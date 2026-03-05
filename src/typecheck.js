@@ -33,6 +33,43 @@ export function countLines(str) {
 export function toVirtual(p) { return p + '.ts'; }
 export function fromVirtual(p) { return p.endsWith('.rip.ts') ? p.slice(0, -3) : p; }
 
+// Patch uninitialized, untyped variables with inferred types from their
+// first assignment. This makes `let total; total = count + ratio;` behave
+// like `let total: number;` — so a later `total = "string"` is caught.
+// Called by both the LSP and the CLI type-checker to keep them aligned.
+export function patchUninitializedTypes(ts, service, compiledEntries) {
+  const program = service.getProgram();
+  if (!program) return;
+  const checker = program.getTypeChecker();
+  for (const [filePath] of compiledEntries) {
+    const sf = program.getSourceFile(toVirtual(filePath));
+    if (!sf) continue;
+    const uninitialized = new Map();
+    for (const stmt of sf.statements) {
+      if (ts.isVariableStatement(stmt)) {
+        for (const decl of stmt.declarationList.declarations) {
+          if (!decl.initializer && !decl.type && ts.isIdentifier(decl.name)) {
+            const sym = checker.getSymbolAtLocation(decl.name);
+            if (sym) uninitialized.set(decl.name.text, sym);
+          }
+        }
+      }
+      if (ts.isExpressionStatement(stmt) && ts.isBinaryExpression(stmt.expression) &&
+          stmt.expression.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+          ts.isIdentifier(stmt.expression.left)) {
+        const name = stmt.expression.left.text;
+        const sym = uninitialized.get(name);
+        if (sym) {
+          const rhsType = checker.getTypeAtLocation(stmt.expression.right);
+          sym.flags |= ts.SymbolFlags.Transient;
+          sym.links = { type: rhsType };
+          uninitialized.delete(name);
+        }
+      }
+    }
+  }
+}
+
 // TS error codes to skip — Rip resolves modules differently and
 // treats async return types transparently.
 export const SKIP_CODES = new Set([
@@ -392,6 +429,9 @@ export async function runCheck(targetDir, opts = {}) {
   };
 
   const service = ts.createLanguageService(host, ts.createDocumentRegistry());
+
+  // Patch uninitialized variables with inferred types (same as LSP)
+  patchUninitializedTypes(ts, service, compiled);
 
   // Collect diagnostics
   let totalErrors = 0;

@@ -76,7 +76,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Runtime return-type validation   | ❌      | Return types are erased — `response.json()` is unvalidated `any`; no `schema.parse()` equivalent         |
 | Readonly / immutability          | 🔶      | `=!` → const; deep readonly not checked                                                                  |
 | Async/await unwrapping           | 🔶      | `!` operator awaits; return type sometimes `any`                                                         |
-| Type inference (split decl.)     | ❌      | `x = expr` compiles as `let x; x = expr;` — TS sees `any`; explicit `::` required for every checked var  |
+| Type inference (split decl.)     | 🔶      | Top-level `x = expr` inferred via `patchUninitializedTypes`; block-scoped, destructured, and `any` RHS are gaps |
 | Hover types                      | ❌      | Hover only works at declaration site; later usages show nothing. Reactive `:=`/`~=` always show `any`    |
 | Go-to-definition on imports      | ❌      | Import lines unmapped; works at call sites only                                                          |
 | Unresolved import paths          | ❌      | `rip check` doesn't flag imports to nonexistent files                                                    |

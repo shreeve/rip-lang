@@ -8,19 +8,14 @@ items:: string[] = ["alpha", "bravo", "charlie"]
 ids:: number[] = [1, 2, 3]
 pair:: [string, number] = ["hello", 42]
 
-# ── Derive and verify types ──
-#
-# NOTE: Rip compiles `let x;` separate from `x = expr;`, so TypeScript
-# can't infer the type from the assignment. Variables MUST use `::` to
-# participate in type checking. This is a design difference from TS,
-# where `const x = expr` lets the checker infer the type automatically.
+# ── Derive (let inference work — no annotations) ──
 
-total:: number = count + ratio
-greeting:: string = "#{label} is #{active}"
-first:: string = items[0]
-allIds:: number = ids.reduce ((a, b) -> a + b), 0
-pairLabel:: string = pair[0]
-pairValue:: number = pair[1]
+total = count + ratio
+greeting = "#{label} is #{active}"
+first = items[0]
+allIds = ids.reduce ((a, b) -> a + b), 0
+pairLabel = pair[0]
+pairValue = pair[1]
 
 console.log "total:", total
 console.log "greeting:", greeting

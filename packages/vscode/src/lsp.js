@@ -306,39 +306,7 @@ function patchTypes() {
   const program = service.getProgram();
   if (!program || program === lastPatchedProgram) return;
   lastPatchedProgram = program;
-
-  const checker = program.getTypeChecker();
-  for (const [filePath] of compiled) {
-    const sf = program.getSourceFile(toVirtual(filePath));
-    if (!sf) continue;
-
-    const uninitialized = new Map();
-    for (const stmt of sf.statements) {
-      if (ts.isVariableStatement(stmt)) {
-        for (const decl of stmt.declarationList.declarations) {
-          // Only patch untyped declarations (e.g. `let x;` from Rip hoisting).
-          // Skip declarations that already have a type annotation (e.g. `let user: User;`
-          // from the DTS) — overriding those would suppress real type errors.
-          if (!decl.initializer && !decl.type && ts.isIdentifier(decl.name)) {
-            const sym = checker.getSymbolAtLocation(decl.name);
-            if (sym) uninitialized.set(decl.name.text, sym);
-          }
-        }
-      }
-      if (ts.isExpressionStatement(stmt) && ts.isBinaryExpression(stmt.expression) &&
-          stmt.expression.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
-          ts.isIdentifier(stmt.expression.left)) {
-        const name = stmt.expression.left.text;
-        const sym = uninitialized.get(name);
-        if (sym) {
-          const rhsType = checker.getTypeAtLocation(stmt.expression.right);
-          sym.flags |= ts.SymbolFlags.Transient;
-          sym.links = { type: rhsType };
-          uninitialized.delete(name);
-        }
-      }
-    }
-  }
+  tc.patchUninitializedTypes(ts, service, compiled);
 }
 
 // ── Position mapping ───────────────────────────────────────────────

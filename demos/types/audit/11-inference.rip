@@ -1,0 +1,93 @@
+# 11-inference.rip — Type inference on unannotated variables
+#
+# Rip compiles `x = expr` as `let x; x = expr;` (split declaration).
+# patchUninitializedTypes infers the type from the first top-level
+# assignment. This file tests where that works and where it doesn't.
+
+# ── Setup: typed base variables ──
+
+count:: number = 0
+ratio:: number = 3.14
+items:: string[] = ["a", "b", "c"]
+
+def double(n:: number):: number
+  n * 2
+
+def expectString(x:: string):: string
+  x
+
+# ──────────────────────────────────────────────────
+# WORKS — top-level assignment with a concrete RHS
+# ──────────────────────────────────────────────────
+
+# ── Primitives ──
+
+total = count + ratio
+label = "hello"
+active = true
+
+# @ts-expect-error — inferred number
+total = "oops"
+# @ts-expect-error — inferred string
+label = 42
+# @ts-expect-error — inferred boolean
+active = "yes"
+
+# ── Typed function return ──
+
+result = double 5
+# @ts-expect-error — inferred number
+result = "oops"
+
+# ── Method calls on typed values ──
+
+upper = "hello".toUpperCase()
+joined = items.join ", "
+
+# @ts-expect-error — inferred string
+upper = 42
+# @ts-expect-error — inferred string
+joined = false
+
+# ── Array element access ──
+
+first = items[0]
+# @ts-expect-error — inferred string | undefined
+first = 99
+
+# ── Template literals ──
+
+msg = "count is #{count}"
+# @ts-expect-error — inferred string
+msg = 42
+
+console.log total, label, active, result, upper, joined, first, msg
+
+# ──────────────────────────────────────────────────
+# GAPS — inference doesn't reach these cases
+# ──────────────────────────────────────────────────
+#
+# To detect `any`, we pass the variable to `expectString()`.
+# If the type were properly inferred as `number`, TS would
+# reject the call. With `any`, it silently passes.
+
+# ── Gap 1: First assignment inside a block ──
+#
+# The patcher only walks top-level statements. When the first
+# assignment lives inside an if/for/try body, the variable's
+# `let` is hoisted but the assignment stays inside the block —
+# the patcher never sees it and the type stays `any`.
+
+if true
+  insideIf = count + ratio
+expectString insideIf  # ← should error (number → string) but passes: `any`
+
+# ── Gap 2: Destructuring ──
+#
+# The patcher matches `isIdentifier(left)` — destructuring
+# patterns aren't simple identifiers, so the variables stay `any`.
+
+{a, b} = {a: 1, b: "hello"}
+expectString a  # ← should error (number → string) but passes: `any`
+
+console.log insideIf, a, b
