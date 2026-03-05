@@ -1,0 +1,137 @@
+# ==============================================================================
+# @rip-lang/server — Default Static File Server
+# ==============================================================================
+#
+# Built-in fallback when no index.rip or index.ts exists in the target directory.
+# Activated automatically by `rip server` when no app entry is found.
+#
+# Behavior:
+#   - Serves static files with auto-detected MIME types
+#   - Directories with index.html serve the index.html
+#   - Directories without index.html show a browsable file listing
+#   - Rip browser bundle available at /rip/rip.min.js
+#   - Hot-reload via SSE for .rip, .html, and .css changes
+#
+# ==============================================================================
+
+import { use, start, notFound } from '@rip-lang/server'
+import { serve } from '@rip-lang/server/middleware'
+import { statSync, readdirSync } from 'node:fs'
+import { join, resolve } from 'node:path'
+
+root = resolve(process.env.APP_BASE_DIR or process.cwd())
+rootSlash = root + '/'
+
+use serve dir: root, bundle: [], watch: true
+
+# --- Helpers ---
+
+esc = (s) ->
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
+fmtSize = (n) ->
+  for u in ['B', 'KB', 'MB', 'GB']
+    if n < 1024
+      return if u is 'B' then "#{n} B" else "#{n.toFixed(1)} #{u}"
+    n /= 1024
+  "#{n.toFixed(1)} TB"
+
+fmtDate = (ms) ->
+  new Date(ms).toLocaleString undefined,
+    year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit'
+
+ICONS =
+  html: '🌐', htm: '🌐', css: '🎨', js: '📜', mjs: '📜', ts: '📜'
+  json: '📋', rip: '⚡', md: '📝', txt: '📝', pdf: '📕'
+  png: '🖼️', jpg: '🖼️', jpeg: '🖼️', gif: '🖼️', svg: '🖼️', webp: '🖼️', ico: '🖼️'
+  zip: '📦', gz: '📦', tar: '📦'
+  mp3: '🎵', ogg: '🎵', wav: '🎵', mp4: '🎬', webm: '🎬'
+  woff: '🔤', woff2: '🔤', ttf: '🔤', otf: '🔤'
+
+icon = (name) ->
+  ICONS[name.slice(name.lastIndexOf('.') + 1).toLowerCase()] or '📄'
+
+tr = (ic, href, label, size = '', date = '') ->
+  "<tr><td class=\"i\">#{ic}</td><td><a href=\"#{esc href}\">#{esc label}</a></td><td class=\"s\">#{size}</td><td class=\"d\">#{date}</td></tr>"
+
+# --- Directory Index ---
+
+renderIndex = (reqPath, fsPath) ->
+  entries = try readdirSync(fsPath, { withFileTypes: true }) catch then []
+  dirs = []
+  files = []
+  for e in entries
+    continue if e.name.startsWith('.')
+    if e.isDirectory() then dirs.push(e.name) else files.push(e.name)
+  dirs.sort()
+  files.sort()
+
+  rows = []
+  rows.push tr('📁', '../', 'Parent Directory') if reqPath isnt '/'
+  for d in dirs
+    rows.push tr('📁', "#{d}/", "#{d}/")
+  for f in files
+    try
+      s = statSync(join(fsPath, f))
+      rows.push tr(icon(f), f, f, fmtSize(s.size), fmtDate(s.mtimeMs))
+    catch
+      rows.push tr(icon(f), f, f)
+
+  title = esc(reqPath)
+  """
+  <!DOCTYPE html>
+  <html lang="en">
+  <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Index of #{title}</title>
+  <style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:ui-monospace,'SF Mono',Menlo,Monaco,monospace;background:#fafafa;color:#333;padding:24px 40px}
+  h1{font-size:16px;font-weight:600;color:#111;padding:12px 0;border-bottom:2px solid #e1e4e8;margin-bottom:4px}
+  table{width:100%;border-collapse:collapse}
+  th{text-align:left;padding:8px 12px;font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #e1e4e8}
+  td{padding:5px 12px;border-bottom:1px solid #f0f0f0;font-size:13px}
+  a{color:#0969da;text-decoration:none}a:hover{text-decoration:underline}
+  tr:hover td{background:#f0f7ff}
+  .i{width:28px;text-align:center}.s{width:100px;text-align:right;color:#666}.d{width:200px;color:#666}th.s{text-align:right}
+  @media(max-width:600px){body{padding:16px}.d,th.d{display:none}}
+  </style>
+  </head>
+  <body>
+  <h1>Index of #{title}</h1>
+  <table>
+  <thead><tr><th></th><th>Name</th><th class="s">Size</th><th class="d">Modified</th></tr></thead>
+  <tbody>
+  #{rows.join('\n')}
+  </tbody>
+  </table>
+  </body>
+  </html>
+  """
+
+# --- Request Handler ---
+
+notFound ->
+  reqPath = @req.path
+  path = resolve(root, reqPath.slice(1))
+
+  unless path is root or path.startsWith(rootSlash)
+    return new Response 'Not Found', { status: 404 }
+
+  try
+    stat = statSync(path)
+  catch
+    return new Response 'Not Found', { status: 404 }
+
+  if stat.isFile()
+    return @send path
+
+  if stat.isDirectory()
+    return new Response(null, { status: 301, headers: { Location: "#{reqPath}/" } }) unless reqPath.endsWith('/')
+    try return @send join(path, 'index.html'), 'text/html; charset=UTF-8' if statSync(join(path, 'index.html')).isFile()
+    return new Response renderIndex(reqPath, path), { headers: { 'Content-Type': 'text/html; charset=UTF-8' } }
+
+  new Response 'Not Found', { status: 404 }
+
+start()

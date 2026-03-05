@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/server",
-  "version": "1.3.77",
+  "version": "1.3.78",
   "description": "Pure Rip web framework and application server",
   "type": "module",
   "main": "api.rip",
@@ -49,6 +49,7 @@
   },
   "files": [
     "api.rip",
+    "default.rip",
     "middleware.rip",
     "server.rip",
     "server.html",

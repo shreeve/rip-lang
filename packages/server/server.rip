@@ -165,6 +165,8 @@ parseRestartPolicy = (token, defReqs, defSecs) ->
 
   { maxRequests, maxSeconds }
 
+defaultEntry = join(import.meta.dir, 'default.rip')
+
 resolveAppEntry = (appPathInput) ->
   abs = if isAbsolute(appPathInput) then appPathInput else resolve(process.cwd(), appPathInput)
 
@@ -177,8 +179,8 @@ resolveAppEntry = (appPathInput) ->
     else if existsSync(two)
       entryPath = two
     else
-      console.error "No app entry found. Probed: #{one}, #{two}"
-      process.exit(2)
+      console.log "rip-server: no index.rip found, serving static files from #{abs}\n             Create an index.rip to customize, or run 'rip server --help' for options."
+      entryPath = defaultEntry
   else
     unless existsSync(abs)
       console.error "App path not found: #{abs}"
@@ -247,10 +249,7 @@ parseFlags = (argv) ->
     else if existsSync(indexTs)
       appPathInput = indexTs
     else
-      console.error 'No app entry found. Looked for index.rip or index.ts in current directory.'
-      console.error 'Usage: rip-server [flags] [app-path] [app-name]'
-      console.error '       rip-server [flags] [app-path]@<alias1>,<alias2>,...'
-      process.exit(2)
+      appPathInput = cwd
 
   getKV = (prefix) ->
     for f as rawFlags
@@ -620,6 +619,7 @@ class Manager
       SOCKET_PATH: socketPath
       SOCKET_PREFIX: @flags.socketPrefix
       APP_ENTRY: @flags.appEntry
+      APP_BASE_DIR: @flags.appBaseDir
       MAX_REQUESTS: String(@flags.maxRequestsPerWorker)
       MAX_SECONDS: String(@flags.maxSecondsPerWorker)
       RIP_LOG_JSON: if @flags.jsonLogging then '1' else '0'
@@ -1212,6 +1212,10 @@ main = ->
         rip serve myapp         Start with app name "myapp"
         rip serve http          HTTP only (no TLS)
         rip serve --static w:8  Production: no reload, 8 workers
+
+      If no index.rip or index.ts is found, a built-in static file server
+      activates with directory indexes, auto-detected MIME types, and
+      hot-reload. Create an index.rip to customize server behavior.
     """
     return
 
