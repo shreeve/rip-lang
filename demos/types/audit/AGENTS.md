@@ -110,7 +110,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 ### Suppressed error codes
 
-`rip check` runs TypeScript under the hood but suppresses 16 error codes (defined in `SKIP_CODES` in [src/typecheck.js](../../../src/typecheck.js)). Most suppressions are necessary — Rip's compilation model produces patterns that confuse TS (DTS coexisting with compiled bodies, module resolution, etc.). But three categories directly weaken type safety:
+`rip check` runs TypeScript under the hood but suppresses 15 error codes (defined in `SKIP_CODES` in [src/typecheck.js](../../../src/typecheck.js)). Most suppressions are necessary — Rip's compilation model produces patterns that confuse TS (DTS coexisting with compiled bodies, module resolution, etc.). But three categories directly weaken type safety:
 
 | Suppressed codes | What they hide                         | Impact on audit                                                                                                           |
 | ---------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
