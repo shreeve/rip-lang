@@ -161,17 +161,22 @@ function AddToCart() {
 // @ts-expect-error — wrong type: items should be CartItem[], not string
 const bad1 = create<Cart>(() => ({ items: 'not an array', addItem: () => {}, removeItem: () => {}, total: () => 0 }))
 
-// @ts-expect-error — wrong item shape: missing required fields
-const bad2 = useCart((s) => s.addItem({ broken: true }))
+// The remaining negative tests call useCart() which invokes React hooks.
+// They must live inside a function body to avoid the "invalid hook call"
+// error at runtime (hooks require a React component/render context).
+function _negativeTests() {
+  // @ts-expect-error — wrong item shape: missing required fields
+  const bad2 = useCart((s) => s.addItem({ broken: true }))
 
-// @ts-expect-error — typo: 'item' doesn't exist, it's 'items'
-const bad3 = useCart((s) => s.item)
+  // @ts-expect-error — typo: 'item' doesn't exist, it's 'items'
+  const bad3 = useCart((s) => s.item)
 
-// @ts-expect-error — nonexistent path
-const bad4 = useCart((s) => s.tax)
+  // @ts-expect-error — nonexistent path
+  const bad4 = useCart((s) => s.tax)
 
-// @ts-expect-error — wrong arg type: number instead of CartItem
-const bad5 = useCart((s) => s.removeItem(42))
+  // @ts-expect-error — wrong arg type: number instead of CartItem
+  const bad5 = useCart((s) => s.removeItem(42))
+}
 
 // All five caught at compile time. In Rip's stash, all five
 // compile silently — the types exist in .d.ts but have no
