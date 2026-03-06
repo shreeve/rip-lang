@@ -1,0 +1,70 @@
+# 10-validation.rip — Runtime validation + async/await (! operator)
+#
+# Tier 2 — Essential for real apps. Every typed API call needs
+# validated responses, not blind trust in response.json().
+#
+# Gap: return type annotations are erased — response.json() is
+# unvalidated `any` at runtime. The .d.ts tells callers it's a
+# User, but nothing actually checks. In TS+Zod, schema.parse()
+# validates at runtime AND the inferred type checks every field
+# access at compile time (wrong property, wrong nullability, etc).
+
+User ::= type
+  id: number
+  email: string
+  firstName: string | null
+  lastName: string | null
+  phone: string | null
+
+def fetchUser(id:: number):: Promise<User>
+  response = fetch! "/api/users/#{id}"
+  response.json()
+
+# ── Runtime exercise ──
+
+alice:: User =
+  id: 1
+  email: 'alice@example.com'
+  firstName: 'Alice'
+  lastName: 'Smith'
+  phone: '555-1234'
+
+bob:: User =
+  id: 2
+  email: 'bob@example.com'
+  firstName: null
+  lastName: null
+  phone: null
+
+console.log "id: #{alice.id}"
+console.log "email: #{alice.email}"
+console.log "name: #{alice.firstName} #{alice.lastName}"
+console.log "phone: #{alice.phone}"
+console.log "id: #{bob.id}"
+console.log "email: #{bob.email}"
+console.log "name: #{bob.firstName ?? '(anon)'}"
+console.log "phone: #{bob.phone ?? '(none)'}"
+
+# ── Async/await with ! operator ──
+
+def delay(ms:: number):: Promise<string>
+  sleep! ms
+  "done after #{ms}ms"
+
+# ! operator: calls + awaits in one step
+r1:: string = delay! 50
+console.log "r1: #{r1}"
+
+# If we wrote `r2:: number = delay! 50`, rip check catches:
+#   "Type 'string' is not assignable to type 'number'" ✓
+# (@ts-expect-error doesn't work here — shadow file line misalignment)
+
+# Without return annotation, awaited result is `any` (gap)
+def delayUntyped(ms:: number)
+  sleep! ms
+  "untyped after #{ms}ms"
+
+r3 = delayUntyped! 50
+console.log "r3: #{r3}"
+# r3 is any — this should error but doesn't (no return annotation)
+r4:: number = r3

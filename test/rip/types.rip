@@ -424,6 +424,8 @@ type "typed constant dts", 'MAX:: number =! 100', "declare const MAX: number;"
 # Reactive state
 type "reactive state dts", "count:: number := 0", """
   interface Signal<T> { value: T; read(): T; lock(): Signal<T>; free(): Signal<T>; kill(): T; }
+  declare function __state<T>(value: T): Signal<T>;
+  declare function __effect(fn: () => void | (() => void)): () => void;
 
   declare const count: Signal<number>;
   """
@@ -434,7 +436,10 @@ type "computed dts", """
   doubled:: number ~= count * 2
   """, """
   interface Signal<T> { value: T; read(): T; lock(): Signal<T>; free(): Signal<T>; kill(): T; }
+  declare function __state<T>(value: T): Signal<T>;
   interface Computed<T> { readonly value: T; read(): T; lock(): Computed<T>; free(): Computed<T>; kill(): T; }
+  declare function __computed<T>(fn: () => T): Computed<T>;
+  declare function __effect(fn: () => void | (() => void)): () => void;
 
   declare const count: Signal<number>;
   declare const doubled: Computed<number>;
@@ -500,6 +505,8 @@ type "enum dts", """
 # Export reactive
 type "export reactive dts", "export count:: number := 0", """
   interface Signal<T> { value: T; read(): T; lock(): Signal<T>; free(): Signal<T>; kill(): T; }
+  declare function __state<T>(value: T): Signal<T>;
+  declare function __effect(fn: () => void | (() => void)): () => void;
 
   export const count: Signal<number>;
   """

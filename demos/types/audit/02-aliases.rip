@@ -1,0 +1,46 @@
+# 02-aliases.rip — Type aliases (simple, union, typeof)
+
+# Simple aliases
+ID ::= number
+Name ::= string
+Email ::= string
+Timestamp ::= number
+
+# Union aliases
+UserID ::= number | string
+Primitive ::= string | number | boolean
+
+# typeof in type position
+defaults = { theme: "dark", lang: "en" }
+Defaults ::= typeof defaults
+
+# ── Use the aliases ──
+
+userId:: ID = 42
+name:: Name = "Jane"
+email:: Email = "jane@example.com"
+ts:: Timestamp = Date.now()
+
+mixedId:: UserID = "abc-123"
+prim:: Primitive = true
+
+prefs:: Defaults = { theme: "light", lang: "fr" }
+
+console.log "userId:", userId
+console.log "name:", name
+console.log "email:", email
+console.log "ts:", ts
+console.log "mixedId:", mixedId
+console.log "prim:", prim
+console.log "prefs:", prefs
+
+# ── Negative: wrong types must be caught ──
+
+# @ts-expect-error — string assigned to ID (number)
+badId:: ID = "not-a-number"
+# @ts-expect-error — number assigned to Name (string)
+badName:: Name = 42
+# @ts-expect-error — boolean assigned to Email (string)
+badEmail:: Email = true
+# @ts-expect-error — wrong shape for Defaults
+badPrefs:: Defaults = { theme: 123, lang: true }

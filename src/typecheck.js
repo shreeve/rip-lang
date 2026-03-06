@@ -33,14 +33,55 @@ export function countLines(str) {
 export function toVirtual(p) { return p + '.ts'; }
 export function fromVirtual(p) { return p.endsWith('.rip.ts') ? p.slice(0, -3) : p; }
 
+// Patch uninitialized, untyped variables with inferred types from their
+// first assignment. This makes `let total; total = count + ratio;` behave
+// like `let total: number;` — so a later `total = "string"` is caught.
+// Called by both the LSP and the CLI type-checker to keep them aligned.
+export function patchUninitializedTypes(ts, service, compiledEntries) {
+  const program = service.getProgram();
+  if (!program) return;
+  const checker = program.getTypeChecker();
+  for (const [filePath] of compiledEntries) {
+    const sf = program.getSourceFile(toVirtual(filePath));
+    if (!sf) continue;
+    const uninitialized = new Map();
+    for (const stmt of sf.statements) {
+      if (ts.isVariableStatement(stmt)) {
+        for (const decl of stmt.declarationList.declarations) {
+          if (!decl.initializer && !decl.type && ts.isIdentifier(decl.name)) {
+            const sym = checker.getSymbolAtLocation(decl.name);
+            if (sym) uninitialized.set(decl.name.text, sym);
+          }
+        }
+      }
+      if (ts.isExpressionStatement(stmt) && ts.isBinaryExpression(stmt.expression) &&
+          stmt.expression.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+          ts.isIdentifier(stmt.expression.left)) {
+        const name = stmt.expression.left.text;
+        const sym = uninitialized.get(name);
+        if (sym) {
+          const rhsType = checker.getTypeAtLocation(stmt.expression.right);
+          sym.flags |= ts.SymbolFlags.Transient;
+          sym.links = { type: rhsType };
+          uninitialized.delete(name);
+        }
+      }
+    }
+  }
+}
+
 // TS error codes to skip — Rip resolves modules differently and
 // treats async return types transparently.
 export const SKIP_CODES = new Set([
   2300, // Duplicate identifier (DTS declarations coexist with compiled class bodies)
   2304, // Cannot find name
   2307, // Cannot find module
+  2389, // Function implementation name must match overload (DTS + compiled body)
+  2391, // Function implementation is missing (DTS overload sigs separated from implementations)
   2393, // Duplicate function implementation
+  2394, // Overload signature not compatible with implementation (untyped compiled params)
   2451, // Cannot redeclare block-scoped variable
+  2567, // Enum declarations can only merge with namespace or other enum (DTS + compiled body)
   1064, // Return type of async function must be Promise
   2582, // Cannot find name 'test' (test runner globals)
   2593, // Cannot find name 'describe' (test runner globals)
@@ -94,20 +135,113 @@ export function compileForCheck(filePath, source, compiler) {
   // Ensure every file is treated as a module (not a global script)
   if (!/\bexport\b/.test(code) && !/\bimport\b/.test(code)) code += '\nexport {};\n';
 
-  const tsContent = (hasTypes ? dts + '\n' : '') + code;
-  const headerLines = hasTypes ? countLines(dts + '\n') : 1;
+  // Interleave function overload signatures from DTS header into the code
+  // section, immediately before their implementations. TypeScript requires
+  // overload signatures adjacent to the implementation — without this, TS
+  // reports error 2391 ("Function implementation is missing or not immediately
+  // following the declaration"). Moving signatures into the code also enables
+  // proper call-site type checking of function parameters.
+  let headerDts = dts;
+  if (hasTypes && dts && code) {
+    const dl = dts.split('\n');
+    const cl = code.split('\n');
+    const fnSigs = [];
+    for (let i = 0; i < dl.length; i++) {
+      const m = dl[i].match(/^(?:export\s+)?(?:declare\s+)?function\s+(\w+)/);
+      if (m) fnSigs.push({ name: m[1], sig: dl[i], idx: i });
+    }
+    if (fnSigs.length > 0) {
+      const injections = [];
+      const moved = new Set();
+      for (const fn of fnSigs) {
+        const pat = new RegExp(`^(?:export\\s+)?(?:async\\s+)?function\\s+${fn.name}\\s*[(<]`);
+        for (let j = 0; j < cl.length; j++) {
+          if (pat.test(cl[j])) {
+            injections.push({ codeLine: j, sig: fn.sig });
+            moved.add(fn.idx);
+            break;
+          }
+        }
+      }
+      if (injections.length > 0) {
+        injections.sort((a, b) => a.codeLine - b.codeLine);
+        // Adjust reverseMap: each injection shifts subsequent code lines down by 1
+        if (result.reverseMap) {
+          for (const [, entry] of result.reverseMap) {
+            let offset = 0;
+            for (const inj of injections) {
+              if (inj.codeLine <= entry.genLine + offset) offset++;
+            }
+            entry.genLine += offset;
+          }
+        }
+        // Insert signatures bottom-up to preserve indices.
+        // Strip 'declare ' — signatures must be non-ambient to match implementations.
+        for (let k = injections.length - 1; k >= 0; k--) {
+          cl.splice(injections[k].codeLine, 0, injections[k].sig.replace(/^declare /, ''));
+        }
+        code = cl.join('\n');
+        // Rebuild header DTS without the moved function signatures
+        headerDts = dl.filter((_, i) => !moved.has(i)).join('\n').trimEnd() + '\n';
+      }
+    }
+  }
+
+  // Annotate reactive/readonly/computed const assignments with their declared
+  // types from the DTS header, and remove the corresponding `declare const`
+  // from the header. This enables TypeScript to check initializer values
+  // against type annotations: `const x: Signal<number> = __state("oops")`
+  // produces a real type error, whereas two separate declarations
+  // (`declare const x: Signal<number>` + `const x = __state("oops")`)
+  // only produce a duplicate-identifier error (2451), which is suppressed.
+  if (hasTypes && headerDts && code) {
+    const dl = headerDts.split('\n');
+    const cl = code.split('\n');
+    const constTypes = new Map();
+
+    for (let i = 0; i < dl.length; i++) {
+      const m = dl[i].match(/^(?:export\s+)?declare\s+const\s+(\w+):\s+(.+);$/);
+      if (m) constTypes.set(m[1], { type: m[2], idx: i });
+    }
+
+    if (constTypes.size > 0) {
+      const movedDts = new Set();
+
+      for (let j = 0; j < cl.length; j++) {
+        const cm = cl[j].match(/^((?:export\s+)?const\s+)(\w+)(\s*=\s*)/);
+        if (cm && constTypes.has(cm[2])) {
+          const entry = constTypes.get(cm[2]);
+          cl[j] = cm[1] + cm[2] + ': ' + entry.type + cm[3] + cl[j].slice(cm[0].length);
+          movedDts.add(entry.idx);
+        }
+      }
+
+      if (movedDts.size > 0) {
+        code = cl.join('\n');
+        headerDts = dl.filter((_, i) => !movedDts.has(i)).join('\n').trimEnd() + '\n';
+      }
+    }
+  }
+
+  let tsContent = (hasTypes ? headerDts + '\n' : '') + code;
+  const headerLines = hasTypes ? countLines(headerDts + '\n') : 1;
 
   // Build bidirectional line maps
   const { srcToGen, genToSrc } = buildLineMap(result.reverseMap, result.map, headerLines);
 
+  // Snapshot code-section mappings before DTS mapping can overwrite them.
+  // Needed by @ts-expect-error injection which must target code lines, not DTS.
+  const codeSrcToGen = new Map(srcToGen);
+
   // Map DTS declaration lines back to source lines (bidirectional).
-  // Covers: let/var declarations, type aliases, interfaces, enums, classes.
+  // Covers: imports, let/var declarations, type aliases, interfaces, enums, classes.
   // This enables hover, go-to-definition, and diagnostics for type-only code.
-  if (hasTypes && dts) {
-    const dtsLines = dts.split('\n');
+  if (hasTypes && headerDts) {
+    const dtsLines = headerDts.split('\n');
     const srcLines = source.split('\n');
     for (let i = 0; i < dtsLines.length; i++) {
       const line = dtsLines[i];
+
       const m = line.match(/^(?:export\s+)?(?:declare\s+)?(?:let|var|type|interface|enum|class)\s+(\w+)/);
       if (!m) continue;
       const name = m[1];
@@ -141,6 +275,50 @@ export function compileForCheck(filePath, source, compiler) {
           genToSrc.set(genA + d, srcA + d);
         }
       }
+    }
+  }
+
+  // Inject @ts-expect-error directives from Rip source into the generated
+  // TypeScript.  This lets TypeScript natively suppress expected errors and
+  // report TS2578 for unused directives — works in both CLI and LSP.
+  if (hasTypes) {
+    const srcLines = source.split('\n');
+    const injects = [];
+    for (let s = 0; s < srcLines.length; s++) {
+      const m = srcLines[s].match(/^\s*#\s*(@ts-expect-error\b.*)/);
+      if (m) {
+        const nextSrc = s + 1;
+        // Prefer code-section line (where the assignment lives and TS reports
+        // the error) over the DTS declaration line.
+        let genLine = codeSrcToGen.get(nextSrc);
+        if (genLine === undefined) {
+          genLine = srcToGen.get(nextSrc);
+          if (genLine !== undefined && genLine < headerLines) genLine = undefined;
+        }
+        if (genLine !== undefined) {
+          injects.push({ genLine, srcLine: s, comment: `// ${m[1]}` });
+        }
+      }
+    }
+    if (injects.length > 0) {
+      // Sort descending so bottom-up insertion doesn't shift earlier positions
+      injects.sort((a, b) => b.genLine - a.genLine);
+      const tsLines = tsContent.split('\n');
+      for (const { genLine, srcLine, comment } of injects) {
+        tsLines.splice(genLine, 0, comment);
+        // Shift existing gen→src mappings at or after the insertion point
+        const shifted = new Map();
+        for (const [g, s] of genToSrc) shifted.set(g >= genLine ? g + 1 : g, s);
+        shifted.set(genLine, srcLine);
+        genToSrc.clear();
+        for (const [g, s] of shifted) genToSrc.set(g, s);
+        // Shift existing src→gen mappings that pointed at or past the insertion
+        for (const [s, g] of srcToGen) {
+          if (g >= genLine) srcToGen.set(s, g + 1);
+        }
+        srcToGen.set(srcLine, genLine);
+      }
+      tsContent = tsLines.join('\n');
     }
   }
 
@@ -287,6 +465,9 @@ export async function runCheck(targetDir, opts = {}) {
   };
 
   const service = ts.createLanguageService(host, ts.createDocumentRegistry());
+
+  // Patch uninitialized variables with inferred types (same as LSP)
+  patchUninitializedTypes(ts, service, compiled);
 
   // Collect diagnostics
   let totalErrors = 0;

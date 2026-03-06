@@ -1,0 +1,207 @@
+# 09-components.rip — Typed component props
+#
+# Rip components define typed props with @prop:: type := default.
+# The component definitions emit typed DTS declarations.
+# Prop type checking on construction is a known gap (see bottom of file).
+
+# ── Components ──
+
+export Button = component
+  @type:: string := "button"
+  @variant:: "primary" | "secondary" := "primary"
+  @loading:: boolean := false
+  @disabled:: boolean := false
+
+  bg ~= if variant is "primary" then "#0066ff" else "#e5e5e5"
+  fg ~= if variant is "primary" then "#fff" else "#333"
+
+  render
+    button type: type, style: "background: #{bg}; color: #{fg}", disabled: disabled or loading
+      if loading
+        "Loading..."
+      else
+        slot
+
+export Input = component
+  @label:: string := ""
+  @type:: string := "text"
+  @placeholder:: string := ""
+  @value:: string := ""
+  @error:: string := ""
+
+  render
+    fieldset
+      if label
+        label label
+      input type: type, placeholder: placeholder, value: value
+      if error
+        div error
+
+export Form = component
+  @title:: string := "Sign In"
+  email:: string := ""
+  password:: string := ""
+  loading := false
+
+  onSubmit: (e) ->
+    e.preventDefault()
+    loading = true
+    p "Signing in: #{email}"
+    loading = false
+
+  render
+    form @submit: @onSubmit
+      h1 title
+      Input
+        label: "Email"
+        type: "email"
+        placeholder: "jane@example.com"
+        value <=> email
+      Input
+        label: "Password"
+        type: "password"
+        placeholder: "••••••••"
+        value <=> password
+      Button type: "submit", variant: "primary", loading: loading
+        "Sign In"
+
+# ── Gap: type safety inside component bodies ──
+#
+# The real gap is not constructor prop checking — it's that types are
+# invisible inside the component body where props are actually used.
+# The compiled code redeclares all props as untyped variables (from
+# signal unwrapping), so TypeScript sees them as `any`. For example:
+#
+#   export Button = component
+#     @variant:: "primary" | "secondary" := "primary"
+#
+#     # These should be caught but aren't:
+#     bad = variant + 5          # string + number — no error
+#     bad = variant is "danger"  # impossible comparison — no error
+#
+# In a real app, 90% of code lives inside component bodies — render
+# blocks, event handlers, computeds, methods. Without typed props
+# flowing through, the type system is effectively invisible where
+# it matters most.
+#
+# Tracked in AGENTS.md gap table under "Component prop types".
+
+# ── Gap: event handler typing ──
+#
+# Handler parameters are untyped — `(e) ->` compiles to `(e) =>`
+# where `e` is `any`. In the Form component above, `onSubmit: (e) ->`
+# doesn't know `e` is a SubmitEvent. No way to annotate event params
+# in render block handlers either (`@click: (e) ->` — `e` is `any`).
+#
+# In TypeScript/React, event handlers get typed automatically:
+#   onSubmit={(e: React.FormEvent) => { ... }}
+# and inline handlers on JSX elements infer the event type from
+# the element (e.g. onClick on <button> gives MouseEvent).
+#
+# Tracked in AGENTS.md gap table under "Event handler typing".
+
+# ── Gap: element type inheritance ──
+#
+# There's no way to declare that a component extends an HTML
+# element's type surface. The Input component above accepts
+# `type`, `placeholder`, `value` — but only because we declared
+# each prop manually. In React/TS:
+#   type InputProps = ComponentProps<'input'> & { label?: string }
+# gives you ALL of <input>'s props (onChange, onFocus, aria-*, etc.)
+# for free. In Rip, each must be listed explicitly or they're unknown.
+#
+# Tracked in AGENTS.md gap table under "Element type inheritance".
+
+# ── Gap: generic components ──
+#
+# Can't parameterize a component by type. A real-world Select needs
+# a bounded generic — options must be strings or { value, label }:
+#
+#   # Not valid Rip syntax:
+#   TOptionShape ::= string | { value: string, label: string }
+#
+#   export Select<TOption extends TOptionShape> = component
+#     @options:: TOption[] := []
+#     @placeholder:: string := ""
+#     @error:: string := ""
+#
+# In React/TS (see 09-components.tsx), this is straightforward:
+#   type TOptionShape = string | { value: string; label: string }
+#   function Select<TOption extends TOptionShape>(props: SelectProps<TOption>) { ... }
+#
+# The constraint ensures callers can only pass valid option shapes.
+# Numbers, objects missing 'label', etc. are caught at the call site.
+# In Rip, @options would be typed as `any[]` — no constraint links
+# the option shape to a known interface, and no way to express
+# `extends` bounds on component type parameters.
+#
+# Tracked in AGENTS.md gap table under "Generic components".
+
+# ── Stash vs zustand: shared client state (shopping cart) ──
+#
+# A shopping cart is pure client state — created in the browser,
+# shared across routes/components, persisted to localStorage.
+# This is exactly what stash and zustand are for.
+
+# Define the cart shape (Rip can express this type):
+CartItem ::= type
+  id: number
+  name: string
+  price: number
+  quantity: number
+
+# In a real Rip app, the stash is seeded (possibly empty) and shared:
+#   <script data-state='{"cart": {"items": []}}'>
+#
+# There is ONE global stash per app — a deep reactive proxy. Different
+# "stores" are just paths within it (stash.cart, stash.theme, etc.).
+# This is unlike zustand, where each store is a separate create() call.
+# Below we simulate this with a module-level object — the access pattern
+# is identical to how components use stash in the browser.
+
+stash:: { cart: { items: CartItem[] } } = { cart: { items: [] } }
+
+def addItem(item:: CartItem)
+  stash.cart.items = [...stash.cart.items, item]
+
+def removeItem(item:: CartItem)
+  stash.cart.items = stash.cart.items.filter (i) -> i.id isnt item.id
+
+def total():: number
+  stash.cart.items.reduce ((sum:: number, i) -> sum + i.price * i.quantity), 0
+
+export CartBadge = component
+  render
+    span "#{stash.cart.items.length} items"
+
+export CartTotal = component
+  render
+    div
+      span "Total: $#{total()}"
+
+export AddToCart = component
+  add: ->
+    addItem { id: 1, name: "Widget", price: 9.99, quantity: 1 }
+
+  render
+    button @click: @add, "Add to Cart"
+
+# ── What stash can't catch (all of these compile silently) ──
+#
+#   stash.cart.items = "not an array"        # wrong type
+#   addItem { broken: true }                 # wrong item shape
+#   stash.cart.item                          # typo — 'item' not 'items'
+#   stash.cart.tax                           # nonexistent path
+#   removeItem 42                            # wrong arg type — number for CartItem
+#
+# CartItem type exists but has NO connection to the stash object or
+# the addItem/removeItem/total functions. It generates a .d.ts
+# declaration but doesn't constrain anything at compile time.
+# The stash is a plain reactive proxy — any property access or
+# assignment is valid.
+#
+# In zustand (see 09-components.tsx), ALL of these are caught at
+# compile time. The store is typed from creation and every
+# selector/mutation is checked.
+#
+# Tracked in AGENTS.md gap table under "Shared state typing (stash)".

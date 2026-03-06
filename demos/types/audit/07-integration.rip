@@ -1,0 +1,43 @@
+# 07-integration.rip — Cross-module integration test
+
+import { add, greet, makePoint, sum, isPositive } from './06-functions.rip'
+
+# ── Use: cross-file typed function calls ──
+
+point = makePoint(10, 20)
+total = sum(1, 2, 3, 4)
+
+console.log "point:", point
+console.log "add(3, 4):", add(3, 4)
+console.log "greet('World'):", greet("World")
+console.log "sum(1..4):", total
+console.log "isPositive(5):", isPositive(5)
+
+# ── Negative: wrong types must be caught ──
+
+# @ts-expect-error — string arguments where numbers expected
+badAdd = add("a", "b")
+# @ts-expect-error — number argument where string expected
+badGreet = greet(42)
+# @ts-expect-error — boolean arguments where numbers expected
+badPoint = makePoint(true, false)
+# @ts-expect-error — string arguments where numbers expected
+badSum = sum("a", "b")
+# @ts-expect-error — string argument where number expected
+badPos = isPositive("five")
+
+# ── Gap: unresolved import paths ──
+#
+# `rip check` doesn't flag imports to nonexistent files.
+# The following import would silently succeed in `rip check`
+# because the .d.ts for this file doesn't include the import
+# statement — types are erased, and the import is just a runtime
+# concern. TypeScript catches this immediately:
+#   import { x } from './nonexistent'  // TS: Cannot find module
+#
+# In a real Rip project, a typo in an import path won't surface
+# until runtime. This is because `rip check` only type-checks
+# the .d.ts declarations and compiled JS — it doesn't verify
+# that import specifiers resolve to actual files.
+#
+# Tracked in AGENTS.md gap table under "Unresolved import paths".
