@@ -40,6 +40,7 @@ Options:
   -s, --sexpr         Show s-expressions (only, unless -c also specified)
   -t, --tokens        Show token stream (only, unless -c also specified)
   -v, --version       Show version number
+  --shadow            Show virtual TypeScript content (what rip check sees)
 
 Subcommands:
   rip server [flags] [app]      Start server (watches *.rip, HTTPS, mDNS)
@@ -68,6 +69,7 @@ Examples:
   rip -d example.rip            # Show type declarations
   rip -m example.rip            # Compile with inline source map
   rip -cd example.rip           # Show compiled JS and type declarations
+  rip --shadow example.rip      # Show shadow TypeScript (for type-check debugging)
   rip -q -c example.rip         # Just the JS, no headers (for piping)
   echo 'p 1 + 2' | rip          # Execute from stdin
   echo 'x = 1 + 2' | rip -c     # Compile from stdin
@@ -167,6 +169,7 @@ async function main() {
   const showCompiled = ripOptions.includes('-c') || ripOptions.includes('--compile');
   const generateDts = ripOptions.includes('-d') || ripOptions.includes('--dts');
   const generateMap = ripOptions.includes('-m') || ripOptions.includes('--map');
+  const showShadow = ripOptions.includes('--shadow');
   const quiet = ripOptions.includes('-q') || ripOptions.includes('--quiet');
 
   let inputFile = scriptFileIndex === -1 ? null : args[scriptFileIndex];
@@ -179,7 +182,7 @@ async function main() {
   }
 
   // Stdin handling — read into memory; only write temp file for the execute path
-  const hasCompileFlag = showCompiled || showTokens || showSExpr || generateDts || generateMap || outputFile;
+  const hasCompileFlag = showCompiled || showTokens || showSExpr || generateDts || generateMap || showShadow || outputFile;
   let source;
 
   if (!inputFile) {
@@ -276,6 +279,13 @@ async function main() {
     if (generateDts && result.dts) {
       if (!quiet) console.log(`// == Type declarations == //\n`);
       console.log(result.dts);
+    }
+
+    if (showShadow) {
+      const { compileForCheck } = await import('../src/typecheck.js');
+      const entry = compileForCheck(inputFile || '<stdin>', source, new Compiler());
+      if (!quiet) console.log(`// == Shadow TypeScript (what \`rip check\` sees) == //\n`);
+      console.log(entry.tsContent);
     }
   } catch (error) {
     console.error('Compilation Error:', error.message);
