@@ -104,10 +104,72 @@ const badInput = <Input label={123} />
 
 // ── Generic components ──
 //
-// TypeScript supports generic components:
-//   function Select<T>({ options, value }: { options: T[], value: T }) { ... }
-// The caller gets type-safe option/value types. Rip can't parameterize
-// components by type — options and value are unrelated types.
+// TypeScript supports generic components where T is bounded by a known shape.
+// The constraint flows through all props — options must satisfy TOptionShape,
+// and the component knows how to render them without extra callbacks.
+// Rip can't parameterize components by type — options would be `any[]`.
+
+type TOptionShape = string | { value: string; label: string }
+
+type SelectProps<TOption extends TOptionShape> = ComponentProps<'select'> & {
+  label?: string
+  options: TOption[]
+  placeholder?: string
+  error?: string
+}
+
+function Select<TOption extends TOptionShape>({ label, options, placeholder, error, ...props }: SelectProps<TOption>) {
+  return (
+    <fieldset>
+      {label && <label>{label}</label>}
+      <select {...props}>
+        {placeholder && <option value='' disabled>{placeholder}</option>}
+        {options.map((option) => {
+          const value = typeof option === 'string' ? option : option.value
+          const label = typeof option === 'string' ? option : option.label
+          return <option key={value} value={value}>{label}</option>
+        })}
+      </select>
+      {error && <div>{error}</div>}
+    </fieldset>
+  )
+}
+
+// Usage — T is inferred from the options array
+
+// Simple: string options
+const colors = ['Red', 'Green', 'Blue']
+const stringSelect = (
+  <Select
+    options={colors} // T inferred as string
+    label='Color'
+  />
+)
+
+// Structured: { value, label } options
+const roles = [{ value: 'admin', label: 'Admin' }, { value: 'user', label: 'User' }]
+const roleSelect = (
+  <Select
+    options={roles} // T inferred as { value: string; label: string }
+    label='Role'
+  />
+)
+
+// Negative tests — TOption must satisfy TOptionShape
+
+// @ts-expect-error — number doesn't extend TOptionShape
+const badSelect1 = <Select options={[1, 2, 3]} />
+
+// @ts-expect-error — object missing 'label' field (has 'name' instead)
+const badSelect2 = <Select options={[{ value: 'a', name: 'A' }]} />
+
+// @ts-expect-error — error expects string | boolean, not number
+const badSelect3 = <Select options={['a']} error={42} />
+
+// In Rip, a Select component can't express `TOption extends TOptionShape`. The
+// @options prop would be typed as `any[]` or a specific concrete type —
+// there's no way to say "anything that's a string or { value, label }"
+// and have that constraint checked at the call site.
 
 // ── Stash vs zustand: shared client state (shopping cart) ──
 
@@ -159,7 +221,7 @@ function AddToCart() {
 // ── Negative tests: zustand catches every mistake ──
 
 // @ts-expect-error — wrong type: items should be CartItem[], not string
-const bad1 = create<Cart>(() => ({ items: 'not an array', addItem: () => {}, removeItem: () => {}, total: () => 0 }))
+const bad1 = create<Cart>(() => ({ items: 'not an array', addItem: () => { }, removeItem: () => { }, total: () => 0 }))
 
 // The remaining negative tests call useCart() which invokes React hooks.
 // They must live inside a function body to avoid the "invalid hook call"
