@@ -567,11 +567,21 @@ All type logic lives in `src/types.js` (lexer sidecar):
 
 Types are processed at the **token level** before parsing. The parser never sees type annotations — they're stripped during token rewriting with metadata stored on tokens for `.d.ts` emission.
 
-### CLI
+### Shadow TypeScript (`--shadow`)
+
+The `--shadow` flag dumps the virtual TypeScript file that `rip check` and the VS Code LSP feed to the TypeScript language service. This is the primary tool for debugging type issues. The output has two sections:
+
+1. **DTS declarations** — type annotations (`::`) emitted as TypeScript `let x: Type` declarations, plus type aliases, interfaces, enums, and reactive helper types (`Signal<T>`, `Computed<T>`)
+2. **Compiled body** — the full compiled JavaScript, with `@ts-expect-error` directives injected where `rip check` expects type errors
+
+TypeScript sees both sections together as a single `.ts` file. This means declared types constrain the compiled assignments below them — that's how Rip achieves type checking without ever writing TypeScript.
 
 ```bash
-rip -d example.rip     # Generate example.d.ts
-rip -cd example.rip    # Compile JS + generate .d.ts
+# Typical debugging workflow
+rip --shadow file.rip    # What does TS actually see? Start here.
+rip -d file.rip          # Are the .d.ts declarations correct?
+rip -c file.rip          # Is the compiled JS what you expect?
+rip -s file.rip          # Is the parser producing the right tree?
 ```
 
 ---
