@@ -409,7 +409,7 @@ function parseDTS(dtsString) {
     while (j < lines.length) {
       if (/^\}/.test(lines[j])) break;
 
-      if (/constructor\(props\?/.test(lines[j])) {
+      if (/constructor\(props\??/.test(lines[j])) {
         foundProps = true;
         j++;
         while (j < lines.length) {
