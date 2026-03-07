@@ -213,14 +213,6 @@ export TabContent = component
 
 `offer` wraps any assignment operator (`:=`, `~=`, `=`, `=!`). The signal passes through directly — parent and child share the same reactive object. Mutations in either direction are instant.
 
-**Three-tier state model:**
-
-| Tier             | Scope              | Mechanism                           | Example                           |
-| ---------------- | ------------------ | ----------------------------------- | --------------------------------- |
-| **Props**        | Parent → child     | `value <=> x`, `placeholder: "..."` | Configuring a Select              |
-| **Offer/Accept** | Ancestor → subtree | `offer`/`accept` keywords           | Tabs sharing `active` with panels |
-| **Stash**        | Application-wide   | Shared reactive proxy               | User email, auth state, theme     |
-
 Implementation: `offer`/`accept` are handled as context-sensitive keywords via `classifyKeyword` override in `src/components.js`. They only tokenize as `OFFER`/`ACCEPT` inside component bodies; elsewhere they're plain identifiers. The grammar rules live in `ComponentLine`. The runtime uses the existing `setContext`/`getContext`/`_parent` chain — zero new runtime code.
 
 ### Two-Way Binding (`<=>`)
@@ -246,20 +238,6 @@ Combobox query <=> @search, value <=> @selected
 2. **DOM → State**: `el.addEventListener('input', (e) => { username = e.target.value; })`
 
 The compiler auto-detects types — `checked` uses the `change` event, number inputs use `valueAsNumber`. Smart auto-binding also works: `value: @name` where `@name` is reactive generates two-way binding automatically without needing `<=>`.
-
-This is what Vue has with `v-model` and Svelte has with `bind:`, but Rip's version works uniformly across HTML elements and custom components with one operator. React cannot do this — every bindable property requires an explicit `value` prop + `onChange` callback pair. The `<=>` operator makes interactive component usage dramatically cleaner:
-
-```coffee
-# React: 8 lines of ceremony
-# const [name, setName] = useState('');
-# const [show, setShow] = useState(false);
-# <input value={name} onChange={e => setName(e.target.value)} />
-# <Dialog open={show} onOpenChange={setShow} />
-
-# Rip: 2 lines, done
-input value <=> @name
-Dialog open <=> @show
-```
 
 Implementation: lexer tokenizes `<=>` as `BIND`, the render rewriter transforms `value <=> x` to `__bind_value__: x`, and the component code generator emits the effect + event listener pair. See `src/components.js`.
 
@@ -674,9 +652,8 @@ keyboard interactions per WAI-ARIA Authoring Practices. Widgets are plain
 - Focus override: `preventScroll: true` globally at module scope (outside component body)
 - Reactive arrays over helper functions: the state *is* the array, the operation
 *is* assignment, there's nothing to abstract. `toasts = [...toasts, { message: "Saved!" }]`
-— no `addToast()` helpers, no manager objects, no import ceremony. This applies to every
-widget that manages a list (toasts, tabs, accordion items). React needs helper APIs because
-its state model forces it; Rip's reactive assignment eliminates the need.
+— no `addToast()` helpers, no manager objects. This applies to every
+widget that manages a list (toasts, tabs, accordion items).
 - Shared-scope naming: in the browser, all `.rip` files loaded via `data-src` share one
 scope. Component names (capitalized) don't collide because they're unique. But lowercase
 module-scope variables (`collator`, `nextId`, etc.) will collide if two files use the same
@@ -812,21 +789,6 @@ manager (rip-server) already handles file watching and SSE at the server level.
 The `/watch` SSE endpoint is intercepted by rip-server's proxy before reaching
 workers. Use `notFound` (not `get '/*'`) for the catch-all route — `get '/*'`
 will intercept requests meant for the serve middleware (like `/rip/rip.min.js`).
-
-**Why Rip builds its own widgets (not Radix, Headless UI, etc.):**
-
-Rip's component system (`component`, `render`, `:=`, `~=`, `~>`, `<=>`,
-`slot`, `@emit`, auto-wired events) is a unique reactive model. No existing
-component library targets these primitives — Radix targets React, Headless UI
-targets React/Vue, Ark UI targets multiple frameworks but not Rip. Building
-widgets in Rip proves the component system works and exercises every feature.
-At ~2,000 lines total for 38 headless UI components (including a 901-line Google Sheets-grade
-Grid), the investment is modest — the same functionality in React + Radix
-requires thousands of lines of glue code plus a build system. Rip widgets
-compile on the fly in the browser from plain `.rip` source files. No bundler,
-no `npm install`, no `node_modules`. One `<script>` tag loads everything.
-Building these widgets also discovered and fixed real compiler bugs — the
-widgets are both the product and the test suite.
 
 **Rip-specific gotchas learned building widgets:**
 
