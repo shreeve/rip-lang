@@ -459,19 +459,12 @@ The `packages/` directory contains optional packages that extend Rip for
 full-stack development. All are written in Rip, have zero dependencies, and
 run on Bun.
 
-### @rip-lang/server (v1.2.11) — Web Framework + Production Server
+### @rip-lang/server — Web Framework + Production Server
 
 Sinatra-style web framework with magic `@` context,
 built-in validators, file serving (`@send`), middleware composition,
 multi-worker process manager, hot reloading, automatic HTTPS, mDNS service
 discovery, and request queueing.
-
-| File             | Lines  | Role                                                                      |
-| ---------------- | ------ | ------------------------------------------------------------------------- |
-| `api.rip`        | ~662   | Core framework: routing, validation, `read()`, `session`, `@send`, server |
-| `middleware.rip` | ~559   | Built-in middleware: cors, logger, sessions, compression, security        |
-| `server.rip`     | ~1,323 | CLI, workers, load balancing, TLS, mDNS                                   |
-| `server.html`    | ~420   | Built-in dashboard UI                                                     |
 
 Key concepts:
 
@@ -498,12 +491,7 @@ rip server        # Start server (watches *.rip by default)
 Zero-build reactive web framework. The browser loads `rip.min.js`
 (compiler + pre-compiled UI framework), auto-detects inline components,
 and renders with fine-grained DOM updates. Uses Rip's built-in reactive
-primitives directly — one signal graph shared between framework and components.
-
-| File        | Lines | Role                                                             |
-| ----------- | ----- | ---------------------------------------------------------------- |
-| `ui.rip`    | ~965  | Unified framework: stash, router (path + hash), renderer, launch |
-| `serve.rip` | ~93   | Server middleware: framework bundle, app bundle, SSE hot-reload  |
+primitives directly.
 
 Key concepts:
 
@@ -529,10 +517,10 @@ start port: 3000
 
 ### Other Packages
 
-- **@rip-lang/db** — DuckDB server with official UI + ActiveRecord-style client (`db.rip` ~388 lines, `client.rip` ~290 lines)
-- **@rip-lang/schema** — ORM + validation with declarative syntax (~505 lines)
-- **@rip-lang/swarm** — Parallel job runner with worker threads (~384 lines). Workers get the rip-loader via path walking from swarm's own `import.meta.url` (not `require.resolve`, which fails from directories without `node_modules`).
-- **@rip-lang/csv** — CSV parser + writer with indexOf ratchet engine (~432 lines)
+- **@rip-lang/db** — DuckDB server with official UI + ActiveRecord-style client
+- **@rip-lang/schema** — ORM + validation with declarative syntax
+- **@rip-lang/swarm** — Parallel job runner with worker threads. Workers get the rip-loader via path walking from swarm's own `import.meta.url` (not `require.resolve`, which fails from directories without `node_modules`).
+- **@rip-lang/csv** — CSV parser + writer with indexOf ratchet engine
 - **@rip-lang/http** — Zero-dependency HTTP client (ky-inspired convenience over native fetch)
 - **@rip-lang/print** — Syntax-highlighted code printer using highlight.js (190+ languages). Serves once, caches via service worker for offline refresh.
 
@@ -542,20 +530,6 @@ Accessible, headless interactive components written in Rip. Zero dependencies.
 Every widget exposes `$` attributes (compiled to `data-`* in HTML) for styling and handles
 keyboard interactions per WAI-ARIA Authoring Practices. Widgets are plain
 `.rip` source files — no build step. The browser compiles them on the fly.
-
-| File            | Lines | What It Does                                                  |
-| --------------- | ----- | ------------------------------------------------------------- |
-| `checkbox.rip`  | 33    | Checkbox and switch toggle                                    |
-| `toast.rip`     | 44    | Auto-dismiss notification, ARIA live region                   |
-| `accordion.rip` | 92    | Expand/collapse, single or multiple                           |
-| `dialog.rip`    | 93    | Modal: focus trap, scroll lock, escape/click-outside dismiss  |
-| `tabs.rip`      | 92    | Tab panel with roving tabindex, orientation, activation modes |
-| `popover.rip`   | 116   | Anchored floating content with data-trigger/data-content      |
-| `tooltip.rip`   | 99    | Hover/focus tooltip with delay and positioning                |
-| `menu.rip`      | 132   | Dropdown action menu with hidden-slot pattern                 |
-| `combobox.rip`  | 152   | Filterable input + listbox                                    |
-| `select.rip`    | 182   | Dropdown with typeahead, ARIA listbox                         |
-| `grid.rip`      | 901   | Virtual-scrolling data grid (100K+ rows at 60fps)             |
 
 **Widget conventions:**
 
@@ -643,67 +617,6 @@ creates a single bundle at `{prefix}/bundle`.
 
 All widgets become available by name (`Select`, `Dialog`, `Grid`, etc.) in
 the shared scope — no imports needed.
-
-**Grid highlights (Google Sheets-grade UX):**
-
-- DOM recycling: pooled `<tr>` elements, `textContent` updates, zero allocation per scroll frame
-- Sheets-style selection: anchor stays at mousedown, swap on mouseup, selection overlay div
-- Full keyboard: arrows, Tab, Enter/F2 edit, Ctrl+Arrow data-boundary jump, PageUp/Down, Ctrl+A, type-to-edit
-- Smart Enter: commit-stay on first press, move-down-and-edit on second (via `_enterCommit` flag)
-- Clipboard: Ctrl+C/V/X with TSV format (interop with Excel/Sheets/Numbers)
-- Multi-column sorting: click header, Shift+click for secondary sort
-- Column resizing: drag header borders
-- Inline editing: pixel-perfect text alignment, `border: 2px` inset, `outline` outset, system-ui font
-- Stripe-aware selection fill with blue-tinted internal gridlines
-- No hover during drag (`$selecting` suppresses hover CSS)
-
-**Widget Gallery dev server (`packages/ui/`):**
-
-The widget gallery uses `data-src` mode for testing individual widgets.
-The dev server is `index.rip` (14 lines) and the gallery is `index.html`.
-
-```coffee
-# index.rip — minimal dev server
-import { get, use, start, notFound } from '@rip-lang/server'
-import { serve } from '@rip-lang/server/middleware'
-
-dir = import.meta.dir
-use serve dir: dir, bundle: ['.'], watch: true
-get '/*.rip', -> @send "#{dir}/#{@req.path.slice(1)}", 'text/plain; charset=UTF-8'
-notFound -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
-start port: 3005
-```
-
-Hot reload: `rip server` from `packages/ui/` gives auto-HTTPS + mDNS
-(`https://widgets.local`). The browser connects to the server's built-in
-`/watch` SSE endpoint. Two reload mechanisms work together:
-
-- `**.rip` file changes**: Manager detects the change, does a rolling restart.
-The SSE connection drops and EventSource auto-reconnects. The browser
-script detects the reconnection and calls `location.reload()`.
-- `**.html`/`.css` changes**: The serve middleware's `watchDirs` (registered
-via `bundle: ['.']` and `watch: true`) detects the change and broadcasts
-a `reload` SSE event directly — no rolling restart needed. The event's
-`data` field distinguishes change types: `.css` changes send `data: styles`
-(client refreshes stylesheets only, no full page reload) while `.html`/`.rip`
-changes send `data: page` (full page reload).
-
-The browser reload script is in `index.html`:
-
-```html
-<script>
-  let ready = false;
-  const es = new EventSource('/watch');
-  es.addEventListener('connected', () => ready ? location.reload() : (ready = true));
-  es.addEventListener('reload', (e) => {
-    if (e.data === 'styles') {
-      document.querySelectorAll('link[rel="stylesheet"]').forEach(l => l.href = l.href.replace(/\?.*|$/, '?' + Date.now()));
-    } else {
-      location.reload();
-    }
-  });
-</script>
-```
 
 **Important architecture note for AI assistants:** Do NOT implement custom file
 watchers or SSE endpoints in the worker `index.rip`. The `rip server` process
@@ -814,43 +727,6 @@ Browser compiler options: `skipExports` (suppresses `export` keyword), `skipRunt
 ## Rip Loader (`rip-loader.js`)
 
 Bun plugin that compiles `.rip` files on the fly and rewrites `@rip-lang/*` imports to absolute paths (needed because Bun worker threads don't respect `NODE_PATH`). Preloaded via `bunfig.toml` or `--preload`. See source and inline comments for details.
-
----
-
-## Language Features
-
-### Removed (from CoffeeScript / Rip 2.x)
-
-| Feature                            | Replacement                   |
-| ---------------------------------- | ----------------------------- |
-| Postfix spread/rest (`x...`)       | Prefix only: `...x` (ES6)     |
-| Prototype access (`x::y`, `x?::y`) | `.prototype` or class syntax  |
-| Binary existential (`x ? y`)       | `x ?? y` (nullish coalescing) |
-| `is not` contraction               | `isnt`                        |
-| `for x from iterable`              | `for x as iterable`           |
-
-### Added
-
-| Feature               | Syntax           | Purpose                                                          |
-| --------------------- | ---------------- | ---------------------------------------------------------------- |
-| Ternary operator      | `x ? a : b`      | JS-style ternary expressions                                     |
-| Postfix ternary       | `a if x else b`  | Python-style ternary expressions                                 |
-| `for...as` iteration  | `for x as iter`  | ES6 `for...of` on iterables                                      |
-| `as!` async shorthand | `for x as! iter` | Shorthand for `for await x as iter`                              |
-| Defined check         | `x!?`            | Postfix `!?` — true if not undefined                             |
-| Presence check        | `x?!`            | Postfix `?!` — true if truthy, else undefined (Houdini operator) |
-| Optional chain assign | `x?.prop = val`  | Guarded assignment — skips if null/undefined                     |
-
-### Kept
-
-| Feature                     | Syntax                    | Compiles to                   |
-| --------------------------- | ------------------------- | ----------------------------- |
-| Existence check             | `x?`                      | `(x != null)`                 |
-| Optional chaining           | `a?.b`, `a?.[0]`, `a?.()` | ES6 optional chaining         |
-| Optional chaining shorthand | `a?[0]`, `a?(x)`          | `a?.[0]`, `a?.(x)`            |
-| Optional chain assign       | `x?.prop = val`           | `if (x != null) x.prop = val` |
-| Nullish coalescing          | `a ?? b`                  | `a ?? b`                      |
-| Dammit operator             | `fetchData!`              | `await fetchData()`           |
 
 ---
 
