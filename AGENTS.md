@@ -612,7 +612,7 @@ Bun plugin that compiles `.rip` files on the fly and rewrites `@rip-lang/*` impo
 | `[-n]`      | Negative index  | `arr[-1]` — last element via `.at()`                                   |
 | `*`         | String repeat   | `"-" * 40` — string repetition                                         |
 | `<` `<=`    | Chained         | `1 < x < 10` — chained comparisons                                     |
-| `|>`        | Pipe            | `x |> fn` or `x |> fn(y)` — first-arg pipe                             |
+| `           | >`              | Pipe                                                                   | `x | > fn` or `x | > fn(y)` — first-arg pipe |
 | `.=`        | Method assign   | `x .= trim()` — `x = x.trim()` (Rip original)                          |
 | `?.` `=`    | Optional assign | `el?.style.display = "none"` — guarded assign (Rip original)           |
 | `=`         | Render text     | `= item.textContent` — output expression as text node in render blocks |
@@ -622,7 +622,7 @@ Bun plugin that compiles `.rip` files on the fly and rewrites `@rip-lang/*` impo
 | `it`        | Implicit param  | `-> it > 5` — auto-injected parameter                                  |
 | `or return` | Guard           | `x = get() or return err` — early return                               |
 | `?? throw`  | Nullish guard   | `x = get() ?? throw err` — throw if null                               |
-| `%w`        | Word literal    | `%w[foo bar baz]` — `["foo", "bar", "baz"]` (Ruby-style)              |
+| `%w`        | Word literal    | `%w[foo bar baz]` — `["foo", "bar", "baz"]` (Ruby-style)               |
 
 ### Standard Library
 
