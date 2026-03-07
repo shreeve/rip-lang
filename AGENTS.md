@@ -1,5 +1,3 @@
-<img src="https://raw.githubusercontent.com/shreeve/rip-lang/main/docs/assets/rip.png" style="width:50px" /> <br>
-
 # AI Agent Guide for Rip
 
 **Purpose:** This document helps AI assistants understand and work with the Rip language compiler and its ecosystem of packages.
@@ -19,7 +17,7 @@ echo 'your code' | ./bin/rip -s  # S-expressions (parser)
 echo 'your code' | ./bin/rip -c  # JavaScript (codegen)
 
 # Run tests
-bun run test                             # All tests (1457)
+bun run test                             # All tests
 bun test/runner.js test/rip/FILE.rip     # Specific file
 
 # Rebuild parser (after grammar changes)
@@ -30,52 +28,6 @@ bun run build
 
 # Serve an app (watches *.rip, HTTPS, mDNS)
 rip server
-```
-
-### Current Status
-
-| Metric       | Value                     |
-| ------------ | ------------------------- |
-| Version      | 3.13.71                   |
-| Tests        | 1,457                     |
-| Dependencies | Zero                      |
-| Self-hosting | Yes (Rip compiles itself) |
-
----
-
-## Project Structure
-
-```
-rip-lang/
-├── src/
-│   ├── lexer.js         # Lexer + Rewriter (1,778 LOC)
-│   ├── compiler.js      # Compiler + Code Generator (3,334 LOC)
-│   ├── types.js         # Type System — sidecar for lexer (1,091 LOC)
-│   ├── components.js    # Component System — sidecar for compiler (2,026 LOC)
-│   ├── sourcemaps.js    # Source Map V3 generator (189 LOC)
-│   ├── typecheck.js     # Shared type-checking infrastructure (442 LOC)
-│   ├── parser.js        # Generated parser (359 LOC) — Don't edit!
-│   ├── repl.js          # Terminal REPL (600 LOC)
-│   ├── browser.js       # Browser integration (194 LOC)
-│   └── grammar/
-│       ├── grammar.rip  # Grammar specification (948 LOC)
-│       ├── lunar.rip    # Recursive descent parser generator (2,412 LOC)
-│       └── solar.rip    # SLR(1) parser generator (929 LOC) — Don't edit!
-├── packages/            # Optional packages (see Packages section below)
-│   ├── ui/              # Rip UI — headless components (Select, Dialog, Grid, etc.)
-│   ├── server/          # @rip-lang/server — Web framework + production server
-│   ├── db/              # @rip-lang/db — DuckDB server
-│   ├── schema/          # @rip-lang/schema — ORM + validation
-│   ├── swarm/           # @rip-lang/swarm — Parallel job runner
-│   ├── csv/             # @rip-lang/csv — CSV parser + writer
-│   ├── http/            # @rip-lang/http — HTTP client (ky-inspired)
-│   ├── print/           # @rip-lang/print — Syntax-highlighted code printer
-│   └── vscode/          # VS Code/Cursor extension
-├── docs/
-│   ├── RIP-LANG.md      # Language reference (includes reactivity, future ideas)
-│   └── RIP-TYPES.md     # Type system specification
-├── test/rip/            # 26 test files (1,457 tests)
-└── scripts/             # Build utilities (all .js — run via `bun run <name>`)
 ```
 
 ### File Editing Rules
@@ -100,7 +52,7 @@ rip-lang/
 
 ```
 Rip Source  ->  Lexer  ->  emitTypes  ->  Parser  ->  S-Expressions  ->  Codegen  ->  JavaScript
-               (1,778)     (types.js)     (357)       (arrays + .loc)     (3,334)      + source map
+                           (types.js)                 (arrays + .loc)               + source map
                               ↓
                            file.d.ts (when types: "emit")
 ```
@@ -525,7 +477,7 @@ CSS enter/leave transitions on conditional blocks:
 
 ### Testing Components
 
-Component tests live in `test/rip/components.rip` (107 tests). Use `code` tests with `{ skipPreamble: true, skipRuntimes: true }` options to verify generated JavaScript output for render blocks. Use `test` tests for runtime behavior (state, computed, methods, LIS algorithm, error boundaries — no DOM needed).
+Component tests live in `test/rip/components.rip`. Use `code` tests with `{ skipPreamble: true, skipRuntimes: true }` options to verify generated JavaScript output for render blocks. Use `test` tests for runtime behavior (state, computed, methods, LIS algorithm, error boundaries — no DOM needed).
 
 ---
 
@@ -692,34 +644,7 @@ code "name", "x + y", "(x + y)"
 fail "name", "invalid syntax"
 ```
 
-### Test Files (26 files, 1,457 tests)
-
-```
-test/rip/
-├── arrows.rip        ├── literals.rip
-├── assignment.rip    ├── loops.rip
-├── async.rip         ├── modules.rip
-├── basic.rip         ├── operators.rip
-├── classes.rip       ├── optional.rip
-├── commaless.rip     ├── parens.rip
-├── components.rip    ├── precedence.rip
-├── comprehensions.rip├── properties.rip
-├── control.rip       ├── reactivity.rip
-├── data.rip          ├── regex.rip
-├── errors.rip        ├── semicolons.rip
-├── functions.rip     ├── strings.rip
-└── guards.rip        └── types.rip
-```
-
----
-
-## Documentation Map
-
-| File                  | Purpose                                                                         |
-| --------------------- | ------------------------------------------------------------------------------- |
-| **README.md**         | User guide, features, installation                                              |
-| **docs/RIP-LANG.md**  | Full language reference (syntax, operators, reactivity, packages, future ideas) |
-| **docs/RIP-TYPES.md** | Type system specification                                                       |
+Test files are in `test/rip/` — use `ls test/rip/` to see the full list.
 
 ---
 
