@@ -241,8 +241,6 @@ The compiler auto-detects types — `checked` uses the `change` event, number in
 
 Implementation: lexer tokenizes `<=>` as `BIND`, the render rewriter transforms `value <=> x` to `__bind_value__: x`, and the component code generator emits the effect + event listener pair. See `src/components.js`.
 
-**How `<=>` works on components (signal sharing):** For HTML elements, `<=>` compiles to an effect + event listener pair. For **components**, it works differently — the parent's signal is passed directly via `__bind_propName__` prop. The child's `_init` checks for this prop first: `this.checked = __state(props.__bind_checked__ ?? props.checked ?? false)`. Since `__state()` has signal passthrough (returns existing signals as-is), parent and child share the exact same signal object. Mutations in either direction are instantly visible to both — no events or sync needed. This is why `<=>` on components is more efficient than on HTML elements.
-
 ---
 
 ## Component System Architecture (`src/components.js`)
@@ -287,19 +285,6 @@ Generates fine-grained DOM operations at compile time (no virtual DOM):
 - `**generateTemplateLoop**` — emits a `__reconcile` call with LIS-based keyed diffing
 - `**emitBlockFactory**` — shared factory emitter (c/m/p/d + `_first` + `_s` + `_t`) used by both conditionals and loops
 
-### Factory Mode (`_factoryMode`)
-
-Block factories need local variables and `ctx` references instead of `this._elN` and `this.member`. Rather than generating with `this.` and regex-replacing after, the codegen uses a **factory mode** flag:
-
-- `**_factoryMode`** (bool) — when true, generation emits `_el0` (local) and `ctx.member` instead of `this._el0` and `this.member`
-- `**_self**` (getter) — returns `'this'` or `'ctx'` based on mode
-- `**_factoryVars**` (Set) — tracks variables created during factory generation (for `let` declarations)
-- `**_fragChildren**` (Map) — tracks fragment-to-children mappings (for proper removal after insertBefore)
-- `**_pushEffect(body)**` — emits `__effect(...)` normally or `disposers.push(__effect(...))` in factory mode
-- `**_loopVarStack**` — accumulates loop variables for threading through nested factories
-
-Factory mode is entered in `generateConditionBranch` and `generateTemplateLoop` via save/restore of `[_createLines, _setupLines, _factoryMode, _factoryVars]`.
-
 ### Auto-Wired Event Handlers (`on*` convention)
 
 Component methods named `onClick`, `onKeydown`, `onMouseenter`, etc. are automatically bound to the component's root DOM element. The rule: `on` + capitalized event name → `addEventListener(lowercased, handler)` on the root element. No explicit `@click: @onClick` wiring needed.
@@ -321,42 +306,9 @@ export Checkbox = component
       slot
 ```
 
-### List Reconciliation (`__reconcile`)
-
-Loop rendering uses a runtime `__reconcile` function instead of inlined reconciliation code. The algorithm:
-
-1. **Phase 0 — Creation batch**: First render accumulates all blocks into a DocumentFragment, single DOM insert (1 op vs N)
-2. **Phase 1 — Prefix scan**: Matching items at the start skip `p()` entirely (effects already live)
-3. **Phase 2 — Suffix scan**: Matching items at the end call `p()` (index may differ)
-4. **Phase 3 — Fast paths**: Pure insertion (DocumentFragment batch) or pure deletion
-5. **Phase 4 — LIS**: Longest Increasing Subsequence for minimal DOM moves on genuine reorders
-
-Compile-time optimizations:
-
-- **Static blocks** (`_s: true`) — when `p()` has no effects, skip patch calls entirely
-- **Array-based storage** — `state.blocks[]` for O(1) index lookup (no persistent Map)
-- **Direct items-as-keys** — `state.keys = items.slice()` for default case (no keyFn allocation)
-
-### Error Boundaries
-
-`onError` lifecycle hook catches errors and walks the `_parent` chain:
-
-- **Constructor**: wraps `_init` in try-catch, calls `__handleComponentError(e, this)`
-- **Mount**: wraps `_create`/`_setup`/`mounted` in try-catch
-- **Child components**: codegen wraps child `_setup`/`mounted` calls in try-catch at compile time
-- `**__handleComponentError(error, component)`**: walks `_parent` to find nearest `onError` handler; rethrows if none found
-
 ### Transitions (`~tilde` syntax)
 
-CSS enter/leave transitions on conditional blocks:
-
-- **Syntax**: `div ~fade` — tilde modifier on elements in render blocks
-- **Rewriter**: converts `UNARY_MATH ~ + IDENTIFIER fade` to `PROPERTY __transition__: STRING "fade"`
-- **Codegen**: `generateAttributes` intercepts `__transition__` → emits `this._t = "fade"` on the block
-- **Conditional**: checks `currentBlock._t` for async leave (callback-based) and enter (fire-and-forget)
-- **Runtime**: `__transition(el, name, dir, done)` manages CSS class dance (double-rAF + transitionend)
-- **Built-in presets**: `fade`, `slide`, `scale`, `blur`, `fly` — CSS injected lazily by `__transitionCSS()`
-- **Custom transitions**: `div ~anything` works with user-provided CSS using `{name}-enter-from`, `{name}-enter-active`, `{name}-leave-to` convention
+CSS enter/leave transitions on conditional blocks. Use `div ~fade` syntax in render blocks. Built-in presets: `fade`, `slide`, `scale`, `blur`, `fly`. Custom transitions work with user-provided CSS using `{name}-enter-from`, `{name}-enter-active`, `{name}-leave-to` convention.
 
 ### Testing Components
 
