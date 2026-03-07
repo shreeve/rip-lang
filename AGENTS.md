@@ -46,6 +46,18 @@ rip server
 | `src/grammar/solar.rip`   | Never     | Parser generator (given)                                        |
 | `test/rip/*.rip`          | Yes       | Test files                                                      |
 
+### Critical Rules
+
+- **Never edit `src/parser.js`** -- It's generated
+- **Never edit `src/grammar/solar.rip`** -- It's given
+- **Never commit without running tests** -- `bun run test` must pass
+- **Never add dependencies** -- Zero dependencies is a core principle
+- **Never read or execute scripts directly** -- Use `bun run <name>` (e.g. `bun run bump`, not `scripts/bump.js`)
+- Run `bun run test` before committing
+- Run `bun run parser` after grammar changes
+- Run `bun run build` after codegen, components.js, or browser.js changes
+- Run `bun run bump` to release -- it handles version, test, build, commit, push, and publish
+
 ---
 
 ## The Compilation Pipeline
@@ -198,27 +210,15 @@ export TabContent = component
 
 ### Two-Way Binding (`<=>`)
 
-In Rip UI render blocks, the `<=>` operator creates bidirectional reactive bindings between parent state and child elements or components. This is a Rip original — it eliminates React's verbose controlled component pattern entirely.
+In Rip UI render blocks, the `<=>` operator creates bidirectional reactive bindings between parent state and child elements or components.
 
 ```coffee
-# HTML elements
 input value <=> @name               # text input
-input type: "number", value <=> @age # number input (uses valueAsNumber)
 input type: "checkbox", checked <=> @active # checkbox
-
-# Custom components — same operator, same mental model
-Dialog open <=> @showConfirm
-Select value <=> @role
-Switch checked <=> @darkMode
-Combobox query <=> @search, value <=> @selected
+Dialog open <=> @showConfirm        # custom components too
 ```
 
-`value <=> username` compiles to two things:
-
-1. **State → DOM**: `__effect(() => { el.value = username; })`
-2. **DOM → State**: `el.addEventListener('input', (e) => { username = e.target.value; })`
-
-The compiler auto-detects types — `checked` uses the `change` event, number inputs use `valueAsNumber`. Smart auto-binding also works: `value: @name` where `@name` is reactive generates two-way binding automatically without needing `<=>`.
+The compiler auto-detects types -- `checked` uses the `change` event, number inputs use `valueAsNumber`. Smart auto-binding also works: `value: @name` where `@name` is reactive generates two-way binding automatically without needing `<=>`.
 
 ---
 
@@ -241,10 +241,8 @@ Tag class patterns in render blocks:
 ```coffee
 div.card                     # static class: <div class="card">
 .card                        # implicit div: <div class="card">
-div.card.active              # multiple: <div class="card active">
 .("flex-1 p-4")             # dynamic: <div class="flex-1 p-4"> (via __clsx)
 .card.("flex-1 p-4")        # combined: <div class="card flex-1 p-4">
-.card.primary.("flex", x)   # multiple static + dynamic args
 ```
 
 Key mechanisms: `startsWithTag` (backward scan to determine if line starts with a template tag), `pendingCallEnds` (indent-level stack for matching injected CALL_START/CALL_END pairs), `fromThen` skip (inline values from `if x then y else z`, never template nesting), data attribute sigil (`$open: true` -> `"data-open": true`).
@@ -262,12 +260,10 @@ Component methods named `onClick`, `onKeydown`, `onMouseenter`, etc. are automat
 - **Lifecycle exclusion**: `onError` (in `LIFECYCLE_HOOKS`) is not auto-wired
 
 ```coffee
-# onClick and onKeydown auto-wire to the root button — no @click/@keydown needed
+# onClick auto-wires to the root button
 export Checkbox = component
   @checked := false
   onClick: -> @checked = not @checked
-  onKeydown: (e) ->
-    @onClick() if e.key in ['Enter', ' ']
   render
     button role: 'checkbox', aria-checked: !!@checked
       slot
@@ -300,11 +296,6 @@ User ::= type
   name: string
   email?: string
 
-# Interfaces
-interface Animal
-  name: string
-  speak: => void
-
 # Enums (emit runtime JS + .d.ts)
 enum Status
   Active
@@ -313,22 +304,11 @@ enum Status
 
 ### Architecture
 
-All type logic lives in `src/types.js` (lexer sidecar):
-
-- `installTypeSupport(Lexer)` — adds `rewriteTypes()` to the lexer
-- `emitTypes(tokens)` — generates `.d.ts` from annotated tokens
-- `generateEnum()` — generates runtime JS for enums
-
-Types are processed at the **token level** before parsing. The parser never sees type annotations — they're stripped during token rewriting with metadata stored on tokens for `.d.ts` emission.
+All type logic lives in `src/types.js` (lexer sidecar): `installTypeSupport(Lexer)` adds `rewriteTypes()`, `emitTypes(tokens)` generates `.d.ts`, `generateEnum()` generates runtime JS. Types are processed at the **token level** before parsing -- the parser never sees type annotations.
 
 ### Shadow TypeScript (`--shadow`)
 
-The `--shadow` flag dumps the virtual TypeScript file that `rip check` and the VS Code LSP feed to the TypeScript language service. This is the primary tool for debugging type issues. The output has two sections:
-
-1. **DTS declarations** — type annotations (`::`) emitted as TypeScript `let x: Type` declarations, plus type aliases, interfaces, enums, and reactive helper types (`Signal<T>`, `Computed<T>`)
-2. **Compiled body** — the full compiled JavaScript, with `@ts-expect-error` directives injected where `rip check` expects type errors
-
-TypeScript sees both sections together as a single `.ts` file. This means declared types constrain the compiled assignments below them — that's how Rip achieves type checking without ever writing TypeScript.
+The `--shadow` flag dumps the virtual TypeScript file that `rip check` and the VS Code LSP feed to the TypeScript language service. The output combines DTS declarations (type annotations emitted as TypeScript) with the compiled JavaScript body. TypeScript sees both together as a single `.ts` file.
 
 ```bash
 # Typical debugging workflow
@@ -366,32 +346,16 @@ The Rip extension (`packages/vscode/`) provides syntax highlighting, auto `.d.ts
 
 ### Fix a Bug in Codegen
 
-```bash
-# 1. Debug the pattern
-echo 'failing code' | ./bin/rip -s  # See s-expression
-
-# 2. Find the generator
-grep "GENERATORS" src/compiler.js
-
-# 3. Fix it, then test
-bun run test
-```
+1. `echo 'failing code' | ./bin/rip -s` -- see the s-expression
+2. `grep "GENERATORS" src/compiler.js` -- find the generator method
+3. Fix it, then `bun run test`
 
 ### Add a Grammar Rule
 
-```bash
-# 1. Edit grammar
-# src/grammar/grammar.rip
-
-# 2. Regenerate parser
-bun run parser
-
-# 3. Add codegen if needed
-# src/compiler.js
-
-# 4. Test
-bun run test
-```
+1. Edit `src/grammar/grammar.rip`
+2. `bun run parser` -- regenerate parser
+3. Add codegen in `src/compiler.js` if needed
+4. `bun run test`
 
 ---
 
@@ -443,26 +407,13 @@ notFound -> @send 'index.html', 'text/html; charset=UTF-8'
 start port: 3000
 ```
 
-```bash
-rip server        # Start server (watches *.rip by default)
-```
-
-### Rip UI (built into rip-lang) — Reactive Web Framework
+### Rip UI (built into rip-lang) -- Reactive Web Framework
 
 Zero-build reactive web framework. The browser loads `rip.min.js`
 (compiler + pre-compiled UI framework), auto-detects inline components,
-and renders with fine-grained DOM updates. Uses Rip's built-in reactive
-primitives directly.
+and renders with fine-grained DOM updates.
 
-Key concepts:
-
-- **Shared scope** — Inline `<script type="text/rip">` tags are compiled and executed in one shared IIFE. Components use `export` to make themselves visible to other tags; exports are stripped to `const` declarations in the shared scope.
-- **Bundle mode** — URLs in `data-src` that don't end in `.rip` are fetched as JSON bundles containing multiple files. The serve middleware provides bundles at `/{app}/bundle`.
-- **Stash** — Created from `data-state` JSON. Bundle data is merged automatically.
-- `**component` / `render**` — Two keywords added to Rip for defining components with reactive state (`:=`), computed (`~=`), effects (`~>`)
-- **File-based routing** — `pages/users/[id].rip` → `/users/:id` (Next.js-style). Shared components go in `components/`.
-- **Unified stash** — Deep reactive proxy with path navigation, uses `__state` from Rip's built-in reactive runtime
-- **Hot reload** — Server sends notify-only SSE events, browser invalidates + refetches + remounts
+Key concepts: **Shared scope** (all `<script type="text/rip">` tags compile into one shared IIFE; `export` makes components visible across tags), **Bundle mode** (URLs in `data-src` that don't end in `.rip` are fetched as JSON bundles via serve middleware), **File-based routing** (`pages/users/[id].rip` -> `/users/:id`), **Hot reload** (SSE notify events, browser refetches + remounts).
 
 ```coffee
 # Server (index.rip)
@@ -636,37 +587,6 @@ Bun plugin that compiles `.rip` files on the fly and rewrites `@rip-lang/*` impo
 
 ---
 
-## Critical Rules
-
-- **Never edit `src/parser.js`** — It's generated
-- **Never edit `src/grammar/solar.rip`** — It's given
-- **Never commit without running tests** — `bun run test` must pass
-- **Never add dependencies** — Zero dependencies is a core principle
-- **Never read or execute scripts directly** — Use `bun run <name>` (e.g. `bun run bump`, not `scripts/bump.js`)
-- Run `bun run test` before committing
-- Run `bun run parser` after grammar changes
-- Run `bun run build` after codegen or browser.js changes
-- Run `bun run bump` to release — it handles version, test, build, commit, push, and publish
-
----
-
-## Debugging Tips
-
-```bash
-# When tests fail
-bun test/runner.js test/rip/FILE.rip  # Run specific test
-echo 'code' | ./bin/rip -s            # Check s-expression
-echo 'code' | ./bin/rip -c            # Check generated JS
-
-# Interactive REPL with debug modes
-./bin/rip
-rip> .tokens  # Toggle token display
-rip> .sexp    # Toggle s-expression display
-rip> .js      # Toggle JS display
-```
-
----
-
 ## Quick Reference
 
 ### Unique Operators
@@ -726,21 +646,4 @@ Rip injects 13 global helpers via `globalThis` into every compiled program. Defi
 
 All use `??=` (overridable by redeclaring). The REPL uses `skipPreamble: true` and injects separately via `getStdlibCode()`.
 
-### Build Commands
-
-All scripts live in `scripts/` as `.js` files. Always use `bun run <name>` — never try to read or execute scripts directly.
-
-```bash
-bun run test      # Run all tests
-bun run parser    # Rebuild parser from grammar
-bun run build     # Build browser bundle (docs/dist/rip.min.js)
-bun run bump      # All-in-one release: bump version, test, build, commit, push, publish
-bun run serve     # Start dev server (localhost:3000)
-bun publish       # Publish to npm (use bun, not npm)
-```
-
-`**bun run bump**` is the standard release workflow. It handles everything: increments the patch version, runs the test suite, rebuilds the browser bundle, commits, pushes, and publishes to npm. Use this instead of manually running build + commit + push separately.
-
 ---
-
-**For AI Assistants:** The code is well-tested and the architecture is clear. Trust the tests, use the debug tools (`-s`, `-t`, `-c`), and follow existing patterns. Most compiler work happens in `src/compiler.js` — find the generator method for the node type you're working with and modify it. For package work, each package has its own README with detailed documentation — see `packages/README.md` for the overview.
