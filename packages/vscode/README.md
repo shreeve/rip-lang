@@ -127,6 +127,14 @@ bun run install-ext
 
 Both `vscode` and `typescript` are external (not bundled) — `vscode` is provided by the editor, `typescript` is loaded at runtime from the workspace or editor.
 
+## Settings
+
+| Setting                    | Default | Description                                |
+| -------------------------- | ------- | ------------------------------------------ |
+| `rip.types.generateOnSave` | `true`  | Auto-generate `.d.ts` on save              |
+| `rip.types.intellisense`   | `true`  | Enable autocomplete/hover/go-to-definition |
+| `rip.compiler.path`        | (auto)  | Path to the `rip` compiler binary          |
+
 ## Publishing
 
 ```bash

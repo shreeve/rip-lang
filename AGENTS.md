@@ -397,37 +397,7 @@ Debuggers (Node.js, Bun, Chrome DevTools) read inline source maps natively — b
 
 ## VS Code Extension
 
-The Rip extension (`packages/vscode/`) provides IDE support for VS Code and Cursor.
-
-### Features
-
-- **Syntax highlighting** — TextMate grammar for all Rip syntax
-- **Auto .d.ts generation** — generates type declarations on save (Level 1)
-- **Type intelligence** — autocomplete, hover, go-to-definition from third-party `.d.ts` files (Level 2)
-- **Commands** — "Generate .d.ts for Current File" and "Generate .d.ts for All Files"
-
-### How Type Intelligence Works
-
-1. On each edit (300ms debounce), the extension compiles `.rip` to a shadow `.ts` file in `.rip-cache/`
-2. VS Code's built-in TypeScript extension analyzes the shadow file and resolves `node_modules` types
-3. Completion/hover/definition requests are proxied from `.rip` → shadow `.ts` using the reverse source map
-4. TypeScript's results are returned to the `.rip` editor
-
-### Settings
-
-| Setting                    | Default | Description                                |
-| -------------------------- | ------- | ------------------------------------------ |
-| `rip.types.generateOnSave` | `true`  | Auto-generate `.d.ts` on save              |
-| `rip.types.intellisense`   | `true`  | Enable autocomplete/hover/go-to-definition |
-| `rip.compiler.path`        | (auto)  | Path to the `rip` compiler binary          |
-
-### Publishing
-
-```bash
-cd packages/vscode
-npx @vscode/vsce login rip-lang    # Login with PAT (one-time)
-npx @vscode/vsce publish           # Publish to Marketplace
-```
+The Rip extension (`packages/vscode/`) provides syntax highlighting, auto `.d.ts` generation on save, and TypeScript-powered type intelligence (autocomplete, hover, go-to-definition). See `packages/vscode/README.md` for settings and publishing.
 
 ---
 
@@ -835,142 +805,15 @@ then `bun update` to pull into global. Use `bun run bump` only for full releases
 
 ## Browser Runtime
 
-`src/browser.js` (~150 LOC) provides the browser entry point. The browser
-bundle (`docs/dist/rip.min.js`) is built as an IIFE and loaded with
-`<script defer>` (not `type="module"` — this allows `file://` loading
-without CORS issues).
+`src/browser.js` provides the browser entry point. The browser bundle (`docs/dist/rip.min.js`) is built as an IIFE. All `<script type="text/rip">` tags are compiled and executed together in one shared async IIFE. Components use `export` to become visible across tags; `skipExports` strips the keyword to plain `const` in the shared scope.
 
-### Shared-Scope Model
+Key `<script>` tag attributes: `data-src` (URLs to load), `data-mount` (component to mount), `data-target` (mount selector), `data-state` (JSON stash seed), `data-router` (history/hash routing), `data-persist` (session/localStorage), `data-reload` (SSE hot reload).
 
-All `<script type="text/rip">` tags (inline or `src`) are compiled and
-executed together in ONE shared async IIFE. Components defined with `export`
-in one script tag are visible to all subsequent tags (exports are stripped
-via the `skipExports` compiler option, becoming plain `const` declarations
-in the shared scope).
-
-### Loading Flow
-
-`processRipScripts()` runs on `DOMContentLoaded` and handles all loading:
-
-1. Collect `data-src` URLs from the runtime `<script>` tag (whitespace-separated)
-2. Collect all `<script type="text/rip">` tags (inline `textContent` or external `src`)
-3. Fetch all URLs via `Promise.allSettled` — `.rip` URLs as source text, others as JSON bundles
-4. Expand bundles into individual sources, merge bundle data into `data-state`
-5. Compile each source with `{ skipRuntimes: true, skipExports: true }`
-6. If `data-mount` is present, append `Component.mount(target)` to the compiled code
-7. Execute everything as one shared async IIFE
-
-### HTML Attributes
-
-All attributes go on the runtime `<script>` tag. None are required.
-
-| Attribute      | Default  | Notes                                                                                                  |
-| -------------- | -------- | ------------------------------------------------------------------------------------------------------ |
-| `data-src`     | (none)   | Whitespace-separated URLs to load. `.rip` URLs fetched as source text, all others fetched as JSON bundles. Sources compile into one shared scope. |
-| `data-mount`   | (none)   | Component name to instantiate and mount after all sources are compiled.                                |
-| `data-target`  | `'body'` | CSS selector for the mount target. Pairs with `data-mount`.                                            |
-| `data-state`   | `{}`     | JSON object to seed the app stash. Bundle data is merged in automatically.                             |
-| `data-router`  | off      | Enables client-side routing. Present with no value or `"history"`: history mode (`pushState`). `"hash"`: hash mode (`#/path`). Absent: no routing. |
-| `data-persist` | off      | Persist the app stash across page reloads. Present with no value: sessionStorage. `"local"`: localStorage. |
-| `data-reload`  | off      | Connect to `/watch` SSE endpoint for hot reload. CSS changes refresh stylesheets only; other changes trigger full page reload. |
-
-### Component Mounting
-
-Every component class has a static `mount(target)` method:
-
-```coffee
-App.mount '#app'     # shorthand for App.new().mount('#app')
-App.mount()          # defaults to 'body'
-```
-
-This can be used from a `<script type="text/rip">` tag as an alternative to
-`data-mount`. `data-mount` is declarative (no extra script tag); `App.mount`
-is code-based (more flexible — conditional mounting, multiple mounts, etc.).
-
-### Key Features
-
-- `**rip()` console REPL** — Wraps code in a Rip `do ->` block before
-compiling, so the compiler handles implicit return and auto-async natively.
-Sync code returns values directly; async code returns a Promise.
-- `**importRip(url)`** — Fetches a `.rip` file, compiles it, imports as an
-ES module via blob URL.
-- **Eager runtime registration** — Both reactive (`__rip`) and component
-(`__ripComponent`) runtimes are registered on `globalThis` at load time.
-
-### globalThis Registrations
-
-| Function            | Purpose                                                              |
-| ------------------- | -------------------------------------------------------------------- |
-| `rip(code)`         | Console REPL — compile and execute Rip code                          |
-| `importRip(url)`    | Fetch, compile, and import a `.rip` file                             |
-| `compileToJS(code)` | Compile Rip source to JavaScript                                     |
-| `__rip`             | Reactive primitives (`__state`, `__computed`, `__effect`, `__batch`) |
-| `__ripComponent`    | Component runtime (`__component`, `__render`, etc.)                  |
-
-### Compiler Options for Browser
-
-| Option         | Purpose                                                                                                                                       |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `skipExports`  | Suppresses `export` keywords in codegen — `export const X` becomes `const X`                                                                  |
-| `skipRuntimes` | Skips reactive/component runtime blocks (already on `globalThis`), uses `var` for helpers to allow safe re-emission across concatenated files |
-
-### Variable Persistence in `rip()`
-
-`let` declarations are stripped (bare assignments create globals in sloppy
-mode eval). `const` is hoisted to `globalThis.` explicitly. This allows
-variables to persist across `rip()` calls in the browser console.
-
----
+Browser compiler options: `skipExports` (suppresses `export` keyword), `skipRuntimes` (skips reactive/component runtime blocks already on `globalThis`).
 
 ## Rip Loader (`rip-loader.js`)
 
-The rip-loader is a Bun plugin that compiles `.rip` files on the fly. It's
-preloaded via `--preload rip-loader.js` (by `bin/rip`) or via `bunfig.toml`
-(in the dev workspace). It does two things:
-
-1. **Compiles `.rip` files** — Registers a Bun plugin with `onLoad` for
-  `/\.rip$/` that reads the source, compiles to JS via `compileToJS()`,
-   and returns the compiled code.
-2. **Rewrites `@rip-lang/*` imports to absolute paths** — After compilation,
-  a regex replaces `@rip-lang/*` import specifiers with absolute filesystem
-   paths resolved via `import.meta.resolve()`. This is necessary because
-   Bun's worker threads don't respect `NODE_PATH`, and `onResolve` doesn't
-   fire for imports in compiled source. Since the rip-loader lives inside
-   the global `node_modules` tree, `import.meta.resolve` finds sibling
-   `@rip-lang/*` packages naturally.
-
-### `bin/rip` Environment Setup
-
-The `rip` binary sets `NODE_PATH` to include its parent `node_modules`
-directory and passes `env: process.env` explicitly to all `spawn`/`spawnSync`
-calls. This is needed because Bun has a bug where `process.env` modifications
-are not inherited by child processes unless `env` is passed explicitly.
-
-### Known Bun Bugs/Limitations (as of Bun v1.3.9)
-
-| Bug                                                                     | Workaround                                    |
-| ----------------------------------------------------------------------- | --------------------------------------------- |
-| `process.env` changes not inherited by `spawn`/`spawnSync`              | Pass `env: process.env` explicitly            |
-| `NODE_PATH` ignored by worker threads                                   | Rewrite imports to absolute paths in `onLoad` |
-| Plugin `onResolve` doesn't fire for imports in `onLoad`-compiled source | Do import rewriting inside `onLoad` instead   |
-| `require.resolve({ paths })` ignores `paths` inside plugin handlers     | Use `import.meta.resolve` instead             |
-
----
-
-## Playground & Demos
-
-HTML files in `docs/`, all using the shared-scope model with `<script defer>`:
-
-| File                 | Purpose                                                                          |
-| -------------------- | -------------------------------------------------------------------------------- |
-| `index.html`         | Interactive playground — compiler, REPL, examples, theme select, resizable panes |
-| `demo.html`          | ACME Corp Dashboard — full ECharts app using `data-mount="Dashboard"`            |
-| `charts.html`        | Same dashboard, standalone copy                                                  |
-| `sierpinski.html`    | Sierpinski triangle demo (loads `rip.min.js` from CDN)                           |
-| `example/index.html` | Generic app launcher — fetches JSON bundle (requires server)                     |
-| `results/index.html` | Lab Results app — 7 components in shared scope with `data-mount="Home"`          |
-
-Static files (`demo.html`, `charts.html`, `sierpinski.html`) work from `file://` — just double-click to open. The playground and example app require `bun run serve` → `http://localhost:3000/`.
+Bun plugin that compiles `.rip` files on the fly and rewrites `@rip-lang/*` imports to absolute paths (needed because Bun worker threads don't respect `NODE_PATH`). Preloaded via `bunfig.toml` or `--preload`. See source and inline comments for details.
 
 ---
 
