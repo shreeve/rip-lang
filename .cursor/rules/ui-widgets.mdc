@@ -1,0 +1,91 @@
+---
+description: Rip UI widget conventions and gotchas
+globs: "{packages/ui/**,docs/ui/**}"
+alwaysApply: false
+---
+
+# UI Widgets
+
+Use this when editing `packages/ui/**` or `docs/ui/**`.
+
+Accessible headless widgets are written in Rip, expose `$` attributes for styling, and compile in the browser with no build step.
+
+## Conventions
+
+- use `ref: "_name"` for DOM refs; never `div._name`
+- common ref names: `_trigger`, `_list`, `_content`
+- use `_slot` with `style: "display:none"` to read child definitions
+- auto-wired root handlers use `onKeydown`, `onScroll`, etc.
+- child element handlers use underscore names like `_headerClick`
+- public methods do not use `_`
+- prefer `=!` for constants and `:=` only for state that should trigger updates
+- click-outside should use document `mousedown` cleanup, not backdrop divs
+- dropdowns use `position:fixed;visibility:hidden` first, then `_position()` via `requestAnimationFrame`
+- keep `preventScroll: true` at module scope
+- use reactive arrays directly: `toasts = [...toasts, { message: "Saved!" }]`
+- prefix module-scope lowercase names to avoid shared-scope collisions
+
+## Critical Gotchas
+
+- do not shadow prop names with locals inside component methods; matching names rewrite to `this.name.value`
+- always name indices in nested render loops
+- avoid `value: @prop` on `<input>` when numeric parsing matters
+- computed values are read-only; invalidate with a reactive counter
+- use imperative DOM updates for 60fps tracking work like scroll, drag, and resize
+- put side effects in `~>` branches, not only in methods like `close()`
+- bare `x.y` in render blocks is tag syntax; use `= x.y` for text output
+
+## Lifecycle and Component Model
+
+- recognized lifecycle hooks: `beforeMount`, `mounted`, `updated`, `beforeUnmount`, `unmounted`, `onError`
+- `onMount` is not a lifecycle hook
+- inside components, `->` is rewritten to `=>`
+- `ref:` sets a plain property, not a reactive signal
+- use the `_ready := false` pattern for effects that need refs after mount
+- `offer` and `accept` only become keywords inside components
+- use `$open`, `$selected`, etc. for data attributes
+- bare `slot` projects `this.children`; it does not create Shadow DOM
+- `@event:` on child components binds listeners to the child root element
+- every component has `emit(name, detail)` which dispatches a bubbling `CustomEvent`
+- `_root` must be set on child components for `emit()` to work
+
+## Integration
+
+Add widget bundles through the serve middleware:
+
+```coffee
+use serve
+  dir: dir
+  bundle:
+    ui: ['../../../packages/ui']
+    app: ['routes', 'components']
+```
+
+Then load with `data-src="ui app"`. Widgets become available by name in the shared scope.
+
+## Grid Highlights
+
+- DOM recycling with pooled rows and `textContent` updates
+- Sheets-style selection model
+- full keyboard support
+- TSV clipboard support
+- multi-column sorting
+- column resizing
+- inline editing
+
+## Widget Gallery Dev Server
+
+The gallery in `packages/ui/` uses `data-src` mode and a minimal `index.rip` dev server:
+
+```coffee
+import { get, use, start, notFound } from '@rip-lang/server'
+import { serve } from '@rip-lang/server/middleware'
+
+dir = import.meta.dir
+use serve dir: dir, bundle: ['.'], watch: true
+get '/*.rip', -> @send "#{dir}/#{@req.path.slice(1)}", 'text/plain; charset=UTF-8'
+notFound -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
+start port: 3005
+```
+
+Hot reload uses the built-in `/watch` SSE endpoint. Do not implement custom watcher or SSE logic in the worker. Use `notFound`, not `get '/*'`, for the catch-all route or you will intercept serve-middleware assets like `/rip/rip.min.js`.

@@ -1,0 +1,200 @@
+---
+description: Compiler, lexer, and grammar internals for Rip
+globs: "{src/compiler.js,src/lexer.js,src/grammar/**/*.rip}"
+alwaysApply: false
+---
+
+# Compiler Internals
+
+Use this when modifying the Rip compiler, lexer, or grammar.
+
+## S-Expression Patterns
+
+Common patterns:
+
+```javascript
+["=", "x", 42]
+["+", left, right]
+["def", "name", params, body]
+["->", params, body]
+["if", condition, then, else]
+["state", name, expr]
+["computed", name, expr]
+["enum", name, body]
+```
+
+Complete node reference:
+
+```javascript
+// Top Level
+['program', ...statements]
+
+// Variables & Assignment
+['=', target, value]
+['+=', target, value]  // Also: -=, *=, /=, %=, **=
+['&&=', target, value]  ['||=', target, value]
+['?=', target, value]   ['??=', target, value]
+
+// Functions
+['def', name, params, body]
+['->', params, body]            // Thin arrow
+['=>', params, body]            // Fat arrow
+// Params: 'name', ['rest', 'name'], ['default', 'name', expr],
+//         ['expansion'], ['object', ...], ['array', ...]
+
+// Calls & Property Access
+[callee, ...args]               // Function call
+['await', expr]
+['.', obj, 'prop']
+['?.', obj, 'prop']
+['[]', arr, index]
+['optindex', arr, index]        // arr?.[index]
+['optcall', fn, ...args]        // fn?.(args)
+['new', constructorExpr]
+['super', ...args]
+['tagged-template', tag, str]
+
+// Data Structures
+['array', ...elements]
+['object', ...pairs]            // pairs: [key, value]
+['...', expr]                   // Spread (prefix only)
+
+// Operators
+['+', left, right]   ['-', left, right]   ['*', left, right]
+['/', left, right]   ['%', left, right]   ['**', left, right]
+['==', left, right]  ['!=', left, right]  // == compiles to ===
+['<', left, right]   ['<=', left, right]
+['>', left, right]   ['>=', left, right]
+['&&', left, right]  ['||', left, right]  ['??', left, right]
+['!', expr]          ['~', expr]          ['typeof', expr]
+['delete', expr]     ['instanceof', expr, type]
+['?', expr]          // Existence check (x?)
+['defined', expr]    // Defined check (x!?)
+['presence', expr]   // Presence check (x?!) — Houdini operator
+['++', expr, isPostfix]  ['--', expr, isPostfix]
+
+// Control Flow
+['if', condition, thenBlock, elseBlock?]
+['unless', condition, body]
+['?:', condition, thenExpr, elseExpr]
+['switch', discriminant, cases, defaultCase?]
+
+// Loops
+['for-in', vars, iterable, step?, guard?, body]
+['for-of', vars, object, guard?, body]
+['for-as', vars, iterable, async?, guard?, body]  // for await
+['while', condition, body]  ['until', condition, body]  ['loop', body]
+['break']  ['continue']  ['break-if', condition]  ['continue-if', condition]
+
+// Comprehensions
+['comprehension', expr, iterators, guards]
+['object-comprehension', keyExpr, valueExpr, iterators, guards]
+
+// Exceptions
+['try', tryBlock, [catchParam, catchBlock]?, finallyBlock?]
+['throw', expr]
+
+// Classes & Types
+['class', name, parent?, ...members]
+['enum', name, body]
+
+// Ranges
+['..', from, to]      // Inclusive
+['...', from, to]     // Exclusive
+
+// Blocks & Modules
+['block', ...statements]
+['do-iife', expr]
+['import', specifiers, source]
+['export', statement]  ['export-default', expr]
+['export-all', source]  ['export-from', specifiers, source]
+
+// Reactivity
+['state', name, expr]           // :=
+['computed', name, expr]        // ~=
+['effect', name, expr]          // ~>
+['readonly', name, expr]        // =!
+
+// Components
+['component', null, body]
+['render', body]
+```
+
+## Lexer Token Format
+
+Tokens are `[tag, val]` arrays with extra properties:
+
+- `.pre` — whitespace count before token
+- `.data` — metadata like `{ await, predicate, quote, invert, parsedValue }`
+- `.loc` — `{ r, c, n }`
+- `.spaced` — sugar for `.pre > 0`
+- `.newLine` — whether preceded by newline
+
+Identifier suffixes:
+
+- `!` sets `.data.await = true`
+- `?` sets `.data.predicate = true`
+- `as!` in loops emits `FORASAWAIT` for `for await`
+
+## Context-Aware Generation
+
+```javascript
+generate(sexpr, context = 'statement')
+```
+
+- Value context: emit an expression result
+- Statement context: emit statements without preserving a result
+
+Comprehensions are the canonical example:
+
+- value context becomes an IIFE with array building
+- statement context becomes a plain loop
+
+## Dispatch Table
+
+All node types dispatch through `GENERATORS` for O(1) lookup. To change a feature:
+
+1. Inspect the s-expression with `echo 'code' | ./bin/rip -s`
+2. Search `GENERATORS` in `src/compiler.js`
+3. Edit the matching generator method
+4. Run `bun run test`
+
+For grammar work:
+
+1. edit `src/grammar/grammar.rip`
+2. run `bun run parser`
+3. verify the new parse shape with `./bin/rip -s`
+4. update codegen or lexer handling if the new node shape requires it
+
+## Heredocs
+
+Heredocs (`'''` and `"""`) use a **closing-delimiter-as-left-margin** rule. The column position of the closing delimiter defines how much leading whitespace to strip from each content line:
+
+```coffee
+# Closing delimiter at same indent as content — fully left-aligned output
+contents = """
+    username=#{user}
+    password=#{pass}
+    """
+# Result: "username=...\npassword=..."
+
+# Closing delimiter 2 columns left of content — 2 spaces retained
+html = '''
+    <div>
+      <p>Hello</p>
+    </div>
+  '''
+# Result: "  <div>\n    <p>Hello</p>\n  </div>"
+```
+
+Raw heredocs (`'''\` and `"""\`) keep recognized escape sequences literal (`\n`, `\t`, `\u`, `\x`, `\\`). Non-JS escapes like `\s`, `\w`, and `\d` already pass through unchanged in both modes.
+
+## Block Unwrapping
+
+Parser bodies are commonly wrapped in `['block', ...]`. Always unwrap before operating on statements:
+
+```javascript
+if (Array.isArray(body) && body[0] === 'block') {
+  const statements = body.slice(1)
+}
+```

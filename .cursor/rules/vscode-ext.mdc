@@ -1,0 +1,90 @@
+---
+description: Type system and VS Code extension details
+globs: "{packages/vscode/**,src/types.js,src/typecheck.js,test/types/**}"
+alwaysApply: false
+---
+
+# Type System and VS Code
+
+Use this when editing the type system, type checker, VS Code extension, or type audit files.
+
+## Rip Types
+
+Rip types are erased from JavaScript and exist for `.d.ts` emission, IDE tooling, and documentation.
+
+### Syntax
+
+```coffee
+def greet(name:: string):: string
+  "Hello, #{name}!"
+
+User ::= type
+  id: number
+  name: string
+  email?: string
+
+interface Animal
+  name: string
+  speak: => void
+
+enum Status
+  Active
+  Inactive
+```
+
+### Architecture
+
+Type emission logic lives in `src/types.js`. Type-checking integration and diagnostic filtering live in `src/typecheck.js`.
+
+- `installTypeSupport(Lexer)` adds `rewriteTypes()`
+- `emitTypes(tokens)` emits `.d.ts`
+- `generateEnum()` emits runtime JS for enums
+- `src/typecheck.js` drives `rip check` and mediates TypeScript diagnostics
+
+Types are processed at the token layer before parsing.
+
+### Shadow TypeScript
+
+`rip --shadow file.rip` dumps the virtual TypeScript file that `rip check` and the VS Code extension feed into the TypeScript language service.
+
+Typical debugging sequence:
+
+```bash
+rip --shadow file.rip
+rip -d file.rip
+rip -cd file.rip
+rip -c file.rip
+rip -s file.rip
+```
+
+## VS Code Extension
+
+The extension in `packages/vscode/` provides:
+
+- syntax highlighting
+- auto `.d.ts` generation on save
+- autocomplete, hover, and go-to-definition via TypeScript
+- commands to generate `.d.ts` for one file or all files
+
+### Type Intelligence Flow
+
+1. compile `.rip` to shadow `.ts` in `.rip-cache/`
+2. let VS Code TypeScript analyze that shadow file
+3. proxy completion / hover / definition through the reverse source map
+4. return the mapped result to the `.rip` editor
+
+### Settings
+
+| Setting | Purpose |
+| --- | --- |
+| `rip.types.generateOnSave` | auto-generate `.d.ts` on save |
+| `rip.types.intellisense` | enable autocomplete / hover / definition |
+| `rip.compiler.path` | override compiler binary path |
+
+### Publishing
+
+```bash
+cd packages/vscode
+npx @vscode/vsce login rip-lang
+npx @vscode/vsce publish
+```
