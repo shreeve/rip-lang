@@ -178,14 +178,6 @@ async function fullRelease(level) {
   rootPkg.version = newVersion;
   writeJSON('package.json', rootPkg);
 
-  // Update AGENTS.md version table
-  let agents = read('AGENTS.md');
-  agents = agents.replace(
-    /\| Version \| \d+\.\d+\.\d+(-[\w.]+)? \|/g,
-    `| Version | ${newVersion} |`
-  );
-  write('AGENTS.md', agents);
-
   // Update README.md version badge
   let readme = read('README.md');
   readme = readme.replace(/version-\d+\.\d+\.\d+(-[\w.]+)?-blue/g, `version-${newVersion}-blue`);
