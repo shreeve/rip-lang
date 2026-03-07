@@ -132,42 +132,25 @@ To modify a feature:
 Heredocs (`'''` and `"""`) use a **closing-delimiter-as-left-margin** rule. The column position of the closing `'''` or `"""` defines the left margin — that amount of leading whitespace is stripped from every content line:
 
 ```coffee
-# Closing delimiter at same indent as content — fully left-aligned output
 contents = """
     username=#{user}
     password=#{pass}
-    access_token=#{token}
     """
-# Result: "username=...\npassword=...\naccess_token=..."
-
-# Closing delimiter 2 columns left of content — 2 spaces retained
-html = '''
-    <div>
-      <p>Hello</p>
-    </div>
-  '''
-# Result: "  <div>\n    <p>Hello</p>\n  </div>"
+# Result: "username=...\npassword=..."  (closing """ at same indent strips all)
 ```
 
 ### 4a. Raw Heredocs (`'''\` and `"""\`)
 
-Appending `\` to a heredoc opener makes recognized escape sequences (`\n`, `\t`, `\u`, `\x`, `\\`, etc.) stay literal in the output. Useful for embedding code strings, shell scripts, or regex-heavy content where backslashes must pass through unchanged.
+Appending `\` to a heredoc opener makes recognized escape sequences (`\n`, `\t`, `\u`, `\x`, `\\`, etc.) stay literal in the output. Useful for embedding code strings, shell scripts, or regex-heavy content.
 
 ```coffee
-# Normal heredoc: \n becomes a newline
-normal = '''
-  hello\nworld
-  '''
-# Result: "hello" + newline + "world"
-
-# Raw heredoc: \n stays as \n (two characters)
 raw = '''\
   hello\nworld
   \'''
-# Result: "hello\\nworld" (literal \n)
+# Result: "hello\\nworld" (literal \n, two characters)
 ```
 
-Note: `\s`, `\w`, `\d` and other non-JS-escape sequences are NOT affected — they pass through unchanged in both normal and raw heredocs. Raw mode only affects the sequences that `'''`/`"""` would normally process (`\n`, `\t`, `\r`, `\b`, `\f`, `\v`, `\0`, `\uXXXX`, `\xXX`, `\\`).
+Note: `\s`, `\w`, `\d` and other non-JS-escape sequences pass through unchanged in both normal and raw heredocs. Raw mode only affects sequences that `'''`/`"""` would normally process.
 
 ### 5. Block Unwrapping
 
@@ -213,8 +196,6 @@ export TabContent = component
 
 `offer` wraps any assignment operator (`:=`, `~=`, `=`, `=!`). The signal passes through directly — parent and child share the same reactive object. Mutations in either direction are instant.
 
-Implementation: `offer`/`accept` are handled as context-sensitive keywords via `classifyKeyword` override in `src/components.js`. They only tokenize as `OFFER`/`ACCEPT` inside component bodies; elsewhere they're plain identifiers. The grammar rules live in `ComponentLine`. The runtime uses the existing `setContext`/`getContext`/`_parent` chain — zero new runtime code.
-
 ### Two-Way Binding (`<=>`)
 
 In Rip UI render blocks, the `<=>` operator creates bidirectional reactive bindings between parent state and child elements or components. This is a Rip original — it eliminates React's verbose controlled component pattern entirely.
@@ -238,8 +219,6 @@ Combobox query <=> @search, value <=> @selected
 2. **DOM → State**: `el.addEventListener('input', (e) => { username = e.target.value; })`
 
 The compiler auto-detects types — `checked` uses the `change` event, number inputs use `valueAsNumber`. Smart auto-binding also works: `value: @name` where `@name` is reactive generates two-way binding automatically without needing `<=>`.
-
-Implementation: lexer tokenizes `<=>` as `BIND`, the render rewriter transforms `value <=> x` to `__bind_value__: x`, and the component code generator emits the effect + event listener pair. See `src/components.js`.
 
 ---
 
@@ -268,30 +247,18 @@ div.card.active              # multiple: <div class="card active">
 .card.primary.("flex", x)   # multiple static + dynamic args
 ```
 
-Key mechanisms:
-
-- `**startsWithTag**` — backward scan to determine if current line starts with a template tag
-- `**pendingCallEnds**` — indent-level stack for matching injected CALL_START/CALL_END pairs
-- `**fromThen` skip** — `normalizeLines` creates `fromThen` INDENTs for `if x then y else z`; these are always inline values, never template nesting
-- **Data attribute sigil** — `$open: true` → `"data-open": true`
+Key mechanisms: `startsWithTag` (backward scan to determine if line starts with a template tag), `pendingCallEnds` (indent-level stack for matching injected CALL_START/CALL_END pairs), `fromThen` skip (inline values from `if x then y else z`, never template nesting), data attribute sigil (`$open: true` -> `"data-open": true`).
 
 ### Component Codegen (CodeGenerator side)
 
-Generates fine-grained DOM operations at compile time (no virtual DOM):
-
-- `**buildRender`** — entry point, initializes counters, create/setup line arrays, and tracking state
-- `**generateNode**` — main dispatch for all render-tree nodes (elements, text, conditionals, loops, components)
-- `**generateConditional**` — produces block factories for if/else with transition-aware enter/leave
-- `**generateTemplateLoop**` — emits a `__reconcile` call with LIS-based keyed diffing
-- `**emitBlockFactory**` — shared factory emitter (c/m/p/d + `_first` + `_s` + `_t`) used by both conditionals and loops
+Generates fine-grained DOM operations at compile time (no virtual DOM). Key entry points: `buildRender` (initializes render state), `generateNode` (dispatch for elements, text, conditionals, loops, components), `generateConditional` (block factories for if/else), `generateTemplateLoop` (`__reconcile` with LIS-based keyed diffing).
 
 ### Auto-Wired Event Handlers (`on*` convention)
 
-Component methods named `onClick`, `onKeydown`, `onMouseenter`, etc. are automatically bound to the component's root DOM element. The rule: `on` + capitalized event name → `addEventListener(lowercased, handler)` on the root element. No explicit `@click: @onClick` wiring needed.
+Component methods named `onClick`, `onKeydown`, `onMouseenter`, etc. are automatically bound to the component's root DOM element. The rule: `on` + capitalized event name -> `addEventListener(lowercased, handler)` on the root element. No explicit `@click: @onClick` wiring needed.
 
-- **Detection**: `generateComponent` builds `_autoEventHandlers` (Map of event name → method name) from methods matching `/^on[A-Z]/` that aren't in `LIFECYCLE_HOOKS`
-- **Root only**: `_claimAutoWire` claims the first HTML tag generated in `buildRender`. Non-tag roots (conditionals, loops, components) clear `_pendingAutoWire` to prevent inner elements from claiming
-- **Explicit override**: An `@event: handler` binding on the root element suppresses auto-wiring for that event (tracked via `_autoWireExplicit` in `generateAttributes`). Explicit bindings on child elements don't affect auto-wiring — standard DOM propagation handles interaction
+- **Root only**: Only the first HTML tag in `buildRender` gets auto-wired. Non-tag roots (conditionals, loops, components) skip auto-wiring
+- **Explicit override**: An `@event: handler` binding on the root element suppresses auto-wiring for that event
 - **Lifecycle exclusion**: `onError` (in `LIFECYCLE_HOOKS`) is not auto-wired
 
 ```coffee
@@ -377,21 +344,15 @@ rip -s file.rip          # Is the parser producing the right tree?
 
 Rip generates Source Map V3 (ECMA-426) for debugging support. Source maps are embedded inline as base64 data URLs — one file, no separate `.map` file needed.
 
-### How It Works
-
 - Every S-expression node carries `.loc = {r, c}` from its original source position
 - The code generator builds line-level mappings between output JS and source Rip
 - `SourceMapGenerator` (in `src/sourcemaps.js`) produces VLQ-encoded mappings
-- `toReverseMap()` provides O(1) source→generated position lookup (used by VS Code extension)
-
-### CLI
+- `toReverseMap()` provides O(1) source->generated position lookup (used by VS Code extension)
 
 ```bash
 rip -m example.rip     # Compile with inline source map
 rip -cm example.rip    # Show compiled JS with source map
 ```
-
-Debuggers (Node.js, Bun, Chrome DevTools) read inline source maps natively — breakpoints and stack traces point back to `.rip` source lines.
 
 ---
 
@@ -533,46 +494,25 @@ keyboard interactions per WAI-ARIA Authoring Practices. Widgets are plain
 
 **Widget conventions:**
 
-- All DOM refs use `ref: "_name"` — never `div._name` (dot syntax sets CSS classes)
-- Trigger elements: `_trigger` (select, menu, popover, tooltip)
-- Dropdown lists: `_list` (select, combobox, menu)
-- Content areas: `_content` (tabs, accordion)
-- Hidden slot: `_slot` with `style: "display:none"` for reading child definitions (select, menu)
+- All DOM refs use `ref: "_name"` -- never `div._name` (dot syntax sets CSS classes)
+- Naming: `_trigger`/`_list`/`_content` for standard refs, `_slot` with `style: "display:none"` for reading child definitions
 - Auto-wired events: `onKeydown`, `onScroll`, etc. (root element, no explicit binding)
 - Child-element handlers: `_headerClick`, `_resizeStart` (underscore prefix, explicit binding)
-- Public methods: `toggle`, `close`, `select`, `selectIndex` (no underscore)
-- Domain data names: `options` (select), `items` (menu, combobox), `tabs`/`panels` (tabs)
 - Use `=!` for constant values (IDs), `:=` only for reactive state that drives DOM
 - Click-outside: document `mousedown` listener with effect cleanup (not backdrop divs)
 - Dropdown positioning: `position:fixed;visibility:hidden` inline, then `_position()` via rAF
 - Focus override: `preventScroll: true` globally at module scope (outside component body)
-- Reactive arrays over helper functions: the state *is* the array, the operation
-*is* assignment, there's nothing to abstract. `toasts = [...toasts, { message: "Saved!" }]`
-— no `addToast()` helpers, no manager objects. This applies to every
-widget that manages a list (toasts, tabs, accordion items).
-- Shared-scope naming: in the browser, all `.rip` files loaded via `data-src` share one
-scope. Component names (capitalized) don't collide because they're unique. But lowercase
-module-scope variables (`collator`, `nextId`, etc.) will collide if two files use the same
-name. Prefix with the widget name: `acCollator` not `collator`. Or move the variable inside
-the component body where it's scoped to `this`.
-- **Don't shadow prop names with local variables** — this is the #1 most
-dangerous trap in Rip components. Inside component methods, the compiler
+- Reactive arrays over helper functions: `toasts = [...toasts, { message: "Saved!" }]`
+-- no `addToast()` helpers, no manager objects
+- Shared-scope naming: prefix module-scope variables with widget name (`acCollator` not `collator`) to avoid collisions across `.rip` files sharing one scope
+- **Don't shadow prop names with local variables** — Inside component methods, the compiler
 rewrites ANY identifier matching a prop/state name to `this.name.value`.
-A local variable named `items` will be treated as `this.items.value` if
-`@items` is a prop — meaning `items = getItems()` silently **overwrites
-your reactive state**. The symptom is usually far from the cause (e.g.,
-a list vanishing on keyboard navigation because a helper method corrupted
-the data source). Always use distinct names for locals: `opts` not `items`,
-`tick` not `step`, `fn` not `filter`. When debugging mysterious state
-corruption, check compiled JS output (`rip -c file.rip`) and search for
-unexpected `this.propName.value =` assignments.
-- **Use explicit index names in nested render loops** — when a `for` loop
-in a render block has no explicit index, the compiler auto-generates `i`.
-Nested loops both get `i`, producing a block factory with duplicate
-parameters (`function create_block(ctx, inner, i, outer, i)`) which is a
-syntax error in strict mode. Fix: always name both indices explicitly
-(`for outer, oIdx in list` / `for inner, iIdx in sublist`). Single
-(non-nested) loops are fine without an explicit index.
+A local `items` becomes `this.items.value` if `@items` is a prop, silently overwriting state.
+Always use distinct names for locals: `opts` not `items`, `tick` not `step`.
+Check compiled JS (`rip -c`) for unexpected `this.propName.value =` assignments.
+- **Use explicit index names in nested render loops** — the compiler auto-generates `i` for
+unnamed indices. Nested loops both get `i`, causing a syntax error. Fix: name both
+(`for outer, oIdx in list` / `for inner, iIdx in sublist`). Single loops are fine.
 - Don't use `value: @prop` on `<input>` elements: Rip's smart auto-binding writes the
 input's string value back to the signal, corrupting numeric state. Use a `_ready`-guarded
 `~>` effect to push values to the input, and `@blur`/`@input` handlers to parse back.
@@ -580,20 +520,13 @@ input's string value back to the signal, corrupting numeric state. Use a `_ready
 from an event handler or observer, bump a reactive counter that the computed reads:
 `_tick := 0` then `_tick = _tick + 1` in the handler.
 - Go imperative for continuous DOM tracking: for scroll position, drag offsets, resize
-dimensions, and anything that updates at 60fps — don't use reactive computeds or
-interpolated style strings. Instead, read the DOM, compute, and write the DOM directly
-in a single method (`_updateThumb()`, `_renderRows()`). Reactive computeds cache values
-and can go stale between the tick that triggered them and the DOM read that follows.
-The Grid uses this pattern for virtual scrolling; the ScrollArea uses it for thumb
-positioning. Rule of thumb: if the data source is a DOM property (`scrollTop`,
-`clientHeight`, `getBoundingClientRect`), go imperative. If it's reactive state
-(`:=`, `~=`), use the reactive system.
-- Put side effects in effect branches, not just methods: when a prop like `@open`
-is controlled via `<=>`, the consumer can set it directly (`showDrawer = false`)
-without calling `close()`. If scroll lock, focus restore, or cleanup only lives
-in `close()`, it won't run. Use `~> if @open ... else ...` so the effect handles
-all state transitions regardless of how the signal changed. Methods like `close()`
-should just set state (`@open = false`) and emit events — the effect does the work.
+dimensions, and anything that updates at 60fps -- read the DOM, compute, and write directly
+in a single method (`_updateThumb()`, `_renderRows()`). Rule of thumb: if the data source
+is a DOM property (`scrollTop`, `clientHeight`), go imperative. If it's reactive state, use the reactive system.
+- Put side effects in effect branches, not just methods: when `@open` is controlled via
+`<=>`, the consumer can set it directly without calling `close()`. Use
+`~> if @open ... else ...` so the effect handles all state transitions.
+Methods like `close()` should just set state (`@open = false`) and emit events.
 - `**x.y` in render blocks is tag syntax:** A bare `item.textContent` on its
 own line in a render block is parsed as a tag named `item` with CSS class
 `textContent`, not a property access. Use the `=` prefix to output
@@ -633,26 +566,19 @@ will intercept requests meant for the serve middleware (like `/rip/rip.min.js`).
 trap for widget authors.
 - `**->` inside components:** The compiler auto-converts all thin arrows
 (`->`) to fat arrows (`=>`) inside component contexts. `this` binding is
-always preserved. Use `->` everywhere — it's cleaner and the compiler
+always preserved. Use `->` everywhere -- it's cleaner and the compiler
 handles it. **Caveat:** If you need `this` to refer to a DOM element (e.g.,
 patching `HTMLElement.prototype.focus`), put the code OUTSIDE the component
-body at module scope — `->` stays as `->` there and `this` refers to the
+body at module scope -- `->` stays as `->` there and `this` refers to the
 caller.
-- **Auto-wired event handlers:** Methods named `onClick`, `onKeydown`,
-etc. are automatically bound to the root element — no `@click: @onClick`
-boilerplate needed. Use an explicit binding only when the handler differs
-from the `on`* method. Child element bindings coexist via normal DOM
-propagation; use `e.stopPropagation()` to suppress the root handler.
 - `**:=` vs `=` for internal storage:** Use `:=` (reactive state) only for
 values that should trigger DOM updates. For internal bookkeeping (pools,
 caches, timer IDs, saved DOM references), use `=` (plain assignment).
-Reactive state has overhead and can cause unwanted effect re-runs.
 - `**_ready` flag pattern:** Effects run during `_init` (before `_create`),
 so `ref:` DOM elements don't exist yet. Add `_ready := false` to state,
 set `_ready = true` in `mounted`, and guard effects with
 `return unless _ready`. The reactive `_ready` flag triggers the effect
-to re-run after mount when DOM refs are available. Used by Tabs,
-Accordion, and Grid.
+to re-run after mount when DOM refs are available.
 - `**ref:` is not reactive:** `ref: "_foo"` sets `this._foo` as a plain
 property during `_create`, not a reactive signal. Effects cannot track
 when refs are set. Use the `_ready` pattern above to bridge the gap.
@@ -661,58 +587,38 @@ when refs are set. Use the `_ready` pattern above to bridge the gap.
 identifiers (safe to use as variable names in server code, etc.).
 - **Imperative DOM in effects:** For performance-critical paths (Grid's
 60fps scroll), bypass the reactive render loop and do imperative DOM
-manipulation inside `~>` effects. The effect still triggers reactively
-but the DOM updates use `textContent`/`nodeValue`/`replaceChildren`.
+manipulation inside `~>` effects.
 - `**$` sigil for data attributes:** In render blocks, use `$open`, `$selected`,
-etc. — the compiler expands `$` to `data-` in the generated HTML. Consumers
+etc. -- the compiler expands `$` to `data-` in the generated HTML. Consumers
 style with CSS attribute selectors (`[data-open]`, `[data-selected]`). Widgets
-never apply visual styles — they only set semantic state. The `data-` form
-still works but `$` is preferred for brevity.
+never apply visual styles -- they only set semantic state.
 - `**slot` in render blocks:** The bare `slot` tag in a component render
 block projects `this.children` (the DOM content passed by the parent).
-It does NOT create an HTML `<slot>` element — Shadow DOM is not used.
+It does NOT create an HTML `<slot>` element -- Shadow DOM is not used.
 - `**@event:` handlers on child components:** `@change: handler` on a
 child component compiles to `addEventListener('change', handler)` on
 the child's root DOM element. The child dispatches events via
 `@emit 'eventName', detail` which creates a `CustomEvent` on `this._root`.
 - `**emit()` method:** Every component has an `emit(name, detail)` method
 that dispatches a `CustomEvent` with `{ detail, bubbles: true }` on the
-component's root element. Use it for non-binding event communication.
-- `**_root` on child components:** When a parent instantiates a child
-component, `_root` is set during `_create()` (via
-`el = inst._root = inst._create()`). This is necessary for `emit()` to
-work — without `_root`, `emit` silently does nothing.
+component's root element.
 - `**rip.min.js` must be rebuilt after `components.js` changes:** The
 browser bundle includes the component runtime. After modifying
 `src/components.js`, run `bun run build` to regenerate `rip.min.js`.
 Then restart `rip server` to pick up the new bundle.
 
-**Documentation in `packages/ui/`:**
-
-- `README.md` — Usage examples, API for every widget, Tailwind styling guide
-- `CONTRIBUTING.md` — Widget authoring guide, behavioral primitives, per-widget implementation notes, known issues, roadmap
-
 ### Package Development
 
 Packages use `workspace:`* linking in the root `package.json`. After modifying
 a package locally, run `bun install` from the project root to ensure symlinks
-are correct. Key patterns:
-
-- Packages written in Rip (`.rip` files) need the Rip loader — run from the
-project root where `bunfig.toml` is located, or use `rip server`
-- `import.meta.dir` resolves to the package's actual filesystem path (important
-for serving files)
-- `@rip-lang/server` handlers bind `this` to the context object — use `@send`,
-`@json`, `@req`, etc.
+are correct.
 
 `**rip server` uses the global install:** The `rip server` command runs
 `@rip-lang/server/server.rip` from the **globally installed** package
 (`~/.bun/install/global/node_modules/@rip-lang/server/`), not the workspace.
-Changes to `packages/server/` won't take effect until published. For
-server-only changes, publish just that package: `cd packages/server && bun publish`,
-then `bun update` to pull into global. Use `bun run bump` only for full releases
-(it bumps ALL packages). Workers spawned by rip-server DO use the workspace's
-`node_modules` for imports in the app entry file (`index.rip`).
+Changes to `packages/server/` won't take effect until published. Workers
+spawned by rip-server DO use the workspace's `node_modules` for imports in
+the app entry file (`index.rip`).
 
 ---
 
