@@ -4,7 +4,7 @@ Independent test files for every Rip type system feature. Each file compiles and
 
 ## Verification (ALWAYS run these)
 
-When asked to verify, validate, or check any audit file, run ALL of these commands from `demos/types/audit/`. No exceptions — don't ask the user which commands to run, just run them all.
+When asked to verify, validate, or check any audit file, run ALL of these commands from this directory (`test/types/`). No exceptions — don't ask the user which commands to run, just run them all.
 
 **Single file** (replace FILE with the target, e.g. `01-basic`):
 
