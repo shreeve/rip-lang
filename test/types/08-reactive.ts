@@ -1,10 +1,9 @@
-// 08-reactive.ts — Typed reactive state (:=, ~=, ~>, =!)
+// 08-reactive.ts — Typed reactive state (:=, ~=, ~>)
 //
 // React equivalents of Rip's reactive operators:
 // Rip's := (state)    → React's useState
 // Rip's ~= (computed) → derived const (recalculated every render)
 // Rip's ~> (effect)   → console.log in render body (useEffect doesn't fire in SSR)
-// Rip's =! (readonly) → plain const (identical)
 //
 // Rip's reactive primitives work at module scope with auto-tracking.
 // React hooks require a component context — we use renderToString
@@ -12,10 +11,6 @@
 
 import { useState, createElement } from 'react'
 import { renderToString } from 'react-dom/server'
-
-// Typed readonly (=!) — plain const, no hook needed
-const MAX_RETRIES: number = 3
-const API_VERSION: string = 'v2'
 
 function ReactiveDemo() {
   // Typed state (:=)
@@ -39,9 +34,6 @@ function ReactiveDemo() {
   console.log('clicksDoubled:', clicksDoubled)
   console.log('greeting:', greeting)
   console.log('hasTags:', hasTags)
-  console.log('MAX_RETRIES:', MAX_RETRIES)
-  console.log('API_VERSION:', API_VERSION)
-
   return null
 }
 
@@ -59,7 +51,5 @@ function useNeg3() { const [x] = useState<boolean>('yes'); return x }
 // @ts-expect-error — number[] assigned to string[] state
 function useNeg4() { const [x] = useState<string[]>([1, 2, 3]); return x }
 
-// @ts-expect-error — string assigned to number readonly
-const badMax: number = 'nope'
 // @ts-expect-error — number assigned to string computed
 const badComputed: string = 0 * 2

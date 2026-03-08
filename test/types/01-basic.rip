@@ -68,3 +68,11 @@ console.log "maybeCount:", maybeCount
 badOptional:: string | undefined = 123
 # @ts-expect-error — string not assignable to number | null
 badNullable:: number | null = "oops"
+
+# ── Readonly (=!) — compiles to const ──
+
+MAX:: number =! 3
+console.log "MAX:", MAX
+
+# @ts-expect-error — cannot reassign readonly
+MAX = 999

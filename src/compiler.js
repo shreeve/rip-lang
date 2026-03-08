@@ -325,14 +325,20 @@ export class CodeGenerator {
       return;
     }
 
-    if (head === 'readonly') return;
+    if (head === 'readonly') {
+      let [name] = rest;
+      let varName = str(name) ?? name;
+      if (!this.readonlyVars) this.readonlyVars = new Set();
+      this.readonlyVars.add(varName);
+      return;
+    }
     if (head === 'component') return;  // Component body has its own scope
 
     if (CodeGenerator.ASSIGNMENT_OPS.has(head)) {
       let [target, value] = rest;
       if (typeof target === 'string' || target instanceof String) {
         let varName = str(target);
-        if (!this.reactiveVars?.has(varName)) this.programVars.add(varName);
+        if (!this.reactiveVars?.has(varName) && !this.readonlyVars?.has(varName)) this.programVars.add(varName);
       } else if (this.is(target, 'array')) {
         this.collectVarsFromArray(target, this.programVars);
       } else if (this.is(target, 'object')) {

@@ -1,4 +1,4 @@
-# 08-reactive.rip — Typed reactive state (:=, ~=, ~>, =!)
+# 08-reactive.rip — Typed reactive state (:=, ~=, ~>)
 
 # Typed state (:=)
 clicks:: number := 0
@@ -11,10 +11,6 @@ clicksDoubled ~= clicks * 2
 greeting ~= "Hello, #{username}!"
 hasTags ~= tags.length > 0
 
-# Typed readonly (=!) — compiles to plain `const`, no reactive runtime
-MAX_RETRIES:: number =! 3
-API_VERSION:: string =! "v2"
-
 # Typed effect (~>)
 clickLogger:: Function ~> console.log "clicks changed:", clicks
 
@@ -26,9 +22,6 @@ console.log "enabled:", enabled
 console.log "clicksDoubled:", clicksDoubled
 console.log "greeting:", greeting
 console.log "hasTags:", hasTags
-console.log "MAX_RETRIES:", MAX_RETRIES
-console.log "API_VERSION:", API_VERSION
-
 # ── Negative: wrong types must be caught ──
 
 # @ts-expect-error — string assigned to number state
@@ -40,7 +33,5 @@ badEnabled:: boolean := "yes"
 # @ts-expect-error — number[] assigned to string[] state
 badTags:: string[] := [1, 2, 3]
 
-# @ts-expect-error — string assigned to number readonly
-badMax:: number =! "nope"
 # @ts-expect-error — number assigned to string computed
 badComputed:: string ~= clicks * 2
