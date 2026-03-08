@@ -22,9 +22,19 @@ rip check                                                                 # 5. t
 bunx tsc                                                                  # 6. type-check all .ts files
 for f in *.rip; do printf "\n── %s ──\n" "$f" && rip "$f"; done           # 7. run all .rip
 for f in *.ts *.tsx; do printf "\n── %s ──\n" "$f" && bun run "$f"; done  # 8. run all .ts
+for n in 01-basic 02-aliases 03-structural 04-unions 05-interfaces 06-functions 07-integration 08-reactive 09-components 10-validation 11-inference; do
+  ext=ts; [[ "$n" == 09-* ]] && ext=tsx
+  rip "$n.rip" > /tmp/rip_out.txt 2>&1
+  bun run "$n.$ext" > /tmp/ts_out.txt 2>&1
+  diff -q /tmp/rip_out.txt /tmp/ts_out.txt > /dev/null 2>&1 && echo "✓ $n" || echo "✗ $n — MISMATCH"
+done                                                                      # 9. output parity
 ```
 
 All commands must pass. 09-components (.rip and .tsx) are silent at runtime but type-check correctly. Report results in a summary table. If errors appear, isolate with single-file commands. Update the status table below as features are fixed or regress.
+
+## Output Parity Rule
+
+**Each `.rip` file and its `.ts`/`.tsx` companion MUST produce identical console output.** This is a hard requirement — if you add, remove, or change any `console.log` in a `.rip` file, make the same change in the `.ts` companion (and vice versa). Avoid non-deterministic values (e.g. `Date.now()`, `Math.random()`) in output; use fixed literals instead. Verify with command 9 in the full suite above.
 
 ## Feature **Status**
 
@@ -52,6 +62,8 @@ Each file exercises a specific type feature. Status key:
 ## Type Safety Gap Analysis
 
 What `rip check` catches today vs. what it doesn't. This tracks the overall health of Rip's type story — not just this audit. Grouped by status, ordered by importance within each group.
+
+**Maintenance rule:** When you fix a gap, run the full verification suite. If everything passes, move the row from its current section (❌ or 🔶) to the correct one (✅ or 🔶). Remove stale "Fixed:" annotations — the row's position is the status. Never leave a fixed item in ❌.
 
 ### ❌ Not working
 

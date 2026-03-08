@@ -19,7 +19,7 @@ type Defaults = typeof defaults
 const userId: ID = 42
 const name: Name = 'Jane'
 const email: Email = 'jane@example.com'
-const ts: Timestamp = Date.now()
+const ts: Timestamp = 1700000000000
 
 const mixedId: UserID = 'abc-123'
 const prim: Primitive = true
