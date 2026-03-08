@@ -223,6 +223,29 @@ export function compileForCheck(filePath, source, compiler) {
     }
   }
 
+  // Ensure reactive preamble declarations are present when compiled code uses
+  // reactive functions. emitTypes() sets the flags when typed reactive vars exist,
+  // but files that import from typed modules may have untyped reactive vars whose
+  // compiled code still references __state/__computed/__effect.
+  if (hasTypes) {
+    const needSignal = /\b__state\(/.test(code) && !/\bdeclare function __state\b/.test(headerDts);
+    const needComputed = /\b__computed\(/.test(code) && !/\bdeclare function __computed\b/.test(headerDts);
+    const needEffect = /\b__effect\(/.test(code) && !/\bdeclare function __effect\b/.test(headerDts);
+    if (needSignal || needComputed || needEffect) {
+      const decls = [];
+      if (needSignal) {
+        if (!/\binterface Signal\b/.test(headerDts)) decls.push('interface Signal<T> { value: T; read(): T; lock(): Signal<T>; free(): Signal<T>; kill(): T; }');
+        decls.push('declare function __state<T>(value: T): Signal<T>;');
+      }
+      if (needComputed) {
+        if (!/\binterface Computed\b/.test(headerDts)) decls.push('interface Computed<T> { readonly value: T; read(): T; lock(): Computed<T>; free(): Computed<T>; kill(): T; }');
+        decls.push('declare function __computed<T>(fn: () => T): Computed<T>;');
+      }
+      if (needEffect) decls.push('declare function __effect(fn: () => void | (() => void)): () => void;');
+      headerDts = decls.join('\n') + '\n' + headerDts;
+    }
+  }
+
   let tsContent = (hasTypes ? headerDts + '\n' : '') + code;
   const headerLines = hasTypes ? countLines(headerDts + '\n') : 1;
 

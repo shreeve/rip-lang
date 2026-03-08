@@ -107,7 +107,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 | Category                    | Tested In    | Notes                                                                                                 |
 | --------------------------- | ------------ | ----------------------------------------------------------------------------------------------------- |
-| Hover types                 | *(IDE only)* | Hover only works at declaration site; later usages show nothing. Reactive `:=`/`~=` always show `any` |
+| Hover types                 | *(IDE only)* | Hover at usage sites improved (word-boundary matching + nearby-line search). Reactive `:=`/`~=` no longer show `any` — DTS preamble now emitted for all reactive operators. Remaining gap: column-level mapping limited by line-level source maps |
 | Go-to-definition on imports | *(IDE only)* | Import lines unmapped; works at call sites only                                                       |
 
 ### 🔶 Partial

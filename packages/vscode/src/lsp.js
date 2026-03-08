@@ -336,8 +336,31 @@ function srcToOffset(filePath, line, col) {
     }
     if (wordMatch) {
       const word = wordMatch[0];
-      const genCol = genText.indexOf(word);
-      if (genCol >= 0) return lineColToOffset(c.tsContent, genLine, genCol);
+      // Use word-boundary regex to find all identifier occurrences,
+      // then pick the one closest to the source column. This avoids
+      // matching the word inside string literals or comments.
+      const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const re = new RegExp('\\b' + escaped + '\\b', 'g');
+      let m, bestCol = -1, bestDist = Infinity;
+      while ((m = re.exec(genText)) !== null) {
+        const dist = Math.abs(m.index - col);
+        if (dist < bestDist) { bestDist = dist; bestCol = m.index; }
+      }
+      if (bestCol >= 0) return lineColToOffset(c.tsContent, genLine, bestCol);
+      // Word not on mapped line — search nearby generated lines
+      for (let delta = 1; delta <= 3; delta++) {
+        for (const tryLine of [genLine + delta, genLine - delta]) {
+          if (tryLine < 0 || tryLine >= genLines.length) continue;
+          const tryText = genLines[tryLine];
+          const re2 = new RegExp('\\b' + escaped + '\\b', 'g');
+          let m2, best2 = -1, bestDist2 = Infinity;
+          while ((m2 = re2.exec(tryText)) !== null) {
+            const dist2 = Math.abs(m2.index - col);
+            if (dist2 < bestDist2) { bestDist2 = dist2; best2 = m2.index; }
+          }
+          if (best2 >= 0) return lineColToOffset(c.tsContent, tryLine, best2);
+        }
+      }
     }
   }
   const genText = c.tsContent.split('\n')[genLine] || '';

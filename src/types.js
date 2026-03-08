@@ -468,6 +468,15 @@ export function emitTypes(tokens, sexpr = null) {
   let usesSignal = false;
   let usesComputed = false;
 
+  // Pre-scan: detect reactive operators regardless of type annotations.
+  // This ensures the DTS preamble declares __state/__computed/__effect
+  // so TypeScript can infer types for untyped reactive variables.
+  for (let i = 0; i < tokens.length; i++) {
+    const tag = tokens[i][0];
+    if (tag === 'REACTIVE_ASSIGN') usesSignal = true;
+    else if (tag === 'COMPUTED_ASSIGN') usesComputed = true;
+  }
+
   // Format { prop; prop } into multi-line block
   let emitBlock = (prefix, body, suffix) => {
     if (body.startsWith('{ ') && body.endsWith(' }')) {
