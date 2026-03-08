@@ -32,6 +32,20 @@ done                                                                      # 9. o
 
 All commands must pass. 09-components (.rip and .tsx) are silent at runtime but type-check correctly. Report results in a summary table. If errors appear, isolate with single-file commands. Update the status table below as features are fixed or regress.
 
+**Picking up compiler changes in the editor:**
+
+The LSP loads `src/compiler.js` and `src/typecheck.js` at runtime from the project root (not bundled). After changing `src/types.js`, `src/typecheck.js`, or `src/compiler.js`, just reload the editor window (Cmd+Shift+P → "Developer: Reload Window").
+
+**Rebuilding the VS Code extension** (required after changes to `packages/vscode/`):
+
+```bash
+cd packages/vscode
+bun run install-vscode    # rebuild + reinstall for VS Code
+bun run install-cursor    # rebuild + reinstall for Cursor
+```
+
+Then reload the editor window to pick up the new extension.
+
 ## Output Parity Rule
 
 **Each `.rip` file and its `.ts`/`.tsx` companion MUST produce identical console output.** This is a hard requirement — if you add, remove, or change any `console.log` in a `.rip` file, make the same change in the `.ts` companion (and vice versa). Avoid non-deterministic values (e.g. `Date.now()`, `Math.random()`) in output; use fixed literals instead. Verify with command 9 in the full suite above.
