@@ -32,15 +32,15 @@ interface HttpOptions {
 
 // ── Use the types ──
 
-const item: Identifiable = { id: 1 }
-const record: Timestamped = { createdAt: '2024-01-01', updatedAt: '2024-06-15' }
-const person: Named = { name: 'Jane' }
+let item: Identifiable = { id: 1 }
+let record: Timestamped = { createdAt: '2024-01-01', updatedAt: '2024-06-15' }
+let person: Named = { name: 'Jane' }
 
-const cat: Animal = { name: 'Whiskers', sound: 'meow', legs: 4 }
-const dog: Dog = { name: 'Rex', sound: 'woof', legs: 4, breed: 'Labrador' }
+let cat: Animal = { name: 'Whiskers', sound: 'meow', legs: 4 }
+let dog: Dog = { name: 'Rex', sound: 'woof', legs: 4, breed: 'Labrador' }
 
-const opts: HttpOptions = { method: 'POST', timeout: 5000 }
-const minOpts: HttpOptions = {}
+let opts: HttpOptions = { method: 'POST', timeout: 5000 }
+let minOpts: HttpOptions = {}
 
 console.log('item:', item)
 console.log('record:', record)
@@ -53,10 +53,10 @@ console.log('minOpts:', minOpts)
 // ── Negative: wrong types must be caught ──
 
 // @ts-expect-error — missing required field (id)
-const badId: Identifiable = {}
+let badId: Identifiable = {}
 // @ts-expect-error — wrong type for legs
-const badAnimal: Animal = { name: 'Cat', sound: 'meow', legs: 'four' }
+let badAnimal: Animal = { name: 'Cat', sound: 'meow', legs: 'four' }
 // @ts-expect-error — Dog extends Animal, breed missing
-const badDog: Dog = { name: 'Rex', sound: 'woof', legs: 4 }
+let badDog: Dog = { name: 'Rex', sound: 'woof', legs: 4 }
 // @ts-expect-error — wrong type for optional field
-const badOpts: HttpOptions = { timeout: 'slow' }
+let badOpts: HttpOptions = { timeout: 'slow' }
