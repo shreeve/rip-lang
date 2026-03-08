@@ -10,7 +10,7 @@
 //   in a directory, creates a TypeScript language service, and reports
 //   type errors mapped back to Rip source positions.
 
-import { Compiler } from './compiler.js';
+import { Compiler, getStdlibCode } from './compiler.js';
 import { createRequire } from 'module';
 import { readFileSync, existsSync, readdirSync } from 'fs';
 import { resolve, relative, dirname } from 'path';
@@ -18,10 +18,16 @@ import { buildLineMap } from './sourcemaps.js';
 
 // ── Shared helpers ─────────────────────────────────────────────────
 
-// Detect type annotations (:: followed by space or =) ignoring comments
-// and prototype syntax (Class::method).
+// Detect type annotations (:: followed by space or =) ignoring comments,
+// string literals, and prototype syntax (Class::method).
 export function hasTypeAnnotations(source) {
-  return source.split('\n').some(line => /::[ \t=]/.test(line.replace(/#.*$/, '')));
+  return source.split('\n').some(line => {
+    // Strip comment
+    line = line.replace(/#.*$/, '');
+    // Strip string literals (single and double quoted)
+    line = line.replace(/"(?:[^"\\]|\\.)*"/g, '""').replace(/'(?:[^'\\]|\\.)*'/g, "''");
+    return /::[ \t=]/.test(line);
+  });
 }
 
 export function countLines(str) {
@@ -83,7 +89,6 @@ export function patchUninitializedTypes(ts, service, compiledEntries) {
 // treats async return types transparently.
 export const SKIP_CODES = new Set([
   2300, // Duplicate identifier (DTS declarations coexist with compiled class bodies)
-  2304, // Cannot find name
   2307, // Cannot find module
   2389, // Function implementation name must match overload (DTS + compiled body)
   2391, // Function implementation is missing (DTS overload sigs separated from implementations)
@@ -291,6 +296,37 @@ export function compileForCheck(filePath, source, compiler) {
       if (needEffect) decls.push('declare function __effect(fn: () => void | (() => void)): () => void;');
       headerDts = decls.join('\n') + '\n' + headerDts;
     }
+  }
+
+  // Inject declarations for Rip's stdlib globals (abort, assert, p, sleep, etc.)
+  // so TypeScript doesn't report false "Cannot find name" (TS2304) errors.
+  // These are normally emitted as globalThis assignments in the preamble, but
+  // type-checking compiles with skipPreamble: true.
+  //
+  // Names are auto-derived from getStdlibCode() so new globals are picked up
+  // automatically. Precise type overrides are provided where the generic
+  // fallback (...args: any[]) => any would lose useful type information.
+  if (hasTypes) {
+    const preciseTypes = {
+      abort:  'declare function abort(msg?: string): never;',
+      assert: 'declare function assert(v: any, msg?: string): asserts v;',
+      exit:   'declare function exit(code?: number): never;',
+      kind:   'declare function kind(v: any): string;',
+      noop:   'declare function noop(): void;',
+      p:      'declare function p(...args: any[]): void;',
+      pp:     'declare function pp(v: any): any;',
+      raise:  'declare function raise(a: any, b?: any): never;',
+      rand:   'declare function rand(a?: number, b?: number): number;',
+      sleep:  'declare function sleep(ms: number): Promise<void>;',
+      todo:   'declare function todo(msg?: string): never;',
+      warn:   'declare function warn(...args: any[]): void;',
+      zip:    'declare function zip(...arrays: any[][]): any[][];',
+    };
+    const names = [...getStdlibCode().matchAll(/globalThis\.(\w+)\s*\?\?=/g)].map(m => m[1]);
+    const stdlibDecls = names.map(name =>
+      preciseTypes[name] || `declare function ${name}(...args: any[]): any;`
+    );
+    headerDts = stdlibDecls.join('\n') + '\n' + headerDts;
   }
 
   let tsContent = (hasTypes ? headerDts + '\n' : '') + code;

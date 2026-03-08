@@ -135,14 +135,15 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 ### Suppressed error codes
 
-`rip check` runs TypeScript under the hood but suppresses 15 error codes (defined in `SKIP_CODES` in [src/typecheck.js](../../../src/typecheck.js)). Most suppressions are necessary — Rip's compilation model produces patterns that confuse TS (DTS coexisting with compiled bodies, module resolution, etc.). But three categories directly weaken type safety:
+`rip check` runs TypeScript under the hood but suppresses 14 error codes (defined in `SKIP_CODES` in [src/typecheck.js](../../../src/typecheck.js)). Most suppressions are necessary — Rip's compilation model produces patterns that confuse TS (DTS coexisting with compiled bodies, module resolution, etc.). But some categories directly weaken type safety:
 
 | Suppressed codes | What they hide                         | Impact on audit                                                                                                           |
 | ---------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | 7005, 7006, 7034 | Implicit `any` on variables and params | Root cause of the component prop gap — TS *would* flag untyped props inside component bodies, but these codes suppress it |
-| 2304             | Cannot find name                       | Masks references to undefined variables; contributes to unresolved import gap                                             |
 | 2300, 2451       | Duplicate identifiers                  | Necessary (DTS + compiled body coexist) but also hides real shadowing bugs                                                |
 | 2307             | Cannot find module                     | Rip resolves modules differently, but this also masks genuinely broken imports                                            |
+
+**Fixed:** 2304 ("Cannot find name") was removed from `SKIP_CODES`. Stdlib globals (`p`, `pp`, `sleep`, `warn`, etc.) are now declared in the type-check preamble, so undefined variable references are correctly flagged.
 
 The remaining codes (2389, 2391, 2393, 2394, 2567, 1064, 2582, 2593) are structural — they exist because Rip's compilation model inherently produces overload/duplicate patterns that TS doesn't expect. These are safe to suppress.
 
