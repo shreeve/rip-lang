@@ -24,6 +24,11 @@ console.log('allIds:', allIds)
 console.log('pairLabel:', pairLabel)
 console.log('pairValue:', pairValue)
 
+// ── Readonly (=!) — compiles to const ──
+
+const MAX: number = 3
+console.log('MAX:', MAX)
+
 // ── Negative: wrong types must be caught ──
 
 // Wrong literals assigned to annotated variables
@@ -68,11 +73,3 @@ console.log('maybeCount:', maybeCount)
 let badOptional: string | undefined = 123
 // @ts-expect-error — string not assignable to number | null
 let badNullable: number | null = 'oops'
-
-// ── Readonly (=!) — compiles to const ──
-
-const MAX: number = 3
-console.log('MAX:', MAX)
-
-// @ts-expect-error — cannot reassign const
-MAX = 999
