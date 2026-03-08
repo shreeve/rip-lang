@@ -46,6 +46,11 @@ export function logMsg(msg: string): void {
   console.log(msg)
 }
 
+// Optional param (? suffix)
+export function greetOpt(name: string, title?: string): string {
+  return title ? `${title} ${name}` : name
+}
+
 // ── Use: let TS infer return types from function signatures ──
 
 const result1 = add(3, 4)
@@ -58,8 +63,10 @@ const result7 = isPositive(5)
 const result8 = formal('Smith')
 const result9 = formal('Smith', 'Dr')
 logMsg('hello')
+const result10 = greetOpt('Smith')
+const result11 = greetOpt('Smith', 'Dr')
 
-console.log(result1, result2, result3, result4, result5, result6, result7, result8, result9)
+console.log(result1, result2, result3, result4, result5, result6, result7, result8, result9, result10, result11)
 
 // ── Negative: wrong param types ──
 
@@ -117,18 +124,11 @@ const badFilter: string[] = nums.filter((x) => x > 2)
 // @ts-expect-error — reduce returns number, not string
 const badReduce: string = nums.reduce((acc, x) => acc + x, 0)
 
-// ── Works in TS but not in Rip (see .rip known gaps) ──
-
-// Optional param — TS handles natively
-export function greetOpt(name: string, title?: string): string {
-  return title ? `${title} ${name}` : name
-}
+// ── Known gaps (Rip only) ──
 
 // Named/destructured param — TS handles natively
 export function createUser({ name, age }: { name: string, age: number }): string {
   return `${name} is ${age}`
 }
 
-greetOpt('Smith')
-greetOpt('Smith', 'Dr')
 createUser({ name: 'Jane', age: 30 })

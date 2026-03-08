@@ -76,7 +76,6 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Runtime return-type validation   | 10-validation            | Return types are erased — `response.json()` is unvalidated `any`; no `schema.parse()` equivalent                      |
 | Type narrowing (control flow)    | 04-unions *(comment)*    | TS narrows compiled JS, not Rip source                                                                                |
 | Destructured typed params        | 06-functions *(comment)* | `{name:: string}` in params fails to parse                                                                            |
-| Optional param `?` in .d.ts      | 06-functions *(comment)* | `y?:: T` emits `y: T` — drops the `?`; use default param workaround                                                   |
 | `void` return annotation         | 06-functions *(comment)* | `void` is reserved; use `!` operator (`def fn!`) instead                                                              |
 | Unresolved import paths          | 07-integration           | `rip check` doesn't flag imports to nonexistent files                                                                 |
 | Enum exhaustiveness              | 04-unions                | Switch narrowing works in .ts but `rip check` doesn't verify exhaustiveness                                           |
@@ -118,6 +117,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Property access checking | 03-structural  | Typos, nonexistent fields                  |
 | Function argument types  | 06-functions   | Same-file typed functions                  |
 | Function return types    | 06-functions   | Same-file typed functions                  |
+| Optional param `?`       | 06-functions   | `y?:: T` emits `y?: T` in .d.ts            |
 | Cross-file type flow     | 07-integration | Via .d.ts; untyped files get `@ts-nocheck` |
 
 ### Suppressed error codes

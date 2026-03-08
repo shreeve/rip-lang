@@ -560,8 +560,9 @@ export function emitTypes(tokens, sexpr = null) {
           hasDefault = true;
         }
 
+        let isOptional = hasDefault || tok.data?.predicate;
         if (paramType) {
-          params.push(`${paramName}${hasDefault ? '?' : ''}: ${expandSuffixes(paramType)}`);
+          params.push(`${paramName}${isOptional ? '?' : ''}: ${expandSuffixes(paramType)}`);
         } else {
           params.push(paramName);
         }

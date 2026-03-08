@@ -36,6 +36,10 @@ export def formal(name:: string, title:: string = "Mr"):: string
 export def logMsg!(msg:: string)
   console.log msg
 
+# Optional param (? suffix — emits title?: string in .d.ts)
+export def greetOpt(name:: string, title?:: string):: string
+  if title then "#{title} #{name}" else name
+
 # ── Use: typed results prove return types flow ──
 # (untyped `result = add(1, 2)` won't show type on hover —
 #  Rip compiles to `let result; result = ...` so TS sees `any`)
@@ -50,8 +54,10 @@ result7:: boolean       = isPositive(5)
 result8:: string        = formal("Smith")
 result9:: string        = formal("Smith", "Dr")
 logMsg!("hello")
+result10:: string = greetOpt("Smith")
+result11:: string = greetOpt("Smith", "Dr")
 
-console.log result1, result2, result3, result4, result5, result6, result7, result8, result9
+console.log result1, result2, result3, result4, result5, result6, result7, result8, result9, result10, result11
 
 # ── Negative: wrong param types ──
 
@@ -110,10 +116,6 @@ badFilter:: string[] = nums.filter (x) => x > 2
 badReduce:: string = nums.reduce ((acc, x) => acc + x), 0
 
 # ── Known gaps ──
-#
-# Optional params: `def foo(x:: string, y?:: string)` compiles and runs,
-# but .d.ts drops the `?` — emits `y: string` instead of `y?: string`.
-# Use default params as a workaround: `y:: string = ""` emits `y?: string`.
 #
 # Named/destructured params: `def foo({name:: string, age:: number})`
 # fails to parse — type annotations inside destructuring aren't supported.
