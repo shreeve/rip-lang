@@ -97,14 +97,13 @@ class SourceMapGenerator {
   }
 
   // Build reverse lookup: original position → generated position.
-  // Returns a Map keyed by original line number, each value is { genLine, genCol }.
-  // For lines with multiple mappings, uses the first (leftmost) one.
+  // Returns a Map keyed by original line number, each value is an array of
+  // { origCol, genLine, genCol } entries — one per mapping on that source line.
   toReverseMap() {
     let reverse = new Map();
     for (let m of this.mappings) {
-      if (!reverse.has(m.origLine)) {
-        reverse.set(m.origLine, { genLine: m.genLine, genCol: m.genCol });
-      }
+      if (!reverse.has(m.origLine)) reverse.set(m.origLine, []);
+      reverse.get(m.origLine).push({ origCol: m.origCol, genLine: m.genLine, genCol: m.genCol });
     }
     return reverse;
   }
@@ -163,14 +162,20 @@ function parseSourceMap(mapJSON) {
 function buildLineMap(reverseMap, mapJSON, headerLines) {
   const srcToGen = new Map();
   const genToSrc = new Map();
+  const srcColToGen = new Map();  // srcLine → Array<{ srcCol, genLine, genCol }>
 
   let hasEntries = false;
   if (reverseMap) {
-    for (const [srcLine, { genLine }] of reverseMap) {
-      const adj = genLine + headerLines;
+    for (const [srcLine, entries] of reverseMap) {
+      const first = entries[0];
+      const adj = first.genLine + headerLines;
       srcToGen.set(srcLine, adj);
       genToSrc.set(adj, srcLine);
       hasEntries = true;
+      // Build column-aware map with all entries for this source line
+      srcColToGen.set(srcLine, entries.map(e => ({
+        srcCol: e.origCol, genLine: e.genLine + headerLines, genCol: e.genCol,
+      })));
     }
   }
 
@@ -183,7 +188,7 @@ function buildLineMap(reverseMap, mapJSON, headerLines) {
     }
   }
 
-  return { srcToGen, genToSrc };
+  return { srcToGen, genToSrc, srcColToGen };
 }
 
 export { SourceMapGenerator, vlqEncode, vlqDecode, parseSourceMap, buildLineMap };

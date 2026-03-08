@@ -41,7 +41,6 @@ The LSP loads `src/compiler.js` and `src/typecheck.js` at runtime from the proje
 ```bash
 cd packages/vscode
 bun run install-vscode    # rebuild + reinstall for VS Code
-bun run install-cursor    # rebuild + reinstall for Cursor
 ```
 
 Then reload the editor window to pick up the new extension.
@@ -105,10 +104,9 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 **IDE-only gaps** (require VS Code extension changes, not testable in audit files):
 
-| Category                    | Tested In    | Notes                                                                                                 |
-| --------------------------- | ------------ | ----------------------------------------------------------------------------------------------------- |
-| Hover types                 | *(IDE only)* | Hover at usage sites improved (word-boundary matching + nearby-line search). Reactive `:=`/`~=` no longer show `any` — DTS preamble now emitted for all reactive operators. Remaining gap: column-level mapping limited by line-level source maps |
-| Go-to-definition on imports | *(IDE only)* | Import lines unmapped; works at call sites only                                                       |
+| Category                    | Tested In    | Notes                                           |
+| --------------------------- | ------------ | ----------------------------------------------- |
+| Go-to-definition on imports | *(IDE only)* | Import lines unmapped; works at call sites only |
 
 ### 🔶 Partial
 
@@ -123,16 +121,17 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 ### ✅ Working
 
-| Category                 | Tested In      | Notes                                      |
-| ------------------------ | -------------- | ------------------------------------------ |
-| Variable type mismatches | 01-basic       | Same-file typed variables                  |
-| Object shape checking    | 03-structural  | Missing fields, extra fields               |
-| Union value checking     | 04-unions      | Literal unions validated                   |
-| Property access checking | 03-structural  | Typos, nonexistent fields                  |
-| Function argument types  | 06-functions   | Same-file typed functions                  |
-| Function return types    | 06-functions   | Same-file typed functions                  |
-| Optional param `?`       | 06-functions   | `y?:: T` emits `y?: T` in .d.ts            |
-| Cross-file type flow     | 07-integration | Via .d.ts; untyped files get `@ts-nocheck` |
+| Category                 | Tested In      | Notes                                                                      |
+| ------------------------ | -------------- | -------------------------------------------------------------------------- |
+| Variable type mismatches | 01-basic       | Same-file typed variables                                                  |
+| Object shape checking    | 03-structural  | Missing fields, extra fields                                               |
+| Union value checking     | 04-unions      | Literal unions validated                                                   |
+| Property access checking | 03-structural  | Typos, nonexistent fields                                                  |
+| Function argument types  | 06-functions   | Same-file typed functions                                                  |
+| Function return types    | 06-functions   | Same-file typed functions                                                  |
+| Optional param `?`       | 06-functions   | `y?:: T` emits `y?: T` in .d.ts                                            |
+| Cross-file type flow     | 07-integration | Via .d.ts; untyped files get `@ts-nocheck`                                 |
+| Hover types              | *(IDE only)*   | Column-aware source maps, overload preference, typed implementation params |
 
 ### Suppressed error codes
 

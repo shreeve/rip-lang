@@ -297,7 +297,65 @@ export class CodeGenerator {
       if (entry.loc) {
         this.sourceMap.addMapping(lineOffset, 0, entry.loc.r, entry.loc.c);
       }
+      // Record sub-expression mappings for finer-grained source positions
+      if (entry.sexpr && entry.loc) {
+        this.recordSubMappings(entry.code, entry.sexpr, lineOffset);
+      }
       lineOffset += entry.code.split('\n').length;
+    }
+  }
+
+  // Walk the s-expression tree and record source map entries for
+  // sub-expressions that carry .loc, giving column-level precision.
+  recordSubMappings(code, sexpr, lineOffset) {
+    let stmtOrigLine = sexpr.loc ? sexpr.loc.r : 0;
+    let subs = [];
+    this.collectSubExprs(sexpr, subs);
+    for (let { name, origLine, origCol } of subs) {
+      let escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      let re = new RegExp('\\b' + escaped + '\\b', 'g');
+      let m, bestMatch = null, bestDist = Infinity;
+      let origLineInStmt = origLine - stmtOrigLine;
+      while ((m = re.exec(code)) !== null) {
+        let before = code.substring(0, m.index);
+        let nl = before.split('\n');
+        let genLine = lineOffset + nl.length - 1;
+        let genCol = nl[nl.length - 1].length;
+        // Prefer matches on the same relative line within the statement,
+        // falling back to column distance as tiebreaker.
+        let genLineInStmt = nl.length - 1;
+        let dist = Math.abs(genLineInStmt - origLineInStmt) * 10000 + Math.abs(genCol - origCol);
+        if (dist < bestDist) { bestDist = dist; bestMatch = { genLine, genCol }; }
+      }
+      if (bestMatch) {
+        this.sourceMap.addMapping(bestMatch.genLine, bestMatch.genCol, origLine, origCol);
+      }
+    }
+  }
+
+  // Collect identifier anchors from sub-expression nodes with .loc.
+  collectSubExprs(node, result) {
+    if (!Array.isArray(node)) return;
+    if (node.loc) {
+      let head = str(node[0]);
+      let ident = null;
+      // Operators/keywords: anchor is the subject at index 1
+      if (typeof head === 'string' && /^[=+\-*/%<>!&|?~^]|^\.\.?$|^def$|^class$|^state$|^computed$|^readonly$|^for-/.test(head)) {
+        if (typeof node[1] === 'string' && /^[a-zA-Z_$]/.test(node[1])) ident = node[1];
+      }
+      // Property access: anchor is the property name
+      else if (head === '.') {
+        if (typeof node[2] === 'string') ident = node[2];
+      }
+      // Function call (head is identifier)
+      else if (typeof head === 'string' && /^[a-zA-Z_$]/.test(head)) {
+        ident = head;
+      }
+      if (ident) result.push({ name: ident, origLine: node.loc.r, origCol: node.loc.c });
+    }
+    // Recurse into children (skip head at index 0 — already processed via parent)
+    for (let i = 1; i < node.length; i++) {
+      if (Array.isArray(node[i])) this.collectSubExprs(node[i], result);
     }
   }
 
@@ -625,7 +683,7 @@ export class CodeGenerator {
         if (!blockStmts.includes(h) || !generated.endsWith('}')) generated += ';';
       }
       let loc = Array.isArray(stmt) ? stmt.loc : null;
-      return { code: generated, loc };
+      return { code: generated, loc, sexpr: Array.isArray(stmt) ? stmt : null };
     });
     let statementsCode = stmtEntries.map(e => e.code).join('\n');
 

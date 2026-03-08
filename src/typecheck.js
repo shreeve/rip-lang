@@ -106,6 +106,35 @@ export function createTypeCheckSettings(ts, overrides = {}) {
   };
 }
 
+// ── Param helpers ──────────────────────────────────────────────────
+
+// Extract the text between the first balanced ( ) — handles nested parens
+// so callback types like `(fn: (x: number) => void)` work correctly.
+function extractFnParams(line) {
+  const idx = line.indexOf('(');
+  if (idx < 0) return null;
+  let depth = 1, i = idx + 1;
+  while (i < line.length && depth > 0) {
+    if (line[i] === '(') depth++;
+    else if (line[i] === ')') depth--;
+    i++;
+  }
+  return depth === 0 ? line.slice(idx + 1, i - 1) : null;
+}
+
+// Replace the first balanced ( ) content in `line` with `newParams`.
+function replaceFnParams(line, newParams) {
+  const idx = line.indexOf('(');
+  if (idx < 0) return line;
+  let depth = 1, i = idx + 1;
+  while (i < line.length && depth > 0) {
+    if (line[i] === '(') depth++;
+    else if (line[i] === ')') depth--;
+    i++;
+  }
+  return depth === 0 ? line.slice(0, idx + 1) + newParams + line.slice(i - 1) : line;
+}
+
 // ── Shared compilation pipeline ────────────────────────────────────
 
 // Compile a .rip file for type-checking. Prepends DTS declarations to
@@ -167,18 +196,27 @@ export function compileForCheck(filePath, source, compiler) {
         injections.sort((a, b) => a.codeLine - b.codeLine);
         // Adjust reverseMap: each injection shifts subsequent code lines down by 1
         if (result.reverseMap) {
-          for (const [, entry] of result.reverseMap) {
-            let offset = 0;
-            for (const inj of injections) {
-              if (inj.codeLine <= entry.genLine + offset) offset++;
+          for (const [, entries] of result.reverseMap) {
+            for (const entry of entries) {
+              let offset = 0;
+              for (const inj of injections) {
+                if (inj.codeLine <= entry.genLine + offset) offset++;
+              }
+              entry.genLine += offset;
             }
-            entry.genLine += offset;
           }
         }
         // Insert signatures bottom-up to preserve indices.
         // Strip 'declare ' — signatures must be non-ambient to match implementations.
+        // Also copy typed params from the overload into the implementation so
+        // TypeScript provides correct parameter types inside the function body.
         for (let k = injections.length - 1; k >= 0; k--) {
-          cl.splice(injections[k].codeLine, 0, injections[k].sig.replace(/^declare /, ''));
+          const sig = injections[k].sig.replace(/^declare /, '');
+          const sigParams = extractFnParams(sig);
+          if (sigParams !== null) {
+            cl[injections[k].codeLine] = replaceFnParams(cl[injections[k].codeLine], sigParams);
+          }
+          cl.splice(injections[k].codeLine, 0, sig);
         }
         code = cl.join('\n');
         // Rebuild header DTS without the moved function signatures
@@ -250,7 +288,7 @@ export function compileForCheck(filePath, source, compiler) {
   const headerLines = hasTypes ? countLines(headerDts + '\n') : 1;
 
   // Build bidirectional line maps
-  const { srcToGen, genToSrc } = buildLineMap(result.reverseMap, result.map, headerLines);
+  const { srcToGen, genToSrc, srcColToGen } = buildLineMap(result.reverseMap, result.map, headerLines);
 
   // Snapshot code-section mappings before DTS mapping can overwrite them.
   // Needed by @ts-expect-error injection which must target code lines, not DTS.
@@ -340,12 +378,18 @@ export function compileForCheck(filePath, source, compiler) {
           if (g >= genLine) srcToGen.set(s, g + 1);
         }
         srcToGen.set(srcLine, genLine);
+        // Shift column-aware mappings
+        for (const [, entries] of srcColToGen) {
+          for (const e of entries) {
+            if (e.genLine >= genLine) e.genLine++;
+          }
+        }
       }
       tsContent = tsLines.join('\n');
     }
   }
 
-  return { tsContent, headerLines, hasTypes, srcToGen, genToSrc, source, dts };
+  return { tsContent, headerLines, hasTypes, srcToGen, genToSrc, srcColToGen, source, dts };
 }
 
 // ── Source mapping helpers ──────────────────────────────────────────

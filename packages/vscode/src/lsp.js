@@ -315,6 +315,33 @@ function srcToOffset(filePath, line, col) {
   const c = compiled.get(filePath);
   if (!c) return undefined;
   let genLine = c.srcToGen.get(line);
+  let genColHint = -1;  // column hint from source map, -1 = no hint
+  let bestSrcCol = -1;  // srcCol of the best column-aware entry
+
+  // Column-aware lookup: when sub-expression mappings exist for this source
+  // line, pick the entry whose srcCol is closest to (but ≤) the cursor column.
+  // This selects the right generated line AND provides a column hint.
+  if (c.srcColToGen) {
+    const colEntries = c.srcColToGen.get(line);
+    if (colEntries && colEntries.length > 0) {
+      let best = colEntries[0];
+      for (const e of colEntries) {
+        if (e.srcCol <= col && (best.srcCol > col || e.srcCol > best.srcCol)) {
+          best = e;
+        }
+      }
+      // If no entry has srcCol ≤ col, use the one closest overall
+      if (best.srcCol > col) {
+        for (const e of colEntries) {
+          if (Math.abs(e.srcCol - col) < Math.abs(best.srcCol - col)) best = e;
+        }
+      }
+      genLine = best.genLine;
+      genColHint = best.genCol;
+      bestSrcCol = best.srcCol;
+    }
+  }
+
   if (genLine === undefined) {
     let best = -1;
     for (const [s] of c.srcToGen) if (s <= line && s > best) best = s;
@@ -336,17 +363,47 @@ function srcToOffset(filePath, line, col) {
     }
     if (wordMatch) {
       const word = wordMatch[0];
-      // Use word-boundary regex to find all identifier occurrences,
-      // then pick the one closest to the source column. This avoids
-      // matching the word inside string literals or comments.
       const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+      // Only trust genColHint when the source-map entry's srcCol is close to
+      // the word being hovered. A line-level entry (srcCol=0) far from the
+      // cursor gives a misleading hint that biases toward the line start.
+      const wordStart = col - leftPart.length;
+      const useHint = genColHint >= 0 && bestSrcCol >= wordStart && bestSrcCol < wordStart + word.length;
+
+      // Prefer the overload signature line (genLine-1) when it exists and
+      // contains the same identifier — overloads carry typed parameters.
+      let targetLine = genLine;
+      let targetText = genText;
+      if (genLine > 0) {
+        const prevText = genLines[genLine - 1] || '';
+        if (/^(?:export\s+)?function\s+\w+\(.*\).*;\s*$/.test(prevText)) {
+          const re0 = new RegExp('\\b' + escaped + '\\b');
+          if (re0.test(prevText)) { targetLine = genLine - 1; targetText = prevText; }
+        }
+      }
+
       const re = new RegExp('\\b' + escaped + '\\b', 'g');
       let m, bestCol = -1, bestDist = Infinity;
-      while ((m = re.exec(genText)) !== null) {
-        const dist = Math.abs(m.index - col);
+      while ((m = re.exec(targetText)) !== null) {
+        const dist = useHint
+          ? Math.abs(m.index - genColHint)
+          : Math.abs(m.index - col);
         if (dist < bestDist) { bestDist = dist; bestCol = m.index; }
       }
-      if (bestCol >= 0) return lineColToOffset(c.tsContent, genLine, bestCol);
+      if (bestCol >= 0) return lineColToOffset(c.tsContent, targetLine, bestCol);
+
+      // Fall back to the original genLine if overload didn't match
+      if (targetLine !== genLine) {
+        const re1b = new RegExp('\\b' + escaped + '\\b', 'g');
+        let m1b, bestCol1b = -1, bestDist1b = Infinity;
+        while ((m1b = re1b.exec(genText)) !== null) {
+          const dist = useHint ? Math.abs(m1b.index - genColHint) : Math.abs(m1b.index - col);
+          if (dist < bestDist1b) { bestDist1b = dist; bestCol1b = m1b.index; }
+        }
+        if (bestCol1b >= 0) return lineColToOffset(c.tsContent, genLine, bestCol1b);
+      }
+
       // Word not on mapped line — search nearby generated lines
       for (let delta = 1; delta <= 3; delta++) {
         for (const tryLine of [genLine + delta, genLine - delta]) {
