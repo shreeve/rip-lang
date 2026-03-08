@@ -41,11 +41,10 @@ export function patchUninitializedTypes(ts, service, compiledEntries) {
   const program = service.getProgram();
   if (!program) return;
   const checker = program.getTypeChecker();
-  for (const [filePath] of compiledEntries) {
-    const sf = program.getSourceFile(toVirtual(filePath));
-    if (!sf) continue;
+
+  function patchStatements(stmts) {
     const uninitialized = new Map();
-    for (const stmt of sf.statements) {
+    for (const stmt of stmts) {
       if (ts.isVariableStatement(stmt)) {
         for (const decl of stmt.declarationList.declarations) {
           if (!decl.initializer && !decl.type && ts.isIdentifier(decl.name)) {
@@ -66,7 +65,17 @@ export function patchUninitializedTypes(ts, service, compiledEntries) {
           uninitialized.delete(name);
         }
       }
+      // Recurse into function bodies
+      if (ts.isFunctionDeclaration(stmt) && stmt.body) {
+        patchStatements(stmt.body.statements);
+      }
     }
+  }
+
+  for (const [filePath] of compiledEntries) {
+    const sf = program.getSourceFile(toVirtual(filePath));
+    if (!sf) continue;
+    patchStatements(sf.statements);
   }
 }
 
