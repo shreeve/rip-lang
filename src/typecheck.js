@@ -222,14 +222,37 @@ export function compileForCheck(filePath, source, compiler) {
           return depth === 0 && sig.slice(i).includes(':');
         }
 
-        // First pass: copy typed params from ALL signatures to implementations.
-        // This gives TS typed params inside function bodies regardless of whether
-        // an overload is injected.
+        // Extract the return type from a DTS signature (e.g. ": number" from
+        // "function add(a: number, b: number): number;").
+        function extractReturnType(sig) {
+          const idx = sig.indexOf('(');
+          if (idx < 0) return null;
+          let depth = 1, i = idx + 1;
+          while (i < sig.length && depth > 0) {
+            if (sig[i] === '(') depth++;
+            else if (sig[i] === ')') depth--;
+            i++;
+          }
+          if (depth !== 0) return null;
+          const rest = sig.slice(i).replace(/;?\s*$/, '').trim();
+          return rest.startsWith(':') ? rest : null;
+        }
+
+        // First pass: copy typed params AND return types from signatures to
+        // implementations. Typed params give TS type info inside function bodies;
+        // return types let TS verify the body matches the declared return.
         for (const inj of injections) {
           const sig = inj.sig.replace(/^declare /, '');
           const sigParams = extractFnParams(sig);
           if (sigParams !== null) {
             cl[inj.codeLine] = replaceFnParams(cl[inj.codeLine], sigParams);
+          }
+          const retType = extractReturnType(sig);
+          if (retType) {
+            const braceIdx = cl[inj.codeLine].lastIndexOf('{');
+            if (braceIdx > 0) {
+              cl[inj.codeLine] = cl[inj.codeLine].slice(0, braceIdx).trimEnd() + retType + ' {';
+            }
           }
         }
 
