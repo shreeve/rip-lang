@@ -121,7 +121,7 @@ const lib = dlopen(libPath, {
   duckdb_vector_get_validity:     { args: ['ptr'], returns: 'ptr' },
   duckdb_destroy_data_chunk:      { args: ['ptr'], returns: 'void' },
 
-  // Logical type introspection (for DECIMAL, ENUM, LIST, STRUCT)
+  // Logical type introspection (for DECIMAL, ENUM, LIST, STRUCT, ARRAY)
   duckdb_column_logical_type:     { args: ['ptr', 'u64'], returns: 'ptr' },
   duckdb_destroy_logical_type:    { args: ['ptr'], returns: 'void' },
   duckdb_get_type_id:             { args: ['ptr'], returns: 'i32' },
@@ -132,14 +132,17 @@ const lib = dlopen(libPath, {
   duckdb_enum_dictionary_size:    { args: ['ptr'], returns: 'u32' },
   duckdb_enum_dictionary_value:   { args: ['ptr', 'u64'], returns: 'ptr' },
 
-  // Nested type vector access (LIST, STRUCT)
+  // Nested type vector access (LIST, STRUCT, ARRAY)
   duckdb_list_vector_get_child:   { args: ['ptr'], returns: 'ptr' },
-  duckdb_list_vector_get_size:    { args: ['ptr'], returns: 'u64' },  // Not yet used; available for LIST size checks
+  duckdb_list_vector_get_size:    { args: ['ptr'], returns: 'u64' },
   duckdb_struct_vector_get_child: { args: ['ptr', 'u64'], returns: 'ptr' },
   duckdb_struct_type_child_count: { args: ['ptr'], returns: 'u64' },
   duckdb_struct_type_child_name:  { args: ['ptr', 'u64'], returns: 'ptr' },
   duckdb_struct_type_child_type:  { args: ['ptr', 'u64'], returns: 'ptr' },
   duckdb_list_type_child_type:    { args: ['ptr'], returns: 'ptr' },
+  duckdb_array_vector_get_child:  { args: ['ptr'], returns: 'ptr' },
+  duckdb_array_type_child_type:   { args: ['ptr'], returns: 'ptr' },
+  duckdb_array_type_array_size:   { args: ['ptr'], returns: 'u64' },
 
   // Memory
   duckdb_free: { args: ['ptr'], returns: 'void' },
@@ -183,7 +186,11 @@ const DUCKDB_TYPE = {
   UUID: 27,
   UNION: 28,
   BIT: 29,
-  TIMESTAMP_TZ: 32,
+  TIME_TZ: 30,
+  TIMESTAMP_TZ: 31,
+  UHUGEINT: 32,
+  ARRAY: 33,
+  TIME_NS: 39,
 };
 
 export { DUCKDB_TYPE };
@@ -406,12 +413,13 @@ class Connection {
   //
   // Contract:
   //   BIGINT/UBIGINT → number (lossy above 2^53, JSON-safe)
-  //   DECIMAL/HUGEINT → string (preserves precision)
+  //   DECIMAL/HUGEINT/UHUGEINT → string (preserves precision)
   //   All timestamps → Date (UTC)
   //   UUID → string (formatted)
   //   VARCHAR/BLOB → string
   //   ENUM → string (dictionary lookup)
-  //   LIST → array, STRUCT → object, MAP → object
+  //   TIME/TIME_NS/TIME_TZ → string (formatted)
+  //   LIST/ARRAY → array, STRUCT → object, MAP → object
   // ---------------------------------------------------------------------------
 
   #extractChunks(resultPtr) {
@@ -431,7 +439,8 @@ class Connection {
 
       // Get logical type metadata for complex types
       if (type === DUCKDB_TYPE.DECIMAL || type === DUCKDB_TYPE.ENUM ||
-          type === DUCKDB_TYPE.LIST || type === DUCKDB_TYPE.STRUCT || type === DUCKDB_TYPE.MAP) {
+          type === DUCKDB_TYPE.LIST || type === DUCKDB_TYPE.STRUCT ||
+          type === DUCKDB_TYPE.MAP || type === DUCKDB_TYPE.ARRAY) {
         const logType = lib.duckdb_column_logical_type(rp, BigInt(c));
         if (logType) {
           if (type === DUCKDB_TYPE.DECIMAL) {
@@ -487,6 +496,15 @@ class Connection {
               }
               const b = allocPtr(); new DataView(b.buffer).setBigUint64(0, BigInt(keyLogType), true);
               lib.duckdb_destroy_logical_type(ptr(b));
+            }
+          } else if (type === DUCKDB_TYPE.ARRAY) {
+            col.arraySize = Number(lib.duckdb_array_type_array_size(logType));
+            const childLogType = lib.duckdb_array_type_child_type(logType);
+            if (childLogType) {
+              col.childType = lib.duckdb_get_type_id(childLogType);
+              const ltBuf2 = allocPtr();
+              new DataView(ltBuf2.buffer).setBigUint64(0, BigInt(childLogType), true);
+              lib.duckdb_destroy_logical_type(ptr(ltBuf2));
             }
           }
           const ltBuf = allocPtr();
@@ -592,6 +610,13 @@ class Connection {
         return value.toString();
       }
 
+      case DUCKDB_TYPE.UHUGEINT: {
+        const lo = ffiRead.u64(dataPtr, row * 16);
+        const hi = ffiRead.u64(dataPtr, row * 16 + 8);
+        const value = (BigInt(hi) << 64n) | BigInt(lo);
+        return value.toString();
+      }
+
       case DUCKDB_TYPE.DECIMAL: {
         // Read based on internal type, divide by 10^scale, return as string
         const scale = col?.decimalScale || 0;
@@ -647,6 +672,39 @@ class Connection {
         const frac = us % 1000000;
         return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}` +
                (frac > 0 ? `.${String(frac).padStart(6,'0').replace(/0+$/, '')}` : '');
+      }
+
+      case DUCKDB_TYPE.TIME_NS: {
+        const ns = ffiRead.i64(dataPtr, row * 8);
+        const totalUs = Number(ns / 1000n);
+        const subUs = Number(ns % 1000n);
+        const totalSec = Math.floor(totalUs / 1000000);
+        const h = Math.floor(totalSec / 3600);
+        const m = Math.floor((totalSec % 3600) / 60);
+        const s = totalSec % 60;
+        const fracUs = totalUs % 1000000;
+        const fracNs = fracUs * 1000 + subUs;
+        return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}` +
+               (fracNs > 0 ? `.${String(fracNs).padStart(9,'0').replace(/0+$/, '')}` : '');
+      }
+
+      case DUCKDB_TYPE.TIME_TZ: {
+        // Stored as uint64: upper 40 bits = microseconds, lower 24 bits = offset + 86399
+        const bits = ffiRead.u64(dataPtr, row * 8);
+        const us = Number(bits >> 24n);
+        const offsetSec = Number(bits & 0xFFFFFFn) - 86399;
+        const totalSec = Math.floor(us / 1000000);
+        const h = Math.floor(totalSec / 3600);
+        const m = Math.floor((totalSec % 3600) / 60);
+        const s = totalSec % 60;
+        const frac = us % 1000000;
+        const absOff = Math.abs(offsetSec);
+        const offH = Math.floor(absOff / 3600);
+        const offM = Math.floor((absOff % 3600) / 60);
+        const sign = offsetSec >= 0 ? '+' : '-';
+        return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}` +
+               (frac > 0 ? `.${String(frac).padStart(6,'0').replace(/0+$/, '')}` : '') +
+               `${sign}${String(offH).padStart(2,'0')}:${String(offM).padStart(2,'0')}`;
       }
 
       case DUCKDB_TYPE.UUID:
@@ -753,6 +811,27 @@ class Connection {
           if (k !== null) obj[String(k)] = v;
         }
         return obj;
+      }
+
+      case DUCKDB_TYPE.ARRAY: {
+        // Fixed-size array: child elements are contiguous, arraySize elements per row
+        if (!vec) return null;
+        const arraySize = col?.arraySize || 0;
+        const childVec = lib.duckdb_array_vector_get_child(vec);
+        const childData = lib.duckdb_vector_get_data(childVec);
+        const childValidity = lib.duckdb_vector_get_validity(childVec);
+        const childType = col?.childType || DUCKDB_TYPE.VARCHAR;
+        const baseIdx = row * arraySize;
+        const result = [];
+        for (let i = 0; i < arraySize; i++) {
+          const childRow = baseIdx + i;
+          if (!isValid(childValidity, childRow)) {
+            result.push(null);
+          } else {
+            result.push(this.#readValue(childData, childRow, childType, null, childVec));
+          }
+        }
+        return result;
       }
 
       case DUCKDB_TYPE.UNION:

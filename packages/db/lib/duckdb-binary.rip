@@ -32,17 +32,20 @@ export LogicalTypeId =
   UBIGINT:       31
   TIMESTAMP_TZ:  32
   TIME_TZ:       34
+  TIME_NS:       35
   BIT:           36
   BIGNUM:        39
   UHUGEINT:      49
   HUGEINT:       50
   UUID:          54
+  GEOMETRY:      60
   STRUCT:       100
   LIST:         101
   MAP:          102
   ENUM:         104
   UNION:        107
   ARRAY:        108
+  VARIANT:      109
 
 # Shared TextEncoder instance (avoid allocating per call)
 textEncoder = new TextEncoder()
@@ -341,6 +344,85 @@ serializeVector = (s, column, values) ->
         dv.setBigInt64 i * 16 + 8, hi, true
       s.writeData bytes
 
+    when LogicalTypeId.TIME
+      s.writeFieldId 102
+      bytes = new Uint8Array values.length * 8
+      dv = new DataView bytes.buffer
+      for v, i in values
+        dv.setBigInt64 i * 8, (if v? then timeToMicros v else 0n), true
+      s.writeData bytes
+
+    when LogicalTypeId.TIME_TZ
+      s.writeFieldId 102
+      bytes = new Uint8Array values.length * 8
+      dv = new DataView bytes.buffer
+      for v, i in values
+        dv.setBigUint64 i * 8, (if v? then timeToPackedTZ v else 0n), true
+      s.writeData bytes
+
+    when LogicalTypeId.TIME_NS
+      s.writeFieldId 102
+      bytes = new Uint8Array values.length * 8
+      dv = new DataView bytes.buffer
+      for v, i in values
+        dv.setBigInt64 i * 8, (if v? then timeToNanos v else 0n), true
+      s.writeData bytes
+
+    when LogicalTypeId.TIMESTAMP_SEC
+      s.writeFieldId 102
+      bytes = new Uint8Array values.length * 8
+      dv = new DataView bytes.buffer
+      for v, i in values
+        dv.setBigInt64 i * 8, (if v? then timestampToSecs v else 0n), true
+      s.writeData bytes
+
+    when LogicalTypeId.TIMESTAMP_MS
+      s.writeFieldId 102
+      bytes = new Uint8Array values.length * 8
+      dv = new DataView bytes.buffer
+      for v, i in values
+        dv.setBigInt64 i * 8, (if v? then timestampToMillis v else 0n), true
+      s.writeData bytes
+
+    when LogicalTypeId.TIMESTAMP_NS
+      s.writeFieldId 102
+      bytes = new Uint8Array values.length * 8
+      dv = new DataView bytes.buffer
+      for v, i in values
+        dv.setBigInt64 i * 8, (if v? then timestampToNanos v else 0n), true
+      s.writeData bytes
+
+    when LogicalTypeId.INTERVAL
+      s.writeFieldId 102
+      bytes = new Uint8Array values.length * 16
+      dv = new DataView bytes.buffer
+      for v, i in values
+        { months, days, micros } = if v? then parseInterval v else { months: 0, days: 0, micros: 0n }
+        dv.setInt32 i * 16, months, true
+        dv.setInt32 i * 16 + 4, days, true
+        dv.setBigInt64 i * 16 + 8, micros, true
+      s.writeData bytes
+
+    when LogicalTypeId.HUGEINT
+      s.writeFieldId 102
+      bytes = new Uint8Array values.length * 16
+      dv = new DataView bytes.buffer
+      for v, i in values
+        { lo, hi } = stringToHugeint v
+        dv.setBigUint64 i * 16, lo, true
+        dv.setBigInt64 i * 16 + 8, hi, true
+      s.writeData bytes
+
+    when LogicalTypeId.UHUGEINT
+      s.writeFieldId 102
+      bytes = new Uint8Array values.length * 16
+      dv = new DataView bytes.buffer
+      for v, i in values
+        { lo, hi } = stringToUhugeint v
+        dv.setBigUint64 i * 16, lo, true
+        dv.setBigUint64 i * 16 + 8, hi, true
+      s.writeData bytes
+
     else
       s.writeList 102, values, (s, v) -> s.writeString String(v ?? '')
 
@@ -391,6 +473,95 @@ uuidToHugeint = (uuid) ->
   lo = full & ((1n << 64n) - 1n)
   { lo, hi }
 
+timeToMicros = (value) ->
+  return 0n unless value
+  match = String(value).match /^(\d+):(\d+):(\d+)(?:\.(\d+))?/
+  return 0n unless match
+  h = parseInt match[1], 10
+  m = parseInt match[2], 10
+  s = parseInt match[3], 10
+  frac = match[4] or ''
+  fracUs = parseInt frac.padEnd(6, '0').slice(0, 6), 10
+  BigInt(h * 3600 + m * 60 + s) * 1000000n + BigInt(fracUs)
+
+timeToPackedTZ = (value) ->
+  return 0n unless value
+  match = String(value).match /^(\d+):(\d+):(\d+)(?:\.(\d+))?([+-])(\d+):(\d+)$/
+  return 0n unless match
+  h = parseInt match[1], 10
+  m = parseInt match[2], 10
+  s = parseInt match[3], 10
+  frac = match[4] or ''
+  fracUs = parseInt frac.padEnd(6, '0').slice(0, 6), 10
+  sign = if match[5] is '+' then 1 else -1
+  offH = parseInt match[6], 10
+  offM = parseInt match[7], 10
+  micros = BigInt(h * 3600 + m * 60 + s) * 1000000n + BigInt(fracUs)
+  offsetSec = sign * (offH * 3600 + offM * 60)
+  (micros << 24n) | BigInt(offsetSec + 86399)
+
+timeToNanos = (value) ->
+  return 0n unless value
+  match = String(value).match /^(\d+):(\d+):(\d+)(?:\.(\d+))?/
+  return 0n unless match
+  h = parseInt match[1], 10
+  m = parseInt match[2], 10
+  s = parseInt match[3], 10
+  frac = match[4] or ''
+  fracNs = parseInt frac.padEnd(9, '0').slice(0, 9), 10
+  BigInt(h * 3600 + m * 60 + s) * 1000000000n + BigInt(fracNs)
+
+timestampToSecs = (value) ->
+  if value instanceof Date then BigInt Math.floor value.getTime() / 1000
+  else if typeof value is 'string' then BigInt Math.floor new Date(value).getTime() / 1000
+  else if typeof value is 'number' then BigInt value
+  else if typeof value is 'bigint' then value
+  else 0n
+
+timestampToMillis = (value) ->
+  if value instanceof Date then BigInt value.getTime()
+  else if typeof value is 'string' then BigInt new Date(value).getTime()
+  else if typeof value is 'number' then BigInt(value) * 1000n
+  else if typeof value is 'bigint' then value
+  else 0n
+
+timestampToNanos = (value) ->
+  if value instanceof Date then BigInt(value.getTime()) * 1000000n
+  else if typeof value is 'string' then BigInt(new Date(value).getTime()) * 1000000n
+  else if typeof value is 'number' then BigInt(value) * 1000000000n
+  else if typeof value is 'bigint' then value
+  else 0n
+
+parseInterval = (value) ->
+  return { months: 0, days: 0, micros: 0n } unless value
+  str = String value
+  months = 0
+  days = 0
+  micros = 0n
+  if m = str.match /(-?\d+)\s+month/
+    months = parseInt m[1], 10
+  if m = str.match /(-?\d+)\s+day/
+    days = parseInt m[1], 10
+  if m = str.match /(-?[\d.]+)\s+second/
+    micros = BigInt Math.round parseFloat(m[1]) * 1000000
+  { months, days, micros }
+
+stringToHugeint = (value) ->
+  return { lo: 0n, hi: 0n } unless value?
+  big = BigInt value
+  mask64 = (1n << 64n) - 1n
+  lo = big & mask64
+  hi = big >> 64n
+  { lo, hi }
+
+stringToUhugeint = (value) ->
+  return { lo: 0n, hi: 0n } unless value?
+  big = BigInt value
+  mask64 = (1n << 64n) - 1n
+  lo = big & mask64
+  hi = (big >> 64n) & mask64
+  { lo, hi }
+
 mapDuckDBType = (typeName) ->
   return LogicalTypeId.VARCHAR unless typeName
   upper = String(typeName).toUpperCase()
@@ -412,14 +583,26 @@ mapDuckDBType = (typeName) ->
     when 'DATE' then LogicalTypeId.DATE
     when 'TIME' then LogicalTypeId.TIME
     when 'TIMESTAMP', 'DATETIME' then LogicalTypeId.TIMESTAMP
-    when 'TIMESTAMP WITH TIME ZONE', 'TIMESTAMPTZ' then LogicalTypeId.TIMESTAMP_TZ
+    when 'TIMESTAMP_S', 'TIMESTAMP_SEC' then LogicalTypeId.TIMESTAMP_SEC
+    when 'TIMESTAMP_MS' then LogicalTypeId.TIMESTAMP_MS
+    when 'TIMESTAMP_NS' then LogicalTypeId.TIMESTAMP_NS
+    when 'TIMESTAMP WITH TIME ZONE', 'TIMESTAMPTZ', 'TIMESTAMP_TZ' then LogicalTypeId.TIMESTAMP_TZ
+    when 'TIME WITH TIME ZONE', 'TIMETZ', 'TIME_TZ' then LogicalTypeId.TIME_TZ
+    when 'TIME_NS' then LogicalTypeId.TIME_NS
     when 'VARCHAR', 'TEXT', 'STRING', 'CHAR', 'BPCHAR' then LogicalTypeId.VARCHAR
-    when 'BLOB', 'BYTEA', 'BINARY', 'VARBINARY' then LogicalTypeId.BLOB
     when 'UUID' then LogicalTypeId.UUID
     when 'INTERVAL' then LogicalTypeId.INTERVAL
-    when 'JSON' then LogicalTypeId.VARCHAR
+    when 'BLOB', 'BYTEA', 'BINARY', 'VARBINARY' then LogicalTypeId.VARCHAR
+    when 'BIT', 'BITSTRING' then LogicalTypeId.VARCHAR
+    when 'ENUM' then LogicalTypeId.VARCHAR
+    when 'LIST' then LogicalTypeId.VARCHAR
+    when 'STRUCT' then LogicalTypeId.VARCHAR
+    when 'MAP' then LogicalTypeId.VARCHAR
+    when 'UNION' then LogicalTypeId.VARCHAR
+    when 'ARRAY' then LogicalTypeId.VARCHAR
+    when 'JSON', 'VARIANT' then LogicalTypeId.VARCHAR
     else
-      if upper.startsWith 'DECIMAL' then LogicalTypeId.VARCHAR  # Serialize as string to preserve exact precision
+      if upper.startsWith 'DECIMAL' then LogicalTypeId.VARCHAR
       else if upper.startsWith 'VARCHAR' then LogicalTypeId.VARCHAR
       else if upper.startsWith 'CHAR' then LogicalTypeId.CHAR
       else LogicalTypeId.VARCHAR
