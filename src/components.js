@@ -853,7 +853,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
         const val = this.generateInComponent(value, 'value');
         sl.push(isPublic ? `    this.${name} = props.${name} ?? ${val};` : `    this.${name} = ${val};`);
       }
-      for (const { name, value, isPublic, required } of stateVars) {
+      for (const { name, value, isPublic, required, type } of stateVars) {
         if (isPublic && required) {
           sl.push(`    this.${name} = __state(props.__bind_${name}__ ?? props.${name});`);
         } else if (isPublic) {

@@ -191,6 +191,22 @@ function publishDiagnostics(filePath) {
                 source: 'rip',
                 message: `Prop '${prop.name}' has no type annotation`,
               });
+            } else {
+              // Typed prop — validate default value against declared type
+              const dm = srcLines[s].match(new RegExp('@' + prop.name + '\\s*::\\s*(.+?)\\s*:=\\s*(.+)'));
+              if (dm) {
+                const defVal = dm[2].replace(/#.*$/, '').trim();
+                const err = tc.validatePropDefault(dm[1].trim(), defVal);
+                if (err) {
+                  const col = srcLines[s].indexOf(match[1]);
+                  diagnostics.push({
+                    range: { start: { line: s, character: col }, end: { line: s, character: col + match[1].length } },
+                    severity: 1,
+                    source: 'rip',
+                    message: err,
+                  });
+                }
+              }
             }
             break;
           }
@@ -496,6 +512,18 @@ function extractUnionValues(typeStr) {
   return values;
 }
 
+// Resolve a type name to its definition string from all compiled DTS.
+// e.g. "Status" → '"pending" | "active" | "done"'
+function resolveTypeFromDTS(typeName) {
+  for (const [, entry] of compiled) {
+    if (!entry.dts) continue;
+    const re = new RegExp('^(?:export\\s+)?type\\s+' + typeName + '\\s*=\\s*(.+?)\\s*;?$', 'm');
+    const m = entry.dts.match(re);
+    if (m) return m[1].trim();
+  }
+  return null;
+}
+
 function getWordAtPosition(text, position) {
   const lines = text.split('\n');
   const line = lines[position.line];
@@ -628,17 +656,68 @@ connection.onCompletion((params) => {
           if (prop) {
             const values = extractUnionValues(prop.type);
             if (values.length > 0) {
-              return values.map((v, i) => ({
-                label: v,
-                kind: 12,
-                insertText: v.startsWith('"') ? v : `"${v}"`,
-                sortText: String(i).padStart(3, '0'),
-              }));
+              const ch = srcLine[params.position.character] || '';
+              const prevCh = params.position.character > 0 ? srcLine[params.position.character - 1] : '';
+              const inQuotes = (prevCh === '"' || prevCh === "'") || (ch === '"' || ch === "'");
+              return values.map((v, i) => {
+                const bare = v.replace(/^["']|["']$/g, '');
+                return {
+                  label: bare,
+                  kind: 12,
+                  insertText: inQuotes ? bare : v.startsWith('"') ? v : `"${v}"`,
+                  sortText: String(i).padStart(3, '0'),
+                };
+              });
             }
           }
         }
       }
     }
+    // Prop default value completions — @prop:: "a" | "b" := |
+    const defMatch = srcLine.match(/^\s*@(\w+)\s*::\s*(.+?)\s*:=\s*/);
+    if (defMatch && params.position.character >= srcLine.indexOf(':=') + 2) {
+      const values = extractUnionValues(defMatch[2].trim());
+      if (values.length > 0) {
+        // Check if cursor is already inside quotes
+        const afterEq = srcLine.slice(srcLine.indexOf(':=') + 2).trimStart();
+        const inQuotes = /^["']/.test(afterEq);
+        return values.map((v, i) => {
+          const bare = v.replace(/^["']|["']$/g, '');
+          return {
+            label: bare,
+            kind: 12,
+            insertText: inQuotes ? bare : v.startsWith('"') ? v : `"${v}"`,
+            sortText: String(i).padStart(3, '0'),
+          };
+        });
+      }
+    }
+
+    // Typed variable completions — name:: Type = "|"
+    const varMatch = srcLine.match(/^\s*(\w+)\s*::\s*(.+?)\s*=\s*/);
+    if (varMatch && params.position.character >= srcLine.indexOf('=') + 1) {
+      let typeStr = varMatch[2].trim();
+      // Resolve named type aliases
+      if (/^\w+$/.test(typeStr)) {
+        const resolved = resolveTypeFromDTS(typeStr);
+        if (resolved) typeStr = resolved;
+      }
+      const values = extractUnionValues(typeStr);
+      if (values.length > 0) {
+        const afterEq = srcLine.slice(srcLine.indexOf('=') + 1).trimStart();
+        const inQuotes = /^["']/.test(afterEq);
+        return values.map((v, i) => {
+          const bare = v.replace(/^["']|["']$/g, '');
+          return {
+            label: bare,
+            kind: 12,
+            insertText: inQuotes ? bare : v.startsWith('"') ? v : `"${v}"`,
+            sortText: String(i).padStart(3, '0'),
+          };
+        });
+      }
+    }
+
     // Space/colon triggered outside component context — don't fall through to TS
     if (params.context?.triggerCharacter === ' ' || params.context?.triggerCharacter === ':') return [];
   }

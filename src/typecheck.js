@@ -37,6 +37,33 @@ export function countLines(str) {
   return n;
 }
 
+// Validate a prop's default value against its declared type.
+// Returns an error message string if invalid, null if OK or can't validate.
+export function validatePropDefault(type, defVal) {
+  const parts = type.split('|').map(s => s.trim());
+  // String literal union: "a" | "b" | "c"
+  if (parts.every(p => /^"[^"]*"$/.test(p))) {
+    if (/^"[^"]*"$/.test(defVal) && !parts.includes(defVal)) {
+      return `Type '${defVal}' is not assignable to type '${type}'`;
+    }
+    return null;
+  }
+  // Single type checks
+  if (parts.length === 1) {
+    const t = parts[0];
+    if (t === 'boolean' && defVal !== 'true' && defVal !== 'false') {
+      return `Type '${defVal}' is not assignable to type 'boolean'`;
+    }
+    if (t === 'number' && !/^-?\d+(\.\d+)?$/.test(defVal)) {
+      return `Type '${defVal}' is not assignable to type 'number'`;
+    }
+    if (t === 'string' && !/^"[^"]*"$/.test(defVal)) {
+      return `Type '${defVal}' is not assignable to type 'string'`;
+    }
+  }
+  return null;
+}
+
 export function toVirtual(p) { return p + '.ts'; }
 export function fromVirtual(p) { return p.endsWith('.rip.ts') ? p.slice(0, -3) : p; }
 
@@ -724,6 +751,17 @@ export async function runCheck(targetDir, opts = {}) {
               if (m[1] !== '::') {
                 errors.push({ line: s + 1, col: m.index + 1, len: propName.length + 1, message: `Prop '${propName}' on component ${cm[1]} has no type annotation`, severity: 'error', code: 'rip', srcLine: srcLines[s], related: [] });
                 totalErrors++;
+              } else {
+                // Typed prop — validate default value against declared type
+                const dm = srcLines[s].match(new RegExp('@' + propName + '\\s*::\\s*(.+?)\\s*:=\\s*(.+)'));
+                if (dm) {
+                  const defVal = dm[2].replace(/#.*$/, '').trim();
+                  const err = validatePropDefault(dm[1].trim(), defVal);
+                  if (err) {
+                    errors.push({ line: s + 1, col: m.index + 1, len: propName.length + 1, message: err, severity: 'error', code: 'rip', srcLine: srcLines[s], related: [] });
+                    totalErrors++;
+                  }
+                }
               }
               break;
             }
