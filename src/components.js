@@ -669,12 +669,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
    * Pattern: ["component", null, ["block", ...statements]]
    */
   proto.generateComponent = function(head, rest, context, sexpr) {
-    if (this.options.stubComponents) return 'class {}';
-
     const [, body] = rest;
-
-    this.usesTemplates = true;
-    this.usesReactivity = true;
 
     // Extract component body statements
     const statements = this.is(body, 'block') ? body.slice(1) : [];
@@ -783,6 +778,159 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     this.componentMembers = memberNames;
     this.reactiveMembers = reactiveMembers;
     this._autoEventHandlers = autoEventHandlers.size > 0 ? autoEventHandlers : null;
+
+    // --- Type-check stub: typed member declarations + body expressions, no DOM ---
+    if (this.options.stubComponents) {
+      // Inline type suffix expansion (mirrors types.js expandSuffixes)
+      const expandType = (t) => t ? t.replace(/::/g, ':')
+        .replace(/(\w+(?:<[^>]+>)?)\?\?/g, '$1 | null | undefined')
+        .replace(/(\w+(?:<[^>]+>)?)\?(?![.:])/g, '$1 | undefined')
+        .replace(/(\w+(?:<[^>]+>)?)\!/g, 'NonNullable<$1>') : null;
+
+      const sl = [];
+      sl.push('class {');
+
+      // Constructor — typed props for public state/readonly (matches DTS)
+      const propEntries = [];
+      for (const { name, type, isPublic } of stateVars) {
+        if (!isPublic) continue;
+        const ts = expandType(type);
+        propEntries.push(`${name}?: ${ts || 'any'}`);
+      }
+      for (const { name, type, isPublic } of readonlyVars) {
+        if (!isPublic) continue;
+        const ts = expandType(type);
+        propEntries.push(`${name}?: ${ts || 'any'}`);
+      }
+      if (propEntries.length > 0) {
+        sl.push(`  constructor(props?: {${propEntries.join('; ')}}) {}`);
+      }
+
+      // Property declarations (declare avoids definite-assignment errors)
+      for (const { name, type } of stateVars) {
+        const ts = expandType(type);
+        sl.push(ts ? `  declare ${name}: Signal<${ts}>;` : `  declare ${name}: Signal<any>;`);
+      }
+      for (const { name, type } of readonlyVars) {
+        const ts = expandType(type);
+        sl.push(ts ? `  declare ${name}: ${ts};` : `  declare ${name}: any;`);
+      }
+      for (const { name, expr } of derivedVars) {
+        if (this.is(expr, 'block')) {
+          const transformed = this.transformComponentMembers(expr);
+          const body = this.generateFunctionBody(transformed);
+          sl.push(`  ${name} = __computed(() => ${body});`);
+        } else {
+          const val = this.generateInComponent(expr, 'value');
+          sl.push(`  ${name} = __computed(() => ${val});`);
+        }
+      }
+
+      // _init body — readonly, state, computed assignments (skip accepted/offered)
+      sl.push('  _init(props) {');
+      for (const { name, value, isPublic } of readonlyVars) {
+        const val = this.generateInComponent(value, 'value');
+        sl.push(isPublic ? `    this.${name} = props.${name} ?? ${val};` : `    this.${name} = ${val};`);
+      }
+      for (const { name, value, isPublic } of stateVars) {
+        const val = this.generateInComponent(value, 'value');
+        sl.push(isPublic
+          ? `    this.${name} = __state(props.__bind_${name}__ ?? props.${name} ?? ${val});`
+          : `    this.${name} = __state(${val});`);
+      }
+
+      for (const effect of effects) {
+        const effectBody = effect[2];
+        const isAsync = this.containsAwait(effectBody) ? 'async ' : '';
+        if (this.is(effectBody, 'block')) {
+          const transformed = this.transformComponentMembers(effectBody);
+          const body = this.generateFunctionBody(transformed, [], true);
+          sl.push(`    __effect(${isAsync}() => ${body});`);
+        } else {
+          const effectCode = this.generateInComponent(effectBody, 'value');
+          sl.push(`    __effect(${isAsync}() => { ${effectCode}; });`);
+        }
+      }
+      sl.push('  }');
+
+      // Methods
+      for (const { name, func } of methods) {
+        if (Array.isArray(func) && (func[0] === '->' || func[0] === '=>')) {
+          const [, params, methodBody] = func;
+          const paramStr = Array.isArray(params) ? params.map(p => this.formatParam(p)).join(', ') : '';
+          const transformed = this.reactiveMembers ? this.transformComponentMembers(methodBody) : methodBody;
+          const isAsync = this.containsAwait(methodBody);
+          const bodyCode = this.generateFunctionBody(transformed, params || []);
+          sl.push(`  ${isAsync ? 'async ' : ''}${name}(${paramStr}) ${bodyCode}`);
+        }
+      }
+
+      // Lifecycle hooks
+      for (const { name, value } of lifecycleHooks) {
+        if (Array.isArray(value) && (value[0] === '->' || value[0] === '=>')) {
+          const [, params, hookBody] = value;
+          const paramStr = Array.isArray(params) ? params.map(p => this.formatParam(p)).join(', ') : '';
+          const transformed = this.reactiveMembers ? this.transformComponentMembers(hookBody) : hookBody;
+          const isAsync = this.containsAwait(hookBody);
+          const bodyCode = this.generateFunctionBody(transformed, params || []);
+          sl.push(`  ${isAsync ? 'async ' : ''}${name}(${paramStr}) ${bodyCode}`);
+        }
+      }
+
+      // Component instantiations from render block — emit new X({...}) for prop type checking
+      if (renderBlock) {
+        const constructions = [];
+        const extractProps = (args) => {
+          const props = [];
+          for (const arg of args) {
+            let obj = null;
+            if (this.is(arg, 'object')) {
+              obj = arg;
+            } else if (Array.isArray(arg) && (arg[0] === '->' || arg[0] === '=>') && this.is(arg[2], 'block')) {
+              // Multi-line props: (-> (undefined) (block (object ...)))
+              for (let k = 1; k < arg[2].length; k++) {
+                if (this.is(arg[2][k], 'object')) { obj = arg[2][k]; break; }
+              }
+            }
+            if (obj) {
+              for (let j = 1; j < obj.length; j++) {
+                const [key, value] = obj[j];
+                if (typeof key === 'string' && !key.startsWith('@') && !key.startsWith('__bind_')) {
+                  const val = this.generateInComponent(value, 'value');
+                  props.push(`${key}: ${val}`);
+                }
+              }
+            }
+          }
+          return props;
+        };
+        const walkRender = (node) => {
+          if (!Array.isArray(node)) return;
+          const head = node[0]?.valueOf?.() ?? node[0];
+          if (typeof head === 'string' && /^[A-Z]/.test(head)) {
+            const props = extractProps(node.slice(1));
+            constructions.push(`    new ${head}({${props.join(', ')}});`);
+          }
+          for (let i = 1; i < node.length; i++) walkRender(node[i]);
+        };
+        walkRender(renderBlock);
+        if (constructions.length > 0) {
+          sl.push('  _render() {');
+          for (const c of constructions) sl.push(c);
+          sl.push('  }');
+        }
+      }
+
+      sl.push('}');
+
+      this.componentMembers = prevComponentMembers;
+      this.reactiveMembers = prevReactiveMembers;
+      this._autoEventHandlers = prevAutoEventHandlers;
+      return sl.join('\n');
+    }
+
+    this.usesTemplates = true;
+    this.usesReactivity = true;
 
     const lines = [];
     let blockFactoriesCode = '';

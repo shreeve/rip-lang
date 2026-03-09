@@ -164,45 +164,6 @@ function publishDiagnostics(filePath) {
         }
       }
 
-      // Value validation: type mismatches and invalid union values
-      for (const [propName, value] of ctx.propValues) {
-        const prop = info.props.find(p => p.name === propName);
-        if (!prop) continue;
-        const isStr = /^["']/.test(value);
-        const isNum = /^\d/.test(value);
-        const isBool = value === 'true' || value === 'false';
-        const type = prop.type;
-
-        const isLiteral = isStr || isNum || isBool;
-        let msg = null;
-        if (!isLiteral) continue;
-        if (type === 'string' && !isStr) msg = `Expected a string for prop '${propName}'`;
-        else if (type === 'number' && !isNum) msg = `Expected a number for prop '${propName}'`;
-        else if (type === 'boolean' && !isBool) msg = `Expected a boolean for prop '${propName}'`;
-        else {
-          const allowed = extractUnionValues(type);
-          if (allowed.length > 0 && isStr) {
-            const strMatch = value.match(/^(["'])(.*)\1$/);
-            if (strMatch) {
-              const quoted = `"${strMatch[2]}"`;
-              if (!allowed.some(v => v === quoted || v === `'${strMatch[2]}'`))
-                msg = `Invalid value ${quoted} for prop '${propName}'. Expected: ${allowed.join(' | ')}`;
-            }
-          }
-        }
-        if (msg) {
-          const col = srcLines[i].indexOf(value);
-          if (col >= 0) {
-            diagnostics.push({
-              range: { start: { line: i, character: col }, end: { line: i, character: col + value.length } },
-              severity: 2,
-              source: 'rip',
-              message: msg,
-            });
-          }
-        }
-      }
-
       // Required prop checking
       for (const prop of info.props) {
         if (!prop.required) continue;

@@ -6,6 +6,21 @@
 
 # ── Components ──
 
+export Input = component
+  @label:: string := ""
+  @type:: string := "text"
+  @placeholder:: string := ""
+  @value:: string := ""
+  @error:: string := ""
+
+  render
+    fieldset
+      if label
+        label label
+      input type: type, placeholder: placeholder, value: value
+      if error
+        div error
+
 export Button = component
   @type:: string := "button"
   @variant:: "primary" | "secondary" := "primary"
@@ -21,21 +36,6 @@ export Button = component
         "Loading..."
       else
         slot
-
-export Input = component
-  @label:: string := ""
-  @type:: string := "text"
-  @placeholder:: string := ""
-  @value:: string := ""
-  @error:: string := ""
-
-  render
-    fieldset
-      if label
-        label label
-      input type: type, placeholder: placeholder, value: value
-      if error
-        div error
 
 export Form = component
   @title:: string := "Sign In"
@@ -65,26 +65,46 @@ export Form = component
       Button type: "submit", variant: "primary", loading: loading
         "Sign In"
 
-# ── Gap: type safety inside component bodies ──
+# ── Negative: wrong prop types must be caught ──
 #
-# The real gap is not constructor prop checking — it's that types are
-# invisible inside the component body where props are actually used.
-# The compiled code redeclares all props as untyped variables (from
-# signal unwrapping), so TypeScript sees them as `any`. For example:
+# These match the TSX companion's negative prop-type tests.
+# The enriched stub emits constructor calls in _render(),
+# so TypeScript catches wrong literals, type mismatches, etc.
+
+export PropTypeTests = component
+  render
+    div
+      # @ts-expect-error — wrong variant literal
+      Button variant: "danger"
+      # @ts-expect-error — disabled expects boolean
+      Button disabled: "yes"
+      # @ts-expect-error — wrong type for label
+      Input label: 123
+
+# ── Negative: type safety inside component bodies ──
 #
-#   export Button = component
-#     @variant:: "primary" | "secondary" := "primary"
-#
-#     # These should be caught but aren't:
-#     bad = variant + 5          # string + number — no error
-#     bad = variant is "danger"  # impossible comparison — no error
-#
-# In a real app, 90% of code lives inside component bodies — render
-# blocks, event handlers, computeds, methods. Without typed props
-# flowing through, the type system is effectively invisible where
-# it matters most.
-#
-# Tracked in AGENTS.md gap table under "Component prop types".
+# The enriched stub gives TypeScript typed property declarations
+# (Signal<T>, Computed<T>) so type errors in computeds and methods
+# are caught. Each @ts-expect-error must suppress a real TS error.
+
+export TypeTestComp = component
+  @variant:: "primary" | "secondary" := "primary"
+  @count:: number := 0
+
+  ok ~= if variant is "primary" then "#0066ff" else "#e5e5e5"
+
+  # @ts-expect-error — toFixed doesn't exist on string union
+  badFixed ~= variant.toFixed(2)
+
+  # @ts-expect-error — arithmetic on string type
+  badMath ~= variant * 2
+
+  badMethod = ->
+    # @ts-expect-error — string assigned to number state
+    count = "hello"
+
+  render
+    null
 
 # ── Gap: event handler typing ──
 #

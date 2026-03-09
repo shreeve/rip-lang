@@ -68,7 +68,7 @@ Each file exercises a specific type feature. Status key:
 | 06-functions.rip   | Typed functions, arrows, and array transforms               | pass   | 21 negative tests (7 param + 6 return + 3 array + 5 destructured) |
 | 07-integration.rip | Cross-module imports of typed functions                     | pass   | Cross-file type flow via .d.ts                                    |
 | 08-reactive.rip    | `:: T :=`, `:: T ~=`, `:: T =!`, `:: T ~>`                  | pass   | Tier 1 — reactive state annotations                               |
-| 09-components.rip  | `@prop:: T :=`, `@prop:: T =!`                              | pass   | Tier 1 — component prop annotations                               |
+| 09-components.rip  | `@prop:: T :=`, `@prop:: T =!`                              | pass   | 3 negative tests (computed + method body type errors)             |
 | 10-validation.rip  | Runtime validation + async/await (`!` operator)             | pass   | Tier 2 — Rip erases types; TS+Zod validates                       |
 | 11-inference.rip   | Type inference on unannotated variables                     | pass   | Top-level works; block/destructure/any are gaps                   |
 
@@ -82,16 +82,15 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 **Compiler / type-checker gaps** (affect `rip check` correctness):
 
-| Category                         | Tested In                | Notes                                                                                                                 |
-| -------------------------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| Component prop types             | 09-components            | .d.ts emits typed constructors but no safety inside component body — **highest-ROI gap** (90% of app code lives here) |
-| Event handler typing             | 09-components            | Handler params are untyped — `(e) ->` gives `any`, no typed event objects                                             |
-| Runtime return-type validation   | 10-validation            | Return types are erased — `response.json()` is unvalidated `any`; no `schema.parse()` equivalent                      |
-| Type narrowing (control flow)    | 04-unions *(comment)*    | TS narrows compiled JS, not Rip source                                                                                |
-| `void` return annotation         | 06-functions *(comment)* | `void` is reserved; use `!` operator (`def fn!`) instead                                                              |
-| Unresolved import paths          | 07-integration           | `rip check` doesn't flag imports to nonexistent files                                                                 |
-| Enum exhaustiveness              | 04-unions                | Switch narrowing works in .ts but `rip check` doesn't verify exhaustiveness                                           |
-| Inline discriminated union .d.ts | 04-unions *(comment)*    | `Shape ::= \| { kind: "circle" } \| { ... }` emits malformed .d.ts; split into named types as workaround              |
+| Category                         | Tested In                | Notes                                                                                                    |
+| -------------------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------- |
+| Event handler typing             | 09-components            | Handler params are untyped — `(e) ->` gives `any`, no typed event objects                                |
+| Runtime return-type validation   | 10-validation            | Return types are erased — `response.json()` is unvalidated `any`; no `schema.parse()` equivalent         |
+| Type narrowing (control flow)    | 04-unions *(comment)*    | TS narrows compiled JS, not Rip source                                                                   |
+| `void` return annotation         | 06-functions *(comment)* | `void` is reserved; use `!` operator (`def fn!`) instead                                                 |
+| Unresolved import paths          | 07-integration           | `rip check` doesn't flag imports to nonexistent files                                                    |
+| Enum exhaustiveness              | 04-unions                | Switch narrowing works in .ts but `rip check` doesn't verify exhaustiveness                              |
+| Inline discriminated union .d.ts | 04-unions *(comment)*    | `Shape ::= \| { kind: "circle" } \| { ... }` emits malformed .d.ts; split into named types as workaround |
 
 **Component model gaps** (would need language-level changes):
 
@@ -135,6 +134,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Array destructured params  | 06-functions   | `[first:: string, second:: string]` → tuple `[string, string]` in .d.ts                              |
 | Nested destructured params | 06-functions   | `{user: {name:: string, age:: number}}` → `{user: {name: string, age: number}}` in .d.ts             |
 | Cross-file type flow       | 07-integration | Via .d.ts; untyped files get `@ts-nocheck`                                                           |
+| Component prop types       | 09-components  | Enriched stub gives Signal<T>/Computed<T> declarations in component class; TS checks body types      |
 | Async/await unwrapping     | 10-validation  | `!` compiles to `await`; return types inferred or explicit; `Promise<T>` → `T`                       |
 | Hover types                | *(IDE only)*   | Column-aware source maps, overload preference, typed implementation params                           |
 
@@ -142,11 +142,11 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 `rip check` runs TypeScript under the hood but suppresses 15 error codes (defined in `SKIP_CODES` in [src/typecheck.js](../../../src/typecheck.js)). Most suppressions are necessary — Rip's compilation model produces patterns that confuse TS (DTS coexisting with compiled bodies, module resolution, etc.). But some categories directly weaken type safety:
 
-| Suppressed codes | What they hide                         | Impact on audit                                                                                                           |
-| ---------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| 7005, 7006, 7034 | Implicit `any` on variables and params | Root cause of the component prop gap — TS *would* flag untyped props inside component bodies, but these codes suppress it |
-| 2300, 2451       | Duplicate identifiers                  | Necessary (DTS + compiled body coexist) but also hides real shadowing bugs                                                |
-| 2307             | Cannot find module                     | Rip resolves modules differently, but this also masks genuinely broken imports                                            |
+| Suppressed codes | What they hide                         | Impact on audit                                                                                            |
+| ---------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| 7005, 7006, 7034 | Implicit `any` on variables and params | Component prop gap is fixed (enriched stubs); these still suppress untyped variables in non-component code |
+| 2300, 2451       | Duplicate identifiers                  | Necessary (DTS + compiled body coexist) but also hides real shadowing bugs                                 |
+| 2307             | Cannot find module                     | Rip resolves modules differently, but this also masks genuinely broken imports                             |
 
 **Fixed:** 2304 ("Cannot find name") was removed from `SKIP_CODES`. Stdlib globals (`p`, `pp`, `sleep`, `warn`, etc.) are now declared in the type-check preamble, so undefined variable references are correctly flagged.
 

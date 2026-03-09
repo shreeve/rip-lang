@@ -82,12 +82,37 @@ function Form({ title = 'Sign In' }: { title?: string } = {}) {
 
 // ── Negative: wrong prop types must be caught ──
 
-// @ts-expect-error — wrong variant literal
-const badBtn = <Button variant='danger' />
-// @ts-expect-error — disabled expects boolean
-const badBtn2 = <Button disabled='yes' />
-// @ts-expect-error — wrong type for label
-const badInput = <Input label={123} />
+function PropTypeTests() {
+  return (
+    <div>
+      {/* @ts-expect-error — wrong variant literal */}
+      <Button variant='danger' />
+      {/* @ts-expect-error — disabled expects boolean */}
+      <Button disabled='yes' />
+      {/* @ts-expect-error — wrong type for label */}
+      <Input label={123} />
+    </div>
+  )
+}
+
+// ── Negative: type safety inside component bodies ──
+
+function TypeTestComp({ variant = 'primary' as 'primary' | 'secondary', count = 0 }) {
+  const ok = variant === 'primary' ? '#0066ff' : '#e5e5e5'
+
+  // @ts-expect-error — toFixed doesn't exist on string union
+  const badFixed = variant.toFixed(2)
+
+  // @ts-expect-error — arithmetic on string type
+  const badMath = variant * 2
+
+  function badMethod() {
+    // @ts-expect-error — string assigned to number variable
+    const x: number = 'hello'
+  }
+
+  return null
+}
 
 // ── Event handler typing ──
 //
