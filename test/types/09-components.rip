@@ -23,7 +23,8 @@ export Input = component
 
 export Button = component
   @type:: string := "button"
-  @variant:: "primary" | "secondary" := "primary"
+  @variant:: "primary" | "secondary"
+  @shape:: "rounded" | "pill" := "rounded"
   @loading:: boolean := false
   @disabled:: boolean := false
 
@@ -77,7 +78,7 @@ export PropTypeTests = component
       # @ts-expect-error — wrong variant literal
       Button variant: "danger"
       # @ts-expect-error — disabled expects boolean
-      Button disabled: "yes"
+      Button variant: "primary", disabled: "yes"
       # @ts-expect-error — wrong type for label
       Input label: 123
 

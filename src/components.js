@@ -707,6 +707,14 @@ export function installComponentSupport(CodeGenerator, Lexer) {
           memberNames.add(varName);
           reactiveMembers.add(varName);
         }
+      } else if (op === '.' && stmt[1] === 'this' && getMemberName(stmt)) {
+        // Required prop: (. this name) — no default value
+        const varName = (typeof stmt[2] === 'string' || stmt[2] instanceof String) ? stmt[2].valueOf() : null;
+        if (varName) {
+          stateVars.push({ name: varName, value: undefined, isPublic: true, type: stmt[2]?.type || null, required: true });
+          memberNames.add(varName);
+          reactiveMembers.add(varName);
+        }
       } else if (op === 'state') {
         const varName = getMemberName(stmt[1]);
         if (varName) {
@@ -792,10 +800,11 @@ export function installComponentSupport(CodeGenerator, Lexer) {
 
       // Constructor — typed props for public state/readonly (matches DTS)
       const propEntries = [];
-      for (const { name, type, isPublic } of stateVars) {
+      for (const { name, type, isPublic, required } of stateVars) {
         if (!isPublic) continue;
         const ts = expandType(type);
-        propEntries.push(`${name}?: ${ts || 'any'}`);
+        const opt = required ? '' : '?';
+        propEntries.push(`${name}${opt}: ${ts || 'any'}`);
       }
       for (const { name, type, isPublic } of readonlyVars) {
         if (!isPublic) continue;
@@ -803,7 +812,9 @@ export function installComponentSupport(CodeGenerator, Lexer) {
         propEntries.push(`${name}?: ${ts || 'any'}`);
       }
       if (propEntries.length > 0) {
-        sl.push(`  constructor(props?: {${propEntries.join('; ')}}) {}`);
+        const hasRequired = stateVars.some(v => v.isPublic && v.required);
+        const propsOpt = hasRequired ? '' : '?';
+        sl.push(`  constructor(props${propsOpt}: {${propEntries.join('; ')}}) {}`);
       }
 
       // Infer type from literal initializer when no explicit annotation
@@ -842,11 +853,16 @@ export function installComponentSupport(CodeGenerator, Lexer) {
         const val = this.generateInComponent(value, 'value');
         sl.push(isPublic ? `    this.${name} = props.${name} ?? ${val};` : `    this.${name} = ${val};`);
       }
-      for (const { name, value, isPublic } of stateVars) {
-        const val = this.generateInComponent(value, 'value');
-        sl.push(isPublic
-          ? `    this.${name} = __state(props.__bind_${name}__ ?? props.${name} ?? ${val});`
-          : `    this.${name} = __state(${val});`);
+      for (const { name, value, isPublic, required } of stateVars) {
+        if (isPublic && required) {
+          sl.push(`    this.${name} = __state(props.__bind_${name}__ ?? props.${name});`);
+        } else if (isPublic) {
+          const val = this.generateInComponent(value, 'value');
+          sl.push(`    this.${name} = __state(props.__bind_${name}__ ?? props.${name} ?? ${val});`);
+        } else {
+          const val = this.generateInComponent(value, 'value');
+          sl.push(`    this.${name} = __state(${val});`);
+        }
       }
 
       for (const effect of effects) {
@@ -964,11 +980,16 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     }
 
     // State variables (__state handles signal passthrough)
-    for (const { name, value, isPublic } of stateVars) {
-      const val = this.generateInComponent(value, 'value');
-      lines.push(isPublic
-        ? `    this.${name} = __state(props.__bind_${name}__ ?? props.${name} ?? ${val});`
-        : `    this.${name} = __state(${val});`);
+    for (const { name, value, isPublic, required } of stateVars) {
+      if (isPublic && required) {
+        lines.push(`    this.${name} = __state(props.__bind_${name}__ ?? props.${name});`);
+      } else if (isPublic) {
+        const val = this.generateInComponent(value, 'value');
+        lines.push(`    this.${name} = __state(props.__bind_${name}__ ?? props.${name} ?? ${val});`);
+      } else {
+        const val = this.generateInComponent(value, 'value');
+        lines.push(`    this.${name} = __state(${val});`);
+      }
     }
 
     // Computed (derived)

@@ -17,7 +17,8 @@ type InputProps = ComponentProps<'input'> & {
 }
 
 type ButtonProps = ComponentProps<'button'> & {
-  variant?: 'primary' | 'secondary'
+  variant: 'primary' | 'secondary'
+  shape?: 'rounded' | 'pill'
   loading?: boolean
 }
 
@@ -33,7 +34,7 @@ function Input({ label, error, ...props }: InputProps) {
   )
 }
 
-function Button({ variant = 'primary', loading, children, ...props }: ButtonProps) {
+function Button({ variant, shape = 'rounded', loading, children, ...props }: ButtonProps) {
   const style = {
     background: variant === 'primary' ? '#0066ff' : '#e5e5e5',
     color: variant === 'primary' ? '#fff' : '#333',
@@ -88,7 +89,7 @@ function PropTypeTests() {
       {/* @ts-expect-error — wrong variant literal */}
       <Button variant='danger' />
       {/* @ts-expect-error — disabled expects boolean */}
-      <Button disabled='yes' />
+      <Button variant='primary' disabled='yes' />
       {/* @ts-expect-error — wrong type for label */}
       <Input label={123} />
     </div>
