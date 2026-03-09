@@ -806,13 +806,23 @@ export function installComponentSupport(CodeGenerator, Lexer) {
         sl.push(`  constructor(props?: {${propEntries.join('; ')}}) {}`);
       }
 
+      // Infer type from literal initializer when no explicit annotation
+      const inferLiteralType = (v) => {
+        const s = v?.valueOf?.() ?? v;
+        if (typeof s !== 'string') return null;
+        if (s === 'true' || s === 'false') return 'boolean';
+        if (/^-?\d+(\.\d+)?$/.test(s)) return 'number';
+        if (s.startsWith('"') || s.startsWith("'")) return 'string';
+        return null;
+      };
+
       // Property declarations (declare avoids definite-assignment errors)
-      for (const { name, type } of stateVars) {
-        const ts = expandType(type);
+      for (const { name, type, value } of stateVars) {
+        const ts = expandType(type) || inferLiteralType(value);
         sl.push(ts ? `  declare ${name}: Signal<${ts}>;` : `  declare ${name}: Signal<any>;`);
       }
-      for (const { name, type } of readonlyVars) {
-        const ts = expandType(type);
+      for (const { name, type, value } of readonlyVars) {
+        const ts = expandType(type) || inferLiteralType(value);
         sl.push(ts ? `  declare ${name}: ${ts};` : `  declare ${name}: any;`);
       }
       for (const { name, expr } of derivedVars) {

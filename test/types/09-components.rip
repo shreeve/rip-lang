@@ -39,8 +39,8 @@ export Button = component
 
 export Form = component
   @title:: string := "Sign In"
-  email:: string := ""
-  password:: string := ""
+  email := ""
+  password := ""
   loading := false
 
   onSubmit: (e) ->
@@ -90,6 +90,7 @@ export PropTypeTests = component
 export TypeTestComp = component
   @variant:: "primary" | "secondary" := "primary"
   @count:: number := 0
+  loading := false
 
   ok ~= if variant is "primary" then "#0066ff" else "#e5e5e5"
 
@@ -102,6 +103,10 @@ export TypeTestComp = component
   badMethod = ->
     # @ts-expect-error — string assigned to number state
     count = "hello"
+
+  badBodyAssign = ->
+    # @ts-expect-error — string assigned to inferred boolean state
+    loading = "wrong"
 
   render
     null

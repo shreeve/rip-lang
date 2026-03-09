@@ -1168,7 +1168,18 @@ function emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars) {
       ? body.slice(1) : (body ? [body] : []);
 
     let publicProps = [];
+    let bodyMembers = [];
     let hasRequired = false;
+
+    // Infer type from literal initializer when no explicit annotation
+    let inferLiteralType = (v) => {
+      let s = v?.valueOf?.() ?? v;
+      if (typeof s !== 'string') return null;
+      if (s === 'true' || s === 'false') return 'boolean';
+      if (/^-?\d+(\.\d+)?$/.test(s)) return 'number';
+      if (s.startsWith('"') || s.startsWith("'")) return 'string';
+      return null;
+    };
 
     for (let member of members) {
       if (!Array.isArray(member)) continue;
@@ -1182,7 +1193,13 @@ function emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars) {
         propName = isProp ? (target[2]?.valueOf?.() ?? target[2]) : (target?.valueOf?.() ?? target);
         type = isProp ? target[2]?.type : target?.type;
         hasDefault = true;
-        if (!isProp) componentVars.add(propName);
+        if (!isProp) {
+          componentVars.add(propName);
+          let wrapper = (mHead === 'computed') ? 'Computed' : 'Signal';
+          let typeStr = type ? expandSuffixes(type) : (inferLiteralType(member[2]) || 'any');
+          bodyMembers.push(`  ${propName}: ${wrapper}<${typeStr}>;`);
+          continue;
+        }
       } else if (mHead === '.') {
         isProp = (member[1]?.valueOf?.() ?? member[1]) === 'this';
         propName = isProp ? (member[2]?.valueOf?.() ?? member[2]) : null;
@@ -1208,6 +1225,7 @@ function emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars) {
       for (let p of publicProps) lines.push(p);
       lines.push(`  });`);
     }
+    for (let m of bodyMembers) lines.push(m);
     lines.push(`}`);
   }
 
