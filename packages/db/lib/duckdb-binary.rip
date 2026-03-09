@@ -236,7 +236,7 @@ serializeVector = (s, column, values) ->
 
   switch typeId
     when LogicalTypeId.VARCHAR, LogicalTypeId.CHAR
-      s.writeList 102, values, (s, v) -> s.writeString String(v ?? '')
+      s.writeList 102, values, (s, v) -> s.writeString stringify(v)
 
     when LogicalTypeId.BOOLEAN
       s.writeFieldId 102
@@ -424,13 +424,17 @@ serializeVector = (s, column, values) ->
       s.writeData bytes
 
     else
-      s.writeList 102, values, (s, v) -> s.writeString String(v ?? '')
+      s.writeList 102, values, (s, v) -> s.writeString stringify(v)
 
   s.writeEndMarker()
 
 # ==============================================================================
 # Helper functions
 # ==============================================================================
+
+stringify = (v) ->
+  return '' unless v?
+  if typeof v is 'object' then JSON.stringify(v) else String(v)
 
 createValidityBitmap = (values) ->
   # Must be uint64-aligned (8-byte chunks) — the UI reads validity with getBigUint64
