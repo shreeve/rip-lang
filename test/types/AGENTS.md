@@ -68,7 +68,7 @@ Each file exercises a specific type feature. Status key:
 | 06-functions.rip   | Typed functions, arrows, and array transforms               | pass   | 21 negative tests (7 param + 6 return + 3 array + 5 destructured) |
 | 07-integration.rip | Cross-module imports of typed functions                     | pass   | Cross-file type flow via .d.ts                                    |
 | 08-reactive.rip    | `:: T :=`, `:: T ~=`, `:: T =!`, `:: T ~>`                  | pass   | Tier 1 — reactive state annotations                               |
-| 09-components.rip  | `@prop:: T :=`, `@prop:: T =!`                              | pass   | 3 negative tests (computed + method body type errors)             |
+| 09-components.rip  | `@prop:: T :=`, `@prop:: T`, default validation             | pass   | Required props, default-vs-type validation, 3 negative body tests |
 | 10-validation.rip  | Runtime validation + async/await (`!` operator)             | pass   | Tier 2 — Rip erases types; TS+Zod validates                       |
 | 11-inference.rip   | Type inference on unannotated variables                     | pass   | Top-level works; block/destructure/any are gaps                   |
 
@@ -123,8 +123,8 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | -------------------------- | -------------- | ---------------------------------------------------------------------------------------------------- |
 | Variable type mismatches   | 01-basic       | Same-file typed variables                                                                            |
 | Object shape checking      | 03-structural  | Missing fields, extra fields                                                                         |
-| Union value checking       | 04-unions      | Literal unions validated                                                                             |
 | Property access checking   | 03-structural  | Typos, nonexistent fields                                                                            |
+| Union value checking       | 04-unions      | Literal unions validated                                                                             |
 | Function argument types    | 06-functions   | Same-file typed functions                                                                            |
 | Function return types      | 06-functions   | Same-file typed functions                                                                            |
 | Optional param `?`         | 06-functions   | `y?:: T` emits `y?: T` in .d.ts                                                                      |
@@ -135,9 +135,12 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Array destructured params  | 06-functions   | `[first:: string, second:: string]` → tuple `[string, string]` in .d.ts                              |
 | Nested destructured params | 06-functions   | `{user: {name:: string, age:: number}}` → `{user: {name: string, age: number}}` in .d.ts             |
 | Cross-file type flow       | 07-integration | Via .d.ts; untyped files get `@ts-nocheck`                                                           |
-| Component prop types       | 09-components  | Enriched stub gives Signal<T>/Computed<T> declarations in component class; TS checks body types      |
+| Component prop types       | 09-components  | Enriched stub gives Signal<T>/Computed<T> declarations; TS checks body types                         |
+| Required component props   | 09-components  | `@prop:: T` (no `:=`) — required in constructor, caught at usage sites                               |
+| Prop default validation    | 09-components  | `@prop:: T := val` — validates default against declared type; squiggle on prop name                  |
 | Async/await unwrapping     | 10-validation  | `!` compiles to `await`; return types inferred or explicit; `Promise<T>` → `T`                       |
 | Hover types                | *(IDE only)*   | Column-aware source maps, overload preference, typed implementation params                           |
+| Union value autocomplete   | *(IDE only)*   | String literal union completions for prop values, prop defaults, and typed variable assignments      |
 
 ### Suppressed error codes
 
