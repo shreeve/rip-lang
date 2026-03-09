@@ -13,6 +13,7 @@
 import { Compiler, getStdlibCode } from './compiler.js';
 import { createRequire } from 'module';
 import { readFileSync, existsSync, readdirSync } from 'fs';
+import { mapToSourcePos, offsetToLine, getLineText, findNearestWord, lineColToOffset, offsetToLineCol } from './sourcemap-utils.js';
 import { resolve, relative, dirname } from 'path';
 import { buildLineMap } from './sourcemaps.js';
 
@@ -484,15 +485,9 @@ export function compileForCheck(filePath, source, compiler) {
   return { tsContent, headerLines, hasTypes, srcToGen, genToSrc, srcColToGen, source, dts };
 }
 
-// ── Source mapping helpers ──────────────────────────────────────────
+// ── Source mapping helpers (delegated to sourcemap-utils.js) ───────
 
-export function offsetToLine(text, offset) {
-  let line = 0;
-  for (let i = 0; i < offset && i < text.length; i++) {
-    if (text[i] === '\n') line++;
-  }
-  return line;
-}
+export { mapToSourcePos, offsetToLine, getLineText, findNearestWord, lineColToOffset, offsetToLineCol } from './sourcemap-utils.js';
 
 // Map a TypeScript diagnostic offset back to a Rip source line number.
 // Returns -1 if the offset falls in the DTS header.
@@ -501,117 +496,10 @@ export function mapToSource(entry, offset) {
   if (tsLine < entry.headerLines) return -1;
 
   if (entry.genToSrc.has(tsLine)) return entry.genToSrc.get(tsLine);
-  for (let d = 1; d <= 3; d++) {
-    if (entry.genToSrc.has(tsLine - d)) return entry.genToSrc.get(tsLine - d);
-    if (entry.genToSrc.has(tsLine + d)) return entry.genToSrc.get(tsLine + d);
-  }
+  let best = -1;
+  for (const [g] of entry.genToSrc) if (g <= tsLine && g > best) best = g;
+  if (best >= 0) return entry.genToSrc.get(best) + (tsLine - best);
   return tsLine - entry.headerLines;
-}
-
-// Map a TypeScript diagnostic offset back to a Rip source { line, col } (0-based).
-// Returns null if the offset falls in the DTS header.
-export function mapToSourcePos(entry, offset) {
-  const tsLine = offsetToLine(entry.tsContent, offset);
-  if (tsLine < entry.headerLines) {
-    // DTS preamble — find the identifier at the offset and locate it in the source
-    const genLineText = getLineText(entry.tsContent, tsLine);
-    let lineStart = 0, curLine = 0;
-    for (let i = 0; i < entry.tsContent.length; i++) {
-      if (curLine === tsLine) { lineStart = i; break; }
-      if (entry.tsContent[i] === '\n') curLine++;
-    }
-    const genCol = offset - lineStart;
-    const wordMatch = genLineText.slice(genCol).match(/^\w+/);
-    if (wordMatch && entry.source) {
-      const word = wordMatch[0];
-      const srcLines = entry.source.split('\n');
-      for (let s = 0; s < srcLines.length; s++) {
-        const re = new RegExp('\\b' + word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b');
-        const m = re.exec(srcLines[s]);
-        if (m) return { line: s, col: m.index };
-      }
-    }
-    return null;
-  }
-
-  let srcLine;
-  if (entry.genToSrc.has(tsLine)) srcLine = entry.genToSrc.get(tsLine);
-  else {
-    for (let d = 1; d <= 3; d++) {
-      if (entry.genToSrc.has(tsLine - d)) { srcLine = entry.genToSrc.get(tsLine - d); break; }
-      if (entry.genToSrc.has(tsLine + d)) { srcLine = entry.genToSrc.get(tsLine + d); break; }
-    }
-    if (srcLine === undefined) srcLine = tsLine - entry.headerLines;
-  }
-
-  // Compute generated column
-  let lineStart = 0, curLine = 0;
-  for (let i = 0; i < entry.tsContent.length; i++) {
-    if (curLine === tsLine) { lineStart = i; break; }
-    if (entry.tsContent[i] === '\n') curLine++;
-  }
-  const genCol = offset - lineStart;
-
-  // Remap column via text matching
-  const genText = getLineText(entry.tsContent, tsLine);
-  const srcText = entry.source ? getLineText(entry.source, srcLine) : '';
-  let srcCol = genCol;
-  let approx = genCol;  // default: assume same column
-  if (entry.srcColToGen) {
-    const entries = entry.srcColToGen.get(srcLine);
-    if (entries) {
-      let best = null;
-      for (const e of entries) {
-        if (e.genLine === tsLine) {
-          if (!best || Math.abs(e.genCol - genCol) < Math.abs(best.genCol - genCol)) best = e;
-        }
-      }
-      if (best) approx = best.srcCol + (genCol - best.genCol);
-    }
-  }
-  // Text-match: find the word at genCol in the gen line, then locate it in the source line
-  if (srcText) {
-    const wordAt = genText.slice(genCol).match(/^\w+/);
-    if (wordAt) {
-      const idx = findNearestWord(srcText, wordAt[0], approx);
-      if (idx >= 0) return { line: srcLine, col: idx };
-    }
-    if (genCol > 0 && (!wordAt || genCol >= genText.length)) {
-      const wordBefore = genText.slice(0, genCol).match(/(\w+)$/);
-      if (wordBefore) {
-        const idx = findNearestWord(srcText, wordBefore[0], approx - wordBefore[0].length);
-        if (idx >= 0) return { line: srcLine, col: idx + wordBefore[0].length };
-      }
-    }
-    srcCol = Math.max(0, approx);
-  }
-  return { line: srcLine, col: srcCol };
-}
-
-function getLineText(text, lineNum) {
-  let start = 0, line = 0;
-  for (let i = 0; i <= text.length; i++) {
-    if (i === text.length || text[i] === '\n') {
-      if (line === lineNum) return text.slice(start, i);
-      start = i + 1;
-      line++;
-    }
-  }
-  return '';
-}
-
-function findNearestWord(text, word, approx) {
-  let bestIdx = -1, bestDist = Infinity, idx = 0;
-  while ((idx = text.indexOf(word, idx)) >= 0) {
-    const before = idx === 0 || /\W/.test(text[idx - 1]);
-    const after = idx + word.length >= text.length || /\W/.test(text[idx + word.length]);
-    if (before && after) {
-      const dist = Math.abs(idx - approx);
-      if (dist < bestDist) { bestDist = dist; bestIdx = idx; }
-    }
-    idx++;
-  }
-  return bestIdx;
 }
 
 // ── CLI batch type-checker ─────────────────────────────────────────

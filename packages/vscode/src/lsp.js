@@ -386,80 +386,16 @@ function srcToOffset(filePath, line, col) {
   return lineColToOffset(c.tsContent, genLine, 0);
 }
 
-function getLineAt(text, lineNum) {
-  let start = 0, line = 0;
-  for (let i = 0; i <= text.length; i++) {
-    if (i === text.length || text[i] === '\n') {
-      if (line === lineNum) return text.slice(start, i);
-      start = i + 1;
-      line++;
-    }
-  }
-  return '';
-}
-
-function findNearestWord(text, word, approx) {
-  let bestIdx = -1, bestDist = Infinity, idx = 0;
-  while ((idx = text.indexOf(word, idx)) >= 0) {
-    const before = idx === 0 || /\W/.test(text[idx - 1]);
-    const after = idx + word.length >= text.length || /\W/.test(text[idx + word.length]);
-    if (before && after) {
-      const dist = Math.abs(idx - approx);
-      if (dist < bestDist) { bestDist = dist; bestIdx = idx; }
-    }
-    idx++;
-  }
-  return bestIdx;
-}
-
 function genToSrcPos(filePath, offset) {
   const c = compiled.get(filePath);
   if (!c) return { line: 0, character: 0 };
-  const { line: genLine, character: genCol } = offsetToLineCol(c.tsContent, offset);
-  let srcLine = c.genToSrc.get(genLine);
-  if (srcLine === undefined) {
-    let best = -1;
-    for (const [g] of c.genToSrc) if (g <= genLine && g > best) best = g;
-    srcLine = best >= 0 ? c.genToSrc.get(best) + (genLine - best) : 0;
-  }
-  // Remap generated column back to source column via text matching
-  const genText = getLineAt(c.tsContent, genLine);
-  const srcText = c.source ? getLineAt(c.source, srcLine) : '';
-  let srcCol = genCol;
-  let approx = genCol;  // default: assume same column
-  if (c.srcColToGen) {
-    const entries = c.srcColToGen.get(srcLine);
-    if (entries) {
-      let best = null;
-      for (const e of entries) {
-        if (e.genLine === genLine) {
-          if (!best || Math.abs(e.genCol - genCol) < Math.abs(best.genCol - genCol)) best = e;
-        }
-      }
-      if (best) approx = best.srcCol + (genCol - best.genCol);
-    }
-  }
-  // Text-match: find the word at genCol in the gen line, then locate it in the source line
-  if (srcText) {
-    const wordAt = genText.slice(genCol).match(/^\w+/);
-    if (wordAt) {
-      const idx = findNearestWord(srcText, wordAt[0], approx);
-      if (idx >= 0) return { line: srcLine, character: idx };
-    }
-    if (genCol > 0 && (!wordAt || genCol >= genText.length)) {
-      const wordBefore = genText.slice(0, genCol).match(/(\w+)$/);
-      if (wordBefore) {
-        const idx = findNearestWord(srcText, wordBefore[0], approx - wordBefore[0].length);
-        if (idx >= 0) return { line: srcLine, character: idx + wordBefore[0].length };
-      }
-    }
-    srcCol = Math.max(0, approx);
-  }
-  return { line: srcLine, character: srcCol };
+  const pos = tc.mapToSourcePos(c, offset);
+  if (!pos) return { line: 0, character: 0 };
+  return { line: pos.line, character: pos.col };
 }
 
-function lineColToOffset(t, line, col) { let r = 0; for (let i = 0; i < t.length; i++) { if (r === line) return i + col; if (t[i] === '\n') r++; } return t.length; }
-function offsetToLineCol(t, o) { let line = 0, ls = 0; for (let i = 0; i < o && i < t.length; i++) { if (t[i] === '\n') { line++; ls = i + 1; } } return { line, character: o - ls }; }
+function lineColToOffset(t, line, col) { return tc.lineColToOffset(t, line, col); }
+function offsetToLineCol(t, o) { const p = tc.offsetToLineCol(t, o); return { line: p.line, character: p.col }; }
 function uriToPath(u) { try { return decodeURIComponent(new URL(u).pathname); } catch { return u; } }
 function pathToUri(p) { return 'file://' + p; }
 
