@@ -1,9 +1,9 @@
 # 08-reactive.rip — Typed reactive state (:=, ~=, ~>)
 
 # Typed state (:=)
-clicks:: number := 0
-username:: string := "Rip"
-enabled:: boolean := true
+clicks := 0
+username := "Rip"
+enabled := true
 tags:: string[] := []
 
 # Computed (~=) — inferred from expression
@@ -22,6 +22,7 @@ console.log "enabled:", enabled
 console.log "clicksDoubled:", clicksDoubled
 console.log "greeting:", greeting
 console.log "hasTags:", hasTags
+
 # ── Negative: wrong types must be caught ──
 
 # @ts-expect-error — string assigned to number state

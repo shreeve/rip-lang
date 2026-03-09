@@ -14,9 +14,9 @@ import { renderToString } from 'react-dom/server'
 
 function ReactiveDemo() {
   // Typed state (:=)
-  const [clicks] = useState<number>(0)
-  const [username] = useState<string>('Rip')
-  const [enabled] = useState<boolean>(true)
+  const [clicks] = useState(0)
+  const [username] = useState('Rip')
+  const [enabled] = useState(true)
   const [tags] = useState<string[]>([])
 
   // Computed (~=) — inferred from expression
