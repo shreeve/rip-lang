@@ -140,19 +140,18 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 ### Suppressed error codes
 
-`rip check` runs TypeScript under the hood but suppresses 15 error codes (defined in `SKIP_CODES` in [src/typecheck.js](../../../src/typecheck.js)). Most suppressions are necessary — Rip's compilation model produces patterns that confuse TS (DTS coexisting with compiled bodies, module resolution, etc.). But some categories directly weaken type safety:
+`rip check` runs TypeScript under the hood but suppresses 12 error codes (defined in `SKIP_CODES` in [src/typecheck.js](../../../src/typecheck.js)). Most suppressions are necessary — Rip's compilation model produces patterns that confuse TS (DTS coexisting with compiled bodies, module resolution, etc.). But some categories directly weaken type safety:
 
-| Suppressed codes | What they hide                         | Impact on audit                                                                                            |
-| ---------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| 7005, 7006, 7034 | Implicit `any` on variables and params | Component prop gap is fixed (enriched stubs); these still suppress untyped variables in non-component code |
-| 2300, 2451       | Duplicate identifiers                  | Necessary (DTS + compiled body coexist) but also hides real shadowing bugs                                 |
-| 2307             | Cannot find module                     | Rip resolves modules differently, but this also masks genuinely broken imports                             |
+| Suppressed codes | What they hide        | Impact on audit                                                                |
+| ---------------- | --------------------- | ------------------------------------------------------------------------------ |
+| 2300, 2451       | Duplicate identifiers | Necessary (DTS + compiled body coexist) but also hides real shadowing bugs     |
+| 2307             | Cannot find module    | Rip resolves modules differently, but this also masks genuinely broken imports |
+
+**Fixed:** 7005, 7006, 7034 (implicit `any` on variables and params) were removed from `SKIP_CODES`. Untyped files already get `// @ts-nocheck`, and typed files have sufficient annotations that implicit `any` never leaks through.
 
 **Fixed:** 2304 ("Cannot find name") was removed from `SKIP_CODES`. Stdlib globals (`p`, `pp`, `sleep`, `warn`, etc.) are now declared in the type-check preamble, so undefined variable references are correctly flagged.
 
 The remaining codes (2389, 2391, 2393, 2394, 2567, 2842, 1064, 2582, 2593) are structural — they exist because Rip's compilation model inherently produces overload/duplicate patterns that TS doesn't expect. These are safe to suppress.
-
-Reducing the implicit-any suppressions (7005/7006/7034) is the single highest-leverage change for type safety — it would surface errors in every component body and untyped function. The tradeoff: it would also flag every intentionally untyped variable in untyped files, so it likely needs a per-file opt-in (e.g. only enforce when the file has `::` annotations).
 
 ## TypeScript Companions
 

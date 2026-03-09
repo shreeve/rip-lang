@@ -100,9 +100,6 @@ export const SKIP_CODES = new Set([
   1064, // Return type of async function must be Promise
   2582, // Cannot find name 'test' (test runner globals)
   2593, // Cannot find name 'describe' (test runner globals)
-  7005, // Variable implicitly has an 'any' type (compiler-generated locals)
-  7006, // Parameter implicitly has an 'any' type (compiler-generated params)
-  7034, // Variable implicitly has type 'any' in some locations (compiler-generated)
 ]);
 
 // Base TypeScript compiler settings for type-checking. Callers can
