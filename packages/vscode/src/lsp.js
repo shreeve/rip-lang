@@ -423,7 +423,10 @@ function genToSrcPos(filePath, offset) {
     srcLine = best >= 0 ? c.genToSrc.get(best) + (genLine - best) : 0;
   }
   // Remap generated column back to source column via text matching
+  const genText = getLineAt(c.tsContent, genLine);
+  const srcText = c.source ? getLineAt(c.source, srcLine) : '';
   let srcCol = genCol;
+  let approx = genCol;  // default: assume same column
   if (c.srcColToGen) {
     const entries = c.srcColToGen.get(srcLine);
     if (entries) {
@@ -433,27 +436,24 @@ function genToSrcPos(filePath, offset) {
           if (!best || Math.abs(e.genCol - genCol) < Math.abs(best.genCol - genCol)) best = e;
         }
       }
-      if (best) {
-        const approx = best.srcCol + (genCol - best.genCol);
-        const genText = getLineAt(c.tsContent, genLine);
-        const srcText = c.source ? getLineAt(c.source, srcLine) : '';
-        // At start of a word: find that word in the source line
-        const wordAt = genText.slice(genCol).match(/^\w+/);
-        if (wordAt && srcText) {
-          const idx = findNearestWord(srcText, wordAt[0], approx);
-          if (idx >= 0) { srcCol = idx; return { line: srcLine, character: srcCol }; }
-        }
-        // Just past end of a word: find preceding word, return its end in source
-        if (genCol > 0 && srcText && (!wordAt || genCol >= genText.length)) {
-          const wordBefore = genText.slice(0, genCol).match(/(\w+)$/);
-          if (wordBefore) {
-            const idx = findNearestWord(srcText, wordBefore[0], approx - wordBefore[0].length);
-            if (idx >= 0) { srcCol = idx + wordBefore[0].length; return { line: srcLine, character: srcCol }; }
-          }
-        }
-        srcCol = Math.max(0, approx);
+      if (best) approx = best.srcCol + (genCol - best.genCol);
+    }
+  }
+  // Text-match: find the word at genCol in the gen line, then locate it in the source line
+  if (srcText) {
+    const wordAt = genText.slice(genCol).match(/^\w+/);
+    if (wordAt) {
+      const idx = findNearestWord(srcText, wordAt[0], approx);
+      if (idx >= 0) return { line: srcLine, character: idx };
+    }
+    if (genCol > 0 && (!wordAt || genCol >= genText.length)) {
+      const wordBefore = genText.slice(0, genCol).match(/(\w+)$/);
+      if (wordBefore) {
+        const idx = findNearestWord(srcText, wordBefore[0], approx - wordBefore[0].length);
+        if (idx >= 0) return { line: srcLine, character: idx + wordBefore[0].length };
       }
     }
+    srcCol = Math.max(0, approx);
   }
   return { line: srcLine, character: srcCol };
 }

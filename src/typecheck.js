@@ -508,6 +508,112 @@ export function mapToSource(entry, offset) {
   return tsLine - entry.headerLines;
 }
 
+// Map a TypeScript diagnostic offset back to a Rip source { line, col } (0-based).
+// Returns null if the offset falls in the DTS header.
+export function mapToSourcePos(entry, offset) {
+  const tsLine = offsetToLine(entry.tsContent, offset);
+  if (tsLine < entry.headerLines) {
+    // DTS preamble — find the identifier at the offset and locate it in the source
+    const genLineText = getLineText(entry.tsContent, tsLine);
+    let lineStart = 0, curLine = 0;
+    for (let i = 0; i < entry.tsContent.length; i++) {
+      if (curLine === tsLine) { lineStart = i; break; }
+      if (entry.tsContent[i] === '\n') curLine++;
+    }
+    const genCol = offset - lineStart;
+    const wordMatch = genLineText.slice(genCol).match(/^\w+/);
+    if (wordMatch && entry.source) {
+      const word = wordMatch[0];
+      const srcLines = entry.source.split('\n');
+      for (let s = 0; s < srcLines.length; s++) {
+        const re = new RegExp('\\b' + word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b');
+        const m = re.exec(srcLines[s]);
+        if (m) return { line: s, col: m.index };
+      }
+    }
+    return null;
+  }
+
+  let srcLine;
+  if (entry.genToSrc.has(tsLine)) srcLine = entry.genToSrc.get(tsLine);
+  else {
+    for (let d = 1; d <= 3; d++) {
+      if (entry.genToSrc.has(tsLine - d)) { srcLine = entry.genToSrc.get(tsLine - d); break; }
+      if (entry.genToSrc.has(tsLine + d)) { srcLine = entry.genToSrc.get(tsLine + d); break; }
+    }
+    if (srcLine === undefined) srcLine = tsLine - entry.headerLines;
+  }
+
+  // Compute generated column
+  let lineStart = 0, curLine = 0;
+  for (let i = 0; i < entry.tsContent.length; i++) {
+    if (curLine === tsLine) { lineStart = i; break; }
+    if (entry.tsContent[i] === '\n') curLine++;
+  }
+  const genCol = offset - lineStart;
+
+  // Remap column via text matching
+  const genText = getLineText(entry.tsContent, tsLine);
+  const srcText = entry.source ? getLineText(entry.source, srcLine) : '';
+  let srcCol = genCol;
+  let approx = genCol;  // default: assume same column
+  if (entry.srcColToGen) {
+    const entries = entry.srcColToGen.get(srcLine);
+    if (entries) {
+      let best = null;
+      for (const e of entries) {
+        if (e.genLine === tsLine) {
+          if (!best || Math.abs(e.genCol - genCol) < Math.abs(best.genCol - genCol)) best = e;
+        }
+      }
+      if (best) approx = best.srcCol + (genCol - best.genCol);
+    }
+  }
+  // Text-match: find the word at genCol in the gen line, then locate it in the source line
+  if (srcText) {
+    const wordAt = genText.slice(genCol).match(/^\w+/);
+    if (wordAt) {
+      const idx = findNearestWord(srcText, wordAt[0], approx);
+      if (idx >= 0) return { line: srcLine, col: idx };
+    }
+    if (genCol > 0 && (!wordAt || genCol >= genText.length)) {
+      const wordBefore = genText.slice(0, genCol).match(/(\w+)$/);
+      if (wordBefore) {
+        const idx = findNearestWord(srcText, wordBefore[0], approx - wordBefore[0].length);
+        if (idx >= 0) return { line: srcLine, col: idx + wordBefore[0].length };
+      }
+    }
+    srcCol = Math.max(0, approx);
+  }
+  return { line: srcLine, col: srcCol };
+}
+
+function getLineText(text, lineNum) {
+  let start = 0, line = 0;
+  for (let i = 0; i <= text.length; i++) {
+    if (i === text.length || text[i] === '\n') {
+      if (line === lineNum) return text.slice(start, i);
+      start = i + 1;
+      line++;
+    }
+  }
+  return '';
+}
+
+function findNearestWord(text, word, approx) {
+  let bestIdx = -1, bestDist = Infinity, idx = 0;
+  while ((idx = text.indexOf(word, idx)) >= 0) {
+    const before = idx === 0 || /\W/.test(text[idx - 1]);
+    const after = idx + word.length >= text.length || /\W/.test(text[idx + word.length]);
+    if (before && after) {
+      const dist = Math.abs(idx - approx);
+      if (dist < bestDist) { bestDist = dist; bestIdx = idx; }
+    }
+    idx++;
+  }
+  return bestIdx;
+}
+
 // ── CLI batch type-checker ─────────────────────────────────────────
 
 function findRipFiles(dir, files = []) {
@@ -647,17 +753,68 @@ export async function runCheck(targetDir, opts = {}) {
     }
 
     const errors = [];
+    const srcLines = entry.source.split('\n');
     for (const d of diags) {
       if (d.start === undefined) continue;
       if (SKIP_CODES.has(d.code)) continue;
 
-      const srcLine = mapToSource(entry, d.start);
-      if (srcLine < 0) continue;
+      const pos = mapToSourcePos(entry, d.start);
+      if (!pos) continue;
+
+      const endPos = d.length ? mapToSourcePos(entry, d.start + d.length) : null;
+      const len = endPos && endPos.line === pos.line ? endPos.col - pos.col : 1;
 
       const message = ts.flattenDiagnosticMessageText(d.messageText, '\n');
       const severity = d.category === 1 ? 'error' : d.category === 0 ? 'warning' : 'info';
+      const srcLine = srcLines[pos.line] || '';
 
-      errors.push({ line: srcLine + 1, message, severity, code: d.code });
+      // Collect related information
+      const related = [];
+      if (d.relatedInformation) {
+        for (const ri of d.relatedInformation) {
+          const riMsg = ts.flattenDiagnosticMessageText(ri.messageText, '\n');
+          if (ri.file && ri.start !== undefined) {
+            const riPath = fromVirtual(ri.file.fileName);
+            const riEntry = compiled.get(riPath);
+            if (riEntry) {
+              const riPos = mapToSourcePos(riEntry, ri.start);
+              if (riPos) {
+                let riLen = ri.length || 1;
+                const riTsLine = offsetToLine(riEntry.tsContent, ri.start);
+                if (riTsLine >= riEntry.headerLines && ri.length) {
+                  const riEnd = mapToSourcePos(riEntry, ri.start + ri.length);
+                  if (riEnd && riEnd.line === riPos.line) riLen = riEnd.col - riPos.col;
+                }
+                const riSrcLines = riEntry.source.split('\n');
+                const riRel = relative(rootPath, riPath);
+                related.push({
+                  file: riRel, line: riPos.line + 1, col: riPos.col + 1,
+                  message: riMsg, srcLine: riSrcLines[riPos.line] || '', len: Math.max(1, riLen),
+                });
+              }
+            } else {
+              // External file (e.g. lib.es5.d.ts) — use TS positions directly
+              const riLine = offsetToLine(ri.file.text, ri.start);
+              let riColStart = ri.start;
+              for (let i = ri.start - 1; i >= 0; i--) {
+                if (ri.file.text[i] === '\n') break;
+                riColStart = i;
+              }
+              const riCol = ri.start - riColStart;
+              const riSrcLine = getLineText(ri.file.text, riLine);
+              const riRel = relative(rootPath, ri.file.fileName);
+              related.push({
+                file: riRel, line: riLine + 1, col: riCol + 1,
+                message: riMsg, srcLine: riSrcLine, len: ri.length || 1,
+              });
+            }
+          } else {
+            related.push({ message: riMsg });
+          }
+        }
+      }
+
+      errors.push({ line: pos.line + 1, col: pos.col + 1, len: Math.max(1, len), message, severity, code: d.code, srcLine, related });
       if (severity === 'error') totalErrors++;
       else if (severity === 'warning') totalWarnings++;
     }
@@ -665,7 +822,6 @@ export async function runCheck(targetDir, opts = {}) {
     // Untyped component prop checking — flag props without :: annotation
     if (!opts.allowAny && entry.dts) {
       const dtsLines = entry.dts.split('\n');
-      const srcLines = entry.source.split('\n');
       for (let d = 0; d < dtsLines.length; d++) {
         const cm = dtsLines[d].match(/^export declare class (\w+)/);
         if (!cm) continue;
@@ -678,7 +834,7 @@ export async function runCheck(targetDir, opts = {}) {
             const m = new RegExp('@' + propName + '\\s*(::|([:!]?=))').exec(srcLines[s]);
             if (m) {
               if (m[1] !== '::') {
-                errors.push({ line: s + 1, message: `Prop '${propName}' on component ${cm[1]} has no type annotation`, severity: 'error', code: 'rip' });
+                errors.push({ line: s + 1, col: m.index + 1, len: propName.length + 1, message: `Prop '${propName}' on component ${cm[1]} has no type annotation`, severity: 'error', code: 'rip', srcLine: srcLines[s], related: [] });
                 totalErrors++;
               }
               break;
@@ -693,35 +849,64 @@ export async function runCheck(targetDir, opts = {}) {
     }
   }
 
-  // Print results
+  // Print results — tsc format with Rip source positions
   for (const { file, errors } of fileResults) {
     const rel = relative(rootPath, file);
     for (const e of errors) {
-      const loc = `${cyan(rel)}${dim(':')}${yellow(String(e.line))}`;
+      const loc = `${cyan(rel)}${dim(':')}${yellow(String(e.line))}${dim(':')}${yellow(String(e.col))}`;
       const sev = e.severity === 'error' ? red('error') : yellow('warning');
-      console.log(`${loc} ${sev} ${e.message} ${dim(typeof e.code === 'number' ? `TS${e.code}` : '')}`);
+      const code = typeof e.code === 'number' ? `TS${e.code}` : e.code || '';
+      console.log(`${loc} ${dim('-')} ${sev} ${dim(code)}${dim(':')} ${e.message}`);
+
+      if (e.srcLine) {
+        console.log('');
+        const lineNum = String(e.line);
+        console.log(`${lineNum} ${e.srcLine}`);
+        console.log(`${' '.repeat(lineNum.length)} ${' '.repeat(e.col - 1)}${red('~'.repeat(e.len))}`);
+      }
+
+      if (e.related) {
+        for (const ri of e.related) {
+          if (ri.file) {
+            console.log('');
+            console.log(`  ${cyan(ri.file)}${dim(':')}${yellow(String(ri.line))}${dim(':')}${yellow(String(ri.col))}`);
+            const riLineNum = String(ri.line);
+            console.log(`    ${riLineNum} ${ri.srcLine}`);
+            console.log(`    ${' '.repeat(riLineNum.length)} ${' '.repeat(ri.col - 1)}${red('~'.repeat(ri.len))}`);
+            console.log(`    ${ri.message}`);
+          } else {
+            console.log(`    ${ri.message}`);
+          }
+        }
+      }
+      console.log('');
     }
   }
 
-  // Summary
-  const typedFiles = [...compiled.values()].filter(e => e.hasTypes).length;
-  const totalFiles = compiled.size;
-
-  if (totalErrors === 0 && totalWarnings === 0) {
-    const summary = typedFiles > 0
-      ? `${typedFiles} typed file${typedFiles !== 1 ? 's' : ''} checked, no errors found`
-      : `${totalFiles} file${totalFiles !== 1 ? 's' : ''} found, none have type annotations`;
-    console.log(`\n${bold('✓')} ${summary}`);
-    if (compileErrors > 0) {
-      console.log(dim(`  (${compileErrors} file${compileErrors !== 1 ? 's' : ''} had compile errors)`));
-    }
+  // Summary — tsc format
+  const totalFound = totalErrors + totalWarnings;
+  if (totalFound === 0) {
     return compileErrors > 0 ? 1 : 0;
   }
 
-  const parts = [];
-  if (totalErrors > 0) parts.push(red(`${totalErrors} error${totalErrors !== 1 ? 's' : ''}`));
-  if (totalWarnings > 0) parts.push(yellow(`${totalWarnings} warning${totalWarnings !== 1 ? 's' : ''}`));
-  console.log(`\n${bold('✗')} ${parts.join(', ')} in ${fileResults.length} file${fileResults.length !== 1 ? 's' : ''} (${typedFiles} typed / ${totalFiles} total)`);
+  const s = totalFound === 1 ? '' : 's';
+  if (fileResults.length === 1) {
+    const rel = relative(rootPath, fileResults[0].file);
+    const first = fileResults[0].errors[0];
+    if (totalFound === 1) {
+      console.log(`Found ${totalFound} error in ${cyan(rel)}${dim(':')}${yellow(String(first.line))}\n`);
+    } else {
+      console.log(`Found ${totalFound} error${s} in the same file, starting at: ${cyan(rel)}${dim(':')}${yellow(String(first.line))}\n`);
+    }
+  } else {
+    console.log(`Found ${totalFound} error${s} in ${fileResults.length} files.\n`);
+    console.log(`  Errors  Files`);
+    for (const { file, errors } of fileResults) {
+      const rel = relative(rootPath, file);
+      console.log(`  ${String(errors.length).padStart(6)}  ${cyan(rel)}${dim(':')}${yellow(String(errors[0].line))}`);
+    }
+    console.log('');
+  }
 
   return totalErrors > 0 ? 1 : 0;
 }

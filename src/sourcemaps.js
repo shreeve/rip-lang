@@ -172,6 +172,13 @@ function buildLineMap(reverseMap, mapJSON, headerLines) {
       srcToGen.set(srcLine, adj);
       genToSrc.set(adj, srcLine);
       hasEntries = true;
+      // Map ALL generated lines back to this source line (a single source line
+      // can compile to multiple generated lines, e.g. `num = parseIntz(input)`
+      // compiles to `let num;` + `num = parseIntz(input);` on separate lines).
+      for (const e of entries) {
+        const g = e.genLine + headerLines;
+        if (!genToSrc.has(g)) genToSrc.set(g, srcLine);
+      }
       // Build column-aware map with all entries for this source line
       srcColToGen.set(srcLine, entries.map(e => ({
         srcCol: e.origCol, genLine: e.genLine + headerLines, genCol: e.genCol,
