@@ -708,7 +708,7 @@ export async function runCheck(targetDir, opts = {}) {
     }
 
     // Untyped component prop checking — flag props without :: annotation
-    if (!opts.allowAny && entry.dts) {
+    if (entry.dts) {
       const dtsLines = entry.dts.split('\n');
       for (let d = 0; d < dtsLines.length; d++) {
         const cm = dtsLines[d].match(/^export declare class (\w+)/);
@@ -738,7 +738,7 @@ export async function runCheck(targetDir, opts = {}) {
   }
 
   // Component usage-site checks — unknown props and missing required props
-  if (!opts.allowAny) {
+  {
     // Build component registry from all DTS
     const componentDefs = new Map();
     for (const [fp, entry] of compiled) {

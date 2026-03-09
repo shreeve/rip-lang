@@ -64,10 +64,7 @@ hover info, and diagnostics — for every component that uses yours:
 ```
 
 Without `::`, the prop is untyped (`any`) and the IDE cannot validate values
-or offer completions. `rip check` treats untyped props as errors by default;
-use `rip check --allow-any` to suppress. The VS Code setting
-`rip.types.warnUntypedProps` controls whether the editor shows hints on
-untyped prop definitions.
+or offer completions. `rip check` treats untyped props as errors.
 
 ### `$` Sigil and `data-*` Attributes
 
