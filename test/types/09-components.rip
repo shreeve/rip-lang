@@ -106,6 +106,30 @@ export TypeTestComp = component
   render
     null
 
+# ── Gap: render block element type safety ──
+#
+# Render blocks don't validate HTML element names or their attributes.
+# Writing `fieldsetz` instead of `fieldset` compiles without error —
+# the lexer knows TEMPLATE_TAGS but only uses them for classification,
+# not validation. Unknown lowercase names silently become text nodes.
+#
+# Two levels of improvement are possible:
+#
+# 1. Compiler-level tag validation (quick win) — reject lowercase names
+#    not in TEMPLATE_TAGS. Catches typos like `fieldsetz` at compile
+#    time. ~10 lines in rewriteRender() or generateNode().
+#
+# 2. Type-level element checking (full IntelliSense) — emit typed
+#    `__el('fieldset', { ... })` calls in the stub's _render(), backed
+#    by a `declare function __el<K extends keyof HTMLElementTagNameMap>`
+#    helper. TypeScript would then reject invalid tag names, reject
+#    invalid attributes, and provide attribute completions. Requires
+#    stub generator changes + LSP cursor mapping into render blocks.
+#
+# In React/TSX, `<fieldset>` maps to `JSX.IntrinsicElements['fieldset']`
+# which resolves to all DOM properties — typos are caught and every
+# valid attribute is offered in autocomplete (see 09-components.tsx).
+
 # ── Gap: event handler typing ──
 #
 # Handler parameters are untyped — `(e) ->` compiles to `(e) =>`
