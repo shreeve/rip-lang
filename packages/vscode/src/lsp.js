@@ -13,7 +13,7 @@ const fs = require('fs');
 const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
 
-let ts, compiler, tc, service, rootPath, lastPatchedProgram, warnUntypedProps = true;
+let ts, compiler, tc, service, rootPath, lastPatchedProgram;
 
 // Real .rip path → { version, source, tsContent, srcToGen, genToSrc, ... }
 const compiled = new Map();
@@ -57,13 +57,9 @@ connection.onInitialize(async (params) => {
 
 connection.onInitialized(() => {
   connection.console.log('[rip] ready');
-  connection.workspace.getConfiguration({ section: 'rip.types' }).then(config => {
-    if (config?.warnUntypedProps !== undefined) warnUntypedProps = config.warnUntypedProps;
-  }).catch(() => {});
 });
 
-connection.onDidChangeConfiguration(({ settings }) => {
-  warnUntypedProps = settings?.rip?.types?.warnUntypedProps ?? true;
+connection.onDidChangeConfiguration(() => {
   for (const fp of compiled.keys()) publishDiagnostics(fp);
 });
 
@@ -139,8 +135,8 @@ function publishDiagnostics(filePath) {
     }
   }
 
-  // Component prop diagnostics
-  if (c.source && componentRegistry.size > 0) {
+  // Component prop diagnostics (typed files only)
+  if (c.hasTypes && c.source && componentRegistry.size > 0) {
     const srcLines = c.source.split('\n');
     for (let i = 0; i < srcLines.length; i++) {
       const ctx = detectComponentContext(srcLines[i], srcLines[i].length);
@@ -156,7 +152,7 @@ function publishDiagnostics(filePath) {
           if (col >= 0) {
             diagnostics.push({
               range: { start: { line: i, character: col }, end: { line: i, character: col + prop.length } },
-              severity: 2,
+              severity: 1,
               source: 'rip',
               message: `Unknown prop '${prop}' on component ${ctx.component}`,
             });
@@ -180,8 +176,8 @@ function publishDiagnostics(filePath) {
       }
     }
 
-    // Untyped prop hints (at component definitions, not usage sites)
-    if (warnUntypedProps) for (const [name, compDef] of componentRegistry) {
+    // Untyped prop errors (at component definitions, not usage sites)
+    for (const [name, compDef] of componentRegistry) {
       if (compDef.source !== filePath) continue;
       for (const prop of compDef.props) {
         for (let s = compDef.line; s < srcLines.length; s++) {
@@ -191,7 +187,7 @@ function publishDiagnostics(filePath) {
               const col = srcLines[s].indexOf(match[1]);
               diagnostics.push({
                 range: { start: { line: s, character: col }, end: { line: s, character: col + match[1].length } },
-                severity: 4,
+                severity: 1,
                 source: 'rip',
                 message: `Prop '${prop.name}' has no type annotation`,
               });

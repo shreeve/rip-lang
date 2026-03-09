@@ -80,16 +80,6 @@
         }
       }
     ],
-    "configuration": {
-      "title": "Rip",
-      "properties": {
-        "rip.types.warnUntypedProps": {
-          "type": "boolean",
-          "default": true,
-          "description": "Show hints for component props without type annotations (:: any)"
-        }
-      }
-    },
     "configurationDefaults": {
       "[rip]": {
         "editor.tabSize": 2,

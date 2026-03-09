@@ -737,6 +737,92 @@ export async function runCheck(targetDir, opts = {}) {
     }
   }
 
+  // Component usage-site checks — unknown props and missing required props
+  if (!opts.allowAny) {
+    // Build component registry from all DTS
+    const componentDefs = new Map();
+    for (const [fp, entry] of compiled) {
+      if (!entry.dts) continue;
+      const lines = entry.dts.split('\n');
+      let i = 0;
+      while (i < lines.length) {
+        const cm = lines[i].match(/^export declare class (\w+)/);
+        if (!cm) { i++; continue; }
+        const name = cm[1];
+        const props = [];
+        let j = i + 1;
+        while (j < lines.length) {
+          if (/^\}/.test(lines[j])) break;
+          if (/constructor\(props\??/.test(lines[j])) {
+            j++;
+            while (j < lines.length) {
+              if (/^\s*\}\);/.test(lines[j])) { j++; break; }
+              const pm = lines[j].match(/^\s+(\w+)(\?)?\s*:\s*(.+);$/);
+              if (pm) props.push({ name: pm[1], required: !pm[2] });
+              j++;
+            }
+            continue;
+          }
+          j++;
+        }
+        if (props.length) componentDefs.set(name, props);
+        i = Math.max(i + 1, j);
+      }
+    }
+
+    // Scan usage sites
+    if (componentDefs.size > 0) {
+      for (const [fp, entry] of compiled) {
+        if (!entry.hasTypes) continue;
+        const srcLines = entry.source.split('\n');
+        const errors = fileResults.find(r => r.file === fp)?.errors || [];
+        const hadEntry = errors.length > 0;
+
+        for (let s = 0; s < srcLines.length; s++) {
+          const trimmed = srcLines[s].trimStart();
+          const cm = trimmed.match(/^([A-Z]\w*)\b/);
+          if (!cm) continue;
+          const compName = cm[1];
+          if (/=\s*component\b/.test(trimmed)) continue;
+          const props = componentDefs.get(compName);
+          if (!props) continue;
+
+          // Parse props on this usage line
+          const rest = trimmed.substring(compName.length);
+          const usedProps = [];
+          for (const m of rest.matchAll(/(?:^|,)\s*(@?\w+)\s*:/g)) {
+            const key = m[1].startsWith('@') ? m[1] : m[1];
+            usedProps.push(key);
+          }
+
+          // Unknown props
+          for (const used of usedProps) {
+            if (used.startsWith('@')) continue;
+            if (used === 'class' || used === 'style') continue;
+            if (!props.some(p => p.name === used)) {
+              const col = srcLines[s].indexOf(used);
+              errors.push({ line: s + 1, col: col + 1, len: used.length, message: `Unknown prop '${used}' on component ${compName}`, severity: 'error', code: 'rip', srcLine: srcLines[s], related: [] });
+              totalErrors++;
+            }
+          }
+
+          // Missing required props
+          for (const prop of props) {
+            if (!prop.required) continue;
+            if (usedProps.includes(prop.name)) continue;
+            const col = srcLines[s].indexOf(compName);
+            errors.push({ line: s + 1, col: col + 1, len: compName.length, message: `Missing required prop '${prop.name}' on component ${compName}`, severity: 'error', code: 'rip', srcLine: srcLines[s], related: [] });
+            totalErrors++;
+          }
+        }
+
+        if (!hadEntry && errors.length > 0) {
+          fileResults.push({ file: fp, errors });
+        }
+      }
+    }
+  }
+
   // Print results — tsc format with Rip source positions
   for (const { file, errors } of fileResults) {
     const rel = relative(rootPath, file);
