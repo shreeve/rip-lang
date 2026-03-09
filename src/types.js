@@ -493,6 +493,148 @@ export function emitTypes(tokens, sexpr = null) {
     lines.push(`${indent()}${prefix}${body}${suffix}`);
   };
 
+  // Skip past a default value expression (= ...) returning the new j
+  let skipDefault = (tokens, j) => {
+    j++; // skip =
+    let dd = 0;
+    while (j < tokens.length) {
+      let dt = tokens[j];
+      if (dt[0] === '(' || dt[0] === '[' || dt[0] === '{') dd++;
+      if (dt[0] === ')' || dt[0] === ']' || dt[0] === '}') {
+        if (dd === 0) break; // closing bracket of enclosing structure
+        dd--;
+      }
+      if (dd === 0 && dt[1] === ',') break;
+      j++;
+    }
+    return j;
+  };
+
+  // Collect a destructured object { a, b: c, ...rest } recursively.
+  // tokens[startJ] must be '{'. Returns { patternStr, typeStr, endJ, hasAnyType }.
+  let collectDestructuredObj = (tokens, startJ) => {
+    let props = [];
+    let hasAnyType = false;
+    let j = startJ + 1; // skip opening {
+    let d = 1;
+    while (j < tokens.length && d > 0) {
+      if (tokens[j][0] === '{') d++;
+      if (tokens[j][0] === '}') d--;
+      if (d <= 0) { j++; break; }
+
+      // Rest: ...name
+      if (tokens[j][0] === '...' || tokens[j][0] === 'SPREAD') {
+        j++;
+        if (tokens[j]?.[0] === 'IDENTIFIER') {
+          props.push({ kind: 'rest', propName: tokens[j][1] });
+          j++;
+        }
+        continue;
+      }
+
+      // PROPERTY : ... (rename, nested object, or nested array)
+      if (tokens[j][0] === 'PROPERTY' && tokens[j + 1]?.[0] === ':') {
+        let propName = tokens[j][1];
+        j += 2; // skip PROPERTY and :
+        // Nested object
+        if (tokens[j]?.[0] === '{') {
+          let inner = collectDestructuredObj(tokens, j);
+          if (inner.hasAnyType) hasAnyType = true;
+          props.push({ kind: 'nested-obj', propName, inner });
+          j = inner.endJ;
+          continue;
+        }
+        // Nested array
+        if (tokens[j]?.[0] === '[') {
+          let inner = collectDestructuredArr(tokens, j);
+          if (inner.hasAnyType) hasAnyType = true;
+          props.push({ kind: 'nested-arr', propName, inner });
+          j = inner.endJ;
+          continue;
+        }
+        // Simple rename: PROPERTY : IDENTIFIER
+        if (tokens[j]?.[0] === 'IDENTIFIER') {
+          let localName = tokens[j][1];
+          let type = tokens[j].data?.type;
+          if (type) hasAnyType = true;
+          let hasDefault = tokens[j + 1]?.[0] === '=';
+          props.push({ kind: 'rename', propName, localName, type: type ? expandSuffixes(type) : null, hasDefault });
+          j++;
+          if (hasDefault) j = skipDefault(tokens, j);
+        }
+        continue;
+      }
+
+      // Simple: IDENTIFIER (possibly with default)
+      if (tokens[j][0] === 'IDENTIFIER') {
+        let name = tokens[j][1];
+        let type = tokens[j].data?.type;
+        if (type) hasAnyType = true;
+        let hasDefault = tokens[j + 1]?.[0] === '=';
+        props.push({ kind: 'simple', propName: name, type: type ? expandSuffixes(type) : null, hasDefault });
+        j++;
+        if (hasDefault) j = skipDefault(tokens, j);
+        continue;
+      }
+
+      // Skip commas and other tokens
+      j++;
+    }
+
+    // Build pattern and type strings
+    let patternParts = [];
+    let typeParts = [];
+    for (let p of props) {
+      if (p.kind === 'rest') {
+        patternParts.push(`...${p.propName}`);
+        typeParts.push(`[key: string]: unknown`);
+      } else if (p.kind === 'nested-obj' || p.kind === 'nested-arr') {
+        patternParts.push(`${p.propName}: ${p.inner.patternStr}`);
+        typeParts.push(`${p.propName}: ${p.inner.typeStr}`);
+      } else if (p.kind === 'rename') {
+        patternParts.push(`${p.propName}: ${p.localName}`);
+        typeParts.push(`${p.propName}${p.hasDefault ? '?' : ''}: ${p.type || 'any'}`);
+      } else {
+        patternParts.push(p.propName);
+        typeParts.push(`${p.propName}${p.hasDefault ? '?' : ''}: ${p.type || 'any'}`);
+      }
+    }
+    return {
+      patternStr: `{${patternParts.join(', ')}}`,
+      typeStr: `{${typeParts.join(', ')}}`,
+      endJ: j,
+      hasAnyType,
+    };
+  };
+
+  // Collect a destructured array [ a, b ] from tokens.
+  // tokens[startJ] must be '['. Returns { patternStr, typeStr, endJ, hasAnyType }.
+  let collectDestructuredArr = (tokens, startJ) => {
+    let names = [];
+    let elemTypes = [];
+    let hasAnyType = false;
+    let j = startJ + 1; // skip opening [
+    let d = 1;
+    while (j < tokens.length && d > 0) {
+      if (tokens[j][0] === '[') d++;
+      if (tokens[j][0] === ']') d--;
+      if (d > 0 && tokens[j][0] === 'IDENTIFIER') {
+        let name = tokens[j][1];
+        let type = tokens[j].data?.type;
+        names.push(name);
+        elemTypes.push(type ? expandSuffixes(type) : null);
+        if (type) hasAnyType = true;
+      }
+      j++;
+    }
+    return {
+      patternStr: `[${names.join(', ')}]`,
+      typeStr: `[${elemTypes.map(t => t || 'any').join(', ')}]`,
+      endJ: j,
+      hasAnyType,
+    };
+  };
+
   // Collect function parameters (handles simple, destructured, rest, defaults)
   let collectParams = (tokens, startIdx) => {
     let params = [];
@@ -542,29 +684,25 @@ export function emitTypes(tokens, sexpr = null) {
       // Destructured object parameter: { a, b }
       if (tok[0] === '{') {
         depth--; // undo the depth++ from nesting tracker above
-        let names = [];
-        let propTypes = [];
-        let hasAnyType = false;
-        j++;
-        let d = 1;
-        while (j < tokens.length && d > 0) {
-          if (tokens[j][0] === '{') d++;
-          if (tokens[j][0] === '}') d--;
-          if (d > 0 && tokens[j][0] === 'IDENTIFIER') {
-            let name = tokens[j][1];
-            let type = tokens[j].data?.type;
-            names.push(name);
-            propTypes.push(type ? expandSuffixes(type) : null);
-            if (type) hasAnyType = true;
-          }
-          j++;
-        }
-        let pattern = `{${names.join(', ')}}`;
-        if (hasAnyType) {
-          let typeStr = names.map((n, i) => `${n}: ${propTypes[i] || 'any'}`).join(', ');
-          params.push(`${pattern}: {${typeStr}}`);
+        let result = collectDestructuredObj(tokens, j);
+        j = result.endJ;
+        if (result.hasAnyType) {
+          params.push(`${result.patternStr}: ${result.typeStr}`);
         } else {
-          params.push(pattern);
+          params.push(result.patternStr);
+        }
+        continue;
+      }
+
+      // Destructured array parameter: [ a, b ]
+      if (tok[0] === '[') {
+        depth--; // undo the depth++ from nesting tracker above
+        let result = collectDestructuredArr(tokens, j);
+        j = result.endJ;
+        if (result.hasAnyType) {
+          params.push(`${result.patternStr}: ${result.typeStr}`);
+        } else {
+          params.push(result.patternStr);
         }
         continue;
       }
@@ -776,6 +914,7 @@ export function emitTypes(tokens, sexpr = null) {
           lines.push(`${indent()}${exp}${declare}function ${fnName}${typeParams}(${paramStr})${ret};`);
         }
       }
+      i = endIdx; // advance past params to avoid leaking destructured typed identifiers
       continue;
     }
 

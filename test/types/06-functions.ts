@@ -145,6 +145,65 @@ console.log(result13)
 // @ts-expect-error — number where string expected in destructured param
 let badCreate: string = createUser({ name: 42, age: 30 })
 
-// ── Known gaps (Rip only) ──
-//
-// Named/destructured params with defaults, rest, or renaming are not yet supported.
+// ── Destructured params: defaults ──
+
+export function withDefaults({ name = 'anon', age = 0 }: { name?: string, age?: number } = {}): string {
+  return `${name} is ${age}`
+}
+
+let result14 = withDefaults({})
+let result15 = withDefaults({ name: 'Eve', age: 25 })
+
+console.log(result14, result15)
+
+// @ts-expect-error — number where string expected
+let badDefaults: string = withDefaults({ name: 42 })
+
+// ── Destructured params: rest ──
+
+export function withRest({ name, ...rest }: { name: string, [key: string]: unknown }): string {
+  return `${name}`
+}
+
+let result16 = withRest({ name: 'Alice', extra: true })
+
+console.log(result16)
+
+// ── Destructured params: rename ──
+
+export function withRename({ name: userName, age }: { name: string, age: number }): string {
+  return `${userName} is ${age}`
+}
+
+let result17 = withRename({ name: 'Bob', age: 42 })
+
+console.log(result17)
+
+// @ts-expect-error — number where string expected in renamed prop
+let badRename: string = withRename({ name: 123, age: 42 })
+
+// ── Destructured params: array ──
+
+export function withArray([first, second]: [string, string]): string {
+  return `${first} and ${second}`
+}
+
+let result18 = withArray(['hello', 'world'])
+
+console.log(result18)
+
+// @ts-expect-error — number where string expected in array destructured param
+let badArray: string = withArray([42, 'world'])
+
+// ── Destructured params: nested ──
+
+export function withNested({ user: { name, age } }: { user: { name: string, age: number } }): string {
+  return `${name} is ${age}`
+}
+
+let result19 = withNested({ user: { name: 'Carol', age: 35 } })
+
+console.log(result19)
+
+// @ts-expect-error — number where string expected in nested destructured param
+let badNested: string = withNested({ user: { name: 123, age: 35 } })

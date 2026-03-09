@@ -2294,9 +2294,10 @@ export class CodeGenerator {
       let pairs = param.slice(1).map(pair => {
         if (this.is(pair, '...')) return `...${pair[1]}`;
         if (this.is(pair, 'default')) return `${pair[1]} = ${this.generate(pair[2], 'value')}`;
-        let [key, value] = pair;
+        let [key, value, operator] = pair;
+        if (operator === '=') return `${key} = ${this.generate(value, 'value')}`;
         if (key === value) return key;
-        return `${key}: ${value}`;
+        return `${key}: ${this.formatParam(value)}`;
       });
       return `{${pairs.join(', ')}}`;
     }

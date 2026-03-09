@@ -96,6 +96,7 @@ export const SKIP_CODES = new Set([
   2394, // Overload signature not compatible with implementation (untyped compiled params)
   2451, // Cannot redeclare block-scoped variable
   2567, // Enum declarations can only merge with namespace or other enum (DTS + compiled body)
+  2842, // Unused renaming of destructured property (DTS overload has renamed param unused in declaration)
   1064, // Return type of async function must be Promise
   2582, // Cannot find name 'test' (test runner globals)
   2593, // Cannot find name 'describe' (test runner globals)

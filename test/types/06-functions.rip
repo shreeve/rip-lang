@@ -132,6 +132,60 @@ console.log result13
 # @ts-expect-error — number where string expected in destructured param
 badCreate:: string = createUser({ name: 42, age: 30 })
 
-# ── Known gaps ──
-#
-# Named/destructured params with defaults, rest, or renaming are not yet supported.
+# ── Destructured params: defaults ──
+
+export def withDefaults({name:: string = "anon", age:: number = 0}):: string
+  "#{name} is #{age}"
+
+result14 = withDefaults({})
+result15 = withDefaults({ name: "Eve", age: 25 })
+
+console.log result14, result15
+
+# @ts-expect-error — number where string expected
+badDefaults:: string = withDefaults({ name: 42 })
+
+# ── Destructured params: rest ──
+
+export def withRest({name:: string, ...rest}):: string
+  "#{name}"
+
+result16 = withRest({ name: "Alice", extra: true })
+
+console.log result16
+
+# ── Destructured params: rename ──
+
+export def withRename({name: userName:: string, age:: number}):: string
+  "#{userName} is #{age}"
+
+result17 = withRename({ name: "Bob", age: 42 })
+
+console.log result17
+
+# @ts-expect-error — number where string expected in renamed prop
+badRename:: string = withRename({ name: 123, age: 42 })
+
+# ── Destructured params: array ──
+
+export def withArray([first:: string, second:: string]):: string
+  "#{first} and #{second}"
+
+result18 = withArray(["hello", "world"])
+
+console.log result18
+
+# @ts-expect-error — number where string expected in array destructured param
+badArray:: string = withArray([42, "world"])
+
+# ── Destructured params: nested ──
+
+export def withNested({user: {name:: string, age:: number}}):: string
+  "#{name} is #{age}"
+
+result19 = withNested({ user: { name: "Carol", age: 35 } })
+
+console.log result19
+
+# @ts-expect-error — number where string expected in nested destructured param
+badNested:: string = withNested({ user: { name: 123, age: 35 } })

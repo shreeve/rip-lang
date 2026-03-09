@@ -65,7 +65,7 @@ Each file exercises a specific type feature. Status key:
 | 03-structural.rip  | `::= type` blocks, optional, readonly, recursive, generic   | pass   | Includes `PagedResult<T>` generic struct                          |
 | 04-unions.rip      | Inline, block, discriminated unions + switch narrowing      | pass   | Narrowing not checked — see gap table                             |
 | 05-interfaces.rip  | `interface`, `extends`, optional members                    | pass   |                                                                   |
-| 06-functions.rip   | Typed functions, arrows, and array transforms               | pass   | 17 negative tests (7 param + 6 return + 3 array + 1 destructured) |
+| 06-functions.rip   | Typed functions, arrows, and array transforms               | pass   | 21 negative tests (7 param + 6 return + 3 array + 5 destructured) |
 | 07-integration.rip | Cross-module imports of typed functions                     | pass   | Cross-file type flow via .d.ts                                    |
 | 08-reactive.rip    | `:: T :=`, `:: T ~=`, `:: T =!`, `:: T ~>`                  | pass   | Tier 1 — reactive state annotations                               |
 | 09-components.rip  | `@prop:: T :=`, `@prop:: T =!`                              | pass   | Tier 1 — component prop annotations                               |
@@ -119,23 +119,28 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 ### ✅ Working
 
-| Category                  | Tested In      | Notes                                                                                                |
-| ------------------------- | -------------- | ---------------------------------------------------------------------------------------------------- |
-| Variable type mismatches  | 01-basic       | Same-file typed variables                                                                            |
-| Object shape checking     | 03-structural  | Missing fields, extra fields                                                                         |
-| Union value checking      | 04-unions      | Literal unions validated                                                                             |
-| Property access checking  | 03-structural  | Typos, nonexistent fields                                                                            |
-| Function argument types   | 06-functions   | Same-file typed functions                                                                            |
-| Function return types     | 06-functions   | Same-file typed functions                                                                            |
-| Optional param `?`        | 06-functions   | `y?:: T` emits `y?: T` in .d.ts                                                                      |
-| Destructured typed params | 06-functions   | `{name:: string, age:: number}` in params; emits `{name, age}: {name: string, age: number}` in .d.ts |
-| Cross-file type flow      | 07-integration | Via .d.ts; untyped files get `@ts-nocheck`                                                           |
-| Async/await unwrapping    | 10-validation  | `!` compiles to `await`; return types inferred or explicit; `Promise<T>` → `T`                       |
-| Hover types               | *(IDE only)*   | Column-aware source maps, overload preference, typed implementation params                           |
+| Category                   | Tested In      | Notes                                                                                                |
+| -------------------------- | -------------- | ---------------------------------------------------------------------------------------------------- |
+| Variable type mismatches   | 01-basic       | Same-file typed variables                                                                            |
+| Object shape checking      | 03-structural  | Missing fields, extra fields                                                                         |
+| Union value checking       | 04-unions      | Literal unions validated                                                                             |
+| Property access checking   | 03-structural  | Typos, nonexistent fields                                                                            |
+| Function argument types    | 06-functions   | Same-file typed functions                                                                            |
+| Function return types      | 06-functions   | Same-file typed functions                                                                            |
+| Optional param `?`         | 06-functions   | `y?:: T` emits `y?: T` in .d.ts                                                                      |
+| Destructured typed params  | 06-functions   | `{name:: string, age:: number}` in params; emits `{name, age}: {name: string, age: number}` in .d.ts |
+| Destructured defaults      | 06-functions   | `{name:: string = "anon"}` → optional `?` in .d.ts type, correct `{name = "anon"}` codegen           |
+| Destructured rest          | 06-functions   | `{name:: string, ...rest}` → `...rest` in pattern, `[key: string]: unknown` in .d.ts type            |
+| Destructured rename        | 06-functions   | `{name: userName:: string}` → prop name `name` in .d.ts type, `{name: userName}` in pattern          |
+| Array destructured params  | 06-functions   | `[first:: string, second:: string]` → tuple `[string, string]` in .d.ts                              |
+| Nested destructured params | 06-functions   | `{user: {name:: string, age:: number}}` → `{user: {name: string, age: number}}` in .d.ts             |
+| Cross-file type flow       | 07-integration | Via .d.ts; untyped files get `@ts-nocheck`                                                           |
+| Async/await unwrapping     | 10-validation  | `!` compiles to `await`; return types inferred or explicit; `Promise<T>` → `T`                       |
+| Hover types                | *(IDE only)*   | Column-aware source maps, overload preference, typed implementation params                           |
 
 ### Suppressed error codes
 
-`rip check` runs TypeScript under the hood but suppresses 14 error codes (defined in `SKIP_CODES` in [src/typecheck.js](../../../src/typecheck.js)). Most suppressions are necessary — Rip's compilation model produces patterns that confuse TS (DTS coexisting with compiled bodies, module resolution, etc.). But some categories directly weaken type safety:
+`rip check` runs TypeScript under the hood but suppresses 15 error codes (defined in `SKIP_CODES` in [src/typecheck.js](../../../src/typecheck.js)). Most suppressions are necessary — Rip's compilation model produces patterns that confuse TS (DTS coexisting with compiled bodies, module resolution, etc.). But some categories directly weaken type safety:
 
 | Suppressed codes | What they hide                         | Impact on audit                                                                                                           |
 | ---------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
@@ -145,7 +150,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 **Fixed:** 2304 ("Cannot find name") was removed from `SKIP_CODES`. Stdlib globals (`p`, `pp`, `sleep`, `warn`, etc.) are now declared in the type-check preamble, so undefined variable references are correctly flagged.
 
-The remaining codes (2389, 2391, 2393, 2394, 2567, 1064, 2582, 2593) are structural — they exist because Rip's compilation model inherently produces overload/duplicate patterns that TS doesn't expect. These are safe to suppress.
+The remaining codes (2389, 2391, 2393, 2394, 2567, 2842, 1064, 2582, 2593) are structural — they exist because Rip's compilation model inherently produces overload/duplicate patterns that TS doesn't expect. These are safe to suppress.
 
 Reducing the implicit-any suppressions (7005/7006/7034) is the single highest-leverage change for type safety — it would surface errors in every component body and untyped function. The tradeoff: it would also flag every intentionally untyped variable in untyped files, so it likely needs a per-file opt-in (e.g. only enforce when the file has `::` annotations).
 
