@@ -58,19 +58,19 @@ Each file exercises a specific type feature. Status key:
 - **fail** — `rip check` or runtime reports errors
 - **partial** — some features in the file work, others don't
 
-| File               | Feature                                                     | Status | Notes                                            |
-| ------------------ | ----------------------------------------------------------- | ------ | ------------------------------------------------ |
-| 01-basic.rip       | `::` on variables, nullable (`T \| null`, `T \| undefined`) | pass   |                                                  |
-| 02-aliases.rip     | `::=` aliases (simple, union, typeof)                       | pass   |                                                  |
-| 03-structural.rip  | `::= type` blocks, optional, readonly, recursive, generic   | pass   | Includes `PagedResult<T>` generic struct         |
-| 04-unions.rip      | Inline, block, discriminated unions + switch narrowing      | pass   | Narrowing not checked — see gap table            |
-| 05-interfaces.rip  | `interface`, `extends`, optional members                    | pass   |                                                  |
-| 06-functions.rip   | Typed functions, arrows, and array transforms               | pass   | 15 negative tests (7 param + 5 return + 3 array) |
-| 07-integration.rip | Cross-module imports of typed functions                     | pass   | Cross-file type flow via .d.ts                   |
-| 08-reactive.rip    | `:: T :=`, `:: T ~=`, `:: T =!`, `:: T ~>`                  | pass   | Tier 1 — reactive state annotations              |
-| 09-components.rip  | `@prop:: T :=`, `@prop:: T =!`                              | pass   | Tier 1 — component prop annotations              |
-| 10-validation.rip  | Runtime validation + async/await (`!` operator)             | pass   | Tier 2 — Rip erases types; TS+Zod validates      |
-| 11-inference.rip   | Type inference on unannotated variables                     | pass   | Top-level works; block/destructure/any are gaps  |
+| File               | Feature                                                     | Status | Notes                                                             |
+| ------------------ | ----------------------------------------------------------- | ------ | ----------------------------------------------------------------- |
+| 01-basic.rip       | `::` on variables, nullable (`T \| null`, `T \| undefined`) | pass   |                                                                   |
+| 02-aliases.rip     | `::=` aliases (simple, union, typeof)                       | pass   |                                                                   |
+| 03-structural.rip  | `::= type` blocks, optional, readonly, recursive, generic   | pass   | Includes `PagedResult<T>` generic struct                          |
+| 04-unions.rip      | Inline, block, discriminated unions + switch narrowing      | pass   | Narrowing not checked — see gap table                             |
+| 05-interfaces.rip  | `interface`, `extends`, optional members                    | pass   |                                                                   |
+| 06-functions.rip   | Typed functions, arrows, and array transforms               | pass   | 17 negative tests (7 param + 6 return + 3 array + 1 destructured) |
+| 07-integration.rip | Cross-module imports of typed functions                     | pass   | Cross-file type flow via .d.ts                                    |
+| 08-reactive.rip    | `:: T :=`, `:: T ~=`, `:: T =!`, `:: T ~>`                  | pass   | Tier 1 — reactive state annotations                               |
+| 09-components.rip  | `@prop:: T :=`, `@prop:: T =!`                              | pass   | Tier 1 — component prop annotations                               |
+| 10-validation.rip  | Runtime validation + async/await (`!` operator)             | pass   | Tier 2 — Rip erases types; TS+Zod validates                       |
+| 11-inference.rip   | Type inference on unannotated variables                     | pass   | Top-level works; block/destructure/any are gaps                   |
 
 ## Type Safety Gap Analysis
 
@@ -88,7 +88,6 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Event handler typing             | 09-components            | Handler params are untyped — `(e) ->` gives `any`, no typed event objects                                             |
 | Runtime return-type validation   | 10-validation            | Return types are erased — `response.json()` is unvalidated `any`; no `schema.parse()` equivalent                      |
 | Type narrowing (control flow)    | 04-unions *(comment)*    | TS narrows compiled JS, not Rip source                                                                                |
-| Destructured typed params        | 06-functions *(comment)* | `{name:: string}` in params fails to parse                                                                            |
 | `void` return annotation         | 06-functions *(comment)* | `void` is reserved; use `!` operator (`def fn!`) instead                                                              |
 | Unresolved import paths          | 07-integration           | `rip check` doesn't flag imports to nonexistent files                                                                 |
 | Enum exhaustiveness              | 04-unions                | Switch narrowing works in .ts but `rip check` doesn't verify exhaustiveness                                           |
@@ -120,18 +119,19 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 ### ✅ Working
 
-| Category                 | Tested In      | Notes                                                                          |
-| ------------------------ | -------------- | ------------------------------------------------------------------------------ |
-| Variable type mismatches | 01-basic       | Same-file typed variables                                                      |
-| Object shape checking    | 03-structural  | Missing fields, extra fields                                                   |
-| Union value checking     | 04-unions      | Literal unions validated                                                       |
-| Property access checking | 03-structural  | Typos, nonexistent fields                                                      |
-| Function argument types  | 06-functions   | Same-file typed functions                                                      |
-| Function return types    | 06-functions   | Same-file typed functions                                                      |
-| Optional param `?`       | 06-functions   | `y?:: T` emits `y?: T` in .d.ts                                                |
-| Cross-file type flow     | 07-integration | Via .d.ts; untyped files get `@ts-nocheck`                                     |
-| Async/await unwrapping   | 10-validation  | `!` compiles to `await`; return types inferred or explicit; `Promise<T>` → `T` |
-| Hover types              | *(IDE only)*   | Column-aware source maps, overload preference, typed implementation params     |
+| Category                  | Tested In      | Notes                                                                                                |
+| ------------------------- | -------------- | ---------------------------------------------------------------------------------------------------- |
+| Variable type mismatches  | 01-basic       | Same-file typed variables                                                                            |
+| Object shape checking     | 03-structural  | Missing fields, extra fields                                                                         |
+| Union value checking      | 04-unions      | Literal unions validated                                                                             |
+| Property access checking  | 03-structural  | Typos, nonexistent fields                                                                            |
+| Function argument types   | 06-functions   | Same-file typed functions                                                                            |
+| Function return types     | 06-functions   | Same-file typed functions                                                                            |
+| Optional param `?`        | 06-functions   | `y?:: T` emits `y?: T` in .d.ts                                                                      |
+| Destructured typed params | 06-functions   | `{name:: string, age:: number}` in params; emits `{name, age}: {name: string, age: number}` in .d.ts |
+| Cross-file type flow      | 07-integration | Via .d.ts; untyped files get `@ts-nocheck`                                                           |
+| Async/await unwrapping    | 10-validation  | `!` compiles to `await`; return types inferred or explicit; `Promise<T>` → `T`                       |
+| Hover types               | *(IDE only)*   | Column-aware source maps, overload preference, typed implementation params                           |
 
 ### Suppressed error codes
 

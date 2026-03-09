@@ -261,13 +261,15 @@ export function compileForCheck(filePath, source, compiler) {
         // the implementation body — injecting an overload would force it to `any`.
         const overloads = injections.filter(inj => hasExplicitReturn(inj.sig));
 
-        // Adjust reverseMap: each overload injection shifts subsequent code lines down by 1
+        // Adjust reverseMap: each overload injection shifts subsequent code lines down by 1.
+        // Compare against the original genLine (not genLine + offset) because bottom-up
+        // splicing means only overloads at positions <= the original line shift it.
         if (result.reverseMap) {
           for (const [, entries] of result.reverseMap) {
             for (const entry of entries) {
               let offset = 0;
               for (const inj of overloads) {
-                if (inj.codeLine <= entry.genLine + offset) offset++;
+                if (inj.codeLine <= entry.genLine) offset++;
               }
               entry.genLine += offset;
             }

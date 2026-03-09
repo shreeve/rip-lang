@@ -132,11 +132,19 @@ let badFilter: string[] = nums.filter((x) => x > 2)
 // @ts-expect-error — reduce returns number, not string
 let badReduce: string = nums.reduce((acc, x) => acc + x, 0)
 
-// ── Known gaps (Rip only) ──
+// ── Destructured params ──
 
-// Named/destructured param — TS handles natively
 export function createUser({ name, age }: { name: string, age: number }): string {
   return `${name} is ${age}`
 }
 
-createUser({ name: 'Jane', age: 30 })
+let result13 = createUser({ name: 'Jane', age: 30 })
+
+console.log(result13)
+
+// @ts-expect-error — number where string expected in destructured param
+let badCreate: string = createUser({ name: 42, age: 30 })
+
+// ── Known gaps (Rip only) ──
+//
+// Named/destructured params with defaults, rest, or renaming are not yet supported.

@@ -120,7 +120,18 @@ badFilter:: string[] = nums.filter (x) => x > 2
 # @ts-expect-error — reduce returns number, not string
 badReduce:: string = nums.reduce ((acc, x) => acc + x), 0
 
+# ── Destructured params ──
+
+export def createUser({name:: string, age:: number}):: string
+  "#{name} is #{age}"
+
+result13 = createUser({ name: "Jane", age: 30 })
+
+console.log result13
+
+# @ts-expect-error — number where string expected in destructured param
+badCreate:: string = createUser({ name: 42, age: 30 })
+
 # ── Known gaps ──
 #
-# Named/destructured params: `def foo({name:: string, age:: number})`
-# fails to parse — type annotations inside destructuring aren't supported.
+# Named/destructured params with defaults, rest, or renaming are not yet supported.

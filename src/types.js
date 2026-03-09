@@ -222,10 +222,10 @@ function collectTypeExpression(tokens, j) {
     let tTag = t[0];
 
     // Bracket balancing
-    let isOpen = tTag === '(' || tTag === '[' ||
+    let isOpen = tTag === '(' || tTag === '[' || tTag === '{' ||
         tTag === 'CALL_START' || tTag === 'PARAM_START' || tTag === 'INDEX_START' ||
         (tTag === 'COMPARE' && t[1] === '<');
-    let isClose = tTag === ')' || tTag === ']' ||
+    let isClose = tTag === ')' || tTag === ']' || tTag === '}' ||
         tTag === 'CALL_END' || tTag === 'PARAM_END' || tTag === 'INDEX_END' ||
         (tTag === 'COMPARE' && t[1] === '>');
 
@@ -541,20 +541,31 @@ export function emitTypes(tokens, sexpr = null) {
 
       // Destructured object parameter: { a, b }
       if (tok[0] === '{') {
-        // Collect the whole destructured pattern as a string
-        let pattern = '{';
+        depth--; // undo the depth++ from nesting tracker above
+        let names = [];
+        let propTypes = [];
+        let hasAnyType = false;
         j++;
         let d = 1;
         while (j < tokens.length && d > 0) {
           if (tokens[j][0] === '{') d++;
           if (tokens[j][0] === '}') d--;
-          if (d > 0) pattern += tokens[j][1] + (tokens[j + 1]?.[0] === '}' ? '' : ', ');
+          if (d > 0 && tokens[j][0] === 'IDENTIFIER') {
+            let name = tokens[j][1];
+            let type = tokens[j].data?.type;
+            names.push(name);
+            propTypes.push(type ? expandSuffixes(type) : null);
+            if (type) hasAnyType = true;
+          }
           j++;
         }
-        pattern += '}';
-        // Check if the closing } had a type annotation
-        let type = tokens[j - 1]?.data?.type;
-        params.push(type ? `${pattern}: ${expandSuffixes(type)}` : pattern);
+        let pattern = `{${names.join(', ')}}`;
+        if (hasAnyType) {
+          let typeStr = names.map((n, i) => `${n}: ${propTypes[i] || 'any'}`).join(', ');
+          params.push(`${pattern}: {${typeStr}}`);
+        } else {
+          params.push(pattern);
+        }
         continue;
       }
 
