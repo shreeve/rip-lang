@@ -110,28 +110,28 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 ### 🔶 Partial
 
-| Category                      | Tested In     | Notes                                                                                                                                         |
-| ----------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| Nullable safety               | 01-basic      | `strictNullChecks` is on but many codes suppressed                                                                                            |
-| Readonly / immutability       | 03-structural | `=!` → const; deep readonly not checked                                                                                                       |
-| Generic types                 | 03-structural | Declarable; .d.ts emission has some gaps                                                                                                      |
-| Discriminated union narrowing | 04-unions     | Types declarable, narrowing doesn't flow in `rip check`                                                                                       |
-| Async/await unwrapping        | 10-validation | `!` operator compiles to `await`; with return type annotation TS correctly unwraps `Promise<T>` → `T`; without annotation the result is `any` |
-| Type inference (split decl.)  | 11-inference  | Top-level `x = expr` inferred via `patchUninitializedTypes`; block-scoped, destructured, and `any` RHS are gaps                               |
+| Category                      | Tested In     | Notes                                                                                                           |
+| ----------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------- |
+| Nullable safety               | 01-basic      | `strictNullChecks` is on but many codes suppressed                                                              |
+| Readonly / immutability       | 03-structural | `=!` → const; deep readonly not checked                                                                         |
+| Generic types                 | 03-structural | Declarable; .d.ts emission has some gaps                                                                        |
+| Discriminated union narrowing | 04-unions     | Types declarable, narrowing doesn't flow in `rip check`                                                         |
+| Type inference (split decl.)  | 11-inference  | Top-level `x = expr` inferred via `patchUninitializedTypes`; block-scoped, destructured, and `any` RHS are gaps |
 
 ### ✅ Working
 
-| Category                 | Tested In      | Notes                                                                      |
-| ------------------------ | -------------- | -------------------------------------------------------------------------- |
-| Variable type mismatches | 01-basic       | Same-file typed variables                                                  |
-| Object shape checking    | 03-structural  | Missing fields, extra fields                                               |
-| Union value checking     | 04-unions      | Literal unions validated                                                   |
-| Property access checking | 03-structural  | Typos, nonexistent fields                                                  |
-| Function argument types  | 06-functions   | Same-file typed functions                                                  |
-| Function return types    | 06-functions   | Same-file typed functions                                                  |
-| Optional param `?`       | 06-functions   | `y?:: T` emits `y?: T` in .d.ts                                            |
-| Cross-file type flow     | 07-integration | Via .d.ts; untyped files get `@ts-nocheck`                                 |
-| Hover types              | *(IDE only)*   | Column-aware source maps, overload preference, typed implementation params |
+| Category                 | Tested In      | Notes                                                                          |
+| ------------------------ | -------------- | ------------------------------------------------------------------------------ |
+| Variable type mismatches | 01-basic       | Same-file typed variables                                                      |
+| Object shape checking    | 03-structural  | Missing fields, extra fields                                                   |
+| Union value checking     | 04-unions      | Literal unions validated                                                       |
+| Property access checking | 03-structural  | Typos, nonexistent fields                                                      |
+| Function argument types  | 06-functions   | Same-file typed functions                                                      |
+| Function return types    | 06-functions   | Same-file typed functions                                                      |
+| Optional param `?`       | 06-functions   | `y?:: T` emits `y?: T` in .d.ts                                                |
+| Cross-file type flow     | 07-integration | Via .d.ts; untyped files get `@ts-nocheck`                                     |
+| Async/await unwrapping   | 10-validation  | `!` compiles to `await`; return types inferred or explicit; `Promise<T>` → `T` |
+| Hover types              | *(IDE only)*   | Column-aware source maps, overload preference, typed implementation params     |
 
 ### Suppressed error codes
 

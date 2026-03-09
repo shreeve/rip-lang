@@ -51,7 +51,12 @@ export function greetOpt(name: string, title?: string): string {
   return title ? `${title} ${name}` : name
 }
 
-// ── Use: let TS infer return types from function signatures ──
+// Inferred return type (no annotation — TS infers from body)
+export function double(n: number) {
+  return n * 2
+}
+
+// ── Use: inferred results (no type annotations) ──
 
 let result1 = add(3, 4)
 let result2 = greet('World')
@@ -65,8 +70,9 @@ let result9 = formal('Smith', 'Dr')
 logMsg('hello')
 let result10 = greetOpt('Smith')
 let result11 = greetOpt('Smith', 'Dr')
+let result12 = double(21)
 
-console.log(result1, result2, result3, result4, result5, result6, result7, result8, result9, result10, result11)
+console.log(result1, result2, result3, result4, result5, result6, result7, result8, result9, result10, result11, result12)
 
 // ── Negative: wrong param types ──
 
@@ -97,6 +103,8 @@ let badRet3: string = makePoint(1, 2)
 let badRet4: boolean = sum(1, 2, 3)
 // @ts-expect-error — isPositive returns boolean, not number
 let badRet5: number = isPositive(1)
+// @ts-expect-error — double infers number return, not string
+let badRet6: string = double(1)
 
 // ── Arrow functions and array transforms ──
 

@@ -208,29 +208,53 @@ export function compileForCheck(filePath, source, compiler) {
       }
       if (injections.length > 0) {
         injections.sort((a, b) => a.codeLine - b.codeLine);
-        // Adjust reverseMap: each injection shifts subsequent code lines down by 1
+
+        // Check if a DTS signature has an explicit return type after the params.
+        function hasExplicitReturn(sig) {
+          const idx = sig.indexOf('(');
+          if (idx < 0) return false;
+          let depth = 1, i = idx + 1;
+          while (i < sig.length && depth > 0) {
+            if (sig[i] === '(') depth++;
+            else if (sig[i] === ')') depth--;
+            i++;
+          }
+          return depth === 0 && sig.slice(i).includes(':');
+        }
+
+        // First pass: copy typed params from ALL signatures to implementations.
+        // This gives TS typed params inside function bodies regardless of whether
+        // an overload is injected.
+        for (const inj of injections) {
+          const sig = inj.sig.replace(/^declare /, '');
+          const sigParams = extractFnParams(sig);
+          if (sigParams !== null) {
+            cl[inj.codeLine] = replaceFnParams(cl[inj.codeLine], sigParams);
+          }
+        }
+
+        // Only inject overload signatures for functions with explicit return types.
+        // Functions without a return type annotation let TS infer the return from
+        // the implementation body — injecting an overload would force it to `any`.
+        const overloads = injections.filter(inj => hasExplicitReturn(inj.sig));
+
+        // Adjust reverseMap: each overload injection shifts subsequent code lines down by 1
         if (result.reverseMap) {
           for (const [, entries] of result.reverseMap) {
             for (const entry of entries) {
               let offset = 0;
-              for (const inj of injections) {
+              for (const inj of overloads) {
                 if (inj.codeLine <= entry.genLine + offset) offset++;
               }
               entry.genLine += offset;
             }
           }
         }
-        // Insert signatures bottom-up to preserve indices.
+        // Insert overload signatures bottom-up to preserve indices.
         // Strip 'declare ' — signatures must be non-ambient to match implementations.
-        // Also copy typed params from the overload into the implementation so
-        // TypeScript provides correct parameter types inside the function body.
-        for (let k = injections.length - 1; k >= 0; k--) {
-          const sig = injections[k].sig.replace(/^declare /, '');
-          const sigParams = extractFnParams(sig);
-          if (sigParams !== null) {
-            cl[injections[k].codeLine] = replaceFnParams(cl[injections[k].codeLine], sigParams);
-          }
-          cl.splice(injections[k].codeLine, 0, sig);
+        for (let k = overloads.length - 1; k >= 0; k--) {
+          const sig = overloads[k].sig.replace(/^declare /, '');
+          cl.splice(overloads[k].codeLine, 0, sig);
         }
         code = cl.join('\n');
         // Rebuild header DTS without the moved function signatures

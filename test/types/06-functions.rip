@@ -40,24 +40,27 @@ export def logMsg!(msg:: string)
 export def greetOpt(name:: string, title?:: string):: string
   if title then "#{title} #{name}" else name
 
-# ── Use: typed results prove return types flow ──
-# (untyped `result = add(1, 2)` won't show type on hover —
-#  Rip compiles to `let result; result = ...` so TS sees `any`)
+# Inferred return type (no :: annotation — TS infers from body)
+export def double(n:: number)
+  n * 2
 
-result1:: number        = add(3, 4)
-result2:: string        = greet("World")
-result3:: number        = clamp(15, 0, 10)
-result4:: Point         = makePoint(1, 2)
-result5:: number | null = parse("42")
-result6:: number        = sum(1, 2, 3, 4)
-result7:: boolean       = isPositive(5)
-result8:: string        = formal("Smith")
-result9:: string        = formal("Smith", "Dr")
+# ── Use: inferred results (no :: annotations) ──
+
+result1  = add(3, 4)
+result2  = greet("World")
+result3  = clamp(15, 0, 10)
+result4  = makePoint(1, 2)
+result5  = parse("42")
+result6  = sum(1, 2, 3, 4)
+result7  = isPositive(5)
+result8  = formal("Smith")
+result9  = formal("Smith", "Dr")
 logMsg!("hello")
-result10:: string = greetOpt("Smith")
-result11:: string = greetOpt("Smith", "Dr")
+result10 = greetOpt("Smith")
+result11 = greetOpt("Smith", "Dr")
+result12 = double(21)
 
-console.log result1, result2, result3, result4, result5, result6, result7, result8, result9, result10, result11
+console.log result1, result2, result3, result4, result5, result6, result7, result8, result9, result10, result11, result12
 
 # ── Negative: wrong param types ──
 
@@ -88,6 +91,8 @@ badRet3:: string = makePoint(1, 2)
 badRet4:: boolean = sum(1, 2, 3)
 # @ts-expect-error — isPositive returns boolean, not number
 badRet5:: number = isPositive(1)
+# @ts-expect-error — double infers number return, not string
+badRet6:: string = double(1)
 
 # ── Arrow functions and array transforms ──
 

@@ -27,7 +27,7 @@ async function fetchUser(id: number): Promise<User> {
 
 // ── Runtime exercise ──
 
-let alice: User = UserSchema.parse({
+let alice = UserSchema.parse({
   id: 1,
   email: 'alice@example.com',
   firstName: 'Alice',
@@ -35,7 +35,7 @@ let alice: User = UserSchema.parse({
   phone: '555-1234',
 })
 
-let bob: User = UserSchema.parse({
+let bob = UserSchema.parse({
   id: 2,
   email: 'bob@example.com',
   firstName: null,
@@ -59,13 +59,13 @@ async function delay(ms: number): Promise<string> {
   return `done after ${ms}ms`
 }
 
-let r1: string = await delay(50)
+let r1 = await delay(50)
 console.log(`r1: ${r1}`)
 
 // If we wrote `let r2: number = await delay(50)`, tsc catches:
 //   "Type 'string' is not assignable to type 'number'" ✓
 
-// Without return annotation, TS infers return type (no gap in TS)
+// Without return annotation, TS infers the return type from the body
 async function delayUntyped(ms: number) {
   await new Promise(r => setTimeout(r, ms))
   return `untyped after ${ms}ms`
@@ -73,6 +73,6 @@ async function delayUntyped(ms: number) {
 
 let r3 = await delayUntyped(50)
 console.log(`r3: ${r3}`)
-// In TS this IS caught — delayUntyped infers Promise<string>
+// r3 is inferred as string — assigning to number is caught
 // @ts-expect-error — string is not assignable to number
 let r4: number = r3
