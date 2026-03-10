@@ -13,7 +13,7 @@ block comment ###
 
 # --- Variables & Constants --------------------------------------------------
 
-name = "Alice"
+myName = "Alice"
 count = 0
 items = [1, 2, 3]
 MAX =! 100
@@ -75,7 +75,7 @@ underscore = 1_000_000
 
 single = 'hello'
 double = "world"
-interp = "name is #{name}"
+interp = "name is #{myName}"
 template = "count is ${count}"
 
 heredocSingle = '''
@@ -84,7 +84,7 @@ heredocSingle = '''
 '''
 
 heredocDouble = """
-  also #{name}
+  also #{myName}
   multi line
 """
 
@@ -193,7 +193,7 @@ count--
 # --- Rip-Specific Operators -------------------------------------------------
 
 # Existential
-exists = name?
+exists = myName?
 
 # Optional chaining
 safe = obj?.prop
