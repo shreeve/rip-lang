@@ -378,7 +378,7 @@
       "match": "(\\.)([a-zA-Z_$]\\w*)",
       "captures": {
         "1": { "name": "punctuation.accessor.rip" },
-        "2": { "name": "variable.other.property.rip" }
+        "2": { "name": "variable.object.property.rip" }
       }
     },
 
@@ -386,7 +386,7 @@
     {
       "match": "\\b([a-zA-Z_$]\\w*)(\\?)?([:])(?![:=])",
       "captures": {
-        "1": { "name": "variable.other.property.rip" },
+        "1": { "name": "variable.object.property.rip" },
         "2": { "name": "keyword.operator.type.optional.rip" },
         "3": { "name": "punctuation.separator.key-value.rip" }
       }
