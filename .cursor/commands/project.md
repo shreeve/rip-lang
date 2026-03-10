@@ -4,16 +4,12 @@ description: Load project context
 
 Read `AGENTS.md` for the core project overview, structure, conventions, critical rules, common tasks, package overview, language features, and debug tools.
 
-Read the relevant targeted rules in `.cursor/rules/` based on the files being modified:
+Read the relevant nested `AGENTS.md` based on the files being modified:
 
-- `compiler-internals.mdc` for `src/compiler.js`, `src/lexer.js`, and `src/grammar/**/*.rip`
-- `components.mdc` for `src/components.js`
-- `reactivity.mdc` for reactive syntax and bindings
-- `ui-widgets.mdc` for `packages/ui/**`
-- `browser.mdc` for `src/browser.js`
-- `rip-loader.mdc` for `rip-loader.js` and `bin/rip`
-- `vscode-ext.mdc` for `packages/vscode/**`, `src/types.js`, `src/typecheck.js`, and `test/types/**`
-
-If working in `test/types/**`, also read `test/types/AGENTS.md`.
+- `src/AGENTS.md` for compiler, lexer, grammar, components, browser.js, reactivity internals, and type system
+- `docs/AGENTS.md` for browser runtime, shared scope, and demo HTML files
+- `packages/ui/AGENTS.md` for UI widget conventions and gotchas
+- `packages/vscode/AGENTS.md` for the VS Code extension, IntelliSense, and publishing
+- `test/types/AGENTS.md` for the type audit, gap analysis, and verification commands
 
 Read `docs/RIP-LANG.md` for the full language reference (syntax, operators, stdlib, patterns).

@@ -1,14 +1,374 @@
-# demo.rip — standalone type annotation demo
+# ============================================================================
+# Rip Syntax Highlighting Demo
+# ============================================================================
+#
+# Open this file side-by-side with demo.ts and use
+# "Developer: Inspect Editor Tokens and Scopes" to compare.
+
+# --- Comments ---------------------------------------------------------------
+
+# This is a line comment
+### This is a
+block comment ###
+
+# --- Variables & Constants --------------------------------------------------
+
+myName = "Alice"
+count = 0
+items = [1, 2, 3]
+MAX =! 100
+
+# --- Type Annotations -------------------------------------------------------
+
+age:: number = 25
+label:: string = "hello"
+active:: boolean = true
+scores:: number[] = [90, 95, 88]
+cache:: Map<string, number> = new Map()
+
+# --- Type Aliases & Interfaces ----------------------------------------------
+
+ID ::= number
+UserID ::= number | string
+Point ::= { x: number, y: number }
 
 User ::= type
   id: number
   name: string
   email?: string
 
-def greet(name:: string):: string
-  "Hello, #{name}!"
+Status ::=
+  | "active"
+  | "inactive"
+  | "pending"
+
+interface Shape
+  area:: () => number
+  name:: string
+
+interface Widget extends Shape
+  render:: () => void
+
+enum Color
+  Red
+  Green
+  Blue
+
+enum HttpCode
+  ok = 200
+  created = 201
+  notFound = 404
+
+# --- Numbers ----------------------------------------------------------------
+
+decimal = 42
+float = 3.14
+negative = -7
+sci = 1.5e10
+hex = 0xFF
+octal = 0o77
+binary = 0b1010
+big = 100n
+underscore = 1_000_000
+
+# --- Strings ----------------------------------------------------------------
+
+single = 'hello'
+double = "world"
+interp = "name is #{myName}"
+template = "count is ${count}"
+
+heredocSingle = '''
+  multi
+  line
+'''
+
+heredocDouble = """
+  also #{myName}
+  multi line
+"""
+
+# --- Regex ------------------------------------------------------------------
+
+pattern = /[a-z]+/gi
+match = "test" =~ /es/
+
+heregex = ///
+  ^               # Start
+  (\d{3})         # Area code
+  [-.\.\s]?       # Separator
+  (\d{3})         # Exchange
+  [-.\.\s]?       # Separator
+  (\d{4})         # Subscriber
+  $               # End
+///
+
+# --- Booleans & Null --------------------------------------------------------
+
+yes_val = true
+no_val = false
+also_yes = yes
+also_no = no
+also_on = on
+also_off = off
+nothing = null
+missing = undefined
+inf = Infinity
+nan = NaN
+self = this
+
+# --- Functions --------------------------------------------------------------
+
+def greet(person:: string):: string
+  "Hello, #{person}!"
 
 def add(a:: number, b:: number):: number
   a + b
 
-export { greet, add, User }
+square = (x) -> x * x
+double = (x) => x * 2
+
+def noop!
+  return
+
+# --- Classes ----------------------------------------------------------------
+
+class Animal
+  constructor: (@name:: string, @sound:: string) ->
+
+  speak: ->
+    "#{@name} says #{@sound}"
+
+class Dog extends Animal
+  constructor: (name:: string) ->
+    super(name, "Woof")
+
+  fetch: (item) ->
+    "#{@name} fetches #{item}"
+
+dog = Dog.new("Buddy")
+
+# --- Operators --------------------------------------------------------------
+
+# Arithmetic
+sum = 1 + 2
+diff = 5 - 3
+prod = 4 * 2
+quot = 10 / 3
+floorDiv = 7 // 2
+modulo = 10 %% 3
+power = 2 ** 8
+
+# Comparison
+eq = a == b
+neq = a != b
+lt = a < b
+gt = a > b
+lte = a <= b
+gte = a >= b
+
+# Logical (word)
+both = a and b
+either = a or b
+negated = not a
+same = a is b
+different = a isnt b
+
+# Logical (symbol)
+andSym = a && b
+orSym = a || b
+
+# Bitwise
+bitAnd = a & b
+bitOr = a | b
+bitXor = a ^ b
+bitNot = ~a
+lshift = a << 2
+rshift = a >> 2
+
+# Increment / Decrement
+count++
+count--
+
+# --- Rip-Specific Operators -------------------------------------------------
+
+# Existential
+exists = myName?
+
+# Optional chaining
+safe = obj?.prop
+safeFn = fn?()
+safeIdx = arr?[0]
+
+# Nullish coalescing
+fallback = val ?? "default"
+
+# Otherwise
+alt = val !? "other"
+
+# Defined / Presence
+isDefined = val!?
+isPresent = val?!
+
+# Pipe
+result = data |> transform
+
+# Range
+nums = [1..10]
+chars = ['a'..'z']
+
+# Splat / Spread
+[first, ...rest] = items
+merged = { ...obj1, ...obj2 }
+
+# --- Assignment Operators ---------------------------------------------------
+
+x = 1
+x += 2
+x -= 1
+x *= 3
+x /= 2
+x %= 4
+x **= 2
+x &&= true
+x ||= false
+x ??= 0
+x .= trim()
+
+# --- Destructuring ----------------------------------------------------------
+
+{ name: userName, age } = person
+[head, ...tail] = list
+
+# --- Control Flow -----------------------------------------------------------
+
+if active
+  p "yes"
+else if count is 0
+  p "zero"
+else
+  p "no"
+
+result = "a" if active else "b"
+
+p "done" if success
+return "error" unless valid
+
+unless error
+  proceed()
+
+for item in items
+  p item
+
+for key, val of obj
+  p key, val
+
+for x as iterable when x > 0
+  process(x)
+
+for item in items by -1
+  p item
+
+while count > 0
+  count--
+
+until done
+  step()
+
+when x
+  1 then "one"
+  2 then "two"
+  else "other"
+
+loop 5 ->
+  p "repeat"
+
+squares = (x * x for x in [1..10])
+evens = (x for x in [1..20] when x % 2 is 0)
+
+# --- Guard Clauses ---------------------------------------------------------
+
+x = getValue() or return
+y = lookup() ?? throw new Error("missing")
+
+# --- Async / Await ----------------------------------------------------------
+
+def fetchData!
+  response = fetch("/api")!
+  data = response.json()!
+  data
+
+# --- Instance Variables -----------------------------------------------------
+
+class User
+  constructor: (@name, @email) ->
+
+  display: ->
+    p @name, @email
+
+# --- Data Attributes --------------------------------------------------------
+
+$visible = true
+
+# --- Embedded JavaScript ----------------------------------------------------
+
+`const raw = "inline JS"`
+
+# --- Module Imports ---------------------------------------------------------
+
+import fs from "fs"
+import { readFile, writeFile } from "fs/promises"
+import * as path from "path"
+
+export default greet
+export { add, square }
+
+# --- Standard Library -------------------------------------------------------
+
+p "hello"
+pp { a: 1 }
+assert true, "must be true"
+kind 42
+sleep 100
+rand 1, 10
+
+# --- Word Literal -----------------------------------------------------------
+
+colors = %w[red green blue]
+
+# --- Reactivity -------------------------------------------------------------
+
+counter := 0
+doubled ~= counter * 2
+~> p "counter changed:", counter
+logger ~> p "logged:", counter
+counter <=> input.value
+
+# Typed reactive variables
+clicks:: number := 0
+username:: string := "Rip"
+enabled:: boolean := true
+tags:: string[] := []
+clicksDoubled:: number ~= clicks * 2
+greeting ~= "Hello, #{username}!"
+MAX_RETRIES:: number =! 3
+clickLogger:: Function ~> p "clicks:", clicks
+
+# --- Components -------------------------------------------------------------
+
+Counter = component
+  @count := 0
+  render
+    div "Count: {@count}"
+
+# Typed components
+Button = component
+  @label:: string := "Click"
+  @variant:: "primary" | "secondary" := "primary"
+  @disabled:: boolean := false
+
+  bg ~= if variant is "primary" then "#06f" else "#e5e5e5"
+
+  render
+    button disabled: disabled, style: "background: #{bg}"
+      slot

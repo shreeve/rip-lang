@@ -4,7 +4,7 @@
 
 **What is Rip:** An elegant reactive language that compiles to modern JavaScript (ES2022), featuring zero dependencies, self-hosting capability, and built-in reactivity primitives.
 
-Detailed compiler, component, browser, widget, loader, and type-system notes now live in targeted `.cursor/rules/*.mdc` files so they only apply when relevant.
+Detailed subsystem notes live in nested `AGENTS.md` files in the relevant directories (`src/`, `docs/`, `packages/ui/`, `packages/vscode/`, `test/types/`).
 
 ---
 
@@ -67,19 +67,19 @@ rip-lang/
 
 ### File Editing Rules
 
-| File | Can Edit? | Notes |
-| --- | --- | --- |
-| `src/compiler.js` | Yes | Code generator; main compiler work |
-| `src/lexer.js` | Yes | Lexer and rewriter |
-| `src/types.js` | Yes | Type system sidecar |
-| `src/components.js` | Yes | Component system sidecar |
-| `src/grammar/grammar.rip` | Carefully | Run `bun run parser` after changes |
-| `src/parser.js` | Never | Generated file |
-| `src/sourcemaps.js` | Yes | Source map generator |
-| `src/browser.js` | Yes | Browser entry point |
-| `rip-loader.js` | Yes | Bun plugin for `.rip` compilation and import rewriting |
-| `src/grammar/solar.rip` | Never | Given parser generator |
-| `test/rip/*.rip` | Yes | Test files |
+| File                      | Can Edit? | Notes                                                  |
+| ------------------------- | --------- | ------------------------------------------------------ |
+| `src/compiler.js`         | Yes       | Code generator; main compiler work                     |
+| `src/lexer.js`            | Yes       | Lexer and rewriter                                     |
+| `src/types.js`            | Yes       | Type system sidecar                                    |
+| `src/components.js`       | Yes       | Component system sidecar                               |
+| `src/grammar/grammar.rip` | Carefully | Run `bun run parser` after changes                     |
+| `src/parser.js`           | Never     | Generated file                                         |
+| `src/sourcemaps.js`       | Yes       | Source map generator                                   |
+| `src/browser.js`          | Yes       | Browser entry point                                    |
+| `rip-loader.js`           | Yes       | Bun plugin for `.rip` compilation and import rewriting |
+| `src/grammar/solar.rip`   | Never     | Given parser generator                                 |
+| `test/rip/*.rip`          | Yes       | Test files                                             |
 
 ### Critical Rules
 
@@ -103,7 +103,7 @@ Rip Source -> Lexer -> emitTypes -> Parser -> S-Expressions -> Codegen -> JavaSc
 
 **Key insight:** S-expressions are simple arrays like `["=", "x", 42]`, not large AST objects.
 
-Detailed compiler and lexer internals are in `.cursor/rules/compiler-internals.mdc`.
+Detailed compiler, lexer, and component internals are in `src/AGENTS.md`.
 
 ---
 
@@ -138,7 +138,7 @@ fail "name", "invalid syntax"
 
 Test files live in `test/rip/`.
 
-Detailed component testing notes live in `.cursor/rules/components.mdc`. Type-system and audit guidance lives in `.cursor/rules/vscode-ext.mdc` plus `test/types/AGENTS.md`.
+Component testing notes are in `src/AGENTS.md`. Type-system and audit guidance is in `packages/vscode/AGENTS.md` and `test/types/AGENTS.md`.
 
 ---
 
@@ -212,7 +212,7 @@ start port: 3000
 
 For server-only changes, publish just that package instead of doing a full release. Use `bun run bump` for full rip-lang releases.
 
-Detailed widget notes live in `.cursor/rules/ui-widgets.mdc`. Browser runtime details live in `.cursor/rules/browser.mdc`.
+Widget conventions and gotchas are in `packages/ui/AGENTS.md`. Browser runtime details are in `docs/AGENTS.md`.
 
 ---
 
@@ -236,36 +236,36 @@ rip -cm example.rip
 
 ### Removed (from CoffeeScript / Rip 2.x)
 
-| Feature | Replacement |
-| --- | --- |
-| postfix spread/rest (`x...`) | prefix only: `...x` |
+| Feature                            | Replacement                  |
+| ---------------------------------- | ---------------------------- |
+| postfix spread/rest (`x...`)       | prefix only: `...x`          |
 | prototype access (`x::y`, `x?::y`) | `.prototype` or class syntax |
-| binary existential (`x ? y`) | `x ?? y` |
-| `is not` contraction | `isnt` |
-| `for x from iterable` | `for x as iterable` |
+| binary existential (`x ? y`)       | `x ?? y`                     |
+| `is not` contraction               | `isnt`                       |
+| `for x from iterable`              | `for x as iterable`          |
 
 ### Added
 
-| Feature | Syntax | Purpose |
-| --- | --- | --- |
-| ternary operator | `x ? a : b` | JS-style ternary |
-| postfix ternary | `a if x else b` | Python-style ternary |
-| `for...as` iteration | `for x as iter` | iterable loop |
-| `as!` async shorthand | `for x as! iter` | shorthand for `for await` |
-| defined check | `x!?` | true if not undefined |
-| presence check | `x?!` | truthy-or-undefined Houdini operator |
-| optional chain assign | `x?.prop = val` | guarded assignment |
+| Feature               | Syntax           | Purpose                              |
+| --------------------- | ---------------- | ------------------------------------ |
+| ternary operator      | `x ? a : b`      | JS-style ternary                     |
+| postfix ternary       | `a if x else b`  | Python-style ternary                 |
+| `for...as` iteration  | `for x as iter`  | iterable loop                        |
+| `as!` async shorthand | `for x as! iter` | shorthand for `for await`            |
+| defined check         | `x!?`            | true if not undefined                |
+| presence check        | `x?!`            | truthy-or-undefined Houdini operator |
+| optional chain assign | `x?.prop = val`  | guarded assignment                   |
 
 ### Kept
 
-| Feature | Syntax | Compiles to |
-| --- | --- | --- |
-| existence check | `x?` | `(x != null)` |
-| optional chaining | `a?.b`, `a?.[0]`, `a?.()` | JS optional chaining |
-| optional shorthand | `a?[0]`, `a?(x)` | `a?.[0]`, `a?.(x)` |
-| optional chain assign | `x?.prop = val` | guarded assignment |
-| nullish coalescing | `a ?? b` | `a ?? b` |
-| dammit operator | `fetchData!` | `await fetchData()` |
+| Feature               | Syntax                    | Compiles to          |
+| --------------------- | ------------------------- | -------------------- |
+| existence check       | `x?`                      | `(x != null)`        |
+| optional chaining     | `a?.b`, `a?.[0]`, `a?.()` | JS optional chaining |
+| optional shorthand    | `a?[0]`, `a?(x)`          | `a?.[0]`, `a?.(x)`   |
+| optional chain assign | `x?.prop = val`           | guarded assignment   |
+| nullish coalescing    | `a ?? b`                  | `a ?? b`             |
+| dammit operator       | `fetchData!`              | `await fetchData()`  |
 
 ---
 
@@ -273,61 +273,173 @@ rip -cm example.rip
 
 ### Unique Operators
 
-| Operator | Name | Example |
-| --- | --- | --- |
-| `!` | Dammit | `fetchData!` |
-| `!` | Void | `def process!` |
-| `=!` | Readonly | `MAX =! 100` |
-| `!?` | Otherwise | `val !? 5` |
-| `!?` | Defined | `val!?` |
-| `?!` | Presence | `@checked?!` |
-| `?` | Existence | `x?` |
-| `//` | Floor div | `7 // 2` |
-| `%%` | True mod | `-1 %% 3` |
-| `:=` | State | `count := 0` |
-| `~=` | Computed | `doubled ~= count * 2` |
-| `<=>` | Two-way bind | `value <=> name` |
-| `=~` | Match | `str =~ /pat/` |
-| `.new()` | Constructor | `User.new()` |
-| `::` | Prototype | `String::trim` |
-| `if...else` | Postfix ternary | `"a" if cond else "b"` |
-| `[-n]` | Negative index | `arr[-1]` |
-| `*` | String repeat | `"-" * 40` |
-| `<` `<=` | Chained | `1 < x < 10` |
-| `|>` | Pipe | `x |> fn` |
-| `.=` | Method assign | `x .= trim()` |
-| `?.=` | Optional assign | `el?.style.display = "none"` |
-| `=` | Render text | `= item.textContent` |
-| `*` | Merge assign | `*obj = {a: 1}` |
-| `not in` | Not in | `x not in arr` |
-| `loop n` | Repeat N | `loop 5 -> body` |
-| `it` | Implicit param | `-> it > 5` |
-| `or return` | Guard | `x = get() or return err` |
-| `?? throw` | Nullish guard | `x = get() ?? throw err` |
-| `%w` | Word literal | `%w[foo bar baz]` |
+| Operator    | Name            | Example                      |
+| ----------- | --------------- | ---------------------------- |
+| `!`         | Dammit          | `fetchData!`                 |
+| `!`         | Void            | `def process!`               |
+| `=!`        | Readonly        | `MAX =! 100`                 |
+| `!?`        | Otherwise       | `val !? 5`                   |
+| `!?`        | Defined         | `val!?`                      |
+| `?!`        | Presence        | `@checked?!`                 |
+| `?`         | Existence       | `x?`                         |
+| `//`        | Floor div       | `7 // 2`                     |
+| `%%`        | True mod        | `-1 %% 3`                    |
+| `:=`        | State           | `count := 0`                 |
+| `~=`        | Computed        | `doubled ~= count * 2`       |
+| `<=>`       | Two-way bind    | `value <=> name`             |
+| `=~`        | Match           | `str =~ /pat/`               |
+| `.new()`    | Constructor     | `User.new()`                 |
+| `::`        | Prototype       | `String::trim`               |
+| `if...else` | Postfix ternary | `"a" if cond else "b"`       |
+| `[-n]`      | Negative index  | `arr[-1]`                    |
+| `*`         | String repeat   | `"-" * 40`                   |
+| `<` `<=`    | Chained         | `1 < x < 10`                 |
+| `           | >`              | Pipe                         | `x | > fn` |
+| `.=`        | Method assign   | `x .= trim()`                |
+| `?.=`       | Optional assign | `el?.style.display = "none"` |
+| `=`         | Render text     | `= item.textContent`         |
+| `*`         | Merge assign    | `*obj = {a: 1}`              |
+| `not in`    | Not in          | `x not in arr`               |
+| `loop n`    | Repeat N        | `loop 5 -> body`             |
+| `it`        | Implicit param  | `-> it > 5`                  |
+| `or return` | Guard           | `x = get() or return err`    |
+| `?? throw`  | Nullish guard   | `x = get() ?? throw err`     |
+| `%w`        | Word literal    | `%w[foo bar baz]`            |
 
 ### Standard Library
 
 Rip injects helpers via `globalThis` in compiled output, the CLI REPL, and the browser REPL.
 
-| Function | Description |
-| --- | --- |
-| `abort(msg?)` | log to stderr, exit with code 1 |
-| `assert(v, msg?)` | throw if falsy |
-| `exit(code?)` | exit process |
-| `kind(v)` | lowercase type name |
-| `noop()` | no-op |
-| `p(...args)` | `console.log` shorthand |
-| `pp(v)` | pretty-print JSON, returns value |
-| `raise(a, b?)` | throw error |
-| `rand(a?, b?)` | random number |
-| `sleep(ms)` | promise-based delay |
-| `todo(msg?)` | throw not implemented |
-| `warn(...args)` | `console.warn` shorthand |
-| `zip(...arrays)` | zip arrays pairwise |
+| Function          | Description                      |
+| ----------------- | -------------------------------- |
+| `abort(msg?)`     | log to stderr, exit with code 1  |
+| `assert(v, msg?)` | throw if falsy                   |
+| `exit(code?)`     | exit process                     |
+| `kind(v)`         | lowercase type name              |
+| `noop()`          | no-op                            |
+| `p(...args)`      | `console.log` shorthand          |
+| `pp(v)`           | pretty-print JSON, returns value |
+| `raise(a, b?)`    | throw error                      |
+| `rand(a?, b?)`    | random number                    |
+| `sleep(ms)`       | promise-based delay              |
+| `todo(msg?)`      | throw not implemented            |
+| `warn(...args)`   | `console.warn` shorthand         |
+| `zip(...arrays)`  | zip arrays pairwise              |
 
 All helpers use `??=` so they can be overridden.
 
+### Reactivity
+
+Rip reactivity is built into the language, not imported from a library.
+
+| Operator | Name            | Output                             |
+| -------- | --------------- | ---------------------------------- |
+| `=`      | assign          | `let x; x = value`                 |
+| `:=`     | state           | `const x = __state(value)`         |
+| `~=`     | computed        | `const x = __computed(() => expr)` |
+| `~>`     | effect          | `__effect(() => { ... })`          |
+| `=!`     | readonly        | `const x = value`                  |
+| `offer`  | context provide | state + `setContext(...)`          |
+| `accept` | context consume | `getContext(...)`                  |
+
+Three-tier state model:
+
+| Tier           | Scope               | Mechanism                           | Example                   |
+| -------------- | ------------------- | ----------------------------------- | ------------------------- |
+| Props          | parent to child     | `value <=> x`, `placeholder: "..."` | configuring a widget      |
+| Offer / Accept | ancestor to subtree | keywords                            | tabs sharing active state |
+| Stash          | app-wide            | shared reactive proxy               | auth state, theme         |
+
+Two-way binding (`<=>`) compiles to an effect that pushes signal state into the DOM plus an event listener that writes DOM changes back. On components, the parent passes the signal via `__bind_propName__` so parent and child share the same signal object.
+
+Implementation details are in `src/AGENTS.md`.
+
 ---
 
-**For AI assistants:** Trust the tests, use the debug tools, follow existing patterns, and let the targeted `.cursor/rules/*.mdc` files provide the deeper subsystem details only when they are relevant.
+## Loader and CLI
+
+The loader (`rip-loader.js`) is a Bun plugin preloaded by `bin/rip` or `bunfig.toml`.
+
+Responsibilities:
+
+1. compile `.rip` files on the fly via `compileToJS()`
+2. rewrite `@rip-lang/*` imports to absolute paths after compilation
+
+The import rewrite is necessary because Bun worker threads do not respect `NODE_PATH`, and `onResolve` does not fire for imports introduced by `onLoad`-compiled source.
+
+`bin/rip` sets `NODE_PATH` to include its parent `node_modules` directory and passes `env: process.env` into child process spawns. This works around Bun not inheriting `process.env` changes unless `env` is passed explicitly.
+
+Known Bun bugs:
+
+| Bug                                                                      | Workaround                                    |
+| ------------------------------------------------------------------------ | --------------------------------------------- |
+| `process.env` changes not inherited by `spawn` / `spawnSync`             | pass `env: process.env` explicitly            |
+| `NODE_PATH` ignored by worker threads                                    | rewrite imports to absolute paths in `onLoad` |
+| plugin `onResolve` does not fire for imports in `onLoad`-compiled source | rewrite imports inside `onLoad`               |
+| `require.resolve({ paths })` ignores `paths` in plugin handlers          | use `import.meta.resolve`                     |
+
+---
+
+## API Route Handler Pattern
+
+API route handlers in `**/api/routes/*.rip` follow five phases: **auth, read, meta, work, send**.
+
+1. **auth** — Who is the caller? Use a scope helper (`userScope!`, `adminScope!`) or mark as `# public`. Exits 401/403 on failure.
+2. **read** — What did they send? `read 'name', 'validator'` for all inputs. No logic, no queries.
+3. **meta** — Derived values and preconditions. Construct variables from auth + read, load related records, check error conditions. Bail before any mutations.
+4. **work** — Do the thing. Create records, update state, call services. Everything needed should already be in named variables.
+5. **send** — The final expression. Usually an object literal for JSON, but could be HTML, a file via `@send`, a redirect, etc.
+
+Guidelines:
+
+- Omit phases that don't apply — no empty comments.
+- Use phase comments (`# auth`, `# read`, etc.) when the handler is long enough to benefit from visual separation.
+- Public endpoints use `# public` instead of a scope call.
+- Early exits belong to their phase — auth failures in auth, preconditions in meta.
+- Use `error!` for HTTP errors, `notice!` for user-facing messages, `bail!` to destroy session and force-logout.
+
+```coffee
+post '/create' ->
+  # auth
+  user = userScope!
+
+  # read
+  week     = read 'week', 'int!'
+  slot     = read 'slot', 'text!'
+  children = read 'children', 'json'
+
+  # meta
+  needed = children?.length or 1
+  spots = sql! '...', [week, slot, 'available', needed]
+  error! 'Not enough spots', 409 unless spots.data?.length >= needed
+
+  # work
+  booking = Booking.create!({ user_id: user.id, week, slot, children: children or [] })
+  for row in spots.data
+    sql! '...', ['booked', booking.id, row[0]]
+
+  # send
+  { bookingId: booking.id }
+```
+
+---
+
+## Reflect Before Finalizing
+
+Before finalizing your work, take a moment to step back.
+
+Review what you've built. Read through the changes as if seeing them for the first time.
+
+Ensure everything is clean, clear, consistent, correct, concise, and efficient.
+
+Question your approach. Now that you've implemented this, is there anything you'd do differently? Are the data structures right? Is information flowing through the system in the most natural way? If you were starting over with what you know now, would you make the same choices?
+
+Look for improvements. If something feels off, fix it now rather than noting it for later. Small refactors compound — clean code invites more clean code.
+
+Gather more context if you're uncertain. Pull up related code. Trace through the system. Sometimes the right answer becomes obvious once you see more of the picture.
+
+Do the work, not the meta-work. Improve the code itself. Don't write reflection documents.
+
+---
+
+**For AI assistants:** Trust the tests, use the debug tools, follow existing patterns, and consult the nested `AGENTS.md` files for deeper subsystem details.

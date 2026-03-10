@@ -13,7 +13,8 @@
   },
   "scripts": {
     "start": "rip db.rip",
-    "dev": "rip db.rip :memory:"
+    "dev": "rip db.rip :memory:",
+    "test": "bun test --preload ../../rip-loader.js test/"
   },
   "keywords": [
     "db",

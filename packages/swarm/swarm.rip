@@ -135,7 +135,7 @@ draw = (state) ->
     bg("f1bf42") + char.repeat(ycol)                          # yellow (live)
     bg("d85140") + " ".repeat(rcol)                           #    red (rest)
     go(row, len + 5 + wide + 3)
-    bg("5383ec") + " #{(ppct * 100).toFixed(1)}% "           #   blue (pct)
+    bg("5383ec") + " #{(ppct * 100).toFixed(1)}% "            #   blue (pct)
     if done > 0 then bg() + " " + bg("58a65c") + " #{done}/#{jobs} done "
     if died > 0 then bg() + " " + bg("d85140") + " #{died} died "
   ].filter(Boolean).join('') + fg() + bg()

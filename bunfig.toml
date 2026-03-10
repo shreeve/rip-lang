@@ -3,6 +3,9 @@
 # Load .rip files with current compiler
 preload = ["./rip-loader.js"]
 
+[test]
+preload = ["./rip-loader.js"]
+
 [install]
 # Auto-install dependencies
 auto = true

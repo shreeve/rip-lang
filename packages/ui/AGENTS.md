@@ -1,14 +1,6 @@
----
-description: Rip UI widget conventions and gotchas
-globs: "{packages/ui/**,docs/ui/**}"
-alwaysApply: false
----
+# UI Widgets — Agent Guide
 
-# UI Widgets
-
-Use this when editing `packages/ui/**` or `docs/ui/**`.
-
-Accessible headless widgets are written in Rip, expose `$` attributes for styling, and compile in the browser with no build step.
+Accessible headless widgets written in Rip. They expose `$` attributes for styling and compile in the browser with no build step.
 
 ## Conventions
 
@@ -75,7 +67,7 @@ Then load with `data-src="ui app"`. Widgets become available by name in the shar
 
 ## Widget Gallery Dev Server
 
-The gallery in `packages/ui/` uses `data-src` mode and a minimal `index.rip` dev server:
+The gallery uses `data-src` mode and a minimal `index.rip` dev server:
 
 ```coffee
 import { get, use, start, notFound } from '@rip-lang/server'

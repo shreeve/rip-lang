@@ -143,61 +143,7 @@ def crlfLen(str, pos)
   if str.charCodeAt(pos) is CR and str.charCodeAt(pos + 1) is LF then 2 else 1
 
 # ==============================================================================
-# Reader — Fast path (no quotes detected)
-# ==============================================================================
-
-def readFast(str, cfg)
-  {sep, row: rowDelim, comments, skipBlanks} = cfg
-  {emit, result} = makeEmitter(cfg)
-
-  sepLen = sep.length
-  rowLen = rowDelim.length
-  len    = str.length
-  pos    = 0
-
-  while pos < len
-    # find end of current line
-    rowEnd = str.indexOf(rowDelim, pos)
-    rowEnd = len if rowEnd is -1
-
-    # skip empty lines
-    if pos is rowEnd
-      pos = rowEnd + rowLen
-      continue if skipBlanks
-
-    # skip comment lines
-    if comments and str[pos] is comments
-      pos = rowEnd + rowLen
-      continue
-
-    # extract fields with indexOf ratchet for separator
-    row = []
-    p = pos
-    loop
-      s = str.indexOf(sep, p)
-      if s >= 0 and s < rowEnd
-        row.push str.slice(p, s)
-        p = s + sepLen
-        if p >= rowEnd
-          row.push ''  # trailing separator -> empty final field
-          break
-      else
-        row.push str.slice(p, rowEnd)
-        break
-
-    pos = rowEnd + rowLen
-
-    # trim trailing \r for mixed line endings
-    last = row.length - 1
-    if last >= 0 and row[last].endsWith('\r')
-      row[last] = row[last].slice(0, -1)
-
-    break unless emit(row)
-
-  result()
-
-# ==============================================================================
-# Reader — Full path (quotes present)
+# Reader — Full path (handles both quoted and unquoted fields)
 # ==============================================================================
 
 def readFull(str, cfg)
@@ -309,16 +255,18 @@ def readFull(str, cfg)
           pos += sepLen
         else if c2 is nlCode
           pos += crlfLen(str, pos)
-          break unless emit(row)
+          cont = emit(row)
           row = []
           atLineStart = true
+          break unless cont
 
     # === newline (end of row) ===
     else if c is nlCode
       pos += crlfLen(str, pos)
-      break unless emit(row)
+      cont = emit(row)
       row = []
       atLineStart = true
+      break unless cont
 
     # === separator (empty field) ===
     else if c is sepCode
@@ -340,9 +288,10 @@ def readFull(str, cfg)
       else if nl >= 0
         row.push str.slice(pos, nl)
         pos = nl + crlfLen(str, nl)
-        break unless emit(row)
+        cont = emit(row)
         row = []
         atLineStart = true
+        break unless cont
       else
         row.push str.slice(pos)
         pos = len
@@ -425,10 +374,7 @@ export CSV =
   read: (str, opts = {}) ->
     return [] unless str?.length
     cfg = probe(str, opts)
-    if cfg.hasQuotes
-      readFull(cfg.str, cfg)
-    else
-      readFast(cfg.str, cfg)
+    readFull(cfg.str, cfg)
 
   # format row arrays into a CSV string
   write: (rows, opts = {}) ->
@@ -502,7 +448,7 @@ if import.meta.main
 
   str = Bun.file(input).text!
   cfg = probe(str, readOpts)
-  rows = if cfg.hasQuotes then readFull(cfg.str, cfg) else readFast(cfg.str, cfg)
+  rows = readFull(cfg.str, cfg)
   writer = new Writer(writeOpts)
 
   if output
