@@ -431,6 +431,8 @@ function unwrapReactiveType(display) {
     if (depth === 0) {
       const inner = display.slice(start, end - 1);
       display = display.slice(0, idx) + inner + display.slice(end);
+      // Signal → let (mutable state), Computed → const (derived, read-only)
+      if (wrapper === 'Signal') display = display.replace(/\bconst\b/, 'let');
     }
   }
   return display;
@@ -796,7 +798,9 @@ connection.onHover((params) => {
     let display = ts.displayPartsToString(info.displayParts);
     const docs = ts.displayPartsToString(info.documentation || []);
     display = unwrapReactiveType(display);
-    return { contents: { kind: 'markdown', value: '```typescript\n' + (docs ? display + '\n\n' + docs : display) + '\n```' } };
+    let value = '```typescript\n' + display + '\n```';
+    if (docs) value += '\n\n' + docs;
+    return { contents: { kind: 'markdown', value } };
   } catch { return null; }
 });
 
