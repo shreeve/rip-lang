@@ -120,13 +120,27 @@
       }
     },
     {
-      "match": "\\b(interface)\\s+([A-Z]\\w*)(?:\\s+(extends)\\s+([A-Z]\\w*))?",
-      "captures": {
+      "begin": "\\b(interface)\\s+([A-Z]\\w*)(?:\\s+(extends)\\s+([A-Z]\\w*))?",
+      "beginCaptures": {
         "1": { "name": "storage.type.interface.rip" },
         "2": { "name": "entity.name.type.interface.rip" },
         "3": { "name": "storage.modifier.extends.rip" },
         "4": { "name": "entity.other.inherited-class.rip" }
-      }
+      },
+      "end": "(?=^\\S)",
+      "name": "meta.interface.rip",
+      "patterns": [
+        {
+          "match": "\\b([a-zA-Z_$]\\w*)(\\?)?(:)(?![:=])\\s*",
+          "captures": {
+            "1": { "name": "variable.other.property.rip" },
+            "2": { "name": "keyword.operator.type.optional.rip" },
+            "3": { "name": "keyword.operator.type.annotation.rip" }
+          }
+        },
+        { "include": "#type_expression" },
+        { "include": "$self" }
+      ]
     },
     {
       "match": "\\b(class)\\s+(\\w+(?:\\.\\w*)*)(?:\\s+(extends)\\s+(\\w+(?:\\.\\w*)*))?",
