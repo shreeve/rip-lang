@@ -250,6 +250,12 @@
       "name": "keyword.operator.logical.word.rip"
     },
 
+    {"comment": "=== BUILT-IN TYPE KEYWORDS (always highlighted) ==="},
+    {
+      "match": "\\b(number|string|boolean|void|any|never|unknown|object|symbol|bigint)\\b",
+      "name": "support.type.primitive.rip"
+    },
+
     {"comment": "=== TYPE DECLARATIONS AND ANNOTATIONS ==="},
     {
       "comment": "Type alias: Name ::= type-expression (single line or 'type' keyword)",
