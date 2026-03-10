@@ -300,9 +300,9 @@ async function fetchData() {
 
 // --- Module Imports ---------------------------------------------------------
 
-// import fs from 'fs';
-// import { readFile, writeFile } from 'fs/promises';
-// import * as path from 'path';
+// import fs from "fs";
+// import { readFile, writeFile } from "fs/promises";
+// import * as path from "path";
 //
 // export default greet;
 // export { add, square };
