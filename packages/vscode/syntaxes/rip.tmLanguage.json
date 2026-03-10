@@ -536,9 +536,9 @@
       "patterns": [
         {
           "begin": "\\#\\{",
-          "beginCaptures": { "0": { "name": "punctuation.section.embedded.begin.rip" } },
+          "beginCaptures": { "0": { "name": "punctuation.definition.template-expression.begin.rip" } },
           "end": "\\}",
-          "endCaptures": { "0": { "name": "punctuation.section.embedded.end.rip" } },
+          "endCaptures": { "0": { "name": "punctuation.definition.template-expression.end.rip" } },
           "name": "meta.embedded.line.rip",
           "contentName": "meta.template.expression.rip",
           "patterns": [
@@ -548,9 +548,9 @@
         },
         {
           "begin": "\\$\\{",
-          "beginCaptures": { "0": { "name": "punctuation.section.embedded.begin.rip" } },
+          "beginCaptures": { "0": { "name": "punctuation.definition.template-expression.begin.rip" } },
           "end": "\\}",
-          "endCaptures": { "0": { "name": "punctuation.section.embedded.end.rip" } },
+          "endCaptures": { "0": { "name": "punctuation.definition.template-expression.end.rip" } },
           "name": "meta.embedded.line.rip",
           "contentName": "meta.template.expression.rip",
           "patterns": [
