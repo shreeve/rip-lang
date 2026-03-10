@@ -283,10 +283,34 @@
     },
 
     {"comment": "=== REACTIVE OPERATORS (before general assignment) ==="},
-    { "match": "~=",   "name": "keyword.operator.assignment.reactive.rip" },
-    { "match": ":=",   "name": "keyword.operator.assignment.reactive.rip" },
-    { "match": "~>",   "name": "keyword.operator.assignment.reactive.rip" },
-    { "match": "<=>",  "name": "keyword.operator.assignment.reactive.rip" },
+    {
+      "match": "([a-zA-Z$_][\\w$]*)\\s*(~=)",
+      "captures": {
+        "1": { "name": "variable.other.readwrite.rip" },
+        "2": { "name": "keyword.operator.assignment.reactive.rip" }
+      }
+    },
+    {
+      "match": "([a-zA-Z$_][\\w$]*)\\s*(:=)",
+      "captures": {
+        "1": { "name": "variable.other.readwrite.rip" },
+        "2": { "name": "keyword.operator.assignment.reactive.rip" }
+      }
+    },
+    {
+      "match": "([a-zA-Z$_][\\w$]*)\\s*(~>)",
+      "captures": {
+        "1": { "name": "variable.other.readwrite.rip" },
+        "2": { "name": "keyword.operator.assignment.reactive.rip" }
+      }
+    },
+    {
+      "match": "([a-zA-Z$_][\\w$]*)\\s*(<=>)",
+      "captures": {
+        "1": { "name": "variable.other.readwrite.rip" },
+        "2": { "name": "keyword.operator.assignment.reactive.rip" }
+      }
+    },
 
     {"comment": "=== READONLY ASSIGNMENT (with constant name capture) ==="},
     {

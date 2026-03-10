@@ -298,14 +298,6 @@ def fetchData!
   data = response.json()!
   data
 
-# --- Reactivity -------------------------------------------------------------
-
-counter := 0
-doubled ~= counter * 2
-~> p "counter changed:", counter
-logger ~> p "logged:", counter
-counter <=> input.value
-
 # --- Instance Variables -----------------------------------------------------
 
 class User
@@ -343,6 +335,24 @@ rand 1, 10
 # --- Word Literal -----------------------------------------------------------
 
 colors = %w[red green blue]
+
+# --- Reactivity -------------------------------------------------------------
+
+counter := 0
+doubled ~= counter * 2
+~> p "counter changed:", counter
+logger ~> p "logged:", counter
+counter <=> input.value
+
+# Typed reactive variables
+clicks:: number := 0
+username:: string := "Rip"
+enabled:: boolean := true
+tags:: string[] := []
+clicksDoubled:: number ~= clicks * 2
+greeting ~= "Hello, #{username}!"
+MAX_RETRIES:: number =! 3
+clickLogger:: Function ~> p "clicks:", clicks
 
 # --- Components -------------------------------------------------------------
 
