@@ -300,7 +300,7 @@
     {
       "match": "([a-zA-Z$_][\\w$]*)\\s*(=)(?![>=])",
       "captures": {
-        "1": { "name": "variable.assignment.rip" },
+        "1": { "name": "variable.other.readwrite.rip" },
         "2": { "name": "keyword.operator.assignment.rip" }
       }
     },
