@@ -277,7 +277,15 @@
     { "match": ":=",   "name": "keyword.operator.assignment.reactive.rip" },
     { "match": "~>",   "name": "keyword.operator.assignment.reactive.rip" },
     { "match": "<=>",  "name": "keyword.operator.assignment.reactive.rip" },
-    { "match": "=!",   "name": "keyword.operator.assignment.readonly.rip" },
+
+    {"comment": "=== READONLY ASSIGNMENT (with constant name capture) ==="},
+    {
+      "match": "([a-zA-Z$_][\\w$]*)\\s*(=!)",
+      "captures": {
+        "1": { "name": "variable.other.constant.rip" },
+        "2": { "name": "keyword.operator.assignment.readonly.rip" }
+      }
+    },
 
     {"comment": "=== SPECIAL OPERATORS (before general operators) ==="},
     { "match": "!\\?",            "name": "keyword.operator.otherwise.rip" },
