@@ -190,8 +190,8 @@
       "captures": {
         "1": { "name": "keyword.operator.new.rip" },
         "2": { "name": "storage.type.class.rip" },
-        "3": { "name": "entity.name.type.instance.rip" },
-        "4": { "name": "entity.name.type.instance.rip" }
+        "3": { "name": "entity.name.function.rip" },
+        "4": { "name": "entity.name.function.rip" }
       }
     },
     {
