@@ -4,7 +4,7 @@
 
 **What is Rip:** An elegant reactive language that compiles to modern JavaScript (ES2022), featuring zero dependencies, self-hosting capability, and built-in reactivity primitives.
 
-Detailed compiler, component, browser, widget, loader, and type-system notes now live in targeted `.cursor/rules/*.mdc` files so they only apply when relevant.
+Detailed subsystem notes live in nested `AGENTS.md` files in the relevant directories (`src/`, `docs/`, `packages/ui/`, `packages/vscode/`, `test/types/`).
 
 ---
 
@@ -103,7 +103,7 @@ Rip Source -> Lexer -> emitTypes -> Parser -> S-Expressions -> Codegen -> JavaSc
 
 **Key insight:** S-expressions are simple arrays like `["=", "x", 42]`, not large AST objects.
 
-Detailed compiler and lexer internals are in `.cursor/rules/compiler-internals.mdc`.
+Detailed compiler, lexer, and component internals are in `src/AGENTS.md`.
 
 ---
 
@@ -138,7 +138,7 @@ fail "name", "invalid syntax"
 
 Test files live in `test/rip/`.
 
-Detailed component testing notes live in `.cursor/rules/components.mdc`. Type-system and audit guidance lives in `.cursor/rules/vscode-ext.mdc` plus `test/types/AGENTS.md`.
+Component testing notes are in `src/AGENTS.md`. Type-system and audit guidance is in `packages/vscode/AGENTS.md` and `test/types/AGENTS.md`.
 
 ---
 
@@ -212,7 +212,7 @@ start port: 3000
 
 For server-only changes, publish just that package instead of doing a full release. Use `bun run bump` for full rip-lang releases.
 
-Detailed widget notes live in `.cursor/rules/ui-widgets.mdc`. Browser runtime details live in `.cursor/rules/browser.mdc`.
+Widget conventions and gotchas are in `packages/ui/AGENTS.md`. Browser runtime details are in `docs/AGENTS.md`.
 
 ---
 
@@ -328,6 +328,118 @@ Rip injects helpers via `globalThis` in compiled output, the CLI REPL, and the b
 
 All helpers use `??=` so they can be overridden.
 
+### Reactivity
+
+Rip reactivity is built into the language, not imported from a library.
+
+| Operator | Name | Output |
+| --- | --- | --- |
+| `=` | assign | `let x; x = value` |
+| `:=` | state | `const x = __state(value)` |
+| `~=` | computed | `const x = __computed(() => expr)` |
+| `~>` | effect | `__effect(() => { ... })` |
+| `=!` | readonly | `const x = value` |
+| `offer` | context provide | state + `setContext(...)` |
+| `accept` | context consume | `getContext(...)` |
+
+Three-tier state model:
+
+| Tier | Scope | Mechanism | Example |
+| --- | --- | --- | --- |
+| Props | parent to child | `value <=> x`, `placeholder: "..."` | configuring a widget |
+| Offer / Accept | ancestor to subtree | keywords | tabs sharing active state |
+| Stash | app-wide | shared reactive proxy | auth state, theme |
+
+Two-way binding (`<=>`) compiles to an effect that pushes signal state into the DOM plus an event listener that writes DOM changes back. On components, the parent passes the signal via `__bind_propName__` so parent and child share the same signal object.
+
+Implementation details are in `src/AGENTS.md`.
+
 ---
 
-**For AI assistants:** Trust the tests, use the debug tools, follow existing patterns, and let the targeted `.cursor/rules/*.mdc` files provide the deeper subsystem details only when they are relevant.
+## Loader and CLI
+
+The loader (`rip-loader.js`) is a Bun plugin preloaded by `bin/rip` or `bunfig.toml`.
+
+Responsibilities:
+
+1. compile `.rip` files on the fly via `compileToJS()`
+2. rewrite `@rip-lang/*` imports to absolute paths after compilation
+
+The import rewrite is necessary because Bun worker threads do not respect `NODE_PATH`, and `onResolve` does not fire for imports introduced by `onLoad`-compiled source.
+
+`bin/rip` sets `NODE_PATH` to include its parent `node_modules` directory and passes `env: process.env` into child process spawns. This works around Bun not inheriting `process.env` changes unless `env` is passed explicitly.
+
+Known Bun bugs:
+
+| Bug | Workaround |
+| --- | --- |
+| `process.env` changes not inherited by `spawn` / `spawnSync` | pass `env: process.env` explicitly |
+| `NODE_PATH` ignored by worker threads | rewrite imports to absolute paths in `onLoad` |
+| plugin `onResolve` does not fire for imports in `onLoad`-compiled source | rewrite imports inside `onLoad` |
+| `require.resolve({ paths })` ignores `paths` in plugin handlers | use `import.meta.resolve` |
+
+---
+
+## API Route Handler Pattern
+
+API route handlers in `**/api/routes/*.rip` follow five phases: **auth, read, meta, work, send**.
+
+1. **auth** — Who is the caller? Use a scope helper (`userScope!`, `adminScope!`) or mark as `# public`. Exits 401/403 on failure.
+2. **read** — What did they send? `read 'name', 'validator'` for all inputs. No logic, no queries.
+3. **meta** — Derived values and preconditions. Construct variables from auth + read, load related records, check error conditions. Bail before any mutations.
+4. **work** — Do the thing. Create records, update state, call services. Everything needed should already be in named variables.
+5. **send** — The final expression. Usually an object literal for JSON, but could be HTML, a file via `@send`, a redirect, etc.
+
+Guidelines:
+
+- Omit phases that don't apply — no empty comments.
+- Use phase comments (`# auth`, `# read`, etc.) when the handler is long enough to benefit from visual separation.
+- Public endpoints use `# public` instead of a scope call.
+- Early exits belong to their phase — auth failures in auth, preconditions in meta.
+- Use `error!` for HTTP errors, `notice!` for user-facing messages, `bail!` to destroy session and force-logout.
+
+```coffee
+post '/create' ->
+  # auth
+  user = userScope!
+
+  # read
+  week     = read 'week', 'int!'
+  slot     = read 'slot', 'text!'
+  children = read 'children', 'json'
+
+  # meta
+  needed = children?.length or 1
+  spots = sql! '...', [week, slot, 'available', needed]
+  error! 'Not enough spots', 409 unless spots.data?.length >= needed
+
+  # work
+  booking = Booking.create!({ user_id: user.id, week, slot, children: children or [] })
+  for row in spots.data
+    sql! '...', ['booked', booking.id, row[0]]
+
+  # send
+  { bookingId: booking.id }
+```
+
+---
+
+## Reflect Before Finalizing
+
+Before finalizing your work, take a moment to step back.
+
+Review what you've built. Read through the changes as if seeing them for the first time.
+
+Ensure everything is clean, clear, consistent, correct, concise, and efficient.
+
+Question your approach. Now that you've implemented this, is there anything you'd do differently? Are the data structures right? Is information flowing through the system in the most natural way? If you were starting over with what you know now, would you make the same choices?
+
+Look for improvements. If something feels off, fix it now rather than noting it for later. Small refactors compound — clean code invites more clean code.
+
+Gather more context if you're uncertain. Pull up related code. Trace through the system. Sometimes the right answer becomes obvious once you see more of the picture.
+
+Do the work, not the meta-work. Improve the code itself. Don't write reflection documents.
+
+---
+
+**For AI assistants:** Trust the tests, use the debug tools, follow existing patterns, and consult the nested `AGENTS.md` files for deeper subsystem details.
