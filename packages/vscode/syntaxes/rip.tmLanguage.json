@@ -267,7 +267,7 @@
         "2": { "name": "variable.other.readwrite.instance.rip" },
         "3": { "name": "keyword.operator.type-annotation.rip" }
       },
-      "end": "(?=\\s*(?:=(?![>=])|:=|~=|~>|=!|<=>|\\)|,|->))|$|(?=#)",
+      "end": "(?=\\s*(?:=(?![>=])|:=|~=|~>|=!|<=>|\\)|->))|$|(?=#)",
       "contentName": "meta.type.rip",
       "patterns": [{ "include": "#type_expression" }]
     },
