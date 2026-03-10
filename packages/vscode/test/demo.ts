@@ -80,7 +80,7 @@ let underscore = 1_000_000
 
 let single = 'hello'
 let double = "world"
-let interp = `name is ${name}`
+let interp = `name is ${myName}`
 let template = `count is ${count}`
 
 // (no heredoc equivalent)
