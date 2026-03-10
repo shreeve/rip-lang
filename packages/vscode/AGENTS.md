@@ -1,21 +1,13 @@
 # VS Code Extension — Agent Guide
 
-The extension in `packages/vscode/` provides syntax highlighting, auto `.d.ts` generation on save, autocomplete, hover, and go-to-definition via TypeScript, and commands to generate `.d.ts` for one file or all files.
+The extension in `packages/vscode/` provides syntax highlighting, autocomplete, hover, go-to-definition, and signature help via TypeScript.
 
 ## Type Intelligence Flow
 
-1. compile `.rip` to shadow `.ts` in `.rip-cache/`
-2. let VS Code TypeScript analyze that shadow file
+1. compile `.rip` to virtual `.ts` in memory
+2. let a TypeScript language service analyze that virtual file
 3. proxy completion / hover / definition through the reverse source map
 4. return the mapped result to the `.rip` editor
-
-## Settings
-
-| Setting | Purpose |
-| --- | --- |
-| `rip.types.generateOnSave` | auto-generate `.d.ts` on save |
-| `rip.types.intellisense` | enable autocomplete / hover / definition |
-| `rip.compiler.path` | override compiler binary path |
 
 ## Debugging
 
