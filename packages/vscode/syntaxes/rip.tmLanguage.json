@@ -261,11 +261,12 @@
     },
     {
       "comment": "Type annotation: name:: Type or @name :: Type",
-      "begin": "(?:(@)([a-zA-Z_$]\\w*))?\\s*(::)(?!=)",
+      "begin": "(?:(@)([a-zA-Z_$]\\w*)|([a-zA-Z_$]\\w*))\\s*(::)(?!=)",
       "beginCaptures": {
         "1": { "name": "punctuation.definition.variable.rip" },
         "2": { "name": "variable.other.readwrite.instance.rip" },
-        "3": { "name": "keyword.operator.type-annotation.rip" }
+        "3": { "name": "variable.other.readwrite.rip" },
+        "4": { "name": "keyword.operator.type-annotation.rip" }
       },
       "end": "(?=\\s*(?:=(?![>=])|:=|~=|~>|=!|<=>|\\)|->))|$|(?=#)",
       "contentName": "meta.type.rip",
