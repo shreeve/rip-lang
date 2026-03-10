@@ -314,9 +314,32 @@ console.log(JSON.stringify({ a: 1 }, null, 2))
 console.assert(true, "must be true")
 typeof 42
 
+// --- Typed Reactive Variables (no direct TS equivalent) ---------------------
+
+// Rip reactive operators with type annotations:
+//
+// clicks:: number := 0              # typed state (Signal<number>)
+// username:: string := "Rip"        # typed state (Signal<string>)
+// clicksDoubled:: number ~= n * 2   # typed computed (Computed<number>)
+// clickLogger:: Function ~> ...     # typed effect
+// MAX_RETRIES:: number =! 3         # typed readonly (const)
+
 // --- Components (no direct TS equivalent) -----------------------------------
 
+// Rip components are a language feature:
+//
 // Counter = component
 //   @count := 0
 //   render
 //     div "Count: {@count}"
+//
+// Typed components:
+//
+// Button = component
+//   @label:: string := "Click"
+//   @variant:: "primary" | "secondary" := "primary"
+//   @disabled:: boolean := false
+//   bg ~= if variant is "primary" then "#06f" else "#e5e5e5"
+//   render
+//     button disabled: disabled, style: "background: #{bg}"
+//       slot

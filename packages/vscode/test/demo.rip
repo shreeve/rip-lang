@@ -360,3 +360,15 @@ Counter = component
   @count := 0
   render
     div "Count: {@count}"
+
+# Typed components
+Button = component
+  @label:: string := "Click"
+  @variant:: "primary" | "secondary" := "primary"
+  @disabled:: boolean := false
+
+  bg ~= if variant is "primary" then "#06f" else "#e5e5e5"
+
+  render
+    button disabled: disabled, style: "background: #{bg}"
+      slot
