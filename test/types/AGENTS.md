@@ -103,9 +103,10 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 **IDE-only gaps** (require VS Code extension changes, not testable in audit files):
 
-| Category                    | Tested In    | Notes                                           |
-| --------------------------- | ------------ | ----------------------------------------------- |
-| Go-to-definition on imports | *(IDE only)* | Import lines unmapped; works at call sites only |
+| Category                    | Tested In    | Notes                                                                                                                          |
+| --------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| Go-to-definition on imports | *(IDE only)* | Import lines unmapped; works at call sites only                                                                                |
+| Semantic token provider     | *(IDE only)* | No `SemanticTokensProvider` — TextMate grammar alone can't provide context-aware styling that TS gets from its language server |
 
 ### 🔶 Partial
 
