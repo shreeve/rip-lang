@@ -141,12 +141,15 @@
 
     {"comment": "=== FUNCTION DEFINITIONS ==="},
     {
-      "comment": "def name or def name!",
-      "match": "\\b(def)\\s+([a-zA-Z_$]\\w*[!?]?)",
-      "captures": {
+      "comment": "def name(...) or def name!(...)",
+      "begin": "\\b(def)\\s+([a-zA-Z_$]\\w*[!?]?)",
+      "beginCaptures": {
         "1": { "name": "storage.type.function.rip" },
         "2": { "name": "entity.name.function.rip" }
-      }
+      },
+      "end": "(?=$|[=-]>|\\n)",
+      "name": "meta.function.rip",
+      "patterns": [{ "include": "#function_params" }, { "include": "$self" }]
     },
     {
       "comment": "name = (...) -> or name = ->",
@@ -533,7 +536,7 @@
               "match": "(@)?([a-zA-Z_$][\\w$]*)(\\.\\.\\.)?",
               "captures": {
                 "1": { "name": "variable.other.readwrite.instance.rip" },
-                "2": { "name": "variable.parameter.function.rip" },
+                "2": { "name": "variable.parameter.rip" },
                 "3": { "name": "keyword.operator.splat.rip" }
               }
             },
