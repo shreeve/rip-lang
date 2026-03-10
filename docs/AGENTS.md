@@ -11,15 +11,15 @@ All `<script type="text/rip">` tags, inline or external, compile and run togethe
 
 ## Runtime Script Attributes
 
-| Attribute | Purpose |
-| --- | --- |
-| `data-src` | whitespace-separated source URLs or bundle URLs |
-| `data-mount` | component to mount after compilation |
-| `data-target` | CSS selector for mount target |
-| `data-state` | JSON stash seed |
-| `data-router` | enables history mode or `"hash"` routing |
-| `data-persist` | persists stash in session storage or `"local"` storage |
-| `data-reload` | connects to `/watch`; CSS changes can refresh styles only |
+| Attribute      | Purpose                                                   |
+| -------------- | --------------------------------------------------------- |
+| `data-src`     | whitespace-separated source URLs or bundle URLs           |
+| `data-mount`   | component to mount after compilation                      |
+| `data-target`  | CSS selector for mount target                             |
+| `data-state`   | JSON stash seed                                           |
+| `data-router`  | enables history mode or `"hash"` routing                  |
+| `data-persist` | persists stash in session storage or `"local"` storage    |
+| `data-reload`  | connects to `/watch`; CSS changes can refresh styles only |
 
 ## Component Mounting
 

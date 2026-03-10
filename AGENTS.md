@@ -67,19 +67,19 @@ rip-lang/
 
 ### File Editing Rules
 
-| File | Can Edit? | Notes |
-| --- | --- | --- |
-| `src/compiler.js` | Yes | Code generator; main compiler work |
-| `src/lexer.js` | Yes | Lexer and rewriter |
-| `src/types.js` | Yes | Type system sidecar |
-| `src/components.js` | Yes | Component system sidecar |
-| `src/grammar/grammar.rip` | Carefully | Run `bun run parser` after changes |
-| `src/parser.js` | Never | Generated file |
-| `src/sourcemaps.js` | Yes | Source map generator |
-| `src/browser.js` | Yes | Browser entry point |
-| `rip-loader.js` | Yes | Bun plugin for `.rip` compilation and import rewriting |
-| `src/grammar/solar.rip` | Never | Given parser generator |
-| `test/rip/*.rip` | Yes | Test files |
+| File                      | Can Edit? | Notes                                                  |
+| ------------------------- | --------- | ------------------------------------------------------ |
+| `src/compiler.js`         | Yes       | Code generator; main compiler work                     |
+| `src/lexer.js`            | Yes       | Lexer and rewriter                                     |
+| `src/types.js`            | Yes       | Type system sidecar                                    |
+| `src/components.js`       | Yes       | Component system sidecar                               |
+| `src/grammar/grammar.rip` | Carefully | Run `bun run parser` after changes                     |
+| `src/parser.js`           | Never     | Generated file                                         |
+| `src/sourcemaps.js`       | Yes       | Source map generator                                   |
+| `src/browser.js`          | Yes       | Browser entry point                                    |
+| `rip-loader.js`           | Yes       | Bun plugin for `.rip` compilation and import rewriting |
+| `src/grammar/solar.rip`   | Never     | Given parser generator                                 |
+| `test/rip/*.rip`          | Yes       | Test files                                             |
 
 ### Critical Rules
 
@@ -236,36 +236,36 @@ rip -cm example.rip
 
 ### Removed (from CoffeeScript / Rip 2.x)
 
-| Feature | Replacement |
-| --- | --- |
-| postfix spread/rest (`x...`) | prefix only: `...x` |
+| Feature                            | Replacement                  |
+| ---------------------------------- | ---------------------------- |
+| postfix spread/rest (`x...`)       | prefix only: `...x`          |
 | prototype access (`x::y`, `x?::y`) | `.prototype` or class syntax |
-| binary existential (`x ? y`) | `x ?? y` |
-| `is not` contraction | `isnt` |
-| `for x from iterable` | `for x as iterable` |
+| binary existential (`x ? y`)       | `x ?? y`                     |
+| `is not` contraction               | `isnt`                       |
+| `for x from iterable`              | `for x as iterable`          |
 
 ### Added
 
-| Feature | Syntax | Purpose |
-| --- | --- | --- |
-| ternary operator | `x ? a : b` | JS-style ternary |
-| postfix ternary | `a if x else b` | Python-style ternary |
-| `for...as` iteration | `for x as iter` | iterable loop |
-| `as!` async shorthand | `for x as! iter` | shorthand for `for await` |
-| defined check | `x!?` | true if not undefined |
-| presence check | `x?!` | truthy-or-undefined Houdini operator |
-| optional chain assign | `x?.prop = val` | guarded assignment |
+| Feature               | Syntax           | Purpose                              |
+| --------------------- | ---------------- | ------------------------------------ |
+| ternary operator      | `x ? a : b`      | JS-style ternary                     |
+| postfix ternary       | `a if x else b`  | Python-style ternary                 |
+| `for...as` iteration  | `for x as iter`  | iterable loop                        |
+| `as!` async shorthand | `for x as! iter` | shorthand for `for await`            |
+| defined check         | `x!?`            | true if not undefined                |
+| presence check        | `x?!`            | truthy-or-undefined Houdini operator |
+| optional chain assign | `x?.prop = val`  | guarded assignment                   |
 
 ### Kept
 
-| Feature | Syntax | Compiles to |
-| --- | --- | --- |
-| existence check | `x?` | `(x != null)` |
-| optional chaining | `a?.b`, `a?.[0]`, `a?.()` | JS optional chaining |
-| optional shorthand | `a?[0]`, `a?(x)` | `a?.[0]`, `a?.(x)` |
-| optional chain assign | `x?.prop = val` | guarded assignment |
-| nullish coalescing | `a ?? b` | `a ?? b` |
-| dammit operator | `fetchData!` | `await fetchData()` |
+| Feature               | Syntax                    | Compiles to          |
+| --------------------- | ------------------------- | -------------------- |
+| existence check       | `x?`                      | `(x != null)`        |
+| optional chaining     | `a?.b`, `a?.[0]`, `a?.()` | JS optional chaining |
+| optional shorthand    | `a?[0]`, `a?(x)`          | `a?.[0]`, `a?.(x)`   |
+| optional chain assign | `x?.prop = val`           | guarded assignment   |
+| nullish coalescing    | `a ?? b`                  | `a ?? b`             |
+| dammit operator       | `fetchData!`              | `await fetchData()`  |
 
 ---
 
@@ -273,58 +273,58 @@ rip -cm example.rip
 
 ### Unique Operators
 
-| Operator | Name | Example |
-| --- | --- | --- |
-| `!` | Dammit | `fetchData!` |
-| `!` | Void | `def process!` |
-| `=!` | Readonly | `MAX =! 100` |
-| `!?` | Otherwise | `val !? 5` |
-| `!?` | Defined | `val!?` |
-| `?!` | Presence | `@checked?!` |
-| `?` | Existence | `x?` |
-| `//` | Floor div | `7 // 2` |
-| `%%` | True mod | `-1 %% 3` |
-| `:=` | State | `count := 0` |
-| `~=` | Computed | `doubled ~= count * 2` |
-| `<=>` | Two-way bind | `value <=> name` |
-| `=~` | Match | `str =~ /pat/` |
-| `.new()` | Constructor | `User.new()` |
-| `::` | Prototype | `String::trim` |
-| `if...else` | Postfix ternary | `"a" if cond else "b"` |
-| `[-n]` | Negative index | `arr[-1]` |
-| `*` | String repeat | `"-" * 40` |
-| `<` `<=` | Chained | `1 < x < 10` |
-| `|>` | Pipe | `x |> fn` |
-| `.=` | Method assign | `x .= trim()` |
-| `?.=` | Optional assign | `el?.style.display = "none"` |
-| `=` | Render text | `= item.textContent` |
-| `*` | Merge assign | `*obj = {a: 1}` |
-| `not in` | Not in | `x not in arr` |
-| `loop n` | Repeat N | `loop 5 -> body` |
-| `it` | Implicit param | `-> it > 5` |
-| `or return` | Guard | `x = get() or return err` |
-| `?? throw` | Nullish guard | `x = get() ?? throw err` |
-| `%w` | Word literal | `%w[foo bar baz]` |
+| Operator    | Name            | Example                      |
+| ----------- | --------------- | ---------------------------- |
+| `!`         | Dammit          | `fetchData!`                 |
+| `!`         | Void            | `def process!`               |
+| `=!`        | Readonly        | `MAX =! 100`                 |
+| `!?`        | Otherwise       | `val !? 5`                   |
+| `!?`        | Defined         | `val!?`                      |
+| `?!`        | Presence        | `@checked?!`                 |
+| `?`         | Existence       | `x?`                         |
+| `//`        | Floor div       | `7 // 2`                     |
+| `%%`        | True mod        | `-1 %% 3`                    |
+| `:=`        | State           | `count := 0`                 |
+| `~=`        | Computed        | `doubled ~= count * 2`       |
+| `<=>`       | Two-way bind    | `value <=> name`             |
+| `=~`        | Match           | `str =~ /pat/`               |
+| `.new()`    | Constructor     | `User.new()`                 |
+| `::`        | Prototype       | `String::trim`               |
+| `if...else` | Postfix ternary | `"a" if cond else "b"`       |
+| `[-n]`      | Negative index  | `arr[-1]`                    |
+| `*`         | String repeat   | `"-" * 40`                   |
+| `<` `<=`    | Chained         | `1 < x < 10`                 |
+| `           | >`              | Pipe                         | `x | > fn` |
+| `.=`        | Method assign   | `x .= trim()`                |
+| `?.=`       | Optional assign | `el?.style.display = "none"` |
+| `=`         | Render text     | `= item.textContent`         |
+| `*`         | Merge assign    | `*obj = {a: 1}`              |
+| `not in`    | Not in          | `x not in arr`               |
+| `loop n`    | Repeat N        | `loop 5 -> body`             |
+| `it`        | Implicit param  | `-> it > 5`                  |
+| `or return` | Guard           | `x = get() or return err`    |
+| `?? throw`  | Nullish guard   | `x = get() ?? throw err`     |
+| `%w`        | Word literal    | `%w[foo bar baz]`            |
 
 ### Standard Library
 
 Rip injects helpers via `globalThis` in compiled output, the CLI REPL, and the browser REPL.
 
-| Function | Description |
-| --- | --- |
-| `abort(msg?)` | log to stderr, exit with code 1 |
-| `assert(v, msg?)` | throw if falsy |
-| `exit(code?)` | exit process |
-| `kind(v)` | lowercase type name |
-| `noop()` | no-op |
-| `p(...args)` | `console.log` shorthand |
-| `pp(v)` | pretty-print JSON, returns value |
-| `raise(a, b?)` | throw error |
-| `rand(a?, b?)` | random number |
-| `sleep(ms)` | promise-based delay |
-| `todo(msg?)` | throw not implemented |
-| `warn(...args)` | `console.warn` shorthand |
-| `zip(...arrays)` | zip arrays pairwise |
+| Function          | Description                      |
+| ----------------- | -------------------------------- |
+| `abort(msg?)`     | log to stderr, exit with code 1  |
+| `assert(v, msg?)` | throw if falsy                   |
+| `exit(code?)`     | exit process                     |
+| `kind(v)`         | lowercase type name              |
+| `noop()`          | no-op                            |
+| `p(...args)`      | `console.log` shorthand          |
+| `pp(v)`           | pretty-print JSON, returns value |
+| `raise(a, b?)`    | throw error                      |
+| `rand(a?, b?)`    | random number                    |
+| `sleep(ms)`       | promise-based delay              |
+| `todo(msg?)`      | throw not implemented            |
+| `warn(...args)`   | `console.warn` shorthand         |
+| `zip(...arrays)`  | zip arrays pairwise              |
 
 All helpers use `??=` so they can be overridden.
 
@@ -332,23 +332,23 @@ All helpers use `??=` so they can be overridden.
 
 Rip reactivity is built into the language, not imported from a library.
 
-| Operator | Name | Output |
-| --- | --- | --- |
-| `=` | assign | `let x; x = value` |
-| `:=` | state | `const x = __state(value)` |
-| `~=` | computed | `const x = __computed(() => expr)` |
-| `~>` | effect | `__effect(() => { ... })` |
-| `=!` | readonly | `const x = value` |
-| `offer` | context provide | state + `setContext(...)` |
-| `accept` | context consume | `getContext(...)` |
+| Operator | Name            | Output                             |
+| -------- | --------------- | ---------------------------------- |
+| `=`      | assign          | `let x; x = value`                 |
+| `:=`     | state           | `const x = __state(value)`         |
+| `~=`     | computed        | `const x = __computed(() => expr)` |
+| `~>`     | effect          | `__effect(() => { ... })`          |
+| `=!`     | readonly        | `const x = value`                  |
+| `offer`  | context provide | state + `setContext(...)`          |
+| `accept` | context consume | `getContext(...)`                  |
 
 Three-tier state model:
 
-| Tier | Scope | Mechanism | Example |
-| --- | --- | --- | --- |
-| Props | parent to child | `value <=> x`, `placeholder: "..."` | configuring a widget |
-| Offer / Accept | ancestor to subtree | keywords | tabs sharing active state |
-| Stash | app-wide | shared reactive proxy | auth state, theme |
+| Tier           | Scope               | Mechanism                           | Example                   |
+| -------------- | ------------------- | ----------------------------------- | ------------------------- |
+| Props          | parent to child     | `value <=> x`, `placeholder: "..."` | configuring a widget      |
+| Offer / Accept | ancestor to subtree | keywords                            | tabs sharing active state |
+| Stash          | app-wide            | shared reactive proxy               | auth state, theme         |
 
 Two-way binding (`<=>`) compiles to an effect that pushes signal state into the DOM plus an event listener that writes DOM changes back. On components, the parent passes the signal via `__bind_propName__` so parent and child share the same signal object.
 
@@ -371,12 +371,12 @@ The import rewrite is necessary because Bun worker threads do not respect `NODE_
 
 Known Bun bugs:
 
-| Bug | Workaround |
-| --- | --- |
-| `process.env` changes not inherited by `spawn` / `spawnSync` | pass `env: process.env` explicitly |
-| `NODE_PATH` ignored by worker threads | rewrite imports to absolute paths in `onLoad` |
-| plugin `onResolve` does not fire for imports in `onLoad`-compiled source | rewrite imports inside `onLoad` |
-| `require.resolve({ paths })` ignores `paths` in plugin handlers | use `import.meta.resolve` |
+| Bug                                                                      | Workaround                                    |
+| ------------------------------------------------------------------------ | --------------------------------------------- |
+| `process.env` changes not inherited by `spawn` / `spawnSync`             | pass `env: process.env` explicitly            |
+| `NODE_PATH` ignored by worker threads                                    | rewrite imports to absolute paths in `onLoad` |
+| plugin `onResolve` does not fire for imports in `onLoad`-compiled source | rewrite imports inside `onLoad`               |
+| `require.resolve({ paths })` ignores `paths` in plugin handlers          | use `import.meta.resolve`                     |
 
 ---
 
