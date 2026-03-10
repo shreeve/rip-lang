@@ -557,6 +557,19 @@
           "name": "meta.parameters.rip",
           "patterns": [
             {
+              "comment": "Type annotation inside params: person:: string",
+              "begin": "(?:(@)([a-zA-Z_$]\\w*)|([a-zA-Z_$]\\w*))\\s*(::)(?!=)",
+              "beginCaptures": {
+                "1": { "name": "punctuation.definition.variable.rip" },
+                "2": { "name": "variable.parameter.rip" },
+                "3": { "name": "variable.parameter.rip" },
+                "4": { "name": "keyword.operator.type-annotation.rip" }
+              },
+              "end": "(?=\\s*(?:=(?![>=])|:=|~=|~>|=!|<=>|\\)|,|->))|$|(?=#)",
+              "contentName": "meta.type.rip",
+              "patterns": [{ "include": "#type_expression" }]
+            },
+            {
               "match": "(@)?([a-zA-Z_$][\\w$]*)(\\.\\.\\.)?",
               "captures": {
                 "1": { "name": "variable.other.readwrite.instance.rip" },
