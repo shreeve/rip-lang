@@ -26,6 +26,52 @@ function toVirtual(p) { return p + '.ts'; }
 function fromVirtual(p) { return p.endsWith('.rip.ts') ? p.slice(0, -3) : p; }
 function isVirtual(p) { return p.endsWith('.rip.ts'); }
 
+// ── Semantic token legend ──────────────────────────────────────────
+// Token types and modifiers aligned with TypeScript's TwentyTwenty
+// encoding from getEncodedSemanticClassifications().
+
+const SEMANTIC_TOKEN_TYPES = [
+  'namespace',      // 0
+  'type',           // 1
+  'class',          // 2
+  'enum',           // 3
+  'interface',      // 4
+  'typeParameter',  // 5
+  'parameter',      // 6
+  'variable',       // 7
+  'property',       // 8
+  'enumMember',     // 9
+  'function',       // 10
+  'method',         // 11
+  'decorator',      // 12
+];
+
+const SEMANTIC_TOKEN_MODIFIERS = [
+  'declaration',     // bit 0
+  'static',          // bit 1
+  'async',           // bit 2
+  'readonly',        // bit 3
+  'defaultLibrary',  // bit 4
+];
+
+// Map TS twenty-twenty classification tokenType → our legend index.
+// TS encodes: class=0, enum=1, interface=2, namespace=3, typeParameter=4,
+// type=5, parameter=6, variable=7, enumMember=8, property=9, function=10, member=11
+const TS_TYPE_TO_LEGEND = [
+  2,   // 0: class → class(2)
+  3,   // 1: enum → enum(3)
+  4,   // 2: interface → interface(4)
+  0,   // 3: namespace → namespace(0)
+  5,   // 4: typeParameter → typeParameter(5)
+  1,   // 5: type → type(1)
+  6,   // 6: parameter → parameter(6)
+  7,   // 7: variable → variable(7)
+  9,   // 8: enumMember → enumMember(9)
+  8,   // 9: property → property(8)
+  10,  // 10: function → function(10)
+  11,  // 11: member → method(11)
+];
+
 connection.onInitialize(async (params) => {
   rootPath = params.rootPath || process.cwd();
   connection.console.log(`[rip] root: ${rootPath}`);
@@ -51,6 +97,10 @@ connection.onInitialize(async (params) => {
       hoverProvider: true,
       definitionProvider: true,
       signatureHelpProvider: { triggerCharacters: ['(', ','] },
+      semanticTokensProvider: {
+        legend: { tokenTypes: SEMANTIC_TOKEN_TYPES, tokenModifiers: SEMANTIC_TOKEN_MODIFIERS },
+        full: true,
+      },
     },
   };
 });
@@ -411,6 +461,65 @@ function offsetToLineCol(t, o) { const p = tc.offsetToLineCol(t, o); return { li
 function uriToPath(u) { try { return decodeURIComponent(new URL(u).pathname); } catch { return u; } }
 function pathToUri(p) { return 'file://' + p; }
 
+// Check whether a column position falls inside a string literal or comment.
+// Scans left-to-right tracking quote state and comment markers.
+function isInsideStringOrComment(line, col) {
+  let quote = null;
+  let interpDepth = 0;
+  for (let i = 0; i < col; i++) {
+    const ch = line[i];
+    if (interpDepth > 0) {
+      if (ch === '{') interpDepth++;
+      else if (ch === '}') { interpDepth--; if (interpDepth === 0) quote = '"'; }
+      else if (ch === '"' || ch === "'") {
+        // nested string inside interpolation — skip it
+        const q = ch;
+        i++;
+        while (i < col && line[i] !== q) { if (line[i] === '\\') i++; i++; }
+      }
+      continue;
+    }
+    if (quote) {
+      if (ch === '\\') { i++; continue; }
+      if (quote === '"' && ch === '#' && line[i + 1] === '{') {
+        interpDepth = 1;
+        quote = null;
+        i++; // skip '{'
+        continue;
+      }
+      if (ch === quote) quote = null;
+    } else {
+      if (ch === '#') return true;  // Rip line comment
+      if (ch === '"' || ch === "'") quote = ch;
+    }
+  }
+  return !!quote && interpDepth === 0;
+}
+
+// Find an unused word-boundary occurrence of `word` near `centerLine`.
+// Searches outward ±5 lines, skipping positions already in `used`.
+// Calls `assign(line, col)` and returns true on success.
+function findUnusedOccurrence(srcLines, word, len, centerLine, used, assign) {
+  for (let delta = 0; delta <= 5; delta++) {
+    const tryLines = delta === 0 ? [centerLine] : [centerLine - delta, centerLine + delta];
+    for (const ln of tryLines) {
+      if (ln < 0 || ln >= srcLines.length) continue;
+      const s = srcLines[ln];
+      let idx = -1;
+      while ((idx = s.indexOf(word, idx + 1)) !== -1) {
+        if ((idx === 0 || !/\w/.test(s[idx - 1])) &&
+            (idx + len >= s.length || !/\w/.test(s[idx + len])) &&
+            !used.has(ln + ':' + idx) &&
+            !isInsideStringOrComment(s, idx)) {
+          assign(ln, idx);
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
 // ── Reactive type unwrapping ────────────────────────────────────────
 // Rip's reactive operators (:=, ~=) compile to Signal<T> / Computed<T>
 // wrappers. On hover, show the inner type T instead — users write and
@@ -627,6 +736,187 @@ function detectComponentContext(srcLine, col) {
 
   return { component, existingProps, propValues, currentProp, wantValues, wantProps };
 }
+
+// ── Semantic tokens ────────────────────────────────────────────────
+// Bridges TypeScript's semantic classification to Rip source positions.
+// TS analyzes the compiled virtual .ts file; we map each classified token
+// back to the .rip source and emit it if the identifier text matches.
+
+connection.onRequest('textDocument/semanticTokens/full', (params) => {
+  const fp = uriToPath(params.textDocument.uri);
+  if (!fp.endsWith('.rip') || !service) return { data: [] };
+
+  const c = compiled.get(fp);
+  if (!c || !c.hasTypes) return { data: [] };
+
+  try {
+    patchTypes();
+    const vf = toVirtual(fp);
+    const format = ts.SemanticClassificationFormat?.TwentyTwenty || '2020';
+    const result = service.getEncodedSemanticClassifications(vf, { start: 0, length: c.tsContent.length }, format);
+    if (!result?.spans) return { data: [] };
+
+    const srcLines = c.source.split('\n');
+    const tokens = [];
+    const usedPositions = new Set();
+
+    // Compute byte offset where DTS header ends in the virtual file.
+    // Body spans have accurate source maps; header spans use heuristic
+    // text search. Processing body first lets accurate mappings claim
+    // positions before header text search can mis-map them.
+    let headerEndOffset = 0;
+    if (c.headerLines > 0) {
+      let nl = 0;
+      for (let j = 0; j < c.tsContent.length; j++) {
+        if (c.tsContent[j] === '\n' && ++nl === c.headerLines) { headerEndOffset = j + 1; break; }
+      }
+    }
+
+    // Two-pass: body spans first (accurate source maps), then header spans
+    // (heuristic text search fills remaining positions).
+    const bodySpans = [];
+    const headerSpans = [];
+    for (let i = 0; i < result.spans.length; i += 3) {
+      const entry = [result.spans[i], result.spans[i + 1], result.spans[i + 2]];
+      if (entry[0] >= headerEndOffset) bodySpans.push(entry);
+      else headerSpans.push(entry);
+    }
+    const orderedSpans = bodySpans.concat(headerSpans);
+
+    // Cache per-line function-signature detection for body tokens.
+    // Overload signatures (ending with `;`) and injected type annotations
+    // (from replaceFnParams) produce phantom property tokens that steal
+    // source positions from the actual body tokens.
+    const fnSigLineCache = new Map(); // tsLine → { isFnSig, isOverload, typeAnnotRanges }
+    function getFnSigInfo(tsLine) {
+      if (fnSigLineCache.has(tsLine)) return fnSigLineCache.get(tsLine);
+      const lineText = tc.getLineText(c.tsContent, tsLine);
+      const isFnSig = /^\s*(?:export\s+)?(?:async\s+)?function\s/.test(lineText);
+      const isOverload = isFnSig && /;\s*$/.test(lineText);
+      // Find column ranges of type annotation blocks in destructured params.
+      // e.g. in `function foo({name: userName}: {name: string})`
+      //       the `{name: string}` after `}: ` is a type annotation range.
+      const typeAnnotRanges = [];
+      if (isFnSig && !isOverload) {
+        const re = /\}:\s*\{/g;
+        let m;
+        while ((m = re.exec(lineText)) !== null) {
+          const start = m.index + m[0].length - 1; // position of `{`
+          let depth = 1, end = start + 1;
+          while (end < lineText.length && depth > 0) {
+            if (lineText[end] === '{') depth++;
+            else if (lineText[end] === '}') depth--;
+            end++;
+          }
+          typeAnnotRanges.push([start, end]);
+        }
+      }
+      const info = { isFnSig, isOverload, typeAnnotRanges };
+      fnSigLineCache.set(tsLine, info);
+      return info;
+    }
+
+    for (const [tsOffset, tsLength, classification] of orderedSpans) {
+      const tsTokenType = ((classification >> 8) & 0xFF) - 1;
+      const tsModifiers = classification & 0xFF;
+      if (tsTokenType >= TS_TYPE_TO_LEGEND.length) continue;
+
+      // Reclassify DTS header tokens: TS classifies function params in
+      // declaration files as 'variable' instead of 'parameter'. Detect
+      // by checking if the token is on a function signature line.
+      let finalType = tsTokenType;
+      if (tsTokenType === 7 && tsOffset < headerEndOffset) {
+        const tsLine = tc.offsetToLine(c.tsContent, tsOffset);
+        const lineText = tc.getLineText(c.tsContent, tsLine);
+        if (/^\s*(?:export\s+)?(?:declare\s+)?(?:async\s+)?function\s/.test(lineText)) {
+          finalType = 6; // parameter
+        }
+      }
+
+      // Skip phantom tokens from injected overload signatures and type
+      // annotations in the body section. compileForCheck injects overload
+      // lines (function sig ending with `;`) and replaceFnParams injects
+      // typed params (`{name: string}`) into implementation lines. TS
+      // classifies property names in these type annotations as `property`,
+      // which steal source positions from actual body tokens via text search.
+      if (tsOffset >= headerEndOffset) {
+        const tsLine = tc.offsetToLine(c.tsContent, tsOffset);
+        const info = getFnSigInfo(tsLine);
+        // Skip ALL tokens from overload signature lines (duplicates)
+        if (info.isOverload) continue;
+        // Skip `property` tokens inside type annotation ranges on
+        // implementation signature lines. Binding-pattern properties
+        // (e.g. `name` in `{name: userName}`) are kept; only the phantom
+        // properties from injected type annotations (e.g. `{name: string}`)
+        // are filtered out.
+        if (info.isFnSig && tsTokenType === 9 && info.typeAnnotRanges.length) {
+          const lineStart = c.tsContent.lastIndexOf('\n', tsOffset - 1) + 1;
+          const col = tsOffset - lineStart;
+          if (info.typeAnnotRanges.some(([s, e]) => col >= s && col < e)) continue;
+        }
+      }
+
+      // Map generated TS offset to Rip source position
+      const srcPos = tc.mapToSourcePos(c, tsOffset);
+      if (!srcPos) continue;
+
+      // Verify the identifier text matches at the mapped position
+      const tsText = c.tsContent.substring(tsOffset, tsOffset + tsLength);
+      let matchLine = srcPos.line;
+      let matchCol = srcPos.col;
+      const srcLine = srcLines[matchLine];
+      if (!srcLine) continue;
+
+      if (srcLine.substring(matchCol, matchCol + tsLength) !== tsText) {
+        // Multiline expressions compile to one gen line — search nearby source lines
+        if (!findUnusedOccurrence(srcLines, tsText, tsLength, srcPos.line, usedPositions, (l, c) => { matchLine = l; matchCol = c; })) continue;
+      }
+
+      // Collision: multiple TS tokens mapped to the same source position
+      // (common in multi-line object literals compiled to one JS line).
+      // Find the next unused occurrence of this word nearby.
+      const posKey = matchLine + ':' + matchCol;
+      if (usedPositions.has(posKey)) {
+        if (!findUnusedOccurrence(srcLines, tsText, tsLength, matchLine, usedPositions, (l, c) => { matchLine = l; matchCol = c; })) continue;
+      }
+
+      // Skip tokens that land inside string literals or comments
+      if (isInsideStringOrComment(srcLines[matchLine], matchCol)) continue;
+
+      usedPositions.add(matchLine + ':' + matchCol);
+      tokens.push({
+        line: matchLine,
+        char: matchCol,
+        length: tsLength,
+        type: TS_TYPE_TO_LEGEND[finalType],
+        modifiers: tsModifiers & 0x1F, // keep bits 0-4, mask off 'local' (bit 5)
+      });
+    }
+
+    // Sort by position and deduplicate
+    tokens.sort((a, b) => a.line - b.line || a.char - b.char);
+
+    // Delta-encode for LSP
+    const data = [];
+    let prevLine = 0, prevChar = 0;
+    for (let j = 0; j < tokens.length; j++) {
+      const t = tokens[j];
+      // Skip duplicate positions (can happen with overlapping mappings)
+      if (j > 0 && t.line === tokens[j - 1].line && t.char === tokens[j - 1].char) continue;
+      const deltaLine = t.line - prevLine;
+      const deltaChar = deltaLine === 0 ? t.char - prevChar : t.char;
+      data.push(deltaLine, deltaChar, t.length, t.type, t.modifiers);
+      prevLine = t.line;
+      prevChar = t.char;
+    }
+
+    connection.console.log(`[rip] semantic tokens ${path.basename(fp)}: ${data.length / 5} tokens`);
+    return { data };
+  } catch (e) {
+    connection.console.log(`[rip] semantic tokens error: ${e.message}`);
+    return { data: [] };
+  }
+});
 
 // ── LSP handlers ───────────────────────────────────────────────────
 

@@ -71,8 +71,26 @@ export function mapToSourcePos(entry, offset) {
     if (wordMatch && entry.source) {
       const word = wordMatch[0];
       const srcLines = entry.source.split('\n');
-      for (let s = 0; s < srcLines.length; s++) {
-        const re = new RegExp('\\b' + word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b');
+      const re = new RegExp('\\b' + word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b');
+
+      // Find enclosing type/interface from DTS context to narrow search —
+      // without this, duplicate member names (e.g. "host" in two types) always
+      // resolve to the first occurrence in the source.
+      let searchStart = 0;
+      for (let t = tsLine; t >= 0; t--) {
+        const tl = getLineText(entry.tsContent, t);
+        const tm = tl.match(/^(?:type|interface)\s+(\w+)/);
+        if (tm) {
+          const typeRe = new RegExp('(?:type|interface)\\s+' + tm[1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b');
+          for (let s = 0; s < srcLines.length; s++) {
+            if (typeRe.test(srcLines[s])) { searchStart = s; break; }
+          }
+          break;
+        }
+        if (/^\}/.test(tl.trim())) break; // exited a type block — not inside one
+      }
+
+      for (let s = searchStart; s < srcLines.length; s++) {
         const m = re.exec(srcLines[s]);
         if (m) return { line: s, col: m.index };
       }
@@ -103,21 +121,27 @@ export function mapToSourcePos(entry, offset) {
 
   // Remap column via text matching
   const genText = getLineText(entry.tsContent, tsLine);
-  const srcText = entry.source ? getLineText(entry.source, srcLine) : '';
   let srcCol = genCol;
   let approx = genCol;  // default: assume same column
+  // Scan ALL source lines for mappings to this gen line — a multi-line Rip
+  // expression (e.g. object literal) may compile to a single gen line, so
+  // multiple source lines can share one gen line.  Pick the closest genCol.
   if (entry.srcColToGen) {
-    const entries = entry.srcColToGen.get(srcLine);
-    if (entries) {
-      let best = null;
+    let bestDist = Infinity;
+    for (const [sl, entries] of entry.srcColToGen) {
       for (const e of entries) {
         if (e.genLine === tsLine) {
-          if (!best || Math.abs(e.genCol - genCol) < Math.abs(best.genCol - genCol)) best = e;
+          const dist = Math.abs(e.genCol - genCol);
+          if (dist < bestDist) {
+            bestDist = dist;
+            srcLine = sl;
+            approx = e.srcCol + (genCol - e.genCol);
+          }
         }
       }
-      if (best) approx = best.srcCol + (genCol - best.genCol);
     }
   }
+  const srcText = entry.source ? getLineText(entry.source, srcLine) : '';
   // Text-match: find the word at genCol in the gen line, then locate it in the source line
   if (srcText) {
     const wordAt = genText.slice(genCol).match(/^\w+/);

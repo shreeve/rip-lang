@@ -110,13 +110,14 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 ### 🔶 Partial
 
-| Category                      | Tested In     | Notes                                                                                                           |
-| ----------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------- |
-| Nullable safety               | 01-basic      | `strictNullChecks` is on but many codes suppressed                                                              |
-| Readonly / immutability       | 03-structural | `=!` → const; deep readonly not checked                                                                         |
-| Generic types                 | 03-structural | Declarable; .d.ts emission has some gaps                                                                        |
-| Discriminated union narrowing | 04-unions     | Types declarable, narrowing doesn't flow in `rip check`                                                         |
-| Type inference (split decl.)  | 11-inference  | Top-level `x = expr` inferred via `patchUninitializedTypes`; block-scoped, destructured, and `any` RHS are gaps |
+| Category                      | Tested In     | Notes                                                                                                                                                    |
+| ----------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Nullable safety               | 01-basic      | `strictNullChecks` is on but many codes suppressed                                                                                                       |
+| Readonly / immutability       | 03-structural | `=!` → const; deep readonly not checked                                                                                                                  |
+| Generic types                 | 03-structural | Declarable; .d.ts emission has some gaps                                                                                                                 |
+| Discriminated union narrowing | 04-unions     | Types declarable, narrowing doesn't flow in `rip check`                                                                                                  |
+| Type inference (split decl.)  | 11-inference  | Top-level `x = expr` inferred via `patchUninitializedTypes`; block-scoped, destructured, and `any` RHS are gaps                                          |
+| Semantic token provider       | *(IDE only)*  | Bridges TS `getEncodedSemanticClassifications()` to Rip source; typed files get variable/function/type/parameter/property tokens, untyped files get none |
 
 ### ✅ Working
 
