@@ -189,3 +189,24 @@ console.log result19
 
 # @ts-expect-error — number where string expected in nested destructured param
 badNested:: string = withNested({ user: { name: 123, age: 35 } })
+
+# ── Semantic token showcase ──
+# With the LSP's semantic token provider enabled, these get richer
+# highlighting than TextMate alone can provide:
+#   - `input`, `radix`, `fallback` stay colored as parameters in the body
+#   - `parseInt`, `isNaN`, `Math` get the defaultLibrary modifier
+#   - `double` passed by name (no parens) is colored as a function
+#   - `it` (implicit param) is colored as a parameter
+
+export def parseNums(input:: string, radix:: number, fallback:: number)
+  input.split(",").map (part) ->
+    parsed = parseInt(part.trim(), radix)
+    value = if isNaN(parsed) then fallback else parsed
+    Math.max(0, Math.min(value, 1000))
+
+result20 = parseNums("10, 20, ff, zz", 16, -1)
+result21 = [1, 2, 3].map(double)
+result22 = ["3", "7", "nope"].map -> parseInt(it) or 0
+console.log "parseNums:", result20
+console.log "map double:", result21
+console.log "map it:", result22

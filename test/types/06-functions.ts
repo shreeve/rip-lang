@@ -207,3 +207,20 @@ console.log(result19)
 
 // @ts-expect-error — number where string expected in nested destructured param
 let badNested: string = withNested({ user: { name: 123, age: 35 } })
+
+// ── Semantic token showcase ──
+
+export function parseNums(input: string, radix: number, fallback: number) {
+  return input.split(',').map(function(part) {
+    let parsed = parseInt(part.trim(), radix)
+    let value = isNaN(parsed) ? fallback : parsed
+    return Math.max(0, Math.min(value, 1000))
+  })
+}
+
+let result20 = parseNums('10, 20, ff, zz', 16, -1)
+let result21 = [1, 2, 3].map(double)
+let result22 = ['3', '7', 'nope'].map(function(it) { return (parseInt(it) || 0) })
+console.log('parseNums:', result20)
+console.log('map double:', result21)
+console.log('map it:', result22)
