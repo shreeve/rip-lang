@@ -46,19 +46,12 @@ export ToggleGroup = component
     focused = Array.from(opts).indexOf(document.activeElement)
     return if focused < 0
     len = opts.length
-    switch e.key
-      when 'ArrowRight', 'ArrowDown'
-        e.preventDefault()
-        opts[(focused + 1) %% len]?.focus()
-      when 'ArrowLeft', 'ArrowUp'
-        e.preventDefault()
-        opts[(focused - 1) %% len]?.focus()
-      when 'Home'
-        e.preventDefault()
-        opts[0]?.focus()
-      when 'End'
-        e.preventDefault()
-        opts[len - 1]?.focus()
+    rovingNav e, {
+      next:  => opts[(focused + 1) %% len]?.focus()
+      prev:  => opts[(focused - 1) %% len]?.focus()
+      first: => opts[0]?.focus()
+      last:  => opts[len - 1]?.focus()
+    }, 'both'
 
   render
     div ref: "_root", role: "group", aria-orientation: @orientation

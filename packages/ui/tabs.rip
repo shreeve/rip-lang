@@ -82,28 +82,17 @@ export Tabs = component
     ids = tabs.map (t) -> t.dataset.tab
     idx = ids.indexOf @active
     return if idx is -1
-
-    horiz = @orientation is 'horizontal'
-    prevKey = if horiz then 'ArrowLeft' else 'ArrowUp'
-    nextKey = if horiz then 'ArrowRight' else 'ArrowDown'
-
-    next = switch e.key
-      when nextKey then @_nextEnabled(ids, idx, 1)
-      when prevKey then @_nextEnabled(ids, idx, -1)
-      when 'Home'  then @_nextEnabled(ids, ids.length - 1, 1)
-      when 'End'   then @_nextEnabled(ids, 0, -1)
-      when 'Enter', ' '
-        if @activation is 'manual'
-          e.preventDefault()
-          @select(ids[idx])
-        null
-      else null
-
-    if next
-      e.preventDefault()
-      tab = tabs.find (t) -> t.dataset.tab is next
-      tab?.focus()
-      @select(next) if @activation is 'automatic'
+    move = (nextId) =>
+      return unless nextId
+      tabs.find((t) -> t.dataset.tab is nextId)?.focus()
+      @select(nextId) if @activation is 'automatic'
+    rovingNav e, {
+      next:   => move(@_nextEnabled(ids, idx,              1))
+      prev:   => move(@_nextEnabled(ids, idx,             -1))
+      first:  => move(@_nextEnabled(ids, ids.length - 1,   1))
+      last:   => move(@_nextEnabled(ids, 0,               -1))
+      select: => @select(ids[idx]) if @activation is 'manual'
+    }, @orientation
 
   render
     .

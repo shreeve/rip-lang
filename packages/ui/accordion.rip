@@ -73,24 +73,14 @@ export Accordion = component
     openItems.has(id)
 
   onTriggerKeydown: (e, id) ->
-    item = e.currentTarget.closest('[data-item]')
-    return if item?.hasAttribute('data-disabled') and e.key in ['Enter', ' ']
-    switch e.key
-      when 'Enter', ' '
-        e.preventDefault()
-        @toggle(id)
-      when 'ArrowDown'
-        e.preventDefault()
-        @_focusNext(1)
-      when 'ArrowUp'
-        e.preventDefault()
-        @_focusNext(-1)
-      when 'Home'
-        e.preventDefault()
-        @_focusTrigger(0)
-      when 'End'
-        e.preventDefault()
-        @_focusTrigger(-1)
+    disabled = e.currentTarget.closest('[data-item]')?.hasAttribute('data-disabled')
+    rovingNav e, {
+      next:   => @_focusNext(1)
+      prev:   => @_focusNext(-1)
+      first:  => @_focusTrigger(0)
+      last:   => @_focusTrigger(-1)
+      select: => @toggle(id) unless disabled
+    }
 
   _triggers: ->
     return [] unless @_content

@@ -84,37 +84,14 @@ export Autocomplete = component
 
   onKeydown: (e) ->
     len = filteredItems.length
-    switch e.key
-      when 'ArrowDown'
-        e.preventDefault()
-        @openMenu() unless open
-        if len
-          @_hlIdx = (@_hlIdx + 1) %% len
-          @_updateHighlight()
-      when 'ArrowUp'
-        e.preventDefault()
-        @openMenu() unless open
-        if len
-          @_hlIdx = if @_hlIdx <= 0 then len - 1 else @_hlIdx - 1
-          @_updateHighlight()
-      when 'Enter'
-        e.preventDefault()
-        @selectIndex(@_hlIdx) if @_hlIdx >= 0
-      when 'Home', 'PageUp'
-        e.preventDefault()
-        if len
-          @_hlIdx = 0
-          @_updateHighlight()
-      when 'End', 'PageDown'
-        e.preventDefault()
-        if len
-          @_hlIdx = len - 1
-          @_updateHighlight()
-      when 'Escape'
-        e.preventDefault()
-        @close()
-      when 'Tab'
-        @close()
+    listNav e,
+      next:    => @openMenu() unless open; if len then @_hlIdx = (@_hlIdx + 1) %% len;                         @_updateHighlight()
+      prev:    => @openMenu() unless open; if len then @_hlIdx = if @_hlIdx <= 0 then len - 1 else @_hlIdx - 1; @_updateHighlight()
+      first:   => if len then @_hlIdx = 0;       @_updateHighlight()
+      last:    => if len then @_hlIdx = len - 1; @_updateHighlight()
+      select:  => @selectIndex(@_hlIdx) if @_hlIdx >= 0
+      dismiss: => @close()
+      tab:     => @close()
 
   ~>
     if open

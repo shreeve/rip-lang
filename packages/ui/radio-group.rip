@@ -30,23 +30,13 @@ export RadioGroup = component
     focused = Array.from(radios).indexOf(document.activeElement)
     return if focused < 0
     len = radios.length
-    next = focused
-    switch e.key
-      when 'ArrowRight', 'ArrowDown'
-        e.preventDefault()
-        next = (focused + 1) %% len
-      when 'ArrowLeft', 'ArrowUp'
-        e.preventDefault()
-        next = (focused - 1) %% len
-      when 'Home'
-        e.preventDefault()
-        next = 0
-      when 'End'
-        e.preventDefault()
-        next = len - 1
-      else return
-    radios[next]?.focus()
-    @_select(_options[next]?.dataset.value)
+    move = (idx) => radios[idx]?.focus(); @_select(_options[idx]?.dataset.value)
+    rovingNav e, {
+      next:  => move((focused + 1) %% len)
+      prev:  => move((focused - 1) %% len)
+      first: => move(0)
+      last:  => move(len - 1)
+    }, 'both'
 
   render
     div ref: "_root", role: "radiogroup", aria-orientation: @orientation

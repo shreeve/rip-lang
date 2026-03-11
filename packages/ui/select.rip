@@ -80,37 +80,16 @@ export Select = component
     from
 
   onListKeydown: (e) ->
-    len = options.length
-    return unless len
-
-    switch e.key
-      when 'ArrowDown'
-        e.preventDefault()
-        highlightedIndex = @_nextEnabled(highlightedIndex, 1)
-        @_focusHighlighted()
-      when 'ArrowUp'
-        e.preventDefault()
-        highlightedIndex = @_nextEnabled(highlightedIndex, -1)
-        @_focusHighlighted()
-      when 'Home', 'PageUp'
-        e.preventDefault()
-        highlightedIndex = 0
-        @_focusHighlighted()
-      when 'End', 'PageDown'
-        e.preventDefault()
-        highlightedIndex = len - 1
-        @_focusHighlighted()
-      when 'Enter', ' '
-        e.preventDefault()
-        @selectIndex(highlightedIndex)
-      when 'Escape'
-        e.preventDefault()
-        @close()
-      when 'Tab'
-        @close()
-      else
-        if e.key.length is 1
-          @_typeahead(e.key)
+    return unless options.length
+    listNav e,
+      next:    => highlightedIndex = @_nextEnabled(highlightedIndex,  1); @_focusHighlighted()
+      prev:    => highlightedIndex = @_nextEnabled(highlightedIndex, -1); @_focusHighlighted()
+      first:   => highlightedIndex = 0;                  @_focusHighlighted()
+      last:    => highlightedIndex = options.length - 1; @_focusHighlighted()
+      select:  => @selectIndex(highlightedIndex)
+      dismiss: => @close()
+      tab:     => @close()
+      char:    => @_typeahead(e.key)
 
   _typeahead: (char) ->
     clearTimeout typeaheadTimer if typeaheadTimer

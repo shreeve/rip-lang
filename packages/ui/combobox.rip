@@ -86,35 +86,14 @@ export Combobox = component
 
   _onKeydown: (e) ->
     len = @getItems().length
-    switch e.key
-      when 'ArrowDown'
-        e.preventDefault()
-        @openMenu() unless open
-        highlightedIndex = @_nextEnabled(highlightedIndex, 1)
-        @_scrollToItem()
-      when 'ArrowUp'
-        e.preventDefault()
-        highlightedIndex = @_nextEnabled(highlightedIndex, -1)
-        @_scrollToItem()
-      when 'Enter'
-        e.preventDefault()
-        if highlightedIndex >= 0
-          @selectIndex(highlightedIndex)
-        else if len is 1
-          @selectIndex(0)
-      when 'Home', 'PageUp'
-        e.preventDefault()
-        highlightedIndex = 0
-        @_scrollToItem()
-      when 'End', 'PageDown'
-        e.preventDefault()
-        highlightedIndex = len - 1
-        @_scrollToItem()
-      when 'Escape'
-        e.preventDefault()
-        if open then @close() else @query = ''
-      when 'Tab'
-        @close()
+    listNav e,
+      next:    => @openMenu() unless open; highlightedIndex = @_nextEnabled(highlightedIndex,  1); @_scrollToItem()
+      prev:    => highlightedIndex = @_nextEnabled(highlightedIndex, -1); @_scrollToItem()
+      first:   => highlightedIndex = 0;       @_scrollToItem()
+      last:    => highlightedIndex = len - 1; @_scrollToItem()
+      select:  => if highlightedIndex >= 0 then @selectIndex(highlightedIndex) else if len is 1 then @selectIndex(0)
+      dismiss: => if open then @close() else @query = ''
+      tab:     => @close()
 
   ~>
     if open
