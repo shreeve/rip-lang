@@ -143,6 +143,8 @@ function compileRip(filePath, source) {
     connection.console.log(`[rip] compiled ${path.basename(filePath)}: hasTypes=${entry.hasTypes}, headerLines=${entry.headerLines}`);
     publishDiagnostics(filePath);
   } catch (e) {
+    compiled.delete(filePath);
+    connection.sendDiagnostics({ uri: pathToUri(filePath), diagnostics: [] });
     connection.console.log(`[rip] compile error ${path.basename(filePath)}: ${e.message}`);
   }
 }
