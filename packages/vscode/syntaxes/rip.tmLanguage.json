@@ -113,12 +113,28 @@
 
     {"comment": "=== TYPE DECLARATIONS (type, enum, interface — before keywords to get name capture) ==="},
     {
-      "match": "\\b(type)\\s+([A-Z]\\w*)",
-      "name": "meta.type.declaration.rip",
-      "captures": {
+      "begin": "\\b(type)\\s+([A-Z]\\w*)",
+      "beginCaptures": {
         "1": { "name": "storage.type.type.rip" },
         "2": { "name": "entity.name.type.alias.rip" }
-      }
+      },
+      "end": "(?=^\\S)",
+      "patterns": [
+        {
+          "match": "\\b(readonly)\\b",
+          "name": "storage.modifier.rip"
+        },
+        {
+          "match": "\\b([a-zA-Z_$]\\w*)(\\?)?(:)(?![:=])\\s*",
+          "captures": {
+            "1": { "name": "variable.object.property.rip" },
+            "2": { "name": "keyword.operator.type.optional.rip" },
+            "3": { "name": "keyword.operator.type.annotation.rip" }
+          }
+        },
+        { "include": "#type_expression" },
+        { "include": "$self" }
+      ]
     },
     {
       "match": "\\b(enum)\\s+([A-Z]\\w*)",
@@ -136,12 +152,15 @@
         "4": { "name": "entity.other.inherited-class.rip" }
       },
       "end": "(?=^\\S)",
-      "name": "meta.interface.rip",
       "patterns": [
+        {
+          "match": "\\b(readonly)\\b",
+          "name": "storage.modifier.rip"
+        },
         {
           "match": "\\b([a-zA-Z_$]\\w*)(\\?)?(:)(?![:=])\\s*",
           "captures": {
-            "1": { "name": "variable.other.property.rip" },
+            "1": { "name": "variable.object.property.rip" },
             "2": { "name": "keyword.operator.type.optional.rip" },
             "3": { "name": "keyword.operator.type.annotation.rip" }
           }
@@ -291,6 +310,16 @@
         "3": { "name": "meta.type.rip" },
         "4": { "name": "keyword.operator.assignment.rip" }
       }
+    },
+    {
+      "comment": "Return type annotation: ):: Type",
+      "begin": "(?<=\\))\\s*(::)(?!=)",
+      "beginCaptures": {
+        "1": { "name": "keyword.operator.type-annotation.rip" }
+      },
+      "end": "(?=\\s*(?:=(?![>=])|:=|~=|~>|=!|<=>|\\)|->))|$|(?=#)",
+      "contentName": "meta.type.rip",
+      "patterns": [{ "include": "#type_expression" }]
     },
     {
       "comment": "Typed constant: name:: Type =! (lookahead for =! to scope as constant)",
@@ -457,7 +486,7 @@
     {
       "match": "\\b([a-zA-Z_$]\\w*)(\\?)?([:])(?![:=])",
       "captures": {
-        "1": { "name": "variable.object.property.rip" },
+        "1": { "name": "meta.object-literal.key.rip" },
         "2": { "name": "keyword.operator.type.optional.rip" },
         "3": { "name": "punctuation.separator.key-value.rip" }
       }
@@ -469,8 +498,13 @@
       "patterns": [
         {
           "comment": "Built-in types",
-          "match": "\\b(number|string|boolean|void|any|never|unknown|object|symbol|bigint)\\b",
+          "match": "\\b(number|string|boolean|void|any|never|unknown|object|symbol|bigint|null|undefined)\\b",
           "name": "support.type.primitive.rip"
+        },
+        {
+          "comment": "typeof in type position",
+          "match": "\\b(typeof)\\b",
+          "name": "keyword.operator.expression.typeof.rip"
         },
         {
           "comment": "Type names (PascalCase)",
@@ -594,13 +628,14 @@
           "name": "meta.parameters.rip",
           "patterns": [
             {
-              "comment": "Type annotation inside params: person:: string",
-              "begin": "(?:(@)([a-zA-Z_$]\\w*)|([a-zA-Z_$]\\w*))\\s*(::)(?!=)",
+              "comment": "Type annotation inside params: person:: string or title?:: string",
+              "begin": "(?:(@)([a-zA-Z_$]\\w*)|([a-zA-Z_$]\\w*))(\\?)?\\s*(::)(?!=)",
               "beginCaptures": {
                 "1": { "name": "punctuation.definition.variable.rip" },
                 "2": { "name": "variable.parameter.rip" },
                 "3": { "name": "variable.parameter.rip" },
-                "4": { "name": "keyword.operator.type-annotation.rip" }
+                "4": { "name": "keyword.operator.type.optional.rip" },
+                "5": { "name": "keyword.operator.type-annotation.rip" }
               },
               "end": "(?=\\s*(?:=(?![>=])|:=|~=|~>|=!|<=>|\\)|,|->))|$|(?=#)",
               "contentName": "meta.type.rip",
