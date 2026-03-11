@@ -92,11 +92,11 @@ export Select = component
         e.preventDefault()
         highlightedIndex = @_nextEnabled(highlightedIndex, -1)
         @_focusHighlighted()
-      when 'Home'
+      when 'Home', 'PageUp'
         e.preventDefault()
         highlightedIndex = 0
         @_focusHighlighted()
-      when 'End'
+      when 'End', 'PageDown'
         e.preventDefault()
         highlightedIndex = len - 1
         @_focusHighlighted()
