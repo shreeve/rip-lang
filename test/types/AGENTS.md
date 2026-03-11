@@ -106,7 +106,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Category                    | Tested In    | Notes                                                                                                                          |
 | --------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------ |
 | Go-to-definition on imports | *(IDE only)* | Import lines unmapped; works at call sites only                                                                                |
-| Semantic token provider     | *(IDE only)* | No `SemanticTokensProvider` — TextMate grammar alone can't provide context-aware styling that TS gets from its language server |
+| Unused variable dimming     | *(IDE only)* | LSP forwards TS diagnostics but drops `reportsUnnecessary` → no `DiagnosticTag.Unnecessary` → unused vars not dimmed in `.rip` |
 
 ### 🔶 Partial
 
