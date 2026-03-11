@@ -112,11 +112,13 @@ export Menu = component
 
   ~>
     if open
-      onDown = (e) =>
-        unless @_trigger?.contains(e.target) or @_list?.contains(e.target)
-          @close()
+      onDown   = (e) => @close() unless @_trigger?.contains(e.target) or @_list?.contains(e.target)
+      onScroll = (e) => @close() unless @_list?.contains(e.target)
       document.addEventListener 'mousedown', onDown
-      return -> document.removeEventListener 'mousedown', onDown
+      window.addEventListener   'scroll',    onScroll, true
+      return ->
+        document.removeEventListener 'mousedown', onDown
+        window.removeEventListener   'scroll',    onScroll, true
 
   render
     .

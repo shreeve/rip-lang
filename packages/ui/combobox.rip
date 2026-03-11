@@ -97,12 +97,13 @@ export Combobox = component
 
   ~>
     if open
-      onDown = (e) =>
-        root = @_content
-        unless root?.contains(e.target)
-          @close()
+      onDown   = (e) => @close() unless @_content?.contains(e.target)
+      onScroll = (e) => @close() unless @_list?.contains(e.target)
       document.addEventListener 'mousedown', onDown
-      return -> document.removeEventListener 'mousedown', onDown
+      window.addEventListener   'scroll',    onScroll, true
+      return ->
+        document.removeEventListener 'mousedown', onDown
+        window.removeEventListener   'scroll',    onScroll, true
 
   render
     . ref: "_content", $open: open?!

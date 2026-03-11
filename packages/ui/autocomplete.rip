@@ -95,11 +95,13 @@ export Autocomplete = component
 
   ~>
     if open
-      onDown = (e) =>
-        unless @_input?.contains(e.target) or @_list?.contains(e.target)
-          @close()
+      onDown   = (e) => @close() unless @_input?.contains(e.target) or @_list?.contains(e.target)
+      onScroll = (e) => @close() unless @_list?.contains(e.target)
       document.addEventListener 'mousedown', onDown
-      return -> document.removeEventListener 'mousedown', onDown
+      window.addEventListener   'scroll',    onScroll, true
+      return ->
+        document.removeEventListener 'mousedown', onDown
+        window.removeEventListener   'scroll',    onScroll, true
 
   mounted: ->
     @_hlIdx = -1
