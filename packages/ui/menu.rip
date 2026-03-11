@@ -111,14 +111,7 @@ export Menu = component
       char:    => @_typeahead(e.key)
 
   ~>
-    if open
-      onDown   = (e) => @close() unless @_trigger?.contains(e.target) or @_list?.contains(e.target)
-      onScroll = (e) => @close() unless @_list?.contains(e.target)
-      document.addEventListener 'mousedown', onDown
-      window.addEventListener   'scroll',    onScroll, true
-      return ->
-        document.removeEventListener 'mousedown', onDown
-        window.removeEventListener   'scroll',    onScroll, true
+    popupDismiss open, @_list, (=> @close()), [@_trigger]
 
   render
     .

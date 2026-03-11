@@ -1,6 +1,7 @@
 # nav.rip — Shared ARIA keyboard navigation utilities
 #
-# Two helpers covering the two fundamental ARIA keyboard patterns:
+# Three helpers covering the two fundamental ARIA keyboard patterns
+# plus popup lifecycle management:
 #
 #   listNav   — popup list (listbox, menu, combobox dropdown)
 #               Focus moves to items; supports typeahead.
@@ -30,6 +31,20 @@
 #   rovingNav e, handlers, orientation
 #   orientation: 'vertical' (default) | 'horizontal' | 'both'
 #   Handlers: next, prev, first, last, select, dismiss
+#
+#   popupDismiss — popup lifecycle: close on outside click or page scroll
+#               Returns a cleanup function for use as the ~> effect return value.
+#               ARIA: https://www.w3.org/WAI/ARIA/apg/patterns/combobox/
+#
+# Usage — popupDismiss:
+#   ~>
+#     popupDismiss open, @_list, (=> @close()), [@_trigger]
+#
+#   Arguments:
+#     open     — boolean: only registers listeners when true
+#     popup    — the popup element (scroll containment checked against this)
+#     close    — function to call when dismissing
+#     els      — array of elements that are "inside" (clicks within these don't dismiss)
 
 # Internal: consume the event and call the handler
 _nav = (e, fn) ->
@@ -50,6 +65,19 @@ listNav = (e, h) ->
     when 'Escape'             then _nav e, h.dismiss
     when 'Tab'                then h.tab?()           # no preventDefault: allow natural focus movement
     else h.char?(e.key) if e.key.length is 1          # printable chars: typeahead
+
+# Popup dismiss: close on outside mousedown or page scroll
+# scroll uses capture phase (scroll doesn't bubble) to catch all scrollable ancestors
+popupDismiss = (open, popup, close, els = []) ->
+  return unless open
+  inside   = [popup, ...els]
+  onDown   = (e) => close() unless inside.some (el) -> el?.contains(e.target)
+  onScroll = (e) => close() unless popup?.contains(e.target)
+  document.addEventListener 'mousedown', onDown
+  window.addEventListener   'scroll',    onScroll, true
+  ->
+    document.removeEventListener 'mousedown', onDown
+    window.removeEventListener   'scroll',    onScroll, true
 
 # Roving tabindex navigation
 # orientation: 'vertical' | 'horizontal' | 'both'

@@ -94,14 +94,7 @@ export Autocomplete = component
       tab:     => @close()
 
   ~>
-    if open
-      onDown   = (e) => @close() unless @_input?.contains(e.target) or @_list?.contains(e.target)
-      onScroll = (e) => @close() unless @_list?.contains(e.target)
-      document.addEventListener 'mousedown', onDown
-      window.addEventListener   'scroll',    onScroll, true
-      return ->
-        document.removeEventListener 'mousedown', onDown
-        window.removeEventListener   'scroll',    onScroll, true
+    popupDismiss open, @_list, (=> @close()), [@_input]
 
   mounted: ->
     @_hlIdx = -1
