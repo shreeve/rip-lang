@@ -304,6 +304,7 @@ export class Lexer {
     this.exportSpecifierList = false;
     this.inRenderBlock = false;
     this.renderIndent  = 0;
+    this.inTypeAnnotation = false;
 
     // Clean source
     code = this.clean(code);
@@ -538,7 +539,8 @@ export class Lexer {
     }
 
     // Reserved words (check the base form, not the suffixed form)
-    if (tag === 'IDENTIFIER' && RESERVED.has(baseId)) {
+    if (tag === 'IDENTIFIER' && RESERVED.has(baseId) &&
+        !(baseId === 'void' && this.inTypeAnnotation)) {
       syntaxError(`reserved word '${baseId}'`, {row: this.row, col: this.col, len: idLen});
     }
 
@@ -695,6 +697,7 @@ export class Lexer {
     }
     if (!this.importSpecifierList) this.seenImport = false;
     if (!this.exportSpecifierList) this.seenExport = false;
+    this.inTypeAnnotation = false;
 
     // Same indentation → emit TERMINATOR
     if (size === this.indent) {
@@ -1206,6 +1209,7 @@ export class Lexer {
     // Semicolons → TERMINATOR
     if (val === ';') {
       this.seenFor = this.seenImport = this.seenExport = false;
+      this.inTypeAnnotation = false;
       tag = 'TERMINATOR';
     }
     // Pipe operator
@@ -1218,13 +1222,13 @@ export class Lexer {
       this.emit('.', '.');
       return 2;
     }
-    else if (val === '::')  tag = 'TYPE_ANNOTATION';
+    else if (val === '::')  { tag = 'TYPE_ANNOTATION'; this.inTypeAnnotation = true; }
     // Reactive operators
-    else if (val === '~=') tag = 'COMPUTED_ASSIGN';
-    else if (val === ':=') tag = 'REACTIVE_ASSIGN';
+    else if (val === '~=') { tag = 'COMPUTED_ASSIGN'; this.inTypeAnnotation = false; }
+    else if (val === ':=') { tag = 'REACTIVE_ASSIGN'; this.inTypeAnnotation = false; }
     else if (val === '<=>') tag = 'BIND';
-    else if (val === '~>') tag = 'EFFECT';
-    else if (val === '=!') tag = 'READONLY_ASSIGN';
+    else if (val === '~>') { tag = 'EFFECT'; this.inTypeAnnotation = false; }
+    else if (val === '=!') { tag = 'READONLY_ASSIGN'; this.inTypeAnnotation = false; }
     // Merge assignment: *config = {a: 1} → Object.assign(config, {a: 1})
     // Also supports *@ = props → Object.assign(this, props)
     else if (val === '*' && (!prev || prev[0] === 'TERMINATOR' || prev[0] === 'INDENT' || prev[0] === 'OUTDENT') &&
@@ -1297,6 +1301,11 @@ export class Lexer {
         tag = 'INDEX_START';
         if (prev[0] === '?.') prev[0] = 'ES6_OPTIONAL_INDEX';
       }
+    }
+
+    // Clear type annotation context on assignment
+    if (this.inTypeAnnotation && (val === '=' || tag === 'COMPOUND_ASSIGN')) {
+      this.inTypeAnnotation = false;
     }
 
     // Balanced pair tracking
