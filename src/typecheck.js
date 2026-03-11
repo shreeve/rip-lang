@@ -314,6 +314,166 @@ export function compileForCheck(filePath, source, compiler) {
     }
   }
 
+  // Inject class field declarations and typed constructor params from DTS
+  // into compiled class bodies. TypeScript ignores `declare class` when a
+  // real `class` implementation exists, so fields must appear in the body.
+  if (hasTypes && headerDts && code) {
+    const dl = headerDts.split('\n');
+    const cl = code.split('\n');
+    // Parse declare class blocks from DTS header
+    const classInfo = new Map();
+    const classLineRanges = [];
+    for (let i = 0; i < dl.length; i++) {
+      const m = dl[i].match(/^(?:export\s+)?declare\s+class\s+(\w+)/);
+      if (m) {
+        const name = m[1];
+        const fields = [];
+        const startIdx = i;
+        let j = i + 1;
+        let ctorParams = null;
+        const methods = [];
+        while (j < dl.length && !dl[j].match(/^\}/)) {
+          const fm = dl[j].match(/^\s+(\w+):\s+(.+);$/);
+          if (fm) fields.push({ name: fm[1], type: fm[2] });
+          const cm = dl[j].match(/^\s+constructor\((.+)\);$/);
+          if (cm) ctorParams = cm[1];
+          // Match method signatures like "  fetch(item: string);" or "  fetch(item: string): string;"
+          const mm = dl[j].match(/^\s+(\w+)\((.+)\)(?::\s*.+)?;$/);
+          if (mm && mm[1] !== 'constructor') methods.push({ name: mm[1], params: mm[2] });
+          j++;
+        }
+        if (fields.length || ctorParams || methods.length) {
+          classInfo.set(name, { fields, ctorParams, methods });
+          classLineRanges.push({ start: startIdx, end: j });
+        }
+      }
+    }
+    if (classInfo.size > 0) {
+      // Inject fields and typed constructor params into compiled class bodies
+      const injections = [];
+      for (let j = 0; j < cl.length; j++) {
+        // Match `class Name {` (regular classes) and `const Name = class {` (components)
+        const regularMatch = cl[j].match(/^(?:export\s+)?class\s+(\w+)/);
+        const constMatch = !regularMatch && cl[j].match(/^(?:export\s+)?const\s+(\w+)\s*=\s*class\b/);
+        const cm = regularMatch || constMatch;
+        if (cm && classInfo.has(cm[1])) {
+          const info = classInfo.get(cm[1]);
+          // Inject field declarations only for regular classes (components already have declare fields)
+          if (regularMatch && info.fields.length) {
+            const inj = info.fields.map(f => `  ${f.name}: ${f.type};`);
+            injections.push({ line: j + 1, lines: inj });
+          }
+          // Copy typed params into constructor (regular classes only; component constructors are already typed)
+          if (regularMatch && info.ctorParams) {
+            for (let k = j + 1; k < cl.length && k < j + 5; k++) {
+              if (cl[k].match(/^\s+constructor\s*\(/)) {
+                cl[k] = cl[k].replace(/constructor\s*\([^)]*\)/, `constructor(${info.ctorParams})`);
+                break;
+              }
+            }
+          }
+          // Copy typed params into class methods (both regular and component classes)
+          if (info.methods.length) {
+            for (const meth of info.methods) {
+              for (let k = j + 1; k < cl.length; k++) {
+                if (cl[k].match(/^(?:export\s+)?(?:class|const)\s+\w+/) && k > j + 1) break;
+                const re = new RegExp(`^(\\s+)${meth.name}\\s*\\([^)]*\\)`);
+                if (re.test(cl[k])) {
+                  cl[k] = cl[k].replace(new RegExp(`${meth.name}\\s*\\([^)]*\\)`), `${meth.name}(${meth.params})`);
+                  break;
+                }
+              }
+            }
+          }
+        }
+      }
+      // Insert field declarations bottom-up to preserve line indices
+      for (let k = injections.length - 1; k >= 0; k--) {
+        cl.splice(injections[k].line, 0, ...injections[k].lines);
+      }
+      // Remove declare class blocks from header DTS
+      const removedLines = new Set();
+      for (const range of classLineRanges) {
+        for (let i = range.start; i <= range.end; i++) removedLines.add(i);
+      }
+      code = cl.join('\n');
+      headerDts = dl.filter((_, i) => !removedLines.has(i)).join('\n').trimEnd() + '\n';
+    }
+  }
+
+  // Copy typed constructor props parameter to _init(props) in component classes.
+  // Components compile constructor(props: T) and _init(props) separately — TS
+  // needs _init to have the same props type to avoid noImplicitAny.
+  // The _init type is widened with Record<string, any> to allow __bind_xxx__
+  // internal properties, and the optional marker is removed since _init is
+  // always called with a valid object by the framework.
+  if (hasTypes && code) {
+    const cl = code.split('\n');
+    let changed = false;
+    for (let j = 0; j < cl.length; j++) {
+      // Match: constructor(props?: { ... }) or constructor(props: { ... })
+      const cm = cl[j].match(/^\s+constructor\((props)\??\s*:\s*(\{[^}]*\})\)/);
+      if (cm) {
+        const propsType = `${cm[1]}: ${cm[2]} & Record<string, any>`;
+        // Find _init(props) in the same class
+        for (let k = j + 1; k < cl.length; k++) {
+          if (cl[k].match(/^((?:export\s+)?(?:const|class)\s+)/)) break;
+          if (cl[k].match(/^\s+_init\(props\)\s*\{?\s*$/)) {
+            cl[k] = cl[k].replace('_init(props)', `_init(${propsType})`);
+            changed = true;
+            break;
+          }
+        }
+      }
+      // For component classes without typed constructors, type _init(props) as any
+      if (cl[j].match(/^\s+_init\(props\)\s*\{?\s*$/)) {
+        cl[j] = cl[j].replace('_init(props)', '_init(props: Record<string, any>)');
+        changed = true;
+      }
+    }
+    if (changed) code = cl.join('\n');
+  }
+
+  // Transfer typed params from `declare function name(...)` into function
+  // expressions assigned to variables: `name = function(x) {}` → `name = function(x: T) {}`.
+  // Also replace `declare function` with `declare var` so TS doesn't clash
+  // with the `let name; name = function(...)` pattern (TS2630).
+  if (hasTypes && headerDts && code) {
+    const dl = headerDts.split('\n');
+    const cl = code.split('\n');
+    const funcDecls = new Map();
+
+    for (let i = 0; i < dl.length; i++) {
+      const m = dl[i].match(/^(?:export\s+)?declare\s+function\s+(\w+)\((.+)\)(?::\s*(.+))?;$/);
+      if (m) funcDecls.set(m[1], { params: m[2], ret: m[3] || null, idx: i });
+    }
+
+    if (funcDecls.size > 0) {
+      const movedDts = new Set();
+
+      for (let j = 0; j < cl.length; j++) {
+        // Match: name = function(args) { or name = (args) => (
+        const fm = cl[j].match(/^(\w+)\s*=\s*function\s*\([^)]*\)/);
+        const am = !fm && cl[j].match(/^(\w+)\s*=\s*\([^)]*\)\s*=>/);
+        const match = fm || am;
+        if (match && funcDecls.has(match[1])) {
+          const entry = funcDecls.get(match[1]);
+          if (fm) {
+            cl[j] = cl[j].replace(/function\s*\([^)]*\)/, `function(${entry.params})`);
+          } else {
+            cl[j] = cl[j].replace(/\([^)]*\)\s*=>/, `(${entry.params}) =>`);
+          }
+          movedDts.add(entry.idx);
+        }
+      }
+
+      if (movedDts.size > 0) {
+        code = cl.join('\n');
+        headerDts = dl.filter((_, i) => !movedDts.has(i)).join('\n').trimEnd() + '\n';
+      }
+    }
+  }
+
   // Annotate reactive/readonly/computed const assignments with their declared
   // types from the DTS header, and remove the corresponding `declare const`
   // from the header. This enables TypeScript to check initializer values
@@ -402,6 +562,16 @@ export function compileForCheck(filePath, source, compiler) {
       preciseTypes[name] || `declare function ${name}(...args: any[]): any;`
     );
     headerDts = stdlibDecls.join('\n') + '\n' + headerDts;
+
+    // Inject declaration for toMatchable helper (emitted by =~ operator in preamble)
+    if (/\btoMatchable\b/.test(code) && !/\btoMatchable\b/.test(headerDts)) {
+      headerDts = 'declare function toMatchable(v: any, allowNewlines?: boolean): string;\n' + headerDts;
+    }
+
+    // Inject declaration for modulo helper (emitted by %% operator in preamble)
+    if (/\bmodulo\b/.test(code) && !/\bdeclare .*\bmodulo\b/.test(headerDts)) {
+      headerDts = 'declare function modulo(n: number, d: number): number;\n' + headerDts;
+    }
   }
 
   let tsContent = (hasTypes ? headerDts + '\n' : '') + code;

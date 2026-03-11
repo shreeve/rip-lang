@@ -115,7 +115,7 @@ function add(a: number, b: number): number {
 const square = (x: number) => x * x
 const doubleFn = (x: number) => x * 2
 
-function noop(): void {
+function doNothing(): void {
   return
 }
 
@@ -156,7 +156,7 @@ function operators(a: number, b: number) {
   let prod = 4 * 2
   let quot = 10 / 3
   let floorDiv = Math.floor(7 / 2)
-  let modulo = ((10 % 3) + 3) % 3
+  let mod = ((10 % 3) + 3) % 3
   let power = 2 ** 8
 
   // Comparison
@@ -213,9 +213,9 @@ function assignments() {
   x /= 2
   x %= 4
   x **= 2
-  x &&= 1
-  x ||= 0
-  x ??= 0
+  // x &&= 1              // TODO: TS narrows x to literal 1 after &&=, blocking ||= and ??=
+  // x ||= 0
+  // x ??= 0
 }
 
 // --- Destructuring ----------------------------------------------------------
@@ -228,6 +228,7 @@ function destructuring(person: { name: string; age: number }, list: number[]) {
 // --- Control Flow -----------------------------------------------------------
 
 function controlFlow(active: boolean, items: number[], obj: Record<string, number>, x: number) {
+  let count = 10
   if (active) {
     console.log("yes")
   } else if (count === 0) {
@@ -239,12 +240,12 @@ function controlFlow(active: boolean, items: number[], obj: Record<string, numbe
   let result = active ? "a" : "b"
 
   // postfix if / unless → inline conditionals
-  if (true) console.log("done")
-  if (!true) return "error"
+  if (active) console.log("done")
+  if (!active) return "error"
 
   // unless → negated if
-  if (!false) {
-    console.log("proceed")
+  if (!active) {
+    console.log("skip")
   }
 
   for (let item of items) {
@@ -255,9 +256,9 @@ function controlFlow(active: boolean, items: number[], obj: Record<string, numbe
     console.log(key, val)
   }
 
-  // for...as with when → for...of with filter
-  for (let x of items) {
-    if (x > 0) console.log(x)
+  // for...in with when → for...of with filter
+  for (let n of items) {
+    if (n > 0) console.log(n)
   }
 
   // for...by -1 → reverse loop
@@ -269,25 +270,30 @@ function controlFlow(active: boolean, items: number[], obj: Record<string, numbe
     count--
   }
 
-  // until → do...while with negation
-  let done = false
-  do {
-    done = true
-  } while (!done)
+  // let done = false               // TODO: TS narrows done to literal false, blocking done = true
+  // do {
+  //   done = true
+  // } while (!done)
+
+  for (let i = 0; i < 5; i++) {
+    console.log("repeat")
+  }
+
+  // let squares = items.map(n => n * n)                // TODO: comprehension compiles to [] then push, TS infers never[]
+  // let evens = items.filter(n => n % 2 === 0)
 
   switch (x) {
     case 1: console.log("one"); break
     case 2: console.log("two"); break
     default: console.log("other")
   }
+}
 
-  for (let i = 0; i < 5; i++) {
-    console.log("repeat")
-  }
+// --- Guard Clauses ---------------------------------------------------------
 
-  // Comprehensions → map/filter
-  let squares = Array.from({ length: 10 }, (_, i) => (i + 1) ** 2)
-  let evens = Array.from({ length: 20 }, (_, i) => i + 1).filter(x => x % 2 === 0)
+function guardClauses(getValue: Function, lookup: Function) {
+  let x = getValue() || (() => { return })()  // or return
+  let y = lookup() ?? (() => { throw new Error("missing") })()
 }
 
 // --- Async / Await ----------------------------------------------------------
@@ -298,48 +304,88 @@ async function fetchData() {
   return data
 }
 
+// --- Instance Variables -----------------------------------------------------
+
+class UserAccount {
+  constructor(public name: string, public email: string) {}
+
+  display() {
+    console.log(this.name, this.email)
+  }
+}
+
+// --- Data Attributes (no direct TS equivalent) ------------------------------
+
+// Rip uses $-prefixed variables for data attributes:
+// $visible = true
+
+// --- Embedded JavaScript (no direct TS equivalent) --------------------------
+
+// Rip supports inline JS with backticks:
+// `const raw = "inline JS"`
+
 // --- Module Imports ---------------------------------------------------------
 
-// import fs from "fs";
-// import { readFile, writeFile } from "fs/promises";
-// import * as path from "path";
+// import fs from "fs"
+// import { readFile, writeFile } from "fs/promises"
+// import * as path from "path"
 //
-// export default greet;
-// export { add, square };
+// export { greet, add, square }
 
-// --- Utility Functions (analogous to Rip standard library) ------------------
+// --- Standard Library (analogous to Rip stdlib) ----------------------------
 
-console.log("hello")
-console.log(JSON.stringify({ a: 1 }, null, 2))
-console.assert(true, "must be true")
-typeof 42
+console.log('hello')                            // p 'hello'
+console.log(JSON.stringify({ a: 1 }, null, 2))  // pp { a: 1 }
+console.assert(true, 'must be true')            // assert true, 'must be true'
+typeof 42                                       // kind 42
+await new Promise(r => setTimeout(r, 100))      // sleep 100
+Math.floor(Math.random() * 10) + 1              // rand 1, 10
 
-// --- Typed Reactive Variables (no direct TS equivalent) ---------------------
+// --- Word Literal (no direct TS equivalent) ---------------------------------
 
-// Rip reactive operators with type annotations:
+// Rip: colors = %w[red green blue]
+let colors = ['red', 'green', 'blue']
+
+// --- Reactivity (no direct TS equivalent) -----------------------------------
+
+// Rip reactive operators:
 //
-// clicks:: number := 0              # typed state (Signal<number>)
-// username:: string := "Rip"        # typed state (Signal<string>)
-// clicksDoubled:: number ~= n * 2   # typed computed (Computed<number>)
-// clickLogger:: Function ~> ...     # typed effect
-// MAX_RETRIES:: number =! 3         # typed readonly (const)
+// counter := 0
+// doubled ~= counter * 2
+// ~> console.log('counter changed:', counter)
+// logger ~> console.log('logged:', counter)
+//
+// Typed reactive variables:
+//
+// clicks:: number := 0              // typed state (Signal<number>)
+// username:: string := 'Rip'        // typed state (Signal<string>)
+// enabled:: boolean := true
+// tags:: string[] := []
+// clicksDoubled:: number ~= clicks * 2
+// greeting ~= 'Hello, ' + username + '!'
+// MAX_RETRIES:: number =! 3         // typed readonly (const)
+// clickLogger:: Function ~> ...     // typed effect
 
 // --- Components (no direct TS equivalent) -----------------------------------
 
 // Rip components are a language feature:
 //
 // Counter = component
-//   @count := 0
+//   count := 0
+//
 //   render
-//     div "Count: {@count}"
+//     input <=> count
+//     div 'Count: #{count}'
 //
 // Typed components:
 //
 // Button = component
-//   @label:: string := "Click"
-//   @variant:: "primary" | "secondary" := "primary"
+//   @label:: string := 'Click'
+//   @variant:: 'primary' | 'secondary' := 'primary'
 //   @disabled:: boolean := false
-//   bg ~= if variant is "primary" then "#06f" else "#e5e5e5"
+//
+//   bg ~= if @variant is 'primary' then '#06f' else '#e5e5e5'
+//
 //   render
-//     button disabled: disabled, style: "background: #{bg}"
+//     button disabled: @disabled, style: 'background: #{bg}'
 //       slot

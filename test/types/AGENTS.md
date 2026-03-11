@@ -82,15 +82,16 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 **Compiler / type-checker gaps** (affect `rip check` correctness):
 
-| Category                         | Tested In                | Notes                                                                                                     |
-| -------------------------------- | ------------------------ | --------------------------------------------------------------------------------------------------------- |
-| Event handler typing             | 09-components            | Handler params are untyped — `(e) ->` gives `any`, no typed event objects                                 |
-| Runtime return-type validation   | 10-validation            | Return types are erased — `response.json()` is unvalidated `any`; no `schema.parse()` equivalent          |
-| Type narrowing (control flow)    | 04-unions *(comment)*    | TS narrows compiled JS, not Rip source                                                                    |
-| `void` return annotation         | 06-functions *(comment)* | `void` is reserved; use `!` operator (`def fn!`) instead                                                  |
-| Unresolved import paths          | 07-integration           | `rip check` doesn't flag imports to nonexistent files                                                     |
-| Enum exhaustiveness              | 04-unions                | Switch narrowing works in .ts but `rip check` doesn't verify exhaustiveness                               |
-| Inline discriminated union .d.ts | 04-unions *(comment)*    | `type Shape \| { kind: "circle" } \| { ... }` emits malformed .d.ts; split into named types as workaround |
+| Category                         | Tested In                | Notes                                                                                                                                                |
+| -------------------------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Strict mode (`strict: true`)     | *(all typed files)*      | `noImplicitAny` breaks ~16 sites: `_init(props)`, untyped lambdas, event handlers, `modulo` helper. Infrastructure partly built — circle back later. |
+| Event handler typing             | 09-components            | Handler params are untyped — `(e) ->` gives `any`, no typed event objects                                                                            |
+| Runtime return-type validation   | 10-validation            | Return types are erased — `response.json()` is unvalidated `any`; no `schema.parse()` equivalent                                                     |
+| Type narrowing (control flow)    | 04-unions *(comment)*    | TS narrows compiled JS, not Rip source                                                                                                               |
+| `void` return annotation         | 06-functions *(comment)* | `void` is reserved; use `!` operator (`def fn!`) instead                                                                                             |
+| Unresolved import paths          | 07-integration           | `rip check` doesn't flag imports to nonexistent files                                                                                                |
+| Enum exhaustiveness              | 04-unions                | Switch narrowing works in .ts but `rip check` doesn't verify exhaustiveness                                                                          |
+| Inline discriminated union .d.ts | 04-unions *(comment)*    | `type Shape \| { kind: "circle" } \| { ... }` emits malformed .d.ts; split into named types as workaround                                            |
 
 **Component model gaps** (would need language-level changes):
 

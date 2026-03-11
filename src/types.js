@@ -485,6 +485,7 @@ export function emitTypes(tokens, sexpr = null) {
   let indentStr = '  ';
   let indent = () => indentStr.repeat(indentLevel);
   let inClass = false;
+  let classFields = new Set(); // Track emitted field names to avoid duplicates
   let usesSignal = false;
   let usesComputed = false;
 
@@ -658,9 +659,10 @@ export function emitTypes(tokens, sexpr = null) {
   // Collect function parameters (handles simple, destructured, rest, defaults)
   let collectParams = (tokens, startIdx) => {
     let params = [];
+    let fields = []; // Track @param:: type for class field emission
     let j = startIdx;
     let openTag = tokens[j]?.[0];
-    if (openTag !== 'CALL_START' && openTag !== 'PARAM_START') return { params, endIdx: j };
+    if (openTag !== 'CALL_START' && openTag !== 'PARAM_START') return { params, fields, endIdx: j };
     let closeTag = openTag === 'CALL_START' ? 'CALL_END' : 'PARAM_END';
     j++;
     let depth = 0;
@@ -684,6 +686,7 @@ export function emitTypes(tokens, sexpr = null) {
           let name = tokens[j][1];
           let type = tokens[j].data?.type;
           params.push(type ? `${name}: ${expandSuffixes(type)}` : name);
+          if (type) fields.push({ name, type: expandSuffixes(type) });
           j++;
         }
         continue;
@@ -764,7 +767,7 @@ export function emitTypes(tokens, sexpr = null) {
       j++;
     }
 
-    return { params, endIdx: j };
+    return { params, fields, endIdx: j };
   };
 
   for (let i = 0; i < tokens.length; i++) {
@@ -906,6 +909,7 @@ export function emitTypes(tokens, sexpr = null) {
         if (hasTypedMembers) {
           lines.push(`${indent()}${exp}declare class ${className}${ext} {`);
           inClass = true;
+          classFields.clear();
           indentLevel++;
         }
       }
@@ -961,9 +965,11 @@ export function emitTypes(tokens, sexpr = null) {
           if (tokens[j]?.[1] === ':') j++;
 
           let params = [];
+          let fields = [];
           if (tokens[j]?.[0] === 'PARAM_START') {
             let result = collectParams(tokens, j);
             params = result.params;
+            fields = result.fields;
             j = result.endIdx + 1;
           }
 
@@ -982,6 +988,15 @@ export function emitTypes(tokens, sexpr = null) {
           if (returnType || params.some(p => p.includes(':'))) {
             let ret = returnType ? `: ${expandSuffixes(returnType)}` : '';
             let paramStr = params.join(', ');
+            // Emit field declarations for constructor @param:: type shorthand
+            if (methodName === 'constructor' && fields.length) {
+              for (let f of fields) {
+                if (!classFields.has(f.name)) {
+                  lines.push(`${indent()}${f.name}: ${f.type};`);
+                  classFields.add(f.name);
+                }
+              }
+            }
             lines.push(`${indent()}${methodName}(${paramStr})${ret};`);
           }
           continue;
@@ -1079,12 +1094,14 @@ export function emitTypes(tokens, sexpr = null) {
             lines.push(`${indent()}${exp}${declare}function ${varName}(${paramStr}): ${returnType};`);
           } else if (inClass) {
             lines.push(`${indent()}${varName}: ${type};`);
+            classFields.add(varName);
           } else {
             lines.push(`${indent()}${exp}let ${varName}: ${type};`);
           }
         } else if (inClass) {
           // Class property without assignment
           lines.push(`${indent()}${varName}: ${type};`);
+          classFields.add(varName);
         }
       } else if (inClass) {
         lines.push(`${indent()}${varName}: ${type};`);
@@ -1226,6 +1243,29 @@ function emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars) {
         type = isProp ? member[2]?.type : null;
         hasDefault = false;
         if (!isProp && propName) componentVars.add(propName);
+      } else if (mHead === 'object') {
+        // Method definitions: (object (methodName (-> (params...) (block ...)) :))
+        for (let i = 1; i < member.length; i++) {
+          let entry = member[i];
+          if (!Array.isArray(entry) || entry.length < 2) continue;
+          let methName = entry[0]?.valueOf?.() ?? entry[0];
+          let funcDef = entry[1];
+          if (!Array.isArray(funcDef)) continue;
+          let fHead = funcDef[0]?.valueOf?.() ?? funcDef[0];
+          if (fHead !== '->' && fHead !== '=>') continue;
+          let params = funcDef[1];
+          if (!Array.isArray(params)) continue;
+          let hasTypedParams = params.some(p => p?.type);
+          if (!hasTypedParams) continue;
+          let paramStrs = [];
+          for (let p of params) {
+            let pName = p?.valueOf?.() ?? p;
+            let pType = p?.type ? expandSuffixes(p.type) : 'any';
+            paramStrs.push(`${pName}: ${pType}`);
+          }
+          bodyMembers.push(`  ${methName}(${paramStrs.join(', ')}): void;`);
+        }
+        continue;
       } else {
         continue;
       }
