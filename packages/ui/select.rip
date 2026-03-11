@@ -122,8 +122,9 @@ export Select = component
       @_focusHighlighted()
 
   _focusHighlighted: ->
-    opt = options[highlightedIndex]
-    opt?.focus()
+    el = @_list?.querySelectorAll('[role="option"]')?.[highlightedIndex]
+    el?.focus()
+    el?.scrollIntoView { block: 'nearest' }
 
   _position: ->
     return unless @_trigger and @_list
