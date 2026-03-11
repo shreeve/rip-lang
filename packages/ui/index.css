@@ -1240,7 +1240,7 @@ body:has(.source-overlay) { overflow: hidden; }
 
 /* ── ButtonGroup ── */
 
-.gallery [role="group"][data-orientation]:not(:has(button[aria-pressed])):not([role="radiogroup"]):not(:has([data-track])) {
+.gallery [role="group"][data-orientation]:not(:has(button[aria-pressed])):not([role="radiogroup"]):not(:has([data-track])):not(:has([role="checkbox"])) {
   display: inline-flex;
 
   &[data-orientation="horizontal"] { flex-direction: row; }
@@ -1657,8 +1657,10 @@ body:has(.source-overlay) { overflow: hidden; }
   .gallery .input-group-demo > div input { color: #e2e8f0; background: #1e293b; }
 
   /* ButtonGroup */
-  .gallery [role="group"][data-orientation]:not(:has(button[aria-pressed])):not([role="radiogroup"]) button { border-color: #475569; background: #1e293b; color: #e2e8f0; }
-  .gallery [role="group"][data-orientation]:not(:has(button[aria-pressed])):not([role="radiogroup"]) button:hover { background: #334155; }
+  .gallery [role="group"][data-orientation]:not(:has(button[aria-pressed])):not([role="radiogroup"]):not(:has([data-track])):not(:has([role="checkbox"])) {
+    button { border-color: #475569; background: #1e293b; color: #e2e8f0; }
+    button:hover { background: #334155; }
+  }
 
   /* AlertDialog */
   .gallery .alert-dialog-panel { background: #1e293b; box-shadow: 0 4px 16px rgba(0,0,0,0.4); }

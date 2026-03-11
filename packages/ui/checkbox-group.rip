@@ -20,9 +20,6 @@ export CheckboxGroup = component
     return [] unless @_slot
     Array.from(@_slot.querySelectorAll('[data-value]') or [])
 
-  _isChecked: (val) ->
-    Array.isArray(@value) and val in @value
-
   _toggle: (val) ->
     return if @disabled
     arr = if Array.isArray(@value) then [...@value] else []
@@ -57,8 +54,8 @@ export CheckboxGroup = component
 
       for opt, idx in _options
         button role: "checkbox", tabindex: (if idx is 0 then "0" else "-1")
-          aria-checked: !!@_isChecked(opt.dataset.value)
-          $checked: @_isChecked(opt.dataset.value)?!
+          aria-checked: opt.dataset.value in @value
+          $checked: (opt.dataset.value in @value)?!
           $disabled: @disabled?!
           $value: opt.dataset.value
           @click: (=> @_toggle(opt.dataset.value))
