@@ -61,8 +61,8 @@ Each file exercises a specific type feature. Status key:
 | File               | Feature                                                     | Status | Notes                                                             |
 | ------------------ | ----------------------------------------------------------- | ------ | ----------------------------------------------------------------- |
 | 01-basic.rip       | `::` on variables, nullable (`T \| null`, `T \| undefined`) | pass   |                                                                   |
-| 02-aliases.rip     | `::=` aliases (simple, union, typeof)                       | pass   |                                                                   |
-| 03-structural.rip  | `::= type` blocks, optional, readonly, recursive, generic   | pass   | Includes `PagedResult<T>` generic struct                          |
+| 02-aliases.rip     | `type` aliases (simple, union, typeof)                      | pass   |                                                                   |
+| 03-structural.rip  | `type` blocks, optional, readonly, recursive, generic       | pass   | Includes `PagedResult<T>` generic struct                          |
 | 04-unions.rip      | Inline, block, discriminated unions + switch narrowing      | pass   | Narrowing not checked — see gap table                             |
 | 05-interfaces.rip  | `interface`, `extends`, optional members                    | pass   |                                                                   |
 | 06-functions.rip   | Typed functions, arrows, and array transforms               | pass   | 21 negative tests (7 param + 6 return + 3 array + 5 destructured) |
@@ -82,15 +82,15 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 **Compiler / type-checker gaps** (affect `rip check` correctness):
 
-| Category                         | Tested In                | Notes                                                                                                    |
-| -------------------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------- |
-| Event handler typing             | 09-components            | Handler params are untyped — `(e) ->` gives `any`, no typed event objects                                |
-| Runtime return-type validation   | 10-validation            | Return types are erased — `response.json()` is unvalidated `any`; no `schema.parse()` equivalent         |
-| Type narrowing (control flow)    | 04-unions *(comment)*    | TS narrows compiled JS, not Rip source                                                                   |
-| `void` return annotation         | 06-functions *(comment)* | `void` is reserved; use `!` operator (`def fn!`) instead                                                 |
-| Unresolved import paths          | 07-integration           | `rip check` doesn't flag imports to nonexistent files                                                    |
-| Enum exhaustiveness              | 04-unions                | Switch narrowing works in .ts but `rip check` doesn't verify exhaustiveness                              |
-| Inline discriminated union .d.ts | 04-unions *(comment)*    | `Shape ::= \| { kind: "circle" } \| { ... }` emits malformed .d.ts; split into named types as workaround |
+| Category                         | Tested In                | Notes                                                                                                     |
+| -------------------------------- | ------------------------ | --------------------------------------------------------------------------------------------------------- |
+| Event handler typing             | 09-components            | Handler params are untyped — `(e) ->` gives `any`, no typed event objects                                 |
+| Runtime return-type validation   | 10-validation            | Return types are erased — `response.json()` is unvalidated `any`; no `schema.parse()` equivalent          |
+| Type narrowing (control flow)    | 04-unions *(comment)*    | TS narrows compiled JS, not Rip source                                                                    |
+| `void` return annotation         | 06-functions *(comment)* | `void` is reserved; use `!` operator (`def fn!`) instead                                                  |
+| Unresolved import paths          | 07-integration           | `rip check` doesn't flag imports to nonexistent files                                                     |
+| Enum exhaustiveness              | 04-unions                | Switch narrowing works in .ts but `rip check` doesn't verify exhaustiveness                               |
+| Inline discriminated union .d.ts | 04-unions *(comment)*    | `type Shape \| { kind: "circle" } \| { ... }` emits malformed .d.ts; split into named types as workaround |
 
 **Component model gaps** (would need language-level changes):
 
