@@ -275,12 +275,12 @@ while count > 0
 until done
   step()
 
-when x
-  1 then "one"
-  2 then "two"
+switch x
+  when 1 then "one"
+  when 2 then "two"
   else "other"
 
-loop 5 ->
+loop 5
   p "repeat"
 
 squares = (x * x for x in [1..10])
@@ -294,8 +294,8 @@ y = lookup() ?? throw new Error("missing")
 # --- Async / Await ----------------------------------------------------------
 
 def fetchData!
-  response = fetch("/api")!
-  data = response.json()!
+  response = fetch!("/api")
+  data = response.json!()
   data
 
 # --- Instance Variables -----------------------------------------------------
@@ -342,7 +342,6 @@ counter := 0
 doubled ~= counter * 2
 ~> p "counter changed:", counter
 logger ~> p "logged:", counter
-counter <=> input.value
 
 # Typed reactive variables
 clicks:: number := 0
@@ -357,9 +356,11 @@ clickLogger:: Function ~> p "clicks:", clicks
 # --- Components -------------------------------------------------------------
 
 Counter = component
-  @count := 0
+  count := 0
+
   render
-    div "Count: {@count}"
+    input <=> count
+    div "Count: #{count}"
 
 # Typed components
 Button = component
@@ -367,8 +368,8 @@ Button = component
   @variant:: "primary" | "secondary" := "primary"
   @disabled:: boolean := false
 
-  bg ~= if variant is "primary" then "#06f" else "#e5e5e5"
+  bg ~= if @variant is "primary" then "#06f" else "#e5e5e5"
 
   render
-    button disabled: disabled, style: "background: #{bg}"
+    button disabled: @disabled, style: "background: #{bg}"
       slot
