@@ -284,14 +284,62 @@
       }
     },
 
+    {"comment": "=== RENDER BLOCK (context-aware tag/component/attribute highlighting) ==="},
+    {
+      "comment": "Captures render keyword + indentation. HTML tags, components, and attributes are only highlighted inside this context. The block ends when a non-blank line is not indented deeper than render.",
+      "begin": "^([ \\t]*)(render)[ \\t]*(?:#.*)?$",
+      "beginCaptures": {
+        "2": { "name": "keyword.control.rip" }
+      },
+      "end": "^(?!\\1[ \\t]|[ \\t]*$)",
+      "patterns": [
+        {
+          "comment": "HTML/SVG tag names. Mirrors TEMPLATE_TAGS in src/components.js.",
+          "begin": "^[ \\t]+(a|abbr|address|animate|animateMotion|animateTransform|area|article|aside|audio|b|base|bdi|bdo|blockquote|body|br|button|canvas|caption|circle|cite|clipPath|code|col|colgroup|data|datalist|dd|defs|del|desc|details|dfn|dialog|div|dl|dt|ellipse|em|embed|feBlend|feColorMatrix|feComponentTransfer|feComposite|feConvolveMatrix|feDiffuseLighting|feDisplacementMap|feDistantLight|feDropShadow|feFlood|feFuncA|feFuncB|feFuncG|feFuncR|feGaussianBlur|feImage|feMerge|feMergeNode|feMorphology|feOffset|fePointLight|feSpecularLighting|feSpotLight|feTile|feTurbulence|fieldset|figcaption|figure|filter|footer|foreignObject|form|g|h1|h2|h3|h4|h5|h6|head|header|hr|html|i|iframe|image|img|input|ins|kbd|label|legend|li|line|linearGradient|link|main|map|mark|marker|mask|math|menu|meta|metadata|meter|mpath|nav|noscript|object|ol|optgroup|option|output|p|param|path|pattern|picture|polygon|polyline|portal|pre|progress|q|radialGradient|rect|rp|rt|ruby|s|samp|script|section|select|set|slot|small|source|span|stop|strong|style|sub|summary|sup|svg|symbol|table|tbody|td|template|text|textPath|textarea|tfoot|th|thead|time|title|tr|track|tspan|u|ul|var|video|view|wbr)\\b(?!\\s*[=:]|\\s*\\()",
+          "beginCaptures": {
+            "1": { "name": "entity.name.tag.rip" }
+          },
+          "end": "$",
+          "patterns": [
+            {
+              "comment": "Attribute name (key: value)",
+              "match": "\\b([a-zA-Z_$][\\w$-]*)(?=\\s*:(?![:=]))",
+              "name": "entity.other.attribute-name.rip"
+            },
+            { "include": "$self" }
+          ]
+        },
+        {
+          "comment": "PascalCase component usage.",
+          "begin": "^[ \\t]+([A-Z]\\w*)\\b(?!\\s*[=:(])",
+          "beginCaptures": {
+            "1": { "name": "entity.name.type.class.rip" }
+          },
+          "end": "$",
+          "patterns": [
+            {
+              "comment": "Attribute name (key: value)",
+              "match": "\\b([a-zA-Z_$][\\w$-]*)(?=\\s*:(?![:=]))",
+              "name": "entity.other.attribute-name.rip"
+            },
+            { "include": "$self" }
+          ]
+        },
+        {
+          "comment": "Standalone attribute props.",
+          "match": "^[ \\t]+([a-zA-Z_$][\\w$-]*)(?=\\s*:(?![:=]))",
+          "captures": {
+            "1": { "name": "entity.other.attribute-name.rip" }
+          }
+        },
+        { "include": "$self" }
+      ]
+    },
+
     {"comment": "=== KEYWORDS ==="},
     {
-      "match": "\\b(return|throw|break|continue|switch|when|then|if|else|unless|for|in|of|by|as|while|until|loop|do|try|catch|finally|yield|await|import|export|from|default|delete|typeof|instanceof|new|super|debugger|use|own|extends|component|render|offer|accept|slot|it)\\b",
+      "match": "\\b(return|throw|break|continue|switch|when|then|if|else|unless|for|in|of|by|as|while|until|loop|do|try|catch|finally|yield|await|import|export|from|default|delete|typeof|instanceof|new|super|debugger|use|own|extends|component|render|offer|accept|slot|it|is|isnt|and|or|not)\\b",
       "name": "keyword.control.rip"
-    },
-    {
-      "match": "\\b(and|or|not|is|isnt)\\b",
-      "name": "keyword.operator.logical.word.rip"
     },
 
     {"comment": "=== BUILT-IN TYPE KEYWORDS (always highlighted) ==="},

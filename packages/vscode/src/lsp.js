@@ -54,6 +54,29 @@ const SEMANTIC_TOKEN_MODIFIERS = [
   'defaultLibrary',  // bit 4
 ];
 
+// HTML/SVG tag names from TEMPLATE_TAGS (src/components.js). When one
+// of these appears as the first word on an indented line, the TextMate
+// grammar assigns entity.name.tag.rip. We skip semantic tokens at
+// those positions so the tag colour is preserved.
+const HTML_TAG_NAMES = new Set([
+  'a','abbr','address','animate','animateMotion','animateTransform','area','article','aside','audio',
+  'b','base','bdi','bdo','blockquote','body','br','button','canvas','caption','circle','cite',
+  'clipPath','code','col','colgroup','data','datalist','dd','defs','del','desc','details','dfn',
+  'dialog','div','dl','dt','ellipse','em','embed','feBlend','feColorMatrix','feComponentTransfer',
+  'feComposite','feConvolveMatrix','feDiffuseLighting','feDisplacementMap','feDistantLight',
+  'feDropShadow','feFlood','feFuncA','feFuncB','feFuncG','feFuncR','feGaussianBlur','feImage',
+  'feMerge','feMergeNode','feMorphology','feOffset','fePointLight','feSpecularLighting','feSpotLight',
+  'feTile','feTurbulence','fieldset','figcaption','figure','filter','footer','foreignObject','form',
+  'g','h1','h2','h3','h4','h5','h6','head','header','hr','html','i','iframe','image','img','input',
+  'ins','kbd','label','legend','li','line','linearGradient','link','main','map','mark','marker',
+  'mask','math','menu','meta','metadata','meter','mpath','nav','noscript','object','ol','optgroup',
+  'option','output','p','param','path','pattern','picture','polygon','polyline','portal','pre',
+  'progress','q','radialGradient','rect','rp','rt','ruby','s','samp','script','section','select',
+  'set','slot','small','source','span','stop','strong','style','sub','summary','sup','svg','switch',
+  'symbol','table','tbody','td','template','text','textPath','textarea','tfoot','th','thead','time',
+  'title','tr','track','tspan','u','ul','use','var','video','view','wbr',
+]);
+
 // Map TS twenty-twenty classification tokenType → our legend index.
 // TS encodes: class=0, enum=1, interface=2, namespace=3, typeParameter=4,
 // type=5, parameter=6, variable=7, enumMember=8, property=9, function=10, member=11
@@ -771,6 +794,24 @@ connection.onRequest('textDocument/semanticTokens/full', (params) => {
       if (m) reactiveNames.add(m[1]);
     }
 
+    // Pre-compute which lines are inside render blocks so we only
+    // suppress semantic tokens for tags/attributes in render context.
+    const renderBlockLines = new Set();
+    for (let ri = 0; ri < srcLines.length; ri++) {
+      const rl = srcLines[ri];
+      const rt = rl.trimStart();
+      if (/^render\s*(?:#.*)?$/.test(rt)) {
+        const rIndent = rl.length - rt.length;
+        for (let rj = ri + 1; rj < srcLines.length; rj++) {
+          const jl = srcLines[rj];
+          const jt = jl.trimStart();
+          if (jt === '') { renderBlockLines.add(rj); continue; }
+          if (jl.length - jt.length > rIndent) { renderBlockLines.add(rj); }
+          else break;
+        }
+      }
+    }
+
     // Compute byte offset where DTS header ends in the virtual file.
     // Body spans have accurate source maps; header spans use heuristic
     // text search. Processing body first lets accurate mappings claim
@@ -893,6 +934,30 @@ connection.onRequest('textDocument/semanticTokens/full', (params) => {
 
       // Skip tokens that land inside string literals or comments
       if (isInsideStringOrComment(srcLines[matchLine], matchCol)) continue;
+
+      // Skip tokens inside render blocks where TextMate provides
+      // entity.name.tag.rip or entity.other.attribute-name.rip scopes.
+      if (renderBlockLines.has(matchLine)) {
+        const sl = srcLines[matchLine];
+        const slIndent = sl.length - sl.trimStart().length;
+        const firstWord = sl.substring(slIndent).match(/^([a-zA-Z]\w*)\b/);
+        const isTagLine = firstWord && HTML_TAG_NAMES.has(firstWord[1]);
+        const isComponentLine = firstWord && /^[A-Z]/.test(firstWord[1]);
+
+        // Skip HTML tag name at first-word position
+        if (isTagLine && matchCol === slIndent) {
+          const after = sl.charAt(matchCol + tsLength);
+          if (!after || after === ' ' || after === '\t') continue;
+        }
+
+        // Skip attribute names: identifier followed by `:`
+        // (not `::` or `:=`).
+        const afterToken = sl.substring(matchCol + tsLength);
+        const colonMatch = afterToken.match(/^\s*:/);
+        if (colonMatch && afterToken.charAt(colonMatch[0].length) !== ':' && afterToken.charAt(colonMatch[0].length) !== '=') {
+          if (matchCol === slIndent || isTagLine || isComponentLine) continue;
+        }
+      }
 
       usedPositions.add(matchLine + ':' + matchCol);
       let mods = tsModifiers & 0x1F; // keep bits 0-4, mask off 'local' (bit 5)
