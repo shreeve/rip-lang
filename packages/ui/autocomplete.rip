@@ -100,6 +100,16 @@ export Autocomplete = component
       when 'Enter'
         e.preventDefault()
         @selectIndex(@_hlIdx) if @_hlIdx >= 0
+      when 'Home'
+        e.preventDefault()
+        if len
+          @_hlIdx = 0
+          @_updateHighlight()
+      when 'End'
+        e.preventDefault()
+        if len
+          @_hlIdx = len - 1
+          @_updateHighlight()
       when 'Escape'
         e.preventDefault()
         @close()

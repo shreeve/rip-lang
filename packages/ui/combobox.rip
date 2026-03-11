@@ -102,6 +102,14 @@ export Combobox = component
           @selectIndex(highlightedIndex)
         else if len is 1
           @selectIndex(0)
+      when 'Home'
+        e.preventDefault()
+        highlightedIndex = 0
+        @_scrollToItem()
+      when 'End'
+        e.preventDefault()
+        highlightedIndex = len - 1
+        @_scrollToItem()
       when 'Escape'
         e.preventDefault()
         if open then @close() else @query = ''
