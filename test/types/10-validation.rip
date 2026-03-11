@@ -9,7 +9,7 @@
 # validates at runtime AND the inferred type checks every field
 # access at compile time (wrong property, wrong nullability, etc).
 
-User ::= type
+type User =
   id: number
   email: string
   firstName: string | null

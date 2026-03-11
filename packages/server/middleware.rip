@@ -540,7 +540,7 @@ export serve = (opts = {}) ->
     { brotliCompressSync } = require 'zlib'
     glob = new Bun.Glob("**/*.rip")
     components = {}
-    if includeRoutes
+    if includeRoutes and existsSync(routesDir)
       for path in Array.from(glob.scanSync(routesDir)).sort()
         components["components/#{path}"] = Bun.file("#{routesDir}/#{path}").text!
     for dir in dirs

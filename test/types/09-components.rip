@@ -168,7 +168,7 @@ export TypeTestComp = component
 # a bounded generic — options must be strings or { value, label }:
 #
 #   # Not valid Rip syntax:
-#   TOptionShape ::= string | { value: string, label: string }
+#   type TOptionShape = string | { value: string, label: string }
 #
 #   export Select<TOption extends TOptionShape> = component
 #     @options:: TOption[] := []
@@ -194,7 +194,7 @@ export TypeTestComp = component
 # This is exactly what stash and zustand are for.
 
 # Define the cart shape (Rip can express this type):
-CartItem ::= type
+type CartItem =
   id: number
   name: string
   price: number

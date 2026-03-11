@@ -26,7 +26,7 @@ export function installTypeSupport(Lexer) {
   //
   // Scans the token stream for:
   //   :: (TYPE_ANNOTATION) — collects type string, stores on surviving token
-  //   ::= (TYPE_ALIAS) — collects type body, replaces with TYPE_DECL marker
+  //   type Name = (contextual keyword) — collects type body, replaces with TYPE_DECL marker
   //   INTERFACE — collects body, replaces with TYPE_DECL marker
   //   DEF IDENTIFIER<...> — collects generic params via .spaced detection
   //
@@ -50,29 +50,27 @@ export function installTypeSupport(Lexer) {
     this.scanTokens((token, i, tokens) => {
       let tag = token[0];
 
-      // ── Generic type parameters: DEF name<T>(...) or Name<T> ::= ───────
+      // ── Generic type parameters: DEF name<T>(...) ──────────────────────
+      // (Generic params on type aliases are handled by the `type` keyword handler below)
       if (tag === 'IDENTIFIER') {
         let next = tokens[i + 1];
         if (next && next[0] === 'COMPARE' && next[1] === '<' && !next.spaced) {
           let isDef = tokens[i - 1]?.[0] === 'DEF';
           let genTokens = collectBalancedAngles(tokens, i + 1);
-          if (genTokens) {
-            let isAlias = !isDef && tokens[i + 1 + genTokens.length]?.[0] === 'TYPE_ALIAS';
-            if (isDef || isAlias) {
-              if (!token.data) token.data = {};
-              token.data.typeParams = buildTypeString(genTokens);
-              tokens.splice(i + 1, genTokens.length);
-              // After removing <T>, retag ( as CALL_START if it follows DEF IDENTIFIER
-              if (isDef && tokens[i + 1]?.[0] === '(') {
-                tokens[i + 1][0] = 'CALL_START';
-                // Find matching ) and retag as CALL_END
-                let d = 1, m = i + 2;
-                while (m < tokens.length && d > 0) {
-                  if (tokens[m][0] === '(' || tokens[m][0] === 'CALL_START') d++;
-                  if (tokens[m][0] === ')' || tokens[m][0] === 'CALL_END') d--;
-                  if (d === 0) tokens[m][0] = 'CALL_END';
-                  m++;
-                }
+          if (genTokens && isDef) {
+            if (!token.data) token.data = {};
+            token.data.typeParams = buildTypeString(genTokens);
+            tokens.splice(i + 1, genTokens.length);
+            // After removing <T>, retag ( as CALL_START if it follows DEF IDENTIFIER
+            if (tokens[i + 1]?.[0] === '(') {
+              tokens[i + 1][0] = 'CALL_START';
+              // Find matching ) and retag as CALL_END
+              let d = 1, m = i + 2;
+              while (m < tokens.length && d > 0) {
+                if (tokens[m][0] === '(' || tokens[m][0] === 'CALL_START') d++;
+                if (tokens[m][0] === ')' || tokens[m][0] === 'CALL_END') d--;
+                if (d === 0) tokens[m][0] = 'CALL_END';
+                m++;
               }
             }
           }
@@ -125,14 +123,33 @@ export function installTypeSupport(Lexer) {
         return 0;
       }
 
-      // ── TYPE_ALIAS (::=) — collect type body, create TYPE_DECL marker ───
-      if (tag === 'TYPE_ALIAS') {
-        let nameToken = tokens[i - 1];
-        if (!nameToken) return 1;
+      // ── type Name = ... — contextual type keyword ──────────────────────
+      if (tag === 'IDENTIFIER' && token[1] === 'type') {
+        let prevTag = tokens[i - 1]?.[0];
+        let atStatement = !prevTag || prevTag === 'TERMINATOR' || prevTag === 'INDENT' || prevTag === 'EXPORT';
+        if (!atStatement) return 1;
+
+        let nameIdx = i + 1;
+        let nameToken = tokens[nameIdx];
+        if (!nameToken || nameToken[0] !== 'IDENTIFIER') return 1;
         let name = nameToken[1];
-        let exported = i >= 2 && tokens[i - 2]?.[0] === 'EXPORT';
-        let removeFrom = exported ? i - 2 : i - 1;
-        let next = tokens[i + 1];
+
+        let exported = prevTag === 'EXPORT';
+        let removeFrom = exported ? i - 1 : i;
+
+        // Handle generic type parameters: type Name<T> = ...
+        let eqIdx = nameIdx + 1;
+        if (tokens[eqIdx]?.[0] === 'COMPARE' && tokens[eqIdx]?.[1] === '<' && !tokens[eqIdx].spaced) {
+          let genTokens = collectBalancedAngles(tokens, eqIdx);
+          if (genTokens) {
+            if (!nameToken.data) nameToken.data = {};
+            nameToken.data.typeParams = buildTypeString(genTokens);
+            tokens.splice(eqIdx, genTokens.length);
+          }
+        }
+
+        // Must have = after name (or after stripped generics)
+        if (tokens[eqIdx]?.[0] !== '=') return 1;
 
         let makeDecl = (typeText) => {
           let dt = gen('TYPE_DECL', name, nameToken);
@@ -141,26 +158,29 @@ export function installTypeSupport(Lexer) {
           return dt;
         };
 
-        // Structural type: Name ::= type INDENT ... OUTDENT
-        if (next && next[0] === 'IDENTIFIER' && next[1] === 'type' &&
-            tokens[i + 2]?.[0] === 'INDENT') {
-          let endIdx = findMatchingOutdent(tokens, i + 2);
-          tokens.splice(removeFrom, endIdx - removeFrom + 1, makeDecl(collectStructuralType(tokens, i + 2)));
-          return 0;
-        }
+        let afterEq = eqIdx + 1;
+        let next = tokens[afterEq];
 
-        // Block union: Name ::= TERMINATOR INDENT | "a" | "b" ... OUTDENT
+        // Block union: type Name = (TERMINATOR?) INDENT | "a" | "b" ... OUTDENT
+        // Must check before structural — `=` suppresses TERMINATOR so INDENT follows directly
         if (next && (next[0] === 'TERMINATOR' || next[0] === 'INDENT')) {
-          let result = collectBlockUnion(tokens, i + 1);
+          let result = collectBlockUnion(tokens, afterEq);
           if (result) {
             tokens.splice(removeFrom, result.endIdx - removeFrom + 1, makeDecl(result.typeText));
             return 0;
           }
         }
 
-        // Simple alias: Name ::= type-expression
-        let typeTokens = collectTypeExpression(tokens, i + 1);
-        tokens.splice(removeFrom, i + 1 + typeTokens.length - removeFrom, makeDecl(buildTypeString(typeTokens)));
+        // Structural type: type Name = INDENT ... OUTDENT
+        if (next && next[0] === 'INDENT') {
+          let endIdx = findMatchingOutdent(tokens, afterEq);
+          tokens.splice(removeFrom, endIdx - removeFrom + 1, makeDecl(collectStructuralType(tokens, afterEq)));
+          return 0;
+        }
+
+        // Simple alias: type Name = type-expression
+        let typeTokens = collectTypeExpression(tokens, afterEq);
+        tokens.splice(removeFrom, afterEq + typeTokens.length - removeFrom, makeDecl(buildTypeString(typeTokens)));
         return 0;
       }
 

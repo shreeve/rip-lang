@@ -1,6 +1,6 @@
 # 06-functions.rip — Typed functions, arrows, and array transforms
 
-Point ::= type
+type Point =
   x: number
   y: number
 

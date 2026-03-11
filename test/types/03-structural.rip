@@ -1,50 +1,50 @@
 # 03-structural.rip — Structural types with the `type` keyword
 
 # Basic structure
-Dimensions ::= type
+type Dimensions =
   width: number
   height: number
 
 # With optional properties
-Config ::= type
+type Config =
   host: string
   port: number
   ssl?: boolean
   timeout?: number
 
 # Nested structures
-ResponseData ::= type
+type ResponseData =
   items: string[]
   total: number
 
-ResponseMeta ::= type
+type ResponseMeta =
   page: number
   limit: number
   hasMore: boolean
 
-ApiResponse ::= type
+type ApiResponse =
   data: ResponseData
   meta: ResponseMeta
 
 # With readonly fields
-ImmutableConfig ::= type
+type ImmutableConfig =
   readonly host: string
   readonly port: number
   readonly ssl: boolean
 
 # Optional vs required-but-undefined (distinct in TS)
-FormField ::= type
+type FormField =
   label: string
   value: string | undefined
   placeholder?: string
 
 # Recursive type
-TreeNode ::= type
+type TreeNode =
   value: string
   children: TreeNode[]
 
 # Generic structural type
-PagedResult<T> ::= type
+type PagedResult<T> =
   data: T[]
   page: number
   total: number

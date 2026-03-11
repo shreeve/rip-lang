@@ -1,18 +1,18 @@
 # 04-unions.rip — Union types (inline, block, discriminated)
 
 # Inline unions
-Status ::= "pending" | "active" | "done"
-Result ::= "success" | "error" | "timeout"
+type Status = "pending" | "active" | "done"
+type Result = "success" | "error" | "timeout"
 
 # Block unions (diff-friendly vertical form)
-HttpMethod ::=
+type HttpMethod =
   | "GET"
   | "POST"
   | "PUT"
   | "PATCH"
   | "DELETE"
 
-LogLevel ::=
+type LogLevel =
   | "debug"
   | "info"
   | "warn"
@@ -21,16 +21,16 @@ LogLevel ::=
 
 # Discriminated unions — named variants composed into a union
 # (inline object syntax produces malformed .d.ts, so use named types)
-Circle ::= type
+type Circle =
   kind: "circle"
   radius: number
 
-Rect ::= type
+type Rect =
   kind: "rect"
   width: number
   height: number
 
-Shape ::= Circle | Rect
+type Shape = Circle | Rect
 
 # ── Use the types ──
 

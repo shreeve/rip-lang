@@ -1813,9 +1813,9 @@ count:: number = 0
 def greet(name:: string):: string
   "Hello, #{name}!"
 
-# Type aliases (::=)
-ID ::= number
-User ::= type
+# Type aliases (type keyword)
+type ID = number
+type User =
   id: number
   name: string
 

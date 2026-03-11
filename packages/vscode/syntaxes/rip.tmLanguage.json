@@ -275,12 +275,14 @@
 
     {"comment": "=== TYPE DECLARATIONS AND ANNOTATIONS ==="},
     {
-      "comment": "Type alias: Name ::= type-expression (single line or 'type' keyword)",
-      "begin": "(::=)\\s*",
-      "beginCaptures": { "1": { "name": "keyword.operator.type-alias.rip" } },
-      "end": "$|(?=#)",
-      "contentName": "meta.type.rip",
-      "patterns": [{ "include": "#type_expression" }]
+      "comment": "Type alias: type Name = type-expression",
+      "match": "\\b(type)\\s+([A-Z][\\w$]*)(?:(<[^>]+>))?\\s*(=)",
+      "captures": {
+        "1": { "name": "keyword.control.rip" },
+        "2": { "name": "entity.name.type.rip" },
+        "3": { "name": "meta.type.rip" },
+        "4": { "name": "keyword.operator.assignment.rip" }
+      }
     },
     {
       "comment": "Typed constant: name:: Type =! (lookahead for =! to scope as constant)",

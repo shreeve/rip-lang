@@ -4,7 +4,7 @@ Independent test files for every Rip type system feature. Each `.rip` file has a
 
 ## Why Type Safety Matters
 
-Rip has its own type annotation syntax (`::`, `::=`, `interface`, etc.) but delegates the actual checking to TypeScript under the hood. When you run `rip check`, the compiler emits `.d.ts` declarations from your annotations, combines them with the compiled JavaScript, and feeds everything to the TypeScript type checker. This gives Rip access to TypeScript's full diagnostic engine without requiring developers to write TypeScript directly.
+Rip has its own type annotation syntax (`::`, `type Name =`, `interface`, etc.) but delegates the actual checking to TypeScript under the hood. When you run `rip check`, the compiler emits `.d.ts` declarations from your annotations, combines them with the compiled JavaScript, and feeds everything to the TypeScript type checker. This gives Rip access to TypeScript's full diagnostic engine without requiring developers to write TypeScript directly.
 
 This matters because:
 

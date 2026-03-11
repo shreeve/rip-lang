@@ -14,7 +14,7 @@ Full language support for [Rip](https://github.com/shreeve/rip-lang), a modern r
 - Comment toggling (`#` line, `###` block)
 - Bracket matching and auto-closing
 - Indentation-based code folding
-- Type annotation highlighting (`::`, `::=`)
+- Type annotation highlighting (`::`, `type`)
 - Reactive operator highlighting (`:=`, `~=`, `~>`)
 
 ## How It Works
@@ -71,7 +71,7 @@ add these to your settings:
 def greet(name:: string):: string
   "Hello, #{name}!"
 
-User ::= type
+type User =
   id: number
   name: string
 

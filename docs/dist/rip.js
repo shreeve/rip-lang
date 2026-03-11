@@ -81,25 +81,22 @@
           if (next && next[0] === "COMPARE" && next[1] === "<" && !next.spaced) {
             let isDef = tokens2[i - 1]?.[0] === "DEF";
             let genTokens = collectBalancedAngles(tokens2, i + 1);
-            if (genTokens) {
-              let isAlias = !isDef && tokens2[i + 1 + genTokens.length]?.[0] === "TYPE_ALIAS";
-              if (isDef || isAlias) {
-                if (!token.data)
-                  token.data = {};
-                token.data.typeParams = buildTypeString(genTokens);
-                tokens2.splice(i + 1, genTokens.length);
-                if (isDef && tokens2[i + 1]?.[0] === "(") {
-                  tokens2[i + 1][0] = "CALL_START";
-                  let d = 1, m = i + 2;
-                  while (m < tokens2.length && d > 0) {
-                    if (tokens2[m][0] === "(" || tokens2[m][0] === "CALL_START")
-                      d++;
-                    if (tokens2[m][0] === ")" || tokens2[m][0] === "CALL_END")
-                      d--;
-                    if (d === 0)
-                      tokens2[m][0] = "CALL_END";
-                    m++;
-                  }
+            if (genTokens && isDef) {
+              if (!token.data)
+                token.data = {};
+              token.data.typeParams = buildTypeString(genTokens);
+              tokens2.splice(i + 1, genTokens.length);
+              if (tokens2[i + 1]?.[0] === "(") {
+                tokens2[i + 1][0] = "CALL_START";
+                let d = 1, m = i + 2;
+                while (m < tokens2.length && d > 0) {
+                  if (tokens2[m][0] === "(" || tokens2[m][0] === "CALL_START")
+                    d++;
+                  if (tokens2[m][0] === ")" || tokens2[m][0] === "CALL_END")
+                    d--;
+                  if (d === 0)
+                    tokens2[m][0] = "CALL_END";
+                  m++;
                 }
               }
             }
@@ -143,14 +140,30 @@
           tokens2.splice(i, removeCount);
           return 0;
         }
-        if (tag === "TYPE_ALIAS") {
-          let nameToken = tokens2[i - 1];
-          if (!nameToken)
+        if (tag === "IDENTIFIER" && token[1] === "type") {
+          let prevTag = tokens2[i - 1]?.[0];
+          let atStatement = !prevTag || prevTag === "TERMINATOR" || prevTag === "INDENT" || prevTag === "EXPORT";
+          if (!atStatement)
+            return 1;
+          let nameIdx = i + 1;
+          let nameToken = tokens2[nameIdx];
+          if (!nameToken || nameToken[0] !== "IDENTIFIER")
             return 1;
           let name = nameToken[1];
-          let exported = i >= 2 && tokens2[i - 2]?.[0] === "EXPORT";
-          let removeFrom = exported ? i - 2 : i - 1;
-          let next = tokens2[i + 1];
+          let exported = prevTag === "EXPORT";
+          let removeFrom = exported ? i - 1 : i;
+          let eqIdx = nameIdx + 1;
+          if (tokens2[eqIdx]?.[0] === "COMPARE" && tokens2[eqIdx]?.[1] === "<" && !tokens2[eqIdx].spaced) {
+            let genTokens = collectBalancedAngles(tokens2, eqIdx);
+            if (genTokens) {
+              if (!nameToken.data)
+                nameToken.data = {};
+              nameToken.data.typeParams = buildTypeString(genTokens);
+              tokens2.splice(eqIdx, genTokens.length);
+            }
+          }
+          if (tokens2[eqIdx]?.[0] !== "=")
+            return 1;
           let makeDecl = (typeText) => {
             let dt = gen("TYPE_DECL", name, nameToken);
             dt.data = { name, typeText, exported };
@@ -158,20 +171,22 @@
               dt.data.typeParams = nameToken.data.typeParams;
             return dt;
           };
-          if (next && next[0] === "IDENTIFIER" && next[1] === "type" && tokens2[i + 2]?.[0] === "INDENT") {
-            let endIdx = findMatchingOutdent(tokens2, i + 2);
-            tokens2.splice(removeFrom, endIdx - removeFrom + 1, makeDecl(collectStructuralType(tokens2, i + 2)));
-            return 0;
-          }
+          let afterEq = eqIdx + 1;
+          let next = tokens2[afterEq];
           if (next && (next[0] === "TERMINATOR" || next[0] === "INDENT")) {
-            let result = collectBlockUnion(tokens2, i + 1);
+            let result = collectBlockUnion(tokens2, afterEq);
             if (result) {
               tokens2.splice(removeFrom, result.endIdx - removeFrom + 1, makeDecl(result.typeText));
               return 0;
             }
           }
-          let typeTokens = collectTypeExpression(tokens2, i + 1);
-          tokens2.splice(removeFrom, i + 1 + typeTokens.length - removeFrom, makeDecl(buildTypeString(typeTokens)));
+          if (next && next[0] === "INDENT") {
+            let endIdx = findMatchingOutdent(tokens2, afterEq);
+            tokens2.splice(removeFrom, endIdx - removeFrom + 1, makeDecl(collectStructuralType(tokens2, afterEq)));
+            return 0;
+          }
+          let typeTokens = collectTypeExpression(tokens2, afterEq);
+          tokens2.splice(removeFrom, afterEq + typeTokens.length - removeFrom, makeDecl(buildTypeString(typeTokens)));
           return 0;
         }
         if (tag === "INTERFACE") {
@@ -835,9 +850,14 @@
     let preamble = [];
     if (usesSignal) {
       preamble.push("interface Signal<T> { value: T; read(): T; lock(): Signal<T>; free(): Signal<T>; kill(): T; }");
+      preamble.push("declare function __state<T>(value: T): Signal<T>;");
     }
     if (usesComputed) {
       preamble.push("interface Computed<T> { readonly value: T; read(): T; lock(): Computed<T>; free(): Computed<T>; kill(): T; }");
+      preamble.push("declare function __computed<T>(fn: () => T): Computed<T>;");
+    }
+    if (usesSignal || usesComputed) {
+      preamble.push("declare function __effect(fn: () => void | (() => void)): () => void;");
     }
     if (preamble.length > 0) {
       preamble.push("");
@@ -1223,7 +1243,7 @@
   var UNARY_MATH = new Set(["!", "~"]);
   var IDENTIFIER_RE = /^(?!\d)((?:(?!\s)[$\w\x7f-\uffff])+(?:!(?!\?)|[?](?![.?![(]))?)([^\n\S]*:(?![=:]))?/;
   var NUMBER_RE = /^0b[01](?:_?[01])*n?|^0o[0-7](?:_?[0-7])*n?|^0x[\da-f](?:_?[\da-f])*n?|^\d+(?:_\d+)*n|^(?:\d+(?:_\d+)*)?\.?\d+(?:_\d+)*(?:e[+-]?\d+(?:_\d+)*)?/i;
-  var OPERATOR_RE = /^(?:<=>|::=|::|[-=]>|~>|~=|:=|=!|===|!==|!\?|\?\!|\?\?|=~|\|>|[-+*\/%<>&|^!?=]=|>>>=?|([-+:])\1|([&|<>*\/%])\2=?|\?\.?|\.{2,3})/;
+  var OPERATOR_RE = /^(?:<=>|::|[-=]>|~>|~=|:=|=!|===|!==|!\?|\?\!|\?\?|=~|\|>|[-+*\/%<>&|^!?=]=|>>>=?|([-+:])\1|([&|<>*\/%])\2=?|\?\.?|\.{2,3})/;
   var WHITESPACE_RE = /^[^\n\S]+/;
   var NEWLINE_RE = /^(?:\n[^\n\S]*)+/;
   var COMMENT_RE = /^(\s*)###([^#][\s\S]*?)(?:###([^\n\S]*)|###$)|^((?:\s*#(?!##[^#]).*)+)/;
@@ -1995,8 +2015,6 @@
         tag = "TERMINATOR";
       } else if (val === "|>")
         tag = "PIPE";
-      else if (val === "::=")
-        tag = "TYPE_ALIAS";
       else if (val === "::" && /^[a-zA-Z_$]/.test(this.chunk[2] || "")) {
         this.emit(".", ".");
         this.emit("PROPERTY", "prototype");
@@ -8844,8 +8862,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeGenerator({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.13.91";
-  var BUILD_DATE = "2026-03-04@21:40:01GMT";
+  var VERSION = "3.13.93";
+  var BUILD_DATE = "2026-03-11@02:24:39GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

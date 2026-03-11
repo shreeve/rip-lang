@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-3.13.92-blue.svg" alt="Version"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-3.13.93-blue.svg" alt="Version"></a>
   <a href="#zero-dependencies"><img src="https://img.shields.io/badge/dependencies-ZERO-brightgreen.svg" alt="Dependencies"></a>
   <a href="#"><img src="https://img.shields.io/badge/tests-1%2C436%2F1%2C436-brightgreen.svg" alt="Tests"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
@@ -40,7 +40,7 @@ get '/users/:id' ->                 # RESTful API endpoint, comma-less
 - **Modern output** — ES2022 with native classes, `?.`, `??`, modules
 - **New operators** — `!`, `!?`, `//`, `%%`, `=~`, `|>`, `.new()`, and more
 - **Reactive operators** — `:=`, `~=`, `~>` as language syntax
-- **Optional types** — `::` annotations, `::=` aliases, `.d.ts` emission
+- **Optional types** — `::` annotations, `type` aliases, `.d.ts` emission
 - **Zero dependencies** — everything included, even the parser generator
 - **Self-hosting** — `bun run parser` rebuilds the compiler from source
 
@@ -162,7 +162,7 @@ Type annotations are erased at compile time — zero runtime cost:
 def greet(name:: string):: string        # Typed function
   "Hello, #{name}!"
 
-User ::= type                            # Structural type
+type User =                              # Structural type
   id: number
   name: string
 
