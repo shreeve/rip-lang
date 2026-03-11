@@ -416,7 +416,7 @@ Rip types are erased from JavaScript and exist for `.d.ts` emission, IDE tooling
 def greet(name:: string):: string
   "Hello, #{name}!"
 
-User ::= type
+type User =
   id: number
   name: string
   email?: string

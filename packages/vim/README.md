@@ -16,7 +16,7 @@ Full-featured Vim plugin for the [Rip](https://github.com/shreeve/rip-lang) prog
 - **Function definitions** — `def name`, `name = ->`, and `name: ->`
 - **Class / enum / interface** — name and extends capture
 - **Reactive operators** — `:=`, `~=`, `~>`, `<=>`, `=!`
-- **Type annotations** — `::` and `::=`
+- **Type annotations** — `::` and `type Name =`
 - **Regular expressions** — `/regex/` and `///heregex///` with interpolation
 - **Auto-indentation** — indent/dedent for offside-rule blocks
 - **Filetype settings** — 2-space soft tabs, fold-by-indent, `gf` navigation

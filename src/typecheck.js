@@ -247,7 +247,8 @@ export function compileForCheck(filePath, source, compiler) {
       const name = m[1];
       for (let s = 0; s < srcLines.length; s++) {
         const src = srcLines[s];
-        if (new RegExp('\\b' + name + '\\s*(?:::=|::)').test(src) ||
+        if (new RegExp('\\b' + name + '\\s*::').test(src) ||
+            new RegExp('^(?:export\\s+)?type\\s+' + name + '\\b').test(src) ||
             new RegExp('^(?:export\\s+)?interface\\s+' + name + '\\b').test(src) ||
             new RegExp('^(?:export\\s+)?enum\\s+' + name + '\\b').test(src) ||
             new RegExp('^(?:export\\s+)?' + name + '\\s*=\\s*component\\b').test(src)) {

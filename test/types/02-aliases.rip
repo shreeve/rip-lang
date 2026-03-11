@@ -1,18 +1,18 @@
 # 02-aliases.rip — Type aliases (simple, union, typeof)
 
 # Simple aliases
-ID ::= number
-Name ::= string
-Email ::= string
-Timestamp ::= number
+type ID = number
+type Name = string
+type Email = string
+type Timestamp = number
 
 # Union aliases
-UserID ::= number | string
-Primitive ::= string | number | boolean
+type UserID = number | string
+type Primitive = string | number | boolean
 
 # typeof in type position
 defaults = { theme: "dark", lang: "en" }
-Defaults ::= typeof defaults
+type Defaults = typeof defaults
 
 # ── Use the aliases ──
 

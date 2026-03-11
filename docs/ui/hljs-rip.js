@@ -14,7 +14,7 @@ export default function(hljs) {
     'delete', 'typeof', 'instanceof', 'new', 'super',
     'and', 'or', 'not', 'is', 'isnt',
     // Declarations
-    'class', 'def', 'enum', 'interface', 'extends', 'own',
+    'class', 'def', 'enum', 'interface', 'type', 'extends', 'own',
     // Iteration
     'in', 'of', 'by', 'as',
     // Component system
@@ -165,7 +165,7 @@ export default function(hljs) {
 
   const OPERATORS = {
     className: 'operator',
-    begin: /\|>|::=|::|:=|~=|~>|<=>|\.=|=!|!\?|\?!|=~|\?\?=|\?\?|\?\.|\.\.\.|\.\.|=>|->|\*\*|\/\/|%%|===|!==|==|!=|<=|>=|&&|\|\||[+\-*\/%&|^~<>=!?]/,
+    begin: /\|>|::|:=|~=|~>|<=>|\.=|=!|!\?|\?!|=~|\?\?=|\?\?|\?\.|\.\.\.|\.\.|=>|->|\*\*|\/\/|%%|===|!==|==|!=|<=|>=|&&|\|\||[+\-*\/%&|^~<>=!?]/,
     relevance: 0,
   };
 

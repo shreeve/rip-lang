@@ -722,7 +722,7 @@ connection.onDefinition((params) => {
         const { line: genLine } = offsetToLineCol(c.tsContent, d.textSpan.start);
         if (!c.genToSrc.has(genLine)) {
           const name = c.tsContent.substring(d.textSpan.start, d.textSpan.start + d.textSpan.length);
-          const pat = new RegExp(`^[^#\\n]*\\b(def\\s+)?${name}\\s*(::=|=|\\()`, 'm');
+          const pat = new RegExp(`^[^#\\n]*\\b(def\\s+|type\\s+)?${name}\\s*(=|\\()`, 'm');
           const m = pat.exec(c.source);
           if (m) {
             const pos = offsetToLineCol(c.source, m.index + m[0].indexOf(name));

@@ -35,7 +35,7 @@ Both compile to identical JavaScript.
 
 1. [Type Sigil Reference](#type-sigil-reference)
 2. [Type Annotations (`::`)](#type-annotations-)
-3. [Type Aliases (`::=`)](#type-aliases-)
+3. [Type Aliases (`type`)](#type-aliases-type)
 4. [Structural Types](#structural-types)
 5. [Optionality Modifiers](#optionality-modifiers)
 6. [Union Types](#union-types)
@@ -58,7 +58,7 @@ Both compile to identical JavaScript.
 | Sigil | Meaning | Example |
 |-------|---------|---------|
 | `::` | Type annotation | `count:: number = 0` |
-| `::=` | Type alias | `ID ::= number` |
+| `type` | Type alias | `type ID = number` |
 | `?` | Optional value (`T \| undefined`) | `email:: string?` |
 | `??` | Nullable value (`T \| null \| undefined`) | `middle:: string??` |
 | `!` | Non-nullable (`NonNullable<T>`) | `id:: ID!` |
@@ -172,20 +172,20 @@ const doubled = __computed<number>(() => count * 2);  // ~= emits const
 
 ---
 
-## Type Aliases (`::=`)
+## Type Aliases (`type`)
 
-The `::=` operator declares a named type, mapping directly to TypeScript's
+The `type` keyword declares a named type, mapping directly to TypeScript's
 `type X = ...`.
 
 ```coffee
 # Simple aliases
-ID ::= number
-Name ::= string
+type ID = number
+type Name = string
 
 # Complex types
-UserID ::= number | string
-Callback ::= (error:: Error?, data:: any) => void
-Handler ::= (req:: Request, res:: Response) => Promise<void>
+type UserID = number | string
+type Callback = (error:: Error?, data:: any) => void
+type Handler = (req:: Request, res:: Response) => Promise<void>
 ```
 
 **Emits:**
@@ -203,16 +203,16 @@ type Handler = (req: Request, res: Response) => Promise<void>;
 
 ## Structural Types
 
-Define object shapes using the `type` keyword followed by a block:
+Define object shapes using the `type` keyword with an indented block:
 
 ```coffee
-User ::= type
+type User =
   id: number
   name: string
   email?: string
   createdAt: Date
 
-Config ::= type
+type Config =
   host: string
   port: number
   ssl?: boolean
@@ -240,7 +240,7 @@ type Config = {
 ### Nesting, Readonly, and Index Signatures
 
 ```coffee
-Response ::= type
+type Response =
   data: type
     users: User[]
     total: number
@@ -248,11 +248,11 @@ Response ::= type
     page: number
     limit: number
 
-ImmutableConfig ::= type
+type ImmutableConfig =
   readonly host: string
   readonly port: number
 
-Dictionary ::= type
+type Dictionary =
   [key: string]: any
 ```
 
@@ -361,7 +361,7 @@ In structural types, `?` after the property name makes it optional (the
 property itself may be absent), distinct from value optionality:
 
 ```coffee
-User ::= type
+type User =
   id: number
   name: string
   email?: string      # Optional property — may be absent
@@ -392,8 +392,8 @@ type User = {
 ### Inline
 
 ```coffee
-Status ::= "pending" | "active" | "done"
-Result ::= Success | Error
+type Status = "pending" | "active" | "done"
+type Result = Success | Error
 ```
 
 ### Block Form (Preferred)
@@ -401,14 +401,14 @@ Result ::= Success | Error
 Vertical form is diff-friendly and encourages domain-first modeling:
 
 ```coffee
-HttpMethod ::=
+type HttpMethod =
   | "GET"
   | "POST"
   | "PUT"
   | "PATCH"
   | "DELETE"
 
-Result ::=
+type Result =
   | { success: true, data: Data }
   | { success: false, error: Error }
 ```
@@ -437,8 +437,8 @@ numeric values.
 
 ```coffee
 # Type aliases for function signatures
-Comparator ::= (a:: any, b:: any) => number
-AsyncFetcher ::= (url:: string) => Promise<Response>
+type Comparator = (a:: any, b:: any) => number
+type AsyncFetcher = (url:: string) => Promise<Response>
 
 # Overloads
 def toHtml(content:: string):: string
@@ -481,16 +481,16 @@ class UserService {
 
 ```coffee
 # Simple generic
-Container<T> ::= type
+type Container<T> =
   value: T
 
 # Multiple parameters
-Pair<K, V> ::= type
+type Pair<K, V> =
   key: K
   value: V
 
 # With constraints
-Comparable<T extends Ordered> ::= type
+type Comparable<T extends Ordered> =
   value: T
   compareTo: (other:: T) => number
 
@@ -555,7 +555,7 @@ interface Dog extends Animal {
 }
 ```
 
-Use `::= type` by default. Use `interface` when you need declaration merging.
+Use `type Name =` by default. Use `interface` when you need declaration merging.
 
 ---
 
@@ -564,7 +564,7 @@ Use `::= type` by default. Use `interface` when you need declaration merging.
 ### Zero-Runtime (Preferred)
 
 ```coffee
-Size ::=
+type Size =
   | "xs"
   | "sm"
   | "md"
@@ -687,12 +687,12 @@ Override per-file with a directive:
 | `file.rip` | `file.d.ts` | Type declarations (when `emit` or `check`) |
 
 Type aliases and annotations are stripped from `.js` output and preserved
-in `.d.ts` output. Type-only declarations (`::=` aliases, unions) appear
+in `.d.ts` output. Type-only declarations (`type` aliases, unions) appear
 only in `.d.ts`.
 
 ```coffee
 # user.rip
-export User ::= type
+export type User =
   id: number
   name: string
 
@@ -732,7 +732,7 @@ UserSchema = z.object
   email: z.string().email()
 
 # Derive type from schema
-User ::= z.infer<typeof UserSchema>
+type User = z.infer<typeof UserSchema>
 
 # Validate at API boundary
 def createUser(req:: Request):: User
@@ -819,7 +819,7 @@ Components added `src/components.js` alongside the compiler — types add
 
 | File | Role | Scope |
 |------|------|-------|
-| `src/lexer.js` | Detect `::` and `::=` tokens, import `installTypeSupport` from `types.js` | Small inline changes |
+| `src/lexer.js` | Detect `::` and `type` keyword, import `installTypeSupport` from `types.js` | Small inline changes |
 | `src/types.js` | Lexer sidecar: `installTypeSupport(Lexer)`, `emitTypes(tokens)`, `generateEnum()` | New file, bulk of logic |
 | `src/compiler.js` | Call `emitTypes()` before parsing, wire `generateEnum()` | ~8 lines |
 | `src/grammar/grammar.rip` | Add `Enum` rule to `Expression` | 1 rule + 1 export |
@@ -878,30 +878,20 @@ unchanged — types are invisible to everything except `rewriteTypes()` and
 
 #### 1.1 Lexer: Token Detection
 
-**Add `::=` and `::` to `OPERATOR_RE`** (in `src/lexer.js`, near line 215).
+**Add `::` to `OPERATOR_RE`** (in `src/lexer.js`, near line 215).
 
-The current regex:
+The `type` keyword is contextual — it is not in `RIP_KEYWORDS` and
+remains a plain `IDENTIFIER`. The `rewriteTypes()` pass in `types.js`
+detects `IDENTIFIER("type")` at statement position followed by another
+`IDENTIFIER` and `=`, and knows a type alias follows.
+The `::` operator is added to the operator regex for type annotations.
 
-```js
-let OPERATOR_RE = /^(?:<=>|[-=]>|~>|~=|:=|=!|===|!==|...)/;
-```
-
-Add `::=` and `::` with longest-match-first ordering (`::=` before `::`).
-Also note that `IDENTIFIER_RE` already avoids matching `:` when followed by
-`=` or `:` (the `(?![=:])` lookahead), so `::` after an identifier will fall
-through to `literalToken()` where `OPERATOR_RE` picks it up.
-
-**Tag the operators** (in the operator tagging section of `literalToken()`,
-near lines 1095-1100, alongside the reactive operators):
+**Tag the annotation operator** (in the operator tagging section of
+`literalToken()`, near lines 1095-1100, alongside the reactive operators):
 
 ```js
-else if (val === '::=') tag = 'TYPE_ALIAS';
 else if (val === '::')  tag = 'TYPE_ANNOTATION';
 ```
-
-These must be checked **before** the `([-+:])\1` pattern in the regex, which
-currently matches `::` as a repeated `:`. The `::=` three-character match must
-come first.
 
 #### 1.2 Rewriter: `rewriteTypes()`
 
@@ -1052,7 +1042,7 @@ rewriteTypes() {
       return 0;  // Re-examine current position
     }
 
-    // --- Handle ::= (type aliases) ---
+    // --- Handle type keyword (type aliases) ---
     // Described in Phase 2 below
 
     return 1;
@@ -1388,9 +1378,9 @@ No changes to `classifyKeyword()` are needed — the existing fallback
 `if (RIP_KEYWORDS.has(id)) return upper` (line 618) automatically tags
 `enum` as `ENUM` and `interface` as `INTERFACE`.
 
-#### 2.2 Type Aliases (`::=`) — Unified typeText
+#### 2.2 Type Aliases (`type` keyword) — Unified typeText
 
-The `::=` operator declares a named type. The `rewriteTypes()` pass handles
+The `type` keyword declares a named type. The `rewriteTypes()` pass handles
 it by collecting the right-hand side, converting it to a TypeScript-compatible
 type string, and packaging it into a single `TYPE_DECL` marker token. All
 three forms (simple alias, structural type, block union) produce the same
@@ -1400,35 +1390,27 @@ emits `type ${name} = ${typeText};` for all of them.
 **Simple alias:**
 
 ```coffee
-ID ::= number
-UserID ::= number | string
+type ID = number
+type UserID = number | string
 ```
 
-When `rewriteTypes()` encounters `TYPE_ALIAS` (`::=`):
+When `rewriteTypes()` encounters `IDENTIFIER("type") IDENTIFIER(name) =`:
 
-1. Record the preceding `IDENTIFIER` token as the type name
+1. Record the name `IDENTIFIER` token as the type name
 2. Collect all following tokens as the type body (same boundary rules as `::`)
-3. Replace the entire sequence (`IDENTIFIER`, `TYPE_ALIAS`, type tokens) with
+3. Replace the entire sequence (`type`, name, `=`, type tokens) with
    a single `TYPE_DECL` marker token
 
 ```js
-// Inside rewriteTypes(), handling TYPE_ALIAS:
-if (tag === 'TYPE_ALIAS') {
-  let nameToken = tokens[i - 1];
+// Inside rewriteTypes(), handling contextual type keyword:
+if (tag === 'IDENTIFIER' && token[1] === 'type') {
+  // Verify statement position and name follows
+  let nameToken = tokens[i + 1];
+  if (!nameToken || nameToken[0] !== 'IDENTIFIER') return 1;
   let name = nameToken[1];
 
-  // Collect type body tokens (same boundary logic as ::)
-  let typeTokens = [];
-  let j = i + 1;
-  let depth = 0;
-  // ... same collection loop as for TYPE_ANNOTATION ...
-
-  let typeStr = /* join collected tokens */;
-
-  // Replace name + ::= + type tokens with TYPE_DECL marker
-  let declToken = gen('TYPE_DECL', name, nameToken);
-  declToken.data = { name, typeText: typeStr };
-  tokens.splice(i - 1, 2 + typeTokens.length, declToken);
+  // Must have = after name (handles generics too)
+  // ... collect type body, create TYPE_DECL marker ...
   return 0;
 }
 ```
@@ -1443,15 +1425,14 @@ the token stream** before parsing. No grammar rule is needed.
 **Structural type:**
 
 ```coffee
-User ::= type
+type User =
   id: number
   name: string
   email?: string
 ```
 
-When `rewriteTypes()` sees `TYPE_ALIAS` followed by `IDENTIFIER("type")` and
-then `INDENT`, it collects the block body and converts it to a TypeScript
-object type string:
+When `rewriteTypes()` sees `type Name =` followed by `INDENT`, it
+collects the block body and converts it to a TypeScript object type string:
 
 1. Consume the `INDENT`
 2. Collect property declarations line by line until `OUTDENT`
@@ -1481,15 +1462,15 @@ type User = {
 **Block union:**
 
 ```coffee
-HttpMethod ::=
+type HttpMethod =
   | "GET"
   | "POST"
   | "PUT"
   | "DELETE"
 ```
 
-When `rewriteTypes()` sees `TYPE_ALIAS` followed by `TERMINATOR` or `INDENT`
-with leading `|` tokens, it collects union members and joins them:
+When `rewriteTypes()` sees `type Name =` followed by `TERMINATOR` or
+`INDENT` with leading `|` tokens, it collects union members and joins them:
 
 ```js
 declToken.data = {
@@ -1672,12 +1653,12 @@ if (tag === 'IDENTIFIER' && i >= 1 && tokens[i - 1]?.[0] === 'DEF') {
 Generic parameters on type aliases work the same way:
 
 ```coffee
-Container<T> ::= type
+type Container<T> =
   value: T
 ```
 
-The `rewriteTypes()` pass detects `IDENTIFIER` + unspaced `<...>` +
-`TYPE_ALIAS` and collects the generic params before processing the `::=`.
+The `rewriteTypes()` pass detects `type` + `IDENTIFIER` + unspaced `<...>` +
+`=` and collects the generic params before processing the type body.
 
 .d.ts:
 ```ts
@@ -1823,7 +1804,7 @@ directive before tokenizing.
 #### Export of Type-Only Declarations
 
 ```coffee
-export User ::= type
+export type User =
   id: number
   name: string
 
@@ -1831,7 +1812,7 @@ export def getUser(id:: number):: User?
   db.find(id)
 ```
 
-The rewriter detects `EXPORT` before `::=` sequences and marks the
+The rewriter detects `EXPORT` before `type` sequences and marks the
 `TYPE_DECL` marker accordingly. The `emitTypes()` function prepends
 `export` to the declaration. No grammar rule is involved for type-only
 exports — the `TYPE_DECL` marker is removed before parsing.
@@ -1864,16 +1845,16 @@ Each row is a test case. Verify both .js and .d.ts output.
 | 4 | `doubled:: number ~= x * 2` | `const doubled = __computed(...)` | `declare const doubled: Computed<number>;` |
 | 5 | `def f(a:: number):: string` | `function f(a) { ... }` | `declare function f(a: number): string;` |
 | 6 | `(x:: number):: number -> x + 1` | `(x) => x + 1` | `(x: number) => number` |
-| 7 | `ID ::= number` | *(empty)* | `type ID = number;` |
-| 8 | `User ::= type` (+ block) | *(empty)* | `type User = { id: number; ... };` |
-| 9 | `Status ::= \| "a" \| "b"` | *(empty)* | `type Status = "a" \| "b";` |
+| 7 | `type ID = number` | *(empty)* | `type ID = number;` |
+| 8 | `type User =` (+ block) | *(empty)* | `type User = { id: number; ... };` |
+| 9 | `type Status = \| "a" \| "b"` | *(empty)* | `type Status = "a" \| "b";` |
 | 10 | `interface Foo` (+ block) | *(empty)* | `interface Foo { ... }` |
 | 11 | `enum Code` (+ block) | `const Code = { ... }` | `enum Code { ... }` |
 | 12 | `items:: Map<string, number> = x` | `items = x` | `let items: Map<string, number>;` |
 | 13 | `email:: string?` | — | `let email: string \| undefined;` |
 | 14 | `id:: ID!` | — | `let id: NonNullable<ID>;` |
 | 15 | `def identity<T>(v:: T):: T` | `function identity(v) { ... }` | `declare function identity<T>(v: T): T;` |
-| 16 | `export User ::= type` (+ block) | *(empty)* | `export type User = { ... };` |
+| 16 | `export type User =` (+ block) | *(empty)* | `export type User = { ... };` |
 | 17 | `export def f(x:: number):: number` | `export function f(x) { ... }` | `export function f(x: number): number;` |
 
 ---
@@ -1926,9 +1907,9 @@ The type system uses a two-phase approach:
 
 | Rip Input | .d.ts Output |
 |-----------|-------------|
-| `Name ::= type { id: number }` | `type Name = { id: number; };` |
-| `Name ::= number` | `type Name = number;` |
-| Block union `::= \| "a" \| "b"` | `type Name = "a" \| "b";` |
+| `type Name =` (+ block `id: number`) | `type Name = { id: number; };` |
+| `type Name = number` | `type Name = number;` |
+| Block union `type Name = \| "a" \| "b"` | `type Name = "a" \| "b";` |
 | `interface Name { ... }` | `interface Name { ... }` |
 | `interface X extends Y` | `interface X extends Y { ... }` |
 | Function types `read: => string` | `read: () => string` |

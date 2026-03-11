@@ -386,13 +386,13 @@ Rip UI hash routing and static demo. See `packages/ui/CHANGELOG.md` v0.3.1.
 ### Rip Types — Optional Type System
 
 - **Type annotations** (`::`) on variables, parameters, and return types — compile-time only, stripped from JS output.
-- **Type aliases** (`::=`) for named types, structural types, union types.
+- **Type aliases** (`type Name =`) for named types, structural types, union types.
 - **Interfaces** with `extends` support.
 - **Enums** with runtime JS generation and `.d.ts` emission.
 - **Generics** (`<T>`) for reusable type definitions.
 - **`.d.ts` emission** — `emitTypes()` generates TypeScript declaration files directly from annotated token stream.
 - **CLI flag** — `-d`/`--dts` generates `.d.ts` files alongside compiled JS.
-- **Architecture** — All type logic consolidated in `src/types.js` (lexer sidecar), minimal changes to lexer and compiler. Added `::` and `::=` operators to lexer.
+- **Architecture** — All type logic consolidated in `src/types.js` (lexer sidecar), minimal changes to lexer and compiler. Added `::` annotations and `type` keyword to lexer.
 
 ## [3.1.0] - 2026-02-08
 

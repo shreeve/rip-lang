@@ -28,16 +28,16 @@ cache:: Map<string, number> = new Map()
 
 # --- Type Aliases & Interfaces ----------------------------------------------
 
-ID ::= number
-UserID ::= number | string
-Point ::= { x: number, y: number }
+type ID = number
+type UserID = number | string
+type Point = { x: number, y: number }
 
-User ::= type
+type User =
   id: number
   name: string
   email?: string
 
-Status ::=
+type Status =
   | "active"
   | "inactive"
   | "pending"

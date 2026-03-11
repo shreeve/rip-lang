@@ -56,7 +56,7 @@ syn keyword ripKeyword      import export from default
 syn keyword ripKeyword      delete typeof instanceof new super
 syn keyword ripKeyword      debugger use own extends
 syn keyword ripKeyword      in of by as
-syn keyword ripKeyword      class def enum interface component render
+syn keyword ripKeyword      class def enum interface type component render
 syn keyword ripKeyword      and or not is isnt
 
 " --- Booleans ---------------------------------------------------------------
@@ -113,7 +113,6 @@ syn match  ripArrow         /[=-]>/
 syn match  ripReactive      /<=>\|:=\|\~=\|\~>\|=!/
 
 " Type annotations (highest operator priority)
-syn match  ripTypeOp        /::=/
 syn match  ripTypeOp        /::\%(=\)\@!/
 
 " --- Object Keys ------------------------------------------------------------
@@ -157,9 +156,10 @@ syn match  ripFuncMethodName /[a-zA-Z_$][a-zA-Z0-9_$]*/         contained
 syn match  ripClassDef      /\<class\s\+\w\+\%(\s\+extends\s\+\w\+\%(\.\w\+\)*\)\?/ contains=ripKeyword,ripClassName
 syn match  ripEnumDef       /\<enum\s\+[A-Z]\w*/                 contains=ripKeyword,ripTypeName
 syn match  ripInterfaceDef  /\<interface\s\+[A-Z]\w*\%(\s\+extends\s\+[A-Z]\w*\)\?/ contains=ripKeyword,ripTypeName
+syn match  ripTypeAliasDef  /\<type\s\+[A-Z]\w*/                 contains=ripKeyword,ripTypeName
 
 syn match  ripClassName     /\%(\<class\s\+\)\@<=\w\+/          contained
-syn match  ripTypeName      /\%(\<\%(enum\|interface\)\s\+\)\@<=[A-Z]\w*/ contained
+syn match  ripTypeName      /\%(\<\%(enum\|interface\|type\)\s\+\)\@<=[A-Z]\w*/ contained
 
 " PascalCase identifiers (type names)
 syn match  ripPascalCase    /\<[A-Z]\w*/
