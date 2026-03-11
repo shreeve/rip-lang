@@ -118,6 +118,7 @@ button { font: inherit; cursor: pointer; }
   background: white; border: 1px solid #cbd5e1; border-radius: 6px;
   box-shadow: 0 4px 16px rgba(0,0,0,0.12); padding: 4px;
   overflow-y: auto; max-height: 280px; min-width: 200px; margin-top: 2px; z-index: 50;
+  overscroll-behavior: contain; /* prevent scroll leaking to the page when list reaches its bounds */
 
   &:not([data-open]) { display: none; }
 }
@@ -154,6 +155,7 @@ button { font: inherit; cursor: pointer; }
   background: white; border: 1px solid #cbd5e1; border-radius: 6px;
   box-shadow: 0 4px 16px rgba(0,0,0,0.12); padding: 4px; z-index: 100;
   overflow-y: auto; max-height: 280px;
+  overscroll-behavior: contain; /* prevent scroll leaking to the page when list reaches its bounds */
 }
 
 .gallery .option,
@@ -269,6 +271,7 @@ button { font: inherit; cursor: pointer; }
   background: white; border: 1px solid #cbd5e1; border-radius: 6px;
   box-shadow: 0 4px 16px rgba(0,0,0,0.12); padding: 4px;
   overflow-y: auto; max-height: 280px; min-width: 160px;
+  overscroll-behavior: contain; /* prevent scroll leaking to the page when list reaches its bounds */
 
   &:not([data-open]) { display: none; }
 }
