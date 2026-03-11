@@ -111,7 +111,15 @@
       ]
     },
 
-    {"comment": "=== TYPE DECLARATIONS (enum, interface — before keywords to get name capture) ==="},
+    {"comment": "=== TYPE DECLARATIONS (type, enum, interface — before keywords to get name capture) ==="},
+    {
+      "match": "\\b(type)\\s+([A-Z]\\w*)",
+      "name": "meta.type.declaration.rip",
+      "captures": {
+        "1": { "name": "storage.type.type.rip" },
+        "2": { "name": "entity.name.type.alias.rip" }
+      }
+    },
     {
       "match": "\\b(enum)\\s+([A-Z]\\w*)",
       "captures": {
