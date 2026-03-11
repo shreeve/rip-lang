@@ -67,6 +67,98 @@ export function validatePropDefault(type, defVal) {
 export function toVirtual(p) { return p + '.ts'; }
 export function fromVirtual(p) { return p.endsWith('.rip.ts') ? p.slice(0, -3) : p; }
 
+// Collect props used at a component usage site, including indented block lines.
+// Returns { component, usedProps } or null if this line isn't a component usage.
+// `componentDefs` is a Map<name, propInfo[]> (or any map with .has/.get on name).
+export function collectUsageProps(srcLines, lineIndex, componentDefs) {
+  const trimmed = srcLines[lineIndex].trimStart();
+  const cm = trimmed.match(/^([A-Z]\w*)\b/);
+  if (!cm) return null;
+  const component = cm[1];
+  if (/=\s*component\b/.test(trimmed)) return null;
+  if (!componentDefs.has(component)) return null;
+
+  // Parse props on the usage line
+  const rest = trimmed.substring(component.length);
+  const usedProps = [];
+  for (const m of rest.matchAll(/(?:^|,)\s*(@?\w+)\s*:/g)) {
+    usedProps.push(m[1]);
+  }
+
+  // Collect props from indented block lines below
+  const baseIndent = srcLines[lineIndex].length - trimmed.length;
+  for (let b = lineIndex + 1; b < srcLines.length; b++) {
+    const bLine = srcLines[b];
+    if (bLine.trim() === '') continue;
+    const bIndent = bLine.length - bLine.trimStart().length;
+    if (bIndent <= baseIndent) break;
+    for (const m of bLine.trimStart().matchAll(/(?:^|,)\s*(@?\w+)\s*:/g)) {
+      usedProps.push(m[1]);
+    }
+  }
+
+  return { component, usedProps };
+}
+
+// Parse component definitions from a DTS string.
+// Returns Map<name, { props: [{ name, type, required }] }>.
+export function parseComponentDTS(dtsString) {
+  const result = new Map();
+  if (!dtsString) return result;
+  const lines = dtsString.split('\n');
+  let i = 0;
+  while (i < lines.length) {
+    const cm = lines[i].match(/^export declare class (\w+)/);
+    if (!cm) { i++; continue; }
+    const name = cm[1];
+    const props = [];
+    let j = i + 1;
+    while (j < lines.length) {
+      if (/^\}/.test(lines[j])) break;
+      if (/constructor\(props\??/.test(lines[j])) {
+        j++;
+        while (j < lines.length) {
+          if (/^\s*\}\);/.test(lines[j])) { j++; break; }
+          const pm = lines[j].match(/^\s+(\w+)(\?)?\s*:\s*(.+);$/);
+          if (pm) props.push({ name: pm[1], type: pm[3].trim(), required: !pm[2] });
+          j++;
+        }
+        continue;
+      }
+      j++;
+    }
+    if (props.length) result.set(name, { props });
+    i = Math.max(i + 1, j);
+  }
+  return result;
+}
+
+// Check component prop definitions for untyped props and invalid defaults.
+// Returns array of { line (0-based), col, len, message } error objects.
+export function checkComponentDefs(compProps, srcLines, startLine = 0) {
+  const errors = [];
+  for (const prop of compProps) {
+    for (let s = startLine; s < srcLines.length; s++) {
+      const m = new RegExp('(@' + prop.name + ')\\s*(::|([:!]?=))').exec(srcLines[s]);
+      if (!m) continue;
+      if (m[1 + 1] !== '::') {
+        errors.push({ line: s, col: m.index, len: m[1].length, propName: prop.name, message: `Prop '${prop.name}' has no type annotation` });
+      } else {
+        const dm = srcLines[s].match(new RegExp('@' + prop.name + '\\s*::\\s*(.+?)\\s*:=\\s*(.+)'));
+        if (dm) {
+          const defVal = dm[2].replace(/#.*$/, '').trim();
+          const err = validatePropDefault(dm[1].trim(), defVal);
+          if (err) {
+            errors.push({ line: s, col: m.index, len: m[1].length, propName: prop.name, message: err });
+          }
+        }
+      }
+      break;
+    }
+  }
+  return errors;
+}
+
 // Patch uninitialized, untyped variables with inferred types from their
 // first assignment. This makes `let total; total = count + ratio;` behave
 // like `let total: number;` — so a later `total = "string"` is caught.
@@ -909,36 +1001,10 @@ export async function runCheck(targetDir, opts = {}) {
 
     // Untyped component prop checking — flag props without :: annotation
     if (entry.dts) {
-      const dtsLines = entry.dts.split('\n');
-      for (let d = 0; d < dtsLines.length; d++) {
-        const cm = dtsLines[d].match(/^export declare class (\w+)/);
-        if (!cm) continue;
-        for (let p = d + 1; p < dtsLines.length; p++) {
-          if (/^\}/.test(dtsLines[p])) break;
-          const pm = dtsLines[p].match(/^\s+(\w+)\??\s*:/);
-          if (!pm) continue;
-          const propName = pm[1];
-          for (let s = 0; s < srcLines.length; s++) {
-            const m = new RegExp('@' + propName + '\\s*(::|([:!]?=))').exec(srcLines[s]);
-            if (m) {
-              if (m[1] !== '::') {
-                errors.push({ line: s + 1, col: m.index + 1, len: propName.length + 1, message: `Prop '${propName}' on component ${cm[1]} has no type annotation`, severity: 'error', code: 'rip', srcLine: srcLines[s], related: [] });
-                totalErrors++;
-              } else {
-                // Typed prop — validate default value against declared type
-                const dm = srcLines[s].match(new RegExp('@' + propName + '\\s*::\\s*(.+?)\\s*:=\\s*(.+)'));
-                if (dm) {
-                  const defVal = dm[2].replace(/#.*$/, '').trim();
-                  const err = validatePropDefault(dm[1].trim(), defVal);
-                  if (err) {
-                    errors.push({ line: s + 1, col: m.index + 1, len: propName.length + 1, message: err, severity: 'error', code: 'rip', srcLine: srcLines[s], related: [] });
-                    totalErrors++;
-                  }
-                }
-              }
-              break;
-            }
-          }
+      for (const [compName, compInfo] of parseComponentDTS(entry.dts)) {
+        for (const e of checkComponentDefs(compInfo.props, srcLines)) {
+          errors.push({ line: e.line + 1, col: e.col + 1, len: e.len, message: e.message.includes('type annotation') ? `Prop '${e.propName}' on component ${compName} has no type annotation` : e.message, severity: 'error', code: 'rip', srcLine: srcLines[e.line], related: [] });
+          totalErrors++;
         }
       }
     }
@@ -954,30 +1020,8 @@ export async function runCheck(targetDir, opts = {}) {
     const componentDefs = new Map();
     for (const [fp, entry] of compiled) {
       if (!entry.dts) continue;
-      const lines = entry.dts.split('\n');
-      let i = 0;
-      while (i < lines.length) {
-        const cm = lines[i].match(/^export declare class (\w+)/);
-        if (!cm) { i++; continue; }
-        const name = cm[1];
-        const props = [];
-        let j = i + 1;
-        while (j < lines.length) {
-          if (/^\}/.test(lines[j])) break;
-          if (/constructor\(props\??/.test(lines[j])) {
-            j++;
-            while (j < lines.length) {
-              if (/^\s*\}\);/.test(lines[j])) { j++; break; }
-              const pm = lines[j].match(/^\s+(\w+)(\?)?\s*:\s*(.+);$/);
-              if (pm) props.push({ name: pm[1], required: !pm[2] });
-              j++;
-            }
-            continue;
-          }
-          j++;
-        }
-        if (props.length) componentDefs.set(name, props);
-        i = Math.max(i + 1, j);
+      for (const [name, info] of parseComponentDTS(entry.dts)) {
+        componentDefs.set(name, info.props);
       }
     }
 
@@ -990,21 +1034,10 @@ export async function runCheck(targetDir, opts = {}) {
         const hadEntry = errors.length > 0;
 
         for (let s = 0; s < srcLines.length; s++) {
-          const trimmed = srcLines[s].trimStart();
-          const cm = trimmed.match(/^([A-Z]\w*)\b/);
-          if (!cm) continue;
-          const compName = cm[1];
-          if (/=\s*component\b/.test(trimmed)) continue;
+          const usage = collectUsageProps(srcLines, s, componentDefs);
+          if (!usage) continue;
+          const { component: compName, usedProps } = usage;
           const props = componentDefs.get(compName);
-          if (!props) continue;
-
-          // Parse props on this usage line
-          const rest = trimmed.substring(compName.length);
-          const usedProps = [];
-          for (const m of rest.matchAll(/(?:^|,)\s*(@?\w+)\s*:/g)) {
-            const key = m[1].startsWith('@') ? m[1] : m[1];
-            usedProps.push(key);
-          }
 
           // Unknown props
           for (const used of usedProps) {

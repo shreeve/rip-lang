@@ -214,12 +214,12 @@ function publishDiagnostics(filePath) {
   if (c.hasTypes && c.source && componentRegistry.size > 0) {
     const srcLines = c.source.split('\n');
     for (let i = 0; i < srcLines.length; i++) {
-      const ctx = detectComponentContext(srcLines[i], srcLines[i].length);
-      if (!ctx?.component) continue;
-      const info = componentRegistry.get(ctx.component);
+      const usage = tc.collectUsageProps(srcLines, i, componentRegistry);
+      if (!usage) continue;
+      const info = componentRegistry.get(usage.component);
       if (!info) continue;
 
-      for (const prop of ctx.existingProps) {
+      for (const prop of usage.usedProps) {
         if (prop.startsWith('@')) continue;
         if (prop === 'class' || prop === 'style') continue;
         if (!info.props.some(p => p.name === prop)) {
@@ -229,7 +229,7 @@ function publishDiagnostics(filePath) {
               range: { start: { line: i, character: col }, end: { line: i, character: col + prop.length } },
               severity: 1,
               source: 'rip',
-              message: `Unknown prop '${prop}' on component ${ctx.component}`,
+              message: `Unknown prop '${prop}' on component ${usage.component}`,
             });
           }
         }
@@ -238,14 +238,14 @@ function publishDiagnostics(filePath) {
       // Required prop checking
       for (const prop of info.props) {
         if (!prop.required) continue;
-        if (ctx.existingProps.includes(prop.name)) continue;
-        const col = srcLines[i].indexOf(ctx.component);
+        if (usage.usedProps.includes(prop.name)) continue;
+        const col = srcLines[i].indexOf(usage.component);
         if (col >= 0) {
           diagnostics.push({
-            range: { start: { line: i, character: col }, end: { line: i, character: col + ctx.component.length } },
+            range: { start: { line: i, character: col }, end: { line: i, character: col + usage.component.length } },
             severity: 1,
             source: 'rip',
-            message: `Missing required prop '${prop.name}' on component ${ctx.component}`,
+            message: `Missing required prop '${prop.name}' on component ${usage.component}`,
           });
         }
       }
@@ -254,38 +254,13 @@ function publishDiagnostics(filePath) {
     // Untyped prop errors (at component definitions, not usage sites)
     for (const [name, compDef] of componentRegistry) {
       if (compDef.source !== filePath) continue;
-      for (const prop of compDef.props) {
-        for (let s = compDef.line; s < srcLines.length; s++) {
-          const match = srcLines[s].match(new RegExp('(@' + prop.name + ')\\s*(::|([:!]?=))'));
-          if (match) {
-            if (match[2] !== '::') {
-              const col = srcLines[s].indexOf(match[1]);
-              diagnostics.push({
-                range: { start: { line: s, character: col }, end: { line: s, character: col + match[1].length } },
-                severity: 1,
-                source: 'rip',
-                message: `Prop '${prop.name}' has no type annotation`,
-              });
-            } else {
-              // Typed prop — validate default value against declared type
-              const dm = srcLines[s].match(new RegExp('@' + prop.name + '\\s*::\\s*(.+?)\\s*:=\\s*(.+)'));
-              if (dm) {
-                const defVal = dm[2].replace(/#.*$/, '').trim();
-                const err = tc.validatePropDefault(dm[1].trim(), defVal);
-                if (err) {
-                  const col = srcLines[s].indexOf(match[1]);
-                  diagnostics.push({
-                    range: { start: { line: s, character: col }, end: { line: s, character: col + match[1].length } },
-                    severity: 1,
-                    source: 'rip',
-                    message: err,
-                  });
-                }
-              }
-            }
-            break;
-          }
-        }
+      for (const e of tc.checkComponentDefs(compDef.props, srcLines, compDef.line)) {
+        diagnostics.push({
+          range: { start: { line: e.line, character: e.col }, end: { line: e.line, character: e.col + e.len } },
+          severity: 1,
+          source: 'rip',
+          message: e.message,
+        });
       }
     }
   }
@@ -574,57 +549,12 @@ function unwrapReactiveType(display) {
 
 // ── Component IntelliSense infrastructure ──────────────────────────
 
-function parseDTS(dtsString) {
-  const result = new Map();
-  if (!dtsString) return result;
-
-  const lines = dtsString.split('\n');
-  let i = 0;
-
-  while (i < lines.length) {
-    const classMatch = lines[i].match(/^export declare class (\w+)/);
-    if (!classMatch) { i++; continue; }
-
-    const name = classMatch[1];
-    const props = [];
-    let j = i + 1;
-    let foundProps = false;
-
-    while (j < lines.length) {
-      if (/^\}/.test(lines[j])) break;
-
-      if (/constructor\(props\??/.test(lines[j])) {
-        foundProps = true;
-        j++;
-        while (j < lines.length) {
-          if (/^\s*\}\);/.test(lines[j])) { j++; break; }
-          const propMatch = lines[j].match(/^\s+(\w+)(\?)?\s*:\s*(.+);$/);
-          if (propMatch) {
-            props.push({ name: propMatch[1], type: propMatch[3].trim(), required: !propMatch[2] });
-          }
-          j++;
-        }
-        continue;
-      }
-      j++;
-    }
-
-    if (foundProps) {
-      result.set(name, { props, source: null, line: 0 });
-    }
-
-    i = Math.max(i + 1, j);
-  }
-
-  return result;
-}
-
 function updateComponentRegistry(filePath, source, dts) {
   for (const [name, info] of componentRegistry) {
     if (info.source === filePath) componentRegistry.delete(name);
   }
 
-  const parsed = parseDTS(dts);
+  const parsed = tc.parseComponentDTS(dts);
   const srcLines = source.split('\n');
 
   for (const [name, info] of parsed) {
