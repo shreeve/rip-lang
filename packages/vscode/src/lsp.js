@@ -760,6 +760,15 @@ connection.onRequest('textDocument/semanticTokens/full', (params) => {
     const tokens = [];
     const usedPositions = new Set();
 
+    // Collect reactive variable names (:= and ~= declarations) so we
+    // can strip the readonly modifier from all their references — TS
+    // sees `const` but these are semantically mutable.
+    const reactiveNames = new Set();
+    for (const sl of srcLines) {
+      const m = sl.match(/^\s*(\w+)\b[^=~]*(?::=|~=|~>)/);
+      if (m) reactiveNames.add(m[1]);
+    }
+
     // Compute byte offset where DTS header ends in the virtual file.
     // Body spans have accurate source maps; header spans use heuristic
     // text search. Processing body first lets accurate mappings claim
@@ -884,12 +893,17 @@ connection.onRequest('textDocument/semanticTokens/full', (params) => {
       if (isInsideStringOrComment(srcLines[matchLine], matchCol)) continue;
 
       usedPositions.add(matchLine + ':' + matchCol);
+      let mods = tsModifiers & 0x1F; // keep bits 0-4, mask off 'local' (bit 5)
+      // Reactive state (:=) and computed (~=) compile to `const`, so TS
+      // flags every reference as readonly. Strip that bit for reactive
+      // variables so the editor doesn't color them as constants.
+      if ((mods & 0x08) && finalType === 7 && reactiveNames.has(tsText)) mods &= ~0x08;
       tokens.push({
         line: matchLine,
         char: matchCol,
         length: tsLength,
         type: TS_TYPE_TO_LEGEND[finalType],
-        modifiers: tsModifiers & 0x1F, // keep bits 0-4, mask off 'local' (bit 5)
+        modifiers: mods,
       });
     }
 
