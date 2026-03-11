@@ -624,7 +624,9 @@ export function compileForCheck(filePath, source, compiler) {
       for (let d = 1; d < srcGap; d++) {
         if (!srcToGen.has(srcA + d) && genA + d < genB) {
           srcToGen.set(srcA + d, genA + d);
-          genToSrc.set(genA + d, srcA + d);
+          if (!genToSrc.has(genA + d)) {
+            genToSrc.set(genA + d, srcA + d);
+          }
         }
       }
     }

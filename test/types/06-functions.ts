@@ -210,7 +210,7 @@ let badNested: string = withNested({ user: { name: 123, age: 35 } })
 
 // ── Semantic token showcase ──
 
-export function parseNums(input: string, radix: number, fallback: number) {
+export function parseNums(input: string, radix: number, fallback: number): number[] {
   return input.split(',').map(function(part) {
     let parsed = parseInt(part.trim(), radix)
     let value = isNaN(parsed) ? fallback : parsed

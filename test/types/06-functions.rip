@@ -198,7 +198,7 @@ badNested:: string = withNested({ user: { name: 123, age: 35 } })
 #   - `double` passed by name (no parens) is colored as a function
 #   - `it` (implicit param) is colored as a parameter
 
-export def parseNums(input:: string, radix:: number, fallback:: number)
+export def parseNums(input:: string, radix:: number, fallback:: number):: number[]
   input.split(",").map (part) ->
     parsed = parseInt(part.trim(), radix)
     value = if isNaN(parsed) then fallback else parsed
