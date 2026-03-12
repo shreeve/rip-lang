@@ -99,6 +99,7 @@ export Popover = component
     floating.style.left = "#{x}px"
     floating.style.top = "#{y}px"
     floating.style.zIndex = '50'
+    floating.style.visibility = 'visible'
 
   ~>
     return unless _ready
@@ -109,6 +110,7 @@ export Popover = component
     if floating
       floating.hidden = not open
       if open
+        floating.style.visibility = 'hidden'
         floating.setAttribute 'data-open', ''
         floating.setAttribute 'data-placement', @placement
         heading = floating.querySelector('h1,h2,h3,h4,h5,h6')
