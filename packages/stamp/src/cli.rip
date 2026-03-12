@@ -1,0 +1,125 @@
+import * as fs from 'fs'
+import * as path from 'path'
+import { parse } from './parser.rip'
+import { run } from './engine.rip'
+
+VERSION = '0.1.0'
+
+# ── Default file resolution ──────────────────────────────────────────────────
+
+findStampfile = (dir = '.') ->
+  for name in ['Stampfile', 'Hostfile', 'Containerfile']
+    candidate = path.resolve dir, name
+    return candidate if fs.existsSync candidate
+  null
+
+# ── CLI ──────────────────────────────────────────────────────────────────────
+
+showHelp = ->
+  console.log """
+  stamp #{VERSION} — declarative host provisioning
+
+  Usage:
+    stamp apply [file]           Reconcile system to match Stampfile
+    stamp verify [file]          Check current state, report PASS/WARN/FAIL
+    stamp plan [file]            Dry-run: show what apply would do
+
+    stamp list                   Show all available directives
+    stamp info <directive>       Show a directive's syntax and properties
+
+    stamp version                Print stamp version
+    stamp help                   Show this help
+  """
+
+showVersion = ->
+  console.log "stamp #{VERSION}"
+
+# ── Subcommands ──────────────────────────────────────────────────────────────
+
+runMode = (mode, file) ->
+  stampfile = file or findStampfile!
+
+  unless stampfile
+    console.error "No Stampfile found. Provide a file or create Stampfile, Hostfile, or Containerfile."
+    process.exit 2
+
+  unless fs.existsSync stampfile
+    console.error "File not found: #{stampfile}"
+    process.exit 2
+
+  source   = fs.readFileSync stampfile, 'utf-8'
+  stampDir = path.dirname path.resolve stampfile
+  parsed   = parse source, process.env
+
+  try
+    result = run! mode, parsed, stampDir
+
+    if mode == 'verify'
+      process.exit 1 if result.fail > 0
+    else if mode == 'plan'
+      process.exit 1 if result > 0
+  catch err
+    console.error "\n  Error: #{err.message}"
+    process.exit 1
+
+listDirectives = ->
+  builtins = ['packages', 'pool', 'dataset', 'profile', 'container', 'incus', 'user', 'group', 'firewall', 'ssh', 'service']
+  console.log "\nBuilt-in directives:\n"
+  for name in builtins
+    console.log "  #{name}"
+  console.log ""
+
+infoDirective = (name) ->
+  unless name
+    console.error "Usage: stamp info <directive>"
+    process.exit 2
+
+  dirPath = path.join import.meta.dir, '..', 'directives', "#{name}.rip"
+  unless fs.existsSync dirPath
+    console.error "Unknown directive: #{name}"
+    process.exit 2
+
+  try
+    mod = import! dirPath
+    console.log "\n#{mod.name or name}"
+    console.log "  #{mod.description}" if mod.description
+    if mod.positional
+      console.log "  Positional: #{mod.positional.join ', '}"
+    if mod.properties
+      console.log "  Properties:"
+      for own k, v of mod.properties
+        flags = []
+        flags.push 'multi' if v.multi
+        flags.push 'arrow' if v.arrow
+        desc = v.description or ''
+        flagStr = if flags.length then " (#{flags.join ', '})" else ''
+        console.log "    #{k}#{flagStr} — #{desc}"
+    console.log ""
+  catch err
+    console.error "Failed to load directive '#{name}': #{err.message}"
+    process.exit 1
+
+# ── Main ─────────────────────────────────────────────────────────────────────
+
+do ->
+  args = process.argv[2..]
+  command = args[0]
+  rest = args[1..]
+
+  switch command
+    when 'apply'           then runMode 'apply', rest[0]
+    when 'verify'          then runMode 'verify', rest[0]
+    when 'plan'            then runMode 'plan', rest[0]
+    when 'list'            then listDirectives!
+    when 'info'            then infoDirective! rest[0]
+    when 'version', '-v'   then showVersion!
+    when 'help', '-h'      then showHelp!
+    when undefined         then showHelp!
+    else
+      # If the first arg is a file path, treat it as `stamp apply <file>`
+      if fs.existsSync command
+        runMode 'apply', command
+      else
+        console.error "Unknown command: #{command}"
+        showHelp!
+        process.exit 2

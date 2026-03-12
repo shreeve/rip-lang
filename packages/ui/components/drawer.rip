@@ -18,44 +18,20 @@ export Drawer = component
   _scrollY = 0
   _id =! "drw-#{Math.random().toString(36).slice(2, 8)}"
 
-  _wireAria: ->
-    panel = @_panel
-    return unless panel
-    heading = panel.querySelector('h1,h2,h3,h4,h5,h6')
-    if heading
-      heading.id ?= "#{_id}-title"
-      panel.setAttribute 'aria-labelledby', heading.id
-    desc = panel.querySelector('p')
-    if desc
-      desc.id ?= "#{_id}-desc"
-      panel.setAttribute 'aria-describedby', desc.id
-
   ~>
     if @open
       _prevFocus = document.activeElement
       document.body.style.overflow = 'hidden'
-
-      setTimeout =>
+      requestAnimationFrame =>
         panel = @_panel
         if panel
-          @_wireAria()
-          focusable = panel.querySelectorAll 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
-          focusable[0]?.focus()
-          @_trapHandler = (e) ->
-            return unless e.key is 'Tab'
-            list = Array.from(panel.querySelectorAll('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])')).filter (f) -> f.offsetParent isnt null
-            return unless list.length
-            first = list[0]
-            last = list[list.length - 1]
-            if e.shiftKey
-              if document.activeElement is first then (e.preventDefault(); last.focus())
-            else
-              if document.activeElement is last then (e.preventDefault(); first.focus())
-          panel.addEventListener 'keydown', @_trapHandler
-      , 0
-    else
-      document.body.style.overflow = ''
-      _prevFocus?.focus()
+          ARIA.wireAria panel, _id
+          panel.querySelectorAll('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])')?[0]?.focus()
+          @_cleanupTrap = ARIA.trapFocus(panel)
+      return ->
+        @_cleanupTrap?()
+        document.body.style.overflow = ''
+        _prevFocus?.focus()
 
   close: ->
     @open = false

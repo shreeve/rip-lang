@@ -133,22 +133,14 @@ export DatePicker = component
     else if @range and Array.isArray(@value) and @value[0]
       viewMonth = new Date(@value[0].getFullYear(), @value[0].getMonth(), 1)
     _inputText = _displayText
-    setTimeout => @_position(), 0
+    requestAnimationFrame => @_position()
 
   close: ->
     open = false
     _rangeStart = null
     _hoveredDay = null
 
-  _position: ->
-    return unless @_trigger and @_cal
-    tr = @_trigger.getBoundingClientRect()
-    @_cal.style.position = 'fixed'
-    @_cal.style.left = "#{tr.left}px"
-    @_cal.style.top = "#{tr.bottom + 4}px"
-    fl = @_cal.getBoundingClientRect()
-    if fl.bottom > window.innerHeight
-      @_cal.style.top = "#{tr.top - fl.height - 4}px"
+  _position: -> ARIA.positionBelow @_trigger, @_cal, 4, false
 
   _onKeydown: (e) ->
     switch e.key

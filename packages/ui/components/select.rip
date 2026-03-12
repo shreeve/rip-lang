@@ -105,17 +105,7 @@ export Select = component
     el?.focus()
     el?.scrollIntoView { block: 'nearest' }
 
-  _position: ->
-    return unless @_trigger and @_list
-    tr = @_trigger.getBoundingClientRect()
-    @_list.style.position = 'fixed'
-    @_list.style.left = "#{tr.left}px"
-    @_list.style.top = "#{tr.bottom + 4}px"
-    @_list.style.minWidth = "#{tr.width}px"
-    fl = @_list.getBoundingClientRect()
-    if fl.bottom > window.innerHeight
-      @_list.style.top = "#{tr.top - fl.height - 4}px"
-    @_list.style.visibility = 'visible'
+  _position: -> ARIA.positionBelow @_trigger, @_list
 
   ~> ARIA.popupDismiss open, (=> @_list), (=> @close()), [=> @_trigger], (=> @_position())
 

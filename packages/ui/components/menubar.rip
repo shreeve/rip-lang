@@ -41,14 +41,8 @@ export Menubar = component
     highlightedIndex = -1
 
   _position: (menuId) ->
-    trigger = @_root?.querySelector("[data-menu-trigger=\"#{menuId}\"]")
-    list = @_root?.querySelector("[data-menu-list=\"#{menuId}\"]")
-    return unless trigger and list
-    tr = trigger.getBoundingClientRect()
-    list.style.position = 'fixed'
-    list.style.left = "#{tr.left}px"
-    list.style.top = "#{tr.bottom + 2}px"
-    list.style.minWidth = "#{tr.width}px"
+    ARIA.positionBelow @_root?.querySelector("[data-menu-trigger=\"#{menuId}\"]"),
+                       @_root?.querySelector("[data-menu-list=\"#{menuId}\"]"), 2, false
 
   selectItem: (menuId, itemId) ->
     @emit 'select', { menu: menuId, item: itemId }

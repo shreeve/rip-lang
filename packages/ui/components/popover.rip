@@ -48,7 +48,7 @@ export Popover = component
 
   openPopover: ->
     open = true
-    setTimeout => @_position(), 0
+    requestAnimationFrame => @_position()
 
   close: ->
     open = false
@@ -116,14 +116,7 @@ export Popover = component
         floating.style.visibility = 'hidden'
         floating.setAttribute 'data-open', ''
         floating.setAttribute 'data-placement', @placement
-        heading = floating.querySelector('h1,h2,h3,h4,h5,h6')
-        if heading
-          heading.id ?= "#{_id}-title"
-          floating.setAttribute 'aria-labelledby', heading.id
-        desc = floating.querySelector('p')
-        if desc
-          desc.id ?= "#{_id}-desc"
-          floating.setAttribute 'aria-describedby', desc.id
+        ARIA.wireAria floating, _id
       else
         floating.hidden = true
         floating.removeAttribute 'data-open'

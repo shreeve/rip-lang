@@ -1,0 +1,56 @@
+import { shx, shok } from "../src/helpers.rip"
+
+export name        = "service"
+export description = "Ensures a systemd service is enabled and running"
+export positional  = ["name"]
+export properties  =
+  enabled: { description: "Whether the service should be enabled (default: true)" }
+  running: { description: "Whether the service should be running (default: true)" }
+
+export check = (name, props) ->
+  wantEnabled = props.enabled?[0]?.args?[0] != 'false'
+  wantRunning = props.running?[0]?.args?[0] != 'false'
+
+  isEnabled = shok "systemctl is-enabled #{name} 2>/dev/null"
+  isRunning = shok "systemctl is-active #{name} 2>/dev/null"
+
+  return 'drift' if wantEnabled and not isEnabled
+  return 'drift' if not wantEnabled and isEnabled
+  return 'drift' if wantRunning and not isRunning
+  return 'drift' if not wantRunning and isRunning
+
+  'ok'
+
+export apply = (name, props) ->
+  wantEnabled = props.enabled?[0]?.args?[0] != 'false'
+  wantRunning = props.running?[0]?.args?[0] != 'false'
+
+  if wantEnabled
+    shx "systemctl enable #{name}" unless shok "systemctl is-enabled #{name} 2>/dev/null"
+  else
+    shx "systemctl disable #{name}" if shok "systemctl is-enabled #{name} 2>/dev/null"
+
+  if wantRunning
+    shx "systemctl start #{name}" unless shok "systemctl is-active #{name} 2>/dev/null"
+  else
+    shx "systemctl stop #{name}" if shok "systemctl is-active #{name} 2>/dev/null"
+
+export verify = (name, props) ->
+  results = []
+  wantEnabled = props.enabled?[0]?.args?[0] != 'false'
+  wantRunning = props.running?[0]?.args?[0] != 'false'
+
+  isEnabled = shok "systemctl is-enabled #{name} 2>/dev/null"
+  isRunning = shok "systemctl is-active #{name} 2>/dev/null"
+
+  if wantEnabled
+    results.push { status: (if isEnabled then 'pass' else 'fail'), message: "#{name} #{if isEnabled then 'enabled' else 'not enabled'}" }
+  else
+    results.push { status: (if not isEnabled then 'pass' else 'fail'), message: "#{name} #{if isEnabled then 'should be disabled' else 'disabled'}" }
+
+  if wantRunning
+    results.push { status: (if isRunning then 'pass' else 'fail'), message: "#{name} #{if isRunning then 'running' else 'not running'}" }
+  else
+    results.push { status: (if not isRunning then 'pass' else 'fail'), message: "#{name} #{if isRunning then 'should be stopped' else 'stopped'}" }
+
+  results

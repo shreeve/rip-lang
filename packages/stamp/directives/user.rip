@@ -1,0 +1,70 @@
+import { shx, shok } from "../src/helpers.rip"
+
+export name        = "user"
+export description = "Ensures a system user exists on the host"
+export positional  = ["name", "uid:gid"]
+export properties  =
+  shell:  { description: "User shell (default: /bin/bash)" }
+  groups: { description: "Supplementary group memberships" }
+  home:   { description: "Home directory (default: /home/<name>)" }
+
+export check = (name, props) ->
+  return 'missing' unless shok "id -u #{name} 2>/dev/null"
+
+  if props.args?[0]
+    [wantUid, wantGid] = props.args[0].split ':'
+    actualUid = shx "id -u #{name}"
+    actualGid = shx "id -g #{name}"
+    return 'drift' if actualUid != wantUid or actualGid != wantGid
+
+  'ok'
+
+export apply = (name, props) ->
+  uidgid = props.args?[0]
+  shell  = props.shell?[0]?.args?[0] or '/bin/bash'
+  home   = props.home?[0]?.args?[0] or "/home/#{name}"
+
+  unless shok "id -u #{name} 2>/dev/null"
+    if uidgid
+      [uid, gid] = uidgid.split ':'
+      shx "groupadd -g #{gid} #{name}" unless shok "getent group #{gid} 2>/dev/null"
+      shx "useradd -m -u #{uid} -g #{gid} -s #{shell} -d #{home} #{name}"
+    else
+      shx "useradd -m -s #{shell} -d #{home} #{name}"
+
+  if props.groups
+    groupList = props.groups[0].args.join ','
+    shx "usermod -aG #{groupList} #{name}"
+
+export verify = (name, props) ->
+  results = []
+
+  unless shok "id -u #{name} 2>/dev/null"
+    results.push { status: 'fail', message: "user #{name} missing" }
+    return results
+  results.push { status: 'pass', message: "user #{name} exists" }
+
+  if props.args?[0]
+    [wantUid, wantGid] = props.args[0].split ':'
+    actualUid = shx "id -u #{name}"
+    actualGid = shx "id -g #{name}"
+
+    if actualUid == wantUid
+      results.push { status: 'pass', message: "#{name} uid is #{wantUid}" }
+    else
+      results.push { status: 'fail', message: "#{name} uid is #{actualUid}, expected #{wantUid}" }
+
+    if actualGid == wantGid
+      results.push { status: 'pass', message: "#{name} gid is #{wantGid}" }
+    else
+      results.push { status: 'fail', message: "#{name} gid is #{actualGid}, expected #{wantGid}" }
+
+  if props.shell?[0]?.args?[0]
+    want = props.shell[0].args[0]
+    actual = shx "getent passwd #{name} | cut -d: -f7"
+    if actual == want
+      results.push { status: 'pass', message: "#{name} shell is #{want}" }
+    else
+      results.push { status: 'warn', message: "#{name} shell is #{actual}, expected #{want}" }
+
+  results

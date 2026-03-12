@@ -62,25 +62,20 @@ export MultiSelect = component
     open = true
     highlightedIndex = if filtered.length > 0 then 0 else -1
 
+  _close: ->
+    open = false
+    query = ''
+    highlightedIndex = -1
+
   onFocusin: -> open = true
 
   onFocusout: ->
     setTimeout =>
       return if @_content?.contains(document.activeElement)
-      open = false
-      query = ''
-      highlightedIndex = -1
+      @_close()
     , 0
 
-  _position: ->
-    return unless @_input and @_list
-    tr = @_input.getBoundingClientRect()
-    @_list.style.left = "#{tr.left}px"
-    @_list.style.top = "#{tr.bottom + 2}px"
-    @_list.style.minWidth = "#{tr.width}px"
-    fl = @_list.getBoundingClientRect()
-    if fl.bottom > window.innerHeight
-      @_list.style.top = "#{tr.top - fl.height - 2}px"
+  _position: -> ARIA.positionBelow @_input, @_list, 2, false
 
   _onKeydown: (e) ->
     len = filtered.length
@@ -89,7 +84,6 @@ export MultiSelect = component
         e.preventDefault()
         open = true
         highlightedIndex = (highlightedIndex + 1) %% len if len
-        setTimeout (=> @_position()), 0
       when 'ArrowUp'
         e.preventDefault()
         highlightedIndex = (highlightedIndex - 1) %% len if len
@@ -110,15 +104,8 @@ export MultiSelect = component
         query = ''
 
   ~>
-    if open
-      setTimeout (=> @_position()), 0
-      onDown = (e) =>
-        unless @_content?.contains(e.target)
-          open = false
-          query = ''
-          highlightedIndex = -1
-      document.addEventListener 'mousedown', onDown
-      return -> document.removeEventListener 'mousedown', onDown
+    if open then requestAnimationFrame => @_position()
+  ~> ARIA.popupDismiss open, (=> @_list), (=> @_close()), [=> @_content], (=> @_position())
 
   render
     . ref: "_content", $open: open?!, $disabled: @disabled?!

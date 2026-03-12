@@ -45,22 +45,13 @@ export Autocomplete = component
   openMenu: ->
     open = true
     @_hlIdx = -1
-    setTimeout => @_position(), 0
+    requestAnimationFrame => @_position()
 
   close: ->
     open = false
     @_hlIdx = -1
 
-  _position: ->
-    return unless @_input and @_list
-    tr = @_input.getBoundingClientRect()
-    @_list.style.position = 'fixed'
-    @_list.style.left = "#{tr.left}px"
-    @_list.style.top = "#{tr.bottom + 2}px"
-    @_list.style.minWidth = "#{tr.width}px"
-    fl = @_list.getBoundingClientRect()
-    if fl.bottom > window.innerHeight
-      @_list.style.top = "#{tr.top - fl.height - 2}px"
+  _position: -> ARIA.positionBelow @_input, @_list, 2, false
 
   selectIndex: (idx) ->
     item = filteredItems[idx]

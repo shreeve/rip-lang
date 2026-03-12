@@ -1085,5 +1085,74 @@ _ariaRovingNav = (e, h, orientation = 'vertical') ->
     when 'Escape'             then _ariaNAV e, h.dismiss
     else h.char?(e.key) if e.key.length is 1          # printable chars: typeahead (e.g. tabs)
 
-globalThis.__aria ??= { listNav: _ariaListNav, rovingNav: _ariaRovingNav, popupDismiss: _ariaPopupDismiss }
-globalThis.ARIA   ??= globalThis.__aria
+# positionBelow — position a fixed popup below its trigger with viewport flip
+# gap: pixels between trigger bottom and popup top (default 4)
+# setVisible: call visibility:visible after positioning (default true)
+_ariaPositionBelow = (trigger, popup, gap = 4, setVisible = true) ->
+  return unless trigger and popup
+  tr = trigger.getBoundingClientRect()
+  popup.style.position = 'fixed'
+  popup.style.left = "#{tr.left}px"
+  popup.style.top = "#{tr.bottom + gap}px"
+  popup.style.minWidth = "#{tr.width}px"
+  fl = popup.getBoundingClientRect()
+  popup.style.top = "#{tr.top - fl.height - gap}px" if fl.bottom > window.innerHeight
+  popup.style.left = "#{window.innerWidth - fl.width - 4}px" if fl.right > window.innerWidth
+  popup.style.visibility = 'visible' if setVisible
+
+# trapFocus — trap Tab key inside a panel (focus wraps first↔last)
+# Returns a cleanup function; call it when the panel closes
+_FOCUSABLE =! 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
+_ariaTrapFocus = (panel) ->
+  handler = (e) ->
+    return unless e.key is 'Tab'
+    list = Array.from(panel.querySelectorAll(_FOCUSABLE)).filter (f) -> f.offsetParent isnt null
+    return unless list.length
+    first = list[0]; last = list[list.length - 1]
+    if e.shiftKey
+      if document.activeElement is first then (e.preventDefault(); last.focus())
+    else
+      if document.activeElement is last then (e.preventDefault(); first.focus())
+  panel.addEventListener 'keydown', handler
+  -> panel.removeEventListener 'keydown', handler
+
+# wireAria — auto-label a panel from its first heading and first paragraph
+_ariaWireAria = (panel, id) ->
+  return unless panel
+  heading = panel.querySelector('h1,h2,h3,h4,h5,h6')
+  if heading
+    heading.id ?= "#{id}-title"
+    panel.setAttribute 'aria-labelledby', heading.id
+  desc = panel.querySelector('p')
+  if desc
+    desc.id ?= "#{id}-desc"
+    panel.setAttribute 'aria-describedby', desc.id
+
+# Shared modal scroll-lock stack — fixes race when Dialog + AlertDialog both open
+# lockScroll(instance): locks body scroll, returns scrollY
+# unlockScroll(instance): removes from stack, restores scroll if stack empty
+_ariaModalStack = []
+_ariaLockScroll = (instance) ->
+  scrollY = window.scrollY
+  _ariaModalStack.push { instance, scrollY }
+  if _ariaModalStack.length is 1
+    document.body.style.position = 'fixed'
+    document.body.style.top = "-#{scrollY}px"
+    document.body.style.width = '100%'
+
+_ariaUnlockScroll = (instance) ->
+  idx = _ariaModalStack.findIndex (m) -> m.instance is instance
+  return if idx < 0
+  { scrollY } = _ariaModalStack.splice(idx, 1)[0]
+  unless _ariaModalStack.length
+    document.body.style.position = ''
+    document.body.style.top = ''
+    document.body.style.width = ''
+    window.scrollTo 0, scrollY
+
+globalThis.__aria ??= {
+  listNav: _ariaListNav, rovingNav: _ariaRovingNav, popupDismiss: _ariaPopupDismiss,
+  positionBelow: _ariaPositionBelow, trapFocus: _ariaTrapFocus, wireAria: _ariaWireAria,
+  lockScroll: _ariaLockScroll, unlockScroll: _ariaUnlockScroll,
+}
+globalThis.ARIA ??= globalThis.__aria

@@ -1,0 +1,16 @@
+# Test Stampfile
+
+set NAME  testhost
+set POOL  tank
+
+packages curl git jq
+
+user shreeve 1000:1000
+  groups trust
+
+group jail 1002
+
+firewall
+  default deny incoming
+  default allow outgoing
+  allow ssh

@@ -1,0 +1,45 @@
+# ── Shell execution helpers ──────────────────────────────────────────────────
+#
+#   sh(cmd)  → { ok, stdout, stderr, code }
+#   shx(cmd) → stdout string; throws on non-zero exit
+#   shok(cmd) → boolean; true if exit code is 0
+
+export sh = (command) ->
+  result = Bun.spawnSync ['sh', '-c', command], { stdout: 'pipe', stderr: 'pipe' }
+  {
+    ok:     result.exitCode == 0
+    stdout: result.stdout.toString().trim()
+    stderr: result.stderr.toString().trim()
+    code:   result.exitCode
+  }
+
+export shx = (command) ->
+  result = sh command
+  unless result.ok
+    throw new Error "Command failed (exit #{result.code}): #{command}\n#{result.stderr}"
+  result.stdout
+
+export shok = (command) ->
+  (sh command).ok
+
+# ── Logging ──────────────────────────────────────────────────────────────────
+
+RESET  = "\x1b[0m"
+BOLD   = "\x1b[1m"
+DIM    = "\x1b[2m"
+GREEN  = "\x1b[32m"
+YELLOW = "\x1b[33m"
+RED    = "\x1b[31m"
+CYAN   = "\x1b[36m"
+
+export log =
+  ok:     (type, name) -> console.log "  #{GREEN}ok#{RESET}     #{type}#{if name then ' ' + name else ''}"
+  apply:  (type, name) -> console.log "  #{CYAN}apply#{RESET}  #{type}#{if name then ' ' + name else ''}"
+  create: (type, name) -> console.log "  #{CYAN}create#{RESET} #{type}#{if name then ' ' + name else ''}"
+  update: (type, name) -> console.log "  #{YELLOW}update#{RESET} #{type}#{if name then ' ' + name else ''}"
+  fail:   (type, name, msg) -> console.log "  #{RED}FAIL#{RESET}   #{type}#{if name then ' ' + name else ''}#{if msg then ' — ' + msg else ''}"
+  pass:   (msg) -> console.log "  #{GREEN}PASS#{RESET}  #{msg}"
+  warn:   (msg) -> console.log "  #{YELLOW}WARN#{RESET}  #{msg}"
+  error:  (msg) -> console.log "  #{RED}FAIL#{RESET}  #{msg}"
+  info:   (msg) -> console.log "  #{DIM}#{msg}#{RESET}"
+  header: (msg) -> console.log "\n#{BOLD}#{msg}#{RESET}"

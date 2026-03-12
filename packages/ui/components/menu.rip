@@ -73,19 +73,7 @@ export Menu = component
       highlightedIndex = idx
       @_list?.querySelectorAll('[role="menuitem"]')[idx]?.focus()
 
-  _position: ->
-    return unless @_trigger and @_list
-    tr = @_trigger.getBoundingClientRect()
-    @_list.style.position = 'fixed'
-    @_list.style.left = "#{tr.left}px"
-    @_list.style.top = "#{tr.bottom + 4}px"
-    @_list.style.minWidth = "#{tr.width}px"
-    fl = @_list.getBoundingClientRect()
-    if fl.bottom > window.innerHeight
-      @_list.style.top = "#{tr.top - fl.height - 4}px"
-    if fl.right > window.innerWidth
-      @_list.style.left = "#{window.innerWidth - fl.width - 4}px"
-    @_list.style.visibility = 'visible'
+  _position: -> ARIA.positionBelow @_trigger, @_list
 
   onTriggerKeydown: (e) ->
     return if @disabled

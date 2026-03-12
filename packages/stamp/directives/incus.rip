@@ -1,0 +1,104 @@
+import { sh, shx, shok } from "../src/helpers.rip"
+
+export name        = "incus"
+export description = "Ensures the Incus daemon is initialized with network and storage"
+export positional  = []
+export properties  =
+  storage: { description: "Storage pool: <name> <driver> <source>" }
+  network: { description: "Network bridge name" }
+
+export check = (name, props) ->
+  return 'missing' unless shok "incus info 2>/dev/null"
+
+  if props.storage
+    poolName = props.storage[0].args[0]
+    return 'drift' unless shok "incus storage show #{poolName} 2>/dev/null"
+
+  if props.network
+    bridge = props.network[0].args[0]
+    return 'drift' unless shok "incus network show #{bridge} 2>/dev/null"
+
+  'ok'
+
+export apply = (name, props) ->
+  unless shok "systemctl is-active incus 2>/dev/null"
+    shx "systemctl enable --now incus"
+
+  unless shok "incus info 2>/dev/null"
+    storageEntry = props.storage?[0]
+    networkEntry = props.network?[0]
+
+    lines = ["config: {}"]
+
+    if networkEntry
+      bridge = networkEntry.args[0]
+      lines.push "networks:"
+      lines.push "- config:"
+      lines.push "    ipv4.address: auto"
+      lines.push "    ipv4.nat: \"true\""
+      lines.push "    ipv6.address: none"
+      lines.push "  description: \"\""
+      lines.push "  name: #{bridge}"
+      lines.push "  type: bridge"
+    else
+      lines.push "networks: []"
+
+    if storageEntry
+      [poolName, driver, source] = storageEntry.args
+      lines.push "storage_pools:"
+      lines.push "- config:"
+      lines.push "    source: #{source}"
+      lines.push "  description: \"\""
+      lines.push "  driver: #{driver}"
+      lines.push "  name: #{poolName}"
+    else
+      lines.push "storage_pools: []"
+
+    defaultPool = storageEntry?.args?[0] or 'default'
+    lines.push "profiles:"
+    lines.push "- config: {}"
+    lines.push "  description: Default Incus profile"
+    lines.push "  devices:"
+    lines.push "    root:"
+    lines.push "      path: /"
+    lines.push "      pool: #{defaultPool}"
+    lines.push "      type: disk"
+    lines.push "  name: default"
+
+    preseed = lines.join '\n'
+    shx "printf '%s' '#{preseed.replace(/'/g, "'\\''")}' | incus admin init --preseed"
+  else
+    if props.storage
+      poolName = props.storage[0].args[0]
+      unless shok "incus storage show #{poolName} 2>/dev/null"
+        throw new Error "Incus already initialized but storage pool '#{poolName}' does not exist"
+
+    if props.network
+      bridge = props.network[0].args[0]
+      unless shok "incus network show #{bridge} 2>/dev/null"
+        throw new Error "Incus already initialized but network '#{bridge}' does not exist"
+
+export verify = (name, props) ->
+  results = []
+
+  if shok "incus info 2>/dev/null"
+    results.push { status: 'pass', message: "incus daemon running" }
+  else
+    results.push { status: 'fail', message: "incus daemon not running" }
+    return results
+
+  if props.storage
+    poolName = props.storage[0].args[0]
+    if shok "incus storage show #{poolName} 2>/dev/null"
+      results.push { status: 'pass', message: "storage pool #{poolName} exists" }
+    else
+      results.push { status: 'fail', message: "storage pool #{poolName} missing" }
+
+  if props.network
+    bridge = props.network[0].args[0]
+    if shok "incus network show #{bridge} 2>/dev/null"
+      results.push { status: 'pass', message: "network #{bridge} exists" }
+    else
+      results.push { status: 'fail', message: "network #{bridge} missing" }
+
+  results

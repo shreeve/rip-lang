@@ -53,13 +53,8 @@ export NavigationMenu = component
     clearTimeout _closeTimer if _closeTimer
 
   _position: (id) ->
-    trigger = @_root?.querySelector("[data-nav-trigger=\"#{id}\"]")
-    panel = @_root?.querySelector("[data-nav-panel=\"#{id}\"]")
-    return unless trigger and panel
-    tr = trigger.getBoundingClientRect()
-    panel.style.position = 'fixed'
-    panel.style.left = "#{tr.left}px"
-    panel.style.top = "#{tr.bottom + 2}px"
+    ARIA.positionBelow @_root?.querySelector("[data-nav-trigger=\"#{id}\"]"),
+                       @_root?.querySelector("[data-nav-panel=\"#{id}\"]"), 2, false
 
   _onKeydown: (e) ->
     navBtns = @_root?.querySelectorAll('[data-nav-trigger], [data-nav-link]')
@@ -86,11 +81,13 @@ export NavigationMenu = component
   ~>
     return unless _ready
     if activePanel
-      onDown = (e) =>
-        unless @_root?.contains(e.target)
-          @_closePanel()
+      onDown   = (e) => @_closePanel() unless @_root?.contains(e.target)
+      onScroll = => @_position(activePanel)
       document.addEventListener 'mousedown', onDown
-      return -> document.removeEventListener 'mousedown', onDown
+      window.addEventListener   'scroll',    onScroll, true
+      return ->
+        document.removeEventListener 'mousedown', onDown
+        window.removeEventListener   'scroll',    onScroll, true
 
   render
     nav ref: "_root", role: "navigation", aria-orientation: @orientation

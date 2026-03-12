@@ -1,0 +1,45 @@
+{
+  "name": "@rip-lang/stamp",
+  "version": "0.1.0",
+  "description": "Declarative host provisioning — no state file, no agent, no YAML",
+  "type": "module",
+  "main": "src/cli.rip",
+  "bin": {
+    "stamp": "./bin/stamp"
+  },
+  "scripts": {
+    "test": "echo 'no tests yet'"
+  },
+  "keywords": [
+    "provisioning",
+    "declarative",
+    "infrastructure",
+    "idempotent",
+    "incus",
+    "zfs",
+    "containers",
+    "bun",
+    "rip",
+    "rip-lang"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shreeve/rip-lang.git",
+    "directory": "packages/stamp"
+  },
+  "homepage": "https://github.com/shreeve/rip-lang/tree/main/packages/stamp#readme",
+  "bugs": {
+    "url": "https://github.com/shreeve/rip-lang/issues"
+  },
+  "author": "Steve Shreeve <steve.shreeve@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "rip-lang": ">=3.13.101"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "directives/",
+    "README.md"
+  ]
+}

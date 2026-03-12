@@ -1,0 +1,142 @@
+import * as fs from 'fs'
+import * as path from 'path'
+import { pathToFileURL } from 'url'
+import { log } from './helpers.rip'
+
+# ── Handler resolution ───────────────────────────────────────────────────────
+
+STAMP_HOME = process.env.STAMP_HOME or path.join(process.env.HOME or '', '.stamp')
+
+resolveHandler = (type, stampDir) ->
+  candidates = [
+    path.join(stampDir, '..', 'directives', "#{type}.rip")       # Built-in
+    path.join(stampDir, 'directives', "#{type}.rip")              # Local (beside Stampfile)
+    path.join(stampDir, 'directives', "#{type}.js")
+    path.join(STAMP_HOME, 'directives', "#{type}.rip")           # Installed
+    path.join(STAMP_HOME, 'directives', "#{type}.js")
+  ]
+
+  for candidate in candidates
+    if fs.existsSync candidate
+      return import! pathToFileURL(candidate).href
+
+  # Try npm resolution
+  for pkg in ["@stamp/#{type}", "stamp-#{type}"]
+    try
+      return import! pkg
+    catch
+      continue
+
+  null
+
+resolveHandlers = (directives, uses, stampDir) ->
+  handlers = {}
+
+  # Pre-resolve `use` declared handlers
+  for source in uses
+    if source.startsWith('http://') or source.startsWith('https://')
+      cacheDir = path.join STAMP_HOME, 'cache'
+      fs.mkdirSync cacheDir, { recursive: true } unless fs.existsSync cacheDir
+      cacheName = source.replace(/[^a-zA-Z0-9.-]/g, '_')
+      cachePath = path.join cacheDir, cacheName
+
+      unless fs.existsSync cachePath
+        log.info "Fetching #{source}..."
+        response = fetch! source
+        unless response.ok
+          throw new Error "Failed to fetch #{source}: #{response.status}"
+        text = response.text!
+        fs.writeFileSync cachePath, text
+      handlers[path.basename(source, path.extname(source))] = import! pathToFileURL(cachePath).href
+    else
+      mod = import! source
+      name = mod.name or path.basename(source, path.extname(source))
+      handlers[name] = mod
+
+  # Resolve handlers for each directive type
+  for dir in directives
+    unless handlers[dir.type]
+      handler = resolveHandler! dir.type, stampDir
+      unless handler
+        throw new Error "Unknown directive '#{dir.type}' (line #{dir.line or '?'})"
+      handlers[dir.type] = handler
+
+  handlers
+
+# ── Execution modes ──────────────────────────────────────────────────────────
+
+propsFor = (dir) ->
+  props = { args: dir.args ?? [], ...dir.properties }
+  props
+
+export apply = (directives, handlers) ->
+  applied = 0
+  total   = directives.length
+
+  for dir in directives
+    handler = handlers[dir.type]
+    props   = propsFor dir
+    result  = handler.check! dir.name, props
+
+    if result == 'ok'
+      log.ok dir.type, dir.name
+    else
+      log.apply dir.type, dir.name
+      handler.apply! dir.name, props
+
+      after = handler.check! dir.name, props
+      if after != 'ok'
+        log.fail dir.type, dir.name, "still not ok after apply"
+        throw new Error "Directive '#{dir.type}#{if dir.name then ' ' + dir.name else ''}' failed post-apply check"
+      applied++
+
+  console.log "\nApplied #{applied} of #{total} directives."
+  applied
+
+export verify = (directives, handlers) ->
+  counts = { pass: 0, warn: 0, fail: 0 }
+
+  for dir in directives
+    handler = handlers[dir.type]
+    props   = propsFor dir
+    results = handler.verify! dir.name, props
+
+    for result in results
+      switch result.status
+        when 'pass' then log.pass  "#{dir.type}: #{result.message}"; counts.pass++
+        when 'warn' then log.warn  "#{dir.type}: #{result.message}"; counts.warn++
+        when 'fail' then log.error "#{dir.type}: #{result.message}"; counts.fail++
+
+  console.log "\nPASS=#{counts.pass} WARN=#{counts.warn} FAIL=#{counts.fail}"
+  counts
+
+export plan = (directives, handlers) ->
+  changes = 0
+
+  for dir in directives
+    handler = handlers[dir.type]
+    props   = propsFor dir
+    result  = handler.check! dir.name, props
+
+    switch result
+      when 'ok'      then log.ok dir.type, dir.name
+      when 'drift'   then log.update dir.type, dir.name; changes++
+      when 'missing' then log.create dir.type, dir.name; changes++
+
+  if changes > 0
+    console.log "\n#{changes} change#{if changes > 1 then 's' else ''} would be applied."
+  else
+    console.log "\nNothing to do."
+  changes
+
+# ── Main entry point ─────────────────────────────────────────────────────────
+
+export run = (mode, parsed, stampDir) ->
+  { directives, uses } = parsed
+  handlers = resolveHandlers! directives, uses, stampDir
+
+  switch mode
+    when 'apply'  then apply!  directives, handlers
+    when 'verify' then verify! directives, handlers
+    when 'plan'   then plan!   directives, handlers
+    else throw new Error "Unknown mode: #{mode}"

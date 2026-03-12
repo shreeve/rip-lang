@@ -1,0 +1,75 @@
+import { shx, shok } from "../src/helpers.rip"
+
+export name        = "firewall"
+export description = "Ensures ufw firewall rules are configured"
+export positional  = []
+export properties  =
+  default: { description: "Default policy: deny/allow incoming/outgoing", multi: true }
+  allow:   { description: "Allow rule", multi: true }
+  deny:    { description: "Deny rule", multi: true }
+
+export check = (name, props) ->
+  return 'missing' unless shok "which ufw"
+  return 'drift'   unless shok "ufw status | grep -q 'Status: active'"
+
+  if props.default
+    status = shx "ufw status verbose"
+    for entry in props.default
+      [action, direction] = entry.args
+      return 'drift' unless status.includes action
+
+  if props.allow
+    status = shx "ufw status"
+    for entry in props.allow
+      rule = entry.args.join ' '
+      return 'drift' unless status.toUpperCase().includes rule.toUpperCase()
+
+  'ok'
+
+export apply = (name, props) ->
+  unless shok "which ufw"
+    shx "apt-get update -qq && apt-get install -y -qq ufw"
+
+  if props.default
+    for entry in props.default
+      [action, direction] = entry.args
+      shx "ufw default #{action} #{direction}"
+
+  if props.allow
+    for entry in props.allow
+      shx "ufw allow #{entry.args.join ' '}"
+
+  if props.deny
+    for entry in props.deny
+      shx "ufw deny #{entry.args.join ' '}"
+
+  unless shok "ufw status | grep -q 'Status: active'"
+    shx "echo 'y' | ufw enable"
+
+export verify = (name, props) ->
+  results = []
+
+  unless shok "which ufw"
+    results.push { status: 'fail', message: "ufw not installed" }
+    return results
+
+  if shok "ufw status | grep -q 'Status: active'"
+    results.push { status: 'pass', message: "ufw active" }
+  else
+    results.push { status: 'fail', message: "ufw not active" }
+
+  if props.default
+    status = shx "ufw status verbose"
+    for entry in props.default
+      [action, direction] = entry.args
+      if status.includes action
+        results.push { status: 'pass', message: "default #{action} #{direction}" }
+      else
+        results.push { status: 'fail', message: "default #{action} #{direction} not set" }
+
+  if props.allow
+    for entry in props.allow
+      rule = entry.args.join ' '
+      results.push { status: 'pass', message: "allow #{rule}" }
+
+  results
