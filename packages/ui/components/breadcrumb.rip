@@ -31,6 +31,7 @@ export Breadcrumb = component
     return unless _ready
     items = _items
     return unless items.length
+    @_content?.style.setProperty '--breadcrumb-separator', JSON.stringify(@separator)
     items.forEach (el, idx) =>
       isLast = idx is items.length - 1
       if isLast

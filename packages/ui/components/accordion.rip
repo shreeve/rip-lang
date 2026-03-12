@@ -48,7 +48,7 @@ export Accordion = component
         trigger.id = triggerId
         trigger.setAttribute 'aria-expanded', isOpen
         trigger.setAttribute 'aria-controls', panelId
-        trigger.setAttribute 'aria-disabled', isDisabled if isDisabled
+        if isDisabled then trigger.setAttribute 'aria-disabled', true else trigger.removeAttribute 'aria-disabled'
         trigger.tabIndex = if isDisabled then -1 else 0
       if content
         content.id = panelId
@@ -80,7 +80,7 @@ export Accordion = component
       first:  => @_focusTrigger(0)
       last:   => @_focusTrigger(-1)
       select: => @toggle(id) unless disabled
-    }
+    }, 'vertical'
 
   _triggers: ->
     return [] unless @_content

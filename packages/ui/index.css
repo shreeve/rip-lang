@@ -901,11 +901,7 @@ select.rip-grid-editor { cursor: pointer; padding-left: 4px; }
 
 /* ── ContextMenu ── */
 
-.gallery [role="menu"][data-open] {
-  background: white; border: 1px solid #cbd5e1; border-radius: 6px;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.12); padding: 4px;
-  min-width: 140px;
-}
+.gallery [role="menu"][data-open] { min-width: 140px; }
 
 /* ── Toolbar ── */
 
@@ -1307,7 +1303,7 @@ body:has(.source-overlay) { overflow: hidden; }
 
   [data-item] { color: #64748b; text-decoration: none; }
   [data-item]:hover:not([data-current]) { color: #1e293b; text-decoration: underline; }
-  [data-item] + [data-item]::before { content: '/'; color: #cbd5e1; margin-right: 6px; user-select: none; text-decoration: none; display: inline-block; }
+  [data-item] + [data-item]::before { content: var(--breadcrumb-separator, '/'); color: #cbd5e1; margin-right: 6px; user-select: none; text-decoration: none; display: inline-block; }
   [data-current] { color: #1e293b; font-weight: 600; }
 }
 
@@ -1502,7 +1498,6 @@ body:has(.source-overlay) { overflow: hidden; }
   /* Menu */
   .gallery [aria-haspopup="menu"] { border-color: #475569; background: #1e293b; color: #e2e8f0; }
   .gallery [role="menu"] { background: #1e293b; border-color: #475569; box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
-  .gallery [role="menu"][data-open] { background: #1e293b; border-color: #475569; box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
 
   /* Scroll Area */
   .scroll-demo [data-orientation] { border-color: #334155; }

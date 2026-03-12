@@ -86,7 +86,7 @@ export Combobox = component
     len = @getItems().length
     ARIA.listNav e,
       next:    => @openMenu() unless open; highlightedIndex = @_nextEnabled(highlightedIndex,  1); @_scrollToItem()
-      prev:    => highlightedIndex = @_nextEnabled(highlightedIndex, -1); @_scrollToItem()
+      prev:    => @openMenu() unless open; highlightedIndex = @_nextEnabled(highlightedIndex, -1); @_scrollToItem()
       first:   => highlightedIndex = 0;       @_scrollToItem()
       last:    => highlightedIndex = len - 1; @_scrollToItem()
       select:  => if highlightedIndex >= 0 then @selectIndex(highlightedIndex) else if len is 1 then @selectIndex(0)
