@@ -118,7 +118,7 @@ export Select = component
     @_list.style.visibility = 'visible'
 
   ~>
-    ARIA.popupDismiss open, @_list, (=> @close()), [@_trigger]
+    ARIA.popupDismiss open, (=> @_list), (=> @close()), [=> @_trigger]
 
   render
     .

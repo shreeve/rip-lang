@@ -1053,9 +1053,9 @@ _ariaListNav = (e, h) ->
 
 _ariaPopupDismiss = (open, popup, close, els = []) ->
   return unless open
-  inside   = [popup, ...els]
-  onDown   = (e) => close() unless inside.some (el) -> el?.contains(e.target)
-  onScroll = (e) => close() unless popup?.contains(e.target)
+  get      = (x) -> if typeof x is 'function' then x() else x
+  onDown   = (e) => close() unless [get(popup), ...els.map(get)].some (el) -> el?.contains(e.target)
+  onScroll = (e) => close() unless get(popup)?.contains(e.target)
   document.addEventListener 'mousedown', onDown
   window.addEventListener   'scroll',    onScroll, true
   ->

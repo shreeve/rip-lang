@@ -96,7 +96,7 @@ export Combobox = component
       tab:     => @close()
 
   ~>
-    ARIA.popupDismiss open, @_list, (=> @close()), [@_content]
+    ARIA.popupDismiss open, (=> @_list), (=> @close()), [=> @_content]
 
   render
     . ref: "_content", $open: open?!
