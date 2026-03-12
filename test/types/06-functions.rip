@@ -36,22 +36,31 @@ export def formal(name:: string, title:: string = "Mr"):: string
 export def logMsg!(msg:: string)
   console.log msg
 
-# ── Use: typed results prove return types flow ──
-# (untyped `result = add(1, 2)` won't show type on hover —
-#  Rip compiles to `let result; result = ...` so TS sees `any`)
+# Optional param (? suffix — emits title?: string in .d.ts)
+export def greetOpt(name:: string, title?:: string):: string
+  if title then "#{title} #{name}" else name
 
-result1:: number        = add(3, 4)
-result2:: string        = greet("World")
-result3:: number        = clamp(15, 0, 10)
-result4:: Point         = makePoint(1, 2)
-result5:: number | null = parse("42")
-result6:: number        = sum(1, 2, 3, 4)
-result7:: boolean       = isPositive(5)
-result8:: string        = formal("Smith")
-result9:: string        = formal("Smith", "Dr")
+# Inferred return type (no :: annotation — TS infers from body)
+export def double(n:: number)
+  n * 2
+
+# ── Use: inferred results (no :: annotations) ──
+
+result1  = add(3, 4)
+result2  = greet("World")
+result3  = clamp(15, 0, 10)
+result4  = makePoint(1, 2)
+result5  = parse("42")
+result6  = sum(1, 2, 3, 4)
+result7  = isPositive(5)
+result8  = formal("Smith")
+result9  = formal("Smith", "Dr")
 logMsg!("hello")
+result10 = greetOpt("Smith")
+result11 = greetOpt("Smith", "Dr")
+result12 = double(21)
 
-console.log result1, result2, result3, result4, result5, result6, result7, result8, result9
+console.log result1, result2, result3, result4, result5, result6, result7, result8, result9, result10, result11, result12
 
 # ── Negative: wrong param types ──
 
@@ -82,6 +91,8 @@ badRet3:: string = makePoint(1, 2)
 badRet4:: boolean = sum(1, 2, 3)
 # @ts-expect-error — isPositive returns boolean, not number
 badRet5:: number = isPositive(1)
+# @ts-expect-error — double infers number return, not string
+badRet6:: string = double(1)
 
 # ── Arrow functions and array transforms ──
 
@@ -109,11 +120,93 @@ badFilter:: string[] = nums.filter (x) => x > 2
 # @ts-expect-error — reduce returns number, not string
 badReduce:: string = nums.reduce ((acc, x) => acc + x), 0
 
-# ── Known gaps ──
-#
-# Optional params: `def foo(x:: string, y?:: string)` compiles and runs,
-# but .d.ts drops the `?` — emits `y: string` instead of `y?: string`.
-# Use default params as a workaround: `y:: string = ""` emits `y?: string`.
-#
-# Named/destructured params: `def foo({name:: string, age:: number})`
-# fails to parse — type annotations inside destructuring aren't supported.
+# ── Destructured params ──
+
+export def createUser({name:: string, age:: number}):: string
+  "#{name} is #{age}"
+
+result13 = createUser({ name: "Jane", age: 30 })
+
+console.log result13
+
+# @ts-expect-error — number where string expected in destructured param
+badCreate:: string = createUser({ name: 42, age: 30 })
+
+# ── Destructured params: defaults ──
+
+export def withDefaults({name:: string = "anon", age:: number = 0}):: string
+  "#{name} is #{age}"
+
+result14 = withDefaults({})
+result15 = withDefaults({ name: "Eve", age: 25 })
+
+console.log result14, result15
+
+# @ts-expect-error — number where string expected
+badDefaults:: string = withDefaults({ name: 42 })
+
+# ── Destructured params: rest ──
+
+export def withRest({name:: string, ...rest}):: string
+  "#{name}"
+
+result16 = withRest({ name: "Alice", extra: true })
+
+console.log result16
+
+# ── Destructured params: rename ──
+
+export def withRename({name: userName:: string, age:: number}):: string
+  "#{userName} is #{age}"
+
+result17 = withRename({ name: "Bob", age: 42 })
+
+console.log result17
+
+# @ts-expect-error — number where string expected in renamed prop
+badRename:: string = withRename({ name: 123, age: 42 })
+
+# ── Destructured params: array ──
+
+export def withArray([first:: string, second:: string]):: string
+  "#{first} and #{second}"
+
+result18 = withArray(["hello", "world"])
+
+console.log result18
+
+# @ts-expect-error — number where string expected in array destructured param
+badArray:: string = withArray([42, "world"])
+
+# ── Destructured params: nested ──
+
+export def withNested({user: {name:: string, age:: number}}):: string
+  "#{name} is #{age}"
+
+result19 = withNested({ user: { name: "Carol", age: 35 } })
+
+console.log result19
+
+# @ts-expect-error — number where string expected in nested destructured param
+badNested:: string = withNested({ user: { name: 123, age: 35 } })
+
+# ── Semantic token showcase ──
+# With the LSP's semantic token provider enabled, these get richer
+# highlighting than TextMate alone can provide:
+#   - `input`, `radix`, `fallback` stay colored as parameters in the body
+#   - `parseInt`, `isNaN`, `Math` get the defaultLibrary modifier
+#   - `double` passed by name (no parens) is colored as a function
+#   - `it` (implicit param) is colored as a parameter
+
+export def parseNums(input:: string, radix:: number, fallback:: number):: number[]
+  input.split(",").map (part) ->
+    parsed = parseInt(part.trim(), radix)
+    value = if isNaN(parsed) then fallback else parsed
+    Math.max(0, Math.min(value, 1000))
+
+result20 = parseNums("10, 20, ff, zz", 16, -1)
+result21 = [1, 2, 3].map(double)
+result22 = ["3", "7", "nope"].map -> parseInt(it) or 0
+console.log "parseNums:", result20
+console.log "map double:", result21
+console.log "map it:", result22

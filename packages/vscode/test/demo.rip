@@ -125,10 +125,10 @@ def greet(person:: string):: string
 def add(a:: number, b:: number):: number
   a + b
 
-square = (x) -> x * x
-double = (x) => x * 2
+square = (x:: number) -> x * x
+doubleFn = (x:: number) => x * 2
 
-def noop!
+def doNothing!
   return
 
 # --- Classes ----------------------------------------------------------------
@@ -143,165 +143,172 @@ class Dog extends Animal
   constructor: (name:: string) ->
     super(name, "Woof")
 
-  fetch: (item) ->
+  fetch: (item:: string) ->
     "#{@name} fetches #{item}"
 
 dog = Dog.new("Buddy")
 
 # --- Operators --------------------------------------------------------------
 
-# Arithmetic
-sum = 1 + 2
-diff = 5 - 3
-prod = 4 * 2
-quot = 10 / 3
-floorDiv = 7 // 2
-modulo = 10 %% 3
-power = 2 ** 8
+def operators(a:: number, b:: number)
+  # Arithmetic
+  sum = 1 + 2
+  diff = 5 - 3
+  prod = 4 * 2
+  quot = 10 / 3
+  floorDiv = 7 // 2
+  mod = 10 %% 3
+  power = 2 ** 8
 
-# Comparison
-eq = a == b
-neq = a != b
-lt = a < b
-gt = a > b
-lte = a <= b
-gte = a >= b
+  # Comparison
+  eq = a == b
+  neq = a != b
+  lt = a < b
+  gt = a > b
+  lte = a <= b
+  gte = a >= b
 
-# Logical (word)
-both = a and b
-either = a or b
-negated = not a
-same = a is b
-different = a isnt b
+  # Logical (word)
+  both = a and b
+  either = a or b
+  negated = not a
+  same = a is b
+  different = a isnt b
 
-# Logical (symbol)
-andSym = a && b
-orSym = a || b
+  # Logical (symbol)
+  andSym = a && b
+  orSym = a || b
 
-# Bitwise
-bitAnd = a & b
-bitOr = a | b
-bitXor = a ^ b
-bitNot = ~a
-lshift = a << 2
-rshift = a >> 2
+  # Bitwise
+  bitAnd = a & b
+  bitOr = a | b
+  bitXor = a ^ b
+  bitNot = ~a
+  lshift = a << 2
+  rshift = a >> 2
 
-# Increment / Decrement
-count++
-count--
+  # Increment / Decrement
+  count++
+  count--
 
 # --- Rip-Specific Operators -------------------------------------------------
 
-# Existential
-exists = myName?
+def ripOperators(obj:: any, val:: string | null, arr:: number[], fn:: Function)
+  # Existential
+  exists = val?
 
-# Optional chaining
-safe = obj?.prop
-safeFn = fn?()
-safeIdx = arr?[0]
+  # Optional chaining
+  safe = obj?.prop
+  safeFn = fn?()
+  safeIdx = arr?[0]
 
-# Nullish coalescing
-fallback = val ?? "default"
+  # Nullish coalescing
+  fallback = val ?? "default"
 
-# Otherwise
-alt = val !? "other"
+  # Otherwise
+  alt = val !? "other"
 
-# Defined / Presence
-isDefined = val!?
-isPresent = val?!
+  # Defined / Presence
+  isDefined = val!?
+  isPresent = val?!
 
-# Pipe
-result = data |> transform
+  # Pipe
+  data = [1, 2, 3]
+  result = data |> JSON.stringify
 
-# Range
-nums = [1..10]
-chars = ['a'..'z']
+  # Range
+  nums = [1..10]
 
-# Splat / Spread
-[first, ...rest] = items
-merged = { ...obj1, ...obj2 }
+  # Splat / Spread
+  [first, ...rest] = arr
+  merged = { ...obj, extra: 1 }
 
 # --- Assignment Operators ---------------------------------------------------
 
-x = 1
-x += 2
-x -= 1
-x *= 3
-x /= 2
-x %= 4
-x **= 2
-x &&= true
-x ||= false
-x ??= 0
-x .= trim()
+def assignments()
+  x:: number = 1
+  x += 2
+  x -= 1
+  x *= 3
+  x /= 2
+  x %= 4
+  x **= 2
+  # x &&= 1              # TODO: TS narrows x to literal 1 after &&=, blocking ||= and ??=
+  # x ||= 0
+  # x ??= 0
 
 # --- Destructuring ----------------------------------------------------------
 
-{ name: userName, age } = person
-[head, ...tail] = list
+def destructuring(person:: { name: string, age: number }, list:: number[])
+  { name: userName, age } = person
+  [head, ...tail] = list
 
 # --- Control Flow -----------------------------------------------------------
 
-if active
-  p "yes"
-else if count is 0
-  p "zero"
-else
-  p "no"
+def controlFlow(active:: boolean, items:: number[], obj:: Record<string, number>, x:: number)
+  if active
+    p "yes"
+  else if count is 0
+    p "zero"
+  else
+    p "no"
 
-result = "a" if active else "b"
+  result = "a" if active else "b"
 
-p "done" if success
-return "error" unless valid
+  p "done" if active
+  return "error" unless active
 
-unless error
-  proceed()
+  unless active
+    p "skip"
 
-for item in items
-  p item
+  for item in items
+    p item
 
-for key, val of obj
-  p key, val
+  for key, val of obj
+    p key, val
 
-for x as iterable when x > 0
-  process(x)
+  for n in items when n > 0
+    p n
 
-for item in items by -1
-  p item
+  for item in items by -1
+    p item
 
-while count > 0
-  count--
+  count:: number = 10
+  while count > 0
+    count--
 
-until done
-  step()
+  # done:: boolean = false  # TODO: TS narrows done to literal false, blocking done = true
+  # until done
+  #   done = true
 
-when x
-  1 then "one"
-  2 then "two"
-  else "other"
+  loop 5
+    p "repeat"
 
-loop 5 ->
-  p "repeat"
+  # squares = (n * n for n in items)           # TODO: comprehension compiles to [] then push, TS infers never[]
+  # evens = (n for n in items when n % 2 is 0)
 
-squares = (x * x for x in [1..10])
-evens = (x for x in [1..20] when x % 2 is 0)
+  switch x
+    when 1 then "one"
+    when 2 then "two"
+    else "other"
 
 # --- Guard Clauses ---------------------------------------------------------
 
-x = getValue() or return
-y = lookup() ?? throw new Error("missing")
+def guardClauses(getValue:: Function, lookup:: Function)
+  x = getValue() or return
+  y = lookup() ?? throw new Error("missing")
 
 # --- Async / Await ----------------------------------------------------------
 
 def fetchData!
-  response = fetch("/api")!
-  data = response.json()!
+  response = fetch!("/api")
+  data = response.json!()
   data
 
 # --- Instance Variables -----------------------------------------------------
 
 class User
-  constructor: (@name, @email) ->
+  constructor: (@name:: string, @email:: string) ->
 
   display: ->
     p @name, @email
@@ -320,8 +327,7 @@ import fs from "fs"
 import { readFile, writeFile } from "fs/promises"
 import * as path from "path"
 
-export default greet
-export { add, square }
+export { greet, add, square }
 
 # --- Standard Library -------------------------------------------------------
 
@@ -342,7 +348,6 @@ counter := 0
 doubled ~= counter * 2
 ~> p "counter changed:", counter
 logger ~> p "logged:", counter
-counter <=> input.value
 
 # Typed reactive variables
 clicks:: number := 0
@@ -354,21 +359,26 @@ greeting ~= "Hello, #{username}!"
 MAX_RETRIES:: number =! 3
 clickLogger:: Function ~> p "clicks:", clicks
 
-# --- Components -------------------------------------------------------------
+# --- Components (no direct TS equivalent) -----------------------------------
 
-Counter = component
-  @count := 0
-  render
-    div "Count: {@count}"
-
-# Typed components
-Button = component
-  @label:: string := "Click"
-  @variant:: "primary" | "secondary" := "primary"
-  @disabled:: boolean := false
-
-  bg ~= if variant is "primary" then "#06f" else "#e5e5e5"
-
-  render
-    button disabled: disabled, style: "background: #{bg}"
-      slot
+# Rip components are a language feature:
+#
+# Counter = component
+#   count := 0
+#
+#   render
+#     input <=> count
+#     div "Count: #{count}"
+#
+# Typed components:
+#
+# Button = component
+#   @label:: string := "Click"
+#   @variant:: "primary" | "secondary" := "primary"
+#   @disabled:: boolean := false
+#
+#   bg ~= if @variant is "primary" then "#06f" else "#e5e5e5"
+#
+#   render
+#     button disabled: @disabled, style: "background: #{bg}"
+#       slot

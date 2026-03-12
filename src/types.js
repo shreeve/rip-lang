@@ -242,10 +242,10 @@ function collectTypeExpression(tokens, j) {
     let tTag = t[0];
 
     // Bracket balancing
-    let isOpen = tTag === '(' || tTag === '[' ||
+    let isOpen = tTag === '(' || tTag === '[' || tTag === '{' ||
         tTag === 'CALL_START' || tTag === 'PARAM_START' || tTag === 'INDEX_START' ||
         (tTag === 'COMPARE' && t[1] === '<');
-    let isClose = tTag === ')' || tTag === ']' ||
+    let isClose = tTag === ')' || tTag === ']' || tTag === '}' ||
         tTag === 'CALL_END' || tTag === 'PARAM_END' || tTag === 'INDEX_END' ||
         (tTag === 'COMPARE' && t[1] === '>');
 
@@ -485,8 +485,18 @@ export function emitTypes(tokens, sexpr = null) {
   let indentStr = '  ';
   let indent = () => indentStr.repeat(indentLevel);
   let inClass = false;
+  let classFields = new Set(); // Track emitted field names to avoid duplicates
   let usesSignal = false;
   let usesComputed = false;
+
+  // Pre-scan: detect reactive operators regardless of type annotations.
+  // This ensures the DTS preamble declares __state/__computed/__effect
+  // so TypeScript can infer types for untyped reactive variables.
+  for (let i = 0; i < tokens.length; i++) {
+    const tag = tokens[i][0];
+    if (tag === 'REACTIVE_ASSIGN') usesSignal = true;
+    else if (tag === 'COMPUTED_ASSIGN') usesComputed = true;
+  }
 
   // Format { prop; prop } into multi-line block
   let emitBlock = (prefix, body, suffix) => {
@@ -504,12 +514,155 @@ export function emitTypes(tokens, sexpr = null) {
     lines.push(`${indent()}${prefix}${body}${suffix}`);
   };
 
+  // Skip past a default value expression (= ...) returning the new j
+  let skipDefault = (tokens, j) => {
+    j++; // skip =
+    let dd = 0;
+    while (j < tokens.length) {
+      let dt = tokens[j];
+      if (dt[0] === '(' || dt[0] === '[' || dt[0] === '{') dd++;
+      if (dt[0] === ')' || dt[0] === ']' || dt[0] === '}') {
+        if (dd === 0) break; // closing bracket of enclosing structure
+        dd--;
+      }
+      if (dd === 0 && dt[1] === ',') break;
+      j++;
+    }
+    return j;
+  };
+
+  // Collect a destructured object { a, b: c, ...rest } recursively.
+  // tokens[startJ] must be '{'. Returns { patternStr, typeStr, endJ, hasAnyType }.
+  let collectDestructuredObj = (tokens, startJ) => {
+    let props = [];
+    let hasAnyType = false;
+    let j = startJ + 1; // skip opening {
+    let d = 1;
+    while (j < tokens.length && d > 0) {
+      if (tokens[j][0] === '{') d++;
+      if (tokens[j][0] === '}') d--;
+      if (d <= 0) { j++; break; }
+
+      // Rest: ...name
+      if (tokens[j][0] === '...' || tokens[j][0] === 'SPREAD') {
+        j++;
+        if (tokens[j]?.[0] === 'IDENTIFIER') {
+          props.push({ kind: 'rest', propName: tokens[j][1] });
+          j++;
+        }
+        continue;
+      }
+
+      // PROPERTY : ... (rename, nested object, or nested array)
+      if (tokens[j][0] === 'PROPERTY' && tokens[j + 1]?.[0] === ':') {
+        let propName = tokens[j][1];
+        j += 2; // skip PROPERTY and :
+        // Nested object
+        if (tokens[j]?.[0] === '{') {
+          let inner = collectDestructuredObj(tokens, j);
+          if (inner.hasAnyType) hasAnyType = true;
+          props.push({ kind: 'nested-obj', propName, inner });
+          j = inner.endJ;
+          continue;
+        }
+        // Nested array
+        if (tokens[j]?.[0] === '[') {
+          let inner = collectDestructuredArr(tokens, j);
+          if (inner.hasAnyType) hasAnyType = true;
+          props.push({ kind: 'nested-arr', propName, inner });
+          j = inner.endJ;
+          continue;
+        }
+        // Simple rename: PROPERTY : IDENTIFIER
+        if (tokens[j]?.[0] === 'IDENTIFIER') {
+          let localName = tokens[j][1];
+          let type = tokens[j].data?.type;
+          if (type) hasAnyType = true;
+          let hasDefault = tokens[j + 1]?.[0] === '=';
+          props.push({ kind: 'rename', propName, localName, type: type ? expandSuffixes(type) : null, hasDefault });
+          j++;
+          if (hasDefault) j = skipDefault(tokens, j);
+        }
+        continue;
+      }
+
+      // Simple: IDENTIFIER (possibly with default)
+      if (tokens[j][0] === 'IDENTIFIER') {
+        let name = tokens[j][1];
+        let type = tokens[j].data?.type;
+        if (type) hasAnyType = true;
+        let hasDefault = tokens[j + 1]?.[0] === '=';
+        props.push({ kind: 'simple', propName: name, type: type ? expandSuffixes(type) : null, hasDefault });
+        j++;
+        if (hasDefault) j = skipDefault(tokens, j);
+        continue;
+      }
+
+      // Skip commas and other tokens
+      j++;
+    }
+
+    // Build pattern and type strings
+    let patternParts = [];
+    let typeParts = [];
+    for (let p of props) {
+      if (p.kind === 'rest') {
+        patternParts.push(`...${p.propName}`);
+        typeParts.push(`[key: string]: unknown`);
+      } else if (p.kind === 'nested-obj' || p.kind === 'nested-arr') {
+        patternParts.push(`${p.propName}: ${p.inner.patternStr}`);
+        typeParts.push(`${p.propName}: ${p.inner.typeStr}`);
+      } else if (p.kind === 'rename') {
+        patternParts.push(`${p.propName}: ${p.localName}`);
+        typeParts.push(`${p.propName}${p.hasDefault ? '?' : ''}: ${p.type || 'any'}`);
+      } else {
+        patternParts.push(p.propName);
+        typeParts.push(`${p.propName}${p.hasDefault ? '?' : ''}: ${p.type || 'any'}`);
+      }
+    }
+    return {
+      patternStr: `{${patternParts.join(', ')}}`,
+      typeStr: `{${typeParts.join(', ')}}`,
+      endJ: j,
+      hasAnyType,
+    };
+  };
+
+  // Collect a destructured array [ a, b ] from tokens.
+  // tokens[startJ] must be '['. Returns { patternStr, typeStr, endJ, hasAnyType }.
+  let collectDestructuredArr = (tokens, startJ) => {
+    let names = [];
+    let elemTypes = [];
+    let hasAnyType = false;
+    let j = startJ + 1; // skip opening [
+    let d = 1;
+    while (j < tokens.length && d > 0) {
+      if (tokens[j][0] === '[') d++;
+      if (tokens[j][0] === ']') d--;
+      if (d > 0 && tokens[j][0] === 'IDENTIFIER') {
+        let name = tokens[j][1];
+        let type = tokens[j].data?.type;
+        names.push(name);
+        elemTypes.push(type ? expandSuffixes(type) : null);
+        if (type) hasAnyType = true;
+      }
+      j++;
+    }
+    return {
+      patternStr: `[${names.join(', ')}]`,
+      typeStr: `[${elemTypes.map(t => t || 'any').join(', ')}]`,
+      endJ: j,
+      hasAnyType,
+    };
+  };
+
   // Collect function parameters (handles simple, destructured, rest, defaults)
   let collectParams = (tokens, startIdx) => {
     let params = [];
+    let fields = []; // Track @param:: type for class field emission
     let j = startIdx;
     let openTag = tokens[j]?.[0];
-    if (openTag !== 'CALL_START' && openTag !== 'PARAM_START') return { params, endIdx: j };
+    if (openTag !== 'CALL_START' && openTag !== 'PARAM_START') return { params, fields, endIdx: j };
     let closeTag = openTag === 'CALL_START' ? 'CALL_END' : 'PARAM_END';
     j++;
     let depth = 0;
@@ -533,6 +686,7 @@ export function emitTypes(tokens, sexpr = null) {
           let name = tokens[j][1];
           let type = tokens[j].data?.type;
           params.push(type ? `${name}: ${expandSuffixes(type)}` : name);
+          if (type) fields.push({ name, type: expandSuffixes(type) });
           j++;
         }
         continue;
@@ -552,20 +706,27 @@ export function emitTypes(tokens, sexpr = null) {
 
       // Destructured object parameter: { a, b }
       if (tok[0] === '{') {
-        // Collect the whole destructured pattern as a string
-        let pattern = '{';
-        j++;
-        let d = 1;
-        while (j < tokens.length && d > 0) {
-          if (tokens[j][0] === '{') d++;
-          if (tokens[j][0] === '}') d--;
-          if (d > 0) pattern += tokens[j][1] + (tokens[j + 1]?.[0] === '}' ? '' : ', ');
-          j++;
+        depth--; // undo the depth++ from nesting tracker above
+        let result = collectDestructuredObj(tokens, j);
+        j = result.endJ;
+        if (result.hasAnyType) {
+          params.push(`${result.patternStr}: ${result.typeStr}`);
+        } else {
+          params.push(result.patternStr);
         }
-        pattern += '}';
-        // Check if the closing } had a type annotation
-        let type = tokens[j - 1]?.data?.type;
-        params.push(type ? `${pattern}: ${expandSuffixes(type)}` : pattern);
+        continue;
+      }
+
+      // Destructured array parameter: [ a, b ]
+      if (tok[0] === '[') {
+        depth--; // undo the depth++ from nesting tracker above
+        let result = collectDestructuredArr(tokens, j);
+        j = result.endJ;
+        if (result.hasAnyType) {
+          params.push(`${result.patternStr}: ${result.typeStr}`);
+        } else {
+          params.push(result.patternStr);
+        }
         continue;
       }
 
@@ -580,8 +741,9 @@ export function emitTypes(tokens, sexpr = null) {
           hasDefault = true;
         }
 
+        let isOptional = hasDefault || tok.data?.predicate;
         if (paramType) {
-          params.push(`${paramName}${hasDefault ? '?' : ''}: ${expandSuffixes(paramType)}`);
+          params.push(`${paramName}${isOptional ? '?' : ''}: ${expandSuffixes(paramType)}`);
         } else {
           params.push(paramName);
         }
@@ -605,7 +767,7 @@ export function emitTypes(tokens, sexpr = null) {
       j++;
     }
 
-    return { params, endIdx: j };
+    return { params, fields, endIdx: j };
   };
 
   for (let i = 0; i < tokens.length; i++) {
@@ -747,6 +909,7 @@ export function emitTypes(tokens, sexpr = null) {
         if (hasTypedMembers) {
           lines.push(`${indent()}${exp}declare class ${className}${ext} {`);
           inClass = true;
+          classFields.clear();
           indentLevel++;
         }
       }
@@ -759,6 +922,7 @@ export function emitTypes(tokens, sexpr = null) {
       if (!nameToken) continue;
       let fnName = nameToken[1];
       let returnType = nameToken.data?.returnType;
+      if (!returnType && nameToken.data?.await === true) returnType = 'void';
       let typeParams = nameToken.data?.typeParams || '';
 
       let { params, endIdx } = collectParams(tokens, i + 2);
@@ -775,6 +939,7 @@ export function emitTypes(tokens, sexpr = null) {
           lines.push(`${indent()}${exp}${declare}function ${fnName}${typeParams}(${paramStr})${ret};`);
         }
       }
+      i = endIdx; // advance past params to avoid leaking destructured typed identifiers
       continue;
     }
 
@@ -801,9 +966,11 @@ export function emitTypes(tokens, sexpr = null) {
           if (tokens[j]?.[1] === ':') j++;
 
           let params = [];
+          let fields = [];
           if (tokens[j]?.[0] === 'PARAM_START') {
             let result = collectParams(tokens, j);
             params = result.params;
+            fields = result.fields;
             j = result.endIdx + 1;
           }
 
@@ -822,6 +989,15 @@ export function emitTypes(tokens, sexpr = null) {
           if (returnType || params.some(p => p.includes(':'))) {
             let ret = returnType ? `: ${expandSuffixes(returnType)}` : '';
             let paramStr = params.join(', ');
+            // Emit field declarations for constructor @param:: type shorthand
+            if (methodName === 'constructor' && fields.length) {
+              for (let f of fields) {
+                if (!classFields.has(f.name)) {
+                  lines.push(`${indent()}${f.name}: ${f.type};`);
+                  classFields.add(f.name);
+                }
+              }
+            }
             lines.push(`${indent()}${methodName}(${paramStr})${ret};`);
           }
           continue;
@@ -919,12 +1095,14 @@ export function emitTypes(tokens, sexpr = null) {
             lines.push(`${indent()}${exp}${declare}function ${varName}(${paramStr}): ${returnType};`);
           } else if (inClass) {
             lines.push(`${indent()}${varName}: ${type};`);
+            classFields.add(varName);
           } else {
             lines.push(`${indent()}${exp}let ${varName}: ${type};`);
           }
         } else if (inClass) {
           // Class property without assignment
           lines.push(`${indent()}${varName}: ${type};`);
+          classFields.add(varName);
         }
       } else if (inClass) {
         lines.push(`${indent()}${varName}: ${type};`);
@@ -1028,7 +1206,18 @@ function emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars) {
       ? body.slice(1) : (body ? [body] : []);
 
     let publicProps = [];
+    let bodyMembers = [];
     let hasRequired = false;
+
+    // Infer type from literal initializer when no explicit annotation
+    let inferLiteralType = (v) => {
+      let s = v?.valueOf?.() ?? v;
+      if (typeof s !== 'string') return null;
+      if (s === 'true' || s === 'false') return 'boolean';
+      if (/^-?\d+(\.\d+)?$/.test(s)) return 'number';
+      if (s.startsWith('"') || s.startsWith("'")) return 'string';
+      return null;
+    };
 
     for (let member of members) {
       if (!Array.isArray(member)) continue;
@@ -1042,13 +1231,42 @@ function emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars) {
         propName = isProp ? (target[2]?.valueOf?.() ?? target[2]) : (target?.valueOf?.() ?? target);
         type = isProp ? target[2]?.type : target?.type;
         hasDefault = true;
-        if (!isProp) componentVars.add(propName);
+        if (!isProp) {
+          componentVars.add(propName);
+          let wrapper = (mHead === 'computed') ? 'Computed' : 'Signal';
+          let typeStr = type ? expandSuffixes(type) : (inferLiteralType(member[2]) || 'any');
+          bodyMembers.push(`  ${propName}: ${wrapper}<${typeStr}>;`);
+          continue;
+        }
       } else if (mHead === '.') {
         isProp = (member[1]?.valueOf?.() ?? member[1]) === 'this';
         propName = isProp ? (member[2]?.valueOf?.() ?? member[2]) : null;
         type = isProp ? member[2]?.type : null;
         hasDefault = false;
         if (!isProp && propName) componentVars.add(propName);
+      } else if (mHead === 'object') {
+        // Method definitions: (object (methodName (-> (params...) (block ...)) :))
+        for (let i = 1; i < member.length; i++) {
+          let entry = member[i];
+          if (!Array.isArray(entry) || entry.length < 2) continue;
+          let methName = entry[0]?.valueOf?.() ?? entry[0];
+          let funcDef = entry[1];
+          if (!Array.isArray(funcDef)) continue;
+          let fHead = funcDef[0]?.valueOf?.() ?? funcDef[0];
+          if (fHead !== '->' && fHead !== '=>') continue;
+          let params = funcDef[1];
+          if (!Array.isArray(params)) continue;
+          let hasTypedParams = params.some(p => p?.type);
+          if (!hasTypedParams) continue;
+          let paramStrs = [];
+          for (let p of params) {
+            let pName = p?.valueOf?.() ?? p;
+            let pType = p?.type ? expandSuffixes(p.type) : 'any';
+            paramStrs.push(`${pName}: ${pType}`);
+          }
+          bodyMembers.push(`  ${methName}(${paramStrs.join(', ')}): void;`);
+        }
+        continue;
       } else {
         continue;
       }
@@ -1068,6 +1286,7 @@ function emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars) {
       for (let p of publicProps) lines.push(p);
       lines.push(`  });`);
     }
+    for (let m of bodyMembers) lines.push(m);
     lines.push(`}`);
   }
 

@@ -26,16 +26,16 @@ type Shape = Circle | Rect
 
 // ── Use the types ──
 
-const status: Status = 'active'
-const pending: Status = 'pending'
-const method: HttpMethod = 'GET'
-const postMethod: HttpMethod = 'POST'
-const level: LogLevel = 'info'
-const fatalLevel: LogLevel = 'fatal'
-const result: Result = 'success'
+let status: Status = 'active'
+let pending: Status = 'pending'
+let method: HttpMethod = 'GET'
+let postMethod: HttpMethod = 'POST'
+let level: LogLevel = 'info'
+let fatalLevel: LogLevel = 'fatal'
+let result: Result = 'success'
 
-const circle: Shape = { kind: 'circle', radius: 5 }
-const rect: Shape = { kind: 'rect', width: 10, height: 20 }
+let circle: Shape = { kind: 'circle', radius: 5 }
+let rect: Shape = { kind: 'rect', width: 10, height: 20 }
 
 console.log('status:', status)
 console.log('pending:', pending)
@@ -66,13 +66,13 @@ console.log('rect area:', area(rect))
 // ── Negative: wrong types must be caught ──
 
 // @ts-expect-error — invalid literal not in Status union
-const badStatus: Status = 'unknown'
+let badStatus: Status = 'unknown'
 // @ts-expect-error — invalid literal not in HttpMethod union
-const badMethod: HttpMethod = 'FETCH'
+let badMethod: HttpMethod = 'FETCH'
 // @ts-expect-error — invalid literal not in LogLevel union
-const badLevel: LogLevel = 'trace'
+let badLevel: LogLevel = 'trace'
 // @ts-expect-error — number not assignable to Result
-const badResult: Result = 0
+let badResult: Result = 0
 
 // ── Enum exhaustiveness ──
 //

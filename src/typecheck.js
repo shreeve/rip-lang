@@ -10,18 +10,25 @@
 //   in a directory, creates a TypeScript language service, and reports
 //   type errors mapped back to Rip source positions.
 
-import { Compiler } from './compiler.js';
+import { Compiler, getStdlibCode } from './compiler.js';
 import { createRequire } from 'module';
 import { readFileSync, existsSync, readdirSync } from 'fs';
+import { mapToSourcePos, offsetToLine, getLineText, findNearestWord, lineColToOffset, offsetToLineCol } from './sourcemap-utils.js';
 import { resolve, relative, dirname } from 'path';
 import { buildLineMap } from './sourcemaps.js';
 
 // ── Shared helpers ─────────────────────────────────────────────────
 
-// Detect type annotations (:: followed by space or =) ignoring comments
-// and prototype syntax (Class::method).
+// Detect type annotations (:: followed by space or =) ignoring comments,
+// string literals, and prototype syntax (Class::method).
 export function hasTypeAnnotations(source) {
-  return source.split('\n').some(line => /::[ \t=]/.test(line.replace(/#.*$/, '')));
+  return source.split('\n').some(line => {
+    // Strip comment
+    line = line.replace(/#.*$/, '');
+    // Strip string literals (single and double quoted)
+    line = line.replace(/"(?:[^"\\]|\\.)*"/g, '""').replace(/'(?:[^'\\]|\\.)*'/g, "''");
+    return /::[ \t=]/.test(line);
+  });
 }
 
 export function countLines(str) {
@@ -30,8 +37,127 @@ export function countLines(str) {
   return n;
 }
 
+// Validate a prop's default value against its declared type.
+// Returns an error message string if invalid, null if OK or can't validate.
+export function validatePropDefault(type, defVal) {
+  const parts = type.split('|').map(s => s.trim());
+  // String literal union: "a" | "b" | "c"
+  if (parts.every(p => /^"[^"]*"$/.test(p))) {
+    if (/^"[^"]*"$/.test(defVal) && !parts.includes(defVal)) {
+      return `Type '${defVal}' is not assignable to type '${type}'`;
+    }
+    return null;
+  }
+  // Single type checks
+  if (parts.length === 1) {
+    const t = parts[0];
+    if (t === 'boolean' && defVal !== 'true' && defVal !== 'false') {
+      return `Type '${defVal}' is not assignable to type 'boolean'`;
+    }
+    if (t === 'number' && !/^-?\d+(\.\d+)?$/.test(defVal)) {
+      return `Type '${defVal}' is not assignable to type 'number'`;
+    }
+    if (t === 'string' && !/^"[^"]*"$/.test(defVal)) {
+      return `Type '${defVal}' is not assignable to type 'string'`;
+    }
+  }
+  return null;
+}
+
 export function toVirtual(p) { return p + '.ts'; }
 export function fromVirtual(p) { return p.endsWith('.rip.ts') ? p.slice(0, -3) : p; }
+
+// Collect props used at a component usage site, including indented block lines.
+// Returns { component, usedProps } or null if this line isn't a component usage.
+// `componentDefs` is a Map<name, propInfo[]> (or any map with .has/.get on name).
+export function collectUsageProps(srcLines, lineIndex, componentDefs) {
+  const trimmed = srcLines[lineIndex].trimStart();
+  const cm = trimmed.match(/^([A-Z]\w*)\b/);
+  if (!cm) return null;
+  const component = cm[1];
+  if (/=\s*component\b/.test(trimmed)) return null;
+  if (!componentDefs.has(component)) return null;
+
+  // Parse props on the usage line
+  const rest = trimmed.substring(component.length);
+  const usedProps = [];
+  for (const m of rest.matchAll(/(?:^|,)\s*(@?\w+)\s*:/g)) {
+    usedProps.push(m[1]);
+  }
+
+  // Collect props from indented block lines below
+  const baseIndent = srcLines[lineIndex].length - trimmed.length;
+  for (let b = lineIndex + 1; b < srcLines.length; b++) {
+    const bLine = srcLines[b];
+    if (bLine.trim() === '') continue;
+    const bIndent = bLine.length - bLine.trimStart().length;
+    if (bIndent <= baseIndent) break;
+    for (const m of bLine.trimStart().matchAll(/(?:^|,)\s*(@?\w+)\s*:/g)) {
+      usedProps.push(m[1]);
+    }
+  }
+
+  return { component, usedProps };
+}
+
+// Parse component definitions from a DTS string.
+// Returns Map<name, { props: [{ name, type, required }] }>.
+export function parseComponentDTS(dtsString) {
+  const result = new Map();
+  if (!dtsString) return result;
+  const lines = dtsString.split('\n');
+  let i = 0;
+  while (i < lines.length) {
+    const cm = lines[i].match(/^export declare class (\w+)/);
+    if (!cm) { i++; continue; }
+    const name = cm[1];
+    const props = [];
+    let j = i + 1;
+    while (j < lines.length) {
+      if (/^\}/.test(lines[j])) break;
+      if (/constructor\(props\??/.test(lines[j])) {
+        j++;
+        while (j < lines.length) {
+          if (/^\s*\}\);/.test(lines[j])) { j++; break; }
+          const pm = lines[j].match(/^\s+(\w+)(\?)?\s*:\s*(.+);$/);
+          if (pm) props.push({ name: pm[1], type: pm[3].trim(), required: !pm[2] });
+          j++;
+        }
+        continue;
+      }
+      j++;
+    }
+    if (props.length) result.set(name, { props });
+    i = Math.max(i + 1, j);
+  }
+  return result;
+}
+
+// Check component prop definitions for untyped props and invalid defaults.
+// Returns array of { line (0-based), col, len, message } error objects.
+export function checkComponentDefs(compProps, srcLines, startLine = 0) {
+  const errors = [];
+  for (const prop of compProps) {
+    for (let s = startLine; s < srcLines.length; s++) {
+      const m = new RegExp('(@' + prop.name + ')\\s*(::|([:!]?=))').exec(srcLines[s]);
+      if (!m) continue;
+      if (m[1 + 1] !== '::') {
+        errors.push({ line: s, col: m.index, len: m[1].length, propName: prop.name, message: `Prop '${prop.name}' has no type annotation` });
+      } else {
+        const dm = srcLines[s].match(new RegExp('@' + prop.name + '\\s*::\\s*(.+?)\\s*:=\\s*(.+)'));
+        if (dm) {
+          const defVal = dm[2].replace(/#.*$/, '').trim();
+          const err = validatePropDefault(dm[1].trim(), defVal);
+          if (err) {
+            errors.push({ line: s, col: m.index, len: m[1].length, propName: prop.name, message: err });
+          }
+        }
+      }
+      break;
+    }
+  }
+  return errors;
+}
 
 // Patch uninitialized, untyped variables with inferred types from their
 // first assignment. This makes `let total; total = count + ratio;` behave
@@ -41,11 +167,10 @@ export function patchUninitializedTypes(ts, service, compiledEntries) {
   const program = service.getProgram();
   if (!program) return;
   const checker = program.getTypeChecker();
-  for (const [filePath] of compiledEntries) {
-    const sf = program.getSourceFile(toVirtual(filePath));
-    if (!sf) continue;
+
+  function patchStatements(stmts) {
     const uninitialized = new Map();
-    for (const stmt of sf.statements) {
+    for (const stmt of stmts) {
       if (ts.isVariableStatement(stmt)) {
         for (const decl of stmt.declarationList.declarations) {
           if (!decl.initializer && !decl.type && ts.isIdentifier(decl.name)) {
@@ -66,7 +191,17 @@ export function patchUninitializedTypes(ts, service, compiledEntries) {
           uninitialized.delete(name);
         }
       }
+      // Recurse into function bodies
+      if (ts.isFunctionDeclaration(stmt) && stmt.body) {
+        patchStatements(stmt.body.statements);
+      }
     }
+  }
+
+  for (const [filePath] of compiledEntries) {
+    const sf = program.getSourceFile(toVirtual(filePath));
+    if (!sf) continue;
+    patchStatements(sf.statements);
   }
 }
 
@@ -74,7 +209,6 @@ export function patchUninitializedTypes(ts, service, compiledEntries) {
 // treats async return types transparently.
 export const SKIP_CODES = new Set([
   2300, // Duplicate identifier (DTS declarations coexist with compiled class bodies)
-  2304, // Cannot find name
   2307, // Cannot find module
   2389, // Function implementation name must match overload (DTS + compiled body)
   2391, // Function implementation is missing (DTS overload sigs separated from implementations)
@@ -82,12 +216,10 @@ export const SKIP_CODES = new Set([
   2394, // Overload signature not compatible with implementation (untyped compiled params)
   2451, // Cannot redeclare block-scoped variable
   2567, // Enum declarations can only merge with namespace or other enum (DTS + compiled body)
+  2842, // Unused renaming of destructured property (DTS overload has renamed param unused in declaration)
   1064, // Return type of async function must be Promise
   2582, // Cannot find name 'test' (test runner globals)
   2593, // Cannot find name 'describe' (test runner globals)
-  7005, // Variable implicitly has an 'any' type (compiler-generated locals)
-  7006, // Parameter implicitly has an 'any' type (compiler-generated params)
-  7034, // Variable implicitly has type 'any' in some locations (compiler-generated)
 ]);
 
 // Base TypeScript compiler settings for type-checking. Callers can
@@ -104,6 +236,35 @@ export function createTypeCheckSettings(ts, overrides = {}) {
     skipLibCheck: true,
     ...overrides,
   };
+}
+
+// ── Param helpers ──────────────────────────────────────────────────
+
+// Extract the text between the first balanced ( ) — handles nested parens
+// so callback types like `(fn: (x: number) => void)` work correctly.
+function extractFnParams(line) {
+  const idx = line.indexOf('(');
+  if (idx < 0) return null;
+  let depth = 1, i = idx + 1;
+  while (i < line.length && depth > 0) {
+    if (line[i] === '(') depth++;
+    else if (line[i] === ')') depth--;
+    i++;
+  }
+  return depth === 0 ? line.slice(idx + 1, i - 1) : null;
+}
+
+// Replace the first balanced ( ) content in `line` with `newParams`.
+function replaceFnParams(line, newParams) {
+  const idx = line.indexOf('(');
+  if (idx < 0) return line;
+  let depth = 1, i = idx + 1;
+  while (i < line.length && depth > 0) {
+    if (line[i] === '(') depth++;
+    else if (line[i] === ')') depth--;
+    i++;
+  }
+  return depth === 0 ? line.slice(0, idx + 1) + newParams + line.slice(i - 1) : line;
 }
 
 // ── Shared compilation pipeline ────────────────────────────────────
@@ -165,24 +326,242 @@ export function compileForCheck(filePath, source, compiler) {
       }
       if (injections.length > 0) {
         injections.sort((a, b) => a.codeLine - b.codeLine);
-        // Adjust reverseMap: each injection shifts subsequent code lines down by 1
-        if (result.reverseMap) {
-          for (const [, entry] of result.reverseMap) {
-            let offset = 0;
-            for (const inj of injections) {
-              if (inj.codeLine <= entry.genLine + offset) offset++;
+
+        // Check if a DTS signature has an explicit return type after the params.
+        function hasExplicitReturn(sig) {
+          const idx = sig.indexOf('(');
+          if (idx < 0) return false;
+          let depth = 1, i = idx + 1;
+          while (i < sig.length && depth > 0) {
+            if (sig[i] === '(') depth++;
+            else if (sig[i] === ')') depth--;
+            i++;
+          }
+          return depth === 0 && sig.slice(i).includes(':');
+        }
+
+        // Extract the return type from a DTS signature (e.g. ": number" from
+        // "function add(a: number, b: number): number;").
+        function extractReturnType(sig) {
+          const idx = sig.indexOf('(');
+          if (idx < 0) return null;
+          let depth = 1, i = idx + 1;
+          while (i < sig.length && depth > 0) {
+            if (sig[i] === '(') depth++;
+            else if (sig[i] === ')') depth--;
+            i++;
+          }
+          if (depth !== 0) return null;
+          const rest = sig.slice(i).replace(/;?\s*$/, '').trim();
+          return rest.startsWith(':') ? rest : null;
+        }
+
+        // First pass: copy typed params AND return types from signatures to
+        // implementations. Typed params give TS type info inside function bodies;
+        // return types let TS verify the body matches the declared return.
+        for (const inj of injections) {
+          const sig = inj.sig.replace(/^declare /, '');
+          const sigParams = extractFnParams(sig);
+          if (sigParams !== null) {
+            cl[inj.codeLine] = replaceFnParams(cl[inj.codeLine], sigParams);
+          }
+          const retType = extractReturnType(sig);
+          if (retType) {
+            const braceIdx = cl[inj.codeLine].lastIndexOf('{');
+            if (braceIdx > 0) {
+              cl[inj.codeLine] = cl[inj.codeLine].slice(0, braceIdx).trimEnd() + retType + ' {';
             }
-            entry.genLine += offset;
           }
         }
-        // Insert signatures bottom-up to preserve indices.
+
+        // Only inject overload signatures for functions with explicit return types.
+        // Functions without a return type annotation let TS infer the return from
+        // the implementation body — injecting an overload would force it to `any`.
+        const overloads = injections.filter(inj => hasExplicitReturn(inj.sig));
+
+        // Adjust reverseMap: each overload injection shifts subsequent code lines down by 1.
+        // Compare against the original genLine (not genLine + offset) because bottom-up
+        // splicing means only overloads at positions <= the original line shift it.
+        if (result.reverseMap) {
+          for (const [, entries] of result.reverseMap) {
+            for (const entry of entries) {
+              let offset = 0;
+              for (const inj of overloads) {
+                if (inj.codeLine <= entry.genLine) offset++;
+              }
+              entry.genLine += offset;
+            }
+          }
+        }
+        // Insert overload signatures bottom-up to preserve indices.
         // Strip 'declare ' — signatures must be non-ambient to match implementations.
-        for (let k = injections.length - 1; k >= 0; k--) {
-          cl.splice(injections[k].codeLine, 0, injections[k].sig.replace(/^declare /, ''));
+        for (let k = overloads.length - 1; k >= 0; k--) {
+          const sig = overloads[k].sig.replace(/^declare /, '');
+          cl.splice(overloads[k].codeLine, 0, sig);
         }
         code = cl.join('\n');
         // Rebuild header DTS without the moved function signatures
         headerDts = dl.filter((_, i) => !moved.has(i)).join('\n').trimEnd() + '\n';
+      }
+    }
+  }
+
+  // Inject class field declarations and typed constructor params from DTS
+  // into compiled class bodies. TypeScript ignores `declare class` when a
+  // real `class` implementation exists, so fields must appear in the body.
+  if (hasTypes && headerDts && code) {
+    const dl = headerDts.split('\n');
+    const cl = code.split('\n');
+    // Parse declare class blocks from DTS header
+    const classInfo = new Map();
+    const classLineRanges = [];
+    for (let i = 0; i < dl.length; i++) {
+      const m = dl[i].match(/^(?:export\s+)?declare\s+class\s+(\w+)/);
+      if (m) {
+        const name = m[1];
+        const fields = [];
+        const startIdx = i;
+        let j = i + 1;
+        let ctorParams = null;
+        const methods = [];
+        while (j < dl.length && !dl[j].match(/^\}/)) {
+          const fm = dl[j].match(/^\s+(\w+):\s+(.+);$/);
+          if (fm) fields.push({ name: fm[1], type: fm[2] });
+          const cm = dl[j].match(/^\s+constructor\((.+)\);$/);
+          if (cm) ctorParams = cm[1];
+          // Match method signatures like "  fetch(item: string);" or "  fetch(item: string): string;"
+          const mm = dl[j].match(/^\s+(\w+)\((.+)\)(?::\s*.+)?;$/);
+          if (mm && mm[1] !== 'constructor') methods.push({ name: mm[1], params: mm[2] });
+          j++;
+        }
+        if (fields.length || ctorParams || methods.length) {
+          classInfo.set(name, { fields, ctorParams, methods });
+          classLineRanges.push({ start: startIdx, end: j });
+        }
+      }
+    }
+    if (classInfo.size > 0) {
+      // Inject fields and typed constructor params into compiled class bodies
+      const injections = [];
+      for (let j = 0; j < cl.length; j++) {
+        // Match `class Name {` (regular classes) and `const Name = class {` (components)
+        const regularMatch = cl[j].match(/^(?:export\s+)?class\s+(\w+)/);
+        const constMatch = !regularMatch && cl[j].match(/^(?:export\s+)?const\s+(\w+)\s*=\s*class\b/);
+        const cm = regularMatch || constMatch;
+        if (cm && classInfo.has(cm[1])) {
+          const info = classInfo.get(cm[1]);
+          // Inject field declarations only for regular classes (components already have declare fields)
+          if (regularMatch && info.fields.length) {
+            const inj = info.fields.map(f => `  ${f.name}: ${f.type};`);
+            injections.push({ line: j + 1, lines: inj });
+          }
+          // Copy typed params into constructor (regular classes only; component constructors are already typed)
+          if (regularMatch && info.ctorParams) {
+            for (let k = j + 1; k < cl.length && k < j + 5; k++) {
+              if (cl[k].match(/^\s+constructor\s*\(/)) {
+                cl[k] = cl[k].replace(/constructor\s*\([^)]*\)/, `constructor(${info.ctorParams})`);
+                break;
+              }
+            }
+          }
+          // Copy typed params into class methods (both regular and component classes)
+          if (info.methods.length) {
+            for (const meth of info.methods) {
+              for (let k = j + 1; k < cl.length; k++) {
+                if (cl[k].match(/^(?:export\s+)?(?:class|const)\s+\w+/) && k > j + 1) break;
+                const re = new RegExp(`^(\\s+)${meth.name}\\s*\\([^)]*\\)`);
+                if (re.test(cl[k])) {
+                  cl[k] = cl[k].replace(new RegExp(`${meth.name}\\s*\\([^)]*\\)`), `${meth.name}(${meth.params})`);
+                  break;
+                }
+              }
+            }
+          }
+        }
+      }
+      // Insert field declarations bottom-up to preserve line indices
+      for (let k = injections.length - 1; k >= 0; k--) {
+        cl.splice(injections[k].line, 0, ...injections[k].lines);
+      }
+      // Remove declare class blocks from header DTS
+      const removedLines = new Set();
+      for (const range of classLineRanges) {
+        for (let i = range.start; i <= range.end; i++) removedLines.add(i);
+      }
+      code = cl.join('\n');
+      headerDts = dl.filter((_, i) => !removedLines.has(i)).join('\n').trimEnd() + '\n';
+    }
+  }
+
+  // Copy typed constructor props parameter to _init(props) in component classes.
+  // Components compile constructor(props: T) and _init(props) separately — TS
+  // needs _init to have the same props type to avoid noImplicitAny.
+  // The _init type is widened with Record<string, any> to allow __bind_xxx__
+  // internal properties, and the optional marker is removed since _init is
+  // always called with a valid object by the framework.
+  if (hasTypes && code) {
+    const cl = code.split('\n');
+    let changed = false;
+    for (let j = 0; j < cl.length; j++) {
+      // Match: constructor(props?: { ... }) or constructor(props: { ... })
+      const cm = cl[j].match(/^\s+constructor\((props)\??\s*:\s*(\{[^}]*\})\)/);
+      if (cm) {
+        const propsType = `${cm[1]}: ${cm[2]} & Record<string, any>`;
+        // Find _init(props) in the same class
+        for (let k = j + 1; k < cl.length; k++) {
+          if (cl[k].match(/^((?:export\s+)?(?:const|class)\s+)/)) break;
+          if (cl[k].match(/^\s+_init\(props\)\s*\{?\s*$/)) {
+            cl[k] = cl[k].replace('_init(props)', `_init(${propsType})`);
+            changed = true;
+            break;
+          }
+        }
+      }
+      // For component classes without typed constructors, type _init(props) as any
+      if (cl[j].match(/^\s+_init\(props\)\s*\{?\s*$/)) {
+        cl[j] = cl[j].replace('_init(props)', '_init(props: Record<string, any>)');
+        changed = true;
+      }
+    }
+    if (changed) code = cl.join('\n');
+  }
+
+  // Transfer typed params from `declare function name(...)` into function
+  // expressions assigned to variables: `name = function(x) {}` → `name = function(x: T) {}`.
+  // Also replace `declare function` with `declare var` so TS doesn't clash
+  // with the `let name; name = function(...)` pattern (TS2630).
+  if (hasTypes && headerDts && code) {
+    const dl = headerDts.split('\n');
+    const cl = code.split('\n');
+    const funcDecls = new Map();
+
+    for (let i = 0; i < dl.length; i++) {
+      const m = dl[i].match(/^(?:export\s+)?declare\s+function\s+(\w+)\((.+)\)(?::\s*(.+))?;$/);
+      if (m) funcDecls.set(m[1], { params: m[2], ret: m[3] || null, idx: i });
+    }
+
+    if (funcDecls.size > 0) {
+      const movedDts = new Set();
+
+      for (let j = 0; j < cl.length; j++) {
+        // Match: name = function(args) { or name = (args) => (
+        const fm = cl[j].match(/^(\w+)\s*=\s*function\s*\([^)]*\)/);
+        const am = !fm && cl[j].match(/^(\w+)\s*=\s*\([^)]*\)\s*=>/);
+        const match = fm || am;
+        if (match && funcDecls.has(match[1])) {
+          const entry = funcDecls.get(match[1]);
+          if (fm) {
+            cl[j] = cl[j].replace(/function\s*\([^)]*\)/, `function(${entry.params})`);
+          } else {
+            cl[j] = cl[j].replace(/\([^)]*\)\s*=>/, `(${entry.params}) =>`);
+          }
+          movedDts.add(entry.idx);
+        }
+      }
+
+      if (movedDts.size > 0) {
+        code = cl.join('\n');
+        headerDts = dl.filter((_, i) => !movedDts.has(i)).join('\n').trimEnd() + '\n';
       }
     }
   }
@@ -223,11 +602,75 @@ export function compileForCheck(filePath, source, compiler) {
     }
   }
 
+  // Ensure reactive preamble declarations are present when compiled code uses
+  // reactive functions. emitTypes() sets the flags when typed reactive vars exist,
+  // but files that import from typed modules may have untyped reactive vars whose
+  // compiled code still references __state/__computed/__effect.
+  if (hasTypes) {
+    const needSignal = /\b__state\(/.test(code) && !/\bdeclare function __state\b/.test(headerDts);
+    const needComputed = /\b__computed\(/.test(code) && !/\bdeclare function __computed\b/.test(headerDts);
+    const needEffect = /\b__effect\(/.test(code) && !/\bdeclare function __effect\b/.test(headerDts);
+    if (needSignal || needComputed || needEffect) {
+      const decls = [];
+      if (needSignal) {
+        if (!/\binterface Signal\b/.test(headerDts)) decls.push('interface Signal<T> { value: T; read(): T; lock(): Signal<T>; free(): Signal<T>; kill(): T; }');
+        decls.push('declare function __state<T>(value: T): Signal<T>;');
+      }
+      if (needComputed) {
+        if (!/\binterface Computed\b/.test(headerDts)) decls.push('interface Computed<T> { readonly value: T; read(): T; lock(): Computed<T>; free(): Computed<T>; kill(): T; }');
+        decls.push('declare function __computed<T>(fn: () => T): Computed<T>;');
+      }
+      if (needEffect) decls.push('declare function __effect(fn: () => void | (() => void)): () => void;');
+      headerDts = decls.join('\n') + '\n' + headerDts;
+    }
+  }
+
+  // Inject declarations for Rip's stdlib globals (abort, assert, p, sleep, etc.)
+  // so TypeScript doesn't report false "Cannot find name" (TS2304) errors.
+  // These are normally emitted as globalThis assignments in the preamble, but
+  // type-checking compiles with skipPreamble: true.
+  //
+  // Names are auto-derived from getStdlibCode() so new globals are picked up
+  // automatically. Precise type overrides are provided where the generic
+  // fallback (...args: any[]) => any would lose useful type information.
+  if (hasTypes) {
+    const preciseTypes = {
+      abort:  'declare function abort(msg?: string): never;',
+      assert: 'declare function assert(v: any, msg?: string): asserts v;',
+      exit:   'declare function exit(code?: number): never;',
+      kind:   'declare function kind(v: any): string;',
+      noop:   'declare function noop(): void;',
+      p:      'declare function p(...args: any[]): void;',
+      pp:     'declare function pp(v: any): any;',
+      raise:  'declare function raise(a: any, b?: any): never;',
+      rand:   'declare function rand(a?: number, b?: number): number;',
+      sleep:  'declare function sleep(ms: number): Promise<void>;',
+      todo:   'declare function todo(msg?: string): never;',
+      warn:   'declare function warn(...args: any[]): void;',
+      zip:    'declare function zip(...arrays: any[][]): any[][];',
+    };
+    const names = [...getStdlibCode().matchAll(/globalThis\.(\w+)\s*\?\?=/g)].map(m => m[1]);
+    const stdlibDecls = names.map(name =>
+      preciseTypes[name] || `declare function ${name}(...args: any[]): any;`
+    );
+    headerDts = stdlibDecls.join('\n') + '\n' + headerDts;
+
+    // Inject declaration for toMatchable helper (emitted by =~ operator in preamble)
+    if (/\btoMatchable\b/.test(code) && !/\btoMatchable\b/.test(headerDts)) {
+      headerDts = 'declare function toMatchable(v: any, allowNewlines?: boolean): string;\n' + headerDts;
+    }
+
+    // Inject declaration for modulo helper (emitted by %% operator in preamble)
+    if (/\bmodulo\b/.test(code) && !/\bdeclare .*\bmodulo\b/.test(headerDts)) {
+      headerDts = 'declare function modulo(n: number, d: number): number;\n' + headerDts;
+    }
+  }
+
   let tsContent = (hasTypes ? headerDts + '\n' : '') + code;
   const headerLines = hasTypes ? countLines(headerDts + '\n') : 1;
 
   // Build bidirectional line maps
-  const { srcToGen, genToSrc } = buildLineMap(result.reverseMap, result.map, headerLines);
+  const { srcToGen, genToSrc, srcColToGen } = buildLineMap(result.reverseMap, result.map, headerLines);
 
   // Snapshot code-section mappings before DTS mapping can overwrite them.
   // Needed by @ts-expect-error injection which must target code lines, not DTS.
@@ -273,7 +716,9 @@ export function compileForCheck(filePath, source, compiler) {
       for (let d = 1; d < srcGap; d++) {
         if (!srcToGen.has(srcA + d) && genA + d < genB) {
           srcToGen.set(srcA + d, genA + d);
-          genToSrc.set(genA + d, srcA + d);
+          if (!genToSrc.has(genA + d)) {
+            genToSrc.set(genA + d, srcA + d);
+          }
         }
       }
     }
@@ -318,23 +763,23 @@ export function compileForCheck(filePath, source, compiler) {
           if (g >= genLine) srcToGen.set(s, g + 1);
         }
         srcToGen.set(srcLine, genLine);
+        // Shift column-aware mappings
+        for (const [, entries] of srcColToGen) {
+          for (const e of entries) {
+            if (e.genLine >= genLine) e.genLine++;
+          }
+        }
       }
       tsContent = tsLines.join('\n');
     }
   }
 
-  return { tsContent, headerLines, hasTypes, srcToGen, genToSrc, source, dts };
+  return { tsContent, headerLines, hasTypes, srcToGen, genToSrc, srcColToGen, source, dts };
 }
 
-// ── Source mapping helpers ──────────────────────────────────────────
+// ── Source mapping helpers (delegated to sourcemap-utils.js) ───────
 
-export function offsetToLine(text, offset) {
-  let line = 0;
-  for (let i = 0; i < offset && i < text.length; i++) {
-    if (text[i] === '\n') line++;
-  }
-  return line;
-}
+export { mapToSourcePos, offsetToLine, getLineText, findNearestWord, lineColToOffset, offsetToLineCol } from './sourcemap-utils.js';
 
 // Map a TypeScript diagnostic offset back to a Rip source line number.
 // Returns -1 if the offset falls in the DTS header.
@@ -343,10 +788,9 @@ export function mapToSource(entry, offset) {
   if (tsLine < entry.headerLines) return -1;
 
   if (entry.genToSrc.has(tsLine)) return entry.genToSrc.get(tsLine);
-  for (let d = 1; d <= 3; d++) {
-    if (entry.genToSrc.has(tsLine - d)) return entry.genToSrc.get(tsLine - d);
-    if (entry.genToSrc.has(tsLine + d)) return entry.genToSrc.get(tsLine + d);
-  }
+  let best = -1;
+  for (const [g] of entry.genToSrc) if (g <= tsLine && g > best) best = g;
+  if (best >= 0) return entry.genToSrc.get(best) + (tsLine - best);
   return tsLine - entry.headerLines;
 }
 
@@ -489,43 +933,78 @@ export async function runCheck(targetDir, opts = {}) {
     }
 
     const errors = [];
+    const srcLines = entry.source.split('\n');
     for (const d of diags) {
       if (d.start === undefined) continue;
       if (SKIP_CODES.has(d.code)) continue;
 
-      const srcLine = mapToSource(entry, d.start);
-      if (srcLine < 0) continue;
+      const pos = mapToSourcePos(entry, d.start);
+      if (!pos) continue;
+
+      const endPos = d.length ? mapToSourcePos(entry, d.start + d.length) : null;
+      const len = endPos && endPos.line === pos.line ? endPos.col - pos.col : 1;
 
       const message = ts.flattenDiagnosticMessageText(d.messageText, '\n');
       const severity = d.category === 1 ? 'error' : d.category === 0 ? 'warning' : 'info';
+      const srcLine = srcLines[pos.line] || '';
 
-      errors.push({ line: srcLine + 1, message, severity, code: d.code });
+      // Collect related information
+      const related = [];
+      if (d.relatedInformation) {
+        for (const ri of d.relatedInformation) {
+          const riMsg = ts.flattenDiagnosticMessageText(ri.messageText, '\n');
+          if (ri.file && ri.start !== undefined) {
+            const riPath = fromVirtual(ri.file.fileName);
+            const riEntry = compiled.get(riPath);
+            if (riEntry) {
+              const riPos = mapToSourcePos(riEntry, ri.start);
+              if (riPos) {
+                let riLen = ri.length || 1;
+                const riTsLine = offsetToLine(riEntry.tsContent, ri.start);
+                if (riTsLine >= riEntry.headerLines && ri.length) {
+                  const riEnd = mapToSourcePos(riEntry, ri.start + ri.length);
+                  if (riEnd && riEnd.line === riPos.line) riLen = riEnd.col - riPos.col;
+                }
+                const riSrcLines = riEntry.source.split('\n');
+                const riRel = relative(rootPath, riPath);
+                related.push({
+                  file: riRel, line: riPos.line + 1, col: riPos.col + 1,
+                  message: riMsg, srcLine: riSrcLines[riPos.line] || '', len: Math.max(1, riLen),
+                });
+              }
+            } else {
+              // External file (e.g. lib.es5.d.ts) — use TS positions directly
+              const riLine = offsetToLine(ri.file.text, ri.start);
+              let riColStart = ri.start;
+              for (let i = ri.start - 1; i >= 0; i--) {
+                if (ri.file.text[i] === '\n') break;
+                riColStart = i;
+              }
+              const riCol = ri.start - riColStart;
+              const riSrcLine = getLineText(ri.file.text, riLine);
+              const riRel = relative(rootPath, ri.file.fileName);
+              related.push({
+                file: riRel, line: riLine + 1, col: riCol + 1,
+                message: riMsg, srcLine: riSrcLine, len: ri.length || 1,
+              });
+            }
+          } else {
+            related.push({ message: riMsg });
+          }
+        }
+      }
+
+      errors.push({ line: pos.line + 1, col: pos.col + 1, len: Math.max(1, len), message, severity, code: d.code, srcLine, related });
       if (severity === 'error') totalErrors++;
       else if (severity === 'warning') totalWarnings++;
     }
 
     // Untyped component prop checking — flag props without :: annotation
-    if (!opts.allowAny && entry.dts) {
-      const dtsLines = entry.dts.split('\n');
-      const srcLines = entry.source.split('\n');
-      for (let d = 0; d < dtsLines.length; d++) {
-        const cm = dtsLines[d].match(/^export declare class (\w+)/);
-        if (!cm) continue;
-        for (let p = d + 1; p < dtsLines.length; p++) {
-          if (/^\}/.test(dtsLines[p])) break;
-          const pm = dtsLines[p].match(/^\s+(\w+)\??\s*:/);
-          if (!pm) continue;
-          const propName = pm[1];
-          for (let s = 0; s < srcLines.length; s++) {
-            const m = new RegExp('@' + propName + '\\s*(::|([:!]?=))').exec(srcLines[s]);
-            if (m) {
-              if (m[1] !== '::') {
-                errors.push({ line: s + 1, message: `Prop '${propName}' on component ${cm[1]} has no type annotation`, severity: 'error', code: 'rip' });
-                totalErrors++;
-              }
-              break;
-            }
-          }
+    if (entry.dts) {
+      for (const [compName, compInfo] of parseComponentDTS(entry.dts)) {
+        for (const e of checkComponentDefs(compInfo.props, srcLines)) {
+          errors.push({ line: e.line + 1, col: e.col + 1, len: e.len, message: e.message.includes('type annotation') ? `Prop '${e.propName}' on component ${compName} has no type annotation` : e.message, severity: 'error', code: 'rip', srcLine: srcLines[e.line], related: [] });
+          totalErrors++;
         }
       }
     }
@@ -535,35 +1014,117 @@ export async function runCheck(targetDir, opts = {}) {
     }
   }
 
-  // Print results
+  // Component usage-site checks — unknown props and missing required props
+  {
+    // Build component registry from all DTS
+    const componentDefs = new Map();
+    for (const [fp, entry] of compiled) {
+      if (!entry.dts) continue;
+      for (const [name, info] of parseComponentDTS(entry.dts)) {
+        componentDefs.set(name, info.props);
+      }
+    }
+
+    // Scan usage sites
+    if (componentDefs.size > 0) {
+      for (const [fp, entry] of compiled) {
+        if (!entry.hasTypes) continue;
+        const srcLines = entry.source.split('\n');
+        const errors = fileResults.find(r => r.file === fp)?.errors || [];
+        const hadEntry = errors.length > 0;
+
+        for (let s = 0; s < srcLines.length; s++) {
+          const usage = collectUsageProps(srcLines, s, componentDefs);
+          if (!usage) continue;
+          const { component: compName, usedProps } = usage;
+          const props = componentDefs.get(compName);
+
+          // Unknown props
+          for (const used of usedProps) {
+            if (used.startsWith('@')) continue;
+            if (used === 'class' || used === 'style') continue;
+            if (!props.some(p => p.name === used)) {
+              const col = srcLines[s].indexOf(used);
+              errors.push({ line: s + 1, col: col + 1, len: used.length, message: `Unknown prop '${used}' on component ${compName}`, severity: 'error', code: 'rip', srcLine: srcLines[s], related: [] });
+              totalErrors++;
+            }
+          }
+
+          // Missing required props
+          for (const prop of props) {
+            if (!prop.required) continue;
+            if (usedProps.includes(prop.name)) continue;
+            const col = srcLines[s].indexOf(compName);
+            errors.push({ line: s + 1, col: col + 1, len: compName.length, message: `Missing required prop '${prop.name}' on component ${compName}`, severity: 'error', code: 'rip', srcLine: srcLines[s], related: [] });
+            totalErrors++;
+          }
+        }
+
+        if (!hadEntry && errors.length > 0) {
+          fileResults.push({ file: fp, errors });
+        }
+      }
+    }
+  }
+
+  // Print results — tsc format with Rip source positions
   for (const { file, errors } of fileResults) {
     const rel = relative(rootPath, file);
     for (const e of errors) {
-      const loc = `${cyan(rel)}${dim(':')}${yellow(String(e.line))}`;
+      const loc = `${cyan(rel)}${dim(':')}${yellow(String(e.line))}${dim(':')}${yellow(String(e.col))}`;
       const sev = e.severity === 'error' ? red('error') : yellow('warning');
-      console.log(`${loc} ${sev} ${e.message} ${dim(typeof e.code === 'number' ? `TS${e.code}` : '')}`);
+      const code = typeof e.code === 'number' ? `TS${e.code}` : e.code || '';
+      console.log(`${loc} ${dim('-')} ${sev} ${dim(code)}${dim(':')} ${e.message}`);
+
+      if (e.srcLine) {
+        console.log('');
+        const lineNum = String(e.line);
+        console.log(`${lineNum} ${e.srcLine}`);
+        console.log(`${' '.repeat(lineNum.length)} ${' '.repeat(e.col - 1)}${red('~'.repeat(e.len))}`);
+      }
+
+      if (e.related) {
+        for (const ri of e.related) {
+          if (ri.file) {
+            console.log('');
+            console.log(`  ${cyan(ri.file)}${dim(':')}${yellow(String(ri.line))}${dim(':')}${yellow(String(ri.col))}`);
+            const riLineNum = String(ri.line);
+            console.log(`    ${riLineNum} ${ri.srcLine}`);
+            console.log(`    ${' '.repeat(riLineNum.length)} ${' '.repeat(ri.col - 1)}${red('~'.repeat(ri.len))}`);
+            console.log(`    ${ri.message}`);
+          } else {
+            console.log(`    ${ri.message}`);
+          }
+        }
+      }
+      console.log('');
     }
   }
 
-  // Summary
-  const typedFiles = [...compiled.values()].filter(e => e.hasTypes).length;
-  const totalFiles = compiled.size;
-
-  if (totalErrors === 0 && totalWarnings === 0) {
-    const summary = typedFiles > 0
-      ? `${typedFiles} typed file${typedFiles !== 1 ? 's' : ''} checked, no errors found`
-      : `${totalFiles} file${totalFiles !== 1 ? 's' : ''} found, none have type annotations`;
-    console.log(`\n${bold('✓')} ${summary}`);
-    if (compileErrors > 0) {
-      console.log(dim(`  (${compileErrors} file${compileErrors !== 1 ? 's' : ''} had compile errors)`));
-    }
+  // Summary — tsc format
+  const totalFound = totalErrors + totalWarnings;
+  if (totalFound === 0) {
     return compileErrors > 0 ? 1 : 0;
   }
 
-  const parts = [];
-  if (totalErrors > 0) parts.push(red(`${totalErrors} error${totalErrors !== 1 ? 's' : ''}`));
-  if (totalWarnings > 0) parts.push(yellow(`${totalWarnings} warning${totalWarnings !== 1 ? 's' : ''}`));
-  console.log(`\n${bold('✗')} ${parts.join(', ')} in ${fileResults.length} file${fileResults.length !== 1 ? 's' : ''} (${typedFiles} typed / ${totalFiles} total)`);
+  const s = totalFound === 1 ? '' : 's';
+  if (fileResults.length === 1) {
+    const rel = relative(rootPath, fileResults[0].file);
+    const first = fileResults[0].errors[0];
+    if (totalFound === 1) {
+      console.log(`Found ${totalFound} error in ${cyan(rel)}${dim(':')}${yellow(String(first.line))}\n`);
+    } else {
+      console.log(`Found ${totalFound} error${s} in the same file, starting at: ${cyan(rel)}${dim(':')}${yellow(String(first.line))}\n`);
+    }
+  } else {
+    console.log(`Found ${totalFound} error${s} in ${fileResults.length} files.\n`);
+    console.log(`  Errors  Files`);
+    for (const { file, errors } of fileResults) {
+      const rel = relative(rootPath, file);
+      console.log(`  ${String(errors.length).padStart(6)}  ${cyan(rel)}${dim(':')}${yellow(String(errors[0].line))}`);
+    }
+    console.log('');
+  }
 
   return totalErrors > 0 ? 1 : 0;
 }

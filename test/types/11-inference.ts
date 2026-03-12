@@ -6,9 +6,9 @@
 
 // ── Setup: typed base variables ──
 
-const count: number = 0
-const ratio: number = 3.14
-const items: string[] = ['a', 'b', 'c']
+let count: number = 0
+let ratio: number = 3.14
+let items: string[] = ['a', 'b', 'c']
 
 function double(n: number): number {
   return n * 2
@@ -87,7 +87,7 @@ expectString(insideIf)
 // TS infers element types from the RHS. Rip's patcher only
 // matches simple identifiers on the LHS.
 
-const { a, b } = { a: 1, b: 'hello' }
+let { a, b } = { a: 1, b: 'hello' }
 // @ts-expect-error — TS knows a is number
 expectString(a)
 

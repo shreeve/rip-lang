@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Form</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <script>
+    fetch('/index.css').then((r) => r.text()).then((css) => {
+      document.head.appendChild(Object.assign(document.createElement('style'), { type: 'text/tailwindcss', textContent: css }))
+    })
+  </script>
+</head>
+<body>
+  <script defer src="/rip/rip.min.js"
+    data-src="app"
+    data-mount="App"
+    data-reload>
+  </script>
+</body>
+</html>

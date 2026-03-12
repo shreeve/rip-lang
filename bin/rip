@@ -130,7 +130,6 @@ async function main() {
     const dir = checkArgs.find(a => !a.startsWith('-')) || '.';
     const exitCode = await runCheck(dir, {
       quiet: checkArgs.includes('-q') || checkArgs.includes('--quiet'),
-      allowAny: checkArgs.includes('--allow-any'),
     });
     process.exit(exitCode);
   }

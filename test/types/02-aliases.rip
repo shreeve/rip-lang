@@ -19,7 +19,7 @@ type Defaults = typeof defaults
 userId:: ID = 42
 name:: Name = "Jane"
 email:: Email = "jane@example.com"
-ts:: Timestamp = Date.now()
+ts:: Timestamp = 1700000000000
 
 mixedId:: UserID = "abc-123"
 prim:: Primitive = true

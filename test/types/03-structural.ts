@@ -60,18 +60,18 @@ type PagedResult<T> = {
 
 // ── Use the types ──
 
-const dim: Dimensions = { width: 800, height: 600 }
-const cfg: Config = { host: 'localhost', port: 3000 }
-const fullCfg: Config = { host: 'prod.example.com', port: 443, ssl: true, timeout: 5000 }
+let dim: Dimensions = { width: 800, height: 600 }
+let cfg: Config = { host: 'localhost', port: 3000 }
+let fullCfg: Config = { host: 'prod.example.com', port: 443, ssl: true, timeout: 5000 }
 
-const resp: ApiResponse = {
+let resp: ApiResponse = {
   data: { items: ['a', 'b'], total: 2 },
   meta: { page: 1, limit: 10, hasMore: false },
 }
 
-const frozen: ImmutableConfig = { host: 'localhost', port: 3000, ssl: true }
+let frozen: ImmutableConfig = { host: 'localhost', port: 3000, ssl: true }
 
-const tree: TreeNode = {
+let tree: TreeNode = {
   value: 'root',
   children: [
     { value: 'left', children: [] },
@@ -80,8 +80,8 @@ const tree: TreeNode = {
 }
 
 // value is required (must pass key), placeholder is optional (can omit key)
-const field: FormField = { label: 'Name', value: undefined }
-const fullField: FormField = { label: 'Email', value: 'test@example.com', placeholder: 'you@domain.com' }
+let field: FormField = { label: 'Name', value: undefined }
+let fullField: FormField = { label: 'Email', value: 'test@example.com', placeholder: 'you@domain.com' }
 
 console.log('dimensions:', dim)
 console.log('config:', cfg)
@@ -92,20 +92,20 @@ console.log('field:', field)
 console.log('fullField:', fullField)
 console.log('tree root:', tree.value)
 
-const paged: PagedResult<string> = { data: ['a', 'b'], page: 1, total: 2 }
+let paged: PagedResult<string> = { data: ['a', 'b'], page: 1, total: 2 }
 console.log('paged:', paged)
 
 // ── Negative: wrong types must be caught ──
 
 // @ts-expect-error — missing required field (height)
-const badDim: Dimensions = { width: 800 }
+let badDim: Dimensions = { width: 800 }
 // @ts-expect-error — wrong field type
-const badCfg: Config = { host: 123, port: 3000 }
+let badCfg: Config = { host: 123, port: 3000 }
 // @ts-expect-error — extra unknown field
-const badExtra: Dimensions = { width: 800, height: 600, depth: 100 }
+let badExtra: Dimensions = { width: 800, height: 600, depth: 100 }
 // @ts-expect-error — nested wrong type
-const badResp: ApiResponse = { data: { items: [1, 2], total: 2 }, meta: { page: 1, limit: 10, hasMore: false } }
+let badResp: ApiResponse = { data: { items: [1, 2], total: 2 }, meta: { page: 1, limit: 10, hasMore: false } }
 // @ts-expect-error — missing required field (value must be passed even if undefined)
-const badField: FormField = { label: 'Name' }
+let badField: FormField = { label: 'Name' }
 // @ts-expect-error — wrong element type in generic structural type
-const badPaged: PagedResult<string> = { data: [1, 2], page: 1, total: 2 }
+let badPaged: PagedResult<string> = { data: [1, 2], page: 1, total: 2 }

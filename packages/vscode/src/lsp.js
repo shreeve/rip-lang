@@ -13,7 +13,7 @@ const fs = require('fs');
 const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
 
-let ts, compiler, tc, service, rootPath, lastPatchedProgram, warnUntypedProps = true;
+let ts, compiler, tc, service, rootPath, lastPatchedProgram;
 
 // Real .rip path → { version, source, tsContent, srcToGen, genToSrc, ... }
 const compiled = new Map();
@@ -25,6 +25,75 @@ const componentRegistry = new Map();
 function toVirtual(p) { return p + '.ts'; }
 function fromVirtual(p) { return p.endsWith('.rip.ts') ? p.slice(0, -3) : p; }
 function isVirtual(p) { return p.endsWith('.rip.ts'); }
+
+// ── Semantic token legend ──────────────────────────────────────────
+// Token types and modifiers aligned with TypeScript's TwentyTwenty
+// encoding from getEncodedSemanticClassifications().
+
+const SEMANTIC_TOKEN_TYPES = [
+  'namespace',      // 0
+  'type',           // 1
+  'class',          // 2
+  'enum',           // 3
+  'interface',      // 4
+  'typeParameter',  // 5
+  'parameter',      // 6
+  'variable',       // 7
+  'property',       // 8
+  'enumMember',     // 9
+  'function',       // 10
+  'method',         // 11
+  'decorator',      // 12
+];
+
+const SEMANTIC_TOKEN_MODIFIERS = [
+  'declaration',     // bit 0
+  'static',          // bit 1
+  'async',           // bit 2
+  'readonly',        // bit 3
+  'defaultLibrary',  // bit 4
+];
+
+// HTML/SVG tag names from TEMPLATE_TAGS (src/components.js). When one
+// of these appears as the first word on an indented line, the TextMate
+// grammar assigns entity.name.tag.rip. We skip semantic tokens at
+// those positions so the tag colour is preserved.
+const HTML_TAG_NAMES = new Set([
+  'a','abbr','address','animate','animateMotion','animateTransform','area','article','aside','audio',
+  'b','base','bdi','bdo','blockquote','body','br','button','canvas','caption','circle','cite',
+  'clipPath','code','col','colgroup','data','datalist','dd','defs','del','desc','details','dfn',
+  'dialog','div','dl','dt','ellipse','em','embed','feBlend','feColorMatrix','feComponentTransfer',
+  'feComposite','feConvolveMatrix','feDiffuseLighting','feDisplacementMap','feDistantLight',
+  'feDropShadow','feFlood','feFuncA','feFuncB','feFuncG','feFuncR','feGaussianBlur','feImage',
+  'feMerge','feMergeNode','feMorphology','feOffset','fePointLight','feSpecularLighting','feSpotLight',
+  'feTile','feTurbulence','fieldset','figcaption','figure','filter','footer','foreignObject','form',
+  'g','h1','h2','h3','h4','h5','h6','head','header','hr','html','i','iframe','image','img','input',
+  'ins','kbd','label','legend','li','line','linearGradient','link','main','map','mark','marker',
+  'mask','math','menu','meta','metadata','meter','mpath','nav','noscript','object','ol','optgroup',
+  'option','output','p','param','path','pattern','picture','polygon','polyline','portal','pre',
+  'progress','q','radialGradient','rect','rp','rt','ruby','s','samp','script','section','select',
+  'set','slot','small','source','span','stop','strong','style','sub','summary','sup','svg','switch',
+  'symbol','table','tbody','td','template','text','textPath','textarea','tfoot','th','thead','time',
+  'title','tr','track','tspan','u','ul','use','var','video','view','wbr',
+]);
+
+// Map TS twenty-twenty classification tokenType → our legend index.
+// TS encodes: class=0, enum=1, interface=2, namespace=3, typeParameter=4,
+// type=5, parameter=6, variable=7, enumMember=8, property=9, function=10, member=11
+const TS_TYPE_TO_LEGEND = [
+  2,   // 0: class → class(2)
+  3,   // 1: enum → enum(3)
+  4,   // 2: interface → interface(4)
+  0,   // 3: namespace → namespace(0)
+  5,   // 4: typeParameter → typeParameter(5)
+  1,   // 5: type → type(1)
+  6,   // 6: parameter → parameter(6)
+  7,   // 7: variable → variable(7)
+  9,   // 8: enumMember → enumMember(9)
+  8,   // 9: property → property(8)
+  10,  // 10: function → function(10)
+  11,  // 11: member → method(11)
+];
 
 connection.onInitialize(async (params) => {
   rootPath = params.rootPath || process.cwd();
@@ -51,19 +120,19 @@ connection.onInitialize(async (params) => {
       hoverProvider: true,
       definitionProvider: true,
       signatureHelpProvider: { triggerCharacters: ['(', ','] },
+      semanticTokensProvider: {
+        legend: { tokenTypes: SEMANTIC_TOKEN_TYPES, tokenModifiers: SEMANTIC_TOKEN_MODIFIERS },
+        full: true,
+      },
     },
   };
 });
 
 connection.onInitialized(() => {
   connection.console.log('[rip] ready');
-  connection.workspace.getConfiguration({ section: 'rip.types' }).then(config => {
-    if (config?.warnUntypedProps !== undefined) warnUntypedProps = config.warnUntypedProps;
-  }).catch(() => {});
 });
 
-connection.onDidChangeConfiguration(({ settings }) => {
-  warnUntypedProps = settings?.rip?.types?.warnUntypedProps ?? true;
+connection.onDidChangeConfiguration(() => {
   for (const fp of compiled.keys()) publishDiagnostics(fp);
 });
 
@@ -97,6 +166,8 @@ function compileRip(filePath, source) {
     connection.console.log(`[rip] compiled ${path.basename(filePath)}: hasTypes=${entry.hasTypes}, headerLines=${entry.headerLines}`);
     publishDiagnostics(filePath);
   } catch (e) {
+    compiled.delete(filePath);
+    connection.sendDiagnostics({ uri: pathToUri(filePath), diagnostics: [] });
     connection.console.log(`[rip] compile error ${path.basename(filePath)}: ${e.message}`);
   }
 }
@@ -139,16 +210,16 @@ function publishDiagnostics(filePath) {
     }
   }
 
-  // Component prop diagnostics
-  if (c.source && componentRegistry.size > 0) {
+  // Component prop diagnostics (typed files only)
+  if (c.hasTypes && c.source && componentRegistry.size > 0) {
     const srcLines = c.source.split('\n');
     for (let i = 0; i < srcLines.length; i++) {
-      const ctx = detectComponentContext(srcLines[i], srcLines[i].length);
-      if (!ctx?.component) continue;
-      const info = componentRegistry.get(ctx.component);
+      const usage = tc.collectUsageProps(srcLines, i, componentRegistry);
+      if (!usage) continue;
+      const info = componentRegistry.get(usage.component);
       if (!info) continue;
 
-      for (const prop of ctx.existingProps) {
+      for (const prop of usage.usedProps) {
         if (prop.startsWith('@')) continue;
         if (prop === 'class' || prop === 'style') continue;
         if (!info.props.some(p => p.name === prop)) {
@@ -156,48 +227,9 @@ function publishDiagnostics(filePath) {
           if (col >= 0) {
             diagnostics.push({
               range: { start: { line: i, character: col }, end: { line: i, character: col + prop.length } },
-              severity: 2,
+              severity: 1,
               source: 'rip',
-              message: `Unknown prop '${prop}' on component ${ctx.component}`,
-            });
-          }
-        }
-      }
-
-      // Value validation: type mismatches and invalid union values
-      for (const [propName, value] of ctx.propValues) {
-        const prop = info.props.find(p => p.name === propName);
-        if (!prop) continue;
-        const isStr = /^["']/.test(value);
-        const isNum = /^\d/.test(value);
-        const isBool = value === 'true' || value === 'false';
-        const type = prop.type;
-
-        const isLiteral = isStr || isNum || isBool;
-        let msg = null;
-        if (!isLiteral) continue;
-        if (type === 'string' && !isStr) msg = `Expected a string for prop '${propName}'`;
-        else if (type === 'number' && !isNum) msg = `Expected a number for prop '${propName}'`;
-        else if (type === 'boolean' && !isBool) msg = `Expected a boolean for prop '${propName}'`;
-        else {
-          const allowed = extractUnionValues(type);
-          if (allowed.length > 0 && isStr) {
-            const strMatch = value.match(/^(["'])(.*)\1$/);
-            if (strMatch) {
-              const quoted = `"${strMatch[2]}"`;
-              if (!allowed.some(v => v === quoted || v === `'${strMatch[2]}'`))
-                msg = `Invalid value ${quoted} for prop '${propName}'. Expected: ${allowed.join(' | ')}`;
-            }
-          }
-        }
-        if (msg) {
-          const col = srcLines[i].indexOf(value);
-          if (col >= 0) {
-            diagnostics.push({
-              range: { start: { line: i, character: col }, end: { line: i, character: col + value.length } },
-              severity: 2,
-              source: 'rip',
-              message: msg,
+              message: `Unknown prop '${prop}' on component ${usage.component}`,
             });
           }
         }
@@ -206,38 +238,29 @@ function publishDiagnostics(filePath) {
       // Required prop checking
       for (const prop of info.props) {
         if (!prop.required) continue;
-        if (ctx.existingProps.includes(prop.name)) continue;
-        const col = srcLines[i].indexOf(ctx.component);
+        if (usage.usedProps.includes(prop.name)) continue;
+        const col = srcLines[i].indexOf(usage.component);
         if (col >= 0) {
           diagnostics.push({
-            range: { start: { line: i, character: col }, end: { line: i, character: col + ctx.component.length } },
+            range: { start: { line: i, character: col }, end: { line: i, character: col + usage.component.length } },
             severity: 1,
             source: 'rip',
-            message: `Missing required prop '${prop.name}' on component ${ctx.component}`,
+            message: `Missing required prop '${prop.name}' on component ${usage.component}`,
           });
         }
       }
     }
 
-    // Untyped prop hints (at component definitions, not usage sites)
-    if (warnUntypedProps) for (const [name, compDef] of componentRegistry) {
+    // Untyped prop errors (at component definitions, not usage sites)
+    for (const [name, compDef] of componentRegistry) {
       if (compDef.source !== filePath) continue;
-      for (const prop of compDef.props) {
-        for (let s = compDef.line; s < srcLines.length; s++) {
-          const match = srcLines[s].match(new RegExp('(@' + prop.name + ')\\s*(::|([:!]?=))'));
-          if (match) {
-            if (match[2] !== '::') {
-              const col = srcLines[s].indexOf(match[1]);
-              diagnostics.push({
-                range: { start: { line: s, character: col }, end: { line: s, character: col + match[1].length } },
-                severity: 4,
-                source: 'rip',
-                message: `Prop '${prop.name}' has no type annotation`,
-              });
-            }
-            break;
-          }
-        }
+      for (const e of tc.checkComponentDefs(compDef.props, srcLines, compDef.line)) {
+        diagnostics.push({
+          range: { start: { line: e.line, character: e.col }, end: { line: e.line, character: e.col + e.len } },
+          severity: 1,
+          source: 'rip',
+          message: e.message,
+        });
       }
     }
   }
@@ -315,6 +338,33 @@ function srcToOffset(filePath, line, col) {
   const c = compiled.get(filePath);
   if (!c) return undefined;
   let genLine = c.srcToGen.get(line);
+  let genColHint = -1;  // column hint from source map, -1 = no hint
+  let bestSrcCol = -1;  // srcCol of the best column-aware entry
+
+  // Column-aware lookup: when sub-expression mappings exist for this source
+  // line, pick the entry whose srcCol is closest to (but ≤) the cursor column.
+  // This selects the right generated line AND provides a column hint.
+  if (c.srcColToGen) {
+    const colEntries = c.srcColToGen.get(line);
+    if (colEntries && colEntries.length > 0) {
+      let best = colEntries[0];
+      for (const e of colEntries) {
+        if (e.srcCol <= col && (best.srcCol > col || e.srcCol > best.srcCol)) {
+          best = e;
+        }
+      }
+      // If no entry has srcCol ≤ col, use the one closest overall
+      if (best.srcCol > col) {
+        for (const e of colEntries) {
+          if (Math.abs(e.srcCol - col) < Math.abs(best.srcCol - col)) best = e;
+        }
+      }
+      genLine = best.genLine;
+      genColHint = best.genCol;
+      bestSrcCol = best.srcCol;
+    }
+  }
+
   if (genLine === undefined) {
     let best = -1;
     for (const [s] of c.srcToGen) if (s <= line && s > best) best = s;
@@ -336,8 +386,61 @@ function srcToOffset(filePath, line, col) {
     }
     if (wordMatch) {
       const word = wordMatch[0];
-      const genCol = genText.indexOf(word);
-      if (genCol >= 0) return lineColToOffset(c.tsContent, genLine, genCol);
+      const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+      // Only trust genColHint when the source-map entry's srcCol is close to
+      // the word being hovered. A line-level entry (srcCol=0) far from the
+      // cursor gives a misleading hint that biases toward the line start.
+      const wordStart = col - leftPart.length;
+      const useHint = genColHint >= 0 && bestSrcCol >= wordStart && bestSrcCol < wordStart + word.length;
+
+      // Prefer the overload signature line (genLine-1) when it exists and
+      // contains the same identifier — overloads carry typed parameters.
+      let targetLine = genLine;
+      let targetText = genText;
+      if (genLine > 0) {
+        const prevText = genLines[genLine - 1] || '';
+        if (/^(?:export\s+)?function\s+\w+\(.*\).*;\s*$/.test(prevText)) {
+          const re0 = new RegExp('\\b' + escaped + '\\b');
+          if (re0.test(prevText)) { targetLine = genLine - 1; targetText = prevText; }
+        }
+      }
+
+      const re = new RegExp('\\b' + escaped + '\\b', 'g');
+      let m, bestCol = -1, bestDist = Infinity;
+      while ((m = re.exec(targetText)) !== null) {
+        const dist = useHint
+          ? Math.abs(m.index - genColHint)
+          : Math.abs(m.index - col);
+        if (dist < bestDist) { bestDist = dist; bestCol = m.index; }
+      }
+      if (bestCol >= 0) return lineColToOffset(c.tsContent, targetLine, bestCol);
+
+      // Fall back to the original genLine if overload didn't match
+      if (targetLine !== genLine) {
+        const re1b = new RegExp('\\b' + escaped + '\\b', 'g');
+        let m1b, bestCol1b = -1, bestDist1b = Infinity;
+        while ((m1b = re1b.exec(genText)) !== null) {
+          const dist = useHint ? Math.abs(m1b.index - genColHint) : Math.abs(m1b.index - col);
+          if (dist < bestDist1b) { bestDist1b = dist; bestCol1b = m1b.index; }
+        }
+        if (bestCol1b >= 0) return lineColToOffset(c.tsContent, genLine, bestCol1b);
+      }
+
+      // Word not on mapped line — search nearby generated lines
+      for (let delta = 1; delta <= 3; delta++) {
+        for (const tryLine of [genLine + delta, genLine - delta]) {
+          if (tryLine < 0 || tryLine >= genLines.length) continue;
+          const tryText = genLines[tryLine];
+          const re2 = new RegExp('\\b' + escaped + '\\b', 'g');
+          let m2, best2 = -1, bestDist2 = Infinity;
+          while ((m2 = re2.exec(tryText)) !== null) {
+            const dist2 = Math.abs(m2.index - col);
+            if (dist2 < bestDist2) { bestDist2 = dist2; best2 = m2.index; }
+          }
+          if (best2 >= 0) return lineColToOffset(c.tsContent, tryLine, best2);
+        }
+      }
     }
   }
   const genText = c.tsContent.split('\n')[genLine] || '';
@@ -348,20 +451,74 @@ function srcToOffset(filePath, line, col) {
 function genToSrcPos(filePath, offset) {
   const c = compiled.get(filePath);
   if (!c) return { line: 0, character: 0 };
-  const { line: genLine, character } = offsetToLineCol(c.tsContent, offset);
-  let srcLine = c.genToSrc.get(genLine);
-  if (srcLine === undefined) {
-    let best = -1;
-    for (const [g] of c.genToSrc) if (g <= genLine && g > best) best = g;
-    srcLine = best >= 0 ? c.genToSrc.get(best) + (genLine - best) : 0;
-  }
-  return { line: srcLine, character };
+  const pos = tc.mapToSourcePos(c, offset);
+  if (!pos) return { line: 0, character: 0 };
+  return { line: pos.line, character: pos.col };
 }
 
-function lineColToOffset(t, line, col) { let r = 0; for (let i = 0; i < t.length; i++) { if (r === line) return i + col; if (t[i] === '\n') r++; } return t.length; }
-function offsetToLineCol(t, o) { let line = 0, ls = 0; for (let i = 0; i < o && i < t.length; i++) { if (t[i] === '\n') { line++; ls = i + 1; } } return { line, character: o - ls }; }
+function lineColToOffset(t, line, col) { return tc.lineColToOffset(t, line, col); }
+function offsetToLineCol(t, o) { const p = tc.offsetToLineCol(t, o); return { line: p.line, character: p.col }; }
 function uriToPath(u) { try { return decodeURIComponent(new URL(u).pathname); } catch { return u; } }
 function pathToUri(p) { return 'file://' + p; }
+
+// Check whether a column position falls inside a string literal or comment.
+// Scans left-to-right tracking quote state and comment markers.
+function isInsideStringOrComment(line, col) {
+  let quote = null;
+  let interpDepth = 0;
+  for (let i = 0; i < col; i++) {
+    const ch = line[i];
+    if (interpDepth > 0) {
+      if (ch === '{') interpDepth++;
+      else if (ch === '}') { interpDepth--; if (interpDepth === 0) quote = '"'; }
+      else if (ch === '"' || ch === "'") {
+        // nested string inside interpolation — skip it
+        const q = ch;
+        i++;
+        while (i < col && line[i] !== q) { if (line[i] === '\\') i++; i++; }
+      }
+      continue;
+    }
+    if (quote) {
+      if (ch === '\\') { i++; continue; }
+      if (quote === '"' && ch === '#' && line[i + 1] === '{') {
+        interpDepth = 1;
+        quote = null;
+        i++; // skip '{'
+        continue;
+      }
+      if (ch === quote) quote = null;
+    } else {
+      if (ch === '#') return true;  // Rip line comment
+      if (ch === '"' || ch === "'") quote = ch;
+    }
+  }
+  return !!quote && interpDepth === 0;
+}
+
+// Find an unused word-boundary occurrence of `word` near `centerLine`.
+// Searches outward ±5 lines, skipping positions already in `used`.
+// Calls `assign(line, col)` and returns true on success.
+function findUnusedOccurrence(srcLines, word, len, centerLine, used, assign) {
+  for (let delta = 0; delta <= 5; delta++) {
+    const tryLines = delta === 0 ? [centerLine] : [centerLine - delta, centerLine + delta];
+    for (const ln of tryLines) {
+      if (ln < 0 || ln >= srcLines.length) continue;
+      const s = srcLines[ln];
+      let idx = -1;
+      while ((idx = s.indexOf(word, idx + 1)) !== -1) {
+        if ((idx === 0 || !/\w/.test(s[idx - 1])) &&
+            (idx + len >= s.length || !/\w/.test(s[idx + len])) &&
+            !used.has(ln + ':' + idx) &&
+            !isInsideStringOrComment(s, idx)) {
+          assign(ln, idx);
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
 
 // ── Reactive type unwrapping ────────────────────────────────────────
 // Rip's reactive operators (:=, ~=) compile to Signal<T> / Computed<T>
@@ -383,6 +540,8 @@ function unwrapReactiveType(display) {
     if (depth === 0) {
       const inner = display.slice(start, end - 1);
       display = display.slice(0, idx) + inner + display.slice(end);
+      // Signal → let (mutable state), Computed → const (derived, read-only)
+      if (wrapper === 'Signal') display = display.replace(/\bconst\b/, 'let');
     }
   }
   return display;
@@ -390,57 +549,12 @@ function unwrapReactiveType(display) {
 
 // ── Component IntelliSense infrastructure ──────────────────────────
 
-function parseDTS(dtsString) {
-  const result = new Map();
-  if (!dtsString) return result;
-
-  const lines = dtsString.split('\n');
-  let i = 0;
-
-  while (i < lines.length) {
-    const classMatch = lines[i].match(/^export declare class (\w+)/);
-    if (!classMatch) { i++; continue; }
-
-    const name = classMatch[1];
-    const props = [];
-    let j = i + 1;
-    let foundProps = false;
-
-    while (j < lines.length) {
-      if (/^\}/.test(lines[j])) break;
-
-      if (/constructor\(props\??/.test(lines[j])) {
-        foundProps = true;
-        j++;
-        while (j < lines.length) {
-          if (/^\s*\}\);/.test(lines[j])) { j++; break; }
-          const propMatch = lines[j].match(/^\s+(\w+)(\?)?\s*:\s*(.+);$/);
-          if (propMatch) {
-            props.push({ name: propMatch[1], type: propMatch[3].trim(), required: !propMatch[2] });
-          }
-          j++;
-        }
-        continue;
-      }
-      j++;
-    }
-
-    if (foundProps) {
-      result.set(name, { props, source: null, line: 0 });
-    }
-
-    i = Math.max(i + 1, j);
-  }
-
-  return result;
-}
-
 function updateComponentRegistry(filePath, source, dts) {
   for (const [name, info] of componentRegistry) {
     if (info.source === filePath) componentRegistry.delete(name);
   }
 
-  const parsed = parseDTS(dts);
+  const parsed = tc.parseComponentDTS(dts);
   const srcLines = source.split('\n');
 
   for (const [name, info] of parsed) {
@@ -462,6 +576,18 @@ function extractUnionValues(typeStr) {
     if (/^["']/.test(part)) values.push(part);
   }
   return values;
+}
+
+// Resolve a type name to its definition string from all compiled DTS.
+// e.g. "Status" → '"pending" | "active" | "done"'
+function resolveTypeFromDTS(typeName) {
+  for (const [, entry] of compiled) {
+    if (!entry.dts) continue;
+    const re = new RegExp('^(?:export\\s+)?type\\s+' + typeName + '\\s*=\\s*(.+?)\\s*;?$', 'm');
+    const m = entry.dts.match(re);
+    if (m) return m[1].trim();
+  }
+  return null;
 }
 
 function getWordAtPosition(text, position) {
@@ -500,6 +626,92 @@ function splitProps(str) {
   }
   segments.push({ start, end: str.length, text: str.substring(start), colon });
   return segments;
+}
+
+// Detect component context for block-style usage. Walks up from the current
+// line to find a parent component, then builds context from the current line.
+function detectBlockComponentContext(srcLines, lineIndex, col) {
+  // First try the current line directly
+  const direct = detectComponentContext(srcLines[lineIndex], col);
+  if (direct) {
+    // Also collect props from indented block lines below for existingProps
+    const baseIndent = srcLines[lineIndex].length - srcLines[lineIndex].trimStart().length;
+    for (let b = lineIndex + 1; b < srcLines.length; b++) {
+      const bLine = srcLines[b];
+      if (bLine.trim() === '') continue;
+      const bIndent = bLine.length - bLine.trimStart().length;
+      if (bIndent <= baseIndent) break;
+      for (const m of bLine.trimStart().matchAll(/(?:^|,)\s*(\w+)\s*:/g)) {
+        if (!direct.existingProps.includes(m[1])) direct.existingProps.push(m[1]);
+      }
+    }
+    return direct;
+  }
+
+  // Walk up to find parent component
+  const curLine = srcLines[lineIndex];
+  if (!curLine) return null;
+  const curIndent = curLine.length - curLine.trimStart().length;
+
+  let parentLine = -1;
+  for (let i = lineIndex - 1; i >= 0; i--) {
+    const line = srcLines[i];
+    if (line.trim() === '') continue;
+    const indent = line.length - line.trimStart().length;
+    if (indent < curIndent) {
+      parentLine = i;
+      break;
+    }
+  }
+  if (parentLine < 0) return null;
+
+  const parentTrimmed = srcLines[parentLine].trimStart();
+  const compMatch = parentTrimmed.match(/^([A-Z]\w*)\b/);
+  if (!compMatch) return null;
+  const component = compMatch[1];
+  if (/=\s*component\b/.test(parentTrimmed)) return null;
+  if (!componentRegistry.has(component)) return null;
+
+  // Collect all existing props from inline (parent line) + block lines
+  const existingProps = [];
+  const propValues = new Map();
+  const parentRest = parentTrimmed.substring(component.length);
+  for (const m of parentRest.matchAll(/(?:^|,)\s*(@?\w+)\s*:/g)) {
+    existingProps.push(m[1].replace(/^@/, ''));
+  }
+  const baseIndent = srcLines[parentLine].length - parentTrimmed.length;
+  for (let b = parentLine + 1; b < srcLines.length; b++) {
+    const bLine = srcLines[b];
+    if (bLine.trim() === '') continue;
+    const bIndent = bLine.length - bLine.trimStart().length;
+    if (bIndent <= baseIndent) break;
+    for (const m of bLine.trimStart().matchAll(/(?:^|,)\s*(@?\w+)\s*:/g)) {
+      const key = m[1].replace(/^@/, '');
+      if (!existingProps.includes(key)) existingProps.push(key);
+    }
+  }
+
+  // Parse the current line as a prop line
+  const trimmed = curLine.trimStart();
+  const cursorInTrimmed = col - curIndent;
+
+  // Detect prop: value pattern on this line
+  const propLineMatch = trimmed.match(/^(@?\w+)\s*:\s*/);
+  if (propLineMatch) {
+    const propName = propLineMatch[1].replace(/^@/, '');
+    const afterColon = propLineMatch[0].length;
+    if (cursorInTrimmed < propLineMatch[1].length) {
+      return { component, existingProps, propValues, currentProp: propName, wantValues: false, wantProps: true };
+    }
+    if (cursorInTrimmed >= afterColon) {
+      const valStr = trimmed.substring(afterColon);
+      propValues.set(propName, valStr);
+      return { component, existingProps, propValues, currentProp: propName, wantValues: true, wantProps: false };
+    }
+  }
+
+  // Cursor on a blank/incomplete line — offer prop completions
+  return { component, existingProps, propValues, currentProp: null, wantValues: false, wantProps: true };
 }
 
 function detectComponentContext(srcLine, col) {
@@ -566,6 +778,243 @@ function detectComponentContext(srcLine, col) {
   return { component, existingProps, propValues, currentProp, wantValues, wantProps };
 }
 
+// ── Semantic tokens ────────────────────────────────────────────────
+// Bridges TypeScript's semantic classification to Rip source positions.
+// TS analyzes the compiled virtual .ts file; we map each classified token
+// back to the .rip source and emit it if the identifier text matches.
+
+connection.onRequest('textDocument/semanticTokens/full', (params) => {
+  const fp = uriToPath(params.textDocument.uri);
+  if (!fp.endsWith('.rip') || !service) return { data: [] };
+
+  const c = compiled.get(fp);
+  if (!c || !c.hasTypes) return { data: [] };
+
+  try {
+    patchTypes();
+    const vf = toVirtual(fp);
+    const format = ts.SemanticClassificationFormat?.TwentyTwenty || '2020';
+    const result = service.getEncodedSemanticClassifications(vf, { start: 0, length: c.tsContent.length }, format);
+    if (!result?.spans) return { data: [] };
+
+    const srcLines = c.source.split('\n');
+    const tokens = [];
+    const usedPositions = new Set();
+
+    // Collect reactive variable names (:= and ~= declarations) so we
+    // can strip the readonly modifier from all their references — TS
+    // sees `const` but these are semantically mutable.
+    const reactiveNames = new Set();
+    for (const sl of srcLines) {
+      const m = sl.match(/^\s*(\w+)\b[^=~]*(?::=|~=|~>)/);
+      if (m) reactiveNames.add(m[1]);
+    }
+
+    // Pre-compute which lines are inside render blocks so we only
+    // suppress semantic tokens for tags/attributes in render context.
+    const renderBlockLines = new Set();
+    for (let ri = 0; ri < srcLines.length; ri++) {
+      const rl = srcLines[ri];
+      const rt = rl.trimStart();
+      if (/^render\s*(?:#.*)?$/.test(rt)) {
+        const rIndent = rl.length - rt.length;
+        for (let rj = ri + 1; rj < srcLines.length; rj++) {
+          const jl = srcLines[rj];
+          const jt = jl.trimStart();
+          if (jt === '') { renderBlockLines.add(rj); continue; }
+          if (jl.length - jt.length > rIndent) { renderBlockLines.add(rj); }
+          else break;
+        }
+      }
+    }
+
+    // Compute byte offset where DTS header ends in the virtual file.
+    // Body spans have accurate source maps; header spans use heuristic
+    // text search. Processing body first lets accurate mappings claim
+    // positions before header text search can mis-map them.
+    let headerEndOffset = 0;
+    if (c.headerLines > 0) {
+      let nl = 0;
+      for (let j = 0; j < c.tsContent.length; j++) {
+        if (c.tsContent[j] === '\n' && ++nl === c.headerLines) { headerEndOffset = j + 1; break; }
+      }
+    }
+
+    // Two-pass: body spans first (accurate source maps), then header spans
+    // (heuristic text search fills remaining positions).
+    const bodySpans = [];
+    const headerSpans = [];
+    for (let i = 0; i < result.spans.length; i += 3) {
+      const entry = [result.spans[i], result.spans[i + 1], result.spans[i + 2]];
+      if (entry[0] >= headerEndOffset) bodySpans.push(entry);
+      else headerSpans.push(entry);
+    }
+    const orderedSpans = bodySpans.concat(headerSpans);
+
+    // Cache per-line function-signature detection for body tokens.
+    // Overload signatures (ending with `;`) and injected type annotations
+    // (from replaceFnParams) produce phantom property tokens that steal
+    // source positions from the actual body tokens.
+    const fnSigLineCache = new Map(); // tsLine → { isFnSig, isOverload, typeAnnotRanges }
+    function getFnSigInfo(tsLine) {
+      if (fnSigLineCache.has(tsLine)) return fnSigLineCache.get(tsLine);
+      const lineText = tc.getLineText(c.tsContent, tsLine);
+      const isFnSig = /^\s*(?:export\s+)?(?:async\s+)?function\s/.test(lineText);
+      const isOverload = isFnSig && /;\s*$/.test(lineText);
+      // Find column ranges of type annotation blocks in destructured params.
+      // e.g. in `function foo({name: userName}: {name: string})`
+      //       the `{name: string}` after `}: ` is a type annotation range.
+      const typeAnnotRanges = [];
+      if (isFnSig && !isOverload) {
+        const re = /\}:\s*\{/g;
+        let m;
+        while ((m = re.exec(lineText)) !== null) {
+          const start = m.index + m[0].length - 1; // position of `{`
+          let depth = 1, end = start + 1;
+          while (end < lineText.length && depth > 0) {
+            if (lineText[end] === '{') depth++;
+            else if (lineText[end] === '}') depth--;
+            end++;
+          }
+          typeAnnotRanges.push([start, end]);
+        }
+      }
+      const info = { isFnSig, isOverload, typeAnnotRanges };
+      fnSigLineCache.set(tsLine, info);
+      return info;
+    }
+
+    for (const [tsOffset, tsLength, classification] of orderedSpans) {
+      const tsTokenType = ((classification >> 8) & 0xFF) - 1;
+      const tsModifiers = classification & 0xFF;
+      if (tsTokenType >= TS_TYPE_TO_LEGEND.length) continue;
+
+      // Reclassify DTS header tokens: TS classifies function params in
+      // declaration files as 'variable' instead of 'parameter'. Detect
+      // by checking if the token is on a function signature line.
+      let finalType = tsTokenType;
+      if (tsTokenType === 7 && tsOffset < headerEndOffset) {
+        const tsLine = tc.offsetToLine(c.tsContent, tsOffset);
+        const lineText = tc.getLineText(c.tsContent, tsLine);
+        if (/^\s*(?:export\s+)?(?:declare\s+)?(?:async\s+)?function\s/.test(lineText)) {
+          finalType = 6; // parameter
+        }
+      }
+
+      // Skip phantom tokens from injected overload signatures and type
+      // annotations in the body section. compileForCheck injects overload
+      // lines (function sig ending with `;`) and replaceFnParams injects
+      // typed params (`{name: string}`) into implementation lines. TS
+      // classifies property names in these type annotations as `property`,
+      // which steal source positions from actual body tokens via text search.
+      if (tsOffset >= headerEndOffset) {
+        const tsLine = tc.offsetToLine(c.tsContent, tsOffset);
+        const info = getFnSigInfo(tsLine);
+        // Skip ALL tokens from overload signature lines (duplicates)
+        if (info.isOverload) continue;
+        // Skip `property` tokens inside type annotation ranges on
+        // implementation signature lines. Binding-pattern properties
+        // (e.g. `name` in `{name: userName}`) are kept; only the phantom
+        // properties from injected type annotations (e.g. `{name: string}`)
+        // are filtered out.
+        if (info.isFnSig && tsTokenType === 9 && info.typeAnnotRanges.length) {
+          const lineStart = c.tsContent.lastIndexOf('\n', tsOffset - 1) + 1;
+          const col = tsOffset - lineStart;
+          if (info.typeAnnotRanges.some(([s, e]) => col >= s && col < e)) continue;
+        }
+      }
+
+      // Map generated TS offset to Rip source position
+      const srcPos = tc.mapToSourcePos(c, tsOffset);
+      if (!srcPos) continue;
+
+      // Verify the identifier text matches at the mapped position
+      const tsText = c.tsContent.substring(tsOffset, tsOffset + tsLength);
+      let matchLine = srcPos.line;
+      let matchCol = srcPos.col;
+      const srcLine = srcLines[matchLine];
+      if (!srcLine) continue;
+
+      if (srcLine.substring(matchCol, matchCol + tsLength) !== tsText) {
+        // Multiline expressions compile to one gen line — search nearby source lines
+        if (!findUnusedOccurrence(srcLines, tsText, tsLength, srcPos.line, usedPositions, (l, c) => { matchLine = l; matchCol = c; })) continue;
+      }
+
+      // Collision: multiple TS tokens mapped to the same source position
+      // (common in multi-line object literals compiled to one JS line).
+      // Find the next unused occurrence of this word nearby.
+      const posKey = matchLine + ':' + matchCol;
+      if (usedPositions.has(posKey)) {
+        if (!findUnusedOccurrence(srcLines, tsText, tsLength, matchLine, usedPositions, (l, c) => { matchLine = l; matchCol = c; })) continue;
+      }
+
+      // Skip tokens that land inside string literals or comments
+      if (isInsideStringOrComment(srcLines[matchLine], matchCol)) continue;
+
+      // Skip tokens inside render blocks where TextMate provides
+      // entity.name.tag.rip or entity.other.attribute-name.rip scopes.
+      if (renderBlockLines.has(matchLine)) {
+        const sl = srcLines[matchLine];
+        const slIndent = sl.length - sl.trimStart().length;
+        const firstWord = sl.substring(slIndent).match(/^([a-zA-Z]\w*)\b/);
+        const isTagLine = firstWord && HTML_TAG_NAMES.has(firstWord[1]);
+        const isComponentLine = firstWord && /^[A-Z]/.test(firstWord[1]);
+
+        // Skip HTML tag name at first-word position
+        if (isTagLine && matchCol === slIndent) {
+          const after = sl.charAt(matchCol + tsLength);
+          if (!after || after === ' ' || after === '\t') continue;
+        }
+
+        // Skip attribute names: identifier followed by `:`
+        // (not `::` or `:=`).
+        const afterToken = sl.substring(matchCol + tsLength);
+        const colonMatch = afterToken.match(/^\s*:/);
+        if (colonMatch && afterToken.charAt(colonMatch[0].length) !== ':' && afterToken.charAt(colonMatch[0].length) !== '=') {
+          if (matchCol === slIndent || isTagLine || isComponentLine) continue;
+        }
+      }
+
+      usedPositions.add(matchLine + ':' + matchCol);
+      let mods = tsModifiers & 0x1F; // keep bits 0-4, mask off 'local' (bit 5)
+      // Reactive state (:=) and computed (~=) compile to `const`, so TS
+      // flags every reference as readonly. Strip that bit for reactive
+      // variables so the editor doesn't color them as constants.
+      if ((mods & 0x08) && finalType === 7 && reactiveNames.has(tsText)) mods &= ~0x08;
+      tokens.push({
+        line: matchLine,
+        char: matchCol,
+        length: tsLength,
+        type: TS_TYPE_TO_LEGEND[finalType],
+        modifiers: mods,
+      });
+    }
+
+    // Sort by position and deduplicate
+    tokens.sort((a, b) => a.line - b.line || a.char - b.char);
+
+    // Delta-encode for LSP
+    const data = [];
+    let prevLine = 0, prevChar = 0;
+    for (let j = 0; j < tokens.length; j++) {
+      const t = tokens[j];
+      // Skip duplicate positions (can happen with overlapping mappings)
+      if (j > 0 && t.line === tokens[j - 1].line && t.char === tokens[j - 1].char) continue;
+      const deltaLine = t.line - prevLine;
+      const deltaChar = deltaLine === 0 ? t.char - prevChar : t.char;
+      data.push(deltaLine, deltaChar, t.length, t.type, t.modifiers);
+      prevLine = t.line;
+      prevChar = t.char;
+    }
+
+    connection.console.log(`[rip] semantic tokens ${path.basename(fp)}: ${data.length / 5} tokens`);
+    return { data };
+  } catch (e) {
+    connection.console.log(`[rip] semantic tokens error: ${e.message}`);
+    return { data: [] };
+  }
+});
+
 // ── LSP handlers ───────────────────────────────────────────────────
 
 connection.onCompletion((params) => {
@@ -575,8 +1024,9 @@ connection.onCompletion((params) => {
   // Component prop completions
   const doc = documents.get(params.textDocument.uri);
   if (doc) {
-    const srcLine = doc.getText().split('\n')[params.position.line];
-    const ctx = detectComponentContext(srcLine, params.position.character);
+    const srcLines = doc.getText().split('\n');
+    const srcLine = srcLines[params.position.line];
+    const ctx = detectBlockComponentContext(srcLines, params.position.line, params.position.character);
     if (ctx) {
       const info = componentRegistry.get(ctx.component);
       if (info) {
@@ -596,17 +1046,68 @@ connection.onCompletion((params) => {
           if (prop) {
             const values = extractUnionValues(prop.type);
             if (values.length > 0) {
-              return values.map((v, i) => ({
-                label: v,
-                kind: 12,
-                insertText: v.startsWith('"') ? v : `"${v}"`,
-                sortText: String(i).padStart(3, '0'),
-              }));
+              const ch = srcLine[params.position.character] || '';
+              const prevCh = params.position.character > 0 ? srcLine[params.position.character - 1] : '';
+              const inQuotes = (prevCh === '"' || prevCh === "'") || (ch === '"' || ch === "'");
+              return values.map((v, i) => {
+                const bare = v.replace(/^["']|["']$/g, '');
+                return {
+                  label: bare,
+                  kind: 12,
+                  insertText: inQuotes ? bare : v.startsWith('"') ? v : `"${v}"`,
+                  sortText: String(i).padStart(3, '0'),
+                };
+              });
             }
           }
         }
       }
     }
+    // Prop default value completions — @prop:: "a" | "b" := |
+    const defMatch = srcLine.match(/^\s*@(\w+)\s*::\s*(.+?)\s*:=\s*/);
+    if (defMatch && params.position.character >= srcLine.indexOf(':=') + 2) {
+      const values = extractUnionValues(defMatch[2].trim());
+      if (values.length > 0) {
+        // Check if cursor is already inside quotes
+        const afterEq = srcLine.slice(srcLine.indexOf(':=') + 2).trimStart();
+        const inQuotes = /^["']/.test(afterEq);
+        return values.map((v, i) => {
+          const bare = v.replace(/^["']|["']$/g, '');
+          return {
+            label: bare,
+            kind: 12,
+            insertText: inQuotes ? bare : v.startsWith('"') ? v : `"${v}"`,
+            sortText: String(i).padStart(3, '0'),
+          };
+        });
+      }
+    }
+
+    // Typed variable completions — name:: Type = "|"
+    const varMatch = srcLine.match(/^\s*(\w+)\s*::\s*(.+?)\s*=\s*/);
+    if (varMatch && params.position.character >= srcLine.indexOf('=') + 1) {
+      let typeStr = varMatch[2].trim();
+      // Resolve named type aliases
+      if (/^\w+$/.test(typeStr)) {
+        const resolved = resolveTypeFromDTS(typeStr);
+        if (resolved) typeStr = resolved;
+      }
+      const values = extractUnionValues(typeStr);
+      if (values.length > 0) {
+        const afterEq = srcLine.slice(srcLine.indexOf('=') + 1).trimStart();
+        const inQuotes = /^["']/.test(afterEq);
+        return values.map((v, i) => {
+          const bare = v.replace(/^["']|["']$/g, '');
+          return {
+            label: bare,
+            kind: 12,
+            insertText: inQuotes ? bare : v.startsWith('"') ? v : `"${v}"`,
+            sortText: String(i).padStart(3, '0'),
+          };
+        });
+      }
+    }
+
     // Space/colon triggered outside component context — don't fall through to TS
     if (params.context?.triggerCharacter === ' ' || params.context?.triggerCharacter === ':') return [];
   }
@@ -653,8 +1154,9 @@ connection.onHover((params) => {
   // Component prop hover
   const doc = documents.get(params.textDocument.uri);
   if (doc) {
-    const srcLine = doc.getText().split('\n')[params.position.line];
-    const ctx = detectComponentContext(srcLine, params.position.character);
+    const srcLines = doc.getText().split('\n');
+    const srcLine = srcLines[params.position.line];
+    const ctx = detectBlockComponentContext(srcLines, params.position.line, params.position.character);
     if (ctx?.component) {
       const compInfo = componentRegistry.get(ctx.component);
       if (compInfo) {
@@ -685,7 +1187,9 @@ connection.onHover((params) => {
     let display = ts.displayPartsToString(info.displayParts);
     const docs = ts.displayPartsToString(info.documentation || []);
     display = unwrapReactiveType(display);
-    return { contents: { kind: 'markdown', value: '```typescript\n' + (docs ? display + '\n\n' + docs : display) + '\n```' } };
+    let value = '```typescript\n' + display + '\n```';
+    if (docs) value += '\n\n' + docs;
+    return { contents: { kind: 'markdown', value } };
   } catch { return null; }
 });
 
@@ -745,8 +1249,9 @@ connection.onSignatureHelp((params) => {
   // Component signature help
   const doc = documents.get(params.textDocument.uri);
   if (doc) {
-    const srcLine = doc.getText().split('\n')[params.position.line];
-    const ctx = detectComponentContext(srcLine, params.position.character);
+    const srcLines = doc.getText().split('\n');
+    const srcLine = srcLines[params.position.line];
+    const ctx = detectBlockComponentContext(srcLines, params.position.line, params.position.character);
     if (ctx?.component) {
       const compInfo = componentRegistry.get(ctx.component);
       if (compInfo && compInfo.props.length > 0) {

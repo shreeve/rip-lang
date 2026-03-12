@@ -6,9 +6,28 @@
 
 # ── Components ──
 
+export Input = component
+  @label:: string := ""
+  @value:: string := ""
+  @placeholder:: string := ""
+  @type:: string := "text"
+  @error:: string := ""
+
+  render
+    fieldset
+      if label
+        label label
+      input
+        value <=> value
+        placeholder: placeholder
+        type: type
+      if error
+        div error
+
 export Button = component
+  @variant:: "primary" | "secondary"
   @type:: string := "button"
-  @variant:: "primary" | "secondary" := "primary"
+  @shape:: "rounded" | "pill" := "rounded"
   @loading:: boolean := false
   @disabled:: boolean := false
 
@@ -16,31 +35,19 @@ export Button = component
   fg ~= if variant is "primary" then "#fff" else "#333"
 
   render
-    button type: type, style: "background: #{bg}; color: #{fg}", disabled: disabled or loading
+    button
+      type: type
+      disabled: disabled or loading
+      style: "background: #{bg}; color: #{fg}"
       if loading
         "Loading..."
       else
         slot
 
-export Input = component
-  @label:: string := ""
-  @type:: string := "text"
-  @placeholder:: string := ""
-  @value:: string := ""
-  @error:: string := ""
-
-  render
-    fieldset
-      if label
-        label label
-      input type: type, placeholder: placeholder, value: value
-      if error
-        div error
-
 export Form = component
-  @title:: string := "Sign In"
-  email:: string := ""
-  password:: string := ""
+  @title:: string := ""
+  email := ""
+  password := ""
   loading := false
 
   onSubmit: (e) ->
@@ -54,37 +61,94 @@ export Form = component
       h1 title
       Input
         label: "Email"
-        type: "email"
-        placeholder: "jane@example.com"
         value <=> email
+        placeholder: "jane@example.com"
+        type: "email"
       Input
         label: "Password"
-        type: "password"
-        placeholder: "••••••••"
         value <=> password
-      Button type: "submit", variant: "primary", loading: loading
+        placeholder: "••••••••"
+        type: "password"
+      Button
+        variant: "primary"
+        type: "submit"
+        loading: loading
         "Sign In"
 
-# ── Gap: type safety inside component bodies ──
+# ── Negative: wrong prop types must be caught ──
 #
-# The real gap is not constructor prop checking — it's that types are
-# invisible inside the component body where props are actually used.
-# The compiled code redeclares all props as untyped variables (from
-# signal unwrapping), so TypeScript sees them as `any`. For example:
+# These match the TSX companion's negative prop-type tests.
+# The enriched stub emits constructor calls in _render(),
+# so TypeScript catches wrong literals, type mismatches, etc.
+
+export PropTypeTests = component
+  render
+    div
+      # @ts-expect-error — wrong variant literal
+      Button variant: "danger"
+      # @ts-expect-error — disabled expects boolean
+      Button variant: "primary", disabled: "yes"
+      # @ts-expect-error — wrong type for label
+      Input label: 123
+
+# ── Negative: type safety inside component bodies ──
 #
-#   export Button = component
-#     @variant:: "primary" | "secondary" := "primary"
+# The enriched stub gives TypeScript typed property declarations
+# (Signal<T>, Computed<T>) so type errors in computeds and methods
+# are caught. Each @ts-expect-error must suppress a real TS error.
+
+export TypeTestComp = component
+  @variant:: "primary" | "secondary" := "primary"
+  @count:: number := 0
+  loading := false
+
+  ok ~= if variant is "primary" then "#0066ff" else "#e5e5e5"
+
+  # @ts-expect-error — toFixed doesn't exist on string union
+  badFixed ~= variant.toFixed(2)
+
+  # @ts-expect-error — arithmetic on string type
+  badMath ~= variant * 2
+
+  badMethod = ->
+    # @ts-expect-error — string assigned to number state
+    count = "hello"
+
+  badBodyAssign = ->
+    # @ts-expect-error — string assigned to inferred boolean state
+    loading = "wrong"
+
+  render
+    null
+
+# ── Gap: render block type safety ──
 #
-#     # These should be caught but aren't:
-#     bad = variant + 5          # string + number — no error
-#     bad = variant is "danger"  # impossible comparison — no error
+# Render blocks are partially checked. Child component constructor calls
+# (e.g. `Button variant: "primary"`) are emitted as `new Button({...})`
+# in the shadow `_render()` method, so TS checks prop types and catches
+# undefined variable references in prop values (e.g. `loading: loadingz`).
 #
-# In a real app, 90% of code lives inside component bodies — render
-# blocks, event handlers, computeds, methods. Without typed props
-# flowing through, the type system is effectively invisible where
-# it matters most.
+# However, everything else in render is stripped:
+#   - Own-template conditionals like `if labelz` go uncaught
+#   - Invalid tag names like `fieldsetz` compile silently
+#   - HTML attribute values and text expressions are unchecked
 #
-# Tracked in AGENTS.md gap table under "Component prop types".
+# Two levels of improvement are possible:
+#
+# 1. Compiler-level tag validation (quick win) — reject lowercase names
+#    not in TEMPLATE_TAGS. Catches typos like `fieldsetz` at compile
+#    time. ~10 lines in rewriteRender() or generateNode().
+#
+# 2. Type-level element checking (full IntelliSense) — emit typed
+#    `__el('fieldset', { ... })` calls in the stub's _render(), backed
+#    by a `declare function __el<K extends keyof HTMLElementTagNameMap>`
+#    helper. TypeScript would then reject invalid tag names, reject
+#    invalid attributes, and provide attribute completions. Requires
+#    stub generator changes + LSP cursor mapping into render blocks.
+#
+# In React/TSX, `<fieldset>` maps to `JSX.IntrinsicElements['fieldset']`
+# which resolves to all DOM properties — typos are caught and every
+# valid attribute is offered in autocomplete (see 09-components.tsx).
 
 # ── Gap: event handler typing ──
 #

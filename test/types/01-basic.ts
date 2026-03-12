@@ -1,21 +1,21 @@
 // 01-basic.ts — Basic type annotations on variables (incl. nullable)
 
-const count: number = 0
-const label: string = 'Rip'
-const active: boolean = true
-const ratio: number = 3.14
-const items: string[] = ['alpha', 'bravo', 'charlie']
-const ids: number[] = [1, 2, 3]
-const pair: [string, number] = ['hello', 42]
+let count: number = 0
+let label: string = 'Rip'
+let active: boolean = true
+let ratio: number = 3.14
+let items: string[] = ['alpha', 'bravo', 'charlie']
+let ids: number[] = [1, 2, 3]
+let pair: [string, number] = ['hello', 42]
 
 // ── Derive (let inference work — no annotations) ──
 
-const total = count + ratio
-const greeting = `${label} is ${active}`
-const first = items[0]
-const allIds = ids.reduce((a, b) => a + b, 0)
-const pairLabel = pair[0]
-const pairValue = pair[1]
+let total = count + ratio
+let greeting = `${label} is ${active}`
+let first = items[0]
+let allIds = ids.reduce((a, b) => a + b, 0)
+let pairLabel = pair[0]
+let pairValue = pair[1]
 
 console.log('total:', total)
 console.log('greeting:', greeting)
@@ -24,40 +24,45 @@ console.log('allIds:', allIds)
 console.log('pairLabel:', pairLabel)
 console.log('pairValue:', pairValue)
 
+// ── Readonly (=!) — compiles to const ──
+
+const MAX: number = 3
+console.log('MAX:', MAX)
+
 // ── Negative: wrong types must be caught ──
 
 // Wrong literals assigned to annotated variables
 // @ts-expect-error — string assigned to number
-const badCount: number = 'oops'
+let badCount: number = 'oops'
 // @ts-expect-error — number assigned to string
-const badLabel: string = 42
+let badLabel: string = 42
 // @ts-expect-error — string assigned to boolean
-const badActive: boolean = 'yes'
+let badActive: boolean = 'yes'
 // @ts-expect-error — string[] assigned to number[]
-const badIds: number[] = ['a', 'b']
+let badIds: number[] = ['a', 'b']
 // @ts-expect-error — swapped tuple members
-const badPair: [string, number] = [123, 'hello']
+let badPair: [string, number] = [123, 'hello']
 
 // Wrong types on derived expressions
 // @ts-expect-error — number + number can't be string
-const badTotal: string = count + ratio
+let badTotal: string = count + ratio
 // @ts-expect-error — template literal can't be number
-const badGreeting: number = `${label} is ${active}`
+let badGreeting: number = `${label} is ${active}`
 // @ts-expect-error — string[] element can't be boolean
-const badFirst: boolean = items[0]
+let badFirst: boolean = items[0]
 // @ts-expect-error — reduce of number[] can't be string
-const badAllIds: string = ids.reduce((a, b) => a + b, 0)
+let badAllIds: string = ids.reduce((a, b) => a + b, 0)
 // @ts-expect-error — tuple[0] is string, not number
-const badPairLabel: number = pair[0]
+let badPairLabel: number = pair[0]
 // @ts-expect-error — tuple[1] is number, not string
-const badPairValue: string = pair[1]
+let badPairValue: string = pair[1]
 
 // ── Nullable and optional types ──
 
 let optionalName: string | undefined = undefined
 let nullableCount: number | null = null
-const maybeName: string | undefined = 'hello'
-const maybeCount: number | null = 42
+let maybeName: string | undefined = 'hello'
+let maybeCount: number | null = 42
 
 console.log('optionalName:', optionalName)
 console.log('nullableCount:', nullableCount)
@@ -65,6 +70,6 @@ console.log('maybeName:', maybeName)
 console.log('maybeCount:', maybeCount)
 
 // @ts-expect-error — number not assignable to string | undefined
-const badOptional: string | undefined = 123
+let badOptional: string | undefined = 123
 // @ts-expect-error — string not assignable to number | null
-const badNullable: number | null = 'oops'
+let badNullable: number | null = 'oops'
