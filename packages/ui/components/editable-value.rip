@@ -25,6 +25,7 @@ export EditableValue = component
     return if saving
     saving = true
     @emit 'save'
+    @close()
 
   _onCancel: ->
     editing = false

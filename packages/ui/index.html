@@ -1098,7 +1098,7 @@ export WidgetGallery = component
         .demo-row
           EditableValue @save: (=> editName = editName)
             span $display: true
-              editName
+              "#{editName}"
             div $editor: true, hidden: true
               input type: "text", value: editName
                 @input: (e) => editName = e.target.value
