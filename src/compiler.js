@@ -2113,6 +2113,7 @@ export class CodeGenerator {
       if (meta(sexpr[0], 'await') === true) return `(await ${importExpr})`;
       return importExpr;
     }
+    if (this.options.skipImports) return '';
     let [specifier, source] = rest;
     let fixedSource = this.addJsExtensionAndAssertions(source);
     if (typeof specifier === 'string') return `import ${specifier} from ${fixedSource}`;
@@ -3374,6 +3375,7 @@ export class Compiler {
       skipPreamble: this.options.skipPreamble,
       skipRuntimes: this.options.skipRuntimes,
       skipExports: this.options.skipExports,
+      skipImports: this.options.skipImports,
       skipDataPart: this.options.skipDataPart,
       stubComponents: this.options.stubComponents,
       reactiveVars: this.options.reactiveVars,

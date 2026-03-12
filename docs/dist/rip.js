@@ -230,8 +230,8 @@
     while (j < tokens.length) {
       let t = tokens[j];
       let tTag = t[0];
-      let isOpen = tTag === "(" || tTag === "[" || tTag === "CALL_START" || tTag === "PARAM_START" || tTag === "INDEX_START" || tTag === "COMPARE" && t[1] === "<";
-      let isClose = tTag === ")" || tTag === "]" || tTag === "CALL_END" || tTag === "PARAM_END" || tTag === "INDEX_END" || tTag === "COMPARE" && t[1] === ">";
+      let isOpen = tTag === "(" || tTag === "[" || tTag === "{" || tTag === "CALL_START" || tTag === "PARAM_START" || tTag === "INDEX_START" || tTag === "COMPARE" && t[1] === "<";
+      let isClose = tTag === ")" || tTag === "]" || tTag === "}" || tTag === "CALL_END" || tTag === "PARAM_END" || tTag === "INDEX_END" || tTag === "COMPARE" && t[1] === ">";
       if (tTag === "SHIFT" && t[1] === ">>" && depth >= 2) {
         depth -= 2;
         typeTokens.push(t);
@@ -440,8 +440,16 @@
     let indentStr = "  ";
     let indent = () => indentStr.repeat(indentLevel);
     let inClass = false;
+    let classFields = new Set;
     let usesSignal = false;
     let usesComputed = false;
+    for (let i = 0;i < tokens.length; i++) {
+      const tag = tokens[i][0];
+      if (tag === "REACTIVE_ASSIGN")
+        usesSignal = true;
+      else if (tag === "COMPUTED_ASSIGN")
+        usesComputed = true;
+    }
     let emitBlock = (prefix, body, suffix) => {
       if (body.startsWith("{ ") && body.endsWith(" }")) {
         let props = body.slice(2, -2).split("; ").filter((p) => p.trim());
@@ -457,12 +465,151 @@
       }
       lines.push(`${indent()}${prefix}${body}${suffix}`);
     };
+    let skipDefault = (tokens2, j) => {
+      j++;
+      let dd = 0;
+      while (j < tokens2.length) {
+        let dt = tokens2[j];
+        if (dt[0] === "(" || dt[0] === "[" || dt[0] === "{")
+          dd++;
+        if (dt[0] === ")" || dt[0] === "]" || dt[0] === "}") {
+          if (dd === 0)
+            break;
+          dd--;
+        }
+        if (dd === 0 && dt[1] === ",")
+          break;
+        j++;
+      }
+      return j;
+    };
+    let collectDestructuredObj = (tokens2, startJ) => {
+      let props = [];
+      let hasAnyType = false;
+      let j = startJ + 1;
+      let d = 1;
+      while (j < tokens2.length && d > 0) {
+        if (tokens2[j][0] === "{")
+          d++;
+        if (tokens2[j][0] === "}")
+          d--;
+        if (d <= 0) {
+          j++;
+          break;
+        }
+        if (tokens2[j][0] === "..." || tokens2[j][0] === "SPREAD") {
+          j++;
+          if (tokens2[j]?.[0] === "IDENTIFIER") {
+            props.push({ kind: "rest", propName: tokens2[j][1] });
+            j++;
+          }
+          continue;
+        }
+        if (tokens2[j][0] === "PROPERTY" && tokens2[j + 1]?.[0] === ":") {
+          let propName = tokens2[j][1];
+          j += 2;
+          if (tokens2[j]?.[0] === "{") {
+            let inner = collectDestructuredObj(tokens2, j);
+            if (inner.hasAnyType)
+              hasAnyType = true;
+            props.push({ kind: "nested-obj", propName, inner });
+            j = inner.endJ;
+            continue;
+          }
+          if (tokens2[j]?.[0] === "[") {
+            let inner = collectDestructuredArr(tokens2, j);
+            if (inner.hasAnyType)
+              hasAnyType = true;
+            props.push({ kind: "nested-arr", propName, inner });
+            j = inner.endJ;
+            continue;
+          }
+          if (tokens2[j]?.[0] === "IDENTIFIER") {
+            let localName = tokens2[j][1];
+            let type = tokens2[j].data?.type;
+            if (type)
+              hasAnyType = true;
+            let hasDefault = tokens2[j + 1]?.[0] === "=";
+            props.push({ kind: "rename", propName, localName, type: type ? expandSuffixes(type) : null, hasDefault });
+            j++;
+            if (hasDefault)
+              j = skipDefault(tokens2, j);
+          }
+          continue;
+        }
+        if (tokens2[j][0] === "IDENTIFIER") {
+          let name = tokens2[j][1];
+          let type = tokens2[j].data?.type;
+          if (type)
+            hasAnyType = true;
+          let hasDefault = tokens2[j + 1]?.[0] === "=";
+          props.push({ kind: "simple", propName: name, type: type ? expandSuffixes(type) : null, hasDefault });
+          j++;
+          if (hasDefault)
+            j = skipDefault(tokens2, j);
+          continue;
+        }
+        j++;
+      }
+      let patternParts = [];
+      let typeParts = [];
+      for (let p of props) {
+        if (p.kind === "rest") {
+          patternParts.push(`...${p.propName}`);
+          typeParts.push(`[key: string]: unknown`);
+        } else if (p.kind === "nested-obj" || p.kind === "nested-arr") {
+          patternParts.push(`${p.propName}: ${p.inner.patternStr}`);
+          typeParts.push(`${p.propName}: ${p.inner.typeStr}`);
+        } else if (p.kind === "rename") {
+          patternParts.push(`${p.propName}: ${p.localName}`);
+          typeParts.push(`${p.propName}${p.hasDefault ? "?" : ""}: ${p.type || "any"}`);
+        } else {
+          patternParts.push(p.propName);
+          typeParts.push(`${p.propName}${p.hasDefault ? "?" : ""}: ${p.type || "any"}`);
+        }
+      }
+      return {
+        patternStr: `{${patternParts.join(", ")}}`,
+        typeStr: `{${typeParts.join(", ")}}`,
+        endJ: j,
+        hasAnyType
+      };
+    };
+    let collectDestructuredArr = (tokens2, startJ) => {
+      let names = [];
+      let elemTypes = [];
+      let hasAnyType = false;
+      let j = startJ + 1;
+      let d = 1;
+      while (j < tokens2.length && d > 0) {
+        if (tokens2[j][0] === "[")
+          d++;
+        if (tokens2[j][0] === "]")
+          d--;
+        if (d > 0 && tokens2[j][0] === "IDENTIFIER") {
+          let name = tokens2[j][1];
+          let type = tokens2[j].data?.type;
+          names.push(name);
+          elemTypes.push(type ? expandSuffixes(type) : null);
+          if (type)
+            hasAnyType = true;
+        }
+        j++;
+      }
+      return {
+        patternStr: `[${names.join(", ")}]`,
+        typeStr: `[${elemTypes.map((t) => t || "any").join(", ")}]`,
+        endJ: j,
+        hasAnyType
+      };
+    };
     let collectParams = (tokens2, startIdx) => {
       let params = [];
+      let fields = [];
       let j = startIdx;
       let openTag = tokens2[j]?.[0];
       if (openTag !== "CALL_START" && openTag !== "PARAM_START")
-        return { params, endIdx: j };
+        return { params, fields, endIdx: j };
       let closeTag = openTag === "CALL_START" ? "CALL_END" : "PARAM_END";
       j++;
       let depth = 0;
@@ -485,6 +632,8 @@
             let name = tokens2[j][1];
             let type = tokens2[j].data?.type;
             params.push(type ? `${name}: ${expandSuffixes(type)}` : name);
+            if (type)
+              fields.push({ name, type: expandSuffixes(type) });
             j++;
           }
           continue;
@@ -500,21 +649,25 @@
           continue;
         }
         if (tok[0] === "{") {
-          let pattern = "{";
-          j++;
-          let d = 1;
-          while (j < tokens2.length && d > 0) {
-            if (tokens2[j][0] === "{")
-              d++;
-            if (tokens2[j][0] === "}")
-              d--;
-            if (d > 0)
-              pattern += tokens2[j][1] + (tokens2[j + 1]?.[0] === "}" ? "" : ", ");
-            j++;
+          depth--;
+          let result = collectDestructuredObj(tokens2, j);
+          j = result.endJ;
+          if (result.hasAnyType) {
+            params.push(`${result.patternStr}: ${result.typeStr}`);
+          } else {
+            params.push(result.patternStr);
           }
-          pattern += "}";
-          let type = tokens2[j - 1]?.data?.type;
-          params.push(type ? `${pattern}: ${expandSuffixes(type)}` : pattern);
+          continue;
+        }
+        if (tok[0] === "[") {
+          depth--;
+          let result = collectDestructuredArr(tokens2, j);
+          j = result.endJ;
+          if (result.hasAnyType) {
+            params.push(`${result.patternStr}: ${result.typeStr}`);
+          } else {
+            params.push(result.patternStr);
+          }
           continue;
         }
         if (tok[0] === "IDENTIFIER") {
@@ -524,8 +677,9 @@
           if (tokens2[j + 1]?.[0] === "=") {
             hasDefault = true;
           }
+          let isOptional = hasDefault || tok.data?.predicate;
           if (paramType) {
-            params.push(`${paramName}${hasDefault ? "?" : ""}: ${expandSuffixes(paramType)}`);
+            params.push(`${paramName}${isOptional ? "?" : ""}: ${expandSuffixes(paramType)}`);
           } else {
             params.push(paramName);
           }
@@ -548,7 +702,7 @@
         }
         j++;
       }
-      return { params, endIdx: j };
+      return { params, fields, endIdx: j };
     };
     for (let i = 0;i < tokens.length; i++) {
       let t = tokens[i];
@@ -667,6 +821,7 @@
           if (hasTypedMembers) {
             lines.push(`${indent()}${exp}declare class ${className}${ext} {`);
             inClass = true;
+            classFields.clear();
             indentLevel++;
           }
         }
@@ -691,6 +846,7 @@
             lines.push(`${indent()}${exp}${declare}function ${fnName}${typeParams}(${paramStr})${ret};`);
           }
         }
+        i = endIdx;
         continue;
       }
       if (tag === "{" && inClass) {
@@ -719,9 +875,11 @@
             if (tokens[j]?.[1] === ":")
               j++;
             let params = [];
+            let fields = [];
             if (tokens[j]?.[0] === "PARAM_START") {
               let result = collectParams(tokens, j);
               params = result.params;
+              fields = result.fields;
               j = result.endIdx + 1;
             }
             if (tokens[j]?.[0] === "->" || tokens[j]?.[0] === "=>")
@@ -740,6 +898,14 @@
             if (returnType || params.some((p) => p.includes(":"))) {
               let ret = returnType ? `: ${expandSuffixes(returnType)}` : "";
               let paramStr = params.join(", ");
+              if (methodName === "constructor" && fields.length) {
+                for (let f of fields) {
+                  if (!classFields.has(f.name)) {
+                    lines.push(`${indent()}${f.name}: ${f.type};`);
+                    classFields.add(f.name);
+                  }
+                }
+              }
               lines.push(`${indent()}${methodName}(${paramStr})${ret};`);
             }
             continue;
@@ -823,11 +989,13 @@
               lines.push(`${indent()}${exp}${declare}function ${varName}(${paramStr}): ${returnType};`);
             } else if (inClass) {
               lines.push(`${indent()}${varName}: ${type};`);
+              classFields.add(varName);
             } else {
               lines.push(`${indent()}${exp}let ${varName}: ${type};`);
             }
           } else if (inClass) {
             lines.push(`${indent()}${varName}: ${type};`);
+            classFields.add(varName);
           }
         } else if (inClass) {
           lines.push(`${indent()}${varName}: ${type};`);
@@ -899,7 +1067,20 @@
       let body = compNode[2];
       let members = Array.isArray(body) && (body[0]?.valueOf?.() ?? body[0]) === "block" ? body.slice(1) : body ? [body] : [];
       let publicProps = [];
+      let bodyMembers = [];
       let hasRequired = false;
+      let inferLiteralType = (v) => {
+        let s = v?.valueOf?.() ?? v;
+        if (typeof s !== "string")
+          return null;
+        if (s === "true" || s === "false")
+          return "boolean";
+        if (/^-?\d+(\.\d+)?$/.test(s))
+          return "number";
+        if (s.startsWith('"') || s.startsWith("'"))
+          return "string";
+        return null;
+      };
       for (let member of members) {
         if (!Array.isArray(member))
           continue;
@@ -911,8 +1092,13 @@
           propName = isProp ? target[2]?.valueOf?.() ?? target[2] : target?.valueOf?.() ?? target;
           type = isProp ? target[2]?.type : target?.type;
           hasDefault = true;
-          if (!isProp)
+          if (!isProp) {
             componentVars.add(propName);
+            let wrapper = mHead === "computed" ? "Computed" : "Signal";
+            let typeStr2 = type ? expandSuffixes(type) : inferLiteralType(member[2]) || "any";
+            bodyMembers.push(`  ${propName}: ${wrapper}<${typeStr2}>;`);
+            continue;
+          }
         } else if (mHead === ".") {
           isProp = (member[1]?.valueOf?.() ?? member[1]) === "this";
           propName = isProp ? member[2]?.valueOf?.() ?? member[2] : null;
@@ -920,6 +1106,33 @@
           hasDefault = false;
           if (!isProp && propName)
             componentVars.add(propName);
+        } else if (mHead === "object") {
+          for (let i = 1;i < member.length; i++) {
+            let entry = member[i];
+            if (!Array.isArray(entry) || entry.length < 2)
+              continue;
+            let methName = entry[0]?.valueOf?.() ?? entry[0];
+            let funcDef = entry[1];
+            if (!Array.isArray(funcDef))
+              continue;
+            let fHead = funcDef[0]?.valueOf?.() ?? funcDef[0];
+            if (fHead !== "->" && fHead !== "=>")
+              continue;
+            let params = funcDef[1];
+            if (!Array.isArray(params))
+              continue;
+            let hasTypedParams = params.some((p) => p?.type);
+            if (!hasTypedParams)
+              continue;
+            let paramStrs = [];
+            for (let p of params) {
+              let pName = p?.valueOf?.() ?? p;
+              let pType = p?.type ? expandSuffixes(p.type) : "any";
+              paramStrs.push(`${pName}: ${pType}`);
+            }
+            bodyMembers.push(`  ${methName}(${paramStrs.join(", ")}): void;`);
+          }
+          continue;
         } else {
           continue;
         }
@@ -939,6 +1152,8 @@
           lines.push(p);
         lines.push(`  });`);
       }
+      for (let m of bodyMembers)
+        lines.push(m);
       lines.push(`}`);
     }
     if (head === "program" || head === "block") {
@@ -1318,6 +1533,7 @@
       this.exportSpecifierList = false;
       this.inRenderBlock = false;
       this.renderIndent = 0;
+      this.inTypeAnnotation = false;
       code = this.clean(code);
       this.code = code;
       while (this.pos < code.length) {
@@ -1461,7 +1677,7 @@
         }
         tag = this.classifyKeyword(id, tag, data);
       }
-      if (tag === "IDENTIFIER" && RESERVED.has(baseId)) {
+      if (tag === "IDENTIFIER" && RESERVED.has(baseId) && !(baseId === "void" && this.inTypeAnnotation)) {
         syntaxError(`reserved word '${baseId}'`, { row: this.row, col: this.col, len: idLen });
       }
       if (tag === "PROPERTY" && prev) {
@@ -1603,6 +1819,7 @@
         this.seenImport = false;
       if (!this.exportSpecifierList)
         this.seenExport = false;
+      this.inTypeAnnotation = false;
       if (size === this.indent) {
         this.emitNewline();
         return indent.length;
@@ -2012,6 +2229,7 @@
         this.exportSpecifierList = false;
       if (val === ";") {
         this.seenFor = this.seenImport = this.seenExport = false;
+        this.inTypeAnnotation = false;
         tag = "TERMINATOR";
       } else if (val === "|>")
         tag = "PIPE";
@@ -2020,19 +2238,24 @@
         this.emit("PROPERTY", "prototype");
         this.emit(".", ".");
         return 2;
-      } else if (val === "::")
+      } else if (val === "::") {
         tag = "TYPE_ANNOTATION";
-      else if (val === "~=")
+        this.inTypeAnnotation = true;
+      } else if (val === "~=") {
         tag = "COMPUTED_ASSIGN";
-      else if (val === ":=")
+        this.inTypeAnnotation = false;
+      } else if (val === ":=") {
         tag = "REACTIVE_ASSIGN";
-      else if (val === "<=>")
+        this.inTypeAnnotation = false;
+      } else if (val === "<=>")
         tag = "BIND";
-      else if (val === "~>")
+      else if (val === "~>") {
         tag = "EFFECT";
-      else if (val === "=!")
+        this.inTypeAnnotation = false;
+      } else if (val === "=!") {
         tag = "READONLY_ASSIGN";
-      else if (val === "*" && (!prev || prev[0] === "TERMINATOR" || prev[0] === "INDENT" || prev[0] === "OUTDENT") && (/^[a-zA-Z_$]/.test(this.chunk[1] || "") || this.chunk[1] === "@")) {
+        this.inTypeAnnotation = false;
+      } else if (val === "*" && (!prev || prev[0] === "TERMINATOR" || prev[0] === "INDENT" || prev[0] === "OUTDENT") && (/^[a-zA-Z_$]/.test(this.chunk[1] || "") || this.chunk[1] === "@")) {
         let rest = this.chunk.slice(1);
         let mAt = /^@(\s*)=(?!=)/.exec(rest);
         if (mAt) {
@@ -2102,6 +2325,9 @@
           if (prev[0] === "?.")
             prev[0] = "ES6_OPTIONAL_INDEX";
         }
+      }
+      if (this.inTypeAnnotation && (val === "=" || tag === "COMPOUND_ASSIGN")) {
+        this.inTypeAnnotation = false;
       }
       if (val === "(" || val === "{" || val === "[") {
         this.ends.push({ tag: INVERSES[val], origin: [tag, val] });
@@ -3990,11 +4216,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       return sexpr.map((item) => this.transformComponentMembers(item));
     };
     proto.generateComponent = function(head, rest, context, sexpr) {
-      if (this.options.stubComponents)
-        return "class {}";
       const [, body] = rest;
-      this.usesTemplates = true;
-      this.usesReactivity = true;
       const statements = this.is(body, "block") ? body.slice(1) : [];
       const stateVars = [];
       const derivedVars = [];
@@ -4024,6 +4246,13 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           const varName = typeof stmt[1] === "string" ? stmt[1] : getMemberName(stmt[1]);
           if (varName) {
             acceptedVars.push(varName);
+            memberNames.add(varName);
+            reactiveMembers.add(varName);
+          }
+        } else if (op === "." && stmt[1] === "this" && getMemberName(stmt)) {
+          const varName = typeof stmt[2] === "string" || stmt[2] instanceof String ? stmt[2].valueOf() : null;
+          if (varName) {
+            stateVars.push({ name: varName, value: undefined, isPublic: true, type: stmt[2]?.type || null, required: true });
             memberNames.add(varName);
             reactiveMembers.add(varName);
           }
@@ -4095,6 +4324,164 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       this.componentMembers = memberNames;
       this.reactiveMembers = reactiveMembers;
       this._autoEventHandlers = autoEventHandlers.size > 0 ? autoEventHandlers : null;
+      if (this.options.stubComponents) {
+        const expandType = (t) => t ? t.replace(/::/g, ":").replace(/(\w+(?:<[^>]+>)?)\?\?/g, "$1 | null | undefined").replace(/(\w+(?:<[^>]+>)?)\?(?![.:])/g, "$1 | undefined").replace(/(\w+(?:<[^>]+>)?)\!/g, "NonNullable<$1>") : null;
+        const sl = [];
+        sl.push("class {");
+        const propEntries = [];
+        for (const { name, type, isPublic, required } of stateVars) {
+          if (!isPublic)
+            continue;
+          const ts = expandType(type);
+          const opt = required ? "" : "?";
+          propEntries.push(`${name}${opt}: ${ts || "any"}`);
+        }
+        for (const { name, type, isPublic } of readonlyVars) {
+          if (!isPublic)
+            continue;
+          const ts = expandType(type);
+          propEntries.push(`${name}?: ${ts || "any"}`);
+        }
+        if (propEntries.length > 0) {
+          const hasRequired = stateVars.some((v) => v.isPublic && v.required);
+          const propsOpt = hasRequired ? "" : "?";
+          sl.push(`  constructor(props${propsOpt}: {${propEntries.join("; ")}}) {}`);
+        }
+        const inferLiteralType = (v) => {
+          const s = v?.valueOf?.() ?? v;
+          if (typeof s !== "string")
+            return null;
+          if (s === "true" || s === "false")
+            return "boolean";
+          if (/^-?\d+(\.\d+)?$/.test(s))
+            return "number";
+          if (s.startsWith('"') || s.startsWith("'"))
+            return "string";
+          return null;
+        };
+        for (const { name, type, value } of stateVars) {
+          const ts = expandType(type) || inferLiteralType(value);
+          sl.push(ts ? `  declare ${name}: Signal<${ts}>;` : `  declare ${name}: Signal<any>;`);
+        }
+        for (const { name, type, value } of readonlyVars) {
+          const ts = expandType(type) || inferLiteralType(value);
+          sl.push(ts ? `  declare ${name}: ${ts};` : `  declare ${name}: any;`);
+        }
+        for (const { name, expr } of derivedVars) {
+          if (this.is(expr, "block")) {
+            const transformed = this.transformComponentMembers(expr);
+            const body2 = this.generateFunctionBody(transformed);
+            sl.push(`  ${name} = __computed(() => ${body2});`);
+          } else {
+            const val = this.generateInComponent(expr, "value");
+            sl.push(`  ${name} = __computed(() => ${val});`);
+          }
+        }
+        sl.push("  _init(props) {");
+        for (const { name, value, isPublic } of readonlyVars) {
+          const val = this.generateInComponent(value, "value");
+          sl.push(isPublic ? `    this.${name} = props.${name} ?? ${val};` : `    this.${name} = ${val};`);
+        }
+        for (const { name, value, isPublic, required, type } of stateVars) {
+          if (isPublic && required) {
+            sl.push(`    this.${name} = __state(props.__bind_${name}__ ?? props.${name});`);
+          } else if (isPublic) {
+            const val = this.generateInComponent(value, "value");
+            sl.push(`    this.${name} = __state(props.__bind_${name}__ ?? props.${name} ?? ${val});`);
+          } else {
+            const val = this.generateInComponent(value, "value");
+            sl.push(`    this.${name} = __state(${val});`);
+          }
+        }
+        for (const effect of effects) {
+          const effectBody = effect[2];
+          const isAsync = this.containsAwait(effectBody) ? "async " : "";
+          if (this.is(effectBody, "block")) {
+            const transformed = this.transformComponentMembers(effectBody);
+            const body2 = this.generateFunctionBody(transformed, [], true);
+            sl.push(`    __effect(${isAsync}() => ${body2});`);
+          } else {
+            const effectCode = this.generateInComponent(effectBody, "value");
+            sl.push(`    __effect(${isAsync}() => { ${effectCode}; });`);
+          }
+        }
+        sl.push("  }");
+        for (const { name, func } of methods) {
+          if (Array.isArray(func) && (func[0] === "->" || func[0] === "=>")) {
+            const [, params, methodBody] = func;
+            const paramStr = Array.isArray(params) ? params.map((p) => this.formatParam(p)).join(", ") : "";
+            const transformed = this.reactiveMembers ? this.transformComponentMembers(methodBody) : methodBody;
+            const isAsync = this.containsAwait(methodBody);
+            const bodyCode = this.generateFunctionBody(transformed, params || []);
+            sl.push(`  ${isAsync ? "async " : ""}${name}(${paramStr}) ${bodyCode}`);
+          }
+        }
+        for (const { name, value } of lifecycleHooks) {
+          if (Array.isArray(value) && (value[0] === "->" || value[0] === "=>")) {
+            const [, params, hookBody] = value;
+            const paramStr = Array.isArray(params) ? params.map((p) => this.formatParam(p)).join(", ") : "";
+            const transformed = this.reactiveMembers ? this.transformComponentMembers(hookBody) : hookBody;
+            const isAsync = this.containsAwait(hookBody);
+            const bodyCode = this.generateFunctionBody(transformed, params || []);
+            sl.push(`  ${isAsync ? "async " : ""}${name}(${paramStr}) ${bodyCode}`);
+          }
+        }
+        if (renderBlock) {
+          const constructions = [];
+          const extractProps = (args) => {
+            const props = [];
+            for (const arg of args) {
+              let obj = null;
+              if (this.is(arg, "object")) {
+                obj = arg;
+              } else if (Array.isArray(arg) && (arg[0] === "->" || arg[0] === "=>") && this.is(arg[2], "block")) {
+                for (let k = 1;k < arg[2].length; k++) {
+                  if (this.is(arg[2][k], "object")) {
+                    obj = arg[2][k];
+                    break;
+                  }
+                }
+              }
+              if (obj) {
+                for (let j = 1;j < obj.length; j++) {
+                  const [key, value] = obj[j];
+                  if (typeof key === "string" && !key.startsWith("@") && !key.startsWith("__bind_")) {
+                    const val = this.generateInComponent(value, "value");
+                    props.push(`${key}: ${val}`);
+                  }
+                }
+              }
+            }
+            return props;
+          };
+          const walkRender = (node) => {
+            if (!Array.isArray(node))
+              return;
+            const head2 = node[0]?.valueOf?.() ?? node[0];
+            if (typeof head2 === "string" && /^[A-Z]/.test(head2)) {
+              const props = extractProps(node.slice(1));
+              constructions.push(`    new ${head2}({${props.join(", ")}});`);
+            }
+            for (let i = 1;i < node.length; i++)
+              walkRender(node[i]);
+          };
+          walkRender(renderBlock);
+          if (constructions.length > 0) {
+            sl.push("  _render() {");
+            for (const c of constructions)
+              sl.push(c);
+            sl.push("  }");
+          }
+        }
+        sl.push("}");
+        this.componentMembers = prevComponentMembers;
+        this.reactiveMembers = prevReactiveMembers;
+        this._autoEventHandlers = prevAutoEventHandlers;
+        return sl.join(`
+`);
+      }
+      this.usesTemplates = true;
+      this.usesReactivity = true;
       const lines = [];
       let blockFactoriesCode = "";
       lines.push("class extends __Component {");
@@ -4106,9 +4493,16 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       for (const name of acceptedVars) {
         lines.push(`    this.${name} = getContext('${name}');`);
       }
-      for (const { name, value, isPublic } of stateVars) {
-        const val = this.generateInComponent(value, "value");
-        lines.push(isPublic ? `    this.${name} = __state(props.__bind_${name}__ ?? props.${name} ?? ${val});` : `    this.${name} = __state(${val});`);
+      for (const { name, value, isPublic, required } of stateVars) {
+        if (isPublic && required) {
+          lines.push(`    this.${name} = __state(props.__bind_${name}__ ?? props.${name});`);
+        } else if (isPublic) {
+          const val = this.generateInComponent(value, "value");
+          lines.push(`    this.${name} = __state(props.__bind_${name}__ ?? props.${name} ?? ${val});`);
+        } else {
+          const val = this.generateInComponent(value, "value");
+          lines.push(`    this.${name} = __state(${val});`);
+        }
       }
       for (const { name, expr } of derivedVars) {
         if (this.is(expr, "block")) {
@@ -5386,9 +5780,9 @@ if (typeof globalThis !== 'undefined') {
     toReverseMap() {
       let reverse = new Map;
       for (let m of this.mappings) {
-        if (!reverse.has(m.origLine)) {
-          reverse.set(m.origLine, { genLine: m.genLine, genCol: m.genCol });
-        }
+        if (!reverse.has(m.origLine))
+          reverse.set(m.origLine, []);
+        reverse.get(m.origLine).push({ origCol: m.origCol, genLine: m.genLine, genCol: m.genCol });
       }
       return reverse;
     }
@@ -5711,8 +6105,61 @@ if (typeof globalThis !== 'undefined') {
         if (entry.loc) {
           this.sourceMap.addMapping(lineOffset, 0, entry.loc.r, entry.loc.c);
         }
+        if (entry.sexpr && entry.loc) {
+          this.recordSubMappings(entry.code, entry.sexpr, lineOffset);
+        }
         lineOffset += entry.code.split(`
 `).length;
+      }
+    }
+    recordSubMappings(code, sexpr, lineOffset) {
+      let stmtOrigLine = sexpr.loc ? sexpr.loc.r : 0;
+      let subs = [];
+      this.collectSubExprs(sexpr, subs);
+      for (let { name, origLine, origCol } of subs) {
+        let escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        let re = new RegExp("\\b" + escaped + "\\b", "g");
+        let m, bestMatch = null, bestDist = Infinity;
+        let origLineInStmt = origLine - stmtOrigLine;
+        while ((m = re.exec(code)) !== null) {
+          let before = code.substring(0, m.index);
+          let nl = before.split(`
+`);
+          let genLine = lineOffset + nl.length - 1;
+          let genCol = nl[nl.length - 1].length;
+          let genLineInStmt = nl.length - 1;
+          let dist = Math.abs(genLineInStmt - origLineInStmt) * 1e4 + Math.abs(genCol - origCol);
+          if (dist < bestDist) {
+            bestDist = dist;
+            bestMatch = { genLine, genCol };
+          }
+        }
+        if (bestMatch) {
+          this.sourceMap.addMapping(bestMatch.genLine, bestMatch.genCol, origLine, origCol);
+        }
+      }
+    }
+    collectSubExprs(node, result) {
+      if (!Array.isArray(node))
+        return;
+      if (node.loc) {
+        let head = str(node[0]);
+        let ident = null;
+        if (typeof head === "string" && /^[=+\-*/%<>!&|?~^]|^\.\.?$|^def$|^class$|^state$|^computed$|^readonly$|^for-/.test(head)) {
+          if (typeof node[1] === "string" && /^[a-zA-Z_$]/.test(node[1]))
+            ident = node[1];
+        } else if (head === ".") {
+          if (typeof node[2] === "string")
+            ident = node[2];
+        } else if (typeof head === "string" && /^[a-zA-Z_$]/.test(head)) {
+          ident = head;
+        }
+        if (ident)
+          result.push({ name: ident, origLine: node.loc.r, origCol: node.loc.c });
+      }
+      for (let i = 1;i < node.length; i++) {
+        if (Array.isArray(node[i]))
+          this.collectSubExprs(node[i], result);
       }
     }
     collectProgramVariables(sexpr) {
@@ -5734,15 +6181,21 @@ if (typeof globalThis !== 'undefined') {
         this.reactiveVars.add(varName);
         return;
       }
-      if (head === "readonly")
+      if (head === "readonly") {
+        let [name] = rest;
+        let varName = str(name) ?? name;
+        if (!this.readonlyVars)
+          this.readonlyVars = new Set;
+        this.readonlyVars.add(varName);
         return;
+      }
       if (head === "component")
         return;
       if (CodeGenerator.ASSIGNMENT_OPS.has(head)) {
         let [target, value] = rest;
         if (typeof target === "string" || target instanceof String) {
           let varName = str(target);
-          if (!this.reactiveVars?.has(varName))
+          if (!this.reactiveVars?.has(varName) && !this.readonlyVars?.has(varName))
             this.programVars.add(varName);
         } else if (this.is(target, "array")) {
           this.collectVarsFromArray(target, this.programVars);
@@ -6008,7 +6461,7 @@ if (typeof globalThis !== 'undefined') {
             generated += ";";
         }
         let loc = Array.isArray(stmt) ? stmt.loc : null;
-        return { code: generated, loc };
+        return { code: generated, loc, sexpr: Array.isArray(stmt) ? stmt : null };
       });
       let statementsCode = stmtEntries.map((e) => e.code).join(`
 `);
@@ -7421,6 +7874,8 @@ ${this.indent()}}`;
           return `(await ${importExpr})`;
         return importExpr;
       }
+      if (this.options.skipImports)
+        return "";
       let [specifier, source] = rest;
       let fixedSource = this.addJsExtensionAndAssertions(source);
       if (typeof specifier === "string")
@@ -7617,10 +8072,12 @@ export default ${expr[1]}`;
             return `...${pair[1]}`;
           if (this.is(pair, "default"))
             return `${pair[1]} = ${this.generate(pair[2], "value")}`;
-          let [key, value] = pair;
+          let [key, value, operator] = pair;
+          if (operator === "=")
+            return `${key} = ${this.generate(value, "value")}`;
           if (key === value)
             return key;
-          return `${key}: ${value}`;
+          return `${key}: ${this.formatParam(value)}`;
         });
         return `{${pairs.join(", ")}}`;
       }
@@ -8803,6 +9260,7 @@ if (typeof globalThis !== 'undefined') {
         skipPreamble: this.options.skipPreamble,
         skipRuntimes: this.options.skipRuntimes,
         skipExports: this.options.skipExports,
+        skipImports: this.options.skipImports,
         skipDataPart: this.options.skipDataPart,
         stubComponents: this.options.stubComponents,
         reactiveVars: this.options.reactiveVars,
@@ -8863,7 +9321,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   }
   // src/browser.js
   var VERSION = "3.13.93";
-  var BUILD_DATE = "2026-03-11@02:24:39GMT";
+  var BUILD_DATE = "2026-03-12@08:04:05GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -8923,7 +9381,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
       const routerAttr = runtimeTag?.getAttribute("data-router");
       const hasRouter = routerAttr != null;
       if (hasRouter && bundles.length > 0) {
-        const opts = { skipRuntimes: true, skipExports: true };
+        const opts = { skipRuntimes: true, skipExports: true, skipImports: true };
         if (individual.length > 0) {
           let js = "";
           for (const s of individual) {
@@ -8972,7 +9430,7 @@ ${js}
           }
         }
         expanded.push(...individual);
-        const opts = { skipRuntimes: true, skipExports: true };
+        const opts = { skipRuntimes: true, skipExports: true, skipImports: true };
         const compiled = [];
         for (const s of expanded) {
           if (!s.code)

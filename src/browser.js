@@ -85,7 +85,7 @@ async function processRipScripts() {
     // for full routing support. Otherwise compile everything upfront.
     if (hasRouter && bundles.length > 0) {
       // Compile non-bundle sources (inline scripts, individual .rip files)
-      const opts = { skipRuntimes: true, skipExports: true };
+      const opts = { skipRuntimes: true, skipExports: true, skipImports: true };
       if (individual.length > 0) {
         let js = '';
         for (const s of individual) {
@@ -124,7 +124,7 @@ async function processRipScripts() {
       }
       expanded.push(...individual);
 
-      const opts = { skipRuntimes: true, skipExports: true };
+      const opts = { skipRuntimes: true, skipExports: true, skipImports: true };
       const compiled = [];
       for (const s of expanded) {
         if (!s.code) continue;

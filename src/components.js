@@ -811,10 +811,11 @@ export function installComponentSupport(CodeGenerator, Lexer) {
         const ts = expandType(type);
         propEntries.push(`${name}?: ${ts || 'any'}`);
       }
-      if (propEntries.length > 0) {
-        const hasRequired = stateVars.some(v => v.isPublic && v.required);
+      {
+        const hasRequired = propEntries.length > 0 && stateVars.some(v => v.isPublic && v.required);
         const propsOpt = hasRequired ? '' : '?';
-        sl.push(`  constructor(props${propsOpt}: {${propEntries.join('; ')}}) {}`);
+        const propsType = propEntries.length > 0 ? `{${propEntries.join('; ')}}` : '{}';
+        sl.push(`  constructor(props${propsOpt}: ${propsType}) {}`);
       }
 
       // Infer type from literal initializer when no explicit annotation
