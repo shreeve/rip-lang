@@ -78,12 +78,12 @@ export apply = (name, props) ->
     if props.storage
       poolName = props.storage[0].args[0]
       unless ok $"incus storage show #{poolName}"
-        throw new Error "Incus already initialized but storage pool '#{poolName}' does not exist"
+        raise "Incus already initialized but storage pool '#{poolName}' does not exist"
 
     if props.network
       bridge = props.network[0].args[0]
       unless ok $"incus network show #{bridge}"
-        throw new Error "Incus already initialized but network '#{bridge}' does not exist"
+        raise "Incus already initialized but network '#{bridge}' does not exist"
 
 export verify = (name, props) ->
   results = []

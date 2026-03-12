@@ -21,13 +21,14 @@ buildArgv = (strings, values) ->
       else
         for word in s.split /\s+/
           argv.push word unless word == ''
-    if i < values.length
+    if i < values.length and values[i]?
       val = String values[i]
-      if s.length and not /\s$/.test s
-        argv[argv.length - 1] += val if argv.length
-        argv.push val unless argv.length
-      else
-        argv.push val
+      if val.length
+        if s.length and not /\s$/.test s
+          argv[argv.length - 1] += val if argv.length
+          argv.push val unless argv.length
+        else
+          argv.push val
   argv
 
 toArgv = (args) ->

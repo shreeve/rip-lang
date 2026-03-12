@@ -1,6 +1,8 @@
-# Stamp
+<img src="https://raw.githubusercontent.com/shreeve/rip-lang/main/docs/assets/rip.png" style="width:50px" /> <br>
 
-Declarative host provisioning — no state file, no agent, no YAML.
+# Stamp - @rip-lang/stamp
+
+**Declarative host provisioning — no state file, no agent, no YAML.**
 
 Stamp reads a Stampfile, resolves each directive to a handler, and reconciles
 the declared state against reality using three operations: **check**, **apply**,
@@ -9,6 +11,8 @@ and **verify**.
 ```
 stamp apply Hostfile
 ```
+
+---
 
 ## Quick Start
 

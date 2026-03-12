@@ -13,11 +13,11 @@ export check = (name, props) ->
 
 export apply = (name, props) ->
   device = props.args?[0]
-  throw new Error "pool '#{name}' requires a device argument" unless device
+  raise "pool '#{name}' requires a device argument" unless device
 
   unless ok $"zpool list #{name}"
-    throw new Error "Block device not found: #{device}" unless ok $"test -b #{device}"
-    throw new Error "Device #{device} has existing data. Run 'wipefs -a #{device}' first." if ok $"blkid #{device}"
+    raise "Block device not found: #{device}" unless ok $"test -b #{device}"
+    raise "Device #{device} has existing data. Run 'wipefs -a #{device}' first." if ok $"blkid #{device}"
 
     ashift = props.ashift?[0]?.args?[0] or '12'
     sh $"zpool create -f -o ashift=#{ashift} #{name} #{device}"
@@ -28,8 +28,8 @@ export apply = (name, props) ->
   atime = props.atime?[0]?.args?[0] or 'off'
   sh $"zfs set atime=#{atime} #{name}"
 
-  if props.mountpoint?[0]?.args?[0]
-    sh $"zfs set mountpoint=#{props.mountpoint[0].args[0]} #{name}"
+  if mp = props.mountpoint?[0]?.args?[0]
+    sh $"zfs set mountpoint=#{mp} #{name}"
 
 export verify = (name, props) ->
   results = []

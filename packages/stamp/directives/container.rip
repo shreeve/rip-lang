@@ -31,7 +31,7 @@ export apply = (name, props) ->
   image = props.args?[0]
 
   unless ok $"incus info #{name}"
-    throw new Error "container '#{name}' requires an image argument" unless image
+    raise "container '#{name}' requires an image argument" unless image
     sh $"incus init #{image} #{name}"
 
   if props.profile
@@ -43,10 +43,8 @@ export apply = (name, props) ->
     for entry in props.disk
       devname = entry.args[0]
       unless ok $"incus config device get #{name} #{devname} source"
-        if 'readonly' in (entry.flags or [])
-          sh $"incus config device add #{name} #{devname} disk source=#{entry.source} path=#{entry.dest} readonly=true"
-        else
-          sh $"incus config device add #{name} #{devname} disk source=#{entry.source} path=#{entry.dest}"
+        ro = 'readonly=true' if 'readonly' in (entry.flags or [])
+        sh $"incus config device add #{name} #{devname} disk source=#{entry.source} path=#{entry.dest} #{ro}"
 
   if props.start and not isRunning name
     sh $"incus start #{name}"
@@ -56,7 +54,7 @@ export apply = (name, props) ->
       break if ok $"incus exec #{name} -- true"
       Bun.sleepSync 1000
       attempts--
-    throw new Error "Container #{name} not ready after 30 seconds" if attempts == 0
+    raise "Container #{name} not ready after 30 seconds" if attempts == 0
 
   if props.user and isRunning name
     for entry in props.user

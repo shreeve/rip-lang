@@ -12,10 +12,8 @@ export check = (name, props) ->
   isEnabled = ok $"systemctl is-enabled #{name}"
   isRunning = ok $"systemctl is-active #{name}"
 
-  return 'drift' if wantEnabled and not isEnabled
-  return 'drift' if not wantEnabled and isEnabled
-  return 'drift' if wantRunning and not isRunning
-  return 'drift' if not wantRunning and isRunning
+  return 'drift' if wantEnabled isnt isEnabled
+  return 'drift' if wantRunning isnt isRunning
 
   'ok'
 
