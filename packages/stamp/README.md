@@ -1,6 +1,6 @@
 <img src="https://raw.githubusercontent.com/shreeve/rip-lang/main/docs/assets/rip.png" style="width:50px" /> <br>
 
-# Stamp
+# Stamp - @rip-lang/stamp
 
 **Declarative host provisioning — no state file, no agent, no YAML.**
 
