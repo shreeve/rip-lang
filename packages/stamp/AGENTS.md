@@ -166,8 +166,8 @@ Test files in `test/`:
 Stamp files live in `stamps/`:
 - `basic` — simple packages/user/group/firewall test
 - `host` — full Incus+ZFS host from STAMP.md spec
-- `vm` — macOS Multipass VM with bootstrap
-- `vm-host` — full host provisioning inside the VM
+- `mac-install` — macOS: install Multipass, create VM, bootstrap
+- `mac-vm` — full host provisioning inside the VM
 
 ## Idioms
 
