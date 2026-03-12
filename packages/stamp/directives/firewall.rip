@@ -1,5 +1,3 @@
-import { shx, shok } from "../src/helpers.rip"
-
 export name        = "firewall"
 export description = "Ensures ufw firewall rules are configured"
 export positional  = []
@@ -8,18 +6,22 @@ export properties  =
   allow:   { description: "Allow rule", multi: true }
   deny:    { description: "Deny rule", multi: true }
 
+ufwActive = ->
+  out = run $"ufw status"
+  out.ok and out.stdout.includes 'Status: active'
+
 export check = (name, props) ->
-  return 'missing' unless shok "which ufw"
-  return 'drift'   unless shok "ufw status | grep -q 'Status: active'"
+  return 'missing' unless ok $"which ufw"
+  return 'drift'   unless ufwActive()
 
   if props.default
-    status = shx "ufw status verbose"
+    status = sh $"ufw status verbose"
     for entry in props.default
       [action, direction] = entry.args
       return 'drift' unless status.includes action
 
   if props.allow
-    status = shx "ufw status"
+    status = sh $"ufw status"
     for entry in props.allow
       rule = entry.args.join ' '
       return 'drift' unless status.toUpperCase().includes rule.toUpperCase()
@@ -27,39 +29,40 @@ export check = (name, props) ->
   'ok'
 
 export apply = (name, props) ->
-  unless shok "which ufw"
-    shx "apt-get update -qq && apt-get install -y -qq ufw"
+  unless ok $"which ufw"
+    sh $"apt-get update -qq"
+    sh $"apt-get install -y -qq ufw"
 
   if props.default
     for entry in props.default
       [action, direction] = entry.args
-      shx "ufw default #{action} #{direction}"
+      sh $"ufw default #{action} #{direction}"
 
   if props.allow
     for entry in props.allow
-      shx "ufw allow #{entry.args.join ' '}"
+      sh $"ufw allow #{entry.args.join ' '}"
 
   if props.deny
     for entry in props.deny
-      shx "ufw deny #{entry.args.join ' '}"
+      sh $"ufw deny #{entry.args.join ' '}"
 
-  unless shok "ufw status | grep -q 'Status: active'"
-    shx "echo 'y' | ufw enable"
+  unless ufwActive()
+    sh $"ufw --force enable"
 
 export verify = (name, props) ->
   results = []
 
-  unless shok "which ufw"
+  unless ok $"which ufw"
     results.push { status: 'fail', message: "ufw not installed" }
     return results
 
-  if shok "ufw status | grep -q 'Status: active'"
+  if ufwActive()
     results.push { status: 'pass', message: "ufw active" }
   else
     results.push { status: 'fail', message: "ufw not active" }
 
   if props.default
-    status = shx "ufw status verbose"
+    status = sh $"ufw status verbose"
     for entry in props.default
       [action, direction] = entry.args
       if status.includes action

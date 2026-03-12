@@ -1,5 +1,3 @@
-import { shx, shok } from "../src/helpers.rip"
-
 export name        = "service"
 export description = "Ensures a systemd service is enabled and running"
 export positional  = ["name"]
@@ -11,8 +9,8 @@ export check = (name, props) ->
   wantEnabled = props.enabled?[0]?.args?[0] != 'false'
   wantRunning = props.running?[0]?.args?[0] != 'false'
 
-  isEnabled = shok "systemctl is-enabled #{name} 2>/dev/null"
-  isRunning = shok "systemctl is-active #{name} 2>/dev/null"
+  isEnabled = ok $"systemctl is-enabled #{name}"
+  isRunning = ok $"systemctl is-active #{name}"
 
   return 'drift' if wantEnabled and not isEnabled
   return 'drift' if not wantEnabled and isEnabled
@@ -26,22 +24,22 @@ export apply = (name, props) ->
   wantRunning = props.running?[0]?.args?[0] != 'false'
 
   if wantEnabled
-    shx "systemctl enable #{name}" unless shok "systemctl is-enabled #{name} 2>/dev/null"
+    sh $"systemctl enable #{name}" unless ok $"systemctl is-enabled #{name}"
   else
-    shx "systemctl disable #{name}" if shok "systemctl is-enabled #{name} 2>/dev/null"
+    sh $"systemctl disable #{name}" if ok $"systemctl is-enabled #{name}"
 
   if wantRunning
-    shx "systemctl start #{name}" unless shok "systemctl is-active #{name} 2>/dev/null"
+    sh $"systemctl start #{name}" unless ok $"systemctl is-active #{name}"
   else
-    shx "systemctl stop #{name}" if shok "systemctl is-active #{name} 2>/dev/null"
+    sh $"systemctl stop #{name}" if ok $"systemctl is-active #{name}"
 
 export verify = (name, props) ->
   results = []
   wantEnabled = props.enabled?[0]?.args?[0] != 'false'
   wantRunning = props.running?[0]?.args?[0] != 'false'
 
-  isEnabled = shok "systemctl is-enabled #{name} 2>/dev/null"
-  isRunning = shok "systemctl is-active #{name} 2>/dev/null"
+  isEnabled = ok $"systemctl is-enabled #{name}"
+  isRunning = ok $"systemctl is-active #{name}"
 
   if wantEnabled
     results.push { status: (if isEnabled then 'pass' else 'fail'), message: "#{name} #{if isEnabled then 'enabled' else 'not enabled'}" }

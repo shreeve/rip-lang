@@ -1,5 +1,3 @@
-import { shx, shok } from "../src/helpers.rip"
-
 export name        = "packages"
 export description = "Ensures system packages are installed"
 export positional  = []
@@ -13,7 +11,8 @@ gather = (name, props) ->
   list
 
 installed = (pkg) ->
-  shok "dpkg -s #{pkg} 2>/dev/null | grep -q 'Status: install ok installed'"
+  out = run $"dpkg -s #{pkg}"
+  out.ok and out.stdout.includes 'Status: install ok installed'
 
 export check = (name, props) ->
   list = gather name, props
@@ -27,8 +26,8 @@ export apply = (name, props) ->
   return if list.length == 0
   missing = (pkg for pkg in list when not installed pkg)
   return if missing.length == 0
-  shx "apt-get update -qq"
-  shx "apt-get install -y -qq #{missing.join ' '}"
+  sh $"apt-get update -qq"
+  sh ['apt-get', 'install', '-y', '-qq', ...missing]
 
 export verify = (name, props) ->
   list = gather name, props

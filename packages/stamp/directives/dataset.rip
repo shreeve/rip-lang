@@ -1,5 +1,3 @@
-import { shx, shok } from "../src/helpers.rip"
-
 export name        = "dataset"
 export description = "Ensures a ZFS dataset exists with correct ownership and permissions"
 export positional  = ["path"]
@@ -8,41 +6,41 @@ export properties  =
   mode:  { description: "Permission mode (octal)" }
 
 export check = (path, props) ->
-  return 'missing' unless shok "zfs list #{path}"
-  mountpoint = shx "zfs get -H -o value mountpoint #{path}"
+  return 'missing' unless ok $"zfs list #{path}"
+  mountpoint = sh $"zfs get -H -o value mountpoint #{path}"
   if props.owner
     want = props.owner[0].args[0]
-    actual = shx "stat -c '%u:%g' #{mountpoint}"
+    actual = sh $"stat -c %u:%g #{mountpoint}"
     return 'drift' if actual != want
   if props.mode
     want = props.mode[0].args[0]
-    actual = shx "stat -c '%a' #{mountpoint}"
+    actual = sh $"stat -c %a #{mountpoint}"
     return 'drift' if actual != want
   'ok'
 
 export apply = (path, props) ->
-  shx "zfs create #{path}" unless shok "zfs list #{path}"
-  mountpoint = shx "zfs get -H -o value mountpoint #{path}"
-  shx "chown #{props.owner[0].args[0]} #{mountpoint}" if props.owner
-  shx "chmod #{props.mode[0].args[0]} #{mountpoint}" if props.mode
+  sh $"zfs create #{path}" unless ok $"zfs list #{path}"
+  mountpoint = sh $"zfs get -H -o value mountpoint #{path}"
+  sh $"chown #{props.owner[0].args[0]} #{mountpoint}" if props.owner
+  sh $"chmod #{props.mode[0].args[0]} #{mountpoint}" if props.mode
 
 export verify = (path, props) ->
   results = []
-  unless shok "zfs list #{path}"
+  unless ok $"zfs list #{path}"
     results.push { status: 'fail', message: "dataset missing: #{path}" }
     return results
   results.push { status: 'pass', message: "dataset exists: #{path}" }
-  mountpoint = shx "zfs get -H -o value mountpoint #{path}"
+  mountpoint = sh $"zfs get -H -o value mountpoint #{path}"
   if props.owner
     want = props.owner[0].args[0]
-    actual = shx "stat -c '%u:%g' #{mountpoint}"
+    actual = sh $"stat -c %u:%g #{mountpoint}"
     if actual == want
       results.push { status: 'pass', message: "#{path} owner is #{want}" }
     else
       results.push { status: 'fail', message: "#{path} owner is #{actual}, expected #{want}" }
   if props.mode
     want = props.mode[0].args[0]
-    actual = shx "stat -c '%a' #{mountpoint}"
+    actual = sh $"stat -c %a #{mountpoint}"
     if actual == want
       results.push { status: 'pass', message: "#{path} mode is #{want}" }
     else

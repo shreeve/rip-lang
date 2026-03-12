@@ -1,26 +1,63 @@
 # ── Shell execution helpers ──────────────────────────────────────────────────
 #
-#   sh(cmd)  → { ok, stdout, stderr, code }
-#   shx(cmd) → stdout string; throws on non-zero exit
-#   shok(cmd) → boolean; true if exit code is 0
+# Each function works in two modes:
+#
+#   String mode:    sh "echo hello"           → passes to sh -c (shell)
+#   Template mode:  sh $"echo #{name}"        → builds argv array (no shell)
+#
+#   run(cmd) → { ok, stdout, stderr, code }
+#   sh(cmd)  → stdout string; throws on non-zero exit
+#   ok(cmd)  → boolean; true if exit code is 0
 
-export sh = (command) ->
-  result = Bun.spawnSync ['sh', '-c', command], { stdout: 'pipe', stderr: 'pipe' }
-  {
-    ok:     result.exitCode == 0
-    stdout: result.stdout.toString().trim()
-    stderr: result.stderr.toString().trim()
-    code:   result.exitCode
-  }
+buildArgv = (strings, values) ->
+  argv = []
+  for s, i in strings
+    if s.length
+      if argv.length and not /^\s/.test s
+        parts = s.split /(\s+)/
+        argv[argv.length - 1] += parts[0]
+        for part in parts[1..]
+          argv.push part unless part == '' or /^\s+$/.test part
+      else
+        for word in s.split /\s+/
+          argv.push word unless word == ''
+    if i < values.length
+      val = String values[i]
+      if s.length and not /\s$/.test s
+        argv[argv.length - 1] += val if argv.length
+        argv.push val unless argv.length
+      else
+        argv.push val
+  argv
 
-export shx = (command) ->
-  result = sh command
-  unless result.ok
-    throw new Error "Command failed (exit #{result.code}): #{command}\n#{result.stderr}"
-  result.stdout
+toArgv = (args) ->
+  first = args[0]
+  if kind(first) == 'array'
+    if first.raw then buildArgv(first, args[1..]) else first
+  else
+    ['sh', '-c', first]
 
-export shok = (command) ->
-  (sh command).ok
+export run = (...args) ->
+  try
+    out = Bun.spawnSync toArgv(args), { stdout: 'pipe', stderr: 'pipe' }
+    {
+      ok:     out.exitCode == 0
+      stdout: out.stdout.toString().trim()
+      stderr: out.stderr.toString().trim()
+      code:   out.exitCode
+    }
+  catch e
+    { ok: false, stdout: '', stderr: e.message, code: 1 }
+
+export sh = (...args) ->
+  out = run ...args
+  unless out.ok
+    cmd = toArgv(args).join ' '
+    raise "Command failed (exit #{out.code}): #{cmd}\n#{out.stderr}"
+  out.stdout
+
+export ok = (...args) ->
+  (run ...args).ok
 
 # ── Logging ──────────────────────────────────────────────────────────────────
 
@@ -33,13 +70,13 @@ RED    = "\x1b[31m"
 CYAN   = "\x1b[36m"
 
 export log =
-  ok:     (type, name) -> console.log "  #{GREEN}ok#{RESET}     #{type}#{if name then ' ' + name else ''}"
-  apply:  (type, name) -> console.log "  #{CYAN}apply#{RESET}  #{type}#{if name then ' ' + name else ''}"
-  create: (type, name) -> console.log "  #{CYAN}create#{RESET} #{type}#{if name then ' ' + name else ''}"
-  update: (type, name) -> console.log "  #{YELLOW}update#{RESET} #{type}#{if name then ' ' + name else ''}"
-  fail:   (type, name, msg) -> console.log "  #{RED}FAIL#{RESET}   #{type}#{if name then ' ' + name else ''}#{if msg then ' — ' + msg else ''}"
-  pass:   (msg) -> console.log "  #{GREEN}PASS#{RESET}  #{msg}"
-  warn:   (msg) -> console.log "  #{YELLOW}WARN#{RESET}  #{msg}"
-  error:  (msg) -> console.log "  #{RED}FAIL#{RESET}  #{msg}"
-  info:   (msg) -> console.log "  #{DIM}#{msg}#{RESET}"
-  header: (msg) -> console.log "\n#{BOLD}#{msg}#{RESET}"
+  ok:     (type, name) -> p "  #{GREEN}ok#{RESET}     #{type}#{if name then ' ' + name else ''}"
+  apply:  (type, name) -> p "  #{CYAN}apply#{RESET}  #{type}#{if name then ' ' + name else ''}"
+  create: (type, name) -> p "  #{CYAN}create#{RESET} #{type}#{if name then ' ' + name else ''}"
+  update: (type, name) -> p "  #{YELLOW}update#{RESET} #{type}#{if name then ' ' + name else ''}"
+  fail:   (type, name, msg) -> p "  #{RED}FAIL#{RESET}   #{type}#{if name then ' ' + name else ''}#{if msg then ' — ' + msg else ''}"
+  pass:   (msg) -> p "  #{GREEN}PASS#{RESET}  #{msg}"
+  warn:   (msg) -> p "  #{YELLOW}WARN#{RESET}  #{msg}"
+  error:  (msg) -> p "  #{RED}FAIL#{RESET}  #{msg}"
+  info:   (msg) -> p "  #{DIM}#{msg}#{RESET}"
+  header: (msg) -> p "\n#{BOLD}#{msg}#{RESET}"

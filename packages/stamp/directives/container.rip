@@ -1,5 +1,3 @@
-import { sh, shx, shok } from "../src/helpers.rip"
-
 export name        = "container"
 export description = "Manages Incus containers"
 export positional  = ["name", "image"]
@@ -10,20 +8,20 @@ export properties  =
   start:   { description: "Ensure container is running" }
 
 isRunning = (name) ->
-  result = sh "incus info #{name} 2>/dev/null | grep -i '^status:'"
-  result.ok and result.stdout.toLowerCase().includes 'running'
+  out = run $"incus info #{name}"
+  out.ok and out.stdout.toLowerCase().includes 'status: running'
 
 export check = (name, props) ->
-  return 'missing' unless shok "incus info #{name} 2>/dev/null"
+  return 'missing' unless ok $"incus info #{name}"
 
   if props.profile
-    current = shx "incus config show #{name} 2>/dev/null"
+    current = sh $"incus config show #{name}"
     for entry in props.profile
       return 'drift' unless current.includes entry.args[0]
 
   if props.disk
     for entry in props.disk
-      return 'drift' unless shok "incus config device get #{name} #{entry.args[0]} source 2>/dev/null"
+      return 'drift' unless ok $"incus config device get #{name} #{entry.args[0]} source"
 
   return 'drift' if props.start and not isRunning name
 
@@ -32,29 +30,30 @@ export check = (name, props) ->
 export apply = (name, props) ->
   image = props.args?[0]
 
-  unless shok "incus info #{name} 2>/dev/null"
+  unless ok $"incus info #{name}"
     throw new Error "container '#{name}' requires an image argument" unless image
-    shx "incus init #{image} #{name}"
+    sh $"incus init #{image} #{name}"
 
   if props.profile
-    current = shx "incus config show #{name} 2>/dev/null"
+    current = sh $"incus config show #{name}"
     for entry in props.profile
-      shx "incus profile add #{name} #{entry.args[0]}" unless current.includes entry.args[0]
+      sh $"incus profile add #{name} #{entry.args[0]}" unless current.includes entry.args[0]
 
   if props.disk
     for entry in props.disk
       devname = entry.args[0]
-      unless shok "incus config device get #{name} #{devname} source 2>/dev/null"
-        cmd = "incus config device add #{name} #{devname} disk source=#{entry.source} path=#{entry.dest}"
-        cmd += " readonly=true" if 'readonly' in (entry.flags or [])
-        shx cmd
+      unless ok $"incus config device get #{name} #{devname} source"
+        if 'readonly' in (entry.flags or [])
+          sh $"incus config device add #{name} #{devname} disk source=#{entry.source} path=#{entry.dest} readonly=true"
+        else
+          sh $"incus config device add #{name} #{devname} disk source=#{entry.source} path=#{entry.dest}"
 
   if props.start and not isRunning name
-    shx "incus start #{name}"
+    sh $"incus start #{name}"
 
     attempts = 30
     while attempts > 0
-      break if shok "incus exec #{name} -- true 2>/dev/null"
+      break if ok $"incus exec #{name} -- true"
       Bun.sleepSync 1000
       attempts--
     throw new Error "Container #{name} not ready after 30 seconds" if attempts == 0
@@ -63,15 +62,15 @@ export apply = (name, props) ->
     for entry in props.user
       username = entry.args[0]
       uidgid   = entry.args[1]
-      unless shok "incus exec #{name} -- id #{username} 2>/dev/null"
+      unless ok $"incus exec #{name} -- id #{username}"
         [uid, gid] = uidgid.split ':'
-        shok "incus exec #{name} -- groupadd -g #{gid} #{username} 2>/dev/null" unless shok "incus exec #{name} -- getent group #{gid} 2>/dev/null"
-        shx "incus exec #{name} -- useradd -m -u #{uid} -g #{gid} #{username}"
+        ok $"incus exec #{name} -- groupadd -g #{gid} #{username}" unless ok $"incus exec #{name} -- getent group #{gid}"
+        sh $"incus exec #{name} -- useradd -m -u #{uid} -g #{gid} #{username}"
 
 export verify = (name, props) ->
   results = []
 
-  unless shok "incus info #{name} 2>/dev/null"
+  unless ok $"incus info #{name}"
     results.push { status: 'fail', message: "container #{name} missing" }
     return results
   results.push { status: 'pass', message: "container #{name} exists" }
@@ -82,7 +81,7 @@ export verify = (name, props) ->
     results.push { status: 'fail', message: "#{name} not running" }
 
   if props.profile
-    current = shx "incus config show #{name} 2>/dev/null"
+    current = sh $"incus config show #{name}"
     for entry in props.profile
       want = entry.args[0]
       if current.includes want
@@ -93,7 +92,7 @@ export verify = (name, props) ->
   if props.disk
     for entry in props.disk
       devname = entry.args[0]
-      if shok "incus config device get #{name} #{devname} source 2>/dev/null"
+      if ok $"incus config device get #{name} #{devname} source"
         results.push { status: 'pass', message: "#{name} disk #{devname} present" }
       else
         results.push { status: 'fail', message: "#{name} disk #{devname} missing" }
@@ -101,7 +100,7 @@ export verify = (name, props) ->
   if props.user and isRunning name
     for entry in props.user
       username = entry.args[0]
-      if shok "incus exec #{name} -- id #{username} 2>/dev/null"
+      if ok $"incus exec #{name} -- id #{username}"
         results.push { status: 'pass', message: "#{name} user #{username} exists" }
       else
         results.push { status: 'fail', message: "#{name} user #{username} missing" }

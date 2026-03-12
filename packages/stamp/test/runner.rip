@@ -26,23 +26,23 @@ errors = []
 assert = (name, condition) ->
   if condition
     pass++
-    console.log "  #{GREEN}✓#{RESET} #{name}"
+    p "  #{GREEN}✓#{RESET} #{name}"
   else
     fail++
-    console.log "  #{RED}✗#{RESET} #{name}"
+    p "  #{RED}✗#{RESET} #{name}"
     errors.push name
 
 eq = (name, actual, expected) ->
   if JSON.stringify(actual) == JSON.stringify(expected)
     pass++
-    console.log "  #{GREEN}✓#{RESET} #{name}"
+    p "  #{GREEN}✓#{RESET} #{name}"
   else
     fail++
-    console.log "  #{RED}✗#{RESET} #{name}"
+    p "  #{RED}✗#{RESET} #{name}"
     errors.push "#{name}\n     expected: #{JSON.stringify expected}\n     actual:   #{JSON.stringify actual}"
 
 section = (name) ->
-  console.log "\n#{CYAN}#{name}#{RESET}"
+  p "\n#{CYAN}#{name}#{RESET}"
 
 # ── Parser tests ─────────────────────────────────────────────────────────────
 
@@ -276,23 +276,68 @@ do ->
   out = run "echo err >&2"
   eq "run captures stderr", out.stderr, 'err'
 
+# ── Tagged template (safe mode) tests ────────────────────────────────────────
+
+section "Helpers: tagged template mode ($\"...\")"
+
+do ->
+  result = sh $"echo hello"
+  eq "sh tagged returns stdout", result, 'hello'
+
+do ->
+  assert "ok tagged true", ok $"true"
+  assert "ok tagged false", not ok $"false"
+
+do ->
+  name = "world"
+  result = sh $"echo #{name}"
+  eq "sh tagged interpolation", result, 'world'
+
+do ->
+  out = run $"echo hello"
+  assert "run tagged .ok", out.ok
+  eq "run tagged .stdout", out.stdout, 'hello'
+
+do ->
+  val = "zstd"
+  result = sh $"echo compression=#{val}"
+  eq "glued interpolation", result, 'compression=zstd'
+
+do ->
+  danger = "; echo INJECTED"
+  result = sh $"echo #{danger}"
+  eq "shell metacharacters are literal", result, '; echo INJECTED'
+
+do ->
+  danger = "$(echo INJECTED)"
+  result = sh $"echo #{danger}"
+  eq "command substitution is literal", result, '$(echo INJECTED)'
+
+do ->
+  threw = false
+  try
+    sh $"false"
+  catch
+    threw = true
+  assert "sh tagged throws on failure", threw
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 
 total = pass + fail
 
-console.log "\n#{BOLD}#{'─'.repeat 60}#{RESET}"
+p "\n#{BOLD}#{'─'.repeat 60}#{RESET}"
 
 if fail > 0
-  console.log "#{RED}#{BOLD}Test failures detected#{RESET}\n"
+  p "#{RED}#{BOLD}Test failures detected#{RESET}\n"
   for err in errors
-    console.log "  #{RED}✗#{RESET} #{err}"
-  console.log ""
+    p "  #{RED}✗#{RESET} #{err}"
+  p ""
 else
-  console.log "#{GREEN}#{BOLD}🎉 ALL TESTS PASSED!#{RESET}"
+  p "#{GREEN}#{BOLD}🎉 ALL TESTS PASSED!#{RESET}"
 
-console.log "#{GREEN}✓ #{pass} passing#{RESET}"
-console.log "#{RED}✗ #{fail} failing#{RESET}" if fail > 0
+p "#{GREEN}✓ #{pass} passing#{RESET}"
+p "#{RED}✗ #{fail} failing#{RESET}" if fail > 0
 pct = ((pass / total) * 100).toFixed 1
-console.log "#{BOLD}★ #{pct}% passing#{RESET}"
+p "#{BOLD}★ #{pct}% passing#{RESET}"
 
-process.exit 1 if fail > 0
+exit 1 if fail > 0

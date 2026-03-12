@@ -121,17 +121,17 @@ Handlers resolve in this order:
 ### Writing a directive
 
 ```coffee
-import { sh!, sh? } from "@rip-lang/stamp/helpers"
+import { sh, ok, run } from "@rip-lang/stamp/helpers"
 
 export name        = "mydirective"
 export description = "What it does"
 
 export check = (name, props) ->
-  return 'missing' unless sh? "some-check"
+  return 'missing' unless ok "some-check"
   'ok'
 
 export apply = (name, props) ->
-  sh! "some-command"
+  sh "some-command"
 
 export verify = (name, props) ->
   [{ status: 'pass', message: 'looks good' }]

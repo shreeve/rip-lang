@@ -8,7 +8,7 @@
     "stamp": "./bin/stamp"
   },
   "scripts": {
-    "test": "echo 'no tests yet'"
+    "test": "bun --preload ../../rip-loader.js test/runner.rip"
   },
   "keywords": [
     "provisioning",

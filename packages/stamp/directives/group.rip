@@ -1,37 +1,35 @@
-import { shx, shok } from "../src/helpers.rip"
-
 export name        = "group"
 export description = "Ensures a system group exists on the host"
 export positional  = ["name", "gid"]
 
 export check = (name, props) ->
-  return 'missing' unless shok "getent group #{name} 2>/dev/null"
+  return 'missing' unless ok $"getent group #{name}"
 
   if props.args?[0]
     wantGid = props.args[0]
-    actual = shx "getent group #{name} | cut -d: -f3"
+    actual = (sh $"getent group #{name}").split(':')[2]
     return 'drift' if actual != wantGid
 
   'ok'
 
 export apply = (name, props) ->
   gid = props.args?[0]
-  unless shok "getent group #{name} 2>/dev/null"
+  unless ok $"getent group #{name}"
     if gid
-      shx "groupadd -g #{gid} #{name}"
+      sh $"groupadd -g #{gid} #{name}"
     else
-      shx "groupadd #{name}"
+      sh $"groupadd #{name}"
 
 export verify = (name, props) ->
   results = []
-  unless shok "getent group #{name} 2>/dev/null"
+  unless ok $"getent group #{name}"
     results.push { status: 'fail', message: "group #{name} missing" }
     return results
   results.push { status: 'pass', message: "group #{name} exists" }
 
   if props.args?[0]
     wantGid = props.args[0]
-    actual = shx "getent group #{name} | cut -d: -f3"
+    actual = (sh $"getent group #{name}").split(':')[2]
     if actual == wantGid
       results.push { status: 'pass', message: "#{name} gid is #{wantGid}" }
     else

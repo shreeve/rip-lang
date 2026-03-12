@@ -1,31 +1,29 @@
-import { sh, shx, shok } from "../src/helpers.rip"
-
 export name        = "profile"
 export description = "Ensures an Incus profile exists with declared configuration"
 export positional  = ["name"]
 
 export check = (name, props) ->
-  return 'missing' unless shok "incus profile show #{name} 2>/dev/null"
+  return 'missing' unless ok $"incus profile show #{name}"
   for own key, entries of props when key != 'args'
     want = entries[0].args[0]
-    actual = (sh "incus profile get #{name} #{key} 2>/dev/null").stdout or ''
+    actual = (run $"incus profile get #{name} #{key}").stdout or ''
     return 'drift' if actual != want
   'ok'
 
 export apply = (name, props) ->
-  shx "incus profile create #{name}" unless shok "incus profile show #{name} 2>/dev/null"
+  sh $"incus profile create #{name}" unless ok $"incus profile show #{name}"
   for own key, entries of props when key != 'args'
-    shx "incus profile set #{name} #{key} #{entries[0].args[0]}"
+    sh $"incus profile set #{name} #{key} #{entries[0].args[0]}"
 
 export verify = (name, props) ->
   results = []
-  unless shok "incus profile show #{name} 2>/dev/null"
+  unless ok $"incus profile show #{name}"
     results.push { status: 'fail', message: "profile #{name} missing" }
     return results
   results.push { status: 'pass', message: "profile #{name} exists" }
   for own key, entries of props when key != 'args'
     want = entries[0].args[0]
-    actual = (sh "incus profile get #{name} #{key} 2>/dev/null").stdout or ''
+    actual = (run $"incus profile get #{name} #{key}").stdout or ''
     if actual == want
       results.push { status: 'pass', message: "#{name} #{key} is #{want}" }
     else

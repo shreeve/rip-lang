@@ -1,5 +1,3 @@
-import { shx, shok } from "../src/helpers.rip"
-
 export name        = "pool"
 export description = "Ensures a ZFS pool exists with specified properties"
 export positional  = ["name", "device"]
@@ -10,39 +8,39 @@ export properties  =
   mountpoint:  { description: "Pool mountpoint (default: /<name>)" }
 
 export check = (name, props) ->
-  return 'missing' unless shok "zpool list #{name}"
+  return 'missing' unless ok $"zpool list #{name}"
   'ok'
 
 export apply = (name, props) ->
   device = props.args?[0]
   throw new Error "pool '#{name}' requires a device argument" unless device
 
-  unless shok "zpool list #{name}"
-    throw new Error "Block device not found: #{device}" unless shok "test -b #{device}"
-    throw new Error "Device #{device} has existing data. Run 'wipefs -a #{device}' first." if shok "blkid #{device}"
+  unless ok $"zpool list #{name}"
+    throw new Error "Block device not found: #{device}" unless ok $"test -b #{device}"
+    throw new Error "Device #{device} has existing data. Run 'wipefs -a #{device}' first." if ok $"blkid #{device}"
 
     ashift = props.ashift?[0]?.args?[0] or '12'
-    shx "zpool create -f -o ashift=#{ashift} #{name} #{device}"
+    sh $"zpool create -f -o ashift=#{ashift} #{name} #{device}"
 
   compression = props.compression?[0]?.args?[0] or 'zstd'
-  shx "zfs set compression=#{compression} #{name}"
+  sh $"zfs set compression=#{compression} #{name}"
 
   atime = props.atime?[0]?.args?[0] or 'off'
-  shx "zfs set atime=#{atime} #{name}"
+  sh $"zfs set atime=#{atime} #{name}"
 
   if props.mountpoint?[0]?.args?[0]
-    shx "zfs set mountpoint=#{props.mountpoint[0].args[0]} #{name}"
+    sh $"zfs set mountpoint=#{props.mountpoint[0].args[0]} #{name}"
 
 export verify = (name, props) ->
   results = []
-  unless shok "zpool list #{name}"
+  unless ok $"zpool list #{name}"
     results.push { status: 'fail', message: "pool #{name} missing" }
     return results
   results.push { status: 'pass', message: "pool #{name} exists" }
 
   if props.compression?[0]?.args?[0]
     want = props.compression[0].args[0]
-    actual = shx "zfs get -H -o value compression #{name}"
+    actual = sh $"zfs get -H -o value compression #{name}"
     if actual == want
       results.push { status: 'pass', message: "#{name} compression is #{want}" }
     else
@@ -50,7 +48,7 @@ export verify = (name, props) ->
 
   if props.atime?[0]?.args?[0]
     want = props.atime[0].args[0]
-    actual = shx "zfs get -H -o value atime #{name}"
+    actual = sh $"zfs get -H -o value atime #{name}"
     if actual == want
       results.push { status: 'pass', message: "#{name} atime is #{want}" }
     else

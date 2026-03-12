@@ -1,4 +1,3 @@
-import { sh, shx, shok } from "../src/helpers.rip"
 import * as fs from 'fs'
 
 export name        = "ssh"
@@ -17,15 +16,14 @@ OPTION_MAP =
   'pubkey-auth':       'PubkeyAuthentication'
 
 export check = (name, props) ->
-  result = sh "sshd -T 2>/dev/null"
-  return 'missing' unless result.ok
+  out = run $"sshd -T"
+  return 'missing' unless out.ok
 
-  effective = result.stdout
   for own key, entries of props when key != 'args'
     want = entries[0].args[0]
     sshdKey = OPTION_MAP[key]?.toLowerCase()
     continue unless sshdKey
-    match = effective.match new RegExp "^#{sshdKey}\\s+(\\S+)", 'mi'
+    match = out.stdout.match new RegExp "^#{sshdKey}\\s+(\\S+)", 'mi'
     return 'drift' if match?[1] != want
 
   'ok'
@@ -39,25 +37,24 @@ export apply = (name, props) ->
 
   fs.writeFileSync CONF_PATH, lines.join('\n') + '\n'
 
-  if shok "systemctl is-active ssh 2>/dev/null"
-    shx "systemctl reload ssh"
-  else if shok "systemctl is-active sshd 2>/dev/null"
-    shx "systemctl reload sshd"
+  if ok $"systemctl is-active ssh"
+    sh $"systemctl reload ssh"
+  else if ok $"systemctl is-active sshd"
+    sh $"systemctl reload sshd"
 
 export verify = (name, props) ->
   results = []
-  result = sh "sshd -T 2>/dev/null"
+  out = run $"sshd -T"
 
-  unless result.ok
+  unless out.ok
     results.push { status: 'fail', message: "sshd not running or not installed" }
     return results
 
-  effective = result.stdout
   for own key, entries of props when key != 'args'
     want = entries[0].args[0]
     sshdKey = OPTION_MAP[key]?.toLowerCase()
     continue unless sshdKey
-    match = effective.match new RegExp "^#{sshdKey}\\s+(\\S+)", 'mi'
+    match = out.stdout.match new RegExp "^#{sshdKey}\\s+(\\S+)", 'mi'
     actual = match?[1]
     if actual == want
       results.push { status: 'pass', message: "#{key} is #{want}" }

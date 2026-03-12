@@ -1,5 +1,3 @@
-import { sh, shx, shok } from "../src/helpers.rip"
-
 export name        = "incus"
 export description = "Ensures the Incus daemon is initialized with network and storage"
 export positional  = []
@@ -8,23 +6,23 @@ export properties  =
   network: { description: "Network bridge name" }
 
 export check = (name, props) ->
-  return 'missing' unless shok "incus info 2>/dev/null"
+  return 'missing' unless ok $"incus info"
 
   if props.storage
     poolName = props.storage[0].args[0]
-    return 'drift' unless shok "incus storage show #{poolName} 2>/dev/null"
+    return 'drift' unless ok $"incus storage show #{poolName}"
 
   if props.network
     bridge = props.network[0].args[0]
-    return 'drift' unless shok "incus network show #{bridge} 2>/dev/null"
+    return 'drift' unless ok $"incus network show #{bridge}"
 
   'ok'
 
 export apply = (name, props) ->
-  unless shok "systemctl is-active incus 2>/dev/null"
-    shx "systemctl enable --now incus"
+  unless ok $"systemctl is-active incus"
+    sh $"systemctl enable --now incus"
 
-  unless shok "incus info 2>/dev/null"
+  unless ok $"incus info"
     storageEntry = props.storage?[0]
     networkEntry = props.network?[0]
 
@@ -66,22 +64,24 @@ export apply = (name, props) ->
     lines.push "  name: default"
 
     preseed = lines.join '\n'
-    shx "printf '%s' '#{preseed.replace(/'/g, "'\\''")}' | incus admin init --preseed"
+    out = Bun.spawnSync ['incus', 'admin', 'init', '--preseed'], { stdin: Buffer.from(preseed), stdout: 'pipe', stderr: 'pipe' }
+    unless out.exitCode == 0
+      throw new Error "incus admin init failed: #{out.stderr.toString().trim()}"
   else
     if props.storage
       poolName = props.storage[0].args[0]
-      unless shok "incus storage show #{poolName} 2>/dev/null"
+      unless ok $"incus storage show #{poolName}"
         throw new Error "Incus already initialized but storage pool '#{poolName}' does not exist"
 
     if props.network
       bridge = props.network[0].args[0]
-      unless shok "incus network show #{bridge} 2>/dev/null"
+      unless ok $"incus network show #{bridge}"
         throw new Error "Incus already initialized but network '#{bridge}' does not exist"
 
 export verify = (name, props) ->
   results = []
 
-  if shok "incus info 2>/dev/null"
+  if ok $"incus info"
     results.push { status: 'pass', message: "incus daemon running" }
   else
     results.push { status: 'fail', message: "incus daemon not running" }
@@ -89,14 +89,14 @@ export verify = (name, props) ->
 
   if props.storage
     poolName = props.storage[0].args[0]
-    if shok "incus storage show #{poolName} 2>/dev/null"
+    if ok $"incus storage show #{poolName}"
       results.push { status: 'pass', message: "storage pool #{poolName} exists" }
     else
       results.push { status: 'fail', message: "storage pool #{poolName} missing" }
 
   if props.network
     bridge = props.network[0].args[0]
-    if shok "incus network show #{bridge} 2>/dev/null"
+    if ok $"incus network show #{bridge}"
       results.push { status: 'pass', message: "network #{bridge} exists" }
     else
       results.push { status: 'fail', message: "network #{bridge} missing" }

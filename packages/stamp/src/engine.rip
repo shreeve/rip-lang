@@ -1,7 +1,11 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import { pathToFileURL } from 'url'
-import { log } from './helpers.rip'
+import { sh, ok, run, log } from './helpers.rip'
+
+globalThis.sh  ??= sh
+globalThis.ok  ??= ok
+globalThis.run ??= run
 
 # ── Handler resolution ───────────────────────────────────────────────────────
 
@@ -90,7 +94,7 @@ export apply = (directives, handlers) ->
         throw new Error "Directive '#{dir.type}#{if dir.name then ' ' + dir.name else ''}' failed post-apply check"
       applied++
 
-  console.log "\nApplied #{applied} of #{total} directives."
+  p "\nApplied #{applied} of #{total} directives."
   applied
 
 export verify = (directives, handlers) ->
@@ -107,7 +111,7 @@ export verify = (directives, handlers) ->
         when 'warn' then log.warn  "#{dir.type}: #{result.message}"; counts.warn++
         when 'fail' then log.error "#{dir.type}: #{result.message}"; counts.fail++
 
-  console.log "\nPASS=#{counts.pass} WARN=#{counts.warn} FAIL=#{counts.fail}"
+  p "\nPASS=#{counts.pass} WARN=#{counts.warn} FAIL=#{counts.fail}"
   counts
 
 export plan = (directives, handlers) ->
@@ -124,14 +128,14 @@ export plan = (directives, handlers) ->
       when 'missing' then log.create dir.type, dir.name; changes++
 
   if changes > 0
-    console.log "\n#{changes} change#{if changes > 1 then 's' else ''} would be applied."
+    p "\n#{changes} change#{if changes > 1 then 's' else ''} would be applied."
   else
-    console.log "\nNothing to do."
+    p "\nNothing to do."
   changes
 
 # ── Main entry point ─────────────────────────────────────────────────────────
 
-export run = (mode, parsed, stampDir) ->
+export execute = (mode, parsed, stampDir) ->
   { directives, uses } = parsed
   handlers = resolveHandlers! directives, uses, stampDir
 

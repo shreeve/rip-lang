@@ -1,7 +1,7 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import { parse } from './parser.rip'
-import { run } from './engine.rip'
+import { execute } from './engine.rip'
 
 VERSION = '0.1.0'
 
@@ -16,7 +16,7 @@ findStampfile = (dir = '.') ->
 # ── CLI ──────────────────────────────────────────────────────────────────────
 
 showHelp = ->
-  console.log """
+  p """
   stamp #{VERSION} — declarative host provisioning
 
   Usage:
@@ -32,7 +32,7 @@ showHelp = ->
   """
 
 showVersion = ->
-  console.log "stamp #{VERSION}"
+  p "stamp #{VERSION}"
 
 # ── Subcommands ──────────────────────────────────────────────────────────────
 
@@ -40,64 +40,64 @@ runMode = (mode, file) ->
   stampfile = file or findStampfile!
 
   unless stampfile
-    console.error "No Stampfile found. Provide a file or create Stampfile, Hostfile, or Containerfile."
-    process.exit 2
+    warn "No Stampfile found. Provide a file or create Stampfile, Hostfile, or Containerfile."
+    exit 2
 
   unless fs.existsSync stampfile
-    console.error "File not found: #{stampfile}"
-    process.exit 2
+    warn "File not found: #{stampfile}"
+    exit 2
 
   source   = fs.readFileSync stampfile, 'utf-8'
   stampDir = path.dirname path.resolve stampfile
   parsed   = parse source, process.env
 
   try
-    result = run! mode, parsed, stampDir
+    result = execute! mode, parsed, stampDir
 
     if mode == 'verify'
-      process.exit 1 if result.fail > 0
+      exit 1 if result.fail > 0
     else if mode == 'plan'
-      process.exit 1 if result > 0
+      exit 1 if result > 0
   catch err
-    console.error "\n  Error: #{err.message}"
-    process.exit 1
+    warn "\n  Error: #{err.message}"
+    exit 1
 
 listDirectives = ->
   builtins = ['packages', 'pool', 'dataset', 'profile', 'container', 'incus', 'user', 'group', 'firewall', 'ssh', 'service']
-  console.log "\nBuilt-in directives:\n"
+  p "\nBuilt-in directives:\n"
   for name in builtins
-    console.log "  #{name}"
-  console.log ""
+    p "  #{name}"
+  p ""
 
 infoDirective = (name) ->
   unless name
-    console.error "Usage: stamp info <directive>"
-    process.exit 2
+    warn "Usage: stamp info <directive>"
+    exit 2
 
   dirPath = path.join import.meta.dir, '..', 'directives', "#{name}.rip"
   unless fs.existsSync dirPath
-    console.error "Unknown directive: #{name}"
-    process.exit 2
+    warn "Unknown directive: #{name}"
+    exit 2
 
   try
     mod = import! dirPath
-    console.log "\n#{mod.name or name}"
-    console.log "  #{mod.description}" if mod.description
+    p "\n#{mod.name or name}"
+    p "  #{mod.description}" if mod.description
     if mod.positional
-      console.log "  Positional: #{mod.positional.join ', '}"
+      p "  Positional: #{mod.positional.join ', '}"
     if mod.properties
-      console.log "  Properties:"
+      p "  Properties:"
       for own k, v of mod.properties
         flags = []
         flags.push 'multi' if v.multi
         flags.push 'arrow' if v.arrow
         desc = v.description or ''
         flagStr = if flags.length then " (#{flags.join ', '})" else ''
-        console.log "    #{k}#{flagStr} — #{desc}"
-    console.log ""
+        p "    #{k}#{flagStr} — #{desc}"
+    p ""
   catch err
-    console.error "Failed to load directive '#{name}': #{err.message}"
-    process.exit 1
+    warn "Failed to load directive '#{name}': #{err.message}"
+    exit 1
 
 # ── Main ─────────────────────────────────────────────────────────────────────
 
@@ -120,6 +120,6 @@ do ->
       if fs.existsSync command
         runMode 'apply', command
       else
-        console.error "Unknown command: #{command}"
+        warn "Unknown command: #{command}"
         showHelp!
-        process.exit 2
+        exit 2
