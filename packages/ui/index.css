@@ -1220,7 +1220,7 @@ body:has(.source-overlay) { overflow: hidden; }
 
 /* ── InputGroup ── */
 
-.gallery .input-group-demo > div {
+.gallery .input-group-demo > div:not(.demo-label) {
   display: inline-flex; align-items: center;
   border: 1px solid #cbd5e1; border-radius: 6px; overflow: hidden;
 
@@ -1655,9 +1655,9 @@ body:has(.source-overlay) { overflow: hidden; }
   .gallery .native-select-demo select { border-color: #475569; background: #1e293b; color: #e2e8f0; }
 
   /* InputGroup */
-  .gallery .input-group-demo > div { border-color: #475569; }
-  .gallery .input-group-demo > div [data-prefix], .gallery .input-group-demo > div [data-suffix] { background: #0f172a; color: #94a3b8; border-color: #334155; }
-  .gallery .input-group-demo > div input { color: #e2e8f0; background: #1e293b; }
+  .gallery .input-group-demo > div:not(.demo-label) { border-color: #475569; }
+  .gallery .input-group-demo > div:not(.demo-label) [data-prefix], .gallery .input-group-demo > div:not(.demo-label) [data-suffix] { background: #0f172a; color: #94a3b8; border-color: #334155; }
+  .gallery .input-group-demo > div:not(.demo-label) input { color: #e2e8f0; background: #1e293b; }
 
   /* ButtonGroup */
   .gallery [role="group"][data-orientation]:not(:has(button[aria-pressed])):not([role="radiogroup"]):not(:has([data-track])):not(:has([role="checkbox"])) {
