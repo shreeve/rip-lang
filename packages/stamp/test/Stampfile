@@ -5,7 +5,7 @@ set POOL  tank
 
 packages curl git jq
 
-user shreeve 1000:1000
+user shreeve 1100:1100
   groups trust
 
 group jail 1002
