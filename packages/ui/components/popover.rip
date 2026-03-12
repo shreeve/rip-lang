@@ -108,8 +108,11 @@ export Popover = component
     if trigger
       trigger.setAttribute 'aria-expanded', !!open
     if floating
-      floating.hidden = not open
       if open
+        floating.style.position = 'fixed'
+        floating.style.left = '-9999px'
+        floating.style.top = '-9999px'
+        floating.hidden = false
         floating.style.visibility = 'hidden'
         floating.setAttribute 'data-open', ''
         floating.setAttribute 'data-placement', @placement
@@ -122,6 +125,7 @@ export Popover = component
           desc.id ?= "#{_id}-desc"
           floating.setAttribute 'aria-describedby', desc.id
       else
+        floating.hidden = true
         floating.removeAttribute 'data-open'
 
   ~>
