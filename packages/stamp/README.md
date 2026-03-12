@@ -90,21 +90,22 @@ datasets
 
 ## Built-in Directives
 
-| Directive | Purpose |
-|-----------|---------|
-| `brew` | Homebrew packages (macOS) |
-| `packages` | System packages (apt-get) |
-| `pool` | ZFS pool creation |
-| `dataset` | ZFS dataset with ownership/permissions |
-| `profile` | Incus profile configuration |
-| `container` | Incus container management |
-| `incus` | Incus daemon initialization |
-| `multipass` | Multipass virtual machines |
-| `user` | System user management |
-| `group` | System group management |
-| `firewall` | ufw firewall rules |
-| `ssh` | SSH daemon configuration |
-| `service` | systemd service management |
+| Directive   | Purpose                                |
+|-------------|----------------------------------------|
+| `brew`      | Homebrew packages (macOS)              |
+| `container` | Incus container management             |
+| `dataset`   | ZFS dataset with ownership/permissions |
+| `ensure`    | Guarded imperative commands            |
+| `firewall`  | ufw firewall rules                     |
+| `group`     | System group management                |
+| `incus`     | Incus daemon initialization            |
+| `multipass` | Multipass virtual machines             |
+| `packages`  | System packages (apt-get)              |
+| `pool`      | ZFS pool creation                      |
+| `profile`   | Incus profile configuration            |
+| `service`   | systemd service management             |
+| `ssh`       | SSH daemon configuration               |
+| `user`      | System user management                 |
 
 ## Handler Contract
 

@@ -63,7 +63,7 @@ runMode = (mode, file) ->
     exit 1
 
 listDirectives = ->
-  builtins = ['brew', 'packages', 'pool', 'dataset', 'profile', 'container', 'incus', 'multipass', 'user', 'group', 'firewall', 'ssh', 'service']
+  builtins = ['brew', 'packages', 'ensure', 'pool', 'dataset', 'profile', 'container', 'incus', 'multipass', 'user', 'group', 'firewall', 'ssh', 'service']
   p "\nBuilt-in directives:\n"
   for name in builtins
     p "  #{name}"
