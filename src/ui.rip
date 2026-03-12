@@ -1013,3 +1013,68 @@ export launch = (appBase = '', opts = {}) ->
       version: '0.3.0'
 
   { app, components: appComponents, router, renderer }
+
+# ==============================================================================
+# ARIA — keyboard navigation and popup lifecycle utilities for UI components
+#
+# Provides the WAI-ARIA keyboard interaction patterns used by headless widgets.
+# Registered on globalThis so any component can use them without explicit imports.
+#
+#   ARIA.listNav(e, handlers)              — popup lists (listbox, menu, combobox)
+#   ARIA.rovingNav(e, handlers, orient)    — inline composites (radiogroup, tabs, toolbar)
+#   ARIA.popupDismiss(open, popup, close, els) — close on outside click or scroll
+#
+# Both nav handlers:
+#   - Guard against IME composition events (e.which === 229, CJK input)
+#   - Call e.preventDefault() + e.stopPropagation() for handled keys
+#   - Only invoke a handler if it is provided (all keys are optional)
+#   - Alias PageUp/PageDown to first/last (fn+Up/Down on macOS)
+#
+# ARIA: https://www.w3.org/WAI/ARIA/apg/practices/keyboard-interface/
+# ==============================================================================
+
+_ariaNAV = (e, fn) ->
+  return unless fn
+  e.preventDefault()
+  e.stopPropagation()
+  fn()
+
+_ariaListNav = (e, h) ->
+  return if e.which is 229              # IME guard: suppress CJK composition events
+  switch e.key
+    when 'ArrowDown'          then _ariaNAV e, h.next
+    when 'ArrowUp'            then _ariaNAV e, h.prev
+    when 'Home', 'PageUp'     then _ariaNAV e, h.first
+    when 'End',  'PageDown'   then _ariaNAV e, h.last
+    when 'Enter', ' '         then _ariaNAV e, h.select
+    when 'Escape'             then _ariaNAV e, h.dismiss
+    when 'Tab'                then h.tab?()           # no preventDefault: allow natural focus movement
+    else h.char?(e.key) if e.key.length is 1          # printable chars: typeahead
+
+_ariaPopupDismiss = (open, popup, close, els = []) ->
+  return unless open
+  inside   = [popup, ...els]
+  onDown   = (e) => close() unless inside.some (el) -> el?.contains(e.target)
+  onScroll = (e) => close() unless popup?.contains(e.target)
+  document.addEventListener 'mousedown', onDown
+  window.addEventListener   'scroll',    onScroll, true
+  ->
+    document.removeEventListener 'mousedown', onDown
+    window.removeEventListener   'scroll',    onScroll, true
+
+_ariaRovingNav = (e, h, orientation = 'vertical') ->
+  return if e.which is 229              # IME guard
+  vert = orientation isnt 'horizontal'
+  horz = orientation isnt 'vertical'
+  switch e.key
+    when 'ArrowDown'          then _ariaNAV e, h.next   if vert
+    when 'ArrowUp'            then _ariaNAV e, h.prev   if vert
+    when 'ArrowRight'         then _ariaNAV e, h.next   if horz
+    when 'ArrowLeft'          then _ariaNAV e, h.prev   if horz
+    when 'Home', 'PageUp'     then _ariaNAV e, h.first
+    when 'End',  'PageDown'   then _ariaNAV e, h.last
+    when 'Enter', ' '         then _ariaNAV e, h.select
+    when 'Escape'             then _ariaNAV e, h.dismiss
+
+globalThis.__aria ??= { listNav: _ariaListNav, rovingNav: _ariaRovingNav, popupDismiss: _ariaPopupDismiss }
+globalThis.ARIA   ??= globalThis.__aria
