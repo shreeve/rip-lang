@@ -46,7 +46,7 @@ export ToggleGroup = component
     focused = Array.from(opts).indexOf(document.activeElement)
     return if focused < 0
     len = opts.length
-    rovingNav e, {
+    ARIA.rovingNav e, {
       next:  => opts[(focused + 1) %% len]?.focus()
       prev:  => opts[(focused - 1) %% len]?.focus()
       first: => opts[0]?.focus()

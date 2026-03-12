@@ -81,7 +81,7 @@ export Select = component
 
   onListKeydown: (e) ->
     return unless options.length
-    listNav e,
+    ARIA.listNav e,
       next:    => highlightedIndex = @_nextEnabled(highlightedIndex,  1); @_focusHighlighted()
       prev:    => highlightedIndex = @_nextEnabled(highlightedIndex, -1); @_focusHighlighted()
       first:   => highlightedIndex = 0;                  @_focusHighlighted()
@@ -118,7 +118,7 @@ export Select = component
     @_list.style.visibility = 'visible'
 
   ~>
-    popupDismiss open, @_list, (=> @close()), [@_trigger]
+    ARIA.popupDismiss open, @_list, (=> @close()), [@_trigger]
 
   render
     .

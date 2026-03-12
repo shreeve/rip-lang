@@ -55,7 +55,7 @@ export ContextMenu = component
   _onKeydown: (e) ->
     return unless _menuItems.length
     len = _menuItems.length
-    listNav e,
+    ARIA.listNav e,
       next:    => @_focusItem((highlightedIndex + 1) %% len)
       prev:    => @_focusItem((highlightedIndex - 1) %% len)
       first:   => @_focusItem(0)
@@ -65,7 +65,7 @@ export ContextMenu = component
       tab:     => @close()
 
   ~>
-    popupDismiss open, @_list, (=> @close())
+    ARIA.popupDismiss open, @_list, (=> @close())
 
   render
     . @contextmenu: @_onContextMenu

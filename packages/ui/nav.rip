@@ -94,3 +94,8 @@ rovingNav = (e, h, orientation = 'vertical') ->
     when 'End',  'PageDown'   then _nav e, h.last
     when 'Enter', ' '         then _nav e, h.select
     when 'Escape'             then _nav e, h.dismiss
+
+# Register on globalThis — available to any component without explicit imports.
+# ARIA is the friendly alias; __aria is the guard (matches __rip / __ripComponent convention).
+globalThis.__aria ??= { listNav, rovingNav, popupDismiss }
+globalThis.ARIA   ??= globalThis.__aria

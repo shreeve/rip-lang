@@ -86,7 +86,7 @@ export Tabs = component
       return unless nextId
       tabs.find((t) -> t.dataset.tab is nextId)?.focus()
       @select(nextId) if @activation is 'automatic'
-    rovingNav e, {
+    ARIA.rovingNav e, {
       next:   => move(@_nextEnabled(ids, idx,              1))
       prev:   => move(@_nextEnabled(ids, idx,             -1))
       first:  => move(@_nextEnabled(ids, ids.length - 1,   1))

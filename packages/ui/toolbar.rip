@@ -25,7 +25,7 @@ export Toolbar = component
     focused = els.indexOf(document.activeElement)
     return if focused < 0
     len = els.length
-    rovingNav e, {
+    ARIA.rovingNav e, {
       next:  => els[(focused + 1) %% len]?.focus()
       prev:  => els[(focused - 1) %% len]?.focus()
       first: => els[0]?.focus()

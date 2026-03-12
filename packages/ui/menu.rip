@@ -100,7 +100,7 @@ export Menu = component
   onMenuKeydown: (e) ->
     len = items.length
     return unless len
-    listNav e,
+    ARIA.listNav e,
       next:    => @_focusItem((highlightedIndex + 1) %% len)
       prev:    => @_focusItem((highlightedIndex - 1) %% len)
       first:   => @_focusItem(0)
@@ -111,7 +111,7 @@ export Menu = component
       char:    => @_typeahead(e.key)
 
   ~>
-    popupDismiss open, @_list, (=> @close()), [@_trigger]
+    ARIA.popupDismiss open, @_list, (=> @close()), [@_trigger]
 
   render
     .

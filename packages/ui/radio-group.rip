@@ -31,7 +31,7 @@ export RadioGroup = component
     return if focused < 0
     len = radios.length
     move = (idx) => radios[idx]?.focus(); @_select(_options[idx]?.dataset.value)
-    rovingNav e, {
+    ARIA.rovingNav e, {
       next:  => move((focused + 1) %% len)
       prev:  => move((focused - 1) %% len)
       first: => move(0)

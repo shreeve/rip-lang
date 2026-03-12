@@ -36,7 +36,7 @@ export CheckboxGroup = component
     focused = Array.from(boxes).indexOf(document.activeElement)
     return if focused < 0
     len = boxes.length
-    rovingNav e, {
+    ARIA.rovingNav e, {
       next:  => boxes[(focused + 1) %% len]?.focus()
       prev:  => boxes[(focused - 1) %% len]?.focus()
       first: => boxes[0]?.focus()

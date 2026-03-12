@@ -74,7 +74,7 @@ export Accordion = component
 
   onTriggerKeydown: (e, id) ->
     disabled = e.currentTarget.closest('[data-item]')?.hasAttribute('data-disabled')
-    rovingNav e, {
+    ARIA.rovingNav e, {
       next:   => @_focusNext(1)
       prev:   => @_focusNext(-1)
       first:  => @_focusTrigger(0)
