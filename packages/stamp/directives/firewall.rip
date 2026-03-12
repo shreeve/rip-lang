@@ -21,10 +21,11 @@ export check = (name, props) ->
       return 'drift' unless status.includes action
 
   if props.allow
-    status = sh $"ufw status"
+    status = sh $"ufw status verbose"
     for entry in props.allow
       rule = entry.args.join ' '
-      return 'drift' unless status.toUpperCase().includes rule.toUpperCase()
+      port = (run $"getent services #{rule}").stdout.split(/\s+/)?[1] or ''
+      return 'drift' unless status.toUpperCase().includes(rule.toUpperCase()) or status.includes(port)
 
   'ok'
 
