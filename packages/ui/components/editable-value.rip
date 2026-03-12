@@ -51,11 +51,12 @@ export EditableValue = component
     editor.querySelector('input, textarea, select')?.focus()
 
   ~>
+    _editing = editing                                 # track before any early return
     display = @_root?.querySelector('[data-display]')
     editor = @_root?.querySelector('[data-editor]')
     return unless display and editor
-    editor.hidden = not editing
-    if editing
+    editor.hidden = not _editing
+    if _editing
       editor.setAttribute 'data-open', ''
       onDown = (e) =>
         unless @_root?.contains(e.target)
