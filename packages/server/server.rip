@@ -750,6 +750,12 @@ class Server
       @serverVersion = pkg.version
     catch
       @serverVersion = 'unknown'
+    try
+      ripPkgPath = dirname(fileURLToPath(import.meta.resolve('rip-lang'))) + '/package.json'
+      ripPkg = JSON.parse(readFileSync(ripPkgPath, 'utf8'))
+      @ripVersion = ripPkg.version
+    catch
+      @ripVersion = 'unknown'
 
     for alias in @flags.appAliases
       host = if alias.includes('.') then alias else "#{alias}.local"
@@ -1316,7 +1322,7 @@ main = ->
   httpOnly = flags.httpsPort is null
   protocol = if httpOnly then 'http' else 'https'
   port = flags.httpsPort or flags.httpPort or 80
-  console.log "rip-server: app=#{flags.appName} workers=#{flags.workers} url=#{protocol}://#{flags.appName}.ripdev.io#{formatPort(protocol, port)}/server"
+  console.log "rip-server: rip=#{svr.ripVersion} server=#{svr.serverVersion} app=#{flags.appName} workers=#{flags.workers} url=#{protocol}://#{flags.appName}.ripdev.io#{formatPort(protocol, port)}/server"
 
 # ==============================================================================
 # Entry Point
