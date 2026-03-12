@@ -106,6 +106,7 @@ export WidgetGallery = component
     resp = fetch! "components/#{id}.rip"
     sourceCode = resp.text!
   _closeSource: -> sourceCode = null
+  _stopProp: (e) -> e.stopPropagation()
   _ensureHljs: (cb) ->
     if window.hljs then return cb()
     link = document.createElement('link')
@@ -2360,7 +2361,7 @@ export WidgetGallery = component
       # ========================================================================
       if sourceCode
         .source-overlay @click: (=> @_closeSource())
-          .source-modal @click: (e) => e.stopPropagation()
+          .source-modal @click: @_stopProp
             .source-header
               .source-title
                 span.source-name sourceName
