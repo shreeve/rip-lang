@@ -16,8 +16,8 @@ export apply = (name, props) ->
   raise "pool '#{name}' requires a device argument" unless device
 
   unless ok $"zpool list #{name}"
-    raise "Block device not found: #{device}" unless ok $"test -b #{device}"
-    raise "Device #{device} has existing data. Run 'wipefs -a #{device}' first." if ok $"blkid #{device}"
+    raise "Device not found: #{device}" unless ok $"test -b #{device}" or ok $"test -f #{device}"
+    raise "Device #{device} has existing data. Run 'wipefs -a #{device}' first." if ok $"test -b #{device}" and ok $"blkid #{device}"
 
     ashift = props.ashift?[0]?.args?[0] or '12'
     sh $"zpool create -f -o ashift=#{ashift} #{name} #{device}"
