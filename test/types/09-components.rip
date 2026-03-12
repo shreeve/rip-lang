@@ -121,12 +121,17 @@ export TypeTestComp = component
   render
     null
 
-# ── Gap: render block element type safety ──
+# ── Gap: render block type safety ──
 #
-# Render blocks don't validate HTML element names or their attributes.
-# Writing `fieldsetz` instead of `fieldset` compiles without error —
-# the lexer knows TEMPLATE_TAGS but only uses them for classification,
-# not validation. Unknown lowercase names silently become text nodes.
+# Render blocks are partially checked. Child component constructor calls
+# (e.g. `Button variant: "primary"`) are emitted as `new Button({...})`
+# in the shadow `_render()` method, so TS checks prop types and catches
+# undefined variable references in prop values (e.g. `loading: loadingz`).
+#
+# However, everything else in render is stripped:
+#   - Own-template conditionals like `if labelz` go uncaught
+#   - Invalid tag names like `fieldsetz` compile silently
+#   - HTML attribute values and text expressions are unchecked
 #
 # Two levels of improvement are possible:
 #
