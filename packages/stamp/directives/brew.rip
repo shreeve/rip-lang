@@ -1,0 +1,48 @@
+export name        = "brew"
+export description = "Ensures Homebrew packages are installed (macOS)"
+export positional  = []
+
+gather = (name, props) ->
+  list = [...(props.args or [])]
+  for own k, entries of props when k != 'args'
+    list.push k
+    for entry in entries
+      list.push ...entry.args if entry.args?.length
+  list
+
+installed = (pkg) ->
+  ok $"brew list #{pkg}"
+
+export check = (name, props) ->
+  return 'missing' unless ok $"which brew"
+  list = gather name, props
+  return 'ok' if list.length == 0
+  for pkg in list
+    return 'drift' unless installed pkg
+  'ok'
+
+export apply = (name, props) ->
+  unless ok $"which brew"
+    sh "/bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
+
+  list = gather name, props
+  return if list.length == 0
+  missing = (pkg for pkg in list when not installed pkg)
+  return if missing.length == 0
+  for pkg in missing
+    sh $"brew install #{pkg}"
+
+export verify = (name, props) ->
+  results = []
+  unless ok $"which brew"
+    results.push { status: 'fail', message: "homebrew not installed" }
+    return results
+  results.push { status: 'pass', message: "homebrew installed" }
+
+  list = gather name, props
+  for pkg in list
+    if installed pkg
+      results.push { status: 'pass', message: "#{pkg} installed" }
+    else
+      results.push { status: 'fail', message: "#{pkg} not installed" }
+  results

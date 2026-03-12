@@ -1,0 +1,9 @@
+# VMfile — Ubuntu 24.04 VM on macOS via Multipass
+
+brew multipass
+
+multipass stamp 24.04
+  cpus 2
+  memory 4G
+  disk 20G
+  start

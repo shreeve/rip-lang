@@ -1,0 +1,47 @@
+export name        = "multipass"
+export description = "Manages Multipass virtual machines"
+export positional  = ["name", "image"]
+export properties  =
+  cpus:   { description: "Number of CPUs (default: 1)" }
+  memory: { description: "Memory allocation (default: 1G)" }
+  disk:   { description: "Disk size (default: 5G)" }
+  start:  { description: "Ensure VM is running" }
+
+isRunning = (name) ->
+  out = run $"multipass info #{name}"
+  out.ok and out.stdout.includes 'State:' and out.stdout.includes 'Running'
+
+export check = (name, props) ->
+  return 'missing' unless ok $"multipass info #{name}"
+  return 'drift' if props.start and not isRunning name
+  'ok'
+
+export apply = (name, props) ->
+  image = props.args?[0] or '24.04'
+
+  unless ok $"multipass info #{name}"
+    cpus   = props.cpus?[0]?.args?[0]
+    memory = props.memory?[0]?.args?[0]
+    disk   = props.disk?[0]?.args?[0]
+    sh ['multipass', 'launch', image, '--name', name,
+      '--cpus',   cpus   or '1',
+      '--memory', memory or '1G',
+      '--disk',   disk   or '5G']
+
+  if props.start and not isRunning name
+    sh $"multipass start #{name}"
+
+export verify = (name, props) ->
+  results = []
+
+  unless ok $"multipass info #{name}"
+    results.push { status: 'fail', message: "vm #{name} missing" }
+    return results
+  results.push { status: 'pass', message: "vm #{name} exists" }
+
+  if isRunning name
+    results.push { status: 'pass', message: "#{name} running" }
+  else
+    results.push { status: 'fail', message: "#{name} not running" }
+
+  results

@@ -92,12 +92,14 @@ datasets
 
 | Directive | Purpose |
 |-----------|---------|
+| `brew` | Homebrew packages (macOS) |
 | `packages` | System packages (apt-get) |
 | `pool` | ZFS pool creation |
 | `dataset` | ZFS dataset with ownership/permissions |
 | `profile` | Incus profile configuration |
 | `container` | Incus container management |
 | `incus` | Incus daemon initialization |
+| `multipass` | Multipass virtual machines |
 | `user` | System user management |
 | `group` | System group management |
 | `firewall` | ufw firewall rules |
