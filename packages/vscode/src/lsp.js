@@ -628,6 +628,92 @@ function splitProps(str) {
   return segments;
 }
 
+// Detect component context for block-style usage. Walks up from the current
+// line to find a parent component, then builds context from the current line.
+function detectBlockComponentContext(srcLines, lineIndex, col) {
+  // First try the current line directly
+  const direct = detectComponentContext(srcLines[lineIndex], col);
+  if (direct) {
+    // Also collect props from indented block lines below for existingProps
+    const baseIndent = srcLines[lineIndex].length - srcLines[lineIndex].trimStart().length;
+    for (let b = lineIndex + 1; b < srcLines.length; b++) {
+      const bLine = srcLines[b];
+      if (bLine.trim() === '') continue;
+      const bIndent = bLine.length - bLine.trimStart().length;
+      if (bIndent <= baseIndent) break;
+      for (const m of bLine.trimStart().matchAll(/(?:^|,)\s*(\w+)\s*:/g)) {
+        if (!direct.existingProps.includes(m[1])) direct.existingProps.push(m[1]);
+      }
+    }
+    return direct;
+  }
+
+  // Walk up to find parent component
+  const curLine = srcLines[lineIndex];
+  if (!curLine) return null;
+  const curIndent = curLine.length - curLine.trimStart().length;
+
+  let parentLine = -1;
+  for (let i = lineIndex - 1; i >= 0; i--) {
+    const line = srcLines[i];
+    if (line.trim() === '') continue;
+    const indent = line.length - line.trimStart().length;
+    if (indent < curIndent) {
+      parentLine = i;
+      break;
+    }
+  }
+  if (parentLine < 0) return null;
+
+  const parentTrimmed = srcLines[parentLine].trimStart();
+  const compMatch = parentTrimmed.match(/^([A-Z]\w*)\b/);
+  if (!compMatch) return null;
+  const component = compMatch[1];
+  if (/=\s*component\b/.test(parentTrimmed)) return null;
+  if (!componentRegistry.has(component)) return null;
+
+  // Collect all existing props from inline (parent line) + block lines
+  const existingProps = [];
+  const propValues = new Map();
+  const parentRest = parentTrimmed.substring(component.length);
+  for (const m of parentRest.matchAll(/(?:^|,)\s*(@?\w+)\s*:/g)) {
+    existingProps.push(m[1].replace(/^@/, ''));
+  }
+  const baseIndent = srcLines[parentLine].length - parentTrimmed.length;
+  for (let b = parentLine + 1; b < srcLines.length; b++) {
+    const bLine = srcLines[b];
+    if (bLine.trim() === '') continue;
+    const bIndent = bLine.length - bLine.trimStart().length;
+    if (bIndent <= baseIndent) break;
+    for (const m of bLine.trimStart().matchAll(/(?:^|,)\s*(@?\w+)\s*:/g)) {
+      const key = m[1].replace(/^@/, '');
+      if (!existingProps.includes(key)) existingProps.push(key);
+    }
+  }
+
+  // Parse the current line as a prop line
+  const trimmed = curLine.trimStart();
+  const cursorInTrimmed = col - curIndent;
+
+  // Detect prop: value pattern on this line
+  const propLineMatch = trimmed.match(/^(@?\w+)\s*:\s*/);
+  if (propLineMatch) {
+    const propName = propLineMatch[1].replace(/^@/, '');
+    const afterColon = propLineMatch[0].length;
+    if (cursorInTrimmed < propLineMatch[1].length) {
+      return { component, existingProps, propValues, currentProp: propName, wantValues: false, wantProps: true };
+    }
+    if (cursorInTrimmed >= afterColon) {
+      const valStr = trimmed.substring(afterColon);
+      propValues.set(propName, valStr);
+      return { component, existingProps, propValues, currentProp: propName, wantValues: true, wantProps: false };
+    }
+  }
+
+  // Cursor on a blank/incomplete line — offer prop completions
+  return { component, existingProps, propValues, currentProp: null, wantValues: false, wantProps: true };
+}
+
 function detectComponentContext(srcLine, col) {
   if (!srcLine) return null;
 
@@ -938,8 +1024,9 @@ connection.onCompletion((params) => {
   // Component prop completions
   const doc = documents.get(params.textDocument.uri);
   if (doc) {
-    const srcLine = doc.getText().split('\n')[params.position.line];
-    const ctx = detectComponentContext(srcLine, params.position.character);
+    const srcLines = doc.getText().split('\n');
+    const srcLine = srcLines[params.position.line];
+    const ctx = detectBlockComponentContext(srcLines, params.position.line, params.position.character);
     if (ctx) {
       const info = componentRegistry.get(ctx.component);
       if (info) {
@@ -1067,8 +1154,9 @@ connection.onHover((params) => {
   // Component prop hover
   const doc = documents.get(params.textDocument.uri);
   if (doc) {
-    const srcLine = doc.getText().split('\n')[params.position.line];
-    const ctx = detectComponentContext(srcLine, params.position.character);
+    const srcLines = doc.getText().split('\n');
+    const srcLine = srcLines[params.position.line];
+    const ctx = detectBlockComponentContext(srcLines, params.position.line, params.position.character);
     if (ctx?.component) {
       const compInfo = componentRegistry.get(ctx.component);
       if (compInfo) {
@@ -1161,8 +1249,9 @@ connection.onSignatureHelp((params) => {
   // Component signature help
   const doc = documents.get(params.textDocument.uri);
   if (doc) {
-    const srcLine = doc.getText().split('\n')[params.position.line];
-    const ctx = detectComponentContext(srcLine, params.position.character);
+    const srcLines = doc.getText().split('\n');
+    const srcLine = srcLines[params.position.line];
+    const ctx = detectBlockComponentContext(srcLines, params.position.line, params.position.character);
     if (ctx?.component) {
       const compInfo = componentRegistry.get(ctx.component);
       if (compInfo && compInfo.props.length > 0) {

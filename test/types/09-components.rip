@@ -63,7 +63,10 @@ export Form = component
         type: "password"
         placeholder: "••••••••"
         value <=> password
-      Button type: "submit", variant: "primary", loading: loading
+      Button
+        type: "submit"
+        variant: "primary"
+        loading: loading
         "Sign In"
 
 # ── Negative: wrong prop types must be caught ──

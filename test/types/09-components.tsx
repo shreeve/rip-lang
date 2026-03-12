@@ -76,7 +76,12 @@ function Form({ title = 'Sign In' }: { title?: string } = {}) {
         value={password}
         onChange={(e) => setPassword(e.target.value)}
       />
-      <Button type='submit' variant='primary' loading={loading}>Sign In</Button>
+      <Button
+        type='submit'
+        variant='primary'
+        loading={loading}>
+        Sign In
+      </Button>
     </form>
   )
 }
