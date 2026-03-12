@@ -1,11 +1,12 @@
-# Stamp
+<img src="https://raw.githubusercontent.com/shreeve/rip-lang/main/docs/assets/rip.png" style="width:50px" /> <br>
 
-Declarative host provisioning with pluggable directives.
+# Stamp - @rip-lang/stamp
 
-Stamp reads a Stampfile, resolves each directive to a handler, and reconciles
-the declared state against reality using three operations: **check**, **apply**,
-and **verify**. No state file. No agent. No YAML. Just a blueprint and an
-engine.
+**Declarative host provisioning with pluggable directives.**
+
+Stamp reads a Stampfile, resolves each directive to a handler, and
+reconciles the declared state against reality. No state file to lose.
+No agent to install. No YAML to wrestle. Just a blueprint and an engine.
 
 ```
 stamp apply Hostfile
