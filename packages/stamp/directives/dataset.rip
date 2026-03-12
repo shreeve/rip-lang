@@ -8,14 +8,10 @@ export properties  =
 export check = (path, props) ->
   return 'missing' unless ok $"zfs list #{path}"
   mountpoint = sh $"zfs get -H -o value mountpoint #{path}"
-  if props.owner
-    want = props.owner[0].args[0]
-    actual = sh $"stat -c %u:%g #{mountpoint}"
-    return 'drift' if actual != want
-  if props.mode
-    want = props.mode[0].args[0]
-    actual = sh $"stat -c %a #{mountpoint}"
-    return 'drift' if actual != want
+  if want = props.owner?[0]?.args?[0]
+    return 'drift' if want isnt sh $"stat -c %u:%g #{mountpoint}"
+  if want = props.mode?[0]?.args?[0]
+    return 'drift' if want isnt sh $"stat -c %a #{mountpoint}"
   'ok'
 
 export apply = (path, props) ->
@@ -31,18 +27,14 @@ export verify = (path, props) ->
     return results
   results.push { status: 'pass', message: "dataset exists: #{path}" }
   mountpoint = sh $"zfs get -H -o value mountpoint #{path}"
-  if props.owner
-    want = props.owner[0].args[0]
-    actual = sh $"stat -c %u:%g #{mountpoint}"
-    if actual == want
+  if want = props.owner?[0]?.args?[0]
+    if want is (have = sh $"stat -c %u:%g #{mountpoint}")
       results.push { status: 'pass', message: "#{path} owner is #{want}" }
     else
-      results.push { status: 'fail', message: "#{path} owner is #{actual}, expected #{want}" }
-  if props.mode
-    want = props.mode[0].args[0]
-    actual = sh $"stat -c %a #{mountpoint}"
-    if actual == want
+      results.push { status: 'fail', message: "#{path} owner is #{have}, expected #{want}" }
+  if want = props.mode?[0]?.args?[0]
+    if want is (have = sh $"stat -c %a #{mountpoint}")
       results.push { status: 'pass', message: "#{path} mode is #{want}" }
     else
-      results.push { status: 'fail', message: "#{path} mode is #{actual}, expected #{want}" }
+      results.push { status: 'fail', message: "#{path} mode is #{have}, expected #{want}" }
   results

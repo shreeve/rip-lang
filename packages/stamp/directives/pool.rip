@@ -38,20 +38,16 @@ export verify = (name, props) ->
     return results
   results.push { status: 'pass', message: "pool #{name} exists" }
 
-  if props.compression?[0]?.args?[0]
-    want = props.compression[0].args[0]
-    actual = sh $"zfs get -H -o value compression #{name}"
-    if actual == want
+  if want = props.compression?[0]?.args?[0]
+    if want is (have = sh $"zfs get -H -o value compression #{name}")
       results.push { status: 'pass', message: "#{name} compression is #{want}" }
     else
-      results.push { status: 'warn', message: "#{name} compression is #{actual}, expected #{want}" }
+      results.push { status: 'warn', message: "#{name} compression is #{have}, expected #{want}" }
 
-  if props.atime?[0]?.args?[0]
-    want = props.atime[0].args[0]
-    actual = sh $"zfs get -H -o value atime #{name}"
-    if actual == want
+  if want = props.atime?[0]?.args?[0]
+    if want is (have = sh $"zfs get -H -o value atime #{name}")
       results.push { status: 'pass', message: "#{name} atime is #{want}" }
     else
-      results.push { status: 'warn', message: "#{name} atime is #{actual}, expected #{want}" }
+      results.push { status: 'warn', message: "#{name} atime is #{have}, expected #{want}" }
 
   results

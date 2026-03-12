@@ -11,9 +11,8 @@ export check = (name, props) ->
 
   if props.args?[0]
     [wantUid, wantGid] = props.args[0].split ':'
-    actualUid = sh $"id -u #{name}"
-    actualGid = sh $"id -g #{name}"
-    return 'drift' if actualUid != wantUid or actualGid != wantGid
+    return 'drift' if wantUid isnt sh $"id -u #{name}"
+    return 'drift' if wantGid isnt sh $"id -g #{name}"
 
   'ok'
 
@@ -44,25 +43,19 @@ export verify = (name, props) ->
 
   if props.args?[0]
     [wantUid, wantGid] = props.args[0].split ':'
-    actualUid = sh $"id -u #{name}"
-    actualGid = sh $"id -g #{name}"
-
-    if actualUid == wantUid
+    if wantUid is (haveUid = sh $"id -u #{name}")
       results.push { status: 'pass', message: "#{name} uid is #{wantUid}" }
     else
-      results.push { status: 'fail', message: "#{name} uid is #{actualUid}, expected #{wantUid}" }
-
-    if actualGid == wantGid
+      results.push { status: 'fail', message: "#{name} uid is #{haveUid}, expected #{wantUid}" }
+    if wantGid is (haveGid = sh $"id -g #{name}")
       results.push { status: 'pass', message: "#{name} gid is #{wantGid}" }
     else
-      results.push { status: 'fail', message: "#{name} gid is #{actualGid}, expected #{wantGid}" }
+      results.push { status: 'fail', message: "#{name} gid is #{haveGid}, expected #{wantGid}" }
 
-  if props.shell?[0]?.args?[0]
-    want = props.shell[0].args[0]
-    actual = (sh $"getent passwd #{name}").split(':')[6]
-    if actual == want
+  if want = props.shell?[0]?.args?[0]
+    if want is (have = (sh $"getent passwd #{name}").split(':')[6])
       results.push { status: 'pass', message: "#{name} shell is #{want}" }
     else
-      results.push { status: 'warn', message: "#{name} shell is #{actual}, expected #{want}" }
+      results.push { status: 'warn', message: "#{name} shell is #{have}, expected #{want}" }
 
   results

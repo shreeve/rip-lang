@@ -6,8 +6,7 @@ export check = (name, props) ->
   return 'missing' unless ok $"incus profile show #{name}"
   for own key, entries of props when key != 'args'
     want = entries[0].args[0]
-    actual = (run $"incus profile get #{name} #{key}").stdout or ''
-    return 'drift' if actual != want
+    return 'drift' if want isnt ((run $"incus profile get #{name} #{key}").stdout or '')
   'ok'
 
 export apply = (name, props) ->
@@ -23,9 +22,8 @@ export verify = (name, props) ->
   results.push { status: 'pass', message: "profile #{name} exists" }
   for own key, entries of props when key != 'args'
     want = entries[0].args[0]
-    actual = (run $"incus profile get #{name} #{key}").stdout or ''
-    if actual == want
+    if want is (have = (run $"incus profile get #{name} #{key}").stdout or '')
       results.push { status: 'pass', message: "#{name} #{key} is #{want}" }
     else
-      results.push { status: 'fail', message: "#{name} #{key} is #{actual}, expected #{want}" }
+      results.push { status: 'fail', message: "#{name} #{key} is #{have}, expected #{want}" }
   results

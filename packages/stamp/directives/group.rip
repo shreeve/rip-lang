@@ -5,10 +5,8 @@ export positional  = ["name", "gid"]
 export check = (name, props) ->
   return 'missing' unless ok $"getent group #{name}"
 
-  if props.args?[0]
-    wantGid = props.args[0]
-    actual = (sh $"getent group #{name}").split(':')[2]
-    return 'drift' if actual != wantGid
+  if want = props.args?[0]
+    return 'drift' if want isnt (sh $"getent group #{name}").split(':')[2]
 
   'ok'
 
@@ -27,12 +25,10 @@ export verify = (name, props) ->
     return results
   results.push { status: 'pass', message: "group #{name} exists" }
 
-  if props.args?[0]
-    wantGid = props.args[0]
-    actual = (sh $"getent group #{name}").split(':')[2]
-    if actual == wantGid
-      results.push { status: 'pass', message: "#{name} gid is #{wantGid}" }
+  if want = props.args?[0]
+    if want is (have = (sh $"getent group #{name}").split(':')[2])
+      results.push { status: 'pass', message: "#{name} gid is #{want}" }
     else
-      results.push { status: 'fail', message: "#{name} gid is #{actual}, expected #{wantGid}" }
+      results.push { status: 'fail', message: "#{name} gid is #{have}, expected #{want}" }
 
   results

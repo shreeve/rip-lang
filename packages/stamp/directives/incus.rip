@@ -26,47 +26,54 @@ export apply = (name, props) ->
     storageEntry = props.storage?[0]
     networkEntry = props.network?[0]
 
-    lines = ["config: {}"]
-
-    if networkEntry
+    networkYaml = if networkEntry
       bridge = networkEntry.args[0]
-      lines.push "networks:"
-      lines.push "- config:"
-      lines.push "    ipv4.address: auto"
-      lines.push "    ipv4.nat: \"true\""
-      lines.push "    ipv6.address: none"
-      lines.push "  description: \"\""
-      lines.push "  name: #{bridge}"
-      lines.push "  type: bridge"
+      """
+      networks:
+      - config:
+          ipv4.address: auto
+          ipv4.nat: "true"
+          ipv6.address: none
+        description: ""
+        name: #{bridge}
+        type: bridge
+      """
     else
-      lines.push "networks: []"
+      "networks: []"
 
-    if storageEntry
+    storageYaml = if storageEntry
       [poolName, driver, source] = storageEntry.args
-      lines.push "storage_pools:"
-      lines.push "- config:"
-      lines.push "    source: #{source}"
-      lines.push "  description: \"\""
-      lines.push "  driver: #{driver}"
-      lines.push "  name: #{poolName}"
+      """
+      storage_pools:
+      - config:
+          source: #{source}
+        description: ""
+        driver: #{driver}
+        name: #{poolName}
+      """
     else
-      lines.push "storage_pools: []"
+      "storage_pools: []"
 
     defaultPool = storageEntry?.args?[0] or 'default'
-    lines.push "profiles:"
-    lines.push "- config: {}"
-    lines.push "  description: Default Incus profile"
-    lines.push "  devices:"
-    lines.push "    root:"
-    lines.push "      path: /"
-    lines.push "      pool: #{defaultPool}"
-    lines.push "      type: disk"
-    lines.push "  name: default"
 
-    preseed = lines.join '\n'
+    preseed = """
+      config: {}
+      #{networkYaml}
+      #{storageYaml}
+      profiles:
+      - config: {}
+        description: Default Incus profile
+        devices:
+          root:
+            path: /
+            pool: #{defaultPool}
+            type: disk
+        name: default
+      """
+
     out = Bun.spawnSync ['incus', 'admin', 'init', '--preseed'], { stdin: Buffer.from(preseed), stdout: 'pipe', stderr: 'pipe' }
     unless out.exitCode == 0
-      throw new Error "incus admin init failed: #{out.stderr.toString().trim()}"
+      raise "incus admin init failed: #{out.stderr.toString().trim()}"
   else
     if props.storage
       poolName = props.storage[0].args[0]
