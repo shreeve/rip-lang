@@ -26,6 +26,124 @@ Accessible headless widgets written in Rip. They expose `$` attributes for styli
 - use imperative DOM updates for 60fps tracking work like scroll, drag, and resize
 - put side effects in `~>` branches, not only in methods like `close()`
 - bare `x.y` in render blocks is tag syntax; use `= x.y` for text output
+- bare variable names in template blocks are tag names, not text: `editName` creates `<editName>` element. Use `= editName` or `"#{editName}"` for text output
+
+### Reactive Attribute Ownership
+
+**The parent owns any attribute it sets on slot children.** If a parent template sets `hidden: true` on a slot child, the reconciler will re-apply `hidden = true` on every parent re-render. A component that imperatively sets `editor.hidden = false` in a `~>` effect will have that overwritten whenever the parent re-renders (e.g. when any reactive state in scope changes).
+
+Rule: **a component that manages a DOM property imperatively must be the only one setting it.** Do not set `hidden`, `value`, `checked`, or any other imperatively-managed property on slot children in the parent template. The component's `~>` effect sets the initial state.
+
+This is the same principle as React's "controlled vs. uncontrolled" — whoever sets a reactive binding on a render cycle owns it.
+
+Practical example — correct:
+```coffee
+EditableValue
+  span $display: true
+    "#{editName}"
+  div $editor: true    ← NO hidden: true here — EditableValue owns it
+    input ...
+```
+
+### Components Emitting Their Own Root Element's Events
+
+If a component's root element IS the event source (e.g. `<select>` firing 'change', `<input>` firing 'input'), calling `@emit 'change'` dispatches a `CustomEvent('change', { bubbles: true })` on that same element — which re-triggers the listener in an infinite loop.
+
+Guard with `e.isTrusted or return` at the start of the handler. `e.isTrusted` is `false` for synthetic `CustomEvent` dispatches, `true` for real user interactions:
+```coffee
+onChange: (e) ->
+  e.isTrusted or return   # prevent infinite loop when @emit re-triggers handler
+  @value = e.target.value
+  @emit 'change', @value
+```
+
+### onFocusout and relatedTarget
+
+In some browsers, `e.relatedTarget` is `null` even when focus moves to a `tabindex="-1"` element (e.g., an option div being clicked). Checking `e.relatedTarget` directly will incorrectly close the popup before the click fires.
+
+Use `setTimeout 0` and `document.activeElement` instead:
+```coffee
+onFocusout: ->
+  setTimeout => @close() unless @_content?.contains(document.activeElement), 0
+```
+
+### Always Track Reactive Dependencies Before Early Returns
+
+In a `~>` effect that has an early return guard, reactive signals read AFTER the guard are not tracked on runs that short-circuit. Always read all signals you need to track before any `return unless`:
+```coffee
+~>
+  _editing = editing          # track BEFORE early return
+  display = @_root?.querySelector('[data-display]')
+  editor  = @_root?.querySelector('[data-editor]')
+  return unless display and editor
+  editor.hidden = not _editing
+```
+
+### Event Handler Parameter Syntax
+
+In Rip, `(e => expr)` parses as **calling `e` as a function** with a fat arrow argument — NOT a fat arrow with parameter `e`. This causes "e is not a function" at runtime.
+
+```coffee
+# WRONG — parses as e(() => e.stopPropagation())
+@click: (e => e.stopPropagation())
+
+# CORRECT — fat arrow with parameter e
+@click: (e) => e.stopPropagation()
+```
+
+## ARIA Keyboard and Popup Helpers
+
+`ARIA.listNav`, `ARIA.rovingNav`, and `ARIA.popupDismiss` are built into `rip.min.js` (defined in `src/ui.rip`) and available globally in any component without imports.
+
+### ARIA.listNav — popup list keyboard navigation
+
+For Select, Menu, Combobox, Autocomplete, and similar popup lists:
+
+```coffee
+onListKeydown: (e) ->
+  ARIA.listNav e,
+    next:    => ...  # ArrowDown
+    prev:    => ...  # ArrowUp
+    first:   => ...  # Home, PageUp
+    last:    => ...  # End, PageDown
+    select:  => ...  # Enter, Space
+    dismiss: => ...  # Escape
+    tab:     => ...  # Tab (no preventDefault — focus moves naturally)
+    char:    => ...  # printable key (typeahead)
+```
+
+### ARIA.rovingNav — inline composite keyboard navigation
+
+For RadioGroup, Tabs, Toolbar, CheckboxGroup, ToggleGroup, Accordion:
+
+```coffee
+onKeydown: (e) ->
+  ARIA.rovingNav e, {
+    next:  => ...   # ArrowDown (vertical) / ArrowRight (horizontal) / both
+    prev:  => ...
+    first: => ...   # Home, PageUp
+    last:  => ...   # End, PageDown
+    select: => ...  # Enter, Space (optional)
+  }, @orientation   # 'vertical' | 'horizontal' | 'both'
+```
+
+### ARIA.popupDismiss — close on outside click or page scroll
+
+For any popup component. Pass lazy getters `(=> @_list)` — NOT the current value `@_list` — because the `~>` effect may run before the render creates the element:
+
+```coffee
+~> ARIA.popupDismiss open, (=> @_list), (=> @close()), [=> @_trigger]
+
+# With scroll repositioning instead of closing (preferred for fixed dropdowns):
+~> ARIA.popupDismiss open, (=> @_list), (=> @close()), [=> @_trigger], (=> @_position())
+```
+
+**Lazy getters are required**: if you pass `@_list` directly (not as `=> @_list`), the value is captured at the moment the `~>` effect fires — which may be before the render creates the listbox element, capturing `null`. Then `null?.contains(option)` returns `undefined` → `close()` fires on every mousedown, making options unclickable.
+
+### Both nav handlers also:
+- Guard against IME composition (`e.isComposing`) — safe for CJK input methods
+- Call `e.preventDefault()` + `e.stopPropagation()` for handled keys
+- Alias `PageUp/PageDown` to `first/last` (handles macOS `fn+Up/Down`)
 
 ## Lifecycle and Component Model
 

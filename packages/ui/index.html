@@ -2360,7 +2360,7 @@ export WidgetGallery = component
       # ========================================================================
       if sourceCode
         .source-overlay @click: (=> @_closeSource())
-          .source-modal @click: (e => e.stopPropagation())
+          .source-modal @click: (e) => e.stopPropagation()
             .source-header
               .source-title
                 span.source-name sourceName
