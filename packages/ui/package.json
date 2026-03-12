@@ -34,7 +34,7 @@
     "rip-lang": ">=3.13.93"
   },
   "files": [
-    "*.rip",
+    "components/",
     "README.md"
   ]
 }
