@@ -73,7 +73,6 @@ export Combobox = component
     @query = val
     @emit 'select', val
     @close()
-    @_input?.blur()
 
   _nextEnabled: (from, dir) ->
     opts = @getItems()
