@@ -8862,8 +8862,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeGenerator({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.13.98";
-  var BUILD_DATE = "2026-03-12@01:49:00GMT";
+  var VERSION = "3.13.99";
+  var BUILD_DATE = "2026-03-12@02:42:08GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -10298,7 +10298,7 @@ ${indented}`);
       }
     })();
   };
-  _ariaPopupDismiss = function(open, popup, close, els = []) {
+  _ariaPopupDismiss = function(open, popup, close, els = [], repos = null) {
     let get, onDown, onScroll;
     if (!open)
       return;
@@ -10308,7 +10308,11 @@ ${indented}`);
     onDown = (e) => ![get(popup), ...els.map(get)].some(function(el) {
       return el?.contains(e.target);
     }) ? close() : undefined;
-    onScroll = (e) => !get(popup)?.contains(e.target) ? close() : undefined;
+    onScroll = (e) => {
+      if (get(popup)?.contains(e.target))
+        return;
+      return repos ? repos() : close();
+    };
     document.addEventListener("mousedown", onDown);
     window.addEventListener("scroll", onScroll, true);
     return function() {
