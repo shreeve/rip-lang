@@ -120,11 +120,13 @@ export Menubar = component
 
   ~>
     if activeMenu
-      onDown = (e) =>
-        unless @_root?.contains(e.target)
-          @_closeMenu()
+      onDown   = (e) => @_closeMenu() unless @_root?.contains(e.target)
+      onScroll = => @_position(activeMenu)
       document.addEventListener 'mousedown', onDown
-      return -> document.removeEventListener 'mousedown', onDown
+      window.addEventListener   'scroll',    onScroll, true
+      return ->
+        document.removeEventListener 'mousedown', onDown
+        window.removeEventListener   'scroll',    onScroll, true
 
   render
     div ref: "_root", role: "menubar", $disabled: @disabled?!
