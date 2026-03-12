@@ -1151,11 +1151,16 @@ connection.onHover((params) => {
   const fp = uriToPath(params.textDocument.uri);
   if (!fp.endsWith('.rip')) return null;
 
-  // Component prop hover
+  // Skip hover inside string literals and comments (e.g. Tailwind classes)
   const doc = documents.get(params.textDocument.uri);
-  if (doc) {
-    const srcLines = doc.getText().split('\n');
+  const srcLines = doc ? doc.getText().split('\n') : null;
+  if (srcLines) {
     const srcLine = srcLines[params.position.line];
+    if (srcLine && isInsideStringOrComment(srcLine, params.position.character)) return null;
+  }
+
+  // Component prop hover
+  if (srcLines) {
     const ctx = detectBlockComponentContext(srcLines, params.position.line, params.position.character);
     if (ctx?.component) {
       const compInfo = componentRegistry.get(ctx.component);
