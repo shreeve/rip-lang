@@ -1,0 +1,298 @@
+#!/usr/bin/env bun
+
+# ── Stamp Test Runner ────────────────────────────────────────────────────────
+#
+# Tests the parser, engine, and directive contracts.
+#
+# Usage:
+#   bun --preload ../../rip-loader.js test/runner.rip
+
+import * as fs from 'fs'
+import { parse } from '../src/parser.rip'
+import { sh, ok, run } from '../src/helpers.rip'
+
+# ── Test framework ───────────────────────────────────────────────────────────
+
+RESET  = "\x1b[0m"
+BOLD   = "\x1b[1m"
+GREEN  = "\x1b[32m"
+RED    = "\x1b[31m"
+CYAN   = "\x1b[36m"
+
+pass   = 0
+fail   = 0
+errors = []
+
+assert = (name, condition) ->
+  if condition
+    pass++
+    console.log "  #{GREEN}✓#{RESET} #{name}"
+  else
+    fail++
+    console.log "  #{RED}✗#{RESET} #{name}"
+    errors.push name
+
+eq = (name, actual, expected) ->
+  if JSON.stringify(actual) == JSON.stringify(expected)
+    pass++
+    console.log "  #{GREEN}✓#{RESET} #{name}"
+  else
+    fail++
+    console.log "  #{RED}✗#{RESET} #{name}"
+    errors.push "#{name}\n     expected: #{JSON.stringify expected}\n     actual:   #{JSON.stringify actual}"
+
+section = (name) ->
+  console.log "\n#{CYAN}#{name}#{RESET}"
+
+# ── Parser tests ─────────────────────────────────────────────────────────────
+
+section "Parser: basic structure"
+
+do ->
+  result = parse "packages curl git jq"
+  eq "inline packages directive", result.directives.length, 1
+  eq "packages type", result.directives[0].type, 'packages'
+  eq "packages has no name", result.directives[0].name, null
+  eq "packages args", result.directives[0].args, ['curl', 'git', 'jq']
+
+do ->
+  result = parse """
+  pool tank /dev/sdb
+    compression zstd
+    atime off
+  """
+  dir = result.directives[0]
+  eq "pool type", dir.type, 'pool'
+  eq "pool name", dir.name, 'tank'
+  eq "pool args", dir.args, ['/dev/sdb']
+  eq "pool compression", dir.properties.compression[0].args, ['zstd']
+  eq "pool atime", dir.properties.atime[0].args, ['off']
+
+section "Parser: variables"
+
+do ->
+  result = parse """
+  set NAME foo
+  set PATH /data
+
+  dataset $NAME
+  """
+  eq "variable expansion in name", result.directives[0].name, 'foo'
+  eq "vars captured", result.vars.NAME, 'foo'
+  eq "vars captured 2", result.vars.PATH, '/data'
+
+do ->
+  result = parse '''
+  set POOL tank
+  pool $POOL /dev/sdb
+  dataset ${POOL}/home
+  '''
+  eq "dollar expansion", result.directives[0].name, 'tank'
+  eq "brace expansion", result.directives[1].name, 'tank/home'
+
+do ->
+  result = parse 'dataset $UNDEFINED_VAR/data'
+  eq "undefined var expands to empty", result.directives[0].name, '/data'
+
+section "Parser: arrow operator"
+
+do ->
+  result = parse """
+  container web ubuntu/24.04
+    disk data /tank/web -> /data
+    disk logs /tank/logs -> /var/log readonly
+  """
+  dir = result.directives[0]
+  disk0 = dir.properties.disk[0]
+  disk1 = dir.properties.disk[1]
+  eq "disk0 args (device name)", disk0.args, ['data']
+  eq "disk0 source", disk0.source, '/tank/web'
+  eq "disk0 dest", disk0.dest, '/data'
+  eq "disk0 no flags", disk0.flags, []
+  eq "disk1 args", disk1.args, ['logs']
+  eq "disk1 source", disk1.source, '/tank/logs'
+  eq "disk1 dest", disk1.dest, '/var/log'
+  eq "disk1 readonly flag", disk1.flags, ['readonly']
+
+section "Parser: block properties"
+
+do ->
+  result = parse """
+  container web ubuntu/24.04
+    profile trusted
+    profile hardened
+    user alice 1000:1000
+    user bob 1001:1001
+    start
+  """
+  dir = result.directives[0]
+  eq "multi profile", dir.properties.profile.length, 2
+  eq "profile 0", dir.properties.profile[0].args, ['trusted']
+  eq "profile 1", dir.properties.profile[1].args, ['hardened']
+  eq "multi user", dir.properties.user.length, 2
+  eq "start has empty args", dir.properties.start[0].args, []
+
+section "Parser: expanded properties (sub-blocks)"
+
+do ->
+  result = parse """
+  container web ubuntu/24.04
+    disk data
+      source /tank/web
+      path /data
+      readonly true
+  """
+  dir = result.directives[0]
+  disk = dir.properties.disk[0]
+  eq "sub-block source", disk.sub.source[0].args, ['/tank/web']
+  eq "sub-block path", disk.sub.path[0].args, ['/data']
+  eq "sub-block readonly", disk.sub.readonly[0].args, ['true']
+
+section "Parser: plural expansion"
+
+do ->
+  result = parse """
+  datasets
+    tank/home
+    tank/shared
+      owner 1001:1001
+      mode 2775
+  """
+  eq "plural expands to 2 directives", result.directives.length, 2
+  eq "first dataset name", result.directives[0].name, 'tank/home'
+  eq "first dataset type", result.directives[0].type, 'dataset'
+  eq "second dataset name", result.directives[1].name, 'tank/shared'
+  eq "second dataset owner", result.directives[1].properties.owner[0].args, ['1001:1001']
+  eq "second dataset mode", result.directives[1].properties.mode[0].args, ['2775']
+
+section "Parser: comments and blanks"
+
+do ->
+  result = parse """
+  # This is a comment
+  packages curl
+
+  # Another comment
+    # Indented comment
+  user alice 1000:1000
+  """
+  eq "comments stripped", result.directives.length, 2
+  eq "first is packages", result.directives[0].type, 'packages'
+  eq "second is user", result.directives[1].type, 'user'
+
+section "Parser: use lines"
+
+do ->
+  result = parse """
+  use @stamp/postgres
+  use https://example.com/caddy.rip
+
+  packages curl
+  """
+  eq "uses collected", result.uses.length, 2
+  eq "npm use", result.uses[0], '@stamp/postgres'
+  eq "url use", result.uses[1], 'https://example.com/caddy.rip'
+  eq "directive still parsed", result.directives.length, 1
+
+section "Parser: quoted strings"
+
+do ->
+  result = parse """
+  user "john doe" 1000:1000
+  """
+  eq "quoted name", result.directives[0].name, 'john doe'
+
+section "Parser: tabs rejected"
+
+do ->
+  threw = false
+  try
+    parse "\tpackages curl"
+  catch
+    threw = true
+  assert "tabs throw error", threw
+
+section "Parser: packages block form"
+
+do ->
+  result = parse """
+  packages
+    curl
+    git jq
+    zfsutils-linux
+  """
+  dir = result.directives[0]
+  eq "packages type", dir.type, 'packages'
+  assert "has curl property", dir.properties.curl?
+  assert "has git property", dir.properties.git?
+  eq "git jq on same line", dir.properties.git[0].args, ['jq']
+  assert "has zfsutils", dir.properties['zfsutils-linux']?
+
+section "Parser: full Hostfile"
+
+do ->
+  source = fs.readFileSync 'test/Hostfile', 'utf-8'
+  result = parse source
+
+  eq "Hostfile total directives", result.directives.length, 18
+  eq "variables resolved", result.vars.POOL, 'tank'
+  eq "first directive is packages", result.directives[0].type, 'packages'
+
+  # Find the foo container
+  foo = result.directives.find (d) -> d.type == 'container' and d.name == 'foo'
+  assert "foo container found", foo?
+  eq "foo has 2 disks", foo.properties.disk.length, 2
+  eq "foo has 2 users", foo.properties.user.length, 2
+  eq "foo disk home source", foo.properties.disk[0].source, '/tank/home/foo'
+  eq "foo disk home dest", foo.properties.disk[0].dest, '/home'
+
+# ── Shell helper tests ───────────────────────────────────────────────────────
+
+section "Helpers: sh, ok, run"
+
+do ->
+  assert "ok true for echo", ok "echo hello"
+  assert "ok false for false", not ok "false"
+  eq "sh returns stdout", sh("echo hello"), 'hello'
+  out = run "echo hello"
+  assert "run .ok is true", out.ok
+  eq "run .stdout", out.stdout, 'hello'
+  eq "run .code", out.code, 0
+
+do ->
+  out = run "false"
+  assert "run .ok is false for failure", not out.ok
+  eq "run .code for failure", out.code, 1
+
+do ->
+  threw = false
+  try
+    sh "false"
+  catch
+    threw = true
+  assert "sh throws on failure", threw
+
+do ->
+  out = run "echo err >&2"
+  eq "run captures stderr", out.stderr, 'err'
+
+# ── Summary ──────────────────────────────────────────────────────────────────
+
+total = pass + fail
+
+console.log "\n#{BOLD}#{'─'.repeat 60}#{RESET}"
+
+if fail > 0
+  console.log "#{RED}#{BOLD}Test failures detected#{RESET}\n"
+  for err in errors
+    console.log "  #{RED}✗#{RESET} #{err}"
+  console.log ""
+else
+  console.log "#{GREEN}#{BOLD}🎉 ALL TESTS PASSED!#{RESET}"
+
+console.log "#{GREEN}✓ #{pass} passing#{RESET}"
+console.log "#{RED}✗ #{fail} failing#{RESET}" if fail > 0
+pct = ((pass / total) * 100).toFixed 1
+console.log "#{BOLD}★ #{pct}% passing#{RESET}"
+
+process.exit 1 if fail > 0

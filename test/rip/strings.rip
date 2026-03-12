@@ -51,6 +51,17 @@ test "nested string in interpolation", 'name = "World"\n"Hello #{"Mr. " + name}"
 test "tagged template", 'tag = (strings, ...values) -> strings[0]\ntag"hello"', "hello"
 test "tagged template with interpolation", 'tag = (strings, ...values) -> values[0]\nx = 42\ntag"value: #{x}"', 42
 
+# $"..." tagged template syntax ($ bridge)
+code "$ tagged template basic", 'sh $"hello"', 'sh`hello`'
+code "$ tagged template interpolation", 'x = sh $"hello #{name}"', 'let x;\nx = sh`hello ${name}`'
+code "$ tagged template single-quote", "sh \$'hello'", 'sh`hello`'
+
+test "$ tagged template receives strings", 'tag = (strings, ...values) -> strings[0]\ntag $"hello"', "hello"
+test "$ tagged template receives values", 'tag = (strings, ...values) -> values[0]\nx = 42\ntag $"val: #{x}"', 42
+test "$ tagged template multiple values", 'tag = (strings, ...values) -> values.length\na = 1\nb = 2\ntag $"#{a} and #{b}"', 2
+test "$ tagged template strings array", 'tag = (strings, ...values) -> strings.length\nx = 1\ntag $"a #{x} b"', 2
+test "$ tagged template no interpolation", 'tag = (strings, ...values) -> strings[0]\ntag $"static"', "static"
+
 # ==============================================================================
 # Heredoc Strings (Triple-Quoted)
 # ==============================================================================

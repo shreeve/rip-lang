@@ -161,6 +161,9 @@ let IMPLICIT_FUNC = new Set([
   'IDENTIFIER', 'PROPERTY', 'SUPER', ')', 'CALL_END', ']', 'INDEX_END', '@', 'THIS',
 ]);
 
+// Tokens that can precede a $ tagged template bridge
+let TAGGABLE = new Set(['IDENTIFIER', 'PROPERTY', ')', 'CALL_END', ']', 'INDEX_END']);
+
 // Control flow tokens that don't end implicit calls/objects
 let CONTROL_IN_IMPLICIT = new Set(['IF', 'TRY', 'FINALLY', 'CATCH', 'CLASS', 'SWITCH', 'COMPONENT']);
 
@@ -1355,6 +1358,7 @@ export class Lexer {
     this.rewriteRender?.();
     this.rewriteTypes();
     this.tagPostfixConditionals();
+    this.rewriteTaggedTemplates();
     this.addImplicitBracesAndParens();
     this.addImplicitCallCommas();
     this.closeMergeAssignments();
@@ -1485,6 +1489,29 @@ export class Lexer {
       this.detectEnd(i + 1, condition, action);
       return 1;
     });
+  }
+
+  // Rewrite `tag $"..."` → `tag"..."` (tagged template via $ bridge)
+  //
+  // When the lexer sees `IDENTIFIER($)` followed by `STRING` or `STRING_START`,
+  // and preceded by a taggable token (IDENTIFIER, PROPERTY, etc.), it removes
+  // the $ token and clears spacing so the string attaches to the tag. This
+  // triggers the existing `Value String` → tagged-template grammar rule.
+  rewriteTaggedTemplates() {
+    let tokens = this.tokens;
+    for (let i = tokens.length - 2; i >= 0; i--) {
+      if (tokens[i][0] === 'IDENTIFIER' && tokens[i][1] === '$' &&
+          (tokens[i + 1]?.[0] === 'STRING' || tokens[i + 1]?.[0] === 'STRING_START')) {
+        let prev = tokens[i - 1];
+        if (prev && TAGGABLE.has(prev[0])) {
+          tokens.splice(i, 1);
+          prev.spaced = false;
+          tokens[i].spaced = false;
+          tokens[i].pre = 0;
+          if (tokens[i].newLine) tokens[i].newLine = false;
+        }
+      }
+    }
   }
 
   addImplicitBracesAndParens() {
