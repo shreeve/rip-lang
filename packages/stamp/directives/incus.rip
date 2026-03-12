@@ -11,6 +11,7 @@ export check = (name, props) ->
   if props.storage
     poolName = props.storage[0].args[0]
     return 'drift' unless ok $"incus storage show #{poolName}"
+    return 'drift' unless ok $"incus profile device get default root pool"
 
   if props.network
     bridge = props.network[0].args[0]
