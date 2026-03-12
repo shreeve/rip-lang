@@ -15,7 +15,7 @@ export check = (path, props) ->
   'ok'
 
 export apply = (path, props) ->
-  sh $"zfs create #{path}" unless ok $"zfs list #{path}"
+  sh $"zfs create -p #{path}" unless ok $"zfs list #{path}"
   mountpoint = sh $"zfs get -H -o value mountpoint #{path}"
   sh $"chown #{props.owner[0].args[0]} #{mountpoint}" if props.owner
   sh $"chmod #{props.mode[0].args[0]} #{mountpoint}" if props.mode
