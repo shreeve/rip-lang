@@ -1,0 +1,3 @@
+import { get } from '@rip-lang/server'
+
+get '/api', -> { message: "Hello, world!" }
