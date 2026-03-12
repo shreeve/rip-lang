@@ -8862,8 +8862,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeGenerator({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.13.99";
-  var BUILD_DATE = "2026-03-12@02:42:08GMT";
+  var VERSION = "3.13.101";
+  var BUILD_DATE = "2026-03-12@03:46:49GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -9041,30 +9041,41 @@ ${c.js}
     }
     if (runtimeTag?.hasAttribute("data-reload") && !globalThis.__ripLaunched) {
       let ready = false;
-      const es = new EventSource("/watch");
-      es.addEventListener("connected", () => {
-        if (ready)
-          location.reload();
-        ready = true;
-      });
-      es.addEventListener("reload", (e) => {
-        if (e.data === "styles") {
-          const t = Date.now();
-          let refreshed = 0;
-          document.querySelectorAll('link[rel="stylesheet"]').forEach((l) => {
-            if (new URL(l.href).origin !== location.origin)
-              return;
-            const url = new URL(l.href);
-            url.searchParams.set("_r", t);
-            l.href = url.toString();
-            refreshed++;
-          });
-          if (!refreshed)
+      let retryDelay = 1000;
+      const maxDelay = 30000;
+      const connectWatch = () => {
+        const es = new EventSource("/watch");
+        es.addEventListener("connected", () => {
+          retryDelay = 1000;
+          if (ready)
             location.reload();
-        } else {
-          location.reload();
-        }
-      });
+          ready = true;
+        });
+        es.addEventListener("reload", (e) => {
+          if (e.data === "styles") {
+            const t = Date.now();
+            let refreshed = 0;
+            document.querySelectorAll('link[rel="stylesheet"]').forEach((l) => {
+              if (new URL(l.href).origin !== location.origin)
+                return;
+              const url = new URL(l.href);
+              url.searchParams.set("_r", t);
+              l.href = url.toString();
+              refreshed++;
+            });
+            if (!refreshed)
+              location.reload();
+          } else {
+            location.reload();
+          }
+        });
+        es.onerror = () => {
+          es.close();
+          setTimeout(connectWatch, retryDelay);
+          retryDelay = Math.min(retryDelay * 2, maxDelay);
+        };
+      };
+      connectWatch();
     }
   }
   async function importRip(url) {
