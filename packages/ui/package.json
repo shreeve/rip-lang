@@ -33,5 +33,8 @@
     "rip-lang"
   ],
   "license": "MIT",
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "rip-lang": ">=3.13.96"
+  }
 }
