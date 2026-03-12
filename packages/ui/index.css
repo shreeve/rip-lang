@@ -1226,7 +1226,7 @@ body:has(.source-overlay) { overflow: hidden; }
   [data-prefix], [data-suffix] {
     padding: 0 10px; background: #f8fafc; color: #64748b;
     font-size: 14px; height: 36px; display: flex; align-items: center;
-    border-right: 1px solid #e2e8f0; user-select: none;
+    border: none; border-right: 1px solid #e2e8f0; outline: none; user-select: none;
   }
 
   [data-suffix] { border-right: none; border-left: 1px solid #e2e8f0; }
