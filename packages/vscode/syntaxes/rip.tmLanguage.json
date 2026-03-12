@@ -302,8 +302,8 @@
           "end": "$",
           "patterns": [
             {
-              "comment": "Attribute name (key: value)",
-              "match": "\\b([a-zA-Z_$][\\w$-]*)(?=\\s*:(?![:=]))",
+              "comment": "Attribute name (key: value or key <=> binding)",
+              "match": "\\b([a-zA-Z_$][\\w$-]*)(?=\\s*(?::(?![:=])|<=>))",
               "name": "entity.other.attribute-name.rip"
             },
             { "include": "$self" }
@@ -318,16 +318,16 @@
           "end": "$",
           "patterns": [
             {
-              "comment": "Attribute name (key: value)",
-              "match": "\\b([a-zA-Z_$][\\w$-]*)(?=\\s*:(?![:=]))",
+              "comment": "Attribute name (key: value or key <=> binding)",
+              "match": "\\b([a-zA-Z_$][\\w$-]*)(?=\\s*(?::(?![:=])|<=>))",
               "name": "entity.other.attribute-name.rip"
             },
             { "include": "$self" }
           ]
         },
         {
-          "comment": "Standalone attribute props.",
-          "match": "^[ \\t]+([a-zA-Z_$][\\w$-]*)(?=\\s*:(?![:=]))",
+          "comment": "Standalone attribute props (key: value or key <=> binding).",
+          "match": "^[ \\t]+([a-zA-Z_$][\\w$-]*)(?=\\s*(?::(?![:=])|<=>))",
           "captures": {
             "1": { "name": "entity.other.attribute-name.rip" }
           }

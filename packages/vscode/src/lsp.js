@@ -967,10 +967,13 @@ connection.onRequest('textDocument/semanticTokens/full', (params) => {
         }
 
         // Skip attribute names: identifier followed by `:`
-        // (not `::` or `:=`).
+        // (not `::` or `:=`) or `<=>` (two-way binding).
         const afterToken = sl.substring(matchCol + tsLength);
         const colonMatch = afterToken.match(/^\s*:/);
         if (colonMatch && afterToken.charAt(colonMatch[0].length) !== ':' && afterToken.charAt(colonMatch[0].length) !== '=') {
+          if (matchCol === slIndent || isTagLine || isComponentLine) continue;
+        }
+        if (/^\s*<=>/.test(afterToken)) {
           if (matchCol === slIndent || isTagLine || isComponentLine) continue;
         }
       }
