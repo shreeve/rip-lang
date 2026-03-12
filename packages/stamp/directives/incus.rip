@@ -79,6 +79,8 @@ export apply = (name, props) ->
       [poolName, driver, source] = props.storage[0].args
       unless ok $"incus storage show #{poolName}"
         sh $"incus storage create #{poolName} #{driver} source=#{source}"
+      unless ok $"incus profile device get default root pool"
+        sh $"incus profile device add default root disk path=/ pool=#{poolName}"
 
     if props.network
       bridge = props.network[0].args[0]
