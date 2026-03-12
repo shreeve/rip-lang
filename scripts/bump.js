@@ -160,6 +160,9 @@ async function selectiveRelease(packageNames) {
   }
   publish('all', '@rip-lang/all', allNewVer);
 
+  // Refresh workspace links
+  run('bun install', { stdio: 'inherit' });
+
   // Done
   console.log(`\n✨ Published ${names}\n`);
 }
@@ -326,7 +329,10 @@ async function fullRelease(level) {
 
   publish('all', '@rip-lang/all', allNewVer);
 
-  // Step 8: Summary
+  // Step 8: Refresh workspace links
+  run('bun install', { stdio: 'inherit' });
+
+  // Step 9: Summary
   console.log(`\n✨ Released rip-lang ${newVersion}\n`);
 
   const all = [{ name: 'rip-lang', old: oldVersion, new: newVersion }, ...bumped];
