@@ -145,7 +145,7 @@ export parse = (source, env = {}) ->
   for dir in directives
     dtype = dir.type
 
-    if dtype in ['packages', 'firewall', 'ssh', 'incus'] or PLURALS[dtype]
+    if dtype in ['brew', 'packages', 'firewall', 'ssh', 'incus'] or PLURALS[dtype]
       dir.name = null
     else if dir.args.length > 0
       dir.name = dir.args[0]
