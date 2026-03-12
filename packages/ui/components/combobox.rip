@@ -40,9 +40,8 @@ export Combobox = component
 
   onFocusin: -> @openMenu()
 
-  onFocusout: (e) ->
-    unless @_content?.contains(e.relatedTarget)
-      @close()
+  onFocusout: ->
+    setTimeout => @close() unless @_content?.contains(document.activeElement), 0
 
   openMenu: ->
     open = true

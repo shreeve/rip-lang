@@ -64,11 +64,13 @@ export MultiSelect = component
 
   onFocusin: -> open = true
 
-  onFocusout: (e) ->
-    unless @_content?.contains(e.relatedTarget)
+  onFocusout: ->
+    setTimeout =>
+      return if @_content?.contains(document.activeElement)
       open = false
       query = ''
       highlightedIndex = -1
+    , 0
 
   _position: ->
     return unless @_input and @_list
