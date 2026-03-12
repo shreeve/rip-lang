@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/db",
-  "version": "1.3.81",
+  "version": "1.3.82",
   "description": "DuckDB server with official DuckDB UI - pure Bun FFI",
   "type": "module",
   "main": "db.rip",
@@ -39,7 +39,7 @@
   "author": "Steve Shreeve <steve.shreeve@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "rip-lang": ">=3.13.93",
+    "rip-lang": ">=3.13.94",
     "@rip-lang/server": ">=1.3.0"
   },
   "files": [

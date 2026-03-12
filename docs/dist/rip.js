@@ -8863,7 +8863,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   }
   // src/browser.js
   var VERSION = "3.13.93";
-  var BUILD_DATE = "2026-03-11@02:24:39GMT";
+  var BUILD_DATE = "2026-03-12@00:12:28GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -9153,6 +9153,10 @@ ${indented}`);
   var __batch;
   var __effect;
   var __state;
+  var _ariaListNav;
+  var _ariaNAV;
+  var _ariaPopupDismiss;
+  var _ariaRovingNav;
   var _keysVersion;
   var _proxy;
   var _toFn;
@@ -10260,6 +10264,88 @@ ${indented}`);
     }
     return { app, components: appComponents, router, renderer };
   };
+  _ariaNAV = function(e, fn) {
+    if (!fn)
+      return;
+    e.preventDefault();
+    e.stopPropagation();
+    return fn();
+  };
+  _ariaListNav = function(e, h) {
+    if (e.which === 229)
+      return;
+    return (() => {
+      switch (e.key) {
+        case "ArrowDown":
+          return _ariaNAV(e, h.next);
+        case "ArrowUp":
+          return _ariaNAV(e, h.prev);
+        case "Home":
+        case "PageUp":
+          return _ariaNAV(e, h.first);
+        case "End":
+        case "PageDown":
+          return _ariaNAV(e, h.last);
+        case "Enter":
+        case " ":
+          return _ariaNAV(e, h.select);
+        case "Escape":
+          return _ariaNAV(e, h.dismiss);
+        case "Tab":
+          return h.tab?.();
+        default:
+          return e.key.length === 1 ? h.char?.(e.key) : undefined;
+      }
+    })();
+  };
+  _ariaPopupDismiss = function(open, popup, close, els = []) {
+    let inside, onDown, onScroll;
+    if (!open)
+      return;
+    inside = [popup, ...els];
+    onDown = (e) => !inside.some(function(el) {
+      return el?.contains(e.target);
+    }) ? close() : undefined;
+    onScroll = (e) => !popup?.contains(e.target) ? close() : undefined;
+    document.addEventListener("mousedown", onDown);
+    window.addEventListener("scroll", onScroll, true);
+    return function() {
+      document.removeEventListener("mousedown", onDown);
+      return window.removeEventListener("scroll", onScroll, true);
+    };
+  };
+  _ariaRovingNav = function(e, h, orientation = "vertical") {
+    let horz, vert;
+    if (e.which === 229)
+      return;
+    vert = orientation !== "horizontal";
+    horz = orientation !== "vertical";
+    return (() => {
+      switch (e.key) {
+        case "ArrowDown":
+          return vert ? _ariaNAV(e, h.next) : undefined;
+        case "ArrowUp":
+          return vert ? _ariaNAV(e, h.prev) : undefined;
+        case "ArrowRight":
+          return horz ? _ariaNAV(e, h.next) : undefined;
+        case "ArrowLeft":
+          return horz ? _ariaNAV(e, h.prev) : undefined;
+        case "Home":
+        case "PageUp":
+          return _ariaNAV(e, h.first);
+        case "End":
+        case "PageDown":
+          return _ariaNAV(e, h.last);
+        case "Enter":
+        case " ":
+          return _ariaNAV(e, h.select);
+        case "Escape":
+          return _ariaNAV(e, h.dismiss);
+      }
+    })();
+  };
+  globalThis.__aria ??= { listNav: _ariaListNav, rovingNav: _ariaRovingNav, popupDismiss: _ariaPopupDismiss };
+  globalThis.ARIA ??= globalThis.__aria;
 
   // docs/dist/_entry.js
   importRip.modules["ui.rip"] = exports__ui;
