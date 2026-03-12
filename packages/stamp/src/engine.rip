@@ -80,18 +80,19 @@ export apply = (directives, handlers) ->
   for dir in directives
     handler = handlers[dir.type]
     props   = propsFor dir
+    label   = dir.name or dir.args?.join(' ') or null
     result  = handler.check! dir.name, props
 
     if result == 'ok'
-      log.ok dir.type, dir.name
+      log.ok dir.type, label
     else
-      log.apply dir.type, dir.name
+      log.apply dir.type, label
       handler.apply! dir.name, props
 
       after = handler.check! dir.name, props
       if after != 'ok'
-        log.fail dir.type, dir.name, "still not ok after apply"
-        throw new Error "Directive '#{dir.type}#{if dir.name then ' ' + dir.name else ''}' failed post-apply check"
+        log.fail dir.type, label, "still not ok after apply"
+        raise "Directive '#{dir.type}#{if label then ' ' + label else ''}' failed post-apply check"
       applied++
 
   p "\nApplied #{applied} of #{total} directives."
@@ -120,12 +121,13 @@ export plan = (directives, handlers) ->
   for dir in directives
     handler = handlers[dir.type]
     props   = propsFor dir
+    label   = dir.name or dir.args?.join(' ') or null
     result  = handler.check! dir.name, props
 
     switch result
-      when 'ok'      then log.ok dir.type, dir.name
-      when 'drift'   then log.update dir.type, dir.name; changes++
-      when 'missing' then log.create dir.type, dir.name; changes++
+      when 'ok'      then log.ok dir.type, label
+      when 'drift'   then log.update dir.type, label; changes++
+      when 'missing' then log.create dir.type, label; changes++
 
   if changes > 0
     p "\n#{changes} change#{if changes > 1 then 's' else ''} would be applied."
