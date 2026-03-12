@@ -2058,7 +2058,16 @@ function hasContext(key) {
 }
 
 function __clsx(...args) {
-  return args.filter(Boolean).join(' ');
+  let out = '';
+  for (const arg of args) {
+    if (!arg) continue;
+    if (typeof arg === 'string') { out && (out += ' '); out += arg; }
+    else if (typeof arg === 'object') {
+      if (Array.isArray(arg)) { const v = __clsx(...arg); v && (out && (out += ' '), out += v); }
+      else for (const k in arg) if (arg[k]) { out && (out += ' '); out += k; }
+    }
+  }
+  return out;
 }
 
 function __lis(arr) {
