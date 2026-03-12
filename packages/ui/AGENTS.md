@@ -81,15 +81,27 @@ In a `~>` effect that has an early return guard, reactive signals read AFTER the
 
 ### Event Handler Parameter Syntax
 
-In Rip, `(e => expr)` parses as **calling `e` as a function** with a fat arrow argument — NOT a fat arrow with parameter `e`. This causes "e is not a function" at runtime.
+Inline event handlers with explicit parameters are unreliable in template attribute contexts. Both `(e) =>` (causes parse error) and `(e) ->` (causes parse error in conditional blocks) can break compilation of the entire component, causing "WidgetGallery is not defined" or similar errors.
+
+**The safe approach: use a named method reference.**
 
 ```coffee
-# WRONG — parses as e(() => e.stopPropagation())
+# WRONG — (e => ...) parses as calling e as a function
 @click: (e => e.stopPropagation())
 
-# CORRECT — fat arrow with parameter e
+# WRONG — (e) => causes parse error in template attribute contexts
 @click: (e) => e.stopPropagation()
+
+# WRONG — (e) -> also causes parse error in some template contexts
+@click: (e) -> e.stopPropagation()
+
+# CORRECT — define a named method, reference it in the template
+_stopProp: (e) -> e.stopPropagation()
+# then in render:
+  .modal @click: @_stopProp
 ```
+
+Method references (`@methodName`) always compile correctly in template attributes and receive the event as their first argument.
 
 ## ARIA Keyboard and Popup Helpers
 
