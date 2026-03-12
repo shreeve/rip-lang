@@ -1,15 +1,27 @@
 {
   "name": "@rip-lang/stamp",
-  "version": "0.1.4",
-  "description": "Declarative host provisioning — no state file, no agent, no YAML",
-  "type": "module",
+  "version": "0.1.5",
+  "author": "Steve Shreeve <steve.shreeve@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shreeve/rip-lang.git",
+    "directory": "packages/stamp"
+  },
   "main": "src/cli.rip",
   "bin": {
     "stamp": "./bin/stamp"
   },
-  "scripts": {
-    "test": "bun --preload ../../rip-loader.js test/runner.rip"
+  "bugs": {
+    "url": "https://github.com/shreeve/rip-lang/issues"
   },
+  "description": "Declarative host provisioning — no state file, no agent, no YAML",
+  "files": [
+    "bin/",
+    "src/",
+    "directives/",
+    "README.md"
+  ],
+  "homepage": "https://github.com/shreeve/rip-lang/tree/main/packages/stamp#readme",
   "keywords": [
     "provisioning",
     "declarative",
@@ -22,24 +34,12 @@
     "rip",
     "rip-lang"
   ],
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/shreeve/rip-lang.git",
-    "directory": "packages/stamp"
-  },
-  "homepage": "https://github.com/shreeve/rip-lang/tree/main/packages/stamp#readme",
-  "bugs": {
-    "url": "https://github.com/shreeve/rip-lang/issues"
-  },
-  "author": "Steve Shreeve <steve.shreeve@gmail.com>",
   "license": "MIT",
-  "dependencies": {
-    "rip-lang": ">=3.13.105"
+  "scripts": {
+    "test": "bun --preload ../../rip-loader.js test/runner.rip"
   },
-  "files": [
-    "bin/",
-    "src/",
-    "directives/",
-    "README.md"
-  ]
+  "type": "module",
+  "dependencies": {
+    "rip-lang": ">=3.13.106"
+  }
 }

@@ -8885,8 +8885,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeGenerator({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.13.105";
-  var BUILD_DATE = "2026-03-12@09:59:15GMT";
+  var VERSION = "3.13.106";
+  var BUILD_DATE = "2026-03-12@10:26:17GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
