@@ -225,60 +225,60 @@ export WidgetGallery = component
     if visible.length is 1
       tocActive = visible[0].getAttribute('href')?.slice(1)
   tocData := [
-    { id: 'select', name: 'Select', lines: 158, desc: 'Dropdown with typeahead, keyboard nav, ARIA listbox.', props: ['@value', '@placeholder', '@disabled'], events: ['change'], keys: ['↕', 'Enter', 'Space', 'Esc', 'Home', 'End', 'type-ahead'], attrs: ['$open', '$placeholder', '$disabled', '$value', '$highlighted', '$selected'] }
-    { id: 'combobox', name: 'Combobox', lines: 133, desc: 'Filterable input + listbox for search-as-you-type.', props: ['@query', '@items', '@placeholder', '@disabled', '@autoHighlight'], events: ['filter', 'select'], keys: ['↕', 'Enter', 'Esc', 'Tab'], attrs: ['$open', '$disabled', '$clear', '$value', '$highlighted', '$empty'] }
-    { id: 'multi-select', name: 'MultiSelect', lines: 160, desc: 'Multi-select with chips, filtering, and keyboard nav.', props: ['@value', '@items', '@placeholder', '@disabled'], events: ['change'], keys: ['↕', 'Enter', 'Esc', 'Backspace', 'Tab'], attrs: ['$open', '$disabled', '$chips', '$chip', '$remove', '$clear', '$highlighted', '$selected'] }
-    { id: 'autocomplete', name: 'Autocomplete', lines: 122, desc: 'Suggestion input — type to filter, select to fill.', props: ['@value', '@items', '@placeholder', '@disabled'], events: ['select'], keys: ['↕', 'Enter', 'Esc', 'Tab'], attrs: ['$open', '$disabled', '$clear'] }
-    { id: 'checkbox', name: 'Checkbox', lines: 33, desc: 'Toggle with checkbox or switch semantics.', props: ['@checked', '@disabled', '@indeterminate', '@switch'], events: ['change'], keys: [], attrs: ['$checked', '$indeterminate', '$disabled'] }
-    { id: 'toggle', name: 'Toggle', lines: 24, desc: 'Two-state toggle button with pressed state.', props: ['@pressed', '@disabled'], events: ['change'], keys: [], attrs: ['$pressed', '$disabled'] }
-    { id: 'toggle-group', name: 'ToggleGroup', lines: 71, desc: 'Single or multi-select toggle buttons.', props: ['@value', '@disabled', '@multiple', '@orientation'], events: ['change'], keys: ['← →', '↕', 'Home', 'End'], attrs: ['$orientation', '$disabled', '$pressed', '$value'] }
-    { id: 'radio-group', name: 'RadioGroup', lines: 57, desc: 'Exactly one option selected with arrow key nav.', props: ['@value', '@disabled', '@orientation', '@name'], events: ['change'], keys: ['← →', '↕', 'Home', 'End'], attrs: ['$orientation', '$disabled', '$checked', '$value'] }
-    { id: 'checkbox-group', name: 'CheckboxGroup', lines: 61, desc: 'Multiple options checked independently.', props: ['@value', '@disabled', '@orientation', '@label'], events: ['change'], keys: ['← →', '↕'], attrs: ['$orientation', '$disabled', '$checked', '$value'] }
-    { id: 'input', name: 'Input', lines: 36, desc: 'Headless input tracking focus, touch, and validation.', props: ['@value', '@placeholder', '@type', '@disabled', '@required'], events: [], keys: [], attrs: ['$disabled', '$focused', '$touched'] }
-    { id: 'number-field', name: 'NumberField', lines: 162, desc: 'Number input with stepper buttons and hold-to-repeat.', props: ['@value', '@min', '@max', '@step', '@disabled', '@readOnly'], events: ['input', 'change'], keys: ['↕', 'PgUp', 'PgDn', 'Home', 'End'], attrs: ['$disabled', '$readonly', '$decrement', '$increment'] }
-    { id: 'slider', name: 'Slider', lines: 165, desc: 'Draggable range input with pointer capture and keyboard.', props: ['@value', '@min', '@max', '@step', '@orientation', '@disabled'], events: ['input', 'change'], keys: ['← →', '↕', 'PgUp', 'PgDn', 'Home', 'End'], attrs: ['$orientation', '$disabled', '$dragging', '$track', '$indicator', '$thumb', '$active'] }
-    { id: 'otp-field', name: 'OTPField', lines: 89, desc: 'Multi-digit code input with auto-advance and paste.', props: ['@length', '@value', '@disabled', '@mask'], events: ['input', 'complete'], keys: ['← →', 'Backspace', 'Home', 'End', 'paste'], attrs: ['$disabled', '$complete', '$filled'] }
-    { id: 'date-picker', name: 'DatePicker', lines: 214, desc: 'Calendar dropdown for single date or range selection.', props: ['@value', '@placeholder', '@disabled', '@range', '@firstDayOfWeek'], events: ['change'], keys: ['Esc', 'Enter', 'Space'], attrs: ['$open', '$disabled', '$range', '$calendar', '$selected', '$today', '$in-range'] }
-    { id: 'editable-value', name: 'EditableValue', lines: 81, desc: 'Click-to-edit inline value with popover form.', props: ['@disabled'], events: ['save'], keys: ['Esc', 'Enter'], attrs: ['$editing', '$disabled', '$saving', '$edit-trigger'] }
-    { id: 'tabs', name: 'Tabs', lines: 113, desc: 'Tab panel with roving tabindex and arrow key nav.', props: ['@active', '@orientation', '@activation'], events: ['change'], keys: ['← →', '↕', 'Home', 'End', 'Enter', 'Space'], attrs: ['$tab', '$panel', '$active', '$disabled'] }
-    { id: 'menu', name: 'Menu', lines: 140, desc: 'Dropdown action menu with keyboard navigation.', props: ['@disabled'], events: ['select'], keys: ['↕', 'Home', 'End', 'Enter', 'Space', 'Esc', 'Tab', 'type-ahead'], attrs: ['$open', '$disabled', '$highlighted', '$value'] }
-    { id: 'context-menu', name: 'ContextMenu', lines: 88, desc: 'Right-click context menu with keyboard navigation.', props: ['@disabled'], events: ['select'], keys: ['↕', 'Home', 'End', 'Enter', 'Space', 'Esc', 'Tab'], attrs: ['$open', '$highlighted', '$disabled', '$value'] }
-    { id: 'menubar', name: 'Menubar', lines: 155, desc: 'Horizontal menu bar with dropdown menus.', props: ['@disabled'], events: ['select'], keys: ['← →', '↕', 'Enter', 'Space', 'Esc', 'Tab'], attrs: ['$disabled', '$open', '$highlighted', '$value'] }
-    { id: 'nav-menu', name: 'NavMenu', lines: 129, desc: 'Site navigation with hover/click dropdown panels.', props: ['@orientation', '@hoverDelay', '@hoverCloseDelay'], events: [], keys: ['← →', '↓', 'Esc'], attrs: ['$orientation', '$open'] }
-    { id: 'toolbar', name: 'Toolbar', lines: 38, desc: 'Groups controls with roving tabindex keyboard nav.', props: ['@orientation', '@label'], events: [], keys: ['← →', '↕', 'Home', 'End'], attrs: ['$orientation'] }
-    { id: 'dialog', name: 'Dialog', lines: 107, desc: 'Modal with focus trap, scroll lock, escape dismiss.', props: ['@open', '@dismissable', '@initialFocus'], events: ['close'], keys: ['Esc', 'Tab'], attrs: ['$open'] }
-    { id: 'drawer', name: 'Drawer', lines: 79, desc: 'Slide-out panel with focus trap and scroll lock.', props: ['@open', '@side', '@dismissable'], events: ['close'], keys: ['Esc', 'Tab'], attrs: ['$open', '$side'] }
-    { id: 'popover', name: 'Popover', lines: 145, desc: 'Anchored floating content with flip/shift positioning.', props: ['@placement', '@offset', '@disabled', '@openOnHover', '@hoverDelay', '@hoverCloseDelay'], events: [], keys: ['Esc', 'Enter', 'Space', '↓'], attrs: ['$open', '$placement'] }
-    { id: 'tooltip', name: 'Tooltip', lines: 115, desc: 'Hover/focus tooltip with delay and positioning.', props: ['@text', '@placement', '@delay', '@offset', '@hoverable'], events: [], keys: [], attrs: ['$open', '$entering', '$exiting', '$placement'] }
-    { id: 'preview-card', name: 'PreviewCard', lines: 73, desc: 'Hover/focus preview card with delay.', props: ['@delay', '@closeDelay'], events: [], keys: [], attrs: ['$open'] }
-    { id: 'toast', name: 'Toast', lines: 87, desc: 'Auto-dismiss notification with ARIA live region.', props: ['@toasts', '@toast', '@placement'], events: ['dismiss'], keys: [], attrs: ['$placement', '$type', '$leaving'] }
-    { id: 'button', name: 'Button', lines: 23, desc: 'Accessible button with disabled-but-focusable pattern.', props: ['@disabled'], events: ['press'], keys: [], attrs: ['$disabled'] }
-    { id: 'separator', name: 'Separator', lines: 17, desc: 'Decorative or semantic divider between sections.', props: ['@orientation', '@decorative'], events: [], keys: [], attrs: ['$orientation'] }
-    { id: 'progress', name: 'Progress', lines: 25, desc: 'Progress bar with CSS custom property for value.', props: ['@value', '@max', '@label'], events: [], keys: [], attrs: ['$complete'] }
-    { id: 'meter', name: 'Meter', lines: 36, desc: 'Gauge for known-range measurements with thresholds.', props: ['@value', '@min', '@max', '@low', '@high', '@optimum', '@label'], events: [], keys: [], attrs: ['$level'] }
-    { id: 'avatar', name: 'Avatar', lines: 37, desc: 'Image with fallback to initials or placeholder.', props: ['@src', '@alt', '@fallback'], events: [], keys: [], attrs: ['$status', '$initials', '$placeholder'] }
-    { id: 'scroll-area', name: 'ScrollArea', lines: 145, desc: 'Custom scrollbar with draggable thumb and auto-hide.', props: ['@orientation'], events: [], keys: [], attrs: ['$orientation', '$hovering', '$scrolling', '$dragging', '$viewport', '$scrollbar', '$thumb'] }
-    { id: 'field', name: 'Field', lines: 53, desc: 'Form field wrapper with label, description, and error.', props: ['@label', '@description', '@error', '@disabled', '@required'], events: [], keys: [], attrs: ['$disabled', '$invalid', '$label', '$required', '$description', '$error'] }
-    { id: 'fieldset', name: 'Fieldset', lines: 22, desc: 'Grouped fields with legend and cascading disable.', props: ['@legend', '@disabled'], events: [], keys: [], attrs: ['$disabled', '$legend'] }
-    { id: 'form', name: 'Form', lines: 39, desc: 'Form wrapper with submit handling and validation state.', props: ['@disabled'], events: ['submit'], keys: [], attrs: ['$disabled', '$submitting', '$submitted'] }
-    { id: 'grid', name: 'Grid', lines: 901, desc: 'Virtual-scrolling data grid — 100K+ rows at 60fps.', props: ['@data', '@columns', '@rowHeight', '@overscan', '@striped', '@beforeEdit', '@afterEdit'], events: [], keys: ['Arrows', 'Tab', 'Enter', 'F2', 'Esc', 'Home', 'End', 'PgUp', 'PgDn', 'Ctrl+A', 'Ctrl+C', 'Ctrl+V', 'Ctrl+X'], attrs: ['$editing', '$selecting', '$sorted'] }
-    { id: 'accordion', name: 'Accordion', lines: 103, desc: 'Expand/collapse sections, single or multiple mode.', props: ['@multiple'], events: ['change'], keys: ['Enter', 'Space', '↕', 'Home', 'End'], attrs: ['$item', '$trigger', '$content', '$open', '$disabled'] }
-    { id: 'badge', name: 'Badge', lines: 15, desc: 'Inline label with variant (solid/outline/subtle).', props: ['@variant'], events: [], keys: [], attrs: ['$variant'] }
-    { id: 'skeleton', name: 'Skeleton', lines: 22, desc: 'Loading placeholder with shimmer animation.', props: ['@width', '@height', '@circle', '@label'], events: [], keys: [], attrs: ['$circle'] }
-    { id: 'spinner', name: 'Spinner', lines: 17, desc: 'Loading indicator with accessible status.', props: ['@label', '@size'], events: [], keys: [], attrs: [] }
-    { id: 'card', name: 'Card', lines: 25, desc: 'Structured container with header/content/footer.', props: ['@interactive'], events: [], keys: [], attrs: ['$interactive'] }
-    { id: 'label', name: 'Label', lines: 16, desc: 'Standalone accessible form label.', props: ['@for', '@required'], events: [], keys: [], attrs: ['$required'] }
-    { id: 'textarea', name: 'Textarea', lines: 48, desc: 'Auto-resizing text area with focus and validation tracking.', props: ['@value', '@placeholder', '@disabled', '@required', '@rows', '@autoResize'], events: [], keys: [], attrs: ['$disabled', '$focused', '$touched'] }
-    { id: 'native-select', name: 'NativeSelect', lines: 33, desc: 'Styled native select element with state tracking.', props: ['@value', '@disabled', '@required'], events: ['change'], keys: [], attrs: ['$disabled', '$focused'] }
-    { id: 'input-group', name: 'InputGroup', lines: 28, desc: 'Input with prefix/suffix addon elements.', props: ['@disabled'], events: [], keys: [], attrs: ['$disabled', '$focused'] }
-    { id: 'button-group', name: 'ButtonGroup', lines: 26, desc: 'Grouped buttons with ARIA group semantics.', props: ['@orientation', '@disabled', '@label'], events: [], keys: [], attrs: ['$orientation', '$disabled'] }
-    { id: 'alert-dialog', name: 'AlertDialog', lines: 96, desc: 'Non-dismissable modal requiring explicit user action.', props: ['@open', '@initialFocus'], events: ['close'], keys: ['Tab'], attrs: ['$open'] }
-    { id: 'breadcrumb', name: 'Breadcrumb', lines: 47, desc: 'Navigation trail with separator and current page.', props: ['@separator', '@label'], events: [], keys: [], attrs: ['$current'] }
-    { id: 'table', name: 'Table', lines: 27, desc: 'Semantic table wrapper with optional caption and striped rows.', props: ['@caption', '@striped'], events: [], keys: [], attrs: ['$striped'] }
-    { id: 'collapsible', name: 'Collapsible', lines: 50, desc: 'Single open/close section with animated expand.', props: ['@open', '@disabled'], events: ['change'], keys: ['Enter', 'Space'], attrs: ['$open', '$disabled'] }
-    { id: 'pagination', name: 'Pagination', lines: 123, desc: 'Page navigation with prev/next and ellipsis gaps.', props: ['@page', '@total', '@perPage', '@siblingCount'], events: ['change'], keys: ['← →', 'Home', 'End'], attrs: ['$active', '$disabled', '$ellipsis'] }
-    { id: 'carousel', name: 'Carousel', lines: 110, desc: 'Slide carousel with autoplay, loop, and keyboard nav.', props: ['@orientation', '@loop', '@autoplay', '@interval', '@label'], events: ['change'], keys: ['← →', '↕', 'Home', 'End'], attrs: ['$orientation', '$active', '$prev', '$next'] }
-    { id: 'resizable', name: 'Resizable', lines: 123, desc: 'Draggable resize handles between panels.', props: ['@orientation', '@minSize', '@maxSize'], events: ['resize'], keys: ['← →', '↕'], attrs: ['$orientation', '$dragging'] }
+    { id: 'select', name: 'Select', lines: 135, desc: 'Dropdown with typeahead, keyboard nav, ARIA listbox.', props: ['@value', '@placeholder', '@disabled'], events: ['change'], keys: ['↕', 'Enter', 'Space', 'Esc', 'Home', 'End', 'type-ahead'], attrs: ['$open', '$placeholder', '$disabled', '$value', '$highlighted', '$selected'] }
+    { id: 'combobox', name: 'Combobox', lines: 118, desc: 'Filterable input + listbox for search-as-you-type.', props: ['@query', '@items', '@placeholder', '@disabled', '@autoHighlight'], events: ['filter', 'select'], keys: ['↕', 'Enter', 'Esc', 'Tab'], attrs: ['$open', '$disabled', '$clear', '$value', '$highlighted', '$empty'] }
+    { id: 'multi-select', name: 'MultiSelect', lines: 146, desc: 'Multi-select with chips, filtering, and keyboard nav.', props: ['@value', '@items', '@placeholder', '@disabled'], events: ['change'], keys: ['↕', 'Enter', 'Esc', 'Backspace', 'Tab'], attrs: ['$open', '$disabled', '$chips', '$chip', '$remove', '$clear', '$highlighted', '$selected'] }
+    { id: 'autocomplete', name: 'Autocomplete', lines: 113, desc: 'Suggestion input — type to filter, select to fill.', props: ['@value', '@items', '@placeholder', '@disabled'], events: ['select'], keys: ['↕', 'Enter', 'Esc', 'Tab'], attrs: ['$open', '$disabled', '$clear'] }
+    { id: 'checkbox', name: 'Checkbox', lines: 18, desc: 'Toggle with checkbox or switch semantics.', props: ['@checked', '@disabled', '@indeterminate', '@switch'], events: ['change'], keys: [], attrs: ['$checked', '$indeterminate', '$disabled'] }
+    { id: 'toggle', name: 'Toggle', lines: 14, desc: 'Two-state toggle button with pressed state.', props: ['@pressed', '@disabled'], events: ['change'], keys: [], attrs: ['$pressed', '$disabled'] }
+    { id: 'toggle-group', name: 'ToggleGroup', lines: 55, desc: 'Single or multi-select toggle buttons.', props: ['@value', '@disabled', '@multiple', '@orientation'], events: ['change'], keys: ['← →', '↕', 'Home', 'End'], attrs: ['$orientation', '$disabled', '$pressed', '$value'] }
+    { id: 'radio-group', name: 'RadioGroup', lines: 42, desc: 'Exactly one option selected with arrow key nav.', props: ['@value', '@disabled', '@orientation', '@name'], events: ['change'], keys: ['← →', '↕', 'Home', 'End'], attrs: ['$orientation', '$disabled', '$checked', '$value'] }
+    { id: 'checkbox-group', name: 'CheckboxGroup', lines: 45, desc: 'Multiple options checked independently.', props: ['@value', '@disabled', '@orientation', '@label'], events: ['change'], keys: ['← →', '↕'], attrs: ['$orientation', '$disabled', '$checked', '$value'] }
+    { id: 'input', name: 'Input', lines: 25, desc: 'Headless input tracking focus, touch, and validation.', props: ['@value', '@placeholder', '@type', '@disabled', '@required'], events: [], keys: [], attrs: ['$disabled', '$focused', '$touched'] }
+    { id: 'number-field', name: 'NumberField', lines: 151, desc: 'Number input with stepper buttons and hold-to-repeat.', props: ['@value', '@min', '@max', '@step', '@disabled', '@readOnly'], events: ['input', 'change'], keys: ['↕', 'PgUp', 'PgDn', 'Home', 'End'], attrs: ['$disabled', '$readonly', '$decrement', '$increment'] }
+    { id: 'slider', name: 'Slider', lines: 152, desc: 'Draggable range input with pointer capture and keyboard.', props: ['@value', '@min', '@max', '@step', '@orientation', '@disabled'], events: ['input', 'change'], keys: ['← →', '↕', 'PgUp', 'PgDn', 'Home', 'End'], attrs: ['$orientation', '$disabled', '$dragging', '$track', '$indicator', '$thumb', '$active'] }
+    { id: 'otp-field', name: 'OTPField', lines: 79, desc: 'Multi-digit code input with auto-advance and paste.', props: ['@length', '@value', '@disabled', '@mask'], events: ['input', 'complete'], keys: ['← →', 'Backspace', 'Home', 'End', 'paste'], attrs: ['$disabled', '$complete', '$filled'] }
+    { id: 'date-picker', name: 'DatePicker', lines: 194, desc: 'Calendar dropdown for single date or range selection.', props: ['@value', '@placeholder', '@disabled', '@range', '@firstDayOfWeek'], events: ['change'], keys: ['Esc', 'Enter', 'Space'], attrs: ['$open', '$disabled', '$range', '$calendar', '$selected', '$today', '$in-range'] }
+    { id: 'editable-value', name: 'EditableValue', lines: 70, desc: 'Click-to-edit inline value with popover form.', props: ['@disabled'], events: ['save'], keys: ['Esc', 'Enter'], attrs: ['$editing', '$disabled', '$saving', '$edit-trigger'] }
+    { id: 'tabs', name: 'Tabs', lines: 92, desc: 'Tab panel with roving tabindex and arrow key nav.', props: ['@active', '@orientation', '@activation'], events: ['change'], keys: ['← →', '↕', 'Home', 'End', 'Enter', 'Space'], attrs: ['$tab', '$panel', '$active', '$disabled'] }
+    { id: 'menu', name: 'Menu', lines: 124, desc: 'Dropdown action menu with keyboard navigation.', props: ['@disabled'], events: ['select'], keys: ['↕', 'Home', 'End', 'Enter', 'Space', 'Esc', 'Tab', 'type-ahead'], attrs: ['$open', '$disabled', '$highlighted', '$value'] }
+    { id: 'context-menu', name: 'ContextMenu', lines: 73, desc: 'Right-click context menu with keyboard navigation.', props: ['@disabled'], events: ['select'], keys: ['↕', 'Home', 'End', 'Enter', 'Space', 'Esc', 'Tab'], attrs: ['$open', '$highlighted', '$disabled', '$value'] }
+    { id: 'menubar', name: 'Menubar', lines: 137, desc: 'Horizontal menu bar with dropdown menus.', props: ['@disabled'], events: ['select'], keys: ['← →', '↕', 'Enter', 'Space', 'Esc', 'Tab'], attrs: ['$disabled', '$open', '$highlighted', '$value'] }
+    { id: 'nav-menu', name: 'NavMenu', lines: 114, desc: 'Site navigation with hover/click dropdown panels.', props: ['@orientation', '@hoverDelay', '@hoverCloseDelay'], events: [], keys: ['← →', '↓', 'Esc'], attrs: ['$orientation', '$open'] }
+    { id: 'toolbar', name: 'Toolbar', lines: 26, desc: 'Groups controls with roving tabindex keyboard nav.', props: ['@orientation', '@label'], events: [], keys: ['← →', '↕', 'Home', 'End'], attrs: ['$orientation'] }
+    { id: 'dialog', name: 'Dialog', lines: 94, desc: 'Modal with focus trap, scroll lock, escape dismiss.', props: ['@open', '@dismissable', '@initialFocus'], events: ['close'], keys: ['Esc', 'Tab'], attrs: ['$open'] }
+    { id: 'drawer', name: 'Drawer', lines: 68, desc: 'Slide-out panel with focus trap and scroll lock.', props: ['@open', '@side', '@dismissable'], events: ['close'], keys: ['Esc', 'Tab'], attrs: ['$open', '$side'] }
+    { id: 'popover', name: 'Popover', lines: 135, desc: 'Anchored floating content with flip/shift positioning.', props: ['@placement', '@offset', '@disabled', '@openOnHover', '@hoverDelay', '@hoverCloseDelay'], events: [], keys: ['Esc', 'Enter', 'Space', '↓'], attrs: ['$open', '$placement'] }
+    { id: 'tooltip', name: 'Tooltip', lines: 103, desc: 'Hover/focus tooltip with delay and positioning.', props: ['@text', '@placement', '@delay', '@offset', '@hoverable'], events: [], keys: [], attrs: ['$open', '$entering', '$exiting', '$placement'] }
+    { id: 'preview-card', name: 'PreviewCard', lines: 63, desc: 'Hover/focus preview card with delay.', props: ['@delay', '@closeDelay'], events: [], keys: [], attrs: ['$open'] }
+    { id: 'toast', name: 'Toast', lines: 66, desc: 'Auto-dismiss notification with ARIA live region.', props: ['@toasts', '@toast', '@placement'], events: ['dismiss'], keys: [], attrs: ['$placement', '$type', '$leaving'] }
+    { id: 'button', name: 'Button', lines: 12, desc: 'Accessible button with disabled-but-focusable pattern.', props: ['@disabled'], events: ['press'], keys: [], attrs: ['$disabled'] }
+    { id: 'separator', name: 'Separator', lines: 8, desc: 'Decorative or semantic divider between sections.', props: ['@orientation', '@decorative'], events: [], keys: [], attrs: ['$orientation'] }
+    { id: 'progress', name: 'Progress', lines: 16, desc: 'Progress bar with CSS custom property for value.', props: ['@value', '@max', '@label'], events: [], keys: [], attrs: ['$complete'] }
+    { id: 'meter', name: 'Meter', lines: 26, desc: 'Gauge for known-range measurements with thresholds.', props: ['@value', '@min', '@max', '@low', '@high', '@optimum', '@label'], events: [], keys: [], attrs: ['$level'] }
+    { id: 'avatar', name: 'Avatar', lines: 27, desc: 'Image with fallback to initials or placeholder.', props: ['@src', '@alt', '@fallback'], events: [], keys: [], attrs: ['$status', '$initials', '$placeholder'] }
+    { id: 'scroll-area', name: 'ScrollArea', lines: 133, desc: 'Custom scrollbar with draggable thumb and auto-hide.', props: ['@orientation'], events: [], keys: [], attrs: ['$orientation', '$hovering', '$scrolling', '$dragging', '$viewport', '$scrollbar', '$thumb'] }
+    { id: 'field', name: 'Field', lines: 44, desc: 'Form field wrapper with label, description, and error.', props: ['@label', '@description', '@error', '@disabled', '@required'], events: [], keys: [], attrs: ['$disabled', '$invalid', '$label', '$required', '$description', '$error'] }
+    { id: 'fieldset', name: 'Fieldset', lines: 11, desc: 'Grouped fields with legend and cascading disable.', props: ['@legend', '@disabled'], events: [], keys: [], attrs: ['$disabled', '$legend'] }
+    { id: 'form', name: 'Form', lines: 24, desc: 'Form wrapper with submit handling and validation state.', props: ['@disabled'], events: ['submit'], keys: [], attrs: ['$disabled', '$submitting', '$submitted'] }
+    { id: 'grid', name: 'Grid', lines: 857, desc: 'Virtual-scrolling data grid — 100K+ rows at 60fps.', props: ['@data', '@columns', '@rowHeight', '@overscan', '@striped', '@beforeEdit', '@afterEdit'], events: [], keys: ['Arrows', 'Tab', 'Enter', 'F2', 'Esc', 'Home', 'End', 'PgUp', 'PgDn', 'Ctrl+A', 'Ctrl+C', 'Ctrl+V', 'Ctrl+X'], attrs: ['$editing', '$selecting', '$sorted'] }
+    { id: 'accordion', name: 'Accordion', lines: 87, desc: 'Expand/collapse sections, single or multiple mode.', props: ['@multiple'], events: ['change'], keys: ['Enter', 'Space', '↕', 'Home', 'End'], attrs: ['$item', '$trigger', '$content', '$open', '$disabled'] }
+    { id: 'badge', name: 'Badge', lines: 7, desc: 'Inline label with variant (solid/outline/subtle).', props: ['@variant'], events: [], keys: [], attrs: ['$variant'] }
+    { id: 'skeleton', name: 'Skeleton', lines: 11, desc: 'Loading placeholder with shimmer animation.', props: ['@width', '@height', '@circle', '@label'], events: [], keys: [], attrs: ['$circle'] }
+    { id: 'spinner', name: 'Spinner', lines: 8, desc: 'Loading indicator with accessible status.', props: ['@label', '@size'], events: [], keys: [], attrs: [] }
+    { id: 'card', name: 'Card', lines: 7, desc: 'Structured container with header/content/footer.', props: ['@interactive'], events: [], keys: [], attrs: ['$interactive'] }
+    { id: 'label', name: 'Label', lines: 8, desc: 'Standalone accessible form label.', props: ['@for', '@required'], events: [], keys: [], attrs: ['$required'] }
+    { id: 'textarea', name: 'Textarea', lines: 37, desc: 'Auto-resizing text area with focus and validation tracking.', props: ['@value', '@placeholder', '@disabled', '@required', '@rows', '@autoResize'], events: [], keys: [], attrs: ['$disabled', '$focused', '$touched'] }
+    { id: 'native-select', name: 'NativeSelect', lines: 21, desc: 'Styled native select element with state tracking.', props: ['@value', '@disabled', '@required'], events: ['change'], keys: [], attrs: ['$disabled', '$focused'] }
+    { id: 'input-group', name: 'InputGroup', lines: 15, desc: 'Input with prefix/suffix addon elements.', props: ['@disabled'], events: [], keys: [], attrs: ['$disabled', '$focused'] }
+    { id: 'button-group', name: 'ButtonGroup', lines: 11, desc: 'Grouped buttons with ARIA group semantics.', props: ['@orientation', '@disabled', '@label'], events: [], keys: [], attrs: ['$orientation', '$disabled'] }
+    { id: 'alert-dialog', name: 'AlertDialog', lines: 83, desc: 'Non-dismissable modal requiring explicit user action.', props: ['@open', '@initialFocus'], events: ['close'], keys: ['Tab'], attrs: ['$open'] }
+    { id: 'breadcrumb', name: 'Breadcrumb', lines: 32, desc: 'Navigation trail with separator and current page.', props: ['@separator', '@label'], events: [], keys: [], attrs: ['$current'] }
+    { id: 'table', name: 'Table', lines: 11, desc: 'Semantic table wrapper with optional caption and striped rows.', props: ['@caption', '@striped'], events: [], keys: [], attrs: ['$striped'] }
+    { id: 'collapsible', name: 'Collapsible', lines: 39, desc: 'Single open/close section with animated expand.', props: ['@open', '@disabled'], events: ['change'], keys: ['Enter', 'Space'], attrs: ['$open', '$disabled'] }
+    { id: 'pagination', name: 'Pagination', lines: 113, desc: 'Page navigation with prev/next and ellipsis gaps.', props: ['@page', '@total', '@perPage', '@siblingCount'], events: ['change'], keys: ['← →', 'Home', 'End'], attrs: ['$active', '$disabled', '$ellipsis'] }
+    { id: 'carousel', name: 'Carousel', lines: 89, desc: 'Slide carousel with autoplay, loop, and keyboard nav.', props: ['@orientation', '@loop', '@autoplay', '@interval', '@label'], events: ['change'], keys: ['← →', '↕', 'Home', 'End'], attrs: ['$orientation', '$active', '$prev', '$next'] }
+    { id: 'resizable', name: 'Resizable', lines: 104, desc: 'Draggable resize handles between panels.', props: ['@orientation', '@minSize', '@maxSize'], events: ['resize'], keys: ['← →', '↕'], attrs: ['$orientation', '$dragging'] }
   ]
   _infoName := ''
   _infoDesc := ''
@@ -557,7 +557,7 @@ export WidgetGallery = component
       # SELECT
       # ========================================================================
       .section id: "select"
-        SectionHead tag: "select", name: "Select", lines: 158
+        SectionHead tag: "select", name: "Select", lines: 135
         .section-desc "Dropdown with typeahead, keyboard nav, ARIA listbox."
         .demo-row
           .demo-label "Basic select"
@@ -605,7 +605,7 @@ export WidgetGallery = component
       # COMBOBOX
       # ========================================================================
       .section id: "combobox"
-        SectionHead tag: "combobox", name: "Combobox", lines: 133
+        SectionHead tag: "combobox", name: "Combobox", lines: 118
         .section-desc "Filterable input + listbox for search-as-you-type."
         .demo-row
           .demo-label "Search fruits"
@@ -645,7 +645,7 @@ export WidgetGallery = component
       # MULTI-SELECT
       # ========================================================================
       .section id: "multi-select"
-        SectionHead tag: "multi-select", name: "MultiSelect", lines: 160
+        SectionHead tag: "multi-select", name: "MultiSelect", lines: 146
         .section-desc "Multi-select with chips, filtering, and keyboard navigation."
         .demo-row
           .demo-label "Pick colors"
@@ -684,7 +684,7 @@ export WidgetGallery = component
       # AUTOCOMPLETE
       # ========================================================================
       .section id: "autocomplete"
-        SectionHead tag: "autocomplete", name: "Autocomplete", lines: 122
+        SectionHead tag: "autocomplete", name: "Autocomplete", lines: 113
         .section-desc "Suggestion input — type to filter, select to fill."
         .demo-row
           .demo-label "Search cities"
@@ -717,7 +717,7 @@ export WidgetGallery = component
       # CHECKBOX
       # ========================================================================
       .section id: "checkbox"
-        SectionHead tag: "checkbox", name: "Checkbox", lines: 33
+        SectionHead tag: "checkbox", name: "Checkbox", lines: 18
         .section-desc "Toggle with checkbox or switch semantics. Supports indeterminate."
         .demo-row
           .demo-label "Checkbox (unchecked)"
@@ -755,7 +755,7 @@ export WidgetGallery = component
       # TOGGLE
       # ========================================================================
       .section id: "toggle"
-        SectionHead tag: "toggle", name: "Toggle", lines: 24
+        SectionHead tag: "toggle", name: "Toggle", lines: 14
         .section-desc "Stateful toggle button with pressed state."
         .demo-row
           .demo-label "Tap to toggle"
@@ -780,7 +780,7 @@ export WidgetGallery = component
       # TOGGLE GROUP
       # ========================================================================
       .section id: "toggle-group"
-        SectionHead tag: "toggle-group", name: "ToggleGroup", lines: 71
+        SectionHead tag: "toggle-group", name: "ToggleGroup", lines: 55
         .section-desc "Single or multi-select toggle buttons."
         .demo-row
           .demo-label "Text alignment"
@@ -824,7 +824,7 @@ export WidgetGallery = component
       # RADIO GROUP
       # ========================================================================
       .section id: "radio-group"
-        SectionHead tag: "radio-group", name: "RadioGroup", lines: 57
+        SectionHead tag: "radio-group", name: "RadioGroup", lines: 42
         .section-desc "Exactly one option selected. Arrow keys move focus and selection."
         .demo-row
           .demo-label "Font size"
@@ -861,7 +861,7 @@ export WidgetGallery = component
       # CHECKBOX GROUP
       # ========================================================================
       .section id: "checkbox-group"
-        SectionHead tag: "checkbox-group", name: "CheckboxGroup", lines: 61
+        SectionHead tag: "checkbox-group", name: "CheckboxGroup", lines: 45
         .section-desc "Multiple options checked independently."
         .demo-row
           .demo-label "Toppings"
@@ -897,7 +897,7 @@ export WidgetGallery = component
       # INPUT
       # ========================================================================
       .section id: "input"
-        SectionHead tag: "input", name: "Input", lines: 36
+        SectionHead tag: "input", name: "Input", lines: 25
         .section-desc "Headless input tracking focus, touch, and validation state."
         .demo-row
           .demo-label "Text input"
@@ -922,7 +922,7 @@ export WidgetGallery = component
       # NUMBER FIELD
       # ========================================================================
       .section id: "number-field"
-        SectionHead tag: "number-field", name: "NumberField", lines: 162
+        SectionHead tag: "number-field", name: "NumberField", lines: 151
         .section-desc "Number input with increment/decrement buttons, hold-to-repeat, and keyboard stepping."
         .demo-row
           .demo-label "Quantity (1-99)"
@@ -966,7 +966,7 @@ export WidgetGallery = component
       # SLIDER
       # ========================================================================
       .section id: "slider"
-        SectionHead tag: "slider", name: "Slider", lines: 165
+        SectionHead tag: "slider", name: "Slider", lines: 152
         .section-desc "Draggable range input with pointer capture and keyboard stepping."
         .demo-row
           .demo-label "Single thumb"
@@ -1014,7 +1014,7 @@ export WidgetGallery = component
       # OTP FIELD
       # ========================================================================
       .section id: "otp-field"
-        SectionHead tag: "otp-field", name: "OTPField", lines: 89
+        SectionHead tag: "otp-field", name: "OTPField", lines: 79
         .section-desc "Multi-digit code input with auto-advance, backspace nav, and paste."
         .demo-row
           .demo-label "6-digit code"
@@ -1052,7 +1052,7 @@ export WidgetGallery = component
       # DATE PICKER
       # ========================================================================
       .section id: "date-picker"
-        SectionHead tag: "date-picker", name: "DatePicker", lines: 214
+        SectionHead tag: "date-picker", name: "DatePicker", lines: 194
         .section-desc "Calendar dropdown for single date or range selection."
         .demo-row
           .demo-label "Single date"
@@ -1093,7 +1093,7 @@ export WidgetGallery = component
       # EDITABLE VALUE
       # ========================================================================
       .section id: "editable-value"
-        SectionHead tag: "editable-value", name: "EditableValue", lines: 81
+        SectionHead tag: "editable-value", name: "EditableValue", lines: 70
         .section-desc "Click the edit icon to modify the value inline."
         .demo-row
           EditableValue @save: (=> editName = editName)
@@ -1125,7 +1125,7 @@ export WidgetGallery = component
       # TEXTAREA
       # ========================================================================
       .section id: "textarea"
-        SectionHead tag: "textarea", name: "Textarea", lines: 48
+        SectionHead tag: "textarea", name: "Textarea", lines: 37
         .section-desc "Auto-resizing text area with focus and validation tracking."
         .demo-row
           .demo-label "Auto-resize textarea"
@@ -1151,7 +1151,7 @@ export WidgetGallery = component
       # NATIVE SELECT
       # ========================================================================
       .section id: "native-select"
-        SectionHead tag: "native-select", name: "NativeSelect", lines: 33
+        SectionHead tag: "native-select", name: "NativeSelect", lines: 21
         .section-desc "Native browser select element with state tracking."
         .demo-row.native-select-demo
           .demo-label "Choose a color"
@@ -1180,7 +1180,7 @@ export WidgetGallery = component
       # INPUT GROUP
       # ========================================================================
       .section id: "input-group"
-        SectionHead tag: "input-group", name: "InputGroup", lines: 28
+        SectionHead tag: "input-group", name: "InputGroup", lines: 15
         .section-desc "Input with prefix/suffix addon elements."
         .demo-row.input-group-demo
           .demo-label "With prefix"
@@ -1206,7 +1206,7 @@ export WidgetGallery = component
       # TABS
       # ========================================================================
       .section id: "tabs"
-        SectionHead tag: "tabs", name: "Tabs", lines: 113
+        SectionHead tag: "tabs", name: "Tabs", lines: 92
         .section-desc "Tab panel with roving tabindex and arrow key navigation."
         .demo-row
           .demo-label "Basic tabs"
@@ -1250,7 +1250,7 @@ export WidgetGallery = component
       # MENU
       # ========================================================================
       .section id: "menu"
-        SectionHead tag: "menu", name: "Menu", lines: 140
+        SectionHead tag: "menu", name: "Menu", lines: 124
         .section-desc "Dropdown action menu with keyboard navigation."
         .demo-row
           .demo-label "Click to open menu"
@@ -1290,7 +1290,7 @@ export WidgetGallery = component
       # CONTEXT MENU
       # ========================================================================
       .section id: "context-menu"
-        SectionHead tag: "context-menu", name: "ContextMenu", lines: 88
+        SectionHead tag: "context-menu", name: "ContextMenu", lines: 73
         .section-desc "Right-click the dashed area to open a context menu."
         ContextMenu
           div $trigger: true
@@ -1327,7 +1327,7 @@ export WidgetGallery = component
       # MENUBAR
       # ========================================================================
       .section id: "menubar"
-        SectionHead tag: "menubar", name: "Menubar", lines: 155
+        SectionHead tag: "menubar", name: "Menubar", lines: 137
         .section-desc "Horizontal menu bar with dropdown menus."
         .demo-row
           Menubar
@@ -1369,7 +1369,7 @@ export WidgetGallery = component
       # NAVIGATION MENU
       # ========================================================================
       .section id: "nav-menu"
-        SectionHead tag: "nav-menu", name: "NavigationMenu", lines: 129
+        SectionHead tag: "nav-menu", name: "NavigationMenu", lines: 114
         .section-desc "Site navigation with dropdown panels."
         .demo-row
           NavigationMenu
@@ -1408,7 +1408,7 @@ export WidgetGallery = component
       # TOOLBAR
       # ========================================================================
       .section id: "toolbar"
-        SectionHead tag: "toolbar", name: "Toolbar", lines: 38
+        SectionHead tag: "toolbar", name: "Toolbar", lines: 26
         .section-desc "Groups controls with roving tabindex keyboard navigation."
         .demo-row
           .demo-label "Text"
@@ -1466,7 +1466,7 @@ export WidgetGallery = component
       # BREADCRUMB
       # ========================================================================
       .section id: "breadcrumb"
-        SectionHead tag: "breadcrumb", name: "Breadcrumb", lines: 47
+        SectionHead tag: "breadcrumb", name: "Breadcrumb", lines: 32
         .section-desc "Navigation trail with separator and current page."
         .demo-row
           .demo-label "Basic breadcrumb"
@@ -1489,7 +1489,7 @@ export WidgetGallery = component
       # DIALOG
       # ========================================================================
       .section id: "dialog"
-        SectionHead tag: "dialog", name: "Dialog", lines: 107
+        SectionHead tag: "dialog", name: "Dialog", lines: 94
         .section-desc "Modal with focus trap and scroll lock. Press Escape or click outside to dismiss."
         .demo-row
           .demo-label "Click to open"
@@ -1527,7 +1527,7 @@ export WidgetGallery = component
       # ALERT DIALOG
       # ========================================================================
       .section id: "alert-dialog"
-        SectionHead tag: "alert-dialog", name: "AlertDialog", lines: 96
+        SectionHead tag: "alert-dialog", name: "AlertDialog", lines: 83
         .section-desc "Non-dismissable modal — Escape and click-outside are blocked. User must choose an action."
         .demo-row
           .demo-label "Requires explicit action"
@@ -1563,7 +1563,7 @@ export WidgetGallery = component
       # DRAWER
       # ========================================================================
       .section id: "drawer"
-        SectionHead tag: "drawer", name: "Drawer", lines: 79
+        SectionHead tag: "drawer", name: "Drawer", lines: 68
         .section-desc "Slide-out panel from edge of screen with focus trap and scroll lock."
         .demo-row
           .demo-label "Open from right"
@@ -1601,7 +1601,7 @@ export WidgetGallery = component
       # POPOVER
       # ========================================================================
       .section id: "popover"
-        SectionHead tag: "popover", name: "Popover", lines: 145
+        SectionHead tag: "popover", name: "Popover", lines: 135
         .section-desc "Anchored floating content with flip/shift positioning."
         .demo-row
           .demo-label "Click to toggle"
@@ -1636,7 +1636,7 @@ export WidgetGallery = component
       # TOOLTIP
       # ========================================================================
       .section id: "tooltip"
-        SectionHead tag: "tooltip", name: "Tooltip", lines: 115
+        SectionHead tag: "tooltip", name: "Tooltip", lines: 103
         .section-desc "Hover/focus tooltip with delay and positioning."
         .demo-row
           .demo-label "Hover the buttons"
@@ -1667,7 +1667,7 @@ export WidgetGallery = component
       # PREVIEW CARD
       # ========================================================================
       .section id: "preview-card"
-        SectionHead tag: "preview-card", name: "PreviewCard", lines: 73
+        SectionHead tag: "preview-card", name: "PreviewCard", lines: 63
         .section-desc "Hover or focus the link to see a preview card."
         .demo-row
           PreviewCard delay: 300
@@ -1691,7 +1691,7 @@ export WidgetGallery = component
       # TOAST
       # ========================================================================
       .section id: "toast"
-        SectionHead tag: "toast", name: "Toast", lines: 87
+        SectionHead tag: "toast", name: "Toast", lines: 66
         .section-desc "Auto-dismiss notification with ARIA live region."
         .demo-row
           .demo-label "Click to show toasts"
@@ -1721,7 +1721,7 @@ export WidgetGallery = component
       # BUTTON
       # ========================================================================
       .section id: "button"
-        SectionHead tag: "button", name: "Button", lines: 23
+        SectionHead tag: "button", name: "Button", lines: 12
         .section-desc "Headless button with disabled-but-focusable pattern."
         .demo-row.btn-demo
           .demo-label "Normal, primary, and disabled"
@@ -1748,7 +1748,7 @@ export WidgetGallery = component
       # BADGE
       # ========================================================================
       .section id: "badge"
-        SectionHead tag: "badge", name: "Badge", lines: 15
+        SectionHead tag: "badge", name: "Badge", lines: 7
         .section-desc "Inline label with variant styles."
         .demo-row
           .demo-label "Variants"
@@ -1769,7 +1769,7 @@ export WidgetGallery = component
       # CARD
       # ========================================================================
       .section id: "card"
-        SectionHead tag: "card", name: "Card", lines: 25
+        SectionHead tag: "card", name: "Card", lines: 7
         .section-desc "Structured container with header, content, and footer."
         .demo-row.card-demo
           Card
@@ -1792,7 +1792,7 @@ export WidgetGallery = component
       # SEPARATOR
       # ========================================================================
       .section id: "separator"
-        SectionHead tag: "separator", name: "Separator", lines: 17
+        SectionHead tag: "separator", name: "Separator", lines: 8
         .section-desc "Decorative or semantic divider between sections."
         .demo-row
           .demo-label "Horizontal (default)"
@@ -1820,7 +1820,7 @@ export WidgetGallery = component
       # PROGRESS
       # ========================================================================
       .section id: "progress"
-        SectionHead tag: "progress", name: "Progress", lines: 25
+        SectionHead tag: "progress", name: "Progress", lines: 16
         .section-desc "Progress bar with value exposed as CSS custom property."
         .demo-row
           .demo-label "65% complete"
@@ -1842,7 +1842,7 @@ export WidgetGallery = component
       # METER
       # ========================================================================
       .section id: "meter"
-        SectionHead tag: "meter", name: "Meter", lines: 36
+        SectionHead tag: "meter", name: "Meter", lines: 26
         .section-desc "Gauge for known-range measurements with low/high/optimum thresholds."
         .demo-row
           .demo-label "Score: 72/100"
@@ -1866,7 +1866,7 @@ export WidgetGallery = component
       # SPINNER
       # ========================================================================
       .section id: "spinner"
-        SectionHead tag: "spinner", name: "Spinner", lines: 17
+        SectionHead tag: "spinner", name: "Spinner", lines: 8
         .section-desc "Loading indicator with accessible status."
         .demo-row.spinner-demo
           .demo-label "Default"
@@ -1885,7 +1885,7 @@ export WidgetGallery = component
       # SKELETON
       # ========================================================================
       .section id: "skeleton"
-        SectionHead tag: "skeleton", name: "Skeleton", lines: 22
+        SectionHead tag: "skeleton", name: "Skeleton", lines: 11
         .section-desc "Loading placeholder with shimmer animation."
         .demo-row
           .demo-label "Shapes"
@@ -1910,7 +1910,7 @@ export WidgetGallery = component
       # AVATAR
       # ========================================================================
       .section id: "avatar"
-        SectionHead tag: "avatar", name: "Avatar", lines: 37
+        SectionHead tag: "avatar", name: "Avatar", lines: 27
         .section-desc "Image with fallback to initials or placeholder."
         .demo-row
           .demo-label "With image"
@@ -1938,7 +1938,7 @@ export WidgetGallery = component
       # LABEL
       # ========================================================================
       .section id: "label"
-        SectionHead tag: "label", name: "Label", lines: 16
+        SectionHead tag: "label", name: "Label", lines: 8
         .section-desc "Standalone accessible form label."
         .demo-row
           .demo-label "With required indicator"
@@ -1958,7 +1958,7 @@ export WidgetGallery = component
       # SCROLL AREA
       # ========================================================================
       .section id: "scroll-area"
-        SectionHead tag: "scroll-area", name: "ScrollArea", lines: 145
+        SectionHead tag: "scroll-area", name: "ScrollArea", lines: 133
         .section-desc "Custom scrollbar with draggable thumb and auto-hide."
         .demo-row
           .demo-label "Scrollable content"
@@ -1999,7 +1999,7 @@ export WidgetGallery = component
       # FIELD + FIELDSET
       # ========================================================================
       .section id: "field"
-        SectionHead tag: "field", name: "Field + Fieldset", lines: 53
+        SectionHead tag: "field", name: "Field + Fieldset", lines: 44
         .section-desc "Form field wrapper with label, description, and error."
         .demo-row
           Field label: "Email", description: "We'll never share your email.", required: true, error: fieldError
@@ -2040,7 +2040,7 @@ export WidgetGallery = component
       # FORM
       # ========================================================================
       .section id: "form"
-        SectionHead tag: "form", name: "Form", lines: 39
+        SectionHead tag: "form", name: "Form", lines: 24
         .section-desc "Form wrapper with submit handling and validation state."
         .demo-row
           Form
@@ -2068,7 +2068,7 @@ export WidgetGallery = component
       # BUTTON GROUP
       # ========================================================================
       .section id: "button-group"
-        SectionHead tag: "button-group", name: "ButtonGroup", lines: 26
+        SectionHead tag: "button-group", name: "ButtonGroup", lines: 11
         .section-desc "Groups related buttons with ARIA group semantics."
         .demo-row
           .demo-label "Horizontal"
@@ -2092,7 +2092,7 @@ export WidgetGallery = component
       # GRID
       # ========================================================================
       .section id: "grid"
-        SectionHead tag: "grid", name: "Grid", lines: 901
+        SectionHead tag: "grid", name: "Grid", lines: 857
         .section-desc "Virtual-scrolling data grid. Click to select, arrows to navigate, double-click to edit."
         .demo-row
           . style: "display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px"
@@ -2142,7 +2142,7 @@ export WidgetGallery = component
       # ACCORDION
       # ========================================================================
       .section id: "accordion"
-        SectionHead tag: "accordion", name: "Accordion", lines: 103
+        SectionHead tag: "accordion", name: "Accordion", lines: 87
         .section-desc "Expand/collapse sections, single or multiple mode."
         .demo-row
           .demo-label "Single mode"
@@ -2189,7 +2189,7 @@ export WidgetGallery = component
       # TABLE
       # ========================================================================
       .section id: "table"
-        SectionHead tag: "table", name: "Table", lines: 27
+        SectionHead tag: "table", name: "Table", lines: 11
         .section-desc "Semantic table wrapper. For data-heavy tables, use Grid."
         .demo-row.table-demo
           Table caption: "Team", striped: true
@@ -2225,7 +2225,7 @@ export WidgetGallery = component
       # COLLAPSIBLE
       # ========================================================================
       .section id: "collapsible"
-        SectionHead tag: "collapsible", name: "Collapsible", lines: 50
+        SectionHead tag: "collapsible", name: "Collapsible", lines: 39
         .section-desc "Single open/close section. Simpler than Accordion."
         .demo-row.collapsible-demo
           Collapsible open <=> collapsibleOpen
@@ -2258,7 +2258,7 @@ export WidgetGallery = component
       # PAGINATION
       # ========================================================================
       .section id: "pagination"
-        SectionHead tag: "pagination", name: "Pagination", lines: 123
+        SectionHead tag: "pagination", name: "Pagination", lines: 113
         .section-desc "Page navigation with prev/next buttons and ellipsis gaps."
         .demo-row
           .demo-label "10 pages"
@@ -2290,7 +2290,7 @@ export WidgetGallery = component
       # CAROUSEL
       # ========================================================================
       .section id: "carousel"
-        SectionHead tag: "carousel", name: "Carousel", lines: 110
+        SectionHead tag: "carousel", name: "Carousel", lines: 89
         .section-desc "Slide carousel with loop and keyboard navigation."
         .demo-row
           Carousel loop: true
@@ -2329,7 +2329,7 @@ export WidgetGallery = component
       # RESIZABLE
       # ========================================================================
       .section id: "resizable"
-        SectionHead tag: "resizable", name: "Resizable", lines: 123
+        SectionHead tag: "resizable", name: "Resizable", lines: 104
         .section-desc "Draggable resize handles between panels."
         .demo-row.resizable-demo
           Resizable
