@@ -8862,8 +8862,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeGenerator({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.13.96";
-  var BUILD_DATE = "2026-03-12@01:03:48GMT";
+  var VERSION = "3.13.98";
+  var BUILD_DATE = "2026-03-12@01:49:00GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -10272,7 +10272,7 @@ ${indented}`);
     return fn();
   };
   _ariaListNav = function(e, h) {
-    if (e.which === 229)
+    if (e.isComposing)
       return;
     return (() => {
       switch (e.key) {
@@ -10318,7 +10318,7 @@ ${indented}`);
   };
   _ariaRovingNav = function(e, h, orientation = "vertical") {
     let horz, vert;
-    if (e.which === 229)
+    if (e.isComposing)
       return;
     vert = orientation !== "horizontal";
     horz = orientation !== "vertical";
