@@ -9,6 +9,12 @@ export properties  =
 
 export check = (name, props) ->
   return 'missing' unless ok $"zpool list #{name}"
+  if want = props.compression?[0]?.args?[0]
+    return 'drift' if want isnt sh $"zfs get -H -o value compression #{name}"
+  if want = props.atime?[0]?.args?[0]
+    return 'drift' if want isnt sh $"zfs get -H -o value atime #{name}"
+  if want = props.mountpoint?[0]?.args?[0]
+    return 'drift' if want isnt sh $"zfs get -H -o value mountpoint #{name}"
   'ok'
 
 export apply = (name, props) ->

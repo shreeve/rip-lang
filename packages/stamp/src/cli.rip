@@ -3,7 +3,8 @@ import * as path from 'path'
 import { parse } from './parser.rip'
 import { execute } from './engine.rip'
 
-VERSION = '0.1.0'
+pkg = JSON.parse fs.readFileSync path.join(import.meta.dir, '..', 'package.json'), 'utf-8'
+VERSION = pkg.version
 
 # ── Default file resolution ──────────────────────────────────────────────────
 
@@ -37,7 +38,7 @@ showVersion = ->
 # ── Subcommands ──────────────────────────────────────────────────────────────
 
 runMode = (mode, file) ->
-  stampfile = file or findStampfile!
+  stampfile = file or findStampfile()
 
   unless stampfile
     warn "No Stampfile found. Provide a file or create Stampfile, Hostfile, or Containerfile."

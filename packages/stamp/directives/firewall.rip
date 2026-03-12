@@ -18,10 +18,10 @@ export check = (name, props) ->
     status = sh $"ufw status verbose"
     for entry in props.default
       [action, direction] = entry.args
-      return 'drift' unless status.includes action
+      return 'drift' unless status.includes "#{action} (#{direction})"
 
   if props.allow
-    status = sh $"ufw status verbose"
+    status ??= sh $"ufw status verbose"
     for entry in props.allow
       rule = entry.args.join ' '
       port = (run $"getent services #{rule}").stdout.split(/\s+/)?[1] or ''
@@ -66,14 +66,19 @@ export verify = (name, props) ->
     status = sh $"ufw status verbose"
     for entry in props.default
       [action, direction] = entry.args
-      if status.includes action
+      if status.includes "#{action} (#{direction})"
         results.push { status: 'pass', message: "default #{action} #{direction}" }
       else
         results.push { status: 'fail', message: "default #{action} #{direction} not set" }
 
   if props.allow
+    status ??= sh $"ufw status verbose"
     for entry in props.allow
       rule = entry.args.join ' '
-      results.push { status: 'pass', message: "allow #{rule}" }
+      port = (run $"getent services #{rule}").stdout.split(/\s+/)?[1] or ''
+      if status.toUpperCase().includes(rule.toUpperCase()) or status.includes(port)
+        results.push { status: 'pass', message: "allow #{rule}" }
+      else
+        results.push { status: 'fail', message: "allow #{rule} not found" }
 
   results

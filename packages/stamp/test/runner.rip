@@ -165,6 +165,35 @@ do ->
   eq "second dataset owner", result.directives[1].properties.owner[0].args, ['1001:1001']
   eq "second dataset mode", result.directives[1].properties.mode[0].args, ['2775']
 
+section "Parser: plural expansion with positional args"
+
+do ->
+  result = parse """
+  users
+    alice 1000:1000
+      groups admin
+    bob 1001:1001
+  """
+  eq "plural users count", result.directives.length, 2
+  eq "alice type", result.directives[0].type, 'user'
+  eq "alice name", result.directives[0].name, 'alice'
+  eq "alice args (uid:gid)", result.directives[0].args, ['1000:1000']
+  eq "alice groups", result.directives[0].properties.groups[0].args, ['admin']
+  eq "bob type", result.directives[1].type, 'user'
+  eq "bob name", result.directives[1].name, 'bob'
+  eq "bob args (uid:gid)", result.directives[1].args, ['1001:1001']
+
+do ->
+  result = parse """
+  groups
+    trust 1101
+    jail 1002
+  """
+  eq "plural groups count", result.directives.length, 2
+  eq "trust name", result.directives[0].name, 'trust'
+  eq "trust args (gid)", result.directives[0].args, ['1101']
+  eq "jail args (gid)", result.directives[1].args, ['1002']
+
 section "Parser: comments and blanks"
 
 do ->

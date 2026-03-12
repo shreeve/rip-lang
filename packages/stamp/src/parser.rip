@@ -159,7 +159,7 @@ export parse = (source, env = {}) ->
     singular = PLURALS[dir.type]
     if singular
       for own pname, props of dir.properties
-        sub = { type: singular, name: pname, args: [], properties: {}, line: dir.line }
+        sub = { type: singular, name: pname, args: props[0]?.args or [], properties: {}, line: dir.line }
         for prop in props when prop.args.length or prop.source? or prop.sub?
           for own k, v of (prop.sub ?? {})
             sub.properties[k] = v

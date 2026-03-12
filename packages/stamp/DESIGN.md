@@ -1118,8 +1118,8 @@ stamp apply [file]           # reconcile system to match Stampfile
 stamp verify [file]          # check current state, report PASS/WARN/FAIL
 stamp plan [file]            # dry-run: show what apply would do
 
-stamp install <source>       # install a directive handler
-stamp update [name]          # re-fetch cached remote directives
+stamp install <source>       # install a directive handler (planned)
+stamp update [name]          # re-fetch cached remote directives (planned)
 stamp list                   # show all available directives
 stamp info <directive>       # show a directive's syntax and properties
 
@@ -1244,7 +1244,7 @@ packages/stamp/
     mac-install              # macOS: Multipass VM + bootstrap
     mac-vm                   # full host provisioning inside the VM
   test/
-    runner.rip               # test suite (79 tests)
+    runner.rip               # test suite
 ```
 
 ### Stampfile parser

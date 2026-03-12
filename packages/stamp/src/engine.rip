@@ -11,9 +11,11 @@ globalThis.run ??= run
 
 STAMP_HOME = process.env.STAMP_HOME or path.join(process.env.HOME or '', '.stamp')
 
+BUILTIN_DIR = path.join import.meta.dir, '..', 'directives'
+
 resolveHandler = (type, stampDir) ->
   candidates = [
-    path.join(stampDir, '..', 'directives', "#{type}.rip")       # Built-in
+    path.join(BUILTIN_DIR, "#{type}.rip")                        # Built-in
     path.join(stampDir, 'directives', "#{type}.rip")              # Local (beside Stampfile)
     path.join(stampDir, 'directives', "#{type}.js")
     path.join(STAMP_HOME, 'directives', "#{type}.rip")           # Installed
