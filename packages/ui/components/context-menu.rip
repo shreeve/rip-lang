@@ -64,8 +64,7 @@ export ContextMenu = component
       dismiss: => @close()
       tab:     => @close()
 
-  ~>
-    ARIA.popupDismiss open, (=> @_list), (=> @close())
+  ~> ARIA.popupDismiss open, (=> @_list), (=> @close())
 
   render
     . @contextmenu: @_onContextMenu

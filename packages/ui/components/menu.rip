@@ -110,8 +110,7 @@ export Menu = component
       tab:     => @close()
       char:    => @_typeahead(e.key)
 
-  ~>
-    ARIA.popupDismiss open, (=> @_list), (=> @close()), [=> @_trigger]
+  ~> ARIA.popupDismiss open, (=> @_list), (=> @close()), [=> @_trigger]
 
   render
     .
