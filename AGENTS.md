@@ -88,6 +88,7 @@ rip-lang/
 - **Never commit without running tests** — `bun run test` must pass
 - **Never add dependencies** — zero dependencies is a core principle
 - **Never read or execute scripts directly** — use `bun run <name>`
+- **Never write `x ? y` in Rip** — binary existential was removed; use `x ?? y` or full ternary `x ? y : z`
 - Run `bun run parser` after grammar changes
 - Run `bun run build` after codegen, `components.js`, or `browser.js` changes
 - Run `bun run bump` for the standard release flow
@@ -234,13 +235,24 @@ rip -cm example.rip
 
 ## Language Features
 
+> **CRITICAL — `?` operator rules (AI agents read this carefully):**
+>
+> - `x ? y : z` — VALID (ternary, requires both `: z` branch)
+> - `x ? y` — **INVALID, DO NOT USE** (binary existential was removed)
+> - `x ?? y` — VALID (nullish coalescing, replaces the old `x ? y`)
+> - `x?` — VALID (existence check, compiles to `x != null`)
+>
+> The most common AI mistake is writing `x ? y` to mean "if x exists, use y".
+> That syntax does not exist in Rip. Always use `x ?? y` for nullish coalescing
+> or `x ? y : z` for a full ternary. There is no two-operand `?` form.
+
 ### Removed (from CoffeeScript / Rip 2.x)
 
 | Feature                            | Replacement                  |
 | ---------------------------------- | ---------------------------- |
 | postfix spread/rest (`x...`)       | prefix only: `...x`          |
 | prototype access (`x::y`, `x?::y`) | `.prototype` or class syntax |
-| binary existential (`x ? y`)       | `x ?? y`                     |
+| **binary existential (`x ? y`)**   | **`x ?? y` (NEVER use `x ? y`, it is not valid Rip)** |
 | `is not` contraction               | `isnt`                       |
 | `for x from iterable`              | `for x as iterable`          |
 
@@ -248,7 +260,7 @@ rip -cm example.rip
 
 | Feature               | Syntax           | Purpose                              |
 | --------------------- | ---------------- | ------------------------------------ |
-| ternary operator      | `x ? a : b`      | JS-style ternary                     |
+| ternary operator      | `x ? a : b`      | JS-style ternary (must have both branches) |
 | postfix ternary       | `a if x else b`  | Python-style ternary                 |
 | `for...as` iteration  | `for x as iter`  | iterable loop                        |
 | `as!` async shorthand | `for x as! iter` | shorthand for `for await`            |
