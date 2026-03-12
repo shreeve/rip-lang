@@ -14,12 +14,14 @@ export Button = component
     button
       type: type
       disabled: disabled
-      class: "
-        #{bgColor} #{rounded} flex items-center justify-center gap-x-3 relative transition disabled:opacity-50
-        #{if variant is 'primary' then 'text-white hover:bg-brand-hover active:bg-brand-active' else ''}
-        #{if variant is 'secondary' then 'border border-primary text-secondary hover:border-secondary hover:bg-secondary active:bg-tertiary' else ''}
-        #{if compact then 'h-11 px-4 text-sm-plus font-medium' else 'h-12 px-5 text-base font-semibold'}
-        #{if loading then 'pointer-events-none' else ''}
-        #{classes}
-      "
+      class: [
+        "#{bgColor} #{rounded} flex items-center justify-center gap-x-3 relative transition disabled:opacity-50",
+        {
+          "text-white hover:bg-brand-hover active:bg-brand-active": variant is "primary",
+          "border border-primary text-secondary hover:border-secondary hover:bg-secondary active:bg-tertiary": variant is "secondary",
+          "pointer-events-none": loading,
+        },
+        if compact then "h-11 px-4 text-sm-plus font-medium" else "h-12 px-5 text-base font-semibold",
+        classes,
+      ]
       slot
