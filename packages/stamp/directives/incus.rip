@@ -76,14 +76,14 @@ export apply = (name, props) ->
       raise "incus admin init failed: #{out.stderr.toString().trim()}"
   else
     if props.storage
-      poolName = props.storage[0].args[0]
+      [poolName, driver, source] = props.storage[0].args
       unless ok $"incus storage show #{poolName}"
-        raise "Incus already initialized but storage pool '#{poolName}' does not exist"
+        sh $"incus storage create #{poolName} #{driver} source=#{source}"
 
     if props.network
       bridge = props.network[0].args[0]
       unless ok $"incus network show #{bridge}"
-        raise "Incus already initialized but network '#{bridge}' does not exist"
+        sh $"incus network create #{bridge}"
 
 export verify = (name, props) ->
   results = []
