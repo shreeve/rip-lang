@@ -1025,7 +1025,7 @@ export launch = (appBase = '', opts = {}) ->
 #   ARIA.popupDismiss(open, popup, close, els) — close on outside click or scroll
 #
 # Both nav handlers:
-#   - Guard against IME composition events (e.which === 229, CJK input)
+#   - Guard against IME composition events (e.isComposing, CJK input)
 #   - Call e.preventDefault() + e.stopPropagation() for handled keys
 #   - Only invoke a handler if it is provided (all keys are optional)
 #   - Alias PageUp/PageDown to first/last (fn+Up/Down on macOS)
@@ -1040,7 +1040,7 @@ _ariaNAV = (e, fn) ->
   fn()
 
 _ariaListNav = (e, h) ->
-  return if e.which is 229              # IME guard: suppress CJK composition events
+  return if e.isComposing               # IME guard: ignore events during CJK composition
   switch e.key
     when 'ArrowDown'          then _ariaNAV e, h.next
     when 'ArrowUp'            then _ariaNAV e, h.prev
@@ -1063,7 +1063,7 @@ _ariaPopupDismiss = (open, popup, close, els = []) ->
     window.removeEventListener   'scroll',    onScroll, true
 
 _ariaRovingNav = (e, h, orientation = 'vertical') ->
-  return if e.which is 229              # IME guard
+  return if e.isComposing               # IME guard
   vert = orientation isnt 'horizontal'
   horz = orientation isnt 'vertical'
   switch e.key
