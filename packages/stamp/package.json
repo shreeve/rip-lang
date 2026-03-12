@@ -19,6 +19,7 @@
     "bin/",
     "src/",
     "directives/",
+    "stamps/",
     "README.md"
   ],
   "homepage": "https://github.com/shreeve/rip-lang/tree/main/packages/stamp#readme",

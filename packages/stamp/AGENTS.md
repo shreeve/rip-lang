@@ -163,9 +163,11 @@ Test types:
 - **Injection tests** — verify shell metacharacters are treated as literal data
 
 Test files in `test/`:
-- `Stampfile` — simple packages/user/group/firewall test
-- `Hostfile` — full Incus+ZFS host from STAMP.md spec
-- `VMfile` — macOS Multipass VM with bootstrap
+Stamp files live in `stamps/`:
+- `basic` — simple packages/user/group/firewall test
+- `host` — full Incus+ZFS host from STAMP.md spec
+- `vm` — macOS Multipass VM with bootstrap
+- `vm-host` — full host provisioning inside the VM
 
 ## Idioms
 

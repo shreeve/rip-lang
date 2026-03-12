@@ -228,13 +228,13 @@ do ->
   eq "git jq on same line", dir.properties.git[0].args, ['jq']
   assert "has zfsutils", dir.properties['zfsutils-linux']?
 
-section "Parser: full Hostfile"
+section "Parser: full host stamp"
 
 do ->
-  source = fs.readFileSync 'test/Hostfile', 'utf-8'
+  source = fs.readFileSync 'stamps/host', 'utf-8'
   result = parse source
 
-  eq "Hostfile total directives", result.directives.length, 18
+  eq "host stamp total directives", result.directives.length, 18
   eq "variables resolved", result.vars.POOL, 'tank'
   eq "first directive is packages", result.directives[0].type, 'packages'
 
