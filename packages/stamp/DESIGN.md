@@ -157,8 +157,8 @@ specific kind of resource.
 
 Directives come in three tiers:
 
-1. **Built-in** — ships with stamp (packages, pool, dataset, profile,
-   container, incus, firewall, ssh, user, group, service)
+1. **Built-in** — ships with stamp (brew, packages, ensure, pool, dataset,
+   profile, container, incus, multipass, user, group, firewall, ssh, service)
 2. **Installed** — community or private handlers installed via npm
    (`stamp install @stamp/postgres`)
 3. **Remote** — fetched from a URL at runtime, declared in the Stampfile
@@ -248,12 +248,15 @@ Each directive type defines how many positional arguments it expects:
 
 | Directive | Positional args | Example |
 |-----------|----------------|---------|
+| `brew` | `<name>...` (variadic) | `brew multipass` |
 | `packages` | `<name>...` (variadic) | `packages curl git jq` |
+| `ensure` | `<name>` | `ensure bun` |
 | `pool` | `<name> <device>` | `pool tank /dev/sdb` |
 | `dataset` | `<path>` | `dataset tank/home` |
 | `profile` | `<name>` | `profile trusted` |
-| `container` | `<name> <image>` | `container web ubuntu/24.04` |
+| `container` | `<name> <image>` | `container web images:ubuntu/24.04` |
 | `incus` | (none) | `incus` |
+| `multipass` | `<name> <image>` | `multipass stamp 24.04` |
 | `user` | `<name> <uid>:<gid>` | `user shreeve 1000:1000` |
 | `group` | `<name> <gid>` | `group jail 1002` |
 | `firewall` | (none) | `firewall` |
@@ -552,19 +555,29 @@ check("web", {
 
 ### Shell execution helpers
 
-Stamp provides these helpers to directive handlers:
+Stamp provides these helpers to directive handlers. They are installed
+as globals — no imports needed in directive files.
 
 ```
-sh(cmd)  -> { ok: bool, stdout: string, stderr: string, code: number }
-sh!(cmd) -> string          # run, return stdout; throw on non-zero exit
-sh?(cmd) -> bool            # run silently, return true if exit code is 0
+sh(cmd)  -> string                                      # stdout; throws on failure
+ok(cmd)  -> bool                                        # true if exit code is 0
+run(cmd) -> { ok: bool, stdout: string, stderr: string, code: number }
 ```
 
-`sh?` is the idempotent-check primitive. It suppresses all output and
-returns only success/failure — the equivalent of `ok` in Slash or
-`cmd >/dev/null 2>&1; echo $?` in bash.
+All three support tagged template syntax (`$"..."`) for injection-safe
+shell execution. Interpolated values are passed as separate arguments
+and never interpreted by a shell:
 
-These wrap Bun's `$` shell API with consistent error handling.
+```coffee
+sh $"zfs set compression=#{value} #{pool}"    # safe — no shell injection
+ok $"incus info #{name}"                      # safe — boolean check
+```
+
+They also accept plain arrays for dynamic argument lists:
+
+```coffee
+sh ['apt-get', 'install', '-y', ...missing]   # safe — direct exec
+```
 
 ---
 
@@ -1210,126 +1223,113 @@ packages/stamp/
   bin/stamp                  # #!/usr/bin/env bun
   src/
     cli.rip                  # argument parsing, subcommand dispatch
-    parser.rip               # Stampfile parser (Solar grammar)
+    parser.rip               # hand-rolled Stampfile parser
     engine.rip               # handler resolution, check/apply/verify loop
-    helpers.rip              # sh, sh!, sh?, logging, output formatting
+    helpers.rip              # sh, ok, run, logging
   directives/
+    brew.rip
     packages.rip
+    ensure.rip
     pool.rip
     dataset.rip
     profile.rip
     container.rip
     incus.rip
+    multipass.rip
     user.rip
     group.rip
     firewall.rip
     ssh.rip
     service.rip
+  stamps/
+    basic                    # simple test: packages, users, groups, firewall
+    host                     # production Incus+ZFS host
+    mac-install              # macOS: Multipass VM + bootstrap
+    mac-vm                   # full host provisioning inside the VM
+  test/
+    runner.rip               # test suite (79 tests)
 ```
 
 ### Stampfile parser
 
-The parser should be implemented using Solar (Rip's parser generator).
-The grammar is simple — two indentation levels, `set`/`use` as special
-forms, everything else is `name args*` with optional indented blocks.
+The parser is hand-rolled (~170 lines), line-oriented. No parser
+generator needed — the grammar is two indentation levels with
+`set`/`use` as special forms.
 
-Key implementation details:
+Parsing passes:
 
-1. First pass: split into lines, compute indentation depth per line.
-2. Strip comment lines (first non-whitespace is `#`) and blank lines.
-3. Process `set` lines to build the variable map.
-4. Expand variables in all remaining lines.
-5. Process `use` lines to resolve remote handlers.
-6. Group lines into directives: a column-0 line starts a new directive,
-   indented lines below it are properties.
-7. For each property line, detect `->` and split into source/dest/flags.
+1. Strip trailing whitespace, remove comment and blank lines.
+2. Process `set` lines to build the variable map.
+3. Expand `$NAME` / `${NAME}` in all remaining lines.
+4. Process `use` lines to resolve remote handlers.
+5. Group lines into directives by indentation (column 0 = new directive).
+6. For each property line, detect `->` and split into source/dest/flags.
+7. Expand plural forms (`datasets` → individual `dataset` calls).
 8. Produce a flat ordered list of `{ type, name, args, properties }`.
 
-### Shell execution helpers (Rip source)
+### Shell execution helpers
+
+`sh`, `ok`, and `run` are installed as globals by the engine before
+any directive loads. They support three calling modes:
 
 ```coffee
-import { $ } from "bun"
-
-export sh = (command) ->
-  result = $`${{raw: command}}`.nothrow!.quiet!
-  {
-    ok:     result.exitCode == 0
-    stdout: result.stdout.toString!.trim!
-    stderr: result.stderr.toString!.trim!
-    code:   result.exitCode
-  }
-
-export sh! = (command) ->
-  result = sh(command)!
-  unless result.ok
-    throw new Error "Command failed (exit #{result.code}): #{command}\n#{result.stderr}"
-  result.stdout
-
-export sh? = (command) ->
-  (sh(command)!).ok
+sh $"incus init #{image} #{name}"       # tagged template — injection-safe
+sh ['apt-get', 'install', ...missing]   # plain array — direct exec
+sh "echo 'y' | ufw enable"             # string — passes to sh -c
 ```
+
+The `$"..."` syntax compiles to a JavaScript tagged template literal.
+Interpolated values are passed as separate arguments and never
+interpreted by a shell. `null` and `undefined` values are silently
+dropped from the argument list.
 
 ### Reference directive: `dataset.rip`
 
-Complete implementation showing the handler contract:
+Complete implementation showing the handler contract. No imports —
+`sh`, `ok`, and `run` are available globally:
 
 ```coffee
-import { sh!, sh? } from "../src/helpers"
-
 export name        = "dataset"
 export description = "Ensures a ZFS dataset exists with correct ownership and permissions"
 export positional  = ["path"]
+export properties  =
+  owner: { description: "Ownership as uid:gid" }
+  mode:  { description: "Permission mode (octal)" }
 
 export check = (path, props) ->
-  return "missing" unless sh? "zfs list #{path}"!
-  mountpoint = sh!("zfs get -H -o value mountpoint #{path}")!
-  if props.owner
-    want = props.owner[0].args[0]
-    actual = sh!("stat -c '%u:%g' #{mountpoint}")!
-    return "drift" if actual != want
-  if props.mode
-    want = props.mode[0].args[0]
-    actual = sh!("stat -c '%a' #{mountpoint}")!
-    return "drift" if actual != want
-  "ok"
+  return 'missing' unless ok $"zfs list #{path}"
+  mountpoint = sh $"zfs get -H -o value mountpoint #{path}"
+  if want = props.owner?[0]?.args?[0]
+    return 'drift' if want isnt sh $"stat -c %u:%g #{mountpoint}"
+  if want = props.mode?[0]?.args?[0]
+    return 'drift' if want isnt sh $"stat -c %a #{mountpoint}"
+  'ok'
 
 export apply = (path, props) ->
-  unless sh? "zfs list #{path}"!
-    sh! "zfs create #{path}"!
-  mountpoint = sh!("zfs get -H -o value mountpoint #{path}")!
-  if props.owner
-    sh! "chown #{props.owner[0].args[0]} #{mountpoint}"!
-  if props.mode
-    sh! "chmod #{props.mode[0].args[0]} #{mountpoint}"!
+  sh $"zfs create -p #{path}" unless ok $"zfs list #{path}"
+  mountpoint = sh $"zfs get -H -o value mountpoint #{path}"
+  sh $"chown #{props.owner[0].args[0]} #{mountpoint}" if props.owner
+  sh $"chmod #{props.mode[0].args[0]} #{mountpoint}" if props.mode
 
 export verify = (path, props) ->
   results = []
-  unless sh? "zfs list #{path}"!
-    results.push { status: "fail", message: "dataset missing: #{path}" }
+  unless ok $"zfs list #{path}"
+    results.push { status: 'fail', message: "dataset missing: #{path}" }
     return results
-  results.push { status: "pass", message: "dataset exists: #{path}" }
-  mountpoint = sh!("zfs get -H -o value mountpoint #{path}")!
-  if props.owner
-    want = props.owner[0].args[0]
-    actual = sh!("stat -c '%u:%g' #{mountpoint}")!
-    if actual == want
-      results.push { status: "pass", message: "#{path} owner is #{want}" }
+  results.push { status: 'pass', message: "dataset exists: #{path}" }
+  mountpoint = sh $"zfs get -H -o value mountpoint #{path}"
+  if want = props.owner?[0]?.args?[0]
+    if want is (have = sh $"stat -c %u:%g #{mountpoint}")
+      results.push { status: 'pass', message: "#{path} owner is #{want}" }
     else
-      results.push { status: "fail", message: "#{path} owner is #{actual}, expected #{want}" }
-  if props.mode
-    want = props.mode[0].args[0]
-    actual = sh!("stat -c '%a' #{mountpoint}")!
-    if actual == want
-      results.push { status: "pass", message: "#{path} mode is #{want}" }
+      results.push { status: 'fail', message: "#{path} owner is #{have}, expected #{want}" }
+  if want = props.mode?[0]?.args?[0]
+    if want is (have = sh $"stat -c %a #{mountpoint}")
+      results.push { status: 'pass', message: "#{path} mode is #{want}" }
     else
-      results.push { status: "fail", message: "#{path} mode is #{actual}, expected #{want}" }
+      results.push { status: 'fail', message: "#{path} mode is #{have}, expected #{want}" }
   results
 ```
-
-The key improvement over the first draft: the handler uses
-`zfs get -H -o value mountpoint` to derive the mount path from the
-dataset, rather than hardcoding `/` + dataset name. This is correct
-for pools with custom mountpoints.
 
 ---
 
