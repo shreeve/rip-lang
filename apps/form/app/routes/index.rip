@@ -38,8 +38,8 @@ export Form = component
           type: "password"
           autocomplete: "current-password"
       Button
-        type: "submit"
         variant: "primary"
+        type: "submit"
         loading: loading
         classes: "mt-8 w-full"
         "Sign In"

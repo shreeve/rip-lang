@@ -8,22 +8,25 @@
 
 export Input = component
   @label:: string := ""
-  @type:: string := "text"
-  @placeholder:: string := ""
   @value:: string := ""
+  @placeholder:: string := ""
+  @type:: string := "text"
   @error:: string := ""
 
   render
     fieldset
       if label
         label label
-      input type: type, placeholder: placeholder, value: value
+      input
+        value <=> value
+        placeholder: placeholder
+        type: type
       if error
         div error
 
 export Button = component
-  @type:: string := "button"
   @variant:: "primary" | "secondary"
+  @type:: string := "button"
   @shape:: "rounded" | "pill" := "rounded"
   @loading:: boolean := false
   @disabled:: boolean := false
@@ -32,14 +35,17 @@ export Button = component
   fg ~= if variant is "primary" then "#fff" else "#333"
 
   render
-    button type: type, style: "background: #{bg}; color: #{fg}", disabled: disabled or loading
+    button
+      type: type
+      disabled: disabled or loading
+      style: "background: #{bg}; color: #{fg}"
       if loading
         "Loading..."
       else
         slot
 
 export Form = component
-  @title:: string := "Sign In"
+  @title:: string := ""
   email := ""
   password := ""
   loading := false
@@ -55,17 +61,17 @@ export Form = component
       h1 title
       Input
         label: "Email"
-        type: "email"
-        placeholder: "jane@example.com"
         value <=> email
+        placeholder: "jane@example.com"
+        type: "email"
       Input
         label: "Password"
-        type: "password"
-        placeholder: "••••••••"
         value <=> password
+        placeholder: "••••••••"
+        type: "password"
       Button
-        type: "submit"
         variant: "primary"
+        type: "submit"
         loading: loading
         "Sign In"
 
