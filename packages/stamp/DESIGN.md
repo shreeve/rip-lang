@@ -8,10 +8,6 @@ Stamp reads a Stampfile, resolves each directive to a handler, and
 reconciles the declared state against reality. No state file to lose.
 No agent to install. No YAML to wrestle. Just a blueprint and an engine.
 
-```
-stamp apply Hostfile
-```
-
 ---
 
 ## Table of Contents
