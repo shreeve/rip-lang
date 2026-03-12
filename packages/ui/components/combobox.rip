@@ -93,7 +93,7 @@ export Combobox = component
       dismiss: => if open then @close() else @query = ''
       tab:     => @close()
 
-  ~> ARIA.popupDismiss open, (=> @_list), (=> @close()), [=> @_content]
+  ~> ARIA.popupDismiss open, (=> @_list), (=> @close()), [=> @_content], (=> @_position())
 
   render
     . ref: "_content", $open: open?!

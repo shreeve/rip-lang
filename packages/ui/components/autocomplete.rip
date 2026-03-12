@@ -93,7 +93,7 @@ export Autocomplete = component
       dismiss: => @close()
       tab:     => @close()
 
-  ~> ARIA.popupDismiss open, (=> @_list), (=> @close()), [=> @_input]
+  ~> ARIA.popupDismiss open, (=> @_list), (=> @close()), [=> @_input], (=> @_position())
 
   mounted: ->
     @_hlIdx = -1
