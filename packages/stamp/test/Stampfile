@@ -5,10 +5,11 @@ set POOL  tank
 
 packages curl git jq
 
+group trust 1101
+group jail 1002
+
 user shreeve 1100:1100
   groups trust
-
-group jail 1002
 
 firewall
   default deny incoming
