@@ -8862,8 +8862,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeGenerator({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.13.93";
-  var BUILD_DATE = "2026-03-12@00:12:28GMT";
+  var VERSION = "3.13.96";
+  var BUILD_DATE = "2026-03-12@01:03:48GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -10299,14 +10299,16 @@ ${indented}`);
     })();
   };
   _ariaPopupDismiss = function(open, popup, close, els = []) {
-    let inside, onDown, onScroll;
+    let get, onDown, onScroll;
     if (!open)
       return;
-    inside = [popup, ...els];
-    onDown = (e) => !inside.some(function(el) {
+    get = function(x) {
+      return typeof x === "function" ? x() : x;
+    };
+    onDown = (e) => ![get(popup), ...els.map(get)].some(function(el) {
       return el?.contains(e.target);
     }) ? close() : undefined;
-    onScroll = (e) => !popup?.contains(e.target) ? close() : undefined;
+    onScroll = (e) => !get(popup)?.contains(e.target) ? close() : undefined;
     document.addEventListener("mousedown", onDown);
     window.addEventListener("scroll", onScroll, true);
     return function() {
