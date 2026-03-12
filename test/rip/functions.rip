@@ -247,12 +247,10 @@ test "void function with early return", '''
   [validate(5), validate(-1)]
   ''', [undefined, undefined]
 
-test "void function return strips value", '''
+fail "void function return with value", '''
   def compute!(x)
     return x * 10
-  result = compute(5)
-  result
-  ''', undefined
+'''
 
 test "normal function for comparison", '''
   def compute(x)
@@ -303,13 +301,9 @@ code "void function early return no value", '''
   }
 '''
 
-code "void function strips return value", '''
+fail "void function strips return value", '''
   def compute!(x)
     return x * 2
-  ''', '''
-  function compute(x) {
-    return;
-  }
 '''
 
 # ==============================================================================
@@ -331,12 +325,10 @@ test "void thin arrow with params", '''
   result
   ''', undefined
 
-test "void thin arrow with return", '''
+fail "void thin arrow with return value", '''
   c! = ->
     return "hello world"
-  result = c()
-  result
-  ''', undefined
+'''
 
 test "void fat arrow no implicit return", '''
   d! = =>
@@ -361,14 +353,9 @@ test "void fat arrow with comprehension", '''
   result
   ''', undefined
 
-code "void thin arrow compiler", '''
+fail "void thin arrow compiler", '''
   c! = ->
     return "hello world"
-  ''', '''
-  let c;
-  c = function() {
-    return;
-  };
 '''
 
 code "void fat arrow compiler", '''

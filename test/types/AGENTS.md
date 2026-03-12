@@ -82,16 +82,15 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 **Compiler / type-checker gaps** (affect `rip check` correctness):
 
-| Category                         | Tested In                | Notes                                                                                                                                                |
-| -------------------------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Strict mode (`strict: true`)     | *(all typed files)*      | `noImplicitAny` breaks ~16 sites: `_init(props)`, untyped lambdas, event handlers, `modulo` helper. Infrastructure partly built — circle back later. |
-| Event handler typing             | 09-components            | Handler params are untyped — `(e) ->` gives `any`, no typed event objects                                                                            |
-| Runtime return-type validation   | 10-validation            | Return types are erased — `response.json()` is unvalidated `any`; no `schema.parse()` equivalent                                                     |
-| Type narrowing (control flow)    | 04-unions *(comment)*    | TS narrows compiled JS, not Rip source                                                                                                               |
-| `void` return annotation         | 06-functions *(comment)* | `void` is reserved; use `!` operator (`def fn!`) instead                                                                                             |
-| Unresolved import paths          | 07-integration           | `rip check` doesn't flag imports to nonexistent files                                                                                                |
-| Enum exhaustiveness              | 04-unions                | Switch narrowing works in .ts but `rip check` doesn't verify exhaustiveness                                                                          |
-| Inline discriminated union .d.ts | 04-unions *(comment)*    | `type Shape \| { kind: "circle" } \| { ... }` emits malformed .d.ts; split into named types as workaround                                            |
+| Category                         | Tested In             | Notes                                                                                                                                                |
+| -------------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Strict mode (`strict: true`)     | *(all typed files)*   | `noImplicitAny` breaks ~16 sites: `_init(props)`, untyped lambdas, event handlers, `modulo` helper. Infrastructure partly built — circle back later. |
+| Event handler typing             | 09-components         | Handler params are untyped — `(e) ->` gives `any`, no typed event objects                                                                            |
+| Runtime return-type validation   | 10-validation         | Return types are erased — `response.json()` is unvalidated `any`; no `schema.parse()` equivalent                                                     |
+| Type narrowing (control flow)    | 04-unions *(comment)* | TS narrows compiled JS, not Rip source                                                                                                               |
+| Unresolved import paths          | 07-integration        | `rip check` doesn't flag imports to nonexistent files                                                                                                |
+| Enum exhaustiveness              | 04-unions             | Switch narrowing works in .ts but `rip check` doesn't verify exhaustiveness                                                                          |
+| Inline discriminated union .d.ts | 04-unions *(comment)* | `type Shape \| { kind: "circle" } \| { ... }` emits malformed .d.ts; split into named types as workaround                                            |
 
 **Component model gaps** (would need language-level changes):
 
@@ -118,6 +117,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Generic types                 | 03-structural | Declarable; .d.ts emission has some gaps                                                                        |
 | Discriminated union narrowing | 04-unions     | Types declarable, narrowing doesn't flow in `rip check`                                                         |
 | Type inference (split decl.)  | 11-inference  | Top-level `x = expr` inferred via `patchUninitializedTypes`; block-scoped, destructured, and `any` RHS are gaps |
+
 ### ✅ Working
 
 | Category                   | Tested In      | Notes                                                                                                                              |
@@ -135,6 +135,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Destructured rename        | 06-functions   | `{name: userName:: string}` → prop name `name` in .d.ts type, `{name: userName}` in pattern                                        |
 | Array destructured params  | 06-functions   | `[first:: string, second:: string]` → tuple `[string, string]` in .d.ts                                                            |
 | Nested destructured params | 06-functions   | `{user: {name:: string, age:: number}}` → `{user: {name: string, age: number}}` in .d.ts                                           |
+| `void` return annotation   | 06-functions   | `def fn!` emits `: void` in .d.ts; `!` sigil suppresses implicit return and declares void return type                              |
 | Cross-file type flow       | 07-integration | Via .d.ts; untyped files get `@ts-nocheck`                                                                                         |
 | Component prop types       | 09-components  | Enriched stub gives Signal<T>/Computed<T> declarations; TS checks body types                                                       |
 | Required component props   | 09-components  | `@prop:: T` (no `:=`) — required in constructor, caught at usage sites                                                             |
