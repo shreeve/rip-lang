@@ -103,7 +103,7 @@ export WidgetGallery = component
     return unless entry
     sourceName = entry.name
     sourceLines = entry.lines
-    resp = fetch! "#{id}.rip"
+    resp = fetch! "components/#{id}.rip"
     sourceCode = resp.text!
   _closeSource: -> sourceCode = null
   _ensureHljs: (cb) ->
