@@ -73,7 +73,7 @@ profile trusted
 
 # ── containers ───────────────────────────────────────────────
 
-container foo ubuntu/24.04
+container foo images:ubuntu/24.04
   profile trusted
   disk home $MOUNT/home/foo -> /home
   disk shared $MOUNT/$SHARED -> /shared
