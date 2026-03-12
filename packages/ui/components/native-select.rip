@@ -17,6 +17,7 @@ export NativeSelect = component
   focused := false
 
   onChange: (e) ->
+    return unless e.isTrusted
     @value = e.target.value
     @emit 'change', @value
 
