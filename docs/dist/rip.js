@@ -8863,7 +8863,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   }
   // src/browser.js
   var VERSION = "3.13.101";
-  var BUILD_DATE = "2026-03-12@03:46:49GMT";
+  var BUILD_DATE = "2026-03-12@04:40:13GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -10358,6 +10358,8 @@ ${indented}`);
           return _ariaNAV(e, h.select);
         case "Escape":
           return _ariaNAV(e, h.dismiss);
+        default:
+          return e.key.length === 1 ? h.char?.(e.key) : undefined;
       }
     })();
   };

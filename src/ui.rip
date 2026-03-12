@@ -1024,6 +1024,12 @@ export launch = (appBase = '', opts = {}) ->
 #   ARIA.rovingNav(e, handlers, orient)    — inline composites (radiogroup, tabs, toolbar)
 #   ARIA.popupDismiss(open, popup, close, els, repos) — dismiss on outside click; reposition or close on scroll
 #
+# Both nav handlers support an optional `char:` handler for typeahead search.
+# APG gaps handled per-component (not in ARIA helpers):
+#   - Submenu ArrowRight/Left: belongs in the Menu component (menu.rip)
+#   - Grid 2D navigation: belongs in the Grid component (grid.rip)
+#   - F2 cell edit mode: belongs in the Grid component (grid.rip)
+#
 # Both nav handlers:
 #   - Guard against IME composition events (e.isComposing, CJK input)
 #   - Call e.preventDefault() + e.stopPropagation() for handled keys
@@ -1077,6 +1083,7 @@ _ariaRovingNav = (e, h, orientation = 'vertical') ->
     when 'End',  'PageDown'   then _ariaNAV e, h.last
     when 'Enter', ' '         then _ariaNAV e, h.select
     when 'Escape'             then _ariaNAV e, h.dismiss
+    else h.char?(e.key) if e.key.length is 1          # printable chars: typeahead (e.g. tabs)
 
 globalThis.__aria ??= { listNav: _ariaListNav, rovingNav: _ariaRovingNav, popupDismiss: _ariaPopupDismiss }
 globalThis.ARIA   ??= globalThis.__aria
