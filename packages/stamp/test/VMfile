@@ -7,3 +7,16 @@ multipass stamp 24.04
   memory 4G
   disk 20G
   start
+
+ensure unzip
+  check multipass exec stamp -- which unzip
+  apply multipass exec stamp -- sudo apt-get update -qq
+  apply multipass exec stamp -- sudo apt-get install -y -qq unzip
+
+ensure bun
+  check multipass exec stamp -- test -x /home/ubuntu/.bun/bin/bun
+  apply multipass exec stamp -- bash -lc "curl -fsSL https://bun.sh/install | bash"
+
+ensure rip
+  check multipass exec stamp -- test -x /home/ubuntu/.bun/bin/rip
+  apply multipass exec stamp -- /home/ubuntu/.bun/bin/bun add -g rip-lang

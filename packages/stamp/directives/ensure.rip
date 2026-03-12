@@ -6,25 +6,23 @@ export properties  =
   apply: { description: "Commands to run if check fails", multi: true }
 
 getCheck = (props) ->
-  props.check?[0]?.args?.join(' ')
+  props.check?[0]?.args
 
 export check = (name, props) ->
-  cmd = getCheck props
-  return 'ok' unless cmd
-  if ok cmd then 'ok' else 'missing'
+  return 'ok' unless args = getCheck(props)
+  if ok args then 'ok' else 'missing'
 
 export apply = (name, props) ->
   if props.apply
     for entry in props.apply
-      sh entry.args.join(' ')
+      sh entry.args
 
 export verify = (name, props) ->
   results = []
-  cmd = getCheck props
-  unless cmd
+  unless args = getCheck props
     results.push { status: 'warn', message: "#{name} has no check command" }
     return results
-  if ok cmd
+  if ok args
     results.push { status: 'pass', message: "#{name} is present" }
   else
     results.push { status: 'fail', message: "#{name} is missing" }
