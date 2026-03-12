@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/ui",
-  "version": "0.3.46",
+  "version": "0.3.47",
   "author": "Steve Shreeve <steve.shreeve@gmail.com>",
   "repository": {
     "type": "git",
@@ -35,6 +35,6 @@
   "license": "MIT",
   "type": "module",
   "dependencies": {
-    "rip-lang": ">=3.13.99"
+    "rip-lang": ">=3.13.100"
   }
 }
