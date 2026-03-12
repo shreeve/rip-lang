@@ -751,8 +751,8 @@ class Server
     catch
       @serverVersion = 'unknown'
     try
-      ripDir = import.meta.resolve('rip-lang').replace('file://', '').replace(/\/[^/]+$/, '')
-      @ripVersion = JSON.parse(readFileSync("#{ripDir}/package.json", 'utf8')).version
+      ripPkgPath = import.meta.resolve('rip-lang/package.json').replace(/^file:\/\//, '')
+      @ripVersion = JSON.parse(readFileSync(ripPkgPath, 'utf8')).version
     catch
       @ripVersion = 'unknown'
 
