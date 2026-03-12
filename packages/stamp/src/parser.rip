@@ -1,0 +1,170 @@
+# ── Stampfile Parser ──────────────────────────────────────────────────────────
+#
+# Parses a Stampfile into an ordered list of directive objects:
+#   { type, name, args, properties }
+#
+# The grammar has three indentation levels:
+#   Column 0:  top-level directives
+#   Level 1:   properties (or grouped items)
+#   Level 2:   sub-properties of expanded properties
+
+PLURALS = { datasets: 'dataset', containers: 'container', users: 'user', groups: 'group', services: 'service' }
+
+# ── Line utilities ───────────────────────────────────────────────────────────
+
+indent = (line) ->
+  match = line.match /^( *)/
+  match[1].length
+
+tokenize = (text) ->
+  tokens = []
+  rest = text.trim()
+  while rest.length
+    if rest[0] in ['"', "'"]
+      quote = rest[0]
+      end = rest.indexOf quote, 1
+      throw new Error "Unterminated string: #{rest}" if end == -1
+      tokens.push rest[1...end]
+      rest = rest[end + 1..].trimStart()
+    else
+      idx = rest.search /[\s]/
+      if idx == -1
+        tokens.push rest
+        rest = ''
+      else
+        tokens.push rest[...idx]
+        rest = rest[idx..].trimStart()
+  tokens
+
+parsePropertyLine = (tokens) ->
+  pname = tokens[0]
+  pargs = tokens[1..]
+  prop = { name: pname, args: pargs }
+
+  arrowIdx = pargs.indexOf '->'
+  if arrowIdx >= 0
+    beforeArrow = pargs[...arrowIdx]
+    prop.source = beforeArrow[beforeArrow.length - 1]
+    prop.dest   = pargs[arrowIdx + 1]
+    prop.flags  = pargs[arrowIdx + 2..]
+    prop.args   = beforeArrow[...-1]
+
+  prop
+
+# ── Main parser ──────────────────────────────────────────────────────────────
+
+export parse = (source, env = {}) ->
+  rawLines = source.split /\r?\n/
+
+  # Strip trailing whitespace
+  lines = rawLines.map (line) -> line.replace /\s+$/, ''
+
+  # Remove comment lines and blank lines, track original line numbers
+  filtered = []
+  for line, i in lines
+    trimmed = line.trimStart()
+    continue if trimmed == ''
+    continue if trimmed[0] == '#'
+    throw new Error "Tabs are not allowed (line #{i + 1})" if /\t/.test line
+    filtered.push { text: line, num: i + 1 }
+
+  # Pass 1: Process `set` lines → build variable map
+  vars = { ...env }
+  remaining = []
+  for item in filtered
+    trimmed = item.text.trimStart()
+    if trimmed.startsWith 'set '
+      tokens = tokenize trimmed
+      vars[tokens[1]] = tokens[2..].join ' '
+    else
+      remaining.push item
+
+  # Pass 2: Expand variables in all remaining lines
+  expandVars = (text) ->
+    text.replace /\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g, (_, braced, bare) ->
+      vname = braced ?? bare
+      vars[vname] ?? ''
+
+  for item in remaining
+    item.text = expandVars item.text
+
+  # Pass 3: Process `use` lines → collect external handler sources
+  uses = []
+  dirLines = []
+  for item in remaining
+    trimmed = item.text.trimStart()
+    if trimmed.startsWith 'use '
+      tokens = tokenize trimmed
+      uses.push tokens[1]
+    else
+      dirLines.push item
+
+  # Pass 4: Group lines into directives by indentation
+  directives = []
+  current = null
+
+  for item in dirLines
+    depth = indent item.text
+    tokens = tokenize item.text
+
+    if depth == 0
+      current = { type: tokens[0], args: tokens[1..], properties: {}, line: item.num, _propDepth: null, _lastPropName: null }
+      directives.push current
+
+    else if current
+      # Sub-property (deeper than first property level)
+      if current._propDepth? and depth > current._propDepth
+        lpname = current._lastPropName
+        if lpname and current.properties[lpname]
+          lastProp = current.properties[lpname]
+          last = lastProp[lastProp.length - 1]
+          last.sub ??= {}
+          parsed = parsePropertyLine tokens
+          last.sub[parsed.name] ??= []
+          last.sub[parsed.name].push { args: parsed.args }
+        continue
+
+      # Regular property
+      current._propDepth ??= depth
+      parsed = parsePropertyLine tokens
+      current._lastPropName = parsed.name
+      current.properties[parsed.name] ??= []
+      propEntry = { args: parsed.args }
+      propEntry.source = parsed.source if parsed.source?
+      propEntry.dest   = parsed.dest   if parsed.dest?
+      propEntry.flags  = parsed.flags  if parsed.flags?
+      propEntry.sub    = parsed.sub    if parsed.sub?
+      current.properties[parsed.name].push propEntry
+
+  # Clean internal tracking fields
+  for dir in directives
+    delete dir._propDepth
+    delete dir._lastPropName
+
+  # Pass 5: Separate name from args based on directive type
+  for dir in directives
+    dtype = dir.type
+
+    if dtype in ['brew', 'packages', 'firewall', 'ssh', 'incus'] or PLURALS[dtype]
+      dir.name = null
+    else if dir.args.length > 0
+      dir.name = dir.args[0]
+      dir.args = dir.args[1..]
+    else
+      dir.name = null
+
+  # Pass 6: Expand plural forms
+  expanded = []
+  for dir in directives
+    singular = PLURALS[dir.type]
+    if singular
+      for own pname, props of dir.properties
+        sub = { type: singular, name: pname, args: props[0]?.args or [], properties: {}, line: dir.line }
+        for prop in props when prop.args.length or prop.source? or prop.sub?
+          for own k, v of (prop.sub ?? {})
+            sub.properties[k] = v
+        expanded.push sub
+    else
+      expanded.push dir
+
+  { directives: expanded, uses, vars }

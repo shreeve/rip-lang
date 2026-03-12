@@ -1,0 +1,29 @@
+export name        = "profile"
+export description = "Ensures an Incus profile exists with declared configuration"
+export positional  = ["name"]
+
+export check = (name, props) ->
+  return 'missing' unless ok $"incus profile show #{name}"
+  for own key, entries of props when key != 'args'
+    want = entries[0].args[0]
+    return 'drift' if want isnt ((run $"incus profile get #{name} #{key}").stdout or '')
+  'ok'
+
+export apply = (name, props) ->
+  sh $"incus profile create #{name}" unless ok $"incus profile show #{name}"
+  for own key, entries of props when key != 'args'
+    sh $"incus profile set #{name} #{key} #{entries[0].args[0]}"
+
+export verify = (name, props) ->
+  results = []
+  unless ok $"incus profile show #{name}"
+    results.push { status: 'fail', message: "profile #{name} missing" }
+    return results
+  results.push { status: 'pass', message: "profile #{name} exists" }
+  for own key, entries of props when key != 'args'
+    want = entries[0].args[0]
+    if want is (have = (run $"incus profile get #{name} #{key}").stdout or '')
+      results.push { status: 'pass', message: "#{name} #{key} is #{want}" }
+    else
+      results.push { status: 'fail', message: "#{name} #{key} is #{have}, expected #{want}" }
+  results

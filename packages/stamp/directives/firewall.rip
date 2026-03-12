@@ -1,0 +1,84 @@
+export name        = "firewall"
+export description = "Ensures ufw firewall rules are configured"
+export positional  = []
+export properties  =
+  default: { description: "Default policy: deny/allow incoming/outgoing", multi: true }
+  allow:   { description: "Allow rule", multi: true }
+  deny:    { description: "Deny rule", multi: true }
+
+ufwActive = ->
+  out = run $"ufw status"
+  out.ok and out.stdout.includes 'Status: active'
+
+export check = (name, props) ->
+  return 'missing' unless ok $"which ufw"
+  return 'drift'   unless ufwActive()
+
+  if props.default
+    status = sh $"ufw status verbose"
+    for entry in props.default
+      [action, direction] = entry.args
+      return 'drift' unless status.includes "#{action} (#{direction})"
+
+  if props.allow
+    status ??= sh $"ufw status verbose"
+    for entry in props.allow
+      rule = entry.args.join ' '
+      port = (run $"getent services #{rule}").stdout.split(/\s+/)?[1] or ''
+      return 'drift' unless status.toUpperCase().includes(rule.toUpperCase()) or status.includes(port)
+
+  'ok'
+
+export apply = (name, props) ->
+  unless ok $"which ufw"
+    sh $"apt-get update -qq"
+    sh $"apt-get install -y -qq ufw"
+
+  if props.default
+    for entry in props.default
+      [action, direction] = entry.args
+      sh $"ufw default #{action} #{direction}"
+
+  if props.allow
+    for entry in props.allow
+      sh $"ufw allow #{entry.args.join ' '}"
+
+  if props.deny
+    for entry in props.deny
+      sh $"ufw deny #{entry.args.join ' '}"
+
+  unless ufwActive()
+    sh $"ufw --force enable"
+
+export verify = (name, props) ->
+  results = []
+
+  unless ok $"which ufw"
+    results.push { status: 'fail', message: "ufw not installed" }
+    return results
+
+  if ufwActive()
+    results.push { status: 'pass', message: "ufw active" }
+  else
+    results.push { status: 'fail', message: "ufw not active" }
+
+  if props.default
+    status = sh $"ufw status verbose"
+    for entry in props.default
+      [action, direction] = entry.args
+      if status.includes "#{action} (#{direction})"
+        results.push { status: 'pass', message: "default #{action} #{direction}" }
+      else
+        results.push { status: 'fail', message: "default #{action} #{direction} not set" }
+
+  if props.allow
+    status ??= sh $"ufw status verbose"
+    for entry in props.allow
+      rule = entry.args.join ' '
+      port = (run $"getent services #{rule}").stdout.split(/\s+/)?[1] or ''
+      if status.toUpperCase().includes(rule.toUpperCase()) or status.includes(port)
+        results.push { status: 'pass', message: "allow #{rule}" }
+      else
+        results.push { status: 'fail', message: "allow #{rule} not found" }
+
+  results

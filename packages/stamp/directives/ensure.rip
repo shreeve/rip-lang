@@ -1,0 +1,29 @@
+export name        = "ensure"
+export description = "Ensures a condition is met, running commands if not"
+export positional  = ["name"]
+export properties  =
+  check: { description: "Command to test — exit 0 means ok" }
+  apply: { description: "Commands to run if check fails", multi: true }
+
+getCheck = (props) ->
+  props.check?[0]?.args
+
+export check = (name, props) ->
+  return 'ok' unless args = getCheck(props)
+  if ok args then 'ok' else 'missing'
+
+export apply = (name, props) ->
+  if props.apply
+    for entry in props.apply
+      sh entry.args
+
+export verify = (name, props) ->
+  results = []
+  unless args = getCheck props
+    results.push { status: 'warn', message: "#{name} has no check command" }
+    return results
+  if ok args
+    results.push { status: 'pass', message: "#{name} is present" }
+  else
+    results.push { status: 'fail', message: "#{name} is missing" }
+  results

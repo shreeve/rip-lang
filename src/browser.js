@@ -187,29 +187,43 @@ async function processRipScripts() {
 
   // Step 6: data-reload enables SSE hot-reload from dev server
   // Skip if launch() was called — it connects its own SSE watch.
+  // Uses exponential backoff: 1s → 2s → 4s → … → 30s (then 30s forever).
+  // The retry delay only affects reconnection to a DOWN server — once connected,
+  // the server pushes reload notifications instantly regardless of this value.
   if (runtimeTag?.hasAttribute('data-reload') && !globalThis.__ripLaunched) {
     let ready = false;
-    const es = new EventSource('/watch');
-    es.addEventListener('connected', () => {
-      if (ready) location.reload();
-      ready = true;
-    });
-    es.addEventListener('reload', (e) => {
-      if (e.data === 'styles') {
-        const t = Date.now();
-        let refreshed = 0;
-        document.querySelectorAll('link[rel="stylesheet"]').forEach(l => {
-          if (new URL(l.href).origin !== location.origin) return;
-          const url = new URL(l.href);
-          url.searchParams.set('_r', t);
-          l.href = url.toString();
-          refreshed++;
-        });
-        if (!refreshed) location.reload();
-      } else {
-        location.reload();
-      }
-    });
+    let retryDelay = 1000;
+    const maxDelay = 30000;
+    const connectWatch = () => {
+      const es = new EventSource('/watch');
+      es.addEventListener('connected', () => {
+        retryDelay = 1000;
+        if (ready) location.reload();
+        ready = true;
+      });
+      es.addEventListener('reload', (e) => {
+        if (e.data === 'styles') {
+          const t = Date.now();
+          let refreshed = 0;
+          document.querySelectorAll('link[rel="stylesheet"]').forEach(l => {
+            if (new URL(l.href).origin !== location.origin) return;
+            const url = new URL(l.href);
+            url.searchParams.set('_r', t);
+            l.href = url.toString();
+            refreshed++;
+          });
+          if (!refreshed) location.reload();
+        } else {
+          location.reload();
+        }
+      });
+      es.onerror = () => {
+        es.close();
+        setTimeout(connectWatch, retryDelay);
+        retryDelay = Math.min(retryDelay * 2, maxDelay);
+      };
+    };
+    connectWatch();
   }
 }
 

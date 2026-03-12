@@ -1,0 +1,59 @@
+export name        = "pool"
+export description = "Ensures a ZFS pool exists with specified properties"
+export positional  = ["name", "device"]
+export properties  =
+  ashift:      { description: "Pool ashift value (default: 12)" }
+  compression: { description: "Compression algorithm (default: zstd)" }
+  atime:       { description: "Access time tracking (default: off)" }
+  mountpoint:  { description: "Pool mountpoint (default: /<name>)" }
+
+export check = (name, props) ->
+  return 'missing' unless ok $"zpool list #{name}"
+  if want = props.compression?[0]?.args?[0]
+    return 'drift' if want isnt sh $"zfs get -H -o value compression #{name}"
+  if want = props.atime?[0]?.args?[0]
+    return 'drift' if want isnt sh $"zfs get -H -o value atime #{name}"
+  if want = props.mountpoint?[0]?.args?[0]
+    return 'drift' if want isnt sh $"zfs get -H -o value mountpoint #{name}"
+  'ok'
+
+export apply = (name, props) ->
+  device = props.args?[0]
+  raise "pool '#{name}' requires a device argument" unless device
+
+  unless ok $"zpool list #{name}"
+    raise "Device not found: #{device}" unless ok $"test -b #{device}" or ok $"test -f #{device}"
+    raise "Device #{device} has existing data. Run 'wipefs -a #{device}' first." if ok $"test -b #{device}" and ok $"blkid #{device}"
+
+    ashift = props.ashift?[0]?.args?[0] or '12'
+    sh $"zpool create -f -o ashift=#{ashift} #{name} #{device}"
+
+  compression = props.compression?[0]?.args?[0] or 'zstd'
+  sh $"zfs set compression=#{compression} #{name}"
+
+  atime = props.atime?[0]?.args?[0] or 'off'
+  sh $"zfs set atime=#{atime} #{name}"
+
+  if mp = props.mountpoint?[0]?.args?[0]
+    sh $"zfs set mountpoint=#{mp} #{name}"
+
+export verify = (name, props) ->
+  results = []
+  unless ok $"zpool list #{name}"
+    results.push { status: 'fail', message: "pool #{name} missing" }
+    return results
+  results.push { status: 'pass', message: "pool #{name} exists" }
+
+  if want = props.compression?[0]?.args?[0]
+    if want is (have = sh $"zfs get -H -o value compression #{name}")
+      results.push { status: 'pass', message: "#{name} compression is #{want}" }
+    else
+      results.push { status: 'warn', message: "#{name} compression is #{have}, expected #{want}" }
+
+  if want = props.atime?[0]?.args?[0]
+    if want is (have = sh $"zfs get -H -o value atime #{name}")
+      results.push { status: 'pass', message: "#{name} atime is #{want}" }
+    else
+      results.push { status: 'warn', message: "#{name} atime is #{have}, expected #{want}" }
+
+  results

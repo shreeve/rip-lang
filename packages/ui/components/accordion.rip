@@ -1,0 +1,103 @@
+# Accordion — accessible headless expand/collapse widget
+#
+# Supports single or multiple expanded sections. Keyboard: Enter/Space to
+# toggle, ArrowDown/Up to move between triggers. Exposes $open on items.
+# Ships zero CSS.
+#
+# Usage:
+#   Accordion multiple: false
+#     div $item: "a"
+#       button $trigger: true, "Section A"
+#       div $content: true
+#         p "Content A"
+#     div $item: "b"
+#       button $trigger: true, "Section B"
+#       div $content: true
+#         p "Content B"
+
+export Accordion = component
+  @multiple := false
+
+  openItems := new Set()
+  _ready    := false
+  _id =! "acc-#{Math.random().toString(36).slice(2, 8)}"
+
+  mounted: ->
+    _ready = true
+    @_content?.querySelectorAll('[data-trigger]').forEach (trigger) =>
+      item = trigger.closest('[data-item]')
+      return unless item
+      id = item.dataset.item
+      trigger.addEventListener 'click', =>
+        return if item.hasAttribute('data-disabled')
+        @toggle(id)
+      trigger.addEventListener 'keydown', (e) => @onTriggerKeydown(e, id)
+
+  ~>
+    return unless _ready
+    @_content?.querySelectorAll('[data-item]').forEach (item) =>
+      id = item.dataset.item
+      isOpen = openItems.has(id)
+      item.toggleAttribute 'data-open', isOpen
+      trigger = item.querySelector('[data-trigger]')
+      content = item.querySelector('[data-content]')
+      triggerId = "#{_id}-trigger-#{id}"
+      panelId   = "#{_id}-panel-#{id}"
+      if trigger
+        isDisabled = item.hasAttribute('data-disabled')
+        trigger.id = triggerId
+        trigger.setAttribute 'aria-expanded', isOpen
+        trigger.setAttribute 'aria-controls', panelId
+        if isDisabled then trigger.setAttribute 'aria-disabled', true else trigger.removeAttribute 'aria-disabled'
+        trigger.tabIndex = if isDisabled then -1 else 0
+      if content
+        content.id = panelId
+        content.hidden = if isOpen then false else 'until-found'
+        content.setAttribute 'role', 'region'
+        content.setAttribute 'aria-labelledby', triggerId
+        if isOpen
+          rect = content.getBoundingClientRect()
+          content.style.setProperty '--accordion-panel-height', "#{rect.height}px"
+          content.style.setProperty '--accordion-panel-width', "#{rect.width}px"
+
+  toggle: (id) ->
+    if openItems.has(id)
+      openItems.delete(id)
+    else
+      openItems.clear() unless @multiple
+      openItems.add(id)
+    openItems = new Set(openItems)
+    @emit 'change', Array.from(openItems)
+
+  isOpen: (id) ->
+    openItems.has(id)
+
+  onTriggerKeydown: (e, id) ->
+    disabled = e.currentTarget.closest('[data-item]')?.hasAttribute('data-disabled')
+    ARIA.rovingNav e, {
+      next:   => @_focusNext(1)
+      prev:   => @_focusNext(-1)
+      first:  => @_focusTrigger(0)
+      last:   => @_focusTrigger(-1)
+      select: => @toggle(id) unless disabled
+    }, 'vertical'
+
+  _triggers: ->
+    return [] unless @_content
+    Array.from(@_content.querySelectorAll('[data-trigger]'))
+
+  _focusNext: (dir) ->
+    triggers = @_triggers()
+    idx = triggers.indexOf(document.activeElement)
+    return if idx is -1
+    next = (idx + dir) %% triggers.length
+    triggers[next]?.focus()
+
+  _focusTrigger: (idx) ->
+    triggers = @_triggers()
+    target = if idx < 0 then triggers[triggers.length - 1] else triggers[idx]
+    target?.focus()
+
+  render
+    div ref: "_content"
+      slot

@@ -1,0 +1,55 @@
+# Drawer — accessible headless slide-out panel
+#
+# A Dialog variant that slides from an edge of the screen.
+# Supports dismiss on escape, click-outside, and optional swipe-to-close.
+# Ships zero CSS.
+#
+# Usage:
+#   Drawer open <=> showDrawer, side: "right"
+#     h2 "Settings"
+#     p "Panel content here"
+
+export Drawer = component
+  @open := false
+  @side := 'right'
+  @dismissable := true
+
+  _prevFocus = null
+  _scrollY = 0
+  _id =! "drw-#{Math.random().toString(36).slice(2, 8)}"
+
+  ~>
+    if @open
+      _prevFocus = document.activeElement
+      document.body.style.overflow = 'hidden'
+      requestAnimationFrame =>
+        panel = @_panel
+        if panel
+          ARIA.wireAria panel, _id
+          panel.querySelectorAll('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])')?[0]?.focus()
+          @_cleanupTrap = ARIA.trapFocus(panel)
+      return ->
+        @_cleanupTrap?()
+        document.body.style.overflow = ''
+        _prevFocus?.focus()
+
+  close: ->
+    @open = false
+    @emit 'close'
+
+  onKeydown: (e) ->
+    if e.key is 'Escape' and @dismissable
+      e.preventDefault()
+      @close()
+
+  onBackdropClick: (e) ->
+    @close() if e.target is e.currentTarget and @dismissable
+
+  render
+    if @open
+      div ref: "_backdrop", $open: true, $side: @side
+        @click: @onBackdropClick
+        @keydown: @onKeydown
+        div ref: "_panel", role: "dialog", aria-modal: "true", tabindex: "-1"
+          $side: @side
+          slot

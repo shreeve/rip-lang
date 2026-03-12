@@ -1,0 +1,125 @@
+# Combobox — accessible headless combobox (input + filterable listbox)
+#
+# Keyboard: ArrowDown/Up to navigate, Enter to select, Escape to close,
+#           typing filters the list via the @filter callback.
+#
+# Exposes $open on the wrapper, $highlighted on options.
+# Ships zero CSS — style entirely via attribute selectors in your stylesheet.
+#
+# Usage:
+#   Combobox query <=> searchText, items: fruits, @select: handleSelect, @filter: filterFn
+
+export Combobox = component
+  @query := ''
+  @items := []
+  @placeholder := 'Search...'
+  @disabled := false
+  @autoHighlight := true
+
+  open := false
+  highlightedIndex := -1
+  _listId =! "cb-#{Math.random().toString(36).slice(2, 8)}"
+
+  getItems: ->
+    return [] unless @_list
+    Array.from(@_list.querySelectorAll('[role="option"]'))
+
+  _scrollToItem: ->
+    @getItems()[highlightedIndex]?.scrollIntoView({ block: 'nearest' })
+
+  clear: ->
+    @query = ''
+    highlightedIndex = -1
+    @emit 'filter', ''
+
+  onInput: (e) ->
+    @query = e.target.value
+    open = true
+    highlightedIndex = if @autoHighlight and @items.length > 0 then 0 else -1
+    @emit 'filter', @query
+
+  onFocusin: -> @openMenu()
+
+  onFocusout: ->
+    setTimeout => @close() unless @_content?.contains(document.activeElement), 0
+
+  openMenu: ->
+    open = true
+    highlightedIndex = -1
+    requestAnimationFrame => @_position()
+
+  close: ->
+    open = false
+    highlightedIndex = -1
+
+  _position: -> ARIA.positionBelow @_input, @_list, 2, false
+
+  isDisabled: (item) -> item?.hasAttribute?('data-disabled')
+
+  selectIndex: (idx) ->
+    item = @getItems()[idx]
+    return unless item
+    return if @isDisabled(item)
+    val = item.dataset.value ?? item.textContent.trim()
+    @query = val
+    @emit 'select', val
+    @close()
+
+  _nextEnabled: (from, dir) ->
+    opts = @getItems()
+    len = opts.length
+    i = from
+    loop len
+      i = (i + dir) %% len
+      return i unless @isDisabled(opts[i])
+    from
+
+  _onKeydown: (e) ->
+    len = @getItems().length
+    ARIA.listNav e,
+      next:    => @openMenu() unless open; highlightedIndex = @_nextEnabled(highlightedIndex,  1); @_scrollToItem()
+      prev:    => @openMenu() unless open; highlightedIndex = @_nextEnabled(highlightedIndex, -1); @_scrollToItem()
+      first:   => highlightedIndex = 0;       @_scrollToItem()
+      last:    => highlightedIndex = len - 1; @_scrollToItem()
+      select:  => if highlightedIndex >= 0 then @selectIndex(highlightedIndex) else if len is 1 then @selectIndex(0)
+      dismiss: => if open then @close() else @query = ''
+      tab:     => @close()
+
+  ~> ARIA.popupDismiss open, (=> @_list), (=> @close()), [=> @_content], (=> @_position())
+
+  render
+    . ref: "_content", $open: open?!
+
+      # Text input
+      . style: "position:relative;display:inline-flex;align-items:center"
+        input ref: "_input", role: "combobox"
+          type: "text"
+          autocomplete: "off"
+          aria-expanded: !!open
+          aria-haspopup: "listbox"
+          aria-autocomplete: "list"
+          aria-controls: if open then _listId else undefined
+          aria-activedescendant: if highlightedIndex >= 0 then "#{_listId}-#{highlightedIndex}" else undefined
+          $disabled: @disabled?!
+          disabled: @disabled
+          placeholder: @placeholder
+          value: @query
+          @keydown: @_onKeydown
+        if @query
+          button aria-label: "Clear", $clear: true, @click: @clear
+            "✕"
+
+      # Listbox — conditionally rendered (like Select)
+      if open and @items.length > 0
+        div ref: "_list", id: _listId, role: "listbox", $open: true
+          style: "position:fixed"
+          for item, idx in @items
+            div role: "option", tabindex: "-1", id: "#{_listId}-#{idx}"
+              $value: item
+              $highlighted: (idx is highlightedIndex)?!
+              @click: (=> @selectIndex(idx))
+              @mouseenter: (=> highlightedIndex = idx)
+              "#{item}"
+      if open and @items.length is 0 and @query
+        div role: "status", aria-live: "polite", $empty: true
+          "No results"

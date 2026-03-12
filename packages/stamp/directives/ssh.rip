@@ -1,0 +1,70 @@
+import * as fs from 'fs'
+
+export name        = "ssh"
+export description = "Ensures the SSH daemon is configured"
+export positional  = []
+export properties  =
+  'password-auth':     { description: "Enable password authentication (yes/no)" }
+  'permit-root-login': { description: "Root login policy (yes/no/prohibit-password)" }
+  'pubkey-auth':       { description: "Enable pubkey authentication (yes/no)" }
+
+CONF_PATH = '/etc/ssh/sshd_config.d/99-stamp.conf'
+
+OPTION_MAP =
+  'password-auth':     'PasswordAuthentication'
+  'permit-root-login': 'PermitRootLogin'
+  'pubkey-auth':       'PubkeyAuthentication'
+
+SYNONYMS =
+  'without-password': 'prohibit-password'
+
+normalize = (val) ->
+  SYNONYMS[val] or val
+
+export check = (name, props) ->
+  out = run $"sshd -T"
+  return 'missing' unless out.ok
+
+  for own key, entries of props when key != 'args'
+    want = entries[0].args[0]
+    sshdKey = OPTION_MAP[key]?.toLowerCase()
+    continue unless sshdKey
+    match = out.stdout.match new RegExp "^#{sshdKey}\\s+(\\S+)", 'mi'
+    return 'drift' if normalize(match?[1]) != want
+
+  'ok'
+
+export apply = (name, props) ->
+  lines = ["# Managed by stamp"]
+  for own key, entries of props when key != 'args'
+    sshdKey = OPTION_MAP[key]
+    continue unless sshdKey
+    lines.push "#{sshdKey} #{entries[0].args[0]}"
+
+  fs.writeFileSync CONF_PATH, lines.join('\n') + '\n'
+
+  if ok $"systemctl is-active ssh"
+    sh $"systemctl reload ssh"
+  else if ok $"systemctl is-active sshd"
+    sh $"systemctl reload sshd"
+
+export verify = (name, props) ->
+  results = []
+  out = run $"sshd -T"
+
+  unless out.ok
+    results.push { status: 'fail', message: "sshd not running or not installed" }
+    return results
+
+  for own key, entries of props when key != 'args'
+    want = entries[0].args[0]
+    sshdKey = OPTION_MAP[key]?.toLowerCase()
+    continue unless sshdKey
+    match = out.stdout.match new RegExp "^#{sshdKey}\\s+(\\S+)", 'mi'
+    actual = normalize match?[1]
+    if actual == want
+      results.push { status: 'pass', message: "#{key} is #{want}" }
+    else
+      results.push { status: 'fail', message: "#{key} is #{actual or 'unset'}, expected #{want}" }
+
+  results

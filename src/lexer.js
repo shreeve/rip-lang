@@ -161,6 +161,9 @@ let IMPLICIT_FUNC = new Set([
   'IDENTIFIER', 'PROPERTY', 'SUPER', ')', 'CALL_END', ']', 'INDEX_END', '@', 'THIS',
 ]);
 
+// Tokens that can precede a $ tagged template bridge
+let TAGGABLE = new Set(['IDENTIFIER', 'PROPERTY', ')', 'CALL_END', ']', 'INDEX_END']);
+
 // Control flow tokens that don't end implicit calls/objects
 let CONTROL_IN_IMPLICIT = new Set(['IF', 'TRY', 'FINALLY', 'CATCH', 'CLASS', 'SWITCH', 'COMPONENT']);
 
@@ -212,9 +215,9 @@ let UNARY_MATH = new Set(['!', '~']);
 // The ? suffix is only captured when NOT followed by . ? ! [ ( to avoid
 // conflict with ?. (optional chaining), ?? (nullish), ?! (presence), ?.( and ?.[
 // The ! suffix is NOT captured when followed by ? to preserve !? as operator
-let IDENTIFIER_RE = /^(?!\d)((?:(?!\s)[$\w\x7f-\uffff])+(?:!(?!\?)|[?](?![.?![(]))?)([^\n\S]*:(?![=:]))?/;
+let IDENTIFIER_RE = /^(?!\d)((?:(?!\s)[$\w\x7f-\uffff])+(?:!(?!\?)|[?](?![.?![(]))?)([^\n\S]*:(?![=:>]))?/;
 let NUMBER_RE     = /^0b[01](?:_?[01])*n?|^0o[0-7](?:_?[0-7])*n?|^0x[\da-f](?:_?[\da-f])*n?|^\d+(?:_\d+)*n|^(?:\d+(?:_\d+)*)?\.?\d+(?:_\d+)*(?:e[+-]?\d+(?:_\d+)*)?/i;
-let OPERATOR_RE   = /^(?:<=>|::|[-=]>|~>|~=|:=|=!|===|!==|!\?|\?\!|\?\?|=~|\|>|[-+*\/%<>&|^!?=]=|>>>=?|([-+:])\1|([&|<>*\/%])\2=?|\?\.?|\.{2,3})/;
+let OPERATOR_RE   = /^(?:<=>|::|[-=]>|~>|~=|:>|:=|=!|===|!==|!\?|\?\!|\?\?|=~|\|>|[-+*\/%<>&|^!?=]=|>>>=?|([-+:])\1|([&|<>*\/%])\2=?|\?\.?|\.{2,3})/;
 let WHITESPACE_RE = /^[^\n\S]+/;
 let NEWLINE_RE    = /^(?:\n[^\n\S]*)+/;
 let COMMENT_RE    = /^(\s*)###([^#][\s\S]*?)(?:###([^\n\S]*)|###$)|^((?:\s*#(?!##[^#]).*)+)/;
@@ -1222,10 +1225,11 @@ export class Lexer {
       this.emit('.', '.');
       return 2;
     }
-    else if (val === '::')  { tag = 'TYPE_ANNOTATION'; this.inTypeAnnotation = true; }
-    // Reactive operators
-    else if (val === '~=') { tag = 'COMPUTED_ASSIGN'; this.inTypeAnnotation = false; }
-    else if (val === ':=') { tag = 'REACTIVE_ASSIGN'; this.inTypeAnnotation = false; }
+    else if (val === '::')  tag = 'TYPE_ANNOTATION';
+    // Reactive and binding operators
+    else if (val === '~=') tag = 'COMPUTED_ASSIGN';
+    else if (val === ':=') tag = 'REACTIVE_ASSIGN';
+    else if (val === ':>') tag = 'RIGHTWARD_ASSIGN';
     else if (val === '<=>') tag = 'BIND';
     else if (val === '~>') { tag = 'EFFECT'; this.inTypeAnnotation = false; }
     else if (val === '=!') { tag = 'READONLY_ASSIGN'; this.inTypeAnnotation = false; }
@@ -1364,6 +1368,7 @@ export class Lexer {
     this.rewriteRender?.();
     this.rewriteTypes();
     this.tagPostfixConditionals();
+    this.rewriteTaggedTemplates();
     this.addImplicitBracesAndParens();
     this.addImplicitCallCommas();
     this.closeMergeAssignments();
@@ -1494,6 +1499,29 @@ export class Lexer {
       this.detectEnd(i + 1, condition, action);
       return 1;
     });
+  }
+
+  // Rewrite `tag $"..."` → `tag"..."` (tagged template via $ bridge)
+  //
+  // When the lexer sees `IDENTIFIER($)` followed by `STRING` or `STRING_START`,
+  // and preceded by a taggable token (IDENTIFIER, PROPERTY, etc.), it removes
+  // the $ token and clears spacing so the string attaches to the tag. This
+  // triggers the existing `Value String` → tagged-template grammar rule.
+  rewriteTaggedTemplates() {
+    let tokens = this.tokens;
+    for (let i = tokens.length - 2; i >= 0; i--) {
+      if (tokens[i][0] === 'IDENTIFIER' && tokens[i][1] === '$' &&
+          (tokens[i + 1]?.[0] === 'STRING' || tokens[i + 1]?.[0] === 'STRING_START')) {
+        let prev = tokens[i - 1];
+        if (prev && TAGGABLE.has(prev[0])) {
+          tokens.splice(i, 1);
+          prev.spaced = false;
+          tokens[i].spaced = false;
+          tokens[i].pre = 0;
+          if (tokens[i].newLine) tokens[i].newLine = false;
+        }
+      }
+    }
   }
 
   addImplicitBracesAndParens() {

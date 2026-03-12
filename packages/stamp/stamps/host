@@ -1,0 +1,102 @@
+# Hostfile — test parsing only
+
+set POOL     tank
+set DEVICE   /dev/disk/by-id/scsi-0Linode_Volume_tank
+set MOUNT    /tank
+set INCUS_DS incus/default
+set SHARED   shared/common
+
+# ── system packages ──────────────────────────────────────────
+
+packages
+  zfsutils-linux
+  incus
+  uidmap
+  acl
+  gettext-base
+  openssh-server
+  ripgrep
+  fail2ban
+  ufw
+  unattended-upgrades
+
+# ── ZFS pool and datasets ───────────────────────────────────
+
+pool $POOL $DEVICE
+  ashift 12
+  compression zstd
+  atime off
+  mountpoint $MOUNT
+
+dataset $POOL/$INCUS_DS
+
+dataset $POOL/home
+dataset $POOL/home/foo
+  owner 1000:1000
+dataset $POOL/home/bar
+  owner 1000:1000
+
+dataset $POOL/$SHARED
+  owner 1001:1001
+  mode 2775
+
+# ── host users and groups ───────────────────────────────────
+
+user shreeve 1000:1000
+  groups trust
+
+user trust 1001:1001
+
+group jail 1002
+
+# ── Incus initialization ────────────────────────────────────
+
+incus
+  storage default zfs $POOL/$INCUS_DS
+  network incusbr0
+
+# ── Incus profiles ──────────────────────────────────────────
+
+profile trusted
+  security.privileged true
+  limits.memory 2GB
+  limits.cpu 2
+
+profile hardened
+  security.idmap.isolated true
+  security.nesting false
+  limits.memory 1GB
+  limits.cpu 1
+  limits.processes 512
+
+# ── containers ──────────────────────────────────────────────
+
+container foo ubuntu/24.04
+  profile trusted
+  disk home $MOUNT/home/foo -> /home
+  disk shared $MOUNT/$SHARED -> /shared
+  user shreeve 1000:1000
+  user trust 1001:1001
+  start
+
+container bar ubuntu/24.04
+  profile trusted
+  disk home $MOUNT/home/bar -> /home
+  disk shared $MOUNT/$SHARED -> /shared readonly
+  user shreeve 1000:1000
+  user trust 1001:1001
+  start
+
+# ── security ────────────────────────────────────────────────
+
+firewall
+  default deny incoming
+  default allow outgoing
+  allow ssh
+
+service fail2ban
+
+ssh
+  password-auth no
+  permit-root-login prohibit-password
+  pubkey-auth yes

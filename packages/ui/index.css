@@ -118,6 +118,7 @@ button { font: inherit; cursor: pointer; }
   background: white; border: 1px solid #cbd5e1; border-radius: 6px;
   box-shadow: 0 4px 16px rgba(0,0,0,0.12); padding: 4px;
   overflow-y: auto; max-height: 280px; min-width: 200px; margin-top: 2px; z-index: 50;
+  overscroll-behavior: contain; /* prevent scroll leaking to the page when list reaches its bounds */
 
   &:not([data-open]) { display: none; }
 }
@@ -154,6 +155,7 @@ button { font: inherit; cursor: pointer; }
   background: white; border: 1px solid #cbd5e1; border-radius: 6px;
   box-shadow: 0 4px 16px rgba(0,0,0,0.12); padding: 4px; z-index: 100;
   overflow-y: auto; max-height: 280px;
+  overscroll-behavior: contain; /* prevent scroll leaking to the page when list reaches its bounds */
 }
 
 .gallery .option,
@@ -269,6 +271,7 @@ button { font: inherit; cursor: pointer; }
   background: white; border: 1px solid #cbd5e1; border-radius: 6px;
   box-shadow: 0 4px 16px rgba(0,0,0,0.12); padding: 4px;
   overflow-y: auto; max-height: 280px; min-width: 160px;
+  overscroll-behavior: contain; /* prevent scroll leaking to the page when list reaches its bounds */
 
   &:not([data-open]) { display: none; }
 }
@@ -898,11 +901,7 @@ select.rip-grid-editor { cursor: pointer; padding-left: 4px; }
 
 /* ── ContextMenu ── */
 
-.gallery [role="menu"][data-open] {
-  background: white; border: 1px solid #cbd5e1; border-radius: 6px;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.12); padding: 4px;
-  min-width: 140px;
-}
+.gallery [role="menu"][data-open] { min-width: 140px; }
 
 /* ── Toolbar ── */
 
@@ -1217,7 +1216,7 @@ body:has(.source-overlay) { overflow: hidden; }
 
 /* ── InputGroup ── */
 
-.gallery .input-group-demo > div {
+.gallery .input-group-demo > div:not(.demo-label) {
   display: inline-flex; align-items: center;
   border: 1px solid #cbd5e1; border-radius: 6px; overflow: hidden;
 
@@ -1227,7 +1226,7 @@ body:has(.source-overlay) { overflow: hidden; }
   [data-prefix], [data-suffix] {
     padding: 0 10px; background: #f8fafc; color: #64748b;
     font-size: 14px; height: 36px; display: flex; align-items: center;
-    border-right: 1px solid #e2e8f0; user-select: none;
+    border: none; border-right: 1px solid #e2e8f0; outline: none; user-select: none;
   }
 
   [data-suffix] { border-right: none; border-left: 1px solid #e2e8f0; }
@@ -1304,7 +1303,7 @@ body:has(.source-overlay) { overflow: hidden; }
 
   [data-item] { color: #64748b; text-decoration: none; }
   [data-item]:hover:not([data-current]) { color: #1e293b; text-decoration: underline; }
-  [data-item] + [data-item]::before { content: '/'; color: #cbd5e1; margin-right: 6px; user-select: none; text-decoration: none; display: inline-block; }
+  [data-item] + [data-item]::before { content: var(--breadcrumb-separator, '/'); color: #cbd5e1; margin-right: 6px; user-select: none; text-decoration: none; display: inline-block; }
   [data-current] { color: #1e293b; font-weight: 600; }
 }
 
@@ -1499,7 +1498,6 @@ body:has(.source-overlay) { overflow: hidden; }
   /* Menu */
   .gallery [aria-haspopup="menu"] { border-color: #475569; background: #1e293b; color: #e2e8f0; }
   .gallery [role="menu"] { background: #1e293b; border-color: #475569; box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
-  .gallery [role="menu"][data-open] { background: #1e293b; border-color: #475569; box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
 
   /* Scroll Area */
   .scroll-demo [data-orientation] { border-color: #334155; }
@@ -1652,9 +1650,9 @@ body:has(.source-overlay) { overflow: hidden; }
   .gallery .native-select-demo select { border-color: #475569; background: #1e293b; color: #e2e8f0; }
 
   /* InputGroup */
-  .gallery .input-group-demo > div { border-color: #475569; }
-  .gallery .input-group-demo > div [data-prefix], .gallery .input-group-demo > div [data-suffix] { background: #0f172a; color: #94a3b8; border-color: #334155; }
-  .gallery .input-group-demo > div input { color: #e2e8f0; background: #1e293b; }
+  .gallery .input-group-demo > div:not(.demo-label) { border-color: #475569; }
+  .gallery .input-group-demo > div:not(.demo-label) [data-prefix], .gallery .input-group-demo > div:not(.demo-label) [data-suffix] { background: #0f172a; color: #94a3b8; border-color: #334155; }
+  .gallery .input-group-demo > div:not(.demo-label) input { color: #e2e8f0; background: #1e293b; }
 
   /* ButtonGroup */
   .gallery [role="group"][data-orientation]:not(:has(button[aria-pressed])):not([role="radiogroup"]):not(:has([data-track])):not(:has([role="checkbox"])) {

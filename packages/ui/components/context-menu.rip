@@ -1,0 +1,88 @@
+# ContextMenu — accessible headless right-click menu
+#
+# Opens on contextmenu event (right-click) over the trigger area.
+# Keyboard navigation matches Menu. Ships zero CSS.
+#
+# Usage:
+#   ContextMenu @select: handleAction
+#     div $trigger: true
+#       p "Right-click this area"
+#     div $item: "cut", "Cut"
+#     div $item: "copy", "Copy"
+#     div $item: "paste", "Paste"
+
+export ContextMenu = component
+  @disabled := false
+
+  open := false
+  highlightedIndex := -1
+  posX := 0
+  posY := 0
+
+  _menuItems ~=
+    return [] unless @_slot
+    Array.from(@_slot.querySelectorAll('[data-item]') or [])
+
+  _triggerEl ~=
+    return null unless @_slot
+    @_slot.querySelector('[data-trigger]')
+
+  _onContextMenu: (e) ->
+    return if @disabled
+    e.preventDefault()
+    posX = e.clientX
+    posY = e.clientY
+    open = true
+    highlightedIndex = 0
+    requestAnimationFrame =>
+      @_list?.querySelectorAll('[role="menuitem"]')[0]?.focus()
+
+  close: ->
+    open = false
+    highlightedIndex = -1
+
+  selectIndex: (idx) ->
+    item = _menuItems[idx]
+    return unless item
+    return if item.dataset.disabled?
+    @emit 'select', item.dataset.item
+    @close()
+
+  _focusItem: (idx) ->
+    highlightedIndex = idx
+    @_list?.querySelectorAll('[role="menuitem"]')[idx]?.focus()
+
+  _onKeydown: (e) ->
+    return unless _menuItems.length
+    len = _menuItems.length
+    ARIA.listNav e,
+      next:    => @_focusItem((highlightedIndex + 1) %% len)
+      prev:    => @_focusItem((highlightedIndex - 1) %% len)
+      first:   => @_focusItem(0)
+      last:    => @_focusItem(len - 1)
+      select:  => @selectIndex(highlightedIndex)
+      dismiss: => @close()
+      tab:     => @close()
+
+  ~> ARIA.popupDismiss open, (=> @_list), (=> @close())
+
+  render
+    . @contextmenu: @_onContextMenu
+
+      . ref: "_slot", style: "display:none"
+        slot
+
+      if _triggerEl
+        . innerHTML: _triggerEl.innerHTML
+
+      if open
+        div ref: "_list", role: "menu", $open: true, @keydown: @_onKeydown
+          style: "position:fixed;left:#{posX}px;top:#{posY}px;z-index:50"
+          for item, idx in _menuItems
+            div role: "menuitem", tabindex: "-1"
+              $highlighted: (idx is highlightedIndex)?!
+              $disabled: item.dataset.disabled?!
+              $value: item.dataset.item
+              @click: (=> @selectIndex(idx))
+              @mouseenter: (=> highlightedIndex = idx)
+              = item.textContent

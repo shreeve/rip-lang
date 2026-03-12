@@ -1,0 +1,34 @@
+export name        = "group"
+export description = "Ensures a system group exists on the host"
+export positional  = ["name", "gid"]
+
+export check = (name, props) ->
+  return 'missing' unless ok $"getent group #{name}"
+
+  if want = props.args?[0]
+    return 'drift' if want isnt (sh $"getent group #{name}").split(':')[2]
+
+  'ok'
+
+export apply = (name, props) ->
+  gid = props.args?[0]
+  unless ok $"getent group #{name}"
+    if gid
+      sh $"groupadd -g #{gid} #{name}"
+    else
+      sh $"groupadd #{name}"
+
+export verify = (name, props) ->
+  results = []
+  unless ok $"getent group #{name}"
+    results.push { status: 'fail', message: "group #{name} missing" }
+    return results
+  results.push { status: 'pass', message: "group #{name} exists" }
+
+  if want = props.args?[0]
+    if want is (have = (sh $"getent group #{name}").split(':')[2])
+      results.push { status: 'pass', message: "#{name} gid is #{want}" }
+    else
+      results.push { status: 'fail', message: "#{name} gid is #{have}, expected #{want}" }
+
+  results

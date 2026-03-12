@@ -26,8 +26,8 @@ Complete node reference:
 ['program', ...statements]
 
 // Variables & Assignment
-['=', target, value]
-['+=', target, value]  // Also: -=, *=, /=, %=, **=
+['=', target, value]    // x = expr  or  expr :> x (both produce this)
+['+=', target, value]   // Also: -=, *=, /=, %=, **=
 ['&&=', target, value]  ['||=', target, value]
 ['?=', target, value]   ['??=', target, value]
 
@@ -131,6 +131,13 @@ Identifier suffixes:
 - `!` sets `.data.await = true`
 - `?` sets `.data.predicate = true`
 - `as!` in loops emits `FORASAWAIT` for `for await`
+
+Tagged template bridge:
+
+- `tag $"string"` → the rewriter (`rewriteTaggedTemplates`) removes the `$`
+  identifier and clears spacing, so the string attaches to the tag. The parser
+  sees `Value String` → `["tagged-template", tag, str]`. Compiles to `` tag`string` ``
+  in JavaScript. Works with all string forms (`$"`, `$'`, `$"""`, `$'''`).
 
 ## Context-Aware Generation
 

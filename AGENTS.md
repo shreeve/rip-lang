@@ -88,6 +88,7 @@ rip-lang/
 - **Never commit without running tests** — `bun run test` must pass
 - **Never add dependencies** — zero dependencies is a core principle
 - **Never read or execute scripts directly** — use `bun run <name>`
+- **Never write `x ? y` in Rip** — binary existential was removed; use `x ?? y` or full ternary `x ? y : z`
 - Run `bun run parser` after grammar changes
 - Run `bun run build` after codegen, `components.js`, or `browser.js` changes
 - Run `bun run bump` for the standard release flow
@@ -234,13 +235,24 @@ rip -cm example.rip
 
 ## Language Features
 
+> **CRITICAL — `?` operator rules (AI agents read this carefully):**
+>
+> - `x ? y : z` — VALID (ternary, requires both `: z` branch)
+> - `x ? y` — **INVALID, DO NOT USE** (binary existential was removed)
+> - `x ?? y` — VALID (nullish coalescing, replaces the old `x ? y`)
+> - `x?` — VALID (existence check, compiles to `x != null`)
+>
+> The most common AI mistake is writing `x ? y` to mean "if x exists, use y".
+> That syntax does not exist in Rip. Always use `x ?? y` for nullish coalescing
+> or `x ? y : z` for a full ternary. There is no two-operand `?` form.
+
 ### Removed (from CoffeeScript / Rip 2.x)
 
 | Feature                            | Replacement                  |
 | ---------------------------------- | ---------------------------- |
 | postfix spread/rest (`x...`)       | prefix only: `...x`          |
 | prototype access (`x::y`, `x?::y`) | `.prototype` or class syntax |
-| binary existential (`x ? y`)       | `x ?? y`                     |
+| **binary existential (`x ? y`)**   | **`x ?? y` (NEVER use `x ? y`, it is not valid Rip)** |
 | `is not` contraction               | `isnt`                       |
 | `for x from iterable`              | `for x as iterable`          |
 
@@ -248,13 +260,15 @@ rip -cm example.rip
 
 | Feature               | Syntax           | Purpose                              |
 | --------------------- | ---------------- | ------------------------------------ |
-| ternary operator      | `x ? a : b`      | JS-style ternary                     |
+| ternary operator      | `x ? a : b`      | JS-style ternary (must have both branches) |
 | postfix ternary       | `a if x else b`  | Python-style ternary                 |
 | `for...as` iteration  | `for x as iter`  | iterable loop                        |
 | `as!` async shorthand | `for x as! iter` | shorthand for `for await`            |
 | defined check         | `x!?`            | true if not undefined                |
 | presence check        | `x?!`            | truthy-or-undefined Houdini operator |
 | optional chain assign | `x?.prop = val`  | guarded assignment                   |
+| rightward assign      | `expr :> x`      | assign with expression first         |
+| tagged template `$`   | `sh $"cmd #{x}"` | injection-safe tagged template       |
 
 ### Kept
 
@@ -273,38 +287,40 @@ rip -cm example.rip
 
 ### Unique Operators
 
-| Operator    | Name            | Example                      |
-| ----------- | --------------- | ---------------------------- |
-| `!`         | Dammit          | `fetchData!`                 |
-| `!`         | Void            | `def process!`               |
-| `=!`        | Readonly        | `MAX =! 100`                 |
-| `!?`        | Otherwise       | `val !? 5`                   |
-| `!?`        | Defined         | `val!?`                      |
-| `?!`        | Presence        | `@checked?!`                 |
-| `?`         | Existence       | `x?`                         |
-| `//`        | Floor div       | `7 // 2`                     |
-| `%%`        | True mod        | `-1 %% 3`                    |
-| `:=`        | State           | `count := 0`                 |
-| `~=`        | Computed        | `doubled ~= count * 2`       |
-| `<=>`       | Two-way bind    | `value <=> name`             |
-| `=~`        | Match           | `str =~ /pat/`               |
-| `.new()`    | Constructor     | `User.new()`                 |
-| `::`        | Prototype       | `String::trim`               |
-| `if...else` | Postfix ternary | `"a" if cond else "b"`       |
-| `[-n]`      | Negative index  | `arr[-1]`                    |
-| `*`         | String repeat   | `"-" * 40`                   |
-| `<` `<=`    | Chained         | `1 < x < 10`                 |
-| `           | >`              | Pipe                         | `x | > fn` |
-| `.=`        | Method assign   | `x .= trim()`                |
-| `?.=`       | Optional assign | `el?.style.display = "none"` |
-| `=`         | Render text     | `= item.textContent`         |
-| `*`         | Merge assign    | `*obj = {a: 1}`              |
-| `not in`    | Not in          | `x not in arr`               |
-| `loop n`    | Repeat N        | `loop 5 -> body`             |
-| `it`        | Implicit param  | `-> it > 5`                  |
-| `or return` | Guard           | `x = get() or return err`    |
-| `?? throw`  | Nullish guard   | `x = get() ?? throw err`     |
-| `%w`        | Word literal    | `%w[foo bar baz]`            |
+| Operator    | Name             | Example                      |
+| ----------- | ---------------- | ---------------------------- |
+| `!`         | Dammit           | `fetchData!`                 |
+| `!`         | Void             | `def process!`               |
+| `=!`        | Readonly         | `MAX =! 100`                 |
+| `!?`        | Otherwise        | `val !? 5`                   |
+| `!?`        | Defined          | `val!?`                      |
+| `?!`        | Presence         | `@checked?!`                 |
+| `?`         | Existence        | `x?`                         |
+| `//`        | Floor div        | `7 // 2`                     |
+| `%%`        | True mod         | `-1 %% 3`                    |
+| `:=`        | State            | `count := 0`                 |
+| `:>`        | Rightward assign | `expr :> x`                  |
+| `~=`        | Computed         | `doubled ~= count * 2`       |
+| `<=>`       | Two-way bind     | `value <=> name`             |
+| `=~`        | Match            | `str =~ /pat/`               |
+| `.new()`    | Constructor      | `User.new()`                 |
+| `::`        | Prototype        | `String::trim`               |
+| `if...else` | Postfix ternary  | `"a" if cond else "b"`       |
+| `[-n]`      | Negative index   | `arr[-1]`                    |
+| `*`         | String repeat    | `"-" * 40`                   |
+| `<` `<=`    | Chained          | `1 < x < 10`                 |
+| `\|>`       | Pipe             | `x \|> fn`                   |
+| `.=`        | Method assign    | `x .= trim()`                |
+| `?.=`       | Optional assign  | `el?.style.display = "none"` |
+| `=`         | Render text      | `= item.textContent`         |
+| `*`         | Merge assign     | `*obj = {a: 1}`              |
+| `not in`    | Not in           | `x not in arr`               |
+| `loop n`    | Repeat N         | `loop 5 -> body`             |
+| `it`        | Implicit param   | `-> it > 5`                  |
+| `or return` | Guard            | `x = get() or return err`    |
+| `?? throw`  | Nullish guard    | `x = get() ?? throw err`     |
+| `%w`        | Word literal     | `%w[foo bar baz]`            |
+| `$"..."`    | Tagged template  | `sh $"cmd #{val}"`           |
 
 ### Standard Library
 
@@ -327,6 +343,37 @@ Rip injects helpers via `globalThis` in compiled output, the CLI REPL, and the b
 | `zip(...arrays)`  | zip arrays pairwise              |
 
 All helpers use `??=` so they can be overridden.
+
+### Tagged Templates (`$"..."`)
+
+The `$` prefix turns a string into a tagged template literal, preventing injection
+attacks across shell commands, SQL queries, HTML output, and any other context
+where interpolated values must not become code.
+
+```coffee
+sh  $"incus init #{image} #{name}"          # shell — safe argv
+sql $"SELECT * FROM users WHERE id = #{id}" # SQL — parameterized query
+html $"<p>Hello, #{name}</p>"               # HTML — escaped output
+```
+
+The `$` works with all string forms:
+
+| Syntax | Interpolation | Tagged template |
+|--------|--------------|-----------------|
+| `$"..."` | yes | yes |
+| `$'...'` | no | yes |
+| `$"""..."""` | yes | yes — tagged heredoc |
+| `$'''...'''` | no | yes — tagged heredoc |
+
+How it works: the `$` is a visual bridge between an identifier and a string.
+The lexer rewriter strips the `$` and attaches the string directly to the
+preceding identifier, triggering the existing `Value String` → `tagged-template`
+grammar rule. The compiler emits a JavaScript tagged template literal.
+
+The receiving function detects mode via `kind(args[0])`:
+- `'array'` with `.raw` → tagged template (strings + values separated)
+- `'array'` without `.raw` → plain argv array (direct exec)
+- `'string'` → regular string (shell interpretation)
 
 ### Reactivity
 

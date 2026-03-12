@@ -160,6 +160,9 @@ async function selectiveRelease(packageNames) {
   }
   publish('all', '@rip-lang/all', allNewVer);
 
+  // Refresh workspace links
+  run('bun install', { stdio: 'inherit' });
+
   // Done
   console.log(`\n✨ Published ${names}\n`);
 }
@@ -263,9 +266,19 @@ async function fullRelease(level) {
   // Step 5: Rebuild and test
   console.log('\nRebuilding...');
 
+  // Rebuild if src/ has uncommitted changes OR if rip.js version is behind
+  // (the latter catches cases where src/ was committed manually before bump)
   const srcChanged = run('git diff HEAD -- src/', { throws: false });
+  const distVersion = (() => {
+    try {
+      const rip = read('docs/dist/rip.js');
+      const m = rip.match(/var VERSION = "([^"]+)"/);
+      return m ? m[1] : null;
+    } catch { return null; }
+  })();
+  const needsBuild = (srcChanged && srcChanged.length > 0) || distVersion !== newVersion;
 
-  if (srcChanged && srcChanged.length > 0) {
+  if (needsBuild) {
     const grammarChanged = run('git diff HEAD -- src/grammar/grammar.rip', { throws: false });
     if (grammarChanged && grammarChanged.length > 0) {
       run('bun run parser', { stdio: 'inherit' });
@@ -277,7 +290,7 @@ async function fullRelease(level) {
     run('bun run build', { stdio: 'inherit' });
     console.log('  ✓ build');
   } else {
-    console.log('  - build (no src/ changes)');
+    console.log('  - build (dist already at current version)');
   }
 
   try {
@@ -316,7 +329,10 @@ async function fullRelease(level) {
 
   publish('all', '@rip-lang/all', allNewVer);
 
-  // Step 8: Summary
+  // Step 8: Refresh workspace links
+  run('bun install', { stdio: 'inherit' });
+
+  // Step 9: Summary
   console.log(`\n✨ Released rip-lang ${newVersion}\n`);
 
   const all = [{ name: 'rip-lang', old: oldVersion, new: newVersion }, ...bumped];

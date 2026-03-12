@@ -1,0 +1,40 @@
+export name        = "packages"
+export description = "Ensures system packages are installed"
+export positional  = []
+
+gather = (name, props) ->
+  list = [...(props.args or [])]
+  for own k, entries of props when k != 'args'
+    list.push k
+    for entry in entries
+      list.push ...entry.args if entry.args?.length
+  list
+
+installed = (pkg) ->
+  out = run $"dpkg -s #{pkg}"
+  out.ok and out.stdout.includes 'Status: install ok installed'
+
+export check = (name, props) ->
+  list = gather name, props
+  return 'ok' if list.length == 0
+  for pkg in list
+    return 'drift' unless installed pkg
+  'ok'
+
+export apply = (name, props) ->
+  list = gather name, props
+  return if list.length == 0
+  missing = (pkg for pkg in list when not installed pkg)
+  return if missing.length == 0
+  sh $"apt-get update -qq"
+  sh ['apt-get', 'install', '-y', '-qq', ...missing]
+
+export verify = (name, props) ->
+  list = gather name, props
+  results = []
+  for pkg in list
+    if installed pkg
+      results.push { status: 'pass', message: "#{pkg} installed" }
+    else
+      results.push { status: 'fail', message: "#{pkg} not installed" }
+  results

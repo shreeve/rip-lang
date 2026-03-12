@@ -1,0 +1,61 @@
+# Dialog — accessible headless modal dialog
+#
+# Traps focus, locks scroll, dismisses on Escape or click outside.
+# Restores focus to the previously focused element on close.
+# Auto-wires aria-labelledby (first h1-h6) and aria-describedby (first p).
+#
+# Exposes $open on the backdrop. Ships zero CSS.
+#
+# Usage:
+#   Dialog open <=> showDialog, @close: handleClose
+#     h2 "Title"
+#     p "Content"
+#     button @click: (=> showDialog = false), "Close"
+
+export Dialog = component
+  @open := false
+  @dismissable := true
+  @initialFocus := null
+
+  _prevFocus = null
+  _cleanupTrap = null
+  _id =! "dlg-#{Math.random().toString(36).slice(2, 8)}"
+
+  ~>
+    if @open
+      _prevFocus = document.activeElement
+      ARIA.lockScroll(this)
+      requestAnimationFrame =>
+        panel = @_panel
+        if panel
+          ARIA.wireAria panel, _id
+          if @initialFocus
+            target = if typeof @initialFocus is 'string' then panel.querySelector(@initialFocus) else @initialFocus
+            target?.focus()
+          else
+            panel.querySelectorAll('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])')?[0]?.focus()
+          _cleanupTrap = ARIA.trapFocus(panel)
+      return ->
+        _cleanupTrap?()
+        ARIA.unlockScroll(this)
+        _prevFocus?.focus()
+
+  close: ->
+    @open = false
+    @emit 'close'
+
+  onKeydown: (e) ->
+    if e.key is 'Escape' and dialogStack[dialogStack.length - 1] is this
+      e.preventDefault()
+      @close() if @dismissable
+
+  onBackdropClick: (e) ->
+    @close() if e.target is e.currentTarget and @dismissable
+
+  render
+    if @open
+      div ref: "_backdrop", $open: true,
+        @click: @onBackdropClick,
+        @keydown: @onKeydown
+        div ref: "_panel", role: "dialog", aria-modal: "true", tabindex: "-1"
+          slot

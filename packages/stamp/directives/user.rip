@@ -1,0 +1,61 @@
+export name        = "user"
+export description = "Ensures a system user exists on the host"
+export positional  = ["name", "uid:gid"]
+export properties  =
+  shell:  { description: "User shell (default: /bin/bash)" }
+  groups: { description: "Supplementary group memberships" }
+  home:   { description: "Home directory (default: /home/<name>)" }
+
+export check = (name, props) ->
+  return 'missing' unless ok $"id -u #{name}"
+
+  if props.args?[0]
+    [wantUid, wantGid] = props.args[0].split ':'
+    return 'drift' if wantUid isnt sh $"id -u #{name}"
+    return 'drift' if wantGid isnt sh $"id -g #{name}"
+
+  'ok'
+
+export apply = (name, props) ->
+  uidgid = props.args?[0]
+  shell  = props.shell?[0]?.args?[0] or '/bin/bash'
+  home   = props.home?[0]?.args?[0] or "/home/#{name}"
+
+  unless ok $"id -u #{name}"
+    if uidgid
+      [uid, gid] = uidgid.split ':'
+      sh $"groupadd -g #{gid} #{name}" unless ok $"getent group #{gid}"
+      sh $"useradd -m -u #{uid} -g #{gid} -s #{shell} -d #{home} #{name}"
+    else
+      sh $"useradd -m -s #{shell} -d #{home} #{name}"
+
+  if props.groups
+    groupList = props.groups[0].args.join ','
+    sh $"usermod -aG #{groupList} #{name}"
+
+export verify = (name, props) ->
+  results = []
+
+  unless ok $"id -u #{name}"
+    results.push { status: 'fail', message: "user #{name} missing" }
+    return results
+  results.push { status: 'pass', message: "user #{name} exists" }
+
+  if props.args?[0]
+    [wantUid, wantGid] = props.args[0].split ':'
+    if wantUid is (haveUid = sh $"id -u #{name}")
+      results.push { status: 'pass', message: "#{name} uid is #{wantUid}" }
+    else
+      results.push { status: 'fail', message: "#{name} uid is #{haveUid}, expected #{wantUid}" }
+    if wantGid is (haveGid = sh $"id -g #{name}")
+      results.push { status: 'pass', message: "#{name} gid is #{wantGid}" }
+    else
+      results.push { status: 'fail', message: "#{name} gid is #{haveGid}, expected #{wantGid}" }
+
+  if want = props.shell?[0]?.args?[0]
+    if want is (have = (sh $"getent passwd #{name}").split(':')[6])
+      results.push { status: 'pass', message: "#{name} shell is #{want}" }
+    else
+      results.push { status: 'warn', message: "#{name} shell is #{have}, expected #{want}" }
+
+  results

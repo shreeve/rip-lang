@@ -1,0 +1,114 @@
+export name        = "incus"
+export description = "Ensures the Incus daemon is initialized with network and storage"
+export positional  = []
+export properties  =
+  storage: { description: "Storage pool: <name> <driver> <source>" }
+  network: { description: "Network bridge name" }
+
+export check = (name, props) ->
+  return 'missing' unless ok $"incus info"
+
+  if props.storage
+    poolName = props.storage[0].args[0]
+    return 'drift' unless ok $"incus storage show #{poolName}"
+    return 'drift' unless ok $"incus profile device get default root pool"
+
+  if props.network
+    bridge = props.network[0].args[0]
+    return 'drift' unless ok $"incus network show #{bridge}"
+
+  'ok'
+
+export apply = (name, props) ->
+  unless ok $"systemctl is-active incus"
+    sh $"systemctl enable --now incus"
+
+  unless ok $"incus info"
+    storageEntry = props.storage?[0]
+    networkEntry = props.network?[0]
+
+    networkYaml = if networkEntry
+      bridge = networkEntry.args[0]
+      """
+      networks:
+      - config:
+          ipv4.address: auto
+          ipv4.nat: "true"
+          ipv6.address: none
+        description: ""
+        name: #{bridge}
+        type: bridge
+      """
+    else
+      "networks: []"
+
+    storageYaml = if storageEntry
+      [poolName, driver, source] = storageEntry.args
+      """
+      storage_pools:
+      - config:
+          source: #{source}
+        description: ""
+        driver: #{driver}
+        name: #{poolName}
+      """
+    else
+      "storage_pools: []"
+
+    defaultPool = storageEntry?.args?[0] or 'default'
+
+    preseed = """
+      config: {}
+      #{networkYaml}
+      #{storageYaml}
+      profiles:
+      - config: {}
+        description: Default Incus profile
+        devices:
+          root:
+            path: /
+            pool: #{defaultPool}
+            type: disk
+        name: default
+      """
+
+    out = Bun.spawnSync ['incus', 'admin', 'init', '--preseed'], { stdin: Buffer.from(preseed), stdout: 'pipe', stderr: 'pipe' }
+    unless out.exitCode == 0
+      raise "incus admin init failed: #{out.stderr.toString().trim()}"
+  else
+    if props.storage
+      [poolName, driver, source] = props.storage[0].args
+      unless ok $"incus storage show #{poolName}"
+        sh $"incus storage create #{poolName} #{driver} source=#{source}"
+      unless ok $"incus profile device get default root pool"
+        sh $"incus profile device add default root disk path=/ pool=#{poolName}"
+
+    if props.network
+      bridge = props.network[0].args[0]
+      unless ok $"incus network show #{bridge}"
+        sh $"incus network create #{bridge}"
+
+export verify = (name, props) ->
+  results = []
+
+  if ok $"incus info"
+    results.push { status: 'pass', message: "incus daemon running" }
+  else
+    results.push { status: 'fail', message: "incus daemon not running" }
+    return results
+
+  if props.storage
+    poolName = props.storage[0].args[0]
+    if ok $"incus storage show #{poolName}"
+      results.push { status: 'pass', message: "storage pool #{poolName} exists" }
+    else
+      results.push { status: 'fail', message: "storage pool #{poolName} missing" }
+
+  if props.network
+    bridge = props.network[0].args[0]
+    if ok $"incus network show #{bridge}"
+      results.push { status: 'pass', message: "network #{bridge} exists" }
+    else
+      results.push { status: 'fail', message: "network #{bridge} missing" }
+
+  results

@@ -1,0 +1,52 @@
+export name        = "service"
+export description = "Ensures a systemd service is enabled and running"
+export positional  = ["name"]
+export properties  =
+  enabled: { description: "Whether the service should be enabled (default: true)" }
+  running: { description: "Whether the service should be running (default: true)" }
+
+export check = (name, props) ->
+  wantEnabled = props.enabled?[0]?.args?[0] != 'false'
+  wantRunning = props.running?[0]?.args?[0] != 'false'
+
+  isEnabled = ok $"systemctl is-enabled #{name}"
+  isRunning = ok $"systemctl is-active #{name}"
+
+  return 'drift' if wantEnabled isnt isEnabled
+  return 'drift' if wantRunning isnt isRunning
+
+  'ok'
+
+export apply = (name, props) ->
+  wantEnabled = props.enabled?[0]?.args?[0] != 'false'
+  wantRunning = props.running?[0]?.args?[0] != 'false'
+
+  if wantEnabled
+    sh $"systemctl enable #{name}" unless ok $"systemctl is-enabled #{name}"
+  else
+    sh $"systemctl disable #{name}" if ok $"systemctl is-enabled #{name}"
+
+  if wantRunning
+    sh $"systemctl start #{name}" unless ok $"systemctl is-active #{name}"
+  else
+    sh $"systemctl stop #{name}" if ok $"systemctl is-active #{name}"
+
+export verify = (name, props) ->
+  results = []
+  wantEnabled = props.enabled?[0]?.args?[0] != 'false'
+  wantRunning = props.running?[0]?.args?[0] != 'false'
+
+  isEnabled = ok $"systemctl is-enabled #{name}"
+  isRunning = ok $"systemctl is-active #{name}"
+
+  if wantEnabled
+    results.push { status: (if isEnabled then 'pass' else 'fail'), message: "#{name} #{if isEnabled then 'enabled' else 'not enabled'}" }
+  else
+    results.push { status: (if not isEnabled then 'pass' else 'fail'), message: "#{name} #{if isEnabled then 'should be disabled' else 'disabled'}" }
+
+  if wantRunning
+    results.push { status: (if isRunning then 'pass' else 'fail'), message: "#{name} #{if isRunning then 'running' else 'not running'}" }
+  else
+    results.push { status: (if not isRunning then 'pass' else 'fail'), message: "#{name} #{if isRunning then 'should be stopped' else 'stopped'}" }
+
+  results
