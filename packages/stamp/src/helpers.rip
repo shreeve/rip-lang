@@ -40,7 +40,7 @@ toArgv = (args) ->
 
 export run = (...args) ->
   try
-    out = Bun.spawnSync toArgv(args), { stdout: 'pipe', stderr: 'pipe' }
+    out = Bun.spawnSync toArgv(args), { stdout: 'pipe', stderr: 'pipe', env: process.env }
     {
       ok:     out.exitCode == 0
       stdout: out.stdout.toString().trim()
