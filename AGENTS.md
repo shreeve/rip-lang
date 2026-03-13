@@ -218,27 +218,27 @@ rip -cm example.rip
 
 ### Removed (from CoffeeScript / Rip 2.x)
 
-| Feature                            | Replacement                  |
-| ---------------------------------- | ---------------------------- |
-| postfix spread/rest (`x...`)       | prefix only: `...x`          |
-| prototype access (`x::y`, `x?::y`) | `.prototype` or class syntax |
+| Feature                            | Replacement                                           |
+| ---------------------------------- | ----------------------------------------------------- |
+| postfix spread/rest (`x...`)       | prefix only: `...x`                                   |
+| prototype access (`x::y`, `x?::y`) | `.prototype` or class syntax                          |
 | **binary existential (`x ? y`)**   | **`x ?? y` (NEVER use `x ? y`, it is not valid Rip)** |
-| `is not` contraction               | `isnt`                       |
-| `for x from iterable`              | `for x as iterable`          |
+| `is not` contraction               | `isnt`                                                |
+| `for x from iterable`              | `for x as iterable`                                   |
 
 ### Added
 
-| Feature               | Syntax           | Purpose                              |
-| --------------------- | ---------------- | ------------------------------------ |
+| Feature               | Syntax           | Purpose                                    |
+| --------------------- | ---------------- | ------------------------------------------ |
 | ternary operator      | `x ? a : b`      | JS-style ternary (must have both branches) |
-| postfix ternary       | `a if x else b`  | Python-style ternary                 |
-| `for...as` iteration  | `for x as iter`  | iterable loop                        |
-| `as!` async shorthand | `for x as! iter` | shorthand for `for await`            |
-| defined check         | `x!?`            | true if not undefined                |
-| presence check        | `x?!`            | truthy-or-undefined Houdini operator |
-| optional chain assign | `x?.prop = val`  | guarded assignment                   |
-| rightward assign      | `expr :> x`      | assign with expression first         |
-| tagged template `$`   | `sh $"cmd #{x}"` | injection-safe tagged template       |
+| postfix ternary       | `a if x else b`  | Python-style ternary                       |
+| `for...as` iteration  | `for x as iter`  | iterable loop                              |
+| `as!` async shorthand | `for x as! iter` | shorthand for `for await`                  |
+| defined check         | `x!?`            | true if not undefined                      |
+| presence check        | `x?!`            | truthy-or-undefined Houdini operator       |
+| optional chain assign | `x?.prop = val`  | guarded assignment                         |
+| rightward assign      | `expr :> x`      | assign with expression first               |
+| tagged template `$`   | `sh $"cmd #{x}"` | injection-safe tagged template             |
 
 ### Kept
 
@@ -328,12 +328,12 @@ html $"<p>Hello, #{name}</p>"               # HTML — escaped output
 
 The `$` works with all string forms:
 
-| Syntax | Interpolation | Tagged template |
-|--------|--------------|-----------------|
-| `$"..."` | yes | yes |
-| `$'...'` | no | yes |
-| `$"""..."""` | yes | yes — tagged heredoc |
-| `$'''...'''` | no | yes — tagged heredoc |
+| Syntax       | Interpolation | Tagged template      |
+| ------------ | ------------- | -------------------- |
+| `$"..."`     | yes           | yes                  |
+| `$'...'`     | no            | yes                  |
+| `$"""..."""` | yes           | yes — tagged heredoc |
+| `$'''...'''` | no            | yes — tagged heredoc |
 
 How it works: the `$` is a visual bridge between an identifier and a string.
 The lexer rewriter strips the `$` and attaches the string directly to the
