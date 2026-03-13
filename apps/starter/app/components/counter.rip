@@ -1,5 +1,5 @@
 export Press = component
-  @variant:: 'primary' | 'special' | 'default' := 'default'
+  @variant := 'default'
 
   classes ~=
     base = "px-4 py-2 text-sm font-medium rounded-lg active:scale-[0.98] transition cursor-pointer"
@@ -13,7 +13,7 @@ export Press = component
       slot
 
 export Counter = component
-  @title :: string := "Data Counters"
+  @title := "Data Counters"
   count := @app.data.count or 0
   step  := 1
 
