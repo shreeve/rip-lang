@@ -874,13 +874,38 @@ export async function runCheck(targetDir, opts = {}) {
     return 1;
   }
 
-  // Compile all files
+  // Pre-scan: only compile files that have type annotations or are imported by typed files.
+  // This avoids compiling hundreds of untyped files that would just get @ts-nocheck.
+  const typedFiles = new Set();
+  const sourcesByPath = new Map();
+  for (const fp of allFiles) {
+    const source = readFileSync(fp, 'utf8');
+    sourcesByPath.set(fp, source);
+    const nocheck = /^#\s*@nocheck\b/m.test(source.slice(0, 256));
+    if (!nocheck && hasTypeAnnotations(source)) typedFiles.add(fp);
+  }
+  // Include imports of typed files
+  for (const fp of typedFiles) {
+    const source = sourcesByPath.get(fp);
+    const ripImports = [...source.matchAll(/from\s+['"]([^'"]*\.rip)['"]/g)];
+    for (const m of ripImports) {
+      const imported = resolve(dirname(fp), m[1]);
+      if (sourcesByPath.has(imported)) typedFiles.add(imported);
+      else if (existsSync(imported)) {
+        const impSrc = readFileSync(imported, 'utf8');
+        sourcesByPath.set(imported, impSrc);
+        typedFiles.add(imported);
+      }
+    }
+  }
+
+  // Compile only typed files (and their imports)
   const compiled = new Map();
   let compileErrors = 0;
 
-  for (const fp of allFiles) {
+  for (const fp of typedFiles) {
     try {
-      const source = readFileSync(fp, 'utf8');
+      const source = sourcesByPath.get(fp);
       compiled.set(fp, compileForCheck(fp, source, new Compiler()));
     } catch (e) {
       compileErrors++;
@@ -889,7 +914,7 @@ export async function runCheck(targetDir, opts = {}) {
     }
   }
 
-  // Also compile any .rip files imported from typed files that aren't in rootPath
+  // Also compile any .rip files imported from typed files that aren't yet compiled
   for (const [fp, entry] of [...compiled.entries()]) {
     if (!entry.hasTypes) continue;
     const ripImports = [...entry.source.matchAll(/from\s+['"]([^'"]*\.rip)['"]/g)];
