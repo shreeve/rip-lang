@@ -233,7 +233,7 @@ function publishDiagnostics(filePath) {
 
         if (startPos.line < 0) continue;
 
-        const message = ts.flattenDiagnosticMessageText(d.messageText, '\n');
+        const message = tc.cleanDiagnosticMessage(ts.flattenDiagnosticMessageText(d.messageText, '\n'));
         diagnostics.push({
           range: { start: startPos, end: endPos },
           severity: d.category === 1 ? 1 : d.category === 0 ? 2 : d.category === 2 ? 4 : 3,

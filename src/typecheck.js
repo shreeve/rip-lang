@@ -222,6 +222,26 @@ export const SKIP_CODES = new Set([
   2593, // Cannot find name 'describe' (test runner globals)
 ]);
 
+// Clean diagnostic messages to hide Rip compiler internals from users.
+// Strips Signal<T>/Computed<T> wrappers, __bind_X__ property names, and
+// removes __bind_*__ entries from inline type displays.
+export function cleanDiagnosticMessage(msg) {
+  // Remove __bind_*__ entries from inline type displays BEFORE unwrapping,
+  // so they don't leave duplicates after the prefix is stripped.
+  msg = msg.replace(/\s*__bind_\w+__\??\s*:\s*[^;}\n]+[;]\s*/g, ' ');
+  // Unwrap Signal<T> and Computed<T> → T (handles nested wrappers)
+  let prev;
+  do {
+    prev = msg;
+    msg = msg.replace(/\b(Signal|Computed)<([^<>]*)>/g, '$2');
+  } while (msg !== prev);
+  // Strip any remaining __bind_X__ → X in property name references
+  msg = msg.replace(/__bind_(\w+)__/g, '$1');
+  // Deduplicate consecutive identical lines (unwrapping can collapse nested messages)
+  msg = msg.split('\n').filter((line, i, arr) => i === 0 || line.trim() !== arr[i - 1].trim()).join('\n');
+  return msg;
+}
+
 // Base TypeScript compiler settings for type-checking. Callers can
 // pass overrides (e.g. { noImplicitAny: true } for the CLI).
 export function createTypeCheckSettings(ts, overrides = {}) {
@@ -960,7 +980,7 @@ export async function runCheck(targetDir, opts = {}) {
       const endPos = d.length ? mapToSourcePos(entry, d.start + d.length) : null;
       const len = endPos && endPos.line === pos.line ? endPos.col - pos.col : 1;
 
-      const message = ts.flattenDiagnosticMessageText(d.messageText, '\n');
+      const message = cleanDiagnosticMessage(ts.flattenDiagnosticMessageText(d.messageText, '\n'));
       const severity = d.category === 1 ? 'error' : d.category === 0 ? 'warning' : 'info';
       const srcLine = srcLines[pos.line] || '';
 
@@ -968,7 +988,7 @@ export async function runCheck(targetDir, opts = {}) {
       const related = [];
       if (d.relatedInformation) {
         for (const ri of d.relatedInformation) {
-          const riMsg = ts.flattenDiagnosticMessageText(ri.messageText, '\n');
+          const riMsg = cleanDiagnosticMessage(ts.flattenDiagnosticMessageText(ri.messageText, '\n'));
           if (ri.file && ri.start !== undefined) {
             const riPath = fromVirtual(ri.file.fileName);
             const riEntry = compiled.get(riPath);

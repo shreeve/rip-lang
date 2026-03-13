@@ -175,6 +175,24 @@ export function mapToSourcePos(entry, offset) {
       }
     }
     srcCol = Math.max(0, approx);
+
+    // Word not found on mapped line — search nearby lines (handles cases where
+    // multiple source lines compress to one generated line, e.g. constructor params)
+    const wordFallback = genText.slice(genCol).match(/^\w+/);
+    if (wordFallback) {
+      let word = wordFallback[0];
+      if (word.startsWith('__bind_') && word.endsWith('__')) word = word.slice(7, -2);
+      const srcLines = entry.source.split('\n');
+      const re = new RegExp('\\b' + word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b');
+      for (let delta = 1; delta <= 10; delta++) {
+        for (const d of [srcLine + delta, srcLine - delta]) {
+          if (d >= 0 && d < srcLines.length) {
+            const m = re.exec(srcLines[d]);
+            if (m) return { line: d, col: m.index };
+          }
+        }
+      }
+    }
   }
   return { line: srcLine, col: srcCol };
 }
