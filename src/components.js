@@ -805,6 +805,8 @@ export function installComponentSupport(CodeGenerator, Lexer) {
         const ts = expandType(type);
         const opt = required ? '' : '?';
         propEntries.push(`${name}${opt}: ${ts || 'any'}`);
+        // Two-way binding: allow parent to pass Signal<T> for this prop
+        propEntries.push(`__bind_${name}__?: Signal<${ts || 'any'}>`);
       }
       for (const { name, type, isPublic } of readonlyVars) {
         if (!isPublic) continue;
@@ -904,9 +906,11 @@ export function installComponentSupport(CodeGenerator, Lexer) {
         }
       }
 
-      // Component instantiations from render block — emit new X({...}) for prop type checking
+      // Component instantiations from render block — emit typed variable declarations for prop type checking
+      // Using `const _: Props = {...}` instead of `new X({...})` gives TS2322 on specific property names
       if (renderBlock) {
         const constructions = [];
+        let constructionIdx = 0;
         const extractProps = (args) => {
           const props = [];
           for (const arg of args) {
@@ -921,10 +925,18 @@ export function installComponentSupport(CodeGenerator, Lexer) {
             }
             if (obj) {
               for (let j = 1; j < obj.length; j++) {
-                const [key, value] = obj[j];
-                if (typeof key === 'string' && !key.startsWith('@') && !key.startsWith('__bind_')) {
-                  const val = this.generateInComponent(value, 'value');
-                  props.push(`${key}: ${val}`);
+                const pair = obj[j];
+                const [key, value] = pair;
+                if (typeof key === 'string' && !key.startsWith('@')) {
+                  const srcLine = pair.loc?.r ?? obj.loc?.r;
+                  if (key.startsWith('__bind_') && key.endsWith('__')) {
+                    // Two-way binding: emit the Signal object (this.xxx), not this.xxx.value
+                    const member = typeof value === 'string' && this.reactiveMembers?.has(value) ? `this.${value}` : this.generateInComponent(value, 'value');
+                    props.push({ code: `${key}: ${member}`, srcLine });
+                  } else {
+                    const val = this.generateInComponent(value, 'value');
+                    props.push({ code: `${key}: ${val}`, srcLine });
+                  }
                 }
               }
             }
@@ -936,7 +948,30 @@ export function installComponentSupport(CodeGenerator, Lexer) {
           const head = node[0]?.valueOf?.() ?? node[0];
           if (typeof head === 'string' && /^[A-Z]/.test(head)) {
             const props = extractProps(node.slice(1));
-            constructions.push(`    new ${head}({${props.join(', ')}});`);
+            const varName = `_${constructionIdx++}`;
+            const propsType = `ConstructorParameters<typeof ${head}>[0] & {}`;
+            if (props.length === 0) {
+              const tagLine = node.loc?.r;
+              constructions.push(`    const ${varName}: ${propsType} = {};` + (tagLine != null ? ` // @rip-src:${tagLine}` : ''));
+            } else if (props.length === 1) {
+              const srcLine = props[0].srcLine ?? node.loc?.r;
+              constructions.push(`    const ${varName}: ${propsType} = {${props[0].code}};` + (srcLine != null ? ` // @rip-src:${srcLine}` : ''));
+            } else {
+              const tagLine = node.loc?.r;
+              // Use multi-line only when props span distinct source lines
+              const distinctLines = new Set(props.map(p => p.srcLine).filter(l => l != null));
+              if (distinctLines.size <= 1) {
+                // All props on same source line — keep single-line for @ts-expect-error compat
+                const srcLine = props[0].srcLine ?? tagLine;
+                constructions.push(`    const ${varName}: ${propsType} = {${props.map(p => p.code).join(', ')}};` + (srcLine != null ? ` // @rip-src:${srcLine}` : ''));
+              } else {
+                constructions.push(`    const ${varName}: ${propsType} = {` + (tagLine != null ? ` // @rip-src:${tagLine}` : ''));
+                for (const p of props) {
+                  constructions.push(`      ${p.code},` + (p.srcLine != null ? ` // @rip-src:${p.srcLine}` : ''));
+                }
+                constructions.push(`    };`);
+              }
+            }
           }
           for (let i = 1; i < node.length; i++) walkRender(node[i]);
         };

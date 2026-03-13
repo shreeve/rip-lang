@@ -1225,7 +1225,7 @@ export class Lexer {
       this.emit('.', '.');
       return 2;
     }
-    else if (val === '::')  tag = 'TYPE_ANNOTATION';
+    else if (val === '::')  { tag = 'TYPE_ANNOTATION'; this.inTypeAnnotation = true; }
     // Reactive and binding operators
     else if (val === '~=') tag = 'COMPUTED_ASSIGN';
     else if (val === ':=') tag = 'REACTIVE_ASSIGN';

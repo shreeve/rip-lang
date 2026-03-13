@@ -146,14 +146,26 @@ export function mapToSourcePos(entry, offset) {
   if (srcText) {
     const wordAt = genText.slice(genCol).match(/^\w+/);
     if (wordAt) {
-      const idx = findNearestWord(srcText, wordAt[0], approx);
+      let word = wordAt[0];
+      let idx = findNearestWord(srcText, word, approx);
+      // __bind_xxx__ → xxx: two-way binding props use mangled names in gen
+      if (idx < 0 && word.startsWith('__bind_') && word.endsWith('__')) {
+        word = word.slice(7, -2);
+        idx = findNearestWord(srcText, word, approx);
+      }
       if (idx >= 0) return { line: srcLine, col: idx };
     }
     if (genCol > 0 && (!wordAt || genCol >= genText.length)) {
       const wordBefore = genText.slice(0, genCol).match(/(\w+)$/);
       if (wordBefore) {
-        const idx = findNearestWord(srcText, wordBefore[0], approx - wordBefore[0].length);
-        if (idx >= 0) return { line: srcLine, col: idx + wordBefore[0].length };
+        let word = wordBefore[0];
+        let idx = findNearestWord(srcText, word, approx - word.length);
+        // __bind_xxx__ → xxx: two-way binding props use mangled names in gen
+        if (idx < 0 && word.startsWith('__bind_') && word.endsWith('__')) {
+          word = word.slice(7, -2);
+          idx = findNearestWord(srcText, word, approx - word.length);
+        }
+        if (idx >= 0) return { line: srcLine, col: idx + word.length };
         // Injected property access (e.g. clicks.value from clicks :=) — map to end of object identifier
         const dotMatch = genText.slice(0, genCol - wordBefore[0].length).match(/(\w+)\.$/);
         if (dotMatch) {

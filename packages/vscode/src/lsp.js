@@ -167,7 +167,44 @@ function compileRip(filePath, source) {
     publishDiagnostics(filePath);
   } catch (e) {
     compiled.delete(filePath);
-    connection.sendDiagnostics({ uri: pathToUri(filePath), diagnostics: [] });
+
+    // Surface parse/syntax errors as diagnostics
+    const diagnostics = [];
+    let line = 0, col = 0, endCol = 1;
+    if (e.hash?.loc) {
+      // Parser error: loc may be Rip format {r, c, n} or Jison format {first_line, first_column, ...}
+      const loc = e.hash.loc;
+      if (loc.r != null) {
+        line = loc.r;
+        col = loc.c || 0;
+        endCol = loc.n ? col + loc.n : col + 1;
+      } else {
+        line = loc.first_line ?? 0;
+        col = loc.first_column ?? 0;
+        endCol = loc.last_column != null ? loc.last_column + 1 : col + 1;
+      }
+    } else if (e.location) {
+      // Lexer SyntaxError: {first_line, first_column, last_column}
+      line = e.location.first_line || 0;
+      col = e.location.first_column || 0;
+      endCol = e.location.last_column != null ? e.location.last_column + 1 : col + 1;
+    }
+
+    // Extract a clean message from the double-wrapped parse error format:
+    // "Parse error at line X, column Y (token: T): Parse error on line N: Unexpected 'TOKEN'"
+    let message = e.message || 'Compilation error';
+    const innerIdx = message.indexOf('): ');
+    if (innerIdx >= 0) message = message.slice(innerIdx + 3);
+    message = message.replace(/^Parse error on line \d+:\s*/, '');
+    if (!message.trim()) message = e.message || 'Compilation error';
+
+    diagnostics.push({
+      severity: 1, // Error
+      range: { start: { line, character: col }, end: { line, character: endCol } },
+      message,
+      source: 'rip',
+    });
+    connection.sendDiagnostics({ uri: pathToUri(filePath), diagnostics });
     connection.console.log(`[rip] compile error ${path.basename(filePath)}: ${e.message}`);
   }
 }
@@ -1171,12 +1208,12 @@ connection.onHover((params) => {
         if (ctx.currentProp) {
           const prop = compInfo.props.find(p => p.name === ctx.currentProp);
           if (prop) {
-            return { contents: { kind: 'markdown', value: `\`\`\`typescript\n(prop) ${prop.name}${prop.required ? '' : '?'}: ${prop.type}\n\`\`\`` } };
+            return { contents: { kind: 'markdown', value: `\`\`\`typescript\n(property) ${prop.name}${prop.required ? '' : '?'}: ${prop.type}\n\`\`\`` } };
           }
         }
         const word = getWordAtPosition(doc.getText(), params.position);
         if (word === ctx.component) {
-          const propsStr = compInfo.props.map(p => `  ${p.name}${p.required ? '' : '?'}: ${p.type}`).join('\n');
+          const propsStr = compInfo.props.filter(p => !p.name.startsWith('__bind_')).map(p => `  ${p.name}${p.required ? '' : '?'}: ${p.type}`).join('\n');
           return { contents: { kind: 'markdown', value: `\`\`\`typescript\nclass ${ctx.component}\nProps: {\n${propsStr}\n}\n\`\`\`` } };
         }
       }
@@ -1195,6 +1232,7 @@ connection.onHover((params) => {
     let display = ts.displayPartsToString(info.displayParts);
     const docs = ts.displayPartsToString(info.documentation || []);
     display = unwrapReactiveType(display);
+    display = display.replace(/\b__bind_(\w+)__\b/g, '$1');
     let value = '```typescript\n' + display + '\n```';
     if (docs) value += '\n\n' + docs;
     return { contents: { kind: 'markdown', value } };

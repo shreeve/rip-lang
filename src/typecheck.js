@@ -277,10 +277,12 @@ export function compileForCheck(filePath, source, compiler) {
   let code = result.code || '';
   const dts = result.dts ? result.dts.trimEnd() + '\n' : '';
 
-  // Determine if this file should be type-checked
-  const hasOwnTypes = hasTypeAnnotations(source);
+  // Determine if this file should be type-checked.
+  // A `# @nocheck` comment near the top of the file opts out entirely.
+  const nocheck = /^#\s*@nocheck\b/m.test(source.slice(0, 256));
+  const hasOwnTypes = !nocheck && hasTypeAnnotations(source);
   let importsTyped = false;
-  if (!hasOwnTypes) {
+  if (!hasOwnTypes && !nocheck) {
     const ripImports = [...source.matchAll(/from\s+['"]([^'"]*\.rip)['"]/g)];
     for (const m of ripImports) {
       const imported = resolve(dirname(filePath), m[1]);
@@ -496,9 +498,8 @@ export function compileForCheck(filePath, source, compiler) {
   // Copy typed constructor props parameter to _init(props) in component classes.
   // Components compile constructor(props: T) and _init(props) separately — TS
   // needs _init to have the same props type to avoid noImplicitAny.
-  // The _init type is widened with Record<string, any> to allow __bind_xxx__
-  // internal properties, and the optional marker is removed since _init is
-  // always called with a valid object by the framework.
+  // The constructor type already includes __bind_xxx__ properties (typed as
+  // Signal<T>), so no Record<string, any> widening is needed.
   if (hasTypes && code) {
     const cl = code.split('\n');
     let changed = false;
@@ -506,7 +507,7 @@ export function compileForCheck(filePath, source, compiler) {
       // Match: constructor(props?: { ... }) or constructor(props: { ... })
       const cm = cl[j].match(/^\s+constructor\((props)\??\s*:\s*(\{[^}]*\})\)/);
       if (cm) {
-        const propsType = `${cm[1]}: ${cm[2]} & Record<string, any>`;
+        const propsType = `${cm[1]}: ${cm[2]}`;
         // Find _init(props) in the same class
         for (let k = j + 1; k < cl.length; k++) {
           if (cl[k].match(/^((?:export\s+)?(?:const|class)\s+)/)) break;
@@ -614,7 +615,7 @@ export function compileForCheck(filePath, source, compiler) {
       const decls = [];
       if (needSignal) {
         if (!/\binterface Signal\b/.test(headerDts)) decls.push('interface Signal<T> { value: T; read(): T; lock(): Signal<T>; free(): Signal<T>; kill(): T; }');
-        decls.push('declare function __state<T>(value: T): Signal<T>;');
+        decls.push('declare function __state<T>(value: T | Signal<T>): Signal<T>;');
       }
       if (needComputed) {
         if (!/\binterface Computed\b/.test(headerDts)) decls.push('interface Computed<T> { readonly value: T; read(): T; lock(): Computed<T>; free(): Computed<T>; kill(): T; }');
@@ -720,6 +721,21 @@ export function compileForCheck(filePath, source, compiler) {
             genToSrc.set(genA + d, srcA + d);
           }
         }
+      }
+    }
+  }
+
+  // Parse @rip-src annotations from _render() constructions.  These explicit
+  // source-line markers override interpolated mappings so that per-prop type
+  // errors land on the correct Rip source line.
+  {
+    const tsLines = tsContent.split('\n');
+    for (let i = 0; i < tsLines.length; i++) {
+      const m = tsLines[i].match(/\/\/ @rip-src:(\d+)$/);
+      if (m) {
+        const srcLine = parseInt(m[1], 10);
+        genToSrc.set(i, srcLine);
+        if (!srcToGen.has(srcLine)) srcToGen.set(srcLine, i);
       }
     }
   }

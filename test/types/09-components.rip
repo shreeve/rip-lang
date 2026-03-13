@@ -91,6 +91,26 @@ export PropTypeTests = component
       # @ts-expect-error — wrong type for label
       Input label: 123
 
+# ── Two-way binding type safety ──
+#
+# The <=> operator passes the parent's Signal directly to the child.
+# The constructor accepts __bind_prop__?: Signal<T> for each public
+# state prop, so TypeScript can check that the bound signal matches
+# the child's expected type.
+
+export BindingTypeTests = component
+  email := ""
+  count := 0
+
+  render
+    div
+      # Correct: string <=> string — no error
+      Input
+        value <=> email
+      # @ts-expect-error — Signal<number> not assignable to Signal<string>
+      Input
+        value <=> count
+
 # ── Negative: type safety inside component bodies ──
 #
 # The enriched stub gives TypeScript typed property declarations

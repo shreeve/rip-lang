@@ -349,15 +349,19 @@ function collectStructuralType(tokens, indentIdx) {
     if (t[0] === 'TERMINATOR') { j++; continue; }
 
     // Collect a property line: name (? optional) : type
-    // Property tokens can be PROPERTY or IDENTIFIER
-    if (depth === 1 && (t[0] === 'PROPERTY' || t[0] === 'IDENTIFIER')) {
+    // Property tokens can be PROPERTY, IDENTIFIER, or keyword tags whose
+    // value is a valid identifier (e.g. RENDER "render" in interfaces).
+    let isProperty = t[0] === 'PROPERTY' || t[0] === 'IDENTIFIER' ||
+        (depth === 1 && /^[a-zA-Z_$]/.test(t[1]) && tokens[j + 1]?.[0] === 'TYPE_ANNOTATION');
+    if (depth === 1 && isProperty) {
       let propName = t[1];
       let optional = false;
       let readonly = false;
       j++;
 
       // Check for readonly prefix
-      if (propName === 'readonly' && (tokens[j]?.[0] === 'PROPERTY' || tokens[j]?.[0] === 'IDENTIFIER')) {
+      if (propName === 'readonly' && tokens[j] && (tokens[j][0] === 'PROPERTY' || tokens[j][0] === 'IDENTIFIER' ||
+          (/^[a-zA-Z_$]/.test(tokens[j][1]) && tokens[j + 1]?.[0] === 'TYPE_ANNOTATION'))) {
         readonly = true;
         propName = tokens[j][1];
         // Carry predicate flag through
@@ -1130,7 +1134,7 @@ export function emitTypes(tokens, sexpr = null) {
   let preamble = [];
   if (usesSignal) {
     preamble.push('interface Signal<T> { value: T; read(): T; lock(): Signal<T>; free(): Signal<T>; kill(): T; }');
-    preamble.push('declare function __state<T>(value: T): Signal<T>;');
+    preamble.push('declare function __state<T>(value: T | Signal<T>): Signal<T>;');
   }
   if (usesComputed) {
     preamble.push('interface Computed<T> { readonly value: T; read(): T; lock(): Computed<T>; free(): Computed<T>; kill(): T; }');
@@ -1277,6 +1281,9 @@ function emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars) {
       let opt = hasDefault ? '?' : '';
       if (!hasDefault) hasRequired = true;
       publicProps.push(`    ${propName}${opt}: ${typeStr};`);
+      if (mHead === 'state') {
+        publicProps.push(`    __bind_${propName}__?: Signal<${typeStr}>;`);
+      }
     }
 
     lines.push(`${exp}declare class ${name} {`);
