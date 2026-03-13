@@ -35,36 +35,6 @@ rip server
 ./bin/rip
 ```
 
-## Project Structure
-
-```text
-rip-lang/
-├── src/
-│   ├── lexer.js
-│   ├── compiler.js
-│   ├── types.js
-│   ├── components.js
-│   ├── sourcemaps.js
-│   ├── typecheck.js
-│   ├── parser.js
-│   ├── repl.js
-│   ├── browser.js
-│   └── grammar/
-├── packages/
-│   ├── ui/
-│   ├── server/
-│   ├── db/
-│   ├── schema/
-│   ├── swarm/
-│   ├── csv/
-│   ├── http/
-│   ├── print/
-│   └── vscode/
-├── docs/
-├── test/rip/
-└── scripts/
-```
-
 ### File Editing Rules
 
 | File                      | Can Edit? | Notes                                                  |
