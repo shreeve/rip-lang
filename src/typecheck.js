@@ -876,13 +876,12 @@ export async function runCheck(targetDir, opts = {}) {
 
   // Compile all files
   const compiled = new Map();
-  const compiler = new Compiler();
   let compileErrors = 0;
 
   for (const fp of allFiles) {
     try {
       const source = readFileSync(fp, 'utf8');
-      compiled.set(fp, compileForCheck(fp, source, compiler));
+      compiled.set(fp, compileForCheck(fp, source, new Compiler()));
     } catch (e) {
       compileErrors++;
       const rel = relative(rootPath, fp);
@@ -899,7 +898,7 @@ export async function runCheck(targetDir, opts = {}) {
       if (!compiled.has(imported) && existsSync(imported)) {
         try {
           const impSrc = readFileSync(imported, 'utf8');
-          compiled.set(imported, compileForCheck(imported, impSrc, compiler));
+          compiled.set(imported, compileForCheck(imported, impSrc, new Compiler()));
         } catch {}
       }
     }
@@ -1052,28 +1051,34 @@ export async function runCheck(targetDir, opts = {}) {
 
   // Component usage-site checks — unknown props and missing required props
   {
-    // Build component registry from all DTS
-    const componentDefs = new Map();
+    // Build per-file component registry: own definitions take priority
+    const globalDefs = new Map();
+    const localDefs = new Map();
     for (const [fp, entry] of compiled) {
       if (!entry.dts) continue;
+      const fileDefs = new Map();
       for (const [name, info] of parseComponentDTS(entry.dts)) {
-        componentDefs.set(name, info.props);
+        globalDefs.set(name, info.props);
+        fileDefs.set(name, info.props);
       }
+      localDefs.set(fp, fileDefs);
     }
 
     // Scan usage sites
-    if (componentDefs.size > 0) {
+    if (globalDefs.size > 0) {
       for (const [fp, entry] of compiled) {
         if (!entry.hasTypes) continue;
         const srcLines = entry.source.split('\n');
         const errors = fileResults.find(r => r.file === fp)?.errors || [];
         const hadEntry = errors.length > 0;
+        // Merge: own file's components override global
+        const fileDefs = new Map([...globalDefs, ...(localDefs.get(fp) || [])]);
 
         for (let s = 0; s < srcLines.length; s++) {
-          const usage = collectUsageProps(srcLines, s, componentDefs);
+          const usage = collectUsageProps(srcLines, s, fileDefs);
           if (!usage) continue;
           const { component: compName, usedProps } = usage;
-          const props = componentDefs.get(compName);
+          const props = fileDefs.get(compName);
 
           // Unknown props
           for (const used of usedProps) {
