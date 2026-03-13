@@ -314,12 +314,13 @@
         j++;
         continue;
       }
-      if (depth === 1 && (t[0] === "PROPERTY" || t[0] === "IDENTIFIER")) {
+      let isProperty = t[0] === "PROPERTY" || t[0] === "IDENTIFIER" || depth === 1 && /^[a-zA-Z_$]/.test(t[1]) && tokens[j + 1]?.[0] === "TYPE_ANNOTATION";
+      if (depth === 1 && isProperty) {
         let propName = t[1];
         let optional = false;
         let readonly = false;
         j++;
-        if (propName === "readonly" && (tokens[j]?.[0] === "PROPERTY" || tokens[j]?.[0] === "IDENTIFIER")) {
+        if (propName === "readonly" && tokens[j] && (tokens[j][0] === "PROPERTY" || tokens[j][0] === "IDENTIFIER" || /^[a-zA-Z_$]/.test(tokens[j][1]) && tokens[j + 1]?.[0] === "TYPE_ANNOTATION")) {
           readonly = true;
           propName = tokens[j][1];
           if (tokens[j].data?.predicate)
@@ -1020,7 +1021,7 @@
     let preamble = [];
     if (usesSignal) {
       preamble.push("interface Signal<T> { value: T; read(): T; lock(): Signal<T>; free(): Signal<T>; kill(): T; }");
-      preamble.push("declare function __state<T>(value: T): Signal<T>;");
+      preamble.push("declare function __state<T>(value: T | Signal<T>): Signal<T>;");
     }
     if (usesComputed) {
       preamble.push("interface Computed<T> { readonly value: T; read(): T; lock(): Computed<T>; free(): Computed<T>; kill(): T; }");
@@ -1145,6 +1146,9 @@
         if (!hasDefault)
           hasRequired = true;
         publicProps.push(`    ${propName}${opt}: ${typeStr};`);
+        if (mHead === "state") {
+          publicProps.push(`    __bind_${propName}__?: Signal<${typeStr}>;`);
+        }
       }
       lines.push(`${exp}declare class ${name} {`);
       if (publicProps.length > 0) {
@@ -2241,9 +2245,10 @@
         this.emit("PROPERTY", "prototype");
         this.emit(".", ".");
         return 2;
-      } else if (val === "::")
+      } else if (val === "::") {
         tag = "TYPE_ANNOTATION";
-      else if (val === "~=")
+        this.inTypeAnnotation = true;
+      } else if (val === "~=")
         tag = "COMPUTED_ASSIGN";
       else if (val === ":=")
         tag = "REACTIVE_ASSIGN";
@@ -4357,6 +4362,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           const ts = expandType(type);
           const opt = required ? "" : "?";
           propEntries.push(`${name}${opt}: ${ts || "any"}`);
+          propEntries.push(`__bind_${name}__?: Signal<${ts || "any"}>`);
         }
         for (const { name, type, isPublic } of readonlyVars) {
           if (!isPublic)
@@ -4451,6 +4457,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         }
         if (renderBlock) {
           const constructions = [];
+          let constructionIdx = 0;
           const extractProps = (args) => {
             const props = [];
             for (const arg of args) {
@@ -4467,10 +4474,17 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
               }
               if (obj) {
                 for (let j = 1;j < obj.length; j++) {
-                  const [key, value] = obj[j];
-                  if (typeof key === "string" && !key.startsWith("@") && !key.startsWith("__bind_")) {
-                    const val = this.generateInComponent(value, "value");
-                    props.push(`${key}: ${val}`);
+                  const pair = obj[j];
+                  const [key, value] = pair;
+                  if (typeof key === "string" && !key.startsWith("@")) {
+                    const srcLine = pair.loc?.r ?? obj.loc?.r;
+                    if (key.startsWith("__bind_") && key.endsWith("__")) {
+                      const member = typeof value === "string" && this.reactiveMembers?.has(value) ? `this.${value}` : this.generateInComponent(value, "value");
+                      props.push({ code: `${key}: ${member}`, srcLine });
+                    } else {
+                      const val = this.generateInComponent(value, "value");
+                      props.push({ code: `${key}: ${val}`, srcLine });
+                    }
                   }
                 }
               }
@@ -4483,7 +4497,28 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
             const head2 = node[0]?.valueOf?.() ?? node[0];
             if (typeof head2 === "string" && /^[A-Z]/.test(head2)) {
               const props = extractProps(node.slice(1));
-              constructions.push(`    new ${head2}({${props.join(", ")}});`);
+              const varName = `_${constructionIdx++}`;
+              const propsType = `ConstructorParameters<typeof ${head2}>[0] & {}`;
+              if (props.length === 0) {
+                const tagLine = node.loc?.r;
+                constructions.push(`    const ${varName}: ${propsType} = {};` + (tagLine != null ? ` // @rip-src:${tagLine}` : ""));
+              } else if (props.length === 1) {
+                const srcLine = props[0].srcLine ?? node.loc?.r;
+                constructions.push(`    const ${varName}: ${propsType} = {${props[0].code}};` + (srcLine != null ? ` // @rip-src:${srcLine}` : ""));
+              } else {
+                const tagLine = node.loc?.r;
+                const distinctLines = new Set(props.map((p) => p.srcLine).filter((l) => l != null));
+                if (distinctLines.size <= 1) {
+                  const srcLine = props[0].srcLine ?? tagLine;
+                  constructions.push(`    const ${varName}: ${propsType} = {${props.map((p) => p.code).join(", ")}};` + (srcLine != null ? ` // @rip-src:${srcLine}` : ""));
+                } else {
+                  constructions.push(`    const ${varName}: ${propsType} = {` + (tagLine != null ? ` // @rip-src:${tagLine}` : ""));
+                  for (const p of props) {
+                    constructions.push(`      ${p.code},` + (p.srcLine != null ? ` // @rip-src:${p.srcLine}` : ""));
+                  }
+                  constructions.push(`    };`);
+                }
+              }
             }
             for (let i = 1;i < node.length; i++)
               walkRender(node[i]);
@@ -9353,8 +9388,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeGenerator({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.13.107";
-  var BUILD_DATE = "2026-03-12@20:23:34GMT";
+  var VERSION = "3.13.108";
+  var BUILD_DATE = "2026-03-13@23:35:48GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
