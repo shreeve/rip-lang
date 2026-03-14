@@ -3420,9 +3420,9 @@
         case 331:
           return ["import", $[$0 - 4], $[$0]];
         case 332:
-          return ["import", [$[$0 - 4], $[$0 - 2]], $[$0]];
+          return ["import", $[$0 - 4], $[$0 - 2], $[$0]];
         case 333:
-          return ["import", [$[$0 - 7], $[$0 - 4]], $[$0]];
+          return ["import", $[$0 - 7], $[$0 - 4], $[$0]];
         case 344:
           return ["*", $[$0]];
         case 345:
@@ -8218,6 +8218,14 @@ ${this.indent()}}`;
       }
       if (this.options.skipImports)
         return "";
+      if (rest.length === 3) {
+        let [def, named, source2] = rest;
+        let fixedSource2 = this.addJsExtensionAndAssertions(source2);
+        if (named[0] === "*" && named.length === 2)
+          return `import ${def}, * as ${named[1]} from ${fixedSource2}`;
+        let names = named.map((i) => Array.isArray(i) && i.length === 2 ? `${i[0]} as ${i[1]}` : i).join(", ");
+        return `import ${def}, { ${names} } from ${fixedSource2}`;
+      }
       let [specifier, source] = rest;
       let fixedSource = this.addJsExtensionAndAssertions(source);
       if (typeof specifier === "string")
@@ -8225,13 +8233,6 @@ ${this.indent()}}`;
       if (Array.isArray(specifier)) {
         if (specifier[0] === "*" && specifier.length === 2)
           return `import * as ${specifier[1]} from ${fixedSource}`;
-        if (typeof specifier[0] === "string" && Array.isArray(specifier[1])) {
-          let def = specifier[0], second = specifier[1];
-          if (second[0] === "*" && second.length === 2)
-            return `import ${def}, * as ${second[1]} from ${fixedSource}`;
-          let names2 = (Array.isArray(second) ? second : [second]).map((i) => Array.isArray(i) && i.length === 2 ? `${i[0]} as ${i[1]}` : i).join(", ");
-          return `import ${def}, { ${names2} } from ${fixedSource}`;
-        }
         let names = specifier.map((i) => Array.isArray(i) && i.length === 2 ? `${i[0]} as ${i[1]}` : i).join(", ");
         return `import { ${names} } from ${fixedSource}`;
       }
@@ -9663,8 +9664,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeGenerator({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.13.119";
-  var BUILD_DATE = "2026-03-14@11:16:29GMT";
+  var VERSION = "3.13.120";
+  var BUILD_DATE = "2026-03-14@11:34:17GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

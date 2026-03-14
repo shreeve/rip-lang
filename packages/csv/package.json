@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/csv",
-  "version": "1.3.97",
+  "version": "1.3.98",
   "description": "Fast, flexible CSV parser and writer for Rip - indexOf ratchet engine, auto-detection, zero dependencies",
   "type": "module",
   "main": "csv.rip",
@@ -31,7 +31,7 @@
   "author": "Steve Shreeve <steve.shreeve@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "rip-lang": ">=3.13.119"
+    "rip-lang": ">=3.13.120"
   },
   "files": [
     "csv.rip",
