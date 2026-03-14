@@ -64,12 +64,11 @@ msg = 42
 console.log total, label, active, result, upper, joined, first, msg
 
 # ──────────────────────────────────────────────────
-# GAPS — inference doesn't reach these cases
+# FIXED — strict mode catches these cases
 # ──────────────────────────────────────────────────
 #
-# To detect `any`, we pass the variable to `expectString()`.
-# If the type were properly inferred as `number`, TS would
-# reject the call. With `any`, it silently passes.
+# The patcher only walks top-level statements, but strict mode
+# rejects `any` at call sites, so these are caught regardless.
 
 # ── Fixed: First assignment inside a block ──
 #

@@ -91,7 +91,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Category                       | Tested In     | Notes                                                                                                          |
 | ------------------------------ | ------------- | -------------------------------------------------------------------------------------------------------------- |
 | Runtime return-type validation | 10-validation | Return types are erased — `response.json()` is unvalidated `any`; no `schema.parse()` equivalent               |
-| Shared state typing (stash)   | 09-components | Stash is untyped — any path/value accepted; zustand equivalent is fully typed (see .tsx)                       |
+| Shared state typing (stash)    | 09-components | Stash is untyped — any path/value accepted; zustand equivalent is fully typed (see .tsx)                       |
 | Generic components             | 09-components | Can't parameterize components by type (e.g. typed select where value type flows through props)                 |
 
 ### 🔶 Partial
@@ -101,7 +101,6 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Event handler typing          | 09, 12        | Inline handlers typed via `__RipEvents`; named method refs (`@submit: @handler`) remain `any` — annotate params explicitly |
 | Generic types                 | 03-structural | Declarable; .d.ts emission has some gaps                                                                                 |
 | Render block type safety      | 09, 12        | Intrinsic tag/attr/event checking via `__ripEl`; conditionals and text expressions still unchecked                       |
-| Type inference (split decl.)  | 11-inference  | Top-level `x = expr` inferred via `patchUninitializedTypes`; block-scoped and destructured now caught by strict mode     |
 
 ### ✅ Working
 
@@ -133,6 +132,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Async/await unwrapping     | 10-validation  | `!` compiles to `await`; return types inferred or explicit; `Promise<T>` → `T`                                                         |
 | Hover types                | *(IDE only)*   | Column-aware source maps, overload preference, typed implementation params                                                             |
 | Union value autocomplete   | *(IDE only)*   | String literal union completions for prop values, prop defaults, and typed variable assignments                                        |
+| Type inference (split decl.) | 11-inference   | Top-level inferred via `patchUninitializedTypes`; block-scoped and destructured caught by `strict: true`                               |
 | Strict mode                | *(all files)*  | `strict: true` enabled — `noImplicitAny`, full null checks, strict function types all active                                          |
 | Inline discriminated unions | 04-unions      | Inline `{ ... } \| { ... }` union types now emit valid .d.ts (previously mangled by multi-line formatting)                            |
 | Go-to-def on imports       | *(IDE only)*   | Resolves import paths directly and finds exported symbol in target file; works for `from './file.rip'` imports                        |
