@@ -105,17 +105,17 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 `rip check` passes for these features but IDE presentation (squiggle positions, hover types, diagnostic messages) has not been manually verified. To promote to ✅, open the relevant file in a VS Code-based editor and confirm: correct squiggle position, correct hover type, no parse errors masking diagnostics, no false positives.
 
-| Category                     | Tested In     | IDE check                                                                                |
-| ---------------------------- | ------------- | ---------------------------------------------------------------------------------------- |
-| Strict mode                  | *(all files)* | No new false-positive squiggles in previously clean typed files                          |
-| Nullable safety              | 01-basic      | Null access squiggle lands on `.prop` access, not the variable declaration               |
-| Readonly / immutability      | 03-structural | Squiggle on reassignment of `=!` const lands on correct line                             |
-| Element type inheritance     | 09-components | `InheritedInput autofocus: true` — no error; `autofocus: "yes"` — squiggle on `"yes"`    |
-| Event handler typing         | 09, 12        | `@click: (e) ->` — hover on `e` shows `MouseEvent`                                       |
-| Type inference (split decl.) | 11-inference  | Hover on inferred variable shows correct type, squiggle on misuse lands correctly        |
-| Intrinsic element typing     | 12-intrinsics | `button disabled: "yes"` shows squiggle on `"yes"`, not a parse error on the whole block |
-| Go-to-def on imports         | *(IDE only)*  | Cmd+click on imported symbol jumps to correct line in target `.rip` file                 |
-| Unused variable dimming      | *(IDE only)*  | Unused variable text is visually dimmed (not just underlined)                            |
+| Category                     | Tested In     | Notes                                                                                                       |
+| ---------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------- |
+| Strict mode                  | *(all files)* | `strict: true` — `noImplicitAny`, full null checks, strict function types all active                        |
+| Nullable safety              | 01-basic      | `strict: true` enables full `strictNullChecks` — null/undefined caught at all usage sites                   |
+| Readonly / immutability      | 03-structural | `=!` emits `const` in JS and `declare const` in .d.ts; binding-level immutability enforced                  |
+| Element type inheritance     | 09-components | `# @inherits tag` widens constructor props with `__RipProps<'tag'>`; runtime forwards unknown props         |
+| Event handler typing         | 09, 12        | Inline handlers typed via `__RipEvents`; named method refs (`@submit: @handler`) remain `any`               |
+| Type inference (split decl.) | 11-inference  | Top-level `x = expr` inferred via `patchUninitializedTypes`; block-scoped and destructured caught by strict |
+| Intrinsic element typing     | 12-intrinsics | `__ripEl` emits typed helper calls; lib.dom source of truth for tags, attrs, events, global attrs           |
+| Go-to-def on imports         | *(IDE only)*  | Resolves import paths directly and finds exported symbol in target file; works for `from './file.rip'`      |
+| Unused variable dimming      | *(IDE only)*  | Forwards `DiagnosticTag.Unnecessary` and `DiagnosticTag.Deprecated` from TS; deprecated gets strikethrough  |
 
 ### ✅ Working
 
