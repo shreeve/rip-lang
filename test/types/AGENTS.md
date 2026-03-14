@@ -69,7 +69,7 @@ Each file exercises a specific type feature. Status key:
 | 07-integration.rip | Cross-module imports of typed functions                     | pass   | Cross-file type flow via .d.ts                                          |
 | 08-reactive.rip    | `:: T :=`, `:: T ~=`, `:: T =!`, `:: T ~>`                  | pass   | Reactive state annotations                                              |
 | 09-components.rip  | `@prop:: T :=`, `@prop:: T`, default validation             | pass   | Required props, default-vs-type validation, 4 negative body tests       |
-| 10-validation.rip  | Runtime validation + async/await (`!` operator)             | pass   | Rip erases types; TS+Zod validates                                      |
+| 10-validation.rip  | Runtime validation use cases (4 real-world patterns)        | pass   | API shape, composition, discriminated union config, 3rd-party transform |
 | 11-inference.rip   | Type inference on unannotated variables                     | pass   | Top-level works; block/destructure/any are gaps                         |
 | 12-intrinsics.rip  | Intrinsic tags, attributes, events, global attrs            | pass   | `__ripEl` validates via lib.dom; wrong types caught; event params typed |
 
@@ -137,11 +137,11 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Array destructured params  | 06-functions   | `[first:: string, second:: string]` → tuple `[string, string]` in .d.ts                                                            |
 | Nested destructured params | 06-functions   | `{user: {name:: string, age:: number}}` → `{user: {name: string, age: number}}` in .d.ts                                           |
 | `void` return annotation   | 06-functions   | `def fn!` emits `: void` in .d.ts; `!` sigil suppresses implicit return and declares void return type                              |
+| Async/await unwrapping     | 06-functions   | `!` compiles to `await`; return types inferred or explicit; `Promise<T>` → `T`                                                     |
 | Cross-file type flow       | 07-integration | Via .d.ts; untyped files get `@ts-nocheck`; unresolved `.rip` imports flagged                                                      |
 | Component prop types       | 09-components  | Enriched stub gives Signal<T>/Computed<T> declarations; TS checks computeds, methods, and render block intrinsic elements          |
 | Required component props   | 09-components  | `@prop:: T` (no `:=`) — required in constructor, caught at usage sites                                                             |
 | Prop default validation    | 09-components  | `@prop:: T := val` — validates default against declared type; squiggle on prop name                                                |
-| Async/await unwrapping     | 10-validation  | `!` compiles to `await`; return types inferred or explicit; `Promise<T>` → `T`                                                     |
 | Hover types                | *(IDE only)*   | Column-aware source maps, overload preference, typed implementation params                                                         |
 | Union value autocomplete   | *(IDE only)*   | String literal union completions for prop values, prop defaults, and typed variable assignments                                    |
 | Semantic token provider    | *(IDE only)*   | Bridges TS `getEncodedSemanticClassifications()` to Rip source; typed files get semantic tokens, reactive vars not marked readonly |

@@ -224,3 +224,30 @@ let result22 = ['3', '7', 'nope'].map(function(it) { return (parseInt(it) || 0) 
 console.log('parseNums:', result20)
 console.log('map double:', result21)
 console.log('map it:', result22)
+
+// ── Async/await with ! (dammit) operator ──
+// The ! (dammit) operator in Rip calls a function and awaits the result.
+// In TS, this is just async/await. Return types flow through.
+
+async function delay(ms: number): Promise<string> {
+  await new Promise(r => setTimeout(r, ms))
+  return `done after ${ms}ms`
+}
+
+let r1 = await delay(50)
+console.log(`r1: ${r1}`)
+
+// If we wrote `let r2: number = await delay(50)`, tsc catches:
+//   "Type 'string' is not assignable to type 'number'" ✓
+
+// Without return annotation, TS infers the return type from the body
+async function delayUntyped(ms: number) {
+  await new Promise(r => setTimeout(r, ms))
+  return `untyped after ${ms}ms`
+}
+
+let r3 = await delayUntyped(50)
+console.log(`r3: ${r3}`)
+// r3 is inferred as string — assigning to number is caught
+// @ts-expect-error — string is not assignable to number
+let r4: number = r3

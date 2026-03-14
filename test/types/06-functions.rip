@@ -210,3 +210,31 @@ result22 = ["3", "7", "nope"].map -> parseInt(it) or 0
 console.log "parseNums:", result20
 console.log "map double:", result21
 console.log "map it:", result22
+
+# ── Async/await with ! (dammit) operator ──
+# The ! operator calls a function and awaits the result in one step.
+# Return types flow through: explicit annotations validate against
+# the body, and unannotated functions infer the return type.
+
+def delay(ms:: number):: Promise<string>
+  sleep! ms
+  "done after #{ms}ms"
+
+# ! operator: calls + awaits in one step
+r1 = delay! 50
+console.log "r1: #{r1}"
+
+# If we wrote `r2:: number = delay! 50`, rip check catches:
+#   "Type 'string' is not assignable to type 'number'" ✓
+# (@ts-expect-error doesn't work here — shadow file line misalignment)
+
+# Without return annotation, TS infers the return type from the body
+def delayUntyped(ms:: number)
+  sleep! ms
+  "untyped after #{ms}ms"
+
+r3 = delayUntyped! 50
+console.log "r3: #{r3}"
+# r3 is inferred as string — assigning to number is caught
+# @ts-expect-error — Type 'string' is not assignable to type 'number'
+r4:: number = r3

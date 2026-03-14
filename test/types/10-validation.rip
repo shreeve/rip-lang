@@ -1,71 +1,190 @@
-# 10-validation.rip — Runtime validation + async/await (! operator)
+# 10-validation.rip — Runtime validation use cases
 #
-# Tier 2 — Essential for real apps. Every typed API call needs
-# validated responses, not blind trust in response.json().
+# Rip type blocks describe shapes at compile time but have no
+# runtime effect. These real-world patterns show what typed code
+# needs beyond compile-time checking. The .ts companion implements
+# each case with Zod for comparison.
 #
-# Gap: return type annotations are erased — response.json() is
-# unvalidated `any` at runtime. The .d.ts tells callers it's a
-# User, but nothing actually checks. In TS+Zod, schema.parse()
-# validates at runtime AND the inferred type checks every field
-# access at compile time (wrong property, wrong nullability, etc).
+# Use cases:
+#   1. API response shape — validate what the server returns
+#   2. Composition — client schema ≠ server model
+#   3. Non-DB config — discriminated unions with no backing table
+#   4. 3rd-party API transform — normalize external data on parse
+
+# ── 1. API response shape ──
+#
+# The server returns JSON, the client needs to know the shape.
+# In Rip, the type annotation is compile-time only —
+# response.json() is unvalidated `any` at runtime.
+# In TS+Zod, schema.parse() validates AND the type is inferred.
 
 type User =
   id: number
   email: string
-  firstName: string | null
-  lastName: string | null
-  phone: string | null
+  name: string | null
 
+# compile-time return type, but response.json() is unvalidated any
 def fetchUser(id:: number):: Promise<User>
   response = fetch! "/api/users/#{id}"
   response.json()
 
-# ── Runtime exercise ──
+alice:: User = { id: 1, email: 'alice@example.com', name: 'Alice' }
+bob:: User = { id: 2, email: 'bob@example.com', name: null }
 
-alice:: User =
+console.log "user: #{alice.id} #{alice.email} #{alice.name}"
+console.log "user: #{bob.id} #{bob.email} #{bob.name ?? '(anon)'}"
+
+# ── 2. Composition — client schema ≠ server model ──
+#
+# The DB stores order items inside a `meta Json` column and dates
+# as DateTime. The client schema types meta, transforms date strings
+# into Dayjs instances, and computes derived fields. The output has
+# fields that don't exist in the DB and fields whose types changed.
+#
+#   Server (DB model):              Client (parsed + transformed):
+#   ─────────────────               ──────────────────────────────
+#   id           Int @id            id          number
+#   userId       Int                number      string
+#   number       String             payment     string
+#   payment      String             subtotal    number
+#   subtotal     Int                total       number
+#   total        Int                meta        { items: OrderItem[] }
+#   meta         Json ─────────────► name       string    ← computed
+#   shippedAt    DateTime?          status      string    ← computed
+#   completedAt  DateTime?          shippedAt   Dayjs | null ← was string
+#   createdAt    DateTime           completedAt Dayjs | null ← was string
+#   updatedAt    DateTime           createdAt   Dayjs        ← was string
+#
+# In Zod, .transform() computes derived fields during .parse() —
+# the output type is inferred automatically. In Rip, you need
+# separate types and a manual conversion function.
+
+type OrderItem =
+  id: number
+  name: string
+  price: number
+  quantity: number
+
+type OrderMeta =
+  items: OrderItem[]
+
+type Order =
+  id: number
+  number: string
+  payment: string
+  subtotal: number
+  total: number
+  meta: OrderMeta
+  name: string
+  status: string
+  shippedAt: string | null
+  completedAt: string | null
+  createdAt: string
+
+def parseOrder(raw:: any):: Order
+  items = raw.meta.items
+  name = items[0]?.name ?? ''
+  if items.length > 1
+    more = items.length - 1
+    suffix = '' if more is 1 else 's'
+    name += " + #{more} more item#{suffix}"
+  status = raw.completedAt ? 'Completed' : raw.shippedAt ? 'Shipped' : 'Pending'
+  { ...raw, name, status }
+
+order = parseOrder({
   id: 1
-  email: 'alice@example.com'
-  firstName: 'Alice'
-  lastName: 'Smith'
-  phone: '555-1234'
+  number: 'ORD-1001'
+  payment: 'card'
+  subtotal: 22500
+  total: 22500
+  meta: {
+    items: [
+      { id: 1, name: 'Lab Panel A', price: 7500, quantity: 1 }
+      { id: 2, name: 'Lab Panel B', price: 7500, quantity: 2 }
+    ]
+  }
+  shippedAt: null
+  completedAt: null
+  createdAt: '2024-03-15T10:30:00Z'
+})
 
-bob:: User =
-  id: 2
-  email: 'bob@example.com'
-  firstName: null
-  lastName: null
-  phone: null
+console.log "order: #{order.number} #{order.name}"
+console.log "status: #{order.status}"
+console.log "item: #{order.meta.items[0].name} $#{(order.meta.items[0].price / 100).toFixed(2)}"
+console.log "item: #{order.meta.items[1].name} $#{(order.meta.items[1].price / 100).toFixed(2)} x#{order.meta.items[1].quantity}"
 
-console.log "id: #{alice.id}"
-console.log "email: #{alice.email}"
-console.log "name: #{alice.firstName} #{alice.lastName}"
-console.log "phone: #{alice.phone}"
-console.log "id: #{bob.id}"
-console.log "email: #{bob.email}"
-console.log "name: #{bob.firstName ?? '(anon)'}"
-console.log "phone: #{bob.phone ?? '(none)'}"
+# ── 3. Non-DB config — discriminated unions ──
+#
+# Workflow configs are built server-side and returned as JSON —
+# no database table. Each step type has different required fields.
+# The `type` field determines which shape applies.
+#
+# In Zod: z.discriminatedUnion('type', [...]) validates the
+# discriminant and applies the correct schema per variant.
+# In Rip: type blocks + union describe the shape at compile time,
+# but nothing validates at runtime.
 
-# ── Async/await with ! operator ──
+type IntroStep =
+  type: "intro"
+  heading: string
+  consent: string
 
-def delay(ms:: number):: Promise<string>
-  sleep! ms
-  "done after #{ms}ms"
+type TaskStep =
+  type: "task"
+  heading: string
+  duration: number
 
-# ! operator: calls + awaits in one step
-r1 = delay! 50
-console.log "r1: #{r1}"
+type FinalStep =
+  type: "final"
+  heading: string
+  button: string | null
 
-# If we wrote `r2:: number = delay! 50`, rip check catches:
-#   "Type 'string' is not assignable to type 'number'" ✓
-# (@ts-expect-error doesn't work here — shadow file line misalignment)
+type WorkflowStep = IntroStep | TaskStep | FinalStep
 
-# Without return annotation, TS infers the return type from the body
-def delayUntyped(ms:: number)
-  sleep! ms
-  "untyped after #{ms}ms"
+type Workflow =
+  name: string
+  steps: WorkflowStep[]
 
-r3 = delayUntyped! 50
-console.log "r3: #{r3}"
-# r3 is inferred as string — assigning to number is caught
-# @ts-expect-error — Type 'string' is not assignable to type 'number'
-r4:: number = r3
+workflow:: Workflow =
+  name: 'Lab Kit Collection'
+  steps: [
+    { type: 'intro', heading: 'Welcome', consent: 'I agree to the terms' }
+    { type: 'task', heading: 'Collect Sample', duration: 300 }
+    { type: 'final', heading: 'Ship Kit', button: 'findLocations' }
+  ]
+
+console.log "workflow: #{workflow.name} (#{workflow.steps.length} steps)"
+for step in workflow.steps
+  console.log "step: #{step.type} - #{step.heading}"
+  # after narrowing on step.type, variant-specific fields are accessible
+  if step.type is 'intro'
+    console.log "  consent: #{step.consent}"
+  else if step.type is 'task'
+    console.log "  duration: #{step.duration}s"
+  else if step.type is 'final'
+    console.log "  button: #{step.button}"
+
+# ── 4. 3rd-party API transform ──
+#
+# External APIs return data in their own format — PascalCase,
+# different field names, nested differently. The client needs to
+# normalize this into the app's conventions. This data doesn't
+# come from your DB at all, so a server .schema can't define it.
+#
+# In Zod, .transform() reshapes during .parse() — one declaration,
+# input validated + output typed. In Rip, you need two types and
+# a manual conversion function.
+
+type RawQBCustomer =
+  Id: string
+  DisplayName: string
+
+type QBCustomer =
+  id: string
+  displayName: string
+
+def parseQBCustomer(raw:: RawQBCustomer):: QBCustomer
+  { id: raw.Id, displayName: raw.DisplayName }
+
+customer = parseQBCustomer({ Id: '123', DisplayName: 'Acme Corp' })
+console.log "customer: #{customer.id} #{customer.displayName}"
