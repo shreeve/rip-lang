@@ -78,10 +78,16 @@ test "validateRequest rejects multiple Host headers", ->
   result = validateRequest(req)
   eq result.valid, false
 
-test "path traversal is normalized by URL parser", ->
+test "URL parser normalizes basic path traversal", ->
   # Bun's URL parser resolves .. before it reaches validateRequest
   url = new URL('http://localhost/../../../etc/passwd')
   eq url.pathname, '/etc/passwd'  # already normalized — safe
+
+test "validateRequest rejects double-encoded traversal", ->
+  # %252e%252e decodes to %2e%2e on first pass, then .. on second
+  req = new Request('http://localhost/%252e%252e/%252e%252e/etc/passwd')
+  result = validateRequest(req)
+  eq result.valid, false
 
 test "validateRequest accepts normal paths with dots", ->
   req = new Request('http://localhost/api/v1.0/users')
