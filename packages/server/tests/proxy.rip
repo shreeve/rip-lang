@@ -1,0 +1,99 @@
+# proxy.rip — reverse proxy and config loader tests
+
+import { test, eq, ok } from '../test.rip'
+import { normalizeAppConfig, applyConfig } from '../edge/config.rip'
+import { createAppRegistry, registerApp, resolveHost, getAppState } from '../edge/registry.rip'
+import { broadcastBinary, createHub, addClient } from '../edge/realtime.rip'
+import { setEventJsonMode, logEvent } from '../control/events.rip'
+
+# --- Config normalization ---
+
+test "normalizeAppConfig sets defaults", ->
+  config = normalizeAppConfig('myapp', {}, '/base')
+  eq config.id, 'myapp'
+  eq config.maxQueue, 512
+  eq config.queueTimeoutMs, 30000
+  eq config.readTimeoutMs, 30000
+  eq config.hosts.length, 0
+
+test "normalizeAppConfig preserves explicit values", ->
+  config = normalizeAppConfig('api', { hosts: ['api.com'], workers: 8, maxQueue: 2048 }, '/base')
+  eq config.hosts[0], 'api.com'
+  eq config.workers, 8
+  eq config.maxQueue, 2048
+
+test "normalizeAppConfig resolves relative entry path", ->
+  config = normalizeAppConfig('app', { entry: './index.rip' }, '/srv/apps')
+  ok config.entry.startsWith('/')
+  ok config.entry.includes('index.rip')
+
+test "normalizeAppConfig keeps absolute entry path", ->
+  config = normalizeAppConfig('app', { entry: '/opt/app/index.rip' }, '/srv')
+  eq config.entry, '/opt/app/index.rip'
+
+# --- Config apply ---
+
+test "applyConfig registers apps in registry", ->
+  registry = createAppRegistry()
+  config =
+    apps:
+      web: { hosts: ['example.com'], workers: 4 }
+      api: { hosts: ['api.example.com'], workers: 2 }
+  registered = applyConfig(config, registry, registerApp, '/srv')
+  eq registered.length, 2
+  eq resolveHost(registry, 'example.com'), 'web'
+  eq resolveHost(registry, 'api.example.com'), 'api'
+
+test "applyConfig handles empty apps", ->
+  registry = createAppRegistry()
+  registered = applyConfig({ apps: {} }, registry, registerApp, '/srv')
+  eq registered.length, 0
+
+# --- Binary broadcast ---
+
+test "broadcastBinary delivers to group members", ->
+  hub = createHub()
+  received = []
+  addClient(hub, 'c1', { send: ((data) -> received.push(data)) })
+  addClient(hub, 'c2', { send: ((data) -> received.push(data)) })
+  # Subscribe both to /room
+  hub.members.get('c1').add('/room')
+  hub.members.get('c2').add('/room')
+  hub.members.set('/room', new Set(['c1', 'c2']))
+  # Broadcast binary
+  buf = new Uint8Array([1, 2, 3, 4])
+  broadcastBinary(hub, ['/room'], buf, null)
+  eq received.length, 2
+
+test "broadcastBinary excludes sender", ->
+  hub = createHub()
+  received = { c1: [], c2: [] }
+  addClient(hub, 'c1', { send: ((data) -> received.c1.push(data)) })
+  addClient(hub, 'c2', { send: ((data) -> received.c2.push(data)) })
+  hub.members.get('c1').add('/room')
+  hub.members.get('c2').add('/room')
+  hub.members.set('/room', new Set(['c1', 'c2']))
+  broadcastBinary(hub, ['/room'], new Uint8Array([5, 6]), 'c1')
+  eq received.c1.length, 0
+  eq received.c2.length, 1
+
+test "broadcastBinary to direct client", ->
+  hub = createHub()
+  received = []
+  addClient(hub, 'c1', { send: ((data) -> received.push(data)) })
+  hub.members.set('c1', new Set())
+  broadcastBinary(hub, ['c1'], new Uint8Array([7, 8]), null)
+  eq received.length, 1
+
+# --- Event logger ---
+
+test "logEvent emits without error", ->
+  setEventJsonMode(false)
+  logEvent('test_event', { key: 'val' })
+  ok true
+
+test "logEvent JSON mode emits without error", ->
+  setEventJsonMode(true)
+  logEvent('test_event', { key: 'val' })
+  setEventJsonMode(false)
+  ok true
