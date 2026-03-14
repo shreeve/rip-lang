@@ -117,29 +117,6 @@ function getMemberType(target) {
   return null;
 }
 
-function findInheritedTagNearLine(source, line, componentName = null) {
-  if (typeof source !== 'string') return null;
-  const lines = source.split('\n');
-  if (Number.isInteger(line)) {
-    const start = Math.max(0, line - 2);
-    const end = Math.min(lines.length - 1, line + 2);
-    for (let i = start; i <= end; i++) {
-      const m = lines[i]?.match(/#\s*@inherits\s+([A-Za-z][\w-]*)/);
-      if (m) return m[1];
-    }
-  }
-  if (componentName) {
-    const escaped = componentName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const declRe = new RegExp(`\\b${escaped}\\b\\s*=\\s*component\\b`);
-    for (const lineText of lines) {
-      if (!declRe.test(lineText)) continue;
-      const m = lineText.match(/#\s*@inherits\s+([A-Za-z][\w-]*)/);
-      if (m) return m[1];
-    }
-  }
-  return null;
-}
-
 // ============================================================================
 // Prototype Installation
 // ============================================================================
@@ -802,7 +779,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       }
     }
 
-    const inheritsTag = findInheritedTagNearLine(this.options.source, sexpr?.loc?.r, this._componentName);
+    const inheritsTag = rest[0]?.valueOf?.() ?? null;
     const publicPropNames = new Set();
     for (const { name, isPublic } of stateVars) if (isPublic) publicPropNames.add(name);
     for (const { name, isPublic } of readonlyVars) if (isPublic) publicPropNames.add(name);

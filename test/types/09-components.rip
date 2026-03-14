@@ -24,7 +24,7 @@ export Input = component
       if error
         div error
 
-export InheritedInput = component # @inherits input
+export InheritedInput = component extends input
   @label:: string := ""
   @error:: string := ""
 
@@ -192,17 +192,13 @@ export TypeTestComp = component
 #
 # Tracked in AGENTS.md gap table under "Event handler typing".
 
-# ── Gap: element type inheritance ──
+# ── Element type inheritance ──
 #
-# There's no way to declare that a component extends an HTML
-# element's type surface. The Input component above accepts
-# `type`, `placeholder`, `value` — but only because we declared
-# each prop manually. In React/TS:
-#   type InputProps = ComponentProps<'input'> & { label?: string }
-# gives you ALL of <input>'s props (onChange, onFocus, aria-*, etc.)
-# for free. In Rip, each must be listed explicitly or they're unknown.
-#
-# Tracked in AGENTS.md gap table under "Element type inheritance".
+# `component extends input` widens the constructor props with
+# `__RipProps<'input'>`, giving access to ALL of <input>'s props
+# (autofocus, maxLength, aria-*, etc.) for free. The runtime
+# forwards unknown props to the first matching element in the
+# render block.
 
 # ── Gap: generic components ──
 #

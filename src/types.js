@@ -1189,28 +1189,6 @@ function expandSuffixes(typeStr) {
   return typeStr;
 }
 
-function findInheritedTagNearLine(sourceLines, line, componentName = null) {
-  if (!Array.isArray(sourceLines)) return null;
-  if (Number.isInteger(line)) {
-    const start = Math.max(0, line - 2);
-    const end = Math.min(sourceLines.length - 1, line + 2);
-    for (let i = start; i <= end; i++) {
-      const m = sourceLines[i]?.match(/#\s*@inherits\s+([A-Za-z][\w-]*)/);
-      if (m) return m[1];
-    }
-  }
-  if (componentName) {
-    const escaped = componentName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const declRe = new RegExp(`\\b${escaped}\\b\\s*=\\s*component\\b`);
-    for (const lineText of sourceLines) {
-      if (!declRe.test(lineText)) continue;
-      const m = lineText.match(/#\s*@inherits\s+([A-Za-z][\w-]*)/);
-      if (m) return m[1];
-    }
-  }
-  return null;
-}
-
 // ============================================================================
 // Component type emission — walk s-expression for component declarations
 // ============================================================================
@@ -1243,7 +1221,7 @@ function emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars, so
 
   if (name && compNode) {
     let exp = exported ? 'export ' : '';
-    let inheritsTag = findInheritedTagNearLine(sourceLines, compNode.loc?.r ?? sexpr.loc?.r, name);
+    let inheritsTag = compNode[1]?.valueOf?.() ?? null;
     let inheritedPropsType = inheritsTag ? `__RipProps<'${inheritsTag}'>` : null;
     if (inheritedPropsType) usesIntrinsicProps = true;
 

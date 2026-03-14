@@ -736,7 +736,8 @@ grammar =
   #          render
   #            div "Count: {@count}"
   Component: [
-    o 'COMPONENT INDENT ComponentBody OUTDENT', '["component", null, ["block", ...3]]'
+    o 'COMPONENT INDENT ComponentBody OUTDENT'                    , '["component", null, ["block", ...3]]'
+    o 'COMPONENT EXTENDS Expression INDENT ComponentBody OUTDENT' , '["component", 3, ["block", ...5]]'
   ]
 
   ComponentBody: [
