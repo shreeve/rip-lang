@@ -9656,7 +9656,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   }
   // src/browser.js
   var VERSION = "3.13.118";
-  var BUILD_DATE = "2026-03-14@10:30:23GMT";
+  var BUILD_DATE = "2026-03-14@10:39:07GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -11083,6 +11083,13 @@ ${indented}`);
     e.stopPropagation();
     return fn();
   };
+  globalThis.__ariaLastFocusedEl ??= null;
+  if (typeof document !== "undefined" && !globalThis.__ariaFocusTrackerBound) {
+    document.addEventListener("focusin", function(e) {
+      return globalThis.__ariaLastFocusedEl = e.target;
+    }, true);
+    globalThis.__ariaFocusTrackerBound = true;
+  }
   _ariaListNav = function(e, h) {
     if (e.isComposing)
       return;
@@ -11135,23 +11142,68 @@ ${indented}`);
     };
   };
   _ariaBindPopover = function(open, popover, setOpen, source = null) {
-    let desired, el, get, onToggle, opts, shown, src;
+    let currentFocus, desired, el, get, onToggle, opts, restoreEl, restoreFocus, shown, src;
     get = function(x) {
       return typeof x === "function" ? x() : x;
+    };
+    currentFocus = function() {
+      let active, last;
+      active = document.activeElement;
+      if (active && active !== document.body)
+        return active;
+      last = globalThis.__ariaLastFocusedEl;
+      if (last?.isConnected !== false)
+        return last;
+      return null;
     };
     el = get(popover);
     if (!el)
       return;
     if (!Object.hasOwn(HTMLElement.prototype, "togglePopover"))
       return;
+    restoreEl = null;
+    restoreFocus = function() {
+      let focusAttempt, target;
+      target = restoreEl;
+      restoreEl = null;
+      if (!target?.focus)
+        return;
+      focusAttempt = function(tries = 6) {
+        if (!(target.isConnected !== false))
+          return;
+        try {
+          target.focus({ preventScroll: true });
+        } catch {
+          target.focus();
+        }
+        if (document.activeElement === target || tries <= 1)
+          return;
+        return setTimeout(function() {
+          return focusAttempt(tries - 1);
+        }, 16);
+      };
+      return requestAnimationFrame(function() {
+        return focusAttempt();
+      });
+    };
     onToggle = function(e) {
-      return setOpen?.(e.newState === "open");
+      let isOpen;
+      isOpen = e.newState === "open";
+      if (isOpen) {
+        restoreEl = get(source) || currentFocus();
+      } else {
+        restoreFocus();
+      }
+      return setOpen?.(isOpen);
     };
     el.addEventListener("toggle", onToggle);
     shown = el.matches(":popover-open");
     desired = !!open;
     if (shown !== desired) {
       src = get(source);
+      if (desired) {
+        restoreEl = src || currentFocus();
+      }
       opts = src && desired ? { force: desired, source: src } : { force: desired };
       try {
         el.togglePopover(opts);
@@ -11162,13 +11214,48 @@ ${indented}`);
     };
   };
   _ariaBindDialog = function(open, dialog, setOpen, dismissable = true) {
-    let el, get, onCancel, onClose;
+    let currentFocus, el, get, onCancel, onClose, restoreEl, restoreFocus;
     get = function(x) {
       return typeof x === "function" ? x() : x;
+    };
+    currentFocus = function() {
+      let active, last;
+      active = document.activeElement;
+      if (active && active !== document.body)
+        return active;
+      last = globalThis.__ariaLastFocusedEl;
+      if (last?.isConnected !== false)
+        return last;
+      return null;
     };
     el = get(dialog);
     if (!el?.showModal)
       return;
+    restoreEl = null;
+    restoreFocus = function() {
+      let focusAttempt, target;
+      target = restoreEl;
+      restoreEl = null;
+      if (!target?.focus)
+        return;
+      focusAttempt = function(tries = 6) {
+        if (!(target.isConnected !== false))
+          return;
+        try {
+          target.focus({ preventScroll: true });
+        } catch {
+          target.focus();
+        }
+        if (document.activeElement === target || tries <= 1)
+          return;
+        return setTimeout(function() {
+          return focusAttempt(tries - 1);
+        }, 16);
+      };
+      return requestAnimationFrame(function() {
+        return focusAttempt();
+      });
+    };
     onCancel = function(e) {
       if (!dismissable) {
         e.preventDefault();
@@ -11177,11 +11264,14 @@ ${indented}`);
       return setOpen?.(false);
     };
     onClose = function() {
-      return setOpen?.(false);
+      setOpen?.(false);
+      return restoreFocus();
     };
     el.addEventListener("cancel", onCancel);
     el.addEventListener("close", onClose);
     if (open && !el.open) {
+      if (!restoreEl)
+        restoreEl = currentFocus();
       try {
         el.showModal();
       } catch {}

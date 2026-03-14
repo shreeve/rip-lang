@@ -1045,6 +1045,11 @@ _ariaNAV = (e, fn) ->
   e.stopPropagation()
   fn()
 
+globalThis.__ariaLastFocusedEl ?= null
+if typeof document isnt 'undefined' and not globalThis.__ariaFocusTrackerBound
+  document.addEventListener 'focusin', (e) -> globalThis.__ariaLastFocusedEl = e.target, true
+  globalThis.__ariaFocusTrackerBound = true
+
 _ariaListNav = (e, h) ->
   return if e.isComposing               # IME guard: ignore events during CJK composition
   switch e.key
@@ -1077,17 +1082,44 @@ _ariaPopupDismiss = (open, popup, close, els = [], repos = null) ->
 # source: optional control element or lazy getter used as popover invoker
 _ariaBindPopover = (open, popover, setOpen, source = null) ->
   get = (x) -> if typeof x is 'function' then x() else x
+  currentFocus = ->
+    active = document.activeElement
+    return active if active and active isnt document.body
+    last = globalThis.__ariaLastFocusedEl
+    return last if last?.isConnected isnt false
+    null
   el = get(popover)
   return unless el
   return unless Object.hasOwn(HTMLElement.prototype, 'togglePopover')
+  restoreEl = null
 
-  onToggle = (e) -> setOpen?(e.newState is 'open')
+  restoreFocus = ->
+    target = restoreEl
+    restoreEl = null
+    return unless target?.focus?
+    focusAttempt = (tries = 6) ->
+      return unless target.isConnected isnt false
+      try target.focus preventScroll: true
+      catch then target.focus()
+      return if document.activeElement is target or tries <= 1
+      setTimeout (-> focusAttempt(tries - 1)), 16
+    requestAnimationFrame -> focusAttempt()
+
+  onToggle = (e) ->
+    isOpen = e.newState is 'open'
+    if isOpen
+      restoreEl = get(source) or currentFocus()
+    else
+      restoreFocus()
+    setOpen?(isOpen)
   el.addEventListener 'toggle', onToggle
 
   shown = el.matches(':popover-open')
   desired = !!open
   if shown isnt desired
     src = get(source)
+    if desired
+      restoreEl = src or currentFocus()
     opts = if src and desired then { force: desired, source: src } else { force: desired }
     try
       el.togglePopover(opts)
@@ -1105,8 +1137,27 @@ _ariaBindPopover = (open, popover, setOpen, source = null) ->
 # dismissable: false prevents Esc/cancel close
 _ariaBindDialog = (open, dialog, setOpen, dismissable = true) ->
   get = (x) -> if typeof x is 'function' then x() else x
+  currentFocus = ->
+    active = document.activeElement
+    return active if active and active isnt document.body
+    last = globalThis.__ariaLastFocusedEl
+    return last if last?.isConnected isnt false
+    null
   el = get(dialog)
   return unless el?.showModal?
+  restoreEl = null
+
+  restoreFocus = ->
+    target = restoreEl
+    restoreEl = null
+    return unless target?.focus?
+    focusAttempt = (tries = 6) ->
+      return unless target.isConnected isnt false
+      try target.focus preventScroll: true
+      catch then target.focus()
+      return if document.activeElement is target or tries <= 1
+      setTimeout (-> focusAttempt(tries - 1)), 16
+    requestAnimationFrame -> focusAttempt()
 
   onCancel = (e) ->
     unless dismissable
@@ -1114,11 +1165,14 @@ _ariaBindDialog = (open, dialog, setOpen, dismissable = true) ->
       return
     setOpen?(false)
 
-  onClose = -> setOpen?(false)
+  onClose = ->
+    setOpen?(false)
+    restoreFocus()
   el.addEventListener 'cancel', onCancel
   el.addEventListener 'close', onClose
 
   if open and not el.open
+    restoreEl = currentFocus() unless restoreEl
     try el.showModal()
     catch then null
   if not open and el.open

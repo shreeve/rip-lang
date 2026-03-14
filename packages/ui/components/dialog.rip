@@ -17,7 +17,6 @@ export Dialog = component
   @dismissable := true
   @initialFocus := null
 
-  _prevFocus = null
   _id =! "dlg-#{Math.random().toString(36).slice(2, 8)}"
 
   ~>
@@ -29,7 +28,6 @@ export Dialog = component
 
   ~>
     if @open
-      _prevFocus = document.activeElement
       ARIA.lockScroll(this)
       requestAnimationFrame =>
         panel = @_dialog
@@ -42,7 +40,6 @@ export Dialog = component
             panel.querySelectorAll('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])')?[0]?.focus()
       return ->
         ARIA.unlockScroll(this)
-        _prevFocus?.focus()
 
   close: ->
     @open = false
