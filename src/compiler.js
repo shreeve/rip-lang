@@ -341,16 +341,26 @@ export class CodeGenerator {
   // Collect identifier anchors from sub-expression nodes with .loc.
   collectSubExprs(node, result) {
     if (!Array.isArray(node)) return;
-    if (node.loc) {
-      let head = str(node[0]);
-      let ident = null;
-      // Operators/keywords: anchor is the subject at index 1
-      if (typeof head === 'string' && /^[=+\-*/%<>!&|?~^]|^\.\.?$|^def$|^class$|^state$|^computed$|^readonly$|^for-/.test(head)) {
-        if (typeof node[1] === 'string' && /^[a-zA-Z_$]/.test(node[1])) ident = node[1];
+    // If node[0] is not a string-like head (e.g. array-of-arrays like the cases
+    // list in a switch), recurse into ALL children including index 0.
+    let head = node[0];
+    if (Array.isArray(head) || (head != null && typeof head !== 'string' && !(head instanceof String))) {
+      for (let i = 0; i < node.length; i++) {
+        if (Array.isArray(node[i])) this.collectSubExprs(node[i], result);
       }
-      // Property access: anchor is the property name
-      else if (head === '.') {
+      return;
+    }
+    if (node.loc) {
+      head = str(head);
+      let ident = null;
+      // Property access: anchor is the property name (check BEFORE operators
+      // because the operator regex also matches '.' via ^\.\.?$)
+      if (head === '.') {
         if (typeof node[2] === 'string') ident = node[2];
+      }
+      // Operators/keywords: anchor is the subject at index 1
+      else if (typeof head === 'string' && /^[=+\-*/%<>!&|?~^]|^\.\.?$|^def$|^class$|^state$|^computed$|^readonly$|^for-/.test(head)) {
+        if (typeof node[1] === 'string' && /^[a-zA-Z_$]/.test(node[1])) ident = node[1];
       }
       // Function call (head is identifier)
       else if (typeof head === 'string' && /^[a-zA-Z_$]/.test(head)) {
