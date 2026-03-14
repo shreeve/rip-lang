@@ -1465,7 +1465,7 @@
   var UNARY_MATH = new Set(["!", "~"]);
   var IDENTIFIER_RE = /^(?!\d)((?:(?!\s)[$\w\x7f-\uffff])+(?:!(?!\?)|[?](?![.?![(]))?)([^\n\S]*:(?![=:>]))?/;
   var NUMBER_RE = /^0b[01](?:_?[01])*n?|^0o[0-7](?:_?[0-7])*n?|^0x[\da-f](?:_?[\da-f])*n?|^\d+(?:_\d+)*n|^(?:\d+(?:_\d+)*)?\.?\d+(?:_\d+)*(?:e[+-]?\d+(?:_\d+)*)?/i;
-  var OPERATOR_RE = /^(?:<=>|::|[-=]>|~>|~=|:>|:=|=!|===|!==|!\?|\?\!|\?\?|=~|\|>|[-+*\/%<>&|^!?=]=|>>>=?|([-+:])\1|([&|<>*\/%])\2=?|\?\.?|\.{2,3})/;
+  var OPERATOR_RE = /^(?:<=>|::|\*>|[-=]>|~>|~=|:>|:=|=!|===|!==|!\?|\?\!|\?\?|=~|\|>|[-+*\/%<>&|^!?=]=|>>>=?|([-+:])\1|([&|<>*\/%])\2=?|\?\.?|\.{2,3})/;
   var WHITESPACE_RE = /^[^\n\S]+/;
   var NEWLINE_RE = /^(?:\n[^\n\S]*)+/;
   var COMMENT_RE = /^(\s*)###([^#][\s\S]*?)(?:###([^\n\S]*)|###$)|^((?:\s*#(?!##[^#]).*)+)/;
@@ -2262,8 +2262,8 @@
       } else if (val === "=!") {
         tag = "READONLY_ASSIGN";
         this.inTypeAnnotation = false;
-      } else if (val === "*" && (!prev || prev[0] === "TERMINATOR" || prev[0] === "INDENT" || prev[0] === "OUTDENT") && (/^[a-zA-Z_$]/.test(this.chunk[1] || "") || this.chunk[1] === "@")) {
-        let rest = this.chunk.slice(1);
+      } else if (val === "*>" && (!prev || prev[0] === "TERMINATOR" || prev[0] === "INDENT" || prev[0] === "OUTDENT") && (/^[a-zA-Z_$]/.test(this.chunk[2] || "") || this.chunk[2] === "@")) {
+        let rest = this.chunk.slice(2);
         let mAt = /^@(\s*)=(?!=)/.exec(rest);
         if (mAt) {
           let space = mAt[1];
@@ -2273,7 +2273,7 @@
           t.spaced = true;
           this.emit("@", "@");
           this.emit(",", ",");
-          return 1 + 1 + space.length + 1;
+          return 2 + 1 + space.length + 1;
         }
         let m = /^((?:(?!\s)[$\w\x7f-\uffff])+(?:\.[a-zA-Z_$][\w]*)*)(\s*)=(?!=)/.exec(rest);
         if (m) {
@@ -2299,7 +2299,7 @@
           this.emit(",", ",");
           let comma = this.prev();
           comma.mergeClose = true;
-          return 1 + target.length + space.length + 1;
+          return 2 + target.length + space.length + 1;
         }
       } else if (val === "*" && prev?.[0] === "EXPORT")
         tag = "EXPORT_ALL";
@@ -9389,7 +9389,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   }
   // src/browser.js
   var VERSION = "3.13.108";
-  var BUILD_DATE = "2026-03-14@05:14:37GMT";
+  var BUILD_DATE = "2026-03-14@06:08:19GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

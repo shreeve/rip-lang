@@ -1,0 +1,2379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rip UI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="index.css">
+  <style>body { opacity: 0; } body.ready { opacity: 1; transition: opacity 200ms ease-in; }</style>
+  <script defer src="/rip/rip.min.js" data-src="bundle" data-mount="WidgetGallery" data-reload>
+  </script>
+</head>
+<body>
+
+<script type="text/rip">
+do ->
+  orig = HTMLElement::focus
+  HTMLElement::focus = (o) -> orig.call this, { preventScroll: true, ...o }
+
+export SectionHead = component
+  accept _gallery
+  @tag := ''
+  @name := ''
+  @lines := 0
+
+  render
+    .section-title
+      = @name
+      if @lines > 0
+        span.badge @click: (=> _gallery._viewSource(@tag)), "#{@lines} lines ❐"
+      else
+        span.badge "pattern"
+      .section-nav
+        a @click: (=> _gallery._navSection(@tag, 'prev')), "‹"
+        a @click: (=> _gallery._navSection(@tag, 'home')), "⌂"
+        a @click: (=> _gallery._navSection(@tag, 'next')), "›"
+
+export WidgetGallery = component
+  offer _gallery := this
+
+  # ---- State ----
+  check1 := false
+  check2 := true
+  switch1 := false
+  toasts := []
+  showDialog := false
+  fruit := null
+  role := null
+  searchQuery := ''
+  allFruits := ['Apple', 'Apricot', 'Avocado', 'Banana', 'Blueberry', 'Cherry', 'Cranberry', 'Date', 'Fig', 'Grape', 'Kiwi', 'Lemon', 'Lime', 'Mango', 'Orange', 'Papaya', 'Peach', 'Pear', 'Plum', 'Raspberry', 'Strawberry']
+  filteredFruits := allFruits
+  currentTab := 'overview'
+  isBold := false
+  isItalic := false
+  userName := ''
+  progressVal := 0.65
+  meterVal := 72
+  sliderVal := 40
+  rangeVal := [20, 70]
+  showDrawer := false
+  citySearch := ''
+  cities := ['Albuquerque', 'Anchorage', 'Arlington', 'Atlanta', 'Aurora', 'Austin', 'Anaheim', 'Asheville', 'Baltimore', 'Baton Rouge', 'Birmingham', 'Boise', 'Boston', 'Buffalo', 'Bakersfield', 'Bridgeport', 'Charlotte', 'Chicago', 'Dallas', 'Denver', 'Detroit', 'El Paso', 'Houston', 'Miami', 'New York', 'Phoenix', 'Portland', 'San Diego', 'San Francisco', 'Seattle']
+  quantity := 1
+  price := 9.99
+  alignment := 'left'
+  fontSize := 'md'
+  toppings := ['Cheese']
+  cbToppings := ['Cheese']
+  fieldEmail := ''
+  fieldError := ''
+  otpCode := ''
+  selectedColors := ['Red']
+  editName := 'John Doe'
+  pickedDate := null
+  dateRange := null
+  darkMode := false
+  showAlertDialog := false
+  textareaVal := ''
+  nativeSelectVal := ''
+  collapsibleOpen := false
+  currentPage := 1
+  sourceCode := null
+  sourceName := ''
+  sourceLines := 0
+  tocActive := null
+  tocFilter := ''
+  tocGroups := [
+    { label: 'Selection', ids: ['select', 'combobox', 'multi-select', 'autocomplete'] }
+    { label: 'Toggle', ids: ['checkbox', 'toggle', 'toggle-group', 'radio-group', 'checkbox-group'] }
+    { label: 'Input', ids: ['input', 'textarea', 'native-select', 'number-field', 'slider', 'otp-field', 'date-picker', 'editable-value', 'input-group'] }
+    { label: 'Navigation', ids: ['tabs', 'menu', 'context-menu', 'menubar', 'nav-menu', 'toolbar', 'breadcrumb'] }
+    { label: 'Overlay', ids: ['dialog', 'alert-dialog', 'drawer', 'popover', 'tooltip', 'preview-card', 'toast'] }
+    { label: 'Display', ids: ['button', 'badge', 'card', 'separator', 'progress', 'meter', 'spinner', 'skeleton', 'avatar', 'label', 'scroll-area'] }
+    { label: 'Form', ids: ['field', 'fieldset', 'form', 'button-group'] }
+    { label: 'Data', ids: ['grid', 'accordion', 'table', 'collapsible'] }
+    { label: 'Interactive', ids: ['pagination', 'carousel', 'resizable'] }
+  ]
+  _nameFor: (id) -> (tocData.find((c) -> c.id is id))?.name or id
+  _viewSource: (id) ->
+    entry = tocData.find((c) -> c.id is id)
+    return unless entry
+    sourceName = entry.name
+    sourceLines = entry.lines
+    resp = fetch! "components/#{id}.rip"
+    sourceCode = resp.text!
+  _closeSource: -> sourceCode = null
+  _stopProp: (e) -> e.stopPropagation()
+  _ensureHljs: (cb) ->
+    if window.hljs then return cb()
+    link = document.createElement('link')
+    link.rel = 'stylesheet'
+    link.href = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github.min.css'
+    document.head.appendChild(link)
+    script = document.createElement('script')
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js'
+    script.onload = =>
+      fetch('hljs-rip.js').then((r) -> r.text()).then (src) =>
+        fn = new Function('return ' + src.replace(/[\s\S]*export default /, ''))()
+        hljs.registerLanguage 'rip', fn
+        cb()
+    document.head.appendChild(script)
+  _onFilter: (e) -> tocFilter = e.target.value
+  _getVisibleLinks: -> Array.from(document.querySelectorAll('.toc-nav .toc-group a:not([data-hidden])') or [])
+
+  _onFilterKey: (e) ->
+    if e.key is '/'
+      e.preventDefault()
+      @_navSection('', 'home')
+      tocFilter = ''
+      e.target.value = ''
+      document.addEventListener 'keyup', (=> e.target.focus()), { once: true }
+      return
+    if e.key is 'Escape'
+      tocFilter = ''
+      e.target.value = ''
+    else if e.key is 'Enter'
+      links = @_getVisibleLinks()
+      if links.length is 1
+        e.preventDefault()
+        tocActive = links[0].getAttribute('href')?.slice(1)
+        @_fadeTo(document.getElementById(tocActive))
+        tocFilter = ''
+        e.target.value = ''
+    else if e.key is 'Tab' and not e.shiftKey
+      links = @_getVisibleLinks()
+      if links.length
+        e.preventDefault()
+        tocActive = links[0].getAttribute('href')?.slice(1)
+        links[0].focus()
+
+  _getTocGrid: ->
+    groups = Array.from(document.querySelectorAll('.toc-nav .toc-group') or [])
+    grid = []
+    for grp in groups
+      col = Array.from(grp.querySelectorAll('a:not([data-hidden])') or [])
+      grid.push(col) if col.length
+    grid
+
+  _focusTocLink: (link) ->
+    tocActive = link.getAttribute('href')?.slice(1)
+    link.focus()
+
+  _onTocKeydown: (e) ->
+    grid = @_getTocGrid()
+    return unless grid.length
+    focused = document.activeElement
+    col = -1
+    row = -1
+    for c, ci in grid
+      ri = c.indexOf(focused)
+      if ri >= 0
+        col = ci
+        row = ri
+        break
+    return if col < 0
+    switch e.key
+      when 'ArrowDown'
+        e.preventDefault()
+        if row < grid[col].length - 1
+          @_focusTocLink(grid[col][row + 1])
+        else if col < grid.length - 1
+          @_focusTocLink(grid[col + 1][0])
+      when 'ArrowUp'
+        e.preventDefault()
+        if row > 0
+          @_focusTocLink(grid[col][row - 1])
+        else if col > 0
+          prev = grid[col - 1]
+          @_focusTocLink(prev[prev.length - 1])
+        else
+          @_root?.querySelector('.toc-search')?.focus()
+      when 'ArrowRight'
+        e.preventDefault()
+        if col < grid.length - 1
+          target = grid[col + 1]
+          @_focusTocLink(target[Math.min(row, target.length - 1)])
+      when 'ArrowLeft'
+        e.preventDefault()
+        if col > 0
+          target = grid[col - 1]
+          @_focusTocLink(target[Math.min(row, target.length - 1)])
+      when 'Home'
+        e.preventDefault()
+        @_focusTocLink(grid[0][0])
+      when 'End'
+        e.preventDefault()
+        last = grid[grid.length - 1]
+        @_focusTocLink(last[last.length - 1])
+      when 'Enter', ' '
+        e.preventDefault()
+        @_fadeTo(document.getElementById(tocActive))
+      when 'Escape'
+        @_root?.querySelector('.toc-search')?.focus()
+
+  ~>
+    q = tocFilter.toLowerCase()
+    visible = []
+    for el in Array.from(document.querySelectorAll('.toc-nav a') or [])
+      if q and not el.textContent.toLowerCase().includes(q)
+        el.setAttribute('data-hidden', '')
+      else
+        el.removeAttribute('data-hidden')
+        visible.push(el) if q
+    if visible.length is 1
+      tocActive = visible[0].getAttribute('href')?.slice(1)
+  tocData := [
+    { id: 'select', name: 'Select', lines: 135, desc: 'Dropdown with typeahead, keyboard nav, ARIA listbox.', props: ['@value', '@placeholder', '@disabled'], events: ['change'], keys: ['↕', 'Enter', 'Space', 'Esc', 'Home', 'End', 'type-ahead'], attrs: ['$open', '$placeholder', '$disabled', '$value', '$highlighted', '$selected'] }
+    { id: 'combobox', name: 'Combobox', lines: 118, desc: 'Filterable input + listbox for search-as-you-type.', props: ['@query', '@items', '@placeholder', '@disabled', '@autoHighlight'], events: ['filter', 'select'], keys: ['↕', 'Enter', 'Esc', 'Tab'], attrs: ['$open', '$disabled', '$clear', '$value', '$highlighted', '$empty'] }
+    { id: 'multi-select', name: 'MultiSelect', lines: 146, desc: 'Multi-select with chips, filtering, and keyboard nav.', props: ['@value', '@items', '@placeholder', '@disabled'], events: ['change'], keys: ['↕', 'Enter', 'Esc', 'Backspace', 'Tab'], attrs: ['$open', '$disabled', '$chips', '$chip', '$remove', '$clear', '$highlighted', '$selected'] }
+    { id: 'autocomplete', name: 'Autocomplete', lines: 113, desc: 'Suggestion input — type to filter, select to fill.', props: ['@value', '@items', '@placeholder', '@disabled'], events: ['select'], keys: ['↕', 'Enter', 'Esc', 'Tab'], attrs: ['$open', '$disabled', '$clear'] }
+    { id: 'checkbox', name: 'Checkbox', lines: 18, desc: 'Toggle with checkbox or switch semantics.', props: ['@checked', '@disabled', '@indeterminate', '@switch'], events: ['change'], keys: [], attrs: ['$checked', '$indeterminate', '$disabled'] }
+    { id: 'toggle', name: 'Toggle', lines: 14, desc: 'Two-state toggle button with pressed state.', props: ['@pressed', '@disabled'], events: ['change'], keys: [], attrs: ['$pressed', '$disabled'] }
+    { id: 'toggle-group', name: 'ToggleGroup', lines: 55, desc: 'Single or multi-select toggle buttons.', props: ['@value', '@disabled', '@multiple', '@orientation'], events: ['change'], keys: ['← →', '↕', 'Home', 'End'], attrs: ['$orientation', '$disabled', '$pressed', '$value'] }
+    { id: 'radio-group', name: 'RadioGroup', lines: 42, desc: 'Exactly one option selected with arrow key nav.', props: ['@value', '@disabled', '@orientation', '@name'], events: ['change'], keys: ['← →', '↕', 'Home', 'End'], attrs: ['$orientation', '$disabled', '$checked', '$value'] }
+    { id: 'checkbox-group', name: 'CheckboxGroup', lines: 45, desc: 'Multiple options checked independently.', props: ['@value', '@disabled', '@orientation', '@label'], events: ['change'], keys: ['← →', '↕'], attrs: ['$orientation', '$disabled', '$checked', '$value'] }
+    { id: 'input', name: 'Input', lines: 25, desc: 'Headless input tracking focus, touch, and validation.', props: ['@value', '@placeholder', '@type', '@disabled', '@required'], events: [], keys: [], attrs: ['$disabled', '$focused', '$touched'] }
+    { id: 'number-field', name: 'NumberField', lines: 151, desc: 'Number input with stepper buttons and hold-to-repeat.', props: ['@value', '@min', '@max', '@step', '@disabled', '@readOnly'], events: ['input', 'change'], keys: ['↕', 'PgUp', 'PgDn', 'Home', 'End'], attrs: ['$disabled', '$readonly', '$decrement', '$increment'] }
+    { id: 'slider', name: 'Slider', lines: 152, desc: 'Draggable range input with pointer capture and keyboard.', props: ['@value', '@min', '@max', '@step', '@orientation', '@disabled'], events: ['input', 'change'], keys: ['← →', '↕', 'PgUp', 'PgDn', 'Home', 'End'], attrs: ['$orientation', '$disabled', '$dragging', '$track', '$indicator', '$thumb', '$active'] }
+    { id: 'otp-field', name: 'OTPField', lines: 79, desc: 'Multi-digit code input with auto-advance and paste.', props: ['@length', '@value', '@disabled', '@mask'], events: ['input', 'complete'], keys: ['← →', 'Backspace', 'Home', 'End', 'paste'], attrs: ['$disabled', '$complete', '$filled'] }
+    { id: 'date-picker', name: 'DatePicker', lines: 194, desc: 'Calendar dropdown for single date or range selection.', props: ['@value', '@placeholder', '@disabled', '@range', '@firstDayOfWeek'], events: ['change'], keys: ['Esc', 'Enter', 'Space'], attrs: ['$open', '$disabled', '$range', '$calendar', '$selected', '$today', '$in-range'] }
+    { id: 'editable-value', name: 'EditableValue', lines: 70, desc: 'Click-to-edit inline value with popover form.', props: ['@disabled'], events: ['save'], keys: ['Esc', 'Enter'], attrs: ['$editing', '$disabled', '$saving', '$edit-trigger'] }
+    { id: 'tabs', name: 'Tabs', lines: 92, desc: 'Tab panel with roving tabindex and arrow key nav.', props: ['@active', '@orientation', '@activation'], events: ['change'], keys: ['← →', '↕', 'Home', 'End', 'Enter', 'Space'], attrs: ['$tab', '$panel', '$active', '$disabled'] }
+    { id: 'menu', name: 'Menu', lines: 124, desc: 'Dropdown action menu with keyboard navigation.', props: ['@disabled'], events: ['select'], keys: ['↕', 'Home', 'End', 'Enter', 'Space', 'Esc', 'Tab', 'type-ahead'], attrs: ['$open', '$disabled', '$highlighted', '$value'] }
+    { id: 'context-menu', name: 'ContextMenu', lines: 73, desc: 'Right-click context menu with keyboard navigation.', props: ['@disabled'], events: ['select'], keys: ['↕', 'Home', 'End', 'Enter', 'Space', 'Esc', 'Tab'], attrs: ['$open', '$highlighted', '$disabled', '$value'] }
+    { id: 'menubar', name: 'Menubar', lines: 137, desc: 'Horizontal menu bar with dropdown menus.', props: ['@disabled'], events: ['select'], keys: ['← →', '↕', 'Enter', 'Space', 'Esc', 'Tab'], attrs: ['$disabled', '$open', '$highlighted', '$value'] }
+    { id: 'nav-menu', name: 'NavMenu', lines: 114, desc: 'Site navigation with hover/click dropdown panels.', props: ['@orientation', '@hoverDelay', '@hoverCloseDelay'], events: [], keys: ['← →', '↓', 'Esc'], attrs: ['$orientation', '$open'] }
+    { id: 'toolbar', name: 'Toolbar', lines: 26, desc: 'Groups controls with roving tabindex keyboard nav.', props: ['@orientation', '@label'], events: [], keys: ['← →', '↕', 'Home', 'End'], attrs: ['$orientation'] }
+    { id: 'dialog', name: 'Dialog', lines: 94, desc: 'Modal with focus trap, scroll lock, escape dismiss.', props: ['@open', '@dismissable', '@initialFocus'], events: ['close'], keys: ['Esc', 'Tab'], attrs: ['$open'] }
+    { id: 'drawer', name: 'Drawer', lines: 68, desc: 'Slide-out panel with focus trap and scroll lock.', props: ['@open', '@side', '@dismissable'], events: ['close'], keys: ['Esc', 'Tab'], attrs: ['$open', '$side'] }
+    { id: 'popover', name: 'Popover', lines: 135, desc: 'Anchored floating content with flip/shift positioning.', props: ['@placement', '@offset', '@disabled', '@openOnHover', '@hoverDelay', '@hoverCloseDelay'], events: [], keys: ['Esc', 'Enter', 'Space', '↓'], attrs: ['$open', '$placement'] }
+    { id: 'tooltip', name: 'Tooltip', lines: 103, desc: 'Hover/focus tooltip with delay and positioning.', props: ['@text', '@placement', '@delay', '@offset', '@hoverable'], events: [], keys: [], attrs: ['$open', '$entering', '$exiting', '$placement'] }
+    { id: 'preview-card', name: 'PreviewCard', lines: 63, desc: 'Hover/focus preview card with delay.', props: ['@delay', '@closeDelay'], events: [], keys: [], attrs: ['$open'] }
+    { id: 'toast', name: 'Toast', lines: 66, desc: 'Auto-dismiss notification with ARIA live region.', props: ['@toasts', '@toast', '@placement'], events: ['dismiss'], keys: [], attrs: ['$placement', '$type', '$leaving'] }
+    { id: 'button', name: 'Button', lines: 12, desc: 'Accessible button with disabled-but-focusable pattern.', props: ['@disabled'], events: ['press'], keys: [], attrs: ['$disabled'] }
+    { id: 'separator', name: 'Separator', lines: 8, desc: 'Decorative or semantic divider between sections.', props: ['@orientation', '@decorative'], events: [], keys: [], attrs: ['$orientation'] }
+    { id: 'progress', name: 'Progress', lines: 16, desc: 'Progress bar with CSS custom property for value.', props: ['@value', '@max', '@label'], events: [], keys: [], attrs: ['$complete'] }
+    { id: 'meter', name: 'Meter', lines: 26, desc: 'Gauge for known-range measurements with thresholds.', props: ['@value', '@min', '@max', '@low', '@high', '@optimum', '@label'], events: [], keys: [], attrs: ['$level'] }
+    { id: 'avatar', name: 'Avatar', lines: 27, desc: 'Image with fallback to initials or placeholder.', props: ['@src', '@alt', '@fallback'], events: [], keys: [], attrs: ['$status', '$initials', '$placeholder'] }
+    { id: 'scroll-area', name: 'ScrollArea', lines: 133, desc: 'Custom scrollbar with draggable thumb and auto-hide.', props: ['@orientation'], events: [], keys: [], attrs: ['$orientation', '$hovering', '$scrolling', '$dragging', '$viewport', '$scrollbar', '$thumb'] }
+    { id: 'field', name: 'Field', lines: 44, desc: 'Form field wrapper with label, description, and error.', props: ['@label', '@description', '@error', '@disabled', '@required'], events: [], keys: [], attrs: ['$disabled', '$invalid', '$label', '$required', '$description', '$error'] }
+    { id: 'fieldset', name: 'Fieldset', lines: 11, desc: 'Grouped fields with legend and cascading disable.', props: ['@legend', '@disabled'], events: [], keys: [], attrs: ['$disabled', '$legend'] }
+    { id: 'form', name: 'Form', lines: 24, desc: 'Form wrapper with submit handling and validation state.', props: ['@disabled'], events: ['submit'], keys: [], attrs: ['$disabled', '$submitting', '$submitted'] }
+    { id: 'grid', name: 'Grid', lines: 857, desc: 'Virtual-scrolling data grid — 100K+ rows at 60fps.', props: ['@data', '@columns', '@rowHeight', '@overscan', '@striped', '@beforeEdit', '@afterEdit'], events: [], keys: ['Arrows', 'Tab', 'Enter', 'F2', 'Esc', 'Home', 'End', 'PgUp', 'PgDn', 'Ctrl+A', 'Ctrl+C', 'Ctrl+V', 'Ctrl+X'], attrs: ['$editing', '$selecting', '$sorted'] }
+    { id: 'accordion', name: 'Accordion', lines: 87, desc: 'Expand/collapse sections, single or multiple mode.', props: ['@multiple'], events: ['change'], keys: ['Enter', 'Space', '↕', 'Home', 'End'], attrs: ['$item', '$trigger', '$content', '$open', '$disabled'] }
+    { id: 'badge', name: 'Badge', lines: 7, desc: 'Inline label with variant (solid/outline/subtle).', props: ['@variant'], events: [], keys: [], attrs: ['$variant'] }
+    { id: 'skeleton', name: 'Skeleton', lines: 11, desc: 'Loading placeholder with shimmer animation.', props: ['@width', '@height', '@circle', '@label'], events: [], keys: [], attrs: ['$circle'] }
+    { id: 'spinner', name: 'Spinner', lines: 8, desc: 'Loading indicator with accessible status.', props: ['@label', '@size'], events: [], keys: [], attrs: [] }
+    { id: 'card', name: 'Card', lines: 7, desc: 'Structured container with header/content/footer.', props: ['@interactive'], events: [], keys: [], attrs: ['$interactive'] }
+    { id: 'label', name: 'Label', lines: 8, desc: 'Standalone accessible form label.', props: ['@for', '@required'], events: [], keys: [], attrs: ['$required'] }
+    { id: 'textarea', name: 'Textarea', lines: 37, desc: 'Auto-resizing text area with focus and validation tracking.', props: ['@value', '@placeholder', '@disabled', '@required', '@rows', '@autoResize'], events: [], keys: [], attrs: ['$disabled', '$focused', '$touched'] }
+    { id: 'native-select', name: 'NativeSelect', lines: 21, desc: 'Styled native select element with state tracking.', props: ['@value', '@disabled', '@required'], events: ['change'], keys: [], attrs: ['$disabled', '$focused'] }
+    { id: 'input-group', name: 'InputGroup', lines: 15, desc: 'Input with prefix/suffix addon elements.', props: ['@disabled'], events: [], keys: [], attrs: ['$disabled', '$focused'] }
+    { id: 'button-group', name: 'ButtonGroup', lines: 11, desc: 'Grouped buttons with ARIA group semantics.', props: ['@orientation', '@disabled', '@label'], events: [], keys: [], attrs: ['$orientation', '$disabled'] }
+    { id: 'alert-dialog', name: 'AlertDialog', lines: 83, desc: 'Non-dismissable modal requiring explicit user action.', props: ['@open', '@initialFocus'], events: ['close'], keys: ['Tab'], attrs: ['$open'] }
+    { id: 'breadcrumb', name: 'Breadcrumb', lines: 32, desc: 'Navigation trail with separator and current page.', props: ['@separator', '@label'], events: [], keys: [], attrs: ['$current'] }
+    { id: 'table', name: 'Table', lines: 11, desc: 'Semantic table wrapper with optional caption and striped rows.', props: ['@caption', '@striped'], events: [], keys: [], attrs: ['$striped'] }
+    { id: 'collapsible', name: 'Collapsible', lines: 39, desc: 'Single open/close section with animated expand.', props: ['@open', '@disabled'], events: ['change'], keys: ['Enter', 'Space'], attrs: ['$open', '$disabled'] }
+    { id: 'pagination', name: 'Pagination', lines: 113, desc: 'Page navigation with prev/next and ellipsis gaps.', props: ['@page', '@total', '@perPage', '@siblingCount'], events: ['change'], keys: ['← →', 'Home', 'End'], attrs: ['$active', '$disabled', '$ellipsis'] }
+    { id: 'carousel', name: 'Carousel', lines: 89, desc: 'Slide carousel with autoplay, loop, and keyboard nav.', props: ['@orientation', '@loop', '@autoplay', '@interval', '@label'], events: ['change'], keys: ['← →', '↕', 'Home', 'End'], attrs: ['$orientation', '$active', '$prev', '$next'] }
+    { id: 'resizable', name: 'Resizable', lines: 104, desc: 'Draggable resize handles between panels.', props: ['@orientation', '@minSize', '@maxSize'], events: ['resize'], keys: ['← →', '↕'], attrs: ['$orientation', '$dragging'] }
+  ]
+  _infoName := ''
+  _infoDesc := ''
+  _infoLines := 0
+  _infoProps := []
+  _infoEvents := []
+  _infoKeys := []
+  _infoAttrs := []
+
+  ~>
+    info = tocData.find (c) -> c.id is tocActive
+    if info
+      _infoName = info.name
+      _infoDesc = info.desc
+      _infoLines = info.lines
+      _infoProps = info.props
+      _infoEvents = info.events
+      _infoKeys = info.keys
+      _infoAttrs = info.attrs
+
+  ~>
+    raw = sourceCode
+    return unless raw
+    setTimeout =>
+      codeEl = document.querySelector('.source-code')
+      gutterEl = document.querySelector('.source-gutter')
+      return unless codeEl
+      text = raw.replace(/^\n+/, '').replace(/\n+$/, '')
+      lines = text.split('\n')
+      gutterEl.textContent = lines.map((_, i) -> String(i + 1)).join('\n') if gutterEl
+      codeEl.textContent = text
+      codeEl.className = 'source-code language-rip'
+      @_ensureHljs =>
+        hljs.highlightElement(codeEl) if window.hljs
+    , 0
+
+  ~>
+    if sourceCode
+      onKey = (e) => @_closeSource() if e.key is 'Escape'
+      document.addEventListener 'keydown', onKey
+      return -> document.removeEventListener 'keydown', onKey
+
+  _toggleDark: ->
+    darkMode = not darkMode
+    document.documentElement.classList.add('no-transition')
+    document.documentElement.dataset.theme = if darkMode then 'dark' else ''
+    localStorage.setItem('rip-ui-theme', if darkMode then 'dark' else 'light')
+    requestAnimationFrame -> requestAnimationFrame -> document.documentElement.classList.remove('no-transition')
+
+  mounted: ->
+    if localStorage.getItem('rip-ui-theme') is 'dark'
+      darkMode = true
+      document.documentElement.dataset.theme = 'dark'
+    document.addEventListener 'keydown', (e) =>
+      if e.key is '/' and not (e.target.tagName in ['INPUT', 'TEXTAREA', 'SELECT']) and not e.target.isContentEditable
+        e.preventDefault()
+        @_navSection('', 'home')
+        tocFilter = ''
+        document.addEventListener 'keyup', (=>
+          @_root?.querySelector('.toc-search')?.focus()
+        ), { once: true }
+    gc = document.querySelector('.grid-container')
+    if gc
+      gc.addEventListener 'mousedown', => setTimeout (=> @_updateGridRef()), 0
+      gc.addEventListener 'keyup', => setTimeout (=> @_updateGridRef()), 0
+    hash = location.hash.slice(1)
+    if hash and document.getElementById(hash)
+      tocActive = hash
+      setTimeout =>
+        document.getElementById(hash)?.scrollIntoView({ behavior: 'instant', block: 'start' })
+        document.body.classList.add('ready')
+      , 50
+    else
+      document.body.classList.add('ready')
+
+  gridCellRef := ''
+
+  _updateGridRef: ->
+    cell = document.querySelector('.grid-container td[data-active]')
+    if cell
+      tr = cell.parentElement
+      rowNum = tr?.firstElementChild?.textContent?.trim()
+      ci = Array.from(tr.children).indexOf(cell)
+      gridCellRef = if rowNum then "R#{rowNum}:C#{ci + 1}" else ''
+    else
+      gridCellRef = ''
+
+  _loadGridRows: (n) ->
+    firstNames = ['Alice', 'Bob', 'Carol', 'Dan', 'Eve', 'Frank', 'Grace', 'Hank', 'Iris', 'Jack', 'Karen', 'Leo', 'Mia', 'Nora', 'Omar', 'Pia', 'Quinn', 'Rosa', 'Sam', 'Tina']
+    lastNames = ['Chen', 'Park', 'Singh', 'Nakamura', 'Torres', 'Liu', 'Kim', 'Patel', 'Wang', 'Brown', 'Lee', 'Martin', 'Garcia', 'Davis', 'Lopez', 'Clark', 'Hall', 'Young', 'King', 'Wright']
+    roles = ['Engineer', 'Designer', 'Manager', 'Director', 'Analyst', 'Lead', 'Intern']
+    cityList = ['Seattle', 'Portland', 'Denver', 'Austin', 'Chicago', 'Boston', 'Miami', 'Phoenix', 'Dallas', 'Atlanta']
+    gc = document.querySelector('.grid-container')
+    gc?.scrollTop = 0
+    gridData = Array.from { length: n }, (_, idx) ->
+      fn = firstNames[idx %% firstNames.length]
+      ln = lastNames[Math.floor(Math.random() * lastNames.length)]
+      { _row: idx + 1, name: "#{fn} #{ln}", role: roles[idx %% roles.length], age: 22 + (idx %% 40), city: cityList[idx %% cityList.length] }
+    gridCellRef = ''
+
+  gridColumns := [
+    { key: '_row', title: '#', width: 60, align: 'right' },
+    { key: 'name', title: 'Name', width: 180 },
+    { key: 'role', title: 'Role', width: 140 },
+    { key: 'age', title: 'Age', width: 80, align: 'right' },
+    { key: 'city', title: 'City', width: 140 },
+  ]
+  gridData := [
+    { _row: 1, name: 'Alice Chen', role: 'Engineer', age: 28, city: 'Seattle' },
+    { _row: 2, name: 'Bob Park', role: 'Designer', age: 34, city: 'Portland' },
+    { _row: 3, name: 'Carol Singh', role: 'Manager', age: 41, city: 'Denver' },
+    { _row: 4, name: 'Dan Nakamura', role: 'Engineer', age: 26, city: 'Austin' },
+    { _row: 5, name: 'Eve Torres', role: 'Director', age: 45, city: 'Chicago' },
+    { _row: 6, name: 'Frank Liu', role: 'Designer', age: 31, city: 'Boston' },
+    { _row: 7, name: 'Grace Kim', role: 'Engineer', age: 29, city: 'Seattle' },
+    { _row: 8, name: 'Hank Patel', role: 'Manager', age: 38, city: 'Denver' },
+    { _row: 9, name: 'Iris Wang', role: 'Engineer', age: 33, city: 'Austin' },
+    { _row: 10, name: 'Jack Brown', role: 'Designer', age: 27, city: 'Portland' },
+    { _row: 11, name: 'Karen Lee', role: 'Director', age: 52, city: 'Chicago' },
+    { _row: 12, name: 'Leo Martin', role: 'Engineer', age: 24, city: 'Boston' },
+  ]
+
+  sectionIds =! ['select', 'combobox', 'multi-select', 'autocomplete', 'checkbox', 'toggle', 'toggle-group', 'radio-group', 'checkbox-group', 'input', 'textarea', 'native-select', 'number-field', 'slider', 'otp-field', 'date-picker', 'editable-value', 'input-group', 'tabs', 'menu', 'context-menu', 'menubar', 'nav-menu', 'toolbar', 'breadcrumb', 'dialog', 'alert-dialog', 'drawer', 'popover', 'tooltip', 'preview-card', 'toast', 'button', 'badge', 'card', 'separator', 'progress', 'meter', 'spinner', 'skeleton', 'avatar', 'label', 'scroll-area', 'field', 'form', 'button-group', 'grid', 'accordion', 'table', 'collapsible', 'pagination', 'carousel', 'resizable']
+
+  _fadeTo: (el) ->
+    return unless el
+    gallery = document.querySelector('.gallery')
+    gallery.style.transition = 'opacity 80ms ease-out'
+    gallery.style.opacity = '0'
+    setTimeout =>
+      el.scrollIntoView({ behavior: 'instant', block: 'start' })
+      history.replaceState(null, '', '#' + el.id) if el.id
+      gallery.style.transition = 'opacity 120ms ease-in'
+      gallery.style.opacity = '1'
+    , 80
+
+  _jumpTo: (e) ->
+    e.preventDefault()
+    @_fadeTo(document.getElementById(tocActive))
+
+  _navSection: (currentId, dir) ->
+    if dir is 'home'
+      gallery = document.querySelector('.gallery')
+      gallery.style.transition = 'opacity 80ms ease-out'
+      gallery.style.opacity = '0'
+      setTimeout =>
+        window.scrollTo({ top: 0, behavior: 'instant' })
+        history.replaceState(null, '', location.pathname)
+        gallery.style.transition = 'opacity 120ms ease-in'
+        gallery.style.opacity = '1'
+      , 80
+      return
+    idx = sectionIds.indexOf(currentId)
+    return if idx < 0
+    nextId = sectionIds[if dir is 'prev' then idx - 1 else idx + 1]
+    @_fadeTo(document.getElementById(nextId)) if nextId
+
+  render
+    .gallery
+
+      .gallery-header
+        .
+          h1 "Rip UI"
+          button.theme-toggle @click: (=> @_toggleDark())
+            if darkMode then "☀" else "☾"
+        p "54 headless, accessible components. Zero CSS, zero dependencies."
+
+      .toc
+        .toc-nav @keydown: @_onTocKeydown
+          input.toc-search type: "text", placeholder: "Filter components...", @input: @_onFilter, @keydown: @_onFilterKey
+          .toc-group
+            .toc-label "Selection"
+            a @mouseenter: (=> tocActive = 'select'), @click: (=> tocActive = 'select'), href: "#select", $active: (tocActive is 'select')?!, "Select"
+            a @mouseenter: (=> tocActive = 'combobox'), @click: (=> tocActive = 'combobox'), href: "#combobox", $active: (tocActive is 'combobox')?!, "Combobox"
+            a @mouseenter: (=> tocActive = 'multi-select'), @click: (=> tocActive = 'multi-select'), href: "#multi-select", $active: (tocActive is 'multi-select')?!, "MultiSelect"
+            a @mouseenter: (=> tocActive = 'autocomplete'), @click: (=> tocActive = 'autocomplete'), href: "#autocomplete", $active: (tocActive is 'autocomplete')?!, "Autocomplete"
+          .toc-group
+            .toc-label "Toggle"
+            a @mouseenter: (=> tocActive = 'checkbox'), @click: (=> tocActive = 'checkbox'), href: "#checkbox", $active: (tocActive is 'checkbox')?!, "Checkbox"
+            a @mouseenter: (=> tocActive = 'toggle'), @click: (=> tocActive = 'toggle'), href: "#toggle", $active: (tocActive is 'toggle')?!, "Toggle"
+            a @mouseenter: (=> tocActive = 'toggle-group'), @click: (=> tocActive = 'toggle-group'), href: "#toggle-group", $active: (tocActive is 'toggle-group')?!, "ToggleGroup"
+            a @mouseenter: (=> tocActive = 'radio-group'), @click: (=> tocActive = 'radio-group'), href: "#radio-group", $active: (tocActive is 'radio-group')?!, "RadioGroup"
+            a @mouseenter: (=> tocActive = 'checkbox-group'), @click: (=> tocActive = 'checkbox-group'), href: "#checkbox-group", $active: (tocActive is 'checkbox-group')?!, "CheckboxGroup"
+          .toc-group
+            .toc-label "Input"
+            a @mouseenter: (=> tocActive = 'input'), @click: (=> tocActive = 'input'), href: "#input", $active: (tocActive is 'input')?!, "Input"
+            a @mouseenter: (=> tocActive = 'textarea'), @click: (=> tocActive = 'textarea'), href: "#textarea", $active: (tocActive is 'textarea')?!, "Textarea"
+            a @mouseenter: (=> tocActive = 'native-select'), @click: (=> tocActive = 'native-select'), href: "#native-select", $active: (tocActive is 'native-select')?!, "NativeSelect"
+            a @mouseenter: (=> tocActive = 'number-field'), @click: (=> tocActive = 'number-field'), href: "#number-field", $active: (tocActive is 'number-field')?!, "NumberField"
+            a @mouseenter: (=> tocActive = 'slider'), @click: (=> tocActive = 'slider'), href: "#slider", $active: (tocActive is 'slider')?!, "Slider"
+            a @mouseenter: (=> tocActive = 'otp-field'), @click: (=> tocActive = 'otp-field'), href: "#otp-field", $active: (tocActive is 'otp-field')?!, "OTPField"
+            a @mouseenter: (=> tocActive = 'date-picker'), @click: (=> tocActive = 'date-picker'), href: "#date-picker", $active: (tocActive is 'date-picker')?!, "DatePicker"
+            a @mouseenter: (=> tocActive = 'editable-value'), @click: (=> tocActive = 'editable-value'), href: "#editable-value", $active: (tocActive is 'editable-value')?!, "EditableValue"
+            a @mouseenter: (=> tocActive = 'input-group'), @click: (=> tocActive = 'input-group'), href: "#input-group", $active: (tocActive is 'input-group')?!, "InputGroup"
+          .toc-group
+            .toc-label "Navigation"
+            a @mouseenter: (=> tocActive = 'tabs'), @click: (=> tocActive = 'tabs'), href: "#tabs", $active: (tocActive is 'tabs')?!, "Tabs"
+            a @mouseenter: (=> tocActive = 'menu'), @click: (=> tocActive = 'menu'), href: "#menu", $active: (tocActive is 'menu')?!, "Menu"
+            a @mouseenter: (=> tocActive = 'context-menu'), @click: (=> tocActive = 'context-menu'), href: "#context-menu", $active: (tocActive is 'context-menu')?!, "ContextMenu"
+            a @mouseenter: (=> tocActive = 'menubar'), @click: (=> tocActive = 'menubar'), href: "#menubar", $active: (tocActive is 'menubar')?!, "Menubar"
+            a @mouseenter: (=> tocActive = 'nav-menu'), @click: (=> tocActive = 'nav-menu'), href: "#nav-menu", $active: (tocActive is 'nav-menu')?!, "NavMenu"
+            a @mouseenter: (=> tocActive = 'toolbar'), @click: (=> tocActive = 'toolbar'), href: "#toolbar", $active: (tocActive is 'toolbar')?!, "Toolbar"
+            a @mouseenter: (=> tocActive = 'breadcrumb'), @click: (=> tocActive = 'breadcrumb'), href: "#breadcrumb", $active: (tocActive is 'breadcrumb')?!, "Breadcrumb"
+          .toc-group
+            .toc-label "Overlay"
+            a @mouseenter: (=> tocActive = 'dialog'), @click: (=> tocActive = 'dialog'), href: "#dialog", $active: (tocActive is 'dialog')?!, "Dialog"
+            a @mouseenter: (=> tocActive = 'alert-dialog'), @click: (=> tocActive = 'alert-dialog'), href: "#alert-dialog", $active: (tocActive is 'alert-dialog')?!, "AlertDialog"
+            a @mouseenter: (=> tocActive = 'drawer'), @click: (=> tocActive = 'drawer'), href: "#drawer", $active: (tocActive is 'drawer')?!, "Drawer"
+            a @mouseenter: (=> tocActive = 'popover'), @click: (=> tocActive = 'popover'), href: "#popover", $active: (tocActive is 'popover')?!, "Popover"
+            a @mouseenter: (=> tocActive = 'tooltip'), @click: (=> tocActive = 'tooltip'), href: "#tooltip", $active: (tocActive is 'tooltip')?!, "Tooltip"
+            a @mouseenter: (=> tocActive = 'preview-card'), @click: (=> tocActive = 'preview-card'), href: "#preview-card", $active: (tocActive is 'preview-card')?!, "PreviewCard"
+            a @mouseenter: (=> tocActive = 'toast'), @click: (=> tocActive = 'toast'), href: "#toast", $active: (tocActive is 'toast')?!, "Toast"
+          .toc-group
+            .toc-label "Display"
+            a @mouseenter: (=> tocActive = 'button'), @click: (=> tocActive = 'button'), href: "#button", $active: (tocActive is 'button')?!, "Button"
+            a @mouseenter: (=> tocActive = 'badge'), @click: (=> tocActive = 'badge'), href: "#badge", $active: (tocActive is 'badge')?!, "Badge"
+            a @mouseenter: (=> tocActive = 'card'), @click: (=> tocActive = 'card'), href: "#card", $active: (tocActive is 'card')?!, "Card"
+            a @mouseenter: (=> tocActive = 'separator'), @click: (=> tocActive = 'separator'), href: "#separator", $active: (tocActive is 'separator')?!, "Separator"
+            a @mouseenter: (=> tocActive = 'progress'), @click: (=> tocActive = 'progress'), href: "#progress", $active: (tocActive is 'progress')?!, "Progress"
+            a @mouseenter: (=> tocActive = 'meter'), @click: (=> tocActive = 'meter'), href: "#meter", $active: (tocActive is 'meter')?!, "Meter"
+            a @mouseenter: (=> tocActive = 'spinner'), @click: (=> tocActive = 'spinner'), href: "#spinner", $active: (tocActive is 'spinner')?!, "Spinner"
+            a @mouseenter: (=> tocActive = 'skeleton'), @click: (=> tocActive = 'skeleton'), href: "#skeleton", $active: (tocActive is 'skeleton')?!, "Skeleton"
+            a @mouseenter: (=> tocActive = 'avatar'), @click: (=> tocActive = 'avatar'), href: "#avatar", $active: (tocActive is 'avatar')?!, "Avatar"
+            a @mouseenter: (=> tocActive = 'label'), @click: (=> tocActive = 'label'), href: "#label", $active: (tocActive is 'label')?!, "Label"
+            a @mouseenter: (=> tocActive = 'scroll-area'), @click: (=> tocActive = 'scroll-area'), href: "#scroll-area", $active: (tocActive is 'scroll-area')?!, "ScrollArea"
+          .toc-group
+            .toc-label "Form"
+            a @mouseenter: (=> tocActive = 'field'), @click: (=> tocActive = 'field'), href: "#field", $active: (tocActive is 'field')?!, "Field"
+            a @mouseenter: (=> tocActive = 'fieldset'), @click: (=> tocActive = 'fieldset'), href: "#fieldset", $active: (tocActive is 'fieldset')?!, "Fieldset"
+            a @mouseenter: (=> tocActive = 'form'), @click: (=> tocActive = 'form'), href: "#form", $active: (tocActive is 'form')?!, "Form"
+            a @mouseenter: (=> tocActive = 'button-group'), @click: (=> tocActive = 'button-group'), href: "#button-group", $active: (tocActive is 'button-group')?!, "ButtonGroup"
+          .toc-group
+            .toc-label "Data"
+            a @mouseenter: (=> tocActive = 'grid'), @click: (=> tocActive = 'grid'), href: "#grid", $active: (tocActive is 'grid')?!, "Grid"
+            a @mouseenter: (=> tocActive = 'accordion'), @click: (=> tocActive = 'accordion'), href: "#accordion", $active: (tocActive is 'accordion')?!, "Accordion"
+            a @mouseenter: (=> tocActive = 'table'), @click: (=> tocActive = 'table'), href: "#table", $active: (tocActive is 'table')?!, "Table"
+            a @mouseenter: (=> tocActive = 'collapsible'), @click: (=> tocActive = 'collapsible'), href: "#collapsible", $active: (tocActive is 'collapsible')?!, "Collapsible"
+          .toc-group
+            .toc-label "Interactive"
+            a @mouseenter: (=> tocActive = 'pagination'), @click: (=> tocActive = 'pagination'), href: "#pagination", $active: (tocActive is 'pagination')?!, "Pagination"
+            a @mouseenter: (=> tocActive = 'carousel'), @click: (=> tocActive = 'carousel'), href: "#carousel", $active: (tocActive is 'carousel')?!, "Carousel"
+            a @mouseenter: (=> tocActive = 'resizable'), @click: (=> tocActive = 'resizable'), href: "#resizable", $active: (tocActive is 'resizable')?!, "Resizable"
+        .toc-detail
+          if tocActive
+            .
+              h3
+                _infoName
+                span.badge @click: (=> @_viewSource(tocActive)), "#{_infoLines} lines ❐"
+              p.toc-desc _infoDesc
+              .api
+                dl
+                  dt "Props"
+                  dd
+                    for item in _infoProps
+                      code item
+                  if _infoEvents.length
+                    dt "Events"
+                    dd
+                      for item in _infoEvents
+                        code item
+                  if _infoKeys.length
+                    dt "Keyboard"
+                    dd
+                      for item in _infoKeys
+                        kbd item
+                  dt "Data"
+                  dd
+                    for item in _infoAttrs
+                      code item
+              a.jump href: "##{tocActive}", @click: ((e) => @_jumpTo(e))
+                "Jump to demo ↓"
+          else
+            .toc-empty "← Hover a component to see its API"
+
+      # ========================================================================
+      # SELECT
+      # ========================================================================
+      .section id: "select"
+        SectionHead tag: "select", name: "Select", lines: 135
+        .section-desc "Dropdown with typeahead, keyboard nav, ARIA listbox."
+        .demo-row
+          .demo-label "Basic select"
+          Select value <=> fruit, @change: (=> null)
+            for f in allFruits
+              option value: f.toLowerCase(), f
+          .status "selected: #{fruit ?? 'none'}"
+        .demo-row
+          .demo-label "With placeholder"
+          Select value <=> role, placeholder: "Choose a role..."
+            option value: "eng", "Engineer"
+            option value: "des", "Designer"
+            option value: "mgr", "Manager"
+            option value: "dir", "Director"
+          .status "selected: #{role ?? 'none'}"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@value"
+              code "@placeholder"
+              code "@disabled"
+            dt "Events"
+            dd
+              code "change"
+            dt "Keyboard"
+            dd
+              kbd "↕"
+              kbd "Enter"
+              kbd "Space"
+              kbd "Esc"
+              kbd "Home"
+              kbd "End"
+              kbd "type-ahead"
+            dt "Data"
+            dd
+              code "$open"
+              code "$placeholder"
+              code "$disabled"
+              code "$value"
+              code "$highlighted"
+              code "$selected"
+
+      # ========================================================================
+      # COMBOBOX
+      # ========================================================================
+      .section id: "combobox"
+        SectionHead tag: "combobox", name: "Combobox", lines: 118
+        .section-desc "Filterable input + listbox for search-as-you-type."
+        .demo-row
+          .demo-label "Search fruits"
+          Combobox query <=> searchQuery, items: filteredFruits, placeholder: "Type to search..."
+            @select: (e) => (searchQuery = e.detail if e.detail?; filteredFruits = allFruits)
+            @filter: (=> filteredFruits = allFruits.filter (f) -> f.toLowerCase().includes(searchQuery.toLowerCase()))
+          .status "query: '#{searchQuery}'"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@query"
+              code "@items"
+              code "@placeholder"
+              code "@disabled"
+              code "@autoHighlight"
+            dt "Events"
+            dd
+              code "filter"
+              code "select"
+            dt "Keyboard"
+            dd
+              kbd "↕"
+              kbd "Enter"
+              kbd "Esc"
+              kbd "Tab"
+            dt "Data"
+            dd
+              code "$open"
+              code "$disabled"
+              code "$clear"
+              code "$value"
+              code "$highlighted"
+              code "$empty"
+
+      # ========================================================================
+      # MULTI-SELECT
+      # ========================================================================
+      .section id: "multi-select"
+        SectionHead tag: "multi-select", name: "MultiSelect", lines: 146
+        .section-desc "Multi-select with chips, filtering, and keyboard navigation."
+        .demo-row
+          .demo-label "Pick colors"
+          MultiSelect value <=> selectedColors, items: ['Red', 'Orange', 'Yellow', 'Green', 'Blue', 'Indigo', 'Violet'], placeholder: "Choose colors..."
+          .status "selected: #{selectedColors.join(', ')}"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@value"
+              code "@items"
+              code "@placeholder"
+              code "@disabled"
+            dt "Events"
+            dd
+              code "change"
+            dt "Keyboard"
+            dd
+              kbd "↕"
+              kbd "Enter"
+              kbd "Esc"
+              kbd "Backspace"
+              kbd "Tab"
+            dt "Data"
+            dd
+              code "$open"
+              code "$disabled"
+              code "$chips"
+              code "$chip"
+              code "$remove"
+              code "$clear"
+              code "$highlighted"
+              code "$selected"
+
+      # ========================================================================
+      # AUTOCOMPLETE
+      # ========================================================================
+      .section id: "autocomplete"
+        SectionHead tag: "autocomplete", name: "Autocomplete", lines: 113
+        .section-desc "Suggestion input — type to filter, select to fill."
+        .demo-row
+          .demo-label "Search cities"
+          Autocomplete value <=> citySearch, items: cities
+          .status "value: #{citySearch}"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@value"
+              code "@items"
+              code "@placeholder"
+              code "@disabled"
+            dt "Events"
+            dd
+              code "select"
+            dt "Keyboard"
+            dd
+              kbd "↕"
+              kbd "Enter"
+              kbd "Esc"
+              kbd "Tab"
+            dt "Data"
+            dd
+              code "$open"
+              code "$disabled"
+              code "$clear"
+
+      # ========================================================================
+      # CHECKBOX
+      # ========================================================================
+      .section id: "checkbox"
+        SectionHead tag: "checkbox", name: "Checkbox", lines: 18
+        .section-desc "Toggle with checkbox or switch semantics. Supports indeterminate."
+        .demo-row
+          .demo-label "Checkbox (unchecked)"
+          Checkbox checked <=> check1, @change: (=> p "Clicked!")
+            "Enable notifications"
+          .status "checked: #{check1}"
+        .demo-row
+          .demo-label "Checkbox (pre-checked)"
+          Checkbox checked <=> check2
+            "Accept terms"
+          .status "checked: #{check2}"
+        .demo-row
+          .demo-label "Switch variant"
+          Checkbox checked <=> switch1, switch: true
+            "Dark mode"
+          .status "on: #{switch1}"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@checked"
+              code "@disabled"
+              code "@indeterminate"
+              code "@switch"
+            dt "Events"
+            dd
+              code "change"
+            dt "Data"
+            dd
+              code "$checked"
+              code "$indeterminate"
+              code "$disabled"
+
+      # ========================================================================
+      # TOGGLE
+      # ========================================================================
+      .section id: "toggle"
+        SectionHead tag: "toggle", name: "Toggle", lines: 14
+        .section-desc "Stateful toggle button with pressed state."
+        .demo-row
+          .demo-label "Tap to toggle"
+          .toggle-heart
+            Toggle pressed <=> isBold
+              span.heart (if isBold then "♥" else "♡")
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@pressed"
+              code "@disabled"
+            dt "Events"
+            dd
+              code "change"
+            dt "Data"
+            dd
+              code "$pressed"
+              code "$disabled"
+
+      # ========================================================================
+      # TOGGLE GROUP
+      # ========================================================================
+      .section id: "toggle-group"
+        SectionHead tag: "toggle-group", name: "ToggleGroup", lines: 55
+        .section-desc "Single or multi-select toggle buttons."
+        .demo-row
+          .demo-label "Text alignment"
+          ToggleGroup value <=> alignment
+            div $value: "left", "Left"
+            div $value: "center", "Center"
+            div $value: "right", "Right"
+          .status "alignment: #{alignment ?? 'none'}"
+        .demo-row
+          .demo-label "Multi-select"
+          ToggleGroup value <=> toppings, multiple: true
+            div $value: "Cheese", "Cheese"
+            div $value: "Bacon", "Bacon"
+            div $value: "Lettuce", "Lettuce"
+          .status "toppings: #{toppings.join(', ')}"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@value"
+              code "@disabled"
+              code "@multiple"
+              code "@orientation"
+            dt "Events"
+            dd
+              code "change"
+            dt "Keyboard"
+            dd
+              kbd "← →"
+              kbd "↕"
+              kbd "Home"
+              kbd "End"
+            dt "Data"
+            dd
+              code "$orientation"
+              code "$disabled"
+              code "$pressed"
+              code "$value"
+
+      # ========================================================================
+      # RADIO GROUP
+      # ========================================================================
+      .section id: "radio-group"
+        SectionHead tag: "radio-group", name: "RadioGroup", lines: 42
+        .section-desc "Exactly one option selected. Arrow keys move focus and selection."
+        .demo-row
+          .demo-label "Font size"
+          RadioGroup value <=> fontSize
+            div $value: "sm", "Small"
+            div $value: "md", "Medium"
+            div $value: "lg", "Large"
+          .status "fontSize: #{fontSize ?? 'none'}"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@value"
+              code "@disabled"
+              code "@orientation"
+              code "@name"
+            dt "Events"
+            dd
+              code "change"
+            dt "Keyboard"
+            dd
+              kbd "← →"
+              kbd "↕"
+              kbd "Home"
+              kbd "End"
+            dt "Data"
+            dd
+              code "$orientation"
+              code "$disabled"
+              code "$checked"
+              code "$value"
+
+      # ========================================================================
+      # CHECKBOX GROUP
+      # ========================================================================
+      .section id: "checkbox-group"
+        SectionHead tag: "checkbox-group", name: "CheckboxGroup", lines: 45
+        .section-desc "Multiple options checked independently."
+        .demo-row
+          .demo-label "Toppings"
+          CheckboxGroup value <=> cbToppings, label: "Pizza toppings"
+            div $value: "Cheese", "Cheese"
+            div $value: "Bacon", "Bacon"
+            div $value: "Lettuce", "Lettuce"
+            div $value: "Tomato", "Tomato"
+          .status "selected: #{cbToppings.join(', ')}"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@value"
+              code "@disabled"
+              code "@orientation"
+              code "@label"
+            dt "Events"
+            dd
+              code "change"
+            dt "Keyboard"
+            dd
+              kbd "← →"
+              kbd "↕"
+            dt "Data"
+            dd
+              code "$orientation"
+              code "$disabled"
+              code "$checked"
+              code "$value"
+
+      # ========================================================================
+      # INPUT
+      # ========================================================================
+      .section id: "input"
+        SectionHead tag: "input", name: "Input", lines: 25
+        .section-desc "Headless input tracking focus, touch, and validation state."
+        .demo-row
+          .demo-label "Text input"
+          Input value <=> userName, placeholder: "Enter your name"
+          .status "value: #{userName}"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@value"
+              code "@placeholder"
+              code "@type"
+              code "@disabled"
+              code "@required"
+            dt "Data"
+            dd
+              code "$disabled"
+              code "$focused"
+              code "$touched"
+
+      # ========================================================================
+      # NUMBER FIELD
+      # ========================================================================
+      .section id: "number-field"
+        SectionHead tag: "number-field", name: "NumberField", lines: 151
+        .section-desc "Number input with increment/decrement buttons, hold-to-repeat, and keyboard stepping."
+        .demo-row
+          .demo-label "Quantity (1-99)"
+          .nf-wrap
+            NumberField value <=> quantity, min: 1, max: 99
+          .status "quantity: #{quantity}"
+        .demo-row
+          .demo-label "Price (step: 0.01)"
+          .nf-wrap
+            NumberField value <=> price, min: 0, max: 999.99, step: 0.01
+          .status "price: #{price}"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@value"
+              code "@min"
+              code "@max"
+              code "@step"
+              code "@disabled"
+              code "@readOnly"
+            dt "Events"
+            dd
+              code "input"
+              code "change"
+            dt "Keyboard"
+            dd
+              kbd "↕"
+              kbd "PgUp"
+              kbd "PgDn"
+              kbd "Home"
+              kbd "End"
+            dt "Data"
+            dd
+              code "$disabled"
+              code "$readonly"
+              code "$decrement"
+              code "$increment"
+
+      # ========================================================================
+      # SLIDER
+      # ========================================================================
+      .section id: "slider"
+        SectionHead tag: "slider", name: "Slider", lines: 152
+        .section-desc "Draggable range input with pointer capture and keyboard stepping."
+        .demo-row
+          .demo-label "Single thumb"
+          .slider-wrap
+            Slider value <=> sliderVal
+          .status "value: #{sliderVal}"
+        .demo-row
+          .demo-label "Range (two thumbs)"
+          .slider-wrap
+            Slider value <=> rangeVal
+          .status "range: #{rangeVal}"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@value"
+              code "@min"
+              code "@max"
+              code "@step"
+              code "@orientation"
+              code "@disabled"
+            dt "Events"
+            dd
+              code "input"
+              code "change"
+            dt "Keyboard"
+            dd
+              kbd "← →"
+              kbd "↕"
+              kbd "PgUp"
+              kbd "PgDn"
+              kbd "Home"
+              kbd "End"
+            dt "Data"
+            dd
+              code "$orientation"
+              code "$disabled"
+              code "$dragging"
+              code "$track"
+              code "$indicator"
+              code "$thumb"
+              code "$active"
+
+      # ========================================================================
+      # OTP FIELD
+      # ========================================================================
+      .section id: "otp-field"
+        SectionHead tag: "otp-field", name: "OTPField", lines: 79
+        .section-desc "Multi-digit code input with auto-advance, backspace nav, and paste."
+        .demo-row
+          .demo-label "6-digit code"
+          OTPField length: 6, value <=> otpCode
+          .status "code: '#{otpCode}'"
+        .demo-row
+          .demo-label "4-digit masked"
+          OTPField length: 4, mask: true
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@length"
+              code "@value"
+              code "@disabled"
+              code "@mask"
+            dt "Events"
+            dd
+              code "input"
+              code "complete"
+            dt "Keyboard"
+            dd
+              kbd "← →"
+              kbd "Backspace"
+              kbd "Home"
+              kbd "End"
+              kbd "paste"
+            dt "Data"
+            dd
+              code "$disabled"
+              code "$complete"
+              code "$filled"
+
+      # ========================================================================
+      # DATE PICKER
+      # ========================================================================
+      .section id: "date-picker"
+        SectionHead tag: "date-picker", name: "DatePicker", lines: 194
+        .section-desc "Calendar dropdown for single date or range selection."
+        .demo-row
+          .demo-label "Single date"
+          DatePicker value <=> pickedDate
+          .status "date: #{if pickedDate then pickedDate.toLocaleDateString() else 'none'}"
+        .demo-row
+          .demo-label "Date range"
+          DatePicker value <=> dateRange, range: true
+          .status "range: #{if dateRange and dateRange[0] then dateRange[0].toLocaleDateString() else 'none'} – #{if dateRange and dateRange[1] then dateRange[1].toLocaleDateString() else '...'}"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@value"
+              code "@placeholder"
+              code "@disabled"
+              code "@range"
+              code "@firstDayOfWeek"
+            dt "Events"
+            dd
+              code "change"
+            dt "Keyboard"
+            dd
+              kbd "Esc"
+              kbd "Enter"
+              kbd "Space"
+            dt "Data"
+            dd
+              code "$open"
+              code "$disabled"
+              code "$range"
+              code "$calendar"
+              code "$selected"
+              code "$today"
+              code "$in-range"
+
+      # ========================================================================
+      # EDITABLE VALUE
+      # ========================================================================
+      .section id: "editable-value"
+        SectionHead tag: "editable-value", name: "EditableValue", lines: 70
+        .section-desc "Click the edit icon to modify the value inline."
+        .demo-row
+          EditableValue @save: (=> editName = editName)
+            span $display: true
+              "#{editName}"
+            div $editor: true
+              input type: "text", value: editName
+                @input: (e) => editName = e.target.value
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@disabled"
+            dt "Events"
+            dd
+              code "save"
+            dt "Keyboard"
+            dd
+              kbd "Esc"
+              kbd "Enter"
+            dt "Data"
+            dd
+              code "$editing"
+              code "$disabled"
+              code "$saving"
+              code "$edit-trigger"
+
+      # ========================================================================
+      # TEXTAREA
+      # ========================================================================
+      .section id: "textarea"
+        SectionHead tag: "textarea", name: "Textarea", lines: 37
+        .section-desc "Auto-resizing text area with focus and validation tracking."
+        .demo-row
+          .demo-label "Auto-resize textarea"
+          Textarea value <=> textareaVal, placeholder: "Type something...", autoResize: true
+          .status "length: #{textareaVal.length}"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@value"
+              code "@placeholder"
+              code "@disabled"
+              code "@required"
+              code "@rows"
+              code "@autoResize"
+            dt "Data"
+            dd
+              code "$disabled"
+              code "$focused"
+              code "$touched"
+
+      # ========================================================================
+      # NATIVE SELECT
+      # ========================================================================
+      .section id: "native-select"
+        SectionHead tag: "native-select", name: "NativeSelect", lines: 21
+        .section-desc "Native browser select element with state tracking."
+        .demo-row.native-select-demo
+          .demo-label "Choose a color"
+          NativeSelect value <=> nativeSelectVal
+            option value: "", "Pick one..."
+            option value: "red", "Red"
+            option value: "green", "Green"
+            option value: "blue", "Blue"
+          .status "value: '#{nativeSelectVal}'"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@value"
+              code "@disabled"
+              code "@required"
+            dt "Events"
+            dd
+              code "change"
+            dt "Data"
+            dd
+              code "$disabled"
+              code "$focused"
+
+      # ========================================================================
+      # INPUT GROUP
+      # ========================================================================
+      .section id: "input-group"
+        SectionHead tag: "input-group", name: "InputGroup", lines: 15
+        .section-desc "Input with prefix/suffix addon elements."
+        .demo-row.input-group-demo
+          .demo-label "With prefix"
+          InputGroup
+            span $prefix: true, "$"
+            input type: "text", placeholder: "Amount"
+        .demo-row.input-group-demo
+          .demo-label "With suffix"
+          InputGroup
+            input type: "text", placeholder: "Search..."
+            button $suffix: true, "Go"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@disabled"
+            dt "Data"
+            dd
+              code "$disabled"
+              code "$focused"
+
+      # ========================================================================
+      # TABS
+      # ========================================================================
+      .section id: "tabs"
+        SectionHead tag: "tabs", name: "Tabs", lines: 92
+        .section-desc "Tab panel with roving tabindex and arrow key navigation."
+        .demo-row
+          .demo-label "Basic tabs"
+          Tabs active <=> currentTab
+            div data-tab: "overview", "Overview"
+            div data-tab: "details", "Details"
+            div data-tab: "settings", "Settings"
+            div data-panel: "overview"
+              p "This is the overview panel."
+            div data-panel: "details"
+              p "These are the details."
+            div data-panel: "settings"
+              p "Settings go here."
+          .status "active: #{currentTab}"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@active"
+              code "@orientation"
+              code "@activation"
+            dt "Events"
+            dd
+              code "change"
+            dt "Keyboard"
+            dd
+              kbd "← →"
+              kbd "↕"
+              kbd "Home"
+              kbd "End"
+              kbd "Enter"
+              kbd "Space"
+            dt "Data"
+            dd
+              code "$tab"
+              code "$panel"
+              code "$active"
+              code "$disabled"
+
+      # ========================================================================
+      # MENU
+      # ========================================================================
+      .section id: "menu"
+        SectionHead tag: "menu", name: "Menu", lines: 124
+        .section-desc "Dropdown action menu with keyboard navigation."
+        .demo-row
+          .demo-label "Click to open menu"
+          Menu
+            @select: (e) => console.log("Selected: #{e.detail}")
+            span "Actions"
+            div data-item: "edit", "Edit"
+            div data-item: "duplicate", "Duplicate"
+            div data-item: "archive", "Archive"
+            div data-item: "delete", "Delete"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@disabled"
+            dt "Events"
+            dd
+              code "select"
+            dt "Keyboard"
+            dd
+              kbd "↕"
+              kbd "Home"
+              kbd "End"
+              kbd "Enter"
+              kbd "Space"
+              kbd "Esc"
+              kbd "Tab"
+              kbd "type-ahead"
+            dt "Data"
+            dd
+              code "$open"
+              code "$disabled"
+              code "$highlighted"
+              code "$value"
+
+      # ========================================================================
+      # CONTEXT MENU
+      # ========================================================================
+      .section id: "context-menu"
+        SectionHead tag: "context-menu", name: "ContextMenu", lines: 73
+        .section-desc "Right-click the dashed area to open a context menu."
+        ContextMenu
+          div $trigger: true
+            .context-zone
+              "Right-click here"
+          div $item: "cut", "Cut"
+          div $item: "copy", "Copy"
+          div $item: "paste", "Paste"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@disabled"
+            dt "Events"
+            dd
+              code "select"
+            dt "Keyboard"
+            dd
+              kbd "↕"
+              kbd "Home"
+              kbd "End"
+              kbd "Enter"
+              kbd "Space"
+              kbd "Esc"
+              kbd "Tab"
+            dt "Data"
+            dd
+              code "$open"
+              code "$highlighted"
+              code "$disabled"
+              code "$value"
+
+      # ========================================================================
+      # MENUBAR
+      # ========================================================================
+      .section id: "menubar"
+        SectionHead tag: "menubar", name: "Menubar", lines: 137
+        .section-desc "Horizontal menu bar with dropdown menus."
+        .demo-row
+          Menubar
+            div $menu: "File"
+              div $item: "new", "New"
+              div $item: "open", "Open"
+              div $item: "save", "Save"
+            div $menu: "Edit"
+              div $item: "undo", "Undo"
+              div $item: "redo", "Redo"
+              div $item: "cut", "Cut"
+            div $menu: "View"
+              div $item: "zoom-in", "Zoom In"
+              div $item: "zoom-out", "Zoom Out"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@disabled"
+            dt "Events"
+            dd
+              code "select"
+            dt "Keyboard"
+            dd
+              kbd "← →"
+              kbd "↕"
+              kbd "Enter"
+              kbd "Space"
+              kbd "Esc"
+              kbd "Tab"
+            dt "Data"
+            dd
+              code "$disabled"
+              code "$open"
+              code "$highlighted"
+              code "$value"
+
+      # ========================================================================
+      # NAVIGATION MENU
+      # ========================================================================
+      .section id: "nav-menu"
+        SectionHead tag: "nav-menu", name: "NavigationMenu", lines: 114
+        .section-desc "Site navigation with dropdown panels."
+        .demo-row
+          NavigationMenu
+            a $link: true, href: "javascript:void(0)"
+              "Home"
+            div $trigger: "Products"
+              div $panel: true
+                a href: "javascript:void(0)", "Components"
+                a href: "javascript:void(0)", "Templates"
+                a href: "javascript:void(0)", "Playground"
+            div $trigger: "Learn"
+              div $panel: true
+                a href: "javascript:void(0)", "Documentation"
+                a href: "javascript:void(0)", "Blog"
+                a href: "javascript:void(0)", "Changelog"
+            a $link: true, href: "javascript:void(0)"
+              "GitHub"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@orientation"
+              code "@hoverDelay"
+              code "@hoverCloseDelay"
+            dt "Keyboard"
+            dd
+              kbd "← →"
+              kbd "↓"
+              kbd "Esc"
+            dt "Data"
+            dd
+              code "$orientation"
+              code "$open"
+
+      # ========================================================================
+      # TOOLBAR
+      # ========================================================================
+      .section id: "toolbar"
+        SectionHead tag: "toolbar", name: "Toolbar", lines: 26
+        .section-desc "Groups controls with roving tabindex keyboard navigation."
+        .demo-row
+          .demo-label "Text"
+          Toolbar label: "Formatting"
+            Button
+              "Save"
+            Button
+              "Undo"
+            Separator orientation: "vertical"
+            Toggle pressed <=> isBold
+              "Bold"
+            Toggle pressed <=> isItalic
+              "Italic"
+        .demo-row
+          .demo-label "Icons + Text"
+          Toolbar label: "Formatting"
+            Button
+              "💾 Save"
+            Button
+              "↩ Undo"
+            Separator orientation: "vertical"
+            Toggle pressed <=> isBold
+              "𝐁 Bold"
+            Toggle pressed <=> isItalic
+              "𝐼 Italic"
+        .demo-row
+          .demo-label "Icons Only"
+          Toolbar label: "Formatting"
+            Button aria-label: "Save"
+              "💾"
+            Button aria-label: "Undo"
+              "↩"
+            Separator orientation: "vertical"
+            Toggle pressed <=> isBold, aria-label: "Bold"
+              "𝐁"
+            Toggle pressed <=> isItalic, aria-label: "Italic"
+              "𝐼"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@orientation"
+              code "@label"
+            dt "Keyboard"
+            dd
+              kbd "← →"
+              kbd "↕"
+              kbd "Home"
+              kbd "End"
+            dt "Data"
+            dd
+              code "$orientation"
+
+      # ========================================================================
+      # BREADCRUMB
+      # ========================================================================
+      .section id: "breadcrumb"
+        SectionHead tag: "breadcrumb", name: "Breadcrumb", lines: 32
+        .section-desc "Navigation trail with separator and current page."
+        .demo-row
+          .demo-label "Basic breadcrumb"
+          Breadcrumb
+            a $item: true, href: "#breadcrumb", "Home"
+            a $item: true, href: "#breadcrumb", "Products"
+            a $item: true, href: "#breadcrumb", "Widgets"
+            span $item: true, "Widget Pro"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@separator"
+              code "@label"
+            dt "Data"
+            dd
+              code "$current"
+
+      # ========================================================================
+      # DIALOG
+      # ========================================================================
+      .section id: "dialog"
+        SectionHead tag: "dialog", name: "Dialog", lines: 94
+        .section-desc "Modal with focus trap and scroll lock. Press Escape or click outside to dismiss."
+        .demo-row
+          .demo-label "Click to open"
+          button.demo-btn @click: (=> showDialog = true)
+            "Open Dialog"
+          .status "open: #{showDialog}"
+        Dialog open <=> showDialog, @close: (=> showDialog = false)
+          .dialog-panel
+            h2 style: "font-size:18px;font-weight:600;margin-bottom:8px", "Confirm Action"
+            p.dialog-desc "Are you sure you want to proceed?"
+            . style: "display:flex;gap:8px;justify-content:flex-end"
+              button.demo-btn @click: (=> showDialog = false)
+                "Cancel"
+              button style: "padding:6px 16px;border:none;border-radius:6px;background:#1d4ed8;color:white;font-weight:600", @click: (=> showDialog = false)
+                "Confirm"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@open"
+              code "@dismissable"
+              code "@initialFocus"
+            dt "Events"
+            dd
+              code "close"
+            dt "Keyboard"
+            dd
+              kbd "Esc"
+              kbd "Tab"
+            dt "Data"
+            dd
+              code "$open"
+
+      # ========================================================================
+      # ALERT DIALOG
+      # ========================================================================
+      .section id: "alert-dialog"
+        SectionHead tag: "alert-dialog", name: "AlertDialog", lines: 83
+        .section-desc "Non-dismissable modal — Escape and click-outside are blocked. User must choose an action."
+        .demo-row
+          .demo-label "Requires explicit action"
+          button.demo-btn @click: (=> showAlertDialog = true)
+            "Delete Account"
+          .status "open: #{showAlertDialog}"
+        AlertDialog open <=> showAlertDialog
+          .dialog-panel
+            h2 style: "font-size:18px;font-weight:600;margin-bottom:8px", "Delete Account?"
+            p.dialog-desc "This action is permanent and cannot be undone."
+            . style: "display:flex;gap:8px;justify-content:flex-end"
+              button.demo-btn @click: (=> showAlertDialog = false)
+                "Cancel"
+              button style: "padding:6px 16px;border:none;border-radius:6px;background:#dc2626;color:white;font-weight:600", @click: (=> showAlertDialog = false)
+                "Delete"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@open"
+              code "@initialFocus"
+            dt "Events"
+            dd
+              code "close"
+            dt "Keyboard"
+            dd
+              kbd "Tab"
+            dt "Data"
+            dd
+              code "$open"
+
+      # ========================================================================
+      # DRAWER
+      # ========================================================================
+      .section id: "drawer"
+        SectionHead tag: "drawer", name: "Drawer", lines: 68
+        .section-desc "Slide-out panel from edge of screen with focus trap and scroll lock."
+        .demo-row
+          .demo-label "Open from right"
+          .btn-demo
+            .btn-row
+              button @click: (=> showDrawer = true)
+                "Open Drawer"
+          Drawer open <=> showDrawer, side: "right"
+            .drawer-panel
+              h2 "Settings"
+              p "This is a drawer panel that slides in from the right."
+              p "Press Escape or click outside to close."
+              button @click: (=> showDrawer = false)
+                "Close"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@open"
+              code "@side"
+              code "@dismissable"
+            dt "Events"
+            dd
+              code "close"
+            dt "Keyboard"
+            dd
+              kbd "Esc"
+              kbd "Tab"
+            dt "Data"
+            dd
+              code "$open"
+              code "$side"
+
+      # ========================================================================
+      # POPOVER
+      # ========================================================================
+      .section id: "popover"
+        SectionHead tag: "popover", name: "Popover", lines: 135
+        .section-desc "Anchored floating content with flip/shift positioning."
+        .demo-row
+          .demo-label "Click to toggle"
+          Popover placement: "bottom-start"
+            button.demo-btn data-trigger: true
+              "Open Popover"
+            div.floating-panel data-content: true
+              p.floating-title "Popover content"
+              p.floating-desc "Click outside or press Escape to close."
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@placement"
+              code "@offset"
+              code "@disabled"
+              code "@openOnHover"
+              code "@hoverDelay"
+              code "@hoverCloseDelay"
+            dt "Keyboard"
+            dd
+              kbd "Esc"
+              kbd "Enter"
+              kbd "Space"
+              kbd "↓"
+            dt "Data"
+            dd
+              code "$open"
+              code "$placement"
+
+      # ========================================================================
+      # TOOLTIP
+      # ========================================================================
+      .section id: "tooltip"
+        SectionHead tag: "tooltip", name: "Tooltip", lines: 103
+        .section-desc "Hover/focus tooltip with delay and positioning."
+        .demo-row
+          .demo-label "Hover the buttons"
+          . style: "display:flex;gap:12px"
+            Tooltip text: "Save your changes", placement: "top"
+              button.demo-btn
+                "Save (top)"
+            Tooltip text: "Delete this item", placement: "bottom"
+              button.demo-btn
+                "Delete (bottom)"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@text"
+              code "@placement"
+              code "@delay"
+              code "@offset"
+              code "@hoverable"
+            dt "Data"
+            dd
+              code "$open"
+              code "$entering"
+              code "$exiting"
+              code "$placement"
+
+      # ========================================================================
+      # PREVIEW CARD
+      # ========================================================================
+      .section id: "preview-card"
+        SectionHead tag: "preview-card", name: "PreviewCard", lines: 63
+        .section-desc "Hover or focus the link to see a preview card."
+        .demo-row
+          PreviewCard delay: 300
+            a $trigger: true, href: "#preview-card", @click: ((e) => e.preventDefault())
+              "Hover me for preview"
+            div $content: true, hidden: true
+              .floating-panel style: "width:240px"
+                p.floating-title "Preview Card"
+                p.floating-desc "This content appears on hover or focus. Useful for link previews."
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@delay"
+              code "@closeDelay"
+            dt "Data"
+            dd
+              code "$open"
+
+      # ========================================================================
+      # TOAST
+      # ========================================================================
+      .section id: "toast"
+        SectionHead tag: "toast", name: "Toast", lines: 66
+        .section-desc "Auto-dismiss notification with ARIA live region."
+        .demo-row
+          .demo-label "Click to show toasts"
+          button.demo-btn @click: (=> toasts = [...toasts, { message: 'Hello!', type: 'info' }])
+            "Info Toast"
+          button.demo-btn style: "margin-left:8px", @click: (=> toasts = [...toasts, { message: 'Saved!', type: 'success' }])
+            "Success Toast"
+        .toast-wrap
+          ToastViewport toasts <=> toasts
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@toasts"
+              code "@toast"
+              code "@placement"
+            dt "Events"
+            dd
+              code "dismiss"
+            dt "Data"
+            dd
+              code "$placement"
+              code "$type"
+              code "$leaving"
+
+      # ========================================================================
+      # BUTTON
+      # ========================================================================
+      .section id: "button"
+        SectionHead tag: "button", name: "Button", lines: 12
+        .section-desc "Headless button with disabled-but-focusable pattern."
+        .demo-row.btn-demo
+          .demo-label "Normal, primary, and disabled"
+          .btn-row
+            Button @press: (=> p "Pressed!")
+              "Click Me"
+            Button @press: (=> p "Saved!")
+              "Save"
+            Button disabled: true
+              "Disabled"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@disabled"
+            dt "Events"
+            dd
+              code "press"
+            dt "Data"
+            dd
+              code "$disabled"
+
+      # ========================================================================
+      # BADGE
+      # ========================================================================
+      .section id: "badge"
+        SectionHead tag: "badge", name: "Badge", lines: 7
+        .section-desc "Inline label with variant styles."
+        .demo-row
+          .demo-label "Variants"
+          . style: "display:flex;gap:8px;align-items:center"
+            Badge "Solid"
+            Badge variant: "outline", "Outline"
+            Badge variant: "subtle", "Subtle"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@variant"
+            dt "Data"
+            dd
+              code "$variant"
+
+      # ========================================================================
+      # CARD
+      # ========================================================================
+      .section id: "card"
+        SectionHead tag: "card", name: "Card", lines: 7
+        .section-desc "Structured container with header, content, and footer."
+        .demo-row.card-demo
+          Card
+            div $header: true
+              h3 "Card Title"
+            div $content: true
+              "This is the card body. Cards can contain any content."
+            div $footer: true
+              button.demo-btn @click: (=> toasts = [...toasts, { message: 'Card action clicked!', type: 'success' }]), "Action"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@interactive"
+            dt "Data"
+            dd
+              code "$interactive"
+
+      # ========================================================================
+      # SEPARATOR
+      # ========================================================================
+      .section id: "separator"
+        SectionHead tag: "separator", name: "Separator", lines: 8
+        .section-desc "Decorative or semantic divider between sections."
+        .demo-row
+          .demo-label "Horizontal (default)"
+          div style: "width:100%"
+            p "Above the separator"
+            Separator
+            p "Below the separator"
+        .demo-row
+          .demo-label "Vertical"
+          div style: "display:flex;align-items:center;gap:12px;height:32px"
+            span "Left"
+            Separator orientation: "vertical"
+            span "Right"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@orientation"
+              code "@decorative"
+            dt "Data"
+            dd
+              code "$orientation"
+
+      # ========================================================================
+      # PROGRESS
+      # ========================================================================
+      .section id: "progress"
+        SectionHead tag: "progress", name: "Progress", lines: 16
+        .section-desc "Progress bar with value exposed as CSS custom property."
+        .demo-row
+          .demo-label "65% complete"
+          Progress value: progressVal
+            div.progress-track
+              div.progress-fill style: "width: var(--progress-percent)"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@value"
+              code "@max"
+              code "@label"
+            dt "Data"
+            dd
+              code "$complete"
+
+      # ========================================================================
+      # METER
+      # ========================================================================
+      .section id: "meter"
+        SectionHead tag: "meter", name: "Meter", lines: 26
+        .section-desc "Gauge for known-range measurements with low/high/optimum thresholds."
+        .demo-row
+          .demo-label "Score: 72/100"
+          Meter value: meterVal, min: 0, max: 100, low: 30, high: 80, optimum: 60
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@value"
+              code "@min"
+              code "@max"
+              code "@low"
+              code "@high"
+              code "@optimum"
+              code "@label"
+            dt "Data"
+            dd
+              code "$level"
+
+      # ========================================================================
+      # SPINNER
+      # ========================================================================
+      .section id: "spinner"
+        SectionHead tag: "spinner", name: "Spinner", lines: 8
+        .section-desc "Loading indicator with accessible status."
+        .demo-row.spinner-demo
+          .demo-label "Default"
+          . style: "display:flex;gap:16px;align-items:center"
+            Spinner
+            Spinner size: "32px"
+            Spinner label: "Saving...", size: "20px"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@label"
+              code "@size"
+
+      # ========================================================================
+      # SKELETON
+      # ========================================================================
+      .section id: "skeleton"
+        SectionHead tag: "skeleton", name: "Skeleton", lines: 11
+        .section-desc "Loading placeholder with shimmer animation."
+        .demo-row
+          .demo-label "Shapes"
+          . style: "display:flex;gap:12px;align-items:center"
+            Skeleton circle: true, width: "40px", height: "40px"
+            . style: "display:flex;flex-direction:column;gap:6px"
+              Skeleton width: "200px", height: "14px"
+              Skeleton width: "150px", height: "14px"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@width"
+              code "@height"
+              code "@circle"
+              code "@label"
+            dt "Data"
+            dd
+              code "$circle"
+
+      # ========================================================================
+      # AVATAR
+      # ========================================================================
+      .section id: "avatar"
+        SectionHead tag: "avatar", name: "Avatar", lines: 27
+        .section-desc "Image with fallback to initials or placeholder."
+        .demo-row
+          .demo-label "With image"
+          Avatar src: "https://i.pravatar.cc/80?u=linda", alt: "Alice Chen"
+        .demo-row
+          .demo-label "Initials fallback"
+          Avatar alt: "Bob Park", fallback: "BP"
+        .demo-row
+          .demo-label "Placeholder"
+          Avatar
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@src"
+              code "@alt"
+              code "@fallback"
+            dt "Data"
+            dd
+              code "$status"
+              code "$initials"
+              code "$placeholder"
+
+      # ========================================================================
+      # LABEL
+      # ========================================================================
+      .section id: "label"
+        SectionHead tag: "label", name: "Label", lines: 8
+        .section-desc "Standalone accessible form label."
+        .demo-row
+          .demo-label "With required indicator"
+          Label required: true
+            "Email address"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@for"
+              code "@required"
+            dt "Data"
+            dd
+              code "$required"
+
+      # ========================================================================
+      # SCROLL AREA
+      # ========================================================================
+      .section id: "scroll-area"
+        SectionHead tag: "scroll-area", name: "ScrollArea", lines: 133
+        .section-desc "Custom scrollbar with draggable thumb and auto-hide."
+        .demo-row
+          .demo-label "Scrollable content"
+          .scroll-demo
+            ScrollArea
+              div style: "padding: 4px 12px"
+                p "Item 1 — Lorem ipsum dolor sit amet, consectetur adipiscing elit."
+                p "Item 2 — Sed do eiusmod tempor incididunt ut labore et dolore."
+                p "Item 3 — Ut enim ad minim veniam, quis nostrud exercitation."
+                p "Item 4 — Duis aute irure dolor in reprehenderit in voluptate."
+                p "Item 5 — Excepteur sint occaecat cupidatat non proident."
+                p "Item 6 — Sunt in culpa qui officia deserunt mollit anim id."
+                p "Item 7 — Lorem ipsum dolor sit amet, consectetur adipiscing."
+                p "Item 8 — Sed do eiusmod tempor incididunt ut labore et dolore."
+                p "Item 9 — Ut enim ad minim veniam, quis nostrud exercitation."
+                p "Item 10 — Duis aute irure dolor in reprehenderit in voluptate."
+                p "Item 11 — Excepteur sint occaecat cupidatat non proident."
+                p "Item 12 — Sunt in culpa qui officia deserunt mollit anim id."
+                p "Item 13 — Lorem ipsum dolor sit amet, consectetur adipiscing."
+                p "Item 14 — Sed do eiusmod tempor incididunt ut labore et dolore."
+                p "Item 15 — Ut enim ad minim veniam, quis nostrud exercitation."
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@orientation"
+            dt "Data"
+            dd
+              code "$orientation"
+              code "$hovering"
+              code "$scrolling"
+              code "$dragging"
+              code "$viewport"
+              code "$scrollbar"
+              code "$thumb"
+
+      # ========================================================================
+      # FIELD + FIELDSET
+      # ========================================================================
+      .section id: "field"
+        SectionHead tag: "field", name: "Field + Fieldset", lines: 44
+        .section-desc "Form field wrapper with label, description, and error."
+        .demo-row
+          Field label: "Email", description: "We'll never share your email.", required: true, error: fieldError
+            input type: "email", placeholder: "you@example.com", value: fieldEmail
+              @input: (e) =>
+                fieldEmail = e.target.value
+                fieldError = if fieldEmail and not fieldEmail.includes('@') then 'Invalid email address' else ''
+        .demo-row
+          Fieldset legend: "Account Info"
+            Field label: "Username"
+              input type: "text", placeholder: "username"
+            Field label: "Password"
+              input type: "password", placeholder: "password"
+        .api
+          dl
+            dt "Field"
+            dd
+              code "@label"
+              code "@description"
+              code "@error"
+              code "@disabled"
+              code "@required"
+            dt "Fieldset"
+            dd
+              code "@legend"
+              code "@disabled"
+            dt "Data"
+            dd
+              code "$disabled"
+              code "$invalid"
+              code "$label"
+              code "$required"
+              code "$description"
+              code "$error"
+              code "$legend"
+
+      # ========================================================================
+      # FORM
+      # ========================================================================
+      .section id: "form"
+        SectionHead tag: "form", name: "Form", lines: 24
+        .section-desc "Form wrapper with submit handling and validation state."
+        .demo-row
+          Form
+            Field label: "Name"
+              input type: "text", placeholder: "Your name"
+            Field label: "Email"
+              input type: "email", placeholder: "you@example.com"
+            button type: "submit"
+              "Submit"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@disabled"
+            dt "Events"
+            dd
+              code "submit"
+            dt "Data"
+            dd
+              code "$disabled"
+              code "$submitting"
+              code "$submitted"
+
+      # ========================================================================
+      # BUTTON GROUP
+      # ========================================================================
+      .section id: "button-group"
+        SectionHead tag: "button-group", name: "ButtonGroup", lines: 11
+        .section-desc "Groups related buttons with ARIA group semantics."
+        .demo-row
+          .demo-label "Horizontal"
+          ButtonGroup label: "Actions"
+            button "Cut"
+            button "Copy"
+            button "Paste"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@orientation"
+              code "@disabled"
+              code "@label"
+            dt "Data"
+            dd
+              code "$orientation"
+              code "$disabled"
+
+      # ========================================================================
+      # GRID
+      # ========================================================================
+      .section id: "grid"
+        SectionHead tag: "grid", name: "Grid", lines: 857
+        .section-desc "Virtual-scrolling data grid. Click to select, arrows to navigate, double-click to edit."
+        .demo-row
+          . style: "display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px"
+            .demo-label style: "margin-bottom:0", "#{gridData.length} rows, #{gridColumns.length} columns"
+            span.grid-cell-ref gridCellRef
+          Grid data: gridData, columns: gridColumns, striped: true
+          . style: "margin-top:12px;display:flex;gap:8px;align-items:center"
+            button.demo-btn @click: (=> @_loadGridRows(1000))
+              "1K rows"
+            button.demo-btn @click: (=> @_loadGridRows(10000))
+              "10K rows"
+            button.demo-btn @click: (=> @_loadGridRows(100000))
+              "100K rows"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@data"
+              code "@columns"
+              code "@rowHeight"
+              code "@overscan"
+              code "@striped"
+              code "@beforeEdit"
+              code "@afterEdit"
+            dt "Keyboard"
+            dd
+              kbd "Arrows"
+              kbd "Tab"
+              kbd "Enter"
+              kbd "F2"
+              kbd "Esc"
+              kbd "Home"
+              kbd "End"
+              kbd "PgUp"
+              kbd "PgDn"
+              kbd "Ctrl+A"
+              kbd "Ctrl+C"
+              kbd "Ctrl+V"
+              kbd "Ctrl+X"
+            dt "Data"
+            dd
+              code "$editing"
+              code "$selecting"
+              code "$sorted"
+
+      # ========================================================================
+      # ACCORDION
+      # ========================================================================
+      .section id: "accordion"
+        SectionHead tag: "accordion", name: "Accordion", lines: 87
+        .section-desc "Expand/collapse sections, single or multiple mode."
+        .demo-row
+          .demo-label "Single mode"
+          Accordion
+            div data-item: "a"
+              button.accordion-trigger data-trigger: true
+                "Section A"
+              div.accordion-content data-content: true
+                p "Content for section A."
+            div data-item: "b"
+              button.accordion-trigger data-trigger: true
+                "Section B"
+              div.accordion-content data-content: true
+                p "Content for section B."
+            div data-item: "c"
+              button.accordion-trigger data-trigger: true
+                "Section C"
+              div.accordion-content data-content: true
+                p "Content for section C."
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@multiple"
+            dt "Events"
+            dd
+              code "change"
+            dt "Keyboard"
+            dd
+              kbd "Enter"
+              kbd "Space"
+              kbd "↕"
+              kbd "Home"
+              kbd "End"
+            dt "Data"
+            dd
+              code "$item"
+              code "$trigger"
+              code "$content"
+              code "$open"
+              code "$disabled"
+
+      # ========================================================================
+      # TABLE
+      # ========================================================================
+      .section id: "table"
+        SectionHead tag: "table", name: "Table", lines: 11
+        .section-desc "Semantic table wrapper. For data-heavy tables, use Grid."
+        .demo-row.table-demo
+          Table caption: "Team", striped: true
+            thead
+              tr
+                th "Name"
+                th "Role"
+                th "City"
+            tbody
+              tr
+                td "Alice"
+                td "Engineer"
+                td "Seattle"
+              tr
+                td "Bob"
+                td "Designer"
+                td "Portland"
+              tr
+                td "Carol"
+                td "Manager"
+                td "Denver"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@caption"
+              code "@striped"
+            dt "Data"
+            dd
+              code "$striped"
+
+      # ========================================================================
+      # COLLAPSIBLE
+      # ========================================================================
+      .section id: "collapsible"
+        SectionHead tag: "collapsible", name: "Collapsible", lines: 39
+        .section-desc "Single open/close section. Simpler than Accordion."
+        .demo-row.collapsible-demo
+          Collapsible open <=> collapsibleOpen
+            button $trigger: true
+              span style: "font-size:10px;margin-right:6px"
+                if collapsibleOpen then "▼" else "▶"
+              "Show details"
+            div $content: true
+              p "These are the collapsible details. Click the trigger or press Enter/Space to toggle."
+          .status "open: #{collapsibleOpen}"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@open"
+              code "@disabled"
+            dt "Events"
+            dd
+              code "change"
+            dt "Keyboard"
+            dd
+              kbd "Enter"
+              kbd "Space"
+            dt "Data"
+            dd
+              code "$open"
+              code "$disabled"
+
+      # ========================================================================
+      # PAGINATION
+      # ========================================================================
+      .section id: "pagination"
+        SectionHead tag: "pagination", name: "Pagination", lines: 113
+        .section-desc "Page navigation with prev/next buttons and ellipsis gaps."
+        .demo-row
+          .demo-label "10 pages"
+          Pagination page <=> currentPage, total: 100, perPage: 10
+          .status "page: #{currentPage}"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@page"
+              code "@total"
+              code "@perPage"
+              code "@siblingCount"
+            dt "Events"
+            dd
+              code "change"
+            dt "Keyboard"
+            dd
+              kbd "← →"
+              kbd "Home"
+              kbd "End"
+            dt "Data"
+            dd
+              code "$active"
+              code "$disabled"
+              code "$ellipsis"
+
+      # ========================================================================
+      # CAROUSEL
+      # ========================================================================
+      .section id: "carousel"
+        SectionHead tag: "carousel", name: "Carousel", lines: 89
+        .section-desc "Slide carousel with loop and keyboard navigation."
+        .demo-row
+          Carousel loop: true
+            div $slide: true
+              "🍎 Slide 1 — Apples"
+            div $slide: true
+              "🍌 Slide 2 — Bananas"
+            div $slide: true
+              "🍒 Slide 3 — Cherries"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@orientation"
+              code "@loop"
+              code "@autoplay"
+              code "@interval"
+              code "@label"
+            dt "Events"
+            dd
+              code "change"
+            dt "Keyboard"
+            dd
+              kbd "← →"
+              kbd "↕"
+              kbd "Home"
+              kbd "End"
+            dt "Data"
+            dd
+              code "$orientation"
+              code "$active"
+              code "$prev"
+              code "$next"
+
+      # ========================================================================
+      # RESIZABLE
+      # ========================================================================
+      .section id: "resizable"
+        SectionHead tag: "resizable", name: "Resizable", lines: 104
+        .section-desc "Draggable resize handles between panels."
+        .demo-row.resizable-demo
+          Resizable
+            div $panel: true, "Left"
+            div $handle: true
+            div $panel: true, "Right"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@orientation"
+              code "@minSize"
+              code "@maxSize"
+            dt "Events"
+            dd
+              code "resize"
+            dt "Keyboard"
+            dd
+              kbd "← →"
+              kbd "↕"
+            dt "Data"
+            dd
+              code "$orientation"
+              code "$dragging"
+
+      # ========================================================================
+      # SOURCE CODE VIEWER
+      # ========================================================================
+      if sourceCode
+        .source-overlay @click: (=> @_closeSource())
+          .source-modal @click: @_stopProp
+            .source-header
+              .source-title
+                span.source-name sourceName
+                span.source-badge "#{sourceLines} lines"
+              button.source-close @click: (=> @_closeSource())
+                "×"
+            .source-body
+              pre.source-pre
+                span.source-gutter
+                code.source-code
+
+</script>
+
+</body>
+</html>
