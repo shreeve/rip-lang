@@ -20,6 +20,7 @@ import { formatPort } from './edge/network.rip'
 import { loadTlsMaterial as edgeLoadTlsMaterial, printCertSummary as edgePrintCertSummary } from './edge/tls-material.rip'
 import { maybeAddSecurityHeaders as edgeMaybeAddSecurityHeaders } from './edge/security.rip'
 import { buildStatusBody as edgeBuildStatusBody, buildRipdevUrl as edgeBuildRipdevUrl } from './edge/status.rip'
+import { watchUnavailableResponse, serverBusyResponse, serviceUnavailableResponse, gatewayTimeoutResponse, queueTimeoutResponse } from './edge/responses.rip'
 import { getWorkerSocketPath, getControlSocketPath, getPidFilePath } from './control/paths.rip'
 import { handleWorkerControl, handleWatchControl, handleRegistryControl } from './control/control-fetch.rip'
 import { getLanIP as controlGetLanIP } from './control/lan.rip'
@@ -836,7 +837,7 @@ class Server
       if @watchGroups.has(watchPrefix)
         return @handleWatch(watchPrefix)
       else
-        return new Response('', { status: 503, headers: { 'Retry-After': '2' } })
+        return watchUnavailableResponse()
 
     if url.pathname is '/server'
       headers = new Headers({ 'content-type': 'text/plain' })
@@ -859,7 +860,7 @@ class Server
           setImmediate => @drainQueue()
 
     if @queue.length >= @flags.maxQueue
-      return new Response('Server busy', { status: 503, headers: { 'Retry-After': '1' } })
+      return serverBusyResponse()
 
     new Promise (resolve, reject) =>
       @queue.push({ req, resolve, reject, enqueuedAt: nowMs() })
@@ -955,11 +956,11 @@ class Server
       @sockets = @sockets.filter((x) -> x.socket isnt socket.socket)
       @availableWorkers = @availableWorkers.filter((x) -> x.socket isnt socket.socket)
       released = true
-      return new Response('Service unavailable', { status: 503, headers: { 'Retry-After': '1' } })
+      return serviceUnavailableResponse()
     finally
       @releaseWorker(socket) unless released
 
-    return new Response('Service unavailable', { status: 503, headers: { 'Retry-After': '1' } }) unless res
+    return serviceUnavailableResponse() unless res
     @buildResponse(res, req, start, workerSeconds)
 
   forwardOnce: (req, socketPath) ->
@@ -975,7 +976,7 @@ class Server
       res
     catch err
       if err.message is 'Upstream timeout'
-        return new Response('Gateway timeout', { status: 504 })
+        return gatewayTimeoutResponse()
       throw err
 
   processJob: (job, worker) ->
@@ -991,7 +992,7 @@ class Server
       job = @queue.shift()
       break unless job
       if nowMs() - job.enqueuedAt > @flags.queueTimeoutMs
-        job.resolve(new Response('Queue timeout', { status: 504 }))
+        job.resolve(queueTimeoutResponse())
         continue
       @inflightTotal++
       worker = @getNextAvailableSocket()

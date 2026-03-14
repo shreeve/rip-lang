@@ -1,0 +1,18 @@
+# ==============================================================================
+# edge/responses.rip — shared edge response factories
+# ==============================================================================
+
+export watchUnavailableResponse = ->
+  new Response('', { status: 503, headers: { 'Retry-After': '2' } })
+
+export serverBusyResponse = ->
+  new Response('Server busy', { status: 503, headers: { 'Retry-After': '1' } })
+
+export serviceUnavailableResponse = ->
+  new Response('Service unavailable', { status: 503, headers: { 'Retry-After': '1' } })
+
+export gatewayTimeoutResponse = ->
+  new Response('Gateway timeout', { status: 504 })
+
+export queueTimeoutResponse = ->
+  new Response('Queue timeout', { status: 504 })
