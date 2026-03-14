@@ -863,6 +863,8 @@ rip server [flags] [app-path]@<alias1>,<alias2>,...
 | `--acme-staging` | Use Let's Encrypt staging CA | Disabled |
 | `--acme-domain=<d>` | Domain for ACME certificate | — |
 | `--realtime-path=<p>` | WebSocket endpoint path | `/realtime` |
+| `--rate-limit=<n>` | Max requests per IP per window | Disabled (0) |
+| `--rate-limit-window=<ms>` | Rate limit window in ms | `60000` (1 min) |
 
 ### Subcommands
 
@@ -1368,14 +1370,55 @@ Features:
 - Timeout with 504, connect failure with 502
 - Manual redirect handling (no auto-follow)
 
+## Request ID Tracing
+
+Every request gets a unique `X-Request-Id` header for end-to-end correlation.
+If the client sends an `X-Request-Id`, it's preserved; otherwise one is generated.
+
+```bash
+curl -v http://localhost/users/42
+# < X-Request-Id: req-a8f3b2c1d4e5
+```
+
+## Rate Limiting
+
+Per-IP sliding window rate limiting, disabled by default:
+
+```bash
+rip server --rate-limit=100                    # 100 requests per minute per IP
+rip server --rate-limit=1000 --rate-limit-window=3600000  # 1000 per hour
+```
+
+Returns `429 Too Many Requests` with `Retry-After` header when exceeded.
+
+## Security
+
+Built-in request smuggling defenses (always on):
+
+- Rejects conflicting `Content-Length` + `Transfer-Encoding` headers
+- Rejects multiple `Host` headers
+- Rejects null bytes in URLs
+- Rejects oversized URLs (>8KB)
+- Path traversal normalized by URL parser
+
+## WebSocket Passthrough
+
+For reverse proxying WebSocket connections to external upstreams:
+
+```coffee
+import { createWsPassthrough } from '@rip-lang/server/edge/forwarding.rip'
+
+# In a WebSocket handler, tunnel to an external upstream
+upstream = createWsPassthrough(clientWs, 'ws://backend:8080/ws')
+```
+
+Frames flow bidirectionally; close and error propagate between both ends.
+
 ## Roadmap
 
 > *Planned improvements for future releases:*
 
 - [ ] Prometheus / OpenTelemetry metrics export
-- [ ] Request ID tracing
-- [ ] Rate limiting and request smuggling defenses
-- [ ] WebSocket passthrough for reverse proxy upstreams
 
 ## License
 
