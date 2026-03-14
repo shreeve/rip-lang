@@ -57,11 +57,11 @@ export InvalidAttrs = component
 export EventHandlers = component
   email:: string := ""
 
-  handleSubmit: (e) ->
+  handleSubmit: (e:: SubmitEvent) ->
     e.preventDefault()
 
-  handleInput: (e) ->
-    @email = e.target.value
+  handleInput: (e:: Event) ->
+    e.preventDefault()
 
   render
     form @submit: @handleSubmit

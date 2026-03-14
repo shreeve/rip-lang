@@ -85,7 +85,6 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 | Category                         | Tested In             | Notes                                                                                                                                                |
 | -------------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Strict mode (`strict: true`)     | *(all typed files)*   | `noImplicitAny` breaks ~16 sites: `_init(props)`, untyped lambdas, event handlers, `modulo` helper. Infrastructure partly built — circle back later. |
 | Event handler typing             | 09, 12-intrinsics     | Inline handlers typed via `__RipEvents`; named method refs (`@submit: @handler`) remain `any` — use `(e:: SubmitEvent) ->` to annotate explicitly   |
 | Runtime return-type validation   | 10-validation         | Return types are erased — `response.json()` is unvalidated `any`; no `schema.parse()` equivalent                                                     |
 | Type narrowing (control flow)    | 04-unions *(comment)* | TS narrows compiled JS, not Rip source                                                                                                               |
@@ -117,12 +116,12 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 | Category                      | Tested In     | Notes                                                                                                                    |
 | ----------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| Nullable safety               | 01-basic      | `strictNullChecks` is on; no null-specific codes suppressed but `strict` is off so other null-adjacent checks are weaker |
+| Nullable safety               | 01-basic      | `strict: true` is on; full null checking active                                                                          |
 | Readonly / immutability       | 03-structural | `=!` → const; deep readonly not checked                                                                                  |
 | Generic types                 | 03-structural | Declarable; .d.ts emission has some gaps                                                                                 |
 | Discriminated union narrowing | 04-unions     | Types declarable, narrowing doesn't flow in `rip check`                                                                  |
 | Render block type safety      | 09, 12        | Intrinsic tag/attr/event checking via `__ripEl`; conditionals and text expressions still unchecked                       |
-| Type inference (split decl.)  | 11-inference  | Top-level `x = expr` inferred via `patchUninitializedTypes`; block-scoped, destructured, and `any` RHS are gaps          |
+| Type inference (split decl.)  | 11-inference  | Top-level `x = expr` inferred via `patchUninitializedTypes`; block-scoped and destructured now caught by strict mode     |
 
 ### ✅ Working
 
@@ -150,6 +149,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Async/await unwrapping     | 10-validation  | `!` compiles to `await`; return types inferred or explicit; `Promise<T>` → `T`                                                         |
 | Hover types                | *(IDE only)*   | Column-aware source maps, overload preference, typed implementation params                                                             |
 | Union value autocomplete   | *(IDE only)*   | String literal union completions for prop values, prop defaults, and typed variable assignments                                        |
+| Strict mode                | *(all files)*  | `strict: true` enabled — `noImplicitAny`, full null checks, strict function types all active                                          |
 | Inline discriminated unions | 04-unions      | Inline `{ ... } \| { ... }` union types now emit valid .d.ts (previously mangled by multi-line formatting)                            |
 | Unused variable dimming    | *(IDE only)*   | Forwards `DiagnosticTag.Unnecessary` and `DiagnosticTag.Deprecated` from TS diagnostics; unused vars dimmed, deprecated strikethrough |
 | Semantic token provider    | *(IDE only)*   | Bridges TS `getEncodedSemanticClassifications()` to Rip source; typed files get semantic tokens, reactive vars not marked readonly     |
