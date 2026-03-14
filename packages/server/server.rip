@@ -32,6 +32,7 @@ import { spawnTrackedWorker, postWorkerQuit, waitForWorkerReady } from './contro
 import { createChallengeStore, handleChallengeRequest } from './acme/challenges.rip'
 import { createAcmeManager } from './acme/manager.rip'
 import { loadCert as acmeLoadCert, defaultCertDir } from './acme/store.rip'
+import { createMetrics } from './edge/metrics.rip'
 
 # Match capture holder for Rip's =~
 _ = null
@@ -572,6 +573,7 @@ class Server
     @defaultAppId = @flags.appName
     @challengeStore = createChallengeStore()
     @acmeManager = null
+    @metrics = createMetrics()
     @mdnsProcesses = new Map()
     @watchGroups = new Map()
     @manager = null
@@ -674,6 +676,7 @@ class Server
       return new Response Bun.file(import.meta.dir + '/server.html')
 
     return @status() if url.pathname is '/status'
+    return @diagnostics() if url.pathname is '/diagnostics'
 
     # SSE hot-reload: intercept /{prefix}/watch
     path = url.pathname
@@ -716,6 +719,26 @@ class Server
     app = getAppState(@appRegistry, @defaultAppId)
     workerCount = if app then app.sockets.length else 0
     body = edgeBuildStatusBody(@startedAt, workerCount, @appRegistry.hostIndex, @serverVersion, @flags.appName, @flags.httpPort, @flags.httpsPort, nowMs)
+    headers = new Headers({ 'content-type': 'application/json', 'cache-control': 'no-cache' })
+    @maybeAddSecurityHeaders(headers)
+    new Response(body, { headers })
+
+  diagnostics: ->
+    snap = @metrics.snapshot(@startedAt, @appRegistry)
+    body = JSON.stringify
+      status: if snap.gauges.workersActive > 0 then 'healthy' else 'degraded'
+      version: { server: @serverVersion, rip: @ripVersion }
+      uptime: snap.uptime
+      apps: snap.apps
+      metrics:
+        requests: snap.counters.requests
+        responses: snap.counters.responses
+        latency: snap.latency
+        queue: snap.counters.queue
+        workers: snap.counters.workers
+        acme: snap.counters.acme
+      gauges: snap.gauges
+      hosts: Array.from(@appRegistry.hostIndex.keys())
     headers = new Headers({ 'content-type': 'application/json', 'cache-control': 'no-cache' })
     @maybeAddSecurityHeaders(headers)
     new Response(body, { headers })
