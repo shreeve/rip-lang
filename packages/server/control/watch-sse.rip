@@ -1,0 +1,37 @@
+# ==============================================================================
+# control/watch-sse.rip — watch registration and SSE helpers
+# ==============================================================================
+
+export registerWatchGroup = (watchGroups, prefix) ->
+  return if watchGroups.has(prefix)
+  watchGroups.set prefix, { sseClients: new Set() }
+
+export handleWatchGroup = (watchGroups, prefix) ->
+  group = watchGroups.get(prefix)
+  return new Response('not-found', { status: 404 }) unless group
+  encoder = new TextEncoder()
+  client = null
+  new Response new ReadableStream(
+    start: (controller) ->
+      send = (type) ->
+        try controller.enqueue encoder.encode("event: #{if type is 'connected' then 'connected' else 'reload'}\ndata: #{type}\n\n")
+        catch then null
+      client = { send }
+      group.sseClients.add(client)
+      send('connected')
+    cancel: ->
+      group.sseClients.delete(client) if client
+  ),
+    headers:
+      'Content-Type': 'text/event-stream'
+      'Cache-Control': 'no-cache'
+      'Connection': 'keep-alive'
+
+export broadcastWatchChange = (watchGroups, prefix, type = 'page') ->
+  group = watchGroups.get(prefix)
+  return unless group
+  dead = []
+  for client as group.sseClients
+    try client.send(type)
+    catch then dead.push(client)
+  group.sseClients.delete(c) for c in dead
