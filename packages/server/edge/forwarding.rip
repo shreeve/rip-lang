@@ -67,17 +67,17 @@ HOP_HEADERS = new Set([
   'te', 'trailer', 'transfer-encoding', 'upgrade'
 ])
 
-export proxyToUpstream = (req, upstreamBase, timeoutMs = 30000) ->
+export proxyToUpstream = (req, upstreamBase, options = {}) ->
   inUrl = new URL(req.url)
   target = "#{upstreamBase}#{inUrl.pathname}#{inUrl.search}"
+  timeoutMs = options.timeoutMs or 30000
+  clientIp = options.clientIp or '127.0.0.1'
 
-  # Forward headers, add X-Forwarded-*
+  # Forward headers, set X-Forwarded-* (overwrite, not append — prevents spoofing)
   headers = new Headers()
   for [key, val] as req.headers.entries()
     headers.set(key, val) unless HOP_HEADERS.has(key.toLowerCase())
-  existingXff = req.headers.get('x-forwarded-for')
-  clientIp = inUrl.hostname or '127.0.0.1'
-  headers.set('X-Forwarded-For', if existingXff then "#{existingXff}, #{clientIp}" else clientIp)
+  headers.set('X-Forwarded-For', clientIp)
   headers.set('X-Forwarded-Proto', if inUrl.protocol is 'https:' then 'https' else 'http')
   headers.set('X-Forwarded-Host', inUrl.host)
 

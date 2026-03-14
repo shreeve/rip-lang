@@ -368,6 +368,7 @@ parseFlags = (argv) ->
     acmeStaging: has('--acme-staging')
     acmeDomain: getKV('--acme-domain=')
     realtimePath: getKV('--realtime-path=') or '/realtime'
+    publishSecret: getKV('--publish-secret=') or process.env.RIP_PUBLISH_SECRET or null
     rateLimit: coerceInt(getKV('--rate-limit='), 0)
     rateLimitWindow: coerceInt(getKV('--rate-limit-window='), 60000)
     watch: watch
@@ -719,6 +720,12 @@ class Server
     app = getAppState(@appRegistry, appId)
     return new Response('Host not found', { status: 404 }) unless app
 
+    # Rate limiting — applied early, covers all endpoints
+    if @rateLimiter.maxRequests > 0
+      clientIp = bunServer?.requestIP?(req)?.address or '127.0.0.1'
+      { allowed, retryAfter } = @rateLimiter.check(clientIp)
+      return rateLimitResponse(retryAfter) unless allowed
+
     # Built-in endpoints (require valid host)
     return @status() if url.pathname is '/status'
     return @diagnostics() if url.pathname is '/diagnostics'
@@ -735,8 +742,12 @@ class Server
         return
       return new Response('WebSocket upgrade failed', { status: 400 })
 
-    # External publish for realtime (requires valid host)
+    # External publish for realtime (requires valid host + optional auth)
     if url.pathname is '/publish' and req.method is 'POST'
+      if @flags.publishSecret
+        authHeader = req.headers.get('authorization') or ''
+        unless authHeader is "Bearer #{@flags.publishSecret}"
+          return new Response('Unauthorized', { status: 401 })
       body = req.text!
       handlePublish(@realtimeHub, body)
       return new Response('ok')
@@ -751,12 +762,6 @@ class Server
         return watchUnavailableResponse()
 
     @metrics.requests++
-
-    # Rate limiting (if configured)
-    if @rateLimiter.maxRequests > 0
-      clientIp = bunServer?.requestIP?(req)?.address or '127.0.0.1'
-      { allowed, retryAfter } = @rateLimiter.check(clientIp)
-      return rateLimitResponse(retryAfter) unless allowed
 
     # Assign request ID for tracing
     requestId = req.headers.get('x-request-id') or generateRequestId()

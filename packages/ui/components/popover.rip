@@ -1,7 +1,7 @@
 # Popover — accessible headless popover with anchor positioning
 #
-# Positions itself relative to the trigger. Dismisses on Escape or click outside.
-# Exposes $open, $placement on content. Ships zero CSS.
+# Uses the native Popover API (top-layer + light-dismiss) and CSS anchor
+# positioning. Exposes $open, $placement on content. Ships zero CSS.
 #
 # Usage:
 #   Popover placement: "bottom-start"
@@ -23,83 +23,64 @@ export Popover = component
   _hoverCloseTimer := null
   _id =! "pop-#{Math.random().toString(36).slice(2, 8)}"
 
+  _applyPlacement: ->
+    floating = @_content?.querySelector('[data-content]')
+    return unless floating
+    [side, align] = @placement.split('-')
+    align ?= 'center'
+    area = "#{side} #{align}"
+    floating.style.position = 'fixed'
+    floating.style.inset = 'auto'
+    floating.style.margin = '0'
+    floating.style.positionArea = area
+    floating.style.positionTry = 'flip-block, flip-inline, flip-block flip-inline'
+    floating.style.positionVisibility = 'anchors-visible'
+    floating.style.removeProperty('margin-top')
+    floating.style.removeProperty('margin-right')
+    floating.style.removeProperty('margin-bottom')
+    floating.style.removeProperty('margin-left')
+    switch side
+      when 'bottom' then floating.style.marginTop = "#{@offset}px"
+      when 'top' then floating.style.marginBottom = "#{@offset}px"
+      when 'left' then floating.style.marginRight = "#{@offset}px"
+      when 'right' then floating.style.marginLeft = "#{@offset}px"
+
   mounted: ->
     _ready = true
     trigger = @_content?.querySelector('[data-trigger]')
-    if trigger
+    floating = @_content?.querySelector('[data-content]')
+    if trigger and floating
+      floating.id = _id
+      floating.setAttribute 'popover', 'auto'
       trigger.setAttribute 'aria-expanded', false
       trigger.setAttribute 'aria-haspopup', 'dialog'
-      trigger.addEventListener 'click', => @toggle()
+      trigger.setAttribute 'aria-controls', _id
+      trigger.addEventListener 'click', =>
+        return if @disabled
+        open = not open
       trigger.addEventListener 'keydown', (e) =>
         if e.key in ['Enter', ' ', 'ArrowDown']
           e.preventDefault()
-          @toggle()
+          return if @disabled
+          open = not open
       if @openOnHover
         trigger.addEventListener 'mouseenter', =>
           clearTimeout _hoverCloseTimer if _hoverCloseTimer
-          _hoverTimer = setTimeout (=> @openPopover()), @hoverDelay
+          _hoverTimer = setTimeout (=> open = true), @hoverDelay
         trigger.addEventListener 'mouseleave', =>
           clearTimeout _hoverTimer if _hoverTimer
-          _hoverCloseTimer = setTimeout (=> @close()), @hoverCloseDelay
+          _hoverCloseTimer = setTimeout (=> open = false), @hoverCloseDelay
+      @_applyPlacement()
 
   toggle: ->
     return if @disabled
-    if open then @close() else @openPopover()
+    open = not open
 
   openPopover: ->
     open = true
-    requestAnimationFrame => @_position()
 
   close: ->
     open = false
-    @_content?.querySelector('[data-trigger]')?.focus()
-
-  _position: ->
-    trigger = @_content?.querySelector('[data-trigger]')
-    floating = @_content?.querySelector('[data-content]')
-    return unless trigger and floating
-    @_content.style.position = 'relative'
-    tr = trigger.getBoundingClientRect()
-    cr = @_content.getBoundingClientRect()
-    fl = floating.getBoundingClientRect()
-    [side, align] = @placement.split('-')
-    align ?= 'center'
-    gap = @offset
-
-    x = switch side
-      when 'bottom', 'top'
-        switch align
-          when 'start' then tr.left - cr.left
-          when 'end' then tr.right - cr.left - fl.width
-          else tr.left - cr.left + (tr.width - fl.width) / 2
-      when 'right' then tr.right - cr.left + gap
-      when 'left' then tr.left - cr.left - fl.width - gap
-
-    y = switch side
-      when 'bottom' then tr.bottom - cr.top + gap
-      when 'top' then tr.top - cr.top - fl.height - gap
-      when 'left', 'right'
-        switch align
-          when 'start' then tr.top - cr.top
-          when 'end' then tr.bottom - cr.top - fl.height
-          else tr.top - cr.top + (tr.height - fl.height) / 2
-
-    if side is 'bottom' and tr.bottom + gap + fl.height > window.innerHeight
-      y = tr.top - cr.top - fl.height - gap
-    if side is 'top' and tr.top - fl.height - gap < 0
-      y = tr.bottom - cr.top + gap
-    if side is 'right' and tr.right + gap + fl.width > window.innerWidth
-      x = tr.left - cr.left - fl.width - gap
-    if side is 'left' and tr.left - fl.width - gap < 0
-      x = tr.right - cr.left + gap
-
-    x = Math.max(4 - cr.left, Math.min(x, window.innerWidth - cr.left - fl.width - 4))
-
-    floating.style.position = 'absolute'
-    floating.style.left = "#{x}px"
-    floating.style.top = "#{y}px"
-    floating.style.zIndex = '50'
-    floating.style.visibility = 'visible'
 
   ~>
     return unless _ready
@@ -108,29 +89,14 @@ export Popover = component
     if trigger
       trigger.setAttribute 'aria-expanded', !!open
     if floating
-      if open
-        floating.style.position = 'fixed'
-        floating.style.left = '-9999px'
-        floating.style.top = '-9999px'
-        floating.hidden = false
-        floating.style.visibility = 'hidden'
-        floating.setAttribute 'data-open', ''
-        floating.setAttribute 'data-placement', @placement
-        ARIA.wireAria floating, _id
-      else
-        floating.hidden = true
-        floating.removeAttribute 'data-open'
+      floating.setAttribute 'data-placement', @placement
+      if open then floating.setAttribute 'data-open', '' else floating.removeAttribute 'data-open'
+      ARIA.wireAria floating, _id
+      @_applyPlacement()
 
   ~>
     return unless _ready
-    if open
-      onDown = (e) =>
-        trigger = @_content?.querySelector('[data-trigger]')
-        floating = @_content?.querySelector('[data-content]')
-        unless trigger?.contains(e.target) or floating?.contains(e.target)
-          @close()
-      document.addEventListener 'mousedown', onDown
-      return -> document.removeEventListener 'mousedown', onDown
+    ARIA.bindPopover open, (=> @_content?.querySelector('[data-content]')), ((isOpen) => open = isOpen), (=> @_content?.querySelector('[data-trigger]'))
 
   onKeydown: (e) ->
     if e.key is 'Escape' and open

@@ -189,6 +189,19 @@ button { font: inherit; cursor: pointer; }
   animation: fadeIn 150ms ease;
 }
 
+.gallery dialog[data-open]:not([data-side]) {
+  border: none;
+  padding: 0;
+  background: transparent;
+  max-width: min(90vw, 420px);
+  width: 100%;
+}
+
+.gallery dialog[data-open]:not([data-side])::backdrop {
+  background: rgba(0,0,0,0.4);
+  animation: fadeIn 150ms ease;
+}
+
 .gallery .dialog-panel {
   background: white; border-radius: 12px; padding: 24px;
   box-shadow: 0 4px 16px rgba(0,0,0,0.12); max-width: min(90vw, 420px); width: 100%;
@@ -281,6 +294,21 @@ button { font: inherit; cursor: pointer; }
 .gallery [data-open][data-side] {
   position: fixed; inset: 0; background: rgba(0,0,0,0.4);
   z-index: 100; animation: fadeIn 150ms ease;
+}
+
+.gallery dialog[data-open][data-side] {
+  border: none;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  position: fixed;
+  max-width: none;
+  max-height: none;
+}
+
+.gallery dialog[data-open][data-side]::backdrop {
+  background: rgba(0,0,0,0.4);
+  animation: fadeIn 150ms ease;
 }
 
 .gallery .drawer-panel {
@@ -1472,7 +1500,9 @@ body:has(.source-overlay) { overflow: hidden; }
 
   /* Dialog / Drawer */
   .gallery .dialog-panel { background: #1e293b; box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
+  .gallery dialog[data-open]:not([data-side])::backdrop { background: rgba(0,0,0,0.6); }
   .gallery .drawer-panel { background: #1e293b; box-shadow: -4px 0 16px rgba(0,0,0,0.4); }
+  .gallery dialog[data-open][data-side]::backdrop { background: rgba(0,0,0,0.6); }
   .gallery .drawer-panel h2 { color: #e2e8f0; }
   .gallery .drawer-panel p { color: #94a3b8; }
   .gallery .drawer-panel button { border-color: #475569; background: #1e293b; color: #e2e8f0; }
@@ -1662,6 +1692,7 @@ body:has(.source-overlay) { overflow: hidden; }
 
   /* AlertDialog */
   .gallery .alert-dialog-panel { background: #1e293b; box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
+  .gallery dialog[data-open][role="alertdialog"]::backdrop { background: rgba(0,0,0,0.6); }
 
   /* Sheet */
   .gallery [data-sheet] { background: #1e293b; box-shadow: 0 0 24px rgba(0,0,0,0.4); }
