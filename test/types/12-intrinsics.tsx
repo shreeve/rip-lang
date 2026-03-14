@@ -60,9 +60,9 @@ function InvalidAttrs() {
   return (
     <div>
       {/* @ts-expect-error — disabled expects boolean, not string */}
-      <button disabled={'yes' as any as boolean}>Submit</button>
+      <button disabled='yes'>Submit</button>
       {/* @ts-expect-error — type must be a valid button type */}
-      <button type={42 as any}>Submit</button>
+      <button type={42}>Submit</button>
     </div>
   )
 }
