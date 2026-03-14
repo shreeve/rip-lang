@@ -49,14 +49,15 @@ export createAcmeManager = (options = {}) ->
         if challengeStore
           challengeStore.set(challenge.token, keyAuth)
 
-        # Tell CA we're ready
-        respondToChallenge!(client, challenge.url)
+        try
+          # Tell CA we're ready
+          respondToChallenge!(client, challenge.url)
 
-        # Wait for authorization to be validated
-        pollAuthorizationStatus!(client, authUrl)
-
-        # Clean up challenge token
-        challengeStore.remove(challenge.token) if challengeStore
+          # Wait for authorization to be validated
+          pollAuthorizationStatus!(client, authUrl)
+        finally
+          # Always clean up challenge token, even on failure
+          challengeStore.remove(challenge.token) if challengeStore
 
       # Generate cert key and CSR
       certKey = generateCertKeyPair()

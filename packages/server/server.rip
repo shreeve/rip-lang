@@ -391,6 +391,7 @@ class Manager
     @lastRollAt = 0
     @nextWorkerId = -1
     @retiringIds = new Set()
+    @restartBudgets = new Map()  # slotIndex -> { count, backoffMs }
     @currentVersion = 1
     @server = null
     @dbUrl = null
@@ -484,6 +485,13 @@ class Manager
         try unlinkSync(w.socketPath)
     @appWorkers.clear()
 
+    # Close all FS watcher handles
+    for [prefix, entry] as @appWatchers
+      clearTimeout(entry.timer) if entry.timer
+      for watcher in (entry.watchers or [])
+        try watcher.close()
+    @appWatchers.clear()
+
   watchDirs: (prefix, dirs) ->
     registerAppWatchDirs(@appWatchers, prefix, dirs, @server, (-> process.cwd()))
 
@@ -502,23 +510,30 @@ class Manager
       # Notify server to remove dead worker's socket entry (fire-and-forget)
       postWorkerQuit(@flags.socketPrefix, w.id)
 
-      # Reset restart count if worker ran long enough to be considered stable
-      if nowMs() - w.startedAt > STABILITY_THRESHOLD_MS
-        w.restartCount = 0
-        w.backoffMs = 1000
+      # Track restart budget by slot (survives worker replacement)
+      workers = @getWorkers()
+      slotIdx = workers.findIndex((x) -> x.id is w.id)
+      return if slotIdx < 0
 
-      w.restartCount++
-      w.backoffMs = Math.min(w.backoffMs * 2, MAX_BACKOFF_MS)
-      if w.restartCount > MAX_RESTART_COUNT
-        logEvent('worker_abandon', { workerId: w.id, restarts: w.restartCount })
+      budget = @restartBudgets.get(slotIdx) or { count: 0, backoffMs: 1000 }
+
+      # Reset budget if worker ran long enough to be considered stable
+      if nowMs() - w.startedAt > STABILITY_THRESHOLD_MS
+        budget.count = 0
+        budget.backoffMs = 1000
+
+      budget.count++
+      budget.backoffMs = Math.min(budget.backoffMs * 2, MAX_BACKOFF_MS)
+      @restartBudgets.set(slotIdx, budget)
+
+      if budget.count > MAX_RESTART_COUNT
+        logEvent('worker_abandon', { workerId: w.id, slot: slotIdx, restarts: budget.count })
         return
       @server?.metrics?.workerRestarts++
-      logEvent('worker_restart', { workerId: w.id, attempt: w.restartCount, backoffMs: w.backoffMs })
+      logEvent('worker_restart', { workerId: w.id, slot: slotIdx, attempt: budget.count, backoffMs: budget.backoffMs })
       setTimeout =>
-        workers = @getWorkers()
-        idx = workers.findIndex((x) -> x.id is w.id)
-        workers[idx] = @spawnWorker(@currentVersion) if idx >= 0
-      , w.backoffMs
+        workers[slotIdx] = @spawnWorker(@currentVersion) if slotIdx < workers.length
+      , budget.backoffMs
 
   waitWorkerReady: (socketPath, timeoutMs = 5000) ->
     waitForWorkerReady(socketPath, timeoutMs)
@@ -527,10 +542,10 @@ class Manager
     workers = @getWorkers()
     olds = [...workers]
     pairs = []
-    @currentVersion++
+    nextVersion = @currentVersion + 1
 
     for oldWorker in olds
-      replacement = @spawnWorker!(@currentVersion)
+      replacement = @spawnWorker!(nextVersion)
       workers.push(replacement)
       pairs.push({ old: oldWorker, replacement })
 
@@ -548,6 +563,9 @@ class Manager
           idx = workers.indexOf(pair.replacement)
           workers.splice(idx, 1) if idx >= 0
       return
+
+    # All verified — now atomically promote the version
+    @currentVersion = nextVersion
 
     # All ready - retire old workers
     for { old } in pairs

@@ -81,6 +81,7 @@ export proxyToUpstream = (req, upstreamBase, timeoutMs = 30000) ->
   headers.set('X-Forwarded-Proto', if inUrl.protocol is 'https:' then 'https' else 'http')
   headers.set('X-Forwarded-Host', inUrl.host)
 
+  timer = null
   try
     fetchPromise = fetch target,
       method: req.method
@@ -88,8 +89,9 @@ export proxyToUpstream = (req, upstreamBase, timeoutMs = 30000) ->
       body: req.body
       redirect: 'manual'
     readGuard = new Promise (_, rej) ->
-      setTimeout (-> rej(new Error('Upstream timeout'))), timeoutMs
+      timer = setTimeout (-> rej(new Error('Upstream timeout'))), timeoutMs
     res = Promise.race!([fetchPromise, readGuard])
+    clearTimeout(timer)
 
     # Strip hop-by-hop headers from response
     resHeaders = new Headers()
@@ -97,6 +99,7 @@ export proxyToUpstream = (req, upstreamBase, timeoutMs = 30000) ->
       resHeaders.set(key, val) unless HOP_HEADERS.has(key.toLowerCase())
     new Response(res.body, { status: res.status, statusText: res.statusText, headers: resHeaders })
   catch err
+    clearTimeout(timer)
     if err.message is 'Upstream timeout'
       return new Response('Gateway timeout', { status: 504 })
     new Response("Bad gateway: #{err.message}", { status: 502 })
@@ -130,13 +133,17 @@ export createWsPassthrough = (clientWs, upstreamUrl) ->
 export forwardOnceWithTimeout = (req, socketPath, readTimeoutMs, gatewayTimeoutResponse) ->
   inUrl = new URL(req.url)
   forwardUrl = "http://localhost#{inUrl.pathname}#{inUrl.search}"
+  timer = null
 
   try
     fetchPromise = fetch(forwardUrl, { method: req.method, headers: req.headers, body: req.body, unix: socketPath, decompress: false })
     readGuard = new Promise (_, rej) ->
-      setTimeout (-> rej(new Error('Upstream timeout'))), readTimeoutMs
-    Promise.race!([fetchPromise, readGuard])
+      timer = setTimeout (-> rej(new Error('Upstream timeout'))), readTimeoutMs
+    res = Promise.race!([fetchPromise, readGuard])
+    clearTimeout(timer)
+    res
   catch err
+    clearTimeout(timer)
     if err.message is 'Upstream timeout'
       return gatewayTimeoutResponse()
     throw err

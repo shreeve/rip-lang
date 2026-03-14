@@ -23,7 +23,7 @@ saveNonce = (client, res) ->
 
 # --- Signed request ---
 
-acmeRequest = (client, url, payload) ->
+acmeRequest = (client, url, payload, retryCount = 0) ->
   nonce = getNonce!(client)
   body = signJws(payload, url, nonce, client.accountKey, client.publicJwk, client.kid)
   res = fetch! url,
@@ -34,6 +34,9 @@ acmeRequest = (client, url, payload) ->
 
   if res.status >= 400
     errBody = try res.json!
+    # Retry once on badNonce (RFC 8555 Section 6.5)
+    if errBody?.type is 'urn:ietf:params:acme:error:badNonce' and retryCount < 1
+      return acmeRequest!(client, url, payload, retryCount + 1)
     throw new Error("ACME error #{res.status}: #{errBody?.detail or res.statusText}")
 
   location = res.headers.get('location')

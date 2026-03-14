@@ -100,12 +100,18 @@ export generateCsr = (domain, keyPem) ->
   tmpDir = mkdtempSync(join(tmpdir(), 'rip-acme-'))
   keyPath = join(tmpDir, 'key.pem')
   csrPath = join(tmpDir, 'csr.der')
+  extPath = join(tmpDir, 'san.cnf')
   writeFileSync(keyPath, keyPem, { encoding: 'utf8', mode: 0o600 })
+
+  # OpenSSL config with SAN extension (required by modern CAs)
+  sanConfig = "[req]\ndistinguished_name=dn\nreq_extensions=san\n[dn]\nCN=#{domain}\n[san]\nsubjectAltName=DNS:#{domain}\n"
+  writeFileSync(extPath, sanConfig, { encoding: 'utf8', mode: 0o600 })
 
   result = Bun.spawnSync [
     'openssl', 'req', '-new'
     '-key', keyPath
     '-subj', "/CN=#{domain}"
+    '-config', extPath
     '-outform', 'DER'
     '-out', csrPath
   ],
