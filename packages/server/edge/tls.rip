@@ -1,5 +1,5 @@
 # ==============================================================================
-# edge/tls-material.rip — TLS material loading helpers
+# edge/tls.rip — TLS material loading helpers
 # ==============================================================================
 
 import { readFileSync } from 'node:fs'

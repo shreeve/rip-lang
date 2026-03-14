@@ -1,5 +1,5 @@
 # ==============================================================================
-# edge/app-registry.rip — per-app state and multi-app registry
+# edge/registry.rip — per-app state and multi-app registry
 # ==============================================================================
 
 createAppState = (appId, config) ->

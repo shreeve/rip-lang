@@ -1,5 +1,5 @@
 # ==============================================================================
-# edge/helpers.rip — small edge utility functions
+# edge/helpers.rip — small edge utilities (formatting, headers, status)
 # ==============================================================================
 
 export formatPort = (protocol, port) ->
@@ -11,3 +11,19 @@ export formatPort = (protocol, port) ->
 export maybeAddSecurityHeaders = (httpsActive, hstsEnabled, headers) ->
   if httpsActive and hstsEnabled
     headers.set('strict-transport-security', 'max-age=31536000; includeSubDomains') unless headers.has('strict-transport-security')
+
+export buildStatusBody = (startedAt, workerCount, hostIndex, serverVersion, appName, httpPort, httpsPort, nowMsFn) ->
+  uptime = Math.floor((nowMsFn() - startedAt) / 1000)
+  healthy = workerCount > 0
+  hosts = Array.from(hostIndex.keys())
+  JSON.stringify
+    status: if healthy then 'healthy' else 'degraded'
+    version: serverVersion
+    app: appName
+    workers: workerCount
+    ports: { http: httpPort or undefined, https: httpsPort or undefined }
+    uptime: uptime
+    hosts: hosts
+
+export buildRipdevUrl = (appName, protocol, port, formatPortFn) ->
+  "#{protocol}://#{appName}.ripdev.io#{formatPortFn(protocol, port)}"
