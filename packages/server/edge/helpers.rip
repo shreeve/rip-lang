@@ -1,6 +1,11 @@
 # ==============================================================================
-# edge/helpers.rip — small edge utilities (formatting, headers, status)
+# edge/helpers.rip — small edge utilities (formatting, headers, status, IDs)
 # ==============================================================================
+
+import { randomBytes } from 'node:crypto'
+
+export generateRequestId = ->
+  "req-#{randomBytes(6).toString('hex')}"
 
 export formatPort = (protocol, port) ->
   if (protocol is 'https' and port is 443) or (protocol is 'http' and port is 80)

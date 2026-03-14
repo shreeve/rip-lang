@@ -16,7 +16,7 @@ import { existsSync, statSync, readFileSync, writeFileSync, unlinkSync, watch, u
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { cpus, networkInterfaces } from 'node:os'
 import { isCurrentVersion as schedulerIsCurrentVersion, getNextAvailableSocket as schedulerGetNextAvailableSocket, releaseWorker as schedulerReleaseWorker, shouldRetryBodylessBusy } from './edge/scheduler.rip'
-import { formatPort, maybeAddSecurityHeaders as edgeMaybeAddSecurityHeaders, buildStatusBody as edgeBuildStatusBody, buildRipdevUrl as edgeBuildRipdevUrl } from './edge/helpers.rip'
+import { formatPort, maybeAddSecurityHeaders as edgeMaybeAddSecurityHeaders, buildStatusBody as edgeBuildStatusBody, buildRipdevUrl as edgeBuildRipdevUrl, generateRequestId } from './edge/helpers.rip'
 import { loadTlsMaterial as edgeLoadTlsMaterial, printCertSummary as edgePrintCertSummary } from './edge/tls.rip'
 import { createAppRegistry, registerApp, resolveHost, getAppState } from './edge/registry.rip'
 import { watchUnavailableResponse, serverBusyResponse, serviceUnavailableResponse, gatewayTimeoutResponse, queueTimeoutResponse, buildUpstreamResponse, forwardOnceWithTimeout, proxyToUpstream } from './edge/forwarding.rip'
@@ -724,6 +724,9 @@ class Server
 
     @metrics.requests++
 
+    # Assign request ID for tracing
+    requestId = req.headers.get('x-request-id') or generateRequestId()
+
     # Fast path: try available worker
     if app.inflightTotal < Math.max(1, app.sockets.length)
       sock = @getNextAvailableSocket(app)
@@ -731,7 +734,7 @@ class Server
         @metrics.forwarded++
         app.inflightTotal++
         try
-          return @forwardToWorker!(req, sock, app)
+          return @forwardToWorker!(req, sock, app, requestId)
         finally
           app.inflightTotal--
           setImmediate => @drainQueue(app)
@@ -806,11 +809,11 @@ class Server
     else if @flags.accessLog
       logAccessHuman(@flags.appName, req, res, totalSeconds, workerSeconds)
 
-  buildResponse: (res, req, start, workerSeconds) ->
+  buildResponse: (res, req, start, workerSeconds, requestId) ->
     totalSeconds = (performance.now() - start) / 1000
     @metrics.recordLatency(totalSeconds)
     @metrics.recordStatus(res.status)
-    buildUpstreamResponse(
+    response = buildUpstreamResponse(
       res,
       req,
       totalSeconds,
@@ -819,8 +822,10 @@ class Server
       @logAccess.bind(@),
       stripInternalHeaders
     )
+    response.headers.set('X-Request-Id', requestId) if requestId
+    response
 
-  forwardToWorker: (req, socket, app) ->
+  forwardToWorker: (req, socket, app, requestId) ->
     app = app or @getAppForWorker(socket.socket)
     start = performance.now()
     res = null
@@ -843,7 +848,7 @@ class Server
           res = @forwardOnce!(req, retry.socket, app)
           workerSeconds = (performance.now() - t1) / 1000
           @releaseWorker(retry, app)
-          return @buildResponse(res, req, start, workerSeconds)
+          return @buildResponse(res, req, start, workerSeconds, requestId)
     catch err
       console.error "[server] forwardToWorker error:", err.message or err if isDebug()
       app.sockets = app.sockets.filter((x) -> x.socket isnt socket.socket)
@@ -854,7 +859,7 @@ class Server
       @releaseWorker(socket, app) unless released
 
     return serviceUnavailableResponse() unless res
-    @buildResponse(res, req, start, workerSeconds)
+    @buildResponse(res, req, start, workerSeconds, requestId)
 
   forwardOnce: (req, socketPath, app) ->
     app = app or @getAppForWorker(socketPath)
