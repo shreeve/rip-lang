@@ -1,0 +1,125 @@
+# test-registry.rip — edge/registry, scheduler, and queue tests
+
+import { test, eq, ok } from '../test.rip'
+import { createAppRegistry, registerApp, resolveHost, getAppState, removeApp } from '../edge/registry.rip'
+import { isCurrentVersion, getNextAvailableSocket, releaseWorker, shouldRetryBodylessBusy, drainQueueOnce } from '../edge/queue.rip'
+
+# --- Registry ---
+
+test "createAppRegistry returns empty maps", ->
+  r = createAppRegistry()
+  eq r.apps.size, 0
+  eq r.hostIndex.size, 0
+
+test "registerApp adds app and indexes hosts", ->
+  r = createAppRegistry()
+  registerApp(r, 'myapp', { hosts: ['example.com', 'www.example.com'] })
+  eq r.apps.size, 1
+  eq r.hostIndex.size, 2
+  eq resolveHost(r, 'example.com'), 'myapp'
+  eq resolveHost(r, 'www.example.com'), 'myapp'
+
+test "resolveHost is case-insensitive", ->
+  r = createAppRegistry()
+  registerApp(r, 'app1', { hosts: ['Example.COM'] })
+  eq resolveHost(r, 'example.com'), 'app1'
+  eq resolveHost(r, 'EXAMPLE.COM'), 'app1'
+
+test "resolveHost returns null for unknown host", ->
+  r = createAppRegistry()
+  eq resolveHost(r, 'unknown.com'), null
+
+test "getAppState returns app or null", ->
+  r = createAppRegistry()
+  registerApp(r, 'app1', { hosts: [] })
+  ok getAppState(r, 'app1')
+  eq getAppState(r, 'nope'), null
+
+test "removeApp cleans up hosts and app", ->
+  r = createAppRegistry()
+  registerApp(r, 'app1', { hosts: ['a.com', 'b.com'] })
+  removeApp(r, 'app1')
+  eq r.apps.size, 0
+  eq r.hostIndex.size, 0
+  eq resolveHost(r, 'a.com'), null
+
+test "AppState has correct defaults", ->
+  r = createAppRegistry()
+  state = registerApp(r, 'app1', { hosts: ['h.com'] })
+  eq state.sockets.length, 0
+  eq state.inflightTotal, 0
+  eq state.maxQueue, 512
+  eq state.queueTimeoutMs, 30000
+
+# --- Scheduler ---
+
+test "getNextAvailableSocket returns worker with 0 inflight", ->
+  workers = [{ socket: '/a', inflight: 0, version: 1, workerId: 0 }]
+  sock = getNextAvailableSocket(workers, null)
+  eq sock.socket, '/a'
+
+test "getNextAvailableSocket skips inflight workers", ->
+  workers = [
+    { socket: '/a', inflight: 1, version: 1, workerId: 0 }
+    { socket: '/b', inflight: 0, version: 1, workerId: 1 }
+  ]
+  sock = getNextAvailableSocket(workers, null)
+  eq sock.socket, '/b'
+
+test "getNextAvailableSocket returns null when all busy", ->
+  workers = [{ socket: '/a', inflight: 1, version: 1, workerId: 0 }]
+  sock = getNextAvailableSocket(workers, null)
+  eq sock, null
+
+test "isCurrentVersion with no version tracking", ->
+  ok isCurrentVersion(null, { version: 1 })
+  ok isCurrentVersion(null, { version: null })
+
+test "releaseWorker resets inflight and re-adds to pool", ->
+  w = { socket: '/a', inflight: 1, version: 1, workerId: 0 }
+  sockets = [w]
+  available = []
+  releaseWorker(sockets, available, null, w)
+  eq w.inflight, 0
+  eq available.length, 1
+
+test "shouldRetryBodylessBusy for GET + 503 + busy header", ->
+  req = { method: 'GET' }
+  headers = new Headers({ 'Rip-Worker-Busy': '1' })
+  res = { status: 503, headers }
+  ok shouldRetryBodylessBusy(req, res)
+
+test "shouldRetryBodylessBusy rejects POST", ->
+  req = { method: 'POST' }
+  headers = new Headers({ 'Rip-Worker-Busy': '1' })
+  res = { status: 503, headers }
+  eq shouldRetryBodylessBusy(req, res), false
+
+# --- Queue ---
+
+test "drainQueueOnce processes one job from queue", ->
+  processed = []
+  queue = [{ req: 'r1', resolve: (->), enqueuedAt: Date.now() }]
+  inflightOut = drainQueueOnce(
+    0, 2, (-> 1),
+    (-> queue.shift()),
+    (-> false),
+    (->),
+    (-> { socket: '/a', inflight: 0 }),
+    ((job, worker) -> processed.push(job.req))
+  )
+  eq processed.length, 1
+  eq inflightOut, 1
+
+test "drainQueueOnce resolves timed-out job", ->
+  resolved = []
+  queue = [{ req: 'r1', resolve: ((r) -> resolved.push('timeout')), enqueuedAt: 0 }]
+  drainQueueOnce(
+    0, 2, (-> 1),
+    (-> queue.shift()),
+    (-> true),
+    (-> 'timeout-response'),
+    (-> null),
+    (->)
+  )
+  eq resolved[0], 'timeout'

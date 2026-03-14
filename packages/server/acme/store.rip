@@ -1,0 +1,67 @@
+# ==============================================================================
+# acme/store.rip — certificate storage, lookup, and HTTP-01 challenge store
+# ==============================================================================
+
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
+import { homedir } from 'node:os'
+import { X509Certificate } from 'node:crypto'
+
+export defaultCertDir = -> join(homedir(), '.rip', 'certs')
+
+export ensureDir = (dir) ->
+  mkdirSync(dir, { recursive: true }) unless existsSync(dir)
+  dir
+
+export domainDir = (baseDir, domain) ->
+  ensureDir(join(ensureDir(baseDir), domain))
+
+export saveCert = (baseDir, domain, certPem, keyPem) ->
+  dir = domainDir(baseDir, domain)
+  writeFileSync(join(dir, 'cert.pem'), certPem, { encoding: 'utf8', mode: 0o644 })
+  writeFileSync(join(dir, 'key.pem'), keyPem, { encoding: 'utf8', mode: 0o600 })
+  { certPath: join(dir, 'cert.pem'), keyPath: join(dir, 'key.pem') }
+
+export loadCert = (baseDir, domain) ->
+  dir = join(baseDir, domain)
+  certPath = join(dir, 'cert.pem')
+  keyPath = join(dir, 'key.pem')
+  return null unless existsSync(certPath) and existsSync(keyPath)
+  cert = readFileSync(certPath, 'utf8')
+  key = readFileSync(keyPath, 'utf8')
+  notAfter = null
+  try
+    x = new X509Certificate(cert)
+    notAfter = new Date(x.validTo).getTime()
+  { cert, key, certPath, keyPath, notAfter }
+
+export needsRenewal = (baseDir, domain, thresholdDays = 30) ->
+  rec = loadCert(baseDir, domain)
+  return true unless rec?.notAfter
+  msLeft = rec.notAfter - Date.now()
+  daysLeft = msLeft / (1000 * 60 * 60 * 24)
+  daysLeft < thresholdDays
+
+export listCerts = (baseDir) ->
+  return [] unless existsSync(baseDir)
+  entries = readdirSync(baseDir, { withFileTypes: true })
+  entries.filter((e) -> e.isDirectory()).map((e) -> e.name)
+
+# --- HTTP-01 challenge token store ---
+
+export createChallengeStore = ->
+  tokens = new Map()
+
+  set: (token, keyAuthorization) -> tokens.set(token, keyAuthorization)
+  get: (token) -> tokens.get(token) ?? null
+  has: (token) -> tokens.has(token)
+  remove: (token) -> tokens.delete(token)
+  clear: -> tokens.clear()
+
+export handleChallengeRequest = (url, challengeStore) ->
+  prefix = '/.well-known/acme-challenge/'
+  return null unless url.pathname.startsWith(prefix)
+  token = url.pathname.slice(prefix.length)
+  return null unless token and challengeStore.has(token)
+  keyAuth = challengeStore.get(token)
+  new Response(keyAuth, { headers: { 'content-type': 'application/octet-stream' } })

@@ -217,7 +217,7 @@ let UNARY_MATH = new Set(['!', '~']);
 // The ! suffix is NOT captured when followed by ? to preserve !? as operator
 let IDENTIFIER_RE = /^(?!\d)((?:(?!\s)[$\w\x7f-\uffff])+(?:!(?!\?)|[?](?![.?![(]))?)([^\n\S]*:(?![=:>]))?/;
 let NUMBER_RE     = /^0b[01](?:_?[01])*n?|^0o[0-7](?:_?[0-7])*n?|^0x[\da-f](?:_?[\da-f])*n?|^\d+(?:_\d+)*n|^(?:\d+(?:_\d+)*)?\.?\d+(?:_\d+)*(?:e[+-]?\d+(?:_\d+)*)?/i;
-let OPERATOR_RE   = /^(?:<=>|::|[-=]>|~>|~=|:>|:=|=!|===|!==|!\?|\?\!|\?\?|=~|\|>|[-+*\/%<>&|^!?=]=|>>>=?|([-+:])\1|([&|<>*\/%])\2=?|\?\.?|\.{2,3})/;
+let OPERATOR_RE   = /^(?:<=>|::|\*>|[-=]>|~>|~=|:>|:=|=!|===|!==|!\?|\?\!|\?\?|=~|\|>|[-+*\/%<>&|^!?=]=|>>>=?|([-+:])\1|([&|<>*\/%])\2=?|\?\.?|\.{2,3})/;
 let WHITESPACE_RE = /^[^\n\S]+/;
 let NEWLINE_RE    = /^(?:\n[^\n\S]*)+/;
 let COMMENT_RE    = /^(\s*)###([^#][\s\S]*?)(?:###([^\n\S]*)|###$)|^((?:\s*#(?!##[^#]).*)+)/;
@@ -1233,12 +1233,12 @@ export class Lexer {
     else if (val === '<=>') tag = 'BIND';
     else if (val === '~>') { tag = 'EFFECT'; this.inTypeAnnotation = false; }
     else if (val === '=!') { tag = 'READONLY_ASSIGN'; this.inTypeAnnotation = false; }
-    // Merge assignment: *config = {a: 1} → Object.assign(config, {a: 1})
-    // Also supports *@ = props → Object.assign(this, props)
-    else if (val === '*' && (!prev || prev[0] === 'TERMINATOR' || prev[0] === 'INDENT' || prev[0] === 'OUTDENT') &&
-             (/^[a-zA-Z_$]/.test(this.chunk[1] || '') || this.chunk[1] === '@')) {
-      let rest = this.chunk.slice(1);
-      // Handle *@ = ... → Object.assign(@, ...)
+    // Merge assignment: *>config = {a: 1} → Object.assign(config, {a: 1})
+    // Also supports *>@ = props → Object.assign(@, props)
+    else if (val === '*>' && (!prev || prev[0] === 'TERMINATOR' || prev[0] === 'INDENT' || prev[0] === 'OUTDENT') &&
+             (/^[a-zA-Z_$]/.test(this.chunk[2] || '') || this.chunk[2] === '@')) {
+      let rest = this.chunk.slice(2);
+      // Handle *>@ = ... → Object.assign(@, ...)
       let mAt = /^@(\s*)=(?!=)/.exec(rest);
       if (mAt) {
         let space = mAt[1];
@@ -1248,7 +1248,7 @@ export class Lexer {
         t.spaced = true; // trigger implicit call detection
         this.emit('@', '@');
         this.emit(',', ',');
-        return 1 + 1 + space.length + 1; // consume *@ =, value tokens become args
+        return 2 + 1 + space.length + 1; // consume *>@ =, value tokens become args
       }
       // Scan ahead to find "IDENTIFIER =" pattern
       let m = /^((?:(?!\s)[$\w\x7f-\uffff])+(?:\.[a-zA-Z_$][\w]*)*)(\s*)=(?!=)/.exec(rest);
@@ -1276,7 +1276,7 @@ export class Lexer {
         this.emit(',', ',');
         let comma = this.prev();
         comma.mergeClose = true; // mark for rewriter to insert CALL_END
-        return 1 + target.length + space.length + 1; // consume *target =
+        return 2 + target.length + space.length + 1; // consume *>target =
       }
     }
     // Export all

@@ -1,7 +1,8 @@
 # PreviewCard — accessible headless hover preview card
 #
 # Shows a floating card on hover/focus of a trigger element. Dismisses
-# on mouse leave or blur. Ships zero CSS.
+# on mouse leave or blur. Uses native `popover="hint"` for top-layer behavior.
+# Ships zero CSS.
 #
 # Usage:
 #   PreviewCard delay: 400
@@ -17,6 +18,7 @@ export PreviewCard = component
   _ready := false
   _openTimer := null
   _closeTimer := null
+  _id =! "pc-#{Math.random().toString(36).slice(2, 8)}"
 
   beforeUnmount: ->
     clearTimeout _openTimer if _openTimer
@@ -25,13 +27,19 @@ export PreviewCard = component
   mounted: ->
     _ready = true
     trigger = @_root?.querySelector('[data-trigger]')
-    return unless trigger
+    floating = @_root?.querySelector('[data-content]')
+    return unless trigger and floating
+    floating.id = _id
+    floating.setAttribute 'popover', 'hint'
+    trigger.setAttribute 'aria-controls', _id
+    trigger.setAttribute 'aria-expanded', false
     trigger.addEventListener 'mouseenter', =>
       clearTimeout _closeTimer if _closeTimer
-      _openTimer = setTimeout (=> open = true; @_position()), @delay
+      _openTimer = setTimeout (=> open = true), @delay
     trigger.addEventListener 'mouseleave', =>
       clearTimeout _openTimer if _openTimer
       _closeTimer = setTimeout (=> open = false), @closeDelay
+    @_applyPlacement()
     trigger.addEventListener 'focus', =>
       clearTimeout _closeTimer if _closeTimer
       _openTimer = setTimeout (=> open = true; @_position()), @delay
@@ -39,25 +47,27 @@ export PreviewCard = component
       clearTimeout _openTimer if _openTimer
       _closeTimer = setTimeout (=> open = false), @closeDelay
 
-  _position: ->
-    trigger = @_root?.querySelector('[data-trigger]')
+  _applyPlacement: ->
     floating = @_root?.querySelector('[data-content]')
-    return unless trigger and floating
-    @_root.style.position = 'relative'
-    tr = trigger.getBoundingClientRect()
-    cr = @_root.getBoundingClientRect()
-    floating.style.position = 'absolute'
-    floating.style.left = "0px"
-    floating.style.top = "#{tr.bottom - cr.top + 4}px"
-    floating.style.zIndex = '50'
+    return unless floating
+    floating.style.position = 'fixed'
+    floating.style.inset = 'auto'
+    floating.style.margin = '0'
+    floating.style.positionArea = 'bottom start'
+    floating.style.positionTry = 'flip-block, flip-inline, flip-block flip-inline'
+    floating.style.positionVisibility = 'anchors-visible'
+    floating.style.marginTop = '4px'
 
   ~>
     return unless _ready
+    trigger = @_root?.querySelector('[data-trigger]')
     floating = @_root?.querySelector('[data-content]')
-    return unless floating
-    floating.hidden = not open
+    return unless floating and trigger
+    trigger.setAttribute 'aria-expanded', !!open
+    @_applyPlacement()
+    if open then floating.setAttribute('data-open', '') else floating.removeAttribute('data-open')
+    ARIA.bindPopover open, (=> floating), ((isOpen) => open = isOpen), (=> trigger)
     if open
-      floating.setAttribute 'data-open', ''
       onEnter = => clearTimeout _closeTimer if _closeTimer
       onLeave = => _closeTimer = setTimeout (=> open = false), @closeDelay
       floating.addEventListener 'mouseenter', onEnter
@@ -65,8 +75,6 @@ export PreviewCard = component
       return ->
         floating.removeEventListener 'mouseenter', onEnter
         floating.removeEventListener 'mouseleave', onLeave
-    else
-      floating.removeAttribute 'data-open'
 
   render
     div ref: "_root"

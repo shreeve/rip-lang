@@ -1,0 +1,69 @@
+# ==============================================================================
+# test/runner.rip — server test harness
+# ==============================================================================
+#
+# Run: rip packages/server/test.rip
+#
+# Discovers and runs all *.rip files in tests/
+# ==============================================================================
+
+import { readdirSync } from 'node:fs'
+import { join, dirname } from 'node:path'
+
+# --- Test helpers (exported for test files to use) ---
+
+passed = 0
+failed = 0
+failures = []
+
+export test = (name, fn) ->
+  try
+    result = fn()
+    result! if result?.then  # await if async
+    passed++
+    p "  ✓ #{name}"
+  catch e
+    failed++
+    failures.push { name, error: e.message or String(e) }
+    p "  ✗ #{name}: #{e.message or e}"
+
+export eq = (actual, expected) ->
+  a = JSON.stringify(actual)
+  b = JSON.stringify(expected)
+  throw new Error("expected #{b}, got #{a}") unless a is b
+
+export ok = (value, msg) ->
+  throw new Error(msg or "expected truthy, got #{JSON.stringify(value)}") unless value
+
+export near = (actual, expected, tolerance = 0.001) ->
+  throw new Error("expected ~#{expected}, got #{actual}") unless Math.abs(actual - expected) < tolerance
+
+# --- Runner ---
+
+testDir = join(dirname(import.meta.path), 'tests')
+files = readdirSync(testDir).filter((f) -> f.endsWith('.rip')).sort()
+
+p "rip-server tests: #{files.length} files\n"
+
+for file in files
+  p "  #{file}"
+  try
+    import!(join(testDir, file))
+  catch e
+    failed++
+    failures.push { name: "#{file} (load)", error: e.message or String(e) }
+    p "  ✗ #{file} failed to load: #{e.message or e}"
+  p ''
+
+# --- Summary ---
+
+total = passed + failed
+pct = if total > 0 then Math.round(passed / total * 100) else 0
+p "✓ #{passed} passing, ✗ #{failed} failing, ★ #{pct}% passing"
+
+if failures.length > 0
+  p "\nFailures:"
+  for f in failures[0...20]
+    p "  ✗ #{f.name}: #{f.error}"
+
+exit if failed > 0 then 1 else 0

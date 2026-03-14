@@ -406,30 +406,30 @@ code "method assign compiles", "x .= trim()", "let x;\n\nx = x.trim();"
 code "method assign chain compiles", "a.b .= trim()", "a.b = a.b.trim();"
 
 # ==============================================================================
-# Merge Assignment — *obj = { ... }
+# Merge Assignment — *>obj = { ... }
 # ==============================================================================
 
 test "merge assign basic", '''
   config = {host: "old"}
-  *config = {host: "localhost", port: 3000}
+  *>config = {host: "localhost", port: 3000}
   config
   ''', {host: "localhost", port: 3000}
 
 test "merge assign preserves existing", '''
   config = {host: "localhost", debug: false}
-  *config = {port: 3000}
+  *>config = {port: 3000}
   config
   ''', {host: "localhost", debug: false, port: 3000}
 
 test "merge assign inline", '''
   opts = {}
-  *opts = {a: 1, b: 2}
+  *>opts = {a: 1, b: 2}
   opts.a + opts.b
   ''', 3
 
 test "merge assign auto-init", '''
-  *opts = {x: 1, y: 2}
+  *>opts = {x: 1, y: 2}
   opts.x + opts.y
   ''', 3
 
-code "merge assign compiles to Object.assign", "*config = {a: 1}", "let config;\n\nconfig = Object.assign(config ??= {}, {a: 1});"
+code "merge assign compiles to Object.assign", "*>config = {a: 1}", "let config;\n\nconfig = Object.assign(config ??= {}, {a: 1});"

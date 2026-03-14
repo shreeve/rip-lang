@@ -237,6 +237,10 @@ export function cleanDiagnosticMessage(msg) {
   } while (msg !== prev);
   // Strip any remaining __bind_X__ → X in property name references
   msg = msg.replace(/__bind_(\w+)__/g, '$1');
+  // Clean intrinsic element type helper names from display
+  msg = msg.replace(/\b__RipProps<['"](\w+)['"]>/g, '<$1> props');
+  msg = msg.replace(/\b__RipElementMap\b/g, 'ElementMap');
+  msg = msg.replace(/\b__ripEl\b/g, 'element');
   // Deduplicate consecutive identical lines (unwrapping can collapse nested messages)
   msg = msg.split('\n').filter((line, i, arr) => i === 0 || line.trim() !== arr[i - 1].trim()).join('\n');
   return msg;
@@ -250,8 +254,7 @@ export function createTypeCheckSettings(ts, overrides = {}) {
     module: ts.ModuleKind.ESNext,
     moduleResolution: ts.ModuleResolutionKind.Bundler,
     allowJs: true,
-    strict: false,
-    strictNullChecks: true,
+    strict: true,
     noEmit: true,
     skipLibCheck: true,
     ...overrides,
@@ -687,6 +690,21 @@ export function compileForCheck(filePath, source, compiler) {
     }
   }
 
+  // Inject intrinsic element type declarations for render block type-checking.
+  // Uses TypeScript's built-in DOM types (HTMLElementTagNameMap, etc.) as the
+  // source of truth for tag names, attribute types, and event handler types.
+  if (hasTypes && /\b__ripEl\b/.test(code)) {
+    const intrinsicDecls = [
+      'type __RipElementMap = HTMLElementTagNameMap & Omit<SVGElementTagNameMap, keyof HTMLElementTagNameMap>;',
+      'type __RipTag = keyof __RipElementMap;',
+      "type __RipAttrKeys<T> = { [K in keyof T]-?: K extends 'style' ? never : T[K] extends (...args: any[]) => any ? never : K }[keyof T] & string;",
+      'type __RipEvents = { [K in keyof HTMLElementEventMap as `@${K}`]?: ((event: HTMLElementEventMap[K]) => void) | null };',
+      'type __RipProps<K extends __RipTag> = { [P in __RipAttrKeys<__RipElementMap[K]>]?: __RipElementMap[K][P] } & __RipEvents & { class?: string; style?: string; [k: `data-${string}`]: any; [k: `aria-${string}`]: any };',
+      'declare function __ripEl<K extends __RipTag>(tag: K, props?: __RipProps<K>): void;',
+    ];
+    headerDts = intrinsicDecls.join('\n') + '\n' + headerDts;
+  }
+
   let tsContent = (hasTypes ? headerDts + '\n' : '') + code;
   const headerLines = hasTypes ? countLines(headerDts + '\n') : 1;
 
@@ -747,15 +765,21 @@ export function compileForCheck(filePath, source, compiler) {
 
   // Parse @rip-src annotations from _render() constructions.  These explicit
   // source-line markers override interpolated mappings so that per-prop type
-  // errors land on the correct Rip source line.
+  // errors land on the correct Rip source line.  Among multiple @rip-src
+  // markers for the same source line, the first one wins (typically the
+  // component constructor call rather than an __ripEl call).
   {
     const tsLines = tsContent.split('\n');
+    const ripSrcSeen = new Set();
     for (let i = 0; i < tsLines.length; i++) {
       const m = tsLines[i].match(/\/\/ @rip-src:(\d+)$/);
       if (m) {
         const srcLine = parseInt(m[1], 10);
         genToSrc.set(i, srcLine);
-        if (!srcToGen.has(srcLine)) srcToGen.set(srcLine, i);
+        if (!ripSrcSeen.has(srcLine)) {
+          ripSrcSeen.add(srcLine);
+          srcToGen.set(srcLine, i);
+        }
       }
     }
   }
@@ -770,12 +794,12 @@ export function compileForCheck(filePath, source, compiler) {
       const m = srcLines[s].match(/^\s*#\s*(@ts-expect-error\b.*)/);
       if (m) {
         const nextSrc = s + 1;
-        // Prefer code-section line (where the assignment lives and TS reports
-        // the error) over the DTS declaration line.
-        let genLine = codeSrcToGen.get(nextSrc);
-        if (genLine === undefined) {
-          genLine = srcToGen.get(nextSrc);
-          if (genLine !== undefined && genLine < headerLines) genLine = undefined;
+        // Prefer @rip-src-enriched mapping (precise per-prop positions from
+        // render stubs) when it points to the code section.  Fall back to
+        // the code-section snapshot for lines without @rip-src markers.
+        let genLine = srcToGen.get(nextSrc);
+        if (genLine === undefined || genLine < headerLines) {
+          genLine = codeSrcToGen.get(nextSrc);
         }
         if (genLine !== undefined) {
           injects.push({ genLine, srcLine: s, comment: `// ${m[1]}` });
@@ -929,6 +953,26 @@ export async function runCheck(targetDir, opts = {}) {
     }
   }
 
+  // Check for unresolved .rip imports in typed files
+  const fileResults = [];
+  let totalErrors = 0, totalWarnings = 0;
+  for (const [fp, entry] of compiled) {
+    if (!entry.hasTypes) continue;
+    const srcLines = entry.source.split('\n');
+    const errors = [];
+    for (let s = 0; s < srcLines.length; s++) {
+      const m = srcLines[s].match(/from\s+['"]([^'"]*\.rip)['"]/);
+      if (!m) continue;
+      const imported = resolve(dirname(fp), m[1]);
+      if (!existsSync(imported)) {
+        const col = srcLines[s].indexOf(m[1]);
+        errors.push({ line: s + 1, col: col + 1, len: m[1].length, message: `Cannot find module '${m[1]}'`, severity: 'error', code: 'rip', srcLine: srcLines[s], related: [] });
+        totalErrors++;
+      }
+    }
+    if (errors.length > 0) fileResults.push({ file: fp, errors });
+  }
+
   // Create TypeScript language service
   const settings = createTypeCheckSettings(ts);
 
@@ -975,9 +1019,6 @@ export async function runCheck(targetDir, opts = {}) {
   patchUninitializedTypes(ts, service, compiled);
 
   // Collect diagnostics
-  let totalErrors = 0;
-  let totalWarnings = 0;
-  const fileResults = [];
 
   for (const [fp, entry] of compiled) {
     if (!entry.hasTypes) continue;

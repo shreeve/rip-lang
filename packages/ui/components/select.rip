@@ -4,6 +4,7 @@
 #           Home/End for first/last, typeahead to jump by character.
 #
 # Exposes $open and $placeholder on button, $highlighted and $selected on options.
+# Uses native `popover="auto"` + anchor positioning.
 # Ships zero CSS — style entirely via attribute selectors in your stylesheet.
 #
 # Usage:
@@ -42,9 +43,7 @@ export Select = component
   openMenu: ->
     open = true
     highlightedIndex = Math.max(0, options.findIndex (o) -> @getOpt(o) is String(@value))
-    requestAnimationFrame =>
-      @_position()
-      @_focusHighlighted()
+    requestAnimationFrame => @_focusHighlighted()
 
   close: ->
     open = false
@@ -105,9 +104,22 @@ export Select = component
     el?.focus()
     el?.scrollIntoView { block: 'nearest' }
 
-  _position: -> ARIA.positionBelow @_trigger, @_list
+  _applyPlacement: ->
+    return unless @_list
+    @_list.style.position = 'fixed'
+    @_list.style.inset = 'auto'
+    @_list.style.margin = '0'
+    @_list.style.positionArea = 'bottom start'
+    @_list.style.positionTry = 'flip-block, flip-inline, flip-block flip-inline'
+    @_list.style.positionVisibility = 'anchors-visible'
+    @_list.style.marginTop = '4px'
+    @_list.style.minWidth = 'anchor-size(width)'
 
-  ~> ARIA.popupDismiss open, (=> @_list), (=> @close()), [=> @_trigger], (=> @_position())
+  ~>
+    if @_list
+      @_list.setAttribute 'popover', 'auto'
+      @_applyPlacement()
+    ARIA.bindPopover open, (=> @_list), ((isOpen) => open = isOpen), (=> @_trigger)
 
   render
     .
@@ -130,19 +142,18 @@ export Select = component
         slot
 
       # Dropdown listbox
-      if open
-        div ref: "_list", id: _listId, role: "listbox", style: "position:fixed;visibility:hidden"
-          $open: true
-          @keydown: @onListKeydown
-          for opt, idx in options
-            div role: "option"
-              tabindex: "-1"
-              $value: @getOpt(opt)
-              $highlighted: (idx is highlightedIndex)?!
-              $selected: (@getOpt(opt) is String(@value))?!
-              $disabled: @isDisabled(opt)?!
-              aria-selected: @getOpt(opt) is String(@value)
-              aria-disabled: @isDisabled(opt)?!
-              @click: (=> @selectIndex(idx))
-              @mouseenter: (=> highlightedIndex = idx)
-              = opt.textContent
+      div ref: "_list", id: _listId, role: "listbox", style: "position:fixed;margin:0;inset:auto"
+        $open: open?!
+        @keydown: @onListKeydown
+        for opt, idx in options
+          div role: "option"
+            tabindex: "-1"
+            $value: @getOpt(opt)
+            $highlighted: (idx is highlightedIndex)?!
+            $selected: (@getOpt(opt) is String(@value))?!
+            $disabled: @isDisabled(opt)?!
+            aria-selected: @getOpt(opt) is String(@value)
+            aria-disabled: @isDisabled(opt)?!
+            @click: (=> @selectIndex(idx))
+            @mouseenter: (=> highlightedIndex = idx)
+            = opt.textContent

@@ -1,0 +1,75 @@
+# ==============================================================================
+# edge/config.rip — declarative multi-app configuration loader
+# ==============================================================================
+#
+# Loads config.rip from the app directory and registers apps in the registry.
+#
+# Example config.rip:
+#
+#   export default
+#     apps:
+#       main:
+#         entry: './index.rip'
+#         hosts: ['example.com', 'www.example.com']
+#         workers: 4
+#       api:
+#         entry: './api/index.rip'
+#         hosts: ['api.example.com']
+#         workers: 2
+#         maxQueue: 1024
+
+import { existsSync } from 'node:fs'
+import { join, dirname, resolve } from 'node:path'
+
+export loadConfig = (configPath) ->
+  return null unless existsSync(configPath)
+  try
+    mod = import!(configPath)
+    await Promise.resolve()
+    config = mod?.default or mod
+    return null unless config and typeof config is 'object'
+    config
+  catch e
+    console.error "rip-server: failed to load config.rip:", e.message
+    null
+
+export normalizeAppConfig = (appId, appConfig, baseDir) ->
+  entry = if appConfig.entry
+    if appConfig.entry.startsWith('/') then appConfig.entry else resolve(baseDir, appConfig.entry)
+  else
+    null
+  hosts = appConfig.hosts or []
+  workers = appConfig.workers or null
+  maxQueue = appConfig.maxQueue or 512
+  queueTimeoutMs = appConfig.queueTimeoutMs or 30000
+  readTimeoutMs = appConfig.readTimeoutMs or 30000
+
+  {
+    id: appId
+    entry
+    hosts
+    workers
+    maxQueue
+    queueTimeoutMs
+    readTimeoutMs
+    env: appConfig.env or {}
+  }
+
+export findConfigFile = (appEntry) ->
+  dir = dirname(appEntry)
+  configPath = join(dir, 'config.rip')
+  if existsSync(configPath) then configPath else null
+
+export applyConfig = (config, registry, registerAppFn, baseDir) ->
+  apps = config.apps or {}
+  registered = []
+  for appId, appConfig of apps
+    normalized = normalizeAppConfig(appId, appConfig, baseDir)
+    registerAppFn(registry, appId,
+      hosts: normalized.hosts
+      maxQueue: normalized.maxQueue
+      queueTimeoutMs: normalized.queueTimeoutMs
+      readTimeoutMs: normalized.readTimeoutMs
+    )
+    registered.push(normalized)
+  registered

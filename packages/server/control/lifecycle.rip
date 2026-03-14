@@ -1,0 +1,71 @@
+# ==============================================================================
+# control/lifecycle.rip — startup, shutdown, reporting, and event logging
+# ==============================================================================
+
+# --- Structured event logging ---
+
+_jsonMode = false
+
+export setEventJsonMode = (enabled) -> _jsonMode = enabled
+
+export logEvent = (event, data = {}) ->
+  if _jsonMode
+    entry = Object.assign { t: new Date().toISOString(), event }, data
+    p JSON.stringify(entry)
+  else
+    parts = ["rip-server: #{event}"]
+    for key, val of data
+      parts.push "#{key}=#{val}" if val?
+    p parts.join(' ')
+
+# --- Startup reporting ---
+
+export computeHideUrls = (appEntry, joinFn, dirnameFn, existsSyncFn) ->
+  setupFile = joinFn(dirnameFn(appEntry), 'setup.rip')
+  existsSyncFn(setupFile)
+
+export logStartupSummary = (server, flags, buildRipdevUrlFn, formatPortFn) ->
+  httpOnly = flags.httpsPort is null
+  protocol = if httpOnly then 'http' else 'https'
+  port = flags.httpsPort or flags.httpPort or 80
+  url = buildRipdevUrlFn(flags.appName, protocol, port, formatPortFn)
+  p "rip-server: rip=#{server.ripVersion} server=#{server.serverVersion} app=#{flags.appName} workers=#{flags.workers} url=#{url}/server"
+
+FORCED_EXIT_MS = 35000
+
+export createCleanup = (pidFile, server, manager, unlinkSyncFn, fetchFn, processObj) ->
+  called = false
+  ->
+    return if called
+    called = true
+    p 'rip-server: shutting down...'
+
+    # Safety net: force exit if graceful shutdown stalls
+    setTimeout (-> processObj.exit(1)), FORCED_EXIT_MS
+
+    # Stop accepting new work before anything else
+    manager.shuttingDown = true
+
+    # Stop ACME renewal loop
+    try server.acmeManager?.stopRenewalLoop()
+
+    # Drain connections and stop listeners
+    server.stop()
+    manager.stop!
+
+    # Shutdown DB if we started it
+    try fetchFn!(manager.dbUrl + '/shutdown', { method: 'POST' }) if manager.dbUrl
+
+    # PID file cleanup last — only after everything has stopped
+    try unlinkSyncFn(pidFile)
+    processObj.exit(0)
+
+export installShutdownHandlers = (cleanup, processObj) ->
+  processObj.on 'SIGTERM', cleanup
+  processObj.on 'SIGINT', cleanup
+  processObj.on 'uncaughtException', (err) ->
+    console.error 'rip-server: uncaught exception:', err
+    cleanup()
+  processObj.on 'unhandledRejection', (err) ->
+    console.error 'rip-server: unhandled rejection:', err
+    cleanup()

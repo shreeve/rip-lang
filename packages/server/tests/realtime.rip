@@ -1,0 +1,147 @@
+# realtime.rip — edge/realtime.rip unit tests
+
+import { test, eq, ok } from '../test.rip'
+import { createHub, generateClientId, addClient, removeClient, processResponse, handlePublish, getRealtimeStats } from '../edge/realtime.rip'
+
+# --- Hub lifecycle ---
+
+test "createHub returns empty hub", ->
+  hub = createHub()
+  eq hub.sockets.size, 0
+  eq hub.members.size, 0
+  eq hub.deliveries, 0
+
+test "generateClientId returns 32-char hex", ->
+  id = generateClientId()
+  eq id.length, 32
+  ok /^[0-9a-f]+$/.test(id)
+
+test "generateClientId is unique", ->
+  a = generateClientId()
+  b = generateClientId()
+  ok a isnt b
+
+# --- Client management ---
+
+test "addClient stores socket and creates membership", ->
+  hub = createHub()
+  ws = { send: (->), readyState: 1 }
+  addClient(hub, 'c1', ws)
+  eq hub.sockets.size, 1
+  eq hub.sockets.get('c1'), ws
+  ok hub.members.has('c1')
+
+test "removeClient cleans up socket and memberships", ->
+  hub = createHub()
+  addClient(hub, 'c1', { send: (->), readyState: 1 })
+  # Subscribe c1 to a group
+  processResponse(hub, JSON.stringify({ '+': ['room1'], '@': ['c1'] }), 'c1')
+  ok hub.members.has('room1')
+  # Remove client
+  removeClient(hub, 'c1')
+  eq hub.sockets.size, 0
+  eq hub.members.has('c1'), false
+
+# --- Membership via processResponse ---
+
+test "subscribe adds client to group", ->
+  hub = createHub()
+  addClient(hub, 'c1', { send: (->), readyState: 1 })
+  processResponse(hub, JSON.stringify({ '+': ['room1'] }), 'c1')
+  ok hub.members.has('room1')
+  ok hub.members.get('room1').has('c1')
+  ok hub.members.get('c1').has('room1')
+
+test "unsubscribe removes client from group", ->
+  hub = createHub()
+  addClient(hub, 'c1', { send: (->), readyState: 1 })
+  processResponse(hub, JSON.stringify({ '+': ['room1'] }), 'c1')
+  processResponse(hub, JSON.stringify({ '-': ['room1'] }), 'c1')
+  eq hub.members.has('room1'), false
+
+test "subscribe to multiple groups", ->
+  hub = createHub()
+  addClient(hub, 'c1', { send: (->), readyState: 1 })
+  processResponse(hub, JSON.stringify({ '+': ['room1', 'room2'] }), 'c1')
+  ok hub.members.get('c1').has('room1')
+  ok hub.members.get('c1').has('room2')
+
+# --- Message delivery ---
+
+test "deliver to direct client target", ->
+  hub = createHub()
+  received = []
+  addClient(hub, 'c1', { send: ((msg) -> received.push(msg)) })
+  addClient(hub, 'c2', { send: ((msg) -> received.push(msg)) })
+  # c1 sends, targeting c2 directly
+  processResponse(hub, JSON.stringify({ '@': ['c2'], 'chat': 'hello' }), 'c1')
+  eq received.length, 1
+  parsed = JSON.parse(received[0])
+  eq parsed.chat, 'hello'
+
+test "deliver to channel group members", ->
+  hub = createHub()
+  received = { c1: [], c2: [] }
+  addClient(hub, 'c1', { send: ((msg) -> received.c1.push(msg)) })
+  addClient(hub, 'c2', { send: ((msg) -> received.c2.push(msg)) })
+  # Subscribe both to /room
+  processResponse(hub, JSON.stringify({ '+': ['/room'] }), 'c1')
+  processResponse(hub, JSON.stringify({ '+': ['/room'] }), 'c2')
+  # Send to /room
+  processResponse(hub, JSON.stringify({ '@': ['/room'], 'msg': 'hi' }), null)
+  ok received.c1.length > 0
+  ok received.c2.length > 0
+
+test "sender exclusion via > key", ->
+  hub = createHub()
+  received = { c1: [], c2: [] }
+  addClient(hub, 'c1', { send: ((msg) -> received.c1.push(msg)) })
+  addClient(hub, 'c2', { send: ((msg) -> received.c2.push(msg)) })
+  # Both in /room
+  processResponse(hub, JSON.stringify({ '+': ['/room'] }), 'c1')
+  processResponse(hub, JSON.stringify({ '+': ['/room'] }), 'c2')
+  # Send from c1, exclude c1
+  processResponse(hub, JSON.stringify({ '>': ['c1'], '@': ['/room'], 'msg': 'hi' }), null)
+  eq received.c1.length, 0
+  ok received.c2.length > 0
+
+# --- External publish ---
+
+test "handlePublish delivers without clientId", ->
+  hub = createHub()
+  received = []
+  addClient(hub, 'c1', { send: ((msg) -> received.push(msg)) })
+  handlePublish(hub, JSON.stringify({ '@': ['c1'], 'event': 'data' }))
+  eq received.length, 1
+
+# --- Stats ---
+
+test "getRealtimeStats reflects hub state", ->
+  hub = createHub()
+  addClient(hub, 'c1', { send: (->), readyState: 1 })
+  addClient(hub, 'c2', { send: (->), readyState: 1 })
+  stats = getRealtimeStats(hub)
+  eq stats.clients, 2
+  eq stats.connections, 2
+
+# --- Array response ---
+
+test "processResponse handles array of items", ->
+  hub = createHub()
+  received = []
+  addClient(hub, 'c1', { send: ((msg) -> received.push(msg)) })
+  # Array with two items
+  processResponse(hub, JSON.stringify([
+    { '+': ['room1'] }
+    { '@': ['c1'], 'a': 1 }
+  ]), 'c1')
+  ok hub.members.get('c1').has('room1')
+  eq received.length, 1
+
+# --- Invalid JSON ---
+
+test "processResponse handles invalid JSON gracefully", ->
+  hub = createHub()
+  processResponse(hub, 'not json', 'c1')
+  # Should not throw — just log error
+  eq hub.sockets.size, 0

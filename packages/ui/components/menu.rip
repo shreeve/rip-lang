@@ -2,7 +2,7 @@
 #
 # Keyboard: ArrowDown/Up to navigate, Enter/Space to select, Escape to close,
 # Home/End for first/last. Exposes $open on menu, $highlighted on items.
-# Ships zero CSS.
+# Uses native `popover="auto"` + anchor positioning. Ships zero CSS.
 #
 # Usage:
 #   Menu
@@ -18,6 +18,7 @@ export Menu = component
   highlightedIndex := -1
   typeaheadBuffer := ''
   typeaheadTimer := null
+  _id =! "menu-#{Math.random().toString(36).slice(2, 8)}"
 
   items ~=
     return [] unless @_slot
@@ -35,9 +36,7 @@ export Menu = component
   openMenu: ->
     open = true
     highlightedIndex = 0
-    requestAnimationFrame =>
-      @_position()
-      @_list?.querySelectorAll('[role="menuitem"]')[0]?.focus()
+    requestAnimationFrame => @_list?.querySelectorAll('[role="menuitem"]')[0]?.focus()
 
   close: ->
     open = false
@@ -73,7 +72,15 @@ export Menu = component
       highlightedIndex = idx
       @_list?.querySelectorAll('[role="menuitem"]')[idx]?.focus()
 
-  _position: -> ARIA.positionBelow @_trigger, @_list
+  _applyPlacement: ->
+    return unless @_list
+    @_list.style.position = 'fixed'
+    @_list.style.inset = 'auto'
+    @_list.style.margin = '0'
+    @_list.style.positionArea = 'bottom start'
+    @_list.style.positionTry = 'flip-block, flip-inline, flip-block flip-inline'
+    @_list.style.positionVisibility = 'anchors-visible'
+    @_list.style.marginTop = '4px'
 
   onTriggerKeydown: (e) ->
     return if @disabled
@@ -98,7 +105,14 @@ export Menu = component
       tab:     => @close()
       char:    => @_typeahead(e.key)
 
-  ~> ARIA.popupDismiss open, (=> @_list), (=> @close()), [=> @_trigger], (=> @_position())
+  ~>
+    if @_list
+      @_list.id = _id
+      @_list.setAttribute 'popover', 'auto'
+      @_applyPlacement()
+    if @_trigger
+      @_trigger.setAttribute 'aria-controls', _id
+    ARIA.bindPopover open, (=> @_list), ((isOpen) => open = isOpen), (=> @_trigger)
 
   render
     .
@@ -115,14 +129,13 @@ export Menu = component
       . ref: "_slot", style: "display:none"
         slot
 
-      if open
-        div ref: "_list", role: "menu", $open: true, style: "position:fixed;visibility:hidden", @keydown: @onMenuKeydown
-          for item, idx in items
-            div role: item.getAttribute('role') or 'menuitem'
-              tabindex: "-1"
-              aria-checked: item.getAttribute('aria-checked')?!
-              $highlighted: (idx is highlightedIndex)?!
-              $disabled: item.dataset.disabled?!
-              @click: (=> @selectIndex(idx))
-              @mouseenter: (=> highlightedIndex = idx)
-              = item.textContent
+      div ref: "_list", role: "menu", $open: open?!, style: "position:fixed;margin:0;inset:auto", @keydown: @onMenuKeydown
+        for item, idx in items
+          div role: item.getAttribute('role') or 'menuitem'
+            tabindex: "-1"
+            aria-checked: item.getAttribute('aria-checked')?!
+            $highlighted: (idx is highlightedIndex)?!
+            $disabled: item.dataset.disabled?!
+            @click: (=> @selectIndex(idx))
+            @mouseenter: (=> highlightedIndex = idx)
+            = item.textContent

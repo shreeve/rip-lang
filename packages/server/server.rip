@@ -15,7 +15,29 @@
 import { existsSync, statSync, readFileSync, writeFileSync, unlinkSync, watch, utimesSync } from 'node:fs'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { cpus, networkInterfaces } from 'node:os'
-import { X509Certificate } from 'node:crypto'
+import { isCurrentVersion as schedulerIsCurrentVersion, getNextAvailableSocket as schedulerGetNextAvailableSocket, releaseWorker as schedulerReleaseWorker, shouldRetryBodylessBusy } from './edge/queue.rip'
+import { formatPort, maybeAddSecurityHeaders as edgeMaybeAddSecurityHeaders, buildStatusBody as edgeBuildStatusBody, buildRipdevUrl as edgeBuildRipdevUrl, generateRequestId } from './edge/forwarding.rip'
+import { loadTlsMaterial as edgeLoadTlsMaterial, printCertSummary as edgePrintCertSummary } from './edge/tls.rip'
+import { createAppRegistry, registerApp, resolveHost, getAppState } from './edge/registry.rip'
+import { watchUnavailableResponse, serverBusyResponse, serviceUnavailableResponse, gatewayTimeoutResponse, queueTimeoutResponse, buildUpstreamResponse, forwardOnceWithTimeout } from './edge/forwarding.rip'
+import { processQueuedJob, drainQueueOnce } from './edge/queue.rip'
+import { getControlSocketPath, getPidFilePath } from './control/control.rip'
+import { handleWorkerControl, handleWatchControl, handleRegistryControl } from './control/control.rip'
+import { getLanIP as controlGetLanIP, startMdnsAdvertisement as controlStartMdnsAdvertisement, stopMdnsAdvertisements as controlStopMdnsAdvertisements } from './control/mdns.rip'
+import { registerWatchGroup, handleWatchGroup, broadcastWatchChange, registerAppWatchDirs } from './control/watchers.rip'
+import { computeHideUrls, logStartupSummary, createCleanup, installShutdownHandlers } from './control/lifecycle.rip'
+import { computeSocketPrefix as cliComputeSocketPrefix, runVersionOutput, runHelpOutput, runStopSubcommand, runListSubcommand } from './control/cli.rip'
+import { runSetupMode, runWorkerMode } from './control/worker.rip'
+import { spawnTrackedWorker, postWorkerQuit, waitForWorkerReady } from './control/workers.rip'
+import { createChallengeStore, handleChallengeRequest } from './acme/store.rip'
+import { createAcmeManager } from './acme/manager.rip'
+import { loadCert as acmeLoadCert, defaultCertDir } from './acme/store.rip'
+import { createMetrics } from './edge/metrics.rip'
+import { setEventJsonMode, logEvent } from './control/lifecycle.rip'
+import { createHub, generateClientId, addClient, removeClient, processResponse, handlePublish, getRealtimeStats } from './edge/realtime.rip'
+import { findConfigFile, loadConfig, applyConfig } from './edge/config.rip'
+import { createRateLimiter, rateLimitResponse } from './edge/ratelimit.rip'
+import { validateRequest } from './edge/security.rip'
 
 # Match capture holder for Rip's =~
 _ = null
@@ -24,20 +46,15 @@ _ = null
 # Constants
 # ==============================================================================
 
-MAX_BACKOFF_MS = 30000        # Max delay between worker restart attempts
-MAX_RESTART_COUNT = 10        # Max consecutive worker crashes before giving up
-SHUTDOWN_TIMEOUT_MS = 30000   # Max time to wait for in-flight requests on shutdown
+MAX_BACKOFF_MS = 30000         # Max delay between worker restart attempts
+MAX_RESTART_COUNT = 10         # Max consecutive worker crashes before giving up
+STABILITY_THRESHOLD_MS = 60000 # Worker uptime before restart count resets
 
 # ==============================================================================
 # Utilities
 # ==============================================================================
 
 nowMs = -> Date.now()
-formatPort = (protocol, port) -> if (protocol is 'https' and port is 443) or (protocol is 'http' and port is 80) then '' else ":#{port}"
-
-getWorkerSocketPath = (prefix, id) -> "/tmp/#{prefix}.#{id}.sock"
-getControlSocketPath = (prefix) -> "/tmp/#{prefix}.ctl.sock"
-getPidFilePath = (prefix) -> "/tmp/#{prefix}.pid"
 
 coerceInt = (value, fallback) ->
   return fallback unless value? and value isnt ''
@@ -97,7 +114,7 @@ logAccessJson = (app, req, res, totalSeconds, workerSeconds) ->
   url = new URL(req.url)
   len = res.headers.get('content-length')
   type = (res.headers.get('content-type') or '').split(';')[0] or undefined
-  console.log JSON.stringify
+  p JSON.stringify
     t: new Date().toISOString()
     app: app
     method: req.method or 'GET'
@@ -125,7 +142,7 @@ logAccessHuman = (app, req, res, totalSeconds, workerSeconds) ->
   contentType = (res.headers.get('content-type') or '').split(';')[0] or ''
   sub = if contentType.includes('/') then contentType.split('/')[1] else contentType
   type = (typeAbbrev[sub] or sub or '').padEnd(4)
-  console.log "#{timestamp} #{timezone} #{dur} │ #{status} #{type} #{size} │ #{method} #{path}"
+  p "#{timestamp} #{timezone} #{dur} │ #{status} #{type} #{size} │ #{method} #{path}"
 
 INTERNAL_HEADERS = new Set(['rip-worker-busy', 'rip-worker-id', 'rip-no-log'])
 
@@ -179,12 +196,12 @@ resolveAppEntry = (appPathInput) ->
     else if existsSync(two)
       entryPath = two
     else
-      console.log "rip-server: no index.rip found, serving static files from #{abs}\n             Create an index.rip to customize, or run 'rip server --help' for options."
+      p "rip-server: no index.rip found, serving static files from #{abs}\n             Create an index.rip to customize, or run 'rip server --help' for options."
       entryPath = defaultEntry
   else
     unless existsSync(abs)
       console.error "App path not found: #{abs}"
-      process.exit(2)
+      exit 2
     baseDir = dirname(abs)
     entryPath = abs
 
@@ -346,6 +363,13 @@ parseFlags = (argv) ->
     readTimeoutMs: coerceInt(getKV('--read-timeout-ms='), coerceInt(process.env.RIP_READ_TIMEOUT_MS, 30000))
     jsonLogging: has('--json-logging')
     accessLog: not has('--no-access-log')
+    acme: has('--acme')
+    acmeStaging: has('--acme-staging')
+    acmeDomain: getKV('--acme-domain=')
+    realtimePath: getKV('--realtime-path=') or '/realtime'
+    publishSecret: getKV('--publish-secret=') or process.env.RIP_PUBLISH_SECRET or null
+    rateLimit: coerceInt(getKV('--rate-limit='), 0)
+    rateLimitWindow: coerceInt(getKV('--rate-limit-window='), 60000)
     watch: watch
   }
 
@@ -353,143 +377,13 @@ parseFlags = (argv) ->
 # Worker Mode
 # ==============================================================================
 
-runSetup = ->
-  setupFile = process.env.RIP_SETUP_FILE
-  try
-    mod = import!(setupFile)
-    await Promise.resolve()
-    fn = mod?.setup or mod?.default
-    if typeof fn is 'function'
-      await fn()
-  catch e
-    console.error "rip-server: setup failed:", e
-    process.exit(1)
-
-runWorker = ->
-  workerId = parseInt(process.env.WORKER_ID or '0')
-  maxRequests = parseInt(process.env.MAX_REQUESTS or '10000')
-  maxSeconds = parseInt(process.env.MAX_SECONDS or '0')
-  appEntry = process.env.APP_ENTRY
-  socketPath = process.env.SOCKET_PATH
-  socketPrefix = process.env.SOCKET_PREFIX
-  version = parseInt(process.env.RIP_VERSION or '1')
-
-  startedAtMs = Date.now()
-  # Use object to avoid Rip closure scoping issues with mutable variables
-  workerState =
-    appReady: false
-    inflight: false
-    handled: 0
-    handler: null
-
-  getHandler = ->
-    return workerState.handler if workerState.handler
-
-    try
-      mod = import!(appEntry)
-
-      # Ensure module has fully executed by yielding to microtask queue
-      await Promise.resolve()
-
-      fresh = mod.default or mod
-
-      if typeof fresh is 'function'
-        h = fresh
-      else if fresh?.fetch?
-        h = fresh.fetch.bind(fresh)
-      else
-        h = globalThis.__ripHandler  # Handler set by start() in rip-server mode
-
-      unless h
-        try
-          api = import!('@rip-lang/server')
-          h = api?.startHandler?.()
-        catch
-          null
-
-      workerState.handler = h if h
-      workerState.handler or (-> new Response('not ready', { status: 503 }))
-    catch e
-      console.error "[worker #{workerId}] import failed:", e
-      workerState.handler or (-> new Response('not ready', { status: 503 }))
-
-  selfJoin = ->
-    try
-      payload = { op: 'join', workerId, pid: process.pid, socket: socketPath, version }
-      body = JSON.stringify(payload)
-      ctl = getControlSocketPath(socketPrefix)
-      fetch!('http://localhost/worker', { method: 'POST', body, headers: { 'content-type': 'application/json' }, unix: ctl })
-    catch
-      null
-
-  selfQuit = ->
-    try
-      payload = { op: 'quit', workerId }
-      body = JSON.stringify(payload)
-      ctl = getControlSocketPath(socketPrefix)
-      fetch!('http://localhost/worker', { method: 'POST', body, headers: { 'content-type': 'application/json' }, unix: ctl })
-    catch
-      null
-
-  # Preload handler
-  try
-    initial = getHandler!
-    workerState.appReady = typeof initial is 'function'
-  catch
-    null
-
-  server = Bun.serve
-    unix: socketPath
-    maxRequestBodySize: 100 * 1024 * 1024
-    fetch: (req) ->
-      url = new URL(req.url)
-      return new Response(if workerState.appReady then 'ok' else 'not-ready') if url.pathname is '/ready'
-
-      if workerState.inflight
-        return new Response 'busy',
-          status: 503
-          headers: { 'Rip-Worker-Busy': '1', 'Retry-After': '0', 'Rip-Worker-Id': String(workerId) }
-
-      handlerFn = getHandler!
-      workerState.appReady = typeof handlerFn is 'function'
-      workerState.inflight = true
-
-      try
-        return new Response('not ready', { status: 503 }) unless typeof handlerFn is 'function'
-        res = handlerFn!(req)
-        res = res!(req) if typeof res is 'function'
-        if res instanceof Response then res else new Response(String(res))
-      catch err
-        console.error "[worker #{workerId}] ERROR:", err
-        new Response('error', { status: 500 })
-      finally
-        workerState.inflight = false
-        workerState.handled++
-        exceededReqs = workerState.handled >= maxRequests
-        exceededTime = maxSeconds > 0 and (Date.now() - startedAtMs) / 1000 >= maxSeconds
-        setTimeout (-> process.exit(0)), 10 if exceededReqs or exceededTime
-
-  selfJoin!
-
-  shutdown = ->
-    # Wait for in-flight request to complete (with timeout)
-    start = Date.now()
-    while workerState.inflight and Date.now() - start < SHUTDOWN_TIMEOUT_MS
-      await new Promise (r) -> setTimeout(r, 10)
-    try server.stop() catch then null
-    selfQuit!
-    process.exit(0)
-
-  process.on 'SIGTERM', shutdown
-  process.on 'SIGINT', shutdown
-
 # ==============================================================================
 # Manager Class
 # ==============================================================================
 
 class Manager
   constructor: (@flags) ->
-    @workers = []
+    @appWorkers = new Map()
     @shuttingDown = false
     @lastCheck = 0
     @currentMtime = 0
@@ -497,10 +391,19 @@ class Manager
     @lastRollAt = 0
     @nextWorkerId = -1
     @retiringIds = new Set()
+    @restartBudgets = new Map()  # slotIndex -> { count, backoffMs }
+    @deferredDeaths = new Set()   # worker IDs that died during rolling restart
     @currentVersion = 1
     @server = null
     @dbUrl = null
     @appWatchers = new Map()
+    @defaultAppId = @flags.appName
+
+  getWorkers: (appId) ->
+    appId = appId or @defaultAppId
+    unless @appWorkers.has(appId)
+      @appWorkers.set(appId, [])
+    @appWorkers.get(appId)
 
   start: ->
     @stop!
@@ -530,12 +433,13 @@ class Manager
       code = await proc.exited
       if code isnt 0
         console.error "rip-server: setup exited with code #{code}"
-        process.exit(1)
+        exit 1
 
-    @workers = []
+    workers = @getWorkers()
+    workers.length = 0
     for i in [0...@flags.workers]
       w = @spawnWorker!(@currentVersion)
-      @workers.push(w)
+      workers.push(w)
 
     if @flags.reload
       @currentMtime = @getEntryMtime()
@@ -558,7 +462,6 @@ class Manager
         entryFile = @flags.appEntry
         entryBase = basename(entryFile)
         watchExt = if @flags.watch.startsWith('*.') then @flags.watch.slice(1) else null
-        debounceMs = @flags.debounce or 250
         try
           watch @flags.appBaseDir, { recursive: true }, (event, filename) =>
             return unless filename
@@ -574,65 +477,28 @@ class Manager
             catch
               null
         catch e
-          console.warn "rip-server: directory watch failed: #{e.message}"
+          warn "rip-server: directory watch failed: #{e.message}"
 
   stop: ->
-    for w in @workers
-      try w.process.kill() catch then null
-      try unlinkSync(w.socketPath) catch then null
-    @workers = []
+    for [appId, workers] as @appWorkers
+      for w in workers
+        try w.process.kill()
+        try unlinkSync(w.socketPath)
+    @appWorkers.clear()
+
+    # Close all FS watcher handles
+    for [prefix, entry] as @appWatchers
+      clearTimeout(entry.timer) if entry.timer
+      for watcher in (entry.watchers or [])
+        try watcher.close()
+    @appWatchers.clear()
 
   watchDirs: (prefix, dirs) ->
-    return if @appWatchers.has(prefix)
-    timer = null
-    pending = null
-    watchers = []
-    broadcast = (type = 'page') =>
-      pending = if type is 'page' or pending is 'page' then 'page' else 'styles'
-      clearTimeout(timer) if timer
-      timer = setTimeout =>
-        timer = null
-        @server?.broadcastChange(prefix, pending)
-        pending = null
-      , 300
-    for dir in dirs
-      try
-        w = watch dir, { recursive: true }, (event, filename) ->
-          if filename?.endsWith('.rip') or filename?.endsWith('.html')
-            broadcast('page')
-          else if filename?.endsWith('.css')
-            broadcast('styles')
-        watchers.push(w)
-      catch e
-        rel = dir.replace(process.cwd() + '/', '')
-        console.warn "rip-server: watch skipped (#{e.code or 'error'}): #{rel}"
-    @appWatchers.set prefix, { watchers, timer }
+    registerAppWatchDirs(@appWatchers, prefix, dirs, @server, (-> process.cwd()))
 
   spawnWorker: (version) ->
     workerId = ++@nextWorkerId
-    socketPath = getWorkerSocketPath(@flags.socketPrefix, workerId)
-    try unlinkSync(socketPath) catch then null
-
-    workerEnv = Object.assign {}, process.env,
-      RIP_WORKER_MODE: '1'
-      WORKER_ID: String(workerId)
-      SOCKET_PATH: socketPath
-      SOCKET_PREFIX: @flags.socketPrefix
-      APP_ENTRY: @flags.appEntry
-      APP_BASE_DIR: @flags.appBaseDir
-      MAX_REQUESTS: String(@flags.maxRequestsPerWorker)
-      MAX_SECONDS: String(@flags.maxSecondsPerWorker)
-      RIP_LOG_JSON: if @flags.jsonLogging then '1' else '0'
-      RIP_VERSION: String(version or @currentVersion)
-
-    proc = Bun.spawn ['rip', import.meta.path],
-      stdout: 'inherit'
-      stderr: 'inherit'
-      stdin: 'ignore'
-      cwd: process.cwd()
-      env: workerEnv
-
-    tracked = { id: workerId, process: proc, socketPath, restartCount: 0, backoffMs: 1000, startedAt: nowMs() }
+    tracked = spawnTrackedWorker(@flags, workerId, (version or @currentVersion), nowMs, import.meta.path, @defaultAppId)
     @monitor(tracked)
     tracked
 
@@ -641,44 +507,50 @@ class Manager
     w.process.exited.then =>
       return if @shuttingDown
       return if @retiringIds.has(w.id)
+      if @isRolling
+        @deferredDeaths.add(w.id)
+        return
 
       # Notify server to remove dead worker's socket entry (fire-and-forget)
-      try
-        ctl = getControlSocketPath(@flags.socketPrefix)
-        body = JSON.stringify({ op: 'quit', workerId: w.id })
-        fetch!('http://localhost/worker', { method: 'POST', body, headers: { 'content-type': 'application/json' }, unix: ctl }).catch(-> null)
-      catch
-        null
+      postWorkerQuit(@flags.socketPrefix, w.id)
 
-      w.restartCount++
-      w.backoffMs = Math.min(w.backoffMs * 2, MAX_BACKOFF_MS)
-      return if w.restartCount > MAX_RESTART_COUNT
+      # Track restart budget by slot (survives worker replacement)
+      workers = @getWorkers()
+      slotIdx = workers.findIndex((x) -> x.id is w.id)
+      return if slotIdx < 0
+
+      budget = @restartBudgets.get(slotIdx) or { count: 0, backoffMs: 1000 }
+
+      # Reset budget if worker ran long enough to be considered stable
+      if nowMs() - w.startedAt > STABILITY_THRESHOLD_MS
+        budget.count = 0
+        budget.backoffMs = 1000
+
+      budget.count++
+      budget.backoffMs = Math.min(budget.backoffMs * 2, MAX_BACKOFF_MS)
+      @restartBudgets.set(slotIdx, budget)
+
+      if budget.count > MAX_RESTART_COUNT
+        logEvent('worker_abandon', { workerId: w.id, slot: slotIdx, restarts: budget.count })
+        return
+      @server?.metrics?.workerRestarts++
+      logEvent('worker_restart', { workerId: w.id, slot: slotIdx, attempt: budget.count, backoffMs: budget.backoffMs })
       setTimeout =>
-        idx = @workers.findIndex((x) -> x.id is w.id)
-        @workers[idx] = @spawnWorker(@currentVersion) if idx >= 0
-      , w.backoffMs
+        workers[slotIdx] = @spawnWorker(@currentVersion) if slotIdx < workers.length
+      , budget.backoffMs
 
   waitWorkerReady: (socketPath, timeoutMs = 5000) ->
-    start = Date.now()
-    while Date.now() - start < timeoutMs
-      try
-        res = fetch!('http://localhost/ready', { unix: socketPath, method: 'GET' })
-        if res.ok
-          txt = res.text!
-          return true if txt is 'ok'
-      catch
-        null
-      await new Promise (r) -> setTimeout(r, 30)
-    false
+    waitForWorkerReady(socketPath, timeoutMs)
 
   rollingRestart: ->
-    olds = [...@workers]
+    workers = @getWorkers()
+    olds = [...workers]
     pairs = []
-    @currentVersion++
+    nextVersion = @currentVersion + 1
 
     for oldWorker in olds
-      replacement = @spawnWorker!(@currentVersion)
-      @workers.push(replacement)
+      replacement = @spawnWorker!(nextVersion)
+      workers.push(replacement)
       pairs.push({ old: oldWorker, replacement })
 
     # Wait for all replacements and check readiness
@@ -691,35 +563,43 @@ class Manager
       # Kill failed replacements and keep old workers
       for pair, i in pairs
         unless readyResults[i]
-          try pair.replacement.process.kill() catch then null
-          @workers = @workers.filter((w) -> w.id isnt pair.replacement.id)
+          try pair.replacement.process.kill()
+          idx = workers.indexOf(pair.replacement)
+          workers.splice(idx, 1) if idx >= 0
+      # Reconcile deferred deaths on rollback too
+      if @deferredDeaths.size > 0
+        for deadId as @deferredDeaths
+          idx = workers.findIndex((x) -> x.id is deadId)
+          workers[idx] = @spawnWorker(@currentVersion) if idx >= 0
+        @deferredDeaths.clear()
       return
+
+    # All verified — now atomically promote the version
+    @currentVersion = nextVersion
 
     # All ready - retire old workers
     for { old } in pairs
       @retiringIds.add(old.id)
-      try old.process.kill() catch then null
+      try old.process.kill()
 
     Promise.all!(pairs.map(({ old }) -> old.process.exited.catch(-> null)))
 
     # Notify server to remove old workers' socket entries
-    ctl = getControlSocketPath(@flags.socketPrefix)
     for { old } in pairs
-      try
-        body = JSON.stringify({ op: 'quit', workerId: old.id })
-        fetch!('http://localhost/worker', { method: 'POST', body, headers: { 'content-type': 'application/json' }, unix: ctl }).catch(-> null)
-      catch
-        null
+      postWorkerQuit(@flags.socketPrefix, old.id)
 
     retiring = new Set(pairs.map((p) -> p.old.id))
-    @workers = @workers.filter((w) -> not retiring.has(w.id))
+    filtered = workers.filter((w) -> not retiring.has(w.id))
+    workers.length = 0
+    workers.push(...filtered)
     @retiringIds.delete(id) for id as retiring
 
-  shutdown: ->
-    return if @shuttingDown
-    @shuttingDown = true
-    @stop!
-    process.exit(0)
+    # Reconcile any workers that died during the roll
+    if @deferredDeaths.size > 0
+      for deadId as @deferredDeaths
+        idx = workers.findIndex((x) -> x.id is deadId)
+        workers[idx] = @spawnWorker(@currentVersion) if idx >= 0
+      @deferredDeaths.clear()
 
   getEntryMtime: ->
     try statSync(@flags.appEntry).mtimeMs catch then 0
@@ -733,15 +613,16 @@ class Server
     @server = null
     @httpsServer = null
     @control = null
-    @sockets = []
-    @availableWorkers = []
-    @inflightTotal = 0
-    @queue = []
     @urls = []
     @startedAt = nowMs()
-    @newestVersion = null
     @httpsActive = false
-    @hostRegistry = new Set(['localhost', '127.0.0.1', 'rip.local'])
+    @appRegistry = createAppRegistry()
+    @defaultAppId = @flags.appName
+    @challengeStore = createChallengeStore()
+    @acmeManager = null
+    @metrics = createMetrics()
+    @realtimeHub = createHub()
+    @rateLimiter = createRateLimiter(@flags.rateLimit, @flags.rateLimitWindow)
     @mdnsProcesses = new Map()
     @watchGroups = new Map()
     @manager = null
@@ -756,14 +637,23 @@ class Server
     catch
       @ripVersion = 'unknown'
 
+    # Register the single app with all its hosts
+    appHosts = ['localhost', '127.0.0.1', 'rip.local']
     for alias in @flags.appAliases
       host = if alias.includes('.') then alias else "#{alias}.local"
-      @hostRegistry.add(host)
-    @hostRegistry.add("#{@flags.appName}.ripdev.io")
+      appHosts.push(host)
+    appHosts.push("#{@flags.appName}.ripdev.io")
+    registerApp(@appRegistry, @defaultAppId,
+      hosts: appHosts
+      maxQueue: @flags.maxQueue
+      queueTimeoutMs: @flags.queueTimeoutMs
+      readTimeoutMs: @flags.readTimeoutMs
+    )
 
   start: ->
     httpOnly = @flags.httpsPort is null
     fetchFn = @fetch.bind(@)
+    wsOpts = @buildWebSocketHandlers()
 
     # Helper to start server, trying the given port first, then incrementing.
     # Falls back to unprivileged range (3000 for HTTP, 3443 for HTTPS) if
@@ -772,7 +662,7 @@ class Server
       port = p
       while port < p + 100
         try
-          return Bun.serve(Object.assign({ port, idleTimeout: 0, fetch: fetchFn }, opts))
+          return Bun.serve(Object.assign({ port, idleTimeout: 0, fetch: fetchFn }, wsOpts, opts))
         catch e
           if e?.code is 'EACCES' and port < 1024
             port = if opts.tls then 3443 else 3000
@@ -793,44 +683,101 @@ class Server
       @flags.httpsPort = httpsPort
       @httpsActive = true
 
-      if @flags.redirectHttp
+      if @flags.redirectHttp or @flags.acme or @flags.acmeStaging
+        challengeStore = @challengeStore
         try
           @server = Bun.serve
             port: 80
             idleTimeout: 8
             fetch: (req) ->
               url = new URL(req.url)
+              # Serve ACME HTTP-01 challenges before redirecting
+              challengeRes = handleChallengeRequest(url, challengeStore)
+              return challengeRes if challengeRes
               loc = "https://#{url.hostname}:#{httpsPort}#{url.pathname}#{url.search}"
               new Response(null, { status: 301, headers: { Location: loc } })
         catch
-          console.warn 'Warn: could not bind port 80 for HTTP→HTTPS redirect'
+          warn 'Warn: could not bind port 80 for HTTP→HTTPS redirect'
 
       @flags.httpPort = if @server then @server.port else 0
 
     @startControl!
 
+    # Periodic queue timeout sweep — expire queued requests even when no workers are available
+    @queueSweepTimer = setInterval =>
+      for [appId, app] as @appRegistry.apps
+        now = Date.now()
+        while app.queue.length > 0 and now - app.queue[0].enqueuedAt > app.queueTimeoutMs
+          job = app.queue.shift()
+          try job.resolve(new Response('Queue timeout', { status: 504 }))
+          @metrics.queueTimeouts++
+    , 1000
+
   stop: ->
-    try @server?.stop() catch then null
-    try @httpsServer?.stop() catch then null
-    try @control?.stop() catch then null
+    clearInterval(@queueSweepTimer) if @queueSweepTimer
+    logEvent('server_stop', { uptime: Math.floor((nowMs() - @startedAt) / 1000) })
+    # Drain all per-app queues — resolve pending requests with 503
+    for [appId, app] as @appRegistry.apps
+      while app.queue.length > 0
+        job = app.queue.shift()
+        try job.resolve(new Response('Server shutting down', { status: 503 }))
 
-    for [host, proc] as @mdnsProcesses
-      try
-        proc.kill()
-        console.log "rip-server: stopped advertising #{host} via mDNS"
-      catch
-        null
-    @mdnsProcesses.clear()
+    # Stop listeners with graceful drain
+    try @server?.stop()
+    try @httpsServer?.stop()
+    try @control?.stop()
 
-  fetch: (req) ->
+    controlStopMdnsAdvertisements(@mdnsProcesses)
+
+  fetch: (req, bunServer) ->
     url = new URL(req.url)
     host = url.hostname.toLowerCase()
+
+    # Request smuggling defenses
+    validation = validateRequest(req)
+    return new Response(validation.message, { status: validation.status }) unless validation.valid
 
     # Dashboard for rip.local
     if host is 'rip.local' and url.pathname in ['/', '']
       return new Response Bun.file(import.meta.dir + '/server.html')
 
+    # Resolve host to app — all routes below require a valid host
+    appId = resolveHost(@appRegistry, host)
+    return new Response('Host not found', { status: 404 }) unless appId
+    app = getAppState(@appRegistry, appId)
+    return new Response('Host not found', { status: 404 }) unless app
+
+    # Rate limiting — applied early, covers all endpoints
+    if @rateLimiter.maxRequests > 0
+      clientIp = bunServer?.requestIP?(req)?.address or '127.0.0.1'
+      { allowed, retryAfter } = @rateLimiter.check(clientIp)
+      return rateLimitResponse(retryAfter) unless allowed
+
+    # Built-in endpoints (require valid host)
     return @status() if url.pathname is '/status'
+    return @diagnostics() if url.pathname is '/diagnostics'
+
+    if url.pathname is '/server'
+      headers = new Headers({ 'content-type': 'text/plain' })
+      @maybeAddSecurityHeaders(headers)
+      return new Response('ok', { headers })
+
+    # WebSocket upgrade for realtime (requires valid host)
+    if url.pathname is @flags.realtimePath and bunServer
+      clientId = generateClientId()
+      if bunServer.upgrade(req, { data: { clientId, headers: req.headers } })
+        return
+      return new Response('WebSocket upgrade failed', { status: 400 })
+
+    # External publish for realtime (requires valid host + optional auth)
+    if url.pathname is '/publish' and req.method is 'POST'
+      if @flags.publishSecret
+        authHeader = req.headers.get('authorization') or ''
+        unless authHeader is "Bearer #{@flags.publishSecret}"
+          return new Response('Unauthorized', { status: 401 })
+      body = req.text!
+      handlePublish(@realtimeHub, body)
+      return new Response('ok')
 
     # SSE hot-reload: intercept /{prefix}/watch
     path = url.pathname
@@ -839,100 +786,88 @@ class Server
       if @watchGroups.has(watchPrefix)
         return @handleWatch(watchPrefix)
       else
-        return new Response('', { status: 503, headers: { 'Retry-After': '2' } })
+        return watchUnavailableResponse()
 
-    if url.pathname is '/server'
-      headers = new Headers({ 'content-type': 'text/plain' })
-      @maybeAddSecurityHeaders(headers)
-      return new Response('ok', { headers })
+    @metrics.requests++
 
-    # Host-based routing guard
-    if @hostRegistry.size > 0 and not @hostRegistry.has(host)
-      return new Response('Host not found', { status: 404 })
+    # Assign request ID for tracing
+    requestId = req.headers.get('x-request-id') or generateRequestId()
 
     # Fast path: try available worker
-    if @inflightTotal < Math.max(1, @sockets.length)
-      sock = @getNextAvailableSocket()
+    if app.inflightTotal < Math.max(1, app.sockets.length)
+      sock = @getNextAvailableSocket(app)
       if sock
-        @inflightTotal++
+        @metrics.forwarded++
+        app.inflightTotal++
         try
-          return @forwardToWorker!(req, sock)
+          return @forwardToWorker!(req, sock, app, requestId)
         finally
-          @inflightTotal--
-          setImmediate => @drainQueue()
+          app.inflightTotal--
+          setImmediate => @drainQueue(app)
 
-    if @queue.length >= @flags.maxQueue
-      return new Response('Server busy', { status: 503, headers: { 'Retry-After': '1' } })
+    if app.queue.length >= app.maxQueue
+      @metrics.queueShed++
+      return serverBusyResponse()
 
+    @metrics.queued++
     new Promise (resolve, reject) =>
-      @queue.push({ req, resolve, reject, enqueuedAt: nowMs() })
+      app.queue.push({ req, resolve, reject, enqueuedAt: nowMs() })
 
   status: ->
-    uptime = Math.floor((nowMs() - @startedAt) / 1000)
-    healthy = @sockets.length > 0
-    hosts = Array.from(@hostRegistry.values())
-    version = @serverVersion
+    app = getAppState(@appRegistry, @defaultAppId)
+    workerCount = if app then app.sockets.length else 0
+    body = edgeBuildStatusBody(@startedAt, workerCount, @appRegistry.hostIndex, @serverVersion, @flags.appName, @flags.httpPort, @flags.httpsPort, nowMs)
+    headers = new Headers({ 'content-type': 'application/json', 'cache-control': 'no-cache' })
+    @maybeAddSecurityHeaders(headers)
+    new Response(body, { headers })
+
+  diagnostics: ->
+    snap = @metrics.snapshot(@startedAt, @appRegistry)
     body = JSON.stringify
-      status: if healthy then 'healthy' else 'degraded'
-      version: version
-      app: @flags.appName
-      workers: @sockets.length
-      ports: { http: @flags.httpPort or undefined, https: @flags.httpsPort or undefined }
-      uptime: uptime
-      hosts: hosts
+      status: if snap.gauges.workersActive > 0 then 'healthy' else 'degraded'
+      version: { server: @serverVersion, rip: @ripVersion }
+      uptime: snap.uptime
+      apps: snap.apps
+      metrics:
+        requests: snap.counters.requests
+        responses: snap.counters.responses
+        latency: snap.latency
+        queue: snap.counters.queue
+        workers: snap.counters.workers
+        acme: snap.counters.acme
+        websocket: snap.counters.websocket
+      gauges: snap.gauges
+      realtime: getRealtimeStats(@realtimeHub)
+      hosts: Array.from(@appRegistry.hostIndex.keys())
     headers = new Headers({ 'content-type': 'application/json', 'cache-control': 'no-cache' })
     @maybeAddSecurityHeaders(headers)
     new Response(body, { headers })
 
   registerWatch: (prefix) ->
-    return if @watchGroups.has(prefix)
-    @watchGroups.set prefix, { sseClients: new Set() }
+    registerWatchGroup(@watchGroups, prefix)
 
   handleWatch: (prefix) ->
-    group = @watchGroups.get(prefix)
-    return new Response('not-found', { status: 404 }) unless group
-    encoder = new TextEncoder()
-    client = null
-    new Response new ReadableStream(
-      start: (controller) ->
-        send = (type) ->
-          try controller.enqueue encoder.encode("event: #{if type is 'connected' then 'connected' else 'reload'}\ndata: #{type}\n\n")
-          catch then null
-        client = { send }
-        group.sseClients.add(client)
-        send('connected')
-      cancel: ->
-        group.sseClients.delete(client) if client
-    ),
-      headers:
-        'Content-Type': 'text/event-stream'
-        'Cache-Control': 'no-cache'
-        'Connection': 'keep-alive'
+    handleWatchGroup(@watchGroups, prefix)
 
   broadcastChange: (prefix, type = 'page') ->
-    group = @watchGroups.get(prefix)
-    return unless group
-    dead = []
-    for client as group.sseClients
-      try client.send(type)
-      catch then dead.push(client)
-    group.sseClients.delete(c) for c in dead
+    broadcastWatchChange(@watchGroups, prefix, type)
 
-  getNextAvailableSocket: ->
-    while @availableWorkers.length > 0
-      worker = @availableWorkers.pop()
-      return worker if worker.inflight is 0 and @isCurrentVersion(worker)
-    null
+  getAppForWorker: (socketPath) ->
+    for app as @appRegistry.apps.values()
+      return app if app.sockets.some((s) -> s.socket is socketPath)
+    getAppState(@appRegistry, @defaultAppId)
 
-  isCurrentVersion: (worker) ->
-    @newestVersion is null or worker.version is null or worker.version >= @newestVersion
+  getNextAvailableSocket: (app) ->
+    app = app or getAppState(@appRegistry, @defaultAppId)
+    schedulerGetNextAvailableSocket(app.availableWorkers, app.newestVersion)
 
-  releaseWorker: (worker) ->
-    return unless worker
-    return unless @sockets.some((s) -> s.socket is worker.socket)  # Validate still in pool
-    worker.inflight = 0
-    if @isCurrentVersion(worker)
-      @availableWorkers.push(worker)
+  isCurrentVersion: (worker, app) ->
+    app = app or getAppState(@appRegistry, @defaultAppId)
+    schedulerIsCurrentVersion(app.newestVersion, worker)
+
+  releaseWorker: (worker, app) ->
+    app = app or getAppState(@appRegistry, @defaultAppId)
+    schedulerReleaseWorker(app.sockets, app.availableWorkers, app.newestVersion, worker)
 
   logAccess: (req, res, totalSeconds, workerSeconds) ->
     if @flags.jsonLogging
@@ -940,15 +875,24 @@ class Server
     else if @flags.accessLog
       logAccessHuman(@flags.appName, req, res, totalSeconds, workerSeconds)
 
-  buildResponse: (res, req, start, workerSeconds) ->
-    silent = res.headers.get('rip-no-log') is '1'
-    headers = stripInternalHeaders(res.headers)
-    headers.delete('date')
-    @maybeAddSecurityHeaders(headers)
-    @logAccess(req, res, (performance.now() - start) / 1000, workerSeconds) unless silent
-    new Response(res.body, { status: res.status, statusText: res.statusText, headers })
+  buildResponse: (res, req, start, workerSeconds, requestId) ->
+    totalSeconds = (performance.now() - start) / 1000
+    @metrics.recordLatency(totalSeconds)
+    @metrics.recordStatus(res.status)
+    response = buildUpstreamResponse(
+      res,
+      req,
+      totalSeconds,
+      workerSeconds,
+      @maybeAddSecurityHeaders.bind(@),
+      @logAccess.bind(@),
+      stripInternalHeaders
+    )
+    response.headers.set('X-Request-Id', requestId) if requestId
+    response
 
-  forwardToWorker: (req, socket) ->
+  forwardToWorker: (req, socket, app, requestId) ->
+    app = app or @getAppForWorker(socket.socket)
     start = performance.now()
     res = null
     workerSeconds = 0
@@ -957,75 +901,67 @@ class Server
     try
       socket.inflight = 1
       t0 = performance.now()
-      res = @forwardOnce!(req, socket.socket)
+      res = @forwardOnce!(req, socket.socket, app)
       workerSeconds = (performance.now() - t0) / 1000
 
-      # Only retry bodyless requests (body stream can't be reused)
-      canRetry = req.method in ['GET', 'HEAD', 'OPTIONS', 'DELETE']
-      if canRetry and res.status is 503 and res.headers.get('Rip-Worker-Busy') is '1'
-        retry = @getNextAvailableSocket()
+      if shouldRetryBodylessBusy(req, res)
+        retry = @getNextAvailableSocket(app)
         if retry and retry isnt socket
-          @releaseWorker(socket)
+          @releaseWorker(socket, app)
           released = true
           retry.inflight = 1
           t1 = performance.now()
-          res = @forwardOnce!(req, retry.socket)
+          res = @forwardOnce!(req, retry.socket, app)
           workerSeconds = (performance.now() - t1) / 1000
-          @releaseWorker(retry)
-          return @buildResponse(res, req, start, workerSeconds)
+          @releaseWorker(retry, app)
+          return @buildResponse(res, req, start, workerSeconds, requestId)
     catch err
       console.error "[server] forwardToWorker error:", err.message or err if isDebug()
-      @sockets = @sockets.filter((x) -> x.socket isnt socket.socket)
-      @availableWorkers = @availableWorkers.filter((x) -> x.socket isnt socket.socket)
+      app.sockets = app.sockets.filter((x) -> x.socket isnt socket.socket)
+      app.availableWorkers = app.availableWorkers.filter((x) -> x.socket isnt socket.socket)
       released = true
-      return new Response('Service unavailable', { status: 503, headers: { 'Retry-After': '1' } })
+      return serviceUnavailableResponse()
     finally
-      @releaseWorker(socket) unless released
+      @releaseWorker(socket, app) unless released
 
-    return new Response('Service unavailable', { status: 503, headers: { 'Retry-After': '1' } }) unless res
-    @buildResponse(res, req, start, workerSeconds)
+    return serviceUnavailableResponse() unless res
+    @buildResponse(res, req, start, workerSeconds, requestId)
 
-  forwardOnce: (req, socketPath) ->
-    inUrl = new URL(req.url)
-    forwardUrl = "http://localhost#{inUrl.pathname}#{inUrl.search}"
-    readTimeoutMs = @flags.readTimeoutMs
+  forwardOnce: (req, socketPath, app) ->
+    app = app or @getAppForWorker(socketPath)
+    forwardOnceWithTimeout(req, socketPath, app.readTimeoutMs, gatewayTimeoutResponse)
 
-    try
-      fetchPromise = fetch(forwardUrl, { method: req.method, headers: req.headers, body: req.body, unix: socketPath, decompress: false })
-      readGuard = new Promise (_, rej) ->
-        setTimeout (-> rej(new Error('Upstream timeout'))), readTimeoutMs
-      res = Promise.race!([fetchPromise, readGuard])
-      res
-    catch err
-      if err.message is 'Upstream timeout'
-        return new Response('Gateway timeout', { status: 504 })
-      throw err
+  processJob: (job, worker, app) ->
+    app = app or @getAppForWorker(worker.socket)
+    processQueuedJob(job, worker, ((req, w) => @forwardToWorker(req, w, app)), =>
+      app.inflightTotal--
+      setImmediate => @drainQueue(app)
+    )
 
-  processJob: (job, worker) ->
-    @forwardToWorker(job.req, worker)
-      .then((r) -> job.resolve(r))
-      .catch((e) -> job.resolve(if e instanceof Response then e else new Response('Internal error', { status: 500 })))
-      .finally =>
-        @inflightTotal--
-        setImmediate => @drainQueue()
-
-  drainQueue: ->
-    while @inflightTotal < Math.max(1, @sockets.length) and @availableWorkers.length > 0
-      job = @queue.shift()
-      break unless job
-      if nowMs() - job.enqueuedAt > @flags.queueTimeoutMs
-        job.resolve(new Response('Queue timeout', { status: 504 }))
-        continue
-      @inflightTotal++
-      worker = @getNextAvailableSocket()
-      unless worker
-        @inflightTotal--
-        break
-      @processJob(job, worker)
+  drainQueue: (app) ->
+    app = app or getAppState(@appRegistry, @defaultAppId)
+    metrics = @metrics
+    app.inflightTotal = drainQueueOnce(
+      app.inflightTotal,
+      app.sockets.length,
+      (=> app.availableWorkers.length),
+      (=> app.queue.shift()),
+      ((job) =>
+        timedOut = nowMs() - job.enqueuedAt > app.queueTimeoutMs
+        metrics.queueTimeouts++ if timedOut
+        timedOut
+      ),
+      queueTimeoutResponse,
+      (=> @getNextAvailableSocket(app)),
+      ((job, worker) =>
+        metrics.forwarded++
+        @processJob(job, worker, app)
+      )
+    )
 
   startControl: ->
     ctlPath = getControlSocketPath(@flags.socketPrefix)
-    try unlinkSync(ctlPath) catch then null
+    try unlinkSync(ctlPath)
     @control = Bun.serve({ unix: ctlPath, fetch: @controlFetch.bind(@) })
 
     @startMdnsAdvertisement('rip.local')
@@ -1035,7 +971,7 @@ class Server
 
     port = @flags.httpsPort or @flags.httpPort or 80
     protocol = if @flags.httpsPort then 'https' else 'http'
-    url = "#{protocol}://#{@flags.appName}.ripdev.io#{formatPort(protocol, port)}"
+    url = edgeBuildRipdevUrl(@flags.appName, protocol, port, formatPort)
     @urls.push(url)
     p "rip-server: #{url}" unless @flags.quiet or @flags.hideUrls
 
@@ -1043,127 +979,113 @@ class Server
     url = new URL(req.url)
 
     if req.method is 'POST' and url.pathname is '/worker'
-      try
-        j = req.json!
-        if j?.op is 'join' and typeof j.socket is 'string' and typeof j.workerId is 'number'
-          version = if typeof j.version is 'number' then j.version else null
-          exists = @sockets.find((x) -> x.socket is j.socket)
-          unless exists
-            worker = { socket: j.socket, inflight: 0, version, workerId: j.workerId }
-            @sockets.push(worker)
-            @availableWorkers.push(worker)
-          @newestVersion = if @newestVersion is null then version else Math.max(@newestVersion, version) if version?
-          return new Response(JSON.stringify({ ok: true }), { headers: { 'content-type': 'application/json' } })
-
-        if j?.op is 'quit' and typeof j.workerId is 'number'
-          @sockets = @sockets.filter((x) -> x.workerId isnt j.workerId)
-          @availableWorkers = @availableWorkers.filter((x) -> x.workerId isnt j.workerId)
-          return new Response(JSON.stringify({ ok: true }), { headers: { 'content-type': 'application/json' } })
-      catch
-        null
-      return new Response(JSON.stringify({ ok: false }), { status: 400, headers: { 'content-type': 'application/json' } })
+      # Peek at appId from payload to route to correct app state
+      body = req.text!
+      appId = try JSON.parse(body).appId
+      appId = appId or @defaultAppId
+      app = getAppState(@appRegistry, appId) or getAppState(@appRegistry, @defaultAppId)
+      res = handleWorkerControl!(new Request(req.url, { method: 'POST', headers: req.headers, body }),
+        sockets: app.sockets
+        availableWorkers: app.availableWorkers
+        newestVersion: app.newestVersion
+      )
+      if res.handled
+        app.sockets = res.sockets if res.sockets?
+        app.availableWorkers = res.availableWorkers if res.availableWorkers?
+        app.newestVersion = res.newestVersion if res.newestVersion?
+        return res.response
 
     if req.method is 'POST' and url.pathname is '/watch'
-      try
-        j = req.json!
-        if j?.op is 'watch' and typeof j.prefix is 'string' and Array.isArray(j.dirs)
-          @registerWatch(j.prefix)
-          @manager?.watchDirs(j.prefix, j.dirs) if j.dirs.length > 0
-          return new Response(JSON.stringify({ ok: true }), { headers: { 'content-type': 'application/json' } })
-      catch
-        null
-      return new Response(JSON.stringify({ ok: false }), { status: 400, headers: { 'content-type': 'application/json' } })
+      res = handleWatchControl!(req, @registerWatch.bind(@), (prefix, dirs) => @manager?.watchDirs(prefix, dirs))
+      return res.response if res.handled
 
     if url.pathname is '/registry' and req.method is 'GET'
-      return new Response(JSON.stringify({ ok: true, hosts: Array.from(@hostRegistry.values()) }), { headers: { 'content-type': 'application/json' } })
+      res = handleRegistryControl(req, @appRegistry.hostIndex)
+      return res.response if res.handled
 
     new Response('not-found', { status: 404 })
 
   maybeAddSecurityHeaders: (headers) ->
-    if @httpsActive and @flags.hsts
-      headers.set('strict-transport-security', 'max-age=31536000; includeSubDomains') unless headers.has('strict-transport-security')
+    edgeMaybeAddSecurityHeaders(@httpsActive, @flags.hsts, headers)
 
   loadTlsMaterial: ->
-    # Explicit cert/key paths
-    if @flags.certPath and @flags.keyPath
-      try
-        cert = readFileSync(@flags.certPath, 'utf8')
-        key = readFileSync(@flags.keyPath, 'utf8')
-        @printCertSummary(cert)
-        return { cert, key }
-      catch
-        console.error 'Failed to read TLS cert/key from provided paths. Use http or fix paths.'
-        process.exit(2)
-
-    # Shipped wildcard cert for *.ripdev.io (GlobalSign, valid for all subdomains)
-    certsDir = join(import.meta.dir, 'certs')
-    certPath = join(certsDir, 'ripdev.io.crt')
-    keyPath = join(certsDir, 'ripdev.io.key')
-    try
-      cert = readFileSync(certPath, 'utf8')
-      key = readFileSync(keyPath, 'utf8')
-      @printCertSummary(cert)
-      return { cert, key }
-    catch e
-      console.error "rip-server: failed to load TLS certs from #{certsDir}: #{e.message}"
-      console.error 'Use --cert/--key to provide your own, or use http to disable TLS.'
-      process.exit(2)
+    edgeLoadTlsMaterial(@flags, import.meta.dir, (domain) -> acmeLoadCert(defaultCertDir(), domain))
 
   printCertSummary: (certPem) ->
-    try
-      x = new X509Certificate(certPem)
-      subject = x.subject.split(/,/)[0]?.trim() or x.subject
-      issuer = x.issuer.split(/,/)[0]?.trim() or x.issuer
-      exp = new Date(x.validTo)
-      console.log "rip-server: tls cert #{subject} issued by #{issuer} expires #{exp.toISOString()}"
-    catch
-      null
+    edgePrintCertSummary(certPem)
 
   getLanIP: ->
-    try
-      nets = networkInterfaces()
-      for name, addrs of nets
-        for addr in addrs
-          continue if addr.internal or addr.family isnt 'IPv4'
-          continue if addr.address.startsWith('169.254.')  # Link-local
-          return addr.address
-    catch
-      null
-    null
+    controlGetLanIP(networkInterfaces)
 
   startMdnsAdvertisement: (host) ->
-    return unless host.endsWith('.local')
-    return if @mdnsProcesses.has(host)
+    controlStartMdnsAdvertisement(
+      host,
+      @mdnsProcesses,
+      @getLanIP.bind(@),
+      @flags,
+      formatPort,
+      (url) =>
+        @urls.push(url)
+        p "rip-server: #{url}" unless @flags.quiet or @flags.hideUrls
+    )
 
-    lanIP = @getLanIP()
-    unless lanIP
-      console.log "rip-server: unable to detect LAN IP for mDNS advertisement of #{host}"
-      return
-
-    port = @flags.httpsPort or @flags.httpPort or 80
-    protocol = if @flags.httpsPort then 'https' else 'http'
-    serviceType = if @flags.httpsPort then '_https._tcp' else '_http._tcp'
-    serviceName = host.replace('.local', '')
-
+  proxyRealtimeToWorker: (headers, frameType, body) ->
+    app = getAppState(@appRegistry, @defaultAppId)
+    return null unless app
+    sock = @getNextAvailableSocket(app)
+    return null unless sock
+    proxyHeaders = new Headers(headers)
+    proxyHeaders.set('Sec-WebSocket-Frame', frameType)
+    proxyHeaders.set('Content-Type', 'text/plain')
+    proxyHeaders.delete('Upgrade')
+    proxyHeaders.delete('Connection')
+    proxyHeaders.delete('Sec-WebSocket-Key')
+    proxyHeaders.delete('Sec-WebSocket-Version')
+    proxyHeaders.delete('Sec-WebSocket-Extensions')
     try
-      proc = Bun.spawn [
-        'dns-sd', '-P'
-        serviceName
-        serviceType
-        'local'
-        String(port)
-        host
-        lanIP
-      ],
-        stdout: 'ignore'
-        stderr: 'ignore'
-
-      @mdnsProcesses.set(host, proc)
-      url = "#{protocol}://#{host}#{formatPort(protocol, port)}"
-      @urls.push(url)
-      p "rip-server: #{url}" unless @flags.quiet or @flags.hideUrls
+      res = fetch! "http://localhost/v1/realtime",
+        method: 'POST'
+        headers: proxyHeaders
+        body: body or ''
+        unix: sock.socket
+        decompress: false
+      res.text!
+    finally
+      @releaseWorker(sock, app)
     catch e
-      console.error "rip-server: failed to advertise #{host} via mDNS:", e.message
+      console.error "realtime: worker proxy failed:", e.message
+      null
+
+  buildWebSocketHandlers: ->
+    hub = @realtimeHub
+    server = @
+
+    websocket:
+      idleTimeout: 120  # seconds — evict idle/stale connections
+      sendPings: true    # Bun auto-sends pings to detect dead connections
+
+      open: (ws) ->
+        { clientId, headers } = ws.data
+        addClient(hub, clientId, ws)
+        server.metrics.wsConnections++
+        logEvent 'ws_open', { clientId }
+        response = server.proxyRealtimeToWorker!(headers, 'open', '')
+        processResponse(hub, response, clientId) if response
+
+      message: (ws, message) ->
+        { clientId, headers } = ws.data
+        server.metrics.wsMessages++
+        isBinary = typeof message isnt 'string'
+        msg = if isBinary then Buffer.from(message) else message
+        frameType = if isBinary then 'binary' else 'text'
+        response = server.proxyRealtimeToWorker!(headers, frameType, msg)
+        processResponse(hub, response, clientId) if response
+
+      close: (ws) ->
+        { clientId, headers } = ws.data
+        logEvent 'ws_close', { clientId }
+        removeClient(hub, clientId)
+        server.proxyRealtimeToWorker!(headers, 'close', '')
 
 
 # ==============================================================================
@@ -1171,120 +1093,24 @@ class Server
 # ==============================================================================
 
 main = ->
-  # Version flag
-  if '--version' in process.argv or '-v' in process.argv
-    try
-      pkg = JSON.parse(readFileSync(import.meta.dir + '/package.json', 'utf8'))
-      console.log "rip-server v#{pkg.version}"
-    catch
-      console.log 'rip-server (version unknown)'
+  if runVersionOutput(process.argv, readFileSync, import.meta.dir + '/package.json')
     return
 
-  # Help flag
-  if '--help' in process.argv or '-h' in process.argv
-    console.log """
-      rip-server - Pure Rip application server
-
-      Usage:
-        rip serve [options] [app-path] [app-name]
-        rip serve [options] [app-path]@<alias1>,<alias2>,...
-
-      Options:
-        -h, --help              Show this help
-        -v, --version           Show version
-        --watch=<glob>          Watch glob pattern (default: *.rip)
-        --static                Disable hot reload and file watching
-        --env=<mode>            Set environment (dev, production)
-        --debug                 Enable debug logging
-        --quiet                 Suppress URL lines (app prints its own)
-
-      Network:
-        http                    HTTP only (no TLS)
-        https                   HTTPS with trusted *.ripdev.io cert (default)
-        <port>                  Listen on specific port
-        --cert=<path>           TLS certificate file (overrides shipped cert)
-        --key=<path>            TLS key file (overrides shipped cert)
-        --hsts                  Enable HSTS header
-        --no-redirect-http      Don't redirect HTTP to HTTPS
-
-      Workers:
-        w:<n>                   Number of workers (default: cores/2)
-        w:auto                  One worker per core
-        r:<n>,<s>s              Restart policy: max requests, max seconds
-
-      Examples:
-        rip serve               Start with ./index.rip (watches *.rip)
-        rip serve myapp         Start with app name "myapp"
-        rip serve http          HTTP only (no TLS)
-        rip serve --static w:8  Production: no reload, 8 workers
-
-      If no index.rip or index.ts is found, a built-in static file server
-      activates with directory indexes, auto-detected MIME types, and
-      hot-reload. Create an index.rip to customize server behavior.
-    """
+  if runHelpOutput(process.argv)
     return
 
-  # Helper functions for subcommands
-  getKV = (prefix) ->
-    for tok in process.argv
-      return tok.slice(prefix.length) if tok.startsWith(prefix)
-    undefined
+  # Subcommands: stop/list
+  if 'stop' in process.argv or 'list' in process.argv
+    prefix = cliComputeSocketPrefix(process.argv, resolveAppEntry, existsSync, isAbsolute, resolve, (-> process.cwd()))
+    if runStopSubcommand(process.argv, prefix, getPidFilePath, existsSync, readFileSync, process.kill.bind(process), Bun.spawnSync, import.meta.path)
+      return
 
-  findAppPathToken = ->
-    for i in [2...process.argv.length]
-      tok = process.argv[i]
-      pathPart = if tok.includes('@') then tok.split('@')[0] else tok
-      looksLikePath = pathPart.includes('/') or pathPart.startsWith('.') or pathPart.endsWith('.rip') or pathPart.endsWith('.ts')
-      try
-        return pathPart if looksLikePath and existsSync(if isAbsolute(pathPart) then pathPart else resolve(process.cwd(), pathPart))
-      catch
-        null
-    undefined
-
-  computeSocketPrefix = ->
-    override = getKV('--socket-prefix=')
-    return override if override
-    appTok = findAppPathToken()
-    if appTok
-      try
-        { appName } = resolveAppEntry(appTok)
-        return "rip_#{appName}"
-      catch
-        null
-    'rip_server'
-
-  # Subcommand: stop
-  if 'stop' in process.argv
-    prefix = computeSocketPrefix()
-    pidFile = getPidFilePath(prefix)
-    try
-      if existsSync(pidFile)
-        pid = parseInt(readFileSync(pidFile, 'utf8').trim())
-        process.kill(pid, 'SIGTERM')
-        console.log "rip-server: sent SIGTERM to process #{pid}"
-      else
-        console.log "rip-server: no PID file found at #{pidFile}, trying pkill..."
-        Bun.spawnSync(['pkill', '-f', import.meta.path])
-    catch e
-      console.error "rip-server: stop failed: #{e.message}"
-    return
-
-  # Subcommand: list
-  if 'list' in process.argv
-    controlUnix = getControlSocketPath(computeSocketPrefix())
-    try
-      res = fetch!('http://localhost/registry', { unix: controlUnix, method: 'GET' })
-      throw new Error("list failed: #{res.status}") unless res.ok
-      j = res.json!
-      hosts = if Array.isArray(j?.hosts) then j.hosts else []
-      console.log if hosts.length then hosts.join('\n') else '(no hosts)'
-    catch e
-      console.error "list command failed: #{e?.message or e}"
-      process.exit(1)
-    return
+    if runListSubcommand(process.argv, prefix, getControlSocketPath, fetch, exit)
+      return
 
   # Normal startup
   flags = parseFlags(process.argv)
+  setEventJsonMode(flags.jsonLogging)
   pidFile = getPidFilePath(flags.socketPrefix)
   writeFileSync(pidFile, String(process.pid))
 
@@ -1293,43 +1119,50 @@ main = ->
   svr.manager = mgr
   mgr.server = svr
 
-  cleanup = ->
-    console.log 'rip-server: shutting down...'
-    try unlinkSync(pidFile) catch then null
-    svr.stop()
-    mgr.stop!
-    try fetch!(mgr.dbUrl + '/shutdown', { method: 'POST' }) if mgr.dbUrl catch then null
-    process.exit(0)
+  # Load config.rip if present — register additional apps
+  configPath = findConfigFile(flags.appEntry)
+  if configPath
+    config = loadConfig!(configPath)
+    if config
+      registered = applyConfig(config, svr.appRegistry, registerApp, dirname(flags.appEntry))
+      p "rip-server: loaded config.rip with #{registered.length} app(s)" unless flags.quiet
 
-  process.on 'SIGTERM', cleanup
-  process.on 'SIGINT', cleanup
-  process.on 'uncaughtException', (err) ->
-    console.error 'rip-server: uncaught exception:', err
-    cleanup()
-  process.on 'unhandledRejection', (err) ->
-    console.error 'rip-server: unhandled rejection:', err
-    cleanup()
+  cleanup = createCleanup(pidFile, svr, mgr, unlinkSync, fetch, process)
+  installShutdownHandlers(cleanup, process)
 
   # Suppress top URL lines if setup.rip will print them at the bottom
-  setupFile = join(dirname(flags.appEntry), 'setup.rip')
-  flags.hideUrls = existsSync(setupFile)
+  flags.hideUrls = computeHideUrls(flags.appEntry, join, dirname, existsSync)
 
   svr.start!
+
+  # ACME auto-TLS: obtain cert if needed, start renewal loop
+  if (flags.acme or flags.acmeStaging) and flags.acmeDomain
+    acmeMgr = createAcmeManager
+      certDir: defaultCertDir()
+      staging: flags.acmeStaging
+      challengeStore: svr.challengeStore
+      onCertRenewed: (domain, result) ->
+        p "rip-acme: cert renewed for #{domain}, graceful restart needed"
+    svr.acmeManager = acmeMgr
+    try acmeMgr.obtainCert!(flags.acmeDomain)
+    catch e
+      console.error "rip-acme: initial cert obtain failed: #{e.message}"
+      console.error "rip-acme: will retry during renewal loop"
+    acmeMgr.startRenewalLoop([flags.acmeDomain])
+
   process.env.RIP_URLS = svr.urls.join(',')  # exact URLs the Server just built
   mgr.start!
 
-  httpOnly = flags.httpsPort is null
-  protocol = if httpOnly then 'http' else 'https'
-  port = flags.httpsPort or flags.httpPort or 80
-  console.log "rip-server: rip=#{svr.ripVersion} server=#{svr.serverVersion} app=#{flags.appName} workers=#{flags.workers} url=#{protocol}://#{flags.appName}.ripdev.io#{formatPort(protocol, port)}/server"
+  logStartupSummary(svr, flags, edgeBuildRipdevUrl, formatPort)
+  logEvent('server_start', { app: flags.appName, workers: flags.workers })
 
 # ==============================================================================
 # Entry Point
 # ==============================================================================
 
 if process.env.RIP_SETUP_MODE
-  runSetup()
+  runSetupMode()
 else if process.env.RIP_WORKER_MODE
-  runWorker()
+  runWorkerMode()
 else
   main!

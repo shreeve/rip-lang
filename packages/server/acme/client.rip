@@ -1,0 +1,138 @@
+# ==============================================================================
+# acme/client.rip — RFC 8555 ACME protocol client (zero dependencies)
+# ==============================================================================
+
+import { signJws, thumbprint } from './crypto.rip'
+
+LETS_ENCRYPT = 'https://acme-v02.api.letsencrypt.org/directory'
+LETS_ENCRYPT_STAGING = 'https://acme-staging-v02.api.letsencrypt.org/directory'
+
+export { LETS_ENCRYPT, LETS_ENCRYPT_STAGING }
+
+# --- Nonce management ---
+
+getNonce = (client) ->
+  if client.nonces.length > 0
+    return client.nonces.pop()
+  res = fetch!(client.directory.newNonce, { method: 'HEAD' })
+  res.headers.get('replay-nonce')
+
+saveNonce = (client, res) ->
+  nonce = res.headers.get('replay-nonce')
+  client.nonces.push(nonce) if nonce
+
+# --- Signed request ---
+
+acmeRequest = (client, url, payload, retryCount = 0) ->
+  nonce = getNonce!(client)
+  body = signJws(payload, url, nonce, client.accountKey, client.publicJwk, client.kid)
+  res = fetch! url,
+    method: 'POST'
+    headers: { 'content-type': 'application/jose+json' }
+    body: body
+  saveNonce(client, res)
+
+  if res.status >= 400
+    errBody = try res.json!
+    # Retry once on badNonce (RFC 8555 Section 6.5)
+    if errBody?.type is 'urn:ietf:params:acme:error:badNonce' and retryCount < 1
+      return acmeRequest!(client, url, payload, retryCount + 1)
+    throw new Error("ACME error #{res.status}: #{errBody?.detail or res.statusText}")
+
+  location = res.headers.get('location')
+  contentType = res.headers.get('content-type') or ''
+
+  data = if contentType.includes('json')
+    res.json!
+  else
+    res.text!
+
+  { data, location, status: res.status, headers: res.headers }
+
+# --- Client lifecycle ---
+
+export createClient = (directoryUrl) ->
+  directoryUrl = directoryUrl or LETS_ENCRYPT
+  res = fetch!(directoryUrl)
+  directory = res.json!
+  {
+    directoryUrl
+    directory
+    accountKey: null
+    publicJwk: null
+    kid: null
+    nonces: []
+  }
+
+export setAccountKey = (client, privateKey, publicJwk) ->
+  client.accountKey = privateKey
+  client.publicJwk = publicJwk
+  client
+
+# --- Account ---
+
+export newAccount = (client) ->
+  { data, location } = acmeRequest! client, client.directory.newAccount,
+    termsOfServiceAgreed: true
+  client.kid = location
+  { accountUrl: location, account: data }
+
+# --- Order ---
+
+export newOrder = (client, domains) ->
+  identifiers = domains.map((d) -> { type: 'dns', value: d })
+  { data, location } = acmeRequest! client, client.directory.newOrder, { identifiers }
+  { orderUrl: location, order: data }
+
+export getAuthorization = (client, authUrl) ->
+  { data } = acmeRequest! client, authUrl, ''
+  data
+
+export getHttp01Challenge = (auth) ->
+  auth.challenges.find((c) -> c.type is 'http-01')
+
+export keyAuthorization = (token, publicJwk) ->
+  "#{token}.#{thumbprint(publicJwk)}"
+
+export respondToChallenge = (client, challengeUrl) ->
+  { data } = acmeRequest! client, challengeUrl, {}
+  data
+
+# --- Polling ---
+
+export pollOrderStatus = (client, orderUrl, maxAttempts = 30, intervalMs = 2000) ->
+  for i in [0...maxAttempts]
+    { data } = acmeRequest! client, orderUrl, ''
+    return data if data.status is 'valid'
+    return data if data.status is 'invalid'
+    throw new Error("ACME order failed: #{data.status}") if data.status in ['expired', 'revoked', 'deactivated']
+    await new Promise (r) -> setTimeout(r, intervalMs)
+  throw new Error('ACME order timed out waiting for validation')
+
+export pollAuthorizationStatus = (client, authUrl, maxAttempts = 30, intervalMs = 2000) ->
+  for i in [0...maxAttempts]
+    { data } = acmeRequest! client, authUrl, ''
+    return data if data.status is 'valid'
+    throw new Error("ACME authorization failed: #{data.status}") if data.status is 'invalid'
+    await new Promise (r) -> setTimeout(r, intervalMs)
+  throw new Error('ACME authorization timed out')
+
+# --- Finalize and download ---
+
+export finalizeOrder = (client, finalizeUrl, csrB64url) ->
+  { data } = acmeRequest! client, finalizeUrl, { csr: csrB64url }
+  data
+
+export downloadCert = (client, certUrl) ->
+  nonce = getNonce!(client)
+  body = signJws('', certUrl, nonce, client.accountKey, client.publicJwk, client.kid)
+  res = fetch! certUrl,
+    method: 'POST'
+    headers:
+      'content-type': 'application/jose+json'
+      'accept': 'application/pem-certificate-chain'
+    body: body
+  saveNonce(client, res)
+  if res.status >= 400
+    throw new Error("ACME cert download failed: #{res.status}")
+  res.text!

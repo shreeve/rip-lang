@@ -1,0 +1,63 @@
+# ==============================================================================
+# edge/ratelimit.rip — per-IP sliding window rate limiter
+# ==============================================================================
+
+DEFAULT_WINDOW_MS = 60000    # 1 minute
+DEFAULT_MAX_REQUESTS = 1000  # per window
+CLEANUP_INTERVAL_MS = 30000  # prune stale entries
+MAX_BUCKETS = 100000         # hard cap on tracked IPs to prevent memory exhaustion
+
+export createRateLimiter = (maxRequests, windowMs) ->
+  # Explicit check: 0 means disabled, null/undefined gets default
+  maxRequests = if typeof maxRequests is 'number' then maxRequests else DEFAULT_MAX_REQUESTS
+  windowMs = if typeof windowMs is 'number' and windowMs > 0 then windowMs else DEFAULT_WINDOW_MS
+  buckets = new Map()
+
+  cleanupTimer = if maxRequests > 0
+    setInterval ->
+      now = Date.now()
+      for [ip, timestamps] as buckets
+        fresh = timestamps.filter((t) -> now - t < windowMs)
+        if fresh.length is 0
+          buckets.delete(ip)
+        else
+          buckets.set(ip, fresh)
+    , CLEANUP_INTERVAL_MS
+  else
+    null
+
+  limiter =
+    maxRequests: maxRequests
+    windowMs: windowMs
+
+    check: (ip) ->
+      return { allowed: true, remaining: 0, retryAfter: 0 } if maxRequests <= 0
+      now = Date.now()
+      timestamps = buckets.get(ip) or []
+      timestamps = timestamps.filter((t) -> now - t < windowMs)
+      if timestamps.length >= maxRequests
+        buckets.set(ip, timestamps)
+        retryAfter = Math.ceil((timestamps[0] + windowMs - now) / 1000)
+        return { allowed: false, remaining: 0, retryAfter }
+      timestamps.push(now)
+      buckets.set(ip, timestamps)
+      # Evict oldest-inserted bucket if over cap (FIFO, not LRU — simple and bounded)
+      if buckets.size > MAX_BUCKETS
+        oldest = buckets.keys().next().value
+        buckets.delete(oldest)
+      { allowed: true, remaining: maxRequests - timestamps.length, retryAfter: 0 }
+
+    reset: (ip) ->
+      buckets.delete(ip)
+
+    stop: ->
+      clearInterval(cleanupTimer) if cleanupTimer
+
+  limiter
+
+export rateLimitResponse = (retryAfter) ->
+  new Response 'Rate limit exceeded',
+    status: 429
+    headers:
+      'Retry-After': String(retryAfter)
+      'Content-Type': 'text/plain'

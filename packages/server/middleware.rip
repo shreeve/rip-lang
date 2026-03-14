@@ -36,7 +36,7 @@
 import { get, enableCorsPreflight } from '@rip-lang/server'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
-import { existsSync } from 'node:fs'
+import { existsSync, realpathSync } from 'node:fs'
 
 export cors = (opts = {}) ->
   origin = opts.origin or '*'
@@ -525,12 +525,14 @@ export serve = (opts = {}) ->
     serve._registered = true
 
   # Route: {prefix}/*.rip — serve .rip files from the app directory tree
-  appDirResolved = resolve(appDir)
+  appDirResolved = realpathSync(resolve(appDir))
   get "#{prefix}/*.rip" ->
     name = @req.path.slice("#{prefix}/".length)
     path = resolve(appDir, name)
-    return unless path.startsWith(appDirResolved)
-    @send path, 'text/x-rip; charset=UTF-8' if existsSync(path)
+    return unless existsSync(path)
+    realPath = realpathSync(path)
+    return unless realPath.startsWith(appDirResolved)
+    @send realPath, 'text/x-rip; charset=UTF-8'
 
   # Routes: {prefix}/{name} — per-bundle JSON endpoints (cached + Brotli)
   # Built once per worker on first request, then served from memory with ETag/304.

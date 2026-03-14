@@ -1,0 +1,53 @@
+# ==============================================================================
+# control/workers.rip — manager-side worker spawn, health, and control
+# ==============================================================================
+
+import { unlinkSync } from 'node:fs'
+import { getWorkerSocketPath, getControlSocketPath } from './control.rip'
+
+# --- Spawn ---
+
+export spawnTrackedWorker = (flags, workerId, version, nowMsFn, importMetaPath, appId) ->
+  socketPath = getWorkerSocketPath(flags.socketPrefix, workerId)
+  try unlinkSync(socketPath)
+
+  workerEnv = Object.assign {}, process.env,
+    RIP_WORKER_MODE: '1'
+    WORKER_ID: String(workerId)
+    SOCKET_PATH: socketPath
+    SOCKET_PREFIX: flags.socketPrefix
+    APP_ID: String(appId or flags.appName or 'default')
+    APP_ENTRY: flags.appEntry
+    APP_BASE_DIR: flags.appBaseDir
+    MAX_REQUESTS: String(flags.maxRequestsPerWorker)
+    MAX_SECONDS: String(flags.maxSecondsPerWorker)
+    RIP_LOG_JSON: if flags.jsonLogging then '1' else '0'
+    RIP_VERSION: String(version)
+
+  proc = Bun.spawn ['rip', importMetaPath],
+    stdout: 'inherit'
+    stderr: 'inherit'
+    stdin: 'ignore'
+    cwd: process.cwd()
+    env: workerEnv
+
+  { id: workerId, process: proc, socketPath, restartCount: 0, backoffMs: 1000, startedAt: nowMsFn() }
+
+# --- Health and control notifications ---
+
+export postWorkerQuit = (socketPrefix, workerId) ->
+  try
+    ctl = getControlSocketPath(socketPrefix)
+    body = JSON.stringify({ op: 'quit', workerId })
+    fetch!('http://localhost/worker', { method: 'POST', body, headers: { 'content-type': 'application/json' }, unix: ctl })
+
+export waitForWorkerReady = (socketPath, timeoutMs = 5000) ->
+  start = Date.now()
+  while Date.now() - start < timeoutMs
+    try
+      res = fetch!('http://localhost/ready', { unix: socketPath, method: 'GET' })
+      if res.ok
+        txt = res.text!
+        return true if txt is 'ok'
+    await new Promise (r) -> setTimeout(r, 30)
+  false

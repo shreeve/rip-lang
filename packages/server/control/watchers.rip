@@ -1,0 +1,68 @@
+# ==============================================================================
+# control/watchers.rip — SSE watch groups and app directory watchers
+# ==============================================================================
+
+import { watch } from 'node:fs'
+
+# --- SSE watch groups ---
+
+export registerWatchGroup = (watchGroups, prefix) ->
+  return if watchGroups.has(prefix)
+  watchGroups.set prefix, { sseClients: new Set() }
+
+export handleWatchGroup = (watchGroups, prefix) ->
+  group = watchGroups.get(prefix)
+  return new Response('not-found', { status: 404 }) unless group
+  encoder = new TextEncoder()
+  client = null
+  new Response new ReadableStream(
+    start: (controller) ->
+      send = (type) ->
+        try controller.enqueue encoder.encode("event: #{if type is 'connected' then 'connected' else 'reload'}\ndata: #{type}\n\n")
+      client = { send }
+      group.sseClients.add(client)
+      send('connected')
+    cancel: ->
+      group.sseClients.delete(client) if client
+  ),
+    headers:
+      'Content-Type': 'text/event-stream'
+      'Cache-Control': 'no-cache'
+      'Connection': 'keep-alive'
+
+export broadcastWatchChange = (watchGroups, prefix, type = 'page') ->
+  group = watchGroups.get(prefix)
+  return unless group
+  dead = []
+  for client as group.sseClients
+    try client.send(type)
+    catch then dead.push(client)
+  group.sseClients.delete(c) for c in dead
+
+# --- App directory watchers ---
+
+export registerAppWatchDirs = (appWatchers, prefix, dirs, server, cwdFn) ->
+  return if appWatchers.has(prefix)
+  timer = null
+  pending = null
+  watchers = []
+  broadcast = (type = 'page') =>
+    pending = if type is 'page' or pending is 'page' then 'page' else 'styles'
+    clearTimeout(timer) if timer
+    timer = setTimeout =>
+      timer = null
+      server?.broadcastChange(prefix, pending)
+      pending = null
+    , 300
+  for dir in dirs
+    try
+      w = watch dir, { recursive: true }, (event, filename) ->
+        if filename?.endsWith('.rip') or filename?.endsWith('.html')
+          broadcast('page')
+        else if filename?.endsWith('.css')
+          broadcast('styles')
+      watchers.push(w)
+    catch e
+      rel = dir.replace(cwdFn() + '/', '')
+      warn "rip-server: watch skipped (#{e.code or 'error'}): #{rel}"
+  appWatchers.set prefix, { watchers, timer }

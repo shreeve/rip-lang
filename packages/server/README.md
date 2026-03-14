@@ -2,12 +2,13 @@
 
 # Rip Server - @rip-lang/server
 
-> **A full-stack web framework and production server — routing, middleware, multi-worker processes, hot reload, HTTPS, and mDNS — written entirely in Rip**
+> **A full-stack web framework and production edge server — routing, middleware, multi-worker processes, hot reload, ACME auto-TLS, realtime WebSocket, observability, and mDNS — written entirely in Rip with zero dependencies**
 
 Rip Server is a unified web framework and application server. It provides
 Sinatra-style routing, built-in validators, file serving, and middleware
 composition for defining your API, plus multi-worker process management,
-rolling restarts, automatic TLS certificates, mDNS service discovery, and
+rolling restarts, automatic TLS via Let's Encrypt, Bam-style realtime
+WebSocket support, runtime diagnostics, mDNS service discovery, and
 request load balancing for running it in production — all with zero external
 dependencies.
 
@@ -16,18 +17,24 @@ dependencies.
 - **Multi-worker architecture** — Automatic worker spawning based on CPU cores
 - **Hot module reloading** — Watches `*.rip` files by default, rolling restarts on change
 - **Rolling restarts** — Zero-downtime deployments
-- **Automatic HTTPS** — Shipped `*.ripdev.io` wildcard cert (green lock, zero setup)
+- **Automatic HTTPS** — Shipped `*.ripdev.io` wildcard cert, or auto-TLS via Let's Encrypt ACME
+- **Realtime WebSocket** — Bam-style pub/sub hub where your backend stays HTTP-only
+- **Observability** — `/diagnostics` endpoint with request rates, latency percentiles, queue pressure
+- **Appliance-grade reliability** — Graceful shutdown, restart resilience, forced-exit safety net
 - **mDNS discovery** — `.local` hostname advertisement
+- **Per-app worker pools** — Multi-app registry with host-to-app routing
 - **Request queue** — Built-in request buffering and load balancing
 - **Built-in dashboard** — Server status UI at `rip.local`
 - **Unified package** — Web framework + production server in one
 
-| File | Lines | Role |
-|------|-------|------|
-| `api.rip` | ~662 | Core framework: routing, validation, `read()`, `session`, `@send`, server |
-| `middleware.rip` | ~559 | Built-in middleware: cors, logger, sessions, compression, security, serve |
-| `server.rip` | ~1,210 | Process manager: CLI, workers, load balancing, TLS, mDNS |
-| `server.html` | ~420 | Built-in dashboard UI |
+| Directory | Role |
+|-----------|------|
+| `api.rip` | Core framework: routing, validation, `read()`, `session`, `@send` |
+| `middleware.rip` | Built-in middleware: cors, logger, sessions, compression, security, serve |
+| `server.rip` | Edge orchestrator: CLI, workers, load balancing, TLS, mDNS |
+| `edge/` | Request path: forwarding, scheduling, metrics, registry, helpers, TLS, realtime |
+| `control/` | Management: CLI, lifecycle, workers, watchers, mDNS, events |
+| `acme/` | Auto-TLS: ACME client, crypto, cert store, challenge handler |
 
 > **See Also**: For the DuckDB server, see [@rip-lang/db](../db/README.md).
 
@@ -852,6 +859,13 @@ rip server [flags] [app-path]@<alias1>,<alias2>,...
 | `--no-redirect-http` | Don't redirect HTTP to HTTPS | Redirects enabled |
 | `--json-logging` | Output JSON access logs | Human-readable |
 | `--no-access-log` | Disable access logging | Enabled |
+| `--acme` | Enable auto-TLS via Let's Encrypt | Disabled |
+| `--acme-staging` | Use Let's Encrypt staging CA | Disabled |
+| `--acme-domain=<d>` | Domain for ACME certificate | — |
+| `--realtime-path=<p>` | WebSocket endpoint path | `/realtime` |
+| `--rate-limit=<n>` | Max requests per IP per window | Disabled (0) |
+| `--rate-limit-window=<ms>` | Rate limit window in ms | `60000` (1 min) |
+| `--publish-secret=<s>` | Bearer token for `/publish` endpoint | None (open) |
 
 ### Subcommands
 
@@ -889,6 +903,17 @@ rip server r:5000,3600s
 ```
 
 ## Architecture
+
+### Edge Planning Docs
+
+Current M0 artifacts for the unified edge/app evolution live in:
+
+- [Edge contracts](docs/edge/CONTRACTS.md)
+- [Config lifecycle](docs/edge/CONFIG_LIFECYCLE.md)
+- [Scheduler policy](docs/edge/SCHEDULER.md)
+- [Edgefile contract](docs/edge/EDGEFILE_CONTRACT.md)
+- [M0b review notes](docs/edge/M0B_REVIEW_NOTES.md)
+- [TLS spike findings](spikes/tls/FINDINGS.md)
 
 ### Self-Spawning Design
 
@@ -958,7 +983,10 @@ The server provides these endpoints automatically:
 | Endpoint | Description |
 |----------|-------------|
 | `/status` | Health check with worker count and uptime |
+| `/diagnostics` | Full runtime telemetry (metrics, latency, queue pressure) |
 | `/server` | Simple "ok" response for load balancer probes |
+| `/publish` | External WebSocket broadcast (when `--realtime` enabled) |
+| `/realtime` | WebSocket upgrade endpoint (when `--realtime` enabled) |
 
 ## TLS Certificates
 
@@ -981,6 +1009,152 @@ For production domains or custom setups, provide your own cert/key:
 ```bash
 rip server --cert=/path/to/cert.pem --key=/path/to/key.pem
 ```
+
+### ACME Auto-TLS (Let's Encrypt)
+
+Automatic TLS certificate management via Let's Encrypt HTTP-01 challenges.
+Zero dependencies — uses `node:crypto` for all cryptographic operations.
+
+```bash
+# Production Let's Encrypt
+rip server --acme --acme-domain=example.com
+
+# Staging CA (for testing, no rate limits)
+rip server --acme-staging --acme-domain=test.example.com
+```
+
+How it works:
+
+1. Edge server generates an EC P-256 account key and registers with Let's Encrypt
+2. Creates a certificate order for your domain
+3. Serves HTTP-01 challenge tokens on port 80 at `/.well-known/acme-challenge/`
+4. Finalizes the order with a CSR and downloads the certificate chain
+5. Stores cert and key at `~/.rip/certs/{domain}/`
+6. Starts a renewal loop (checks every 12 hours, renews 30 days before expiry)
+
+The ACME crypto stack has been validated against the real Let's Encrypt staging
+server — account creation, JWS signing, and nonce management all confirmed working.
+
+## Realtime WebSocket (Bam-style)
+
+Built-in WebSocket pub/sub where **your backend stays HTTP-only**. The edge
+server manages all WebSocket connections, group membership, and message routing.
+Your app just responds to HTTP POSTs with JSON instructions.
+
+Realtime is always on — no flags needed. WebSocket connections are accepted
+at `/realtime` by default. Customize the path with `--realtime-path=/ws`.
+
+### How it works
+
+1. Client connects via WebSocket to `/realtime` (configurable)
+2. Edge forwards the event to a worker as a POST to `/v1/realtime` with `Sec-WebSocket-Frame: open` — using the same worker pool and scheduler as regular HTTP requests
+3. Your handler responds with JSON: `{ "+": ["room1"], "@": ["user1"], "welcome": "hello" }`
+4. Edge updates group membership and delivers messages to targets
+
+### Protocol
+
+Backend JSON response keys:
+
+| Key | Meaning |
+|-----|---------|
+| `@` | Target groups — who receives the message |
+| `+` | Subscribe — add client to these groups |
+| `-` | Unsubscribe — remove client from these groups |
+| `>` | Senders — exclude these clients from delivery |
+| Any other | Event payload — delivered to all targets |
+
+Groups starting with `/` are channel groups (members receive messages).
+Other groups are direct client targets.
+
+### Example backend handler
+
+```coffee
+post '/v1/realtime' ->
+  frame = @req.header 'Sec-WebSocket-Frame'
+
+  if frame is 'open'
+    user = authenticate!(@req)
+    return { '+': ["/lobby", "/user-#{user.id}"], 'connected': { userId: user.id } }
+
+  if frame is 'text'
+    data = @req.json!
+    return { '@': ["/lobby"], 'chat': { from: data.from, text: data.text } }
+
+  { ok: true }
+```
+
+### External publish
+
+Server-side code can broadcast messages without a WebSocket connection:
+
+```bash
+curl -X POST http://localhost/publish \
+  -d '{"@": ["/lobby"], "announcement": "Server restarting in 5 minutes"}'
+```
+
+**Production security:** Set a publish secret to require authentication:
+
+```bash
+# Via flag
+rip server --publish-secret=my-secret-token
+
+# Via environment variable
+RIP_PUBLISH_SECRET=my-secret-token rip server
+```
+
+When set, `/publish` requires `Authorization: Bearer my-secret-token`. Without a
+secret, `/publish` is open to any client that can reach a valid host — fine for
+development, but always set a secret in production.
+
+## Diagnostics & Observability
+
+### `/status` — Health check
+
+```bash
+curl http://localhost/status
+# {"status":"healthy","app":"myapp","workers":4,"uptime":86400,"hosts":["localhost"]}
+```
+
+### `/diagnostics` — Full runtime telemetry
+
+```bash
+curl http://localhost/diagnostics
+```
+
+Returns:
+
+```json
+{
+  "status": "healthy",
+  "version": { "server": "1.0.0", "rip": "3.13.108" },
+  "uptime": 86400,
+  "apps": [{ "id": "myapp", "workers": 4, "inflight": 2, "queueDepth": 0 }],
+  "metrics": {
+    "requests": 150000,
+    "responses": { "2xx": 148000, "4xx": 1500, "5xx": 500 },
+    "latency": { "p50": 0.012, "p95": 0.085, "p99": 0.210 },
+    "queue": { "queued": 3200, "timeouts": 5, "shed": 12 },
+    "workers": { "restarts": 2 },
+    "acme": { "renewals": 1, "failures": 0 },
+    "websocket": { "connections": 45, "messages": 12000, "deliveries": 89000 }
+  },
+  "gauges": { "workersActive": 4, "inflight": 2, "queueDepth": 0 },
+  "realtime": { "clients": 23, "groups": 8, "deliveries": 89000, "messages": 12000 },
+  "hosts": ["localhost", "myapp.ripdev.io"]
+}
+```
+
+### Structured event logging
+
+With `--json-logging`, lifecycle events are emitted as structured JSON:
+
+```json
+{"t":"2026-03-14T12:00:00.000Z","event":"server_start","app":"myapp","workers":4}
+{"t":"2026-03-14T12:05:00.000Z","event":"worker_restart","workerId":3,"attempt":1}
+{"t":"2026-03-14T12:10:00.000Z","event":"ws_open","clientId":"a1b2c3d4"}
+```
+
+Events: `server_start`, `server_stop`, `worker_restart`, `worker_abandon`, `ws_open`, `ws_close`
 
 ## mDNS Service Discovery
 
@@ -1150,27 +1324,120 @@ See [Hot Reloading](#hot-reloading) for details on how the two layers (API + UI)
 
 ## Comparison with Other Servers
 
-| Feature | rip server | PM2 | Nginx |
-|---------|-----------|-----|-------|
-| Pure Rip | ✅ | ❌ | ❌ |
-| Single File | ✅ (~1,200 lines) | ❌ | ❌ |
-| Hot Reload | ✅ (default) | ✅ | ❌ |
-| Directory Watch | ✅ (default) | ✅ | ❌ |
-| Multi-Worker | ✅ | ✅ | ✅ |
-| Auto HTTPS | ✅ | ❌ | ❌ |
-| mDNS | ✅ | ❌ | ❌ |
-| Zero Config | ✅ | ❌ | ❌ |
-| Built-in LB | ✅ | ❌ | ✅ |
+| Feature | rip server | PM2 | Nginx | Caddy |
+|---------|-----------|-----|-------|-------|
+| Pure Rip | ✅ | ❌ | ❌ | ❌ |
+| Zero Dependencies | ✅ | ❌ | ❌ | ❌ |
+| Hot Reload | ✅ (default) | ✅ | ❌ | ❌ |
+| Multi-Worker | ✅ | ✅ | ✅ | ❌ |
+| Auto HTTPS (ACME) | ✅ | ❌ | ❌ | ✅ |
+| Realtime WebSocket | ✅ (Bam-style) | ❌ | ❌ | ❌ |
+| Runtime Diagnostics | ✅ (latency p50/p95/p99) | ❌ | ❌ | ❌ |
+| mDNS | ✅ | ❌ | ❌ | ❌ |
+| Zero Config | ✅ | ❌ | ❌ | ✅ |
+| Built-in LB | ✅ | ❌ | ✅ | ✅ |
+| Graceful Shutdown | ✅ | ✅ | ✅ | ✅ |
+
+## Multi-App Configuration (`config.rip`)
+
+If a `config.rip` file exists next to your entry file, the server loads it
+and registers additional apps with their own hosts and worker pools.
+
+```coffee
+# config.rip
+export default
+  apps:
+    main:
+      entry: './index.rip'
+      hosts: ['example.com', 'www.example.com']
+      workers: 4
+    api:
+      entry: './api/index.rip'
+      hosts: ['api.example.com']
+      workers: 2
+      maxQueue: 1024
+    admin:
+      entry: './admin/index.rip'
+      hosts: ['admin.example.com']
+      workers: 1
+```
+
+Each app gets its own worker pool, queue, and host routing. The edge server
+routes requests to the correct app based on the `Host` header.
+
+If no `config.rip` exists, the server runs in single-app mode as usual.
+
+## Reverse Proxy
+
+Forward requests to external HTTP upstreams with proper header handling:
+
+```coffee
+import { get } from '@rip-lang/server'
+import { proxyToUpstream } from '@rip-lang/server/edge/forwarding.rip'
+
+get '/api/*' -> proxyToUpstream!(@req.raw, 'http://backend:8080', { clientIp: @req.header('x-real-ip') or '127.0.0.1' })
+```
+
+Features:
+- Strips hop-by-hop headers (Connection, Transfer-Encoding, etc.)
+- Sets `X-Forwarded-For` to actual client IP (overwrites, never appends — prevents spoofing)
+- Adds `X-Forwarded-Proto` and `X-Forwarded-Host`
+- Streaming response passthrough
+- Timeout with 504, connect failure with 502
+- Manual redirect handling (no auto-follow)
+
+Pass `clientIp` in options so upstream services see the real client address.
+Pass `timeoutMs` to override the default 30-second upstream timeout.
+
+## Request ID Tracing
+
+Every request gets a unique `X-Request-Id` header for end-to-end correlation.
+If the client sends an `X-Request-Id`, it's preserved; otherwise one is generated.
+
+```bash
+curl -v http://localhost/users/42
+# < X-Request-Id: req-a8f3b2c1d4e5
+```
+
+## Rate Limiting
+
+Per-IP sliding window rate limiting, disabled by default:
+
+```bash
+rip server --rate-limit=100                    # 100 requests per minute per IP
+rip server --rate-limit=1000 --rate-limit-window=3600000  # 1000 per hour
+```
+
+Returns `429 Too Many Requests` with `Retry-After` header when exceeded.
+
+## Security
+
+Built-in request smuggling defenses (always on):
+
+- Rejects conflicting `Content-Length` + `Transfer-Encoding` headers
+- Rejects multiple `Host` headers
+- Rejects null bytes in URLs
+- Rejects oversized URLs (>8KB)
+- Path traversal normalized by URL parser
+
+## WebSocket Passthrough
+
+For reverse proxying WebSocket connections to external upstreams:
+
+```coffee
+import { createWsPassthrough } from '@rip-lang/server/edge/forwarding.rip'
+
+# In a WebSocket handler, tunnel to an external upstream
+upstream = createWsPassthrough(clientWs, 'ws://backend:8080/ws')
+```
+
+Frames flow bidirectionally; close and error propagate between both ends.
 
 ## Roadmap
 
 > *Planned improvements for future releases:*
 
-- [ ] Request ID tracing for debugging
-- [ ] Metrics endpoint (Prometheus format)
-- [ ] Static file serving
-- [ ] Rate limiting
-- [ ] Performance benchmarks
+- [ ] Prometheus / OpenTelemetry metrics export
 
 ## License
 

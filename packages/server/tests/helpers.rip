@@ -1,0 +1,90 @@
+# test-helpers.rip — edge/helpers and forwarding response factory tests
+
+import { test, eq, ok } from '../test.rip'
+import { formatPort, maybeAddSecurityHeaders, buildStatusBody, buildRipdevUrl } from '../edge/forwarding.rip'
+import { watchUnavailableResponse, serverBusyResponse, serviceUnavailableResponse, gatewayTimeoutResponse, queueTimeoutResponse } from '../edge/forwarding.rip'
+
+# --- formatPort ---
+
+test "formatPort hides default HTTPS port", ->
+  eq formatPort('https', 443), ''
+
+test "formatPort hides default HTTP port", ->
+  eq formatPort('http', 80), ''
+
+test "formatPort shows non-default port", ->
+  eq formatPort('https', 3443), ':3443'
+  eq formatPort('http', 8080), ':8080'
+
+# --- maybeAddSecurityHeaders ---
+
+test "maybeAddSecurityHeaders sets HSTS when active", ->
+  headers = new Headers()
+  maybeAddSecurityHeaders(true, true, headers)
+  ok headers.has('strict-transport-security')
+
+test "maybeAddSecurityHeaders skips when not HTTPS", ->
+  headers = new Headers()
+  maybeAddSecurityHeaders(false, true, headers)
+  eq headers.has('strict-transport-security'), false
+
+test "maybeAddSecurityHeaders skips when HSTS disabled", ->
+  headers = new Headers()
+  maybeAddSecurityHeaders(true, false, headers)
+  eq headers.has('strict-transport-security'), false
+
+test "maybeAddSecurityHeaders does not overwrite existing", ->
+  headers = new Headers({ 'strict-transport-security': 'custom' })
+  maybeAddSecurityHeaders(true, true, headers)
+  eq headers.get('strict-transport-security'), 'custom'
+
+# --- buildRipdevUrl ---
+
+test "buildRipdevUrl with default port", ->
+  url = buildRipdevUrl('myapp', 'https', 443, formatPort)
+  eq url, 'https://myapp.ripdev.io'
+
+test "buildRipdevUrl with custom port", ->
+  url = buildRipdevUrl('myapp', 'https', 3443, formatPort)
+  eq url, 'https://myapp.ripdev.io:3443'
+
+# --- buildStatusBody ---
+
+test "buildStatusBody returns valid JSON", ->
+  hostIndex = new Map([['localhost', 'app1']])
+  body = buildStatusBody(Date.now() - 5000, 2, hostIndex, '1.0.0', 'myapp', 80, 443, (-> Date.now()))
+  parsed = JSON.parse(body)
+  eq parsed.status, 'healthy'
+  eq parsed.workers, 2
+  eq parsed.app, 'myapp'
+  ok parsed.hosts.includes('localhost')
+
+test "buildStatusBody degraded when no workers", ->
+  hostIndex = new Map()
+  body = buildStatusBody(Date.now(), 0, hostIndex, '1.0', 'app', 80, null, (-> Date.now()))
+  parsed = JSON.parse(body)
+  eq parsed.status, 'degraded'
+
+# --- Response factories ---
+
+test "watchUnavailableResponse returns 503", ->
+  res = watchUnavailableResponse()
+  eq res.status, 503
+  eq res.headers.get('Retry-After'), '2'
+
+test "serverBusyResponse returns 503", ->
+  res = serverBusyResponse()
+  eq res.status, 503
+  eq res.headers.get('Retry-After'), '1'
+
+test "serviceUnavailableResponse returns 503", ->
+  res = serviceUnavailableResponse()
+  eq res.status, 503
+
+test "gatewayTimeoutResponse returns 504", ->
+  res = gatewayTimeoutResponse()
+  eq res.status, 504
+
+test "queueTimeoutResponse returns 504", ->
+  res = queueTimeoutResponse()
+  eq res.status, 504

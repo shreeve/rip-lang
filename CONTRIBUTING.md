@@ -262,6 +262,24 @@ bun test/runner.js test/rip/functions.rip # Specific file
 bun --no-cache test/runner.js test/rip    # Clear Bun cache
 ```
 
+### UI Test Policy
+
+The `packages/ui` suite now has browser automation and accessibility checks.
+Use these commands from the repo root:
+
+```bash
+bun run test:ui:chromium  # Fast smoke for local iteration
+bun run test:ui           # Full browser matrix (Chromium/Firefox/WebKit)
+bun run test:ui:axe       # Optional axe pass (critical issues fail)
+```
+
+Run `test:ui:chromium` while iterating on UI work, then run `test:ui` before
+merging. Run `test:ui:axe` before release candidates or when touching ARIA,
+focus, keyboard, dialog/popover behavior, or gallery demos.
+
+CI enforces the UI lane for relevant path changes, so PRs get automated browser
+coverage by default.
+
 ---
 
 ## Key Concepts

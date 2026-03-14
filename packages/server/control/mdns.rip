@@ -1,0 +1,53 @@
+# ==============================================================================
+# control/mdns.rip — mDNS and LAN detection helpers
+# ==============================================================================
+
+export getLanIP = (networkInterfacesFn) ->
+  try
+    nets = networkInterfacesFn()
+    for name, addrs of nets
+      for addr in addrs
+        continue if addr.internal or addr.family isnt 'IPv4'
+        continue if addr.address.startsWith('169.254.')  # Link-local
+        return addr.address
+  null
+
+export stopMdnsAdvertisements = (mdnsProcesses) ->
+  for [host, proc] as mdnsProcesses
+    try
+      proc.kill()
+      p "rip-server: stopped advertising #{host} via mDNS"
+  mdnsProcesses.clear()
+
+export startMdnsAdvertisement = (host, mdnsProcesses, getLanIP, flags, formatPort, publishUrl) ->
+  return unless host.endsWith('.local')
+  return if mdnsProcesses.has(host)
+
+  lanIP = getLanIP()
+  unless lanIP
+    p "rip-server: unable to detect LAN IP for mDNS advertisement of #{host}"
+    return
+
+  port = flags.httpsPort or flags.httpPort or 80
+  protocol = if flags.httpsPort then 'https' else 'http'
+  serviceType = if flags.httpsPort then '_https._tcp' else '_http._tcp'
+  serviceName = host.replace('.local', '')
+
+  try
+    proc = Bun.spawn [
+      'dns-sd', '-P'
+      serviceName
+      serviceType
+      'local'
+      String(port)
+      host
+      lanIP
+    ],
+      stdout: 'ignore'
+      stderr: 'ignore'
+
+    mdnsProcesses.set(host, proc)
+    url = "#{protocol}://#{host}#{formatPort(protocol, port)}"
+    publishUrl(url)
+  catch e
+    console.error "rip-server: failed to advertise #{host} via mDNS:", e.message

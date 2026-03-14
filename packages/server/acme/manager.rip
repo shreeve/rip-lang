@@ -1,0 +1,107 @@
+# ==============================================================================
+# acme/manager.rip — ACME certificate lifecycle orchestrator
+# ==============================================================================
+
+import { loadOrCreateAccountKey, generateCertKeyPair, exportPrivateKeyPem, generateCsr } from './crypto.rip'
+import { createClient, setAccountKey, newAccount, newOrder, getAuthorization, getHttp01Challenge, keyAuthorization, respondToChallenge, pollAuthorizationStatus, pollOrderStatus, finalizeOrder, downloadCert, LETS_ENCRYPT, LETS_ENCRYPT_STAGING } from './client.rip'
+import { defaultCertDir, saveCert, loadCert, needsRenewal } from './store.rip'
+
+export createAcmeManager = (options = {}) ->
+  certDir = options.certDir or defaultCertDir()
+  staging = options.staging or false
+  directoryUrl = if staging then LETS_ENCRYPT_STAGING else LETS_ENCRYPT
+  challengeStore = options.challengeStore or null
+  onCertRenewed = options.onCertRenewed or (->)
+  renewalTimer = null
+
+  manager =
+    certDir: certDir
+    staging: staging
+    directoryUrl: directoryUrl
+    challengeStore: challengeStore
+    onCertRenewed: onCertRenewed
+
+    obtainCert: (domain) ->
+      p "rip-acme: obtaining cert for #{domain}#{if staging then ' (staging)' else ''}"
+
+      # Load or create account key
+      account = loadOrCreateAccountKey(certDir)
+
+      # Create ACME client and register account
+      client = createClient!(directoryUrl)
+      setAccountKey(client, account.privateKey, account.publicJwk)
+      newAccount!(client)
+
+      # Create order
+      { orderUrl, order } = newOrder!(client, [domain])
+
+      # Process authorizations
+      for authUrl in order.authorizations
+        auth = getAuthorization!(client, authUrl)
+        continue if auth.status is 'valid'
+
+        challenge = getHttp01Challenge(auth)
+        unless challenge
+          throw new Error("No HTTP-01 challenge available for #{domain}")
+
+        # Set challenge token for the HTTP server to serve
+        keyAuth = keyAuthorization(challenge.token, client.publicJwk)
+        if challengeStore
+          challengeStore.set(challenge.token, keyAuth)
+
+        try
+          # Tell CA we're ready
+          respondToChallenge!(client, challenge.url)
+
+          # Wait for authorization to be validated
+          pollAuthorizationStatus!(client, authUrl)
+        finally
+          # Always clean up challenge token, even on failure
+          challengeStore.remove(challenge.token) if challengeStore
+
+      # Generate cert key and CSR
+      certKey = generateCertKeyPair()
+      certKeyPem = exportPrivateKeyPem(certKey)
+      csrB64 = generateCsr(domain, certKeyPem)
+
+      # Finalize order with CSR
+      finalizeOrder!(client, order.finalize, csrB64)
+
+      # Poll until cert is ready
+      completedOrder = pollOrderStatus!(client, orderUrl)
+      unless completedOrder.certificate
+        throw new Error('ACME order completed but no certificate URL returned')
+
+      # Download cert chain
+      certPem = downloadCert!(client, completedOrder.certificate)
+
+      # Store cert and key
+      saveCert(certDir, domain, certPem, certKeyPem)
+      p "rip-acme: cert obtained and stored for #{domain}"
+
+      { cert: certPem, key: certKeyPem }
+
+    renewIfNeeded: (domain) ->
+      if needsRenewal(certDir, domain)
+        p "rip-acme: cert for #{domain} needs renewal"
+        result = manager.obtainCert!(domain)
+        manager.onCertRenewed(domain, result)
+        return true
+      false
+
+    startRenewalLoop: (domains, intervalMs = 12 * 60 * 60 * 1000) ->
+      manager.stopRenewalLoop()
+      check = ->
+        for domain in domains
+          try manager.renewIfNeeded!(domain)
+          catch e
+            console.error "rip-acme: renewal failed for #{domain}:", e.message
+      renewalTimer = setInterval(check, intervalMs)
+      # Run first check after a short delay
+      setTimeout(check, 5000)
+
+    stopRenewalLoop: ->
+      clearInterval(renewalTimer) if renewalTimer
+      renewalTimer = null
+
+  manager

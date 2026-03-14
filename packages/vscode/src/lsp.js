@@ -234,12 +234,16 @@ function publishDiagnostics(filePath) {
         if (startPos.line < 0) continue;
 
         const message = tc.cleanDiagnosticMessage(ts.flattenDiagnosticMessageText(d.messageText, '\n'));
+        const tags = [];
+        if (d.reportsUnnecessary) tags.push(1);
+        if (d.reportsDeprecated) tags.push(2);
         diagnostics.push({
           range: { start: startPos, end: endPos },
           severity: d.category === 1 ? 1 : d.category === 0 ? 2 : d.category === 2 ? 4 : 3,
           code: d.code,
           source: 'rip',
           message,
+          tags: tags.length > 0 ? tags : undefined,
         });
       }
     } catch (e) {
@@ -581,6 +585,10 @@ function unwrapReactiveType(display) {
       if (wrapper === 'Signal') display = display.replace(/\bconst\b/, 'let');
     }
   }
+  display = display.replace(/\b__RipProps<['"](\w+)['"]>/g, '<$1> props');
+  display = display.replace(/\b__RipElementMap\b/g, 'ElementMap');
+  display = display.replace(/\b__RipEvents\b/g, 'EventHandlers');
+  display = display.replace(/\b__ripEl\b/g, 'element');
   return display;
 }
 
@@ -813,6 +821,22 @@ function detectComponentContext(srcLine, col) {
   if (!wantValues && !wantProps) wantProps = true;
 
   return { component, existingProps, propValues, currentProp, wantValues, wantProps };
+}
+
+// Detect whether the cursor is inside a render block. Walks up from the
+// current line to find an ancestor `render` keyword at lower indentation.
+function isInRenderBlock(srcLines, lineIndex) {
+  const line = srcLines[lineIndex];
+  if (!line) return false;
+  const curIndent = line.length - line.trimStart().length;
+  for (let i = lineIndex - 1; i >= 0; i--) {
+    const prev = srcLines[i];
+    if (!prev || prev.trim() === '') continue;
+    const prevIndent = prev.length - prev.trimStart().length;
+    if (prevIndent < curIndent && /^\s*render\s*$/.test(prev)) return true;
+    if (prevIndent === 0) break;
+  }
+  return false;
 }
 
 // ── Semantic tokens ────────────────────────────────────────────────
@@ -1148,8 +1172,10 @@ connection.onCompletion((params) => {
       }
     }
 
-    // Space/colon triggered outside component context — don't fall through to TS
-    if (params.context?.triggerCharacter === ' ' || params.context?.triggerCharacter === ':') return [];
+    // Space/colon triggered outside component/render context — don't fall through to TS
+    if (params.context?.triggerCharacter === ' ' || params.context?.triggerCharacter === ':') {
+      if (!isInRenderBlock(srcLines, params.position.line)) return [];
+    }
   }
 
   // TypeScript completions
@@ -1253,6 +1279,29 @@ connection.onDefinition((params) => {
         uri: pathToUri(compInfo.source),
         range: { start: { line: compInfo.line, character: 0 }, end: { line: compInfo.line, character: 0 } },
       }];
+    }
+
+    // Import go-to-definition — resolve import paths directly
+    const srcLine = doc.getText().split('\n')[params.position.line];
+    const fromMatch = srcLine?.match(/from\s+['"]([^'"]+)['"]/);
+    if (fromMatch) {
+      let importPath = fromMatch[1];
+      if (!path.isAbsolute(importPath)) importPath = path.resolve(path.dirname(fp), importPath);
+      if (!importPath.endsWith('.rip') && fs.existsSync(importPath + '.rip')) importPath += '.rip';
+      if (fs.existsSync(importPath)) {
+        if (word && word !== 'from' && word !== 'import') {
+          const targetSrc = fs.readFileSync(importPath, 'utf8');
+          const targetLines = targetSrc.split('\n');
+          const pat = new RegExp(`(?:^|export\\s+)(?:def\\s+|type\\s+|interface\\s+)?${word}\\s*[=(:]`);
+          for (let i = 0; i < targetLines.length; i++) {
+            if (pat.test(targetLines[i])) {
+              const col = targetLines[i].indexOf(word);
+              return [{ uri: pathToUri(importPath), range: { start: { line: i, character: Math.max(0, col) }, end: { line: i, character: Math.max(0, col) + word.length } } }];
+            }
+          }
+        }
+        return [{ uri: pathToUri(importPath), range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } } }];
+      }
     }
   }
 

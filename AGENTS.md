@@ -283,7 +283,7 @@ rip -cm example.rip
 | `.=`        | Method assign    | `x .= trim()`                |
 | `?.=`       | Optional assign  | `el?.style.display = "none"` |
 | `=`         | Render text      | `= item.textContent`         |
-| `*`         | Merge assign     | `*obj = {a: 1}`              |
+| `*>`        | Merge assign     | `*>obj = {a: 1}`             |
 | `not in`    | Not in           | `x not in arr`               |
 | `loop n`    | Repeat N         | `loop 5 -> body`             |
 | `it`        | Implicit param   | `-> it > 5`                  |
@@ -344,6 +344,40 @@ The receiving function detects mode via `kind(args[0])`:
 - `'array'` with `.raw` → tagged template (strings + values separated)
 - `'array'` without `.raw` → plain argv array (direct exec)
 - `'string'` → regular string (shell interpretation)
+
+### Error Suppression (`try` without `catch`)
+
+In Rip, a bare `try` compiles to `try {} catch {}` in JavaScript. This is
+functionally identical to `try ... catch then null`, which adds a useless
+`null;` statement inside the catch. **Prefer bare `try`** for fire-and-forget
+error suppression — it's cleaner and the intent is obvious.
+
+```coffee
+# Preferred — bare try
+try unlinkSync(path)
+try server.stop()
+
+# Avoid — redundant catch
+try unlinkSync(path) catch then null
+try
+  proc.kill()
+catch
+  null
+```
+
+Use an explicit `catch` only when the catch body does actual work:
+
+```coffee
+# Good — catch does real work
+try
+  pkg = JSON.parse(readFileSync(path, 'utf8'))
+catch
+  console.log 'version unknown'
+
+# Good — catch with error variable
+catch e
+  console.error "failed: #{e.message}"
+```
 
 ### Reactivity
 

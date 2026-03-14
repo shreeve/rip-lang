@@ -1070,6 +1070,64 @@ _ariaPopupDismiss = (open, popup, close, els = [], repos = null) ->
     document.removeEventListener 'mousedown', onDown
     window.removeEventListener   'scroll',    onScroll, true
 
+# bindPopover — sync reactive open state with native Popover API
+# open: reactive boolean
+# popover: element or lazy getter (=> el)
+# setOpen: callback that receives actual native open state (true/false)
+# source: optional control element or lazy getter used as popover invoker
+_ariaBindPopover = (open, popover, setOpen, source = null) ->
+  get = (x) -> if typeof x is 'function' then x() else x
+  el = get(popover)
+  return unless el
+  return unless Object.hasOwn(HTMLElement.prototype, 'togglePopover')
+
+  onToggle = (e) -> setOpen?(e.newState is 'open')
+  el.addEventListener 'toggle', onToggle
+
+  shown = el.matches(':popover-open')
+  desired = !!open
+  if shown isnt desired
+    src = get(source)
+    opts = if src and desired then { force: desired, source: src } else { force: desired }
+    try
+      el.togglePopover(opts)
+    catch
+      # If the element cannot be toggled right now (for example detached),
+      # keep runtime stable; effect will retry on the next reactive pass.
+      null
+
+  -> el.removeEventListener 'toggle', onToggle
+
+# bindDialog — sync reactive open state with native <dialog>
+# open: reactive boolean
+# dialog: dialog element or lazy getter (=> el)
+# setOpen: callback invoked when native state changes
+# dismissable: false prevents Esc/cancel close
+_ariaBindDialog = (open, dialog, setOpen, dismissable = true) ->
+  get = (x) -> if typeof x is 'function' then x() else x
+  el = get(dialog)
+  return unless el?.showModal?
+
+  onCancel = (e) ->
+    unless dismissable
+      e.preventDefault()
+      return
+    setOpen?(false)
+
+  onClose = -> setOpen?(false)
+  el.addEventListener 'cancel', onCancel
+  el.addEventListener 'close', onClose
+
+  if open and not el.open
+    try el.showModal()
+    catch then null
+  if not open and el.open
+    el.close()
+
+  ->
+    el.removeEventListener 'cancel', onCancel
+    el.removeEventListener 'close', onClose
+
 _ariaRovingNav = (e, h, orientation = 'vertical') ->
   return if e.isComposing               # IME guard
   vert = orientation isnt 'horizontal'
@@ -1152,6 +1210,7 @@ _ariaUnlockScroll = (instance) ->
 
 globalThis.__aria ??= {
   listNav: _ariaListNav, rovingNav: _ariaRovingNav, popupDismiss: _ariaPopupDismiss,
+  bindPopover: _ariaBindPopover, bindDialog: _ariaBindDialog,
   positionBelow: _ariaPositionBelow, trapFocus: _ariaTrapFocus, wireAria: _ariaWireAria,
   lockScroll: _ariaLockScroll, unlockScroll: _ariaUnlockScroll,
 }

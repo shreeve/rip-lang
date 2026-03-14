@@ -1,0 +1,95 @@
+# security.rip — rate limiter, request validation, and request ID tests
+
+import { test, eq, ok } from '../test.rip'
+import { createRateLimiter, rateLimitResponse } from '../edge/ratelimit.rip'
+import { validateRequest } from '../edge/security.rip'
+import { generateRequestId } from '../edge/forwarding.rip'
+
+# --- Request ID ---
+
+test "generateRequestId returns req- prefixed hex", ->
+  id = generateRequestId()
+  ok id.startsWith('req-')
+  eq id.length, 16  # "req-" + 12 hex chars (6 random bytes)
+
+test "generateRequestId is unique", ->
+  a = generateRequestId()
+  b = generateRequestId()
+  ok a isnt b
+
+# --- Rate limiter ---
+
+test "createRateLimiter allows requests under limit", ->
+  limiter = createRateLimiter(5, 60000)
+  result = limiter.check('1.2.3.4')
+  eq result.allowed, true
+  eq result.remaining, 4
+  limiter.stop()
+
+test "rate limiter rejects when limit exceeded", ->
+  limiter = createRateLimiter(3, 60000)
+  limiter.check('1.2.3.4')
+  limiter.check('1.2.3.4')
+  limiter.check('1.2.3.4')
+  result = limiter.check('1.2.3.4')
+  eq result.allowed, false
+  ok result.retryAfter > 0
+  limiter.stop()
+
+test "rate limiter tracks IPs independently", ->
+  limiter = createRateLimiter(2, 60000)
+  limiter.check('1.1.1.1')
+  limiter.check('1.1.1.1')
+  result = limiter.check('2.2.2.2')
+  eq result.allowed, true
+  limiter.stop()
+
+test "rate limiter reset clears IP", ->
+  limiter = createRateLimiter(2, 60000)
+  limiter.check('1.1.1.1')
+  limiter.check('1.1.1.1')
+  limiter.reset('1.1.1.1')
+  result = limiter.check('1.1.1.1')
+  eq result.allowed, true
+  limiter.stop()
+
+test "rateLimitResponse returns 429", ->
+  res = rateLimitResponse(30)
+  eq res.status, 429
+  eq res.headers.get('Retry-After'), '30'
+
+# --- Request validation ---
+
+test "validateRequest accepts normal request", ->
+  req = new Request('http://localhost/hello')
+  result = validateRequest(req)
+  eq result.valid, true
+
+test "validateRequest rejects CL+TE conflict", ->
+  req = new Request 'http://localhost/',
+    headers: { 'content-length': '10', 'transfer-encoding': 'chunked' }
+  result = validateRequest(req)
+  eq result.valid, false
+  eq result.status, 400
+
+test "validateRequest rejects multiple Host headers", ->
+  req = new Request 'http://localhost/',
+    headers: { host: 'a.com, b.com' }
+  result = validateRequest(req)
+  eq result.valid, false
+
+test "URL parser normalizes basic path traversal", ->
+  # Bun's URL parser resolves .. before it reaches validateRequest
+  url = new URL('http://localhost/../../../etc/passwd')
+  eq url.pathname, '/etc/passwd'  # already normalized — safe
+
+test "validateRequest rejects double-encoded traversal", ->
+  # %252e%252e decodes to %2e%2e on first pass, then .. on second
+  req = new Request('http://localhost/%252e%252e/%252e%252e/etc/passwd')
+  result = validateRequest(req)
+  eq result.valid, false
+
+test "validateRequest accepts normal paths with dots", ->
+  req = new Request('http://localhost/api/v1.0/users')
+  result = validateRequest(req)
+  eq result.valid, true

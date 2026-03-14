@@ -26,7 +26,7 @@ export Input = component
 
 export Button = component
   @variant:: "primary" | "secondary"
-  @type:: string := "button"
+  @type:: "submit" | "reset" | "button" := "button"
   @shape:: "rounded" | "pill" := "rounded"
   @loading:: boolean := false
   @disabled:: boolean := false
@@ -50,7 +50,7 @@ export Form = component
   password := ""
   loading := false
 
-  onSubmit: (e) ->
+  onSubmit: (e:: Event) ->
     e.preventDefault()
     loading = true
     p "Signing in: #{email}"
@@ -141,46 +141,39 @@ export TypeTestComp = component
   render
     null
 
-# ── Gap: render block type safety ──
+# ── Partially resolved: render block type safety ──
 #
-# Render blocks are partially checked. Child component constructor calls
-# (e.g. `Button variant: "primary"`) are emitted as `new Button({...})`
-# in the shadow `_render()` method, so TS checks prop types and catches
-# undefined variable references in prop values (e.g. `loading: loadingz`).
+# Render blocks are now partially type-checked via __ripEl():
 #
-# However, everything else in render is stripped:
-#   - Own-template conditionals like `if labelz` go uncaught
-#   - Invalid tag names like `fieldsetz` compile silently
-#   - HTML attribute values and text expressions are unchecked
+# What works (see 12-intrinsics.rip for full coverage):
+#   - Intrinsic element attributes are type-checked against lib.dom.d.ts
+#     (e.g. `button disabled: "yes"` errors — disabled expects boolean)
+#   - Event handlers get contextual typing via HTMLElementEventMap
+#     (`@click: (e) -> ...` knows `e` is MouseEvent for inline handlers)
+#   - Global attrs (class, style, data-*, aria-*) accepted on any element
+#   - Child component constructor calls still checked as before
 #
-# Two levels of improvement are possible:
+# Remaining gaps:
+#   - Own-template conditionals like `if labelz` still go uncaught
+#   - Text expressions (`= expr`) are unchecked
 #
-# 1. Compiler-level tag validation (quick win) — reject lowercase names
-#    not in TEMPLATE_TAGS. Catches typos like `fieldsetz` at compile
-#    time. ~10 lines in rewriteRender() or generateNode().
-#
-# 2. Type-level element checking (full IntelliSense) — emit typed
-#    `__el('fieldset', { ... })` calls in the stub's _render(), backed
-#    by a `declare function __el<K extends keyof HTMLElementTagNameMap>`
-#    helper. TypeScript would then reject invalid tag names, reject
-#    invalid attributes, and provide attribute completions. Requires
-#    stub generator changes + LSP cursor mapping into render blocks.
-#
-# In React/TSX, `<fieldset>` maps to `JSX.IntrinsicElements['fieldset']`
-# which resolves to all DOM properties — typos are caught and every
-# valid attribute is offered in autocomplete (see 09-components.tsx).
+# Non-issues (clarified during review):
+#   - Unknown lowercase names like `fieldsetz` are treated as expressions
+#     (variable refs / method calls), which TS catches via "Cannot find name"
+#     in typed files — this is correct behavior, not a gap
+#   - Event typing is global (same HTMLElementEventMap for all elements) —
+#     this matches how the DOM actually works; React has the same behavior
 
-# ── Gap: event handler typing ──
+# ── Partially resolved: event handler typing ──
 #
-# Handler parameters are untyped — `(e) ->` compiles to `(e) =>`
-# where `e` is `any`. In the Form component above, `onSubmit: (e) ->`
-# doesn't know `e` is a SubmitEvent. No way to annotate event params
-# in render block handlers either (`@click: (e) ->` — `e` is `any`).
+# Inline event handlers on intrinsic elements now get contextual typing:
+#   @click: (e) -> ...   # e is MouseEvent (from HTMLElementEventMap)
+#   @submit: (e) -> ...  # e is SubmitEvent
 #
-# In TypeScript/React, event handlers get typed automatically:
-#   onSubmit={(e: React.FormEvent) => { ... }}
-# and inline handlers on JSX elements infer the event type from
-# the element (e.g. onClick on <button> gives MouseEvent).
+# Named method refs like `@submit: @handleSubmit` remain untyped —
+# TS can only contextually type inline function literals, not already-
+# declared methods. Workaround: annotate the param explicitly:
+#   handleSubmit: (e:: SubmitEvent) -> e.preventDefault()
 #
 # Tracked in AGENTS.md gap table under "Event handler typing".
 

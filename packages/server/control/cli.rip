@@ -1,0 +1,123 @@
+# ==============================================================================
+# control/cli.rip — CLI parsing, subcommands, and output
+# ==============================================================================
+
+# --- Argv helpers ---
+
+export getKV = (argv, prefix) ->
+  for tok in argv
+    return tok.slice(prefix.length) if tok.startsWith(prefix)
+  undefined
+
+export findAppPathToken = (argv, existsSyncFn, isAbsoluteFn, resolveFn, cwdFn) ->
+  for i in [2...argv.length]
+    tok = argv[i]
+    pathPart = if tok.includes('@') then tok.split('@')[0] else tok
+    looksLikePath = pathPart.includes('/') or pathPart.startsWith('.') or pathPart.endsWith('.rip') or pathPart.endsWith('.ts')
+    try
+      return pathPart if looksLikePath and existsSyncFn(if isAbsoluteFn(pathPart) then pathPart else resolveFn(cwdFn(), pathPart))
+  undefined
+
+export computeSocketPrefix = (argv, resolveAppEntryFn, existsSyncFn, isAbsoluteFn, resolveFn, cwdFn) ->
+  override = getKV(argv, '--socket-prefix=')
+  return override if override
+  appTok = findAppPathToken(argv, existsSyncFn, isAbsoluteFn, resolveFn, cwdFn)
+  if appTok
+    try
+      { appName } = resolveAppEntryFn(appTok)
+      return "rip_#{appName}"
+  'rip_server'
+
+# --- Output ---
+
+export runVersionOutput = (argv, readFileSyncFn, packageJsonPath) ->
+  return false unless '--version' in argv or '-v' in argv
+  try
+    pkg = JSON.parse(readFileSyncFn(packageJsonPath, 'utf8'))
+    p "rip-server v#{pkg.version}"
+  catch
+    p 'rip-server (version unknown)'
+  true
+
+export runHelpOutput = (argv) ->
+  return false unless '--help' in argv or '-h' in argv
+  p """
+    rip-server - Pure Rip application server
+
+    Usage:
+      rip serve [options] [app-path] [app-name]
+      rip serve [options] [app-path]@<alias1>,<alias2>,...
+
+    Options:
+      -h, --help              Show this help
+      -v, --version           Show version
+      --watch=<glob>          Watch glob pattern (default: *.rip)
+      --static                Disable hot reload and file watching
+      --env=<mode>            Set environment (dev, production)
+      --debug                 Enable debug logging
+      --quiet                 Suppress URL lines (app prints its own)
+
+    Network:
+      http                    HTTP only (no TLS)
+      https                   HTTPS with trusted *.ripdev.io cert (default)
+      <port>                  Listen on specific port
+      --cert=<path>           TLS certificate file (overrides shipped cert)
+      --key=<path>            TLS key file (overrides shipped cert)
+      --hsts                  Enable HSTS header
+      --no-redirect-http      Don't redirect HTTP to HTTPS
+
+    ACME (auto TLS):
+      --acme                  Enable auto TLS via Let's Encrypt
+      --acme-staging          Use Let's Encrypt staging CA (for testing)
+      --acme-domain=<domain>  Domain for ACME cert (required with --acme)
+
+    Realtime (WebSocket):
+      --realtime-path=<path>  WebSocket endpoint path (default: /realtime)
+
+    Workers:
+      w:<n>                   Number of workers (default: cores/2)
+      w:auto                  One worker per core
+      r:<n>,<s>s              Restart policy: max requests, max seconds
+
+    Examples:
+      rip serve               Start with ./index.rip (watches *.rip)
+      rip serve myapp         Start with app name "myapp"
+      rip serve http          HTTP only (no TLS)
+      rip serve --static w:8  Production: no reload, 8 workers
+
+    If no index.rip or index.ts is found, a built-in static file server
+    activates with directory indexes, auto-detected MIME types, and
+    hot-reload. Create an index.rip to customize server behavior.
+  """
+  true
+
+# --- Subcommands ---
+
+export runStopSubcommand = (argv, prefix, getPidFilePathFn, existsSyncFn, readFileSyncFn, killFn, spawnSyncFn, importMetaPath) ->
+  return false unless 'stop' in argv
+  pidFile = getPidFilePathFn(prefix)
+  try
+    if existsSyncFn(pidFile)
+      pid = parseInt(readFileSyncFn(pidFile, 'utf8').trim())
+      killFn(pid, 'SIGTERM')
+      p "rip-server: sent SIGTERM to process #{pid}"
+    else
+      p "rip-server: no PID file found at #{pidFile}, trying pkill..."
+      spawnSyncFn(['pkill', '-f', importMetaPath])
+  catch e
+    console.error "rip-server: stop failed: #{e.message}"
+  true
+
+export runListSubcommand = (argv, prefix, getControlSocketPathFn, fetchFn, exitFn) ->
+  return false unless 'list' in argv
+  controlUnix = getControlSocketPathFn(prefix)
+  try
+    res = fetchFn!('http://localhost/registry', { unix: controlUnix, method: 'GET' })
+    throw new Error("list failed: #{res.status}") unless res.ok
+    j = res.json!
+    hosts = if Array.isArray(j?.hosts) then j.hosts else []
+    p if hosts.length then hosts.join('\n') else '(no hosts)'
+  catch e
+    console.error "list command failed: #{e?.message or e}"
+    exitFn(1)
+  true

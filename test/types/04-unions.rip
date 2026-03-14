@@ -20,7 +20,6 @@ type LogLevel =
   | "fatal"
 
 # Discriminated unions — named variants composed into a union
-# (inline object syntax produces malformed .d.ts, so use named types)
 type Circle =
   kind: "circle"
   radius: number
@@ -57,10 +56,10 @@ console.log "rect:", rect
 
 # ── Switch narrowing ──
 #
-# Gap: Rip can't narrow discriminated unions in switch branches.
-# TypeScript knows shape is { kind: 'circle', radius } in the
-# circle case — accessing .radius is safe. In Rip, rip check
-# can't verify that .radius exists after checking kind.
+# Discriminated union narrowing works in the compiled JS — TypeScript
+# narrows shape to { kind: 'circle', radius } in the circle case.
+# Accessing .radius is safe because the switch/when compiles to
+# switch/case which TS narrows correctly.
 
 def area(shape:: Shape):: number
   switch shape.kind
@@ -81,19 +80,9 @@ badLevel:: LogLevel = "trace"
 # @ts-expect-error — number not assignable to Result
 badResult:: Result = 0
 
-# ── Gap: enum exhaustiveness ──
+# ── Fixed: enum exhaustiveness ──
 #
-# In TypeScript, a switch on a discriminated union or enum with no
-# default branch must cover all cases — the compiler enforces this.
-# For example, adding a new Shape variant (`Triangle`) without
-# updating the `area` function above would produce:
-#   "Function lacks ending return statement and return type does
-#    not include 'undefined'."
-#
-# In Rip, `rip check` doesn't verify switch exhaustiveness. The
-# `area` function above handles "circle" and "rect" — if we added
-# a Triangle variant to Shape, `rip check` would not flag the
-# missing case. The error only surfaces at runtime (returning
-# undefined instead of a number).
-#
-# Tracked in AGENTS.md gap table under "Enum exhaustiveness".
+# With strict: true, adding a new Shape variant (e.g. Triangle)
+# without updating the switch produces:
+#   "Type 'number | undefined' is not assignable to type 'number'"
+# because TS knows the switch doesn't cover all cases.

@@ -1,0 +1,75 @@
+# ==============================================================================
+# control/control.rip — paths, worker registry, and control socket handlers
+# ==============================================================================
+
+# --- Socket and PID paths ---
+
+export getWorkerSocketPath = (prefix, id) -> "/tmp/#{prefix}.#{id}.sock"
+export getControlSocketPath = (prefix) -> "/tmp/#{prefix}.ctl.sock"
+export getPidFilePath = (prefix) -> "/tmp/#{prefix}.pid"
+
+# --- Worker registry ---
+
+registerWorker = (sockets, availableWorkers, payload) ->
+  version = if typeof payload.version is 'number' then payload.version else null
+  exists = sockets.find((x) -> x.socket is payload.socket)
+  unless exists
+    worker = { socket: payload.socket, inflight: 0, version, workerId: payload.workerId }
+    sockets.push(worker)
+    availableWorkers.push(worker)
+  { version }
+
+removeWorkerById = (sockets, availableWorkers, workerId) ->
+  # Mutate in-place to avoid race conditions with concurrent join/quit
+  i = sockets.length
+  while i-- > 0
+    sockets.splice(i, 1) if sockets[i].workerId is workerId
+  i = availableWorkers.length
+  while i-- > 0
+    availableWorkers.splice(i, 1) if availableWorkers[i].workerId is workerId
+  return
+
+# --- Control socket handlers ---
+
+jsonOk = -> new Response(JSON.stringify({ ok: true }), { headers: { 'content-type': 'application/json' } })
+jsonBad = -> new Response(JSON.stringify({ ok: false }), { status: 400, headers: { 'content-type': 'application/json' } })
+
+export handleWorkerControl = (req, state) ->
+  return { handled: false } unless req.method is 'POST'
+  try
+    j = req.json!
+    if j?.op is 'join' and typeof j.socket is 'string' and typeof j.workerId is 'number'
+      { version } = registerWorker(state.sockets, state.availableWorkers, j)
+      newestVersion = state.newestVersion
+      newestVersion = if newestVersion is null then version else Math.max(newestVersion, version) if version?
+      return
+        handled: true
+        response: jsonOk()
+        sockets: state.sockets
+        availableWorkers: state.availableWorkers
+        newestVersion
+
+    if j?.op is 'quit' and typeof j.workerId is 'number'
+      removeWorkerById(state.sockets, state.availableWorkers, j.workerId)
+      return
+        handled: true
+        response: jsonOk()
+  { handled: true, response: jsonBad(), sockets: state.sockets, availableWorkers: state.availableWorkers, newestVersion: state.newestVersion }
+
+export handleWatchControl = (req, registerWatch, watchDirs) ->
+  return { handled: false } unless req.method is 'POST'
+  try
+    j = req.json!
+    if j?.op is 'watch' and typeof j.prefix is 'string' and Array.isArray(j.dirs)
+      registerWatch(j.prefix)
+      watchDirs(j.prefix, j.dirs) if j.dirs.length > 0
+      return { handled: true, response: jsonOk() }
+  { handled: true, response: jsonBad() }
+
+export handleRegistryControl = (req, hostIndex) ->
+  return { handled: false } unless req.method is 'GET'
+  hostMap = {}
+  for [host, appId] as hostIndex
+    (hostMap[appId] = hostMap[appId] or []).push(host)
+  response = new Response(JSON.stringify({ ok: true, hosts: Array.from(hostIndex.keys()), apps: hostMap }), { headers: { 'content-type': 'application/json' } })
+  { handled: true, response }
