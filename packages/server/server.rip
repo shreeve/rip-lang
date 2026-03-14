@@ -22,6 +22,7 @@ import { maybeAddSecurityHeaders as edgeMaybeAddSecurityHeaders } from './edge/s
 import { buildStatusBody as edgeBuildStatusBody, buildRipdevUrl as edgeBuildRipdevUrl } from './edge/status.rip'
 import { watchUnavailableResponse, serverBusyResponse, serviceUnavailableResponse, gatewayTimeoutResponse, queueTimeoutResponse } from './edge/responses.rip'
 import { buildUpstreamResponse, forwardOnceWithTimeout } from './edge/forwarding.rip'
+import { processQueuedJob, drainQueueOnce } from './edge/queue.rip'
 import { getWorkerSocketPath, getControlSocketPath, getPidFilePath } from './control/paths.rip'
 import { handleWorkerControl, handleWatchControl, handleRegistryControl } from './control/control-fetch.rip'
 import { getLanIP as controlGetLanIP } from './control/lan.rip'
@@ -947,26 +948,22 @@ class Server
     forwardOnceWithTimeout(req, socketPath, @flags.readTimeoutMs, gatewayTimeoutResponse)
 
   processJob: (job, worker) ->
-    @forwardToWorker(job.req, worker)
-      .then((r) -> job.resolve(r))
-      .catch((e) -> job.resolve(if e instanceof Response then e else new Response('Internal error', { status: 500 })))
-      .finally =>
-        @inflightTotal--
-        setImmediate => @drainQueue()
+    processQueuedJob(job, worker, @forwardToWorker.bind(@), =>
+      @inflightTotal--
+      setImmediate => @drainQueue()
+    )
 
   drainQueue: ->
-    while @inflightTotal < Math.max(1, @sockets.length) and @availableWorkers.length > 0
-      job = @queue.shift()
-      break unless job
-      if nowMs() - job.enqueuedAt > @flags.queueTimeoutMs
-        job.resolve(queueTimeoutResponse())
-        continue
-      @inflightTotal++
-      worker = @getNextAvailableSocket()
-      unless worker
-        @inflightTotal--
-        break
-      @processJob(job, worker)
+    @inflightTotal = drainQueueOnce(
+      @inflightTotal,
+      @sockets.length,
+      (=> @availableWorkers.length),
+      (=> @queue.shift()),
+      ((job) => nowMs() - job.enqueuedAt > @flags.queueTimeoutMs),
+      queueTimeoutResponse,
+      @getNextAvailableSocket.bind(@),
+      @processJob.bind(@)
+    )
 
   startControl: ->
     ctlPath = getControlSocketPath(@flags.socketPrefix)

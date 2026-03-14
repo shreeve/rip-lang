@@ -1,0 +1,27 @@
+# ==============================================================================
+# edge/queue.rip — queue drain and job processing helpers
+# ==============================================================================
+
+resolveJobError = (e) ->
+  if e instanceof Response then e else new Response('Internal error', { status: 500 })
+
+export processQueuedJob = (job, worker, forwardToWorker, onFinally) ->
+  forwardToWorker(job.req, worker)
+    .then((r) -> job.resolve(r))
+    .catch((e) -> job.resolve(resolveJobError(e)))
+    .finally(-> onFinally())
+
+export drainQueueOnce = (inflightTotal, socketsLength, availableWorkersLength, shiftJob, isJobTimedOut, queueTimeoutResponse, getNextAvailableSocket, processJob) ->
+  while inflightTotal < Math.max(1, socketsLength) and availableWorkersLength() > 0
+    job = shiftJob()
+    break unless job
+    if isJobTimedOut(job)
+      job.resolve(queueTimeoutResponse())
+      continue
+    inflightTotal++
+    worker = getNextAvailableSocket()
+    unless worker
+      inflightTotal--
+      break
+    processJob(job, worker)
+  inflightTotal
