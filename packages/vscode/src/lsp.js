@@ -642,14 +642,129 @@ function extractUnionValues(typeStr) {
 
 // Resolve a type name to its definition string from all compiled DTS.
 // e.g. "Status" → '"pending" | "active" | "done"'
+// Handles both single-line (`type X = A | B;`) and multi-line (`type X = {\n...\n};`) DTS.
 function resolveTypeFromDTS(typeName) {
   for (const [, entry] of compiled) {
     if (!entry.dts) continue;
-    const re = new RegExp('^(?:export\\s+)?type\\s+' + typeName + '\\s*=\\s*(.+?)\\s*;?$', 'm');
+    const re = new RegExp('^(?:export\\s+)?type\\s+' + typeName + '\\s*=\\s*', 'm');
     const m = entry.dts.match(re);
-    if (m) return m[1].trim();
+    if (!m) continue;
+    const start = m.index + m[0].length;
+    // Collect the type body, tracking brace/bracket depth
+    let depth = 0, i = start;
+    const dts = entry.dts;
+    while (i < dts.length) {
+      const ch = dts[i];
+      if (ch === '{' || ch === '<' || ch === '(') depth++;
+      else if (ch === '}' || ch === '>' || ch === ')') {
+        depth--;
+        if (depth < 0) break;
+      }
+      else if (ch === ';' && depth === 0) break;
+      i++;
+    }
+    // Include the closing brace if we stopped at depth going below zero
+    if (i < dts.length && dts[i] === '}') i++;
+    return dts.slice(start, i).trim().replace(/;\s*$/, '');
   }
   return null;
+}
+
+// Resolve a property's string literal union values from a discriminant
+// expression like "shape.kind", using source-level type annotations and DTS.
+// Returns string literal values like ['"circle"', '"rect"'] or [].
+function resolveDiscriminantValues(srcLines, switchLine, switchExpr) {
+  // Parse discriminant: e.g. "shape.kind" → varName="shape", propChain=["kind"]
+  const parts = switchExpr.split('.');
+  if (parts.length < 2) return [];
+  const varName = parts[0];
+  const propChain = parts.slice(1);
+
+  // Walk backwards from the switch line to find the variable's type annotation
+  let varType = null;
+  for (let i = switchLine; i >= 0; i--) {
+    const li = srcLines[i];
+    // Match parameter: (name:: Type) or name:: Type
+    const paramRe = new RegExp('\\b' + varName + '\\s*::\\s*([\\w.]+)');
+    const pm = li.match(paramRe);
+    if (pm) { varType = pm[1].trim(); break; }
+  }
+  if (!varType) return [];
+
+  // Try DTS first, then fall back to source-level type definitions
+  let typeDef = resolveTypeFromDTS(varType) || resolveTypeFromSource(srcLines, varType);
+  if (!typeDef) return [];
+
+  // Expand named union members: "Circle | Rect" → individual type bodies
+  // Split on top-level | (not inside braces)
+  const members = splitTopLevelUnion(typeDef);
+
+  // For each member, resolve if it's a named type, then extract the property
+  const propValues = new Set();
+  for (let member of members) {
+    member = member.trim();
+    // If it's a named type reference, resolve it
+    if (/^\w+$/.test(member)) {
+      const resolved = resolveTypeFromDTS(member) || resolveTypeFromSource(srcLines, member);
+      if (resolved) member = resolved;
+    }
+    // Extract the property value from object type: { kind: "circle", ... }
+    const propName = propChain[propChain.length - 1];
+    const propRe = new RegExp('\\b' + propName + '\\s*:\\s*(["\'][^"\']*["\'])');
+    const pm = member.match(propRe);
+    if (pm) propValues.add(pm[1]);
+  }
+
+  return [...propValues];
+}
+
+// Resolve a type name from Rip source lines (fallback when DTS unavailable).
+// Handles: type X = { ... } and type X = A | B
+function resolveTypeFromSource(srcLines, typeName) {
+  const re = new RegExp('^type\\s+' + typeName + '\\s*=\\s*(.*)');
+  for (let i = 0; i < srcLines.length; i++) {
+    const m = srcLines[i].match(re);
+    if (!m) continue;
+    let body = m[1].trim();
+    // Single-line type: type X = A | B
+    if (!body.startsWith('{') || (body.includes('}') && body.indexOf('}') < body.length)) {
+      // Check if it's a complete single-line definition
+      if (!body.startsWith('{') || body.includes('}')) return body.replace(/\s*$/, '');
+    }
+    // Multi-line object type: collect until matching }
+    let depth = 0;
+    for (let j = i; j < srcLines.length; j++) {
+      for (const ch of srcLines[j]) {
+        if (ch === '{') depth++;
+        else if (ch === '}') depth--;
+      }
+      if (depth <= 0) {
+        // Join all lines from i to j
+        const full = srcLines.slice(i, j + 1).join(' ');
+        const fm = full.match(re);
+        return fm ? fm[1].trim() : body;
+      }
+    }
+    return body;
+  }
+  return null;
+}
+
+// Split a type string on top-level | (not inside { } or < >)
+function splitTopLevelUnion(typeStr) {
+  const parts = [];
+  let depth = 0, start = 0;
+  for (let i = 0; i < typeStr.length; i++) {
+    const ch = typeStr[i];
+    if (ch === '{' || ch === '<' || ch === '(') depth++;
+    else if (ch === '}' || ch === '>' || ch === ')') depth--;
+    else if (ch === '|' && depth === 0) {
+      parts.push(typeStr.slice(start, i));
+      start = i + 1;
+    }
+  }
+  parts.push(typeStr.slice(start));
+  return parts;
 }
 
 function getWordAtPosition(text, position) {
@@ -1195,6 +1310,61 @@ connection.onCompletion((params) => {
             sortText: String(i).padStart(3, '0'),
           };
         });
+      }
+    }
+
+    // When-clause completions — discriminated union values for switch/when
+    const whenMatch = srcLine.match(/^\s*when\s+(["'])/);
+    if (whenMatch) {
+      const quote = whenMatch[1];
+      const whenIdx = srcLine.indexOf('when');
+      const quoteStart = srcLine.indexOf(quote, whenIdx + 4);
+      const quoteEnd = srcLine.indexOf(quote, quoteStart + 1);
+      const col = params.position.character;
+      // Only trigger when cursor is inside the when-clause string literal
+      if (col > quoteStart && (quoteEnd < 0 || col <= quoteEnd)) {
+        // Walk backwards to find parent switch at a lower indent level
+        const indent = srcLine.match(/^\s*/)[0].length;
+        let switchLine = -1, switchExpr = null;
+        for (let i = params.position.line - 1; i >= 0; i--) {
+          const li = srcLines[i];
+          const liIndent = li.match(/^\s*/)[0].length;
+          if (liIndent < indent) {
+            const sm = li.match(/^\s*switch\s+(.+)/);
+            if (sm) { switchLine = i; switchExpr = sm[1].trim(); }
+            break;
+          }
+        }
+        if (switchExpr && switchLine >= 0) {
+          const values = resolveDiscriminantValues(srcLines, switchLine, switchExpr);
+          if (values.length > 0) {
+            // Collect existing when values to exclude
+            const existing = new Set();
+            for (let i = params.position.line - 1; i >= 0; i--) {
+              const wm = srcLines[i].match(/^\s*when\s+["']([^"']*)["']/);
+              if (wm) existing.add(wm[1]);
+              else if (/^\s*switch\b/.test(srcLines[i])) break;
+            }
+            for (let i = params.position.line + 1; i < srcLines.length; i++) {
+              const wm = srcLines[i].match(/^\s*when\s+["']([^"']*)["']/);
+              if (wm) existing.add(wm[1]);
+              else if (!/^\s*(when|else|$|#)/.test(srcLines[i])) break;
+            }
+            const prevCh = col > 0 ? srcLine[col - 1] : '';
+            const inQuotes = prevCh === '"' || prevCh === "'";
+            return values
+              .filter(v => !existing.has(v.replace(/^["']|["']$/g, '')))
+              .map((v, i) => {
+                const bare = v.replace(/^["']|["']$/g, '');
+                return {
+                  label: bare,
+                  kind: 12,
+                  insertText: inQuotes ? bare : v.startsWith('"') ? v : `"${v}"`,
+                  sortText: String(i).padStart(3, '0'),
+                };
+              });
+          }
+        }
       }
     }
 
