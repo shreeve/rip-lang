@@ -1,0 +1,14 @@
+# ==============================================================================
+# control/startup-reporting.rip — startup URL/reporting helpers
+# ==============================================================================
+
+export computeHideUrls = (appEntry, joinFn, dirnameFn, existsSyncFn) ->
+  setupFile = joinFn(dirnameFn(appEntry), 'setup.rip')
+  existsSyncFn(setupFile)
+
+export logStartupSummary = (server, flags, buildRipdevUrlFn, formatPortFn) ->
+  httpOnly = flags.httpsPort is null
+  protocol = if httpOnly then 'http' else 'https'
+  port = flags.httpsPort or flags.httpPort or 80
+  url = buildRipdevUrlFn(flags.appName, protocol, port, formatPortFn)
+  console.log "rip-server: rip=#{server.ripVersion} server=#{server.serverVersion} app=#{flags.appName} workers=#{flags.workers} url=#{url}/server"
