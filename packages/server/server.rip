@@ -767,7 +767,9 @@ class Server
         queue: snap.counters.queue
         workers: snap.counters.workers
         acme: snap.counters.acme
+        websocket: snap.counters.websocket
       gauges: snap.gauges
+      realtime: if @realtimeHub then getRealtimeStats(@realtimeHub) else null
       hosts: Array.from(@appRegistry.hostIndex.keys())
     headers = new Headers({ 'content-type': 'application/json', 'cache-control': 'no-cache' })
     @maybeAddSecurityHeaders(headers)

@@ -21,6 +21,9 @@ export createMetrics = ->
     workerRestarts: 0
     acmeRenewals: 0
     acmeFailures: 0
+    wsConnections: 0
+    wsMessages: 0
+    wsDeliveries: 0
 
     # Record a request latency (seconds)
     recordLatency: (seconds) ->
@@ -72,6 +75,7 @@ export createMetrics = ->
         queue: { queued: m.queued, timeouts: m.queueTimeouts, shed: m.queueShed }
         workers: { restarts: m.workerRestarts }
         acme: { renewals: m.acmeRenewals, failures: m.acmeFailures }
+        websocket: { connections: m.wsConnections, messages: m.wsMessages, deliveries: m.wsDeliveries }
       gauges:
         workersActive: apps.reduce(((sum, a) -> sum + a.workers), 0)
         inflight: totalInflight
