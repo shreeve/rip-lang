@@ -1,0 +1,32 @@
+# ==============================================================================
+# control/cli-commands.rip — CLI stop/list subcommand handlers
+# ==============================================================================
+
+export runStopSubcommand = (argv, prefix, getPidFilePathFn, existsSyncFn, readFileSyncFn, killFn, spawnSyncFn, importMetaPath) ->
+  return false unless 'stop' in argv
+  pidFile = getPidFilePathFn(prefix)
+  try
+    if existsSyncFn(pidFile)
+      pid = parseInt(readFileSyncFn(pidFile, 'utf8').trim())
+      killFn(pid, 'SIGTERM')
+      console.log "rip-server: sent SIGTERM to process #{pid}"
+    else
+      console.log "rip-server: no PID file found at #{pidFile}, trying pkill..."
+      spawnSyncFn(['pkill', '-f', importMetaPath])
+  catch e
+    console.error "rip-server: stop failed: #{e.message}"
+  true
+
+export runListSubcommand = (argv, prefix, getControlSocketPathFn, fetchFn, exitFn) ->
+  return false unless 'list' in argv
+  controlUnix = getControlSocketPathFn(prefix)
+  try
+    res = fetchFn!('http://localhost/registry', { unix: controlUnix, method: 'GET' })
+    throw new Error("list failed: #{res.status}") unless res.ok
+    j = res.json!
+    hosts = if Array.isArray(j?.hosts) then j.hosts else []
+    console.log if hosts.length then hosts.join('\n') else '(no hosts)'
+  catch e
+    console.error "list command failed: #{e?.message or e}"
+    exitFn(1)
+  true

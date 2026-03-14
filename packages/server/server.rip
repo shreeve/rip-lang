@@ -30,6 +30,7 @@ import { startMdnsAdvertisement as controlStartMdnsAdvertisement, stopMdnsAdvert
 import { registerWatchGroup, handleWatchGroup, broadcastWatchChange } from './control/watch-sse.rip'
 import { createCleanup, installShutdownHandlers } from './control/lifecycle.rip'
 import { computeSocketPrefix as cliComputeSocketPrefix } from './control/cli-helpers.rip'
+import { runStopSubcommand, runListSubcommand } from './control/cli-commands.rip'
 
 # Match capture holder for Rip's =~
 _ = null
@@ -1091,35 +1092,12 @@ main = ->
     """
     return
 
-  # Subcommand: stop
-  if 'stop' in process.argv
-    prefix = cliComputeSocketPrefix(process.argv, resolveAppEntry, existsSync, isAbsolute, resolve, (-> process.cwd()))
-    pidFile = getPidFilePath(prefix)
-    try
-      if existsSync(pidFile)
-        pid = parseInt(readFileSync(pidFile, 'utf8').trim())
-        process.kill(pid, 'SIGTERM')
-        console.log "rip-server: sent SIGTERM to process #{pid}"
-      else
-        console.log "rip-server: no PID file found at #{pidFile}, trying pkill..."
-        Bun.spawnSync(['pkill', '-f', import.meta.path])
-    catch e
-      console.error "rip-server: stop failed: #{e.message}"
+  # Subcommands: stop/list
+  prefix = cliComputeSocketPrefix(process.argv, resolveAppEntry, existsSync, isAbsolute, resolve, (-> process.cwd()))
+  if runStopSubcommand(process.argv, prefix, getPidFilePath, existsSync, readFileSync, process.kill.bind(process), Bun.spawnSync, import.meta.path)
     return
 
-  # Subcommand: list
-  if 'list' in process.argv
-    prefix = cliComputeSocketPrefix(process.argv, resolveAppEntry, existsSync, isAbsolute, resolve, (-> process.cwd()))
-    controlUnix = getControlSocketPath(prefix)
-    try
-      res = fetch!('http://localhost/registry', { unix: controlUnix, method: 'GET' })
-      throw new Error("list failed: #{res.status}") unless res.ok
-      j = res.json!
-      hosts = if Array.isArray(j?.hosts) then j.hosts else []
-      console.log if hosts.length then hosts.join('\n') else '(no hosts)'
-    catch e
-      console.error "list command failed: #{e?.message or e}"
-      process.exit(1)
+  if runListSubcommand(process.argv, prefix, getControlSocketPath, fetch, process.exit.bind(process))
     return
 
   # Normal startup
