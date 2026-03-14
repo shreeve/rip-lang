@@ -49,7 +49,7 @@ export Dialog = component
     @emit 'close'
 
   onKeydown: (e) ->
-    if e.key is 'Escape' and dialogStack[dialogStack.length - 1] is this
+    if e.key is 'Escape'
       e.preventDefault()
       @close() if @dismissable
 

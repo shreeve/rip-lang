@@ -9389,7 +9389,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   }
   // src/browser.js
   var VERSION = "3.13.108";
-  var BUILD_DATE = "2026-03-13@23:35:48GMT";
+  var BUILD_DATE = "2026-03-14@05:14:37GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -9690,6 +9690,8 @@ ${indented}`);
   var __batch;
   var __effect;
   var __state;
+  var _ariaBindDialog;
+  var _ariaBindPopover;
   var _ariaListNav;
   var _ariaLockScroll;
   var _ariaModalStack;
@@ -10863,6 +10865,66 @@ ${indented}`);
       return window.removeEventListener("scroll", onScroll, true);
     };
   };
+  _ariaBindPopover = function(open, popover, setOpen, source = null) {
+    let desired, el, get, onToggle, opts, shown, src;
+    get = function(x) {
+      return typeof x === "function" ? x() : x;
+    };
+    el = get(popover);
+    if (!el)
+      return;
+    if (!Object.hasOwn(HTMLElement.prototype, "togglePopover"))
+      return;
+    onToggle = function(e) {
+      return setOpen?.(e.newState === "open");
+    };
+    el.addEventListener("toggle", onToggle);
+    shown = el.matches(":popover-open");
+    desired = !!open;
+    if (shown !== desired) {
+      src = get(source);
+      opts = src && desired ? { force: desired, source: src } : { force: desired };
+      try {
+        el.togglePopover(opts);
+      } catch {}
+    }
+    return function() {
+      return el.removeEventListener("toggle", onToggle);
+    };
+  };
+  _ariaBindDialog = function(open, dialog, setOpen, dismissable = true) {
+    let el, get, onCancel, onClose;
+    get = function(x) {
+      return typeof x === "function" ? x() : x;
+    };
+    el = get(dialog);
+    if (!el?.showModal)
+      return;
+    onCancel = function(e) {
+      if (!dismissable) {
+        e.preventDefault();
+        return;
+      }
+      return setOpen?.(false);
+    };
+    onClose = function() {
+      return setOpen?.(false);
+    };
+    el.addEventListener("cancel", onCancel);
+    el.addEventListener("close", onClose);
+    if (open && !el.open) {
+      try {
+        el.showModal();
+      } catch {}
+    }
+    if (!open && el.open) {
+      el.close();
+    }
+    return function() {
+      el.removeEventListener("cancel", onCancel);
+      return el.removeEventListener("close", onClose);
+    };
+  };
   _ariaRovingNav = function(e, h, orientation = "vertical") {
     let horz, vert;
     if (e.isComposing)
@@ -10973,7 +11035,7 @@ ${indented}`);
       return window.scrollTo(0, scrollY);
     }
   };
-  globalThis.__aria ??= { listNav: _ariaListNav, rovingNav: _ariaRovingNav, popupDismiss: _ariaPopupDismiss, positionBelow: _ariaPositionBelow, trapFocus: _ariaTrapFocus, wireAria: _ariaWireAria, lockScroll: _ariaLockScroll, unlockScroll: _ariaUnlockScroll };
+  globalThis.__aria ??= { listNav: _ariaListNav, rovingNav: _ariaRovingNav, popupDismiss: _ariaPopupDismiss, bindPopover: _ariaBindPopover, bindDialog: _ariaBindDialog, positionBelow: _ariaPositionBelow, trapFocus: _ariaTrapFocus, wireAria: _ariaWireAria, lockScroll: _ariaLockScroll, unlockScroll: _ariaUnlockScroll };
   globalThis.ARIA ??= globalThis.__aria;
 
   // docs/dist/_entry.js

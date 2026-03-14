@@ -865,6 +865,7 @@ rip server [flags] [app-path]@<alias1>,<alias2>,...
 | `--realtime-path=<p>` | WebSocket endpoint path | `/realtime` |
 | `--rate-limit=<n>` | Max requests per IP per window | Disabled (0) |
 | `--rate-limit-window=<ms>` | Rate limit window in ms | `60000` (1 min) |
+| `--publish-secret=<s>` | Bearer token for `/publish` endpoint | None (open) |
 
 ### Subcommands
 
@@ -1090,6 +1091,20 @@ Server-side code can broadcast messages without a WebSocket connection:
 curl -X POST http://localhost/publish \
   -d '{"@": ["/lobby"], "announcement": "Server restarting in 5 minutes"}'
 ```
+
+**Production security:** Set a publish secret to require authentication:
+
+```bash
+# Via flag
+rip server --publish-secret=my-secret-token
+
+# Via environment variable
+RIP_PUBLISH_SECRET=my-secret-token rip server
+```
+
+When set, `/publish` requires `Authorization: Bearer my-secret-token`. Without a
+secret, `/publish` is open to any client that can reach a valid host — fine for
+development, but always set a secret in production.
 
 ## Diagnostics & Observability
 
@@ -1360,15 +1375,19 @@ Forward requests to external HTTP upstreams with proper header handling:
 import { get } from '@rip-lang/server'
 import { proxyToUpstream } from '@rip-lang/server/edge/forwarding.rip'
 
-get '/api/*' -> proxyToUpstream!(@req.raw, 'http://backend:8080')
+get '/api/*' -> proxyToUpstream!(@req.raw, 'http://backend:8080', { clientIp: @req.header('x-real-ip') or '127.0.0.1' })
 ```
 
 Features:
 - Strips hop-by-hop headers (Connection, Transfer-Encoding, etc.)
-- Adds `X-Forwarded-For`, `X-Forwarded-Proto`, `X-Forwarded-Host`
+- Sets `X-Forwarded-For` to actual client IP (overwrites, never appends — prevents spoofing)
+- Adds `X-Forwarded-Proto` and `X-Forwarded-Host`
 - Streaming response passthrough
 - Timeout with 504, connect failure with 502
 - Manual redirect handling (no auto-follow)
+
+Pass `clientIp` in options so upstream services see the real client address.
+Pass `timeoutMs` to override the default 30-second upstream timeout.
 
 ## Request ID Tracing
 
