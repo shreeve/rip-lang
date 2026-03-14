@@ -67,9 +67,9 @@ Each file exercises a specific type feature. Status key:
 | 05-interfaces.rip  | `interface`, `extends`, optional members                    | pass   |                                                                   |
 | 06-functions.rip   | Typed functions, arrows, and array transforms               | pass   | 21 negative tests (7 param + 6 return + 3 array + 5 destructured) |
 | 07-integration.rip | Cross-module imports of typed functions                     | pass   | Cross-file type flow via .d.ts                                    |
-| 08-reactive.rip    | `:: T :=`, `:: T ~=`, `:: T =!`, `:: T ~>`                  | pass   | Tier 1 — reactive state annotations                               |
+| 08-reactive.rip    | `:: T :=`, `:: T ~=`, `:: T =!`, `:: T ~>`                  | pass   | Reactive state annotations                               |
 | 09-components.rip  | `@prop:: T :=`, `@prop:: T`, default validation             | pass   | Required props, default-vs-type validation, 4 negative body tests |
-| 10-validation.rip  | Runtime validation + async/await (`!` operator)             | pass   | Tier 2 — Rip erases types; TS+Zod validates                       |
+| 10-validation.rip  | Runtime validation + async/await (`!` operator)             | pass   | Rip erases types; TS+Zod validates                       |
 | 11-inference.rip   | Type inference on unannotated variables                     | pass   | Top-level works; block/destructure/any are gaps                   |
 | 12-intrinsics.rip  | Intrinsic tags, attributes, events, global attrs            | pass   | `__ripEl` validates via lib.dom; wrong types caught; event params typed |
 
@@ -107,15 +107,15 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 | Category                     | Tested In      | IDE check                                                                                                                  |
 | ---------------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Readonly / immutability      | 03-structural  | Squiggle on reassignment of `=!` const lands on correct line                                                               |
+| Strict mode                  | *(all files)*  | No new false-positive squiggles in previously clean typed files                                                            |
 | Nullable safety              | 01-basic       | Null access squiggle lands on `.prop` access, not the variable declaration                                                 |
+| Readonly / immutability      | 03-structural  | Squiggle on reassignment of `=!` const lands on correct line                                                               |
 | Union narrowing + exhaust.   | 04-unions      | Squiggle lands on the correct `when` branch, not a neighboring line                                                        |
+| Inline discriminated unions  | 04-unions      | Hover on union type shows the union members, not internal names                                                            |
 | Element type inheritance     | 09-components  | `InheritedInput autofocus: true` — no error; `autofocus: "yes"` — squiggle on `"yes"`                                     |
 | Event handler typing         | 09, 12         | `@click: (e) ->` — hover on `e` shows `MouseEvent`                                                                        |
-| Intrinsic element typing     | 12-intrinsics  | `button disabled: "yes"` shows squiggle on `"yes"`, not a parse error on the whole block                                  |
 | Type inference (split decl.) | 11-inference   | Hover on inferred variable shows correct type, squiggle on misuse lands correctly                                          |
-| Strict mode                  | *(all files)*  | No new false-positive squiggles in previously clean typed files                                                            |
-| Inline discriminated unions  | 04-unions      | Hover on union type shows the union members, not internal names                                                            |
+| Intrinsic element typing     | 12-intrinsics  | `button disabled: "yes"` shows squiggle on `"yes"`, not a parse error on the whole block                                  |
 | Go-to-def on imports         | *(IDE only)*   | Cmd+click on imported symbol jumps to correct line in target `.rip` file                                                   |
 | Unused variable dimming      | *(IDE only)*   | Unused variable text is visually dimmed (not just underlined)                                                              |
 
