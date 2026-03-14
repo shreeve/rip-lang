@@ -2,9 +2,9 @@
 # test/runner.rip — server test harness
 # ==============================================================================
 #
-# Run: rip packages/server/test/runner.rip
+# Run: rip packages/server/test.rip
 #
-# Discovers and runs all *.rip files in test/tests/
+# Discovers and runs all *.rip files in tests/
 # ==============================================================================
 
 import { readdirSync } from 'node:fs'

@@ -1,9 +1,9 @@
 # test-acme.rip — ACME challenges, store, and crypto tests
 
-import { test, eq, ok } from '../runner.rip'
-import { createChallengeStore, handleChallengeRequest } from '../../acme/challenges.rip'
-import { defaultCertDir, ensureDir, saveCert, loadCert, needsRenewal, listCerts } from '../../acme/store.rip'
-import { b64url, generateAccountKeyPair, exportPublicJwk, thumbprint, signJws } from '../../acme/crypto.rip'
+import { test, eq, ok } from '../test.rip'
+import { createChallengeStore, handleChallengeRequest } from '../acme/challenges.rip'
+import { defaultCertDir, ensureDir, saveCert, loadCert, needsRenewal, listCerts } from '../acme/store.rip'
+import { b64url, generateAccountKeyPair, exportPublicJwk, thumbprint, signJws } from '../acme/crypto.rip'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

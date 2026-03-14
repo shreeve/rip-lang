@@ -2,8 +2,8 @@
 # test-metrics.rip — edge/metrics.rip tests
 # ==============================================================================
 
-import { test, eq, ok, near } from '../runner.rip'
-import { createMetrics } from '../../edge/metrics.rip'
+import { test, eq, ok, near } from '../test.rip'
+import { createMetrics } from '../edge/metrics.rip'
 
 test "createMetrics returns object with counters", ->
   m = createMetrics()

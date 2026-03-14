@@ -10,7 +10,7 @@
 # Run: rip packages/server/test/tests/read.rip
 #
 
-import { read, requestContext } from '../../api.rip'
+import { read, requestContext } from '../api.rip'
 
 # ==============================================================================
 # Test harness
