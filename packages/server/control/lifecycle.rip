@@ -11,7 +11,7 @@ export logStartupSummary = (server, flags, buildRipdevUrlFn, formatPortFn) ->
   protocol = if httpOnly then 'http' else 'https'
   port = flags.httpsPort or flags.httpPort or 80
   url = buildRipdevUrlFn(flags.appName, protocol, port, formatPortFn)
-  console.log "rip-server: rip=#{server.ripVersion} server=#{server.serverVersion} app=#{flags.appName} workers=#{flags.workers} url=#{url}/server"
+  p "rip-server: rip=#{server.ripVersion} server=#{server.serverVersion} app=#{flags.appName} workers=#{flags.workers} url=#{url}/server"
 
 FORCED_EXIT_MS = 35000
 
@@ -20,7 +20,7 @@ export createCleanup = (pidFile, server, manager, unlinkSyncFn, fetchFn, process
   ->
     return if called
     called = true
-    console.log 'rip-server: shutting down...'
+    p 'rip-server: shutting down...'
 
     # Safety net: force exit if graceful shutdown stalls
     setTimeout (-> processObj.exit(1)), FORCED_EXIT_MS

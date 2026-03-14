@@ -22,7 +22,7 @@ export createAcmeManager = (options = {}) ->
     onCertRenewed: onCertRenewed
 
     obtainCert: (domain) ->
-      console.log "rip-acme: obtaining cert for #{domain}#{if staging then ' (staging)' else ''}"
+      p "rip-acme: obtaining cert for #{domain}#{if staging then ' (staging)' else ''}"
 
       # Load or create account key
       account = loadOrCreateAccountKey(certDir)
@@ -76,13 +76,13 @@ export createAcmeManager = (options = {}) ->
 
       # Store cert and key
       saveCert(certDir, domain, certPem, certKeyPem)
-      console.log "rip-acme: cert obtained and stored for #{domain}"
+      p "rip-acme: cert obtained and stored for #{domain}"
 
       { cert: certPem, key: certKeyPem }
 
     renewIfNeeded: (domain) ->
       if needsRenewal(certDir, domain)
-        console.log "rip-acme: cert for #{domain} needs renewal"
+        p "rip-acme: cert for #{domain} needs renewal"
         result = manager.obtainCert!(domain)
         manager.onCertRenewed(domain, result)
         return true

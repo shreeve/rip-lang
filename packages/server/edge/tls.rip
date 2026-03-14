@@ -12,7 +12,7 @@ export printCertSummary = (certPem) ->
     subject = x.subject.split(/,/)[0]?.trim() or x.subject
     issuer = x.issuer.split(/,/)[0]?.trim() or x.issuer
     exp = new Date(x.validTo)
-    console.log "rip-server: tls cert #{subject} issued by #{issuer} expires #{exp.toISOString()}"
+    p "rip-server: tls cert #{subject} issued by #{issuer} expires #{exp.toISOString()}"
 
 export loadTlsMaterial = (flags, serverDir, acmeLoadCertFn) ->
   # Explicit cert/key paths
@@ -24,13 +24,13 @@ export loadTlsMaterial = (flags, serverDir, acmeLoadCertFn) ->
       return { cert, key }
     catch
       console.error 'Failed to read TLS cert/key from provided paths. Use http or fix paths.'
-      process.exit(2)
+      exit 2
 
   # ACME-managed cert (if domain is configured)
   if acmeLoadCertFn and (flags.acme or flags.acmeStaging) and flags.acmeDomain
     acmeCert = acmeLoadCertFn(flags.acmeDomain)
     if acmeCert
-      console.log "rip-server: using ACME cert for #{flags.acmeDomain}"
+      p "rip-server: using ACME cert for #{flags.acmeDomain}"
       printCertSummary(acmeCert.cert)
       return { cert: acmeCert.cert, key: acmeCert.key }
 
@@ -46,4 +46,4 @@ export loadTlsMaterial = (flags, serverDir, acmeLoadCertFn) ->
   catch e
     console.error "rip-server: failed to load TLS certs from #{certsDir}: #{e.message}"
     console.error 'Use --cert/--key to provide your own, or use http to disable TLS.'
-    process.exit(2)
+    exit 2

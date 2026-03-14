@@ -64,5 +64,5 @@ export registerAppWatchDirs = (appWatchers, prefix, dirs, server, cwdFn) ->
       watchers.push(w)
     catch e
       rel = dir.replace(cwdFn() + '/', '')
-      console.warn "rip-server: watch skipped (#{e.code or 'error'}): #{rel}"
+      warn "rip-server: watch skipped (#{e.code or 'error'}): #{rel}"
   appWatchers.set prefix, { watchers, timer }

@@ -16,7 +16,7 @@ export runSetupMode = ->
       await fn()
   catch e
     console.error "rip-server: setup failed:", e
-    process.exit(1)
+    exit 1
 
 export runWorkerMode = ->
   workerId = parseInt(process.env.WORKER_ID or '0')
@@ -113,7 +113,7 @@ export runWorkerMode = ->
         workerState.handled++
         exceededReqs = workerState.handled >= maxRequests
         exceededTime = maxSeconds > 0 and (Date.now() - startedAtMs) / 1000 >= maxSeconds
-        setTimeout (-> process.exit(0)), 10 if exceededReqs or exceededTime
+        setTimeout (-> exit 0), 10 if exceededReqs or exceededTime
 
   selfJoin!
 
@@ -124,7 +124,7 @@ export runWorkerMode = ->
       await new Promise (r) -> setTimeout(r, 10)
     try server.stop()
     selfQuit!
-    process.exit(0)
+    exit 0
 
   process.on 'SIGTERM', shutdown
   process.on 'SIGINT', shutdown

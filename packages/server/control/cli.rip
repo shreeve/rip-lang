@@ -34,14 +34,14 @@ export runVersionOutput = (argv, readFileSyncFn, packageJsonPath) ->
   return false unless '--version' in argv or '-v' in argv
   try
     pkg = JSON.parse(readFileSyncFn(packageJsonPath, 'utf8'))
-    console.log "rip-server v#{pkg.version}"
+    p "rip-server v#{pkg.version}"
   catch
-    console.log 'rip-server (version unknown)'
+    p 'rip-server (version unknown)'
   true
 
 export runHelpOutput = (argv) ->
   return false unless '--help' in argv or '-h' in argv
-  console.log """
+  p """
     rip-server - Pure Rip application server
 
     Usage:
@@ -97,9 +97,9 @@ export runStopSubcommand = (argv, prefix, getPidFilePathFn, existsSyncFn, readFi
     if existsSyncFn(pidFile)
       pid = parseInt(readFileSyncFn(pidFile, 'utf8').trim())
       killFn(pid, 'SIGTERM')
-      console.log "rip-server: sent SIGTERM to process #{pid}"
+      p "rip-server: sent SIGTERM to process #{pid}"
     else
-      console.log "rip-server: no PID file found at #{pidFile}, trying pkill..."
+      p "rip-server: no PID file found at #{pidFile}, trying pkill..."
       spawnSyncFn(['pkill', '-f', importMetaPath])
   catch e
     console.error "rip-server: stop failed: #{e.message}"
@@ -113,7 +113,7 @@ export runListSubcommand = (argv, prefix, getControlSocketPathFn, fetchFn, exitF
     throw new Error("list failed: #{res.status}") unless res.ok
     j = res.json!
     hosts = if Array.isArray(j?.hosts) then j.hosts else []
-    console.log if hosts.length then hosts.join('\n') else '(no hosts)'
+    p if hosts.length then hosts.join('\n') else '(no hosts)'
   catch e
     console.error "list command failed: #{e?.message or e}"
     exitFn(1)

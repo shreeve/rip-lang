@@ -21,11 +21,11 @@ export test = (name, fn) ->
     result = fn()
     result! if result?.then  # await if async
     passed++
-    console.log "  ✓ #{name}"
+    p "  ✓ #{name}"
   catch e
     failed++
     failures.push { name, error: e.message or String(e) }
-    console.log "  ✗ #{name}: #{e.message or e}"
+    p "  ✗ #{name}: #{e.message or e}"
 
 export eq = (actual, expected) ->
   a = JSON.stringify(actual)
@@ -43,27 +43,27 @@ export near = (actual, expected, tolerance = 0.001) ->
 testDir = join(dirname(import.meta.path), 'server')
 files = readdirSync(testDir).filter((f) -> f.startsWith('test-') and f.endsWith('.rip')).sort()
 
-console.log "rip-server tests: #{files.length} files\n"
+p "rip-server tests: #{files.length} files\n"
 
 for file in files
-  console.log "  #{file}"
+  p "  #{file}"
   try
     import!(join(testDir, file))
   catch e
     failed++
     failures.push { name: "#{file} (load)", error: e.message or String(e) }
-    console.log "  ✗ #{file} failed to load: #{e.message or e}"
-  console.log ''
+    p "  ✗ #{file} failed to load: #{e.message or e}"
+  p ''
 
 # --- Summary ---
 
 total = passed + failed
 pct = if total > 0 then Math.round(passed / total * 100) else 0
-console.log "✓ #{passed} passing, ✗ #{failed} failing, ★ #{pct}% passing"
+p "✓ #{passed} passing, ✗ #{failed} failing, ★ #{pct}% passing"
 
 if failures.length > 0
   console.log "\nFailures:"
   for f in failures[0...20]
     console.log "  ✗ #{f.name}: #{f.error}"
 
-process.exit(if failed > 0 then 1 else 0)
+exit if failed > 0 then 1 else 0

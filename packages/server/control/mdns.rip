@@ -16,7 +16,7 @@ export stopMdnsAdvertisements = (mdnsProcesses) ->
   for [host, proc] as mdnsProcesses
     try
       proc.kill()
-      console.log "rip-server: stopped advertising #{host} via mDNS"
+      p "rip-server: stopped advertising #{host} via mDNS"
   mdnsProcesses.clear()
 
 export startMdnsAdvertisement = (host, mdnsProcesses, getLanIP, flags, formatPort, publishUrl) ->
@@ -25,7 +25,7 @@ export startMdnsAdvertisement = (host, mdnsProcesses, getLanIP, flags, formatPor
 
   lanIP = getLanIP()
   unless lanIP
-    console.log "rip-server: unable to detect LAN IP for mDNS advertisement of #{host}"
+    p "rip-server: unable to detect LAN IP for mDNS advertisement of #{host}"
     return
 
   port = flags.httpsPort or flags.httpPort or 80

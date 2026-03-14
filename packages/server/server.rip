@@ -111,7 +111,7 @@ logAccessJson = (app, req, res, totalSeconds, workerSeconds) ->
   url = new URL(req.url)
   len = res.headers.get('content-length')
   type = (res.headers.get('content-type') or '').split(';')[0] or undefined
-  console.log JSON.stringify
+  p JSON.stringify
     t: new Date().toISOString()
     app: app
     method: req.method or 'GET'
@@ -139,7 +139,7 @@ logAccessHuman = (app, req, res, totalSeconds, workerSeconds) ->
   contentType = (res.headers.get('content-type') or '').split(';')[0] or ''
   sub = if contentType.includes('/') then contentType.split('/')[1] else contentType
   type = (typeAbbrev[sub] or sub or '').padEnd(4)
-  console.log "#{timestamp} #{timezone} #{dur} │ #{status} #{type} #{size} │ #{method} #{path}"
+  p "#{timestamp} #{timezone} #{dur} │ #{status} #{type} #{size} │ #{method} #{path}"
 
 INTERNAL_HEADERS = new Set(['rip-worker-busy', 'rip-worker-id', 'rip-no-log'])
 
@@ -193,12 +193,12 @@ resolveAppEntry = (appPathInput) ->
     else if existsSync(two)
       entryPath = two
     else
-      console.log "rip-server: no index.rip found, serving static files from #{abs}\n             Create an index.rip to customize, or run 'rip server --help' for options."
+      p "rip-server: no index.rip found, serving static files from #{abs}\n             Create an index.rip to customize, or run 'rip server --help' for options."
       entryPath = defaultEntry
   else
     unless existsSync(abs)
       console.error "App path not found: #{abs}"
-      process.exit(2)
+      exit 2
     baseDir = dirname(abs)
     entryPath = abs
 
@@ -424,7 +424,7 @@ class Manager
       code = await proc.exited
       if code isnt 0
         console.error "rip-server: setup exited with code #{code}"
-        process.exit(1)
+        exit 1
 
     workers = @getWorkers()
     workers.length = 0
@@ -468,7 +468,7 @@ class Manager
             catch
               null
         catch e
-          console.warn "rip-server: directory watch failed: #{e.message}"
+          warn "rip-server: directory watch failed: #{e.message}"
 
   stop: ->
     for [appId, workers] as @appWorkers
@@ -652,7 +652,7 @@ class Server
               loc = "https://#{url.hostname}:#{httpsPort}#{url.pathname}#{url.search}"
               new Response(null, { status: 301, headers: { Location: loc } })
         catch
-          console.warn 'Warn: could not bind port 80 for HTTP→HTTPS redirect'
+          warn 'Warn: could not bind port 80 for HTTP→HTTPS redirect'
 
       @flags.httpPort = if @server then @server.port else 0
 
@@ -956,7 +956,7 @@ main = ->
     if runStopSubcommand(process.argv, prefix, getPidFilePath, existsSync, readFileSync, process.kill.bind(process), Bun.spawnSync, import.meta.path)
       return
 
-    if runListSubcommand(process.argv, prefix, getControlSocketPath, fetch, process.exit.bind(process))
+    if runListSubcommand(process.argv, prefix, getControlSocketPath, fetch, exit)
       return
 
   # Normal startup
@@ -985,7 +985,7 @@ main = ->
       staging: flags.acmeStaging
       challengeStore: svr.challengeStore
       onCertRenewed: (domain, result) ->
-        console.log "rip-acme: cert renewed for #{domain}, graceful restart needed"
+        p "rip-acme: cert renewed for #{domain}, graceful restart needed"
     svr.acmeManager = acmeMgr
     try acmeMgr.obtainCert!(flags.acmeDomain)
     catch e
