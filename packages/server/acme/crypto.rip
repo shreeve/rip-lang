@@ -1,0 +1,124 @@
+# ==============================================================================
+# acme/crypto.rip — ACME protocol crypto helpers (zero dependencies)
+# ==============================================================================
+
+import { generateKeyPairSync, createSign, createHash, createPrivateKey } from 'node:crypto'
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
+import { join, dirname } from 'node:path'
+
+# --- Base64url ---
+
+export b64url = (buf) ->
+  s = if typeof buf is 'string' then Buffer.from(buf).toString('base64') else Buffer.from(buf).toString('base64')
+  s.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+
+b64urlBuf = (buf) -> b64url(buf)
+
+# --- Key generation ---
+
+export generateAccountKeyPair = ->
+  generateKeyPairSync('ec', { namedCurve: 'P-256' })
+
+export generateCertKeyPair = ->
+  generateKeyPairSync('ec', { namedCurve: 'P-256' })
+
+export exportPrivateKeyPem = (keyPair) ->
+  keyPair.privateKey.export({ format: 'pem', type: 'pkcs8' })
+
+export exportPublicJwk = (keyPair) ->
+  jwk = keyPair.publicKey.export({ format: 'jwk' })
+  { kty: jwk.kty, crv: jwk.crv, x: jwk.x, y: jwk.y }
+
+# --- Account key persistence ---
+
+export loadOrCreateAccountKey = (storePath) ->
+  accountFile = join(storePath, 'account.json')
+  if existsSync(accountFile)
+    data = JSON.parse(readFileSync(accountFile, 'utf8'))
+    privKey = createPrivateKey({ key: Buffer.from(data.privateKeyPem), format: 'pem' })
+    pubJwk = data.publicJwk
+    return { privateKey: privKey, publicJwk: pubJwk }
+
+  pair = generateAccountKeyPair()
+  pubJwk = exportPublicJwk(pair)
+  privPem = exportPrivateKeyPem(pair)
+  mkdirSync(dirname(accountFile), { recursive: true }) unless existsSync(dirname(accountFile))
+  writeFileSync(accountFile, JSON.stringify({ publicJwk: pubJwk, privateKeyPem: privPem }), 'utf8')
+  { privateKey: pair.privateKey, publicJwk: pubJwk }
+
+# --- JWK Thumbprint (RFC 7638) ---
+
+export thumbprint = (jwk) ->
+  canonical = JSON.stringify({ crv: jwk.crv, kty: jwk.kty, x: jwk.x, y: jwk.y })
+  hash = createHash('sha256').update(canonical).digest()
+  b64url(hash)
+
+# --- JWS Signing (ES256 / ACME) ---
+
+derToRaw = (derSig) ->
+  # Convert DER-encoded ECDSA signature to raw r||s (64 bytes for P-256)
+  offset = 2
+  rLen = derSig[offset + 1]
+  r = derSig.slice(offset + 2, offset + 2 + rLen)
+  offset = offset + 2 + rLen
+  sLen = derSig[offset + 1]
+  s = derSig.slice(offset + 2, offset + 2 + sLen)
+  # Pad or trim to 32 bytes each
+  pad = (buf, len) ->
+    return buf.slice(buf.length - len) if buf.length > len
+    return buf if buf.length is len
+    out = Buffer.alloc(len)
+    buf.copy(out, len - buf.length)
+    out
+  Buffer.concat([pad(r, 32), pad(s, 32)])
+
+export signJws = (payload, url, nonce, privateKey, publicJwk, kid) ->
+  protectedHeader = if kid
+    { alg: 'ES256', kid, nonce, url }
+  else
+    { alg: 'ES256', jwk: publicJwk, nonce, url }
+
+  protectedB64 = b64url(JSON.stringify(protectedHeader))
+  payloadB64 = if payload is '' then '' else b64url(JSON.stringify(payload))
+
+  sigInput = "#{protectedB64}.#{payloadB64}"
+  signer = createSign('SHA256')
+  signer.update(sigInput)
+  derSig = signer.sign(privateKey)
+  rawSig = derToRaw(derSig)
+
+  JSON.stringify
+    protected: protectedB64
+    payload: payloadB64
+    signature: b64url(rawSig)
+
+# --- CSR generation via openssl ---
+
+export generateCsr = (domain, keyPem) ->
+  # Write key to temp file, generate CSR, read it back
+  tmpDir = join('/tmp', "rip-acme-#{process.pid}")
+  mkdirSync(tmpDir, { recursive: true }) unless existsSync(tmpDir)
+  keyPath = join(tmpDir, 'key.pem')
+  csrPath = join(tmpDir, 'csr.der')
+  writeFileSync(keyPath, keyPem, 'utf8')
+
+  result = Bun.spawnSync [
+    'openssl', 'req', '-new'
+    '-key', keyPath
+    '-subj', "/CN=#{domain}"
+    '-outform', 'DER'
+    '-out', csrPath
+  ],
+    stdout: 'pipe'
+    stderr: 'pipe'
+
+  if result.exitCode isnt 0
+    stderr = Buffer.from(result.stderr or []).toString('utf8')
+    throw new Error("CSR generation failed: #{stderr}")
+
+  csrDer = readFileSync(csrPath)
+
+  # Cleanup
+  try Bun.spawnSync(['rm', '-rf', tmpDir])
+
+  b64url(csrDer)
