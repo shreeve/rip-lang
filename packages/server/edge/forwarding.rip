@@ -64,6 +64,30 @@ export proxyToUpstream = (req, upstreamBase, timeoutMs = 30000) ->
       return new Response('Gateway timeout', { status: 504 })
     new Response("Bad gateway: #{err.message}", { status: 502 })
 
+# --- WebSocket passthrough to external upstream ---
+
+export createWsPassthrough = (clientWs, upstreamUrl) ->
+  upstream = new WebSocket(upstreamUrl)
+
+  upstream.addEventListener 'open', ->
+    null  # upstream connected
+
+  upstream.addEventListener 'message', (event) ->
+    try clientWs.send(event.data)
+
+  upstream.addEventListener 'close', ->
+    try clientWs.close()
+
+  upstream.addEventListener 'error', (err) ->
+    console.error "ws-passthrough: upstream error:", err.message or err
+    try clientWs.close()
+
+  # Return object for client-side event wiring
+  sendToUpstream: (data) ->
+    try upstream.send(data) if upstream.readyState is WebSocket.OPEN
+  close: ->
+    try upstream.close() if upstream.readyState is WebSocket.OPEN
+
 # --- Worker forwarding ---
 
 export forwardOnceWithTimeout = (req, socketPath, readTimeoutMs, gatewayTimeoutResponse) ->
