@@ -98,7 +98,6 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 | Category                      | Tested In     | Notes                                                                                                                    |
 | ----------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| Event handler typing          | 09, 12        | Inline handlers typed via `__RipEvents`; named method refs (`@submit: @handler`) remain `any` — annotate params explicitly |
 | Generic types                 | 03-structural | Declarable; .d.ts emission has some gaps                                                                                 |
 | Render block type safety      | 09, 12        | Intrinsic tag/attr/event checking via `__ripEl`; conditionals and text expressions still unchecked                       |
 
@@ -126,6 +125,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Cross-file type flow       | 07-integration | Via .d.ts; untyped files get `@ts-nocheck`; unresolved `.rip` imports flagged                                                          |
 | Component prop types       | 09-components  | Enriched stub gives Signal<T>/Computed<T> declarations; TS checks computeds, methods, and render block intrinsic elements              |
 | Element type inheritance   | 09-components  | `component extends tag` widens constructor props with `__RipProps<'tag'>`; runtime forwards unknown props to first matching tag       |
+| Event handler typing       | 09, 12         | Inline handlers contextually typed; named method refs (`@click: @handler`) auto-annotated from `HTMLElementEventMap`                   |
 | Intrinsic element typing   | 12-intrinsics  | `__ripEl` emits typed helper calls; lib.dom source of truth for tags, attrs, events, global attrs                                      |
 | Required component props   | 09-components  | `@prop:: T` (no `:=`) — required in constructor, caught at usage sites                                                                 |
 | Prop default validation    | 09-components  | `@prop:: T := val` — validates default against declared type; squiggle on prop name                                                    |

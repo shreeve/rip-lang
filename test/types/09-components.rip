@@ -179,18 +179,22 @@ export TypeTestComp = component
 #   - Event typing is global (same HTMLElementEventMap for all elements) —
 #     this matches how the DOM actually works; React has the same behavior
 
-# ── Partially resolved: event handler typing ──
+# ── Event handler typing ──
 #
-# Inline event handlers on intrinsic elements now get contextual typing:
-#   @click: (e) -> ...   # e is MouseEvent (from HTMLElementEventMap)
-#   @submit: (e) -> ...  # e is SubmitEvent
+# Both inline and named method refs are typed:
+#   @click: (e) -> ...        # inline — contextual typing from __RipEvents
+#   @submit: @handleSubmit    # named — stub injects HTMLElementEventMap type
 #
-# Named method refs like `@submit: @handleSubmit` remain untyped —
-# TS can only contextually type inline function literals, not already-
-# declared methods. Workaround: annotate the param explicitly:
-#   handleSubmit: (e:: SubmitEvent) -> e.preventDefault()
-#
-# Tracked in AGENTS.md gap table under "Event handler typing".
+# The stub pre-scans the render block for @event: @method bindings
+# and annotates the first untyped parameter with the event type.
+
+export EventHandlerTest = component
+  handleClick: (e) -> p e.clientX
+  handleSubmit: (e) -> e.preventDefault()
+
+  render
+    form @submit: @handleSubmit
+      button @click: @handleClick, "Click"
 
 # ── Element type inheritance ──
 #
