@@ -890,6 +890,17 @@ rip server r:5000,3600s
 
 ## Architecture
 
+### Edge Planning Docs
+
+Current M0 artifacts for the unified edge/app evolution live in:
+
+- [Edge contracts](docs/edge/CONTRACTS.md)
+- [Config lifecycle](docs/edge/CONFIG_LIFECYCLE.md)
+- [Scheduler policy](docs/edge/SCHEDULER.md)
+- [Edgefile contract](docs/edge/EDGEFILE_CONTRACT.md)
+- [M0b review notes](docs/edge/M0B_REVIEW_NOTES.md)
+- [TLS spike findings](spikes/tls/FINDINGS.md)
+
 ### Self-Spawning Design
 
 The server uses a single-file, self-spawning architecture:
