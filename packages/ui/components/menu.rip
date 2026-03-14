@@ -74,13 +74,14 @@ export Menu = component
 
   _applyPlacement: ->
     return unless @_list
-    @_list.style.position = 'fixed'
-    @_list.style.inset = 'auto'
-    @_list.style.margin = '0'
-    @_list.style.positionArea = 'bottom start'
-    @_list.style.positionTry = 'flip-block, flip-inline, flip-block flip-inline'
-    @_list.style.positionVisibility = 'anchors-visible'
-    @_list.style.marginTop = '4px'
+    *>@_list.style =
+      position: 'fixed'
+      inset: 'auto'
+      margin: '0'
+      positionArea: 'bottom start'
+      positionTry: 'flip-block, flip-inline, flip-block flip-inline'
+      positionVisibility: 'anchors-visible'
+      marginTop: '4px'
 
   onTriggerKeydown: (e) ->
     return if @disabled

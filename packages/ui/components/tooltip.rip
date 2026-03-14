@@ -29,16 +29,17 @@ export Tooltip = component
     return unless @_tip
     [side, align] = @placement.split('-')
     align ?= 'center'
-    @_tip.style.position = 'fixed'
-    @_tip.style.inset = 'auto'
-    @_tip.style.margin = '0'
-    @_tip.style.positionArea = "#{side} #{align}"
-    @_tip.style.positionTry = 'flip-block, flip-inline, flip-block flip-inline'
-    @_tip.style.positionVisibility = 'anchors-visible'
-    @_tip.style.removeProperty('margin-top')
-    @_tip.style.removeProperty('margin-right')
-    @_tip.style.removeProperty('margin-bottom')
-    @_tip.style.removeProperty('margin-left')
+    *>@_tip.style =
+      position: 'fixed'
+      inset: 'auto'
+      margin: '0'
+      positionArea: "#{side} #{align}"
+      positionTry: 'flip-block, flip-inline, flip-block flip-inline'
+      positionVisibility: 'anchors-visible'
+      marginTop: ''
+      marginRight: ''
+      marginBottom: ''
+      marginLeft: ''
     switch side
       when 'bottom' then @_tip.style.marginTop = "#{@offset}px"
       when 'top' then @_tip.style.marginBottom = "#{@offset}px"

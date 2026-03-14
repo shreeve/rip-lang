@@ -229,7 +229,7 @@ All use `globalThis` with `??=` — override any by redeclaring locally.
 | `not in` | `x not in arr` | Negated membership test |
 | `not of` | `k not of obj` | Negated key existence |
 | `.=` (method assign) | `x .= trim()` | `x = x.trim()` — compound method assignment |
-| `*` (merge assign) | `*obj = {a: 1}` | `Object.assign(obj, {a: 1})` |
+| `*>` (merge assign) | `*>obj = {a: 1}` | `Object.assign(obj, {a: 1})` |
 | `or return` | `x = get() or return err` | Guard clause (Ruby-style) |
 | `?? throw` | `x = get() ?? throw err` | Nullish guard |
 

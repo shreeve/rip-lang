@@ -283,7 +283,7 @@ rip -cm example.rip
 | `.=`        | Method assign    | `x .= trim()`                |
 | `?.=`       | Optional assign  | `el?.style.display = "none"` |
 | `=`         | Render text      | `= item.textContent`         |
-| `*`         | Merge assign     | `*obj = {a: 1}`              |
+| `*>`        | Merge assign     | `*>obj = {a: 1}`             |
 | `not in`    | Not in           | `x not in arr`               |
 | `loop n`    | Repeat N         | `loop 5 -> body`             |
 | `it`        | Implicit param   | `-> it > 5`                  |
