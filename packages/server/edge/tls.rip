@@ -14,7 +14,7 @@ export printCertSummary = (certPem) ->
     exp = new Date(x.validTo)
     console.log "rip-server: tls cert #{subject} issued by #{issuer} expires #{exp.toISOString()}"
 
-export loadTlsMaterial = (flags, serverDir) ->
+export loadTlsMaterial = (flags, serverDir, acmeLoadCertFn) ->
   # Explicit cert/key paths
   if flags.certPath and flags.keyPath
     try
@@ -25,6 +25,14 @@ export loadTlsMaterial = (flags, serverDir) ->
     catch
       console.error 'Failed to read TLS cert/key from provided paths. Use http or fix paths.'
       process.exit(2)
+
+  # ACME-managed cert (if domain is configured)
+  if acmeLoadCertFn and (flags.acme or flags.acmeStaging) and flags.acmeDomain
+    acmeCert = acmeLoadCertFn(flags.acmeDomain)
+    if acmeCert
+      console.log "rip-server: using ACME cert for #{flags.acmeDomain}"
+      printCertSummary(acmeCert.cert)
+      return { cert: acmeCert.cert, key: acmeCert.key }
 
   # Shipped wildcard cert for *.ripdev.io (GlobalSign, valid for all subdomains)
   certsDir = join(serverDir, 'certs')

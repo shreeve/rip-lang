@@ -66,6 +66,11 @@ export runHelpOutput = (argv) ->
       --hsts                  Enable HSTS header
       --no-redirect-http      Don't redirect HTTP to HTTPS
 
+    ACME (auto TLS):
+      --acme                  Enable auto TLS via Let's Encrypt
+      --acme-staging          Use Let's Encrypt staging CA (for testing)
+      --acme-domain=<domain>  Domain for ACME cert (required with --acme)
+
     Workers:
       w:<n>                   Number of workers (default: cores/2)
       w:auto                  One worker per core

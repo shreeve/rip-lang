@@ -29,6 +29,9 @@ import { computeHideUrls, logStartupSummary, createCleanup, installShutdownHandl
 import { computeSocketPrefix as cliComputeSocketPrefix, runVersionOutput, runHelpOutput, runStopSubcommand, runListSubcommand } from './control/cli.rip'
 import { runSetupMode, runWorkerMode } from './control/worker.rip'
 import { spawnTrackedWorker, postWorkerQuit, waitForWorkerReady } from './control/workers.rip'
+import { createChallengeStore, handleChallengeRequest } from './acme/challenges.rip'
+import { createAcmeManager } from './acme/manager.rip'
+import { loadCert as acmeLoadCert, defaultCertDir } from './acme/store.rip'
 
 # Match capture holder for Rip's =~
 _ = null
@@ -353,6 +356,9 @@ parseFlags = (argv) ->
     readTimeoutMs: coerceInt(getKV('--read-timeout-ms='), coerceInt(process.env.RIP_READ_TIMEOUT_MS, 30000))
     jsonLogging: has('--json-logging')
     accessLog: not has('--no-access-log')
+    acme: has('--acme')
+    acmeStaging: has('--acme-staging')
+    acmeDomain: getKV('--acme-domain=')
     watch: watch
   }
 
@@ -557,6 +563,8 @@ class Server
     @httpsActive = false
     @appRegistry = createAppRegistry()
     @defaultAppId = @flags.appName
+    @challengeStore = createChallengeStore()
+    @acmeManager = null
     @mdnsProcesses = new Map()
     @watchGroups = new Map()
     @manager = null
@@ -616,13 +624,17 @@ class Server
       @flags.httpsPort = httpsPort
       @httpsActive = true
 
-      if @flags.redirectHttp
+      if @flags.redirectHttp or @flags.acme or @flags.acmeStaging
+        challengeStore = @challengeStore
         try
           @server = Bun.serve
             port: 80
             idleTimeout: 8
             fetch: (req) ->
               url = new URL(req.url)
+              # Serve ACME HTTP-01 challenges before redirecting
+              challengeRes = handleChallengeRequest(url, challengeStore)
+              return challengeRes if challengeRes
               loc = "https://#{url.hostname}:#{httpsPort}#{url.pathname}#{url.search}"
               new Response(null, { status: 301, headers: { Location: loc } })
         catch
@@ -847,7 +859,7 @@ class Server
     edgeMaybeAddSecurityHeaders(@httpsActive, @flags.hsts, headers)
 
   loadTlsMaterial: ->
-    edgeLoadTlsMaterial(@flags, import.meta.dir)
+    edgeLoadTlsMaterial(@flags, import.meta.dir, (domain) -> acmeLoadCert(defaultCertDir(), domain))
 
   printCertSummary: (certPem) ->
     edgePrintCertSummary(certPem)
@@ -905,6 +917,22 @@ main = ->
   flags.hideUrls = computeHideUrls(flags.appEntry, join, dirname, existsSync)
 
   svr.start!
+
+  # ACME auto-TLS: obtain cert if needed, start renewal loop
+  if (flags.acme or flags.acmeStaging) and flags.acmeDomain
+    acmeMgr = createAcmeManager
+      certDir: defaultCertDir()
+      staging: flags.acmeStaging
+      challengeStore: svr.challengeStore
+      onCertRenewed: (domain, result) ->
+        console.log "rip-acme: cert renewed for #{domain}, graceful restart needed"
+    svr.acmeManager = acmeMgr
+    try acmeMgr.obtainCert!(flags.acmeDomain)
+    catch e
+      console.error "rip-acme: initial cert obtain failed: #{e.message}"
+      console.error "rip-acme: will retry during renewal loop"
+    acmeMgr.startRenewalLoop([flags.acmeDomain])
+
   process.env.RIP_URLS = svr.urls.join(',')  # exact URLs the Server just built
   mgr.start!
 
