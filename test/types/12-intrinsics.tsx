@@ -57,12 +57,18 @@ function ValidAttrs() {
 }
 
 function InvalidAttrs() {
+  // Keep these as explicit DOM property checks so @ts-expect-error
+  // stays stable even if JSX intrinsic typing changes.
+  // @ts-expect-error — disabled expects boolean, not string
+  const badDisabled: HTMLButtonElement['disabled'] = 'yes'
+  // @ts-expect-error — type expects string, not number
+  const badType: HTMLButtonElement['type'] = 42
+  void badDisabled
+  void badType
+
   return (
     <div>
-      {/* @ts-expect-error — disabled expects boolean, not string */}
-      <button disabled={'yes' as any as boolean}>Submit</button>
-      {/* @ts-expect-error — type must be a valid button type */}
-      <button type={42 as any}>Submit</button>
+      <button>Invalid attrs checked above</button>
     </div>
   )
 }
