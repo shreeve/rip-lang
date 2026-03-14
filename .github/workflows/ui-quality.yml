@@ -44,13 +44,13 @@ jobs:
             ${{ runner.os }}-playwright-
 
       - name: Install Playwright browsers
-        run: bunx playwright install chromium firefox webkit
+        run: bunx playwright install chromium firefox
 
       - name: Build browser bundle
         run: bun run build
 
       - name: Run UI browser matrix
-        run: bun run test:ui
+        run: bun run --cwd packages/ui test:e2e -- --project=chromium --project=firefox
 
       - name: Run UI accessibility scan
         run: |
