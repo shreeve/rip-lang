@@ -33,6 +33,7 @@ import { computeSocketPrefix as cliComputeSocketPrefix } from './control/cli-hel
 import { runStopSubcommand, runListSubcommand } from './control/cli-commands.rip'
 import { runVersionOutput, runHelpOutput } from './control/cli-output.rip'
 import { computeHideUrls, logStartupSummary } from './control/startup-reporting.rip'
+import { runSetupMode, runWorkerMode } from './control/worker-mode.rip'
 
 # Match capture holder for Rip's =~
 _ = null
@@ -43,7 +44,6 @@ _ = null
 
 MAX_BACKOFF_MS = 30000        # Max delay between worker restart attempts
 MAX_RESTART_COUNT = 10        # Max consecutive worker crashes before giving up
-SHUTDOWN_TIMEOUT_MS = 30000   # Max time to wait for in-flight requests on shutdown
 
 # ==============================================================================
 # Utilities
@@ -364,136 +364,6 @@ parseFlags = (argv) ->
 # ==============================================================================
 # Worker Mode
 # ==============================================================================
-
-runSetup = ->
-  setupFile = process.env.RIP_SETUP_FILE
-  try
-    mod = import!(setupFile)
-    await Promise.resolve()
-    fn = mod?.setup or mod?.default
-    if typeof fn is 'function'
-      await fn()
-  catch e
-    console.error "rip-server: setup failed:", e
-    process.exit(1)
-
-runWorker = ->
-  workerId = parseInt(process.env.WORKER_ID or '0')
-  maxRequests = parseInt(process.env.MAX_REQUESTS or '10000')
-  maxSeconds = parseInt(process.env.MAX_SECONDS or '0')
-  appEntry = process.env.APP_ENTRY
-  socketPath = process.env.SOCKET_PATH
-  socketPrefix = process.env.SOCKET_PREFIX
-  version = parseInt(process.env.RIP_VERSION or '1')
-
-  startedAtMs = Date.now()
-  # Use object to avoid Rip closure scoping issues with mutable variables
-  workerState =
-    appReady: false
-    inflight: false
-    handled: 0
-    handler: null
-
-  getHandler = ->
-    return workerState.handler if workerState.handler
-
-    try
-      mod = import!(appEntry)
-
-      # Ensure module has fully executed by yielding to microtask queue
-      await Promise.resolve()
-
-      fresh = mod.default or mod
-
-      if typeof fresh is 'function'
-        h = fresh
-      else if fresh?.fetch?
-        h = fresh.fetch.bind(fresh)
-      else
-        h = globalThis.__ripHandler  # Handler set by start() in rip-server mode
-
-      unless h
-        try
-          api = import!('@rip-lang/server')
-          h = api?.startHandler?.()
-        catch
-          null
-
-      workerState.handler = h if h
-      workerState.handler or (-> new Response('not ready', { status: 503 }))
-    catch e
-      console.error "[worker #{workerId}] import failed:", e
-      workerState.handler or (-> new Response('not ready', { status: 503 }))
-
-  selfJoin = ->
-    try
-      payload = { op: 'join', workerId, pid: process.pid, socket: socketPath, version }
-      body = JSON.stringify(payload)
-      ctl = getControlSocketPath(socketPrefix)
-      fetch!('http://localhost/worker', { method: 'POST', body, headers: { 'content-type': 'application/json' }, unix: ctl })
-    catch
-      null
-
-  selfQuit = ->
-    try
-      payload = { op: 'quit', workerId }
-      body = JSON.stringify(payload)
-      ctl = getControlSocketPath(socketPrefix)
-      fetch!('http://localhost/worker', { method: 'POST', body, headers: { 'content-type': 'application/json' }, unix: ctl })
-    catch
-      null
-
-  # Preload handler
-  try
-    initial = getHandler!
-    workerState.appReady = typeof initial is 'function'
-  catch
-    null
-
-  server = Bun.serve
-    unix: socketPath
-    maxRequestBodySize: 100 * 1024 * 1024
-    fetch: (req) ->
-      url = new URL(req.url)
-      return new Response(if workerState.appReady then 'ok' else 'not-ready') if url.pathname is '/ready'
-
-      if workerState.inflight
-        return new Response 'busy',
-          status: 503
-          headers: { 'Rip-Worker-Busy': '1', 'Retry-After': '0', 'Rip-Worker-Id': String(workerId) }
-
-      handlerFn = getHandler!
-      workerState.appReady = typeof handlerFn is 'function'
-      workerState.inflight = true
-
-      try
-        return new Response('not ready', { status: 503 }) unless typeof handlerFn is 'function'
-        res = handlerFn!(req)
-        res = res!(req) if typeof res is 'function'
-        if res instanceof Response then res else new Response(String(res))
-      catch err
-        console.error "[worker #{workerId}] ERROR:", err
-        new Response('error', { status: 500 })
-      finally
-        workerState.inflight = false
-        workerState.handled++
-        exceededReqs = workerState.handled >= maxRequests
-        exceededTime = maxSeconds > 0 and (Date.now() - startedAtMs) / 1000 >= maxSeconds
-        setTimeout (-> process.exit(0)), 10 if exceededReqs or exceededTime
-
-  selfJoin!
-
-  shutdown = ->
-    # Wait for in-flight request to complete (with timeout)
-    start = Date.now()
-    while workerState.inflight and Date.now() - start < SHUTDOWN_TIMEOUT_MS
-      await new Promise (r) -> setTimeout(r, 10)
-    try server.stop() catch then null
-    selfQuit!
-    process.exit(0)
-
-  process.on 'SIGTERM', shutdown
-  process.on 'SIGINT', shutdown
 
 # ==============================================================================
 # Manager Class
@@ -1083,8 +953,8 @@ main = ->
 # ==============================================================================
 
 if process.env.RIP_SETUP_MODE
-  runSetup()
+  runSetupMode()
 else if process.env.RIP_WORKER_MODE
-  runWorker()
+  runWorkerMode()
 else
   main!
