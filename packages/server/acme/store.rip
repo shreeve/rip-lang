@@ -1,0 +1,48 @@
+# ==============================================================================
+# acme/store.rip — on-disk certificate storage and lookup
+# ==============================================================================
+
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
+import { homedir } from 'node:os'
+import { X509Certificate } from 'node:crypto'
+
+export defaultCertDir = -> join(homedir(), '.rip', 'certs')
+
+export ensureDir = (dir) ->
+  mkdirSync(dir, { recursive: true }) unless existsSync(dir)
+  dir
+
+export domainDir = (baseDir, domain) ->
+  ensureDir(join(ensureDir(baseDir), domain))
+
+export saveCert = (baseDir, domain, certPem, keyPem) ->
+  dir = domainDir(baseDir, domain)
+  writeFileSync(join(dir, 'cert.pem'), certPem, 'utf8')
+  writeFileSync(join(dir, 'key.pem'), keyPem, 'utf8')
+  { certPath: join(dir, 'cert.pem'), keyPath: join(dir, 'key.pem') }
+
+export loadCert = (baseDir, domain) ->
+  dir = join(baseDir, domain)
+  certPath = join(dir, 'cert.pem')
+  keyPath = join(dir, 'key.pem')
+  return null unless existsSync(certPath) and existsSync(keyPath)
+  cert = readFileSync(certPath, 'utf8')
+  key = readFileSync(keyPath, 'utf8')
+  notAfter = null
+  try
+    x = new X509Certificate(cert)
+    notAfter = new Date(x.validTo).getTime()
+  { cert, key, certPath, keyPath, notAfter }
+
+export needsRenewal = (baseDir, domain, thresholdDays = 30) ->
+  rec = loadCert(baseDir, domain)
+  return true unless rec?.notAfter
+  msLeft = rec.notAfter - Date.now()
+  daysLeft = msLeft / (1000 * 60 * 60 * 24)
+  daysLeft < thresholdDays
+
+export listCerts = (baseDir) ->
+  return [] unless existsSync(baseDir)
+  entries = readdirSync(baseDir, { withFileTypes: true })
+  entries.filter((e) -> e.isDirectory()).map((e) -> e.name)
