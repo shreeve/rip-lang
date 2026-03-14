@@ -29,21 +29,21 @@ Status: Active
 - Validate route precedence edge cases in conformance tests
 - Confirm ops defaults for retention policy in deployment docs
 
-## Refactor Guardrails (anti-file-sprawl)
+## Refactor Guardrails
 
-Use these rules during M1/M2 to keep the codebase lightweight and manageable.
+Group by theme, not by function. A file should cover a coherent area — not
+necessarily one function or one class. Pragmatism over purity.
 
-- One module, one responsibility.
-- No generic `utils.rip` dumping ground for server internals.
-- New file allowed only when it extracts one cohesive block from `server.rip`.
-- Target module size: roughly `80-200` lines unless there is clear reason.
-- Keep import fan-out low; if a module imports too many siblings, boundary is likely wrong.
-- `server.rip` should trend toward orchestration/wiring, not new business logic.
-- If a new module ends up tiny and non-reused, fold it back into parent module.
-- Every extraction commit must remain behavior-preserving and pass tests.
+- Group related functions into one file by theme (e.g. all CLI logic in `cli.rip`).
+- No generic `utils.rip` dumping ground — but themed helpers files are fine.
+- If a module is under ~20 lines with only one importer, fold it into its neighbor.
+- If a module grows past ~300 lines, consider splitting by sub-theme.
+- Keep import fan-out low; if a module imports too many siblings, the boundary is wrong.
+- `server.rip` should stay as orchestration/wiring, not business logic.
+- Every extraction or consolidation must pass tests.
 - Prefer vertical domains:
-  - `edge/*` for request-path behavior
-  - `control/*` for manager/control socket/lifecycle
+  - `edge/*` for request-path behavior (forwarding, scheduling, status, registry)
+  - `control/*` for management (CLI, lifecycle, workers, watchers, mDNS)
   - `acme/*` only when ACME implementation begins
 
 ## Coding Conventions

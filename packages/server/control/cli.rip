@@ -1,6 +1,34 @@
 # ==============================================================================
-# control/cli-output.rip — CLI help/version output handlers
+# control/cli.rip — CLI parsing, subcommands, and output
 # ==============================================================================
+
+# --- Argv helpers ---
+
+export getKV = (argv, prefix) ->
+  for tok in argv
+    return tok.slice(prefix.length) if tok.startsWith(prefix)
+  undefined
+
+export findAppPathToken = (argv, existsSyncFn, isAbsoluteFn, resolveFn, cwdFn) ->
+  for i in [2...argv.length]
+    tok = argv[i]
+    pathPart = if tok.includes('@') then tok.split('@')[0] else tok
+    looksLikePath = pathPart.includes('/') or pathPart.startsWith('.') or pathPart.endsWith('.rip') or pathPart.endsWith('.ts')
+    try
+      return pathPart if looksLikePath and existsSyncFn(if isAbsoluteFn(pathPart) then pathPart else resolveFn(cwdFn(), pathPart))
+  undefined
+
+export computeSocketPrefix = (argv, resolveAppEntryFn, existsSyncFn, isAbsoluteFn, resolveFn, cwdFn) ->
+  override = getKV(argv, '--socket-prefix=')
+  return override if override
+  appTok = findAppPathToken(argv, existsSyncFn, isAbsoluteFn, resolveFn, cwdFn)
+  if appTok
+    try
+      { appName } = resolveAppEntryFn(appTok)
+      return "rip_#{appName}"
+  'rip_server'
+
+# --- Output ---
 
 export runVersionOutput = (argv, readFileSyncFn, packageJsonPath) ->
   return false unless '--version' in argv or '-v' in argv
@@ -53,4 +81,35 @@ export runHelpOutput = (argv) ->
     activates with directory indexes, auto-detected MIME types, and
     hot-reload. Create an index.rip to customize server behavior.
   """
+  true
+
+# --- Subcommands ---
+
+export runStopSubcommand = (argv, prefix, getPidFilePathFn, existsSyncFn, readFileSyncFn, killFn, spawnSyncFn, importMetaPath) ->
+  return false unless 'stop' in argv
+  pidFile = getPidFilePathFn(prefix)
+  try
+    if existsSyncFn(pidFile)
+      pid = parseInt(readFileSyncFn(pidFile, 'utf8').trim())
+      killFn(pid, 'SIGTERM')
+      console.log "rip-server: sent SIGTERM to process #{pid}"
+    else
+      console.log "rip-server: no PID file found at #{pidFile}, trying pkill..."
+      spawnSyncFn(['pkill', '-f', importMetaPath])
+  catch e
+    console.error "rip-server: stop failed: #{e.message}"
+  true
+
+export runListSubcommand = (argv, prefix, getControlSocketPathFn, fetchFn, exitFn) ->
+  return false unless 'list' in argv
+  controlUnix = getControlSocketPathFn(prefix)
+  try
+    res = fetchFn!('http://localhost/registry', { unix: controlUnix, method: 'GET' })
+    throw new Error("list failed: #{res.status}") unless res.ok
+    j = res.json!
+    hosts = if Array.isArray(j?.hosts) then j.hosts else []
+    console.log if hosts.length then hosts.join('\n') else '(no hosts)'
+  catch e
+    console.error "list command failed: #{e?.message or e}"
+    exitFn(1)
   true
