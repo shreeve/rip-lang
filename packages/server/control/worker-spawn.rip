@@ -1,0 +1,31 @@
+# ==============================================================================
+# control/worker-spawn.rip — worker process spawn helper
+# ==============================================================================
+
+import { unlinkSync } from 'node:fs'
+import { getWorkerSocketPath } from './paths.rip'
+
+export spawnTrackedWorker = (flags, workerId, version, nowMsFn, importMetaPath) ->
+  socketPath = getWorkerSocketPath(flags.socketPrefix, workerId)
+  try unlinkSync(socketPath) catch then null
+
+  workerEnv = Object.assign {}, process.env,
+    RIP_WORKER_MODE: '1'
+    WORKER_ID: String(workerId)
+    SOCKET_PATH: socketPath
+    SOCKET_PREFIX: flags.socketPrefix
+    APP_ENTRY: flags.appEntry
+    APP_BASE_DIR: flags.appBaseDir
+    MAX_REQUESTS: String(flags.maxRequestsPerWorker)
+    MAX_SECONDS: String(flags.maxSecondsPerWorker)
+    RIP_LOG_JSON: if flags.jsonLogging then '1' else '0'
+    RIP_VERSION: String(version)
+
+  proc = Bun.spawn ['rip', importMetaPath],
+    stdout: 'inherit'
+    stderr: 'inherit'
+    stdin: 'ignore'
+    cwd: process.cwd()
+    env: workerEnv
+
+  { id: workerId, process: proc, socketPath, restartCount: 0, backoffMs: 1000, startedAt: nowMsFn() }

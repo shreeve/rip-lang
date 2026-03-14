@@ -23,7 +23,7 @@ import { buildStatusBody as edgeBuildStatusBody, buildRipdevUrl as edgeBuildRipd
 import { watchUnavailableResponse, serverBusyResponse, serviceUnavailableResponse, gatewayTimeoutResponse, queueTimeoutResponse } from './edge/responses.rip'
 import { buildUpstreamResponse, forwardOnceWithTimeout } from './edge/forwarding.rip'
 import { processQueuedJob, drainQueueOnce } from './edge/queue.rip'
-import { getWorkerSocketPath, getControlSocketPath, getPidFilePath } from './control/paths.rip'
+import { getControlSocketPath, getPidFilePath } from './control/paths.rip'
 import { handleWorkerControl, handleWatchControl, handleRegistryControl } from './control/control-fetch.rip'
 import { getLanIP as controlGetLanIP } from './control/lan.rip'
 import { startMdnsAdvertisement as controlStartMdnsAdvertisement, stopMdnsAdvertisements as controlStopMdnsAdvertisements } from './control/mdns.rip'
@@ -35,6 +35,7 @@ import { runVersionOutput, runHelpOutput } from './control/cli-output.rip'
 import { computeHideUrls, logStartupSummary } from './control/startup-reporting.rip'
 import { runSetupMode, runWorkerMode } from './control/worker-mode.rip'
 import { registerAppWatchDirs } from './control/app-watchers.rip'
+import { spawnTrackedWorker } from './control/worker-spawn.rip'
 
 # Match capture holder for Rip's =~
 _ = null
@@ -470,29 +471,7 @@ class Manager
 
   spawnWorker: (version) ->
     workerId = ++@nextWorkerId
-    socketPath = getWorkerSocketPath(@flags.socketPrefix, workerId)
-    try unlinkSync(socketPath) catch then null
-
-    workerEnv = Object.assign {}, process.env,
-      RIP_WORKER_MODE: '1'
-      WORKER_ID: String(workerId)
-      SOCKET_PATH: socketPath
-      SOCKET_PREFIX: @flags.socketPrefix
-      APP_ENTRY: @flags.appEntry
-      APP_BASE_DIR: @flags.appBaseDir
-      MAX_REQUESTS: String(@flags.maxRequestsPerWorker)
-      MAX_SECONDS: String(@flags.maxSecondsPerWorker)
-      RIP_LOG_JSON: if @flags.jsonLogging then '1' else '0'
-      RIP_VERSION: String(version or @currentVersion)
-
-    proc = Bun.spawn ['rip', import.meta.path],
-      stdout: 'inherit'
-      stderr: 'inherit'
-      stdin: 'ignore'
-      cwd: process.cwd()
-      env: workerEnv
-
-    tracked = { id: workerId, process: proc, socketPath, restartCount: 0, backoffMs: 1000, startedAt: nowMs() }
+    tracked = spawnTrackedWorker(@flags, workerId, (version or @currentVersion), nowMs, import.meta.path)
     @monitor(tracked)
     tracked
 
