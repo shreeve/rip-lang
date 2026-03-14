@@ -1048,12 +1048,13 @@ main = ->
     return
 
   # Subcommands: stop/list
-  prefix = cliComputeSocketPrefix(process.argv, resolveAppEntry, existsSync, isAbsolute, resolve, (-> process.cwd()))
-  if runStopSubcommand(process.argv, prefix, getPidFilePath, existsSync, readFileSync, process.kill.bind(process), Bun.spawnSync, import.meta.path)
-    return
+  if 'stop' in process.argv or 'list' in process.argv
+    prefix = cliComputeSocketPrefix(process.argv, resolveAppEntry, existsSync, isAbsolute, resolve, (-> process.cwd()))
+    if runStopSubcommand(process.argv, prefix, getPidFilePath, existsSync, readFileSync, process.kill.bind(process), Bun.spawnSync, import.meta.path)
+      return
 
-  if runListSubcommand(process.argv, prefix, getControlSocketPath, fetch, process.exit.bind(process))
-    return
+    if runListSubcommand(process.argv, prefix, getControlSocketPath, fetch, process.exit.bind(process))
+      return
 
   # Normal startup
   flags = parseFlags(process.argv)
