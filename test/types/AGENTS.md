@@ -77,7 +77,7 @@ Each file exercises a specific type feature. Status key:
 
 What `rip check` catches today vs. what it doesn't. This tracks the overall health of Rip's type story — not just this audit. Grouped by status, ordered by importance within each group.
 
-**Maintenance rule:** When you fix a gap, run the full verification suite. If everything passes, move the row from its current section (❌ or 🔶) to the correct one (✅ or 🔶). Remove stale "Fixed:" annotations — the row's position is the status. Never leave a fixed item in ❌.
+**Maintenance rule:** When you fix a gap, run the full verification suite. If everything passes, move the row to 🔍. To promote from 🔍 to ✅, manually verify IDE behavior (squiggle on correct token, hover shows expected type, no parse errors masking diagnostics, no false-positive errors). Remove stale "Fixed:" annotations — the row's position is the status. Never leave a fixed item in ❌.
 
 **Design trade-offs** (inherent to the language, not fixable via type system):
 
@@ -101,6 +101,24 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Generic types                 | 03-structural | Basic generics work (structs, function returns); edge cases may remain                                                   |
 | Render block type safety      | 09, 12        | Intrinsic tag/attr/event checking via `__ripEl`; conditionals and text expressions still unchecked                       |
 
+### 🔍 Compiler-verified (IDE review needed)
+
+`rip check` passes for these features but IDE presentation (squiggle positions, hover types, diagnostic messages) has not been manually verified. To promote to ✅, open the relevant file in a VS Code-based editor and confirm: correct squiggle position, correct hover type, no parse errors masking diagnostics, no false positives.
+
+| Category                     | Tested In      | IDE check                                                                                                                  |
+| ---------------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Readonly / immutability      | 03-structural  | Squiggle on reassignment of `=!` const lands on correct line                                                               |
+| Nullable safety              | 01-basic       | Null access squiggle lands on `.prop` access, not the variable declaration                                                 |
+| Union narrowing + exhaust.   | 04-unions      | Squiggle lands on the correct `when` branch, not a neighboring line                                                        |
+| Element type inheritance     | 09-components  | `InheritedInput autofocus: true` — no error; `autofocus: "yes"` — squiggle on `"yes"`                                     |
+| Event handler typing         | 09, 12         | `@click: (e) ->` — hover on `e` shows `MouseEvent`                                                                        |
+| Intrinsic element typing     | 12-intrinsics  | `button disabled: "yes"` shows squiggle on `"yes"`, not a parse error on the whole block                                  |
+| Type inference (split decl.) | 11-inference   | Hover on inferred variable shows correct type, squiggle on misuse lands correctly                                          |
+| Strict mode                  | *(all files)*  | No new false-positive squiggles in previously clean typed files                                                            |
+| Inline discriminated unions  | 04-unions      | Hover on union type shows the union members, not internal names                                                            |
+| Go-to-def on imports         | *(IDE only)*   | Cmd+click on imported symbol jumps to correct line in target `.rip` file                                                   |
+| Unused variable dimming      | *(IDE only)*   | Unused variable text is visually dimmed (not just underlined)                                                              |
+
 ### ✅ Working
 
 | Category                   | Tested In      | Notes                                                                                                                                  |
@@ -109,9 +127,6 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Object shape checking      | 03-structural  | Missing fields, extra fields                                                                                                           |
 | Property access checking   | 03-structural  | Typos, nonexistent fields                                                                                                              |
 | Union value checking       | 04-unions      | Literal unions validated                                                                                                               |
-| Readonly / immutability    | 03-structural  | `=!` emits `const` in JS and `declare const` in .d.ts; binding-level immutability enforced (deep readonly is opt-in, same as TS)      |
-| Nullable safety            | 01-basic       | `strict: true` enables full `strictNullChecks` — null/undefined caught at all usage sites                                              |
-| Union narrowing + exhaust. | 04-unions      | Discriminated union narrowing and switch exhaustiveness both work via strict mode                                                       |
 | Function argument types    | 06-functions   | Same-file typed functions                                                                                                              |
 | Function return types      | 06-functions   | Same-file typed functions                                                                                                              |
 | Optional param `?`         | 06-functions   | `y?:: T` emits `y?: T` in .d.ts                                                                                                        |
@@ -124,19 +139,11 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | `void` return annotation   | 06-functions   | `def fn!` emits `: void` in .d.ts; `!` sigil suppresses implicit return and declares void return type                                  |
 | Cross-file type flow       | 07-integration | Via .d.ts; untyped files get `@ts-nocheck`; unresolved `.rip` imports flagged                                                          |
 | Component prop types       | 09-components  | Enriched stub gives Signal<T>/Computed<T> declarations; TS checks computeds, methods, and render block intrinsic elements              |
-| Element type inheritance   | 09-components  | `component extends tag` widens constructor props with `__RipProps<'tag'>`; runtime forwards unknown props to first matching tag       |
-| Event handler typing       | 09, 12         | Inline handlers contextually typed; named method refs (`@click: @handler`) auto-annotated from `HTMLElementEventMap`                   |
-| Intrinsic element typing   | 12-intrinsics  | `__ripEl` emits typed helper calls; lib.dom source of truth for tags, attrs, events, global attrs                                      |
 | Required component props   | 09-components  | `@prop:: T` (no `:=`) — required in constructor, caught at usage sites                                                                 |
 | Prop default validation    | 09-components  | `@prop:: T := val` — validates default against declared type; squiggle on prop name                                                    |
 | Async/await unwrapping     | 10-validation  | `!` compiles to `await`; return types inferred or explicit; `Promise<T>` → `T`                                                         |
 | Hover types                | *(IDE only)*   | Column-aware source maps, overload preference, typed implementation params                                                             |
 | Union value autocomplete   | *(IDE only)*   | String literal union completions for prop values, prop defaults, and typed variable assignments                                        |
-| Type inference (split decl.) | 11-inference   | Top-level inferred via `patchUninitializedTypes`; block-scoped and destructured caught by `strict: true`                               |
-| Strict mode                | *(all files)*  | `strict: true` enabled — `noImplicitAny`, full null checks, strict function types all active                                          |
-| Inline discriminated unions | 04-unions      | Inline `{ ... } \| { ... }` union types now emit valid .d.ts (previously mangled by multi-line formatting)                            |
-| Go-to-def on imports       | *(IDE only)*   | Resolves import paths directly and finds exported symbol in target file; works for `from './file.rip'` imports                        |
-| Unused variable dimming    | *(IDE only)*   | Forwards `DiagnosticTag.Unnecessary` and `DiagnosticTag.Deprecated` from TS diagnostics; unused vars dimmed, deprecated strikethrough |
 | Semantic token provider    | *(IDE only)*   | Bridges TS `getEncodedSemanticClassifications()` to Rip source; typed files get semantic tokens, reactive vars not marked readonly     |
 
 ### Suppressed error codes
