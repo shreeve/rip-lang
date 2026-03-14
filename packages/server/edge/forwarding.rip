@@ -1,0 +1,25 @@
+# ==============================================================================
+# edge/forwarding.rip — forwarding and upstream response helpers
+# ==============================================================================
+
+export buildUpstreamResponse = (res, req, totalSeconds, workerSeconds, maybeAddSecurityHeaders, logAccess, stripInternalHeaders) ->
+  silent = res.headers.get('rip-no-log') is '1'
+  headers = stripInternalHeaders(res.headers)
+  headers.delete('date')
+  maybeAddSecurityHeaders(headers)
+  logAccess(req, res, totalSeconds, workerSeconds) unless silent
+  new Response(res.body, { status: res.status, statusText: res.statusText, headers })
+
+export forwardOnceWithTimeout = (req, socketPath, readTimeoutMs, gatewayTimeoutResponse) ->
+  inUrl = new URL(req.url)
+  forwardUrl = "http://localhost#{inUrl.pathname}#{inUrl.search}"
+
+  try
+    fetchPromise = fetch(forwardUrl, { method: req.method, headers: req.headers, body: req.body, unix: socketPath, decompress: false })
+    readGuard = new Promise (_, rej) ->
+      setTimeout (-> rej(new Error('Upstream timeout'))), readTimeoutMs
+    Promise.race!([fetchPromise, readGuard])
+  catch err
+    if err.message is 'Upstream timeout'
+      return gatewayTimeoutResponse()
+    throw err

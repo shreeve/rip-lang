@@ -21,6 +21,7 @@ import { loadTlsMaterial as edgeLoadTlsMaterial, printCertSummary as edgePrintCe
 import { maybeAddSecurityHeaders as edgeMaybeAddSecurityHeaders } from './edge/security.rip'
 import { buildStatusBody as edgeBuildStatusBody, buildRipdevUrl as edgeBuildRipdevUrl } from './edge/status.rip'
 import { watchUnavailableResponse, serverBusyResponse, serviceUnavailableResponse, gatewayTimeoutResponse, queueTimeoutResponse } from './edge/responses.rip'
+import { buildUpstreamResponse, forwardOnceWithTimeout } from './edge/forwarding.rip'
 import { getWorkerSocketPath, getControlSocketPath, getPidFilePath } from './control/paths.rip'
 import { handleWorkerControl, handleWatchControl, handleRegistryControl } from './control/control-fetch.rip'
 import { getLanIP as controlGetLanIP } from './control/lan.rip'
@@ -897,12 +898,15 @@ class Server
       logAccessHuman(@flags.appName, req, res, totalSeconds, workerSeconds)
 
   buildResponse: (res, req, start, workerSeconds) ->
-    silent = res.headers.get('rip-no-log') is '1'
-    headers = stripInternalHeaders(res.headers)
-    headers.delete('date')
-    @maybeAddSecurityHeaders(headers)
-    @logAccess(req, res, (performance.now() - start) / 1000, workerSeconds) unless silent
-    new Response(res.body, { status: res.status, statusText: res.statusText, headers })
+    buildUpstreamResponse(
+      res,
+      req,
+      (performance.now() - start) / 1000,
+      workerSeconds,
+      @maybeAddSecurityHeaders.bind(@),
+      @logAccess.bind(@),
+      stripInternalHeaders
+    )
 
   forwardToWorker: (req, socket) ->
     start = performance.now()
@@ -940,20 +944,7 @@ class Server
     @buildResponse(res, req, start, workerSeconds)
 
   forwardOnce: (req, socketPath) ->
-    inUrl = new URL(req.url)
-    forwardUrl = "http://localhost#{inUrl.pathname}#{inUrl.search}"
-    readTimeoutMs = @flags.readTimeoutMs
-
-    try
-      fetchPromise = fetch(forwardUrl, { method: req.method, headers: req.headers, body: req.body, unix: socketPath, decompress: false })
-      readGuard = new Promise (_, rej) ->
-        setTimeout (-> rej(new Error('Upstream timeout'))), readTimeoutMs
-      res = Promise.race!([fetchPromise, readGuard])
-      res
-    catch err
-      if err.message is 'Upstream timeout'
-        return gatewayTimeoutResponse()
-      throw err
+    forwardOnceWithTimeout(req, socketPath, @flags.readTimeoutMs, gatewayTimeoutResponse)
 
   processJob: (job, worker) ->
     @forwardToWorker(job.req, worker)
