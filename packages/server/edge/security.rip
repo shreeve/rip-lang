@@ -26,12 +26,13 @@ export validateRequest = (req) ->
   if url.pathname.includes('\x00') or url.search.includes('\x00')
     return { valid: false, status: 400, message: 'Null byte in URL' }
 
-  # Reject path traversal — two decodes beyond URL parser
-  # URL parser already decoded once; two more catches double-encoded attacks
+  # Reject path traversal — three decodes beyond URL parser
+  # Catches single (%2e), double (%252e), and triple (%25252e) encoding
   pathname = url.pathname
-  decoded1 = try decodeURIComponent(pathname) catch then pathname
-  decoded2 = try decodeURIComponent(decoded1) catch then decoded1
-  if pathname.includes('..') or decoded1.includes('..') or decoded2.includes('..')
+  d1 = try decodeURIComponent(pathname) catch then pathname
+  d2 = try decodeURIComponent(d1) catch then d1
+  d3 = try decodeURIComponent(d2) catch then d2
+  if pathname.includes('..') or d1.includes('..') or d2.includes('..') or d3.includes('..')
     return { valid: false, status: 400, message: 'Path traversal rejected' }
 
   { valid: true }

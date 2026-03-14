@@ -41,15 +41,13 @@ export EditableValue = component
     display = @_root?.querySelector('[data-display]')
     editor = @_root?.querySelector('[data-editor]')
     return unless display and editor
-    *>@_root.style =
-      position: 'relative'
+    @_root.style.position = 'relative'
     dr = display.getBoundingClientRect()
     cr = @_root.getBoundingClientRect()
-    *>editor.style =
-      position: 'absolute'
-      left: "0px"
-      top: "#{dr.bottom - cr.top + 4}px"
-      zIndex: '50'
+    editor.style.position = 'absolute'
+    editor.style.left = "0px"
+    editor.style.top = "#{dr.bottom - cr.top + 4}px"
+    editor.style.zIndex = '50'
     editor.querySelector('input, textarea, select')?.focus()
 
   ~>

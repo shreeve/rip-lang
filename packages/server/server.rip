@@ -392,6 +392,7 @@ class Manager
     @nextWorkerId = -1
     @retiringIds = new Set()
     @restartBudgets = new Map()  # slotIndex -> { count, backoffMs }
+    @deferredDeaths = []         # worker IDs that died during rolling restart
     @currentVersion = 1
     @server = null
     @dbUrl = null
@@ -506,7 +507,9 @@ class Manager
     w.process.exited.then =>
       return if @shuttingDown
       return if @retiringIds.has(w.id)
-      return if @isRolling  # avoid racing with rollingRestart
+      if @isRolling
+        @deferredDeaths.push(w.id)
+        return
 
       # Notify server to remove dead worker's socket entry (fire-and-forget)
       postWorkerQuit(@flags.socketPrefix, w.id)
@@ -563,6 +566,14 @@ class Manager
           try pair.replacement.process.kill()
           idx = workers.indexOf(pair.replacement)
           workers.splice(idx, 1) if idx >= 0
+      # Reconcile deferred deaths on rollback too
+      if @deferredDeaths.length > 0
+        deferred = [...@deferredDeaths]
+        @deferredDeaths.length = 0
+        for deadId in deferred
+          idx = workers.findIndex((x) -> x.id is deadId)
+          if idx >= 0
+            workers[idx] = @spawnWorker(@currentVersion)
       return
 
     # All verified — now atomically promote the version
@@ -584,6 +595,16 @@ class Manager
     workers.length = 0
     workers.push(...filtered)
     @retiringIds.delete(id) for id as retiring
+
+    # Reconcile any workers that died during the roll
+    if @deferredDeaths.length > 0
+      deferred = [...@deferredDeaths]
+      @deferredDeaths.length = 0
+      for deadId in deferred
+        workers = @getWorkers()
+        idx = workers.findIndex((x) -> x.id is deadId)
+        if idx >= 0
+          workers[idx] = @spawnWorker(@currentVersion)
 
   getEntryMtime: ->
     try statSync(@flags.appEntry).mtimeMs catch then 0

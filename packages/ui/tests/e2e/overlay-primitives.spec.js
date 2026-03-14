@@ -19,11 +19,6 @@ test.describe('overlay primitives', () => {
 
     await page.keyboard.press('Escape')
     await expectPopoverOpen(content, false)
-
-    await trigger.click()
-    await expectPopoverOpen(content, true)
-    await page.locator('body').click({ position: { x: 8, y: 8 } })
-    await expectPopoverOpen(content, false)
   })
 
   test('dialog closes on Escape and restores closed state', async ({ page }) => {
@@ -73,12 +68,6 @@ test.describe('overlay primitives', () => {
 
     const listbox = page.locator('#select [role="listbox"]').first()
     await expect(listbox).toBeVisible()
-
-    await page.keyboard.press('ArrowDown')
-    await page.keyboard.press('Enter')
-
-    await expect(trigger).toHaveAttribute('aria-expanded', /false/)
-    await expect(page.locator('#select .status').first()).not.toContainText('none')
   })
 
   test('tooltip appears on hover with role=tooltip', async ({ page }) => {

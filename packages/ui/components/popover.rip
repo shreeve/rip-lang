@@ -29,17 +29,16 @@ export Popover = component
     [side, align] = @placement.split('-')
     align ?= 'center'
     area = "#{side} #{align}"
-    *>floating.style =
-      position: 'fixed'
-      inset: 'auto'
-      margin: '0'
-      positionArea: area
-      positionTry: 'flip-block, flip-inline, flip-block flip-inline'
-      positionVisibility: 'anchors-visible'
-      marginTop: ''
-      marginRight: ''
-      marginBottom: ''
-      marginLeft: ''
+    floating.style.position = 'fixed'
+    floating.style.inset = 'auto'
+    floating.style.margin = '0'
+    floating.style.positionArea = area
+    floating.style.positionTry = 'flip-block, flip-inline, flip-block flip-inline'
+    floating.style.positionVisibility = 'anchors-visible'
+    floating.style.marginTop = ''
+    floating.style.marginRight = ''
+    floating.style.marginBottom = ''
+    floating.style.marginLeft = ''
     switch side
       when 'bottom' then floating.style.marginTop = "#{@offset}px"
       when 'top' then floating.style.marginBottom = "#{@offset}px"
