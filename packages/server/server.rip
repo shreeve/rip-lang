@@ -34,7 +34,7 @@ import { createAcmeManager } from './acme/manager.rip'
 import { loadCert as acmeLoadCert, defaultCertDir } from './acme/store.rip'
 import { createMetrics } from './edge/metrics.rip'
 import { setEventJsonMode, logEvent } from './control/events.rip'
-import { createHub, generateClientId, addClient, removeClient, processResponse, proxyToBackend, handlePublish, getRealtimeStats } from './edge/realtime.rip'
+import { createHub, generateClientId, addClient, removeClient, processResponse, handlePublish, getRealtimeStats } from './edge/realtime.rip'
 
 # Match capture holder for Rip's =~
 _ = null
@@ -364,9 +364,7 @@ parseFlags = (argv) ->
     acme: has('--acme')
     acmeStaging: has('--acme-staging')
     acmeDomain: getKV('--acme-domain=')
-    realtime: has('--realtime')
     realtimePath: getKV('--realtime-path=') or '/realtime'
-    realtimeBackend: getKV('--realtime-backend=')
     watch: watch
   }
 
@@ -583,7 +581,7 @@ class Server
     @challengeStore = createChallengeStore()
     @acmeManager = null
     @metrics = createMetrics()
-    @realtimeHub = if @flags.realtime then createHub() else null
+    @realtimeHub = createHub()
     @mdnsProcesses = new Map()
     @watchGroups = new Map()
     @manager = null
@@ -614,7 +612,7 @@ class Server
   start: ->
     httpOnly = @flags.httpsPort is null
     fetchFn = @fetch.bind(@)
-    wsOpts = if @realtimeHub then @buildWebSocketHandlers() else {}
+    wsOpts = @buildWebSocketHandlers()
 
     # Helper to start server, trying the given port first, then incrementing.
     # Falls back to unprivileged range (3000 for HTTP, 3443 for HTTPS) if
@@ -691,14 +689,14 @@ class Server
     return @diagnostics() if url.pathname is '/diagnostics'
 
     # WebSocket upgrade for realtime
-    if @realtimeHub and url.pathname is @flags.realtimePath and bunServer
+    if url.pathname is @flags.realtimePath and bunServer
       clientId = generateClientId()
       if bunServer.upgrade(req, { data: { clientId, headers: req.headers } })
         return
       return new Response('WebSocket upgrade failed', { status: 400 })
 
     # External publish for realtime
-    if @realtimeHub and url.pathname is '/publish' and req.method is 'POST'
+    if url.pathname is '/publish' and req.method is 'POST'
       body = req.text!
       handlePublish(@realtimeHub, body)
       return new Response('ok')
@@ -769,7 +767,7 @@ class Server
         acme: snap.counters.acme
         websocket: snap.counters.websocket
       gauges: snap.gauges
-      realtime: if @realtimeHub then getRealtimeStats(@realtimeHub) else null
+      realtime: getRealtimeStats(@realtimeHub)
       hosts: Array.from(@appRegistry.hostIndex.keys())
     headers = new Headers({ 'content-type': 'application/json', 'cache-control': 'no-cache' })
     @maybeAddSecurityHeaders(headers)
@@ -959,33 +957,54 @@ class Server
         p "rip-server: #{url}" unless @flags.quiet or @flags.hideUrls
     )
 
+  proxyRealtimeToWorker: (headers, frameType, body) ->
+    app = getAppState(@appRegistry, @defaultAppId)
+    return null unless app
+    sock = @getNextAvailableSocket(app)
+    return null unless sock
+    proxyHeaders = new Headers(headers)
+    proxyHeaders.set('Sec-WebSocket-Frame', frameType)
+    proxyHeaders.set('Content-Type', 'text/plain')
+    proxyHeaders.delete('Upgrade')
+    proxyHeaders.delete('Connection')
+    proxyHeaders.delete('Sec-WebSocket-Key')
+    proxyHeaders.delete('Sec-WebSocket-Version')
+    proxyHeaders.delete('Sec-WebSocket-Extensions')
+    try
+      res = fetch! "http://localhost/v1/realtime",
+        method: 'POST'
+        headers: proxyHeaders
+        body: body or ''
+        unix: sock.socket
+        decompress: false
+      res.text!
+    catch e
+      console.error "realtime: worker proxy failed:", e.message
+      null
+
   buildWebSocketHandlers: ->
     hub = @realtimeHub
-    return {} unless hub
-
-    # Configure backend URL for proxying WS events
-    port = @flags.httpPort or 80
-    hub.backendUrl = @flags.realtimeBackend or "http://127.0.0.1:#{port}/v1/realtime"
+    server = @
 
     websocket:
       open: (ws) ->
         { clientId, headers } = ws.data
         addClient(hub, clientId, ws)
         logEvent 'ws_open', { clientId }
-        response = proxyToBackend!(hub, headers, 'open', '')
+        response = server.proxyRealtimeToWorker!(headers, 'open', '')
         processResponse(hub, response, clientId) if response
 
       message: (ws, message) ->
         { clientId, headers } = ws.data
         msg = if typeof message is 'string' then message else message.toString()
-        response = proxyToBackend!(hub, headers, 'text', msg)
+        response = server.proxyRealtimeToWorker!(headers, 'text', msg)
         processResponse(hub, response, clientId) if response
 
       close: (ws) ->
         { clientId, headers } = ws.data
         logEvent 'ws_close', { clientId }
         removeClient(hub, clientId)
-        proxyToBackend!(hub, headers, 'close', '')
+        server.proxyRealtimeToWorker!(headers, 'close', '')
 
 
 # ==============================================================================

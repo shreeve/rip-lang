@@ -72,9 +72,7 @@ export runHelpOutput = (argv) ->
       --acme-domain=<domain>  Domain for ACME cert (required with --acme)
 
     Realtime (WebSocket):
-      --realtime              Enable Bam-style WebSocket realtime hub
       --realtime-path=<path>  WebSocket endpoint path (default: /realtime)
-      --realtime-backend=<url> Backend URL for proxying WS events
 
     Workers:
       w:<n>                   Number of workers (default: cores/2)

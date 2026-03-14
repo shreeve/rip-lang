@@ -862,9 +862,7 @@ rip server [flags] [app-path]@<alias1>,<alias2>,...
 | `--acme` | Enable auto-TLS via Let's Encrypt | Disabled |
 | `--acme-staging` | Use Let's Encrypt staging CA | Disabled |
 | `--acme-domain=<d>` | Domain for ACME certificate | — |
-| `--realtime` | Enable Bam-style WebSocket hub | Disabled |
 | `--realtime-path=<p>` | WebSocket endpoint path | `/realtime` |
-| `--realtime-backend=<url>` | Backend URL for WS event proxy | Auto-detected |
 
 ### Subcommands
 
@@ -1040,17 +1038,14 @@ Built-in WebSocket pub/sub where **your backend stays HTTP-only**. The edge
 server manages all WebSocket connections, group membership, and message routing.
 Your app just responds to HTTP POSTs with JSON instructions.
 
-```bash
-rip server --realtime
-rip server --realtime --realtime-path=/ws
-rip server --realtime --realtime-backend=http://localhost:4005/v1/realtime
-```
+Realtime is always on — no flags needed. WebSocket connections are accepted
+at `/realtime` by default. Customize the path with `--realtime-path=/ws`.
 
 ### How it works
 
 1. Client connects via WebSocket to `/realtime` (configurable)
-2. Edge proxies the event to your backend as an HTTP POST with `Sec-WebSocket-Frame: open`
-3. Backend responds with JSON: `{ "+": ["room1"], "@": ["user1"], "welcome": "hello" }`
+2. Edge forwards the event to a worker as a POST to `/v1/realtime` with `Sec-WebSocket-Frame: open` — using the same worker pool and scheduler as regular HTTP requests
+3. Your handler responds with JSON: `{ "+": ["room1"], "@": ["user1"], "welcome": "hello" }`
 4. Edge updates group membership and delivers messages to targets
 
 ### Protocol
