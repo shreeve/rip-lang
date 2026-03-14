@@ -27,7 +27,7 @@ import { getLanIP as controlGetLanIP, startMdnsAdvertisement as controlStartMdns
 import { registerWatchGroup, handleWatchGroup, broadcastWatchChange, registerAppWatchDirs } from './control/watchers.rip'
 import { computeHideUrls, logStartupSummary, createCleanup, installShutdownHandlers } from './control/lifecycle.rip'
 import { computeSocketPrefix as cliComputeSocketPrefix, runVersionOutput, runHelpOutput, runStopSubcommand, runListSubcommand } from './control/cli.rip'
-import { runSetupMode, runWorkerMode } from './control/worker-mode.rip'
+import { runSetupMode, runWorkerMode } from './control/worker.rip'
 import { spawnTrackedWorker, postWorkerQuit, waitForWorkerReady } from './control/workers.rip'
 
 # Match capture holder for Rip's =~

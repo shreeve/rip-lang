@@ -1,5 +1,5 @@
 # ==============================================================================
-# control/worker-mode.rip — setup and worker mode runtime
+# control/worker.rip — setup and worker child process runtime
 # ==============================================================================
 
 import { getControlSocketPath } from './paths.rip'
