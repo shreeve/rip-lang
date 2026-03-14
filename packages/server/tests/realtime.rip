@@ -11,9 +11,9 @@ test "createHub returns empty hub", ->
   eq hub.members.size, 0
   eq hub.deliveries, 0
 
-test "generateClientId returns 8-char hex", ->
+test "generateClientId returns 32-char hex", ->
   id = generateClientId()
-  eq id.length, 8
+  eq id.length, 32
   ok /^[0-9a-f]+$/.test(id)
 
 test "generateClientId is unique", ->

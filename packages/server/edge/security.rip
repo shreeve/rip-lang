@@ -3,7 +3,6 @@
 # ==============================================================================
 
 MAX_URL_LENGTH = 8192
-MAX_HEADER_COUNT = 100
 
 export validateRequest = (req) ->
   url = new URL(req.url)

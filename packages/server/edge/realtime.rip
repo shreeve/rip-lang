@@ -27,7 +27,7 @@ export createHub = ->
   connections: 0
 
 export generateClientId = ->
-  randomBytes(4).toString('hex')
+  randomBytes(16).toString('hex')
 
 # --- Client management ---
 

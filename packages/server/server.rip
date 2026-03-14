@@ -695,17 +695,29 @@ class Server
     if host is 'rip.local' and url.pathname in ['/', '']
       return new Response Bun.file(import.meta.dir + '/server.html')
 
+    # Resolve host to app — all routes below require a valid host
+    appId = resolveHost(@appRegistry, host)
+    return new Response('Host not found', { status: 404 }) unless appId
+    app = getAppState(@appRegistry, appId)
+    return new Response('Host not found', { status: 404 }) unless app
+
+    # Built-in endpoints (require valid host)
     return @status() if url.pathname is '/status'
     return @diagnostics() if url.pathname is '/diagnostics'
 
-    # WebSocket upgrade for realtime
+    if url.pathname is '/server'
+      headers = new Headers({ 'content-type': 'text/plain' })
+      @maybeAddSecurityHeaders(headers)
+      return new Response('ok', { headers })
+
+    # WebSocket upgrade for realtime (requires valid host)
     if url.pathname is @flags.realtimePath and bunServer
       clientId = generateClientId()
       if bunServer.upgrade(req, { data: { clientId, headers: req.headers } })
         return
       return new Response('WebSocket upgrade failed', { status: 400 })
 
-    # External publish for realtime
+    # External publish for realtime (requires valid host)
     if url.pathname is '/publish' and req.method is 'POST'
       body = req.text!
       handlePublish(@realtimeHub, body)
@@ -720,22 +732,11 @@ class Server
       else
         return watchUnavailableResponse()
 
-    if url.pathname is '/server'
-      headers = new Headers({ 'content-type': 'text/plain' })
-      @maybeAddSecurityHeaders(headers)
-      return new Response('ok', { headers })
-
-    # Resolve host to app
-    appId = resolveHost(@appRegistry, host)
-    return new Response('Host not found', { status: 404 }) unless appId
-    app = getAppState(@appRegistry, appId)
-    return new Response('Host not found', { status: 404 }) unless app
-
     @metrics.requests++
 
     # Rate limiting (if configured)
     if @rateLimiter.maxRequests > 0
-      clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() or '127.0.0.1'
+      clientIp = bunServer?.requestIP?(req)?.address or '127.0.0.1'
       { allowed, retryAfter } = @rateLimiter.check(clientIp)
       return rateLimitResponse(retryAfter) unless allowed
 

@@ -10,7 +10,7 @@ import { generateRequestId } from '../edge/helpers.rip'
 test "generateRequestId returns req- prefixed hex", ->
   id = generateRequestId()
   ok id.startsWith('req-')
-  eq id.length, 16  # "req-" + 12 hex chars
+  eq id.length, 16  # "req-" + 12 hex chars (6 random bytes)
 
 test "generateRequestId is unique", ->
   a = generateRequestId()

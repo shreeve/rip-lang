@@ -3,7 +3,8 @@
 # ==============================================================================
 
 import { generateKeyPairSync, createSign, createHash, createPrivateKey } from 'node:crypto'
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 
 # --- Base64url ---
@@ -42,8 +43,8 @@ export loadOrCreateAccountKey = (storePath) ->
   pair = generateAccountKeyPair()
   pubJwk = exportPublicJwk(pair)
   privPem = exportPrivateKeyPem(pair)
-  mkdirSync(dirname(accountFile), { recursive: true }) unless existsSync(dirname(accountFile))
-  writeFileSync(accountFile, JSON.stringify({ publicJwk: pubJwk, privateKeyPem: privPem }), 'utf8')
+  mkdirSync(dirname(accountFile), { recursive: true, mode: 0o700 }) unless existsSync(dirname(accountFile))
+  writeFileSync(accountFile, JSON.stringify({ publicJwk: pubJwk, privateKeyPem: privPem }), { encoding: 'utf8', mode: 0o600 })
   { privateKey: pair.privateKey, publicJwk: pubJwk }
 
 # --- JWK Thumbprint (RFC 7638) ---
@@ -96,11 +97,10 @@ export signJws = (payload, url, nonce, privateKey, publicJwk, kid) ->
 
 export generateCsr = (domain, keyPem) ->
   # Write key to temp file, generate CSR, read it back
-  tmpDir = join('/tmp', "rip-acme-#{process.pid}")
-  mkdirSync(tmpDir, { recursive: true }) unless existsSync(tmpDir)
+  tmpDir = mkdtempSync(join(tmpdir(), 'rip-acme-'))
   keyPath = join(tmpDir, 'key.pem')
   csrPath = join(tmpDir, 'csr.der')
-  writeFileSync(keyPath, keyPem, 'utf8')
+  writeFileSync(keyPath, keyPem, { encoding: 'utf8', mode: 0o600 })
 
   result = Bun.spawnSync [
     'openssl', 'req', '-new'
@@ -119,6 +119,6 @@ export generateCsr = (domain, keyPem) ->
   csrDer = readFileSync(csrPath)
 
   # Cleanup
-  try Bun.spawnSync(['rm', '-rf', tmpDir])
+  try rmSync(tmpDir, { recursive: true, force: true })
 
   b64url(csrDer)

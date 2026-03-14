@@ -40,7 +40,9 @@ export proxyToUpstream = (req, upstreamBase, timeoutMs = 30000) ->
   headers = new Headers()
   for [key, val] as req.headers.entries()
     headers.set(key, val) unless HOP_HEADERS.has(key.toLowerCase())
-  headers.set('X-Forwarded-For', req.headers.get('x-forwarded-for') or '127.0.0.1')
+  existingXff = req.headers.get('x-forwarded-for')
+  clientIp = inUrl.hostname or '127.0.0.1'
+  headers.set('X-Forwarded-For', if existingXff then "#{existingXff}, #{clientIp}" else clientIp)
   headers.set('X-Forwarded-Proto', if inUrl.protocol is 'https:' then 'https' else 'http')
   headers.set('X-Forwarded-Host', inUrl.host)
 

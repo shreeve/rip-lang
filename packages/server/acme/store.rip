@@ -18,8 +18,8 @@ export domainDir = (baseDir, domain) ->
 
 export saveCert = (baseDir, domain, certPem, keyPem) ->
   dir = domainDir(baseDir, domain)
-  writeFileSync(join(dir, 'cert.pem'), certPem, 'utf8')
-  writeFileSync(join(dir, 'key.pem'), keyPem, 'utf8')
+  writeFileSync(join(dir, 'cert.pem'), certPem, { encoding: 'utf8', mode: 0o644 })
+  writeFileSync(join(dir, 'key.pem'), keyPem, { encoding: 'utf8', mode: 0o600 })
   { certPath: join(dir, 'cert.pem'), keyPath: join(dir, 'key.pem') }
 
 export loadCert = (baseDir, domain) ->
