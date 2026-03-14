@@ -36,6 +36,7 @@ import { createMetrics } from './edge/metrics.rip'
 import { setEventJsonMode, logEvent } from './control/events.rip'
 import { createHub, generateClientId, addClient, removeClient, processResponse, handlePublish, getRealtimeStats } from './edge/realtime.rip'
 import { findConfigFile, loadConfig, applyConfig } from './edge/config.rip'
+import { createRateLimiter, rateLimitResponse } from './edge/ratelimit.rip'
 
 # Match capture holder for Rip's =~
 _ = null
@@ -366,6 +367,8 @@ parseFlags = (argv) ->
     acmeStaging: has('--acme-staging')
     acmeDomain: getKV('--acme-domain=')
     realtimePath: getKV('--realtime-path=') or '/realtime'
+    rateLimit: coerceInt(getKV('--rate-limit='), 0)
+    rateLimitWindow: coerceInt(getKV('--rate-limit-window='), 60000)
     watch: watch
   }
 
@@ -583,6 +586,7 @@ class Server
     @acmeManager = null
     @metrics = createMetrics()
     @realtimeHub = createHub()
+    @rateLimiter = createRateLimiter(@flags.rateLimit, @flags.rateLimitWindow)
     @mdnsProcesses = new Map()
     @watchGroups = new Map()
     @manager = null
@@ -723,6 +727,12 @@ class Server
     return new Response('Host not found', { status: 404 }) unless app
 
     @metrics.requests++
+
+    # Rate limiting (if configured)
+    if @rateLimiter.maxRequests > 0
+      clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() or '127.0.0.1'
+      { allowed, retryAfter } = @rateLimiter.check(clientIp)
+      return rateLimitResponse(retryAfter) unless allowed
 
     # Assign request ID for tracing
     requestId = req.headers.get('x-request-id') or generateRequestId()
