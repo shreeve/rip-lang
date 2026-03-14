@@ -88,7 +88,6 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Event handler typing             | 09, 12-intrinsics     | Inline handlers typed via `__RipEvents`; named method refs (`@submit: @handler`) remain `any` — use `(e:: SubmitEvent) ->` to annotate explicitly   |
 | Runtime return-type validation   | 10-validation         | Return types are erased — `response.json()` is unvalidated `any`; no `schema.parse()` equivalent                                                     |
 | Type narrowing (control flow)    | 04-unions *(comment)* | TS narrows compiled JS, not Rip source                                                                                                               |
-| Unresolved import paths          | 07-integration        | `rip check` doesn't flag imports to nonexistent files                                                                                                |
 | Enum exhaustiveness              | 04-unions             | Switch narrowing works in .ts but `rip check` doesn't verify exhaustiveness                                                                          |
 
 **Component model gaps** (would need language-level changes):
@@ -139,7 +138,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Array destructured params  | 06-functions   | `[first:: string, second:: string]` → tuple `[string, string]` in .d.ts                                                                |
 | Nested destructured params | 06-functions   | `{user: {name:: string, age:: number}}` → `{user: {name: string, age: number}}` in .d.ts                                               |
 | `void` return annotation   | 06-functions   | `def fn!` emits `: void` in .d.ts; `!` sigil suppresses implicit return and declares void return type                                  |
-| Cross-file type flow       | 07-integration | Via .d.ts; untyped files get `@ts-nocheck`                                                                                             |
+| Cross-file type flow       | 07-integration | Via .d.ts; untyped files get `@ts-nocheck`; unresolved `.rip` imports flagged                                                          |
 | Component prop types       | 09-components  | Enriched stub gives Signal<T>/Computed<T> declarations; TS checks computeds, methods, and render block intrinsic elements              |
 | Intrinsic element typing   | 12-intrinsics  | `__ripEl` emits typed helper calls; lib.dom source of truth for tags, attrs, events, global attrs                                      |
 | Required component props   | 09-components  | `@prop:: T` (no `:=`) — required in constructor, caught at usage sites                                                                 |

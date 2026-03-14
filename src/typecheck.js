@@ -953,6 +953,26 @@ export async function runCheck(targetDir, opts = {}) {
     }
   }
 
+  // Check for unresolved .rip imports in typed files
+  const fileResults = [];
+  let totalErrors = 0, totalWarnings = 0;
+  for (const [fp, entry] of compiled) {
+    if (!entry.hasTypes) continue;
+    const srcLines = entry.source.split('\n');
+    const errors = [];
+    for (let s = 0; s < srcLines.length; s++) {
+      const m = srcLines[s].match(/from\s+['"]([^'"]*\.rip)['"]/);
+      if (!m) continue;
+      const imported = resolve(dirname(fp), m[1]);
+      if (!existsSync(imported)) {
+        const col = srcLines[s].indexOf(m[1]);
+        errors.push({ line: s + 1, col: col + 1, len: m[1].length, message: `Cannot find module '${m[1]}'`, severity: 'error', code: 'rip', srcLine: srcLines[s], related: [] });
+        totalErrors++;
+      }
+    }
+    if (errors.length > 0) fileResults.push({ file: fp, errors });
+  }
+
   // Create TypeScript language service
   const settings = createTypeCheckSettings(ts);
 
@@ -999,9 +1019,6 @@ export async function runCheck(targetDir, opts = {}) {
   patchUninitializedTypes(ts, service, compiled);
 
   // Collect diagnostics
-  let totalErrors = 0;
-  let totalWarnings = 0;
-  const fileResults = [];
 
   for (const [fp, entry] of compiled) {
     if (!entry.hasTypes) continue;
