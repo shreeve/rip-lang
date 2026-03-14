@@ -1,0 +1,124 @@
+# test-acme.rip — ACME challenges, store, and crypto tests
+
+import { test, eq, ok } from '../runner.rip'
+import { createChallengeStore, handleChallengeRequest } from '../../acme/challenges.rip'
+import { defaultCertDir, ensureDir, saveCert, loadCert, needsRenewal, listCerts } from '../../acme/store.rip'
+import { b64url, generateAccountKeyPair, exportPublicJwk, thumbprint, signJws } from '../../acme/crypto.rip'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+# --- Challenge store ---
+
+test "createChallengeStore set/get/has/remove", ->
+  store = createChallengeStore()
+  eq store.has('tok1'), false
+  store.set('tok1', 'auth1')
+  eq store.has('tok1'), true
+  eq store.get('tok1'), 'auth1'
+  store.remove('tok1')
+  eq store.has('tok1'), false
+  eq store.get('tok1'), null
+
+test "handleChallengeRequest serves token", ->
+  store = createChallengeStore()
+  store.set('abc123', 'abc123.thumbprint')
+  url = new URL('http://example.com/.well-known/acme-challenge/abc123')
+  res = handleChallengeRequest(url, store)
+  ok res
+  eq res.status, 200
+
+test "handleChallengeRequest returns null for unknown token", ->
+  store = createChallengeStore()
+  url = new URL('http://example.com/.well-known/acme-challenge/unknown')
+  res = handleChallengeRequest(url, store)
+  eq res, null
+
+test "handleChallengeRequest returns null for non-challenge path", ->
+  store = createChallengeStore()
+  url = new URL('http://example.com/other/path')
+  res = handleChallengeRequest(url, store)
+  eq res, null
+
+# --- Cert store ---
+
+test "saveCert and loadCert round-trip", ->
+  dir = mkdtempSync(join(tmpdir(), 'rip-test-'))
+  saveCert(dir, 'test.com', 'CERT-PEM', 'KEY-PEM')
+  rec = loadCert(dir, 'test.com')
+  ok rec
+  eq rec.cert, 'CERT-PEM'
+  eq rec.key, 'KEY-PEM'
+  rmSync(dir, { recursive: true })
+
+test "loadCert returns null for missing domain", ->
+  dir = mkdtempSync(join(tmpdir(), 'rip-test-'))
+  rec = loadCert(dir, 'missing.com')
+  eq rec, null
+  rmSync(dir, { recursive: true })
+
+test "needsRenewal returns true for missing cert", ->
+  dir = mkdtempSync(join(tmpdir(), 'rip-test-'))
+  eq needsRenewal(dir, 'missing.com'), true
+  rmSync(dir, { recursive: true })
+
+test "listCerts returns domain directories", ->
+  dir = mkdtempSync(join(tmpdir(), 'rip-test-'))
+  saveCert(dir, 'a.com', 'C', 'K')
+  saveCert(dir, 'b.com', 'C', 'K')
+  certs = listCerts(dir)
+  ok certs.includes('a.com')
+  ok certs.includes('b.com')
+  rmSync(dir, { recursive: true })
+
+test "defaultCertDir returns a path", ->
+  d = defaultCertDir()
+  ok typeof d is 'string'
+  ok d.includes('.rip')
+
+# --- Crypto ---
+
+test "b64url encodes correctly", ->
+  eq b64url('hello'), 'aGVsbG8'
+  eq b64url(''), ''
+
+test "b64url strips padding", ->
+  encoded = b64url('a')
+  eq encoded.includes('='), false
+
+test "generateAccountKeyPair returns keypair", ->
+  pair = generateAccountKeyPair()
+  ok pair.publicKey
+  ok pair.privateKey
+
+test "exportPublicJwk returns EC P-256 JWK", ->
+  pair = generateAccountKeyPair()
+  jwk = exportPublicJwk(pair)
+  eq jwk.kty, 'EC'
+  eq jwk.crv, 'P-256'
+  ok jwk.x
+  ok jwk.y
+
+test "thumbprint returns 43-char base64url", ->
+  pair = generateAccountKeyPair()
+  jwk = exportPublicJwk(pair)
+  tp = thumbprint(jwk)
+  eq tp.length, 43
+
+test "signJws returns valid JWS structure", ->
+  pair = generateAccountKeyPair()
+  jwk = exportPublicJwk(pair)
+  jws = signJws({ test: true }, 'https://example.com', 'nonce1', pair.privateKey, jwk, null)
+  parsed = JSON.parse(jws)
+  ok parsed.protected
+  ok parsed.payload
+  ok parsed.signature
+
+test "signJws with kid omits jwk from header", ->
+  pair = generateAccountKeyPair()
+  jwk = exportPublicJwk(pair)
+  jws = signJws({}, 'https://example.com', 'nonce1', pair.privateKey, jwk, 'https://acme/acct/1')
+  parsed = JSON.parse(jws)
+  header = JSON.parse(Buffer.from(parsed.protected.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString())
+  eq header.kid, 'https://acme/acct/1'
+  eq header.jwk, undefined

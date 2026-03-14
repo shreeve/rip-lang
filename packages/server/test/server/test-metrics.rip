@@ -1,0 +1,73 @@
+# ==============================================================================
+# test-metrics.rip — edge/metrics.rip tests
+# ==============================================================================
+
+import { test, eq, ok, near } from '../runner.rip'
+import { createMetrics } from '../../edge/metrics.rip'
+
+test "createMetrics returns object with counters", ->
+  m = createMetrics()
+  eq m.requests, 0
+  eq m.forwarded, 0
+  eq m.responses2xx, 0
+  eq m.queueShed, 0
+
+test "counter increments", ->
+  m = createMetrics()
+  m.requests++
+  m.requests++
+  m.forwarded++
+  eq m.requests, 2
+  eq m.forwarded, 1
+
+test "recordStatus tracks 2xx", ->
+  m = createMetrics()
+  m.recordStatus(200)
+  m.recordStatus(201)
+  m.recordStatus(204)
+  eq m.responses2xx, 3
+  eq m.responses4xx, 0
+
+test "recordStatus tracks 4xx and 5xx", ->
+  m = createMetrics()
+  m.recordStatus(404)
+  m.recordStatus(500)
+  m.recordStatus(503)
+  eq m.responses4xx, 1
+  eq m.responses5xx, 2
+
+test "recordLatency and percentiles with single value", ->
+  m = createMetrics()
+  m.recordLatency(0.05)
+  p = m.percentiles()
+  near p.p50, 0.05
+  near p.p95, 0.05
+  near p.p99, 0.05
+
+test "percentiles with multiple values", ->
+  m = createMetrics()
+  for i in [1..100]
+    m.recordLatency(i / 1000)
+  p = m.percentiles()
+  ok p.p50 >= 0.045 and p.p50 <= 0.055
+  ok p.p95 >= 0.090 and p.p95 <= 0.100
+  ok p.p99 >= 0.095 and p.p99 <= 0.105
+
+test "percentiles empty returns zeros", ->
+  m = createMetrics()
+  p = m.percentiles()
+  eq p.p50, 0
+  eq p.p95, 0
+  eq p.p99, 0
+
+test "snapshot returns expected shape", ->
+  m = createMetrics()
+  m.requests = 100
+  m.responses2xx = 90
+  m.responses5xx = 10
+  snap = m.snapshot(Date.now() - 60000, null)
+  ok snap.uptime >= 59 and snap.uptime <= 61
+  eq snap.counters.requests, 100
+  eq snap.counters.responses['2xx'], 90
+  eq snap.counters.responses['5xx'], 10
+  eq snap.apps, []
