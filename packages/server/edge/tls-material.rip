@@ -1,0 +1,43 @@
+# ==============================================================================
+# edge/tls-material.rip — TLS material loading helpers
+# ==============================================================================
+
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { X509Certificate } from 'node:crypto'
+
+export printCertSummary = (certPem) ->
+  try
+    x = new X509Certificate(certPem)
+    subject = x.subject.split(/,/)[0]?.trim() or x.subject
+    issuer = x.issuer.split(/,/)[0]?.trim() or x.issuer
+    exp = new Date(x.validTo)
+    console.log "rip-server: tls cert #{subject} issued by #{issuer} expires #{exp.toISOString()}"
+  catch
+    null
+
+export loadTlsMaterial = (flags, serverDir) ->
+  # Explicit cert/key paths
+  if flags.certPath and flags.keyPath
+    try
+      cert = readFileSync(flags.certPath, 'utf8')
+      key = readFileSync(flags.keyPath, 'utf8')
+      printCertSummary(cert)
+      return { cert, key }
+    catch
+      console.error 'Failed to read TLS cert/key from provided paths. Use http or fix paths.'
+      process.exit(2)
+
+  # Shipped wildcard cert for *.ripdev.io (GlobalSign, valid for all subdomains)
+  certsDir = join(serverDir, 'certs')
+  certPath = join(certsDir, 'ripdev.io.crt')
+  keyPath = join(certsDir, 'ripdev.io.key')
+  try
+    cert = readFileSync(certPath, 'utf8')
+    key = readFileSync(keyPath, 'utf8')
+    printCertSummary(cert)
+    return { cert, key }
+  catch e
+    console.error "rip-server: failed to load TLS certs from #{certsDir}: #{e.message}"
+    console.error 'Use --cert/--key to provide your own, or use http to disable TLS.'
+    process.exit(2)
