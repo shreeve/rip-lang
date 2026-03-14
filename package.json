@@ -37,6 +37,8 @@
     "parser": "bun src/grammar/solar.rip -o src/parser.js src/grammar/grammar.rip",
     "serve": "bun scripts/serve.js",
     "test": "bun test/runner.js",
+    "test:ui": "bun run --cwd packages/ui test:e2e",
+    "test:ui:chromium": "bun run --cwd packages/ui test:e2e:chromium",
     "version": "./bin/rip -v",
     "pack": "npm pack --dry-run"
   },

@@ -34,7 +34,15 @@
   ],
   "license": "MIT",
   "type": "module",
+  "scripts": {
+    "test:e2e": "bunx playwright test -c playwright.config.mjs",
+    "test:e2e:chromium": "bunx playwright test -c playwright.config.mjs --project=chromium",
+    "test:e2e:headed": "bunx playwright test -c playwright.config.mjs --headed --project=chromium"
+  },
   "dependencies": {
     "rip-lang": ">=3.13.108"
+  },
+  "devDependencies": {
+    "playwright": "1.58.2"
   }
 }

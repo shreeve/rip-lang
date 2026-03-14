@@ -5,6 +5,28 @@ documentation, see [README.md](README.md).
 
 ---
 
+## E2E Overlay QA
+
+Run the browser smoke suite for modern overlay primitives:
+
+```bash
+# from repo root
+bun run test:ui:chromium
+
+# full browser matrix
+bun run test:ui
+```
+
+If Playwright browsers are not installed yet:
+
+```bash
+bunx playwright install chromium firefox webkit
+```
+
+See [TESTING.md](TESTING.md) for the quality bar and covered scenarios.
+
+---
+
 ## Widget Authoring Guide
 
 Rules learned building these widgets. Follow them.

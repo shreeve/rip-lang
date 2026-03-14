@@ -20,8 +20,14 @@ registerWorker = (sockets, availableWorkers, payload) ->
   { version }
 
 removeWorkerById = (sockets, availableWorkers, workerId) ->
-  sockets: sockets.filter((x) -> x.workerId isnt workerId)
-  availableWorkers: availableWorkers.filter((x) -> x.workerId isnt workerId)
+  # Mutate in-place to avoid race conditions with concurrent join/quit
+  i = sockets.length
+  while i-- > 0
+    sockets.splice(i, 1) if sockets[i].workerId is workerId
+  i = availableWorkers.length
+  while i-- > 0
+    availableWorkers.splice(i, 1) if availableWorkers[i].workerId is workerId
+  return
 
 # --- Control socket handlers ---
 
@@ -44,13 +50,10 @@ export handleWorkerControl = (req, state) ->
         newestVersion
 
     if j?.op is 'quit' and typeof j.workerId is 'number'
-      { sockets, availableWorkers } = removeWorkerById(state.sockets, state.availableWorkers, j.workerId)
+      removeWorkerById(state.sockets, state.availableWorkers, j.workerId)
       return
         handled: true
         response: jsonOk()
-        sockets
-        availableWorkers
-        newestVersion: state.newestVersion
   { handled: true, response: jsonBad(), sockets: state.sockets, availableWorkers: state.availableWorkers, newestVersion: state.newestVersion }
 
 export handleWatchControl = (req, registerWatch, watchDirs) ->

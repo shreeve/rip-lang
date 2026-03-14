@@ -5,31 +5,35 @@
 DEFAULT_WINDOW_MS = 60000    # 1 minute
 DEFAULT_MAX_REQUESTS = 1000  # per window
 CLEANUP_INTERVAL_MS = 30000  # prune stale entries
+MAX_BUCKETS = 100000         # hard cap on tracked IPs to prevent memory exhaustion
 
 export createRateLimiter = (maxRequests, windowMs) ->
-  maxRequests = maxRequests or DEFAULT_MAX_REQUESTS
-  windowMs = windowMs or DEFAULT_WINDOW_MS
-  buckets = new Map()  # ip -> [timestamps]
+  # Explicit check: 0 means disabled, null/undefined gets default
+  maxRequests = if typeof maxRequests is 'number' then maxRequests else DEFAULT_MAX_REQUESTS
+  windowMs = if typeof windowMs is 'number' and windowMs > 0 then windowMs else DEFAULT_WINDOW_MS
+  buckets = new Map()
 
-  # Periodic cleanup of expired entries
-  cleanupTimer = setInterval ->
-    now = Date.now()
-    for [ip, timestamps] as buckets
-      fresh = timestamps.filter((t) -> now - t < windowMs)
-      if fresh.length is 0
-        buckets.delete(ip)
-      else
-        buckets.set(ip, fresh)
-  , CLEANUP_INTERVAL_MS
+  cleanupTimer = if maxRequests > 0
+    setInterval ->
+      now = Date.now()
+      for [ip, timestamps] as buckets
+        fresh = timestamps.filter((t) -> now - t < windowMs)
+        if fresh.length is 0
+          buckets.delete(ip)
+        else
+          buckets.set(ip, fresh)
+    , CLEANUP_INTERVAL_MS
+  else
+    null
 
   limiter =
     maxRequests: maxRequests
     windowMs: windowMs
 
     check: (ip) ->
+      return { allowed: true, remaining: 0, retryAfter: 0 } if maxRequests <= 0
       now = Date.now()
       timestamps = buckets.get(ip) or []
-      # Remove expired entries
       timestamps = timestamps.filter((t) -> now - t < windowMs)
       if timestamps.length >= maxRequests
         buckets.set(ip, timestamps)
@@ -37,13 +41,17 @@ export createRateLimiter = (maxRequests, windowMs) ->
         return { allowed: false, remaining: 0, retryAfter }
       timestamps.push(now)
       buckets.set(ip, timestamps)
+      # Evict oldest bucket if over cap (prevent memory exhaustion from IP cardinality)
+      if buckets.size > MAX_BUCKETS
+        oldest = buckets.keys().next().value
+        buckets.delete(oldest)
       { allowed: true, remaining: maxRequests - timestamps.length, retryAfter: 0 }
 
     reset: (ip) ->
       buckets.delete(ip)
 
     stop: ->
-      clearInterval(cleanupTimer)
+      clearInterval(cleanupTimer) if cleanupTimer
 
   limiter
 

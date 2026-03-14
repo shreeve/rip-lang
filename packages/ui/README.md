@@ -28,6 +28,9 @@ cd packages/ui
 rip server
 ```
 
+For browser quality checks and overlay regression tests, see
+[TESTING.md](TESTING.md).
+
 Every widget:
 - Handles all keyboard interactions per WAI-ARIA Authoring Practices
 - Sets correct ARIA attributes automatically
