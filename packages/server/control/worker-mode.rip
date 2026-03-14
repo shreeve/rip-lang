@@ -23,6 +23,7 @@ export runWorkerMode = ->
   maxRequests = parseInt(process.env.MAX_REQUESTS or '10000')
   maxSeconds = parseInt(process.env.MAX_SECONDS or '0')
   appEntry = process.env.APP_ENTRY
+  appId = process.env.APP_ID or 'default'
   socketPath = process.env.SOCKET_PATH
   socketPrefix = process.env.SOCKET_PREFIX
   version = parseInt(process.env.RIP_VERSION or '1')
@@ -66,14 +67,14 @@ export runWorkerMode = ->
 
   selfJoin = ->
     try
-      payload = { op: 'join', workerId, pid: process.pid, socket: socketPath, version }
+      payload = { op: 'join', workerId, pid: process.pid, socket: socketPath, version, appId }
       body = JSON.stringify(payload)
       ctl = getControlSocketPath(socketPrefix)
       fetch!('http://localhost/worker', { method: 'POST', body, headers: { 'content-type': 'application/json' }, unix: ctl })
 
   selfQuit = ->
     try
-      payload = { op: 'quit', workerId }
+      payload = { op: 'quit', workerId, appId }
       body = JSON.stringify(payload)
       ctl = getControlSocketPath(socketPrefix)
       fetch!('http://localhost/worker', { method: 'POST', body, headers: { 'content-type': 'application/json' }, unix: ctl })

@@ -482,7 +482,7 @@ class Manager
 
   spawnWorker: (version) ->
     workerId = ++@nextWorkerId
-    tracked = spawnTrackedWorker(@flags, workerId, (version or @currentVersion), nowMs, import.meta.path)
+    tracked = spawnTrackedWorker(@flags, workerId, (version or @currentVersion), nowMs, import.meta.path, @defaultAppId)
     @monitor(tracked)
     tracked
 
@@ -833,8 +833,12 @@ class Server
     url = new URL(req.url)
 
     if req.method is 'POST' and url.pathname is '/worker'
-      app = getAppState(@appRegistry, @defaultAppId)
-      res = handleWorkerControl!(req,
+      # Peek at appId from payload to route to correct app state
+      body = req.text!
+      appId = try JSON.parse(body).appId
+      appId = appId or @defaultAppId
+      app = getAppState(@appRegistry, appId) or getAppState(@appRegistry, @defaultAppId)
+      res = handleWorkerControl!(new Request(req.url, { method: 'POST', headers: req.headers, body }),
         sockets: app.sockets
         availableWorkers: app.availableWorkers
         newestVersion: app.newestVersion
