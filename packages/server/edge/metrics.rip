@@ -1,0 +1,81 @@
+# ==============================================================================
+# edge/metrics.rip — lightweight in-process metrics collector
+# ==============================================================================
+
+LATENCY_WINDOW = 1000
+
+export createMetrics = ->
+  latencies = []
+  latencyIdx = 0
+
+  m =
+    # Counters (monotonically increasing)
+    requests: 0
+    responses2xx: 0
+    responses4xx: 0
+    responses5xx: 0
+    forwarded: 0
+    queued: 0
+    queueTimeouts: 0
+    queueShed: 0
+    workerRestarts: 0
+    acmeRenewals: 0
+    acmeFailures: 0
+
+    # Record a request latency (seconds)
+    recordLatency: (seconds) ->
+      if latencies.length < LATENCY_WINDOW
+        latencies.push(seconds)
+      else
+        latencies[latencyIdx] = seconds
+      latencyIdx = (latencyIdx + 1) % LATENCY_WINDOW
+
+    # Record a response by status code class
+    recordStatus: (status) ->
+      if status >= 200 and status < 300
+        m.responses2xx++
+      else if status >= 400 and status < 500
+        m.responses4xx++
+      else if status >= 500
+        m.responses5xx++
+
+    # Compute latency percentiles from the rolling window
+    percentiles: ->
+      return { p50: 0, p95: 0, p99: 0 } if latencies.length is 0
+      sorted = [...latencies].sort((a, b) -> a - b)
+      n = sorted.length
+      pick = (p) -> sorted[Math.min(Math.floor(n * p), n - 1)]
+      { p50: pick(0.50), p95: pick(0.95), p99: pick(0.99) }
+
+    # Full snapshot of all metrics
+    snapshot: (startedAt, appRegistry) ->
+      totalInflight = 0
+      totalQueueDepth = 0
+      apps = []
+      if appRegistry
+        for [appId, app] as appRegistry.apps
+          totalInflight += app.inflightTotal
+          totalQueueDepth += app.queue.length
+          apps.push
+            id: appId
+            workers: app.sockets.length
+            inflight: app.inflightTotal
+            queueDepth: app.queue.length
+      uptimeSeconds = if startedAt then Math.floor((Date.now() - startedAt) / 1000) else 0
+
+      uptime: uptimeSeconds
+      apps: apps
+      counters:
+        requests: m.requests
+        responses: { '2xx': m.responses2xx, '4xx': m.responses4xx, '5xx': m.responses5xx }
+        forwarded: m.forwarded
+        queue: { queued: m.queued, timeouts: m.queueTimeouts, shed: m.queueShed }
+        workers: { restarts: m.workerRestarts }
+        acme: { renewals: m.acmeRenewals, failures: m.acmeFailures }
+      gauges:
+        workersActive: apps.reduce(((sum, a) -> sum + a.workers), 0)
+        inflight: totalInflight
+        queueDepth: totalQueueDepth
+      latency: m.percentiles()
+
+  m
