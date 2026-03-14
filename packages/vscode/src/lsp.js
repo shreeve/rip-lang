@@ -1280,6 +1280,29 @@ connection.onDefinition((params) => {
         range: { start: { line: compInfo.line, character: 0 }, end: { line: compInfo.line, character: 0 } },
       }];
     }
+
+    // Import go-to-definition — resolve import paths directly
+    const srcLine = doc.getText().split('\n')[params.position.line];
+    const fromMatch = srcLine?.match(/from\s+['"]([^'"]+)['"]/);
+    if (fromMatch) {
+      let importPath = fromMatch[1];
+      if (!path.isAbsolute(importPath)) importPath = path.resolve(path.dirname(fp), importPath);
+      if (!importPath.endsWith('.rip') && fs.existsSync(importPath + '.rip')) importPath += '.rip';
+      if (fs.existsSync(importPath)) {
+        if (word && word !== 'from' && word !== 'import') {
+          const targetSrc = fs.readFileSync(importPath, 'utf8');
+          const targetLines = targetSrc.split('\n');
+          const pat = new RegExp(`(?:^|export\\s+)(?:def\\s+|type\\s+|interface\\s+)?${word}\\s*[=(:]`);
+          for (let i = 0; i < targetLines.length; i++) {
+            if (pat.test(targetLines[i])) {
+              const col = targetLines[i].indexOf(word);
+              return [{ uri: pathToUri(importPath), range: { start: { line: i, character: Math.max(0, col) }, end: { line: i, character: Math.max(0, col) + word.length } } }];
+            }
+          }
+        }
+        return [{ uri: pathToUri(importPath), range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } } }];
+      }
+    }
   }
 
   // TypeScript go-to-definition

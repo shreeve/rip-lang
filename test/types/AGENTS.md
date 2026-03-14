@@ -101,9 +101,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 **IDE-only gaps** (require VS Code extension changes, not testable in audit files):
 
-| Category                    | Tested In    | Notes                                                                                                                          |
-| --------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| Go-to-definition on imports | *(IDE only)* | Import lines unmapped; works at call sites only                                                                                |
+*No current gaps.*
 
 **Design trade-offs** (inherent to the language, not fixable via type system):
 
@@ -151,6 +149,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Union value autocomplete   | *(IDE only)*   | String literal union completions for prop values, prop defaults, and typed variable assignments                                        |
 | Strict mode                | *(all files)*  | `strict: true` enabled — `noImplicitAny`, full null checks, strict function types all active                                          |
 | Inline discriminated unions | 04-unions      | Inline `{ ... } \| { ... }` union types now emit valid .d.ts (previously mangled by multi-line formatting)                            |
+| Go-to-def on imports       | *(IDE only)*   | Resolves import paths directly and finds exported symbol in target file; works for `from './file.rip'` imports                        |
 | Unused variable dimming    | *(IDE only)*   | Forwards `DiagnosticTag.Unnecessary` and `DiagnosticTag.Deprecated` from TS diagnostics; unused vars dimmed, deprecated strikethrough |
 | Semantic token provider    | *(IDE only)*   | Bridges TS `getEncodedSemanticClassifications()` to Rip source; typed files get semantic tokens, reactive vars not marked readonly     |
 
