@@ -37,6 +37,7 @@ import { setEventJsonMode, logEvent } from './control/events.rip'
 import { createHub, generateClientId, addClient, removeClient, processResponse, handlePublish, getRealtimeStats } from './edge/realtime.rip'
 import { findConfigFile, loadConfig, applyConfig } from './edge/config.rip'
 import { createRateLimiter, rateLimitResponse } from './edge/ratelimit.rip'
+import { validateRequest } from './edge/security.rip'
 
 # Match capture holder for Rip's =~
 _ = null
@@ -685,6 +686,10 @@ class Server
   fetch: (req, bunServer) ->
     url = new URL(req.url)
     host = url.hostname.toLowerCase()
+
+    # Request smuggling defenses
+    validation = validateRequest(req)
+    return new Response(validation.message, { status: validation.status }) unless validation.valid
 
     # Dashboard for rip.local
     if host is 'rip.local' and url.pathname in ['/', '']

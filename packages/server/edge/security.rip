@@ -1,0 +1,34 @@
+# ==============================================================================
+# edge/security.rip — request smuggling and validation defenses
+# ==============================================================================
+
+MAX_URL_LENGTH = 8192
+MAX_HEADER_COUNT = 100
+
+export validateRequest = (req) ->
+  url = new URL(req.url)
+
+  # Reject oversized URLs
+  if url.href.length > MAX_URL_LENGTH
+    return { valid: false, status: 400, message: 'URL too long' }
+
+  # Reject conflicting Content-Length and Transfer-Encoding
+  hasContentLength = req.headers.has('content-length')
+  hasTransferEncoding = req.headers.has('transfer-encoding')
+  if hasContentLength and hasTransferEncoding
+    return { valid: false, status: 400, message: 'Conflicting Content-Length and Transfer-Encoding' }
+
+  # Reject multiple Host headers (check for comma which indicates multiple values)
+  hostHeader = req.headers.get('host')
+  if hostHeader and hostHeader.includes(',')
+    return { valid: false, status: 400, message: 'Multiple Host headers' }
+
+  # Reject null bytes in URL
+  if url.pathname.includes('\x00') or url.search.includes('\x00')
+    return { valid: false, status: 400, message: 'Null byte in URL' }
+
+  # Reject path traversal attempts
+  if url.pathname.includes('..') and decodeURIComponent(url.pathname).includes('..')
+    return { valid: false, status: 400, message: 'Path traversal rejected' }
+
+  { valid: true }
