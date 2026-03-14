@@ -39,6 +39,7 @@
     "test": "bun test/runner.js",
     "test:ui": "bun run --cwd packages/ui test:e2e",
     "test:ui:chromium": "bun run --cwd packages/ui test:e2e:chromium",
+    "test:ui:axe": "bun run --cwd packages/ui test:e2e:axe",
     "version": "./bin/rip -v",
     "pack": "npm pack --dry-run"
   },

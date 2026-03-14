@@ -1,0 +1,65 @@
+name: UI Quality
+
+on:
+  pull_request:
+    paths:
+      - 'packages/ui/**'
+      - 'docs/dist/**'
+      - 'src/**'
+      - 'package.json'
+      - 'bun.lock'
+      - '.github/workflows/ui-quality.yml'
+  push:
+    branches: [main, edge]
+    paths:
+      - 'packages/ui/**'
+      - 'docs/dist/**'
+      - 'src/**'
+      - 'package.json'
+      - 'bun.lock'
+      - '.github/workflows/ui-quality.yml'
+
+jobs:
+  ui-quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('bun.lock', 'packages/ui/package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
+      - name: Install Playwright browsers
+        run: bunx playwright install chromium firefox webkit
+
+      - name: Build browser bundle
+        run: bun run build
+
+      - name: Run UI browser matrix
+        run: bun run test:ui
+
+      - name: Run UI accessibility scan
+        run: bun run test:ui:axe
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            packages/ui/playwright-report
+            packages/ui/test-results

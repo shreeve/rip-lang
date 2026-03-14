@@ -1501,6 +1501,12 @@ export WidgetGallery = component
           .dialog-panel
             h2 style: "font-size:18px;font-weight:600;margin-bottom:8px", "Confirm Action"
             p.dialog-desc "Are you sure you want to proceed?"
+            Popover placement: "bottom-start"
+              button.demo-btn data-trigger: true
+                "More options"
+              div.floating-panel data-content: true
+                p.floating-title "Dialog popover"
+                p.floating-desc "Nested overlay: popover stays inside active modal flow."
             . style: "display:flex;gap:8px;justify-content:flex-end"
               button.demo-btn @click: (=> showDialog = false)
                 "Cancel"

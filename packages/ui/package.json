@@ -37,12 +37,14 @@
   "scripts": {
     "test:e2e": "bunx playwright test -c playwright.config.mjs",
     "test:e2e:chromium": "bunx playwright test -c playwright.config.mjs --project=chromium",
-    "test:e2e:headed": "bunx playwright test -c playwright.config.mjs --headed --project=chromium"
+    "test:e2e:headed": "bunx playwright test -c playwright.config.mjs --headed --project=chromium",
+    "test:e2e:axe": "UI_AXE=1 bunx playwright test -c playwright.config.mjs --project=chromium"
   },
   "dependencies": {
     "rip-lang": ">=3.13.108"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.11.1",
     "playwright": "1.58.2"
   }
 }

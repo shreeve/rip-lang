@@ -17,6 +17,7 @@ From repo root:
 ```bash
 bun run test:ui:chromium
 bun run test:ui
+bun run test:ui:axe
 ```
 
 From `packages/ui`:
@@ -25,6 +26,7 @@ From `packages/ui`:
 bun run test:e2e:chromium
 bun run test:e2e
 bun run test:e2e:headed
+bun run test:e2e:axe
 ```
 
 ## Browser Setup
@@ -46,10 +48,12 @@ bunx playwright install chromium firefox webkit
 - Menu: role/open-state semantics
 - Select: keyboard open/selection close
 - Tooltip: hover + role visibility
+- Nested overlay: popover interaction while dialog is open
+- Race smoke: repeated popover open/escape cycles
+- Optional axe scan (`UI_AXE=1`): blocks on critical issues; reports serious issues
 
 ## Next Tightening Steps
 
-- Add nested overlay tests (`dialog` + popover/menu/tooltip inside modal).
 - Add focus-return assertions for all modal/popup components.
 - Add stress tests for rapid toggle/open-close races.
-- Add optional axe scans in CI for key sections (`#menu`, `#select`, `#dialog`).
+- Expand axe coverage to include menubar/nav-menu and context-menu sections.

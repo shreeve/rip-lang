@@ -15,6 +15,9 @@ bun run test:ui:chromium
 
 # full browser matrix
 bun run test:ui
+
+# optional accessibility scan (Chromium)
+bun run test:ui:axe
 ```
 
 If Playwright browsers are not installed yet:
