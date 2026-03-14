@@ -36,6 +36,7 @@ import { computeHideUrls, logStartupSummary } from './control/startup-reporting.
 import { runSetupMode, runWorkerMode } from './control/worker-mode.rip'
 import { registerAppWatchDirs } from './control/app-watchers.rip'
 import { spawnTrackedWorker } from './control/worker-spawn.rip'
+import { postWorkerQuit, waitForWorkerReady } from './control/worker-health.rip'
 
 # Match capture holder for Rip's =~
 _ = null
@@ -482,12 +483,7 @@ class Manager
       return if @retiringIds.has(w.id)
 
       # Notify server to remove dead worker's socket entry (fire-and-forget)
-      try
-        ctl = getControlSocketPath(@flags.socketPrefix)
-        body = JSON.stringify({ op: 'quit', workerId: w.id })
-        fetch!('http://localhost/worker', { method: 'POST', body, headers: { 'content-type': 'application/json' }, unix: ctl }).catch(-> null)
-      catch
-        null
+      postWorkerQuit(@flags.socketPrefix, w.id)
 
       w.restartCount++
       w.backoffMs = Math.min(w.backoffMs * 2, MAX_BACKOFF_MS)
@@ -498,17 +494,7 @@ class Manager
       , w.backoffMs
 
   waitWorkerReady: (socketPath, timeoutMs = 5000) ->
-    start = Date.now()
-    while Date.now() - start < timeoutMs
-      try
-        res = fetch!('http://localhost/ready', { unix: socketPath, method: 'GET' })
-        if res.ok
-          txt = res.text!
-          return true if txt is 'ok'
-      catch
-        null
-      await new Promise (r) -> setTimeout(r, 30)
-    false
+    waitForWorkerReady(socketPath, timeoutMs)
 
   rollingRestart: ->
     olds = [...@workers]
@@ -542,13 +528,8 @@ class Manager
     Promise.all!(pairs.map(({ old }) -> old.process.exited.catch(-> null)))
 
     # Notify server to remove old workers' socket entries
-    ctl = getControlSocketPath(@flags.socketPrefix)
     for { old } in pairs
-      try
-        body = JSON.stringify({ op: 'quit', workerId: old.id })
-        fetch!('http://localhost/worker', { method: 'POST', body, headers: { 'content-type': 'application/json' }, unix: ctl }).catch(-> null)
-      catch
-        null
+      postWorkerQuit(@flags.socketPrefix, old.id)
 
     retiring = new Set(pairs.map((p) -> p.old.id))
     @workers = @workers.filter((w) -> not retiring.has(w.id))

@@ -1,0 +1,26 @@
+# ==============================================================================
+# control/worker-health.rip — worker readiness and control notifications
+# ==============================================================================
+
+import { getControlSocketPath } from './paths.rip'
+
+export postWorkerQuit = (socketPrefix, workerId) ->
+  try
+    ctl = getControlSocketPath(socketPrefix)
+    body = JSON.stringify({ op: 'quit', workerId })
+    fetch!('http://localhost/worker', { method: 'POST', body, headers: { 'content-type': 'application/json' }, unix: ctl }).catch(-> null)
+  catch
+    null
+
+export waitForWorkerReady = (socketPath, timeoutMs = 5000) ->
+  start = Date.now()
+  while Date.now() - start < timeoutMs
+    try
+      res = fetch!('http://localhost/ready', { unix: socketPath, method: 'GET' })
+      if res.ok
+        txt = res.text!
+        return true if txt is 'ok'
+    catch
+      null
+    await new Promise (r) -> setTimeout(r, 30)
+  false
