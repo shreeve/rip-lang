@@ -79,6 +79,13 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 **Maintenance rule:** When you fix a gap, run the full verification suite. If everything passes, move the row from its current section (❌ or 🔶) to the correct one (✅ or 🔶). Remove stale "Fixed:" annotations — the row's position is the status. Never leave a fixed item in ❌.
 
+**Design trade-offs** (inherent to the language, not fixable via type system):
+
+| Category                   | Tested In     | Notes                                                                                                                                              |
+| -------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Implicit variable creation | 09-components | `loadingz = true` creates a new local — typos in assignments are invisible to types. This is CoffeeScript's core `=`-creates-a-variable semantics. |
+| Untyped files unchecked    | *(all files)* | Files without `::` annotations get `// @ts-nocheck` — zero type checking. Removing it requires `strict: true` and annotations on every file.       |
+
 ### ❌ Not working (language-level changes or runtime validation needed)
 
 | Category                       | Tested In     | Notes                                                                                                          |
@@ -86,13 +93,6 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Runtime return-type validation | 10-validation | Return types are erased — `response.json()` is unvalidated `any`; no `schema.parse()` equivalent               |
 | Shared state typing (stash)   | 09-components | Stash is untyped — any path/value accepted; zustand equivalent is fully typed (see .tsx)                       |
 | Generic components             | 09-components | Can't parameterize components by type (e.g. typed select where value type flows through props)                 |
-
-**Design trade-offs** (inherent to the language, not fixable via type system):
-
-| Category                   | Tested In     | Notes                                                                                                                                              |
-| -------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Implicit variable creation | 09-components | `loadingz = true` creates a new local — typos in assignments are invisible to types. This is CoffeeScript's core `=`-creates-a-variable semantics. |
-| Untyped files unchecked    | *(all files)* | Files without `::` annotations get `// @ts-nocheck` — zero type checking. Removing it requires `strict: true` and annotations on every file.       |
 
 ### 🔶 Partial
 
