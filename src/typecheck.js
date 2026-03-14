@@ -696,7 +696,7 @@ export function compileForCheck(filePath, source, compiler) {
   // source of truth for tag names, attribute types, and event handler types.
   if (hasTypes && /\b__ripEl\b/.test(code)) {
     const intrinsicDecls = [
-      'type __RipElementMap = HTMLElementTagNameMap & SVGElementTagNameMap;',
+      'type __RipElementMap = HTMLElementTagNameMap & Omit<SVGElementTagNameMap, keyof HTMLElementTagNameMap>;',
       'type __RipTag = keyof __RipElementMap;',
       "type __RipAttrKeys<T> = { [K in keyof T]-?: K extends 'style' ? never : T[K] extends (...args: any[]) => any ? never : K }[keyof T] & string;",
       'type __RipEvents = { [K in keyof HTMLElementEventMap as `@${K}`]?: ((event: HTMLElementEventMap[K]) => void) | null };',

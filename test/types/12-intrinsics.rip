@@ -1,0 +1,81 @@
+# 12-intrinsics.rip — Intrinsic element typing
+#
+# Tests that rip check validates intrinsic HTML/SVG elements via __ripEl:
+# tag names, attribute types, event handlers, and global attributes.
+# Uses TypeScript's built-in lib.dom.d.ts as the source of truth.
+
+# ── Valid HTML/SVG tags ──
+
+export ValidTags = component
+  render
+    div
+      h1 "Title"
+      p "Paragraph"
+      span "Inline"
+      button "Click me"
+      input type: "text"
+      form
+        fieldset
+          label "Name"
+          input type: "text", placeholder: "Enter name"
+        button type: "submit"
+          "Submit"
+
+export SvgTags = component
+  render
+    svg
+      circle
+      rect
+      path
+      g
+        line
+
+# ── Attribute type checking ──
+
+export ValidAttrs = component
+  render
+    div
+      input type: "email", placeholder: "jane@example.com", disabled: false
+      button type: "submit", disabled: true
+      a href: "https://example.com"
+      img src: "/logo.png", alt: "Logo", width: 100, height: 50
+      textarea rows: 5, cols: 40
+      select multiple: true
+        option value: "a"
+          "Option A"
+
+export InvalidAttrs = component
+  render
+    div
+      # @ts-expect-error — disabled expects boolean, not string
+      button disabled: "yes"
+      # @ts-expect-error — type must be a valid button type
+      button type: 42
+
+# ── Event handler typing ──
+
+export EventHandlers = component
+  email:: string := ""
+
+  handleSubmit: (e) ->
+    e.preventDefault()
+
+  handleInput: (e) ->
+    @email = e.target.value
+
+  render
+    form @submit: @handleSubmit
+      input type: "email", @input: @handleInput
+      button type: "submit"
+        "Submit"
+
+# ── Global attributes (class, style, data-*, aria-*) ──
+
+export GlobalAttrs = component
+  render
+    div id: "main", class: "container"
+      h1 class: "title", style: "color: blue"
+        "Hello"
+      button id: "btn", title: "Click me", tabIndex: 0, hidden: false
+        "OK"
+      input aria-label: "Email", data-testid: "email-input", type: "email"

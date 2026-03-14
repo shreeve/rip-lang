@@ -22,8 +22,8 @@ rip check                                                                 # 5. t
 bunx tsc                                                                  # 6. type-check all .ts files
 for f in *.rip; do printf "\n── %s ──\n" "$f" && rip "$f"; done           # 7. run all .rip
 for f in *.ts *.tsx; do printf "\n── %s ──\n" "$f" && bun run "$f"; done  # 8. run all .ts
-for n in 01-basic 02-aliases 03-structural 04-unions 05-interfaces 06-functions 07-integration 08-reactive 09-components 10-validation 11-inference; do
-  ext=ts; [[ "$n" == 09-* ]] && ext=tsx
+for n in 01-basic 02-aliases 03-structural 04-unions 05-interfaces 06-functions 07-integration 08-reactive 09-components 10-validation 11-inference 12-intrinsics; do
+  ext=ts; [[ "$n" == 09-* || "$n" == 12-* ]] && ext=tsx
   rip "$n.rip" > /tmp/rip_out.txt 2>&1
   bun run "$n.$ext" > /tmp/ts_out.txt 2>&1
   diff -q /tmp/rip_out.txt /tmp/ts_out.txt > /dev/null 2>&1 && echo "✓ $n" || echo "✗ $n — MISMATCH"
@@ -71,6 +71,7 @@ Each file exercises a specific type feature. Status key:
 | 09-components.rip  | `@prop:: T :=`, `@prop:: T`, default validation             | pass   | Required props, default-vs-type validation, 4 negative body tests |
 | 10-validation.rip  | Runtime validation + async/await (`!` operator)             | pass   | Tier 2 — Rip erases types; TS+Zod validates                       |
 | 11-inference.rip   | Type inference on unannotated variables                     | pass   | Top-level works; block/destructure/any are gaps                   |
+| 12-intrinsics.rip  | Intrinsic tags, attributes, events, global attrs            | pass   | `__ripEl` validates via lib.dom; wrong types caught; event params typed |
 
 ## Type Safety Gap Analysis
 
@@ -85,7 +86,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Category                         | Tested In             | Notes                                                                                                                                                |
 | -------------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Strict mode (`strict: true`)     | *(all typed files)*   | `noImplicitAny` breaks ~16 sites: `_init(props)`, untyped lambdas, event handlers, `modulo` helper. Infrastructure partly built — circle back later. |
-| Event handler typing             | 09-components         | Handler params are untyped — `(e) ->` gives `any`, no typed event objects                                                                            |
+| Event handler typing             | 09, 12-intrinsics     | Inline handlers typed via `__RipEvents`; named method refs (`@submit: @handler`) remain `any` — use `(e:: SubmitEvent) ->` to annotate explicitly   |
 | Runtime return-type validation   | 10-validation         | Return types are erased — `response.json()` is unvalidated `any`; no `schema.parse()` equivalent                                                     |
 | Type narrowing (control flow)    | 04-unions *(comment)* | TS narrows compiled JS, not Rip source                                                                                                               |
 | Unresolved import paths          | 07-integration        | `rip check` doesn't flag imports to nonexistent files                                                                                                |
@@ -96,7 +97,6 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 | Category                    | Tested In     | Notes                                                                                                                                                |
 | --------------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Render block type safety    | 09-components | Render block template code (conditionals, tag names, HTML attributes) is stripped from shadow TS; only child component constructor calls are checked |
 | Shared state typing (stash) | 09-components | Stash is untyped — any path/value accepted; zustand equivalent is fully typed (see .tsx)                                                             |
 | Element type inheritance    | 09-components | No way to inherit HTML element's full type surface; wrappers must declare each prop manually                                                         |
 | Generic components          | 09-components | Can't parameterize components by type (e.g. typed select where value type flows through props)                                                       |
@@ -123,6 +123,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Readonly / immutability       | 03-structural | `=!` → const; deep readonly not checked                                                                                  |
 | Generic types                 | 03-structural | Declarable; .d.ts emission has some gaps                                                                                 |
 | Discriminated union narrowing | 04-unions     | Types declarable, narrowing doesn't flow in `rip check`                                                                  |
+| Render block type safety      | 09, 12        | Intrinsic tag/attr/event checking via `__ripEl`; conditionals and text expressions still unchecked                       |
 | Type inference (split decl.)  | 11-inference  | Top-level `x = expr` inferred via `patchUninitializedTypes`; block-scoped, destructured, and `any` RHS are gaps          |
 
 ### ✅ Working
@@ -144,7 +145,8 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Nested destructured params | 06-functions   | `{user: {name:: string, age:: number}}` → `{user: {name: string, age: number}}` in .d.ts                                               |
 | `void` return annotation   | 06-functions   | `def fn!` emits `: void` in .d.ts; `!` sigil suppresses implicit return and declares void return type                                  |
 | Cross-file type flow       | 07-integration | Via .d.ts; untyped files get `@ts-nocheck`                                                                                             |
-| Component prop types       | 09-components  | Enriched stub gives Signal<T>/Computed<T> declarations; TS checks computeds and methods but **not** render blocks (separately tracked) |
+| Component prop types       | 09-components  | Enriched stub gives Signal<T>/Computed<T> declarations; TS checks computeds, methods, and render block intrinsic elements              |
+| Intrinsic element typing   | 12-intrinsics  | `__ripEl` emits typed helper calls; lib.dom source of truth for tags, attrs, events, global attrs                                      |
 | Required component props   | 09-components  | `@prop:: T` (no `:=`) — required in constructor, caught at usage sites                                                                 |
 | Prop default validation    | 09-components  | `@prop:: T := val` — validates default against declared type; squiggle on prop name                                                    |
 | Async/await unwrapping     | 10-validation  | `!` compiles to `await`; return types inferred or explicit; `Promise<T>` → `T`                                                         |

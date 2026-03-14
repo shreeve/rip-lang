@@ -993,7 +993,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
               const tagLine = node.loc?.r;
               constructions.push(`    const ${varName}: ${propsType} = {};` + (tagLine != null ? ` // @rip-src:${tagLine}` : ''));
             } else if (props.length === 1) {
-              const srcLine = props[0].srcLine ?? node.loc?.r;
+              const srcLine = node.loc?.r ?? props[0].srcLine;
               constructions.push(`    const ${varName}: ${propsType} = {${props[0].code}};` + (srcLine != null ? ` // @rip-src:${srcLine}` : ''));
             } else {
               const tagLine = node.loc?.r;
