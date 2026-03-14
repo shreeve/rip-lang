@@ -20,6 +20,7 @@ import { formatPort } from './edge/network.rip'
 import { loadTlsMaterial as edgeLoadTlsMaterial, printCertSummary as edgePrintCertSummary } from './edge/tls-material.rip'
 import { maybeAddSecurityHeaders as edgeMaybeAddSecurityHeaders } from './edge/security.rip'
 import { buildStatusBody as edgeBuildStatusBody, buildRipdevUrl as edgeBuildRipdevUrl } from './edge/status.rip'
+import { createAppRegistry, registerApp, resolveHost, getAppState, getAllApps } from './edge/app-registry.rip'
 import { watchUnavailableResponse, serverBusyResponse, serviceUnavailableResponse, gatewayTimeoutResponse, queueTimeoutResponse } from './edge/responses.rip'
 import { buildUpstreamResponse, forwardOnceWithTimeout } from './edge/forwarding.rip'
 import { processQueuedJob, drainQueueOnce } from './edge/queue.rip'
@@ -553,15 +554,11 @@ class Server
     @server = null
     @httpsServer = null
     @control = null
-    @sockets = []
-    @availableWorkers = []
-    @inflightTotal = 0
-    @queue = []
     @urls = []
     @startedAt = nowMs()
-    @newestVersion = null
     @httpsActive = false
-    @hostRegistry = new Set(['localhost', '127.0.0.1', 'rip.local'])
+    @appRegistry = createAppRegistry()
+    @defaultAppId = @flags.appName
     @mdnsProcesses = new Map()
     @watchGroups = new Map()
     @manager = null
@@ -576,10 +573,18 @@ class Server
     catch
       @ripVersion = 'unknown'
 
+    # Register the single app with all its hosts
+    appHosts = ['localhost', '127.0.0.1', 'rip.local']
     for alias in @flags.appAliases
       host = if alias.includes('.') then alias else "#{alias}.local"
-      @hostRegistry.add(host)
-    @hostRegistry.add("#{@flags.appName}.ripdev.io")
+      appHosts.push(host)
+    appHosts.push("#{@flags.appName}.ripdev.io")
+    registerApp(@appRegistry, @defaultAppId,
+      hosts: appHosts
+      maxQueue: @flags.maxQueue
+      queueTimeoutMs: @flags.queueTimeoutMs
+      readTimeoutMs: @flags.readTimeoutMs
+    )
 
   start: ->
     httpOnly = @flags.httpsPort is null
@@ -660,29 +665,33 @@ class Server
       @maybeAddSecurityHeaders(headers)
       return new Response('ok', { headers })
 
-    # Host-based routing guard
-    if @hostRegistry.size > 0 and not @hostRegistry.has(host)
-      return new Response('Host not found', { status: 404 })
+    # Resolve host to app
+    appId = resolveHost(@appRegistry, host)
+    return new Response('Host not found', { status: 404 }) unless appId
+    app = getAppState(@appRegistry, appId)
+    return new Response('Host not found', { status: 404 }) unless app
 
     # Fast path: try available worker
-    if @inflightTotal < Math.max(1, @sockets.length)
-      sock = @getNextAvailableSocket()
+    if app.inflightTotal < Math.max(1, app.sockets.length)
+      sock = @getNextAvailableSocket(app)
       if sock
-        @inflightTotal++
+        app.inflightTotal++
         try
-          return @forwardToWorker!(req, sock)
+          return @forwardToWorker!(req, sock, app)
         finally
-          @inflightTotal--
-          setImmediate => @drainQueue()
+          app.inflightTotal--
+          setImmediate => @drainQueue(app)
 
-    if @queue.length >= @flags.maxQueue
+    if app.queue.length >= app.maxQueue
       return serverBusyResponse()
 
     new Promise (resolve, reject) =>
-      @queue.push({ req, resolve, reject, enqueuedAt: nowMs() })
+      app.queue.push({ req, resolve, reject, enqueuedAt: nowMs() })
 
   status: ->
-    body = edgeBuildStatusBody(@startedAt, @sockets.length, @hostRegistry, @serverVersion, @flags.appName, @flags.httpPort, @flags.httpsPort, nowMs)
+    app = getAppState(@appRegistry, @defaultAppId)
+    workerCount = if app then app.sockets.length else 0
+    body = edgeBuildStatusBody(@startedAt, workerCount, @appRegistry.hostIndex, @serverVersion, @flags.appName, @flags.httpPort, @flags.httpsPort, nowMs)
     headers = new Headers({ 'content-type': 'application/json', 'cache-control': 'no-cache' })
     @maybeAddSecurityHeaders(headers)
     new Response(body, { headers })
@@ -696,14 +705,22 @@ class Server
   broadcastChange: (prefix, type = 'page') ->
     broadcastWatchChange(@watchGroups, prefix, type)
 
-  getNextAvailableSocket: ->
-    schedulerGetNextAvailableSocket(@availableWorkers, @newestVersion)
+  getAppForWorker: (socketPath) ->
+    for app as @appRegistry.apps.values()
+      return app if app.sockets.some((s) -> s.socket is socketPath)
+    getAppState(@appRegistry, @defaultAppId)
 
-  isCurrentVersion: (worker) ->
-    schedulerIsCurrentVersion(@newestVersion, worker)
+  getNextAvailableSocket: (app) ->
+    app = app or getAppState(@appRegistry, @defaultAppId)
+    schedulerGetNextAvailableSocket(app.availableWorkers, app.newestVersion)
 
-  releaseWorker: (worker) ->
-    schedulerReleaseWorker(@sockets, @availableWorkers, @newestVersion, worker)
+  isCurrentVersion: (worker, app) ->
+    app = app or getAppState(@appRegistry, @defaultAppId)
+    schedulerIsCurrentVersion(app.newestVersion, worker)
+
+  releaseWorker: (worker, app) ->
+    app = app or getAppState(@appRegistry, @defaultAppId)
+    schedulerReleaseWorker(app.sockets, app.availableWorkers, app.newestVersion, worker)
 
   logAccess: (req, res, totalSeconds, workerSeconds) ->
     if @flags.jsonLogging
@@ -722,7 +739,8 @@ class Server
       stripInternalHeaders
     )
 
-  forwardToWorker: (req, socket) ->
+  forwardToWorker: (req, socket, app) ->
+    app = app or @getAppForWorker(socket.socket)
     start = performance.now()
     res = null
     workerSeconds = 0
@@ -731,51 +749,54 @@ class Server
     try
       socket.inflight = 1
       t0 = performance.now()
-      res = @forwardOnce!(req, socket.socket)
+      res = @forwardOnce!(req, socket.socket, app)
       workerSeconds = (performance.now() - t0) / 1000
 
       if shouldRetryBodylessBusy(req, res)
-        retry = @getNextAvailableSocket()
+        retry = @getNextAvailableSocket(app)
         if retry and retry isnt socket
-          @releaseWorker(socket)
+          @releaseWorker(socket, app)
           released = true
           retry.inflight = 1
           t1 = performance.now()
-          res = @forwardOnce!(req, retry.socket)
+          res = @forwardOnce!(req, retry.socket, app)
           workerSeconds = (performance.now() - t1) / 1000
-          @releaseWorker(retry)
+          @releaseWorker(retry, app)
           return @buildResponse(res, req, start, workerSeconds)
     catch err
       console.error "[server] forwardToWorker error:", err.message or err if isDebug()
-      @sockets = @sockets.filter((x) -> x.socket isnt socket.socket)
-      @availableWorkers = @availableWorkers.filter((x) -> x.socket isnt socket.socket)
+      app.sockets = app.sockets.filter((x) -> x.socket isnt socket.socket)
+      app.availableWorkers = app.availableWorkers.filter((x) -> x.socket isnt socket.socket)
       released = true
       return serviceUnavailableResponse()
     finally
-      @releaseWorker(socket) unless released
+      @releaseWorker(socket, app) unless released
 
     return serviceUnavailableResponse() unless res
     @buildResponse(res, req, start, workerSeconds)
 
-  forwardOnce: (req, socketPath) ->
-    forwardOnceWithTimeout(req, socketPath, @flags.readTimeoutMs, gatewayTimeoutResponse)
+  forwardOnce: (req, socketPath, app) ->
+    app = app or @getAppForWorker(socketPath)
+    forwardOnceWithTimeout(req, socketPath, app.readTimeoutMs, gatewayTimeoutResponse)
 
-  processJob: (job, worker) ->
-    processQueuedJob(job, worker, @forwardToWorker.bind(@), =>
-      @inflightTotal--
-      setImmediate => @drainQueue()
+  processJob: (job, worker, app) ->
+    app = app or @getAppForWorker(worker.socket)
+    processQueuedJob(job, worker, ((req, w) => @forwardToWorker(req, w, app)), =>
+      app.inflightTotal--
+      setImmediate => @drainQueue(app)
     )
 
-  drainQueue: ->
-    @inflightTotal = drainQueueOnce(
-      @inflightTotal,
-      @sockets.length,
-      (=> @availableWorkers.length),
-      (=> @queue.shift()),
-      ((job) => nowMs() - job.enqueuedAt > @flags.queueTimeoutMs),
+  drainQueue: (app) ->
+    app = app or getAppState(@appRegistry, @defaultAppId)
+    app.inflightTotal = drainQueueOnce(
+      app.inflightTotal,
+      app.sockets.length,
+      (=> app.availableWorkers.length),
+      (=> app.queue.shift()),
+      ((job) => nowMs() - job.enqueuedAt > app.queueTimeoutMs),
       queueTimeoutResponse,
-      @getNextAvailableSocket.bind(@),
-      @processJob.bind(@)
+      (=> @getNextAvailableSocket(app)),
+      ((job, worker) => @processJob(job, worker, app))
     )
 
   startControl: ->
@@ -798,15 +819,16 @@ class Server
     url = new URL(req.url)
 
     if req.method is 'POST' and url.pathname is '/worker'
+      app = getAppState(@appRegistry, @defaultAppId)
       res = handleWorkerControl!(req,
-        sockets: @sockets
-        availableWorkers: @availableWorkers
-        newestVersion: @newestVersion
+        sockets: app.sockets
+        availableWorkers: app.availableWorkers
+        newestVersion: app.newestVersion
       )
       if res.handled
-        @sockets = res.sockets if res.sockets?
-        @availableWorkers = res.availableWorkers if res.availableWorkers?
-        @newestVersion = res.newestVersion if res.newestVersion?
+        app.sockets = res.sockets if res.sockets?
+        app.availableWorkers = res.availableWorkers if res.availableWorkers?
+        app.newestVersion = res.newestVersion if res.newestVersion?
         return res.response
 
     if req.method is 'POST' and url.pathname is '/watch'
@@ -814,7 +836,7 @@ class Server
       return res.response if res.handled
 
     if url.pathname is '/registry' and req.method is 'GET'
-      res = handleRegistryControl(req, @hostRegistry)
+      res = handleRegistryControl(req, @appRegistry.hostIndex)
       return res.response if res.handled
 
     new Response('not-found', { status: 404 })
