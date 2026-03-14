@@ -453,15 +453,29 @@
     }
     let emitBlock = (prefix, body, suffix) => {
       if (body.startsWith("{ ") && body.endsWith(" }")) {
-        let props = body.slice(2, -2).split("; ").filter((p) => p.trim());
-        if (props.length > 0) {
-          lines.push(`${indent()}${prefix}{`);
-          indentLevel++;
-          for (let prop of props)
-            lines.push(`${indent()}${prop};`);
-          indentLevel--;
-          lines.push(`${indent()}}${suffix}`);
-          return;
+        let depth = 0, firstTopClose = -1;
+        for (let c = 0;c < body.length; c++) {
+          if (body[c] === "{")
+            depth++;
+          else if (body[c] === "}") {
+            depth--;
+            if (depth === 0) {
+              firstTopClose = c;
+              break;
+            }
+          }
+        }
+        if (firstTopClose === body.length - 1) {
+          let props = body.slice(2, -2).split("; ").filter((p) => p.trim());
+          if (props.length > 0) {
+            lines.push(`${indent()}${prefix}{`);
+            indentLevel++;
+            for (let prop of props)
+              lines.push(`${indent()}${prop};`);
+            indentLevel--;
+            lines.push(`${indent()}}${suffix}`);
+            return;
+          }
         }
       }
       lines.push(`${indent()}${prefix}${body}${suffix}`);
@@ -4491,6 +4505,51 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
             }
             return props;
           };
+          const extractIntrinsicProps = (args) => {
+            const props = [];
+            for (const arg of args) {
+              let obj = null;
+              if (this.is(arg, "object")) {
+                obj = arg;
+              } else if (Array.isArray(arg) && (arg[0] === "->" || arg[0] === "=>") && this.is(arg[2], "block")) {
+                for (let k = 1;k < arg[2].length; k++) {
+                  if (this.is(arg[2][k], "object")) {
+                    obj = arg[2][k];
+                    break;
+                  }
+                }
+              }
+              if (obj) {
+                for (let j = 1;j < obj.length; j++) {
+                  const pair = obj[j];
+                  if (!Array.isArray(pair) || pair.length < 2)
+                    continue;
+                  const [key, value] = pair;
+                  const srcLine = pair.loc?.r ?? obj.loc?.r;
+                  if (Array.isArray(key) && key[0] === "." && key[1] === "this") {
+                    let memberName = typeof key[2] === "string" ? key[2] : key[2]?.valueOf?.();
+                    if (!memberName)
+                      continue;
+                    const eventKey = "@" + memberName.split(".")[0];
+                    const val = this.generateInComponent(value, "value");
+                    props.push({ code: `'${eventKey}': ${val}`, srcLine });
+                  } else if (typeof key === "string") {
+                    if (key === "key")
+                      continue;
+                    if (key.startsWith("__bind_") && key.endsWith("__")) {
+                      const propName = key.slice(7, -2);
+                      const val = this.generateInComponent(value, "value");
+                      props.push({ code: `${propName}: ${val}`, srcLine });
+                    } else {
+                      const val = this.generateInComponent(value, "value");
+                      props.push({ code: `${key}: ${val}`, srcLine });
+                    }
+                  }
+                }
+              }
+            }
+            return props;
+          };
           const walkRender = (node) => {
             if (!Array.isArray(node))
               return;
@@ -4503,7 +4562,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
                 const tagLine = node.loc?.r;
                 constructions.push(`    const ${varName}: ${propsType} = {};` + (tagLine != null ? ` // @rip-src:${tagLine}` : ""));
               } else if (props.length === 1) {
-                const srcLine = props[0].srcLine ?? node.loc?.r;
+                const srcLine = node.loc?.r ?? props[0].srcLine;
                 constructions.push(`    const ${varName}: ${propsType} = {${props[0].code}};` + (srcLine != null ? ` // @rip-src:${srcLine}` : ""));
               } else {
                 const tagLine = node.loc?.r;
@@ -4517,6 +4576,31 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
                     constructions.push(`      ${p.code},` + (p.srcLine != null ? ` // @rip-src:${p.srcLine}` : ""));
                   }
                   constructions.push(`    };`);
+                }
+              }
+            } else if (typeof head2 === "string" && head2 !== "object" && head2 !== "switch" && TEMPLATE_TAGS.has(head2.split(/[.#]/)[0])) {
+              const tagName = head2.split(/[.#]/)[0];
+              const iProps = extractIntrinsicProps(node.slice(1));
+              const tagLine = node.loc?.r;
+              const srcMarker = tagLine != null ? ` // @rip-src:${tagLine}` : "";
+              if (iProps.length === 0) {
+                constructions.push(`    __ripEl('${tagName}');${srcMarker}`);
+              } else if (iProps.length === 1) {
+                const srcLine = iProps[0].srcLine ?? tagLine;
+                const marker = srcLine != null ? ` // @rip-src:${srcLine}` : "";
+                constructions.push(`    __ripEl('${tagName}', {${iProps[0].code}});${marker}`);
+              } else {
+                const distinctLines = new Set(iProps.map((p) => p.srcLine).filter((l) => l != null));
+                if (distinctLines.size <= 1) {
+                  const srcLine = iProps[0].srcLine ?? tagLine;
+                  const marker = srcLine != null ? ` // @rip-src:${srcLine}` : "";
+                  constructions.push(`    __ripEl('${tagName}', {${iProps.map((p) => p.code).join(", ")}});${marker}`);
+                } else {
+                  constructions.push(`    __ripEl('${tagName}', {${srcMarker}`);
+                  for (const p of iProps) {
+                    constructions.push(`      ${p.code},` + (p.srcLine != null ? ` // @rip-src:${p.srcLine}` : ""));
+                  }
+                  constructions.push(`    });`);
                 }
               }
             }
@@ -9388,8 +9472,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeGenerator({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.13.108";
-  var BUILD_DATE = "2026-03-14@06:12:01GMT";
+  var VERSION = "3.13.109";
+  var BUILD_DATE = "2026-03-14@08:22:53GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
