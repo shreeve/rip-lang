@@ -19,7 +19,7 @@ import { isCurrentVersion as schedulerIsCurrentVersion, getNextAvailableSocket a
 import { formatPort, maybeAddSecurityHeaders as edgeMaybeAddSecurityHeaders, buildStatusBody as edgeBuildStatusBody, buildRipdevUrl as edgeBuildRipdevUrl } from './edge/helpers.rip'
 import { loadTlsMaterial as edgeLoadTlsMaterial, printCertSummary as edgePrintCertSummary } from './edge/tls.rip'
 import { createAppRegistry, registerApp, resolveHost, getAppState } from './edge/registry.rip'
-import { watchUnavailableResponse, serverBusyResponse, serviceUnavailableResponse, gatewayTimeoutResponse, queueTimeoutResponse, buildUpstreamResponse, forwardOnceWithTimeout } from './edge/forwarding.rip'
+import { watchUnavailableResponse, serverBusyResponse, serviceUnavailableResponse, gatewayTimeoutResponse, queueTimeoutResponse, buildUpstreamResponse, forwardOnceWithTimeout, proxyToUpstream } from './edge/forwarding.rip'
 import { processQueuedJob, drainQueueOnce } from './edge/queue.rip'
 import { getControlSocketPath, getPidFilePath } from './control/paths.rip'
 import { handleWorkerControl, handleWatchControl, handleRegistryControl } from './control/control.rip'

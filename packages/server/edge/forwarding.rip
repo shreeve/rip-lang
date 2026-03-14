@@ -25,6 +25,47 @@ export buildUpstreamResponse = (res, req, totalSeconds, workerSeconds, maybeAddS
   logAccess(req, res, totalSeconds, workerSeconds) unless silent
   new Response(res.body, { status: res.status, statusText: res.statusText, headers })
 
+# --- Reverse proxy to external upstream ---
+
+HOP_HEADERS = new Set([
+  'connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization'
+  'te', 'trailer', 'transfer-encoding', 'upgrade'
+])
+
+export proxyToUpstream = (req, upstreamBase, timeoutMs = 30000) ->
+  inUrl = new URL(req.url)
+  target = "#{upstreamBase}#{inUrl.pathname}#{inUrl.search}"
+
+  # Forward headers, add X-Forwarded-*
+  headers = new Headers()
+  for [key, val] as req.headers.entries()
+    headers.set(key, val) unless HOP_HEADERS.has(key.toLowerCase())
+  headers.set('X-Forwarded-For', req.headers.get('x-forwarded-for') or '127.0.0.1')
+  headers.set('X-Forwarded-Proto', if inUrl.protocol is 'https:' then 'https' else 'http')
+  headers.set('X-Forwarded-Host', inUrl.host)
+
+  try
+    fetchPromise = fetch target,
+      method: req.method
+      headers: headers
+      body: req.body
+      redirect: 'manual'
+    readGuard = new Promise (_, rej) ->
+      setTimeout (-> rej(new Error('Upstream timeout'))), timeoutMs
+    res = Promise.race!([fetchPromise, readGuard])
+
+    # Strip hop-by-hop headers from response
+    resHeaders = new Headers()
+    for [key, val] as res.headers.entries()
+      resHeaders.set(key, val) unless HOP_HEADERS.has(key.toLowerCase())
+    new Response(res.body, { status: res.status, statusText: res.statusText, headers: resHeaders })
+  catch err
+    if err.message is 'Upstream timeout'
+      return new Response('Gateway timeout', { status: 504 })
+    new Response("Bad gateway: #{err.message}", { status: 502 })
+
+# --- Worker forwarding ---
+
 export forwardOnceWithTimeout = (req, socketPath, readTimeoutMs, gatewayTimeoutResponse) ->
   inUrl = new URL(req.url)
   forwardUrl = "http://localhost#{inUrl.pathname}#{inUrl.search}"
