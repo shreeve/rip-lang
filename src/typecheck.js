@@ -766,15 +766,21 @@ export function compileForCheck(filePath, source, compiler) {
 
   // Parse @rip-src annotations from _render() constructions.  These explicit
   // source-line markers override interpolated mappings so that per-prop type
-  // errors land on the correct Rip source line.
+  // errors land on the correct Rip source line.  Among multiple @rip-src
+  // markers for the same source line, the first one wins (typically the
+  // component constructor call rather than an __ripEl call).
   {
     const tsLines = tsContent.split('\n');
+    const ripSrcSeen = new Set();
     for (let i = 0; i < tsLines.length; i++) {
       const m = tsLines[i].match(/\/\/ @rip-src:(\d+)$/);
       if (m) {
         const srcLine = parseInt(m[1], 10);
         genToSrc.set(i, srcLine);
-        if (!srcToGen.has(srcLine)) srcToGen.set(srcLine, i);
+        if (!ripSrcSeen.has(srcLine)) {
+          ripSrcSeen.add(srcLine);
+          srcToGen.set(srcLine, i);
+        }
       }
     }
   }
@@ -789,12 +795,12 @@ export function compileForCheck(filePath, source, compiler) {
       const m = srcLines[s].match(/^\s*#\s*(@ts-expect-error\b.*)/);
       if (m) {
         const nextSrc = s + 1;
-        // Prefer code-section line (where the assignment lives and TS reports
-        // the error) over the DTS declaration line.
-        let genLine = codeSrcToGen.get(nextSrc);
-        if (genLine === undefined) {
-          genLine = srcToGen.get(nextSrc);
-          if (genLine !== undefined && genLine < headerLines) genLine = undefined;
+        // Prefer @rip-src-enriched mapping (precise per-prop positions from
+        // render stubs) when it points to the code section.  Fall back to
+        // the code-section snapshot for lines without @rip-src markers.
+        let genLine = srcToGen.get(nextSrc);
+        if (genLine === undefined || genLine < headerLines) {
+          genLine = codeSrcToGen.get(nextSrc);
         }
         if (genLine !== undefined) {
           injects.push({ genLine, srcLine: s, comment: `// ${m[1]}` });

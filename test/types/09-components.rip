@@ -26,7 +26,7 @@ export Input = component
 
 export Button = component
   @variant:: "primary" | "secondary"
-  @type:: string := "button"
+  @type:: "submit" | "reset" | "button" := "button"
   @shape:: "rounded" | "pill" := "rounded"
   @loading:: boolean := false
   @disabled:: boolean := false
