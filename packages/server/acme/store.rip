@@ -1,5 +1,5 @@
 # ==============================================================================
-# acme/store.rip — on-disk certificate storage and lookup
+# acme/store.rip — certificate storage, lookup, and HTTP-01 challenge store
 # ==============================================================================
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from 'node:fs'
@@ -46,3 +46,22 @@ export listCerts = (baseDir) ->
   return [] unless existsSync(baseDir)
   entries = readdirSync(baseDir, { withFileTypes: true })
   entries.filter((e) -> e.isDirectory()).map((e) -> e.name)
+
+# --- HTTP-01 challenge token store ---
+
+export createChallengeStore = ->
+  tokens = new Map()
+
+  set: (token, keyAuthorization) -> tokens.set(token, keyAuthorization)
+  get: (token) -> tokens.get(token) ?? null
+  has: (token) -> tokens.has(token)
+  remove: (token) -> tokens.delete(token)
+  clear: -> tokens.clear()
+
+export handleChallengeRequest = (url, challengeStore) ->
+  prefix = '/.well-known/acme-challenge/'
+  return null unless url.pathname.startsWith(prefix)
+  token = url.pathname.slice(prefix.length)
+  return null unless token and challengeStore.has(token)
+  keyAuth = challengeStore.get(token)
+  new Response(keyAuth, { headers: { 'content-type': 'application/octet-stream' } })

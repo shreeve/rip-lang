@@ -1,6 +1,24 @@
 # ==============================================================================
-# control/lifecycle.rip — startup, shutdown, and reporting helpers
+# control/lifecycle.rip — startup, shutdown, reporting, and event logging
 # ==============================================================================
+
+# --- Structured event logging ---
+
+_jsonMode = false
+
+export setEventJsonMode = (enabled) -> _jsonMode = enabled
+
+export logEvent = (event, data = {}) ->
+  if _jsonMode
+    entry = Object.assign { t: new Date().toISOString(), event }, data
+    p JSON.stringify(entry)
+  else
+    parts = ["rip-server: #{event}"]
+    for key, val of data
+      parts.push "#{key}=#{val}" if val?
+    p parts.join(' ')
+
+# --- Startup reporting ---
 
 export computeHideUrls = (appEntry, joinFn, dirnameFn, existsSyncFn) ->
   setupFile = joinFn(dirnameFn(appEntry), 'setup.rip')

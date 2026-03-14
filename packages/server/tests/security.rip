@@ -3,7 +3,7 @@
 import { test, eq, ok } from '../test.rip'
 import { createRateLimiter, rateLimitResponse } from '../edge/ratelimit.rip'
 import { validateRequest } from '../edge/security.rip'
-import { generateRequestId } from '../edge/helpers.rip'
+import { generateRequestId } from '../edge/forwarding.rip'
 
 # --- Request ID ---
 

@@ -4,7 +4,7 @@ import { test, eq, ok } from '../test.rip'
 import { normalizeAppConfig, applyConfig } from '../edge/config.rip'
 import { createAppRegistry, registerApp, resolveHost, getAppState } from '../edge/registry.rip'
 import { broadcastBinary, createHub, addClient } from '../edge/realtime.rip'
-import { setEventJsonMode, logEvent } from '../control/events.rip'
+import { setEventJsonMode, logEvent } from '../control/lifecycle.rip'
 
 # --- Config normalization ---
 

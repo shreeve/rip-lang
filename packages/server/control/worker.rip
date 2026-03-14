@@ -2,7 +2,7 @@
 # control/worker.rip — setup and worker child process runtime
 # ==============================================================================
 
-import { getControlSocketPath } from './paths.rip'
+import { getControlSocketPath } from './control.rip'
 
 SHUTDOWN_TIMEOUT_MS = 30000   # Max time to wait for in-flight requests on shutdown
 

@@ -1,6 +1,12 @@
 # ==============================================================================
-# control/control.rip — control socket handlers and worker registry
+# control/control.rip — paths, worker registry, and control socket handlers
 # ==============================================================================
+
+# --- Socket and PID paths ---
+
+export getWorkerSocketPath = (prefix, id) -> "/tmp/#{prefix}.#{id}.sock"
+export getControlSocketPath = (prefix) -> "/tmp/#{prefix}.ctl.sock"
+export getPidFilePath = (prefix) -> "/tmp/#{prefix}.pid"
 
 # --- Worker registry ---
 

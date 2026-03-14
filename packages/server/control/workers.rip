@@ -3,7 +3,7 @@
 # ==============================================================================
 
 import { unlinkSync } from 'node:fs'
-import { getWorkerSocketPath, getControlSocketPath } from './paths.rip'
+import { getWorkerSocketPath, getControlSocketPath } from './control.rip'
 
 # --- Spawn ---
 

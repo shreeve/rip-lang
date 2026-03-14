@@ -1,6 +1,41 @@
 # ==============================================================================
-# edge/forwarding.rip — forwarding, responses, and upstream helpers
+# edge/forwarding.rip — helpers, responses, forwarding, and proxy
 # ==============================================================================
+
+import { randomBytes } from 'node:crypto'
+
+# --- Edge utilities ---
+
+export generateRequestId = ->
+  "req-#{randomBytes(6).toString('hex')}"
+
+export formatPort = (protocol, port) ->
+  if (protocol is 'https' and port is 443) or (protocol is 'http' and port is 80)
+    ''
+  else
+    ":#{port}"
+
+export maybeAddSecurityHeaders = (httpsActive, hstsEnabled, headers) ->
+  if httpsActive and hstsEnabled
+    headers.set('strict-transport-security', 'max-age=31536000; includeSubDomains') unless headers.has('strict-transport-security')
+
+export buildStatusBody = (startedAt, workerCount, hostIndex, serverVersion, appName, httpPort, httpsPort, nowMsFn) ->
+  uptime = Math.floor((nowMsFn() - startedAt) / 1000)
+  healthy = workerCount > 0
+  hosts = Array.from(hostIndex.keys())
+  JSON.stringify
+    status: if healthy then 'healthy' else 'degraded'
+    version: serverVersion
+    app: appName
+    workers: workerCount
+    ports: { http: httpPort or undefined, https: httpsPort or undefined }
+    uptime: uptime
+    hosts: hosts
+
+export buildRipdevUrl = (appName, protocol, port, formatPortFn) ->
+  "#{protocol}://#{appName}.ripdev.io#{formatPortFn(protocol, port)}"
+
+# --- Responses ---
 
 export watchUnavailableResponse = ->
   new Response('', { status: 503, headers: { 'Retry-After': '2' } })
