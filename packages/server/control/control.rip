@@ -47,7 +47,7 @@ export handleWorkerControl = (req, state) ->
         response: jsonOk()
         sockets: state.sockets
         availableWorkers: state.availableWorkers
-        newestVersion
+        newestVersion: newestVersion
 
     if j?.op is 'quit' and typeof j.workerId is 'number'
       removeWorkerById(state.sockets, state.availableWorkers, j.workerId)
