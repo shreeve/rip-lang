@@ -33,6 +33,7 @@ import { createChallengeStore, handleChallengeRequest } from './acme/challenges.
 import { createAcmeManager } from './acme/manager.rip'
 import { loadCert as acmeLoadCert, defaultCertDir } from './acme/store.rip'
 import { createMetrics } from './edge/metrics.rip'
+import { setEventJsonMode, logEvent } from './control/events.rip'
 
 # Match capture holder for Rip's =~
 _ = null
@@ -501,7 +502,11 @@ class Manager
 
       w.restartCount++
       w.backoffMs = Math.min(w.backoffMs * 2, MAX_BACKOFF_MS)
-      return if w.restartCount > MAX_RESTART_COUNT
+      if w.restartCount > MAX_RESTART_COUNT
+        logEvent('worker_abandon', { workerId: w.id, restarts: w.restartCount })
+        return
+      @server?.metrics?.workerRestarts++
+      logEvent('worker_restart', { workerId: w.id, attempt: w.restartCount, backoffMs: w.backoffMs })
       setTimeout =>
         workers = @getWorkers()
         idx = workers.findIndex((x) -> x.id is w.id)
@@ -654,6 +659,7 @@ class Server
     @startControl!
 
   stop: ->
+    logEvent('server_stop', { uptime: Math.floor((nowMs() - @startedAt) / 1000) })
     # Drain all per-app queues — resolve pending requests with 503
     for [appId, app] as @appRegistry.apps
       while app.queue.length > 0
@@ -698,10 +704,13 @@ class Server
     app = getAppState(@appRegistry, appId)
     return new Response('Host not found', { status: 404 }) unless app
 
+    @metrics.requests++
+
     # Fast path: try available worker
     if app.inflightTotal < Math.max(1, app.sockets.length)
       sock = @getNextAvailableSocket(app)
       if sock
+        @metrics.forwarded++
         app.inflightTotal++
         try
           return @forwardToWorker!(req, sock, app)
@@ -710,8 +719,10 @@ class Server
           setImmediate => @drainQueue(app)
 
     if app.queue.length >= app.maxQueue
+      @metrics.queueShed++
       return serverBusyResponse()
 
+    @metrics.queued++
     new Promise (resolve, reject) =>
       app.queue.push({ req, resolve, reject, enqueuedAt: nowMs() })
 
@@ -776,10 +787,13 @@ class Server
       logAccessHuman(@flags.appName, req, res, totalSeconds, workerSeconds)
 
   buildResponse: (res, req, start, workerSeconds) ->
+    totalSeconds = (performance.now() - start) / 1000
+    @metrics.recordLatency(totalSeconds)
+    @metrics.recordStatus(res.status)
     buildUpstreamResponse(
       res,
       req,
-      (performance.now() - start) / 1000,
+      totalSeconds,
       workerSeconds,
       @maybeAddSecurityHeaders.bind(@),
       @logAccess.bind(@),
@@ -835,15 +849,23 @@ class Server
 
   drainQueue: (app) ->
     app = app or getAppState(@appRegistry, @defaultAppId)
+    metrics = @metrics
     app.inflightTotal = drainQueueOnce(
       app.inflightTotal,
       app.sockets.length,
       (=> app.availableWorkers.length),
       (=> app.queue.shift()),
-      ((job) => nowMs() - job.enqueuedAt > app.queueTimeoutMs),
+      ((job) =>
+        timedOut = nowMs() - job.enqueuedAt > app.queueTimeoutMs
+        metrics.queueTimeouts++ if timedOut
+        timedOut
+      ),
       queueTimeoutResponse,
       (=> @getNextAvailableSocket(app)),
-      ((job, worker) => @processJob(job, worker, app))
+      ((job, worker) =>
+        metrics.forwarded++
+        @processJob(job, worker, app)
+      )
     )
 
   startControl: ->
@@ -939,6 +961,7 @@ main = ->
 
   # Normal startup
   flags = parseFlags(process.argv)
+  setEventJsonMode(flags.jsonLogging)
   pidFile = getPidFilePath(flags.socketPrefix)
   writeFileSync(pidFile, String(process.pid))
 
@@ -974,6 +997,7 @@ main = ->
   mgr.start!
 
   logStartupSummary(svr, flags, edgeBuildRipdevUrl, formatPort)
+  logEvent('server_start', { app: flags.appName, workers: flags.workers })
 
 # ==============================================================================
 # Entry Point
