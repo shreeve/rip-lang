@@ -1,0 +1,32 @@
+# ==============================================================================
+# edge/app-registry.rip — multi-app registry with host index
+# ==============================================================================
+
+import { createAppState } from './app-state.rip'
+
+export createAppRegistry = ->
+  apps: new Map()
+  hostIndex: new Map()
+
+export registerApp = (registry, appId, config) ->
+  state = createAppState(appId, config)
+  registry.apps.set(appId, state)
+  for host in (config.hosts or [])
+    registry.hostIndex.set(host.toLowerCase(), appId)
+  state
+
+export removeApp = (registry, appId) ->
+  state = registry.apps.get(appId)
+  return unless state
+  for host in state.hosts
+    registry.hostIndex.delete(host.toLowerCase()) if registry.hostIndex.get(host.toLowerCase()) is appId
+  registry.apps.delete(appId)
+
+export resolveHost = (registry, hostname) ->
+  registry.hostIndex.get(hostname.toLowerCase()) ?? null
+
+export getAppState = (registry, appId) ->
+  registry.apps.get(appId) ?? null
+
+export getAllApps = (registry) ->
+  Array.from(registry.apps.values())

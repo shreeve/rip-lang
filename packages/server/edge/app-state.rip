@@ -1,0 +1,16 @@
+# ==============================================================================
+# edge/app-state.rip — per-app runtime state
+# ==============================================================================
+
+export createAppState = (appId, config) ->
+  appId: appId
+  config: config
+  sockets: []
+  availableWorkers: []
+  queue: []
+  inflightTotal: 0
+  newestVersion: null
+  maxQueue: config.maxQueue or 512
+  queueTimeoutMs: config.queueTimeoutMs or 30000
+  readTimeoutMs: config.readTimeoutMs or 30000
+  hosts: config.hosts or []
