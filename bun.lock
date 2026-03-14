@@ -10,101 +10,101 @@
     },
     "packages/all": {
       "name": "@rip-lang/all",
-      "version": "3.13.130",
+      "version": "3.13.131",
       "dependencies": {
-        "@rip-lang/csv": ">=1.3.87",
-        "@rip-lang/db": ">=1.3.97",
-        "@rip-lang/http": ">=1.1.88",
-        "@rip-lang/print": ">=1.1.92",
-        "@rip-lang/schema": ">=0.3.88",
-        "@rip-lang/server": ">=1.3.99",
-        "@rip-lang/swarm": ">=1.2.98",
-        "@rip-lang/ui": ">=0.3.56",
-        "@rip-lang/x12": ">=0.2.88",
-        "rip-lang": ">=3.13.109",
+        "@rip-lang/csv": ">=1.3.88",
+        "@rip-lang/db": ">=1.3.98",
+        "@rip-lang/http": ">=1.1.89",
+        "@rip-lang/print": ">=1.1.93",
+        "@rip-lang/schema": ">=0.3.89",
+        "@rip-lang/server": ">=1.3.100",
+        "@rip-lang/swarm": ">=1.2.99",
+        "@rip-lang/ui": ">=0.3.57",
+        "@rip-lang/x12": ">=0.2.89",
+        "rip-lang": ">=3.13.110",
       },
     },
     "packages/csv": {
       "name": "@rip-lang/csv",
-      "version": "1.3.87",
+      "version": "1.3.88",
       "dependencies": {
-        "rip-lang": ">=3.13.109",
+        "rip-lang": ">=3.13.110",
       },
     },
     "packages/db": {
       "name": "@rip-lang/db",
-      "version": "1.3.97",
+      "version": "1.3.98",
       "bin": {
         "rip-db": "./bin/rip-db",
       },
       "dependencies": {
         "@rip-lang/server": ">=1.3.0",
-        "rip-lang": ">=3.13.109",
+        "rip-lang": ">=3.13.110",
       },
     },
     "packages/http": {
       "name": "@rip-lang/http",
-      "version": "1.1.88",
+      "version": "1.1.89",
       "dependencies": {
-        "rip-lang": ">=3.13.109",
+        "rip-lang": ">=3.13.110",
       },
     },
     "packages/print": {
       "name": "@rip-lang/print",
-      "version": "1.1.92",
+      "version": "1.1.93",
       "bin": {
         "rip-print": "./bin/rip-print",
       },
       "dependencies": {
         "highlight.js": "^11.11.1",
-        "rip-lang": ">=3.13.109",
+        "rip-lang": ">=3.13.110",
       },
     },
     "packages/schema": {
       "name": "@rip-lang/schema",
-      "version": "0.3.88",
+      "version": "0.3.89",
       "bin": {
         "rip-schema": "./generate.js",
       },
       "dependencies": {
-        "rip-lang": ">=3.13.109",
+        "rip-lang": ">=3.13.110",
       },
     },
     "packages/server": {
       "name": "@rip-lang/server",
-      "version": "1.3.99",
+      "version": "1.3.100",
       "bin": {
         "rip-server": "./bin/rip-server",
       },
       "dependencies": {
-        "rip-lang": ">=3.13.109",
+        "rip-lang": ">=3.13.110",
       },
     },
     "packages/stamp": {
       "name": "@rip-lang/stamp",
-      "version": "0.1.8",
+      "version": "0.1.9",
       "bin": {
         "stamp": "./bin/stamp",
       },
       "dependencies": {
-        "rip-lang": ">=3.13.109",
+        "rip-lang": ">=3.13.110",
       },
     },
     "packages/swarm": {
       "name": "@rip-lang/swarm",
-      "version": "1.2.98",
+      "version": "1.2.99",
       "bin": {
         "swarm": "./bin/swarm",
       },
       "dependencies": {
-        "rip-lang": ">=3.13.109",
+        "rip-lang": ">=3.13.110",
       },
     },
     "packages/ui": {
       "name": "@rip-lang/ui",
-      "version": "0.3.56",
+      "version": "0.3.57",
       "dependencies": {
-        "rip-lang": ">=3.13.109",
+        "rip-lang": ">=3.13.110",
       },
       "devDependencies": {
         "@axe-core/playwright": "4.11.1",
@@ -126,12 +126,12 @@
     },
     "packages/x12": {
       "name": "@rip-lang/x12",
-      "version": "0.2.88",
+      "version": "0.2.89",
       "bin": {
         "rip-x12": "./bin/rip-x12",
       },
       "dependencies": {
-        "rip-lang": ">=3.13.109",
+        "rip-lang": ">=3.13.110",
       },
     },
   },
@@ -232,7 +232,7 @@
 
     "rip": ["rip@workspace:packages/vscode"],
 
-    "rip-lang": ["rip-lang@3.13.109", "", { "bin": { "rip": "bin/rip" } }, "sha512-ivNEwFaSu51DFPzC0+TpTOpvN0TuquOdBQ4eR1NnsKQ69ZVcx9KpRWcv/YsiNRno+r++mNEWX6IQWMZfT4OY8g=="],
+    "rip-lang": ["rip-lang@3.13.110", "", { "bin": { "rip": "bin/rip" } }, "sha512-DzDUWk0/sM56lTJMBH7QqO2LZLC20My6xFb6d+N5/HQXdpDHU+8vn8lzKyzWNc4IgdYZ23eota4FGiiYy8YupQ=="],
 
     "semver": ["semver@7.7.4", "", { "bin": { "semver": "bin/semver.js" } }, "sha512-vFKC2IEtQnVhpT78h1Yp8wzwrf8CM+MzKMHGJZfBtzhZNycRFnXsHk6E5TxIkkMsgNS7mdX3AGB7x2QM2di4lA=="],
 
