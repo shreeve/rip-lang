@@ -29,6 +29,7 @@ import { getLanIP as controlGetLanIP } from './control/lan.rip'
 import { startMdnsAdvertisement as controlStartMdnsAdvertisement, stopMdnsAdvertisements as controlStopMdnsAdvertisements } from './control/mdns.rip'
 import { registerWatchGroup, handleWatchGroup, broadcastWatchChange } from './control/watch-sse.rip'
 import { createCleanup, installShutdownHandlers } from './control/lifecycle.rip'
+import { computeSocketPrefix as cliComputeSocketPrefix } from './control/cli-helpers.rip'
 
 # Match capture holder for Rip's =~
 _ = null
@@ -1090,38 +1091,9 @@ main = ->
     """
     return
 
-  # Helper functions for subcommands
-  getKV = (prefix) ->
-    for tok in process.argv
-      return tok.slice(prefix.length) if tok.startsWith(prefix)
-    undefined
-
-  findAppPathToken = ->
-    for i in [2...process.argv.length]
-      tok = process.argv[i]
-      pathPart = if tok.includes('@') then tok.split('@')[0] else tok
-      looksLikePath = pathPart.includes('/') or pathPart.startsWith('.') or pathPart.endsWith('.rip') or pathPart.endsWith('.ts')
-      try
-        return pathPart if looksLikePath and existsSync(if isAbsolute(pathPart) then pathPart else resolve(process.cwd(), pathPart))
-      catch
-        null
-    undefined
-
-  computeSocketPrefix = ->
-    override = getKV('--socket-prefix=')
-    return override if override
-    appTok = findAppPathToken()
-    if appTok
-      try
-        { appName } = resolveAppEntry(appTok)
-        return "rip_#{appName}"
-      catch
-        null
-    'rip_server'
-
   # Subcommand: stop
   if 'stop' in process.argv
-    prefix = computeSocketPrefix()
+    prefix = cliComputeSocketPrefix(process.argv, resolveAppEntry, existsSync, isAbsolute, resolve, (-> process.cwd()))
     pidFile = getPidFilePath(prefix)
     try
       if existsSync(pidFile)
@@ -1137,7 +1109,8 @@ main = ->
 
   # Subcommand: list
   if 'list' in process.argv
-    controlUnix = getControlSocketPath(computeSocketPrefix())
+    prefix = cliComputeSocketPrefix(process.argv, resolveAppEntry, existsSync, isAbsolute, resolve, (-> process.cwd()))
+    controlUnix = getControlSocketPath(prefix)
     try
       res = fetch!('http://localhost/registry', { unix: controlUnix, method: 'GET' })
       throw new Error("list failed: #{res.status}") unless res.ok
