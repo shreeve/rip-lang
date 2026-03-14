@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/server",
-  "version": "1.3.111",
+  "version": "1.3.112",
   "description": "Pure Rip web framework and application server",
   "type": "module",
   "main": "api.rip",
@@ -53,10 +53,13 @@
     "middleware.rip",
     "server.rip",
     "server.html",
-    "certs/",
+    "acme/",
     "bin/",
-    "tests/",
+    "certs/",
+    "control/",
     "docs/",
+    "edge/",
+    "tests/",
     "README.md"
   ]
 }
