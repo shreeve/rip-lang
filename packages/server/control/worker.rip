@@ -128,3 +128,9 @@ export runWorkerMode = ->
 
   process.on 'SIGTERM', shutdown
   process.on 'SIGINT', shutdown
+  process.on 'uncaughtException', (err) ->
+    console.error "[worker #{workerId}] uncaught exception:", err
+    shutdown()
+  process.on 'unhandledRejection', (err) ->
+    console.error "[worker #{workerId}] unhandled rejection:", err
+    shutdown()

@@ -40,8 +40,10 @@ _ = null
 # Constants
 # ==============================================================================
 
-MAX_BACKOFF_MS = 30000        # Max delay between worker restart attempts
-MAX_RESTART_COUNT = 10        # Max consecutive worker crashes before giving up
+MAX_BACKOFF_MS = 30000         # Max delay between worker restart attempts
+MAX_RESTART_COUNT = 10         # Max consecutive worker crashes before giving up
+STABILITY_THRESHOLD_MS = 60000 # Worker uptime before restart count resets
+SHUTDOWN_TIMEOUT_MS = 30000    # Max wait for connection draining on shutdown
 
 # ==============================================================================
 # Utilities
@@ -491,6 +493,11 @@ class Manager
       # Notify server to remove dead worker's socket entry (fire-and-forget)
       postWorkerQuit(@flags.socketPrefix, w.id)
 
+      # Reset restart count if worker ran long enough to be considered stable
+      if nowMs() - w.startedAt > STABILITY_THRESHOLD_MS
+        w.restartCount = 0
+        w.backoffMs = 1000
+
       w.restartCount++
       w.backoffMs = Math.min(w.backoffMs * 2, MAX_BACKOFF_MS)
       return if w.restartCount > MAX_RESTART_COUNT
@@ -645,6 +652,13 @@ class Server
     @startControl!
 
   stop: ->
+    # Drain all per-app queues — resolve pending requests with 503
+    for [appId, app] as @appRegistry.apps
+      while app.queue.length > 0
+        job = app.queue.shift()
+        try job.resolve(new Response('Server shutting down', { status: 503 }))
+
+    # Stop listeners with graceful drain
     try @server?.stop()
     try @httpsServer?.stop()
     try @control?.stop()

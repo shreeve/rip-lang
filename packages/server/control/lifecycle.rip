@@ -13,13 +13,33 @@ export logStartupSummary = (server, flags, buildRipdevUrlFn, formatPortFn) ->
   url = buildRipdevUrlFn(flags.appName, protocol, port, formatPortFn)
   console.log "rip-server: rip=#{server.ripVersion} server=#{server.serverVersion} app=#{flags.appName} workers=#{flags.workers} url=#{url}/server"
 
+FORCED_EXIT_MS = 35000
+
 export createCleanup = (pidFile, server, manager, unlinkSyncFn, fetchFn, processObj) ->
+  called = false
   ->
+    return if called
+    called = true
     console.log 'rip-server: shutting down...'
-    try unlinkSyncFn(pidFile)
+
+    # Safety net: force exit if graceful shutdown stalls
+    setTimeout (-> processObj.exit(1)), FORCED_EXIT_MS
+
+    # Stop accepting new work before anything else
+    manager.shuttingDown = true
+
+    # Stop ACME renewal loop
+    try server.acmeManager?.stopRenewalLoop()
+
+    # Drain connections and stop listeners
     server.stop()
     manager.stop!
+
+    # Shutdown DB if we started it
     try fetchFn!(manager.dbUrl + '/shutdown', { method: 'POST' }) if manager.dbUrl
+
+    # PID file cleanup last — only after everything has stopped
+    try unlinkSyncFn(pidFile)
     processObj.exit(0)
 
 export installShutdownHandlers = (cleanup, processObj) ->
