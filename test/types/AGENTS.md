@@ -107,7 +107,6 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 | Category                     | Tested In     | Notes                                                                                                       |
 | ---------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------- |
-| Readonly / immutability      | 03-structural | `=!` emits `const` in JS and `declare const` in .d.ts; binding-level immutability enforced                  |
 | Element type inheritance     | 09-components | `# @inherits tag` widens constructor props with `__RipProps<'tag'>`; runtime forwards unknown props         |
 | Event handler typing         | 09, 12        | Inline handlers typed via `__RipEvents`; named method refs (`@submit: @handler`) remain `any`               |
 | Type inference (split decl.) | 11-inference  | Top-level `x = expr` inferred via `patchUninitializedTypes`; block-scoped and destructured caught by strict |
@@ -120,6 +119,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Category                    | Tested In      | Notes                                                                                                                              |
 | --------------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | Variable type mismatches    | 01-basic       | Same-file typed variables                                                                                                          |
+| Readonly / immutability     | 01-basic       | `=!` emits `const`/`declare const`; reassignment caught (TS2588); `readonly` field mutation caught (TS2540)                        |
 | Nullable safety             | 01-basic       | `strict: true` enables full `strictNullChecks` — null/undefined caught at all usage sites; 2 negative tests                        |
 | Object shape checking       | 03-structural  | Missing fields, extra fields                                                                                                       |
 | Property access checking    | 03-structural  | Typos, nonexistent fields                                                                                                          |
