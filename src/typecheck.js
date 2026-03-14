@@ -237,6 +237,10 @@ export function cleanDiagnosticMessage(msg) {
   } while (msg !== prev);
   // Strip any remaining __bind_X__ → X in property name references
   msg = msg.replace(/__bind_(\w+)__/g, '$1');
+  // Clean intrinsic element type helper names from display
+  msg = msg.replace(/\b__RipProps<['"](\w+)['"]>/g, '<$1> props');
+  msg = msg.replace(/\b__RipElementMap\b/g, 'ElementMap');
+  msg = msg.replace(/\b__ripEl\b/g, 'element');
   // Deduplicate consecutive identical lines (unwrapping can collapse nested messages)
   msg = msg.split('\n').filter((line, i, arr) => i === 0 || line.trim() !== arr[i - 1].trim()).join('\n');
   return msg;
@@ -685,6 +689,21 @@ export function compileForCheck(filePath, source, compiler) {
     if (/\bmodulo\b/.test(code) && !/\bdeclare .*\bmodulo\b/.test(headerDts)) {
       headerDts = 'declare function modulo(n: number, d: number): number;\n' + headerDts;
     }
+  }
+
+  // Inject intrinsic element type declarations for render block type-checking.
+  // Uses TypeScript's built-in DOM types (HTMLElementTagNameMap, etc.) as the
+  // source of truth for tag names, attribute types, and event handler types.
+  if (hasTypes && /\b__ripEl\b/.test(code)) {
+    const intrinsicDecls = [
+      'type __RipElementMap = HTMLElementTagNameMap & SVGElementTagNameMap;',
+      'type __RipTag = keyof __RipElementMap;',
+      "type __RipAttrKeys<T> = { [K in keyof T]-?: K extends 'style' ? never : T[K] extends (...args: any[]) => any ? never : K }[keyof T] & string;",
+      'type __RipEvents = { [K in keyof HTMLElementEventMap as `@${K}`]?: ((event: HTMLElementEventMap[K]) => void) | null };',
+      'type __RipProps<K extends __RipTag> = { [P in __RipAttrKeys<__RipElementMap[K]>]?: __RipElementMap[K][P] } & __RipEvents & { class?: string; style?: string; [k: `data-${string}`]: any; [k: `aria-${string}`]: any };',
+      'declare function __ripEl<K extends __RipTag>(tag: K, props?: __RipProps<K>): void;',
+    ];
+    headerDts = intrinsicDecls.join('\n') + '\n' + headerDts;
   }
 
   let tsContent = (hasTypes ? headerDts + '\n' : '') + code;

@@ -32,3 +32,8 @@ notes.txt
 /apps/candor/
 /apps/trustlabs/
 /apps/websites/
+
+# UI test artifacts
+/packages/ui/playwright-report/
+/packages/ui/test-results/
+/packages/ui/tests/results/

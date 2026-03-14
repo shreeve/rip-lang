@@ -581,6 +581,10 @@ function unwrapReactiveType(display) {
       if (wrapper === 'Signal') display = display.replace(/\bconst\b/, 'let');
     }
   }
+  display = display.replace(/\b__RipProps<['"](\w+)['"]>/g, '<$1> props');
+  display = display.replace(/\b__RipElementMap\b/g, 'ElementMap');
+  display = display.replace(/\b__RipEvents\b/g, 'EventHandlers');
+  display = display.replace(/\b__ripEl\b/g, 'element');
   return display;
 }
 
@@ -813,6 +817,22 @@ function detectComponentContext(srcLine, col) {
   if (!wantValues && !wantProps) wantProps = true;
 
   return { component, existingProps, propValues, currentProp, wantValues, wantProps };
+}
+
+// Detect whether the cursor is inside a render block. Walks up from the
+// current line to find an ancestor `render` keyword at lower indentation.
+function isInRenderBlock(srcLines, lineIndex) {
+  const line = srcLines[lineIndex];
+  if (!line) return false;
+  const curIndent = line.length - line.trimStart().length;
+  for (let i = lineIndex - 1; i >= 0; i--) {
+    const prev = srcLines[i];
+    if (!prev || prev.trim() === '') continue;
+    const prevIndent = prev.length - prev.trimStart().length;
+    if (prevIndent < curIndent && /^\s*render\s*$/.test(prev)) return true;
+    if (prevIndent === 0) break;
+  }
+  return false;
 }
 
 // ── Semantic tokens ────────────────────────────────────────────────
@@ -1148,8 +1168,10 @@ connection.onCompletion((params) => {
       }
     }
 
-    // Space/colon triggered outside component context — don't fall through to TS
-    if (params.context?.triggerCharacter === ' ' || params.context?.triggerCharacter === ':') return [];
+    // Space/colon triggered outside component/render context — don't fall through to TS
+    if (params.context?.triggerCharacter === ' ' || params.context?.triggerCharacter === ':') {
+      if (!isInRenderBlock(srcLines, params.position.line)) return [];
+    }
   }
 
   // TypeScript completions
