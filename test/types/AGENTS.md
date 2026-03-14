@@ -63,7 +63,7 @@ Each file exercises a specific type feature. Status key:
 | 01-basic.rip       | `::` on variables, nullable (`T \| null`, `T \| undefined`) | pass   |                                                                   |
 | 02-aliases.rip     | `type` aliases (simple, union, typeof)                      | pass   |                                                                   |
 | 03-structural.rip  | `type` blocks, optional, readonly, recursive, generic       | pass   | Includes `PagedResult<T>` generic struct                          |
-| 04-unions.rip      | Inline, block, discriminated unions + switch narrowing      | pass   | Narrowing not checked — see gap table                             |
+| 04-unions.rip      | Inline, block, discriminated unions + switch narrowing      | pass   |                                                                   |
 | 05-interfaces.rip  | `interface`, `extends`, optional members                    | pass   |                                                                   |
 | 06-functions.rip   | Typed functions, arrows, and array transforms               | pass   | 21 negative tests (7 param + 6 return + 3 array + 5 destructured) |
 | 07-integration.rip | Cross-module imports of typed functions                     | pass   | Cross-file type flow via .d.ts                                    |
@@ -98,7 +98,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 | Category                      | Tested In     | Notes                                                                                                                    |
 | ----------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| Generic types                 | 03-structural | Declarable; .d.ts emission has some gaps                                                                                 |
+| Generic types                 | 03-structural | Basic generics work (structs, function returns); edge cases may remain                                                   |
 | Render block type safety      | 09, 12        | Intrinsic tag/attr/event checking via `__ripEl`; conditionals and text expressions still unchecked                       |
 
 ### ✅ Working
@@ -141,7 +141,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 ### Suppressed error codes
 
-`rip check` runs TypeScript under the hood but suppresses 12 error codes (defined in `SKIP_CODES` in [src/typecheck.js](../../../src/typecheck.js)). Most suppressions are necessary — Rip's compilation model produces patterns that confuse TS (DTS coexisting with compiled bodies, module resolution, etc.). But some categories directly weaken type safety:
+`rip check` runs TypeScript under the hood but suppresses 13 error codes (defined in `SKIP_CODES` in [src/typecheck.js](../../../src/typecheck.js)). Most suppressions are necessary — Rip's compilation model produces patterns that confuse TS (DTS coexisting with compiled bodies, module resolution, etc.). But some categories directly weaken type safety:
 
 | Suppressed codes | What they hide        | Impact on audit                                                                |
 | ---------------- | --------------------- | ------------------------------------------------------------------------------ |

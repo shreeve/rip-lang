@@ -13,12 +13,12 @@ Stampfile → Parser → Engine → Directives
            plurals    loop
 ```
 
-Four source files, ~524 lines total:
+Four source files, ~529 lines total:
 
 | File         | Lines | Purpose                                        |
 |--------------|-------|------------------------------------------------|
 | `parser.rip` | 170   | Stampfile grammar — variables, arrows, plurals |
-| `engine.rip` | 149   | Handler resolution, check/apply/verify loop    |
+| `engine.rip` | 150   | Handler resolution, check/apply/verify loop    |
 | `cli.rip`    | 126   | Subcommand dispatch, file discovery            |
 | `helpers.rip` | 84   | Shell execution, logging                       |
 

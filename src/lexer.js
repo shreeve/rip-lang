@@ -1250,14 +1250,21 @@ export class Lexer {
         this.emit(',', ',');
         return 2 + 1 + space.length + 1; // consume *>@ =, value tokens become args
       }
-      // Scan ahead to find "IDENTIFIER =" pattern
-      let m = /^((?:(?!\s)[$\w\x7f-\uffff])+(?:\.[a-zA-Z_$][\w]*)*)(\s*)=(?!=)/.exec(rest);
+      // Scan ahead to find "IDENTIFIER =" or "@IDENTIFIER =" pattern
+      let m = /^(@?(?:(?!\s)[$\w\x7f-\uffff])+(?:\.[a-zA-Z_$][\w]*)*)(\s*)=(?!=)/.exec(rest);
       if (m) {
         let target = m[1], space = m[2];
-        let parts = target.split('.');
+        let hasAt = target[0] === '@';
+        let bare = hasAt ? target.slice(1) : target;
+        let parts = bare ? bare.split('.') : [];
         // Emit: target = Object.assign(target ??= {}, ...)
         let emitTarget = () => {
-          this.emit('IDENTIFIER', parts[0]);
+          if (hasAt) {
+            this.emit('@', '@');
+            if (parts.length > 0) this.emit('PROPERTY', parts[0]);
+          } else {
+            this.emit('IDENTIFIER', parts[0]);
+          }
           for (let i = 1; i < parts.length; i++) {
             this.emit('.', '.');
             this.emit('PROPERTY', parts[i]);
@@ -1275,7 +1282,7 @@ export class Lexer {
         this.emit('}', '}');
         this.emit(',', ',');
         let comma = this.prev();
-        comma.mergeClose = true; // mark for rewriter to insert CALL_END
+        comma.mergeClose = true;
         return 2 + target.length + space.length + 1; // consume *>target =
       }
     }
@@ -1362,6 +1369,7 @@ export class Lexer {
   rewrite(tokens) {
     this.tokens = tokens;
     this.removeLeadingNewlines();
+    this.closeMergeAssignments();
     this.closeOpenCalls();
     this.closeOpenIndexes();
     this.normalizeLines();
@@ -1371,7 +1379,6 @@ export class Lexer {
     this.rewriteTaggedTemplates();
     this.addImplicitBracesAndParens();
     this.addImplicitCallCommas();
-    this.closeMergeAssignments();
     return this.tokens;
   }
 

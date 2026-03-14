@@ -4,7 +4,7 @@
 
 **What is Rip:** An elegant reactive language that compiles to modern JavaScript (ES2022), featuring zero dependencies, self-hosting capability, and built-in reactivity primitives.
 
-Detailed subsystem notes live in nested `AGENTS.md` files in the relevant directories (`src/`, `docs/`, `packages/ui/`, `packages/vscode/`, `test/types/`).
+Detailed subsystem notes live in nested `AGENTS.md` files in the relevant directories (`src/`, `docs/`, `packages/ui/`, `packages/vscode/`, `packages/stamp/`, `test/types/`).
 
 ---
 
@@ -247,7 +247,6 @@ rip -cm example.rip
 | existence check       | `x?`                      | `(x != null)`        |
 | optional chaining     | `a?.b`, `a?.[0]`, `a?.()` | JS optional chaining |
 | optional shorthand    | `a?[0]`, `a?(x)`          | `a?.[0]`, `a?.(x)`   |
-| optional chain assign | `x?.prop = val`           | guarded assignment   |
 | nullish coalescing    | `a ?? b`                  | `a ?? b`             |
 | dammit operator       | `fetchData!`              | `await fetchData()`  |
 
@@ -375,6 +374,8 @@ catch
   console.log 'version unknown'
 
 # Good — catch with error variable
+try
+  something()
 catch e
   console.error "failed: #{e.message}"
 ```

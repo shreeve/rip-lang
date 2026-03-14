@@ -54,7 +54,7 @@ export Autocomplete = component
 
   _applyPlacement: ->
     return unless @_list
-    Object.assign @_list.style,
+    *>@_list.style =
       position: 'fixed'
       inset: 'auto'
       margin: '0'
