@@ -46,6 +46,53 @@ Use these rules during M1/M2 to keep the codebase lightweight and manageable.
   - `control/*` for manager/control socket/lifecycle
   - `acme/*` only when ACME implementation begins
 
+## Coding Conventions
+
+### Bare `try` over `try ... catch then null`
+
+In Rip, a bare `try` compiles to `try {} catch {}` in JavaScript — functionally
+identical to `try ... catch then null`, which compiles to `try {} catch { null; }`.
+The extra `null;` is a no-op statement with no behavioral difference.
+
+**Preferred style:** use bare `try` for fire-and-forget error suppression.
+
+```coffee
+# Good — clean, concise
+try unlinkSync(path)
+try server.stop()
+
+# Good — multiline bare try
+try
+  proc.kill()
+  console.log "stopped #{host}"
+
+# Avoid — unnecessary catch block
+try unlinkSync(path) catch then null
+
+# Avoid — verbose no-op catch
+try
+  proc.kill()
+catch
+  null
+```
+
+**When to use an explicit catch:**
+- When the catch body does actual work (logging, fallback value, cleanup)
+- When catching a specific error variable: `catch e`
+- When fall-through after try needs a specific return value that differs from `undefined`
+
+```coffee
+# Good — catch does real work
+try
+  pkg = JSON.parse(readFileSync(path, 'utf8'))
+catch
+  console.log 'version unknown'
+
+# Good — catch with error variable
+catch e
+  console.error "failed: #{e.message}"
+```
+
 ## Evidence links
 
 - TLS spikes and outputs:
