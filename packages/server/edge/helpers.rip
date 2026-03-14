@@ -1,5 +1,5 @@
 # ==============================================================================
-# edge/network.rip — network formatting helpers
+# edge/helpers.rip — small edge utility functions
 # ==============================================================================
 
 export formatPort = (protocol, port) ->
@@ -7,3 +7,7 @@ export formatPort = (protocol, port) ->
     ''
   else
     ":#{port}"
+
+export maybeAddSecurityHeaders = (httpsActive, hstsEnabled, headers) ->
+  if httpsActive and hstsEnabled
+    headers.set('strict-transport-security', 'max-age=31536000; includeSubDomains') unless headers.has('strict-transport-security')

@@ -1,7 +1,0 @@
-# ==============================================================================
-# edge/security.rip — security header helpers
-# ==============================================================================
-
-export maybeAddSecurityHeaders = (httpsActive, hstsEnabled, headers) ->
-  if httpsActive and hstsEnabled
-    headers.set('strict-transport-security', 'max-age=31536000; includeSubDomains') unless headers.has('strict-transport-security')

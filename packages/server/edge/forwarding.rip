@@ -1,6 +1,21 @@
 # ==============================================================================
-# edge/forwarding.rip — forwarding and upstream response helpers
+# edge/forwarding.rip — forwarding, responses, and upstream helpers
 # ==============================================================================
+
+export watchUnavailableResponse = ->
+  new Response('', { status: 503, headers: { 'Retry-After': '2' } })
+
+export serverBusyResponse = ->
+  new Response('Server busy', { status: 503, headers: { 'Retry-After': '1' } })
+
+export serviceUnavailableResponse = ->
+  new Response('Service unavailable', { status: 503, headers: { 'Retry-After': '1' } })
+
+export gatewayTimeoutResponse = ->
+  new Response('Gateway timeout', { status: 504 })
+
+export queueTimeoutResponse = ->
+  new Response('Queue timeout', { status: 504 })
 
 export buildUpstreamResponse = (res, req, totalSeconds, workerSeconds, maybeAddSecurityHeaders, logAccess, stripInternalHeaders) ->
   silent = res.headers.get('rip-no-log') is '1'

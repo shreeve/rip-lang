@@ -1,6 +1,16 @@
 # ==============================================================================
-# control/mdns.rip — mDNS advertisement helpers
+# control/mdns.rip — mDNS and LAN detection helpers
 # ==============================================================================
+
+export getLanIP = (networkInterfacesFn) ->
+  try
+    nets = networkInterfacesFn()
+    for name, addrs of nets
+      for addr in addrs
+        continue if addr.internal or addr.family isnt 'IPv4'
+        continue if addr.address.startsWith('169.254.')  # Link-local
+        return addr.address
+  null
 
 export stopMdnsAdvertisements = (mdnsProcesses) ->
   for [host, proc] as mdnsProcesses
