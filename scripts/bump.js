@@ -329,8 +329,18 @@ async function fullRelease(level) {
 
   publish('all', '@rip-lang/all', allNewVer);
 
-  // Step 8: Refresh workspace links
-  run('bun install', { stdio: 'inherit' });
+  // Step 8: Refresh workspace links (retry — npm registry propagation delay)
+  for (let attempt = 0; attempt < 10; attempt++) {
+    try {
+      run('bun install');
+      break;
+    } catch {
+      if (attempt === 9) { console.warn('  ⚠ bun install failed after retries — run manually'); break; }
+      const secs = 3 + attempt * 2;
+      console.log(`  waiting ${secs}s for registry to propagate... (attempt ${attempt + 1}/10)`);
+      execSync(`sleep ${secs}`);
+    }
+  }
 
   // Step 9: Summary
   console.log(`\n✨ Released rip-lang ${newVersion}\n`);
