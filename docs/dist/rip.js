@@ -2309,12 +2309,20 @@
           this.emit(",", ",");
           return 2 + 1 + space.length + 1;
         }
-        let m = /^((?:(?!\s)[$\w\x7f-\uffff])+(?:\.[a-zA-Z_$][\w]*)*)(\s*)=(?!=)/.exec(rest);
+        let m = /^(@?(?:(?!\s)[$\w\x7f-\uffff])+(?:\.[a-zA-Z_$][\w]*)*)(\s*)=(?!=)/.exec(rest);
         if (m) {
           let target = m[1], space = m[2];
-          let parts = target.split(".");
+          let hasAt = target[0] === "@";
+          let bare = hasAt ? target.slice(1) : target;
+          let parts = bare ? bare.split(".") : [];
           let emitTarget = () => {
-            this.emit("IDENTIFIER", parts[0]);
+            if (hasAt) {
+              this.emit("@", "@");
+              if (parts.length > 0)
+                this.emit("PROPERTY", parts[0]);
+            } else {
+              this.emit("IDENTIFIER", parts[0]);
+            }
             for (let i = 1;i < parts.length; i++) {
               this.emit(".", ".");
               this.emit("PROPERTY", parts[i]);
@@ -2409,6 +2417,7 @@
     rewrite(tokens) {
       this.tokens = tokens;
       this.removeLeadingNewlines();
+      this.closeMergeAssignments();
       this.closeOpenCalls();
       this.closeOpenIndexes();
       this.normalizeLines();
@@ -2418,7 +2427,6 @@
       this.rewriteTaggedTemplates();
       this.addImplicitBracesAndParens();
       this.addImplicitCallCommas();
-      this.closeMergeAssignments();
       return this.tokens;
     }
     removeLeadingNewlines() {
@@ -9655,8 +9663,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeGenerator({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.13.118";
-  var BUILD_DATE = "2026-03-14@10:39:07GMT";
+  var VERSION = "3.13.119";
+  var BUILD_DATE = "2026-03-14@11:16:29GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
