@@ -35,6 +35,7 @@ import { loadCert as acmeLoadCert, defaultCertDir } from './acme/store.rip'
 import { createMetrics } from './edge/metrics.rip'
 import { setEventJsonMode, logEvent } from './control/events.rip'
 import { createHub, generateClientId, addClient, removeClient, processResponse, handlePublish, getRealtimeStats } from './edge/realtime.rip'
+import { findConfigFile, loadConfig, applyConfig } from './edge/config.rip'
 
 # Match capture holder for Rip's =~
 _ = null
@@ -1039,6 +1040,14 @@ main = ->
   mgr = new Manager(flags)
   svr.manager = mgr
   mgr.server = svr
+
+  # Load config.rip if present — register additional apps
+  configPath = findConfigFile(flags.appEntry)
+  if configPath
+    config = loadConfig!(configPath)
+    if config
+      registered = applyConfig(config, svr.appRegistry, registerApp, dirname(flags.appEntry))
+      p "rip-server: loaded config.rip with #{registered.length} app(s)" unless flags.quiet
 
   cleanup = createCleanup(pidFile, svr, mgr, unlinkSync, fetch, process)
   installShutdownHandlers(cleanup, process)

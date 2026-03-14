@@ -1321,16 +1321,61 @@ See [Hot Reloading](#hot-reloading) for details on how the two layers (API + UI)
 | Built-in LB | ✅ | ❌ | ✅ | ✅ |
 | Graceful Shutdown | ✅ | ✅ | ✅ | ✅ |
 
+## Multi-App Configuration (`config.rip`)
+
+If a `config.rip` file exists next to your entry file, the server loads it
+and registers additional apps with their own hosts and worker pools.
+
+```coffee
+# config.rip
+export default
+  apps:
+    main:
+      entry: './index.rip'
+      hosts: ['example.com', 'www.example.com']
+      workers: 4
+    api:
+      entry: './api/index.rip'
+      hosts: ['api.example.com']
+      workers: 2
+      maxQueue: 1024
+    admin:
+      entry: './admin/index.rip'
+      hosts: ['admin.example.com']
+      workers: 1
+```
+
+Each app gets its own worker pool, queue, and host routing. The edge server
+routes requests to the correct app based on the `Host` header.
+
+If no `config.rip` exists, the server runs in single-app mode as usual.
+
+## Reverse Proxy
+
+Forward requests to external HTTP upstreams with proper header handling:
+
+```coffee
+import { get } from '@rip-lang/server'
+import { proxyToUpstream } from '@rip-lang/server/edge/forwarding.rip'
+
+get '/api/*' -> proxyToUpstream!(@req.raw, 'http://backend:8080')
+```
+
+Features:
+- Strips hop-by-hop headers (Connection, Transfer-Encoding, etc.)
+- Adds `X-Forwarded-For`, `X-Forwarded-Proto`, `X-Forwarded-Host`
+- Streaming response passthrough
+- Timeout with 504, connect failure with 502
+- Manual redirect handling (no auto-follow)
+
 ## Roadmap
 
 > *Planned improvements for future releases:*
 
-- [ ] Edgefile.rip declarative multi-app config
-- [ ] Reverse proxy / WebSocket passthrough to external upstreams
 - [ ] Prometheus / OpenTelemetry metrics export
 - [ ] Request ID tracing
 - [ ] Rate limiting and request smuggling defenses
-- [ ] Binary WebSocket frame support for CRDT collaboration
+- [ ] WebSocket passthrough for reverse proxy upstreams
 
 ## License
 
