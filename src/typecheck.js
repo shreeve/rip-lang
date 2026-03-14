@@ -13,7 +13,7 @@
 import { Compiler, getStdlibCode } from './compiler.js';
 import { createRequire } from 'module';
 import { readFileSync, existsSync, readdirSync } from 'fs';
-import { mapToSourcePos, offsetToLine, getLineText, findNearestWord, lineColToOffset, offsetToLineCol } from './sourcemap-utils.js';
+import { mapToSourcePos, offsetToLine, getLineText, findNearestWord, lineColToOffset, offsetToLineCol, adjustSwitchDiagnostic } from './sourcemap-utils.js';
 import { resolve, relative, dirname } from 'path';
 import { buildLineMap } from './sourcemaps.js';
 
@@ -247,6 +247,22 @@ export function cleanDiagnosticMessage(msg) {
   msg = msg.replace(/\b__ripEl\b/g, 'element');
   // Deduplicate consecutive identical lines (unwrapping can collapse nested messages)
   msg = msg.split('\n').filter((line, i, arr) => i === 0 || line.trim() !== arr[i - 1].trim()).join('\n');
+  // Remove redundant nested "Type 'X' is not assignable to type 'Y'" when
+  // the parent already says "Type 'X | Z' is not assignable to type 'Y'"
+  // and X is just one member of the union — the drill-down adds no information.
+  const lines = msg.split('\n');
+  if (lines.length >= 2) {
+    const parentMatch = lines[0].match(/^Type '(.+)' is not assignable to type '(.+)'\.$/);
+    if (parentMatch && parentMatch[1].includes(' | ')) {
+      const members = parentMatch[1].split(' | ').map(s => s.trim());
+      const filtered = lines.filter((line, i) => {
+        if (i === 0) return true;
+        const childMatch = line.trim().match(/^Type '(.+)' is not assignable to type '(.+)'\.$/);
+        return !(childMatch && childMatch[2] === parentMatch[2] && members.includes(childMatch[1]));
+      });
+      msg = filtered.join('\n');
+    }
+  }
   return msg;
 }
 
@@ -843,7 +859,7 @@ export function compileForCheck(filePath, source, compiler) {
 
 // ── Source mapping helpers (delegated to sourcemap-utils.js) ───────
 
-export { mapToSourcePos, offsetToLine, getLineText, findNearestWord, lineColToOffset, offsetToLineCol } from './sourcemap-utils.js';
+export { mapToSourcePos, offsetToLine, getLineText, findNearestWord, lineColToOffset, offsetToLineCol, adjustSwitchDiagnostic } from './sourcemap-utils.js';
 
 // Map a TypeScript diagnostic offset back to a Rip source line number.
 // Returns -1 if the offset falls in the DTS header.
@@ -1046,7 +1062,11 @@ export async function runCheck(targetDir, opts = {}) {
       const pos = mapToSourcePos(entry, d.start);
       if (!pos) continue;
 
-      const endPos = d.length ? mapToSourcePos(entry, d.start + d.length) : null;
+      // Remap IIFE-switch diagnostics to the enclosing function declaration
+      const adj = adjustSwitchDiagnostic(entry.source, pos, d.code);
+      if (adj) { pos.line = adj.line; pos.col = adj.col; }
+
+      const endPos = adj ? { line: adj.line, col: adj.col + adj.len } : (d.length ? mapToSourcePos(entry, d.start + d.length) : null);
       const len = endPos && endPos.line === pos.line ? endPos.col - pos.col : 1;
 
       const message = cleanDiagnosticMessage(ts.flattenDiagnosticMessageText(d.messageText, '\n'));

@@ -4,7 +4,7 @@
 type Status = 'pending' | 'active' | 'done'
 type Result = 'success' | 'error' | 'timeout'
 
-// Block unions (vertical form)
+// Block unions (diff-friendly vertical form)
 type HttpMethod =
   | 'GET'
   | 'POST'
@@ -49,9 +49,10 @@ console.log('rect:', rect)
 
 // ── Switch narrowing ──
 //
-// TypeScript narrows the type in each case branch. After checking
-// kind === 'circle', TS knows shape has .radius — accessing .width
-// would be an error. Rip can't do this.
+// Discriminated union narrowing works in the compiled JS — TypeScript
+// narrows shape to { kind: 'circle', radius } in the circle case.
+// Accessing .radius is safe because the switch/when compiles to
+// switch/case which TS narrows correctly.
 
 function area(shape: Shape): number {
   switch (shape.kind) {
@@ -74,12 +75,20 @@ let badLevel: LogLevel = 'trace'
 // @ts-expect-error — number not assignable to Result
 let badResult: Result = 0
 
-// ── Enum exhaustiveness ──
+// ── Negative: switch narrowing catches wrong property access ──
+
+function badArea(shape: Shape): number {
+  switch (shape.kind) {
+    // @ts-expect-error — Circle has no .width
+    case 'circle': return shape.width * 2
+    // @ts-expect-error — Rect has no .radius
+    case 'rect': return shape.radius ** 2
+  }
+}
+
+// ── Exhaustiveness ──
 //
-// TypeScript enforces exhaustive switch handling. The `area` function
-// above must handle all Shape variants — adding Triangle without
-// updating the switch would produce:
-//   "Function lacks ending return statement and return type does
-//    not include 'undefined'."
-// Rip's `rip check` doesn't verify this — missing cases only fail
-// at runtime.
+// With strict: true, adding a new Shape variant (e.g. Triangle)
+// without updating the switch produces:
+//   "Type 'number | undefined' is not assignable to type 'number'"
+// because TS knows the switch doesn't cover all cases.

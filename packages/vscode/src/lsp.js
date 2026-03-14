@@ -228,10 +228,27 @@ function publishDiagnostics(filePath) {
         if (d.start === undefined) continue;
         if (tc.SKIP_CODES.has(d.code)) continue;
 
-        const startPos = genToSrcPos(filePath, d.start);
-        const endPos = genToSrcPos(filePath, d.start + (d.length || 1));
+        const startRaw = tc.mapToSourcePos(c, d.start);
+        if (!startRaw) continue;
+        const startPos = { line: startRaw.line, character: startRaw.col };
 
-        if (startPos.line < 0) continue;
+        // Compute end position: try mapping the end offset, and fall back to
+        // using the error length from the start position when the end can't be
+        // resolved (e.g. errors in the DTS header where only the word maps).
+        const endRaw = tc.mapToSourcePos(c, d.start + (d.length || 1));
+        let endPos;
+        if (endRaw && endRaw.line === startRaw.line && endRaw.col > startRaw.col) {
+          endPos = { line: endRaw.line, character: endRaw.col };
+        } else {
+          endPos = { line: startPos.line, character: startPos.character + (d.length || 1) };
+        }
+
+        // Remap IIFE-switch diagnostics to the enclosing function declaration
+        const adj = tc.adjustSwitchDiagnostic?.(c.source, { line: startPos.line, col: startPos.character }, d.code);
+        if (adj) {
+          startPos.line = adj.line; startPos.character = adj.col;
+          endPos.line = adj.line; endPos.character = adj.col + adj.len;
+        }
 
         const message = tc.cleanDiagnosticMessage(ts.flattenDiagnosticMessageText(d.messageText, '\n'));
         const tags = [];
@@ -950,14 +967,23 @@ connection.onRequest('textDocument/semanticTokens/full', (params) => {
       const tsModifiers = classification & 0xFF;
       if (tsTokenType >= TS_TYPE_TO_LEGEND.length) continue;
 
-      // Reclassify DTS header tokens: TS classifies function params in
-      // declaration files as 'variable' instead of 'parameter'. Detect
-      // by checking if the token is on a function signature line.
+      // DTS header token handling: reclassify and skip synthetic lines.
       let finalType = tsTokenType;
-      if (tsTokenType === 7 && tsOffset < headerEndOffset) {
+      if (tsOffset < headerEndOffset) {
         const tsLine = tc.offsetToLine(c.tsContent, tsOffset);
         const lineText = tc.getLineText(c.tsContent, tsLine);
-        if (/^\s*(?:export\s+)?(?:declare\s+)?(?:async\s+)?function\s/.test(lineText)) {
+        // Skip tokens from synthetic `declare function` lines. User
+        // function sigs are moved to the body during interleaving —
+        // only stdlib globals (kind, p, pp, etc.) and reactive helpers
+        // (__state, __computed) remain. These have no source counterpart,
+        // and text-search mapping mis-maps them to identically named
+        // properties or variables (e.g. `kind` in a type block gets
+        // colored as a function).
+        if (/^\s*declare\s+function\s/.test(lineText)) continue;
+        // TS classifies function params in declaration files as
+        // 'variable' instead of 'parameter'. Reclassify when on a
+        // function signature line.
+        if (tsTokenType === 7 && /^\s*(?:export\s+)?(?:declare\s+)?(?:async\s+)?function\s/.test(lineText)) {
           finalType = 6; // parameter
         }
       }

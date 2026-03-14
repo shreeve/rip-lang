@@ -1,6 +1,37 @@
 // Shared source-map position utilities used by both the CLI type-checker
 // (src/typecheck.js) and the VS Code language server (packages/vscode/src/lsp.js).
 
+// When a switch expression is the implicit return of a function, the compiler
+// wraps it in an IIFE: `return (() => { switch ... })()`.  Non-exhaustive
+// switches produce TS2322 on the IIFE return, which source-maps to the `switch`
+// line.  This helper detects that pattern and remaps the diagnostic to the
+// function's return-type annotation (matching TS behaviour on the raw .ts).
+// Returns { line, col, len } if remapped, or null if no adjustment needed.
+export function adjustSwitchDiagnostic(source, pos, code) {
+  if (code !== 2322) return null;
+  const srcLines = source.split('\n');
+  const line = srcLines[pos.line] || '';
+  if (!/^\s*switch\b/.test(line)) return null;
+
+  const switchIndent = line.match(/^(\s*)/)[1].length;
+  for (let i = pos.line - 1; i >= 0; i--) {
+    const defLine = srcLines[i];
+    const defMatch = defLine.match(/^(\s*)def\b/);
+    if (defMatch && defMatch[1].length < switchIndent) {
+      // Found enclosing function — look for return-type annotation "):: Type"
+      const retMatch = defLine.match(/\)\s*::\s*(\w+)\s*$/);
+      if (retMatch) {
+        const typeStart = defLine.lastIndexOf(retMatch[1]);
+        return { line: i, col: typeStart, len: retMatch[1].length };
+      }
+      return { line: i, col: defMatch[1].length, len: 3 }; // fallback: highlight `def`
+    }
+    // Stop if we leave the indentation context
+    if (/\S/.test(defLine) && !defLine.match(/^(\s*)/)[1].length && !/^\s*#/.test(defLine)) break;
+  }
+  return null;
+}
+
 export function getLineText(text, lineNum) {
   let start = 0, line = 0;
   for (let i = 0; i <= text.length; i++) {
@@ -72,6 +103,22 @@ export function mapToSourcePos(entry, offset) {
       const word = wordMatch[0];
       const srcLines = entry.source.split('\n');
       const re = new RegExp('\\b' + word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b');
+
+      // For let/var declarations, the error word may appear on many source lines
+      // (e.g. `Status` referenced in multiple variable annotations). Narrow the
+      // search to the source line that declares the same variable.
+      const letMatch = genLineText.match(/^(?:export\s+)?(?:declare\s+)?(?:let|var)\s+(\w+)/);
+      if (letMatch) {
+        const varName = letMatch[1];
+        const varRe = new RegExp('\\b' + varName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*::');
+        for (let s = 0; s < srcLines.length; s++) {
+          if (varRe.test(srcLines[s])) {
+            const m = re.exec(srcLines[s]);
+            if (m) return { line: s, col: m.index };
+            return { line: s, col: 0 };
+          }
+        }
+      }
 
       // Find enclosing type/interface from DTS context to narrow search —
       // without this, duplicate member names (e.g. "host" in two types) always

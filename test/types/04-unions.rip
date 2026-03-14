@@ -20,15 +20,8 @@ type LogLevel =
   | "fatal"
 
 # Discriminated unions — named variants composed into a union
-type Circle =
-  kind: "circle"
-  radius: number
-
-type Rect =
-  kind: "rect"
-  width: number
-  height: number
-
+type Circle = { kind: "circle", radius: number }
+type Rect = { kind: "rect", width: number, height: number }
 type Shape = Circle | Rect
 
 # ── Use the types ──
@@ -80,7 +73,16 @@ badLevel:: LogLevel = "trace"
 # @ts-expect-error — number not assignable to Result
 badResult:: Result = 0
 
-# ── Fixed: enum exhaustiveness ──
+# ── Negative: switch narrowing catches wrong property access ──
+
+def badArea(shape:: Shape):: number
+  switch shape.kind
+    # @ts-expect-error — Circle has no .width
+    when "circle" then shape.width * 2
+    # @ts-expect-error — Rect has no .radius
+    when "rect" then shape.radius ** 2
+
+# ── Exhaustiveness ──
 #
 # With strict: true, adding a new Shape variant (e.g. Triangle)
 # without updating the switch produces:
