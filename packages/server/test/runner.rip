@@ -4,7 +4,7 @@
 #
 # Run: rip packages/server/test/runner.rip
 #
-# Discovers and runs all test-*.rip files in test/server/
+# Discovers and runs all *.rip files in test/tests/
 # ==============================================================================
 
 import { readdirSync } from 'node:fs'
@@ -40,8 +40,8 @@ export near = (actual, expected, tolerance = 0.001) ->
 
 # --- Runner ---
 
-testDir = join(dirname(import.meta.path), 'server')
-files = readdirSync(testDir).filter((f) -> f.startsWith('test-') and f.endsWith('.rip')).sort()
+testDir = join(dirname(import.meta.path), 'tests')
+files = readdirSync(testDir).filter((f) -> f.endsWith('.rip')).sort()
 
 p "rip-server tests: #{files.length} files\n"
 
@@ -62,8 +62,8 @@ pct = if total > 0 then Math.round(passed / total * 100) else 0
 p "✓ #{passed} passing, ✗ #{failed} failing, ★ #{pct}% passing"
 
 if failures.length > 0
-  console.log "\nFailures:"
+  p "\nFailures:"
   for f in failures[0...20]
-    console.log "  ✗ #{f.name}: #{f.error}"
+    p "  ✗ #{f.name}: #{f.error}"
 
 exit if failed > 0 then 1 else 0
