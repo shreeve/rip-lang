@@ -1003,6 +1003,24 @@ test "component public state from constructor", '''
   a.count.value
   ''', 42
 
+test "extends collects unknown props into _rest", '''
+  A = component extends input
+    @label := ""
+    render
+      input
+  a = A.new({ label: "x", autofocus: true, maxlength: 10 })
+  [a._rest.autofocus, a._rest.maxlength, a._rest.label?]
+  ''', [true, 10, false]
+
+test "extends rest props can be updated", '''
+  A = component extends input
+    render
+      input
+  a = A.new({ autofocus: true })
+  a._setRestProp("maxlength", 25)
+  a._rest.maxlength
+  ''', 25
+
 test "component effect runs on state change", '''
   A = component
     x := 0
@@ -2907,6 +2925,87 @@ code 'render: CSS class + property access attr coexist', '''
       this._el1.appendChild(this._t0);
       this._el0.appendChild(this._el1);
       this._el0.className = 'active';
+      return this._el0;
+    }
+  };
+  ''', opts
+
+code 'component extends: inherits tag, rest props forwarded', '''
+  export Test = component extends input
+    @label:: string := ""
+    render
+      fieldset
+        input
+  ''', '''
+  export const Test = class extends __Component {
+    _init(props) {
+      this.label = __state(props.__bind_label__ ?? props.label ?? "");
+      this._rest = {};
+      for (const __k in props) {
+        if (__k !== 'label' && !__k.startsWith('__bind_')) this._rest[__k] = props[__k];
+      }
+    }
+    _setRestProp(key, value) {
+      if (key.startsWith('__bind_')) return;
+      this._rest || (this._rest = {});
+      if (value == null) delete this._rest[key];
+      else this._rest[key] = value;
+      this._applyInheritedProp(this._inheritedEl, key, value);
+    }
+    _applyRestToInheritedEl() {
+      if (!this._inheritedEl || !this._rest) return;
+      for (const key in this._rest) this._applyInheritedProp(this._inheritedEl, key, this._rest[key]);
+    }
+    _applyInheritedProp(el, key, value) {
+      if (!el || key === 'key' || key === 'ref' || key.startsWith('__bind_')) return;
+      if (key[0] === '@') {
+        const event = key.slice(1).split('.')[0];
+        this._restHandlers || (this._restHandlers = {});
+        const prev = this._restHandlers[key];
+        if (prev) el.removeEventListener(event, prev);
+        if (typeof value === 'function') {
+          const next = (e) => __batch(() => value(e));
+          this._restHandlers[key] = next;
+          el.addEventListener(event, next);
+        } else {
+          delete this._restHandlers[key];
+        }
+        return;
+      }
+      if (key === 'class' || key === 'className') {
+        if (el instanceof SVGElement) el.setAttribute('class', __clsx(value));
+        else el.className = __clsx(value);
+        return;
+      }
+      if (key === 'style') {
+        if (value == null) { el.removeAttribute('style'); return; }
+        if (typeof value === 'string') { el.setAttribute('style', value); return; }
+        if (typeof value === 'object') { Object.assign(el.style, value); return; }
+      }
+      if (key === 'innerHTML' || key === 'textContent' || key === 'innerText') {
+        el[key] = value ?? '';
+        return;
+      }
+      if (key in el && !key.includes('-')) {
+        el[key] = value;
+        return;
+      }
+      if (value == null || value === false) {
+        el.removeAttribute(key);
+        return;
+      }
+      if (value === true) {
+        el.setAttribute(key, '');
+        return;
+      }
+      el.setAttribute(key, value);
+    }
+    _create() {
+      this._el0 = document.createElement('fieldset');
+      this._el1 = document.createElement('input');
+      this._inheritedEl = this._el1;
+      this._applyRestToInheritedEl();
+      this._el0.appendChild(this._el1);
       return this._el0;
     }
   };

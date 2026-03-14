@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/server",
-  "version": "1.3.99",
+  "version": "1.3.101",
   "description": "Pure Rip web framework and application server",
   "type": "module",
   "main": "api.rip",
@@ -45,7 +45,7 @@
   "author": "Steve Shreeve <steve.shreeve@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "rip-lang": ">=3.13.109"
+    "rip-lang": ">=3.13.111"
   },
   "files": [
     "api.rip",

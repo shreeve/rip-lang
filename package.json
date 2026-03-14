@@ -1,6 +1,6 @@
 {
   "name": "rip-lang",
-  "version": "3.13.109",
+  "version": "3.13.111",
   "description": "A modern language that compiles to JavaScript",
   "type": "module",
   "main": "src/compiler.js",
@@ -37,6 +37,7 @@
     "parser": "bun src/grammar/solar.rip -o src/parser.js src/grammar/grammar.rip",
     "serve": "bun scripts/serve.js",
     "test": "bun test/runner.js",
+    "test:types": "cd test/types && ../../bin/rip check && bunx tsc",
     "test:ui": "bun run --cwd packages/ui test:e2e",
     "test:ui:chromium": "bun run --cwd packages/ui test:e2e:chromium",
     "test:ui:axe": "bun run --cwd packages/ui test:e2e:axe",

@@ -24,6 +24,18 @@ export Input = component
       if error
         div error
 
+export InheritedInput = component extends input
+  @label:: string := ""
+  @error:: string := ""
+
+  render
+    fieldset
+      if label
+        label label
+      input
+      if error
+        div error
+
 export Button = component
   @variant:: "primary" | "secondary"
   @type:: "submit" | "reset" | "button" := "button"
@@ -90,6 +102,9 @@ export PropTypeTests = component
       Button variant: "primary", disabled: "yes"
       # @ts-expect-error — wrong type for label
       Input label: 123
+      InheritedInput label: "Email", autofocus: true, maxLength: 100
+      # @ts-expect-error — autofocus expects boolean
+      InheritedInput autofocus: "yes"
 
 # ── Two-way binding type safety ──
 #
@@ -164,30 +179,30 @@ export TypeTestComp = component
 #   - Event typing is global (same HTMLElementEventMap for all elements) —
 #     this matches how the DOM actually works; React has the same behavior
 
-# ── Partially resolved: event handler typing ──
+# ── Event handler typing ──
 #
-# Inline event handlers on intrinsic elements now get contextual typing:
-#   @click: (e) -> ...   # e is MouseEvent (from HTMLElementEventMap)
-#   @submit: (e) -> ...  # e is SubmitEvent
+# Both inline and named method refs are typed:
+#   @click: (e) -> ...        # inline — contextual typing from __RipEvents
+#   @submit: @handleSubmit    # named — stub injects HTMLElementEventMap type
 #
-# Named method refs like `@submit: @handleSubmit` remain untyped —
-# TS can only contextually type inline function literals, not already-
-# declared methods. Workaround: annotate the param explicitly:
-#   handleSubmit: (e:: SubmitEvent) -> e.preventDefault()
-#
-# Tracked in AGENTS.md gap table under "Event handler typing".
+# The stub pre-scans the render block for @event: @method bindings
+# and annotates the first untyped parameter with the event type.
 
-# ── Gap: element type inheritance ──
+export EventHandlerTest = component
+  handleClick: (e) -> p e.clientX
+  handleSubmit: (e) -> e.preventDefault()
+
+  render
+    form @submit: @handleSubmit
+      button @click: @handleClick, "Click"
+
+# ── Element type inheritance ──
 #
-# There's no way to declare that a component extends an HTML
-# element's type surface. The Input component above accepts
-# `type`, `placeholder`, `value` — but only because we declared
-# each prop manually. In React/TS:
-#   type InputProps = ComponentProps<'input'> & { label?: string }
-# gives you ALL of <input>'s props (onChange, onFocus, aria-*, etc.)
-# for free. In Rip, each must be listed explicitly or they're unknown.
-#
-# Tracked in AGENTS.md gap table under "Element type inheritance".
+# `component extends input` widens the constructor props with
+# `__RipProps<'input'>`, giving access to ALL of <input>'s props
+# (autofocus, maxLength, aria-*, etc.) for free. The runtime
+# forwards unknown props to the first matching element in the
+# render block.
 
 # ── Gap: generic components ──
 #

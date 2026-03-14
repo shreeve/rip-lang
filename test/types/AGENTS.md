@@ -79,27 +79,6 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 **Maintenance rule:** When you fix a gap, run the full verification suite. If everything passes, move the row from its current section (❌ or 🔶) to the correct one (✅ or 🔶). Remove stale "Fixed:" annotations — the row's position is the status. Never leave a fixed item in ❌.
 
-### ❌ Not working
-
-**Compiler / type-checker gaps** (affect `rip check` correctness):
-
-| Category                         | Tested In             | Notes                                                                                                                                                |
-| -------------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Event handler typing             | 09, 12-intrinsics     | Inline handlers typed via `__RipEvents`; named method refs (`@submit: @handler`) remain `any` — use `(e:: SubmitEvent) ->` to annotate explicitly   |
-| Runtime return-type validation   | 10-validation         | Return types are erased — `response.json()` is unvalidated `any`; no `schema.parse()` equivalent                                                     |
-
-**Component model gaps** (would need language-level changes):
-
-| Category                    | Tested In     | Notes                                                                                                                                                |
-| --------------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Shared state typing (stash) | 09-components | Stash is untyped — any path/value accepted; zustand equivalent is fully typed (see .tsx)                                                             |
-| Element type inheritance    | 09-components | No way to inherit HTML element's full type surface; wrappers must declare each prop manually                                                         |
-| Generic components          | 09-components | Can't parameterize components by type (e.g. typed select where value type flows through props)                                                       |
-
-**IDE-only gaps** (require VS Code extension changes, not testable in audit files):
-
-*No current gaps.*
-
 **Design trade-offs** (inherent to the language, not fixable via type system):
 
 | Category                   | Tested In     | Notes                                                                                                                                              |
@@ -107,13 +86,20 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Implicit variable creation | 09-components | `loadingz = true` creates a new local — typos in assignments are invisible to types. This is CoffeeScript's core `=`-creates-a-variable semantics. |
 | Untyped files unchecked    | *(all files)* | Files without `::` annotations get `// @ts-nocheck` — zero type checking. Removing it requires `strict: true` and annotations on every file.       |
 
+### ❌ Not working (language-level changes or runtime validation needed)
+
+| Category                       | Tested In     | Notes                                                                                                          |
+| ------------------------------ | ------------- | -------------------------------------------------------------------------------------------------------------- |
+| Runtime return-type validation | 10-validation | Return types are erased — `response.json()` is unvalidated `any`; no `schema.parse()` equivalent               |
+| Shared state typing (stash)    | 09-components | Stash is untyped — any path/value accepted; zustand equivalent is fully typed (see .tsx)                       |
+| Generic components             | 09-components | Can't parameterize components by type (e.g. typed select where value type flows through props)                 |
+
 ### 🔶 Partial
 
 | Category                      | Tested In     | Notes                                                                                                                    |
 | ----------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | Generic types                 | 03-structural | Declarable; .d.ts emission has some gaps                                                                                 |
 | Render block type safety      | 09, 12        | Intrinsic tag/attr/event checking via `__ripEl`; conditionals and text expressions still unchecked                       |
-| Type inference (split decl.)  | 11-inference  | Top-level `x = expr` inferred via `patchUninitializedTypes`; block-scoped and destructured now caught by strict mode     |
 
 ### ✅ Working
 
@@ -138,12 +124,15 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | `void` return annotation   | 06-functions   | `def fn!` emits `: void` in .d.ts; `!` sigil suppresses implicit return and declares void return type                                  |
 | Cross-file type flow       | 07-integration | Via .d.ts; untyped files get `@ts-nocheck`; unresolved `.rip` imports flagged                                                          |
 | Component prop types       | 09-components  | Enriched stub gives Signal<T>/Computed<T> declarations; TS checks computeds, methods, and render block intrinsic elements              |
+| Element type inheritance   | 09-components  | `component extends tag` widens constructor props with `__RipProps<'tag'>`; runtime forwards unknown props to first matching tag       |
+| Event handler typing       | 09, 12         | Inline handlers contextually typed; named method refs (`@click: @handler`) auto-annotated from `HTMLElementEventMap`                   |
 | Intrinsic element typing   | 12-intrinsics  | `__ripEl` emits typed helper calls; lib.dom source of truth for tags, attrs, events, global attrs                                      |
 | Required component props   | 09-components  | `@prop:: T` (no `:=`) — required in constructor, caught at usage sites                                                                 |
 | Prop default validation    | 09-components  | `@prop:: T := val` — validates default against declared type; squiggle on prop name                                                    |
 | Async/await unwrapping     | 10-validation  | `!` compiles to `await`; return types inferred or explicit; `Promise<T>` → `T`                                                         |
 | Hover types                | *(IDE only)*   | Column-aware source maps, overload preference, typed implementation params                                                             |
 | Union value autocomplete   | *(IDE only)*   | String literal union completions for prop values, prop defaults, and typed variable assignments                                        |
+| Type inference (split decl.) | 11-inference   | Top-level inferred via `patchUninitializedTypes`; block-scoped and destructured caught by `strict: true`                               |
 | Strict mode                | *(all files)*  | `strict: true` enabled — `noImplicitAny`, full null checks, strict function types all active                                          |
 | Inline discriminated unions | 04-unions      | Inline `{ ... } \| { ... }` union types now emit valid .d.ts (previously mangled by multi-line formatting)                            |
 | Go-to-def on imports       | *(IDE only)*   | Resolves import paths directly and finds exported symbol in target file; works for `from './file.rip'` imports                        |
@@ -164,6 +153,34 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 **Fixed:** 2304 ("Cannot find name") was removed from `SKIP_CODES`. Stdlib globals (`p`, `pp`, `sleep`, `warn`, etc.) are now declared in the type-check preamble, so undefined variable references are correctly flagged.
 
 The remaining codes (2389, 2391, 2393, 2394, 2567, 2842, 1064, 2582, 2593) are structural — they exist because Rip's compilation model inherently produces overload/duplicate patterns that TS doesn't expect. These are safe to suppress.
+
+## Future Notes — Runtime Return Validation
+
+This captures design notes for the `Runtime return-type validation` gap in `10-validation`.
+
+### Problem
+
+`rip check` verifies declared return types at compile time, but runtime values are not validated. Example: `response.json()` in a function typed as `Promise<User>` can return invalid data and still run.
+
+### Why `@rip-lang/schema` is a likely fit
+
+- Existing runtime validator API (`Schema.validate(typeName, value)`)
+- Good support for boundary checks (named object types, nested types, arrays, required/optional)
+- Already in this monorepo, no new external dependency needed
+
+### Practical MVP (no grammar changes)
+
+1. **Compiler hook**: in `src/compiler.js`, detect functions with explicit return types (`User`, `Promise<User>`).
+2. **Return wrapper**: inject runtime helper around return values for eligible functions.
+3. **Validation contract**: use a global hook (for decoupling), e.g. `globalThis.__ripReturnValidator(typeName, value)`.
+4. **Schema adapter**: app code can wire `@rip-lang/schema` by setting the hook to call `schema.validate(...)`.
+5. **Tests**: extend `test/types/10-validation.rip` with pass/fail runtime cases for typed API payloads.
+
+### Important caveats
+
+- Start with **named type returns**; full arbitrary type expression validation is larger scope.
+- `@rip-lang/schema` is good for boundary validation, but not a complete replacement for full TypeScript-level runtime type semantics.
+- Consider option-gating first rollout (e.g. compiler/runtime flag) to avoid breaking existing apps.
 
 ## TypeScript Companions
 
