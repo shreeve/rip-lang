@@ -1,0 +1,52 @@
+# ==============================================================================
+# control/control-fetch.rip — control socket request helpers
+# ==============================================================================
+
+import { registerWorker, removeWorkerById } from './registry.rip'
+
+jsonOk = -> new Response(JSON.stringify({ ok: true }), { headers: { 'content-type': 'application/json' } })
+jsonBad = -> new Response(JSON.stringify({ ok: false }), { status: 400, headers: { 'content-type': 'application/json' } })
+
+export handleWorkerControl = (req, state) ->
+  return { handled: false } unless req.method is 'POST'
+  try
+    j = req.json!
+    if j?.op is 'join' and typeof j.socket is 'string' and typeof j.workerId is 'number'
+      { version } = registerWorker(state.sockets, state.availableWorkers, j)
+      newestVersion = state.newestVersion
+      newestVersion = if newestVersion is null then version else Math.max(newestVersion, version) if version?
+      return
+        handled: true
+        response: jsonOk()
+        sockets: state.sockets
+        availableWorkers: state.availableWorkers
+        newestVersion
+
+    if j?.op is 'quit' and typeof j.workerId is 'number'
+      { sockets, availableWorkers } = removeWorkerById(state.sockets, state.availableWorkers, j.workerId)
+      return
+        handled: true
+        response: jsonOk()
+        sockets
+        availableWorkers
+        newestVersion: state.newestVersion
+  catch
+    null
+  { handled: true, response: jsonBad(), sockets: state.sockets, availableWorkers: state.availableWorkers, newestVersion: state.newestVersion }
+
+export handleWatchControl = (req, registerWatch, watchDirs) ->
+  return { handled: false } unless req.method is 'POST'
+  try
+    j = req.json!
+    if j?.op is 'watch' and typeof j.prefix is 'string' and Array.isArray(j.dirs)
+      registerWatch(j.prefix)
+      watchDirs(j.prefix, j.dirs) if j.dirs.length > 0
+      return { handled: true, response: jsonOk() }
+  catch
+    null
+  { handled: true, response: jsonBad() }
+
+export handleRegistryControl = (req, hostRegistry) ->
+  return { handled: false } unless req.method is 'GET'
+  response = new Response(JSON.stringify({ ok: true, hosts: Array.from(hostRegistry.values()) }), { headers: { 'content-type': 'application/json' } })
+  { handled: true, response }

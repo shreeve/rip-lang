@@ -18,8 +18,8 @@ import { cpus, networkInterfaces } from 'node:os'
 import { X509Certificate } from 'node:crypto'
 import { isCurrentVersion as schedulerIsCurrentVersion, getNextAvailableSocket as schedulerGetNextAvailableSocket, releaseWorker as schedulerReleaseWorker, shouldRetryBodylessBusy } from './edge/scheduler.rip'
 import { formatPort } from './edge/network.rip'
-import { registerWorker, removeWorkerById } from './control/registry.rip'
 import { getWorkerSocketPath, getControlSocketPath, getPidFilePath } from './control/paths.rip'
+import { handleWorkerControl, handleWatchControl, handleRegistryControl } from './control/control-fetch.rip'
 
 # Match capture holder for Rip's =~
 _ = null
@@ -1033,35 +1033,24 @@ class Server
     url = new URL(req.url)
 
     if req.method is 'POST' and url.pathname is '/worker'
-      try
-        j = req.json!
-        if j?.op is 'join' and typeof j.socket is 'string' and typeof j.workerId is 'number'
-          { version } = registerWorker(@sockets, @availableWorkers, j)
-          @newestVersion = if @newestVersion is null then version else Math.max(@newestVersion, version) if version?
-          return new Response(JSON.stringify({ ok: true }), { headers: { 'content-type': 'application/json' } })
-
-        if j?.op is 'quit' and typeof j.workerId is 'number'
-          { sockets, availableWorkers } = removeWorkerById(@sockets, @availableWorkers, j.workerId)
-          @sockets = sockets
-          @availableWorkers = availableWorkers
-          return new Response(JSON.stringify({ ok: true }), { headers: { 'content-type': 'application/json' } })
-      catch
-        null
-      return new Response(JSON.stringify({ ok: false }), { status: 400, headers: { 'content-type': 'application/json' } })
+      res = handleWorkerControl(req,
+        sockets: @sockets
+        availableWorkers: @availableWorkers
+        newestVersion: @newestVersion
+      )
+      if res.handled
+        @sockets = res.sockets if res.sockets?
+        @availableWorkers = res.availableWorkers if res.availableWorkers?
+        @newestVersion = res.newestVersion if res.newestVersion?
+        return res.response
 
     if req.method is 'POST' and url.pathname is '/watch'
-      try
-        j = req.json!
-        if j?.op is 'watch' and typeof j.prefix is 'string' and Array.isArray(j.dirs)
-          @registerWatch(j.prefix)
-          @manager?.watchDirs(j.prefix, j.dirs) if j.dirs.length > 0
-          return new Response(JSON.stringify({ ok: true }), { headers: { 'content-type': 'application/json' } })
-      catch
-        null
-      return new Response(JSON.stringify({ ok: false }), { status: 400, headers: { 'content-type': 'application/json' } })
+      res = handleWatchControl(req, @registerWatch.bind(@), (prefix, dirs) => @manager?.watchDirs(prefix, dirs))
+      return res.response if res.handled
 
     if url.pathname is '/registry' and req.method is 'GET'
-      return new Response(JSON.stringify({ ok: true, hosts: Array.from(@hostRegistry.values()) }), { headers: { 'content-type': 'application/json' } })
+      res = handleRegistryControl(req, @hostRegistry)
+      return res.response if res.handled
 
     new Response('not-found', { status: 404 })
 
