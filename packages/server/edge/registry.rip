@@ -30,7 +30,8 @@ export removeApp = (registry, appId) ->
   state = registry.apps.get(appId)
   return unless state
   for host in state.hosts
-    registry.hostIndex.delete(host.toLowerCase()) if registry.hostIndex.get(host.toLowerCase()) is appId
+    h = host.toLowerCase()
+    registry.hostIndex.delete(h) if registry.hostIndex.get(h) is appId
   registry.apps.delete(appId)
 
 export resolveHost = (registry, hostname) ->

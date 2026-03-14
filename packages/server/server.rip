@@ -18,7 +18,7 @@ import { cpus, networkInterfaces } from 'node:os'
 import { isCurrentVersion as schedulerIsCurrentVersion, getNextAvailableSocket as schedulerGetNextAvailableSocket, releaseWorker as schedulerReleaseWorker, shouldRetryBodylessBusy } from './edge/scheduler.rip'
 import { formatPort, maybeAddSecurityHeaders as edgeMaybeAddSecurityHeaders, buildStatusBody as edgeBuildStatusBody, buildRipdevUrl as edgeBuildRipdevUrl } from './edge/helpers.rip'
 import { loadTlsMaterial as edgeLoadTlsMaterial, printCertSummary as edgePrintCertSummary } from './edge/tls.rip'
-import { createAppRegistry, registerApp, resolveHost, getAppState, getAllApps } from './edge/registry.rip'
+import { createAppRegistry, registerApp, resolveHost, getAppState } from './edge/registry.rip'
 import { watchUnavailableResponse, serverBusyResponse, serviceUnavailableResponse, gatewayTimeoutResponse, queueTimeoutResponse, buildUpstreamResponse, forwardOnceWithTimeout } from './edge/forwarding.rip'
 import { processQueuedJob, drainQueueOnce } from './edge/queue.rip'
 import { getControlSocketPath, getPidFilePath } from './control/paths.rip'
@@ -443,7 +443,6 @@ class Manager
         entryFile = @flags.appEntry
         entryBase = basename(entryFile)
         watchExt = if @flags.watch.startsWith('*.') then @flags.watch.slice(1) else null
-        debounceMs = @flags.debounce or 250
         try
           watch @flags.appBaseDir, { recursive: true }, (event, filename) =>
             return unless filename
@@ -540,12 +539,6 @@ class Manager
     workers.length = 0
     workers.push(...filtered)
     @retiringIds.delete(id) for id as retiring
-
-  shutdown: ->
-    return if @shuttingDown
-    @shuttingDown = true
-    @stop!
-    process.exit(0)
 
   getEntryMtime: ->
     try statSync(@flags.appEntry).mtimeMs catch then 0
