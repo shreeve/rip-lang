@@ -95,8 +95,7 @@ resolveTargets = (hub, groups) ->
         clients.add(group)
   clients
 
-deliverToClients = (hub, clients, senders, bundle) ->
-  payload = JSON.stringify(bundle)
+deliverToClients = (hub, clients, senders, payload) ->
   for id as clients
     continue if senders and senders.has(String(id))
     ws = hub.sockets.get(id)
@@ -104,7 +103,7 @@ deliverToClients = (hub, clients, senders, bundle) ->
       try
         ws.send(payload)
         hub.deliveries++
-        hub.messages += Object.keys(bundle).length
+        hub.messages++
 
 # --- Process backend response ---
 
@@ -137,7 +136,7 @@ export processResponse = (hub, body, clientId) ->
 
       if groups and Object.keys(bundle).length > 0
         clients = resolveTargets(hub, groups)
-        deliverToClients(hub, clients, senders, bundle)
+        deliverToClients(hub, clients, senders, JSON.stringify(bundle))
   catch e
     console.error "realtime: invalid response:", e.message
 
@@ -162,6 +161,28 @@ export proxyToBackend = (hub, headers, frameType, body) ->
   catch e
     console.error "realtime: proxy failed:", e.message
     null
+
+# --- Binary delivery (for CRDT and raw data) ---
+
+export broadcastBinary = (hub, groupIds, data, excludeClientId) ->
+  clients = new Set()
+  for group in groupIds
+    set = hub.members.get(String(group))
+    if set
+      if String(group).startsWith('/')
+        for id as set
+          clients.add(id)
+      else
+        clients.add(String(group))
+  for id as clients
+    continue if excludeClientId and id is excludeClientId
+    ws = hub.sockets.get(id)
+    if ws
+      try
+        ws.send(data)
+        hub.deliveries++
+        hub.messages++
+  return
 
 # --- Publish (external) ---
 

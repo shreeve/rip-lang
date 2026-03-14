@@ -996,8 +996,10 @@ class Server
 
       message: (ws, message) ->
         { clientId, headers } = ws.data
-        msg = if typeof message is 'string' then message else message.toString()
-        response = server.proxyRealtimeToWorker!(headers, 'text', msg)
+        isBinary = typeof message isnt 'string'
+        msg = if isBinary then Buffer.from(message) else message
+        frameType = if isBinary then 'binary' else 'text'
+        response = server.proxyRealtimeToWorker!(headers, frameType, msg)
         processResponse(hub, response, clientId) if response
 
       close: (ws) ->
