@@ -53,7 +53,26 @@ jobs:
         run: bun run test:ui
 
       - name: Run UI accessibility scan
-        run: bun run test:ui:axe
+        run: |
+          set -o pipefail
+          bun run test:ui:axe | tee ui-axe.log
+
+      - name: Summarize UI axe findings
+        if: always()
+        run: |
+          {
+            echo "## UI Axe Findings"
+            echo
+            if rg -n "\\[axe:" ui-axe.log >/dev/null 2>&1; then
+              echo "### Serious (non-blocking) findings"
+              echo
+              echo '```text'
+              rg "\\[axe:" ui-axe.log
+              echo '```'
+            else
+              echo "No serious findings logged."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload Playwright report
         if: always()

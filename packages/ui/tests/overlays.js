@@ -20,18 +20,21 @@ test.describe('overlay primitives', () => {
 
     await page.keyboard.press('Escape')
     await expectPopoverOpen(content, false)
+    await expect(trigger).toBeFocused()
   })
 
   test('dialog closes on Escape and restores closed state', async ({ page }) => {
     await page.goto('/#dialog')
 
-    await page.locator('#dialog button:has-text("Open Dialog")').click()
+    const trigger = page.locator('#dialog button:has-text("Open Dialog")')
+    await trigger.click()
     const dialog = page.locator('#dialog dialog')
     await expect(dialog).toHaveAttribute('open', '')
 
     await page.keyboard.press('Escape')
     await expect(dialog).not.toHaveAttribute('open', '')
     await expect(page.locator('#dialog .status')).toContainText('open: false')
+    await expect(trigger).toBeFocused()
   })
 
   test('alert dialog ignores Escape until explicit action', async ({ page }) => {

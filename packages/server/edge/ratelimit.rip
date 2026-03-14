@@ -41,7 +41,7 @@ export createRateLimiter = (maxRequests, windowMs) ->
         return { allowed: false, remaining: 0, retryAfter }
       timestamps.push(now)
       buckets.set(ip, timestamps)
-      # Evict oldest bucket if over cap (prevent memory exhaustion from IP cardinality)
+      # Evict oldest-inserted bucket if over cap (FIFO, not LRU — simple and bounded)
       if buckets.size > MAX_BUCKETS
         oldest = buckets.keys().next().value
         buckets.delete(oldest)

@@ -703,7 +703,18 @@ class Server
 
     @startControl!
 
+    # Periodic queue timeout sweep — expire queued requests even when no workers are available
+    @queueSweepTimer = setInterval =>
+      for [appId, app] as @appRegistry.apps
+        now = Date.now()
+        while app.queue.length > 0 and now - app.queue[0].enqueuedAt > app.queueTimeoutMs
+          job = app.queue.shift()
+          try job.resolve(new Response('Queue timeout', { status: 504 }))
+          @metrics.queueTimeouts++
+    , 1000
+
   stop: ->
+    clearInterval(@queueSweepTimer) if @queueSweepTimer
     logEvent('server_stop', { uptime: Math.floor((nowMs() - @startedAt) / 1000) })
     # Drain all per-app queues — resolve pending requests with 503
     for [appId, app] as @appRegistry.apps
@@ -1039,6 +1050,8 @@ class Server
         unix: sock.socket
         decompress: false
       res.text!
+    finally
+      @releaseWorker(sock, app)
     catch e
       console.error "realtime: worker proxy failed:", e.message
       null

@@ -110,6 +110,7 @@ deliverToClients = (hub, clients, senders, payload) ->
 export processResponse = (hub, body, clientId) ->
   try
     json = JSON.parse(body)
+    return unless json and typeof json is 'object'  # reject primitives (strings, numbers, booleans)
     list = if Array.isArray(json) then json else [json]
 
     for item in list
