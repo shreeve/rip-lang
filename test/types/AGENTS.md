@@ -107,8 +107,6 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 | Category                     | Tested In     | Notes                                                                                                       |
 | ---------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------- |
-| Strict mode                  | *(all files)* | `strict: true` — `noImplicitAny`, full null checks, strict function types all active                        |
-| Nullable safety              | 01-basic      | `strict: true` enables full `strictNullChecks` — null/undefined caught at all usage sites                   |
 | Readonly / immutability      | 03-structural | `=!` emits `const` in JS and `declare const` in .d.ts; binding-level immutability enforced                  |
 | Element type inheritance     | 09-components | `# @inherits tag` widens constructor props with `__RipProps<'tag'>`; runtime forwards unknown props         |
 | Event handler typing         | 09, 12        | Inline handlers typed via `__RipEvents`; named method refs (`@submit: @handler`) remain `any`               |
@@ -122,6 +120,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Category                    | Tested In      | Notes                                                                                                                              |
 | --------------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | Variable type mismatches    | 01-basic       | Same-file typed variables                                                                                                          |
+| Nullable safety             | 01-basic       | `strict: true` enables full `strictNullChecks` — null/undefined caught at all usage sites; 2 negative tests                        |
 | Object shape checking       | 03-structural  | Missing fields, extra fields                                                                                                       |
 | Property access checking    | 03-structural  | Typos, nonexistent fields                                                                                                          |
 | Union value checking        | 04-unions      | Literal unions validated                                                                                                           |
@@ -142,6 +141,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Component prop types        | 09-components  | Enriched stub gives Signal<T>/Computed<T> declarations; TS checks computeds, methods, and render block intrinsic elements          |
 | Required component props    | 09-components  | `@prop:: T` (no `:=`) — required in constructor, caught at usage sites                                                             |
 | Prop default validation     | 09-components  | `@prop:: T := val` — validates default against declared type; squiggle on prop name                                                |
+| Strict mode                 | *(all files)*  | `strict: true` — `noImplicitAny`, full null checks, strict function types all active; hardcoded in all paths                       |
 | Hover types                 | *(IDE only)*   | Column-aware source maps, overload preference, typed implementation params                                                         |
 | Union value autocomplete    | *(IDE only)*   | String literal union completions for prop values, prop defaults, and typed variable assignments                                    |
 | Semantic token provider     | *(IDE only)*   | Bridges TS `getEncodedSemanticClassifications()` to Rip source; typed files get semantic tokens, reactive vars not marked readonly |
