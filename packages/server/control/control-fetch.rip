@@ -42,7 +42,10 @@ export handleWatchControl = (req, registerWatch, watchDirs) ->
       return { handled: true, response: jsonOk() }
   { handled: true, response: jsonBad() }
 
-export handleRegistryControl = (req, hostRegistry) ->
+export handleRegistryControl = (req, hostIndex) ->
   return { handled: false } unless req.method is 'GET'
-  response = new Response(JSON.stringify({ ok: true, hosts: Array.from(hostRegistry.values()) }), { headers: { 'content-type': 'application/json' } })
+  hostMap = {}
+  for [host, appId] as hostIndex
+    (hostMap[appId] = hostMap[appId] or []).push(host)
+  response = new Response(JSON.stringify({ ok: true, hosts: Array.from(hostIndex.keys()), apps: hostMap }), { headers: { 'content-type': 'application/json' } })
   { handled: true, response }
