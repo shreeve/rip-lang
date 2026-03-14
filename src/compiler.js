@@ -2122,17 +2122,18 @@ export class CodeGenerator {
       return importExpr;
     }
     if (this.options.skipImports) return '';
+    if (rest.length === 3) {
+      let [def, named, source] = rest;
+      let fixedSource = this.addJsExtensionAndAssertions(source);
+      if (named[0] === '*' && named.length === 2) return `import ${def}, * as ${named[1]} from ${fixedSource}`;
+      let names = named.map(i => Array.isArray(i) && i.length === 2 ? `${i[0]} as ${i[1]}` : i).join(', ');
+      return `import ${def}, { ${names} } from ${fixedSource}`;
+    }
     let [specifier, source] = rest;
     let fixedSource = this.addJsExtensionAndAssertions(source);
     if (typeof specifier === 'string') return `import ${specifier} from ${fixedSource}`;
     if (Array.isArray(specifier)) {
       if (specifier[0] === '*' && specifier.length === 2) return `import * as ${specifier[1]} from ${fixedSource}`;
-      if (typeof specifier[0] === 'string' && Array.isArray(specifier[1])) {
-        let def = specifier[0], second = specifier[1];
-        if (second[0] === '*' && second.length === 2) return `import ${def}, * as ${second[1]} from ${fixedSource}`;
-        let names = (Array.isArray(second) ? second : [second]).map(i => Array.isArray(i) && i.length === 2 ? `${i[0]} as ${i[1]}` : i).join(', ');
-        return `import ${def}, { ${names} } from ${fixedSource}`;
-      }
       let names = specifier.map(i => Array.isArray(i) && i.length === 2 ? `${i[0]} as ${i[1]}` : i).join(', ');
       return `import { ${names} } from ${fixedSource}`;
     }

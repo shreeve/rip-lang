@@ -772,8 +772,8 @@ grammar =
     o 'IMPORT ImportNamespaceSpecifier FROM String'                                 , '["import", 2, 4]'
     o 'IMPORT { } FROM String'                                                      , '["import", "{}", 5]'
     o 'IMPORT { ImportSpecifierList OptComma } FROM String'                         , '["import", 3, 7]'
-    o 'IMPORT ImportDefaultSpecifier , ImportNamespaceSpecifier FROM String'        , '["import", [2, 4], 6]'
-    o 'IMPORT ImportDefaultSpecifier , { ImportSpecifierList OptComma } FROM String', '["import", [2, 5], 9]'
+    o 'IMPORT ImportDefaultSpecifier , ImportNamespaceSpecifier FROM String'        , '["import", 2, 4, 6]'
+    o 'IMPORT ImportDefaultSpecifier , { ImportSpecifierList OptComma } FROM String', '["import", 2, 5, 9]'
   ]
 
   ImportSpecifierList: [

@@ -189,8 +189,8 @@ const parserInstance = {
       case 327: case 330: return ["import", "{}", $[$0]];
       case 328: case 329: return ["import", $[$0-2], $[$0]];
       case 331: return ["import", $[$0-4], $[$0]];
-      case 332: return ["import", [$[$0-4], $[$0-2]], $[$0]];
-      case 333: return ["import", [$[$0-7], $[$0-4]], $[$0]];
+      case 332: return ["import", $[$0-4], $[$0-2], $[$0]];
+      case 333: return ["import", $[$0-7], $[$0-4], $[$0]];
       case 344: return ["*", $[$0]];
       case 345: return ["export", "{}"];
       case 346: return ["export", $[$0-2]];
