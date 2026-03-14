@@ -79,25 +79,13 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 **Maintenance rule:** When you fix a gap, run the full verification suite. If everything passes, move the row from its current section (❌ or 🔶) to the correct one (✅ or 🔶). Remove stale "Fixed:" annotations — the row's position is the status. Never leave a fixed item in ❌.
 
-### ❌ Not working
+### ❌ Not working (language-level changes or runtime validation needed)
 
-**Compiler / type-checker gaps** (affect `rip check` correctness):
-
-| Category                         | Tested In             | Notes                                                                                                                                                |
-| -------------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Event handler typing             | 09, 12-intrinsics     | Inline handlers typed via `__RipEvents`; named method refs (`@submit: @handler`) remain `any` — use `(e:: SubmitEvent) ->` to annotate explicitly   |
-| Runtime return-type validation   | 10-validation         | Return types are erased — `response.json()` is unvalidated `any`; no `schema.parse()` equivalent                                                     |
-
-**Component model gaps** (would need language-level changes):
-
-| Category                    | Tested In     | Notes                                                                                                                                                |
-| --------------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Shared state typing (stash) | 09-components | Stash is untyped — any path/value accepted; zustand equivalent is fully typed (see .tsx)                                                             |
-| Generic components          | 09-components | Can't parameterize components by type (e.g. typed select where value type flows through props)                                                       |
-
-**IDE-only gaps** (require VS Code extension changes, not testable in audit files):
-
-*No current gaps.*
+| Category                       | Tested In     | Notes                                                                                                          |
+| ------------------------------ | ------------- | -------------------------------------------------------------------------------------------------------------- |
+| Runtime return-type validation | 10-validation | Return types are erased — `response.json()` is unvalidated `any`; no `schema.parse()` equivalent               |
+| Shared state typing (stash)   | 09-components | Stash is untyped — any path/value accepted; zustand equivalent is fully typed (see .tsx)                       |
+| Generic components             | 09-components | Can't parameterize components by type (e.g. typed select where value type flows through props)                 |
 
 **Design trade-offs** (inherent to the language, not fixable via type system):
 
@@ -110,6 +98,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 | Category                      | Tested In     | Notes                                                                                                                    |
 | ----------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Event handler typing          | 09, 12        | Inline handlers typed via `__RipEvents`; named method refs (`@submit: @handler`) remain `any` — annotate params explicitly |
 | Generic types                 | 03-structural | Declarable; .d.ts emission has some gaps                                                                                 |
 | Render block type safety      | 09, 12        | Intrinsic tag/attr/event checking via `__ripEl`; conditionals and text expressions still unchecked                       |
 | Type inference (split decl.)  | 11-inference  | Top-level `x = expr` inferred via `patchUninitializedTypes`; block-scoped and destructured now caught by strict mode     |
@@ -164,6 +153,34 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 **Fixed:** 2304 ("Cannot find name") was removed from `SKIP_CODES`. Stdlib globals (`p`, `pp`, `sleep`, `warn`, etc.) are now declared in the type-check preamble, so undefined variable references are correctly flagged.
 
 The remaining codes (2389, 2391, 2393, 2394, 2567, 2842, 1064, 2582, 2593) are structural — they exist because Rip's compilation model inherently produces overload/duplicate patterns that TS doesn't expect. These are safe to suppress.
+
+## Future Notes — Runtime Return Validation
+
+This captures design notes for the `Runtime return-type validation` gap in `10-validation`.
+
+### Problem
+
+`rip check` verifies declared return types at compile time, but runtime values are not validated. Example: `response.json()` in a function typed as `Promise<User>` can return invalid data and still run.
+
+### Why `@rip-lang/schema` is a likely fit
+
+- Existing runtime validator API (`Schema.validate(typeName, value)`)
+- Good support for boundary checks (named object types, nested types, arrays, required/optional)
+- Already in this monorepo, no new external dependency needed
+
+### Practical MVP (no grammar changes)
+
+1. **Compiler hook**: in `src/compiler.js`, detect functions with explicit return types (`User`, `Promise<User>`).
+2. **Return wrapper**: inject runtime helper around return values for eligible functions.
+3. **Validation contract**: use a global hook (for decoupling), e.g. `globalThis.__ripReturnValidator(typeName, value)`.
+4. **Schema adapter**: app code can wire `@rip-lang/schema` by setting the hook to call `schema.validate(...)`.
+5. **Tests**: extend `test/types/10-validation.rip` with pass/fail runtime cases for typed API payloads.
+
+### Important caveats
+
+- Start with **named type returns**; full arbitrary type expression validation is larger scope.
+- `@rip-lang/schema` is good for boundary validation, but not a complete replacement for full TypeScript-level runtime type semantics.
+- Consider option-gating first rollout (e.g. compiler/runtime flag) to avoid breaking existing apps.
 
 ## TypeScript Companions
 
