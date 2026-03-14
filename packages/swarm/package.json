@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/swarm",
-  "version": "1.2.102",
+  "version": "1.2.103",
   "description": "Parallel job runner with worker threads - setup once, swarm many",
   "type": "module",
   "main": "swarm.rip",
@@ -35,7 +35,7 @@
   "author": "Steve Shreeve <steve.shreeve@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "rip-lang": ">=3.13.113"
+    "rip-lang": ">=3.13.114"
   },
   "files": [
     "swarm.rip",

@@ -7198,10 +7198,12 @@ function _setDataSection() {
       let paramSyntax = isSingle ? paramList : `(${paramList})`;
       let isAsync = this.containsAwait(body);
       let prefix = isAsync ? "async " : "";
+      let stmtOnly = new Set(["def", "class", "if", "for-in", "for-of", "for-as", "while", "until", "loop", "switch", "try", "unless"]);
       if (!sideEffectOnly) {
         if (this.is(body, "block") && body.length === 2) {
           let expr = body[1];
-          if (!Array.isArray(expr) || expr[0] !== "return") {
+          let exprHead = Array.isArray(expr) ? expr[0] : null;
+          if (exprHead !== "return" && !stmtOnly.has(exprHead)) {
             let code = this.generate(expr, "value");
             if (code[0] === "{")
               code = `(${code})`;
@@ -9639,8 +9641,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeGenerator({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.13.113";
-  var BUILD_DATE = "2026-03-14@10:11:14GMT";
+  var VERSION = "3.13.114";
+  var BUILD_DATE = "2026-03-14@10:15:10GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -11101,9 +11103,11 @@ ${indented}`);
     get = function(x) {
       return typeof x === "function" ? x() : x;
     };
-    onDown = (e) => ![get(popup), ...els.map(get)].some(function(el) {
-      return el?.contains(e.target);
-    }) ? close() : undefined;
+    onDown = (e) => {
+      return ![get(popup), ...els.map(get)].some(function(el) {
+        return el?.contains(e.target);
+      }) ? close() : undefined;
+    };
     onScroll = (e) => {
       if (get(popup)?.contains(e.target))
         return;

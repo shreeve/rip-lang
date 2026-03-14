@@ -1116,10 +1116,12 @@ export class CodeGenerator {
     let isAsync = this.containsAwait(body);
     let prefix = isAsync ? 'async ' : '';
 
+    let stmtOnly = new Set(['def', 'class', 'if', 'for-in', 'for-of', 'for-as', 'while', 'until', 'loop', 'switch', 'try', 'unless']);
     if (!sideEffectOnly) {
       if (this.is(body, 'block') && body.length === 2) {
         let expr = body[1];
-        if (!Array.isArray(expr) || expr[0] !== 'return') {
+        let exprHead = Array.isArray(expr) ? expr[0] : null;
+        if (exprHead !== 'return' && !stmtOnly.has(exprHead)) {
           let code = this.generate(expr, 'value');
           if (code[0] === '{') code = `(${code})`;
           return `${prefix}${paramSyntax} => ${code}`;
