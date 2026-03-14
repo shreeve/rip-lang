@@ -234,12 +234,16 @@ function publishDiagnostics(filePath) {
         if (startPos.line < 0) continue;
 
         const message = tc.cleanDiagnosticMessage(ts.flattenDiagnosticMessageText(d.messageText, '\n'));
+        const tags = [];
+        if (d.reportsUnnecessary) tags.push(1);
+        if (d.reportsDeprecated) tags.push(2);
         diagnostics.push({
           range: { start: startPos, end: endPos },
           severity: d.category === 1 ? 1 : d.category === 0 ? 2 : d.category === 2 ? 4 : 3,
           code: d.code,
           source: 'rip',
           message,
+          tags: tags.length > 0 ? tags : undefined,
         });
       }
     } catch (e) {
