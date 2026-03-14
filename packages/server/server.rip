@@ -392,7 +392,7 @@ class Manager
     @nextWorkerId = -1
     @retiringIds = new Set()
     @restartBudgets = new Map()  # slotIndex -> { count, backoffMs }
-    @deferredDeaths = []         # worker IDs that died during rolling restart
+    @deferredDeaths = new Set()   # worker IDs that died during rolling restart
     @currentVersion = 1
     @server = null
     @dbUrl = null
@@ -508,7 +508,7 @@ class Manager
       return if @shuttingDown
       return if @retiringIds.has(w.id)
       if @isRolling
-        @deferredDeaths.push(w.id)
+        @deferredDeaths.add(w.id)
         return
 
       # Notify server to remove dead worker's socket entry (fire-and-forget)
@@ -567,13 +567,11 @@ class Manager
           idx = workers.indexOf(pair.replacement)
           workers.splice(idx, 1) if idx >= 0
       # Reconcile deferred deaths on rollback too
-      if @deferredDeaths.length > 0
-        deferred = [...@deferredDeaths]
-        @deferredDeaths.length = 0
-        for deadId in deferred
+      if @deferredDeaths.size > 0
+        for deadId as @deferredDeaths
           idx = workers.findIndex((x) -> x.id is deadId)
-          if idx >= 0
-            workers[idx] = @spawnWorker(@currentVersion)
+          workers[idx] = @spawnWorker(@currentVersion) if idx >= 0
+        @deferredDeaths.clear()
       return
 
     # All verified — now atomically promote the version
@@ -597,14 +595,11 @@ class Manager
     @retiringIds.delete(id) for id as retiring
 
     # Reconcile any workers that died during the roll
-    if @deferredDeaths.length > 0
-      deferred = [...@deferredDeaths]
-      @deferredDeaths.length = 0
-      for deadId in deferred
-        workers = @getWorkers()
+    if @deferredDeaths.size > 0
+      for deadId as @deferredDeaths
         idx = workers.findIndex((x) -> x.id is deadId)
-        if idx >= 0
-          workers[idx] = @spawnWorker(@currentVersion)
+        workers[idx] = @spawnWorker(@currentVersion) if idx >= 0
+      @deferredDeaths.clear()
 
   getEntryMtime: ->
     try statSync(@flags.appEntry).mtimeMs catch then 0
