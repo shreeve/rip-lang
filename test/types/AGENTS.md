@@ -111,7 +111,6 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 | Category                      | Tested In     | Notes                                                                                                                    |
 | ----------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| Nullable safety               | 01-basic      | `strict: true` is on; full null checking active                                                                          |
 | Readonly / immutability       | 03-structural | `=!` → const; deep readonly not checked                                                                                  |
 | Generic types                 | 03-structural | Declarable; .d.ts emission has some gaps                                                                                 |
 | Render block type safety      | 09, 12        | Intrinsic tag/attr/event checking via `__ripEl`; conditionals and text expressions still unchecked                       |
@@ -125,6 +124,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Object shape checking      | 03-structural  | Missing fields, extra fields                                                                                                           |
 | Property access checking   | 03-structural  | Typos, nonexistent fields                                                                                                              |
 | Union value checking       | 04-unions      | Literal unions validated                                                                                                               |
+| Nullable safety            | 01-basic       | `strict: true` enables full `strictNullChecks` — null/undefined caught at all usage sites                                              |
 | Union narrowing + exhaust. | 04-unions      | Discriminated union narrowing and switch exhaustiveness both work via strict mode                                                       |
 | Function argument types    | 06-functions   | Same-file typed functions                                                                                                              |
 | Function return types      | 06-functions   | Same-file typed functions                                                                                                              |
