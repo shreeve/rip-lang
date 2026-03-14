@@ -30,8 +30,7 @@ import { computeHideUrls, logStartupSummary, createCleanup, installShutdownHandl
 import { computeSocketPrefix as cliComputeSocketPrefix, runVersionOutput, runHelpOutput, runStopSubcommand, runListSubcommand } from './control/cli.rip'
 import { runSetupMode, runWorkerMode } from './control/worker-mode.rip'
 import { registerAppWatchDirs } from './control/app-watchers.rip'
-import { spawnTrackedWorker } from './control/worker-spawn.rip'
-import { postWorkerQuit, waitForWorkerReady } from './control/worker-health.rip'
+import { spawnTrackedWorker, postWorkerQuit, waitForWorkerReady } from './control/workers.rip'
 
 # Match capture holder for Rip's =~
 _ = null
