@@ -329,18 +329,22 @@ async function fullRelease(level) {
 
   publish('all', '@rip-lang/all', allNewVer);
 
-  // Step 8: Refresh workspace links (retry — npm registry propagation delay)
-  for (let attempt = 0; attempt < 10; attempt++) {
+  // Step 8: Refresh workspace links (wait for registry propagation)
+  console.log('\nRefreshing...');
+  const maxWait = 90, poll = 3;
+  for (let waited = 0; waited <= maxWait; waited += poll) {
     try {
-      run('bun install');
+      execSync(`npm view rip-lang@${newVersion} version`, { encoding: 'utf8', stdio: 'pipe' });
       break;
     } catch {
-      if (attempt === 9) { console.warn('  ⚠ bun install failed after retries — run manually'); break; }
-      const secs = 3 + attempt * 2;
-      console.log(`  waiting ${secs}s for registry to propagate... (attempt ${attempt + 1}/10)`);
-      execSync(`sleep ${secs}`);
+      if (waited + poll > maxWait) { console.warn('  ⚠ registry timeout — run `bun install` manually'); break; }
+      if (waited === 0) process.stdout.write(`  waiting for registry`);
+      process.stdout.write('.');
+      execSync(`sleep ${poll}`);
     }
   }
+  if (process.stdout.columns) console.log();
+  try { run('bun install'); } catch { console.warn('  ⚠ bun install failed — run manually'); }
 
   // Step 9: Summary
   console.log(`\n✨ Released rip-lang ${newVersion}\n`);
