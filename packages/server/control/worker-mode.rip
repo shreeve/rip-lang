@@ -57,8 +57,6 @@ export runWorkerMode = ->
         try
           api = import!('@rip-lang/server')
           h = api?.startHandler?.()
-        catch
-          null
 
       workerState.handler = h if h
       workerState.handler or (-> new Response('not ready', { status: 503 }))
@@ -72,8 +70,6 @@ export runWorkerMode = ->
       body = JSON.stringify(payload)
       ctl = getControlSocketPath(socketPrefix)
       fetch!('http://localhost/worker', { method: 'POST', body, headers: { 'content-type': 'application/json' }, unix: ctl })
-    catch
-      null
 
   selfQuit = ->
     try
@@ -81,15 +77,11 @@ export runWorkerMode = ->
       body = JSON.stringify(payload)
       ctl = getControlSocketPath(socketPrefix)
       fetch!('http://localhost/worker', { method: 'POST', body, headers: { 'content-type': 'application/json' }, unix: ctl })
-    catch
-      null
 
   # Preload handler
   try
     initial = getHandler!
     workerState.appReady = typeof initial is 'function'
-  catch
-    null
 
   server = Bun.serve
     unix: socketPath
@@ -129,7 +121,7 @@ export runWorkerMode = ->
     start = Date.now()
     while workerState.inflight and Date.now() - start < SHUTDOWN_TIMEOUT_MS
       await new Promise (r) -> setTimeout(r, 10)
-    try server.stop() catch then null
+    try server.stop()
     selfQuit!
     process.exit(0)
 

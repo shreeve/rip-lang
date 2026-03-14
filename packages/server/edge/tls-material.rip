@@ -13,8 +13,6 @@ export printCertSummary = (certPem) ->
     issuer = x.issuer.split(/,/)[0]?.trim() or x.issuer
     exp = new Date(x.validTo)
     console.log "rip-server: tls cert #{subject} issued by #{issuer} expires #{exp.toISOString()}"
-  catch
-    null
 
 export loadTlsMaterial = (flags, serverDir) ->
   # Explicit cert/key paths

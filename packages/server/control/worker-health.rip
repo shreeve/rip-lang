@@ -8,9 +8,7 @@ export postWorkerQuit = (socketPrefix, workerId) ->
   try
     ctl = getControlSocketPath(socketPrefix)
     body = JSON.stringify({ op: 'quit', workerId })
-    fetch!('http://localhost/worker', { method: 'POST', body, headers: { 'content-type': 'application/json' }, unix: ctl }).catch(-> null)
-  catch
-    null
+    fetch!('http://localhost/worker', { method: 'POST', body, headers: { 'content-type': 'application/json' }, unix: ctl })
 
 export waitForWorkerReady = (socketPath, timeoutMs = 5000) ->
   start = Date.now()
@@ -20,7 +18,5 @@ export waitForWorkerReady = (socketPath, timeoutMs = 5000) ->
       if res.ok
         txt = res.text!
         return true if txt is 'ok'
-    catch
-      null
     await new Promise (r) -> setTimeout(r, 30)
   false

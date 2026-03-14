@@ -7,8 +7,6 @@ export stopMdnsAdvertisements = (mdnsProcesses) ->
     try
       proc.kill()
       console.log "rip-server: stopped advertising #{host} via mDNS"
-    catch
-      null
   mdnsProcesses.clear()
 
 export startMdnsAdvertisement = (host, mdnsProcesses, getLanIP, flags, formatPort, publishUrl) ->

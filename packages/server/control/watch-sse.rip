@@ -15,7 +15,6 @@ export handleWatchGroup = (watchGroups, prefix) ->
     start: (controller) ->
       send = (type) ->
         try controller.enqueue encoder.encode("event: #{if type is 'connected' then 'connected' else 'reload'}\ndata: #{type}\n\n")
-        catch then null
       client = { send }
       group.sseClients.add(client)
       send('connected')

@@ -7,7 +7,7 @@ import { getWorkerSocketPath } from './paths.rip'
 
 export spawnTrackedWorker = (flags, workerId, version, nowMsFn, importMetaPath) ->
   socketPath = getWorkerSocketPath(flags.socketPrefix, workerId)
-  try unlinkSync(socketPath) catch then null
+  try unlinkSync(socketPath)
 
   workerEnv = Object.assign {}, process.env,
     RIP_WORKER_MODE: '1'

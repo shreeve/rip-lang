@@ -5,10 +5,10 @@
 export createCleanup = (pidFile, server, manager, unlinkSyncFn, fetchFn, processObj) ->
   ->
     console.log 'rip-server: shutting down...'
-    try unlinkSyncFn(pidFile) catch then null
+    try unlinkSyncFn(pidFile)
     server.stop()
     manager.stop!
-    try fetchFn!(manager.dbUrl + '/shutdown', { method: 'POST' }) if manager.dbUrl catch then null
+    try fetchFn!(manager.dbUrl + '/shutdown', { method: 'POST' }) if manager.dbUrl
     processObj.exit(0)
 
 export installShutdownHandlers = (cleanup, processObj) ->

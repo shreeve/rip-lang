@@ -14,8 +14,6 @@ export findAppPathToken = (argv, existsSyncFn, isAbsoluteFn, resolveFn, cwdFn) -
     looksLikePath = pathPart.includes('/') or pathPart.startsWith('.') or pathPart.endsWith('.rip') or pathPart.endsWith('.ts')
     try
       return pathPart if looksLikePath and existsSyncFn(if isAbsoluteFn(pathPart) then pathPart else resolveFn(cwdFn(), pathPart))
-    catch
-      null
   undefined
 
 export computeSocketPrefix = (argv, resolveAppEntryFn, existsSyncFn, isAbsoluteFn, resolveFn, cwdFn) ->
@@ -26,6 +24,4 @@ export computeSocketPrefix = (argv, resolveAppEntryFn, existsSyncFn, isAbsoluteF
     try
       { appName } = resolveAppEntryFn(appTok)
       return "rip_#{appName}"
-    catch
-      null
   'rip_server'

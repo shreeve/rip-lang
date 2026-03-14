@@ -463,8 +463,8 @@ class Manager
 
   stop: ->
     for w in @workers
-      try w.process.kill() catch then null
-      try unlinkSync(w.socketPath) catch then null
+      try w.process.kill()
+      try unlinkSync(w.socketPath)
     @workers = []
 
   watchDirs: (prefix, dirs) ->
@@ -516,14 +516,14 @@ class Manager
       # Kill failed replacements and keep old workers
       for pair, i in pairs
         unless readyResults[i]
-          try pair.replacement.process.kill() catch then null
+          try pair.replacement.process.kill()
           @workers = @workers.filter((w) -> w.id isnt pair.replacement.id)
       return
 
     # All ready - retire old workers
     for { old } in pairs
       @retiringIds.add(old.id)
-      try old.process.kill() catch then null
+      try old.process.kill()
 
     Promise.all!(pairs.map(({ old }) -> old.process.exited.catch(-> null)))
 
@@ -630,9 +630,9 @@ class Server
     @startControl!
 
   stop: ->
-    try @server?.stop() catch then null
-    try @httpsServer?.stop() catch then null
-    try @control?.stop() catch then null
+    try @server?.stop()
+    try @httpsServer?.stop()
+    try @control?.stop()
 
     controlStopMdnsAdvertisements(@mdnsProcesses)
 
@@ -780,7 +780,7 @@ class Server
 
   startControl: ->
     ctlPath = getControlSocketPath(@flags.socketPrefix)
-    try unlinkSync(ctlPath) catch then null
+    try unlinkSync(ctlPath)
     @control = Bun.serve({ unix: ctlPath, fetch: @controlFetch.bind(@) })
 
     @startMdnsAdvertisement('rip.local')
@@ -798,7 +798,7 @@ class Server
     url = new URL(req.url)
 
     if req.method is 'POST' and url.pathname is '/worker'
-      res = handleWorkerControl(req,
+      res = handleWorkerControl!(req,
         sockets: @sockets
         availableWorkers: @availableWorkers
         newestVersion: @newestVersion
@@ -810,7 +810,7 @@ class Server
         return res.response
 
     if req.method is 'POST' and url.pathname is '/watch'
-      res = handleWatchControl(req, @registerWatch.bind(@), (prefix, dirs) => @manager?.watchDirs(prefix, dirs))
+      res = handleWatchControl!(req, @registerWatch.bind(@), (prefix, dirs) => @manager?.watchDirs(prefix, dirs))
       return res.response if res.handled
 
     if url.pathname is '/registry' and req.method is 'GET'

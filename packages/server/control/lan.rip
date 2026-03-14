@@ -10,6 +10,4 @@ export getLanIP = (networkInterfacesFn) ->
         continue if addr.internal or addr.family isnt 'IPv4'
         continue if addr.address.startsWith('169.254.')  # Link-local
         return addr.address
-  catch
-    null
   null

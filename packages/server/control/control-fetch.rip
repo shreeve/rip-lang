@@ -30,8 +30,6 @@ export handleWorkerControl = (req, state) ->
         sockets
         availableWorkers
         newestVersion: state.newestVersion
-  catch
-    null
   { handled: true, response: jsonBad(), sockets: state.sockets, availableWorkers: state.availableWorkers, newestVersion: state.newestVersion }
 
 export handleWatchControl = (req, registerWatch, watchDirs) ->
@@ -42,8 +40,6 @@ export handleWatchControl = (req, registerWatch, watchDirs) ->
       registerWatch(j.prefix)
       watchDirs(j.prefix, j.dirs) if j.dirs.length > 0
       return { handled: true, response: jsonOk() }
-  catch
-    null
   { handled: true, response: jsonBad() }
 
 export handleRegistryControl = (req, hostRegistry) ->
