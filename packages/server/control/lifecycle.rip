@@ -1,0 +1,22 @@
+# ==============================================================================
+# control/lifecycle.rip — startup/shutdown lifecycle helpers
+# ==============================================================================
+
+export createCleanup = (pidFile, server, manager, unlinkSyncFn, fetchFn, processObj) ->
+  ->
+    console.log 'rip-server: shutting down...'
+    try unlinkSyncFn(pidFile) catch then null
+    server.stop()
+    manager.stop!
+    try fetchFn!(manager.dbUrl + '/shutdown', { method: 'POST' }) if manager.dbUrl catch then null
+    processObj.exit(0)
+
+export installShutdownHandlers = (cleanup, processObj) ->
+  processObj.on 'SIGTERM', cleanup
+  processObj.on 'SIGINT', cleanup
+  processObj.on 'uncaughtException', (err) ->
+    console.error 'rip-server: uncaught exception:', err
+    cleanup()
+  processObj.on 'unhandledRejection', (err) ->
+    console.error 'rip-server: unhandled rejection:', err
+    cleanup()

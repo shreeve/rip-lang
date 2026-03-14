@@ -28,6 +28,7 @@ import { handleWorkerControl, handleWatchControl, handleRegistryControl } from '
 import { getLanIP as controlGetLanIP } from './control/lan.rip'
 import { startMdnsAdvertisement as controlStartMdnsAdvertisement, stopMdnsAdvertisements as controlStopMdnsAdvertisements } from './control/mdns.rip'
 import { registerWatchGroup, handleWatchGroup, broadcastWatchChange } from './control/watch-sse.rip'
+import { createCleanup, installShutdownHandlers } from './control/lifecycle.rip'
 
 # Match capture holder for Rip's =~
 _ = null
@@ -1158,22 +1159,8 @@ main = ->
   svr.manager = mgr
   mgr.server = svr
 
-  cleanup = ->
-    console.log 'rip-server: shutting down...'
-    try unlinkSync(pidFile) catch then null
-    svr.stop()
-    mgr.stop!
-    try fetch!(mgr.dbUrl + '/shutdown', { method: 'POST' }) if mgr.dbUrl catch then null
-    process.exit(0)
-
-  process.on 'SIGTERM', cleanup
-  process.on 'SIGINT', cleanup
-  process.on 'uncaughtException', (err) ->
-    console.error 'rip-server: uncaught exception:', err
-    cleanup()
-  process.on 'unhandledRejection', (err) ->
-    console.error 'rip-server: unhandled rejection:', err
-    cleanup()
+  cleanup = createCleanup(pidFile, svr, mgr, unlinkSync, fetch, process)
+  installShutdownHandlers(cleanup, process)
 
   # Suppress top URL lines if setup.rip will print them at the bottom
   setupFile = join(dirname(flags.appEntry), 'setup.rip')
