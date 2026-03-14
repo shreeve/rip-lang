@@ -1050,11 +1050,11 @@ class Server
         unix: sock.socket
         decompress: false
       res.text!
-    finally
-      @releaseWorker(sock, app)
     catch e
       console.error "realtime: worker proxy failed:", e.message
       null
+    finally
+      @releaseWorker(sock, app)
 
   buildWebSocketHandlers: ->
     hub = @realtimeHub
