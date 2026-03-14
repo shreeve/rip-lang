@@ -6158,6 +6158,21 @@ if (typeof globalThis !== 'undefined') {
     "optindex",
     "optcall"
   ]);
+  var STMT_ONLY = new Set([
+    "def",
+    "class",
+    "if",
+    "unless",
+    "for-in",
+    "for-of",
+    "for-as",
+    "while",
+    "until",
+    "loop",
+    "switch",
+    "try",
+    "throw"
+  ]);
   function isInline(arr) {
     if (!Array.isArray(arr) || arr.length === 0)
       return false;
@@ -7198,12 +7213,11 @@ function _setDataSection() {
       let paramSyntax = isSingle ? paramList : `(${paramList})`;
       let isAsync = this.containsAwait(body);
       let prefix = isAsync ? "async " : "";
-      let stmtOnly = new Set(["def", "class", "if", "for-in", "for-of", "for-as", "while", "until", "loop", "switch", "try", "unless"]);
       if (!sideEffectOnly) {
         if (this.is(body, "block") && body.length === 2) {
           let expr = body[1];
           let exprHead = Array.isArray(expr) ? expr[0] : null;
-          if (exprHead !== "return" && !stmtOnly.has(exprHead)) {
+          if (exprHead !== "return" && !STMT_ONLY.has(exprHead)) {
             let code = this.generate(expr, "value");
             if (code[0] === "{")
               code = `(${code})`;
@@ -9641,8 +9655,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeGenerator({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.13.117";
-  var BUILD_DATE = "2026-03-14@10:20:59GMT";
+  var VERSION = "3.13.118";
+  var BUILD_DATE = "2026-03-14@10:30:23GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

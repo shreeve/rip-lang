@@ -35,6 +35,11 @@ let INLINE_FORMS = new Set([
   '...', 'rest', 'expansion', 'optindex', 'optcall',
 ]);
 
+let STMT_ONLY = new Set([
+  'def', 'class', 'if', 'unless', 'for-in', 'for-of', 'for-as',
+  'while', 'until', 'loop', 'switch', 'try', 'throw',
+]);
+
 function isInline(arr) {
   if (!Array.isArray(arr) || arr.length === 0) return false;
   let head = arr[0]?.valueOf?.() ?? arr[0];
@@ -1116,12 +1121,11 @@ export class CodeGenerator {
     let isAsync = this.containsAwait(body);
     let prefix = isAsync ? 'async ' : '';
 
-    let stmtOnly = new Set(['def', 'class', 'if', 'for-in', 'for-of', 'for-as', 'while', 'until', 'loop', 'switch', 'try', 'unless']);
     if (!sideEffectOnly) {
       if (this.is(body, 'block') && body.length === 2) {
         let expr = body[1];
         let exprHead = Array.isArray(expr) ? expr[0] : null;
-        if (exprHead !== 'return' && !stmtOnly.has(exprHead)) {
+        if (exprHead !== 'return' && !STMT_ONLY.has(exprHead)) {
           let code = this.generate(expr, 'value');
           if (code[0] === '{') code = `(${code})`;
           return `${prefix}${paramSyntax} => ${code}`;
