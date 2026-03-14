@@ -17,7 +17,9 @@ import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { cpus, networkInterfaces } from 'node:os'
 import { X509Certificate } from 'node:crypto'
 import { isCurrentVersion as schedulerIsCurrentVersion, getNextAvailableSocket as schedulerGetNextAvailableSocket, releaseWorker as schedulerReleaseWorker, shouldRetryBodylessBusy } from './edge/scheduler.rip'
+import { formatPort } from './edge/network.rip'
 import { registerWorker, removeWorkerById } from './control/registry.rip'
+import { getWorkerSocketPath, getControlSocketPath, getPidFilePath } from './control/paths.rip'
 
 # Match capture holder for Rip's =~
 _ = null
@@ -35,11 +37,6 @@ SHUTDOWN_TIMEOUT_MS = 30000   # Max time to wait for in-flight requests on shutd
 # ==============================================================================
 
 nowMs = -> Date.now()
-formatPort = (protocol, port) -> if (protocol is 'https' and port is 443) or (protocol is 'http' and port is 80) then '' else ":#{port}"
-
-getWorkerSocketPath = (prefix, id) -> "/tmp/#{prefix}.#{id}.sock"
-getControlSocketPath = (prefix) -> "/tmp/#{prefix}.ctl.sock"
-getPidFilePath = (prefix) -> "/tmp/#{prefix}.pid"
 
 coerceInt = (value, fallback) ->
   return fallback unless value? and value isnt ''

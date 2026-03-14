@@ -1,0 +1,7 @@
+# ==============================================================================
+# control/paths.rip — socket and pid path helpers
+# ==============================================================================
+
+export getWorkerSocketPath = (prefix, id) -> "/tmp/#{prefix}.#{id}.sock"
+export getControlSocketPath = (prefix) -> "/tmp/#{prefix}.ctl.sock"
+export getPidFilePath = (prefix) -> "/tmp/#{prefix}.pid"

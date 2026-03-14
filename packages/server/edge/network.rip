@@ -1,0 +1,9 @@
+# ==============================================================================
+# edge/network.rip — network formatting helpers
+# ==============================================================================
+
+export formatPort = (protocol, port) ->
+  if (protocol is 'https' and port is 443) or (protocol is 'http' and port is 80)
+    ''
+  else
+    ":#{port}"
