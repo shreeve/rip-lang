@@ -1,0 +1,24 @@
+# ==============================================================================
+# edge/scheduler.rip — request scheduling helpers
+# ==============================================================================
+
+export isCurrentVersion = (newestVersion, worker) ->
+  newestVersion is null or worker.version is null or worker.version >= newestVersion
+
+export getNextAvailableSocket = (availableWorkers, newestVersion) ->
+  while availableWorkers.length > 0
+    worker = availableWorkers.pop()
+    return worker if worker.inflight is 0 and isCurrentVersion(newestVersion, worker)
+  null
+
+export releaseWorker = (sockets, availableWorkers, newestVersion, worker) ->
+  return unless worker
+  return unless sockets.some((s) -> s.socket is worker.socket)
+  worker.inflight = 0
+  if isCurrentVersion(newestVersion, worker)
+    availableWorkers.push(worker)
+
+export shouldRetryBodylessBusy = (req, res) ->
+  req.method in ['GET', 'HEAD', 'OPTIONS', 'DELETE'] and
+    res.status is 503 and
+    res.headers.get('Rip-Worker-Busy') is '1'

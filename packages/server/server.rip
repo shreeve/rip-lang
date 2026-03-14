@@ -16,6 +16,8 @@ import { existsSync, statSync, readFileSync, writeFileSync, unlinkSync, watch, u
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { cpus, networkInterfaces } from 'node:os'
 import { X509Certificate } from 'node:crypto'
+import { isCurrentVersion as schedulerIsCurrentVersion, getNextAvailableSocket as schedulerGetNextAvailableSocket, releaseWorker as schedulerReleaseWorker, shouldRetryBodylessBusy } from './edge/scheduler.rip'
+import { registerWorker, removeWorkerById } from './control/registry.rip'
 
 # Match capture holder for Rip's =~
 _ = null
@@ -919,20 +921,13 @@ class Server
     group.sseClients.delete(c) for c in dead
 
   getNextAvailableSocket: ->
-    while @availableWorkers.length > 0
-      worker = @availableWorkers.pop()
-      return worker if worker.inflight is 0 and @isCurrentVersion(worker)
-    null
+    schedulerGetNextAvailableSocket(@availableWorkers, @newestVersion)
 
   isCurrentVersion: (worker) ->
-    @newestVersion is null or worker.version is null or worker.version >= @newestVersion
+    schedulerIsCurrentVersion(@newestVersion, worker)
 
   releaseWorker: (worker) ->
-    return unless worker
-    return unless @sockets.some((s) -> s.socket is worker.socket)  # Validate still in pool
-    worker.inflight = 0
-    if @isCurrentVersion(worker)
-      @availableWorkers.push(worker)
+    schedulerReleaseWorker(@sockets, @availableWorkers, @newestVersion, worker)
 
   logAccess: (req, res, totalSeconds, workerSeconds) ->
     if @flags.jsonLogging
@@ -960,9 +955,7 @@ class Server
       res = @forwardOnce!(req, socket.socket)
       workerSeconds = (performance.now() - t0) / 1000
 
-      # Only retry bodyless requests (body stream can't be reused)
-      canRetry = req.method in ['GET', 'HEAD', 'OPTIONS', 'DELETE']
-      if canRetry and res.status is 503 and res.headers.get('Rip-Worker-Busy') is '1'
+      if shouldRetryBodylessBusy(req, res)
         retry = @getNextAvailableSocket()
         if retry and retry isnt socket
           @releaseWorker(socket)
@@ -1046,18 +1039,14 @@ class Server
       try
         j = req.json!
         if j?.op is 'join' and typeof j.socket is 'string' and typeof j.workerId is 'number'
-          version = if typeof j.version is 'number' then j.version else null
-          exists = @sockets.find((x) -> x.socket is j.socket)
-          unless exists
-            worker = { socket: j.socket, inflight: 0, version, workerId: j.workerId }
-            @sockets.push(worker)
-            @availableWorkers.push(worker)
+          { version } = registerWorker(@sockets, @availableWorkers, j)
           @newestVersion = if @newestVersion is null then version else Math.max(@newestVersion, version) if version?
           return new Response(JSON.stringify({ ok: true }), { headers: { 'content-type': 'application/json' } })
 
         if j?.op is 'quit' and typeof j.workerId is 'number'
-          @sockets = @sockets.filter((x) -> x.workerId isnt j.workerId)
-          @availableWorkers = @availableWorkers.filter((x) -> x.workerId isnt j.workerId)
+          { sockets, availableWorkers } = removeWorkerById(@sockets, @availableWorkers, j.workerId)
+          @sockets = sockets
+          @availableWorkers = availableWorkers
           return new Response(JSON.stringify({ ok: true }), { headers: { 'content-type': 'application/json' } })
       catch
         null
