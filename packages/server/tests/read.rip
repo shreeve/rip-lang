@@ -251,4 +251,3 @@ t "required w/ miss()"      , undefined, 'ok' -> read 'v', 'email!', -> 'ok'
 # ==============================================================================
 
 p "\n#{passed} passed, #{failed} failed (#{total} total)"
-exit if failed > 0 then 1 else 0

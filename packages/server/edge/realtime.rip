@@ -47,6 +47,7 @@ export removeClient = (hub, clientId) ->
       if set
         set.delete(clientId)
         hub.members.delete(group) if set.size is 0
+  return
 
 # --- Membership ---
 
