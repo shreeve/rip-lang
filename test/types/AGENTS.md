@@ -106,7 +106,6 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Category                    | Tested In    | Notes                                                                                                                          |
 | --------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------ |
 | Go-to-definition on imports | *(IDE only)* | Import lines unmapped; works at call sites only                                                                                |
-| Unused variable dimming     | *(IDE only)* | LSP forwards TS diagnostics but drops `reportsUnnecessary` → no `DiagnosticTag.Unnecessary` → unused vars not dimmed in `.rip` |
 
 **Design trade-offs** (inherent to the language, not fixable via type system):
 
@@ -152,6 +151,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Async/await unwrapping     | 10-validation  | `!` compiles to `await`; return types inferred or explicit; `Promise<T>` → `T`                                                         |
 | Hover types                | *(IDE only)*   | Column-aware source maps, overload preference, typed implementation params                                                             |
 | Union value autocomplete   | *(IDE only)*   | String literal union completions for prop values, prop defaults, and typed variable assignments                                        |
+| Unused variable dimming    | *(IDE only)*   | Forwards `DiagnosticTag.Unnecessary` and `DiagnosticTag.Deprecated` from TS diagnostics; unused vars dimmed, deprecated strikethrough |
 | Semantic token provider    | *(IDE only)*   | Bridges TS `getEncodedSemanticClassifications()` to Rip source; typed files get semantic tokens, reactive vars not marked readonly     |
 
 ### Suppressed error codes
