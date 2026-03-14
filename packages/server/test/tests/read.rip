@@ -7,10 +7,10 @@
 # Each test is self-contained: t(name, input, expected, fn)
 # No HTTP server needed — uses requestContext.run() directly.
 #
-# Run: rip packages/server/tests/read.test.rip
+# Run: rip packages/server/test/tests/read.rip
 #
 
-import { read, requestContext } from '../api.rip'
+import { read, requestContext } from '../../api.rip'
 
 # ==============================================================================
 # Test harness
@@ -33,16 +33,16 @@ t = (name, was, now, fn) ->
       actual = fn()
       if deepEq(actual, now)
         passed++
-        console.log "✓ #{name}"
+        p "✓ #{name}"
       else
         failed++
-        console.log "✗ #{name}"
-        console.log "    was:      #{stringify(was)}"
-        console.log "    expected: #{stringify(now)}"
-        console.log "    actual:   #{stringify(actual)}"
+        p "✗ #{name}"
+        p "    was:      #{stringify(was)}"
+        p "    expected: #{stringify(now)}"
+        p "    actual:   #{stringify(actual)}"
     catch err
       failed++
-      console.log "✗ #{name} — threw: #{err.message}"
+      p "✗ #{name} — threw: #{err.message}"
 
 # f(name, was, fn) — expect a throw
 f = (name, was, fn) ->
@@ -51,10 +51,10 @@ f = (name, was, fn) ->
     try
       fn()
       failed++
-      console.log "✗ #{name} — expected throw"
+      p "✗ #{name} — expected throw"
     catch
       passed++
-      console.log "✓ #{name}"
+      p "✓ #{name}"
 
 # ==============================================================================
 # read() basics (no validator)
@@ -250,5 +250,5 @@ t "required w/ miss()"      , undefined, 'ok' -> read 'v', 'email!', -> 'ok'
 # Results
 # ==============================================================================
 
-console.log "\n#{passed} passed, #{failed} failed (#{total} total)"
+p "\n#{passed} passed, #{failed} failed (#{total} total)"
 exit if failed > 0 then 1 else 0
