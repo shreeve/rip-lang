@@ -1,0 +1,56 @@
+# ==============================================================================
+# control/cli-output.rip — CLI help/version output handlers
+# ==============================================================================
+
+export runVersionOutput = (argv, readFileSyncFn, packageJsonPath) ->
+  return false unless '--version' in argv or '-v' in argv
+  try
+    pkg = JSON.parse(readFileSyncFn(packageJsonPath, 'utf8'))
+    console.log "rip-server v#{pkg.version}"
+  catch
+    console.log 'rip-server (version unknown)'
+  true
+
+export runHelpOutput = (argv) ->
+  return false unless '--help' in argv or '-h' in argv
+  console.log """
+    rip-server - Pure Rip application server
+
+    Usage:
+      rip serve [options] [app-path] [app-name]
+      rip serve [options] [app-path]@<alias1>,<alias2>,...
+
+    Options:
+      -h, --help              Show this help
+      -v, --version           Show version
+      --watch=<glob>          Watch glob pattern (default: *.rip)
+      --static                Disable hot reload and file watching
+      --env=<mode>            Set environment (dev, production)
+      --debug                 Enable debug logging
+      --quiet                 Suppress URL lines (app prints its own)
+
+    Network:
+      http                    HTTP only (no TLS)
+      https                   HTTPS with trusted *.ripdev.io cert (default)
+      <port>                  Listen on specific port
+      --cert=<path>           TLS certificate file (overrides shipped cert)
+      --key=<path>            TLS key file (overrides shipped cert)
+      --hsts                  Enable HSTS header
+      --no-redirect-http      Don't redirect HTTP to HTTPS
+
+    Workers:
+      w:<n>                   Number of workers (default: cores/2)
+      w:auto                  One worker per core
+      r:<n>,<s>s              Restart policy: max requests, max seconds
+
+    Examples:
+      rip serve               Start with ./index.rip (watches *.rip)
+      rip serve myapp         Start with app name "myapp"
+      rip serve http          HTTP only (no TLS)
+      rip serve --static w:8  Production: no reload, 8 workers
+
+    If no index.rip or index.ts is found, a built-in static file server
+    activates with directory indexes, auto-detected MIME types, and
+    hot-reload. Create an index.rip to customize server behavior.
+  """
+  true
