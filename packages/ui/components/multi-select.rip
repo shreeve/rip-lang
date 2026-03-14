@@ -66,6 +66,7 @@ export MultiSelect = component
     open = false
     query = ''
     highlightedIndex = -1
+    @_input?.focus()
 
   onFocusin: -> open = true
 
@@ -75,7 +76,16 @@ export MultiSelect = component
       @_close()
     , 0
 
-  _position: -> ARIA.positionBelow @_input, @_list, 2, false
+  _applyPlacement: ->
+    return unless @_list
+    @_list.style.position = 'fixed'
+    @_list.style.inset = 'auto'
+    @_list.style.margin = '0'
+    @_list.style.positionArea = 'bottom start'
+    @_list.style.positionTry = 'flip-block, flip-inline, flip-block flip-inline'
+    @_list.style.positionVisibility = 'anchors-visible'
+    @_list.style.marginTop = '2px'
+    @_list.style.minWidth = 'anchor-size(width)'
 
   _onKeydown: (e) ->
     len = filtered.length
@@ -104,8 +114,10 @@ export MultiSelect = component
         query = ''
 
   ~>
-    if open then requestAnimationFrame => @_position()
-  ~> ARIA.popupDismiss open, (=> @_list), (=> @_close()), [=> @_content], (=> @_position())
+    if @_list
+      @_list.setAttribute 'popover', 'auto'
+      @_applyPlacement()
+    ARIA.bindPopover open, (=> @_list), ((isOpen) => open = isOpen), (=> @_input)
 
   render
     . ref: "_content", $open: open?!, $disabled: @disabled?!
@@ -133,15 +145,17 @@ export MultiSelect = component
             "✕"
 
       # Dropdown
-      if open and filtered.length > 0
-        div ref: "_list", id: _listId, role: "listbox", $open: true, aria-multiselectable: "true"
-          style: "position:fixed"
-          for item, idx in filtered
-            div role: "option", tabindex: "-1", id: "#{_listId}-#{idx}"
-              $value: @_val(item)
-              $selected: @_isSelected(item)?!
-              $highlighted: (idx is highlightedIndex)?!
-              aria-selected: !!@_isSelected(item)
-              @click: (=> @_toggleItem(item))
-              @mouseenter: (=> highlightedIndex = idx)
-              @_label(item)
+      div ref: "_list", id: _listId, role: "listbox", $open: open?!, aria-multiselectable: "true"
+        style: "position:fixed;margin:0;inset:auto"
+        for item, idx in filtered
+          div role: "option", tabindex: "-1", id: "#{_listId}-#{idx}"
+            $value: @_val(item)
+            $selected: @_isSelected(item)?!
+            $highlighted: (idx is highlightedIndex)?!
+            aria-selected: !!@_isSelected(item)
+            @click: (=> @_toggleItem(item))
+            @mouseenter: (=> highlightedIndex = idx)
+            @_label(item)
+        if filtered.length is 0 and query
+          div role: "status", aria-live: "polite", $empty: true
+            "No results"

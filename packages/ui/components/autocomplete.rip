@@ -45,13 +45,24 @@ export Autocomplete = component
   openMenu: ->
     open = true
     @_hlIdx = -1
-    requestAnimationFrame => @_position()
+    @_input?.focus()
 
   close: ->
     open = false
     @_hlIdx = -1
+    @_input?.focus()
 
-  _position: -> ARIA.positionBelow @_input, @_list, 2, false
+  _applyPlacement: ->
+    return unless @_list
+    Object.assign @_list.style,
+      position: 'fixed'
+      inset: 'auto'
+      margin: '0'
+      positionArea: 'bottom start'
+      positionTry: 'flip-block, flip-inline, flip-block flip-inline'
+      positionVisibility: 'anchors-visible'
+      marginTop: '2px'
+      minWidth: 'anchor-size(width)'
 
   selectIndex: (idx) ->
     item = filteredItems[idx]
@@ -68,10 +79,7 @@ export Autocomplete = component
     @value = newVal
     open = true
     @_hlIdx = if filteredItems.length > 0 then 0 else -1
-    setTimeout =>
-      @_position()
-      @_updateHighlight()
-    , 0
+    setTimeout (=> @_updateHighlight()), 0
 
   onKeydown: (e) ->
     len = filteredItems.length
@@ -84,7 +92,11 @@ export Autocomplete = component
       dismiss: => @close()
       tab:     => @close()
 
-  ~> ARIA.popupDismiss open, (=> @_list), (=> @close()), [=> @_input], (=> @_position())
+  ~>
+    if @_list
+      @_list.setAttribute 'popover', 'auto'
+      @_applyPlacement()
+    ARIA.bindPopover open, (=> @_list), ((isOpen) => open = isOpen), (=> @_input)
 
   mounted: ->
     @_hlIdx = -1
@@ -104,10 +116,9 @@ export Autocomplete = component
         placeholder: @placeholder
         @input: @onInput
 
-      if open and filteredItems.length > 0
-        div ref: "_list", id: _listId, role: "listbox", $open: true, style: "position:fixed"
-          for item, idx in filteredItems
-            div role: "option", tabindex: "-1"
-              @click: (=> @selectIndex(idx))
-              @mouseenter: (=> @_hlIdx = idx; @_updateHighlight())
-              "#{if typeof item is 'string' then item else (item.label or item.name or String(item))}"
+      div ref: "_list", id: _listId, role: "listbox", $open: open?!, style: "position:fixed;margin:0;inset:auto"
+        for item, idx in filteredItems
+          div role: "option", tabindex: "-1"
+            @click: (=> @selectIndex(idx))
+            @mouseenter: (=> @_hlIdx = idx; @_updateHighlight())
+            "#{if typeof item is 'string' then item else (item.label or item.name or String(item))}"

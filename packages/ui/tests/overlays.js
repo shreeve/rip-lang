@@ -81,6 +81,47 @@ test.describe('overlay primitives', () => {
     await expect(listbox).toBeVisible()
   })
 
+  test('combobox opens suggestions and selects via Enter', async ({ page }) => {
+    await page.goto('/#combobox')
+
+    const input = page.locator('#combobox [role="combobox"]').first()
+    await input.fill('ap')
+    await expect(page.locator('#combobox [role="listbox"]').first()).toBeVisible()
+
+    await page.keyboard.press('ArrowDown')
+    await page.keyboard.press('Enter')
+    await expect(page.locator('#combobox [role="listbox"]').first()).not.toBeVisible()
+    await expect(input).toHaveValue(/.+/)
+  })
+
+  test('autocomplete opens suggestions and accepts keyboard selection', async ({ page }) => {
+    await page.goto('/#autocomplete')
+
+    const input = page.locator('#autocomplete [role="combobox"]').first()
+    await input.fill('n')
+    await expect(page.locator('#autocomplete [role="listbox"]').first()).toBeVisible()
+
+    await page.keyboard.press('ArrowDown')
+    await page.keyboard.press('Enter')
+    await expect(page.locator('#autocomplete [role="listbox"]').first()).not.toBeVisible()
+    await expect(input).toHaveValue(/.+/)
+  })
+
+  test('multiselect opens listbox and toggles an option', async ({ page }) => {
+    await page.goto('/#multi-select')
+
+    const input = page.locator('#multi-select [role="combobox"]').first()
+    await input.focus()
+    await page.keyboard.press('ArrowDown')
+    const listbox = page.locator('#multi-select [role="listbox"]').first()
+    await expect(listbox).toBeVisible()
+
+    const firstOption = page.locator('#multi-select [role="option"]').first()
+    const before = await firstOption.getAttribute('aria-selected')
+    await page.keyboard.press('Enter')
+    await expect(firstOption).toHaveAttribute('aria-selected', before === 'true' ? 'false' : 'true')
+  })
+
   test('tooltip appears on hover with role=tooltip', async ({ page }) => {
     await page.goto('/#tooltip')
 

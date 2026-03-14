@@ -46,13 +46,23 @@ export Combobox = component
   openMenu: ->
     open = true
     highlightedIndex = -1
-    requestAnimationFrame => @_position()
+    @_input?.focus()
 
   close: ->
     open = false
     highlightedIndex = -1
+    @_input?.focus()
 
-  _position: -> ARIA.positionBelow @_input, @_list, 2, false
+  _applyPlacement: ->
+    return unless @_list
+    @_list.style.position = 'fixed'
+    @_list.style.inset = 'auto'
+    @_list.style.margin = '0'
+    @_list.style.positionArea = 'bottom start'
+    @_list.style.positionTry = 'flip-block, flip-inline, flip-block flip-inline'
+    @_list.style.positionVisibility = 'anchors-visible'
+    @_list.style.marginTop = '2px'
+    @_list.style.minWidth = 'anchor-size(width)'
 
   isDisabled: (item) -> item?.hasAttribute?('data-disabled')
 
@@ -85,7 +95,11 @@ export Combobox = component
       dismiss: => if open then @close() else @query = ''
       tab:     => @close()
 
-  ~> ARIA.popupDismiss open, (=> @_list), (=> @close()), [=> @_content], (=> @_position())
+  ~>
+    if @_list
+      @_list.setAttribute 'popover', 'auto'
+      @_applyPlacement()
+    ARIA.bindPopover open, (=> @_list), ((isOpen) => open = isOpen), (=> @_input)
 
   render
     . ref: "_content", $open: open?!
@@ -109,17 +123,16 @@ export Combobox = component
           button aria-label: "Clear", $clear: true, @click: @clear
             "✕"
 
-      # Listbox — conditionally rendered (like Select)
-      if open and @items.length > 0
-        div ref: "_list", id: _listId, role: "listbox", $open: true
-          style: "position:fixed"
-          for item, idx in @items
-            div role: "option", tabindex: "-1", id: "#{_listId}-#{idx}"
-              $value: item
-              $highlighted: (idx is highlightedIndex)?!
-              @click: (=> @selectIndex(idx))
-              @mouseenter: (=> highlightedIndex = idx)
-              "#{item}"
-      if open and @items.length is 0 and @query
-        div role: "status", aria-live: "polite", $empty: true
-          "No results"
+      # Listbox
+      div ref: "_list", id: _listId, role: "listbox", style: "position:fixed;margin:0;inset:auto"
+        $open: open?!
+        for item, idx in @items
+          div role: "option", tabindex: "-1", id: "#{_listId}-#{idx}"
+            $value: item
+            $highlighted: (idx is highlightedIndex)?!
+            @click: (=> @selectIndex(idx))
+            @mouseenter: (=> highlightedIndex = idx)
+            "#{item}"
+        if @items.length is 0 and @query
+          div role: "status", aria-live: "polite", $empty: true
+            "No results"
