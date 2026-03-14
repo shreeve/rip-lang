@@ -19,6 +19,7 @@ import { isCurrentVersion as schedulerIsCurrentVersion, getNextAvailableSocket a
 import { formatPort } from './edge/network.rip'
 import { loadTlsMaterial as edgeLoadTlsMaterial, printCertSummary as edgePrintCertSummary } from './edge/tls-material.rip'
 import { maybeAddSecurityHeaders as edgeMaybeAddSecurityHeaders } from './edge/security.rip'
+import { buildStatusBody as edgeBuildStatusBody, buildRipdevUrl as edgeBuildRipdevUrl } from './edge/status.rip'
 import { getWorkerSocketPath, getControlSocketPath, getPidFilePath } from './control/paths.rip'
 import { handleWorkerControl, handleWatchControl, handleRegistryControl } from './control/control-fetch.rip'
 import { getLanIP as controlGetLanIP } from './control/lan.rip'
@@ -864,18 +865,7 @@ class Server
       @queue.push({ req, resolve, reject, enqueuedAt: nowMs() })
 
   status: ->
-    uptime = Math.floor((nowMs() - @startedAt) / 1000)
-    healthy = @sockets.length > 0
-    hosts = Array.from(@hostRegistry.values())
-    version = @serverVersion
-    body = JSON.stringify
-      status: if healthy then 'healthy' else 'degraded'
-      version: version
-      app: @flags.appName
-      workers: @sockets.length
-      ports: { http: @flags.httpPort or undefined, https: @flags.httpsPort or undefined }
-      uptime: uptime
-      hosts: hosts
+    body = edgeBuildStatusBody(@startedAt, @sockets.length, @hostRegistry, @serverVersion, @flags.appName, @flags.httpPort, @flags.httpsPort, nowMs)
     headers = new Headers({ 'content-type': 'application/json', 'cache-control': 'no-cache' })
     @maybeAddSecurityHeaders(headers)
     new Response(body, { headers })
@@ -1022,7 +1012,7 @@ class Server
 
     port = @flags.httpsPort or @flags.httpPort or 80
     protocol = if @flags.httpsPort then 'https' else 'http'
-    url = "#{protocol}://#{@flags.appName}.ripdev.io#{formatPort(protocol, port)}"
+    url = edgeBuildRipdevUrl(@flags.appName, protocol, port, formatPort)
     @urls.push(url)
     p "rip-server: #{url}" unless @flags.quiet or @flags.hideUrls
 
@@ -1231,7 +1221,7 @@ main = ->
   httpOnly = flags.httpsPort is null
   protocol = if httpOnly then 'http' else 'https'
   port = flags.httpsPort or flags.httpPort or 80
-  console.log "rip-server: rip=#{svr.ripVersion} server=#{svr.serverVersion} app=#{flags.appName} workers=#{flags.workers} url=#{protocol}://#{flags.appName}.ripdev.io#{formatPort(protocol, port)}/server"
+  console.log "rip-server: rip=#{svr.ripVersion} server=#{svr.serverVersion} app=#{flags.appName} workers=#{flags.workers} url=#{edgeBuildRipdevUrl(flags.appName, protocol, port, formatPort)}/server"
 
 # ==============================================================================
 # Entry Point
