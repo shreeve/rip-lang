@@ -34,6 +34,7 @@ import { createAcmeManager } from './acme/manager.rip'
 import { loadCert as acmeLoadCert, defaultCertDir } from './acme/store.rip'
 import { createMetrics } from './edge/metrics.rip'
 import { setEventJsonMode, logEvent } from './control/events.rip'
+import { createHub, generateClientId, addClient, removeClient, processResponse, proxyToBackend, handlePublish, getRealtimeStats } from './edge/realtime.rip'
 
 # Match capture holder for Rip's =~
 _ = null
@@ -363,6 +364,9 @@ parseFlags = (argv) ->
     acme: has('--acme')
     acmeStaging: has('--acme-staging')
     acmeDomain: getKV('--acme-domain=')
+    realtime: has('--realtime')
+    realtimePath: getKV('--realtime-path=') or '/realtime'
+    realtimeBackend: getKV('--realtime-backend=')
     watch: watch
   }
 
@@ -579,6 +583,7 @@ class Server
     @challengeStore = createChallengeStore()
     @acmeManager = null
     @metrics = createMetrics()
+    @realtimeHub = if @flags.realtime then createHub() else null
     @mdnsProcesses = new Map()
     @watchGroups = new Map()
     @manager = null
@@ -609,6 +614,7 @@ class Server
   start: ->
     httpOnly = @flags.httpsPort is null
     fetchFn = @fetch.bind(@)
+    wsOpts = if @realtimeHub then @buildWebSocketHandlers() else {}
 
     # Helper to start server, trying the given port first, then incrementing.
     # Falls back to unprivileged range (3000 for HTTP, 3443 for HTTPS) if
@@ -617,7 +623,7 @@ class Server
       port = p
       while port < p + 100
         try
-          return Bun.serve(Object.assign({ port, idleTimeout: 0, fetch: fetchFn }, opts))
+          return Bun.serve(Object.assign({ port, idleTimeout: 0, fetch: fetchFn }, wsOpts, opts))
         catch e
           if e?.code is 'EACCES' and port < 1024
             port = if opts.tls then 3443 else 3000
@@ -673,7 +679,7 @@ class Server
 
     controlStopMdnsAdvertisements(@mdnsProcesses)
 
-  fetch: (req) ->
+  fetch: (req, bunServer) ->
     url = new URL(req.url)
     host = url.hostname.toLowerCase()
 
@@ -683,6 +689,19 @@ class Server
 
     return @status() if url.pathname is '/status'
     return @diagnostics() if url.pathname is '/diagnostics'
+
+    # WebSocket upgrade for realtime
+    if @realtimeHub and url.pathname is @flags.realtimePath and bunServer
+      clientId = generateClientId()
+      if bunServer.upgrade(req, { data: { clientId, headers: req.headers } })
+        return
+      return new Response('WebSocket upgrade failed', { status: 400 })
+
+    # External publish for realtime
+    if @realtimeHub and url.pathname is '/publish' and req.method is 'POST'
+      body = req.text!
+      handlePublish(@realtimeHub, body)
+      return new Response('ok')
 
     # SSE hot-reload: intercept /{prefix}/watch
     path = url.pathname
@@ -937,6 +956,34 @@ class Server
         @urls.push(url)
         p "rip-server: #{url}" unless @flags.quiet or @flags.hideUrls
     )
+
+  buildWebSocketHandlers: ->
+    hub = @realtimeHub
+    return {} unless hub
+
+    # Configure backend URL for proxying WS events
+    port = @flags.httpPort or 80
+    hub.backendUrl = @flags.realtimeBackend or "http://127.0.0.1:#{port}/v1/realtime"
+
+    websocket:
+      open: (ws) ->
+        { clientId, headers } = ws.data
+        addClient(hub, clientId, ws)
+        logEvent 'ws_open', { clientId }
+        response = proxyToBackend!(hub, headers, 'open', '')
+        processResponse(hub, response, clientId) if response
+
+      message: (ws, message) ->
+        { clientId, headers } = ws.data
+        msg = if typeof message is 'string' then message else message.toString()
+        response = proxyToBackend!(hub, headers, 'text', msg)
+        processResponse(hub, response, clientId) if response
+
+      close: (ws) ->
+        { clientId, headers } = ws.data
+        logEvent 'ws_close', { clientId }
+        removeClient(hub, clientId)
+        proxyToBackend!(hub, headers, 'close', '')
 
 
 # ==============================================================================
