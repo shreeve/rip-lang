@@ -18,8 +18,10 @@ import { cpus, networkInterfaces } from 'node:os'
 import { isCurrentVersion as schedulerIsCurrentVersion, getNextAvailableSocket as schedulerGetNextAvailableSocket, releaseWorker as schedulerReleaseWorker, shouldRetryBodylessBusy } from './edge/scheduler.rip'
 import { formatPort } from './edge/network.rip'
 import { loadTlsMaterial as edgeLoadTlsMaterial, printCertSummary as edgePrintCertSummary } from './edge/tls-material.rip'
+import { maybeAddSecurityHeaders as edgeMaybeAddSecurityHeaders } from './edge/security.rip'
 import { getWorkerSocketPath, getControlSocketPath, getPidFilePath } from './control/paths.rip'
 import { handleWorkerControl, handleWatchControl, handleRegistryControl } from './control/control-fetch.rip'
+import { getLanIP as controlGetLanIP } from './control/lan.rip'
 
 # Match capture holder for Rip's =~
 _ = null
@@ -1055,8 +1057,7 @@ class Server
     new Response('not-found', { status: 404 })
 
   maybeAddSecurityHeaders: (headers) ->
-    if @httpsActive and @flags.hsts
-      headers.set('strict-transport-security', 'max-age=31536000; includeSubDomains') unless headers.has('strict-transport-security')
+    edgeMaybeAddSecurityHeaders(@httpsActive, @flags.hsts, headers)
 
   loadTlsMaterial: ->
     edgeLoadTlsMaterial(@flags, import.meta.dir)
@@ -1065,16 +1066,7 @@ class Server
     edgePrintCertSummary(certPem)
 
   getLanIP: ->
-    try
-      nets = networkInterfaces()
-      for name, addrs of nets
-        for addr in addrs
-          continue if addr.internal or addr.family isnt 'IPv4'
-          continue if addr.address.startsWith('169.254.')  # Link-local
-          return addr.address
-    catch
-      null
-    null
+    controlGetLanIP(networkInterfaces)
 
   startMdnsAdvertisement: (host) ->
     return unless host.endsWith('.local')
