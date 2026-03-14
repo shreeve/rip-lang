@@ -117,6 +117,29 @@ function getMemberType(target) {
   return null;
 }
 
+function findInheritedTagNearLine(source, line, componentName = null) {
+  if (typeof source !== 'string') return null;
+  const lines = source.split('\n');
+  if (Number.isInteger(line)) {
+    const start = Math.max(0, line - 2);
+    const end = Math.min(lines.length - 1, line + 2);
+    for (let i = start; i <= end; i++) {
+      const m = lines[i]?.match(/#\s*@inherits\s+([A-Za-z][\w-]*)/);
+      if (m) return m[1];
+    }
+  }
+  if (componentName) {
+    const escaped = componentName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const declRe = new RegExp(`\\b${escaped}\\b\\s*=\\s*component\\b`);
+    for (const lineText of lines) {
+      if (!declRe.test(lineText)) continue;
+      const m = lineText.match(/#\s*@inherits\s+([A-Za-z][\w-]*)/);
+      if (m) return m[1];
+    }
+  }
+  return null;
+}
+
 // ============================================================================
 // Prototype Installation
 // ============================================================================
@@ -779,13 +802,20 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       }
     }
 
+    const inheritsTag = findInheritedTagNearLine(this.options.source, sexpr?.loc?.r, this._componentName);
+    const publicPropNames = new Set();
+    for (const { name, isPublic } of stateVars) if (isPublic) publicPropNames.add(name);
+    for (const { name, isPublic } of readonlyVars) if (isPublic) publicPropNames.add(name);
+
     // Save and set component context
     const prevComponentMembers = this.componentMembers;
     const prevReactiveMembers = this.reactiveMembers;
     const prevAutoEventHandlers = this._autoEventHandlers;
+    const prevInheritsTag = this._inheritsTag;
     this.componentMembers = memberNames;
     this.reactiveMembers = reactiveMembers;
     this._autoEventHandlers = autoEventHandlers.size > 0 ? autoEventHandlers : null;
+    this._inheritsTag = inheritsTag || null;
 
     // --- Type-check stub: typed member declarations + body expressions, no DOM ---
     if (this.options.stubComponents) {
@@ -816,7 +846,8 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       {
         const hasRequired = propEntries.length > 0 && stateVars.some(v => v.isPublic && v.required);
         const propsOpt = hasRequired ? '' : '?';
-        const propsType = propEntries.length > 0 ? `{${propEntries.join('; ')}}` : '{}';
+        let propsType = propEntries.length > 0 ? `{${propEntries.join('; ')}}` : '{}';
+        if (inheritsTag) propsType += ` & __RipProps<'${inheritsTag}'>`;
         sl.push(`  constructor(props${propsOpt}: ${propsType}) {}`);
       }
 
@@ -1050,6 +1081,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       this.componentMembers = prevComponentMembers;
       this.reactiveMembers = prevReactiveMembers;
       this._autoEventHandlers = prevAutoEventHandlers;
+      this._inheritsTag = prevInheritsTag;
       return sl.join('\n');
     }
 
@@ -1090,6 +1122,18 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       }
     }
 
+    if (inheritsTag) {
+      lines.push('    this._rest = {};');
+      lines.push('    for (const __k in props) {');
+      if (publicPropNames.size > 0) {
+        const checks = [...publicPropNames].map(name => `__k !== '${name}'`).join(' && ');
+        lines.push(`      if (${checks} && !__k.startsWith('__bind_')) this._rest[__k] = props[__k];`);
+      } else {
+        lines.push("      if (!__k.startsWith('__bind_')) this._rest[__k] = props[__k];");
+      }
+      lines.push('    }');
+    }
+
     // Computed (derived)
     for (const { name, expr } of derivedVars) {
       if (this.is(expr, 'block')) {
@@ -1122,6 +1166,64 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     }
 
     lines.push('  }');
+
+    if (inheritsTag) {
+      lines.push('  _setRestProp(key, value) {');
+      lines.push('    if (key.startsWith(\'__bind_\')) return;');
+      lines.push('    this._rest || (this._rest = {});');
+      lines.push('    if (value == null) delete this._rest[key];');
+      lines.push('    else this._rest[key] = value;');
+      lines.push('    this._applyInheritedProp(this._inheritedEl, key, value);');
+      lines.push('  }');
+      lines.push('  _applyRestToInheritedEl() {');
+      lines.push('    if (!this._inheritedEl || !this._rest) return;');
+      lines.push('    for (const key in this._rest) this._applyInheritedProp(this._inheritedEl, key, this._rest[key]);');
+      lines.push('  }');
+      lines.push('  _applyInheritedProp(el, key, value) {');
+      lines.push('    if (!el || key === \'key\' || key === \'ref\' || key.startsWith(\'__bind_\')) return;');
+      lines.push('    if (key[0] === \'@\') {');
+      lines.push('      const event = key.slice(1).split(\'.\')[0];');
+      lines.push('      this._restHandlers || (this._restHandlers = {});');
+      lines.push('      const prev = this._restHandlers[key];');
+      lines.push('      if (prev) el.removeEventListener(event, prev);');
+      lines.push('      if (typeof value === \'function\') {');
+      lines.push('        const next = (e) => __batch(() => value(e));');
+      lines.push('        this._restHandlers[key] = next;');
+      lines.push('        el.addEventListener(event, next);');
+      lines.push('      } else {');
+      lines.push('        delete this._restHandlers[key];');
+      lines.push('      }');
+      lines.push('      return;');
+      lines.push('    }');
+      lines.push('    if (key === \'class\' || key === \'className\') {');
+      lines.push('      if (el instanceof SVGElement) el.setAttribute(\'class\', __clsx(value));');
+      lines.push('      else el.className = __clsx(value);');
+      lines.push('      return;');
+      lines.push('    }');
+      lines.push('    if (key === \'style\') {');
+      lines.push('      if (value == null) { el.removeAttribute(\'style\'); return; }');
+      lines.push('      if (typeof value === \'string\') { el.setAttribute(\'style\', value); return; }');
+      lines.push('      if (typeof value === \'object\') { Object.assign(el.style, value); return; }');
+      lines.push('    }');
+      lines.push('    if (key === \'innerHTML\' || key === \'textContent\' || key === \'innerText\') {');
+      lines.push('      el[key] = value ?? \'\';');
+      lines.push('      return;');
+      lines.push('    }');
+      lines.push('    if (key in el && !key.includes(\'-\')) {');
+      lines.push('      el[key] = value;');
+      lines.push('      return;');
+      lines.push('    }');
+      lines.push('    if (value == null || value === false) {');
+      lines.push('      el.removeAttribute(key);');
+      lines.push('      return;');
+      lines.push('    }');
+      lines.push('    if (value === true) {');
+      lines.push("      el.setAttribute(key, '');");
+      lines.push('      return;');
+      lines.push('    }');
+      lines.push('    el.setAttribute(key, value);');
+      lines.push('  }');
+    }
 
     // --- Methods ---
     for (const { name, func } of methods) {
@@ -1178,6 +1280,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     this.componentMembers = prevComponentMembers;
     this.reactiveMembers = prevReactiveMembers;
     this._autoEventHandlers = prevAutoEventHandlers;
+    this._inheritsTag = prevInheritsTag;
 
     // If block factories exist, wrap in IIFE so they're in scope
     if (blockFactoriesCode) {
@@ -1241,6 +1344,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     this._pendingAutoWire = false;
     this._autoWireEl = null;
     this._autoWireExplicit = null;
+    this._inheritsTargetBound = false;
 
     const statements = this.is(body, 'block') ? body.slice(1) : [body];
 
@@ -1341,6 +1445,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
         this._createLines.push(`${elVar} = document.createElement('${actualTag}');`);
       }
       if (idStr) this._createLines.push(`${elVar}.id = '${idStr}';`);
+      this._bindInheritedTarget(actualTag, elVar);
       return elVar;
     }
 
@@ -1538,6 +1643,14 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     this._autoWireExplicit = null;
   };
 
+  proto._bindInheritedTarget = function(tag, elVar) {
+    if (!this._inheritsTag || this._factoryMode || this._inheritsTargetBound) return;
+    if (tag !== this._inheritsTag) return;
+    this._inheritsTargetBound = true;
+    this._createLines.push(`this._inheritedEl = ${elVar};`);
+    this._createLines.push('this._applyRestToInheritedEl();');
+  };
+
   // --------------------------------------------------------------------------
   // generateTag — HTML element with static classes and children
   // --------------------------------------------------------------------------
@@ -1554,6 +1667,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     if (id) {
       this._createLines.push(`${elVar}.id = '${id}';`);
     }
+    this._bindInheritedTarget(tag, elVar);
 
     if (this._componentName && this._elementCount === 1 && !this._factoryMode && !this.options.skipDataPart) {
       this._createLines.push(`${elVar}.setAttribute('data-part', '${this._componentName}');`);
@@ -1610,6 +1724,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       this._createLines.push(`${elVar} = document.createElement('${tag}');`);
     }
     if (id) this._createLines.push(`${elVar}.id = '${id}';`);
+    this._bindInheritedTarget(tag, elVar);
 
     const autoWireClaimed = this._claimAutoWire(elVar);
 
@@ -2087,7 +2202,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     this._setupLines.push(`try { if (${instVar}._setup) ${instVar}._setup(); if (${instVar}.mounted) ${instVar}.mounted(); } catch (__e) { __handleComponentError(__e, ${instVar}); }`);
 
     for (const { key, valueCode } of reactiveProps) {
-      this._pushEffect(`if (${instVar}.${key}) ${instVar}.${key}.value = ${valueCode};`);
+      this._pushEffect(`if (${instVar}.${key} && typeof ${instVar}.${key} === 'object' && 'value' in ${instVar}.${key}) ${instVar}.${key}.value = ${valueCode}; else if (${instVar}._setRestProp) ${instVar}._setRestProp('${key}', ${valueCode});`);
     }
 
     for (const line of childrenSetupLines) {

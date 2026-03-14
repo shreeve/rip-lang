@@ -1003,6 +1003,24 @@ test "component public state from constructor", '''
   a.count.value
   ''', 42
 
+test "inherits directive collects unknown props into _rest", '''
+  A = component # @inherits input
+    @label := ""
+    render
+      input
+  a = A.new({ label: "x", autofocus: true, maxlength: 10 })
+  [a._rest.autofocus, a._rest.maxlength, a._rest.label?]
+  ''', [true, 10, false]
+
+test "inherits rest props can be updated", '''
+  A = component # @inherits input
+    render
+      input
+  a = A.new({ autofocus: true })
+  a._setRestProp("maxlength", 25)
+  a._rest.maxlength
+  ''', 25
+
 test "component effect runs on state change", '''
   A = component
     x := 0

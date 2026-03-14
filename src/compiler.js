@@ -3326,7 +3326,7 @@ export class Compiler {
 
     // If only terminators remain (type-only source), emit types and return early
     if (tokens.every(t => t[0] === 'TERMINATOR')) {
-      if (typeTokens) dts = emitTypes(typeTokens, ['program']);
+      if (typeTokens) dts = emitTypes(typeTokens, ['program'], source);
       return { tokens, sexpr: ['program'], code: '', dts, data: dataSection, reactiveVars: {} };
     }
 
@@ -3374,6 +3374,7 @@ export class Compiler {
 
     let generator = new CodeGenerator({
       dataSection,
+      source,
       skipPreamble: this.options.skipPreamble,
       skipRuntimes: this.options.skipRuntimes,
       skipExports: this.options.skipExports,
@@ -3396,7 +3397,7 @@ export class Compiler {
 
     // Step 5: Emit .d.ts from annotated tokens + parsed s-expression
     if (typeTokens) {
-      dts = emitTypes(typeTokens, sexpr);
+      dts = emitTypes(typeTokens, sexpr, source);
     }
 
     return { tokens, sexpr, code, dts, map, reverseMap, data: dataSection, reactiveVars: generator.reactiveVars };

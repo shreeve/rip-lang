@@ -435,7 +435,7 @@
     let endIdx = findMatchingOutdent(tokens, indentIdx);
     return { typeText: members.join(" | "), endIdx };
   }
-  function emitTypes(tokens, sexpr = null) {
+  function emitTypes(tokens, sexpr = null, source = "") {
     let lines = [];
     let indentLevel = 0;
     let indentStr = "  ";
@@ -444,6 +444,9 @@
     let classFields = new Set;
     let usesSignal = false;
     let usesComputed = false;
+    let usesRipIntrinsicProps = false;
+    const sourceLines = typeof source === "string" ? source.split(`
+`) : [];
     for (let i = 0;i < tokens.length; i++) {
       const tag = tokens[i][0];
       if (tag === "REACTIVE_ASSIGN")
@@ -1021,7 +1024,7 @@
     }
     let componentVars = new Set;
     if (sexpr) {
-      emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars);
+      usesRipIntrinsicProps = emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars, sourceLines) || usesRipIntrinsicProps;
       if (componentVars.size > 0) {
         for (let k = lines.length - 1;k >= 0; k--) {
           let match = lines[k].match(/(?:declare |export )*(?:const|let) (\w+)/);
@@ -1033,6 +1036,13 @@
     if (lines.length === 0)
       return null;
     let preamble = [];
+    if (usesRipIntrinsicProps) {
+      preamble.push("type __RipElementMap = HTMLElementTagNameMap & Omit<SVGElementTagNameMap, keyof HTMLElementTagNameMap>;");
+      preamble.push("type __RipTag = keyof __RipElementMap;");
+      preamble.push("type __RipAttrKeys<T> = { [K in keyof T]-?: K extends 'style' ? never : T[K] extends (...args: any[]) => any ? never : K }[keyof T] & string;");
+      preamble.push("type __RipEvents = { [K in keyof HTMLElementEventMap as `@${K}`]?: ((event: HTMLElementEventMap[K]) => void) | null };");
+      preamble.push("type __RipProps<K extends __RipTag> = { [P in __RipAttrKeys<__RipElementMap[K]>]?: __RipElementMap[K][P] } & __RipEvents & { class?: string; style?: string; [k: `data-${string}`]: any; [k: `aria-${string}`]: any };");
+    }
     if (usesSignal) {
       preamble.push("interface Signal<T> { value: T; read(): T; lock(): Signal<T>; free(): Signal<T>; kill(): T; }");
       preamble.push("declare function __state<T>(value: T | Signal<T>): Signal<T>;");
@@ -1060,10 +1070,36 @@
     typeStr = typeStr.replace(/(\w+(?:<[^>]+>)?)\!/g, "NonNullable<$1>");
     return typeStr;
   }
-  function emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars) {
+  function findInheritedTagNearLine(sourceLines, line, componentName = null) {
+    if (!Array.isArray(sourceLines))
+      return null;
+    if (Number.isInteger(line)) {
+      const start = Math.max(0, line - 2);
+      const end = Math.min(sourceLines.length - 1, line + 2);
+      for (let i = start;i <= end; i++) {
+        const m = sourceLines[i]?.match(/#\s*@inherits\s+([A-Za-z][\w-]*)/);
+        if (m)
+          return m[1];
+      }
+    }
+    if (componentName) {
+      const escaped = componentName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const declRe = new RegExp(`\\b${escaped}\\b\\s*=\\s*component\\b`);
+      for (const lineText of sourceLines) {
+        if (!declRe.test(lineText))
+          continue;
+        const m = lineText.match(/#\s*@inherits\s+([A-Za-z][\w-]*)/);
+        if (m)
+          return m[1];
+      }
+    }
+    return null;
+  }
+  function emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars, sourceLines) {
     if (!Array.isArray(sexpr))
-      return;
+      return false;
     let head = sexpr[0]?.valueOf?.() ?? sexpr[0];
+    let usesIntrinsicProps = false;
     let exported = false;
     let name = null;
     let compNode = null;
@@ -1081,6 +1117,10 @@
     }
     if (name && compNode) {
       let exp = exported ? "export " : "";
+      let inheritsTag = findInheritedTagNearLine(sourceLines, compNode.loc?.r ?? sexpr.loc?.r, name);
+      let inheritedPropsType = inheritsTag ? `__RipProps<'${inheritsTag}'>` : null;
+      if (inheritedPropsType)
+        usesIntrinsicProps = true;
       let body = compNode[2];
       let members = Array.isArray(body) && (body[0]?.valueOf?.() ?? body[0]) === "block" ? body.slice(1) : body ? [body] : [];
       let publicProps = [];
@@ -1165,12 +1205,16 @@
         }
       }
       lines.push(`${exp}declare class ${name} {`);
-      if (publicProps.length > 0) {
+      if (publicProps.length > 0 || inheritedPropsType) {
         let propsOpt = hasRequired ? "" : "?";
-        lines.push(`  constructor(props${propsOpt}: {`);
-        for (let p of publicProps)
-          lines.push(p);
-        lines.push(`  });`);
+        if (publicProps.length > 0) {
+          lines.push(`  constructor(props${propsOpt}: {`);
+          for (let p of publicProps)
+            lines.push(p);
+          lines.push(inheritedPropsType ? `  } & ${inheritedPropsType});` : "  });");
+        } else {
+          lines.push(`  constructor(props${propsOpt}: ${inheritedPropsType});`);
+        }
       }
       for (let m of bodyMembers)
         lines.push(m);
@@ -1179,13 +1223,14 @@
     if (head === "program" || head === "block") {
       for (let i = 1;i < sexpr.length; i++) {
         if (Array.isArray(sexpr[i])) {
-          emitComponentTypes(sexpr[i], lines, indent, indentLevel, componentVars);
+          usesIntrinsicProps = emitComponentTypes(sexpr[i], lines, indent, indentLevel, componentVars, sourceLines) || usesIntrinsicProps;
         }
       }
     }
     if (head === "export" && Array.isArray(sexpr[1]) && !compNode) {
-      emitComponentTypes(sexpr[1], lines, indent, indentLevel, componentVars);
+      usesIntrinsicProps = emitComponentTypes(sexpr[1], lines, indent, indentLevel, componentVars, sourceLines) || usesIntrinsicProps;
     }
+    return usesIntrinsicProps;
   }
   function generateEnum(head, rest, context) {
     let [name, body] = rest;
@@ -3849,6 +3894,33 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       return target[2].type;
     return null;
   }
+  function findInheritedTagNearLine2(source, line, componentName = null) {
+    if (typeof source !== "string")
+      return null;
+    const lines = source.split(`
+`);
+    if (Number.isInteger(line)) {
+      const start = Math.max(0, line - 2);
+      const end = Math.min(lines.length - 1, line + 2);
+      for (let i = start;i <= end; i++) {
+        const m = lines[i]?.match(/#\s*@inherits\s+([A-Za-z][\w-]*)/);
+        if (m)
+          return m[1];
+      }
+    }
+    if (componentName) {
+      const escaped = componentName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const declRe = new RegExp(`\\b${escaped}\\b\\s*=\\s*component\\b`);
+      for (const lineText of lines) {
+        if (!declRe.test(lineText))
+          continue;
+        const m = lineText.match(/#\s*@inherits\s+([A-Za-z][\w-]*)/);
+        if (m)
+          return m[1];
+      }
+    }
+    return null;
+  }
   function installComponentSupport(CodeGenerator, Lexer2) {
     let meta = (node, key) => node instanceof String ? node[key] : undefined;
     const origClassify = Lexer2.prototype.classifyKeyword;
@@ -4359,12 +4431,22 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           autoEventHandlers.set(name[2].toLowerCase() + name.slice(3), name);
         }
       }
+      const inheritsTag = findInheritedTagNearLine2(this.options.source, sexpr?.loc?.r, this._componentName);
+      const publicPropNames = new Set;
+      for (const { name, isPublic } of stateVars)
+        if (isPublic)
+          publicPropNames.add(name);
+      for (const { name, isPublic } of readonlyVars)
+        if (isPublic)
+          publicPropNames.add(name);
       const prevComponentMembers = this.componentMembers;
       const prevReactiveMembers = this.reactiveMembers;
       const prevAutoEventHandlers = this._autoEventHandlers;
+      const prevInheritsTag = this._inheritsTag;
       this.componentMembers = memberNames;
       this.reactiveMembers = reactiveMembers;
       this._autoEventHandlers = autoEventHandlers.size > 0 ? autoEventHandlers : null;
+      this._inheritsTag = inheritsTag || null;
       if (this.options.stubComponents) {
         const expandType = (t) => t ? t.replace(/::/g, ":").replace(/(\w+(?:<[^>]+>)?)\?\?/g, "$1 | null | undefined").replace(/(\w+(?:<[^>]+>)?)\?(?![.:])/g, "$1 | undefined").replace(/(\w+(?:<[^>]+>)?)\!/g, "NonNullable<$1>") : null;
         const sl = [];
@@ -4387,7 +4469,9 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         {
           const hasRequired = propEntries.length > 0 && stateVars.some((v) => v.isPublic && v.required);
           const propsOpt = hasRequired ? "" : "?";
-          const propsType = propEntries.length > 0 ? `{${propEntries.join("; ")}}` : "{}";
+          let propsType = propEntries.length > 0 ? `{${propEntries.join("; ")}}` : "{}";
+          if (inheritsTag)
+            propsType += ` & __RipProps<'${inheritsTag}'>`;
           sl.push(`  constructor(props${propsOpt}: ${propsType}) {}`);
         }
         const inferLiteralType = (v) => {
@@ -4619,6 +4703,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         this.componentMembers = prevComponentMembers;
         this.reactiveMembers = prevReactiveMembers;
         this._autoEventHandlers = prevAutoEventHandlers;
+        this._inheritsTag = prevInheritsTag;
         return sl.join(`
 `);
       }
@@ -4646,6 +4731,17 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           lines.push(`    this.${name} = __state(${val});`);
         }
       }
+      if (inheritsTag) {
+        lines.push("    this._rest = {};");
+        lines.push("    for (const __k in props) {");
+        if (publicPropNames.size > 0) {
+          const checks = [...publicPropNames].map((name) => `__k !== '${name}'`).join(" && ");
+          lines.push(`      if (${checks} && !__k.startsWith('__bind_')) this._rest[__k] = props[__k];`);
+        } else {
+          lines.push("      if (!__k.startsWith('__bind_')) this._rest[__k] = props[__k];");
+        }
+        lines.push("    }");
+      }
       for (const { name, expr } of derivedVars) {
         if (this.is(expr, "block")) {
           const transformed = this.transformComponentMembers(expr);
@@ -4672,6 +4768,63 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         }
       }
       lines.push("  }");
+      if (inheritsTag) {
+        lines.push("  _setRestProp(key, value) {");
+        lines.push("    if (key.startsWith('__bind_')) return;");
+        lines.push("    this._rest || (this._rest = {});");
+        lines.push("    if (value == null) delete this._rest[key];");
+        lines.push("    else this._rest[key] = value;");
+        lines.push("    this._applyInheritedProp(this._inheritedEl, key, value);");
+        lines.push("  }");
+        lines.push("  _applyRestToInheritedEl() {");
+        lines.push("    if (!this._inheritedEl || !this._rest) return;");
+        lines.push("    for (const key in this._rest) this._applyInheritedProp(this._inheritedEl, key, this._rest[key]);");
+        lines.push("  }");
+        lines.push("  _applyInheritedProp(el, key, value) {");
+        lines.push("    if (!el || key === 'key' || key === 'ref' || key.startsWith('__bind_')) return;");
+        lines.push("    if (key[0] === '@') {");
+        lines.push("      const event = key.slice(1).split('.')[0];");
+        lines.push("      this._restHandlers || (this._restHandlers = {});");
+        lines.push("      const prev = this._restHandlers[key];");
+        lines.push("      if (prev) el.removeEventListener(event, prev);");
+        lines.push("      if (typeof value === 'function') {");
+        lines.push("        const next = (e) => __batch(() => value(e));");
+        lines.push("        this._restHandlers[key] = next;");
+        lines.push("        el.addEventListener(event, next);");
+        lines.push("      } else {");
+        lines.push("        delete this._restHandlers[key];");
+        lines.push("      }");
+        lines.push("      return;");
+        lines.push("    }");
+        lines.push("    if (key === 'class' || key === 'className') {");
+        lines.push("      if (el instanceof SVGElement) el.setAttribute('class', __clsx(value));");
+        lines.push("      else el.className = __clsx(value);");
+        lines.push("      return;");
+        lines.push("    }");
+        lines.push("    if (key === 'style') {");
+        lines.push("      if (value == null) { el.removeAttribute('style'); return; }");
+        lines.push("      if (typeof value === 'string') { el.setAttribute('style', value); return; }");
+        lines.push("      if (typeof value === 'object') { Object.assign(el.style, value); return; }");
+        lines.push("    }");
+        lines.push("    if (key === 'innerHTML' || key === 'textContent' || key === 'innerText') {");
+        lines.push("      el[key] = value ?? '';");
+        lines.push("      return;");
+        lines.push("    }");
+        lines.push("    if (key in el && !key.includes('-')) {");
+        lines.push("      el[key] = value;");
+        lines.push("      return;");
+        lines.push("    }");
+        lines.push("    if (value == null || value === false) {");
+        lines.push("      el.removeAttribute(key);");
+        lines.push("      return;");
+        lines.push("    }");
+        lines.push("    if (value === true) {");
+        lines.push("      el.setAttribute(key, '');");
+        lines.push("      return;");
+        lines.push("    }");
+        lines.push("    el.setAttribute(key, value);");
+        lines.push("  }");
+      }
       for (const { name, func } of methods) {
         if (Array.isArray(func) && (func[0] === "->" || func[0] === "=>")) {
           const [, params, methodBody] = func;
@@ -4720,6 +4873,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       this.componentMembers = prevComponentMembers;
       this.reactiveMembers = prevReactiveMembers;
       this._autoEventHandlers = prevAutoEventHandlers;
+      this._inheritsTag = prevInheritsTag;
       if (blockFactoriesCode) {
         return `(() => {
 ${blockFactoriesCode}return ${lines.join(`
@@ -4765,6 +4919,7 @@ ${blockFactoriesCode}return ${lines.join(`
       this._pendingAutoWire = false;
       this._autoWireEl = null;
       this._autoWireExplicit = null;
+      this._inheritsTargetBound = false;
       const statements = this.is(body, "block") ? body.slice(1) : [body];
       let rootVar;
       if (statements.length === 0) {
@@ -4848,6 +5003,7 @@ ${blockFactoriesCode}return ${lines.join(`
         }
         if (idStr)
           this._createLines.push(`${elVar}.id = '${idStr}';`);
+        this._bindInheritedTarget(actualTag, elVar);
         return elVar;
       }
       if (!Array.isArray(sexpr)) {
@@ -5000,6 +5156,15 @@ ${blockFactoriesCode}return ${lines.join(`
       this._autoWireEl = null;
       this._autoWireExplicit = null;
     };
+    proto._bindInheritedTarget = function(tag, elVar) {
+      if (!this._inheritsTag || this._factoryMode || this._inheritsTargetBound)
+        return;
+      if (tag !== this._inheritsTag)
+        return;
+      this._inheritsTargetBound = true;
+      this._createLines.push(`this._inheritedEl = ${elVar};`);
+      this._createLines.push("this._applyRestToInheritedEl();");
+    };
     proto.generateTag = function(tag, classes, args, id) {
       const elVar = this.newElementVar();
       const isSvg = SVG_TAGS.has(tag) || this._svgDepth > 0;
@@ -5011,6 +5176,7 @@ ${blockFactoriesCode}return ${lines.join(`
       if (id) {
         this._createLines.push(`${elVar}.id = '${id}';`);
       }
+      this._bindInheritedTarget(tag, elVar);
       if (this._componentName && this._elementCount === 1 && !this._factoryMode && !this.options.skipDataPart) {
         this._createLines.push(`${elVar}.setAttribute('data-part', '${this._componentName}');`);
       }
@@ -5056,6 +5222,7 @@ ${blockFactoriesCode}return ${lines.join(`
       }
       if (id)
         this._createLines.push(`${elVar}.id = '${id}';`);
+      this._bindInheritedTarget(tag, elVar);
       const autoWireClaimed = this._claimAutoWire(elVar);
       const classArgs = [...staticClassArgs || [], ...classExprs.map((e) => this.generateInComponent(e, "value"))];
       const prevClassArgs = this._pendingClassArgs;
@@ -5429,7 +5596,7 @@ ${blockFactoriesCode}return ${lines.join(`
       }
       this._setupLines.push(`try { if (${instVar}._setup) ${instVar}._setup(); if (${instVar}.mounted) ${instVar}.mounted(); } catch (__e) { __handleComponentError(__e, ${instVar}); }`);
       for (const { key, valueCode } of reactiveProps) {
-        this._pushEffect(`if (${instVar}.${key}) ${instVar}.${key}.value = ${valueCode};`);
+        this._pushEffect(`if (${instVar}.${key} && typeof ${instVar}.${key} === 'object' && 'value' in ${instVar}.${key}) ${instVar}.${key}.value = ${valueCode}; else if (${instVar}._setRestProp) ${instVar}._setRestProp('${key}', ${valueCode});`);
       }
       for (const line of childrenSetupLines) {
         this._setupLines.push(line);
@@ -9367,7 +9534,7 @@ if (typeof globalThis !== 'undefined') {
       }
       if (tokens.every((t) => t[0] === "TERMINATOR")) {
         if (typeTokens)
-          dts = emitTypes(typeTokens, ["program"]);
+          dts = emitTypes(typeTokens, ["program"], source);
         return { tokens, sexpr: ["program"], code: "", dts, data: dataSection, reactiveVars: {} };
       }
       parser.lexer = {
@@ -9409,6 +9576,7 @@ if (typeof globalThis !== 'undefined') {
       }
       let generator = new CodeGenerator({
         dataSection,
+        source,
         skipPreamble: this.options.skipPreamble,
         skipRuntimes: this.options.skipRuntimes,
         skipExports: this.options.skipExports,
@@ -9430,7 +9598,7 @@ if (typeof globalThis !== 'undefined') {
 //# sourceMappingURL=${this.options.filename}.js.map`;
       }
       if (typeTokens) {
-        dts = emitTypes(typeTokens, sexpr);
+        dts = emitTypes(typeTokens, sexpr, source);
       }
       return { tokens, sexpr, code, dts, map, reverseMap, data: dataSection, reactiveVars: generator.reactiveVars };
     }
@@ -9472,8 +9640,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeGenerator({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.13.109";
-  var BUILD_DATE = "2026-03-14@08:22:53GMT";
+  var VERSION = "3.13.110";
+  var BUILD_DATE = "2026-03-14@09:05:54GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

@@ -24,6 +24,18 @@ export Input = component
       if error
         div error
 
+export InheritedInput = component # @inherits input
+  @label:: string := ""
+  @error:: string := ""
+
+  render
+    fieldset
+      if label
+        label label
+      input
+      if error
+        div error
+
 export Button = component
   @variant:: "primary" | "secondary"
   @type:: "submit" | "reset" | "button" := "button"
@@ -90,6 +102,9 @@ export PropTypeTests = component
       Button variant: "primary", disabled: "yes"
       # @ts-expect-error — wrong type for label
       Input label: 123
+      InheritedInput label: "Email", autofocus: true, maxLength: 100
+      # @ts-expect-error — autofocus expects boolean
+      InheritedInput autofocus: "yes"
 
 # ── Two-way binding type safety ──
 #

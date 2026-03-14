@@ -101,7 +101,7 @@ export function collectUsageProps(srcLines, lineIndex, componentDefs) {
 }
 
 // Parse component definitions from a DTS string.
-// Returns Map<name, { props: [{ name, type, required }] }>.
+// Returns Map<name, { props: [{ name, type, required }], hasIntrinsicProps?: boolean }>.
 export function parseComponentDTS(dtsString) {
   const result = new Map();
   if (!dtsString) return result;
@@ -112,13 +112,17 @@ export function parseComponentDTS(dtsString) {
     if (!cm) { i++; continue; }
     const name = cm[1];
     const props = [];
+    let hasIntrinsicProps = false;
     let j = i + 1;
     while (j < lines.length) {
       if (/^\}/.test(lines[j])) break;
       if (/constructor\(props\??/.test(lines[j])) {
+        if (lines[j].includes('__RipProps<')) hasIntrinsicProps = true;
+        if (!lines[j].includes('{')) { j++; continue; }
         j++;
         while (j < lines.length) {
-          if (/^\s*\}\);/.test(lines[j])) { j++; break; }
+          if (lines[j].includes('__RipProps<')) hasIntrinsicProps = true;
+          if (/^\s*\}\s*(?:&\s*.+)?\);\s*$/.test(lines[j])) { j++; break; }
           const pm = lines[j].match(/^\s+(\w+)(\?)?\s*:\s*(.+);$/);
           if (pm) props.push({ name: pm[1], type: pm[3].trim(), required: !pm[2] });
           j++;
@@ -127,7 +131,7 @@ export function parseComponentDTS(dtsString) {
       }
       j++;
     }
-    if (props.length) result.set(name, { props });
+    if (props.length || hasIntrinsicProps) result.set(name, { props, hasIntrinsicProps });
     i = Math.max(i + 1, j);
   }
   return result;
@@ -693,7 +697,7 @@ export function compileForCheck(filePath, source, compiler) {
   // Inject intrinsic element type declarations for render block type-checking.
   // Uses TypeScript's built-in DOM types (HTMLElementTagNameMap, etc.) as the
   // source of truth for tag names, attribute types, and event handler types.
-  if (hasTypes && /\b__ripEl\b/.test(code)) {
+  if (hasTypes && (/\b__ripEl\b/.test(code) || /\b__RipProps\b/.test(headerDts))) {
     const intrinsicDecls = [
       'type __RipElementMap = HTMLElementTagNameMap & Omit<SVGElementTagNameMap, keyof HTMLElementTagNameMap>;',
       'type __RipTag = keyof __RipElementMap;',
@@ -1124,8 +1128,8 @@ export async function runCheck(targetDir, opts = {}) {
       if (!entry.dts) continue;
       const fileDefs = new Map();
       for (const [name, info] of parseComponentDTS(entry.dts)) {
-        globalDefs.set(name, info.props);
-        fileDefs.set(name, info.props);
+        globalDefs.set(name, info);
+        fileDefs.set(name, info);
       }
       localDefs.set(fp, fileDefs);
     }
@@ -1144,16 +1148,19 @@ export async function runCheck(targetDir, opts = {}) {
           const usage = collectUsageProps(srcLines, s, fileDefs);
           if (!usage) continue;
           const { component: compName, usedProps } = usage;
-          const props = fileDefs.get(compName);
+          const def = fileDefs.get(compName);
+          const props = def?.props || [];
 
           // Unknown props
-          for (const used of usedProps) {
-            if (used.startsWith('@')) continue;
-            if (used === 'class' || used === 'style') continue;
-            if (!props.some(p => p.name === used)) {
-              const col = srcLines[s].indexOf(used);
-              errors.push({ line: s + 1, col: col + 1, len: used.length, message: `Unknown prop '${used}' on component ${compName}`, severity: 'error', code: 'rip', srcLine: srcLines[s], related: [] });
-              totalErrors++;
+          if (!def?.hasIntrinsicProps) {
+            for (const used of usedProps) {
+              if (used.startsWith('@')) continue;
+              if (used === 'class' || used === 'style') continue;
+              if (!props.some(p => p.name === used)) {
+                const col = srcLines[s].indexOf(used);
+                errors.push({ line: s + 1, col: col + 1, len: used.length, message: `Unknown prop '${used}' on component ${compName}`, severity: 'error', code: 'rip', srcLine: srcLines[s], related: [] });
+                totalErrors++;
+              }
             }
           }
 

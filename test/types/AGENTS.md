@@ -93,7 +93,6 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Category                    | Tested In     | Notes                                                                                                                                                |
 | --------------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Shared state typing (stash) | 09-components | Stash is untyped — any path/value accepted; zustand equivalent is fully typed (see .tsx)                                                             |
-| Element type inheritance    | 09-components | No way to inherit HTML element's full type surface; wrappers must declare each prop manually                                                         |
 | Generic components          | 09-components | Can't parameterize components by type (e.g. typed select where value type flows through props)                                                       |
 
 **IDE-only gaps** (require VS Code extension changes, not testable in audit files):
@@ -138,6 +137,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | `void` return annotation   | 06-functions   | `def fn!` emits `: void` in .d.ts; `!` sigil suppresses implicit return and declares void return type                                  |
 | Cross-file type flow       | 07-integration | Via .d.ts; untyped files get `@ts-nocheck`; unresolved `.rip` imports flagged                                                          |
 | Component prop types       | 09-components  | Enriched stub gives Signal<T>/Computed<T> declarations; TS checks computeds, methods, and render block intrinsic elements              |
+| Element type inheritance   | 09-components  | `# @inherits tag` widens constructor props with `__RipProps<'tag'>`; runtime forwards unknown props to first matching tag             |
 | Intrinsic element typing   | 12-intrinsics  | `__ripEl` emits typed helper calls; lib.dom source of truth for tags, attrs, events, global attrs                                      |
 | Required component props   | 09-components  | `@prop:: T` (no `:=`) — required in constructor, caught at usage sites                                                                 |
 | Prop default validation    | 09-components  | `@prop:: T := val` — validates default against declared type; squiggle on prop name                                                    |

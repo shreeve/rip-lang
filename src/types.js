@@ -483,7 +483,7 @@ function collectBlockUnion(tokens, startIdx) {
 // emitTypes — generate .d.ts from annotated tokens + s-expression tree
 // ============================================================================
 
-export function emitTypes(tokens, sexpr = null) {
+export function emitTypes(tokens, sexpr = null, source = '') {
   let lines = [];
   let indentLevel = 0;
   let indentStr = '  ';
@@ -492,6 +492,8 @@ export function emitTypes(tokens, sexpr = null) {
   let classFields = new Set(); // Track emitted field names to avoid duplicates
   let usesSignal = false;
   let usesComputed = false;
+  let usesRipIntrinsicProps = false;
+  const sourceLines = typeof source === 'string' ? source.split('\n') : [];
 
   // Pre-scan: detect reactive operators regardless of type annotations.
   // This ensures the DTS preamble declares __state/__computed/__effect
@@ -1125,7 +1127,7 @@ export function emitTypes(tokens, sexpr = null) {
   // Walk s-expression tree for component declarations
   let componentVars = new Set();
   if (sexpr) {
-    emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars);
+    usesRipIntrinsicProps = emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars, sourceLines) || usesRipIntrinsicProps;
 
     // Remove lines for variables that belong to components (emitted as class members)
     if (componentVars.size > 0) {
@@ -1140,6 +1142,13 @@ export function emitTypes(tokens, sexpr = null) {
 
   // Prepend reactive type definitions if used
   let preamble = [];
+  if (usesRipIntrinsicProps) {
+    preamble.push('type __RipElementMap = HTMLElementTagNameMap & Omit<SVGElementTagNameMap, keyof HTMLElementTagNameMap>;');
+    preamble.push('type __RipTag = keyof __RipElementMap;');
+    preamble.push("type __RipAttrKeys<T> = { [K in keyof T]-?: K extends 'style' ? never : T[K] extends (...args: any[]) => any ? never : K }[keyof T] & string;");
+    preamble.push('type __RipEvents = { [K in keyof HTMLElementEventMap as `@${K}`]?: ((event: HTMLElementEventMap[K]) => void) | null };');
+    preamble.push('type __RipProps<K extends __RipTag> = { [P in __RipAttrKeys<__RipElementMap[K]>]?: __RipElementMap[K][P] } & __RipEvents & { class?: string; style?: string; [k: `data-${string}`]: any; [k: `aria-${string}`]: any };');
+  }
   if (usesSignal) {
     preamble.push('interface Signal<T> { value: T; read(): T; lock(): Signal<T>; free(): Signal<T>; kill(): T; }');
     preamble.push('declare function __state<T>(value: T | Signal<T>): Signal<T>;');
@@ -1180,13 +1189,36 @@ function expandSuffixes(typeStr) {
   return typeStr;
 }
 
+function findInheritedTagNearLine(sourceLines, line, componentName = null) {
+  if (!Array.isArray(sourceLines)) return null;
+  if (Number.isInteger(line)) {
+    const start = Math.max(0, line - 2);
+    const end = Math.min(sourceLines.length - 1, line + 2);
+    for (let i = start; i <= end; i++) {
+      const m = sourceLines[i]?.match(/#\s*@inherits\s+([A-Za-z][\w-]*)/);
+      if (m) return m[1];
+    }
+  }
+  if (componentName) {
+    const escaped = componentName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const declRe = new RegExp(`\\b${escaped}\\b\\s*=\\s*component\\b`);
+    for (const lineText of sourceLines) {
+      if (!declRe.test(lineText)) continue;
+      const m = lineText.match(/#\s*@inherits\s+([A-Za-z][\w-]*)/);
+      if (m) return m[1];
+    }
+  }
+  return null;
+}
+
 // ============================================================================
 // Component type emission — walk s-expression for component declarations
 // ============================================================================
 
-function emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars) {
-  if (!Array.isArray(sexpr)) return;
+function emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars, sourceLines) {
+  if (!Array.isArray(sexpr)) return false;
   let head = sexpr[0]?.valueOf?.() ?? sexpr[0];
+  let usesIntrinsicProps = false;
 
   // export Name = component ... → ["export", ["=", "Name", ["component", ...members]]]
   // Name = component ...       → ["=", "Name", ["component", ...members]]
@@ -1211,6 +1243,9 @@ function emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars) {
 
   if (name && compNode) {
     let exp = exported ? 'export ' : '';
+    let inheritsTag = findInheritedTagNearLine(sourceLines, compNode.loc?.r ?? sexpr.loc?.r, name);
+    let inheritedPropsType = inheritsTag ? `__RipProps<'${inheritsTag}'>` : null;
+    if (inheritedPropsType) usesIntrinsicProps = true;
 
     // Component structure: ["component", parent, ["block", ...members]]
     let body = compNode[2];
@@ -1295,11 +1330,15 @@ function emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars) {
     }
 
     lines.push(`${exp}declare class ${name} {`);
-    if (publicProps.length > 0) {
+    if (publicProps.length > 0 || inheritedPropsType) {
       let propsOpt = hasRequired ? '' : '?';
-      lines.push(`  constructor(props${propsOpt}: {`);
-      for (let p of publicProps) lines.push(p);
-      lines.push(`  });`);
+      if (publicProps.length > 0) {
+        lines.push(`  constructor(props${propsOpt}: {`);
+        for (let p of publicProps) lines.push(p);
+        lines.push(inheritedPropsType ? `  } & ${inheritedPropsType});` : '  });');
+      } else {
+        lines.push(`  constructor(props${propsOpt}: ${inheritedPropsType});`);
+      }
     }
     for (let m of bodyMembers) lines.push(m);
     lines.push(`}`);
@@ -1309,14 +1348,16 @@ function emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars) {
   if (head === 'program' || head === 'block') {
     for (let i = 1; i < sexpr.length; i++) {
       if (Array.isArray(sexpr[i])) {
-        emitComponentTypes(sexpr[i], lines, indent, indentLevel, componentVars);
+        usesIntrinsicProps = emitComponentTypes(sexpr[i], lines, indent, indentLevel, componentVars, sourceLines) || usesIntrinsicProps;
       }
     }
   }
   // Also check inside export wrappers
   if (head === 'export' && Array.isArray(sexpr[1]) && !compNode) {
-    emitComponentTypes(sexpr[1], lines, indent, indentLevel, componentVars);
+    usesIntrinsicProps = emitComponentTypes(sexpr[1], lines, indent, indentLevel, componentVars, sourceLines) || usesIntrinsicProps;
   }
+
+  return usesIntrinsicProps;
 }
 
 // ============================================================================
