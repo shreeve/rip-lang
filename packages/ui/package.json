@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/ui",
-  "version": "0.3.58",
+  "version": "0.3.59",
   "author": "Steve Shreeve <steve.shreeve@gmail.com>",
   "repository": {
     "type": "git",
@@ -41,7 +41,7 @@
     "test:e2e:axe": "UI_AXE=1 bunx playwright test -c playwright.config.mjs --project=chromium"
   },
   "dependencies": {
-    "rip-lang": ">=3.13.111"
+    "rip-lang": ">=3.13.112"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.11.1",

@@ -4483,10 +4483,59 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           }
         }
         sl.push("  }");
+        const eventMethodTypes = new Map;
+        if (renderBlock) {
+          const scanEvents = (node) => {
+            if (!Array.isArray(node))
+              return;
+            const head2 = node[0]?.valueOf?.() ?? node[0];
+            if (typeof head2 === "string" && head2 !== "object" && head2 !== "switch" && TEMPLATE_TAGS.has(head2.split(/[.#]/)[0])) {
+              for (let i = 1;i < node.length; i++) {
+                const arg = node[i];
+                let obj = this.is(arg, "object") ? arg : null;
+                if (!obj && Array.isArray(arg) && (arg[0] === "->" || arg[0] === "=>") && this.is(arg[2], "block")) {
+                  for (let k = 1;k < arg[2].length; k++) {
+                    if (this.is(arg[2][k], "object")) {
+                      obj = arg[2][k];
+                      break;
+                    }
+                  }
+                }
+                if (!obj)
+                  continue;
+                for (let j = 1;j < obj.length; j++) {
+                  const pair = obj[j];
+                  if (!Array.isArray(pair) || pair.length < 2)
+                    continue;
+                  const [key, value] = pair;
+                  if (Array.isArray(key) && key[0] === "." && key[1] === "this" && Array.isArray(value) && value[0] === "." && value[1] === "this") {
+                    const eventName = typeof key[2] === "string" ? key[2] : key[2]?.valueOf?.();
+                    const methodName = typeof value[2] === "string" ? value[2] : value[2]?.valueOf?.();
+                    if (eventName && methodName && !eventMethodTypes.has(methodName)) {
+                      eventMethodTypes.set(methodName, eventName);
+                    }
+                  }
+                }
+              }
+            }
+            for (let i = 1;i < node.length; i++)
+              scanEvents(node[i]);
+          };
+          scanEvents(renderBlock);
+        }
         for (const { name, func } of methods) {
           if (Array.isArray(func) && (func[0] === "->" || func[0] === "=>")) {
             const [, params, methodBody] = func;
-            const paramStr = Array.isArray(params) ? params.map((p) => this.formatParam(p)).join(", ") : "";
+            let paramStr = Array.isArray(params) ? params.map((p) => this.formatParam(p)).join(", ") : "";
+            const boundEvent = eventMethodTypes.get(name);
+            if (boundEvent && Array.isArray(params) && params.length > 0) {
+              const firstParam = params[0];
+              const hasType = firstParam?.type || firstParam instanceof String && firstParam.type;
+              if (!hasType && typeof (firstParam?.valueOf?.() ?? firstParam) === "string") {
+                const paramName = firstParam?.valueOf?.() ?? firstParam;
+                paramStr = paramStr.replace(paramName, `${paramName}: HTMLElementEventMap['${boundEvent}']`);
+              }
+            }
             const transformed = this.reactiveMembers ? this.transformComponentMembers(methodBody) : methodBody;
             const isAsync = this.containsAwait(methodBody);
             const bodyCode = this.generateFunctionBody(transformed, params || []);
@@ -9590,8 +9639,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeGenerator({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.13.111";
-  var BUILD_DATE = "2026-03-14@09:52:11GMT";
+  var VERSION = "3.13.112";
+  var BUILD_DATE = "2026-03-14@10:01:55GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
