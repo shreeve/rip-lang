@@ -87,8 +87,6 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | -------------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Event handler typing             | 09, 12-intrinsics     | Inline handlers typed via `__RipEvents`; named method refs (`@submit: @handler`) remain `any` — use `(e:: SubmitEvent) ->` to annotate explicitly   |
 | Runtime return-type validation   | 10-validation         | Return types are erased — `response.json()` is unvalidated `any`; no `schema.parse()` equivalent                                                     |
-| Type narrowing (control flow)    | 04-unions *(comment)* | TS narrows compiled JS, not Rip source                                                                                                               |
-| Enum exhaustiveness              | 04-unions             | Switch narrowing works in .ts but `rip check` doesn't verify exhaustiveness                                                                          |
 
 **Component model gaps** (would need language-level changes):
 
@@ -116,7 +114,6 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Nullable safety               | 01-basic      | `strict: true` is on; full null checking active                                                                          |
 | Readonly / immutability       | 03-structural | `=!` → const; deep readonly not checked                                                                                  |
 | Generic types                 | 03-structural | Declarable; .d.ts emission has some gaps                                                                                 |
-| Discriminated union narrowing | 04-unions     | Types declarable, narrowing doesn't flow in `rip check`                                                                  |
 | Render block type safety      | 09, 12        | Intrinsic tag/attr/event checking via `__ripEl`; conditionals and text expressions still unchecked                       |
 | Type inference (split decl.)  | 11-inference  | Top-level `x = expr` inferred via `patchUninitializedTypes`; block-scoped and destructured now caught by strict mode     |
 
@@ -128,6 +125,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Object shape checking      | 03-structural  | Missing fields, extra fields                                                                                                           |
 | Property access checking   | 03-structural  | Typos, nonexistent fields                                                                                                              |
 | Union value checking       | 04-unions      | Literal unions validated                                                                                                               |
+| Union narrowing + exhaust. | 04-unions      | Discriminated union narrowing and switch exhaustiveness both work via strict mode                                                       |
 | Function argument types    | 06-functions   | Same-file typed functions                                                                                                              |
 | Function return types      | 06-functions   | Same-file typed functions                                                                                                              |
 | Optional param `?`         | 06-functions   | `y?:: T` emits `y?: T` in .d.ts                                                                                                        |
