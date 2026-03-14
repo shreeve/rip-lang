@@ -20,7 +20,6 @@ type LogLevel =
   | "fatal"
 
 # Discriminated unions — named variants composed into a union
-# (inline object syntax produces malformed .d.ts, so use named types)
 type Circle =
   kind: "circle"
   radius: number

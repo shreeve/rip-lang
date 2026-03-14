@@ -91,7 +91,6 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Type narrowing (control flow)    | 04-unions *(comment)* | TS narrows compiled JS, not Rip source                                                                                                               |
 | Unresolved import paths          | 07-integration        | `rip check` doesn't flag imports to nonexistent files                                                                                                |
 | Enum exhaustiveness              | 04-unions             | Switch narrowing works in .ts but `rip check` doesn't verify exhaustiveness                                                                          |
-| Inline discriminated union .d.ts | 04-unions *(comment)* | `type Shape \| { kind: "circle" } \| { ... }` emits malformed .d.ts; split into named types as workaround                                            |
 
 **Component model gaps** (would need language-level changes):
 
@@ -151,6 +150,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Async/await unwrapping     | 10-validation  | `!` compiles to `await`; return types inferred or explicit; `Promise<T>` → `T`                                                         |
 | Hover types                | *(IDE only)*   | Column-aware source maps, overload preference, typed implementation params                                                             |
 | Union value autocomplete   | *(IDE only)*   | String literal union completions for prop values, prop defaults, and typed variable assignments                                        |
+| Inline discriminated unions | 04-unions      | Inline `{ ... } \| { ... }` union types now emit valid .d.ts (previously mangled by multi-line formatting)                            |
 | Unused variable dimming    | *(IDE only)*   | Forwards `DiagnosticTag.Unnecessary` and `DiagnosticTag.Deprecated` from TS diagnostics; unused vars dimmed, deprecated strikethrough |
 | Semantic token provider    | *(IDE only)*   | Bridges TS `getEncodedSemanticClassifications()` to Rip source; typed files get semantic tokens, reactive vars not marked readonly     |
 

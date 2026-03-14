@@ -502,17 +502,25 @@ export function emitTypes(tokens, sexpr = null) {
     else if (tag === 'COMPUTED_ASSIGN') usesComputed = true;
   }
 
-  // Format { prop; prop } into multi-line block
+  // Format { prop; prop } into multi-line block.  Only applies when the
+  // body is a single { ... } object — not a union like { ... } | { ... }.
   let emitBlock = (prefix, body, suffix) => {
     if (body.startsWith('{ ') && body.endsWith(' }')) {
-      let props = body.slice(2, -2).split('; ').filter(p => p.trim());
-      if (props.length > 0) {
-        lines.push(`${indent()}${prefix}{`);
-        indentLevel++;
-        for (let prop of props) lines.push(`${indent()}${prop};`);
-        indentLevel--;
-        lines.push(`${indent()}}${suffix}`);
-        return;
+      let depth = 0, firstTopClose = -1;
+      for (let c = 0; c < body.length; c++) {
+        if (body[c] === '{') depth++;
+        else if (body[c] === '}') { depth--; if (depth === 0) { firstTopClose = c; break; } }
+      }
+      if (firstTopClose === body.length - 1) {
+        let props = body.slice(2, -2).split('; ').filter(p => p.trim());
+        if (props.length > 0) {
+          lines.push(`${indent()}${prefix}{`);
+          indentLevel++;
+          for (let prop of props) lines.push(`${indent()}${prop};`);
+          indentLevel--;
+          lines.push(`${indent()}}${suffix}`);
+          return;
+        }
       }
     }
     lines.push(`${indent()}${prefix}${body}${suffix}`);
