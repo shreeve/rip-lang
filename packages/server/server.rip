@@ -533,7 +533,7 @@ class Manager
       if budget.count > MAX_RESTART_COUNT
         logEvent('worker_abandon', { workerId: w.id, slot: slotIdx, restarts: budget.count })
         return
-      @server?.metrics?.workerRestarts++
+      @server?.metrics and @server.metrics.workerRestarts++
       logEvent('worker_restart', { workerId: w.id, slot: slotIdx, attempt: budget.count, backoffMs: budget.backoffMs })
       setTimeout =>
         workers[slotIdx] = @spawnWorker(@currentVersion) if slotIdx < workers.length
