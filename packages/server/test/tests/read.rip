@@ -251,4 +251,4 @@ t "required w/ miss()"      , undefined, 'ok' -> read 'v', 'email!', -> 'ok'
 # ==============================================================================
 
 console.log "\n#{passed} passed, #{failed} failed (#{total} total)"
-process.exit(if failed > 0 then 1 else 0)
+exit if failed > 0 then 1 else 0
