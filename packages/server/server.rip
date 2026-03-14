@@ -375,7 +375,7 @@ parseFlags = (argv) ->
 
 class Manager
   constructor: (@flags) ->
-    @workers = []
+    @appWorkers = new Map()
     @shuttingDown = false
     @lastCheck = 0
     @currentMtime = 0
@@ -387,6 +387,13 @@ class Manager
     @server = null
     @dbUrl = null
     @appWatchers = new Map()
+    @defaultAppId = @flags.appName
+
+  getWorkers: (appId) ->
+    appId = appId or @defaultAppId
+    unless @appWorkers.has(appId)
+      @appWorkers.set(appId, [])
+    @appWorkers.get(appId)
 
   start: ->
     @stop!
@@ -418,10 +425,11 @@ class Manager
         console.error "rip-server: setup exited with code #{code}"
         process.exit(1)
 
-    @workers = []
+    workers = @getWorkers()
+    workers.length = 0
     for i in [0...@flags.workers]
       w = @spawnWorker!(@currentVersion)
-      @workers.push(w)
+      workers.push(w)
 
     if @flags.reload
       @currentMtime = @getEntryMtime()
@@ -463,10 +471,11 @@ class Manager
           console.warn "rip-server: directory watch failed: #{e.message}"
 
   stop: ->
-    for w in @workers
-      try w.process.kill()
-      try unlinkSync(w.socketPath)
-    @workers = []
+    for [appId, workers] as @appWorkers
+      for w in workers
+        try w.process.kill()
+        try unlinkSync(w.socketPath)
+    @appWorkers.clear()
 
   watchDirs: (prefix, dirs) ->
     registerAppWatchDirs(@appWatchers, prefix, dirs, @server, (-> process.cwd()))
@@ -490,21 +499,23 @@ class Manager
       w.backoffMs = Math.min(w.backoffMs * 2, MAX_BACKOFF_MS)
       return if w.restartCount > MAX_RESTART_COUNT
       setTimeout =>
-        idx = @workers.findIndex((x) -> x.id is w.id)
-        @workers[idx] = @spawnWorker(@currentVersion) if idx >= 0
+        workers = @getWorkers()
+        idx = workers.findIndex((x) -> x.id is w.id)
+        workers[idx] = @spawnWorker(@currentVersion) if idx >= 0
       , w.backoffMs
 
   waitWorkerReady: (socketPath, timeoutMs = 5000) ->
     waitForWorkerReady(socketPath, timeoutMs)
 
   rollingRestart: ->
-    olds = [...@workers]
+    workers = @getWorkers()
+    olds = [...workers]
     pairs = []
     @currentVersion++
 
     for oldWorker in olds
       replacement = @spawnWorker!(@currentVersion)
-      @workers.push(replacement)
+      workers.push(replacement)
       pairs.push({ old: oldWorker, replacement })
 
     # Wait for all replacements and check readiness
@@ -518,7 +529,8 @@ class Manager
       for pair, i in pairs
         unless readyResults[i]
           try pair.replacement.process.kill()
-          @workers = @workers.filter((w) -> w.id isnt pair.replacement.id)
+          idx = workers.indexOf(pair.replacement)
+          workers.splice(idx, 1) if idx >= 0
       return
 
     # All ready - retire old workers
@@ -533,7 +545,9 @@ class Manager
       postWorkerQuit(@flags.socketPrefix, old.id)
 
     retiring = new Set(pairs.map((p) -> p.old.id))
-    @workers = @workers.filter((w) -> not retiring.has(w.id))
+    filtered = workers.filter((w) -> not retiring.has(w.id))
+    workers.length = 0
+    workers.push(...filtered)
     @retiringIds.delete(id) for id as retiring
 
   shutdown: ->
