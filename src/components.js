@@ -489,12 +489,14 @@ export function installComponentSupport(CodeGenerator, Lexer) {
           }
         }
 
+        let atLineStart = tag === 'IDENTIFIER' && (prevTag === 'INDENT' || prevTag === 'TERMINATOR' || prevTag === 'RENDER');
+
         if (isClsxCallEnd) {
           isTemplateElement = true;
         } else if (tag === 'IDENTIFIER' && isTemplateTag(token[1]) && !isAfterControlFlow) {
           isTemplateElement = true;
         } else if (tag === 'IDENTIFIER' && !isAfterControlFlow) {
-          isTemplateElement = startsWithTag(tokens, i);
+          isTemplateElement = atLineStart || startsWithTag(tokens, i);
         } else if (tag === 'PROPERTY' || tag === 'STRING' || tag === 'STRING_END' || tag === 'NUMBER' || tag === 'BOOL' || tag === 'CALL_END' || tag === ')' || tag === 'PRESENCE') {
           isTemplateElement = startsWithTag(tokens, i);
         }
@@ -513,7 +515,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
               }
             }
           }
-          let isBareTag = isClsxCallEnd || (tag === 'IDENTIFIER' && isTemplateTag(token[1])) || isClassOrIdTail;
+          let isBareTag = isClsxCallEnd || (tag === 'IDENTIFIER' && (isTemplateTag(token[1]) || atLineStart)) || isClassOrIdTail;
 
           if (isBareTag) {
             let callStartToken = gen('CALL_START', '(', token);
@@ -1063,7 +1065,8 @@ export function installComponentSupport(CodeGenerator, Lexer) {
                 constructions.push(`    };`);
               }
             }
-          } else if (typeof head === 'string' && head !== 'object' && head !== 'switch' && TEMPLATE_TAGS.has(head.split(/[.#]/)[0])) {
+          } else if (typeof head === 'string' && head !== 'object' && head !== 'switch' && (TEMPLATE_TAGS.has(head.split(/[.#]/)[0]) ||
+                     (/^[a-z]/.test(head) && node.length > 1 && Array.isArray(node[1]) && (node[1][0] === '->' || node[1][0] === '=>')))) {
             const tagName = head.split(/[.#]/)[0];
             const iProps = extractIntrinsicProps(node.slice(1));
             const tagLine = node.loc?.r;
