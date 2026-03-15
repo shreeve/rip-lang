@@ -3,7 +3,7 @@
 // TSX equivalent of 12-intrinsics.rip: tag validation, attribute types,
 // event handlers, and global attributes.
 
-import React, { useState } from 'react'
+import { useState } from 'react'
 
 // ── Valid HTML/SVG tags ──
 
