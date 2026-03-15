@@ -29,6 +29,27 @@ test "resolveHost returns null for unknown host", ->
   r = createAppRegistry()
   eq resolveHost(r, 'unknown.com'), null
 
+test "resolveHost matches wildcard host", ->
+  r = createAppRegistry()
+  registerApp(r, 'wild', { hosts: ['*.example.com'] })
+  eq resolveHost(r, 'api.example.com'), 'wild'
+
+test "resolveHost wildcard does not span multiple labels", ->
+  r = createAppRegistry()
+  registerApp(r, 'wild', { hosts: ['*.example.com'] })
+  eq resolveHost(r, 'a.b.example.com'), null
+
+test "resolveHost falls back to catchall host", ->
+  r = createAppRegistry()
+  registerApp(r, 'catchall', { hosts: ['*'] })
+  eq resolveHost(r, 'unknown.com'), 'catchall'
+
+test "resolveHost prefers exact host over wildcard", ->
+  r = createAppRegistry()
+  registerApp(r, 'wild', { hosts: ['*.example.com'] })
+  registerApp(r, 'exact', { hosts: ['api.example.com'] })
+  eq resolveHost(r, 'api.example.com'), 'exact'
+
 test "getAppState returns app or null", ->
   r = createAppRegistry()
   registerApp(r, 'app1', { hosts: [] })
@@ -42,6 +63,12 @@ test "removeApp cleans up hosts and app", ->
   eq r.apps.size, 0
   eq r.hostIndex.size, 0
   eq resolveHost(r, 'a.com'), null
+
+test "removeApp cleans wildcard entries", ->
+  r = createAppRegistry()
+  registerApp(r, 'wild', { hosts: ['*.example.com'] })
+  removeApp(r, 'wild')
+  eq resolveHost(r, 'api.example.com'), null
 
 test "AppState has correct defaults", ->
   r = createAppRegistry()

@@ -1,0 +1,73 @@
+# ==============================================================================
+# edge/verify.rip — edge runtime verification helpers
+# ==============================================================================
+
+export buildVerificationResult = (ok, code = null, message = null, details = null) ->
+  { ok, code, message, details }
+
+defaultPolicy =
+  requireHealthyUpstreams: true
+  requireReadyApps: true
+  includeUnroutedManagedApps: true
+  minHealthyTargetsPerUpstream: 1
+
+mergePolicy = (policy = {}) ->
+  requireHealthyUpstreams: if policy.requireHealthyUpstreams? then policy.requireHealthyUpstreams is true else defaultPolicy.requireHealthyUpstreams
+  requireReadyApps: if policy.requireReadyApps? then policy.requireReadyApps is true else defaultPolicy.requireReadyApps
+  includeUnroutedManagedApps: if policy.includeUnroutedManagedApps? then policy.includeUnroutedManagedApps is true else defaultPolicy.includeUnroutedManagedApps
+  minHealthyTargetsPerUpstream: Math.max(1, parseInt(String(policy.minHealthyTargetsPerUpstream or defaultPolicy.minHealthyTargetsPerUpstream)) or 1)
+
+export collectRouteRequirements = (routeTable, appRegistry = null, defaultAppId = null, policy = {}) ->
+  policy = mergePolicy(policy)
+  upstreamIds = new Set()
+  appIds = new Set()
+
+  for route in (routeTable?.routes or [])
+    upstreamIds.add(route.upstream) if route.upstream
+    appIds.add(route.app) if route.app
+
+  if appRegistry and policy.includeUnroutedManagedApps
+    for [appId, app] as appRegistry.apps
+      continue if appId is defaultAppId
+      continue unless app?.config?.entry
+      appIds.add(appId)
+
+  {
+    upstreamIds: Array.from(upstreamIds)
+    appIds: Array.from(appIds)
+  }
+
+export verifyRouteRuntime = (runtime, appRegistry, defaultAppId, getUpstreamFn, checkTargetHealthFn, getAppStateFn, policy = {}) ->
+  policy = mergePolicy(policy)
+  requirements = collectRouteRequirements(runtime?.routeTable, appRegistry, defaultAppId, policy)
+
+  if policy.requireHealthyUpstreams
+    for upstreamId in requirements.upstreamIds
+      upstream = getUpstreamFn(runtime.upstreamPool, upstreamId)
+      return buildVerificationResult(false, 'upstream_missing', "Referenced upstream #{upstreamId} is missing", { upstreamId }) unless upstream
+
+      healthyTargets = []
+      for target in upstream.targets
+        healthyTargets.push(target.targetId) if checkTargetHealthFn(runtime.upstreamPool, target)
+
+      unless healthyTargets.length >= policy.minHealthyTargetsPerUpstream
+        return buildVerificationResult(
+          false
+          'upstream_no_healthy_targets'
+          "Upstream #{upstreamId} has too few healthy targets after activation"
+          { upstreamId, targetCount: upstream.targets.length, healthyTargets: healthyTargets.length, requiredHealthyTargets: policy.minHealthyTargetsPerUpstream }
+        )
+
+  if policy.requireReadyApps
+    for appId in requirements.appIds
+      app = getAppStateFn(appRegistry, appId)
+      return buildVerificationResult(false, 'app_missing', "Referenced app #{appId} is missing", { appId }) unless app
+      unless app.sockets?.length > 0
+        return buildVerificationResult(
+          false
+          'app_no_ready_workers'
+          "App #{appId} has no ready workers after activation"
+          { appId, workers: app.sockets?.length or 0 }
+        )
+
+  buildVerificationResult(true)

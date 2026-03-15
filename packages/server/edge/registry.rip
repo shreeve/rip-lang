@@ -18,12 +18,25 @@ createAppState = (appId, config) ->
 export createAppRegistry = ->
   apps: new Map()
   hostIndex: new Map()
+  wildcardIndex: new Map()
+
+wildcardKey = (host) ->
+  return null unless typeof host is 'string' and host.startsWith('*.')
+  base = host.slice(2)
+  labels = base.split('.').filter(Boolean)
+  return null if labels.length < 2
+  ".#{base}"
 
 export registerApp = (registry, appId, config) ->
   state = createAppState(appId, config)
   registry.apps.set(appId, state)
   for host in (config.hosts or [])
-    registry.hostIndex.set(host.toLowerCase(), appId)
+    normalized = host.toLowerCase()
+    wildcard = wildcardKey(normalized)
+    if wildcard
+      registry.wildcardIndex.set(wildcard, appId)
+    else
+      registry.hostIndex.set(normalized, appId)
   state
 
 export removeApp = (registry, appId) ->
@@ -31,11 +44,24 @@ export removeApp = (registry, appId) ->
   return unless state
   for host in state.hosts
     h = host.toLowerCase()
-    registry.hostIndex.delete(h) if registry.hostIndex.get(h) is appId
+    wildcard = wildcardKey(h)
+    if wildcard
+      registry.wildcardIndex.delete(wildcard) if registry.wildcardIndex.get(wildcard) is appId
+    else
+      registry.hostIndex.delete(h) if registry.hostIndex.get(h) is appId
   registry.apps.delete(appId)
 
 export resolveHost = (registry, hostname) ->
-  registry.hostIndex.get(hostname.toLowerCase()) ?? null
+  host = hostname.toLowerCase()
+  exact = registry.hostIndex.get(host)
+  return exact if exact?
+
+  dot = host.indexOf('.')
+  if dot > 0
+    wildcard = registry.wildcardIndex.get(host.slice(dot))
+    return wildcard if wildcard?
+
+  registry.hostIndex.get('*') ?? null
 
 export getAppState = (registry, appId) ->
   registry.apps.get(appId) ?? null

@@ -1,0 +1,191 @@
+import { test, eq, ok } from '../test.rip'
+import {
+  createUpstreamPool
+  addUpstream
+  getUpstream
+  listUpstreams
+  removeUpstream
+  selectTarget
+  markTargetBusy
+  releaseTarget
+  shouldRetry
+  computeRetryDelayMs
+  updateTargetHealth
+} from '../edge/upstream.rip'
+
+test "createUpstreamPool starts empty", ->
+  pool = createUpstreamPool()
+  eq pool.upstreams.size, 0
+
+test "addUpstream normalizes targets and defaults", ->
+  pool = createUpstreamPool()
+  upstream = addUpstream(pool, 'app',
+    targets: ['http://127.0.0.1:3000']
+  )
+  eq pool.upstreams.size, 1
+  eq upstream.targets.length, 1
+  eq upstream.targets[0].healthy, true
+  eq upstream.targets[0].circuitState, 'closed'
+
+test "listUpstreams returns added upstreams", ->
+  pool = createUpstreamPool()
+  addUpstream(pool, 'app', targets: ['http://127.0.0.1:3000'])
+  eq listUpstreams(pool).length, 1
+
+test "removeUpstream deletes entry", ->
+  pool = createUpstreamPool()
+  addUpstream(pool, 'app', targets: ['http://127.0.0.1:3000'])
+  removeUpstream(pool, 'app')
+  eq getUpstream(pool, 'app'), null
+
+test "selectTarget picks least inflight target", ->
+  pool = createUpstreamPool()
+  upstream = addUpstream(pool, 'app',
+    targets: ['http://a', 'http://b']
+  )
+  upstream.targets[0].inflight = 2
+  upstream.targets[1].inflight = 0
+  eq selectTarget(upstream).url, 'http://b'
+
+test "selectTarget falls back to latency tie-break", ->
+  pool = createUpstreamPool()
+  upstream = addUpstream(pool, 'app',
+    targets: ['http://a', 'http://b']
+  )
+  upstream.targets[0].latencyEwma = 50
+  upstream.targets[1].latencyEwma = 10
+  eq selectTarget(upstream).url, 'http://b'
+
+test "selectTarget returns null when all targets unhealthy", ->
+  pool = createUpstreamPool()
+  upstream = addUpstream(pool, 'app',
+    targets: ['http://a', 'http://b']
+  )
+  upstream.targets[0].healthy = false
+  upstream.targets[1].healthy = false
+  eq selectTarget(upstream), null
+
+test "markTargetBusy increments inflight", ->
+  pool = createUpstreamPool()
+  upstream = addUpstream(pool, 'app', targets: ['http://a'])
+  target = upstream.targets[0]
+  markTargetBusy(target)
+  eq target.inflight, 1
+
+test "releaseTarget decrements inflight and updates ewma", ->
+  pool = createUpstreamPool()
+  upstream = addUpstream(pool, 'app', targets: ['http://a'])
+  target = upstream.targets[0]
+  markTargetBusy(target)
+  releaseTarget(target, 100, true, pool)
+  eq target.inflight, 0
+  ok target.latencyEwma > 0
+
+test "updateTargetHealth marks target unhealthy after threshold", ->
+  pool = createUpstreamPool(nowFn: -> 1000, randomFn: -> 0)
+  upstream = addUpstream(pool, 'app',
+    targets: ['http://a']
+    healthCheck:
+      unhealthyThreshold: 2
+  )
+  target = upstream.targets[0]
+  updateTargetHealth(target, false, pool)
+  eq target.healthy, true
+  updateTargetHealth(target, false, pool)
+  eq target.healthy, false
+
+test "updateTargetHealth restores healthy after success threshold", ->
+  pool = createUpstreamPool(nowFn: -> 1000, randomFn: -> 0)
+  upstream = addUpstream(pool, 'app',
+    targets: ['http://a']
+    healthCheck:
+      unhealthyThreshold: 1
+      healthyThreshold: 2
+  )
+  target = upstream.targets[0]
+  updateTargetHealth(target, false, pool)
+  eq target.healthy, false
+  updateTargetHealth(target, true, pool)
+  eq target.healthy, false
+  updateTargetHealth(target, true, pool)
+  eq target.healthy, true
+
+test "releaseTarget opens circuit after enough failures", ->
+  pool = createUpstreamPool(nowFn: -> 1234, randomFn: -> 0)
+  upstream = addUpstream(pool, 'app',
+    targets: ['http://a']
+    circuit:
+      minRequests: 3
+      errorThreshold: 0.5
+      cooldownMs: 1000
+  )
+  target = upstream.targets[0]
+  for _ in [1..3]
+    markTargetBusy(target)
+    releaseTarget(target, 10, false, pool)
+  eq target.circuitState, 'open'
+  eq target.circuitOpenedAt, 1234
+
+test "selectTarget reopens half-open target after cooldown", ->
+  now = 0
+  pool = createUpstreamPool(nowFn: -> now, randomFn: -> 0)
+  upstream = addUpstream(pool, 'app',
+    targets: ['http://a']
+    circuit:
+      minRequests: 1
+      cooldownMs: 100
+      jitterRatio: 0
+  )
+  target = upstream.targets[0]
+  markTargetBusy(target)
+  releaseTarget(target, 10, false, pool)
+  eq selectTarget(upstream, pool.nowFn), null
+  now = 150
+  selected = selectTarget(upstream, pool.nowFn)
+  eq selected.url, 'http://a'
+  eq target.circuitState, 'half-open'
+
+test "half-open success closes circuit", ->
+  pool = createUpstreamPool(nowFn: -> 500, randomFn: -> 0)
+  upstream = addUpstream(pool, 'app',
+    targets: ['http://a']
+    circuit:
+      minRequests: 1
+      cooldownMs: 100
+      jitterRatio: 0
+  )
+  target = upstream.targets[0]
+  markTargetBusy(target)
+  releaseTarget(target, 10, false, pool)
+  target.circuitOpenedAt = 0
+  selected = selectTarget(upstream, pool.nowFn)
+  markTargetBusy(selected)
+  releaseTarget(selected, 5, true, pool)
+  eq target.circuitState, 'closed'
+
+test "shouldRetry honors method status and body state", ->
+  retry = attempts: 2, retryOn: [502, 503], retryMethods: ['GET']
+  ok shouldRetry(retry, 'GET', 502, false)
+  eq shouldRetry(retry, 'POST', 502, false), false
+  eq shouldRetry(retry, 'GET', 500, false), false
+  eq shouldRetry(retry, 'GET', 502, true), false
+
+test "computeRetryDelayMs adds bounded jitter", ->
+  delay = computeRetryDelayMs({ backoffMs: 100 }, 2, -> 0)
+  eq delay, 200
+
+test "updateTargetHealth records last check timestamp", ->
+  pool = createUpstreamPool(nowFn: -> 42, randomFn: -> 0)
+  upstream = addUpstream(pool, 'app', targets: ['http://a'])
+  target = upstream.targets[0]
+  updateTargetHealth(target, true, pool)
+  eq target.lastCheckAt, 42
+
+test "updateTargetHealth can trip half-open target back to open", ->
+  pool = createUpstreamPool(nowFn: -> 99, randomFn: -> 0)
+  upstream = addUpstream(pool, 'app', targets: ['http://a'])
+  target = upstream.targets[0]
+  target.circuitState = 'half-open'
+  updateTargetHealth(target, false, pool)
+  eq target.circuitState, 'open'
+  eq target.circuitOpenedAt, 99

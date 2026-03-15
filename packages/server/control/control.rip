@@ -66,6 +66,15 @@ export handleWatchControl = (req, registerWatch, watchDirs) ->
       return { handled: true, response: jsonOk() }
   { handled: true, response: jsonBad() }
 
+export handleReloadControl = (req, result) ->
+  return { handled: false } unless req.method is 'POST'
+  body = JSON.stringify(result or { ok: false, result: 'rejected', reason: 'unknown' })
+  status = if result?.ok then 200 else 409
+  return {
+    handled: true
+    response: new Response(body, { status, headers: { 'content-type': 'application/json' } })
+  }
+
 export handleRegistryControl = (req, hostIndex) ->
   return { handled: false } unless req.method is 'GET'
   hostMap = {}

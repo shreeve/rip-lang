@@ -1,6 +1,223 @@
 # ==============================================================================
-# control/cli.rip — CLI parsing, subcommands, and output
+# control/cli.rip — CLI parsing, flag parsing, subcommands, and output
 # ==============================================================================
+
+import { existsSync, statSync } from 'node:fs'
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
+import { cpus } from 'node:os'
+
+# --- Shared helpers ---
+
+coerceInt = (value, fallback) ->
+  return fallback unless value? and value isnt ''
+  n = parseInt(String(value))
+  if Number.isFinite(n) then n else fallback
+
+export coerceInt
+
+parseWorkersToken = (token, fallback) ->
+  return fallback unless token
+  cores = cpus().length
+  return Math.max(1, cores) if token is 'auto'
+  return Math.max(1, Math.floor(cores / 2)) if token is 'half'
+  return Math.max(1, cores * 2) if token is '2x'
+  return Math.max(1, cores * 3) if token is '3x'
+  n = parseInt(token)
+  if Number.isFinite(n) and n > 0 then n else fallback
+
+parseRestartPolicy = (token, defReqs, defSecs) ->
+  return { maxRequests: defReqs, maxSeconds: defSecs } unless token
+  maxRequests = defReqs
+  maxSeconds = defSecs
+  for part in token.split(',').map((s) -> s.trim()).filter(Boolean)
+    if part.endsWith('s')
+      secs = parseInt(part.slice(0, -1))
+      maxSeconds = secs if Number.isFinite(secs) and secs >= 0
+    else
+      n = parseInt(part)
+      maxRequests = n if Number.isFinite(n) and n > 0
+  { maxRequests, maxSeconds }
+
+export resolveAppEntry = (appPathInput, defaultEntryPath = null) ->
+  abs = if isAbsolute(appPathInput) then appPathInput else resolve(process.cwd(), appPathInput)
+
+  if existsSync(abs) and statSync(abs).isDirectory()
+    baseDir = abs
+    one = join(abs, 'index.rip')
+    two = join(abs, 'index.ts')
+    if existsSync(one)
+      entryPath = one
+    else if existsSync(two)
+      entryPath = two
+    else
+      p "rip-server: no index.rip found, serving static files from #{abs}\n             Create an index.rip to customize, or run 'rip server --help' for options."
+      entryPath = defaultEntryPath or abs
+  else
+    unless existsSync(abs)
+      console.error "App path not found: #{abs}"
+      exit 2
+    baseDir = dirname(abs)
+    entryPath = abs
+
+  appName = basename(baseDir)
+  { baseDir, entryPath, appName }
+
+export parseFlags = (argv, defaultEntryPath = null) ->
+  rawFlags = new Set()
+  appPathInput = null
+  appAliases = []
+
+  isFlag = (tok) ->
+    tok.startsWith('-') or tok.startsWith('--') or /^\d+$/.test(tok) or tok in ['http', 'https']
+
+  tryResolveApp = (tok) ->
+    looksLikePath = tok.includes('/') or tok.startsWith('.') or isAbsolute(tok) or tok.endsWith('.rip') or tok.endsWith('.ts')
+    return undefined unless looksLikePath
+    try
+      abs = if isAbsolute(tok) then tok else resolve(process.cwd(), tok)
+      if existsSync(abs) then tok else undefined
+    catch
+      undefined
+
+  for i in [2...argv.length]
+    tok = argv[i]
+    unless appPathInput
+      if tok.includes('@') and not tok.startsWith('-')
+        [pathPart, aliasesPart] = tok.split('@')
+        maybe = tryResolveApp(pathPart)
+        if maybe
+          appPathInput = maybe
+          appAliases = aliasesPart.split(',').map((a) -> a.trim()).filter((a) -> a)
+          continue
+        else if not pathPart.includes('/') and not pathPart.startsWith('.')
+          appAliases = [pathPart].concat(aliasesPart.split(',').map((a) -> a.trim()).filter((a) -> a))
+          continue
+
+      maybe = tryResolveApp(tok)
+      if maybe
+        appPathInput = maybe
+        continue
+
+      unless isFlag(tok)
+        appAliases.push(tok)
+        continue
+
+    rawFlags.add(tok)
+
+  unless appPathInput
+    cwd = process.cwd()
+    indexRip = join(cwd, 'index.rip')
+    indexTs = join(cwd, 'index.ts')
+    if existsSync(indexRip)
+      appPathInput = indexRip
+    else if existsSync(indexTs)
+      appPathInput = indexTs
+    else
+      appPathInput = cwd
+
+  getKV = (prefix) ->
+    for f as rawFlags
+      return f.slice(prefix.length) if f.startsWith(prefix)
+    undefined
+
+  has = (name) -> rawFlags.has(name)
+
+  { baseDir, entryPath, appName } = resolveAppEntry(appPathInput, defaultEntryPath)
+  appAliases = [appName] if appAliases.length is 0
+
+  tokens = Array.from(rawFlags)
+  bareIntPort = null
+  hasHttpsKeyword = false
+  httpsPortToken = null
+  hasHttpKeyword = false
+  httpPortToken = null
+
+  for t in tokens
+    if /^\d+$/.test(t)
+      bareIntPort = parseInt(t)
+    else if t is 'https'
+      hasHttpsKeyword = true
+    else if t.startsWith('https:')
+      httpsPortToken = coerceInt(t.slice(6), 0)
+    else if t is 'http'
+      hasHttpKeyword = true
+    else if t.startsWith('http:')
+      httpPortToken = coerceInt(t.slice(5), 0)
+
+  httpsIntent = bareIntPort? or hasHttpsKeyword or httpsPortToken?
+  httpIntent = hasHttpKeyword or httpPortToken?
+  httpsIntent = true unless httpsIntent or httpIntent
+
+  httpPort = if httpIntent then (httpPortToken ?? bareIntPort ?? 0) else 0
+  httpsPortDerived = if not httpIntent then (bareIntPort or httpsPortToken or 0) else null
+
+  socketPrefixOverride = getKV('--socket-prefix=')
+  socketPrefix = socketPrefixOverride or "rip_#{appName}"
+
+  cores = cpus().length
+  workers = parseWorkersToken(getKV('w:'), Math.max(1, Math.floor(cores / 2)))
+
+  policy = parseRestartPolicy(
+    getKV('r:'),
+    coerceInt(process.env.RIP_MAX_REQUESTS, 10000),
+    coerceInt(process.env.RIP_MAX_SECONDS, 3600)
+  )
+
+  reload = not (has('--static') or process.env.RIP_STATIC is '1')
+
+  envValue = getKV('--env=')
+  envOverride = null
+  if envValue
+    normalized = envValue.toLowerCase()
+    envOverride = switch normalized
+      when 'prod', 'production' then 'production'
+      when 'dev', 'development' then 'development'
+      else normalized
+
+  watch = getKV('--watch=') or '*.rip'
+
+  httpsPort = do ->
+    kv = getKV('--https-port=')
+    return coerceInt(kv, 443) if kv?
+    httpsPortDerived
+
+  {
+    appPath: resolve(appPathInput)
+    appBaseDir: baseDir
+    appEntry: entryPath
+    appName
+    appAliases
+    workers
+    maxRequestsPerWorker: policy.maxRequests
+    maxSecondsPerWorker: policy.maxSeconds
+    httpPort
+    httpsPort
+    certPath: getKV('--cert=')
+    keyPath: getKV('--key=')
+    hsts: has('--hsts')
+    redirectHttp: not has('--no-redirect-http')
+    reload
+    quiet: has('--quiet')
+    socketPrefix
+    maxQueue: coerceInt(getKV('--max-queue='), coerceInt(process.env.RIP_MAX_QUEUE, 512))
+    queueTimeoutMs: coerceInt(getKV('--queue-timeout-ms='), coerceInt(process.env.RIP_QUEUE_TIMEOUT_MS, 30000))
+    connectTimeoutMs: coerceInt(getKV('--connect-timeout-ms='), coerceInt(process.env.RIP_CONNECT_TIMEOUT_MS, 2000))
+    readTimeoutMs: coerceInt(getKV('--read-timeout-ms='), coerceInt(process.env.RIP_READ_TIMEOUT_MS, 30000))
+    jsonLogging: has('--json-logging')
+    accessLog: not has('--no-access-log')
+    acme: has('--acme')
+    acmeStaging: has('--acme-staging')
+    acmeDomain: getKV('--acme-domain=')
+    realtimePath: getKV('--realtime-path=') or '/realtime'
+    publishSecret: getKV('--publish-secret=') or process.env.RIP_PUBLISH_SECRET or null
+    rateLimit: coerceInt(getKV('--rate-limit='), 0)
+    rateLimitWindow: coerceInt(getKV('--rate-limit-window='), 60000)
+    watch: watch
+    edgefilePath: getKV('--edgefile=')
+    checkConfig: has('--check-config')
+    envOverride: envOverride
+    debug: has('--debug')
+  }
 
 # --- Argv helpers ---
 
@@ -51,6 +268,8 @@ export runHelpOutput = (argv) ->
     Options:
       -h, --help              Show this help
       -v, --version           Show version
+      --edgefile=<path>       Load Edgefile.rip from an explicit path
+      --check-config          Validate Edgefile.rip or config.rip and exit
       --watch=<glob>          Watch glob pattern (default: *.rip)
       --static                Disable hot reload and file watching
       --env=<mode>            Set environment (dev, production)
@@ -84,6 +303,9 @@ export runHelpOutput = (argv) ->
       rip serve myapp         Start with app name "myapp"
       rip serve http          HTTP only (no TLS)
       rip serve --static w:8  Production: no reload, 8 workers
+      rip serve --check-config
+      rip serve --check-config --edgefile=./Edgefile.rip
+      rip serve --edgefile=./Edgefile.rip
 
     If no index.rip or index.ts is found, a built-in static file server
     activates with directory indexes, auto-detected MIME types, and

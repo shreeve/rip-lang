@@ -39,6 +39,16 @@ export broadcastWatchChange = (watchGroups, prefix, type = 'page') ->
     catch then dead.push(client)
   group.sseClients.delete(c) for c in dead
 
+# --- Code reload matching ---
+
+export shouldTriggerCodeReload = (filename, watchSpec, entryBase = null) ->
+  return false unless filename
+  return false if entryBase and filename is entryBase
+  if watchSpec?.startsWith('*.')
+    filename.endsWith(watchSpec.slice(1))
+  else
+    filename is watchSpec or filename.endsWith("/#{watchSpec}")
+
 # --- App directory watchers ---
 
 export registerAppWatchDirs = (appWatchers, prefix, dirs, server, cwdFn) ->

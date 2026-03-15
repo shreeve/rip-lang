@@ -1,0 +1,157 @@
+import { test, eq, ok } from '../test.rip'
+import { normalizeEdgeConfig, normalizeLegacyConfig, summarizeConfig, formatConfigErrors } from '../edge/config.rip'
+
+getErrors = (fn) ->
+  try
+    fn()
+    []
+  catch e
+    e.validationErrors or []
+
+test "normalizeEdgeConfig accepts canonical pure proxy shape", ->
+  normalized = normalizeEdgeConfig(
+    version: 1
+    edge: {}
+    upstreams:
+      app:
+        targets: ['http://127.0.0.1:3000']
+    routes: [
+      { path: '/*', upstream: 'app' }
+    ]
+  , '/srv')
+  eq normalized.kind, 'edge'
+  eq Object.keys(normalized.upstreams).length, 1
+  eq normalized.routes.length, 1
+  eq normalized.edge.hsts, false
+
+test "normalizeEdgeConfig accepts mixed mode shape", ->
+  normalized = normalizeEdgeConfig(
+    version: 1
+    edge: {}
+    upstreams:
+      api:
+        targets: ['http://127.0.0.1:4000']
+    apps:
+      admin:
+        entry: './admin/index.rip'
+        hosts: ['admin.example.com']
+    routes: [
+      { path: '/api/*', upstream: 'api' }
+      { path: '/admin/*', app: 'admin' }
+    ]
+    sites:
+      'admin.example.com':
+        routes: [{ path: '/*', app: 'admin' }]
+  , '/srv')
+  eq Object.keys(normalized.apps).length, 1
+  eq normalized.sites['admin.example.com'].routes.length, 1
+
+test "normalizeEdgeConfig rejects missing version", ->
+  errors = getErrors ->
+    normalizeEdgeConfig({ edge: {}, routes: [] }, '/srv')
+  ok errors.some((err) -> err.code is 'E_EDGE_VERSION')
+
+test "normalizeEdgeConfig rejects wildcard ACME domains", ->
+  errors = getErrors ->
+    normalizeEdgeConfig(
+      version: 1
+      edge:
+        acme: true
+        acmeDomains: ['*.example.com']
+      routes: []
+    , '/srv')
+  ok errors.some((err) -> err.code is 'E_ACME_WILDCARD')
+
+test "normalizeEdgeConfig rejects invalid wildcard host base", ->
+  errors = getErrors ->
+    normalizeEdgeConfig(
+      version: 1
+      edge: {}
+      apps:
+        admin:
+          hosts: ['*.com']
+      routes: []
+    , '/srv')
+  ok errors.some((err) -> err.code is 'E_HOST_WILDCARD_BASE')
+
+test "normalizeEdgeConfig rejects routes with multiple actions", ->
+  errors = getErrors ->
+    normalizeEdgeConfig(
+      version: 1
+      edge: {}
+      upstreams:
+        api:
+          targets: ['http://127.0.0.1:4000']
+      apps:
+        admin:
+          entry: './admin/index.rip'
+      routes: [
+        { path: '/x', upstream: 'api', app: 'admin' }
+      ]
+    , '/srv')
+  ok errors.some((err) -> err.code is 'E_ROUTE_ACTION')
+
+test "normalizeEdgeConfig rejects websocket route without upstream", ->
+  errors = getErrors ->
+    normalizeEdgeConfig(
+      version: 1
+      edge: {}
+      apps:
+        admin:
+          entry: './admin/index.rip'
+      routes: [
+        { path: '/ws', app: 'admin', websocket: true }
+      ]
+    , '/srv')
+  ok errors.some((err) -> err.code is 'E_ROUTE_WEBSOCKET')
+
+test "normalizeEdgeConfig preserves verify policy", ->
+  normalized = normalizeEdgeConfig(
+    version: 1
+    edge:
+      verify:
+        requireHealthyUpstreams: false
+        requireReadyApps: true
+        includeUnroutedManagedApps: false
+        minHealthyTargetsPerUpstream: 2
+    routes: []
+  , '/srv')
+  eq normalized.edge.verify.requireHealthyUpstreams, false
+  eq normalized.edge.verify.includeUnroutedManagedApps, false
+  eq normalized.edge.verify.minHealthyTargetsPerUpstream, 2
+
+test "formatConfigErrors includes code path and hint", ->
+  output = formatConfigErrors('Edgefile.rip', [
+    code: 'E_ROUTE_ACTION'
+    path: 'routes[0]'
+    message: 'route must define exactly one action'
+    hint: 'Choose one action field per route.'
+  ])
+  ok output.includes('[E_ROUTE_ACTION]')
+  ok output.includes('routes[0]')
+  ok output.includes('Hint:')
+
+test "summarizeConfig reports canonical counts", ->
+  summary = summarizeConfig('/srv/Edgefile.rip',
+    kind: 'edge'
+    version: 1
+    edge: {}
+    upstreams: { app: { targets: ['http://127.0.0.1:3000'] } }
+    apps: { admin: { entry: '/srv/admin/index.rip', hosts: ['admin.example.com'] } }
+    routes: [{ path: '/*', upstream: 'app' }]
+    sites: { 'admin.example.com': { routes: [] } }
+  )
+  eq summary.counts.upstreams, 1
+  eq summary.counts.apps, 1
+  eq summary.counts.routes, 1
+  eq summary.counts.sites, 1
+
+test "normalizeLegacyConfig validates legacy apps object", ->
+  normalized = normalizeLegacyConfig(
+    apps:
+      web:
+        entry: './index.rip'
+        hosts: ['example.com']
+  , '/srv')
+  eq normalized.kind, 'legacy'
+  eq Object.keys(normalized.apps).length, 1

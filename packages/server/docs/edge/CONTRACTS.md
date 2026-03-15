@@ -1,12 +1,14 @@
-# Edge Contracts (M0b)
+# Edge Contracts
 
-This document freezes the core data contracts for the unified edge/app runtime in `@rip-lang/server`.
-
-Status: Draft frozen for M0b review.
+This document describes the implemented core contracts for the unified
+edge/app runtime in `@rip-lang/server`.
 
 ## Source of truth inputs
 
-- Plan: `.cursor/plans/rip_unified_master_plan_v2_2892e891.plan.md`
+- Runtime implementation: `packages/server/server.rip`
+- Edge config normalization: `packages/server/edge/config.rip`
+- Edge runtime lifecycle: `packages/server/edge/runtime.rip`
+- Verification policy: `packages/server/edge/verify.rip`
 - TLS findings: `packages/server/spikes/tls/FINDINGS.md`
 
 ## AppDescriptor
@@ -14,34 +16,16 @@ Status: Draft frozen for M0b review.
 ```ts
 type AppDescriptor = {
   id: string
-  entry: string
+  entry: string | null
+  appBaseDir: string | null
   hosts: string[]
-  prefixes: string[]
-  workers: number
+  workers: number | null
   maxQueue: number
-  maxInflight: number
+  queueTimeoutMs: number
+  readTimeoutMs: number
   env: Record<string, string>
-  restartPolicy: {
-    maxRestarts: number
-    backoffMs: number
-    windowMs: number
-  }
-  healthCheck: {
-    path: string
-    intervalMs: number
-    timeoutMs: number
-    unhealthyThreshold: number
-  }
 }
 ```
-
-Defaults:
-- `workers`: `cpus().length`, min `2`
-- `maxQueue`: `1000`
-- `maxInflight`: `workers * 32`
-- `env`: `{}`
-- `restartPolicy`: `{ maxRestarts: 10, backoffMs: 1000, windowMs: 60000 }`
-- `healthCheck`: `{ path: "/ready", intervalMs: 5000, timeoutMs: 2000, unhealthyThreshold: 3 }`
 
 ## WorkerEndpoint
 
@@ -51,27 +35,9 @@ type WorkerEndpoint = {
   workerId: number
   socketPath: string
   inflight: number
-  version: number
-  state: "starting" | "ready" | "draining" | "stopped"
+  version: number | null
   startedAt: number
-  requestCount: number
 }
-```
-
-Defaults:
-- `inflight`: `0`
-- `state`: `"starting"`
-- `requestCount`: `0`
-
-## RouteAction
-
-```ts
-type RouteAction =
-  | { kind: "toApp"; appId: string }
-  | { kind: "proxy"; upstream: string; host?: string }
-  | { kind: "static"; dir: string; spaFallback?: string }
-  | { kind: "redirect"; to: string; status: number }
-  | { kind: "headers"; set?: Record<string, string>; remove?: string[] }
 ```
 
 ## RouteRule
@@ -79,20 +45,52 @@ type RouteAction =
 ```ts
 type RouteRule = {
   id: string
-  host: string | "*"
-  pathPattern: string
+  host: string | "*" | "*.example.com"
+  path: string
   methods: string[] | "*"
-  action: RouteAction
   priority: number
+  upstream?: string | null
+  app?: string | null
+  static?: string | null
+  redirect?: { to: string, status: number } | null
+  headers?: { set?: Record<string, string>, remove?: string[] } | null
+  websocket?: boolean
   timeouts?: Partial<TimeoutPolicy>
 }
 ```
 
+## VerifyPolicy
+
+```ts
+type VerifyPolicy = {
+  requireHealthyUpstreams: boolean
+  requireReadyApps: boolean
+  includeUnroutedManagedApps: boolean
+  minHealthyTargetsPerUpstream: number
+}
+```
+
 Defaults:
-- `host`: `"*"`
-- `methods`: `"*"`
-- `priority`: declaration order
-- `timeouts`: inherit site/app/global defaults
+
+- `requireHealthyUpstreams: true`
+- `requireReadyApps: true`
+- `includeUnroutedManagedApps: true`
+- `minHealthyTargetsPerUpstream: 1`
+
+## EdgeRuntime
+
+```ts
+type EdgeRuntime = {
+  id: string
+  upstreamPool: UpstreamPool
+  routeTable: RouteTable
+  configInfo: ConfigInfo
+  verifyPolicy: VerifyPolicy | null
+  inflight: number
+  wsConnections: number
+  retiredAt: string | null
+}
+```
 
 ## SchedulerDecision
 
@@ -107,9 +105,10 @@ type SchedulerDecision = {
 ```
 
 Defaults:
-- `algorithm`: `"least-inflight"`
-- `fallback`: `"queue"` while queue `< maxQueue`, else `"shed-503"`
-- `queuePosition`: `null` when immediately assigned
+
+- `algorithm: "least-inflight"`
+- `fallback: "queue"` while queue `< maxQueue`, else `"shed-503"`
+- `queuePosition: null` when immediately assigned
 
 ## TlsCertRecord
 
@@ -128,19 +127,11 @@ type TlsCertRecord = {
 }
 ```
 
-Defaults:
-- `source`: `"acme"` for auto-managed certificates
-- `lastRenewAttempt`: `null`
-- `lastRenewResult`: `null`
-
-## Constraint from M0a
+## TLS constraints
 
 From `packages/server/spikes/tls/FINDINGS.md`:
-- dynamic SNI selection and ALPN-driven cert selection were not observed
-- in-process cert hot reload was not observed
-- graceful restart reload works
 
-Therefore v1 contract assumptions:
-- TLS config is loaded at process start
-- cert activation uses graceful restart path in v1
+- dynamic SNI selection was not observed
+- in-process cert hot reload was not observed
+- graceful restart cert activation works
 - ACME HTTP-01 is the reliable v1 baseline

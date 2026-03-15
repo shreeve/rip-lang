@@ -7,18 +7,22 @@ import { getWorkerSocketPath, getControlSocketPath } from './control.rip'
 
 # --- Spawn ---
 
-export spawnTrackedWorker = (flags, workerId, version, nowMsFn, importMetaPath, appId) ->
+export spawnTrackedWorker = (flags, workerId, version, nowMsFn, importMetaPath, appId, appConfig = {}) ->
   socketPath = getWorkerSocketPath(flags.socketPrefix, workerId)
   try unlinkSync(socketPath)
 
-  workerEnv = Object.assign {}, process.env,
+  appEntry = appConfig.entry or flags.appEntry
+  appBaseDir = appConfig.appBaseDir or flags.appBaseDir
+  workerEnvExtra = appConfig.env or {}
+
+  workerEnv = Object.assign {}, process.env, workerEnvExtra,
     RIP_WORKER_MODE: '1'
     WORKER_ID: String(workerId)
     SOCKET_PATH: socketPath
     SOCKET_PREFIX: flags.socketPrefix
     APP_ID: String(appId or flags.appName or 'default')
-    APP_ENTRY: flags.appEntry
-    APP_BASE_DIR: flags.appBaseDir
+    APP_ENTRY: appEntry
+    APP_BASE_DIR: appBaseDir
     MAX_REQUESTS: String(flags.maxRequestsPerWorker)
     MAX_SECONDS: String(flags.maxSecondsPerWorker)
     RIP_LOG_JSON: if flags.jsonLogging then '1' else '0'
@@ -31,7 +35,7 @@ export spawnTrackedWorker = (flags, workerId, version, nowMsFn, importMetaPath, 
     cwd: process.cwd()
     env: workerEnv
 
-  { id: workerId, process: proc, socketPath, restartCount: 0, backoffMs: 1000, startedAt: nowMsFn() }
+  { id: workerId, process: proc, socketPath, restartCount: 0, backoffMs: 1000, startedAt: nowMsFn(), appId }
 
 # --- Health and control notifications ---
 

@@ -4,13 +4,12 @@
 
 > **A full-stack web framework and production edge server — routing, middleware, multi-worker processes, hot reload, ACME auto-TLS, realtime WebSocket, observability, and mDNS — written entirely in Rip with zero dependencies**
 
-Rip Server is a unified web framework and application server. It provides
-Sinatra-style routing, built-in validators, file serving, and middleware
-composition for defining your API, plus multi-worker process management,
-rolling restarts, automatic TLS via Let's Encrypt, Bam-style realtime
-WebSocket support, runtime diagnostics, mDNS service discovery, and
-request load balancing for running it in production — all with zero external
-dependencies.
+Rip Server is a unified web framework and application server. It gives you
+Sinatra-style routing, built-in validators, file serving, and middleware for
+defining your API, plus multi-worker process management, rolling restarts,
+automatic TLS, realtime WebSocket support, runtime diagnostics, mDNS
+discovery, and request load balancing for production use — all with zero
+external dependencies.
 
 ## Features
 
@@ -32,11 +31,27 @@ dependencies.
 | `api.rip` | Core framework: routing, validation, `read()`, `session`, `@send` |
 | `middleware.rip` | Built-in middleware: cors, logger, sessions, compression, security, serve |
 | `server.rip` | Edge orchestrator: CLI, workers, load balancing, TLS, mDNS |
-| `edge/` | Request path: forwarding, scheduling, metrics, registry, helpers, TLS, realtime |
+| `edge/` | Request path and edge runtime: config, forwarding, metrics, registry, router, runtime, TLS, upstreams, verification |
 | `control/` | Management: CLI, lifecycle, workers, watchers, mDNS, events |
 | `acme/` | Auto-TLS: ACME client, crypto, cert store, challenge handler |
 
 > **See Also**: For the DuckDB server, see [@rip-lang/db](../db/README.md).
+
+## Runtime Tiers
+
+`rip server` is a graduated runtime:
+
+1. **Single-app mode** — one app, zero config, one command
+2. **Managed multi-app mode** — many Rip apps with per-app worker pools via `config.rip`
+3. **Edge mode** — upstream proxying, host/path routing, staged reload, verification, and rollback via `Edgefile.rip`
+
+```mermaid
+flowchart TD
+  SingleApp["rip server"] --> ManagedApps["config.rip"]
+  ManagedApps --> EdgeMode["Edgefile.rip"]
+  EdgeMode --> Upstreams["HTTP and WS upstream routes"]
+  EdgeMode --> ManagedRoutes["Managed app routes"]
+```
 
 ## Quick Start
 
@@ -107,6 +122,212 @@ curl http://localhost/users/42
 curl http://localhost/status
 # {"status":"healthy","app":"myapp","workers":5,"ports":{"https":443}}
 ```
+
+## Edgefile Quick Start
+
+`Edgefile.rip` is the canonical edge config shape for the Bun-native edge
+runtime. It gives you:
+
+- strict schema validation with field-path errors and remediation hints
+- explicit loading via `--edgefile`
+- `--check-config` validation without opening listeners
+- config metadata, counts, and last reload result in `/diagnostics`
+- `SIGHUP` config reload for config-backed app registrations and diagnostics state
+
+`upstreams`, `routes`, and `sites` are validated and surfaced in diagnostics.
+Upstream-backed Edgefile routes execute in the main server process, including
+`websocket: true` routes. Wildcard hosts resolve in the live app registry path.
+Managed app-route expansion works beyond the default app, and additional
+managed apps participate in server-side reload/watch parity.
+
+### Canonical Shape
+
+```coffee
+export default
+  version: 1
+  edge:
+    hsts: true
+    timeouts:
+      connectMs: 2000
+      readMs: 30000
+  upstreams: {}
+  apps: {}
+  routes: []
+  sites: {}
+```
+
+### Edgefile Field Reference
+
+| Field | Purpose |
+|------|---------|
+| `version` | Required schema version. Must be `1`. |
+| `edge` | Global edge settings: TLS, trusted proxies, timeouts, verification policy. |
+| `upstreams` | Named external HTTP services and their targets. |
+| `apps` | Managed Rip apps with entry paths, hosts, worker counts, and env. |
+| `routes` | Declarative route objects that choose exactly one action. |
+| `sites` | Per-host route groups and policy overrides. |
+
+### Route Shape
+
+Common route fields:
+
+- `host?: string` — exact host, wildcard host like `*.example.com`, or `*`
+- `path: string` — must start with `/`
+- `methods?: string[] | "*"`
+- `priority?: number`
+- `timeouts?: { connectMs, readMs }`
+
+Each route must define exactly one action:
+
+- `upstream: 'name'`
+- `app: 'name'`
+- `static: '/dir'`
+- `redirect: { to: '...', status: 301 }`
+- `headers: { set, remove }`
+
+WebSocket proxy routes use:
+
+- `websocket: true`
+- `upstream: 'name'`
+
+### Example: Pure Proxy Shape
+
+```coffee
+export default
+  version: 1
+  edge:
+    hsts: true
+    trustedProxies: ['10.0.0.0/8']
+    verify:
+      requireHealthyUpstreams: true
+      requireReadyApps: true
+      includeUnroutedManagedApps: true
+      minHealthyTargetsPerUpstream: 1
+  upstreams:
+    app:
+      targets: ['http://app.incusbr0:3000']
+      healthCheck:
+        path: '/health'
+  routes: [
+    { path: '/ws', websocket: true, upstream: 'app' }
+    { path: '/*', upstream: 'app' }
+  ]
+```
+
+### Example: Mixed Apps + Upstreams
+
+```coffee
+export default
+  version: 1
+  edge: {}
+  upstreams:
+    api:
+      targets: ['http://api.incusbr0:4000']
+  apps:
+    admin:
+      entry: './admin/index.rip'
+      hosts: ['admin.example.com']
+  routes: [
+    { path: '/api/*', upstream: 'api' }
+    { path: '/admin/*', app: 'admin' }
+  ]
+  sites:
+    'admin.example.com':
+      routes: [
+        { path: '/*', app: 'admin' }
+      ]
+```
+
+### Example: Manual Wildcard TLS
+
+Use manual cert/key paths for wildcard TLS. ACME HTTP-01 cannot issue
+`*.domain` certificates.
+
+```coffee
+export default
+  version: 1
+  edge:
+    cert: './certs/wildcard.example.com.crt'
+    key: './certs/wildcard.example.com.key'
+    hsts: true
+  upstreams:
+    web:
+      targets: ['http://web.incusbr0:3000']
+  routes: [
+    { path: '/*', upstream: 'web', host: '*.example.com' }
+  ]
+```
+
+## Operator Runbook
+
+### Start With An Explicit Edgefile
+
+```bash
+rip server --edgefile=./Edgefile.rip
+```
+
+### Validate Config Without Serving
+
+```bash
+rip server --check-config
+rip server --check-config --edgefile=./Edgefile.rip
+```
+
+### Reload Config Safely
+
+Send `SIGHUP` to the long-lived server process:
+
+```bash
+kill -HUP "$(cat /tmp/rip_myapp.pid)"
+```
+
+The default PID file is `/tmp/rip_<app-name>.pid`. If you use a custom socket
+prefix, the PID file follows `/tmp/<socket-prefix>.pid`.
+Reload success or rejection is printed to stderr and reflected in `/diagnostics`.
+
+You can also trigger reload through the control socket:
+
+```bash
+curl --unix-socket /tmp/rip_myapp.ctl.sock -X POST http://localhost/reload
+```
+
+When file watching is enabled, editing `Edgefile.rip` uses the same reload path
+automatically.
+
+### Inspect Active Config And Diagnostics
+
+```bash
+curl http://localhost/diagnostics
+```
+
+The `config` block reports:
+
+- config kind (`edge`, `legacy`, or `none`)
+- active path
+- schema version
+- counts for apps, upstreams, routes, and sites
+- active compiled route descriptions
+- last result (`loaded`, `rejected`, etc.)
+- reload timestamp
+- last error, if any
+- active edge runtime inflight/WS counts
+- retired edge runtimes still draining after a config swap
+- last reload attempt record
+- bounded reload history with source, versions, result, and reason
+- structured rollback/rejection code and details for failed reloads
+
+The top-level diagnostics payload also includes:
+
+- `upstreams`: per-upstream target counts and healthy/unhealthy target totals
+
+### Verification Policy
+
+Use `edge.verify` to tune post-activate verification:
+
+- `requireHealthyUpstreams`: require referenced upstreams to prove healthy targets
+- `requireReadyApps`: require referenced managed apps to have ready workers
+- `includeUnroutedManagedApps`: also verify managed apps not directly referenced by a route
+- `minHealthyTargetsPerUpstream`: minimum healthy targets required per referenced upstream
 
 ## The `read()` Function
 
@@ -843,14 +1064,18 @@ rip server [flags] [app-path]@<alias1>,<alias2>,...
 |------|-------------|---------|
 | `-h`, `--help` | Show help and exit | — |
 | `-v`, `--version` | Show version and exit | — |
+| `--edgefile=<path>` | Load `Edgefile.rip` from an explicit path | Auto-discover or none |
+| `--check-config` | Validate `Edgefile.rip` or `config.rip` and exit | Disabled |
 | `--watch=<glob>` | Watch glob pattern | `*.rip` |
 | `--static` | Disable hot reload and file watching | — |
 | `--env=<mode>` | Environment mode (`dev`, `prod`) | `development` |
 | `--debug` | Enable debug logging | Disabled |
+| `--quiet` | Suppress startup URL output | Disabled |
 | `http` | HTTP-only mode (no HTTPS) | HTTPS enabled |
 | `https` | HTTPS mode (explicit) | Auto |
 | `http:<port>` | Set HTTP port | 80, fallback 3000 |
 | `https:<port>` | Set HTTPS port | 443, fallback 3443 |
+| `--socket-prefix=<name>` | Override Unix socket / PID file prefix | `rip_<app-name>` |
 | `w:<n>` | Worker count (`auto`, `half`, `2x`, `3x`, or number) | `half` of cores |
 | `r:<reqs>,<secs>s` | Restart policy: requests, seconds (e.g., `5000,3600s`) | `10000,3600s` |
 | `--cert=<path>` | TLS certificate path | Shipped `*.ripdev.io` cert |
@@ -952,18 +1177,34 @@ When `RIP_SETUP_MODE=1` is set, the same file runs the one-time setup phase. Whe
 
 ### Request Flow
 
-1. **Main Process** receives HTTP/HTTPS request
-2. **Server** selects available worker from pool
-3. **Request** forwarded via Unix socket
-4. **Worker** processes request, returns response
-5. **Server** forwards response to client
+```mermaid
+flowchart TD
+  request[Incoming Request] --> validate[ValidateRequest]
+  validate --> rateLimit[RateLimit]
+  rateLimit --> edgeRoute{Edge Route Match}
+  edgeRoute -->|upstream| upstream[Proxy To Upstream]
+  edgeRoute -->|app| worker[Forward To Managed Worker]
+  edgeRoute -->|no edge match| registry[Host Registry]
+  registry --> worker
+  worker --> response[Response]
+  upstream --> response
+```
+
+At runtime:
+
+1. validate request and rate-limit early
+2. check the active edge route table
+3. proxy to an upstream if an `upstream` route matches
+4. otherwise resolve a managed app and forward to its worker pool
+5. keep retired edge runtimes alive while in-flight HTTP and websocket traffic drains
 
 ### Hot Reloading
 
 Two layers of hot reload work together by default:
 
-- **API changes** — The Manager watches for `.rip` file changes in the app directory and triggers rolling worker restarts (zero downtime, server-side).
+- **API changes** — The Manager watches `.rip` files per app directory and triggers rolling restarts for the affected app pool only.
 - **UI changes** (`watch: true` in `serve` middleware) — Workers register their component directories with the Manager via the control socket. The Manager watches those directories and broadcasts SSE reload events to connected browsers (client-side).
+- **Edge config changes** — `Edgefile.rip` changes use the staged reload path with verification, rollback, and bounded reload history.
 
 SSE connections are held by the long-lived Server process, not by recyclable workers, ensuring stable hot-reload connections. Each app prefix gets its own SSE pool for multi-app isolation.
 
@@ -1129,6 +1370,9 @@ Returns:
   "version": { "server": "1.0.0", "rip": "3.13.108" },
   "uptime": 86400,
   "apps": [{ "id": "myapp", "workers": 4, "inflight": 2, "queueDepth": 0 }],
+  "upstreams": [
+    { "id": "app", "targets": 2, "healthyTargets": 2, "unhealthyTargets": 0 }
+  ],
   "metrics": {
     "requests": 150000,
     "responses": { "2xx": 148000, "4xx": 1500, "5xx": 500 },
@@ -1138,9 +1382,41 @@ Returns:
     "acme": { "renewals": 1, "failures": 0 },
     "websocket": { "connections": 45, "messages": 12000, "deliveries": 89000 }
   },
-  "gauges": { "workersActive": 4, "inflight": 2, "queueDepth": 0 },
+  "gauges": {
+    "workersActive": 4,
+    "inflight": 2,
+    "queueDepth": 0,
+    "upstreamTargetsHealthy": 2,
+    "upstreamTargetsUnhealthy": 0
+  },
   "realtime": { "clients": 23, "groups": 8, "deliveries": 89000, "messages": 12000 },
-  "hosts": ["localhost", "myapp.ripdev.io"]
+  "hosts": ["localhost", "myapp.ripdev.io"],
+  "config": {
+    "kind": "edge",
+    "path": "/srv/Edgefile.rip",
+    "version": 1,
+    "counts": { "apps": 2, "upstreams": 1, "routes": 4, "sites": 1 },
+    "lastResult": "applied",
+    "lastError": null,
+    "lastErrorCode": null,
+    "lastErrorDetails": null,
+    "activeRouteDescriptions": [
+      "* /api/* proxy:api",
+      "admin.example.com /* app:admin"
+    ],
+    "activeRuntime": { "id": "edge-123", "inflight": 1, "wsConnections": 2 },
+    "retiredRuntimes": [],
+    "lastReload": {
+      "id": "reload-4",
+      "source": "control_api",
+      "oldVersion": 1,
+      "newVersion": 1,
+      "result": "applied",
+      "reason": null,
+      "code": null
+    },
+    "reloadHistory": []
+  }
 }
 ```
 
@@ -1324,19 +1600,27 @@ See [Hot Reloading](#hot-reloading) for details on how the two layers (API + UI)
 
 ## Comparison with Other Servers
 
-| Feature | rip server | PM2 | Nginx | Caddy |
-|---------|-----------|-----|-------|-------|
-| Pure Rip | ✅ | ❌ | ❌ | ❌ |
-| Zero Dependencies | ✅ | ❌ | ❌ | ❌ |
-| Hot Reload | ✅ (default) | ✅ | ❌ | ❌ |
-| Multi-Worker | ✅ | ✅ | ✅ | ❌ |
-| Auto HTTPS (ACME) | ✅ | ❌ | ❌ | ✅ |
-| Realtime WebSocket | ✅ (Bam-style) | ❌ | ❌ | ❌ |
-| Runtime Diagnostics | ✅ (latency p50/p95/p99) | ❌ | ❌ | ❌ |
-| mDNS | ✅ | ❌ | ❌ | ❌ |
-| Zero Config | ✅ | ❌ | ❌ | ✅ |
-| Built-in LB | ✅ | ❌ | ✅ | ✅ |
-| Graceful Shutdown | ✅ | ✅ | ✅ | ✅ |
+For a single-host Bun deployment, `rip server` now covers most of what you would
+normally reach for Caddy or nginx to do, while also managing your Rip apps.
+
+| Capability | rip server | Caddy | nginx | Traefik |
+|-----------|------------|-------|-------|---------|
+| Single-app zero-config serving | ✅ | ❌ | ❌ | ❌ |
+| Managed multi-app worker pools | ✅ | ❌ | ❌ | ❌ |
+| Host/path upstream proxying | ✅ | ✅ | ✅ | ✅ |
+| WebSocket upstream proxying | ✅ | ✅ | ✅ | ✅ |
+| Wildcard hosts | ✅ | ✅ | ✅ | ✅ |
+| Auto HTTPS (ACME HTTP-01) | ✅ | ✅ | External | ✅ |
+| Config validation with hints | ✅ | Partial | ❌ | Partial |
+| Atomic runtime swap + drain | ✅ | ✅ | ✅ | ✅ |
+| Post-activate verify + automatic rollback | ✅ | ❌ | ❌ | ❌ |
+| Built-in diagnostics + reload history | ✅ | Partial | Partial | ✅ |
+| HTTP response cache | ❌ | Partial | ✅ | ❌ |
+| Multi-node service discovery | ❌ | ❌ | ❌ | ✅ |
+
+Use `rip server` when you want one Bun-native runtime for both the app and the
+edge. Use Caddy/nginx/Traefik when you specifically need their mature caching,
+multi-node routing, or ecosystem integrations.
 
 ## Multi-App Configuration (`config.rip`)
 

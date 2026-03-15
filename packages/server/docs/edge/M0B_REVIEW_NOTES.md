@@ -1,6 +1,6 @@
 # M0b Review Notes
 
-Status: Active
+Status: Maintained
 
 ## Accepted decisions
 
@@ -25,9 +25,9 @@ Status: Active
 
 ## Open items for next review pass
 
-- Confirm `Edgefile.rip` syntax shape against current Rip parser
-- Validate route precedence edge cases in conformance tests
-- Confirm ops defaults for retention policy in deployment docs
+- Expand end-to-end websocket proxy coverage beyond the current package tests
+- Decide whether staged rollout policy should gain additional operator tuning beyond `edge.verify`
+- Confirm retention policy expectations for reload history and retired runtime visibility in deployment docs
 
 ## Refactor Guardrails
 
@@ -99,4 +99,4 @@ catch e
   - `packages/server/spikes/tls/README.md`
   - `packages/server/spikes/tls/FINDINGS.md`
 - Plan of record:
-  - `.cursor/plans/rip_unified_master_plan_v2_2892e891.plan.md`
+  - `packages/server/docs/edge/PURE_BUN_EDGE_PLAN.md`

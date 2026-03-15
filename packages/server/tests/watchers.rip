@@ -1,0 +1,15 @@
+import { test, eq } from '../test.rip'
+import { shouldTriggerCodeReload } from '../control/watchers.rip'
+
+test "shouldTriggerCodeReload matches extension watch specs", ->
+  eq shouldTriggerCodeReload('foo.rip', '*.rip'), true
+  eq shouldTriggerCodeReload('foo.txt', '*.rip'), false
+
+test "shouldTriggerCodeReload matches exact filenames", ->
+  eq shouldTriggerCodeReload('config.rip', 'config.rip'), true
+  eq shouldTriggerCodeReload('nested/config.rip', 'config.rip'), true
+  eq shouldTriggerCodeReload('other.rip', 'config.rip'), false
+
+test "shouldTriggerCodeReload ignores the entry file itself", ->
+  eq shouldTriggerCodeReload('index.rip', '*.rip', 'index.rip'), false
+  eq shouldTriggerCodeReload('nested.rip', '*.rip', 'index.rip'), true

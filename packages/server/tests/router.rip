@@ -1,0 +1,81 @@
+import { test, eq, ok } from '../test.rip'
+import { compileRouteTable, matchRoute, describeRoute } from '../edge/router.rip'
+
+test "compileRouteTable keeps global route order", ->
+  table = compileRouteTable([
+    { id: 'one', path: '/a', upstream: 'app' }
+    { id: 'two', path: '/b', upstream: 'app' }
+  ])
+  eq table.routes.length, 2
+  eq table.routes[0].order, 0
+  eq table.routes[1].order, 1
+
+test "compileRouteTable merges site routes with inherited host", ->
+  table = compileRouteTable([],
+    'admin.example.com':
+      routes: [{ path: '/*', app: 'admin' }]
+  )
+  eq table.routes.length, 1
+  eq table.routes[0].host, 'admin.example.com'
+
+test "matchRoute prefers exact host over catchall", ->
+  table = compileRouteTable([
+    { path: '/*', upstream: 'fallback' }
+    { host: 'api.example.com', path: '/*', upstream: 'api' }
+  ])
+  eq matchRoute(table, 'api.example.com', '/users').upstream, 'api'
+
+test "matchRoute prefers wildcard host over catchall", ->
+  table = compileRouteTable([
+    { path: '/*', upstream: 'fallback' }
+    { host: '*.example.com', path: '/*', upstream: 'wild' }
+  ])
+  eq matchRoute(table, 'api.example.com', '/users').upstream, 'wild'
+
+test "matchRoute does not let wildcard span multiple labels", ->
+  table = compileRouteTable([
+    { host: '*.example.com', path: '/*', upstream: 'wild' }
+    { path: '/*', upstream: 'fallback' }
+  ])
+  eq matchRoute(table, 'a.b.example.com', '/users').upstream, 'fallback'
+
+test "matchRoute prefers exact path over prefix", ->
+  table = compileRouteTable([
+    { path: '/api/*', upstream: 'api' }
+    { path: '/api/users', upstream: 'users' }
+  ])
+  eq matchRoute(table, 'example.com', '/api/users').upstream, 'users'
+
+test "matchRoute prefers longer prefix", ->
+  table = compileRouteTable([
+    { path: '/api/*', upstream: 'api' }
+    { path: '/api/admin/*', upstream: 'admin' }
+  ])
+  eq matchRoute(table, 'example.com', '/api/admin/users').upstream, 'admin'
+
+test "matchRoute uses lower priority number before order", ->
+  table = compileRouteTable([
+    { path: '/api/*', upstream: 'one', priority: 10 }
+    { path: '/api/*', upstream: 'two', priority: 5 }
+  ])
+  eq matchRoute(table, 'example.com', '/api/x').upstream, 'two'
+
+test "matchRoute filters by method", ->
+  table = compileRouteTable([
+    { path: '/submit', upstream: 'read', methods: ['GET'] }
+    { path: '/submit', upstream: 'write', methods: ['POST'] }
+  ])
+  eq matchRoute(table, 'example.com', '/submit', 'POST').upstream, 'write'
+
+test "matchRoute returns null when nothing matches", ->
+  table = compileRouteTable([
+    { host: 'api.example.com', path: '/api/*', upstream: 'api' }
+  ])
+  eq matchRoute(table, 'example.com', '/api/x'), null
+
+test "describeRoute summarizes action", ->
+  table = compileRouteTable([
+    { host: 'api.example.com', path: '/api/*', upstream: 'api' }
+  ])
+  summary = describeRoute(matchRoute(table, 'api.example.com', '/api/x'))
+  ok summary.includes('proxy:api')

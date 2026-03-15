@@ -51,10 +51,13 @@ export createMetrics = ->
       { p50: pick(0.50), p95: pick(0.95), p99: pick(0.99) }
 
     # Full snapshot of all metrics
-    snapshot: (startedAt, appRegistry) ->
+    snapshot: (startedAt, appRegistry, upstreamPool = null) ->
       totalInflight = 0
       totalQueueDepth = 0
       apps = []
+      upstreams = []
+      upstreamHealthy = 0
+      upstreamUnhealthy = 0
       if appRegistry
         for [appId, app] as appRegistry.apps
           totalInflight += app.inflightTotal
@@ -64,10 +67,23 @@ export createMetrics = ->
             workers: app.sockets.length
             inflight: app.inflightTotal
             queueDepth: app.queue.length
+      if upstreamPool
+        for [upstreamId, upstream] as upstreamPool.upstreams
+          targets = upstream.targets or []
+          healthyTargets = targets.filter((t) -> t.healthy and t.circuitState isnt 'open').length
+          unhealthyTargets = targets.length - healthyTargets
+          upstreamHealthy += healthyTargets
+          upstreamUnhealthy += unhealthyTargets
+          upstreams.push
+            id: upstreamId
+            targets: targets.length
+            healthyTargets: healthyTargets
+            unhealthyTargets: unhealthyTargets
       uptimeSeconds = if startedAt then Math.floor((Date.now() - startedAt) / 1000) else 0
 
       uptime: uptimeSeconds
       apps: apps
+      upstreams: upstreams
       counters:
         requests: m.requests
         responses: { '2xx': m.responses2xx, '4xx': m.responses4xx, '5xx': m.responses5xx }
@@ -80,6 +96,8 @@ export createMetrics = ->
         workersActive: apps.reduce(((sum, a) -> sum + a.workers), 0)
         inflight: totalInflight
         queueDepth: totalQueueDepth
+        upstreamTargetsHealthy: upstreamHealthy
+        upstreamTargetsUnhealthy: upstreamUnhealthy
       latency: m.percentiles()
 
   m
