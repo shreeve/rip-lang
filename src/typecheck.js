@@ -973,15 +973,15 @@ export async function runCheck(targetDir, opts = {}) {
     }
   }
 
-  // Check for unresolved .rip imports in typed files
+  // Check for unresolved relative imports in all files (not just typed ones)
   const fileResults = [];
   let totalErrors = 0, totalWarnings = 0;
-  for (const [fp, entry] of compiled) {
-    if (!entry.hasTypes) continue;
-    const srcLines = entry.source.split('\n');
+  for (const [fp, source] of sourcesByPath) {
+    const srcLines = source.split('\n');
     const errors = [];
     for (let s = 0; s < srcLines.length; s++) {
-      const m = srcLines[s].match(/from\s+['"]([^'"]*\.rip)['"]/);
+      if (/^\s*#/.test(srcLines[s])) continue;
+      const m = srcLines[s].match(/^(?:import|export)\b.*from\s+['"](\.\.?\/[^'"]+)['"]/);
       if (!m) continue;
       const imported = resolve(dirname(fp), m[1]);
       if (!existsSync(imported)) {

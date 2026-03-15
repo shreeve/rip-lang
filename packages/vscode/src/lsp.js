@@ -351,6 +351,26 @@ function publishDiagnostics(filePath) {
     }
   }
 
+  // Unresolved relative import check (all files, not just typed)
+  if (c.source) {
+    const srcLines = c.source.split('\n');
+    for (let i = 0; i < srcLines.length; i++) {
+      if (/^\s*#/.test(srcLines[i])) continue;
+      const m = srcLines[i].match(/^(?:import|export)\b.*from\s+['"](\.\.?\/[^'"]+)['"]/);
+      if (!m) continue;
+      const imported = path.resolve(path.dirname(filePath), m[1]);
+      if (!fs.existsSync(imported)) {
+        const col = srcLines[i].indexOf(m[1]);
+        diagnostics.push({
+          range: { start: { line: i, character: col }, end: { line: i, character: col + m[1].length } },
+          severity: 1,
+          source: 'rip',
+          message: `Cannot find module '${m[1]}'`,
+        });
+      }
+    }
+  }
+
   connection.sendDiagnostics({ uri: pathToUri(filePath), diagnostics });
   connection.console.log(`[rip] diagnostics ${path.basename(filePath)}: ${diagnostics.length} issues`);
 }
