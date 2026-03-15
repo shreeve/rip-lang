@@ -22,7 +22,12 @@ import { buildLineMap } from './sourcemaps.js';
 // Detect type annotations (:: followed by space or =) ignoring comments,
 // string literals, and prototype syntax (Class::method).
 export function hasTypeAnnotations(source) {
+  let inHeredoc = false;
   return source.split('\n').some(line => {
+    // Track heredoc boundaries (''' or """)
+    const ticks = (line.match(/'''|"""/g) || []);
+    for (const t of ticks) inHeredoc = !inHeredoc;
+    if (inHeredoc) return false;
     // Strip comment
     line = line.replace(/#.*$/, '');
     // Strip string literals (single and double quoted)
