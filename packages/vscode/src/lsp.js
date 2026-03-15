@@ -1519,18 +1519,30 @@ connection.onDefinition((params) => {
       if (!path.isAbsolute(importPath)) importPath = path.resolve(path.dirname(fp), importPath);
       if (!importPath.endsWith('.rip') && fs.existsSync(importPath + '.rip')) importPath += '.rip';
       if (fs.existsSync(importPath)) {
+        // Check if cursor is on the module path string (quote to quote)
+        const pathStart = fromMatch.index + fromMatch[0].indexOf(fromMatch[1]) - 1;
+        const pathEnd = pathStart + fromMatch[1].length + 2;
+        const col = params.position.character;
+        const line = params.position.line;
+        const originRange = { start: { line, character: pathStart }, end: { line, character: pathEnd } };
+        const target = { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } };
+        if (col >= pathStart && col < pathEnd) {
+          return [{ targetUri: pathToUri(importPath), targetRange: target, targetSelectionRange: target, originSelectionRange: originRange }];
+        }
         if (word && word !== 'from' && word !== 'import') {
           const targetSrc = fs.readFileSync(importPath, 'utf8');
           const targetLines = targetSrc.split('\n');
           const pat = new RegExp(`(?:^|export\\s+)(?:def\\s+|type\\s+|interface\\s+)?${word}\\s*[=(:]`);
           for (let i = 0; i < targetLines.length; i++) {
             if (pat.test(targetLines[i])) {
-              const col = targetLines[i].indexOf(word);
-              return [{ uri: pathToUri(importPath), range: { start: { line: i, character: Math.max(0, col) }, end: { line: i, character: Math.max(0, col) + word.length } } }];
+              const symCol = targetLines[i].indexOf(word);
+              const symRange = { start: { line: i, character: Math.max(0, symCol) }, end: { line: i, character: Math.max(0, symCol) + word.length } };
+              return [{ targetUri: pathToUri(importPath), targetRange: symRange, targetSelectionRange: symRange }];
             }
           }
+          // Symbol not found in target — navigate to file
+          return [{ targetUri: pathToUri(importPath), targetRange: target, targetSelectionRange: target }];
         }
-        return [{ uri: pathToUri(importPath), range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } } }];
       }
     }
   }
