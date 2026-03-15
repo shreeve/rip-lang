@@ -60,9 +60,14 @@ export createCleanup = (pidFile, server, manager, unlinkSyncFn, fetchFn, process
     try unlinkSyncFn(pidFile)
     processObj.exit(0)
 
-export installShutdownHandlers = (cleanup, processObj) ->
+export installShutdownHandlers = (cleanup, processObj, onReload = null) ->
   processObj.on 'SIGTERM', cleanup
   processObj.on 'SIGINT', cleanup
+  if onReload
+    processObj.on 'SIGHUP', ->
+      try onReload!()
+      catch err
+        console.error 'rip-server: config reload failed:', err?.message or err
   processObj.on 'uncaughtException', (err) ->
     console.error 'rip-server: uncaught exception:', err
     cleanup()

@@ -71,3 +71,19 @@ test "snapshot returns expected shape", ->
   eq snap.counters.responses['2xx'], 90
   eq snap.counters.responses['5xx'], 10
   eq snap.apps, []
+
+test "snapshot includes upstream health gauges", ->
+  m = createMetrics()
+  upstreamPool =
+    upstreams: new Map([
+      ['app',
+        targets: [
+          { healthy: true, circuitState: 'closed' }
+          { healthy: false, circuitState: 'open' }
+        ]
+      ]
+    ])
+  snap = m.snapshot(Date.now() - 1000, null, upstreamPool)
+  eq snap.upstreams.length, 1
+  eq snap.gauges.upstreamTargetsHealthy, 1
+  eq snap.gauges.upstreamTargetsUnhealthy, 1

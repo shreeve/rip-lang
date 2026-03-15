@@ -1,0 +1,148 @@
+import { test, eq, ok } from '../test.rip'
+import { compileRouteTable } from '../edge/router.rip'
+import { collectRouteRequirements, verifyRouteRuntime } from '../edge/verify.rip'
+
+test "collectRouteRequirements gathers upstreams and managed apps", ->
+  table = compileRouteTable([
+    { path: '/api/*', upstream: 'api' }
+    { path: '/admin/*', app: 'admin' }
+  ])
+  appRegistry =
+    apps: new Map([
+      ['default', { config: { entry: '/srv/index.rip' } }]
+      ['reports', { config: { entry: '/srv/reports/index.rip' } }]
+    ])
+  reqs = collectRouteRequirements(table, appRegistry, 'default')
+  eq reqs.upstreamIds, ['api']
+  ok reqs.appIds.includes('admin')
+  ok reqs.appIds.includes('reports')
+
+test "verifyRouteRuntime returns upstream reason code", ->
+  runtime =
+    upstreamPool:
+      upstreams: new Map([
+        ['api', { id: 'api', targets: [{ targetId: 'api:0' }, { targetId: 'api:1' }] }]
+      ])
+    routeTable: compileRouteTable([{ path: '/api/*', upstream: 'api' }])
+  appRegistry = { apps: new Map() }
+  result = verifyRouteRuntime(
+    runtime,
+    appRegistry,
+    'default',
+    ((pool, id) -> pool.upstreams.get(id)),
+    ((pool, target) -> false),
+    ((registry, appId) -> registry.apps.get(appId))
+  )
+  eq result.ok, false
+  eq result.code, 'upstream_no_healthy_targets'
+  eq result.details.upstreamId, 'api'
+  eq result.details.requiredHealthyTargets, 1
+
+test "verifyRouteRuntime returns app worker reason code", ->
+  runtime =
+    upstreamPool:
+      upstreams: new Map()
+    routeTable: compileRouteTable([{ path: '/admin/*', app: 'admin' }])
+  appRegistry =
+    apps: new Map([
+      ['admin', { sockets: [], config: { entry: '/srv/admin/index.rip' } }]
+    ])
+  result = verifyRouteRuntime(
+    runtime,
+    appRegistry,
+    'default',
+    ((pool, id) -> pool.upstreams.get(id)),
+    ((pool, target) -> true),
+    ((registry, appId) -> registry.apps.get(appId))
+  )
+  eq result.ok, false
+  eq result.code, 'app_no_ready_workers'
+  eq result.details.appId, 'admin'
+
+test "verifyRouteRuntime succeeds when referenced upstreams and apps are healthy", ->
+  runtime =
+    upstreamPool:
+      upstreams: new Map([
+        ['api', { id: 'api', targets: [{ targetId: 'api:0' }] }]
+      ])
+    routeTable: compileRouteTable([
+      { path: '/api/*', upstream: 'api' }
+      { path: '/admin/*', app: 'admin' }
+    ])
+  appRegistry =
+    apps: new Map([
+      ['admin', { sockets: [{ socket: '/tmp/a.sock' }], config: { entry: '/srv/admin/index.rip' } }]
+    ])
+  result = verifyRouteRuntime(
+    runtime,
+    appRegistry,
+    'default',
+    ((pool, id) -> pool.upstreams.get(id)),
+    ((pool, target) -> true),
+    ((registry, appId) -> registry.apps.get(appId))
+  )
+  eq result.ok, true
+  eq result.code, null
+
+test "verifyRouteRuntime honors minimum healthy targets policy", ->
+  runtime =
+    upstreamPool:
+      upstreams: new Map([
+        ['api', { id: 'api', targets: [{ targetId: 'api:0' }, { targetId: 'api:1' }] }]
+      ])
+    routeTable: compileRouteTable([{ path: '/api/*', upstream: 'api' }])
+  appRegistry = { apps: new Map() }
+  healthyCount = 0
+  result = verifyRouteRuntime(
+    runtime,
+    appRegistry,
+    'default',
+    ((pool, id) -> pool.upstreams.get(id)),
+    ((pool, target) ->
+      healthyCount++
+      healthyCount is 1
+    ),
+    ((registry, appId) -> registry.apps.get(appId)),
+    minHealthyTargetsPerUpstream: 2
+  )
+  eq result.ok, false
+  eq result.code, 'upstream_no_healthy_targets'
+  eq result.details.healthyTargets, 1
+  eq result.details.requiredHealthyTargets, 2
+
+test "verifyRouteRuntime can skip healthy upstream checks", ->
+  runtime =
+    upstreamPool:
+      upstreams: new Map()
+    routeTable: compileRouteTable([{ path: '/api/*', upstream: 'api' }])
+  appRegistry = { apps: new Map() }
+  result = verifyRouteRuntime(
+    runtime,
+    appRegistry,
+    'default',
+    ((pool, id) -> pool.upstreams.get(id)),
+    ((pool, target) -> false),
+    ((registry, appId) -> registry.apps.get(appId)),
+    requireHealthyUpstreams: false
+  )
+  eq result.ok, true
+
+test "verifyRouteRuntime can skip unrouted managed apps", ->
+  runtime =
+    upstreamPool:
+      upstreams: new Map()
+    routeTable: compileRouteTable([])
+  appRegistry =
+    apps: new Map([
+      ['reports', { sockets: [], config: { entry: '/srv/reports/index.rip' } }]
+    ])
+  result = verifyRouteRuntime(
+    runtime,
+    appRegistry,
+    'default',
+    ((pool, id) -> pool.upstreams.get(id)),
+    ((pool, target) -> true),
+    ((registry, appId) -> registry.apps.get(appId)),
+    includeUnroutedManagedApps: false
+  )
+  eq result.ok, true

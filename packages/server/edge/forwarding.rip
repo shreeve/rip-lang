@@ -80,6 +80,8 @@ export proxyToUpstream = (req, upstreamBase, options = {}) ->
   headers.set('X-Forwarded-For', clientIp)
   headers.set('X-Forwarded-Proto', if inUrl.protocol is 'https:' then 'https' else 'http')
   headers.set('X-Forwarded-Host', inUrl.host)
+  via = req.headers.get('via')
+  headers.set('Via', if via then "#{via}, 1.1 rip" else '1.1 rip')
 
   timer = null
   try
@@ -97,6 +99,8 @@ export proxyToUpstream = (req, upstreamBase, options = {}) ->
     resHeaders = new Headers()
     for [key, val] as res.headers.entries()
       resHeaders.set(key, val) unless HOP_HEADERS.has(key.toLowerCase())
+    upstreamVia = res.headers.get('via')
+    resHeaders.set('Via', if upstreamVia then "#{upstreamVia}, 1.1 rip" else '1.1 rip')
     new Response(res.body, { status: res.status, statusText: res.statusText, headers: resHeaders })
   catch err
     clearTimeout(timer)
@@ -106,8 +110,8 @@ export proxyToUpstream = (req, upstreamBase, options = {}) ->
 
 # --- WebSocket passthrough to external upstream ---
 
-export createWsPassthrough = (clientWs, upstreamUrl) ->
-  upstream = new WebSocket(upstreamUrl)
+export createWsPassthrough = (clientWs, upstreamUrl, protocols = []) ->
+  upstream = new WebSocket(upstreamUrl, protocols)
 
   upstream.addEventListener 'open', ->
     null  # upstream connected

@@ -1,0 +1,180 @@
+# AI Agent Guide for `packages/server`
+
+This guide is for AI assistants working inside `packages/server/`.
+
+## Purpose
+
+`@rip-lang/server` is a graduated Bun-native runtime:
+
+1. **Single-app mode** — `rip server`
+2. **Managed multi-app mode** — `config.rip`
+3. **Edge mode** — `Edgefile.rip`
+
+It combines:
+
+- app framework (`api.rip`, `middleware.rip`)
+- managed worker runtime (`server.rip`, `control/*`)
+- edge proxy/runtime (`edge/*`)
+- auto-TLS (`acme/*`)
+
+## Package layout
+
+### Top level
+
+- `api.rip` — framework API: routing, validators, context, `start()`
+- `middleware.rip` — built-in middleware
+- `default.rip` — static fallback server
+- `server.rip` — orchestration hub: Manager, Server, request dispatch, startup
+
+### `edge/`
+
+Request-path behavior and edge runtime logic.
+
+- `config.rip` — `Edgefile.rip` and `config.rip` normalization/validation
+- `forwarding.rip` — HTTP/WS proxy helpers and worker forwarding
+- `metrics.rip` — diagnostics counters/gauges
+- `queue.rip` — worker queue helpers
+- `ratelimit.rip` — request rate limiting
+- `realtime.rip` — Bam-style realtime hub
+- `registry.rip` — host registry and app state
+- `router.rip` — host/path/method route matching
+- `runtime.rip` — edge runtime lifecycle helpers
+- `security.rip` — request validation and smuggling defenses
+- `tls.rip` — TLS loading helpers
+- `upstream.rip` — upstream pools, health checks, retry helpers
+- `verify.rip` — post-activate verification policy
+
+### `control/`
+
+Management/runtime plumbing.
+
+- `cli.rip` — CLI parsing, app resolution, help/version/subcommands
+- `control.rip` — control socket handlers and worker registry helpers
+- `lifecycle.rip` — shutdown hooks and event logging
+- `mdns.rip` — `.local` advertising
+- `watchers.rip` — code and SSE watch helpers
+- `worker.rip` — worker child runtime
+- `workers.rip` — worker spawn/health helpers
+
+### `acme/`
+
+Auto-TLS internals.
+
+- `client.rip`, `manager.rip`, `crypto.rip`, `store.rip`
+
+## Config modes
+
+### `config.rip`
+
+Legacy managed multi-app config.
+
+- only `apps` is valid at the top level
+- registers additional managed Rip apps
+- no upstreams, no edge routes, no verification policy
+
+### `Edgefile.rip`
+
+Canonical edge config for the edge runtime.
+
+Top-level keys:
+
+- `version`
+- `edge`
+- `upstreams`
+- `apps`
+- `routes`
+- `sites`
+
+Use `Edgefile.rip` when you need:
+
+- upstream proxy routes
+- websocket proxy routes
+- wildcard hosts
+- staged reload + verification + rollback
+- verification policy (`edge.verify`)
+
+## Edge runtime lifecycle
+
+The active edge runtime is generational:
+
+1. parse and validate config
+2. normalize and compile route table
+3. stage a new runtime
+4. activate atomically
+5. verify according to `edge.verify`
+6. rollback automatically if verification fails
+7. let retired runtimes drain in-flight HTTP and websocket proxy traffic
+
+Important objects:
+
+- `EdgeRuntime` — active/retired generation
+- `configInfo` — operator-facing status and reload history
+- `upstreamPool` — proxy backends and health state
+- `routeTable` — compiled host/path/method rules
+
+## Where logic belongs
+
+- request-path behavior belongs in `edge/*`
+- management/runtime plumbing belongs in `control/*`
+- orchestration stays in `server.rip`
+- avoid adding generic utility files
+
+If you are adding:
+
+- route matching -> `edge/router.rip`
+- upstream proxy behavior -> `edge/upstream.rip` / `edge/forwarding.rip`
+- verification rules -> `edge/verify.rip`
+- reload/rollback orchestration helpers -> `edge/runtime.rip`
+- CLI or app-entry resolution -> `control/cli.rip`
+
+## Testing
+
+Primary package test command:
+
+```bash
+./bin/rip packages/server/test.rip
+```
+
+Repo-wide regression suite:
+
+```bash
+bun run test
+```
+
+Server package tests live in `packages/server/tests/`.
+
+When changing:
+
+- config parsing -> update `tests/edgefile.rip`, `tests/proxy.rip`
+- routing -> update `tests/router.rip`, `tests/registry.rip`
+- upstream behavior -> update `tests/upstream.rip`
+- verification/rollback -> update `tests/verify.rip`, `tests/control.rip`
+- watcher behavior -> update `tests/watchers.rip`
+
+## Conventions
+
+- Keep docs and implementation aligned. `Edgefile.rip` surface changes must update:
+  - `README.md`
+  - `docs/edge/EDGEFILE_CONTRACT.md`
+  - `docs/edge/CONFIG_LIFECYCLE.md`
+  - `docs/edge/CONTRACTS.md`
+- Prefer extractions by theme, not by single function.
+- Keep `server.rip` as orchestration/wiring, not a dumping ground.
+- Use bare `try` when the catch body is truly a no-op.
+- Preserve the graduated runtime story:
+  - simple app serving must stay simple
+  - edge features must remain explicit and opt-in
+
+## Operator-facing features to protect
+
+Be careful when changing anything that affects:
+
+- `--edgefile`
+- `--check-config`
+- `POST /reload` on the control socket
+- `/diagnostics`
+- reload history and rollback reason reporting
+- wildcard hosts
+- websocket proxy routes
+
+These are now part of the runtime’s public operator contract.

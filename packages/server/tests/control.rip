@@ -1,0 +1,18 @@
+import { test, eq, ok } from '../test.rip'
+import { handleReloadControl } from '../control/control.rip'
+
+test "handleReloadControl ignores non-POST requests", ->
+  req = new Request('http://localhost/reload', { method: 'GET' })
+  eq handleReloadControl(req, { ok: true }).handled, false
+
+test "handleReloadControl returns 200 for successful reload", ->
+  req = new Request('http://localhost/reload', { method: 'POST' })
+  res = handleReloadControl(req, { ok: true, id: 'reload-1', result: 'applied' })
+  eq res.handled, true
+  eq res.response.status, 200
+
+test "handleReloadControl returns 409 for rejected reload", ->
+  req = new Request('http://localhost/reload', { method: 'POST' })
+  res = handleReloadControl(req, { ok: false, id: 'reload-2', result: 'rolled_back', reason: 'boom' })
+  eq res.handled, true
+  eq res.response.status, 409

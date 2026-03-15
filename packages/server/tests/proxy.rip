@@ -1,7 +1,7 @@
 # proxy.rip — reverse proxy and config loader tests
 
 import { test, eq, ok } from '../test.rip'
-import { normalizeAppConfig, applyConfig } from '../edge/config.rip'
+import { normalizeAppConfig, applyConfig, applyEdgeConfig } from '../edge/config.rip'
 import { createAppRegistry, registerApp, resolveHost, getAppState } from '../edge/registry.rip'
 import { broadcastBinary, createHub, addClient } from '../edge/realtime.rip'
 import { setEventJsonMode, logEvent } from '../control/lifecycle.rip'
@@ -48,6 +48,27 @@ test "applyConfig handles empty apps", ->
   registry = createAppRegistry()
   registered = applyConfig({ apps: {} }, registry, registerApp, '/srv')
   eq registered.length, 0
+
+test "applyEdgeConfig preserves managed app entry workers and env", ->
+  registry = createAppRegistry()
+  config =
+    kind: 'edge'
+    apps:
+      admin:
+        entry: '/srv/admin/index.rip'
+        hosts: ['admin.example.com']
+        workers: 3
+        maxQueue: 700
+        queueTimeoutMs: 1234
+        readTimeoutMs: 5678
+        env: { ADMIN_MODE: '1' }
+  registered = applyEdgeConfig(config, registry, registerApp, '/srv')
+  eq registered.length, 1
+  state = getAppState(registry, 'admin')
+  eq state.config.entry, '/srv/admin/index.rip'
+  eq state.config.workers, 3
+  eq state.config.env.ADMIN_MODE, '1'
+  eq state.maxQueue, 700
 
 # --- Binary broadcast ---
 
