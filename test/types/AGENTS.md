@@ -144,7 +144,8 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Hover types                 | *(IDE only)*   | Column-aware source maps, overload preference, typed implementation params                                                         |
 | Union value autocomplete    | *(IDE only)*   | String literal union completions for prop values, prop defaults, and typed variable assignments                                    |
 | Semantic token provider     | *(IDE only)*   | Bridges TS `getEncodedSemanticClassifications()` to Rip source; typed files get semantic tokens, reactive vars not marked readonly |
-| Unused variable dimming    | *(IDE only)*   | Forwards `DiagnosticTag.Unnecessary` from TS; expands hoisted-let 6199 into per-variable 6133; scoped source mapping for functions |
+| Unused variable dimming     | *(IDE only)*   | Forwards `DiagnosticTag.Unnecessary` from TS; expands hoisted-let 6199 into per-variable 6133; scoped source mapping for functions |
+| Deprecated strikethrough    | *(IDE only)*   | Forwards `DiagnosticTag.Deprecated` from TS suggestion diagnostics; hover includes JSDoc `@deprecated`, `@param` tags              |
 
 ### Suppressed error codes
 

@@ -514,7 +514,7 @@ function srcToOffset(filePath, line, col) {
       }
 
       // Word not on mapped line — search nearby generated lines
-      for (let delta = 1; delta <= 3; delta++) {
+      for (let delta = 1; delta <= 5; delta++) {
         for (const tryLine of [genLine + delta, genLine - delta]) {
           if (tryLine < 0 || tryLine >= genLines.length) continue;
           const tryText = genLines[tryLine];
@@ -1485,6 +1485,12 @@ connection.onHover((params) => {
     display = display.replace(/\b__bind_(\w+)__\b/g, '$1');
     let value = '```typescript\n' + display + '\n```';
     if (docs) value += '\n\n' + docs;
+    if (info.tags?.length) {
+      for (const tag of info.tags) {
+        const text = ts.displayPartsToString(tag.text || []);
+        value += `\n\n*@${tag.name}*` + (text ? ` — ${text}` : '');
+      }
+    }
     return { contents: { kind: 'markdown', value } };
   } catch { return null; }
 });
