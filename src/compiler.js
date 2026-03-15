@@ -406,6 +406,7 @@ export class CodeGenerator {
       return;
     }
     if (head === 'component') return;  // Component body has its own scope
+    if (head === 'enum') return;       // Enum members are not top-level variables
 
     if (CodeGenerator.ASSIGNMENT_OPS.has(head)) {
       let [target, value] = rest;

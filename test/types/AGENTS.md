@@ -112,7 +112,6 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Type inference (split decl.) | 11-inference  | Top-level `x = expr` inferred via `patchUninitializedTypes`; block-scoped and destructured caught by strict |
 | Intrinsic element typing     | 12-intrinsics | `__ripEl` emits typed helper calls; lib.dom source of truth for tags, attrs, events, global attrs           |
 | Go-to-def on imports         | *(IDE only)*  | Resolves import paths directly and finds exported symbol in target file; works for `from './file.rip'`      |
-| Unused variable dimming      | *(IDE only)*  | Forwards `DiagnosticTag.Unnecessary` and `DiagnosticTag.Deprecated` from TS; deprecated gets strikethrough  |
 
 ### ✅ Working
 
@@ -145,6 +144,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Hover types                 | *(IDE only)*   | Column-aware source maps, overload preference, typed implementation params                                                         |
 | Union value autocomplete    | *(IDE only)*   | String literal union completions for prop values, prop defaults, and typed variable assignments                                    |
 | Semantic token provider     | *(IDE only)*   | Bridges TS `getEncodedSemanticClassifications()` to Rip source; typed files get semantic tokens, reactive vars not marked readonly |
+| Unused variable dimming    | *(IDE only)*   | Forwards `DiagnosticTag.Unnecessary` from TS; expands hoisted-let 6199 into per-variable 6133; scoped source mapping for functions |
 
 ### Suppressed error codes
 

@@ -341,6 +341,10 @@ typeof 42                                       // kind 42
 await new Promise(r => setTimeout(r, 100))      // sleep 100
 Math.floor(Math.random() * 10) + 1              // rand 1, 10
 
+// --- Deprecated API (strikethrough test) -------------------------------------
+
+let escaped: string = escape('hello & world')
+
 // --- Word Literal (no direct TS equivalent) ---------------------------------
 
 // Rip: colors = %w[red green blue]

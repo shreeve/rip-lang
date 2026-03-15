@@ -145,6 +145,50 @@ export function mapToSourcePos(entry, offset) {
     return null;
   }
 
+  // Hoisted multi-variable `let` declaration (e.g. `let a, b, items, ...;`) —
+  // the compiler aggregates variable declarations into one line with no useful
+  // per-variable source mapping.  Detect the pattern (both top-level and inside
+  // functions), extract the word at the offset, and find its assignment in
+  // the Rip source.  Use the genToSrc mapping of the preceding TS line (the
+  // function declaration) to scope the search and avoid matching a same-named
+  // variable in a different function.
+  const hoistLine = getLineText(entry.tsContent, tsLine);
+  if (/^\s*let\s+[$\w]+\s*,/.test(hoistLine) && entry.source) {
+    let hl = 0;
+    for (let i = 0; i < entry.tsContent.length; i++) {
+      if (hl === tsLine) { hl = i; break; }
+      if (entry.tsContent[i] === '\n') hl++;
+    }
+    const hCol = offset - hl;
+    const hWord = hoistLine.slice(hCol).match(/^[$\w]+/);
+    if (hWord) {
+      const word = hWord[0];
+      const srcLines = entry.source.split('\n');
+      const assignRe = new RegExp('^' + word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*(?:::|=!|:=|~=|=)');
+
+      // Scope the search: find the source line of the enclosing function by
+      // checking genToSrc for the TS line just before the hoisted let.
+      let searchStart = 0;
+      if (entry.genToSrc) {
+        for (let g = tsLine - 1; g >= 0; g--) {
+          const s = entry.genToSrc.get(g);
+          if (s !== undefined) { searchStart = s; break; }
+        }
+      }
+
+      for (let s = searchStart; s < srcLines.length; s++) {
+        if (assignRe.test(srcLines[s].trimStart())) {
+          const col = srcLines[s].indexOf(word);
+          if (col >= 0) return { line: s, col };
+        }
+      }
+      // Variable is on a hoisted let but has no recognisable assignment in
+      // the source (e.g. for-loop iterators, destructured names).  Return
+      // null so callers skip it rather than producing a garbage mapping.
+      return null;
+    }
+  }
+
   // Resolve source line from genToSrc
   let srcLine = entry.genToSrc.get(tsLine);
   if (srcLine === undefined) {

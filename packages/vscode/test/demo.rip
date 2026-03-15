@@ -338,6 +338,10 @@ kind 42
 sleep 100
 rand 1, 10
 
+# --- Deprecated API (strikethrough test) -------------------------------------
+
+escaped:: string = escape("hello & world")
+
 # --- Word Literal -----------------------------------------------------------
 
 colors = %w[red green blue]

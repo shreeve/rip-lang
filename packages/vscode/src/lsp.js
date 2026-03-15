@@ -222,11 +222,39 @@ function publishDiagnostics(filePath) {
       const vf = toVirtual(filePath);
       const semanticDiags = service.getSemanticDiagnostics(vf);
       const syntacticDiags = service.getSyntacticDiagnostics(vf);
-      const allDiags = [...syntacticDiags, ...semanticDiags];
+      const suggestionDiags = service.getSuggestionDiagnostics(vf);
+      const allDiags = [...syntacticDiags, ...semanticDiags, ...suggestionDiags];
 
       for (const d of allDiags) {
         if (d.start === undefined) continue;
         if (tc.SKIP_CODES.has(d.code)) continue;
+
+        // Expand 6199 (all declarations unused) on hoisted multi-var `let` into
+        // individual per-variable diagnostics so each one dims independently.
+        if (d.code === 6199 && d.length > 0) {
+          const span = c.tsContent.substring(d.start, d.start + d.length);
+          if (/^\s*let\s+[$\w]+\s*,/.test(span)) {
+            const varRe = /[$\w]+/g;
+            let vm;
+            while ((vm = varRe.exec(span)) !== null) {
+              if (vm[0] === 'let') continue;
+              const pos = tc.mapToSourcePos(c, d.start + vm.index);
+              if (!pos) continue;
+              diagnostics.push({
+                range: {
+                  start: { line: pos.line, character: pos.col },
+                  end: { line: pos.line, character: pos.col + vm[0].length },
+                },
+                severity: d.category === 1 ? 1 : d.category === 0 ? 2 : d.category === 2 ? 4 : 3,
+                code: 6133,
+                source: 'rip',
+                message: `'${vm[0]}' is declared but its value is never read.`,
+                tags: [1],
+              });
+            }
+            continue;
+          }
+        }
 
         const startRaw = tc.mapToSourcePos(c, d.start);
         if (!startRaw) continue;
