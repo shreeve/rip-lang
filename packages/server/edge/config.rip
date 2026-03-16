@@ -362,7 +362,8 @@ normalizeServerBlock = (host, serverConfig, baseDir, errors, knownUpstreams, kno
       pushError(errors, 'E_SERVER_APP_REF', "#{path}.app", "unknown app #{serverApp}", 'Define the app under `apps` first.')
   else if isPlainObject(serverConfig.app)
     serverApp = "app-#{host.toLowerCase()}"
-    inlineApp = normalizeAppConfigInto(serverApp, serverConfig.app, baseDir, "#{path}.app", errors)
+    inlineAppConfig = Object.assign({}, serverConfig.app, { hosts: [host.toLowerCase()] })
+    inlineApp = normalizeAppConfigInto(serverApp, inlineAppConfig, baseDir, "#{path}.app", errors)
   routes = []
   if Array.isArray(serverConfig.routes) and serverConfig.routes.length > 0
     for routeConfig, idx in serverConfig.routes
