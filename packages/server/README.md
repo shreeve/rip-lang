@@ -33,6 +33,7 @@ external dependencies.
 | `server.rip` | Edge orchestrator: CLI, workers, load balancing, TLS, mDNS |
 | `edge/` | Request path and edge runtime: config, forwarding, metrics, registry, router, runtime, TLS, upstreams, verification |
 | `control/` | Management: CLI, lifecycle, workers, watchers, mDNS, events |
+| `streams/` | Layer 4 stream routing: ClientHello parsing, SNI routing, stream runtimes, raw TCP upstreams |
 | `acme/` | Auto-TLS: ACME client, crypto, cert store, challenge handler |
 
 > **See Also**: For the DuckDB server, see [@rip-lang/db](../db/README.md).
@@ -140,6 +141,10 @@ Upstream-backed Edgefile routes execute in the main server process, including
 Managed app-route expansion works beyond the default app, and additional
 managed apps participate in server-side reload/watch parity.
 
+For services that must keep their own TLS and client-certificate
+authentication intact, use `streamUpstreams` and `streams` for Layer 4
+passthrough.
+
 ### Canonical Shape
 
 ```coffee
@@ -151,8 +156,10 @@ export default
       connectMs: 2000
       readMs: 30000
   upstreams: {}
+  streamUpstreams: {}
   apps: {}
   routes: []
+  streams: []
   sites: {}
 ```
 
@@ -163,8 +170,10 @@ export default
 | `version` | Required schema version. Must be `1`. |
 | `edge` | Global edge settings: TLS, trusted proxies, timeouts, verification policy. |
 | `upstreams` | Named external HTTP services and their targets. |
+| `streamUpstreams` | Named raw TCP upstreams using `host:port` targets and optional `connectTimeoutMs`. |
 | `apps` | Managed Rip apps with entry paths, hosts, worker counts, and env. |
 | `routes` | Declarative route objects that choose exactly one action. |
+| `streams` | Layer 4 stream routes that match by listen port and SNI. |
 | `sites` | Per-host route groups and policy overrides. |
 
 ### Route Shape
@@ -190,6 +199,19 @@ WebSocket proxy routes use:
 - `websocket: true`
 - `upstream: 'name'`
 
+### Stream Shape
+
+Common stream fields:
+
+- `listen: number` — TCP port to bind
+- `sni: string[]` — exact or wildcard SNI patterns
+- `upstream: 'name'`
+- `timeouts?: { handshakeMs, idleMs, connectMs }`
+
+When `listen` matches the active HTTPS port, Rip uses a shared-port
+multiplexer. Matching SNI traffic is passed through to the stream upstream, and
+everything else falls through to Rip's internal HTTPS server.
+
 ### Example: Pure Proxy Shape
 
 ```coffee
@@ -213,6 +235,51 @@ export default
     { path: '/*', upstream: 'app' }
   ]
 ```
+
+### Example: TLS Passthrough For Incus
+
+```coffee
+export default
+  version: 1
+
+  edge: {}
+
+  streamUpstreams:
+    incus:
+      targets: ['127.0.0.1:8443']
+
+  streams: [
+    { listen: 8443, sni: ['incus.example.com'], upstream: 'incus' }
+  ]
+```
+
+### Example: Unified Port For Apps + Incus
+
+If a stream route listens on the active HTTPS port, Rip automatically switches
+that port into multiplexer mode. Matching SNI traffic is passed through at
+Layer 4, and everything else falls through to Rip's internal HTTPS server.
+
+```coffee
+export default
+  version: 1
+  edge: {}
+
+  streamUpstreams:
+    incus:
+      targets: ['127.0.0.1:8443']
+
+  streams: [
+    { listen: 443, sni: ['incus.example.com'], upstream: 'incus' }
+  ]
+```
+
+This means:
+
+- `https://incus.example.com` keeps Incus's own TLS and client-certificate flow
+- every other HTTPS host on `:443` still terminates TLS in Rip and uses the
+  normal HTTP/WebSocket edge runtime
+- if no stream route shares the HTTPS port, Rip stays on the normal direct
+  `Bun.serve()` path with no extra hop
 
 ### Example: Mixed Apps + Upstreams
 
@@ -291,8 +358,9 @@ You can also trigger reload through the control socket:
 curl --unix-socket /tmp/rip_myapp.ctl.sock -X POST http://localhost/reload
 ```
 
-When file watching is enabled, editing `Edgefile.rip` uses the same reload path
-automatically.
+When file watching is enabled, application code changes use the same staged
+reload path automatically. You can always reload Edgefile changes explicitly via
+`SIGHUP` or the control socket API.
 
 ### Inspect Active Config And Diagnostics
 

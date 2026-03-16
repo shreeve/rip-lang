@@ -1,0 +1,108 @@
+import { test, eq, ok } from '../test.rip'
+import { parseSNI } from '../streams/tls_clienthello.rip'
+
+buildClientHello = (hostname = 'incus.example.com', opts = {}) ->
+  hostBytes = new TextEncoder().encode(hostname)
+  sniEntryLen = 1 + 2 + hostBytes.length
+  serverNameListLen = sniEntryLen
+  sniExtLen = 2 + serverNameListLen
+  extensionsLen = if opts.noExtensions then 0 else 4 + sniExtLen
+  sessionId = new Uint8Array(0)
+  cipherSuites = new Uint8Array([0x00, 0x2f])
+  compression = new Uint8Array([0x00])
+
+  bodyLen = 2 + 32 + 1 + sessionId.length + 2 + cipherSuites.length + 1 + compression.length + 2 + extensionsLen
+  recordLen = 4 + bodyLen
+  totalLen = 5 + recordLen
+  out = new Uint8Array(totalLen)
+  i = 0
+  out[i++] = opts.contentType or 0x16
+  out[i++] = 0x03
+  out[i++] = opts.tlsMinor or 0x03
+  out[i++] = (recordLen >> 8) & 0xff
+  out[i++] = recordLen & 0xff
+  out[i++] = opts.handshakeType or 0x01
+  out[i++] = (bodyLen >> 16) & 0xff
+  out[i++] = (bodyLen >> 8) & 0xff
+  out[i++] = bodyLen & 0xff
+  out[i++] = 0x03
+  out[i++] = opts.clientMinor or 0x03
+  for n in [0...32]
+    out[i++] = n
+  out[i++] = sessionId.length
+  out.set(sessionId, i)
+  i += sessionId.length
+  out[i++] = 0x00
+  out[i++] = cipherSuites.length
+  out.set(cipherSuites, i)
+  i += cipherSuites.length
+  out[i++] = compression.length
+  out.set(compression, i)
+  i += compression.length
+  out[i++] = (extensionsLen >> 8) & 0xff
+  out[i++] = extensionsLen & 0xff
+  unless opts.noExtensions
+    out[i++] = 0x00
+    out[i++] = 0x00
+    out[i++] = (sniExtLen >> 8) & 0xff
+    out[i++] = sniExtLen & 0xff
+    out[i++] = (serverNameListLen >> 8) & 0xff
+    out[i++] = serverNameListLen & 0xff
+    out[i++] = 0x00
+    out[i++] = (hostBytes.length >> 8) & 0xff
+    out[i++] = hostBytes.length & 0xff
+    out.set(hostBytes, i)
+    i += hostBytes.length
+  out
+
+test "parseSNI extracts hostname from TLS 1.2 ClientHello", ->
+  hello = buildClientHello('incus.example.com', tlsMinor: 0x03, clientMinor: 0x03)
+  parsed = parseSNI(hello)
+  eq parsed.ok, true
+  eq parsed.sni, 'incus.example.com'
+
+test "parseSNI extracts hostname from TLS 1.3-style ClientHello", ->
+  hello = buildClientHello('api.example.com', tlsMinor: 0x03, clientMinor: 0x03)
+  parsed = parseSNI(hello)
+  eq parsed.ok, true
+  eq parsed.sni, 'api.example.com'
+
+test "parseSNI lowercases hostname", ->
+  hello = buildClientHello('InCus.Example.Com')
+  parsed = parseSNI(hello)
+  eq parsed.sni, 'incus.example.com'
+
+test "parseSNI returns need_more_bytes for short buffer", ->
+  parsed = parseSNI(new Uint8Array([0x16, 0x03, 0x03]))
+  eq parsed.ok, false
+  eq parsed.code, 'need_more_bytes'
+
+test "parseSNI rejects wrong record type", ->
+  hello = buildClientHello('incus.example.com', contentType: 0x17)
+  parsed = parseSNI(hello)
+  eq parsed.ok, false
+  eq parsed.code, 'bad_record_type'
+
+test "parseSNI rejects no-extensions hello as no_sni", ->
+  hello = buildClientHello('incus.example.com', noExtensions: true)
+  parsed = parseSNI(hello)
+  eq parsed.ok, false
+  eq parsed.code, 'no_sni'
+
+test "parseSNI rejects oversized ClientHello", ->
+  huge = new Uint8Array(5)
+  huge[0] = 0x16
+  huge[1] = 0x03
+  huge[2] = 0x03
+  huge[3] = 0x40
+  huge[4] = 0x01
+  parsed = parseSNI(huge)
+  eq parsed.ok, false
+  eq parsed.code, 'client_hello_too_large'
+
+test "parseSNI rejects malformed extension bounds", ->
+  hello = buildClientHello('incus.example.com')
+  hello[54] = 0xff
+  hello[55] = 0xff
+  parsed = parseSNI(hello)
+  ok parsed.ok is false

@@ -8,12 +8,10 @@ import { cpus } from 'node:os'
 
 # --- Shared helpers ---
 
-coerceInt = (value, fallback) ->
+export coerceInt = (value, fallback) ->
   return fallback unless value? and value isnt ''
   n = parseInt(String(value))
   if Number.isFinite(n) then n else fallback
-
-export coerceInt
 
 parseWorkersToken = (token, fallback) ->
   return fallback unless token

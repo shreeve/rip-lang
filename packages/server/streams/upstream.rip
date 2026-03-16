@@ -1,0 +1,48 @@
+# ==============================================================================
+# streams/upstream.rip — stream upstream selection and accounting
+# ==============================================================================
+
+export createStreamUpstreamPool = ->
+  upstreams: new Map()
+
+export addStreamUpstream = (pool, id, config) ->
+  targets = (config.targets or []).map (target, idx) ->
+    targetId: target.targetId or "#{target.host}:#{target.port}"
+    host: target.host
+    port: target.port
+    source: target.source or "#{target.host}:#{target.port}"
+    activeConnections: 0
+    totalConnections: 0
+  upstream =
+    id: id
+    connectTimeoutMs: config.connectTimeoutMs or 5000
+    targets: targets
+  pool.upstreams.set(id, upstream)
+  upstream
+
+export getStreamUpstream = (pool, id) ->
+  pool.upstreams.get(id) ?? null
+
+export listStreamUpstreams = (pool) ->
+  Array.from(pool.upstreams.values())
+
+export selectStreamTarget = (upstream) ->
+  return null unless upstream?.targets?.length
+  best = upstream.targets[0]
+  for target in upstream.targets[1..]
+    better = false
+    if target.activeConnections < best.activeConnections
+      better = true
+    else if target.activeConnections is best.activeConnections and target.targetId < best.targetId
+      better = true
+    best = target if better
+  best
+
+export openStreamConnection = (target) ->
+  target.activeConnections++
+  target.totalConnections++
+  target
+
+export releaseStreamConnection = (target) ->
+  target.activeConnections = Math.max(0, target.activeConnections - 1)
+  target

@@ -1,0 +1,51 @@
+# ==============================================================================
+# streams/runtime.rip — stream runtime lifecycle helpers
+# ==============================================================================
+
+import { createStreamUpstreamPool } from './upstream.rip'
+import { compileStreamTable, describeStreamRoute } from './router.rip'
+
+export createStreamRuntime = (configInfo = null, upstreamPool = null, routeTable = null) ->
+  upstreamPool = upstreamPool or createStreamUpstreamPool()
+  routeTable = routeTable or compileStreamTable()
+  configInfo = configInfo or {
+    streamCounts:
+      streamUpstreams: 0
+      streams: 0
+    activeStreamRouteDescriptions: []
+  }
+  {
+    id: "stream-#{Date.now()}-#{Math.random().toString(16).slice(2, 8)}"
+    upstreamPool: upstreamPool
+    routeTable: routeTable
+    listeners: new Map()
+    inflight: 0
+    retiredAt: null
+    configInfo: configInfo
+  }
+
+export describeStreamRuntime = (runtime) ->
+  return null unless runtime
+  {
+    id: runtime.id
+    inflight: runtime.inflight
+    retiredAt: runtime.retiredAt
+    listeners: Array.from(runtime.listeners.keys())
+  }
+
+export streamUsesListenPort = (runtimeOrRoutes, listenPort) ->
+  return false unless typeof listenPort is 'number'
+  routes = if runtimeOrRoutes?.routeTable?.routes
+    runtimeOrRoutes.routeTable.routes
+  else
+    runtimeOrRoutes or []
+  (routes or []).some((route) -> route?.listen is listenPort)
+
+export buildStreamConfigInfo = (normalized) ->
+  routeTable = compileStreamTable(normalized.streams or [])
+  {
+    streamCounts:
+      streamUpstreams: Object.keys(normalized.streamUpstreams or {}).length
+      streams: (normalized.streams or []).length
+    activeStreamRouteDescriptions: (routeTable.routes or []).map(describeStreamRoute).filter(Boolean)
+  }

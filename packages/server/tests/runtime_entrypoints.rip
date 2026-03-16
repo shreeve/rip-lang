@@ -1,0 +1,16 @@
+import { test, eq, ok } from '../test.rip'
+import { coerceInt, parseFlags } from '../control/cli.rip'
+import { createEdgeRuntime, createReloadHistoryEntry } from '../edge/runtime.rip'
+
+test "control cli helpers load and parse basic flags", ->
+  flags = parseFlags(['bun', 'server', '--https-port=9445', '--edgefile=./Edgefile.rip', 'packages/server/default.rip'])
+  eq coerceInt('42', 0), 42
+  eq flags.httpsPort, 9445
+  ok flags.edgefilePath.endsWith('Edgefile.rip')
+
+test "edge runtime helpers load and create summary entries", ->
+  runtime = createEdgeRuntime()
+  entry = createReloadHistoryEntry('reload-1', 'test', null, 1, 'applied')
+  eq runtime.configInfo.kind, 'none'
+  eq entry.id, 'reload-1'
+  eq entry.result, 'applied'

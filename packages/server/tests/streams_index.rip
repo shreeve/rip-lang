@@ -1,0 +1,53 @@
+import { test, eq } from '../test.rip'
+import { buildStreamRuntime, resolveHandshakeTarget } from '../streams/index.rip'
+
+test "resolveHandshakeTarget falls through to http fallback when no route matches", ->
+  runtime = buildStreamRuntime(
+    streamUpstreams:
+      incus:
+        targets: [{ host: '127.0.0.1', port: 8443 }]
+    streams: [
+      { id: 'incus', order: 0, listen: 443, sni: ['incus.example.com'], upstream: 'incus' }
+    ]
+  )
+  result = resolveHandshakeTarget(runtime, 443, 'app.example.com',
+    443:
+      hostname: '127.0.0.1'
+      port: 9443
+  )
+  eq result.kind, 'fallback'
+  eq result.target.port, 9443
+
+test "resolveHandshakeTarget prefers configured stream routes over fallback", ->
+  runtime = buildStreamRuntime(
+    streamUpstreams:
+      incus:
+        targets: [{ host: '127.0.0.1', port: 8443 }]
+    streams: [
+      { id: 'incus', order: 0, listen: 443, sni: ['incus.example.com'], upstream: 'incus' }
+    ]
+  )
+  result = resolveHandshakeTarget(runtime, 443, 'incus.example.com',
+    443:
+      hostname: '127.0.0.1'
+      port: 9443
+  )
+  eq result.kind, 'stream'
+  eq result.target.port, 8443
+
+test "resolveHandshakeTarget rejects when stream route matches but upstream is unavailable", ->
+  runtime = buildStreamRuntime(
+    streamUpstreams:
+      incus:
+        targets: []
+    streams: [
+      { id: 'incus', order: 0, listen: 443, sni: ['incus.example.com'], upstream: 'incus' }
+    ]
+  )
+  result = resolveHandshakeTarget(runtime, 443, 'incus.example.com',
+    443:
+      hostname: '127.0.0.1'
+      port: 9443
+  )
+  eq result.kind, 'reject'
+  eq result.code, 'no_available_target'

@@ -9,7 +9,7 @@ import { resolveConfigSource, loadConfig, loadEdgeConfig, summarizeConfig, forma
 export createEdgeRuntime = (configInfo = null, upstreamPool = null, routeTable = null) ->
   upstreamPool = upstreamPool or createUpstreamPool()
   routeTable = routeTable or compileRouteTable()
-  configInfo = configInfo or
+  configInfo = configInfo or {
     kind: 'none'
     path: null
     version: null
@@ -21,6 +21,7 @@ export createEdgeRuntime = (configInfo = null, upstreamPool = null, routeTable =
     lastErrorCode: null
     lastErrorDetails: null
     activeRouteDescriptions: []
+  }
   {
     id: "edge-#{Date.now()}-#{Math.random().toString(16).slice(2, 8)}"
     upstreamPool

@@ -1,0 +1,70 @@
+import { test, eq, ok } from '../test.rip'
+import { createPipeState, writeChunk, flushPending } from '../streams/pipe.rip'
+
+fakeSocket = (returns = []) ->
+  writes = []
+  idx = 0
+  paused = 0
+  resumed = 0
+  {
+    writes
+    write: (data) ->
+      writes.push(new Uint8Array(data))
+      ret = returns[idx]
+      idx++
+      if ret? then ret else data.byteLength
+    pause: -> paused++
+    resume: -> resumed++
+    pausedCount: -> paused
+    resumedCount: -> resumed
+  }
+
+test "writeChunk succeeds when full write completes", ->
+  sock = fakeSocket()
+  state = createPipeState()
+  res = writeChunk(sock, state, new Uint8Array([1, 2, 3]))
+  eq res.needDrain, false
+  eq state.pending.byteLength, 0
+
+test "writeChunk buffers remainder on partial write", ->
+  sock = fakeSocket([1])
+  state = createPipeState()
+  res = writeChunk(sock, state, new Uint8Array([1, 2, 3]))
+  eq res.needDrain, true
+  eq state.pending.byteLength, 2
+  eq Array.from(state.pending), [2, 3]
+
+test "flushPending clears buffer when write completes", ->
+  sock = fakeSocket()
+  state = createPipeState()
+  state.pending = new Uint8Array([4, 5])
+  state.waitingForDrain = true
+  res = flushPending(sock, state)
+  eq res.needDrain, false
+  eq state.pending.byteLength, 0
+
+test "flushPending keeps remainder on partial write", ->
+  sock = fakeSocket([1])
+  state = createPipeState()
+  state.pending = new Uint8Array([4, 5, 6])
+  state.waitingForDrain = true
+  res = flushPending(sock, state)
+  eq res.needDrain, true
+  eq Array.from(state.pending), [5, 6]
+
+test "writeChunk appends new data behind existing pending buffer", ->
+  sock = fakeSocket()
+  state = createPipeState()
+  state.pending = new Uint8Array([9, 9])
+  state.waitingForDrain = true
+  res = writeChunk(sock, state, new Uint8Array([1, 2]))
+  eq res.needDrain, true
+  eq res.wrote, 0
+  eq Array.from(state.pending), [9, 9, 1, 2]
+
+test "writeChunk reports closed socket on -1", ->
+  sock = fakeSocket([-1])
+  state = createPipeState()
+  res = writeChunk(sock, state, new Uint8Array([1]))
+  eq res.closed, true
+  eq res.ok, false

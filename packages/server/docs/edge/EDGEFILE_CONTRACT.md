@@ -10,13 +10,15 @@ export default
   version: 1
   edge: ...
   upstreams: ...
+  streamUpstreams: ...
   apps: ...
   routes: ...
+  streams: ...
   sites: ...
 ```
 
-Only `version`, `edge`, `upstreams`, `apps`, `routes`, and `sites` are valid
-top-level keys.
+Only `version`, `edge`, `upstreams`, `streamUpstreams`, `apps`, `routes`,
+`streams`, and `sites` are valid top-level keys.
 
 ## Determinism policy
 
@@ -85,6 +87,17 @@ apps:
       ADMIN_MODE: '1'
 ```
 
+### `streamUpstreams`
+
+Named raw TCP upstreams for Layer 4 passthrough.
+
+```coffee
+streamUpstreams:
+  incus:
+    targets: ['127.0.0.1:8443']
+    connectTimeoutMs: 5000  # optional, default 5000
+```
+
 ### `routes`
 
 Declarative edge route objects.
@@ -118,6 +131,32 @@ WebSocket proxy routes use:
 
 - `websocket: true`
 - `upstream: string`
+
+### `streams`
+
+Declarative Layer 4 stream routes.
+
+```coffee
+streams: [
+  { listen: 8443, sni: ['incus.example.com'], upstream: 'incus' }
+]
+```
+
+Supported fields:
+
+- `id?: string`
+- `listen: number`
+- `sni: string[]`
+- `upstream: string`
+- `timeouts?: { handshakeMs, idleMs, connectMs }`
+
+If a stream route listens on the active HTTPS port, Rip switches that port into
+a shared multiplexer mode:
+
+- the public port is owned by the Layer 4 listener
+- matching SNI traffic is passed through to the configured `streamUpstreams`
+- non-matching SNI, or TLS clients without SNI, fall through to Rip's internal
+  HTTPS server and continue through the normal HTTP/WebSocket edge runtime
 
 ### `sites`
 

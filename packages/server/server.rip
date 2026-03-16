@@ -42,6 +42,8 @@ import { validateRequest } from './edge/security.rip'
 import { createUpstreamPool, addUpstream, getUpstream, listUpstreams, selectTarget, markTargetBusy, releaseTarget, shouldRetry as shouldRetryUpstream, computeRetryDelayMs, startHealthChecks, stopHealthChecks, checkTargetHealth } from './edge/upstream.rip'
 import { compileRouteTable, matchRoute, describeRoute } from './edge/router.rip'
 import { buildVerificationResult, verifyRouteRuntime } from './edge/verify.rip'
+import { buildStreamRuntime, startStreamListeners, stopStreamListeners, streamDiagnostics } from './streams/index.rip'
+import { createStreamRuntime, streamUsesListenPort } from './streams/runtime.rip'
 
 # Match capture holder for Rip's =~
 _ = null
@@ -416,10 +418,16 @@ class Server
   constructor: (@flags) ->
     @server = null
     @httpsServer = null
+    @internalHttpsServer = null
     @control = null
     @urls = []
     @startedAt = nowMs()
     @httpsActive = false
+    @streamListenersDeferred = false
+    @tlsMaterial = null
+    @multiplexerPorts =
+      publicHttpsPort: null
+      internalHttpsPort: null
     @appRegistry = createAppRegistry()
     @defaultAppId = @flags.appName
     @challengeStore = createChallengeStore()
@@ -433,6 +441,8 @@ class Server
     @configuredAppIds = new Set()
     @edgeRuntime = createEdgeRuntime()
     @retiredEdgeRuntimes = []
+    @streamRuntime = createStreamRuntime()
+    @retiredStreamRuntimes = []
     @reloadAttemptSeq = 0
     @configInfo = @edgeRuntime.configInfo
     @configInfo.reloadHistory = []
@@ -486,6 +496,14 @@ class Server
     runtime.wsConnections = Math.max(0, runtime.wsConnections - 1)
     @cleanupRetiredEdgeRuntimes()
 
+  retainStreamRuntime: (runtime) ->
+    runtime.inflight++
+    runtime
+
+  releaseStreamRuntime: (runtime) ->
+    runtime.inflight = Math.max(0, runtime.inflight - 1)
+    @cleanupRetiredStreamRuntimes()
+
   cleanupRetiredEdgeRuntimes: ->
     keep = []
     for runtime in @retiredEdgeRuntimes
@@ -494,6 +512,15 @@ class Server
       else
         stopHealthChecks(runtime.upstreamPool)
     @retiredEdgeRuntimes = keep
+
+  cleanupRetiredStreamRuntimes: ->
+    keep = []
+    for runtime in @retiredStreamRuntimes
+      if runtime.inflight > 0
+        keep.push(runtime)
+      else
+        stopStreamListeners(runtime, true)
+    @retiredStreamRuntimes = keep
 
   appendReloadHistory: (entry) ->
     history = [entry].concat(@configInfo.reloadHistory or [])
@@ -538,6 +565,88 @@ class Server
     startHealthChecks(runtime.upstreamPool)
     runtime
 
+  buildStreamRuntimeForConfig: (loaded) ->
+    return createStreamRuntime() unless loaded?.source?.kind is 'edge'
+    buildStreamRuntime(loaded.normalized)
+
+  startAppServerOnPort: (p, opts = {}) ->
+    fetchFn = @fetch.bind(@)
+    wsOpts = @buildWebSocketHandlers()
+    port = p
+    while port < p + 100
+      try
+        return Bun.serve(Object.assign({ port, idleTimeout: 0, fetch: fetchFn }, wsOpts, opts))
+      catch e
+        if e?.code is 'EACCES' and port < 1024
+          port = if opts.tls then 3443 else 3000
+          p = port
+          continue
+        throw e unless e?.code is 'EADDRINUSE'
+        port++
+    throw new Error "No available port found (tried #{p}–#{p + 99})"
+
+  captureHttpsMode: ->
+    {
+      useInternal: Boolean(@internalHttpsServer)
+      publicHttpsPort: @flags.httpsPort or null
+    }
+
+  shouldUseInternalHttps: (runtime, publicHttpsPort = @flags.httpsPort or null) ->
+    return false unless @tlsMaterial and publicHttpsPort?
+    streamUsesListenPort(runtime, publicHttpsPort)
+
+  applyHttpsMode: (useInternal, publicHttpsPort = @flags.httpsPort or null) ->
+    return unless @tlsMaterial and publicHttpsPort?
+    if useInternal
+      try @httpsServer?.stop()
+      @httpsServer = null
+      unless @internalHttpsServer
+        fetchFn = @fetch.bind(@)
+        wsOpts = @buildWebSocketHandlers()
+        @internalHttpsServer = Bun.serve(Object.assign(
+          { hostname: '127.0.0.1', port: 0, idleTimeout: 0, fetch: fetchFn }
+          wsOpts
+          { tls: @tlsMaterial }
+        ))
+      @httpsActive = true
+      @flags.httpsPort = publicHttpsPort
+      @multiplexerPorts =
+        publicHttpsPort: publicHttpsPort
+        internalHttpsPort: @internalHttpsServer.port
+      return
+
+    try @internalHttpsServer?.stop()
+    @internalHttpsServer = null
+    unless @httpsServer?.port is publicHttpsPort
+      try @httpsServer?.stop()
+      @httpsServer = @startAppServerOnPort(publicHttpsPort, { tls: @tlsMaterial })
+    @httpsActive = true
+    @flags.httpsPort = @httpsServer.port
+    @multiplexerPorts =
+      publicHttpsPort: @httpsServer.port
+      internalHttpsPort: null
+
+  restoreHttpsMode: (snapshot) ->
+    return unless snapshot?.publicHttpsPort?
+    @applyHttpsMode(snapshot.useInternal is true, snapshot.publicHttpsPort)
+
+  buildStreamListenerOptions: ->
+    options =
+      hostname: '0.0.0.0'
+      onConnectionOpen: @retainStreamRuntime.bind(@)
+      onConnectionClose: @releaseStreamRuntime.bind(@)
+    if @internalHttpsServer and @flags.httpsPort?
+      fallback = {}
+      fallback[@flags.httpsPort] =
+        hostname: '127.0.0.1'
+        port: @internalHttpsServer.port
+      options.httpFallback = fallback
+    options
+
+  startActiveStreamListeners: ->
+    startStreamListeners(@streamRuntime, @buildStreamListenerOptions())
+    @streamListenersDeferred = false
+
   activateEdgeRuntime: (runtime) ->
     return unless runtime
     oldRuntime = @edgeRuntime
@@ -547,6 +656,32 @@ class Server
       oldRuntime.retiredAt = new Date().toISOString()
       @retiredEdgeRuntimes.push(oldRuntime)
       @cleanupRetiredEdgeRuntimes()
+    oldRuntime
+
+  activateStreamRuntime: (runtime, options = {}) ->
+    return unless runtime
+    oldRuntime = @streamRuntime
+    httpsSnapshot = @captureHttpsMode()
+    if oldRuntime and oldRuntime isnt runtime
+      stopStreamListeners(oldRuntime, false)
+      oldRuntime.retiredAt = new Date().toISOString()
+    try
+      unless options.deferListeners is true
+        @applyHttpsMode(@shouldUseInternalHttps(runtime, httpsSnapshot.publicHttpsPort), httpsSnapshot.publicHttpsPort) if @tlsMaterial and httpsSnapshot.publicHttpsPort?
+        startStreamListeners(runtime, @buildStreamListenerOptions())
+        @streamListenersDeferred = false
+      else
+        @streamListenersDeferred = true
+    catch err
+      @restoreHttpsMode(httpsSnapshot) if @tlsMaterial and httpsSnapshot.publicHttpsPort?
+      if oldRuntime and oldRuntime isnt runtime
+        startStreamListeners(oldRuntime, @buildStreamListenerOptions()) unless oldRuntime.listeners.size > 0
+        oldRuntime.retiredAt = null
+      throw err
+    @streamRuntime = runtime
+    if oldRuntime and oldRuntime isnt runtime
+      @retiredStreamRuntimes.push(oldRuntime)
+      @cleanupRetiredStreamRuntimes()
     oldRuntime
 
   rollbackEdgeRuntime: (oldRuntime, failedRuntime, snapshot, verification) ->
@@ -576,11 +711,21 @@ class Server
     @retiredEdgeRuntimes.push(failedRuntime)
     @cleanupRetiredEdgeRuntimes()
 
+  rollbackStreamRuntime: (oldRuntime, failedRuntime) ->
+    stopStreamListeners(failedRuntime, true)
+    @retiredStreamRuntimes = @retiredStreamRuntimes.filter((runtime) -> runtime isnt oldRuntime and runtime isnt failedRuntime)
+    if oldRuntime
+      oldRuntime.retiredAt = null
+      @applyHttpsMode(@shouldUseInternalHttps(oldRuntime), @flags.httpsPort) if @tlsMaterial and @flags.httpsPort?
+      startStreamListeners(oldRuntime, @buildStreamListenerOptions()) unless oldRuntime.listeners.size > 0
+      @streamRuntime = oldRuntime
+    @cleanupRetiredStreamRuntimes()
+
   reloadRuntimeConfig: (flags, source = 'startup', verifyAfterActivate = false) ->
     attemptId = @nextReloadAttemptId()
     oldVersion = @configInfo?.version or null
     try
-      loaded = loadRuntimeConfig(flags)
+      loaded = loadRuntimeConfig!(flags)
       applied = @applyRuntimeConfig(loaded,
         source: source
         verifyAfterActivate: verifyAfterActivate
@@ -669,11 +814,14 @@ class Server
       wildcardIndex: new Map(@appRegistry.wildcardIndex)
       configured: new Set(@configuredAppIds)
     oldRuntime = @edgeRuntime
+    oldStreamRuntime = @streamRuntime
     stagedRuntime = @buildEdgeRuntime(loaded)
+    stagedStreamRuntime = @buildStreamRuntimeForConfig(loaded)
 
     @clearConfiguredApps()
     unless loaded
       @activateEdgeRuntime(stagedRuntime)
+      @activateStreamRuntime(stagedStreamRuntime, deferListeners: source is 'startup')
       return
 
     baseDir = dirname(loaded.source.path)
@@ -685,10 +833,12 @@ class Server
       for app in registered
         @configuredAppIds.add(app.id) unless app.id is @defaultAppId
       oldRuntime = @activateEdgeRuntime(stagedRuntime)
+      oldStreamRuntime = @activateStreamRuntime(stagedStreamRuntime, deferListeners: source is 'startup')
       if verifyAfterActivate
         result = @verifyEdgeRuntime!(stagedRuntime, loaded)
         unless result.ok
           @rollbackEdgeRuntime(oldRuntime, stagedRuntime, snapshot, result)
+          @rollbackStreamRuntime(oldStreamRuntime, stagedStreamRuntime)
           logEvent('config_rollback',
             source: source
             oldVersion: oldRuntime?.configInfo?.version
@@ -715,42 +865,23 @@ class Server
       true
     catch err
       stopHealthChecks(stagedRuntime.upstreamPool)
+      stopStreamListeners(stagedStreamRuntime, true)
       restoreRegistrySnapshot(@appRegistry, snapshot)
       @configuredAppIds = new Set(snapshot.configured)
       throw err
 
   start: ->
     httpOnly = @flags.httpsPort is null
-    fetchFn = @fetch.bind(@)
-    wsOpts = @buildWebSocketHandlers()
-
-    # Helper to start server, trying the given port first, then incrementing.
-    # Falls back to unprivileged range (3000 for HTTP, 3443 for HTTPS) if
-    # the initial port fails due to permission denied (EACCES).
-    startOnPort = (p, opts = {}) =>
-      port = p
-      while port < p + 100
-        try
-          return Bun.serve(Object.assign({ port, idleTimeout: 0, fetch: fetchFn }, wsOpts, opts))
-        catch e
-          if e?.code is 'EACCES' and port < 1024
-            port = if opts.tls then 3443 else 3000
-            p = port
-            continue
-          throw e unless e?.code is 'EADDRINUSE'
-          port++
-      throw new Error "No available port found (tried #{p}–#{p + 99})"
 
     if httpOnly
-      @server = startOnPort(@flags.httpPort or 80)
+      @server = @startAppServerOnPort(@flags.httpPort or 80)
       @flags.httpPort = @server.port
     else
-      tls = @loadTlsMaterial!
-      @httpsServer = startOnPort(@flags.httpsPort or 443, { tls })
-
-      httpsPort = @httpsServer.port
-      @flags.httpsPort = httpsPort
-      @httpsActive = true
+      @tlsMaterial = @loadTlsMaterial!
+      publicHttpsPort = @flags.httpsPort or 443
+      @applyHttpsMode(@shouldUseInternalHttps(@streamRuntime, publicHttpsPort), publicHttpsPort)
+      httpsPort = @flags.httpsPort
+      @streamListenersDeferred = true if @internalHttpsServer and @streamRuntime.listeners.size is 0
 
       if @flags.redirectHttp or @flags.acme or @flags.acmeStaging
         challengeStore = @challengeStore
@@ -770,6 +901,8 @@ class Server
 
       @flags.httpPort = if @server then @server.port else 0
 
+    @startActiveStreamListeners() if @streamListenersDeferred or @streamRuntime.listeners.size is 0
+
     @startControl!
 
     # Periodic queue timeout sweep — expire queued requests even when no workers are available
@@ -785,6 +918,8 @@ class Server
   stop: ->
     stopHealthChecks(@edgeRuntime.upstreamPool)
     stopHealthChecks(runtime.upstreamPool) for runtime in @retiredEdgeRuntimes
+    stopStreamListeners(@streamRuntime, true)
+    stopStreamListeners(runtime, true) for runtime in @retiredStreamRuntimes
     clearInterval(@queueSweepTimer) if @queueSweepTimer
     logEvent('server_stop', { uptime: Math.floor((nowMs() - @startedAt) / 1000) })
     # Drain all per-app queues — resolve pending requests with 503
@@ -796,6 +931,7 @@ class Server
     # Stop listeners with graceful drain
     try @server?.stop()
     try @httpsServer?.stop()
+    try @internalHttpsServer?.stop()
     try @control?.stop()
 
     controlStopMdnsAdvertisements(@mdnsProcesses)
@@ -1022,7 +1158,12 @@ class Server
       gauges: snap.gauges
       realtime: getRealtimeStats(@realtimeHub)
       hosts: Array.from(@appRegistry.hostIndex.keys())
+      streams: streamDiagnostics(@streamRuntime)
       config: Object.assign({}, @configInfo,
+        multiplexer:
+          enabled: Boolean(@internalHttpsServer)
+          publicHttpsPort: @multiplexerPorts.publicHttpsPort
+          internalHttpsPort: @multiplexerPorts.internalHttpsPort
         activeRuntime:
           id: @edgeRuntime.id
           inflight: @edgeRuntime.inflight
@@ -1031,6 +1172,16 @@ class Server
           id: runtime.id
           inflight: runtime.inflight
           wsConnections: runtime.wsConnections
+          retiredAt: runtime.retiredAt
+        )
+        activeStreamRuntime:
+          id: @streamRuntime.id
+          inflight: @streamRuntime.inflight
+          listeners: Array.from(@streamRuntime.listeners.keys())
+        retiredStreamRuntimes: @retiredStreamRuntimes.map((runtime) ->
+          id: runtime.id
+          inflight: runtime.inflight
+          listeners: Array.from(runtime.listeners.keys())
           retiredAt: runtime.retiredAt
         )
       )
@@ -1195,7 +1346,7 @@ class Server
       return res.response if res.handled
 
     if req.method is 'POST' and url.pathname is '/reload'
-      result = @reloadRuntimeConfig(@flags, 'control_api', true)
+      result = @reloadRuntimeConfig!(@flags, 'control_api', true)
       res = handleReloadControl(req, result)
       return res.response if res.handled
 
@@ -1329,7 +1480,7 @@ main = ->
   flags = parseFlags(process.argv, defaultEntry)
   applyFlagSideEffects(flags)
   if flags.checkConfig
-    runCheckConfig(flags)
+    runCheckConfig!(flags)
     return
   setEventJsonMode(flags.jsonLogging)
   pidFile = getPidFilePath(flags.socketPrefix)
@@ -1340,13 +1491,13 @@ main = ->
   svr.manager = mgr
   mgr.server = svr
 
-  startupReload = svr.reloadRuntimeConfig(flags, 'startup', false)
+  startupReload = svr.reloadRuntimeConfig!(flags, 'startup', false)
   exit 1 unless startupReload.ok
 
   cleanup = createCleanup(pidFile, svr, mgr, unlinkSync, fetch, process)
   installShutdownHandlers(cleanup, process, ->
     p 'rip-server: received SIGHUP, reloading config...'
-    if svr.reloadRuntimeConfig(flags, 'sighup', true).ok
+    if svr.reloadRuntimeConfig!(flags, 'sighup', true).ok
       p 'rip-server: config reload applied'
     else
       p 'rip-server: config reload rejected, keeping previous config'

@@ -8,6 +8,7 @@
 
 import { existsSync, statSync } from 'node:fs'
 import { join, dirname, resolve, basename } from 'node:path'
+import { normalizeStreamUpstreams, normalizeStreams } from '../streams/config.rip'
 
 EDGEFILE_NAME = 'Edgefile.rip'
 LEGACY_CONFIG_NAME = 'config.rip'
@@ -272,7 +273,7 @@ normalizeSiteConfig = (host, siteConfig, idx, errors, knownUpstreams, knownApps)
     routes
   }
 
-topLevelKeys = new Set(['version', 'edge', 'upstreams', 'apps', 'routes', 'sites'])
+topLevelKeys = new Set(['version', 'edge', 'upstreams', 'apps', 'routes', 'sites', 'streamUpstreams', 'streams'])
 
 export createConfigError = (code, path, message, hint = null) ->
   { code, path, message, hint }
@@ -306,7 +307,7 @@ export normalizeEdgeConfig = (config, baseDir) ->
     pushError(errors, 'E_CONFIG_TYPE', '$', 'Edgefile.rip must export an object', "Use `export default { version: 1, edge: {}, routes: [] }`.")
     throw validationError(EDGEFILE_NAME, errors)
   for key of config
-    pushError(errors, 'E_UNKNOWN_KEY', key, "unknown top-level key #{key}", 'Use only `version`, `edge`, `upstreams`, `apps`, `routes`, and `sites`.') unless topLevelKeys.has(key)
+    pushError(errors, 'E_UNKNOWN_KEY', key, "unknown top-level key #{key}", 'Use only `version`, `edge`, `upstreams`, `streamUpstreams`, `apps`, `routes`, `streams`, and `sites`.') unless topLevelKeys.has(key)
   pushError(errors, 'E_EDGE_VERSION', 'version', 'Edgefile.rip requires `version: 1`', 'Set `version: 1` at the top level.') unless config.version is 1
   edge = normalizeEdgeSettings(config.edge, errors)
   upstreams = {}
@@ -339,8 +340,11 @@ export normalizeEdgeConfig = (config, baseDir) ->
     else
       for host, siteConfig of config.sites
         sites[host] = normalizeSiteConfig(host, siteConfig, host, errors, knownUpstreams, knownApps)
+  streamUpstreams = normalizeStreamUpstreams(config.streamUpstreams, errors)
+  knownStreamUpstreams = new Set(Object.keys(streamUpstreams))
+  streams = normalizeStreams(config.streams, knownStreamUpstreams, errors)
   throw validationError(EDGEFILE_NAME, errors) if errors.length > 0
-  { kind: 'edge', version: 1, edge, upstreams, apps, routes, sites }
+  { kind: 'edge', version: 1, edge, upstreams, apps, routes, sites, streamUpstreams, streams }
 
 export summarizeConfig = (configPath, normalized) ->
   path = resolve(configPath)
@@ -354,6 +358,8 @@ export summarizeConfig = (configPath, normalized) ->
       apps: Object.keys(normalized.apps or {}).length
       routes: (normalized.routes or []).length
       sites: Object.keys(normalized.sites or {}).length
+      streamUpstreams: Object.keys(normalized.streamUpstreams or {}).length
+      streams: (normalized.streams or []).length
     canonicalShape:
       version: true
       edge: true
@@ -361,6 +367,8 @@ export summarizeConfig = (configPath, normalized) ->
       apps: true
       routes: true
       sites: true
+      streamUpstreams: true
+      streams: true
   }
 
 export loadConfig = (configPath) ->

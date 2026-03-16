@@ -1,0 +1,56 @@
+# ==============================================================================
+# streams/pipe.rip — backpressure-safe socket write helpers
+# ==============================================================================
+
+toBytes = (data) ->
+  if data instanceof Uint8Array then data else new Uint8Array(data)
+
+concatBytes = (a, b) ->
+  a = toBytes(a)
+  b = toBytes(b)
+  out = new Uint8Array(a.byteLength + b.byteLength)
+  out.set(a, 0)
+  out.set(b, a.byteLength)
+  out
+
+export createPipeState = ->
+  pending: new Uint8Array(0)
+  waitingForDrain: false
+
+queuePending = (state, data, wrote) ->
+  bytes = toBytes(data)
+  remainder = bytes.subarray(Math.max(0, wrote))
+  state.pending = if state.pending.byteLength > 0 then concatBytes(state.pending, remainder) else new Uint8Array(remainder)
+  state.waitingForDrain = state.pending.byteLength > 0
+  state
+
+export writeChunk = (socket, state, data) ->
+  bytes = toBytes(data)
+  if state.pending.byteLength > 0
+    state.pending = concatBytes(state.pending, bytes)
+    state.waitingForDrain = true
+    return { ok: true, closed: false, wrote: 0, buffered: state.pending.byteLength, needDrain: true }
+  wrote = socket.write(bytes)
+  return { ok: false, closed: true, wrote: -1, buffered: state.pending.byteLength } if wrote < 0
+  if wrote < bytes.byteLength
+    queuePending(state, bytes, wrote)
+    return { ok: true, closed: false, wrote: wrote, buffered: state.pending.byteLength, needDrain: true }
+  { ok: true, closed: false, wrote: wrote, buffered: state.pending.byteLength, needDrain: false }
+
+export flushPending = (socket, state) ->
+  return { ok: true, closed: false, wrote: 0, buffered: 0, needDrain: false } unless state.pending.byteLength > 0
+  wrote = socket.write(state.pending)
+  return { ok: false, closed: true, wrote: -1, buffered: state.pending.byteLength } if wrote < 0
+  if wrote < state.pending.byteLength
+    state.pending = new Uint8Array(state.pending.subarray(wrote))
+    state.waitingForDrain = true
+    return { ok: true, closed: false, wrote: wrote, buffered: state.pending.byteLength, needDrain: true }
+  state.pending = new Uint8Array(0)
+  state.waitingForDrain = false
+  { ok: true, closed: false, wrote: wrote, buffered: 0, needDrain: false }
+
+export markPaused = (socket) ->
+  socket.pause?()
+
+export markResumed = (socket) ->
+  socket.resume?()

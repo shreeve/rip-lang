@@ -1,0 +1,288 @@
+# ==============================================================================
+# streams/index.rip — stream runtime facade and listener orchestration
+# ==============================================================================
+
+import { parseSNI } from './tls_clienthello.rip'
+import { compileStreamTable, matchStreamRoute, describeStreamRoute } from './router.rip'
+import { createStreamRuntime, buildStreamConfigInfo, describeStreamRuntime } from './runtime.rip'
+import { createStreamUpstreamPool, addStreamUpstream, getStreamUpstream, selectStreamTarget, openStreamConnection, releaseStreamConnection } from './upstream.rip'
+import { createPipeState, writeChunk, flushPending, markPaused, markResumed } from './pipe.rip'
+
+MAX_CLIENT_HELLO_BYTES = 16384
+MAX_CONNECT_BUFFER_BYTES = 262144
+
+concatBytes = (a, b) ->
+  out = new Uint8Array(a.byteLength + b.byteLength)
+  out.set(a, 0)
+  out.set(b, a.byteLength)
+  out
+
+export resolveHandshakeTarget = (runtime, listenPort, sni, httpFallback = {}) ->
+  route = matchStreamRoute(runtime.routeTable, listenPort, sni)
+  if route
+    upstream = getStreamUpstream(runtime.upstreamPool, route.upstream)
+    unless upstream
+      return {
+        kind: 'reject'
+        code: 'unknown_upstream'
+      }
+    target = selectStreamTarget(upstream)
+    unless target
+      return {
+        kind: 'reject'
+        code: 'no_available_target'
+      }
+    return {
+      kind: 'stream'
+      route: route
+      upstream: upstream
+      target: target
+    }
+
+  fallback = httpFallback?[listenPort] or null
+  return {
+    kind: 'fallback'
+    target: fallback
+  } if fallback
+  {
+    kind: 'reject'
+    code: 'no_matching_route'
+  }
+
+export buildStreamRuntime = (normalized) ->
+  routeTable = compileStreamTable(normalized.streams or [])
+  upstreamPool = createStreamUpstreamPool()
+  for upstreamId, upstreamConfig of (normalized.streamUpstreams or {})
+    addStreamUpstream(upstreamPool, upstreamId, upstreamConfig)
+  configInfo = buildStreamConfigInfo(normalized)
+  createStreamRuntime(configInfo, upstreamPool, routeTable)
+
+export streamDiagnostics = (runtime) ->
+  return null unless runtime
+  summary = describeStreamRuntime(runtime)
+  summary.upstreams = Array.from(runtime.upstreamPool.upstreams.values()).map (upstream) ->
+    id: upstream.id
+    activeConnections: upstream.targets.reduce(((sum, t) -> sum + t.activeConnections), 0)
+    totalConnections: upstream.targets.reduce(((sum, t) -> sum + t.totalConnections), 0)
+    targets: upstream.targets.map (t) ->
+      id: t.targetId
+      activeConnections: t.activeConnections
+      totalConnections: t.totalConnections
+  summary.routes = runtime.configInfo.activeStreamRouteDescriptions or []
+  summary
+
+cleanupState = (state, options = {}) ->
+  return if state.cleanedUp
+  state.cleanedUp = true
+  clearTimeout(state.handshakeTimer) if state.handshakeTimer
+  clearTimeout(state.connectTimer) if state.connectTimer
+  clearTimeout(state.idleTimer) if state.idleTimer
+  try state.client.close() if state.client?.readyState > 0
+  try state.upstream.close() if state.upstream?.readyState > 0
+  releaseStreamConnection(state.target) if state.target and state.connectionOpened
+  options.onConnectionClose?(state.runtime)
+
+finishHalfClose = (state) ->
+  if state.clientEnded and not state.upstreamFinSent and state.toUpstream.pending.byteLength is 0
+    state.upstreamFinSent = true
+    try state.upstream?.end()
+  if state.upstreamEnded and not state.clientFinSent and state.toClient.pending.byteLength is 0
+    state.clientFinSent = true
+    try state.client?.end()
+
+resetIdleTimer = (state, options) ->
+  clearTimeout(state.idleTimer) if state.idleTimer
+  idleMs = state.timeouts.idleMs or 300000
+  state.idleTimer = setTimeout((-> cleanupState(state, options)), idleMs)
+
+createUpstreamHandlers = (state, options) ->
+  open: (upstream) ->
+    if state.cleanedUp
+      try upstream.close()
+      return
+    try
+      state.upstream = upstream
+      clearTimeout(state.connectTimer) if state.connectTimer
+      state.phase = 'streaming'
+      res = writeChunk(upstream, state.toUpstream, state.buffer)
+      return cleanupState(state, options) if res.closed
+      state.buffer = new Uint8Array(0)
+      if res.needDrain
+        state.clientPaused = true
+        markPaused(state.client)
+      resetIdleTimer(state, options)
+      finishHalfClose(state) unless res.needDrain
+    catch
+      cleanupState(state, options)
+
+  data: (upstream, data) ->
+    return if state.cleanedUp
+    resetIdleTimer(state, options)
+    res = writeChunk(state.client, state.toClient, new Uint8Array(data))
+    return cleanupState(state, options) if res.closed
+    if res.needDrain
+      state.upstreamPaused = true
+      markPaused(upstream)
+
+  drain: (upstream) ->
+    return if state.cleanedUp
+    res = flushPending(upstream, state.toUpstream)
+    return cleanupState(state, options) if res.closed
+    unless res.needDrain
+      if state.clientPaused
+        state.clientPaused = false
+        markResumed(state.client)
+      finishHalfClose(state)
+
+  end: (upstream) ->
+    return if state.cleanedUp
+    state.upstreamEnded = true
+    finishHalfClose(state)
+
+  close: (upstream, err) ->
+    cleanupState(state, options)
+
+  error: (upstream, err) ->
+    cleanupState(state, options)
+
+  timeout: (upstream) ->
+    cleanupState(state, options)
+
+  connectError: (upstream, err) ->
+    cleanupState(state, options)
+
+createClientHandlers = (runtime, listenPort, listenerTimeouts, options) ->
+  listenerOptions = Object.assign({}, options)
+  socket:
+    open: (client) ->
+      timeouts = Object.assign({ handshakeMs: 5000, idleMs: 300000, connectMs: 5000 }, listenerTimeouts or {}, options.timeouts or {})
+      state =
+        runtime: runtime
+        client: client
+        upstream: null
+        listenPort: listenPort
+        phase: 'handshake'
+        buffer: new Uint8Array(0)
+        route: null
+        target: null
+        cleanedUp: false
+        clientPaused: false
+        upstreamPaused: false
+        toUpstream: createPipeState()
+        toClient: createPipeState()
+        clientEnded: false
+        upstreamEnded: false
+        clientFinSent: false
+        upstreamFinSent: false
+        connectionOpened: false
+        handshakeTimer: null
+        connectTimer: null
+        idleTimer: null
+        timeouts: timeouts
+      client.data = state
+      state.handshakeTimer = setTimeout((-> cleanupState(state, listenerOptions)), timeouts.handshakeMs)
+      options.onConnectionOpen?(runtime)
+
+    data: (client, data) ->
+      state = client.data
+      return if state.cleanedUp
+      resetIdleTimer(state, listenerOptions) if state.phase is 'streaming'
+
+      if state.phase is 'handshake'
+        next = new Uint8Array(data)
+        state.buffer = if state.buffer.byteLength > 0 then concatBytes(state.buffer, next) else next
+        return cleanupState(state, listenerOptions) if state.buffer.byteLength > MAX_CLIENT_HELLO_BYTES
+
+        parsed = parseSNI(state.buffer)
+        return if parsed.code is 'need_more_bytes'
+        hasFallback = Boolean(options.httpFallback?[state.listenPort])
+        return cleanupState(state, listenerOptions) unless parsed.ok or (parsed.code is 'no_sni' and hasFallback)
+
+        requestedSni = if parsed.ok then parsed.sni else null
+        result = resolveHandshakeTarget(runtime, state.listenPort, requestedSni, options.httpFallback or {})
+        return cleanupState(state, listenerOptions) if result.kind is 'reject'
+
+        state.route = result.route or null
+        state.target = if result.kind is 'stream' then result.target else null
+        state.timeouts = if result.kind is 'stream'
+          Object.assign({}, state.timeouts, result.route.timeouts or {}, connectMs: result.route.timeouts?.connectMs or result.upstream.connectTimeoutMs or state.timeouts.connectMs)
+        else
+          Object.assign({}, state.timeouts)
+
+        connectHost = if result.kind is 'stream' then result.target.host else result.target.hostname
+        connectPort = result.target.port
+        openStreamConnection(result.target) if result.kind is 'stream'
+        state.connectionOpened = result.kind is 'stream'
+        state.phase = 'connecting'
+        clearTimeout(state.handshakeTimer) if state.handshakeTimer
+        state.connectTimer = setTimeout((-> cleanupState(state, listenerOptions)), state.timeouts.connectMs or 5000)
+        Bun.connect(
+          hostname: connectHost
+          port: connectPort
+          allowHalfOpen: true
+          socket: createUpstreamHandlers(state, listenerOptions)
+        ).catch(-> cleanupState(state, listenerOptions))
+        return
+
+      if state.phase is 'connecting'
+        next = new Uint8Array(data)
+        state.buffer = if state.buffer.byteLength > 0 then concatBytes(state.buffer, next) else next
+        return cleanupState(state, listenerOptions) if state.buffer.byteLength > MAX_CONNECT_BUFFER_BYTES
+        return
+
+      if state.phase is 'streaming'
+        res = writeChunk(state.upstream, state.toUpstream, new Uint8Array(data))
+        return cleanupState(state, listenerOptions) if res.closed
+        if res.needDrain
+          state.clientPaused = true
+          markPaused(client)
+
+    drain: (client) ->
+      state = client.data
+      return if state.cleanedUp
+      res = flushPending(client, state.toClient)
+      return cleanupState(state, listenerOptions) if res.closed
+      unless res.needDrain
+        if state.upstreamPaused
+          state.upstreamPaused = false
+          markResumed(state.upstream)
+        finishHalfClose(state)
+
+    end: (client) ->
+      state = client.data
+      return if state.cleanedUp
+      state.clientEnded = true
+      finishHalfClose(state)
+
+    close: (client, err) ->
+      cleanupState(client.data, listenerOptions)
+
+    error: (client, err) ->
+      cleanupState(client.data, listenerOptions)
+
+export startStreamListeners = (runtime, options = {}) ->
+  routesByPort = new Map()
+  for route in (runtime.routeTable.routes or [])
+    list = routesByPort.get(route.listen) or []
+    list.push(route)
+    routesByPort.set(route.listen, list)
+  ports = Array.from(routesByPort.keys())
+  for port in ports
+    portRoutes = routesByPort.get(port) or []
+    listenerTimeouts =
+      handshakeMs: Math.max(...portRoutes.map((route) -> route.timeouts?.handshakeMs or 5000), 5000)
+      idleMs: Math.max(...portRoutes.map((route) -> route.timeouts?.idleMs or 300000), 300000)
+      connectMs: Math.max(...portRoutes.map((route) -> route.timeouts?.connectMs or 5000), 5000)
+    listener = Bun.listen
+      hostname: options.hostname or '0.0.0.0'
+      port: port
+      allowHalfOpen: true
+      socket: createClientHandlers(runtime, port, listenerTimeouts, options).socket
+    runtime.listeners.set(port, listener)
+  runtime
+
+export stopStreamListeners = (runtime, closeActiveConnections = false) ->
+  for [port, listener] as runtime.listeners
+    try listener.stop(closeActiveConnections)
+  runtime.listeners.clear()
+  runtime

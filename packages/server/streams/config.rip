@@ -1,0 +1,120 @@
+# ==============================================================================
+# streams/config.rip — stream config normalization and validation
+# ==============================================================================
+
+isPlainObject = (value) ->
+  value? and typeof value is 'object' and not Array.isArray(value)
+
+pushError = (errors, code, path, message, hint = null) ->
+  errors.push({ code, path, message, hint })
+
+normalizePositiveInt = (value, fallback, path, errors, label) ->
+  return fallback unless value?
+  n = parseInt(String(value))
+  unless Number.isFinite(n) and n >= 0
+    pushError(errors, 'E_STREAM_NUMBER', path, "#{label} must be a non-negative integer", "Set #{path.split('.').slice(-1)[0]}: #{fallback} or another whole number.")
+    return fallback
+  n
+
+normalizeSniPatterns = (value, path, errors) ->
+  patterns = []
+  unless Array.isArray(value) and value.length > 0
+    pushError(errors, 'E_STREAM_SNI', path, 'sni must be a non-empty array of host patterns', "Use `sni: ['incus.example.com']`.")
+    return patterns
+  for host, idx in value
+    unless typeof host is 'string' and host.trim()
+      pushError(errors, 'E_STREAM_SNI_VALUE', "#{path}[#{idx}]", 'sni entry must be a non-empty string', "Use `'incus.example.com'` or `'*.example.com'`.")
+      continue
+    normalized = host.trim().toLowerCase()
+    if normalized.startsWith('*.')
+      base = normalized.slice(2)
+      labels = base.split('.').filter(Boolean)
+      if labels.length < 2
+        pushError(errors, 'E_STREAM_SNI_WILDCARD', "#{path}[#{idx}]", 'wildcard SNI patterns must have a base domain with at least two labels', "Use `'*.example.com'`, not `'*.com'`.")
+        continue
+    else if normalized.includes(':')
+      pushError(errors, 'E_STREAM_SNI_PORT', "#{path}[#{idx}]", 'SNI patterns must not include a port', "Use `'incus.example.com'`, not `'incus.example.com:8443'`.")
+      continue
+    patterns.push(normalized)
+  patterns
+
+parseHostPort = (value) ->
+  return null unless typeof value is 'string'
+  idx = value.lastIndexOf(':')
+  return null unless idx > 0 and idx < value.length - 1
+  host = value.slice(0, idx)
+  port = parseInt(value.slice(idx + 1))
+  return null unless host and Number.isFinite(port) and port > 0 and port <= 65535
+  { host, port }
+
+normalizeStreamTarget = (target, idx, path, errors) ->
+  parsed = parseHostPort(target)
+  unless parsed
+    pushError(errors, 'E_STREAM_TARGET', "#{path}[#{idx}]", 'stream target must be in host:port form', "Use `'127.0.0.1:8443'`.")
+    return null
+  {
+    targetId: "#{parsed.host}:#{parsed.port}"
+    host: parsed.host
+    port: parsed.port
+    source: target
+  }
+
+export normalizeStreamUpstreams = (rawUpstreams, errors, path = 'streamUpstreams') ->
+  upstreams = {}
+  return upstreams unless rawUpstreams?
+  unless isPlainObject(rawUpstreams)
+    pushError(errors, 'E_STREAM_UPSTREAMS_TYPE', path, 'streamUpstreams must be an object keyed by upstream ID', "Use `streamUpstreams: { incus: { targets: ['127.0.0.1:8443'] } }`.")
+    return upstreams
+  for upstreamId, rawConfig of rawUpstreams
+    unless isPlainObject(rawConfig)
+      pushError(errors, 'E_STREAM_UPSTREAM_TYPE', "#{path}.#{upstreamId}", 'stream upstream config must be an object', "Use #{upstreamId}: { targets: ['127.0.0.1:8443'] }.")
+      continue
+    targets = []
+    unless Array.isArray(rawConfig.targets) and rawConfig.targets.length > 0
+      pushError(errors, 'E_STREAM_UPSTREAM_TARGETS', "#{path}.#{upstreamId}.targets", 'stream upstream must define at least one target', "Use `targets: ['127.0.0.1:8443']`.")
+    else
+      for target, idx in rawConfig.targets
+        normalized = normalizeStreamTarget(target, idx, "#{path}.#{upstreamId}.targets", errors)
+        targets.push(normalized) if normalized
+    upstreams[upstreamId] =
+      id: upstreamId
+      targets: targets
+      connectTimeoutMs: normalizePositiveInt(rawConfig.connectTimeoutMs, 5000, "#{path}.#{upstreamId}.connectTimeoutMs", errors, 'connectTimeoutMs')
+  upstreams
+
+normalizeStreamTimeouts = (value, path, errors) ->
+  return {} unless value?
+  unless isPlainObject(value)
+    pushError(errors, 'E_STREAM_TIMEOUTS', path, 'stream timeouts must be an object', "Use `timeouts: { handshakeMs: 5000, idleMs: 300000, connectMs: 5000 }`.")
+    return {}
+  {
+    handshakeMs: normalizePositiveInt(value.handshakeMs, 5000, "#{path}.handshakeMs", errors, 'handshakeMs')
+    idleMs: normalizePositiveInt(value.idleMs, 300000, "#{path}.idleMs", errors, 'idleMs')
+    connectMs: normalizePositiveInt(value.connectMs, 5000, "#{path}.connectMs", errors, 'connectMs')
+  }
+
+export normalizeStreams = (rawStreams, knownUpstreams, errors, path = 'streams') ->
+  streams = []
+  return streams unless rawStreams?
+  unless Array.isArray(rawStreams)
+    pushError(errors, 'E_STREAMS_TYPE', path, 'streams must be an array', "Use `streams: [{ listen: 8443, sni: ['incus.example.com'], upstream: 'incus' }]`.")
+    return streams
+  for route, idx in rawStreams
+    itemPath = "#{path}[#{idx}]"
+    unless isPlainObject(route)
+      pushError(errors, 'E_STREAM_ROUTE_TYPE', itemPath, 'stream route must be an object', "Use `{ listen: 8443, sni: ['incus.example.com'], upstream: 'incus' }`.")
+      continue
+    listen = normalizePositiveInt(route.listen, 0, "#{itemPath}.listen", errors, 'listen')
+    pushError(errors, 'E_STREAM_LISTEN_RANGE', "#{itemPath}.listen", 'listen port must be between 1 and 65535', 'Choose a valid TCP port.') unless listen > 0 and listen <= 65535
+    unless typeof route.upstream is 'string' and route.upstream
+      pushError(errors, 'E_STREAM_UPSTREAM_REF', "#{itemPath}.upstream", 'stream route must reference an upstream', "Use `upstream: 'incus'`.")
+    else unless knownUpstreams.has(route.upstream)
+      pushError(errors, 'E_STREAM_UPSTREAM_REF', "#{itemPath}.upstream", "unknown stream upstream #{route.upstream}", 'Define the upstream under `streamUpstreams` first.')
+    streams.push
+      id: route.id or "stream-#{idx + 1}"
+      order: idx
+      listen: listen
+      sni: normalizeSniPatterns(route.sni, "#{itemPath}.sni", errors)
+      upstream: route.upstream or null
+      timeouts: normalizeStreamTimeouts(route.timeouts, "#{itemPath}.timeouts", errors)
+  streams

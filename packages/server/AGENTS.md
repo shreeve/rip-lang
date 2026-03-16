@@ -15,6 +15,7 @@ It combines:
 - app framework (`api.rip`, `middleware.rip`)
 - managed worker runtime (`server.rip`, `control/*`)
 - edge proxy/runtime (`edge/*`)
+- stream routing (`streams/*`)
 - auto-TLS (`acme/*`)
 
 ## Package layout
@@ -56,6 +57,18 @@ Management/runtime plumbing.
 - `worker.rip` — worker child runtime
 - `workers.rip` — worker spawn/health helpers
 
+### `streams/`
+
+Layer 4 TCP/TLS routing.
+
+- `config.rip` — stream config normalization and validation
+- `index.rip` — public stream runtime facade and listener orchestration
+- `pipe.rip` — backpressure-safe byte piping helpers
+- `router.rip` — listen port + SNI route matching
+- `runtime.rip` — stream runtime metadata and summaries
+- `tls_clienthello.rip` — strict ClientHello SNI extraction
+- `upstream.rip` — target selection and connection accounting
+
 ### `acme/`
 
 Auto-TLS internals.
@@ -81,8 +94,10 @@ Top-level keys:
 - `version`
 - `edge`
 - `upstreams`
+- `streamUpstreams`
 - `apps`
 - `routes`
+- `streams`
 - `sites`
 
 Use `Edgefile.rip` when you need:
@@ -92,6 +107,7 @@ Use `Edgefile.rip` when you need:
 - wildcard hosts
 - staged reload + verification + rollback
 - verification policy (`edge.verify`)
+- stream passthrough via `streamUpstreams` and `streams`
 
 ## Edge runtime lifecycle
 
@@ -111,6 +127,8 @@ Important objects:
 - `configInfo` — operator-facing status and reload history
 - `upstreamPool` — proxy backends and health state
 - `routeTable` — compiled host/path/method rules
+- `streamRuntime` — active/retired Layer 4 stream generation
+- `streamUpstreamPool` — raw TCP upstream targets and active connection counts
 
 ## Where logic belongs
 
@@ -125,6 +143,7 @@ If you are adding:
 - upstream proxy behavior -> `edge/upstream.rip` / `edge/forwarding.rip`
 - verification rules -> `edge/verify.rip`
 - reload/rollback orchestration helpers -> `edge/runtime.rip`
+- Layer 4 TCP/TLS routing -> `streams/*`
 - CLI or app-entry resolution -> `control/cli.rip`
 
 ## Testing
@@ -148,6 +167,7 @@ When changing:
 - config parsing -> update `tests/edgefile.rip`, `tests/proxy.rip`
 - routing -> update `tests/router.rip`, `tests/registry.rip`
 - upstream behavior -> update `tests/upstream.rip`
+- stream parsing/routing/pipe behavior -> update `tests/streams_*.rip`
 - verification/rollback -> update `tests/verify.rip`, `tests/control.rip`
 - watcher behavior -> update `tests/watchers.rip`
 
@@ -176,5 +196,7 @@ Be careful when changing anything that affects:
 - reload history and rollback reason reporting
 - wildcard hosts
 - websocket proxy routes
+- stream passthrough listeners and connection drain semantics
+- shared-port HTTPS multiplexer mode for `streams.listen == httpsPort`
 
 These are now part of the runtime’s public operator contract.

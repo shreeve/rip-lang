@@ -1,0 +1,38 @@
+import { test, eq } from '../test.rip'
+import { createStreamRuntime, describeStreamRuntime, buildStreamConfigInfo, streamUsesListenPort } from '../streams/runtime.rip'
+
+test "createStreamRuntime starts empty", ->
+  runtime = createStreamRuntime()
+  eq runtime.inflight, 0
+  eq runtime.listeners.size, 0
+
+test "describeStreamRuntime returns summary", ->
+  runtime = createStreamRuntime()
+  runtime.inflight = 2
+  runtime.retiredAt = '2026-01-01T00:00:00.000Z'
+  runtime.listeners.set(8443, {})
+  summary = describeStreamRuntime(runtime)
+  eq summary.inflight, 2
+  eq summary.listeners[0], 8443
+
+test "buildStreamConfigInfo reports counts and descriptions", ->
+  info = buildStreamConfigInfo(
+    streamUpstreams:
+      incus: {}
+    streams: [
+      { id: 'incus', order: 0, listen: 8443, sni: ['incus.example.com'], upstream: 'incus' }
+    ]
+  )
+  eq info.streamCounts.streamUpstreams, 1
+  eq info.streamCounts.streams, 1
+  eq info.activeStreamRouteDescriptions[0], '8443 incus.example.com -> incus'
+
+test "streamUsesListenPort detects shared listener ports", ->
+  runtime = createStreamRuntime(null, null,
+    routes: [
+      { listen: 443, sni: 'incus.example.com', upstream: 'incus' }
+      { listen: 8443, sni: 'db.example.com', upstream: 'db' }
+    ]
+  )
+  eq streamUsesListenPort(runtime, 443), true
+  eq streamUsesListenPort(runtime, 80), false
