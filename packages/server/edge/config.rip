@@ -279,8 +279,7 @@ normalizeSiteConfig = (host, siteConfig, idx, errors, knownUpstreams, knownApps)
     routes
   }
 
-topLevelKeysV1 = new Set(['version', 'edge', 'upstreams', 'apps', 'routes', 'sites', 'streamUpstreams', 'streams'])
-topLevelKeysV2 = new Set(['version', 'edge', 'servers', 'upstreams', 'apps', 'streamUpstreams', 'streams'])
+topLevelKeys = new Set(['version', 'edge', 'servers', 'upstreams', 'apps', 'streamUpstreams', 'streams'])
 
 VALID_REDIRECT_STATUSES = new Set([301, 302, 307, 308])
 
@@ -407,10 +406,10 @@ normalizeServerBlock = (host, serverConfig, baseDir, errors, knownUpstreams, kno
     passthrough: null
   }
 
-export normalizeEdgeConfigV2 = (config, baseDir) ->
+normalizeServersConfig = (config, baseDir) ->
   errors = []
   for key of config
-    pushError(errors, 'E_UNKNOWN_KEY', key, "unknown top-level key #{key}", 'Allowed keys: version, edge, servers, upstreams, apps, streamUpstreams, streams.') unless topLevelKeysV2.has(key)
+    pushError(errors, 'E_UNKNOWN_KEY', key, "unknown top-level key #{key}", 'Allowed keys: version, edge, servers, upstreams, apps, streamUpstreams, streams.') unless topLevelKeys.has(key)
   edgeInput = config.edge or {}
   edge = normalizeEdgeSettings(edgeInput, errors)
   upstreams = {}
@@ -486,7 +485,7 @@ export normalizeLegacyConfig = (config, baseDir) ->
   { kind: 'legacy', version: null, edge: {}, upstreams: {}, apps, routes: [], sites: {} }
 
 export normalizeEdgeConfig = (config, baseDir) ->
-  normalizeEdgeConfigV2(config, baseDir)
+  normalizeServersConfig(config, baseDir)
 
 export summarizeConfig = (configPath, normalized) ->
   path = resolve(configPath)
