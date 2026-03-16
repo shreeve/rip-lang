@@ -2,29 +2,48 @@
 
 # Rip Server - @rip-lang/server
 
-> **A full-stack web framework and production edge server — routing, middleware, multi-worker processes, hot reload, ACME auto-TLS, realtime WebSocket, observability, and mDNS — written entirely in Rip with zero dependencies**
+> **One runtime for your app and your edge — web framework, reverse proxy, TLS passthrough, and managed workers in a single zero-dependency Bun-native server**
 
-Rip Server is a unified web framework and application server. It gives you
-Sinatra-style routing, built-in validators, file serving, and middleware for
-defining your API, plus multi-worker process management, rolling restarts,
-automatic TLS, realtime WebSocket support, runtime diagnostics, mDNS
-discovery, and request load balancing for production use — all with zero
-external dependencies.
+Rip Server replaces the combination of a web framework (Express, Hono), a
+process manager (PM2), and a reverse proxy (Nginx, Caddy, Traefik) with one
+unified runtime. Define your API with Sinatra-style routes, serve it with
+managed multi-worker processes, proxy external services, and pass through raw
+TLS for things like the Incus Web UI — all from a single `rip server` command
+with zero external dependencies.
+
+Written entirely in Rip. Runs on Bun.
 
 ## Features
 
+### App Framework
+- **Sinatra-style routing** — `get`, `post`, `put`, `del` with path parameters and wildcards
+- **Request validation** — 40+ built-in validators via [`read()`](docs/READ_VALIDATORS.md) eliminate API boilerplate
+- **Middleware** — cors, sessions, compression, security headers, rate limiting, body limits
+- **File serving** — Auto-detected MIME types via `@send`, SPA fallback support
+- **Realtime WebSocket** — Pub/sub hub where your backend stays HTTP-only
+
+### Server Runtime
 - **Multi-worker architecture** — Automatic worker spawning based on CPU cores
 - **Hot module reloading** — Watches `*.rip` files by default, rolling restarts on change
-- **Rolling restarts** — Zero-downtime deployments
+- **Rolling restarts** — Zero-downtime deployments with per-app worker pools
 - **Automatic HTTPS** — Shipped `*.ripdev.io` wildcard cert, or auto-TLS via Let's Encrypt ACME
-- **Realtime WebSocket** — Bam-style pub/sub hub where your backend stays HTTP-only
-- **Observability** — `/diagnostics` endpoint with request rates, latency percentiles, queue pressure
-- **Appliance-grade reliability** — Graceful shutdown, restart resilience, forced-exit safety net
+- **Observability** — `/diagnostics` with request rates, latency percentiles, queue pressure
 - **mDNS discovery** — `.local` hostname advertisement
-- **Per-app worker pools** — Multi-app registry with host-to-app routing
-- **Request queue** — Built-in request buffering and load balancing
-- **Built-in dashboard** — Server status UI at `rip.local`
-- **Unified package** — Web framework + production server in one
+
+### Edge Proxy
+- **HTTP/WS reverse proxy** — Route to external upstreams with health checks, circuit breakers, and retry
+- **Layer 4 TLS passthrough** — SNI-based raw TCP routing for services that keep their own TLS
+- **Unified port multiplexer** — Stream passthrough and normal HTTPS on the same `:443`
+- **Atomic config reload** — Staged activation with post-verify and automatic rollback
+- **Declarative routing** — Host/path/method matching with wildcard hosts and per-site overrides
+
+## What Can You Build?
+
+- **A single API or web app** — `rip server` with zero config, one command
+- **A multi-app platform** — Per-app worker pools, host routing, and rolling restarts via `config.rip`
+- **A reverse proxy** — Route traffic to external HTTP/WS upstreams with health checks
+- **A TLS passthrough edge** — Expose services like the Incus Web UI without terminating their TLS
+- **A full edge runtime** — Replace Nginx, Caddy, or Traefik for single-host deployments via `Edgefile.rip`
 
 | Directory | Role |
 |-----------|------|
@@ -40,19 +59,57 @@ external dependencies.
 
 ## Runtime Tiers
 
-`rip server` is a graduated runtime:
+`rip server` is a graduated runtime. Start simple and add capabilities as you need them:
 
 1. **Single-app mode** — one app, zero config, one command
 2. **Managed multi-app mode** — many Rip apps with per-app worker pools via `config.rip`
-3. **Edge mode** — upstream proxying, host/path routing, staged reload, verification, and rollback via `Edgefile.rip`
+3. **Edge mode** — upstream proxying, host/path routing, TLS passthrough, staged reload, verification, and rollback via `Edgefile.rip`
 
 ```mermaid
 flowchart TD
   SingleApp["rip server"] --> ManagedApps["config.rip"]
   ManagedApps --> EdgeMode["Edgefile.rip"]
   EdgeMode --> Upstreams["HTTP and WS upstream routes"]
+  EdgeMode --> Streams["Layer 4 TLS passthrough"]
   EdgeMode --> ManagedRoutes["Managed app routes"]
 ```
+
+## Architecture
+
+```mermaid
+flowchart LR
+  Client[Client] --> Port[":443"]
+  Port -->|"HTTP/WS"| TLS["TLS termination"]
+  TLS --> Router["Route matching"]
+  Router -->|upstream| Proxy["Reverse proxy"]
+  Router -->|app| Workers["Worker pool"]
+  Port -->|"TLS passthrough"| SNI["SNI routing"]
+  SNI --> Upstream["Raw TCP upstream"]
+```
+
+When a stream route shares the HTTPS port, Rip uses a multiplexer: matching SNI
+traffic passes through at Layer 4, and everything else falls through to the
+normal HTTP/WebSocket edge runtime. When no stream routes share the HTTPS port,
+there is no multiplexer and no extra hop.
+
+## How Does Rip Server Compare?
+
+| Capability | Rip Server | Caddy | Nginx | Traefik |
+|---|---|---|---|---|
+| HTTP reverse proxy | Yes | Yes | Yes | Yes |
+| WebSocket proxy | Yes | Yes | Yes | Yes |
+| Auto-TLS (ACME) | Yes | Yes | Plugin | Yes |
+| Layer 4 TLS passthrough | Yes | Yes | Stream module | Yes |
+| Managed app workers | Yes | No | No | No |
+| Built-in app framework | Yes | No | No | No |
+| Hot reload | Yes | Yes | Reload | Yes |
+| Atomic rollback | Yes | No | No | No |
+| Config validation with hints | Yes | Partial | No | Partial |
+| Zero dependencies | Yes | Go binary | C binary | Go binary |
+
+Use Rip Server when you want one Bun-native runtime for both the app and the
+edge. Use Caddy, Nginx, or Traefik when you specifically need mature HTTP
+caching, multi-node service discovery, or their broader ecosystem integrations.
 
 ## Quick Start
 
@@ -89,13 +146,13 @@ Create `index.rip`:
 ```coffee
 import { get, read, start } from '@rip-lang/server'
 
-get '/', ->
+get '/' ->
   'Hello from Rip Server!'
 
-get '/json', ->
+get '/json' ->
   { message: 'It works!', timestamp: Date.now() }
 
-get '/users/:id', ->
+get '/users/:id' ->
   id = read 'id', 'id!'
   { user: { id, name: "User #{id}" } }
 
@@ -126,24 +183,16 @@ curl http://localhost/status
 
 ## Edgefile Quick Start
 
-`Edgefile.rip` is the canonical edge config shape for the Bun-native edge
-runtime. It gives you:
+`Edgefile.rip` is the declarative edge config for the Bun-native edge runtime.
+It gives you:
 
-- strict schema validation with field-path errors and remediation hints
-- explicit loading via `--edgefile`
-- `--check-config` validation without opening listeners
-- config metadata, counts, and last reload result in `/diagnostics`
-- `SIGHUP` config reload for config-backed app registrations and diagnostics state
-
-`upstreams`, `routes`, and `sites` are validated and surfaced in diagnostics.
-Upstream-backed Edgefile routes execute in the main server process, including
-`websocket: true` routes. Wildcard hosts resolve in the live app registry path.
-Managed app-route expansion works beyond the default app, and additional
-managed apps participate in server-side reload/watch parity.
-
-For services that must keep their own TLS and client-certificate
-authentication intact, use `streamUpstreams` and `streams` for Layer 4
-passthrough.
+- **HTTP/WS reverse proxy** — route traffic to external upstreams with health checks, retries, and circuit breakers
+- **Layer 4 TLS passthrough** — route raw TLS connections by SNI to services that keep their own certificates and client-cert auth
+- **Shared-port multiplexer** — stream passthrough and normal HTTPS on the same `:443`, automatically
+- **Managed app routes** — host Rip apps with per-app worker pools alongside proxy routes
+- **Atomic reload** — staged activation with post-verify and automatic rollback via `SIGHUP` or control API
+- **Strict validation** — field-path errors and remediation hints, with `--check-config` for dry-run validation
+- **Diagnostics** — config metadata, counts, reload history, and route descriptions in `/diagnostics`
 
 ### Canonical Shape
 
@@ -397,660 +446,21 @@ Use `edge.verify` to tune post-activate verification:
 - `includeUnroutedManagedApps`: also verify managed apps not directly referenced by a route
 - `minHealthyTargetsPerUpstream`: minimum healthy targets required per referenced upstream
 
-## The `read()` Function
+## Validation
 
-A validation and parsing powerhouse that eliminates 90% of API boilerplate.
-
-### Basic Patterns
-
-```coffee
-# Required field (throws if missing)
-email = read 'email', 'email!'
-
-# Optional field (returns null if missing)
-phone = read 'phone', 'phone'
-
-# With default value
-role = read 'role', ['admin', 'user'], 'user'
-
-# Get entire payload
-data = read()
-```
-
-### Range Validation
-
-The `[min, max]` syntax works for both numbers and string lengths:
+The `read()` function is a validation and parsing powerhouse that eliminates
+90% of API boilerplate. It supports 40+ built-in validators including `email`,
+`phone`, `money`, `uuid`, `json`, `regex`, and composable object schemas.
 
 ```coffee
-# Numbers: value range
-age = read 'age', 'int', [18, 120]        # Between 18 and 120
-priority = read 'priority', 'int', [1, 10]  # 1-10 range
-
-# Strings: length range
-username = read 'username', 'string', [3, 20]  # 3-20 characters
-bio = read 'bio', 'string', [0, 500]           # Up to 500 chars
-
-# Named parameters
-views = read 'views', 'int', min: 0             # Non-negative integer
-discount = read 'discount', 'float', max: 100   # Up to 100
+email = read 'email', 'email!'           # required, validated
+phone = read 'phone', 'phone'            # optional, formatted
+role  = read 'role', ['admin', 'user']   # enum
+age   = read 'age', 'int', [18, 120]     # range-checked
 ```
 
-### Enumeration Validation
-
-```coffee
-# Must be one of these values
-role = read 'role', ['admin', 'user', 'guest']
-status = read 'status', ['pending', 'active', 'closed']
-```
-
-### Regex Validation
-
-```coffee
-# Custom pattern matching
-code = read 'code', /^[A-Z]{3,6}$/
-```
-
-## Built-in Validators
-
-`@rip-lang/server` includes 37 validators for every common API need:
-
-### Numbers & Money
-```coffee
-id = read 'user_id', 'id!'       # Positive integer (1+)
-count = read 'count', 'whole'    # Non-negative integer (0+)
-price = read 'price', 'float'   # Decimal number
-cost = read 'cost', 'money'     # Banker's rounding to cents
-```
-
-### Text Processing
-```coffee
-title = read 'title', 'string'   # Collapses whitespace
-bio = read 'bio', 'text'         # Light cleanup
-name = read 'name', 'name'       # Trims and normalizes
-```
-
-### Contact Information
-```coffee
-email = read 'email', 'email'        # Valid email format
-phone = read 'phone', 'phone'        # US phone → (555) 123-4567
-address = read 'address', 'address'  # Trimmed address
-```
-
-### Geographic Data
-```coffee
-state = read 'state', 'state'      # Two-letter → uppercase
-zip = read 'zip', 'zip'            # 5-digit zip
-zipplus4 = read 'zip', 'zipplus4'  # 12345-6789 format
-```
-
-### Identity & Security
-```coffee
-ssn = read 'ssn', 'ssn'                # SSN → digits only
-sex = read 'gender', 'sex'             # m/f/o
-username = read 'username', 'username' # 3-20 chars, lowercase
-```
-
-### Web & Technical
-```coffee
-url = read 'website', 'url'      # Valid URL
-ip = read 'ip_address', 'ip'     # IPv4 address
-mac = read 'mac', 'mac'          # MAC address
-color = read 'color', 'color'    # Hex color → #abc123
-uuid = read 'user_id', 'uuid'    # UUID format
-semver = read 'version', 'semver' # Semantic version
-```
-
-### Time & Date
-```coffee
-date = read 'date', 'date'        # YYYY-MM-DD
-time = read 'time', 'time'        # HH:MM or HH:MM:SS (24-hour)
-time12 = read 'time', 'time12'    # 12-hour with am/pm
-```
-
-### Boolean & Collections
-```coffee
-active = read 'active', 'truthy'    # true/t/1/yes/y/on → true
-inactive = read 'off', 'falsy'      # false/f/0/no/n/off → true
-flag = read 'flag', 'bool'          # Either → boolean
-tags = read 'tags', 'array'         # Must be array
-config = read 'config', 'hash'      # Must be object
-settings = read 'data', 'json'      # Parse JSON string
-ids = read 'ids', 'ids'             # "1,2,3" → [1, 2, 3]
-slug = read 'slug', 'slug'          # URL-safe slug
-```
-
-### Custom Validators
-
-```coffee
-import { registerValidator, read } from '@rip-lang/server'
-
-registerValidator 'postalCode', (v) ->
-  if v =~ /^[A-Z]\d[A-Z] \d[A-Z]\d$/i
-    _[0].toUpperCase()
-  else
-    null
-
-# Now use it
-code = read 'postal', 'postalCode!'
-```
-
-## Routing
-
-### HTTP Methods
-
-```coffee
-import { get, post, put, patch, del, all } from '@rip-lang/server'
-
-get    '/users'     -> listUsers!
-post   '/users'     -> createUser!
-get    '/users/:id' -> getUser!
-put    '/users/:id' -> updateUser!
-patch  '/users/:id' -> patchUser!
-del    '/users/:id' -> deleteUser!
-all    '/health'    -> 'ok'  # All methods
-```
-
-### Path Parameters
-
-```coffee
-# Basic parameters
-get '/users/:id' ->
-  id = read 'id', 'id!'
-  { id }
-
-# Multiple parameters
-get '/users/:userId/posts/:postId' ->
-  userId = read 'userId', 'id!'
-  postId = read 'postId', 'id!'
-  { userId, postId }
-
-# Custom patterns
-get '/files/:name{[a-z]+\\.txt}' ->
-  name = read 'name'
-  { file: name }
-
-# Wildcards
-get '/static/*', (env) ->
-  { path: env.req.path }
-```
-
-### Route Grouping
-
-```coffee
-import { prefix } from '@rip-lang/server'
-
-prefix '/api/v1' ->
-  get '/users' -> listUsers!
-  get '/posts' -> listPosts!
-
-prefix '/api/v2' ->
-  get '/users' -> listUsersV2!
-```
-
-## Middleware
-
-### Built-in Middleware
-
-Import from `@rip-lang/server/middleware`:
-
-```coffee
-import { use } from '@rip-lang/server'
-import { cors, logger, compress, sessions, secureHeaders, timeout, bodyLimit } from '@rip-lang/server/middleware'
-
-# Logging
-use logger()
-use logger format: 'tiny'                # Minimal output
-use logger format: 'dev'                 # Colorized (default)
-use logger skip: (c) -> c.req.path is '/health'
-
-# CORS
-use cors()                               # Allow all origins
-use cors origin: 'https://myapp.com'     # Specific origin
-use cors origin: ['https://a.com', 'https://b.com']
-use cors credentials: true, maxAge: 86400
-
-# Compression (gzip/deflate)
-use compress()
-use compress threshold: 1024             # Min bytes to compress
-
-# Security headers
-use secureHeaders()
-use secureHeaders hsts: true, contentSecurityPolicy: "default-src 'self'"
-
-# Request limits
-use timeout ms: 30000                    # 30 second timeout
-use bodyLimit maxSize: 1024 * 1024       # 1MB max body
-```
-
-### Middleware Options
-
-| Middleware | Options |
-|------------|---------|
-| `logger()` | `format`, `skip`, `stream` |
-| `cors()` | `origin`, `methods`, `headers`, `credentials`, `maxAge`, `exposeHeaders`, `preflight` |
-| `compress()` | `threshold`, `encodings` |
-| `sessions()` | `secret`, `name`, `maxAge`, `secure`, `httpOnly`, `sameSite` |
-| `secureHeaders()` | `hsts`, `hstsMaxAge`, `contentSecurityPolicy`, `frameOptions`, `referrerPolicy` |
-| `timeout()` | `ms`, `message`, `status` |
-| `bodyLimit()` | `maxSize`, `message` |
-
-### Session Usage
-
-```coffee
-import { get, use, before, session } from '@rip-lang/server'
-import { sessions } from '@rip-lang/server/middleware'
-
-# Sessions parses cookies directly from request headers
-use sessions secret: process.env.SESSION_SECRET
-
-before ->
-  session.views ?= 0
-  session.views += 1
-
-get '/profile' ->
-  { userId: session.userId, views: session.views }
-
-get '/login' ->
-  session.userId = 123
-  { loggedIn: true }
-
-get '/logout' ->
-  delete session.userId
-  { loggedOut: true }
-```
-
-The `session` import works anywhere via AsyncLocalStorage — no `@` needed, works in helpers and nested callbacks.
-
-**Security note:** Without `secret`, sessions use plain base64 (dev only). With `secret`, sessions are HMAC-SHA256 signed (tamper-proof). Always set `secret` in production.
-
-### CORS with Preflight
-
-```coffee
-import { use } from '@rip-lang/server'
-import { cors } from '@rip-lang/server/middleware'
-
-# Handle OPTIONS early (before routes are matched)
-use cors origin: 'https://myapp.com', preflight: true
-```
-
-### Custom Middleware
-
-```coffee
-# Authentication middleware
-use (c, next) ->
-  token = @req.header 'Authorization'
-  unless token
-    return @json { error: 'Unauthorized' }, 401
-  @user = validateToken!(token)
-  await next()
-
-# Timing middleware
-use (c, next) ->
-  start = Date.now()
-  await next()
-  @header 'X-Response-Time', "#{Date.now() - start}ms"
-```
-
-### Request Lifecycle Filters
-
-Three filters run at different stages: `raw` → `before` → handler → `after`
-
-```coffee
-import { raw, before, after, get } from '@rip-lang/server'
-
-# Runs first — modify raw request before body parsing
-raw (req) ->
-  if req.headers.get('X-Raw-SQL') is 'true'
-    req.headers.set 'content-type', 'text/plain'
-
-skipPaths = ['/favicon.ico', '/ping', '/health']
-
-# Runs before handler (after body parsing)
-before ->
-  @start = Date.now()
-  @silent = @req.path in skipPaths
-  unless @req.header 'Authorization'
-    return @json { error: 'Unauthorized' }, 401
-
-# Runs after handler
-after ->
-  return if @silent
-  console.log "#{@req.method} #{@req.path} - #{Date.now() - @start}ms"
-```
-
-**Note:** `raw` receives the native `Request` object (before parsing). `before` and `after` use `@` to access the context.
-
-**How `@` works:** Handlers are called with `this` bound to the context, so `@foo` is `this.foo`. This gives you Sinatra-like magic access to:
-- `@req` — Request object
-- `@json()`, `@text()`, `@html()`, `@redirect()`, `@send()` — Response helpers
-- `@header()` — Response header modifier
-- `@anything` — Custom per-request state
-
-**Imports that work anywhere** (via AsyncLocalStorage or Proxy):
-- `read` — Validated request parameters
-- `session` — Session data (if middleware enabled)
-- `env` — `process.env` shortcut (e.g., `env.DATABASE_URL`)
-
-## Context Object
-
-Use `@` to access the context directly — no parameter needed:
-
-### Response Helpers
-
-```coffee
-get '/demo' ->
-  # JSON response
-  @json { data: 'value' }
-  @json { data: 'value' }, 201  # With status
-  @json { data: 'value' }, 200, { 'X-Custom': 'header' }
-
-  # Text response
-  @text 'Hello'
-  @text 'Created', 201
-
-  # HTML response
-  @html '<h1>Hello</h1>'
-
-  # Redirect
-  @redirect '/new-location'
-  @redirect '/new-location', 301  # Permanent
-
-  # Raw body
-  @body data, 200, { 'Content-Type': 'application/octet-stream' }
-
-  # File serving (auto-detected MIME type via Bun.file)
-  @send 'public/style.css'                    # text/css
-  @send 'data/export.json', 'application/json' # explicit type
-```
-
-### Request Helpers
-
-```coffee
-get '/info' ->
-  # Path and query parameters — use read() for validation!
-  id = read 'id', 'id!'
-  q  = read 'q'
-
-  # Headers
-  auth = @req.header 'Authorization'
-  allHeaders = @req.header()
-
-  # Body (async)
-  json = @req.json!
-  text = @req.text!
-  form = @req.formData!
-  parsed = @req.parseBody!
-
-  # Raw request
-  @req.raw     # Native Request object
-  @req.method  # 'GET', 'POST', etc.
-  @req.url     # Full URL
-  @req.path    # Path only
-```
-
-### Request-Scoped State
-
-```coffee
-# Store data for later middleware/handlers
-use (c, next) ->
-  @user = { id: 1, name: 'Alice' }
-  @startTime = Date.now()
-  await next()
-
-get '/profile' ->
-  @json @user
-```
-
-## File Serving
-
-### `@send(path, type?)`
-
-Serve a file with auto-detected MIME type. Uses `Bun.file()` internally for
-efficient streaming — the file is never buffered in memory.
-
-```coffee
-# Auto-detected content type (30+ extensions supported)
-get '/css/*', -> @send "css/#{@req.path.slice(5)}"
-
-# Explicit content type
-get '/files/*', -> @send "uploads/#{@req.path.slice(7)}", 'application/octet-stream'
-
-# SPA fallback — serve index.html for all unmatched routes
-notFound -> @send 'index.html', 'text/html; charset=UTF-8'
-```
-
-### `mimeType(path)`
-
-Exported utility that returns the MIME type for a file path:
-
-```coffee
-import { mimeType } from '@rip-lang/server'
-
-mimeType 'style.css'    # 'text/css; charset=UTF-8'
-mimeType 'app.js'       # 'application/javascript'
-mimeType 'photo.png'    # 'image/png'
-mimeType 'data.xyz'     # 'application/octet-stream'
-```
-
-## Error Handling
-
-### Custom Error Handler
-
-```coffee
-import { onError } from '@rip-lang/server'
-
-onError (err, c) ->
-  console.error 'Error:', err
-  c.json { error: err.message }, err.status or 500
-```
-
-### Custom 404 Handler
-
-```coffee
-import { notFound } from '@rip-lang/server'
-
-notFound (c) ->
-  c.json { error: 'Not found', path: c.req.path }, 404
-```
-
-## Server Options
-
-### Basic Server
-
-```coffee
-import { start } from '@rip-lang/server'
-
-start port: 3000
-start port: 3000, host: '0.0.0.0'
-```
-
-### Handler Only (for custom servers)
-
-```coffee
-import { startHandler } from '@rip-lang/server'
-
-export default startHandler()
-```
-
-### App Pattern
-
-```coffee
-import { App, get, post } from '@rip-lang/server'
-
-export default App ->
-  get '/', -> 'Hello'
-  post '/echo', -> read()
-```
-
-## Context Utilities
-
-### ctx()
-
-Get the current request context from anywhere (via AsyncLocalStorage):
-
-```coffee
-import { ctx } from '@rip-lang/server'
-
-logRequest = ->
-  c = ctx()
-  console.log "#{c.req.method} #{c.req.path}" if c
-
-get '/demo' ->
-  logRequest()
-  { ok: true }
-```
-
-### resetGlobals()
-
-Reset all global state (routes, middleware, filters). Useful for testing:
-
-```coffee
-import { resetGlobals, get, start } from '@rip-lang/server'
-
-beforeEach ->
-  resetGlobals()
-
-get '/test', -> { test: true }
-```
-
-## Utility Functions
-
-### isBlank
-
-```coffee
-import { isBlank } from '@rip-lang/server'
-
-isBlank null        # true
-isBlank undefined   # true
-isBlank ''          # true
-isBlank '   '       # true
-isBlank []          # true
-isBlank {}          # true
-isBlank false       # true
-isBlank 'hello'     # false
-isBlank [1, 2]      # false
-```
-
-### toName
-
-Advanced name formatting with intelligent capitalization:
-
-```coffee
-import { toName } from '@rip-lang/server'
-
-toName 'john doe'           # 'John Doe'
-toName 'JANE SMITH'         # 'Jane Smith'
-toName "o'brien"            # "O'Brien"
-toName 'mcdonald'           # 'McDonald'
-toName 'los angeles', 'address'  # 'Los Angeles'
-```
-
-### toPhone
-
-US phone number formatting:
-
-```coffee
-import { toPhone } from '@rip-lang/server'
-
-toPhone '5551234567'        # '(555) 123-4567'
-toPhone '555-123-4567'      # '(555) 123-4567'
-toPhone '555.123.4567 x99'  # '(555) 123-4567, ext. 99'
-toPhone '+1 555 123 4567'   # '(555) 123-4567'
-```
-
-## Migration from Hono
-
-### Before (Hono)
-
-```coffee
-import { Hono } from 'hono'
-
-app = new Hono()
-app.get '/users/:id', (c) ->
-  id = c.req.param 'id'
-  c.json { id }
-
-export default app
-```
-
-### After (@rip-lang/server)
-
-```coffee
-import { get, read, startHandler } from '@rip-lang/server'
-
-get '/users/:id', ->
-  id = read 'id', 'id!'
-  { id }
-
-export default startHandler()
-```
-
-### API Compatibility
-
-| Hono | @rip-lang/server |
-|------|------------------|
-| `app.get(path, handler)` | `get path, handler` |
-| `app.post(path, handler)` | `post path, handler` |
-| `app.use(middleware)` | `use middleware` |
-| `app.basePath(path)` | `prefix path, -> ...` |
-| `c.json(data)` | `@json(data)` or return `{ data }` |
-| `c.req.param('id')` | `@req.param('id')` or `read 'id'` |
-| `c.req.query('q')` | `@req.query('q')` or `read 'q'` |
-
-## Real-World Example
-
-```coffee
-import { get, post, put, del, use, read, start, before, after, onError } from '@rip-lang/server'
-import { logger } from '@rip-lang/server/middleware'
-
-use logger()
-
-before ->
-  @start = Date.now()
-
-after ->
-  console.log "#{@req.method} #{@req.path} - #{Date.now() - @start}ms"
-
-onError (err) ->
-  @json { error: err.message }, err.status or 500
-
-get '/', ->
-  { name: 'My API', version: '1.0' }
-
-get '/users', ->
-  page = read 'page', 'int', [1, 100]
-  limit = read 'limit', 'int', [1, 50]
-  users = db.listUsers! page or 1, limit or 10
-  { users, page, limit }
-
-get '/users/:id', ->
-  id = read 'id', 'id!'
-  user = db.getUser!(id)
-  unless user
-    throw { message: 'User not found', status: 404 }
-  { user }
-
-post '/users', ->
-  email = read 'email', 'email!'
-  name = read 'name', 'string', [1, 100]
-  phone = read 'phone', 'phone'
-  user = db.createUser! { email, name, phone }
-  { user, created: true }
-
-put '/users/:id', ->
-  id = read 'id', 'id!'
-  email = read 'email', 'email'
-  name = read 'name', 'string', [1, 100]
-  user = db.updateUser! id, { email, name }
-  { user, updated: true }
-
-del '/users/:id', ->
-  id = read 'id', 'id!'
-  db.deleteUser!(id)
-  { deleted: true }
-
-start port: 3000
-```
+See the full [Validation Reference](docs/READ_VALIDATORS.md) for all 37+
+validators, patterns, custom validators, and real-world examples.
 
 ## App Path & Naming
 
@@ -1195,18 +605,7 @@ rip server --debug
 rip server r:5000,3600s
 ```
 
-## Architecture
-
-### Edge Planning Docs
-
-Current M0 artifacts for the unified edge/app evolution live in:
-
-- [Edge contracts](docs/edge/CONTRACTS.md)
-- [Config lifecycle](docs/edge/CONFIG_LIFECYCLE.md)
-- [Scheduler policy](docs/edge/SCHEDULER.md)
-- [Edgefile contract](docs/edge/EDGEFILE_CONTRACT.md)
-- [M0b review notes](docs/edge/M0B_REVIEW_NOTES.md)
-- [TLS spike findings](spikes/tls/FINDINGS.md)
+## Internals
 
 ### Self-Spawning Design
 
@@ -1523,7 +922,7 @@ Your app must provide a fetch handler. Three patterns are supported:
 ```coffee
 import { get, start } from '@rip-lang/server'
 
-get '/', -> 'Hello!'
+get '/' -> 'Hello!'
 
 start()
 ```
@@ -1641,7 +1040,7 @@ dir = import.meta.dir
 
 use serve dir: dir, title: 'My App', watch: true
 
-get '/css/*', -> @send "#{dir}/css/#{@req.path.slice(5)}"
+get '/css/*' -> @send "#{dir}/css/#{@req.path.slice(5)}"
 
 notFound -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
 
@@ -1665,30 +1064,6 @@ This gives you:
 - **Rolling restarts** — zero-downtime file-watch reloading
 
 See [Hot Reloading](#hot-reloading) for details on how the two layers (API + UI) work together.
-
-## Comparison with Other Servers
-
-For a single-host Bun deployment, `rip server` now covers most of what you would
-normally reach for Caddy or nginx to do, while also managing your Rip apps.
-
-| Capability | rip server | Caddy | nginx | Traefik |
-|-----------|------------|-------|-------|---------|
-| Single-app zero-config serving | ✅ | ❌ | ❌ | ❌ |
-| Managed multi-app worker pools | ✅ | ❌ | ❌ | ❌ |
-| Host/path upstream proxying | ✅ | ✅ | ✅ | ✅ |
-| WebSocket upstream proxying | ✅ | ✅ | ✅ | ✅ |
-| Wildcard hosts | ✅ | ✅ | ✅ | ✅ |
-| Auto HTTPS (ACME HTTP-01) | ✅ | ✅ | External | ✅ |
-| Config validation with hints | ✅ | Partial | ❌ | Partial |
-| Atomic runtime swap + drain | ✅ | ✅ | ✅ | ✅ |
-| Post-activate verify + automatic rollback | ✅ | ❌ | ❌ | ❌ |
-| Built-in diagnostics + reload history | ✅ | Partial | Partial | ✅ |
-| HTTP response cache | ❌ | Partial | ✅ | ❌ |
-| Multi-node service discovery | ❌ | ❌ | ❌ | ✅ |
-
-Use `rip server` when you want one Bun-native runtime for both the app and the
-edge. Use Caddy/nginx/Traefik when you specifically need their mature caching,
-multi-node routing, or ecosystem integrations.
 
 ## Multi-App Configuration (`config.rip`)
 
@@ -1787,9 +1162,9 @@ Frames flow bidirectionally; close and error propagate between both ends.
 
 ## Roadmap
 
-> *Planned improvements for future releases:*
-
 - [ ] Prometheus / OpenTelemetry metrics export
+- [ ] Inline edge handlers (run small handlers without a worker process)
+- [ ] HTTP response caching at the edge
 
 ## License
 
