@@ -245,3 +245,18 @@ test "server block rejects unknown app reference", ->
     threw = true
     ok e.validationErrors.some((err) -> err.code is 'E_SERVER_APP_REF')
   ok threw
+
+test "inline app definition on host block", ->
+  config = normalizeEdgeConfig({
+    hosts:
+      'api.example.com':
+        cert: '/ssl/example.com.crt'
+        key:  '/ssl/example.com.key'
+        app:
+          entry: '/srv/myapi/index.rip'
+          root:  '/srv/myapi'
+  }, '/home/shreeve')
+  route = config.sites['api.example.com'].routes[0]
+  eq route.app, 'app-api.example.com'
+  ok config.apps['app-api.example.com']
+  ok config.apps['app-api.example.com'].entry.includes('myapi')
