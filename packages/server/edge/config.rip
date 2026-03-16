@@ -125,7 +125,11 @@ normalizeAppConfigInto = (appId, appConfig, baseDir, path, errors) ->
     maxQueue: normalizePositiveInt(appConfig.maxQueue, 512, "#{path}.maxQueue", errors, 'maxQueue')
     queueTimeoutMs: normalizePositiveInt(appConfig.queueTimeoutMs, 30000, "#{path}.queueTimeoutMs", errors, 'queueTimeoutMs')
     readTimeoutMs: normalizePositiveInt(appConfig.readTimeoutMs, 30000, "#{path}.readTimeoutMs", errors, 'readTimeoutMs')
-    env: normalizeEnv(appConfig.env, "#{path}.env", errors)
+    env: do ->
+      env = normalizeEnv(appConfig.env, "#{path}.env", errors)
+      if typeof appConfig.root is 'string' and appConfig.root.trim()
+        env.APP_BASE_DIR = if appConfig.root.startsWith('/') then appConfig.root else resolve(baseDir, appConfig.root)
+      env
   }
 
 normalizeTimeouts = (value, path, errors) ->
