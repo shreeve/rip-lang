@@ -90,6 +90,7 @@ compileRoute = (route, order, inheritedHost = null) ->
     static:    route.static or null
     root:      route.root or null
     spa:       route.spa is true
+    browse:    route.browse is true
     redirect:  route.redirect or null
     headers:   route.headers or null
     websocket: route.websocket is true

@@ -319,6 +319,7 @@ normalizeServerRouteConfig = (routeConfig, idx, serverHost, serverRoot, baseDir,
     static:    routeConfig.static or null
     root:      effectiveRoot
     spa:       routeConfig.spa is true
+    browse:    routeConfig.browse is true
     redirect:  routeConfig.redirect or null
     headers:   routeConfig.headers or null
     websocket: routeConfig.websocket is true
@@ -349,6 +350,7 @@ normalizeServerBlock = (host, serverConfig, baseDir, errors, knownUpstreams, kno
   keyPath = if hasKey and typeof serverConfig.key is 'string' then resolve(baseDir, serverConfig.key) else null
   serverRoot = if typeof serverConfig.root is 'string' then resolve(baseDir, serverConfig.root) else null
   serverSpa = serverConfig.spa is true
+  serverBrowse = serverConfig.browse is true
   routes = []
   if Array.isArray(serverConfig.routes) and serverConfig.routes.length > 0
     for routeConfig, idx in serverConfig.routes
@@ -365,6 +367,7 @@ normalizeServerBlock = (host, serverConfig, baseDir, errors, knownUpstreams, kno
       static:    '.'
       root:      serverRoot
       spa:       serverSpa
+      browse:    serverBrowse
       redirect:  null
       headers:   null
       websocket: false
