@@ -1533,8 +1533,6 @@ main = ->
     acmeMgr.startRenewalLoop([flags.acmeDomain])
 
   process.env.RIP_URLS = svr.urls.join(',')  # exact URLs the Server just built
-  for app in mgr.allAppStates()
-    p "rip-server: app #{app.appId} entry=#{app.config.entry or 'none'} hosts=#{(app.config.hosts or []).join(',') or 'none'}"
   mgr.start!
 
   logStartupSummary(svr, flags, edgeBuildRipdevUrl, formatPort)

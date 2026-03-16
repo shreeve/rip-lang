@@ -22,7 +22,7 @@ export spawnTrackedWorker = (flags, workerId, version, nowMsFn, importMetaPath, 
     SOCKET_PREFIX: flags.socketPrefix
     APP_ID: String(appId or flags.appName or 'default')
     APP_ENTRY: appEntry
-    APP_BASE_DIR: appBaseDir
+    APP_BASE_DIR: workerEnvExtra.APP_BASE_DIR or appBaseDir
     MAX_REQUESTS: String(flags.maxRequestsPerWorker)
     MAX_SECONDS: String(flags.maxSecondsPerWorker)
     RIP_LOG_JSON: if flags.jsonLogging then '1' else '0'
