@@ -215,63 +215,33 @@ test "v2 validates app references in server routes", ->
     ok e.validationErrors.some((err) -> err.code is 'E_ROUTE_APP_REF')
   ok threw
 
-# --- unified schema ---
 
-test "servers detected by key presence, not version number", ->
+test "server block with app field creates app route", ->
   config = normalizeEdgeConfig({
-    version: 1
-    edge: {}
     servers:
-      '*.example.com':
-        routes: [{ path: '/*', static: '.' }]
+      'dev.example.com':
+        cert: '/ssl/example.com.crt'
+        key:  '/ssl/example.com.key'
+        app:  'browser'
+    apps:
+      browser:
+        entry: '/srv/default.rip'
+        root:  '/mnt/www'
   }, '/home/shreeve')
-  ok config.sites['*.example.com']
+  route = config.sites['dev.example.com'].routes[0]
+  eq route.app, 'browser'
+  eq route.host, 'dev.example.com'
+  ok config.certs['dev.example.com']
 
-test "flat routes still work alongside version 1", ->
-  config = normalizeEdgeConfig({
-    version: 1
-    edge: {}
-    upstreams:
-      app:
-        targets: ['http://127.0.0.1:3000']
-    routes: [
-      { path: '/*', upstream: 'app' }
-    ]
-  }, '/home/shreeve')
-  eq config.version, 1
-  eq config.routes.length, 1
-  eq config.routes[0].upstream, 'app'
-
-test "rejects mixing servers with routes", ->
+test "server block rejects unknown app reference", ->
   threw = false
   try
     normalizeEdgeConfig({
-      version: 1
-      edge: {}
       servers:
-        '*.example.com':
-          routes: [{ path: '/*', static: '.' }]
-      routes: [{ path: '/*', upstream: 'app' }]
+        'dev.example.com':
+          app: 'nonexistent'
     }, '/home/shreeve')
   catch e
     threw = true
-    ok e.validationErrors.some((err) -> err.code is 'E_MIXED_HOST_MODEL')
-  ok threw
-
-test "rejects mixing servers with sites", ->
-  threw = false
-  try
-    normalizeEdgeConfig({
-      version: 1
-      edge: {}
-      servers:
-        '*.example.com':
-          routes: [{ path: '/*', static: '.' }]
-      sites:
-        api.example.com:
-          routes: [{ path: '/*', upstream: 'app' }]
-    }, '/home/shreeve')
-  catch e
-    threw = true
-    ok e.validationErrors.some((err) -> err.code is 'E_MIXED_HOST_MODEL')
+    ok e.validationErrors.some((err) -> err.code is 'E_SERVER_APP_REF')
   ok threw

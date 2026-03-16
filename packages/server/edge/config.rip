@@ -355,10 +355,30 @@ normalizeServerBlock = (host, serverConfig, baseDir, errors, knownUpstreams, kno
   serverRoot = if typeof serverConfig.root is 'string' then resolve(baseDir, serverConfig.root) else null
   serverSpa = serverConfig.spa is true
   serverBrowse = serverConfig.browse is true
+  serverApp = if typeof serverConfig.app is 'string' and serverConfig.app.trim() then serverConfig.app.trim() else null
+  if serverApp and not knownApps.has(serverApp)
+    pushError(errors, 'E_SERVER_APP_REF', "#{path}.app", "unknown app #{serverApp}", 'Define the app under `apps` first.')
   routes = []
   if Array.isArray(serverConfig.routes) and serverConfig.routes.length > 0
     for routeConfig, idx in serverConfig.routes
       routes.push(normalizeServerRouteConfig(routeConfig, idx, host, serverRoot, baseDir, errors, knownUpstreams, knownApps))
+  else if serverApp
+    routes.push
+      id:        'route-1'
+      host:      host.toLowerCase()
+      path:      '/*'
+      methods:   '*'
+      priority:  0
+      upstream:  null
+      app:       serverApp
+      static:    null
+      root:      null
+      spa:       false
+      browse:    false
+      redirect:  null
+      headers:   null
+      websocket: false
+      timeouts:  {}
   else if serverRoot
     routes.push
       id:        'route-1'
@@ -377,7 +397,7 @@ normalizeServerBlock = (host, serverConfig, baseDir, errors, knownUpstreams, kno
       websocket: false
       timeouts:  {}
   else
-    pushError(errors, 'E_SERVER_ROUTES', "#{path}", 'server block must define routes, root, or passthrough', "Add routes: [...], root: '/path/to/dir', or passthrough: 'host:port'.")
+    pushError(errors, 'E_SERVER_ROUTES', "#{path}", 'server block must define routes, root, app, or passthrough', "Add routes: [...], root: '/path', app: 'name', or passthrough: 'host:port'.")
   {
     host:        host.toLowerCase()
     routes:      routes
@@ -465,60 +485,8 @@ export normalizeLegacyConfig = (config, baseDir) ->
   throw validationError(LEGACY_CONFIG_NAME, errors) if errors.length > 0
   { kind: 'legacy', version: null, edge: {}, upstreams: {}, apps, routes: [], sites: {} }
 
-topLevelKeysAll = new Set([...topLevelKeysV1, ...topLevelKeysV2])
-
 export normalizeEdgeConfig = (config, baseDir) ->
-  errors = []
-  unless isPlainObject(config)
-    pushError(errors, 'E_CONFIG_TYPE', '$', 'Edgefile.rip must export an object', "Use `export default { version: 1, edge: {}, routes: [] }`.")
-    throw validationError(EDGEFILE_NAME, errors)
-  hasServers = config.servers?
-  hasRoutes = config.routes?
-  hasSites = config.sites?
-  if hasServers and (hasRoutes or hasSites)
-    pushError(errors, 'E_MIXED_HOST_MODEL', '$', 'cannot use both `servers` and `routes`/`sites` in the same Edgefile', 'Use `servers` for per-domain config, or `routes`/`sites` for flat config, but not both.')
-    throw validationError(EDGEFILE_NAME, errors)
-  if hasServers
-    return normalizeEdgeConfigV2(config, baseDir)
-  for key of config
-    pushError(errors, 'E_UNKNOWN_KEY', key, "unknown top-level key #{key}", 'Use only `version`, `edge`, `upstreams`, `streamUpstreams`, `apps`, `routes`, `streams`, `sites`, and `servers`.') unless topLevelKeysAll.has(key)
-  edgeInput = config.edge or {}
-  edge = normalizeEdgeSettings(edgeInput, errors)
-  upstreams = {}
-  if config.upstreams?
-    unless isPlainObject(config.upstreams)
-      pushError(errors, 'E_UPSTREAMS_TYPE', 'upstreams', 'upstreams must be an object keyed by upstream ID', "Use `upstreams: { app: { targets: ['http://127.0.0.1:3000'] } }`.")
-    else
-      for upstreamId, upstreamConfig of config.upstreams
-        upstreams[upstreamId] = normalizeUpstreamConfig(upstreamId, upstreamConfig, "upstreams.#{upstreamId}", errors)
-  apps = {}
-  if config.apps?
-    unless isPlainObject(config.apps)
-      pushError(errors, 'E_APPS_TYPE', 'apps', 'apps must be an object keyed by app ID', "Use `apps: { admin: { entry: './admin/index.rip' } }`.")
-    else
-      for appId, appConfig of config.apps
-        apps[appId] = normalizeAppConfigInto(appId, appConfig, baseDir, "apps.#{appId}", errors)
-  knownUpstreams = new Set(Object.keys(upstreams))
-  knownApps = new Set(Object.keys(apps))
-  routes = []
-  if config.routes?
-    unless Array.isArray(config.routes)
-      pushError(errors, 'E_ROUTES_TYPE', 'routes', 'routes must be an array', "Use `routes: [{ path: '/*', upstream: 'app' }]`.")
-    else
-      for routeConfig, idx in config.routes
-        routes.push(normalizeRouteConfig(routeConfig, idx, errors, knownUpstreams, knownApps))
-  sites = {}
-  if config.sites?
-    unless isPlainObject(config.sites)
-      pushError(errors, 'E_SITES_TYPE', 'sites', 'sites must be an object keyed by host', "Use `sites: { 'api.example.com': { routes: [...] } }`.")
-    else
-      for host, siteConfig of config.sites
-        sites[host] = normalizeSiteConfig(host, siteConfig, host, errors, knownUpstreams, knownApps)
-  streamUpstreams = normalizeStreamUpstreams(config.streamUpstreams, errors)
-  knownStreamUpstreams = new Set(Object.keys(streamUpstreams))
-  streams = normalizeStreams(config.streams, knownStreamUpstreams, errors)
-  throw validationError(EDGEFILE_NAME, errors) if errors.length > 0
-  { kind: 'edge', version: 1, edge, upstreams, apps, routes, sites, streamUpstreams, streams }
+  normalizeEdgeConfigV2(config, baseDir)
 
 export summarizeConfig = (configPath, normalized) ->
   path = resolve(configPath)
