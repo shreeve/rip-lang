@@ -12,7 +12,7 @@ test "compileRouteTable keeps global route order", ->
 
 test "compileRouteTable merges site routes with inherited host", ->
   table = compileRouteTable([],
-    'admin.example.com':
+    admin.example.com:
       routes: [{ path: '/*', app: 'admin' }]
   )
   eq table.routes.length, 1

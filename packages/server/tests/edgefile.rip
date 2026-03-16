@@ -40,7 +40,7 @@ test "normalizeEdgeConfig accepts mixed mode shape", ->
       { path: '/admin/*', app: 'admin' }
     ]
     sites:
-      'admin.example.com':
+      admin.example.com:
         routes: [{ path: '/*', app: 'admin' }]
   , '/srv')
   eq Object.keys(normalized.apps).length, 1
@@ -163,7 +163,7 @@ test "summarizeConfig reports canonical counts", ->
     upstreams: { app: { targets: ['http://127.0.0.1:3000'] } }
     apps: { admin: { entry: '/srv/admin/index.rip', hosts: ['admin.example.com'] } }
     routes: [{ path: '/*', upstream: 'app' }]
-    sites: { 'admin.example.com': { routes: [] } }
+    sites: { admin.example.com: { routes: [] } }
   )
   eq summary.counts.upstreams, 1
   eq summary.counts.apps, 1

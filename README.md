@@ -87,6 +87,15 @@ dog = Dog.new("Buddy")         # Ruby-style constructor
 
 Both `#{}` and `${}` compile to JavaScript template literals. Use whichever you prefer.
 
+### Objects
+
+```coffee
+user = {name: "Alice", age: 30}
+config =
+  api.endpoint: "https://example.com"  # Dotted keys become flat string keys
+  api.timeout: 5000                    # {'api.endpoint': "...", 'api.timeout': 5000}
+```
+
 ### Destructuring & Comprehensions
 
 ```coffee

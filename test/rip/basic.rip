@@ -84,6 +84,15 @@ code "computed property code", "{[key]: value}", "({[key]: value})"
 test "interpolated string key", 'k = "x"\no = {"#{k}": 42}\no.x', 42
 test "interpolated string key access", 'n = "name"\no = {"#{n}": "Alice"}\no.name', "Alice"
 
+# Dotted keys (rescued syntax — treated as flat string keys)
+test "dotted key simple", 'o = { a.b: 1 }; o["a.b"]', 1
+test "dotted key triple", 'o = { one.two.three: 44 }; o["one.two.three"]', 44
+test "dotted key mixed", 'o = { one.two.three: 44, five: 66 }; o["one.two.three"] + o.five', 110
+code "dotted key codegen", '{ a.b: 1 }', "({'a.b': 1})"
+code "dotted key triple codegen", '{ one.two.three: 44 }', "({'one.two.three': 44})"
+test "dotted key implicit object", 'a =\n  x.y:\n    z: 1\na["x.y"].z', 1
+test "dotted key implicit siblings", 'a =\n  x.y: 1\n  w.z: 2\na["x.y"] + a["w.z"]', 3
+
 # ==============================================================================
 # Inclusive Ranges (..)
 # ==============================================================================

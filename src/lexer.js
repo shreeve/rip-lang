@@ -1638,6 +1638,26 @@ export class Lexer {
           return forward(1);
         }
 
+        // Dotted keys: collapse `IDENTIFIER . PROPERTY . PROPERTY` into a STRING
+        if (tokens[i - 1]?.[0] === 'PROPERTY' && tokens[i - 2]?.[0] === '.') {
+          let j = i - 2;
+          while (j >= 2 && tokens[j]?.[0] === '.' && (tokens[j - 1]?.[0] === 'PROPERTY' || tokens[j - 1]?.[0] === 'IDENTIFIER')) {
+            j -= 2;
+          }
+          j += 1;
+          if (tokens[j]?.[0] === 'IDENTIFIER' || tokens[j]?.[0] === 'PROPERTY') {
+            let parts = [];
+            for (let k = j; k < i; k += 2) parts.push(tokens[k][1]);
+            let str = gen('STRING', `"${parts.join('.')}"`, tokens[j]);
+            str.pre = tokens[j].pre;
+            str.spaced = tokens[j].spaced;
+            str.newLine = tokens[j].newLine;
+            str.loc = tokens[j].loc;
+            tokens.splice(j, i - j, str);
+            i = j + 1;
+          }
+        }
+
         // Find the start of this key
         let s = EXPRESSION_END.has(this.tokens[i - 1]?.[0]) ? stack[stack.length - 1]?.[1] ?? i - 1 : i - 1;
         if (this.tokens[i - 2]?.[0] === '@') s = i - 2;
@@ -1825,6 +1845,12 @@ export class Lexer {
     if (!this.tokens[j]) return false;
     if (this.tokens[j]?.[0] === '@' && this.tokens[j + 2]?.[0] === ':') return true;
     if (this.tokens[j + 1]?.[0] === ':') return true;
+    // Dotted keys: IDENTIFIER . PROPERTY ... :
+    if ((this.tokens[j]?.[0] === 'IDENTIFIER' || this.tokens[j]?.[0] === 'PROPERTY') && this.tokens[j + 1]?.[0] === '.') {
+      let k = j + 2;
+      while (this.tokens[k]?.[0] === 'PROPERTY' && this.tokens[k + 1]?.[0] === '.') k += 2;
+      if (this.tokens[k]?.[0] === 'PROPERTY' && this.tokens[k + 1]?.[0] === ':') return true;
+    }
     if (EXPRESSION_START.has(this.tokens[j]?.[0])) {
       let end = null;
       this.detectEnd(j + 1,

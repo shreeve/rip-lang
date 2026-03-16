@@ -78,7 +78,7 @@ test "v2 routes inherit host from server key", ->
     version: 2
     edge: {}
     servers:
-      'app.example.com':
+      app.example.com:
         routes: [
           { path: '/*', static: '/mnt/app' }
         ]
@@ -145,7 +145,7 @@ test "passthrough server block creates stream entries", ->
   config = normalizeEdgeConfig({
     version: 1
     servers:
-      'incus.example.com':
+      incus.example.com:
         passthrough: '127.0.0.1:8443'
   }, '/home/shreeve')
   ok config.streamUpstreams['passthrough-incus.example.com']
@@ -156,7 +156,7 @@ test "passthrough server block has no sites entry", ->
   config = normalizeEdgeConfig({
     version: 1
     servers:
-      'incus.example.com':
+      incus.example.com:
         passthrough: '127.0.0.1:8443'
   }, '/home/shreeve')
   eq config.sites['incus.example.com'], undefined
@@ -268,7 +268,7 @@ test "rejects mixing servers with sites", ->
         '*.example.com':
           routes: [{ path: '/*', static: '.' }]
       sites:
-        'api.example.com':
+        api.example.com:
           routes: [{ path: '/*', upstream: 'app' }]
     }, '/home/shreeve')
   catch e

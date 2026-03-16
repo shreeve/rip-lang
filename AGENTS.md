@@ -239,6 +239,7 @@ rip -cm example.rip
 | optional chain assign | `x?.prop = val`  | guarded assignment                         |
 | rightward assign      | `expr :> x`      | assign with expression first               |
 | tagged template `$`   | `sh $"cmd #{x}"` | injection-safe tagged template             |
+| dotted keys           | `{a.b: 1}`       | flat string key in object literals         |
 
 ### Kept
 
@@ -290,6 +291,7 @@ rip -cm example.rip
 | `?? throw`  | Nullish guard    | `x = get() ?? throw err`     |
 | `%w`        | Word literal     | `%w[foo bar baz]`            |
 | `$"..."`    | Tagged template  | `sh $"cmd #{val}"`           |
+| `a.b:`      | Dotted key       | `{host.name: "x"}`          |
 
 ### Standard Library
 

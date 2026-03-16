@@ -106,6 +106,7 @@ colors = %w(red green blue)   # any delimiter: [] () {} <> || !! etc.
 # Objects
 user = {name: "Alice", age: 30}
 shorthand = {name, age}  # Same as {name: name, age: age}
+config = {api.host: "localhost", api.port: 3000}  # Dotted keys → flat string keys
 
 # Ranges
 nums = [1..5]      # [1, 2, 3, 4, 5]
@@ -2067,6 +2068,9 @@ a =~ /pat/     # regex match, captures in _
 a[/pat/, 1]    # regex extract
 a?             # existence check (a != null)
 a ?? b         # nullish coalescing
+
+# Dotted keys
+{a.b: 1}          # {'a.b': 1} — flat string key
 
 # Word arrays
 %w[foo bar baz]   # ["foo", "bar", "baz"] — Ruby-style word literal
