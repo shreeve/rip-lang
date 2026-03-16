@@ -6,6 +6,29 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { X509Certificate } from 'node:crypto'
 
+hostSpecificity = (serverName) ->
+  return 0 unless typeof serverName is 'string'
+  if serverName.startsWith('*.')
+    labels = serverName.slice(2).split('.').length
+    return 100 + labels
+  serverName.split('.').length + 200
+
+export buildTlsArray = (defaultMaterial, certMap) ->
+  entries = []
+  for serverName, certInfo of (certMap or {})
+    try
+      cert = readFileSync(certInfo.certPath, 'utf8')
+      key = readFileSync(certInfo.keyPath, 'utf8')
+      entries.push({ serverName, cert, key, specificity: hostSpecificity(serverName) })
+    catch e
+      console.error "rip-server: failed to load cert for #{serverName}: #{e.message}"
+  entries.sort((a, b) -> b.specificity - a.specificity)
+  result = entries.map((e) -> { serverName: e.serverName, cert: e.cert, key: e.key })
+  if defaultMaterial?.cert and defaultMaterial?.key
+    fallbackName = '*.localhost'
+    result.push({ serverName: fallbackName, cert: defaultMaterial.cert, key: defaultMaterial.key })
+  result
+
 export printCertSummary = (certPem) ->
   try
     x = new X509Certificate(certPem)

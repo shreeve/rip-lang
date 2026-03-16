@@ -87,11 +87,13 @@ compileRoute = (route, order, inheritedHost = null) ->
     priority: route.priority or order
     upstream: route.upstream or null
     app: route.app or null
-    static: route.static or null
-    redirect: route.redirect or null
-    headers: route.headers or null
+    static:    route.static or null
+    root:      route.root or null
+    spa:       route.spa is true
+    redirect:  route.redirect or null
+    headers:   route.headers or null
     websocket: route.websocket is true
-    timeouts: route.timeouts or {}
+    timeouts:  route.timeouts or {}
   }
 
 export compileRouteTable = (routes = [], sites = {}) ->

@@ -38,7 +38,7 @@ normalizeSniPatterns = (value, path, errors) ->
     patterns.push(normalized)
   patterns
 
-parseHostPort = (value) ->
+export parseHostPort = (value) ->
   return null unless typeof value is 'string'
   idx = value.lastIndexOf(':')
   return null unless idx > 0 and idx < value.length - 1

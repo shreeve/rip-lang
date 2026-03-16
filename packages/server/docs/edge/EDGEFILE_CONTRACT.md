@@ -1,9 +1,19 @@
 # Edgefile Contract
 
-This document defines the current v1 contract for `Edgefile.rip` as implemented in
+This document defines the `Edgefile.rip` contract as implemented in
 `@rip-lang/server`.
 
-## Required top-level shape
+## Host model detection
+
+The Edgefile supports two host models, auto-detected by key presence:
+
+- **Flat model** (`routes`/`sites`) -- routes listed at the top level with optional per-host site groups
+- **Server blocks** (`servers`) -- per-domain blocks that own cert, root, routes, and passthrough
+
+You cannot mix `servers` with `routes`/`sites` in the same Edgefile.
+`version` and `edge` are optional (default to `1` and `{}` respectively).
+
+## Flat model shape
 
 ```coffee
 export default
@@ -17,8 +27,57 @@ export default
   sites: ...
 ```
 
-Only `version`, `edge`, `upstreams`, `streamUpstreams`, `apps`, `routes`,
-`streams`, and `sites` are valid top-level keys.
+## Server blocks shape
+
+```coffee
+export default
+  servers: ...
+  upstreams: ...
+  apps: ...
+  streamUpstreams: ...
+  streams: ...
+```
+
+### `servers`
+
+Per-domain server blocks, keyed by hostname (exact or wildcard).
+
+```coffee
+servers:
+  '*.trusthealth.com':
+    cert: '/ssl/trusthealth.com.crt'
+    key:  '/ssl/trusthealth.com.key'
+    root: '/mnt/trusthealth/website'
+    routes: [
+      { path: '/*', static: '.', spa: true }
+    ]
+```
+
+Server block fields:
+
+- `passthrough?: string` -- raw TLS passthrough to `host:port` (no cert, no routes needed)
+- `cert?: string` -- TLS certificate path (must pair with `key`)
+- `key?: string` -- TLS private key path (must pair with `cert`)
+- `root?: string` -- default filesystem base; serves static files if no routes are defined
+- `spa?: boolean` -- server-level SPA fallback (used with root-only blocks)
+- `routes?: array` -- route objects (optional if `root` or `passthrough` is set)
+- `timeouts?: object` -- per-server timeout defaults
+
+Per-server `cert`/`key` enable SNI-based certificate selection via Bun's TLS
+array. `edge.cert` and `edge.key` remain the fallback TLS identity for
+unmatched hostnames. The TLS array is sorted by specificity: exact hosts first,
+then wildcards by label count, then the fallback entry.
+
+Routes inside a server block inherit the server hostname and must not specify
+`host`. Routes with `upstream` or `app` must reference known entries from the
+top-level `upstreams` or `apps` sections.
+
+Static routes support `static` (string path), `root` (overrides server root),
+and `spa` (boolean, serves `index.html` on miss for GET/HEAD with Accept
+text/html).
+
+Hosts not matching any server block or stream route fall through to the default
+app.
 
 ## Determinism policy
 
@@ -32,12 +91,11 @@ Only `version`, `edge`, `upstreams`, `streamUpstreams`, `apps`, `routes`,
 
 ### `version`
 
-- Required.
-- Must be `1`.
+- Optional. Defaults to `1`.
 
 ### `edge`
 
-Global edge settings.
+Global edge settings. Optional (defaults to `{}`).
 
 Supported keys:
 

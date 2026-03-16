@@ -1,0 +1,277 @@
+import { test, eq, ok } from '../test.rip'
+import { normalizeEdgeConfig } from '../edge/config.rip'
+
+# --- v2 basic normalization ---
+
+test "v2 normalizes servers into sites object shape", ->
+  config = normalizeEdgeConfig({
+    version: 2
+    edge: {}
+    servers:
+      '*.trusthealth.com':
+        cert: '/ssl/trusthealth.com.crt'
+        key:  '/ssl/trusthealth.com.key'
+        root: '/mnt/trusthealth'
+        routes: [
+          { path: '/*', static: '.', spa: true }
+        ]
+  }, '/home/shreeve')
+  eq config.version, 2
+  eq config.kind, 'edge'
+  ok config.sites['*.trusthealth.com']
+  eq config.sites['*.trusthealth.com'].host, '*.trusthealth.com'
+  eq config.sites['*.trusthealth.com'].routes.length, 1
+
+test "v2 extracts cert map from server blocks", ->
+  config = normalizeEdgeConfig({
+    version: 2
+    edge: {}
+    servers:
+      '*.trusthealth.com':
+        cert: '/ssl/trusthealth.com.crt'
+        key:  '/ssl/trusthealth.com.key'
+        routes: [
+          { path: '/*', static: '/mnt/web' }
+        ]
+      '*.zionlabshare.com':
+        cert: '/ssl/zionlabshare.com.crt'
+        key:  '/ssl/zionlabshare.com.key'
+        routes: [
+          { path: '/*', static: '/mnt/zion' }
+        ]
+  }, '/home/shreeve')
+  ok config.certs
+  ok config.certs['*.trusthealth.com']
+  ok config.certs['*.zionlabshare.com']
+  ok config.certs['*.trusthealth.com'].certPath.endsWith('trusthealth.com.crt')
+
+test "v2 inherits server root into routes", ->
+  config = normalizeEdgeConfig({
+    version: 2
+    edge: {}
+    servers:
+      '*.example.com':
+        root: '/mnt/site'
+        routes: [
+          { path: '/*', static: '.' }
+        ]
+  }, '/home/shreeve')
+  route = config.sites['*.example.com'].routes[0]
+  ok route.root.includes('mnt/site')
+
+test "v2 route root overrides server root", ->
+  config = normalizeEdgeConfig({
+    version: 2
+    edge: {}
+    servers:
+      '*.example.com':
+        root: '/mnt/default'
+        routes: [
+          { path: '/*', static: '.', root: '/mnt/override' }
+        ]
+  }, '/home/shreeve')
+  route = config.sites['*.example.com'].routes[0]
+  ok route.root.includes('mnt/override')
+
+test "v2 routes inherit host from server key", ->
+  config = normalizeEdgeConfig({
+    version: 2
+    edge: {}
+    servers:
+      'app.example.com':
+        routes: [
+          { path: '/*', static: '/mnt/app' }
+        ]
+  }, '/home/shreeve')
+  route = config.sites['app.example.com'].routes[0]
+  eq route.host, 'app.example.com'
+
+test "v2 preserves spa flag on routes", ->
+  config = normalizeEdgeConfig({
+    version: 2
+    edge: {}
+    servers:
+      '*.example.com':
+        routes: [
+          { path: '/*', static: '/mnt/app', spa: true }
+        ]
+  }, '/home/shreeve')
+  route = config.sites['*.example.com'].routes[0]
+  eq route.spa, true
+
+# --- validation errors ---
+
+test "rejects server block with no routes and no root", ->
+  threw = false
+  try
+    normalizeEdgeConfig({
+      version: 1
+      edge: {}
+      servers:
+        '*.example.com':
+          cert: '/ssl/example.com.crt'
+          key:  '/ssl/example.com.key'
+    }, '/home/shreeve')
+  catch e
+    threw = true
+    ok e.validationErrors.some((err) -> err.code is 'E_SERVER_ROUTES')
+  ok threw
+
+test "root-only server block generates implicit static route", ->
+  config = normalizeEdgeConfig({
+    version: 1
+    edge: {}
+    servers:
+      '*.example.com':
+        root: '/mnt/site'
+  }, '/home/shreeve')
+  routes = config.sites['*.example.com'].routes
+  eq routes.length, 1
+  eq routes[0].static, '.'
+  ok routes[0].root.includes('mnt/site')
+
+test "root-only server block with spa", ->
+  config = normalizeEdgeConfig({
+    version: 1
+    edge: {}
+    servers:
+      '*.example.com':
+        root: '/mnt/site'
+        spa:  true
+  }, '/home/shreeve')
+  eq config.sites['*.example.com'].routes[0].spa, true
+
+test "passthrough server block creates stream entries", ->
+  config = normalizeEdgeConfig({
+    version: 1
+    servers:
+      'incus.example.com':
+        passthrough: '127.0.0.1:8443'
+  }, '/home/shreeve')
+  ok config.streamUpstreams['passthrough-incus.example.com']
+  eq config.streams.length, 1
+  eq config.streams[0].sni[0], 'incus.example.com'
+
+test "passthrough server block has no sites entry", ->
+  config = normalizeEdgeConfig({
+    version: 1
+    servers:
+      'incus.example.com':
+        passthrough: '127.0.0.1:8443'
+  }, '/home/shreeve')
+  eq config.sites['incus.example.com'], undefined
+
+test "edge and version are optional", ->
+  config = normalizeEdgeConfig({
+    servers:
+      '*.example.com':
+        root: '/mnt/site'
+  }, '/home/shreeve')
+  eq config.version, 1
+  ok config.edge
+
+test "v2 rejects route with host field", ->
+  threw = false
+  try
+    normalizeEdgeConfig({
+      version: 2
+      edge: {}
+      servers:
+        '*.example.com':
+          routes: [{ path: '/*', static: '.', host: 'other.com' }]
+    }, '/home/shreeve')
+  catch e
+    threw = true
+    ok e.validationErrors.some((err) -> err.code is 'E_SERVER_ROUTE_HOST')
+  ok threw
+
+test "v2 validates upstream references in server routes", ->
+  threw = false
+  try
+    normalizeEdgeConfig({
+      version: 2
+      edge: {}
+      servers:
+        '*.example.com':
+          routes: [{ path: '/api/*', upstream: 'nonexistent' }]
+    }, '/home/shreeve')
+  catch e
+    threw = true
+    ok e.validationErrors.some((err) -> err.code is 'E_ROUTE_UPSTREAM_REF')
+  ok threw
+
+test "v2 validates app references in server routes", ->
+  threw = false
+  try
+    normalizeEdgeConfig({
+      version: 2
+      edge: {}
+      servers:
+        '*.example.com':
+          routes: [{ path: '/*', app: 'nonexistent' }]
+    }, '/home/shreeve')
+  catch e
+    threw = true
+    ok e.validationErrors.some((err) -> err.code is 'E_ROUTE_APP_REF')
+  ok threw
+
+# --- unified schema ---
+
+test "servers detected by key presence, not version number", ->
+  config = normalizeEdgeConfig({
+    version: 1
+    edge: {}
+    servers:
+      '*.example.com':
+        routes: [{ path: '/*', static: '.' }]
+  }, '/home/shreeve')
+  ok config.sites['*.example.com']
+
+test "flat routes still work alongside version 1", ->
+  config = normalizeEdgeConfig({
+    version: 1
+    edge: {}
+    upstreams:
+      app:
+        targets: ['http://127.0.0.1:3000']
+    routes: [
+      { path: '/*', upstream: 'app' }
+    ]
+  }, '/home/shreeve')
+  eq config.version, 1
+  eq config.routes.length, 1
+  eq config.routes[0].upstream, 'app'
+
+test "rejects mixing servers with routes", ->
+  threw = false
+  try
+    normalizeEdgeConfig({
+      version: 1
+      edge: {}
+      servers:
+        '*.example.com':
+          routes: [{ path: '/*', static: '.' }]
+      routes: [{ path: '/*', upstream: 'app' }]
+    }, '/home/shreeve')
+  catch e
+    threw = true
+    ok e.validationErrors.some((err) -> err.code is 'E_MIXED_HOST_MODEL')
+  ok threw
+
+test "rejects mixing servers with sites", ->
+  threw = false
+  try
+    normalizeEdgeConfig({
+      version: 1
+      edge: {}
+      servers:
+        '*.example.com':
+          routes: [{ path: '/*', static: '.' }]
+      sites:
+        'api.example.com':
+          routes: [{ path: '/*', upstream: 'app' }]
+    }, '/home/shreeve')
+  catch e
+    threw = true
+    ok e.validationErrors.some((err) -> err.code is 'E_MIXED_HOST_MODEL')
+  ok threw

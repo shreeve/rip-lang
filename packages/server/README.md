@@ -104,6 +104,7 @@ there is no multiplexer and no extra hop.
 | Built-in app framework | Yes | No | No | No |
 | Hot reload | Yes | Yes | Reload | Yes |
 | Atomic rollback | Yes | No | No | No |
+| Per-SNI multi-cert TLS | Yes | Yes | Yes | Yes |
 | Config validation with hints | Yes | Partial | No | Partial |
 | Zero dependencies | Yes | Go binary | C binary | Go binary |
 
@@ -216,7 +217,7 @@ export default
 
 | Field | Purpose |
 |------|---------|
-| `version` | Required schema version. Must be `1`. |
+| `version` | Schema version (optional, defaults to `1`). |
 | `edge` | Global edge settings: TLS, trusted proxies, timeouts, verification policy. |
 | `upstreams` | Named external HTTP services and their targets. |
 | `streamUpstreams` | Named raw TCP upstreams using `host:port` targets and optional `connectTimeoutMs`. |
@@ -372,6 +373,93 @@ export default
   routes: [
     { path: '/*', upstream: 'web', host: '*.example.com' }
   ]
+```
+
+## Server Blocks
+
+Use `servers` to group TLS certificates, routes, and static file serving
+under each hostname. This is the cleanest way to configure multi-domain hosting.
+
+`servers` is auto-detected: if your Edgefile has `servers`, Rip uses the
+server-block model. If it has `routes`/`sites`, Rip uses the flat model. You
+cannot mix both. `version` and `edge` are optional -- they default to `1` and
+`{}` respectively.
+
+### Server Blocks Shape
+
+```coffee
+export default
+  servers:
+    '*.trusthealth.com':
+      cert: '/ssl/trusthealth.com.crt'
+      key:  '/ssl/trusthealth.com.key'
+      root: '/mnt/trusthealth/website'
+      routes: [
+        { path: '/*', static: '.', spa: true }
+      ]
+
+    '*.zionlabshare.com':
+      cert: '/ssl/zionlabshare.com.crt'
+      key:  '/ssl/zionlabshare.com.key'
+      routes: [
+        { path: '/api/*', upstream: 'api' }
+        { path: '/*', static: '/mnt/zion/dist', spa: true }
+      ]
+
+  upstreams:
+    api: { targets: ['http://127.0.0.1:3807'] }
+
+  streamUpstreams:
+    incus: { targets: ['127.0.0.1:8443'] }
+
+  streams: [
+    { listen: 443, sni: ['incus.trusthealth.com'], upstream: 'incus' }
+  ]
+```
+
+### How Server Blocks Work
+
+- Each server block is keyed by hostname (exact or wildcard)
+- Per-server `cert`/`key` enable SNI-based certificate selection (multiple domains on one port)
+- `edge.cert` and `edge.key` are the optional fallback TLS identity
+- A server with just `root` and no `routes` serves static files automatically
+- A server with `passthrough` routes raw TLS to another address (no termination)
+- `streams`, `streamUpstreams`, `upstreams`, and `apps` stay top-level and are shared
+- Routes inside a server block inherit the server hostname automatically
+- Hosts not matching any server block or stream route fall through to the default app
+
+### Server Block Fields
+
+| Field | Purpose |
+|-------|---------|
+| `passthrough` | Raw TLS passthrough to `host:port` (no cert, no routes needed) |
+| `cert` | TLS certificate path for this hostname (must pair with `key`) |
+| `key` | TLS private key path for this hostname (must pair with `cert`) |
+| `root` | Default filesystem base; if present with no `routes`, serves static files |
+| `spa` | Server-level SPA fallback (boolean, used with `root`-only blocks) |
+| `routes` | Array of route objects (optional if `root` or `passthrough` is set) |
+| `timeouts` | Per-server timeout defaults |
+
+### Static Routes
+
+Static routes serve files from disk with auto-detected MIME types:
+
+```coffee
+{ path: '/*', static: '.', spa: true }
+{ path: '/assets/*', static: '/mnt/assets' }
+```
+
+- `static` is the directory to serve from (absolute path or relative to `root`)
+- `root` on a route overrides the server-level `root`
+- `spa: true` enables SPA fallback: when a file is not found and the request
+  accepts `text/html`, serves `index.html` instead
+- Directory requests serve `index.html` if present
+- Path traversal is rejected
+
+### Redirect Routes
+
+```coffee
+{ path: '/old/*', redirect: { to: 'https://new.example.com', status: 301 } }
 ```
 
 ## Operator Runbook

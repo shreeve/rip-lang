@@ -5,7 +5,9 @@ Branch: `edge`
 
 ## Summary
 
-- SNI dynamic cert selection: **not observed**
+- SNI dynamic cert selection via `SNICallback` or `serverName` function: **not supported**
+- SNI cert selection via `tls: [{ serverName, cert, key }, ...]` array: **works on Bun 1.3.10** (not tested in this spike; validated later in the `servers` branch)
+- Bun requires every TLS array entry to have a `serverName` -- entries without it are rejected
 - ALPN negotiation (`acme-tls/1`): **not observed in tested Bun TLS API path**
 - ALPN-driven cert selection: **not observed**
 - In-process cert hot reload: **not observed**

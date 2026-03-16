@@ -1,0 +1,64 @@
+import { test, eq, ok } from '../test.rip'
+import { serveStaticRoute, buildRedirectResponse } from '../edge/static.rip'
+
+# --- helpers ---
+
+mockReq = (method = 'GET', accept = 'text/html') ->
+  headers: new Headers({ accept })
+  method: method
+
+mockUrl = (pathname) ->
+  new URL("https://example.com#{pathname}")
+
+# --- static route tests ---
+
+test "serveStaticRoute returns 405 for POST", ->
+  req = mockReq('POST')
+  route = { static: '/tmp', root: '/tmp', path: '/*' }
+  res = serveStaticRoute(req, mockUrl('/foo'), route)
+  eq res.status, 405
+
+test "serveStaticRoute returns 404 for missing file", ->
+  req = mockReq()
+  route = { static: '/tmp/nonexistent-dir-rip-test', root: '/tmp/nonexistent-dir-rip-test', path: '/*' }
+  res = serveStaticRoute(req, mockUrl('/missing.txt'), route)
+  eq res.status, 404
+
+test "serveStaticRoute rejects percent-encoded traversal", ->
+  req = mockReq()
+  route = { static: '/tmp/rip-static-test', root: '/tmp/rip-static-test', path: '/*' }
+  url = { pathname: '/%2e%2e/%2e%2e/etc/passwd' }
+  res = serveStaticRoute(req, url, route)
+  ok res.status is 403 or res.status is 404
+
+test "URL-normalized traversal stays safe", ->
+  req = mockReq()
+  route = { static: '/tmp/rip-static-test', root: '/tmp/rip-static-test', path: '/*' }
+  res = serveStaticRoute(req, mockUrl('/../../etc/passwd'), route)
+  ok res.status >= 400
+
+test "serveStaticRoute SPA fallback requires Accept text/html", ->
+  req = mockReq('GET', 'application/json')
+  route = { static: '/tmp', root: '/tmp', path: '/*', spa: true }
+  res = serveStaticRoute(req, mockUrl('/missing-page'), route)
+  eq res.status, 404
+
+test "serveStaticRoute HEAD returns 405-safe", ->
+  req = mockReq('HEAD')
+  route = { static: '/tmp/nonexistent-dir-rip-test', root: '/tmp/nonexistent-dir-rip-test', path: '/*' }
+  res = serveStaticRoute(req, mockUrl('/missing.txt'), route)
+  eq res.status, 404
+
+# --- redirect tests ---
+
+test "buildRedirectResponse returns 302 by default", ->
+  req = mockReq()
+  route = { redirect: { to: 'https://example.com' } }
+  res = buildRedirectResponse(req, mockUrl('/old'), route)
+  eq res.status, 302
+
+test "buildRedirectResponse uses custom status", ->
+  req = mockReq()
+  route = { redirect: { to: 'https://example.com', status: 301 } }
+  res = buildRedirectResponse(req, mockUrl('/old'), route)
+  eq res.status, 301

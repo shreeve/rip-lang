@@ -87,18 +87,15 @@ Legacy managed multi-app config.
 
 ### `Edgefile.rip`
 
-Canonical edge config for the edge runtime.
+Canonical edge config for the edge runtime. Supports v1 and v2 schemas.
 
-Top-level keys:
+v1 top-level keys: `version`, `edge`, `upstreams`, `streamUpstreams`, `apps`,
+`routes`, `streams`, `sites`.
 
-- `version`
-- `edge`
-- `upstreams`
-- `streamUpstreams`
-- `apps`
-- `routes`
-- `streams`
-- `sites`
+v2 top-level keys: `version`, `edge`, `servers`, `upstreams`, `apps`,
+`streamUpstreams`, `streams`. v2 uses `servers` instead of `routes`/`sites`.
+Each server block owns `cert`, `key`, `root`, `routes`, and `timeouts`.
+Per-server `cert`/`key` enable per-SNI multi-cert TLS via Bun's TLS array.
 
 Use `Edgefile.rip` when you need:
 
@@ -108,6 +105,11 @@ Use `Edgefile.rip` when you need:
 - staged reload + verification + rollback
 - verification policy (`edge.verify`)
 - stream passthrough via `streamUpstreams` and `streams`
+- per-domain TLS via `servers` blocks with `cert`/`key`
+- `passthrough` shorthand for raw TLS passthrough in server blocks
+- root-only server blocks with implicit static file serving
+- static file serving and SPA fallback via `static`/`spa` route actions
+- redirect routes via `redirect: { to, status }`
 
 ## Edge runtime lifecycle
 

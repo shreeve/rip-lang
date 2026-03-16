@@ -8,7 +8,7 @@
 
 import { existsSync, statSync } from 'node:fs'
 import { join, dirname, resolve, basename } from 'node:path'
-import { normalizeStreamUpstreams, normalizeStreams } from '../streams/config.rip'
+import { normalizeStreamUpstreams, normalizeStreams, parseHostPort } from '../streams/config.rip'
 
 EDGEFILE_NAME = 'Edgefile.rip'
 LEGACY_CONFIG_NAME = 'config.rip'
@@ -162,7 +162,7 @@ normalizeVerifyPolicy = (value, path, errors) ->
 
 normalizeEdgeSettings = (value, errors) ->
   unless isPlainObject(value)
-    pushError(errors, 'E_EDGE_REQUIRED', 'edge', 'edge must be an object', "Use `edge: {}` even if you only rely on defaults.")
+    pushError(errors, 'E_EDGE_REQUIRED', 'edge', 'edge must be an object', "Use `edge: {}` or omit it to use defaults.")
     value = {}
   certPath = if typeof value.cert is 'string' and value.cert.trim() then resolve(process.cwd(), value.cert) else null
   keyPath = if typeof value.key is 'string' and value.key.trim() then resolve(process.cwd(), value.key) else null
@@ -241,18 +241,20 @@ normalizeRouteConfig = (routeConfig, idx, errors, knownUpstreams, knownApps) ->
   if routeConfig.websocket is true and not routeConfig.upstream?
     pushError(errors, 'E_ROUTE_WEBSOCKET', "#{path}.websocket", 'websocket routes currently require an upstream action', 'Set `upstream: ...` on the route or remove `websocket: true`.')
   {
-    id: routeConfig.id or "route-#{idx + 1}"
-    host: if typeof host is 'string' then host.toLowerCase() else '*'
-    path: routePath or '/'
-    methods: if routeConfig.methods? then routeConfig.methods else '*'
-    priority: normalizePositiveInt(routeConfig.priority, idx, "#{path}.priority", errors, 'priority')
-    upstream: routeConfig.upstream or null
-    app: routeConfig.app or null
-    static: routeConfig.static or null
-    redirect: routeConfig.redirect or null
-    headers: routeConfig.headers or null
+    id:        routeConfig.id or "route-#{idx + 1}"
+    host:      if typeof host is 'string' then host.toLowerCase() else '*'
+    path:      routePath or '/'
+    methods:   if routeConfig.methods? then routeConfig.methods else '*'
+    priority:  normalizePositiveInt(routeConfig.priority, idx, "#{path}.priority", errors, 'priority')
+    upstream:  routeConfig.upstream or null
+    app:       routeConfig.app or null
+    static:    routeConfig.static or null
+    root:      routeConfig.root or null
+    spa:       routeConfig.spa is true
+    redirect:  routeConfig.redirect or null
+    headers:   routeConfig.headers or null
     websocket: routeConfig.websocket is true
-    timeouts: normalizeTimeouts(routeConfig.timeouts, "#{path}.timeouts", errors)
+    timeouts:  normalizeTimeouts(routeConfig.timeouts, "#{path}.timeouts", errors)
   }
 
 normalizeSiteConfig = (host, siteConfig, idx, errors, knownUpstreams, knownApps) ->
@@ -273,7 +275,162 @@ normalizeSiteConfig = (host, siteConfig, idx, errors, knownUpstreams, knownApps)
     routes
   }
 
-topLevelKeys = new Set(['version', 'edge', 'upstreams', 'apps', 'routes', 'sites', 'streamUpstreams', 'streams'])
+topLevelKeysV1 = new Set(['version', 'edge', 'upstreams', 'apps', 'routes', 'sites', 'streamUpstreams', 'streams'])
+topLevelKeysV2 = new Set(['version', 'edge', 'servers', 'upstreams', 'apps', 'streamUpstreams', 'streams'])
+
+VALID_REDIRECT_STATUSES = new Set([301, 302, 307, 308])
+
+normalizeServerRouteConfig = (routeConfig, idx, serverHost, serverRoot, baseDir, errors, knownUpstreams, knownApps) ->
+  path = "servers.#{serverHost}.routes[#{idx}]"
+  unless isPlainObject(routeConfig)
+    pushError(errors, 'E_ROUTE_TYPE', path, 'route must be an object', "Use `{ path: '/*', static: '.' }`.")
+    routeConfig = {}
+  if routeConfig.host?
+    pushError(errors, 'E_SERVER_ROUTE_HOST', "#{path}.host", 'routes inside a server block must not specify host (inherited from server key)', "Remove the `host` field.")
+  actionKeys = ['upstream', 'app', 'static', 'redirect', 'headers'].filter((key) -> routeConfig[key]?)
+  if actionKeys.length isnt 1
+    pushError(errors, 'E_ROUTE_ACTION', path, 'route must define exactly one action: upstream, app, static, redirect, or headers', "Choose one action field per route.")
+  routePath = if typeof routeConfig.path is 'string' and routeConfig.path.startsWith('/') then routeConfig.path else null
+  pushError(errors, 'E_ROUTE_PATH', "#{path}.path", 'route path must be a string starting with /', "Use `path: '/*'`.") unless routePath
+  if routeConfig.upstream? and not knownUpstreams.has(routeConfig.upstream)
+    pushError(errors, 'E_ROUTE_UPSTREAM_REF', "#{path}.upstream", "unknown upstream #{routeConfig.upstream}", 'Define the upstream under `upstreams` first.')
+  if routeConfig.app? and not knownApps.has(routeConfig.app)
+    pushError(errors, 'E_ROUTE_APP_REF', "#{path}.app", "unknown app #{routeConfig.app}", 'Define the app under `apps` first.')
+  if routeConfig.websocket is true and not routeConfig.upstream?
+    pushError(errors, 'E_ROUTE_WEBSOCKET', "#{path}.websocket", 'websocket routes currently require an upstream action', 'Set `upstream: ...` on the route or remove `websocket: true`.')
+  if routeConfig.static?
+    pushError(errors, 'E_ROUTE_STATIC_TYPE', "#{path}.static", 'static must be a string path', "Use `static: '.'` or `static: '/path/to/dir'`.") unless typeof routeConfig.static is 'string'
+    pushError(errors, 'E_ROUTE_SPA_TYPE', "#{path}.spa", 'spa must be a boolean', "Use `spa: true` or remove it.") if routeConfig.spa? and typeof routeConfig.spa isnt 'boolean'
+    pushError(errors, 'E_ROUTE_ROOT_TYPE', "#{path}.root", 'root must be a string path', "Use `root: '/path/to/dir'`.") if routeConfig.root? and typeof routeConfig.root isnt 'string'
+  if routeConfig.redirect?
+    unless isPlainObject(routeConfig.redirect) and typeof routeConfig.redirect.to is 'string'
+      pushError(errors, 'E_REDIRECT_TO', "#{path}.redirect", 'redirect must have a `to` string', "Use `redirect: { to: 'https://example.com', status: 301 }`.")
+    if routeConfig.redirect?.status? and not VALID_REDIRECT_STATUSES.has(routeConfig.redirect.status)
+      pushError(errors, 'E_REDIRECT_STATUS', "#{path}.redirect.status", 'redirect status must be 301, 302, 307, or 308', "Use `status: 301` or `status: 302`.")
+  effectiveRoot = if typeof routeConfig.root is 'string' then resolve(baseDir, routeConfig.root) else if serverRoot then serverRoot else null
+  {
+    id:        routeConfig.id or "route-#{idx + 1}"
+    host:      serverHost.toLowerCase()
+    path:      routePath or '/'
+    methods:   if routeConfig.methods? then routeConfig.methods else '*'
+    priority:  normalizePositiveInt(routeConfig.priority, idx, "#{path}.priority", errors, 'priority')
+    upstream:  routeConfig.upstream or null
+    app:       routeConfig.app or null
+    static:    routeConfig.static or null
+    root:      effectiveRoot
+    spa:       routeConfig.spa is true
+    redirect:  routeConfig.redirect or null
+    headers:   routeConfig.headers or null
+    websocket: routeConfig.websocket is true
+    timeouts:  normalizeTimeouts(routeConfig.timeouts, "#{path}.timeouts", errors)
+  }
+
+normalizeServerBlock = (host, serverConfig, baseDir, errors, knownUpstreams, knownApps) ->
+  path = "servers.#{host}"
+  unless isPlainObject(serverConfig)
+    pushError(errors, 'E_SERVER_TYPE', path, 'server block must be an object', "Use '#{host}': { routes: [...] }.")
+    return { host: host.toLowerCase(), routes: [], timeouts: {}, certPath: null, keyPath: null, passthrough: null }
+  if serverConfig.passthrough?
+    unless typeof serverConfig.passthrough is 'string' and serverConfig.passthrough.trim()
+      pushError(errors, 'E_SERVER_PASSTHROUGH', "#{path}.passthrough", 'passthrough must be a host:port string', "Use passthrough: '127.0.0.1:8443'.")
+    return {
+      host:        host.toLowerCase()
+      routes:      []
+      timeouts:    {}
+      certPath:    null
+      keyPath:     null
+      passthrough: if typeof serverConfig.passthrough is 'string' then serverConfig.passthrough.trim() else null
+    }
+  hasCert = serverConfig.cert?
+  hasKey = serverConfig.key?
+  if hasCert isnt hasKey
+    pushError(errors, 'E_SERVER_TLS_PAIR', path, 'server block must provide both cert and key or neither', "Add both cert and key, or remove both.")
+  certPath = if hasCert and typeof serverConfig.cert is 'string' then resolve(baseDir, serverConfig.cert) else null
+  keyPath = if hasKey and typeof serverConfig.key is 'string' then resolve(baseDir, serverConfig.key) else null
+  serverRoot = if typeof serverConfig.root is 'string' then resolve(baseDir, serverConfig.root) else null
+  serverSpa = serverConfig.spa is true
+  routes = []
+  if Array.isArray(serverConfig.routes) and serverConfig.routes.length > 0
+    for routeConfig, idx in serverConfig.routes
+      routes.push(normalizeServerRouteConfig(routeConfig, idx, host, serverRoot, baseDir, errors, knownUpstreams, knownApps))
+  else if serverRoot
+    routes.push
+      id:        'route-1'
+      host:      host.toLowerCase()
+      path:      '/*'
+      methods:   '*'
+      priority:  0
+      upstream:  null
+      app:       null
+      static:    '.'
+      root:      serverRoot
+      spa:       serverSpa
+      redirect:  null
+      headers:   null
+      websocket: false
+      timeouts:  {}
+  else
+    pushError(errors, 'E_SERVER_ROUTES', "#{path}", 'server block must define routes, root, or passthrough', "Add routes: [...], root: '/path/to/dir', or passthrough: 'host:port'.")
+  {
+    host:        host.toLowerCase()
+    routes:      routes
+    timeouts:    normalizeTimeouts(serverConfig.timeouts, "#{path}.timeouts", errors)
+    certPath:    certPath
+    keyPath:     keyPath
+    passthrough: null
+  }
+
+export normalizeEdgeConfigV2 = (config, baseDir) ->
+  errors = []
+  for key of config
+    pushError(errors, 'E_UNKNOWN_KEY', key, "unknown top-level key #{key}", 'Allowed keys: version, edge, servers, upstreams, apps, streamUpstreams, streams.') unless topLevelKeysV2.has(key)
+  edgeInput = config.edge or {}
+  edge = normalizeEdgeSettings(edgeInput, errors)
+  upstreams = {}
+  if config.upstreams?
+    unless isPlainObject(config.upstreams)
+      pushError(errors, 'E_UPSTREAMS_TYPE', 'upstreams', 'upstreams must be an object keyed by upstream ID', "Use upstreams: { app: { targets: ['http://127.0.0.1:3000'] } }.")
+    else
+      for upstreamId, upstreamConfig of config.upstreams
+        upstreams[upstreamId] = normalizeUpstreamConfig(upstreamId, upstreamConfig, "upstreams.#{upstreamId}", errors)
+  apps = {}
+  if config.apps?
+    unless isPlainObject(config.apps)
+      pushError(errors, 'E_APPS_TYPE', 'apps', 'apps must be an object keyed by app ID', "Use apps: { admin: { entry: './admin/index.rip' } }.")
+    else
+      for appId, appConfig of config.apps
+        apps[appId] = normalizeAppConfigInto(appId, appConfig, baseDir, "apps.#{appId}", errors)
+  knownUpstreams = new Set(Object.keys(upstreams))
+  knownApps = new Set(Object.keys(apps))
+  sites = {}
+  certs = {}
+  passthroughUpstreams = {}
+  passthroughStreams = []
+  unless isPlainObject(config.servers)
+    pushError(errors, 'E_SERVERS_TYPE', 'servers', 'servers must be an object keyed by hostname', "Use servers: { '*.example.com': { root: '/mnt/site' } }.")
+  else
+    for host, serverConfig of config.servers
+      normalized = normalizeServerBlock(host, serverConfig, baseDir, errors, knownUpstreams, knownApps)
+      if normalized.passthrough
+        upstreamId = "passthrough-#{normalized.host}"
+        parsed = parseHostPort(normalized.passthrough)
+        if parsed
+          passthroughUpstreams[upstreamId] = { id: upstreamId, targets: [parsed], connectTimeoutMs: 5000 }
+          passthroughStreams.push({ id: upstreamId, order: passthroughStreams.length, listen: 443, sni: [normalized.host], upstream: upstreamId, timeouts: {} })
+        else
+          pushError(errors, 'E_SERVER_PASSTHROUGH', "servers.#{host}.passthrough", "invalid passthrough target #{normalized.passthrough}", "Use passthrough: '127.0.0.1:8443'.")
+      else
+        sites[normalized.host] = { host: normalized.host, timeouts: normalized.timeouts, routes: normalized.routes }
+        if normalized.certPath and normalized.keyPath
+          certs[normalized.host] = { certPath: normalized.certPath, keyPath: normalized.keyPath }
+  streamUpstreams = normalizeStreamUpstreams(config.streamUpstreams, errors)
+  for id, upstream of passthroughUpstreams
+    streamUpstreams[id] = upstream
+  knownStreamUpstreams = new Set(Object.keys(streamUpstreams))
+  streams = normalizeStreams(config.streams, knownStreamUpstreams, errors)
+  streams = passthroughStreams.concat(streams)
+  throw validationError(EDGEFILE_NAME, errors) if errors.length > 0
+  { kind: 'edge', version: config.version or 1, edge, upstreams, apps, routes: [], sites, certs, streamUpstreams, streams }
 
 export createConfigError = (code, path, message, hint = null) ->
   { code, path, message, hint }
@@ -301,15 +458,25 @@ export normalizeLegacyConfig = (config, baseDir) ->
   throw validationError(LEGACY_CONFIG_NAME, errors) if errors.length > 0
   { kind: 'legacy', version: null, edge: {}, upstreams: {}, apps, routes: [], sites: {} }
 
+topLevelKeysAll = new Set([...topLevelKeysV1, ...topLevelKeysV2])
+
 export normalizeEdgeConfig = (config, baseDir) ->
   errors = []
   unless isPlainObject(config)
     pushError(errors, 'E_CONFIG_TYPE', '$', 'Edgefile.rip must export an object', "Use `export default { version: 1, edge: {}, routes: [] }`.")
     throw validationError(EDGEFILE_NAME, errors)
+  hasServers = config.servers?
+  hasRoutes = config.routes?
+  hasSites = config.sites?
+  if hasServers and (hasRoutes or hasSites)
+    pushError(errors, 'E_MIXED_HOST_MODEL', '$', 'cannot use both `servers` and `routes`/`sites` in the same Edgefile', 'Use `servers` for per-domain config, or `routes`/`sites` for flat config, but not both.')
+    throw validationError(EDGEFILE_NAME, errors)
+  if hasServers
+    return normalizeEdgeConfigV2(config, baseDir)
   for key of config
-    pushError(errors, 'E_UNKNOWN_KEY', key, "unknown top-level key #{key}", 'Use only `version`, `edge`, `upstreams`, `streamUpstreams`, `apps`, `routes`, `streams`, and `sites`.') unless topLevelKeys.has(key)
-  pushError(errors, 'E_EDGE_VERSION', 'version', 'Edgefile.rip requires `version: 1`', 'Set `version: 1` at the top level.') unless config.version is 1
-  edge = normalizeEdgeSettings(config.edge, errors)
+    pushError(errors, 'E_UNKNOWN_KEY', key, "unknown top-level key #{key}", 'Use only `version`, `edge`, `upstreams`, `streamUpstreams`, `apps`, `routes`, `streams`, `sites`, and `servers`.') unless topLevelKeysAll.has(key)
+  edgeInput = config.edge or {}
+  edge = normalizeEdgeSettings(edgeInput, errors)
   upstreams = {}
   if config.upstreams?
     unless isPlainObject(config.upstreams)

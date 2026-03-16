@@ -42,6 +42,8 @@ import { validateRequest } from './edge/security.rip'
 import { createUpstreamPool, addUpstream, getUpstream, listUpstreams, selectTarget, markTargetBusy, releaseTarget, shouldRetry as shouldRetryUpstream, computeRetryDelayMs, startHealthChecks, stopHealthChecks, checkTargetHealth } from './edge/upstream.rip'
 import { compileRouteTable, matchRoute, describeRoute } from './edge/router.rip'
 import { buildVerificationResult, verifyRouteRuntime } from './edge/verify.rip'
+import { serveStaticRoute, buildRedirectResponse } from './edge/static.rip'
+import { buildTlsArray } from './edge/tls.rip'
 import { buildStreamRuntime, startStreamListeners, stopStreamListeners, streamDiagnostics } from './streams/index.rip'
 import { createStreamRuntime, streamUsesListenPort } from './streams/runtime.rip'
 
@@ -558,6 +560,7 @@ class Server
       lastErrorDetails: null
       rolledBackFrom: null
       verifyPolicy: loaded.normalized.edge?.verify or null
+      certs: loaded.normalized.certs or null
       activeRouteDescriptions: (routeTable.routes or []).map(describeRoute).filter(Boolean)
       lastReload: @configInfo?.lastReload or null
       reloadHistory: @configInfo?.reloadHistory or []
@@ -878,6 +881,8 @@ class Server
       @flags.httpPort = @server.port
     else
       @tlsMaterial = @loadTlsMaterial!
+      if @edgeRuntime?.configInfo?.certs and Object.keys(@edgeRuntime.configInfo.certs).length > 0
+        @tlsMaterial = buildTlsArray(@tlsMaterial, @edgeRuntime.configInfo.certs)
       publicHttpsPort = @flags.httpsPort or 443
       @applyHttpsMode(@shouldUseInternalHttps(@streamRuntime, publicHttpsPort), publicHttpsPort)
       httpsPort = @flags.httpsPort
@@ -1091,6 +1096,10 @@ class Server
         return @proxyRouteToUpstream!(req, matchedRoute, requestId, clientIp, runtime)
       finally
         @releaseEdgeRuntime(runtime)
+    if matchedRoute?.static
+      return serveStaticRoute(req, url, matchedRoute)
+    if matchedRoute?.redirect
+      return buildRedirectResponse(req, url, matchedRoute)
 
     # Resolve host to app — app traffic falls back to the managed worker registry
     appId = matchedRoute?.app or resolveHost(@appRegistry, host)

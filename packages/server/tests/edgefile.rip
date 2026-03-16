@@ -46,10 +46,9 @@ test "normalizeEdgeConfig accepts mixed mode shape", ->
   eq Object.keys(normalized.apps).length, 1
   eq normalized.sites['admin.example.com'].routes.length, 1
 
-test "normalizeEdgeConfig rejects missing version", ->
-  errors = getErrors ->
-    normalizeEdgeConfig({ edge: {}, routes: [] }, '/srv')
-  ok errors.some((err) -> err.code is 'E_EDGE_VERSION')
+test "normalizeEdgeConfig accepts missing version", ->
+  config = normalizeEdgeConfig({ edge: {}, routes: [] }, '/srv')
+  eq config.version, 1
 
 test "normalizeEdgeConfig rejects wildcard ACME domains", ->
   errors = getErrors ->

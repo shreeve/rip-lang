@@ -1,0 +1,69 @@
+# ==============================================================================
+# edge/static.rip — static file serving and redirect route handlers
+# ==============================================================================
+
+import { resolve, join } from 'node:path'
+import { statSync } from 'node:fs'
+import { mimeType } from '../api.rip'
+
+stripRoutePrefix = (pathname, routePath) ->
+  return pathname if routePath is '/' or routePath is '/*'
+  prefix = if routePath.endsWith('/*') then routePath.slice(0, -2) else routePath
+  if pathname.startsWith(prefix)
+    rest = pathname.slice(prefix.length)
+    return if rest is '' then '/' else rest
+  pathname
+
+isSafeWithinRoot = (root, resolved) ->
+  rootSlash = if root.endsWith('/') then root else root + '/'
+  resolved is root or resolved.startsWith(rootSlash)
+
+acceptsHtml = (req) ->
+  accept = req.headers?.get?('accept') or ''
+  accept.includes('text/html')
+
+export serveStaticRoute = (req, url, route) ->
+  method = req.method or 'GET'
+  return new Response(null, { status: 405 }) unless method is 'GET' or method is 'HEAD'
+
+  base = route.root or route.static
+  return new Response('Not Found', { status: 404 }) unless base
+
+  staticDir = if route.static and route.static isnt '.'
+    if route.static.startsWith('/') then route.static else resolve(base, route.static)
+  else
+    base
+
+  pathname = try decodeURIComponent(url.pathname) catch then url.pathname
+  relative = stripRoutePrefix(pathname, route.path or '/*')
+  filePath = resolve(staticDir, '.' + relative)
+
+  return new Response('Forbidden', { status: 403 }) unless isSafeWithinRoot(staticDir, filePath)
+
+  try
+    stat = statSync(filePath)
+    if stat.isDirectory()
+      indexPath = join(filePath, 'index.html')
+      try
+        indexStat = statSync(indexPath)
+        if indexStat.isFile()
+          file = Bun.file(indexPath)
+          return new Response(file, { headers: { 'content-type': 'text/html; charset=UTF-8' } })
+    if stat.isFile()
+      file = Bun.file(filePath)
+      return new Response(file, { headers: { 'content-type': mimeType(filePath) } })
+
+  if route.spa and acceptsHtml(req)
+    spaPath = join(staticDir, 'index.html')
+    try
+      spaStat = statSync(spaPath)
+      if spaStat.isFile()
+        file = Bun.file(spaPath)
+        return new Response(file, { headers: { 'content-type': 'text/html; charset=UTF-8' } })
+
+  new Response('Not Found', { status: 404 })
+
+export buildRedirectResponse = (req, url, route) ->
+  target = route.redirect?.to or '/'
+  status = route.redirect?.status or 302
+  Response.redirect(target, status)

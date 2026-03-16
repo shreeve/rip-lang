@@ -79,3 +79,23 @@ test "describeRoute summarizes action", ->
   ])
   summary = describeRoute(matchRoute(table, 'api.example.com', '/api/x'))
   ok summary.includes('proxy:api')
+
+test "compiled route preserves root field", ->
+  table = compileRouteTable([], {
+    '*.example.com':
+      routes: [
+        { path: '/*', static: '.', root: '/mnt/site', spa: true }
+      ]
+  })
+  matched = matchRoute(table, 'app.example.com', '/index.html')
+  eq matched.root, '/mnt/site'
+
+test "compiled route preserves spa field", ->
+  table = compileRouteTable([], {
+    '*.example.com':
+      routes: [
+        { path: '/*', static: '.', root: '/mnt/site', spa: true }
+      ]
+  })
+  matched = matchRoute(table, 'app.example.com', '/index.html')
+  eq matched.spa, true
