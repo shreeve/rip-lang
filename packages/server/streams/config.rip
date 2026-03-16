@@ -54,9 +54,9 @@ normalizeStreamTarget = (target, idx, path, errors) ->
     return null
   {
     targetId: "#{parsed.host}:#{parsed.port}"
-    host: parsed.host
-    port: parsed.port
-    source: target
+    host:     parsed.host
+    port:     parsed.port
+    source:   target
   }
 
 export normalizeStreamUpstreams = (rawUpstreams, errors, path = 'streamUpstreams') ->
@@ -77,8 +77,8 @@ export normalizeStreamUpstreams = (rawUpstreams, errors, path = 'streamUpstreams
         normalized = normalizeStreamTarget(target, idx, "#{path}.#{upstreamId}.targets", errors)
         targets.push(normalized) if normalized
     upstreams[upstreamId] =
-      id: upstreamId
-      targets: targets
+      id:               upstreamId
+      targets:          targets
       connectTimeoutMs: normalizePositiveInt(rawConfig.connectTimeoutMs, 5000, "#{path}.#{upstreamId}.connectTimeoutMs", errors, 'connectTimeoutMs')
   upstreams
 
@@ -111,10 +111,10 @@ export normalizeStreams = (rawStreams, knownUpstreams, errors, path = 'streams')
     else unless knownUpstreams.has(route.upstream)
       pushError(errors, 'E_STREAM_UPSTREAM_REF', "#{itemPath}.upstream", "unknown stream upstream #{route.upstream}", 'Define the upstream under `streamUpstreams` first.')
     streams.push
-      id: route.id or "stream-#{idx + 1}"
-      order: idx
-      listen: listen
-      sni: normalizeSniPatterns(route.sni, "#{itemPath}.sni", errors)
+      id:       route.id or "stream-#{idx + 1}"
+      order:    idx
+      listen:   listen
+      sni:      normalizeSniPatterns(route.sni, "#{itemPath}.sni", errors)
       upstream: route.upstream or null
       timeouts: normalizeStreamTimeouts(route.timeouts, "#{itemPath}.timeouts", errors)
   streams

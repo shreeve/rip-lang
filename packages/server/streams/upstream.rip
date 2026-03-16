@@ -7,16 +7,16 @@ export createStreamUpstreamPool = ->
 
 export addStreamUpstream = (pool, id, config) ->
   targets = (config.targets or []).map (target, idx) ->
-    targetId: target.targetId or "#{target.host}:#{target.port}"
-    host: target.host
-    port: target.port
-    source: target.source or "#{target.host}:#{target.port}"
+    targetId:          target.targetId or "#{target.host}:#{target.port}"
+    host:              target.host
+    port:              target.port
+    source:            target.source or "#{target.host}:#{target.port}"
     activeConnections: 0
-    totalConnections: 0
+    totalConnections:  0
   upstream =
-    id: id
+    id:               id
     connectTimeoutMs: config.connectTimeoutMs or 5000
-    targets: targets
+    targets:          targets
   pool.upstreams.set(id, upstream)
   upstream
 

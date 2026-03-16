@@ -425,7 +425,9 @@ notFound ->
 
   if stat.isDirectory()
     return new Response(null, { status: 301, headers: { Location: "#{reqPath}/" } }) unless reqPath.endsWith('/')
-    try return @send join(path, 'index.html'), 'text/html; charset=UTF-8' if statSync(join(path, 'index.html')).isFile()
+    indexPath = join(path, 'index.html')
+    if (try statSync(indexPath).isFile())
+      return @send indexPath, 'text/html; charset=UTF-8'
     return new Response renderIndex(reqPath, path), { headers: { 'Content-Type': 'text/html; charset=UTF-8' } }
 
   new Response 'Not Found', { status: 404 }

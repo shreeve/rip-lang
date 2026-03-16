@@ -217,7 +217,7 @@ export compress = (opts = {}) ->
 #   before ->
 #     session.userId = 123
 #
-#   get '/profile', ->
+#   get '/profile' ->
 #     { userId: session.userId }
 #
 # Security:
@@ -488,8 +488,8 @@ export serve = (opts = {}) ->
   prefix        = opts.app or ''
   appDir        = opts.dir or '.'
   routesDir     = "#{appDir}/#{opts.routes or 'routes'}"
-  rawBundle = opts.bundle or opts.components or ['components']
-  bundles = new Map()
+  rawBundle     = opts.bundle or opts.components or ['components']
+  bundles       = new Map()
   if Array.isArray(rawBundle)
     bundles.set 'bundle', rawBundle.map (d) -> "#{appDir}/#{d}"
   else if typeof rawBundle is 'object'

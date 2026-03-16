@@ -562,12 +562,12 @@ export validators =
   cents_even: (v) -> v[/^([-+]? ?\$? ?(?:[\d,]+(?:\.\d*)?|\.\d+))$/] and toMoney(_[1], true,  true)
 
   # Strings & formatting
-  string:    (v) -> v.replace(/(?:\t+|\s{2,})/g, ' ')
-  text:      (v) -> v.replace(/  +/g  , ' ')
+  string:     (v) -> v.replace(/(?:\t+|\s{2,})/g, ' ')
+  text:       (v) -> v.replace(/  +/g, ' ')
 
   # Name/address
-  name:      (v) -> v = v.replace(/\s+/g, ' ') and toName v, 'name'
-  address:   (v) -> v = v.replace(/\s+/g, ' ') and toName v, 'address'
+  name:       (v) -> v = v.replace(/\s+/g, ' ') and toName v, 'name'
+  address:    (v) -> v = v.replace(/\s+/g, ' ') and toName v, 'address'
 
   # Date & time
   date:      (v) -> v[/^\d{4}(-?)\d{2}\1\d{2}$/]                                and _[0]
