@@ -3,11 +3,11 @@ import { normalizeEdgeConfig } from '../edge/config.rip'
 
 # --- v2 basic normalization ---
 
-test "v2 normalizes servers into sites object shape", ->
+test "normalizes hosts into sites object shape", ->
   config = normalizeEdgeConfig({
     version: 2
     edge: {}
-    servers:
+    hosts:
       '*.trusthealth.com':
         cert: '/ssl/trusthealth.com.crt'
         key:  '/ssl/trusthealth.com.key'
@@ -26,7 +26,7 @@ test "v2 extracts cert map from server blocks", ->
   config = normalizeEdgeConfig({
     version: 2
     edge: {}
-    servers:
+    hosts:
       '*.trusthealth.com':
         cert: '/ssl/trusthealth.com.crt'
         key:  '/ssl/trusthealth.com.key'
@@ -49,7 +49,7 @@ test "v2 inherits server root into routes", ->
   config = normalizeEdgeConfig({
     version: 2
     edge: {}
-    servers:
+    hosts:
       '*.example.com':
         root: '/mnt/site'
         routes: [
@@ -63,7 +63,7 @@ test "v2 route root overrides server root", ->
   config = normalizeEdgeConfig({
     version: 2
     edge: {}
-    servers:
+    hosts:
       '*.example.com':
         root: '/mnt/default'
         routes: [
@@ -77,7 +77,7 @@ test "v2 routes inherit host from server key", ->
   config = normalizeEdgeConfig({
     version: 2
     edge: {}
-    servers:
+    hosts:
       app.example.com:
         routes: [
           { path: '/*', static: '/mnt/app' }
@@ -90,7 +90,7 @@ test "v2 preserves spa flag on routes", ->
   config = normalizeEdgeConfig({
     version: 2
     edge: {}
-    servers:
+    hosts:
       '*.example.com':
         routes: [
           { path: '/*', static: '/mnt/app', spa: true }
@@ -107,7 +107,7 @@ test "rejects server block with no routes and no root", ->
     normalizeEdgeConfig({
       version: 1
       edge: {}
-      servers:
+      hosts:
         '*.example.com':
           cert: '/ssl/example.com.crt'
           key:  '/ssl/example.com.key'
@@ -121,7 +121,7 @@ test "root-only server block generates implicit static route", ->
   config = normalizeEdgeConfig({
     version: 1
     edge: {}
-    servers:
+    hosts:
       '*.example.com':
         root: '/mnt/site'
   }, '/home/shreeve')
@@ -134,7 +134,7 @@ test "root-only server block with spa", ->
   config = normalizeEdgeConfig({
     version: 1
     edge: {}
-    servers:
+    hosts:
       '*.example.com':
         root: '/mnt/site'
         spa:  true
@@ -144,7 +144,7 @@ test "root-only server block with spa", ->
 test "passthrough server block creates stream entries", ->
   config = normalizeEdgeConfig({
     version: 1
-    servers:
+    hosts:
       incus.example.com:
         passthrough: '127.0.0.1:8443'
   }, '/home/shreeve')
@@ -155,7 +155,7 @@ test "passthrough server block creates stream entries", ->
 test "passthrough server block has no sites entry", ->
   config = normalizeEdgeConfig({
     version: 1
-    servers:
+    hosts:
       incus.example.com:
         passthrough: '127.0.0.1:8443'
   }, '/home/shreeve')
@@ -163,7 +163,7 @@ test "passthrough server block has no sites entry", ->
 
 test "edge and version are optional", ->
   config = normalizeEdgeConfig({
-    servers:
+    hosts:
       '*.example.com':
         root: '/mnt/site'
   }, '/home/shreeve')
@@ -176,7 +176,7 @@ test "v2 rejects route with host field", ->
     normalizeEdgeConfig({
       version: 2
       edge: {}
-      servers:
+      hosts:
         '*.example.com':
           routes: [{ path: '/*', static: '.', host: 'other.com' }]
     }, '/home/shreeve')
@@ -191,7 +191,7 @@ test "v2 validates upstream references in server routes", ->
     normalizeEdgeConfig({
       version: 2
       edge: {}
-      servers:
+      hosts:
         '*.example.com':
           routes: [{ path: '/api/*', upstream: 'nonexistent' }]
     }, '/home/shreeve')
@@ -206,7 +206,7 @@ test "v2 validates app references in server routes", ->
     normalizeEdgeConfig({
       version: 2
       edge: {}
-      servers:
+      hosts:
         '*.example.com':
           routes: [{ path: '/*', app: 'nonexistent' }]
     }, '/home/shreeve')
@@ -218,7 +218,7 @@ test "v2 validates app references in server routes", ->
 
 test "server block with app field creates app route", ->
   config = normalizeEdgeConfig({
-    servers:
+    hosts:
       'dev.example.com':
         cert: '/ssl/example.com.crt'
         key:  '/ssl/example.com.key'
@@ -237,7 +237,7 @@ test "server block rejects unknown app reference", ->
   threw = false
   try
     normalizeEdgeConfig({
-      servers:
+      hosts:
         'dev.example.com':
           app: 'nonexistent'
     }, '/home/shreeve')

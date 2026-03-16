@@ -375,21 +375,19 @@ export default
   ]
 ```
 
-## Server Blocks
+## Host Blocks
 
-Use `servers` to group TLS certificates, routes, and static file serving
+Use `hosts` to group TLS certificates, routes, and static file serving
 under each hostname. This is the cleanest way to configure multi-domain hosting.
 
-`servers` is auto-detected: if your Edgefile has `servers`, Rip uses the
-server-block model. If it has `routes`/`sites`, Rip uses the flat model. You
-cannot mix both. `version` and `edge` are optional -- they default to `1` and
-`{}` respectively.
+`hosts` defines per-domain configuration. `version` and `edge` are optional --
+they default to `1` and `{}` respectively.
 
-### Server Blocks Shape
+### Host Blocks Shape
 
 ```coffee
 export default
-  servers:
+  hosts:
     '*.trusthealth.com':
       cert: '/ssl/trusthealth.com.crt'
       key:  '/ssl/trusthealth.com.key'
@@ -417,7 +415,7 @@ export default
   ]
 ```
 
-### How Server Blocks Work
+### How Host Blocks Work
 
 - Each server block is keyed by hostname (exact or wildcard)
 - Per-server `cert`/`key` enable SNI-based certificate selection (multiple domains on one port)
@@ -428,7 +426,7 @@ export default
 - Routes inside a server block inherit the server hostname automatically
 - Hosts not matching any server block or stream route fall through to the default app
 
-### Server Block Fields
+### Host Block Fields
 
 | Field | Purpose |
 |-------|---------|

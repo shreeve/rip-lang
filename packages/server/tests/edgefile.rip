@@ -8,9 +8,9 @@ getErrors = (fn) ->
   catch e
     e.validationErrors or []
 
-test "normalizeEdgeConfig accepts servers with upstreams", ->
+test "normalizeEdgeConfig accepts hosts with upstreams", ->
   normalized = normalizeEdgeConfig(
-    servers:
+    hosts:
       '*.example.com':
         routes: [
           { path: '/*', upstream: 'app' }
@@ -22,9 +22,9 @@ test "normalizeEdgeConfig accepts servers with upstreams", ->
   eq normalized.kind, 'edge'
   eq Object.keys(normalized.upstreams).length, 1
 
-test "normalizeEdgeConfig accepts servers with apps", ->
+test "normalizeEdgeConfig accepts hosts with apps", ->
   normalized = normalizeEdgeConfig(
-    servers:
+    hosts:
       '*.example.com':
         app: 'admin'
     apps:
@@ -36,7 +36,7 @@ test "normalizeEdgeConfig accepts servers with apps", ->
 
 test "normalizeEdgeConfig version and edge are optional", ->
   config = normalizeEdgeConfig(
-    servers:
+    hosts:
       '*.example.com':
         root: '/mnt/site'
   , '/srv')
@@ -49,7 +49,7 @@ test "normalizeEdgeConfig rejects wildcard ACME domains", ->
       edge:
         acme: true
         acmeDomains: ['*.example.com']
-      servers:
+      hosts:
         '*.example.com':
           root: '/mnt/site'
     , '/srv')
@@ -64,7 +64,7 @@ test "normalizeEdgeConfig rejects routes with multiple actions", ->
       apps:
         admin:
           entry: './admin/index.rip'
-      servers:
+      hosts:
         '*.example.com':
           routes: [
             { path: '/x', upstream: 'api', app: 'admin' }
@@ -78,7 +78,7 @@ test "normalizeEdgeConfig rejects websocket route without upstream", ->
       apps:
         admin:
           entry: './admin/index.rip'
-      servers:
+      hosts:
         '*.example.com':
           routes: [
             { path: '/ws', app: 'admin', websocket: true }
@@ -94,7 +94,7 @@ test "normalizeEdgeConfig preserves verify policy", ->
         requireReadyApps: true
         includeUnroutedManagedApps: false
         minHealthyTargetsPerUpstream: 2
-    servers:
+    hosts:
       '*.example.com':
         root: '/mnt/site'
   , '/srv')
@@ -104,7 +104,7 @@ test "normalizeEdgeConfig preserves verify policy", ->
 
 test "normalizeEdgeConfig accepts streamUpstreams and streams", ->
   normalized = normalizeEdgeConfig(
-    servers:
+    hosts:
       '*.example.com':
         root: '/mnt/site'
     streamUpstreams:
@@ -120,7 +120,7 @@ test "normalizeEdgeConfig accepts streamUpstreams and streams", ->
 test "normalizeEdgeConfig rejects unknown stream upstream refs", ->
   errors = getErrors ->
     normalizeEdgeConfig(
-      servers:
+      hosts:
         '*.example.com':
           root: '/mnt/site'
       streams: [

@@ -8,9 +8,7 @@ This document defines the `Edgefile.rip` contract as implemented in
 The Edgefile supports two host models, auto-detected by key presence:
 
 - **Flat model** (`routes`/`sites`) -- routes listed at the top level with optional per-host site groups
-- **Server blocks** (`servers`) -- per-domain blocks that own cert, root, routes, and passthrough
-
-You cannot mix `servers` with `routes`/`sites` in the same Edgefile.
+- **Host blocks** (`hosts`) -- per-domain blocks that own cert, root, routes, and passthrough
 `version` and `edge` are optional (default to `1` and `{}` respectively).
 
 ## Flat model shape
@@ -31,19 +29,19 @@ export default
 
 ```coffee
 export default
-  servers: ...
+  hosts: ...
   upstreams: ...
   apps: ...
   streamUpstreams: ...
   streams: ...
 ```
 
-### `servers`
+### `hosts`
 
 Per-domain server blocks, keyed by hostname (exact or wildcard).
 
 ```coffee
-servers:
+hosts:
   '*.trusthealth.com':
     cert: '/ssl/trusthealth.com.crt'
     key:  '/ssl/trusthealth.com.key'

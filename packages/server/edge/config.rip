@@ -279,12 +279,12 @@ normalizeSiteConfig = (host, siteConfig, idx, errors, knownUpstreams, knownApps)
     routes
   }
 
-topLevelKeys = new Set(['version', 'edge', 'servers', 'upstreams', 'apps', 'streamUpstreams', 'streams'])
+topLevelKeys = new Set(['version', 'edge', 'hosts', 'upstreams', 'apps', 'streamUpstreams', 'streams'])
 
 VALID_REDIRECT_STATUSES = new Set([301, 302, 307, 308])
 
 normalizeServerRouteConfig = (routeConfig, idx, serverHost, serverRoot, baseDir, errors, knownUpstreams, knownApps) ->
-  path = "servers.#{serverHost}.routes[#{idx}]"
+  path = "hosts.#{serverHost}.routes[#{idx}]"
   unless isPlainObject(routeConfig)
     pushError(errors, 'E_ROUTE_TYPE', path, 'route must be an object', "Use `{ path: '/*', static: '.' }`.")
     routeConfig = {}
@@ -330,7 +330,7 @@ normalizeServerRouteConfig = (routeConfig, idx, serverHost, serverRoot, baseDir,
   }
 
 normalizeServerBlock = (host, serverConfig, baseDir, errors, knownUpstreams, knownApps) ->
-  path = "servers.#{host}"
+  path = "hosts.#{host}"
   unless isPlainObject(serverConfig)
     pushError(errors, 'E_SERVER_TYPE', path, 'server block must be an object', "Use '#{host}': { routes: [...] }.")
     return { host: host.toLowerCase(), routes: [], timeouts: {}, certPath: null, keyPath: null, passthrough: null }
@@ -409,7 +409,7 @@ normalizeServerBlock = (host, serverConfig, baseDir, errors, knownUpstreams, kno
 normalizeServersConfig = (config, baseDir) ->
   errors = []
   for key of config
-    pushError(errors, 'E_UNKNOWN_KEY', key, "unknown top-level key #{key}", 'Allowed keys: version, edge, servers, upstreams, apps, streamUpstreams, streams.') unless topLevelKeys.has(key)
+    pushError(errors, 'E_UNKNOWN_KEY', key, "unknown top-level key #{key}", 'Allowed keys: version, edge, hosts, upstreams, apps, streamUpstreams, streams.') unless topLevelKeys.has(key)
   edgeInput = config.edge or {}
   edge = normalizeEdgeSettings(edgeInput, errors)
   upstreams = {}
@@ -432,10 +432,10 @@ normalizeServersConfig = (config, baseDir) ->
   certs = {}
   passthroughUpstreams = {}
   passthroughStreams = []
-  unless isPlainObject(config.servers)
-    pushError(errors, 'E_SERVERS_TYPE', 'servers', 'servers must be an object keyed by hostname', "Use servers: { '*.example.com': { root: '/mnt/site' } }.")
+  unless isPlainObject(config.hosts)
+    pushError(errors, 'E_HOSTS_TYPE', 'hosts', 'hosts must be an object keyed by hostname', "Use hosts: { '*.example.com': { root: '/mnt/site' } }.")
   else
-    for host, serverConfig of config.servers
+    for host, serverConfig of config.hosts
       normalized = normalizeServerBlock(host, serverConfig, baseDir, errors, knownUpstreams, knownApps)
       if normalized.passthrough
         upstreamId = "passthrough-#{normalized.host}"
@@ -444,7 +444,7 @@ normalizeServersConfig = (config, baseDir) ->
           passthroughUpstreams[upstreamId] = { id: upstreamId, targets: [parsed], connectTimeoutMs: 5000 }
           passthroughStreams.push({ id: upstreamId, order: passthroughStreams.length, listen: 443, sni: [normalized.host], upstream: upstreamId, timeouts: {} })
         else
-          pushError(errors, 'E_SERVER_PASSTHROUGH', "servers.#{host}.passthrough", "invalid passthrough target #{normalized.passthrough}", "Use passthrough: '127.0.0.1:8443'.")
+          pushError(errors, 'E_SERVER_PASSTHROUGH', "hosts.#{host}.passthrough", "invalid passthrough target #{normalized.passthrough}", "Use passthrough: '127.0.0.1:8443'.")
       else
         sites[normalized.host] = { host: normalized.host, timeouts: normalized.timeouts, routes: normalized.routes }
         if normalized.certPath and normalized.keyPath
