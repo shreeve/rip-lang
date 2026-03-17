@@ -1,0 +1,41 @@
+#
+# Example 1 — minimal curated email rendered to real HTML.
+#
+# Run from packages/ui/email:
+#   ../../../bin/rip example-1.rip > example-1.html
+#
+import { renderEmail, Email, Head, Body, Preview, Font, Container, Heading, Text, Button, Divider, Link } from './email.rip'
+
+export WelcomeEmail = component
+  @name:: string := "friend"
+  @loginUrl:: string := "https://example.com/login"
+
+  render
+    Email lang: 'en'
+      Head
+        Font fontFamily: 'Inter', fallbackFontFamily: 'Arial, sans-serif', fontWeight: 400, webFontUrl: 'https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa1ZL7.woff2'
+        Font fontFamily: 'Inter', fallbackFontFamily: 'Arial, sans-serif', fontWeight: 700, webFontUrl: 'https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa1ZL7.woff2'
+      Body style: "background:#f6f9fc;padding:24px;font-family:'Inter',Arial,sans-serif"
+        Preview text: "Welcome to Rip, #{@name}!"
+        Container style: 'background:#ffffff;padding:32px;border:1px solid #e5e7eb'
+          Heading as: 'h1', style: 'font-size:28px;line-height:32px;margin:0 0 16px;color:#111827'
+            "Welcome, #{@name}"
+
+          Text style: 'font-size:16px;line-height:24px;color:#4b5563'
+            "Your account is ready. Click below to sign in."
+
+          Button href: @loginUrl, style: 'background:#111827;color:#ffffff;padding:12px 18px;border-radius:8px'
+            'Sign in'
+
+          Divider style: 'margin:24px 0;border-top:1px solid #e5e7eb'
+
+          Text style: 'font-size:14px;line-height:22px;color:#6b7280'
+            = 'If the button does not work, copy and paste this link: '
+            Link href: @loginUrl, style: 'color:#0f766e'
+              = @loginUrl
+
+result = renderEmail WelcomeEmail,
+  name: 'Alice'
+  loginUrl: 'https://example.com/login'
+
+p result.html

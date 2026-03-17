@@ -53,3 +53,18 @@ Tailwind config: theme
 ```
 
 Use one shared Tailwind config per rendered email tree.
+
+## Runnable examples
+
+From `packages/ui/email`:
+
+```bash
+../../../bin/rip example-1.rip > example-1.html
+../../../bin/rip example-2.rip > example-2.html
+```
+
+- `example-1.rip` shows the plain curated-component workflow.
+- `example-2.rip` shows a richer newsletter layout using the most email-safe current path: curated components plus inline styles.
+- Both runnable examples load Inter from Google Fonts through the curated `Font` component.
+
+For now, the curated component path is the best choice for emails you want to send broadly across clients. The Tailwind path is promising, but it is still better treated as an advanced or experimental workflow until more email-client hardening is done.
