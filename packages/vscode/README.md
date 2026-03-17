@@ -114,7 +114,10 @@ bun run build
 bun run package
 
 # Build + package + install into Cursor
-bun run install-ext
+bun run install-cursor
+
+# Build + package + install into VS Code
+bun run install-vscode
 
 # Then reload the window: Cmd+Shift+P → "Developer: Reload Window"
 ```
@@ -131,11 +134,26 @@ Both `vscode` and `typescript` are external (not bundled) — `vscode` is provid
 
 ```bash
 cd packages/vscode
-npx @vscode/vsce login rip-lang    # login with PAT (one-time)
-npx @vscode/vsce publish           # publish to Marketplace
+
+# Bump version first
+$EDITOR package.json
+
+# Build a local installable package
+bun run package
+
+# Install locally in Cursor while testing the release
+bun run install-cursor
+
+# Publish to the Marketplace
+bunx @vscode/vsce login rip-lang   # one-time
+bunx @vscode/vsce publish --no-dependencies --skip-license
 ```
 
-Bump `version` in `package.json` before each publish.
+Release notes:
+
+- `packages/vscode` is not included in the root `bun run bump` flow.
+- After publishing, create and push a git tag such as `vscode-vX.Y.Z`.
+- Create a matching GitHub release and attach the generated `rip-*.vsix`.
 
 ## Links
 

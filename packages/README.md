@@ -14,8 +14,9 @@ bun add @rip-lang/csv            # CSV parser + writer
 bun add @rip-lang/db             # DuckDB server
 bun add @rip-lang/print          # Syntax-highlighted code printer
 bun add @rip-lang/server         # Production server
+bun add @rip-lang/stamp          # Declarative host provisioning
 bun add @rip-lang/swarm          # Parallel job runner
-bun add @rip-lang/grid           # Reactive data grid
+bun add @rip-lang/ui             # Reactive UI system, including grid widgets
 bun add @rip-lang/x12            # X12 EDI parser + query engine
 
 # VS Code / Cursor extension
@@ -64,6 +65,16 @@ Multi-worker process manager with hot reloading, automatic HTTPS, mDNS service d
 ```bash
 rip server                        # Start server (watches *.rip by default)
 rip server myapp                  # Named (accessible at myapp.local)
+```
+
+### [@rip-lang/stamp](stamp/) — Declarative Host Provisioning
+
+Declarative infrastructure and host setup without a state file, agent, or YAML. `Stampfile` is the source of truth, with built-in directives for common provisioning tasks and support for local or installed directive plugins.
+
+```bash
+stamp check
+stamp apply
+stamp verify
 ```
 
 ### [@rip-lang/swarm](swarm/) — Parallel Job Runner
