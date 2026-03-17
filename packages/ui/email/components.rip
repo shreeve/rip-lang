@@ -55,29 +55,40 @@ export Font = component
   @fallbackFontFamily:: string | string[] := "Arial"
   @fontStyle:: string := "normal"
   @fontWeight:: number := 400
+  @google:: string := ""
+  @display:: string := "swap"
   @webFontUrl:: string := ""
   @webFontFormat:: string := "woff2"
 
+  _family ~= @google or @fontFamily
+  _googleFamily ~= encodeURIComponent(_family).replace(/%20/g, '+')
+  _googleSpec ~= if @fontStyle is 'italic'
+    "#{_googleFamily}:ital,wght@1,#{@fontWeight}"
+  else
+    "#{_googleFamily}:wght@#{@fontWeight}"
+  _googleUrl ~= if @google then "https://fonts.googleapis.com/css2?family=#{_googleSpec}&display=#{@display}" else ''
   _src ~= if @webFontUrl then "src: url(#{@webFontUrl}) format('#{@webFontFormat}');" else ''
   _fallback:: string[] ~= if kind(@fallbackFontFamily) is 'array' then Array.from(@fallbackFontFamily) else [@fallbackFontFamily]
   _msoAlt ~= _fallback[0]
   _fallbackStr:: string ~= _fallback.join(', ')
+  _fontRule ~= "* { font-family: '#{_family}', #{_fallbackStr}; }"
 
-  _css ~= """
+  _css ~= if @webFontUrl
+    """
     @font-face {
-      font-family: '#{@fontFamily}';
+      font-family: '#{_family}';
       font-style: #{@fontStyle};
       font-weight: #{@fontWeight};
       mso-font-alt: '#{_msoAlt}';
       #{_src}
     }
-    * {
-      font-family: '#{@fontFamily}', #{_fallbackStr};
-    }
+    #{_fontRule}
     """
+  else
+    ("@import url('#{_googleUrl}');\n" if _googleUrl else '') + _fontRule
 
   render
-    if @fontFamily
+    if _family
       style innerHTML: _css
 
 # ==============================================================================

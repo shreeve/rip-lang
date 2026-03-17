@@ -65,6 +65,6 @@ From `packages/ui/email`:
 
 - `example-1.rip` shows the plain curated-component workflow.
 - `example-2.rip` shows a richer newsletter layout using the most email-safe current path: curated components plus inline styles.
-- Both runnable examples load Inter from Google Fonts through the curated `Font` component.
+- Both runnable examples load Inter from Google Fonts through the curated `Font` component's `google: 'Inter'` mode.
 
 For now, the curated component path is the best choice for emails you want to send broadly across clients. The Tailwind path is promising, but it is still better treated as an advanced or experimental workflow until more email-client hardening is done.

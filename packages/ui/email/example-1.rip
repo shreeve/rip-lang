@@ -13,8 +13,8 @@ export WelcomeEmail = component
   render
     Email lang: 'en'
       Head
-        Font fontFamily: 'Inter', fallbackFontFamily: 'Arial, sans-serif', fontWeight: 400, webFontUrl: 'https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa1ZL7.woff2'
-        Font fontFamily: 'Inter', fallbackFontFamily: 'Arial, sans-serif', fontWeight: 700, webFontUrl: 'https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa1ZL7.woff2'
+        Font google: 'Inter', fallbackFontFamily: 'Arial, sans-serif', fontWeight: 400
+        Font google: 'Inter', fallbackFontFamily: 'Arial, sans-serif', fontWeight: 700
       Body style: "background:#f6f9fc;padding:24px;font-family:'Inter',Arial,sans-serif"
         Preview text: "Welcome to Rip, #{@name}!"
         Container style: 'background:#ffffff;padding:32px;border:1px solid #e5e7eb'
