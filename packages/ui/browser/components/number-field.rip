@@ -136,7 +136,7 @@ export NumberField = component
 
   render
     div role: "group", $disabled: @disabled?!, $readonly: @readOnly?!
-      button aria-label: "Decrease", tabindex: "-1"
+      button aria-label: "Decrease", tabIndex: -1
         $decrement: true
         aria-controls: _id
         disabled: @disabled or (@min? and @value <= @min)
@@ -155,7 +155,7 @@ export NumberField = component
         @keydown: @_onKeydown
         @blur: @_onBlur
 
-      button aria-label: "Increase", tabindex: "-1"
+      button aria-label: "Increase", tabIndex: -1
         $increment: true
         aria-controls: _id
         disabled: @disabled or (@max? and @value >= @max)

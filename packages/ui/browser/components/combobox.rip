@@ -140,7 +140,7 @@ export Combobox = component
         style: "position:fixed;margin:0;inset:auto"
         $open: open?!
         for item, idx in @items
-          div role: "option", tabindex: "-1", id: "#{_listId}-#{idx}"
+          div role: "option", tabIndex: -1, id: "#{_listId}-#{idx}"
             $value: item
             $highlighted: (idx is highlightedIndex)?!
             @click: (=> @selectIndex(idx))

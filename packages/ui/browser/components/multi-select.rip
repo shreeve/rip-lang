@@ -191,7 +191,7 @@ export MultiSelect = component
         aria-multiselectable: "true"
         style: "position:fixed;margin:0;inset:auto"
         for item, idx in filtered
-          div role: "option", tabindex: "-1", id: "#{_listId}-#{idx}"
+          div role: "option", tabIndex: -1, id: "#{_listId}-#{idx}"
             $value: @_val(item)
             $selected: @_isSelected(item)?!
             $highlighted: (idx is highlightedIndex)?!

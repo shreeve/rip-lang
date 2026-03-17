@@ -879,7 +879,7 @@ export Grid = component
       @_resizeObs.disconnect()
 
   render
-    div.grid-container ref: "_container", role: "grid", tabindex: "0",
+    div.grid-container ref: "_container", role: "grid", tabIndex: 0,
       $editing: editing?!,
       $selecting: selecting?!
       table.rip-grid

@@ -195,7 +195,7 @@ export DatePicker = component
           # Day grid
           . $days: true, role: "grid"
             for entry, dIdx in _daysInView
-              button role: "gridcell", tabindex: "-1"
+              button role: "gridcell", tabIndex: -1
                 $outside: entry.outside?!
                 $today: dpSameDay(entry.date, _today)?!
                 $selected: (if @range then (Array.isArray(@value) and (dpSameDay(entry.date, @value[0]) or dpSameDay(entry.date, @value[1]))) else dpSameDay(entry.date, @value))?!

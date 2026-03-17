@@ -93,7 +93,7 @@ export Carousel = component
   onMouseleave: -> @_startAutoplay() if @autoplay
 
   render
-    div role: "region", aria-roledescription: "carousel", aria-label: @label, tabindex: "0"
+    div role: "region", aria-roledescription: "carousel", aria-label: @label, tabIndex: 0
       $orientation: @orientation
       @keydown: @onKeydown
       @mouseenter: @onMouseenter

@@ -79,7 +79,7 @@ export ContextMenu = component
         div ref: "_list", role: "menu", $open: true, @keydown: @_onKeydown
           style: "position:fixed;left:#{posX}px;top:#{posY}px;z-index:50"
           for item, idx in _menuItems
-            div role: "menuitem", tabindex: "-1"
+            div role: "menuitem", tabIndex: -1
               $highlighted: (idx is highlightedIndex)?!
               $disabled: item.dataset.disabled?!
               $value: item.dataset.item

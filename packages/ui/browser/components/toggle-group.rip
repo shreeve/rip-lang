@@ -93,7 +93,7 @@ export ToggleGroup = component
         slot
 
       for item, idx in _items
-        button tabindex: "-1"
+        button tabIndex: -1
           aria-pressed: !!@_isPressed(item)
           $pressed: @_isPressed(item)?!
           $disabled: @disabled?!

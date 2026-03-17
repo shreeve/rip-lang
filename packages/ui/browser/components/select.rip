@@ -175,7 +175,8 @@ export Select = component
         @keydown: @onListKeydown
         for opt, idx in options
           div role: "option"
-            tabindex: "-1"
+            tabIndex: -1
+            data-idx: idx
             $value: @getOpt(opt)
             $highlighted: (idx is highlightedIndex)?!
             $selected: (@getOpt(opt) is String(@value))?!

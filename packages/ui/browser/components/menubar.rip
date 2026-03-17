@@ -129,7 +129,7 @@ export Menubar = component
         slot
 
       for menu in _menus
-        button role: "menuitem", tabindex: "0"
+        button role: "menuitem", tabIndex: 0
           "data-menu-trigger": menu.dataset.menu
           aria-haspopup: "menu"
           aria-expanded: activeMenu is menu.dataset.menu
@@ -143,7 +143,7 @@ export Menubar = component
             "data-menu-list": menu.dataset.menu
             @keydown: (e) => @_onMenuKeydown(e, menu.dataset.menu, @_menuItemsFor(menu))
             for item, idx in @_menuItemsFor(menu)
-              div role: "menuitem", tabindex: "-1"
+              div role: "menuitem", tabIndex: -1
                 $highlighted: (idx is highlightedIndex)?!
                 $value: item.dataset.item
                 @click: (=> @selectItem(menu.dataset.menu, item.dataset.item))

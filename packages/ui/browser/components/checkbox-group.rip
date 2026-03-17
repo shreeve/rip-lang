@@ -81,7 +81,7 @@ export CheckboxGroup = component
         slot
 
       for opt, idx in _options
-        button role: "checkbox", tabindex: "-1"
+        button role: "checkbox", tabIndex: -1
           aria-checked: opt.dataset.value in @value
           $checked: (opt.dataset.value in @value)?!
           $disabled: @disabled?!

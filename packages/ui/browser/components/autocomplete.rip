@@ -124,7 +124,7 @@ export Autocomplete = component
         $open: open?!
         style: "position:fixed;margin:0;inset:auto"
         for item, idx in filteredItems
-          div role: "option", tabindex: "-1"
+          div role: "option", tabIndex: -1
             @click: (=> @selectIndex(idx))
             @mouseenter: (=> @_hlIdx = idx; @_updateHighlight())
             "#{if typeof item is 'string' then item else (item.label or item.name or String(item))}"

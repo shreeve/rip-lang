@@ -139,7 +139,7 @@ export Menu = component
         @keydown: @onMenuKeydown
         for item, idx in items
           div role: item.getAttribute('role') or 'menuitem'
-            tabindex: "-1"
+            tabIndex: -1
             aria-checked: item.getAttribute('aria-checked')?!
             $highlighted: (idx is highlightedIndex)?!
             $disabled: item.dataset.disabled?!
