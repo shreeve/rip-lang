@@ -108,6 +108,7 @@ test.describe('overlay primitives', () => {
     const option = listbox.locator('[role="option"]').nth(2)
     const status = row.locator('.status')
 
+    await trigger.scrollIntoViewIfNeeded()
     const triggerCenter = await getCenter(trigger)
     await page.mouse.move(triggerCenter.x, triggerCenter.y)
     await page.mouse.down()
@@ -212,14 +213,16 @@ test.describe('overlay primitives', () => {
     await page.goto('/#multi-select')
 
     const input = page.locator('#multi-select [role="combobox"]').first()
-    await input.focus()
-    await page.keyboard.press('ArrowDown')
+    const chips = page.locator('#multi-select [data-chips]').first()
     const listbox = page.locator('#multi-select [role="listbox"]').first()
+    const firstOption = page.locator('#multi-select [role="option"]').first()
+
+    await chips.scrollIntoViewIfNeeded()
+    await input.fill('r')
     await expect(listbox).toBeVisible()
 
-    const firstOption = page.locator('#multi-select [role="option"]').first()
     const before = await firstOption.getAttribute('aria-selected')
-    await page.keyboard.press('Enter')
+    await firstOption.dispatchEvent('click')
     await expect(firstOption).toHaveAttribute('aria-selected', before === 'true' ? 'false' : 'true')
   })
 
