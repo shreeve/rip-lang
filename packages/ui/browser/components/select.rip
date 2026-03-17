@@ -26,6 +26,7 @@ export Select = component
   typeaheadBuffer := ''
   typeaheadTimer := null
   suppressTriggerClick := false
+  suppressOptionClick := false
   _ready := false
   _popupGuard =! ARIA.popupGuard()
   _listId =! "sel-#{Math.random().toString(36).slice(2, 8)}"
@@ -93,6 +94,22 @@ export Select = component
       return
     e.preventDefault()
     if open then @close(false, true) else @openMenu()
+
+  onOptionPointerup: (e:: any) ->
+    return unless open
+    return unless e.button is 0
+    return unless e.pointerType in ['mouse', 'pen']
+    idx = Number(e.currentTarget.dataset.idx)
+    suppressOptionClick = true
+    @selectIndex(idx)
+
+  onOptionClick: (e:: any) ->
+    idx = Number(e.currentTarget.dataset.idx)
+    if suppressOptionClick
+      suppressOptionClick = false
+      e.preventDefault()
+      return
+    @selectIndex(idx)
 
   _nextEnabled: (from, dir) ->
     len = options.length
@@ -183,6 +200,7 @@ export Select = component
             $disabled: @isDisabled(opt)?!
             aria-selected: @getOpt(opt) is String(@value)
             aria-disabled: @isDisabled(opt)?!
-            @click: (=> @selectIndex(idx))
+            @pointerup: @onOptionPointerup
+            @click: @onOptionClick
             @mouseenter: (=> highlightedIndex = idx)
             = opt.textContent
