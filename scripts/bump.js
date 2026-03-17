@@ -78,6 +78,20 @@ function publish(dir, name, version) {
   }
 }
 
+function pushLockRefresh(message) {
+  const lockChanged = run('git diff --name-only -- bun.lock', { throws: false });
+  if (!lockChanged) return false;
+
+  console.log('\nSyncing bun.lock...');
+  const msgFile = join(ROOT, '.git', 'COMMIT_MSG');
+  writeFileSync(msgFile, message);
+  run('git add bun.lock');
+  run(`git commit -F ${msgFile}`);
+  run('git push');
+  console.log('  ✓ bun.lock refreshed');
+  return true;
+}
+
 // ── Parse arguments ──
 
 const LEVELS = new Set(['patch', 'minor', 'major']);
@@ -162,6 +176,7 @@ async function selectiveRelease(packageNames) {
 
   // Refresh workspace links
   run('bun install', { stdio: 'inherit' });
+  pushLockRefresh(`Refresh bun.lock after publishing ${names}`);
 
   // Done
   console.log(`\n✨ Published ${names}\n`);
@@ -345,6 +360,7 @@ async function fullRelease(level) {
   }
   if (process.stdout.columns) console.log();
   try { run('bun install'); } catch { console.warn('  ⚠ bun install failed — run manually'); }
+  try { pushLockRefresh(`Refresh bun.lock for rip-lang ${newVersion}`); } catch { console.warn('  ⚠ bun.lock refresh push failed — run manually'); }
 
   // Step 9: Summary
   console.log(`\n✨ Released rip-lang ${newVersion}\n`);
