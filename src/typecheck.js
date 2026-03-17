@@ -500,10 +500,21 @@ export function compileForCheck(filePath, source, compiler) {
         const cm = regularMatch || constMatch;
         if (cm && classInfo.has(cm[1])) {
           const info = classInfo.get(cm[1]);
-          // Inject field declarations only for regular classes (components already have declare fields)
-          if (regularMatch && info.fields.length) {
-            const inj = info.fields.map(f => `  ${f.name}: ${f.type};`);
-            injections.push({ line: j + 1, lines: inj });
+          // Inject field declarations, skipping any component fields already declared
+          if (info.fields.length) {
+            const existingFields = new Set();
+            for (let k = j + 1; k < cl.length; k++) {
+              if (cl[k].match(/^(?:export\s+)?(?:class|const)\s+\w+/) && k > j + 1) break;
+              const fm = cl[k].match(/^\s+(?:declare\s+)?(\w+):\s+.+;$/);
+              if (fm) existingFields.add(fm[1]);
+              if (cl[k].match(/^\s+_init\s*\(/)) break;
+            }
+            const missingFields = info.fields.filter(f => !existingFields.has(f.name));
+            const inj = missingFields.map(f => regularMatch
+              ? `  ${f.name}: ${f.type};`
+              : `  declare ${f.name}: ${f.type};`
+            );
+            if (inj.length) injections.push({ line: j + 1, lines: inj });
           }
           // Copy typed params into constructor (regular classes only; component constructors are already typed)
           if (regularMatch && info.ctorParams) {
@@ -724,10 +735,33 @@ export function compileForCheck(filePath, source, compiler) {
       'type __RipTag = keyof __RipElementMap;',
       "type __RipAttrKeys<T> = { [K in keyof T]-?: K extends 'style' ? never : T[K] extends (...args: any[]) => any ? never : K }[keyof T] & string;",
       'type __RipEvents = { [K in keyof HTMLElementEventMap as `@${K}`]?: ((event: HTMLElementEventMap[K]) => void) | null };',
-      'type __RipProps<K extends __RipTag> = { [P in __RipAttrKeys<__RipElementMap[K]>]?: __RipElementMap[K][P] } & __RipEvents & { class?: string; style?: string; [k: `data-${string}`]: any; [k: `aria-${string}`]: any };',
+      'type __RipProps<K extends __RipTag> = { [P in __RipAttrKeys<__RipElementMap[K]>]?: __RipElementMap[K][P] } & __RipEvents & { ref?: string; class?: string; style?: string; [k: `data-${string}`]: any; [k: `aria-${string}`]: any };',
       'declare function __ripEl<K extends __RipTag>(tag: K, props?: __RipProps<K>): void;',
     ];
     headerDts = intrinsicDecls.join('\n') + '\n' + headerDts;
+  }
+
+  if (hasTypes && /\bARIA\./.test(code) && !/\bdeclare const ARIA\b/.test(headerDts)) {
+    const ariaDecls = [
+      'type __RipAriaNavHandlers = { next?: () => void; prev?: () => void; first?: () => void; last?: () => void; select?: () => void; dismiss?: () => void; tab?: () => void; char?: () => void; };',
+      "declare const ARIA: {",
+      "  bindPopover(open: boolean, popover: () => Element | null | undefined, setOpen: (isOpen: boolean) => void, source?: (() => Element | null | undefined) | null): void;",
+      "  bindDialog(open: boolean, dialog: () => Element | null | undefined, setOpen: (isOpen: boolean) => void, dismissable?: boolean): void;",
+      "  popupDismiss(open: boolean, popup: () => Element | null | undefined, close: () => void, els?: Array<() => Element | null | undefined>, repos?: (() => void) | null): void;",
+      "  popupGuard(delay?: number): any;",
+      "  listNav(event: KeyboardEvent, handlers: __RipAriaNavHandlers): void;",
+      "  rovingNav(event: KeyboardEvent, handlers: __RipAriaNavHandlers, orientation?: 'vertical' | 'horizontal' | 'both'): void;",
+      "  positionBelow(trigger: Element | null | undefined, popup: Element | null | undefined, gap?: number, setVisible?: boolean): void;",
+      "  position(trigger: Element | null | undefined, floating: Element | null | undefined, opts?: any): void;",
+      "  trapFocus(panel: Element | null | undefined): void;",
+      "  wireAria(panel: Element, id: string): void;",
+      "  lockScroll(instance: any): void;",
+      "  unlockScroll(instance: any): void;",
+      "  hasAnchor: boolean;",
+      "  [key: string]: any;",
+      "};",
+    ];
+    headerDts = ariaDecls.join('\n') + '\n' + headerDts;
   }
 
   let tsContent = (hasTypes ? headerDts + '\n' : '') + code;

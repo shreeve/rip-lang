@@ -1147,7 +1147,26 @@ export function emitTypes(tokens, sexpr = null, source = '') {
     preamble.push('type __RipTag = keyof __RipElementMap;');
     preamble.push("type __RipAttrKeys<T> = { [K in keyof T]-?: K extends 'style' ? never : T[K] extends (...args: any[]) => any ? never : K }[keyof T] & string;");
     preamble.push('type __RipEvents = { [K in keyof HTMLElementEventMap as `@${K}`]?: ((event: HTMLElementEventMap[K]) => void) | null };');
-    preamble.push('type __RipProps<K extends __RipTag> = { [P in __RipAttrKeys<__RipElementMap[K]>]?: __RipElementMap[K][P] } & __RipEvents & { class?: string; style?: string; [k: `data-${string}`]: any; [k: `aria-${string}`]: any };');
+    preamble.push('type __RipProps<K extends __RipTag> = { [P in __RipAttrKeys<__RipElementMap[K]>]?: __RipElementMap[K][P] } & __RipEvents & { ref?: string; class?: string; style?: string; [k: `data-${string}`]: any; [k: `aria-${string}`]: any };');
+  }
+  if (/\bARIA\./.test(source)) {
+    preamble.push("type __RipAriaNavHandlers = { next?: () => void; prev?: () => void; first?: () => void; last?: () => void; select?: () => void; dismiss?: () => void; tab?: () => void; char?: () => void; };");
+    preamble.push("declare const ARIA: {");
+    preamble.push("  bindPopover(open: boolean, popover: () => Element | null | undefined, setOpen: (isOpen: boolean) => void, source?: (() => Element | null | undefined) | null): void;");
+    preamble.push("  bindDialog(open: boolean, dialog: () => Element | null | undefined, setOpen: (isOpen: boolean) => void, dismissable?: boolean): void;");
+    preamble.push("  popupDismiss(open: boolean, popup: () => Element | null | undefined, close: () => void, els?: Array<() => Element | null | undefined>, repos?: (() => void) | null): void;");
+    preamble.push("  popupGuard(delay?: number): any;");
+    preamble.push("  listNav(event: KeyboardEvent, handlers: __RipAriaNavHandlers): void;");
+    preamble.push("  rovingNav(event: KeyboardEvent, handlers: __RipAriaNavHandlers, orientation?: 'vertical' | 'horizontal' | 'both'): void;");
+    preamble.push("  positionBelow(trigger: Element | null | undefined, popup: Element | null | undefined, gap?: number, setVisible?: boolean): void;");
+    preamble.push("  position(trigger: Element | null | undefined, floating: Element | null | undefined, opts?: any): void;");
+    preamble.push("  trapFocus(panel: Element | null | undefined): void;");
+    preamble.push("  wireAria(panel: Element, id: string): void;");
+    preamble.push("  lockScroll(instance: any): void;");
+    preamble.push("  unlockScroll(instance: any): void;");
+    preamble.push("  hasAnchor: boolean;");
+    preamble.push("  [key: string]: any;");
+    preamble.push("};");
   }
   if (usesSignal) {
     preamble.push('interface Signal<T> { value: T; read(): T; lock(): Signal<T>; free(): Signal<T>; kill(): T; }');
@@ -1197,6 +1216,35 @@ function emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars, so
   if (!Array.isArray(sexpr)) return false;
   let head = sexpr[0]?.valueOf?.() ?? sexpr[0];
   let usesIntrinsicProps = false;
+
+  const refMembers = new Map();
+  const isIntrinsicTag = (name) => typeof name === 'string' && /^[a-z]/.test(name);
+  const collectRefMembers = (node) => {
+    if (!Array.isArray(node)) return;
+    let nodeHead = node[0]?.valueOf?.() ?? node[0];
+    if (isIntrinsicTag(nodeHead)) {
+      for (let i = 1; i < node.length; i++) {
+        let child = node[i];
+        if (!Array.isArray(child)) continue;
+        let childHead = child[0]?.valueOf?.() ?? child[0];
+        if (childHead !== 'object') continue;
+        for (let j = 1; j < child.length; j++) {
+          let entry = child[j];
+          if (!Array.isArray(entry)) continue;
+          let key = entry[0]?.valueOf?.() ?? entry[0];
+          if (key !== 'ref') continue;
+          let refName = entry[1]?.valueOf?.() ?? entry[1];
+          if (typeof refName === 'string') refName = refName.replace(/^["']|["']$/g, '');
+          if (typeof refName === 'string' && !refMembers.has(refName)) {
+            refMembers.set(refName, `__RipElementMap['${nodeHead}'] | null`);
+          }
+        }
+      }
+    }
+    for (let i = 1; i < node.length; i++) {
+      if (Array.isArray(node[i])) collectRefMembers(node[i]);
+    }
+  };
 
   // export Name = component ... → ["export", ["=", "Name", ["component", ...members]]]
   // Name = component ...       → ["=", "Name", ["component", ...members]]
@@ -1292,6 +1340,10 @@ function emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars, so
           bodyMembers.push(`  ${methName}(${paramStrs.join(', ')}): void;`);
         }
         continue;
+      } else if (mHead === 'render') {
+        usesIntrinsicProps = true;
+        collectRefMembers(member[1]);
+        continue;
       } else {
         continue;
       }
@@ -1317,6 +1369,9 @@ function emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars, so
       } else {
         lines.push(`  constructor(props${propsOpt}: ${inheritedPropsType});`);
       }
+    }
+    for (let [refName, refType] of refMembers) {
+      bodyMembers.push(`  ${refName}: ${refType};`);
     }
     for (let m of bodyMembers) lines.push(m);
     lines.push(`}`);
