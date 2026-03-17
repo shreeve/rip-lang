@@ -1,3 +1,6 @@
+import { DOM_EVENTS } from './generated/dom-events.js';
+import { HTML_TAGS, SVG_TAGS, TEMPLATE_TAGS } from './generated/dom-tags.js';
+
 // Component System — Fine-grained reactive components for Rip
 //
 // Architecture: installComponentSupport(CodeGenerator, Lexer) adds methods to
@@ -8,47 +11,6 @@
 // Naming: All render-tree generators use generate* (consistent with compiler).
 
 // ============================================================================
-// HTML/SVG Tag Definitions
-// ============================================================================
-
-const HTML_TAGS = new Set([
-  'html', 'head', 'title', 'base', 'link', 'meta', 'style',
-  'body', 'address', 'article', 'aside', 'footer', 'header',
-  'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'main', 'nav', 'section',
-  'blockquote', 'dd', 'div', 'dl', 'dt', 'figcaption', 'figure',
-  'hr', 'li', 'ol', 'p', 'pre', 'ul',
-  'a', 'abbr', 'b', 'bdi', 'bdo', 'br', 'cite', 'code', 'data',
-  'dfn', 'em', 'i', 'kbd', 'mark', 'q', 'rp', 'rt', 'ruby', 's',
-  'samp', 'small', 'span', 'strong', 'sub', 'sup', 'time', 'u', 'var', 'wbr',
-  'area', 'audio', 'img', 'map', 'track', 'video',
-  'embed', 'iframe', 'object', 'param', 'picture', 'portal', 'source',
-  'svg', 'math', 'canvas',
-  'noscript', 'script',
-  'del', 'ins',
-  'caption', 'col', 'colgroup', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'tr',
-  'button', 'datalist', 'fieldset', 'form', 'input', 'label', 'legend',
-  'meter', 'optgroup', 'option', 'output', 'progress', 'select', 'textarea',
-  'details', 'dialog', 'menu', 'summary',
-  'slot', 'template'
-]);
-
-const SVG_TAGS = new Set([
-  'svg', 'g', 'defs', 'symbol', 'use', 'marker', 'clipPath', 'mask', 'pattern',
-  'circle', 'ellipse', 'line', 'path', 'polygon', 'polyline', 'rect',
-  'text', 'textPath', 'tspan',
-  'linearGradient', 'radialGradient', 'stop',
-  'filter', 'feBlend', 'feColorMatrix', 'feComponentTransfer', 'feComposite',
-  'feConvolveMatrix', 'feDiffuseLighting', 'feDisplacementMap', 'feDistantLight',
-  'feDropShadow', 'feFlood', 'feFuncA', 'feFuncB', 'feFuncG', 'feFuncR',
-  'feGaussianBlur', 'feImage', 'feMerge', 'feMergeNode', 'feMorphology',
-  'feOffset', 'fePointLight', 'feSpecularLighting', 'feSpotLight', 'feTile', 'feTurbulence',
-  'animate', 'animateMotion', 'animateTransform', 'set', 'mpath',
-  'desc', 'foreignObject', 'image', 'metadata', 'switch', 'title', 'view'
-]);
-
-const TEMPLATE_TAGS = new Set([...HTML_TAGS, ...SVG_TAGS]);
-
-// ============================================================================
 // Constants
 // ============================================================================
 
@@ -56,20 +18,6 @@ const BIND_PREFIX = '__bind_';
 const BIND_SUFFIX = '__';
 
 const LIFECYCLE_HOOKS = new Set(['beforeMount', 'mounted', 'updated', 'beforeUnmount', 'unmounted', 'onError']);
-const DOM_EVENTS = new Set([
-  'abort', 'animationend', 'animationiteration', 'animationstart',
-  'auxclick', 'beforeinput', 'blur', 'cancel', 'change', 'click', 'close',
-  'compositionend', 'compositionstart', 'compositionupdate', 'contextmenu',
-  'copy', 'cut', 'dblclick', 'drag', 'dragend', 'dragenter', 'dragleave',
-  'dragover', 'dragstart', 'drop', 'error', 'focus', 'focusin', 'focusout',
-  'gotpointercapture', 'input', 'keydown', 'keypress', 'keyup', 'load',
-  'lostpointercapture', 'mousedown', 'mouseenter', 'mouseleave', 'mousemove',
-  'mouseout', 'mouseover', 'mouseup', 'paste', 'pointercancel', 'pointerdown',
-  'pointerenter', 'pointerleave', 'pointermove', 'pointerout', 'pointerover',
-  'pointerup', 'reset', 'resize', 'scroll', 'scrollend', 'select', 'submit',
-  'toggle', 'touchcancel', 'touchend', 'touchmove', 'touchstart',
-  'transitionend', 'wheel'
-]);
 const BOOLEAN_ATTRS = new Set([
   'disabled', 'hidden', 'readonly', 'required', 'checked', 'selected',
   'autofocus', 'autoplay', 'controls', 'loop', 'muted', 'multiple',

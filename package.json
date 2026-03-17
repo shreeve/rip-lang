@@ -33,6 +33,7 @@
   "scripts": {
     "build": "bun scripts/build.js",
     "bump": "bun scripts/bump.js",
+    "gen:dom": "bun scripts/gen-dom.js",
     "gallery": "bun scripts/gallery.js",
     "parser": "bun src/grammar/solar.rip -o src/parser.js src/grammar/grammar.rip",
     "serve": "bun scripts/serve.js",

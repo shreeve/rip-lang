@@ -269,9 +269,18 @@ Factory mode is entered in `generateConditionBranch` and `generateTemplateLoop` 
 Methods named `onClick`, `onKeydown`, `onMouseenter`, etc. automatically bind to the root DOM element.
 
 - detection: methods matching `/^on[A-Z]/` that are not lifecycle hooks
+- event names come from the generated `src/generated/dom-events.js` list, sourced from TypeScript's `HTMLElementEventMap`
 - root only: the first generated HTML tag can claim auto-wiring
 - explicit override: `@click: handler` on the root suppresses auto-wire for that event
 - lifecycle exclusion: `onError` is not auto-wired
+- after bumping `typescript`, refresh the generated DOM metadata with `bun run gen:dom`
+
+### Generated DOM Tag Sets
+
+- `src/generated/dom-tags.js` is generated from TypeScript's `HTMLElementTagNameMap` and `SVGElementTagNameMap`
+- `SVG_TAGS` uses only SVG namespace-specific tag names; overlapping names like `a`, `script`, and `style` stay HTML by default unless `_svgDepth > 0`
+- a tiny compatibility list remains in the generator for tags Rip already recognized but TypeScript does not currently expose the same way
+- after bumping `typescript`, refresh with `bun run gen:dom`
 
 ```coffee
 export Checkbox = component
