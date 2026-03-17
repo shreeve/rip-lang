@@ -733,6 +733,9 @@ export function compileForCheck(filePath, source, compiler) {
     const intrinsicDecls = [
       'type __RipElementMap = HTMLElementTagNameMap & Omit<SVGElementTagNameMap, keyof HTMLElementTagNameMap>;',
       'type __RipTag = keyof __RipElementMap;',
+      "declare global { interface ParentNode { querySelector(selectors: string): any; querySelectorAll(selectors: string): NodeListOf<any>; } interface Element { closest(selectors: string): any; setAttribute(qualifiedName: string, value: any): void; } }",
+      "type __RipDomElement = HTMLElement & { hidden: boolean | 'until-found'; setAttribute(qualifiedName: string, value: any): void; };",
+      "type __RipDomEl<K extends __RipTag> = Omit<__RipElementMap[K], 'querySelector' | 'querySelectorAll' | 'closest' | 'setAttribute'> & __RipDomElement;",
       "type __RipAttrKeys<T> = { [K in keyof T]-?: K extends 'style' ? never : T[K] extends (...args: any[]) => any ? never : K }[keyof T] & string;",
       'type __RipEvents = { [K in keyof HTMLElementEventMap as `@${K}`]?: ((event: HTMLElementEventMap[K]) => void) | null };',
       'type __RipProps<K extends __RipTag> = { [P in __RipAttrKeys<__RipElementMap[K]>]?: __RipElementMap[K][P] } & __RipEvents & { ref?: string; class?: string; style?: string; [k: `data-${string}`]: any; [k: `aria-${string}`]: any };',

@@ -155,6 +155,42 @@ Release notes:
 - After publishing, create and push a git tag such as `vscode-vX.Y.Z`.
 - Create a matching GitHub release and attach the generated `rip-*.vsix`.
 
+### Repeatable Release Checklist
+
+```bash
+# 1. Bump the extension version in packages/vscode/package.json
+#    and keep bun.lock in sync if it tracks the workspace version.
+
+# 2. Run validation from the repo root
+bun run test
+
+# 3. Build, package, and install locally in Cursor
+cd packages/vscode
+bun run install-cursor
+
+# 4. If the repo has unrelated changes, stage only the release files
+cd ../..
+git add bun.lock packages/vscode/package.json packages/vscode/README.md src/components.js src/typecheck.js src/types.js
+
+# 5. Commit and push the release
+git commit -m "Release VS Code extension vX.Y.Z"
+git push
+
+# 6. Publish to the Marketplace
+cd packages/vscode
+bunx @vscode/vsce publish --no-dependencies --skip-license
+
+# 7. Tag and publish the GitHub release
+cd ../..
+git tag "vscode-vX.Y.Z"
+git push origin "vscode-vX.Y.Z"
+gh release create "vscode-vX.Y.Z" "packages/vscode/rip-X.Y.Z.vsix" \
+  --title "VS Code Extension vX.Y.Z"
+```
+
+- Reload Cursor after local install so the new extension instance is active.
+- When the worktree is dirty, stage only the files meant for the extension release.
+
 ## Links
 
 - [Rip Language](https://github.com/shreeve/rip-lang)

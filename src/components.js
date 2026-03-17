@@ -56,6 +56,20 @@ const BIND_PREFIX = '__bind_';
 const BIND_SUFFIX = '__';
 
 const LIFECYCLE_HOOKS = new Set(['beforeMount', 'mounted', 'updated', 'beforeUnmount', 'unmounted', 'onError']);
+const DOM_EVENTS = new Set([
+  'abort', 'animationend', 'animationiteration', 'animationstart',
+  'auxclick', 'beforeinput', 'blur', 'cancel', 'change', 'click', 'close',
+  'compositionend', 'compositionstart', 'compositionupdate', 'contextmenu',
+  'copy', 'cut', 'dblclick', 'drag', 'dragend', 'dragenter', 'dragleave',
+  'dragover', 'dragstart', 'drop', 'error', 'focus', 'focusin', 'focusout',
+  'gotpointercapture', 'input', 'keydown', 'keypress', 'keyup', 'load',
+  'lostpointercapture', 'mousedown', 'mouseenter', 'mouseleave', 'mousemove',
+  'mouseout', 'mouseover', 'mouseup', 'paste', 'pointercancel', 'pointerdown',
+  'pointerenter', 'pointerleave', 'pointermove', 'pointerout', 'pointerover',
+  'pointerup', 'reset', 'resize', 'scroll', 'scrollend', 'select', 'submit',
+  'toggle', 'touchcancel', 'touchend', 'touchmove', 'touchstart',
+  'transitionend', 'wheel'
+]);
 const BOOLEAN_ATTRS = new Set([
   'disabled', 'hidden', 'readonly', 'required', 'checked', 'selected',
   'autofocus', 'autoplay', 'controls', 'loop', 'muted', 'multiple',
@@ -613,10 +627,11 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     return (s.predicate || s.await) ? s : to;
   };
 
-  proto.transformComponentMembers = function(sexpr) {
+  proto.transformComponentMembers = function(sexpr, localScope = new Set()) {
     const self = this._self;
     if (!Array.isArray(sexpr)) {
       const sv = _str(sexpr);
+      if (sv && localScope.has(sv)) return sexpr;
       if (sv && this.reactiveMembers && this.reactiveMembers.has(sv)) {
         return ['.', ['.', self, sv], _transferMeta(sexpr, 'value')];
       }
@@ -643,7 +658,15 @@ export function installComponentSupport(CodeGenerator, Lexer) {
 
     // Force thin arrows to fat arrows inside components to preserve this binding
     if (sexpr[0] === '->') {
-      return ['=>', ...sexpr.slice(1).map(item => this.transformComponentMembers(item))];
+      const params = sexpr[1];
+      const childScope = new Set(localScope);
+      if (Array.isArray(params)) {
+        for (const p of params) {
+          const name = _str(Array.isArray(p) && p[0] === 'default' ? p[1] : p);
+          if (name) childScope.add(name);
+        }
+      }
+      return ['=>', sexpr[1], this.transformComponentMembers(sexpr[2], childScope)];
     }
 
     // Object literals: transform values but leave bare string keys untouched
@@ -651,15 +674,33 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       return ['object', ...sexpr.slice(1).map(pair => {
         if (Array.isArray(pair) && pair.length >= 2) {
           let key = pair[0];
-          let newKey = Array.isArray(key) ? this.transformComponentMembers(key) : key;
-          let newValue = this.transformComponentMembers(pair[1]);
+          let newKey = Array.isArray(key) ? this.transformComponentMembers(key, localScope) : key;
+          let newValue = this.transformComponentMembers(pair[1], localScope);
           return [newKey, newValue, pair[2]];
         }
-        return this.transformComponentMembers(pair);
+        return this.transformComponentMembers(pair, localScope);
       })];
     }
 
-    return sexpr.map(item => this.transformComponentMembers(item));
+    if (sexpr[0] === 'block' || sexpr[0] === 'program') {
+      const scope = new Set(localScope);
+      const items = [sexpr[0]];
+      for (let i = 1; i < sexpr.length; i++) {
+        const item = sexpr[i];
+        if (Array.isArray(item) && item[0] === '=') {
+          const targetName = _str(item[1]);
+          if (targetName && !(this.reactiveMembers && this.reactiveMembers.has(targetName))) {
+            items.push(['=', item[1], this.transformComponentMembers(item[2], scope)]);
+            scope.add(targetName);
+            continue;
+          }
+        }
+        items.push(this.transformComponentMembers(item, scope));
+      }
+      return items;
+    }
+
+    return sexpr.map(item => this.transformComponentMembers(item, localScope));
   };
 
   // ==========================================================================
@@ -777,7 +818,8 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     const autoEventHandlers = new Map();
     for (const { name } of methods) {
       if (/^on[A-Z]/.test(name) && !LIFECYCLE_HOOKS.has(name)) {
-        autoEventHandlers.set(name[2].toLowerCase() + name.slice(3), name);
+        const eventName = name[2].toLowerCase() + name.slice(3);
+        if (DOM_EVENTS.has(eventName)) autoEventHandlers.set(eventName, name);
       }
     }
 

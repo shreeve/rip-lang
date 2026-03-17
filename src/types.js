@@ -1145,6 +1145,9 @@ export function emitTypes(tokens, sexpr = null, source = '') {
   if (usesRipIntrinsicProps) {
     preamble.push('type __RipElementMap = HTMLElementTagNameMap & Omit<SVGElementTagNameMap, keyof HTMLElementTagNameMap>;');
     preamble.push('type __RipTag = keyof __RipElementMap;');
+    preamble.push("declare global { interface ParentNode { querySelector(selectors: string): any; querySelectorAll(selectors: string): NodeListOf<any>; } interface Element { closest(selectors: string): any; setAttribute(qualifiedName: string, value: any): void; } }");
+    preamble.push("type __RipDomElement = HTMLElement & { hidden: boolean | 'until-found'; setAttribute(qualifiedName: string, value: any): void; };");
+    preamble.push("type __RipDomEl<K extends __RipTag> = Omit<__RipElementMap[K], 'querySelector' | 'querySelectorAll' | 'closest' | 'setAttribute'> & __RipDomElement;");
     preamble.push("type __RipAttrKeys<T> = { [K in keyof T]-?: K extends 'style' ? never : T[K] extends (...args: any[]) => any ? never : K }[keyof T] & string;");
     preamble.push('type __RipEvents = { [K in keyof HTMLElementEventMap as `@${K}`]?: ((event: HTMLElementEventMap[K]) => void) | null };');
     preamble.push('type __RipProps<K extends __RipTag> = { [P in __RipAttrKeys<__RipElementMap[K]>]?: __RipElementMap[K][P] } & __RipEvents & { ref?: string; class?: string; style?: string; [k: `data-${string}`]: any; [k: `aria-${string}`]: any };');
@@ -1236,7 +1239,7 @@ function emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars, so
           let refName = entry[1]?.valueOf?.() ?? entry[1];
           if (typeof refName === 'string') refName = refName.replace(/^["']|["']$/g, '');
           if (typeof refName === 'string' && !refMembers.has(refName)) {
-            refMembers.set(refName, `__RipElementMap['${nodeHead}'] | null`);
+            refMembers.set(refName, '__RipDomElement | null');
           }
         }
       }
