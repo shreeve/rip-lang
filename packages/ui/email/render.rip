@@ -1,0 +1,82 @@
+# ==============================================================================
+# Render — instantiate a Rip component and produce email HTML + plain text
+#
+# Usage:
+#   import { toHTML, toText, renderEmail } from '@rip-lang/ui/email'
+#
+#   html = toHTML(MyEmail, name: "Alice")
+#   text = toText(MyEmail, name: "Alice")
+#   { html, text } = renderEmail(MyEmail, name: "Alice")
+#
+# Notes:
+# - rendering is synchronous and swaps in a temporary global DOM shim
+# - do not add awaits or async work inside this render path
+# - custom Tailwind configs must be prepared ahead of time via
+#   `@rip-lang/ui/tailwind.prepareConfig(config)` before sync rendering
+# ==============================================================================
+
+import { Node, Document, serializeChildren, toPlainText } from './dom.rip'
+import { inlineEmailTree, takeEmailTailwindRoots, configKey } from '../tailwind/tailwind.rip'
+
+XHTML_DOCTYPE =! '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">'
+
+_resolveTailwindConfig = (entries = []) ->
+  configs = []
+  for entry in entries
+    continue unless entry?.config?
+    configs.push(entry.config)
+
+  return {} unless configs.length
+
+  first = configs[0]
+  firstKey = configKey(first)
+
+  for config, idx in configs
+    continue unless idx
+    continue if configKey(config) is firstKey
+    raise 'Tailwind: multiple different Tailwind configs were registered during one email render. Use a single shared config per render and call prepareConfig(config) before synchronous rendering.'
+
+  first
+
+_renderComponent = (ComponentClass, props = {}) ->
+  prevDoc  = globalThis.document
+  prevNode = globalThis.Node
+  prevSVG  = globalThis.SVGElement
+
+  doc = Document.new()
+  globalThis.document = doc
+  globalThis.Node = Node
+  globalThis.SVGElement = class SVGStub extends Node
+
+  try
+    root = doc.createElement('__root')
+    instance = ComponentClass.new(props)
+    el = instance._create()
+    root.appendChild(el)
+    instance._setup() if instance._setup
+    instance.mounted() if instance.mounted
+
+    entries = takeEmailTailwindRoots()
+    if entries.length
+      result = inlineEmailTree(root, _resolveTailwindConfig(entries))
+      warn "Tailwind: unsupported classes ignored: #{result.unsupported.join(' ')}" if result.unsupported?.length
+
+    root
+  finally
+    globalThis.document = prevDoc
+    globalThis.Node = prevNode
+    globalThis.SVGElement = prevSVG
+
+export renderEmail = (ComponentClass, props = {}) ->
+  root = _renderComponent(ComponentClass, props)
+  html = serializeChildren(root)
+  text = toPlainText(root)
+  { html: "#{XHTML_DOCTYPE}#{html}", text }
+
+export toHTML = (ComponentClass, props = {}) ->
+  root = _renderComponent(ComponentClass, props)
+  "#{XHTML_DOCTYPE}#{serializeChildren(root)}"
+
+export toText = (ComponentClass, props = {}) ->
+  root = _renderComponent(ComponentClass, props)
+  toPlainText(root)

@@ -1,0 +1,25 @@
+# Card — accessible headless content container
+#
+# Structured container with optional header, content, and footer sections.
+# Use $header, $content, $footer on children to mark sections.
+# Ships zero CSS.
+#
+# Usage:
+#   Card
+#     div $header: true
+#       h3 "Title"
+#     div $content: true
+#       p "Body text"
+#     div $footer: true
+#       Button "Action"
+#
+#   Card interactive: true, @click: handleClick
+#     p "Clickable card"
+
+export Card = component
+  @interactive:: boolean := false
+
+  render
+    div tabindex: (if @interactive then "0" else undefined)
+      $interactive: @interactive?!
+      slot

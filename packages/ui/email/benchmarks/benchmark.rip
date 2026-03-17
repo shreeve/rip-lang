@@ -1,0 +1,94 @@
+import { renderEmail, toHTML } from '../email.rip'
+import { prepareConfig } from '../../tailwind/tailwind.rip'
+import { PlainBenchEmail, TailwindBenchEmail, benchTailwindConfig } from './samples.rip'
+
+iterations = Number(process.argv[2] ?? 250)
+warmupIterations = Number(process.argv[3] ?? 40)
+
+percentile = (sortedValues, fraction) ->
+  return 0 unless sortedValues.length
+  index = Math.min(sortedValues.length - 1, Math.floor(sortedValues.length * fraction))
+  sortedValues[index]
+
+formatMs = (value) -> "#{value.toFixed(2)}ms"
+
+summarize = (name, samples) ->
+  sorted = [...samples]
+  sorted.sort (a, b) -> a - b
+
+  total = 0
+  total += value for value in sorted
+  average = total / sorted.length
+  ops = 1000 / average
+
+  {
+    name: name
+    average: average
+    p50: percentile(sorted, 0.5)
+    p95: percentile(sorted, 0.95)
+    min: sorted[0]
+    max: sorted[-1]
+    ops: ops
+  }
+
+runCase = (name, fn) ->
+  for idx in [0...warmupIterations]
+    fn()
+
+  samples = []
+  for idx in [0...iterations]
+    start = performance.now()
+    fn()
+    samples.push(performance.now() - start)
+
+  summarize(name, samples)
+
+await prepareConfig(benchTailwindConfig)
+
+cases = [
+  {
+    name: 'toHTML plain'
+    run: -> toHTML(PlainBenchEmail)
+  }
+  {
+    name: 'renderEmail plain'
+    run: -> renderEmail(PlainBenchEmail)
+  }
+  {
+    name: 'toHTML tailwind'
+    run: -> toHTML(TailwindBenchEmail)
+  }
+  {
+    name: 'renderEmail tailwind'
+    run: -> renderEmail(TailwindBenchEmail)
+  }
+  {
+    name: 'toHTML tailwind themed'
+    run: ->
+      toHTML TailwindBenchEmail,
+        config: benchTailwindConfig
+        buttonClass: 'rounded-md bg-brand px-4 py-3 text-sm font-semibold text-white'
+        linkClass: 'text-accent'
+  }
+  {
+    name: 'renderEmail tailwind themed'
+    run: ->
+      renderEmail TailwindBenchEmail,
+        config: benchTailwindConfig
+        buttonClass: 'rounded-md bg-brand px-4 py-3 text-sm font-semibold text-white'
+        linkClass: 'text-accent'
+  }
+]
+
+p "Rip email benchmark (#{iterations} iterations, #{warmupIterations} warmup)"
+for testCase in cases
+  result = runCase(testCase.name, testCase.run)
+  p [
+    result.name.padEnd(28)
+    "avg #{formatMs(result.average)}".padEnd(14)
+    "p50 #{formatMs(result.p50)}".padEnd(14)
+    "p95 #{formatMs(result.p95)}".padEnd(14)
+    "min #{formatMs(result.min)}".padEnd(14)
+    "max #{formatMs(result.max)}".padEnd(14)
+    "#{result.ops.toFixed(1)} ops/s"
+  ].join('  ')

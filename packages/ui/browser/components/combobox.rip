@@ -1,0 +1,151 @@
+# Combobox — accessible headless combobox (input + filterable listbox)
+#
+# Keyboard: ArrowDown/Up to navigate, Enter to select, Escape to close,
+#           typing filters the list via the @filter callback.
+#
+# Exposes $open on the wrapper, $highlighted on options.
+# Ships zero CSS — style entirely via attribute selectors in your stylesheet.
+#
+# Usage:
+#   Combobox query <=> searchText, items: fruits, @select: handleSelect, @filter: filterFn
+
+export Combobox = component
+  @query:: string := ""
+  @items:: any[] := []
+  @placeholder:: string := "Search..."
+  @disabled:: boolean := false
+  @autoHighlight:: boolean := true
+
+  open := false
+  highlightedIndex := -1
+  _ready := false
+  _popupGuard =! ARIA.popupGuard()
+  _listId =! "cb-#{Math.random().toString(36).slice(2, 8)}"
+
+  getItems: ->
+    return [] unless @_list
+    Array.from(@_list.querySelectorAll('[role="option"]'))
+
+  _scrollToItem: ->
+    @getItems()[highlightedIndex]?.scrollIntoView({ block: 'nearest' })
+
+  clear: ->
+    @query = ''
+    highlightedIndex = -1
+    @emit 'filter', ''
+
+  onInput: (e) ->
+    @query = e.target.value
+    open = true
+    highlightedIndex = if @autoHighlight and @items.length > 0 then 0 else -1
+    @emit 'filter', @query
+
+  onFocusin: ->
+    return unless _popupGuard.canOpen()
+    @openMenu()
+
+  onInputClick: ->
+    return if @disabled or open
+    @openMenu(true)
+
+  onFocusout: ->
+    setTimeout => @close(false, true) unless @_content?.contains(document.activeElement), 0
+
+  openMenu: (force = false) ->
+    return unless force or _popupGuard.canOpen()
+    open = true
+    highlightedIndex = -1
+    @_input?.focus()
+
+  close: (restoreFocus = true, blockOpen = false) ->
+    open = false
+    highlightedIndex = -1
+    _popupGuard.block() if blockOpen
+    @_input?.focus() if restoreFocus
+
+  mounted: ->
+    _ready = true
+
+  _applyPlacement: ->
+    ARIA.position @_content, @_list, placement: 'bottom start', offset: 2, matchWidth: true
+
+  isDisabled: (item) -> item?.hasAttribute?('data-disabled')
+
+  selectIndex: (idx) ->
+    item = @getItems()[idx]
+    return unless item
+    return if @isDisabled(item)
+    val = item.dataset.value ?? item.textContent.trim()
+    @query = val
+    @emit 'select', val
+    @close(true, true)
+
+  _nextEnabled: (from, dir) ->
+    opts = @getItems()
+    len = opts.length
+    i = from
+    loop len
+      i = (i + dir) %% len
+      return i unless @isDisabled(opts[i])
+    from
+
+  _onKeydown: (e) ->
+    len = @getItems().length
+    ARIA.listNav e,
+      next:    => @openMenu() unless open; highlightedIndex = @_nextEnabled(highlightedIndex,  1); @_scrollToItem()
+      prev:    => @openMenu() unless open; highlightedIndex = @_nextEnabled(highlightedIndex, -1); @_scrollToItem()
+      first:   => highlightedIndex = 0;       @_scrollToItem()
+      last:    => highlightedIndex = len - 1; @_scrollToItem()
+      select:  => if highlightedIndex >= 0 then @selectIndex(highlightedIndex) else if len is 1 then @selectIndex(0)
+      dismiss: => if open then @close() else @query = ''
+      tab:     => @close(false, true)
+
+  ~>
+    return unless _ready
+    if @_list
+      @_applyPlacement()
+    ARIA.bindPopover open, (=> @_list), ((isOpen) => open = isOpen), (=> @_input)
+    ARIA.popupDismiss open, (=> @_list), (=> @close(false, true)), [=> @_input, => @_content]
+
+  render
+    . ref: "_content", $open: open?!
+
+      # Text input
+      . style: "position:relative;display:inline-flex;align-items:center"
+        input ref: "_input", role: "combobox"
+          type: "text"
+          autocomplete: "off"
+          aria-expanded: !!open
+          aria-haspopup: "listbox"
+          aria-autocomplete: "list"
+          aria-controls: if open then _listId else undefined
+          aria-activedescendant: if highlightedIndex >= 0 then "#{_listId}-#{highlightedIndex}" else undefined
+          $disabled: @disabled?!
+          disabled: @disabled
+          placeholder: @placeholder
+          value: @query
+          @click: @onInputClick
+          @keydown: @_onKeydown
+        if @query
+          button aria-label: "Clear", $clear: true, @click: @clear
+            "✕"
+
+      # Listbox
+      div ref: "_list"
+        id: _listId
+        role: "listbox"
+        popover: "auto"
+        hidden: not open
+        aria-hidden: (open ? undefined : "true")
+        style: "position:fixed;margin:0;inset:auto"
+        $open: open?!
+        for item, idx in @items
+          div role: "option", tabindex: "-1", id: "#{_listId}-#{idx}"
+            $value: item
+            $highlighted: (idx is highlightedIndex)?!
+            @click: (=> @selectIndex(idx))
+            @mouseenter: (=> highlightedIndex = idx)
+            "#{item}"
+        if @items.length is 0 and @query
+          div role: "status", aria-live: "polite", $empty: true
+            "No results"

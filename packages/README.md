@@ -4,7 +4,7 @@
 
 > **Optional packages that extend Rip for full-stack development**
 
-All packages are written in Rip, run on Bun, and have zero dependencies (except `@rip-lang/print` which uses `highlight.js`).
+All packages are written in Rip, run on Bun, and have zero dependencies (except `@rip-lang/print`, which uses `highlight.js`, and `@rip-lang/ui`, whose Tailwind domain uses `tailwindcss` and `css-tree`).
 
 ## Installation
 

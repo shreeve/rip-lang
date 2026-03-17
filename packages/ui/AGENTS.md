@@ -1,213 +1,93 @@
-# UI Widgets — Agent Guide
+# Unified UI Package Guide
 
-Accessible headless widgets written in Rip. They expose `$` attributes for styling and compile in the browser with no build step.
+`@rip-lang/ui` is the umbrella package for browser widgets, email components, shared helpers, and Tailwind integration.
 
-## Conventions
+## Domain boundaries
 
-- use `ref: "_name"` for DOM refs; never `div._name`
-- common ref names: `_trigger`, `_list`, `_content`
-- use `_slot` with `style: "display:none"` to read child definitions
-- auto-wired root handlers use `onKeydown`, `onScroll`, etc.
-- child element handlers use underscore names like `_headerClick`
-- public methods do not use `_`
-- prefer `=!` for constants and `:=` only for state that should trigger updates
-- click-outside should use document `mousedown` cleanup, not backdrop divs
-- dropdowns use `position:fixed;visibility:hidden` first, then `_position()` via `requestAnimationFrame`
-- keep `preventScroll: true` at module scope
-- use reactive arrays directly: `toasts = [...toasts, { message: "Saved!" }]`
-- prefix module-scope lowercase names to avoid shared-scope collisions
+- `browser/` owns interactive headless widgets and browser-only DOM behavior
+- `email/` owns curated email rendering, serializers, and email-client compatibility
+- `shared/` owns only truly cross-domain utilities
+- `tailwind/` is the only place where `tailwindcss` and `css-tree` may be imported
 
-## Critical Gotchas
+## Typing
 
-- do not shadow prop names with locals inside component methods; matching names rewrite to `this.name.value`
-- always name indices in nested render loops
-- avoid `value: @prop` on `<input>` when numeric parsing matters
-- computed values are read-only; invalidate with a reactive counter
-- use imperative DOM updates for 60fps tracking work like scroll, drag, and resize
-- put side effects in `~>` branches, not only in methods like `close()`
-- bare `x.y` in render blocks is tag syntax; use `= x.y` for text output
-- bare variable names in template blocks are tag names, not text: `editName` creates `<editName>` element. Use `= editName` or `"#{editName}"` for text output
+All exported browser and email components should use explicit Rip types on their public props. Use the existing virtual TypeScript pipeline (`rip check`, LSP, generated virtual TS) during development; do not emit scattered `.d.ts` files during active work.
 
-### Reactive Attribute Ownership
+## Gallery
 
-**The parent owns any attribute it sets on slot children.** If a parent template sets `hidden: true` on a slot child, the reconciler will re-apply `hidden = true` on every parent re-render. A component that imperatively sets `editor.hidden = false` in a `~>` effect will have that overwritten whenever the parent re-renders (e.g. when any reactive state in scope changes).
+The root `index.html` / `index.css` / `index.rip` form a showcase layer only. Components stay headless and unstyled. The gallery itself is intentionally polished.
 
-Rule: **a component that manages a DOM property imperatively must be the only one setting it.** Do not set `hidden`, `value`, `checked`, or any other imperatively-managed property on slot children in the parent template. The component's `~>` effect sets the initial state.
+## First Read For Agents
 
-This is the same principle as React's "controlled vs. uncontrolled" — whoever sets a reactive binding on a render cycle owns it.
+When working in `packages/ui`, do not rely only on automatic context pickup from nested `AGENTS.md` files. For strong results, proactively read these files at the start of the task:
 
-Practical example — correct:
-```coffee
-EditableValue
-  span $display: true
-    "#{editName}"
-  div $editor: true    ← NO hidden: true here — EditableValue owns it
-    input ...
-```
+1. `packages/ui/AGENTS.md` — package boundaries, architecture, reuse policy
+2. `packages/ui/browser/AGENTS.md` — widget conventions, gotchas, popup/focus patterns
+3. `packages/ui/DEBUG.md` — current local-debug workflow, live gallery URL, known-good browser signals
 
-### Components Emitting Their Own Root Element's Events
+Then, if the task involves a hard popup/input widget, inspect the current reference component before making changes:
 
-If a component's root element IS the event source (e.g. `<select>` firing 'change', `<input>` firing 'input'), calling `@emit 'change'` dispatches a `CustomEvent('change', { bubbles: true })` on that same element — which re-triggers the listener in an infinite loop.
+- `packages/ui/browser/components/multi-select.rip`
 
-Guard with `e.isTrusted or return` at the start of the handler. `e.isTrusted` is `false` for synthetic `CustomEvent` dispatches, `true` for real user interactions:
-```coffee
-onChange: (e) ->
-  e.isTrusted or return   # prevent infinite loop when @emit re-triggers handler
-  @value = e.target.value
-  @emit 'change', @value
-```
+Use `multi-select.rip` as the reference example for:
 
-### onFocusout and relatedTarget
+- layered popup mechanics vs widget-local semantics
+- nested interactive affordance isolation
+- reopen suppression after pointer-driven closes
+- composite input styling with an embedded input inside a larger shell
 
-In some browsers, `e.relatedTarget` is `null` even when focus moves to a `tabindex="-1"` element (e.g., an option div being clicked). Checking `e.relatedTarget` directly will incorrectly close the popup before the click fires.
+This startup sequence gets an agent much closer to “current project reality” than `AGENTS.md` inheritance alone.
 
-Use `setTimeout 0` and `document.activeElement` instead:
-```coffee
-onFocusout: ->
-  setTimeout => @close() unless @_content?.contains(document.activeElement), 0
-```
+## Browser Widget Direction
 
-### Always Track Reactive Dependencies Before Early Returns
+For complex browser widgets, prefer a layered design:
 
-In a `~>` effect that has an early return guard, reactive signals read AFTER the guard are not tracked on runs that short-circuit. Always read all signals you need to track before any `return unless`:
-```coffee
-~>
-  _editing = editing          # track BEFORE early return
-  display = @_root?.querySelector('[data-display]')
-  editor  = @_root?.querySelector('[data-editor]')
-  return unless display and editor
-  editor.hidden = not _editing
-```
+- keep generic popup, focus, keyboard, and timing logic in the shared `ARIA` helper layer in `src/ui.rip`
+- keep component-specific semantics local to the widget (`chips`, token removal, selection rules, etc.)
+- do not solve browser event-ordering bugs independently in every component if the underlying problem is generic
 
-### Event Handler Parameter Syntax
+The current model is:
 
-Inline event handlers with explicit parameters are unreliable in template attribute contexts. Both `(e) =>` (causes parse error) and `(e) ->` (causes parse error in conditional blocks) can break compilation of the entire component, causing "WidgetGallery is not defined" or similar errors.
+- `ARIA` / `__aria` owns shared primitives such as popup dismissal, popover binding, dialog binding, positioning, roving/list navigation, and short reopen-suppression after pointer-driven closes
+- individual components own only the semantics that make that widget unique
 
-**The safe approach: use a named method reference.**
+## Reference Component
 
-```coffee
-# WRONG — (e => ...) parses as calling e as a function
-@click: (e => e.stopPropagation())
+`browser/components/multi-select.rip` is the reference example for a "hard" composite widget in this package.
 
-# WRONG — (e) => causes parse error in template attribute contexts
-@click: (e) => e.stopPropagation()
+Use it as the model for components that combine:
 
-# WRONG — (e) -> also causes parse error in some template contexts
-@click: (e) -> e.stopPropagation()
+- popup lifecycle
+- embedded inputs
+- nested interactive affordances
+- keyboard navigation
+- multiple coordinated state transitions
 
-# CORRECT — define a named method, reference it in the template
-_stopProp: (e) -> e.stopPropagation()
-# then in render:
-  .modal @click: @_stopProp
-```
+What it should demonstrate:
 
-Method references (`@methodName`) always compile correctly in template attributes and receive the event as their first argument.
+- clear separation between shared popup mechanics and local widget semantics
+- consistent naming (`on...` for auto-wired root handlers, `_on...` for child handlers, `_...` for private helpers/refs/state)
+- explicit isolation of nested controls when `mousedown` / focus ordering would otherwise leak into parent behavior
+- behavior that matches high-quality headless UI expectations before adding styling
 
-## ARIA Keyboard and Popup Helpers
+## Reuse Policy
 
-`ARIA.listNav`, `ARIA.rovingNav`, and `ARIA.popupDismiss` are built into `rip.min.js` (defined in `src/ui.rip`) and available globally in any component without imports.
+When building or refactoring browser widgets:
 
-### ARIA.listNav — popup list keyboard navigation
+- extract the smallest stable shared primitive into `src/ui.rip`
+- do not create a giant generic base component prematurely
+- reuse `ARIA.popupGuard()` for pointer-driven close/reopen timing problems in popup-style controls
+- keep styling fixes in the gallery CSS unless the component itself is shipping opinionated visuals
 
-For Select, Menu, Combobox, Autocomplete, and similar popup lists:
+Good candidates for shared primitives:
 
-```coffee
-onListKeydown: (e) ->
-  ARIA.listNav e,
-    next:    => ...  # ArrowDown
-    prev:    => ...  # ArrowUp
-    first:   => ...  # Home, PageUp
-    last:    => ...  # End, PageDown
-    select:  => ...  # Enter, Space
-    dismiss: => ...  # Escape
-    tab:     => ...  # Tab (no preventDefault — focus moves naturally)
-    char:    => ...  # printable key (typeahead)
-```
+- reopen suppression after outside-click dismissal
+- popup dismissal wiring
+- keyboard navigation helpers
+- focus restoration / modal stack handling
 
-### ARIA.rovingNav — inline composite keyboard navigation
+Bad candidates for premature abstraction:
 
-For RadioGroup, Tabs, Toolbar, CheckboxGroup, ToggleGroup, Accordion:
-
-```coffee
-onKeydown: (e) ->
-  ARIA.rovingNav e, {
-    next:  => ...   # ArrowDown (vertical) / ArrowRight (horizontal) / both
-    prev:  => ...
-    first: => ...   # Home, PageUp
-    last:  => ...   # End, PageDown
-    select: => ...  # Enter, Space (optional)
-  }, @orientation   # 'vertical' | 'horizontal' | 'both'
-```
-
-### ARIA.popupDismiss — close on outside click or page scroll
-
-For any popup component. Pass lazy getters `(=> @_list)` — NOT the current value `@_list` — because the `~>` effect may run before the render creates the element:
-
-```coffee
-~> ARIA.popupDismiss open, (=> @_list), (=> @close()), [=> @_trigger]
-
-# With scroll repositioning instead of closing (preferred for fixed dropdowns):
-~> ARIA.popupDismiss open, (=> @_list), (=> @close()), [=> @_trigger], (=> @_position())
-```
-
-**Lazy getters are required**: if you pass `@_list` directly (not as `=> @_list`), the value is captured at the moment the `~>` effect fires — which may be before the render creates the listbox element, capturing `null`. Then `null?.contains(option)` returns `undefined` → `close()` fires on every mousedown, making options unclickable.
-
-### Both nav handlers also:
-- Guard against IME composition (`e.isComposing`) — safe for CJK input methods
-- Call `e.preventDefault()` + `e.stopPropagation()` for handled keys
-- Alias `PageUp/PageDown` to `first/last` (handles macOS `fn+Up/Down`)
-
-## Lifecycle and Component Model
-
-- recognized lifecycle hooks: `beforeMount`, `mounted`, `updated`, `beforeUnmount`, `unmounted`, `onError`
-- `onMount` is not a lifecycle hook
-- inside components, `->` is rewritten to `=>`
-- `ref:` sets a plain property, not a reactive signal
-- use the `_ready := false` pattern for effects that need refs after mount
-- `offer` and `accept` only become keywords inside components
-- use `$open`, `$selected`, etc. for data attributes
-- bare `slot` projects `this.children`; it does not create Shadow DOM
-- `@event:` on child components binds listeners to the child root element
-- every component has `emit(name, detail)` which dispatches a bubbling `CustomEvent`
-- `_root` must be set on child components for `emit()` to work
-
-## Integration
-
-Add widget bundles through the serve middleware:
-
-```coffee
-use serve
-  dir: dir
-  bundle:
-    ui: ['../../../packages/ui']
-    app: ['routes', 'components']
-```
-
-Then load with `data-src="ui app"`. Widgets become available by name in the shared scope.
-
-## Grid Highlights
-
-- DOM recycling with pooled rows and `textContent` updates
-- Sheets-style selection model
-- full keyboard support
-- TSV clipboard support
-- multi-column sorting
-- column resizing
-- inline editing
-
-## Widget Gallery Dev Server
-
-The gallery uses `data-src` mode and a minimal `index.rip` dev server:
-
-```coffee
-import { get, use, start, notFound } from '@rip-lang/server'
-import { serve } from '@rip-lang/server/middleware'
-
-dir = import.meta.dir
-use serve dir: dir, bundle: ['.'], watch: true
-get '/*.rip', -> @send "#{dir}/#{@req.path.slice(1)}", 'text/plain; charset=UTF-8'
-notFound -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
-start port: 3005
-```
-
-Hot reload uses the built-in `/watch` SSE endpoint. Do not implement custom watcher or SSE logic in the worker. Use `notFound`, not `get '/*'`, for the catch-all route or you will intercept serve-middleware assets like `/rip/rip.min.js`.
+- token rendering rules
+- chip-specific behaviors
+- widget-specific content semantics

@@ -1,0 +1,203 @@
+# MultiSelect — accessible headless multi-select with chips
+#
+# Filterable dropdown where multiple items can be selected. Selected items
+# appear as removable chips. Type to filter, click or arrow+Enter to toggle.
+# Ships zero CSS — style entirely via attribute selectors in your stylesheet.
+#
+# Usage:
+#   MultiSelect value <=> selectedColors, items: colors, placeholder: "Choose colors..."
+
+export MultiSelect = component
+  @value:: any[] := []
+  @items:: any[] := []
+  @placeholder:: string := "Select..."
+  @disabled:: boolean := false
+
+  open := false
+  query := ''
+  highlightedIndex := -1
+  _ready := false
+  _ignoreInputClickOnce := false
+  _popupGuard =! ARIA.popupGuard()
+  _listId =! "ms-#{Math.random().toString(36).slice(2, 8)}"
+
+  filtered ~=
+    q = query.trim().toLowerCase()
+    return @items unless q
+    @items.filter (item) ->
+      label = if typeof item is 'string' then item else (item.label or item.name or String(item))
+      label.toLowerCase().includes(q)
+
+  # Block reopen briefly so the same pointer gesture that closed the popup
+  # cannot immediately reopen it via focus/click side effects.
+  _blockOpenBriefly: ->
+    _popupGuard.block()
+
+  _canOpen: ->
+    _popupGuard.canOpen()
+
+  _label: (item) ->
+    if typeof item is 'string' then item else (item.label or item.name or String(item))
+
+  _val: (item) ->
+    if typeof item is 'string' then item else (item.value or item.id or String(item))
+
+  _isSelected: (item) ->
+    v = @_val(item)
+    Array.isArray(@value) and v in @value
+
+  _toggleItem: (item) ->
+    return if @disabled
+    v = @_val(item)
+    arr = if Array.isArray(@value) then [...@value] else []
+    if v in arr
+      arr = arr.filter (x) -> x isnt v
+    else
+      arr.push v
+    @value = arr
+    @emit 'change', @value
+
+  _removeChip: (v) ->
+    return if @disabled
+    @value = @value.filter (x) -> x isnt v
+    @emit 'change', @value
+
+  _onRemoveMousedown: (e) ->
+    e.preventDefault()
+    e.stopPropagation()
+    @_blockOpenBriefly()
+
+  _onInput: (e) ->
+    query = e.target.value
+    open = true
+    highlightedIndex = if filtered.length > 0 then 0 else -1
+
+  _openMenu: ->
+    return if @disabled
+    return unless @_canOpen()
+    open = true
+    highlightedIndex = if filtered.length > 0 then Math.max(highlightedIndex, 0) else -1
+
+  _close: (restoreFocus = false, blockOpen = false) ->
+    open = false
+    query = ''
+    highlightedIndex = -1
+    @_blockOpenBriefly() if blockOpen
+    @_input?.focus() if restoreFocus
+
+  onFocusin: ->
+    return unless @_canOpen()
+    @_openMenu()
+
+  _onInputMousedown: (e) ->
+    return unless open and not query
+    e.preventDefault()
+    _ignoreInputClickOnce = true
+    @_close(false, true)
+
+  _onInputClick: ->
+    if _ignoreInputClickOnce
+      _ignoreInputClickOnce = false
+      return
+    return unless @_canOpen()
+    @_openMenu()
+
+  _onChipsClick: (e) ->
+    return unless e.target is e.currentTarget
+    if open and not query
+      @_close(false, true)
+      return
+    return unless @_canOpen()
+    @_input?.focus()
+    @_openMenu() if document.activeElement is @_input
+
+  onFocusout: ->
+    setTimeout =>
+      return if @_content?.contains(document.activeElement)
+      @_close(false, true)
+    , 0
+
+  mounted: ->
+    _ready = true
+
+  _applyPlacement: ->
+    ARIA.position @_content, @_list, placement: 'bottom start', offset: 2, matchWidth: true
+
+  _onKeydown: (e) ->
+    len = filtered.length
+    switch e.key
+      when 'ArrowDown'
+        e.preventDefault()
+        open = true
+        highlightedIndex = (highlightedIndex + 1) %% len if len
+      when 'ArrowUp'
+        e.preventDefault()
+        highlightedIndex = (highlightedIndex - 1) %% len if len
+      when 'Enter'
+        e.preventDefault()
+        if highlightedIndex >= 0 and highlightedIndex < len
+          @_toggleItem(filtered[highlightedIndex])
+      when 'Escape'
+        e.preventDefault()
+        @_close()
+      when 'Backspace'
+        if not query and @value.length > 0
+          @value = @value.slice(0, -1)
+          @emit 'change', @value
+      when 'Tab'
+        @_close(false, true)
+
+  ~>
+    return unless _ready
+    if @_list
+      @_list.setAttribute 'popover', 'manual'
+      @_applyPlacement()
+    ARIA.bindPopover open, (=> @_list), ((isOpen) => open = isOpen), (=> @_input)
+    ARIA.popupDismiss open, (=> @_list), (=> @_close(false, true)), [=> @_input, => @_content]
+
+  render
+    . ref: "_content", $open: open?!, $disabled: @disabled?!
+
+      # Chip area + input
+      . $chips: true, @click: @_onChipsClick
+        for chip in @value
+          span $chip: true
+            "#{chip}"
+            button $remove: true, aria-label: "Remove #{chip}", @mousedown: @_onRemoveMousedown, @click: (=> @_removeChip(chip))
+              "✕"
+        input ref: "_input", type: "text", autocomplete: "off"
+          role: "combobox"
+          aria-expanded: !!open
+          aria-haspopup: "listbox"
+          aria-controls: if open then _listId else undefined
+          $disabled: @disabled?!
+          disabled: @disabled
+          placeholder: if @value.length is 0 then @placeholder else ''
+          value: query
+          @mousedown: @_onInputMousedown
+          @input: @_onInput
+          @click: @_onInputClick
+          @keydown: @_onKeydown
+
+      # Dropdown
+      div ref: "_list"
+        id: _listId
+        role: "listbox"
+        popover: "manual"
+        hidden: not open
+        aria-hidden: (open ? undefined : "true")
+        $open: open?!
+        aria-multiselectable: "true"
+        style: "position:fixed;margin:0;inset:auto"
+        for item, idx in filtered
+          div role: "option", tabindex: "-1", id: "#{_listId}-#{idx}"
+            $value: @_val(item)
+            $selected: @_isSelected(item)?!
+            $highlighted: (idx is highlightedIndex)?!
+            aria-selected: !!@_isSelected(item)
+            @click: (=> @_toggleItem(item))
+            @mouseenter: (=> highlightedIndex = idx)
+            @_label(item)
+        if filtered.length is 0 and query
+          div role: "status", aria-live: "polite", $empty: true
+            "No results"

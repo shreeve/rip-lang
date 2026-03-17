@@ -1,0 +1,3 @@
+# @rip-lang/ui umbrella barrel
+
+export UI_VERSION =! '0.4.0'

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Anchor Positioning Test</title>
+<style>
+  body { font-family: system-ui; padding: 40px; }
+  h3 { margin-top: 30px; }
+  .result { margin-top: 20px; font-family: monospace; font-size: 12px; white-space: pre; background: #f5f5f5; padding: 12px; border-radius: 6px; }
+  .drop { background: white; border: 1px solid #ccc; border-radius: 6px; padding: 8px; min-width: 180px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+  .drop div { padding: 6px 12px; border-radius: 4px; cursor: pointer; }
+  .drop div:hover { background: #eef; }
+  button { padding: 8px 16px; font-size: 14px; margin-right: 12px; }
+
+  /* Test A: MDN-style (anchor function) */
+  .anchorA { anchor-name: --anchorA; }
+  .dropA {
+    position: fixed;
+    position-anchor: --anchorA;
+    top: anchor(bottom);
+    left: anchor(left);
+    margin-top: 4px;
+  }
+
+  /* Test B: position-area with "bottom" only */
+  .anchorB { anchor-name: --anchorB; }
+  .dropB {
+    position: fixed;
+    position-anchor: --anchorB;
+    position-area: bottom;
+    margin-top: 4px;
+  }
+
+  /* Test C: position-area with two keywords */
+  .anchorC { anchor-name: --anchorC; }
+  .dropC {
+    position: fixed;
+    position-anchor: --anchorC;
+    position-area: bottom left;
+    margin-top: 4px;
+  }
+
+  /* Test D: our original (with inset:auto and margin:0) */
+  .anchorD { anchor-name: --anchorD; }
+  .dropD {
+    position: fixed;
+    inset: auto;
+    margin: 0;
+    position-anchor: --anchorD;
+    position-area: bottom start;
+    margin-top: 4px;
+  }
+
+  /* Test E: JS fallback */
+</style>
+</head>
+<body>
+
+<h2>CSS Anchor Positioning — Isolation Tests</h2>
+
+<h3>Test A: anchor() function (MDN style)</h3>
+<button class="anchorA" popovertarget="dropA">Test A ▾</button>
+<div id="dropA" class="drop dropA" popover="auto">
+  <div>Apple</div><div>Banana</div><div>Cherry</div>
+</div>
+
+<h3>Test B: position-area: bottom (single keyword)</h3>
+<button class="anchorB" popovertarget="dropB">Test B ▾</button>
+<div id="dropB" class="drop dropB" popover="auto">
+  <div>Apple</div><div>Banana</div><div>Cherry</div>
+</div>
+
+<h3>Test C: position-area: bottom left (two physical keywords)</h3>
+<button class="anchorC" popovertarget="dropC">Test C ▾</button>
+<div id="dropC" class="drop dropC" popover="auto">
+  <div>Apple</div><div>Banana</div><div>Cherry</div>
+</div>
+
+<h3>Test D: our original (inset:auto + margin:0 + bottom start)</h3>
+<button class="anchorD" popovertarget="dropD">Test D ▾</button>
+<div id="dropD" class="drop dropD" popover="auto">
+  <div>Apple</div><div>Banana</div><div>Cherry</div>
+</div>
+
+<h3>Test E: JS getBoundingClientRect fallback</h3>
+<button id="jsBtn">Test E ▾</button>
+<div id="dropE" class="drop" popover="auto">
+  <div>Apple</div><div>Banana</div><div>Cherry</div>
+</div>
+
+<div class="result" id="results">Running tests...</div>
+
+<script>
+document.getElementById('jsBtn').addEventListener('click', () => {
+  const drop = document.getElementById('dropE');
+  drop.togglePopover();
+  const r = document.getElementById('jsBtn').getBoundingClientRect();
+  drop.style.position = 'fixed';
+  drop.style.inset = 'auto';
+  drop.style.margin = '0';
+  drop.style.top = (r.bottom + 4) + 'px';
+  drop.style.left = r.left + 'px';
+  drop.style.minWidth = r.width + 'px';
+});
+
+const r = [];
+r.push('CSS.supports("anchor-name", "--a"): ' + CSS.supports('anchor-name', '--a'));
+r.push('CSS.supports("position-area", "bottom"): ' + CSS.supports('position-area', 'bottom'));
+r.push('CSS.supports("position-area", "bottom start"): ' + CSS.supports('position-area', 'bottom start'));
+r.push('CSS.supports("position-area", "bottom left"): ' + CSS.supports('position-area', 'bottom left'));
+r.push('');
+r.push('Navigator: ' + navigator.userAgent);
+document.getElementById('results').textContent = r.join('\n');
+</script>
+</body>
+</html>

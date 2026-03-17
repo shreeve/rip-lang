@@ -806,6 +806,8 @@ export function installComponentSupport(CodeGenerator, Lexer) {
 
       const sl = [];
       sl.push('class {');
+      sl.push('  declare _root: Element | null;');
+      sl.push('  emit(name: string, detail?: any): void {}');
 
       // Constructor — typed props for public state/readonly (matches DTS)
       const propEntries = [];
@@ -894,6 +896,9 @@ export function installComponentSupport(CodeGenerator, Lexer) {
 
       // Pre-scan render block for @event: @method bindings to type method params
       const eventMethodTypes = new Map();
+      for (const [eventName, methodName] of autoEventHandlers) {
+        eventMethodTypes.set(methodName, eventName);
+      }
       if (renderBlock) {
         const scanEvents = (node) => {
           if (!Array.isArray(node)) return;
@@ -931,7 +936,8 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       // Methods
       for (const { name, func } of methods) {
         if (Array.isArray(func) && (func[0] === '->' || func[0] === '=>')) {
-          const [, params, methodBody] = func;
+          let [, params, methodBody] = func;
+          if ((!params || (Array.isArray(params) && params.length === 0)) && this.containsIt(methodBody)) params = ['it'];
           let paramStr = Array.isArray(params) ? params.map(p => this.formatParam(p)).join(', ') : '';
           // Inject event type on untyped first param when method is bound to an event
           const boundEvent = eventMethodTypes.get(name);
@@ -1206,7 +1212,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       lines.push('    for (const key in this._rest) this._applyInheritedProp(this._inheritedEl, key, this._rest[key]);');
       lines.push('  }');
       lines.push('  _applyInheritedProp(el, key, value) {');
-      lines.push('    if (!el || key === \'key\' || key === \'ref\' || key.startsWith(\'__bind_\')) return;');
+      lines.push('    if (!el || key === \'key\' || key === \'ref\' || key === \'children\' || key.startsWith(\'__bind_\')) return;');
       lines.push('    if (key[0] === \'@\') {');
       lines.push('      const event = key.slice(1).split(\'.\')[0];');
       lines.push('      this._restHandlers || (this._restHandlers = {});');
@@ -1254,7 +1260,8 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     // --- Methods ---
     for (const { name, func } of methods) {
       if (Array.isArray(func) && (func[0] === '->' || func[0] === '=>')) {
-        const [, params, methodBody] = func;
+        let [, params, methodBody] = func;
+        if ((!params || (Array.isArray(params) && params.length === 0)) && this.containsIt(methodBody)) params = ['it'];
         const paramStr = Array.isArray(params) ? params.map(p => this.formatParam(p)).join(', ') : '';
         const transformed = this.reactiveMembers ? this.transformComponentMembers(methodBody) : methodBody;
         const isAsync = this.containsAwait(methodBody);
@@ -1495,6 +1502,33 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       const slotVar = this.newElementVar('slot');
       this._createLines.push(`${slotVar} = ${s}.children instanceof Node ? ${s}.children : (${s}.children != null ? document.createTextNode(String(${s}.children)) : document.createComment(''));`);
       return slotVar;
+    }
+
+    // Switch: convert to if/else-if chain for conditional rendering
+    if (headStr === 'switch') {
+      const disc = rest[0];
+      const whens = rest[1] || [];
+      const defaultCase = rest[2] || null;
+      let chain = defaultCase;
+      for (let i = whens.length - 1; i >= 0; i--) {
+        const [, tests, body] = whens[i];
+        let cond;
+        if (disc === null) {
+          cond = tests.length === 1 ? tests[0]
+            : tests.reduce((a, t) => a ? ['||', a, t] : t, null);
+        } else {
+          cond = tests.length === 1 ? ['==', disc, tests[0]]
+            : tests.map(t => ['==', disc, t]).reduce((a, c) => a ? ['||', a, c] : c, null);
+        }
+        chain = ['if', cond, body, chain];
+      }
+      if (chain) {
+        if (Array.isArray(chain) && chain[0] === 'if') return this.generateConditional(chain);
+        return this.generateTemplateBlock(chain);
+      }
+      const cv = this.newElementVar('c');
+      this._createLines.push(`${cv} = document.createComment('switch');`);
+      return cv;
     }
 
     // HTML tag (possibly with #id, e.g. div#content)

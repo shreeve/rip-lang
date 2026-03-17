@@ -1,0 +1,104 @@
+import { Email, Head, Body, Preview, Container, Section, Row, Column, Heading, Text, Link, Button, Divider, Tailwind } from '../email.rip'
+
+benchLinks = [
+  {
+    title: 'Deployment summary'
+    body: 'Builds are green, release notes are drafted, and the staging environment is ready for sign-off.'
+    href: 'https://example.com/deployments'
+  }
+  {
+    title: 'Customer feedback'
+    body: 'Three enterprise customers requested tighter audit logs and clearer seat-management flows.'
+    href: 'https://example.com/feedback'
+  }
+  {
+    title: 'Usage analytics'
+    body: 'Activation is up 8% week over week, with strong retention from trial accounts created this month.'
+    href: 'https://example.com/analytics'
+  }
+]
+
+export benchTailwindConfig =
+  theme:
+    extend:
+      colors:
+        brand: '#0f172a'
+        accent: '#0f766e'
+
+export PlainBenchEmail = component
+  @title:: string := 'Rip UI Weekly Digest'
+
+  render
+    Email
+      Head
+      Body style: 'background-color:#f8fafc;padding:24px'
+        Preview text: 'Rip UI weekly digest with product, customer, and delivery updates.'
+        Container style: 'background:#ffffff;padding:32px;border:1px solid #e2e8f0'
+          Heading as: 'h1', style: 'font-size:30px;line-height:36px;margin:0 0 16px;color:#0f172a'
+            = @title
+
+          Text style: 'color:#475569'
+            = 'A compact benchmark email that exercises the curated Rip email components without Tailwind.'
+
+          Divider style: 'margin:24px 0;border-top:1px solid #e2e8f0'
+
+          for entry, idx in benchLinks
+            Section style: "padding:20px;border:1px solid #e2e8f0;background:#ffffff;margin:0 0 #{if idx < benchLinks.length - 1 then '16px' else '0'}"
+              Row
+                Column style: 'width:70%'
+                  Heading as: 'h2', style: 'font-size:18px;line-height:24px;margin:0 0 8px;color:#111827'
+                    = entry.title
+                  Text style: 'margin:0;color:#475569'
+                    = entry.body
+                Column style: 'width:30%;text-align:right'
+                  Button href: entry.href, style: 'background:#0f172a;color:#ffffff;border-radius:8px;padding:12px 16px'
+                    = 'Open report'
+
+          Divider style: 'margin:24px 0;border-top:1px solid #e2e8f0'
+
+          Text style: 'margin:0;color:#64748b'
+            = 'Need more detail?'
+            = ' '
+            Link href: 'https://example.com/team', style: 'color:#0f766e'
+              = 'Visit the team dashboard'
+
+export TailwindBenchEmail = component
+  @title:: string := 'Rip UI Weekly Digest'
+  @config:: any := undefined
+  @buttonClass:: string := 'rounded-md bg-slate-900 px-4 py-3 text-sm font-semibold text-white'
+  @linkClass:: string := 'text-teal-700'
+
+  render
+    Email
+      Head
+      Tailwind config: @config
+        Body class: 'bg-slate-50 px-6 py-8'
+          Preview text: 'Rip UI weekly digest with product, customer, and delivery updates.'
+          Container class: 'mx-auto max-w-2xl border border-slate-200 bg-white p-8'
+            Heading as: 'h1', class: 'm-0 text-3xl font-semibold tracking-tight text-slate-900'
+              = @title
+
+            Text class: 'my-4 text-sm leading-6 text-slate-600'
+              = 'A compact benchmark email that exercises the Rip Tailwind inliner and themed email path.'
+
+            Divider class: 'my-6 border-slate-200'
+
+            for entry, idx in benchLinks
+              Section class: "rounded-lg border border-slate-200 bg-white p-5 #{if idx < benchLinks.length - 1 then 'mb-4' else ''}"
+                Row
+                  Column class: 'w-[70%]'
+                    Heading as: 'h2', class: 'm-0 text-lg font-semibold text-slate-900'
+                      = entry.title
+                    Text class: 'mb-0 mt-2 text-sm leading-6 text-slate-600'
+                      = entry.body
+                  Column class: 'w-[30%] text-right'
+                    Button href: entry.href, class: @buttonClass
+                      = 'Open report'
+
+            Divider class: 'my-6 border-slate-200'
+
+            Text class: 'm-0 text-sm text-slate-500'
+              = 'Need more detail?'
+              = ' '
+              Link href: 'https://example.com/team', class: @linkClass
+                = 'Visit the team dashboard'

@@ -1,0 +1,88 @@
+# EditableValue — accessible headless inline editable value
+#
+# Displays a value with an edit trigger. Clicking opens a popover form.
+# Emits 'save' on submit. Ships zero CSS.
+#
+# Usage:
+#   EditableValue @save: handleSave
+#     span $display: true
+#       "John Doe"
+#     div $editor: true
+#       input type: "text", value: name, @input: (e) => name = e.target.value
+
+export EditableValue = component
+  @disabled:: boolean := false
+
+  editing := false
+  saving := false
+  _ready := false
+
+  _onEdit: ->
+    return if @disabled
+    editing = true
+    requestAnimationFrame => @_position()
+
+  _onSave: ->
+    return if saving
+    saving = true
+    @emit 'save'
+    @close()
+
+  _onCancel: ->
+    editing = false
+    saving = false
+
+  close: ->
+    editing = false
+    saving = false
+
+  setSaving: (val) -> saving = val
+
+  _position: ->
+    display = @_root?.querySelector('[data-display]')
+    editor = @_root?.querySelector('[data-editor]')
+    return unless display and editor
+    @_root.style.position = 'relative'
+    dr = display.getBoundingClientRect()
+    cr = @_root.getBoundingClientRect()
+    editor.style.position = 'absolute'
+    editor.style.left = "0px"
+    editor.style.top = "#{dr.bottom - cr.top + 4}px"
+    editor.style.zIndex = '50'
+    editor.querySelector('input, textarea, select')?.focus()
+
+  mounted: ->
+    _ready = true
+
+  ~>
+    _readyNow = _ready
+    _editing = editing                                 # track before any early return
+    return unless _readyNow
+    display = @_root?.querySelector('[data-display]')
+    editor = @_root?.querySelector('[data-editor]')
+    return unless display and editor
+    editor.hidden = not _editing
+    if _editing
+      editor.setAttribute 'data-open', ''
+      onDown = (e) =>
+        unless @_root?.contains(e.target)
+          @_onCancel()
+      document.addEventListener 'mousedown', onDown
+      return -> document.removeEventListener 'mousedown', onDown
+    else
+      editor.removeAttribute 'data-open'
+
+  onKeydown: (e) ->
+    if e.key is 'Escape' and editing
+      e.preventDefault()
+      @_onCancel()
+    if e.key is 'Enter' and editing
+      e.preventDefault()
+      @_onSave()
+
+  render
+    div ref: "_root", $editing: editing?!, $disabled: @disabled?!, $saving: saving?!
+      slot
+      unless editing
+        button $edit-trigger: true, aria-label: "Edit", @click: @_onEdit
+          "✎"

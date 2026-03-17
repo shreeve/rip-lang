@@ -1,0 +1,129 @@
+# ==============================================================================
+# Compat — email-specific helper functions
+#
+# Ported from React Email's utility files, rewritten as idiomatic Rip.
+# Zero dependencies.
+# ==============================================================================
+
+# --- Unit conversion ---
+
+export pxToPt = (px) ->
+  return undefined unless typeof px is 'number' and not Number.isNaN(px)
+  px * 3 / 4
+
+export convertToPx = (value) ->
+  return 0 unless value?
+  return value if typeof value is 'number'
+  str = String(value)
+  if str =~ /^([\d.]+)(px|em|rem|%)$/
+    num = parseFloat(_[1])
+    switch _[2]
+      when 'px' then num
+      when 'em', 'rem' then num * 16
+      when '%' then num / 100 * 600
+      else num
+  else 0
+
+# --- Padding parser ---
+
+styleToObject = (style) ->
+  return {} unless style?
+  return style if typeof style is 'object'
+
+  result = {}
+  for raw in String(style).split(';')
+    s = raw.trim()
+    continue unless s
+    idx = s.indexOf(':')
+    continue if idx is -1
+    key = s.slice(0, idx).trim()
+    val = s.slice(idx + 1).trim()
+    camel = key.replace /-([a-z])/g, (_, c) -> c.toUpperCase()
+    result[camel] = val
+  result
+
+parsePaddingValue = (value) ->
+  base = { paddingTop: undefined, paddingRight: undefined, paddingBottom: undefined, paddingLeft: undefined }
+  return base unless value?
+
+  if typeof value is 'number'
+    return { paddingTop: value, paddingRight: value, paddingBottom: value, paddingLeft: value }
+
+  vals = String(value).trim().split(/\s+/)
+  switch vals.length
+    when 1 then { paddingTop: vals[0], paddingRight: vals[0], paddingBottom: vals[0], paddingLeft: vals[0] }
+    when 2 then { paddingTop: vals[0], paddingRight: vals[1], paddingBottom: vals[0], paddingLeft: vals[1] }
+    when 3 then { paddingTop: vals[0], paddingRight: vals[1], paddingBottom: vals[2], paddingLeft: vals[1] }
+    when 4 then { paddingTop: vals[0], paddingRight: vals[1], paddingBottom: vals[2], paddingLeft: vals[3] }
+    else base
+
+export parsePadding = (style = {}) ->
+  style = styleToObject(style)
+  pt = undefined
+  pr = undefined
+  pb = undefined
+  pl = undefined
+
+  for key, val of style
+    if key is 'padding'
+      parsed = parsePaddingValue(val)
+      pt = parsed.paddingTop
+      pr = parsed.paddingRight
+      pb = parsed.paddingBottom
+      pl = parsed.paddingLeft
+    else if key is 'paddingTop'    then pt = val
+    else if key is 'paddingRight'  then pr = val
+    else if key is 'paddingBottom' then pb = val
+    else if key is 'paddingLeft'   then pl = val
+
+  paddingTop:    if pt? then convertToPx(pt) else undefined
+  paddingRight:  if pr? then convertToPx(pr) else undefined
+  paddingBottom: if pb? then convertToPx(pb) else undefined
+  paddingLeft:   if pl? then convertToPx(pl) else undefined
+
+# --- MSO button padding ---
+
+MAX_FONT_WIDTH =! 5
+
+export computeMsoPadding = (expectedWidth) ->
+  return [0, 0] if expectedWidth is 0
+  spaceCount = 0
+  fontWidth = -> if spaceCount > 0 then expectedWidth / spaceCount / 2 else Infinity
+  spaceCount++ while fontWidth() > MAX_FONT_WIDTH
+  [fontWidth(), spaceCount]
+
+# --- Preview text padding ---
+
+WHITESPACE_CHARS =! '\xa0\u200C\u200B\u200D\u200E\u200F\uFEFF'
+PREVIEW_MAX_LENGTH =! 150
+
+export previewPadding = (text, maxLen = PREVIEW_MAX_LENGTH) ->
+  remaining = maxLen - text.length
+  return '' if remaining <= 0
+  WHITESPACE_CHARS.repeat(remaining)
+
+# --- Style object to CSS string ---
+
+export styleToString = (obj) ->
+  parts = []
+  for key, val of obj
+    continue unless val?
+    kebab = key.replace /[A-Z]/g, (m) -> "-#{m.toLowerCase()}"
+    parts.push "#{kebab}:#{val}"
+  parts.join(';')
+
+# --- MSO conditional wrapper ---
+
+export msoConditional = (html) ->
+  "<!--[if mso]>#{html}<![endif]-->"
+
+# --- MSO button HTML ---
+
+export msoButtonHtml = (paddingLeft, paddingRight, paddingBottom) ->
+  [plFontWidth, plSpaceCount] = computeMsoPadding(paddingLeft ?? 0)
+  [prFontWidth, prSpaceCount] = computeMsoPadding(paddingRight ?? 0)
+  textRaise = pxToPt((paddingBottom ?? 0) * 2) ?? 0
+
+  left = "<!--[if mso]><i style=\"mso-font-width:#{plFontWidth * 100}%;mso-text-raise:#{textRaise}\" hidden>#{'&#8202;'.repeat(plSpaceCount)}</i><![endif]-->"
+  right = "<!--[if mso]><i style=\"mso-font-width:#{prFontWidth * 100}%\" hidden>#{'&#8202;'.repeat(prSpaceCount)}&#8203;</i><![endif]-->"
+  { left, right }

@@ -1,0 +1,371 @@
+# ==============================================================================
+# Rip Email — curated PascalCase component catalog
+#
+# Each component uses native lowercase HTML tags internally via Rip render
+# blocks. The public API is uniform PascalCase.
+# ==============================================================================
+
+import { previewPadding, computeMsoPadding, pxToPt, parsePadding } from './compat.rip'
+import { joinStyles, withMargin } from '../shared/styles.rip'
+import { registerEmailTailwindRoot } from '../tailwind/tailwind.rip'
+
+# ==============================================================================
+# Document
+# ==============================================================================
+
+export Email = component
+  @class:: string := ""
+  @lang:: string := "en"
+  @dir:: "ltr" | "rtl" := "ltr"
+  render
+    html class: @class, lang: @lang, dir: @dir
+      slot
+
+export Head = component
+  @class:: string := ""
+  render
+    head class: @class
+      meta content: "text/html; charset=UTF-8", "http-equiv": "Content-Type"
+      meta name: "x-apple-disable-message-reformatting"
+      slot
+
+export Body = component
+  @class:: string := ""
+  @style:: string := ""
+  render
+    body class: @class
+      table align: "center", width: "100%", border: "0", cellPadding: "0", cellSpacing: "0", role: "presentation"
+        tbody
+          tr
+            td style: @style
+              slot
+
+export Preview = component
+  @class:: string := ""
+  @text:: string := ""
+  _padding ~= previewPadding(@text)
+  render
+    div class: @class, style: "display:none;overflow:hidden;line-height:1px;opacity:0;max-height:0;max-width:0", "data-skip-in-text": "true"
+      = @text
+      div
+        = _padding
+
+export Font = component
+  @fontFamily:: string := ""
+  @fallbackFontFamily:: string | string[] := "Arial"
+  @fontStyle:: string := "normal"
+  @fontWeight:: number := 400
+  @webFontUrl:: string := ""
+  @webFontFormat:: string := "woff2"
+
+  _src ~= if @webFontUrl then "src: url(#{@webFontUrl}) format('#{@webFontFormat}');" else ''
+  _fallback:: string[] ~= if kind(@fallbackFontFamily) is 'array' then Array.from(@fallbackFontFamily) else [@fallbackFontFamily]
+  _msoAlt ~= _fallback[0]
+  _fallbackStr:: string ~= _fallback.join(', ')
+
+  _css ~= """
+    @font-face {
+      font-family: '#{@fontFamily}';
+      font-style: #{@fontStyle};
+      font-weight: #{@fontWeight};
+      mso-font-alt: '#{_msoAlt}';
+      #{_src}
+    }
+    * {
+      font-family: '#{@fontFamily}', #{_fallbackStr};
+    }
+    """
+
+  render
+    if @fontFamily
+      style innerHTML: _css
+
+# ==============================================================================
+# Layout
+# ==============================================================================
+
+export Container = component
+  @class:: string := ""
+  @style:: string := ""
+  _style ~= joinStyles("max-width:37.5em", @style)
+  render
+    table class: @class, align: "center", width: "100%", border: "0", cellPadding: "0", cellSpacing: "0", role: "presentation", style: _style
+      tbody
+        tr style: "width:100%"
+          td
+            slot
+
+export Section = component
+  @class:: string := ""
+  @style:: string := ""
+  render
+    table class: @class, align: "center", width: "100%", border: "0", cellPadding: "0", cellSpacing: "0", role: "presentation", style: @style
+      tbody
+        tr
+          td
+            slot
+
+export Row = component
+  @class:: string := ""
+  @style:: string := ""
+  render
+    table class: @class, align: "center", width: "100%", border: "0", cellPadding: "0", cellSpacing: "0", role: "presentation", style: @style
+      tbody
+        tr style: "width:100%"
+          slot
+
+export Column = component
+  @class:: string := ""
+  @style:: string := ""
+  render
+    td class: @class, style: @style
+      slot
+
+# ==============================================================================
+# Content
+# ==============================================================================
+
+export Heading = component
+  @as:: "h1" | "h2" | "h3" | "h4" | "h5" | "h6" := "h1"
+  @class:: string := ""
+  @style:: string := ""
+  @m:: string | undefined := undefined
+  @mx:: string | undefined := undefined
+  @my:: string | undefined := undefined
+  @mt:: string | undefined := undefined
+  @mr:: string | undefined := undefined
+  @mb:: string | undefined := undefined
+  @ml:: string | undefined := undefined
+  _marginStyle ~= withMargin {
+    m:  @m
+    mx: @mx
+    my: @my
+    mt: @mt
+    mr: @mr
+    mb: @mb
+    ml: @ml
+  }
+  _style ~= joinStyles(_marginStyle, @style)
+  render
+    switch @as
+      when 'h1' then h1 class: @class, style: _style, slot
+      when 'h2' then h2 class: @class, style: _style, slot
+      when 'h3' then h3 class: @class, style: _style, slot
+      when 'h4' then h4 class: @class, style: _style, slot
+      when 'h5' then h5 class: @class, style: _style, slot
+      when 'h6' then h6 class: @class, style: _style, slot
+      else h1 class: @class, style: _style, slot
+
+export Text = component
+  @class:: string := ""
+  @style:: string := ""
+  _style ~= joinStyles("font-size:14px;line-height:24px;margin:16px 0", @style)
+  render
+    p class: @class, style: _style
+      slot
+
+export Link = component
+  @class:: string := ""
+  @href:: string := ""
+  @target:: string := "_blank"
+  @style:: string := ""
+  _style ~= joinStyles("color:#067df7;text-decoration:none", @style)
+  render
+    a class: @class, href: @href, target: @target, style: _style
+      slot
+
+export Image = component
+  @class:: string := ""
+  @src:: string := ""
+  @alt:: string := ""
+  @width:: number | undefined := undefined
+  @height:: number | undefined := undefined
+  @style:: string := ""
+  _style ~= joinStyles("display:block;outline:none;border:none;text-decoration:none", @style)
+  render
+    img class: @class, src: @src, alt: @alt, width: @width, height: @height, style: _style
+
+export Divider = component
+  @class:: string := ""
+  @style:: string := ""
+  _style ~= joinStyles("width:100%;border:none;border-top:1px solid #eaeaea", @style)
+  render
+    hr class: @class, style: _style
+
+export Button = component
+  @class:: string := ""
+  @href:: string := ""
+  @target:: string := "_blank"
+  @style:: string := ""
+
+  _padding ~= parsePadding(@style)
+  _y ~= (_padding.paddingTop ?? 0) + (_padding.paddingBottom ?? 0)
+  _textRaise ~= pxToPt(_y) ?? 0
+  _plResult ~= computeMsoPadding(_padding.paddingLeft ?? 0)
+  _prResult ~= computeMsoPadding(_padding.paddingRight ?? 0)
+  _msoLeft ~= "<!--[if mso]><i style=\"mso-font-width:#{_plResult[0] * 100}%;mso-text-raise:#{_textRaise}\" hidden>#{'&#8202;'.repeat(_plResult[1])}</i><![endif]-->"
+  _msoRight ~= "<!--[if mso]><i style=\"mso-font-width:#{_prResult[0] * 100}%\" hidden>#{'&#8202;'.repeat(_prResult[1])}&#8203;</i><![endif]-->"
+
+  _linkStyle ~= joinStyles("line-height:100%;text-decoration:none;display:inline-block;max-width:100%;mso-padding-alt:0px", @style)
+
+  render
+    a class: @class, href: @href, target: @target, style: _linkStyle
+      span innerHTML: _msoLeft
+      span style: "max-width:100%;display:inline-block;line-height:120%;mso-padding-alt:0px"
+        slot
+      span innerHTML: _msoRight
+
+# ==============================================================================
+# Rich content
+# ==============================================================================
+
+_escapeHtml = (text:: string) ->
+  String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+
+_escapeAttr = (text:: string) ->
+  String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+
+_safeHref = (href:: string) ->
+  value = String(href or '').trim()
+  return '' unless value
+
+  lower = value.toLowerCase()
+  return value if lower.startsWith('http://')
+  return value if lower.startsWith('https://')
+  return value if lower.startsWith('mailto:')
+  return value if lower.startsWith('tel:')
+  return value if lower.startsWith('/')
+  return value if lower.startsWith('#')
+  '#'
+
+_inlineFormat = (text:: string) ->
+  escaped = _escapeHtml(text)
+
+  escaped
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/__(.+?)__/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/_(.+?)_/g, '<em>$1</em>')
+    .replace(/`(.+?)`/g, '<code>$1</code>')
+    .replace /\[(.+?)\]\((.+?)\)/g, (_, label, href) ->
+      safeHref = _escapeAttr(_safeHref(href))
+      "<a href=\"#{safeHref}\" target=\"_blank\">#{label}</a>"
+
+_parseMarkdown = (src:: string) ->
+  return '' unless src
+  lines = src.split('\n')
+  out = []
+  inList = null
+
+  for line in lines
+    stripped = line.trim()
+
+    if stripped is ''
+      if inList
+        out.push("</#{inList}>")
+        inList = null
+      continue
+
+    if stripped[0] is '#'
+      level = 0
+      level++ while stripped[level] is '#' and level < 6
+      text = stripped.slice(level).trim()
+      out.push("<h#{level}>#{_inlineFormat(text)}</h#{level}>")
+      continue
+
+    if (stripped[0] is '-' or stripped[0] is '*') and stripped[1] is ' '
+      unless inList is 'ul'
+        out.push("</#{inList}>") if inList
+        out.push('<ul>')
+        inList = 'ul'
+      out.push("<li>#{_inlineFormat(stripped.slice(2))}</li>")
+      continue
+
+    if stripped =~ /^\d+\.\s+(.*)/
+      unless inList is 'ol'
+        out.push("</#{inList}>") if inList
+        out.push('<ol>')
+        inList = 'ol'
+      out.push("<li>#{_inlineFormat(_[1])}</li>")
+      continue
+
+    if stripped is '---' or stripped is '***' or stripped is '___'
+      out.push('<hr />')
+      continue
+
+    if stripped[0] is '>'
+      out.push("<blockquote>#{_inlineFormat(stripped.slice(1).trim())}</blockquote>")
+      continue
+
+    out.push("<p>#{_inlineFormat(stripped)}</p>")
+
+  out.push("</#{inList}>") if inList
+  out.join('\n')
+
+export Markdown = component
+  @class:: string := ""
+  @text:: string := ""
+  @style:: string := ""
+  _html ~= _parseMarkdown(@text)
+  render
+    # Raw HTML from markdown input is escaped; only this curated subset renders as tags.
+    div class: @class, style: @style, innerHTML: _html
+
+export CodeBlock = component
+  @class:: string := ""
+  @code:: string := ""
+  @lineNumbers:: boolean := false
+  @style:: string := ""
+  _baseStyle =! "background:#f4f4f4;padding:16px;border-radius:4px;font-family:monospace;font-size:13px;overflow-x:auto;white-space:pre"
+  _style ~= "#{_baseStyle};#{@style}"
+
+  _html ~=
+    lines = @code.split('\n')
+    result = []
+    for line, i in lines
+      escaped = line
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+      if @lineNumbers
+        num = "<span style=\"display:inline-block;width:2em;color:#999;user-select:none\">#{i + 1}</span>"
+        result.push("#{num}#{escaped}")
+      else
+        result.push(escaped)
+    result.join('\n')
+
+  render
+    pre class: @class, style: _style
+      code innerHTML: _html
+
+export CodeInline = component
+  @class:: string := ""
+  @style:: string := ""
+  _codeStyle ~= "background:#f4f4f4;padding:2px 4px;border-radius:3px;font-family:monospace;font-size:0.9em;#{@style}"
+  _orangeCss =! '''
+    meta ~ .cino { display: none !important; opacity: 0 !important; }
+    meta ~ .cio { display: block !important; }
+    '''
+  render
+    style innerHTML: _orangeCss
+    code class: joinStyles(@class, "cino"), style: _codeStyle
+      slot
+    span class: joinStyles(@class, "cio"), style: "display:none;#{_codeStyle}"
+      slot
+
+# ==============================================================================
+# Styling
+# ==============================================================================
+
+export Tailwind = component
+  @config:: any := undefined
+  mounted: ->
+    registerEmailTailwindRoot(this, @config)
+  render
+    slot

@@ -1,0 +1,53 @@
+# Field — accessible headless form field wrapper
+#
+# Associates a label, description, and error message with a form control.
+# Generates linked IDs for aria-labelledby/describedby/errormessage.
+# Ships zero CSS.
+#
+# Usage:
+#   Field label: "Email", error: errors.email
+#     Input value <=> email, type: "email"
+
+export Field = component
+  @label:: string := ""
+  @description:: string := ""
+  @error:: string := ""
+  @disabled:: boolean := false
+  @required:: boolean := false
+
+  _id =! "fld-#{Math.random().toString(36).slice(2, 8)}"
+
+  mounted: ->
+    ctrl = @_root?.querySelector('input, select, textarea, button, [role]')
+    if ctrl
+      ctrl.setAttribute 'aria-labelledby', "#{_id}-label" if @label
+      ctrl.setAttribute 'aria-describedby', "#{_id}-desc" if @description
+      ctrl.setAttribute 'aria-errormessage', "#{_id}-err" if @error
+      ctrl.setAttribute 'aria-invalid', true if @error
+      ctrl.setAttribute 'aria-required', true if @required
+
+  ~>
+    ctrl = @_root?.querySelector('input, select, textarea, button, [role]')
+    return unless ctrl
+    if @error
+      ctrl.setAttribute 'aria-invalid', true
+      ctrl.setAttribute 'aria-errormessage', "#{_id}-err"
+    else
+      ctrl.removeAttribute 'aria-invalid'
+      ctrl.removeAttribute 'aria-errormessage'
+
+  render
+    div $disabled: @disabled?!, $invalid: @error?!
+      if @label
+        label id: "#{_id}-label", $label: true
+          @label
+          if @required
+            span $required: true, aria-hidden: "true"
+              " *"
+      slot
+      if @description and not @error
+        div id: "#{_id}-desc", $description: true
+          @description
+      if @error
+        div id: "#{_id}-err", role: "alert", $error: true
+          @error

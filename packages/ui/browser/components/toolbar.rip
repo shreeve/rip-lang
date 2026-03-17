@@ -1,0 +1,38 @@
+# Toolbar — accessible headless toolbar
+#
+# Groups interactive controls with roving tabindex keyboard navigation.
+# Arrow keys move focus between focusable children. Ships zero CSS.
+#
+# Usage:
+#   Toolbar
+#     Button @click: save, "Save"
+#     Button @click: undo, "Undo"
+#     Separator orientation: "vertical"
+#     Toggle pressed <=> isBold, "Bold"
+
+export Toolbar = component
+  @orientation:: "horizontal" | "vertical" := "horizontal"
+  @label:: string := ""
+
+  _getFocusable: ->
+    return [] unless @_root
+    Array.from(@_root.querySelectorAll('button, [tabindex], input, select, textarea')).filter (el) ->
+      not el.disabled and el.offsetParent isnt null
+
+  onKeydown: (e) ->
+    els = @_getFocusable()
+    return unless els.length
+    focused = els.indexOf(document.activeElement)
+    return if focused < 0
+    len = els.length
+    ARIA.rovingNav e, {
+      next:  => els[(focused + 1) %% len]?.focus()
+      prev:  => els[(focused - 1) %% len]?.focus()
+      first: => els[0]?.focus()
+      last:  => els[len - 1]?.focus()
+    }, @orientation
+
+  render
+    div role: "toolbar", aria-label: @label or undefined, aria-orientation: @orientation
+      $orientation: @orientation
+      slot

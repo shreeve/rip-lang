@@ -2633,6 +2633,25 @@
             inTernary = false;
             return forward(1);
           }
+          if (tokens[i - 1]?.[0] === "PROPERTY" && tokens[i - 2]?.[0] === ".") {
+            let j = i - 2;
+            while (j >= 2 && tokens[j]?.[0] === "." && (tokens[j - 1]?.[0] === "PROPERTY" || tokens[j - 1]?.[0] === "IDENTIFIER")) {
+              j -= 2;
+            }
+            j += 1;
+            if (tokens[j]?.[0] === "IDENTIFIER" || tokens[j]?.[0] === "PROPERTY") {
+              let parts = [];
+              for (let k = j;k < i; k += 2)
+                parts.push(tokens[k][1]);
+              let str = gen("STRING", `"${parts.join(".")}"`, tokens[j]);
+              str.pre = tokens[j].pre;
+              str.spaced = tokens[j].spaced;
+              str.newLine = tokens[j].newLine;
+              str.loc = tokens[j].loc;
+              tokens.splice(j, i - j, str);
+              i = j + 1;
+            }
+          }
           let s = EXPRESSION_END.has(this.tokens[i - 1]?.[0]) ? stack[stack.length - 1]?.[1] ?? i - 1 : i - 1;
           if (this.tokens[i - 2]?.[0] === "@")
             s = i - 2;
@@ -2818,6 +2837,13 @@
         return true;
       if (this.tokens[j + 1]?.[0] === ":")
         return true;
+      if ((this.tokens[j]?.[0] === "IDENTIFIER" || this.tokens[j]?.[0] === "PROPERTY") && this.tokens[j + 1]?.[0] === ".") {
+        let k = j + 2;
+        while (this.tokens[k]?.[0] === "PROPERTY" && this.tokens[k + 1]?.[0] === ".")
+          k += 2;
+        if (this.tokens[k]?.[0] === "PROPERTY" && this.tokens[k + 1]?.[0] === ":")
+          return true;
+      }
       if (EXPRESSION_START.has(this.tokens[j]?.[0])) {
         let end = null;
         this.detectEnd(j + 1, (t) => EXPRESSION_END.has(t[0]), (t, i) => end = i);
@@ -4162,12 +4188,13 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
               }
             }
           }
+          let atLineStart = tag === "IDENTIFIER" && (prevTag === "INDENT" || prevTag === "TERMINATOR" || prevTag === "RENDER");
           if (isClsxCallEnd) {
             isTemplateElement = true;
           } else if (tag === "IDENTIFIER" && isTemplateTag(token[1]) && !isAfterControlFlow) {
             isTemplateElement = true;
           } else if (tag === "IDENTIFIER" && !isAfterControlFlow) {
-            isTemplateElement = startsWithTag(tokens, i);
+            isTemplateElement = atLineStart || startsWithTag(tokens, i);
           } else if (tag === "PROPERTY" || tag === "STRING" || tag === "STRING_END" || tag === "NUMBER" || tag === "BOOL" || tag === "CALL_END" || tag === ")" || tag === "PRESENCE") {
             isTemplateElement = startsWithTag(tokens, i);
           }
@@ -4184,7 +4211,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
                 }
               }
             }
-            let isBareTag = isClsxCallEnd || tag === "IDENTIFIER" && isTemplateTag(token[1]) || isClassOrIdTail;
+            let isBareTag = isClsxCallEnd || tag === "IDENTIFIER" && (isTemplateTag(token[1]) || atLineStart) || isClassOrIdTail;
             if (isBareTag) {
               let callStartToken = gen2("CALL_START", "(", token);
               let arrowToken = gen2("->", "->", token);
@@ -4409,6 +4436,8 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         const expandType = (t) => t ? t.replace(/::/g, ":").replace(/(\w+(?:<[^>]+>)?)\?\?/g, "$1 | null | undefined").replace(/(\w+(?:<[^>]+>)?)\?(?![.:])/g, "$1 | undefined").replace(/(\w+(?:<[^>]+>)?)\!/g, "NonNullable<$1>") : null;
         const sl = [];
         sl.push("class {");
+        sl.push("  declare _root: Element | null;");
+        sl.push("  emit(name: string, detail?: any): void {}");
         const propEntries = [];
         for (const { name, type, isPublic, required } of stateVars) {
           if (!isPublic)
@@ -4492,6 +4521,9 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         }
         sl.push("  }");
         const eventMethodTypes = new Map;
+        for (const [eventName, methodName] of autoEventHandlers) {
+          eventMethodTypes.set(methodName, eventName);
+        }
         if (renderBlock) {
           const scanEvents = (node) => {
             if (!Array.isArray(node))
@@ -4533,7 +4565,9 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         }
         for (const { name, func } of methods) {
           if (Array.isArray(func) && (func[0] === "->" || func[0] === "=>")) {
-            const [, params, methodBody] = func;
+            let [, params, methodBody] = func;
+            if ((!params || Array.isArray(params) && params.length === 0) && this.containsIt(methodBody))
+              params = ["it"];
             let paramStr = Array.isArray(params) ? params.map((p) => this.formatParam(p)).join(", ") : "";
             const boundEvent = eventMethodTypes.get(name);
             if (boundEvent && Array.isArray(params) && params.length > 0) {
@@ -4669,7 +4703,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
                   constructions.push(`    };`);
                 }
               }
-            } else if (typeof head2 === "string" && head2 !== "object" && head2 !== "switch" && TEMPLATE_TAGS.has(head2.split(/[.#]/)[0])) {
+            } else if (typeof head2 === "string" && head2 !== "object" && head2 !== "switch" && (TEMPLATE_TAGS.has(head2.split(/[.#]/)[0]) || /^[a-z]/.test(head2) && node.length > 1 && Array.isArray(node[1]) && (node[1][0] === "->" || node[1][0] === "=>"))) {
               const tagName = head2.split(/[.#]/)[0];
               const iProps = extractIntrinsicProps(node.slice(1));
               const tagLine = node.loc?.r;
@@ -4788,7 +4822,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         lines.push("    for (const key in this._rest) this._applyInheritedProp(this._inheritedEl, key, this._rest[key]);");
         lines.push("  }");
         lines.push("  _applyInheritedProp(el, key, value) {");
-        lines.push("    if (!el || key === 'key' || key === 'ref' || key.startsWith('__bind_')) return;");
+        lines.push("    if (!el || key === 'key' || key === 'ref' || key === 'children' || key.startsWith('__bind_')) return;");
         lines.push("    if (key[0] === '@') {");
         lines.push("      const event = key.slice(1).split('.')[0];");
         lines.push("      this._restHandlers || (this._restHandlers = {});");
@@ -4834,7 +4868,9 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       }
       for (const { name, func } of methods) {
         if (Array.isArray(func) && (func[0] === "->" || func[0] === "=>")) {
-          const [, params, methodBody] = func;
+          let [, params, methodBody] = func;
+          if ((!params || Array.isArray(params) && params.length === 0) && this.containsIt(methodBody))
+            params = ["it"];
           const paramStr = Array.isArray(params) ? params.map((p) => this.formatParam(p)).join(", ") : "";
           const transformed = this.reactiveMembers ? this.transformComponentMembers(methodBody) : methodBody;
           const isAsync = this.containsAwait(methodBody);
@@ -5028,6 +5064,30 @@ ${blockFactoriesCode}return ${lines.join(`
         const slotVar = this.newElementVar("slot");
         this._createLines.push(`${slotVar} = ${s}.children instanceof Node ? ${s}.children : (${s}.children != null ? document.createTextNode(String(${s}.children)) : document.createComment(''));`);
         return slotVar;
+      }
+      if (headStr === "switch") {
+        const disc = rest[0];
+        const whens = rest[1] || [];
+        const defaultCase = rest[2] || null;
+        let chain = defaultCase;
+        for (let i = whens.length - 1;i >= 0; i--) {
+          const [, tests, body] = whens[i];
+          let cond;
+          if (disc === null) {
+            cond = tests.length === 1 ? tests[0] : tests.reduce((a, t) => a ? ["||", a, t] : t, null);
+          } else {
+            cond = tests.length === 1 ? ["==", disc, tests[0]] : tests.map((t) => ["==", disc, t]).reduce((a, c) => a ? ["||", a, c] : c, null);
+          }
+          chain = ["if", cond, body, chain];
+        }
+        if (chain) {
+          if (Array.isArray(chain) && chain[0] === "if")
+            return this.generateConditional(chain);
+          return this.generateTemplateBlock(chain);
+        }
+        const cv = this.newElementVar("c");
+        this._createLines.push(`${cv} = document.createComment('switch');`);
+        return cv;
       }
       if (headStr && this.isHtmlTag(headStr) && !meta(head, "text")) {
         let [tagName, id] = headStr.split("#");
@@ -6482,15 +6542,23 @@ if (typeof globalThis !== 'undefined') {
     collectSubExprs(node, result) {
       if (!Array.isArray(node))
         return;
+      let head = node[0];
+      if (Array.isArray(head) || head != null && typeof head !== "string" && !(head instanceof String)) {
+        for (let i = 0;i < node.length; i++) {
+          if (Array.isArray(node[i]))
+            this.collectSubExprs(node[i], result);
+        }
+        return;
+      }
       if (node.loc) {
-        let head = str(node[0]);
+        head = str(head);
         let ident = null;
-        if (typeof head === "string" && /^[=+\-*/%<>!&|?~^]|^\.\.?$|^def$|^class$|^state$|^computed$|^readonly$|^for-/.test(head)) {
-          if (typeof node[1] === "string" && /^[a-zA-Z_$]/.test(node[1]))
-            ident = node[1];
-        } else if (head === ".") {
+        if (head === ".") {
           if (typeof node[2] === "string")
             ident = node[2];
+        } else if (typeof head === "string" && /^[=+\-*/%<>!&|?~^]|^\.\.?$|^def$|^class$|^state$|^computed$|^readonly$|^for-/.test(head)) {
+          if (typeof node[1] === "string" && /^[a-zA-Z_$]/.test(node[1]))
+            ident = node[1];
         } else if (typeof head === "string" && /^[a-zA-Z_$]/.test(head)) {
           ident = head;
         }
@@ -6530,6 +6598,8 @@ if (typeof globalThis !== 'undefined') {
         return;
       }
       if (head === "component")
+        return;
+      if (head === "enum")
         return;
       if (CodeGenerator.ASSIGNMENT_OPS.has(head)) {
         let [target, value] = rest;
@@ -9665,7 +9735,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   }
   // src/browser.js
   var VERSION = "3.13.120";
-  var BUILD_DATE = "2026-03-14@11:34:17GMT";
+  var BUILD_DATE = "2026-03-17@06:39:22GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -9968,11 +10038,14 @@ ${indented}`);
   var __state;
   var _ariaBindDialog;
   var _ariaBindPopover;
+  var _ariaHasAnchor;
   var _ariaListNav;
   var _ariaLockScroll;
   var _ariaModalStack;
   var _ariaNAV;
   var _ariaPopupDismiss;
+  var _ariaPopupGuard;
+  var _ariaPosition;
   var _ariaPositionBelow;
   var _ariaRovingNav;
   var _ariaTrapFocus;
@@ -11150,8 +11223,17 @@ ${indented}`);
       return window.removeEventListener("scroll", onScroll, true);
     };
   };
+  _ariaPopupGuard = function(delay2 = 250) {
+    let blockedUntil;
+    blockedUntil = 0;
+    return { block: function(ms = delay2) {
+      return blockedUntil = Date.now() + ms;
+    }, canOpen: function() {
+      return Date.now() >= blockedUntil;
+    } };
+  };
   _ariaBindPopover = function(open, popover, setOpen, source = null) {
-    let currentFocus, desired, el, get, onToggle, opts, restoreEl, restoreFocus, shown, src;
+    let currentFocus, desired, el, get, onToggle, opts, restoreEl, restoreFocus, shown, src, syncState;
     get = function(x) {
       return typeof x === "function" ? x() : x;
     };
@@ -11171,6 +11253,21 @@ ${indented}`);
     if (!Object.hasOwn(HTMLElement.prototype, "togglePopover"))
       return;
     restoreEl = null;
+    syncState = function(isOpen) {
+      if (isOpen) {
+        el.hidden = false;
+        try {
+          el.inert = false;
+        } catch {}
+        return el.removeAttribute("aria-hidden");
+      } else {
+        try {
+          el.inert = true;
+        } catch {}
+        el.setAttribute("aria-hidden", "true");
+        return el.hidden = true;
+      }
+    };
     restoreFocus = function() {
       let focusAttempt, target;
       target = restoreEl;
@@ -11200,7 +11297,9 @@ ${indented}`);
       isOpen = e.newState === "open";
       if (isOpen) {
         restoreEl = get(source) || currentFocus();
+        syncState(true);
       } else {
+        syncState(false);
         restoreFocus();
       }
       return setOpen?.(isOpen);
@@ -11212,18 +11311,21 @@ ${indented}`);
       src = get(source);
       if (desired) {
         restoreEl = src || currentFocus();
+        syncState(true);
       }
       opts = src && desired ? { force: desired, source: src } : { force: desired };
       try {
         el.togglePopover(opts);
       } catch {}
+    } else {
+      syncState(desired);
     }
     return function() {
       return el.removeEventListener("toggle", onToggle);
     };
   };
   _ariaBindDialog = function(open, dialog, setOpen, dismissable = true) {
-    let currentFocus, el, get, onCancel, onClose, restoreEl, restoreFocus;
+    let currentFocus, el, get, onCancel, onClose, restoreEl, restoreFocus, syncState;
     get = function(x) {
       return typeof x === "function" ? x() : x;
     };
@@ -11241,6 +11343,21 @@ ${indented}`);
     if (!el?.showModal)
       return;
     restoreEl = null;
+    syncState = function(isOpen) {
+      if (isOpen) {
+        el.hidden = false;
+        try {
+          el.inert = false;
+        } catch {}
+        return el.removeAttribute("aria-hidden");
+      } else {
+        try {
+          el.inert = true;
+        } catch {}
+        el.setAttribute("aria-hidden", "true");
+        return el.hidden = true;
+      }
+    };
     restoreFocus = function() {
       let focusAttempt, target;
       target = restoreEl;
@@ -11274,6 +11391,7 @@ ${indented}`);
     };
     onClose = function() {
       setOpen?.(false);
+      syncState(false);
       return restoreFocus();
     };
     el.addEventListener("cancel", onCancel);
@@ -11281,12 +11399,14 @@ ${indented}`);
     if (open && !el.open) {
       if (!restoreEl)
         restoreEl = currentFocus();
+      syncState(true);
       try {
         el.showModal();
       } catch {}
-    }
-    if (!open && el.open) {
+    } else if (!open && el.open) {
       el.close();
+    } else {
+      syncState(!!open);
     }
     return function() {
       el.removeEventListener("cancel", onCancel);
@@ -11403,7 +11523,116 @@ ${indented}`);
       return window.scrollTo(0, scrollY);
     }
   };
-  globalThis.__aria ??= { listNav: _ariaListNav, rovingNav: _ariaRovingNav, popupDismiss: _ariaPopupDismiss, bindPopover: _ariaBindPopover, bindDialog: _ariaBindDialog, positionBelow: _ariaPositionBelow, trapFocus: _ariaTrapFocus, wireAria: _ariaWireAria, lockScroll: _ariaLockScroll, unlockScroll: _ariaUnlockScroll };
+  _ariaHasAnchor = function() {
+    let anchor, floating, rect;
+    return (() => {
+      try {
+        if (!document?.createElement)
+          return false;
+        anchor = document.createElement("div");
+        floating = document.createElement("div");
+        anchor.style.cssText = "position:fixed;top:100px;left:100px;width:10px;height:10px;anchor-name:--probe";
+        floating.style.cssText = "position:fixed;inset:auto;margin:0;position-anchor:--probe;position-area:bottom start;width:10px;height:10px";
+        document.body.appendChild(anchor);
+        document.body.appendChild(floating);
+        rect = floating.getBoundingClientRect();
+        anchor.remove();
+        floating.remove();
+        return rect.top > 50;
+      } catch {
+        return false;
+      }
+    })();
+  }();
+  _ariaPosition = function(trigger, floating, opts = {}) {
+    let align, matchWidth, name, offset, placement, rect, side;
+    if (!(trigger && floating))
+      return;
+    placement = opts.placement ?? "bottom start";
+    offset = opts.offset ?? 4;
+    matchWidth = opts.matchWidth ?? false;
+    if (_ariaHasAnchor) {
+      name = `--anchor-${floating.id || Math.random().toString(36).slice(2, 8)}`;
+      trigger.style.anchorName = name;
+      floating.style.positionAnchor = name;
+      floating.style.position = "fixed";
+      floating.style.inset = "auto";
+      floating.style.margin = "0";
+      floating.style.positionArea = placement;
+      floating.style.positionTry = "flip-block, flip-inline, flip-block flip-inline";
+      floating.style.positionVisibility = "anchors-visible";
+      [side] = placement.split(" ");
+      floating.style.marginTop = "";
+      floating.style.marginBottom = "";
+      floating.style.marginLeft = "";
+      floating.style.marginRight = "";
+      switch (side) {
+        case "bottom":
+          floating.style.marginTop = `${offset}px`;
+          break;
+        case "top":
+          floating.style.marginBottom = `${offset}px`;
+          break;
+        case "left":
+          floating.style.marginRight = `${offset}px`;
+          break;
+        case "right":
+          floating.style.marginLeft = `${offset}px`;
+          break;
+      }
+      return matchWidth ? floating.style.minWidth = "anchor-size(width)" : undefined;
+    } else {
+      rect = trigger.getBoundingClientRect();
+      floating.style.position = "fixed";
+      floating.style.inset = "auto";
+      floating.style.margin = "0";
+      [side, align] = placement.split(" ");
+      align ??= "start";
+      switch (side) {
+        case "bottom":
+          floating.style.top = `${rect.bottom + offset}px`;
+          break;
+        case "top":
+          floating.style.bottom = `${window.innerHeight - rect.top + offset}px`;
+          break;
+        case "left":
+          floating.style.right = `${window.innerWidth - rect.left + offset}px`;
+          break;
+        case "right":
+          floating.style.left = `${rect.right + offset}px`;
+          break;
+      }
+      if (Array.isArray(["bottom", "top"]) ? ["bottom", "top"].includes(side) : (side in ["bottom", "top"])) {
+        switch (align) {
+          case "start":
+            floating.style.left = `${rect.left}px`;
+            break;
+          case "center":
+            floating.style.left = `${rect.left + rect.width / 2}px`;
+            floating.style.transform = "translateX(-50%)";
+            break;
+          case "end":
+            floating.style.right = `${window.innerWidth - rect.right}px`;
+            break;
+        }
+      } else {
+        switch (align) {
+          case "start":
+            floating.style.top = `${rect.top}px`;
+            break;
+          case "center":
+            floating.style.top = `${rect.top + rect.height / 2}px`;
+            floating.style.transform = "translateY(-50%)";
+            break;
+          case "end":
+            floating.style.bottom = `${window.innerHeight - rect.bottom}px`;
+            break;
+        }
+      }
+      return matchWidth ? floating.style.minWidth = `${rect.width}px` : undefined;
+    }
+  };
+  globalThis.__aria ??= { listNav: _ariaListNav, rovingNav: _ariaRovingNav, popupDismiss: _ariaPopupDismiss, popupGuard: _ariaPopupGuard, bindPopover: _ariaBindPopover, bindDialog: _ariaBindDialog, positionBelow: _ariaPositionBelow, trapFocus: _ariaTrapFocus, wireAria: _ariaWireAria, lockScroll: _ariaLockScroll, unlockScroll: _ariaUnlockScroll, position: _ariaPosition, hasAnchor: _ariaHasAnchor };
   globalThis.ARIA ??= globalThis.__aria;
 
   // docs/dist/_entry.js

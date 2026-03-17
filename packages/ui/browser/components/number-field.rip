@@ -1,0 +1,162 @@
+# NumberField — accessible headless number input with stepper buttons
+#
+# Increment/decrement with click, hold-to-repeat, and keyboard.
+# Supports min/max/step clamping and Shift/Alt step modifiers.
+# Ships zero CSS.
+#
+# Usage:
+#   NumberField value <=> quantity
+#   NumberField value <=> price, min: 0, max: 1000, step: 0.01
+
+START_DELAY = 400
+TICK_DELAY  = 60
+
+export NumberField = component
+  @value:: number := 0
+  @min:: any := null
+  @max:: any := null
+  @step:: number := 1
+  @smallStep:: number := 0.1
+  @largeStep:: number := 10
+  @disabled:: boolean := false
+  @readOnly:: boolean := false
+  @name:: any := null
+
+  _timer = null
+  _interval = null
+  _id =! "nf-#{Math.random().toString(36).slice(2, 8)}"
+
+  _clamp: (v) ->
+    v = Math.max(@min, v) if @min?
+    v = Math.min(@max, v) if @max?
+    v
+
+  _roundToStep: (v) ->
+    base = @min ?? 0
+    rounded = Math.round((v - base) / @step) * @step + base
+    precision = String(@step).split('.')[1]?.length or 0
+    parseFloat rounded.toFixed(precision)
+
+  _stepAmount: (e) ->
+    if e?.altKey then @smallStep
+    else if e?.shiftKey then @largeStep
+    else @step
+
+  increment: (amount) ->
+    return if @disabled or @readOnly
+    @value = @_clamp(@_roundToStep(+@value + amount))
+    @emit 'input', @value
+
+  decrement: (amount) ->
+    return if @disabled or @readOnly
+    @value = @_clamp(@_roundToStep(+@value - amount))
+    @emit 'input', @value
+
+  _startRepeat: (dir, e) ->
+    amount = @_stepAmount(e)
+    tick = => if dir > 0 then @increment(amount) else @decrement(amount)
+    tick()
+    _timer = setTimeout =>
+      _interval = setInterval tick, TICK_DELAY
+    , START_DELAY
+
+  _stopRepeat: ->
+    clearTimeout _timer if _timer
+    clearInterval _interval if _interval
+    _timer = null
+    _interval = null
+    @emit 'change', @value
+
+  _onIncDown: (e) ->
+    return if @disabled or @readOnly or e.button isnt 0
+    e.preventDefault()
+    @_input?.focus()
+    @_startRepeat 1, e
+    onUp = =>
+      @_stopRepeat()
+      document.removeEventListener 'pointerup', onUp
+    document.addEventListener 'pointerup', onUp
+
+  _onDecDown: (e) ->
+    return if @disabled or @readOnly or e.button isnt 0
+    e.preventDefault()
+    @_input?.focus()
+    @_startRepeat -1, e
+    onUp = =>
+      @_stopRepeat()
+      document.removeEventListener 'pointerup', onUp
+    document.addEventListener 'pointerup', onUp
+
+  _onKeydown: (e) ->
+    return if @disabled or @readOnly
+    amount = @_stepAmount(e)
+    switch e.key
+      when 'ArrowUp'
+        e.preventDefault()
+        @increment(amount)
+        @emit 'change', @value
+      when 'ArrowDown'
+        e.preventDefault()
+        @decrement(amount)
+        @emit 'change', @value
+      when 'PageUp'
+        e.preventDefault()
+        @increment(@largeStep)
+        @emit 'change', @value
+      when 'PageDown'
+        e.preventDefault()
+        @decrement(@largeStep)
+        @emit 'change', @value
+      when 'Home'
+        if @min?
+          e.preventDefault()
+          @value = @min
+          @emit 'change', @value
+      when 'End'
+        if @max?
+          e.preventDefault()
+          @value = @max
+          @emit 'change', @value
+
+  _onBlur: ->
+    val = parseFloat @_input?.value
+    unless isNaN(val)
+      @value = @_clamp(@_roundToStep(val))
+    @emit 'change', @value
+
+  _ready := false
+
+  mounted: -> _ready = true
+
+  ~>
+    return unless _ready
+    @_input?.value = String(@value)
+
+  beforeUnmount: -> @_stopRepeat()
+
+  render
+    div role: "group", $disabled: @disabled?!, $readonly: @readOnly?!
+      button aria-label: "Decrease", tabindex: "-1"
+        $decrement: true
+        aria-controls: _id
+        disabled: @disabled or (@min? and @value <= @min)
+        @pointerdown: @_onDecDown
+
+      input ref: "_input", id: _id, type: "text", inputmode: "numeric"
+        name: @name?!
+        aria-roledescription: "Number field"
+        aria-valuenow: @value
+        aria-valuemin: @min?!
+        aria-valuemax: @max?!
+        aria-disabled: @disabled?!
+        aria-readonly: @readOnly?!
+        disabled: @disabled
+        readonly: @readOnly
+        @keydown: @_onKeydown
+        @blur: @_onBlur
+
+      button aria-label: "Increase", tabindex: "-1"
+        $increment: true
+        aria-controls: _id
+        disabled: @disabled or (@max? and @value >= @max)
+        @pointerdown: @_onIncDown

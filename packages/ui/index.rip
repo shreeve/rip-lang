@@ -5,10 +5,10 @@ import { serve } from '@rip-lang/server/middleware'
 
 dir = import.meta.dir
 
-use serve dir: dir, bundle: ['components'], watch: true
+use serve dir: dir, bundle: ['browser/components'], watch: true
 
 get '/*.css', -> @send "#{dir}/#{@req.path.slice(1)}", 'text/css; charset=UTF-8'
-get '/hljs-rip.js', -> @send "#{dir}/../print/hljs-rip.js", 'text/javascript; charset=UTF-8'
+get '/hljs-rip.js', -> @send "#{dir}/browser/hljs-rip.js", 'text/javascript; charset=UTF-8'
 
 notFound -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
 

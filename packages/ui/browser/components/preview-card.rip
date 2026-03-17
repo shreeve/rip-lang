@@ -1,0 +1,77 @@
+# PreviewCard — accessible headless hover preview card
+#
+# Shows a floating card on hover/focus of a trigger element. Dismisses
+# on mouse leave or blur. Uses native `popover="hint"` for top-layer behavior.
+# Ships zero CSS.
+#
+# Usage:
+#   PreviewCard delay: 400
+#     a $trigger: true, href: "/user/42", "View Profile"
+#     div $content: true
+#       p "User details here..."
+
+export PreviewCard = component
+  @delay:: number := 400
+  @closeDelay:: number := 200
+
+  open := false
+  _ready := false
+  _openTimer := null
+  _closeTimer := null
+  _id =! "pc-#{Math.random().toString(36).slice(2, 8)}"
+
+  beforeUnmount: ->
+    clearTimeout _openTimer if _openTimer
+    clearTimeout _closeTimer if _closeTimer
+
+  mounted: ->
+    _ready = true
+    trigger = @_root?.querySelector('[data-trigger]')
+    floating = @_root?.querySelector('[data-content]')
+    return unless trigger and floating
+    floating.id = _id
+    floating.setAttribute 'popover', 'hint'
+    trigger.setAttribute 'aria-controls', _id
+    trigger.setAttribute 'aria-expanded', false
+    trigger.addEventListener 'mouseenter', =>
+      clearTimeout _closeTimer if _closeTimer
+      _openTimer = setTimeout (=> open = true), @delay
+    trigger.addEventListener 'mouseleave', =>
+      clearTimeout _openTimer if _openTimer
+      _closeTimer = setTimeout (=> open = false), @closeDelay
+    @_applyPlacement()
+    trigger.addEventListener 'focus', =>
+      clearTimeout _closeTimer if _closeTimer
+      _openTimer = setTimeout (=> open = true; @_applyPlacement()), @delay
+    trigger.addEventListener 'blur', =>
+      clearTimeout _openTimer if _openTimer
+      _closeTimer = setTimeout (=> open = false), @closeDelay
+
+  _applyPlacement: ->
+    trigger = @_root?.querySelector('[data-trigger]')
+    floating = @_root?.querySelector('[data-content]')
+    ARIA.position trigger, floating, placement: 'bottom start', offset: 4
+
+  ~>
+    return unless _ready
+    trigger = @_root?.querySelector('[data-trigger]')
+    floating = @_root?.querySelector('[data-content]')
+    return unless floating and trigger
+    trigger.setAttribute 'aria-expanded', !!open
+    floating.hidden = not open
+    if open then floating.removeAttribute 'aria-hidden' else floating.setAttribute 'aria-hidden', 'true'
+    @_applyPlacement()
+    if open then floating.setAttribute('data-open', '') else floating.removeAttribute('data-open')
+    ARIA.bindPopover open, (=> floating), ((isOpen) => open = isOpen), (=> trigger)
+    if open
+      onEnter = => clearTimeout _closeTimer if _closeTimer
+      onLeave = => _closeTimer = setTimeout (=> open = false), @closeDelay
+      floating.addEventListener 'mouseenter', onEnter
+      floating.addEventListener 'mouseleave', onLeave
+      return ->
+        floating.removeEventListener 'mouseenter', onEnter
+        floating.removeEventListener 'mouseleave', onLeave
+
+  render
+    div ref: "_root"
+      slot

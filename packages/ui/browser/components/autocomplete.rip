@@ -1,0 +1,130 @@
+# Autocomplete — accessible headless suggestion input
+#
+# Like Combobox but the input value IS the value (no selection from a list).
+# Suggestions are shown as the user types; selecting a suggestion fills the input.
+# Ships zero CSS.
+#
+# Usage:
+#   Autocomplete value <=> city, items: cities, @filter: filterCities
+
+acCollator = new Intl.Collator(undefined, { sensitivity: 'base' })
+
+export Autocomplete = component
+  @value:: string := ""
+  @items:: any[] := []
+  @placeholder:: string := "Type to search..."
+  @disabled:: boolean := false
+
+  open := false
+  _ready := false
+  _popupGuard =! ARIA.popupGuard()
+
+  filteredItems ~=
+    q = @value.trim()
+    return @items unless q
+    @items.filter (item) ->
+      label = if typeof item is 'string' then item else (item.label or item.name or String(item))
+      acCollator.compare(label.slice(0, q.length), q) is 0
+
+  _listId =! "ac-list-#{Math.random().toString(36).slice(2, 8)}"
+
+  _getItems: ->
+    return [] unless @_list
+    Array.from(@_list.querySelectorAll('[role="option"]'))
+
+  _updateHighlight: ->
+    idx = @_hlIdx
+    opts = @_getItems()
+    opts.forEach (el, ndx) ->
+      el.id = "#{@_listId}-opt-#{ndx}" unless el.id
+      el.toggleAttribute 'data-highlighted', ndx is idx
+    activeId = if idx >= 0 and opts[idx] then opts[idx].id else undefined
+    if @_input
+      if activeId then @_input.setAttribute 'aria-activedescendant', activeId
+      else @_input.removeAttribute 'aria-activedescendant'
+    opts[idx]?.scrollIntoView({ block: 'nearest' })
+
+  openMenu: ->
+    return unless _popupGuard.canOpen()
+    open = true
+    @_hlIdx = -1
+    @_input?.focus()
+
+  close: (restoreFocus = true, blockOpen = false) ->
+    open = false
+    @_hlIdx = -1
+    @_input?.removeAttribute 'aria-activedescendant'
+    _popupGuard.block() if blockOpen
+    @_input?.focus() if restoreFocus
+
+  _applyPlacement: ->
+    ARIA.position @_input, @_list, placement: 'bottom start', offset: 2, matchWidth: true
+
+  selectIndex: (idx) ->
+    item = filteredItems[idx]
+    return unless item
+    label = if typeof item is 'string' then item else (item.label or item.name or String(item))
+    @value = label
+    @_input?.value = label
+    @emit 'select', item
+    @close(true, true)
+
+  onInput: (e) ->
+    newVal = e.target.value
+    return if newVal is @value
+    @value = newVal
+    open = true
+    @_hlIdx = if filteredItems.length > 0 then 0 else -1
+    setTimeout (=> @_updateHighlight()), 0
+
+  onKeydown: (e) ->
+    len = filteredItems.length
+    ARIA.listNav e,
+      next:    => @openMenu() unless open; if len then @_hlIdx = (@_hlIdx + 1) %% len;                         @_updateHighlight()
+      prev:    => @openMenu() unless open; if len then @_hlIdx = if @_hlIdx <= 0 then len - 1 else @_hlIdx - 1; @_updateHighlight()
+      first:   => if len then @_hlIdx = 0;       @_updateHighlight()
+      last:    => if len then @_hlIdx = len - 1; @_updateHighlight()
+      select:  => @selectIndex(@_hlIdx) if @_hlIdx >= 0
+      dismiss: => @close()
+      tab:     => @close(false, true)
+
+  ~>
+    return unless _ready
+    if @_list
+      @_applyPlacement()
+    ARIA.bindPopover open, (=> @_list), ((isOpen) => open = isOpen), (=> @_input)
+    ARIA.popupDismiss open, (=> @_list), (=> @close(false, true)), [=> @_input]
+
+  mounted: ->
+    _ready = true
+    @_hlIdx = -1
+    @_input.value = @value if @_input and @value
+
+  render
+    . $open: open?!
+
+      input ref: "_input", role: "combobox", type: "text"
+        autocomplete: "off"
+        aria-expanded: !!open
+        aria-haspopup: "listbox"
+        aria-autocomplete: "list"
+        aria-controls: open ? _listId : undefined
+        $disabled: @disabled?!
+        disabled: @disabled
+        placeholder: @placeholder
+        @input: @onInput
+        @keydown: @onKeydown
+
+      div ref: "_list"
+        id: _listId
+        role: "listbox"
+        popover: "auto"
+        hidden: not open
+        aria-hidden: (open ? undefined : "true")
+        $open: open?!
+        style: "position:fixed;margin:0;inset:auto"
+        for item, idx in filteredItems
+          div role: "option", tabindex: "-1"
+            @click: (=> @selectIndex(idx))
+            @mouseenter: (=> @_hlIdx = idx; @_updateHighlight())
+            "#{if typeof item is 'string' then item else (item.label or item.name or String(item))}"

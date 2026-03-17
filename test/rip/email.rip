@@ -1,0 +1,638 @@
+# Test: Rip Email — components, rendering, DOM shim, serializer, compat
+
+_base = process.cwd()
+
+emailDom    = import!("#{_base}/packages/ui/email/dom.rip")
+emailCompat = import!("#{_base}/packages/ui/email/compat.rip")
+emailRender = import!("#{_base}/packages/ui/email/render.rip")
+emailPkg    = import!("#{_base}/packages/ui/email/components.rip")
+
+globalThis.emailDom    = emailDom
+globalThis.emailCompat = emailCompat
+globalThis.emailRender = emailRender
+globalThis.emailPkg    = emailPkg
+
+# ==============================================================================
+# DOM Shim
+# ==============================================================================
+
+test "createElement creates element with tag", '''
+  { Document } = emailDom
+  doc = Document.new()
+  doc.createElement('div').tag
+  ''', 'div'
+
+test "createTextNode creates text with data", '''
+  { Document } = emailDom
+  Document.new().createTextNode('hello').data
+  ''', 'hello'
+
+test "createComment creates comment with data", '''
+  { Document } = emailDom
+  Document.new().createComment('test').data
+  ''', 'test'
+
+test "appendChild adds child and sets parentNode", '''
+  { Document } = emailDom
+  doc = Document.new()
+  parent = doc.createElement('div')
+  child = doc.createElement('span')
+  parent.appendChild(child)
+  child.parentNode is parent and parent.childNodes.length is 1
+  ''', true
+
+test "appendChild chains nextSibling", '''
+  { Document } = emailDom
+  doc = Document.new()
+  parent = doc.createElement('div')
+  a = doc.createElement('span')
+  b = doc.createElement('span')
+  parent.appendChild(a)
+  parent.appendChild(b)
+  a.nextSibling is b and b.previousSibling is a
+  ''', true
+
+test "insertBefore inserts before reference", '''
+  { Document } = emailDom
+  doc = Document.new()
+  parent = doc.createElement('div')
+  a = doc.createElement('a')
+  c2 = doc.createElement('c')
+  parent.appendChild(a)
+  parent.appendChild(c2)
+  b = doc.createElement('b')
+  parent.insertBefore(b, c2)
+  parent.childNodes.map((n) -> n.tag).join(',')
+  ''', 'a,b,c'
+
+test "removeChild removes and clears parentNode", '''
+  { Document } = emailDom
+  doc = Document.new()
+  parent = doc.createElement('div')
+  child = doc.createElement('span')
+  parent.appendChild(child)
+  parent.removeChild(child)
+  parent.childNodes.length is 0 and child.parentNode is null
+  ''', true
+
+test "fragment children flatten on appendChild", '''
+  { Document } = emailDom
+  doc = Document.new()
+  parent = doc.createElement('div')
+  frag = doc.createDocumentFragment()
+  frag.appendChild(doc.createElement('a'))
+  frag.appendChild(doc.createElement('b'))
+  parent.appendChild(frag)
+  parent.childNodes.map((n) -> n.tag).join(',')
+  ''', 'a,b'
+
+test "setAttribute style string parses", '''
+  { Document } = emailDom
+  doc = Document.new()
+  el = doc.createElement('div')
+  el.setAttribute('style', 'color:red;font-size:14px')
+  el.style.color is 'red' and el.style.fontSize is '14px'
+  ''', true
+
+test "textContent sets text child", '''
+  { Document } = emailDom
+  doc = Document.new()
+  el = doc.createElement('p')
+  el.textContent = 'hello world'
+  el.childNodes.length is 1 and el.childNodes[0].data is 'hello world'
+  ''', true
+
+# ==============================================================================
+# Serializer
+# ==============================================================================
+
+test "serialize element with text", '''
+  { Document, serialize } = emailDom
+  doc = Document.new()
+  el = doc.createElement('p')
+  el.appendChild(doc.createTextNode('hello'))
+  serialize(el)
+  ''', '<p>hello</p>'
+
+test "serialize void element", '''
+  { Document, serialize } = emailDom
+  serialize(Document.new().createElement('br'))
+  ''', '<br />'
+
+test "serialize element with style object", '''
+  { Document, serialize } = emailDom
+  doc = Document.new()
+  el = doc.createElement('p')
+  el.style.fontSize = '14px'
+  el.style.lineHeight = '24px'
+  serialize(el)
+  ''', '<p style="font-size:14px;line-height:24px"></p>'
+
+test "serialize escapes HTML in text", '''
+  { Document, serialize } = emailDom
+  doc = Document.new()
+  el = doc.createElement('p')
+  el.appendChild(doc.createTextNode('a < b & c > d'))
+  serialize(el)
+  ''', '<p>a &lt; b &amp; c &gt; d</p>'
+
+test "serialize suppresses framework anchor comments", '''
+  { Document, serialize } = emailDom
+  doc = Document.new()
+  parent = doc.createElement('div')
+  parent.appendChild(doc.createComment('if'))
+  parent.appendChild(doc.createComment('for'))
+  parent.appendChild(doc.createComment(''))
+  serialize(parent)
+  ''', '<div></div>'
+
+test "serialize passes through MSO comments", '''
+  { Document, serialize } = emailDom
+  doc = Document.new()
+  parent = doc.createElement('div')
+  parent.appendChild(doc.createComment('[if mso]><i>test</i><![endif]'))
+  serialize(parent)
+  ''', '<div><!--[if mso]><i>test</i><![endif]--></div>'
+
+test "serialize innerHTML outputs verbatim", '''
+  { Document, serialize } = emailDom
+  doc = Document.new()
+  el = doc.createElement('span')
+  el.innerHTML = '<b>hi</b>'
+  serialize(el)
+  ''', '<span><b>hi</b></span>'
+
+test "serialize nested structure", '''
+  { Document, serialize } = emailDom
+  doc = Document.new()
+  t = doc.createElement('table')
+  tb = doc.createElement('tbody')
+  tr = doc.createElement('tr')
+  td = doc.createElement('td')
+  td.appendChild(doc.createTextNode('cell'))
+  tr.appendChild(td)
+  tb.appendChild(tr)
+  t.appendChild(tb)
+  serialize(t)
+  ''', '<table><tbody><tr><td>cell</td></tr></tbody></table>'
+
+# ==============================================================================
+# Plain text
+# ==============================================================================
+
+test "toPlainText paragraph", '''
+  { Document, toPlainText } = emailDom
+  doc = Document.new()
+  root = doc.createElement('__root')
+  p = doc.createElement('p')
+  p.appendChild(doc.createTextNode('Hello world'))
+  root.appendChild(p)
+  toPlainText(root)
+  ''', 'Hello world'
+
+test "toPlainText link with different href", '''
+  { Document, toPlainText } = emailDom
+  doc = Document.new()
+  root = doc.createElement('__root')
+  a = doc.createElement('a')
+  a.setAttribute('href', 'https://example.com')
+  a.appendChild(doc.createTextNode('Click here'))
+  root.appendChild(a)
+  toPlainText(root)
+  ''', 'Click here (https://example.com)'
+
+test "toPlainText hr becomes ---", '''
+  { Document, toPlainText } = emailDom
+  doc = Document.new()
+  root = doc.createElement('__root')
+  root.appendChild(doc.createElement('hr'))
+  toPlainText(root).trim()
+  ''', '---'
+
+# ==============================================================================
+# Compat helpers
+# ==============================================================================
+
+test "pxToPt converts correctly", '''
+  { pxToPt } = emailCompat
+  pxToPt(16)
+  ''', 12
+
+test "convertToPx handles px", '''
+  { convertToPx } = emailCompat
+  convertToPx('16px')
+  ''', 16
+
+test "convertToPx handles em", '''
+  { convertToPx } = emailCompat
+  convertToPx('1em')
+  ''', 16
+
+test "computeMsoPadding returns zero for zero", '''
+  { computeMsoPadding } = emailCompat
+  computeMsoPadding(0)
+  ''', [0, 0]
+
+test "previewPadding pads to max length", '''
+  { previewPadding } = emailCompat
+  previewPadding('short').length
+  ''', 1015
+
+test "styleToString converts object", '''
+  { styleToString } = emailCompat
+  styleToString({ fontSize: '14px', color: 'red' })
+  ''', 'font-size:14px;color:red'
+
+test "msoConditional wraps in comments", '''
+  { msoConditional } = emailCompat
+  msoConditional('<b>hi</b>')
+  ''', '<!--[if mso]><b>hi</b><![endif]-->'
+
+# ==============================================================================
+# Output API
+# ==============================================================================
+
+test "toHTML returns string with doctype", '''
+  { toHTML } = emailRender
+  TestEmail = component
+    render
+      html
+        body
+          p "hello"
+  result = toHTML(TestEmail)
+  result.includes('<!DOCTYPE') and result.includes('<p>hello</p>')
+  ''', true
+
+test "toText returns plain text string", '''
+  { toText } = emailRender
+  TestEmail = component
+    render
+      div
+        p "hello world"
+  result = toText(TestEmail)
+  result.includes('hello world')
+  ''', true
+
+test "renderEmail returns html and text", '''
+  { renderEmail } = emailRender
+  TestEmail = component
+    render
+      div
+        h1 "Title"
+        p "Body"
+  { html, text } = renderEmail(TestEmail)
+  html.includes('<h1>Title</h1>') and text.includes('Title') and text.includes('Body')
+  ''', true
+
+# ==============================================================================
+# Document components
+# ==============================================================================
+
+test "Email renders html tag with lang and dir", '''
+  { toHTML } = emailRender
+  { Email } = emailPkg
+  E = component
+    render
+      Email
+  result = toHTML(E)
+  result.includes('lang="en"') and result.includes('dir="ltr"') and result.includes('<html')
+  ''', true
+
+test "Head renders meta tags", '''
+  { toHTML } = emailRender
+  { Email, Head } = emailPkg
+  E = component
+    render
+      Email
+        Head
+  result = toHTML(E)
+  result.includes('charset=UTF-8') and result.includes('x-apple-disable-message-reformatting')
+  ''', true
+
+test "Body renders table wrapper", '''
+  { toHTML } = emailRender
+  { Email, Body } = emailPkg
+  E = component
+    render
+      Email
+        Body
+          p "content"
+  result = toHTML(E)
+  result.includes('role="presentation"') and result.includes('<p>content</p>')
+  ''', true
+
+test "Preview renders hidden div with padding", '''
+  { toHTML } = emailRender
+  { Preview } = emailPkg
+  E = component
+    render
+      Preview text: "Hello preview"
+  result = toHTML(E)
+  result.includes('display:none') and result.includes('Hello preview')
+  ''', true
+
+# ==============================================================================
+# Layout components
+# ==============================================================================
+
+test "Container renders centered table", '''
+  { toHTML } = emailRender
+  { Container } = emailPkg
+  E = component
+    render
+      Container
+        p "inside"
+  result = toHTML(E)
+  result.includes('max-width:37.5em') and result.includes('role="presentation"') and result.includes('<p>inside</p>')
+  ''', true
+
+test "Section renders full-width table", '''
+  { toHTML } = emailRender
+  { Section } = emailPkg
+  E = component
+    render
+      Section
+        p "section content"
+  result = toHTML(E)
+  result.includes('role="presentation"') and result.includes('<p>section content</p>')
+  ''', true
+
+test "Row renders table row", '''
+  { toHTML } = emailRender
+  { Row } = emailPkg
+  E = component
+    render
+      Row
+        td "cell"
+  result = toHTML(E)
+  result.includes('<tr') and result.includes('<td>cell</td>')
+  ''', true
+
+test "Column renders td", '''
+  { toHTML } = emailRender
+  { Column } = emailPkg
+  E = component
+    render
+      table
+        tr
+          Column
+            "cell content"
+  result = toHTML(E)
+  result.includes('<td') and result.includes('cell content')
+  ''', true
+
+# ==============================================================================
+# Content components
+# ==============================================================================
+
+test "Heading renders h1 by default", '''
+  { toHTML } = emailRender
+  { Heading } = emailPkg
+  E = component
+    render
+      Heading
+        "Title"
+  toHTML(E).includes('<h1')
+  ''', true
+
+test "Heading renders h1 with style", '''
+  { toHTML } = emailRender
+  { Heading } = emailPkg
+  E = component
+    render
+      Heading style: "color:red"
+        "Subtitle"
+  toHTML(E).includes('color:red')
+  ''', true
+
+test "Heading renders h2 with as prop", '''
+  { toHTML } = emailRender
+  { Heading } = emailPkg
+  E = component
+    render
+      Heading as: "h2"
+        "Subtitle"
+  toHTML(E).includes('<h2')
+  ''', true
+
+test "Text renders p with defaults", '''
+  { toHTML } = emailRender
+  { Text } = emailPkg
+  E = component
+    render
+      Text
+        "paragraph"
+  result = toHTML(E)
+  result.includes('<p') and result.includes('font-size:14px') and result.includes('paragraph')
+  ''', true
+
+test "Link renders anchor with defaults", '''
+  { toHTML } = emailRender
+  { Link } = emailPkg
+  E = component
+    render
+      Link href: "https://example.com"
+        "click"
+  result = toHTML(E)
+  result.includes('href="https://example.com"') and result.includes('target="_blank"') and result.includes('click')
+  ''', true
+
+test "Image renders img with safe defaults", '''
+  { toHTML } = emailRender
+  { Image } = emailPkg
+  E = component
+    render
+      Image src: "logo.png", alt: "Logo"
+  result = toHTML(E)
+  result.includes('src="logo.png"') and result.includes('display:block')
+  ''', true
+
+test "Divider renders hr with border", '''
+  { toHTML } = emailRender
+  { Divider } = emailPkg
+  E = component
+    render
+      Divider
+  result = toHTML(E)
+  result.includes('<hr') and result.includes('border-top:1px solid #eaeaea')
+  ''', true
+
+test "Button renders anchor with MSO conditionals", '''
+  { toHTML } = emailRender
+  { Button } = emailPkg
+  E = component
+    render
+      Button href: "https://example.com", style: "padding:12px 20px;background:#111;color:#fff"
+        "Click me"
+  result = toHTML(E)
+  result.includes('href="https://example.com"') and result.includes('Click me') and result.includes('mso-font-width')
+  ''', true
+
+# ==============================================================================
+# Rich content components
+# ==============================================================================
+
+test "Markdown renders paragraphs", '''
+  { toHTML } = emailRender
+  { Markdown } = emailPkg
+  E = component
+    render
+      Markdown text: "Hello world"
+  toHTML(E).includes('<p>Hello world</p>')
+  ''', true
+
+test "Markdown renders bold and italic", '''
+  { toHTML } = emailRender
+  { Markdown } = emailPkg
+  E = component
+    render
+      Markdown text: "This is **bold** and *italic*"
+  result = toHTML(E)
+  result.includes('<strong>bold</strong>') and result.includes('<em>italic</em>')
+  ''', true
+
+test "Markdown renders headings", '''
+  { toHTML } = emailRender
+  { Markdown } = emailPkg
+  E = component
+    render
+      Markdown text: "# Title"
+  toHTML(E).includes('<h1>Title</h1>')
+  ''', true
+
+test "Markdown renders links", '''
+  { toHTML } = emailRender
+  { Markdown } = emailPkg
+  E = component
+    render
+      Markdown text: "Visit [Example](https://example.com)"
+  toHTML(E).includes('<a href="https://example.com"')
+  ''', true
+
+test "Markdown renders unordered lists", """
+  { toHTML } = emailRender
+  { Markdown } = emailPkg
+  E = component
+    render
+      Markdown text: "- one\\n- two\\n- three"
+  result = toHTML(E)
+  result.includes('<ul>') and result.includes('<li>one</li>')
+  """, true
+
+test "CodeBlock renders pre with code", '''
+  { toHTML } = emailRender
+  { CodeBlock } = emailPkg
+  E = component
+    render
+      CodeBlock code: "x = 42"
+  result = toHTML(E)
+  result.includes('<pre') and result.includes('x = 42')
+  ''', true
+
+test "CodeBlock escapes HTML in code", '''
+  { toHTML } = emailRender
+  { CodeBlock } = emailPkg
+  E = component
+    render
+      CodeBlock code: "<div>hi</div>"
+  result = toHTML(E)
+  result.includes('&lt;div&gt;')
+  ''', true
+
+test "CodeInline renders code with Orange.fr workaround", '''
+  { toHTML } = emailRender
+  { CodeInline } = emailPkg
+  E = component
+    render
+      CodeInline
+        "hello"
+  result = toHTML(E)
+  result.includes('class="cino"') and result.includes('class="cio"')
+  ''', true
+
+test "Tailwind injects generated CSS for raw HTML tag classes", '''
+  { toHTML } = emailRender
+  { Email, Head, Tailwind } = emailPkg
+  E = component
+    render
+      Email
+        Head
+        Tailwind
+          p class: "text-gray-400 bg-gray-100 px-4 py-2 rounded-lg"
+            "styled"
+  result = toHTML(E)
+  result.includes('@layer theme') and result.includes('style="color:var(--color-gray-400);background-color:var(--color-gray-100);padding-inline:calc(var(--spacing)*4);padding-block:calc(var(--spacing)*2);border-radius:var(--radius-lg)"')
+  ''', true
+
+test "Tailwind injects generated CSS for PascalCase component classes", '''
+  { toHTML } = emailRender
+  { Email, Head, Tailwind, Text, Button } = emailPkg
+  E = component
+    render
+      Email
+        Head
+        Tailwind
+          Text class: "text-center text-gray-600"
+            "hello"
+          Button class: "rounded-full bg-black text-white", href: "https://example.com", style: "padding:12px 20px"
+            "go"
+  result = toHTML(E)
+  result.includes('text-align:center') and result.includes('color:var(--color-gray-600)') and result.includes('background-color:var(--color-black)') and result.includes('border-radius:calc(infinity*1px)')
+  ''', true
+
+test "Tailwind keeps unsupported classes", '''
+  { toHTML } = emailRender
+  { Email, Head, Tailwind } = emailPkg
+  E = component
+    render
+      Email
+        Head
+        Tailwind
+          div class: "sm:text-lg custom-class"
+            "x"
+  result = toHTML(E)
+  result.includes('class="sm:text-lg custom-class"') and result.includes('@media') and result.includes('text-lg')
+  ''', true
+
+# ==============================================================================
+# End-to-end — full email using multiple components
+# ==============================================================================
+
+test "full email renders correctly", '''
+  { toHTML } = emailRender
+  { Email, Head, Body, Preview, Container, Heading, Text, Link, Divider } = emailPkg
+  WelcomeEmail = component
+    @name =! "World"
+    render
+      Email
+        Head
+        Preview text: "Welcome aboard"
+        Body
+          Container
+            Heading "Welcome, #{@name}!"
+            Text "Thanks for signing up."
+            Link href: "https://example.com"
+              "Get started"
+            Divider
+            Text "See you soon."
+  result = toHTML(WelcomeEmail, name: "Alice")
+  result.includes('<!DOCTYPE') and result.includes('Welcome, Alice!') and result.includes('charset=UTF-8') and result.includes('max-width:37.5em') and result.includes('Get started') and result.includes('border-top:1px solid')
+  ''', true
+
+test "full email plain text", '''
+  { toText } = emailRender
+  { Email, Head, Body, Container, Heading, Text, Link, Divider } = emailPkg
+  WelcomeEmail = component
+    @name =! "World"
+    render
+      Email
+        Head
+        Body
+          Container
+            Heading "Welcome, #{@name}!"
+            Text "Thanks for signing up."
+            Link href: "https://example.com"
+              "Get started"
+  result = toText(WelcomeEmail, name: "Bob")
+  result.includes('Welcome, Bob!') and result.includes('Get started (https://example.com)')
+  ''', true

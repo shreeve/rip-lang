@@ -11,18 +11,18 @@ console.log('Building widget gallery for docs/ui/...\n');
 mkdirSync(dst, { recursive: true });
 
 // Copy all .rip files
-const ripFiles = readdirSync(src).filter(f => f.endsWith('.rip') && f !== 'index.rip');
+const ripFiles = readdirSync(join(src, 'browser/components')).filter(f => f.endsWith('.rip'));
 for (const f of ripFiles) {
-  cpSync(join(src, f), join(dst, f));
+  cpSync(join(src, 'browser/components', f), join(dst, f));
 }
-console.log(`  ${ripFiles.length} .rip files copied`);
+console.log(`  ${ripFiles.length} browser .rip files copied`);
 
 // Copy CSS
 cpSync(join(src, 'index.css'), join(dst, 'index.css'));
 console.log('  index.css copied');
 
 // Copy hljs-rip.js (syntax highlighting grammar)
-cpSync('./packages/print/hljs-rip.js', join(dst, 'hljs-rip.js'));
+cpSync(join(src, 'browser/hljs-rip.js'), join(dst, 'hljs-rip.js'));
 console.log('  hljs-rip.js copied');
 
 // Transform index.html for static hosting
@@ -46,4 +46,4 @@ html = html.replace("'/hljs-rip.js'", "'hljs-rip.js'");
 writeFileSync(join(dst, 'index.html'), html);
 console.log('  index.html copied (paths adjusted for static hosting)');
 
-console.log(`\n✨ Gallery ready at docs/ui/ (${ripFiles.length} widgets)`);
+console.log(`\n✨ Gallery ready at docs/ui/ (${ripFiles.length} browser widgets)`);

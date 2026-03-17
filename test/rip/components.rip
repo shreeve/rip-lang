@@ -2957,7 +2957,7 @@ code 'component extends: inherits tag, rest props forwarded', '''
       for (const key in this._rest) this._applyInheritedProp(this._inheritedEl, key, this._rest[key]);
     }
     _applyInheritedProp(el, key, value) {
-      if (!el || key === 'key' || key === 'ref' || key.startsWith('__bind_')) return;
+      if (!el || key === 'key' || key === 'ref' || key === 'children' || key.startsWith('__bind_')) return;
       if (key[0] === '@') {
         const event = key.slice(1).split('.')[0];
         this._restHandlers || (this._restHandlers = {});

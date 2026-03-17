@@ -103,7 +103,8 @@ export WidgetGallery = component
     return unless entry
     sourceName = entry.name
     sourceLines = entry.lines
-    resp = fetch! "components/#{id}.rip"
+    resp = fetch! "browser/components/#{id}.rip"
+    return unless resp.ok
     sourceCode = resp.text!
   _closeSource: -> sourceCode = null
   _stopProp: (e) -> e.stopPropagation()
@@ -228,7 +229,7 @@ export WidgetGallery = component
   tocData := [
     { id: 'select', name: 'Select', lines: 135, desc: 'Dropdown with typeahead, keyboard nav, ARIA listbox.', props: ['@value', '@placeholder', '@disabled'], events: ['change'], keys: ['↕', 'Enter', 'Space', 'Esc', 'Home', 'End', 'type-ahead'], attrs: ['$open', '$placeholder', '$disabled', '$value', '$highlighted', '$selected'] }
     { id: 'combobox', name: 'Combobox', lines: 118, desc: 'Filterable input + listbox for search-as-you-type.', props: ['@query', '@items', '@placeholder', '@disabled', '@autoHighlight'], events: ['filter', 'select'], keys: ['↕', 'Enter', 'Esc', 'Tab'], attrs: ['$open', '$disabled', '$clear', '$value', '$highlighted', '$empty'] }
-    { id: 'multi-select', name: 'MultiSelect', lines: 146, desc: 'Multi-select with chips, filtering, and keyboard nav.', props: ['@value', '@items', '@placeholder', '@disabled'], events: ['change'], keys: ['↕', 'Enter', 'Esc', 'Backspace', 'Tab'], attrs: ['$open', '$disabled', '$chips', '$chip', '$remove', '$clear', '$highlighted', '$selected'] }
+    { id: 'multi-select', name: 'MultiSelect', lines: 204, desc: 'Multi-select with chips, filtering, and keyboard nav.', props: ['@value', '@items', '@placeholder', '@disabled'], events: ['change'], keys: ['↕', 'Enter', 'Esc', 'Backspace', 'Tab'], attrs: ['$open', '$disabled', '$chips', '$chip', '$remove', '$highlighted', '$selected'] }
     { id: 'autocomplete', name: 'Autocomplete', lines: 113, desc: 'Suggestion input — type to filter, select to fill.', props: ['@value', '@items', '@placeholder', '@disabled'], events: ['select'], keys: ['↕', 'Enter', 'Esc', 'Tab'], attrs: ['$open', '$disabled', '$clear'] }
     { id: 'checkbox', name: 'Checkbox', lines: 18, desc: 'Toggle with checkbox or switch semantics.', props: ['@checked', '@disabled', '@indeterminate', '@switch'], events: ['change'], keys: [], attrs: ['$checked', '$indeterminate', '$disabled'] }
     { id: 'toggle', name: 'Toggle', lines: 14, desc: 'Two-state toggle button with pressed state.', props: ['@pressed', '@disabled'], events: ['change'], keys: [], attrs: ['$pressed', '$disabled'] }
@@ -646,7 +647,7 @@ export WidgetGallery = component
       # MULTI-SELECT
       # ========================================================================
       .section id: "multi-select"
-        SectionHead tag: "multi-select", name: "MultiSelect", lines: 146
+        SectionHead tag: "multi-select", name: "MultiSelect", lines: 204
         .section-desc "Multi-select with chips, filtering, and keyboard navigation."
         .demo-row
           .demo-label "Pick colors"
@@ -677,7 +678,6 @@ export WidgetGallery = component
               code "$chips"
               code "$chip"
               code "$remove"
-              code "$clear"
               code "$highlighted"
               code "$selected"
 

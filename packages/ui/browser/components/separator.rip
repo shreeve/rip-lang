@@ -1,0 +1,17 @@
+# Separator — accessible headless visual divider
+#
+# Decorative or semantic separator between content sections.
+# Ships zero CSS.
+#
+# Usage:
+#   Separator
+#   Separator orientation: "vertical"
+
+export Separator = component
+  @orientation:: "horizontal" | "vertical" := "horizontal"
+  @decorative:: boolean := true
+
+  render
+    div role: (if @decorative then 'none' else 'separator')
+      aria-orientation: (if @orientation is 'vertical' then 'vertical' else undefined)
+      $orientation: @orientation

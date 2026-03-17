@@ -1,0 +1,27 @@
+# Table — accessible headless semantic table wrapper
+#
+# Lightweight wrapper for HTML tables with optional caption and
+# striped rows. For data-heavy tables with virtual scrolling, use Grid.
+# Ships zero CSS.
+#
+# Usage:
+#   Table caption: "Team members", striped: true
+#     thead
+#       tr
+#         th "Name"
+#         th "Role"
+#     tbody
+#       tr
+#         td "Alice"
+#         td "Engineer"
+
+export Table = component
+  @caption:: string := ""
+  @striped:: boolean := false
+
+  render
+    div $striped: @striped?!
+      table
+        if @caption
+          caption @caption
+        slot

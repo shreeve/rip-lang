@@ -1,0 +1,10 @@
+# ==============================================================================
+# @rip-lang/ui/email — curated email components for Rip
+#
+# Usage:
+#   import { toHTML, Email, Head, Body, Container, Heading, Text, Button } from '@rip-lang/ui/email'
+#   html = toHTML(MyEmail, name: "Alice")
+# ==============================================================================
+
+export { toHTML, toText, renderEmail } from './render.rip'
+export { Email, Head, Body, Preview, Font, Container, Section, Row, Column, Heading, Text, Link, Image, Divider, Button, Markdown, CodeBlock, CodeInline, Tailwind } from './components.rip'

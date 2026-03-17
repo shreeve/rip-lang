@@ -1,0 +1,102 @@
+# ToggleGroup — accessible headless toggle group
+#
+# A set of two-state buttons where one or more can be pressed.
+# Set @multiple to false for single-select (radio-like) behavior.
+# Ships zero CSS.
+#
+# Usage:
+#   ToggleGroup value <=> alignment
+#     div $value: "left", "Left"
+#     div $value: "center", "Center"
+#     div $value: "right", "Right"
+
+export ToggleGroup = component
+  @value:: any := null
+  @disabled:: boolean := false
+  @multiple:: boolean := false
+  @orientation:: "horizontal" | "vertical" := "horizontal"
+
+  _items ~=
+    return [] unless @_slot
+    Array.from(@_slot.querySelectorAll('[data-value]') or [])
+
+  _isPressed: (item) ->
+    val = item.dataset.value
+    if @multiple
+      Array.isArray(@value) and val in @value
+    else
+      val is @value
+
+  _toggle: (val) ->
+    return if @disabled
+    if @multiple
+      arr = if Array.isArray(@value) then [...@value] else []
+      if val in arr
+        arr = arr.filter (v) -> v isnt val
+      else
+        arr.push val
+      @value = arr
+    else
+      @value = if val is @value then null else val
+    @emit 'change', @value
+
+  _buttons: ->
+    Array.from(@_root?.querySelectorAll('button[aria-pressed]') or [])
+
+  _syncTabStops: (focusIdx = null) ->
+    buttons = @_buttons()
+    return unless buttons.length
+    idx = focusIdx
+    if idx is null
+      idx = buttons.indexOf(document.activeElement)
+    if idx < 0
+      idx = buttons.findIndex (btn) -> btn.getAttribute('aria-pressed') is 'true'
+    idx = 0 if idx < 0
+    buttons.forEach (btn, i) -> btn.tabIndex = if i is idx then 0 else -1
+
+  _focusIndex: (idx) ->
+    buttons = @_buttons()
+    return unless buttons.length
+    idx = Math.max(0, Math.min(idx, buttons.length - 1))
+    @_syncTabStops(idx)
+    buttons[idx]?.focus()
+
+  onKeydown: (e) ->
+    opts = @_buttons()
+    return unless opts?.length
+    focused = Array.from(opts).indexOf(document.activeElement)
+    return if focused < 0
+    len = opts.length
+    ARIA.rovingNav e, {
+      next:  => @_focusIndex((focused + 1) %% len)
+      prev:  => @_focusIndex((focused - 1) %% len)
+      first: => @_focusIndex(0)
+      last:  => @_focusIndex(len - 1)
+    }, @orientation
+
+  onFocusin: (e) ->
+    buttons = @_buttons()
+    idx = buttons.indexOf(e.target)
+    @_syncTabStops(idx) if idx >= 0
+
+  mounted: ->
+    requestAnimationFrame => @_syncTabStops()
+
+  ~> @_syncTabStops()
+
+  render
+    div ref: "_root", role: "group", aria-orientation: @orientation
+      $orientation: @orientation
+      $disabled: @disabled?!
+
+      . ref: "_slot", style: "display:none"
+        slot
+
+      for item, idx in _items
+        button tabindex: "-1"
+          aria-pressed: !!@_isPressed(item)
+          $pressed: @_isPressed(item)?!
+          $disabled: @disabled?!
+          $value: item.dataset.value
+          @click: (=> @_toggle(item.dataset.value))
+          = item.textContent

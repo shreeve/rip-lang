@@ -1,0 +1,71 @@
+# ToggleGroup — accessible headless toggle group
+#
+# A set of two-state buttons where one or more can be pressed.
+# Set @multiple to false for single-select (radio-like) behavior.
+# Ships zero CSS.
+#
+# Usage:
+#   ToggleGroup value <=> alignment
+#     div $value: "left", "Left"
+#     div $value: "center", "Center"
+#     div $value: "right", "Right"
+
+export ToggleGroup = component
+  @value:: any := null
+  @disabled:: boolean := false
+  @multiple:: boolean := false
+  @orientation:: "horizontal" | "vertical" := "horizontal"
+
+  _items ~=
+    return [] unless @_slot
+    Array.from(@_slot.querySelectorAll('[data-value]') or [])
+
+  _isPressed: (item) ->
+    val = item.dataset.value
+    if @multiple
+      Array.isArray(@value) and val in @value
+    else
+      val is @value
+
+  _toggle: (val) ->
+    return if @disabled
+    if @multiple
+      arr = if Array.isArray(@value) then [...@value] else []
+      if val in arr
+        arr = arr.filter (v) -> v isnt val
+      else
+        arr.push val
+      @value = arr
+    else
+      @value = if val is @value then null else val
+    @emit 'change', @value
+
+  onKeydown: (e) ->
+    opts = @_root?.querySelectorAll('[data-value]')
+    return unless opts?.length
+    focused = Array.from(opts).indexOf(document.activeElement)
+    return if focused < 0
+    len = opts.length
+    ARIA.rovingNav e, {
+      next:  => opts[(focused + 1) %% len]?.focus()
+      prev:  => opts[(focused - 1) %% len]?.focus()
+      first: => opts[0]?.focus()
+      last:  => opts[len - 1]?.focus()
+    }, 'both'
+
+  render
+    div ref: "_root", role: "group", aria-orientation: @orientation
+      $orientation: @orientation
+      $disabled: @disabled?!
+
+      . ref: "_slot", style: "display:none"
+        slot
+
+      for item, idx in _items
+        button tabindex: (if idx is 0 then "0" else "-1")
+          aria-pressed: !!@_isPressed(item)
+          $pressed: @_isPressed(item)?!
+          $disabled: @disabled?!
+          $value: item.dataset.value
+          @click: (=> @_toggle(item.dataset.value))
+          = item.textContent

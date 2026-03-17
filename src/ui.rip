@@ -1075,6 +1075,18 @@ _ariaPopupDismiss = (open, popup, close, els = [], repos = null) ->
     document.removeEventListener 'mousedown', onDown
     window.removeEventListener   'scroll',    onScroll, true
 
+# popupGuard — per-component reopen suppression for pointer-driven popup closes.
+# Use when the same gesture that closes a popup can otherwise refocus/reclick a
+# trigger and reopen it immediately on the tail end of that sequence.
+_ariaPopupGuard = (delay = 250) ->
+  blockedUntil = 0
+  {
+    block: (ms = delay) ->
+      blockedUntil = Date.now() + ms
+    canOpen: ->
+      Date.now() >= blockedUntil
+  }
+
 # bindPopover — sync reactive open state with native Popover API
 # open: reactive boolean
 # popover: element or lazy getter (=> el)
@@ -1093,6 +1105,18 @@ _ariaBindPopover = (open, popover, setOpen, source = null) ->
   return unless Object.hasOwn(HTMLElement.prototype, 'togglePopover')
   restoreEl = null
 
+  syncState = (isOpen) ->
+    if isOpen
+      el.hidden = false
+      try el.inert = false
+      catch then null
+      el.removeAttribute 'aria-hidden'
+    else
+      try el.inert = true
+      catch then null
+      el.setAttribute 'aria-hidden', 'true'
+      el.hidden = true
+
   restoreFocus = ->
     target = restoreEl
     restoreEl = null
@@ -1109,7 +1133,9 @@ _ariaBindPopover = (open, popover, setOpen, source = null) ->
     isOpen = e.newState is 'open'
     if isOpen
       restoreEl = get(source) or currentFocus()
+      syncState(true)
     else
+      syncState(false)
       restoreFocus()
     setOpen?(isOpen)
   el.addEventListener 'toggle', onToggle
@@ -1120,6 +1146,7 @@ _ariaBindPopover = (open, popover, setOpen, source = null) ->
     src = get(source)
     if desired
       restoreEl = src or currentFocus()
+      syncState(true)
     opts = if src and desired then { force: desired, source: src } else { force: desired }
     try
       el.togglePopover(opts)
@@ -1127,6 +1154,8 @@ _ariaBindPopover = (open, popover, setOpen, source = null) ->
       # If the element cannot be toggled right now (for example detached),
       # keep runtime stable; effect will retry on the next reactive pass.
       null
+  else
+    syncState(desired)
 
   -> el.removeEventListener 'toggle', onToggle
 
@@ -1146,6 +1175,18 @@ _ariaBindDialog = (open, dialog, setOpen, dismissable = true) ->
   el = get(dialog)
   return unless el?.showModal?
   restoreEl = null
+
+  syncState = (isOpen) ->
+    if isOpen
+      el.hidden = false
+      try el.inert = false
+      catch then null
+      el.removeAttribute 'aria-hidden'
+    else
+      try el.inert = true
+      catch then null
+      el.setAttribute 'aria-hidden', 'true'
+      el.hidden = true
 
   restoreFocus = ->
     target = restoreEl
@@ -1167,16 +1208,20 @@ _ariaBindDialog = (open, dialog, setOpen, dismissable = true) ->
 
   onClose = ->
     setOpen?(false)
+    syncState(false)
     restoreFocus()
   el.addEventListener 'cancel', onCancel
   el.addEventListener 'close', onClose
 
   if open and not el.open
     restoreEl = currentFocus() unless restoreEl
+    syncState(true)
     try el.showModal()
     catch then null
-  if not open and el.open
+  else if not open and el.open
     el.close()
+  else
+    syncState(!!open)
 
   ->
     el.removeEventListener 'cancel', onCancel
@@ -1262,10 +1307,81 @@ _ariaUnlockScroll = (instance) ->
     document.body.style.width = ''
     window.scrollTo 0, scrollY
 
+_ariaHasAnchor = do ->
+  try
+    return false unless document?.createElement
+    anchor = document.createElement('div')
+    floating = document.createElement('div')
+    anchor.style.cssText = 'position:fixed;top:100px;left:100px;width:10px;height:10px;anchor-name:--probe'
+    floating.style.cssText = 'position:fixed;inset:auto;margin:0;position-anchor:--probe;position-area:bottom start;width:10px;height:10px'
+    document.body.appendChild(anchor)
+    document.body.appendChild(floating)
+    rect = floating.getBoundingClientRect()
+    anchor.remove()
+    floating.remove()
+    rect.top > 50
+  catch
+    false
+
+_ariaPosition = (trigger, floating, opts = {}) ->
+  return unless trigger and floating
+  placement = opts.placement ?? 'bottom start'
+  offset = opts.offset ?? 4
+  matchWidth = opts.matchWidth ?? false
+  if _ariaHasAnchor
+    name = "--anchor-#{floating.id or Math.random().toString(36).slice(2, 8)}"
+    trigger.style.anchorName = name
+    floating.style.positionAnchor = name
+    floating.style.position = 'fixed'
+    floating.style.inset = 'auto'
+    floating.style.margin = '0'
+    floating.style.positionArea = placement
+    floating.style.positionTry = 'flip-block, flip-inline, flip-block flip-inline'
+    floating.style.positionVisibility = 'anchors-visible'
+    [side] = placement.split(' ')
+    floating.style.marginTop = ''
+    floating.style.marginBottom = ''
+    floating.style.marginLeft = ''
+    floating.style.marginRight = ''
+    switch side
+      when 'bottom' then floating.style.marginTop = "#{offset}px"
+      when 'top' then floating.style.marginBottom = "#{offset}px"
+      when 'left' then floating.style.marginRight = "#{offset}px"
+      when 'right' then floating.style.marginLeft = "#{offset}px"
+    floating.style.minWidth = 'anchor-size(width)' if matchWidth
+  else
+    rect = trigger.getBoundingClientRect()
+    floating.style.position = 'fixed'
+    floating.style.inset = 'auto'
+    floating.style.margin = '0'
+    [side, align] = placement.split(' ')
+    align ??= 'start'
+    switch side
+      when 'bottom'
+        floating.style.top = "#{rect.bottom + offset}px"
+      when 'top'
+        floating.style.bottom = "#{window.innerHeight - rect.top + offset}px"
+      when 'left'
+        floating.style.right = "#{window.innerWidth - rect.left + offset}px"
+      when 'right'
+        floating.style.left = "#{rect.right + offset}px"
+    if side in ['bottom', 'top']
+      switch align
+        when 'start' then floating.style.left = "#{rect.left}px"
+        when 'center' then floating.style.left = "#{rect.left + rect.width / 2}px"; floating.style.transform = 'translateX(-50%)'
+        when 'end' then floating.style.right = "#{window.innerWidth - rect.right}px"
+    else
+      switch align
+        when 'start' then floating.style.top = "#{rect.top}px"
+        when 'center' then floating.style.top = "#{rect.top + rect.height / 2}px"; floating.style.transform = 'translateY(-50%)'
+        when 'end' then floating.style.bottom = "#{window.innerHeight - rect.bottom}px"
+    floating.style.minWidth = "#{rect.width}px" if matchWidth
+
 globalThis.__aria ??= {
-  listNav: _ariaListNav, rovingNav: _ariaRovingNav, popupDismiss: _ariaPopupDismiss,
+  listNav: _ariaListNav, rovingNav: _ariaRovingNav, popupDismiss: _ariaPopupDismiss, popupGuard: _ariaPopupGuard,
   bindPopover: _ariaBindPopover, bindDialog: _ariaBindDialog,
   positionBelow: _ariaPositionBelow, trapFocus: _ariaTrapFocus, wireAria: _ariaWireAria,
   lockScroll: _ariaLockScroll, unlockScroll: _ariaUnlockScroll,
+  position: _ariaPosition, hasAnchor: _ariaHasAnchor,
 }
 globalThis.ARIA ??= globalThis.__aria

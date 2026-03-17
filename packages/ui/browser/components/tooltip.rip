@@ -1,0 +1,96 @@
+# Tooltip — accessible headless tooltip with delay and positioning
+#
+# Shows on hover/focus with configurable delay. Uses aria-describedby and
+# native `popover="hint"` for top-layer behavior.
+# Exposes $open, $entering, $exiting. Ships zero CSS.
+#
+# Usage:
+#   Tooltip text: "Helpful info", placement: "top"
+#     button "Hover me"
+
+lastCloseTime = 0
+GROUP_TIMEOUT = 400
+
+export Tooltip = component
+  @text:: string := ""
+  @placement:: "top" | "top-start" | "top-end" | "bottom" | "bottom-start" | "bottom-end" | "left" | "right" := "top"
+  @delay:: number := 300
+  @offset:: number := 6
+  @hoverable:: boolean := false
+
+  open := false
+  entering := false
+  exiting := false
+  _showTimer := null
+  _hideTimer := null
+  _ready := false
+  _id =! "tip-#{Math.random().toString(36).slice(2, 8)}"
+
+  _applyPlacement: ->
+    [side, align] = @placement.split('-')
+    align ??= 'center'
+    ARIA.position @_trigger, @_tip, placement: "#{side} #{align}", offset: @offset
+
+  show: ->
+    clearTimeout _hideTimer if _hideTimer
+    delay = if (Date.now() - lastCloseTime) < GROUP_TIMEOUT then 0 else @delay
+    _showTimer = setTimeout =>
+      open = true
+      entering = true
+      setTimeout =>
+        entering = false
+      , 0
+    , delay
+
+  hide: ->
+    clearTimeout _showTimer if _showTimer
+    exiting = true
+    _hideTimer = setTimeout =>
+      open = false
+      exiting = false
+      lastCloseTime = Date.now()
+    , 150
+
+  _cancelHide: ->
+    clearTimeout _hideTimer if _hideTimer
+    exiting = false
+
+  beforeUnmount: ->
+    clearTimeout _showTimer if _showTimer
+    clearTimeout _hideTimer if _hideTimer
+
+  mounted: ->
+    _ready = true
+
+  ~>
+    return unless _ready
+    if @_tip
+      @_tip.setAttribute 'popover', 'hint'
+      @_applyPlacement()
+      if open then @_tip.setAttribute('data-open', '') else @_tip.removeAttribute('data-open')
+      ARIA.bindPopover open, (=> @_tip), ((isOpen) => open = isOpen), (=> @_trigger)
+
+  render
+    .
+      div ref: "_trigger"
+        aria-describedby: open ? _id : undefined
+        @mouseenter: @show
+        @mouseleave: @hide
+        @focusin: @show
+        @focusout: @hide
+        slot
+
+      div ref: "_tip"
+        id: _id
+        role: "tooltip"
+        popover: "hint"
+        hidden: not open
+        aria-hidden: (open ? undefined : "true")
+        style: "position:fixed;margin:0;inset:auto"
+        $open: open?!
+        $entering: entering?!
+        $exiting: exiting?!
+        $placement: @placement
+        @mouseenter: (=> @_cancelHide() if @hoverable)
+        @mouseleave: (=> @hide() if @hoverable)
+        @text

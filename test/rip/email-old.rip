@@ -1,0 +1,418 @@
+# Test: UI Email Package (DOM shim, serializer, plain text, render, compat)
+
+_base = process.cwd()
+
+# Pre-import the active ui/email modules into globals so test code strings can use them
+_dom = import!("#{_base}/packages/ui/email/dom.rip")
+_compat = import!("#{_base}/packages/ui/email/compat.rip")
+_render = import!("#{_base}/packages/ui/email/render.rip")
+
+globalThis.__emailDom    = _dom
+globalThis.__emailCompat = _compat
+globalThis.__emailRender = _render
+
+# ==============================================================================
+# DOM Shim — basic node operations
+# ==============================================================================
+
+test "createElement creates element with tag", '''
+  { Document } = __emailDom
+  doc = Document.new()
+  el = doc.createElement('div')
+  el.tag
+  ''', 'div'
+
+test "createTextNode creates text with data", '''
+  { Document } = __emailDom
+  doc = Document.new()
+  doc.createTextNode('hello').data
+  ''', 'hello'
+
+test "createComment creates comment with data", '''
+  { Document } = __emailDom
+  doc = Document.new()
+  doc.createComment('test').data
+  ''', 'test'
+
+test "appendChild adds child and sets parentNode", '''
+  { Document } = __emailDom
+  doc = Document.new()
+  parent = doc.createElement('div')
+  child = doc.createElement('span')
+  parent.appendChild(child)
+  child.parentNode is parent and parent.childNodes.length is 1
+  ''', true
+
+test "appendChild chains nextSibling", '''
+  { Document } = __emailDom
+  doc = Document.new()
+  parent = doc.createElement('div')
+  a = doc.createElement('span')
+  b = doc.createElement('span')
+  parent.appendChild(a)
+  parent.appendChild(b)
+  a.nextSibling is b and b.previousSibling is a
+  ''', true
+
+test "insertBefore inserts before reference", '''
+  { Document } = __emailDom
+  doc = Document.new()
+  parent = doc.createElement('div')
+  a = doc.createElement('a')
+  c2 = doc.createElement('c')
+  parent.appendChild(a)
+  parent.appendChild(c2)
+  b = doc.createElement('b')
+  parent.insertBefore(b, c2)
+  parent.childNodes.map((n) -> n.tag).join(',')
+  ''', 'a,b,c'
+
+test "removeChild removes and clears parentNode", '''
+  { Document } = __emailDom
+  doc = Document.new()
+  parent = doc.createElement('div')
+  child = doc.createElement('span')
+  parent.appendChild(child)
+  parent.removeChild(child)
+  parent.childNodes.length is 0 and child.parentNode is null
+  ''', true
+
+test "remove removes self from parent", '''
+  { Document } = __emailDom
+  doc = Document.new()
+  parent = doc.createElement('div')
+  child = doc.createElement('span')
+  parent.appendChild(child)
+  child.remove()
+  parent.childNodes.length
+  ''', 0
+
+test "fragment children flatten on appendChild", '''
+  { Document } = __emailDom
+  doc = Document.new()
+  parent = doc.createElement('div')
+  frag = doc.createDocumentFragment()
+  frag.appendChild(doc.createElement('a'))
+  frag.appendChild(doc.createElement('b'))
+  parent.appendChild(frag)
+  parent.childNodes.map((n) -> n.tag).join(',')
+  ''', 'a,b'
+
+test "setAttribute sets attribute", '''
+  { Document } = __emailDom
+  doc = Document.new()
+  el = doc.createElement('div')
+  el.setAttribute('role', 'presentation')
+  el.attributes.get('role')
+  ''', 'presentation'
+
+test "setAttribute style string parses into style object", '''
+  { Document } = __emailDom
+  doc = Document.new()
+  el = doc.createElement('div')
+  el.setAttribute('style', 'color:red;font-size:14px')
+  el.style.color is 'red' and el.style.fontSize is '14px'
+  ''', true
+
+test "setAttribute style object merges into style", '''
+  { Document } = __emailDom
+  doc = Document.new()
+  el = doc.createElement('div')
+  el.setAttribute('style', { color: 'blue', fontWeight: 'bold' })
+  el.style.color is 'blue' and el.style.fontWeight is 'bold'
+  ''', true
+
+test "className sets class attribute", '''
+  { Document } = __emailDom
+  doc = Document.new()
+  el = doc.createElement('div')
+  el.className = 'card active'
+  el.attributes.get('class')
+  ''', 'card active'
+
+test "innerHTML stores raw content", '''
+  { Document } = __emailDom
+  doc = Document.new()
+  el = doc.createElement('span')
+  el.innerHTML = '<b>bold</b>'
+  el.innerHTML
+  ''', '<b>bold</b>'
+
+test "textContent sets text child", '''
+  { Document } = __emailDom
+  doc = Document.new()
+  el = doc.createElement('p')
+  el.textContent = 'hello world'
+  el.childNodes.length is 1 and el.childNodes[0].data is 'hello world'
+  ''', true
+
+# ==============================================================================
+# Serializer
+# ==============================================================================
+
+test "serialize element with text", '''
+  { Document, serialize } = __emailDom
+  doc = Document.new()
+  el = doc.createElement('p')
+  el.appendChild(doc.createTextNode('hello'))
+  serialize(el)
+  ''', '<p>hello</p>'
+
+test "serialize void element", '''
+  { Document, serialize } = __emailDom
+  doc = Document.new()
+  serialize(doc.createElement('br'))
+  ''', '<br />'
+
+test "serialize element with style object", '''
+  { Document, serialize } = __emailDom
+  doc = Document.new()
+  el = doc.createElement('p')
+  el.style.fontSize = '14px'
+  el.style.lineHeight = '24px'
+  serialize(el)
+  ''', '<p style="font-size:14px;line-height:24px"></p>'
+
+test "serialize escapes HTML in text", '''
+  { Document, serialize } = __emailDom
+  doc = Document.new()
+  el = doc.createElement('p')
+  el.appendChild(doc.createTextNode('a < b & c > d'))
+  serialize(el)
+  ''', '<p>a &lt; b &amp; c &gt; d</p>'
+
+test "serialize suppresses framework anchor comments", '''
+  { Document, serialize } = __emailDom
+  doc = Document.new()
+  parent = doc.createElement('div')
+  parent.appendChild(doc.createComment('if'))
+  parent.appendChild(doc.createComment('for'))
+  parent.appendChild(doc.createComment('unknown'))
+  parent.appendChild(doc.createComment(''))
+  serialize(parent)
+  ''', '<div></div>'
+
+test "serialize passes through MSO conditional comments", '''
+  { Document, serialize } = __emailDom
+  doc = Document.new()
+  parent = doc.createElement('div')
+  parent.appendChild(doc.createComment('[if mso]><i>test</i><![endif]'))
+  serialize(parent)
+  ''', '<div><!--[if mso]><i>test</i><![endif]--></div>'
+
+test "serialize innerHTML outputs verbatim", '''
+  { Document, serialize } = __emailDom
+  doc = Document.new()
+  el = doc.createElement('span')
+  el.innerHTML = '<!--[if mso]><b>hi</b><![endif]-->'
+  serialize(el)
+  ''', '<span><!--[if mso]><b>hi</b><![endif]--></span>'
+
+test "serialize nested structure", '''
+  { Document, serialize } = __emailDom
+  doc = Document.new()
+  t = doc.createElement('table')
+  tb = doc.createElement('tbody')
+  tr = doc.createElement('tr')
+  td = doc.createElement('td')
+  td.appendChild(doc.createTextNode('cell'))
+  tr.appendChild(td)
+  tb.appendChild(tr)
+  t.appendChild(tb)
+  serialize(t)
+  ''', '<table><tbody><tr><td>cell</td></tr></tbody></table>'
+
+# ==============================================================================
+# Plain text
+# ==============================================================================
+
+test "toPlainText paragraph", '''
+  { Document, toPlainText } = __emailDom
+  doc = Document.new()
+  root = doc.createElement('__root')
+  p = doc.createElement('p')
+  p.appendChild(doc.createTextNode('Hello world'))
+  root.appendChild(p)
+  toPlainText(root)
+  ''', 'Hello world'
+
+test "toPlainText link with different href", '''
+  { Document, toPlainText } = __emailDom
+  doc = Document.new()
+  root = doc.createElement('__root')
+  a = doc.createElement('a')
+  a.setAttribute('href', 'https://example.com')
+  a.appendChild(doc.createTextNode('Click here'))
+  root.appendChild(a)
+  toPlainText(root)
+  ''', 'Click here (https://example.com)'
+
+test "toPlainText hr becomes ---", '''
+  { Document, toPlainText } = __emailDom
+  doc = Document.new()
+  root = doc.createElement('__root')
+  root.appendChild(doc.createElement('hr'))
+  toPlainText(root).trim()
+  ''', '---'
+
+test "toPlainText skips data-skip-in-text elements", '''
+  { Document, toPlainText } = __emailDom
+  doc = Document.new()
+  root = doc.createElement('__root')
+  div = doc.createElement('div')
+  div.setAttribute('data-skip-in-text', 'true')
+  div.appendChild(doc.createTextNode('hidden'))
+  root.appendChild(div)
+  p = doc.createElement('p')
+  p.appendChild(doc.createTextNode('visible'))
+  root.appendChild(p)
+  toPlainText(root).trim()
+  ''', 'visible'
+
+test "toPlainText skips style tags", '''
+  { Document, toPlainText } = __emailDom
+  doc = Document.new()
+  root = doc.createElement('__root')
+  s = doc.createElement('style')
+  s.appendChild(doc.createTextNode('body { color: red }'))
+  root.appendChild(s)
+  p = doc.createElement('p')
+  p.appendChild(doc.createTextNode('content'))
+  root.appendChild(p)
+  toPlainText(root).trim()
+  ''', 'content'
+
+# ==============================================================================
+# Compat helpers
+# ==============================================================================
+
+test "pxToPt converts correctly", '''
+  { pxToPt } = __emailCompat
+  pxToPt(16)
+  ''', 12
+
+test "pxToPt returns undefined for non-number", '''
+  { pxToPt } = __emailCompat
+  pxToPt(undefined)
+  ''', undefined
+
+test "convertToPx handles px", '''
+  { convertToPx } = __emailCompat
+  convertToPx('16px')
+  ''', 16
+
+test "convertToPx handles em", '''
+  { convertToPx } = __emailCompat
+  convertToPx('1em')
+  ''', 16
+
+test "convertToPx handles number", '''
+  { convertToPx } = __emailCompat
+  convertToPx(42)
+  ''', 42
+
+test "convertToPx returns 0 for null", '''
+  { convertToPx } = __emailCompat
+  convertToPx(null)
+  ''', 0
+
+test "parsePadding shorthand single value", '''
+  { parsePadding } = __emailCompat
+  result = parsePadding({ padding: '10px' })
+  result.paddingTop is 10 and result.paddingRight is 10 and result.paddingBottom is 10 and result.paddingLeft is 10
+  ''', true
+
+test "parsePadding individual overrides shorthand", '''
+  { parsePadding } = __emailCompat
+  result = parsePadding({ padding: '10px', paddingLeft: '5px' })
+  result.paddingLeft
+  ''', 5
+
+test "computeMsoPadding returns zero for zero", '''
+  { computeMsoPadding } = __emailCompat
+  computeMsoPadding(0)
+  ''', [0, 0]
+
+test "computeMsoPadding returns valid font width", '''
+  { computeMsoPadding } = __emailCompat
+  [fw, sc] = computeMsoPadding(20)
+  fw <= 5 and sc > 0
+  ''', true
+
+test "previewPadding pads to max length", '''
+  { previewPadding } = __emailCompat
+  previewPadding('short').length
+  ''', 1015
+
+test "previewPadding returns empty for long text", '''
+  { previewPadding } = __emailCompat
+  previewPadding('x'.repeat(200))
+  ''', ''
+
+test "styleToString converts object", '''
+  { styleToString } = __emailCompat
+  styleToString({ fontSize: '14px', color: 'red' })
+  ''', 'font-size:14px;color:red'
+
+test "styleToString handles MSO properties", '''
+  { styleToString } = __emailCompat
+  styleToString({ msoPaddingAlt: '0px', msoTextRaise: '12' })
+  ''', 'mso-padding-alt:0px;mso-text-raise:12'
+
+test "msoConditional wraps in comments", '''
+  { msoConditional } = __emailCompat
+  msoConditional('<b>hi</b>')
+  ''', '<!--[if mso]><b>hi</b><![endif]-->'
+
+# ==============================================================================
+# Render — end-to-end with real Rip components
+# ==============================================================================
+
+test "renderEmail produces html with doctype", '''
+  { renderEmail } = __emailRender
+  TestEmail = component
+    @name =! "World"
+    render
+      html
+        body
+          p "Hello #{@name}"
+  { html, text } = renderEmail(TestEmail, name: "Alice")
+  html.includes('<!DOCTYPE') and html.includes('<p>Hello Alice</p>') and text.includes('Hello Alice')
+  ''', true
+
+test "renderEmail with conditional", '''
+  { renderEmail } = __emailRender
+  TestEmail = component
+    @show =! true
+    render
+      div
+        if @show
+          p "visible"
+  { html } = renderEmail(TestEmail, show: true)
+  html.includes('<p>visible</p>')
+  ''', true
+
+test "renderEmail with nested native tags", '''
+  { renderEmail } = __emailRender
+  TestEmail = component
+    render
+      table role: "presentation", border: "0", cellpadding: "0", cellspacing: "0"
+        tbody
+          tr
+            td
+              p "content"
+  { html } = renderEmail(TestEmail)
+  html.includes('<table') and html.includes('<td><p>content</p></td>')
+  ''', true
+
+test "renderEmail plain text output", '''
+  { renderEmail } = __emailRender
+  TestEmail = component
+    render
+      div
+        h1 "Title"
+        p "Body text"
+        a href: "https://example.com", "Click"
+  { text } = renderEmail(TestEmail)
+  text.includes('Title') and text.includes('Body text') and text.includes('Click (https://example.com)')
+  ''', true

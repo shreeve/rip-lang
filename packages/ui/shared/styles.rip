@@ -1,0 +1,17 @@
+# Shared style helpers for @rip-lang/ui
+
+export joinStyles = (...styles) ->
+  (s for s in styles when s).join(';')
+
+export withMargin = (opts = {}) ->
+  parts = []
+  parts.push("margin:#{opts.m}") if opts.m?
+  parts.push("margin-left:#{opts.mx}") if opts.mx?
+  parts.push("margin-right:#{opts.mx}") if opts.mx?
+  parts.push("margin-top:#{opts.my}") if opts.my?
+  parts.push("margin-bottom:#{opts.my}") if opts.my?
+  parts.push("margin-top:#{opts.mt}") if opts.mt?
+  parts.push("margin-right:#{opts.mr}") if opts.mr?
+  parts.push("margin-bottom:#{opts.mb}") if opts.mb?
+  parts.push("margin-left:#{opts.ml}") if opts.ml?
+  parts.join(';')

@@ -1,0 +1,28 @@
+# InputGroup — accessible headless input with prefix/suffix
+#
+# Wraps a form control with optional prefix and suffix elements.
+# Use $prefix and $suffix on children to mark addon positions.
+# Tracks child input focus for styling. Ships zero CSS.
+#
+# Usage:
+#   InputGroup
+#     span $prefix: true, "$"
+#     Input value <=> amount, type: "number"
+#   InputGroup
+#     Input value <=> search, placeholder: "Search..."
+#     button $suffix: true, @click: doSearch, "Go"
+
+export InputGroup = component
+  @disabled:: boolean := false
+
+  focused := false
+
+  mounted: ->
+    ctrl = @_root?.querySelector('input, select, textarea')
+    return unless ctrl
+    ctrl.addEventListener 'focusin', => focused = true
+    ctrl.addEventListener 'focusout', => focused = false
+
+  render
+    div ref: "_root", $disabled: @disabled?!, $focused: focused?!
+      slot

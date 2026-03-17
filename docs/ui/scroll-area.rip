@@ -1,0 +1,145 @@
+# ScrollArea — accessible headless custom scrollbar
+#
+# Renders custom scrollbar thumb that tracks scroll position. Thumb is
+# draggable and the track is clickable. Auto-hides when not scrolling.
+# Ships zero CSS.
+#
+# Usage:
+#   ScrollArea
+#     div "Long scrollable content..."
+
+MIN_THUMB = 20
+
+export ScrollArea = component
+  @orientation:: "horizontal" | "vertical" := "vertical"
+
+  hovering := false
+  scrolling := false
+  _scrollTimer = null
+  _dragStart = 0
+  _dragScrollStart = 0
+  _dragging = false
+  _ready := false
+
+  _updateThumb: ->
+    vp = @_viewport
+    sb = @_scrollbar
+    th = @_thumb
+    return unless vp and sb and th
+    vert = @orientation is 'vertical'
+
+    vpSize = if vert then vp.clientHeight else vp.clientWidth
+    scSize = if vert then vp.scrollHeight else vp.scrollWidth
+    sbSize = if vert then sb.clientHeight else sb.clientWidth
+    scrollPos = if vert then vp.scrollTop else vp.scrollLeft
+
+    ratio = vpSize / (scSize or 1)
+    if ratio >= 1
+      th.style.display = 'none'
+      return
+    th.style.display = ''
+
+    thumbPx = Math.max(MIN_THUMB, sbSize * ratio)
+    scrollRange = scSize - vpSize
+    maxOffset = sbSize - thumbPx
+    posPx = if scrollRange > 0 then Math.min(maxOffset, Math.max(0, (scrollPos / scrollRange) * maxOffset)) else 0
+
+    if vert
+      th.style.height = "#{thumbPx}px"
+      th.style.transform = "translate3d(0,#{posPx}px,0)"
+    else
+      th.style.width = "#{thumbPx}px"
+      th.style.transform = "translate3d(#{posPx}px,0,0)"
+
+  _onScroll: ->
+    scrolling = true
+    clearTimeout _scrollTimer if _scrollTimer
+    _scrollTimer = setTimeout (-> scrolling = false), 800
+    @_updateThumb()
+
+  _onTrackClick: (e) ->
+    return if e.target is @_thumb
+    vp = @_viewport
+    sb = @_scrollbar
+    th = @_thumb
+    return unless vp and sb and th
+    vert = @orientation is 'vertical'
+    rect = sb.getBoundingClientRect()
+    thumbPx = if vert then th.offsetHeight else th.offsetWidth
+
+    if vert
+      clickPos = e.clientY - rect.top - thumbPx / 2
+      maxOffset = rect.height - thumbPx
+      ratio = Math.max(0, Math.min(1, clickPos / maxOffset))
+      vp.scrollTop = ratio * (vp.scrollHeight - vp.clientHeight)
+    else
+      clickPos = e.clientX - rect.left - thumbPx / 2
+      maxOffset = rect.width - thumbPx
+      ratio = Math.max(0, Math.min(1, clickPos / maxOffset))
+      vp.scrollLeft = ratio * (vp.scrollWidth - vp.clientWidth)
+
+  _onThumbDown: (e) ->
+    return if e.button isnt 0
+    e.preventDefault()
+    e.stopPropagation()
+    _dragging = true
+    if @orientation is 'vertical'
+      _dragStart = e.clientY
+      _dragScrollStart = @_viewport.scrollTop
+    else
+      _dragStart = e.clientX
+      _dragScrollStart = @_viewport.scrollLeft
+    @_thumb.setPointerCapture e.pointerId
+
+  _onThumbMove: (e) ->
+    return unless _dragging
+    vp = @_viewport
+    sb = @_scrollbar
+    th = @_thumb
+    return unless vp and sb and th
+    vert = @orientation is 'vertical'
+    thumbPx = if vert then th.offsetHeight else th.offsetWidth
+    sbSize = if vert then sb.clientHeight else sb.clientWidth
+    maxOffset = sbSize - thumbPx
+    return if maxOffset <= 0
+
+    delta = if vert then e.clientY - _dragStart else e.clientX - _dragStart
+    scrollRange = if vert then vp.scrollHeight - vp.clientHeight else vp.scrollWidth - vp.clientWidth
+    newPos = _dragScrollStart + (delta / maxOffset) * scrollRange
+
+    if vert then vp.scrollTop = newPos else vp.scrollLeft = newPos
+
+  _onThumbUp: (e) ->
+    _dragging = false
+    @_thumb.releasePointerCapture e.pointerId
+
+  mounted: ->
+    _ready = true
+    requestAnimationFrame => @_updateThumb()
+    if @_viewport
+      @_resizeObs = new ResizeObserver => @_updateThumb()
+      @_resizeObs.observe @_viewport
+      @_resizeObs.observe @_viewport.firstElementChild if @_viewport.firstElementChild
+
+  beforeUnmount: ->
+    @_resizeObs?.disconnect()
+
+  render
+    div $orientation: @orientation
+      $hovering: hovering?!
+      $scrolling: scrolling?!
+      $dragging: _dragging?!
+      @mouseenter: (=> hovering = true)
+      @mouseleave: (=> hovering = false)
+
+      div ref: "_viewport", $viewport: true
+        style: "overflow:scroll;scrollbar-width:none"
+        @scroll: @_onScroll
+        slot
+
+      div ref: "_scrollbar", $scrollbar: true
+        @click: @_onTrackClick
+        div ref: "_thumb", $thumb: true
+          @pointerdown: @_onThumbDown
+          @pointermove: @_onThumbMove
+          @pointerup: @_onThumbUp
