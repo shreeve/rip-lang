@@ -117,7 +117,7 @@
     },
     "packages/vscode": {
       "name": "rip",
-      "version": "0.5.14",
+      "version": "0.5.15",
       "dependencies": {
         "vscode-languageclient": "^9.0.1",
         "vscode-languageserver": "^9.0.1",

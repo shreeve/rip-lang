@@ -222,7 +222,7 @@ test.describe('overlay primitives', () => {
     await expect(listbox).toBeVisible()
 
     const before = await firstOption.getAttribute('aria-selected')
-    await firstOption.dispatchEvent('click')
+    await firstOption.click()
     await expect(firstOption).toHaveAttribute('aria-selected', before === 'true' ? 'false' : 'true')
   })
 
