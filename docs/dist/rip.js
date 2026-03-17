@@ -1039,9 +1039,30 @@
     if (usesRipIntrinsicProps) {
       preamble.push("type __RipElementMap = HTMLElementTagNameMap & Omit<SVGElementTagNameMap, keyof HTMLElementTagNameMap>;");
       preamble.push("type __RipTag = keyof __RipElementMap;");
+      preamble.push("type __RipBrowserElement = Omit<HTMLElement, 'querySelector' | 'querySelectorAll' | 'closest' | 'setAttribute' | 'hidden'> & { hidden: boolean | 'until-found'; setAttribute(qualifiedName: string, value: any): void; querySelector(selectors: string): __RipBrowserElement | null; querySelectorAll(selectors: string): NodeListOf<__RipBrowserElement>; closest(selectors: string): __RipBrowserElement | null; };");
+      preamble.push("type __RipDomEl<K extends __RipTag> = Omit<__RipElementMap[K], 'querySelector' | 'querySelectorAll' | 'closest' | 'setAttribute' | 'hidden'> & __RipBrowserElement;");
       preamble.push("type __RipAttrKeys<T> = { [K in keyof T]-?: K extends 'style' ? never : T[K] extends (...args: any[]) => any ? never : K }[keyof T] & string;");
       preamble.push("type __RipEvents = { [K in keyof HTMLElementEventMap as `@${K}`]?: ((event: HTMLElementEventMap[K]) => void) | null };");
-      preamble.push("type __RipProps<K extends __RipTag> = { [P in __RipAttrKeys<__RipElementMap[K]>]?: __RipElementMap[K][P] } & __RipEvents & { class?: string; style?: string; [k: `data-${string}`]: any; [k: `aria-${string}`]: any };");
+      preamble.push("type __RipProps<K extends __RipTag> = { [P in __RipAttrKeys<__RipElementMap[K]>]?: __RipElementMap[K][P] } & __RipEvents & { ref?: string; class?: string; style?: string; [k: `data-${string}`]: any; [k: `aria-${string}`]: any };");
+    }
+    if (/\bARIA\./.test(source)) {
+      preamble.push("type __RipAriaNavHandlers = { next?: () => void; prev?: () => void; first?: () => void; last?: () => void; select?: () => void; dismiss?: () => void; tab?: () => void; char?: () => void; };");
+      preamble.push("declare const ARIA: {");
+      preamble.push("  bindPopover(open: boolean, popover: () => Element | null | undefined, setOpen: (isOpen: boolean) => void, source?: (() => Element | null | undefined) | null): void;");
+      preamble.push("  bindDialog(open: boolean, dialog: () => Element | null | undefined, setOpen: (isOpen: boolean) => void, dismissable?: boolean): void;");
+      preamble.push("  popupDismiss(open: boolean, popup: () => Element | null | undefined, close: () => void, els?: Array<() => Element | null | undefined>, repos?: (() => void) | null): void;");
+      preamble.push("  popupGuard(delay?: number): any;");
+      preamble.push("  listNav(event: KeyboardEvent, handlers: __RipAriaNavHandlers): void;");
+      preamble.push("  rovingNav(event: KeyboardEvent, handlers: __RipAriaNavHandlers, orientation?: 'vertical' | 'horizontal' | 'both'): void;");
+      preamble.push("  positionBelow(trigger: Element | null | undefined, popup: Element | null | undefined, gap?: number, setVisible?: boolean): void;");
+      preamble.push("  position(trigger: Element | null | undefined, floating: Element | null | undefined, opts?: any): void;");
+      preamble.push("  trapFocus(panel: Element | null | undefined): void;");
+      preamble.push("  wireAria(panel: Element, id: string): void;");
+      preamble.push("  lockScroll(instance: any): void;");
+      preamble.push("  unlockScroll(instance: any): void;");
+      preamble.push("  hasAnchor: boolean;");
+      preamble.push("  [key: string]: any;");
+      preamble.push("};");
     }
     if (usesSignal) {
       preamble.push("interface Signal<T> { value: T; read(): T; lock(): Signal<T>; free(): Signal<T>; kill(): T; }");
@@ -1075,6 +1096,41 @@
       return false;
     let head = sexpr[0]?.valueOf?.() ?? sexpr[0];
     let usesIntrinsicProps = false;
+    const refMembers = new Map;
+    const isIntrinsicTag = (name2) => typeof name2 === "string" && /^[a-z]/.test(name2);
+    const collectRefMembers = (node) => {
+      if (!Array.isArray(node))
+        return;
+      let nodeHead = node[0]?.valueOf?.() ?? node[0];
+      if (isIntrinsicTag(nodeHead)) {
+        for (let i = 1;i < node.length; i++) {
+          let child = node[i];
+          if (!Array.isArray(child))
+            continue;
+          let childHead = child[0]?.valueOf?.() ?? child[0];
+          if (childHead !== "object")
+            continue;
+          for (let j = 1;j < child.length; j++) {
+            let entry = child[j];
+            if (!Array.isArray(entry))
+              continue;
+            let key = entry[0]?.valueOf?.() ?? entry[0];
+            if (key !== "ref")
+              continue;
+            let refName = entry[1]?.valueOf?.() ?? entry[1];
+            if (typeof refName === "string")
+              refName = refName.replace(/^["']|["']$/g, "");
+            if (typeof refName === "string" && !refMembers.has(refName)) {
+              refMembers.set(refName, `__RipDomEl<'${nodeHead}'> | null`);
+            }
+          }
+        }
+      }
+      for (let i = 1;i < node.length; i++) {
+        if (Array.isArray(node[i]))
+          collectRefMembers(node[i]);
+      }
+    };
     let exported = false;
     let name = null;
     let compNode = null;
@@ -1165,6 +1221,10 @@
             bodyMembers.push(`  ${methName}(${paramStrs.join(", ")}): void;`);
           }
           continue;
+        } else if (mHead === "render") {
+          usesIntrinsicProps = true;
+          collectRefMembers(member[1]);
+          continue;
         } else {
           continue;
         }
@@ -1190,6 +1250,9 @@
         } else {
           lines.push(`  constructor(props${propsOpt}: ${inheritedPropsType});`);
         }
+      }
+      for (let [refName, refType] of refMembers) {
+        bodyMembers.push(`  ${refName}: ${refType};`);
       }
       for (let m of bodyMembers)
         lines.push(m);
@@ -3669,147 +3732,242 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
   };
   var parser = /* @__PURE__ */ createParser();
   var parse = parser.parse.bind(parser);
-  // src/components.js
-  var HTML_TAGS = new Set([
-    "html",
-    "head",
-    "title",
-    "base",
-    "link",
-    "meta",
-    "style",
-    "body",
+  // src/generated/dom-events.js
+  var DOM_EVENT_NAMES = [
+    "abort",
+    "animationcancel",
+    "animationend",
+    "animationiteration",
+    "animationstart",
+    "auxclick",
+    "beforeinput",
+    "beforematch",
+    "beforetoggle",
+    "blur",
+    "cancel",
+    "canplay",
+    "canplaythrough",
+    "change",
+    "click",
+    "close",
+    "compositionend",
+    "compositionstart",
+    "compositionupdate",
+    "contextlost",
+    "contextmenu",
+    "contextrestored",
+    "copy",
+    "cuechange",
+    "cut",
+    "dblclick",
+    "drag",
+    "dragend",
+    "dragenter",
+    "dragleave",
+    "dragover",
+    "dragstart",
+    "drop",
+    "durationchange",
+    "emptied",
+    "ended",
+    "error",
+    "focus",
+    "focusin",
+    "focusout",
+    "formdata",
+    "fullscreenchange",
+    "fullscreenerror",
+    "gotpointercapture",
+    "input",
+    "invalid",
+    "keydown",
+    "keypress",
+    "keyup",
+    "load",
+    "loadeddata",
+    "loadedmetadata",
+    "loadstart",
+    "lostpointercapture",
+    "mousedown",
+    "mouseenter",
+    "mouseleave",
+    "mousemove",
+    "mouseout",
+    "mouseover",
+    "mouseup",
+    "paste",
+    "pause",
+    "play",
+    "playing",
+    "pointercancel",
+    "pointerdown",
+    "pointerenter",
+    "pointerleave",
+    "pointermove",
+    "pointerout",
+    "pointerover",
+    "pointerrawupdate",
+    "pointerup",
+    "progress",
+    "ratechange",
+    "reset",
+    "resize",
+    "scroll",
+    "scrollend",
+    "securitypolicyviolation",
+    "seeked",
+    "seeking",
+    "select",
+    "selectionchange",
+    "selectstart",
+    "slotchange",
+    "stalled",
+    "submit",
+    "suspend",
+    "timeupdate",
+    "toggle",
+    "touchcancel",
+    "touchend",
+    "touchmove",
+    "touchstart",
+    "transitioncancel",
+    "transitionend",
+    "transitionrun",
+    "transitionstart",
+    "volumechange",
+    "waiting",
+    "webkitanimationend",
+    "webkitanimationiteration",
+    "webkitanimationstart",
+    "webkittransitionend",
+    "wheel"
+  ];
+  var DOM_EVENTS = new Set(DOM_EVENT_NAMES);
+
+  // src/generated/dom-tags.js
+  var HTML_TAG_NAMES = [
+    "a",
+    "abbr",
     "address",
+    "area",
     "article",
     "aside",
+    "audio",
+    "b",
+    "base",
+    "bdi",
+    "bdo",
+    "blockquote",
+    "body",
+    "br",
+    "button",
+    "canvas",
+    "caption",
+    "cite",
+    "code",
+    "col",
+    "colgroup",
+    "data",
+    "datalist",
+    "dd",
+    "del",
+    "details",
+    "dfn",
+    "dialog",
+    "div",
+    "dl",
+    "dt",
+    "em",
+    "embed",
+    "fieldset",
+    "figcaption",
+    "figure",
     "footer",
-    "header",
+    "form",
     "h1",
     "h2",
     "h3",
     "h4",
     "h5",
     "h6",
-    "main",
-    "nav",
-    "section",
-    "blockquote",
-    "dd",
-    "div",
-    "dl",
-    "dt",
-    "figcaption",
-    "figure",
+    "head",
+    "header",
+    "hgroup",
     "hr",
-    "li",
-    "ol",
-    "p",
-    "pre",
-    "ul",
-    "a",
-    "abbr",
-    "b",
-    "bdi",
-    "bdo",
-    "br",
-    "cite",
-    "code",
-    "data",
-    "dfn",
-    "em",
+    "html",
     "i",
+    "iframe",
+    "img",
+    "input",
+    "ins",
     "kbd",
+    "label",
+    "legend",
+    "li",
+    "link",
+    "main",
+    "map",
     "mark",
+    "menu",
+    "meta",
+    "meter",
+    "nav",
+    "noscript",
+    "object",
+    "ol",
+    "optgroup",
+    "option",
+    "output",
+    "p",
+    "picture",
+    "pre",
+    "progress",
     "q",
     "rp",
     "rt",
     "ruby",
     "s",
     "samp",
+    "script",
+    "search",
+    "section",
+    "select",
+    "slot",
     "small",
+    "source",
     "span",
     "strong",
+    "style",
     "sub",
+    "summary",
     "sup",
-    "time",
-    "u",
-    "var",
-    "wbr",
-    "area",
-    "audio",
-    "img",
-    "map",
-    "track",
-    "video",
-    "embed",
-    "iframe",
-    "object",
-    "param",
-    "picture",
-    "portal",
-    "source",
-    "svg",
-    "math",
-    "canvas",
-    "noscript",
-    "script",
-    "del",
-    "ins",
-    "caption",
-    "col",
-    "colgroup",
     "table",
     "tbody",
     "td",
+    "template",
+    "textarea",
     "tfoot",
     "th",
     "thead",
+    "time",
+    "title",
     "tr",
-    "button",
-    "datalist",
-    "fieldset",
-    "form",
-    "input",
-    "label",
-    "legend",
-    "meter",
-    "optgroup",
-    "option",
-    "output",
-    "progress",
-    "select",
-    "textarea",
-    "details",
-    "dialog",
-    "menu",
-    "summary",
-    "slot",
-    "template"
-  ]);
-  var SVG_TAGS = new Set([
-    "svg",
-    "g",
-    "defs",
-    "symbol",
-    "use",
-    "marker",
-    "clipPath",
-    "mask",
-    "pattern",
+    "track",
+    "u",
+    "ul",
+    "var",
+    "video",
+    "wbr"
+  ];
+  var SVG_NAMESPACE_TAG_NAMES = [
+    "animate",
+    "animateMotion",
+    "animateTransform",
     "circle",
+    "clipPath",
+    "defs",
+    "desc",
     "ellipse",
-    "line",
-    "path",
-    "polygon",
-    "polyline",
-    "rect",
-    "text",
-    "textPath",
-    "tspan",
-    "linearGradient",
-    "radialGradient",
-    "stop",
-    "filter",
     "feBlend",
     "feColorMatrix",
     "feComponentTransfer",
@@ -3835,20 +3993,43 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
     "feSpotLight",
     "feTile",
     "feTurbulence",
-    "animate",
-    "animateMotion",
-    "animateTransform",
-    "set",
-    "mpath",
-    "desc",
+    "filter",
     "foreignObject",
+    "g",
     "image",
+    "line",
+    "linearGradient",
+    "marker",
+    "mask",
     "metadata",
+    "mpath",
+    "path",
+    "pattern",
+    "polygon",
+    "polyline",
+    "radialGradient",
+    "rect",
+    "set",
+    "stop",
+    "svg",
     "switch",
-    "title",
+    "symbol",
+    "text",
+    "textPath",
+    "tspan",
+    "use",
     "view"
-  ]);
+  ];
+  var HTML_COMPAT_EXTRA_TAG_NAMES = [
+    "math",
+    "param",
+    "portal"
+  ];
+  var HTML_TAGS = new Set([...HTML_TAG_NAMES, ...HTML_COMPAT_EXTRA_TAG_NAMES]);
+  var SVG_TAGS = new Set(SVG_NAMESPACE_TAG_NAMES);
   var TEMPLATE_TAGS = new Set([...HTML_TAGS, ...SVG_TAGS]);
+
+  // src/components.js
   var BIND_PREFIX = "__bind_";
   var BIND_SUFFIX = "__";
   var LIFECYCLE_HOOKS = new Set(["beforeMount", "mounted", "updated", "beforeUnmount", "unmounted", "onError"]);
@@ -4274,10 +4455,12 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         s.await = true;
       return s.predicate || s.await ? s : to;
     };
-    proto.transformComponentMembers = function(sexpr) {
+    proto.transformComponentMembers = function(sexpr, localScope = new Set) {
       const self = this._self;
       if (!Array.isArray(sexpr)) {
         const sv = _str(sexpr);
+        if (sv && localScope.has(sv))
+          return sexpr;
         if (sv && this.reactiveMembers && this.reactiveMembers.has(sv)) {
           return [".", [".", self, sv], _transferMeta(sexpr, "value")];
         }
@@ -4298,20 +4481,46 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         return [sexpr[0], this.transformComponentMembers(sexpr[1]), sexpr[2]];
       }
       if (sexpr[0] === "->") {
-        return ["=>", ...sexpr.slice(1).map((item) => this.transformComponentMembers(item))];
+        const params = sexpr[1];
+        const childScope = new Set(localScope);
+        if (Array.isArray(params)) {
+          for (const p of params) {
+            const name = _str(Array.isArray(p) && p[0] === "default" ? p[1] : p);
+            if (name)
+              childScope.add(name);
+          }
+        }
+        return ["=>", sexpr[1], this.transformComponentMembers(sexpr[2], childScope)];
       }
       if (sexpr[0] === "object") {
         return ["object", ...sexpr.slice(1).map((pair) => {
           if (Array.isArray(pair) && pair.length >= 2) {
             let key = pair[0];
-            let newKey = Array.isArray(key) ? this.transformComponentMembers(key) : key;
-            let newValue = this.transformComponentMembers(pair[1]);
+            let newKey = Array.isArray(key) ? this.transformComponentMembers(key, localScope) : key;
+            let newValue = this.transformComponentMembers(pair[1], localScope);
             return [newKey, newValue, pair[2]];
           }
-          return this.transformComponentMembers(pair);
+          return this.transformComponentMembers(pair, localScope);
         })];
       }
-      return sexpr.map((item) => this.transformComponentMembers(item));
+      if (sexpr[0] === "block" || sexpr[0] === "program") {
+        const scope = new Set(localScope);
+        const items = [sexpr[0]];
+        for (let i = 1;i < sexpr.length; i++) {
+          const item = sexpr[i];
+          if (Array.isArray(item) && item[0] === "=") {
+            const targetName = _str(item[1]);
+            if (targetName && !(this.reactiveMembers && this.reactiveMembers.has(targetName))) {
+              items.push(["=", item[1], this.transformComponentMembers(item[2], scope)]);
+              scope.add(targetName);
+              continue;
+            }
+          }
+          items.push(this.transformComponentMembers(item, scope));
+        }
+        return items;
+      }
+      return sexpr.map((item) => this.transformComponentMembers(item, localScope));
     };
     proto.generateComponent = function(head, rest, context, sexpr) {
       const [, body] = rest;
@@ -4413,7 +4622,9 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       const autoEventHandlers = new Map;
       for (const { name } of methods) {
         if (/^on[A-Z]/.test(name) && !LIFECYCLE_HOOKS.has(name)) {
-          autoEventHandlers.set(name[2].toLowerCase() + name.slice(3), name);
+          const eventName = name[2].toLowerCase() + name.slice(3);
+          if (DOM_EVENTS.has(eventName))
+            autoEventHandlers.set(eventName, name);
         }
       }
       const inheritsTag = rest[0]?.valueOf?.() ?? null;
@@ -9734,8 +9945,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeGenerator({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.13.121";
-  var BUILD_DATE = "2026-03-17@16:10:50GMT";
+  var VERSION = "3.13.122";
+  var BUILD_DATE = "2026-03-17@21:09:52GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
