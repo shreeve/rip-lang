@@ -21,6 +21,25 @@ const SUMMARY = packageJson.description;
 
 const isFile = (path) => existsSync(path) && statSync(path).isFile();
 
+function getRepoRoot() {
+  try {
+    return execSync('git rev-parse --show-toplevel', {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe']
+    }).trim();
+  } catch {
+    return null;
+  }
+}
+
+function getWorkspaceServerPath() {
+  const repoRoot = getRepoRoot();
+  if (!repoRoot) return null;
+
+  const workspaceServerPath = join(repoRoot, 'packages', 'server', 'server.rip');
+  return isFile(workspaceServerPath) ? workspaceServerPath : null;
+}
+
 function printHelp() {
   console.log(`
 Rip ${VERSION} - ${SUMMARY}
@@ -136,11 +155,14 @@ async function main() {
 
   if (args[0] === 'server') {
     let serverPath;
-    try {
-      serverPath = fileURLToPath(import.meta.resolve('@rip-lang/server/server'));
-    } catch {
-      console.error('Error: @rip-lang/server is not installed.\n\n  bun add @rip-lang/server\n');
-      process.exit(1);
+    serverPath = getWorkspaceServerPath();
+    if (!serverPath) {
+      try {
+        serverPath = fileURLToPath(import.meta.resolve('@rip-lang/server/server'));
+      } catch {
+        console.error('Error: @rip-lang/server is not installed.\n\n  bun add @rip-lang/server\n');
+        process.exit(1);
+      }
     }
     const result = spawnSync('bun', ['--preload', loaderPath, serverPath, ...args.slice(1)], {
       stdio: 'inherit',
@@ -238,10 +260,8 @@ async function main() {
   // Allows `rip migrate --status` to find and run {repo}/bin/migrate
   if (inputFile && !inputFile.startsWith('-') && !isFile(inputFile)) {
     try {
-      const repoRoot = execSync('git rev-parse --show-toplevel', {
-        encoding: 'utf-8',
-        stdio: ['pipe', 'pipe', 'pipe']
-      }).trim();
+      const repoRoot = getRepoRoot();
+      if (!repoRoot) throw new Error('No git repo root');
       const binScript = join(repoRoot, 'bin', inputFile);
       if (existsSync(binScript)) {
         const r = spawnSync(binScript, scriptArgs, { stdio: 'inherit', env: process.env });
