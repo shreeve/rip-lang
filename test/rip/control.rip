@@ -680,7 +680,89 @@ code 'return with postfix unless', '''
   ''', '''
   let fn;
   fn = function() {
-    if (!x) return 5;
+    if (!x) {
+      return 5;
+    }
+  };
+'''
+
+code 'return negative literal with postfix unless', '''
+  fn = -> return -1 unless x
+''', '''
+  let fn;
+  fn = function() {
+    if (!x) {
+      return (-1);
+    }
+  };
+'''
+
+test 'return negative literal with postfix unless skips early return', '''
+  fn = (x) ->
+    return -1 unless x
+    0
+  fn(true)
+''', 0
+
+test 'assignment negative literal with postfix unless stays undefined', '''
+  y = -1 unless true
+  y
+''', undefined
+
+test 'return bang expression with postfix unless skips early return', '''
+  fn = (x, y) ->
+    return !x unless y
+    0
+  fn(true, true)
+''', 0
+
+code 'sole postfix return if generates if statement', '''
+  fn = ->
+    return 5 if flag
+''', '''
+  let fn;
+  fn = function() {
+    if (flag) {
+      return 5;
+    }
+  };
+'''
+
+code 'sole postfix return if not generates if statement', '''
+  fn = ->
+    return -1 if not x
+''', '''
+  let fn;
+  fn = function() {
+    if (!x) {
+      return (-1);
+    }
+  };
+'''
+
+code 'block if not with return generates if statement', '''
+  fn = ->
+    if not x
+      return -1
+''', '''
+  let fn;
+  fn = function() {
+    if (!x) {
+      return (-1);
+    }
+  };
+'''
+
+code 'block unless with return generates if statement', '''
+  fn = ->
+    unless x
+      return -1
+''', '''
+  let fn;
+  fn = function() {
+    if (!x) {
+      return (-1);
+    }
   };
 '''
 

@@ -2402,8 +2402,9 @@ export class CodeGenerator {
           if (!isConstructor && !sideEffectOnly && isLast && h === 'if') {
             let [cond, thenB, ...elseB] = stmt.slice(1);
             let hasMulti = (b) => this.is(b, 'block') && b.length > 2;
-            if (hasMulti(thenB) || elseB.some(hasMulti)) {
-              code += this.generateIfElseWithEarlyReturns(stmt);
+            let hasCtrlStmt = this.hasStatementInBranch(thenB) || elseB.some(b => this.hasStatementInBranch(b));
+            if (hasCtrlStmt || hasMulti(thenB) || elseB.some(hasMulti)) {
+              code += this.generateIfElseWithEarlyReturns(stmt) + '\n';
               return;
             }
           }
@@ -2647,6 +2648,7 @@ export class CodeGenerator {
   }
 
   generateBranchWithReturn(branch) {
+    branch = this.unwrapIfBranch(branch);
     let stmts = this.unwrapBlock(branch);
     let code = '';
     for (let i = 0; i < stmts.length; i++) {
@@ -2905,6 +2907,7 @@ export class CodeGenerator {
 
   hasStatementInBranch(branch) {
     if (!Array.isArray(branch)) return false;
+    if (branch.length === 1 && Array.isArray(branch[0])) return this.hasStatementInBranch(branch[0]);
     let h = branch[0];
     if (h === 'return' || h === 'throw' || h === 'break' || h === 'continue') return true;
     if (h === 'block') return branch.slice(1).some(s => this.hasStatementInBranch(s));

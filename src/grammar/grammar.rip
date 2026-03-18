@@ -950,7 +950,7 @@ operators = """
   right       = : COMPOUND_ASSIGN RIGHTWARD_ASSIGN RETURN THROW EXTENDS
   right       FORIN FOROF FORAS FORASAWAIT BY WHEN
   right       IF ELSE FOR WHILE UNTIL LOOP SUPER CLASS COMPONENT RENDER IMPORT EXPORT DYNAMIC_IMPORT OFFER ACCEPT
-  left        POST_IF
+  left        POST_IF POST_UNLESS
 """.trim().split('\n').reverse().map (line) -> line.trim().split /\s+/
 
 # ==============================================================================

@@ -163,10 +163,10 @@ code 'throw in else block', '''
   ''', '''
   let fn;
   fn = function(x) {
-    return (() => { if (x) {
+    if (x) {
       return "ok";
     } else {
       throw new Error("bad");
-    } })();
-};
+    }
+  };
 '''
