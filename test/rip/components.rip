@@ -538,6 +538,16 @@ test "text output in switch loop with attrs and postfix if else compiles", '''
   typeof A
 ''', "function"
 
+test "uppercase loop iterable in render compiles as data, not component", '''
+  A = component
+    render
+      div
+        for report in RESULTS_REPORTS
+          span
+            = "Ready" if report.status is "ready" else "Processing"
+  typeof A
+''', "function"
+
 # ==============================================================================
 # Nested Structures — variable threading through block factories
 # ==============================================================================

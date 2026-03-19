@@ -434,7 +434,8 @@ export function installComponentSupport(CodeGenerator, Lexer) {
 
         let isTemplateElement = false;
         let prevTag = i > 0 ? tokens[i - 1][0] : null;
-        let isAfterControlFlow = prevTag === 'IF' || prevTag === 'UNLESS' || prevTag === 'WHILE' || prevTag === 'UNTIL' || prevTag === 'WHEN';
+        let isAfterControlFlow = prevTag === 'IF' || prevTag === 'UNLESS' || prevTag === 'WHILE' || prevTag === 'UNTIL' || prevTag === 'WHEN' ||
+                                 prevTag === 'FORIN' || prevTag === 'FOROF' || prevTag === 'FORAS' || prevTag === 'FORASAWAIT' || prevTag === 'BY';
 
         // Detect __clsx CALL_END early — OUTDENT tokens inside multi-line .()
         // args prevent startsWithTag from seeing the template tag, so we check
