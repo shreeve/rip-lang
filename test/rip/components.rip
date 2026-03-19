@@ -455,6 +455,89 @@ code "simple loop", '''
   })()
   ''', opts
 
+code "text output in loop with postfix if else", '''
+  export A = component
+    items := [true]
+    render
+      for item in items
+        span
+          = "Ready" if item else "No"
+  ''', '''
+  export const A = (() => {
+  function create_block_0(ctx, item, i) {
+    let _el1, _t0;
+    return {
+      _s: true,
+      c() {
+        _el1 = document.createElement('span');
+        _t0 = document.createTextNode(String((item ? "Ready" : "No")));
+        _el1.appendChild(_t0);
+        this._first = _el1;
+      },
+      m(target, anchor) {
+        if (target) target.insertBefore(_el1, anchor);
+      },
+      p(ctx, item, i) {},
+      d(detaching) {
+        if (detaching && _el1) _el1.remove();
+      }
+    };
+  }
+
+  return class extends __Component {
+    _init(props) {
+      this.items = __state([true]);
+    }
+    _create() {
+      this._anchor0 = document.createComment('for');
+      return this._anchor0;
+    }
+    _setup() {
+      // Loop: create_block_0
+      {
+        const __s = { blocks: [], keys: [] };
+        __effect(() => {
+          __reconcile(this._anchor0, __s, this.items.value, this, create_block_0, null);
+        });
+      }
+    }
+  };
+  })()
+  ''', opts
+
+test "text output in switch loop with postfix if else compiles", '''
+  A = component
+    items := [{status: "ready"}]
+    tab := "reports"
+    render
+      switch tab
+        when "reports"
+          div
+            for report in items
+              span
+                = "Ready" if report.status is "ready" else "Processing"
+        else
+          div "Other"
+  typeof A
+''', "function"
+
+test "text output in switch loop with attrs and postfix if else compiles", '''
+  A = component
+    items := [{status: "ready"}]
+    tab := "reports"
+    render
+      switch tab
+        when "reports"
+          div
+            for report in items
+              span
+                class: if report.status is "ready" then "a" else "b"
+                = "Ready" if report.status is "ready" else "Processing"
+        else
+          div "Other"
+  typeof A
+''', "function"
+
 # ==============================================================================
 # Nested Structures — variable threading through block factories
 # ==============================================================================

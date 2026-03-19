@@ -129,11 +129,7 @@ code "switch when with nested inline if", '''
 ''', '''
   switch (screen) {
     case 'home':
-      if (mode === "hero") {
-        "hero-home";
-      } else {
-        "simple-home";
-      };
+      (mode === "hero" ? "hero-home" : "simple-home");
       break;
     case 'labs':
       "labs";

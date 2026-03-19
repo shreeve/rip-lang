@@ -2709,11 +2709,11 @@ export class CodeGenerator {
   generateSwitchCaseBody(body, context) {
     let code = '';
     let hasFlow = this.hasExplicitControlFlow(body);
+    let stmts = this.unwrapBlock(body);
     if (hasFlow) {
-      for (let s of this.unwrapBlock(body)) code += this.indent() + this.generate(s, 'statement') + ';\n';
+      for (let s of stmts) code += this.indent() + this.generate(s, 'statement') + ';\n';
     } else if (context === 'value') {
       if (this.is(body, 'block') && body.length > 2) {
-        let stmts = body.slice(1);
         for (let i = 0; i < stmts.length; i++) {
           if (i === stmts.length - 1) code += this.indent() + `return ${this.generate(stmts[i], 'value')};\n`;
           else code += this.indent() + this.generate(stmts[i], 'statement') + ';\n';
@@ -2722,8 +2722,13 @@ export class CodeGenerator {
         code += this.indent() + `return ${this.extractExpression(body)};\n`;
       }
     } else {
-      if (this.is(body, 'block') && body.length > 1) {
-        for (let s of body.slice(1)) code += this.indent() + this.generate(s, 'statement') + ';\n';
+      if (stmts.length === 1 && this.is(stmts[0], 'if') && !this.hasStatementInBranch(stmts[0]) && !this.hasNestedMultiStatement(stmts[0])) {
+        let [_, condition, thenBranch, ...elseBranches] = stmts[0];
+        let thenExpr = this.extractExpression(this.unwrapIfBranch(thenBranch));
+        let elseExpr = this.buildTernaryChain(elseBranches);
+        code += this.indent() + `(${this.unwrap(this.generate(condition, 'value'))} ? ${thenExpr} : ${elseExpr});\n`;
+      } else if (this.is(body, 'block') && body.length > 1) {
+        for (let s of stmts) code += this.indent() + this.generate(s, 'statement') + ';\n';
       } else {
         code += this.indent() + this.generate(body, 'statement') + ';\n';
       }

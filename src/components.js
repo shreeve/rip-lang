@@ -236,18 +236,20 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       if (!inRender) return 1;
 
       // ─────────────────────────────────────────────────────────────────────
-      // Expression output: = expr → text node (stamp .text, skip tag detection)
+      // Expression output: = expr → synthetic text node __text__(expr)
       // ─────────────────────────────────────────────────────────────────────
       if (tag === '=' && i > 0) {
         let prev = tokens[i - 1][0];
         if (prev === 'TERMINATOR' || prev === 'INDENT' || prev === 'RENDER') {
-          tokens.splice(i, 1);
-          if (tokens[i] && tokens[i][0] === 'IDENTIFIER') {
-            let val = tokens[i][1];
-            if (typeof val === 'string') { val = new String(val); tokens[i][1] = val; }
-            val.text = true;
-          }
-          return 0;
+          const textToken = gen('IDENTIFIER', '__text__', token);
+          const callStart = gen('CALL_START', '(', token);
+          tokens.splice(i, 1, textToken, callStart);
+          this.detectEnd(i + 2,
+            (t) => t[0] === 'TERMINATOR' || t[0] === 'OUTDENT',
+            (t, j) => tokens.splice(j, 0, gen('CALL_END', ')', t)),
+            { returnOnNegativeLevel: true }
+          );
+          return 2;
         }
       }
 
@@ -1602,6 +1604,20 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     // For loop
     if (headStr === 'for' || headStr === 'for-in' || headStr === 'for-of' || headStr === 'for-as') {
       return this.generateTemplateLoop(sexpr);
+    }
+
+    // Synthetic text node inserted by rewriteRender for `= expr`
+    if (headStr === '__text__') {
+      const expr = rest[0] ?? 'undefined';
+      const textVar = this.newTextVar();
+      const exprCode = this.generateInComponent(expr, 'value');
+      if (this.hasReactiveDeps(expr)) {
+        this._createLines.push(`${textVar} = document.createTextNode('');`);
+        this._pushEffect(`${textVar}.data = String(${exprCode});`);
+      } else {
+        this._createLines.push(`${textVar} = document.createTextNode(String(${exprCode}));`);
+      }
+      return textVar;
     }
 
     // General expression (computed value, function call, binary op, etc.)
