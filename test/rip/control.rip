@@ -95,6 +95,17 @@ test "switch no discriminant", "x = 15; result = switch\n  when x < 10 then 'low
 # Switch with blocks
 test "switch with block", "x = 2; result = switch x\n  when 1\n    'one'\n  when 2\n    'two'\n  else\n    'other'\nresult", "two"
 
+# Switch when body can be an inline if/else expression
+test "switch when with nested inline if", '''
+  mode = "hero"
+  screen = "home"
+  result = switch screen
+    when "home" then if mode is "hero" then "hero-home" else "simple-home"
+    when "labs" then "labs"
+    else "other"
+  result
+''', "hero-home"
+
 # Switch without discriminant in statement context (loop)
 test "switch in loop for side effects", '''
   count = 0
@@ -111,6 +122,29 @@ test "switch in loop for side effects", '''
 
 # Code generation
 code "switch", "switch x\n  when 1 then 'one'\n  else 'other'", "switch (x) {\n  case 1:\n    'one';\n    break;\n  default:\n    'other';\n    break;\n}"
+code "switch when with nested inline if", '''
+  switch screen
+    when "home" then if mode is "hero" then "hero-home" else "simple-home"
+    when "labs" then "labs"
+''', '''
+  switch (screen) {
+    case 'home':
+      if (mode === "hero") {
+        "hero-home";
+      } else {
+        "simple-home";
+      };
+      break;
+    case 'labs':
+      "labs";
+      break;
+  }
+'''
+fail "switch when cannot mix inline and block body", '''
+  switch x
+    when 1 then if true then "a" else "b"
+      "extra"
+'''
 
 # ==============================================================================
 # Statement Blocks: "block"

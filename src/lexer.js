@@ -1476,13 +1476,43 @@ export class Lexer {
         [indent, outdent] = this.makeIndentation();
         if (tag === 'THEN') indent.fromThen = true;
         tokens.splice(i + 1, 0, indent);
-        this.detectEnd(i + 2, condition, action);
+        if (tag === 'THEN' && this.singleLineOwner(i) === 'LEADING_WHEN') this.detectWhenThenEnd(i + 2, condition, action);
+        else this.detectEnd(i + 2, condition, action);
         if (tag === 'THEN') tokens.splice(i, 1);
         return 1;
       }
 
       return 1;
     });
+  }
+
+  singleLineOwner(i) {
+    let starters = new Set(['LEADING_WHEN', 'IF', 'POST_IF', 'UNLESS', 'POST_UNLESS', 'ELSE', 'CATCH', 'TRY', 'FINALLY', '->', '=>']);
+    for (let j = i - 1; j >= 0; j--) {
+      let token = this.tokens[j];
+      let tag = token?.[0];
+      if (starters.has(tag)) return tag;
+      if (LINE_BREAK.has(tag) || token?.newLine) return null;
+    }
+    return null;
+  }
+
+  detectWhenThenEnd(i, condition, action) {
+    let levels = 0;
+    let nestedInlineBranches = 0;
+    while (i < this.tokens.length) {
+      let token = this.tokens[i];
+      let tag = token[0];
+      if (levels === 0) {
+        if (tag === 'THEN' && this.singleLineOwner(i) !== 'LEADING_WHEN') nestedInlineBranches++;
+        else if (tag === 'ELSE' && nestedInlineBranches > 0) nestedInlineBranches--;
+        else if (condition.call(this, token, i)) return action.call(this, token, i);
+      }
+      if (EXPRESSION_START.has(tag)) levels++;
+      if (EXPRESSION_END.has(tag)) levels--;
+      if (levels < 0) return action.call(this, token, i);
+      i++;
+    }
   }
 
   tagPostfixConditionals() {
