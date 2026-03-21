@@ -1685,6 +1685,7 @@ export class CodeGenerator {
   generateMap(head, pairs, context) {
     if (pairs.length === 0) return 'new Map()';
     let entries = pairs.map(pair => {
+      if (this.is(pair, '...')) return `...${this.generate(pair[1], 'value')}`;
       let [, key, value] = pair;
       let keyCode;
       if (Array.isArray(key)) {

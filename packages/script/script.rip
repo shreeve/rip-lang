@@ -471,15 +471,6 @@ export class Script
 
 # ==[ Helper Functions ]==
 
-# Build a Map from alternating key/value arguments (for dynamic entry construction)
-def mux(...args)
-  pairs = []
-  i = 0
-  while i < args.length
-    pairs.push [args[i], args[i + 1]]
-    i += 2
-  new Map pairs
-
 # Sugar for common prompt/response patterns (string keys only)
 export def prompts(obj)
   result = {}
@@ -500,17 +491,9 @@ export def quote(value)
   "\"#{value}\""
 
 # Handle entering a value that may trigger "Are you adding?" confirmation
-export def enter(value, ...rest)
-  items = if Array.isArray(value) then value else [value]
-  extra = {}
-  if rest.length is 1 and typeof rest[0] is 'object' and not Array.isArray(rest[0]) and rest[0] not instanceof RegExp
-    extra = rest[0]
-    rest = []
-  mux(
-    "Are you adding", ["Y"]
-    ...Object.entries(extra).flat()
-    ...rest
-  )
+export def enter(value, extra)
+  entries = if extra instanceof Map then [...extra] else if extra? then Object.entries(extra) else []
+  *{ "Are you adding": ["Y"], ...entries }
 
 # ==[ Default Export ]==
 

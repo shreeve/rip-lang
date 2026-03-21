@@ -105,3 +105,20 @@ test "parenthetical key", """
   m = *{ (fn()): 42 }
   m.get('dynamic')
   """, 42
+
+# Spread another Map into a map literal
+test "spread map", """
+  extra = *{ b: 2, c: 3 }
+  m = *{ a: 1, ...extra }
+  m.size
+  """, 3
+
+# Spread entries array
+test "spread entries", """
+  entries = [["x", 10], ["y", 20]]
+  m = *{ a: 1, ...entries }
+  m.get("x") + m.get("y")
+  """, 30
+
+# Spread codegen
+code "spread codegen", "*{ a: 1, ...other }", 'new Map([["a", 1], ...other])'
