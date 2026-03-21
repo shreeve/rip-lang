@@ -27,6 +27,7 @@
     "@rip-lang/http": ">=1.1.104",
     "@rip-lang/print": ">=1.1.108",
     "@rip-lang/schema": ">=0.3.104",
+    "@rip-lang/script": ">=0.1.0",
     "@rip-lang/server": ">=1.3.120",
     "@rip-lang/stamp": ">=0.1.24",
     "@rip-lang/swarm": ">=1.2.114",

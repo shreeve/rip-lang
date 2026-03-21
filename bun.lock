@@ -71,6 +71,13 @@
         "rip-lang": ">=3.13.125",
       },
     },
+    "packages/script": {
+      "name": "@rip-lang/script",
+      "version": "0.1.0",
+      "dependencies": {
+        "rip-lang": ">=3.13.125",
+      },
+    },
     "packages/server": {
       "name": "@rip-lang/server",
       "version": "1.3.120",
@@ -204,6 +211,8 @@
     "@rip-lang/print": ["@rip-lang/print@workspace:packages/print"],
 
     "@rip-lang/schema": ["@rip-lang/schema@workspace:packages/schema"],
+
+    "@rip-lang/script": ["@rip-lang/script@workspace:packages/script"],
 
     "@rip-lang/server": ["@rip-lang/server@workspace:packages/server"],
 

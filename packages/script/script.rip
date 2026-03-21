@@ -1,0 +1,517 @@
+# ==============================================================================
+# @rip-lang/script — Homoiconic interaction engine for Rip
+#
+# Author: Steve Shreeve (steve.shreeve@gmail.com)
+#   Date: March 20, 2026
+#
+# A type-dispatching automation engine that scripts complex stateful interactions
+# with remote systems. Pass it nested arrays of patterns and responses — strings,
+# regexes, objects, functions — and it walks the structure, matching output and
+# sending input. The data structure IS the program.
+# ==============================================================================
+
+# ==[ Control Flow Constants ]==
+
+export REDO =! Symbol 'redo'
+export SKIP =! Symbol 'skip'
+export ELSE =! Symbol 'else'
+export THIS =! Symbol 'this'
+export PURE =! Symbol 'pure'
+
+# ==[ Helpers ]==
+
+ANSI_RE =! /\x08|\x1b[=>]|\x1b\[(?:[^a-zA-Z]*)[a-zA-Z]/g
+
+def stripAnsi(str)
+  str.replace ANSI_RE, ''
+
+def invoke(fn, back)
+  if Array.isArray(back) then fn(...back) else fn(back)
+
+# ==[ SpawnTransport — PTY via Bun.Terminal ]==
+
+class SpawnTransport
+  constructor: (cmd, args = [], opts = {}) ->
+    @queue   = []
+    @waiting = null
+    @closed  = false
+    @proc    = Bun.spawn [cmd, ...args],
+      terminal:
+        cols: opts.cols ?? 80
+        rows: opts.rows ?? 24
+        data: (term, raw) =>
+          chunk = new TextDecoder().decode(raw)
+          if @waiting
+            fn = @waiting
+            @waiting = null
+            fn chunk
+          else
+            @queue.push chunk
+
+  write: (data) ->
+    @proc.terminal.write data
+
+  read: (timeout) ->
+    return null if @closed
+    return @queue.shift() if @queue.length > 0
+    new Promise (resolve) =>
+      timer = setTimeout =>
+        @waiting = null
+        resolve null
+      , timeout * 1000
+      @waiting = (data) ->
+        clearTimeout timer
+        resolve data
+
+  close: ->
+    @closed = true
+    try @proc.terminal.close()
+    try @proc.kill()
+
+# ==[ TcpTransport — Raw TCP via Bun.connect ]==
+
+class TcpTransport
+  constructor: (host, port, opts = {}) ->
+    @queue   = []
+    @waiting = null
+    @closed  = false
+    @ready   = new Promise (resolve, reject) =>
+      Bun.connect
+        hostname: host
+        port:     port
+        socket:
+          open: (socket) =>
+            @socket = socket
+            resolve()
+          data: (socket, raw) =>
+            chunk = if typeof raw is 'string' then raw else new TextDecoder().decode(raw)
+            if @waiting
+              fn = @waiting
+              @waiting = null
+              fn chunk
+            else
+              @queue.push chunk
+          close: =>
+            @closed = true
+          error: (socket, err) =>
+            @closed = true
+            reject err
+
+  write: (data) ->
+    @socket.write data
+
+  read: (timeout) ->
+    return null if @closed
+    return @queue.shift() if @queue.length > 0
+    new Promise (resolve) =>
+      timer = setTimeout =>
+        @waiting = null
+        resolve null
+      , timeout * 1000
+      @waiting = (data) ->
+        clearTimeout timer
+        resolve data
+
+  close: ->
+    @closed = true
+    try @socket.end()
+
+# ==[ TraceTransport — Dry-run mode, no connection ]==
+
+class TraceTransport
+  constructor: ->
+    @closed = false
+
+  write: (data) ->
+    process.stdout.write "  SEND: #{JSON.stringify(data)}\n"
+
+  read: (timeout) ->
+    null
+
+  close: ->
+    @closed = true
+
+# ==[ Engine — The Core Interpreter ]==
+
+class Engine
+  constructor: (@transport, @opts = {}) ->
+    @buff  = ''
+    @last  = null
+    @live  = @opts.live  ?? true
+    @show  = @opts.show  ?? false
+    @echo  = @opts.echo  ?? false
+    @nocr  = @opts.nocr  ?? true
+    @ansi  = @opts.ansi  ?? false
+    @bomb  = @opts.bomb  ?? true
+    @slow  = @opts.slow  ?? 10
+    @fast  = @opts.fast  ?? 0.25
+    @line  = @opts.line  ?? "\r"
+    @wait  = @opts.wait  ?? null
+    @trace = @transport instanceof TraceTransport
+
+  # -- Read from transport, strip ANSI/CR, append to buffer --
+
+  read: (fast = false) ->
+    timeout = if fast then @fast else @slow
+    data = @transport.read! timeout
+    unless data?
+      return 'fast' if fast
+      raise "Timeout waiting for data\nBuffer: #{JSON.stringify(@buff)}" if @bomb
+      return 'slow'
+    data .= replace /\r/g, '' if @nocr
+    data = stripAnsi(data) unless @ansi
+    process.stdout.write(data) if @live
+    @opts.onRecv?(data)
+    @buff += data
+
+  # -- Send text with line terminator --
+
+  send: (text) ->
+    return unless text?
+    text = String(text)
+    if @wait
+      ms = (@wait[0] + Math.random() * (@wait[1] - @wait[0])) * 1000
+      Bun.sleep! ms
+    @transport.write text + @line
+    process.stdout.write(text) if @echo
+    @opts.onSend?(text)
+    text
+
+  # -- Disconnect --
+
+  disconnect: ->
+    @transport.close()
+
+  # -- Dispatch on a matched value in a multiplexer --
+
+  dispatchVal: (val, back) ->
+    if typeof val is 'string' or typeof val is 'number'
+      @send! String(val)
+      back
+    else if Array.isArray(val)
+      back = @chat!(null, ...val) unless val.length is 0
+      back = REDO if val.length <= 1
+      back
+    else if typeof val is 'function'
+      back = invoke! val, back
+      if Array.isArray(back)
+        if back.length > 0 and back[0] is PURE
+          savedLine = @line
+          @line = ''
+          back = @chat!(null, ...back.slice(1)) unless back.length is 1
+          @line = savedLine
+          back = REDO if back.length <= 2
+        else
+          back = @chat!(null, ...back) unless back.length is 0
+          back = REDO if back.length <= 1
+      back
+    else if val instanceof Map or (typeof val is 'object' and val isnt null and not Array.isArray(val))
+      @chat! val
+    else if val is true or val is null
+      val
+    else if val is false or typeof val is 'symbol'
+      if val is THIS
+        if Array.isArray(back) then back[0] else back
+      else
+        val
+    else
+      back
+
+  # -- The Chat Engine: recursive type-dispatching interpreter --
+  #
+  # Processes a flat list of items. Maintains two modes:
+  #   listen (talk=false): wait for patterns in the buffer
+  #   talk   (talk=true):  send responses to the stream
+  #
+  # Type dispatch:
+  #   null           → toggle mode
+  #   true           → no-op continue
+  #   false / Symbol → control signal (REDO, SKIP, etc.)
+  #   String/Number  → match (listen) or send (talk)
+  #   RegExp         → pattern match against buffer
+  #   Object         → multiplexer (string keys, first match wins)
+  #   Map            → multiplexer (any key type, for regex keys)
+  #   Array          → sub-script; [boolean, ...] for conditional; [PURE, ...] for raw mode
+  #   Function       → callback, return value becomes next item
+
+  chat: (...args) ->
+    list = if args.length is 1 and Array.isArray(args[0]) then args[0] else args
+    return null if list.length is 0
+
+    back = null
+    talk = false
+    fast = false
+
+    for entry in list
+      item = entry
+
+      done = false
+      until done
+        done = true
+        type = kind(item)
+
+        # -- null: toggle listen/talk mode --
+        if type is 'null'
+          talk = !talk
+          back = null
+
+        # -- boolean: true continues, false propagates --
+        else if type is 'boolean'
+          back = item
+          return back unless item
+
+        # -- symbol: control signal --
+        else if type is 'symbol'
+          back = item
+          return back unless back is REDO
+
+        # -- string / number: match or send --
+        else if type is 'string' or type is 'number'
+          str = String(item)
+          if talk
+            @send! str
+            back = str
+            talk = false
+          else if @trace
+            process.stdout.write "EXPECT: #{JSON.stringify(str)}\n"
+            back = str
+            talk = true
+          else
+            idx = @buff.indexOf str
+            if idx >= 0
+              @last = str
+              back = @buff.slice 0, idx + str.length
+              @buff = @buff.slice idx + str.length
+              process.stdout.write(back.replace(/\r/g, '')) if @show
+              @opts.onMatch?(str, back)
+              talk = true
+            else
+              @read!()
+              done = false
+
+        # -- regexp: pattern match --
+        else if type is 'regexp'
+          if @trace
+            process.stdout.write "EXPECT: #{item}\n"
+            back = ['']
+            talk = true
+          else
+            match = @buff.match item
+            if match
+              @last = match[1] ?? match[0]
+              pre = @buff.slice 0, match.index
+              @buff = @buff.slice match.index + match[0].length
+              back = [pre + match[0], ...match.slice(1)]
+              process.stdout.write(back[0].replace(/\r/g, '')) if @show
+              @opts.onMatch?(item, back)
+              talk = true
+            else
+              talk = false
+              @read!()
+              done = false
+
+        # -- map / object: multiplexer --
+        else if type is 'map' or type is 'object'
+          entries = if item instanceof Map then [...item.entries()] else Object.entries(item)
+          hasElse = entries.some ([k]) -> k is ELSE or k is 'else'
+          elseVal = null
+          for [ek, ev] in entries
+            elseVal = ev if ek is ELSE or ek is 'else'
+
+          matched = false
+
+          if @trace
+            keys = entries.map(([k]) -> String(k)).filter((k) -> k isnt 'else')
+            process.stdout.write "BRANCH: [#{keys.join(', ')}]\n"
+            matched = true
+            talk = false
+            back = null
+          else if fast and elseVal?
+            matched = true
+            back = ELSE
+            @dispatchVal! elseVal, back
+          else
+            for [key, val] in entries
+              continue if key is ELSE or key is 'else'
+              ktype = kind(key)
+
+              if ktype is 'string' or ktype is 'number'
+                keyStr = String(key)
+                idx = @buff.indexOf keyStr
+                if idx >= 0
+                  back = @buff.slice 0, idx + keyStr.length
+                  @buff = @buff.slice idx + keyStr.length
+                  process.stdout.write(back.replace(/\r/g, '')) if @show
+                  matched = true
+                else
+                  continue
+              else if ktype is 'regexp'
+                m = @buff.match key
+                if m
+                  pre = @buff.slice 0, m.index
+                  @buff = @buff.slice m.index + m[0].length
+                  back = [pre + m[0], ...m.slice(1)]
+                  process.stdout.write(back[0].replace(/\r/g, '')) if @show
+                  matched = true
+                else
+                  continue
+              else
+                continue
+
+              if matched
+                back = @dispatchVal! val, back
+                break
+
+          unless matched
+            fast = @read!(hasElse) is 'fast'
+            done = false
+          else
+            fast = false
+            talk = false
+            done = true
+            done = false if back is REDO
+
+        # -- array: sub-script or conditional --
+        else if type is 'array'
+          if item.length > 0 and item[0] is PURE
+            savedLine = @line
+            savedAnsi = @ansi
+            @line = ''
+            @ansi = false
+            back = if talk then @chat!(null, ...item.slice(1)) else @chat!(...item.slice(1))
+            @line = savedLine
+            @ansi = savedAnsi
+          else if item.length > 0 and kind(item[0]) is 'boolean'
+            if item[0]
+              back = if talk then @chat!(null, ...item.slice(1)) else @chat!(...item.slice(1))
+          else
+            back = if talk then @chat!(null, ...item) else @chat!(...item)
+          talk = false
+
+        # -- function: callback --
+        else if type is 'function' or type is 'asyncfunction'
+          back = invoke! item, back
+          item = back unless back is REDO
+          done = false
+
+        # -- unknown --
+        else
+          raise "Script can't handle #{type}: #{JSON.stringify(item)}"
+
+      # Between items: check control signals
+      break if back is REDO
+      break if back is SKIP
+
+    back
+
+# ==[ Script — Public API Factory ]==
+
+def createChat(engine)
+  fn = (list) -> engine.chat(list)
+  fn.send       = (text) -> engine.send(text)
+  fn.read       = (fast) -> engine.read(fast)
+  fn.disconnect = ->        engine.disconnect()
+  Object.defineProperty fn, 'buffer', get: -> engine.buff
+  Object.defineProperty fn, 'last',   get: -> engine.last
+  fn
+
+export class Script
+
+  @spawn: (cmd, args, opts) ->
+    if typeof args is 'object' and not Array.isArray(args)
+      opts = args
+      args = []
+    opts ??= {}
+    transport = new SpawnTransport(cmd, args ?? [], opts)
+    engine = new Engine(transport, opts)
+    if opts.auth
+      engine.chat! opts.auth
+    if opts.init
+      engine.chat! opts.init
+    createChat engine
+
+  @ssh: (url, opts = {}) ->
+    parsed = new URL(if url.includes('://') then url else "ssh://#{url}")
+    args = []
+    args.push '-p', parsed.port if parsed.port
+    args.push '-l', decodeURIComponent(parsed.username) if parsed.username
+    args.push parsed.hostname
+    transport = new SpawnTransport('ssh', args, opts)
+    engine = new Engine(transport, opts)
+    if parsed.password
+      engine.chat! [/[Pp]assword/, decodeURIComponent(parsed.password)]
+    if opts.auth
+      engine.chat! opts.auth
+    if opts.init
+      engine.chat! opts.init
+    createChat engine
+
+  @tcp: (host, port, opts = {}) ->
+    transport = new TcpTransport(host, port, opts)
+    transport.ready!
+    engine = new Engine(transport, opts)
+    if opts.auth
+      engine.chat! opts.auth
+    if opts.init
+      engine.chat! opts.init
+    createChat engine
+
+  @connect: (url, opts = {}) ->
+    [scheme] = url.split '://'
+    switch scheme
+      when 'spawn' then Script.spawn! url.slice(8), [], opts
+      when 'ssh'   then Script.ssh! url, opts
+      when 'tcp'   then Script.tcp! url.split('://')[1].split(':')[0], parseInt(url.split(':').pop()), opts
+      else raise "Unknown scheme: #{scheme}"
+
+  @trace: (opts = {}) ->
+    transport = new TraceTransport()
+    engine = new Engine(transport, { ...opts, live: false })
+    createChat engine
+
+# ==[ Helper Functions ]==
+
+# Build a Map from alternating key/value arguments (supports regex keys)
+export def mux(...args)
+  pairs = []
+  i = 0
+  while i < args.length
+    pairs.push [args[i], args[i + 1]]
+    i += 2
+  new Map pairs
+
+# Sugar for common prompt/response patterns (string keys only)
+export def prompts(obj)
+  result = {}
+  for own k, v of obj
+    result[k] = v
+  result
+
+# Handle "Replace ... With ..." editing dance
+export def replace(value)
+  mux(
+    "Replace ",  ["...", " With ", value, "  Replace ", ""]
+    "// ",       value
+    ELSE,        value
+  )
+
+# Force exact match with double quotes
+export def quote(value)
+  "\"#{value}\""
+
+# Handle entering a value that may trigger "Are you adding?" confirmation
+export def enter(value, ...rest)
+  items = if Array.isArray(value) then value else [value]
+  extra = {}
+  if rest.length is 1 and typeof rest[0] is 'object' and not Array.isArray(rest[0]) and rest[0] not instanceof RegExp
+    extra = rest[0]
+    rest = []
+  mux(
+    "Are you adding", ["Y"]
+    ...Object.entries(extra).flat()
+    ...rest
+  )
+
+# ==[ Default Export ]==
+
+export default Script

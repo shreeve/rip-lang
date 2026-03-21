@@ -1,0 +1,181 @@
+# ==============================================================================
+# @rip-lang/script — Tests
+# ==============================================================================
+
+import Script, { mux, prompts, replace, quote, REDO, SKIP, ELSE, THIS, PURE } from '../script.rip'
+
+# ==[ Test Harness ]==
+
+pass = 0
+fail = 0
+
+def test(name, fn)
+  try
+    fn!()
+    pass++
+    p "  \x1b[32m✓\x1b[0m #{name}"
+  catch e
+    fail++
+    p "  \x1b[31m✗\x1b[0m #{name}"
+    p "    #{e.message}"
+
+p "\n\x1b[1m@rip-lang/script\x1b[0m\n"
+
+# ==[ Helper Function Tests ]==
+
+test "mux creates a Map from alternating args", ->
+  m = mux("a", 1, "b", 2)
+  assert m instanceof Map
+  assert m.get("a") is 1
+  assert m.get("b") is 2
+
+test "mux supports regex keys", ->
+  m = mux(/^test/, "found", ELSE, "fallback")
+  assert m instanceof Map
+  assert m.size is 2
+
+test "quote wraps in double quotes", ->
+  assert quote("hello") is '"hello"'
+  assert quote("SMITH,JOHN") is '"SMITH,JOHN"'
+
+test "replace returns a Map for the replace dance", ->
+  m = replace("newvalue")
+  assert m instanceof Map
+  assert m.size is 3
+
+test "prompts passes through object", ->
+  obj = prompts("KEY:": ["val"], "DATE:": "")
+  assert obj["KEY:"][0] is "val"
+  assert obj["DATE:"] is ""
+
+# ==[ Control Constants ]==
+
+test "control constants are unique symbols", ->
+  assert typeof REDO is 'symbol'
+  assert typeof SKIP is 'symbol'
+  assert typeof ELSE is 'symbol'
+  assert typeof THIS is 'symbol'
+  assert typeof PURE is 'symbol'
+  assert REDO isnt SKIP
+  assert SKIP isnt ELSE
+
+# ==[ Trace Mode Tests ]==
+
+test "trace mode creates a callable", ->
+  chat = Script.trace()
+  assert typeof chat is 'function'
+
+test "trace mode logs expect/send pairs", ->
+  chat = Script.trace()
+  chat! [
+    "prompt>", "hello"
+    "result:", "world"
+  ]
+
+test "trace mode handles objects", ->
+  chat = Script.trace()
+  chat! [
+    "prompt>", "test"
+    { "option1:": "a", "option2:": "b" }
+  ]
+
+test "trace mode handles conditionals", ->
+  chat = Script.trace()
+  chat! [
+    [true, "prompt>", "yes"]
+    [false, "prompt>", "no"]
+  ]
+
+test "trace mode returns null for empty list", ->
+  chat = Script.trace()
+  result = chat! []
+  assert result is null
+
+# ==[ Spawn Integration Tests ]==
+
+test "spawn and basic expect/send", ->
+  chat = Script.spawn! 'bash', [], line: "\n", live: false, slow: 5
+
+  chat! [
+    /\$\s*/, "echo RIPTEST123"
+    "RIPTEST123", ""
+  ]
+
+  chat.disconnect!
+
+test "spawn with conditional array (true)", ->
+  chat = Script.spawn! 'bash', [], line: "\n", live: false, slow: 5
+
+  chat! [
+    /\$\s*/, "echo START"
+    "START", ""
+    [true
+      /\$\s*/, "echo EXTRA"
+      "EXTRA", ""
+    ]
+    /\$\s*/, "echo DONE"
+    "DONE", ""
+  ]
+
+  chat.disconnect!
+
+test "spawn with conditional array (false skips)", ->
+  chat = Script.spawn! 'bash', [], line: "\n", live: false, slow: 5
+
+  chat! [
+    /\$\s*/, "echo ONLY"
+    "ONLY", ""
+    [false
+      /\$\s*/, "echo NEVER"
+      "NEVER", ""
+    ]
+    /\$\s*/, "echo END"
+    "END", ""
+  ]
+
+  chat.disconnect!
+
+test "spawn with object multiplexer", ->
+  chat = Script.spawn! 'bash', [], line: "\n", live: false, slow: 5
+
+  chat! [
+    /\$\s*/, "echo TESTMUX"
+    { "TESTMUX": null }
+    /\$\s*/, "echo DONE"
+    "DONE", ""
+  ]
+
+  chat.disconnect!
+
+test "spawn captures regex groups", ->
+  chat = Script.spawn! 'bash', [], line: "\n", live: false, slow: 5
+
+  chat! [
+    /\$\s*/, "echo VERSION=42"
+    /VERSION=(\d+)/
+  ]
+
+  assert chat.last is "42"
+  chat.disconnect!
+
+test "spawn with function callback", ->
+  chat = Script.spawn! 'bash', [], line: "\n", live: false, slow: 5
+  captured = null
+
+  chat! [
+    /\$\s*/, "echo DATA=hello"
+    /DATA=(\w+)\n/, (...args) ->
+      captured = args[1]
+      true
+  ]
+
+  assert captured?, "callback was not called"
+  assert captured is "hello", "expected 'hello' but got #{JSON.stringify(captured)}"
+  chat.disconnect!
+
+# ==[ Results ]==
+
+p "\n\x1b[32m#{pass} passing\x1b[0m"
+p "\x1b[31m#{fail} failing\x1b[0m" if fail > 0
+p ""
+process.exit(1) if fail > 0

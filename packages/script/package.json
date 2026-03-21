@@ -1,0 +1,38 @@
+{
+  "name": "@rip-lang/script",
+  "version": "0.1.0",
+  "description": "Homoiconic interaction engine — automate stateful conversations with remote systems using nested data structures",
+  "type": "module",
+  "main": "script.rip",
+  "exports": {
+    ".": "./script.rip"
+  },
+  "scripts": {
+    "test": "rip test/script.test.rip"
+  },
+  "keywords": [
+    "rip",
+    "expect",
+    "automation",
+    "interactive",
+    "pty",
+    "ssh",
+    "terminal",
+    "scripting",
+    "homoiconic"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shreeve/rip-lang.git",
+    "directory": "packages/script"
+  },
+  "author": "Steve Shreeve <steve.shreeve@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "rip-lang": ">=3.13.125"
+  },
+  "files": [
+    "script.rip",
+    "README.md"
+  ]
+}
