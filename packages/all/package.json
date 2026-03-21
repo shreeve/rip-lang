@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/all",
-  "version": "3.13.153",
+  "version": "3.13.154",
   "description": "Meta-package that installs rip-lang and all @rip-lang/* packages",
   "type": "module",
   "keywords": [
@@ -21,17 +21,17 @@
   "author": "Steve Shreeve <steve.shreeve@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "rip-lang": ">=3.13.127",
-    "@rip-lang/csv": ">=1.3.105",
-    "@rip-lang/db": ">=1.3.115",
-    "@rip-lang/http": ">=1.1.106",
-    "@rip-lang/print": ">=1.1.110",
-    "@rip-lang/schema": ">=0.3.106",
-    "@rip-lang/script": ">=0.1.2",
-    "@rip-lang/server": ">=1.3.122",
-    "@rip-lang/stamp": ">=0.1.26",
-    "@rip-lang/swarm": ">=1.2.116",
-    "@rip-lang/ui": ">=0.4.7",
-    "@rip-lang/x12": ">=0.2.106"
+    "rip-lang": ">=3.13.128",
+    "@rip-lang/csv": ">=1.3.106",
+    "@rip-lang/db": ">=1.3.116",
+    "@rip-lang/http": ">=1.1.107",
+    "@rip-lang/print": ">=1.1.111",
+    "@rip-lang/schema": ">=0.3.107",
+    "@rip-lang/script": ">=0.1.3",
+    "@rip-lang/server": ">=1.3.123",
+    "@rip-lang/stamp": ">=0.1.27",
+    "@rip-lang/swarm": ">=1.2.117",
+    "@rip-lang/ui": ">=0.4.8",
+    "@rip-lang/x12": ">=0.2.107"
   }
 }
