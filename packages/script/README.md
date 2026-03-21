@@ -59,9 +59,9 @@ You pass it an array. It processes each element by type:
 Spawn a local process with a real pseudo-terminal:
 
 ```coffee
-chat = Script.spawn! 'mumps -dir'             # MUMPS console
-chat = Script.spawn! 'bash'                    # local shell
-chat = Script.spawn! 'python3', ['-i']         # interactive Python
+chat = Script.spawn! 'mumps -dir'           # MUMPS console
+chat = Script.spawn! 'bash'                 # local shell
+chat = Script.spawn! 'python3', ['-i']      # interactive Python
 ```
 
 ### SSH (Remote Systems)
@@ -71,7 +71,7 @@ Connect via SSH, using your `~/.ssh/config`, keys, and agent:
 ```coffee
 chat = Script.ssh! 'admin@company.example.com'
 chat = Script.ssh! 'ssh://user:pass@10.0.1.50:22'
-chat = Script.ssh! 'user@host', slow: 30      # longer timeout for slow links
+chat = Script.ssh! 'user@host', slow: 30    # longer timeout for slow links
 ```
 
 ### TCP (Raw Socket)
@@ -117,9 +117,9 @@ The simplest pattern — strings alternate between waiting and sending:
 
 ```coffee
 chat! [
-  ">",               "D ^XUP"             # wait for ">", send "D ^XUP"
-  "Select OPTION:",  "DG ADMIT PATIENT"   # wait for prompt, send menu choice
-  "Admit PATIENT:",  "SMITH,JOHN"         # wait for prompt, send patient name
+  ">",               "D ^XUP"               # wait for ">", send "D ^XUP"
+  "Select OPTION:",  "DG ADMIT PATIENT"     # wait for prompt, send menu choice
+  "Admit PATIENT:",  "SMITH,JOHN"           # wait for prompt, send patient name
 ]
 ```
 
@@ -144,9 +144,9 @@ Objects try each key against the output buffer — first match wins:
 chat! [
   "Enter name:", "SMITH,JOHN"
   {
-    "SURE YOU WANT TO ADD":    ["Y"]                  # if confirmation, say yes
-    "Select ADMISSION DATE:":  [""]                   # if date prompt, press enter
-    "Do you want to continue": ["C"]                  # if continue prompt, continue
+    "SURE YOU WANT TO ADD":    ["Y"]        # if confirmation, say yes
+    "Select ADMISSION DATE:":  [""]         # if date prompt, press enter
+    "Do you want to continue": ["C"]        # if continue prompt, continue
   }
 ]
 ```
@@ -161,9 +161,9 @@ import { mux, ELSE } from '@rip-lang/script'
 chat! [
   "Enter name:", "SMITH,JOHN"
   mux(
-    /^NAME:/,          [""]                # regex key
-    "CHOOSE 1",        [1]                 # string key
-    ELSE,              null                # fallback — nothing matched
+    /^NAME:/,          [""]                 # regex key
+    "CHOOSE 1",        [1]                  # string key
+    ELSE,              null                 # fallback — nothing matched
   )
 ]
 ```
@@ -175,7 +175,7 @@ Arrays with a boolean first element execute conditionally:
 ```coffee
 chat! [
   "DIVISION:", data.division
-  [data.hasBeds                            # only if hasBeds is true
+  [data.hasBeds                             # only if hasBeds is true
     "NUMBER OF BEDS:", data.beds
     "SERIOUSLY ILL:", "N"
   ]
@@ -190,7 +190,7 @@ Arrays without a boolean first element are nested sub-scripts:
 ```coffee
 chat! [
   "Select OPTION:", "EDIT"
-  [                                        # nested conversation
+  [                                         # nested conversation
     "FIELD:", "NAME"
     "FIELD:", "TITLE"
     "FIELD:", ""
@@ -211,7 +211,7 @@ chat! [
         "Select KEY:", key
         { "KEY:": [""], "REVIEW DATE:": "" }
       ]
-    true                                   # continue to next item
+    true                                    # continue to next item
 
   "Select KEY:", ""
 ]
@@ -237,7 +237,7 @@ pair = chat! [
   /\n([^\n]+)\n/
 ]
 
-systemInfo = pair[1]   # the captured group
+systemInfo = pair[1]                        # the captured group
 ```
 
 ### Control Flow
@@ -317,39 +317,39 @@ All connection factories accept options:
 
 ```coffee
 chat = Script.ssh! 'user@host',
-  live: true           # print received data to stdout (default: true)
-  echo: false          # print sent data to stdout (default: false)
-  show: false          # print matched data to stdout (default: false)
-  slow: 10             # timeout in seconds waiting for output (default: 10)
-  fast: 0.25           # timeout in seconds for "is there more?" (default: 0.25)
-  bomb: true           # throw on timeout (default: true)
-  line: "\r"           # line terminator appended to sends (default: "\r")
-  ansi: false          # keep ANSI escapes (default: false = strip them)
-  nocr: true           # strip \r characters (default: true)
-  wait: null           # [min, max] random delay in seconds before sends
-  auth: [...]          # initial authentication script to run on connect
-  init: [...]          # initialization script to run after auth
-  onSend:  null        # (text) -> hook called after each send
-  onRecv:  null        # (data) -> hook called after each read
-  onMatch: null        # (pattern, matched) -> hook called after each match
+  live: true       # print received data to stdout (default: true)
+  echo: false      # print sent data to stdout (default: false)
+  show: false      # print matched data to stdout (default: false)
+  slow: 10         # timeout in seconds waiting for output (default: 10)
+  fast: 0.25       # timeout in seconds for "is there more?" (default: 0.25)
+  bomb: true       # throw on timeout (default: true)
+  line: "\r"       # line terminator appended to sends (default: "\r")
+  ansi: false      # keep ANSI escapes (default: false = strip them)
+  nocr: true       # strip \r characters (default: true)
+  wait: null       # [min, max] random delay in seconds before sends
+  auth: [...]      # initial authentication script to run on connect
+  init: [...]      # initialization script to run after auth
+  onSend:  null    # (text) -> hook called after each send
+  onRecv:  null    # (data) -> hook called after each read
+  onMatch: null    # (pattern, matched) -> hook called after each match
 ```
 
 ## Options Reference
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `live` | `true` | Print received data to stdout in real time |
+| `live` | `true`  | Print received data to stdout in real time |
 | `echo` | `false` | Print sent data to stdout |
 | `show` | `false` | Print matched/consumed text to stdout |
-| `slow` | `10` | Seconds to wait before timeout |
-| `fast` | `0.25` | Seconds for "is there more data?" check |
-| `bomb` | `true` | Throw on timeout (false = return silently) |
-| `line` | `"\r"` | Line terminator appended to every send |
+| `slow` | `10`    | Seconds to wait before timeout |
+| `fast` | `0.25`  | Seconds for "is there more data?" check |
+| `bomb` | `true`  | Throw on timeout (false = return silently) |
+| `line` | `"\r"`  | Line terminator appended to every send |
 | `ansi` | `false` | Keep ANSI escape sequences (false = strip) |
-| `nocr` | `true` | Strip carriage returns from received data |
-| `wait` | `null` | `[min, max]` random delay before sends (seconds) |
-| `auth` | `null` | Script array to run on connect (authentication) |
-| `init` | `null` | Script array to run after auth (initialization) |
+| `nocr` | `true`  | Strip carriage returns from received data |
+| `wait` | `null`  | `[min, max]` random delay before sends (seconds) |
+| `auth` | `null`  | Script array to run on connect (authentication) |
+| `init` | `null`  | Script array to run after auth (initialization) |
 
 ## Type Dispatch Reference
 
