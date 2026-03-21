@@ -151,20 +151,20 @@ chat! [
 ]
 ```
 
-### Regex-Keyed Multiplexing with `mux()`
+### Map Literal Multiplexing
 
-When you need regex keys, use `mux()` to build a Map:
+When you need regex keys or mixed key types, use a map literal (`*{ }`):
 
 ```coffee
-import { mux, ELSE } from '@rip-lang/script'
+import { ELSE } from '@rip-lang/script'
 
 chat! [
   "Enter name:", "SMITH,JOHN"
-  mux(
-    /^NAME:/,          [""]                 # regex key
-    "CHOOSE 1",        [1]                  # string key
-    ELSE,              null                 # fallback — nothing matched
-  )
+  *{
+    /^NAME:/: [""]                           # regex key
+    "CHOOSE 1": [1]                          # string key
+    ELSE: null                               # fallback — nothing matched
+  }
 ]
 ```
 
@@ -256,17 +256,20 @@ import { REDO, SKIP, ELSE, THIS, PURE } from '@rip-lang/script'
 
 ## Helper Functions
 
-### `mux(...args)` — Mixed-Key Multiplexer
+### Map Literals (`*{ }`) — Mixed-Key Multiplexers
 
-Build a Map from alternating key/value arguments:
+Use map literals for multiplexers with regex keys or mixed key types:
 
 ```coffee
-mux(
-  /^NAME:/,      [""]
-  "CHOOSE 1",    [1]
-  ELSE,          null
-)
+*{
+  /^NAME:/: [""]
+  "CHOOSE 1": [1]
+  ELSE: null
+}
 ```
+
+Map literals compile to `new Map(...)` and support all key types: strings,
+regexes, numbers, booleans, symbols, and expressions via `(expr)`.
 
 ### `replace(value)` — Replace/Edit Handler
 
@@ -361,7 +364,7 @@ chat = Script.ssh! 'user@host',
 | `true` | Continue | No-op pass-through. |
 | `false` / `Symbol` | Control Signal | `REDO`, `SKIP`, etc. — flow control. |
 | `Object` | Multiplexer | Try each string key against buffer. First match wins. |
-| `Map` | Multiplexer | Like Object but supports regex keys. Use `mux()`. |
+| `Map` | Multiplexer | Like Object but supports regex keys. Use `*{ }` map literals. |
 | `Array` | Sub-script | Nest a conversation. Boolean first element = conditional. |
 | `Function` | Callback | Execute, return value becomes next item to process. |
 

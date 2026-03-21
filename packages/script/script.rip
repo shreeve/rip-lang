@@ -471,8 +471,8 @@ export class Script
 
 # ==[ Helper Functions ]==
 
-# Build a Map from alternating key/value arguments (supports regex keys)
-export def mux(...args)
+# Build a Map from alternating key/value arguments (for dynamic entry construction)
+def mux(...args)
   pairs = []
   i = 0
   while i < args.length
@@ -489,11 +489,11 @@ export def prompts(obj)
 
 # Handle "Replace ... With ..." editing dance
 export def replace(value)
-  mux(
-    "Replace ",  ["...", " With ", value, "  Replace ", ""]
-    "// ",       value
-    ELSE,        value
-  )
+  *{
+    "Replace ": ["...", " With ", value, "  Replace ", ""]
+    "// ":      value
+    ELSE:       value
+  }
 
 # Force exact match with double quotes
 export def quote(value)

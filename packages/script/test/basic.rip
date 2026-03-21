@@ -2,7 +2,7 @@
 # @rip-lang/script — Tests
 # ==============================================================================
 
-import Script, { mux, prompts, replace, quote, REDO, SKIP, ELSE, THIS, PURE } from '../script.rip'
+import Script, { prompts, replace, quote, REDO, SKIP, ELSE, THIS, PURE } from '../script.rip'
 
 # ==[ Test Harness ]==
 
@@ -23,14 +23,14 @@ p "\n\x1b[1m@rip-lang/script\x1b[0m\n"
 
 # ==[ Helper Function Tests ]==
 
-test "mux creates a Map from alternating args", ->
-  m = mux("a", 1, "b", 2)
+test "map literal creates a Map", ->
+  m = *{ a: 1, b: 2 }
   assert m instanceof Map
   assert m.get("a") is 1
   assert m.get("b") is 2
 
-test "mux supports regex keys", ->
-  m = mux(/^test/, "found", ELSE, "fallback")
+test "map literal supports regex keys", ->
+  m = *{ /^test/: "found", ELSE: "fallback" }
   assert m instanceof Map
   assert m.size is 2
 
