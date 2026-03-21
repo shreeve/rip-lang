@@ -2101,7 +2101,7 @@ export install = (Generator) ->
         let value;
         if (token === 'INDENT') { advance(); value = parseExpression(0); expect('OUTDENT'); }
         else { value = parseExpression(0); }
-        return [key, value, ":"];
+        return [":", key, value];
       }
       // Default: key = value (only valid for SimpleObjAssignable keys)
       if (token === '=') {
@@ -2109,10 +2109,10 @@ export install = (Generator) ->
         let value;
         if (token === 'INDENT') { advance(); value = parseExpression(0); expect('OUTDENT'); }
         else { value = parseExpression(0); }
-        return [key, value, "="];
+        return ["=", key, value];
       }
       // Shorthand: {x}
-      return [key, key, null];
+      return [null, key, key];
     }
     """
 
@@ -2132,10 +2132,10 @@ export install = (Generator) ->
       // Check for comprehension (FOR after the first key:value)
       if (token === 'FOR') {
         // Object comprehension: {k: v for ...}
-        // list should have [key, value, ":"] as first entry
+        // list should have [":", key, value] as first entry
         const first = list[0];
-        const key = first ? first[0] : list[0];
-        const val = first ? first[1] : list[1];
+        const key = first ? first[1] : list[0];
+        const val = first ? first[2] : list[1];
         advance(); // consume FOR
         if (token === 'OWN') {
           advance();

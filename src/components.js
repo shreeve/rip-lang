@@ -39,8 +39,8 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 function extractInputType(pairs) {
   for (const pair of pairs) {
     if (!Array.isArray(pair)) continue;
-    const key = pair[0] instanceof String ? pair[0].valueOf() : pair[0];
-    const val = pair[1] instanceof String ? pair[1].valueOf() : pair[1];
+    const key = pair[1] instanceof String ? pair[1].valueOf() : pair[1];
+    const val = pair[2] instanceof String ? pair[2].valueOf() : pair[2];
     if (key === 'type' && typeof val === 'string') {
       return val.replace(/^["']|["']$/g, '');
     }
@@ -624,10 +624,10 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     if (sexpr[0] === 'object') {
       return ['object', ...sexpr.slice(1).map(pair => {
         if (Array.isArray(pair) && pair.length >= 2) {
-          let key = pair[0];
+          let key = pair[1];
           let newKey = Array.isArray(key) ? this.transformComponentMembers(key, localScope) : key;
-          let newValue = this.transformComponentMembers(pair[1], localScope);
-          return [newKey, newValue, pair[2]];
+          let newValue = this.transformComponentMembers(pair[2], localScope);
+          return [pair[0], newKey, newValue];
         }
         return this.transformComponentMembers(pair, localScope);
       })];
@@ -754,7 +754,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
         for (let i = 1; i < stmt.length; i++) {
           const pair = stmt[i];
           if (!Array.isArray(pair)) continue;
-          const [methodName, funcDef] = pair;
+          const [, methodName, funcDef] = pair;
           if (typeof methodName === 'string' && LIFECYCLE_HOOKS.has(methodName)) {
             lifecycleHooks.push({ name: methodName, value: funcDef });
           } else if (typeof methodName === 'string') {
@@ -909,7 +909,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
               for (let j = 1; j < obj.length; j++) {
                 const pair = obj[j];
                 if (!Array.isArray(pair) || pair.length < 2) continue;
-                const [key, value] = pair;
+                const [, key, value] = pair;
                 if (Array.isArray(key) && key[0] === '.' && key[1] === 'this' &&
                     Array.isArray(value) && value[0] === '.' && value[1] === 'this') {
                   const eventName = typeof key[2] === 'string' ? key[2] : key[2]?.valueOf?.();
@@ -981,7 +981,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
             if (obj) {
               for (let j = 1; j < obj.length; j++) {
                 const pair = obj[j];
-                const [key, value] = pair;
+                const [, key, value] = pair;
                 if (typeof key === 'string' && !key.startsWith('@')) {
                   const srcLine = pair.loc?.r ?? obj.loc?.r;
                   if (key.startsWith('__bind_') && key.endsWith('__')) {
@@ -1013,7 +1013,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
               for (let j = 1; j < obj.length; j++) {
                 const pair = obj[j];
                 if (!Array.isArray(pair) || pair.length < 2) continue;
-                const [key, value] = pair;
+                const [, key, value] = pair;
                 const srcLine = pair.loc?.r ?? obj.loc?.r;
                 if (Array.isArray(key) && key[0] === '.' && key[1] === 'this') {
                   let memberName = typeof key[2] === 'string' ? key[2] : key[2]?.valueOf?.();
@@ -1831,7 +1831,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     const inputType = extractInputType(objExpr.slice(1));
 
     for (let i = 1; i < objExpr.length; i++) {
-      let [key, value] = objExpr[i];
+      let [, key, value] = objExpr[i];
 
       // Event handler: @click or (. this eventName)
       if (this.is(key, '.') && key[1] === 'this') {
@@ -2315,7 +2315,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
 
     const addObjectProps = (objExpr) => {
       for (let i = 1; i < objExpr.length; i++) {
-        const [key, value] = objExpr[i];
+        const [, key, value] = objExpr[i];
         if (typeof key === 'string') {
           addProp(key, value);
         } else if (Array.isArray(key) && key[0] === '.' && key[1] === 'this' && typeof key[2] === 'string') {

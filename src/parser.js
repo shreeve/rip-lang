@@ -24,9 +24,9 @@ const parserInstance = {
       case 66: return ["regex", $[$0-1]];
       case 67: return ["regex-index", $[$0-2], $[$0]];
       case 68: return ["regex-index", $[$0], null];
-      case 69: return ["=", $[$0-2], $[$0]];
+      case 69: case 120: return ["=", $[$0-2], $[$0]];
       case 70: return ["=", $[$0-3], $[$0]];
-      case 71: return ["=", $[$0-4], $[$0-1]];
+      case 71: case 121: return ["=", $[$0-4], $[$0-1]];
       case 72: return ["=", $[$0], $[$0-2]];
       case 73: return ["state", $[$0-2], $[$0]];
       case 74: return ["state", $[$0-3], $[$0]];
@@ -54,11 +54,9 @@ const parserInstance = {
       case 111: case 154: case 175: case 194: return [];
       case 114: case 178: case 198: case 336: case 365: return [...$[$0-3], $[$0]];
       case 115: case 179: case 200: case 338: case 367: return [...$[$0-5], ...$[$0-2]];
-      case 116: return [$[$0], $[$0], null];
-      case 118: return [$[$0-2], $[$0], ":"];
-      case 119: return [$[$0-4], $[$0-1], ":"];
-      case 120: return [$[$0-2], $[$0], "="];
-      case 121: return [$[$0-4], $[$0-1], "="];
+      case 116: return [null, $[$0], $[$0]];
+      case 118: return [":", $[$0-2], $[$0]];
+      case 119: return [":", $[$0-4], $[$0-1]];
       case 126: return ["dynamicKey", $[$0-1]];
       case 127: return ["[]", "this", $[$0-1]];
       case 129: case 130: case 188: return ["...", $[$0]];

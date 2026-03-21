@@ -682,7 +682,7 @@ export class CodeGenerator {
     let stmtEntries = body.map((stmt, index) => {
       let isSingle = body.length === 1 && imports.length === 0;
       let isObj = this.is(stmt, 'object');
-      let isObjComp = isObj && stmt.length === 2 && Array.isArray(stmt[1]) && Array.isArray(stmt[1][1]) && stmt[1][1][0] === 'comprehension';
+      let isObjComp = isObj && stmt.length === 2 && Array.isArray(stmt[1]) && Array.isArray(stmt[1][2]) && stmt[1][2][0] === 'comprehension';
       let isAlreadyExpr = (this.is(stmt, 'comprehension') || this.is(stmt, 'object-comprehension') || this.is(stmt, 'do-iife'));
       let hasNoVars = this.programVars.size === 0;
       let needsParens = isSingle && isObj && hasNoVars && !isAlreadyExpr && !isObjComp;
@@ -1653,15 +1653,15 @@ export class CodeGenerator {
 
   generateObject(head, pairs, context) {
     if (pairs.length === 1 && Array.isArray(pairs[0]) &&
-        Array.isArray(pairs[0][1]) && pairs[0][1][0] === 'comprehension') {
-      let [keyVar, compNode] = pairs[0];
+        Array.isArray(pairs[0][2]) && pairs[0][2][0] === 'comprehension') {
+      let [, keyVar, compNode] = pairs[0];
       let [, valueExpr, iterators, guards] = compNode;
       return this.generate(['object-comprehension', keyVar, valueExpr, iterators, guards], context);
     }
 
     let codes = pairs.map(pair => {
       if (this.is(pair, '...')) return `...${this.generate(pair[1], 'value')}`;
-      let [key, value, operator] = pair;
+      let [operator, key, value] = pair;
       let keyCode;
       if (this.is(key, 'dynamicKey')) keyCode = `[${this.generate(key[1], 'value')}]`;
       else if (this.is(key, 'str')) keyCode = `[${this.generate(key, 'value')}]`;
@@ -2006,7 +2006,7 @@ export class CodeGenerator {
 
           // First pass: identify bound methods
           let boundMethods = [];
-          for (let [mk, mv] of members) {
+          for (let [, mk, mv] of members) {
             let isStatic = this.is(mk, '.') && mk[1] === 'this';
             let isComputed = this.is(mk, 'computed');
             let mName = this.extractMemberName(mk);
@@ -2014,7 +2014,7 @@ export class CodeGenerator {
           }
 
           // Second pass: generate members
-          for (let [mk, mv] of members) {
+          for (let [, mk, mv] of members) {
             let isStatic = this.is(mk, '.') && mk[1] === 'this';
             let isComputed = this.is(mk, 'computed');
             let mName = this.extractMemberName(mk);
@@ -2066,7 +2066,7 @@ export class CodeGenerator {
           let members = bodyStmts[0].slice(1);
           let additionalStmts = bodyStmts.slice(1);
           this.indentLevel++;
-          for (let [mk, mv] of members) {
+          for (let [, mk, mv] of members) {
             let isStatic = this.is(mk, '.') && mk[1] === 'this', mName = this.extractMemberName(mk);
             if ((this.is(mv, '->') || this.is(mv, '=>'))) {
               let [, params, body] = mv;
@@ -2315,7 +2315,7 @@ export class CodeGenerator {
       let pairs = param.slice(1).map(pair => {
         if (this.is(pair, '...')) return `...${pair[1]}`;
         if (this.is(pair, 'default')) return `${pair[1]} = ${this.generate(pair[2], 'value')}`;
-        let [key, value, operator] = pair;
+        let [operator, key, value] = pair;
         if (operator === '=') return `${key} = ${this.generate(value, 'value')}`;
         if (key === value) return key;
         return `${key}: ${this.formatParam(value)}`;
@@ -2962,7 +2962,7 @@ export class CodeGenerator {
       if (!Array.isArray(pair)) return;
       if (pair[0] === '...' && typeof pair[1] === 'string') { varSet.add(pair[1]); return; }
       if (pair.length >= 2) {
-        let [key, value, operator] = pair;
+        let [operator, key, value] = pair;
         if (operator === '=') { if (typeof key === 'string') varSet.add(key); }
         else {
           if (typeof value === 'string') varSet.add(value);

@@ -281,12 +281,12 @@ grammar =
   ]
 
   AssignObj: [
-    o 'ObjAssignable'                                  , '[1, 1, null]'  # Shorthand: {x}
+    o 'ObjAssignable'                                  , '[null, 1, 1]'  # Shorthand: {x}
     o 'ObjRestValue'                                                     # Rest: {...rest}
-    o 'ObjAssignable : Expression'                     , '[1, 3, ":"]'   # Property: {a: 5}
-    o 'ObjAssignable : INDENT Expression OUTDENT'      , '[1, 4, ":"]'
-    o 'SimpleObjAssignable = Expression'               , '[1, 3, "="]'   # Default: {a = 5}
-    o 'SimpleObjAssignable = INDENT Expression OUTDENT', '[1, 4, "="]'
+    o 'ObjAssignable : Expression'                     , '[":", 1, 3]'   # Property: {a: 5}
+    o 'ObjAssignable : INDENT Expression OUTDENT'      , '[":", 1, 4]'
+    o 'SimpleObjAssignable = Expression'               , '["=", 1, 3]'   # Default: {a = 5}
+    o 'SimpleObjAssignable = INDENT Expression OUTDENT', '["=", 1, 4]'
   ]
 
   SimpleObjAssignable: [
