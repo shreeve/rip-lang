@@ -108,6 +108,14 @@ user = {name: "Alice", age: 30}
 shorthand = {name, age}  # Same as {name: name, age: age}
 config = {api.host: "localhost", api.port: 3000}  # Dotted keys → flat string keys
 
+# Map literals — real JavaScript Map with any key type
+table = *{
+  /^NAME:/: [""]
+  "CHOOSE 1": [1]
+  true: "yes"
+  null: "nothing"
+}
+
 # Ranges
 nums = [1..5]      # [1, 2, 3, 4, 5]
 exclusive = [1...5]  # [1, 2, 3, 4]
@@ -331,6 +339,7 @@ Multiple lines
 | `not in` | Not in | `x not in arr` | Negated membership test |
 | `not of` | Not of | `k not of obj` | Negated key existence |
 | `<=>` | Two-way bind | `value <=> name` | Bidirectional reactive binding (render blocks) |
+| `*{ }` | Map literal | `*{/pat/: val}` | `new Map([[/pat/, val]])` |
 
 ## Assignment Operators
 
@@ -2074,6 +2083,9 @@ a ?? b         # nullish coalescing
 
 # Word arrays
 %w[foo bar baz]   # ["foo", "bar", "baz"] — Ruby-style word literal
+
+# Map literals — real Map with any key type
+*{ /regex/: val, "key": val, 42: val }
 
 # Two-way binding (render blocks)
 input value <=> @name      # bidirectional reactive binding

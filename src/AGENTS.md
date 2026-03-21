@@ -53,6 +53,7 @@ Complete node reference:
 // Data Structures
 ['array', ...elements]
 ['object', ...pairs]            // pairs: [key, value]
+['map-literal', ...pairs]       // *{ } → new Map([[key, value], ...])
 ['...', expr]                   // Spread (prefix only)
 
 // Operators

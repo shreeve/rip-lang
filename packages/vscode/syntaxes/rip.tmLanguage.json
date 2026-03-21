@@ -435,6 +435,9 @@
       }
     },
 
+    {"comment": "=== MAP LITERAL (before operators — *{ } → new Map) ==="},
+    { "match": "\\*(?=\\{)", "name": "keyword.operator.map-literal.rip" },
+
     {"comment": "=== SPECIAL OPERATORS (before general operators) ==="},
     { "match": "!\\?",            "name": "keyword.operator.otherwise.rip" },
     { "match": "\\?!",            "name": "keyword.operator.presence.rip" },

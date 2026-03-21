@@ -240,6 +240,7 @@ rip -cm example.rip
 | rightward assign      | `expr :> x`      | assign with expression first               |
 | tagged template `$`   | `sh $"cmd #{x}"` | injection-safe tagged template             |
 | dotted keys           | `{a.b: 1}`       | flat string key in object literals         |
+| map literal           | `*{a: 1}`        | real `Map` with any key type               |
 
 ### Kept
 
@@ -292,6 +293,7 @@ rip -cm example.rip
 | `%w`        | Word literal     | `%w[foo bar baz]`            |
 | `$"..."`    | Tagged template  | `sh $"cmd #{val}"`           |
 | `a.b:`      | Dotted key       | `{host.name: "x"}`          |
+| `*{ }`      | Map literal      | `*{/pat/: val, a: 1}`       |
 
 ### Standard Library
 
