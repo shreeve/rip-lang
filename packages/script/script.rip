@@ -158,10 +158,10 @@ class Engine
       return 'fast' if fast
       raise "Timeout waiting for data\nBuffer: #{JSON.stringify(@buff)}" if @bomb
       return 'slow'
-    data .= replace /\r/g, '' if @nocr
-    data = stripAnsi(data) unless @ansi
     process.stdout.write(data) if @live
     @opts.onRecv?(data)
+    data .= replace /\r/g, '' if @nocr
+    data = stripAnsi(data) unless @ansi
     @buff += data
 
   # -- Send text with line terminator --

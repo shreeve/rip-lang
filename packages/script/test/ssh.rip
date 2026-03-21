@@ -1,0 +1,13 @@
+import Script, { PURE } from '../script.rip'
+
+chat = Script.ssh! 'trust',
+  cols: process.stdout.columns ?? 120
+  rows: process.stdout.rows    ?? 32
+
+chat! [
+  '~> '  , "mc"
+  'Hint:', [PURE, "\x1b0"]
+  '~> '  , "exit"
+]
+
+chat.disconnect!
