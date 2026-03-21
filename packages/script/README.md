@@ -270,6 +270,11 @@ Use map literals for multiplexers with regex keys or mixed key types:
 
 Map literals compile to `new Map(...)` and support all key types: strings,
 regexes, numbers, booleans, symbols, and expressions via `(expr)`.
+Spread (`...expr`) merges entries from other Maps or iterables:
+
+```coffee
+*{ "Are you adding": ["Y"], ...extra }
+```
 
 ### `replace(value)` — Replace/Edit Handler
 
