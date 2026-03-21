@@ -106,7 +106,7 @@ let CALLABLE = new Set([
 let INDEXABLE = new Set([
   ...CALLABLE,
   'NUMBER', 'INFINITY', 'NAN', 'STRING', 'STRING_END',
-  'REGEX', 'REGEX_END', 'BOOL', 'NULL', 'UNDEFINED', '}',
+  'REGEX', 'REGEX_END', 'BOOL', 'NULL', 'UNDEFINED', '}', 'MAP_END',
 ]);
 
 // Tokens that can follow IMPLICIT_FUNC to start an implicit call
@@ -117,7 +117,7 @@ let IMPLICIT_CALL = new Set([
   'THIS', 'DYNAMIC_IMPORT', 'IMPORT_META', 'NEW_TARGET',
   'UNDEFINED', 'NULL', 'BOOL', 'UNARY', 'DO', 'DO_IIFE',
   'YIELD', 'AWAIT', 'UNARY_MATH', 'SUPER', 'THROW',
-  '@', '->', '=>', '[', '(', '{', '--', '++',
+  '@', '->', '=>', '[', '(', '{', 'MAP_START', '--', '++',
 ]);
 
 // Tokens that can start an implicit call (unspaced, like +/-)
@@ -132,12 +132,12 @@ let IMPLICIT_END = new Set([
 // Tokens that trigger implicit comma insertion before arrows
 let IMPLICIT_COMMA_BEFORE_ARROW = new Set([
   'STRING', 'STRING_END', 'REGEX', 'REGEX_END', 'NUMBER',
-  'BOOL', 'NULL', 'UNDEFINED', 'INFINITY', 'NAN', ']', '}',
+  'BOOL', 'NULL', 'UNDEFINED', 'INFINITY', 'NAN', ']', '}', 'MAP_END',
 ]);
 
 // Tokens that start/end balanced pairs
-let EXPRESSION_START = new Set(['(', '[', '{', 'INDENT', 'CALL_START', 'PARAM_START', 'INDEX_START', 'STRING_START', 'INTERPOLATION_START', 'REGEX_START']);
-let EXPRESSION_END   = new Set([')', ']', '}', 'OUTDENT', 'CALL_END', 'PARAM_END', 'INDEX_END', 'STRING_END', 'INTERPOLATION_END', 'REGEX_END']);
+let EXPRESSION_START = new Set(['(', '[', '{', 'MAP_START', 'INDENT', 'CALL_START', 'PARAM_START', 'INDEX_START', 'STRING_START', 'INTERPOLATION_START', 'REGEX_START']);
+let EXPRESSION_END   = new Set([')', ']', '}', 'MAP_END', 'OUTDENT', 'CALL_END', 'PARAM_END', 'INDEX_END', 'STRING_END', 'INTERPOLATION_END', 'REGEX_END']);
 
 // Balanced pair inverses
 let INVERSES = {
@@ -151,6 +151,7 @@ let INVERSES = {
   'STRING_START': 'STRING_END', 'STRING_END': 'STRING_START',
   'INTERPOLATION_START': 'INTERPOLATION_END', 'INTERPOLATION_END': 'INTERPOLATION_START',
   'REGEX_START': 'REGEX_END', 'REGEX_END': 'REGEX_START',
+  'MAP_START': 'MAP_END', 'MAP_END': 'MAP_START',
 };
 
 // Tokens that close a clause (for normalizeLines)
@@ -1369,6 +1370,7 @@ export class Lexer {
   rewrite(tokens) {
     this.tokens = tokens;
     this.removeLeadingNewlines();
+    this.rewriteMapLiterals();
     this.closeMergeAssignments();
     this.closeOpenCalls();
     this.closeOpenIndexes();
@@ -1388,6 +1390,26 @@ export class Lexer {
     let i = 0;
     while (this.tokens[i]?.[0] === 'TERMINATOR') i++;
     if (i > 0) this.tokens.splice(0, i);
+  }
+
+  rewriteMapLiterals() {
+    let tokens = this.tokens;
+    for (let i = 0; i < tokens.length; i++) {
+      if (tokens[i][0] !== 'MATH' || tokens[i][1] !== '*') continue;
+      let next = tokens[i + 1];
+      if (!next || next[0] !== '{') continue;
+      if (tokens[i].spaced || tokens[i].newLine) continue;
+      let prev = tokens[i - 1];
+      if (prev && INDEXABLE.has(prev[0])) continue;
+      tokens.splice(i, 1);
+      tokens[i][0] = 'MAP_START';
+      let depth = 1;
+      for (let j = i + 1; j < tokens.length && depth > 0; j++) {
+        let tag = tokens[j][0];
+        if (tag === '{' || tag === 'MAP_START') depth++;
+        if (tag === '}') { depth--; if (depth === 0) tokens[j][0] = 'MAP_END'; }
+      }
+    }
   }
 
   closeOpenCalls() {
@@ -1694,12 +1716,13 @@ export class Lexer {
 
         let startsLine = s <= 0 || LINE_BREAK.has(this.tokens[s - 1]?.[0]) || this.tokens[s - 1]?.newLine;
 
-        // Check if we're continuing an existing object
+        // Check if we're continuing an existing object or map literal
         if (stackTop()) {
           let [stackTag, stackIdx] = stackTop();
           let stackNext = stack[stack.length - 2];
-          if ((stackTag === '{' || (stackTag === 'INDENT' && stackNext?.[0] === '{' && !isImplicit(stackNext))) &&
-              (startsLine || this.tokens[s - 1]?.[0] === ',' || this.tokens[s - 1]?.[0] === '{' || this.tokens[s]?.[0] === '{')) {
+          let isBrace = (t) => t === '{' || t === 'MAP_START';
+          if ((isBrace(stackTag) || (stackTag === 'INDENT' && isBrace(stackNext?.[0]) && !isImplicit(stackNext))) &&
+              (startsLine || this.tokens[s - 1]?.[0] === ',' || isBrace(this.tokens[s - 1]?.[0]) || isBrace(this.tokens[s]?.[0]))) {
             return forward(1);
           }
         }

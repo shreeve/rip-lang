@@ -110,6 +110,7 @@ grammar =
     o 'This'
     o 'Super'
     o 'MetaProperty'
+    o 'MapLiteral'
   ]
 
   # Immediate values — numbers, strings, booleans, etc.
@@ -326,6 +327,44 @@ grammar =
     # Indexing
     o 'ObjSpreadExpr INDEX_START Expression INDEX_END'                , '["[]", 1, 3]'
     o 'ObjSpreadExpr INDEX_START INDENT Expression OUTDENT INDEX_END', '["[]", 1, 4]'
+  ]
+
+  # ============================================================================
+  # Map Literals — *{ key: value } → new Map([[key, value]])
+  # ============================================================================
+
+  MapLiteral: [
+    o 'MAP_START MAP_END'                        , '["map-literal"]'
+    o 'MAP_START MapAssignList OptComma MAP_END' , '["map-literal", ...2]'
+  ]
+
+  MapAssignList: [
+    o ''                                                              , '[]'
+    o 'MapAssignObj'                                                  , '[1]'
+    o 'MapAssignList , MapAssignObj'                                  , '[...1, 3]'
+    o 'MapAssignList OptComma TERMINATOR MapAssignObj'                , '[...1, 4]'
+    o 'MapAssignList OptComma INDENT MapAssignList OptComma OUTDENT'  , '[...1, ...4]'
+  ]
+
+  MapAssignObj: [
+    o 'MapAssignable : Expression'                , '[":", 1, 3]'
+    o 'MapAssignable : INDENT Expression OUTDENT' , '[":", 1, 4]'
+  ]
+
+  MapAssignable: [
+    o 'Identifier'
+    o 'Property'
+    o 'ThisProperty'
+    o 'AlphaNumeric'
+    o 'Regex'
+    o 'BOOL'
+    o 'NULL'       , '"null"'
+    o 'UNDEFINED'  , '"undefined"'
+    o 'INFINITY'
+    o 'NAN'
+    o 'Array'
+    o 'Object'
+    o 'Parenthetical'
   ]
 
   # ============================================================================

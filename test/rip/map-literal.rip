@@ -1,0 +1,107 @@
+# Test: Map Literals — *{ key: value } → new Map([[key, value]])
+
+# ==============================================================================
+# Code Generation
+# ==============================================================================
+
+# Empty map
+code "empty map", "*{}", "new Map()"
+
+# Identifier keys become strings
+code "identifier keys", "*{ a: 1, b: 2 }", 'new Map([["a", 1], ["b", 2]])'
+
+# String keys
+code "string keys", '*{ "hello": 1, "world": 2 }', 'new Map([["hello", 1], ["world", 2]])'
+
+# Number keys
+code "number keys", "*{ 1: 'one', 2: 'two' }", "new Map([[1, 'one'], [2, 'two']])"
+
+# Regex keys
+code "regex key", "*{ /^NAME:/: 1 }", "new Map([[/^NAME:/, 1]])"
+
+# Boolean keys
+code "boolean keys", "*{ true: 'yes', false: 'no' }", "new Map([[true, 'yes'], [false, 'no']])"
+
+# Null key
+code "null key", "*{ null: 'nothing' }", "new Map([[null, 'nothing']])"
+
+# Undefined key
+code "undefined key", "*{ undefined: 'nope' }", "new Map([[undefined, 'nope']])"
+
+# Mixed key types
+code "mixed keys", """
+  *{ /^NAME:/: [""], "CHOOSE 1": [1], 1: "one", true: "yes", null: "nothing" }
+  """, 'new Map([[/^NAME:/, [""]], ["CHOOSE 1", [1]], [1, "one"], [true, "yes"], [null, "nothing"]])'
+
+# Array values
+code "array values", '*{ a: [1, 2, 3] }', 'new Map([["a", [1, 2, 3]]])'
+
+# Nested object values
+code "nested object values", '*{ a: { x: 1 } }', 'new Map([["a", {x: 1}]])'
+
+# Normal object is unchanged
+code "normal object unchanged", "{ a: 1, b: 2 }", "({a: 1, b: 2})"
+
+# ==============================================================================
+# Runtime Tests
+# ==============================================================================
+
+# Instance check
+test "map is instanceof Map", "*{ a: 1 } instanceof Map", true
+
+# Size
+test "map size", "*{ a: 1, b: 2 }.size", 2
+
+# Empty map size
+test "empty map size", "*{}.size", 0
+
+# Get with string key (from identifier)
+test "get identifier key", '*{ a: 42 }.get("a")', 42
+
+# Get with string key
+test "get string key", '*{ "hello": 99 }.get("hello")', 99
+
+# Get with number key
+test "get number key", "*{ 1: 'one' }.get(1)", "one"
+
+# Get with boolean key
+test "get boolean key", "*{ true: 'yes' }.get(true)", "yes"
+
+# Get with null key
+test "get null key", "*{ null: 'nil' }.get(null)", "nil"
+
+# Normal object is not a Map
+test "normal object is not Map", "{ a: 1 } instanceof Map", false
+
+# Multiline map
+test "multiline map", """
+  m = *{
+    a: 1
+    b: 2
+    c: 3
+  }
+  m.size
+  """, 3
+
+# Regex key runtime
+test "regex key get", """
+  m = *{ /^NAME:/: 'found' }
+  key = null
+  for [k, v] as m
+    key = k
+  key instanceof RegExp
+  """, true
+
+# Map with expression values
+test "map with computed values", """
+  x = 10
+  m = *{ a: x * 2, b: x + 5 }
+  m.get("a") + m.get("b")
+  """, 35
+
+# Parenthetical key (escape hatch for expressions)
+test "parenthetical key", """
+  fn = -> 'dynamic'
+  m = *{ (fn()): 42 }
+  m.get('dynamic')
+  """, 42

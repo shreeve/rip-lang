@@ -40,6 +40,8 @@ let STMT_ONLY = new Set([
   'while', 'until', 'loop', 'switch', 'try', 'throw',
 ]);
 
+let MAP_LITERAL_KEYS = new Set(['true', 'false', 'null', 'undefined', 'Infinity', 'NaN']);
+
 function isInline(arr) {
   if (!Array.isArray(arr) || arr.length === 0) return false;
   let head = arr[0]?.valueOf?.() ?? arr[0];
@@ -183,6 +185,7 @@ export class CodeGenerator {
     // Data structures
     'array': 'generateArray',
     'object': 'generateObject',
+    'map-literal': 'generateMap',
     'block': 'generateBlock',
 
     // Property access
@@ -1677,6 +1680,25 @@ export class CodeGenerator {
       return `${keyCode}: ${valCode}`;
     }).join(', ');
     return `{${codes}}`;
+  }
+
+  generateMap(head, pairs, context) {
+    if (pairs.length === 0) return 'new Map()';
+    let entries = pairs.map(pair => {
+      let [, key, value] = pair;
+      let keyCode;
+      if (Array.isArray(key)) {
+        keyCode = this.generate(key, 'value');
+      } else {
+        let k = str(key) ?? key;
+        let isIdentifier = !k.startsWith('"') && !k.startsWith("'") && !k.startsWith('/') &&
+          !CodeGenerator.NUMBER_START_RE.test(k) && !MAP_LITERAL_KEYS.has(k);
+        keyCode = isIdentifier ? `"${k}"` : this.generate(key, 'value');
+      }
+      let valCode = this.generate(value, 'value');
+      return `[${keyCode}, ${valCode}]`;
+    }).join(', ');
+    return `new Map([${entries}])`;
   }
 
   generateBlock(head, statements, context) {
