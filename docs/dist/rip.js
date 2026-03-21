@@ -3159,10 +3159,12 @@
         case 68:
           return ["regex-index", $[$0], null];
         case 69:
+        case 120:
           return ["=", $[$0 - 2], $[$0]];
         case 70:
           return ["=", $[$0 - 3], $[$0]];
         case 71:
+        case 121:
           return ["=", $[$0 - 4], $[$0 - 1]];
         case 72:
           return ["=", $[$0], $[$0 - 2]];
@@ -3244,15 +3246,11 @@
         case 367:
           return [...$[$0 - 5], ...$[$0 - 2]];
         case 116:
-          return [$[$0], $[$0], null];
+          return [null, $[$0], $[$0]];
         case 118:
-          return [$[$0 - 2], $[$0], ":"];
+          return [":", $[$0 - 2], $[$0]];
         case 119:
-          return [$[$0 - 4], $[$0 - 1], ":"];
-        case 120:
-          return [$[$0 - 2], $[$0], "="];
-        case 121:
-          return [$[$0 - 4], $[$0 - 1], "="];
+          return [":", $[$0 - 4], $[$0 - 1]];
         case 126:
           return ["dynamicKey", $[$0 - 1]];
         case 127:
@@ -4098,8 +4096,8 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
     for (const pair of pairs) {
       if (!Array.isArray(pair))
         continue;
-      const key = pair[0] instanceof String ? pair[0].valueOf() : pair[0];
-      const val = pair[1] instanceof String ? pair[1].valueOf() : pair[1];
+      const key = pair[1] instanceof String ? pair[1].valueOf() : pair[1];
+      const val = pair[2] instanceof String ? pair[2].valueOf() : pair[2];
       if (key === "type" && typeof val === "string") {
         return val.replace(/^["']|["']$/g, "");
       }
@@ -4528,10 +4526,10 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       if (sexpr[0] === "object") {
         return ["object", ...sexpr.slice(1).map((pair) => {
           if (Array.isArray(pair) && pair.length >= 2) {
-            let key = pair[0];
+            let key = pair[1];
             let newKey = Array.isArray(key) ? this.transformComponentMembers(key, localScope) : key;
-            let newValue = this.transformComponentMembers(pair[1], localScope);
-            return [newKey, newValue, pair[2]];
+            let newValue = this.transformComponentMembers(pair[2], localScope);
+            return [pair[0], newKey, newValue];
           }
           return this.transformComponentMembers(pair, localScope);
         })];
@@ -4642,7 +4640,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
             const pair = stmt[i];
             if (!Array.isArray(pair))
               continue;
-            const [methodName, funcDef] = pair;
+            const [, methodName, funcDef] = pair;
             if (typeof methodName === "string" && LIFECYCLE_HOOKS.has(methodName)) {
               lifecycleHooks.push({ name: methodName, value: funcDef });
             } else if (typeof methodName === "string") {
@@ -4791,7 +4789,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
                   const pair = obj[j];
                   if (!Array.isArray(pair) || pair.length < 2)
                     continue;
-                  const [key, value] = pair;
+                  const [, key, value] = pair;
                   if (Array.isArray(key) && key[0] === "." && key[1] === "this" && Array.isArray(value) && value[0] === "." && value[1] === "this") {
                     const eventName = typeof key[2] === "string" ? key[2] : key[2]?.valueOf?.();
                     const methodName = typeof value[2] === "string" ? value[2] : value[2]?.valueOf?.();
@@ -4858,7 +4856,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
               if (obj) {
                 for (let j = 1;j < obj.length; j++) {
                   const pair = obj[j];
-                  const [key, value] = pair;
+                  const [, key, value] = pair;
                   if (typeof key === "string" && !key.startsWith("@")) {
                     const srcLine = pair.loc?.r ?? obj.loc?.r;
                     if (key.startsWith("__bind_") && key.endsWith("__")) {
@@ -4893,7 +4891,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
                   const pair = obj[j];
                   if (!Array.isArray(pair) || pair.length < 2)
                     continue;
-                  const [key, value] = pair;
+                  const [, key, value] = pair;
                   const srcLine = pair.loc?.r ?? obj.loc?.r;
                   if (Array.isArray(key) && key[0] === "." && key[1] === "this") {
                     let memberName = typeof key[2] === "string" ? key[2] : key[2]?.valueOf?.();
@@ -5574,7 +5572,7 @@ ${blockFactoriesCode}return ${lines.join(`
     proto.generateAttributes = function(elVar, objExpr) {
       const inputType = extractInputType(objExpr.slice(1));
       for (let i = 1;i < objExpr.length; i++) {
-        let [key, value] = objExpr[i];
+        let [, key, value] = objExpr[i];
         if (this.is(key, ".") && key[1] === "this") {
           const eventName = key[2];
           if (this._autoWireExplicit && this._autoWireEl === elVar) {
@@ -5951,7 +5949,7 @@ ${blockFactoriesCode}return ${lines.join(`
       };
       const addObjectProps = (objExpr) => {
         for (let i = 1;i < objExpr.length; i++) {
-          const [key, value] = objExpr[i];
+          const [, key, value] = objExpr[i];
           if (typeof key === "string") {
             addProp(key, value);
           } else if (Array.isArray(key) && key[0] === "." && key[1] === "this" && typeof key[2] === "string") {
@@ -7108,7 +7106,7 @@ if (typeof globalThis !== 'undefined') {
       let stmtEntries = body.map((stmt, index) => {
         let isSingle = body.length === 1 && imports.length === 0;
         let isObj = this.is(stmt, "object");
-        let isObjComp = isObj && stmt.length === 2 && Array.isArray(stmt[1]) && Array.isArray(stmt[1][1]) && stmt[1][1][0] === "comprehension";
+        let isObjComp = isObj && stmt.length === 2 && Array.isArray(stmt[1]) && Array.isArray(stmt[1][2]) && stmt[1][2][0] === "comprehension";
         let isAlreadyExpr = this.is(stmt, "comprehension") || this.is(stmt, "object-comprehension") || this.is(stmt, "do-iife");
         let hasNoVars = this.programVars.size === 0;
         let needsParens = isSingle && isObj && hasNoVars && !isAlreadyExpr && !isObjComp;
@@ -8029,15 +8027,15 @@ ${this.indent()}}`;
       return hasTrailingElision ? `[${codes},]` : `[${codes}]`;
     }
     generateObject(head, pairs, context) {
-      if (pairs.length === 1 && Array.isArray(pairs[0]) && Array.isArray(pairs[0][1]) && pairs[0][1][0] === "comprehension") {
-        let [keyVar, compNode] = pairs[0];
+      if (pairs.length === 1 && Array.isArray(pairs[0]) && Array.isArray(pairs[0][2]) && pairs[0][2][0] === "comprehension") {
+        let [, keyVar, compNode] = pairs[0];
         let [, valueExpr, iterators, guards] = compNode;
         return this.generate(["object-comprehension", keyVar, valueExpr, iterators, guards], context);
       }
       let codes = pairs.map((pair) => {
         if (this.is(pair, "..."))
           return `...${this.generate(pair[1], "value")}`;
-        let [key, value, operator] = pair;
+        let [operator, key, value] = pair;
         let keyCode;
         if (this.is(key, "dynamicKey"))
           keyCode = `[${this.generate(key[1], "value")}]`;
@@ -8408,14 +8406,14 @@ ${this.indent()}}`;
             let members = bodyStmts[0].slice(1);
             this.indentLevel++;
             let boundMethods = [];
-            for (let [mk, mv] of members) {
+            for (let [, mk, mv] of members) {
               let isStatic = this.is(mk, ".") && mk[1] === "this";
               let isComputed = this.is(mk, "computed");
               let mName = this.extractMemberName(mk);
               if (this.is(mv, "=>") && !isStatic && !isComputed && mName !== "constructor")
                 boundMethods.push(mName);
             }
-            for (let [mk, mv] of members) {
+            for (let [, mk, mv] of members) {
               let isStatic = this.is(mk, ".") && mk[1] === "this";
               let isComputed = this.is(mk, "computed");
               let mName = this.extractMemberName(mk);
@@ -8473,7 +8471,7 @@ ${this.indent()}}`;
             let members = bodyStmts[0].slice(1);
             let additionalStmts = bodyStmts.slice(1);
             this.indentLevel++;
-            for (let [mk, mv] of members) {
+            for (let [, mk, mv] of members) {
               let isStatic = this.is(mk, ".") && mk[1] === "this", mName = this.extractMemberName(mk);
               if (this.is(mv, "->") || this.is(mv, "=>")) {
                 let [, params, body] = mv;
@@ -8741,7 +8739,7 @@ export default ${expr[1]}`;
             return `...${pair[1]}`;
           if (this.is(pair, "default"))
             return `${pair[1]} = ${this.generate(pair[2], "value")}`;
-          let [key, value, operator] = pair;
+          let [operator, key, value] = pair;
           if (operator === "=")
             return `${key} = ${this.generate(value, "value")}`;
           if (key === value)
@@ -9466,7 +9464,7 @@ ${this.indent()}}`;
           return;
         }
         if (pair.length >= 2) {
-          let [key, value, operator] = pair;
+          let [operator, key, value] = pair;
           if (operator === "=") {
             if (typeof key === "string")
               varSet.add(key);
@@ -10001,8 +9999,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeGenerator({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.13.126";
-  var BUILD_DATE = "2026-03-21@06:00:44GMT";
+  var VERSION = "3.13.127";
+  var BUILD_DATE = "2026-03-21@07:18:26GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
