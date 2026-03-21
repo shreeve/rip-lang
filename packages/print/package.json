@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/print",
-  "version": "1.1.108",
+  "version": "1.1.109",
   "description": "Syntax-highlighted source code printer - highlight.js-powered, serves once, auto-opens browser",
   "type": "module",
   "main": "print.rip",
@@ -29,7 +29,7 @@
   "author": "Steve Shreeve <steve.shreeve@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "rip-lang": ">=3.13.125",
+    "rip-lang": ">=3.13.126",
     "highlight.js": "^11.11.1"
   },
   "files": [

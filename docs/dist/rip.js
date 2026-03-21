@@ -4248,16 +4248,11 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         if (tag === "=" && i > 0) {
           let prev = tokens[i - 1][0];
           if (prev === "TERMINATOR" || prev === "INDENT" || prev === "RENDER") {
-            tokens.splice(i, 1);
-            if (tokens[i] && tokens[i][0] === "IDENTIFIER") {
-              let val = tokens[i][1];
-              if (typeof val === "string") {
-                val = new String(val);
-                tokens[i][1] = val;
-              }
-              val.text = true;
-            }
-            return 0;
+            const textToken = gen2("IDENTIFIER", "__text__", token);
+            const callStart = gen2("CALL_START", "(", token);
+            tokens.splice(i, 1, textToken, callStart);
+            this.detectEnd(i + 2, (t) => t[0] === "TERMINATOR" || t[0] === "OUTDENT", (t, j) => tokens.splice(j, 0, gen2("CALL_END", ")", t)), { returnOnNegativeLevel: true });
+            return 2;
           }
         }
         if (tag === "UNARY_MATH" && token[1] === "~" && nextToken && nextToken[0] === "IDENTIFIER") {
@@ -4392,7 +4387,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           }
           let isTemplateElement = false;
           let prevTag = i > 0 ? tokens[i - 1][0] : null;
-          let isAfterControlFlow = prevTag === "IF" || prevTag === "UNLESS" || prevTag === "WHILE" || prevTag === "UNTIL" || prevTag === "WHEN";
+          let isAfterControlFlow = prevTag === "IF" || prevTag === "UNLESS" || prevTag === "WHILE" || prevTag === "UNTIL" || prevTag === "WHEN" || prevTag === "FORIN" || prevTag === "FOROF" || prevTag === "FORAS" || prevTag === "FORASAWAIT" || prevTag === "BY";
           let isClsxCallEnd = false;
           if (tag === "CALL_END") {
             let depth = 1;
@@ -5397,6 +5392,18 @@ ${blockFactoriesCode}return ${lines.join(`
       }
       if (headStr === "for" || headStr === "for-in" || headStr === "for-of" || headStr === "for-as") {
         return this.generateTemplateLoop(sexpr);
+      }
+      if (headStr === "__text__") {
+        const expr = rest[0] ?? "undefined";
+        const textVar2 = this.newTextVar();
+        const exprCode2 = this.generateInComponent(expr, "value");
+        if (this.hasReactiveDeps(expr)) {
+          this._createLines.push(`${textVar2} = document.createTextNode('');`);
+          this._pushEffect(`${textVar2}.data = String(${exprCode2});`);
+        } else {
+          this._createLines.push(`${textVar2} = document.createTextNode(String(${exprCode2}));`);
+        }
+        return textVar2;
       }
       const textVar = this.newTextVar();
       const exprCode = this.generateInComponent(sexpr, "value");
@@ -9152,13 +9159,13 @@ ${this.indent()}}`;
     generateSwitchCaseBody(body, context) {
       let code = "";
       let hasFlow = this.hasExplicitControlFlow(body);
+      let stmts = this.unwrapBlock(body);
       if (hasFlow) {
-        for (let s of this.unwrapBlock(body))
+        for (let s of stmts)
           code += this.indent() + this.generate(s, "statement") + `;
 `;
       } else if (context === "value") {
         if (this.is(body, "block") && body.length > 2) {
-          let stmts = body.slice(1);
           for (let i = 0;i < stmts.length; i++) {
             if (i === stmts.length - 1)
               code += this.indent() + `return ${this.generate(stmts[i], "value")};
@@ -9172,8 +9179,14 @@ ${this.indent()}}`;
 `;
         }
       } else {
-        if (this.is(body, "block") && body.length > 1) {
-          for (let s of body.slice(1))
+        if (stmts.length === 1 && this.is(stmts[0], "if") && !this.hasStatementInBranch(stmts[0]) && !this.hasNestedMultiStatement(stmts[0])) {
+          let [_, condition, thenBranch, ...elseBranches] = stmts[0];
+          let thenExpr = this.extractExpression(this.unwrapIfBranch(thenBranch));
+          let elseExpr = this.buildTernaryChain(elseBranches);
+          code += this.indent() + `(${this.unwrap(this.generate(condition, "value"))} ? ${thenExpr} : ${elseExpr});
+`;
+        } else if (this.is(body, "block") && body.length > 1) {
+          for (let s of stmts)
             code += this.indent() + this.generate(s, "statement") + `;
 `;
         } else {
@@ -9988,8 +10001,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeGenerator({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.13.125";
-  var BUILD_DATE = "2026-03-19@00:54:22GMT";
+  var VERSION = "3.13.126";
+  var BUILD_DATE = "2026-03-21@06:00:44GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
