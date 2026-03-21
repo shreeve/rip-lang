@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/ui",
-  "version": "0.4.8",
+  "version": "0.4.9",
   "type": "module",
   "description": "Unified UI system for Rip — browser widgets, email components, and Tailwind integration",
   "exports": {
@@ -22,7 +22,7 @@
     "ui.rip"
   ],
   "dependencies": {
-    "rip-lang": ">=3.13.128",
+    "rip-lang": ">=3.13.129",
     "tailwindcss": "^4",
     "css-tree": "^3"
   },
