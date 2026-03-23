@@ -3,6 +3,7 @@
 # ==============================================================================
 
 import { unlinkSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { getWorkerSocketPath, getControlSocketPath } from './control.rip'
 
 # --- Spawn ---
@@ -28,7 +29,8 @@ export spawnTrackedWorker = (flags, workerId, version, nowMsFn, importMetaPath, 
     RIP_LOG_JSON: if flags.jsonLogging then '1' else '0'
     RIP_VERSION: String(version)
 
-  proc = Bun.spawn ['rip', importMetaPath],
+  loaderPath = join(dirname(importMetaPath), '..', '..', 'rip-loader.js')
+  proc = Bun.spawn ['bun', '--preload', loaderPath, importMetaPath],
     stdout: 'inherit'
     stderr: 'inherit'
     stdin: 'ignore'
