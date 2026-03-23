@@ -4584,8 +4584,11 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         }
         return ["=>", sexpr[1], this.transformComponentMembers(sexpr[2], childScope)];
       }
-      if (sexpr[0] === "object") {
-        return ["object", ...sexpr.slice(1).map((pair) => {
+      if (sexpr[0] === "object" || sexpr[0] === "map-literal") {
+        return [sexpr[0], ...sexpr.slice(1).map((pair) => {
+          if (Array.isArray(pair) && pair[0] === "...") {
+            return ["...", this.transformComponentMembers(pair[1], localScope)];
+          }
           if (Array.isArray(pair) && pair.length >= 2) {
             let key = pair[1];
             let newKey = Array.isArray(key) ? this.transformComponentMembers(key, localScope) : key;
@@ -10083,7 +10086,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   }
   // src/browser.js
   var VERSION = "3.13.129";
-  var BUILD_DATE = "2026-03-23@20:24:48GMT";
+  var BUILD_DATE = "2026-03-23@20:46:13GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

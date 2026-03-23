@@ -621,8 +621,11 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     }
 
     // Object literals: transform values but leave bare string keys untouched
-    if (sexpr[0] === 'object') {
-      return ['object', ...sexpr.slice(1).map(pair => {
+    if (sexpr[0] === 'object' || sexpr[0] === 'map-literal') {
+      return [sexpr[0], ...sexpr.slice(1).map(pair => {
+        if (Array.isArray(pair) && pair[0] === '...') {
+          return ['...', this.transformComponentMembers(pair[1], localScope)];
+        }
         if (Array.isArray(pair) && pair.length >= 2) {
           let key = pair[1];
           let newKey = Array.isArray(key) ? this.transformComponentMembers(key, localScope) : key;
