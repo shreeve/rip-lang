@@ -448,27 +448,30 @@ export Dashboard = component
 
   # ── Helpers ──
 
-  $k   = (v) -> "$#{v}k"
-  pct  = (v) -> "#{v}%"
-  $M   = (v) -> "$#{(v / 1000).toFixed(1)}M"
-  valK = (p) -> "#{p.name}<br>$#{(p.value or 0).toLocaleString()}k"
-  tip  = (fmt) -> { ...BASE.tooltip, trigger: 'item', formatter: fmt }
+  $k:   (v) -> "$#{v}k"
+  pct:  (v) -> "#{v}%"
+  $M:   (v) -> "$#{(v / 1000).toFixed(1)}M"
+  valK: (p) -> "#{p.name}<br>$#{(p.value or 0).toLocaleString()}k"
+  tip:  (fmt) -> { ...BASE.tooltip, trigger: 'item', formatter: fmt }
 
-  xaxis = (data = null, opts = {}) ->
+  xaxis: (data = null, opts = {}) ->
+    xa = XAXIS
     if typeof data is 'object' and not Array.isArray(data) and data isnt null
       opts = data
       data = opts.data or null
-    label = if opts.axisLabel then { ...XAXIS.axisLabel, ...opts.axisLabel } else XAXIS.axisLabel
-    { ...XAXIS, data, ...opts, axisLabel: label }
-  yaxis = (name, fmt, opts = {}) ->
-    label = if opts.axisLabel then { ...YAXIS.axisLabel, formatter: fmt, ...opts.axisLabel } else { ...YAXIS.axisLabel, formatter: fmt }
-    { ...YAXIS, name, ...opts, axisLabel: label }
+    label = if opts.axisLabel then { ...xa.axisLabel, ...opts.axisLabel } else xa.axisLabel
+    { ...xa, data, ...opts, axisLabel: label }
+  yaxis: (name, fmt, opts = {}) ->
+    ya = YAXIS
+    label = if opts.axisLabel then { ...ya.axisLabel, formatter: fmt, ...opts.axisLabel } else { ...ya.axisLabel, formatter: fmt }
+    { ...ya, name, ...opts, axisLabel: label }
 
   ic: (id, opts) ->
     el = document.getElementById(id)
     return unless el
     c = echarts.init(el, 'evidence')
-    c.setOption({ ...BASE, ...opts })
+    base = BASE
+    c.setOption({ ...base, ...opts })
     window.addEventListener 'resize', -> c.resize({ animation: { duration: 500 } })
     c
 
@@ -592,7 +595,7 @@ export Dashboard = component
     @ic 'heatmap',
       grid: { ...BASE.grid, top: '8%', bottom: '12%' }
       xAxis: xaxis hours, splitArea: { show: false }
-      yAxis: { ...YAXIS, type: 'category', data: days, splitLine: { show: false }, splitArea: { show: false } }
+      yAxis: yaxis '', null, type: 'category', data: days, splitLine: { show: false }, splitArea: { show: false }
       tooltip: tip (p) -> "#{days[p.value[1]]} #{hours[p.value[0]]}<br>Sessions: <b>#{p.value[2]}</b>"
       visualMap:
         min: 10, max: 140, calculable: true, orient: 'horizontal', left: 'center', bottom: '0%'
