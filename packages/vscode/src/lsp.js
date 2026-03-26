@@ -305,18 +305,20 @@ function publishDiagnostics(filePath) {
       const info = componentRegistry.get(usage.component);
       if (!info) continue;
 
-      for (const prop of usage.usedProps) {
-        if (prop.startsWith('@')) continue;
-        if (prop === 'class' || prop === 'style') continue;
-        if (!info.props.some(p => p.name === prop)) {
-          const col = srcLines[i].indexOf(prop);
-          if (col >= 0) {
-            diagnostics.push({
-              range: { start: { line: i, character: col }, end: { line: i, character: col + prop.length } },
-              severity: 1,
-              source: 'rip',
-              message: `Unknown prop '${prop}' on component ${usage.component}`,
-            });
+      if (!info.hasIntrinsicProps) {
+        for (const prop of usage.usedProps) {
+          if (prop.startsWith('@')) continue;
+          if (prop === 'class' || prop === 'style') continue;
+          if (!info.props.some(p => p.name === prop)) {
+            const col = srcLines[i].indexOf(prop);
+            if (col >= 0) {
+              diagnostics.push({
+                range: { start: { line: i, character: col }, end: { line: i, character: col + prop.length } },
+                severity: 1,
+                source: 'rip',
+                message: `Unknown prop '${prop}' on component ${usage.component}`,
+              });
+            }
           }
         }
       }
