@@ -7,7 +7,7 @@
 // Rip's render block            → React's JSX return
 // Rip's <=> two-way bind        → React's value + onChange (no equivalent)
 
-import { useState, type ComponentProps } from 'react'
+import { SubmitEventHandler, useState, ComponentProps } from 'react'
 
 // ── Prop types ──
 
@@ -53,14 +53,15 @@ function Form({ title = 'Sign In' }: { title?: string } = {}) {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
 
-  async function submit() {
+  const onSubmit: SubmitEventHandler<HTMLFormElement> = (e) => {
+    e.preventDefault()
     setLoading(true)
     console.log(`Signing in: ${email}`)
     setLoading(false)
   }
 
   return (
-    <form onSubmit={(e) => { e.preventDefault(); submit() }}>
+    <form onSubmit={onSubmit}>
       <h1>{title}</h1>
       <Input
         label='Email'
