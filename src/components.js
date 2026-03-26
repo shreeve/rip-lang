@@ -934,7 +934,11 @@ export function installComponentSupport(CodeGenerator, Lexer) {
         if (Array.isArray(func) && (func[0] === '->' || func[0] === '=>')) {
           let [, params, methodBody] = func;
           if ((!params || (Array.isArray(params) && params.length === 0)) && this.containsIt(methodBody)) params = ['it'];
-          let paramStr = Array.isArray(params) ? params.map(p => this.formatParam(p)).join(', ') : '';
+          let paramStr = Array.isArray(params) ? params.map(p => {
+            let base = this.formatParam(p);
+            if (p?.type) base += `: ${p.type}`;
+            return base;
+          }).join(', ') : '';
           // Inject event type on untyped first param when method is bound to an event
           const boundEvent = eventMethodTypes.get(name);
           if (boundEvent && Array.isArray(params) && params.length > 0) {

@@ -1320,12 +1320,12 @@ function emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars, so
         hasDefault = false;
         if (!isProp && propName) componentVars.add(propName);
       } else if (mHead === 'object') {
-        // Method definitions: (object (methodName (-> (params...) (block ...)) :))
+        // Method definitions: (object (: methodName (-> (params...) (block ...))))
         for (let i = 1; i < member.length; i++) {
           let entry = member[i];
-          if (!Array.isArray(entry) || entry.length < 2) continue;
-          let methName = entry[0]?.valueOf?.() ?? entry[0];
-          let funcDef = entry[1];
+          if (!Array.isArray(entry) || entry.length < 3) continue;
+          let methName = entry[1]?.valueOf?.() ?? entry[1];
+          let funcDef = entry[2];
           if (!Array.isArray(funcDef)) continue;
           let fHead = funcDef[0]?.valueOf?.() ?? funcDef[0];
           if (fHead !== '->' && fHead !== '=>') continue;
