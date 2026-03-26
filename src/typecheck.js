@@ -740,7 +740,8 @@ export function compileForCheck(filePath, source, compiler) {
       "type __RipDomEl<K extends __RipTag> = Omit<__RipElementMap[K], 'querySelector' | 'querySelectorAll' | 'closest' | 'setAttribute' | 'hidden'> & __RipBrowserElement;",
       "type __RipAttrKeys<T> = { [K in keyof T]-?: K extends 'style' ? never : T[K] extends (...args: any[]) => any ? never : K }[keyof T] & string;",
       'type __RipEvents = { [K in keyof HTMLElementEventMap as `@${K}`]?: ((event: HTMLElementEventMap[K]) => void) | null };',
-      'type __RipProps<K extends __RipTag> = { [P in __RipAttrKeys<__RipElementMap[K]>]?: __RipElementMap[K][P] } & __RipEvents & { ref?: string; class?: string; style?: string; [k: `data-${string}`]: any; [k: `aria-${string}`]: any };',
+      'type __RipClassValue = string | boolean | null | undefined | Record<string, boolean> | __RipClassValue[];',
+      'type __RipProps<K extends __RipTag> = { [P in __RipAttrKeys<__RipElementMap[K]>]?: __RipElementMap[K][P] } & __RipEvents & { ref?: string; class?: __RipClassValue | __RipClassValue[]; style?: string; [k: `data-${string}`]: any; [k: `aria-${string}`]: any };',
       'declare function __ripEl<K extends __RipTag>(tag: K, props?: __RipProps<K>): void;',
     ];
     headerDts = intrinsicDecls.join('\n') + '\n' + headerDts;
