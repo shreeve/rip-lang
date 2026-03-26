@@ -507,6 +507,9 @@ export function compileForCheck(filePath, source, compiler) {
               if (cl[k].match(/^(?:export\s+)?(?:class|const)\s+\w+/) && k > j + 1) break;
               const fm = cl[k].match(/^\s+(?:declare\s+)?(\w+):\s+.+;$/);
               if (fm) existingFields.add(fm[1]);
+              // Also match field assignments (e.g. `name = __computed(...)` in component stubs)
+              const am = cl[k].match(/^\s+(\w+)\s*=\s+/);
+              if (am) existingFields.add(am[1]);
               if (cl[k].match(/^\s+_init\s*\(/)) break;
             }
             const missingFields = info.fields.filter(f => !existingFields.has(f.name));
