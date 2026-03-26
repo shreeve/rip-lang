@@ -62,7 +62,7 @@ export Form = component
   password := ""
   loading := false
 
-  onSubmit: (e:: Event) ->
+  onSubmit: (e:: SubmitEvent) ->
     e.preventDefault()
     loading = true
     p "Signing in: #{email}"
