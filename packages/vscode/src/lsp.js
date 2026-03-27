@@ -229,6 +229,13 @@ function publishDiagnostics(filePath) {
         if (d.start === undefined) continue;
         if (tc.SKIP_CODES.has(d.code)) continue;
 
+        // Skip 6133 on compiler-generated _render() construction variables (_0, _1, …)
+        // — these typed constants exist solely for prop type-checking and are never read.
+        if ((d.code === 6133 || d.code === 6196) && d.length > 0) {
+          const span = c.tsContent.substring(d.start, d.start + d.length);
+          if (/^_\d+$/.test(span.trim())) continue;
+        }
+
         // Expand 6199 (all declarations unused) on hoisted multi-var `let` into
         // individual per-variable diagnostics so each one dims independently.
         if (d.code === 6199 && d.length > 0) {
