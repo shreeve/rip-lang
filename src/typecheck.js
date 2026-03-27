@@ -563,23 +563,37 @@ export function compileForCheck(filePath, source, compiler) {
     const cl = code.split('\n');
     let changed = false;
     for (let j = 0; j < cl.length; j++) {
-      // Match: constructor(props?: { ... }) or constructor(props: { ... })
-      const cm = cl[j].match(/^\s+constructor\((props)\??\s*:\s*(\{[^}]*\})\)/);
+      // Match: constructor(_props?: { ... }) or constructor(_props: { ... })
+      const cm = cl[j].match(/^\s+constructor\(_props\??\s*:\s*(\{[^}]*\})\)/);
       if (cm) {
-        const propsType = `${cm[1]}: ${cm[2]}`;
+        const propsType = cm[1];
         // Find _init(props) in the same class
         for (let k = j + 1; k < cl.length; k++) {
           if (cl[k].match(/^((?:export\s+)?(?:const|class)\s+)/)) break;
           if (cl[k].match(/^\s+_init\(props\)\s*\{?\s*$/)) {
-            cl[k] = cl[k].replace('_init(props)', `_init(${propsType})`);
+            // Check if the body actually uses `props`
+            let usesProps = false;
+            for (let m = k + 1; m < cl.length; m++) {
+              if (/^\s+\}/.test(cl[m]) || /^((?:export\s+)?(?:const|class)\s+)/.test(cl[m])) break;
+              if (/\bprops\b/.test(cl[m])) { usesProps = true; break; }
+            }
+            const paramName = usesProps ? 'props' : '_props';
+            cl[k] = cl[k].replace('_init(props)', `_init(${paramName}: ${propsType})`);
             changed = true;
             break;
           }
         }
       }
-      // For component classes without typed constructors, type _init(props) as any
+      // For component classes without typed constructors, type _init(props) as any.
+      // Check if the body actually uses `props` — if not, prefix with _ to suppress 6133.
       if (cl[j].match(/^\s+_init\(props\)\s*\{?\s*$/)) {
-        cl[j] = cl[j].replace('_init(props)', '_init(props: Record<string, any>)');
+        let usesProps = false;
+        for (let k = j + 1; k < cl.length; k++) {
+          if (/^\s+\}/.test(cl[k]) || /^((?:export\s+)?(?:const|class)\s+)/.test(cl[k])) break;
+          if (/\bprops\b/.test(cl[k])) { usesProps = true; break; }
+        }
+        const paramName = usesProps ? 'props' : '_props';
+        cl[j] = cl[j].replace('_init(props)', `_init(${paramName}: Record<string, any>)`);
         changed = true;
       }
     }
@@ -1100,6 +1114,12 @@ export async function runCheck(targetDir, opts = {}) {
     for (const d of diags) {
       if (d.start === undefined) continue;
       if (SKIP_CODES.has(d.code)) continue;
+
+      // Skip 6133 on compiler-generated _render() construction variables (_0, _1, …)
+      if ((d.code === 6133 || d.code === 6196) && d.length > 0) {
+        const span = entry.tsContent.substring(d.start, d.start + d.length);
+        if (/^_\d+$/.test(span.trim())) continue;
+      }
 
       const pos = mapToSourcePos(entry, d.start);
       if (!pos) continue;

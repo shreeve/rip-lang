@@ -195,6 +195,25 @@ export function mapToSourcePos(entry, offset) {
     }
   }
 
+  // Injected function overload signatures (e.g. `function fetchUser(id: number): Promise<User>;`)
+  // have no genToSrc entry.  The backward-walk approximation below can map them to
+  // wildly wrong source lines.  Extract the function name and find its `def` in the source.
+  const bodyLine = getLineText(entry.tsContent, tsLine);
+  if (entry.genToSrc.get(tsLine) === undefined && entry.source) {
+    const overloadMatch = bodyLine.match(/^(?:async\s+)?function\s+(\w+)\s*\(/);
+    if (overloadMatch && bodyLine.trimEnd().endsWith(';')) {
+      const fnName = overloadMatch[1];
+      const srcLines = entry.source.split('\n');
+      const defRe = new RegExp('\\bdef\\s+' + fnName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b');
+      for (let s = 0; s < srcLines.length; s++) {
+        if (defRe.test(srcLines[s])) {
+          const col = srcLines[s].indexOf(fnName);
+          return { line: s, col: col >= 0 ? col : 0 };
+        }
+      }
+    }
+  }
+
   // Resolve source line from genToSrc
   let srcLine = entry.genToSrc.get(tsLine);
   if (srcLine === undefined) {

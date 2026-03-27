@@ -803,7 +803,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       const sl = [];
       sl.push('class {');
       sl.push('  declare _root: Element | null;');
-      sl.push('  emit(name: string, detail?: any): void {}');
+      sl.push('  emit(_name: string, _detail?: any): void {}');
 
       // Constructor — typed props for public state/readonly (matches DTS)
       const propEntries = [];
@@ -825,7 +825,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
         const propsOpt = hasRequired ? '' : '?';
         let propsType = propEntries.length > 0 ? `{${propEntries.join('; ')}}` : '{}';
         if (inheritsTag) propsType += ` & __RipProps<'${inheritsTag}'>`;
-        sl.push(`  constructor(props${propsOpt}: ${propsType}) {}`);
+        sl.push(`  constructor(_props${propsOpt}: ${propsType}) {}`);
       }
 
       // Infer type from literal initializer when no explicit annotation
