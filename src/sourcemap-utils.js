@@ -92,6 +92,12 @@ export function mapToSourcePos(entry, offset) {
   if (tsLine < entry.headerLines) {
     // DTS preamble — find the identifier at the offset and locate it in the source
     const genLineText = getLineText(entry.tsContent, tsLine);
+
+    // Skip compiler-injected stdlib declarations (declare function warn, etc.)
+    // — diagnostics on these lines are never user-authored and would incorrectly
+    // match string literals or identifiers in the source.
+    if (/^declare\s+function\s/.test(genLineText)) return null;
+
     let lineStart = 0, curLine = 0;
     for (let i = 0; i < entry.tsContent.length; i++) {
       if (curLine === tsLine) { lineStart = i; break; }
