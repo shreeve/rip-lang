@@ -1,6 +1,5 @@
-export Button = component
+export Button = component extends button
   @variant:: "primary" | "secondary"
-  @type:: string := "button"
   @shape:: "rounded" | "pill" := "rounded"
   @compact:: boolean := false
   @loading:: boolean := false
@@ -12,7 +11,6 @@ export Button = component
 
   render
     button
-      type: type
       disabled: disabled
       class: [
         "#{bgColor} #{rounded} flex items-center justify-center gap-x-3 relative transition disabled:opacity-50",
