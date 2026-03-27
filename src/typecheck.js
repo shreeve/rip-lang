@@ -13,7 +13,7 @@
 import { Compiler, getStdlibCode } from './compiler.js';
 import { createRequire } from 'module';
 import { readFileSync, existsSync, readdirSync } from 'fs';
-import { mapToSourcePos, offsetToLine, getLineText, findNearestWord, lineColToOffset, offsetToLineCol, adjustSwitchDiagnostic } from './sourcemap-utils.js';
+import { mapToSourcePos, offsetToLine, getLineText, findNearestWord, lineColToOffset, offsetToLineCol, adjustSwitchDiagnostic, isInjectedOverload } from './sourcemap-utils.js';
 import { resolve, relative, dirname } from 'path';
 import { buildLineMap } from './sourcemaps.js';
 
@@ -918,7 +918,7 @@ export function compileForCheck(filePath, source, compiler) {
 
 // ── Source mapping helpers (delegated to sourcemap-utils.js) ───────
 
-export { mapToSourcePos, offsetToLine, getLineText, findNearestWord, lineColToOffset, offsetToLineCol, adjustSwitchDiagnostic } from './sourcemap-utils.js';
+export { mapToSourcePos, offsetToLine, getLineText, findNearestWord, lineColToOffset, offsetToLineCol, adjustSwitchDiagnostic, isInjectedOverload } from './sourcemap-utils.js';
 
 // Map a TypeScript diagnostic offset back to a Rip source line number.
 // Returns -1 if the offset falls in the DTS header.
@@ -1123,6 +1123,10 @@ export async function runCheck(targetDir, opts = {}) {
         const span = entry.tsContent.substring(d.start, d.start + d.length);
         if (/^_\d+$/.test(span.trim())) continue;
       }
+
+      // Skip diagnostics on injected overload signatures — the real function
+      // definition already carries the same diagnostic.
+      if (isInjectedOverload(entry, d.start)) continue;
 
       const pos = mapToSourcePos(entry, d.start);
       if (!pos) continue;

@@ -236,6 +236,10 @@ function publishDiagnostics(filePath) {
           if (/^_\d+$/.test(span.trim())) continue;
         }
 
+        // Skip diagnostics on injected overload signatures — the real function
+        // definition already carries the same diagnostic.
+        if (tc.isInjectedOverload?.(c, d.start)) continue;
+
         // Expand 6199 (all declarations unused) on hoisted multi-var `let` into
         // individual per-variable diagnostics so each one dims independently.
         if (d.code === 6199 && d.length > 0) {
