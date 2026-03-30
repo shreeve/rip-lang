@@ -1236,10 +1236,18 @@ connection.onRequest('textDocument/semanticTokens/full', (params) => {
         const isTagLine = firstWord && HTML_TAG_NAMES.has(firstWord[1]);
         const isComponentLine = firstWord && /^[A-Z]/.test(firstWord[1]);
 
-        // Skip HTML tag name at first-word position
+        // When the semantic token lands on an HTML tag at the first-word
+        // position (e.g. `label label` — first is the <label> tag),
+        // reserve that position and redirect to the next occurrence
+        // (the reactive prop reference). TextMate's entity.name.tag.rip
+        // scope is correct for the tag; the semantic token belongs on
+        // the prop.
         if (isTagLine && matchCol === slIndent) {
           const after = sl.charAt(matchCol + tsLength);
-          if (!after || after === ' ' || after === '\t') continue;
+          if (!after || after === ' ' || after === '\t') {
+            usedPositions.add(posKey);
+            if (!findUnusedOccurrence(srcLines, tsText, tsLength, matchLine, usedPositions, (l, c) => { matchLine = l; matchCol = c; })) continue;
+          }
         }
 
         // Skip attribute names: identifier followed by `:`

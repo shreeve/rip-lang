@@ -1050,28 +1050,44 @@ export function installComponentSupport(CodeGenerator, Lexer) {
         const walkRender = (node) => {
           if (!Array.isArray(node)) return;
           const head = node[0]?.valueOf?.() ?? node[0];
-          // Bare lowercase identifiers inside a block that aren't component members
-          // or language constructs — emit __ripEl so TS catches tag typos (e.g., slotz for slot)
-          if (head === 'block') {
-            for (let i = 1; i < node.length; i++) {
-              const child = node[i];
-              if (typeof child === 'string' && /^[a-z][\w-]*$/.test(child) &&
-                  !CodeGenerator.GENERATORS[child] &&
-                  !(this.componentMembers && this.componentMembers.has(child)) &&
-                  child !== 'null' && child !== 'undefined' && child !== 'true' && child !== 'false') {
-                // Find the exact source line by searching forward from the block start
-                let srcLine = node.loc?.r;
-                if (srcLine != null && sourceLines) {
-                  const re = new RegExp(`\\b${child}\\b`);
-                  for (let ln = srcLine; ln < sourceLines.length; ln++) {
-                    if (re.test(sourceLines[ln])) { srcLine = ln; break; }
-                  }
-                }
-                const srcMarker = srcLine != null ? ` // @rip-src:${srcLine}` : '';
-                constructions.push(`    __ripEl('${child}');${srcMarker}`);
+
+          // Emit a bare lowercase identifier as either a property access
+          // (component member used as text), __ripEl (tag name check when at
+          // block level), or a plain variable reference (text child of a tag).
+          const emitBareIdent = (child, parentNode, isTextChild) => {
+            if (typeof child !== 'string' || !/^[a-z][\w-]*$/.test(child)) return;
+            if (CodeGenerator.GENERATORS[child]) return;
+            if (child === 'null' || child === 'undefined' || child === 'true' || child === 'false') return;
+            let srcLine = parentNode.loc?.r;
+            if (srcLine != null && sourceLines) {
+              const re = new RegExp(`\\b${child}\\b`);
+              for (let ln = srcLine; ln < sourceLines.length; ln++) {
+                if (re.test(sourceLines[ln])) { srcLine = ln; break; }
               }
             }
+            const srcMarker = srcLine != null ? ` // @rip-src:${srcLine}` : '';
+            if (this.componentMembers && this.componentMembers.has(child)) {
+              constructions.push(`    this.${child};${srcMarker}`);
+            } else if (isTextChild) {
+              // Text child of a tag — emit as variable reference so TS
+              // reports "Cannot find name 'x'" instead of "not a known element"
+              constructions.push(`    ${child};${srcMarker}`);
+            } else {
+              constructions.push(`    __ripEl('${child}');${srcMarker}`);
+            }
+          };
+
+          // Bare lowercase identifiers inside a block or as children of tag nodes
+          // — emit __ripEl so TS catches tag typos (e.g., slotz for slot), or
+          // emit this.prop for component member text references.
+          const isTagHead = typeof head === 'string' && /^[a-z][\w-]*$/.test(head) &&
+              !CodeGenerator.GENERATORS[head] && TEMPLATE_TAGS.has(head.split(/[.#]/)[0]);
+          if (head === 'block') {
+            for (let i = 1; i < node.length; i++) emitBareIdent(node[i], node, false);
+          } else if (isTagHead) {
+            for (let i = 1; i < node.length; i++) emitBareIdent(node[i], node, true);
           }
+          for (let i = 1; i < node.length; i++) walkRender(node[i]);
           if (typeof head === 'string' && /^[A-Z]/.test(head)) {
             const props = extractProps(node.slice(1));
             const varName = `_${constructionIdx++}`;
@@ -1123,7 +1139,6 @@ export function installComponentSupport(CodeGenerator, Lexer) {
               }
             }
           }
-          for (let i = 1; i < node.length; i++) walkRender(node[i]);
         };
         walkRender(renderBlock);
         if (constructions.length > 0) {
