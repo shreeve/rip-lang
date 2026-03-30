@@ -410,16 +410,16 @@ Simple arrays (with `.loc`) instead of AST node classes. The compiler is self-ho
 | Component | File | Lines |
 |-----------|------|-------|
 | Lexer + Rewriter | `src/lexer.js` | 1,778 |
-| Compiler + Codegen | `src/compiler.js` | 3,334 |
-| Type System | `src/types.js` | 1,091 |
-| Component System | `src/components.js` | 2,026 |
-| Source Maps | `src/sourcemaps.js` | 189 |
-| Type Checking | `src/typecheck.js` | 442 |
-| Parser (generated) | `src/parser.js` | 359 |
 | Grammar | `src/grammar/grammar.rip` | 948 |
 | Parser Generator | `src/grammar/solar.rip` | 929 |
+| Parser (generated) | `src/parser.js` | 359 |
+| Compiler + Codegen | `src/compiler.js` | 3,334 |
+| Component System | `src/components.js` | 2,026 |
+| Browser Engine | `src/browser.js` | 194 |
+| Source Maps | `src/sourcemaps.js` | 189 |
+| Type System | `src/types.js` | 1,091 |
+| Type Checking | `src/typecheck.js` | 442 |
 | REPL | `src/repl.js` | 600 |
-| Browser Entry | `src/browser.js` | 194 |
 | **Total** | | **~11,890** |
 
 ---
