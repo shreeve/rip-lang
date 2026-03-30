@@ -255,6 +255,11 @@ export function cleanDiagnosticMessage(msg) {
     /Argument of type '"([\w-]+)"' is not assignable to parameter of type '(?:__RipTag|[^']*\bkeyof HTMLElementTagNameMap\b[^']*)'\./,
     "'$1' is not a known element."
   );
+  // Rewrite verbose __RipTag constraint error (e.g. component extends unknown element)
+  msg = msg.replace(
+    /Type '"([\w-]+)"' does not satisfy the constraint '(?:__RipTag|[^']*\bkeyof HTMLElementTagNameMap\b[^']*)'\./,
+    "'$1' is not a known element."
+  );
   // Deduplicate consecutive identical lines (unwrapping can collapse nested messages)
   msg = msg.split('\n').filter((line, i, arr) => i === 0 || line.trim() !== arr[i - 1].trim()).join('\n');
   // Remove redundant nested "Type 'X' is not assignable to type 'Y'" when

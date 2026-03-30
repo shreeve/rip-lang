@@ -1245,8 +1245,16 @@ connection.onRequest('textDocument/semanticTokens/full', (params) => {
         if (isTagLine && matchCol === slIndent) {
           const after = sl.charAt(matchCol + tsLength);
           if (!after || after === ' ' || after === '\t') {
+            // Try to redirect to the next occurrence (e.g. `label label` →
+            // keep tag, token on prop). If no second occurrence exists
+            // (bare `label` as text child), keep token here to override
+            // the incorrect TextMate tag scope with property scope.
+            const savedKey = posKey;
             usedPositions.add(posKey);
-            if (!findUnusedOccurrence(srcLines, tsText, tsLength, matchLine, usedPositions, (l, c) => { matchLine = l; matchCol = c; })) continue;
+            if (!findUnusedOccurrence(srcLines, tsText, tsLength, matchLine, usedPositions, (l, c) => { matchLine = l; matchCol = c; })) {
+              // No redirect target — restore position and emit here
+              usedPositions.delete(savedKey);
+            }
           }
         }
 
