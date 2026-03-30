@@ -271,7 +271,11 @@ export function mapToSourcePos(entry, offset) {
   const srcText = entry.source ? getLineText(entry.source, srcLine) : '';
   // Text-match: find the word at genCol in the gen line, then locate it in the source line
   if (srcText) {
-    const wordAt = genText.slice(genCol).match(/^\w+/);
+    let wordAt = genText.slice(genCol).match(/^\w+/);
+    // Quoted string literal (e.g. __ripEl('tag')) — peek inside the quotes
+    if (!wordAt && (genText[genCol] === "'" || genText[genCol] === '"')) {
+      wordAt = genText.slice(genCol + 1).match(/^\w+/);
+    }
     if (wordAt) {
       let word = wordAt[0];
       let idx = findNearestWord(srcText, word, approx);
@@ -283,7 +287,11 @@ export function mapToSourcePos(entry, offset) {
       if (idx >= 0) return { line: srcLine, col: idx };
     }
     if (genCol > 0 && (!wordAt || genCol >= genText.length)) {
-      const wordBefore = genText.slice(0, genCol).match(/(\w+)$/);
+      let wordBefore = genText.slice(0, genCol).match(/(\w+)$/);
+      // Closing quote — peek inside to find the word (e.g. end of __ripEl('tag'))
+      if (!wordBefore && (genText[genCol - 1] === "'" || genText[genCol - 1] === '"')) {
+        wordBefore = genText.slice(0, genCol - 1).match(/(\w+)$/);
+      }
       if (wordBefore) {
         let word = wordBefore[0];
         let idx = findNearestWord(srcText, word, approx - word.length);

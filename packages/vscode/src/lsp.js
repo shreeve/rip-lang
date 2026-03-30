@@ -282,6 +282,19 @@ function publishDiagnostics(filePath) {
           endPos = { line: startPos.line, character: startPos.character + (d.length || 1) };
         }
 
+        // Clamp end to the word at startPos — the TS diagnostic length may
+        // include quotes or wrappers that don't exist in the Rip source.
+        if (c.source) {
+          const srcLineText = tc.getLineText(c.source, startPos.line);
+          const wordMatch = srcLineText.slice(startPos.character).match(/^\w+/);
+          if (wordMatch) {
+            const wordEnd = startPos.character + wordMatch[0].length;
+            if (endPos.line === startPos.line && endPos.character > wordEnd) {
+              endPos.character = wordEnd;
+            }
+          }
+        }
+
         // Remap IIFE-switch diagnostics to the enclosing function declaration
         const adj = tc.adjustSwitchDiagnostic?.(c.source, { line: startPos.line, col: startPos.character }, d.code);
         if (adj) {
