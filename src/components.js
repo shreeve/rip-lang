@@ -975,6 +975,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       if (renderBlock) {
         const constructions = [];
         let constructionIdx = 0;
+        const sourceLines = this.options.source?.split('\n');
         const extractProps = (args) => {
           const props = [];
           for (const arg of args) {
@@ -1049,6 +1050,28 @@ export function installComponentSupport(CodeGenerator, Lexer) {
         const walkRender = (node) => {
           if (!Array.isArray(node)) return;
           const head = node[0]?.valueOf?.() ?? node[0];
+          // Bare lowercase identifiers inside a block that aren't component members
+          // or language constructs — emit __ripEl so TS catches tag typos (e.g., slotz for slot)
+          if (head === 'block') {
+            for (let i = 1; i < node.length; i++) {
+              const child = node[i];
+              if (typeof child === 'string' && /^[a-z][\w-]*$/.test(child) &&
+                  !CodeGenerator.GENERATORS[child] &&
+                  !(this.componentMembers && this.componentMembers.has(child)) &&
+                  child !== 'null' && child !== 'undefined' && child !== 'true' && child !== 'false') {
+                // Find the exact source line by searching forward from the block start
+                let srcLine = node.loc?.r;
+                if (srcLine != null && sourceLines) {
+                  const re = new RegExp(`\\b${child}\\b`);
+                  for (let ln = srcLine; ln < Math.min(srcLine + 5, sourceLines.length); ln++) {
+                    if (re.test(sourceLines[ln])) { srcLine = ln; break; }
+                  }
+                }
+                const srcMarker = srcLine != null ? ` // @rip-src:${srcLine}` : '';
+                constructions.push(`    __ripEl('${child}');${srcMarker}`);
+              }
+            }
+          }
           if (typeof head === 'string' && /^[A-Z]/.test(head)) {
             const props = extractProps(node.slice(1));
             const varName = `_${constructionIdx++}`;
