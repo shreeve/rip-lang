@@ -1063,7 +1063,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
                 let srcLine = node.loc?.r;
                 if (srcLine != null && sourceLines) {
                   const re = new RegExp(`\\b${child}\\b`);
-                  for (let ln = srcLine; ln < Math.min(srcLine + 5, sourceLines.length); ln++) {
+                  for (let ln = srcLine; ln < sourceLines.length; ln++) {
                     if (re.test(sourceLines[ln])) { srcLine = ln; break; }
                   }
                 }
