@@ -63,6 +63,7 @@ export resolveAppEntry = (appPathInput, defaultEntryPath = null) ->
 export parseFlags = (argv, defaultEntryPath = null) ->
   rawFlags = new Set()
   appPathInput = null
+  appNameOverride = null
   appAliases = []
 
   isFlag = (tok) ->
@@ -82,13 +83,17 @@ export parseFlags = (argv, defaultEntryPath = null) ->
     unless appPathInput
       if tok.includes('@') and not tok.startsWith('-')
         [pathPart, aliasesPart] = tok.split('@')
+        aliases = aliasesPart.split(',').map((a) -> a.trim()).filter((a) -> a)
         maybe = tryResolveApp(pathPart)
         if maybe
           appPathInput = maybe
-          appAliases = aliasesPart.split(',').map((a) -> a.trim()).filter((a) -> a)
+          if aliases.length > 0
+            appNameOverride = aliases[0]
+            appAliases = aliases
           continue
         else if not pathPart.includes('/') and not pathPart.startsWith('.')
-          appAliases = [pathPart].concat(aliasesPart.split(',').map((a) -> a.trim()).filter((a) -> a))
+          appNameOverride = pathPart
+          appAliases = [pathPart].concat(aliases)
           continue
 
       maybe = tryResolveApp(tok)
@@ -97,7 +102,11 @@ export parseFlags = (argv, defaultEntryPath = null) ->
         continue
 
       unless isFlag(tok)
-        appAliases.push(tok)
+        if appNameOverride
+          appAliases.push(tok)
+        else
+          appNameOverride = tok
+          appAliases = [tok]
         continue
 
     rawFlags.add(tok)
@@ -121,6 +130,7 @@ export parseFlags = (argv, defaultEntryPath = null) ->
   has = (name) -> rawFlags.has(name)
 
   { baseDir, entryPath, appName } = resolveAppEntry(appPathInput, defaultEntryPath)
+  appName = appNameOverride if appNameOverride
   appAliases = [appName] if appAliases.length is 0
 
   tokens = Array.from(rawFlags)
@@ -236,6 +246,16 @@ export findAppPathToken = (argv, existsSyncFn, isAbsoluteFn, resolveFn, cwdFn) -
 export computeSocketPrefix = (argv, resolveAppEntryFn, existsSyncFn, isAbsoluteFn, resolveFn, cwdFn) ->
   override = getKV(argv, '--socket-prefix=')
   return override if override
+  for i in [2...argv.length]
+    tok = argv[i]
+    continue if tok.startsWith('-') or /^\d+$/.test(tok) or tok in ['http', 'https']
+    [pathPart, aliasesPart] = if tok.includes('@') then tok.split('@') else [tok, null]
+    aliases = aliasesPart?.split(',').map((a) -> a.trim()).filter((a) -> a) or []
+    looksLikePath = pathPart.includes('/') or pathPart.startsWith('.') or pathPart.endsWith('.rip') or pathPart.endsWith('.ts')
+    unless looksLikePath
+      return "rip_#{pathPart}"
+    return "rip_#{aliases[0]}" if aliases.length > 0
+    break
   appTok = findAppPathToken(argv, existsSyncFn, isAbsoluteFn, resolveFn, cwdFn)
   if appTok
     try
