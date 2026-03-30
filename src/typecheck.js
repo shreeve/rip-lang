@@ -253,7 +253,7 @@ export function cleanDiagnosticMessage(msg) {
   // Rewrite verbose __ripEl tag union mismatch into a clean JSX-like message
   msg = msg.replace(
     /Argument of type '"([\w-]+)"' is not assignable to parameter of type '(?:__RipTag|[^']*\bkeyof HTMLElementTagNameMap\b[^']*)'\./,
-    "'$1' is not a known HTML or SVG element."
+    "'$1' is not a known element."
   );
   // Deduplicate consecutive identical lines (unwrapping can collapse nested messages)
   msg = msg.split('\n').filter((line, i, arr) => i === 0 || line.trim() !== arr[i - 1].trim()).join('\n');
