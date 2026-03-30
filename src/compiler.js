@@ -714,10 +714,19 @@ export class CodeGenerator {
     }
 
     if (this.programVars.size > 0) {
-      let vars = Array.from(this.programVars).sort().join(', ');
-      if (needsBlank) code += '\n';
-      code += `let ${vars};\n`;
-      needsBlank = true;
+      let hasUnderscore = this.programVars.has('_');
+      if (hasUnderscore) this.programVars.delete('_');
+      if (this.programVars.size > 0) {
+        let vars = Array.from(this.programVars).sort().join(', ');
+        if (needsBlank) code += '\n';
+        code += `let ${vars};\n`;
+        needsBlank = true;
+      }
+      if (hasUnderscore) {
+        if (needsBlank) code += '\n';
+        code += `var _;\n`;
+        needsBlank = true;
+      }
     }
 
     let skip = this.options.skipPreamble;
