@@ -250,6 +250,11 @@ export function cleanDiagnosticMessage(msg) {
   msg = msg.replace(/\b__RipProps<['"](\w+)['"]>/g, '<$1> props');
   msg = msg.replace(/\b__RipElementMap\b/g, 'ElementMap');
   msg = msg.replace(/\b__ripEl\b/g, 'element');
+  // Rewrite verbose __ripEl tag union mismatch into a clean JSX-like message
+  msg = msg.replace(
+    /Argument of type '"([\w-]+)"' is not assignable to parameter of type '(?:__RipTag|[^']*\bkeyof HTMLElementTagNameMap\b[^']*)'\./,
+    "'$1' is not a known HTML or SVG element."
+  );
   // Deduplicate consecutive identical lines (unwrapping can collapse nested messages)
   msg = msg.split('\n').filter((line, i, arr) => i === 0 || line.trim() !== arr[i - 1].trim()).join('\n');
   // Remove redundant nested "Type 'X' is not assignable to type 'Y'" when
