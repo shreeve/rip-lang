@@ -1043,7 +1043,8 @@
       preamble.push("type __RipDomEl<K extends __RipTag> = Omit<__RipElementMap[K], 'querySelector' | 'querySelectorAll' | 'closest' | 'setAttribute' | 'hidden'> & __RipBrowserElement;");
       preamble.push("type __RipAttrKeys<T> = { [K in keyof T]-?: K extends 'style' ? never : T[K] extends (...args: any[]) => any ? never : K }[keyof T] & string;");
       preamble.push("type __RipEvents = { [K in keyof HTMLElementEventMap as `@${K}`]?: ((event: HTMLElementEventMap[K]) => void) | null };");
-      preamble.push("type __RipProps<K extends __RipTag> = { [P in __RipAttrKeys<__RipElementMap[K]>]?: __RipElementMap[K][P] } & __RipEvents & { ref?: string; class?: string; style?: string; [k: `data-${string}`]: any; [k: `aria-${string}`]: any };");
+      preamble.push("type __RipClassValue = string | boolean | null | undefined | Record<string, boolean> | __RipClassValue[]");
+      preamble.push("type __RipProps<K extends __RipTag> = { [P in __RipAttrKeys<__RipElementMap[K]>]?: __RipElementMap[K][P] } & __RipEvents & { ref?: string; class?: __RipClassValue | __RipClassValue[]; style?: string; [k: `data-${string}`]: any; [k: `aria-${string}`]: any };");
     }
     if (/\bARIA\./.test(source)) {
       preamble.push("type __RipAriaNavHandlers = { next?: () => void; prev?: () => void; first?: () => void; last?: () => void; select?: () => void; dismiss?: () => void; tab?: () => void; char?: () => void; };");
@@ -1197,10 +1198,10 @@
         } else if (mHead === "object") {
           for (let i = 1;i < member.length; i++) {
             let entry = member[i];
-            if (!Array.isArray(entry) || entry.length < 2)
+            if (!Array.isArray(entry) || entry.length < 3)
               continue;
-            let methName = entry[0]?.valueOf?.() ?? entry[0];
-            let funcDef = entry[1];
+            let methName = entry[1]?.valueOf?.() ?? entry[1];
+            let funcDef = entry[2];
             if (!Array.isArray(funcDef))
               continue;
             let fHead = funcDef[0]?.valueOf?.() ?? funcDef[0];
@@ -4274,7 +4275,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           }
           j--;
         }
-        return tokens[j] && tokens[j][0] === "IDENTIFIER" && isTemplateTag(tokens[j][1]);
+        return tokens[j] && tokens[j][0] === "IDENTIFIER" && (isTemplateTag(tokens[j][1]) || (j === 0 || tokens[j - 1][0] === "INDENT" || tokens[j - 1][0] === "TERMINATOR" || tokens[j - 1][0] === "RENDER"));
       };
       this.scanTokens(function(token, i, tokens) {
         let tag = token[0];
@@ -4743,7 +4744,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         const sl = [];
         sl.push("class {");
         sl.push("  declare _root: Element | null;");
-        sl.push("  emit(name: string, detail?: any): void {}");
+        sl.push("  emit(_name: string, _detail?: any): void {}");
         const propEntries = [];
         for (const { name, type, isPublic, required } of stateVars) {
           if (!isPublic)
@@ -4765,7 +4766,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           let propsType = propEntries.length > 0 ? `{${propEntries.join("; ")}}` : "{}";
           if (inheritsTag)
             propsType += ` & __RipProps<'${inheritsTag}'>`;
-          sl.push(`  constructor(props${propsOpt}: ${propsType}) {}`);
+          sl.push(`  constructor(_props${propsOpt}: ${propsType}) {}`);
         }
         const inferLiteralType = (v) => {
           const s = v?.valueOf?.() ?? v;
@@ -4874,7 +4875,12 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
             let [, params, methodBody] = func;
             if ((!params || Array.isArray(params) && params.length === 0) && this.containsIt(methodBody))
               params = ["it"];
-            let paramStr = Array.isArray(params) ? params.map((p) => this.formatParam(p)).join(", ") : "";
+            let paramStr = Array.isArray(params) ? params.map((p) => {
+              let base = this.formatParam(p);
+              if (p?.type)
+                base += `: ${p.type}`;
+              return base;
+            }).join(", ") : "";
             const boundEvent = eventMethodTypes.get(name);
             if (boundEvent && Array.isArray(params) && params.length > 0) {
               const firstParam = params[0];
@@ -4903,6 +4909,8 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         if (renderBlock) {
           const constructions = [];
           let constructionIdx = 0;
+          const sourceLines = this.options.source?.split(`
+`);
           const extractProps = (args) => {
             const props = [];
             for (const arg of args) {
@@ -4985,6 +4993,25 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
             if (!Array.isArray(node))
               return;
             const head2 = node[0]?.valueOf?.() ?? node[0];
+            if (head2 === "block") {
+              for (let i = 1;i < node.length; i++) {
+                const child = node[i];
+                if (typeof child === "string" && /^[a-z][\w-]*$/.test(child) && !CodeGenerator.GENERATORS[child] && !(this.componentMembers && this.componentMembers.has(child)) && child !== "null" && child !== "undefined" && child !== "true" && child !== "false") {
+                  let srcLine = node.loc?.r;
+                  if (srcLine != null && sourceLines) {
+                    const re = new RegExp(`\\b${child}\\b`);
+                    for (let ln = srcLine;ln < Math.min(srcLine + 5, sourceLines.length); ln++) {
+                      if (re.test(sourceLines[ln])) {
+                        srcLine = ln;
+                        break;
+                      }
+                    }
+                  }
+                  const srcMarker = srcLine != null ? ` // @rip-src:${srcLine}` : "";
+                  constructions.push(`    __ripEl('${child}');${srcMarker}`);
+                }
+              }
+            }
             if (typeof head2 === "string" && /^[A-Z]/.test(head2)) {
               const props = extractProps(node.slice(1));
               const varName = `_${constructionIdx++}`;
@@ -5009,7 +5036,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
                   constructions.push(`    };`);
                 }
               }
-            } else if (typeof head2 === "string" && head2 !== "object" && head2 !== "switch" && (TEMPLATE_TAGS.has(head2.split(/[.#]/)[0]) || /^[a-z]/.test(head2) && node.length > 1 && Array.isArray(node[1]) && (node[1][0] === "->" || node[1][0] === "=>"))) {
+            } else if (typeof head2 === "string" && !CodeGenerator.GENERATORS[head2] && (TEMPLATE_TAGS.has(head2.split(/[.#]/)[0]) || /^[a-z][\w-]*$/.test(head2) && node.length > 1)) {
               const tagName = head2.split(/[.#]/)[0];
               const iProps = extractIntrinsicProps(node.slice(1));
               const tagLine = node.loc?.r;
@@ -10086,7 +10113,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   }
   // src/browser.js
   var VERSION = "3.13.129";
-  var BUILD_DATE = "2026-03-23@20:46:13GMT";
+  var BUILD_DATE = "2026-03-30@07:19:45GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
