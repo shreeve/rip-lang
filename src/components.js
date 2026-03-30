@@ -193,7 +193,9 @@ export function installComponentSupport(CodeGenerator, Lexer) {
         }
         j--;
       }
-      return tokens[j] && tokens[j][0] === 'IDENTIFIER' && isTemplateTag(tokens[j][1]);
+      return tokens[j] && tokens[j][0] === 'IDENTIFIER' &&
+        (isTemplateTag(tokens[j][1]) ||
+         (j === 0 || tokens[j - 1][0] === 'INDENT' || tokens[j - 1][0] === 'TERMINATOR' || tokens[j - 1][0] === 'RENDER'));
     };
 
     this.scanTokens(function(token, i, tokens) {
@@ -1071,8 +1073,8 @@ export function installComponentSupport(CodeGenerator, Lexer) {
                 constructions.push(`    };`);
               }
             }
-          } else if (typeof head === 'string' && head !== 'object' && head !== 'switch' && (TEMPLATE_TAGS.has(head.split(/[.#]/)[0]) ||
-                     (/^[a-z]/.test(head) && node.length > 1 && Array.isArray(node[1]) && (node[1][0] === '->' || node[1][0] === '=>')))) {
+          } else if (typeof head === 'string' && head !== 'object' && head !== 'switch' && head !== 'block' && (TEMPLATE_TAGS.has(head.split(/[.#]/)[0]) ||
+                     (/^[a-z]/.test(head) && node.length > 1 && Array.isArray(node[1]) && (node[1][0] === '->' || node[1][0] === '=>' || node[1][0] === 'object')))) {
             const tagName = head.split(/[.#]/)[0];
             const iProps = extractIntrinsicProps(node.slice(1));
             const tagLine = node.loc?.r;
