@@ -60,7 +60,7 @@ rip server
 - **Never read or execute scripts directly** — use `bun run <name>`
 - **Never write `x ? y` in Rip** — binary existential was removed; use `x ?? y` or full ternary `x ? y : z`
 - Run `bun run parser` after grammar changes
-- Run `bun run build` after codegen, `components.js`, or `browser.js` changes
+- Run `bun run build` after codegen, `components.js`, `browser.js`, or `ui.rip` changes
 - Run `bun run bump` for the standard release flow
 
 ## Compilation Pipeline
