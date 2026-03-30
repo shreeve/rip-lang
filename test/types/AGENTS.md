@@ -107,7 +107,6 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 | Category                     | Tested In     | Notes                                                                                                       |
 | ---------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------- |
-| Element type inheritance     | 09-components | `# @inherits tag` widens constructor props with `__RipProps<'tag'>`; runtime forwards unknown props         |
 | Event handler typing         | 09, 12        | Inline handlers typed via `__RipEvents`; named method refs (`@submit: @handler`) remain `any`               |
 | Type inference (split decl.) | 11-inference  | Top-level `x = expr` inferred via `patchUninitializedTypes`; block-scoped and destructured caught by strict |
 | Intrinsic element typing     | 12-intrinsics | `__ripEl` emits typed helper calls; lib.dom source of truth for tags, attrs, events, global attrs           |
@@ -139,13 +138,14 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Component prop types        | 09-components  | Enriched stub gives Signal<T>/Computed<T> declarations; TS checks computeds, methods, and render block intrinsic elements          |
 | Required component props    | 09-components  | `@prop:: T` (no `:=`) — required in constructor, caught at usage sites                                                             |
 | Prop default validation     | 09-components  | `@prop:: T := val` — validates default against declared type; squiggle on prop name                                                |
+| Element type inheritance    | 09-components  | `component extends tag` widens constructor props with `__RipProps<'tag'>`; invalid tags caught with clean error                    |
 | Strict mode                 | *(all files)*  | `strict: true` — `noImplicitAny`, full null checks, strict function types all active; hardcoded in all paths                       |
 | Hover types                 | *(IDE only)*   | Column-aware source maps, overload preference, typed implementation params                                                         |
 | Union value autocomplete    | *(IDE only)*   | String literal union completions for prop values, prop defaults, and typed variable assignments                                    |
 | Semantic token provider     | *(IDE only)*   | Bridges TS `getEncodedSemanticClassifications()` to Rip source; typed files get semantic tokens, reactive vars not marked readonly |
 | Unused variable dimming     | *(IDE only)*   | Forwards `DiagnosticTag.Unnecessary` from TS; expands hoisted-let 6199 into per-variable 6133; scoped source mapping for functions |
 | Deprecated strikethrough    | *(IDE only)*   | Forwards `DiagnosticTag.Deprecated` from TS suggestion diagnostics; hover includes JSDoc `@deprecated`, `@param` tags              |
-| Go-to-def on imports        | *(IDE only)*   | Resolves import paths directly; symbol names jump to definition in target file; path string navigates to file |
+| Go-to-def on imports        | *(IDE only)*   | Resolves import paths directly; symbol names jump to definition in target file; path string navigates to file                      |
 
 ### Suppressed error codes
 

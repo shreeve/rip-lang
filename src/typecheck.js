@@ -1293,7 +1293,9 @@ export async function runCheck(targetDir, opts = {}) {
         console.log('');
         const lineNum = String(e.line);
         console.log(`${lineNum} ${e.srcLine}`);
-        console.log(`${' '.repeat(lineNum.length)} ${' '.repeat(e.col - 1)}${red('~'.repeat(e.len))}`);
+        const pad = Math.max(0, e.col - 1);
+        const underline = Math.max(1, e.len);
+        console.log(`${' '.repeat(lineNum.length)} ${' '.repeat(pad)}${red('~'.repeat(underline))}`);
       }
 
       if (e.related) {
