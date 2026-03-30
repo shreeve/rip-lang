@@ -1073,8 +1073,8 @@ export function installComponentSupport(CodeGenerator, Lexer) {
                 constructions.push(`    };`);
               }
             }
-          } else if (typeof head === 'string' && head !== 'object' && head !== 'switch' && head !== 'block' && (TEMPLATE_TAGS.has(head.split(/[.#]/)[0]) ||
-                     (/^[a-z]/.test(head) && node.length > 1 && Array.isArray(node[1]) && (node[1][0] === '->' || node[1][0] === '=>' || node[1][0] === 'object')))) {
+          } else if (typeof head === 'string' && !CodeGenerator.GENERATORS[head] && (TEMPLATE_TAGS.has(head.split(/[.#]/)[0]) ||
+                     (/^[a-z][\w-]*$/.test(head) && node.length > 1))) {
             const tagName = head.split(/[.#]/)[0];
             const iProps = extractIntrinsicProps(node.slice(1));
             const tagLine = node.loc?.r;
