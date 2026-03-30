@@ -102,6 +102,32 @@ test "textContent sets text child", '''
   el.childNodes.length is 1 and el.childNodes[0].data is 'hello world'
   ''', true
 
+test "remove removes self from parent", '''
+  { Document } = emailDom
+  doc = Document.new()
+  parent = doc.createElement('div')
+  child = doc.createElement('span')
+  parent.appendChild(child)
+  child.remove()
+  parent.childNodes.length
+  ''', 0
+
+test "className sets class attribute", '''
+  { Document } = emailDom
+  doc = Document.new()
+  el = doc.createElement('div')
+  el.className = 'card active'
+  el.attributes.get('class')
+  ''', 'card active'
+
+test "setAttribute style object merges into style", '''
+  { Document } = emailDom
+  doc = Document.new()
+  el = doc.createElement('div')
+  el.setAttribute('style', { color: 'blue', fontWeight: 'bold' })
+  el.style.color is 'blue' and el.style.fontWeight is 'bold'
+  ''', true
+
 # ==============================================================================
 # Serializer
 # ==============================================================================
@@ -209,6 +235,33 @@ test "toPlainText hr becomes ---", '''
   toPlainText(root).trim()
   ''', '---'
 
+test "toPlainText skips data-skip-in-text elements", '''
+  { Document, toPlainText } = emailDom
+  doc = Document.new()
+  root = doc.createElement('__root')
+  div = doc.createElement('div')
+  div.setAttribute('data-skip-in-text', 'true')
+  div.appendChild(doc.createTextNode('hidden'))
+  root.appendChild(div)
+  p = doc.createElement('p')
+  p.appendChild(doc.createTextNode('visible'))
+  root.appendChild(p)
+  toPlainText(root).trim()
+  ''', 'visible'
+
+test "toPlainText skips style tags", '''
+  { Document, toPlainText } = emailDom
+  doc = Document.new()
+  root = doc.createElement('__root')
+  s = doc.createElement('style')
+  s.appendChild(doc.createTextNode('body { color: red }'))
+  root.appendChild(s)
+  p = doc.createElement('p')
+  p.appendChild(doc.createTextNode('content'))
+  root.appendChild(p)
+  toPlainText(root).trim()
+  ''', 'content'
+
 # ==============================================================================
 # Compat helpers
 # ==============================================================================
@@ -247,6 +300,43 @@ test "msoConditional wraps in comments", '''
   { msoConditional } = emailCompat
   msoConditional('<b>hi</b>')
   ''', '<!--[if mso]><b>hi</b><![endif]-->'
+
+test "pxToPt returns undefined for non-number", '''
+  { pxToPt } = emailCompat
+  pxToPt(undefined)
+  ''', undefined
+
+test "convertToPx handles number", '''
+  { convertToPx } = emailCompat
+  convertToPx(42)
+  ''', 42
+
+test "convertToPx returns 0 for null", '''
+  { convertToPx } = emailCompat
+  convertToPx(null)
+  ''', 0
+
+test "parsePadding shorthand single value", '''
+  { parsePadding } = emailCompat
+  result = parsePadding({ padding: '10px' })
+  result.paddingTop is 10 and result.paddingRight is 10 and result.paddingBottom is 10 and result.paddingLeft is 10
+  ''', true
+
+test "parsePadding individual overrides shorthand", '''
+  { parsePadding } = emailCompat
+  result = parsePadding({ padding: '10px', paddingLeft: '5px' })
+  result.paddingLeft
+  ''', 5
+
+test "previewPadding returns empty for long text", '''
+  { previewPadding } = emailCompat
+  previewPadding('x'.repeat(200))
+  ''', ''
+
+test "styleToString handles MSO properties", '''
+  { styleToString } = emailCompat
+  styleToString({ msoPaddingAlt: '0px', msoTextRaise: '12' })
+  ''', 'mso-padding-alt:0px;mso-text-raise:12'
 
 # ==============================================================================
 # Output API
@@ -635,4 +725,41 @@ test "full email plain text", '''
               "Get started"
   result = toText(WelcomeEmail, name: "Bob")
   result.includes('Welcome, Bob!') and result.includes('Get started (https://example.com)')
+  ''', true
+
+test "renderEmail with conditional", '''
+  { renderEmail } = emailRender
+  TestEmail = component
+    @show =! true
+    render
+      div
+        if @show
+          p "visible"
+  { html } = renderEmail(TestEmail, show: true)
+  html.includes('<p>visible</p>')
+  ''', true
+
+test "renderEmail with nested native tags", '''
+  { renderEmail } = emailRender
+  TestEmail = component
+    render
+      table role: "presentation", border: "0", cellpadding: "0", cellspacing: "0"
+        tbody
+          tr
+            td
+              p "content"
+  { html } = renderEmail(TestEmail)
+  html.includes('<table') and html.includes('<td><p>content</p></td>')
+  ''', true
+
+test "renderEmail plain text output", '''
+  { renderEmail } = emailRender
+  TestEmail = component
+    render
+      div
+        h1 "Title"
+        p "Body text"
+        a href: "https://example.com", "Click"
+  { text } = renderEmail(TestEmail)
+  text.includes('Title') and text.includes('Body text') and text.includes('Click (https://example.com)')
   ''', true
