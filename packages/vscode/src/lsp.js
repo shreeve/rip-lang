@@ -1243,8 +1243,14 @@ connection.onRequest('textDocument/semanticTokens/full', (params) => {
         if (!findUnusedOccurrence(srcLines, tsText, tsLength, matchLine, usedPositions, (l, c) => { matchLine = l; matchCol = c; })) continue;
       }
 
-      // Skip tokens that land inside string literals or comments
-      if (isInsideStringOrComment(srcLines[matchLine], matchCol)) continue;
+      // When the initial mapping lands inside a string literal or comment,
+      // reserve that position and try to find the real occurrence outside.
+      // This commonly happens when a variable name also appears as a string
+      // value on the same source line (e.g. `console.log "total:", total`).
+      if (isInsideStringOrComment(srcLines[matchLine], matchCol)) {
+        usedPositions.add(matchLine + ':' + matchCol);
+        if (!findUnusedOccurrence(srcLines, tsText, tsLength, matchLine, usedPositions, (l, c) => { matchLine = l; matchCol = c; })) continue;
+      }
 
       // Skip tokens inside render blocks where TextMate provides
       // entity.name.tag.rip or entity.other.attribute-name.rip scopes.
