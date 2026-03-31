@@ -1522,9 +1522,31 @@ connection.onHover((params) => {
   const fp = uriToPath(params.textDocument.uri);
   if (!fp.endsWith('.rip')) return null;
 
-  // Skip hover inside string literals and comments (e.g. Tailwind classes)
+  // Import path hover — show module info like TypeScript does
   const doc = documents.get(params.textDocument.uri);
   const srcLines = doc ? doc.getText().split('\n') : null;
+  if (srcLines) {
+    const srcLine = srcLines[params.position.line];
+    if (srcLine) {
+      const fromMatch = srcLine.match(/from\s+['"]([^'"]+)['"]/);
+      if (fromMatch) {
+        const pathStart = fromMatch.index + fromMatch[0].indexOf(fromMatch[1]) - 1;
+        const pathEnd = pathStart + fromMatch[1].length + 2;
+        const col = params.position.character;
+        if (col >= pathStart && col < pathEnd) {
+          let importPath = fromMatch[1];
+          if (!path.isAbsolute(importPath)) importPath = path.resolve(path.dirname(fp), importPath);
+          if (!importPath.endsWith('.rip') && fs.existsSync(importPath + '.rip')) importPath += '.rip';
+          if (fs.existsSync(importPath)) {
+            const displayPath = importPath;
+            return { contents: { kind: 'markdown', value: `\`\`\`typescript\nmodule "${displayPath}"\n\`\`\`` } };
+          }
+        }
+      }
+    }
+  }
+
+  // Skip hover inside string literals and comments (e.g. Tailwind classes)
   if (srcLines) {
     const srcLine = srcLines[params.position.line];
     if (srcLine && isInsideStringOrComment(srcLine, params.position.character)) return null;
