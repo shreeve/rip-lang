@@ -336,6 +336,48 @@
       ]
     },
 
+    {"comment": "=== IMPORT STATEMENTS (before keywords so imported names get scoped) ==="},
+    {
+      "comment": "Named imports: import { a, b as c } from 'path'",
+      "begin": "\\b(import)\\s*(\\{)",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.rip" },
+        "2": { "name": "punctuation.definition.modules.begin.rip" }
+      },
+      "end": "(\\})",
+      "endCaptures": {
+        "1": { "name": "punctuation.definition.modules.end.rip" }
+      },
+      "patterns": [
+        {
+          "match": "\\b(as)\\b",
+          "name": "keyword.control.rip"
+        },
+        {
+          "match": "\\b([a-zA-Z_$]\\w*)\\b",
+          "name": "variable.other.readwrite.alias.rip"
+        }
+      ]
+    },
+    {
+      "comment": "Namespace import: import * as name from 'path'",
+      "match": "\\b(import)\\s+(\\*)\\s+(as)\\s+([a-zA-Z_$]\\w*)",
+      "captures": {
+        "1": { "name": "keyword.control.rip" },
+        "2": { "name": "constant.language.import-export-all.rip" },
+        "3": { "name": "keyword.control.rip" },
+        "4": { "name": "variable.other.readwrite.alias.rip" }
+      }
+    },
+    {
+      "comment": "Default import: import name from 'path'",
+      "match": "\\b(import)\\s+([a-zA-Z_$]\\w*)(?=\\s+from\\b)",
+      "captures": {
+        "1": { "name": "keyword.control.rip" },
+        "2": { "name": "variable.other.readwrite.alias.rip" }
+      }
+    },
+
     {"comment": "=== KEYWORDS ==="},
     {
       "match": "\\b(return|throw|break|continue|switch|when|then|if|else|unless|for|in|of|by|as|while|until|loop|do|try|catch|finally|yield|await|import|export|from|default|delete|typeof|instanceof|new|super|debugger|use|own|extends|component|render|offer|accept|slot|it|is|isnt|and|or|not)\\b",
