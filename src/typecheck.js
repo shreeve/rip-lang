@@ -129,7 +129,7 @@ export function parseComponentDTS(dtsString) {
           if (lines[j].includes('__RipProps<')) hasIntrinsicProps = true;
           if (/^\s*\}\s*(?:&\s*.+)?\);\s*$/.test(lines[j])) { j++; break; }
           const pm = lines[j].match(/^\s+(\w+)(\?)?\s*:\s*(.+);$/);
-          if (pm) props.push({ name: pm[1], type: pm[3].trim(), required: !pm[2] });
+          if (pm && !pm[1].startsWith('__bind_')) props.push({ name: pm[1], type: pm[3].trim(), required: !pm[2] });
           j++;
         }
         continue;
