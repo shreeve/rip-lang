@@ -65,21 +65,21 @@ function Form({ title = 'Sign In' }: { title?: string } = {}) {
       <h1>{title}</h1>
       <Input
         label='Email'
-        type='email'
-        placeholder='jane@example.com'
         value={email}
+        placeholder='jane@example.com'
+        type='email'
         onChange={(e) => setEmail(e.target.value)}
       />
       <Input
         label='Password'
-        type='password'
-        placeholder='••••••••'
         value={password}
+        placeholder='••••••••'
+        type='password'
         onChange={(e) => setPassword(e.target.value)}
       />
       <Button
-        type='submit'
         variant='primary'
+        type='submit'
         loading={loading}>
         Sign In
       </Button>
@@ -98,6 +98,8 @@ function PropTypeTests() {
       <Button variant='primary' disabled='yes' />
       {/* @ts-expect-error — wrong type for label */}
       <Input label={123} />
+      {/* @ts-expect-error — inherited intrinsic: maxLength expects number */}
+      <Input maxLength='ten' />
     </div>
   )
 }
@@ -118,21 +120,13 @@ function TypeTestComp({ variant = 'primary' as 'primary' | 'secondary', count = 
     const x: number = 'hello'
   }
 
+  function badBodyAssign() {
+    // @ts-expect-error — string assigned to inferred boolean variable
+    const loading: boolean = 'wrong'
+  }
+
   return null
 }
-
-// ── Event handler typing ──
-//
-// TypeScript + React gives typed event handlers automatically:
-// onSubmit in the Form above gets React.FormEvent<HTMLFormElement>.
-// onClick on <button> gives React.MouseEvent<HTMLButtonElement>.
-// In Rip, `(e) ->` gives `any` for all handler params.
-
-// ── Element type inheritance ──
-//
-// ComponentProps<'input'> (used by InputProps above) gives ALL of
-// <input>'s props — onChange, onFocus, aria-*, etc. — for free.
-// In Rip, each prop must be listed explicitly or it's unknown.
 
 // ── Generic components ──
 //

@@ -6,11 +6,9 @@
 
 # ── Components ──
 
-export Input = component
+export Input = component extends input
   @label:: string := ""
   @value:: string := ""
-  @placeholder:: string := ""
-  @type:: string := "text"
   @error:: string := ""
 
   render
@@ -19,37 +17,19 @@ export Input = component
         label label
       input
         value <=> value
-        placeholder: placeholder
-        type: type
       if error
         div error
 
-export InheritedInput = component extends input
-  @label:: string := ""
-  @error:: string := ""
-
-  render
-    fieldset
-      if label
-        label label
-      input
-      if error
-        div error
-
-export Button = component
+export Button = component extends button
   @variant:: "primary" | "secondary"
-  @type:: "submit" | "reset" | "button" := "button"
   @shape:: "rounded" | "pill" := "rounded"
   @loading:: boolean := false
-  @disabled:: boolean := false
 
   bg ~= if variant is "primary" then "#0066ff" else "#e5e5e5"
   fg ~= if variant is "primary" then "#fff" else "#333"
 
   render
     button
-      type: type
-      disabled: disabled or loading
       style: "background: #{bg}; color: #{fg}"
       if loading
         "Loading..."
@@ -102,9 +82,8 @@ export PropTypeTests = component
       Button variant: "primary", disabled: "yes"
       # @ts-expect-error — wrong type for label
       Input label: 123
-      InheritedInput label: "Email", autofocus: true, maxLength: 100
-      # @ts-expect-error — autofocus expects boolean
-      InheritedInput autofocus: "yes"
+      # @ts-expect-error — inherited intrinsic: maxLength expects number
+      Input maxLength: "ten"
 
 # ── Two-way binding type safety ──
 #
@@ -122,15 +101,11 @@ export BindingTypeTests = component
       # Correct: string <=> string — no error
       Input
         value <=> email
-      # @ts-expect-error — Signal<number> not assignable to Signal<string>
+      # @ts-expect-error — Type 'number' is not assignable to type 'string'
       Input
         value <=> count
 
 # ── Negative: type safety inside component bodies ──
-#
-# The enriched stub gives TypeScript typed property declarations
-# (Signal<T>, Computed<T>) so type errors in computeds and methods
-# are caught. Each @ts-expect-error must suppress a real TS error.
 
 export TypeTestComp = component
   @variant:: "primary" | "secondary" := "primary"
@@ -195,14 +170,6 @@ export EventHandlerTest = component
   render
     form @submit: @handleSubmit
       button @click: @handleClick, "Click"
-
-# ── Element type inheritance ──
-#
-# `component extends input` widens the constructor props with
-# `__RipProps<'input'>`, giving access to ALL of <input>'s props
-# (autofocus, maxLength, aria-*, etc.) for free. The runtime
-# forwards unknown props to the first matching element in the
-# render block.
 
 # ── Gap: generic components ──
 #

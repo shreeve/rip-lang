@@ -26,9 +26,8 @@ let badSum = sum('a', 'b')
 // @ts-expect-error — string argument where number expected
 let badPos = isPositive('five')
 
-// ── Unresolved import paths ──
+// ── Fixed: unresolved import paths ──
 //
-// TypeScript catches nonexistent imports immediately:
-//   import { x } from './nonexistent'  // Cannot find module
-// Rip's `rip check` doesn't verify import specifiers resolve
-// to actual files — the error only surfaces at runtime.
+// Both TypeScript and `rip check` catch nonexistent imports:
+//   import { x } from './nonexistent'      // tsc: Cannot find module
+//   import { x } from './nonexistent.rip'  // rip: Cannot find module
