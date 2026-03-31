@@ -1,21 +1,39 @@
 @import "tailwindcss";
 
 :root {
-  --color-brand: oklch(0.6079 0.1408 256.21);
+  --color-brand: var(--color-sky-600);
   --color-success: var(--color-green-600);
   --color-info: var(--color-brand);
   --color-error: var(--color-red-600);
-  --color-text-primary: var(--color-gray-950);
-  --color-text-secondary: var(--color-gray-800);
-  --color-text-tertiary: var(--color-gray-600);
-  --color-text-quaternary: var(--color-gray-400);
-  --color-bg-primary: var(--color-white);
-  --color-bg-secondary: var(--color-gray-50);
-  --color-bg-tertiary: var(--color-gray-100);
-  --color-bg-quaternary: var(--color-gray-200);
-  --color-border-primary: var(--color-gray-200);
-  --color-border-secondary: var(--color-gray-300);
-  --color-border-tertiary: var(--color-gray-400);
+  --color-text-primary: var(--color-neutral-950);
+  --color-text-secondary: var(--color-neutral-800);
+  --color-text-tertiary: var(--color-neutral-600);
+  --color-text-quaternary: var(--color-neutral-400);
+  --color-bg-background: var(--color-neutral-50);
+  --color-bg-surface: var(--color-white);
+  --color-bg-input: var(--color-white);
+  --color-bg-input-hover: var(--color-neutral-50);
+  --color-bg-input-active: var(--color-neutral-100);
+  --color-border-surface: oklch(from var(--color-neutral-200) calc(l + 0.02) c h);
+  --color-border-input: var(--color-neutral-200);
+  --color-border-input-hover: var(--color-neutral-300);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-text-primary: var(--color-neutral-50);
+    --color-text-secondary: var(--color-neutral-200);
+    --color-text-tertiary: var(--color-neutral-300);
+    --color-text-quaternary: var(--color-neutral-400);
+    --color-bg-background: var(--color-neutral-950);
+    --color-bg-surface: var(--color-neutral-900);
+    --color-bg-input: oklch(from var(--color-neutral-900) calc(l + 0.04) c h);
+    --color-bg-input-hover: oklch(from var(--color-neutral-900) calc(l + 0.05) c h);
+    --color-bg-input-active: var(--color-neutral-800);
+    --color-border-surface: oklch(from var(--color-neutral-700) calc(l - 0.06) c h);
+    --color-border-input: var(--color-neutral-700);
+    --color-border-input-hover: var(--color-neutral-600);
+  }
 }
 
 @theme {
@@ -29,13 +47,14 @@
   --text-color-secondary: var(--color-text-secondary);
   --text-color-tertiary: var(--color-text-tertiary);
   --text-color-quaternary: var(--color-text-quaternary);
-  --background-color-primary: var(--color-bg-primary);
-  --background-color-secondary: var(--color-bg-secondary);
-  --background-color-tertiary: var(--color-bg-tertiary);
-  --background-color-quaternary: var(--color-bg-quaternary);
-  --border-color-primary: var(--color-border-primary);
-  --border-color-secondary: var(--color-border-secondary);
-  --border-color-tertiary: var(--color-border-tertiary);
+  --background-color-background: var(--color-bg-background);
+  --background-color-surface: var(--color-bg-surface);
+  --background-color-input: var(--color-bg-input);
+  --background-color-input-hover: var(--color-bg-input-hover);
+  --background-color-input-active: var(--color-bg-input-active);
+  --border-color-surface: var(--color-border-surface);
+  --border-color-input: var(--color-border-input);
+  --border-color-input-hover: var(--color-border-input-hover);
 
   --breakpoint-xs: 30rem;
   --breakpoint-sm: 40rem;
@@ -62,7 +81,7 @@
   }
 
   body {
-    @apply bg-primary text-primary antialiased;
+    @apply bg-background text-primary antialiased;
   }
 
   button:not(:disabled), [role="button"]:not(:disabled) {

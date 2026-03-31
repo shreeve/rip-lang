@@ -3,8 +3,8 @@ import { Button } from "../components/button.rip"
 
 export App = component
   render
-    div class: "flex min-h-dvh items-center justify-center bg-gray-50 pb-8 md:py-10 lg:py-12"
-      div class: "rounded-2xl shadow-lg/6 border border-gray-200/70 bg-white p-6 pt-8 xs:px-8 md:p-11"
+    div class: "flex min-h-dvh items-center justify-center bg-background pb-8 md:py-10 lg:py-12"
+      div class: "rounded-2xl border border-surface bg-surface p-6 pt-8 shadow-lg/6 xs:px-8 md:p-11"
         div class: "xs:w-80"
           Form title: "Sign in"
 

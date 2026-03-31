@@ -6,7 +6,7 @@ export Button = component extends button
   @disabled:: boolean := false
   @classes:: string := ""
 
-  bgColor ~= if variant is "primary" then "bg-brand" else "bg-primary"
+  bgColor ~= if variant is "primary" then "bg-brand" else "bg-input"
   rounded ~= if shape is "pill" then "rounded-full" else "rounded-lg"
 
   render
@@ -16,7 +16,7 @@ export Button = component extends button
         "#{bgColor} #{rounded} flex items-center justify-center gap-x-3 relative transition disabled:opacity-50",
         {
           "text-white hover:bg-brand-hover active:bg-brand-active": variant is "primary",
-          "border border-primary text-secondary hover:border-secondary hover:bg-secondary active:bg-tertiary": variant is "secondary",
+          "border border-input text-secondary hover:border-input-hover hover:bg-input-hover active:bg-input-active": variant is "secondary",
           "pointer-events-none": loading,
         },
         if compact then "h-11 px-4 text-sm-plus font-medium" else "h-12 px-5 text-base font-semibold",
