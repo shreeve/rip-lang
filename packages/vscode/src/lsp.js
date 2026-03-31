@@ -301,14 +301,14 @@ function publishDiagnostics(filePath) {
           }
         }
 
-        // Clamp end to the word at startPos — the TS diagnostic length may
-        // include quotes or wrappers that don't exist in the Rip source.
+        // Snap end to the word at startPos — the TS diagnostic length may not
+        // match the source identifier (e.g. generated _2 → Button).
         if (c.source) {
           const srcLineText = tc.getLineText(c.source, startPos.line);
           const wordMatch = srcLineText.slice(startPos.character).match(/^\w+/);
           if (wordMatch) {
             const wordEnd = startPos.character + wordMatch[0].length;
-            if (endPos.line === startPos.line && endPos.character > wordEnd) {
+            if (endPos.line === startPos.line) {
               endPos.character = wordEnd;
             }
           }

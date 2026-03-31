@@ -347,5 +347,16 @@ export function mapToSourcePos(entry, offset) {
       }
     }
   }
+
+  // When text matching failed entirely (generated identifier like _2 doesn't
+  // exist in source), srcCol may land on whitespace or past EOL.  Fall back to
+  // the first word on the source line so the diagnostic highlights something
+  // meaningful (e.g. the component name on a `Button` line).
+  if (srcText) {
+    if (srcCol >= srcText.length || /^\s*$/.test(srcText.slice(srcCol, srcCol + 1))) {
+      const firstWord = srcText.match(/^\s*(\w+)/);
+      if (firstWord) return { line: srcLine, col: firstWord.index + firstWord[0].length - firstWord[1].length };
+    }
+  }
   return { line: srcLine, col: srcCol };
 }
