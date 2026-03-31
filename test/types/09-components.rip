@@ -164,12 +164,16 @@ export TypeTestComp = component
 # and annotates the first untyped parameter with the event type.
 
 export EventHandlerTest = component
-  handleClick: (e) -> p e.clientX
+  # Named method refs — stub injects event parameter types
   handleSubmit: (e) -> e.preventDefault()
+  handleClick: (e) -> p e.clientX
 
   render
     form @submit: @handleSubmit
       button @click: @handleClick, "Click"
+      # Inline handlers — contextual typing from __RipEvents
+      button @click: (e) -> p e.clientX, "Inline"
+      input @keydown: (e) -> p e.key
 
 # ── Gap: generic components ──
 #

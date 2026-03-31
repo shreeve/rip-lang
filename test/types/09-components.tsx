@@ -7,7 +7,7 @@
 // Rip's render block            → React's JSX return
 // Rip's <=> two-way bind        → React's value + onChange (no equivalent)
 
-import { SubmitEventHandler, useState, ComponentProps } from 'react'
+import { SubmitEventHandler, useState, ComponentProps, MouseEventHandler } from 'react'
 
 // ── Prop types ──
 
@@ -126,6 +126,27 @@ function TypeTestComp({ variant = 'primary' as 'primary' | 'secondary', count = 
   }
 
   return null
+}
+
+// ── Event handler typing ──
+//
+// Both inline and named method refs are typed.
+// In React, event handler params get contextual typing from JSX attributes
+// (onClick types e as MouseEvent, onSubmit types e as FormEvent, etc.)
+
+function EventHandlerTest() {
+  // Named method refs — explicit parameter types
+  const handleSubmit: SubmitEventHandler<HTMLFormElement> = (e) => e.preventDefault()
+  const handleClick: MouseEventHandler<HTMLButtonElement> = (e) => console.log(e.clientX)
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <button onClick={handleClick}>Click</button>
+      {/* Inline handlers — contextual typing from JSX attributes */}
+      <button onClick={(e) => console.log(e.clientX)}>Inline</button>
+      <input onKeyDown={(e) => console.log(e.key)} />
+    </form>
+  )
 }
 
 // ── Generic components ──
