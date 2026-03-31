@@ -161,6 +161,14 @@ function compileRip(filePath, source) {
 
     if (entry.dts) {
       updateComponentRegistry(filePath, source, entry.dts);
+      // Eagerly populate intrinsic props cache so value completions work
+      // even after later compilation failures (e.g. `type:` with no value).
+      for (const [name, info] of componentRegistry) {
+        if (info.source === filePath && info.inheritsTag) {
+          const ownPropNames = new Set(info.props.map(p => p.name));
+          resolveIntrinsicProps(name, ownPropNames);
+        }
+      }
     }
 
     connection.console.log(`[rip] compiled ${path.basename(filePath)}: hasTypes=${entry.hasTypes}, headerLines=${entry.headerLines}`);
@@ -480,7 +488,10 @@ function patchTypes() {
   const program = service.getProgram();
   if (!program || program === lastPatchedProgram) return;
   lastPatchedProgram = program;
-  intrinsicPropsCache.clear();
+  // Don't clear intrinsicPropsCache — DOM element types are stable across
+  // program changes and must survive compilation failures so that value
+  // completions still work when the user is mid-edit (e.g. `type:` with
+  // no value yet causes a parse error, deleting compiled data).
   tc.patchUninitializedTypes(ts, service, compiled);
 }
 
