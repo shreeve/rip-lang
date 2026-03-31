@@ -813,6 +813,20 @@ export function compileForCheck(filePath, source, compiler) {
     for (let i = 0; i < dtsLines.length; i++) {
       const line = dtsLines[i];
 
+      // Map import lines by module path (from "..." or from '...')
+      const importMatch = line.match(/^import\s+.+\s+from\s+['"]([^'"]+)['"]/);
+      if (importMatch) {
+        const modulePath = importMatch[1];
+        for (let s = 0; s < srcLines.length; s++) {
+          if (srcLines[s].includes(modulePath) && /^import\s/.test(srcLines[s].trimStart())) {
+            genToSrc.set(i, s);
+            srcToGen.set(s, i);
+            break;
+          }
+        }
+        continue;
+      }
+
       const m = line.match(/^(?:export\s+)?(?:declare\s+)?(?:let|var|type|interface|enum|class)\s+(\w+)/);
       if (!m) continue;
       const name = m[1];

@@ -109,6 +109,10 @@ export function mapToSourcePos(entry, offset) {
     // match string literals or identifiers in the source.
     if (/^declare\s+function\s/.test(genLineText)) return null;
 
+    // If genToSrc has a mapping for this header line (e.g. imports, declarations),
+    // use it to target the correct source line for word matching.
+    const mappedSrcLine = entry.genToSrc.get(tsLine);
+
     let lineStart = 0, curLine = 0;
     for (let i = 0; i < entry.tsContent.length; i++) {
       if (curLine === tsLine) { lineStart = i; break; }
@@ -120,6 +124,13 @@ export function mapToSourcePos(entry, offset) {
       const word = wordMatch[0];
       const srcLines = entry.source.split('\n');
       const re = new RegExp('\\b' + word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b');
+
+      // If we have a direct line mapping, try that source line first
+      if (mappedSrcLine !== undefined) {
+        const m = re.exec(srcLines[mappedSrcLine]);
+        if (m) return { line: mappedSrcLine, col: m.index };
+        return { line: mappedSrcLine, col: genCol };
+      }
 
       // For let/var declarations, the error word may appear on many source lines
       // (e.g. `Status` referenced in multiple variable annotations). Narrow the

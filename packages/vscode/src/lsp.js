@@ -282,6 +282,25 @@ function publishDiagnostics(filePath) {
           endPos = { line: startPos.line, character: startPos.character + (d.length || 1) };
         }
 
+        // For unused-import diagnostics (6133/6196), TS spans the entire import
+        // statement but the message names the specific binding.  Extract it and
+        // target just that identifier on the source line.
+        if ((d.code === 6133 || d.code === 6196) && c.source) {
+          const srcLineText = tc.getLineText(c.source, startPos.line);
+          if (/^\s*import\s/.test(srcLineText)) {
+            const msg = typeof d.messageText === 'string' ? d.messageText : d.messageText?.messageText;
+            const nameMatch = msg && msg.match(/^'(\w+)'/);
+            if (nameMatch) {
+              const re = new RegExp('\\b' + nameMatch[1] + '\\b');
+              const m = re.exec(srcLineText);
+              if (m) {
+                startPos.character = m.index;
+                endPos = { line: startPos.line, character: m.index + nameMatch[1].length };
+              }
+            }
+          }
+        }
+
         // Clamp end to the word at startPos — the TS diagnostic length may
         // include quotes or wrappers that don't exist in the Rip source.
         if (c.source) {
