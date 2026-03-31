@@ -1538,8 +1538,7 @@ connection.onHover((params) => {
           if (!path.isAbsolute(importPath)) importPath = path.resolve(path.dirname(fp), importPath);
           if (!importPath.endsWith('.rip') && fs.existsSync(importPath + '.rip')) importPath += '.rip';
           if (fs.existsSync(importPath)) {
-            const displayPath = importPath;
-            return { contents: { kind: 'markdown', value: `\`\`\`typescript\nmodule "${displayPath}"\n\`\`\`` } };
+            return { contents: { kind: 'markdown', value: `\`\`\`typescript\nmodule "${importPath}"\n\`\`\`` } };
           }
         }
       }
