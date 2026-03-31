@@ -96,10 +96,11 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 ### 🔶 Partial
 
-| Category                 | Tested In     | Notes                                                                                              |
-| ------------------------ | ------------- | -------------------------------------------------------------------------------------------------- |
-| Generic types            | 03-structural | Basic generics work (structs, function returns); edge cases may remain                             |
-| Render block type safety | 09, 12        | Intrinsic tag/attr/event checking via `__ripEl`; conditionals and text expressions still unchecked |
+| Category                 | Tested In     | Notes                                                                                                                                                                                                                          |
+| ------------------------ | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Generic types            | 03-structural | Basic generics work (structs, function returns); edge cases may remain                                                                                                                                                         |
+| Dot-completion accuracy  | 09-components | `e.` in event handlers shows generic `Event` members instead of specific event type (e.g. `MouseEvent`); root cause: stale-compilation offset mapping picks the wrong `e.` in generated TS. Hover and `rip check` are correct. |
+| Render block type safety | 09, 12        | Intrinsic tag/attr/event checking via `__ripEl`; conditionals and text expressions still unchecked                                                                                                                             |
 
 ### 🔍 Compiler-verified (IDE review needed)
 
@@ -107,7 +108,6 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 | Category                     | Tested In     | Notes                                                                                                       |
 | ---------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------- |
-| Event handler typing         | 09, 12        | Inline handlers typed via `__RipEvents`; named method refs (`@submit: @handler`) remain `any`               |
 | Type inference (split decl.) | 11-inference  | Top-level `x = expr` inferred via `patchUninitializedTypes`; block-scoped and destructured caught by strict |
 | Intrinsic element typing     | 12-intrinsics | `__ripEl` emits typed helper calls; lib.dom source of truth for tags, attrs, events, global attrs           |
 
@@ -139,6 +139,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Required component props    | 09-components  | `@prop:: T` (no `:=`) — required in constructor, caught at usage sites                                                             |
 | Prop default validation     | 09-components  | `@prop:: T := val` — validates default against declared type; squiggle on prop name                                                |
 | Element type inheritance    | 09-components  | `component extends tag` widens constructor props with `__RipProps<'tag'>`; invalid tags caught with clean error                    |
+| Event handler typing        | 09, 12         | Inline handlers typed via `__RipEvents`; named method refs typed via stub-injected `HTMLElementEventMap` annotations               |
 | Strict mode                 | *(all files)*  | `strict: true` — `noImplicitAny`, full null checks, strict function types all active; hardcoded in all paths                       |
 | Hover types                 | *(IDE only)*   | Column-aware source maps, overload preference, typed implementation params                                                         |
 | Union value autocomplete    | *(IDE only)*   | String literal union completions for prop values, prop defaults, and typed variable assignments                                    |
