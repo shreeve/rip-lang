@@ -135,7 +135,7 @@ export TypeTestComp = component
 #
 # Render blocks are now partially type-checked via __ripEl():
 #
-# What works (see 12-intrinsics.rip for full coverage):
+# What works:
 #   - Intrinsic element attributes are type-checked against lib.dom.d.ts
 #     (e.g. `button disabled: "yes"` errors — disabled expects boolean)
 #   - Event handlers get contextual typing via HTMLElementEventMap

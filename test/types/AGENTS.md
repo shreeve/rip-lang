@@ -22,8 +22,8 @@ rip check                                                                 # 5. t
 bunx tsc                                                                  # 6. type-check all .ts files
 for f in *.rip; do printf "\n── %s ──\n" "$f" && rip "$f"; done           # 7. run all .rip
 for f in *.ts *.tsx; do printf "\n── %s ──\n" "$f" && bun run "$f"; done  # 8. run all .ts
-for n in 01-basic 02-aliases 03-structural 04-unions 05-interfaces 06-functions 07-integration 08-reactive 09-components 10-validation 11-inference 12-intrinsics; do
-  ext=ts; [[ "$n" == 09-* || "$n" == 12-* ]] && ext=tsx
+for n in 01-basic 02-aliases 03-structural 04-unions 05-interfaces 06-functions 07-integration 08-reactive 09-components 10-validation 11-inference; do
+  ext=ts; [[ "$n" == 09-* ]] && ext=tsx
   rip "$n.rip" > /tmp/rip_out.txt 2>&1
   bun run "$n.$ext" > /tmp/ts_out.txt 2>&1
   diff -q /tmp/rip_out.txt /tmp/ts_out.txt > /dev/null 2>&1 && echo "✓ $n" || echo "✗ $n — MISMATCH"
@@ -71,7 +71,6 @@ Each file exercises a specific type feature. Status key:
 | 09-components.rip  | `@prop:: T :=`, `@prop:: T`, default validation             | pass   | Required props, default-vs-type validation, 4 negative body tests       |
 | 10-validation.rip  | Runtime validation use cases (4 real-world patterns)        | pass   | API shape, composition, discriminated union config, 3rd-party transform |
 | 11-inference.rip   | Type inference on unannotated variables                     | pass   | Top-level works; block/destructure/any are gaps                         |
-| 12-intrinsics.rip  | Intrinsic tags, attributes, events, global attrs            | pass   | `__ripEl` validates via lib.dom; wrong types caught; event params typed |
 
 ## Type Safety Gap Analysis
 
@@ -100,16 +99,15 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | ------------------------ | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Generic types            | 03-structural | Basic generics work (structs, function returns); edge cases may remain                                                                                                                                                         |
 | Dot-completion accuracy  | 09-components | `e.` in event handlers shows generic `Event` members instead of specific event type (e.g. `MouseEvent`); root cause: stale-compilation offset mapping picks the wrong `e.` in generated TS. Hover and `rip check` are correct. |
-| Render block type safety | 09, 12        | Intrinsic tag/attr/event checking via `__ripEl`; conditionals and text expressions still unchecked                                                                                                                             |
+| Render block type safety | 09-components | Intrinsic tag/attr/event checking via `__ripEl`; conditionals and text expressions still unchecked                                                                                                                             |
 
 ### 🔍 Compiler-verified (IDE review needed)
 
 `rip check` passes for these features but IDE presentation (squiggle positions, hover types, diagnostic messages) has not been manually verified. To promote to ✅, open the relevant file in a VS Code-based editor and confirm: correct squiggle position, correct hover type, no parse errors masking diagnostics, no false positives.
 
-| Category                     | Tested In     | Notes                                                                                                       |
-| ---------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------- |
-| Type inference (split decl.) | 11-inference  | Top-level `x = expr` inferred via `patchUninitializedTypes`; block-scoped and destructured caught by strict |
-| Intrinsic element typing     | 12-intrinsics | `__ripEl` emits typed helper calls; lib.dom source of truth for tags, attrs, events, global attrs           |
+| Category                     | Tested In    | Notes                                                                                                       |
+| ---------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------- |
+| Type inference (split decl.) | 11-inference | Top-level `x = expr` inferred via `patchUninitializedTypes`; block-scoped and destructured caught by strict |
 
 ### ✅ Working
 
@@ -139,7 +137,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Required component props    | 09-components  | `@prop:: T` (no `:=`) — required in constructor, caught at usage sites                                                             |
 | Prop default validation     | 09-components  | `@prop:: T := val` — validates default against declared type; squiggle on prop name                                                |
 | Element type inheritance    | 09-components  | `component extends tag` widens constructor props with `__RipProps<'tag'>`; invalid tags caught with clean error                    |
-| Event handler typing        | 09, 12         | Inline handlers typed via `__RipEvents`; named method refs typed via stub-injected `HTMLElementEventMap` annotations               |
+| Event handler typing        | 09-components  | Inline handlers typed via `__RipEvents`; named method refs typed via stub-injected `HTMLElementEventMap` annotations               |
 | Strict mode                 | *(all files)*  | `strict: true` — `noImplicitAny`, full null checks, strict function types all active; hardcoded in all paths                       |
 | Hover types                 | *(IDE only)*   | Column-aware source maps, overload preference, typed implementation params                                                         |
 | Union value autocomplete    | *(IDE only)*   | String literal union completions for prop values, prop defaults, and typed variable assignments                                    |
