@@ -785,12 +785,24 @@ function resolveIntrinsicProps(componentName, ownPropNames) {
 
       for (const member of classNode.members || []) {
         if (!ts.isConstructorDeclaration(member) || member.parameters.length === 0) continue;
-        const paramType = checker.getTypeAtLocation(member.parameters[0]);
+        // Under strict mode, optional params (props?) have type `T | undefined`.
+        // Strip undefined so getProperties() sees the actual intersection type.
+        const paramType = checker.getNonNullableType(checker.getTypeAtLocation(member.parameters[0]));
         if (!paramType) continue;
         const props = [];
         for (const prop of paramType.getProperties()) {
           if (prop.name.startsWith('__bind_') || prop.name.startsWith('@')) continue;
           if (ownPropNames.has(prop.name)) continue;
+          // Skip DOM constants (ATTRIBUTE_NODE, ELEMENT_NODE, etc.)
+          if (/^[A-Z][A-Z_0-9]+$/.test(prop.name)) continue;
+          // Skip readonly DOM properties (childNodes, clientHeight, etc.)
+          // These are inherited from Element/Node and not useful as HTML attributes.
+          const decls = prop.getDeclarations();
+          if (decls?.length > 0) {
+            const allReadonly = decls.every(d =>
+              (ts.getCombinedModifierFlags(d) & ts.ModifierFlags.Readonly) !== 0);
+            if (allReadonly) continue;
+          }
           const propType = checker.getTypeOfSymbolAtLocation(prop, member.parameters[0]);
           props.push({
             name: prop.name,
