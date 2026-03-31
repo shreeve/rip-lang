@@ -1,7 +1,6 @@
 export Input = component extends input
   @label:: string := ""
   @value:: string := ""
-  @placeholder:: string := ""
   @compact:: boolean := false
   @error:: string := ""
   @classes:: string := ""
@@ -16,10 +15,9 @@ export Input = component extends input
             label
         input
           value <=> value
-          placeholder: placeholder
           class: [
             "w-full rounded-lg border bg-input shadow-xs transition outline-none placeholder:text-quaternary",
-            "focus:ring focus:ring-brand enabled:focus:border-brand disabled:text-tertiary",
+            "focus:ring focus:ring-brand enabled:focus:border-brand disabled:opacity-50",
             if compact then "h-10.5 px-3.25 text-sm-plus" else "h-11 px-3.5 text-base",
             if error then "border-error ring ring-error" else "border-input enabled:hover:border-input-hover",
             inputClasses,

@@ -17,7 +17,7 @@ export Form = component
   onSubmit: (e) ->
     e.preventDefault()
     loading = true
-    p "Signing in: #{email}"
+    p "Signing in: \n#{email}\n#{password}"
     loading = false
 
   render

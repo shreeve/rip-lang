@@ -3,7 +3,6 @@ export Button = component extends button
   @shape:: "rounded" | "pill" := "rounded"
   @compact:: boolean := false
   @loading:: boolean := false
-  @disabled:: boolean := false
   @classes:: string := ""
 
   bgColor ~= if variant is "primary" then "bg-brand" else "bg-input"
@@ -11,12 +10,11 @@ export Button = component extends button
 
   render
     button
-      disabled: disabled
       class: [
         "#{bgColor} #{rounded} flex items-center justify-center gap-x-3 relative transition disabled:opacity-50",
         {
-          "text-white hover:bg-brand-hover active:bg-brand-active": variant is "primary",
-          "border border-input text-secondary hover:border-input-hover hover:bg-input-hover active:bg-input-active": variant is "secondary",
+          "text-white enabled:hover:bg-brand-hover enabled:active:bg-brand-active": variant is "primary",
+          "border border-input text-secondary enabled:hover:border-input-hover enabled:hover:bg-input-hover enabled:active:bg-input-active": variant is "secondary",
           "pointer-events-none": loading,
         },
         if compact then "h-11 px-4 text-sm-plus font-medium" else "h-12 px-5 text-base font-semibold",
