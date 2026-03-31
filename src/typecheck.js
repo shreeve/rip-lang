@@ -118,15 +118,19 @@ export function parseComponentDTS(dtsString) {
     const name = cm[1];
     const props = [];
     let hasIntrinsicProps = false;
+    let inheritsTag = null;
     let j = i + 1;
     while (j < lines.length) {
       if (/^\}/.test(lines[j])) break;
       if (/constructor\(props\??/.test(lines[j])) {
         if (lines[j].includes('__RipProps<')) hasIntrinsicProps = true;
+        const tagMatch = lines[j].match(/__RipProps<'(\w+)'>/);
+        if (tagMatch) inheritsTag = tagMatch[1];
         if (!lines[j].includes('{')) { j++; continue; }
         j++;
         while (j < lines.length) {
           if (lines[j].includes('__RipProps<')) hasIntrinsicProps = true;
+          if (!inheritsTag) { const tm = lines[j].match(/__RipProps<'(\w+)'>/); if (tm) inheritsTag = tm[1]; }
           if (/^\s*\}\s*(?:&\s*.+)?\);\s*$/.test(lines[j])) { j++; break; }
           const pm = lines[j].match(/^\s+(\w+)(\?)?\s*:\s*(.+);$/);
           if (pm && !pm[1].startsWith('__bind_')) props.push({ name: pm[1], type: pm[3].trim(), required: !pm[2] });
@@ -136,7 +140,7 @@ export function parseComponentDTS(dtsString) {
       }
       j++;
     }
-    if (props.length || hasIntrinsicProps) result.set(name, { props, hasIntrinsicProps });
+    if (props.length || hasIntrinsicProps) result.set(name, { props, hasIntrinsicProps, inheritsTag });
     i = Math.max(i + 1, j);
   }
   return result;

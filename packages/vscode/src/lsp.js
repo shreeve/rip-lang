@@ -480,6 +480,7 @@ function patchTypes() {
   const program = service.getProgram();
   if (!program || program === lastPatchedProgram) return;
   lastPatchedProgram = program;
+  intrinsicPropsCache.clear();
   tc.patchUninitializedTypes(ts, service, compiled);
 }
 
@@ -731,6 +732,70 @@ function extractUnionValues(typeStr) {
     if (/^["']/.test(part)) values.push(part);
   }
   return values;
+}
+
+// Cache resolved intrinsic element props by tag name (e.g. 'button' → [{name, type}...])
+const intrinsicPropsCache = new Map();
+
+// Resolve the HTML/SVG element attributes for a given tag name using the TS type checker.
+// Components compile as `const Button = class extends __Component { constructor(props: {...} & __RipProps<'button'>) {} }`.
+// We find the class expression's constructor parameter and resolve all properties from the intersection type.
+function resolveIntrinsicProps(componentName, ownPropNames) {
+  const info = componentRegistry.get(componentName);
+  if (!info?.inheritsTag) return [];
+  const tag = info.inheritsTag;
+  if (intrinsicPropsCache.has(tag)) return intrinsicPropsCache.get(tag);
+  if (!service || !ts) { intrinsicPropsCache.set(tag, []); return []; }
+  patchTypes();
+  const program = service.getProgram();
+  if (!program) return [];
+  const checker = program.getTypeChecker();
+
+  // Search all source files for the component's class (either class declaration or class expression in a const)
+  for (const sf of program.getSourceFiles()) {
+    for (const stmt of sf.statements) {
+      let classNode = null;
+
+      // Pattern 1: `class Button { ... }` or `declare class Button { ... }`
+      if (ts.isClassDeclaration(stmt) && stmt.name?.text === componentName) {
+        classNode = stmt;
+      }
+      // Pattern 2: `const Button = class extends __Component { ... }`
+      else if (ts.isVariableStatement(stmt)) {
+        for (const decl of stmt.declarationList.declarations) {
+          if (ts.isIdentifier(decl.name) && decl.name.text === componentName &&
+              decl.initializer && ts.isClassExpression(decl.initializer)) {
+            classNode = decl.initializer;
+            break;
+          }
+        }
+      }
+      if (!classNode) continue;
+
+      for (const member of classNode.members || []) {
+        if (!ts.isConstructorDeclaration(member) || member.parameters.length === 0) continue;
+        const paramType = checker.getTypeAtLocation(member.parameters[0]);
+        if (!paramType) continue;
+        const props = [];
+        for (const prop of paramType.getProperties()) {
+          if (prop.name.startsWith('__bind_') || prop.name.startsWith('@')) continue;
+          if (ownPropNames.has(prop.name)) continue;
+          const propType = checker.getTypeOfSymbolAtLocation(prop, member.parameters[0]);
+          props.push({
+            name: prop.name,
+            type: checker.typeToString(propType),
+            required: false,
+          });
+        }
+        if (props.length > 0) {
+          intrinsicPropsCache.set(tag, props);
+          return props;
+        }
+      }
+    }
+  }
+  intrinsicPropsCache.set(tag, []);
+  return [];
 }
 
 // Resolve a type name to its definition string from all compiled DTS.
@@ -1351,18 +1416,30 @@ connection.onCompletion((params) => {
       const info = componentRegistry.get(ctx.component);
       if (info) {
         if (ctx.wantProps) {
-          return info.props
+          const ownPropNames = new Set(info.props.map(p => p.name));
+          const allProps = [...info.props];
+          if (info.inheritsTag) {
+            for (const ip of resolveIntrinsicProps(ctx.component, ownPropNames)) {
+              allProps.push(ip);
+            }
+          }
+          return allProps
             .filter(p => !ctx.existingProps.includes(p.name))
-            .map(p => ({
-              label: p.name + ':',
-              kind: 5,
-              detail: p.type,
-              insertText: p.name + ': ',
-              sortText: p.required ? '0' + p.name : '1' + p.name,
-            }));
+            .map(p => {
+              const isOwn = ownPropNames.has(p.name);
+              return {
+                label: p.name + ':',
+                kind: 5,
+                detail: p.type,
+                insertText: p.name + ': ',
+                sortText: p.required ? '0' + p.name : isOwn ? '1' + p.name : '2' + p.name,
+              };
+            });
         }
         if (ctx.wantValues && ctx.currentProp) {
-          const prop = info.props.find(p => p.name === ctx.currentProp);
+          const ownPropNames = new Set(info.props.map(p => p.name));
+          const allProps = info.inheritsTag ? [...info.props, ...resolveIntrinsicProps(ctx.component, ownPropNames)] : info.props;
+          const prop = allProps.find(p => p.name === ctx.currentProp);
           if (prop) {
             const values = extractUnionValues(prop.type);
             if (values.length > 0) {
@@ -1564,7 +1641,9 @@ connection.onHover((params) => {
       const compInfo = componentRegistry.get(ctx.component);
       if (compInfo) {
         if (ctx.currentProp) {
-          const prop = compInfo.props.find(p => p.name === ctx.currentProp);
+          const ownPropNames = new Set(compInfo.props.map(p => p.name));
+          const allProps = compInfo.inheritsTag ? [...compInfo.props, ...resolveIntrinsicProps(ctx.component, ownPropNames)] : compInfo.props;
+          const prop = allProps.find(p => p.name === ctx.currentProp);
           if (prop) {
             return { contents: { kind: 'markdown', value: `\`\`\`typescript\n(property) ${prop.name}${prop.required ? '' : '?'}: ${prop.type}\n\`\`\`` } };
           }
