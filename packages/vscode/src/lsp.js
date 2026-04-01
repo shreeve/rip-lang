@@ -116,7 +116,7 @@ connection.onInitialize(async (params) => {
   return {
     capabilities: {
       textDocumentSync: TextDocumentSyncKind.Full,
-      completionProvider: { triggerCharacters: ['.', '"', "'", '/', ':', ' '] },
+      completionProvider: { triggerCharacters: ['.', '"', "'", '/', ':', ' ', '@'] },
       hoverProvider: true,
       definitionProvider: true,
       signatureHelpProvider: { triggerCharacters: ['(', ','] },
@@ -745,80 +745,185 @@ function extractUnionValues(typeStr) {
   return values;
 }
 
-// Cache resolved intrinsic element props by tag name (e.g. 'button' → [{name, type}...])
-const intrinsicPropsCache = new Map();
+// DOM event names resolved from HTMLElementEventMap via the TS checker.
+// Lazy-initialized on first use; falls back to empty (no @event completions
+// until TS service is ready, then populates on next request).
+let domEventNamesCache = null;
 
-// Resolve the HTML/SVG element attributes for a given tag name using the TS type checker.
-// Components compile as `const Button = class extends __Component { constructor(props: {...} & __RipProps<'button'>) {} }`.
-// We find the class expression's constructor parameter and resolve all properties from the intersection type.
-function resolveIntrinsicProps(componentName, ownPropNames) {
-  const info = componentRegistry.get(componentName);
-  if (!info?.inheritsTag) return [];
-  const tag = info.inheritsTag;
-  if (intrinsicPropsCache.has(tag)) return intrinsicPropsCache.get(tag);
-  if (!service || !ts) { intrinsicPropsCache.set(tag, []); return []; }
+function getDomEventNames() {
+  if (domEventNamesCache) return domEventNamesCache;
+  if (!service || !ts) return [];
   patchTypes();
   const program = service.getProgram();
   if (!program) return [];
   const checker = program.getTypeChecker();
+  // HTMLElementEventMap is declared in lib.dom.d.ts
+  const symbol = checker.resolveName('HTMLElementEventMap', undefined, ts.SymbolFlags.Type, false);
+  if (!symbol) return [];
+  const type = checker.getDeclaredTypeOfSymbol(symbol);
+  if (!type) return [];
+  const names = type.getProperties().map(p => p.name).sort();
+  if (names.length > 0) domEventNamesCache = names;
+  return names;
+}
 
-  // Search all source files for the component's class (either class declaration or class expression in a const)
+// Cache resolved intrinsic element props by tag name (e.g. 'button' → [{name, type}...])
+const intrinsicPropsCache = new Map();
+
+// Resolve HTML/SVG element attributes for a tag by finding a __ripEl('tag') call in the
+// compiled TS sources and reading the resolved __RipProps<'tag'> type from the call signature.
+// Returns [{name, type, required}] for all non-internal, non-readonly, non-constant props.
+function resolveTagProps(tag, skipNames) {
+  if (intrinsicPropsCache.has(tag)) {
+    const cached = intrinsicPropsCache.get(tag);
+    if (!skipNames || skipNames.size === 0) return cached;
+    return cached.filter(p => !skipNames.has(p.name));
+  }
+  if (!service || !ts) return [];
+  patchTypes();
+  const program = service.getProgram();
+  if (!program) { return []; }
+  const checker = program.getTypeChecker();
+
+  // Strategy 1: Find an existing __ripEl('tag') call and resolve the full
+  // __RipProps<'tag'> intersection type from the call's resolved signature.
+  let sfCount = 0;
   for (const sf of program.getSourceFiles()) {
-    for (const stmt of sf.statements) {
-      let classNode = null;
+    if (sf.isDeclarationFile) continue;
+    sfCount++;
+    let found = null;
+    ts.forEachChild(sf, function visit(node) {
+      if (found) return;
+      if (ts.isCallExpression(node) &&
+          ts.isIdentifier(node.expression) &&
+          node.expression.text === '__ripEl' &&
+          node.arguments.length >= 1 &&
+          ts.isStringLiteral(node.arguments[0]) &&
+          node.arguments[0].text === tag) {
+        found = node;
+        return;
+      }
+      ts.forEachChild(node, visit);
+    });
+    if (!found) continue;
 
-      // Pattern 1: `class Button { ... }` or `declare class Button { ... }`
-      if (ts.isClassDeclaration(stmt) && stmt.name?.text === componentName) {
-        classNode = stmt;
-      }
-      // Pattern 2: `const Button = class extends __Component { ... }`
-      else if (ts.isVariableStatement(stmt)) {
-        for (const decl of stmt.declarationList.declarations) {
-          if (ts.isIdentifier(decl.name) && decl.name.text === componentName &&
-              decl.initializer && ts.isClassExpression(decl.initializer)) {
-            classNode = decl.initializer;
-            break;
-          }
-        }
-      }
-      if (!classNode) continue;
+    const callSig = checker.getResolvedSignature(found);
+    if (!callSig || callSig.parameters.length < 2) continue;
+    const propsParam = callSig.parameters[1];
+    const propsType = checker.getNonNullableType(
+      checker.getTypeOfSymbolAtLocation(propsParam, found));
+    if (!propsType) continue;
 
-      for (const member of classNode.members || []) {
-        if (!ts.isConstructorDeclaration(member) || member.parameters.length === 0) continue;
-        // Under strict mode, optional params (props?) have type `T | undefined`.
-        // Strip undefined so getProperties() sees the actual intersection type.
-        const paramType = checker.getNonNullableType(checker.getTypeAtLocation(member.parameters[0]));
-        if (!paramType) continue;
-        const props = [];
-        for (const prop of paramType.getProperties()) {
-          if (prop.name.startsWith('__bind_') || prop.name.startsWith('@')) continue;
-          if (ownPropNames.has(prop.name)) continue;
-          // Skip DOM constants (ATTRIBUTE_NODE, ELEMENT_NODE, etc.)
-          if (/^[A-Z][A-Z_0-9]+$/.test(prop.name)) continue;
-          // Skip readonly DOM properties (childNodes, clientHeight, etc.)
-          // These are inherited from Element/Node and not useful as HTML attributes.
-          const decls = prop.getDeclarations();
-          if (decls?.length > 0) {
-            const allReadonly = decls.every(d =>
-              (ts.getCombinedModifierFlags(d) & ts.ModifierFlags.Readonly) !== 0);
-            if (allReadonly) continue;
-          }
-          const propType = checker.getTypeOfSymbolAtLocation(prop, member.parameters[0]);
-          props.push({
-            name: prop.name,
-            type: checker.typeToString(propType),
-            required: false,
-          });
-        }
-        if (props.length > 0) {
-          intrinsicPropsCache.set(tag, props);
-          return props;
-        }
-      }
+    const props = collectFilteredProps(checker, propsType, found);
+    // The __RipAttrKeys conditional type trick works for type-checking but
+    // TypeScript's checker API cannot enumerate its members via getProperties().
+    // When only the Rip extras (ref, class, style) survive, the mapped type
+    // contributed nothing — fall through to Strategy 2 which resolves the raw
+    // DOM element type and filters properties directly.
+    const RIP_EXTRAS = new Set(['ref', 'class', 'style']);
+    const hasDomProps = props.some(p => !RIP_EXTRAS.has(p.name));
+    if (hasDomProps && props.length > 0) {
+      intrinsicPropsCache.set(tag, props);
+      if (!skipNames || skipNames.size === 0) return props;
+      return props.filter(p => !skipNames.has(p.name));
     }
   }
-  intrinsicPropsCache.set(tag, []);
+
+  // Strategy 2: Resolve the element type from __RipElementMap directly.
+  // This works even when no __ripEl('tag') call exists in any compiled file.
+  // We look up the element type and apply the same __RipAttrKeys filter
+  // (skip methods, skip 'style' as a property), then add the Rip-specific
+  // extras (class, style, ref).
+  for (const sf of program.getSourceFiles()) {
+    if (sf.isDeclarationFile) continue;
+    let mapDecl = null;
+    for (const stmt of sf.statements) {
+      if (ts.isTypeAliasDeclaration(stmt) && stmt.name.text === '__RipElementMap') {
+        mapDecl = stmt;
+        break;
+      }
+    }
+    if (!mapDecl) continue;
+
+    const mapSymbol = checker.getSymbolAtLocation(mapDecl.name);
+    if (!mapSymbol) continue;
+    const mapType = checker.getDeclaredTypeOfSymbol(mapSymbol);
+    const tagProp = mapType.getProperty(tag);
+    if (!tagProp) continue;
+
+    const elemType = checker.getTypeOfSymbolAtLocation(tagProp, mapDecl);
+    if (!elemType) continue;
+
+    // Mirror the __RipAttrKeys type-level filter in JavaScript:
+    // skip style/classList/className/nodeValue/textContent/innerHTML/innerText/
+    // outerHTML/outerText/scrollLeft/scrollTop, on* handlers, aria*Element(s),
+    // methods, and readonly properties.
+    const SKIP_PROPS = new Set([
+      'style', 'classList', 'className', 'nodeValue', 'textContent',
+      'innerHTML', 'innerText', 'outerHTML', 'outerText', 'scrollLeft', 'scrollTop',
+    ]);
+    const props = [];
+    for (const prop of elemType.getProperties()) {
+      if (SKIP_PROPS.has(prop.name)) continue;
+      if (prop.name.startsWith('on')) continue;
+      if (/^aria.+Elements?$/.test(prop.name)) continue;
+      if (prop.name.startsWith('__') || prop.name.startsWith('@')) continue;
+      if (/^[A-Z][A-Z_0-9]+$/.test(prop.name)) continue;
+      const propType = checker.getTypeOfSymbolAtLocation(prop, mapDecl);
+      if (propType.getCallSignatures().length > 0) continue;
+      const decls = prop.getDeclarations();
+      if (decls?.length > 0) {
+        const allReadonly = decls.every(d =>
+          (ts.getCombinedModifierFlags(d) & ts.ModifierFlags.Readonly) !== 0);
+        if (allReadonly) continue;
+      }
+      props.push({
+        name: prop.name,
+        type: checker.typeToString(propType),
+        required: false,
+      });
+    }
+    // Add Rip-specific props from __RipProps (class, style, ref)
+    props.push({ name: 'class', type: 'string | string[]', required: false });
+    props.push({ name: 'style', type: 'string', required: false });
+    props.push({ name: 'ref', type: 'string', required: false });
+    if (props.length > 0) {
+      intrinsicPropsCache.set(tag, props);
+      if (!skipNames || skipNames.size === 0) return props;
+      return props.filter(p => !skipNames.has(p.name));
+    }
+  }
+
   return [];
+}
+
+function collectFilteredProps(checker, propsType, contextNode) {
+  const props = [];
+  for (const prop of propsType.getProperties()) {
+    if (prop.name.startsWith('__bind_') || prop.name.startsWith('@')) continue;
+    if (/^[A-Z][A-Z_0-9]+$/.test(prop.name)) continue;
+    const decls = prop.getDeclarations();
+    if (decls?.length > 0) {
+      const allReadonly = decls.every(d =>
+        (ts.getCombinedModifierFlags(d) & ts.ModifierFlags.Readonly) !== 0);
+      if (allReadonly) continue;
+    }
+    const propType = checker.getTypeOfSymbolAtLocation(prop, contextNode);
+    props.push({
+      name: prop.name,
+      type: checker.typeToString(propType),
+      required: false,
+    });
+  }
+  return props;
+}
+
+// Resolve intrinsic element attributes for a component that extends an HTML element.
+// Delegates to resolveTagProps and filters out the component's own props.
+function resolveIntrinsicProps(componentName, ownPropNames) {
+  const info = componentRegistry.get(componentName);
+  if (!info?.inheritsTag) return [];
+  return resolveTagProps(info.inheritsTag, ownPropNames);
 }
 
 // Resolve a type name to its definition string from all compiled DTS.
@@ -990,7 +1095,7 @@ function splitProps(str) {
 // line to find a parent component, then builds context from the current line.
 function detectBlockComponentContext(srcLines, lineIndex, col) {
   // First try the current line directly
-  const direct = detectComponentContext(srcLines[lineIndex], col);
+  const direct = detectComponentContext(srcLines[lineIndex], col, srcLines, lineIndex);
   if (direct) {
     // Also collect props from indented block lines below for existingProps
     const baseIndent = srcLines[lineIndex].length - srcLines[lineIndex].trimStart().length;
@@ -999,7 +1104,7 @@ function detectBlockComponentContext(srcLines, lineIndex, col) {
       if (bLine.trim() === '') continue;
       const bIndent = bLine.length - bLine.trimStart().length;
       if (bIndent <= baseIndent) break;
-      for (const m of bLine.trimStart().matchAll(/(?:^|,)\s*(\w+)\s*:/g)) {
+      for (const m of bLine.trimStart().matchAll(/(?:^|,)\s*(@?\w+)\s*:/g)) {
         if (!direct.existingProps.includes(m[1])) direct.existingProps.push(m[1]);
       }
     }
@@ -1025,17 +1130,29 @@ function detectBlockComponentContext(srcLines, lineIndex, col) {
 
   const parentTrimmed = srcLines[parentLine].trimStart();
   const compMatch = parentTrimmed.match(/^([A-Z]\w*)\b/);
-  if (!compMatch) return null;
-  const component = compMatch[1];
-  if (/=\s*component\b/.test(parentTrimmed)) return null;
-  if (!componentRegistry.has(component)) return null;
+  let component = null;
+  let htmlTag = null;
+  if (compMatch) {
+    if (/=\s*component\b/.test(parentTrimmed)) return null;
+    if (!componentRegistry.has(compMatch[1])) return null;
+    component = compMatch[1];
+  } else {
+    // Check for HTML element tag (lowercase identifier starting a line in a render block)
+    const tagMatch = parentTrimmed.match(/^([a-z]\w*)\b/);
+    if (tagMatch && isInRenderBlock(srcLines, parentLine)) {
+      htmlTag = tagMatch[1];
+    } else {
+      return null;
+    }
+  }
+  const tagOrComp = component || htmlTag;
 
   // Collect all existing props from inline (parent line) + block lines
   const existingProps = [];
   const propValues = new Map();
-  const parentRest = parentTrimmed.substring(component.length);
+  const parentRest = parentTrimmed.substring(tagOrComp.length);
   for (const m of parentRest.matchAll(/(?:^|,)\s*(@?\w+)\s*:/g)) {
-    existingProps.push(m[1].replace(/^@/, ''));
+    existingProps.push(m[1]);
   }
   const baseIndent = srcLines[parentLine].length - parentTrimmed.length;
   for (let b = parentLine + 1; b < srcLines.length; b++) {
@@ -1044,7 +1161,7 @@ function detectBlockComponentContext(srcLines, lineIndex, col) {
     const bIndent = bLine.length - bLine.trimStart().length;
     if (bIndent <= baseIndent) break;
     for (const m of bLine.trimStart().matchAll(/(?:^|,)\s*(@?\w+)\s*:/g)) {
-      const key = m[1].replace(/^@/, '');
+      const key = m[1];
       if (!existingProps.includes(key)) existingProps.push(key);
     }
   }
@@ -1059,42 +1176,52 @@ function detectBlockComponentContext(srcLines, lineIndex, col) {
     const propName = propLineMatch[1].replace(/^@/, '');
     const afterColon = propLineMatch[0].length;
     if (cursorInTrimmed < propLineMatch[1].length) {
-      return { component, existingProps, propValues, currentProp: propName, wantValues: false, wantProps: true };
+      return { component, htmlTag, existingProps, propValues, currentProp: propName, wantValues: false, wantProps: true };
     }
     if (cursorInTrimmed >= afterColon) {
       const valStr = trimmed.substring(afterColon);
       propValues.set(propName, valStr);
-      return { component, existingProps, propValues, currentProp: propName, wantValues: true, wantProps: false };
+      return { component, htmlTag, existingProps, propValues, currentProp: propName, wantValues: true, wantProps: false };
     }
   }
 
   // Cursor on a blank/incomplete line — offer prop completions
-  return { component, existingProps, propValues, currentProp: null, wantValues: false, wantProps: true };
+  return { component, htmlTag, existingProps, propValues, currentProp: null, wantValues: false, wantProps: true };
 }
 
-function detectComponentContext(srcLine, col) {
+function detectComponentContext(srcLine, col, srcLines, lineIndex) {
   if (!srcLine) return null;
 
   const trimmed = srcLine.trimStart();
   const indent = srcLine.length - trimmed.length;
 
   const compMatch = trimmed.match(/^([A-Z]\w*)\b/);
-  if (!compMatch) return null;
-  const component = compMatch[1];
+  let component = null;
+  let htmlTag = null;
+  if (compMatch) {
+    if (/=\s*component\b/.test(trimmed)) return null;
+    if (!componentRegistry.has(compMatch[1])) return null;
+    component = compMatch[1];
+  } else if (srcLines && lineIndex != null) {
+    // Check for inline HTML tag (lowercase identifier) inside a render block
+    const tagMatch = trimmed.match(/^([a-z][\w-]*)\b/);
+    if (tagMatch && isInRenderBlock(srcLines, lineIndex)) {
+      htmlTag = tagMatch[1];
+    }
+  }
+  if (!component && !htmlTag) return null;
+  const tagOrComp = component || htmlTag;
 
-  if (/=\s*component\b/.test(trimmed)) return null;
-  if (!componentRegistry.has(component)) return null;
-
-  const rest = trimmed.substring(component.length);
+  const rest = trimmed.substring(tagOrComp.length);
   if (rest.length > 0 && rest[0] !== ' ' && rest[0] !== '\t') return null;
 
   const cursorInTrimmed = col - indent;
 
-  if (cursorInTrimmed <= component.length) {
-    return { component, existingProps: [], propValues: new Map(), currentProp: null, wantValues: false, wantProps: false };
+  if (cursorInTrimmed <= tagOrComp.length) {
+    return { component, htmlTag, existingProps: [], propValues: new Map(), currentProp: null, wantValues: false, wantProps: false };
   }
 
-  const cursorInRest = cursorInTrimmed - component.length;
+  const cursorInRest = cursorInTrimmed - tagOrComp.length;
   const segments = splitProps(rest);
 
   const existingProps = [];
@@ -1133,7 +1260,7 @@ function detectComponentContext(srcLine, col) {
 
   if (!wantValues && !wantProps) wantProps = true;
 
-  return { component, existingProps, propValues, currentProp, wantValues, wantProps };
+  return { component, htmlTag, existingProps, propValues, currentProp, wantValues, wantProps };
 }
 
 // Detect whether the cursor is inside a render block. Walks up from the
@@ -1436,17 +1563,39 @@ connection.onCompletion((params) => {
     const srcLine = srcLines[params.position.line];
     const ctx = detectBlockComponentContext(srcLines, params.position.line, params.position.character);
     if (ctx) {
-      const info = componentRegistry.get(ctx.component);
+      connection.console.log(`[rip] completion ctx: component=${ctx.component}, htmlTag=${ctx.htmlTag}, wantProps=${ctx.wantProps}, wantValues=${ctx.wantValues}, currentProp=${ctx.currentProp}`);
+      const info = ctx.component ? componentRegistry.get(ctx.component) : null;
+
+      // Build the unified props list for either components or raw HTML elements
+      let ownProps = [];
+      let ownPropNames = new Set();
+      let allProps = [];
+
       if (info) {
-        if (ctx.wantProps) {
-          const ownPropNames = new Set(info.props.map(p => p.name));
-          const allProps = [...info.props];
-          if (info.inheritsTag) {
-            for (const ip of resolveIntrinsicProps(ctx.component, ownPropNames)) {
-              allProps.push(ip);
-            }
+        // Component with registered props
+        ownProps = info.props;
+        ownPropNames = new Set(ownProps.map(p => p.name));
+        allProps = [...ownProps];
+        if (info.inheritsTag) {
+          for (const ip of resolveIntrinsicProps(ctx.component, ownPropNames)) {
+            allProps.push(ip);
           }
-          return allProps
+        }
+      } else if (ctx.htmlTag) {
+        // Raw HTML element — all props come from the DOM type
+        allProps = resolveTagProps(ctx.htmlTag);
+        connection.console.log(`[rip] resolveTagProps('${ctx.htmlTag}') returned ${allProps.length} props`);
+      }
+
+      if (allProps.length > 0 || ctx.htmlTag || (info && info.inheritsTag)) {
+        if (ctx.wantProps) {
+          // When the user is typing an @event name, return only @event: completions.
+          // Detect by checking if the current word starts with '@' (covers both
+          // the initial trigger character and continued typing like @bl).
+          const wordStart = srcLine.slice(0, params.position.character).search(/@\w*$/);
+          const typingAtEvent = wordStart >= 0;
+
+          const attrItems = typingAtEvent ? [] : allProps
             .filter(p => !ctx.existingProps.includes(p.name))
             .map(p => {
               const isOwn = ownPropNames.has(p.name);
@@ -1458,10 +1607,31 @@ connection.onCompletion((params) => {
                 sortText: p.required ? '0' + p.name : isOwn ? '1' + p.name : '2' + p.name,
               };
             });
+          // Add @event: completions for elements in render blocks
+          if (ctx.htmlTag || (info && info.inheritsTag)) {
+            // Compute the replacement range starting from the '@' so VS Code
+            // matches the full @event prefix (@ isn't a word character, so
+            // without an explicit range VS Code would only see 'b' for '@b').
+            const atStart = typingAtEvent ? wordStart : params.position.character;
+            const replaceRange = {
+              start: { line: params.position.line, character: atStart },
+              end: params.position,
+            };
+            for (const ev of getDomEventNames()) {
+              if (ctx.existingProps.includes('@' + ev)) continue;
+              attrItems.push({
+                label: '@' + ev + ':',
+                kind: 23,
+                detail: '(event handler)',
+                textEdit: { range: replaceRange, newText: '@' + ev + ': ' },
+                filterText: '@' + ev,
+                sortText: typingAtEvent ? '0' + ev : '3' + ev,
+              });
+            }
+          }
+          return attrItems;
         }
         if (ctx.wantValues && ctx.currentProp) {
-          const ownPropNames = new Set(info.props.map(p => p.name));
-          const allProps = info.inheritsTag ? [...info.props, ...resolveIntrinsicProps(ctx.component, ownPropNames)] : info.props;
           const prop = allProps.find(p => p.name === ctx.currentProp);
           if (prop) {
             const values = extractUnionValues(prop.type);
@@ -1676,6 +1846,12 @@ connection.onHover((params) => {
           const propsStr = compInfo.props.filter(p => !p.name.startsWith('__bind_')).map(p => `  ${p.name}${p.required ? '' : '?'}: ${p.type}`).join('\n');
           return { contents: { kind: 'markdown', value: `\`\`\`typescript\nclass ${ctx.component}\nProps: {\n${propsStr}\n}\n\`\`\`` } };
         }
+      }
+    } else if (ctx?.htmlTag && ctx.currentProp) {
+      const allProps = resolveTagProps(ctx.htmlTag);
+      const prop = allProps.find(p => p.name === ctx.currentProp);
+      if (prop) {
+        return { contents: { kind: 'markdown', value: `\`\`\`typescript\n(property) ${prop.name}?: ${prop.type}\n\`\`\`` } };
       }
     }
   }

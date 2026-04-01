@@ -1051,6 +1051,13 @@ export function installComponentSupport(CodeGenerator, Lexer) {
           if (!Array.isArray(node)) return;
           const head = node[0]?.valueOf?.() ?? node[0];
 
+          // Object nodes are property bags (key-value pairs) — their values
+          // are code expressions (event handlers, bindings, literals), not
+          // render template. extractIntrinsicProps handles them separately.
+          // Walking into them would treat function bodies as template content
+          // (e.g. `@blur: (e) -> p(e)` would emit `e;` and `__ripEl('p')`).
+          if (head === 'object') return;
+
           // Emit a bare lowercase identifier as either a property access
           // (component member used as text), __ripEl (tag name check when at
           // block level), or a plain variable reference (text child of a tag).
