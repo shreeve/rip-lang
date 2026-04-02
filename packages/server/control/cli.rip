@@ -221,8 +221,9 @@ export parseFlags = (argv, defaultEntryPath = null) ->
     rateLimit: coerceInt(getKV('--rate-limit='), 0)
     rateLimitWindow: coerceInt(getKV('--rate-limit-window='), 60000)
     watch: watch
-    edgefilePath: getKV('--edgefile=')
-    checkConfig: has('--check-config')
+    edgefilePath: getKV('--edgefile=') or getKV('--file=') or getKV('-f=')
+    checkConfig: has('--check-config') or has('--check') or has('-c')
+    reloadConfig: has('--reload') or has('-r')
     envOverride: envOverride
     debug: has('--debug')
   }
@@ -286,8 +287,9 @@ export runHelpOutput = (argv) ->
     Options:
       -h, --help              Show this help
       -v, --version           Show version
-      --edgefile=<path>       Load Edgefile.rip from an explicit path
-      --check-config          Validate Edgefile.rip or config.rip and exit
+      -c, --check             Validate Edgefile.rip or config.rip and exit
+      -r, --reload            Reload config on a running server
+      -f, --file=<path>       Load Edgefile.rip from an explicit path
       --watch=<glob>          Watch glob pattern (default: *.rip)
       --static                Disable hot reload and file watching
       --env=<mode>            Set environment (dev, production)
@@ -321,9 +323,10 @@ export runHelpOutput = (argv) ->
       rip serve myapp         Start with app name "myapp"
       rip serve http          HTTP only (no TLS)
       rip serve --static w:8  Production: no reload, 8 workers
-      rip serve --check-config
-      rip serve --check-config --edgefile=./Edgefile.rip
-      rip serve --edgefile=./Edgefile.rip
+      rip serve -c            Validate config and exit
+      rip serve -c -f=./Edgefile.rip
+      rip serve -r            Reload running server config
+      rip serve -f=./Edgefile.rip
 
     If no index.rip or index.ts is found, a built-in static file server
     activates with directory indexes, auto-detected MIME types, and
@@ -361,3 +364,18 @@ export runListSubcommand = (argv, prefix, getControlSocketPathFn, fetchFn, exitF
     console.error "list command failed: #{e?.message or e}"
     exitFn(1)
   true
+
+export runReloadSubcommand = (prefix, getControlSocketPathFn, fetchFn, exitFn) ->
+  controlUnix = getControlSocketPathFn(prefix)
+  try
+    res = fetchFn!('http://localhost/reload', { unix: controlUnix, method: 'POST' })
+    j = res.json!
+    if j?.ok
+      p "rip-server: config reload applied"
+    else
+      reason = j?.reason or 'unknown'
+      console.error "rip-server: config reload rejected: #{reason}"
+      exitFn(1)
+  catch e
+    console.error "rip-server: reload failed: #{e?.message or e}"
+    exitFn(1)

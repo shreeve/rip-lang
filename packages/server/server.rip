@@ -26,7 +26,7 @@ import { handleWorkerControl, handleWatchControl, handleRegistryControl, handleR
 import { getLanIP as controlGetLanIP, startMdnsAdvertisement as controlStartMdnsAdvertisement, stopMdnsAdvertisements as controlStopMdnsAdvertisements } from './control/mdns.rip'
 import { registerWatchGroup, handleWatchGroup, broadcastWatchChange, registerAppWatchDirs, shouldTriggerCodeReload } from './control/watchers.rip'
 import { computeHideUrls, logStartupSummary, createCleanup, installShutdownHandlers } from './control/lifecycle.rip'
-import { computeSocketPrefix as cliComputeSocketPrefix, runVersionOutput, runHelpOutput, runStopSubcommand, runListSubcommand, resolveAppEntry, parseFlags, coerceInt } from './control/cli.rip'
+import { computeSocketPrefix as cliComputeSocketPrefix, runVersionOutput, runHelpOutput, runStopSubcommand, runListSubcommand, runReloadSubcommand, resolveAppEntry, parseFlags, coerceInt } from './control/cli.rip'
 import { runSetupMode, runWorkerMode } from './control/worker.rip'
 import { spawnTrackedWorker, postWorkerQuit, waitForWorkerReady } from './control/workers.rip'
 import { createChallengeStore, handleChallengeRequest } from './acme/store.rip'
@@ -1491,6 +1491,9 @@ main = ->
   if flags.checkConfig
     runCheckConfig!(flags)
     return
+  if flags.reloadConfig
+    runReloadSubcommand!(flags.socketPrefix, getControlSocketPath, fetch, exit)
+    return
   setEventJsonMode(flags.jsonLogging)
   pidFile = getPidFilePath(flags.socketPrefix)
   writeFileSync(pidFile, String(process.pid))
@@ -1504,13 +1507,7 @@ main = ->
   exit 1 unless startupReload.ok
 
   cleanup = createCleanup(pidFile, svr, mgr, unlinkSync, fetch, process)
-  installShutdownHandlers(cleanup, process, ->
-    p 'rip-server: received SIGHUP, reloading config...'
-    if svr.reloadRuntimeConfig!(flags, 'sighup', true).ok
-      p 'rip-server: config reload applied'
-    else
-      p 'rip-server: config reload rejected, keeping previous config'
-  )
+  installShutdownHandlers(cleanup, process)
 
   # Suppress top URL lines if setup.rip will print them at the bottom
   flags.hideUrls = computeHideUrls(flags.appEntry, join, dirname, existsSync)
