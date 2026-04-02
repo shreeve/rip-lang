@@ -224,6 +224,7 @@ export parseFlags = (argv, defaultEntryPath = null) ->
     edgefilePath: getKV('--edgefile=') or getKV('--file=') or getKV('-f=')
     checkConfig: has('--check-config') or has('--check') or has('-c')
     reloadConfig: has('--reload') or has('-r')
+    stopServer: has('--stop') or has('-s')
     envOverride: envOverride
     debug: has('--debug')
   }
@@ -289,6 +290,7 @@ export runHelpOutput = (argv) ->
       -v, --version           Show version
       -c, --check             Validate Edgefile.rip or config.rip and exit
       -r, --reload            Reload config on a running server
+      -s, --stop              Stop a running server
       -f, --file=<path>       Load Edgefile.rip from an explicit path
       --watch=<glob>          Watch glob pattern (default: *.rip)
       --static                Disable hot reload and file watching
@@ -326,6 +328,7 @@ export runHelpOutput = (argv) ->
       rip serve -c            Validate config and exit
       rip serve -c -f=./Edgefile.rip
       rip serve -r            Reload running server config
+      rip serve -s            Stop running server
       rip serve -f=./Edgefile.rip
 
     If no index.rip or index.ts is found, a built-in static file server
@@ -336,8 +339,7 @@ export runHelpOutput = (argv) ->
 
 # --- Subcommands ---
 
-export runStopSubcommand = (argv, prefix, getPidFilePathFn, existsSyncFn, readFileSyncFn, killFn, spawnSyncFn, importMetaPath) ->
-  return false unless 'stop' in argv
+export stopServer = (prefix, getPidFilePathFn, existsSyncFn, readFileSyncFn, killFn, spawnSyncFn, importMetaPath) ->
   pidFile = getPidFilePathFn(prefix)
   try
     if existsSyncFn(pidFile)
@@ -349,6 +351,10 @@ export runStopSubcommand = (argv, prefix, getPidFilePathFn, existsSyncFn, readFi
       spawnSyncFn(['pkill', '-f', importMetaPath])
   catch e
     console.error "rip-server: stop failed: #{e.message}"
+
+export runStopSubcommand = (argv, prefix, getPidFilePathFn, existsSyncFn, readFileSyncFn, killFn, spawnSyncFn, importMetaPath) ->
+  return false unless 'stop' in argv
+  stopServer(prefix, getPidFilePathFn, existsSyncFn, readFileSyncFn, killFn, spawnSyncFn, importMetaPath)
   true
 
 export runListSubcommand = (argv, prefix, getControlSocketPathFn, fetchFn, exitFn) ->
