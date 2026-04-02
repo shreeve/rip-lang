@@ -282,8 +282,8 @@ export runHelpOutput = (argv) ->
     rip-server - Pure Rip application server
 
     Usage:
-      rip serve [options] [app-path] [app-name]
-      rip serve [options] [app-path]@<alias1>,<alias2>,...
+      rip server [options] [app-path] [app-name]
+      rip server [options] [app-path]@<alias1>,<alias2>,...
 
     Options:
       -h, --help              Show this help
@@ -321,15 +321,15 @@ export runHelpOutput = (argv) ->
       r:<n>,<s>s              Restart policy: max requests, max seconds
 
     Examples:
-      rip serve               Start with ./index.rip (watches *.rip)
-      rip serve myapp         Start with app name "myapp"
-      rip serve http          HTTP only (no TLS)
-      rip serve --static w:8  Production: no reload, 8 workers
-      rip serve -c            Validate config and exit
-      rip serve -c -f=./Edgefile.rip
-      rip serve -r            Reload running server config
-      rip serve -s            Stop running server
-      rip serve -f=./Edgefile.rip
+      rip server               Start with ./index.rip (watches *.rip)
+      rip server myapp         Start with app name "myapp"
+      rip server http          HTTP only (no TLS)
+      rip server --static w:8  Production: no reload, 8 workers
+      rip server -c            Validate config and exit
+      rip server -c -f=./Edgefile.rip
+      rip server -r            Reload running server config
+      rip server -s            Stop running server
+      rip server -f=./Edgefile.rip
 
     If no index.rip or index.ts is found, a built-in static file server
     activates with directory indexes, auto-detected MIME types, and
@@ -351,11 +351,6 @@ export stopServer = (prefix, getPidFilePathFn, existsSyncFn, readFileSyncFn, kil
       spawnSyncFn(['pkill', '-f', importMetaPath])
   catch e
     console.error "rip-server: stop failed: #{e.message}"
-
-export runStopSubcommand = (argv, prefix, getPidFilePathFn, existsSyncFn, readFileSyncFn, killFn, spawnSyncFn, importMetaPath) ->
-  return false unless 'stop' in argv
-  stopServer(prefix, getPidFilePathFn, existsSyncFn, readFileSyncFn, killFn, spawnSyncFn, importMetaPath)
-  true
 
 export runListSubcommand = (argv, prefix, getControlSocketPathFn, fetchFn, exitFn) ->
   return false unless 'list' in argv
