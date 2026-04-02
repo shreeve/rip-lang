@@ -67,7 +67,7 @@ export parseFlags = (argv, defaultEntryPath = null) ->
   appAliases = []
 
   isFlag = (tok) ->
-    tok.startsWith('-') or tok.startsWith('--') or /^\d+$/.test(tok) or tok in ['http', 'https', 'stop', 'list']
+    tok.startsWith('-') or tok.startsWith('--') or /^\d+$/.test(tok) or tok in ['http', 'https']
 
   tryResolveApp = (tok) ->
     looksLikePath = tok.includes('/') or tok.startsWith('.') or isAbsolute(tok) or tok.endsWith('.rip') or tok.endsWith('.ts')
@@ -250,7 +250,7 @@ export computeSocketPrefix = (argv, resolveAppEntryFn, existsSyncFn, isAbsoluteF
   return override if override
   for i in [2...argv.length]
     tok = argv[i]
-    continue if tok.startsWith('-') or /^\d+$/.test(tok) or tok in ['http', 'https', 'stop', 'list']
+    continue if tok.startsWith('-') or /^\d+$/.test(tok) or tok in ['http', 'https']
     [pathPart, aliasesPart] = if tok.includes('@') then tok.split('@') else [tok, null]
     aliases = aliasesPart?.split(',').map((a) -> a.trim()).filter((a) -> a) or []
     looksLikePath = pathPart.includes('/') or pathPart.startsWith('.') or pathPart.endsWith('.rip') or pathPart.endsWith('.ts')

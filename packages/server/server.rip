@@ -26,7 +26,7 @@ import { handleWorkerControl, handleWatchControl, handleRegistryControl, handleR
 import { getLanIP as controlGetLanIP, startMdnsAdvertisement as controlStartMdnsAdvertisement, stopMdnsAdvertisements as controlStopMdnsAdvertisements } from './control/mdns.rip'
 import { registerWatchGroup, handleWatchGroup, broadcastWatchChange, registerAppWatchDirs, shouldTriggerCodeReload } from './control/watchers.rip'
 import { computeHideUrls, logStartupSummary, createCleanup, installShutdownHandlers } from './control/lifecycle.rip'
-import { computeSocketPrefix as cliComputeSocketPrefix, runVersionOutput, runHelpOutput, stopServer, runListSubcommand, runReloadSubcommand, resolveAppEntry, parseFlags, coerceInt } from './control/cli.rip'
+import { runVersionOutput, runHelpOutput, stopServer, runReloadSubcommand, resolveAppEntry, parseFlags, coerceInt } from './control/cli.rip'
 import { runSetupMode, runWorkerMode } from './control/worker.rip'
 import { spawnTrackedWorker, postWorkerQuit, waitForWorkerReady } from './control/workers.rip'
 import { createChallengeStore, handleChallengeRequest } from './acme/store.rip'
@@ -1476,18 +1476,6 @@ main = ->
   if runHelpOutput(process.argv)
     return
 
-  # Subcommands: stop/list (bare-word legacy)
-  if 'stop' in process.argv
-    prefix = cliComputeSocketPrefix(process.argv, resolveAppEntry, existsSync, isAbsolute, resolve, (-> process.cwd()))
-    stopServer(prefix, getPidFilePath, existsSync, readFileSync, process.kill.bind(process), Bun.spawnSync, import.meta.path)
-    return
-
-  if 'list' in process.argv
-    prefix = cliComputeSocketPrefix(process.argv, resolveAppEntry, existsSync, isAbsolute, resolve, (-> process.cwd()))
-    if runListSubcommand(process.argv, prefix, getControlSocketPath, fetch, exit)
-      return
-
-  # Normal startup
   flags = parseFlags(process.argv, defaultEntry)
   applyFlagSideEffects(flags)
   if flags.checkConfig
