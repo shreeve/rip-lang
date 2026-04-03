@@ -228,8 +228,7 @@ export checkTargetHealth = (pool, target, fetchFn = null) ->
   runFetch = fetchFn or pool.fetchFn or fetch
   url = target.url + target.health.path
   try
-    res = runFetch(url)
-    res = res! if res?.then
+    res = await runFetch(url)
     target.lastStatus = res.status
     updateTargetHealth(target, res.ok, pool)
     res.ok
