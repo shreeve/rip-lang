@@ -740,10 +740,9 @@ class Server
       details = if applied then null else (@configInfo?.lastErrorDetails or null)
       entry = createReloadHistoryEntry(attemptId, source, oldVersion, newVersion, result, reason, code, details)
       @appendReloadHistory(entry)
-      if loaded and not flags.quiet
+      if loaded and not flags.quiet and source isnt 'startup'
         label = if loaded.source.kind is 'edge' then 'Edgefile.rip' else 'config.rip'
         p "rip-server: loaded #{label} with #{loaded.summary.counts.apps} app(s), #{loaded.summary.counts.upstreams} upstream(s), #{loaded.summary.counts.routes} route(s)"
-        p "rip-server: note: #{@configInfo.note}" if @configInfo.note
       logEvent('config_loaded',
         id: attemptId
         source: source
@@ -1333,7 +1332,6 @@ class Server
     protocol = if @flags.httpsPort then 'https' else 'http'
     url = edgeBuildRipdevUrl(@flags.appName, protocol, port, formatPort)
     @urls.push(url)
-    p "rip-server: #{url}" unless @flags.quiet or @flags.hideUrls
 
   controlFetch: (req) ->
     url = new URL(req.url)

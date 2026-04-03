@@ -29,13 +29,13 @@ export buildTlsArray = (defaultMaterial, certMap) ->
     result.push({ serverName: fallbackName, cert: defaultMaterial.cert, key: defaultMaterial.key })
   result
 
-export printCertSummary = (certPem) ->
+export printCertSummary = (certPem, quiet = false) ->
   try
     x = new X509Certificate(certPem)
     subject = x.subject.split(/,/)[0]?.trim() or x.subject
     issuer = x.issuer.split(/,/)[0]?.trim() or x.issuer
     exp = new Date(x.validTo)
-    p "rip-server: tls cert #{subject} issued by #{issuer} expires #{exp.toISOString()}"
+    p "rip-server: tls cert #{subject} issued by #{issuer} expires #{exp.toISOString()}" unless quiet
 
 export loadTlsMaterial = (flags, serverDir, acmeLoadCertFn) ->
   # Explicit cert/key paths
