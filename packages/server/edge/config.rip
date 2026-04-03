@@ -10,7 +10,7 @@ import { existsSync, statSync } from 'node:fs'
 import { join, dirname, resolve, basename } from 'node:path'
 import { normalizeStreamUpstreams, normalizeStreams, parseHostPort } from '../streams/config.rip'
 
-SERVE_NAME = 'serve.rip'
+CONFIG_FILE = 'serve.rip'
 LEGACY_CONFIG_NAME = 'config.rip'
 
 isPlainObject = (value) ->
@@ -465,7 +465,7 @@ normalizeServersConfig = (config, baseDir) ->
   knownStreamUpstreams = new Set(Object.keys(streamUpstreams))
   streams = normalizeStreams(config.streams, knownStreamUpstreams, errors)
   streams = passthroughStreams.concat(streams)
-  throw validationError(SERVE_NAME, errors) if errors.length > 0
+  throw validationError(CONFIG_FILE, errors) if errors.length > 0
   { kind: 'edge', version: config.version or 1, edge, upstreams, apps, routes: [], sites, certs, streamUpstreams, streams }
 
 export createConfigError = (code, path, message, hint = null) ->
@@ -536,7 +536,7 @@ export loadConfig = (configPath) ->
 
 export loadEdgeConfig = (configPath) ->
   return null unless existsSync(configPath)
-  raw = moduleObject!(configPath, SERVE_NAME)
+  raw = moduleObject!(configPath, CONFIG_FILE)
   normalizeEdgeConfig(raw, dirname(configPath))
 
 export checkConfigFile = (configPath) ->
@@ -552,12 +552,12 @@ export findConfigFile = (appEntry) ->
 
 export findEdgeFile = (appEntry) ->
   dir = if existsSync(appEntry) and statSync(appEntry).isDirectory() then appEntry else dirname(appEntry)
-  servePath = join(dir, SERVE_NAME)
+  servePath = join(dir, CONFIG_FILE)
   return servePath if existsSync(servePath)
   null
 
 isEdgeConfigName = (name) ->
-  name is SERVE_NAME
+  name is CONFIG_FILE
 
 export resolveConfigSource = (appEntry, edgefilePath = null) ->
   if edgefilePath
