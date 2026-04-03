@@ -59,6 +59,13 @@ export resolveAppEntry = (appPathInput, defaultEntryPath = null) ->
   appName = basename(baseDir)
   { baseDir, entryPath, appName }
 
+export VALUE_FLAGS = new Set(%w[
+  -f --file --edgefile --cert --key --watch --env --https-port
+  --socket-prefix --acme-domain --realtime-path --publish-secret
+  --max-queue --queue-timeout-ms --connect-timeout-ms --read-timeout-ms
+  --rate-limit --rate-limit-window -o --output
+])
+
 export parseFlags = (argv, defaultEntryPath = null) ->
   rawFlags = new Set()
   appPathInput = null
@@ -77,8 +84,17 @@ export parseFlags = (argv, defaultEntryPath = null) ->
     catch
       undefined
 
+  skipNext = false
   for i in [2...argv.length]
+    if skipNext
+      rawFlags.add(argv[i])
+      skipNext = false
+      continue
     tok = argv[i]
+    if VALUE_FLAGS.has(tok)
+      rawFlags.add(tok)
+      skipNext = true
+      continue
     unless appPathInput
       if tok.includes('@') and not tok.startsWith('-')
         [pathPart, aliasesPart] = tok.split('@')
@@ -226,7 +242,9 @@ export parseFlags = (argv, defaultEntryPath = null) ->
     watch: watch
     edgefilePath: getKV('--edgefile=') or getKV('--file=') or getKV('-f=')
     checkConfig: has('--check-config') or has('--check') or has('-c')
+    showInfo: has('--info') or has('-i')
     reloadConfig: has('--reload') or has('-r')
+    listApps: has('--list') or has('-l')
     stopServer: has('--stop') or has('-s')
     envOverride: envOverride
     debug: has('--debug')
@@ -291,10 +309,12 @@ export runHelpOutput = (argv) ->
     Options:
       -h, --help              Show this help
       -v, --version           Show version
-      -c, --check             Validate Edgefile.rip or config.rip and exit
-      -r, --reload            Reload config on a running server
-      -s, --stop              Stop a running server
-      -f, --file=<path>       Load Edgefile.rip from an explicit path
+      -c, --check             Validate config and exit
+      -f, --file <path>       Specify config file path
+      -i, --info              Show running server status
+      -l, --list              List registered hosts
+      -r, --reload            Reload config on running server
+      -s, --stop              Stop running server
       --watch=<glob>          Watch glob pattern (default: *.rip)
       --static                Disable hot reload and file watching
       --env=<mode>            Set environment (dev, production)
@@ -329,10 +349,12 @@ export runHelpOutput = (argv) ->
       rip server http          HTTP only (no TLS)
       rip server --static w:8  Production: no reload, 8 workers
       rip server -c            Validate config and exit
-      rip server -c -f=./Edgefile.rip
-      rip server -r            Reload running server config
-      rip server -s            Stop running server
-      rip server -f=./Edgefile.rip
+      rip server -c -f hosts.rip
+      rip server -i            Show server status
+      rip server -l            List registered hosts
+      rip server -r            Reload config
+      rip server -s            Stop server
+      rip server -f hosts.rip
 
     If no index.rip or index.ts is found, a built-in static file server
     activates with directory indexes, auto-detected MIME types, and
@@ -382,4 +404,44 @@ export runReloadSubcommand = (prefix, getControlSocketPathFn, fetchFn, exitFn) -
       exitFn(1)
   catch e
     console.error "rip-server: reload failed: #{e?.message or e}"
+    exitFn(1)
+
+export listApps = (prefix, getControlSocketPathFn, fetchFn, exitFn) ->
+  controlUnix = getControlSocketPathFn(prefix)
+  try
+    res = fetchFn!('http://localhost/registry', { unix: controlUnix, method: 'GET' })
+    throw new Error("list failed: #{res.status}") unless res.ok
+    j = res.json!
+    hosts = if Array.isArray(j?.hosts) then j.hosts else []
+    p if hosts.length then hosts.join('\n') else '(no hosts)'
+  catch e
+    console.error "rip-server: list failed: #{e?.message or e}"
+    exitFn(1)
+
+formatUptime = (seconds) ->
+  return "#{seconds}s" if seconds < 60
+  return "#{Math.floor(seconds / 60)}m" if seconds < 3600
+  hours = Math.floor(seconds / 3600)
+  mins = Math.floor((seconds %% 3600) / 60)
+  if mins > 0 then "#{hours}h #{mins}m" else "#{hours}h"
+
+export showInfo = (fetchFn, exitFn) ->
+  try
+    res = fetchFn!('https://localhost/diagnostics', { tls: { rejectUnauthorized: false } })
+    throw new Error("status #{res.status}") unless res.ok
+    d = res.json!
+    version = d.version?.server or 'unknown'
+    workers = d.gauges?.workersActive or 0
+    hosts = d.hosts?.length or 0
+    upstreamsTotal = d.upstreams?.length or 0
+    healthy = d.gauges?.upstreamTargetsHealthy or 0
+    unhealthy = d.gauges?.upstreamTargetsUnhealthy or 0
+    upstreamStatus = if unhealthy > 0 then "#{healthy} healthy, #{unhealthy} unhealthy" else "#{healthy} healthy"
+    upstreamPart = if upstreamsTotal > 0 then " | #{upstreamsTotal} upstream (#{upstreamStatus})" else ''
+    uptime = formatUptime(d.uptime or 0)
+    status = d.status or 'unknown'
+    p "rip server v#{version} | #{status} | #{workers} workers | #{hosts} hosts#{upstreamPart} | uptime #{uptime}"
+    exitFn(if status is 'healthy' then 0 else 1)
+  catch e
+    console.error "rip-server: info failed: #{e?.message or e}"
     exitFn(1)

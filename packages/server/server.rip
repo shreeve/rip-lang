@@ -26,7 +26,7 @@ import { handleWorkerControl, handleWatchControl, handleRegistryControl, handleR
 import { getLanIP as controlGetLanIP, startMdnsAdvertisement as controlStartMdnsAdvertisement, stopMdnsAdvertisements as controlStopMdnsAdvertisements } from './control/mdns.rip'
 import { registerWatchGroup, handleWatchGroup, broadcastWatchChange, registerAppWatchDirs, shouldTriggerCodeReload } from './control/watchers.rip'
 import { computeHideUrls, logStartupSummary, createCleanup, installShutdownHandlers } from './control/lifecycle.rip'
-import { runVersionOutput, runHelpOutput, stopServer, runReloadSubcommand, resolveAppEntry, parseFlags, coerceInt } from './control/cli.rip'
+import { runVersionOutput, runHelpOutput, stopServer, runReloadSubcommand, listApps, showInfo, resolveAppEntry, parseFlags, coerceInt } from './control/cli.rip'
 import { runSetupMode, runWorkerMode } from './control/worker.rip'
 import { spawnTrackedWorker, postWorkerQuit, waitForWorkerReady } from './control/workers.rip'
 import { createChallengeStore, handleChallengeRequest } from './acme/store.rip'
@@ -76,6 +76,7 @@ isDebug = -> _debugMode or process.env.RIP_DEBUG?
 applyFlagSideEffects = (flags) ->
   _envOverride = flags.envOverride if flags.envOverride
   _debugMode = flags.debug is true
+  process.env.RIP_DEBUG = '1' if _debugMode
 
 formatTimestamp = ->
   now = new Date()
@@ -1484,8 +1485,14 @@ main = ->
   if flags.checkConfig
     runCheckConfig!(flags)
     return
+  if flags.showInfo
+    showInfo!(fetch, exit)
+    return
   if flags.reloadConfig
     runReloadSubcommand!(flags.socketPrefix, getControlSocketPath, fetch, exit)
+    return
+  if flags.listApps
+    listApps!(flags.socketPrefix, getControlSocketPath, fetch, exit)
     return
   if flags.stopServer
     stopServer(flags.socketPrefix, getPidFilePath, existsSync, readFileSync, process.kill.bind(process), Bun.spawnSync, import.meta.path)
