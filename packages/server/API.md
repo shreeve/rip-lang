@@ -1,6 +1,16 @@
-# Validation Reference — `read()`
+# Server API Reference
 
-> Extracted from the main [@rip-lang/server README](../README.md).
+> Extracted from the main [@rip-lang/server README](./README.md).
+
+This document covers the framework-facing API for `@rip-lang/server`, including
+validation, routing, middleware, request/response helpers, and app entrypoints.
+
+The framework API is one way to create served content inside Rip Server. It is
+not the whole product identity: the same runtime also serves static content,
+proxied HTTP services, and TCP/TLS services. This reference covers the app and
+API surface within that broader serving model.
+
+## Validation with `read()`
 
 The `read()` function is a validation and parsing powerhouse that eliminates
 90% of API boilerplate.
@@ -265,8 +275,6 @@ get '/logout' ->
 
 The `session` import works anywhere via AsyncLocalStorage — no `@` needed, works in helpers and nested callbacks.
 
-**Security note:** Without `secret`, sessions use plain base64 (dev only). With `secret`, sessions are HMAC-SHA256 signed (tamper-proof). Always set `secret` in production.
-
 ### CORS with Preflight
 
 ```coffee
@@ -297,105 +305,61 @@ use (c, next) ->
 
 ### Request Lifecycle Filters
 
-Three filters run at different stages: `raw` → `before` → handler → `after`
+Three filters run at different stages: `raw` -> `before` -> handler -> `after`
 
 ```coffee
 import { raw, before, after, get } from '@rip-lang/server'
 
-# Runs first — modify raw request before body parsing
 raw (req) ->
   if req.headers.get('X-Raw-SQL') is 'true'
     req.headers.set 'content-type', 'text/plain'
 
 skipPaths = ['/favicon.ico', '/ping', '/health']
 
-# Runs before handler (after body parsing)
 before ->
   @start = Date.now()
   @silent = @req.path in skipPaths
   unless @req.header 'Authorization'
     return @json { error: 'Unauthorized' }, 401
 
-# Runs after handler
 after ->
   return if @silent
   console.log "#{@req.method} #{@req.path} - #{Date.now() - @start}ms"
 ```
 
-**Note:** `raw` receives the native `Request` object (before parsing). `before` and `after` use `@` to access the context.
-
-**How `@` works:** Handlers are called with `this` bound to the context, so `@foo` is `this.foo`. This gives you Sinatra-like magic access to:
-- `@req` — Request object
-- `@json()`, `@text()`, `@html()`, `@redirect()`, `@send()` — Response helpers
-- `@header()` — Response header modifier
-- `@anything` — Custom per-request state
-
-**Imports that work anywhere** (via AsyncLocalStorage or Proxy):
-- `read` — Validated request parameters
-- `session` — Session data (if middleware enabled)
-- `env` — `process.env` shortcut (e.g., `env.DATABASE_URL`)
-
 ## Context Object
 
-Use `@` to access the context directly — no parameter needed:
+Use `@` to access the context directly — no parameter needed.
 
 ### Response Helpers
 
 ```coffee
 get '/demo' ->
-  # JSON response
   @json { data: 'value' }
-  @json { data: 'value' }, 201  # With status
-  @json { data: 'value' }, 200, { 'X-Custom': 'header' }
-
-  # Text response
   @text 'Hello'
-  @text 'Created', 201
-
-  # HTML response
   @html '<h1>Hello</h1>'
-
-  # Redirect
   @redirect '/new-location'
-  @redirect '/new-location', 301  # Permanent
-
-  # Raw body
   @body data, 200, { 'Content-Type': 'application/octet-stream' }
-
-  # File serving (auto-detected MIME type via Bun.file)
-  @send 'public/style.css'                    # text/css
-  @send 'data/export.json', 'application/json' # explicit type
+  @send 'public/style.css'
 ```
 
 ### Request Helpers
 
 ```coffee
 get '/info' ->
-  # Path and query parameters — use read() for validation!
   id = read 'id', 'id!'
   q  = read 'q'
-
-  # Headers
   auth = @req.header 'Authorization'
-  allHeaders = @req.header()
-
-  # Body (async)
   json = @req.json!
-  text = @req.text!
-  form = @req.formData!
-  parsed = @req.parseBody!
-
-  # Raw request
-  @req.raw     # Native Request object
-  @req.method  # 'GET', 'POST', etc.
-  @req.url     # Full URL
-  @req.path    # Path only
+  @req.raw
+  @req.method
+  @req.url
+  @req.path
 ```
 
 ### Request-Scoped State
 
 ```coffee
-# Store data for later middleware/handlers
 use (c, next) ->
   @user = { id: 1, name: 'Alice' }
   @startTime = Date.now()
@@ -410,30 +374,22 @@ get '/profile' ->
 ### `@send(path, type?)`
 
 Serve a file with auto-detected MIME type. Uses `Bun.file()` internally for
-efficient streaming — the file is never buffered in memory.
+efficient streaming.
 
 ```coffee
-# Auto-detected content type (30+ extensions supported)
 get '/css/*' -> @send "css/#{@req.path.slice(5)}"
-
-# Explicit content type
 get '/files/*' -> @send "uploads/#{@req.path.slice(7)}", 'application/octet-stream'
-
-# SPA fallback — serve index.html for all unmatched routes
 notFound -> @send 'index.html', 'text/html; charset=UTF-8'
 ```
 
 ### `mimeType(path)`
 
-Exported utility that returns the MIME type for a file path:
-
 ```coffee
 import { mimeType } from '@rip-lang/server'
 
-mimeType 'style.css'    # 'text/css; charset=UTF-8'
-mimeType 'app.js'       # 'application/javascript'
-mimeType 'photo.png'    # 'image/png'
-mimeType 'data.xyz'     # 'application/octet-stream'
+mimeType 'style.css'
+mimeType 'app.js'
+mimeType 'photo.png'
 ```
 
 ## Error Handling
@@ -468,7 +424,7 @@ start port: 3000
 start port: 3000, host: '0.0.0.0'
 ```
 
-### Handler Only (for custom servers)
+### Handler Only
 
 ```coffee
 import { startHandler } from '@rip-lang/server'
@@ -488,9 +444,9 @@ export default App ->
 
 ## Context Utilities
 
-### ctx()
+### `ctx()`
 
-Get the current request context from anywhere (via AsyncLocalStorage):
+Get the current request context from anywhere:
 
 ```coffee
 import { ctx } from '@rip-lang/server'
@@ -498,74 +454,52 @@ import { ctx } from '@rip-lang/server'
 logRequest = ->
   c = ctx()
   console.log "#{c.req.method} #{c.req.path}" if c
-
-get '/demo' ->
-  logRequest()
-  { ok: true }
 ```
 
-### resetGlobals()
+### `resetGlobals()`
 
-Reset all global state (routes, middleware, filters). Useful for testing:
+Reset all global state (routes, middleware, filters). Useful for testing.
 
 ```coffee
-import { resetGlobals, get, start } from '@rip-lang/server'
+import { resetGlobals, get } from '@rip-lang/server'
 
 beforeEach ->
   resetGlobals()
-
-get '/test' -> { test: true }
 ```
 
 ## Utility Functions
 
-### isBlank
+### `isBlank`
 
 ```coffee
 import { isBlank } from '@rip-lang/server'
 
-isBlank null        # true
-isBlank undefined   # true
-isBlank ''          # true
-isBlank '   '       # true
-isBlank []          # true
-isBlank {}          # true
-isBlank false       # true
-isBlank 'hello'     # false
-isBlank [1, 2]      # false
+isBlank null
+isBlank ''
+isBlank {}
 ```
 
-### toName
-
-Advanced name formatting with intelligent capitalization:
+### `toName`
 
 ```coffee
 import { toName } from '@rip-lang/server'
 
-toName 'john doe'                    # 'John Doe'
-toName 'JANE SMITH'                  # 'Jane Smith'
-toName "o'brien"                     # "O'Brien"
-toName 'mcdonald'                    # 'McDonald'
-toName 'P. o. bOX #44', 'address'    # 'PO Box #44'
-toName '123 main st ne', 'address'   # '123 Main St NE'
+toName 'john doe'
+toName "o'brien"
 ```
 
-### toPhone
-
-US phone number formatting:
+### `toPhone`
 
 ```coffee
 import { toPhone } from '@rip-lang/server'
 
-toPhone '5551234567'        # '(555) 123-4567'
-toPhone '555-123-4567'      # '(555) 123-4567'
-toPhone '555.123.4567 x99'  # '(555) 123-4567, ext. 99'
-toPhone '+1 555 123 4567'   # '(555) 123-4567'
+toPhone '5551234567'
+toPhone '555.123.4567 x99'
 ```
 
 ## Migration from Hono
 
-### Before (Hono)
+### Before
 
 ```coffee
 import { Hono } from 'hono'
@@ -578,7 +512,7 @@ app.get '/users/:id', (c) ->
 export default app
 ```
 
-### After (@rip-lang/server)
+### After
 
 ```coffee
 import { get, read, startHandler } from '@rip-lang/server'
@@ -589,18 +523,6 @@ get '/users/:id' ->
 
 export default startHandler()
 ```
-
-### API Compatibility
-
-| Hono | @rip-lang/server |
-|------|------------------|
-| `app.get(path, handler)` | `get path, handler` |
-| `app.post(path, handler)` | `post path, handler` |
-| `app.use(middleware)` | `use middleware` |
-| `app.basePath(path)` | `prefix path, -> ...` |
-| `c.json(data)` | `@json(data)` or return `{ data }` |
-| `c.req.param('id')` | `@req.param('id')` or `read 'id'` |
-| `c.req.query('q')` | `@req.query('q')` or `read 'q'` |
 
 ## Real-World Example
 

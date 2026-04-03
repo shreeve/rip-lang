@@ -14,7 +14,7 @@
   },
   "scripts": {
     "build": "rip -c server.rip",
-    "test": "rip tests/read.test.rip"
+    "test": "rip tests/runner.rip"
   },
   "keywords": [
     "server",
@@ -57,10 +57,11 @@
     "bin/",
     "certs/",
     "control/",
-    "docs/",
     "edge/",
     "streams/",
     "tests/",
+    "API.md",
+    "CONFIG.md",
     "README.md"
   ]
 }

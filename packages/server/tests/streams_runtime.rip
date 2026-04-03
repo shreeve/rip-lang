@@ -1,4 +1,4 @@
-import { test, eq } from '../test.rip'
+import { test, eq } from './runner.rip'
 import { createStreamRuntime, describeStreamRuntime, buildStreamConfigInfo, streamUsesListenPort } from '../streams/runtime.rip'
 
 test "createStreamRuntime starts empty", ->

@@ -1,4 +1,4 @@
-import { test, eq, ok } from '../test.rip'
+import { test, eq, ok } from './runner.rip'
 import { compileRouteTable } from '../edge/router.rip'
 import { collectRouteRequirements, verifyRouteRuntime } from '../edge/verify.rip'
 

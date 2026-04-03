@@ -2,24 +2,35 @@
 
 # Rip Server - @rip-lang/server
 
-> One Bun-native runtime for your app and your edge: framework, workers, proxy, TLS passthrough, and composable host config in one server.
+> Rip Server serves content: static sites, Rip apps, proxied HTTP services, and TCP/TLS services from one Bun-native runtime.
+
+Here, `content` means anything you want to make reachable over the network. That
+may be a static site, a small Rip app, an HTTP service behind a proxy, a raw
+TCP/TLS service, or a containerized tool you want to publish.
 
 Rip Server replaces the usual app framework + process manager + reverse proxy
 stack with one runtime. Start with `rip server` for a single app. Add
 `serve.rip` when you want multi-host routing, shared apps, named proxy
-backends, reusable certs, or TLS passthrough.
+backends, reusable certs, or TCP/TLS passthrough. The job stays the same:
+take something you have and make it reachable safely, cleanly, and coherently.
 
 Written entirely in Rip. Runs on Bun.
 
-## Features
+## Serving Modes
 
-- Sinatra-style routing and `read()` validators
-- Managed worker pools with rolling restarts
-- HTTPS, ACME, diagnostics, and mDNS
+- Static file and website serving
+- Small app serving with Sinatra-style routing and `read()` validators
 - HTTP / WebSocket reverse proxy
 - Layer 4 TCP / TLS passthrough
+
+## Serving Guarantees
+
+- Managed worker pools with rolling restarts
+- HTTPS, ACME, certificate reuse, and SNI routing
+- Proxy health checks, retry behavior, and upstream timeouts
 - Shared-port HTTPS multiplexer
 - Atomic config reload with verification and rollback
+- Drain semantics, diagnostics, and control APIs
 - Composable `serve.rip` config with reusable groups and rules
 
 ## Quick Start

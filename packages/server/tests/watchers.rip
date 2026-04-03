@@ -1,4 +1,4 @@
-import { test, eq } from '../test.rip'
+import { test, eq } from './runner.rip'
 import { shouldTriggerCodeReload } from '../control/watchers.rip'
 
 test "shouldTriggerCodeReload matches extension watch specs", ->

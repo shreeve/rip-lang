@@ -1,4 +1,4 @@
-import { test, eq } from '../test.rip'
+import { test, eq } from './runner.rip'
 import { compileStreamTable, matchStreamRoute, describeStreamRoute } from '../streams/router.rip'
 
 test "compileStreamTable expands sni patterns", ->

@@ -1,8 +1,9 @@
 # ==============================================================================
-# test/runner.rip — server test harness
+# tests/runner.rip — server test harness
 # ==============================================================================
 #
-# Run: rip packages/server/test.rip
+# Run from package dir: bun run test
+# Run from repo root: ./bin/rip packages/server/tests/runner.rip
 #
 # Discovers and runs all *.rip files in tests/
 # ==============================================================================
@@ -40,8 +41,8 @@ export near = (actual, expected, tolerance = 0.001) ->
 
 # --- Runner ---
 
-testDir = join(dirname(import.meta.path), 'tests')
-files = readdirSync(testDir).filter((f) -> f.endsWith('.rip')).sort()
+testDir = dirname(import.meta.path)
+files = readdirSync(testDir).filter((f) -> f.endsWith('.rip') and f isnt 'runner.rip').sort()
 
 p "rip-server tests: #{files.length} files\n"
 

@@ -1,6 +1,6 @@
 # test-registry.rip — edge/registry, scheduler, and queue tests
 
-import { test, eq, ok } from '../test.rip'
+import { test, eq, ok } from './runner.rip'
 import { createAppRegistry, registerApp, resolveHost, getAppState, removeApp } from '../edge/registry.rip'
 import { isCurrentVersion, getNextAvailableSocket, releaseWorker, shouldRetryBodylessBusy, drainQueueOnce } from '../edge/queue.rip'
 

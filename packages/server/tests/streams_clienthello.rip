@@ -1,4 +1,4 @@
-import { test, eq, ok } from '../test.rip'
+import { test, eq, ok } from './runner.rip'
 import { parseSNI } from '../streams/tls_clienthello.rip'
 
 buildClientHello = (hostname = 'incus.example.com', opts = {}) ->

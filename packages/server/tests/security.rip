@@ -1,6 +1,6 @@
 # security.rip — rate limiter, request validation, and request ID tests
 
-import { test, eq, ok } from '../test.rip'
+import { test, eq, ok } from './runner.rip'
 import { createRateLimiter, rateLimitResponse } from '../edge/ratelimit.rip'
 import { validateRequest } from '../edge/security.rip'
 import { generateRequestId } from '../edge/forwarding.rip'

@@ -1,13 +1,24 @@
 # Serve Reference
 
 This document is the reference for `serve.rip` and the runtime behavior behind
-it. It combines:
+it.
+
+Rip Server serves content. Here, `content` means anything you want to make
+reachable over the network: a static site, a Rip app, a proxied HTTP service,
+or a TCP/TLS service.
+
+`serve.rip` is the operator model for publishing and routing that content. It
+combines:
 
 - config shape
 - config lifecycle
 - runtime contracts
 - scheduler policy
 - implementation constraints that matter to operators
+
+Those lifecycle and runtime constraints are part of serving, not side systems.
+TLS, proxy health, verification, rollback, drain, reload, and diagnostics are
+the guarantees that make serving safe and coherent.
 
 ## Canonical shape
 

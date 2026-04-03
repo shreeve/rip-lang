@@ -4,18 +4,32 @@ This guide is for AI assistants working inside `packages/server/`.
 
 ## Purpose
 
-`@rip-lang/server` is a Bun-native runtime with two operator stories:
+`@rip-lang/server` serves content. Here, `content` means anything an operator
+wants to make reachable over the network: a static site, a Rip app, a proxied
+HTTP service, or a TCP/TLS service.
+
+It has two operator stories:
 
 1. `rip server` for a single app
 2. `serve.rip` for the composable edge/app runtime
 
-It combines:
+Those stories map to four serving modes:
+
+- static serving
+- app serving
+- HTTP/HTTPS proxy serving
+- TCP/TLS passthrough serving
+
+The package combines:
 
 - app framework (`api.rip`, `middleware.rip`)
 - managed worker runtime (`server.rip`, `control/*`)
 - edge proxy/runtime (`edge/*`)
 - stream routing (`streams/*`)
 - auto-TLS (`acme/*`)
+
+TLS, proxy health, verification, rollback, drain, reload, and diagnostics are
+part of the core serving story. They are serving guarantees, not side features.
 
 ## Package layout
 
@@ -104,12 +118,12 @@ Host rules:
 
 ## Where logic belongs
 
-- request-path behavior -> `edge/*`
-- HTTP proxy backend behavior -> `edge/upstream.rip` / `edge/forwarding.rip`
+- request-path behavior for served HTTP content -> `edge/*`
+- HTTP proxy backend behavior and resilience -> `edge/upstream.rip` / `edge/forwarding.rip`
 - verification / reload orchestration -> `edge/runtime.rip`, `edge/verify.rip`
-- Layer 4 TCP/TLS routing -> `streams/*`
+- Layer 4 TCP/TLS routing and ingress selection -> `streams/*`
 - CLI / app-entry resolution -> `control/cli.rip`
-- orchestration / wiring -> `server.rip`
+- orchestration / wiring across serving modes -> `server.rip`
 
 Avoid adding generic utility files.
 
@@ -118,7 +132,7 @@ Avoid adding generic utility files.
 Primary package test command:
 
 ```bash
-./bin/rip packages/server/test.rip
+./bin/rip packages/server/tests/runner.rip
 ```
 
 Repo-wide regression suite:
@@ -140,7 +154,7 @@ When changing:
 
 - Keep docs and implementation aligned. Config surface changes must update:
   - `README.md`
-  - `docs/SERVE_REFERENCE.md`
+  - `CONFIG.md`
 - Prefer extractions by theme, not one-off helpers
 - Keep `server.rip` as orchestration, not a dumping ground
 - Use bare `try` when the catch body is truly a no-op

@@ -1,4 +1,4 @@
-import { test, eq } from '../test.rip'
+import { test, eq } from './runner.rip'
 import { buildStreamRuntime, resolveHandshakeTarget } from '../streams/index.rip'
 
 test "resolveHandshakeTarget falls through to http fallback when no route matches", ->
