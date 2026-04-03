@@ -46,7 +46,7 @@ export logStartupSummary = (server, flags, buildRipdevUrlFn, formatPortFn) ->
 
   hosts = []
   for route in streamRoutes
-    sni = route.sni?[0] or route.id
+    sni = route.sni or route.id
     hosts.push { name: sni, action: 'passthrough', tls: false }
   for desc in routeDescs
     parts = desc.split(' ')
