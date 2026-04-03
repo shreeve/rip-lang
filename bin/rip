@@ -163,7 +163,22 @@ async function main() {
           process.exit(r.status ?? 1);
         }
 
-        // 3. Local node_modules: node_modules/.bin/rip-<name>
+        // 3. Workspace package binary: packages/*/bin/rip-<name>
+        const pkgsDir = join(repoRoot, 'packages');
+        if (existsSync(pkgsDir)) {
+          try {
+            for (const d of readdirSync(pkgsDir, { withFileTypes: true })) {
+              if (!d.isDirectory()) continue;
+              const pkgBin = join(pkgsDir, d.name, 'bin', `rip-${name}`);
+              if (existsSync(pkgBin)) {
+                const r = spawnSync(pkgBin, subArgs, { stdio: 'inherit', env: process.env });
+                process.exit(r.status ?? 1);
+              }
+            }
+          } catch {}
+        }
+
+        // 4. Local node_modules: node_modules/.bin/rip-<name>
         const localBin = join(repoRoot, 'node_modules', '.bin', `rip-${name}`);
         if (existsSync(localBin)) {
           const r = spawnSync(localBin, subArgs, { stdio: 'inherit', env: process.env });
@@ -171,13 +186,13 @@ async function main() {
         }
       }
 
-      // 4. Global PATH: rip-<name>
+      // 5. Global PATH: rip-<name>
       const pathResult = spawnSync(`rip-${name}`, subArgs, { stdio: 'inherit', env: process.env });
       if (pathResult.error?.code !== 'ENOENT') {
         process.exit(pathResult.status ?? 1);
       }
 
-      // 5. Not found
+      // 6. Not found
       console.error(`rip: unknown command '${name}'\n\nRun 'rip --help' for usage.`);
       process.exit(1);
     }
