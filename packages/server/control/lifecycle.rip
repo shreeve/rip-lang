@@ -27,67 +27,68 @@ export computeHideUrls = (appEntry, joinFn, dirnameFn, existsSyncFn) ->
 export logStartupSummary = (server, flags, buildRipdevUrlFn, formatPortFn) ->
   return if flags.quiet
 
-  dim   = '\x1b[2m'
-  cyan  = '\x1b[36m'
-  green = '\x1b[32m'
-  bold  = '\x1b[1m'
-  reset = '\x1b[0m'
+  d = '\x1b[2m'
+  r = '\x1b[0m'
+  b = '\x1b[1m'
+  c = '\x1b[36m'
+  g = '\x1b[32m'
+  y = '\x1b[33m'
 
   httpOnly = flags.httpsPort is null
   protocol = if httpOnly then 'http' else 'https'
   port = flags.httpsPort or flags.httpPort or 80
   url = buildRipdevUrlFn(flags.appName, protocol, port, formatPortFn)
 
-  lines = []
-  lines.push ''
-  lines.push "  #{bold}rip server#{reset} #{dim}v#{server.serverVersion}#{reset}"
-  lines.push ''
-
   configInfo = server.edgeRuntime?.configInfo
-  if configInfo?.path
-    lines.push "  #{dim}config#{reset}    #{configInfo.path}"
-
-  lines.push "  #{dim}workers#{reset}   #{flags.workers}"
-
   sites = configInfo?.sites or {}
   certs = configInfo?.certs or {}
-  routes = configInfo?.activeRouteDescriptions or []
   streamRoutes = server.streamRuntime?.routes or []
 
-  if Object.keys(sites).length > 0 or streamRoutes.length > 0
-    lines.push ''
-    lines.push "  #{dim}hosts#{reset}"
-    for route in streamRoutes
-      sni = route.sni?[0] or route.id
-      target = route.upstream or 'unknown'
-      lines.push "    #{cyan}#{sni}#{reset}#{dim} passthrough#{reset}"
-    for host, siteConfig of sites
-      siteRoutes = siteConfig.routes or []
-      action = if siteRoutes[0]?.upstream
-        "proxy → #{siteRoutes[0].upstream}"
-      else if siteRoutes[0]?.app
-        "app"
-      else if siteRoutes[0]?.static
-        "static"
-      else
-        "routes: #{siteRoutes.length}"
-      cert = if certs[host] then " #{dim}•#{reset} #{dim}tls#{reset}" else ''
-      lines.push "    #{cyan}#{host}#{reset} #{dim}#{action}#{reset}#{cert}"
+  hosts = []
+  for route in streamRoutes
+    sni = route.sni?[0] or route.id
+    hosts.push { name: sni, action: 'passthrough', tls: false }
+  for host, siteConfig of sites
+    siteRoutes = siteConfig.routes or []
+    action = if siteRoutes[0]?.upstream then "proxy #{d}→#{r} #{siteRoutes[0].upstream}"
+    else if siteRoutes[0]?.app then 'app'
+    else if siteRoutes[0]?.static then 'static'
+    else "#{siteRoutes.length} routes"
+    hosts.push { name: host, action, tls: !!certs[host] }
 
-  upstreams = server.edgeRuntime?.upstreamPool
-  if upstreams
-    upstreamList = []
-    for [id, upstream] as upstreams.upstreams
+  upstreamList = []
+  pool = server.edgeRuntime?.upstreamPool
+  if pool
+    for [id, upstream] as pool.upstreams
       targets = upstream.targets.map((t) -> t.url).join(', ')
       upstreamList.push { id, targets }
-    if upstreamList.length > 0
-      lines.push ''
-      lines.push "  #{dim}upstreams#{reset}"
-      for u in upstreamList
-        lines.push "    #{u.id} #{dim}→#{reset} #{u.targets}"
+
+  maxHost = 0
+  maxHost = Math.max(maxHost, h.name.length) for h in hosts
+
+  lines = []
+  lines.push ''
+  lines.push "  #{b}rip server#{r} #{d}v#{server.serverVersion}#{r}"
+  lines.push ''
+
+  if configInfo?.path
+    lines.push "  #{d}config#{r}   #{configInfo.path}"
+  lines.push "  #{d}workers#{r}  #{flags.workers}"
+
+  if hosts.length > 0
+    lines.push ''
+    for h in hosts
+      pad = ' '.repeat(maxHost - h.name.length + 2)
+      tls = if h.tls then " #{g}✓#{r}#{d}tls#{r}" else ''
+      lines.push "  #{c}#{h.name}#{r}#{pad}#{d}#{h.action}#{r}#{tls}"
+
+  if upstreamList.length > 0
+    lines.push ''
+    for u in upstreamList
+      lines.push "  #{d}↑#{r} #{y}#{u.id}#{r} #{d}→#{r} #{u.targets}"
 
   lines.push ''
-  lines.push "  #{green}#{bold}→#{reset} #{green}#{url}#{reset}"
+  lines.push "  #{g}#{b}→#{r} #{g}#{url}#{r}"
   lines.push ''
 
   p lines.join('\n')
