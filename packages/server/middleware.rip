@@ -476,7 +476,7 @@ pre{margin:0;white-space:pre-wrap;word-break:break-word}
 #   dir:        string          — app directory on disk (default: '.')
 #   routes:     string          — page components directory, relative to dir (default: 'routes')
 #   bundle:     string[]|object — directories for bundle endpoint(s) (default: ['components'])
-#                                 Array: single bundle at {prefix}/bundle (legacy)
+#                                 Array: single bundle at {prefix}/bundle
 #                                 Object: named bundles — { ui: [...], app: [...] } → {prefix}/ui, {prefix}/app
 #   app:        string          — URL mount point (default: '')
 #   title:      string          — document title

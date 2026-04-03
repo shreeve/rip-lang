@@ -8,7 +8,7 @@ This guide is for AI assistants working inside `packages/server/`.
 
 1. **Single-app mode** — `rip server`
 2. **Managed multi-app mode** — `config.rip`
-3. **Edge mode** — `Edgefile.rip`
+3. **Edge mode** — `serve.rip`
 
 It combines:
 
@@ -31,7 +31,7 @@ It combines:
 
 Request-path behavior and edge runtime logic.
 
-- `config.rip` — `Edgefile.rip` and `config.rip` normalization/validation
+- `config.rip` — `serve.rip` loading and validation
 - `forwarding.rip` — HTTP/WS proxy helpers and worker forwarding
 - `metrics.rip` — diagnostics counters/gauges
 - `queue.rip` — worker queue helpers
@@ -75,29 +75,18 @@ Auto-TLS internals.
 
 - `client.rip`, `manager.rip`, `crypto.rip`, `store.rip`
 
-## Config modes
+## Config
 
-### `config.rip`
+### `serve.rip`
 
-Legacy managed multi-app config.
-
-- only `apps` is valid at the top level
-- registers additional managed Rip apps
-- no upstreams, no edge routes, no verification policy
-
-### `Edgefile.rip`
-
-Canonical edge config for the edge runtime. Supports v1 and v2 schemas.
-
-v1 top-level keys: `version`, `edge`, `upstreams`, `streamUpstreams`, `apps`,
-`routes`, `streams`, `sites`.
+The server config file. Auto-discovered in the working directory, or specified with `-f`.
 
 Top-level keys: `version`, `edge`, `hosts`, `upstreams`, `apps`,
 `streamUpstreams`, `streams`. `hosts` is the per-domain config model.
 Each server block owns `cert`, `key`, `root`, `routes`, and `timeouts`.
 Per-server `cert`/`key` enable per-SNI multi-cert TLS via Bun's TLS array.
 
-Use `Edgefile.rip` when you need:
+Use `serve.rip` when you need:
 
 - upstream proxy routes
 - websocket proxy routes
@@ -175,7 +164,7 @@ When changing:
 
 ## Conventions
 
-- Keep docs and implementation aligned. `Edgefile.rip` surface changes must update:
+- Keep docs and implementation aligned. `serve.rip` surface changes must update:
   - `README.md`
   - `docs/edge/EDGEFILE_CONTRACT.md`
   - `docs/edge/CONFIG_LIFECYCLE.md`
@@ -191,7 +180,7 @@ When changing:
 
 Be careful when changing anything that affects:
 
-- `--edgefile`
+- `-f`/`--file`
 - `--check-config`
 - `POST /reload` on the control socket
 - `/diagnostics`

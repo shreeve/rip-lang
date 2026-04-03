@@ -505,7 +505,7 @@ curl http://localhost/diagnostics
 
 The `config` block reports:
 
-- config kind (`edge`, `legacy`, or `none`)
+- config kind (`edge` or `none`)
 - active path
 - schema version
 - counts for apps, upstreams, routes, and sites
