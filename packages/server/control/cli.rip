@@ -48,7 +48,6 @@ export resolveAppEntry = (appPathInput, defaultEntryPath = null) ->
     else if existsSync(two)
       entryPath = two
     else
-      p "rip-server: no index.rip found, serving static files from #{abs}\n             Create an index.rip to customize, or run 'rip server --help' for options."
       entryPath = defaultEntryPath or abs
   else
     unless existsSync(abs)

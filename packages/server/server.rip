@@ -757,7 +757,7 @@ class Server
         upstreams: @configInfo.counts.upstreams
         routes: @configInfo.counts.routes
         sites: @configInfo.counts.sites
-      ) if loaded or source isnt 'startup'
+      ) if source isnt 'startup'
       {
         ok: applied
         id: attemptId

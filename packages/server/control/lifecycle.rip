@@ -42,7 +42,7 @@ export logStartupSummary = (server, flags, buildRipdevUrlFn, formatPortFn) ->
   configInfo = server.edgeRuntime?.configInfo
   certs = configInfo?.certs or {}
   routeDescs = configInfo?.activeRouteDescriptions or []
-  streamRoutes = server.streamRuntime?.routes or []
+  streamRoutes = server.streamRuntime?.routeTable?.routes or []
 
   hosts = []
   for route in streamRoutes
@@ -51,10 +51,11 @@ export logStartupSummary = (server, flags, buildRipdevUrlFn, formatPortFn) ->
   for desc in routeDescs
     parts = desc.split(' ')
     host = parts[0]
-    action = parts.slice(2).join(' ')
-      .replace('proxy:', "proxy #{d}→#{r} ")
-      .replace('app:', 'app')
-      .replace('static', 'static')
+    raw = parts.slice(2).join(' ')
+    action = if raw.startsWith('proxy:') then "proxy #{d}→#{r} #{raw.slice(6)}"
+    else if raw.startsWith('app:') then 'app'
+    else if raw.startsWith('static') then 'static'
+    else raw
     hosts.push { name: host, action, tls: !!certs[host] }
 
   upstreamList = []
