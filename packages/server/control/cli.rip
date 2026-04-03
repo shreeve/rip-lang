@@ -377,7 +377,7 @@ export stopServer = (prefix, getPidFilePathFn, existsSyncFn, readFileSyncFn, kil
   catch e
     console.error "rip-server: stop failed: #{e.message}"
 
-export runReloadSubcommand = (prefix, getControlSocketPathFn, fetchFn, exitFn) ->
+export reloadConfig = (prefix, getControlSocketPathFn, fetchFn, exitFn) ->
   controlUnix = getControlSocketPathFn(prefix)
   try
     res = fetchFn!('http://localhost/reload', { unix: controlUnix, method: 'POST' })

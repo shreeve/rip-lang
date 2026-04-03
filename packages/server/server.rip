@@ -26,7 +26,7 @@ import { handleWorkerControl, handleWatchControl, handleRegistryControl, handleR
 import { getLanIP as controlGetLanIP, startMdnsAdvertisement as controlStartMdnsAdvertisement, stopMdnsAdvertisements as controlStopMdnsAdvertisements } from './control/mdns.rip'
 import { registerWatchGroup, handleWatchGroup, broadcastWatchChange, registerAppWatchDirs, shouldTriggerCodeReload } from './control/watchers.rip'
 import { computeHideUrls, logStartupSummary, createCleanup, installShutdownHandlers } from './control/lifecycle.rip'
-import { runVersionOutput, runHelpOutput, stopServer, runReloadSubcommand, listApps, showInfo, resolveAppEntry, parseFlags, coerceInt } from './control/cli.rip'
+import { runVersionOutput, runHelpOutput, stopServer, reloadConfig, listApps, showInfo, resolveAppEntry, parseFlags, coerceInt } from './control/cli.rip'
 import { runSetupMode, runWorkerMode } from './control/worker.rip'
 import { spawnTrackedWorker, postWorkerQuit, waitForWorkerReady } from './control/workers.rip'
 import { createChallengeStore, handleChallengeRequest } from './acme/store.rip'
@@ -1489,7 +1489,7 @@ main = ->
     showInfo!(fetch, exit)
     return
   if flags.reloadConfig
-    runReloadSubcommand!(flags.socketPrefix, getControlSocketPath, fetch, exit)
+    reloadConfig!(flags.socketPrefix, getControlSocketPath, fetch, exit)
     return
   if flags.listApps
     listApps!(flags.socketPrefix, getControlSocketPath, fetch, exit)
