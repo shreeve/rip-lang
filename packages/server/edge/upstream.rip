@@ -233,7 +233,8 @@ export checkTargetHealth = (pool, target, fetchFn = null) ->
     target.lastStatus = res.status
     updateTargetHealth(target, res.ok, pool)
     res.ok
-  catch
+  catch e
+    console.error "[health] #{url} failed: #{e?.message or e}"
     target.lastStatus = null
     updateTargetHealth(target, false, pool)
     false
