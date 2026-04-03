@@ -123,8 +123,12 @@ export parseFlags = (argv, defaultEntryPath = null) ->
       appPathInput = cwd
 
   getKV = (prefix) ->
-    for f as rawFlags
-      return f.slice(prefix.length) if f.startsWith(prefix)
+    tokens = Array.from(rawFlags)
+    bare = prefix.slice(0, -1)
+    for i in [0...tokens.length]
+      return tokens[i].slice(prefix.length) if tokens[i].startsWith(prefix)
+      if tokens[i] is bare and tokens[i + 1] and not tokens[i + 1].startsWith('-')
+        return tokens[i + 1]
     undefined
 
   has = (name) -> rawFlags.has(name)
