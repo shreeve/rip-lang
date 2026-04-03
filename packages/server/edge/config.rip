@@ -1,9 +1,5 @@
 # ==============================================================================
-# edge/config.rip — serve.rip and config.rip loading/validation
-# ==============================================================================
-#
-# config.rip remains the legacy app-registry config.
-# serve.rip is the edge config surface for the server runtime.
+# edge/config.rip — serve.rip loading and validation
 # ==============================================================================
 
 import { existsSync, statSync } from 'node:fs'
@@ -11,8 +7,6 @@ import { join, dirname, resolve, basename } from 'node:path'
 import { normalizeStreamUpstreams, normalizeStreams, parseHostPort } from '../streams/config.rip'
 
 CONFIG_FILE = 'serve.rip'
-LEGACY_CONFIG_NAME = 'config.rip'
-
 isPlainObject = (value) ->
   value? and typeof value is 'object' and not Array.isArray(value)
 
@@ -477,29 +471,12 @@ export normalizeAppConfig = (appId, appConfig, baseDir) ->
   throw validationError("app #{appId}", errors) if errors.length > 0
   normalized
 
-export normalizeLegacyConfig = (config, baseDir) ->
-  errors = []
-  unless isPlainObject(config)
-    pushError(errors, 'E_CONFIG_TYPE', '$', 'config.rip must export an object', "Use `export default { apps: { ... } }`.")
-    throw validationError(LEGACY_CONFIG_NAME, errors)
-  for key of config
-    pushError(errors, 'E_LEGACY_KEY', key, "unknown top-level key #{key} in config.rip", 'Use only the `apps` key in config.rip, or migrate to serve.rip.') unless key is 'apps'
-  apps = {}
-  if config.apps?
-    unless isPlainObject(config.apps)
-      pushError(errors, 'E_APPS_TYPE', 'apps', 'apps must be an object keyed by app ID', "Use `apps: { main: { entry: './index.rip' } }`.")
-    else
-      for appId, appConfig of config.apps
-        apps[appId] = normalizeAppConfigInto(appId, appConfig, baseDir, "apps.#{appId}", errors)
-  throw validationError(LEGACY_CONFIG_NAME, errors) if errors.length > 0
-  { kind: 'legacy', version: null, edge: {}, upstreams: {}, apps, routes: [], sites: {} }
-
 export normalizeEdgeConfig = (config, baseDir) ->
   normalizeServersConfig(config, baseDir)
 
 export summarizeConfig = (configPath, normalized) ->
   path = resolve(configPath)
-  kind = normalized.kind or (if isEdgeConfigName(basename(path)) then 'edge' else 'legacy')
+  kind = normalized.kind or 'edge'
   {
     kind
     path
@@ -522,18 +499,6 @@ export summarizeConfig = (configPath, normalized) ->
       streams: true
   }
 
-export loadConfig = (configPath) ->
-  return null unless existsSync(configPath)
-  try
-    raw = moduleObject!(configPath, LEGACY_CONFIG_NAME)
-    normalizeLegacyConfig(raw, dirname(configPath))
-  catch e
-    if e.validationErrors
-      console.error formatConfigErrors(LEGACY_CONFIG_NAME, e.validationErrors)
-    else
-      console.error "rip-server: failed to load config.rip: #{e.message}"
-    null
-
 export loadEdgeConfig = (configPath) ->
   return null unless existsSync(configPath)
   raw = moduleObject!(configPath, CONFIG_FILE)
@@ -541,56 +506,24 @@ export loadEdgeConfig = (configPath) ->
 
 export checkConfigFile = (configPath) ->
   resolved = resolve(configPath)
-  kind = if isEdgeConfigName(basename(resolved)) then 'edge' else 'legacy'
-  normalized = if kind is 'edge' then loadEdgeConfig!(resolved) else normalizeLegacyConfig(moduleObject!(resolved, LEGACY_CONFIG_NAME), dirname(resolved))
-  { kind, normalized, summary: summarizeConfig(resolved, normalized) }
+  normalized = loadEdgeConfig!(resolved)
+  { kind: 'edge', normalized, summary: summarizeConfig(resolved, normalized) }
 
 export findConfigFile = (appEntry) ->
-  dir = if existsSync(appEntry) and statSync(appEntry).isDirectory() then appEntry else dirname(appEntry)
-  configPath = join(dir, LEGACY_CONFIG_NAME)
-  if existsSync(configPath) then configPath else null
-
-export findEdgeFile = (appEntry) ->
   dir = if existsSync(appEntry) and statSync(appEntry).isDirectory() then appEntry else dirname(appEntry)
   servePath = join(dir, CONFIG_FILE)
   return servePath if existsSync(servePath)
   null
 
-isEdgeConfigName = (name) ->
-  name is CONFIG_FILE
-
 export resolveConfigSource = (appEntry, edgefilePath = null) ->
   if edgefilePath
     resolved = if edgefilePath.startsWith('/') then edgefilePath else resolve(process.cwd(), edgefilePath)
     return { kind: 'edge', path: resolved }
-  if isEdgeConfigName(basename(appEntry))
+  if basename(appEntry) is CONFIG_FILE
     return { kind: 'edge', path: resolve(appEntry) }
-  if basename(appEntry) is LEGACY_CONFIG_NAME
-    return { kind: 'legacy', path: resolve(appEntry) }
-  edgePath = findEdgeFile(appEntry)
-  return { kind: 'edge', path: edgePath } if edgePath
-  legacyPath = findConfigFile(appEntry)
-  return { kind: 'legacy', path: legacyPath } if legacyPath
+  configPath = findConfigFile(appEntry)
+  return { kind: 'edge', path: configPath } if configPath
   null
-
-export applyConfig = (config, registry, registerAppFn, baseDir) ->
-  normalized = if config?.kind then config else normalizeLegacyConfig(config or {}, baseDir)
-  apps = normalized.apps or {}
-  registered = []
-  for appId, appConfig of apps
-    normalizedApp = normalizeAppConfigInto(appId, appConfig, baseDir, "apps.#{appId}", [])
-    registerAppFn(registry, appId,
-      entry: normalizedApp.entry
-      appBaseDir: if normalizedApp.entry then dirname(normalizedApp.entry) else baseDir
-      hosts: normalizedApp.hosts
-      workers: normalizedApp.workers
-      maxQueue: normalizedApp.maxQueue
-      queueTimeoutMs: normalizedApp.queueTimeoutMs
-      readTimeoutMs: normalizedApp.readTimeoutMs
-      env: normalizedApp.env
-    )
-    registered.push(normalizedApp)
-  registered
 
 export applyEdgeConfig = (config, registry, registerAppFn, baseDir) ->
   registered = []

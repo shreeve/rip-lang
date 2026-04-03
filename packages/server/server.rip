@@ -35,7 +35,7 @@ import { loadCert as acmeLoadCert, defaultCertDir } from './acme/store.rip'
 import { createMetrics } from './edge/metrics.rip'
 import { setEventJsonMode, logEvent } from './control/lifecycle.rip'
 import { createHub, generateClientId, addClient, removeClient, processResponse, handlePublish, getRealtimeStats } from './edge/realtime.rip'
-import { findConfigFile, findEdgeFile, resolveConfigSource, applyConfig, applyEdgeConfig, formatConfigErrors } from './edge/config.rip'
+import { findConfigFile, resolveConfigSource, applyEdgeConfig, formatConfigErrors } from './edge/config.rip'
 import { createEdgeRuntime, createReloadHistoryEntry, restoreRegistrySnapshot, configNote, toUpstreamWsUrl, loadRuntimeConfig, runCheckConfig } from './edge/runtime.rip'
 import { createRateLimiter, rateLimitResponse } from './edge/ratelimit.rip'
 import { validateRequest } from './edge/security.rip'
@@ -742,8 +742,7 @@ class Server
       entry = createReloadHistoryEntry(attemptId, source, oldVersion, newVersion, result, reason, code, details)
       @appendReloadHistory(entry)
       if loaded and not flags.quiet and source isnt 'startup'
-        label = if loaded.source.kind is 'edge' then 'serve.rip' else 'config.rip'
-        p "rip-server: loaded #{label} with #{loaded.summary.counts.apps} app(s), #{loaded.summary.counts.upstreams} upstream(s), #{loaded.summary.counts.routes} route(s)"
+        p "rip-server: loaded serve.rip with #{loaded.summary.counts.apps} app(s), #{loaded.summary.counts.upstreams} upstream(s), #{loaded.summary.counts.routes} route(s)"
       logEvent('config_loaded',
         id: attemptId
         source: source
@@ -781,7 +780,7 @@ class Server
       entry = createReloadHistoryEntry(attemptId, source, oldVersion, @configInfo?.version or null, 'rejected', e.message or String(e), 'reload_exception', null)
       @appendReloadHistory(entry)
       if e.validationErrors
-        label = if flags.edgefilePath or findEdgeFile(flags.appEntry) then 'serve.rip' else 'config.rip'
+        label = 'serve.rip'
         console.error formatConfigErrors(label, e.validationErrors)
       else
         console.error "rip-server: failed to load active config: #{e.message or e}"
@@ -829,10 +828,7 @@ class Server
 
     baseDir = dirname(loaded.source.path)
     try
-      registered = if loaded.source.kind is 'edge'
-        applyEdgeConfig(loaded.normalized, @appRegistry, registerApp, baseDir)
-      else
-        applyConfig(loaded.normalized, @appRegistry, registerApp, baseDir)
+      registered = applyEdgeConfig(loaded.normalized, @appRegistry, registerApp, baseDir)
       for app in registered
         @configuredAppIds.add(app.id) unless app.id is @defaultAppId
       oldRuntime = @activateEdgeRuntime(stagedRuntime)

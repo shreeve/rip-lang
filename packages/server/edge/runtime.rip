@@ -4,7 +4,7 @@
 
 import { createUpstreamPool } from './upstream.rip'
 import { compileRouteTable, describeRoute } from './router.rip'
-import { resolveConfigSource, loadConfig, loadEdgeConfig, summarizeConfig, formatConfigErrors, checkConfigFile } from './config.rip'
+import { resolveConfigSource, loadEdgeConfig, summarizeConfig, formatConfigErrors, checkConfigFile } from './config.rip'
 
 export createEdgeRuntime = (configInfo = null, upstreamPool = null, routeTable = null) ->
   upstreamPool = upstreamPool or createUpstreamPool()
@@ -64,7 +64,7 @@ export toUpstreamWsUrl = (baseUrl, pathName, search) ->
 export loadRuntimeConfig = (flags) ->
   source = resolveConfigSource(flags.appEntry, flags.edgefilePath)
   return null unless source?.path
-  normalized = if source.kind is 'edge' then loadEdgeConfig!(source.path) else loadConfig!(source.path)
+  normalized = loadEdgeConfig!(source.path)
   return null unless normalized
   {
     source
@@ -73,7 +73,7 @@ export loadRuntimeConfig = (flags) ->
   }
 
 export printCheckConfigResult = (loaded) ->
-  label = if loaded.source.kind is 'edge' then 'serve.rip' else 'config.rip'
+  label = 'serve.rip'
   p "rip-server: #{label} OK"
   p "  path: #{loaded.summary.path}"
   p "  apps: #{loaded.summary.counts.apps}  upstreams: #{loaded.summary.counts.upstreams}  routes: #{loaded.summary.counts.routes}  sites: #{loaded.summary.counts.sites}"
@@ -91,7 +91,7 @@ export runCheckConfig = (flags) ->
     printCheckConfigResult({ source, normalized: checked.normalized, summary: checked.summary })
   catch e
     if e.validationErrors
-      label = if source.kind is 'edge' then 'serve.rip' else 'config.rip'
+      label = 'serve.rip'
       console.error formatConfigErrors(label, e.validationErrors)
     else
       console.error "rip-server: config check failed: #{e.message or e}"

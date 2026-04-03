@@ -1,5 +1,5 @@
 import { test, eq, ok } from '../test.rip'
-import { normalizeEdgeConfig, normalizeLegacyConfig, summarizeConfig, formatConfigErrors } from '../edge/config.rip'
+import { normalizeEdgeConfig, summarizeConfig, formatConfigErrors } from '../edge/config.rip'
 
 getErrors = (fn) ->
   try
@@ -154,12 +154,3 @@ test "summarizeConfig reports canonical counts", ->
   eq summary.counts.apps, 1
   eq summary.counts.sites, 1
 
-test "normalizeLegacyConfig validates legacy apps object", ->
-  normalized = normalizeLegacyConfig(
-    apps:
-      web:
-        entry: './index.rip'
-        hosts: ['example.com']
-  , '/srv')
-  eq normalized.kind, 'legacy'
-  eq Object.keys(normalized.apps).length, 1
