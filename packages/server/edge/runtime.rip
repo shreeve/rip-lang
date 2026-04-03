@@ -4,7 +4,7 @@
 
 import { createUpstreamPool } from './upstream.rip'
 import { compileRouteTable, describeRoute } from './router.rip'
-import { resolveConfigSource, loadEdgeConfig, summarizeConfig, formatConfigErrors, checkConfigFile } from './config.rip'
+import { resolveConfigSource, loadConfig, summarizeConfig, formatConfigErrors, checkConfigFile } from './config.rip'
 
 export createEdgeRuntime = (configInfo = null, upstreamPool = null, routeTable = null) ->
   upstreamPool = upstreamPool or createUpstreamPool()
@@ -62,9 +62,9 @@ export toUpstreamWsUrl = (baseUrl, pathName, search) ->
   "#{protocol}//#{origin.host}#{pathName}#{search}"
 
 export loadRuntimeConfig = (flags) ->
-  source = resolveConfigSource(flags.appEntry, flags.edgefilePath)
+  source = resolveConfigSource(flags.appEntry, flags.configPath)
   return null unless source?.path
-  normalized = loadEdgeConfig!(source.path)
+  normalized = loadConfig!(source.path)
   return null unless normalized
   {
     source
@@ -82,7 +82,7 @@ export printCheckConfigResult = (loaded) ->
   p "  note: #{note}" if note
 
 export runCheckConfig = (flags) ->
-  source = resolveConfigSource(flags.appEntry, flags.edgefilePath)
+  source = resolveConfigSource(flags.appEntry, flags.configPath)
   unless source?.path
     console.error 'rip-server: no serve.rip or config.rip found to validate'
     exit 1

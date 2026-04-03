@@ -499,14 +499,14 @@ export summarizeConfig = (configPath, normalized) ->
       streams: true
   }
 
-export loadEdgeConfig = (configPath) ->
+export loadConfig = (configPath) ->
   return null unless existsSync(configPath)
   raw = moduleObject!(configPath, CONFIG_FILE)
   normalizeEdgeConfig(raw, dirname(configPath))
 
 export checkConfigFile = (configPath) ->
   resolved = resolve(configPath)
-  normalized = loadEdgeConfig!(resolved)
+  normalized = loadConfig!(resolved)
   { kind: 'edge', normalized, summary: summarizeConfig(resolved, normalized) }
 
 export findConfigFile = (appEntry) ->
@@ -515,9 +515,9 @@ export findConfigFile = (appEntry) ->
   return servePath if existsSync(servePath)
   null
 
-export resolveConfigSource = (appEntry, edgefilePath = null) ->
-  if edgefilePath
-    resolved = if edgefilePath.startsWith('/') then edgefilePath else resolve(process.cwd(), edgefilePath)
+export resolveConfigSource = (appEntry, configPath = null) ->
+  if configPath
+    resolved = if configPath.startsWith('/') then configPath else resolve(process.cwd(), configPath)
     return { kind: 'edge', path: resolved }
   if basename(appEntry) is CONFIG_FILE
     return { kind: 'edge', path: resolve(appEntry) }

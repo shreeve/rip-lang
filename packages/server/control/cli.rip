@@ -240,7 +240,7 @@ export parseFlags = (argv, defaultEntryPath = null) ->
     rateLimit: coerceInt(getKV('--rate-limit='), 0)
     rateLimitWindow: coerceInt(getKV('--rate-limit-window='), 60000)
     watch: watch
-    edgefilePath: getKV('--edgefile=') or getKV('--file=') or getKV('-f=')
+    configPath: getKV('--file=') or getKV('-f=') or getKV('--edgefile=')
     checkConfig: has('--check-config') or has('--check') or has('-c')
     showInfo: has('--info') or has('-i')
     reloadConfig: has('--reload') or has('-r')
