@@ -943,14 +943,18 @@ class Server
 
   proxyRouteToUpstream: (req, route, requestId, clientIp, runtime) ->
     upstream = getUpstream(runtime.upstreamPool, route.upstream)
-    return serviceUnavailableResponse() unless upstream
+    unless upstream
+      console.error "[proxy] no upstream '#{route.upstream}'" if isDebug()
+      return serviceUnavailableResponse()
 
     attempt = 1
     start = performance.now()
 
     while attempt <= upstream.retry.attempts
       target = selectTarget(upstream, runtime.upstreamPool.nowFn)
-      return serviceUnavailableResponse() unless target
+      unless target
+        console.error "[proxy] no healthy target for '#{route.upstream}'" if isDebug()
+        return serviceUnavailableResponse()
 
       markTargetBusy(target)
       workerSeconds = 0
@@ -966,8 +970,9 @@ class Server
         )
         workerSeconds = (performance.now() - t0) / 1000
         success = res.status < 500
+        console.error "[proxy] #{route.upstream} -> #{target.url} status=#{res.status} attempt=#{attempt}" if isDebug()
       catch err
-        console.error "[server] proxyRouteToUpstream error:", err.message or err if isDebug()
+        console.error "[proxy] #{route.upstream} error: #{err.message or err}" if isDebug()
         res = serviceUnavailableResponse()
       finally
         releaseTarget(target, workerSeconds * 1000, success, runtime.upstreamPool)
