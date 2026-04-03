@@ -34,6 +34,9 @@ export startMdnsAdvertisement = (host, mdnsProcesses, getLanIP, flags, formatPor
   serviceName = host.replace('.local', '')
 
   try
+    which = Bun.spawnSync(['which', 'dns-sd'], { stdout: 'ignore', stderr: 'ignore' })
+    return unless which.exitCode is 0
+
     proc = Bun.spawn [
       'dns-sd', '-P'
       serviceName
