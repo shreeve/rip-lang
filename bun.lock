@@ -10,7 +10,7 @@
     },
     "packages/all": {
       "name": "@rip-lang/all",
-      "version": "3.13.156",
+      "version": "3.13.157",
       "dependencies": {
         "@rip-lang/csv": ">=1.3.108",
         "@rip-lang/db": ">=1.3.118",
@@ -18,12 +18,12 @@
         "@rip-lang/print": ">=1.1.113",
         "@rip-lang/schema": ">=0.3.109",
         "@rip-lang/script": ">=0.1.5",
-        "@rip-lang/server": ">=1.3.125",
+        "@rip-lang/server": ">=1.3.126",
         "@rip-lang/stamp": ">=0.1.29",
         "@rip-lang/swarm": ">=1.2.119",
         "@rip-lang/ui": ">=0.4.10",
         "@rip-lang/x12": ">=0.2.109",
-        "rip-lang": ">=3.13.130",
+        "rip-lang": ">=3.13.131",
       },
     },
     "packages/csv": {
@@ -81,12 +81,12 @@
     },
     "packages/server": {
       "name": "@rip-lang/server",
-      "version": "1.3.125",
+      "version": "1.3.126",
       "bin": {
         "rip-server": "./bin/rip-server",
       },
       "dependencies": {
-        "rip-lang": ">=3.13.130",
+        "rip-lang": ">=3.13.131",
       },
     },
     "packages/stamp": {
@@ -249,7 +249,7 @@
 
     "rip": ["rip@workspace:packages/vscode"],
 
-    "rip-lang": ["rip-lang@3.13.130", "", { "bin": { "rip": "bin/rip" } }, "sha512-Uj2pDyWSgMxRcHte3T+K4cOO3YmBOnfXRpRB3e8A0sHCuDY4gEfH0S9wOw+fWL8JANniFRhr096LU6Zffnu0QQ=="],
+    "rip-lang": ["rip-lang@3.13.131", "", { "bin": { "rip": "bin/rip" } }, "sha512-YV3J66K8axT80Vq3YuxR1X5mlhfJ55i+v61d2PTSqrf0L4gs8OYPHGnnnww9xaLCm2Qgt3bQaEyOCkUZC7lwIQ=="],
 
     "semver": ["semver@7.7.4", "", { "bin": { "semver": "bin/semver.js" } }, "sha512-vFKC2IEtQnVhpT78h1Yp8wzwrf8CM+MzKMHGJZfBtzhZNycRFnXsHk6E5TxIkkMsgNS7mdX3AGB7x2QM2di4lA=="],
 
