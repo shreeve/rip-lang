@@ -325,8 +325,8 @@ export runHelpOutput = (argv) ->
       http                    HTTP only (no TLS)
       https                   HTTPS with trusted *.ripdev.io cert (default)
       <port>                  Listen on specific port
-      --cert=<path>           TLS certificate file (overrides shipped cert)
-      --key=<path>            TLS key file (overrides shipped cert)
+      --cert <path>           TLS certificate file (overrides shipped cert)
+      --key <path>            TLS key file (overrides shipped cert)
       --hsts                  Enable HSTS header
       --no-redirect-http      Don't redirect HTTP to HTTPS
 
@@ -376,20 +376,6 @@ export stopServer = (prefix, getPidFilePathFn, existsSyncFn, readFileSyncFn, kil
       spawnSyncFn(['pkill', '-f', importMetaPath])
   catch e
     console.error "rip-server: stop failed: #{e.message}"
-
-export runListSubcommand = (argv, prefix, getControlSocketPathFn, fetchFn, exitFn) ->
-  return false unless 'list' in argv
-  controlUnix = getControlSocketPathFn(prefix)
-  try
-    res = fetchFn!('http://localhost/registry', { unix: controlUnix, method: 'GET' })
-    throw new Error("list failed: #{res.status}") unless res.ok
-    j = res.json!
-    hosts = if Array.isArray(j?.hosts) then j.hosts else []
-    p if hosts.length then hosts.join('\n') else '(no hosts)'
-  catch e
-    console.error "list command failed: #{e?.message or e}"
-    exitFn(1)
-  true
 
 export runReloadSubcommand = (prefix, getControlSocketPathFn, fetchFn, exitFn) ->
   controlUnix = getControlSocketPathFn(prefix)
