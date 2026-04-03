@@ -130,7 +130,7 @@ test "normalizeEdgeConfig rejects unknown stream upstream refs", ->
   ok errors.some((err) -> err.code is 'E_STREAM_UPSTREAM_REF')
 
 test "formatConfigErrors includes code path and hint", ->
-  output = formatConfigErrors('Edgefile.rip', [
+  output = formatConfigErrors('serve.rip', [
     code: 'E_ROUTE_ACTION'
     path: 'routes[0]'
     message: 'route must define exactly one action'
@@ -141,7 +141,7 @@ test "formatConfigErrors includes code path and hint", ->
   ok output.includes('Hint:')
 
 test "summarizeConfig reports canonical counts", ->
-  summary = summarizeConfig('/srv/Edgefile.rip',
+  summary = summarizeConfig('/srv/serve.rip',
     kind: 'edge'
     version: 1
     edge: {}

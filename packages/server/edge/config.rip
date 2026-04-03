@@ -1,9 +1,9 @@
 # ==============================================================================
-# edge/config.rip — legacy config.rip and Edgefile.rip loading/validation
+# edge/config.rip — serve.rip and config.rip loading/validation
 # ==============================================================================
 #
 # config.rip remains the legacy app-registry config.
-# Edgefile.rip is the stricter edge config surface for the pure Bun edge work.
+# serve.rip is the edge config surface for the server runtime.
 # ==============================================================================
 
 import { existsSync, statSync } from 'node:fs'
@@ -11,7 +11,6 @@ import { join, dirname, resolve, basename } from 'node:path'
 import { normalizeStreamUpstreams, normalizeStreams, parseHostPort } from '../streams/config.rip'
 
 SERVE_NAME = 'serve.rip'
-EDGEFILE_NAME = 'Edgefile.rip'
 LEGACY_CONFIG_NAME = 'config.rip'
 
 isPlainObject = (value) ->
@@ -466,7 +465,7 @@ normalizeServersConfig = (config, baseDir) ->
   knownStreamUpstreams = new Set(Object.keys(streamUpstreams))
   streams = normalizeStreams(config.streams, knownStreamUpstreams, errors)
   streams = passthroughStreams.concat(streams)
-  throw validationError(EDGEFILE_NAME, errors) if errors.length > 0
+  throw validationError(SERVE_NAME, errors) if errors.length > 0
   { kind: 'edge', version: config.version or 1, edge, upstreams, apps, routes: [], sites, certs, streamUpstreams, streams }
 
 export createConfigError = (code, path, message, hint = null) ->
@@ -484,7 +483,7 @@ export normalizeLegacyConfig = (config, baseDir) ->
     pushError(errors, 'E_CONFIG_TYPE', '$', 'config.rip must export an object', "Use `export default { apps: { ... } }`.")
     throw validationError(LEGACY_CONFIG_NAME, errors)
   for key of config
-    pushError(errors, 'E_LEGACY_KEY', key, "unknown top-level key #{key} in config.rip", 'Use only the `apps` key in config.rip, or migrate to Edgefile.rip.') unless key is 'apps'
+    pushError(errors, 'E_LEGACY_KEY', key, "unknown top-level key #{key} in config.rip", 'Use only the `apps` key in config.rip, or migrate to serve.rip.') unless key is 'apps'
   apps = {}
   if config.apps?
     unless isPlainObject(config.apps)
@@ -537,7 +536,7 @@ export loadConfig = (configPath) ->
 
 export loadEdgeConfig = (configPath) ->
   return null unless existsSync(configPath)
-  raw = moduleObject!(configPath, EDGEFILE_NAME)
+  raw = moduleObject!(configPath, SERVE_NAME)
   normalizeEdgeConfig(raw, dirname(configPath))
 
 export checkConfigFile = (configPath) ->
@@ -555,12 +554,10 @@ export findEdgeFile = (appEntry) ->
   dir = if existsSync(appEntry) and statSync(appEntry).isDirectory() then appEntry else dirname(appEntry)
   servePath = join(dir, SERVE_NAME)
   return servePath if existsSync(servePath)
-  edgePath = join(dir, EDGEFILE_NAME)
-  return edgePath if existsSync(edgePath)
   null
 
 isEdgeConfigName = (name) ->
-  name is SERVE_NAME or name is EDGEFILE_NAME
+  name is SERVE_NAME
 
 export resolveConfigSource = (appEntry, edgefilePath = null) ->
   if edgefilePath

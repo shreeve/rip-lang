@@ -742,7 +742,7 @@ class Server
       entry = createReloadHistoryEntry(attemptId, source, oldVersion, newVersion, result, reason, code, details)
       @appendReloadHistory(entry)
       if loaded and not flags.quiet and source isnt 'startup'
-        label = if loaded.source.kind is 'edge' then 'Edgefile.rip' else 'config.rip'
+        label = if loaded.source.kind is 'edge' then 'serve.rip' else 'config.rip'
         p "rip-server: loaded #{label} with #{loaded.summary.counts.apps} app(s), #{loaded.summary.counts.upstreams} upstream(s), #{loaded.summary.counts.routes} route(s)"
       logEvent('config_loaded',
         id: attemptId
@@ -781,7 +781,7 @@ class Server
       entry = createReloadHistoryEntry(attemptId, source, oldVersion, @configInfo?.version or null, 'rejected', e.message or String(e), 'reload_exception', null)
       @appendReloadHistory(entry)
       if e.validationErrors
-        label = if flags.edgefilePath or findEdgeFile(flags.appEntry) then 'Edgefile.rip' else 'config.rip'
+        label = if flags.edgefilePath or findEdgeFile(flags.appEntry) then 'serve.rip' else 'config.rip'
         console.error formatConfigErrors(label, e.validationErrors)
       else
         console.error "rip-server: failed to load active config: #{e.message or e}"

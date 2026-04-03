@@ -3,10 +3,10 @@ import { coerceInt, computeSocketPrefix, parseFlags } from '../control/cli.rip'
 import { createEdgeRuntime, createReloadHistoryEntry } from '../edge/runtime.rip'
 
 test "control cli helpers load and parse basic flags", ->
-  flags = parseFlags(['bun', 'server', '--https-port=9445', '--edgefile=./Edgefile.rip', 'packages/server/default.rip'])
+  flags = parseFlags(['bun', 'server', '--https-port=9445', '--file=./serve.rip', 'packages/server/default.rip'])
   eq coerceInt('42', 0), 42
   eq flags.httpsPort, 9445
-  ok flags.edgefilePath.endsWith('Edgefile.rip')
+  ok flags.edgefilePath.endsWith('serve.rip')
 
 test "control cli uses bare app token as true app name override", ->
   flags = parseFlags(['bun', 'server', 'ola'])
