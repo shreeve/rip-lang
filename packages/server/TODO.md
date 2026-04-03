@@ -50,7 +50,7 @@ already exists in `default.rip` (`renderIndex`). Two implementation paths:
 For public browse, the edge handler is sufficient. For authenticated browse,
 use a managed app with `before ->` middleware.
 
-## Per-route middleware in Edgefile
+## Per-route middleware in serve.rip
 
 Allow inline middleware configuration per host or per route:
 

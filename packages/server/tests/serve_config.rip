@@ -1,0 +1,216 @@
+import { test, eq, ok } from '../test.rip'
+import { normalizeEdgeConfig, summarizeConfig, formatConfigErrors } from '../edge/config.rip'
+
+getErrors = (fn) ->
+  try
+    fn()
+    []
+  catch e
+    e.validationErrors or []
+
+test "normalizeEdgeConfig accepts composable groups rules and certs", ->
+  normalized = normalizeEdgeConfig(
+    certs:
+      trusthealth: '/ssl/trusthealth.com'
+    rules:
+      web: [
+        { path: '/*', app: 'web' }
+      ]
+    groups:
+      publicWeb: ['example.com', 'www.example.com']
+    apps:
+      web:
+        entry: './web/index.rip'
+    hosts:
+      publicWeb:
+        hosts: 'publicWeb'
+        cert: 'trusthealth'
+        rules: 'web'
+  , '/srv')
+  eq normalized.kind, 'edge'
+  eq Object.keys(normalized.sites).length, 2
+  eq normalized.sites['example.com'].routes[0].app, 'web'
+  eq normalized.sites['www.example.com'].routes[0].app, 'web'
+  ok normalized.resolvedCerts['example.com']
+  ok normalized.resolvedCerts['www.example.com']
+
+test "normalizeEdgeConfig accepts map-literal style grouped host keys", ->
+  normalized = normalizeEdgeConfig(
+    certs:
+      shared: '/ssl/shared'
+    rules:
+      web: [
+        { path: '/*', app: 'web' }
+      ]
+    apps:
+      web:
+        entry: './web/index.rip'
+    hosts: *{
+      ['example.com', 'foo.bar.com', 'larry.me.org']:
+        cert: 'shared'
+        rules: 'web'
+    }
+  , '/srv')
+  eq Object.keys(normalized.sites).length, 3
+  eq normalized.sites['foo.bar.com'].routes[0].app, 'web'
+  ok normalized.resolvedCerts['larry.me.org']
+
+test "normalizeEdgeConfig allows rule-set refs mixed with inline rules", ->
+  normalized = normalizeEdgeConfig(
+    rules:
+      web: [
+        { path: '/*', app: 'web' }
+      ]
+    proxies:
+      api:
+        hosts: ['http://127.0.0.1:4000']
+    apps:
+      web:
+        entry: './web/index.rip'
+    hosts:
+      'example.com':
+        rules: [
+          { path: '/api/*', proxy: 'api' }
+          'web'
+        ]
+  , '/srv')
+  eq normalized.sites['example.com'].routes.length, 2
+  eq normalized.sites['example.com'].routes[0].proxy, 'api'
+  eq normalized.sites['example.com'].routes[1].app, 'web'
+
+test "normalizeEdgeConfig preserves verify policy", ->
+  normalized = normalizeEdgeConfig(
+    edge:
+      verify:
+        requireHealthyProxies: false
+        requireReadyApps: true
+        includeUnroutedManagedApps: false
+        minHealthyTargetsPerProxy: 2
+    hosts:
+      '*.example.com':
+        root: '/mnt/site'
+  , '/srv')
+  eq normalized.edge.verify.requireHealthyProxies, false
+  eq normalized.edge.verify.includeUnroutedManagedApps, false
+  eq normalized.edge.verify.minHealthyTargetsPerProxy, 2
+
+test "normalizeEdgeConfig accepts TCP proxies and streams", ->
+  normalized = normalizeEdgeConfig(
+    proxies:
+      incus:
+        hosts: ['tcp://127.0.0.1:8443']
+    hosts:
+      '*.example.com':
+        root: '/mnt/site'
+    streams: [
+      { listen: 8443, sni: ['incus.example.com'], proxy: 'incus' }
+    ]
+  , '/srv')
+  ok normalized.streamUpstreams['incus']
+  eq normalized.streams.length, 1
+
+test "normalizeEdgeConfig rejects wildcard ACME domains", ->
+  errors = getErrors ->
+    normalizeEdgeConfig(
+      edge:
+        acme: true
+        acmeDomains: ['*.example.com']
+      hosts:
+        '*.example.com':
+          root: '/mnt/site'
+    , '/srv')
+  ok errors.some((err) -> err.code is 'E_ACME_WILDCARD')
+
+test "normalizeEdgeConfig rejects unknown rule-set references", ->
+  errors = getErrors ->
+    normalizeEdgeConfig(
+      hosts:
+        '*.example.com':
+          rules: 'missing'
+    , '/srv')
+  ok errors.some((err) -> err.code is 'E_RULE_UNKNOWN')
+
+test "normalizeEdgeConfig rejects inline app definitions on host blocks", ->
+  errors = getErrors ->
+    normalizeEdgeConfig(
+      hosts:
+        'api.example.com':
+          app:
+            entry: './api/index.rip'
+    , '/srv')
+  ok errors.some((err) -> err.code is 'E_SERVER_APP_INLINE')
+
+test "normalizeEdgeConfig rejects duplicate hosts after expansion", ->
+  errors = getErrors ->
+    normalizeEdgeConfig(
+      groups:
+        publicWeb: ['example.com']
+      hosts:
+        publicWeb:
+          hosts: 'publicWeb'
+          root: '/srv/site'
+        'example.com':
+          root: '/srv/other'
+    , '/srv')
+  ok errors.some((err) -> err.code is 'E_HOST_DUPLICATE')
+
+test "normalizeEdgeConfig infers HTTP and TCP proxy kinds from hosts", ->
+  normalized = normalizeEdgeConfig(
+    proxies:
+      api:
+        hosts: ['http://127.0.0.1:4000']
+        check:
+          path: '/health'
+      incus:
+        hosts: ['tcp://127.0.0.1:8443']
+    hosts:
+      'example.com':
+        rules: [{ path: '/api/*', proxy: 'api' }]
+      'incus.example.com':
+        proxy: 'incus'
+  , '/srv')
+  eq normalized.proxies.api.kind, 'http'
+  eq normalized.proxies.incus.kind, 'tcp'
+  eq normalized.streams[0].proxy, 'incus'
+
+test "normalizeEdgeConfig rejects mixed proxy host kinds", ->
+  errors = getErrors ->
+    normalizeEdgeConfig(
+      proxies:
+        bad:
+          hosts: ['http://127.0.0.1:4000', 'tcp://127.0.0.1:8443']
+      hosts:
+        'example.com':
+          root: '/srv/site'
+    , '/srv')
+  ok errors.some((err) -> err.code is 'E_PROXY_KIND_MIX')
+
+test "formatConfigErrors includes code path and hint", ->
+  output = formatConfigErrors('serve.rip', [
+    code: 'E_ROUTE_ACTION'
+    path: 'hosts.publicWeb.rules[0]'
+    message: 'route must define exactly one action'
+    hint: 'Choose one action field per route.'
+  ])
+  ok output.includes('[E_ROUTE_ACTION]')
+  ok output.includes('hosts.publicWeb.rules[0]')
+  ok output.includes('Hint:')
+
+test "summarizeConfig reports canonical counts", ->
+  summary = summarizeConfig('/srv/serve.rip',
+    kind: 'edge'
+    version: 1
+    edge: {}
+    proxies: { app: { id: 'app', kind: 'http', hosts: ['http://127.0.0.1:3000'] } }
+    apps: { web: { entry: '/srv/web/index.rip' } }
+    sites:
+      'example.com':
+        routes: [{ path: '/*', app: 'web' }]
+      'www.example.com':
+        routes: [{ path: '/*', app: 'web' }]
+    streams: []
+  )
+  eq summary.counts.proxies, 1
+  eq summary.counts.apps, 1
+  eq summary.counts.hosts, 2
+  eq summary.counts.routes, 2

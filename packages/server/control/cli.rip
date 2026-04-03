@@ -60,7 +60,7 @@ export resolveAppEntry = (appPathInput, defaultEntryPath = null) ->
   { baseDir, entryPath, appName }
 
 export VALUE_FLAGS = new Set(%w[
-  -f --file --edgefile --cert --key --watch --env --https-port
+  -f --file --cert --key --watch --env --https-port
   --socket-prefix --acme-domain --realtime-path --publish-secret
   --max-queue --queue-timeout-ms --connect-timeout-ms --read-timeout-ms
   --rate-limit --rate-limit-window -o --output
@@ -240,7 +240,7 @@ export parseFlags = (argv, defaultEntryPath = null) ->
     rateLimit: coerceInt(getKV('--rate-limit='), 0)
     rateLimitWindow: coerceInt(getKV('--rate-limit-window='), 60000)
     watch: watch
-    configPath: getKV('--file=') or getKV('-f=') or getKV('--edgefile=')
+    configPath: getKV('--file=') or getKV('-f=')
     checkConfig: has('--check-config') or has('--check') or has('-c')
     showInfo: has('--info') or has('-i')
     reloadConfig: has('--reload') or has('-r')
@@ -419,11 +419,11 @@ export showInfo = (fetchFn, exitFn) ->
     version = d.version?.server or 'unknown'
     workers = d.gauges?.workersActive or 0
     hosts = d.hosts?.length or 0
-    upstreamsTotal = d.upstreams?.length or 0
+    upstreamsTotal = d.proxies?.length or 0
     healthy = d.gauges?.upstreamTargetsHealthy or 0
     unhealthy = d.gauges?.upstreamTargetsUnhealthy or 0
     upstreamStatus = if unhealthy > 0 then "#{healthy} healthy, #{unhealthy} unhealthy" else "#{healthy} healthy"
-    upstreamPart = if upstreamsTotal > 0 then " | #{upstreamsTotal} upstream (#{upstreamStatus})" else ''
+    upstreamPart = if upstreamsTotal > 0 then " | #{upstreamsTotal} proxy (#{upstreamStatus})" else ''
     uptime = formatUptime(d.uptime or 0)
     status = d.status or 'unknown'
     p "rip server v#{version} | #{status} | #{workers} workers | #{hosts} hosts#{upstreamPart} | uptime #{uptime}"

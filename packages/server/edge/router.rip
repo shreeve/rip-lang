@@ -85,7 +85,7 @@ compileRoute = (route, order, inheritedHost = null) ->
     pathBase: pathBase(path)
     methods
     priority: route.priority or order
-    upstream: route.upstream or null
+    proxy: route.proxy or null
     app: route.app or null
     static:    route.static or null
     root:      route.root or null
@@ -128,7 +128,7 @@ export matchRoute = (table, hostname, pathname, method = 'GET') ->
 
 export describeRoute = (route) ->
   return null unless route
-  action = if route.upstream? then "proxy:#{route.upstream}"
+  action = if route.proxy? then "proxy:#{route.proxy}"
   else if route.app? then "app:#{route.app}"
   else if route.static? then "static"
   else if route.redirect? then "redirect"

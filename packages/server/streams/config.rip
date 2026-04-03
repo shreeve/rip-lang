@@ -93,28 +93,28 @@ normalizeStreamTimeouts = (value, path, errors) ->
     connectMs: normalizePositiveInt(value.connectMs, 5000, "#{path}.connectMs", errors, 'connectMs')
   }
 
-export normalizeStreams = (rawStreams, knownUpstreams, errors, path = 'streams') ->
+export normalizeStreams = (rawStreams, knownProxies, errors, path = 'streams') ->
   streams = []
   return streams unless rawStreams?
   unless Array.isArray(rawStreams)
-    pushError(errors, 'E_STREAMS_TYPE', path, 'streams must be an array', "Use `streams: [{ listen: 8443, sni: ['incus.example.com'], upstream: 'incus' }]`.")
+    pushError(errors, 'E_STREAMS_TYPE', path, 'streams must be an array', "Use `streams: [{ listen: 8443, sni: ['incus.example.com'], proxy: 'incus' }]`.")
     return streams
   for route, idx in rawStreams
     itemPath = "#{path}[#{idx}]"
     unless isPlainObject(route)
-      pushError(errors, 'E_STREAM_ROUTE_TYPE', itemPath, 'stream route must be an object', "Use `{ listen: 8443, sni: ['incus.example.com'], upstream: 'incus' }`.")
+      pushError(errors, 'E_STREAM_ROUTE_TYPE', itemPath, 'stream route must be an object', "Use `{ listen: 8443, sni: ['incus.example.com'], proxy: 'incus' }`.")
       continue
     listen = normalizePositiveInt(route.listen, 0, "#{itemPath}.listen", errors, 'listen')
     pushError(errors, 'E_STREAM_LISTEN_RANGE', "#{itemPath}.listen", 'listen port must be between 1 and 65535', 'Choose a valid TCP port.') unless listen > 0 and listen <= 65535
-    unless typeof route.upstream is 'string' and route.upstream
-      pushError(errors, 'E_STREAM_UPSTREAM_REF', "#{itemPath}.upstream", 'stream route must reference an upstream', "Use `upstream: 'incus'`.")
-    else unless knownUpstreams.has(route.upstream)
-      pushError(errors, 'E_STREAM_UPSTREAM_REF', "#{itemPath}.upstream", "unknown stream upstream #{route.upstream}", 'Define the upstream under `streamUpstreams` first.')
+    unless typeof route.proxy is 'string' and route.proxy
+      pushError(errors, 'E_STREAM_PROXY_REF', "#{itemPath}.proxy", 'stream route must reference a TCP proxy', "Use `proxy: 'incus'`.")
+    else unless knownProxies.has(route.proxy)
+      pushError(errors, 'E_STREAM_PROXY_REF', "#{itemPath}.proxy", "unknown TCP proxy #{route.proxy}", 'Define the proxy under `proxies` with host:port entries first.')
     streams.push
       id:       route.id or "stream-#{idx + 1}"
       order:    idx
       listen:   listen
       sni:      normalizeSniPatterns(route.sni, "#{itemPath}.sni", errors)
-      upstream: route.upstream or null
+      proxy:    route.proxy or null
       timeouts: normalizeStreamTimeouts(route.timeouts, "#{itemPath}.timeouts", errors)
   streams

@@ -20,7 +20,7 @@ concatBytes = (a, b) ->
 export resolveHandshakeTarget = (runtime, listenPort, sni, httpFallback = {}) ->
   route = matchStreamRoute(runtime.routeTable, listenPort, sni)
   if route
-    upstream = getStreamUpstream(runtime.upstreamPool, route.upstream)
+    upstream = getStreamUpstream(runtime.upstreamPool, route.proxy)
     unless upstream
       return {
         kind: 'reject'
@@ -52,8 +52,8 @@ export resolveHandshakeTarget = (runtime, listenPort, sni, httpFallback = {}) ->
 export buildStreamRuntime = (normalized) ->
   routeTable = compileStreamTable(normalized.streams or [])
   upstreamPool = createStreamUpstreamPool()
-  for upstreamId, upstreamConfig of (normalized.streamUpstreams or {})
-    addStreamUpstream(upstreamPool, upstreamId, upstreamConfig)
+  for proxyId, upstreamConfig of (normalized.streamUpstreams or {})
+    addStreamUpstream(upstreamPool, proxyId, upstreamConfig)
   configInfo = buildStreamConfigInfo(normalized)
   createStreamRuntime(configInfo, upstreamPool, routeTable)
 

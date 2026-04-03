@@ -7,7 +7,7 @@ test "resolveHandshakeTarget falls through to http fallback when no route matche
       incus:
         targets: [{ host: '127.0.0.1', port: 8443 }]
     streams: [
-      { id: 'incus', order: 0, listen: 443, sni: ['incus.example.com'], upstream: 'incus' }
+      { id: 'incus', order: 0, listen: 443, sni: ['incus.example.com'], proxy: 'incus' }
     ]
   )
   result = resolveHandshakeTarget(runtime, 443, 'app.example.com',
@@ -24,7 +24,7 @@ test "resolveHandshakeTarget prefers configured stream routes over fallback", ->
       incus:
         targets: [{ host: '127.0.0.1', port: 8443 }]
     streams: [
-      { id: 'incus', order: 0, listen: 443, sni: ['incus.example.com'], upstream: 'incus' }
+      { id: 'incus', order: 0, listen: 443, sni: ['incus.example.com'], proxy: 'incus' }
     ]
   )
   result = resolveHandshakeTarget(runtime, 443, 'incus.example.com',
@@ -41,7 +41,7 @@ test "resolveHandshakeTarget rejects when stream route matches but upstream is u
       incus:
         targets: []
     streams: [
-      { id: 'incus', order: 0, listen: 443, sni: ['incus.example.com'], upstream: 'incus' }
+      { id: 'incus', order: 0, listen: 443, sni: ['incus.example.com'], proxy: 'incus' }
     ]
   )
   result = resolveHandshakeTarget(runtime, 443, 'incus.example.com',

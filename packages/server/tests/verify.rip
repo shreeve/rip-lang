@@ -2,9 +2,9 @@ import { test, eq, ok } from '../test.rip'
 import { compileRouteTable } from '../edge/router.rip'
 import { collectRouteRequirements, verifyRouteRuntime } from '../edge/verify.rip'
 
-test "collectRouteRequirements gathers upstreams and managed apps", ->
+test "collectRouteRequirements gathers proxies and managed apps", ->
   table = compileRouteTable([
-    { path: '/api/*', upstream: 'api' }
+    { path: '/api/*', proxy: 'api' }
     { path: '/admin/*', app: 'admin' }
   ])
   appRegistry =
@@ -13,17 +13,17 @@ test "collectRouteRequirements gathers upstreams and managed apps", ->
       ['reports', { config: { entry: '/srv/reports/index.rip' } }]
     ])
   reqs = collectRouteRequirements(table, appRegistry, 'default')
-  eq reqs.upstreamIds, ['api']
+  eq reqs.proxyIds, ['api']
   ok reqs.appIds.includes('admin')
   ok reqs.appIds.includes('reports')
 
-test "verifyRouteRuntime returns upstream reason code", ->
+test "verifyRouteRuntime returns proxy reason code", ->
   runtime =
     upstreamPool:
       upstreams: new Map([
         ['api', { id: 'api', targets: [{ targetId: 'api:0' }, { targetId: 'api:1' }] }]
       ])
-    routeTable: compileRouteTable([{ path: '/api/*', upstream: 'api' }])
+    routeTable: compileRouteTable([{ path: '/api/*', proxy: 'api' }])
   appRegistry = { apps: new Map() }
   result = verifyRouteRuntime(
     runtime,
@@ -34,8 +34,8 @@ test "verifyRouteRuntime returns upstream reason code", ->
     ((registry, appId) -> registry.apps.get(appId))
   )
   eq result.ok, false
-  eq result.code, 'upstream_no_healthy_targets'
-  eq result.details.upstreamId, 'api'
+  eq result.code, 'proxy_no_healthy_targets'
+  eq result.details.proxyId, 'api'
   eq result.details.requiredHealthyTargets, 1
 
 test "verifyRouteRuntime returns app worker reason code", ->
@@ -59,14 +59,14 @@ test "verifyRouteRuntime returns app worker reason code", ->
   eq result.code, 'app_no_ready_workers'
   eq result.details.appId, 'admin'
 
-test "verifyRouteRuntime succeeds when referenced upstreams and apps are healthy", ->
+test "verifyRouteRuntime succeeds when referenced proxies and apps are healthy", ->
   runtime =
     upstreamPool:
       upstreams: new Map([
         ['api', { id: 'api', targets: [{ targetId: 'api:0' }] }]
       ])
     routeTable: compileRouteTable([
-      { path: '/api/*', upstream: 'api' }
+      { path: '/api/*', proxy: 'api' }
       { path: '/admin/*', app: 'admin' }
     ])
   appRegistry =
@@ -90,7 +90,7 @@ test "verifyRouteRuntime honors minimum healthy targets policy", ->
       upstreams: new Map([
         ['api', { id: 'api', targets: [{ targetId: 'api:0' }, { targetId: 'api:1' }] }]
       ])
-    routeTable: compileRouteTable([{ path: '/api/*', upstream: 'api' }])
+    routeTable: compileRouteTable([{ path: '/api/*', proxy: 'api' }])
   appRegistry = { apps: new Map() }
   healthyCount = 0
   result = verifyRouteRuntime(
@@ -103,18 +103,18 @@ test "verifyRouteRuntime honors minimum healthy targets policy", ->
       healthyCount is 1
     ),
     ((registry, appId) -> registry.apps.get(appId)),
-    minHealthyTargetsPerUpstream: 2
+    minHealthyTargetsPerProxy: 2
   )
   eq result.ok, false
-  eq result.code, 'upstream_no_healthy_targets'
+  eq result.code, 'proxy_no_healthy_targets'
   eq result.details.healthyTargets, 1
   eq result.details.requiredHealthyTargets, 2
 
-test "verifyRouteRuntime can skip healthy upstream checks", ->
+test "verifyRouteRuntime can skip healthy proxy checks", ->
   runtime =
     upstreamPool:
       upstreams: new Map()
-    routeTable: compileRouteTable([{ path: '/api/*', upstream: 'api' }])
+    routeTable: compileRouteTable([{ path: '/api/*', proxy: 'api' }])
   appRegistry = { apps: new Map() }
   result = verifyRouteRuntime(
     runtime,
@@ -123,7 +123,7 @@ test "verifyRouteRuntime can skip healthy upstream checks", ->
     ((pool, id) -> pool.upstreams.get(id)),
     ((pool, target) -> false),
     ((registry, appId) -> registry.apps.get(appId)),
-    requireHealthyUpstreams: false
+    requireHealthyProxies: false
   )
   eq result.ok, true
 

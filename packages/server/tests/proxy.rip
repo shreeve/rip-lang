@@ -1,7 +1,7 @@
 # proxy.rip — reverse proxy and config loader tests
 
 import { test, eq, ok } from '../test.rip'
-import { normalizeAppConfig, applyConfig, applyEdgeConfig } from '../edge/config.rip'
+import { normalizeAppConfig, applyEdgeConfig } from '../edge/config.rip'
 import { createAppRegistry, registerApp, resolveHost, getAppState } from '../edge/registry.rip'
 import { broadcastBinary, createHub, addClient } from '../edge/realtime.rip'
 import { setEventJsonMode, logEvent } from '../control/lifecycle.rip'
@@ -33,20 +33,21 @@ test "normalizeAppConfig keeps absolute entry path", ->
 
 # --- Config apply ---
 
-test "applyConfig registers apps in registry", ->
+test "applyEdgeConfig registers apps in registry", ->
   registry = createAppRegistry()
   config =
+    kind: 'edge'
     apps:
       web: { hosts: ['example.com'], workers: 4 }
       api: { hosts: ['api.example.com'], workers: 2 }
-  registered = applyConfig(config, registry, registerApp, '/srv')
+  registered = applyEdgeConfig(config, registry, registerApp, '/srv')
   eq registered.length, 2
   eq resolveHost(registry, 'example.com'), 'web'
   eq resolveHost(registry, 'api.example.com'), 'api'
 
-test "applyConfig handles empty apps", ->
+test "applyEdgeConfig handles empty apps", ->
   registry = createAppRegistry()
-  registered = applyConfig({ apps: {} }, registry, registerApp, '/srv')
+  registered = applyEdgeConfig({ kind: 'edge', apps: {} }, registry, registerApp, '/srv')
   eq registered.length, 0
 
 test "applyEdgeConfig preserves managed app entry workers and env", ->

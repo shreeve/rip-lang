@@ -561,7 +561,7 @@ class Server
       lastErrorDetails: null
       rolledBackFrom: null
       verifyPolicy: loaded.normalized.edge?.verify or null
-      certs: loaded.normalized.certs or null
+      certs: loaded.normalized.resolvedCerts or null
       activeRouteDescriptions: (routeTable.routes or []).map(describeRoute).filter(Boolean)
       lastReload: @configInfo?.lastReload or null
       reloadHistory: @configInfo?.reloadHistory or []
@@ -742,7 +742,7 @@ class Server
       entry = createReloadHistoryEntry(attemptId, source, oldVersion, newVersion, result, reason, code, details)
       @appendReloadHistory(entry)
       if loaded and not flags.quiet and source isnt 'startup'
-        p "rip-server: loaded serve.rip with #{loaded.summary.counts.apps} app(s), #{loaded.summary.counts.upstreams} upstream(s), #{loaded.summary.counts.routes} route(s)"
+        p "rip-server: loaded serve.rip with #{loaded.summary.counts.apps} app(s), #{loaded.summary.counts.proxies} proxy(s), #{loaded.summary.counts.routes} route(s)"
       logEvent('config_loaded',
         id: attemptId
         source: source
@@ -754,9 +754,9 @@ class Server
         reason: reason
         code: code
         apps: @configInfo.counts.apps
-        upstreams: @configInfo.counts.upstreams
+        proxies: @configInfo.counts.proxies
         routes: @configInfo.counts.routes
-        sites: @configInfo.counts.sites
+        hosts: @configInfo.counts.hosts
       ) if source isnt 'startup'
       {
         ok: applied
@@ -938,9 +938,9 @@ class Server
     controlStopMdnsAdvertisements(@mdnsProcesses)
 
   proxyRouteToUpstream: (req, route, requestId, clientIp, runtime) ->
-    upstream = getUpstream(runtime.upstreamPool, route.upstream)
+    upstream = getUpstream(runtime.upstreamPool, route.proxy)
     unless upstream
-      console.error "[proxy] no upstream '#{route.upstream}'" if isDebug()
+      console.error "[proxy] no proxy '#{route.proxy}'" if isDebug()
       return serviceUnavailableResponse()
 
     attempt = 1
@@ -949,7 +949,7 @@ class Server
     while attempt <= upstream.retry.attempts
       target = selectTarget(upstream, runtime.upstreamPool.nowFn)
       unless target
-        console.error "[proxy] no healthy target for '#{route.upstream}'" if isDebug()
+        console.error "[proxy] no healthy target for '#{route.proxy}'" if isDebug()
         return serviceUnavailableResponse()
 
       markTargetBusy(target)
@@ -966,9 +966,9 @@ class Server
         )
         workerSeconds = (performance.now() - t0) / 1000
         success = res.status < 500
-        console.error "[proxy] #{route.upstream} -> #{target.url} status=#{res.status} attempt=#{attempt}" if isDebug()
+        console.error "[proxy] #{route.proxy} -> #{target.url} status=#{res.status} attempt=#{attempt}" if isDebug()
       catch err
-        console.error "[proxy] #{route.upstream} error: #{err.message or err}" if isDebug()
+        console.error "[proxy] #{route.proxy} error: #{err.message or err}" if isDebug()
         res = serviceUnavailableResponse()
       finally
         releaseTarget(target, workerSeconds * 1000, success, runtime.upstreamPool)
@@ -999,7 +999,7 @@ class Server
     serviceUnavailableResponse()
 
   upgradeProxyWebSocket: (req, bunServer, route, requestId, runtime) ->
-    upstream = getUpstream(runtime.upstreamPool, route.upstream)
+    upstream = getUpstream(runtime.upstreamPool, route.proxy)
     return new Response('Service unavailable', { status: 503 }) unless upstream
     target = selectTarget(upstream, runtime.upstreamPool.nowFn)
     return new Response('Service unavailable', { status: 503 }) unless target
@@ -1086,12 +1086,12 @@ class Server
     # Assign request ID for tracing
     requestId = req.headers.get('x-request-id') or generateRequestId()
 
-    # Edge route table — upstream proxy routes can handle hosts outside the managed app registry
+    # Edge route table — proxy routes can handle hosts outside the managed app registry
     runtime = @edgeRuntime
     matchedRoute = matchRoute(runtime.routeTable, host, url.pathname, req.method)
-    if matchedRoute?.upstream and matchedRoute.websocket and bunServer
+    if matchedRoute?.proxy and matchedRoute.websocket and bunServer
       return @upgradeProxyWebSocket(req, bunServer, matchedRoute, requestId, runtime)
-    if matchedRoute?.upstream
+    if matchedRoute?.proxy
       @retainEdgeRuntime(runtime)
       try
         return @proxyRouteToUpstream!(req, matchedRoute, requestId, clientIp, runtime)
@@ -1156,7 +1156,7 @@ class Server
       version: { server: @serverVersion, rip: @ripVersion }
       uptime: snap.uptime
       apps: snap.apps
-      upstreams: snap.upstreams
+      proxies: snap.upstreams
       metrics:
         requests: snap.counters.requests
         responses: snap.counters.responses

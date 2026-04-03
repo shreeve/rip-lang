@@ -20,7 +20,7 @@ test "buildStreamConfigInfo reports counts and descriptions", ->
     streamUpstreams:
       incus: {}
     streams: [
-      { id: 'incus', order: 0, listen: 8443, sni: ['incus.example.com'], upstream: 'incus' }
+      { id: 'incus', order: 0, listen: 8443, sni: ['incus.example.com'], proxy: 'incus' }
     ]
   )
   eq info.streamCounts.streamUpstreams, 1
@@ -30,8 +30,8 @@ test "buildStreamConfigInfo reports counts and descriptions", ->
 test "streamUsesListenPort detects shared listener ports", ->
   runtime = createStreamRuntime(null, null,
     routes: [
-      { listen: 443, sni: 'incus.example.com', upstream: 'incus' }
-      { listen: 8443, sni: 'db.example.com', upstream: 'db' }
+      { listen: 443, sni: 'incus.example.com', proxy: 'incus' }
+      { listen: 8443, sni: 'db.example.com', proxy: 'db' }
     ]
   )
   eq streamUsesListenPort(runtime, 443), true

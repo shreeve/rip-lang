@@ -13,7 +13,7 @@ export createEdgeRuntime = (configInfo = null, upstreamPool = null, routeTable =
     kind: 'none'
     path: null
     version: null
-    counts: { apps: 0, upstreams: 0, routes: 0, sites: 0 }
+    counts: { apps: 0, proxies: 0, routes: 0, hosts: 0 }
     lastResult: 'none'
     loadedAt: null
     note: null
@@ -51,8 +51,8 @@ export restoreRegistrySnapshot = (registry, snapshot) ->
 
 export configNote = (loaded) ->
   return null unless loaded?.source?.kind is 'edge'
-  if loaded.summary.counts.upstreams > 0 or loaded.summary.counts.routes > 0 or loaded.summary.counts.sites > 0
-    'Upstream routes, websocket routes, wildcard hosts, managed app-route expansion, and per-app server-side reload parity are live.'
+  if loaded.summary.counts.proxies > 0 or loaded.summary.counts.routes > 0 or loaded.summary.counts.hosts > 0
+    'Composable host blocks, proxy routes, websocket routes, wildcard hosts, and managed app routing are live.'
   else
     null
 
@@ -76,7 +76,7 @@ export printCheckConfigResult = (loaded) ->
   label = 'serve.rip'
   p "rip-server: #{label} OK"
   p "  path: #{loaded.summary.path}"
-  p "  apps: #{loaded.summary.counts.apps}  upstreams: #{loaded.summary.counts.upstreams}  routes: #{loaded.summary.counts.routes}  sites: #{loaded.summary.counts.sites}"
+  p "  apps: #{loaded.summary.counts.apps}  proxies: #{loaded.summary.counts.proxies}  hosts: #{loaded.summary.counts.hosts}  routes: #{loaded.summary.counts.routes}"
   p "  version: #{loaded.summary.version}" if loaded.summary.version?
   note = configNote(loaded)
   p "  note: #{note}" if note
@@ -84,7 +84,7 @@ export printCheckConfigResult = (loaded) ->
 export runCheckConfig = (flags) ->
   source = resolveConfigSource(flags.appEntry, flags.configPath)
   unless source?.path
-    console.error 'rip-server: no serve.rip or config.rip found to validate'
+    console.error 'rip-server: no serve.rip found to validate'
     exit 1
   try
     checked = checkConfigFile!(source.path)
