@@ -40,20 +40,21 @@ export logStartupSummary = (server, flags, buildRipdevUrlFn, formatPortFn) ->
   url = buildRipdevUrlFn(flags.appName, protocol, port, formatPortFn)
 
   configInfo = server.edgeRuntime?.configInfo
-  sites = configInfo?.sites or {}
   certs = configInfo?.certs or {}
+  routeDescs = configInfo?.activeRouteDescriptions or []
   streamRoutes = server.streamRuntime?.routes or []
 
   hosts = []
   for route in streamRoutes
     sni = route.sni?[0] or route.id
     hosts.push { name: sni, action: 'passthrough', tls: false }
-  for host, siteConfig of sites
-    siteRoutes = siteConfig.routes or []
-    action = if siteRoutes[0]?.upstream then "proxy #{d}→#{r} #{siteRoutes[0].upstream}"
-    else if siteRoutes[0]?.app then 'app'
-    else if siteRoutes[0]?.static then 'static'
-    else "#{siteRoutes.length} routes"
+  for desc in routeDescs
+    parts = desc.split(' ')
+    host = parts[0]
+    action = parts.slice(2).join(' ')
+      .replace('proxy:', "proxy #{d}→#{r} ")
+      .replace('app:', 'app')
+      .replace('static', 'static')
     hosts.push { name: host, action, tls: !!certs[host] }
 
   upstreamList = []

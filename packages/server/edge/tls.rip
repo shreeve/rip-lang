@@ -43,7 +43,6 @@ export loadTlsMaterial = (flags, serverDir, acmeLoadCertFn) ->
     try
       cert = readFileSync(flags.certPath, 'utf8')
       key = readFileSync(flags.keyPath, 'utf8')
-      printCertSummary(cert)
       return { cert, key }
     catch
       console.error 'Failed to read TLS cert/key from provided paths. Use http or fix paths.'
@@ -53,8 +52,6 @@ export loadTlsMaterial = (flags, serverDir, acmeLoadCertFn) ->
   if acmeLoadCertFn and (flags.acme or flags.acmeStaging) and flags.acmeDomain
     acmeCert = acmeLoadCertFn(flags.acmeDomain)
     if acmeCert
-      p "rip-server: using ACME cert for #{flags.acmeDomain}"
-      printCertSummary(acmeCert.cert)
       return { cert: acmeCert.cert, key: acmeCert.key }
 
   # Shipped wildcard cert for *.ripdev.io (GlobalSign, valid for all subdomains)
@@ -64,7 +61,6 @@ export loadTlsMaterial = (flags, serverDir, acmeLoadCertFn) ->
   try
     cert = readFileSync(certPath, 'utf8')
     key = readFileSync(keyPath, 'utf8')
-    printCertSummary(cert)
     return { cert, key }
   catch e
     console.error "rip-server: failed to load TLS certs from #{certsDir}: #{e.message}"

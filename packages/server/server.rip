@@ -1529,7 +1529,6 @@ main = ->
   mgr.start!
 
   logStartupSummary(svr, flags, edgeBuildRipdevUrl, formatPort)
-  logEvent('server_start', { app: flags.appName, workers: flags.workers })
 
 # ==============================================================================
 # Entry Point
