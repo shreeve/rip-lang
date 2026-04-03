@@ -10,6 +10,7 @@ import { existsSync, statSync } from 'node:fs'
 import { join, dirname, resolve, basename } from 'node:path'
 import { normalizeStreamUpstreams, normalizeStreams, parseHostPort } from '../streams/config.rip'
 
+SERVE_NAME = 'serve.rip'
 EDGEFILE_NAME = 'Edgefile.rip'
 LEGACY_CONFIG_NAME = 'config.rip'
 
@@ -499,7 +500,7 @@ export normalizeEdgeConfig = (config, baseDir) ->
 
 export summarizeConfig = (configPath, normalized) ->
   path = resolve(configPath)
-  kind = normalized.kind or (if basename(path) is EDGEFILE_NAME then 'edge' else 'legacy')
+  kind = normalized.kind or (if isEdgeConfigName(basename(path)) then 'edge' else 'legacy')
   {
     kind
     path
@@ -541,7 +542,7 @@ export loadEdgeConfig = (configPath) ->
 
 export checkConfigFile = (configPath) ->
   resolved = resolve(configPath)
-  kind = if basename(resolved) is EDGEFILE_NAME then 'edge' else 'legacy'
+  kind = if isEdgeConfigName(basename(resolved)) then 'edge' else 'legacy'
   normalized = if kind is 'edge' then loadEdgeConfig!(resolved) else normalizeLegacyConfig(moduleObject!(resolved, LEGACY_CONFIG_NAME), dirname(resolved))
   { kind, normalized, summary: summarizeConfig(resolved, normalized) }
 
@@ -552,14 +553,20 @@ export findConfigFile = (appEntry) ->
 
 export findEdgeFile = (appEntry) ->
   dir = if existsSync(appEntry) and statSync(appEntry).isDirectory() then appEntry else dirname(appEntry)
+  servePath = join(dir, SERVE_NAME)
+  return servePath if existsSync(servePath)
   edgePath = join(dir, EDGEFILE_NAME)
-  if existsSync(edgePath) then edgePath else null
+  return edgePath if existsSync(edgePath)
+  null
+
+isEdgeConfigName = (name) ->
+  name is SERVE_NAME or name is EDGEFILE_NAME
 
 export resolveConfigSource = (appEntry, edgefilePath = null) ->
   if edgefilePath
     resolved = if edgefilePath.startsWith('/') then edgefilePath else resolve(process.cwd(), edgefilePath)
     return { kind: 'edge', path: resolved }
-  if basename(appEntry) is EDGEFILE_NAME
+  if isEdgeConfigName(basename(appEntry))
     return { kind: 'edge', path: resolve(appEntry) }
   if basename(appEntry) is LEGACY_CONFIG_NAME
     return { kind: 'legacy', path: resolve(appEntry) }
