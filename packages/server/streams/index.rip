@@ -273,12 +273,29 @@ export startStreamListeners = (runtime, options = {}) ->
       handshakeMs: Math.max(...portRoutes.map((route) -> route.timeouts?.handshakeMs or 5000), 5000)
       idleMs: Math.max(...portRoutes.map((route) -> route.timeouts?.idleMs or 300000), 300000)
       connectMs: Math.max(...portRoutes.map((route) -> route.timeouts?.connectMs or 5000), 5000)
-    listener = Bun.listen
-      hostname: options.hostname or '0.0.0.0'
-      port: port
-      allowHalfOpen: true
-      socket: createClientHandlers(runtime, port, listenerTimeouts, options).socket
-    runtime.listeners.set(port, listener)
+    try
+      listener = Bun.listen
+        hostname: options.hostname or '0.0.0.0'
+        port: port
+        allowHalfOpen: true
+        socket: createClientHandlers(runtime, port, listenerTimeouts, options).socket
+      runtime.listeners.set(port, listener)
+    catch e
+      if e?.code is 'EACCES' and port < 1024
+        console.error ""
+        console.error "rip-server: cannot bind to port #{port} — permission denied"
+        console.error ""
+        console.error "  Ports below 1024 require elevated privileges. Options:"
+        console.error ""
+        console.error "    1. Grant Bun the capability (recommended, one-time):"
+        console.error "       sudo setcap cap_net_bind_service=+ep $(which bun)"
+        console.error ""
+        console.error "    2. Run with sudo:"
+        console.error "       sudo rip server --file serve.rip"
+        console.error ""
+        console.error "  Note: upgrading Bun resets the capability — re-run setcap after upgrades."
+        console.error ""
+      throw e
   runtime
 
 export stopStreamListeners = (runtime, closeActiveConnections = false) ->

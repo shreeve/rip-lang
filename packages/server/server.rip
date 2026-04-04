@@ -223,7 +223,9 @@ class Server
         return Bun.serve(Object.assign({ port, idleTimeout: 0, fetch: fetchFn }, wsOpts, opts))
       catch e
         if e?.code is 'EACCES' and port < 1024
-          port = if opts.tls then 3443 else 3000
+          fallback = if opts.tls then 3443 else 3000
+          warn "rip-server: port #{port} requires elevated privileges, falling back to #{fallback}"
+          port = fallback
           p = port
           continue
         throw e unless e?.code is 'EADDRINUSE'
