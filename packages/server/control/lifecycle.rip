@@ -103,6 +103,7 @@ export createCleanup = (pidFile, server, manager, unlinkSyncFn, fetchFn, process
   ->
     return if called
     called = true
+    process.stdout.write('\r\x1b[K')
     p 'rip-server: shutting down...'
 
     # Safety net: force exit if graceful shutdown stalls
