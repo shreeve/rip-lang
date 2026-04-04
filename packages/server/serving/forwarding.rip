@@ -1,10 +1,10 @@
 # ==============================================================================
-# edge/forwarding.rip — helpers, responses, forwarding, and proxy
+# serving/forwarding.rip — helpers, responses, forwarding, and proxy
 # ==============================================================================
 
 import { randomBytes } from 'node:crypto'
 
-# --- Edge utilities ---
+# --- Serving utilities ---
 
 export generateRequestId = ->
   "req-#{randomBytes(6).toString('hex')}"

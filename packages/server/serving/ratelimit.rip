@@ -1,5 +1,5 @@
 # ==============================================================================
-# edge/ratelimit.rip — per-IP sliding window rate limiter
+# serving/ratelimit.rip — per-IP sliding window rate limiter
 # ==============================================================================
 
 DEFAULT_WINDOW_MS = 60000    # 1 minute

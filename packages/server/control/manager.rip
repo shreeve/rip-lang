@@ -1,0 +1,250 @@
+# ==============================================================================
+# control/manager.rip — worker pool manager
+# ==============================================================================
+
+import { existsSync, statSync, unlinkSync, watch, utimesSync } from 'node:fs'
+import { basename, dirname, join } from 'node:path'
+import { spawnTrackedWorker, postWorkerQuit, waitForWorkerReady } from './workers.rip'
+import { shouldTriggerCodeReload, registerAppWatchDirs } from './watchers.rip'
+import { logEvent } from './lifecycle.rip'
+
+MAX_BACKOFF_MS = 30000
+MAX_RESTART_COUNT = 10
+STABILITY_THRESHOLD_MS = 60000
+
+nowMs = -> Date.now()
+
+export class Manager
+  constructor: (@flags, @serverPath) ->
+    @appWorkers = new Map()
+    @shuttingDown = false
+    @lastCheck = 0
+    @currentMtimes = new Map()
+    @rollingApps = new Set()
+    @lastRollAt = new Map()
+    @nextWorkerId = -1
+    @retiringIds = new Set()
+    @restartBudgets = new Map()
+    @deferredDeaths = new Set()
+    @currentVersion = 1
+    @server = null
+    @dbUrl = null
+    @appWatchers = new Map()
+    @codeWatchers = new Map()
+    @defaultAppId = @flags.appName
+
+  getWorkers: (appId) ->
+    appId = appId or @defaultAppId
+    unless @appWorkers.has(appId)
+      @appWorkers.set(appId, [])
+    @appWorkers.get(appId)
+
+  getAppState: (appId) ->
+    @server?.appRegistry?.apps?.get(appId) or null
+
+  allAppStates: ->
+    return [] unless @server?.appRegistry?.apps
+    Array.from(@server.appRegistry.apps.values())
+
+  runSetupForApp: (app) ->
+    setupFile = join(app.config.appBaseDir or dirname(app.config.entry or @flags.appEntry), 'setup.rip')
+    return unless existsSync(setupFile)
+
+    dbUrl = process.env.DB_URL or 'http://localhost:4213'
+    dbAlreadyRunning = try
+      fetch! dbUrl + '/health'
+      true
+    catch
+      false
+    @dbUrl = dbUrl unless dbAlreadyRunning
+
+    setupEnv = Object.assign {}, process.env, app.config.env or {},
+      RIP_SETUP_MODE: '1'
+      RIP_SETUP_FILE: setupFile
+      APP_ID: String(app.appId)
+      APP_ENTRY: app.config.entry or @flags.appEntry
+      APP_BASE_DIR: app.config.appBaseDir or @flags.appBaseDir
+    proc = Bun.spawn ['rip', @serverPath],
+      stdout: 'inherit'
+      stderr: 'inherit'
+      stdin: 'ignore'
+      cwd: process.cwd()
+      env: setupEnv
+
+    code = await proc.exited
+    if code isnt 0
+      console.error "rip-server: setup exited with code #{code} for app #{app.appId}"
+      exit 1
+
+  start: ->
+    @stop!
+
+    for app in @allAppStates()
+      @runSetupForApp!(app) if app.config.entry
+
+    for app in @allAppStates()
+      workers = @getWorkers(app.appId)
+      workers.length = 0
+      desiredWorkers = app.config.workers or @flags.workers
+      for i in [0...desiredWorkers]
+        w = @spawnWorker!(app.appId, @currentVersion)
+        workers.push(w)
+
+    if @flags.reload
+      for app in @allAppStates()
+        @currentMtimes.set(app.appId, @getEntryMtime(app.appId))
+
+      interval = setInterval =>
+        return clearInterval(interval) if @shuttingDown
+        now = Date.now()
+        return if now - @lastCheck < 100
+        @lastCheck = now
+        for app in @allAppStates()
+          appId = app.appId
+          mt = @getEntryMtime(appId)
+          previous = @currentMtimes.get(appId) or 0
+          if mt > previous
+            continue if @rollingApps.has(appId)
+            continue if now - (@lastRollAt.get(appId) or 0) < 200
+            @currentMtimes.set(appId, mt)
+            @rollingApps.add(appId)
+            @lastRollAt.set(appId, now)
+            @rollingRestart(appId).finally => @rollingApps.delete(appId)
+      , 50
+
+      if @flags.watch
+        for app in @allAppStates()
+          continue unless app.config.entry and app.config.appBaseDir
+          entryFile = app.config.entry
+          entryBase = basename(entryFile)
+          try
+            watcher = watch app.config.appBaseDir, { recursive: true }, (event, filename) =>
+              return unless shouldTriggerCodeReload(filename, @flags.watch, entryBase)
+              try
+                now = new Date()
+                utimesSync(entryFile, now, now)
+              catch
+                null
+            @codeWatchers.set(app.appId, watcher)
+          catch e
+            warn "rip-server: directory watch failed for #{app.appId}: #{e.message}"
+
+  stop: ->
+    for [appId, workers] as @appWorkers
+      for w in workers
+        try w.process.kill()
+        try unlinkSync(w.socketPath)
+    @appWorkers.clear()
+
+    for [prefix, entry] as @appWatchers
+      clearTimeout(entry.timer) if entry.timer
+      for watcher in (entry.watchers or [])
+        try watcher.close()
+    @appWatchers.clear()
+    for [appId, watcher] as @codeWatchers
+      try watcher.close()
+    @codeWatchers.clear()
+
+  watchDirs: (prefix, dirs) ->
+    registerAppWatchDirs(@appWatchers, prefix, dirs, @server, (-> process.cwd()))
+
+  spawnWorker: (appId, version) ->
+    workerId = ++@nextWorkerId
+    app = @getAppState(appId) or { appId: appId, config: {} }
+    tracked = spawnTrackedWorker(@flags, workerId, (version or @currentVersion), nowMs, @serverPath, appId, app.config)
+    @monitor(tracked)
+    tracked
+
+  monitor: (w) ->
+    w.process.exited.then =>
+      return if @shuttingDown
+      return if @retiringIds.has(w.id)
+      if @rollingApps.has(w.appId)
+        @deferredDeaths.add(w.id)
+        return
+
+      postWorkerQuit(@flags.socketPrefix, w.id)
+
+      workers = @getWorkers(w.appId)
+      slotIdx = workers.findIndex((x) -> x.id is w.id)
+      return if slotIdx < 0
+
+      budget = @restartBudgets.get(slotIdx) or { count: 0, backoffMs: 1000 }
+
+      if nowMs() - w.startedAt > STABILITY_THRESHOLD_MS
+        budget.count = 0
+        budget.backoffMs = 1000
+
+      budget.count++
+      budget.backoffMs = Math.min(budget.backoffMs * 2, MAX_BACKOFF_MS)
+      @restartBudgets.set(slotIdx, budget)
+
+      if budget.count > MAX_RESTART_COUNT
+        logEvent('worker_abandon', { workerId: w.id, slot: slotIdx, restarts: budget.count })
+        return
+      @server?.metrics and @server.metrics.workerRestarts++
+      logEvent('worker_restart', { workerId: w.id, slot: slotIdx, attempt: budget.count, backoffMs: budget.backoffMs })
+      setTimeout =>
+        workers[slotIdx] = @spawnWorker(w.appId, @currentVersion) if slotIdx < workers.length
+      , budget.backoffMs
+
+  waitWorkerReady: (socketPath, timeoutMs = 5000) ->
+    waitForWorkerReady(socketPath, timeoutMs)
+
+  rollingRestart: (appId = null) ->
+    apps = if appId then [@getAppState(appId)].filter(Boolean) else @allAppStates()
+    nextVersion = @currentVersion + 1
+
+    for app in apps
+      workers = @getWorkers(app.appId)
+      olds = [...workers]
+      pairs = []
+
+      for oldWorker in olds
+        replacement = @spawnWorker!(app.appId, nextVersion)
+        workers.push(replacement)
+        pairs.push({ old: oldWorker, replacement })
+
+      readyResults = Promise.all!(pairs.map((p) => @waitWorkerReady(p.replacement.socketPath, 3000)))
+      allReady = readyResults.every((ready) -> ready)
+      unless allReady
+        console.error "[manager] Rolling restart aborted: not all new workers ready for app #{app.appId}"
+        for pair, i in pairs
+          unless readyResults[i]
+            try pair.replacement.process.kill()
+            idx = workers.indexOf(pair.replacement)
+            workers.splice(idx, 1) if idx >= 0
+        if @deferredDeaths.size > 0
+          for deadId as @deferredDeaths
+            idx = workers.findIndex((x) -> x.id is deadId)
+            workers[idx] = @spawnWorker(app.appId, @currentVersion) if idx >= 0
+          @deferredDeaths.clear()
+        return
+
+      @currentVersion = nextVersion
+
+      for { old } in pairs
+        @retiringIds.add(old.id)
+        try old.process.kill()
+
+      Promise.all!(pairs.map(({ old }) -> old.process.exited.catch(-> null)))
+
+      for { old } in pairs
+        postWorkerQuit(@flags.socketPrefix, old.id)
+
+      retiring = new Set(pairs.map((p) -> p.old.id))
+      filtered = workers.filter((w) -> not retiring.has(w.id))
+      workers.length = 0
+      workers.push(...filtered)
+      @retiringIds.delete(id) for id as retiring
+
+      if @deferredDeaths.size > 0
+        for deadId as @deferredDeaths
+          idx = workers.findIndex((x) -> x.id is deadId)
+          workers[idx] = @spawnWorker(app.appId, @currentVersion) if idx >= 0
+        @deferredDeaths.clear()
+
+  getEntryMtime: (appId = null) ->
+    app = @getAppState(appId or @defaultAppId)
+    entry = app?.config?.entry or @flags.appEntry
+    try statSync(entry).mtimeMs catch then 0

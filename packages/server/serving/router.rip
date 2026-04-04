@@ -1,5 +1,5 @@
 # ==============================================================================
-# edge/router.rip — edge route compilation and matching
+# serving/router.rip — route compilation and matching
 # ==============================================================================
 
 normalizeMethods = (methods) ->

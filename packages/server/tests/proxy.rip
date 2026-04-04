@@ -1,9 +1,9 @@
 # proxy.rip — reverse proxy and config loader tests
 
 import { test, eq, ok } from './runner.rip'
-import { normalizeAppConfig, applyEdgeConfig } from '../edge/config.rip'
-import { createAppRegistry, registerApp, resolveHost, getAppState } from '../edge/registry.rip'
-import { broadcastBinary, createHub, addClient } from '../edge/realtime.rip'
+import { normalizeAppConfig, applyConfig } from '../serving/config.rip'
+import { createAppRegistry, registerApp, resolveHost, getAppState } from '../serving/registry.rip'
+import { broadcastBinary, createHub, addClient } from '../serving/realtime.rip'
 import { setEventJsonMode, logEvent } from '../control/lifecycle.rip'
 
 # --- Config normalization ---
@@ -33,27 +33,27 @@ test "normalizeAppConfig keeps absolute entry path", ->
 
 # --- Config apply ---
 
-test "applyEdgeConfig registers apps in registry", ->
+test "applyConfig registers apps in registry", ->
   registry = createAppRegistry()
   config =
-    kind: 'edge'
+    kind: 'serve'
     apps:
       web: { hosts: ['example.com'], workers: 4 }
       api: { hosts: ['api.example.com'], workers: 2 }
-  registered = applyEdgeConfig(config, registry, registerApp, '/srv')
+  registered = applyConfig(config, registry, registerApp, '/srv')
   eq registered.length, 2
   eq resolveHost(registry, 'example.com'), 'web'
   eq resolveHost(registry, 'api.example.com'), 'api'
 
-test "applyEdgeConfig handles empty apps", ->
+test "applyConfig handles empty apps", ->
   registry = createAppRegistry()
-  registered = applyEdgeConfig({ kind: 'edge', apps: {} }, registry, registerApp, '/srv')
+  registered = applyConfig({ kind: 'serve', apps: {} }, registry, registerApp, '/srv')
   eq registered.length, 0
 
-test "applyEdgeConfig preserves managed app entry workers and env", ->
+test "applyConfig preserves managed app entry workers and env", ->
   registry = createAppRegistry()
   config =
-    kind: 'edge'
+    kind: 'serve'
     apps:
       admin:
         entry: '/srv/admin/index.rip'
@@ -63,7 +63,7 @@ test "applyEdgeConfig preserves managed app entry workers and env", ->
         queueTimeoutMs: 1234
         readTimeoutMs: 5678
         env: { ADMIN_MODE: '1' }
-  registered = applyEdgeConfig(config, registry, registerApp, '/srv')
+  registered = applyConfig(config, registry, registerApp, '/srv')
   eq registered.length, 1
   state = getAppState(registry, 'admin')
   eq state.config.entry, '/srv/admin/index.rip'

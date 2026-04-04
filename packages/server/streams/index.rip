@@ -2,8 +2,8 @@
 # streams/index.rip — stream runtime facade and listener orchestration
 # ==============================================================================
 
-import { parseSNI } from './tls_clienthello.rip'
-import { compileStreamTable, matchStreamRoute, describeStreamRoute } from './router.rip'
+import { parseSNI } from './clienthello.rip'
+import { compileStreamTable, matchStreamRoute } from './router.rip'
 import { createStreamRuntime, buildStreamConfigInfo, describeStreamRuntime } from './runtime.rip'
 import { createStreamUpstreamPool, addStreamUpstream, getStreamUpstream, selectStreamTarget, openStreamConnection, releaseStreamConnection } from './upstream.rip'
 import { createPipeState, writeChunk, flushPending, markPaused, markResumed } from './pipe.rip'

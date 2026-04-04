@@ -1,5 +1,5 @@
 # ==============================================================================
-# edge/security.rip — request smuggling and validation defenses
+# serving/security.rip — request smuggling and validation defenses
 # ==============================================================================
 
 MAX_URL_LENGTH = 8192

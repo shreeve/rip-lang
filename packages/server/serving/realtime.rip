@@ -1,5 +1,5 @@
 # ==============================================================================
-# edge/realtime.rip — Bam-style WebSocket realtime hub
+# serving/realtime.rip — Bam-style WebSocket realtime hub
 # ==============================================================================
 #
 # Manages WebSocket connections, group membership, and message routing.
@@ -194,7 +194,76 @@ export handlePublish = (hub, body) ->
 
 export getRealtimeStats = (hub) ->
   clients: hub.sockets.size
-  groups: hub.members.size - hub.sockets.size  # groups minus client entries
+  groups: hub.members.size - hub.sockets.size
   deliveries: hub.deliveries
   messages: hub.messages
   connections: hub.connections
+
+export proxyRealtimeToWorker = (headers, frameType, body, getSocket, releaseSocket) ->
+  sock = getSocket()
+  return null unless sock
+  proxyHeaders = new Headers(headers)
+  proxyHeaders.set('Sec-WebSocket-Frame', frameType)
+  proxyHeaders.set('Content-Type', 'text/plain')
+  proxyHeaders.delete('Upgrade')
+  proxyHeaders.delete('Connection')
+  proxyHeaders.delete('Sec-WebSocket-Key')
+  proxyHeaders.delete('Sec-WebSocket-Version')
+  proxyHeaders.delete('Sec-WebSocket-Extensions')
+  try
+    res = fetch! "http://localhost/v1/realtime",
+      method: 'POST'
+      headers: proxyHeaders
+      body: body or ''
+      unix: sock.socket
+      decompress: false
+    res.text!
+  catch e
+    console.error "realtime: worker proxy failed:", e.message
+    null
+  finally
+    releaseSocket(sock)
+
+export buildWebSocketHandlers = (hub, server) ->
+  websocket:
+    idleTimeout: 120
+    sendPings: true
+
+    open: (ws) ->
+      if ws.data?.kind is 'ws-proxy'
+        server.retainRuntimeWs(ws.data.runtime)
+        ws.data.passthrough = server.createWsPassthrough(ws, ws.data.upstreamUrl, ws.data.protocols or [])
+        return
+
+      { clientId, headers } = ws.data
+      addClient(hub, clientId, ws)
+      server.metrics.wsConnections++
+      server.logEvent 'ws_open', { clientId }
+      response = server.proxyRealtimeToWorker!(headers, 'open', '')
+      processResponse(hub, response, clientId) if response
+
+    message: (ws, message) ->
+      if ws.data?.kind is 'ws-proxy'
+        ws.data.passthrough?.sendToUpstream(message)
+        return
+
+      { clientId, headers } = ws.data
+      server.metrics.wsMessages++
+      isBinary = typeof message isnt 'string'
+      msg = if isBinary then Buffer.from(message) else message
+      frameType = if isBinary then 'binary' else 'text'
+      response = server.proxyRealtimeToWorker!(headers, frameType, msg)
+      processResponse(hub, response, clientId) if response
+
+    close: (ws) ->
+      if ws.data?.kind is 'ws-proxy'
+        ws.data.passthrough?.close()
+        unless ws.data.released
+          server.releaseProxyTarget(ws.data)
+          ws.data.released = true
+        return
+
+      { clientId, headers } = ws.data
+      server.logEvent 'ws_close', { clientId }
+      removeClient(hub, clientId)
+      server.proxyRealtimeToWorker!(headers, 'close', '')

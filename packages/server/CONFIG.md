@@ -28,7 +28,7 @@ surface.
 ```coffee
 export default
   version: 1
-  edge: {}
+  server: {}
   certs: {}
   proxies: {}
   apps: {}
@@ -42,7 +42,9 @@ There are no alternate top-level route/site models.
 
 ## Top-level sections
 
-### `edge`
+### `server`
+
+`edge` is accepted as an alias for backward compatibility.
 
 Global settings:
 

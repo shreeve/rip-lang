@@ -1,5 +1,5 @@
 # ==============================================================================
-# edge/upstream.rip — upstream pools, health checks, and retry helpers
+# serving/upstream.rip — upstream pools, health checks, and retry helpers
 # ==============================================================================
 
 DEFAULT_HEALTH =

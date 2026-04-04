@@ -106,7 +106,14 @@ export parseFlags = (argv, defaultEntryPath = null) ->
             appNameOverride = aliases[0]
             appAliases = aliases
           continue
-        else if not pathPart.includes('/') and not pathPart.startsWith('.')
+        looksLikePath = pathPart.includes('/') or pathPart.startsWith('.') or pathPart.endsWith('.rip') or pathPart.endsWith('.ts')
+        if looksLikePath
+          appPathInput = pathPart
+          if aliases.length > 0
+            appNameOverride = aliases[0]
+            appAliases = aliases
+          continue
+        else
           appNameOverride = pathPart
           appAliases = [pathPart].concat(aliases)
           continue

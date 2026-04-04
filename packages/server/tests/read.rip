@@ -7,7 +7,7 @@
 # Each test is self-contained: t(name, input, expected, fn)
 # No HTTP server needed — uses requestContext.run() directly.
 #
-# Run: rip packages/server/test/tests/read.rip
+# Run: ./bin/rip packages/server/tests/read.rip
 #
 
 import { read, requestContext } from '../api.rip'

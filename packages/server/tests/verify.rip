@@ -1,6 +1,6 @@
 import { test, eq, ok } from './runner.rip'
-import { compileRouteTable } from '../edge/router.rip'
-import { collectRouteRequirements, verifyRouteRuntime } from '../edge/verify.rip'
+import { compileRouteTable } from '../serving/router.rip'
+import { collectRouteRequirements, verifyRouteRuntime } from '../serving/verify.rip'
 
 test "collectRouteRequirements gathers proxies and managed apps", ->
   table = compileRouteTable([

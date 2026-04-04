@@ -1,5 +1,5 @@
 # ==============================================================================
-# edge/metrics.rip — lightweight in-process metrics collector
+# serving/metrics.rip — lightweight in-process metrics collector
 # ==============================================================================
 
 LATENCY_WINDOW = 1000
@@ -101,3 +101,31 @@ export createMetrics = ->
       latency: m.percentiles()
 
   m
+
+export buildDiagnosticsBody = (state) ->
+  snap = state.metrics.snapshot(state.startedAt, state.appRegistry, state.servingRuntime.upstreamPool)
+  JSON.stringify
+    status: if snap.gauges.workersActive > 0 then 'healthy' else 'degraded'
+    version: { server: state.serverVersion, rip: state.ripVersion }
+    uptime: snap.uptime
+    apps: snap.apps
+    proxies: snap.upstreams
+    metrics:
+      requests: snap.counters.requests
+      responses: snap.counters.responses
+      latency: snap.latency
+      queue: snap.counters.queue
+      workers: snap.counters.workers
+      acme: snap.counters.acme
+      websocket: snap.counters.websocket
+    gauges: snap.gauges
+    realtime: state.realtimeStats
+    hosts: state.hosts
+    streams: state.streamDiagnostics
+    config: Object.assign({}, state.configInfo,
+      multiplexer: state.multiplexer
+      activeRuntime: state.activeRuntime
+      retiredRuntimes: state.retiredRuntimes
+      activeStreamRuntime: state.activeStreamRuntime
+      retiredStreamRuntimes: state.retiredStreamRuntimes
+    )
