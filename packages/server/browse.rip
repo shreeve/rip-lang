@@ -11,7 +11,6 @@
 # ==============================================================================
 
 import { use, start, notFound } from '@rip-lang/server'
-import { serve } from '@rip-lang/server/middleware'
 import { statSync } from 'node:fs'
 import { join, resolve, basename } from 'node:path'
 import { renderDirectoryListing, renderMarkdown, renderTextFile, isTextFile, serveRipHighlightGrammar, findIndexFile } from './serving/static.rip'
@@ -19,8 +18,6 @@ import { renderDirectoryListing, renderMarkdown, renderTextFile, isTextFile, ser
 root = resolve(process.env.APP_BASE_DIR or process.cwd())
 rootSlash = root + '/'
 rootName = basename(root) or root
-
-use serve dir: root, bundle: [], watch: true
 
 notFound ->
   if @req.path is '/_rip/hljs-rip.js'
