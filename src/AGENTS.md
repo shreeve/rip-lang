@@ -63,7 +63,7 @@ Complete node reference:
 ['program', ...statements]
 
 // Variables & Assignment
-['=', target, value]    // x = expr  or  expr :> x (both produce this)
+['=', target, value]    // x = expr
 ['+=', target, value]   // Also: -=, *=, /=, %=, **=
 ['&&=', target, value]  ['||=', target, value]
 ['?=', target, value]   ['??=', target, value]
@@ -103,7 +103,6 @@ Complete node reference:
 ['!', expr]          ['~', expr]          ['typeof', expr]
 ['delete', expr]     ['instanceof', expr, type]
 ['?', expr]          // Existence check (x?)
-['defined', expr]    // Defined check (x!?)
 ['presence', expr]   // Presence check (x?!) — Houdini operator
 ['++', expr, isPostfix]  ['--', expr, isPostfix]
 

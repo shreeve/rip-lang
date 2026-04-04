@@ -38,7 +38,7 @@ get '/users/:id' ->                 # RESTful API endpoint, comma-less
 
 **What makes Rip different:**
 - **Modern output** — ES2022 with native classes, `?.`, `??`, modules
-- **New operators** — `!`, `!?`, `//`, `%%`, `=~`, `|>`, `.new()`, and more
+- **New operators** — `!`, `//`, `%%`, `=~`, `|>`, `.new()`, and more
 - **Reactive operators** — `:=`, `~=`, `~>` as language syntax
 - **Optional types** — `::` annotations, `type` aliases, `.d.ts` emission
 - **Zero dependencies** — everything included, even the parser generator
@@ -213,8 +213,6 @@ All use `globalThis` with `??=` — override any by redeclaring locally.
 |----------|---------|--------------|
 | `!` (dammit) | `fetchData!` | Calls AND awaits |
 | `!` (void) | `def process!` | Suppresses implicit return |
-| `!?` (otherwise) | `val !? 5` | Default only if `undefined` (infix) |
-| `!?` (defined) | `val!?` | True if not `undefined` (postfix) |
 | `?!` (presence) | `@checked?!` | True if truthy, else `undefined` (Houdini operator) |
 | `?` (existence) | `x?` | True if `x != null` |
 | `?:` (ternary) | `x > 0 ? 'yes' : 'no'` | JS-style ternary expression |
