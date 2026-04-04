@@ -585,27 +585,14 @@ export class CodeEmitter {
 
       // super.methodName() in non-constructor methods
       if (head === 'super' && this.currentMethodName && this.currentMethodName !== 'constructor') {
-        let args = rest.map(arg => this.unwrap(this.emit(arg, 'value'))).join(', ');
-        return `super.${this.currentMethodName}(${args})`;
+        return `super.${this.currentMethodName}(${this._emitArgs(rest)})`;
       }
 
-      // Postfix if on single-arg call
-      if (context === 'statement' && rest.length === 1) {
-        let cond = this.findPostfixConditional(rest[0]);
-        if (cond) {
-          let argWithout = this.rebuildWithoutConditional(cond);
-          let callee = this.emit(head, 'value');
-          let condCode = this.emit(cond.condition, 'value');
-          let valCode = this.emit(argWithout, 'value');
-          let callStr = `${callee}(${valCode})`;
-          return `if (${condCode}) ${callStr}`;
-        }
-      }
+      let postfix = this._tryPostfixCall(head, rest, context);
+      if (postfix) return postfix;
 
       let needsAwait = headAwaitMeta === true;
-      let calleeName = this.emit(head, 'value');
-      let args = rest.map(arg => this.unwrap(this.emit(arg, 'value'))).join(', ');
-      let callStr = `${calleeName}(${args})`;
+      let callStr = `${this.emit(head, 'value')}(${this._emitArgs(rest)})`;
       return needsAwait ? `await ${callStr}` : callStr;
     }
 
@@ -613,8 +600,7 @@ export class CodeEmitter {
     if (Array.isArray(head) && typeof head[0] === 'string') {
       let stmtOps = ['=', '+=', '-=', '*=', '/=', '%=', '**=', '&&=', '||=', '??=', 'if', 'return', 'throw'];
       if (stmtOps.includes(head[0])) {
-        let exprs = sexpr.map(stmt => this.emit(stmt, 'value'));
-        return `(${exprs.join(', ')})`;
+        return `(${sexpr.map(stmt => this.emit(stmt, 'value')).join(', ')})`;
       }
     }
 
@@ -624,23 +610,12 @@ export class CodeEmitter {
       if (head[0] === '.' && (head[2] === 'new' || str(head[2]) === 'new')) {
         let ctorExpr = head[1];
         let ctorCode = this.emit(ctorExpr, 'value');
-        let args = rest.map(arg => this.unwrap(this.emit(arg, 'value'))).join(', ');
         let needsParens = Array.isArray(ctorExpr);
-        return `new ${needsParens ? `(${ctorCode})` : ctorCode}(${args})`;
+        return `new ${needsParens ? `(${ctorCode})` : ctorCode}(${this._emitArgs(rest)})`;
       }
 
-      // Postfix if on single-arg method call
-      if (context === 'statement' && rest.length === 1) {
-        let cond = this.findPostfixConditional(rest[0]);
-        if (cond) {
-          let argWithout = this.rebuildWithoutConditional(cond);
-          let calleeCode = this.emit(head, 'value');
-          let condCode = this.emit(cond.condition, 'value');
-          let valCode = this.emit(argWithout, 'value');
-          let callStr = `${calleeCode}(${valCode})`;
-          return `if (${condCode}) ${callStr}`;
-        }
-      }
+      let postfix = this._tryPostfixCall(head, rest, context);
+      if (postfix) return postfix;
 
       // Property access with await sigil on property
       let needsAwait = false;
@@ -657,8 +632,7 @@ export class CodeEmitter {
         calleeCode = this.emit(head, 'value');
       }
 
-      let args = rest.map(arg => this.unwrap(this.emit(arg, 'value'))).join(', ');
-      let callStr = `${calleeCode}(${args})`;
+      let callStr = `${calleeCode}(${this._emitArgs(rest)})`;
       return needsAwait ? `await ${callStr}` : callStr;
     }
 
@@ -2293,6 +2267,21 @@ export class CodeEmitter {
     let val = Array.isArray(cond.value) && cond.value.length === 1 ? cond.value[0] : cond.value;
     if (cond.parentOp) return [cond.parentOp, ...cond.otherOperands, val];
     return val;
+  }
+
+  _tryPostfixCall(head, rest, context) {
+    if (context !== 'statement' || rest.length !== 1) return null;
+    let cond = this.findPostfixConditional(rest[0]);
+    if (!cond) return null;
+    let argWithout = this.rebuildWithoutConditional(cond);
+    let calleeCode = this.emit(head, 'value');
+    let condCode = this.emit(cond.condition, 'value');
+    let valCode = this.emit(argWithout, 'value');
+    return `if (${condCode}) ${calleeCode}(${valCode})`;
+  }
+
+  _emitArgs(rest) {
+    return rest.map(arg => this.unwrap(this.emit(arg, 'value'))).join(', ');
   }
 
   emitDestructuringPattern(pattern) { return this.formatParam(pattern); }

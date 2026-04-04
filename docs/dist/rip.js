@@ -7096,52 +7096,31 @@ if (typeof globalThis !== 'undefined') {
         if (CodeEmitter.NUMBER_START_RE.test(head))
           return head;
         if (head === "super" && this.currentMethodName && this.currentMethodName !== "constructor") {
-          let args2 = rest.map((arg) => this.unwrap(this.emit(arg, "value"))).join(", ");
-          return `super.${this.currentMethodName}(${args2})`;
+          return `super.${this.currentMethodName}(${this._emitArgs(rest)})`;
         }
-        if (context === "statement" && rest.length === 1) {
-          let cond = this.findPostfixConditional(rest[0]);
-          if (cond) {
-            let argWithout = this.rebuildWithoutConditional(cond);
-            let callee = this.emit(head, "value");
-            let condCode = this.emit(cond.condition, "value");
-            let valCode = this.emit(argWithout, "value");
-            let callStr2 = `${callee}(${valCode})`;
-            return `if (${condCode}) ${callStr2}`;
-          }
-        }
+        let postfix = this._tryPostfixCall(head, rest, context);
+        if (postfix)
+          return postfix;
         let needsAwait = headAwaitMeta === true;
-        let calleeName = this.emit(head, "value");
-        let args = rest.map((arg) => this.unwrap(this.emit(arg, "value"))).join(", ");
-        let callStr = `${calleeName}(${args})`;
+        let callStr = `${this.emit(head, "value")}(${this._emitArgs(rest)})`;
         return needsAwait ? `await ${callStr}` : callStr;
       }
       if (Array.isArray(head) && typeof head[0] === "string") {
         let stmtOps = ["=", "+=", "-=", "*=", "/=", "%=", "**=", "&&=", "||=", "??=", "if", "return", "throw"];
         if (stmtOps.includes(head[0])) {
-          let exprs = sexpr.map((stmt) => this.emit(stmt, "value"));
-          return `(${exprs.join(", ")})`;
+          return `(${sexpr.map((stmt) => this.emit(stmt, "value")).join(", ")})`;
         }
       }
       if (Array.isArray(head)) {
         if (head[0] === "." && (head[2] === "new" || str(head[2]) === "new")) {
           let ctorExpr = head[1];
           let ctorCode = this.emit(ctorExpr, "value");
-          let args2 = rest.map((arg) => this.unwrap(this.emit(arg, "value"))).join(", ");
           let needsParens = Array.isArray(ctorExpr);
-          return `new ${needsParens ? `(${ctorCode})` : ctorCode}(${args2})`;
+          return `new ${needsParens ? `(${ctorCode})` : ctorCode}(${this._emitArgs(rest)})`;
         }
-        if (context === "statement" && rest.length === 1) {
-          let cond = this.findPostfixConditional(rest[0]);
-          if (cond) {
-            let argWithout = this.rebuildWithoutConditional(cond);
-            let calleeCode2 = this.emit(head, "value");
-            let condCode = this.emit(cond.condition, "value");
-            let valCode = this.emit(argWithout, "value");
-            let callStr2 = `${calleeCode2}(${valCode})`;
-            return `if (${condCode}) ${callStr2}`;
-          }
-        }
+        let postfix = this._tryPostfixCall(head, rest, context);
+        if (postfix)
+          return postfix;
         let needsAwait = false;
         let calleeCode;
         if (head[0] === "." && meta(head[2], "await") === true) {
@@ -7154,8 +7133,7 @@ if (typeof globalThis !== 'undefined') {
         } else {
           calleeCode = this.emit(head, "value");
         }
-        let args = rest.map((arg) => this.unwrap(this.emit(arg, "value"))).join(", ");
-        let callStr = `${calleeCode}(${args})`;
+        let callStr = `${calleeCode}(${this._emitArgs(rest)})`;
         return needsAwait ? `await ${callStr}` : callStr;
       }
       throw new Error(`Unknown s-expression type: ${head}`);
@@ -8508,100 +8486,18 @@ ${this.indent()}}`;
         if (bodyBlock[0] === "block") {
           let bodyStmts = bodyBlock.slice(1);
           let hasObjFirst = bodyStmts.length > 0 && Array.isArray(bodyStmts[0]) && bodyStmts[0][0] === "object";
-          if (hasObjFirst && bodyStmts.length === 1) {
+          if (hasObjFirst) {
             let members = bodyStmts[0].slice(1);
             this.indentLevel++;
-            let boundMethods = [];
-            for (let [, mk, mv] of members) {
-              let isStatic = this.is(mk, ".") && mk[1] === "this";
-              let isComputed = this.is(mk, "computed");
-              let mName = this.extractMemberName(mk);
-              if (this.is(mv, "=>") && !isStatic && !isComputed && mName !== "constructor")
-                boundMethods.push(mName);
-            }
-            for (let [, mk, mv] of members) {
-              let isStatic = this.is(mk, ".") && mk[1] === "this";
-              let isComputed = this.is(mk, "computed");
-              let mName = this.extractMemberName(mk);
-              if (this.is(mv, "->") || this.is(mv, "=>")) {
-                let [, params, body] = mv;
-                let hasAwait = this.containsAwait(body), hasYield = this.containsYield(body);
-                let cleanParams = params, autoAssign = [];
-                if (mName === "constructor") {
-                  let isSubclass = !!parentClass;
-                  let atParamMap = isSubclass ? new Map : null;
-                  cleanParams = params.map((p) => {
-                    if (this.is(p, ".") && p[1] === "this") {
-                      let name = p[2];
-                      let param = isSubclass ? `_${name}` : name;
-                      autoAssign.push(`this.${name} = ${param}`);
-                      if (isSubclass)
-                        atParamMap.set(name, param);
-                      return param;
-                    }
-                    if (this.is(p, "default") && this.is(p[1], ".") && p[1][1] === "this") {
-                      let name = p[1][2];
-                      let param = isSubclass ? `_${name}` : name;
-                      autoAssign.push(`this.${name} = ${param}`);
-                      if (isSubclass)
-                        atParamMap.set(name, param);
-                      return ["default", param, p[2]];
-                    }
-                    return p;
-                  });
-                  for (let bm of boundMethods)
-                    autoAssign.unshift(`this.${bm} = this.${bm}.bind(this)`);
-                  if (atParamMap?.size > 0)
-                    this._atParamMap = atParamMap;
-                }
-                let pList = this.emitParamList(cleanParams);
-                let prefix = (isStatic ? "static " : "") + (hasAwait ? "async " : "") + (hasYield ? "*" : "");
-                code += this.indent() + `${prefix}${mName}(${pList}) `;
-                if (!isComputed)
-                  this.currentMethodName = mName;
-                code += this.emitMethodBody(body, autoAssign, mName === "constructor", cleanParams);
-                this._atParamMap = null;
-                this.currentMethodName = null;
-                code += `
-`;
-              } else if (isStatic) {
-                code += this.indent() + `static ${mName} = ${this.emit(mv, "value")};
-`;
-              } else {
-                code += this.indent() + `${mName} = ${this.emit(mv, "value")};
-`;
-              }
-            }
-            this.indentLevel--;
-          } else if (hasObjFirst) {
-            let members = bodyStmts[0].slice(1);
-            let additionalStmts = bodyStmts.slice(1);
-            this.indentLevel++;
-            for (let [, mk, mv] of members) {
-              let isStatic = this.is(mk, ".") && mk[1] === "this", mName = this.extractMemberName(mk);
-              if (this.is(mv, "->") || this.is(mv, "=>")) {
-                let [, params, body] = mv;
-                let pList = this.emitParamList(params);
-                let prefix = (isStatic ? "static " : "") + (this.containsAwait(body) ? "async " : "") + (this.containsYield(body) ? "*" : "");
-                code += this.indent() + `${prefix}${mName}(${pList}) `;
-                this.currentMethodName = mName;
-                code += this.emitMethodBody(body, [], mName === "constructor", params);
-                this.currentMethodName = null;
-                code += `
-`;
-              } else if (isStatic) {
-                code += this.indent() + `static ${mName} = ${this.emit(mv, "value")};
-`;
-              } else {
-                code += this.indent() + `${mName} = ${this.emit(mv, "value")};
-`;
-              }
-            }
-            for (let stmt of additionalStmts) {
+            code += this._emitClassMembers(members, parentClass);
+            for (let stmt of bodyStmts.slice(1)) {
               if (this.is(stmt, "class")) {
                 let [, nestedName, parent, ...nestedBody] = stmt;
                 if (this.is(nestedName, ".") && nestedName[1] === "this") {
                   code += this.indent() + `static ${nestedName[2]} = ${this.emit(["class", null, parent, ...nestedBody], "value")};
+`;
+                } else {
+                  code += this.indent() + this.emit(stmt, "statement") + `;
 `;
                 }
               } else {
@@ -8626,6 +8522,71 @@ ${this.indent()}}`;
         }
       }
       code += this.indent() + "}";
+      return code;
+    }
+    _emitClassMembers(members, parentClass) {
+      let code = "";
+      let boundMethods = [];
+      for (let [, mk, mv] of members) {
+        let isStatic = this.is(mk, ".") && mk[1] === "this";
+        let isComputed = this.is(mk, "computed");
+        let mName = this.extractMemberName(mk);
+        if (this.is(mv, "=>") && !isStatic && !isComputed && mName !== "constructor")
+          boundMethods.push(mName);
+      }
+      for (let [, mk, mv] of members) {
+        let isStatic = this.is(mk, ".") && mk[1] === "this";
+        let isComputed = this.is(mk, "computed");
+        let mName = this.extractMemberName(mk);
+        if (this.is(mv, "->") || this.is(mv, "=>")) {
+          let [, params, body] = mv;
+          let hasAwait = this.containsAwait(body), hasYield = this.containsYield(body);
+          let cleanParams = params, autoAssign = [];
+          if (mName === "constructor") {
+            let isSubclass = !!parentClass;
+            let atParamMap = isSubclass ? new Map : null;
+            cleanParams = params.map((p) => {
+              if (this.is(p, ".") && p[1] === "this") {
+                let name = p[2];
+                let param = isSubclass ? `_${name}` : name;
+                autoAssign.push(`this.${name} = ${param}`);
+                if (isSubclass)
+                  atParamMap.set(name, param);
+                return param;
+              }
+              if (this.is(p, "default") && this.is(p[1], ".") && p[1][1] === "this") {
+                let name = p[1][2];
+                let param = isSubclass ? `_${name}` : name;
+                autoAssign.push(`this.${name} = ${param}`);
+                if (isSubclass)
+                  atParamMap.set(name, param);
+                return ["default", param, p[2]];
+              }
+              return p;
+            });
+            for (let bm of boundMethods)
+              autoAssign.unshift(`this.${bm} = this.${bm}.bind(this)`);
+            if (atParamMap?.size > 0)
+              this._atParamMap = atParamMap;
+          }
+          let pList = this.emitParamList(cleanParams);
+          let prefix = (isStatic ? "static " : "") + (hasAwait ? "async " : "") + (hasYield ? "*" : "");
+          code += this.indent() + `${prefix}${mName}(${pList}) `;
+          if (!isComputed)
+            this.currentMethodName = mName;
+          code += this.emitMethodBody(body, autoAssign, mName === "constructor", cleanParams);
+          this._atParamMap = null;
+          this.currentMethodName = null;
+          code += `
+`;
+        } else if (isStatic) {
+          code += this.indent() + `static ${mName} = ${this.emit(mv, "value")};
+`;
+        } else {
+          code += this.indent() + `${mName} = ${this.emit(mv, "value")};
+`;
+        }
+      }
       return code;
     }
     emitSuper(head, rest) {
@@ -8789,6 +8750,21 @@ export default ${expr[1]}`;
       if (cond.parentOp)
         return [cond.parentOp, ...cond.otherOperands, val];
       return val;
+    }
+    _tryPostfixCall(head, rest, context) {
+      if (context !== "statement" || rest.length !== 1)
+        return null;
+      let cond = this.findPostfixConditional(rest[0]);
+      if (!cond)
+        return null;
+      let argWithout = this.rebuildWithoutConditional(cond);
+      let calleeCode = this.emit(head, "value");
+      let condCode = this.emit(cond.condition, "value");
+      let valCode = this.emit(argWithout, "value");
+      return `if (${condCode}) ${calleeCode}(${valCode})`;
+    }
+    _emitArgs(rest) {
+      return rest.map((arg) => this.unwrap(this.emit(arg, "value"))).join(", ");
     }
     emitDestructuringPattern(pattern) {
       return this.formatParam(pattern);
@@ -10120,7 +10096,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   }
   // src/browser.js
   var VERSION = "3.13.133";
-  var BUILD_DATE = "2026-04-04@08:06:13GMT";
+  var BUILD_DATE = "2026-04-04@08:27:37GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
