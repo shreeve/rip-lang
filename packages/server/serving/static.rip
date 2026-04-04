@@ -216,7 +216,14 @@ renderMarkdown = (filePath) ->
   th { font-weight: 600; background: var(--pre-bg); }
   hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
   @page { margin: 0.5in; }
-  @media print { body { background: #fff; color: #1a1a1a; } pre, code { background: #f4f4f5; } a { color: #2563eb; } }
+  @media print {
+    body { background: #fff; color: #1a1a1a; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    pre { background: #f4f4f5; box-shadow: inset 0 0 0 1000px #f4f4f5; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    code { background: #f0f0f2; box-shadow: inset 0 0 0 1000px #f0f0f2; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    pre code { background: none; box-shadow: none; }
+    th { background: #f6f8fa; box-shadow: inset 0 0 0 1000px #f6f8fa; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    a { color: #2563eb; }
+  }
   </style>
   </head>
   <body>#{body}</body>
