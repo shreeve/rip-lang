@@ -6,7 +6,11 @@ import { resolve, join, basename, dirname } from 'node:path'
 import { statSync, readdirSync, readFileSync } from 'node:fs'
 import { mimeType } from '../api.rip'
 
-HLJS_RIP_GRAMMAR = try readFileSync(join(dirname(import.meta.dir), '..', 'print', 'hljs-rip.js'), 'utf8') catch then null
+HLJS_RIP_PATH = try
+  p = join(dirname(import.meta.dir), '..', 'print', 'hljs-rip.js')
+  statSync(p)
+  p
+catch then null
 
 stripRoutePrefix = (pathname, routePath) ->
   return pathname if routePath is '/' or routePath is '/*'
@@ -291,7 +295,7 @@ export renderTextFile = (filePath) ->
   .name { font-size: 13px; font-weight: 600; }
   .meta { font-size: 12px; color: var(--secondary); }
   pre { margin: 0 !important; border: none !important; border-radius: 0 !important; }
-  pre code.hljs { padding: 1rem 1.25rem; font-size: 13px; line-height: 1.6; font-family: ui-monospace, 'SF Mono', 'Fira Code', monospace; }
+  pre code.hljs { padding: 1rem 1.25rem 1.5rem; font-size: 13px; line-height: 1.6; font-family: ui-monospace, 'SF Mono', 'Fira Code', monospace; }
   @page { margin: 0.5in; }
   @media print { .bar { background: #f3f4f6; box-shadow: inset 0 0 0 1000px #f3f4f6; -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
   </style>
@@ -302,17 +306,28 @@ export renderTextFile = (filePath) ->
   <pre><code class="language-#{lang}">#{esc content}</code></pre>
   </div></div>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
-  #{if lang is 'rip' and HLJS_RIP_GRAMMAR then "<script>#{HLJS_RIP_GRAMMAR.replace('export default function', 'hljs.registerLanguage(\"rip\", function')}\n)</script>" else ''}
-  <script>hljs.highlightAll()</script>
+  #{if lang is 'rip' and HLJS_RIP_PATH then '<script src="/_rip/hljs-rip.js"></script><script>hljs.registerLanguage("rip",hljsRip);hljs.highlightAll()</script>' else '<script>hljs.highlightAll()</script>'}
   </body>
   </html>
   """
 
 # --- Static file serving ---
 
+export serveRipHighlightGrammar = ->
+  return null unless HLJS_RIP_PATH
+  content = readFileSync(HLJS_RIP_PATH, 'utf8')
+  wrapped = content.replace('export default function', 'var hljsRip = function')
+  file = Bun.file(HLJS_RIP_PATH)
+  etag = "W/\"#{file.lastModified}-#{file.size}\""
+  new Response(wrapped, { headers: { 'content-type': 'application/javascript; charset=UTF-8', 'etag': etag, 'cache-control': 'public, max-age=86400' } })
+
 export serveStaticRoute = (req, url, route) ->
   method = req.method or 'GET'
   return new Response(null, { status: 405 }) unless method is 'GET' or method is 'HEAD'
+
+  if url.pathname is '/_rip/hljs-rip.js'
+    res = serveRipHighlightGrammar()
+    return res if res
 
   base = route.root or route.static
   return new Response('Not Found', { status: 404 }) unless base
