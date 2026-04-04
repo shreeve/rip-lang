@@ -5,9 +5,8 @@
 # Built-in file browser when no index.rip or index.ts exists in the target
 # directory. Activated automatically by `rip server` when no app entry is found.
 #
-# Default mode is run: HTML renders, Rip executes, images display.
+# Default mode is run: HTML renders, images display.
 # Text files that can't run are shown with syntax highlighting.
-# Append ?view to any URL to see the source instead of running it.
 # ==============================================================================
 
 import { use, start, notFound } from '@rip-lang/server'
@@ -26,7 +25,6 @@ notFound ->
 
   reqPath = try decodeURIComponent(@req.path) catch then @req.path
   path = resolve(root, reqPath.slice(1))
-  viewMode = @req.query('view')?
 
   unless path is root or path.startsWith(rootSlash)
     return new Response 'Not Found', { status: 404 }
@@ -39,12 +37,6 @@ notFound ->
   if stat.isFile()
     accept = @req.header('accept') or ''
     if accept.includes('text/html')
-      # ?view forces syntax-highlighted source for any file
-      if viewMode and isTextFile(path)
-        try
-          html = renderTextFile(path)
-          return new Response html, { headers: { 'Content-Type': 'text/html; charset=UTF-8' } }
-      # Markdown always renders (it's better than raw)
       if path.endsWith('.md')
         try
           html = renderMarkdown(path)
