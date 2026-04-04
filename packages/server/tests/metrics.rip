@@ -1,9 +1,9 @@
 # ==============================================================================
-# test-metrics.rip — edge/metrics.rip tests
+# test-metrics.rip — serving/metrics.rip tests
 # ==============================================================================
 
 import { test, eq, ok, near } from './runner.rip'
-import { createMetrics } from '../edge/metrics.rip'
+import { createMetrics } from '../serving/metrics.rip'
 
 test "createMetrics returns object with counters", ->
   m = createMetrics()

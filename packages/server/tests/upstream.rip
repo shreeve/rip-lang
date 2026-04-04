@@ -11,7 +11,7 @@ import {
   shouldRetry
   computeRetryDelayMs
   updateTargetHealth
-} from '../edge/upstream.rip'
+} from '../serving/upstream.rip'
 
 test "createUpstreamPool starts empty", ->
   pool = createUpstreamPool()

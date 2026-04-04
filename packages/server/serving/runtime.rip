@@ -1,12 +1,12 @@
 # ==============================================================================
-# edge/runtime.rip — edge runtime lifecycle helpers
+# serving/runtime.rip — serving runtime lifecycle helpers
 # ==============================================================================
 
 import { createUpstreamPool } from './upstream.rip'
-import { compileRouteTable, describeRoute } from './router.rip'
+import { compileRouteTable } from './router.rip'
 import { resolveConfigSource, loadConfig, summarizeConfig, formatConfigErrors, checkConfigFile } from './config.rip'
 
-export createEdgeRuntime = (configInfo = null, upstreamPool = null, routeTable = null) ->
+export createServingRuntime = (configInfo = null, upstreamPool = null, routeTable = null) ->
   upstreamPool = upstreamPool or createUpstreamPool()
   routeTable = routeTable or compileRouteTable()
   configInfo = configInfo or {
@@ -23,7 +23,7 @@ export createEdgeRuntime = (configInfo = null, upstreamPool = null, routeTable =
     activeRouteDescriptions: []
   }
   {
-    id: "edge-#{Date.now()}-#{Math.random().toString(16).slice(2, 8)}"
+    id: "srv-#{Date.now()}-#{Math.random().toString(16).slice(2, 8)}"
     upstreamPool
     routeTable
     configInfo
@@ -32,6 +32,8 @@ export createEdgeRuntime = (configInfo = null, upstreamPool = null, routeTable =
     wsConnections: 0
     retiredAt: null
   }
+
+export createEdgeRuntime = (configInfo, upstreamPool, routeTable) -> createServingRuntime(configInfo, upstreamPool, routeTable)
 
 export createReloadHistoryEntry = (id, source, oldVersion, newVersion, result, reason = null, code = null, details = null) ->
   id: id
@@ -50,7 +52,7 @@ export restoreRegistrySnapshot = (registry, snapshot) ->
   registry.wildcardIndex = new Map(snapshot.wildcardIndex)
 
 export configNote = (loaded) ->
-  return null unless loaded?.source?.kind is 'edge'
+  return null unless loaded?.source?.kind in ['serve', 'edge']
   if loaded.summary.counts.proxies > 0 or loaded.summary.counts.routes > 0 or loaded.summary.counts.hosts > 0
     'Composable host blocks, proxy routes, websocket routes, wildcard hosts, and managed app routing are live.'
   else

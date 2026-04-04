@@ -20,7 +20,7 @@ failures = []
 export test = (name, fn) ->
   try
     result = fn()
-    result! if result?.then  # await if async
+    await result if result?.then
     passed++
     p "  ✓ #{name}"
   catch e

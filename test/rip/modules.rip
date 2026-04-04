@@ -44,6 +44,11 @@ code "export class", "export class Animal\n  constructor: (@name) ->", "export c
 # Named exports
 code "export named", "export { x, y }", "export { x, y };"
 
+# Export alias — assigning an existing identifier to a new exported name
+code "export alias identifier", "foo = -> 42\nexport bar = foo", "let foo;\nfoo = function() {\n  return 42;\n};\nexport const bar = foo;"
+
+code "export alias variable", "x = 10\nexport y = x", "let x;\nx = 10;\nexport const y = x;"
+
 # ==============================================================================
 # Export Default: "export-default"
 # ==============================================================================

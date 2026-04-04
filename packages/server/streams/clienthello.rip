@@ -1,5 +1,5 @@
 # ==============================================================================
-# streams/tls_clienthello.rip — minimal ClientHello SNI extractor
+# streams/clienthello.rip — minimal ClientHello SNI extractor
 # ==============================================================================
 
 MAX_CLIENT_HELLO_BYTES = 16384

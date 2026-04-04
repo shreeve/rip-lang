@@ -74,7 +74,7 @@ apps, proxy backends, reusable TLS, or TCP passthrough.
 Canonical top-level keys:
 
 - `version`
-- `edge`
+- `server` (`edge` is a deprecated alias)
 - `certs`
 - `proxies`
 - `apps`
@@ -98,7 +98,7 @@ lists, and concrete stream routes.
 ```coffee
 export default
   version: 1
-  edge: {}
+  server: {}
   certs: {}
   proxies: {}
   apps: {}
@@ -247,7 +247,7 @@ else falls through to Rip's internal HTTPS server.
 export default
   version: 1
 
-  edge:
+  server:
     hsts: true
     trustedProxies: ['10.0.0.0/8', '127.0.0.1']
     timeouts:

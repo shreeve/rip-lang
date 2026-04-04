@@ -1,5 +1,5 @@
 # ==============================================================================
-# edge/verify.rip — edge runtime verification helpers
+# serving/verify.rip — post-activate runtime verification
 # ==============================================================================
 
 export buildVerificationResult = (ok, code = null, message = null, details = null) ->

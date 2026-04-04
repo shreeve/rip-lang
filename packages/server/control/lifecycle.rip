@@ -39,7 +39,7 @@ export logStartupSummary = (server, flags, buildRipdevUrlFn, formatPortFn) ->
   port = flags.httpsPort or flags.httpPort or 80
   url = buildRipdevUrlFn(flags.appName, protocol, port, formatPortFn)
 
-  configInfo = server.edgeRuntime?.configInfo
+  configInfo = server.servingRuntime?.configInfo
   certs = configInfo?.certs or {}
   routeDescs = configInfo?.activeRouteDescriptions or []
   streamRoutes = server.streamRuntime?.routeTable?.routes or []
@@ -59,7 +59,7 @@ export logStartupSummary = (server, flags, buildRipdevUrlFn, formatPortFn) ->
     hosts.push { name: host, action, tls: !!certs[host] }
 
   upstreamList = []
-  pool = server.edgeRuntime?.upstreamPool
+  pool = server.servingRuntime?.upstreamPool
   if pool
     for [id, upstream] as pool.upstreams
       targets = upstream.targets.map((t) -> t.url).join(', ')

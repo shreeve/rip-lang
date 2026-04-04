@@ -11,7 +11,7 @@ HTTP service, or a TCP/TLS service.
 It has two operator stories:
 
 1. `rip server` for a single app
-2. `serve.rip` for the composable edge/app runtime
+2. `serve.rip` for the composable multi-host runtime
 
 Those stories map to four serving modes:
 
@@ -19,14 +19,6 @@ Those stories map to four serving modes:
 - app serving
 - HTTP/HTTPS proxy serving
 - TCP/TLS passthrough serving
-
-The package combines:
-
-- app framework (`api.rip`, `middleware.rip`)
-- managed worker runtime (`server.rip`, `control/*`)
-- edge proxy/runtime (`edge/*`)
-- stream routing (`streams/*`)
-- auto-TLS (`acme/*`)
 
 TLS, proxy health, verification, rollback, drain, reload, and diagnostics are
 part of the core serving story. They are serving guarantees, not side features.
@@ -40,52 +32,68 @@ part of the core serving story. They are serving guarantees, not side features.
 - `default.rip` — static fallback server
 - `server.rip` — orchestration hub: Manager, Server, startup, request dispatch
 
-### `edge/`
+### `serving/`
+
+HTTP serving layer. Everything that handles an inbound HTTP request after it
+arrives at the server.
 
 - `config.rip` — `serve.rip` loading, composition, and validation
-- `forwarding.rip` — HTTP/WS proxy helpers and worker forwarding
-- `metrics.rip` — diagnostics counters/gauges
+- `forwarding.rip` — response builders, request IDs, error responses, worker forwarding
+- `logging.rip` — access logging, debug flags, formatting utilities
+- `metrics.rip` — diagnostics counters/gauges and response builders
+- `proxy.rip` — HTTP/WebSocket proxy-to-upstream routing with retry
 - `queue.rip` — worker queue helpers
 - `ratelimit.rip` — request rate limiting
-- `realtime.rip` — realtime hub
+- `realtime.rip` — realtime hub and WebSocket handler builders
 - `registry.rip` — host registry and app state
 - `router.rip` — host/path/method route matching
-- `runtime.rip` — edge runtime lifecycle helpers
+- `runtime.rip` — serving runtime lifecycle helpers
 - `security.rip` — request validation and smuggling defenses
+- `static.rip` — static file serving, traversal safety, SPA fallback
 - `tls.rip` — TLS loading helpers
 - `upstream.rip` — HTTP proxy backend pools, health checks, retry
 - `verify.rip` — post-activate verification policy
 
-### `control/`
-
-- `cli.rip` — CLI parsing and subcommands
-- `control.rip` — control socket handlers
-- `lifecycle.rip` — shutdown hooks and event logging
-- `mdns.rip` — `.local` advertising
-- `watchers.rip` — code and SSE watch helpers
-- `worker.rip` — worker child runtime
-- `workers.rip` — worker spawn/health helpers
-
 ### `streams/`
 
+TCP/TLS passthrough layer. Handles Layer 4 connections before TLS termination.
+
+- `clienthello.rip` — strict ClientHello SNI extraction
 - `config.rip` — stream route normalization
 - `index.rip` — stream runtime facade and listeners
 - `pipe.rip` — backpressure-safe byte piping
 - `router.rip` — listen port + SNI matching
 - `runtime.rip` — stream runtime metadata
-- `tls_clienthello.rip` — strict ClientHello SNI extraction
 - `upstream.rip` — TCP backend target selection and accounting
 
 ### `acme/`
 
-- `client.rip`, `manager.rip`, `crypto.rip`, `store.rip`
+Automatic certificate management.
+
+- `client.rip` — RFC 8555 ACME protocol client
+- `crypto.rip` — P-256 keys, JWS, CSR generation
+- `manager.rip` — certificate lifecycle orchestrator
+- `store.rip` — filesystem cert storage + HTTP-01 challenge store
+
+### `control/`
+
+Process management and operator control surfaces.
+
+- `cli.rip` — CLI parsing and subcommands
+- `control.rip` — control socket handlers
+- `lifecycle.rip` — shutdown hooks and event logging
+- `manager.rip` — worker pool manager (spawn, monitor, rolling restart)
+- `mdns.rip` — `.local` advertising
+- `watchers.rip` — code and SSE watch helpers
+- `worker.rip` — worker child runtime
+- `workers.rip` — worker spawn/health helpers
 
 ## `serve.rip`
 
 Canonical top-level keys:
 
 - `version`
-- `edge`
+- `server` (global settings; `edge` accepted as deprecated alias)
 - `certs`
 - `proxies`
 - `apps`
@@ -118,9 +126,9 @@ Host rules:
 
 ## Where logic belongs
 
-- request-path behavior for served HTTP content -> `edge/*`
-- HTTP proxy backend behavior and resilience -> `edge/upstream.rip` / `edge/forwarding.rip`
-- verification / reload orchestration -> `edge/runtime.rip`, `edge/verify.rip`
+- request-path behavior for served HTTP content -> `serving/*`
+- HTTP proxy backend behavior and resilience -> `serving/upstream.rip` / `serving/forwarding.rip`
+- verification / reload orchestration -> `serving/runtime.rip`, `serving/verify.rip`
 - Layer 4 TCP/TLS routing and ingress selection -> `streams/*`
 - CLI / app-entry resolution -> `control/cli.rip`
 - orchestration / wiring across serving modes -> `server.rip`

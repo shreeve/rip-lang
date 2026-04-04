@@ -1,5 +1,5 @@
 import { test, eq, ok } from './runner.rip'
-import { compileRouteTable, matchRoute, describeRoute } from '../edge/router.rip'
+import { compileRouteTable, matchRoute, describeRoute } from '../serving/router.rip'
 
 test "compileRouteTable keeps global route order", ->
   table = compileRouteTable([

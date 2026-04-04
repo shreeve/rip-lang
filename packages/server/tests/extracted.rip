@@ -1,0 +1,118 @@
+# extracted.rip — tests for modules extracted during the server rebuild
+
+import { test, eq, ok } from './runner.rip'
+import { nowMs, isDebug, applyFlagSideEffects, stripInternalHeaders } from '../serving/logging.rip'
+import { proxyRouteToUpstream, upgradeProxyWebSocket } from '../serving/proxy.rip'
+import { createMetrics, buildDiagnosticsBody } from '../serving/metrics.rip'
+import { proxyRealtimeToWorker, buildWebSocketHandlers, createHub } from '../serving/realtime.rip'
+import { Manager } from '../control/manager.rip'
+import { createUpstreamPool } from '../serving/upstream.rip'
+import { createServingRuntime } from '../serving/runtime.rip'
+
+# --- serving/logging.rip ---
+
+test "nowMs returns a number", ->
+  ok typeof nowMs() is 'number'
+  ok nowMs() > 0
+
+test "isDebug returns false by default", ->
+  eq isDebug(), false
+
+test "applyFlagSideEffects sets debug mode", ->
+  applyFlagSideEffects({ debug: true })
+  ok isDebug()
+  applyFlagSideEffects({ debug: false })
+
+test "stripInternalHeaders removes rip headers and preserves others", ->
+  h = new Headers()
+  h.set('content-type', 'text/plain')
+  h.set('rip-worker-busy', '1')
+  h.set('rip-worker-id', 'w-0')
+  h.set('rip-no-log', '1')
+  h.set('x-custom', 'keep')
+  stripped = stripInternalHeaders(h)
+  ok stripped.has('content-type')
+  ok stripped.has('x-custom')
+  eq stripped.has('rip-worker-busy'), false
+  eq stripped.has('rip-worker-id'), false
+  eq stripped.has('rip-no-log'), false
+
+# --- serving/proxy.rip ---
+
+test "proxyRouteToUpstream returns 503 when no matching proxy", ->
+  pool = createUpstreamPool()
+  runtime = createServingRuntime(null, pool)
+  metrics = createMetrics()
+  route = { proxy: 'nonexistent', timeouts: {} }
+  req = new Request('http://localhost/test')
+  res = await proxyRouteToUpstream(req, route, 'req-1', '127.0.0.1', runtime, metrics, {}, (->), (->))
+  eq res.status, 503
+
+test "upgradeProxyWebSocket returns 503 when no matching proxy", ->
+  pool = createUpstreamPool()
+  runtime = createServingRuntime(null, pool)
+  route = { proxy: 'nonexistent' }
+  res = upgradeProxyWebSocket(null, null, route, 'req-1', runtime)
+  eq res.status, 503
+
+# --- serving/metrics.rip ---
+
+test "buildDiagnosticsBody returns valid JSON with expected keys", ->
+  metrics = createMetrics()
+  runtime = createServingRuntime()
+  body = buildDiagnosticsBody
+    metrics: metrics
+    startedAt: Date.now()
+    appRegistry: { apps: new Map(), hostIndex: new Map() }
+    servingRuntime: runtime
+    serverVersion: '1.0.0'
+    ripVersion: '3.0.0'
+    configInfo: { kind: 'none' }
+    realtimeStats: { clients: 0, groups: 0 }
+    hosts: []
+    streamDiagnostics: {}
+    multiplexer: { enabled: false }
+    activeRuntime: { id: 'test', inflight: 0, wsConnections: 0 }
+    retiredRuntimes: []
+    activeStreamRuntime: { id: 'test', inflight: 0, listeners: [] }
+    retiredStreamRuntimes: []
+  parsed = JSON.parse(body)
+  ok parsed.status
+  ok parsed.version
+  ok parsed.metrics
+  ok parsed.gauges
+  eq parsed.version.server, '1.0.0'
+
+# --- serving/realtime.rip ---
+
+test "proxyRealtimeToWorker returns null when no socket available", ->
+  result = await proxyRealtimeToWorker(new Headers(), 'open', '', (-> null), (->))
+  eq result, null
+
+test "buildWebSocketHandlers returns object with websocket handlers", ->
+  hub = createHub()
+  serverStub =
+    metrics: createMetrics()
+    retainRuntimeWs: (->)
+    releaseRuntimeWs: (->)
+    createWsPassthrough: (->)
+    releaseProxyTarget: (->)
+    logEvent: (->)
+    proxyRealtimeToWorker: (->)
+  handlers = buildWebSocketHandlers(hub, serverStub)
+  ok handlers.websocket
+  ok typeof handlers.websocket.open is 'function'
+  ok typeof handlers.websocket.message is 'function'
+  ok typeof handlers.websocket.close is 'function'
+
+# --- control/manager.rip ---
+
+test "Manager constructor initializes expected state", ->
+  flags = { appName: 'test', workers: 2 }
+  mgr = new Manager(flags, '/tmp/server.rip')
+  eq mgr.appWorkers.size, 0
+  eq mgr.currentVersion, 1
+  eq mgr.shuttingDown, false
+  eq mgr.defaultAppId, 'test'
+  ok mgr.restartBudgets instanceof Map
+  ok mgr.deferredDeaths instanceof Set
