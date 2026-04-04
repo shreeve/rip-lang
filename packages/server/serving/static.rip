@@ -376,10 +376,11 @@ export serveStaticRoute = (req, url, route) ->
         return new Response(html, { headers: { 'content-type': 'text/html; charset=UTF-8' } })
     if stat.isFile()
       if route.browse and acceptsHtml(req)
-        if filePath.endsWith('.md')
+        viewSource = url.search is '?'
+        if filePath.endsWith('.md') and not viewSource
           html = renderMarkdown(filePath)
           return new Response(html, { headers: { 'content-type': 'text/html; charset=UTF-8' } })
-        if isTextFile(filePath)
+        if viewSource and isTextFile(filePath)
           html = renderTextFile(filePath)
           return new Response(html, { headers: { 'content-type': 'text/html; charset=UTF-8' } })
       file = Bun.file(filePath)
