@@ -119,7 +119,11 @@ renderDirectoryListing = (reqPath, fsPath, rootName) ->
   tr:last-child td{border-bottom:none}tbody tr:hover{background:var(--hover-bg)}
   td a{color:var(--link);text-decoration:none}td a:hover{text-decoration:underline}td a:visited{color:var(--link-visited)}
   .ic{width:2.5rem;text-align:center;font-size:1.125rem}.sz{width:6rem;text-align:right;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}.dt{color:var(--muted);white-space:nowrap}th.sz{text-align:right}
-  @media(max-width:640px){.wrap{margin:1rem auto}td,th{padding:.5rem .75rem}.dt,th.dt{display:none}.bar{padding:.75rem 1rem}}
+  .pop{position:fixed;z-index:9999;pointer-events:none;width:320px;background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.12);overflow:hidden;opacity:0;transform:translateY(6px) scale(.985);transition:opacity 150ms ease,transform 150ms ease}
+  .pop.on{opacity:1;transform:none}
+  .pop-h{padding:8px 14px;font-size:.6875rem;font-weight:700;letter-spacing:.06em;color:var(--muted);text-transform:uppercase;border-bottom:1px solid var(--border-row);background:var(--head-bg)}
+  .pop-b{display:flex;align-items:center;justify-content:center;min-height:100px}.pop-b img{display:block;max-width:100%;max-height:240px}
+  @media(max-width:640px){.wrap{margin:1rem auto}td,th{padding:.5rem .75rem}.dt,th.dt{display:none}.bar{padding:.75rem 1rem}.pop{display:none}}
   </style>
   </head>
   <body>
@@ -130,6 +134,9 @@ renderDirectoryListing = (reqPath, fsPath, rootName) ->
   <tbody>#{rows.join('\n')}</tbody>
   </table>
   </div></div>
+  <script>
+  !function(){var p,c,ox=16,oy=16;function mk(){if(p)return p;p=document.createElement('div');p.className='pop';p.innerHTML='<div class="pop-h"></div><div class="pop-b"></div>';document.body.appendChild(p);return p}function show(a,e){var t=a.dataset.pv,s=a.dataset.src;if(!t||!s)return;var el=mk(),b=el.lastChild;el.firstChild.textContent='PREVIEW';b.innerHTML='';var img=new Image();img.src=s;b.appendChild(img);c=a;el.classList.add('on');place(e.clientX,e.clientY)}function hide(){c=null;if(p)p.classList.remove('on')}function place(x,y){if(!p)return;var r=p.getBoundingClientRect(),m=12,l=x+ox,t=y+oy;if(l+r.width>innerWidth-m)l=x-r.width-ox;if(t+r.height>innerHeight-m)t=innerHeight-r.height-m;if(l<m)l=m;if(t<m)t=m;p.style.left=l+'px';p.style.top=t+'px'}document.addEventListener('mouseover',function(e){var a=e.target.closest('[data-pv]');if(a)show(a,e)});document.addEventListener('mousemove',function(e){if(c)place(e.clientX,e.clientY)});document.addEventListener('mouseout',function(e){var a=e.target.closest('[data-pv]');if(a&&a===c)hide()});document.addEventListener('scroll',hide,{passive:true});window.addEventListener('blur',hide)}();
+  </script>
   </body>
   </html>
   """
