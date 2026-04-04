@@ -14,7 +14,7 @@ import { use, start, notFound } from '@rip-lang/server'
 import { serve } from '@rip-lang/server/middleware'
 import { statSync } from 'node:fs'
 import { join, resolve, basename } from 'node:path'
-import { renderDirectoryListing, renderMarkdown, renderTextFile, isTextFile, serveRipHighlightGrammar } from './serving/static.rip'
+import { renderDirectoryListing, renderMarkdown, renderTextFile, isTextFile, serveRipHighlightGrammar, findIndexFile } from './serving/static.rip'
 
 root = resolve(process.env.APP_BASE_DIR or process.cwd())
 rootSlash = root + '/'
@@ -61,8 +61,8 @@ notFound ->
 
   if stat.isDirectory()
     return new Response(null, { status: 301, headers: { Location: "#{reqPath}/" } }) unless reqPath.endsWith('/')
-    indexPath = join(path, 'index.html')
-    if (try statSync(indexPath).isFile())
+    indexPath = findIndexFile(path)
+    if indexPath
       return @send indexPath, 'text/html; charset=UTF-8'
     return new Response renderDirectoryListing(reqPath, path, rootName), { headers: { 'Content-Type': 'text/html; charset=UTF-8' } }
 

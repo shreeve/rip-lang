@@ -321,6 +321,16 @@ export renderTextFile = (filePath) ->
 
 # --- Static file serving ---
 
+INDEX_FILES = ['index.html', 'index.rip', 'index.ts', 'index.tsx', 'index.jsx', 'index.js']
+
+export findIndexFile = (dir) ->
+  for name in INDEX_FILES
+    p = join(dir, name)
+    try
+      if statSync(p).isFile()
+        return p
+  null
+
 export serveRipHighlightGrammar = ->
   return null unless HLJS_RIP_PATH
   content = readFileSync(HLJS_RIP_PATH, 'utf8')
@@ -356,12 +366,10 @@ export serveStaticRoute = (req, url, route) ->
     if stat.isDirectory()
       unless pathname.endsWith('/')
         return Response.redirect("#{pathname}/", 301)
-      indexPath = join(filePath, 'index.html')
-      try
-        indexStat = statSync(indexPath)
-        if indexStat.isFile()
-          file = Bun.file(indexPath)
-          return new Response(file, { headers: { 'content-type': 'text/html; charset=UTF-8' } })
+      indexPath = findIndexFile(filePath)
+      if indexPath
+        file = Bun.file(indexPath)
+        return new Response(file, { headers: { 'content-type': 'text/html; charset=UTF-8' } })
       if route.browse and acceptsHtml(req)
         rootName = basename(staticDir)
         html = renderDirectoryListing(pathname, filePath, rootName)
