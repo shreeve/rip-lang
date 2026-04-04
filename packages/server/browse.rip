@@ -27,7 +27,7 @@ notFound ->
   url = new URL(@req.url)
   reqPath = try decodeURIComponent(url.pathname) catch then url.pathname
   path = resolve(root, reqPath.slice(1))
-  viewSource = url.search is '?'
+  viewSource = url.search is '?view'
 
   unless path is root or path.startsWith(rootSlash)
     return new Response 'Not Found', { status: 404 }
