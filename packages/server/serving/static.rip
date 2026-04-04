@@ -37,31 +37,35 @@ fmtDate = (ms) ->
   d = new Date(ms)
   mo = d.toLocaleString('en', { month: 'short' })
   day = String(d.getDate()).padStart(2, '0')
-  year = d.getFullYear()
-  hour = d.getHours()
-  min = String(d.getMinutes()).padStart(2, '0')
-  ampm = if hour >= 12 then 'PM' else 'AM'
-  hour = hour % 12 or 12
-  "#{mo} #{day}, #{year} at #{hour}:#{min} #{ampm}"
-
-EXT_ICONS =
-  html: '🌐', htm: '🌐', css: '🎨', js: '📜', mjs: '📜', ts: '📜'
-  json: '📋', rip: '⚡', md: '📝', txt: '📝', pdf: '📕'
-  png: '🖼️', jpg: '🖼️', jpeg: '🖼️', gif: '🖼️', svg: '🖼️', webp: '🖼️', ico: '🖼️'
-  zip: '📦', gz: '📦', tar: '📦'
-  mp3: '🎵', ogg: '🎵', wav: '🎵', mp4: '🎬', webm: '🎬'
-  woff: '🔤', woff2: '🔤', ttf: '🔤', otf: '🔤'
+  "#{mo} #{day}, #{d.getFullYear()}"
 
 IMG_EXTS = new Set ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'avif']
+CODE_EXTS = new Set ['js', 'mjs', 'ts', 'rip', 'html', 'htm', 'css', 'json', 'xml', 'yaml', 'yml', 'sh']
+DOC_EXTS = new Set ['pdf', 'md', 'txt', 'doc', 'docx', 'rtf']
+ARCHIVE_EXTS = new Set ['zip', 'gz', 'tar', 'bz2', 'xz', '7z', 'rar']
 
-fileIcon = (name) -> EXT_ICONS[name.slice(name.lastIndexOf('.') + 1).toLowerCase()] or '📄'
+SVG_FOLDER = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>'
+SVG_FILE = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>'
+SVG_IMAGE = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>'
+SVG_CODE = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>'
+SVG_DOC = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>'
+SVG_ARCHIVE = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>'
+SVG_UP = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l-6-6 6-6"/><path d="M3 12h18"/></svg>'
+
+fileIcon = (name) ->
+  ext = name.slice(name.lastIndexOf('.') + 1).toLowerCase()
+  if IMG_EXTS.has(ext) then SVG_IMAGE
+  else if CODE_EXTS.has(ext) then SVG_CODE
+  else if DOC_EXTS.has(ext) then SVG_DOC
+  else if ARCHIVE_EXTS.has(ext) then SVG_ARCHIVE
+  else SVG_FILE
 
 previewAttr = (name, href) ->
   ext = name.slice(name.lastIndexOf('.') + 1).toLowerCase()
   if IMG_EXTS.has(ext) then " data-pv=\"image\" data-src=\"#{esc href}\"" else ''
 
 dirRow = (ic, href, label, size = '', date = '', extra = '') ->
-  "<tr><td class=\"ic\">#{ic}</td><td><a href=\"#{esc href}\"#{extra}>#{esc label}</a></td><td class=\"sz\">#{size}</td><td class=\"dt\">#{date}</td></tr>"
+  "<tr><td class=\"ic\">#{ic}</td><td class=\"nm\"><a href=\"#{esc href}\"#{extra}>#{esc label}</a></td><td class=\"sz\">#{size}</td><td class=\"dt\">#{date}</td></tr>"
 
 renderDirectoryListing = (reqPath, fsPath, rootName) ->
   entries = try readdirSync(fsPath, { withFileTypes: true }) catch then []
@@ -74,9 +78,9 @@ renderDirectoryListing = (reqPath, fsPath, rootName) ->
   files.sort()
 
   rows = []
-  rows.push dirRow('📁', '../', '..') if reqPath isnt '/'
+  rows.push dirRow(SVG_UP, '../', '..') if reqPath isnt '/'
   for d in dirs
-    rows.push dirRow('📁', "#{d}/", d)
+    rows.push dirRow(SVG_FOLDER, "#{d}/", d)
   for f in files
     try
       s = statSync(join(fsPath, f))
@@ -86,15 +90,15 @@ renderDirectoryListing = (reqPath, fsPath, rootName) ->
 
   numDirs = dirs.length
   numFiles = files.length
-  summary = []
-  summary.push "#{numDirs} folder#{if numDirs isnt 1 then 's' else ''}" if numDirs > 0
-  summary.push "#{numFiles} file#{if numFiles isnt 1 then 's' else ''}" if numFiles > 0
+  counts = []
+  counts.push "#{numDirs} folder#{if numDirs isnt 1 then 's' else ''}" if numDirs > 0
+  counts.push "#{numFiles} file#{if numFiles isnt 1 then 's' else ''}" if numFiles > 0
 
   crumbs = "<a href=\"/\">#{esc rootName}</a>"
   href = ''
   for part in reqPath.split('/').filter((p) -> p)
     href += "/#{part}"
-    crumbs += " <span class=\"sep\">/</span> <a href=\"#{href}/\">#{esc part}</a>"
+    crumbs += "<span class=\"sep\">/</span><a href=\"#{href}/\">#{esc part}</a>"
 
   """
   <!DOCTYPE html>
@@ -102,40 +106,70 @@ renderDirectoryListing = (reqPath, fsPath, rootName) ->
   <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Index of #{esc reqPath}</title>
+  <title>#{esc reqPath} — #{esc rootName}</title>
   <style>
-  :root{--bg:#f3f6f7;--card:#fff;--border:#e5e7eb;--border-row:#f0f0f0;--text:#1f2937;--muted:#6b7280;--link:#2563eb;--link-visited:#7c3aed;--hover-bg:#f0f7ff;--head-bg:#fafbfc;--sep:#cbd5e1}
-  @media(prefers-color-scheme:dark){:root{--bg:#0d1117;--card:#161b22;--border:#30363d;--border-row:#21262d;--text:#c9d1d9;--muted:#8b949e;--link:#58a6ff;--link-visited:#bc8cff;--hover-bg:#1c2129;--head-bg:#1c2129;--sep:#484f58}}
-  *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
-  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:15px;line-height:1.5;color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased}
-  .wrap{max-width:960px;margin:2.5rem auto;padding:0 1rem}
-  .card{background:var(--card);border:1px solid var(--border);border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06)}
-  .bar{display:flex;align-items:center;justify-content:space-between;padding:.875rem 1.25rem;border-bottom:1px solid var(--border);gap:1rem}
-  .crumbs{font-size:.9375rem;font-weight:500}.crumbs a{color:var(--link);text-decoration:none}.crumbs a:hover{text-decoration:underline}
-  .sep{color:var(--sep);margin:0 .3rem;font-weight:400}.meta{font-size:.8125rem;color:var(--muted);white-space:nowrap}
-  table{width:100%;border-collapse:collapse}
-  th{position:sticky;top:0;background:var(--head-bg);text-align:left;padding:.625rem 1.25rem;font-size:.6875rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border)}
-  td{padding:.5rem 1.25rem;border-bottom:1px solid var(--border-row);font-size:.875rem;vertical-align:middle}
-  tr:last-child td{border-bottom:none}tbody tr:hover{background:var(--hover-bg)}
-  td a{color:var(--link);text-decoration:none}td a:hover{text-decoration:underline}td a:visited{color:var(--link-visited)}
-  .ic{width:2.5rem;text-align:center;font-size:1.125rem}.sz{width:6rem;text-align:right;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}.dt{color:var(--muted);white-space:nowrap}th.sz{text-align:right}
-  .pop{position:fixed;z-index:9999;pointer-events:none;width:320px;background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.12);overflow:hidden;opacity:0;transform:translateY(6px) scale(.985);transition:opacity 150ms ease,transform 150ms ease}
-  .pop.on{opacity:1;transform:none}
-  .pop-h{padding:8px 14px;font-size:.6875rem;font-weight:700;letter-spacing:.06em;color:var(--muted);text-transform:uppercase;border-bottom:1px solid var(--border-row);background:var(--head-bg)}
-  .pop-b{display:flex;align-items:center;justify-content:center;min-height:100px}.pop-b img{display:block;max-width:100%;max-height:240px}
-  @media(max-width:640px){.wrap{margin:1rem auto}td,th{padding:.5rem .75rem}.dt,th.dt{display:none}.bar{padding:.75rem 1rem}.pop{display:none}}
+  :root {
+    --bg: #fafafa; --card: #fff; --border: #e8e8ec; --row-border: #f4f4f5;
+    --text: #1a1a1a; --secondary: #71717a; --link: #18181b; --link-hover: #3b82f6;
+    --hover: #f8fafc; --head: #fafafa; --icon: #a1a1aa; --sep: #d4d4d8;
+    --radius: 10px; --shadow: 0 1px 2px rgba(0,0,0,.04), 0 0 0 1px rgba(0,0,0,.03);
+  }
+  @media (prefers-color-scheme: dark) { :root {
+    --bg: #09090b; --card: #18181b; --border: #27272a; --row-border: #1f1f23;
+    --text: #fafafa; --secondary: #71717a; --link: #fafafa; --link-hover: #60a5fa;
+    --hover: #1c1c20; --head: #141416; --icon: #52525b; --sep: #3f3f46;
+    --shadow: 0 1px 2px rgba(0,0,0,.2), 0 0 0 1px rgba(255,255,255,.04);
+  }}
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+    font-size: 14px; line-height: 1.5; color: var(--text); background: var(--bg);
+    -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+  .wrap { max-width: 880px; margin: 3rem auto; padding: 0 1.25rem; }
+  .card { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+  .bar { display: flex; align-items: center; justify-content: space-between;
+    padding: .75rem 1rem; gap: .75rem; border-bottom: 1px solid var(--border); }
+  .crumbs { font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 0; flex-wrap: wrap; }
+  .crumbs a { color: var(--secondary); text-decoration: none; padding: 2px 6px; border-radius: 4px; transition: all 120ms; }
+  .crumbs a:last-child { color: var(--text); font-weight: 600; }
+  .crumbs a:hover { color: var(--link-hover); background: var(--hover); }
+  .sep { color: var(--sep); font-size: 11px; margin: 0 1px; user-select: none; }
+  .meta { font-size: 12px; color: var(--secondary); white-space: nowrap; font-weight: 400; }
+  table { width: 100%; border-collapse: collapse; }
+  thead { display: none; }
+  td { padding: 7px 1rem; vertical-align: middle; font-size: 13px; border-bottom: 1px solid var(--row-border); }
+  tr:last-child td { border-bottom: none; }
+  tbody tr { transition: background 80ms; }
+  tbody tr:hover { background: var(--hover); }
+  .ic { width: 2.25rem; text-align: center; color: var(--icon); line-height: 0; }
+  .ic svg { vertical-align: middle; }
+  .nm a { color: var(--link); text-decoration: none; font-weight: 450; letter-spacing: -.01em; }
+  .nm a:hover { color: var(--link-hover); }
+  .sz { width: 5.5rem; text-align: right; color: var(--secondary); white-space: nowrap;
+    font-variant-numeric: tabular-nums; font-size: 12px; letter-spacing: .01em; }
+  .dt { color: var(--secondary); white-space: nowrap; font-size: 12px; }
+  .pop { position: fixed; z-index: 9999; pointer-events: none; width: 300px;
+    background: var(--card); border-radius: 10px; box-shadow: 0 20px 40px rgba(0,0,0,.15), 0 0 0 1px rgba(0,0,0,.05);
+    overflow: hidden; opacity: 0; transform: translateY(4px) scale(.98);
+    transition: opacity 120ms ease, transform 120ms ease; }
+  .pop.on { opacity: 1; transform: none; }
+  .pop-b { display: flex; align-items: center; justify-content: center; min-height: 80px; padding: 8px; }
+  .pop-b img { display: block; max-width: 100%; max-height: 220px; border-radius: 4px; }
+  @media (max-width: 640px) {
+    .wrap { margin: 1rem auto; } td { padding: 8px .75rem; }
+    .dt { display: none; } .bar { padding: .625rem .75rem; } .pop { display: none; }
+  }
   </style>
   </head>
   <body>
   <div class="wrap"><div class="card">
-  <div class="bar"><div class="crumbs">#{crumbs}</div><div class="meta">#{summary.join(' &middot; ')}</div></div>
+  <div class="bar"><div class="crumbs">#{crumbs}</div><div class="meta">#{counts.join(' · ')}</div></div>
   <table>
-  <thead><tr><th></th><th>Name</th><th class="sz">Size</th><th class="dt">Modified</th></tr></thead>
+  <thead><tr><th></th><th>Name</th><th>Size</th><th>Modified</th></tr></thead>
   <tbody>#{rows.join('\n')}</tbody>
   </table>
   </div></div>
   <script>
-  !function(){var p,c,ox=16,oy=16;function mk(){if(p)return p;p=document.createElement('div');p.className='pop';p.innerHTML='<div class="pop-h"></div><div class="pop-b"></div>';document.body.appendChild(p);return p}function show(a,e){var t=a.dataset.pv,s=a.dataset.src;if(!t||!s)return;var el=mk(),b=el.lastChild;el.firstChild.textContent='PREVIEW';b.innerHTML='';var img=new Image();img.src=s;b.appendChild(img);c=a;el.classList.add('on');place(e.clientX,e.clientY)}function hide(){c=null;if(p)p.classList.remove('on')}function place(x,y){if(!p)return;var r=p.getBoundingClientRect(),m=12,l=x+ox,t=y+oy;if(l+r.width>innerWidth-m)l=x-r.width-ox;if(t+r.height>innerHeight-m)t=innerHeight-r.height-m;if(l<m)l=m;if(t<m)t=m;p.style.left=l+'px';p.style.top=t+'px'}document.addEventListener('mouseover',function(e){var a=e.target.closest('[data-pv]');if(a)show(a,e)});document.addEventListener('mousemove',function(e){if(c)place(e.clientX,e.clientY)});document.addEventListener('mouseout',function(e){var a=e.target.closest('[data-pv]');if(a&&a===c)hide()});document.addEventListener('scroll',hide,{passive:true});window.addEventListener('blur',hide)}();
+  !function(){var p,c,ox=14,oy=14;function mk(){if(p)return p;p=document.createElement('div');p.className='pop';p.innerHTML='<div class="pop-b"></div>';document.body.appendChild(p);return p}function show(a,e){var s=a.dataset.src;if(!s)return;var el=mk(),b=el.firstChild;b.innerHTML='';var img=new Image();img.src=s;b.appendChild(img);c=a;el.classList.add('on');place(e.clientX,e.clientY)}function hide(){c=null;if(p)p.classList.remove('on')}function place(x,y){if(!p)return;var r=p.getBoundingClientRect(),m=12,l=x+ox,t=y+oy;if(l+r.width>innerWidth-m)l=x-r.width-ox;if(t+r.height>innerHeight-m)t=innerHeight-r.height-m;if(l<m)l=m;if(t<m)t=m;p.style.left=l+'px';p.style.top=t+'px'}document.addEventListener('mouseover',function(e){var a=e.target.closest('[data-pv]');if(a)show(a,e)});document.addEventListener('mousemove',function(e){if(c)place(e.clientX,e.clientY)});document.addEventListener('mouseout',function(e){var a=e.target.closest('[data-pv]');if(a&&a===c)hide()});document.addEventListener('scroll',hide,{passive:true});window.addEventListener('blur',hide)}();
   </script>
   </body>
   </html>
