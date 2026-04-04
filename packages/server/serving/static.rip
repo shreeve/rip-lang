@@ -310,7 +310,7 @@ export renderTextFile = (filePath) ->
   </head>
   <body>
   <div class="wrap"><div class="card">
-  <div class="bar"><span class="name">#{esc name}</span><span class="meta">#{content.split('\\n').length} lines</span></div>
+  <div class="bar"><span class="name">#{esc name}</span><span class="meta">#{n = content.split('\\n').length}#{n} line#{if n isnt 1 then 's' else ''}</span></div>
   <pre><code class="language-#{lang}">#{esc content}</code></pre>
   </div></div>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
