@@ -271,7 +271,8 @@ HLJS_LANG_MAP =
   jsonc: 'json', gql: 'graphql'
 
 export isTextFile = (filePath) ->
-  ext = basename(filePath).toLowerCase().slice(basename(filePath).lastIndexOf('.') + 1)
+  name = basename(filePath).toLowerCase()
+  ext = name.slice(name.lastIndexOf('.') + 1)
   not BINARY_EXTS.has(ext)
 
 hljsLang = (filePath) ->
