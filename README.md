@@ -485,7 +485,7 @@ bun run build          # Build browser bundle
 ## Release
 
 ```bash
-# rip-lang + changed @rip-lang/* packages + @rip-lang/all
+# rip-lang + changed @rip-lang/* packages
 bun run bump
 
 # Explicit version level
@@ -495,8 +495,7 @@ bun run bump major
 ```
 
 - `bun run bump` is the standard release flow for the npm ecosystem in this repo.
-- It bumps `rip-lang`, bumps any changed publishable `@rip-lang/*` packages, updates `@rip-lang/all`, runs the build and test steps, then commits, pushes, and publishes.
-- `@rip-lang/all` is released automatically as part of that flow; there is no separate manual release step for it.
+- It bumps `rip-lang`, bumps any changed publishable `@rip-lang/*` packages, runs the build and test steps, then commits, pushes, and publishes.
 - `packages/vscode` is intentionally excluded and must be versioned and published separately.
 
 ---

@@ -15,25 +15,6 @@
         "rip-lang": ">=3.13.134",
       },
     },
-    "packages/all": {
-      "name": "@rip-lang/all",
-      "version": "3.13.160",
-      "dependencies": {
-        "@rip-lang/ai": ">=0.1.1",
-        "@rip-lang/csv": ">=1.3.111",
-        "@rip-lang/db": ">=1.3.121",
-        "@rip-lang/http": ">=1.1.112",
-        "@rip-lang/print": ">=1.1.116",
-        "@rip-lang/schema": ">=0.3.112",
-        "@rip-lang/script": ">=0.1.8",
-        "@rip-lang/server": ">=1.4.3",
-        "@rip-lang/stamp": ">=0.1.32",
-        "@rip-lang/swarm": ">=1.2.122",
-        "@rip-lang/ui": ">=0.4.13",
-        "@rip-lang/x12": ">=0.2.112",
-        "rip-lang": ">=3.13.134",
-      },
-    },
     "packages/csv": {
       "name": "@rip-lang/csv",
       "version": "1.3.111",
@@ -89,7 +70,7 @@
     },
     "packages/server": {
       "name": "@rip-lang/server",
-      "version": "1.4.3",
+      "version": "1.4.6",
       "bin": {
         "rip-server": "./bin/rip-server",
       },
@@ -210,8 +191,6 @@
     "@esbuild/win32-x64": ["@esbuild/win32-x64@0.27.3", "", { "os": "win32", "cpu": "x64" }, "sha512-4uJGhsxuptu3OcpVAzli+/gWusVGwZZHTlS63hh++ehExkVT8SgiEf7/uC/PclrPPkLhZqGgCTjd0VWLo6xMqA=="],
 
     "@rip-lang/ai": ["@rip-lang/ai@workspace:packages/ai"],
-
-    "@rip-lang/all": ["@rip-lang/all@workspace:packages/all"],
 
     "@rip-lang/csv": ["@rip-lang/csv@workspace:packages/csv"],
 

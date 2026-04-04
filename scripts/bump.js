@@ -157,29 +157,11 @@ async function selectiveRelease(packageNames) {
     bumped.push({ name: pkg.name, old: oldVer, new: newVer, dir: name });
   }
 
-  // Update @rip-lang/all
-  const allPkgPath = 'packages/all/package.json';
-  const allPkg = readJSON(allPkgPath);
-  const allOldVer = allPkg.version;
-  const allNewVer = bumpVersion(allOldVer, 'patch');
-  allPkg.version = allNewVer;
-
-  if (allPkg.dependencies) {
-    for (const b of bumped) {
-      if (allPkg.dependencies[b.name]) {
-        allPkg.dependencies[b.name] = `>=${b.new}`;
-      }
-    }
-  }
-
-  writeJSON(allPkgPath, allPkg);
-
   // Summary
   console.log('\nBumped packages:');
   for (const b of bumped) {
     console.log(`  ${b.name.padEnd(22)} ${b.old} → ${b.new}`);
   }
-  console.log(`  ${'@rip-lang/all'.padEnd(22)} ${allOldVer} → ${allNewVer}`);
 
   // Commit and push
   console.log('\nCommitting...');
@@ -200,7 +182,6 @@ async function selectiveRelease(packageNames) {
       publish(b.dir, b.name, b.new);
     }
   }
-  publish('all', '@rip-lang/all', allNewVer);
 
   // Refresh workspace links
   run('bun install', { stdio: 'inherit' });
@@ -284,29 +265,7 @@ async function fullRelease(level) {
     console.log('No package changes detected.');
   }
 
-  // Step 4: Bump @rip-lang/all
-  const allPkgPath = 'packages/all/package.json';
-  const allPkg = readJSON(allPkgPath);
-  const allOldVer = allPkg.version;
-  const allNewVer = bumpVersion(allOldVer, 'patch');
-  allPkg.version = allNewVer;
-
-  if (allPkg.dependencies) {
-    allPkg.dependencies['rip-lang'] = `>=${newVersion}`;
-    for (const dir of dirs) {
-      if (dir === 'all') continue;
-      const pkg = readJSON(`packages/${dir}/package.json`);
-      if (allPkg.dependencies[pkg.name]) {
-        allPkg.dependencies[pkg.name] = `>=${pkg.version}`;
-      }
-    }
-  }
-
-  writeJSON(allPkgPath, allPkg);
-  bumped.push({ name: '@rip-lang/all', old: allOldVer, new: allNewVer, dir: 'all' });
-  console.log(`  ${'@rip-lang/all'.padEnd(22)} ${allOldVer} → ${allNewVer}`);
-
-  // Step 5: Rebuild and test
+  // Step 4: Rebuild and test
   console.log('\nRebuilding...');
 
   // Rebuild if src/ has uncommitted changes OR if rip.js version is behind
@@ -347,7 +306,7 @@ async function fullRelease(level) {
     process.exit(1);
   }
 
-  // Step 6: Commit and push
+  // Step 5: Commit and push
   console.log('\nCommitting...');
 
   const pkgList = bumped.map(b => `  ${b.name}@${b.new}`).join('\n');
@@ -360,19 +319,16 @@ async function fullRelease(level) {
   run('git push');
   console.log('  ✓ committed and pushed');
 
-  // Step 7: Publish
+  // Step 6: Publish
   console.log('\nPublishing...');
 
   publish('.', 'rip-lang', newVersion);
 
   for (const b of bumped) {
-    if (b.name === '@rip-lang/all') continue;
     publish(b.dir, b.name, b.new);
   }
 
-  publish('all', '@rip-lang/all', allNewVer);
-
-  // Step 8: Refresh workspace links (wait for registry propagation)
+  // Step 7: Refresh workspace links (wait for registry propagation)
   console.log('\nRefreshing...');
   const maxWait = 90, poll = 3;
   for (let waited = 0; waited <= maxWait; waited += poll) {
