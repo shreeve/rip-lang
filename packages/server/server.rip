@@ -657,9 +657,14 @@ class Server
       finally
         @releaseRuntime(runtime)
     if matchedRoute?.static
-      return serveStaticRoute(req, url, matchedRoute)
+      start = performance.now()
+      res = serveStaticRoute(req, url, matchedRoute)
+      @logAccess(req, res, (performance.now() - start) / 1000, 0)
+      return res
     if matchedRoute?.redirect
-      return buildRedirectResponse(req, url, matchedRoute)
+      res = buildRedirectResponse(req, url, matchedRoute)
+      @logAccess(req, res, 0, 0)
+      return res
 
     # Resolve host to app — app traffic falls back to the managed worker registry
     appId = matchedRoute?.app or resolveHost(@appRegistry, host)
