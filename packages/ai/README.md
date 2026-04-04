@@ -44,8 +44,8 @@ chmod 600 ~/.config/rip/credentials
 
 ```
 ┌─────────────┐          ┌─────────────┐          ┌─────────────┐
-│   Claude     │  stdio   │   rip-ai    │  HTTPS   │  GPT-5.4    │
-│  (Cursor)    │◀────────▶│   (MCP)     │────────▶│  (OpenAI)   │
+│   Claude    │  stdio   │   rip-ai    │  HTTPS   │  GPT-5.4    │
+│  (Cursor)   │◀────────▶│   (MCP)     │────────▶ │  (OpenAI)   │
 └─────────────┘          └─────────────┘          └─────────────┘
 ```
 
