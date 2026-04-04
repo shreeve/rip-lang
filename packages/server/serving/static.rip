@@ -321,7 +321,7 @@ export renderTextFile = (filePath) ->
 
 # --- Static file serving ---
 
-INDEX_FILES = ['index.html', 'index.rip', 'index.ts', 'index.tsx', 'index.jsx', 'index.js']
+export INDEX_FILES = ['index.html', 'index.rip', 'index.ts', 'index.tsx', 'index.jsx', 'index.js']
 
 export findIndexFile = (dir) ->
   for name in INDEX_FILES
