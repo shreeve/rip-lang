@@ -80,9 +80,10 @@ export logStartupSummary = (server, flags, buildRipdevUrlFn, formatPortFn) ->
   if hosts.length > 0
     lines.push ''
     for h in hosts
+      scheme = if h.tls or h.action is 'passthrough' then 'https://' else 'http://'
       pad = ' '.repeat(maxHost - h.name.length + 2)
       tls = if h.tls then " #{g}✓#{r}#{d}tls#{r}" else ''
-      lines.push "  #{c}#{h.name}#{r}#{pad}#{d}#{h.action}#{r}#{tls}"
+      lines.push "  #{c}#{scheme}#{h.name}#{r}#{pad}#{d}#{h.action}#{r}#{tls}"
 
   if upstreamList.length > 0
     lines.push ''
