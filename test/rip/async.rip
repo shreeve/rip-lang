@@ -2,6 +2,21 @@
 # Tests "await" and "await-return" node types
 
 # ==============================================================================
+# Canary: verifies the test runner properly awaits async test() calls.
+# This test uses a multi-hop async chain (nested async IIFEs) that requires
+# multiple microtask cycles to resolve. If the runner silently drops async
+# tests, this test won't be counted and the total will be wrong.
+# ==============================================================================
+
+test "async canary - multi-hop await is tracked by runner", '''
+  fn = ->
+    inner = -> Promise.resolve(Promise.resolve(42))
+    result = try await inner()
+    result
+  fn()
+  ''', 42
+
+# ==============================================================================
 # Await: "await"
 # ==============================================================================
 
@@ -596,3 +611,110 @@ code "object comprehension await emits async IIFE", '''
     return result;
   })();
   '''
+
+# ==============================================================================
+# If-expression with await (multi-statement IIFE path)
+# ==============================================================================
+
+# Runtime: await in then-branch (multi-statement triggers IIFE)
+test "if expr with await in then-branch resolves", '''
+  fn = ->
+    resolve = (v) -> Promise.resolve(v)
+    result = if true
+      a = resolve!(42)
+      a + 1
+    else
+      0
+    result
+  fn()
+  ''', 43
+
+# Runtime: await in else-branch
+test "if expr with await in else-branch resolves", '''
+  fn = ->
+    resolve = (v) -> Promise.resolve(v)
+    result = if false
+      0
+    else
+      a = resolve!(99)
+      a - 9
+    result
+  fn()
+  ''', 90
+
+# Runtime: await in condition (multi-statement branch, triggers IIFE)
+test "if expr with await in condition resolves", '''
+  fn = ->
+    check = -> Promise.resolve(true)
+    result = if check!()
+      a = 10
+      a * 2
+    else
+      0
+    result
+  fn()
+  ''', 20
+
+# Codegen: if-expression multi-statement with await
+code "if expr await emits async IIFE", '''
+  x = if cond
+    a = fetch!()
+    a + 1
+  else
+    0
+  ''', '''
+  let a, x;
+  x = await (async () => { if (cond) {
+    a = await fetch();
+    return (a + 1);
+  } else {
+    return 0;
+  } })();
+  '''
+
+# ==============================================================================
+# Nested async expression constructs
+# ==============================================================================
+
+# Runtime: switch inside try, both with await
+test "nested switch inside try with await resolves", '''
+  fn = ->
+    resolve = (v) -> Promise.resolve(v)
+    result = try
+      switch 'a'
+        when 'a' then resolve!(42)
+        else 0
+    catch e
+      -1
+    result
+  fn()
+  ''', 42
+
+# Runtime: comprehension inside if, both with await
+test "nested comprehension inside if with await resolves", '''
+  fn = ->
+    resolve = (v) -> Promise.resolve(v)
+    result = if true
+      items = (resolve!(x) for x in [1, 2, 3])
+      items.length
+    else
+      0
+    result
+  fn()
+  ''', 3
+
+# Runtime: if inside switch, both with await
+test "nested if inside switch with await resolves", '''
+  fn = ->
+    resolve = (v) -> Promise.resolve(v)
+    result = switch 'x'
+      when 'x'
+        if true
+          a = resolve!(10)
+          a * 3
+        else
+          0
+      else 0
+    result
+  fn()
+  ''', 30

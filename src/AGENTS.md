@@ -143,13 +143,42 @@ Tagged template bridge:
 ## Context-Aware Generation
 
 ```javascript
-generate(sexpr, context = 'statement')
+emit(sexpr, context = 'statement')
 ```
 
 - Value context: emit an expression result
 - Statement context: emit statements without preserving a result
 
 Comprehensions are the canonical example — value context becomes an IIFE with array building, statement context becomes a plain loop.
+
+### Expression-Context Construct Audit
+
+When a construct appears in value context and cannot be a simple JS expression, the
+compiler wraps it in an IIFE. If the enclosed code contains `await`, the IIFE must
+be `async` and the call must be `await`ed. All async IIFE sites use the centralized
+`asyncIIFE()` / `asyncIIFEOpen()` helpers.
+
+| Construct | Method | IIFE type | Enclosed nodes |
+| --------- | --------- | --------- | -------------- |
+| `if` (multi-stmt) | `emitIfAsExpression` | async IIFE | condition, thenBranch, elseBranches |
+| `switch` | `emitSwitch` | async IIFE | disc, case labels, case bodies, defaultCase |
+| `switch` (no disc) | `emitSwitchAsIfChain` | async IIFE | when-conditions, when-bodies, defaultCase |
+| `try` | `emitTry` | async IIFE | try body, catch clause, finally block |
+| comprehension | `emitComprehension` | async IIFE | expr, iterators, guards |
+| object comp. | `emitObjectComprehension` | async IIFE | keyExpr, valueExpr, iterators, guards |
+| `or return` etc. | `emitControl` | sync IIFE | expr, ctrl value (return/throw semantics) |
+| `x = e or return` | `emitAssignment` | sync IIFE | expr, target, ctrl value |
+| `throw` | `emitThrow` | sync IIFE | throw expression |
+| `do ->` | `emitDoIIFE` | user fn | user's function (handles own async) |
+| ternary `?:` | `emitTernary` | none | direct JS ternary |
+| block (comma) | `emitBlock` | none | comma expression |
+| calls + postfix if | `emit` | none | conditional rewrite |
+| `->` in value | `emitThinArrow` | none | parenthesized function |
+
+**Invariant:** every node listed in the "Enclosed nodes" column must appear in
+that site's `containsAwait` check. The sync IIFE sites use `return`/`throw`
+inside the IIFE, which cannot propagate to the enclosing function, so async
+handling is intentionally omitted.
 
 ## Dispatch Table
 
@@ -204,7 +233,7 @@ if (Array.isArray(body) && body[0] === 'block') {
 
 ## Component Internals
 
-The component system is a compiler sidecar. `installComponentSupport(CodeGenerator, Lexer)` adds methods to both prototypes.
+The component system is a compiler sidecar. `installComponentSupport(CodeEmitter, Lexer)` adds methods to both prototypes.
 
 ### Render Rewriter
 
@@ -247,9 +276,9 @@ Key mechanisms:
 Key entry points:
 
 - `buildRender` — initializes counters and create/setup line arrays
-- `generateNode` — dispatch for elements, text, conditionals, loops, components
-- `generateConditional` — emits conditional block factories
-- `generateTemplateLoop` — emits `__reconcile(...)`
+- `emitNode` — dispatch for elements, text, conditionals, loops, components
+- `emitConditional` — emits conditional block factories
+- `emitTemplateLoop` — emits `__reconcile(...)`
 - `emitBlockFactory` — shared factory emitter used by conditionals and loops
 
 ### Factory Mode
@@ -263,7 +292,7 @@ Block factories need locals and `ctx.member` references instead of `this._elN` a
 - `_pushEffect(body)` — emits `__effect(...)` or `disposers.push(__effect(...))`
 - `_loopVarStack` — threads loop variables through nested factories
 
-Factory mode is entered in `generateConditionBranch` and `generateTemplateLoop` via save/restore of `[_createLines, _setupLines, _factoryMode, _factoryVars]`.
+Factory mode is entered in `emitConditionBranch` and `emitTemplateLoop` via save/restore of `[_createLines, _setupLines, _factoryMode, _factoryVars]`.
 
 ### Auto-Wired Event Handlers
 
@@ -332,7 +361,7 @@ div ~fade
 Pipeline:
 
 - rewriter converts the tilde form into `__transition__`
-- `generateAttributes` emits `this._t = "fade"`
+- `emitAttributes` emits `this._t = "fade"`
 - conditionals check `_t` for async leave / enter
 - runtime `__transition(el, name, dir, done)` performs the CSS class dance
 
@@ -453,7 +482,7 @@ Type emission logic lives in `types.js`. Type-checking integration and diagnosti
 
 - `installTypeSupport(Lexer)` adds `rewriteTypes()`
 - `emitTypes(tokens)` emits `.d.ts`
-- `generateEnum()` emits runtime JS for enums
+- `emitEnum()` emits runtime JS for enums
 - `typecheck.js` drives `rip check` and mediates TypeScript diagnostics
 
 Types are processed at the token layer before parsing.

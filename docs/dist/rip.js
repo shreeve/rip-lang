@@ -53,7 +53,7 @@
     VERSION: () => VERSION,
     Lexer: () => Lexer,
     Compiler: () => Compiler,
-    CodeGenerator: () => CodeGenerator,
+    CodeEmitter: () => CodeEmitter,
     BUILD_DATE: () => BUILD_DATE
   });
 
@@ -1271,7 +1271,7 @@
     }
     return usesIntrinsicProps;
   }
-  function generateEnum(head, rest, context) {
+  function emitEnum(head, rest, context) {
     let [name, body] = rest;
     let enumName = name?.valueOf?.() ?? name;
     let pairs = [];
@@ -4184,7 +4184,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       return target[2].type;
     return null;
   }
-  function installComponentSupport(CodeGenerator, Lexer2) {
+  function installComponentSupport(CodeEmitter, Lexer2) {
     let meta = (node, key) => node instanceof String ? node[key] : undefined;
     const origClassify = Lexer2.prototype.classifyKeyword;
     Lexer2.prototype.classifyKeyword = function(id, fallback, data) {
@@ -4509,7 +4509,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         return 1;
       });
     };
-    const proto = CodeGenerator.prototype;
+    const proto = CodeEmitter.prototype;
     proto.isHtmlTag = function(name) {
       const tagPart = name.split("#")[0];
       return TEMPLATE_TAGS.has(tagPart.toLowerCase());
@@ -4618,7 +4618,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       }
       return sexpr.map((item) => this.transformComponentMembers(item, localScope));
     };
-    proto.generateComponent = function(head, rest, context, sexpr) {
+    proto.emitComponent = function(head, rest, context, sexpr) {
       const [, body] = rest;
       const statements = this.is(body, "block") ? body.slice(1) : [];
       const stateVars = [];
@@ -4791,26 +4791,26 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         for (const { name, expr } of derivedVars) {
           if (this.is(expr, "block")) {
             const transformed = this.transformComponentMembers(expr);
-            const body2 = this.generateFunctionBody(transformed);
+            const body2 = this.emitFunctionBody(transformed);
             sl.push(`  ${name} = __computed(() => ${body2});`);
           } else {
-            const val = this.generateInComponent(expr, "value");
+            const val = this.emitInComponent(expr, "value");
             sl.push(`  ${name} = __computed(() => ${val});`);
           }
         }
         sl.push("  _init(props) {");
         for (const { name, value, isPublic } of readonlyVars) {
-          const val = this.generateInComponent(value, "value");
+          const val = this.emitInComponent(value, "value");
           sl.push(isPublic ? `    this.${name} = props.${name} ?? ${val};` : `    this.${name} = ${val};`);
         }
         for (const { name, value, isPublic, required, type } of stateVars) {
           if (isPublic && required) {
             sl.push(`    this.${name} = __state(props.__bind_${name}__ ?? props.${name});`);
           } else if (isPublic) {
-            const val = this.generateInComponent(value, "value");
+            const val = this.emitInComponent(value, "value");
             sl.push(`    this.${name} = __state(props.__bind_${name}__ ?? props.${name} ?? ${val});`);
           } else {
-            const val = this.generateInComponent(value, "value");
+            const val = this.emitInComponent(value, "value");
             sl.push(`    this.${name} = __state(${val});`);
           }
         }
@@ -4819,10 +4819,10 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           const isAsync = this.containsAwait(effectBody) ? "async " : "";
           if (this.is(effectBody, "block")) {
             const transformed = this.transformComponentMembers(effectBody);
-            const body2 = this.generateFunctionBody(transformed, [], true);
+            const body2 = this.emitFunctionBody(transformed, [], true);
             sl.push(`    __effect(${isAsync}() => ${body2});`);
           } else {
-            const effectCode = this.generateInComponent(effectBody, "value");
+            const effectCode = this.emitInComponent(effectBody, "value");
             sl.push(`    __effect(${isAsync}() => { ${effectCode}; });`);
           }
         }
@@ -4892,7 +4892,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
             }
             const transformed = this.reactiveMembers ? this.transformComponentMembers(methodBody) : methodBody;
             const isAsync = this.containsAwait(methodBody);
-            const bodyCode = this.generateFunctionBody(transformed, params || []);
+            const bodyCode = this.emitFunctionBody(transformed, params || []);
             sl.push(`  ${isAsync ? "async " : ""}${name}(${paramStr}) ${bodyCode}`);
           }
         }
@@ -4902,7 +4902,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
             const paramStr = Array.isArray(params) ? params.map((p) => this.formatParam(p)).join(", ") : "";
             const transformed = this.reactiveMembers ? this.transformComponentMembers(hookBody) : hookBody;
             const isAsync = this.containsAwait(hookBody);
-            const bodyCode = this.generateFunctionBody(transformed, params || []);
+            const bodyCode = this.emitFunctionBody(transformed, params || []);
             sl.push(`  ${isAsync ? "async " : ""}${name}(${paramStr}) ${bodyCode}`);
           }
         }
@@ -4930,10 +4930,10 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
                   if (typeof key === "string" && !key.startsWith("@")) {
                     const srcLine = pair.loc?.r ?? obj.loc?.r;
                     if (key.startsWith("__bind_") && key.endsWith("__")) {
-                      const member = typeof value === "string" && this.reactiveMembers?.has(value) ? `this.${value}` : this.generateInComponent(value, "value");
+                      const member = typeof value === "string" && this.reactiveMembers?.has(value) ? `this.${value}` : this.emitInComponent(value, "value");
                       props.push({ code: `${key}: ${member}`, srcLine });
                     } else {
-                      const val = this.generateInComponent(value, "value");
+                      const val = this.emitInComponent(value, "value");
                       props.push({ code: `${key}: ${val}`, srcLine });
                     }
                   }
@@ -4968,17 +4968,17 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
                     if (!memberName)
                       continue;
                     const eventKey = "@" + memberName.split(".")[0];
-                    const val = this.generateInComponent(value, "value");
+                    const val = this.emitInComponent(value, "value");
                     props.push({ code: `'${eventKey}': ${val}`, srcLine });
                   } else if (typeof key === "string") {
                     if (key === "key")
                       continue;
                     if (key.startsWith("__bind_") && key.endsWith("__")) {
                       const propName = key.slice(7, -2);
-                      const val = this.generateInComponent(value, "value");
+                      const val = this.emitInComponent(value, "value");
                       props.push({ code: `${propName}: ${val}`, srcLine });
                     } else {
-                      const val = this.generateInComponent(value, "value");
+                      const val = this.emitInComponent(value, "value");
                       props.push({ code: `${key}: ${val}`, srcLine });
                     }
                   }
@@ -5015,7 +5015,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
                   constructions.push(`    };`);
                 }
               }
-            } else if (typeof head2 === "string" && !CodeGenerator.GENERATORS[head2] && (TEMPLATE_TAGS.has(head2.split(/[.#]/)[0]) || /^[a-z][\w-]*$/.test(head2) && node.length > 1)) {
+            } else if (typeof head2 === "string" && !CodeEmitter.GENERATORS[head2] && (TEMPLATE_TAGS.has(head2.split(/[.#]/)[0]) || /^[a-z][\w-]*$/.test(head2) && node.length > 1)) {
               const tagName = head2.split(/[.#]/)[0];
               const iProps = extractIntrinsicProps(node.slice(1));
               const tagLine = node.loc?.r;
@@ -5067,7 +5067,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       lines.push("class extends __Component {");
       lines.push("  _init(props) {");
       for (const { name, value, isPublic } of readonlyVars) {
-        const val = this.generateInComponent(value, "value");
+        const val = this.emitInComponent(value, "value");
         lines.push(isPublic ? `    this.${name} = props.${name} ?? ${val};` : `    this.${name} = ${val};`);
       }
       for (const name of acceptedVars) {
@@ -5077,10 +5077,10 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         if (isPublic && required) {
           lines.push(`    this.${name} = __state(props.__bind_${name}__ ?? props.${name});`);
         } else if (isPublic) {
-          const val = this.generateInComponent(value, "value");
+          const val = this.emitInComponent(value, "value");
           lines.push(`    this.${name} = __state(props.__bind_${name}__ ?? props.${name} ?? ${val});`);
         } else {
-          const val = this.generateInComponent(value, "value");
+          const val = this.emitInComponent(value, "value");
           lines.push(`    this.${name} = __state(${val});`);
         }
       }
@@ -5098,10 +5098,10 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       for (const { name, expr } of derivedVars) {
         if (this.is(expr, "block")) {
           const transformed = this.transformComponentMembers(expr);
-          const body2 = this.generateFunctionBody(transformed);
+          const body2 = this.emitFunctionBody(transformed);
           lines.push(`    this.${name} = __computed(() => ${body2});`);
         } else {
-          const val = this.generateInComponent(expr, "value");
+          const val = this.emitInComponent(expr, "value");
           lines.push(`    this.${name} = __computed(() => ${val});`);
         }
       }
@@ -5113,10 +5113,10 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         const isAsync = this.containsAwait(effectBody) ? "async " : "";
         if (this.is(effectBody, "block")) {
           const transformed = this.transformComponentMembers(effectBody);
-          const body2 = this.generateFunctionBody(transformed, [], true);
+          const body2 = this.emitFunctionBody(transformed, [], true);
           lines.push(`    __effect(${isAsync}() => ${body2});`);
         } else {
-          const effectCode = this.generateInComponent(effectBody, "value");
+          const effectCode = this.emitInComponent(effectBody, "value");
           lines.push(`    __effect(${isAsync}() => { ${effectCode}; });`);
         }
       }
@@ -5186,7 +5186,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           const paramStr = Array.isArray(params) ? params.map((p) => this.formatParam(p)).join(", ") : "";
           const transformed = this.reactiveMembers ? this.transformComponentMembers(methodBody) : methodBody;
           const isAsync = this.containsAwait(methodBody);
-          const bodyCode = this.generateFunctionBody(transformed, params || []);
+          const bodyCode = this.emitFunctionBody(transformed, params || []);
           lines.push(`  ${isAsync ? "async " : ""}${name}(${paramStr}) ${bodyCode}`);
         }
       }
@@ -5196,7 +5196,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           const paramStr = Array.isArray(params) ? params.map((p) => this.formatParam(p)).join(", ") : "";
           const transformed = this.reactiveMembers ? this.transformComponentMembers(hookBody) : hookBody;
           const isAsync = this.containsAwait(hookBody);
-          const bodyCode = this.generateFunctionBody(transformed, params || []);
+          const bodyCode = this.emitFunctionBody(transformed, params || []);
           lines.push(`  ${isAsync ? "async " : ""}${name}(${paramStr}) ${bodyCode}`);
         }
       }
@@ -5238,7 +5238,7 @@ ${blockFactoriesCode}return ${lines.join(`
       return lines.join(`
 `);
     };
-    proto.generateInComponent = function(sexpr, context) {
+    proto.emitInComponent = function(sexpr, context) {
       if (typeof sexpr === "string" && this.reactiveMembers && this.reactiveMembers.has(sexpr)) {
         return `${this._self}.${sexpr}.value`;
       }
@@ -5247,17 +5247,17 @@ ${blockFactoriesCode}return ${lines.join(`
       }
       if (Array.isArray(sexpr) && this.reactiveMembers) {
         const transformed = this.transformComponentMembers(sexpr);
-        return this.generate(transformed, context);
+        return this.emit(transformed, context);
       }
-      return this.generate(sexpr, context);
+      return this.emit(sexpr, context);
     };
-    proto.generateRender = function(head, rest, context, sexpr) {
+    proto.emitRender = function(head, rest, context, sexpr) {
       throw new Error("render blocks can only be used inside a component");
     };
-    proto.generateOffer = function(head, rest, context, sexpr) {
+    proto.emitOffer = function(head, rest, context, sexpr) {
       throw new Error("offer can only be used inside a component");
     };
-    proto.generateAccept = function(head, rest, context, sexpr) {
+    proto.emitAccept = function(head, rest, context, sexpr) {
       throw new Error("accept can only be used inside a component");
     };
     proto.buildRender = function(body) {
@@ -5281,14 +5281,14 @@ ${blockFactoriesCode}return ${lines.join(`
         rootVar = "null";
       } else if (statements.length === 1) {
         this._pendingAutoWire = !!this._autoEventHandlers;
-        rootVar = this.generateNode(statements[0]);
+        rootVar = this.emitNode(statements[0]);
         this._pendingAutoWire = false;
       } else {
         rootVar = this.newElementVar("frag");
         this._createLines.push(`${rootVar} = document.createDocumentFragment();`);
         const children = [];
         for (const stmt of statements) {
-          const childVar = this.generateNode(stmt);
+          const childVar = this.emitNode(stmt);
           this._createLines.push(`${rootVar}.appendChild(${childVar});`);
           children.push(childVar);
         }
@@ -5328,7 +5328,7 @@ ${blockFactoriesCode}return ${lines.join(`
         this._setupLines.push(`__effect(() => { ${body} });`);
       }
     };
-    proto.generateNode = function(sexpr) {
+    proto.emitNode = function(sexpr) {
       if (typeof sexpr === "string" || sexpr instanceof String) {
         const str = sexpr.valueOf();
         if (str.startsWith('"') || str.startsWith("'") || str.startsWith("`")) {
@@ -5369,7 +5369,7 @@ ${blockFactoriesCode}return ${lines.join(`
       const [head, ...rest] = sexpr;
       const headStr = typeof head === "string" ? head : head instanceof String ? head.valueOf() : null;
       if (headStr && this.isComponent(headStr)) {
-        return this.generateChildComponent(headStr, rest);
+        return this.emitChildComponent(headStr, rest);
       }
       if (headStr === "slot" && this.componentMembers) {
         const s = this._self;
@@ -5394,8 +5394,8 @@ ${blockFactoriesCode}return ${lines.join(`
         }
         if (chain) {
           if (Array.isArray(chain) && chain[0] === "if")
-            return this.generateConditional(chain);
-          return this.generateTemplateBlock(chain);
+            return this.emitConditional(chain);
+          return this.emitTemplateBlock(chain);
         }
         const cv = this.newElementVar("c");
         this._createLines.push(`${cv} = document.createComment('switch');`);
@@ -5403,7 +5403,7 @@ ${blockFactoriesCode}return ${lines.join(`
       }
       if (headStr && this.isHtmlTag(headStr) && !meta(head, "text")) {
         let [tagName, id] = headStr.split("#");
-        return this.generateTag(tagName || "div", [], rest, id);
+        return this.emitTag(tagName || "div", [], rest, id);
       }
       if (headStr === ".") {
         const [, obj, prop] = sexpr;
@@ -5421,10 +5421,10 @@ ${blockFactoriesCode}return ${lines.join(`
         }
         const { tag, classes, id, base } = this.collectTemplateClasses(sexpr);
         if (!meta(base, "text") && tag && this.isHtmlTag(tag)) {
-          return this.generateTag(tag, classes, [], id);
+          return this.emitTag(tag, classes, [], id);
         }
         const textVar2 = this.newTextVar();
-        const exprCode2 = this.generateInComponent(sexpr, "value");
+        const exprCode2 = this.emitInComponent(sexpr, "value");
         this._createLines.push(`${textVar2} = document.createTextNode(String(${exprCode2}));`);
         return textVar2;
       }
@@ -5436,35 +5436,35 @@ ${blockFactoriesCode}return ${lines.join(`
             const { tag: tag3, classes: classes2, id: id2 } = this.collectTemplateClasses(tagExpr);
             if (tag3) {
               const staticArgs = classes2.map((c) => `"${c}"`);
-              return this.generateDynamicTag(tag3, classExprs, rest, staticArgs, id2);
+              return this.emitDynamicTag(tag3, classExprs, rest, staticArgs, id2);
             }
           }
           const tag2 = typeof tagExpr === "string" ? tagExpr : tagExpr.valueOf();
-          return this.generateDynamicTag(tag2, classExprs, rest);
+          return this.emitDynamicTag(tag2, classExprs, rest);
         }
         const { tag, classes, id } = this.collectTemplateClasses(head);
         if (tag && this.isHtmlTag(tag)) {
           if (classes.length > 0 && classes[classes.length - 1] === "__clsx") {
             const staticClasses = classes.slice(0, -1);
             const staticArgs = staticClasses.map((c) => `"${c}"`);
-            return this.generateDynamicTag(tag, rest, [], staticArgs, id);
+            return this.emitDynamicTag(tag, rest, [], staticArgs, id);
           }
-          return this.generateTag(tag, classes, rest, id);
+          return this.emitTag(tag, classes, rest, id);
         }
       }
       if (headStr === "->" || headStr === "=>") {
-        return this.generateTemplateBlock(rest[1]);
+        return this.emitTemplateBlock(rest[1]);
       }
       if (headStr === "if") {
-        return this.generateConditional(sexpr);
+        return this.emitConditional(sexpr);
       }
       if (headStr === "for" || headStr === "for-in" || headStr === "for-of" || headStr === "for-as") {
-        return this.generateTemplateLoop(sexpr);
+        return this.emitTemplateLoop(sexpr);
       }
       if (headStr === "__text__") {
         const expr = rest[0] ?? "undefined";
         const textVar2 = this.newTextVar();
-        const exprCode2 = this.generateInComponent(expr, "value");
+        const exprCode2 = this.emitInComponent(expr, "value");
         if (this.hasReactiveDeps(expr)) {
           this._createLines.push(`${textVar2} = document.createTextNode('');`);
           this._pushEffect(`${textVar2}.data = String(${exprCode2});`);
@@ -5474,7 +5474,7 @@ ${blockFactoriesCode}return ${lines.join(`
         return textVar2;
       }
       const textVar = this.newTextVar();
-      const exprCode = this.generateInComponent(sexpr, "value");
+      const exprCode = this.emitInComponent(sexpr, "value");
       if (this.hasReactiveDeps(sexpr)) {
         this._createLines.push(`${textVar} = document.createTextNode('');`);
         this._pushEffect(`${textVar}.data = ${exprCode};`);
@@ -5490,23 +5490,23 @@ ${blockFactoriesCode}return ${lines.join(`
           if (this.is(block, "block")) {
             for (const child of block.slice(1)) {
               if (this.is(child, "object")) {
-                this.generateAttributes(elVar, child);
+                this.emitAttributes(elVar, child);
               } else {
-                const childVar = this.generateNode(child);
+                const childVar = this.emitNode(child);
                 this._createLines.push(`${elVar}.appendChild(${childVar});`);
               }
             }
           } else if (block) {
-            const childVar = this.generateNode(block);
+            const childVar = this.emitNode(block);
             this._createLines.push(`${elVar}.appendChild(${childVar});`);
           }
         } else if (this.is(arg, "object")) {
-          this.generateAttributes(elVar, arg);
+          this.emitAttributes(elVar, arg);
         } else if (typeof arg === "string" || arg instanceof String) {
           const val = arg.valueOf();
           const baseName = val.split(/[#.]/)[0];
           if (this.isHtmlTag(baseName || "div") || this.isComponent(baseName)) {
-            const childVar = this.generateNode(arg);
+            const childVar = this.emitNode(arg);
             this._createLines.push(`${elVar}.appendChild(${childVar});`);
           } else {
             const textVar = this.newTextVar();
@@ -5518,12 +5518,12 @@ ${blockFactoriesCode}return ${lines.join(`
             } else if (this.componentMembers && this.componentMembers.has(val)) {
               this._createLines.push(`${textVar} = document.createTextNode(String(${this._self}.${val}));`);
             } else {
-              this._createLines.push(`${textVar} = document.createTextNode(${this.generateInComponent(arg, "value")});`);
+              this._createLines.push(`${textVar} = document.createTextNode(${this.emitInComponent(arg, "value")});`);
             }
             this._createLines.push(`${elVar}.appendChild(${textVar});`);
           }
         } else if (arg) {
-          const childVar = this.generateNode(arg);
+          const childVar = this.emitNode(arg);
           this._createLines.push(`${elVar}.appendChild(${childVar});`);
         }
       }
@@ -5556,7 +5556,7 @@ ${blockFactoriesCode}return ${lines.join(`
       this._createLines.push(`this._inheritedEl = ${elVar};`);
       this._createLines.push("this._applyRestToInheritedEl();");
     };
-    proto.generateTag = function(tag, classes, args, id) {
+    proto.emitTag = function(tag, classes, args, id) {
       const elVar = this.newElementVar();
       const isSvg = SVG_TAGS.has(tag) || this._svgDepth > 0;
       if (isSvg) {
@@ -5604,7 +5604,7 @@ ${blockFactoriesCode}return ${lines.join(`
       this._emitAutoWire(elVar, autoWireClaimed);
       return elVar;
     };
-    proto.generateDynamicTag = function(tag, classExprs, children, staticClassArgs, id) {
+    proto.emitDynamicTag = function(tag, classExprs, children, staticClassArgs, id) {
       const elVar = this.newElementVar();
       if (SVG_TAGS.has(tag) || this._svgDepth > 0) {
         this._createLines.push(`${elVar} = document.createElementNS('${SVG_NS}', '${tag}');`);
@@ -5615,7 +5615,7 @@ ${blockFactoriesCode}return ${lines.join(`
         this._createLines.push(`${elVar}.id = '${id}';`);
       this._bindInheritedTarget(tag, elVar);
       const autoWireClaimed = this._claimAutoWire(elVar);
-      const classArgs = [...staticClassArgs || [], ...classExprs.map((e) => this.generateInComponent(e, "value"))];
+      const classArgs = [...staticClassArgs || [], ...classExprs.map((e) => this.emitInComponent(e, "value"))];
       const prevClassArgs = this._pendingClassArgs;
       const prevClassEl = this._pendingClassEl;
       this._pendingClassArgs = classArgs;
@@ -5639,7 +5639,7 @@ ${blockFactoriesCode}return ${lines.join(`
       this._emitAutoWire(elVar, autoWireClaimed);
       return elVar;
     };
-    proto.generateAttributes = function(elVar, objExpr) {
+    proto.emitAttributes = function(elVar, objExpr) {
       const inputType = extractInputType(objExpr.slice(1));
       for (let i = 1;i < objExpr.length; i++) {
         let [, key, value] = objExpr[i];
@@ -5651,7 +5651,7 @@ ${blockFactoriesCode}return ${lines.join(`
           if (typeof value === "string" && this.componentMembers?.has(value)) {
             this._createLines.push(`${elVar}.addEventListener('${eventName}', (e) => __batch(() => ${this._self}.${value}(e)));`);
           } else {
-            const handlerCode = this.generateInComponent(value, "value");
+            const handlerCode = this.emitInComponent(value, "value");
             this._createLines.push(`${elVar}.addEventListener('${eventName}', (e) => __batch(() => (${handlerCode})(e)));`);
           }
           continue;
@@ -5661,7 +5661,7 @@ ${blockFactoriesCode}return ${lines.join(`
             key = key.slice(1, -1);
           }
           if (key === "class" || key === "className") {
-            const valueCode2 = this.generateInComponent(value, "value");
+            const valueCode2 = this.emitInComponent(value, "value");
             if (this._pendingClassArgs && this._pendingClassEl === elVar) {
               this._pendingClassArgs.push(valueCode2);
             } else if (this.hasReactiveDeps(value)) {
@@ -5691,7 +5691,7 @@ ${blockFactoriesCode}return ${lines.join(`
           }
           if (key.startsWith(BIND_PREFIX) && key.endsWith(BIND_SUFFIX)) {
             const prop = key.slice(BIND_PREFIX.length, -BIND_SUFFIX.length);
-            const valueCode2 = this.generateInComponent(value, "value");
+            const valueCode2 = this.emitInComponent(value, "value");
             let event, valueAccessor;
             if (prop === "checked") {
               event = "change";
@@ -5709,7 +5709,7 @@ ${blockFactoriesCode}return ${lines.join(`
             this._createLines.push(`${elVar}.addEventListener('${event}', (e) => { ${assignCode}; });`);
             continue;
           }
-          const valueCode = this.generateInComponent(value, "value");
+          const valueCode = this.emitInComponent(value, "value");
           if ((key === "value" || key === "checked") && this.hasReactiveDeps(value)) {
             this._pushEffect(`${elVar}.${key} = ${valueCode};`);
             continue;
@@ -5742,9 +5742,9 @@ ${blockFactoriesCode}return ${lines.join(`
         }
       }
     };
-    proto.generateTemplateBlock = function(body) {
+    proto.emitTemplateBlock = function(body) {
       if (!Array.isArray(body) || body[0] !== "block") {
-        return this.generateNode(body);
+        return this.emitNode(body);
       }
       const statements = body.slice(1);
       if (statements.length === 0) {
@@ -5753,33 +5753,33 @@ ${blockFactoriesCode}return ${lines.join(`
         return commentVar;
       }
       if (statements.length === 1) {
-        return this.generateNode(statements[0]);
+        return this.emitNode(statements[0]);
       }
       const fragVar = this.newElementVar("frag");
       this._createLines.push(`${fragVar} = document.createDocumentFragment();`);
       const children = [];
       for (const stmt of statements) {
-        const childVar = this.generateNode(stmt);
+        const childVar = this.emitNode(stmt);
         this._createLines.push(`${fragVar}.appendChild(${childVar});`);
         children.push(childVar);
       }
       this._fragChildren.set(fragVar, children);
       return fragVar;
     };
-    proto.generateConditional = function(sexpr) {
+    proto.emitConditional = function(sexpr) {
       this._pendingAutoWire = false;
       const [, condition, thenBlock, elseBlock] = sexpr;
       const anchorVar = this.newElementVar("anchor");
       this._createLines.push(`${anchorVar} = document.createComment('if');`);
-      const condCode = this.generateInComponent(condition, "value");
+      const condCode = this.emitInComponent(condition, "value");
       const outerParams = this._loopVarStack.map((v) => `${v.itemVar}, ${v.indexVar}`).join(", ");
       const outerExtra = outerParams ? `, ${outerParams}` : "";
       const thenBlockName = this.newBlockVar();
-      this.generateConditionBranch(thenBlockName, thenBlock);
+      this.emitConditionBranch(thenBlockName, thenBlock);
       let elseBlockName = null;
       if (elseBlock) {
         elseBlockName = this.newBlockVar();
-        this.generateConditionBranch(elseBlockName, elseBlock);
+        this.emitConditionBranch(elseBlockName, elseBlock);
       }
       const setupLines = [];
       setupLines.push(`// Conditional: ${thenBlockName}${elseBlockName ? " / " + elseBlockName : ""}`);
@@ -5824,13 +5824,13 @@ ${blockFactoriesCode}return ${lines.join(`
     `));
       return anchorVar;
     };
-    proto.generateConditionBranch = function(blockName, block) {
+    proto.emitConditionBranch = function(blockName, block) {
       const saved = [this._createLines, this._setupLines, this._factoryMode, this._factoryVars];
       this._createLines = [];
       this._setupLines = [];
       this._factoryMode = true;
       this._factoryVars = new Set;
-      const rootVar = this.generateTemplateBlock(block);
+      const rootVar = this.emitTemplateBlock(block);
       const createLines = this._createLines;
       const setupLines = this._setupLines;
       const factoryVars = this._factoryVars;
@@ -5896,7 +5896,7 @@ ${blockFactoriesCode}return ${lines.join(`
       this._blockFactories.push(factoryLines.join(`
 `));
     };
-    proto.generateTemplateLoop = function(sexpr) {
+    proto.emitTemplateLoop = function(sexpr) {
       this._pendingAutoWire = false;
       const [head, vars, collection, guard, step, body] = sexpr;
       const blockName = this.newBlockVar();
@@ -5916,7 +5916,7 @@ ${blockFactoriesCode}return ${lines.join(`
         }
         indexVar = indexVar || `_i${this._loopVarStack.length}`;
       }
-      const collectionCode = this.generateInComponent(collection, "value");
+      const collectionCode = this.emitInComponent(collection, "value");
       let keyExpr = itemVar;
       if (this.is(body, "block") && body.length > 1) {
         const firstChild = body[1];
@@ -5926,7 +5926,7 @@ ${blockFactoriesCode}return ${lines.join(`
               for (let i = 1;i < arg.length; i++) {
                 const [k, v] = arg[i];
                 if (k === "key") {
-                  keyExpr = this.generate(v, "value");
+                  keyExpr = this.emit(v, "value");
                   break;
                 }
               }
@@ -5944,7 +5944,7 @@ ${blockFactoriesCode}return ${lines.join(`
       const outerParams = this._loopVarStack.map((v) => `${v.itemVar}, ${v.indexVar}`).join(", ");
       const outerExtra = outerParams ? `, ${outerParams}` : "";
       this._loopVarStack.push({ itemVar, indexVar });
-      const itemNode = this.generateTemplateBlock(body);
+      const itemNode = this.emitTemplateBlock(body);
       this._loopVarStack.pop();
       const itemCreateLines = this._createLines;
       const itemSetupLines = this._setupLines;
@@ -5970,7 +5970,7 @@ ${blockFactoriesCode}return ${lines.join(`
     `));
       return anchorVar;
     };
-    proto.generateChildComponent = function(componentName, args) {
+    proto.emitChildComponent = function(componentName, args) {
       this._pendingAutoWire = false;
       const instVar = this.newElementVar("inst");
       const elVar = this.newElementVar("el");
@@ -5982,7 +5982,7 @@ ${blockFactoriesCode}return ${lines.join(`
       this._createLines.push(`(${s}._children || (${s}._children = [])).push(${instVar});`);
       this._createLines.push(`} finally { __popComponent(__prev); } }`);
       for (const { event, value } of eventBindings) {
-        const handlerCode = this.generateInComponent(value, "value");
+        const handlerCode = this.emitInComponent(value, "value");
         this._createLines.push(`${elVar}.addEventListener('${event}', (e) => __batch(() => (${handlerCode})(e)));`);
       }
       this._setupLines.push(`try { if (${instVar}._setup) ${instVar}._setup(); if (${instVar}.mounted) ${instVar}.mounted(); } catch (__e) { __handleComponentError(__e, ${instVar}); }`);
@@ -6010,7 +6010,7 @@ ${blockFactoriesCode}return ${lines.join(`
           const member = typeof value === "string" ? value : value[2];
           props.push(`${key}: ${this._self}.${member}`);
         } else {
-          const valueCode = this.generateInComponent(value, "value");
+          const valueCode = this.emitInComponent(value, "value");
           props.push(`${key}: ${valueCode}`);
           if (this.hasReactiveDeps(value)) {
             reactiveProps.push({ key, valueCode });
@@ -6049,7 +6049,7 @@ ${blockFactoriesCode}return ${lines.join(`
               const savedSetupLines = this._setupLines;
               this._createLines = [];
               this._setupLines = [];
-              childrenVar = this.generateTemplateBlock(block);
+              childrenVar = this.emitTemplateBlock(block);
               const childCreateLines = this._createLines;
               const childSetupLinesCopy = this._setupLines;
               this._createLines = savedCreateLines;
@@ -6063,7 +6063,7 @@ ${blockFactoriesCode}return ${lines.join(`
           }
         } else if (arg && !childrenVar) {
           const textVar = this.newTextVar();
-          const exprCode = this.generateInComponent(arg, "value");
+          const exprCode = this.emitInComponent(arg, "value");
           if (this.hasReactiveDeps(arg)) {
             this._createLines.push(`${textVar} = document.createTextNode('');`);
             const body = `${textVar}.data = ${exprCode};`;
@@ -6660,7 +6660,7 @@ if (typeof globalThis !== 'undefined') {
 `);
   }
 
-  class CodeGenerator {
+  class CodeEmitter {
     static ASSIGNMENT_OPS = new Set([
       "=",
       "+=",
@@ -6683,123 +6683,123 @@ if (typeof globalThis !== 'undefined') {
     static NUMBER_LITERAL_RE = /^-?\d+(\.\d+)?([eE][+-]?\d+)?$/;
     static NUMBER_START_RE = /^-?\d/;
     static GENERATORS = {
-      program: "generateProgram",
-      "&&": "generateLogicalAnd",
-      "||": "generateLogicalOr",
-      "+": "generateBinaryOp",
-      "-": "generateBinaryOp",
-      "*": "generateBinaryOp",
-      "/": "generateBinaryOp",
-      "%": "generateBinaryOp",
-      "**": "generateBinaryOp",
-      "==": "generateBinaryOp",
-      "===": "generateBinaryOp",
-      "!=": "generateBinaryOp",
-      "!==": "generateBinaryOp",
-      "<": "generateBinaryOp",
-      ">": "generateBinaryOp",
-      "<=": "generateBinaryOp",
-      ">=": "generateBinaryOp",
-      "??": "generateBinaryOp",
-      "!?": "generateBinaryOp",
-      "&": "generateBinaryOp",
-      "|": "generateBinaryOp",
-      "^": "generateBinaryOp",
-      "<<": "generateBinaryOp",
-      ">>": "generateBinaryOp",
-      ">>>": "generateBinaryOp",
-      "%%": "generateModulo",
-      "%%=": "generateModuloAssign",
-      "//": "generateFloorDiv",
-      "//=": "generateFloorDivAssign",
-      "..": "generateRange",
-      "=": "generateAssignment",
-      "+=": "generateAssignment",
-      "-=": "generateAssignment",
-      "*=": "generateAssignment",
-      "/=": "generateAssignment",
-      "%=": "generateAssignment",
-      "**=": "generateAssignment",
-      "&&=": "generateAssignment",
-      "||=": "generateAssignment",
-      "??=": "generateAssignment",
-      "?=": "generateAssignment",
-      "&=": "generateAssignment",
-      "|=": "generateAssignment",
-      "^=": "generateAssignment",
-      "<<=": "generateAssignment",
-      ">>=": "generateAssignment",
-      ">>>=": "generateAssignment",
-      "...": "generateRange",
-      "!": "generateNot",
-      "~": "generateBitwiseNot",
-      "++": "generateIncDec",
-      "--": "generateIncDec",
-      "=~": "generateRegexMatch",
-      instanceof: "generateInstanceof",
-      in: "generateIn",
-      of: "generateOf",
-      typeof: "generateTypeof",
-      delete: "generateDelete",
-      new: "generateNew",
-      array: "generateArray",
-      object: "generateObject",
-      "map-literal": "generateMap",
-      block: "generateBlock",
-      ".": "generatePropertyAccess",
-      "?.": "generateOptionalProperty",
-      "[]": "generateIndexAccess",
-      optindex: "generateOptIndex",
-      optcall: "generateOptCall",
-      "regex-index": "generateRegexIndex",
-      def: "generateDef",
-      "->": "generateThinArrow",
-      "=>": "generateFatArrow",
-      return: "generateReturn",
-      state: "generateState",
-      computed: "generateComputed",
-      readonly: "generateReadonly",
-      effect: "generateEffect",
-      break: "generateBreak",
-      continue: "generateContinue",
-      "?": "generateExistential",
-      defined: "generateDefined",
-      presence: "generatePresence",
-      "?:": "generateTernary",
-      "|>": "generatePipe",
-      loop: "generateLoop",
-      "loop-n": "generateLoopN",
-      await: "generateAwait",
-      yield: "generateYield",
-      "yield-from": "generateYieldFrom",
-      if: "generateIf",
-      "for-in": "generateForIn",
-      "for-of": "generateForOf",
-      "for-as": "generateForAs",
-      while: "generateWhile",
-      try: "generateTry",
-      throw: "generateThrow",
-      control: "generateControl",
-      switch: "generateSwitch",
-      when: "generateWhen",
-      comprehension: "generateComprehension",
-      "object-comprehension": "generateObjectComprehension",
-      class: "generateClass",
-      super: "generateSuper",
-      component: "generateComponent",
-      render: "generateRender",
-      offer: "generateOffer",
-      accept: "generateAccept",
-      enum: "generateEnum",
-      import: "generateImport",
-      export: "generateExport",
-      "export-default": "generateExportDefault",
-      "export-all": "generateExportAll",
-      "export-from": "generateExportFrom",
-      "do-iife": "generateDoIIFE",
-      regex: "generateRegex",
-      "tagged-template": "generateTaggedTemplate",
-      str: "generateString"
+      program: "emitProgram",
+      "&&": "emitLogicalAnd",
+      "||": "emitLogicalOr",
+      "+": "emitBinaryOp",
+      "-": "emitBinaryOp",
+      "*": "emitBinaryOp",
+      "/": "emitBinaryOp",
+      "%": "emitBinaryOp",
+      "**": "emitBinaryOp",
+      "==": "emitBinaryOp",
+      "===": "emitBinaryOp",
+      "!=": "emitBinaryOp",
+      "!==": "emitBinaryOp",
+      "<": "emitBinaryOp",
+      ">": "emitBinaryOp",
+      "<=": "emitBinaryOp",
+      ">=": "emitBinaryOp",
+      "??": "emitBinaryOp",
+      "!?": "emitBinaryOp",
+      "&": "emitBinaryOp",
+      "|": "emitBinaryOp",
+      "^": "emitBinaryOp",
+      "<<": "emitBinaryOp",
+      ">>": "emitBinaryOp",
+      ">>>": "emitBinaryOp",
+      "%%": "emitModulo",
+      "%%=": "emitModuloAssign",
+      "//": "emitFloorDiv",
+      "//=": "emitFloorDivAssign",
+      "..": "emitRange",
+      "=": "emitAssignment",
+      "+=": "emitAssignment",
+      "-=": "emitAssignment",
+      "*=": "emitAssignment",
+      "/=": "emitAssignment",
+      "%=": "emitAssignment",
+      "**=": "emitAssignment",
+      "&&=": "emitAssignment",
+      "||=": "emitAssignment",
+      "??=": "emitAssignment",
+      "?=": "emitAssignment",
+      "&=": "emitAssignment",
+      "|=": "emitAssignment",
+      "^=": "emitAssignment",
+      "<<=": "emitAssignment",
+      ">>=": "emitAssignment",
+      ">>>=": "emitAssignment",
+      "...": "emitRange",
+      "!": "emitNot",
+      "~": "emitBitwiseNot",
+      "++": "emitIncDec",
+      "--": "emitIncDec",
+      "=~": "emitRegexMatch",
+      instanceof: "emitInstanceof",
+      in: "emitIn",
+      of: "emitOf",
+      typeof: "emitTypeof",
+      delete: "emitDelete",
+      new: "emitNew",
+      array: "emitArray",
+      object: "emitObject",
+      "map-literal": "emitMap",
+      block: "emitBlock",
+      ".": "emitPropertyAccess",
+      "?.": "emitOptionalProperty",
+      "[]": "emitIndexAccess",
+      optindex: "emitOptIndex",
+      optcall: "emitOptCall",
+      "regex-index": "emitRegexIndex",
+      def: "emitDef",
+      "->": "emitThinArrow",
+      "=>": "emitFatArrow",
+      return: "emitReturn",
+      state: "emitState",
+      computed: "emitComputed",
+      readonly: "emitReadonly",
+      effect: "emitEffect",
+      break: "emitBreak",
+      continue: "emitContinue",
+      "?": "emitExistential",
+      defined: "emitDefined",
+      presence: "emitPresence",
+      "?:": "emitTernary",
+      "|>": "emitPipe",
+      loop: "emitLoop",
+      "loop-n": "emitLoopN",
+      await: "emitAwait",
+      yield: "emitYield",
+      "yield-from": "emitYieldFrom",
+      if: "emitIf",
+      "for-in": "emitForIn",
+      "for-of": "emitForOf",
+      "for-as": "emitForAs",
+      while: "emitWhile",
+      try: "emitTry",
+      throw: "emitThrow",
+      control: "emitControl",
+      switch: "emitSwitch",
+      when: "emitWhen",
+      comprehension: "emitComprehension",
+      "object-comprehension": "emitObjectComprehension",
+      class: "emitClass",
+      super: "emitSuper",
+      component: "emitComponent",
+      render: "emitRender",
+      offer: "emitOffer",
+      accept: "emitAccept",
+      enum: "emitEnum",
+      import: "emitImport",
+      export: "emitExport",
+      "export-default": "emitExportDefault",
+      "export-all": "emitExportAll",
+      "export-from": "emitExportFrom",
+      "do-iife": "emitDoIIFE",
+      regex: "emitRegex",
+      "tagged-template": "emitTaggedTemplate",
+      str: "emitString"
     };
     constructor(options = {}) {
       this.options = options;
@@ -6818,7 +6818,7 @@ if (typeof globalThis !== 'undefined') {
       this.helpers = new Set;
       this.scopeStack = [];
       this.collectProgramVariables(sexpr);
-      let code = this.generate(sexpr);
+      let code = this.emit(sexpr);
       if (this.sourceMap)
         this.buildMappings();
       return code;
@@ -6927,7 +6927,7 @@ if (typeof globalThis !== 'undefined') {
         return;
       if (head === "enum")
         return;
-      if (CodeGenerator.ASSIGNMENT_OPS.has(head)) {
+      if (CodeEmitter.ASSIGNMENT_OPS.has(head)) {
         let [target, value] = rest;
         if (typeof target === "string" || target instanceof String) {
           let varName = str(target);
@@ -6989,7 +6989,7 @@ if (typeof globalThis !== 'undefined') {
           sexpr.forEach((item) => collect(item));
           return;
         }
-        if (CodeGenerator.ASSIGNMENT_OPS.has(head)) {
+        if (CodeEmitter.ASSIGNMENT_OPS.has(head)) {
           let [target, value] = rest;
           if (typeof target === "string")
             vars.add(target);
@@ -7030,7 +7030,7 @@ if (typeof globalThis !== 'undefined') {
       collect(body);
       return vars;
     }
-    generate(sexpr, context = "statement") {
+    emit(sexpr, context = "statement") {
       if (sexpr instanceof String) {
         if (meta(sexpr, "await") === true) {
           return `await ${str(sexpr)}()`;
@@ -7089,45 +7089,45 @@ if (typeof globalThis !== 'undefined') {
       let [head, ...rest] = sexpr;
       let headAwaitMeta = meta(head, "await");
       head = str(head);
-      let method = CodeGenerator.GENERATORS[head];
+      let method = CodeEmitter.GENERATORS[head];
       if (method)
         return this[method](head, rest, context, sexpr);
       if (typeof head === "string" && !head.startsWith('"') && !head.startsWith("'")) {
-        if (CodeGenerator.NUMBER_START_RE.test(head))
+        if (CodeEmitter.NUMBER_START_RE.test(head))
           return head;
         if (head === "super" && this.currentMethodName && this.currentMethodName !== "constructor") {
-          let args2 = rest.map((arg) => this.unwrap(this.generate(arg, "value"))).join(", ");
+          let args2 = rest.map((arg) => this.unwrap(this.emit(arg, "value"))).join(", ");
           return `super.${this.currentMethodName}(${args2})`;
         }
         if (context === "statement" && rest.length === 1) {
           let cond = this.findPostfixConditional(rest[0]);
           if (cond) {
             let argWithout = this.rebuildWithoutConditional(cond);
-            let callee = this.generate(head, "value");
-            let condCode = this.generate(cond.condition, "value");
-            let valCode = this.generate(argWithout, "value");
+            let callee = this.emit(head, "value");
+            let condCode = this.emit(cond.condition, "value");
+            let valCode = this.emit(argWithout, "value");
             let callStr2 = `${callee}(${valCode})`;
             return `if (${condCode}) ${callStr2}`;
           }
         }
         let needsAwait = headAwaitMeta === true;
-        let calleeName = this.generate(head, "value");
-        let args = rest.map((arg) => this.unwrap(this.generate(arg, "value"))).join(", ");
+        let calleeName = this.emit(head, "value");
+        let args = rest.map((arg) => this.unwrap(this.emit(arg, "value"))).join(", ");
         let callStr = `${calleeName}(${args})`;
         return needsAwait ? `await ${callStr}` : callStr;
       }
       if (Array.isArray(head) && typeof head[0] === "string") {
         let stmtOps = ["=", "+=", "-=", "*=", "/=", "%=", "**=", "&&=", "||=", "??=", "if", "return", "throw"];
         if (stmtOps.includes(head[0])) {
-          let exprs = sexpr.map((stmt) => this.generate(stmt, "value"));
+          let exprs = sexpr.map((stmt) => this.emit(stmt, "value"));
           return `(${exprs.join(", ")})`;
         }
       }
       if (Array.isArray(head)) {
         if (head[0] === "." && (head[2] === "new" || str(head[2]) === "new")) {
           let ctorExpr = head[1];
-          let ctorCode = this.generate(ctorExpr, "value");
-          let args2 = rest.map((arg) => this.unwrap(this.generate(arg, "value"))).join(", ");
+          let ctorCode = this.emit(ctorExpr, "value");
+          let args2 = rest.map((arg) => this.unwrap(this.emit(arg, "value"))).join(", ");
           let needsParens = Array.isArray(ctorExpr);
           return `new ${needsParens ? `(${ctorCode})` : ctorCode}(${args2})`;
         }
@@ -7135,9 +7135,9 @@ if (typeof globalThis !== 'undefined') {
           let cond = this.findPostfixConditional(rest[0]);
           if (cond) {
             let argWithout = this.rebuildWithoutConditional(cond);
-            let calleeCode2 = this.generate(head, "value");
-            let condCode = this.generate(cond.condition, "value");
-            let valCode = this.generate(argWithout, "value");
+            let calleeCode2 = this.emit(head, "value");
+            let condCode = this.emit(cond.condition, "value");
+            let valCode = this.emit(argWithout, "value");
             let callStr2 = `${calleeCode2}(${valCode})`;
             return `if (${condCode}) ${callStr2}`;
           }
@@ -7147,20 +7147,20 @@ if (typeof globalThis !== 'undefined') {
         if (head[0] === "." && meta(head[2], "await") === true) {
           needsAwait = true;
           let [obj, prop] = head.slice(1);
-          let objCode = this.generate(obj, "value");
-          let needsParens = CodeGenerator.NUMBER_LITERAL_RE.test(objCode) || (this.is(obj, "object") || this.is(obj, "await") || this.is(obj, "yield"));
+          let objCode = this.emit(obj, "value");
+          let needsParens = CodeEmitter.NUMBER_LITERAL_RE.test(objCode) || (this.is(obj, "object") || this.is(obj, "await") || this.is(obj, "yield"));
           let base = needsParens ? `(${objCode})` : objCode;
           calleeCode = `${base}.${str(prop)}`;
         } else {
-          calleeCode = this.generate(head, "value");
+          calleeCode = this.emit(head, "value");
         }
-        let args = rest.map((arg) => this.unwrap(this.generate(arg, "value"))).join(", ");
+        let args = rest.map((arg) => this.unwrap(this.emit(arg, "value"))).join(", ");
         let callStr = `${calleeCode}(${args})`;
         return needsAwait ? `await ${callStr}` : callStr;
       }
       throw new Error(`Unknown s-expression type: ${head}`);
     }
-    generateProgram(head, statements, context, sexpr) {
+    emitProgram(head, statements, context, sexpr) {
       let code = "";
       let imports = [], body = [];
       for (let stmt of statements) {
@@ -7186,11 +7186,11 @@ if (typeof globalThis !== 'undefined') {
         let isLastComp = isLast && isAlreadyExpr;
         let generated;
         if (needsParens)
-          generated = `(${this.generate(stmt, "value")})`;
+          generated = `(${this.emit(stmt, "value")})`;
         else if (isLastComp)
-          generated = this.generate(stmt, "value");
+          generated = this.emit(stmt, "value");
         else
-          generated = this.generate(stmt, "statement");
+          generated = this.emit(stmt, "statement");
         if (generated && !generated.endsWith(";")) {
           let h = Array.isArray(stmt) ? stmt[0] : null;
           if (!blockStmts.includes(h) || !generated.endsWith("}"))
@@ -7203,7 +7203,7 @@ if (typeof globalThis !== 'undefined') {
 `);
       let needsBlank = false;
       if (imports.length > 0) {
-        code += imports.map((s) => this.addSemicolon(s, this.generate(s, "statement"))).join(`
+        code += imports.map((s) => this.addSemicolon(s, this.emit(s, "statement"))).join(`
 `);
         needsBlank = true;
       }
@@ -7326,65 +7326,65 @@ function _setDataSection() {
       }
       return code;
     }
-    generateBinaryOp(op, rest, context, sexpr) {
+    emitBinaryOp(op, rest, context, sexpr) {
       if ((op === "+" || op === "-") && rest.length === 1) {
-        return `(${op}${this.generate(rest[0], "value")})`;
+        return `(${op}${this.emit(rest[0], "value")})`;
       }
       let [left, right] = rest;
       if (op === "*") {
         let leftStr = left?.valueOf?.() ?? left;
         if (typeof leftStr === "string" && /^["']/.test(leftStr)) {
-          return `${this.generate(left, "value")}.repeat(${this.generate(right, "value")})`;
+          return `${this.emit(left, "value")}.repeat(${this.emit(right, "value")})`;
         }
       }
       let COMPARE_OPS = new Set(["<", ">", "<=", ">="]);
       if (COMPARE_OPS.has(op) && Array.isArray(left)) {
         let leftOp = left[0]?.valueOf?.() ?? left[0];
         if (COMPARE_OPS.has(leftOp)) {
-          let a = this.generate(left[1], "value");
-          let b = this.generate(left[2], "value");
-          let c = this.generate(right, "value");
+          let a = this.emit(left[1], "value");
+          let b = this.emit(left[2], "value");
+          let c = this.emit(right, "value");
           return `((${a} ${leftOp} ${b}) && (${b} ${op} ${c}))`;
         }
       }
       if (op === "!?") {
-        let l = this.generate(left, "value"), r = this.generate(right, "value");
+        let l = this.emit(left, "value"), r = this.emit(right, "value");
         return `(${l} !== undefined ? ${l} : ${r})`;
       }
       if (op === "==")
         op = "===";
       if (op === "!=")
         op = "!==";
-      return `(${this.generate(left, "value")} ${op} ${this.generate(right, "value")})`;
+      return `(${this.emit(left, "value")} ${op} ${this.emit(right, "value")})`;
     }
-    generateModulo(head, rest) {
+    emitModulo(head, rest) {
       let [left, right] = rest;
       this.helpers.add("modulo");
-      return `modulo(${this.generate(left, "value")}, ${this.generate(right, "value")})`;
+      return `modulo(${this.emit(left, "value")}, ${this.emit(right, "value")})`;
     }
-    generateModuloAssign(head, rest) {
+    emitModuloAssign(head, rest) {
       let [target, value] = rest;
       this.helpers.add("modulo");
-      let t = this.generate(target, "value"), v = this.generate(value, "value");
+      let t = this.emit(target, "value"), v = this.emit(value, "value");
       return `${t} = modulo(${t}, ${v})`;
     }
-    generateFloorDiv(head, rest) {
+    emitFloorDiv(head, rest) {
       let [left, right] = rest;
-      return `Math.floor(${this.generate(left, "value")} / ${this.generate(right, "value")})`;
+      return `Math.floor(${this.emit(left, "value")} / ${this.emit(right, "value")})`;
     }
-    generateFloorDivAssign(head, rest) {
+    emitFloorDivAssign(head, rest) {
       let [target, value] = rest;
-      let t = this.generate(target, "value"), v = this.generate(value, "value");
+      let t = this.emit(target, "value"), v = this.emit(value, "value");
       return `${t} = Math.floor(${t} / ${v})`;
     }
-    generateAssignment(head, rest, context, sexpr) {
+    emitAssignment(head, rest, context, sexpr) {
       let [target, value] = rest;
       let op = head === "?=" ? "??=" : head;
       let optInfo = this._findOptionalInTarget(target);
       if (optInfo) {
-        let guardCode = this.generate(optInfo.guard, "value");
-        let targetCode2 = this.generate(optInfo.rewritten, "value");
-        let valueCode2 = this.generate(value, "value");
+        let guardCode = this.emit(optInfo.guard, "value");
+        let targetCode2 = this.emit(optInfo.rewritten, "value");
+        let valueCode2 = this.emit(value, "value");
         if (context === "value") {
           return `(${guardCode} != null ? (${targetCode2} ${op} ${valueCode2}) : undefined)`;
         }
@@ -7401,17 +7401,17 @@ function _setDataSection() {
       let isEmptyArr = this.is(target, "array", 0);
       let isEmptyObj = this.is(target, "object", 0);
       if (isEmptyArr || isEmptyObj) {
-        let v = this.generate(value, "value");
+        let v = this.emit(value, "value");
         return isEmptyObj && context === "statement" ? `(${v})` : v;
       }
       if (Array.isArray(value) && op === "=" && value[0] === "control") {
         let [, rawCtrlOp, expr, ctrlSexpr] = value;
         let ctrlOp = str(rawCtrlOp);
         let isReturn = ctrlSexpr[0] === "return";
-        let targetCode2 = this.generate(target, "value");
-        let exprCode = this.generate(expr, "value");
+        let targetCode2 = this.emit(target, "value");
+        let exprCode = this.emit(expr, "value");
         let ctrlValue = ctrlSexpr.length > 1 ? ctrlSexpr[1] : null;
-        let ctrlCode = isReturn ? ctrlValue ? `return ${this.generate(ctrlValue, "value")}` : "return" : ctrlValue ? `throw ${this.generate(ctrlValue, "value")}` : "throw new Error()";
+        let ctrlCode = isReturn ? ctrlValue ? `return ${this.emit(ctrlValue, "value")}` : "return" : ctrlValue ? `throw ${this.emit(ctrlValue, "value")}` : "throw new Error()";
         if (context === "value") {
           if (ctrlOp === "??")
             return `(() => { const __v = ${exprCode}; if (__v == null) ${ctrlCode}; return (${targetCode2} = __v); })()`;
@@ -7432,10 +7432,10 @@ function _setDataSection() {
           let afterRest = elements.slice(restIdx + 1);
           let afterCount = afterRest.length;
           if (afterCount > 0) {
-            let valueCode2 = this.generate(value, "value");
+            let valueCode2 = this.emit(value, "value");
             let beforeRest = elements.slice(0, restIdx);
-            let beforePattern = beforeRest.map((el) => el === "," ? "" : typeof el === "string" ? el : this.generate(el, "value")).join(", ");
-            let afterPattern = afterRest.map((el) => el === "," ? "" : typeof el === "string" ? el : this.generate(el, "value")).join(", ");
+            let beforePattern = beforeRest.map((el) => el === "," ? "" : typeof el === "string" ? el : this.emit(el, "value")).join(", ");
+            let afterPattern = afterRest.map((el) => el === "," ? "" : typeof el === "string" ? el : this.emit(el, "value")).join(", ");
             this.helpers.add("slice");
             elements.forEach((el) => {
               if (el === "," || el === "...")
@@ -7463,7 +7463,7 @@ function _setDataSection() {
           let [, condition, wrappedValue] = right;
           let unwrapped = Array.isArray(wrappedValue) && wrappedValue.length === 1 ? wrappedValue[0] : wrappedValue;
           let fullValue = [binOp, left, unwrapped];
-          let t = this.generate(target, "value"), c = this.generate(condition, "value"), v = this.generate(fullValue, "value");
+          let t = this.emit(target, "value"), c = this.emit(condition, "value"), v = this.emit(fullValue, "value");
           return `if (${c}) ${t} = ${v}`;
         }
       }
@@ -7472,9 +7472,9 @@ function _setDataSection() {
         let isPostfix = Array.isArray(actualValue) && actualValue.length === 1 && (!Array.isArray(actualValue[0]) || actualValue[0][0] !== "block");
         if (valHead === "if" && isPostfix) {
           let unwrapped = Array.isArray(actualValue) && actualValue.length === 1 ? actualValue[0] : actualValue;
-          let t = this.generate(target, "value");
-          let condCode = this.unwrapLogical(this.generate(condition, "value"));
-          let v = this.generate(unwrapped, "value");
+          let t = this.emit(target, "value");
+          let condCode = this.unwrapLogical(this.emit(condition, "value"));
+          let v = this.emit(unwrapped, "value");
           return `if (${condCode}) ${t} = ${v}`;
         }
       }
@@ -7484,12 +7484,12 @@ function _setDataSection() {
       } else if (typeof target === "string" && this.reactiveVars?.has(target)) {
         targetCode = `${target}.value`;
       } else {
-        targetCode = this.generate(target, "value");
+        targetCode = this.emit(target, "value");
       }
       const prevComponentName = this._componentName;
       if (this.is(value, "component") && (typeof target === "string" || target instanceof String))
         this._componentName = str(target);
-      let valueCode = this.generate(value, "value");
+      let valueCode = this.emit(value, "value");
       this._componentName = prevComponentName;
       let isObjLit = this.is(value, "object");
       if (!isObjLit)
@@ -7500,15 +7500,15 @@ function _setDataSection() {
         return `(${targetCode} ${op} ${valueCode})`;
       return `${targetCode} ${op} ${valueCode}`;
     }
-    generatePropertyAccess(head, rest, context, sexpr) {
+    emitPropertyAccess(head, rest, context, sexpr) {
       let [obj, prop] = rest;
       if (this._atParamMap && obj === "this") {
         let mapped = this._atParamMap.get(str(prop));
         if (mapped)
           return mapped;
       }
-      let objCode = this.generate(obj, "value");
-      let needsParens = CodeGenerator.NUMBER_LITERAL_RE.test(objCode) || objCode.startsWith("await ") || (this.is(obj, "object") || this.is(obj, "yield"));
+      let objCode = this.emit(obj, "value");
+      let needsParens = CodeEmitter.NUMBER_LITERAL_RE.test(objCode) || objCode.startsWith("await ") || (this.is(obj, "object") || this.is(obj, "yield"));
       let base = needsParens ? `(${objCode})` : objCode;
       if (meta(prop, "await") === true)
         return `await ${base}.${str(prop)}()`;
@@ -7516,24 +7516,24 @@ function _setDataSection() {
         return `(${base}.${str(prop)} != null)`;
       return `${base}.${str(prop)}`;
     }
-    generateOptionalProperty(head, rest) {
+    emitOptionalProperty(head, rest) {
       let [obj, prop] = rest;
-      return `${this.generate(obj, "value")}?.${prop}`;
+      return `${this.emit(obj, "value")}?.${prop}`;
     }
-    generateRegexIndex(head, rest) {
+    emitRegexIndex(head, rest) {
       let [value, regex, captureIndex] = rest;
       this.helpers.add("toMatchable");
       this.programVars.add("_");
-      let v = this.generate(value, "value"), r = this.generate(regex, "value");
-      let idx = captureIndex !== null ? this.generate(captureIndex, "value") : "0";
+      let v = this.emit(value, "value"), r = this.emit(regex, "value");
+      let idx = captureIndex !== null ? this.emit(captureIndex, "value") : "0";
       let allowNL = r.includes("/m") ? ", true" : "";
       return `(_ = toMatchable(${v}${allowNL}).match(${r})) && _[${idx}]`;
     }
-    generateIndexAccess(head, rest) {
+    emitIndexAccess(head, rest) {
       let [arr, index] = rest;
       if (this.is(index, "..") || this.is(index, "...")) {
         let isIncl = index[0] === "..";
-        let arrCode = this.generate(arr, "value");
+        let arrCode = this.emit(arr, "value");
         let [start, end] = index.slice(1);
         let numericLiteral = (node) => {
           if (node === null)
@@ -7563,69 +7563,69 @@ function _setDataSection() {
         if (start === null) {
           if (isIncl && this.is(end, "-", 1) && (str(end[1]) ?? end[1]) == 1)
             return `${arrCode}.slice(0)`;
-          let e2 = this.generate(end, "value");
+          let e2 = this.emit(end, "value");
           return isIncl ? inclEnd("0", e2, end) : `${arrCode}.slice(0, ${e2})`;
         }
         if (end === null)
-          return `${arrCode}.slice(${this.generate(start, "value")})`;
-        let s = this.generate(start, "value");
+          return `${arrCode}.slice(${this.emit(start, "value")})`;
+        let s = this.emit(start, "value");
         if (isIncl && this.is(end, "-", 1) && (str(end[1]) ?? end[1]) == 1)
           return `${arrCode}.slice(${s})`;
-        let e = this.generate(end, "value");
+        let e = this.emit(end, "value");
         return isIncl ? inclEnd(s, e, end) : `${arrCode}.slice(${s}, ${e})`;
       }
       if (this.is(index, "-", 1)) {
         let n = str(index[1]) ?? index[1];
         if (typeof n === "number" || typeof n === "string" && /^\d+$/.test(n)) {
-          return `${this.generate(arr, "value")}.at(-${n})`;
+          return `${this.emit(arr, "value")}.at(-${n})`;
         }
       }
-      return `${this.generate(arr, "value")}[${this.unwrap(this.generate(index, "value"))}]`;
+      return `${this.emit(arr, "value")}[${this.unwrap(this.emit(index, "value"))}]`;
     }
-    generateOptIndex(head, rest) {
+    emitOptIndex(head, rest) {
       let [arr, index] = rest;
       if (this.is(index, "-", 1)) {
         let n = str(index[1]) ?? index[1];
         if (typeof n === "number" || typeof n === "string" && /^\d+$/.test(n)) {
-          return `${this.generate(arr, "value")}?.at(-${n})`;
+          return `${this.emit(arr, "value")}?.at(-${n})`;
         }
       }
-      return `${this.generate(arr, "value")}?.[${this.generate(index, "value")}]`;
+      return `${this.emit(arr, "value")}?.[${this.emit(index, "value")}]`;
     }
-    generateOptCall(head, rest) {
+    emitOptCall(head, rest) {
       let [fn, ...args] = rest;
-      return `${this.generate(fn, "value")}?.(${args.map((a) => this.generate(a, "value")).join(", ")})`;
+      return `${this.emit(fn, "value")}?.(${args.map((a) => this.emit(a, "value")).join(", ")})`;
     }
-    generateDef(head, rest, context, sexpr) {
+    emitDef(head, rest, context, sexpr) {
       let [name, params, body] = rest;
       let sideEffectOnly = meta(name, "await") === true;
       let cleanName = str(name);
-      let paramList = this.generateParamList(params);
-      let bodyCode = this.generateFunctionBody(body, params, sideEffectOnly);
+      let paramList = this.emitParamList(params);
+      let bodyCode = this.emitFunctionBody(body, params, sideEffectOnly);
       let isAsync = this.containsAwait(body);
       let isGen = this.containsYield(body);
       return `${isAsync ? "async " : ""}function${isGen ? "*" : ""} ${cleanName}(${paramList}) ${bodyCode}`;
     }
-    generateThinArrow(head, rest, context, sexpr) {
+    emitThinArrow(head, rest, context, sexpr) {
       let [params, body] = rest;
       if ((!params || Array.isArray(params) && params.length === 0) && this.containsIt(body))
         params = ["it"];
       let sideEffectOnly = this.nextFunctionIsVoid || false;
       this.nextFunctionIsVoid = false;
-      let paramList = this.generateParamList(params);
-      let bodyCode = this.generateFunctionBody(body, params, sideEffectOnly);
+      let paramList = this.emitParamList(params);
+      let bodyCode = this.emitFunctionBody(body, params, sideEffectOnly);
       let isAsync = this.containsAwait(body);
       let isGen = this.containsYield(body);
       let fn = `${isAsync ? "async " : ""}function${isGen ? "*" : ""}(${paramList}) ${bodyCode}`;
       return context === "value" ? `(${fn})` : fn;
     }
-    generateFatArrow(head, rest, context, sexpr) {
+    emitFatArrow(head, rest, context, sexpr) {
       let [params, body] = rest;
       if ((!params || Array.isArray(params) && params.length === 0) && this.containsIt(body))
         params = ["it"];
       let sideEffectOnly = this.nextFunctionIsVoid || false;
       this.nextFunctionIsVoid = false;
-      let paramList = this.generateParamList(params);
+      let paramList = this.emitParamList(params);
       let isSingle = params.length === 1 && typeof params[0] === "string" && !paramList.includes("=") && !paramList.includes("...") && !paramList.includes("[") && !paramList.includes("{");
       let paramSyntax = isSingle ? paramList : `(${paramList})`;
       let isAsync = this.containsAwait(body);
@@ -7635,23 +7635,23 @@ function _setDataSection() {
           let expr = body[1];
           let exprHead = Array.isArray(expr) ? expr[0] : null;
           if (exprHead !== "return" && !STMT_ONLY.has(exprHead)) {
-            let code = this.generate(expr, "value");
+            let code = this.emit(expr, "value");
             if (code[0] === "{")
               code = `(${code})`;
             return `${prefix}${paramSyntax} => ${code}`;
           }
         }
         if (!Array.isArray(body) || body[0] !== "block") {
-          let code = this.generate(body, "value");
+          let code = this.emit(body, "value");
           if (code[0] === "{")
             code = `(${code})`;
           return `${prefix}${paramSyntax} => ${code}`;
         }
       }
-      let bodyCode = this.generateFunctionBody(body, params, sideEffectOnly);
+      let bodyCode = this.emitFunctionBody(body, params, sideEffectOnly);
       return `${prefix}${paramSyntax} => ${bodyCode}`;
     }
-    generateReturn(head, rest, context, sexpr) {
+    emitReturn(head, rest, context, sexpr) {
       if (rest.length === 0)
         return "return";
       let [expr] = rest;
@@ -7662,26 +7662,26 @@ function _setDataSection() {
         let [, condition, body, ...elseParts] = expr;
         if (elseParts.length === 0) {
           let val = Array.isArray(body) && body.length === 1 ? body[0] : body;
-          return `if (${this.generate(condition, "value")}) return ${this.generate(val, "value")}`;
+          return `if (${this.emit(condition, "value")}) return ${this.emit(val, "value")}`;
         }
       }
       if (this.is(expr, "new") && Array.isArray(expr[1]) && expr[1][0] === "if") {
         let [, condition, body] = expr[1];
         let val = Array.isArray(body) && body.length === 1 ? body[0] : body;
-        return `if (${this.generate(condition, "value")}) return ${this.generate(["new", val], "value")}`;
+        return `if (${this.emit(condition, "value")}) return ${this.emit(["new", val], "value")}`;
       }
-      return `return ${this.generate(expr, "value")}`;
+      return `return ${this.emit(expr, "value")}`;
     }
-    generateState(head, rest) {
+    emitState(head, rest) {
       let [name, expr] = rest;
       this.usesReactivity = true;
       let varName = str(name) ?? name;
       if (!this.reactiveVars)
         this.reactiveVars = new Set;
       this.reactiveVars.add(varName);
-      return `const ${varName} = __state(${this.generate(expr, "value")})`;
+      return `const ${varName} = __state(${this.emit(expr, "value")})`;
     }
-    generateComputed(head, rest) {
+    emitComputed(head, rest) {
       let [name, expr] = rest;
       this.usesReactivity = true;
       if (!this.reactiveVars)
@@ -7689,108 +7689,108 @@ function _setDataSection() {
       let varName = str(name) ?? name;
       this.reactiveVars.add(varName);
       if (this.is(expr, "block") && expr.length > 2) {
-        return `const ${varName} = __computed(() => ${this.generateFunctionBody(expr)})`;
+        return `const ${varName} = __computed(() => ${this.emitFunctionBody(expr)})`;
       }
-      return `const ${varName} = __computed(() => ${this.generate(expr, "value")})`;
+      return `const ${varName} = __computed(() => ${this.emit(expr, "value")})`;
     }
-    generateReadonly(head, rest) {
+    emitReadonly(head, rest) {
       let [name, expr] = rest;
-      return `const ${str(name) ?? name} = ${this.generate(expr, "value")}`;
+      return `const ${str(name) ?? name} = ${this.emit(expr, "value")}`;
     }
-    generateEffect(head, rest) {
+    emitEffect(head, rest) {
       let [target, body] = rest;
       this.usesReactivity = true;
       let bodyCode;
       if (this.is(body, "block")) {
-        bodyCode = this.generateFunctionBody(body);
+        bodyCode = this.emitFunctionBody(body);
       } else if (this.is(body, "->") || this.is(body, "=>")) {
-        let fnCode = this.generate(body, "value");
+        let fnCode = this.emit(body, "value");
         if (target)
-          return `const ${str(target) ?? this.generate(target, "value")} = __effect(${fnCode})`;
+          return `const ${str(target) ?? this.emit(target, "value")} = __effect(${fnCode})`;
         return `__effect(${fnCode})`;
       } else {
-        bodyCode = `{ ${this.generate(body, "value")}; }`;
+        bodyCode = `{ ${this.emit(body, "value")}; }`;
       }
       let effectCode = `__effect(() => ${bodyCode})`;
       if (target)
-        return `const ${str(target) ?? this.generate(target, "value")} = ${effectCode}`;
+        return `const ${str(target) ?? this.emit(target, "value")} = ${effectCode}`;
       return effectCode;
     }
-    generateBreak() {
+    emitBreak() {
       return "break";
     }
-    generateContinue() {
+    emitContinue() {
       return "continue";
     }
-    generateExistential(head, rest) {
-      return `(${this.generate(rest[0], "value")} != null)`;
+    emitExistential(head, rest) {
+      return `(${this.emit(rest[0], "value")} != null)`;
     }
-    generateDefined(head, rest) {
-      return `(${this.generate(rest[0], "value")} !== undefined)`;
+    emitDefined(head, rest) {
+      return `(${this.emit(rest[0], "value")} !== undefined)`;
     }
-    generatePresence(head, rest) {
-      return `(${this.generate(rest[0], "value")} ? true : undefined)`;
+    emitPresence(head, rest) {
+      return `(${this.emit(rest[0], "value")} ? true : undefined)`;
     }
-    generateTernary(head, rest, context) {
+    emitTernary(head, rest, context) {
       let [cond, then_, else_] = rest;
       let thenHead = then_?.[0]?.valueOf?.() ?? then_?.[0];
       if (thenHead === "=" && Array.isArray(then_)) {
-        let target = this.generate(then_[1], "value");
-        let thenVal = this.generate(then_[2], "value");
-        let elseVal = this.generate(else_, "value");
-        return `${target} = (${this.unwrap(this.generate(cond, "value"))} ? ${thenVal} : ${elseVal})`;
+        let target = this.emit(then_[1], "value");
+        let thenVal = this.emit(then_[2], "value");
+        let elseVal = this.emit(else_, "value");
+        return `${target} = (${this.unwrap(this.emit(cond, "value"))} ? ${thenVal} : ${elseVal})`;
       }
-      return `(${this.unwrap(this.generate(cond, "value"))} ? ${this.generate(then_, "value")} : ${this.generate(else_, "value")})`;
+      return `(${this.unwrap(this.emit(cond, "value"))} ? ${this.emit(then_, "value")} : ${this.emit(else_, "value")})`;
     }
-    generatePipe(head, rest) {
+    emitPipe(head, rest) {
       let [left, right] = rest;
-      let leftCode = this.generate(left, "value");
+      let leftCode = this.emit(left, "value");
       if (Array.isArray(right) && right.length > 1) {
         let fn = right[0];
         let isCall = Array.isArray(fn) || typeof fn === "string" && /^[a-zA-Z_$]/.test(fn);
         if (isCall) {
-          let fnCode = this.generate(fn, "value");
-          let args = right.slice(1).map((a) => this.generate(a, "value"));
+          let fnCode = this.emit(fn, "value");
+          let args = right.slice(1).map((a) => this.emit(a, "value"));
           return `${fnCode}(${leftCode}, ${args.join(", ")})`;
         }
       }
-      return `${this.generate(right, "value")}(${leftCode})`;
+      return `${this.emit(right, "value")}(${leftCode})`;
     }
-    generateLoop(head, rest) {
-      return `while (true) ${this.generateLoopBody(rest[0])}`;
+    emitLoop(head, rest) {
+      return `while (true) ${this.emitLoopBody(rest[0])}`;
     }
-    generateLoopN(head, rest) {
+    emitLoopN(head, rest) {
       let [count, body] = rest;
-      let n = this.generate(count, "value");
-      return `for (let it = 0; it < ${n}; it++) ${this.generateLoopBody(body)}`;
+      let n = this.emit(count, "value");
+      return `for (let it = 0; it < ${n}; it++) ${this.emitLoopBody(body)}`;
     }
-    generateAwait(head, rest) {
-      return `await ${this.generate(rest[0], "value")}`;
+    emitAwait(head, rest) {
+      return `await ${this.emit(rest[0], "value")}`;
     }
-    generateYield(head, rest) {
-      return rest.length === 0 ? "yield" : `yield ${this.generate(rest[0], "value")}`;
+    emitYield(head, rest) {
+      return rest.length === 0 ? "yield" : `yield ${this.emit(rest[0], "value")}`;
     }
-    generateYieldFrom(head, rest) {
-      return `yield* ${this.generate(rest[0], "value")}`;
+    emitYieldFrom(head, rest) {
+      return `yield* ${this.emit(rest[0], "value")}`;
     }
-    generateIf(head, rest, context, sexpr) {
+    emitIf(head, rest, context, sexpr) {
       let [condition, thenBranch, ...elseBranches] = rest;
-      return context === "value" ? this.generateIfAsExpression(condition, thenBranch, elseBranches) : this.generateIfAsStatement(condition, thenBranch, elseBranches);
+      return context === "value" ? this.emitIfAsExpression(condition, thenBranch, elseBranches) : this.emitIfAsStatement(condition, thenBranch, elseBranches);
     }
-    generateForIn(head, rest, context, sexpr) {
+    emitForIn(head, rest, context, sexpr) {
       let [vars, iterable, step, guard, body] = rest;
       if (context === "value" && this.comprehensionDepth === 0) {
         let iterator = ["for-in", vars, iterable, step];
-        return this.generate(["comprehension", body, [iterator], guard ? [guard] : []], context);
+        return this.emit(["comprehension", body, [iterator], guard ? [guard] : []], context);
       }
       let varsArray = Array.isArray(vars) ? vars : [vars];
       let noVar = varsArray.length === 0;
       let [itemVar, indexVar] = noVar ? ["_i", null] : varsArray;
-      let itemVarPattern = this.is(itemVar, "array") || this.is(itemVar, "object") ? this.generateDestructuringPattern(itemVar) : itemVar;
+      let itemVarPattern = this.is(itemVar, "array") || this.is(itemVar, "object") ? this.emitDestructuringPattern(itemVar) : itemVar;
       if (step && step !== null) {
-        let iterCode = this.generate(iterable, "value");
+        let iterCode = this.emit(iterable, "value");
         let idxName = indexVar || "_i";
-        let stepCode = this.generate(step, "value");
+        let stepCode = this.emit(step, "value");
         let isNeg = this.is(step, "-", 1);
         let isMinus1 = isNeg && (step[1] === "1" || step[1] === 1 || str(step[1]) === "1");
         let isPlus1 = !isNeg && (step === "1" || step === 1 || str(step) === "1");
@@ -7810,13 +7810,13 @@ function _setDataSection() {
           if (!noVar)
             lines.push(`const ${itemVarPattern} = ${iterCode}[${idxName}];`);
           if (guard) {
-            lines.push(`if (${this.generate(guard, "value")}) {`);
+            lines.push(`if (${this.emit(guard, "value")}) {`);
             this.indentLevel++;
             lines.push(...this.formatStatements(stmts));
             this.indentLevel--;
             lines.push(this.indent() + "}");
           } else {
-            lines.push(...stmts.map((s) => this.addSemicolon(s, this.generate(s, "statement"))));
+            lines.push(...stmts.map((s) => this.addSemicolon(s, this.emit(s, "statement"))));
           }
           this.indentLevel--;
           return loopHeader + `{
@@ -7825,12 +7825,12 @@ ${lines.map((s) => this.indent() + s).join(`
 ${this.indent()}}`;
         }
         if (noVar) {
-          return guard ? loopHeader + `{ if (${this.generate(guard, "value")}) ${this.generate(body, "statement")}; }` : loopHeader + `{ ${this.generate(body, "statement")}; }`;
+          return guard ? loopHeader + `{ if (${this.emit(guard, "value")}) ${this.emit(body, "statement")}; }` : loopHeader + `{ ${this.emit(body, "statement")}; }`;
         }
-        return guard ? loopHeader + `{ const ${itemVarPattern} = ${iterCode}[${idxName}]; if (${this.generate(guard, "value")}) ${this.generate(body, "statement")}; }` : loopHeader + `{ const ${itemVarPattern} = ${iterCode}[${idxName}]; ${this.generate(body, "statement")}; }`;
+        return guard ? loopHeader + `{ const ${itemVarPattern} = ${iterCode}[${idxName}]; if (${this.emit(guard, "value")}) ${this.emit(body, "statement")}; }` : loopHeader + `{ const ${itemVarPattern} = ${iterCode}[${idxName}]; ${this.emit(body, "statement")}; }`;
       }
       if (indexVar) {
-        let iterCode = this.generate(iterable, "value");
+        let iterCode = this.emit(iterable, "value");
         let code2 = `for (let ${indexVar} = 0; ${indexVar} < ${iterCode}.length; ${indexVar}++) `;
         if (this.is(body, "block")) {
           code2 += `{
@@ -7839,7 +7839,7 @@ ${this.indent()}}`;
           code2 += this.indent() + `const ${itemVarPattern} = ${iterCode}[${indexVar}];
 `;
           if (guard) {
-            code2 += this.indent() + `if (${this.unwrap(this.generate(guard, "value"))}) {
+            code2 += this.indent() + `if (${this.unwrap(this.emit(guard, "value"))}) {
 `;
             this.indentLevel++;
             code2 += this.formatStatements(body.slice(1)).join(`
@@ -7856,7 +7856,7 @@ ${this.indent()}}`;
           this.indentLevel--;
           code2 += this.indent() + "}";
         } else {
-          code2 += guard ? `{ const ${itemVarPattern} = ${iterCode}[${indexVar}]; if (${this.unwrap(this.generate(guard, "value"))}) ${this.generate(body, "statement")}; }` : `{ const ${itemVarPattern} = ${iterCode}[${indexVar}]; ${this.generate(body, "statement")}; }`;
+          code2 += guard ? `{ const ${itemVarPattern} = ${iterCode}[${indexVar}]; if (${this.unwrap(this.emit(guard, "value"))}) ${this.emit(body, "statement")}; }` : `{ const ${itemVarPattern} = ${iterCode}[${indexVar}]; ${this.emit(body, "statement")}; }`;
         }
         return code2;
       }
@@ -7868,38 +7868,38 @@ ${this.indent()}}`;
         let [start, end] = iterable.slice(1);
         let isSimple = (e) => typeof e === "number" || typeof e === "string" && !e.includes("(") || e instanceof String && !str(e).includes("(") || this.is(e, ".");
         if (isSimple(start) && isSimple(end)) {
-          let s = this.generate(start, "value"), e = this.generate(end, "value");
+          let s = this.emit(start, "value"), e = this.emit(end, "value");
           let cmp = isExcl ? "<" : "<=";
-          let inc = step ? `${itemVarPattern} += ${this.generate(step, "value")}` : `${itemVarPattern}++`;
+          let inc = step ? `${itemVarPattern} += ${this.emit(step, "value")}` : `${itemVarPattern}++`;
           let code2 = `for (let ${itemVarPattern} = ${s}; ${itemVarPattern} ${cmp} ${e}; ${inc}) `;
-          code2 += guard ? this.generateLoopBodyWithGuard(body, guard) : this.generateLoopBody(body);
+          code2 += guard ? this.emitLoopBodyWithGuard(body, guard) : this.emitLoopBody(body);
           return code2;
         }
       }
-      let code = `for (const ${itemVarPattern} of ${this.generate(iterable, "value")}) `;
-      code += guard ? this.generateLoopBodyWithGuard(body, guard) : this.generateLoopBody(body);
+      let code = `for (const ${itemVarPattern} of ${this.emit(iterable, "value")}) `;
+      code += guard ? this.emitLoopBodyWithGuard(body, guard) : this.emitLoopBody(body);
       return code;
     }
-    generateForOf(head, rest, context, sexpr) {
+    emitForOf(head, rest, context, sexpr) {
       let [vars, obj, own, guard, body] = rest;
       if (context === "value" && this.comprehensionDepth === 0) {
         let iterator = ["for-of", vars, obj, own];
-        return this.generate(["comprehension", body, [iterator], guard ? [guard] : []], context);
+        return this.emit(["comprehension", body, [iterator], guard ? [guard] : []], context);
       }
       let [keyVar, valueVar] = Array.isArray(vars) ? vars : [vars];
-      let objCode = this.generate(obj, "value");
+      let objCode = this.emit(obj, "value");
       let code = `for (const ${keyVar} in ${objCode}) `;
       if (own && !valueVar && !guard) {
         if (this.is(body, "block")) {
           this.indentLevel++;
-          let stmts = [`if (!Object.hasOwn(${objCode}, ${keyVar})) continue;`, ...body.slice(1).map((s) => this.addSemicolon(s, this.generate(s, "statement")))];
+          let stmts = [`if (!Object.hasOwn(${objCode}, ${keyVar})) continue;`, ...body.slice(1).map((s) => this.addSemicolon(s, this.emit(s, "statement")))];
           this.indentLevel--;
           return code + `{
 ${stmts.map((s) => this.indent() + s).join(`
 `)}
 ${this.indent()}}`;
         }
-        return code + `{ if (!Object.hasOwn(${objCode}, ${keyVar})) continue; ${this.generate(body, "statement")}; }`;
+        return code + `{ if (!Object.hasOwn(${objCode}, ${keyVar})) continue; ${this.emit(body, "statement")}; }`;
       }
       if (valueVar) {
         if (this.is(body, "block")) {
@@ -7910,13 +7910,13 @@ ${this.indent()}}`;
             lines.push(`if (!Object.hasOwn(${objCode}, ${keyVar})) continue;`);
           lines.push(`const ${valueVar} = ${objCode}[${keyVar}];`);
           if (guard) {
-            lines.push(`if (${this.generate(guard, "value")}) {`);
+            lines.push(`if (${this.emit(guard, "value")}) {`);
             this.indentLevel++;
-            lines.push(...stmts.map((s) => this.addSemicolon(s, this.generate(s, "statement"))));
+            lines.push(...stmts.map((s) => this.addSemicolon(s, this.emit(s, "statement"))));
             this.indentLevel--;
             lines.push(this.indent() + "}");
           } else {
-            lines.push(...stmts.map((s) => this.addSemicolon(s, this.generate(s, "statement"))));
+            lines.push(...stmts.map((s) => this.addSemicolon(s, this.emit(s, "statement"))));
           }
           this.indentLevel--;
           return code + `{
@@ -7929,14 +7929,14 @@ ${this.indent()}}`;
           inline += `if (!Object.hasOwn(${objCode}, ${keyVar})) continue; `;
         inline += `const ${valueVar} = ${objCode}[${keyVar}]; `;
         if (guard)
-          inline += `if (${this.generate(guard, "value")}) `;
-        inline += `${this.generate(body, "statement")};`;
+          inline += `if (${this.emit(guard, "value")}) `;
+        inline += `${this.emit(body, "statement")};`;
         return code + `{ ${inline} }`;
       }
-      code += guard ? this.generateLoopBodyWithGuard(body, guard) : this.generateLoopBody(body);
+      code += guard ? this.emitLoopBodyWithGuard(body, guard) : this.emitLoopBody(body);
       return code;
     }
-    generateForAs(head, rest, context, sexpr) {
+    emitForAs(head, rest, context, sexpr) {
       let varsArray = Array.isArray(rest[0]) ? rest[0] : [rest[0]];
       let [firstVar] = varsArray;
       let iterable = rest[1], isAwait = rest[2], guard = rest[3], body = rest[4];
@@ -7950,9 +7950,9 @@ ${this.indent()}}`;
           let beforeRest = elements.slice(0, restIdx);
           let restEl = elements[restIdx];
           let restVar = this.is(restEl, "...") ? restEl[1] : "_rest";
-          let beforePattern = beforeRest.map((el) => el === "," ? "" : typeof el === "string" ? el : this.generate(el, "value")).join(", ");
+          let beforePattern = beforeRest.map((el) => el === "," ? "" : typeof el === "string" ? el : this.emit(el, "value")).join(", ");
           let firstPattern = beforePattern ? `${beforePattern}, ...${restVar}` : `...${restVar}`;
-          let afterPattern = afterRest.map((el) => el === "," ? "" : typeof el === "string" ? el : this.generate(el, "value")).join(", ");
+          let afterPattern = afterRest.map((el) => el === "," ? "" : typeof el === "string" ? el : this.emit(el, "value")).join(", ");
           destructStmts.push(`[${firstPattern}] = _item`);
           destructStmts.push(`[${afterPattern}] = ${restVar}.splice(-${afterCount})`);
           this.helpers.add("slice");
@@ -7966,13 +7966,13 @@ ${this.indent()}}`;
           });
         }
       }
-      let iterCode = this.generate(iterable, "value");
+      let iterCode = this.emit(iterable, "value");
       let awaitKw = isAwait ? "await " : "";
       let itemVarPattern;
       if (needsTempVar)
         itemVarPattern = "_item";
       else if (this.is(firstVar, "array") || this.is(firstVar, "object"))
-        itemVarPattern = this.generateDestructuringPattern(firstVar);
+        itemVarPattern = this.emitDestructuringPattern(firstVar);
       else
         itemVarPattern = firstVar;
       let code = `for ${awaitKw}(const ${itemVarPattern} of ${iterCode}) `;
@@ -7987,118 +7987,118 @@ ${allStmts.join(`
 `)}
 ${this.indent()}}`;
       } else {
-        code += guard ? this.generateLoopBodyWithGuard(body, guard) : this.generateLoopBody(body);
+        code += guard ? this.emitLoopBodyWithGuard(body, guard) : this.emitLoopBody(body);
       }
       return code;
     }
-    generateWhile(head, rest) {
+    emitWhile(head, rest) {
       let cond = rest[0], guard = rest.length === 3 ? rest[1] : null, body = rest[rest.length - 1];
-      let code = `while (${this.unwrap(this.generate(cond, "value"))}) `;
-      return code + (guard ? this.generateLoopBodyWithGuard(body, guard) : this.generateLoopBody(body));
+      let code = `while (${this.unwrap(this.emit(cond, "value"))}) `;
+      return code + (guard ? this.emitLoopBodyWithGuard(body, guard) : this.emitLoopBody(body));
     }
-    generateRange(head, rest) {
+    emitRange(head, rest) {
       if (head === "...") {
         if (rest.length === 1)
-          return `...${this.generate(rest[0], "value")}`;
+          return `...${this.emit(rest[0], "value")}`;
         let [s2, e2] = rest;
-        let sc2 = this.generate(s2, "value"), ec2 = this.generate(e2, "value");
+        let sc2 = this.emit(s2, "value"), ec2 = this.emit(e2, "value");
         return `((s, e) => Array.from({length: Math.max(0, Math.abs(e - s))}, (_, i) => s + (i * (s <= e ? 1 : -1))))(${sc2}, ${ec2})`;
       }
       let [s, e] = rest;
-      let sc = this.generate(s, "value"), ec = this.generate(e, "value");
+      let sc = this.emit(s, "value"), ec = this.emit(e, "value");
       return `((s, e) => Array.from({length: Math.abs(e - s) + 1}, (_, i) => s + (i * (s <= e ? 1 : -1))))(${sc}, ${ec})`;
     }
-    generateNot(head, rest) {
+    emitNot(head, rest) {
       let [operand] = rest;
       if (typeof operand === "string" || operand instanceof String)
-        return `!${this.generate(operand, "value")}`;
+        return `!${this.emit(operand, "value")}`;
       if (Array.isArray(operand)) {
         let highPrec = [".", "?.", "[]", "optindex", "optcall"];
         if (highPrec.includes(operand[0]))
-          return `!${this.generate(operand, "value")}`;
+          return `!${this.emit(operand, "value")}`;
       }
-      let code = this.generate(operand, "value");
+      let code = this.emit(operand, "value");
       return code.startsWith("(") ? `!${code}` : `(!${code})`;
     }
-    generateBitwiseNot(head, rest) {
-      return `(~${this.generate(rest[0], "value")})`;
+    emitBitwiseNot(head, rest) {
+      return `(~${this.emit(rest[0], "value")})`;
     }
-    generateIncDec(head, rest) {
+    emitIncDec(head, rest) {
       let [operand, isPostfix] = rest;
-      let code = this.generate(operand, "value");
+      let code = this.emit(operand, "value");
       return isPostfix ? `(${code}${head})` : `(${head}${code})`;
     }
-    generateTypeof(head, rest) {
-      return `typeof ${this.generate(rest[0], "value")}`;
+    emitTypeof(head, rest) {
+      return `typeof ${this.emit(rest[0], "value")}`;
     }
-    generateDelete(head, rest) {
-      return `(delete ${this.generate(rest[0], "value")})`;
+    emitDelete(head, rest) {
+      return `(delete ${this.emit(rest[0], "value")})`;
     }
-    generateInstanceof(head, rest, context, sexpr) {
+    emitInstanceof(head, rest, context, sexpr) {
       let [expr, type] = rest;
       let isNeg = meta(sexpr[0], "invert");
-      let result = `(${this.generate(expr, "value")} instanceof ${this.generate(type, "value")})`;
+      let result = `(${this.emit(expr, "value")} instanceof ${this.emit(type, "value")})`;
       return isNeg ? `(!${result})` : result;
     }
-    generateIn(head, rest, context, sexpr) {
+    emitIn(head, rest, context, sexpr) {
       let [key, container] = rest;
-      let keyCode = this.generate(key, "value");
+      let keyCode = this.emit(key, "value");
       let isNeg = meta(sexpr[0], "invert");
       if (this.is(container, "object")) {
-        let result2 = `(${keyCode} in ${this.generate(container, "value")})`;
+        let result2 = `(${keyCode} in ${this.emit(container, "value")})`;
         return isNeg ? `(!${result2})` : result2;
       }
-      let c = this.generate(container, "value");
+      let c = this.emit(container, "value");
       let result = `(Array.isArray(${c}) || typeof ${c} === 'string' ? ${c}.includes(${keyCode}) : (${keyCode} in ${c}))`;
       return isNeg ? `(!${result})` : result;
     }
-    generateOf(head, rest, context, sexpr) {
+    emitOf(head, rest, context, sexpr) {
       let [value, container] = rest;
-      let v = this.generate(value, "value"), c = this.generate(container, "value");
+      let v = this.emit(value, "value"), c = this.emit(container, "value");
       let isNeg = meta(sexpr[0], "invert");
       let result = `(${v} in ${c})`;
       return isNeg ? `(!${result})` : result;
     }
-    generateRegexMatch(head, rest) {
+    emitRegexMatch(head, rest) {
       let [left, right] = rest;
       this.helpers.add("toMatchable");
       this.programVars.add("_");
-      let r = this.generate(right, "value");
+      let r = this.emit(right, "value");
       let allowNL = r.includes("/m") ? ", true" : "";
-      return `(_ = toMatchable(${this.generate(left, "value")}${allowNL}).match(${r}))`;
+      return `(_ = toMatchable(${this.emit(left, "value")}${allowNL}).match(${r}))`;
     }
-    generateNew(head, rest) {
+    emitNew(head, rest) {
       let [call] = rest;
       if (this.is(call, ".") || this.is(call, "?.")) {
         let [accType, target, prop] = call;
         if (Array.isArray(target) && !target[0].startsWith) {
-          return `(${this.generate(["new", target], "value")}).${prop}`;
+          return `(${this.emit(["new", target], "value")}).${prop}`;
         }
-        return `new ${this.generate(target, "value")}.${prop}`;
+        return `new ${this.emit(target, "value")}.${prop}`;
       }
       if (Array.isArray(call)) {
         let [ctor, ...args] = call;
-        return `new ${this.generate(ctor, "value")}(${args.map((a) => this.unwrap(this.generate(a, "value"))).join(", ")})`;
+        return `new ${this.emit(ctor, "value")}(${args.map((a) => this.unwrap(this.emit(a, "value"))).join(", ")})`;
       }
-      return `new ${this.generate(call, "value")}()`;
+      return `new ${this.emit(call, "value")}()`;
     }
-    generateLogicalAnd(head, rest, context, sexpr) {
+    emitLogicalAnd(head, rest, context, sexpr) {
       let ops = this.flattenBinaryChain(sexpr).slice(1);
       if (ops.length === 0)
         return "true";
       if (ops.length === 1)
-        return this.generate(ops[0], "value");
-      return `(${ops.map((o) => this.generate(o, "value")).join(" && ")})`;
+        return this.emit(ops[0], "value");
+      return `(${ops.map((o) => this.emit(o, "value")).join(" && ")})`;
     }
-    generateLogicalOr(head, rest, context, sexpr) {
+    emitLogicalOr(head, rest, context, sexpr) {
       let ops = this.flattenBinaryChain(sexpr).slice(1);
       if (ops.length === 0)
         return "true";
       if (ops.length === 1)
-        return this.generate(ops[0], "value");
-      return `(${ops.map((o) => this.generate(o, "value")).join(" || ")})`;
+        return this.emit(ops[0], "value");
+      return `(${ops.map((o) => this.emit(o, "value")).join(" || ")})`;
     }
-    generateArray(head, elements) {
+    emitArray(head, elements) {
       let hasTrailingElision = elements.length > 0 && elements[elements.length - 1] === ",";
       let codes = elements.map((el) => {
         if (el === ",")
@@ -8106,32 +8106,32 @@ ${this.indent()}}`;
         if (el === "...")
           return "";
         if (this.is(el, "..."))
-          return `...${this.generate(el[1], "value")}`;
-        return this.generate(el, "value");
+          return `...${this.emit(el[1], "value")}`;
+        return this.emit(el, "value");
       }).join(", ");
       return hasTrailingElision ? `[${codes},]` : `[${codes}]`;
     }
-    generateObject(head, pairs, context) {
+    emitObject(head, pairs, context) {
       if (pairs.length === 1 && Array.isArray(pairs[0]) && Array.isArray(pairs[0][2]) && pairs[0][2][0] === "comprehension") {
         let [, keyVar, compNode] = pairs[0];
         let [, valueExpr, iterators, guards] = compNode;
-        return this.generate(["object-comprehension", keyVar, valueExpr, iterators, guards], context);
+        return this.emit(["object-comprehension", keyVar, valueExpr, iterators, guards], context);
       }
       let codes = pairs.map((pair) => {
         if (this.is(pair, "..."))
-          return `...${this.generate(pair[1], "value")}`;
+          return `...${this.emit(pair[1], "value")}`;
         let [operator, key, value] = pair;
         let keyCode;
         if (this.is(key, "dynamicKey"))
-          keyCode = `[${this.generate(key[1], "value")}]`;
+          keyCode = `[${this.emit(key[1], "value")}]`;
         else if (this.is(key, "str"))
-          keyCode = `[${this.generate(key, "value")}]`;
+          keyCode = `[${this.emit(key, "value")}]`;
         else {
           this.suppressReactiveUnwrap = true;
-          keyCode = this.generate(key, "value");
+          keyCode = this.emit(key, "value");
           this.suppressReactiveUnwrap = false;
         }
-        let valCode = this.generate(value, "value");
+        let valCode = this.emit(value, "value");
         if (operator === "=")
           return `${keyCode} = ${valCode}`;
         if (operator === ":")
@@ -8142,27 +8142,27 @@ ${this.indent()}}`;
       }).join(", ");
       return `{${codes}}`;
     }
-    generateMap(head, pairs, context) {
+    emitMap(head, pairs, context) {
       if (pairs.length === 0)
         return "new Map()";
       let entries = pairs.map((pair) => {
         if (this.is(pair, "..."))
-          return `...${this.generate(pair[1], "value")}`;
+          return `...${this.emit(pair[1], "value")}`;
         let [, key, value] = pair;
         let keyCode;
         if (Array.isArray(key)) {
-          keyCode = this.generate(key, "value");
+          keyCode = this.emit(key, "value");
         } else {
           let k = str(key) ?? key;
-          let isIdentifier = !k.startsWith('"') && !k.startsWith("'") && !k.startsWith("/") && !CodeGenerator.NUMBER_START_RE.test(k) && !MAP_LITERAL_KEYS.has(k);
-          keyCode = isIdentifier ? `"${k}"` : this.generate(key, "value");
+          let isIdentifier = !k.startsWith('"') && !k.startsWith("'") && !k.startsWith("/") && !CodeEmitter.NUMBER_START_RE.test(k) && !MAP_LITERAL_KEYS.has(k);
+          keyCode = isIdentifier ? `"${k}"` : this.emit(key, "value");
         }
-        let valCode = this.generate(value, "value");
+        let valCode = this.emit(value, "value");
         return `[${keyCode}, ${valCode}]`;
       }).join(", ");
       return `new Map([${entries}])`;
     }
-    generateBlock(head, statements, context) {
+    emitBlock(head, statements, context) {
       if (context === "statement") {
         let stmts = this.withIndent(() => this.formatStatements(statements));
         return `{
@@ -8173,48 +8173,48 @@ ${this.indent()}}`;
       if (statements.length === 0)
         return "undefined";
       if (statements.length === 1)
-        return this.generate(statements[0], context);
+        return this.emit(statements[0], context);
       let last = statements[statements.length - 1];
       let lastIsCtrl = Array.isArray(last) && ["break", "continue", "return", "throw"].includes(last[0]);
       if (lastIsCtrl) {
-        let parts = statements.map((s) => this.addSemicolon(s, this.generate(s, "statement")));
+        let parts = statements.map((s) => this.addSemicolon(s, this.emit(s, "statement")));
         return `{
 ${this.withIndent(() => parts.map((p) => this.indent() + p).join(`
 `))}
 ${this.indent()}}`;
       }
-      return `(${statements.map((s) => this.generate(s, "value")).join(", ")})`;
+      return `(${statements.map((s) => this.emit(s, "value")).join(", ")})`;
     }
-    generateTry(head, rest, context) {
+    emitTry(head, rest, context) {
       let needsReturns = context === "value";
       let tryCode = "try ";
       let tryBlock = rest[0];
-      tryCode += needsReturns && this.is(tryBlock, "block") ? this.generateBlockWithReturns(tryBlock) : this.generate(tryBlock, "statement");
+      tryCode += needsReturns && this.is(tryBlock, "block") ? this.emitBlockWithReturns(tryBlock) : this.emit(tryBlock, "statement");
       if (rest.length >= 2 && Array.isArray(rest[1]) && rest[1].length === 2 && rest[1][0] !== "block") {
         let [param, catchBlock] = rest[1];
         tryCode += " catch";
         if (param && (this.is(param, "object") || this.is(param, "array"))) {
           tryCode += " (error)";
-          let destructStmt = `(${this.generate(param, "value")} = error)`;
+          let destructStmt = `(${this.emit(param, "value")} = error)`;
           catchBlock = this.is(catchBlock, "block") ? ["block", destructStmt, ...catchBlock.slice(1)] : ["block", destructStmt, catchBlock];
         } else if (param) {
           tryCode += ` (${param})`;
         }
-        tryCode += " " + (needsReturns && this.is(catchBlock, "block") ? this.generateBlockWithReturns(catchBlock) : this.generate(catchBlock, "statement"));
+        tryCode += " " + (needsReturns && this.is(catchBlock, "block") ? this.emitBlockWithReturns(catchBlock) : this.emit(catchBlock, "statement"));
       } else if (rest.length === 2) {
-        tryCode += " finally " + this.generate(rest[1], "statement");
+        tryCode += " finally " + this.emit(rest[1], "statement");
       }
       if (rest.length === 3)
-        tryCode += " finally " + this.generate(rest[2], "statement");
+        tryCode += " finally " + this.emit(rest[2], "statement");
       if (rest.length === 1)
         tryCode += " catch {}";
       if (needsReturns) {
-        let isAsync = this.containsAwait(rest[0]) || rest[1] && this.containsAwait(rest[1]);
-        return `(${isAsync ? "async " : ""}() => { ${tryCode} })()`;
+        let hasAwait = this.containsAwait(rest[0]) || rest[1] && this.containsAwait(rest[1]) || rest[2] && this.containsAwait(rest[2]);
+        return this.asyncIIFE(hasAwait, tryCode);
       }
       return tryCode;
     }
-    generateThrow(head, rest, context) {
+    emitThrow(head, rest, context) {
       let [expr] = rest;
       if (Array.isArray(expr)) {
         let checkExpr = expr, wrapperType = null;
@@ -8228,23 +8228,23 @@ ${this.indent()}}`;
           let [, condition, body] = checkExpr;
           let unwrapped = Array.isArray(body) && body.length === 1 ? body[0] : body;
           expr = wrapperType === "new" ? ["new", unwrapped] : unwrapped;
-          let condCode = this.generate(condition, "value");
-          let throwCode = `throw ${this.generate(expr, "value")}`;
+          let condCode = this.emit(condition, "value");
+          let throwCode = `throw ${this.emit(expr, "value")}`;
           return `if (${condCode}) {
 ${this.indent()}  ${throwCode};
 ${this.indent()}}`;
         }
       }
-      let throwStmt = `throw ${this.generate(expr, "value")}`;
+      let throwStmt = `throw ${this.emit(expr, "value")}`;
       return context === "value" ? `(() => { ${throwStmt}; })()` : throwStmt;
     }
-    generateControl(head, rest, context) {
+    emitControl(head, rest, context) {
       let [rawOp, expr, ctrlSexpr] = rest;
       let op = str(rawOp);
       let isReturn = ctrlSexpr[0] === "return";
-      let exprCode = this.generate(expr, "value");
+      let exprCode = this.emit(expr, "value");
       let ctrlValue = ctrlSexpr.length > 1 ? ctrlSexpr[1] : null;
-      let ctrlCode = isReturn ? ctrlValue ? `return ${this.generate(ctrlValue, "value")}` : "return" : ctrlValue ? `throw ${this.generate(ctrlValue, "value")}` : "throw new Error()";
+      let ctrlCode = isReturn ? ctrlValue ? `return ${this.emit(ctrlValue, "value")}` : "return" : ctrlValue ? `throw ${this.emit(ctrlValue, "value")}` : "throw new Error()";
       let wrapped = this.wrapForCondition(exprCode);
       if (context === "value") {
         if (op === "??")
@@ -8259,11 +8259,11 @@ ${this.indent()}}`;
         return `if (!${wrapped}) ${ctrlCode}`;
       return `if (${wrapped}) ${ctrlCode}`;
     }
-    generateSwitch(head, rest, context) {
+    emitSwitch(head, rest, context) {
       let [disc, whens, defaultCase] = rest;
       if (disc === null)
-        return this.generateSwitchAsIfChain(whens, defaultCase, context);
-      let switchBody = `switch (${this.generate(disc, "value")}) {
+        return this.emitSwitchAsIfChain(whens, defaultCase, context);
+      let switchBody = `switch (${this.emit(disc, "value")}) {
 `;
       this.indentLevel++;
       for (let clause of whens) {
@@ -8272,41 +8272,41 @@ ${this.indent()}}`;
           let tv = str(t) ?? t;
           let cv;
           if (Array.isArray(tv))
-            cv = this.generate(tv, "value");
+            cv = this.emit(tv, "value");
           else if (typeof tv === "string" && (tv.startsWith('"') || tv.startsWith("'")))
             cv = `'${tv.slice(1, -1)}'`;
           else
-            cv = this.generate(tv, "value");
+            cv = this.emit(tv, "value");
           switchBody += this.indent() + `case ${cv}:
 `;
         }
         this.indentLevel++;
-        switchBody += this.generateSwitchCaseBody(body, context);
+        switchBody += this.emitSwitchCaseBody(body, context);
         this.indentLevel--;
       }
       if (defaultCase) {
         switchBody += this.indent() + `default:
 `;
         this.indentLevel++;
-        switchBody += this.generateSwitchCaseBody(defaultCase, context);
+        switchBody += this.emitSwitchCaseBody(defaultCase, context);
         this.indentLevel--;
       }
       this.indentLevel--;
       switchBody += this.indent() + "}";
       if (context === "value") {
-        let hasAwait = whens.some((w) => this.containsAwait(w[2])) || defaultCase && this.containsAwait(defaultCase);
-        return `(${hasAwait ? "async " : ""}() => { ${switchBody} })()`;
+        let hasAwait = this.containsAwait(disc) || whens.some((w) => this.containsAwait(w[1]) || this.containsAwait(w[2])) || defaultCase && this.containsAwait(defaultCase);
+        return this.asyncIIFE(hasAwait, switchBody);
       }
       return switchBody;
     }
-    generateWhen() {
+    emitWhen() {
       throw new Error("when clause should be handled by switch");
     }
     _forInHeader(vars, iterable, step) {
       let va = Array.isArray(vars) ? vars : [vars];
       let noVar = va.length === 0;
       let [itemVar, indexVar] = noVar ? ["_i", null] : va;
-      let ivp = this.is(itemVar, "array") || this.is(itemVar, "object") ? this.generateDestructuringPattern(itemVar) : itemVar;
+      let ivp = this.is(itemVar, "array") || this.is(itemVar, "object") ? this.emitDestructuringPattern(itemVar) : itemVar;
       if (step && step !== null) {
         let ih = Array.isArray(iterable) && iterable[0];
         if (ih instanceof String)
@@ -8315,10 +8315,10 @@ ${this.indent()}}`;
         if (isRange) {
           let isExcl = ih === "...";
           let [s, e] = iterable.slice(1);
-          let sc = this.generate(s, "value"), ec = this.generate(e, "value"), stc2 = this.generate(step, "value");
+          let sc = this.emit(s, "value"), ec = this.emit(e, "value"), stc2 = this.emit(step, "value");
           return { header: `for (let ${ivp} = ${sc}; ${ivp} ${isExcl ? "<" : "<="} ${ec}; ${ivp} += ${stc2})`, setup: null };
         }
-        let ic = this.generate(iterable, "value"), idxN = indexVar || "_i", stc = this.generate(step, "value");
+        let ic = this.emit(iterable, "value"), idxN = indexVar || "_i", stc = this.emit(step, "value");
         let isNeg = this.is(step, "-", 1);
         let isMinus1 = isNeg && (step[1] === "1" || step[1] === 1 || str(step[1]) === "1");
         let isPlus1 = !isNeg && (step === "1" || step === 1 || str(step) === "1");
@@ -8327,35 +8327,35 @@ ${this.indent()}}`;
         return { header, setup: noVar ? null : `const ${ivp} = ${ic}[${idxN}];` };
       }
       if (indexVar) {
-        let ic = this.generate(iterable, "value");
+        let ic = this.emit(iterable, "value");
         return {
           header: `for (let ${indexVar} = 0; ${indexVar} < ${ic}.length; ${indexVar}++)`,
           setup: `const ${ivp} = ${ic}[${indexVar}];`
         };
       }
-      return { header: `for (const ${ivp} of ${this.generate(iterable, "value")})`, setup: null };
+      return { header: `for (const ${ivp} of ${this.emit(iterable, "value")})`, setup: null };
     }
     _forOfHeader(vars, iterable, own) {
       let va = Array.isArray(vars) ? vars : [vars];
       let [kv, vv] = va;
-      let kvp = this.is(kv, "array") || this.is(kv, "object") ? this.generateDestructuringPattern(kv) : kv;
-      let oc = this.generate(iterable, "value");
+      let kvp = this.is(kv, "array") || this.is(kv, "object") ? this.emitDestructuringPattern(kv) : kv;
+      let oc = this.emit(iterable, "value");
       return { header: `for (const ${kvp} in ${oc})`, own, vv, oc, kvp };
     }
     _forAsHeader(vars, iterable, isAwait) {
       let va = Array.isArray(vars) ? vars : [vars];
       let [fv] = va;
-      let ivp = this.is(fv, "array") || this.is(fv, "object") ? this.generateDestructuringPattern(fv) : fv;
-      return { header: `for ${isAwait ? "await " : ""}(const ${ivp} of ${this.generate(iterable, "value")})` };
+      let ivp = this.is(fv, "array") || this.is(fv, "object") ? this.emitDestructuringPattern(fv) : fv;
+      return { header: `for ${isAwait ? "await " : ""}(const ${ivp} of ${this.emit(iterable, "value")})` };
     }
-    generateComprehension(head, rest, context) {
+    emitComprehension(head, rest, context) {
       let [expr, iterators, guards] = rest;
       if (context === "statement")
-        return this.generateComprehensionAsLoop(expr, iterators, guards);
+        return this.emitComprehensionAsLoop(expr, iterators, guards);
       if (this.comprehensionTarget)
-        return this.generateComprehensionWithTarget(expr, iterators, guards, this.comprehensionTarget);
-      let hasAwait = this.containsAwait(expr);
-      let code = `(${hasAwait ? "async " : ""}() => {
+        return this.emitComprehensionWithTarget(expr, iterators, guards, this.comprehensionTarget);
+      let hasAwait = this.containsAwait(expr) || iterators.some((i) => this.containsAwait(i)) || guards.some((g) => this.containsAwait(g));
+      let code = this.asyncIIFEOpen(hasAwait) + `
 `;
       this.indentLevel++;
       this.comprehensionDepth++;
@@ -8390,7 +8390,7 @@ ${this.indent()}}`;
         }
       }
       for (let guard of guards) {
-        code += this.indent() + `if (${this.generate(guard, "value")}) {
+        code += this.indent() + `if (${this.emit(guard, "value")}) {
 `;
         this.indentLevel++;
       }
@@ -8410,25 +8410,25 @@ ${this.indent()}}`;
         for (let i = 0;i < expr.length - 1; i++) {
           let s = expr[i + 1], isLast = i === expr.length - 2;
           if (!isLast || hasCtrl(s)) {
-            code += this.indent() + this.generate(s, "statement") + `;
+            code += this.indent() + this.emit(s, "statement") + `;
 `;
           } else if (Array.isArray(s) && loopStmts.includes(s[0])) {
-            code += this.indent() + this.generate(s, "statement") + `;
+            code += this.indent() + this.emit(s, "statement") + `;
 `;
           } else {
-            code += this.indent() + `result.push(${this.generate(s, "value")});
+            code += this.indent() + `result.push(${this.emit(s, "value")});
 `;
           }
         }
       } else {
         if (hasCtrl(expr)) {
-          code += this.indent() + this.generate(expr, "statement") + `;
+          code += this.indent() + this.emit(expr, "statement") + `;
 `;
         } else if (Array.isArray(expr) && loopStmts.includes(expr[0])) {
-          code += this.indent() + this.generate(expr, "statement") + `;
+          code += this.indent() + this.emit(expr, "statement") + `;
 `;
         } else {
-          code += this.indent() + `result.push(${this.generate(expr, "value")});
+          code += this.indent() + `result.push(${this.emit(expr, "value")});
 `;
         }
       }
@@ -8449,9 +8449,10 @@ ${this.indent()}}`;
       code += this.indent() + "})()";
       return code;
     }
-    generateObjectComprehension(head, rest, context) {
+    emitObjectComprehension(head, rest, context) {
       let [keyExpr, valueExpr, iterators, guards] = rest;
-      let code = `(() => {
+      let hasAwait = this.containsAwait(keyExpr) || this.containsAwait(valueExpr) || iterators.some((i) => this.containsAwait(i)) || guards.some((g) => this.containsAwait(g));
+      let code = this.asyncIIFEOpen(hasAwait) + `
 `;
       this.indentLevel++;
       code += this.indent() + `const result = {};
@@ -8460,7 +8461,7 @@ ${this.indent()}}`;
         let [iterType, vars, iterable, own] = iter;
         if (iterType === "for-of") {
           let [kv, vv] = vars;
-          let oc = this.generate(iterable, "value");
+          let oc = this.emit(iterable, "value");
           code += this.indent() + `for (const ${kv} in ${oc}) {
 `;
           this.indentLevel++;
@@ -8473,11 +8474,11 @@ ${this.indent()}}`;
         }
       }
       for (let guard of guards) {
-        code += this.indent() + `if (${this.generate(guard, "value")}) {
+        code += this.indent() + `if (${this.emit(guard, "value")}) {
 `;
         this.indentLevel++;
       }
-      code += this.indent() + `result[${this.generate(keyExpr, "value")}] = ${this.generate(valueExpr, "value")};
+      code += this.indent() + `result[${this.emit(keyExpr, "value")}] = ${this.emit(valueExpr, "value")};
 `;
       for (let i = 0;i < guards.length; i++) {
         this.indentLevel--;
@@ -8495,11 +8496,11 @@ ${this.indent()}}`;
       code += this.indent() + "})()";
       return code;
     }
-    generateClass(head, rest, context) {
+    emitClass(head, rest, context) {
       let [className, parentClass, ...bodyParts] = rest;
       let code = className ? `class ${className}` : "class";
       if (parentClass)
-        code += ` extends ${this.generate(parentClass, "value")}`;
+        code += ` extends ${this.emit(parentClass, "value")}`;
       code += ` {
 `;
       if (bodyParts.length > 0 && Array.isArray(bodyParts[0])) {
@@ -8553,21 +8554,21 @@ ${this.indent()}}`;
                   if (atParamMap?.size > 0)
                     this._atParamMap = atParamMap;
                 }
-                let pList = this.generateParamList(cleanParams);
+                let pList = this.emitParamList(cleanParams);
                 let prefix = (isStatic ? "static " : "") + (hasAwait ? "async " : "") + (hasYield ? "*" : "");
                 code += this.indent() + `${prefix}${mName}(${pList}) `;
                 if (!isComputed)
                   this.currentMethodName = mName;
-                code += this.generateMethodBody(body, autoAssign, mName === "constructor", cleanParams);
+                code += this.emitMethodBody(body, autoAssign, mName === "constructor", cleanParams);
                 this._atParamMap = null;
                 this.currentMethodName = null;
                 code += `
 `;
               } else if (isStatic) {
-                code += this.indent() + `static ${mName} = ${this.generate(mv, "value")};
+                code += this.indent() + `static ${mName} = ${this.emit(mv, "value")};
 `;
               } else {
-                code += this.indent() + `${mName} = ${this.generate(mv, "value")};
+                code += this.indent() + `${mName} = ${this.emit(mv, "value")};
 `;
               }
             }
@@ -8580,19 +8581,19 @@ ${this.indent()}}`;
               let isStatic = this.is(mk, ".") && mk[1] === "this", mName = this.extractMemberName(mk);
               if (this.is(mv, "->") || this.is(mv, "=>")) {
                 let [, params, body] = mv;
-                let pList = this.generateParamList(params);
+                let pList = this.emitParamList(params);
                 let prefix = (isStatic ? "static " : "") + (this.containsAwait(body) ? "async " : "") + (this.containsYield(body) ? "*" : "");
                 code += this.indent() + `${prefix}${mName}(${pList}) `;
                 this.currentMethodName = mName;
-                code += this.generateMethodBody(body, [], mName === "constructor", params);
+                code += this.emitMethodBody(body, [], mName === "constructor", params);
                 this.currentMethodName = null;
                 code += `
 `;
               } else if (isStatic) {
-                code += this.indent() + `static ${mName} = ${this.generate(mv, "value")};
+                code += this.indent() + `static ${mName} = ${this.emit(mv, "value")};
 `;
               } else {
-                code += this.indent() + `${mName} = ${this.generate(mv, "value")};
+                code += this.indent() + `${mName} = ${this.emit(mv, "value")};
 `;
               }
             }
@@ -8600,11 +8601,11 @@ ${this.indent()}}`;
               if (this.is(stmt, "class")) {
                 let [, nestedName, parent, ...nestedBody] = stmt;
                 if (this.is(nestedName, ".") && nestedName[1] === "this") {
-                  code += this.indent() + `static ${nestedName[2]} = ${this.generate(["class", null, parent, ...nestedBody], "value")};
+                  code += this.indent() + `static ${nestedName[2]} = ${this.emit(["class", null, parent, ...nestedBody], "value")};
 `;
                 }
               } else {
-                code += this.indent() + this.generate(stmt, "statement") + `;
+                code += this.indent() + this.emit(stmt, "statement") + `;
 `;
               }
             }
@@ -8613,10 +8614,10 @@ ${this.indent()}}`;
             this.indentLevel++;
             for (let stmt of bodyStmts) {
               if (this.is(stmt, "=") && Array.isArray(stmt[1]) && stmt[1][0] === "." && stmt[1][1] === "this") {
-                code += this.indent() + `static ${stmt[1][2]} = ${this.generate(stmt[2], "value")};
+                code += this.indent() + `static ${stmt[1][2]} = ${this.emit(stmt[2], "value")};
 `;
               } else {
-                code += this.indent() + this.generate(stmt, "statement") + `;
+                code += this.indent() + this.emit(stmt, "statement") + `;
 `;
               }
             }
@@ -8627,20 +8628,20 @@ ${this.indent()}}`;
       code += this.indent() + "}";
       return code;
     }
-    generateSuper(head, rest) {
+    emitSuper(head, rest) {
       if (rest.length === 0) {
         if (this.currentMethodName && this.currentMethodName !== "constructor")
           return `super.${this.currentMethodName}()`;
         return "super";
       }
-      let args = rest.map((a) => this.unwrap(this.generate(a, "value"))).join(", ");
+      let args = rest.map((a) => this.unwrap(this.emit(a, "value"))).join(", ");
       if (this.currentMethodName && this.currentMethodName !== "constructor")
         return `super.${this.currentMethodName}(${args})`;
       return `super(${args})`;
     }
-    generateImport(head, rest, context, sexpr) {
+    emitImport(head, rest, context, sexpr) {
       if (rest.length === 1) {
-        let importExpr = `import(${this.generate(rest[0], "value")})`;
+        let importExpr = `import(${this.emit(rest[0], "value")})`;
         if (meta(sexpr[0], "await") === true)
           return `(await ${importExpr})`;
         return importExpr;
@@ -8665,54 +8666,54 @@ ${this.indent()}}`;
         let names = specifier.map((i) => Array.isArray(i) && i.length === 2 ? `${i[0]} as ${i[1]}` : i).join(", ");
         return `import { ${names} } from ${fixedSource}`;
       }
-      return `import ${this.generate(specifier, "value")} from ${fixedSource}`;
+      return `import ${this.emit(specifier, "value")} from ${fixedSource}`;
     }
-    generateExport(head, rest) {
+    emitExport(head, rest) {
       let [decl] = rest;
       if (this.options.skipExports) {
         if (this.is(decl, "=")) {
           const prev = this._componentName;
           if (this.is(decl[2], "component"))
             this._componentName = str(decl[1]);
-          const result = `const ${decl[1]} = ${this.generate(decl[2], "value")}`;
+          const result = `const ${decl[1]} = ${this.emit(decl[2], "value")}`;
           this._componentName = prev;
           return result;
         }
         if (Array.isArray(decl) && decl.every((i) => typeof i === "string"))
           return "";
-        return this.generate(decl, "statement");
+        return this.emit(decl, "statement");
       }
       if (this.is(decl, "=")) {
         const prev = this._componentName;
         if (this.is(decl[2], "component"))
           this._componentName = str(decl[1]);
-        const result = `export const ${decl[1]} = ${this.generate(decl[2], "value")}`;
+        const result = `export const ${decl[1]} = ${this.emit(decl[2], "value")}`;
         this._componentName = prev;
         return result;
       }
       if (Array.isArray(decl) && decl.every((i) => typeof i === "string"))
         return `export { ${decl.join(", ")} }`;
-      return `export ${this.generate(decl, "statement")}`;
+      return `export ${this.emit(decl, "statement")}`;
     }
-    generateExportDefault(head, rest) {
+    emitExportDefault(head, rest) {
       let [expr] = rest;
       if (this.options.skipExports) {
         if (this.is(expr, "="))
-          return `const ${expr[1]} = ${this.generate(expr[2], "value")}`;
-        return this.generate(expr, "statement");
+          return `const ${expr[1]} = ${this.emit(expr[2], "value")}`;
+        return this.emit(expr, "statement");
       }
       if (this.is(expr, "=")) {
-        return `const ${expr[1]} = ${this.generate(expr[2], "value")};
+        return `const ${expr[1]} = ${this.emit(expr[2], "value")};
 export default ${expr[1]}`;
       }
-      return `export default ${this.generate(expr, "statement")}`;
+      return `export default ${this.emit(expr, "statement")}`;
     }
-    generateExportAll(head, rest) {
+    emitExportAll(head, rest) {
       if (this.options.skipExports)
         return "";
       return `export * from ${this.addJsExtensionAndAssertions(rest[0])}`;
     }
-    generateExportFrom(head, rest) {
+    emitExportFrom(head, rest) {
       if (this.options.skipExports)
         return "";
       let [specifiers, source] = rest;
@@ -8723,23 +8724,23 @@ export default ${expr[1]}`;
       }
       return `export ${specifiers} from ${fixedSource}`;
     }
-    generateDoIIFE(head, rest) {
-      return `(${this.generate(rest[0], "statement")})()`;
+    emitDoIIFE(head, rest) {
+      return `(${this.emit(rest[0], "statement")})()`;
     }
-    generateRegex(head, rest) {
-      return rest.length === 0 ? head : this.generate(rest[0], "value");
+    emitRegex(head, rest) {
+      return rest.length === 0 ? head : this.emit(rest[0], "value");
     }
-    generateTaggedTemplate(head, rest) {
+    emitTaggedTemplate(head, rest) {
       let [tag, s] = rest;
-      let tagCode = this.generate(tag, "value");
-      let content = this.generate(s, "value");
+      let tagCode = this.emit(tag, "value");
+      let content = this.emit(s, "value");
       if (content.startsWith("`"))
         return `${tagCode}${content}`;
       if (content.startsWith('"') || content.startsWith("'"))
         return `${tagCode}\`${content.slice(1, -1)}\``;
       return `${tagCode}\`${content}\``;
     }
-    generateString(head, rest) {
+    emitString(head, rest) {
       let result = "`";
       for (let part of rest) {
         if (part instanceof String) {
@@ -8755,10 +8756,10 @@ export default ${expr[1]}`;
         } else if (Array.isArray(part)) {
           if (part.length === 1 && typeof part[0] === "string" && !Array.isArray(part[0])) {
             let v = part[0];
-            result += /^[\d"']/.test(v) ? "${" + this.generate(v, "value") + "}" : "${" + v + "}";
+            result += /^[\d"']/.test(v) ? "${" + this.emit(v, "value") + "}" : "${" + v + "}";
           } else {
             let expr = part.length === 1 && Array.isArray(part[0]) ? part[0] : part;
-            result += "${" + this.generate(expr, "value") + "}";
+            result += "${" + this.emit(expr, "value") + "}";
           }
         }
       }
@@ -8789,10 +8790,10 @@ export default ${expr[1]}`;
         return [cond.parentOp, ...cond.otherOperands, val];
       return val;
     }
-    generateDestructuringPattern(pattern) {
+    emitDestructuringPattern(pattern) {
       return this.formatParam(pattern);
     }
-    generateParamList(params) {
+    emitParamList(params) {
       let expIdx = params.findIndex((p) => this.is(p, "expansion"));
       if (expIdx !== -1) {
         let before = params.slice(0, expIdx), after = params.slice(expIdx + 1);
@@ -8819,7 +8820,7 @@ export default ${expr[1]}`;
       if (this.is(param, "rest"))
         return `...${param[1]}`;
       if (this.is(param, "default"))
-        return `${param[1]} = ${this.generate(param[2], "value")}`;
+        return `${param[1]} = ${this.emit(param[2], "value")}`;
       if (this.is(param, ".") && param[1] === "this")
         return param[2];
       if (this.is(param, "array")) {
@@ -8831,7 +8832,7 @@ export default ${expr[1]}`;
           if (this.is(el, "..."))
             return `...${el[1]}`;
           if (this.is(el, "=") && typeof el[1] === "string")
-            return `${el[1]} = ${this.generate(el[2], "value")}`;
+            return `${el[1]} = ${this.emit(el[2], "value")}`;
           if (typeof el === "string")
             return el;
           return this.formatParam(el);
@@ -8843,10 +8844,10 @@ export default ${expr[1]}`;
           if (this.is(pair, "..."))
             return `...${pair[1]}`;
           if (this.is(pair, "default"))
-            return `${pair[1]} = ${this.generate(pair[2], "value")}`;
+            return `${pair[1]} = ${this.emit(pair[2], "value")}`;
           let [operator, key, value] = pair;
           if (operator === "=")
-            return `${key} = ${this.generate(value, "value")}`;
+            return `${key} = ${this.emit(value, "value")}`;
           if (key === value)
             return key;
           return `${key}: ${this.formatParam(value)}`;
@@ -8855,7 +8856,7 @@ export default ${expr[1]}`;
       }
       return JSON.stringify(param);
     }
-    generateBodyWithReturns(body, params = [], options = {}) {
+    emitBodyWithReturns(body, params = [], options = {}) {
       let { sideEffectOnly = false, autoAssignments = [], isConstructor = false, hasExpansionParams = false } = options;
       let prevSEO = this.sideEffectOnly;
       this.sideEffectOnly = sideEffectOnly;
@@ -8917,7 +8918,7 @@ export default ${expr[1]}`;
             let h = Array.isArray(stmt) ? stmt[0] : null;
             if (!isLast && h === "comprehension") {
               let [, expr, iters, guards] = stmt;
-              code += this.indent() + this.generateComprehensionAsLoop(expr, iters, guards) + `
+              code += this.indent() + this.emitComprehensionAsLoop(expr, iters, guards) + `
 `;
               return;
             }
@@ -8926,7 +8927,7 @@ export default ${expr[1]}`;
               let hasMulti = (b) => this.is(b, "block") && b.length > 2;
               let hasCtrlStmt = this.hasStatementInBranch(thenB) || elseB.some((b) => this.hasStatementInBranch(b));
               if (hasCtrlStmt || hasMulti(thenB) || elseB.some(hasMulti)) {
-                code += this.generateIfElseWithEarlyReturns(stmt) + `
+                code += this.emitIfElseWithEarlyReturns(stmt) + `
 `;
                 return;
               }
@@ -8937,7 +8938,7 @@ export default ${expr[1]}`;
                 let vh = value[0];
                 if (vh === "comprehension" || vh === "for-in") {
                   this.comprehensionTarget = target;
-                  code += this.generate(value, "value");
+                  code += this.emit(value, "value");
                   this.comprehensionTarget = null;
                   code += this.indent() + `return ${target};
 `;
@@ -8947,7 +8948,7 @@ export default ${expr[1]}`;
             }
             let needsReturn = !isConstructor && !sideEffectOnly && isLast && !noRetStmts.includes(h) && !loopStmts.includes(h) && !this.hasExplicitControlFlow(stmt);
             let ctx = needsReturn ? "value" : "statement";
-            let sc = this.generate(stmt, ctx);
+            let sc = this.emit(stmt, ctx);
             if (needsReturn)
               code += this.indent() + "return " + sc + `;
 `;
@@ -8959,10 +8960,10 @@ export default ${expr[1]}`;
         if (firstIsSuper) {
           let isSuperOnly = statements.length === 1;
           if (isSuperOnly && !isConstructor)
-            code += this.indent() + "return " + this.generate(statements[0], "value") + `;
+            code += this.indent() + "return " + this.emit(statements[0], "value") + `;
 `;
           else
-            code += this.indent() + this.generate(statements[0], "statement") + `;
+            code += this.indent() + this.emit(statements[0], "statement") + `;
 `;
           for (let a of autoAssignments)
             code += this.indent() + a + `;
@@ -8990,35 +8991,35 @@ export default ${expr[1]}`;
       let result;
       if (isConstructor && autoAssignments.length > 0) {
         let isSuper = Array.isArray(body) && body[0] === "super";
-        let bodyCode = this.generate(body, "statement");
+        let bodyCode = this.emit(body, "statement");
         let assigns = autoAssignments.map((a) => `${a};`).join(" ");
         result = isSuper ? `{ ${bodyCode}; ${assigns} }` : `{ ${assigns} ${bodyCode}; }`;
       } else if (isConstructor || this.hasExplicitControlFlow(body))
-        result = `{ ${this.generate(body, "statement")}; }`;
+        result = `{ ${this.emit(body, "statement")}; }`;
       else if (Array.isArray(body) && (noRetStmts.includes(body[0]) || loopStmts.includes(body[0])))
-        result = `{ ${this.generate(body, "statement")}; }`;
+        result = `{ ${this.emit(body, "statement")}; }`;
       else if (sideEffectOnly)
-        result = `{ ${this.generate(body, "statement")}; return; }`;
+        result = `{ ${this.emit(body, "statement")}; return; }`;
       else
-        result = `{ return ${this.generate(body, "value")}; }`;
+        result = `{ return ${this.emit(body, "value")}; }`;
       this.scopeStack.pop();
       return result;
     }
-    generateFunctionBody(body, params = [], sideEffectOnly = false) {
-      return this.generateBodyWithReturns(body, params, { sideEffectOnly, hasExpansionParams: this.expansionAfterParams?.length > 0 });
+    emitFunctionBody(body, params = [], sideEffectOnly = false) {
+      return this.emitBodyWithReturns(body, params, { sideEffectOnly, hasExpansionParams: this.expansionAfterParams?.length > 0 });
     }
-    generateMethodBody(body, autoAssignments = [], isConstructor = false, params = []) {
-      return this.generateBodyWithReturns(body, params, { autoAssignments, isConstructor });
+    emitMethodBody(body, autoAssignments = [], isConstructor = false, params = []) {
+      return this.emitBodyWithReturns(body, params, { autoAssignments, isConstructor });
     }
-    generateBlockWithReturns(block) {
+    emitBlockWithReturns(block) {
       if (!Array.isArray(block) || block[0] !== "block")
-        return this.generate(block, "statement");
+        return this.emit(block, "statement");
       let stmts = this.unwrapBlock(block);
       let lines = this.withIndent(() => stmts.map((stmt, i) => {
         let isLast = i === stmts.length - 1;
         let h = Array.isArray(stmt) ? stmt[0] : null;
         let needsReturn = isLast && !["return", "throw", "break", "continue"].includes(h);
-        let code = this.generate(stmt, needsReturn ? "value" : "statement");
+        let code = this.emit(stmt, needsReturn ? "value" : "statement");
         return needsReturn ? this.indent() + "return " + code + ";" : this.indent() + code + ";";
       }));
       return `{
@@ -9026,29 +9027,29 @@ ${lines.join(`
 `)}
 ${this.indent()}}`;
     }
-    generateLoopBody(body) {
+    emitLoopBody(body) {
       if (!Array.isArray(body))
-        return `{ ${this.generate(body, "statement")}; }`;
+        return `{ ${this.emit(body, "statement")}; }`;
       if (body[0] === "block" || Array.isArray(body[0])) {
         let stmts = body[0] === "block" ? body.slice(1) : body;
         let lines = this.withIndent(() => stmts.map((s) => {
           if (this.is(s, "comprehension")) {
             let [, expr, iters, guards] = s;
-            return this.indent() + this.generateComprehensionAsLoop(expr, iters, guards);
+            return this.indent() + this.emitComprehensionAsLoop(expr, iters, guards);
           }
-          return this.indent() + this.addSemicolon(s, this.generate(s, "statement"));
+          return this.indent() + this.addSemicolon(s, this.emit(s, "statement"));
         }));
         return `{
 ${lines.join(`
 `)}
 ${this.indent()}}`;
       }
-      return `{ ${this.generate(body, "statement")}; }`;
+      return `{ ${this.emit(body, "statement")}; }`;
     }
-    generateLoopBodyWithGuard(body, guard) {
-      let guardCond = this.unwrap(this.generate(guard, "value"));
+    emitLoopBodyWithGuard(body, guard) {
+      let guardCond = this.unwrap(this.emit(guard, "value"));
       if (!Array.isArray(body))
-        return `{ if (${guardCond}) ${this.generate(body, "statement")}; }`;
+        return `{ if (${guardCond}) ${this.emit(body, "statement")}; }`;
       if (body[0] === "block" || Array.isArray(body[0])) {
         let stmts = body[0] === "block" ? body.slice(1) : body;
         let loopIndent = this.withIndent(() => this.indent());
@@ -9067,9 +9068,9 @@ ${loopIndent}${guardCode}${innerStmts.join(`
 ${close}
 ${this.indent()}}`;
       }
-      return `{ if (${this.generate(guard, "value")}) ${this.generate(body, "statement")}; }`;
+      return `{ if (${this.emit(guard, "value")}) ${this.emit(body, "statement")}; }`;
     }
-    generateComprehensionWithTarget(expr, iterators, guards, targetVar) {
+    emitComprehensionWithTarget(expr, iterators, guards, targetVar) {
       let code = "";
       code += this.indent() + `${targetVar} = [];
 `;
@@ -9085,11 +9086,11 @@ ${this.indent()}}`;
             code += this.indent() + setup + `
 `;
           if (guards && guards.length > 0) {
-            code += this.indent() + `if (${guards.map((g) => this.generate(g, "value")).join(" && ")}) {
+            code += this.indent() + `if (${guards.map((g) => this.emit(g, "value")).join(" && ")}) {
 `;
             this.indentLevel++;
           }
-          code += this.indent() + `${targetVar}.push(${this.unwrap(this.generate(unwrappedExpr, "value"))});
+          code += this.indent() + `${targetVar}.push(${this.unwrap(this.emit(unwrappedExpr, "value"))});
 `;
           if (guards && guards.length > 0) {
             this.indentLevel--;
@@ -9105,21 +9106,21 @@ ${this.indent()}}`;
       return this.indent() + `${targetVar} = (() => { /* complex comprehension */ })();
 `;
     }
-    generateComprehensionAsLoop(expr, iterators, guards) {
+    emitComprehensionAsLoop(expr, iterators, guards) {
       let code = "";
-      let guardCond = guards?.length ? guards.map((g) => this.generate(g, "value")).join(" && ") : null;
+      let guardCond = guards?.length ? guards.map((g) => this.emit(g, "value")).join(" && ") : null;
       let emitBody = () => {
         if (guardCond) {
           code += this.indent() + `if (${guardCond}) {
 `;
           this.indentLevel++;
-          code += this.indent() + this.generate(expr, "statement") + `;
+          code += this.indent() + this.emit(expr, "statement") + `;
 `;
           this.indentLevel--;
           code += this.indent() + `}
 `;
         } else {
-          code += this.indent() + this.generate(expr, "statement") + `;
+          code += this.indent() + this.emit(expr, "statement") + `;
 `;
         }
       };
@@ -9165,40 +9166,40 @@ ${this.indent()}}`;
           return code;
         }
       }
-      return this.generate(["comprehension", expr, iterators, guards], "value");
+      return this.emit(["comprehension", expr, iterators, guards], "value");
     }
-    generateIfElseWithEarlyReturns(ifStmt) {
+    emitIfElseWithEarlyReturns(ifStmt) {
       let [head, condition, thenBranch, ...elseBranches] = ifStmt;
       let code = "";
-      let condCode = this.generate(condition, "value");
+      let condCode = this.emit(condition, "value");
       code += this.indent() + `if (${condCode}) {
 `;
-      code += this.withIndent(() => this.generateBranchWithReturn(thenBranch));
+      code += this.withIndent(() => this.emitBranchWithReturn(thenBranch));
       code += this.indent() + "}";
       for (let branch of elseBranches) {
         code += " else ";
         if (this.is(branch, "if")) {
           let [, nc, nt, ...ne] = branch;
-          code += `if (${this.generate(nc, "value")}) {
+          code += `if (${this.emit(nc, "value")}) {
 `;
-          code += this.withIndent(() => this.generateBranchWithReturn(nt));
+          code += this.withIndent(() => this.emitBranchWithReturn(nt));
           code += this.indent() + "}";
           for (let rb of ne) {
             code += ` else {
 `;
-            code += this.withIndent(() => this.generateBranchWithReturn(rb));
+            code += this.withIndent(() => this.emitBranchWithReturn(rb));
             code += this.indent() + "}";
           }
         } else {
           code += `{
 `;
-          code += this.withIndent(() => this.generateBranchWithReturn(branch));
+          code += this.withIndent(() => this.emitBranchWithReturn(branch));
           code += this.indent() + "}";
         }
       }
       return code;
     }
-    generateBranchWithReturn(branch) {
+    emitBranchWithReturn(branch) {
       branch = this.unwrapIfBranch(branch);
       let stmts = this.unwrapBlock(branch);
       let code = "";
@@ -9207,74 +9208,74 @@ ${this.indent()}}`;
         let h = Array.isArray(s) ? s[0] : null;
         let hasCtrl = h === "return" || h === "throw" || h === "break" || h === "continue";
         if (isLast && !hasCtrl)
-          code += this.indent() + `return ${this.generate(s, "value")};
+          code += this.indent() + `return ${this.emit(s, "value")};
 `;
         else
-          code += this.indent() + this.generate(s, "statement") + `;
+          code += this.indent() + this.emit(s, "statement") + `;
 `;
       }
       return code;
     }
-    generateIfAsExpression(condition, thenBranch, elseBranches) {
+    emitIfAsExpression(condition, thenBranch, elseBranches) {
       let needsIIFE = this.is(thenBranch, "block") && thenBranch.length > 2 || this.hasStatementInBranch(thenBranch) || elseBranches.some((b) => this.is(b, "block") && b.length > 2 || this.hasStatementInBranch(b) || this.hasNestedMultiStatement(b));
       if (needsIIFE) {
         let hasAwait = this.containsAwait(condition) || this.containsAwait(thenBranch) || elseBranches.some((b) => this.containsAwait(b));
-        let code = `${hasAwait ? "await " : ""}(${hasAwait ? "async " : ""}() => { `;
-        code += `if (${this.generate(condition, "value")}) `;
-        code += this.generateBlockWithReturns(thenBranch);
+        let code = this.asyncIIFEOpen(hasAwait) + " ";
+        code += `if (${this.emit(condition, "value")}) `;
+        code += this.emitBlockWithReturns(thenBranch);
         for (let branch of elseBranches) {
           code += " else ";
           if (this.is(branch, "if")) {
             let [_, nc, nt, ...ne] = branch;
-            code += `if (${this.generate(nc, "value")}) `;
-            code += this.generateBlockWithReturns(nt);
+            code += `if (${this.emit(nc, "value")}) `;
+            code += this.emitBlockWithReturns(nt);
             for (let nb of ne) {
               code += " else ";
               if (this.is(nb, "if")) {
                 let [__, nnc, nnt, ...nne] = nb;
-                code += `if (${this.generate(nnc, "value")}) `;
-                code += this.generateBlockWithReturns(nnt);
+                code += `if (${this.emit(nnc, "value")}) `;
+                code += this.emitBlockWithReturns(nnt);
                 elseBranches.push(...nne);
               } else {
-                code += this.generateBlockWithReturns(nb);
+                code += this.emitBlockWithReturns(nb);
               }
             }
           } else {
-            code += this.generateBlockWithReturns(branch);
+            code += this.emitBlockWithReturns(branch);
           }
         }
         return code + " })()";
       }
       let thenExpr = this.extractExpression(this.unwrapIfBranch(thenBranch));
       let elseExpr = this.buildTernaryChain(elseBranches);
-      let condCode = this.generate(condition, "value");
+      let condCode = this.emit(condition, "value");
       if (this.is(condition, "yield") || this.is(condition, "await"))
         condCode = `(${condCode})`;
       return `(${condCode} ? ${thenExpr} : ${elseExpr})`;
     }
-    generateIfAsStatement(condition, thenBranch, elseBranches) {
-      let code = `if (${this.unwrap(this.generate(condition, "value"))}) `;
-      code += this.generate(this.unwrapIfBranch(thenBranch), "statement");
+    emitIfAsStatement(condition, thenBranch, elseBranches) {
+      let code = `if (${this.unwrap(this.emit(condition, "value"))}) `;
+      code += this.emit(this.unwrapIfBranch(thenBranch), "statement");
       for (let branch of elseBranches)
-        code += ` else ` + this.generate(this.unwrapIfBranch(branch), "statement");
+        code += ` else ` + this.emit(this.unwrapIfBranch(branch), "statement");
       return code;
     }
-    generateSwitchCaseBody(body, context) {
+    emitSwitchCaseBody(body, context) {
       let code = "";
       let hasFlow = this.hasExplicitControlFlow(body);
       let stmts = this.unwrapBlock(body);
       if (hasFlow) {
         for (let s of stmts)
-          code += this.indent() + this.generate(s, "statement") + `;
+          code += this.indent() + this.emit(s, "statement") + `;
 `;
       } else if (context === "value") {
         if (this.is(body, "block") && body.length > 2) {
           for (let i = 0;i < stmts.length; i++) {
             if (i === stmts.length - 1)
-              code += this.indent() + `return ${this.generate(stmts[i], "value")};
+              code += this.indent() + `return ${this.emit(stmts[i], "value")};
 `;
             else
-              code += this.indent() + this.generate(stmts[i], "statement") + `;
+              code += this.indent() + this.emit(stmts[i], "statement") + `;
 `;
           }
         } else {
@@ -9286,14 +9287,14 @@ ${this.indent()}}`;
           let [_, condition, thenBranch, ...elseBranches] = stmts[0];
           let thenExpr = this.extractExpression(this.unwrapIfBranch(thenBranch));
           let elseExpr = this.buildTernaryChain(elseBranches);
-          code += this.indent() + `(${this.unwrap(this.generate(condition, "value"))} ? ${thenExpr} : ${elseExpr});
+          code += this.indent() + `(${this.unwrap(this.emit(condition, "value"))} ? ${thenExpr} : ${elseExpr});
 `;
         } else if (this.is(body, "block") && body.length > 1) {
           for (let s of stmts)
-            code += this.indent() + this.generate(s, "statement") + `;
+            code += this.indent() + this.emit(s, "statement") + `;
 `;
         } else {
-          code += this.indent() + this.generate(body, "statement") + `;
+          code += this.indent() + this.emit(body, "statement") + `;
 `;
         }
         code += this.indent() + `break;
@@ -9301,12 +9302,12 @@ ${this.indent()}}`;
       }
       return code;
     }
-    generateSwitchAsIfChain(whens, defaultCase, context) {
+    emitSwitchAsIfChain(whens, defaultCase, context) {
       let code = "";
       for (let i = 0;i < whens.length; i++) {
         let [, test, body] = whens[i];
         let cond = Array.isArray(test) ? test[0] : test;
-        code += (i === 0 ? "" : " else ") + `if (${this.generate(cond, "value")}) {
+        code += (i === 0 ? "" : " else ") + `if (${this.emit(cond, "value")}) {
 `;
         this.indentLevel++;
         if (context === "value")
@@ -9314,7 +9315,7 @@ ${this.indent()}}`;
 `;
         else
           for (let s of this.unwrapBlock(body))
-            code += this.indent() + this.generate(s, "statement") + `;
+            code += this.indent() + this.emit(s, "statement") + `;
 `;
         this.indentLevel--;
         code += this.indent() + "}";
@@ -9328,16 +9329,30 @@ ${this.indent()}}`;
 `;
         else
           for (let s of this.unwrapBlock(defaultCase))
-            code += this.indent() + this.generate(s, "statement") + `;
+            code += this.indent() + this.emit(s, "statement") + `;
 `;
         this.indentLevel--;
         code += this.indent() + "}";
       }
-      return context === "value" ? `(() => { ${code} })()` : code;
+      if (context === "value") {
+        let hasAwait = whens.some((w) => this.containsAwait(w[1]) || this.containsAwait(w[2])) || defaultCase && this.containsAwait(defaultCase);
+        return this.asyncIIFE(hasAwait, code);
+      }
+      return code;
+    }
+    asyncIIFE(hasAwait, body) {
+      let prefix = hasAwait ? "await " : "";
+      let async_ = hasAwait ? "async " : "";
+      return `${prefix}(${async_}() => { ${body} })()`;
+    }
+    asyncIIFEOpen(hasAwait) {
+      let prefix = hasAwait ? "await " : "";
+      let async_ = hasAwait ? "async " : "";
+      return `${prefix}(${async_}() => {`;
     }
     extractExpression(branch) {
       let stmts = this.unwrapBlock(branch);
-      return stmts.length > 0 ? this.generate(stmts[stmts.length - 1], "value") : "undefined";
+      return stmts.length > 0 ? this.emit(stmts[stmts.length - 1], "value") : "undefined";
     }
     unwrapBlock(body) {
       if (!Array.isArray(body))
@@ -9366,7 +9381,7 @@ ${this.indent()}}`;
       return generated + (this.needsSemicolon(stmt, generated) ? ";" : "");
     }
     formatStatements(stmts, context = "statement") {
-      return stmts.map((s) => this.indent() + this.addSemicolon(s, this.generate(s, context)));
+      return stmts.map((s) => this.indent() + this.addSemicolon(s, this.emit(s, context)));
     }
     wrapForCondition(code) {
       if (/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(code))
@@ -9538,7 +9553,7 @@ ${this.indent()}}`;
         let [_, cond, then_, ...rest] = first;
         let thenPart = this.extractExpression(this.unwrapIfBranch(then_));
         let elsePart = this.buildTernaryChain([...rest, ...branches.slice(1)]);
-        return `(${this.generate(cond, "value")} ? ${thenPart} : ${elsePart})`;
+        return `(${this.emit(cond, "value")} ? ${thenPart} : ${elsePart})`;
       }
       return this.extractExpression(this.unwrapIfBranch(first));
     }
@@ -9725,7 +9740,7 @@ ${this.indent()}}`;
       if (this.is(mk, ".") && mk[1] === "this")
         return mk[2];
       if (this.is(mk, "computed"))
-        return `[${this.generate(mk[1], "value")}]`;
+        return `[${this.emit(mk[1], "value")}]`;
       return mk;
     }
     getReactiveRuntime() {
@@ -10038,7 +10053,7 @@ if (typeof globalThis !== 'undefined') {
         let sourceFile = this.options.filename || "input.rip";
         sourceMap = new SourceMapGenerator(file, sourceFile, source);
       }
-      let generator = new CodeGenerator({
+      let generator = new CodeEmitter({
         dataSection,
         source,
         skipPreamble: this.options.skipPreamble,
@@ -10073,8 +10088,8 @@ if (typeof globalThis !== 'undefined') {
       return this.compile(source).sexpr;
     }
   }
-  installComponentSupport(CodeGenerator, Lexer);
-  CodeGenerator.prototype.generateEnum = generateEnum;
+  installComponentSupport(CodeEmitter, Lexer);
+  CodeEmitter.prototype.emitEnum = emitEnum;
   function compile(source, options = {}) {
     return new Compiler(options).compile(source);
   }
@@ -10098,14 +10113,14 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
 `;
   }
   function getReactiveRuntime() {
-    return new CodeGenerator({}).getReactiveRuntime();
+    return new CodeEmitter({}).getReactiveRuntime();
   }
   function getComponentRuntime() {
-    return new CodeGenerator({}).getComponentRuntime();
+    return new CodeEmitter({}).getComponentRuntime();
   }
   // src/browser.js
   var VERSION = "3.13.133";
-  var BUILD_DATE = "2026-04-04@06:37:36GMT";
+  var BUILD_DATE = "2026-04-04@08:06:13GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -10675,7 +10690,7 @@ ${indented}`);
       let result;
       _loading.value = true;
       _error.value = null;
-      return (async () => {
+      return await (async () => {
         try {
           result = await fn();
           return _data.value = result;
@@ -11277,7 +11292,7 @@ ${indented}`);
       currentParams = params;
       gen2 = ++generation;
       router.navigating = true;
-      return (async () => {
+      return await (async () => {
         try {
           source = components.read(route.file);
           if (!source) {
