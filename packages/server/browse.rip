@@ -1,8 +1,8 @@
 # ==============================================================================
-# @rip-lang/server — Default Static File Server
+# @rip-lang/server — Directory Browser
 # ==============================================================================
 #
-# Built-in fallback when no index.rip or index.ts exists in the target directory.
+# Built-in file browser when no index.rip or index.ts exists in the target directory.
 # Activated automatically by `rip server` when no app entry is found.
 #
 # Behavior:

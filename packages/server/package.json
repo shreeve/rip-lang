@@ -51,7 +51,7 @@
   },
   "files": [
     "api.rip",
-    "default.rip",
+    "browse.rip",
     "middleware.rip",
     "server.rip",
     "server.html",

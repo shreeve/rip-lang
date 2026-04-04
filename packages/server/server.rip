@@ -49,7 +49,7 @@ import { createAcmeManager } from './acme/manager.rip'
 
 _ = null
 
-defaultEntry = join(import.meta.dir, 'default.rip')
+defaultEntry = join(import.meta.dir, 'browse.rip')
 
 
 # ==============================================================================

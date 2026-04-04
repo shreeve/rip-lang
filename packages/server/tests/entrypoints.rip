@@ -4,7 +4,7 @@ import { coerceInt, computeSocketPrefix, parseFlags } from '../control/cli.rip'
 import { createServingRuntime, createReloadHistoryEntry } from '../serving/runtime.rip'
 
 serverDir = dirname(import.meta.dir)
-defaultRip = join(serverDir, 'default.rip')
+defaultRip = join(serverDir, 'browse.rip')
 
 test "control cli helpers load and parse basic flags", ->
   flags = parseFlags(['bun', 'server', '--https-port=9445', '--file=./serve.rip', defaultRip])

@@ -196,7 +196,7 @@ test "host block with app field creates app route", ->
         app:  'browser'
     apps:
       browser:
-        entry: '/srv/default.rip'
+        entry: '/srv/browse.rip'
         root:  '/mnt/www'
   }, '/home/shreeve')
   route = config.sites['dev.example.com'].routes[0]
