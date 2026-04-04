@@ -2037,94 +2037,17 @@ export class CodeEmitter {
         let bodyStmts = bodyBlock.slice(1);
         let hasObjFirst = bodyStmts.length > 0 && Array.isArray(bodyStmts[0]) && bodyStmts[0][0] === 'object';
 
-        if (hasObjFirst && bodyStmts.length === 1) {
+        if (hasObjFirst) {
           let members = bodyStmts[0].slice(1);
           this.indentLevel++;
-
-          // First pass: identify bound methods
-          let boundMethods = [];
-          for (let [, mk, mv] of members) {
-            let isStatic = this.is(mk, '.') && mk[1] === 'this';
-            let isComputed = this.is(mk, 'computed');
-            let mName = this.extractMemberName(mk);
-            if (this.is(mv, '=>') && !isStatic && !isComputed && mName !== 'constructor') boundMethods.push(mName);
-          }
-
-          // Second pass: generate members
-          for (let [, mk, mv] of members) {
-            let isStatic = this.is(mk, '.') && mk[1] === 'this';
-            let isComputed = this.is(mk, 'computed');
-            let mName = this.extractMemberName(mk);
-            if ((this.is(mv, '->') || this.is(mv, '=>'))) {
-              let [, params, body] = mv;
-              let hasAwait = this.containsAwait(body), hasYield = this.containsYield(body);
-              let cleanParams = params, autoAssign = [];
-              if (mName === 'constructor') {
-                let isSubclass = !!parentClass;
-                let atParamMap = isSubclass ? new Map() : null;
-                cleanParams = params.map(p => {
-                  // Handle @param: ['.', 'this', 'name']
-                  if (this.is(p, '.') && p[1] === 'this') {
-                    let name = p[2];
-                    let param = isSubclass ? `_${name}` : name;
-                    autoAssign.push(`this.${name} = ${param}`);
-                    if (isSubclass) atParamMap.set(name, param);
-                    return param;
-                  }
-                  // Handle @param with default: ['default', ['.', 'this', 'name'], value]
-                  if (this.is(p, 'default') && this.is(p[1], '.') && p[1][1] === 'this') {
-                    let name = p[1][2];
-                    let param = isSubclass ? `_${name}` : name;
-                    autoAssign.push(`this.${name} = ${param}`);
-                    if (isSubclass) atParamMap.set(name, param);
-                    return ['default', param, p[2]];
-                  }
-                  return p;
-                });
-                for (let bm of boundMethods) autoAssign.unshift(`this.${bm} = this.${bm}.bind(this)`);
-                if (atParamMap?.size > 0) this._atParamMap = atParamMap;
-              }
-              let pList = this.emitParamList(cleanParams);
-              let prefix = (isStatic ? 'static ' : '') + (hasAwait ? 'async ' : '') + (hasYield ? '*' : '');
-              code += this.indent() + `${prefix}${mName}(${pList}) `;
-              if (!isComputed) this.currentMethodName = mName;
-              code += this.emitMethodBody(body, autoAssign, mName === 'constructor', cleanParams);
-              this._atParamMap = null;
-              this.currentMethodName = null;
-              code += '\n';
-            } else if (isStatic) {
-              code += this.indent() + `static ${mName} = ${this.emit(mv, 'value')};\n`;
-            } else {
-              code += this.indent() + `${mName} = ${this.emit(mv, 'value')};\n`;
-            }
-          }
-          this.indentLevel--;
-        } else if (hasObjFirst) {
-          let members = bodyStmts[0].slice(1);
-          let additionalStmts = bodyStmts.slice(1);
-          this.indentLevel++;
-          for (let [, mk, mv] of members) {
-            let isStatic = this.is(mk, '.') && mk[1] === 'this', mName = this.extractMemberName(mk);
-            if ((this.is(mv, '->') || this.is(mv, '=>'))) {
-              let [, params, body] = mv;
-              let pList = this.emitParamList(params);
-              let prefix = (isStatic ? 'static ' : '') + (this.containsAwait(body) ? 'async ' : '') + (this.containsYield(body) ? '*' : '');
-              code += this.indent() + `${prefix}${mName}(${pList}) `;
-              this.currentMethodName = mName;
-              code += this.emitMethodBody(body, [], mName === 'constructor', params);
-              this.currentMethodName = null;
-              code += '\n';
-            } else if (isStatic) {
-              code += this.indent() + `static ${mName} = ${this.emit(mv, 'value')};\n`;
-            } else {
-              code += this.indent() + `${mName} = ${this.emit(mv, 'value')};\n`;
-            }
-          }
-          for (let stmt of additionalStmts) {
+          code += this._emitClassMembers(members, parentClass);
+          for (let stmt of bodyStmts.slice(1)) {
             if (this.is(stmt, 'class')) {
               let [, nestedName, parent, ...nestedBody] = stmt;
               if (this.is(nestedName, '.') && nestedName[1] === 'this') {
                 code += this.indent() + `static ${nestedName[2]} = ${this.emit(['class', null, parent, ...nestedBody], 'value')};\n`;
+              } else {
+                code += this.indent() + this.emit(stmt, 'statement') + ';\n';
               }
             } else {
               code += this.indent() + this.emit(stmt, 'statement') + ';\n';
@@ -2146,6 +2069,69 @@ export class CodeEmitter {
     }
 
     code += this.indent() + '}';
+    return code;
+  }
+
+  _emitClassMembers(members, parentClass) {
+    let code = '';
+
+    let boundMethods = [];
+    for (let [, mk, mv] of members) {
+      let isStatic = this.is(mk, '.') && mk[1] === 'this';
+      let isComputed = this.is(mk, 'computed');
+      let mName = this.extractMemberName(mk);
+      if (this.is(mv, '=>') && !isStatic && !isComputed && mName !== 'constructor') boundMethods.push(mName);
+    }
+
+    for (let [, mk, mv] of members) {
+      let isStatic = this.is(mk, '.') && mk[1] === 'this';
+      let isComputed = this.is(mk, 'computed');
+      let mName = this.extractMemberName(mk);
+
+      if (this.is(mv, '->') || this.is(mv, '=>')) {
+        let [, params, body] = mv;
+        let hasAwait = this.containsAwait(body), hasYield = this.containsYield(body);
+        let cleanParams = params, autoAssign = [];
+
+        if (mName === 'constructor') {
+          let isSubclass = !!parentClass;
+          let atParamMap = isSubclass ? new Map() : null;
+          cleanParams = params.map(p => {
+            if (this.is(p, '.') && p[1] === 'this') {
+              let name = p[2];
+              let param = isSubclass ? `_${name}` : name;
+              autoAssign.push(`this.${name} = ${param}`);
+              if (isSubclass) atParamMap.set(name, param);
+              return param;
+            }
+            if (this.is(p, 'default') && this.is(p[1], '.') && p[1][1] === 'this') {
+              let name = p[1][2];
+              let param = isSubclass ? `_${name}` : name;
+              autoAssign.push(`this.${name} = ${param}`);
+              if (isSubclass) atParamMap.set(name, param);
+              return ['default', param, p[2]];
+            }
+            return p;
+          });
+          for (let bm of boundMethods) autoAssign.unshift(`this.${bm} = this.${bm}.bind(this)`);
+          if (atParamMap?.size > 0) this._atParamMap = atParamMap;
+        }
+
+        let pList = this.emitParamList(cleanParams);
+        let prefix = (isStatic ? 'static ' : '') + (hasAwait ? 'async ' : '') + (hasYield ? '*' : '');
+        code += this.indent() + `${prefix}${mName}(${pList}) `;
+        if (!isComputed) this.currentMethodName = mName;
+        code += this.emitMethodBody(body, autoAssign, mName === 'constructor', cleanParams);
+        this._atParamMap = null;
+        this.currentMethodName = null;
+        code += '\n';
+      } else if (isStatic) {
+        code += this.indent() + `static ${mName} = ${this.emit(mv, 'value')};\n`;
+      } else {
+        code += this.indent() + `${mName} = ${this.emit(mv, 'value')};\n`;
+      }
+    }
+
     return code;
   }
 
