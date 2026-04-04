@@ -2,7 +2,7 @@
 
 # Rip Server - @rip-lang/server
 
-> Rip Server serves content: static sites, Rip apps, proxied HTTP services, and TCP/TLS services from one Bun-native runtime.
+> Rip Server serves content: static sites, Rip apps, proxied HTTP services, and TCP/TLS services -- all from one Bun-native runtime.
 
 Here, `content` means anything you want to make reachable over the network. That
 may be a static site, a small Rip app, an HTTP service behind a proxy, a raw
