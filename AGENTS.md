@@ -39,7 +39,7 @@ rip server
 
 | File                      | Can Edit? | Notes                                                  |
 | ------------------------- | --------- | ------------------------------------------------------ |
-| `src/compiler.js`         | Yes       | Code generator; main compiler work                     |
+| `src/compiler.js`         | Yes       | Code emitter (`CodeEmitter`); main compiler work       |
 | `src/lexer.js`            | Yes       | Lexer and rewriter                                     |
 | `src/types.js`            | Yes       | Type system sidecar                                    |
 | `src/components.js`       | Yes       | Component system sidecar                               |
@@ -66,8 +66,8 @@ rip server
 ## Compilation Pipeline
 
 ```text
-Rip Source -> Lexer -> emitTypes -> Parser -> S-Expressions -> Codegen -> JavaScript
-                       (types.js)           (arrays + .loc)             + source map
+Rip Source -> Lexer -> emitTypes -> Parser -> S-Expressions -> CodeEmitter -> JavaScript
+                       (types.js)           (arrays + .loc)                  + source map
                           ↓
                        file.d.ts (when types: "emit")
 ```

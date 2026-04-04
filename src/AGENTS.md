@@ -4,6 +4,43 @@ This covers `compiler.js`, `lexer.js`, `components.js`, `browser.js`, `types.js`
 
 ---
 
+## Architecture Overview
+
+The code emitter is `CodeEmitter` in `compiler.js`. It takes s-expression ASTs
+from the parser and produces JavaScript strings. The class was previously called
+`CodeGenerator`; all codegen methods now use `emit*` naming (e.g. `emitIf`,
+`emitSwitch`, `emitClass`). Utility methods that analyze or transform the AST
+without producing output keep descriptive verbs: `collect*`, `extract*`,
+`unwrap*`, `contains*`, `has*`, `find*`, `build*`, `format*`.
+
+Key helpers:
+- `asyncIIFE(hasAwait, body)` / `asyncIIFEOpen(hasAwait)` — centralized async
+  IIFE wrapping. All 6 expression-context IIFE sites route through these.
+- `_tryPostfixCall(head, rest, context)` — shared postfix-if optimization for
+  both simple and complex callee call paths.
+- `_emitArgs(rest)` — shared argument-list emission.
+- `_emitClassMembers(members, parentClass)` — shared class member emission for
+  object-style class bodies (handles bound methods, `@param`, `atParamMap`).
+
+### Cleanup Status
+
+The compiler has been through a hardening pass. Current state:
+
+| Area | Status | Notes |
+| ---- | ------ | ----- |
+| Async IIFE emission | Done | All 6 sites centralized via `asyncIIFE`/`asyncIIFEOpen` |
+| `containsAwait` scope | Done | All enclosed nodes checked (disc, conditions, finally, etc.) |
+| `emitClass` | Done | Deduplicated member loops, fixed 3 latent bugs |
+| `emit()` dispatch | Done | Deduplicated postfix-if and args generation |
+| `emitBodyWithReturns` | Reviewed, not refactored | 143 lines, 12 responsibilities — complex but working, no known bugs |
+| `emitAssignment` | Reviewed, not refactored | 138 lines, 8 patterns — complex but working, no known bugs |
+| `emitForIn` | Reviewed, not refactored | 107 lines — inherent complexity from loop variants |
+| `emitProgram` | Reviewed, not refactored | 136 lines — sequential setup, each section unique |
+| Test runner | Done | Async tests tracked via `pendingTests` + `Promise.all` |
+| Test coverage | Done | 1631 tests, async IIFE + class + nested construct coverage |
+
+---
+
 ## S-Expression Patterns
 
 Common patterns:
@@ -186,7 +223,7 @@ All node types dispatch through `GENERATORS` for O(1) lookup. To change a featur
 
 1. Inspect the s-expression with `echo 'code' | ./bin/rip -s`
 2. Search `GENERATORS` in `src/compiler.js`
-3. Edit the matching generator method
+3. Edit the matching `emit*` method
 4. Run `bun run test`
 
 For grammar work:
