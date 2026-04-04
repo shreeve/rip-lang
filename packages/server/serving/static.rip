@@ -106,7 +106,7 @@ renderDirectoryListing = (reqPath, fsPath, rootName) ->
   <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>#{esc reqPath} — #{esc rootName}</title>
+  <title>#{esc(if reqPath is '/' then rootName else reqPath.split('/').filter((p) -> p).slice(-1)[0] or rootName)}</title>
   <style>
   :root {
     --bg: #f8f9fa; --card: #fff; --border: #e2e5e9; --row-border: #f0f1f3;
