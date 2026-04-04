@@ -183,20 +183,21 @@ normalizeServerSettings = (value, errors) ->
   if (certPath and not keyPath) or (keyPath and not certPath)
     pushError(errors, 'E_TLS_PAIR', 'server', 'manual TLS requires both cert and key', "Provide both `server.cert` and `server.key`, or remove both and rely on manual host TLS.")
   acmeDomains = []
-  if value.acmeDomains?
-    unless Array.isArray(value.acmeDomains)
-      pushError(errors, 'E_ACME_DOMAINS', 'server.acmeDomains', 'acmeDomains must be an array of exact hostnames', "Use `acmeDomains: ['example.com', 'www.example.com']`.")
-    else
-      for domain, idx in value.acmeDomains
-        unless typeof domain is 'string' and domain.trim()
-          pushError(errors, 'E_ACME_DOMAIN_VALUE', "server.acmeDomains[#{idx}]", 'acme domain must be a non-empty string', "Use `'example.com'`.")
-          continue
-        if domain.includes('*')
-          pushError(errors, 'E_ACME_WILDCARD', "server.acmeDomains[#{idx}]", 'ACME HTTP-01 cannot issue wildcard certificates', "Remove the wildcard domain or provide `cert` and `key` manually via `hosts` or `certs`.")
-          continue
-        acmeDomains.push(domain.trim().toLowerCase())
+  acmeEnabled = false
+  if Array.isArray(value.acme)
+    acmeEnabled = true
+    for domain, idx in value.acme
+      unless typeof domain is 'string' and domain.trim()
+        pushError(errors, 'E_ACME_DOMAIN_VALUE', "server.acme[#{idx}]", 'acme domain must be a non-empty string', "Use `'example.com'`.")
+        continue
+      if domain.includes('*')
+        pushError(errors, 'E_ACME_WILDCARD', "server.acme[#{idx}]", 'ACME HTTP-01 cannot issue wildcard certificates', "Remove the wildcard domain or provide `cert` and `key` manually via `hosts` or `certs`.")
+        continue
+      acmeDomains.push(domain.trim().toLowerCase())
+  else if value.acme is true
+    acmeEnabled = true
   {
-    acme: value.acme is true
+    acme: acmeEnabled
     acmeDomains
     cert: certPath
     key: keyPath

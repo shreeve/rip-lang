@@ -112,9 +112,8 @@ test "normalizeConfig accepts TCP proxies and streams", ->
 test "normalizeConfig rejects wildcard ACME domains", ->
   errors = getErrors ->
     normalizeConfig(
-      edge:
-        acme: true
-        acmeDomains: ['*.example.com']
+      server:
+        acme: ['*.example.com']
       hosts:
         '*.example.com':
           root: '/mnt/site'

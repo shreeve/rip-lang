@@ -48,8 +48,7 @@ There are no alternate top-level route/site models.
 
 Global settings:
 
-- `acme`
-- `acmeDomains`
+- `acme` (boolean or array of domains)
 - `cert`
 - `key`
 - `hsts`

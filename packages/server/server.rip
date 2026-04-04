@@ -200,6 +200,7 @@ class Server
       lastErrorDetails: null
       rolledBackFrom: null
       verifyPolicy: loaded.normalized.server?.verify or null
+      acmeDomains: loaded.normalized.server?.acmeDomains or []
       certs: loaded.normalized.resolvedCerts or null
       activeRouteDescriptions: (routeTable.routes or []).map(describeRoute).filter(Boolean)
       lastReload: @configInfo?.lastReload or null
@@ -523,7 +524,8 @@ class Server
       httpsPort = @flags.httpsPort
       @streamListenersDeferred = true if @internalHttpsServer and @streamRuntime.listeners.size is 0
 
-      if @flags.redirectHttp or @flags.acme or @flags.acmeStaging
+      configHasAcme = @servingRuntime?.configInfo?.acmeDomains?.length > 0
+      if @flags.redirectHttp or @flags.acme or @flags.acmeStaging or configHasAcme
         challengeStore = @challengeStore
         try
           @server = Bun.serve
@@ -1003,20 +1005,37 @@ main = ->
 
   svr.start!
 
-  # ACME auto-TLS: obtain cert if needed, start renewal loop
-  if (flags.acme or flags.acmeStaging) and flags.acmeDomain
+  # ACME auto-TLS: obtain certs for all domains, start renewal loop
+  acmeDomains = []
+  acmeDomains.push(flags.acmeDomain) if flags.acmeDomain
+  configAcme = svr.servingRuntime?.configInfo?.acmeDomains or []
+  for d in configAcme
+    acmeDomains.push(d) unless acmeDomains.includes(d)
+
+  acmeEnabled = flags.acme or flags.acmeStaging or acmeDomains.length > 0
+  if acmeEnabled and acmeDomains.length > 0
     acmeMgr = createAcmeManager
       certDir: defaultCertDir()
       staging: flags.acmeStaging
       challengeStore: svr.challengeStore
       onCertRenewed: (domain, result) ->
-        p "rip-acme: cert renewed for #{domain}, graceful restart needed"
+        p "rip-acme: cert renewed for #{domain}"
+        try
+          svr.tlsMaterial = svr.loadTlsMaterial!
+          if svr.servingRuntime?.configInfo?.certs and Object.keys(svr.servingRuntime.configInfo.certs).length > 0
+            svr.tlsMaterial = buildTlsArray(svr.tlsMaterial, svr.servingRuntime.configInfo.certs)
+          svr.httpsServer?.reload({ tls: svr.tlsMaterial }) if svr.httpsServer
+          svr.internalHttpsServer?.reload({ tls: svr.tlsMaterial }) if svr.internalHttpsServer
+          p "rip-acme: TLS reloaded with renewed cert for #{domain}"
+        catch e
+          console.error "rip-acme: TLS reload failed after renewal: #{e.message}"
     svr.acmeManager = acmeMgr
-    try acmeMgr.obtainCert!(flags.acmeDomain)
-    catch e
-      console.error "rip-acme: initial cert obtain failed: #{e.message}"
-      console.error "rip-acme: will retry during renewal loop"
-    acmeMgr.startRenewalLoop([flags.acmeDomain])
+    for domain in acmeDomains
+      try acmeMgr.obtainCert!(domain)
+      catch e
+        console.error "rip-acme: cert obtain failed for #{domain}: #{e.message}"
+        console.error "rip-acme: will retry during renewal loop"
+    acmeMgr.startRenewalLoop(acmeDomains)
 
   process.env.RIP_URLS = svr.urls.join(',')  # exact URLs the Server just built
   mgr.start!
