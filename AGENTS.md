@@ -234,7 +234,6 @@ rip -cm example.rip
 | postfix ternary       | `a if x else b`  | Python-style ternary                       |
 | `for...as` iteration  | `for x as iter`  | iterable loop                              |
 | `as!` async shorthand | `for x as! iter` | shorthand for `for await`                  |
-| defined check         | `x!?`            | true if not undefined                      |
 | presence check        | `x?!`            | truthy-or-undefined Houdini operator       |
 | optional chain assign | `x?.prop = val`  | guarded assignment                         |
 | tagged template `$`   | `sh $"cmd #{x}"` | injection-safe tagged template             |
@@ -262,8 +261,6 @@ rip -cm example.rip
 | `!`         | Dammit           | `fetchData!`                 |
 | `!`         | Void             | `def process!`               |
 | `=!`        | Readonly         | `MAX =! 100`                 |
-| `!?`        | Otherwise        | `val !? 5`                   |
-| `!?`        | Defined          | `val!?`                      |
 | `?!`        | Presence         | `@checked?!`                 |
 | `?`         | Existence        | `x?`                         |
 | `//`        | Floor div        | `7 // 2`                     |

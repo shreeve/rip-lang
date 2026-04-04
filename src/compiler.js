@@ -28,7 +28,7 @@ let str  = (node) => node instanceof String ? node.valueOf() : node;
 let INLINE_FORMS = new Set([
   '+', '-', '*', '/', '%', '//', '%%', '**',
   '==', '!=', '<', '>', '<=', '>=', '===', '!==',
-  '&&', '||', '??', '!?', 'not',
+  '&&', '||', '??', 'not',
   '&', '|', '^', '<<', '>>', '>>>',
   '=', '.', '?.', '[]',
   '!', 'typeof', 'void', 'delete', 'new',
@@ -149,7 +149,7 @@ export class CodeEmitter {
     '==': 'emitBinaryOp', '===': 'emitBinaryOp', '!=': 'emitBinaryOp',
     '!==': 'emitBinaryOp', '<': 'emitBinaryOp', '>': 'emitBinaryOp',
     '<=': 'emitBinaryOp', '>=': 'emitBinaryOp', '??': 'emitBinaryOp',
-    '!?': 'emitBinaryOp', '&': 'emitBinaryOp', '|': 'emitBinaryOp',
+    '&': 'emitBinaryOp', '|': 'emitBinaryOp',
     '^': 'emitBinaryOp', '<<': 'emitBinaryOp', '>>': 'emitBinaryOp',
     '>>>': 'emitBinaryOp',
 
@@ -212,7 +212,6 @@ export class CodeEmitter {
     'break': 'emitBreak',
     'continue': 'emitContinue',
     '?': 'emitExistential',
-    'defined': 'emitDefined',
     'presence': 'emitPresence',
     '?:': 'emitTernary',
     '|>': 'emitPipe',
@@ -803,10 +802,6 @@ export class CodeEmitter {
         return `((${a} ${leftOp} ${b}) && (${b} ${op} ${c}))`;
       }
     }
-    if (op === '!?') {
-      let l = this.emit(left, 'value'), r = this.emit(right, 'value');
-      return `(${l} !== undefined ? ${l} : ${r})`;
-    }
     if (op === '==') op = '===';
     if (op === '!=') op = '!==';
     return `(${this.emit(left, 'value')} ${op} ${this.emit(right, 'value')})`;
@@ -1218,10 +1213,6 @@ export class CodeEmitter {
 
   emitExistential(head, rest) {
     return `(${this.emit(rest[0], 'value')} != null)`;
-  }
-
-  emitDefined(head, rest) {
-    return `(${this.emit(rest[0], 'value')} !== undefined)`;
   }
 
   emitPresence(head, rest) {
