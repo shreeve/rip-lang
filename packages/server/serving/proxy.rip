@@ -10,7 +10,7 @@ import { toUpstreamWsUrl } from './runtime.rip'
 export proxyRouteToUpstream = (req, route, requestId, clientIp, runtime, metrics, flags, addSecurityHeaders, logAccess) ->
   upstream = getUpstream(runtime.upstreamPool, route.proxy)
   unless upstream
-    console.error "[proxy] no proxy '#{route.proxy}'" if isDebug()
+    warn "[proxy] no proxy '#{route.proxy}'" if isDebug()
     return serviceUnavailableResponse()
 
   attempt = 1
@@ -19,7 +19,7 @@ export proxyRouteToUpstream = (req, route, requestId, clientIp, runtime, metrics
   while attempt <= upstream.retry.attempts
     target = selectTarget(upstream, runtime.upstreamPool.nowFn)
     unless target
-      console.error "[proxy] no healthy target for '#{route.proxy}'" if isDebug()
+      warn "[proxy] no healthy target for '#{route.proxy}'" if isDebug()
       return serviceUnavailableResponse()
 
     markTargetBusy(target)
@@ -36,9 +36,9 @@ export proxyRouteToUpstream = (req, route, requestId, clientIp, runtime, metrics
       )
       workerSeconds = (performance.now() - t0) / 1000
       success = res.status < 500
-      console.error "[proxy] #{route.proxy} -> #{target.url} status=#{res.status} attempt=#{attempt}" if isDebug()
+      warn "[proxy] #{route.proxy} -> #{target.url} status=#{res.status} attempt=#{attempt}" if isDebug()
     catch err
-      console.error "[proxy] #{route.proxy} error: #{err.message or err}" if isDebug()
+      warn "[proxy] #{route.proxy} error: #{err.message or err}" if isDebug()
       res = serviceUnavailableResponse()
     finally
       releaseTarget(target, workerSeconds * 1000, success, runtime.upstreamPool)

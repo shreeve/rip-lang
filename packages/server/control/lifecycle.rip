@@ -133,10 +133,10 @@ export installShutdownHandlers = (cleanup, processObj, onReload = null) ->
     processObj.on 'SIGHUP', ->
       try onReload!()
       catch err
-        console.error 'rip-server: config reload failed:', err?.message or err
+        warn 'rip-server: config reload failed:', err?.message or err
   processObj.on 'uncaughtException', (err) ->
-    console.error 'rip-server: uncaught exception:', err
+    warn 'rip-server: uncaught exception:', err
     cleanup()
   processObj.on 'unhandledRejection', (err) ->
-    console.error 'rip-server: unhandled rejection:', err
+    warn 'rip-server: unhandled rejection:', err
     cleanup()

@@ -53,4 +53,4 @@ export startMdnsAdvertisement = (host, mdnsProcesses, getLanIP, flags, formatPor
     url = "#{protocol}://#{host}#{formatPort(protocol, port)}"
     publishUrl(url)
   catch e
-    console.error "rip-server: failed to advertise #{host} via mDNS:", e.message
+    warn "rip-server: failed to advertise #{host} via mDNS:", e.message

@@ -86,7 +86,7 @@ export printCheckConfigResult = (loaded) ->
 export runCheckConfig = (flags) ->
   source = resolveConfigSource(flags.appEntry, flags.configPath)
   unless source?.path
-    console.error 'rip-server: no serve.rip found to validate'
+    warn 'rip-server: no serve.rip found to validate'
     exit 1
   try
     checked = checkConfigFile!(source.path)
@@ -94,7 +94,7 @@ export runCheckConfig = (flags) ->
   catch e
     if e.validationErrors
       label = 'serve.rip'
-      console.error formatConfigErrors(label, e.validationErrors)
+      warn formatConfigErrors(label, e.validationErrors)
     else
-      console.error "rip-server: config check failed: #{e.message or e}"
+      warn "rip-server: config check failed: #{e.message or e}"
     exit 1

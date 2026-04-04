@@ -100,7 +100,7 @@ export cors = (opts = {}) ->
 export logger = (opts = {}) ->
   format = opts.format or 'dev'
   skip = opts.skip or null
-  stream = opts.stream or { write: (msg) -> console.log msg.trim() }
+  stream = opts.stream or { write: (msg) -> p msg.trim() }
 
   formatters =
     tiny: (info) -> "#{info.method} #{info.path} #{info.status} - #{info.ms}ms"
@@ -274,7 +274,7 @@ export sessions = (opts = {}) ->
 
   # Warn if no secret in production
   if not secret and process.env.NODE_ENV is 'production'
-    console.warn 'WARNING: sessions() without secret is insecure. Set secret option for production.'
+    warn 'WARNING: sessions() without secret is insecure. Set secret option for production.'
 
   (c, next) ->
     # Parse cookie header
@@ -587,6 +587,6 @@ export serve = (opts = {}) ->
     body = JSON.stringify({ op: 'watch', prefix, dirs: watchDirs })
 
     fetch('http://localhost/watch', { method: 'POST', body, headers: { 'content-type': 'application/json' }, unix: ctl }).catch (e) ->
-      console.warn "[Rip] Watch registration failed: #{e.message}"
+      warn "[Rip] Watch registration failed: #{e.message}"
 
   (c, next) -> next!()

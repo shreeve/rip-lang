@@ -424,9 +424,9 @@ class Server
       @appendReloadHistory(entry)
       if e.validationErrors
         label = 'serve.rip'
-        console.error formatConfigErrors(label, e.validationErrors)
+        warn formatConfigErrors(label, e.validationErrors)
       else
-        console.error "rip-server: failed to load active config: #{e.message or e}"
+        warn "rip-server: failed to load active config: #{e.message or e}"
       logEvent('config_loaded',
         id: attemptId
         source: source
@@ -821,7 +821,7 @@ class Server
           @releaseWorker(retry, app)
           return @buildResponse(res, req, start, workerSeconds, requestId)
     catch err
-      console.error "[server] forwardToWorker error:", err.message or err if isDebug()
+      warn "[server] forwardToWorker error:", err.message or err if isDebug()
       app.sockets = app.sockets.filter((x) -> x.socket isnt socket.socket)
       app.availableWorkers = app.availableWorkers.filter((x) -> x.socket isnt socket.socket)
       released = true
@@ -1032,13 +1032,13 @@ main = ->
           svr.internalHttpsServer?.reload({ tls: svr.tlsMaterial }) if svr.internalHttpsServer
           p "rip-acme: TLS reloaded with renewed cert for #{domain}"
         catch e
-          console.error "rip-acme: TLS reload failed after renewal: #{e.message}"
+          warn "rip-acme: TLS reload failed after renewal: #{e.message}"
     svr.acmeManager = acmeMgr
     for domain in acmeDomains
       try acmeMgr.obtainCert!(domain)
       catch e
-        console.error "rip-acme: cert obtain failed for #{domain}: #{e.message}"
-        console.error "rip-acme: will retry during renewal loop"
+        warn "rip-acme: cert obtain failed for #{domain}: #{e.message}"
+        warn "rip-acme: will retry during renewal loop"
     acmeMgr.startRenewalLoop(acmeDomains)
 
   process.env.RIP_URLS = svr.urls.join(',')  # exact URLs the Server just built

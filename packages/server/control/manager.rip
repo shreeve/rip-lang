@@ -73,7 +73,7 @@ export class Manager
 
     code = await proc.exited
     if code isnt 0
-      console.error "rip-server: setup exited with code #{code} for app #{app.appId}"
+      warn "rip-server: setup exited with code #{code} for app #{app.appId}"
       exit 1
 
   start: ->
@@ -208,7 +208,7 @@ export class Manager
       readyResults = Promise.all!(pairs.map((p) => @waitWorkerReady(p.replacement.socketPath, 3000)))
       allReady = readyResults.every((ready) -> ready)
       unless allReady
-        console.error "[manager] Rolling restart aborted: not all new workers ready for app #{app.appId}"
+        warn "[manager] Rolling restart aborted: not all new workers ready for app #{app.appId}"
         for pair, i in pairs
           unless readyResults[i]
             try pair.replacement.process.kill()

@@ -21,7 +21,7 @@ export buildTlsArray = (defaultMaterial, certMap) ->
       key = readFileSync(certInfo.keyPath, 'utf8')
       entries.push({ serverName, cert, key, specificity: hostSpecificity(serverName) })
     catch e
-      console.error "rip-server: failed to load cert for #{serverName}: #{e.message}"
+      warn "rip-server: failed to load cert for #{serverName}: #{e.message}"
   entries.sort((a, b) -> b.specificity - a.specificity)
   result = entries.map((e) -> { serverName: e.serverName, cert: e.cert, key: e.key })
   if defaultMaterial?.cert and defaultMaterial?.key
@@ -45,7 +45,7 @@ export loadTlsMaterial = (flags, serverDir, acmeLoadCertFn) ->
       key = readFileSync(flags.keyPath, 'utf8')
       return { cert, key }
     catch
-      console.error 'Failed to read TLS cert/key from provided paths. Use http or fix paths.'
+      warn 'Failed to read TLS cert/key from provided paths. Use http or fix paths.'
       exit 2
 
   # ACME-managed cert (if domain is configured)
@@ -63,6 +63,6 @@ export loadTlsMaterial = (flags, serverDir, acmeLoadCertFn) ->
     key = readFileSync(keyPath, 'utf8')
     return { cert, key }
   catch e
-    console.error "rip-server: failed to load TLS certs from #{certsDir}: #{e.message}"
-    console.error 'Use --cert/--key to provide your own, or use http to disable TLS.'
+    warn "rip-server: failed to load TLS certs from #{certsDir}: #{e.message}"
+    warn 'Use --cert/--key to provide your own, or use http to disable TLS.'
     exit 2

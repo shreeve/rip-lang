@@ -95,7 +95,7 @@ export createAcmeManager = (options = {}) ->
         for domain in domains
           try manager.renewIfNeeded!(domain)
           catch e
-            console.error "rip-acme: renewal failed for #{domain}:", e.message
+            warn "rip-acme: renewal failed for #{domain}:", e.message
       renewalTimer = setInterval(check, intervalMs)
       # Run first check after a short delay
       setTimeout(check, 5000)

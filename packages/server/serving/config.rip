@@ -616,7 +616,7 @@ normalizeServeConfig = (config, baseDir) ->
     pushError(errors, 'E_UNKNOWN_KEY', key, "unknown top-level key #{key}", 'Allowed keys: version, server, proxies, apps, certs, rules, groups, hosts, streams.') unless TOP_LEVEL_KEYS.has(key)
 
   if config.edge? and not config.server?
-    console.warn "rip-server: 'edge' is deprecated in serve.rip; use 'server' instead"
+    warn "rip-server: 'edge' is deprecated in serve.rip; use 'server' instead"
   serverSettings = normalizeServerSettings(config.server or config.edge or {}, errors)
 
   proxies = {}

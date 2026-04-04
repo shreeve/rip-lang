@@ -15,7 +15,7 @@ export runSetupMode = ->
     if typeof fn is 'function'
       await fn()
   catch e
-    console.error "rip-server: setup failed:", e
+    warn "rip-server: setup failed:", e
     exit 1
 
 export runWorkerMode = ->
@@ -62,7 +62,7 @@ export runWorkerMode = ->
       workerState.handler = h if h
       workerState.handler or (-> new Response('not ready', { status: 503 }))
     catch e
-      console.error "[worker #{workerId}] import failed:", e
+      warn "[worker #{workerId}] import failed:", e
       workerState.handler or (-> new Response('not ready', { status: 503 }))
 
   selfJoin = ->
@@ -106,7 +106,7 @@ export runWorkerMode = ->
         res = res!(req) if typeof res is 'function'
         if res instanceof Response then res else new Response(String(res))
       catch err
-        console.error "[worker #{workerId}] ERROR:", err
+        warn "[worker #{workerId}] ERROR:", err
         new Response('error', { status: 500 })
       finally
         workerState.inflight = false
@@ -129,8 +129,8 @@ export runWorkerMode = ->
   process.on 'SIGTERM', shutdown
   process.on 'SIGINT', shutdown
   process.on 'uncaughtException', (err) ->
-    console.error "[worker #{workerId}] uncaught exception:", err
+    warn "[worker #{workerId}] uncaught exception:", err
     shutdown()
   process.on 'unhandledRejection', (err) ->
-    console.error "[worker #{workerId}] unhandled rejection:", err
+    warn "[worker #{workerId}] unhandled rejection:", err
     shutdown()

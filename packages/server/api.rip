@@ -272,7 +272,7 @@ smart = (fn) ->
       result
     catch err
       status = err?.status or 500
-      console.error 'Handler error:', err if status >= 500
+      warn 'Handler error:', err if status >= 500
       if err?.notice
         body = JSON.stringify { error: { notice: err.notice } }
         new Response body, { status, headers: { 'Content-Type': 'application/json' } }
@@ -389,7 +389,7 @@ runHandler = (c, handler) ->
     compose!(_middlewares, _beforeFilters, _afterFilters, handler)(c)
     c._response or new Response('', { status: 204 })
   catch err
-    console.error 'Request error:', err if not err?.status or err.status >= 500
+    warn 'Request error:', err if not err?.status or err.status >= 500
     if _errorHandler?
       _errorHandler.call!(c, err, c)
     else
@@ -413,7 +413,7 @@ export start = (opts = {}) ->
   host = opts.host or 'localhost'
   port = opts.port or 3000
   server = Bun.serve { hostname: host, port: port, fetch: handler }
-  console.log "rip-api listening on http://#{host}:#{port}" unless opts.silent
+  p "rip-api listening on http://#{host}:#{port}" unless opts.silent
   server
 
 export App = (fn) ->

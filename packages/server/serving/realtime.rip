@@ -139,7 +139,7 @@ export processResponse = (hub, body, clientId) ->
         clients = resolveTargets(hub, groups)
         deliverToClients(hub, clients, senders, JSON.stringify(bundle))
   catch e
-    console.error "realtime: invalid response:", e.message
+    warn "realtime: invalid response:", e.message
 
 # --- Proxy to backend ---
 
@@ -160,7 +160,7 @@ export proxyToBackend = (hub, headers, frameType, body) ->
       body: body or ''
     res.text!
   catch e
-    console.error "realtime: proxy failed:", e.message
+    warn "realtime: proxy failed:", e.message
     null
 
 # --- Binary delivery (for CRDT and raw data) ---
@@ -219,7 +219,7 @@ export proxyRealtimeToWorker = (headers, frameType, body, getSocket, releaseSock
       decompress: false
     res.text!
   catch e
-    console.error "realtime: worker proxy failed:", e.message
+    warn "realtime: worker proxy failed:", e.message
     null
   finally
     releaseSocket(sock)

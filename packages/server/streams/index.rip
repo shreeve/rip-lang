@@ -282,22 +282,22 @@ export startStreamListeners = (runtime, options = {}) ->
       runtime.listeners.set(port, listener)
     catch e
       if e?.code is 'EACCES' and port < 1024
-        console.error ""
-        console.error "rip-server: cannot bind to port #{port} — permission denied"
-        console.error ""
-        console.error "  Ports below 1024 require elevated privileges."
-        console.error "  This commonly happens after upgrading Bun, which resets capabilities."
-        console.error ""
-        console.error "  Options:"
-        console.error ""
-        console.error "    1. Grant Bun the capability (recommended, one-time):"
-        console.error "       sudo setcap cap_net_bind_service=+ep $(which bun)"
-        console.error ""
-        console.error "    2. Run with sudo:"
-        console.error "       sudo rip server --file serve.rip"
-        console.error ""
-        console.error "  Note: upgrading Bun resets the capability — re-run setcap after upgrades."
-        console.error ""
+        warn ""
+        warn "rip-server: cannot bind to port #{port} — permission denied"
+        warn ""
+        warn "  Ports below 1024 require elevated privileges."
+        warn "  This commonly happens after upgrading Bun, which resets capabilities."
+        warn ""
+        warn "  Options:"
+        warn ""
+        warn "    1. Grant Bun the capability (recommended, one-time):"
+        warn "       sudo setcap cap_net_bind_service=+ep $(which bun)"
+        warn ""
+        warn "    2. Run with sudo:"
+        warn "       sudo rip server --file serve.rip"
+        warn ""
+        warn "  Note: upgrading Bun resets the capability — re-run setcap after upgrades."
+        warn ""
       throw e
   runtime
 

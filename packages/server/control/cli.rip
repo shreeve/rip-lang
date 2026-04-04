@@ -51,7 +51,7 @@ export resolveAppEntry = (appPathInput, defaultEntryPath = null) ->
       entryPath = defaultEntryPath or abs
   else
     unless existsSync(abs)
-      console.error "App path not found: #{abs}"
+      warn "App path not found: #{abs}"
       exit 2
     baseDir = dirname(abs)
     entryPath = abs
@@ -383,7 +383,7 @@ export stopServer = (prefix, getPidFilePathFn, existsSyncFn, readFileSyncFn, kil
       p "rip-server: no PID file found at #{pidFile}, trying pkill..."
       spawnSyncFn(['pkill', '-f', importMetaPath])
   catch e
-    console.error "rip-server: stop failed: #{e.message}"
+    warn "rip-server: stop failed: #{e.message}"
 
 export reloadConfig = (prefix, getControlSocketPathFn, fetchFn, exitFn) ->
   controlUnix = getControlSocketPathFn(prefix)
@@ -394,10 +394,10 @@ export reloadConfig = (prefix, getControlSocketPathFn, fetchFn, exitFn) ->
       p "rip-server: config reload applied"
     else
       reason = j?.reason or 'unknown'
-      console.error "rip-server: config reload rejected: #{reason}"
+      warn "rip-server: config reload rejected: #{reason}"
       exitFn(1)
   catch e
-    console.error "rip-server: reload failed: #{e?.message or e}"
+    warn "rip-server: reload failed: #{e?.message or e}"
     exitFn(1)
 
 export listApps = (prefix, getControlSocketPathFn, fetchFn, exitFn) ->
@@ -409,7 +409,7 @@ export listApps = (prefix, getControlSocketPathFn, fetchFn, exitFn) ->
     hosts = if Array.isArray(j?.hosts) then j.hosts else []
     p if hosts.length then hosts.join('\n') else '(no hosts)'
   catch e
-    console.error "rip-server: list failed: #{e?.message or e}"
+    warn "rip-server: list failed: #{e?.message or e}"
     exitFn(1)
 
 formatUptime = (seconds) ->
@@ -437,5 +437,5 @@ export showInfo = (fetchFn, exitFn) ->
     p "rip server v#{version} | #{status} | #{workers} workers | #{hosts} hosts#{upstreamPart} | uptime #{uptime}"
     exitFn(if status is 'healthy' then 0 else 1)
   catch e
-    console.error "rip-server: info failed: #{e?.message or e}"
+    warn "rip-server: info failed: #{e?.message or e}"
     exitFn(1)

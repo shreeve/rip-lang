@@ -123,7 +123,7 @@ export createWsPassthrough = (clientWs, upstreamUrl, protocols = []) ->
     try clientWs.close()
 
   upstream.addEventListener 'error', (err) ->
-    console.error "ws-passthrough: upstream error:", err.message or err
+    warn "ws-passthrough: upstream error:", err.message or err
     try clientWs.close()
 
   # Return object for client-side event wiring

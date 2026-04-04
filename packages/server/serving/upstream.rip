@@ -233,7 +233,7 @@ export checkTargetHealth = (pool, target, fetchFn = null) ->
     updateTargetHealth(target, res.ok, pool)
     res.ok
   catch e
-    console.error "[health] #{url} failed: #{e?.message or e}" if process.env.RIP_DEBUG?
+    warn "[health] #{url} failed: #{e?.message or e}" if process.env.RIP_DEBUG?
     target.lastStatus = null
     updateTargetHealth(target, false, pool)
     false
