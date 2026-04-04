@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/server",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "Bun-native content server: static sites, apps, HTTP proxy, and TCP/TLS passthrough",
   "type": "module",
   "main": "api.rip",
@@ -47,7 +47,7 @@
   "author": "Steve Shreeve <steve.shreeve@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "rip-lang": ">=3.13.132"
+    "rip-lang": ">=3.13.133"
   },
   "files": [
     "api.rip",
