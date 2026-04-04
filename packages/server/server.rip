@@ -1006,14 +1006,14 @@ main = ->
   svr.start!
 
   # ACME auto-TLS: obtain certs for all domains, start renewal loop
-  acmeDomains = []
-  acmeDomains.push(flags.acmeDomain) if flags.acmeDomain
-  configAcme = svr.servingRuntime?.configInfo?.acmeDomains or []
-  for d in configAcme
-    acmeDomains.push(d) unless acmeDomains.includes(d)
+  unless flags.noAcme
+    acmeDomains = []
+    acmeDomains.push(flags.acmeDomain) if flags.acmeDomain
+    configAcme = svr.servingRuntime?.configInfo?.acmeDomains or []
+    for d in configAcme
+      acmeDomains.push(d) unless acmeDomains.includes(d)
 
-  acmeEnabled = flags.acme or flags.acmeStaging or acmeDomains.length > 0
-  if acmeEnabled and acmeDomains.length > 0
+  if not flags.noAcme and acmeDomains?.length > 0
     acmeMgr = createAcmeManager
       certDir: defaultCertDir()
       staging: flags.acmeStaging
