@@ -293,8 +293,8 @@ export renderTextFile = (filePath) ->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
   <style>
-  :root { --bg: #fff; --text: #1a1d21; --border: #e2e5e9; --bar-bg: #f3f4f6; --secondary: #6b7280; --link: #2563eb; }
-  @media (prefers-color-scheme: dark) { :root { --bg: #0d1117; --text: #e4e4e7; --border: #2a2a2e; --bar-bg: #161618; --secondary: #71717a; --link: #60a5fa; } }
+  :root { --bg: #fff; --text: #1a1d21; --border: #e2e5e9; --bar-bg: #f3f4f6; --secondary: #6b7280; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #0d1117; --text: #e4e4e7; --border: #2a2a2e; --bar-bg: #161618; --secondary: #71717a; } }
   *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--text); }
   .wrap { max-width: 960px; margin: 3rem auto; padding: 0 1.25rem; }
@@ -302,8 +302,8 @@ export renderTextFile = (filePath) ->
   .bar { display: flex; align-items: center; justify-content: space-between; padding: .625rem 1.25rem; background: var(--bar-bg); border-bottom: 1px solid var(--border); }
   .name { font-size: 13px; font-weight: 600; }
   .meta { font-size: 12px; color: var(--secondary); }
-  pre { margin: 0 !important; border: none !important; border-radius: 0 !important; }
-  pre code { display: block; padding: 1rem 1.25rem 1.5rem !important; font-size: 13px; line-height: 1.6; font-family: ui-monospace, 'SF Mono', 'Fira Code', monospace; overflow-x: auto; }
+  pre { margin: 0; border: none; border-radius: 0; }
+  pre code, pre code.hljs { display: block; padding: 1rem 1.25rem 1.5rem; font-size: 13px; line-height: 1.6; font-family: ui-monospace, 'SF Mono', 'Fira Code', monospace; overflow-x: auto; }
   @page { margin: 0.5in; }
   @media print { .bar { background: #f3f4f6; box-shadow: inset 0 0 0 1000px #f3f4f6; -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
   </style>
