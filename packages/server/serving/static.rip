@@ -319,6 +319,19 @@ export renderTextFile = (filePath) ->
   </html>
   """
 
+# --- Browse file response (shared by browse.rip and serveStaticRoute) ---
+
+export serveBrowseFile = (filePath, url) ->
+  viewSource = url.search is '?view'
+  isHtml = filePath.endsWith('.html') or filePath.endsWith('.htm')
+  if filePath.endsWith('.md') and not viewSource
+    html = renderMarkdown(filePath)
+    return new Response(html, { headers: { 'content-type': 'text/html; charset=UTF-8' } })
+  if isTextFile(filePath) and (viewSource or not isHtml)
+    html = renderTextFile(filePath)
+    return new Response(html, { headers: { 'content-type': 'text/html; charset=UTF-8' } })
+  null
+
 # --- Static file serving ---
 
 export INDEX_FILES = ['index.html', 'index.rip', 'index.ts', 'index.tsx', 'index.jsx', 'index.js']
@@ -376,14 +389,8 @@ export serveStaticRoute = (req, url, route) ->
         return new Response(html, { headers: { 'content-type': 'text/html; charset=UTF-8' } })
     if stat.isFile()
       if route.browse and acceptsHtml(req)
-        viewSource = url.search is '?view'
-        isHtml = filePath.endsWith('.html') or filePath.endsWith('.htm')
-        if filePath.endsWith('.md') and not viewSource
-          html = renderMarkdown(filePath)
-          return new Response(html, { headers: { 'content-type': 'text/html; charset=UTF-8' } })
-        if isTextFile(filePath) and (viewSource or not isHtml)
-          html = renderTextFile(filePath)
-          return new Response(html, { headers: { 'content-type': 'text/html; charset=UTF-8' } })
+        res = serveBrowseFile(filePath, url)
+        return res if res
       file = Bun.file(filePath)
       return new Response(file, { headers: { 'content-type': mimeType(filePath) } })
 

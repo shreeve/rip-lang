@@ -13,13 +13,11 @@
 import { use, start, notFound } from '@rip-lang/server'
 import { statSync } from 'node:fs'
 import { join, resolve, basename } from 'node:path'
-import { renderDirectoryListing, renderMarkdown, renderTextFile, isTextFile, serveRipHighlightGrammar, findIndexFile } from './serving/static.rip'
+import { renderDirectoryListing, serveBrowseFile, serveRipHighlightGrammar, findIndexFile } from './serving/static.rip'
 
 root = resolve(process.env.APP_BASE_DIR or process.cwd())
 rootSlash = root + '/'
 rootName = basename(root) or root
-
-isHtml = (p) -> p.endsWith('.html') or p.endsWith('.htm')
 
 notFound ->
   if @req.path is '/_rip/hljs-rip.js'
@@ -29,7 +27,6 @@ notFound ->
   url = new URL(@req.url)
   reqPath = try decodeURIComponent(url.pathname) catch then url.pathname
   path = resolve(root, reqPath.slice(1))
-  viewSource = url.search is '?view'
 
   unless path is root or path.startsWith(rootSlash)
     return new Response 'Not Found', { status: 404 }
@@ -42,14 +39,8 @@ notFound ->
   if stat.isFile()
     accept = @req.header('accept') or ''
     if accept.includes('text/html')
-      if path.endsWith('.md') and not viewSource
-        try
-          html = renderMarkdown(path)
-          return new Response html, { headers: { 'Content-Type': 'text/html; charset=UTF-8' } }
-      if isTextFile(path) and (viewSource or not isHtml(path))
-        try
-          html = renderTextFile(path)
-          return new Response html, { headers: { 'Content-Type': 'text/html; charset=UTF-8' } }
+      res = serveBrowseFile(path, url)
+      return res if res
     return @send path
 
   if stat.isDirectory()
