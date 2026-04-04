@@ -5,12 +5,13 @@
 # Built-in file browser when no index.rip or index.ts exists in the target
 # directory. Activated automatically by `rip server` when no app entry is found.
 #
-# All files are shown in view mode: syntax highlighted source, rendered
-# markdown, directory listings. Nothing is executed — this is a browser, not
-# an app runner.
+# Default mode is run: HTML renders, Rip executes, images display.
+# Text files that can't run are shown with syntax highlighting.
+# Append ?view to any URL to see the source instead of running it.
 # ==============================================================================
 
 import { use, start, notFound } from '@rip-lang/server'
+import { serve } from '@rip-lang/server/middleware'
 import { statSync } from 'node:fs'
 import { join, resolve, basename } from 'node:path'
 import { renderDirectoryListing, renderMarkdown, renderTextFile, isTextFile, serveRipHighlightGrammar } from './serving/static.rip'
@@ -19,6 +20,8 @@ root = resolve(process.env.APP_BASE_DIR or process.cwd())
 rootSlash = root + '/'
 rootName = basename(root) or root
 
+use serve dir: root, bundle: [], watch: true
+
 notFound ->
   if @req.path is '/_rip/hljs-rip.js'
     res = serveRipHighlightGrammar()
@@ -26,6 +29,7 @@ notFound ->
 
   reqPath = try decodeURIComponent(@req.path) catch then @req.path
   path = resolve(root, reqPath.slice(1))
+  viewMode = @req.query('view')?
 
   unless path is root or path.startsWith(rootSlash)
     return new Response 'Not Found', { status: 404 }
@@ -38,11 +42,18 @@ notFound ->
   if stat.isFile()
     accept = @req.header('accept') or ''
     if accept.includes('text/html')
+      # ?view forces syntax-highlighted source for any file
+      if viewMode and isTextFile(path)
+        try
+          html = renderTextFile(path)
+          return new Response html, { headers: { 'Content-Type': 'text/html; charset=UTF-8' } }
+      # Markdown always renders (it's better than raw)
       if path.endsWith('.md')
         try
           html = renderMarkdown(path)
           return new Response html, { headers: { 'Content-Type': 'text/html; charset=UTF-8' } }
-      if isTextFile(path)
+      # Text files that can't "run" get syntax highlighted
+      if isTextFile(path) and not path.endsWith('.html') and not path.endsWith('.htm') and not path.endsWith('.rip')
         try
           html = renderTextFile(path)
           return new Response html, { headers: { 'Content-Type': 'text/html; charset=UTF-8' } }
