@@ -1,0 +1,359 @@
+# ==============================================================================
+# @rip-lang/ai MCP Server — AI-to-AI collaboration for Cursor
+# ==============================================================================
+#
+# MCP stdio server that lets one AI talk to its peer. The calling AI (Claude
+# in Cursor) automatically gets GPT-5.4 as the peer, and vice versa.
+#
+# Two models, auto-peer:
+#   Claude Opus 4.6  ←→  GPT-5.4
+#
+# Usage:
+#   rip mcp.rip                        # peer = gpt-5.4 (default, for Claude)
+#   rip mcp.rip --peer anthropic       # peer = claude-opus-4-6 (for GPT)
+#
+# API keys are loaded from (in order of priority):
+#   1. Environment variables (OPENAI_API_KEY, ANTHROPIC_API_KEY)
+#   2. ~/.config/rip/credentials file (KEY=value format, one per line)
+#
+# Credentials file setup:
+#   mkdir -p ~/.config/rip
+#   cat > ~/.config/rip/credentials << 'EOF'
+#   OPENAI_API_KEY=sk-...
+#   ANTHROPIC_API_KEY=sk-ant-...
+#   EOF
+#   chmod 600 ~/.config/rip/credentials
+#
+# Cursor MCP config (~/.cursor/mcp.json):
+#   {
+#     "mcpServers": {
+#       "ai": {
+#         "command": "rip",
+#         "args": ["/path/to/packages/ai/mcp.rip"]
+#       }
+#     }
+#   }
+#
+# ==============================================================================
+
+import { createInterface } from 'readline'
+import { readFileSync, existsSync } from 'fs'
+import { join } from 'path'
+
+VERSION =! '1.0.0'
+MAX_RESPONSE =! 100000
+
+# ==============================================================================
+# Credentials — load from ~/.config/rip/credentials, env vars override
+# ==============================================================================
+
+credentials = do ->
+  keys = {}
+  home = process.env.HOME or process.env.USERPROFILE or ''
+  credFile = join(home, '.config', 'rip', 'credentials')
+  if existsSync(credFile)
+    try
+      lines = readFileSync(credFile, 'utf-8').split('\n')
+      for raw in lines
+        entry = raw.trim()
+        continue if not entry or entry.startsWith('#')
+        idx = entry.indexOf('=')
+        continue if idx < 1
+        keys[entry.slice(0, idx).trim()] = entry.slice(idx + 1).trim()
+    catch err
+      console.error "[mcp-ai] Warning: could not read #{credFile}: #{err.message}"
+  keys
+
+getKey = (name) ->
+  process.env[name] or credentials[name] or ''
+
+# ==============================================================================
+# Configuration
+# ==============================================================================
+
+peer = do ->
+  args = process.argv.slice(2)
+  idx = args.indexOf('--peer')
+  name = if idx >= 0 and args[idx + 1] then args[idx + 1] else 'openai'
+  switch name
+    when 'anthropic' then { provider: 'anthropic', model: 'claude-opus-4-6', name: 'Claude Opus 4.6' }
+    else { provider: 'openai', model: 'gpt-5.4', name: 'GPT-5.4' }
+
+log = (...args) -> console.error '[mcp-ai]', ...args
+
+# ==============================================================================
+# Provider API calls
+# ==============================================================================
+
+callOpenAI = (messages, maxTokens) ->
+  key = getKey('OPENAI_API_KEY')
+  throw new Error('OPENAI_API_KEY not set — add it to ~/.config/rip/credentials') unless key
+
+  resp = await fetch 'https://api.openai.com/v1/chat/completions',
+    method: 'POST'
+    headers:
+      'Content-Type': 'application/json'
+      'Authorization': "Bearer #{key}"
+    body: JSON.stringify
+      model: 'gpt-5.4'
+      messages: messages
+      max_completion_tokens: maxTokens
+  data = await resp.json()
+  throw new Error(data.error?.message or JSON.stringify(data.error)) if data.error
+  data.choices[0].message.content
+
+callAnthropic = (messages, maxTokens) ->
+  key = getKey('ANTHROPIC_API_KEY')
+  throw new Error('ANTHROPIC_API_KEY not set — add it to ~/.config/rip/credentials') unless key
+
+  system = messages.filter((m) -> m.role is 'system').map((m) -> m.content).join('\n\n')
+  userMessages = messages.filter((m) -> m.role isnt 'system')
+
+  resp = await fetch 'https://api.anthropic.com/v1/messages',
+    method: 'POST'
+    headers:
+      'Content-Type': 'application/json'
+      'x-api-key': key
+      'anthropic-version': '2023-06-01'
+    body: JSON.stringify
+      model: 'claude-opus-4-6'
+      max_tokens: maxTokens
+      system: system or undefined
+      messages: userMessages
+  data = await resp.json()
+  throw new Error(data.error?.message or JSON.stringify(data.error)) if data.error
+  data.content[0].text
+
+callPeer = (messages, maxTokens = 8192) ->
+  if peer.provider is 'anthropic'
+    callAnthropic(messages, maxTokens)
+  else
+    callOpenAI(messages, maxTokens)
+
+# ==============================================================================
+# Conversation state for multi-turn discuss
+# ==============================================================================
+
+conversations = {}
+
+# ==============================================================================
+# Tools
+# ==============================================================================
+
+TOOLS =! [
+  {
+    name: 'chat'
+    description: """Send a message to the peer AI and get a response. \
+      Use for quick questions, second opinions, or brainstorming."""
+    inputSchema:
+      type: 'object'
+      properties:
+        message: { type: 'string', description: 'The message to send' }
+        system:  { type: 'string', description: 'System prompt override' }
+      required: ['message']
+  }
+  {
+    name: 'review'
+    description: """Send code to the peer AI for detailed review. Returns \
+      structured feedback on bugs, correctness, performance, style, and \
+      suggestions. Include language and context for better results."""
+    inputSchema:
+      type: 'object'
+      properties:
+        code:     { type: 'string', description: 'The code to review' }
+        language: { type: 'string', description: 'Programming language (zig, rip, python, etc.)' }
+        context:  { type: 'string', description: 'Context: what the code does, project info, constraints' }
+        focus:    { type: 'string', description: 'Review focus: bugs, performance, style, security, all (default: all)' }
+      required: ['code']
+  }
+  {
+    name: 'discuss'
+    description: """Multi-turn conversation with the peer AI. Uses a conversation \
+      ID to maintain history across calls for back-and-forth discussion."""
+    inputSchema:
+      type: 'object'
+      properties:
+        conversation_id: { type: 'string', description: 'Unique ID for this conversation thread' }
+        message: { type: 'string', description: 'Your message in the conversation' }
+        system:  { type: 'string', description: 'System prompt (only used on first message or reset)' }
+        reset:   { type: 'boolean', description: 'Clear history and start fresh' }
+      required: ['conversation_id', 'message']
+  }
+]
+
+# ==============================================================================
+# Tool handlers
+# ==============================================================================
+
+DEFAULT_SYSTEM =! """\
+  You are a senior software engineer collaborating with another AI on a \
+  codebase. Be direct, technical, and specific. When you disagree, explain \
+  why with concrete reasoning. When you spot issues, be precise about what's \
+  wrong and how to fix it. Keep responses focused and actionable."""
+
+REVIEW_SYSTEM =! """\
+  You are an expert code reviewer. Analyze the provided code thoroughly and \
+  return a structured review covering:
+
+  1. **Correctness** — bugs, logic errors, edge cases, off-by-one errors
+  2. **Safety** — undefined behavior, memory issues, race conditions, panics
+  3. **Performance** — unnecessary allocations, hot-path inefficiency, algorithmic issues
+  4. **Style** — naming, structure, idiomatic patterns for the language
+  5. **Suggestions** — concrete improvements with code examples where helpful
+
+  Be specific: reference line numbers or code snippets. Don't pad with praise \
+  — focus on what matters. If the code is good, say so briefly and move on."""
+
+# --- chat ---
+
+handleChat = (params) ->
+  return { error: 'Missing message parameter' } unless params.message
+  try
+    messages = [
+      { role: 'system', content: params.system or DEFAULT_SYSTEM }
+      { role: 'user', content: params.message }
+    ]
+    response = await callPeer(messages)
+    { response, peer: peer.name }
+  catch err
+    { error: err.message }
+
+# --- review ---
+
+handleReview = (params) ->
+  return { error: 'Missing code parameter' } unless params.code
+  try
+    focus = params.focus or 'all'
+    fence = '`' + '`' + '`'
+    lang = params.language or ''
+    prompt = "Review this #{lang} code"
+    prompt += " (focus: #{focus})" unless focus is 'all'
+    prompt += ":\n\n#{params.context}\n" if params.context
+    prompt += "\n#{fence}#{lang}\n#{params.code}\n#{fence}"
+
+    messages = [
+      { role: 'system', content: REVIEW_SYSTEM }
+      { role: 'user', content: prompt }
+    ]
+    response = await callPeer(messages)
+    { response, peer: peer.name }
+  catch err
+    { error: err.message }
+
+# --- discuss ---
+
+handleDiscuss = (params) ->
+  return { error: 'Missing conversation_id' } unless params.conversation_id
+  return { error: 'Missing message' } unless params.message
+  try
+    id = params.conversation_id
+
+    if params.reset or not conversations[id]
+      conversations[id] =
+        messages: [{ role: 'system', content: params.system or DEFAULT_SYSTEM }]
+        turns: 0
+
+    convo = conversations[id]
+    convo.messages.push { role: 'user', content: params.message }
+    convo.turns += 1
+
+    response = await callPeer(convo.messages)
+    convo.messages.push { role: 'assistant', content: response }
+
+    { response, peer: peer.name, conversation_id: id, turn: convo.turns }
+  catch err
+    { error: err.message }
+
+# ==============================================================================
+# Server Instructions
+# ==============================================================================
+
+INSTRUCTIONS =! """\
+  You are connected to another AI model via the ai MCP server. Use these tools \
+  to get a second opinion, collaborative code review, or have a multi-turn \
+  discussion with another AI.
+
+  Available tools: chat, review, discuss.
+
+  Guidelines:
+  - Use `review` for code review — include language and context for best results
+  - Use `chat` for one-off questions or quick second opinions
+  - Use `discuss` for multi-turn conversations — pick a conversation_id and \
+    keep using it to maintain context across calls
+  - The other AI doesn't see your full context — include relevant code and \
+    context in your messages
+  - When relaying the other AI's feedback to the user, synthesize and \
+    attribute it (e.g. "GPT-5.4 suggests...")
+  """
+
+# ==============================================================================
+# MCP Protocol — JSON-RPC 2.0 over stdio
+# ==============================================================================
+
+respond = (id, result) ->
+  JSON.stringify({ jsonrpc: '2.0', id, result })
+
+respondError = (id, code, message) ->
+  JSON.stringify({ jsonrpc: '2.0', id, error: { code, message } })
+
+dispatch = (msg) ->
+  { id, method, params } = msg
+
+  switch method
+    when 'initialize'
+      respond id,
+        protocolVersion: '2024-11-05'
+        capabilities: { tools: {} }
+        serverInfo: { name: 'rip-ai-mcp', version: VERSION }
+        instructions: INSTRUCTIONS
+
+    when 'notifications/initialized'
+      null
+
+    when 'tools/list'
+      respond id, { tools: TOOLS }
+
+    when 'tools/call'
+      name = params?.name
+      args = params?.arguments or {}
+
+      if name is 'chat'
+        result = await handleChat(args)
+      else if name is 'review'
+        result = await handleReview(args)
+      else if name is 'discuss'
+        result = await handleDiscuss(args)
+      else
+        result = { error: "Unknown tool: #{name}" }
+
+      isError = result.error?
+      text = JSON.stringify(result)
+
+      if text.length > MAX_RESPONSE
+        text = text.slice(0, MAX_RESPONSE)
+        result.truncated = true
+
+      respond id, { content: [{ type: 'text', text }], isError }
+
+    else
+      if id?
+        respondError id, -32601, "Unknown method: #{method}"
+      else
+        null
+
+# ==============================================================================
+# Main
+# ==============================================================================
+
+log "Starting (peer: #{peer.name})"
+
+rl = createInterface({ input: process.stdin })
+rl.on 'line', (line) ->
+  return unless line.trim()
+  try
+    msg = JSON.parse(line)
+    result = await dispatch(msg)
+    if result
+      process.stdout.write result + '\n'
+  catch err
+    log "Error: #{err.message}"

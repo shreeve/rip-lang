@@ -1,0 +1,42 @@
+{
+  "name": "@rip-lang/ai",
+  "version": "0.1.0",
+  "description": "AI-to-AI collaboration MCP server — peer review and multi-turn discussion between AI models",
+  "type": "module",
+  "main": "mcp.rip",
+  "exports": {
+    ".": "./mcp.rip"
+  },
+  "scripts": {
+    "start": "rip mcp.rip"
+  },
+  "keywords": [
+    "ai",
+    "mcp",
+    "llm",
+    "peer-review",
+    "collaboration",
+    "openai",
+    "anthropic",
+    "cursor",
+    "rip"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shreeve/rip-lang.git",
+    "directory": "packages/ai"
+  },
+  "homepage": "https://github.com/shreeve/rip-lang/tree/main/packages/ai#readme",
+  "bugs": {
+    "url": "https://github.com/shreeve/rip-lang/issues"
+  },
+  "author": "Steve Shreeve <steve.shreeve@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "rip-lang": ">=3.13.133"
+  },
+  "files": [
+    "mcp.rip",
+    "README.md"
+  ]
+}

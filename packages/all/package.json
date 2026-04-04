@@ -22,6 +22,7 @@
   "license": "MIT",
   "dependencies": {
     "rip-lang": ">=3.13.133",
+    "@rip-lang/ai": ">=0.1.0",
     "@rip-lang/csv": ">=1.3.110",
     "@rip-lang/db": ">=1.3.120",
     "@rip-lang/http": ">=1.1.111",

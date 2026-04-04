@@ -10,6 +10,7 @@ All packages are written in Rip, run on Bun, and have zero dependencies (except 
 
 ```bash
 bun add rip-lang                 # Core language (required)
+bun add @rip-lang/ai             # AI-to-AI collaboration MCP server
 bun add @rip-lang/csv            # CSV parser + writer
 bun add @rip-lang/db             # DuckDB server
 bun add @rip-lang/print          # Syntax-highlighted code printer
@@ -26,6 +27,23 @@ cursor --install-extension rip-lang.rip
 ---
 
 ## Packages
+
+### [@rip-lang/ai](ai/) — AI-to-AI Collaboration
+
+MCP stdio server that lets one AI talk to its peer for collaborative code review, second opinions, and multi-turn technical discussions. Claude Opus 4.6 auto-peers with GPT-5.4, and vice versa. Zero config per call — just `chat`, `review`, or `discuss`. ~240 lines.
+
+```bash
+# Cursor MCP config — add to ~/.cursor/mcp.json:
+{
+  "mcpServers": {
+    "ai": {
+      "command": "rip",
+      "args": ["/path/to/packages/ai/mcp.rip"],
+      "env": { "OPENAI_API_KEY": "sk-...", "ANTHROPIC_API_KEY": "sk-ant-..." }
+    }
+  }
+}
+```
 
 ### [@rip-lang/csv](csv/) — CSV Parser + Writer
 

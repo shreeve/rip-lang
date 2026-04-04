@@ -8,10 +8,18 @@
         "typescript": "5.9.3",
       },
     },
+    "packages/ai": {
+      "name": "@rip-lang/ai",
+      "version": "0.1.0",
+      "dependencies": {
+        "rip-lang": ">=3.13.133",
+      },
+    },
     "packages/all": {
       "name": "@rip-lang/all",
       "version": "3.13.159",
       "dependencies": {
+        "@rip-lang/ai": ">=0.1.0",
         "@rip-lang/csv": ">=1.3.110",
         "@rip-lang/db": ">=1.3.120",
         "@rip-lang/http": ">=1.1.111",
@@ -200,6 +208,8 @@
     "@esbuild/win32-ia32": ["@esbuild/win32-ia32@0.27.3", "", { "os": "win32", "cpu": "ia32" }, "sha512-QLKSFeXNS8+tHW7tZpMtjlNb7HKau0QDpwm49u0vUp9y1WOF+PEzkU84y9GqYaAVW8aH8f3GcBck26jh54cX4Q=="],
 
     "@esbuild/win32-x64": ["@esbuild/win32-x64@0.27.3", "", { "os": "win32", "cpu": "x64" }, "sha512-4uJGhsxuptu3OcpVAzli+/gWusVGwZZHTlS63hh++ehExkVT8SgiEf7/uC/PclrPPkLhZqGgCTjd0VWLo6xMqA=="],
+
+    "@rip-lang/ai": ["@rip-lang/ai@workspace:packages/ai"],
 
     "@rip-lang/all": ["@rip-lang/all@workspace:packages/all"],
 
