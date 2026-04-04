@@ -5,12 +5,12 @@
 # Built-in file browser when no index.rip or index.ts exists in the target
 # directory. Activated automatically by `rip server` when no app entry is found.
 #
-# Delegates rendering to serving/static.rip for unified directory listing,
-# markdown rendering, and file serving across all serving modes.
+# All files are shown in view mode: syntax highlighted source, rendered
+# markdown, directory listings. Nothing is executed — this is a browser, not
+# an app runner.
 # ==============================================================================
 
 import { use, start, notFound } from '@rip-lang/server'
-import { serve } from '@rip-lang/server/middleware'
 import { statSync } from 'node:fs'
 import { join, resolve, basename } from 'node:path'
 import { renderDirectoryListing, renderMarkdown, renderTextFile, isTextFile, serveRipHighlightGrammar } from './serving/static.rip'
@@ -18,8 +18,6 @@ import { renderDirectoryListing, renderMarkdown, renderTextFile, isTextFile, ser
 root = resolve(process.env.APP_BASE_DIR or process.cwd())
 rootSlash = root + '/'
 rootName = basename(root) or root
-
-use serve dir: root, bundle: [], watch: true
 
 notFound ->
   if @req.path is '/_rip/hljs-rip.js'
@@ -44,7 +42,7 @@ notFound ->
         try
           html = renderMarkdown(path)
           return new Response html, { headers: { 'Content-Type': 'text/html; charset=UTF-8' } }
-      if isTextFile(path) and not path.endsWith('.rip')
+      if isTextFile(path)
         try
           html = renderTextFile(path)
           return new Response html, { headers: { 'Content-Type': 'text/html; charset=UTF-8' } }
