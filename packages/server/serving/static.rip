@@ -67,7 +67,7 @@ previewAttr = (name, href) ->
 dirRow = (ic, href, label, size = '', date = '', extra = '') ->
   "<tr><td class=\"ic\">#{ic}</td><td class=\"nm\"><a href=\"#{esc href}\"#{extra}>#{esc label}</a></td><td class=\"sz\">#{size}</td><td class=\"dt\">#{date}</td></tr>"
 
-renderDirectoryListing = (reqPath, fsPath, rootName) ->
+export renderDirectoryListing = (reqPath, fsPath, rootName) ->
   entries = try readdirSync(fsPath, { withFileTypes: true }) catch then []
   dirs = []
   files = []
@@ -183,7 +183,7 @@ renderDirectoryListing = (reqPath, fsPath, rootName) ->
 
 # --- Markdown rendering ---
 
-renderMarkdown = (filePath) ->
+export renderMarkdown = (filePath) ->
   md = readFileSync(filePath, 'utf8')
   body = Bun.markdown.html(md)
   name = esc(basename(filePath))
