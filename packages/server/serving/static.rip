@@ -246,33 +246,33 @@ export renderMarkdown = (filePath) ->
 
 # --- Text file rendering with syntax highlighting ---
 
-TEXT_EXTS = new Set [
-  'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx', 'json', 'jsonc'
-  'css', 'scss', 'less', 'html', 'htm', 'xml', 'svg'
-  'rip', 'coffee', 'rb', 'py', 'go', 'rs', 'c', 'cpp', 'h', 'hpp', 'java', 'kt', 'swift', 'cs'
-  'sh', 'bash', 'zsh', 'fish', 'ps1', 'bat', 'cmd'
-  'yaml', 'yml', 'toml', 'ini', 'conf', 'cfg', 'env'
-  'md', 'txt', 'log', 'csv', 'tsv', 'diff', 'patch'
-  'sql', 'graphql', 'gql', 'prisma'
-  'dockerfile', 'makefile', 'gemfile', 'rakefile'
-  'gitignore', 'gitattributes', 'editorconfig', 'eslintrc', 'prettierrc'
-  'lock', 'license', 'licence', 'readme', 'changelog', 'contributing', 'authors'
+BINARY_EXTS = new Set [
+  'png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'ico', 'bmp', 'tiff', 'tif'
+  'svg'
+  'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'rtf'
+  'zip', 'gz', 'tar', 'bz2', 'xz', '7z', 'rar', 'dmg', 'iso'
+  'mp3', 'mp4', 'wav', 'ogg', 'webm', 'flac', 'aac', 'm4a', 'avi', 'mov', 'mkv'
+  'woff', 'woff2', 'ttf', 'otf', 'eot'
+  'wasm', 'bin', 'exe', 'dll', 'so', 'dylib', 'o', 'a'
+  'sqlite', 'db', 'duckdb'
+  'DS_Store'
 ]
 
 HLJS_LANG_MAP =
   js: 'javascript', mjs: 'javascript', cjs: 'javascript', jsx: 'javascript'
   ts: 'typescript', tsx: 'typescript'
   rb: 'ruby', py: 'python', rs: 'rust', go: 'go', sh: 'bash', zsh: 'bash'
+  cr: 'crystal', ex: 'elixir', exs: 'elixir', elm: 'elm', hs: 'haskell'
+  lua: 'lua', nim: 'nim', zig: 'zig', pl: 'perl', r: 'r', m: 'objectivec'
   yml: 'yaml', toml: 'ini', conf: 'ini', cfg: 'ini'
   rip: 'rip', coffee: 'coffeescript'
-  md: 'markdown', htm: 'xml', svg: 'xml'
+  md: 'markdown', htm: 'xml'
   dockerfile: 'dockerfile', makefile: 'makefile'
   jsonc: 'json', gql: 'graphql'
 
 export isTextFile = (filePath) ->
-  name = basename(filePath).toLowerCase()
-  ext = name.slice(name.lastIndexOf('.') + 1)
-  TEXT_EXTS.has(ext) or TEXT_EXTS.has(name)
+  ext = basename(filePath).toLowerCase().slice(basename(filePath).lastIndexOf('.') + 1)
+  not BINARY_EXTS.has(ext)
 
 hljsLang = (filePath) ->
   name = basename(filePath).toLowerCase()
