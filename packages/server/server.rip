@@ -201,6 +201,7 @@ class Server
       rolledBackFrom: null
       verifyPolicy: loaded.normalized.server?.verify or null
       acmeDomains: loaded.normalized.server?.acmeDomains or []
+      certDir: loaded.normalized.server?.certDir or null
       certs: loaded.normalized.resolvedCerts or null
       activeRouteDescriptions: (routeTable.routes or []).map(describeRoute).filter(Boolean)
       lastReload: @configInfo?.lastReload or null
@@ -915,7 +916,8 @@ class Server
     addSecurityHeaders(@httpsActive, @flags.hsts, headers)
 
   loadTlsMaterial: ->
-    loadTls(@flags, import.meta.dir, (domain) -> acmeLoadCert(defaultCertDir(), domain))
+    certDir = @servingRuntime?.configInfo?.certDir or defaultCertDir()
+    loadTls(@flags, import.meta.dir, (domain) -> acmeLoadCert(certDir, domain))
 
   printCertSummary: (certPem) ->
     printCertSummary(certPem)
@@ -1015,7 +1017,7 @@ main = ->
 
   if not flags.noAcme and acmeDomains?.length > 0
     acmeMgr = createAcmeManager
-      certDir: defaultCertDir()
+      certDir: svr.servingRuntime?.configInfo?.certDir or defaultCertDir()
       staging: flags.acmeStaging
       challengeStore: svr.challengeStore
       onCertRenewed: (domain, result) ->
