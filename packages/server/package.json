@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/server",
-  "version": "1.4.3",
+  "version": "1.4.4",
   "description": "Bun-native content server: static sites, apps, HTTP proxy, and TCP/TLS passthrough",
   "type": "module",
   "main": "api.rip",
