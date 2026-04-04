@@ -2,8 +2,8 @@
 # serving/static.rip — static file serving and redirect route handlers
 # ==============================================================================
 
-import { resolve, join } from 'node:path'
-import { statSync } from 'node:fs'
+import { resolve, join, basename } from 'node:path'
+import { statSync, readdirSync } from 'node:fs'
 import { mimeType } from '../api.rip'
 
 stripRoutePrefix = (pathname, routePath) ->
@@ -21,6 +21,120 @@ isSafeWithinRoot = (root, resolved) ->
 acceptsHtml = (req) ->
   accept = req.headers?.get?('accept') or ''
   accept.includes('text/html')
+
+# --- Directory listing ---
+
+esc = (s) -> s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
+fmtSize = (n) ->
+  for u in ['B', 'KB', 'MB', 'GB']
+    if n < 1024
+      return if u is 'B' then "#{n} B" else "#{n.toFixed(1)} #{u}"
+    n /= 1024
+  "#{n.toFixed(1)} TB"
+
+fmtDate = (ms) ->
+  d = new Date(ms)
+  mo = d.toLocaleString('en', { month: 'short' })
+  day = String(d.getDate()).padStart(2, '0')
+  year = d.getFullYear()
+  hour = d.getHours()
+  min = String(d.getMinutes()).padStart(2, '0')
+  ampm = if hour >= 12 then 'PM' else 'AM'
+  hour = hour % 12 or 12
+  "#{mo} #{day}, #{year} at #{hour}:#{min} #{ampm}"
+
+EXT_ICONS =
+  html: '🌐', htm: '🌐', css: '🎨', js: '📜', mjs: '📜', ts: '📜'
+  json: '📋', rip: '⚡', md: '📝', txt: '📝', pdf: '📕'
+  png: '🖼️', jpg: '🖼️', jpeg: '🖼️', gif: '🖼️', svg: '🖼️', webp: '🖼️', ico: '🖼️'
+  zip: '📦', gz: '📦', tar: '📦'
+  mp3: '🎵', ogg: '🎵', wav: '🎵', mp4: '🎬', webm: '🎬'
+  woff: '🔤', woff2: '🔤', ttf: '🔤', otf: '🔤'
+
+IMG_EXTS = new Set ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'avif']
+
+fileIcon = (name) -> EXT_ICONS[name.slice(name.lastIndexOf('.') + 1).toLowerCase()] or '📄'
+
+previewAttr = (name, href) ->
+  ext = name.slice(name.lastIndexOf('.') + 1).toLowerCase()
+  if IMG_EXTS.has(ext) then " data-pv=\"image\" data-src=\"#{esc href}\"" else ''
+
+dirRow = (ic, href, label, size = '', date = '', extra = '') ->
+  "<tr><td class=\"ic\">#{ic}</td><td><a href=\"#{esc href}\"#{extra}>#{esc label}</a></td><td class=\"sz\">#{size}</td><td class=\"dt\">#{date}</td></tr>"
+
+renderDirectoryListing = (reqPath, fsPath, rootName) ->
+  entries = try readdirSync(fsPath, { withFileTypes: true }) catch then []
+  dirs = []
+  files = []
+  for e in entries
+    continue if e.name.startsWith('.')
+    if e.isDirectory() then dirs.push(e.name) else files.push(e.name)
+  dirs.sort()
+  files.sort()
+
+  rows = []
+  rows.push dirRow('📁', '../', '..') if reqPath isnt '/'
+  for d in dirs
+    rows.push dirRow('📁', "#{d}/", d)
+  for f in files
+    try
+      s = statSync(join(fsPath, f))
+      rows.push dirRow(fileIcon(f), f, f, fmtSize(s.size), fmtDate(s.mtimeMs), previewAttr(f, f))
+    catch
+      rows.push dirRow(fileIcon(f), f, f)
+
+  numDirs = dirs.length
+  numFiles = files.length
+  summary = []
+  summary.push "#{numDirs} folder#{if numDirs isnt 1 then 's' else ''}" if numDirs > 0
+  summary.push "#{numFiles} file#{if numFiles isnt 1 then 's' else ''}" if numFiles > 0
+
+  crumbs = "<a href=\"/\">#{esc rootName}</a>"
+  href = ''
+  for part in reqPath.split('/').filter((p) -> p)
+    href += "/#{part}"
+    crumbs += " <span class=\"sep\">/</span> <a href=\"#{href}/\">#{esc part}</a>"
+
+  """
+  <!DOCTYPE html>
+  <html lang="en">
+  <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Index of #{esc reqPath}</title>
+  <style>
+  :root{--bg:#f3f6f7;--card:#fff;--border:#e5e7eb;--border-row:#f0f0f0;--text:#1f2937;--muted:#6b7280;--link:#2563eb;--link-visited:#7c3aed;--hover-bg:#f0f7ff;--head-bg:#fafbfc;--sep:#cbd5e1}
+  @media(prefers-color-scheme:dark){:root{--bg:#0d1117;--card:#161b22;--border:#30363d;--border-row:#21262d;--text:#c9d1d9;--muted:#8b949e;--link:#58a6ff;--link-visited:#bc8cff;--hover-bg:#1c2129;--head-bg:#1c2129;--sep:#484f58}}
+  *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:15px;line-height:1.5;color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased}
+  .wrap{max-width:960px;margin:2.5rem auto;padding:0 1rem}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+  .bar{display:flex;align-items:center;justify-content:space-between;padding:.875rem 1.25rem;border-bottom:1px solid var(--border);gap:1rem}
+  .crumbs{font-size:.9375rem;font-weight:500}.crumbs a{color:var(--link);text-decoration:none}.crumbs a:hover{text-decoration:underline}
+  .sep{color:var(--sep);margin:0 .3rem;font-weight:400}.meta{font-size:.8125rem;color:var(--muted);white-space:nowrap}
+  table{width:100%;border-collapse:collapse}
+  th{position:sticky;top:0;background:var(--head-bg);text-align:left;padding:.625rem 1.25rem;font-size:.6875rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border)}
+  td{padding:.5rem 1.25rem;border-bottom:1px solid var(--border-row);font-size:.875rem;vertical-align:middle}
+  tr:last-child td{border-bottom:none}tbody tr:hover{background:var(--hover-bg)}
+  td a{color:var(--link);text-decoration:none}td a:hover{text-decoration:underline}td a:visited{color:var(--link-visited)}
+  .ic{width:2.5rem;text-align:center;font-size:1.125rem}.sz{width:6rem;text-align:right;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}.dt{color:var(--muted);white-space:nowrap}th.sz{text-align:right}
+  @media(max-width:640px){.wrap{margin:1rem auto}td,th{padding:.5rem .75rem}.dt,th.dt{display:none}.bar{padding:.75rem 1rem}}
+  </style>
+  </head>
+  <body>
+  <div class="wrap"><div class="card">
+  <div class="bar"><div class="crumbs">#{crumbs}</div><div class="meta">#{summary.join(' &middot; ')}</div></div>
+  <table>
+  <thead><tr><th></th><th>Name</th><th class="sz">Size</th><th class="dt">Modified</th></tr></thead>
+  <tbody>#{rows.join('\n')}</tbody>
+  </table>
+  </div></div>
+  </body>
+  </html>
+  """
+
+# --- Static file serving ---
 
 export serveStaticRoute = (req, url, route) ->
   method = req.method or 'GET'
@@ -43,12 +157,18 @@ export serveStaticRoute = (req, url, route) ->
   try
     stat = statSync(filePath)
     if stat.isDirectory()
+      unless pathname.endsWith('/')
+        return Response.redirect("#{pathname}/", 301)
       indexPath = join(filePath, 'index.html')
       try
         indexStat = statSync(indexPath)
         if indexStat.isFile()
           file = Bun.file(indexPath)
           return new Response(file, { headers: { 'content-type': 'text/html; charset=UTF-8' } })
+      if route.browse and acceptsHtml(req)
+        rootName = basename(staticDir)
+        html = renderDirectoryListing(pathname, filePath, rootName)
+        return new Response(html, { headers: { 'content-type': 'text/html; charset=UTF-8' } })
     if stat.isFile()
       file = Bun.file(filePath)
       return new Response(file, { headers: { 'content-type': mimeType(filePath) } })
