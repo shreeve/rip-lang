@@ -116,7 +116,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | `@rip-lang/schema` | 0.3.7 |
 | `@rip-lang/swarm` | 1.2.17 |
 
-
 ## [3.10.12] - 2026-02-20
 
 ### Compiler — Fix Variable Scoping in Effect Blocks
