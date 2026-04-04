@@ -2,9 +2,11 @@
 # serving/static.rip — static file serving and redirect route handlers
 # ==============================================================================
 
-import { resolve, join, basename } from 'node:path'
+import { resolve, join, basename, dirname } from 'node:path'
 import { statSync, readdirSync, readFileSync } from 'node:fs'
 import { mimeType } from '../api.rip'
+
+HLJS_RIP_GRAMMAR = try readFileSync(join(dirname(import.meta.dir), '..', 'print', 'hljs-rip.js'), 'utf8') catch then null
 
 stripRoutePrefix = (pathname, routePath) ->
   return pathname if routePath is '/' or routePath is '/*'
@@ -250,7 +252,7 @@ HLJS_LANG_MAP =
   ts: 'typescript', tsx: 'typescript'
   rb: 'ruby', py: 'python', rs: 'rust', go: 'go', sh: 'bash', zsh: 'bash'
   yml: 'yaml', toml: 'ini', conf: 'ini', cfg: 'ini'
-  rip: 'coffeescript', coffee: 'coffeescript'
+  rip: 'rip', coffee: 'coffeescript'
   md: 'markdown', htm: 'xml', svg: 'xml'
   dockerfile: 'dockerfile', makefile: 'makefile'
   jsonc: 'json', gql: 'graphql'
@@ -300,6 +302,7 @@ export renderTextFile = (filePath) ->
   <pre><code class="language-#{lang}">#{esc content}</code></pre>
   </div></div>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+  #{if lang is 'rip' and HLJS_RIP_GRAMMAR then "<script>#{HLJS_RIP_GRAMMAR.replace('export default function', 'hljs.registerLanguage(\"rip\", function')}\n)</script>" else ''}
   <script>hljs.highlightAll()</script>
   </body>
   </html>
