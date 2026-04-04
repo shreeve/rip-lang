@@ -112,14 +112,14 @@ renderDirectoryListing = (reqPath, fsPath, rootName) ->
     --bg: #f8f9fa; --card: #fff; --border: #e2e5e9; --row-border: #f0f1f3;
     --text: #1a1d21; --secondary: #6b7280; --icon: #9ca3af;
     --link: #2563eb; --link-visited: #7c3aed; --link-hover: #1d4ed8;
-    --hover: #f0f5ff; --sep: #cbd5e1;
+    --hover: #f0f5ff; --sep: #cbd5e1; --bar-bg: #f3f4f6; --head-bg: #f9fafb;
     --radius: 10px; --shadow: 0 1px 3px rgba(0,0,0,.05), 0 0 0 1px rgba(0,0,0,.03);
   }
   @media (prefers-color-scheme: dark) { :root {
     --bg: #0a0a0c; --card: #161618; --border: #2a2a2e; --row-border: #1e1e22;
     --text: #e4e4e7; --secondary: #71717a; --icon: #52525b;
     --link: #60a5fa; --link-visited: #a78bfa; --link-hover: #93c5fd;
-    --hover: #1a1d24; --sep: #3f3f46;
+    --hover: #1a1d24; --sep: #3f3f46; --bar-bg: #1c1c1f; --head-bg: #19191c;
     --shadow: 0 1px 3px rgba(0,0,0,.3), 0 0 0 1px rgba(255,255,255,.04);
   }}
   *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
@@ -129,7 +129,7 @@ renderDirectoryListing = (reqPath, fsPath, rootName) ->
   .wrap { max-width: 880px; margin: 3rem auto; padding: 0 1.25rem; }
   .card { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
   .bar { display: flex; align-items: center; justify-content: space-between;
-    padding: .75rem 1rem; gap: .75rem; border-bottom: 1px solid var(--border); }
+    padding: .75rem 1rem; gap: .75rem; border-bottom: 1px solid var(--border); background: var(--bar-bg); }
   .crumbs { font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 0; flex-wrap: wrap; }
   .crumbs a { color: var(--link); text-decoration: none; padding: 2px 6px; border-radius: 4px; transition: all 120ms; }
   .crumbs a:last-child { color: var(--text); font-weight: 600; }
@@ -137,7 +137,7 @@ renderDirectoryListing = (reqPath, fsPath, rootName) ->
   .sep { color: var(--sep); font-size: 11px; margin: 0 1px; user-select: none; }
   .meta { font-size: 12px; color: var(--secondary); white-space: nowrap; font-weight: 400; }
   table { width: 100%; border-collapse: collapse; }
-  th { background: var(--card); text-align: left; padding: 6px 1rem; font-size: 11px;
+  th { background: var(--head-bg); text-align: left; padding: 6px 1rem; font-size: 11px;
     font-weight: 500; color: var(--secondary); letter-spacing: .03em; border-bottom: 1px solid var(--border); }
   th.sz { text-align: right; }
   td { padding: 7px 1rem; vertical-align: middle; font-size: 13px; border-bottom: 1px solid var(--row-border); }
