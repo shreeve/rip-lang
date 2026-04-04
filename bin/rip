@@ -4,7 +4,7 @@ import { readFileSync, readdirSync, writeFileSync, existsSync, statSync, unlinkS
 import { execSync, spawnSync, spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, basename, join } from 'path';
-import { Compiler } from '../src/compiler.js';
+import { Compiler, formatError } from '../src/compiler.js';
 import packageJson from '../package.json' with { type: 'json' };
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -269,7 +269,13 @@ async function main() {
 
     // Non-.rip files (e.g. shebang scripts): compile to temp file, execute, clean up
     const source = readFileSync(inputFile, 'utf-8');
-    const result = new Compiler().compile(source);
+    let result;
+    try {
+      result = new Compiler({ filename: inputFile }).compile(source);
+    } catch (error) {
+      console.error(formatError(error, { source, file: inputFile }));
+      process.exit(1);
+    }
     const tmp = join(dirname(inputFile), `.${basename(inputFile)}.__rip__.mjs`);
     let exitCode = 0;
     try {
@@ -295,6 +301,7 @@ async function main() {
 
   try {
     const compiler = new Compiler({ showTokens, showSExpr, quiet,
+      filename: inputFile || '<stdin>',
       types: generateDts ? 'emit' : undefined,
       sourceMap: generateMap ? 'inline' : undefined,
     });
@@ -320,8 +327,7 @@ async function main() {
       console.log(entry.tsContent);
     }
   } catch (error) {
-    console.error('Compilation Error:', error.message);
-    if (error.stack) console.error(error.stack);
+    console.error(formatError(error, { source, file: inputFile }));
     process.exit(1);
   }
 }

@@ -2,7 +2,7 @@
 
 import { plugin } from "bun";
 import { fileURLToPath } from "url";
-import { compileToJS } from "./src/compiler.js";
+import { compileToJS, formatError } from "./src/compiler.js";
 
 await plugin({
   name: "rip-loader",
@@ -32,7 +32,7 @@ await plugin({
           loader: "js",
         };
       } catch (err) {
-        console.error(`Error compiling ${args.path}:`, err.message);
+        console.error(formatError(err, { file: args.path }));
         throw err;
       }
     });

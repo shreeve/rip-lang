@@ -63,6 +63,10 @@ export runWorkerMode = ->
       workerState.handler or (-> new Response('not ready', { status: 503 }))
     catch e
       warn "[worker #{workerId}] import failed:", e
+      if typeof e.formatHTML is 'function'
+        html = "<!DOCTYPE html><html><head><meta charset=utf-8><title>Rip Compile Error</title><style>body{margin:40px auto;max-width:900px;background:#1e1e2e;color:#cdd6f4;font-family:system-ui,sans-serif}</style></head><body>#{e.formatHTML()}</body></html>"
+        workerState.handler = -> new Response(html, { status: 500, headers: { 'content-type': 'text/html; charset=UTF-8' } })
+        return workerState.handler
       workerState.handler or (-> new Response('not ready', { status: 503 }))
 
   selfJoin = ->

@@ -1346,15 +1346,15 @@ export function installComponentSupport(CodeEmitter, Lexer) {
    * Handle standalone render (outside component): error
    */
   proto.emitRender = function(head, rest, context, sexpr) {
-    throw new Error('render blocks can only be used inside a component');
+    this.error('render blocks can only be used inside a component', sexpr);
   };
 
   proto.emitOffer = function(head, rest, context, sexpr) {
-    throw new Error('offer can only be used inside a component');
+    this.error('offer can only be used inside a component', sexpr);
   };
 
   proto.emitAccept = function(head, rest, context, sexpr) {
-    throw new Error('accept can only be used inside a component');
+    this.error('accept can only be used inside a component', sexpr);
   };
 
   // ==========================================================================

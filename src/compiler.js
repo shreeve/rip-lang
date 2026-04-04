@@ -13,6 +13,7 @@ import { parser } from './parser.js';
 import { installComponentSupport } from './components.js';
 import { emitTypes, emitEnum } from './types.js';
 import { SourceMapGenerator } from './sourcemaps.js';
+import { RipError, toRipError } from './error.js';
 
 // =============================================================================
 // Metadata helpers — isolate all new String() awareness here
@@ -274,6 +275,11 @@ export class CodeEmitter {
     if (options.reactiveVars) {
       this.reactiveVars = new Set(options.reactiveVars);
     }
+  }
+
+  // Throw a RipError with source location from the nearest s-expression node
+  error(message, sexpr, { suggestion } = {}) {
+    throw RipError.fromSExpr(message, sexpr, this.options.source, this.options.filename, suggestion);
   }
 
   // ---------------------------------------------------------------------------
@@ -565,7 +571,7 @@ export class CodeEmitter {
 
     if (typeof sexpr === 'number') return String(sexpr);
     if (sexpr === null || sexpr === undefined) return 'null';
-    if (!Array.isArray(sexpr)) throw new Error(`Invalid s-expression: ${JSON.stringify(sexpr)}`);
+    if (!Array.isArray(sexpr)) this.error(`Invalid s-expression: ${JSON.stringify(sexpr)}`, sexpr);
 
     let [head, ...rest] = sexpr;
 
@@ -635,7 +641,7 @@ export class CodeEmitter {
       return needsAwait ? `await ${callStr}` : callStr;
     }
 
-    throw new Error(`Unknown s-expression type: ${head}`);
+    this.error(`Unknown s-expression type: ${head}`, sexpr);
   }
 
   // ---------------------------------------------------------------------------
@@ -855,7 +861,7 @@ export class CodeEmitter {
     let isFnValue = (this.is(value, '->') || this.is(value, '=>') || this.is(value, 'def'));
     if (target instanceof String && meta(target, 'await') !== undefined && !isFnValue) {
       let sigil = meta(target, 'await') === true ? '!' : '&';
-      throw new Error(`Cannot use ${sigil} sigil in variable declaration '${str(target)}'.`);
+      this.error(`Cannot use ${sigil} sigil in variable declaration '${str(target)}'`, sexpr);
     }
 
     if (target instanceof String && meta(target, 'await') === true && isFnValue) {
@@ -1138,7 +1144,7 @@ export class CodeEmitter {
     if (rest.length === 0) return 'return';
     let [expr] = rest;
     if (this.sideEffectOnly && !(this.is(expr, '->') || this.is(expr, '=>'))) {
-      throw new Error(`Cannot return a value from a void function (declared with !)`);
+      this.error('Cannot return a value from a void function (declared with !)', sexpr);
     }
 
     if (this.is(expr, 'if')) {
@@ -1817,7 +1823,7 @@ export class CodeEmitter {
     return switchBody;
   }
 
-  emitWhen() { throw new Error('when clause should be handled by switch'); }
+  emitWhen(head, rest, context, sexpr) { this.error('when clause should be handled by switch', sexpr); }
 
   // ---------------------------------------------------------------------------
   // Comprehensions
@@ -3353,7 +3359,12 @@ export class Compiler {
 
     // Step 1: Tokenize (includes rewriteTypes() via installTypeSupport)
     let lexer = new Lexer();
-    let tokens = lexer.tokenize(source);
+    let tokens;
+    try {
+      tokens = lexer.tokenize(source);
+    } catch (err) {
+      throw toRipError(err, source, this.options.filename);
+    }
     if (this.options.showTokens) {
       tokens.forEach(t => console.log(`${t[0].padEnd(12)} ${JSON.stringify(t[1])}`));
       console.log();
@@ -3381,6 +3392,7 @@ export class Compiler {
     }
 
     // Step 3: Parse — shim adapter wraps token values with metadata
+    let lastLexedLoc = null;
     parser.lexer = {
       tokens, pos: 0,
       setInput: function() {},
@@ -3395,6 +3407,8 @@ export class Compiler {
         }
         this.text = val;
         this.loc  = token.loc;
+        this.line = token.loc?.r;
+        lastLexedLoc = token.loc;
         return token[0];
       }
     };
@@ -3402,11 +3416,21 @@ export class Compiler {
     let sexpr;
     try {
       sexpr = parser.parse(source);
-    } catch (parseError) {
+    } catch (err) {
       if (/\?\s*\([^)]*\?[^)]*:[^)]*\)\s*:/.test(source) || /\?\s+\w+\s+\?\s+/.test(source)) {
-        throw new Error('Nested ternary operators are not supported. Use if/else statements instead.');
+        throw new RipError('Nested ternary operators are not supported', {
+          code: 'E_PARSE', source, file: this.options.filename,
+          suggestion: 'Use if/else statements instead.',
+          phase: 'parser',
+        });
       }
-      throw parseError;
+      let re = toRipError(err, source, this.options.filename);
+      if (re.phase === 'parser' && lastLexedLoc) {
+        re.line = lastLexedLoc.r ?? re.line;
+        re.column = lastLexedLoc.c ?? re.column;
+        re.length = lastLexedLoc.n || 1;
+      }
+      throw re;
     }
 
     if (this.options.showSExpr) {
@@ -3425,6 +3449,7 @@ export class Compiler {
     let generator = new CodeEmitter({
       dataSection,
       source,
+      filename: this.options.filename,
       skipPreamble: this.options.skipPreamble,
       skipRuntimes: this.options.skipRuntimes,
       skipExports: this.options.skipExports,
@@ -3512,3 +3537,4 @@ export function getComponentRuntime() {
 }
 
 export { formatSExpr };
+export { RipError, toRipError, formatError, formatErrorHTML } from './error.js';
