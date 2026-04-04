@@ -215,6 +215,8 @@ renderMarkdown = (filePath) ->
   th, td { padding: .5rem .75rem; border: 1px solid var(--border); text-align: left; font-size: .875rem; }
   th { font-weight: 600; background: var(--pre-bg); }
   hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+  @page { margin: 0.5in; }
+  @media print { body { background: #fff; color: #1a1a1a; } pre, code { background: #f4f4f5; } a { color: #2563eb; } }
   </style>
   </head>
   <body>#{body}</body>
