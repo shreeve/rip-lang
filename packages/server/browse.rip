@@ -12,7 +12,7 @@
 import { use, start, notFound } from '@rip-lang/server'
 import { statSync } from 'node:fs'
 import { join, resolve, basename } from 'node:path'
-import { renderDirectoryListing, renderMarkdown, renderTextFile, isTextFile, serveRipHighlightGrammar, findIndexFile } from './serving/static.rip'
+import { renderDirectoryListing, renderMarkdown, renderTextFile, isTextFile, serveRipHighlightGrammar, findIndexFile, INDEX_FILES } from './serving/static.rip'
 
 root = resolve(process.env.APP_BASE_DIR or process.cwd())
 rootSlash = root + '/'
@@ -41,8 +41,7 @@ notFound ->
         try
           html = renderMarkdown(path)
           return new Response html, { headers: { 'Content-Type': 'text/html; charset=UTF-8' } }
-      # Text files that can't "run" get syntax highlighted
-      if isTextFile(path) and not path.endsWith('.html') and not path.endsWith('.htm') and not path.endsWith('.rip')
+      if isTextFile(path) and not INDEX_FILES.includes(basename(path))
         try
           html = renderTextFile(path)
           return new Response html, { headers: { 'Content-Type': 'text/html; charset=UTF-8' } }
