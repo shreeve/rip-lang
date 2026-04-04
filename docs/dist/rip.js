@@ -8670,8 +8670,6 @@ ${this.indent()}}`;
     generateExport(head, rest) {
       let [decl] = rest;
       if (this.options.skipExports) {
-        if (Array.isArray(decl) && decl.every((i) => typeof i === "string"))
-          return "";
         if (this.is(decl, "=")) {
           const prev = this._componentName;
           if (this.is(decl[2], "component"))
@@ -8680,10 +8678,10 @@ ${this.indent()}}`;
           this._componentName = prev;
           return result;
         }
+        if (Array.isArray(decl) && decl.every((i) => typeof i === "string"))
+          return "";
         return this.generate(decl, "statement");
       }
-      if (Array.isArray(decl) && decl.every((i) => typeof i === "string"))
-        return `export { ${decl.join(", ")} }`;
       if (this.is(decl, "=")) {
         const prev = this._componentName;
         if (this.is(decl[2], "component"))
@@ -8692,6 +8690,8 @@ ${this.indent()}}`;
         this._componentName = prev;
         return result;
       }
+      if (Array.isArray(decl) && decl.every((i) => typeof i === "string"))
+        return `export { ${decl.join(", ")} }`;
       return `export ${this.generate(decl, "statement")}`;
     }
     generateExportDefault(head, rest) {
@@ -10104,8 +10104,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeGenerator({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.13.130";
-  var BUILD_DATE = "2026-04-02@23:49:11GMT";
+  var VERSION = "3.13.132";
+  var BUILD_DATE = "2026-04-04@05:43:09GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
