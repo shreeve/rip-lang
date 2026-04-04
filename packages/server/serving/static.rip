@@ -299,7 +299,7 @@ export renderTextFile = (filePath) ->
   body { font-family: -apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--text); }
   .wrap { max-width: 960px; margin: 3rem auto; padding: 0 1.25rem; }
   .card { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
-  .bar { display: flex; align-items: center; justify-content: space-between; padding: .625rem 1rem; background: var(--bar-bg); border-bottom: 1px solid var(--border); }
+  .bar { display: flex; align-items: center; justify-content: space-between; padding: .625rem 1.25rem; background: var(--bar-bg); border-bottom: 1px solid var(--border); }
   .name { font-size: 13px; font-weight: 600; }
   .meta { font-size: 12px; color: var(--secondary); }
   pre { margin: 0 !important; border: none !important; border-radius: 0 !important; }
