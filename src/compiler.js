@@ -2186,7 +2186,6 @@ export class CodeGenerator {
   generateExport(head, rest) {
     let [decl] = rest;
     if (this.options.skipExports) {
-      if (Array.isArray(decl) && decl.every(i => typeof i === 'string')) return '';
       if (this.is(decl, '=')) {
         const prev = this._componentName;
         if (this.is(decl[2], 'component')) this._componentName = str(decl[1]);
@@ -2194,9 +2193,9 @@ export class CodeGenerator {
         this._componentName = prev;
         return result;
       }
+      if (Array.isArray(decl) && decl.every(i => typeof i === 'string')) return '';
       return this.generate(decl, 'statement');
     }
-    if (Array.isArray(decl) && decl.every(i => typeof i === 'string')) return `export { ${decl.join(', ')} }`;
     if (this.is(decl, '=')) {
       const prev = this._componentName;
       if (this.is(decl[2], 'component')) this._componentName = str(decl[1]);
@@ -2204,6 +2203,7 @@ export class CodeGenerator {
       this._componentName = prev;
       return result;
     }
+    if (Array.isArray(decl) && decl.every(i => typeof i === 'string')) return `export { ${decl.join(', ')} }`;
     return `export ${this.generate(decl, 'statement')}`;
   }
 
