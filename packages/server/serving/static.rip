@@ -142,11 +142,12 @@ renderDirectoryListing = (reqPath, fsPath, rootName) ->
   th.sz { text-align: right; }
   td { padding: 7px 1rem; vertical-align: middle; font-size: 13px; border-bottom: 1px solid var(--row-border); }
   tr:last-child td { border-bottom: none; }
-  tbody tr { transition: background 80ms; }
+  tbody tr { position: relative; transition: background 80ms; cursor: pointer; }
   tbody tr:hover { background: var(--hover); }
   .ic { width: 2.25rem; text-align: center; color: var(--icon); line-height: 0; }
   .ic svg { vertical-align: middle; }
   .nm a { color: var(--link); text-decoration: none; font-weight: 450; letter-spacing: -.01em; }
+  .nm a::after { content: ''; position: absolute; inset: 0; }
   .nm a:visited { color: var(--link-visited); }
   .nm a:hover { color: var(--link-hover); text-decoration: underline; }
   .sz { width: 5.5rem; text-align: right; color: var(--secondary); white-space: nowrap;
