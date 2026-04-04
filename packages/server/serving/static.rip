@@ -133,7 +133,7 @@ renderDirectoryListing = (reqPath, fsPath, rootName) ->
   .crumbs { font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 0; flex-wrap: wrap; }
   .crumbs a { color: var(--link); text-decoration: none; padding: 2px 6px; border-radius: 4px; transition: all 120ms; }
   .crumbs a:last-child { color: var(--text); font-weight: 600; }
-  .crumbs a:hover { color: var(--link-hover); background: var(--hover); text-decoration: underline; }
+  .crumbs a:hover { color: var(--link-hover); background: var(--hover); }
   .sep { color: var(--sep); font-size: 11px; margin: 0 1px; user-select: none; }
   .meta { font-size: 12px; color: var(--secondary); white-space: nowrap; font-weight: 400; }
   table { width: 100%; border-collapse: collapse; }
@@ -149,7 +149,7 @@ renderDirectoryListing = (reqPath, fsPath, rootName) ->
   .nm a { color: var(--link); text-decoration: none; font-weight: 450; letter-spacing: -.01em; }
   .nm a::after { content: ''; position: absolute; inset: 0; }
   .nm a:visited { color: var(--link-visited); }
-  .nm a:hover { color: var(--link-hover); text-decoration: underline; }
+  .nm a:hover { color: var(--link-hover); }
   .sz { width: 5.5rem; text-align: right; color: var(--secondary); white-space: nowrap;
     font-variant-numeric: tabular-nums; font-size: 12px; letter-spacing: .01em; }
   .dt { color: var(--secondary); white-space: nowrap; font-size: 12px; }
