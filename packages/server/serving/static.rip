@@ -185,7 +185,7 @@ renderDirectoryListing = (reqPath, fsPath, rootName) ->
 
 renderMarkdown = (filePath) ->
   md = readFileSync(filePath, 'utf8')
-  body = Bun.markdown(md)
+  body = Bun.markdown.html(md)
   name = esc(basename(filePath))
   """
   <!DOCTYPE html>
