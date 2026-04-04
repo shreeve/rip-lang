@@ -958,7 +958,7 @@ operators = """
   right       DO_IIFE
   left        . ?.
   left        CALL_START CALL_END
-  nonassoc    ++ -- ? DEFINED PRESENCE
+  nonassoc    ++ -- ? PRESENCE
   right       UNARY DO
   right       AWAIT
   right       **
