@@ -73,9 +73,13 @@ export logAccessJson = (app, req, res, totalSeconds, workerSeconds) ->
     length: if len then Number(len) else undefined
 
 typeAbbrev =
-  html: 'html', css: 'css', javascript: 'js', json: 'json', plain: 'text'
-  png: 'png', jpeg: 'jpg', gif: 'gif', webp: 'webp', svg: 'svg'
-  'svg+xml': 'svg', 'x-icon': 'ico', 'octet-stream': 'bin', 'x-rip': 'rip'
+  html: 'html', css: 'css', javascript: 'js', json: 'json', plain: 'text', xml: 'xml'
+  png: 'png', jpeg: 'jpg', gif: 'gif', webp: 'webp', avif: 'avif'
+  'svg+xml': 'svg', svg: 'svg', 'x-icon': 'icon', 'vnd.microsoft.icon': 'icon'
+  woff: 'font', woff2: 'font', ttf: 'font', otf: 'font'
+  mpeg: 'mp3', mp4: 'mp4', ogg: 'ogg', webm: 'webm'
+  pdf: 'pdf', zip: 'zip', gzip: 'gz', wasm: 'wasm'
+  'octet-stream': 'bin', 'x-rip': 'rip'
 
 export logAccessHuman = (app, req, res, totalSeconds, workerSeconds) ->
   { timestamp, timezone } = formatTimestamp()
