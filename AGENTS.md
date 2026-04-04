@@ -237,7 +237,6 @@ rip -cm example.rip
 | defined check         | `x!?`            | true if not undefined                      |
 | presence check        | `x?!`            | truthy-or-undefined Houdini operator       |
 | optional chain assign | `x?.prop = val`  | guarded assignment                         |
-| rightward assign      | `expr :> x`      | assign with expression first               |
 | tagged template `$`   | `sh $"cmd #{x}"` | injection-safe tagged template             |
 | dotted keys           | `{a.b: 1}`       | flat string key in object literals         |
 | map literal           | `*{a: 1}`        | real `Map` with any key type               |
@@ -270,7 +269,6 @@ rip -cm example.rip
 | `//`        | Floor div        | `7 // 2`                     |
 | `%%`        | True mod         | `-1 %% 3`                    |
 | `:=`        | State            | `count := 0`                 |
-| `:>`        | Rightward assign | `expr :> x`                  |
 | `~=`        | Computed         | `doubled ~= count * 2`       |
 | `<=>`       | Two-way bind     | `value <=> name`             |
 | `=~`        | Match            | `str =~ /pat/`               |

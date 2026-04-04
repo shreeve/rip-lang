@@ -201,19 +201,3 @@ test 'optional chain assign: inner chain skips', '''
 code 'optional chain assign: style pattern', 'el?.style.display = "none"', 'if (el != null) el.style.display = "none"'
 code 'optional chain assign: value pattern', '@_input?.value = ""', 'if (this._input != null) this._input.value = ""'
 code 'optional chain assign: subtract', 'x?.y -= 1', 'if (x != null) x.y -= 1'
-
-# ==============================================================================
-# Rightward Assignment (:>)
-# ==============================================================================
-
-# Runtime tests
-test "rightward assign integer", "42 :> x; x", 42
-test "rightward assign string", '"hello" :> x; x', "hello"
-test "rightward assign expression", "5 + 3 :> result; result", 8
-test "rightward assign reassignment", "x = 1; 2 :> x; x", 2
-test "rightward assign with call", 'fn = -> 42\nfn() :> x; x', 42
-test "rightward assign precedence", "2 * 3 + 1 :> x; x", 7
-
-# Codegen tests — produces identical output to leftward assignment
-code "rightward assign codegen", "42 :> x", "let x;\nx = 42"
-code "rightward assign expression codegen", "a + b :> result", "let result;\nresult = a + b"
