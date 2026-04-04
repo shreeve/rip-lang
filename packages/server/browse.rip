@@ -34,7 +34,7 @@ notFound ->
     return new Response 'Not Found', { status: 404 }
 
   if stat.isFile()
-    accept = @req.headers.get('accept') or ''
+    accept = @req.header('accept') or ''
     if accept.includes('text/html')
       if path.endsWith('.md')
         try
