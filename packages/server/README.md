@@ -359,6 +359,18 @@ or:
 curl --unix-socket /tmp/rip_myapp.ctl.sock -X POST http://localhost/reload
 ```
 
+### Binding to ports 80 and 443
+
+Ports below 1024 require elevated privileges. If you see a permission
+error on startup, grant Bun the capability once:
+
+```bash
+sudo setcap cap_net_bind_service=+ep $(which bun)
+```
+
+This survives reboots but **not Bun upgrades** — re-run it after
+`bun upgrade`.
+
 ### Diagnostics
 
 ```bash
