@@ -9,7 +9,7 @@
 # markdown rendering, and file serving across all serving modes.
 # ==============================================================================
 
-import { use, start, notFound } from '@rip-lang/server'
+import { get, use, start, notFound } from '@rip-lang/server'
 import { serve } from '@rip-lang/server/middleware'
 import { statSync } from 'node:fs'
 import { join, resolve, basename } from 'node:path'
@@ -21,11 +21,23 @@ rootName = basename(root) or root
 
 use serve dir: root, bundle: [], watch: true
 
-notFound ->
-  if @req.path is '/_rip/hljs-rip.js'
-    res = serveRipHighlightGrammar()
-    return res if res
+get '/_rip/hljs-rip.js' ->
+  serveRipHighlightGrammar() or new Response('Not Found', { status: 404 })
 
+get '/*.rip' ->
+  reqPath = try decodeURIComponent(@req.path) catch then @req.path
+  path = resolve(root, reqPath.slice(1))
+  unless path is root or path.startsWith(rootSlash)
+    return new Response 'Not Found', { status: 404 }
+  try statSync(path) catch then return new Response 'Not Found', { status: 404 }
+  accept = @req.header('accept') or ''
+  if accept.includes('text/html')
+    try
+      html = renderTextFile(path)
+      return new Response html, { headers: { 'Content-Type': 'text/html; charset=UTF-8' } }
+  @send path
+
+notFound ->
   reqPath = try decodeURIComponent(@req.path) catch then @req.path
   path = resolve(root, reqPath.slice(1))
 
