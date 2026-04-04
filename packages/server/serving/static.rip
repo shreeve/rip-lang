@@ -6,11 +6,19 @@ import { resolve, join, basename, dirname } from 'node:path'
 import { statSync, readdirSync, readFileSync } from 'node:fs'
 import { mimeType } from '../api.rip'
 
-HLJS_RIP_PATH = try
-  p = join(dirname(import.meta.dir), '..', 'print', 'hljs-rip.js')
-  statSync(p)
-  p
-catch then null
+findHljsRip = ->
+  bases = [
+    join(import.meta.dir, '..', '..', 'print', 'hljs-rip.js')
+    join(import.meta.dir, '..', '..', '..', 'print', 'hljs-rip.js')
+  ]
+  try bases.push(import.meta.resolve('@rip-lang/print/hljs-rip.js').replace(/^file:\/\//, ''))
+  for p in bases
+    try
+      statSync(p)
+      return p
+  null
+
+HLJS_RIP_PATH = findHljsRip()
 
 stripRoutePrefix = (pathname, routePath) ->
   return pathname if routePath is '/' or routePath is '/*'
