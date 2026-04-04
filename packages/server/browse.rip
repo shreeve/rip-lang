@@ -5,9 +5,9 @@
 # Built-in file browser when no index.rip or index.ts exists in the target
 # directory. Activated automatically by `rip server` when no app entry is found.
 #
-# Single-click serves files natively (HTML renders, images display, etc.).
-# Double-click (appends ?) shows syntax-highlighted source for text files.
-# Markdown always renders. Directories show a listing with index file detection.
+# Text files get syntax-highlighted by default. HTML files render natively
+# (double-click adds ?view to see source). Markdown renders. Binary files
+# (images, PDFs) serve natively. Directories show a listing.
 # ==============================================================================
 
 import { use, start, notFound } from '@rip-lang/server'
@@ -18,6 +18,8 @@ import { renderDirectoryListing, renderMarkdown, renderTextFile, isTextFile, ser
 root = resolve(process.env.APP_BASE_DIR or process.cwd())
 rootSlash = root + '/'
 rootName = basename(root) or root
+
+isHtml = (p) -> p.endsWith('.html') or p.endsWith('.htm')
 
 notFound ->
   if @req.path is '/_rip/hljs-rip.js'
@@ -44,7 +46,7 @@ notFound ->
         try
           html = renderMarkdown(path)
           return new Response html, { headers: { 'Content-Type': 'text/html; charset=UTF-8' } }
-      if viewSource and isTextFile(path)
+      if isTextFile(path) and (viewSource or not isHtml(path))
         try
           html = renderTextFile(path)
           return new Response html, { headers: { 'Content-Type': 'text/html; charset=UTF-8' } }
