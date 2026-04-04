@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/all",
-  "version": "3.13.162",
+  "version": "3.13.163",
   "description": "Meta-package that installs rip-lang and all @rip-lang/* packages",
   "type": "module",
   "keywords": [
@@ -29,7 +29,7 @@
     "@rip-lang/print": ">=1.1.116",
     "@rip-lang/schema": ">=0.3.112",
     "@rip-lang/script": ">=0.1.8",
-    "@rip-lang/server": ">=1.4.5",
+    "@rip-lang/server": ">=1.4.6",
     "@rip-lang/stamp": ">=0.1.32",
     "@rip-lang/swarm": ">=1.2.122",
     "@rip-lang/ui": ">=0.4.13",
