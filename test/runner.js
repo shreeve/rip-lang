@@ -34,6 +34,7 @@ let currentFile = '';
 let fileTests = { pass: 0, fail: 0 };
 let totalTests = { pass: 0, fail: 0 };
 let failures = [];
+let pendingTests = [];
 
 // Normalize code for comparison (remove extra whitespace, normalize semicolons)
 function normalizeCode(code) {
@@ -52,7 +53,12 @@ function normalizeCode(code) {
 // Test helper: Execute code and compare result
 // Note: This is async to support await - but await on non-promises is instant,
 // so synchronous tests have zero performance impact
-async function test(name, code, expected) {
+function test(name, code, expected) {
+  const p = _runTest(name, code, expected);
+  pendingTests.push(p);
+}
+
+async function _runTest(name, code, expected) {
   try {
     const result = compile(code);
 
@@ -238,8 +244,10 @@ async function runTestFile(filePath) {
     };
 
     // Execute test file as async function
+    pendingTests = [];
     const testFn = new (async function(){}).constructor(...Object.keys(testEnv), result.code);
     await testFn(...Object.values(testEnv));
+    await Promise.all(pendingTests);
 
   } catch (error) {
     console.log(`  ${colors.red}✗ File failed to compile/execute${colors.reset}`);

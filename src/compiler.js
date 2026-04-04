@@ -1761,8 +1761,8 @@ export class CodeGenerator {
     if (rest.length === 1) tryCode += ' catch {}';
 
     if (needsReturns) {
-      let isAsync = this.containsAwait(rest[0]) || (rest[1] && this.containsAwait(rest[1]));
-      return `(${isAsync ? 'async ' : ''}() => { ${tryCode} })()`;
+      let hasAwait = this.containsAwait(rest[0]) || (rest[1] && this.containsAwait(rest[1])) || (rest[2] && this.containsAwait(rest[2]));
+      return `${hasAwait ? 'await ' : ''}(${hasAwait ? 'async ' : ''}() => { ${tryCode} })()`;
     }
     return tryCode;
   }
@@ -1844,8 +1844,8 @@ export class CodeGenerator {
     switchBody += this.indent() + '}';
 
     if (context === 'value') {
-      let hasAwait = whens.some(w => this.containsAwait(w[2])) || (defaultCase && this.containsAwait(defaultCase));
-      return `(${hasAwait ? 'async ' : ''}() => { ${switchBody} })()`;
+      let hasAwait = this.containsAwait(disc) || whens.some(w => this.containsAwait(w[1]) || this.containsAwait(w[2])) || (defaultCase && this.containsAwait(defaultCase));
+      return `${hasAwait ? 'await ' : ''}(${hasAwait ? 'async ' : ''}() => { ${switchBody} })()`;
     }
     return switchBody;
   }
@@ -1920,8 +1920,8 @@ export class CodeGenerator {
     if (context === 'statement') return this.generateComprehensionAsLoop(expr, iterators, guards);
     if (this.comprehensionTarget) return this.generateComprehensionWithTarget(expr, iterators, guards, this.comprehensionTarget);
 
-    let hasAwait = this.containsAwait(expr);
-    let code = `(${hasAwait ? 'async ' : ''}() => {\n`;
+    let hasAwait = this.containsAwait(expr) || iterators.some(i => this.containsAwait(i)) || guards.some(g => this.containsAwait(g));
+    let code = `${hasAwait ? 'await ' : ''}(${hasAwait ? 'async ' : ''}() => {\n`;
     this.indentLevel++;
     this.comprehensionDepth++;
     code += this.indent() + 'const result = [];\n';
@@ -1992,7 +1992,8 @@ export class CodeGenerator {
 
   generateObjectComprehension(head, rest, context) {
     let [keyExpr, valueExpr, iterators, guards] = rest;
-    let code = '(() => {\n';
+    let hasAwait = this.containsAwait(keyExpr) || this.containsAwait(valueExpr) || iterators.some(i => this.containsAwait(i)) || guards.some(g => this.containsAwait(g));
+    let code = `${hasAwait ? 'await ' : ''}(${hasAwait ? 'async ' : ''}() => {\n`;
     this.indentLevel++;
     code += this.indent() + 'const result = {};\n';
     for (let iter of iterators) {
@@ -2789,7 +2790,11 @@ export class CodeGenerator {
       this.indentLevel--;
       code += this.indent() + '}';
     }
-    return context === 'value' ? `(() => { ${code} })()` : code;
+    if (context === 'value') {
+      let hasAwait = whens.some(w => this.containsAwait(w[1]) || this.containsAwait(w[2])) || (defaultCase && this.containsAwait(defaultCase));
+      return `${hasAwait ? 'await ' : ''}(${hasAwait ? 'async ' : ''}() => { ${code} })()`;
+    }
+    return code;
   }
 
   // ---------------------------------------------------------------------------
