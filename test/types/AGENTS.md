@@ -78,19 +78,14 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 **Maintenance rule:** When you fix a gap, run the full verification suite. If everything passes, move the row to 🔍. To promote from 🔍 to ✅, manually verify IDE behavior (squiggle on correct token, hover shows expected type, no parse errors masking diagnostics, no false-positive errors). Remove stale "Fixed:" annotations — the row's position is the status. Never leave a fixed item in ❌.
 
-**Design trade-offs** (inherent to the language, not fixable via type system):
-
-| Category                   | Tested In     | Notes                                                                                                                                              |
-| -------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Implicit variable creation | 09-components | `loadingz = true` creates a new local — typos in assignments are invisible to types. This is CoffeeScript's core `=`-creates-a-variable semantics. |
-| Untyped files unchecked    | *(all files)* | Files without `::` annotations get `// @ts-nocheck` — zero type checking. Removing it requires `strict: true` and annotations on every file.       |
-
 ### ❌ Not working (language-level changes or runtime validation needed)
 
-| Category                       | Tested In     | Notes                                                                                            |
-| ------------------------------ | ------------- | ------------------------------------------------------------------------------------------------ |
-| Runtime return-type validation | 10-validation | Return types are erased — `response.json()` is unvalidated `any`; no `schema.parse()` equivalent |
-| Generic components             | 09-components | Can't parameterize components by type (e.g. typed select where value type flows through props)   |
+| Category                       | Tested In     | Notes                                                                                                                                |
+| ------------------------------ | ------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Render block conditional check | 09-components | `if labelz` in render blocks is unchecked — evaluates as `undefined` (falsy), silently skips the block                               |
+| Generic components             | 09-components | Can't parameterize components by type (e.g. typed select where value type flows through props)                                       |
+| Runtime return-type validation | 10-validation | Return types are erased — `response.json()` is unvalidated `any`; no `schema.parse()` equivalent                                     |
+| Project-level type enforcement | *(all files)* | No `rip check --strict` flag — untyped files silently get `@ts-nocheck`. ~10-line fix in `typecheck.js`; `# @nocheck` opt-out exists |
 
 ### 🔶 Partial
 
@@ -201,3 +196,50 @@ Each `.rip` file has a `.ts` companion with equivalent TypeScript for side-by-si
 - **Single quotes** — use `'string'` not `"string"`
 - **Trailing commas** — in multi-line objects and arrays
 - **`type` over `interface`** — use `type X = { ... }` not `interface X { ... }` (except in `05-interfaces.ts` which tests `interface` specifically)
+
+## Rip Gotchas
+
+Surprising behaviors, parser traps, and non-obvious syntax requirements discovered during the type audit. These trip up both developers and AI agents.
+
+### Typos in assignments create new variables
+
+Rip inherits CoffeeScript's `=`-creates-a-variable semantics. A typo silently creates a new local.
+
+```coffee
+loading := false
+# ...
+loadingz = true    # No error — creates `loadingz`, `loading` unchanged
+```
+
+No automated fix. The type system can't catch this because the new variable has an inferred type.
+
+### Implicit call ambiguity
+
+Rip's implicit parentheses work by greedy consumption. When a function call's arguments include commas, the parser can't distinguish between "another argument to this call" and "next sibling in render block."
+
+```coffee
+# TRAP — "Add to Cart" gets swallowed as second arg to addItem
+button @click: -> stash.cart.addItem { id: 1 }, "Add to Cart"
+
+# FIX — explicit parens on the call
+button @click: -> stash.cart.addItem({ id: 1 }), "Add to Cart"
+
+# FIX — block form (attrs and children are siblings)
+button
+  @click: -> stash.cart.addItem { id: 1 }
+  "Add to Cart"
+```
+
+### `reduce` needs double parentheses
+
+The callback argument to `reduce` must be wrapped in parens to prevent the implicit call from consuming the initial value.
+
+```coffee
+# CORRECT — inner parens group the callback
+items.reduce ((sum, i) -> sum + i.price), 0
+
+# WRONG — `, 0` gets misinterpreted
+items.reduce (sum, i) -> sum + i.price, 0
+```
+
+Same applies to any method where the first argument is a callback followed by more arguments.

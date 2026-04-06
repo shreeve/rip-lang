@@ -239,7 +239,9 @@ export CartDemo = component
   render
     div
       span "#{stash.cart.items.length} items — $#{stash.cart.total()}"
-      button @click: -> stash.cart.addItem({ id: 1, name: "Widget", price: 9.99, quantity: 1 }), "Add to Cart"
+      button
+        @click: -> stash.cart.addItem { id: 1, name: "Widget", price: 9.99, quantity: 1 }
+        "Add to Cart"
       ul
         for item in stash.cart.items
           li "#{item.name} x#{item.quantity} — $#{item.price}"
