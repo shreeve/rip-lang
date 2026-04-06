@@ -206,12 +206,18 @@ export EventHandlerTest = component
 # shared across routes/components, persisted to localStorage.
 # This is exactly what stash and zustand are for.
 
-# Define the cart shape (Rip can express this type):
+# Define the cart shape — data + methods, like a zustand store:
 type CartItem =
   id: number
   name: string
   price: number
   quantity: number
+
+type Cart =
+  items: CartItem[]
+  addItem: (item: CartItem) => void
+  removeItem: (item: CartItem) => void
+  total: () => number
 
 # In a real Rip app, the stash is seeded (possibly empty) and shared:
 #   <script data-state='{"cart": {"items": []}}'>
@@ -222,49 +228,42 @@ type CartItem =
 # Below we simulate this with a module-level object — the access pattern
 # is identical to how components use stash in the browser.
 
-stash:: { cart: { items: CartItem[] } } = { cart: { items: [] } }
+stash:: { cart: Cart } =
+  cart:
+    items: []
+    addItem: (item) -> stash.cart.items = [...stash.cart.items, item]
+    removeItem: (item) -> stash.cart.items = stash.cart.items.filter (i) -> i.id isnt item.id
+    total: -> stash.cart.items.reduce ((sum:: number, i) -> sum + i.price * i.quantity), 0
 
-def addItem(item:: CartItem)
-  stash.cart.items = [...stash.cart.items, item]
-
-def removeItem(item:: CartItem)
-  stash.cart.items = stash.cart.items.filter (i) -> i.id isnt item.id
-
-def total():: number
-  stash.cart.items.reduce ((sum:: number, i) -> sum + i.price * i.quantity), 0
-
-export CartBadge = component
-  render
-    span "#{stash.cart.items.length} items"
-
-export CartTotal = component
+export CartDemo = component
   render
     div
-      span "Total: $#{total()}"
+      span "#{stash.cart.items.length} items — $#{stash.cart.total()}"
+      button @click: -> stash.cart.addItem({ id: 1, name: "Widget", price: 9.99, quantity: 1 }), "Add to Cart"
+      ul
+        for item in stash.cart.items
+          li "#{item.name} x#{item.quantity} — $#{item.price}"
 
-export AddToCart = component
-  add: ->
-    addItem { id: 1, name: "Widget", price: 9.99, quantity: 1 }
+# ── Negative: stash type safety ──
+#
+# The :: annotation on stash flows through to the .d.ts, so TypeScript
+# catches every mistake — reads, writes, and method calls.
+
+export StashTypeTests = component
+  badAccess: ->
+    # Writes
+    # @ts-expect-error — wrong type: items should be CartItem[], not string
+    stash.cart.items = "not an array"
+    # @ts-expect-error — wrong item shape: missing required fields
+    stash.cart.addItem { broken: true }
+    # @ts-expect-error — wrong arg type: number instead of CartItem
+    stash.cart.removeItem 42
+
+    # Reads
+    # @ts-expect-error — typo: 'item' doesn't exist, it's 'items'
+    stash.cart.item
+    # @ts-expect-error — nonexistent path
+    stash.cart.tax
 
   render
-    button @click: @add, "Add to Cart"
-
-# ── What stash can't catch (all of these compile silently) ──
-#
-#   stash.cart.items = "not an array"        # wrong type
-#   addItem { broken: true }                 # wrong item shape
-#   stash.cart.item                          # typo — 'item' not 'items'
-#   stash.cart.tax                           # nonexistent path
-#   removeItem 42                            # wrong arg type — number for CartItem
-#
-# CartItem type exists but has NO connection to the stash object or
-# the addItem/removeItem/total functions. It generates a .d.ts
-# declaration but doesn't constrain anything at compile time.
-# The stash is a plain reactive proxy — any property access or
-# assignment is valid.
-#
-# In zustand (see 09-components.tsx), ALL of these are caught at
-# compile time. The store is typed from creation and every
-# selector/mutation is checked.
-#
-# Tracked in AGENTS.md gap table under "Shared state typing (stash)".
+    null

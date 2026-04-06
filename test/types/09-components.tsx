@@ -244,24 +244,22 @@ const useCart = create<Cart>()((set, get) => ({
   total: () => get().items.reduce((sum, i) => sum + i.price * i.quantity, 0),
 }))
 
-// Components — every selector is typed
+// Components — cart used in render (JSX equivalent of Rip render blocks)
 
-function CartBadge() {
-  const items = useCart((s) => s.items)              // typed: CartItem[]
-  return <span>{items.length} items</span>
-}
-
-function CartTotal() {
-  const total = useCart((s) => s.total)              // typed: () => number
-  return <div>Total: ${total()}</div>
-}
-
-function AddToCart() {
-  const addItem = useCart((s) => s.addItem)          // typed: (item: CartItem) => void
+function CartDemo() {
+  const cart = useCart()
   return (
-    <button onClick={() => addItem({ id: 1, name: 'Widget', price: 9.99, quantity: 1 })}>
-      Add to Cart
-    </button>
+    <div>
+      <span>{cart.items.length} items — ${cart.total()}</span>
+      <button onClick={() => cart.addItem({ id: 1, name: 'Widget', price: 9.99, quantity: 1 })}>
+        Add to Cart
+      </button>
+      <ul>
+        {cart.items.map((item) => (
+          <li key={item.id}>{item.name} x{item.quantity} — ${item.price}</li>
+        ))}
+      </ul>
+    </div>
   )
 }
 
@@ -274,19 +272,20 @@ const bad1 = create<Cart>(() => ({ items: 'not an array', addItem: () => { }, re
 // They must live inside a function body to avoid the "invalid hook call"
 // error at runtime (hooks require a React component/render context).
 function _negativeTests() {
+  const cart = useCart()
+
+  // Writes
   // @ts-expect-error — wrong item shape: missing required fields
-  const bad2 = useCart((s) => s.addItem({ broken: true }))
-
-  // @ts-expect-error — typo: 'item' doesn't exist, it's 'items'
-  const bad3 = useCart((s) => s.item)
-
-  // @ts-expect-error — nonexistent path
-  const bad4 = useCart((s) => s.tax)
-
+  cart.addItem({ broken: true })
   // @ts-expect-error — wrong arg type: number instead of CartItem
-  const bad5 = useCart((s) => s.removeItem(42))
+  cart.removeItem(42)
+
+  // Reads
+  // @ts-expect-error — typo: 'item' doesn't exist, it's 'items'
+  const bad3 = cart.item
+  // @ts-expect-error — nonexistent path
+  const bad4 = cart.tax
 }
 
-// All five caught at compile time. In Rip's stash, all five
-// compile silently — the types exist in .d.ts but have no
-// connection to the stash proxy.
+// All caught at compile time. Rip's typed stash catches the same
+// errors — the :: annotation flows through to the .d.ts.

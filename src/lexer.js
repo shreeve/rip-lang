@@ -543,9 +543,12 @@ export class Lexer {
     }
 
     // Reserved words (check the base form, not the suffixed form)
-    if (tag === 'IDENTIFIER' && RESERVED.has(baseId) &&
-        !(baseId === 'void' && this.inTypeAnnotation)) {
-      syntaxError(`reserved word '${baseId}'`, {row: this.row, col: this.col, len: idLen});
+    if (tag === 'IDENTIFIER' && RESERVED.has(baseId)) {
+      if (baseId === 'void' && (this.inTypeAnnotation || this.prevTag() === '=>')) {
+        // ok — void used as a type (after :: or =>)
+      } else {
+        syntaxError(`reserved word '${baseId}'`, {row: this.row, col: this.col, len: idLen});
+      }
     }
 
     // Property-specific checks (new.target, import.meta)

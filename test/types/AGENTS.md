@@ -90,7 +90,6 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Category                       | Tested In     | Notes                                                                                            |
 | ------------------------------ | ------------- | ------------------------------------------------------------------------------------------------ |
 | Runtime return-type validation | 10-validation | Return types are erased — `response.json()` is unvalidated `any`; no `schema.parse()` equivalent |
-| Shared state typing (stash)    | 09-components | Stash is untyped — any path/value accepted; zustand equivalent is fully typed (see .tsx)         |
 | Generic components             | 09-components | Can't parameterize components by type (e.g. typed select where value type flows through props)   |
 
 ### 🔶 Partial
@@ -138,6 +137,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Prop default validation     | 09-components  | `@prop:: T := val` — validates default against declared type; squiggle on prop name                                                |
 | Element type inheritance    | 09-components  | `component extends tag` widens constructor props with `__RipProps<'tag'>`; invalid tags caught with clean error                    |
 | Event handler typing        | 09-components  | Inline handlers typed via `__RipEvents`; named method refs typed via stub-injected `HTMLElementEventMap` annotations               |
+| Shared state typing (stash) | 09-components  | `stash:: { cart: { items: CartItem[] } }` — full shape in .d.ts; wrong types, typos, bad args all caught; on par with zustand      |
 | Strict mode                 | *(all files)*  | `strict: true` — `noImplicitAny`, full null checks, strict function types all active; hardcoded in all paths                       |
 | Hover types                 | *(IDE only)*   | Column-aware source maps, overload preference, typed implementation params                                                         |
 | Union value autocomplete    | *(IDE only)*   | String literal union completions for prop values, prop defaults, and typed variable assignments                                    |
@@ -192,6 +192,8 @@ This captures design notes for the `Runtime return-type validation` gap in `10-v
 ## TypeScript Companions
 
 Each `.rip` file has a `.ts` companion with equivalent TypeScript for side-by-side IntelliSense comparison.
+
+**Sync rule (mandatory):** When you add, remove, or change a component, type, negative test, or comment block in a `.rip` file, make the equivalent change in the `.ts`/`.tsx` companion (and vice versa). The two files must always demonstrate the same features with matching structure. Verify with `bunx tsc` and the output parity check.
 
 **Style rules for `.ts` files (mandatory):**
 
