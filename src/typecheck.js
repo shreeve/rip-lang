@@ -11,6 +11,7 @@
 //   type errors mapped back to Rip source positions.
 
 import { Compiler, getStdlibCode } from './compiler.js';
+import { INTRINSIC_TYPE_DECLS, INTRINSIC_FN_DECL, ARIA_TYPE_DECLS, SIGNAL_INTERFACE, SIGNAL_FN, COMPUTED_INTERFACE, COMPUTED_FN, EFFECT_FN } from './types.js';
 import { createRequire } from 'module';
 import { readFileSync, existsSync, readdirSync } from 'fs';
 import { mapToSourcePos, offsetToLine, getLineText, findNearestWord, lineColToOffset, offsetToLineCol, adjustSwitchDiagnostic, isInjectedOverload } from './sourcemap-utils.js';
@@ -308,7 +309,43 @@ export const SKIP_CODES = new Set([
 //            Let through when both endpoints are in the compiled body (real shadowing).
 // 2307:     Suppress only for @rip-lang/* and .rip imports (Rip resolves these).
 //            Let through for genuinely broken npm/JS imports.
-const CONDITIONAL_CODES = new Set([2300, 2451, 2307]);
+export const CONDITIONAL_CODES = new Set([2300, 2451, 2307]);
+
+// Shared conditional suppression logic — used by both CLI (runCheck) and LSP
+// (publishDiagnostics). Returns true if the diagnostic should be suppressed.
+//
+// Parameters:
+//   code       — TS diagnostic code (e.g. 2300, 2451, 2307)
+//   start      — byte offset in the virtual .ts content
+//   length     — byte length of the diagnostic span
+//   tsContent  — the full virtual .ts content
+//   headerLines — number of header lines in the virtual .ts
+//   dts        — the .d.ts content (for identifier checks)
+//   flatMessage — flattened diagnostic message string (only needed for 2307)
+export function shouldSuppressConditional(code, start, length, tsContent, headerLines, dts, flatMessage) {
+  if (code === 2300 || code === 2451) {
+    // Duplicate identifier: suppress when one endpoint is in the DTS header.
+    const diagLine = offsetToLine(tsContent, start);
+    if (diagLine < headerLines) return true; // diagnostic is on the header declaration
+    // Body-side: check if the identifier also lives in the DTS header
+    const ident = length ? tsContent.substring(start, start + length).trim() : '';
+    if (ident && dts) {
+      const escaped = ident.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      if (new RegExp('\\b' + escaped + '\\b').test(dts)) return true; // structural — DTS vs body
+    }
+    return false; // Identifier not in DTS → real shadowing bug
+  }
+  if (code === 2307) {
+    // Cannot find module: suppress only for @rip-lang/* and .rip imports
+    const modMatch = flatMessage?.match(/Cannot find module '([^']+)'/);
+    if (modMatch) {
+      const mod = modMatch[1];
+      if (mod.startsWith('@rip-lang/') || mod.endsWith('.rip')) return true;
+    }
+    return false; // Genuine broken import
+  }
+  return false;
+}
 
 // Clean diagnostic messages to hide Rip compiler internals from users.
 // Strips Signal<T>/Computed<T> wrappers, __bind_X__ property names, and
@@ -779,14 +816,14 @@ export function compileForCheck(filePath, source, compiler) {
     if (needSignal || needComputed || needEffect) {
       const decls = [];
       if (needSignal) {
-        if (!/\binterface Signal\b/.test(headerDts)) decls.push('interface Signal<T> { value: T; read(): T; lock(): Signal<T>; free(): Signal<T>; kill(): T; }');
-        decls.push('declare function __state<T>(value: T | Signal<T>): Signal<T>;');
+        if (!/\binterface Signal\b/.test(headerDts)) decls.push(SIGNAL_INTERFACE);
+        decls.push(SIGNAL_FN);
       }
       if (needComputed) {
-        if (!/\binterface Computed\b/.test(headerDts)) decls.push('interface Computed<T> { readonly value: T; read(): T; lock(): Computed<T>; free(): Computed<T>; kill(): T; }');
-        decls.push('declare function __computed<T>(fn: () => T): Computed<T>;');
+        if (!/\binterface Computed\b/.test(headerDts)) decls.push(COMPUTED_INTERFACE);
+        decls.push(COMPUTED_FN);
       }
-      if (needEffect) decls.push('declare function __effect(fn: () => void | (() => void)): () => void;');
+      if (needEffect) decls.push(EFFECT_FN);
       headerDts = decls.join('\n') + '\n' + headerDts;
     }
   }
@@ -836,41 +873,11 @@ export function compileForCheck(filePath, source, compiler) {
   // Uses TypeScript's built-in DOM types (HTMLElementTagNameMap, etc.) as the
   // source of truth for tag names, attribute types, and event handler types.
   if (hasTypes && (/\b__ripEl\b/.test(code) || /\b__RipProps\b/.test(headerDts))) {
-    const intrinsicDecls = [
-      'type __RipElementMap = HTMLElementTagNameMap & Omit<SVGElementTagNameMap, keyof HTMLElementTagNameMap>;',
-      'type __RipTag = keyof __RipElementMap;',
-      "type __RipBrowserElement = Omit<HTMLElement, 'querySelector' | 'querySelectorAll' | 'closest' | 'setAttribute' | 'hidden'> & { hidden: boolean | 'until-found'; setAttribute(qualifiedName: string, value: any): void; querySelector(selectors: string): __RipBrowserElement | null; querySelectorAll(selectors: string): NodeListOf<__RipBrowserElement>; closest(selectors: string): __RipBrowserElement | null; };",
-      "type __RipDomEl<K extends __RipTag> = Omit<__RipElementMap[K], 'querySelector' | 'querySelectorAll' | 'closest' | 'setAttribute' | 'hidden'> & __RipBrowserElement;",
-      "type __RipAttrKeys<T> = { [K in keyof T]-?: K extends 'style' | 'classList' | 'className' | 'nodeValue' | 'textContent' | 'innerHTML' | 'innerText' | 'outerHTML' | 'outerText' | 'scrollLeft' | 'scrollTop' ? never : K extends `on${string}` | `aria${string}Element` | `aria${string}Elements` ? never : T[K] extends (...args: any[]) => any ? never : (<V>() => V extends Pick<T, K> ? 1 : 2) extends (<V>() => V extends { -readonly [P in K]: T[P] } ? 1 : 2) ? K : never }[keyof T] & string;",
-      'type __RipEvents = { [K in keyof HTMLElementEventMap as `@${K}`]?: ((event: HTMLElementEventMap[K]) => void) | null };',
-      'type __RipClassValue = string | boolean | null | undefined | Record<string, boolean> | __RipClassValue[];',
-      'type __RipProps<K extends __RipTag> = { [P in __RipAttrKeys<__RipElementMap[K]>]?: __RipElementMap[K][P] } & __RipEvents & { ref?: string; class?: __RipClassValue | __RipClassValue[]; style?: string; [k: `data-${string}`]: any; [k: `aria-${string}`]: any };',
-      'declare function __ripEl<K extends __RipTag>(tag: K, props?: __RipProps<K>): void;',
-    ];
-    headerDts = intrinsicDecls.join('\n') + '\n' + headerDts;
+    headerDts = [...INTRINSIC_TYPE_DECLS, INTRINSIC_FN_DECL].join('\n') + '\n' + headerDts;
   }
 
   if (hasTypes && /\bARIA\./.test(code) && !/\bdeclare const ARIA\b/.test(headerDts)) {
-    const ariaDecls = [
-      'type __RipAriaNavHandlers = { next?: () => void; prev?: () => void; first?: () => void; last?: () => void; select?: () => void; dismiss?: () => void; tab?: () => void; char?: () => void; };',
-      "declare const ARIA: {",
-      "  bindPopover(open: boolean, popover: () => Element | null | undefined, setOpen: (isOpen: boolean) => void, source?: (() => Element | null | undefined) | null): void;",
-      "  bindDialog(open: boolean, dialog: () => Element | null | undefined, setOpen: (isOpen: boolean) => void, dismissable?: boolean): void;",
-      "  popupDismiss(open: boolean, popup: () => Element | null | undefined, close: () => void, els?: Array<() => Element | null | undefined>, repos?: (() => void) | null): void;",
-      "  popupGuard(delay?: number): any;",
-      "  listNav(event: KeyboardEvent, handlers: __RipAriaNavHandlers): void;",
-      "  rovingNav(event: KeyboardEvent, handlers: __RipAriaNavHandlers, orientation?: 'vertical' | 'horizontal' | 'both'): void;",
-      "  positionBelow(trigger: Element | null | undefined, popup: Element | null | undefined, gap?: number, setVisible?: boolean): void;",
-      "  position(trigger: Element | null | undefined, floating: Element | null | undefined, opts?: any): void;",
-      "  trapFocus(panel: Element | null | undefined): void;",
-      "  wireAria(panel: Element, id: string): void;",
-      "  lockScroll(instance: any): void;",
-      "  unlockScroll(instance: any): void;",
-      "  hasAnchor: boolean;",
-      "  [key: string]: any;",
-      "};",
-    ];
-    headerDts = ariaDecls.join('\n') + '\n' + headerDts;
+    headerDts = ARIA_TYPE_DECLS.join('\n') + '\n' + headerDts;
   }
 
   let tsContent = (hasTypes ? headerDts + '\n' : '') + code;
@@ -1317,29 +1324,8 @@ export async function runCheck(targetDir, opts = {}) {
 
       // Conditional suppression — narrowed instead of blanket
       if (CONDITIONAL_CODES.has(d.code)) {
-        if (d.code === 2300 || d.code === 2451) {
-          // Duplicate identifier: suppress when one endpoint is in the DTS header.
-          // TS fires on both the header and body instances but without relatedInformation,
-          // so we also check the body-side: if the identifier is declared in the DTS, suppress.
-          const diagLine = offsetToLine(entry.tsContent, d.start);
-          if (diagLine < entry.headerLines) continue; // diagnostic is on the header declaration
-          // Body-side: check if the identifier also lives in the DTS header
-          const ident = d.length ? entry.tsContent.substring(d.start, d.start + d.length).trim() : '';
-          if (ident && entry.dts) {
-            const escaped = ident.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            if (new RegExp('\\b' + escaped + '\\b').test(entry.dts)) continue; // structural — DTS vs body
-          }
-          // Identifier not in DTS → real shadowing bug, fall through to report
-        } else if (d.code === 2307) {
-          // Cannot find module: suppress only for @rip-lang/* and .rip imports
-          const msg = ts.flattenDiagnosticMessageText(d.messageText, '\n');
-          const modMatch = msg.match(/Cannot find module '([^']+)'/);
-          if (modMatch) {
-            const mod = modMatch[1];
-            if (mod.startsWith('@rip-lang/') || mod.endsWith('.rip')) continue;
-          }
-          // Genuine broken import, fall through to report
-        }
+        const flatMsg = d.code === 2307 ? ts.flattenDiagnosticMessageText(d.messageText, '\n') : null;
+        if (shouldSuppressConditional(d.code, d.start, d.length, entry.tsContent, entry.headerLines, entry.dts, flatMsg)) continue;
       }
 
       // Skip 6133 on compiler-generated _render() construction variables (_0, _1, …)

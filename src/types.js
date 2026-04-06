@@ -14,6 +14,52 @@
 //     Enums cross into the grammar because they emit runtime JavaScript.
 
 // ============================================================================
+// Shared type declaration constants — single source of truth
+// ============================================================================
+// Used by emitTypes() for .d.ts emission and by compileForCheck() in
+// typecheck.js for virtual .ts injection. Keeping them here eliminates
+// divergence between what gets written to disk and what TS analyzes.
+
+export const INTRINSIC_TYPE_DECLS = [
+  'type __RipElementMap = HTMLElementTagNameMap & Omit<SVGElementTagNameMap, keyof HTMLElementTagNameMap>;',
+  'type __RipTag = keyof __RipElementMap;',
+  "type __RipBrowserElement = Omit<HTMLElement, 'querySelector' | 'querySelectorAll' | 'closest' | 'setAttribute' | 'hidden'> & { hidden: boolean | 'until-found'; setAttribute(qualifiedName: string, value: any): void; querySelector(selectors: string): __RipBrowserElement | null; querySelectorAll(selectors: string): NodeListOf<__RipBrowserElement>; closest(selectors: string): __RipBrowserElement | null; };",
+  "type __RipDomEl<K extends __RipTag> = Omit<__RipElementMap[K], 'querySelector' | 'querySelectorAll' | 'closest' | 'setAttribute' | 'hidden'> & __RipBrowserElement;",
+  "type __RipAttrKeys<T> = { [K in keyof T]-?: K extends 'style' | 'classList' | 'className' | 'nodeValue' | 'textContent' | 'innerHTML' | 'innerText' | 'outerHTML' | 'outerText' | 'scrollLeft' | 'scrollTop' ? never : K extends `on${string}` | `aria${string}Element` | `aria${string}Elements` ? never : T[K] extends (...args: any[]) => any ? never : (<V>() => V extends Pick<T, K> ? 1 : 2) extends (<V>() => V extends { -readonly [P in K]: T[P] } ? 1 : 2) ? K : never }[keyof T] & string;",
+  'type __RipEvents = { [K in keyof HTMLElementEventMap as `@${K}`]?: ((event: HTMLElementEventMap[K]) => void) | null };',
+  'type __RipClassValue = string | boolean | null | undefined | Record<string, boolean> | __RipClassValue[];',
+  'type __RipProps<K extends __RipTag> = { [P in __RipAttrKeys<__RipElementMap[K]>]?: __RipElementMap[K][P] } & __RipEvents & { ref?: string; class?: __RipClassValue | __RipClassValue[]; style?: string; [k: `data-${string}`]: any; [k: `aria-${string}`]: any };',
+];
+
+export const INTRINSIC_FN_DECL = 'declare function __ripEl<K extends __RipTag>(tag: K, props?: __RipProps<K>): void;';
+
+export const ARIA_TYPE_DECLS = [
+  'type __RipAriaNavHandlers = { next?: () => void; prev?: () => void; first?: () => void; last?: () => void; select?: () => void; dismiss?: () => void; tab?: () => void; char?: () => void; };',
+  "declare const ARIA: {",
+  "  bindPopover(open: boolean, popover: () => Element | null | undefined, setOpen: (isOpen: boolean) => void, source?: (() => Element | null | undefined) | null): void;",
+  "  bindDialog(open: boolean, dialog: () => Element | null | undefined, setOpen: (isOpen: boolean) => void, dismissable?: boolean): void;",
+  "  popupDismiss(open: boolean, popup: () => Element | null | undefined, close: () => void, els?: Array<() => Element | null | undefined>, repos?: (() => void) | null): void;",
+  "  popupGuard(delay?: number): any;",
+  "  listNav(event: KeyboardEvent, handlers: __RipAriaNavHandlers): void;",
+  "  rovingNav(event: KeyboardEvent, handlers: __RipAriaNavHandlers, orientation?: 'vertical' | 'horizontal' | 'both'): void;",
+  "  positionBelow(trigger: Element | null | undefined, popup: Element | null | undefined, gap?: number, setVisible?: boolean): void;",
+  "  position(trigger: Element | null | undefined, floating: Element | null | undefined, opts?: any): void;",
+  "  trapFocus(panel: Element | null | undefined): void;",
+  "  wireAria(panel: Element, id: string): void;",
+  "  lockScroll(instance: any): void;",
+  "  unlockScroll(instance: any): void;",
+  "  hasAnchor: boolean;",
+  "  [key: string]: any;",
+  "};",
+];
+
+export const SIGNAL_INTERFACE = 'interface Signal<T> { value: T; read(): T; lock(): Signal<T>; free(): Signal<T>; kill(): T; }';
+export const SIGNAL_FN = 'declare function __state<T>(value: T | Signal<T>): Signal<T>;';
+export const COMPUTED_INTERFACE = 'interface Computed<T> { readonly value: T; read(): T; lock(): Computed<T>; free(): Computed<T>; kill(): T; }';
+export const COMPUTED_FN = 'declare function __computed<T>(fn: () => T): Computed<T>;';
+export const EFFECT_FN = 'declare function __effect(fn: () => void | (() => void)): () => void;';
+
+// ============================================================================
 // installTypeSupport — adds rewriteTypes() to Lexer.prototype
 // ============================================================================
 
@@ -1149,43 +1195,21 @@ export function emitTypes(tokens, sexpr = null, source = '') {
   // Prepend reactive type definitions if used
   let preamble = [];
   if (usesRipIntrinsicProps) {
-    preamble.push('type __RipElementMap = HTMLElementTagNameMap & Omit<SVGElementTagNameMap, keyof HTMLElementTagNameMap>;');
-    preamble.push('type __RipTag = keyof __RipElementMap;');
-    preamble.push("type __RipBrowserElement = Omit<HTMLElement, 'querySelector' | 'querySelectorAll' | 'closest' | 'setAttribute' | 'hidden'> & { hidden: boolean | 'until-found'; setAttribute(qualifiedName: string, value: any): void; querySelector(selectors: string): __RipBrowserElement | null; querySelectorAll(selectors: string): NodeListOf<__RipBrowserElement>; closest(selectors: string): __RipBrowserElement | null; };");
-    preamble.push("type __RipDomEl<K extends __RipTag> = Omit<__RipElementMap[K], 'querySelector' | 'querySelectorAll' | 'closest' | 'setAttribute' | 'hidden'> & __RipBrowserElement;");
-    preamble.push("type __RipAttrKeys<T> = { [K in keyof T]-?: K extends 'style' ? never : T[K] extends (...args: any[]) => any ? never : K }[keyof T] & string;");
-    preamble.push('type __RipEvents = { [K in keyof HTMLElementEventMap as `@${K}`]?: ((event: HTMLElementEventMap[K]) => void) | null };');
-    preamble.push('type __RipClassValue = string | boolean | null | undefined | Record<string, boolean> | __RipClassValue[]'); preamble.push('type __RipProps<K extends __RipTag> = { [P in __RipAttrKeys<__RipElementMap[K]>]?: __RipElementMap[K][P] } & __RipEvents & { ref?: string; class?: __RipClassValue | __RipClassValue[]; style?: string; [k: `data-${string}`]: any; [k: `aria-${string}`]: any };');
+    preamble.push(...INTRINSIC_TYPE_DECLS);
   }
   if (/\bARIA\./.test(source)) {
-    preamble.push("type __RipAriaNavHandlers = { next?: () => void; prev?: () => void; first?: () => void; last?: () => void; select?: () => void; dismiss?: () => void; tab?: () => void; char?: () => void; };");
-    preamble.push("declare const ARIA: {");
-    preamble.push("  bindPopover(open: boolean, popover: () => Element | null | undefined, setOpen: (isOpen: boolean) => void, source?: (() => Element | null | undefined) | null): void;");
-    preamble.push("  bindDialog(open: boolean, dialog: () => Element | null | undefined, setOpen: (isOpen: boolean) => void, dismissable?: boolean): void;");
-    preamble.push("  popupDismiss(open: boolean, popup: () => Element | null | undefined, close: () => void, els?: Array<() => Element | null | undefined>, repos?: (() => void) | null): void;");
-    preamble.push("  popupGuard(delay?: number): any;");
-    preamble.push("  listNav(event: KeyboardEvent, handlers: __RipAriaNavHandlers): void;");
-    preamble.push("  rovingNav(event: KeyboardEvent, handlers: __RipAriaNavHandlers, orientation?: 'vertical' | 'horizontal' | 'both'): void;");
-    preamble.push("  positionBelow(trigger: Element | null | undefined, popup: Element | null | undefined, gap?: number, setVisible?: boolean): void;");
-    preamble.push("  position(trigger: Element | null | undefined, floating: Element | null | undefined, opts?: any): void;");
-    preamble.push("  trapFocus(panel: Element | null | undefined): void;");
-    preamble.push("  wireAria(panel: Element, id: string): void;");
-    preamble.push("  lockScroll(instance: any): void;");
-    preamble.push("  unlockScroll(instance: any): void;");
-    preamble.push("  hasAnchor: boolean;");
-    preamble.push("  [key: string]: any;");
-    preamble.push("};");
+    preamble.push(...ARIA_TYPE_DECLS);
   }
   if (usesSignal) {
-    preamble.push('interface Signal<T> { value: T; read(): T; lock(): Signal<T>; free(): Signal<T>; kill(): T; }');
-    preamble.push('declare function __state<T>(value: T | Signal<T>): Signal<T>;');
+    preamble.push(SIGNAL_INTERFACE);
+    preamble.push(SIGNAL_FN);
   }
   if (usesComputed) {
-    preamble.push('interface Computed<T> { readonly value: T; read(): T; lock(): Computed<T>; free(): Computed<T>; kill(): T; }');
-    preamble.push('declare function __computed<T>(fn: () => T): Computed<T>;');
+    preamble.push(COMPUTED_INTERFACE);
+    preamble.push(COMPUTED_FN);
   }
   if (usesSignal || usesComputed) {
-    preamble.push('declare function __effect(fn: () => void | (() => void)): () => void;');
+    preamble.push(EFFECT_FN);
   }
   if (preamble.length > 0) {
     preamble.push('');

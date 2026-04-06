@@ -261,21 +261,9 @@ function publishDiagnostics(filePath) {
         if (tc.SKIP_CODES.has(d.code)) continue;
 
         // Conditional suppression — narrowed instead of blanket
-        if (d.code === 2300 || d.code === 2451) {
-          const diagLine = tc.offsetToLine(c.tsContent, d.start);
-          if (diagLine < c.headerLines) continue; // diagnostic is on the header declaration
-          const ident = d.length ? c.tsContent.substring(d.start, d.start + d.length).trim() : '';
-          if (ident && c.dts) {
-            const escaped = ident.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            if (new RegExp('\\b' + escaped + '\\b').test(c.dts)) continue; // structural — DTS vs body
-          }
-        } else if (d.code === 2307) {
-          const msg = ts.flattenDiagnosticMessageText(d.messageText, '\n');
-          const modMatch = msg.match(/Cannot find module '([^']+)'/);
-          if (modMatch) {
-            const mod = modMatch[1];
-            if (mod.startsWith('@rip-lang/') || mod.endsWith('.rip')) continue;
-          }
+        if (tc.CONDITIONAL_CODES?.has(d.code)) {
+          const flatMsg = d.code === 2307 ? ts.flattenDiagnosticMessageText(d.messageText, '\n') : null;
+          if (tc.shouldSuppressConditional(d.code, d.start, d.length, c.tsContent, c.headerLines, c.dts, flatMsg)) continue;
         }
 
         // Skip 6133 on compiler-generated _render() construction variables (_0, _1, …)
