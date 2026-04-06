@@ -1175,6 +1175,27 @@ export function installComponentSupport(CodeGenerator, Lexer) {
             for (let i = 1; i < node.length; i++) emitBareIdent(node[i], node, false);
           } else if (isTagHead) {
             for (let i = 1; i < node.length; i++) emitBareIdent(node[i], node, true);
+            // Emit expression children of intrinsic tags for type-checking.
+            // Without this, text content like "#{item.name}" in `li "#{item.name}"`
+            // is invisible to TypeScript and loop variables appear unused (TS 6133).
+            for (let i = 1; i < node.length; i++) {
+              const child = node[i];
+              if (!Array.isArray(child)) continue;
+              const ch = child[0]?.valueOf?.() ?? child[0];
+              if (ch === 'object' || ch === 'block' || ch === '__text__') continue;
+              if (typeof ch === 'string') {
+                if (/^[A-Z]/.test(ch)) continue;
+                if (TEMPLATE_TAGS.has(ch.split(/[.#]/)[0])) continue;
+                if (/^[a-z][\w-]*$/.test(ch) && !CodeGenerator.GENERATORS[ch]) continue;
+                if (/^(if|unless|switch|for-in|for-of|for-as|while|until|loop|loop-n|try|throw|break|continue|break-if|continue-if|control|when|return|def|->|=>|class|enum|state|computed|readonly|effect|=|program)$/.test(ch)) continue;
+              }
+              try {
+                const exprCode = this.generateInComponent(child, 'value');
+                const srcLine = child.loc?.r ?? node.loc?.r;
+                const srcMarker = srcLine != null ? ` // @rip-src:${srcLine}` : '';
+                constructions.push(`    ${exprCode};${srcMarker}`);
+              } catch {}
+            }
           }
           for (let i = 1; i < node.length; i++) walkRender(node[i]);
           if (typeof head === 'string' && /^[A-Z]/.test(head)) {
