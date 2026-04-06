@@ -50,27 +50,33 @@ export function installTypeSupport(Lexer) {
     this.scanTokens((token, i, tokens) => {
       let tag = token[0];
 
-      // ── Generic type parameters: DEF name<T>(...) ──────────────────────
+      // ── Generic type parameters: DEF name<T>(...) or Name<T> = component ──
       // (Generic params on type aliases are handled by the `type` keyword handler below)
       if (tag === 'IDENTIFIER') {
         let next = tokens[i + 1];
         if (next && next[0] === 'COMPARE' && next[1] === '<' && !next.spaced) {
           let isDef = tokens[i - 1]?.[0] === 'DEF';
           let genTokens = collectBalancedAngles(tokens, i + 1);
-          if (genTokens && isDef) {
-            if (!token.data) token.data = {};
-            token.data.typeParams = buildTypeString(genTokens);
-            tokens.splice(i + 1, genTokens.length);
-            // After removing <T>, retag ( as CALL_START if it follows DEF IDENTIFIER
-            if (tokens[i + 1]?.[0] === '(') {
-              tokens[i + 1][0] = 'CALL_START';
-              // Find matching ) and retag as CALL_END
-              let d = 1, m = i + 2;
-              while (m < tokens.length && d > 0) {
-                if (tokens[m][0] === '(' || tokens[m][0] === 'CALL_START') d++;
-                if (tokens[m][0] === ')' || tokens[m][0] === 'CALL_END') d--;
-                if (d === 0) tokens[m][0] = 'CALL_END';
-                m++;
+          if (genTokens) {
+            // Check for component pattern: Name<T> = component
+            let afterAngles = i + 1 + genTokens.length;
+            let isComponent = !isDef && tokens[afterAngles]?.[0] === '=' &&
+                              tokens[afterAngles + 1]?.[0] === 'COMPONENT';
+            if (isDef || isComponent) {
+              if (!token.data) token.data = {};
+              token.data.typeParams = buildTypeString(genTokens);
+              tokens.splice(i + 1, genTokens.length);
+              // After removing <T>, retag ( as CALL_START if it follows DEF IDENTIFIER
+              if (isDef && tokens[i + 1]?.[0] === '(') {
+                tokens[i + 1][0] = 'CALL_START';
+                // Find matching ) and retag as CALL_END
+                let d = 1, m = i + 2;
+                while (m < tokens.length && d > 0) {
+                  if (tokens[m][0] === '(' || tokens[m][0] === 'CALL_START') d++;
+                  if (tokens[m][0] === ')' || tokens[m][0] === 'CALL_END') d--;
+                  if (d === 0) tokens[m][0] = 'CALL_END';
+                  m++;
+                }
               }
             }
           }
@@ -1253,6 +1259,7 @@ function emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars, so
   let exported = false;
   let name = null;
   let compNode = null;
+  let typeParams = '';
 
   if (head === 'export' && Array.isArray(sexpr[1])) {
     exported = true;
@@ -1260,11 +1267,13 @@ function emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars, so
     let innerHead = inner[0]?.valueOf?.() ?? inner[0];
     if (innerHead === '=' && Array.isArray(inner[2]) &&
         (inner[2][0]?.valueOf?.() ?? inner[2][0]) === 'component') {
+      typeParams = inner[1]?.typeParams || '';
       name = inner[1]?.valueOf?.() ?? inner[1];
       compNode = inner[2];
     }
   } else if (head === '=' && Array.isArray(sexpr[2]) &&
              (sexpr[2][0]?.valueOf?.() ?? sexpr[2][0]) === 'component') {
+    typeParams = sexpr[1]?.typeParams || '';
     name = sexpr[1]?.valueOf?.() ?? sexpr[1];
     compNode = sexpr[2];
   }
@@ -1361,7 +1370,7 @@ function emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars, so
       }
     }
 
-    lines.push(`${exp}declare class ${name} {`);
+    lines.push(`${exp}declare class ${name}${typeParams} {`);
     if (publicProps.length > 0 || inheritedPropsType) {
       let propsOpt = hasRequired ? '' : '?';
       if (publicProps.length > 0) {

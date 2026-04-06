@@ -183,7 +183,7 @@ function EventHandlerTest() {
 // TypeScript supports generic components where T is bounded by a known shape.
 // The constraint flows through all props — options must satisfy TOptionShape,
 // and the component knows how to render them without extra callbacks.
-// Rip can't parameterize components by type — options would be `any[]`.
+// Rip supports this via `Name<T extends Constraint> = component` syntax.
 
 type TOptionShape = string | { value: string; label: string }
 
@@ -213,39 +213,23 @@ function Select<TOption extends TOptionShape>({ label, options, placeholder, err
 
 // Usage — T is inferred from the options array
 
-// Simple: string options
-const colors = ['Red', 'Green', 'Blue']
-const stringSelect = (
-  <Select
-    options={colors} // T inferred as string
-    label='Color'
-  />
-)
+function GenericUsageTests() {
+  return (
+    <div>
+      {/* Simple: string options */}
+      <Select options={['Red', 'Green', 'Blue']} />
 
-// Structured: { value, label } options
-const roles = [{ value: 'admin', label: 'Admin' }, { value: 'user', label: 'User' }]
-const roleSelect = (
-  <Select
-    options={roles} // T inferred as { value: string; label: string }
-    label='Role'
-  />
-)
+      {/* Structured: { value, label } options */}
+      <Select options={[{ value: 'admin', label: 'Admin' }, { value: 'user', label: 'User' }]} />
 
-// Negative tests — TOption must satisfy TOptionShape
+      {/* @ts-expect-error — number doesn't extend TOptionShape */}
+      <Select options={[1, 2, 3]} />
 
-// @ts-expect-error — number doesn't extend TOptionShape
-const badSelect1 = <Select options={[1, 2, 3]} />
-
-// @ts-expect-error — object missing 'label' field (has 'name' instead)
-const badSelect2 = <Select options={[{ value: 'a', name: 'A' }]} />
-
-// @ts-expect-error — error expects string | boolean, not number
-const badSelect3 = <Select options={['a']} error={42} />
-
-// In Rip, a Select component can't express `TOption extends TOptionShape`. The
-// @options prop would be typed as `any[]` or a specific concrete type —
-// there's no way to say "anything that's a string or { value, label }"
-// and have that constraint checked at the call site.
+      {/* @ts-expect-error — object missing 'label' field (has 'name' instead) */}
+      <Select options={[{ value: 'a', name: 'A' }]} />
+    </div>
+  )
+}
 
 // ── Stash vs zustand: shared client state (shopping cart) ──
 

@@ -205,30 +205,49 @@ export EventHandlerTest = component
       button @click: (e) -> p e.clientX, "Inline"
       input @keydown: (e) -> p e.key
 
-# ── Gap: generic components ──
+# ── Generic components ──
 #
-# Can't parameterize a component by type. A real-world Select needs
-# a bounded generic — options must be strings or { value, label }:
-#
-#   # Not valid Rip syntax:
-#   type TOptionShape = string | { value: string, label: string }
-#
-#   export Select<TOption extends TOptionShape> = component
-#     @options:: TOption[] := []
-#     @placeholder:: string := ""
-#     @error:: string := ""
-#
-# In React/TS (see 09-components.tsx), this is straightforward:
-#   type TOptionShape = string | { value: string; label: string }
-#   function Select<TOption extends TOptionShape>(props: SelectProps<TOption>) { ... }
-#
-# The constraint ensures callers can only pass valid option shapes.
-# Numbers, objects missing 'label', etc. are caught at the call site.
-# In Rip, @options would be typed as `any[]` — no constraint links
-# the option shape to a known interface, and no way to express
-# `extends` bounds on component type parameters.
-#
-# Tracked in AGENTS.md gap table under "Generic components".
+# Components can be parameterized by type. A real-world Select uses
+# a bounded generic — options must be strings or { value, label }.
+
+type TOptionShape = string | { value: string, label: string }
+
+export Select<TOption extends TOptionShape> = component extends select
+  @label:: string := ""
+  @options:: TOption[] := []
+  @placeholder:: string := ""
+  @error:: string := ""
+
+  render
+    fieldset
+      if label
+        label label
+      select
+        if placeholder
+          option value: "", disabled: true, placeholder
+        for option in options
+          option
+            key: typeof option is "string" ? option : option.value
+            value: typeof option is "string" ? option : option.value
+            typeof option is "string" ? option : option.label
+      if error
+        div error
+
+# Usage — T is inferred from the options array
+export GenericUsageTests = component
+  render
+    div
+      # Simple: string options
+      Select options: ["Red", "Green", "Blue"]
+
+      # Structured: { value, label } options
+      Select options: [{ value: "admin", label: "Admin" }, { value: "user", label: "User" }]
+
+      # @ts-expect-error — number doesn't extend TOptionShape
+      Select options: [1, 2, 3]
+
+      # @ts-expect-error — object missing 'label' field (has 'name' instead)
+      Select options: [{ value: "a", name: "A" }]
 
 # ── Stash vs zustand: shared client state (shopping cart) ──
 #

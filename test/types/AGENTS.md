@@ -82,22 +82,21 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 | Category                       | Tested In     | Notes                                                                                                                                |
 | ------------------------------ | ------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| Generic components             | 09-components | Can't parameterize components by type (e.g. typed select where value type flows through props)                                       |
 | Runtime return-type validation | 10-validation | Return types are erased — `response.json()` is unvalidated `any`; no `schema.parse()` equivalent                                     |
 | Project-level type enforcement | *(all files)* | No `rip check --strict` flag — untyped files silently get `@ts-nocheck`. ~10-line fix in `typecheck.js`; `# @nocheck` opt-out exists |
 
 ### 🔶 Partial
 
-| Category                 | Tested In     | Notes                                                                                                                                                                                                                          |
-| ------------------------ | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Generic types            | 03-structural | Basic generics work (structs, function returns); edge cases may remain                                                                                                                                                         |
-| Dot-completion accuracy  | 09-components | `e.` in event handlers shows generic `Event` members instead of specific event type (e.g. `MouseEvent`); root cause: stale-compilation offset mapping picks the wrong `e.` in generated TS. Hover and `rip check` are correct. |
+| Category                | Tested In     | Notes                                                                                                                                                                                                                          |
+| ----------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Generic types           | 03-structural | Basic generics work (structs, function returns); edge cases may remain                                                                                                                                                         |
+| Dot-completion accuracy | 09-components | `e.` in event handlers shows generic `Event` members instead of specific event type (e.g. `MouseEvent`); root cause: stale-compilation offset mapping picks the wrong `e.` in generated TS. Hover and `rip check` are correct. |
 
 ### 🔍 Compiler-verified (IDE review needed)
 
 `rip check` passes for these features but IDE presentation (squiggle positions, hover types, diagnostic messages) has not been manually verified. To promote to ✅, open the relevant file in a VS Code-based editor and confirm: correct squiggle position, correct hover type, no parse errors masking diagnostics, no false positives.
 
-*(empty — all verified features promoted to ✅)*
+*(No items currently pending review.)*
 
 ### ✅ Working
 
@@ -130,6 +129,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Event handler typing         | 09-components  | Inline handlers typed via `__RipEvents`; named method refs typed via stub-injected `HTMLElementEventMap` annotations               |
 | Render block conditionals    | 09-components  | `if`/`unless`/`?:` conditions, `switch` discriminants, and `for` loop iterables emitted into type-checking stub                    |
 | Render block text exprs      | 09-components  | `= expr` text expressions emitted into type-checking stub; typos caught via "Cannot find name"                                     |
+| Generic components           | 09-components  | `Name<T extends C> = component` — type params flow through DTS, stub, and ConstructorParameters inference                          |
 | Shared state typing (stash)  | 09-components  | `stash:: { cart: { items: CartItem[] } }` — full shape in .d.ts; wrong types, typos, bad args all caught; on par with zustand      |
 | Type inference (split decl.) | 11-inference   | `patchUninitializedTypes` infers from first assignment — top-level, block-scoped (if/for/while/try/switch), and destructured       |
 | Strict mode                  | *(all files)*  | `strict: true` — `noImplicitAny`, full null checks, strict function types all active; hardcoded in all paths                       |

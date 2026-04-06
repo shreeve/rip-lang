@@ -803,7 +803,8 @@ export function installComponentSupport(CodeGenerator, Lexer) {
         .replace(/(\w+(?:<[^>]+>)?)\!/g, 'NonNullable<$1>') : null;
 
       const sl = [];
-      sl.push('class {');
+      const componentTypeParams = this._componentTypeParams || '';
+      sl.push(`class ${componentTypeParams}{`);
       sl.push('  declare _root: Element | null;');
       sl.push('  emit(_name: string, _detail?: any): void {}');
 
@@ -1062,7 +1063,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
           // Without this, `if labelz` (a typo for `label`) silently evaluates
           // as undefined and skips the block — the condition goes unchecked.
           // Similarly, `switch statusz` and `for item in itemsz` go unchecked.
-          if (head === 'if' || head === 'unless' || head === '?:') {
+          if (head === 'if' || head === 'unless') {
             const condition = node[1];
             if (condition != null) {
               const condCode = this.generateInComponent(condition, 'value');
@@ -1070,6 +1071,12 @@ export function installComponentSupport(CodeGenerator, Lexer) {
               const srcMarker = srcLine != null ? ` // @rip-src:${srcLine}` : '';
               constructions.push(`    ${condCode};${srcMarker}`);
             }
+          } else if (head === '?:') {
+            // Emit the full ternary so all branches are type-checked
+            const ternCode = this.generateInComponent(node, 'value');
+            const srcLine = node.loc?.r;
+            const srcMarker = srcLine != null ? ` // @rip-src:${srcLine}` : '';
+            constructions.push(`    ${ternCode};${srcMarker}`);
           } else if (head === 'switch') {
             const discriminant = node[1];
             if (discriminant != null) {
@@ -1079,13 +1086,41 @@ export function installComponentSupport(CodeGenerator, Lexer) {
               constructions.push(`    ${discCode};${srcMarker}`);
             }
           } else if (head === 'for-in' || head === 'for-of' || head === 'for-as') {
-            // node[2] is the iterable/object expression
+            // Emit a real for-loop so the loop variable is in scope for the body.
+            // node: [head, vars, iterable, step, guard, body]
+            const vars = node[1];
             const iterable = node[2];
             if (iterable != null) {
               const iterCode = this.generateInComponent(iterable, 'value');
               const srcLine = node.loc?.r;
               const srcMarker = srcLine != null ? ` // @rip-src:${srcLine}` : '';
-              constructions.push(`    ${iterCode};${srcMarker}`);
+              // Extract loop variable pattern
+              let varPattern;
+              if (Array.isArray(vars)) {
+                if (vars.length === 1) {
+                  const v = vars[0];
+                  varPattern = Array.isArray(v) ? this.generateDestructuringPattern(v) : String(v);
+                } else if (head === 'for-of') {
+                  // for key, val of obj — destructure as [key, val] from Object.entries
+                  varPattern = `[${vars.map(v => String(v)).join(', ')}]`;
+                } else {
+                  // for item, index in arr — first is the item
+                  varPattern = String(vars[0]);
+                }
+              } else {
+                varPattern = String(vars);
+              }
+              if (head === 'for-of') {
+                constructions.push(`    for (const ${varPattern} of Object.entries(${iterCode})) {${srcMarker}`);
+              } else {
+                constructions.push(`    for (const ${varPattern} of ${iterCode}) {${srcMarker}`);
+              }
+              // Walk body children (indices 3+ may contain guard, body, etc.)
+              for (let bi = 3; bi < node.length; bi++) {
+                if (node[bi] != null) walkRender(node[bi]);
+              }
+              constructions.push(`    }`);
+              return; // Don't walk children again below
             }
           } else if (head === '__text__') {
             // = expr — text expression: emit the expression for type-checking
