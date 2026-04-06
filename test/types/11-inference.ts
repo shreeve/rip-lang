@@ -85,11 +85,11 @@ expectString(insideIf)
 
 // ── Destructuring ──
 //
-// TS infers element types from the RHS. Rip's patcher only
-// matches simple identifiers on the LHS; strict mode catches the `any`.
+// TS infers element types from the RHS. Rip's patcher now walks
+// destructuring patterns and infers each property's type.
 
 let { a, b } = { a: 1, b: 'hello' }
-// @ts-expect-error — TS knows a is number
+// @ts-expect-error — number not assignable to string
 expectString(a)
 
 console.log(insideIf, a, b)

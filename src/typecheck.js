@@ -205,16 +205,72 @@ export function patchUninitializedTypes(ts, service, compiledEntries) {
   // assignments inside if/for/while/try/switch are discovered.
   function patchAssignment(stmt, uninitialized) {
     if (!uninitialized.size) return;
-    if (ts.isExpressionStatement(stmt) && ts.isBinaryExpression(stmt.expression) &&
-        stmt.expression.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
-        ts.isIdentifier(stmt.expression.left)) {
-      const name = stmt.expression.left.text;
-      const sym = uninitialized.get(name);
-      if (sym) {
-        const rhsType = checker.getTypeAtLocation(stmt.expression.right);
-        sym.flags |= ts.SymbolFlags.Transient;
-        sym.links = { type: rhsType };
-        uninitialized.delete(name);
+    // Unwrap parenthesized expressions: ({a, b} = ...) → {a, b} = ...
+    const unwrap = (e) => ts.isParenthesizedExpression(e) ? unwrap(e.expression) : e;
+    if (ts.isExpressionStatement(stmt)) {
+      const expr = unwrap(stmt.expression);
+      if (ts.isBinaryExpression(expr) && expr.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+        if (ts.isIdentifier(expr.left)) {
+          const name = expr.left.text;
+          const sym = uninitialized.get(name);
+          if (sym) {
+            const rhsType = checker.getTypeAtLocation(expr.right);
+            sym.flags |= ts.SymbolFlags.Transient;
+            sym.links = { type: rhsType };
+            uninitialized.delete(name);
+          }
+        } else if (ts.isObjectLiteralExpression(expr.left) || ts.isArrayLiteralExpression(expr.left)) {
+          // Destructuring assignment: ({a, b} = {a: 1, b: "hello"})
+          // Walk the LHS pattern and patch each identifier from the RHS type.
+          const rhsType = checker.getTypeAtLocation(expr.right);
+          const patchDestructured = (pattern, contextType) => {
+            if (ts.isObjectLiteralExpression(pattern)) {
+              for (const prop of pattern.properties) {
+                if (ts.isShorthandPropertyAssignment(prop) && ts.isIdentifier(prop.name)) {
+                  const name = prop.name.text;
+                  const sym = uninitialized.get(name);
+                  if (sym) {
+                    const propSym = contextType.getProperty(name);
+                    if (propSym) {
+                      const propType = checker.getTypeOfSymbol(propSym);
+                      sym.flags |= ts.SymbolFlags.Transient;
+                      sym.links = { type: propType };
+                      uninitialized.delete(name);
+                    }
+                  }
+                } else if (ts.isPropertyAssignment(prop) && ts.isIdentifier(prop.initializer)) {
+                  const name = prop.initializer.text;
+                  const sym = uninitialized.get(name);
+                  if (sym) {
+                    const key = ts.isIdentifier(prop.name) ? prop.name.text : undefined;
+                    const propSym = key && contextType.getProperty(key);
+                    if (propSym) {
+                      const propType = checker.getTypeOfSymbol(propSym);
+                      sym.flags |= ts.SymbolFlags.Transient;
+                      sym.links = { type: propType };
+                      uninitialized.delete(name);
+                    }
+                  }
+                }
+              }
+            } else if (ts.isArrayLiteralExpression(pattern)) {
+              const tupleTypes = checker.getTypeArguments(contextType);
+              for (let i = 0; i < pattern.elements.length; i++) {
+                const el = pattern.elements[i];
+                if (ts.isIdentifier(el)) {
+                  const name = el.text;
+                  const sym = uninitialized.get(name);
+                  if (sym && tupleTypes && tupleTypes[i]) {
+                    sym.flags |= ts.SymbolFlags.Transient;
+                    sym.links = { type: tupleTypes[i] };
+                    uninitialized.delete(name);
+                  }
+                }
+              }
+            }
+          };
+          patchDestructured(expr.left, rhsType);
+        }
       }
     }
     // Recurse into block-containing statements (but not functions — those get their own scope)

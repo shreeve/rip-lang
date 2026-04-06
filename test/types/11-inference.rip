@@ -79,11 +79,11 @@ expectString insideIf
 
 # ── Destructuring ──
 #
-# The patcher matches `isIdentifier(left)` — destructuring patterns
-# aren't simple identifiers. With strict: true, TS catches the `any`.
+# The patcher walks destructuring patterns and infers each property's
+# type from the RHS object type.
 
 {a, b} = {a: 1, b: "hello"}
-# @ts-expect-error — number not assignable to string (destructured inference caught with strict)
+# @ts-expect-error — number not assignable to string (destructured inference patched)
 expectString a
 
 console.log insideIf, a, b
