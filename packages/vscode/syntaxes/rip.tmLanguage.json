@@ -127,7 +127,7 @@
         {
           "match": "\\b([a-zA-Z_$]\\w*)(\\?)?(:)(?![:=])\\s*",
           "captures": {
-            "1": { "name": "variable.object.property.rip" },
+            "1": { "name": "variable.other.object.property.rip" },
             "2": { "name": "keyword.operator.type.optional.rip" },
             "3": { "name": "keyword.operator.type.annotation.rip" }
           }
@@ -160,7 +160,7 @@
         {
           "match": "\\b([a-zA-Z_$]\\w*)(\\?)?(:)(?![:=])\\s*",
           "captures": {
-            "1": { "name": "variable.object.property.rip" },
+            "1": { "name": "variable.other.object.property.rip" },
             "2": { "name": "keyword.operator.type.optional.rip" },
             "3": { "name": "keyword.operator.type.annotation.rip" }
           }
@@ -571,7 +571,7 @@
       "match": "(\\.)([a-zA-Z_$]\\w*)",
       "captures": {
         "1": { "name": "punctuation.accessor.rip" },
-        "2": { "name": "variable.object.property.rip" }
+        "2": { "name": "variable.other.object.property.rip" }
       }
     },
 
