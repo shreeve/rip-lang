@@ -1341,6 +1341,17 @@ connection.onRequest('textDocument/semanticTokens/full', (params) => {
       }
     }
 
+    // Pre-compute ARIA declaration block line range (if injected) so its
+    // parameter tokens (open, event, trigger, etc.) don't mis-map.
+    let ariaBlockStart = -1, ariaBlockEnd = -1;
+    if (headerEndOffset > 0) {
+      for (let h = 0; h < c.headerLines; h++) {
+        const hl = tc.getLineText(c.tsContent, h);
+        if (ariaBlockStart < 0 && /^\s*declare\s+const\s+ARIA\b/.test(hl)) ariaBlockStart = h;
+        if (ariaBlockStart >= 0 && /^\};/.test(hl)) { ariaBlockEnd = h; break; }
+      }
+    }
+
     // Two-pass: body spans first (accurate source maps), then header spans
     // (heuristic text search fills remaining positions).
     const bodySpans = [];
@@ -1403,6 +1414,14 @@ connection.onRequest('textDocument/semanticTokens/full', (params) => {
         // properties or variables (e.g. `kind` in a type block gets
         // colored as a function).
         if (/^\s*declare\s+function\s/.test(lineText)) continue;
+        // Skip tokens from synthetic framework type definitions without
+        // source counterparts (__RipBrowserElement, Signal, etc.).
+        // Identifiers in their method signatures (e.g. `value` in
+        // setAttribute) can text-search mis-map to user identifiers,
+        // overriding TextMate scopes with incorrect semantic token types.
+        if (/^\s*(?:type\s+__\w|interface\s+(?:Signal|Computed)\b)/.test(lineText)) continue;
+        // Skip tokens inside the ARIA declaration block (declare const ARIA: {...}).
+        if (ariaBlockStart >= 0 && tsLine >= ariaBlockStart && tsLine <= ariaBlockEnd) continue;
         // TS classifies function params in declaration files as
         // 'variable' instead of 'parameter'. Reclassify when on a
         // function signature line.

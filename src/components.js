@@ -1058,6 +1058,37 @@ export function installComponentSupport(CodeGenerator, Lexer) {
           // (e.g. `@blur: (e) -> p(e)` would emit `e;` and `__ripEl('p')`).
           if (head === 'object') return;
 
+          // Type-check conditional and loop expressions in render blocks.
+          // Without this, `if labelz` (a typo for `label`) silently evaluates
+          // as undefined and skips the block — the condition goes unchecked.
+          // Similarly, `switch statusz` and `for item in itemsz` go unchecked.
+          if (head === 'if' || head === 'unless' || head === '?:') {
+            const condition = node[1];
+            if (condition != null) {
+              const condCode = this.generateInComponent(condition, 'value');
+              const srcLine = node.loc?.r;
+              const srcMarker = srcLine != null ? ` // @rip-src:${srcLine}` : '';
+              constructions.push(`    ${condCode};${srcMarker}`);
+            }
+          } else if (head === 'switch') {
+            const discriminant = node[1];
+            if (discriminant != null) {
+              const discCode = this.generateInComponent(discriminant, 'value');
+              const srcLine = node.loc?.r;
+              const srcMarker = srcLine != null ? ` // @rip-src:${srcLine}` : '';
+              constructions.push(`    ${discCode};${srcMarker}`);
+            }
+          } else if (head === 'for-in' || head === 'for-of' || head === 'for-as') {
+            // node[2] is the iterable/object expression
+            const iterable = node[2];
+            if (iterable != null) {
+              const iterCode = this.generateInComponent(iterable, 'value');
+              const srcLine = node.loc?.r;
+              const srcMarker = srcLine != null ? ` // @rip-src:${srcLine}` : '';
+              constructions.push(`    ${iterCode};${srcMarker}`);
+            }
+          }
+
           // Emit a bare lowercase identifier as either a property access
           // (component member used as text), __ripEl (tag name check when at
           // block level), or a plain variable reference (text child of a tag).

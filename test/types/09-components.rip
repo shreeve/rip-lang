@@ -144,7 +144,6 @@ export TypeTestComp = component
 #   - Child component constructor calls still checked as before
 #
 # Remaining gaps:
-#   - Own-template conditionals like `if labelz` still go uncaught
 #   - Text expressions (`= expr`) are unchecked
 #
 # Non-issues (clarified during review):
@@ -153,6 +152,34 @@ export TypeTestComp = component
 #     in typed files — this is correct behavior, not a gap
 #   - Event typing is global (same HTMLElementEventMap for all elements) —
 #     this matches how the DOM actually works; React has the same behavior
+
+# ── Negative: render block conditional type checking ──
+#
+# Conditionals, switch discriminants, and loop iterables in render blocks
+# are now type-checked. A typo emits the expression into the stub so TS catches it.
+
+export RenderCondTest = component
+  label := ""
+  error := ""
+  items := ["a", "b"]
+  status := "active"
+  loading := false
+
+  render
+    div
+      # @ts-expect-error — typo: 'labelz' does not exist on component
+      if labelz
+        span "label"
+      # @ts-expect-error — typo: 'loadingz' does not exist
+      unless loadingz
+        span "ready"
+      # @ts-expect-error — typo: 'statusz' does not exist
+      switch statusz
+        when "active" then span "on"
+        when "inactive" then span "off"
+      # @ts-expect-error — typo: 'itemsz' does not exist
+      for item in itemsz
+        span "list"
 
 # ── Event handler typing ──
 #

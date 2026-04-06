@@ -128,6 +128,32 @@ function TypeTestComp({ variant = 'primary' as 'primary' | 'secondary', count = 
   return null
 }
 
+// ── Negative: render block conditional type checking ──
+//
+// In Rip, conditionals, switch discriminants, and loop iterables in render
+// blocks are now type-checked. JSX already catches these via standard scoping.
+
+function RenderCondTest() {
+  const [label] = useState('')
+  const [error] = useState('')
+  const [items] = useState(['a', 'b'])
+  const [status] = useState('active')
+  const [loading] = useState(false)
+
+  return (
+    <div>
+      {/* @ts-expect-error — typo: 'labelz' does not exist */}
+      {labelz && <span>label</span>}
+      {/* @ts-expect-error — typo: 'loadingz' does not exist */}
+      {!loadingz && <span>ready</span>}
+      {/* @ts-expect-error — typo: 'statusz' does not exist */}
+      {statusz === 'active' ? <span>on</span> : <span>off</span>}
+      {/* @ts-expect-error — typo: 'itemsz' does not exist */}
+      {itemsz.map((item: string) => <span key={item}>{item}</span>)}
+    </div>
+  )
+}
+
 // ── Event handler typing ──
 //
 // Both inline and named method refs are typed.
@@ -248,6 +274,7 @@ const useCart = create<Cart>()((set, get) => ({
 
 function CartDemo() {
   const cart = useCart()
+
   return (
     <div>
       <span>{cart.items.length} items — ${cart.total()}</span>
