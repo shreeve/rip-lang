@@ -264,14 +264,25 @@
       }
     },
 
-    {"comment": "=== COMPONENT DEFINITIONS (export Name = component) ==="},
+    {"comment": "=== COMPONENT DEFINITIONS (export Name = component extends tag) ==="},
     {
-      "match": "\\b(export\\s+)?([A-Z]\\w*)\\s*(=)\\s*(component)\\b",
+      "match": "\\b(export\\s+)?([A-Z]\\w*)\\s*(=)\\s*(component)(?:\\s+(extends)\\s+([a-z]\\w*))?\\b",
       "captures": {
         "1": { "name": "keyword.control.rip" },
         "2": { "name": "entity.name.type.class.rip" },
         "3": { "name": "keyword.operator.assignment.rip" },
-        "4": { "name": "keyword.control.rip" }
+        "4": { "name": "keyword.control.rip" },
+        "5": { "name": "storage.modifier.extends.rip" },
+        "6": { "name": "entity.name.tag.rip" }
+      }
+    },
+    {
+      "comment": "Fallback for generic components: scopes 'component extends tag' when the full definition rule doesn't match (due to <...> type params).",
+      "match": "\\b(component)\\s+(extends)\\s+([a-z]\\w*)\\b",
+      "captures": {
+        "1": { "name": "keyword.control.rip" },
+        "2": { "name": "storage.modifier.extends.rip" },
+        "3": { "name": "entity.name.tag.rip" }
       }
     },
 
@@ -380,8 +391,12 @@
 
     {"comment": "=== KEYWORDS ==="},
     {
-      "match": "\\b(return|throw|break|continue|switch|when|then|if|else|unless|for|in|of|by|as|while|until|loop|do|try|catch|finally|yield|await|import|export|from|default|delete|typeof|instanceof|new|super|debugger|use|own|extends|component|render|offer|accept|slot|it|is|isnt|and|or|not)\\b",
+      "match": "\\b(return|throw|break|continue|switch|when|then|if|else|unless|for|in|of|by|as|while|until|loop|do|try|catch|finally|yield|await|import|export|from|default|delete|typeof|instanceof|new|super|debugger|use|own|component|render|offer|accept|slot|it|is|isnt|and|or|not)\\b",
       "name": "keyword.control.rip"
+    },
+    {
+      "match": "\\bextends\\b",
+      "name": "storage.modifier.extends.rip"
     },
 
     {"comment": "=== BUILT-IN TYPE KEYWORDS (always highlighted) ==="},
