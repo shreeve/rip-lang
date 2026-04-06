@@ -139,6 +139,7 @@ function RenderCondTest() {
   const [items] = useState(['a', 'b'])
   const [status] = useState('active')
   const [loading] = useState(false)
+  const [count] = useState(42)
 
   return (
     <div>
@@ -150,6 +151,8 @@ function RenderCondTest() {
       {statusz === 'active' ? <span>on</span> : <span>off</span>}
       {/* @ts-expect-error — typo: 'itemsz' does not exist */}
       {itemsz.map((item: string) => <span key={item}>{item}</span>)}
+      {/* @ts-expect-error — typo: 'countz' does not exist */}
+      {countz}
     </div>
   )
 }

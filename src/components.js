@@ -1087,6 +1087,15 @@ export function installComponentSupport(CodeGenerator, Lexer) {
               const srcMarker = srcLine != null ? ` // @rip-src:${srcLine}` : '';
               constructions.push(`    ${iterCode};${srcMarker}`);
             }
+          } else if (head === '__text__') {
+            // = expr — text expression: emit the expression for type-checking
+            const textExpr = node[1];
+            if (textExpr != null) {
+              const exprCode = this.generateInComponent(textExpr, 'value');
+              const srcLine = node.loc?.r;
+              const srcMarker = srcLine != null ? ` // @rip-src:${srcLine}` : '';
+              constructions.push(`    ${exprCode};${srcMarker}`);
+            }
           }
 
           // Emit a bare lowercase identifier as either a property access

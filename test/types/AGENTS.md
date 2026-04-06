@@ -92,7 +92,6 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | ------------------------ | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Generic types            | 03-structural | Basic generics work (structs, function returns); edge cases may remain                                                                                                                                                         |
 | Dot-completion accuracy  | 09-components | `e.` in event handlers shows generic `Event` members instead of specific event type (e.g. `MouseEvent`); root cause: stale-compilation offset mapping picks the wrong `e.` in generated TS. Hover and `rip check` are correct. |
-| Render block type safety | 09-components | Intrinsic tag/attr/event checking via `__ripEl`; conditionals now checked; text expressions still unchecked                                                                                                                    |
 
 ### 🔍 Compiler-verified (IDE review needed)
 
@@ -130,6 +129,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Element type inheritance     | 09-components  | `component extends tag` widens constructor props with `__RipProps<'tag'>`; invalid tags caught with clean error                    |
 | Event handler typing         | 09-components  | Inline handlers typed via `__RipEvents`; named method refs typed via stub-injected `HTMLElementEventMap` annotations               |
 | Render block conditionals    | 09-components  | `if`/`unless`/`?:` conditions, `switch` discriminants, and `for` loop iterables emitted into type-checking stub                    |
+| Render block text exprs      | 09-components  | `= expr` text expressions emitted into type-checking stub; typos caught via "Cannot find name"                                     |
 | Shared state typing (stash)  | 09-components  | `stash:: { cart: { items: CartItem[] } }` — full shape in .d.ts; wrong types, typos, bad args all caught; on par with zustand      |
 | Type inference (split decl.) | 11-inference   | `patchUninitializedTypes` infers from first assignment — top-level, block-scoped (if/for/while/try/switch), and destructured       |
 | Strict mode                  | *(all files)*  | `strict: true` — `noImplicitAny`, full null checks, strict function types all active; hardcoded in all paths                       |

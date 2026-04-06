@@ -131,9 +131,9 @@ export TypeTestComp = component
   render
     null
 
-# ── Partially resolved: render block type safety ──
+# ── Resolved: render block type safety ──
 #
-# Render blocks are now partially type-checked via __ripEl():
+# Render blocks are type-checked via __ripEl() and the _render() stub:
 #
 # What works:
 #   - Intrinsic element attributes are type-checked against lib.dom.d.ts
@@ -142,9 +142,9 @@ export TypeTestComp = component
 #     (`@click: (e) -> ...` knows `e` is MouseEvent for inline handlers)
 #   - Global attrs (class, style, data-*, aria-*) accepted on any element
 #   - Child component constructor calls still checked as before
-#
-# Remaining gaps:
-#   - Text expressions (`= expr`) are unchecked
+#   - Conditionals (`if`/`unless`/`?:`), `switch` discriminants, and
+#     `for` loop iterables are type-checked
+#   - Text expressions (`= expr`) are type-checked
 #
 # Non-issues (clarified during review):
 #   - Unknown lowercase names like `fieldsetz` are treated as expressions
@@ -153,10 +153,10 @@ export TypeTestComp = component
 #   - Event typing is global (same HTMLElementEventMap for all elements) —
 #     this matches how the DOM actually works; React has the same behavior
 
-# ── Negative: render block conditional type checking ──
+# ── Negative: render block expression type checking ──
 #
-# Conditionals, switch discriminants, and loop iterables in render blocks
-# are now type-checked. A typo emits the expression into the stub so TS catches it.
+# Conditionals, switch discriminants, loop iterables, and text expressions
+# in render blocks are type-checked. Typos emit into the stub so TS catches them.
 
 export RenderCondTest = component
   label := ""
@@ -164,6 +164,7 @@ export RenderCondTest = component
   items := ["a", "b"]
   status := "active"
   loading := false
+  count := 42
 
   render
     div
@@ -180,6 +181,8 @@ export RenderCondTest = component
       # @ts-expect-error — typo: 'itemsz' does not exist
       for item in itemsz
         span "list"
+      # @ts-expect-error — typo: 'countz' does not exist
+      = countz
 
 # ── Event handler typing ──
 #
