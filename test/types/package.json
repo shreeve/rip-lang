@@ -1,5 +1,7 @@
 {
-  "private": true,
+  "rip": {
+    "strict": true
+  },
   "dependencies": {
     "dayjs": "^1.11.20",
     "react": "^19.2.4",

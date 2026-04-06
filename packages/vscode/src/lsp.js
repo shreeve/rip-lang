@@ -21,6 +21,16 @@ const compiled = new Map();
 // Component name → { props: [{ name, type, required }], source, line }
 const componentRegistry = new Map();
 
+// Per-directory project config cache (dir → { strict, exclude, ... })
+const configCache = new Map();
+function getProjectConfig(filePath) {
+  const dir = path.dirname(filePath);
+  if (configCache.has(dir)) return configCache.get(dir);
+  const config = tc?.readProjectConfig?.(dir) || {};
+  configCache.set(dir, config);
+  return config;
+}
+
 // TypeScript sees virtual .ts paths; we translate at the boundary
 function toVirtual(p) { return p + '.ts'; }
 function fromVirtual(p) { return p.endsWith('.rip.ts') ? p.slice(0, -3) : p; }
@@ -129,7 +139,18 @@ connection.onInitialize(async (params) => {
 });
 
 connection.onInitialized(() => {
+  connection.client.register(require('vscode-languageserver').DidChangeWatchedFilesNotification.type, {
+    watchers: [
+      { globPattern: '**/rip.json' },
+      { globPattern: '**/package.json' },
+    ],
+  });
   connection.console.log('[rip] ready');
+});
+
+connection.onDidChangeWatchedFiles(() => {
+  configCache.clear();
+  for (const fp of compiled.keys()) publishDiagnostics(fp);
 });
 
 connection.onDidChangeConfiguration(() => {
@@ -420,6 +441,34 @@ function publishDiagnostics(filePath) {
           source: 'rip',
           message: `Cannot find module '${m[1]}'`,
         });
+      }
+    }
+  }
+
+  // Strict mode: warn on files without type annotations (unless opted out with # @nocheck)
+  if (!c.hasTypes && c.source) {
+    const config = getProjectConfig(filePath);
+    if (config.strict) {
+      // Check exclude patterns
+      let excluded = false;
+      if (config._configDir && Array.isArray(config.exclude)) {
+        const rel = path.relative(config._configDir, filePath);
+        excluded = config.exclude.some(glob => {
+          const re = tc.globToRegex(glob);
+          return re.test(rel);
+        });
+      }
+      if (!excluded) {
+        const nocheck = /^#\s*@nocheck\b/m.test(c.source.slice(0, 256));
+        if (!nocheck) {
+          diagnostics.push({
+            range: { start: { line: 0, character: 0 }, end: { line: 0, character: c.source.indexOf('\n') || c.source.length } },
+            severity: 1,
+            code: 'rip-strict',
+            source: 'rip',
+            message: 'File has no type annotations. Add `:: type` annotations or `# @nocheck` to opt out.',
+          });
+        }
       }
     }
   }

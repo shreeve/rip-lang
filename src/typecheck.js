@@ -1032,13 +1032,73 @@ export function mapToSource(entry, offset) {
   return tsLine - entry.headerLines;
 }
 
+// ── Project config ─────────────────────────────────────────────────
+
+// Read project config: rip.json in the given directory, or "rip" key in
+// the nearest ancestor package.json.  Returns { strict, exclude }.
+export function readProjectConfig(dir) {
+  const config = {};
+  try {
+    let d = resolve(dir);
+    while (true) {
+      const ripJsonPath = resolve(d, 'rip.json');
+      if (existsSync(ripJsonPath)) {
+        Object.assign(config, JSON.parse(readFileSync(ripJsonPath, 'utf8')));
+        config._configDir = d;
+        break;
+      }
+      const pkgPath = resolve(d, 'package.json');
+      if (existsSync(pkgPath)) {
+        const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
+        if (pkg.rip && typeof pkg.rip === 'object') { Object.assign(config, pkg.rip); config._configDir = d; break; }
+      }
+      const parent = dirname(d);
+      if (parent === d) break;
+      d = parent;
+    }
+  } catch {}
+  return config;
+}
+
 // ── CLI batch type-checker ─────────────────────────────────────────
 
-function findRipFiles(dir, files = []) {
+// Convert a simple glob pattern to a RegExp for matching relative paths.
+// Supports: ** (any path segments), * (any within segment), ? (single char).
+export function globToRegex(pattern) {
+  let re = '';
+  let i = 0;
+  while (i < pattern.length) {
+    const c = pattern[i];
+    if (c === '*' && pattern[i + 1] === '*') {
+      re += '.*';
+      i += 2;
+      if (pattern[i] === '/') i++; // skip trailing slash after **
+    } else if (c === '*') {
+      re += '[^/]*';
+      i++;
+    } else if (c === '?') {
+      re += '[^/]';
+      i++;
+    } else if (c === '.') {
+      re += '\\.';
+      i++;
+    } else {
+      re += c;
+      i++;
+    }
+  }
+  return new RegExp('^' + re + '$');
+}
+
+function findRipFiles(dir, files = [], excludePatterns = [], rootDir = dir) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
     const full = resolve(dir, entry.name);
-    if (entry.isDirectory()) findRipFiles(full, files);
+    if (excludePatterns.length > 0) {
+      const rel = relative(rootDir, full);
+      if (excludePatterns.some(p => p.test(rel))) continue;
+    }
+    if (entry.isDirectory()) findRipFiles(full, files, excludePatterns, rootDir);
     else if (entry.name.endsWith('.rip')) files.push(full);
   }
   return files;
@@ -1070,7 +1130,14 @@ export async function runCheck(targetDir, opts = {}) {
     return 1;
   }
 
-  const allFiles = findRipFiles(rootPath);
+  const ripConfig = readProjectConfig(rootPath);
+
+  // Merge: CLI flags override config file
+  const strict = opts.strict || ripConfig.strict === true;
+  const excludeGlobs = Array.isArray(ripConfig.exclude) ? ripConfig.exclude : [];
+  const excludePatterns = excludeGlobs.map(globToRegex);
+
+  const allFiles = findRipFiles(rootPath, [], excludePatterns);
   if (allFiles.length === 0) {
     console.error(red(`No .rip files found in ${targetDir}`));
     return 1;
@@ -1080,13 +1147,16 @@ export async function runCheck(targetDir, opts = {}) {
   // This avoids compiling hundreds of untyped files that would just get @ts-nocheck.
   const typedFiles = new Set();
   const sourcesByPath = new Map();
+  const untypedFiles = [];
   for (const fp of allFiles) {
     const source = readFileSync(fp, 'utf8');
     sourcesByPath.set(fp, source);
     const nocheck = /^#\s*@nocheck\b/m.test(source.slice(0, 256));
     if (!nocheck && hasTypeAnnotations(source)) typedFiles.add(fp);
+    else if (!nocheck && strict) untypedFiles.push(fp);
   }
-  // Include imports of typed files
+
+  // Include imports of typed files (files imported BY typed files)
   for (const fp of typedFiles) {
     const source = sourcesByPath.get(fp);
     const ripImports = [...source.matchAll(/from\s+['"]([^'"]*\.rip)['"]/g)];
@@ -1098,6 +1168,17 @@ export async function runCheck(targetDir, opts = {}) {
         sourcesByPath.set(imported, impSrc);
         typedFiles.add(imported);
       }
+    }
+  }
+  // Include files that import FROM typed files (consumers of typed modules)
+  for (const [fp, source] of sourcesByPath) {
+    if (typedFiles.has(fp)) continue;
+    const nocheck = /^#\s*@nocheck\b/m.test(source.slice(0, 256));
+    if (nocheck) continue;
+    const ripImports = [...source.matchAll(/from\s+['"]([^'"]*\.rip)['"]/g)];
+    for (const m of ripImports) {
+      const imported = resolve(dirname(fp), m[1]);
+      if (typedFiles.has(imported)) { typedFiles.add(fp); break; }
     }
   }
 
@@ -1149,6 +1230,19 @@ export async function runCheck(targetDir, opts = {}) {
       }
     }
     if (errors.length > 0) fileResults.push({ file: fp, errors });
+  }
+
+  // In strict mode, report untyped files as errors (opt out with `# @nocheck`)
+  if (strict && untypedFiles.length > 0) {
+    for (const fp of untypedFiles) {
+      if (typedFiles.has(fp)) continue; // pulled in via imports — already type-checked
+      fileResults.push({ file: fp, errors: [{
+        line: 1, col: 1, len: 1,
+        message: `File has no type annotations. Add \`:: type\` annotations or \`# @nocheck\` to opt out.`,
+        severity: 'error', code: 'rip-strict', srcLine: sourcesByPath.get(fp).split('\n')[0] || '', related: [],
+      }]});
+      totalErrors++;
+    }
   }
 
   // Create TypeScript language service

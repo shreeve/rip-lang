@@ -64,6 +64,11 @@ Options:
 Subcommands:
   rip server [flags] [app]      Start server (watches *.rip, HTTPS, mDNS)
   rip check [dir]               Type-check all .rip files in directory
+  rip check --strict [dir]      Require type annotations in all .rip files
+
+  Configure via rip.json or package.json:
+    { "strict": true, "exclude": ["scripts/**"] }             # rip.json
+    { "rip": { "strict": true, "exclude": ["scripts/**"] } }  # package.json
 
 Serve flags:
   --watch=<glob>      Watch glob pattern (default: *.rip)
@@ -149,6 +154,7 @@ async function main() {
     const dir = checkArgs.find(a => !a.startsWith('-')) || '.';
     const exitCode = await runCheck(dir, {
       quiet: checkArgs.includes('-q') || checkArgs.includes('--quiet'),
+      strict: checkArgs.includes('--strict'),
     });
     process.exit(exitCode);
   }
