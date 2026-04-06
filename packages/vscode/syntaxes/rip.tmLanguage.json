@@ -389,6 +389,17 @@
       }
     },
 
+    {"comment": "=== FOR-LOOP VARIABLES (for item in array / for key, value of object) ==="},
+    {
+      "match": "\\b(for)\\s+([a-zA-Z_$]\\w*)(?:\\s*,\\s*([a-zA-Z_$]\\w*))?\\s+(in|of|as)\\b",
+      "captures": {
+        "1": { "name": "keyword.control.rip" },
+        "2": { "name": "variable.other.constant.rip" },
+        "3": { "name": "variable.other.constant.rip" },
+        "4": { "name": "keyword.control.rip" }
+      }
+    },
+
     {"comment": "=== KEYWORDS ==="},
     {
       "match": "\\b(return|throw|break|continue|switch|when|then|if|else|unless|for|in|of|by|as|while|until|loop|do|try|catch|finally|yield|await|import|export|from|default|delete|typeof|instanceof|new|super|debugger|use|own|component|render|offer|accept|slot|it|is|isnt|and|or|not)\\b",
@@ -504,6 +515,9 @@
 
     {"comment": "=== REGEX MATCH (before comparison) ==="},
     { "match": "=~", "name": "keyword.operator.regex-match.rip" },
+
+    {"comment": "=== TWO-WAY BINDING (before comparison to prevent <=> matching <= then >) ==="},
+    { "match": "<=>", "name": "keyword.control.bind.rip" },
 
     {"comment": "=== COMPARISON (before assignment to prevent == matching =) ==="},
     { "match": "===|!==|==|!=|<=|>=", "name": "keyword.operator.comparison.rip" },

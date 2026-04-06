@@ -1033,7 +1033,14 @@ export function installComponentSupport(CodeGenerator, Lexer) {
                   const val = this.generateInComponent(value, 'value');
                   props.push({ code: `'${eventKey}': ${val}`, srcLine });
                 } else if (typeof key === 'string') {
-                  if (key === 'key') continue;
+                  if (key === 'key') {
+                    // key: is not an HTML attribute, but emit its value
+                    // expression for type-checking and semantic tokens
+                    const val = this.generateInComponent(value, 'value');
+                    const marker = srcLine != null ? ` // @rip-src:${srcLine}` : '';
+                    constructions.push(`    (${val});${marker}`);
+                    continue;
+                  }
                   if (key.startsWith('__bind_') && key.endsWith('__')) {
                     const propName = key.slice(7, -2);
                     const val = this.generateInComponent(value, 'value');

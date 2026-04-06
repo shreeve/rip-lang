@@ -264,13 +264,17 @@ export function mapToSourcePos(entry, offset) {
   // Scan ALL source lines for mappings to this gen line — a multi-line Rip
   // expression (e.g. object literal) may compile to a single gen line, so
   // multiple source lines can share one gen line.  Pick the closest genCol.
+  // On ties, prefer the source line that genToSrc already identified (e.g.
+  // from an @rip-src annotation) so that stub render-block expressions land
+  // on their correct source lines instead of a sibling attribute line.
   if (entry.srcColToGen) {
+    const origSrcLine = srcLine;
     let bestDist = Infinity;
     for (const [sl, entries] of entry.srcColToGen) {
       for (const e of entries) {
         if (e.genLine === tsLine) {
           const dist = Math.abs(e.genCol - genCol);
-          if (dist < bestDist) {
+          if (dist < bestDist || (dist === bestDist && sl === origSrcLine)) {
             bestDist = dist;
             srcLine = sl;
             approx = e.srcCol + (genCol - e.genCol);
