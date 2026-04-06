@@ -195,7 +195,9 @@ function compileRip(filePath, source) {
     connection.console.log(`[rip] compiled ${path.basename(filePath)}: hasTypes=${entry.hasTypes}, headerLines=${entry.headerLines}`);
     publishDiagnostics(filePath);
   } catch (e) {
-    compiled.delete(filePath);
+    // Keep the previous compiled version for completions/hover during
+    // transient parse errors.  Dot-recovery (trailing `.` triggers) is
+    // handled in the completion handler where the cursor line is known.
 
     // Surface parse/syntax errors as diagnostics
     const diagnostics = [];
@@ -1829,6 +1831,24 @@ connection.onCompletion((params) => {
 
   // TypeScript completions
   if (!service) return [];
+
+  // Dot-recovery: when cursor follows a trailing dot (e.g. `obj.`), the lexer
+  // treats `.` at EOL as line-continuation and compilation fails.  Patch only
+  // the cursor line with a placeholder property so TS sees a member-access.
+  if (doc) {
+    const curLine = (doc.getText().split('\n')[params.position.line]) || '';
+    const before = curLine.slice(0, params.position.character);
+    if (/\w\.\s*$/.test(before)) {
+      const docLines = doc.getText().split('\n');
+      docLines[params.position.line] = before.replace(/(\w)\.\s*$/, '$1.__rip__') + curLine.slice(params.position.character);
+      try {
+        const entry = tc.compileForCheck(fp, docLines.join('\n'), compiler);
+        const prev = compiled.get(fp);
+        compiled.set(fp, { version: (prev?.version || 0) + 1, ...entry });
+      } catch {} // recovery failed — continue with stale data
+    }
+  }
+
   const offset = srcToOffset(fp, params.position.line, params.position.character);
   if (offset === undefined) return [];
 

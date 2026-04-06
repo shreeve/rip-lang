@@ -371,8 +371,12 @@ export class CodeGenerator {
       }
       if (ident) result.push({ name: ident, origLine: node.loc.r, origCol: node.loc.c });
     }
-    // Recurse into children (skip head at index 0 — already processed via parent)
-    for (let i = 1; i < node.length; i++) {
+    // Recurse into children (skip head at index 0 — already processed via parent).
+    // For arrow functions (-> / =>), skip index 1 (params array) — parameter
+    // names are not call expressions and would produce incorrect mappings via
+    // the distance heuristic when the same identifier appears in other methods.
+    let start = (head === '->' || head === '=>') ? 2 : 1;
+    for (let i = start; i < node.length; i++) {
       if (Array.isArray(node[i])) this.collectSubExprs(node[i], result);
     }
   }
