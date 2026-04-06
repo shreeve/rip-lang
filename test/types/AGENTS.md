@@ -89,10 +89,10 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 ### 🔶 Partial
 
-| Category                | Tested In     | Notes                                                                                                                                                                                                                          |
-| ----------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Generic types           | 03-structural | Basic generics work (structs, function returns); edge cases may remain                                                                                                                                                         |
-| Dot-completion accuracy | 09-components | `e.` in event handlers shows generic `Event` members instead of specific event type (e.g. `MouseEvent`); root cause: stale-compilation offset mapping picks the wrong `e.` in generated TS. Hover and `rip check` are correct. |
+| Category                | Tested In     | Notes                                                                                                                                                     |
+| ----------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Generic types           | 03-structural | Basic generics work (structs, function returns); edge cases may remain                                                                                    |
+| Dot-completion accuracy | 09-components | `e.` in event handlers shows generic `Event` instead of `MouseEvent`; offset mapping picks wrong `e.` in generated TS. Hover and `rip check` are correct. |
 
 ### 🔍 Compiler-verified (IDE review needed)
 
