@@ -782,15 +782,20 @@ export class Lexer {
         }
       }
     }
-    // A > that closes a generic type annotation is NOT a continuation
+    // A > or >> that closes a generic type annotation/alias is NOT a continuation
     let prev = this.tokens[this.tokens.length - 1];
-    if (prev?.[0] === 'COMPARE' && prev[1] === '>') {
+    let isGenericClose = (prev?.[0] === 'COMPARE' && prev[1] === '>') ||
+                         (prev?.[0] === 'SHIFT' && (prev[1] === '>>' || prev[1] === '>>>'));
+    if (isGenericClose) {
       let depth = 0;
       for (let k = this.tokens.length - 1; k >= 0; k--) {
         let tk = this.tokens[k];
         if (tk[0] === 'COMPARE' && tk[1] === '>') depth++;
+        else if (tk[0] === 'SHIFT' && tk[1] === '>>') depth += 2;
+        else if (tk[0] === 'SHIFT' && tk[1] === '>>>') depth += 3;
         else if (tk[0] === 'COMPARE' && tk[1] === '<') depth--;
         if (depth === 0 && tk[0] === 'TYPE_ANNOTATION') return false;
+        if (depth === 0 && tk[0] === 'IDENTIFIER' && tk[1] === 'type') return false;
         if (tk[0] === 'TERMINATOR' || tk[0] === 'INDENT' || tk[0] === 'OUTDENT') break;
       }
     }

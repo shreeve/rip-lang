@@ -91,7 +91,6 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 | Category                | Tested In     | Notes                                                                                                                                                     |
 | ----------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Generic types           | 03-structural | Basic generics work (structs, function returns); edge cases may remain                                                                                    |
 | Dot-completion accuracy | 09-components | `e.` in event handlers shows generic `Event` instead of `MouseEvent`; offset mapping picks wrong `e.` in generated TS. Hover and `rip check` are correct. |
 
 ### 🔍 Compiler-verified (IDE review needed)
@@ -107,6 +106,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Variable type mismatches       | 01-basic       | Same-file typed variables                                                                                                          |
 | Readonly / immutability        | 01-basic       | `=!` emits `const`/`declare const`; reassignment caught (TS2588); `readonly` field mutation caught (TS2540)                        |
 | Nullable safety                | 01-basic       | `strict: true` enables full `strictNullChecks` — null/undefined caught at all usage sites; 2 negative tests                        |
+| Generic types                  | 03-structural  | Structs, functions, constraints, nested (`Box<Box<T>>`), multi-param, unions — all emit correct DTS                                |
 | Object shape checking          | 03-structural  | Missing fields, extra fields                                                                                                       |
 | Property access checking       | 03-structural  | Typos, nonexistent fields                                                                                                          |
 | Union value checking           | 04-unions      | Literal unions validated                                                                                                           |
