@@ -347,6 +347,20 @@ export function shouldSuppressConditional(code, start, length, tsContent, header
   return false;
 }
 
+// Maximum byte offset to scan for a `# @nocheck` comment at the top of a file.
+// Long shebangs, license headers, or multi-line comments could push the directive
+// further down, but 512 bytes covers typical preambles without scanning entire files.
+export const NOCHECK_SCAN_LIMIT = 512;
+
+// Check whether a diagnostic targets a compiler-generated _render() construction
+// variable (_0, _1, …). These typed constants exist solely for prop type-checking
+// and are never read — unused-variable diagnostics on them are spurious.
+export function isRenderConstructionVar(tsContent, start, length) {
+  if (!length) return false;
+  const span = tsContent.substring(start, start + length);
+  return /^_\d+$/.test(span.trim());
+}
+
 // Clean diagnostic messages to hide Rip compiler internals from users.
 // Strips Signal<T>/Computed<T> wrappers, __bind_X__ property names, and
 // removes __bind_*__ entries from inline type displays.
@@ -453,7 +467,7 @@ export function compileForCheck(filePath, source, compiler) {
 
   // Determine if this file should be type-checked.
   // A `# @nocheck` comment near the top of the file opts out entirely.
-  const nocheck = /^#\s*@nocheck\b/m.test(source.slice(0, 256));
+  const nocheck = /^#\s*@nocheck\b/m.test(source.slice(0, NOCHECK_SCAN_LIMIT));
   const hasOwnTypes = !nocheck && hasTypeAnnotations(source);
   let importsTyped = false;
   if (!hasOwnTypes && !nocheck) {
@@ -1162,7 +1176,7 @@ export async function runCheck(targetDir, opts = {}) {
   for (const fp of allFiles) {
     const source = readFileSync(fp, 'utf8');
     sourcesByPath.set(fp, source);
-    const nocheck = /^#\s*@nocheck\b/m.test(source.slice(0, 256));
+    const nocheck = /^#\s*@nocheck\b/m.test(source.slice(0, NOCHECK_SCAN_LIMIT));
     if (!nocheck && hasTypeAnnotations(source)) typedFiles.add(fp);
     else if (!nocheck && strict) untypedFiles.push(fp);
   }
@@ -1184,7 +1198,7 @@ export async function runCheck(targetDir, opts = {}) {
   // Include files that import FROM typed files (consumers of typed modules)
   for (const [fp, source] of sourcesByPath) {
     if (typedFiles.has(fp)) continue;
-    const nocheck = /^#\s*@nocheck\b/m.test(source.slice(0, 256));
+    const nocheck = /^#\s*@nocheck\b/m.test(source.slice(0, NOCHECK_SCAN_LIMIT));
     if (nocheck) continue;
     const ripImports = [...source.matchAll(/from\s+['"]([^'"]*\.rip)['"]/g)];
     for (const m of ripImports) {
@@ -1329,10 +1343,7 @@ export async function runCheck(targetDir, opts = {}) {
       }
 
       // Skip 6133 on compiler-generated _render() construction variables (_0, _1, …)
-      if ((d.code === 6133 || d.code === 6196) && d.length > 0) {
-        const span = entry.tsContent.substring(d.start, d.start + d.length);
-        if (/^_\d+$/.test(span.trim())) continue;
-      }
+      if ((d.code === 6133 || d.code === 6196) && isRenderConstructionVar(entry.tsContent, d.start, d.length)) continue;
 
       // Skip diagnostics on injected overload signatures — the real function
       // definition already carries the same diagnostic.

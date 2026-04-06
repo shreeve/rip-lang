@@ -267,11 +267,7 @@ function publishDiagnostics(filePath) {
         }
 
         // Skip 6133 on compiler-generated _render() construction variables (_0, _1, …)
-        // — these typed constants exist solely for prop type-checking and are never read.
-        if ((d.code === 6133 || d.code === 6196) && d.length > 0) {
-          const span = c.tsContent.substring(d.start, d.start + d.length);
-          if (/^_\d+$/.test(span.trim())) continue;
-        }
+        if ((d.code === 6133 || d.code === 6196) && tc.isRenderConstructionVar(c.tsContent, d.start, d.length)) continue;
 
         // Skip diagnostics on injected overload signatures — the real function
         // definition already carries the same diagnostic.
@@ -467,7 +463,7 @@ function publishDiagnostics(filePath) {
         });
       }
       if (!excluded) {
-        const nocheck = /^#\s*@nocheck\b/m.test(c.source.slice(0, 256));
+        const nocheck = /^#\s*@nocheck\b/m.test(c.source.slice(0, tc.NOCHECK_SCAN_LIMIT));
         if (!nocheck) {
           diagnostics.push({
             range: { start: { line: 0, character: 0 }, end: { line: 0, character: c.source.indexOf('\n') || c.source.length } },
@@ -670,16 +666,16 @@ function srcToOffset(filePath, line, col) {
 
 function genToSrcPos(filePath, offset) {
   const c = compiled.get(filePath);
-  if (!c) return { line: 0, character: 0 };
+  if (!c) return null;
   const pos = tc.mapToSourcePos(c, offset);
-  if (!pos) return { line: 0, character: 0 };
+  if (!pos) return null;
   return { line: pos.line, character: pos.col };
 }
 
 function lineColToOffset(t, line, col) { return tc.lineColToOffset(t, line, col); }
 function offsetToLineCol(t, o) { const p = tc.offsetToLineCol(t, o); return { line: p.line, character: p.col }; }
 function uriToPath(u) { try { return decodeURIComponent(new URL(u).pathname); } catch { return u; } }
-function pathToUri(p) { return 'file://' + p; }
+function pathToUri(p) { return 'file://' + p.replace(/#/g, '%23').replace(/%(?![0-9A-Fa-f]{2})/g, '%25').replace(/ /g, '%20'); }
 
 // Check whether a column position falls inside a string literal or comment.
 // Scans left-to-right tracking quote state and comment markers.
@@ -1972,7 +1968,7 @@ connection.onHover((params) => {
       }
     }
     return { contents: { kind: 'markdown', value } };
-  } catch { return null; }
+  } catch (e) { connection.console.log(`[rip] hover error: ${e.message}`); return null; }
 });
 
 connection.onDefinition((params) => {
@@ -2051,12 +2047,13 @@ connection.onDefinition((params) => {
           }
         }
         const pos = genToSrcPos(realPath, d.textSpan.start);
+        if (!pos) return null;
         return { uri: pathToUri(realPath), range: { start: pos, end: pos } };
       }
       const pos = offsetToLineCol(fs.readFileSync(d.fileName, 'utf8'), d.textSpan.start);
       return { uri: pathToUri(realPath), range: { start: pos, end: pos } };
     });
-  } catch { return null; }
+  } catch (e) { connection.console.log(`[rip] definition error: ${e.message}`); return null; }
 });
 
 connection.onSignatureHelp((params) => {
@@ -2106,7 +2103,7 @@ connection.onSignatureHelp((params) => {
       activeSignature: sig.selectedItemIndex,
       activeParameter: sig.argumentIndex,
     };
-  } catch { return null; }
+  } catch (e) { connection.console.log(`[rip] signature help error: ${e.message}`); return null; }
 });
 
 const KIND = {
