@@ -142,18 +142,22 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 ### Suppressed error codes
 
-`rip check` runs TypeScript under the hood but suppresses 13 error codes (defined in `SKIP_CODES` in [src/typecheck.js](../../../src/typecheck.js)). Most suppressions are necessary — Rip's compilation model produces patterns that confuse TS (DTS coexisting with compiled bodies, module resolution, etc.). But some categories directly weaken type safety:
+`rip check` runs TypeScript under the hood but suppresses error codes in two tiers (defined in [src/typecheck.js](../../../src/typecheck.js)):
 
-| Suppressed codes | What they hide        | Impact on audit                                                                |
-| ---------------- | --------------------- | ------------------------------------------------------------------------------ |
-| 2300, 2451       | Duplicate identifiers | Necessary (DTS + compiled body coexist) but also hides real shadowing bugs     |
-| 2307             | Cannot find module    | Rip resolves modules differently, but this also masks genuinely broken imports |
+**Blanket suppression (9 codes in `SKIP_CODES`):** Structural artifacts that always fire due to Rip's compilation model — overload patterns, async return types, test globals. These are safe to suppress unconditionally: 2389, 2391, 2393, 2394, 2567, 2842, 1064, 2582, 2593.
+
+**Conditional suppression (3 codes in `CONDITIONAL_CODES`):** These are only suppressed when the diagnostic is structural:
+
+| Code       | What it reports       | Suppressed when                                                                | Kept when                                    |
+| ---------- | --------------------- | ------------------------------------------------------------------------------ | -------------------------------------------- |
+| 2300, 2451 | Duplicate identifiers | Diagnostic is in the DTS header, or the identifier is also declared in the DTS | Both instances are in the compiled body only |
+| 2307       | Cannot find module    | Module path starts with `@rip-lang/` or ends with `.rip` (Rip resolves these)  | Any other import (npm packages, JS/TS files) |
 
 **Fixed:** 7005, 7006, 7034 (implicit `any` on variables and params) were removed from `SKIP_CODES`. Untyped files already get `// @ts-nocheck`, and typed files have sufficient annotations that implicit `any` never leaks through.
 
 **Fixed:** 2304 ("Cannot find name") was removed from `SKIP_CODES`. Stdlib globals (`p`, `pp`, `sleep`, `warn`, etc.) are now declared in the type-check preamble, so undefined variable references are correctly flagged.
 
-The remaining codes (2389, 2391, 2393, 2394, 2567, 2842, 1064, 2582, 2593) are structural — they exist because Rip's compilation model inherently produces overload/duplicate patterns that TS doesn't expect. These are safe to suppress.
+**Fixed:** 2300, 2451 ("Duplicate identifier" / "Cannot redeclare") and 2307 ("Cannot find module") were moved from blanket `SKIP_CODES` to conditional `CONDITIONAL_CODES`. Real shadowing bugs and genuinely broken imports are now reported.
 
 ## Future Notes — Runtime Return Validation
 

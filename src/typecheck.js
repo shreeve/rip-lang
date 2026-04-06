@@ -289,22 +289,26 @@ export function patchUninitializedTypes(ts, service, compiledEntries) {
   }
 }
 
-// TS error codes to skip — Rip resolves modules differently and
-// treats async return types transparently.
+// TS error codes to skip — structural artifacts of Rip's compilation model
+// (DTS coexisting with compiled bodies, overload patterns, etc.)
 export const SKIP_CODES = new Set([
-  2300, // Duplicate identifier (DTS declarations coexist with compiled class bodies)
-  2307, // Cannot find module
   2389, // Function implementation name must match overload (DTS + compiled body)
   2391, // Function implementation is missing (DTS overload sigs separated from implementations)
   2393, // Duplicate function implementation
   2394, // Overload signature not compatible with implementation (untyped compiled params)
-  2451, // Cannot redeclare block-scoped variable
   2567, // Enum declarations can only merge with namespace or other enum (DTS + compiled body)
   2842, // Unused renaming of destructured property (DTS overload has renamed param unused in declaration)
   1064, // Return type of async function must be Promise
   2582, // Cannot find name 'test' (test runner globals)
   2593, // Cannot find name 'describe' (test runner globals)
 ]);
+
+// Codes that need conditional suppression (not blanket).
+// 2300/2451: Suppress only when one endpoint is in the DTS header (structural).
+//            Let through when both endpoints are in the compiled body (real shadowing).
+// 2307:     Suppress only for @rip-lang/* and .rip imports (Rip resolves these).
+//            Let through for genuinely broken npm/JS imports.
+const CONDITIONAL_CODES = new Set([2300, 2451, 2307]);
 
 // Clean diagnostic messages to hide Rip compiler internals from users.
 // Strips Signal<T>/Computed<T> wrappers, __bind_X__ property names, and
@@ -1310,6 +1314,33 @@ export async function runCheck(targetDir, opts = {}) {
     for (const d of diags) {
       if (d.start === undefined) continue;
       if (SKIP_CODES.has(d.code)) continue;
+
+      // Conditional suppression — narrowed instead of blanket
+      if (CONDITIONAL_CODES.has(d.code)) {
+        if (d.code === 2300 || d.code === 2451) {
+          // Duplicate identifier: suppress when one endpoint is in the DTS header.
+          // TS fires on both the header and body instances but without relatedInformation,
+          // so we also check the body-side: if the identifier is declared in the DTS, suppress.
+          const diagLine = offsetToLine(entry.tsContent, d.start);
+          if (diagLine < entry.headerLines) continue; // diagnostic is on the header declaration
+          // Body-side: check if the identifier also lives in the DTS header
+          const ident = d.length ? entry.tsContent.substring(d.start, d.start + d.length).trim() : '';
+          if (ident && entry.dts) {
+            const escaped = ident.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            if (new RegExp('\\b' + escaped + '\\b').test(entry.dts)) continue; // structural — DTS vs body
+          }
+          // Identifier not in DTS → real shadowing bug, fall through to report
+        } else if (d.code === 2307) {
+          // Cannot find module: suppress only for @rip-lang/* and .rip imports
+          const msg = ts.flattenDiagnosticMessageText(d.messageText, '\n');
+          const modMatch = msg.match(/Cannot find module '([^']+)'/);
+          if (modMatch) {
+            const mod = modMatch[1];
+            if (mod.startsWith('@rip-lang/') || mod.endsWith('.rip')) continue;
+          }
+          // Genuine broken import, fall through to report
+        }
+      }
 
       // Skip 6133 on compiler-generated _render() construction variables (_0, _1, …)
       if ((d.code === 6133 || d.code === 6196) && d.length > 0) {

@@ -260,6 +260,24 @@ function publishDiagnostics(filePath) {
         if (d.start === undefined) continue;
         if (tc.SKIP_CODES.has(d.code)) continue;
 
+        // Conditional suppression — narrowed instead of blanket
+        if (d.code === 2300 || d.code === 2451) {
+          const diagLine = tc.offsetToLine(c.tsContent, d.start);
+          if (diagLine < c.headerLines) continue; // diagnostic is on the header declaration
+          const ident = d.length ? c.tsContent.substring(d.start, d.start + d.length).trim() : '';
+          if (ident && c.dts) {
+            const escaped = ident.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            if (new RegExp('\\b' + escaped + '\\b').test(c.dts)) continue; // structural — DTS vs body
+          }
+        } else if (d.code === 2307) {
+          const msg = ts.flattenDiagnosticMessageText(d.messageText, '\n');
+          const modMatch = msg.match(/Cannot find module '([^']+)'/);
+          if (modMatch) {
+            const mod = modMatch[1];
+            if (mod.startsWith('@rip-lang/') || mod.endsWith('.rip')) continue;
+          }
+        }
+
         // Skip 6133 on compiler-generated _render() construction variables (_0, _1, …)
         // — these typed constants exist solely for prop type-checking and are never read.
         if ((d.code === 6133 || d.code === 6196) && d.length > 0) {
