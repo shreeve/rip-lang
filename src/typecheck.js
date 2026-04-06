@@ -192,23 +192,38 @@ export function patchUninitializedTypes(ts, service, compiledEntries) {
           }
         }
       }
-      if (ts.isExpressionStatement(stmt) && ts.isBinaryExpression(stmt.expression) &&
-          stmt.expression.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
-          ts.isIdentifier(stmt.expression.left)) {
-        const name = stmt.expression.left.text;
-        const sym = uninitialized.get(name);
-        if (sym) {
-          const rhsType = checker.getTypeAtLocation(stmt.expression.right);
-          sym.flags |= ts.SymbolFlags.Transient;
-          sym.links = { type: rhsType };
-          uninitialized.delete(name);
-        }
-      }
-      // Recurse into function bodies
+      patchAssignment(stmt, uninitialized);
+      // Recurse into function bodies (fresh scope)
       if (ts.isFunctionDeclaration(stmt) && stmt.body) {
         patchStatements(stmt.body.statements);
       }
     }
+  }
+
+  // Walk a statement (and nested blocks) looking for first assignments
+  // to uninitialized variables. Shares the outer scope's map so that
+  // assignments inside if/for/while/try/switch are discovered.
+  function patchAssignment(stmt, uninitialized) {
+    if (!uninitialized.size) return;
+    if (ts.isExpressionStatement(stmt) && ts.isBinaryExpression(stmt.expression) &&
+        stmt.expression.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+        ts.isIdentifier(stmt.expression.left)) {
+      const name = stmt.expression.left.text;
+      const sym = uninitialized.get(name);
+      if (sym) {
+        const rhsType = checker.getTypeAtLocation(stmt.expression.right);
+        sym.flags |= ts.SymbolFlags.Transient;
+        sym.links = { type: rhsType };
+        uninitialized.delete(name);
+      }
+    }
+    // Recurse into block-containing statements (but not functions — those get their own scope)
+    const walkBlock = (node) => { if (node) { if (ts.isBlock(node)) node.statements.forEach(s => patchAssignment(s, uninitialized)); else patchAssignment(node, uninitialized); } };
+    if (ts.isIfStatement(stmt)) { walkBlock(stmt.thenStatement); walkBlock(stmt.elseStatement); }
+    if (ts.isForStatement(stmt) || ts.isForInStatement(stmt) || ts.isForOfStatement(stmt) || ts.isWhileStatement(stmt) || ts.isDoStatement(stmt)) walkBlock(stmt.statement);
+    if (ts.isTryStatement(stmt)) { walkBlock(stmt.tryBlock); if (stmt.catchClause) walkBlock(stmt.catchClause.block); if (stmt.finallyBlock) walkBlock(stmt.finallyBlock); }
+    if (ts.isSwitchStatement(stmt)) { for (const clause of stmt.caseBlock.clauses) clause.statements.forEach(s => patchAssignment(s, uninitialized)); }
+    if (ts.isBlock(stmt)) stmt.statements.forEach(s => patchAssignment(s, uninitialized));
   }
 
   for (const [filePath] of compiledEntries) {

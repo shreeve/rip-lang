@@ -66,26 +66,27 @@ msg = 42
 console.log(total, label, active, result, upper, joined, first, msg)
 
 // ──────────────────────────────────────────────────
-// TS handles these — Rip doesn't (yet)
+// WORKS — block-scoped and destructured assignments
 // ──────────────────────────────────────────────────
 
-// ── Block-scoped assignment ──
+// ── Block-scoped first assignment ──
 //
-// TS uses control flow analysis — even when the first assignment
-// is inside a block, the type is tracked. Rip's patcher only
-// walks top-level statements, so this is a gap.
+// Rip compiles this as `let insideIf; ... insideIf = count + ratio;`
+// (split declaration). The patcher finds the assignment inside the
+// if-block and infers `number`. TS can't mirror the split pattern
+// (strict rejects untyped `let`), so we use a typed declaration.
 
-let insideIf = 0
+let insideIf: number
 if (true) {
   insideIf = count + ratio
 }
-// @ts-expect-error — TS knows insideIf is number
+// @ts-expect-error — number not assignable to string
 expectString(insideIf)
 
 // ── Destructuring ──
 //
 // TS infers element types from the RHS. Rip's patcher only
-// matches simple identifiers on the LHS.
+// matches simple identifiers on the LHS; strict mode catches the `any`.
 
 let { a, b } = { a: 1, b: 'hello' }
 // @ts-expect-error — TS knows a is number

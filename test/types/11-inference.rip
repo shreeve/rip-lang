@@ -64,30 +64,26 @@ msg = 42
 console.log total, label, active, result, upper, joined, first, msg
 
 # ──────────────────────────────────────────────────
-# FIXED — strict mode catches these cases
+# WORKS — block-scoped and destructured assignments
 # ──────────────────────────────────────────────────
-#
-# The patcher only walks top-level statements, but strict mode
-# rejects `any` at call sites, so these are caught regardless.
 
-# ── Fixed: First assignment inside a block ──
+# ── Block-scoped first assignment ──
 #
-# The patcher only walks top-level statements, so block-scoped
-# first assignments aren't patched. With strict: true, TS catches
-# the `any` inference and rejects it at call sites.
+# The patcher recurses into if/for/while/try/switch blocks to find
+# the first assignment, so insideIf is inferred as number.
 
 if true
   insideIf = count + ratio
-# @ts-expect-error — number not assignable to string (block-scoped inference now caught with strict)
+# @ts-expect-error — number not assignable to string (block-scoped inference patched)
 expectString insideIf
 
-# ── Fixed: Destructuring ──
+# ── Destructuring ──
 #
 # The patcher matches `isIdentifier(left)` — destructuring patterns
 # aren't simple identifiers. With strict: true, TS catches the `any`.
 
 {a, b} = {a: 1, b: "hello"}
-# @ts-expect-error — number not assignable to string (destructured inference now caught with strict)
+# @ts-expect-error — number not assignable to string (destructured inference caught with strict)
 expectString a
 
 console.log insideIf, a, b
