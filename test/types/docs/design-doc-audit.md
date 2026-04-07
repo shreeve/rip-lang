@@ -128,3 +128,24 @@ The section could be improved by mentioning this delegation explicitly — makin
 Structural type members with function type signatures emit an extra space around `:` — e.g., `(other : T)` instead of `(other: T)`. Not invalid, but doesn't match doc examples.
 
 **Resolution:** Fix spacing in `emitTypes()` structural type member formatting.
+
+## 11. `expandSuffixes()` regex fails on complex types
+
+**Where:** `src/types.js` — `expandSuffixes()` function
+
+Even if issue #1 is fixed (lexer preserves suffixes in type context), the `expandSuffixes()` regex only matches `word` or `word<simple>` before a suffix. These all fail:
+
+- Union types: `(Foo | Bar)?` — parens not matched by `\w+`
+- Nested generics: `Map<string, Set<number>>?` — `[^>]+` stops at the first `>`
+- Array types: `string[]?` — brackets not matched
+- Intersection: `A & B??` — only `B` matches
+
+**Resolution:** If type suffixes are kept in the spec, rewrite `expandSuffixes()` with a proper parser instead of regex. If suffixes are removed (per issue #1), delete the dead code.
+
+## 12. SKIP_CODES may hide real errors in non-test files
+
+**Where:** `src/typecheck.js` — `SKIP_CODES` set
+
+Codes 2582 (`Cannot find name 'test'`) and 2593 (`Cannot find name 'describe'`) are blanket-suppressed for test runner globals. This also silently hides missing-name errors for those identifiers in non-test files. Code 2567 (enum declarations merging) suppresses legitimate enum errors.
+
+**Resolution:** Move 2582/2593 to conditional suppression — only suppress in files that look like test files (e.g., filename contains `test` or `spec`, or file imports from a test runner). Consider whether 2567 needs conditional treatment too.

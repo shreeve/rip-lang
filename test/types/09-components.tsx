@@ -2,10 +2,10 @@
 //
 // React equivalent of the Rip component file. Direct comparison:
 // Rip's @prop:: type := default → React's destructured props + useState
-// Rip's ~= computed             → React's useMemo
-// Rip's toggle: -> ...          → React's useCallback
+// Rip's ~= computed             → derived variable (React Compiler handles memoization)
+// Rip's method: -> ...          → function in component body
 // Rip's render block            → React's JSX return
-// Rip's <=> two-way bind        → React's value + onChange (no equivalent)
+// Rip's <=> two-way bind        → React's value + onChange (no direct equivalent)
 
 import { SubmitEventHandler, useState, ComponentProps, MouseEventHandler } from 'react'
 

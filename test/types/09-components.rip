@@ -2,7 +2,7 @@
 #
 # Rip components define typed props with @prop:: type := default.
 # The component definitions emit typed DTS declarations.
-# Prop type checking on construction is a known gap (see bottom of file).
+# Prop values are type-checked at construction sites via `rip check`.
 
 # ── Components ──
 
