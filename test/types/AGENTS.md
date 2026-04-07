@@ -28,8 +28,9 @@ for n in 01-basic 02-aliases 03-structural 04-unions 05-interfaces 06-functions 
   bun run "$n.$ext" > /tmp/ts_out.txt 2>&1
   diff -q /tmp/rip_out.txt /tmp/ts_out.txt > /dev/null 2>&1 && echo "✓ $n" || echo "✗ $n — MISMATCH"
 done                                                                      # 9. output parity
-echo 'x = 42' > /tmp/_strict_probe.rip && cp /tmp/_strict_probe.rip _strict_probe.rip \
-  && rip check 2>&1 | grep -q 'rip-strict' && echo "✓ strict mode" \
+echo 'x = "hello"' > /tmp/_strict_probe.rip && echo 'x()' >> /tmp/_strict_probe.rip \
+  && cp /tmp/_strict_probe.rip _strict_probe.rip \
+  && rip check 2>&1 | grep -q 'TS2349' && echo "✓ strict mode" \
   || echo "✗ strict mode — NOT ENFORCED"; rm -f _strict_probe.rip         # 10. strict mode enforcement
 ```
 

@@ -469,15 +469,17 @@ function replaceFnParams(line, newParams) {
 // Compile a .rip file for type-checking. Prepends DTS declarations to
 // compiled JS, detects type annotations, and builds bidirectional
 // source maps. Returns everything both the CLI and LSP need.
-export function compileForCheck(filePath, source, compiler) {
+// When opts.strict is true, all non-nocheck files are type-checked.
+export function compileForCheck(filePath, source, compiler, opts = {}) {
   const result = compiler.compile(source, { sourceMap: true, types: 'emit', skipPreamble: true, stubComponents: true });
   let code = result.code || '';
   const dts = result.dts ? result.dts.trimEnd() + '\n' : '';
 
   // Determine if this file should be type-checked.
   // A `# @nocheck` comment near the top of the file opts out entirely.
+  // In strict mode, all non-nocheck files are type-checked.
   const nocheck = /^#\s*@nocheck\b/m.test(source.slice(0, NOCHECK_SCAN_LIMIT));
-  const hasOwnTypes = !nocheck && hasTypeAnnotations(source);
+  const hasOwnTypes = !nocheck && (hasTypeAnnotations(source) || !!opts.strict);
   let importsTyped = false;
   if (!hasOwnTypes && !nocheck) {
     const ripImports = [...source.matchAll(/from\s+['"]([^'"]*\.rip)['"]/g)];
@@ -1183,16 +1185,14 @@ export async function runCheck(targetDir, opts = {}) {
   }
 
   // Pre-scan: only compile files that have type annotations or are imported by typed files.
-  // This avoids compiling hundreds of untyped files that would just get @ts-nocheck.
+  // In strict mode, all non-nocheck files are type-checked.
   const typedFiles = new Set();
   const sourcesByPath = new Map();
-  const untypedFiles = [];
   for (const fp of allFiles) {
     const source = readFileSync(fp, 'utf8');
     sourcesByPath.set(fp, source);
     const nocheck = /^#\s*@nocheck\b/m.test(source.slice(0, NOCHECK_SCAN_LIMIT));
-    if (!nocheck && hasTypeAnnotations(source)) typedFiles.add(fp);
-    else if (!nocheck && strict) untypedFiles.push(fp);
+    if (!nocheck && (hasTypeAnnotations(source) || strict)) typedFiles.add(fp);
   }
 
   // Include imports of typed files (files imported BY typed files)
@@ -1228,7 +1228,7 @@ export async function runCheck(targetDir, opts = {}) {
   for (const fp of typedFiles) {
     try {
       const source = sourcesByPath.get(fp);
-      compiled.set(fp, compileForCheck(fp, source, new Compiler()));
+      compiled.set(fp, compileForCheck(fp, source, new Compiler(), { strict }));
     } catch (e) {
       compileErrors++;
       const rel = relative(rootPath, fp);
@@ -1269,19 +1269,6 @@ export async function runCheck(targetDir, opts = {}) {
       }
     }
     if (errors.length > 0) fileResults.push({ file: fp, errors });
-  }
-
-  // In strict mode, report untyped files as errors (opt out with `# @nocheck`)
-  if (strict && untypedFiles.length > 0) {
-    for (const fp of untypedFiles) {
-      if (typedFiles.has(fp)) continue; // pulled in via imports — already type-checked
-      fileResults.push({ file: fp, errors: [{
-        line: 1, col: 1, len: 1,
-        message: `File has no type annotations. Add \`:: type\` annotations or \`# @nocheck\` to opt out.`,
-        severity: 'error', code: 'rip-strict', srcLine: sourcesByPath.get(fp).split('\n')[0] || '', related: [],
-      }]});
-      totalErrors++;
-    }
   }
 
   // Create TypeScript language service

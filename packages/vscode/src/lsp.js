@@ -170,9 +170,20 @@ documents.onDidClose(({ document }) => {
   connection.sendDiagnostics({ uri: document.uri, diagnostics: [] });
 });
 
+function isStrictFile(filePath) {
+  const config = getProjectConfig(filePath);
+  if (!config.strict) return false;
+  if (config._configDir && Array.isArray(config.exclude)) {
+    const rel = path.relative(config._configDir, filePath);
+    if (config.exclude.some(glob => tc.globToRegex(glob).test(rel))) return false;
+  }
+  return true;
+}
+
 function compileRip(filePath, source) {
   try {
-    const entry = tc.compileForCheck(filePath, source, compiler);
+    const strict = isStrictFile(filePath);
+    const entry = tc.compileForCheck(filePath, source, compiler, { strict });
     const prev = compiled.get(filePath);
 
     compiled.set(filePath, {
@@ -445,34 +456,6 @@ function publishDiagnostics(filePath) {
           source: 'rip',
           message: `Cannot find module '${m[1]}'`,
         });
-      }
-    }
-  }
-
-  // Strict mode: warn on files without type annotations (unless opted out with # @nocheck)
-  if (!c.hasTypes && c.source) {
-    const config = getProjectConfig(filePath);
-    if (config.strict) {
-      // Check exclude patterns
-      let excluded = false;
-      if (config._configDir && Array.isArray(config.exclude)) {
-        const rel = path.relative(config._configDir, filePath);
-        excluded = config.exclude.some(glob => {
-          const re = tc.globToRegex(glob);
-          return re.test(rel);
-        });
-      }
-      if (!excluded) {
-        const nocheck = /^#\s*@nocheck\b/m.test(c.source.slice(0, tc.NOCHECK_SCAN_LIMIT));
-        if (!nocheck) {
-          diagnostics.push({
-            range: { start: { line: 0, character: 0 }, end: { line: 0, character: c.source.indexOf('\n') || c.source.length } },
-            severity: 1,
-            code: 'rip-strict',
-            source: 'rip',
-            message: 'File has no type annotations. Add `:: type` annotations or `# @nocheck` to opt out.',
-          });
-        }
       }
     }
   }
@@ -1844,7 +1827,8 @@ connection.onCompletion((params) => {
       const docLines = doc.getText().split('\n');
       docLines[params.position.line] = before.replace(/(\w)\.\s*$/, '$1.__rip__') + curLine.slice(params.position.character);
       try {
-        const entry = tc.compileForCheck(fp, docLines.join('\n'), compiler);
+        const strict = isStrictFile(fp);
+        const entry = tc.compileForCheck(fp, docLines.join('\n'), compiler, { strict });
         const prev = compiled.get(fp);
         compiled.set(fp, { version: (prev?.version || 0) + 1, ...entry });
       } catch {} // recovery failed — continue with stale data
