@@ -25,36 +25,13 @@ Actual output:
 
 **Status:** Fixed. Two changes in `src/types.js`: (1) `collectStructuralType` now detects `IDENTIFIER "type"` + `INDENT` and recursively calls itself to build nested `{ ... }` strings. (2) `emitBlock` uses depth-aware splitting (tracks `{`/`}` depth) instead of naive `'; '` split, so nested semicolons aren't shredded. Test added in `03-structural.rip`.
 
-## 4. Index signatures missing opening bracket
+## ~~4. Index signatures missing opening bracket~~
 
-**Doc ref:** §4 Structural Types
+**Status:** Fixed. Added index signature detection in `collectStructuralType()` in `src/types.js` — when `[` is seen at depth 1, collects through `]: type`, formats as `[sig]: val`. Test added in `03-structural.rip` (MixedMap + negative test).
 
-The doc claims:
-```coffee
-type Dictionary =
-  [key: string]: any
-```
-emits `[key: string]: any;`.
+## ~~5. Function overloads (bodiless `def`) parse error~~
 
-Actual output: `key: string]: any;` — missing opening `[`.
-
-**Resolution:** Fix `emitTypes()` structural type parsing to preserve index signature brackets.
-
-## 5. Function overloads (bodiless `def`) parse error
-
-**Doc ref:** §7 Function Types
-
-The doc shows:
-```coffee
-def toHtml(content:: string):: string
-def toHtml(nodes:: Element[]):: string
-def toHtml(input:: any):: string
-  "hi"
-```
-
-The first two (bodiless) `def` lines produce a parse error. The grammar requires `def` to have a body.
-
-**Resolution:** Add grammar support for bodiless `def` (type-only declarations that emit to DTS but not JS), or remove overloads from the spec.
+**Status:** Fixed. Three changes: (1) `rewriteTypes()` in `src/types.js` second pass detects bodiless typed `def` and replaces with `TYPE_DECL` markers (`kind: 'overload'`) before the parser sees them. (2) `emitTypes()` handles `kind: 'overload'` to emit `declare function` lines in DTS. (3) `compileForCheck()` in `src/typecheck.js` fixed return-type stacking bug — when multiple DTS sigs target the same implementation, only the last sig's params/return annotate the body. Test added in `06-functions.rip`.
 
 ## 6. File-level type directives not implemented
 

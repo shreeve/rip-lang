@@ -558,7 +558,12 @@ export function compileForCheck(filePath, source, compiler) {
         // First pass: copy typed params AND return types from signatures to
         // implementations. Typed params give TS type info inside function bodies;
         // return types let TS verify the body matches the declared return.
-        for (const inj of injections) {
+        // When multiple sigs target the same codeLine (overloads), only apply
+        // from the last one — that's the implementation signature whose types
+        // should annotate the function body.
+        const lastByLine = new Map();
+        for (const inj of injections) lastByLine.set(inj.codeLine, inj);
+        for (const inj of lastByLine.values()) {
           const sig = inj.sig.replace(/^declare /, '');
           const sigParams = extractFnParams(sig);
           if (sigParams !== null) {

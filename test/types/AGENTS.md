@@ -61,19 +61,19 @@ Each file exercises a specific type feature. Status key:
 - **fail** — `rip check` or runtime reports errors
 - **partial** — some features in the file work, others don't
 
-| File               | Feature                                                     | Status | Notes                                                                                          |
-| ------------------ | ----------------------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------- |
-| 01-basic.rip       | `::` on variables, nullable (`T \| null`, `T \| undefined`) | pass   |                                                                                                |
-| 02-aliases.rip     | `type` aliases (simple, union, typeof, function)            | pass   | Function type aliases: `(a: T) => R`, generics, negative tests                                 |
-| 03-structural.rip  | `type` blocks, optional, readonly, recursive, generic       | pass   | Nested `type` blocks, index signatures, deep nesting, negative tests                           |
-| 04-unions.rip      | Inline, block, discriminated unions + switch narrowing      | pass   | Narrowing + exhaustiveness verified via strict mode                                            |
-| 05-interfaces.rip  | `interface`, `extends`, optional members                    | pass   |                                                                                                |
-| 06-functions.rip   | Typed functions, arrows, and array transforms               | pass   | 21 negative tests (7 param + 6 return + 3 array + 5 destructured); overloads documented as gap |
-| 07-integration.rip | Cross-module imports of typed functions                     | pass   | Cross-file type flow via .d.ts                                                                 |
-| 08-reactive.rip    | `:: T :=`, `:: T ~=`, `:: T =!`, `:: T ~>`                  | pass   | Reactive state annotations                                                                     |
-| 09-components.rip  | `@prop:: T :=`, `@prop:: T`, default validation             | pass   | Required props, default-vs-type validation, 4 negative body tests                              |
-| 10-validation.rip  | Runtime validation use cases (4 real-world patterns)        | pass   | API shape, composition, discriminated union config, 3rd-party transform                        |
-| 11-inference.rip   | Type inference on unannotated variables                     | pass   | Top-level, block-scoped, and destructured inference all patched                                |
+| File               | Feature                                                     | Status | Notes                                                                   |
+| ------------------ | ----------------------------------------------------------- | ------ | ----------------------------------------------------------------------- |
+| 01-basic.rip       | `::` on variables, nullable (`T \| null`, `T \| undefined`) | pass   |                                                                         |
+| 02-aliases.rip     | `type` aliases (simple, union, typeof, function)            | pass   | Function type aliases: `(a: T) => R`, generics, negative tests          |
+| 03-structural.rip  | `type` blocks, optional, readonly, recursive, generic       | pass   | Nested `type` blocks, index signatures, deep nesting, negative tests    |
+| 04-unions.rip      | Inline, block, discriminated unions + switch narrowing      | pass   | Narrowing + exhaustiveness verified via strict mode                     |
+| 05-interfaces.rip  | `interface`, `extends`, optional members                    | pass   |                                                                         |
+| 06-functions.rip   | Typed functions, arrows, overloads, and array transforms    | pass   | 22 negative tests; overloads narrow return types                        |
+| 07-integration.rip | Cross-module imports of typed functions                     | pass   | Cross-file type flow via .d.ts                                          |
+| 08-reactive.rip    | `:: T :=`, `:: T ~=`, `:: T =!`, `:: T ~>`                  | pass   | Reactive state annotations                                              |
+| 09-components.rip  | `@prop:: T :=`, `@prop:: T`, default validation             | pass   | Required props, default-vs-type validation, 4 negative body tests       |
+| 10-validation.rip  | Runtime validation use cases (4 real-world patterns)        | pass   | API shape, composition, discriminated union config, 3rd-party transform |
+| 11-inference.rip   | Type inference on unannotated variables                     | pass   | Top-level, block-scoped, and destructured inference all patched         |
 
 ## Type Safety Gap Analysis
 
@@ -85,7 +85,6 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 | Category                       | Tested In     | Notes                                                                                            |
 | ------------------------------ | ------------- | ------------------------------------------------------------------------------------------------ |
-| Function overloads             | 06-functions  | Bodiless `def` (overload signatures) parse error; grammar requires a body                        |
 | Runtime return-type validation | 10-validation | Return types are erased — `response.json()` is unvalidated `any`; no `schema.parse()` equivalent |
 
 ### 🔶 Partial
@@ -123,6 +122,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Nested destructured params     | 06-functions   | `{user: {name:: string, age:: number}}` → `{user: {name: string, age: number}}` in .d.ts                                           |
 | `void` return annotation       | 06-functions   | `def fn!` emits `: void` in .d.ts; `!` sigil suppresses implicit return and declares void return type                              |
 | Async/await unwrapping         | 06-functions   | `!` compiles to `await`; return types inferred or explicit; `Promise<T>` → `T`                                                     |
+| Function overloads             | 06-functions   | Bodiless `def` overload signatures → `declare function` in DTS; `rip check` relocates to adjacent non-ambient overloads            |
 | Cross-file type flow           | 07-integration | Via .d.ts; untyped files get `@ts-nocheck`; unresolved `.rip` imports flagged                                                      |
 | Component prop types           | 09-components  | Enriched stub gives Signal<T>/Computed<T> declarations; TS checks computeds, methods, and render block intrinsic elements          |
 | Required component props       | 09-components  | `@prop:: T` (no `:=`) — required in constructor, caught at usage sites                                                             |

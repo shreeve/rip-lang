@@ -277,6 +277,61 @@ export function installTypeSupport(Lexer) {
 
       return 1;
     });
+
+    // ── Second pass: detect bodiless typed DEF (overload signatures) ──────
+    // Pattern: DEF IDENTIFIER CALL_START ... CALL_END TERMINATOR (no INDENT body)
+    // These are type-only overload declarations — remove from token stream
+    // and emit as TYPE_DECL markers so emitTypes() can generate DTS lines.
+    for (let i = tokens.length - 1; i >= 0; i--) {
+      if (tokens[i][0] !== 'DEF') continue;
+      let nameToken = tokens[i + 1];
+      if (!nameToken || nameToken[0] !== 'IDENTIFIER') continue;
+
+      // Find CALL_END
+      let j = i + 2;
+      if (tokens[j]?.[0] !== 'CALL_START') continue;
+      let depth = 1;
+      j++;
+      while (j < tokens.length && depth > 0) {
+        if (tokens[j][0] === 'CALL_START') depth++;
+        if (tokens[j][0] === 'CALL_END') depth--;
+        j++;
+      }
+      // j is now past CALL_END
+      let callEndIdx = j - 1;
+
+      // Bodiless = next is TERMINATOR or EOF (not INDENT)
+      let next = tokens[j];
+      if (next && next[0] !== 'TERMINATOR') continue;
+
+      // Must have type annotations to qualify as an overload signature
+      let hasTypes = nameToken.data?.returnType;
+      if (!hasTypes) {
+        for (let k = i + 2; k <= callEndIdx; k++) {
+          if (tokens[k].data?.type) { hasTypes = true; break; }
+        }
+      }
+      if (!hasTypes) continue;
+
+      // Save the overload tokens for emitTypes' collectParams
+      let overloadTokens = tokens.slice(i, j + 1); // DEF through TERMINATOR
+
+      // Check for export before DEF
+      let exported = i >= 1 && tokens[i - 1]?.[0] === 'EXPORT';
+      let spliceFrom = exported ? i - 1 : i;
+      let spliceCount = (j + 1) - spliceFrom; // include TERMINATOR
+
+      let marker = gen('TYPE_DECL', nameToken[1], nameToken);
+      marker.data = {
+        name: nameToken[1],
+        kind: 'overload',
+        overloadTokens,
+        exported,
+      };
+      if (nameToken.data?.typeParams) marker.data.typeParams = nameToken.data.typeParams;
+
+      tokens.splice(spliceFrom, spliceCount, marker);
+    }
   };
 }
 
@@ -958,7 +1013,21 @@ export function emitTypes(tokens, sexpr = null, source = '') {
       let exp = (exported || data.exported) ? 'export ' : '';
       let params = data.typeParams || '';
 
-      if (data.kind === 'interface') {
+      if (data.kind === 'overload') {
+        // Emit function overload signature from saved tokens
+        let ot = data.overloadTokens;
+        let nameToken = ot[1]; // DEF is [0], name is [1]
+        let { params: paramList } = collectParams(ot, 2);
+        let returnType = nameToken.data?.returnType;
+        let ret = returnType ? `: ${expandSuffixes(returnType)}` : '';
+        let declare = inClass ? '' : (exp ? '' : 'declare ');
+        let typeParams = data.typeParams || '';
+        if (inClass) {
+          lines.push(`${indent()}${data.name}${typeParams}(${paramList.join(', ')})${ret};`);
+        } else {
+          lines.push(`${indent()}${exp}${declare}function ${data.name}${typeParams}(${paramList.join(', ')})${ret};`);
+        }
+      } else if (data.kind === 'interface') {
         let ext = data.extends ? ` extends ${data.extends}` : '';
         emitBlock(`${exp}interface ${data.name}${params}${ext} `, data.typeText || '{}', '');
       } else {

@@ -239,27 +239,20 @@ console.log "r3: #{r3}"
 # @ts-expect-error — Type 'string' is not assignable to type 'number'
 r4:: number = r3
 
-# ── Gap: function overloads (bodiless def) ──
-# The grammar requires `def` to have a body, so bodiless overload
-# signatures produce a parse error. Overloads narrow the return
-# type based on argument types — e.g. call with string → get string,
-# call with string[] → get number[]. Without overloads, both calls
-# return `string | number[]`.
-#
-# def parseInput(input:: string):: number
-# def parseInput(input:: string[]):: number[]
-# def parseInput(input:: string | string[]):: number | number[]
-#   if Array.isArray(input) then input.map(Number) else Number(input)
-#
+# ── Function overloads (bodiless def) ──
+
+def parseInput(input:: string):: number
+def parseInput(input:: string[]):: number[]
+def parseInput(input:: string | string[]):: number | number[]
+  if Array.isArray(input) then input.map(Number) else Number(input)
+
 # string arg → number return (narrowed from number | number[])
-# single = parseInput('42')
-# console.log 'single:', single
-#
+single = parseInput('42')
+console.log 'single:', single
+
 # string[] arg → number[] return (narrowed from number | number[])
-# batch = parseInput(['1', '2', '3'])
-# console.log 'batch:', batch
-#
+batch = parseInput(['1', '2', '3'])
+console.log 'batch:', batch
+
 # @ts-expect-error — string arg narrows return to number, not number[]
-# badOverload:: number[] = parseInput('42')
-#
-# Workaround: use a union parameter and cast at the call site
+badOverload:: number[] = parseInput('42')
