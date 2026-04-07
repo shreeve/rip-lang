@@ -643,39 +643,40 @@ count = 0                     # Inferred as number
 
 ## Adoption Model
 
-Types are optional at every level:
+Types are optional and gradual:
 
 ### Project Level
 
+Configure via `rip.json` or the `"rip"` key in `package.json`:
+
 ```json
 {
-  "rip": {
-    "types": "emit"
-  }
+  "strict": true,
+  "exclude": ["vendor/**", "legacy/**"]
 }
 ```
 
-| Mode | Behavior |
-|------|----------|
-| `"off"` | Types are parsed but ignored — no `.d.ts` emitted |
-| `"emit"` | `.d.ts` files generated — enables editor IntelliSense |
-| `"check"` | `.d.ts` generated + `tsc --noEmit` validates types |
+| Key | Purpose |
+|-----|--------|
+| `strict` | Enable strict mode for `rip check` (default: `false`) |
+| `exclude` | Glob patterns for files to skip during `rip check` |
 
 ### File Level
 
-Override per-file with a directive:
+Opt out of type-checking for a single file:
 
 ```coffee
-# @types off    — Ignore types in this file
-# @types emit   — Parse and emit .d.ts
-# @types check  — Full TypeScript checking
+# @nocheck
 ```
+
+Untyped files (no `::` annotations) automatically get `// @ts-nocheck` —
+no directive needed.
 
 ### Gradual Path
 
-1. **Start with `"off"`** — Write normal Rip code
-2. **Enable `"emit"`** — Add types where helpful, get `.d.ts` for tooling
-3. **Move to `"check"`** — Enforce type safety via TypeScript
+1. **Start untyped** — Write normal Rip code
+2. **Add annotations** — Use `::` where helpful; `.d.ts` emitted automatically for editor IntelliSense
+3. **Enable strict** — Set `strict: true` to enforce type safety via `rip check`
 
 ---
 
@@ -752,7 +753,7 @@ Rip Types is primarily **editor-driven**. The intended loop:
 1. Define shapes and contracts
 2. Annotate public boundaries
 3. Let the editor guide implementation
-4. Optionally validate via `types: "check"`
+4. Optionally validate via `rip check`
 
 High-quality `.d.ts` output is a first-class goal.
 
@@ -768,8 +769,7 @@ Rip does not:
 - Introduce runtime type checks
 - Evaluate type expressions or prove soundness
 
-These responsibilities belong to editors, linters, and TypeScript tooling
-(when enabled via `types: "check"`).
+These responsibilities belong to editors, linters, and TypeScript tooling (when enabled via `rip check`).
 
 Rip only needs to:
 
@@ -1791,15 +1791,8 @@ See §1.6 for the full Rip-to-TypeScript conversion table (including `::` → `:
 
 #### File-Level Type Directives
 
-```coffee
-# @types off     — ignore types in this file
-# @types emit    — emit .d.ts
-# @types check   — emit .d.ts + enable tsc validation
-```
-
-These are comments. The lexer's `commentToken()` method can detect this
-pattern and set a flag. Alternatively, the `Compiler` can scan for the
-directive before tokenizing.
+A `# @nocheck` comment near the top of a file opts it out of type-checking.
+Untyped files (no `::` annotations) are automatically skipped.
 
 #### Export of Type-Only Declarations
 

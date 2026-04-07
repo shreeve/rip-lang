@@ -33,30 +33,13 @@ Actual output:
 
 **Status:** Fixed. Three changes: (1) `rewriteTypes()` in `src/types.js` second pass detects bodiless typed `def` and replaces with `TYPE_DECL` markers (`kind: 'overload'`) before the parser sees them. (2) `emitTypes()` handles `kind: 'overload'` to emit `declare function` lines in DTS. (3) `compileForCheck()` in `src/typecheck.js` fixed return-type stacking bug — when multiple DTS sigs target the same implementation, only the last sig's params/return annotate the body. Test added in `06-functions.rip`.
 
-## 6. File-level type directives not implemented
+## ~~6. File-level type directives not implemented~~
 
-**Doc ref:** §12 Adoption Model
+**Status:** Resolved. Removed `# @types off/emit/check` from the spec (§12 Adoption Model and Implementation Plan). Replaced with `# @nocheck` which is what actually exists. Untyped files already get `// @ts-nocheck` automatically.
 
-The doc describes three file-level directives:
-```coffee
-# @types off     — Ignore types in this file
-# @types emit    — Parse and emit .d.ts
-# @types check   — Full TypeScript checking
-```
+## ~~7. Project-level `types` mode not implemented~~
 
-None of these exist. The only directive is `# @nocheck` (opt out of strict-mode checking). There is no `# @types off/emit/check` handler anywhere in the codebase.
-
-**Resolution:** Remove from the spec. The three-mode system doesn't map to any real workflow — untyped files are already "off" (get `// @ts-nocheck` automatically), "emit" is the default for all typed files, and "check" is what `rip check` does. `# @nocheck` is the only escape hatch needed.
-
-## 7. Project-level `types` mode not implemented
-
-**Doc ref:** §12 Adoption Model
-
-The doc claims `rip.json` supports `{ "types": "off" | "emit" | "check" }`.
-
-Actual `rip.json` config: `{ strict: boolean, exclude: string[] }`. There is no `types` mode selector. The typecheck pipeline always uses `types: 'emit'` internally.
-
-**Resolution:** Remove from the spec. `strict` + `exclude` + `# @nocheck` already covers every real scenario. The three-mode project config was designed before implementation and has no use case that isn't already handled.
+**Status:** Resolved. Replaced the `{ "types": "off" | "emit" | "check" }` config in the spec with what actually exists: `{ strict: boolean, exclude: string[] }`. Also updated `types: "check"` references in §Editor-First Workflow and §What Rip Intentionally Does Not Do to say `rip check`.
 
 ## 8. Implementation Plan says `emitTypes()` runs before parsing — it doesn't
 
