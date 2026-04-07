@@ -49,15 +49,9 @@ The Implementation Plan consistently describes `emitTypes()` running between tok
 
 **Resolution:** Update the Implementation Plan to match reality, or add a note that this section describes the original design which evolved.
 
-## 9. "What Rip Does Not Do" — could mention `rip check` delegation
+## ~~9. "What Rip Does Not Do" — could mention `rip check` delegation~~
 
-**Doc ref:** §16 What Rip Intentionally Does Not Do
-
-The doc states Rip does not: narrow types, perform exhaustiveness checks, or reject programs based on type errors. This is accurate — untyped Rip genuinely does none of these things. Only by opting into types does `rip check` delegate to TypeScript, which provides narrowing, exhaustiveness, and error rejection.
-
-The section could be improved by mentioning this delegation explicitly — making it clear that these capabilities become available when types are added, via TypeScript under the hood.
-
-**Resolution:** Consider adding a sentence like "When types are enabled, `rip check` delegates to TypeScript, which provides all of these." Low priority — the current text isn't wrong, just incomplete.
+**Status:** Resolved. Added explicit mention that `rip check` delegates to TypeScript for narrowing, exhaustiveness, and error rejection when types are added.
 
 ## ~~10. Minor: extra space in structural function type params~~
 

@@ -769,7 +769,8 @@ Rip does not:
 - Introduce runtime type checks
 - Evaluate type expressions or prove soundness
 
-These responsibilities belong to editors, linters, and TypeScript tooling (when enabled via `rip check`).
+These responsibilities belong to editors, linters, and TypeScript tooling.
+When types are added, `rip check` delegates to TypeScript, which provides all of these capabilities.
 
 Rip only needs to:
 
