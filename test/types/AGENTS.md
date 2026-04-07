@@ -64,7 +64,7 @@ Each file exercises a specific type feature. Status key:
 | File               | Feature                                                     | Status | Notes                                                                                          |
 | ------------------ | ----------------------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------- |
 | 01-basic.rip       | `::` on variables, nullable (`T \| null`, `T \| undefined`) | pass   |                                                                                                |
-| 02-aliases.rip     | `type` aliases (simple, union, typeof)                      | pass   | Function type aliases documented as gap (commented out)                                        |
+| 02-aliases.rip     | `type` aliases (simple, union, typeof, function)            | pass   | Function type aliases: `(a: T) => R`, generics, negative tests                                 |
 | 03-structural.rip  | `type` blocks, optional, readonly, recursive, generic       | pass   | Nested types + index signatures documented as gaps (commented out)                             |
 | 04-unions.rip      | Inline, block, discriminated unions + switch narrowing      | pass   | Narrowing + exhaustiveness verified via strict mode                                            |
 | 05-interfaces.rip  | `interface`, `extends`, optional members                    | pass   |                                                                                                |
@@ -85,7 +85,6 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 | Category                       | Tested In     | Notes                                                                                            |
 | ------------------------------ | ------------- | ------------------------------------------------------------------------------------------------ |
-| Function type aliases          | 02-aliases    | `type Fn = (a: T) => R` parse error; only works as structural type member, not standalone alias  |
 | Nested structural types        | 03-structural | `data: type\n    users: string[]` emits garbled inline text, not `data: { users: string[] }`     |
 | Index signatures               | 03-structural | `[key: string]: number` emits `key: string]: number;` — missing opening `[`                      |
 | Function overloads             | 06-functions  | Bodiless `def` (overload signatures) parse error; grammar requires a body                        |
@@ -106,6 +105,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Variable type mismatches       | 01-basic       | Same-file typed variables                                                                                                          |
 | Readonly / immutability        | 01-basic       | `=!` emits `const`/`declare const`; reassignment caught (TS2588); `readonly` field mutation caught (TS2540)                        |
 | Nullable safety                | 01-basic       | `strict: true` enables full `strictNullChecks` — null/undefined caught at all usage sites; 2 negative tests                        |
+| Function type aliases          | 02-aliases     | `type Fn = (a: T) => R` — standalone function type aliases with generics; negative test for wrong return type                      |
 | Generic types                  | 03-structural  | Structs, functions, constraints, nested (`Box<Box<T>>`), multi-param, unions — all emit correct DTS                                |
 | Object shape checking          | 03-structural  | Missing fields, extra fields                                                                                                       |
 | Property access checking       | 03-structural  | Typos, nonexistent fields                                                                                                          |

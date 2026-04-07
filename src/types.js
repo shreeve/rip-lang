@@ -154,7 +154,7 @@ export function installTypeSupport(Lexer) {
           propName = 'returnType';
         } else if (prevToken[0] === 'PARAM_END') {
           // Return type on arrow function — scan forward to -> token
-          let arrowIdx = i + 1 + typeTokens.length;
+          let arrowIdx = i + 1 + typeTokens.consumed;
           let arrowToken = tokens[arrowIdx];
           if (arrowToken && (arrowToken[0] === '->' || arrowToken[0] === '=>')) {
             target = arrowToken;
@@ -170,7 +170,7 @@ export function installTypeSupport(Lexer) {
         target.data[propName] = typeStr;
 
         // Remove :: and type tokens from stream
-        let removeCount = 1 + typeTokens.length;
+        let removeCount = 1 + typeTokens.consumed;
         tokens.splice(i, removeCount);
         return 0;
       }
@@ -232,7 +232,7 @@ export function installTypeSupport(Lexer) {
 
         // Simple alias: type Name = type-expression
         let typeTokens = collectTypeExpression(tokens, afterEq);
-        tokens.splice(removeFrom, afterEq + typeTokens.length - removeFrom, makeDecl(buildTypeString(typeTokens)));
+        tokens.splice(removeFrom, afterEq + typeTokens.consumed - removeFrom, makeDecl(buildTypeString(typeTokens)));
         return 0;
       }
 
@@ -288,6 +288,7 @@ export function installTypeSupport(Lexer) {
 function collectTypeExpression(tokens, j) {
   let typeTokens = [];
   let depth = 0;
+  let startJ = j;
 
   while (j < tokens.length) {
     let t = tokens[j];
@@ -327,6 +328,17 @@ function collectTypeExpression(tokens, j) {
 
     // Delimiters that end the type at depth 0
     if (depth === 0) {
+      // After =>, INDENT wraps the return type body — collect through OUTDENT
+      if (tTag === 'INDENT' && typeTokens.length > 0 && typeTokens[typeTokens.length - 1][0] === '=>') {
+        j++; // skip INDENT
+        let nest = 1;
+        while (j < tokens.length && nest > 0) {
+          if (tokens[j][0] === 'INDENT') { nest++; j++; }
+          else if (tokens[j][0] === 'OUTDENT') { nest--; j++; }
+          else { typeTokens.push(tokens[j]); j++; }
+        }
+        continue;
+      }
       if (tTag === '=' || tTag === 'REACTIVE_ASSIGN' ||
           tTag === 'COMPUTED_ASSIGN' || tTag === 'READONLY_ASSIGN' ||
           tTag === 'EFFECT' || tTag === 'TERMINATOR' ||
@@ -341,6 +353,8 @@ function collectTypeExpression(tokens, j) {
     typeTokens.push(t);
     j++;
   }
+
+  typeTokens.consumed = j - startJ;
 
   return typeTokens;
 }

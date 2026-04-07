@@ -17,20 +17,9 @@ Actual output:
 
 **Resolution:** Remove from the spec (see `?::` RFC below) or fix the lexer to preserve them in type context.
 
-## 2. Function type aliases parse error
+## ~~2. Function type aliases parse error~~
 
-**Doc ref:** §3 Type Aliases, §7 Function Types
-
-The doc shows:
-```coffee
-type Callback = (error:: Error?, data:: any) => void
-type Comparator = (a:: any, b:: any) => number
-type Handler = () => void
-```
-
-All forms — `::` params, `:` params, empty parens — produce a parse error. The `rewriteTypes()` rewriter can't handle parenthesized function types as standalone type alias RHS values. Function types only work as structural type **members** (e.g., `compareTo: (other: T) => number`).
-
-**Resolution:** Fix `rewriteTypes()` to handle `type Name = (...) => ReturnType` patterns, or document the workaround (wrap in a structural type).
+**Status:** Fixed. `collectTypeExpression()` in `src/types.js` now handles `=> INDENT ... OUTDENT` (the lexer wraps arrow return types in indent blocks). Added `.consumed` tracking for accurate splice ranges. Function type aliases (`type Fn = (a: T) => R`) now parse, emit correct DTS, and type-check. Test added in `02-aliases.rip`.
 
 ## 3. Nested structural types emit garbled output
 
