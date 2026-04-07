@@ -56,6 +56,22 @@ every review comes from a genuinely different perspective.
 
 ## Tools
 
+### status
+
+Inspect the MCP server configuration and capabilities.
+
+```coffee
+status({})
+```
+
+Returns:
+
+- server name and version
+- default peer provider/model
+- supported model aliases
+- credential availability
+- available tool names
+
 ### chat
 
 Send a message and get a response. Use for quick questions, second opinions,
@@ -64,12 +80,14 @@ or brainstorming.
 ```coffee
 # From Cursor's Claude, this reaches GPT-5.4:
 chat({ message: "Is this the right data structure for a LRU cache?" })
+chat({ message: "Give me a second opinion", model: "anthropic" })
 ```
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `message` | string | yes | The message to send |
 | `system` | string | no | System prompt override |
+| `model` | string | no | Override the peer model for this call |
 
 ### review
 
@@ -83,6 +101,16 @@ review({
   context: "This is a compiler code generator",
   focus: "bugs"
 })
+review({
+  code: "...",
+  language: "zig",
+  model: "gpt-5.4"
+})
+review({
+  code: "...",
+  language: "zig",
+  format: "json"
+})
 ```
 
 | Parameter | Type | Required | Description |
@@ -91,6 +119,12 @@ review({
 | `language` | string | no | Programming language |
 | `context` | string | no | What the code does, project info, constraints |
 | `focus` | string | no | `bugs`, `performance`, `style`, `security`, or `all` (default) |
+| `model` | string | no | Override the peer model for this call |
+| `format` | string | no | Response format: `text` (default) or `json` |
+
+When `format: "json"` is used, the peer is instructed to return a strict JSON
+object with a summary and structured findings. If the peer fails to return valid
+JSON, the MCP response includes `raw_response` and `parse_error`.
 
 ### discuss
 
@@ -100,6 +134,7 @@ conversation ID and keep using it for back-and-forth discussion.
 ```coffee
 discuss({ conversation_id: "arch-review", message: "Should we use a B-tree or a hash map here?" })
 discuss({ conversation_id: "arch-review", message: "What about cache locality?" })
+discuss({ conversation_id: "arch-review", message: "Ask Claude instead", model: "anthropic" })
 ```
 
 | Parameter | Type | Required | Description |
@@ -108,6 +143,7 @@ discuss({ conversation_id: "arch-review", message: "What about cache locality?" 
 | `message` | string | yes | Your message in the conversation |
 | `system` | string | no | System prompt (first message or reset only) |
 | `reset` | boolean | no | Clear history and start fresh |
+| `model` | string | no | Override the peer model for this call |
 
 ## Peer Selection
 
@@ -122,6 +158,12 @@ The peer model is chosen automatically based on who's calling:
 rip mcp.rip                    # peer = GPT-5.4 (default, for Claude)
 rip mcp.rip --peer anthropic   # peer = Claude Opus 4.6 (for GPT)
 ```
+
+You can also override the peer model per tool call with the optional `model`
+parameter. Supported values include:
+
+- `openai`, `gpt`, `gpt-5.4`
+- `anthropic`, `claude`, `opus`, `claude-opus-4-6`
 
 ## Credential Resolution
 
