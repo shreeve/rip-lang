@@ -123,11 +123,9 @@ The section could be improved by mentioning this delegation explicitly — makin
 
 **Resolution:** Consider adding a sentence like "When types are enabled, `rip check` delegates to TypeScript, which provides all of these." Low priority — the current text isn't wrong, just incomplete.
 
-## 10. Minor: extra space in structural function type params
+## ~~10. Minor: extra space in structural function type params~~
 
-Structural type members with function type signatures emit an extra space around `:` — e.g., `(other : T)` instead of `(other: T)`. Not invalid, but doesn't match doc examples.
-
-**Resolution:** Fix spacing in `emitTypes()` structural type member formatting.
+**Status:** Fixed. Added ` : ` → `: ` replacement in `buildTypeString()` in `src/types.js`. Now `(other: T)` instead of `(other : T)`.
 
 ## 11. `expandSuffixes()` regex fails on complex types
 

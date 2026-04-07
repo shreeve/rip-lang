@@ -358,7 +358,8 @@ function buildTypeString(typeTokens) {
     .replace(/\s*,\s*/g, ', ')
     .replace(/\s*=>\s*/g, ' => ')
     .replace(/ :: /g, ': ')
-    .replace(/:: /g, ': ');
+    .replace(/:: /g, ': ')
+    .replace(/ : /g, ': ');
   return typeStr;
 }
 
