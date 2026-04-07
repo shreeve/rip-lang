@@ -15,20 +15,16 @@ type Config = {
 }
 
 // Nested structures
-type ResponseData = {
-  items: string[]
-  total: number
-}
-
-type ResponseMeta = {
-  page: number
-  limit: number
-  hasMore: boolean
-}
-
 type ApiResponse = {
-  data: ResponseData
-  meta: ResponseMeta
+  data: {
+    items: string[]
+    total: number
+  }
+  meta: {
+    page: number
+    limit: number
+    hasMore: boolean
+  }
 }
 
 // With readonly fields
@@ -109,3 +105,14 @@ let badResp: ApiResponse = { data: { items: [1, 2], total: 2 }, meta: { page: 1,
 let badField: FormField = { label: 'Name' }
 // @ts-expect-error — wrong element type in generic structural type
 let badPaged: PagedResult<string> = { data: [1, 2], page: 1, total: 2 }
+
+// ── Gap: nested structural types ──
+// Inline nested type blocks emit garbled DTS in Rip. The ApiResponse above shows how TypeScript
+// handles inline nesting; in Rip, the workaround is to define ResponseData / ResponseMeta separately.
+
+// ── Gap: index signatures ──
+// These work in TypeScript but emit with a missing `[` in Rip.
+//
+type Dictionary = {
+  [key: string]: number
+}

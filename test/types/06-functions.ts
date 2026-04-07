@@ -251,3 +251,26 @@ console.log(`r3: ${r3}`)
 // r3 is inferred as string — assigning to number is caught
 // @ts-expect-error — string is not assignable to number
 let r4: number = r3
+
+// ── Gap: function overloads (bodiless def) ──
+// These work in TypeScript but currently parse-error in Rip.
+// Overloads narrow the return type based on argument types:
+//   parseInput('42')    → number      (not number | number[])
+//   parseInput(['1'])   → number[]    (not number | number[])
+//
+function parseInput(input: string): number
+function parseInput(input: string[]): number[]
+function parseInput(input: string | string[]): number | number[] {
+  return Array.isArray(input) ? input.map(Number) : Number(input)
+}
+
+// string arg → number return (narrowed from number | number[])
+let single = parseInput('42')
+// console.log('single:', single)  // → 42
+
+// string[] arg → number[] return (narrowed from number | number[])
+let batch = parseInput(['1', '2', '3'])
+// console.log('batch:', batch)  // → [1, 2, 3]
+
+// @ts-expect-error — string arg narrows return to number, not number[]
+let badOverload: number[] = parseInput('42')

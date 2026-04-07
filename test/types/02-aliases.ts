@@ -44,3 +44,12 @@ let badName: Name = 42
 let badEmail: Email = true
 // @ts-expect-error — wrong shape for Defaults
 let badPrefs: Defaults = { theme: 123, lang: true }
+
+// ── Gap: function type aliases ──
+// These work in TypeScript but currently parse-error in Rip.
+// Function types work as structural type members but not as
+// standalone type alias values.
+//
+type Callback = (error: Error, data: string) => void
+type Comparator = (a: number, b: number) => number
+type Handler = () => void

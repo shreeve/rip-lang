@@ -100,3 +100,16 @@ badResp:: ApiResponse = { data: { items: [1, 2], total: 2 }, meta: { page: 1, li
 badField:: FormField = { label: "Name" }
 # @ts-expect-error — wrong element type in generic structural type
 badPaged:: PagedResult<string> = { data: [1, 2], page: 1, total: 2 }
+
+# ── Gap: nested structural types ──
+# Inline nested `type` blocks emit garbled DTS (e.g. `data: type users : string[]total : number;`
+# instead of `data: { users: string[]; total: number; }`). The ApiResponse above works around this
+# by defining ResponseData / ResponseMeta as separate named types.
+
+# ── Gap: index signatures ──
+# Index signatures emit with a missing opening `[` bracket.
+# The doc claims `[key: string]: number` but actual output is
+# `key: string]: number;`
+#
+# type Dictionary =
+#   [key: string]: number
