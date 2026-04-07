@@ -1036,7 +1036,7 @@ export function installComponentSupport(CodeEmitter, Lexer) {
                   if (key === 'key') {
                     // key: is not an HTML attribute, but emit its value
                     // expression for type-checking and semantic tokens
-                    const val = this.generateInComponent(value, 'value');
+                    const val = this.emitInComponent(value, 'value');
                     const marker = srcLine != null ? ` // @rip-src:${srcLine}` : '';
                     constructions.push(`    (${val});${marker}`);
                     continue;
@@ -1073,21 +1073,21 @@ export function installComponentSupport(CodeEmitter, Lexer) {
           if (head === 'if' || head === 'unless') {
             const condition = node[1];
             if (condition != null) {
-              const condCode = this.generateInComponent(condition, 'value');
+              const condCode = this.emitInComponent(condition, 'value');
               const srcLine = node.loc?.r;
               const srcMarker = srcLine != null ? ` // @rip-src:${srcLine}` : '';
               constructions.push(`    ${condCode};${srcMarker}`);
             }
           } else if (head === '?:') {
             // Emit the full ternary so all branches are type-checked
-            const ternCode = this.generateInComponent(node, 'value');
+            const ternCode = this.emitInComponent(node, 'value');
             const srcLine = node.loc?.r;
             const srcMarker = srcLine != null ? ` // @rip-src:${srcLine}` : '';
             constructions.push(`    ${ternCode};${srcMarker}`);
           } else if (head === 'switch') {
             const discriminant = node[1];
             if (discriminant != null) {
-              const discCode = this.generateInComponent(discriminant, 'value');
+              const discCode = this.emitInComponent(discriminant, 'value');
               const srcLine = node.loc?.r;
               const srcMarker = srcLine != null ? ` // @rip-src:${srcLine}` : '';
               constructions.push(`    ${discCode};${srcMarker}`);
@@ -1098,7 +1098,7 @@ export function installComponentSupport(CodeEmitter, Lexer) {
             const vars = node[1];
             const iterable = node[2];
             if (iterable != null) {
-              const iterCode = this.generateInComponent(iterable, 'value');
+              const iterCode = this.emitInComponent(iterable, 'value');
               const srcLine = node.loc?.r;
               const srcMarker = srcLine != null ? ` // @rip-src:${srcLine}` : '';
               // Extract loop variable pattern
@@ -1106,7 +1106,7 @@ export function installComponentSupport(CodeEmitter, Lexer) {
               if (Array.isArray(vars)) {
                 if (vars.length === 1) {
                   const v = vars[0];
-                  varPattern = Array.isArray(v) ? this.generateDestructuringPattern(v) : String(v);
+                  varPattern = Array.isArray(v) ? this.emitDestructuringPattern(v) : String(v);
                 } else if (head === 'for-of') {
                   // for key, val of obj — destructure as [key, val] from Object.entries
                   varPattern = `[${vars.map(v => String(v)).join(', ')}]`;
@@ -1133,7 +1133,7 @@ export function installComponentSupport(CodeEmitter, Lexer) {
             // = expr — text expression: emit the expression for type-checking
             const textExpr = node[1];
             if (textExpr != null) {
-              const exprCode = this.generateInComponent(textExpr, 'value');
+              const exprCode = this.emitInComponent(textExpr, 'value');
               const srcLine = node.loc?.r;
               const srcMarker = srcLine != null ? ` // @rip-src:${srcLine}` : '';
               constructions.push(`    ${exprCode};${srcMarker}`);
@@ -1145,7 +1145,7 @@ export function installComponentSupport(CodeEmitter, Lexer) {
           // block level), or a plain variable reference (text child of a tag).
           const emitBareIdent = (child, parentNode, isTextChild) => {
             if (typeof child !== 'string' || !/^[a-z][\w-]*$/.test(child)) return;
-            if (CodeGenerator.GENERATORS[child]) return;
+            if (CodeEmitter.GENERATORS[child]) return;
             if (child === 'null' || child === 'undefined' || child === 'true' || child === 'false') return;
             let srcLine = parentNode.loc?.r;
             if (srcLine != null && sourceLines) {
@@ -1170,7 +1170,7 @@ export function installComponentSupport(CodeEmitter, Lexer) {
           // — emit __ripEl so TS catches tag typos (e.g., slotz for slot), or
           // emit this.prop for component member text references.
           const isTagHead = typeof head === 'string' && /^[a-z][\w-]*$/.test(head) &&
-              !CodeGenerator.GENERATORS[head] && TEMPLATE_TAGS.has(head.split(/[.#]/)[0]);
+              !CodeEmitter.GENERATORS[head] && TEMPLATE_TAGS.has(head.split(/[.#]/)[0]);
           if (head === 'block') {
             for (let i = 1; i < node.length; i++) emitBareIdent(node[i], node, false);
           } else if (isTagHead) {
@@ -1186,11 +1186,11 @@ export function installComponentSupport(CodeEmitter, Lexer) {
               if (typeof ch === 'string') {
                 if (/^[A-Z]/.test(ch)) continue;
                 if (TEMPLATE_TAGS.has(ch.split(/[.#]/)[0])) continue;
-                if (/^[a-z][\w-]*$/.test(ch) && !CodeGenerator.GENERATORS[ch]) continue;
+                if (/^[a-z][\w-]*$/.test(ch) && !CodeEmitter.GENERATORS[ch]) continue;
                 if (/^(if|unless|switch|for-in|for-of|for-as|while|until|loop|loop-n|try|throw|break|continue|break-if|continue-if|control|when|return|def|->|=>|class|enum|state|computed|readonly|effect|=|program)$/.test(ch)) continue;
               }
               try {
-                const exprCode = this.generateInComponent(child, 'value');
+                const exprCode = this.emitInComponent(child, 'value');
                 const srcLine = child.loc?.r ?? node.loc?.r;
                 const srcMarker = srcLine != null ? ` // @rip-src:${srcLine}` : '';
                 constructions.push(`    ${exprCode};${srcMarker}`);
