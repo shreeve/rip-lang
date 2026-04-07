@@ -213,7 +213,7 @@ Surprising behaviors, parser traps, and non-obvious syntax requirements discover
 
 Rip inherits CoffeeScript's `=`-creates-a-variable semantics. A typo silently creates a new local.
 
-```rip
+```coffee
 loading := false
 # ...
 loadingz = true    # No error — creates `loadingz`, `loading` unchanged
@@ -225,7 +225,7 @@ No automated fix. The type system can't catch this because the new variable has 
 
 Rip's implicit parentheses work by greedy consumption. When a function call's arguments include commas, the parser can't distinguish between "another argument to this call" and "next sibling in render block."
 
-```rip
+```coffee
 render
   # TRAP — "Add to Cart" gets swallowed as second arg to addItem
   button @click: -> stash.cart.addItem { id: 1 }, "Add to Cart"
@@ -243,7 +243,7 @@ render
 
 The callback argument to `reduce` must be wrapped in parens to prevent the implicit call from consuming the initial value.
 
-```rip
+```coffee
 # CORRECT — inner parens group the callback
 items.reduce ((sum, i) -> sum + i.price), 0
 
