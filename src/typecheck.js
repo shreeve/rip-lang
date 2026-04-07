@@ -300,8 +300,6 @@ export const SKIP_CODES = new Set([
   2567, // Enum declarations can only merge with namespace or other enum (DTS + compiled body)
   2842, // Unused renaming of destructured property (DTS overload has renamed param unused in declaration)
   1064, // Return type of async function must be Promise
-  2582, // Cannot find name 'test' (test runner globals)
-  2593, // Cannot find name 'describe' (test runner globals)
 ]);
 
 // Codes that need conditional suppression (not blanket).
@@ -309,7 +307,9 @@ export const SKIP_CODES = new Set([
 //            Let through when both endpoints are in the compiled body (real shadowing).
 // 2307:     Suppress only for @rip-lang/* and .rip imports (Rip resolves these).
 //            Let through for genuinely broken npm/JS imports.
-export const CONDITIONAL_CODES = new Set([2300, 2451, 2307]);
+// 2582/2593: Suppress only in test files (test runner globals).
+//            Let through in non-test files so typos like `test(...)` are caught.
+export const CONDITIONAL_CODES = new Set([2300, 2451, 2307, 2582, 2593]);
 
 // Shared conditional suppression logic — used by both CLI (runCheck) and LSP
 // (publishDiagnostics). Returns true if the diagnostic should be suppressed.
@@ -322,7 +322,8 @@ export const CONDITIONAL_CODES = new Set([2300, 2451, 2307]);
 //   headerLines — number of header lines in the virtual .ts
 //   dts        — the .d.ts content (for identifier checks)
 //   flatMessage — flattened diagnostic message string (only needed for 2307)
-export function shouldSuppressConditional(code, start, length, tsContent, headerLines, dts, flatMessage) {
+//   filePath   — original .rip file path (only needed for 2582/2593)
+export function shouldSuppressConditional(code, start, length, tsContent, headerLines, dts, flatMessage, filePath) {
   if (code === 2300 || code === 2451) {
     // Duplicate identifier: suppress when one endpoint is in the DTS header.
     const diagLine = offsetToLine(tsContent, start);
@@ -343,6 +344,14 @@ export function shouldSuppressConditional(code, start, length, tsContent, header
       if (mod.startsWith('@rip-lang/') || mod.endsWith('.rip')) return true;
     }
     return false; // Genuine broken import
+  }
+  if (code === 2582 || code === 2593) {
+    // test/describe globals: suppress only in test files
+    if (!filePath) return false;
+    const base = filePath.replace(/.*[\/]/, '');
+    if (/test|spec/i.test(base)) return true;
+    if (/[\/](test|tests|spec|specs|__tests__)[\/]/i.test(filePath)) return true;
+    return false;
   }
   return false;
 }
@@ -1339,7 +1348,7 @@ export async function runCheck(targetDir, opts = {}) {
       // Conditional suppression — narrowed instead of blanket
       if (CONDITIONAL_CODES.has(d.code)) {
         const flatMsg = d.code === 2307 ? ts.flattenDiagnosticMessageText(d.messageText, '\n') : null;
-        if (shouldSuppressConditional(d.code, d.start, d.length, entry.tsContent, entry.headerLines, entry.dts, flatMsg)) continue;
+        if (shouldSuppressConditional(d.code, d.start, d.length, entry.tsContent, entry.headerLines, entry.dts, flatMsg, fp)) continue;
       }
 
       // Skip 6133 on compiler-generated _render() construction variables (_0, _1, …)

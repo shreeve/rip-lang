@@ -148,14 +148,15 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 `rip check` runs TypeScript under the hood but suppresses error codes in two tiers (defined in [src/typecheck.js](../../../src/typecheck.js)):
 
-**Blanket suppression (9 codes in `SKIP_CODES`):** Structural artifacts that always fire due to Rip's compilation model — overload patterns, async return types, test globals. These are safe to suppress unconditionally: 2389, 2391, 2393, 2394, 2567, 2842, 1064, 2582, 2593.
+**Blanket suppression (7 codes in `SKIP_CODES`):** Structural artifacts that always fire due to Rip's compilation model — overload patterns, async return types, enum declarations. These are safe to suppress unconditionally: 2389, 2391, 2393, 2394, 2567, 2842, 1064.
 
-**Conditional suppression (3 codes in `CONDITIONAL_CODES`):** These are only suppressed when the diagnostic is structural:
+**Conditional suppression (5 codes in `CONDITIONAL_CODES`):** These are only suppressed when the diagnostic is structural:
 
-| Code       | What it reports       | Suppressed when                                                                | Kept when                                    |
-| ---------- | --------------------- | ------------------------------------------------------------------------------ | -------------------------------------------- |
-| 2300, 2451 | Duplicate identifiers | Diagnostic is in the DTS header, or the identifier is also declared in the DTS | Both instances are in the compiled body only |
-| 2307       | Cannot find module    | Module path starts with `@rip-lang/` or ends with `.rip` (Rip resolves these)  | Any other import (npm packages, JS/TS files) |
+| Code       | What it reports           | Suppressed when                                                                | Kept when                                    |
+| ---------- | ------------------------- | ------------------------------------------------------------------------------ | -------------------------------------------- |
+| 2300, 2451 | Duplicate identifiers     | Diagnostic is in the DTS header, or the identifier is also declared in the DTS | Both instances are in the compiled body only |
+| 2307       | Cannot find module        | Module path starts with `@rip-lang/` or ends with `.rip` (Rip resolves these)  | Any other import (npm packages, JS/TS files) |
+| 2582, 2593 | Cannot find test/describe | File basename contains `test`/`spec`, or path includes `/test/` etc.           | Non-test files (e.g. `app.rip`, `index.rip`) |
 
 **Fixed:** 7005, 7006, 7034 (implicit `any` on variables and params) were removed from `SKIP_CODES`. Untyped files already get `// @ts-nocheck`, and typed files have sufficient annotations that implicit `any` never leaks through.
 

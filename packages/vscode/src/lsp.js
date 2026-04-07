@@ -263,7 +263,7 @@ function publishDiagnostics(filePath) {
         // Conditional suppression — narrowed instead of blanket
         if (tc.CONDITIONAL_CODES?.has(d.code)) {
           const flatMsg = d.code === 2307 ? ts.flattenDiagnosticMessageText(d.messageText, '\n') : null;
-          if (tc.shouldSuppressConditional(d.code, d.start, d.length, c.tsContent, c.headerLines, c.dts, flatMsg)) continue;
+          if (tc.shouldSuppressConditional(d.code, d.start, d.length, c.tsContent, c.headerLines, c.dts, flatMsg, filePath)) continue;
         }
 
         // Skip 6133 on compiler-generated _render() construction variables (_0, _1, …)
