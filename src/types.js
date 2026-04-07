@@ -452,6 +452,20 @@ function collectStructuralType(tokens, indentIdx) {
       let typeDepth = 0;
       while (j < tokens.length) {
         let pt = tokens[j];
+        // Nested structural type: `prop: type` followed by INDENT block
+        if (pt[0] === 'IDENTIFIER' && pt[1] === 'type' && tokens[j + 1]?.[0] === 'INDENT') {
+          j++; // skip 'type'
+          let nestedType = collectStructuralType(tokens, j);
+          propTypeTokens.push(['', nestedType]);
+          // Skip past the INDENT...OUTDENT block
+          let nd = 1; j++;
+          while (j < tokens.length && nd > 0) {
+            if (tokens[j][0] === 'INDENT') nd++;
+            if (tokens[j][0] === 'OUTDENT') nd--;
+            j++;
+          }
+          continue;
+        }
         if (pt[0] === 'INDENT') { typeDepth++; j++; continue; }
         if (pt[0] === 'OUTDENT') {
           if (typeDepth > 0) { typeDepth--; j++; continue; }
@@ -581,7 +595,19 @@ export function emitTypes(tokens, sexpr = null, source = '') {
         else if (body[c] === '}') { depth--; if (depth === 0) { firstTopClose = c; break; } }
       }
       if (firstTopClose === body.length - 1) {
-        let props = body.slice(2, -2).split('; ').filter(p => p.trim());
+        // Depth-aware split on '; ' at top level only
+        let inner = body.slice(2, -2);
+        let props = [], start = 0, d = 0;
+        for (let c = 0; c < inner.length; c++) {
+          if (inner[c] === '{') d++;
+          else if (inner[c] === '}') d--;
+          else if (d === 0 && inner[c] === ';' && inner[c + 1] === ' ') {
+            props.push(inner.slice(start, c));
+            start = c + 2;
+          }
+        }
+        if (start < inner.length) props.push(inner.slice(start));
+        props = props.filter(p => p.trim());
         if (props.length > 0) {
           lines.push(`${indent()}${prefix}{`);
           indentLevel++;

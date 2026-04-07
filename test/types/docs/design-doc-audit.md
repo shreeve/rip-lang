@@ -21,22 +21,9 @@ Actual output:
 
 **Status:** Fixed. `collectTypeExpression()` in `src/types.js` now handles `=> INDENT ... OUTDENT` (the lexer wraps arrow return types in indent blocks). Added `.consumed` tracking for accurate splice ranges. Function type aliases (`type Fn = (a: T) => R`) now parse, emit correct DTS, and type-check. Test added in `02-aliases.rip`.
 
-## 3. Nested structural types emit garbled output
+## ~~3. Nested structural types emit garbled output~~
 
-**Doc ref:** §4 Structural Types — "Nesting, Readonly, and Index Signatures"
-
-The doc claims:
-```coffee
-type Response =
-  data: type
-    users: User[]
-    total: number
-```
-emits `data: { users: User[]; total: number; }`.
-
-Actual output: `data: type users : User[]total : number;` — garbled inline text, not a nested object.
-
-**Resolution:** Fix `emitTypes()` to handle nested `type` blocks within structural types.
+**Status:** Fixed. Two changes in `src/types.js`: (1) `collectStructuralType` now detects `IDENTIFIER "type"` + `INDENT` and recursively calls itself to build nested `{ ... }` strings. (2) `emitBlock` uses depth-aware splitting (tracks `{`/`}` depth) instead of naive `'; '` split, so nested semicolons aren't shredded. Test added in `03-structural.rip`.
 
 ## 4. Index signatures missing opening bracket
 

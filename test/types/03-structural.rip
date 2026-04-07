@@ -13,18 +13,14 @@ type Config =
   timeout?: number
 
 # Nested structures
-type ResponseData =
-  items: string[]
-  total: number
-
-type ResponseMeta =
-  page: number
-  limit: number
-  hasMore: boolean
-
 type ApiResponse =
-  data: ResponseData
-  meta: ResponseMeta
+  data: type
+    items: string[]
+    total: number
+  meta: type
+    page: number
+    limit: number
+    hasMore: boolean
 
 # With readonly fields
 type ImmutableConfig =
@@ -100,11 +96,6 @@ badResp:: ApiResponse = { data: { items: [1, 2], total: 2 }, meta: { page: 1, li
 badField:: FormField = { label: "Name" }
 # @ts-expect-error — wrong element type in generic structural type
 badPaged:: PagedResult<string> = { data: [1, 2], page: 1, total: 2 }
-
-# ── Gap: nested structural types ──
-# Inline nested `type` blocks emit garbled DTS (e.g. `data: type users : string[]total : number;`
-# instead of `data: { users: string[]; total: number; }`). The ApiResponse above works around this
-# by defining ResponseData / ResponseMeta as separate named types.
 
 # ── Gap: index signatures ──
 # Index signatures emit with a missing opening `[` bracket.

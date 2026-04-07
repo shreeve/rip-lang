@@ -106,10 +106,6 @@ let badField: FormField = { label: 'Name' }
 // @ts-expect-error — wrong element type in generic structural type
 let badPaged: PagedResult<string> = { data: [1, 2], page: 1, total: 2 }
 
-// ── Gap: nested structural types ──
-// Inline nested type blocks emit garbled DTS in Rip. The ApiResponse above shows how TypeScript
-// handles inline nesting; in Rip, the workaround is to define ResponseData / ResponseMeta separately.
-
 // ── Gap: index signatures ──
 // These work in TypeScript but emit with a missing `[` in Rip.
 //
