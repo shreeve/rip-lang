@@ -41,13 +41,9 @@ Actual output:
 
 **Status:** Resolved. Replaced the `{ "types": "off" | "emit" | "check" }` config in the spec with what actually exists: `{ strict: boolean, exclude: string[] }`. Also updated `types: "check"` references in §Editor-First Workflow and §What Rip Intentionally Does Not Do to say `rip check`.
 
-## 8. Implementation Plan says `emitTypes()` runs before parsing — it doesn't
+## ~~8. Implementation Plan says `emitTypes()` runs before parsing — it doesn't~~
 
-**Doc ref:** §Implementation Plan (9 references to "before parsing"), §Current Status
-
-The Implementation Plan consistently describes `emitTypes()` running between tokenization and parsing. The Current Status section correctly says it runs after parsing. The actual code (`compiler.js:3468`) runs it **after** parsing and code generation, receiving the s-expression tree.
-
-**Resolution:** Update the Implementation Plan to match reality, or add a note that this section describes the original design which evolved.
+**Status:** Resolved. Updated 6 locations in the Implementation Plan. `emitTypes()` actually runs after codegen and receives both the annotated token stream and the parsed s-expression tree. Remaining "before parsing" references correctly describe TYPE_DECL marker removal.
 
 ## ~~9. "What Rip Does Not Do" — could mention `rip check` delegation~~
 
