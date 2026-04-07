@@ -115,7 +115,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | `@rip-lang/x12` | 0.2.7 |
 | `@rip-lang/schema` | 0.3.7 |
 | `@rip-lang/swarm` | 1.2.17 |
-| `@rip-lang/all` | 3.13.26 |
 
 ## [3.10.12] - 2026-02-20
 

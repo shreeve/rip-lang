@@ -1,9 +1,9 @@
 # ==============================================================================
-# @rip-lang/server — Pure Rip Application Server
+# @rip-lang/server — Rip Server serves content
 # ==============================================================================
 #
-# A multi-worker application server written entirely in Rip.
-# Provides hot reloading, HTTPS, mDNS, and production-grade features.
+# One Bun-native runtime to serve static sites, apps, proxied HTTP services,
+# and TCP/TLS services. Written entirely in Rip.
 #
 # Usage:
 #   bun server.rip <app-path>              # Start server
@@ -12,405 +12,45 @@
 #   bun server.rip list                    # List registered hosts
 # ==============================================================================
 
-import { existsSync, statSync, readFileSync, writeFileSync, unlinkSync, watch, utimesSync } from 'node:fs'
-import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
+import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { networkInterfaces } from 'node:os'
-import { isCurrentVersion as schedulerIsCurrentVersion, getNextAvailableSocket as schedulerGetNextAvailableSocket, releaseWorker as schedulerReleaseWorker, shouldRetryBodylessBusy } from './edge/queue.rip'
-import { formatPort, maybeAddSecurityHeaders as edgeMaybeAddSecurityHeaders, buildStatusBody as edgeBuildStatusBody, buildRipdevUrl as edgeBuildRipdevUrl, generateRequestId } from './edge/forwarding.rip'
-import { loadTlsMaterial as edgeLoadTlsMaterial, printCertSummary as edgePrintCertSummary } from './edge/tls.rip'
-import { createAppRegistry, registerApp, resolveHost, getAppState, removeApp } from './edge/registry.rip'
-import { watchUnavailableResponse, serverBusyResponse, serviceUnavailableResponse, gatewayTimeoutResponse, queueTimeoutResponse, buildUpstreamResponse, forwardOnceWithTimeout, createWsPassthrough } from './edge/forwarding.rip'
-import { processQueuedJob, drainQueueOnce } from './edge/queue.rip'
-import { getControlSocketPath, getPidFilePath } from './control/control.rip'
-import { handleWorkerControl, handleWatchControl, handleRegistryControl, handleReloadControl } from './control/control.rip'
-import { getLanIP as controlGetLanIP, startMdnsAdvertisement as controlStartMdnsAdvertisement, stopMdnsAdvertisements as controlStopMdnsAdvertisements } from './control/mdns.rip'
-import { registerWatchGroup, handleWatchGroup, broadcastWatchChange, registerAppWatchDirs, shouldTriggerCodeReload } from './control/watchers.rip'
-import { computeHideUrls, logStartupSummary, createCleanup, installShutdownHandlers } from './control/lifecycle.rip'
-import { computeSocketPrefix as cliComputeSocketPrefix, runVersionOutput, runHelpOutput, runStopSubcommand, runListSubcommand, resolveAppEntry, parseFlags, coerceInt } from './control/cli.rip'
-import { runSetupMode, runWorkerMode } from './control/worker.rip'
-import { spawnTrackedWorker, postWorkerQuit, waitForWorkerReady } from './control/workers.rip'
-import { createChallengeStore, handleChallengeRequest } from './acme/store.rip'
-import { createAcmeManager } from './acme/manager.rip'
-import { loadCert as acmeLoadCert, defaultCertDir } from './acme/store.rip'
-import { createMetrics } from './edge/metrics.rip'
-import { setEventJsonMode, logEvent } from './control/lifecycle.rip'
-import { createHub, generateClientId, addClient, removeClient, processResponse, handlePublish, getRealtimeStats } from './edge/realtime.rip'
-import { findConfigFile, findEdgeFile, resolveConfigSource, applyConfig, applyEdgeConfig, formatConfigErrors } from './edge/config.rip'
-import { createEdgeRuntime, createReloadHistoryEntry, restoreRegistrySnapshot, configNote, toUpstreamWsUrl, loadRuntimeConfig, runCheckConfig } from './edge/runtime.rip'
-import { createRateLimiter, rateLimitResponse } from './edge/ratelimit.rip'
-import { validateRequest } from './edge/security.rip'
-import { createUpstreamPool, addUpstream, getUpstream, listUpstreams, selectTarget, markTargetBusy, releaseTarget, shouldRetry as shouldRetryUpstream, computeRetryDelayMs, startHealthChecks, stopHealthChecks, checkTargetHealth } from './edge/upstream.rip'
-import { compileRouteTable, matchRoute, describeRoute } from './edge/router.rip'
-import { buildVerificationResult, verifyRouteRuntime } from './edge/verify.rip'
-import { serveStaticRoute, buildRedirectResponse } from './edge/static.rip'
-import { buildTlsArray } from './edge/tls.rip'
+
+import { nowMs, isDebug, applyFlagSideEffects, logAccessJson, logAccessHuman, stripInternalHeaders } from './serving/logging.rip'
+import { applyConfig, formatConfigErrors } from './serving/config.rip'
+import { createAppRegistry, registerApp, resolveHost, getAppState, removeApp } from './serving/registry.rip'
+import { compileRouteTable, matchRoute, describeRoute } from './serving/router.rip'
+import { serveStaticRoute, buildRedirectResponse } from './serving/static.rip'
+import { createUpstreamPool, addUpstream, getUpstream, releaseTarget, startHealthChecks, stopHealthChecks, checkTargetHealth } from './serving/upstream.rip'
+import { formatPort, maybeAddSecurityHeaders as addSecurityHeaders, buildStatusBody, buildRipdevUrl, generateRequestId, watchUnavailableResponse, serverBusyResponse, serviceUnavailableResponse, gatewayTimeoutResponse, queueTimeoutResponse, buildUpstreamResponse, forwardOnceWithTimeout, createWsPassthrough } from './serving/forwarding.rip'
+import { proxyRouteToUpstream as proxyRouteToUpstreamFn, upgradeProxyWebSocket as upgradeProxyWebSocketFn } from './serving/proxy.rip'
+import { isCurrentVersion as schedulerIsCurrentVersion, getNextAvailableSocket as schedulerGetNextAvailableSocket, releaseWorker as schedulerReleaseWorker, shouldRetryBodylessBusy, processQueuedJob, drainQueueOnce } from './serving/queue.rip'
+import { createServingRuntime, createReloadHistoryEntry, restoreRegistrySnapshot, configNote, loadRuntimeConfig, runCheckConfig } from './serving/runtime.rip'
+import { buildVerificationResult, verifyRouteRuntime } from './serving/verify.rip'
+import { loadTlsMaterial as loadTls, printCertSummary, buildTlsArray } from './serving/tls.rip'
+import { createMetrics, buildDiagnosticsBody } from './serving/metrics.rip'
+import { createRateLimiter, rateLimitResponse } from './serving/ratelimit.rip'
+import { validateRequest } from './serving/security.rip'
+import { createHub, generateClientId, handlePublish, getRealtimeStats, proxyRealtimeToWorker as realtimeProxyToWorker, buildWebSocketHandlers as buildWsHandlers } from './serving/realtime.rip'
+
 import { buildStreamRuntime, startStreamListeners, stopStreamListeners, streamDiagnostics } from './streams/index.rip'
 import { createStreamRuntime, streamUsesListenPort } from './streams/runtime.rip'
 
-# Match capture holder for Rip's =~
+import { getControlSocketPath, getPidFilePath, handleWorkerControl, handleWatchControl, handleRegistryControl, handleReloadControl } from './control/control.rip'
+import { getLanIP as controlGetLanIP, startMdnsAdvertisement as controlStartMdnsAdvertisement, stopMdnsAdvertisements as controlStopMdnsAdvertisements } from './control/mdns.rip'
+import { registerWatchGroup, handleWatchGroup, broadcastWatchChange } from './control/watchers.rip'
+import { computeHideUrls, logStartupSummary, createCleanup, installShutdownHandlers, setEventJsonMode, logEvent } from './control/lifecycle.rip'
+import { runVersionOutput, runHelpOutput, stopServer, reloadConfig, listApps, showInfo, parseFlags } from './control/cli.rip'
+import { runSetupMode, runWorkerMode } from './control/worker.rip'
+import { Manager } from './control/manager.rip'
+
+import { createChallengeStore, handleChallengeRequest, loadCert as acmeLoadCert, defaultCertDir } from './acme/store.rip'
+import { createAcmeManager } from './acme/manager.rip'
+
 _ = null
 
-# ==============================================================================
-# Constants
-# ==============================================================================
+defaultEntry = join(import.meta.dir, 'browse.rip')
 
-MAX_BACKOFF_MS = 30000         # Max delay between worker restart attempts
-MAX_RESTART_COUNT = 10         # Max consecutive worker crashes before giving up
-STABILITY_THRESHOLD_MS = 60000 # Worker uptime before restart count resets
-
-# ==============================================================================
-# Utilities
-# ==============================================================================
-
-nowMs = -> Date.now()
-
-_envOverride = null
-_debugMode = false
-
-isDev = ->
-  env = (_envOverride or process.env.NODE_ENV or '').toLowerCase()
-  env in ['development', 'dev', '']
-
-isDebug = -> _debugMode or process.env.RIP_DEBUG?
-
-applyFlagSideEffects = (flags) ->
-  _envOverride = flags.envOverride if flags.envOverride
-  _debugMode = flags.debug is true
-
-formatTimestamp = ->
-  now = new Date()
-  pad = (n, w = 2) -> String(n).padStart(w, '0')
-  timestamp = "#{now.getFullYear()}-#{pad(now.getMonth() + 1)}-#{pad(now.getDate())} #{pad(now.getHours())}:#{pad(now.getMinutes())}:#{pad(now.getSeconds())}.#{String(now.getMilliseconds()).padStart(3, '0')}"
-  tzMin = now.getTimezoneOffset()
-  tzSign = if tzMin <= 0 then '+' else '-'
-  tzAbs = Math.abs(tzMin)
-  timezone = "#{tzSign}#{String(Math.floor(tzAbs / 60)).padStart(2, '0')}#{String(tzAbs % 60).padStart(2, '0')}"
-  { timestamp, timezone }
-
-scale = (value, unit, pad = true) ->
-  if value > 0 and Number.isFinite(value)
-    span = ['T', 'G', 'M', 'k', (if pad then ' ' else ''), 'm', 'µ', 'n', 'p']
-    base = 4
-    minSlot = 0
-    maxSlot = span.length - 1
-    slot = base
-
-    while value < 0.995 and slot <= maxSlot # use 0.05 to try to keep units
-      value *= 1000
-      slot++
-    while value >= 999.5 and slot >= minSlot
-      value /= 1000
-      slot--
-
-    if slot >= minSlot and slot <= maxSlot
-      tens = Math.round(value * 10) / 10
-      if tens >= 99.5
-        nums = Math.round(value).toString()
-      else if tens >= 10
-        nums = Math.round(value).toString()
-      else
-        nums = tens.toFixed(1)
-      nums = nums.padStart(3, ' ') if pad
-      return "#{nums}#{span[slot]}#{unit}"
-
-  return (if pad then '  0 ' else '0') + unit if value is 0
-  '???' + (if pad then ' ' else '') + unit
-
-logAccessJson = (app, req, res, totalSeconds, workerSeconds) ->
-  url = new URL(req.url)
-  len = res.headers.get('content-length')
-  type = (res.headers.get('content-type') or '').split(';')[0] or undefined
-  p JSON.stringify
-    t: new Date().toISOString()
-    app: app
-    method: req.method or 'GET'
-    path: url.pathname
-    status: res.status
-    totalSeconds: totalSeconds
-    workerSeconds: workerSeconds
-    type: type
-    length: if len then Number(len) else undefined
-
-typeAbbrev =
-  html: 'html', css: 'css', javascript: 'js', json: 'json', plain: 'text'
-  png: 'png', jpeg: 'jpg', gif: 'gif', webp: 'webp', svg: 'svg'
-  'svg+xml': 'svg', 'x-icon': 'ico', 'octet-stream': 'bin', 'x-rip': 'rip'
-
-logAccessHuman = (app, req, res, totalSeconds, workerSeconds) ->
-  { timestamp, timezone } = formatTimestamp()
-  dur = scale(totalSeconds, 's')
-  method = req.method or 'GET'
-  url = new URL(req.url)
-  path = url.pathname
-  status = res.status
-  bytes = Number(res.headers.get('content-length') or 0)
-  size = scale(bytes, 'B')
-  contentType = (res.headers.get('content-type') or '').split(';')[0] or ''
-  sub = if contentType.includes('/') then contentType.split('/')[1] else contentType
-  type = (typeAbbrev[sub] or sub or '').padEnd(4)
-  p "#{timestamp} #{timezone} #{dur} │ #{status} #{type} #{size} │ #{method} #{path}"
-
-INTERNAL_HEADERS = new Set(['rip-worker-busy', 'rip-worker-id', 'rip-no-log'])
-
-stripInternalHeaders = (h) ->
-  out = new Headers()
-  for [k, v] as h.entries()
-    continue if INTERNAL_HEADERS.has(k.toLowerCase())
-    out.append(k, v)
-  out
-
-defaultEntry = join(import.meta.dir, 'default.rip')
-
-# Edge runtime lifecycle helpers are in edge/runtime.rip
-
-# ==============================================================================
-# Worker Mode
-# ==============================================================================
-
-# ==============================================================================
-# Manager Class
-# ==============================================================================
-
-class Manager
-  constructor: (@flags) ->
-    @appWorkers = new Map()
-    @shuttingDown = false
-    @lastCheck = 0
-    @currentMtimes = new Map()
-    @rollingApps = new Set()
-    @lastRollAt = new Map()
-    @nextWorkerId = -1
-    @retiringIds = new Set()
-    @restartBudgets = new Map()  # slotIndex -> { count, backoffMs }
-    @deferredDeaths = new Set()   # worker IDs that died during rolling restart
-    @currentVersion = 1
-    @server = null
-    @dbUrl = null
-    @appWatchers = new Map()
-    @codeWatchers = new Map()
-    @defaultAppId = @flags.appName
-
-  getWorkers: (appId) ->
-    appId = appId or @defaultAppId
-    unless @appWorkers.has(appId)
-      @appWorkers.set(appId, [])
-    @appWorkers.get(appId)
-
-  getAppState: (appId) ->
-    @server?.appRegistry?.apps?.get(appId) or null
-
-  allAppStates: ->
-    return [] unless @server?.appRegistry?.apps
-    Array.from(@server.appRegistry.apps.values())
-
-  runSetupForApp: (app) ->
-    setupFile = join(app.config.appBaseDir or dirname(app.config.entry or @flags.appEntry), 'setup.rip')
-    return unless existsSync(setupFile)
-
-    dbUrl = process.env.DB_URL or 'http://localhost:4213'
-    dbAlreadyRunning = try
-      fetch! dbUrl + '/health'
-      true
-    catch
-      false
-    @dbUrl = dbUrl unless dbAlreadyRunning
-
-    setupEnv = Object.assign {}, process.env, app.config.env or {},
-      RIP_SETUP_MODE: '1'
-      RIP_SETUP_FILE: setupFile
-      APP_ID: String(app.appId)
-      APP_ENTRY: app.config.entry or @flags.appEntry
-      APP_BASE_DIR: app.config.appBaseDir or @flags.appBaseDir
-    proc = Bun.spawn ['rip', import.meta.path],
-      stdout: 'inherit'
-      stderr: 'inherit'
-      stdin: 'ignore'
-      cwd: process.cwd()
-      env: setupEnv
-
-    code = await proc.exited
-    if code isnt 0
-      console.error "rip-server: setup exited with code #{code} for app #{app.appId}"
-      exit 1
-
-  start: ->
-    @stop!
-
-    for app in @allAppStates()
-      @runSetupForApp!(app) if app.config.entry
-
-    for app in @allAppStates()
-      workers = @getWorkers(app.appId)
-      workers.length = 0
-      desiredWorkers = app.config.workers or @flags.workers
-      for i in [0...desiredWorkers]
-        w = @spawnWorker!(app.appId, @currentVersion)
-        workers.push(w)
-
-    if @flags.reload
-      for app in @allAppStates()
-        @currentMtimes.set(app.appId, @getEntryMtime(app.appId))
-
-      interval = setInterval =>
-        return clearInterval(interval) if @shuttingDown
-        now = Date.now()
-        return if now - @lastCheck < 100
-        @lastCheck = now
-        for app in @allAppStates()
-          appId = app.appId
-          mt = @getEntryMtime(appId)
-          previous = @currentMtimes.get(appId) or 0
-          if mt > previous
-            continue if @rollingApps.has(appId)
-            continue if now - (@lastRollAt.get(appId) or 0) < 200
-            @currentMtimes.set(appId, mt)
-            @rollingApps.add(appId)
-            @lastRollAt.set(appId, now)
-            @rollingRestart(appId).finally => @rollingApps.delete(appId)
-      , 50
-
-      # Watch files in each app directory (on by default, --static disables)
-      if @flags.watch
-        for app in @allAppStates()
-          continue unless app.config.entry and app.config.appBaseDir
-          entryFile = app.config.entry
-          entryBase = basename(entryFile)
-          try
-            watcher = watch app.config.appBaseDir, { recursive: true }, (event, filename) =>
-              return unless shouldTriggerCodeReload(filename, @flags.watch, entryBase)
-              try
-                now = new Date()
-                utimesSync(entryFile, now, now)
-              catch
-                null
-            @codeWatchers.set(app.appId, watcher)
-          catch e
-            warn "rip-server: directory watch failed for #{app.appId}: #{e.message}"
-
-  stop: ->
-    for [appId, workers] as @appWorkers
-      for w in workers
-        try w.process.kill()
-        try unlinkSync(w.socketPath)
-    @appWorkers.clear()
-
-    # Close all FS watcher handles
-    for [prefix, entry] as @appWatchers
-      clearTimeout(entry.timer) if entry.timer
-      for watcher in (entry.watchers or [])
-        try watcher.close()
-    @appWatchers.clear()
-    for [appId, watcher] as @codeWatchers
-      try watcher.close()
-    @codeWatchers.clear()
-
-  watchDirs: (prefix, dirs) ->
-    registerAppWatchDirs(@appWatchers, prefix, dirs, @server, (-> process.cwd()))
-
-  spawnWorker: (appId, version) ->
-    workerId = ++@nextWorkerId
-    app = @getAppState(appId) or { appId: appId, config: {} }
-    tracked = spawnTrackedWorker(@flags, workerId, (version or @currentVersion), nowMs, import.meta.path, appId, app.config)
-    @monitor(tracked)
-    tracked
-
-  monitor: (w) ->
-    # Watch for process exit in background (don't block)
-    w.process.exited.then =>
-      return if @shuttingDown
-      return if @retiringIds.has(w.id)
-      if @rollingApps.has(w.appId)
-        @deferredDeaths.add(w.id)
-        return
-
-      # Notify server to remove dead worker's socket entry (fire-and-forget)
-      postWorkerQuit(@flags.socketPrefix, w.id)
-
-      # Track restart budget by slot (survives worker replacement)
-      workers = @getWorkers(w.appId)
-      slotIdx = workers.findIndex((x) -> x.id is w.id)
-      return if slotIdx < 0
-
-      budget = @restartBudgets.get(slotIdx) or { count: 0, backoffMs: 1000 }
-
-      # Reset budget if worker ran long enough to be considered stable
-      if nowMs() - w.startedAt > STABILITY_THRESHOLD_MS
-        budget.count = 0
-        budget.backoffMs = 1000
-
-      budget.count++
-      budget.backoffMs = Math.min(budget.backoffMs * 2, MAX_BACKOFF_MS)
-      @restartBudgets.set(slotIdx, budget)
-
-      if budget.count > MAX_RESTART_COUNT
-        logEvent('worker_abandon', { workerId: w.id, slot: slotIdx, restarts: budget.count })
-        return
-      @server?.metrics and @server.metrics.workerRestarts++
-      logEvent('worker_restart', { workerId: w.id, slot: slotIdx, attempt: budget.count, backoffMs: budget.backoffMs })
-      setTimeout =>
-        workers[slotIdx] = @spawnWorker(w.appId, @currentVersion) if slotIdx < workers.length
-      , budget.backoffMs
-
-  waitWorkerReady: (socketPath, timeoutMs = 5000) ->
-    waitForWorkerReady(socketPath, timeoutMs)
-
-  rollingRestart: (appId = null) ->
-    apps = if appId then [@getAppState(appId)].filter(Boolean) else @allAppStates()
-    nextVersion = @currentVersion + 1
-
-    for app in apps
-      workers = @getWorkers(app.appId)
-      olds = [...workers]
-      pairs = []
-
-      for oldWorker in olds
-        replacement = @spawnWorker!(app.appId, nextVersion)
-        workers.push(replacement)
-        pairs.push({ old: oldWorker, replacement })
-
-      readyResults = Promise.all!(pairs.map((p) => @waitWorkerReady(p.replacement.socketPath, 3000)))
-      allReady = readyResults.every((ready) -> ready)
-      unless allReady
-        console.error "[manager] Rolling restart aborted: not all new workers ready for app #{app.appId}"
-        for pair, i in pairs
-          unless readyResults[i]
-            try pair.replacement.process.kill()
-            idx = workers.indexOf(pair.replacement)
-            workers.splice(idx, 1) if idx >= 0
-        if @deferredDeaths.size > 0
-          for deadId as @deferredDeaths
-            idx = workers.findIndex((x) -> x.id is deadId)
-            workers[idx] = @spawnWorker(app.appId, @currentVersion) if idx >= 0
-          @deferredDeaths.clear()
-        return
-
-      @currentVersion = nextVersion
-
-      for { old } in pairs
-        @retiringIds.add(old.id)
-        try old.process.kill()
-
-      Promise.all!(pairs.map(({ old }) -> old.process.exited.catch(-> null)))
-
-      for { old } in pairs
-        postWorkerQuit(@flags.socketPrefix, old.id)
-
-      retiring = new Set(pairs.map((p) -> p.old.id))
-      filtered = workers.filter((w) -> not retiring.has(w.id))
-      workers.length = 0
-      workers.push(...filtered)
-      @retiringIds.delete(id) for id as retiring
-
-      if @deferredDeaths.size > 0
-        for deadId as @deferredDeaths
-          idx = workers.findIndex((x) -> x.id is deadId)
-          workers[idx] = @spawnWorker(app.appId, @currentVersion) if idx >= 0
-        @deferredDeaths.clear()
-
-  getEntryMtime: (appId = null) ->
-    app = @getAppState(appId or @defaultAppId)
-    entry = app?.config?.entry or @flags.appEntry
-    try statSync(entry).mtimeMs catch then 0
 
 # ==============================================================================
 # Server Class
@@ -441,12 +81,12 @@ class Server
     @watchGroups = new Map()
     @manager = null
     @configuredAppIds = new Set()
-    @edgeRuntime = createEdgeRuntime()
-    @retiredEdgeRuntimes = []
+    @servingRuntime = createServingRuntime()
+    @retiredServingRuntimes = []
     @streamRuntime = createStreamRuntime()
     @retiredStreamRuntimes = []
     @reloadAttemptSeq = 0
-    @configInfo = @edgeRuntime.configInfo
+    @configInfo = @servingRuntime.configInfo
     @configInfo.reloadHistory = []
     @configInfo.lastReload = null
     try
@@ -482,21 +122,21 @@ class Server
       removeApp(@appRegistry, appId)
     @configuredAppIds.clear()
 
-  retainEdgeRuntime: (runtime) ->
+  retainRuntime: (runtime) ->
     runtime.inflight++
     runtime
 
-  releaseEdgeRuntime: (runtime) ->
+  releaseRuntime: (runtime) ->
     runtime.inflight = Math.max(0, runtime.inflight - 1)
-    @cleanupRetiredEdgeRuntimes()
+    @cleanupRetiredServingRuntimes()
 
-  retainEdgeRuntimeWs: (runtime) ->
+  retainRuntimeWs: (runtime) ->
     runtime.wsConnections++
     runtime
 
-  releaseEdgeRuntimeWs: (runtime) ->
+  releaseRuntimeWs: (runtime) ->
     runtime.wsConnections = Math.max(0, runtime.wsConnections - 1)
-    @cleanupRetiredEdgeRuntimes()
+    @cleanupRetiredServingRuntimes()
 
   retainStreamRuntime: (runtime) ->
     runtime.inflight++
@@ -506,14 +146,14 @@ class Server
     runtime.inflight = Math.max(0, runtime.inflight - 1)
     @cleanupRetiredStreamRuntimes()
 
-  cleanupRetiredEdgeRuntimes: ->
+  cleanupRetiredServingRuntimes: ->
     keep = []
-    for runtime in @retiredEdgeRuntimes
+    for runtime in @retiredServingRuntimes
       if runtime.inflight > 0 or runtime.wsConnections > 0
         keep.push(runtime)
       else
         stopHealthChecks(runtime.upstreamPool)
-    @retiredEdgeRuntimes = keep
+    @retiredServingRuntimes = keep
 
   cleanupRetiredStreamRuntimes: ->
     keep = []
@@ -531,18 +171,18 @@ class Server
       lastReload: entry
       reloadHistory: history
     )
-    @edgeRuntime.configInfo = @configInfo if @edgeRuntime?.configInfo
+    @servingRuntime.configInfo = @configInfo if @servingRuntime?.configInfo
 
   nextReloadAttemptId: ->
     @reloadAttemptSeq++
     "reload-#{@reloadAttemptSeq}"
 
-  verifyEdgeRuntime: (runtime, loaded) ->
-    return buildVerificationResult(true) unless runtime?.configInfo?.kind is 'edge'
+  verifyRuntime: (runtime, loaded) ->
+    return buildVerificationResult(true) unless runtime?.configInfo?.kind in ['serve', 'edge']
     verifyRouteRuntime(runtime, @appRegistry, @defaultAppId, getUpstream, checkTargetHealth, getAppState, runtime.verifyPolicy or runtime.configInfo.verifyPolicy or {})
 
-  buildEdgeRuntime: (loaded) ->
-    return createEdgeRuntime() unless loaded?.source?.kind is 'edge'
+  buildRuntime: (loaded) ->
+    return createServingRuntime() unless loaded?.source?.kind in ['serve', 'edge']
     upstreamPool = createUpstreamPool()
     for upstreamId, upstreamConfig of (loaded.normalized.upstreams or {})
       addUpstream(upstreamPool, upstreamId, upstreamConfig)
@@ -559,17 +199,19 @@ class Server
       lastErrorCode: null
       lastErrorDetails: null
       rolledBackFrom: null
-      verifyPolicy: loaded.normalized.edge?.verify or null
-      certs: loaded.normalized.certs or null
+      verifyPolicy: loaded.normalized.server?.verify or null
+      acmeDomains: loaded.normalized.server?.acmeDomains or []
+      certDir: loaded.normalized.server?.certDir or null
+      certs: loaded.normalized.resolvedCerts or null
       activeRouteDescriptions: (routeTable.routes or []).map(describeRoute).filter(Boolean)
       lastReload: @configInfo?.lastReload or null
       reloadHistory: @configInfo?.reloadHistory or []
-    runtime = createEdgeRuntime(configInfo, upstreamPool, routeTable)
+    runtime = createServingRuntime(configInfo, upstreamPool, routeTable)
     startHealthChecks(runtime.upstreamPool)
     runtime
 
   buildStreamRuntimeForConfig: (loaded) ->
-    return createStreamRuntime() unless loaded?.source?.kind is 'edge'
+    return createStreamRuntime() unless loaded?.source?.kind in ['serve', 'edge']
     buildStreamRuntime(loaded.normalized)
 
   startAppServerOnPort: (p, opts = {}) ->
@@ -581,7 +223,9 @@ class Server
         return Bun.serve(Object.assign({ port, idleTimeout: 0, fetch: fetchFn }, wsOpts, opts))
       catch e
         if e?.code is 'EACCES' and port < 1024
-          port = if opts.tls then 3443 else 3000
+          fallback = if opts.tls then 3443 else 3000
+          warn "rip-server: port #{port} requires elevated privileges, falling back to #{fallback}"
+          port = fallback
           p = port
           continue
         throw e unless e?.code is 'EADDRINUSE'
@@ -650,15 +294,15 @@ class Server
     startStreamListeners(@streamRuntime, @buildStreamListenerOptions())
     @streamListenersDeferred = false
 
-  activateEdgeRuntime: (runtime) ->
+  activateRuntime: (runtime) ->
     return unless runtime
-    oldRuntime = @edgeRuntime
-    @edgeRuntime = runtime
+    oldRuntime = @servingRuntime
+    @servingRuntime = runtime
     @configInfo = runtime.configInfo
     if oldRuntime and oldRuntime isnt runtime
       oldRuntime.retiredAt = new Date().toISOString()
-      @retiredEdgeRuntimes.push(oldRuntime)
-      @cleanupRetiredEdgeRuntimes()
+      @retiredServingRuntimes.push(oldRuntime)
+      @cleanupRetiredServingRuntimes()
     oldRuntime
 
   activateStreamRuntime: (runtime, options = {}) ->
@@ -687,15 +331,15 @@ class Server
       @cleanupRetiredStreamRuntimes()
     oldRuntime
 
-  rollbackEdgeRuntime: (oldRuntime, failedRuntime, snapshot, verification) ->
+  rollbackRuntime: (oldRuntime, failedRuntime, snapshot, verification) ->
     restoreRegistrySnapshot(@appRegistry, snapshot)
     @configuredAppIds = new Set(snapshot.configured)
 
     stopHealthChecks(failedRuntime.upstreamPool)
-    @retiredEdgeRuntimes = @retiredEdgeRuntimes.filter((runtime) -> runtime isnt oldRuntime and runtime isnt failedRuntime)
+    @retiredServingRuntimes = @retiredServingRuntimes.filter((runtime) -> runtime isnt oldRuntime and runtime isnt failedRuntime)
     if oldRuntime
       oldRuntime.retiredAt = null
-      @edgeRuntime = oldRuntime
+      @servingRuntime = oldRuntime
       @configInfo = Object.assign({}, oldRuntime.configInfo,
         lastResult: 'rolled_back'
         lastError: verification.message
@@ -711,8 +355,8 @@ class Server
       lastErrorCode: verification.code
       lastErrorDetails: verification.details or null
     )
-    @retiredEdgeRuntimes.push(failedRuntime)
-    @cleanupRetiredEdgeRuntimes()
+    @retiredServingRuntimes.push(failedRuntime)
+    @cleanupRetiredServingRuntimes()
 
   rollbackStreamRuntime: (oldRuntime, failedRuntime) ->
     stopStreamListeners(failedRuntime, true)
@@ -740,10 +384,8 @@ class Server
       details = if applied then null else (@configInfo?.lastErrorDetails or null)
       entry = createReloadHistoryEntry(attemptId, source, oldVersion, newVersion, result, reason, code, details)
       @appendReloadHistory(entry)
-      if loaded and not flags.quiet
-        label = if loaded.source.kind is 'edge' then 'Edgefile.rip' else 'config.rip'
-        p "rip-server: loaded #{label} with #{loaded.summary.counts.apps} app(s), #{loaded.summary.counts.upstreams} upstream(s), #{loaded.summary.counts.routes} route(s)"
-        p "rip-server: note: #{@configInfo.note}" if @configInfo.note
+      if loaded and not flags.quiet and source isnt 'startup'
+        p "rip-server: loaded serve.rip with #{loaded.summary.counts.apps} app(s), #{loaded.summary.counts.proxies} proxy(s), #{loaded.summary.counts.routes} route(s)"
       logEvent('config_loaded',
         id: attemptId
         source: source
@@ -755,10 +397,10 @@ class Server
         reason: reason
         code: code
         apps: @configInfo.counts.apps
-        upstreams: @configInfo.counts.upstreams
+        proxies: @configInfo.counts.proxies
         routes: @configInfo.counts.routes
-        sites: @configInfo.counts.sites
-      ) if loaded or source isnt 'startup'
+        hosts: @configInfo.counts.hosts
+      ) if source isnt 'startup'
       {
         ok: applied
         id: attemptId
@@ -781,10 +423,10 @@ class Server
       entry = createReloadHistoryEntry(attemptId, source, oldVersion, @configInfo?.version or null, 'rejected', e.message or String(e), 'reload_exception', null)
       @appendReloadHistory(entry)
       if e.validationErrors
-        label = if flags.edgefilePath or findEdgeFile(flags.appEntry) then 'Edgefile.rip' else 'config.rip'
-        console.error formatConfigErrors(label, e.validationErrors)
+        label = 'serve.rip'
+        warn formatConfigErrors(label, e.validationErrors)
       else
-        console.error "rip-server: failed to load active config: #{e.message or e}"
+        warn "rip-server: failed to load active config: #{e.message or e}"
       logEvent('config_loaded',
         id: attemptId
         source: source
@@ -816,31 +458,28 @@ class Server
       hostIndex: new Map(@appRegistry.hostIndex)
       wildcardIndex: new Map(@appRegistry.wildcardIndex)
       configured: new Set(@configuredAppIds)
-    oldRuntime = @edgeRuntime
+    oldRuntime = @servingRuntime
     oldStreamRuntime = @streamRuntime
-    stagedRuntime = @buildEdgeRuntime(loaded)
+    stagedRuntime = @buildRuntime(loaded)
     stagedStreamRuntime = @buildStreamRuntimeForConfig(loaded)
 
     @clearConfiguredApps()
     unless loaded
-      @activateEdgeRuntime(stagedRuntime)
+      @activateRuntime(stagedRuntime)
       @activateStreamRuntime(stagedStreamRuntime, deferListeners: source is 'startup')
       return
 
     baseDir = dirname(loaded.source.path)
     try
-      registered = if loaded.source.kind is 'edge'
-        applyEdgeConfig(loaded.normalized, @appRegistry, registerApp, baseDir)
-      else
-        applyConfig(loaded.normalized, @appRegistry, registerApp, baseDir)
+      registered = applyConfig(loaded.normalized, @appRegistry, registerApp, baseDir)
       for app in registered
         @configuredAppIds.add(app.id) unless app.id is @defaultAppId
-      oldRuntime = @activateEdgeRuntime(stagedRuntime)
+      oldRuntime = @activateRuntime(stagedRuntime)
       oldStreamRuntime = @activateStreamRuntime(stagedStreamRuntime, deferListeners: source is 'startup')
       if verifyAfterActivate
-        result = @verifyEdgeRuntime!(stagedRuntime, loaded)
+        result = @verifyRuntime!(stagedRuntime, loaded)
         unless result.ok
-          @rollbackEdgeRuntime(oldRuntime, stagedRuntime, snapshot, result)
+          @rollbackRuntime(oldRuntime, stagedRuntime, snapshot, result)
           @rollbackStreamRuntime(oldStreamRuntime, stagedStreamRuntime)
           logEvent('config_rollback',
             source: source
@@ -858,7 +497,7 @@ class Server
           rolledBackFrom: null
           loadedAt: new Date().toISOString()
         )
-        @edgeRuntime.configInfo = @configInfo
+        @servingRuntime.configInfo = @configInfo
         logEvent('config_activated',
           source: source
           oldVersion: oldRuntime?.configInfo?.version
@@ -881,14 +520,15 @@ class Server
       @flags.httpPort = @server.port
     else
       @tlsMaterial = @loadTlsMaterial!
-      if @edgeRuntime?.configInfo?.certs and Object.keys(@edgeRuntime.configInfo.certs).length > 0
-        @tlsMaterial = buildTlsArray(@tlsMaterial, @edgeRuntime.configInfo.certs)
+      if @servingRuntime?.configInfo?.certs and Object.keys(@servingRuntime.configInfo.certs).length > 0
+        @tlsMaterial = buildTlsArray(@tlsMaterial, @servingRuntime.configInfo.certs)
       publicHttpsPort = @flags.httpsPort or 443
       @applyHttpsMode(@shouldUseInternalHttps(@streamRuntime, publicHttpsPort), publicHttpsPort)
       httpsPort = @flags.httpsPort
       @streamListenersDeferred = true if @internalHttpsServer and @streamRuntime.listeners.size is 0
 
-      if @flags.redirectHttp or @flags.acme or @flags.acmeStaging
+      configHasAcme = @servingRuntime?.configInfo?.acmeDomains?.length > 0
+      if @flags.redirectHttp or @flags.acme or @flags.acmeStaging or configHasAcme
         challengeStore = @challengeStore
         try
           @server = Bun.serve
@@ -921,8 +561,8 @@ class Server
     , 1000
 
   stop: ->
-    stopHealthChecks(@edgeRuntime.upstreamPool)
-    stopHealthChecks(runtime.upstreamPool) for runtime in @retiredEdgeRuntimes
+    stopHealthChecks(@servingRuntime.upstreamPool)
+    stopHealthChecks(runtime.upstreamPool) for runtime in @retiredServingRuntimes
     stopStreamListeners(@streamRuntime, true)
     stopStreamListeners(runtime, true) for runtime in @retiredStreamRuntimes
     clearInterval(@queueSweepTimer) if @queueSweepTimer
@@ -942,90 +582,10 @@ class Server
     controlStopMdnsAdvertisements(@mdnsProcesses)
 
   proxyRouteToUpstream: (req, route, requestId, clientIp, runtime) ->
-    upstream = getUpstream(runtime.upstreamPool, route.upstream)
-    return serviceUnavailableResponse() unless upstream
-
-    attempt = 1
-    start = performance.now()
-
-    while attempt <= upstream.retry.attempts
-      target = selectTarget(upstream, runtime.upstreamPool.nowFn)
-      return serviceUnavailableResponse() unless target
-
-      markTargetBusy(target)
-      workerSeconds = 0
-      res = null
-      success = false
-
-      try
-        t0 = performance.now()
-        timeoutMs = route.timeouts?.readMs or upstream.timeouts?.readMs or @flags.readTimeoutMs
-        res = proxyToUpstream!(req, target.url,
-          timeoutMs: timeoutMs
-          clientIp: clientIp
-        )
-        workerSeconds = (performance.now() - t0) / 1000
-        success = res.status < 500
-      catch err
-        console.error "[server] proxyRouteToUpstream error:", err.message or err if isDebug()
-        res = serviceUnavailableResponse()
-      finally
-        releaseTarget(target, workerSeconds * 1000, success, runtime.upstreamPool)
-
-      if res and shouldRetryUpstream(upstream.retry, req.method, res.status, false) and attempt < upstream.retry.attempts
-        delayMs = computeRetryDelayMs(upstream.retry, attempt, runtime.upstreamPool.randomFn)
-        await new Promise (r) -> setTimeout(r, delayMs)
-        attempt++
-        continue
-
-      totalSeconds = (performance.now() - start) / 1000
-      @metrics.forwarded++
-      @metrics.recordLatency(totalSeconds)
-      @metrics.recordStatus(res.status)
-      response = buildUpstreamResponse(
-        res,
-        req,
-        totalSeconds,
-        workerSeconds,
-        @maybeAddSecurityHeaders.bind(@),
-        @logAccess.bind(@),
-        stripInternalHeaders
-      )
-      response.headers.set('X-Request-Id', requestId) if requestId
-      response.headers.set('X-Rip-Route', route.id) if route.id
-      return response
-
-    serviceUnavailableResponse()
+    proxyRouteToUpstreamFn!(req, route, requestId, clientIp, runtime, @metrics, @flags, @maybeAddSecurityHeaders.bind(@), @logAccess.bind(@))
 
   upgradeProxyWebSocket: (req, bunServer, route, requestId, runtime) ->
-    upstream = getUpstream(runtime.upstreamPool, route.upstream)
-    return new Response('Service unavailable', { status: 503 }) unless upstream
-    target = selectTarget(upstream, runtime.upstreamPool.nowFn)
-    return new Response('Service unavailable', { status: 503 }) unless target
-
-    inUrl = new URL(req.url)
-    protocols = (req.headers.get('sec-websocket-protocol') or '')
-      .split(',')
-      .map((p) -> p.trim())
-      .filter(Boolean)
-
-    markTargetBusy(target)
-    data =
-      kind: 'edge-proxy'
-      runtime: runtime
-      requestId: requestId
-      routeId: route.id
-      upstreamTarget: target
-      upstreamUrl: toUpstreamWsUrl(target.url, inUrl.pathname, inUrl.search)
-      protocols: protocols
-      passthrough: null
-      released: false
-
-    if bunServer.upgrade(req, { data })
-      return
-
-    releaseTarget(target, 0, false, runtime.upstreamPool)
-    new Response('WebSocket upgrade failed', { status: 400 })
+    upgradeProxyWebSocketFn(req, bunServer, route, requestId, runtime)
 
   fetch: (req, bunServer) ->
     url = new URL(req.url)
@@ -1085,21 +645,26 @@ class Server
     # Assign request ID for tracing
     requestId = req.headers.get('x-request-id') or generateRequestId()
 
-    # Edge route table — upstream proxy routes can handle hosts outside the managed app registry
-    runtime = @edgeRuntime
+    # Route table — proxy routes can handle hosts outside the managed app registry
+    runtime = @servingRuntime
     matchedRoute = matchRoute(runtime.routeTable, host, url.pathname, req.method)
-    if matchedRoute?.upstream and matchedRoute.websocket and bunServer
+    if matchedRoute?.proxy and matchedRoute.websocket and bunServer
       return @upgradeProxyWebSocket(req, bunServer, matchedRoute, requestId, runtime)
-    if matchedRoute?.upstream
-      @retainEdgeRuntime(runtime)
+    if matchedRoute?.proxy
+      @retainRuntime(runtime)
       try
         return @proxyRouteToUpstream!(req, matchedRoute, requestId, clientIp, runtime)
       finally
-        @releaseEdgeRuntime(runtime)
+        @releaseRuntime(runtime)
     if matchedRoute?.static
-      return serveStaticRoute(req, url, matchedRoute)
+      start = performance.now()
+      res = serveStaticRoute(req, url, matchedRoute)
+      @logAccess(req, res, (performance.now() - start) / 1000, 0)
+      return res
     if matchedRoute?.redirect
-      return buildRedirectResponse(req, url, matchedRoute)
+      res = buildRedirectResponse(req, url, matchedRoute)
+      @logAccess(req, res, 0, 0)
+      return res
 
     # Resolve host to app — app traffic falls back to the managed worker registry
     appId = matchedRoute?.app or resolveHost(@appRegistry, host)
@@ -1107,7 +672,7 @@ class Server
     app = getAppState(@appRegistry, appId)
     return new Response('Host not found', { status: 404 }) unless app
 
-    @retainEdgeRuntime(runtime) if matchedRoute?.app
+    @retainRuntime(runtime) if matchedRoute?.app
 
     # Fast path: try available worker
     if app.inflightTotal < Math.max(1, app.sockets.length)
@@ -1118,13 +683,13 @@ class Server
         try
           return @forwardToWorker!(req, sock, app, requestId)
         finally
-          @releaseEdgeRuntime(runtime) if matchedRoute?.app
+          @releaseRuntime(runtime) if matchedRoute?.app
           app.inflightTotal--
           setImmediate => @drainQueue(app)
 
     if app.queue.length >= app.maxQueue
       @metrics.queueShed++
-      @releaseEdgeRuntime(runtime) if matchedRoute?.app
+      @releaseRuntime(runtime) if matchedRoute?.app
       return serverBusyResponse()
 
     @metrics.queued++
@@ -1133,66 +698,56 @@ class Server
         originalResolve = resolve
         originalReject = reject
         resolve = (value) =>
-          @releaseEdgeRuntime(runtime)
+          @releaseRuntime(runtime)
           originalResolve(value)
         reject = (err) =>
-          @releaseEdgeRuntime(runtime)
+          @releaseRuntime(runtime)
           originalReject(err)
       app.queue.push({ req, resolve, reject, enqueuedAt: nowMs() })
 
   status: ->
     app = getAppState(@appRegistry, @defaultAppId)
     workerCount = if app then app.sockets.length else 0
-    body = edgeBuildStatusBody(@startedAt, workerCount, @appRegistry.hostIndex, @serverVersion, @flags.appName, @flags.httpPort, @flags.httpsPort, nowMs)
+    body = buildStatusBody(@startedAt, workerCount, @appRegistry.hostIndex, @serverVersion, @flags.appName, @flags.httpPort, @flags.httpsPort, nowMs)
     headers = new Headers({ 'content-type': 'application/json', 'cache-control': 'no-cache' })
     @maybeAddSecurityHeaders(headers)
     new Response(body, { headers })
 
   diagnostics: ->
-    snap = @metrics.snapshot(@startedAt, @appRegistry, @edgeRuntime.upstreamPool)
-    body = JSON.stringify
-      status: if snap.gauges.workersActive > 0 then 'healthy' else 'degraded'
-      version: { server: @serverVersion, rip: @ripVersion }
-      uptime: snap.uptime
-      apps: snap.apps
-      upstreams: snap.upstreams
-      metrics:
-        requests: snap.counters.requests
-        responses: snap.counters.responses
-        latency: snap.latency
-        queue: snap.counters.queue
-        workers: snap.counters.workers
-        acme: snap.counters.acme
-        websocket: snap.counters.websocket
-      gauges: snap.gauges
-      realtime: getRealtimeStats(@realtimeHub)
+    body = buildDiagnosticsBody
+      metrics: @metrics
+      startedAt: @startedAt
+      appRegistry: @appRegistry
+      servingRuntime: @servingRuntime
+      serverVersion: @serverVersion
+      ripVersion: @ripVersion
+      configInfo: @configInfo
+      realtimeStats: getRealtimeStats(@realtimeHub)
       hosts: Array.from(@appRegistry.hostIndex.keys())
-      streams: streamDiagnostics(@streamRuntime)
-      config: Object.assign({}, @configInfo,
-        multiplexer:
-          enabled: Boolean(@internalHttpsServer)
-          publicHttpsPort: @multiplexerPorts.publicHttpsPort
-          internalHttpsPort: @multiplexerPorts.internalHttpsPort
-        activeRuntime:
-          id: @edgeRuntime.id
-          inflight: @edgeRuntime.inflight
-          wsConnections: @edgeRuntime.wsConnections
-        retiredRuntimes: @retiredEdgeRuntimes.map((runtime) ->
-          id: runtime.id
-          inflight: runtime.inflight
-          wsConnections: runtime.wsConnections
-          retiredAt: runtime.retiredAt
-        )
-        activeStreamRuntime:
-          id: @streamRuntime.id
-          inflight: @streamRuntime.inflight
-          listeners: Array.from(@streamRuntime.listeners.keys())
-        retiredStreamRuntimes: @retiredStreamRuntimes.map((runtime) ->
-          id: runtime.id
-          inflight: runtime.inflight
-          listeners: Array.from(runtime.listeners.keys())
-          retiredAt: runtime.retiredAt
-        )
+      streamDiagnostics: streamDiagnostics(@streamRuntime)
+      multiplexer:
+        enabled: Boolean(@internalHttpsServer)
+        publicHttpsPort: @multiplexerPorts.publicHttpsPort
+        internalHttpsPort: @multiplexerPorts.internalHttpsPort
+      activeRuntime:
+        id: @servingRuntime.id
+        inflight: @servingRuntime.inflight
+        wsConnections: @servingRuntime.wsConnections
+      retiredRuntimes: @retiredServingRuntimes.map((runtime) ->
+        id: runtime.id
+        inflight: runtime.inflight
+        wsConnections: runtime.wsConnections
+        retiredAt: runtime.retiredAt
+      )
+      activeStreamRuntime:
+        id: @streamRuntime.id
+        inflight: @streamRuntime.inflight
+        listeners: Array.from(@streamRuntime.listeners.keys())
+      retiredStreamRuntimes: @retiredStreamRuntimes.map((runtime) ->
+        id: runtime.id
+        inflight: runtime.inflight
+        listeners: Array.from(runtime.listeners.keys())
+        retiredAt: runtime.retiredAt
       )
     headers = new Headers({ 'content-type': 'application/json', 'cache-control': 'no-cache' })
     @maybeAddSecurityHeaders(headers)
@@ -1271,7 +826,7 @@ class Server
           @releaseWorker(retry, app)
           return @buildResponse(res, req, start, workerSeconds, requestId)
     catch err
-      console.error "[server] forwardToWorker error:", err.message or err if isDebug()
+      warn "[server] forwardToWorker error:", err.message or err if isDebug()
       app.sockets = app.sockets.filter((x) -> x.socket isnt socket.socket)
       app.availableWorkers = app.availableWorkers.filter((x) -> x.socket isnt socket.socket)
       released = true
@@ -1326,9 +881,8 @@ class Server
 
     port = @flags.httpsPort or @flags.httpPort or 80
     protocol = if @flags.httpsPort then 'https' else 'http'
-    url = edgeBuildRipdevUrl(@flags.appName, protocol, port, formatPort)
+    url = buildRipdevUrl(@flags.appName, protocol, port, formatPort)
     @urls.push(url)
-    p "rip-server: #{url}" unless @flags.quiet or @flags.hideUrls
 
   controlFetch: (req) ->
     url = new URL(req.url)
@@ -1366,13 +920,14 @@ class Server
     new Response('not-found', { status: 404 })
 
   maybeAddSecurityHeaders: (headers) ->
-    edgeMaybeAddSecurityHeaders(@httpsActive, @flags.hsts, headers)
+    addSecurityHeaders(@httpsActive, @flags.hsts, headers)
 
   loadTlsMaterial: ->
-    edgeLoadTlsMaterial(@flags, import.meta.dir, (domain) -> acmeLoadCert(defaultCertDir(), domain))
+    certDir = @servingRuntime?.configInfo?.certDir or defaultCertDir()
+    loadTls(@flags, import.meta.dir, (domain) -> acmeLoadCert(certDir, domain))
 
   printCertSummary: (certPem) ->
-    edgePrintCertSummary(certPem)
+    printCertSummary(certPem)
 
   getLanIP: ->
     controlGetLanIP(networkInterfaces)
@@ -1392,77 +947,23 @@ class Server
   proxyRealtimeToWorker: (headers, frameType, body) ->
     app = getAppState(@appRegistry, @defaultAppId)
     return null unless app
-    sock = @getNextAvailableSocket(app)
-    return null unless sock
-    proxyHeaders = new Headers(headers)
-    proxyHeaders.set('Sec-WebSocket-Frame', frameType)
-    proxyHeaders.set('Content-Type', 'text/plain')
-    proxyHeaders.delete('Upgrade')
-    proxyHeaders.delete('Connection')
-    proxyHeaders.delete('Sec-WebSocket-Key')
-    proxyHeaders.delete('Sec-WebSocket-Version')
-    proxyHeaders.delete('Sec-WebSocket-Extensions')
-    try
-      res = fetch! "http://localhost/v1/realtime",
-        method: 'POST'
-        headers: proxyHeaders
-        body: body or ''
-        unix: sock.socket
-        decompress: false
-      res.text!
-    catch e
-      console.error "realtime: worker proxy failed:", e.message
-      null
-    finally
-      @releaseWorker(sock, app)
+    realtimeProxyToWorker(headers, frameType, body,
+      (=> @getNextAvailableSocket(app)),
+      ((sock) => @releaseWorker(sock, app))
+    )
 
   buildWebSocketHandlers: ->
-    hub = @realtimeHub
-    server = @
-
-    websocket:
-      idleTimeout: 120  # seconds — evict idle/stale connections
-      sendPings: true    # Bun auto-sends pings to detect dead connections
-
-      open: (ws) ->
-        if ws.data?.kind is 'edge-proxy'
-          server.retainEdgeRuntimeWs(ws.data.runtime)
-          ws.data.passthrough = createWsPassthrough(ws, ws.data.upstreamUrl, ws.data.protocols or [])
-          return
-
-        { clientId, headers } = ws.data
-        addClient(hub, clientId, ws)
-        server.metrics.wsConnections++
-        logEvent 'ws_open', { clientId }
-        response = server.proxyRealtimeToWorker!(headers, 'open', '')
-        processResponse(hub, response, clientId) if response
-
-      message: (ws, message) ->
-        if ws.data?.kind is 'edge-proxy'
-          ws.data.passthrough?.sendToUpstream(message)
-          return
-
-        { clientId, headers } = ws.data
-        server.metrics.wsMessages++
-        isBinary = typeof message isnt 'string'
-        msg = if isBinary then Buffer.from(message) else message
-        frameType = if isBinary then 'binary' else 'text'
-        response = server.proxyRealtimeToWorker!(headers, frameType, msg)
-        processResponse(hub, response, clientId) if response
-
-      close: (ws) ->
-        if ws.data?.kind is 'edge-proxy'
-          ws.data.passthrough?.close()
-          unless ws.data.released
-            releaseTarget(ws.data.upstreamTarget, 0, true, ws.data.runtime.upstreamPool)
-            server.releaseEdgeRuntimeWs(ws.data.runtime)
-            ws.data.released = true
-          return
-
-        { clientId, headers } = ws.data
-        logEvent 'ws_close', { clientId }
-        removeClient(hub, clientId)
-        server.proxyRealtimeToWorker!(headers, 'close', '')
+    buildWsHandlers(@realtimeHub,
+      metrics: @metrics
+      retainRuntimeWs: @retainRuntimeWs.bind(@)
+      releaseRuntimeWs: @releaseRuntimeWs.bind(@)
+      createWsPassthrough: (ws, url, protocols) -> createWsPassthrough(ws, url, protocols)
+      releaseProxyTarget: (data) =>
+        releaseTarget(data.upstreamTarget, 0, true, data.runtime.upstreamPool)
+        @releaseRuntimeWs(data.runtime)
+      logEvent: logEvent
+      proxyRealtimeToWorker: @proxyRealtimeToWorker.bind(@)
+    )
 
 
 # ==============================================================================
@@ -1476,27 +977,29 @@ main = ->
   if runHelpOutput(process.argv)
     return
 
-  # Subcommands: stop/list
-  if 'stop' in process.argv or 'list' in process.argv
-    prefix = cliComputeSocketPrefix(process.argv, resolveAppEntry, existsSync, isAbsolute, resolve, (-> process.cwd()))
-    if runStopSubcommand(process.argv, prefix, getPidFilePath, existsSync, readFileSync, process.kill.bind(process), Bun.spawnSync, import.meta.path)
-      return
-
-    if runListSubcommand(process.argv, prefix, getControlSocketPath, fetch, exit)
-      return
-
-  # Normal startup
   flags = parseFlags(process.argv, defaultEntry)
   applyFlagSideEffects(flags)
   if flags.checkConfig
     runCheckConfig!(flags)
+    return
+  if flags.showInfo
+    showInfo!(fetch, exit)
+    return
+  if flags.reloadConfig
+    reloadConfig!(flags.socketPrefix, getControlSocketPath, fetch, exit)
+    return
+  if flags.listApps
+    listApps!(flags.socketPrefix, getControlSocketPath, fetch, exit)
+    return
+  if flags.stopServer
+    stopServer(flags.socketPrefix, getPidFilePath, existsSync, readFileSync, process.kill.bind(process), Bun.spawnSync, import.meta.path)
     return
   setEventJsonMode(flags.jsonLogging)
   pidFile = getPidFilePath(flags.socketPrefix)
   writeFileSync(pidFile, String(process.pid))
 
   svr = new Server(flags)
-  mgr = new Manager(flags)
+  mgr = new Manager(flags, import.meta.path)
   svr.manager = mgr
   mgr.server = svr
 
@@ -1504,39 +1007,49 @@ main = ->
   exit 1 unless startupReload.ok
 
   cleanup = createCleanup(pidFile, svr, mgr, unlinkSync, fetch, process)
-  installShutdownHandlers(cleanup, process, ->
-    p 'rip-server: received SIGHUP, reloading config...'
-    if svr.reloadRuntimeConfig!(flags, 'sighup', true).ok
-      p 'rip-server: config reload applied'
-    else
-      p 'rip-server: config reload rejected, keeping previous config'
-  )
+  installShutdownHandlers(cleanup, process)
 
   # Suppress top URL lines if setup.rip will print them at the bottom
   flags.hideUrls = computeHideUrls(flags.appEntry, join, dirname, existsSync)
 
   svr.start!
 
-  # ACME auto-TLS: obtain cert if needed, start renewal loop
-  if (flags.acme or flags.acmeStaging) and flags.acmeDomain
+  # ACME auto-TLS: obtain certs for all domains, start renewal loop
+  unless flags.noAcme
+    acmeDomains = []
+    acmeDomains.push(flags.acmeDomain) if flags.acmeDomain
+    configAcme = svr.servingRuntime?.configInfo?.acmeDomains or []
+    for d in configAcme
+      acmeDomains.push(d) unless acmeDomains.includes(d)
+
+  if not flags.noAcme and acmeDomains?.length > 0
     acmeMgr = createAcmeManager
-      certDir: defaultCertDir()
+      certDir: svr.servingRuntime?.configInfo?.certDir or defaultCertDir()
       staging: flags.acmeStaging
       challengeStore: svr.challengeStore
       onCertRenewed: (domain, result) ->
-        p "rip-acme: cert renewed for #{domain}, graceful restart needed"
+        p "rip-acme: cert renewed for #{domain}"
+        try
+          svr.tlsMaterial = svr.loadTlsMaterial!
+          if svr.servingRuntime?.configInfo?.certs and Object.keys(svr.servingRuntime.configInfo.certs).length > 0
+            svr.tlsMaterial = buildTlsArray(svr.tlsMaterial, svr.servingRuntime.configInfo.certs)
+          svr.httpsServer?.reload({ tls: svr.tlsMaterial }) if svr.httpsServer
+          svr.internalHttpsServer?.reload({ tls: svr.tlsMaterial }) if svr.internalHttpsServer
+          p "rip-acme: TLS reloaded with renewed cert for #{domain}"
+        catch e
+          warn "rip-acme: TLS reload failed after renewal: #{e.message}"
     svr.acmeManager = acmeMgr
-    try acmeMgr.obtainCert!(flags.acmeDomain)
-    catch e
-      console.error "rip-acme: initial cert obtain failed: #{e.message}"
-      console.error "rip-acme: will retry during renewal loop"
-    acmeMgr.startRenewalLoop([flags.acmeDomain])
+    for domain in acmeDomains
+      try acmeMgr.obtainCert!(domain)
+      catch e
+        warn "rip-acme: cert obtain failed for #{domain}: #{e.message}"
+        warn "rip-acme: will retry during renewal loop"
+    acmeMgr.startRenewalLoop(acmeDomains)
 
   process.env.RIP_URLS = svr.urls.join(',')  # exact URLs the Server just built
   mgr.start!
 
-  logStartupSummary(svr, flags, edgeBuildRipdevUrl, formatPort)
-  logEvent('server_start', { app: flags.appName, workers: flags.workers })
+  logStartupSummary(svr, flags, buildRipdevUrl, formatPort)
 
 # ==============================================================================
 # Entry Point

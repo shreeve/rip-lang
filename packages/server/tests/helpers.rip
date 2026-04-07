@@ -1,8 +1,8 @@
-# test-helpers.rip — edge/helpers and forwarding response factory tests
+# helpers.rip — serving/forwarding response factory tests
 
-import { test, eq, ok } from '../test.rip'
-import { formatPort, maybeAddSecurityHeaders, buildStatusBody, buildRipdevUrl } from '../edge/forwarding.rip'
-import { watchUnavailableResponse, serverBusyResponse, serviceUnavailableResponse, gatewayTimeoutResponse, queueTimeoutResponse } from '../edge/forwarding.rip'
+import { test, eq, ok } from './runner.rip'
+import { formatPort, maybeAddSecurityHeaders, buildStatusBody, buildRipdevUrl } from '../serving/forwarding.rip'
+import { watchUnavailableResponse, serverBusyResponse, serviceUnavailableResponse, gatewayTimeoutResponse, queueTimeoutResponse } from '../serving/forwarding.rip'
 
 # --- formatPort ---
 

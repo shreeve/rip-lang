@@ -39,7 +39,7 @@ rip server
 
 | File                      | Can Edit? | Notes                                                  |
 | ------------------------- | --------- | ------------------------------------------------------ |
-| `src/compiler.js`         | Yes       | Code generator; main compiler work                     |
+| `src/compiler.js`         | Yes       | Code emitter (`CodeEmitter`); main compiler work       |
 | `src/lexer.js`            | Yes       | Lexer and rewriter                                     |
 | `src/types.js`            | Yes       | Type system sidecar                                    |
 | `src/components.js`       | Yes       | Component system sidecar                               |
@@ -66,8 +66,8 @@ rip server
 ## Compilation Pipeline
 
 ```text
-Rip Source -> Lexer -> emitTypes -> Parser -> S-Expressions -> Codegen -> JavaScript
-                       (types.js)           (arrays + .loc)             + source map
+Rip Source -> Lexer -> emitTypes -> Parser -> S-Expressions -> CodeEmitter -> JavaScript
+                       (types.js)           (arrays + .loc)                  + source map
                           ↓
                        file.d.ts (when types: "emit")
 ```
@@ -234,10 +234,8 @@ rip -cm example.rip
 | postfix ternary       | `a if x else b`  | Python-style ternary                       |
 | `for...as` iteration  | `for x as iter`  | iterable loop                              |
 | `as!` async shorthand | `for x as! iter` | shorthand for `for await`                  |
-| defined check         | `x!?`            | true if not undefined                      |
 | presence check        | `x?!`            | truthy-or-undefined Houdini operator       |
 | optional chain assign | `x?.prop = val`  | guarded assignment                         |
-| rightward assign      | `expr :> x`      | assign with expression first               |
 | tagged template `$`   | `sh $"cmd #{x}"` | injection-safe tagged template             |
 | dotted keys           | `{a.b: 1}`       | flat string key in object literals         |
 | map literal           | `*{a: 1}`        | real `Map` with any key type               |
@@ -263,14 +261,11 @@ rip -cm example.rip
 | `!`         | Dammit           | `fetchData!`                 |
 | `!`         | Void             | `def process!`               |
 | `=!`        | Readonly         | `MAX =! 100`                 |
-| `!?`        | Otherwise        | `val !? 5`                   |
-| `!?`        | Defined          | `val!?`                      |
 | `?!`        | Presence         | `@checked?!`                 |
 | `?`         | Existence        | `x?`                         |
 | `//`        | Floor div        | `7 // 2`                     |
 | `%%`        | True mod         | `-1 %% 3`                    |
 | `:=`        | State            | `count := 0`                 |
-| `:>`        | Rightward assign | `expr :> x`                  |
 | `~=`        | Computed         | `doubled ~= count * 2`       |
 | `<=>`       | Two-way bind     | `value <=> name`             |
 | `=~`        | Match            | `str =~ /pat/`               |

@@ -2,6 +2,21 @@
 # Tests "await" and "await-return" node types
 
 # ==============================================================================
+# Canary: verifies the test runner properly awaits async test() calls.
+# This test uses a multi-hop async chain (nested async IIFEs) that requires
+# multiple microtask cycles to resolve. If the runner silently drops async
+# tests, this test won't be counted and the total will be wrong.
+# ==============================================================================
+
+test "async canary - multi-hop await is tracked by runner", '''
+  fn = ->
+    inner = -> Promise.resolve(Promise.resolve(42))
+    result = try await inner()
+    result
+  fn()
+  ''', 42
+
+# ==============================================================================
 # Await: "await"
 # ==============================================================================
 
@@ -382,3 +397,324 @@ code 'chained dammit prop', 'obj!.method!.prop', '(await (await obj()).method())
 # Dynamic import with dammit operator
 code 'import! dynamic', 'import!("./foo.rip")', '(await import("./foo.rip"))'
 code 'import! with variable', 'import!(path)', '(await import(path))'
+
+# ==============================================================================
+# Async IIFE Await — switch, try, switchAsIfChain, comprehension in value context
+# must await the async IIFE so the assignment gets the resolved value, not a Promise
+# ==============================================================================
+
+# Runtime: switch expression with await
+test "switch expr with await resolves value", '''
+  fn = ->
+    resolve = (v) -> Promise.resolve(v)
+    result = switch 'a'
+      when 'a' then resolve!(42)
+      else 0
+    result + 1
+  fn()
+  ''', 43
+
+# Runtime: try expression with await
+test "try expr with await resolves value", '''
+  fn = ->
+    resolve = (v) -> Promise.resolve(v)
+    result = try resolve!(42)
+    result + 1
+  fn()
+  ''', 43
+
+# Runtime: switch-as-if-chain with await
+test "switch-as-if expr with await resolves value", '''
+  fn = ->
+    resolve = (v) -> Promise.resolve(v)
+    x = 5
+    result = switch
+      when x > 10 then resolve!('big')
+      when x > 0 then resolve!('small')
+      else 'zero'
+    result + '!'
+  fn()
+  ''', "small!"
+
+# Runtime: comprehension with await
+test "comprehension with await resolves values", '''
+  fn = ->
+    resolve = (v) -> Promise.resolve(v)
+    result = (resolve!(x) for x in [1, 2, 3])
+    result.length
+  fn()
+  ''', 3
+
+# Codegen: switch expression with await must emit "await" before async IIFE
+code "switch expr await emits await before IIFE", '''
+  x = switch val
+    when 'a' then fetch!
+    else 0
+  ''', '''
+  let x;
+  x = await (async () => { switch (val) {
+    case 'a':
+      return await fetch();
+    default:
+      return 0;
+  } })();
+  '''
+
+# Codegen: try expression with await must emit "await" before async IIFE
+code "try expr await emits await before IIFE", '''
+  x = try fetch!
+  ''', '''
+  let x;
+  x = await (async () => { try {
+    return await fetch();
+  } catch {} })();
+  '''
+
+# Codegen: switch-as-if-chain with await must emit "await (async () => ...)()"
+code "switch-as-if expr await emits await before IIFE", '''
+  x = switch
+    when a then fetch!
+    else 0
+  ''', '''
+  let x;
+  x = await (async () => { if (a) {
+    return await fetch();
+  } else {
+    return 0;
+  } })();
+  '''
+
+# Codegen: comprehension with await must emit "await" before async IIFE
+code "comprehension await emits await before IIFE", '''
+  x = (fetch!(v) for v in arr)
+  ''', '''
+  let x;
+  x = await (async () => {
+    const result = [];
+    for (const v of arr) {
+      result.push(await fetch(v));
+    }
+    return result;
+  })();
+  '''
+
+# ==============================================================================
+# Async IIFE scope — await in discriminants, conditions, finally blocks
+# ==============================================================================
+
+# Runtime: await in switch discriminant
+test "switch with await in discriminant resolves", '''
+  fn = ->
+    getKey = -> Promise.resolve('a')
+    result = switch getKey!()
+      when 'a' then 10
+      when 'b' then 20
+      else 30
+    result + 1
+  fn()
+  ''', 11
+
+# Runtime: await in switch-as-if condition
+test "switch-as-if with await in condition resolves", '''
+  fn = ->
+    check = -> Promise.resolve(true)
+    result = switch
+      when check!() then 'yes'
+      else 'no'
+    result + '!'
+  fn()
+  ''', "yes!"
+
+# Runtime: await in try/catch/finally
+test "try with await in finally resolves", '''
+  fn = ->
+    log = []
+    cleanup = -> log.push('cleaned'); Promise.resolve()
+    result = try
+      42
+    catch e
+      0
+    finally
+      cleanup!()
+    [result, log]
+  fn()
+  ''', [42, ['cleaned']]
+
+# Codegen: switch with await in discriminant
+code "switch discriminant await emits async IIFE", '''
+  x = switch getAction!()
+    when 'a' then 1
+    else 2
+  ''', '''
+  let x;
+  x = await (async () => { switch (await getAction()) {
+    case 'a':
+      return 1;
+    default:
+      return 2;
+  } })();
+  '''
+
+# Codegen: switch-as-if with await in condition
+code "switch-as-if condition await emits async IIFE", '''
+  x = switch
+    when isReady!() then 'yes'
+    else 'no'
+  ''', '''
+  let x;
+  x = await (async () => { if (await isReady()) {
+    return 'yes';
+  } else {
+    return 'no';
+  } })();
+  '''
+
+# Codegen: try with await in finally
+code "try finally await emits async IIFE", '''
+  x = try
+    something()
+  catch e
+    fallback()
+  finally
+    cleanup!()
+  ''', '''
+  let x;
+  x = await (async () => { try {
+    return something();
+  } catch (e) {
+    return fallback();
+  } finally {
+    await cleanup();
+  } })();
+  '''
+
+# Runtime: object comprehension with await
+test "object comprehension with await resolves values", '''
+  fn = ->
+    resolve = (v) -> Promise.resolve(v * 10)
+    result = {k: resolve!(v) for k, v of {a: 1, b: 2}}
+    result
+  fn()
+  ''', {a: 10, b: 20}
+
+# Codegen: object comprehension with await
+code "object comprehension await emits async IIFE", '''
+  x = {k: fetch!(v) for k, v of obj}
+  ''', '''
+  let x;
+  x = await (async () => {
+    const result = {};
+    for (const k in obj) {
+      const v = obj[k];
+      result[k] = await fetch(v);
+    }
+    return result;
+  })();
+  '''
+
+# ==============================================================================
+# If-expression with await (multi-statement IIFE path)
+# ==============================================================================
+
+# Runtime: await in then-branch (multi-statement triggers IIFE)
+test "if expr with await in then-branch resolves", '''
+  fn = ->
+    resolve = (v) -> Promise.resolve(v)
+    result = if true
+      a = resolve!(42)
+      a + 1
+    else
+      0
+    result
+  fn()
+  ''', 43
+
+# Runtime: await in else-branch
+test "if expr with await in else-branch resolves", '''
+  fn = ->
+    resolve = (v) -> Promise.resolve(v)
+    result = if false
+      0
+    else
+      a = resolve!(99)
+      a - 9
+    result
+  fn()
+  ''', 90
+
+# Runtime: await in condition (multi-statement branch, triggers IIFE)
+test "if expr with await in condition resolves", '''
+  fn = ->
+    check = -> Promise.resolve(true)
+    result = if check!()
+      a = 10
+      a * 2
+    else
+      0
+    result
+  fn()
+  ''', 20
+
+# Codegen: if-expression multi-statement with await
+code "if expr await emits async IIFE", '''
+  x = if cond
+    a = fetch!()
+    a + 1
+  else
+    0
+  ''', '''
+  let a, x;
+  x = await (async () => { if (cond) {
+    a = await fetch();
+    return (a + 1);
+  } else {
+    return 0;
+  } })();
+  '''
+
+# ==============================================================================
+# Nested async expression constructs
+# ==============================================================================
+
+# Runtime: switch inside try, both with await
+test "nested switch inside try with await resolves", '''
+  fn = ->
+    resolve = (v) -> Promise.resolve(v)
+    result = try
+      switch 'a'
+        when 'a' then resolve!(42)
+        else 0
+    catch e
+      -1
+    result
+  fn()
+  ''', 42
+
+# Runtime: comprehension inside if, both with await
+test "nested comprehension inside if with await resolves", '''
+  fn = ->
+    resolve = (v) -> Promise.resolve(v)
+    result = if true
+      items = (resolve!(x) for x in [1, 2, 3])
+      items.length
+    else
+      0
+    result
+  fn()
+  ''', 3
+
+# Runtime: if inside switch, both with await
+test "nested if inside switch with await resolves", '''
+  fn = ->
+    resolve = (v) -> Promise.resolve(v)
+    result = switch 'x'
+      when 'x'
+        if true
+          a = resolve!(10)
+          a * 3
+        else
+          0
+      else 0
+    result
+  fn()
+  ''', 30

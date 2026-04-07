@@ -34,6 +34,9 @@ export startMdnsAdvertisement = (host, mdnsProcesses, getLanIP, flags, formatPor
   serviceName = host.replace('.local', '')
 
   try
+    which = Bun.spawnSync(['which', 'dns-sd'], { stdout: 'ignore', stderr: 'ignore' })
+    return if which.exitCode
+
     proc = Bun.spawn [
       'dns-sd', '-P'
       serviceName
@@ -50,4 +53,4 @@ export startMdnsAdvertisement = (host, mdnsProcesses, getLanIP, flags, formatPor
     url = "#{protocol}://#{host}#{formatPort(protocol, port)}"
     publishUrl(url)
   catch e
-    console.error "rip-server: failed to advertise #{host} via mDNS:", e.message
+    warn "rip-server: failed to advertise #{host} via mDNS:", e.message

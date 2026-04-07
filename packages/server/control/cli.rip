@@ -48,11 +48,10 @@ export resolveAppEntry = (appPathInput, defaultEntryPath = null) ->
     else if existsSync(two)
       entryPath = two
     else
-      p "rip-server: no index.rip found, serving static files from #{abs}\n             Create an index.rip to customize, or run 'rip server --help' for options."
       entryPath = defaultEntryPath or abs
   else
     unless existsSync(abs)
-      console.error "App path not found: #{abs}"
+      warn "App path not found: #{abs}"
       exit 2
     baseDir = dirname(abs)
     entryPath = abs
@@ -60,9 +59,17 @@ export resolveAppEntry = (appPathInput, defaultEntryPath = null) ->
   appName = basename(baseDir)
   { baseDir, entryPath, appName }
 
+export VALUE_FLAGS = new Set(%w[
+  -f --file --cert --key --watch --env --https-port
+  --socket-prefix --acme --acme-staging --realtime-path --publish-secret
+  --max-queue --queue-timeout-ms --connect-timeout-ms --read-timeout-ms
+  --rate-limit --rate-limit-window -o --output
+])
+
 export parseFlags = (argv, defaultEntryPath = null) ->
   rawFlags = new Set()
   appPathInput = null
+  appNameOverride = null
   appAliases = []
 
   isFlag = (tok) ->
@@ -77,18 +84,38 @@ export parseFlags = (argv, defaultEntryPath = null) ->
     catch
       undefined
 
+  skipNext = false
   for i in [2...argv.length]
+    if skipNext
+      rawFlags.add(argv[i])
+      skipNext = false
+      continue
     tok = argv[i]
+    if VALUE_FLAGS.has(tok)
+      rawFlags.add(tok)
+      skipNext = true
+      continue
     unless appPathInput
       if tok.includes('@') and not tok.startsWith('-')
         [pathPart, aliasesPart] = tok.split('@')
+        aliases = aliasesPart.split(',').map((a) -> a.trim()).filter((a) -> a)
         maybe = tryResolveApp(pathPart)
         if maybe
           appPathInput = maybe
-          appAliases = aliasesPart.split(',').map((a) -> a.trim()).filter((a) -> a)
+          if aliases.length > 0
+            appNameOverride = aliases[0]
+            appAliases = aliases
           continue
-        else if not pathPart.includes('/') and not pathPart.startsWith('.')
-          appAliases = [pathPart].concat(aliasesPart.split(',').map((a) -> a.trim()).filter((a) -> a))
+        looksLikePath = pathPart.includes('/') or pathPart.startsWith('.') or pathPart.endsWith('.rip') or pathPart.endsWith('.ts')
+        if looksLikePath
+          appPathInput = pathPart
+          if aliases.length > 0
+            appNameOverride = aliases[0]
+            appAliases = aliases
+          continue
+        else
+          appNameOverride = pathPart
+          appAliases = [pathPart].concat(aliases)
           continue
 
       maybe = tryResolveApp(tok)
@@ -97,7 +124,11 @@ export parseFlags = (argv, defaultEntryPath = null) ->
         continue
 
       unless isFlag(tok)
-        appAliases.push(tok)
+        if appNameOverride
+          appAliases.push(tok)
+        else
+          appNameOverride = tok
+          appAliases = [tok]
         continue
 
     rawFlags.add(tok)
@@ -114,13 +145,18 @@ export parseFlags = (argv, defaultEntryPath = null) ->
       appPathInput = cwd
 
   getKV = (prefix) ->
-    for f as rawFlags
-      return f.slice(prefix.length) if f.startsWith(prefix)
+    tokens = Array.from(rawFlags)
+    bare = prefix.slice(0, -1)
+    for i in [0...tokens.length]
+      return tokens[i].slice(prefix.length) if tokens[i].startsWith(prefix)
+      if tokens[i] is bare and tokens[i + 1] and not tokens[i + 1].startsWith('-')
+        return tokens[i + 1]
     undefined
 
   has = (name) -> rawFlags.has(name)
 
   { baseDir, entryPath, appName } = resolveAppEntry(appPathInput, defaultEntryPath)
+  appName = appNameOverride if appNameOverride
   appAliases = [appName] if appAliases.length is 0
 
   tokens = Array.from(rawFlags)
@@ -203,16 +239,21 @@ export parseFlags = (argv, defaultEntryPath = null) ->
     readTimeoutMs: coerceInt(getKV('--read-timeout-ms='), coerceInt(process.env.RIP_READ_TIMEOUT_MS, 30000))
     jsonLogging: has('--json-logging')
     accessLog: not has('--no-access-log')
-    acme: has('--acme')
-    acmeStaging: has('--acme-staging')
-    acmeDomain: getKV('--acme-domain=')
+    acme: Boolean(getKV('--acme=') or getKV('--acme-staging='))
+    acmeStaging: Boolean(getKV('--acme-staging='))
+    acmeDomain: getKV('--acme=') or getKV('--acme-staging=') or null
+    noAcme: has('--no-acme')
     realtimePath: getKV('--realtime-path=') or '/realtime'
     publishSecret: getKV('--publish-secret=') or process.env.RIP_PUBLISH_SECRET or null
     rateLimit: coerceInt(getKV('--rate-limit='), 0)
     rateLimitWindow: coerceInt(getKV('--rate-limit-window='), 60000)
     watch: watch
-    edgefilePath: getKV('--edgefile=')
-    checkConfig: has('--check-config')
+    configPath: getKV('--file=') or getKV('-f=')
+    checkConfig: has('--check-config') or has('--check') or has('-c')
+    showInfo: has('--info') or has('-i')
+    reloadConfig: has('--reload') or has('-r')
+    listApps: has('--list') or has('-l')
+    stopServer: has('--stop') or has('-s')
     envOverride: envOverride
     debug: has('--debug')
   }
@@ -236,6 +277,16 @@ export findAppPathToken = (argv, existsSyncFn, isAbsoluteFn, resolveFn, cwdFn) -
 export computeSocketPrefix = (argv, resolveAppEntryFn, existsSyncFn, isAbsoluteFn, resolveFn, cwdFn) ->
   override = getKV(argv, '--socket-prefix=')
   return override if override
+  for i in [2...argv.length]
+    tok = argv[i]
+    continue if tok.startsWith('-') or /^\d+$/.test(tok) or tok in ['http', 'https']
+    [pathPart, aliasesPart] = if tok.includes('@') then tok.split('@') else [tok, null]
+    aliases = aliasesPart?.split(',').map((a) -> a.trim()).filter((a) -> a) or []
+    looksLikePath = pathPart.includes('/') or pathPart.startsWith('.') or pathPart.endsWith('.rip') or pathPart.endsWith('.ts')
+    unless looksLikePath
+      return "rip_#{pathPart}"
+    return "rip_#{aliases[0]}" if aliases.length > 0
+    break
   appTok = findAppPathToken(argv, existsSyncFn, isAbsoluteFn, resolveFn, cwdFn)
   if appTok
     try
@@ -260,14 +311,18 @@ export runHelpOutput = (argv) ->
     rip-server - Pure Rip application server
 
     Usage:
-      rip serve [options] [app-path] [app-name]
-      rip serve [options] [app-path]@<alias1>,<alias2>,...
+      rip server [options] [app-path] [app-name]
+      rip server [options] [app-path]@<alias1>,<alias2>,...
 
     Options:
       -h, --help              Show this help
       -v, --version           Show version
-      --edgefile=<path>       Load Edgefile.rip from an explicit path
-      --check-config          Validate Edgefile.rip or config.rip and exit
+      -c, --check             Validate config and exit
+      -f, --file <path>       Specify config file path
+      -i, --info              Show running server status
+      -l, --list              List registered hosts
+      -r, --reload            Reload config on running server
+      -s, --stop              Stop running server
       --watch=<glob>          Watch glob pattern (default: *.rip)
       --static                Disable hot reload and file watching
       --env=<mode>            Set environment (dev, production)
@@ -278,15 +333,15 @@ export runHelpOutput = (argv) ->
       http                    HTTP only (no TLS)
       https                   HTTPS with trusted *.ripdev.io cert (default)
       <port>                  Listen on specific port
-      --cert=<path>           TLS certificate file (overrides shipped cert)
-      --key=<path>            TLS key file (overrides shipped cert)
+      --cert <path>           TLS certificate file (overrides shipped cert)
+      --key <path>            TLS key file (overrides shipped cert)
       --hsts                  Enable HSTS header
       --no-redirect-http      Don't redirect HTTP to HTTPS
 
     ACME (auto TLS):
-      --acme                  Enable auto TLS via Let's Encrypt
-      --acme-staging          Use Let's Encrypt staging CA (for testing)
-      --acme-domain=<domain>  Domain for ACME cert (required with --acme)
+      --acme <domain>         Obtain TLS cert via Let's Encrypt for <domain>
+      --acme-staging <domain> Same as --acme but use Let's Encrypt staging CA
+      --no-acme               Disable ACME even if serve.rip configures it
 
     Realtime (WebSocket):
       --realtime-path=<path>  WebSocket endpoint path (default: /realtime)
@@ -297,13 +352,17 @@ export runHelpOutput = (argv) ->
       r:<n>,<s>s              Restart policy: max requests, max seconds
 
     Examples:
-      rip serve               Start with ./index.rip (watches *.rip)
-      rip serve myapp         Start with app name "myapp"
-      rip serve http          HTTP only (no TLS)
-      rip serve --static w:8  Production: no reload, 8 workers
-      rip serve --check-config
-      rip serve --check-config --edgefile=./Edgefile.rip
-      rip serve --edgefile=./Edgefile.rip
+      rip server               Start with ./index.rip (watches *.rip)
+      rip server myapp         Start with app name "myapp"
+      rip server http          HTTP only (no TLS)
+      rip server --static w:8  Production: no reload, 8 workers
+      rip server -c            Validate config and exit
+      rip server -c -f hosts.rip
+      rip server -i            Show server status
+      rip server -l            List registered hosts
+      rip server -r            Reload config
+      rip server -s            Stop server
+      rip server -f hosts.rip
 
     If no index.rip or index.ts is found, a built-in static file server
     activates with directory indexes, auto-detected MIME types, and
@@ -313,8 +372,7 @@ export runHelpOutput = (argv) ->
 
 # --- Subcommands ---
 
-export runStopSubcommand = (argv, prefix, getPidFilePathFn, existsSyncFn, readFileSyncFn, killFn, spawnSyncFn, importMetaPath) ->
-  return false unless 'stop' in argv
+export stopServer = (prefix, getPidFilePathFn, existsSyncFn, readFileSyncFn, killFn, spawnSyncFn, importMetaPath) ->
   pidFile = getPidFilePathFn(prefix)
   try
     if existsSyncFn(pidFile)
@@ -325,11 +383,24 @@ export runStopSubcommand = (argv, prefix, getPidFilePathFn, existsSyncFn, readFi
       p "rip-server: no PID file found at #{pidFile}, trying pkill..."
       spawnSyncFn(['pkill', '-f', importMetaPath])
   catch e
-    console.error "rip-server: stop failed: #{e.message}"
-  true
+    warn "rip-server: stop failed: #{e.message}"
 
-export runListSubcommand = (argv, prefix, getControlSocketPathFn, fetchFn, exitFn) ->
-  return false unless 'list' in argv
+export reloadConfig = (prefix, getControlSocketPathFn, fetchFn, exitFn) ->
+  controlUnix = getControlSocketPathFn(prefix)
+  try
+    res = fetchFn!('http://localhost/reload', { unix: controlUnix, method: 'POST' })
+    j = res.json!
+    if j?.ok
+      p "rip-server: config reload applied"
+    else
+      reason = j?.reason or 'unknown'
+      warn "rip-server: config reload rejected: #{reason}"
+      exitFn(1)
+  catch e
+    warn "rip-server: reload failed: #{e?.message or e}"
+    exitFn(1)
+
+export listApps = (prefix, getControlSocketPathFn, fetchFn, exitFn) ->
   controlUnix = getControlSocketPathFn(prefix)
   try
     res = fetchFn!('http://localhost/registry', { unix: controlUnix, method: 'GET' })
@@ -338,6 +409,33 @@ export runListSubcommand = (argv, prefix, getControlSocketPathFn, fetchFn, exitF
     hosts = if Array.isArray(j?.hosts) then j.hosts else []
     p if hosts.length then hosts.join('\n') else '(no hosts)'
   catch e
-    console.error "list command failed: #{e?.message or e}"
+    warn "rip-server: list failed: #{e?.message or e}"
     exitFn(1)
-  true
+
+formatUptime = (seconds) ->
+  return "#{seconds}s" if seconds < 60
+  return "#{Math.floor(seconds / 60)}m" if seconds < 3600
+  hours = Math.floor(seconds / 3600)
+  mins = Math.floor((seconds %% 3600) / 60)
+  if mins > 0 then "#{hours}h #{mins}m" else "#{hours}h"
+
+export showInfo = (fetchFn, exitFn) ->
+  try
+    res = fetchFn!('https://localhost/diagnostics', { tls: { rejectUnauthorized: false } })
+    throw new Error("status #{res.status}") unless res.ok
+    d = res.json!
+    version = d.version?.server or 'unknown'
+    workers = d.gauges?.workersActive or 0
+    hosts = d.hosts?.length or 0
+    upstreamsTotal = d.proxies?.length or 0
+    healthy = d.gauges?.upstreamTargetsHealthy or 0
+    unhealthy = d.gauges?.upstreamTargetsUnhealthy or 0
+    upstreamStatus = if unhealthy > 0 then "#{healthy} healthy, #{unhealthy} unhealthy" else "#{healthy} healthy"
+    upstreamPart = if upstreamsTotal > 0 then " | #{upstreamsTotal} proxy (#{upstreamStatus})" else ''
+    uptime = formatUptime(d.uptime or 0)
+    status = d.status or 'unknown'
+    p "rip server v#{version} | #{status} | #{workers} workers | #{hosts} hosts#{upstreamPart} | uptime #{uptime}"
+    exitFn(if status is 'healthy' then 0 else 1)
+  catch e
+    warn "rip-server: info failed: #{e?.message or e}"
+    exitFn(1)

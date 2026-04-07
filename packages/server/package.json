@@ -1,7 +1,7 @@
 {
   "name": "@rip-lang/server",
-  "version": "1.3.124",
-  "description": "Pure Rip web framework and application server",
+  "version": "1.4.15",
+  "description": "Bun-native content server: static sites, apps, HTTP proxy, and TCP/TLS passthrough",
   "type": "module",
   "main": "api.rip",
   "exports": {
@@ -14,21 +14,23 @@
   },
   "scripts": {
     "build": "rip -c server.rip",
-    "test": "rip tests/read.test.rip"
+    "test": "rip tests/runner.rip"
   },
   "keywords": [
     "server",
-    "api",
-    "web-framework",
+    "content-server",
+    "static-serving",
+    "app-server",
+    "reverse-proxy",
+    "tls-passthrough",
     "routing",
     "middleware",
     "validation",
-    "app-server",
     "hot-reload",
     "multi-worker",
     "https",
     "tls",
-    "mdns",
+    "acme",
     "bun",
     "rip",
     "rip-lang"
@@ -45,11 +47,11 @@
   "author": "Steve Shreeve <steve.shreeve@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "rip-lang": ">=3.13.129"
+    "rip-lang": ">=3.13.134"
   },
   "files": [
     "api.rip",
-    "default.rip",
+    "browse.rip",
     "middleware.rip",
     "server.rip",
     "server.html",
@@ -57,10 +59,11 @@
     "bin/",
     "certs/",
     "control/",
-    "docs/",
-    "edge/",
+    "serving/",
     "streams/",
     "tests/",
+    "API.md",
+    "CONFIG.md",
     "README.md"
   ]
 }

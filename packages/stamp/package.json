@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/stamp",
-  "version": "0.1.28",
+  "version": "0.1.32",
   "author": "Steve Shreeve <steve.shreeve@gmail.com>",
   "repository": {
     "type": "git",
@@ -41,6 +41,6 @@
   },
   "type": "module",
   "dependencies": {
-    "rip-lang": ">=3.13.129"
+    "rip-lang": ">=3.13.134"
   }
 }

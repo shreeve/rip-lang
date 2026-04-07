@@ -17,7 +17,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as vm from 'vm';
-import { Compiler, compileToJS, getStdlibCode, getReactiveRuntime, getComponentRuntime } from './compiler.js';
+import { Compiler, compileToJS, getStdlibCode, getReactiveRuntime, getComponentRuntime, formatError } from './compiler.js';
 import packageJson from '../package.json' with { type: 'json' };
 
 const VERSION = packageJson.version;
@@ -205,6 +205,7 @@ export class RipREPL {
   async evaluate(code) {
     try {
       this.history.push(code);
+      this._lastSource = code;
 
       const compiler = new Compiler({
         showTokens: this.showTokens,
@@ -433,7 +434,7 @@ export class RipREPL {
   }
 
   printError(error) {
-    console.log(`${colors.red}✗${colors.reset} ${colors.red}${error.message}${colors.reset}`);
+    console.log(formatError(error, { source: this._lastSource, color: true }));
     if (error.stack && process.env.RIP_DEBUG) {
       console.log(`${colors.dim}${error.stack}${colors.reset}`);
     }

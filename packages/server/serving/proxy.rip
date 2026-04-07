@@ -1,0 +1,99 @@
+# ==============================================================================
+# serving/proxy.rip — HTTP and WebSocket proxy to upstream backends
+# ==============================================================================
+
+import { getUpstream, selectTarget, markTargetBusy, releaseTarget, shouldRetry, computeRetryDelayMs } from './upstream.rip'
+import { serviceUnavailableResponse, buildUpstreamResponse, proxyToUpstream } from './forwarding.rip'
+import { isDebug, stripInternalHeaders } from './logging.rip'
+import { toUpstreamWsUrl } from './runtime.rip'
+
+export proxyRouteToUpstream = (req, route, requestId, clientIp, runtime, metrics, flags, addSecurityHeaders, logAccess) ->
+  upstream = getUpstream(runtime.upstreamPool, route.proxy)
+  unless upstream
+    warn "[proxy] no proxy '#{route.proxy}'" if isDebug()
+    return serviceUnavailableResponse()
+
+  attempt = 1
+  start = performance.now()
+
+  while attempt <= upstream.retry.attempts
+    target = selectTarget(upstream, runtime.upstreamPool.nowFn)
+    unless target
+      warn "[proxy] no healthy target for '#{route.proxy}'" if isDebug()
+      return serviceUnavailableResponse()
+
+    markTargetBusy(target)
+    workerSeconds = 0
+    res = null
+    success = false
+
+    try
+      t0 = performance.now()
+      timeoutMs = route.timeouts?.readMs or upstream.timeouts?.readMs or flags.readTimeoutMs
+      res = proxyToUpstream!(req, target.url,
+        timeoutMs: timeoutMs
+        clientIp: clientIp
+      )
+      workerSeconds = (performance.now() - t0) / 1000
+      success = res.status < 500
+      warn "[proxy] #{route.proxy} -> #{target.url} status=#{res.status} attempt=#{attempt}" if isDebug()
+    catch err
+      warn "[proxy] #{route.proxy} error: #{err.message or err}" if isDebug()
+      res = serviceUnavailableResponse()
+    finally
+      releaseTarget(target, workerSeconds * 1000, success, runtime.upstreamPool)
+
+    if res and shouldRetry(upstream.retry, req.method, res.status, false) and attempt < upstream.retry.attempts
+      delayMs = computeRetryDelayMs(upstream.retry, attempt, runtime.upstreamPool.randomFn)
+      await new Promise (r) -> setTimeout(r, delayMs)
+      attempt++
+      continue
+
+    totalSeconds = (performance.now() - start) / 1000
+    metrics.forwarded++
+    metrics.recordLatency(totalSeconds)
+    metrics.recordStatus(res.status)
+    response = buildUpstreamResponse(
+      res,
+      req,
+      totalSeconds,
+      workerSeconds,
+      addSecurityHeaders,
+      logAccess,
+      stripInternalHeaders
+    )
+    response.headers.set('X-Request-Id', requestId) if requestId
+    response.headers.set('X-Rip-Route', route.id) if route.id
+    return response
+
+  serviceUnavailableResponse()
+
+export upgradeProxyWebSocket = (req, bunServer, route, requestId, runtime) ->
+  upstream = getUpstream(runtime.upstreamPool, route.proxy)
+  return new Response('Service unavailable', { status: 503 }) unless upstream
+  target = selectTarget(upstream, runtime.upstreamPool.nowFn)
+  return new Response('Service unavailable', { status: 503 }) unless target
+
+  inUrl = new URL(req.url)
+  protocols = (req.headers.get('sec-websocket-protocol') or '')
+    .split(',')
+    .map((p) -> p.trim())
+    .filter(Boolean)
+
+  markTargetBusy(target)
+  data =
+    kind: 'ws-proxy'
+    runtime: runtime
+    requestId: requestId
+    routeId: route.id
+    upstreamTarget: target
+    upstreamUrl: toUpstreamWsUrl(target.url, inUrl.pathname, inUrl.search)
+    protocols: protocols
+    passthrough: null
+    released: false
+
+  if bunServer.upgrade(req, { data })
+    return
+
+  releaseTarget(target, 0, false, runtime.upstreamPool)
+  new Response('WebSocket upgrade failed', { status: 400 })

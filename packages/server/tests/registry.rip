@@ -1,8 +1,8 @@
-# test-registry.rip — edge/registry, scheduler, and queue tests
+# test-registry.rip — serving/registry, scheduler, and queue tests
 
-import { test, eq, ok } from '../test.rip'
-import { createAppRegistry, registerApp, resolveHost, getAppState, removeApp } from '../edge/registry.rip'
-import { isCurrentVersion, getNextAvailableSocket, releaseWorker, shouldRetryBodylessBusy, drainQueueOnce } from '../edge/queue.rip'
+import { test, eq, ok } from './runner.rip'
+import { createAppRegistry, registerApp, resolveHost, getAppState, removeApp } from '../serving/registry.rip'
+import { isCurrentVersion, getNextAvailableSocket, releaseWorker, shouldRetryBodylessBusy, drainQueueOnce } from '../serving/queue.rip'
 
 # --- Registry ---
 

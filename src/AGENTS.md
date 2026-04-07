@@ -4,6 +4,43 @@ This covers `compiler.js`, `lexer.js`, `components.js`, `browser.js`, `types.js`
 
 ---
 
+## Architecture Overview
+
+The code emitter is `CodeEmitter` in `compiler.js`. It takes s-expression ASTs
+from the parser and produces JavaScript strings. The class was previously called
+`CodeGenerator`; all codegen methods now use `emit*` naming (e.g. `emitIf`,
+`emitSwitch`, `emitClass`). Utility methods that analyze or transform the AST
+without producing output keep descriptive verbs: `collect*`, `extract*`,
+`unwrap*`, `contains*`, `has*`, `find*`, `build*`, `format*`.
+
+Key helpers:
+- `asyncIIFE(hasAwait, body)` / `asyncIIFEOpen(hasAwait)` — centralized async
+  IIFE wrapping. All 6 expression-context IIFE sites route through these.
+- `_tryPostfixCall(head, rest, context)` — shared postfix-if optimization for
+  both simple and complex callee call paths.
+- `_emitArgs(rest)` — shared argument-list emission.
+- `_emitClassMembers(members, parentClass)` — shared class member emission for
+  object-style class bodies (handles bound methods, `@param`, `atParamMap`).
+
+### Cleanup Status
+
+The compiler has been through a hardening pass. Current state:
+
+| Area | Status | Notes |
+| ---- | ------ | ----- |
+| Async IIFE emission | Done | All 6 sites centralized via `asyncIIFE`/`asyncIIFEOpen` |
+| `containsAwait` scope | Done | All enclosed nodes checked (disc, conditions, finally, etc.) |
+| `emitClass` | Done | Deduplicated member loops, fixed 3 latent bugs |
+| `emit()` dispatch | Done | Deduplicated postfix-if and args generation |
+| `emitBodyWithReturns` | Reviewed, not refactored | 143 lines, 12 responsibilities — complex but working, no known bugs |
+| `emitAssignment` | Reviewed, not refactored | 138 lines, 8 patterns — complex but working, no known bugs |
+| `emitForIn` | Reviewed, not refactored | 107 lines — inherent complexity from loop variants |
+| `emitProgram` | Reviewed, not refactored | 136 lines — sequential setup, each section unique |
+| Test runner | Done | Async tests tracked via `pendingTests` + `Promise.all` |
+| Test coverage | Done | 1631 tests, async IIFE + class + nested construct coverage |
+
+---
+
 ## S-Expression Patterns
 
 Common patterns:
@@ -26,7 +63,7 @@ Complete node reference:
 ['program', ...statements]
 
 // Variables & Assignment
-['=', target, value]    // x = expr  or  expr :> x (both produce this)
+['=', target, value]    // x = expr
 ['+=', target, value]   // Also: -=, *=, /=, %=, **=
 ['&&=', target, value]  ['||=', target, value]
 ['?=', target, value]   ['??=', target, value]
@@ -66,7 +103,6 @@ Complete node reference:
 ['!', expr]          ['~', expr]          ['typeof', expr]
 ['delete', expr]     ['instanceof', expr, type]
 ['?', expr]          // Existence check (x?)
-['defined', expr]    // Defined check (x!?)
 ['presence', expr]   // Presence check (x?!) — Houdini operator
 ['++', expr, isPostfix]  ['--', expr, isPostfix]
 
@@ -143,7 +179,7 @@ Tagged template bridge:
 ## Context-Aware Generation
 
 ```javascript
-generate(sexpr, context = 'statement')
+emit(sexpr, context = 'statement')
 ```
 
 - Value context: emit an expression result
@@ -151,13 +187,42 @@ generate(sexpr, context = 'statement')
 
 Comprehensions are the canonical example — value context becomes an IIFE with array building, statement context becomes a plain loop.
 
+### Expression-Context Construct Audit
+
+When a construct appears in value context and cannot be a simple JS expression, the
+compiler wraps it in an IIFE. If the enclosed code contains `await`, the IIFE must
+be `async` and the call must be `await`ed. All async IIFE sites use the centralized
+`asyncIIFE()` / `asyncIIFEOpen()` helpers.
+
+| Construct | Method | IIFE type | Enclosed nodes |
+| --------- | --------- | --------- | -------------- |
+| `if` (multi-stmt) | `emitIfAsExpression` | async IIFE | condition, thenBranch, elseBranches |
+| `switch` | `emitSwitch` | async IIFE | disc, case labels, case bodies, defaultCase |
+| `switch` (no disc) | `emitSwitchAsIfChain` | async IIFE | when-conditions, when-bodies, defaultCase |
+| `try` | `emitTry` | async IIFE | try body, catch clause, finally block |
+| comprehension | `emitComprehension` | async IIFE | expr, iterators, guards |
+| object comp. | `emitObjectComprehension` | async IIFE | keyExpr, valueExpr, iterators, guards |
+| `or return` etc. | `emitControl` | sync IIFE | expr, ctrl value (return/throw semantics) |
+| `x = e or return` | `emitAssignment` | sync IIFE | expr, target, ctrl value |
+| `throw` | `emitThrow` | sync IIFE | throw expression |
+| `do ->` | `emitDoIIFE` | user fn | user's function (handles own async) |
+| ternary `?:` | `emitTernary` | none | direct JS ternary |
+| block (comma) | `emitBlock` | none | comma expression |
+| calls + postfix if | `emit` | none | conditional rewrite |
+| `->` in value | `emitThinArrow` | none | parenthesized function |
+
+**Invariant:** every node listed in the "Enclosed nodes" column must appear in
+that site's `containsAwait` check. The sync IIFE sites use `return`/`throw`
+inside the IIFE, which cannot propagate to the enclosing function, so async
+handling is intentionally omitted.
+
 ## Dispatch Table
 
 All node types dispatch through `GENERATORS` for O(1) lookup. To change a feature:
 
 1. Inspect the s-expression with `echo 'code' | ./bin/rip -s`
 2. Search `GENERATORS` in `src/compiler.js`
-3. Edit the matching generator method
+3. Edit the matching `emit*` method
 4. Run `bun run test`
 
 For grammar work:
@@ -204,7 +269,7 @@ if (Array.isArray(body) && body[0] === 'block') {
 
 ## Component Internals
 
-The component system is a compiler sidecar. `installComponentSupport(CodeGenerator, Lexer)` adds methods to both prototypes.
+The component system is a compiler sidecar. `installComponentSupport(CodeEmitter, Lexer)` adds methods to both prototypes.
 
 ### Render Rewriter
 
@@ -247,9 +312,9 @@ Key mechanisms:
 Key entry points:
 
 - `buildRender` — initializes counters and create/setup line arrays
-- `generateNode` — dispatch for elements, text, conditionals, loops, components
-- `generateConditional` — emits conditional block factories
-- `generateTemplateLoop` — emits `__reconcile(...)`
+- `emitNode` — dispatch for elements, text, conditionals, loops, components
+- `emitConditional` — emits conditional block factories
+- `emitTemplateLoop` — emits `__reconcile(...)`
 - `emitBlockFactory` — shared factory emitter used by conditionals and loops
 
 ### Factory Mode
@@ -263,7 +328,7 @@ Block factories need locals and `ctx.member` references instead of `this._elN` a
 - `_pushEffect(body)` — emits `__effect(...)` or `disposers.push(__effect(...))`
 - `_loopVarStack` — threads loop variables through nested factories
 
-Factory mode is entered in `generateConditionBranch` and `generateTemplateLoop` via save/restore of `[_createLines, _setupLines, _factoryMode, _factoryVars]`.
+Factory mode is entered in `emitConditionBranch` and `emitTemplateLoop` via save/restore of `[_createLines, _setupLines, _factoryMode, _factoryVars]`.
 
 ### Auto-Wired Event Handlers
 
@@ -332,7 +397,7 @@ div ~fade
 Pipeline:
 
 - rewriter converts the tilde form into `__transition__`
-- `generateAttributes` emits `this._t = "fade"`
+- `emitAttributes` emits `this._t = "fade"`
 - conditionals check `_t` for async leave / enter
 - runtime `__transition(el, name, dir, done)` performs the CSS class dance
 
@@ -453,7 +518,7 @@ Type emission logic lives in `types.js`. Type-checking integration and diagnosti
 
 - `installTypeSupport(Lexer)` adds `rewriteTypes()`
 - `emitTypes(tokens)` emits `.d.ts`
-- `generateEnum()` emits runtime JS for enums
+- `emitEnum()` emits runtime JS for enums
 - `typecheck.js` drives `rip check` and mediates TypeScript diagnostics
 
 Types are processed at the token layer before parsing.

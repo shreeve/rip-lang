@@ -10,7 +10,7 @@
 //     to both token-level annotations (variables, functions, types) and
 //     s-expression structures (components). One function, one output.
 //
-//   generateEnum() — the one CodeGenerator method for runtime enum output.
+//   emitEnum() — the one CodeEmitter method for runtime enum output.
 //     Enums cross into the grammar because they emit runtime JavaScript.
 
 // ============================================================================
@@ -1565,10 +1565,10 @@ function emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars, so
 }
 
 // ============================================================================
-// generateEnum — runtime JavaScript enum object (CodeGenerator method)
+// emitEnum — runtime JavaScript enum object (CodeEmitter method)
 // ============================================================================
 
-export function generateEnum(head, rest, context) {
+export function emitEnum(head, rest, context) {
   let [name, body] = rest;
   let enumName = name?.valueOf?.() ?? name;
 

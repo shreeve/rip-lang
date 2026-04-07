@@ -1,0 +1,55 @@
+# ==============================================================================
+# @rip-lang/server — Directory Browser
+# ==============================================================================
+#
+# Built-in file browser when no index.rip or index.ts exists in the target
+# directory. Activated automatically by `rip server` when no app entry is found.
+#
+# Text files get syntax-highlighted by default. HTML files render natively
+# (double-click adds ?view to see source). Markdown renders. Binary files
+# (images, PDFs) serve natively. Directories show a listing.
+# ==============================================================================
+
+import { use, start, notFound } from '@rip-lang/server'
+import { statSync } from 'node:fs'
+import { join, resolve, basename } from 'node:path'
+import { renderDirectoryListing, serveBrowseFile, serveRipHighlightGrammar, findIndexFile } from './serving/static.rip'
+
+root = resolve(process.env.APP_BASE_DIR or process.cwd())
+rootSlash = root + '/'
+rootName = basename(root) or root
+
+notFound ->
+  if @req.path is '/_rip/hljs-rip.js'
+    res = serveRipHighlightGrammar()
+    return res if res
+
+  url = new URL(@req.url)
+  reqPath = try decodeURIComponent(url.pathname) catch then url.pathname
+  path = resolve(root, reqPath.slice(1))
+
+  unless path is root or path.startsWith(rootSlash)
+    return new Response 'Not Found', { status: 404 }
+
+  try
+    stat = statSync(path)
+  catch
+    return new Response 'Not Found', { status: 404 }
+
+  if stat.isFile()
+    accept = @req.header('accept') or ''
+    if accept.includes('text/html')
+      res = serveBrowseFile(path, url)
+      return res if res
+    return @send path
+
+  if stat.isDirectory()
+    return new Response(null, { status: 301, headers: { Location: "#{reqPath}/" } }) unless reqPath.endsWith('/')
+    indexPath = findIndexFile(path)
+    if indexPath
+      return @send indexPath, 'text/html; charset=UTF-8'
+    return new Response renderDirectoryListing(reqPath, path, rootName), { headers: { 'Content-Type': 'text/html; charset=UTF-8' } }
+
+  new Response 'Not Found', { status: 404 }
+
+start()

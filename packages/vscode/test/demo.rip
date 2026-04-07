@@ -205,11 +205,7 @@ def ripOperators(obj:: any, val:: string | null, arr:: number[], fn:: Function)
   # Nullish coalescing
   fallback = val ?? "default"
 
-  # Otherwise
-  alt = val !? "other"
-
-  # Defined / Presence
-  isDefined = val!?
+  # Presence
   isPresent = val?!
 
   # Pipe

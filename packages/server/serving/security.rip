@@ -1,0 +1,38 @@
+# ==============================================================================
+# serving/security.rip — request smuggling and validation defenses
+# ==============================================================================
+
+MAX_URL_LENGTH = 8192
+
+export validateRequest = (req) ->
+  url = new URL(req.url)
+
+  # Reject oversized URLs
+  if url.href.length > MAX_URL_LENGTH
+    return { valid: false, status: 400, message: 'URL too long' }
+
+  # Reject conflicting Content-Length and Transfer-Encoding
+  hasContentLength = req.headers.has('content-length')
+  hasTransferEncoding = req.headers.has('transfer-encoding')
+  if hasContentLength and hasTransferEncoding
+    return { valid: false, status: 400, message: 'Conflicting Content-Length and Transfer-Encoding' }
+
+  # Reject multiple Host headers (check for comma which indicates multiple values)
+  hostHeader = req.headers.get('host')
+  if hostHeader and hostHeader.includes(',')
+    return { valid: false, status: 400, message: 'Multiple Host headers' }
+
+  # Reject null bytes in URL
+  if url.pathname.includes('\x00') or url.search.includes('\x00')
+    return { valid: false, status: 400, message: 'Null byte in URL' }
+
+  # Reject path traversal — three decodes beyond URL parser
+  # Catches single (%2e), double (%252e), and triple (%25252e) encoding
+  pathname = url.pathname
+  d1 = try decodeURIComponent(pathname) catch then pathname
+  d2 = try decodeURIComponent(d1) catch then d1
+  d3 = try decodeURIComponent(d2) catch then d2
+  if pathname.includes('..') or d1.includes('..') or d2.includes('..') or d3.includes('..')
+    return { valid: false, status: 400, message: 'Path traversal rejected' }
+
+  { valid: true }

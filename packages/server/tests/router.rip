@@ -1,10 +1,10 @@
-import { test, eq, ok } from '../test.rip'
-import { compileRouteTable, matchRoute, describeRoute } from '../edge/router.rip'
+import { test, eq, ok } from './runner.rip'
+import { compileRouteTable, matchRoute, describeRoute } from '../serving/router.rip'
 
 test "compileRouteTable keeps global route order", ->
   table = compileRouteTable([
-    { id: 'one', path: '/a', upstream: 'app' }
-    { id: 'two', path: '/b', upstream: 'app' }
+    { id: 'one', path: '/a', proxy: 'app' }
+    { id: 'two', path: '/b', proxy: 'app' }
   ])
   eq table.routes.length, 2
   eq table.routes[0].order, 0
@@ -20,62 +20,62 @@ test "compileRouteTable merges site routes with inherited host", ->
 
 test "matchRoute prefers exact host over catchall", ->
   table = compileRouteTable([
-    { path: '/*', upstream: 'fallback' }
-    { host: 'api.example.com', path: '/*', upstream: 'api' }
+    { path: '/*', proxy: 'fallback' }
+    { host: 'api.example.com', path: '/*', proxy: 'api' }
   ])
-  eq matchRoute(table, 'api.example.com', '/users').upstream, 'api'
+  eq matchRoute(table, 'api.example.com', '/users').proxy, 'api'
 
 test "matchRoute prefers wildcard host over catchall", ->
   table = compileRouteTable([
-    { path: '/*', upstream: 'fallback' }
-    { host: '*.example.com', path: '/*', upstream: 'wild' }
+    { path: '/*', proxy: 'fallback' }
+    { host: '*.example.com', path: '/*', proxy: 'wild' }
   ])
-  eq matchRoute(table, 'api.example.com', '/users').upstream, 'wild'
+  eq matchRoute(table, 'api.example.com', '/users').proxy, 'wild'
 
 test "matchRoute does not let wildcard span multiple labels", ->
   table = compileRouteTable([
-    { host: '*.example.com', path: '/*', upstream: 'wild' }
-    { path: '/*', upstream: 'fallback' }
+    { host: '*.example.com', path: '/*', proxy: 'wild' }
+    { path: '/*', proxy: 'fallback' }
   ])
-  eq matchRoute(table, 'a.b.example.com', '/users').upstream, 'fallback'
+  eq matchRoute(table, 'a.b.example.com', '/users').proxy, 'fallback'
 
 test "matchRoute prefers exact path over prefix", ->
   table = compileRouteTable([
-    { path: '/api/*', upstream: 'api' }
-    { path: '/api/users', upstream: 'users' }
+    { path: '/api/*', proxy: 'api' }
+    { path: '/api/users', proxy: 'users' }
   ])
-  eq matchRoute(table, 'example.com', '/api/users').upstream, 'users'
+  eq matchRoute(table, 'example.com', '/api/users').proxy, 'users'
 
 test "matchRoute prefers longer prefix", ->
   table = compileRouteTable([
-    { path: '/api/*', upstream: 'api' }
-    { path: '/api/admin/*', upstream: 'admin' }
+    { path: '/api/*', proxy: 'api' }
+    { path: '/api/admin/*', proxy: 'admin' }
   ])
-  eq matchRoute(table, 'example.com', '/api/admin/users').upstream, 'admin'
+  eq matchRoute(table, 'example.com', '/api/admin/users').proxy, 'admin'
 
 test "matchRoute uses lower priority number before order", ->
   table = compileRouteTable([
-    { path: '/api/*', upstream: 'one', priority: 10 }
-    { path: '/api/*', upstream: 'two', priority: 5 }
+    { path: '/api/*', proxy: 'one', priority: 10 }
+    { path: '/api/*', proxy: 'two', priority: 5 }
   ])
-  eq matchRoute(table, 'example.com', '/api/x').upstream, 'two'
+  eq matchRoute(table, 'example.com', '/api/x').proxy, 'two'
 
 test "matchRoute filters by method", ->
   table = compileRouteTable([
-    { path: '/submit', upstream: 'read', methods: ['GET'] }
-    { path: '/submit', upstream: 'write', methods: ['POST'] }
+    { path: '/submit', proxy: 'read', methods: ['GET'] }
+    { path: '/submit', proxy: 'write', methods: ['POST'] }
   ])
-  eq matchRoute(table, 'example.com', '/submit', 'POST').upstream, 'write'
+  eq matchRoute(table, 'example.com', '/submit', 'POST').proxy, 'write'
 
 test "matchRoute returns null when nothing matches", ->
   table = compileRouteTable([
-    { host: 'api.example.com', path: '/api/*', upstream: 'api' }
+    { host: 'api.example.com', path: '/api/*', proxy: 'api' }
   ])
   eq matchRoute(table, 'example.com', '/api/x'), null
 
 test "describeRoute summarizes action", ->
   table = compileRouteTable([
-    { host: 'api.example.com', path: '/api/*', upstream: 'api' }
+    { host: 'api.example.com', path: '/api/*', proxy: 'api' }
   ])
   summary = describeRoute(matchRoute(table, 'api.example.com', '/api/x'))
   ok summary.includes('proxy:api')

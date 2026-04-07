@@ -1,5 +1,5 @@
-import { test, eq, ok } from '../test.rip'
-import { serveStaticRoute, buildRedirectResponse } from '../edge/static.rip'
+import { test, eq, ok } from './runner.rip'
+import { serveStaticRoute, buildRedirectResponse } from '../serving/static.rip'
 
 # --- helpers ---
 

@@ -4,7 +4,7 @@ import { readFileSync, readdirSync, writeFileSync, existsSync, statSync, unlinkS
 import { execSync, spawnSync, spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, basename, join } from 'path';
-import { Compiler } from '../src/compiler.js';
+import { Compiler, formatError } from '../src/compiler.js';
 import packageJson from '../package.json' with { type: 'json' };
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -32,14 +32,6 @@ function getRepoRoot() {
   }
 }
 
-function getWorkspaceServerPath() {
-  const repoRoot = getRepoRoot();
-  if (!repoRoot) return null;
-
-  const workspaceServerPath = join(repoRoot, 'packages', 'server', 'server.rip');
-  return isFile(workspaceServerPath) ? workspaceServerPath : null;
-}
-
 function printHelp() {
   console.log(`
 Rip ${VERSION} - ${SUMMARY}
@@ -62,39 +54,33 @@ Options:
   --shadow            Show virtual TypeScript content (what rip check sees)
 
 Subcommands:
-  rip server [flags] [app]      Start server (watches *.rip, HTTPS, mDNS)
   rip check [dir]               Type-check all .rip files in directory
   rip check --strict [dir]      Require type annotations in all .rip files
+  rip <name> [args]             Run rip-<name> (repo bin/, node_modules, or PATH)
 
   Configure via rip.json or package.json:
     { "strict": true, "exclude": ["scripts/**"] }             # rip.json
     { "rip": { "strict": true, "exclude": ["scripts/**"] } }  # package.json
 
-Serve flags:
-  --watch=<glob>      Watch glob pattern (default: *.rip)
-  --static            Disable hot reload and file watching
-  http                HTTP-only mode (no HTTPS)
-  http:<port>         Set HTTP port
-  w:<n>               Worker count (auto, half, 2x, 3x, or number)
+Packages:
+  rip server [flags] [app]      Start server (run 'rip server -h' for details)
+  rip db                        DuckDB server
+  rip csv                       CSV parser
+  rip print                     Syntax-highlighted code printer
 
 Examples:
   rip                           # Interactive REPL (terminal)
   rip script.rip                # Execute script directly
   rip script.rip arg1 arg2      # Execute with arguments
-  rip server                    # Serve ./index.rip (watches *.rip)
-  rip server http               # Serve HTTP-only
-  rip server myapp              # Serve with mDNS name
+  rip server                    # Start server (watches *.rip, HTTPS, mDNS)
+  rip server -c                 # Validate server config
+  rip server -s                 # Stop running server
   rip -c example.rip            # Compile and show JavaScript
   rip -o output.js example.rip  # Compile and save to file
   rip -s example.rip            # Show ONLY s-expressions
   rip -t example.rip            # Show ONLY tokens
-  rip -s -c example.rip         # Show s-expressions AND JavaScript
-  rip -s -t -c example.rip      # Show everything (full debug mode)
   rip -d example.rip            # Show type declarations
   rip -m example.rip            # Compile with inline source map
-  rip -cd example.rip           # Show compiled JS and type declarations
-  rip --shadow example.rip      # Show shadow TypeScript (for type-check debugging)
-  rip -q -c example.rip         # Just the JS, no headers (for piping)
   echo 'p 1 + 2' | rip          # Execute from stdin
   echo 'x = 1 + 2' | rip -c     # Compile from stdin
 
@@ -146,7 +132,7 @@ async function main() {
     process.exit(0);
   }
 
-  // --- Subcommands ---
+  // --- Built-in subcommands ---
 
   if (args[0] === 'check') {
     const { runCheck } = await import('../src/typecheck.js');
@@ -159,22 +145,63 @@ async function main() {
     process.exit(exitCode);
   }
 
-  if (args[0] === 'server') {
-    let serverPath;
-    serverPath = getWorkspaceServerPath();
-    if (!serverPath) {
-      try {
-        serverPath = fileURLToPath(import.meta.resolve('@rip-lang/server/server'));
-      } catch {
-        console.error('Error: @rip-lang/server is not installed.\n\n  bun add @rip-lang/server\n');
-        process.exit(1);
+  // --- Subcommand dispatch: rip <name> → rip-<name> ---
+
+  if (scriptFileIndex >= 0) {
+    const candidate = args[scriptFileIndex];
+    if (!candidate.startsWith('-') && !isFile(candidate)) {
+      const name = candidate;
+      const subArgs = args.slice(scriptFileIndex + 1);
+
+      const repoRoot = getRepoRoot();
+      if (repoRoot) {
+        // 1. Repo package: bin/rip-<name>
+        const repoPkg = join(repoRoot, 'bin', `rip-${name}`);
+        if (existsSync(repoPkg)) {
+          const r = spawnSync(repoPkg, subArgs, { stdio: 'inherit', env: process.env });
+          process.exit(r.status ?? 1);
+        }
+
+        // 2. Repo script: bin/<name>
+        const repoScript = join(repoRoot, 'bin', name);
+        if (existsSync(repoScript)) {
+          const r = spawnSync(repoScript, subArgs, { stdio: 'inherit', env: process.env });
+          process.exit(r.status ?? 1);
+        }
+
+        // 3. Workspace package binary: packages/*/bin/rip-<name>
+        const pkgsDir = join(repoRoot, 'packages');
+        if (existsSync(pkgsDir)) {
+          try {
+            for (const d of readdirSync(pkgsDir, { withFileTypes: true })) {
+              if (!d.isDirectory()) continue;
+              const pkgBin = join(pkgsDir, d.name, 'bin', `rip-${name}`);
+              if (existsSync(pkgBin)) {
+                const r = spawnSync(pkgBin, subArgs, { stdio: 'inherit', env: process.env });
+                process.exit(r.status ?? 1);
+              }
+            }
+          } catch {}
+        }
+
+        // 4. Local node_modules: node_modules/.bin/rip-<name>
+        const localBin = join(repoRoot, 'node_modules', '.bin', `rip-${name}`);
+        if (existsSync(localBin)) {
+          const r = spawnSync(localBin, subArgs, { stdio: 'inherit', env: process.env });
+          process.exit(r.status ?? 1);
+        }
       }
+
+      // 5. Global PATH: rip-<name>
+      const pathResult = spawnSync(`rip-${name}`, subArgs, { stdio: 'inherit', env: process.env });
+      if (pathResult.error?.code !== 'ENOENT') {
+        process.exit(pathResult.status ?? 1);
+      }
+
+      // 6. Not found
+      console.error(`rip: unknown command '${name}'\n\nRun 'rip --help' for usage.`);
+      process.exit(1);
     }
-    const result = spawnSync('bun', ['--preload', loaderPath, serverPath, ...args.slice(1)], {
-      stdio: 'inherit',
-      env: process.env
-    });
-    process.exit(result.status ?? 1);
   }
 
   // --- REPL ---
@@ -248,7 +275,13 @@ async function main() {
 
     // Non-.rip files (e.g. shebang scripts): compile to temp file, execute, clean up
     const source = readFileSync(inputFile, 'utf-8');
-    const result = new Compiler().compile(source);
+    let result;
+    try {
+      result = new Compiler({ filename: inputFile }).compile(source);
+    } catch (error) {
+      console.error(formatError(error, { source, file: inputFile }));
+      process.exit(1);
+    }
     const tmp = join(dirname(inputFile), `.${basename(inputFile)}.__rip__.mjs`);
     let exitCode = 0;
     try {
@@ -260,20 +293,6 @@ async function main() {
     }
     try { unlinkSync(tmp); } catch {}
     process.exit(exitCode);
-  }
-
-  // Fallback: look for bin/{command} in git repo root
-  // Allows `rip migrate --status` to find and run {repo}/bin/migrate
-  if (inputFile && !inputFile.startsWith('-') && !isFile(inputFile)) {
-    try {
-      const repoRoot = getRepoRoot();
-      if (!repoRoot) throw new Error('No git repo root');
-      const binScript = join(repoRoot, 'bin', inputFile);
-      if (existsSync(binScript)) {
-        const r = spawnSync(binScript, scriptArgs, { stdio: 'inherit', env: process.env });
-        process.exit(r.status ?? 1);
-      }
-    } catch {}
   }
 
   // --- Compile (with flags) ---
@@ -288,6 +307,7 @@ async function main() {
 
   try {
     const compiler = new Compiler({ showTokens, showSExpr, quiet,
+      filename: inputFile || '<stdin>',
       types: generateDts ? 'emit' : undefined,
       sourceMap: generateMap ? 'inline' : undefined,
     });
@@ -313,8 +333,7 @@ async function main() {
       console.log(entry.tsContent);
     }
   } catch (error) {
-    console.error('Compilation Error:', error.message);
-    if (error.stack) console.error(error.stack);
+    console.error(formatError(error, { source, file: inputFile }));
     process.exit(1);
   }
 }

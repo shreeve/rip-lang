@@ -29,7 +29,8 @@ export spawnTrackedWorker = (flags, workerId, version, nowMsFn, importMetaPath, 
     RIP_LOG_JSON: if flags.jsonLogging then '1' else '0'
     RIP_VERSION: String(version)
 
-  loaderPath = join(dirname(importMetaPath), '..', '..', 'rip-loader.js')
+  ripPkgUrl = import.meta.resolve('rip-lang/package.json')
+  loaderPath = join(dirname(ripPkgUrl.slice(7)), 'rip-loader.js')
   proc = Bun.spawn ['bun', '--preload', loaderPath, importMetaPath],
     stdout: 'inherit'
     stderr: 'inherit'

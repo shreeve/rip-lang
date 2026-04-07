@@ -1,0 +1,269 @@
+# ==============================================================================
+# serving/realtime.rip — Bam-style WebSocket realtime hub
+# ==============================================================================
+#
+# Manages WebSocket connections, group membership, and message routing.
+# Backend stays HTTP-only — the hub proxies WS events as HTTP POSTs and
+# processes JSON responses for membership updates and message delivery.
+#
+# Protocol keys:
+#   @  target groups (who receives)
+#   +  subscribe to groups
+#   -  unsubscribe from groups
+#   >  senders (exclude from delivery)
+#   *  close with reason
+#   Other keys are event payloads delivered to targets
+
+import { randomBytes } from 'node:crypto'
+
+# --- Hub lifecycle ---
+
+export createHub = ->
+  sockets: new Map()     # clientId -> ws
+  members: new Map()     # groupId -> Set(clientId) (bidirectional)
+  backendUrl: null       # set during wiring
+  deliveries: 0
+  messages: 0
+  connections: 0
+
+export generateClientId = ->
+  randomBytes(16).toString('hex')
+
+# --- Client management ---
+
+export addClient = (hub, clientId, ws) ->
+  hub.sockets.set(clientId, ws)
+  hub.members.set(clientId, new Set())
+  hub.connections++
+  clientId
+
+export removeClient = (hub, clientId) ->
+  hub.sockets.delete(clientId)
+  groups = hub.members.get(clientId)
+  hub.members.delete(clientId)
+  if groups
+    for group as groups
+      set = hub.members.get(group)
+      if set
+        set.delete(clientId)
+        hub.members.delete(group) if set.size is 0
+  return
+
+# --- Membership ---
+
+applySubscribe = (hub, groups, channels) ->
+  for group as groups
+    set = hub.members.get(group)
+    if set
+      for ch as channels
+        set.add(ch)
+    else
+      hub.members.set(group, new Set(channels))
+  for ch as channels
+    set = hub.members.get(ch)
+    if set
+      for group as groups
+        set.add(group)
+    else
+      hub.members.set(ch, new Set(groups))
+
+applyUnsubscribe = (hub, groups, channels) ->
+  for group as groups
+    set = hub.members.get(group)
+    if set
+      for ch as channels
+        set.delete(ch)
+      hub.members.delete(group) if set.size is 0
+  for ch as channels
+    set = hub.members.get(ch)
+    if set
+      for group as groups
+        set.delete(group)
+      hub.members.delete(ch) if set.size is 0
+
+# --- Message routing ---
+
+resolveTargets = (hub, groups) ->
+  clients = new Set()
+  for group as groups
+    set = hub.members.get(group)
+    if set
+      if String(group).startsWith('/')
+        for id as set
+          clients.add(id)
+      else
+        clients.add(group)
+  clients
+
+deliverToClients = (hub, clients, senders, payload) ->
+  for id as clients
+    continue if senders and senders.has(String(id))
+    ws = hub.sockets.get(id)
+    if ws
+      try
+        ws.send(payload)
+        hub.deliveries++
+        hub.messages++
+
+# --- Process backend response ---
+
+export processResponse = (hub, body, clientId) ->
+  try
+    json = JSON.parse(body)
+    return unless json and typeof json is 'object'  # reject primitives (strings, numbers, booleans)
+    list = if Array.isArray(json) then json else [json]
+
+    for item in list
+      groups = null
+      concat = null
+      remove = null
+      senders = null
+      bundle = {}
+
+      for key, val of item
+        switch key
+          when '@' then groups = new Set(val.map(String))
+          when '+' then concat = new Set(val.map(String))
+          when '-' then remove = new Set(val.map(String))
+          when '>' then senders = new Set(val.map(String))
+          when '*' then null # close reason — handled by caller
+          else bundle[key] = val
+
+      groups = new Set([clientId]) if not groups and clientId
+
+      if groups
+        applySubscribe(hub, groups, concat) if concat
+        applyUnsubscribe(hub, groups, remove) if remove
+
+      if groups and Object.keys(bundle).length > 0
+        clients = resolveTargets(hub, groups)
+        deliverToClients(hub, clients, senders, JSON.stringify(bundle))
+  catch e
+    warn "realtime: invalid response:", e.message
+
+# --- Proxy to backend ---
+
+export proxyToBackend = (hub, headers, frameType, body) ->
+  return unless hub.backendUrl
+  proxyHeaders = new Headers(headers)
+  proxyHeaders.set('Sec-WebSocket-Frame', frameType)
+  proxyHeaders.delete('Upgrade')
+  proxyHeaders.delete('Connection')
+  proxyHeaders.delete('Sec-WebSocket-Key')
+  proxyHeaders.delete('Sec-WebSocket-Version')
+  proxyHeaders.delete('Sec-WebSocket-Extensions')
+
+  try
+    res = fetch! hub.backendUrl,
+      method: 'POST'
+      headers: proxyHeaders
+      body: body or ''
+    res.text!
+  catch e
+    warn "realtime: proxy failed:", e.message
+    null
+
+# --- Binary delivery (for CRDT and raw data) ---
+
+export broadcastBinary = (hub, groupIds, data, excludeClientId) ->
+  clients = new Set()
+  for group in groupIds
+    set = hub.members.get(String(group))
+    if set
+      if String(group).startsWith('/')
+        for id as set
+          clients.add(id)
+      else
+        clients.add(String(group))
+  for id as clients
+    continue if excludeClientId and id is excludeClientId
+    ws = hub.sockets.get(id)
+    if ws
+      try
+        ws.send(data)
+        hub.deliveries++
+        hub.messages++
+  return
+
+# --- Publish (external) ---
+
+export handlePublish = (hub, body) ->
+  processResponse(hub, body, null)
+
+# --- Stats ---
+
+export getRealtimeStats = (hub) ->
+  clients: hub.sockets.size
+  groups: hub.members.size - hub.sockets.size
+  deliveries: hub.deliveries
+  messages: hub.messages
+  connections: hub.connections
+
+export proxyRealtimeToWorker = (headers, frameType, body, getSocket, releaseSocket) ->
+  sock = getSocket()
+  return null unless sock
+  proxyHeaders = new Headers(headers)
+  proxyHeaders.set('Sec-WebSocket-Frame', frameType)
+  proxyHeaders.set('Content-Type', 'text/plain')
+  proxyHeaders.delete('Upgrade')
+  proxyHeaders.delete('Connection')
+  proxyHeaders.delete('Sec-WebSocket-Key')
+  proxyHeaders.delete('Sec-WebSocket-Version')
+  proxyHeaders.delete('Sec-WebSocket-Extensions')
+  try
+    res = fetch! "http://localhost/v1/realtime",
+      method: 'POST'
+      headers: proxyHeaders
+      body: body or ''
+      unix: sock.socket
+      decompress: false
+    res.text!
+  catch e
+    warn "realtime: worker proxy failed:", e.message
+    null
+  finally
+    releaseSocket(sock)
+
+export buildWebSocketHandlers = (hub, server) ->
+  websocket:
+    idleTimeout: 120
+    sendPings: true
+
+    open: (ws) ->
+      if ws.data?.kind is 'ws-proxy'
+        server.retainRuntimeWs(ws.data.runtime)
+        ws.data.passthrough = server.createWsPassthrough(ws, ws.data.upstreamUrl, ws.data.protocols or [])
+        return
+
+      { clientId, headers } = ws.data
+      addClient(hub, clientId, ws)
+      server.metrics.wsConnections++
+      server.logEvent 'ws_open', { clientId }
+      response = server.proxyRealtimeToWorker!(headers, 'open', '')
+      processResponse(hub, response, clientId) if response
+
+    message: (ws, message) ->
+      if ws.data?.kind is 'ws-proxy'
+        ws.data.passthrough?.sendToUpstream(message)
+        return
+
+      { clientId, headers } = ws.data
+      server.metrics.wsMessages++
+      isBinary = typeof message isnt 'string'
+      msg = if isBinary then Buffer.from(message) else message
+      frameType = if isBinary then 'binary' else 'text'
+      response = server.proxyRealtimeToWorker!(headers, frameType, msg)
+      processResponse(hub, response, clientId) if response
+
+    close: (ws) ->
+      if ws.data?.kind is 'ws-proxy'
+        ws.data.passthrough?.close()
+        unless ws.data.released
+          server.releaseProxyTarget(ws.data)
+          ws.data.released = true
+        return
+
+      { clientId, headers } = ws.data
+      server.logEvent 'ws_close', { clientId }
+      removeClient(hub, clientId)
+      server.proxyRealtimeToWorker!(headers, 'close', '')

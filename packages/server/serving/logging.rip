@@ -1,0 +1,105 @@
+# ==============================================================================
+# serving/logging.rip — access logging, formatting, and server utilities
+# ==============================================================================
+
+export nowMs = -> Date.now()
+
+_envOverride = null
+_debugMode = false
+
+export isDev = ->
+  env = (_envOverride or process.env.NODE_ENV or '').toLowerCase()
+  env in ['development', 'dev', '']
+
+export isDebug = -> _debugMode or process.env.RIP_DEBUG?
+
+export applyFlagSideEffects = (flags) ->
+  _envOverride = flags.envOverride if flags.envOverride
+  _debugMode = flags.debug is true
+  process.env.RIP_DEBUG = '1' if _debugMode
+
+export formatTimestamp = ->
+  now = new Date()
+  pad = (n, w = 2) -> String(n).padStart(w, '0')
+  timestamp = "#{now.getFullYear()}-#{pad(now.getMonth() + 1)}-#{pad(now.getDate())} #{pad(now.getHours())}:#{pad(now.getMinutes())}:#{pad(now.getSeconds())}.#{String(now.getMilliseconds()).padStart(3, '0')}"
+  tzMin = now.getTimezoneOffset()
+  tzSign = if tzMin <= 0 then '+' else '-'
+  tzAbs = Math.abs(tzMin)
+  timezone = "#{tzSign}#{String(Math.floor(tzAbs / 60)).padStart(2, '0')}#{String(tzAbs % 60).padStart(2, '0')}"
+  { timestamp, timezone }
+
+export scale = (value, unit, pad = true) ->
+  if value > 0 and Number.isFinite(value)
+    span = ['T', 'G', 'M', 'k', (if pad then ' ' else ''), 'm', 'µ', 'n', 'p']
+    base = 4
+    minSlot = 0
+    maxSlot = span.length - 1
+    slot = base
+
+    while value < 0.995 and slot <= maxSlot
+      value *= 1000
+      slot++
+    while value >= 999.5 and slot >= minSlot
+      value /= 1000
+      slot--
+
+    if slot >= minSlot and slot <= maxSlot
+      tens = Math.round(value * 10) / 10
+      if tens >= 99.5
+        nums = Math.round(value).toString()
+      else if tens >= 10
+        nums = Math.round(value).toString()
+      else
+        nums = tens.toFixed(1)
+      nums = nums.padStart(3, ' ') if pad
+      return "#{nums}#{span[slot]}#{unit}"
+
+  return (if pad then '  0 ' else '0') + unit if value is 0
+  '???' + (if pad then ' ' else '') + unit
+
+export logAccessJson = (app, req, res, totalSeconds, workerSeconds) ->
+  url = new URL(req.url)
+  len = res.headers.get('content-length')
+  type = (res.headers.get('content-type') or '').split(';')[0] or undefined
+  p JSON.stringify
+    t: new Date().toISOString()
+    app: app
+    method: req.method or 'GET'
+    path: url.pathname
+    status: res.status
+    totalSeconds: totalSeconds
+    workerSeconds: workerSeconds
+    type: type
+    length: if len then Number(len) else undefined
+
+typeAbbrev =
+  html: 'html', css: 'css', javascript: 'js', json: 'json', plain: 'text', xml: 'xml'
+  png: 'png', jpeg: 'jpg', gif: 'gif', webp: 'webp', avif: 'avif'
+  'svg+xml': 'svg', svg: 'svg', 'x-icon': 'icon', 'vnd.microsoft.icon': 'icon'
+  woff: 'font', woff2: 'font', ttf: 'font', otf: 'font'
+  mpeg: 'mp3', mp4: 'mp4', ogg: 'ogg', webm: 'webm'
+  pdf: 'pdf', zip: 'zip', gzip: 'gz', wasm: 'wasm'
+  'octet-stream': 'bin', 'x-rip': 'rip'
+
+export logAccessHuman = (app, req, res, totalSeconds, workerSeconds) ->
+  { timestamp, timezone } = formatTimestamp()
+  dur = scale(totalSeconds, 's')
+  method = req.method or 'GET'
+  url = new URL(req.url)
+  path = url.pathname
+  status = res.status
+  bytes = Number(res.headers.get('content-length') or 0)
+  size = scale(bytes, 'B')
+  contentType = (res.headers.get('content-type') or '').split(';')[0] or ''
+  sub = if contentType.includes('/') then contentType.split('/')[1] else contentType
+  type = (typeAbbrev[sub] or sub or '').padEnd(4)
+  p "#{timestamp} #{timezone} #{dur} │ #{status} #{type} #{size} │ #{method} #{path}"
+
+INTERNAL_HEADERS = new Set(['rip-worker-busy', 'rip-worker-id', 'rip-no-log'])
+
+export stripInternalHeaders = (h) ->
+  out = new Headers()
+  for [k, v] as h.entries()
+    continue if INTERNAL_HEADERS.has(k.toLowerCase())
+    out.append(k, v)
+  out

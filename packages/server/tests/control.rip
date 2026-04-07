@@ -1,4 +1,4 @@
-import { test, eq, ok } from '../test.rip'
+import { test, eq, ok } from './runner.rip'
 import { handleReloadControl } from '../control/control.rip'
 
 test "handleReloadControl ignores non-POST requests", ->

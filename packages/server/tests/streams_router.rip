@@ -1,39 +1,39 @@
-import { test, eq } from '../test.rip'
+import { test, eq } from './runner.rip'
 import { compileStreamTable, matchStreamRoute, describeStreamRoute } from '../streams/router.rip'
 
 test "compileStreamTable expands sni patterns", ->
   table = compileStreamTable([
-    { id: 'incus', order: 0, listen: 8443, sni: ['incus.example.com', '*.example.com'], upstream: 'incus' }
+    { id: 'incus', order: 0, listen: 8443, sni: ['incus.example.com', '*.example.com'], proxy: 'incus' }
   ])
   eq table.routes.length, 2
 
 test "matchStreamRoute prefers exact sni", ->
   table = compileStreamTable([
-    { id: 'wild', order: 0, listen: 8443, sni: ['*.example.com'], upstream: 'wild' }
-    { id: 'exact', order: 1, listen: 8443, sni: ['incus.example.com'], upstream: 'exact' }
+    { id: 'wild', order: 0, listen: 8443, sni: ['*.example.com'], proxy: 'wild' }
+    { id: 'exact', order: 1, listen: 8443, sni: ['incus.example.com'], proxy: 'exact' }
   ])
-  eq matchStreamRoute(table, 8443, 'incus.example.com').upstream, 'exact'
+  eq matchStreamRoute(table, 8443, 'incus.example.com').proxy, 'exact'
 
 test "matchStreamRoute matches wildcard sni", ->
   table = compileStreamTable([
-    { id: 'wild', order: 0, listen: 8443, sni: ['*.example.com'], upstream: 'wild' }
+    { id: 'wild', order: 0, listen: 8443, sni: ['*.example.com'], proxy: 'wild' }
   ])
-  eq matchStreamRoute(table, 8443, 'api.example.com').upstream, 'wild'
+  eq matchStreamRoute(table, 8443, 'api.example.com').proxy, 'wild'
 
 test "matchStreamRoute wildcard is single-label only", ->
   table = compileStreamTable([
-    { id: 'wild', order: 0, listen: 8443, sni: ['*.example.com'], upstream: 'wild' }
+    { id: 'wild', order: 0, listen: 8443, sni: ['*.example.com'], proxy: 'wild' }
   ])
   eq matchStreamRoute(table, 8443, 'a.b.example.com'), null
 
 test "matchStreamRoute filters by listen port", ->
   table = compileStreamTable([
-    { id: 'incus', order: 0, listen: 8443, sni: ['incus.example.com'], upstream: 'incus' }
+    { id: 'incus', order: 0, listen: 8443, sni: ['incus.example.com'], proxy: 'incus' }
   ])
   eq matchStreamRoute(table, 443, 'incus.example.com'), null
 
 test "describeStreamRoute summarizes route", ->
   table = compileStreamTable([
-    { id: 'incus', order: 0, listen: 8443, sni: ['incus.example.com'], upstream: 'incus' }
+    { id: 'incus', order: 0, listen: 8443, sni: ['incus.example.com'], proxy: 'incus' }
   ])
   eq describeStreamRoute(table.routes[0]), '8443 incus.example.com -> incus'

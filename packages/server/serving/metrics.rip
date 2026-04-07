@@ -1,0 +1,131 @@
+# ==============================================================================
+# serving/metrics.rip — lightweight in-process metrics collector
+# ==============================================================================
+
+LATENCY_WINDOW = 1000
+
+export createMetrics = ->
+  latencies = []
+  latencyIdx = 0
+
+  m =
+    # Counters (monotonically increasing)
+    requests: 0
+    responses2xx: 0
+    responses4xx: 0
+    responses5xx: 0
+    forwarded: 0
+    queued: 0
+    queueTimeouts: 0
+    queueShed: 0
+    workerRestarts: 0
+    acmeRenewals: 0
+    acmeFailures: 0
+    wsConnections: 0
+    wsMessages: 0
+    wsDeliveries: 0
+
+    # Record a request latency (seconds)
+    recordLatency: (seconds) ->
+      if latencies.length < LATENCY_WINDOW
+        latencies.push(seconds)
+      else
+        latencies[latencyIdx] = seconds
+      latencyIdx = (latencyIdx + 1) % LATENCY_WINDOW
+
+    # Record a response by status code class
+    recordStatus: (status) ->
+      if status >= 200 and status < 300
+        m.responses2xx++
+      else if status >= 400 and status < 500
+        m.responses4xx++
+      else if status >= 500
+        m.responses5xx++
+
+    # Compute latency percentiles from the rolling window
+    percentiles: ->
+      return { p50: 0, p95: 0, p99: 0 } if latencies.length is 0
+      sorted = [...latencies].sort((a, b) -> a - b)
+      n = sorted.length
+      pick = (p) -> sorted[Math.min(Math.floor(n * p), n - 1)]
+      { p50: pick(0.50), p95: pick(0.95), p99: pick(0.99) }
+
+    # Full snapshot of all metrics
+    snapshot: (startedAt, appRegistry, upstreamPool = null) ->
+      totalInflight = 0
+      totalQueueDepth = 0
+      apps = []
+      upstreams = []
+      upstreamHealthy = 0
+      upstreamUnhealthy = 0
+      if appRegistry
+        for [appId, app] as appRegistry.apps
+          totalInflight += app.inflightTotal
+          totalQueueDepth += app.queue.length
+          apps.push
+            id: appId
+            workers: app.sockets.length
+            inflight: app.inflightTotal
+            queueDepth: app.queue.length
+      if upstreamPool
+        for [upstreamId, upstream] as upstreamPool.upstreams
+          targets = upstream.targets or []
+          healthyTargets = targets.filter((t) -> t.healthy and t.circuitState isnt 'open').length
+          unhealthyTargets = targets.length - healthyTargets
+          upstreamHealthy += healthyTargets
+          upstreamUnhealthy += unhealthyTargets
+          upstreams.push
+            id: upstreamId
+            targets: targets.length
+            healthyTargets: healthyTargets
+            unhealthyTargets: unhealthyTargets
+      uptimeSeconds = if startedAt then Math.floor((Date.now() - startedAt) / 1000) else 0
+
+      uptime: uptimeSeconds
+      apps: apps
+      upstreams: upstreams
+      counters:
+        requests: m.requests
+        responses: { '2xx': m.responses2xx, '4xx': m.responses4xx, '5xx': m.responses5xx }
+        forwarded: m.forwarded
+        queue: { queued: m.queued, timeouts: m.queueTimeouts, shed: m.queueShed }
+        workers: { restarts: m.workerRestarts }
+        acme: { renewals: m.acmeRenewals, failures: m.acmeFailures }
+        websocket: { connections: m.wsConnections, messages: m.wsMessages, deliveries: m.wsDeliveries }
+      gauges:
+        workersActive: apps.reduce(((sum, a) -> sum + a.workers), 0)
+        inflight: totalInflight
+        queueDepth: totalQueueDepth
+        upstreamTargetsHealthy: upstreamHealthy
+        upstreamTargetsUnhealthy: upstreamUnhealthy
+      latency: m.percentiles()
+
+  m
+
+export buildDiagnosticsBody = (state) ->
+  snap = state.metrics.snapshot(state.startedAt, state.appRegistry, state.servingRuntime.upstreamPool)
+  JSON.stringify
+    status: if snap.gauges.workersActive > 0 then 'healthy' else 'degraded'
+    version: { server: state.serverVersion, rip: state.ripVersion }
+    uptime: snap.uptime
+    apps: snap.apps
+    proxies: snap.upstreams
+    metrics:
+      requests: snap.counters.requests
+      responses: snap.counters.responses
+      latency: snap.latency
+      queue: snap.counters.queue
+      workers: snap.counters.workers
+      acme: snap.counters.acme
+      websocket: snap.counters.websocket
+    gauges: snap.gauges
+    realtime: state.realtimeStats
+    hosts: state.hosts
+    streams: state.streamDiagnostics
+    config: Object.assign({}, state.configInfo,
+      multiplexer: state.multiplexer
+      activeRuntime: state.activeRuntime
+      retiredRuntimes: state.retiredRuntimes
+      activeStreamRuntime: state.activeStreamRuntime
+      retiredStreamRuntimes: state.retiredStreamRuntimes
+    )

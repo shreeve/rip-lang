@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-3.13.129-blue.svg" alt="Version"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-3.13.134-blue.svg" alt="Version"></a>
   <a href="#zero-dependencies"><img src="https://img.shields.io/badge/dependencies-ZERO-brightgreen.svg" alt="Dependencies"></a>
   <a href="#"><img src="https://img.shields.io/badge/tests-1%2C436%2F1%2C436-brightgreen.svg" alt="Tests"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
@@ -38,7 +38,7 @@ get '/users/:id' ->                 # RESTful API endpoint, comma-less
 
 **What makes Rip different:**
 - **Modern output** — ES2022 with native classes, `?.`, `??`, modules
-- **New operators** — `!`, `!?`, `//`, `%%`, `=~`, `|>`, `.new()`, and more
+- **New operators** — `!`, `//`, `%%`, `=~`, `|>`, `.new()`, and more
 - **Reactive operators** — `:=`, `~=`, `~>` as language syntax
 - **Optional types** — `::` annotations, `type` aliases, `.d.ts` emission
 - **Zero dependencies** — everything included, even the parser generator
@@ -213,8 +213,6 @@ All use `globalThis` with `??=` — override any by redeclaring locally.
 |----------|---------|--------------|
 | `!` (dammit) | `fetchData!` | Calls AND awaits |
 | `!` (void) | `def process!` | Suppresses implicit return |
-| `!?` (otherwise) | `val !? 5` | Default only if `undefined` (infix) |
-| `!?` (defined) | `val!?` | True if not `undefined` (postfix) |
 | `?!` (presence) | `@checked?!` | True if truthy, else `undefined` (Houdini operator) |
 | `?` (existence) | `x?` | True if `x != null` |
 | `?:` (ternary) | `x > 0 ? 'yes' : 'no'` | JS-style ternary expression |
@@ -485,7 +483,7 @@ bun run build          # Build browser bundle
 ## Release
 
 ```bash
-# rip-lang + changed @rip-lang/* packages + @rip-lang/all
+# rip-lang + changed @rip-lang/* packages
 bun run bump
 
 # Explicit version level
@@ -495,8 +493,7 @@ bun run bump major
 ```
 
 - `bun run bump` is the standard release flow for the npm ecosystem in this repo.
-- It bumps `rip-lang`, bumps any changed publishable `@rip-lang/*` packages, updates `@rip-lang/all`, runs the build and test steps, then commits, pushes, and publishes.
-- `@rip-lang/all` is released automatically as part of that flow; there is no separate manual release step for it.
+- It bumps `rip-lang`, bumps any changed publishable `@rip-lang/*` packages, runs the build and test steps, then commits, pushes, and publishes.
 - `packages/vscode` is intentionally excluded and must be versioned and published separately.
 
 ---

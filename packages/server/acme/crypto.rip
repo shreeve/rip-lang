@@ -13,8 +13,6 @@ export b64url = (buf) ->
   s = if typeof buf is 'string' then Buffer.from(buf).toString('base64') else Buffer.from(buf).toString('base64')
   s.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 
-b64urlBuf = (buf) -> b64url(buf)
-
 # --- Key generation ---
 
 export generateAccountKeyPair = ->

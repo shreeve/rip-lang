@@ -2,8 +2,8 @@
 # streams/index.rip — stream runtime facade and listener orchestration
 # ==============================================================================
 
-import { parseSNI } from './tls_clienthello.rip'
-import { compileStreamTable, matchStreamRoute, describeStreamRoute } from './router.rip'
+import { parseSNI } from './clienthello.rip'
+import { compileStreamTable, matchStreamRoute } from './router.rip'
 import { createStreamRuntime, buildStreamConfigInfo, describeStreamRuntime } from './runtime.rip'
 import { createStreamUpstreamPool, addStreamUpstream, getStreamUpstream, selectStreamTarget, openStreamConnection, releaseStreamConnection } from './upstream.rip'
 import { createPipeState, writeChunk, flushPending, markPaused, markResumed } from './pipe.rip'
@@ -20,7 +20,7 @@ concatBytes = (a, b) ->
 export resolveHandshakeTarget = (runtime, listenPort, sni, httpFallback = {}) ->
   route = matchStreamRoute(runtime.routeTable, listenPort, sni)
   if route
-    upstream = getStreamUpstream(runtime.upstreamPool, route.upstream)
+    upstream = getStreamUpstream(runtime.upstreamPool, route.proxy)
     unless upstream
       return {
         kind: 'reject'
@@ -52,8 +52,8 @@ export resolveHandshakeTarget = (runtime, listenPort, sni, httpFallback = {}) ->
 export buildStreamRuntime = (normalized) ->
   routeTable = compileStreamTable(normalized.streams or [])
   upstreamPool = createStreamUpstreamPool()
-  for upstreamId, upstreamConfig of (normalized.streamUpstreams or {})
-    addStreamUpstream(upstreamPool, upstreamId, upstreamConfig)
+  for proxyId, upstreamConfig of (normalized.streamUpstreams or {})
+    addStreamUpstream(upstreamPool, proxyId, upstreamConfig)
   configInfo = buildStreamConfigInfo(normalized)
   createStreamRuntime(configInfo, upstreamPool, routeTable)
 
@@ -273,12 +273,32 @@ export startStreamListeners = (runtime, options = {}) ->
       handshakeMs: Math.max(...portRoutes.map((route) -> route.timeouts?.handshakeMs or 5000), 5000)
       idleMs: Math.max(...portRoutes.map((route) -> route.timeouts?.idleMs or 300000), 300000)
       connectMs: Math.max(...portRoutes.map((route) -> route.timeouts?.connectMs or 5000), 5000)
-    listener = Bun.listen
-      hostname: options.hostname or '0.0.0.0'
-      port: port
-      allowHalfOpen: true
-      socket: createClientHandlers(runtime, port, listenerTimeouts, options).socket
-    runtime.listeners.set(port, listener)
+    try
+      listener = Bun.listen
+        hostname: options.hostname or '0.0.0.0'
+        port: port
+        allowHalfOpen: true
+        socket: createClientHandlers(runtime, port, listenerTimeouts, options).socket
+      runtime.listeners.set(port, listener)
+    catch e
+      if e?.code is 'EACCES' and port < 1024
+        warn ""
+        warn "rip-server: cannot bind to port #{port} — permission denied"
+        warn ""
+        warn "  Ports below 1024 require elevated privileges."
+        warn "  This commonly happens after upgrading Bun, which resets capabilities."
+        warn ""
+        warn "  Options:"
+        warn ""
+        warn "    1. Grant Bun the capability (recommended, one-time):"
+        warn "       sudo setcap cap_net_bind_service=+ep $(which bun)"
+        warn ""
+        warn "    2. Run with sudo:"
+        warn "       sudo rip server --file serve.rip"
+        warn ""
+        warn "  Note: upgrading Bun resets the capability — re-run setcap after upgrades."
+        warn ""
+      throw e
   runtime
 
 export stopStreamListeners = (runtime, closeActiveConnections = false) ->

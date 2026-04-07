@@ -1,0 +1,42 @@
+import { test, eq, ok } from './runner.rip'
+import { dirname, join } from 'node:path'
+import { coerceInt, computeSocketPrefix, parseFlags } from '../control/cli.rip'
+import { createServingRuntime, createReloadHistoryEntry } from '../serving/runtime.rip'
+
+serverDir = dirname(import.meta.dir)
+defaultRip = join(serverDir, 'browse.rip')
+
+test "control cli helpers load and parse basic flags", ->
+  flags = parseFlags(['bun', 'server', '--https-port=9445', '--file=./serve.rip', defaultRip])
+  eq coerceInt('42', 0), 42
+  eq flags.httpsPort, 9445
+  ok flags.configPath.endsWith('serve.rip')
+
+test "control cli uses bare app token as true app name override", ->
+  flags = parseFlags(['bun', 'server', 'ola'])
+  eq flags.appName, 'ola'
+  eq flags.appAliases[0], 'ola'
+  eq flags.socketPrefix, 'rip_ola'
+
+  socketPrefix = computeSocketPrefix(
+    ['bun', 'server', 'ola'],
+    (appTok) -> { appName: appTok }
+    -> false
+    -> false
+    (_, tok) -> tok
+    -> '/tmp'
+  )
+  eq socketPrefix, 'rip_ola'
+
+test "control cli supports explicit path with custom app name", ->
+  flags = parseFlags(['bun', 'server', "#{defaultRip}@ola"])
+  eq flags.appName, 'ola'
+  eq flags.appAliases[0], 'ola'
+  eq flags.socketPrefix, 'rip_ola'
+
+test "serving runtime helpers load and create summary entries", ->
+  runtime = createServingRuntime()
+  entry = createReloadHistoryEntry('reload-1', 'test', null, 1, 'applied')
+  eq runtime.configInfo.kind, 'none'
+  eq entry.id, 'reload-1'
+  eq entry.result, 'applied'

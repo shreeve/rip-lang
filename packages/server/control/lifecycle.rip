@@ -25,11 +25,76 @@ export computeHideUrls = (appEntry, joinFn, dirnameFn, existsSyncFn) ->
   existsSyncFn(setupFile)
 
 export logStartupSummary = (server, flags, buildRipdevUrlFn, formatPortFn) ->
+  return if flags.quiet
+
+  d = '\x1b[2m'
+  r = '\x1b[0m'
+  b = '\x1b[1m'
+  c = '\x1b[36m'
+  g = '\x1b[32m'
+  y = '\x1b[33m'
+
   httpOnly = flags.httpsPort is null
   protocol = if httpOnly then 'http' else 'https'
   port = flags.httpsPort or flags.httpPort or 80
   url = buildRipdevUrlFn(flags.appName, protocol, port, formatPortFn)
-  p "rip-server: rip=#{server.ripVersion} server=#{server.serverVersion} app=#{flags.appName} workers=#{flags.workers} url=#{url}/server"
+
+  configInfo = server.servingRuntime?.configInfo
+  certs = configInfo?.certs or {}
+  routeDescs = configInfo?.activeRouteDescriptions or []
+  streamRoutes = server.streamRuntime?.routeTable?.routes or []
+
+  hosts = []
+  for route in streamRoutes
+    sni = route.sni or route.id
+    hosts.push { name: sni, action: 'passthrough', tls: false }
+  for desc in routeDescs
+    parts = desc.split(' ')
+    host = parts[0]
+    raw = parts.slice(2).join(' ')
+    action = if raw.startsWith('proxy:') then "proxy #{d}→#{r} #{raw.slice(6)}"
+    else if raw.startsWith('app:') then 'app'
+    else if raw.startsWith('static') then 'static'
+    else raw
+    hosts.push { name: host, action, tls: !!certs[host] }
+
+  upstreamList = []
+  pool = server.servingRuntime?.upstreamPool
+  if pool
+    for [id, upstream] as pool.upstreams
+      targets = upstream.targets.map((t) -> t.url).join(', ')
+      upstreamList.push { id, targets }
+
+  maxHost = 0
+  maxHost = Math.max(maxHost, h.name.length) for h in hosts
+
+  lines = []
+  lines.push ''
+  lines.push "  #{b}rip server#{r} #{d}v#{server.serverVersion}#{r}"
+  lines.push ''
+
+  if configInfo?.path
+    lines.push "  #{d}config#{r}   #{configInfo.path}"
+  lines.push "  #{d}workers#{r}  #{flags.workers}"
+
+  if hosts.length > 0
+    lines.push ''
+    for h in hosts
+      scheme = if h.tls or h.action is 'passthrough' then 'https://' else 'http://'
+      pad = ' '.repeat(maxHost - h.name.length + 2)
+      tls = if h.tls then " #{g}✓#{r}#{d}tls#{r}" else ''
+      lines.push "  #{c}#{scheme}#{h.name}#{r}#{pad}#{d}#{h.action}#{r}#{tls}"
+
+  if upstreamList.length > 0
+    lines.push ''
+    for u in upstreamList
+      lines.push "  #{d}↑#{r} #{y}#{u.id}#{r} #{d}→#{r} #{u.targets}"
+
+  lines.push ''
+  lines.push "  #{g}#{b}→#{r} #{g}#{url}#{r}"
+  lines.push ''
+
+  p lines.join('\n')
 
 FORCED_EXIT_MS = 35000
 
@@ -38,6 +103,7 @@ export createCleanup = (pidFile, server, manager, unlinkSyncFn, fetchFn, process
   ->
     return if called
     called = true
+    process.stdout.write('\r\x1b[K')
     p 'rip-server: shutting down...'
 
     # Safety net: force exit if graceful shutdown stalls
@@ -67,10 +133,10 @@ export installShutdownHandlers = (cleanup, processObj, onReload = null) ->
     processObj.on 'SIGHUP', ->
       try onReload!()
       catch err
-        console.error 'rip-server: config reload failed:', err?.message or err
+        warn 'rip-server: config reload failed:', err?.message or err
   processObj.on 'uncaughtException', (err) ->
-    console.error 'rip-server: uncaught exception:', err
+    warn 'rip-server: uncaught exception:', err
     cleanup()
   processObj.on 'unhandledRejection', (err) ->
-    console.error 'rip-server: unhandled rejection:', err
+    warn 'rip-server: unhandled rejection:', err
     cleanup()

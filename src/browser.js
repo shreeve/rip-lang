@@ -3,8 +3,8 @@
 
 export { Lexer } from './lexer.js';
 export { parser } from './parser.js';
-export { CodeGenerator, Compiler, compile, compileToJS, formatSExpr, getStdlibCode, getReactiveRuntime, getComponentRuntime } from './compiler.js';
-import { getStdlibCode } from './compiler.js';
+export { CodeEmitter, Compiler, compile, compileToJS, formatSExpr, getStdlibCode, getReactiveRuntime, getComponentRuntime, RipError, formatError, formatErrorHTML } from './compiler.js';
+import { getStdlibCode, formatError as _formatError } from './compiler.js';
 
 // Version info (replaced during build)
 export const VERSION = "0.0.0";
@@ -90,7 +90,7 @@ async function processRipScripts() {
         let js = '';
         for (const s of individual) {
           try { js += compileToJS(s.code, opts) + '\n'; }
-          catch (e) { console.error(`Rip compile error in ${s.url || 'inline'}:`, e.message); }
+          catch (e) { console.error(_formatError(e, { source: s.code, file: s.url || 'inline', color: false })); }
         }
         if (js) {
           try { await (0, eval)(`(async()=>{\n${js}\n})()`); }
@@ -132,7 +132,7 @@ async function processRipScripts() {
           const js = compileToJS(s.code, opts);
           compiled.push({ js, url: s.url || 'inline' });
         } catch (e) {
-          console.error(`Rip compile error in ${s.url || 'inline'}:`, e.message);
+          console.error(_formatError(e, { source: s.code, file: s.url || 'inline', color: false }));
         }
       }
 
@@ -281,7 +281,7 @@ export function rip(code) {
     if (result !== undefined) globalThis._ = result;
     return result;
   } catch (error) {
-    console.error('Rip compilation error:', error.message);
+    console.error(_formatError(error, { source: code, color: false }));
     return undefined;
   }
 }

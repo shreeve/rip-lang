@@ -215,10 +215,9 @@ let UNARY_MATH = new Set(['!', '~']);
 // Identifier: word chars + optional trailing ! (await) or ? (predicate)
 // The ? suffix is only captured when NOT followed by . ? ! [ ( to avoid
 // conflict with ?. (optional chaining), ?? (nullish), ?! (presence), ?.( and ?.[
-// The ! suffix is NOT captured when followed by ? to preserve !? as operator
-let IDENTIFIER_RE = /^(?!\d)((?:(?!\s)[$\w\x7f-\uffff])+(?:!(?!\?)|[?](?![.?![(]))?)([^\n\S]*:(?![=:>]))?/;
+let IDENTIFIER_RE = /^(?!\d)((?:(?!\s)[$\w\x7f-\uffff])+(?:!|[?](?![.?![(]))?)([^\n\S]*:(?![=:]))?/;
 let NUMBER_RE     = /^0b[01](?:_?[01])*n?|^0o[0-7](?:_?[0-7])*n?|^0x[\da-f](?:_?[\da-f])*n?|^\d+(?:_\d+)*n|^(?:\d+(?:_\d+)*)?\.?\d+(?:_\d+)*(?:e[+-]?\d+(?:_\d+)*)?/i;
-let OPERATOR_RE   = /^(?:<=>|::|\*>|[-=]>|~>|~=|:>|:=|=!|===|!==|!\?|\?\!|\?\?|=~|\|>|[-+*\/%<>&|^!?=]=|>>>=?|([-+:])\1|([&|<>*\/%])\2=?|\?\.?|\.{2,3})/;
+let OPERATOR_RE   = /^(?:<=>|::|\*>|[-=]>|~>|~=|:=|=!|===|!==|\?\!|\?\?|=~|\|>|[-+*\/%<>&|^!?=]=|>>>=?|([-+:])\1|([&|<>*\/%])\2=?|\?\.?|\.{2,3})/;
 let WHITESPACE_RE = /^[^\n\S]+/;
 let NEWLINE_RE    = /^(?:\n[^\n\S]*)+/;
 let COMMENT_RE    = /^(\s*)###([^#][\s\S]*?)(?:###([^\n\S]*)|###$)|^((?:\s*#(?!##[^#]).*)+)/;
@@ -1238,7 +1237,6 @@ export class Lexer {
     // Reactive and binding operators
     else if (val === '~=') tag = 'COMPUTED_ASSIGN';
     else if (val === ':=') tag = 'REACTIVE_ASSIGN';
-    else if (val === ':>') tag = 'RIGHTWARD_ASSIGN';
     else if (val === '<=>') tag = 'BIND';
     else if (val === '~>') { tag = 'EFFECT'; this.inTypeAnnotation = false; }
     else if (val === '=!') { tag = 'READONLY_ASSIGN'; this.inTypeAnnotation = false; }
@@ -1305,8 +1303,6 @@ export class Lexer {
     else if (SHIFT.has(val))           tag = 'SHIFT';
     // Spaced ? → TERNARY (ternary)
     else if (val === '?' && prev?.spaced) tag = 'TERNARY';
-    // Unspaced !? → DEFINED (postfix defined check: v!? → v !== undefined)
-    else if (val === '!?' && prev && !prev.spaced) tag = 'DEFINED';
     // Unspaced ?! → PRESENCE (Houdini: v?! → v ? true : undefined)
     else if (val === '?!' && prev && !prev.spaced) tag = 'PRESENCE';
     // ?[ and ?( without dot → treat as optional chaining (?.)

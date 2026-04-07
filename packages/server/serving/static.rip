@@ -1,0 +1,411 @@
+# ==============================================================================
+# serving/static.rip — static file serving and redirect route handlers
+# ==============================================================================
+
+import { resolve, join, basename, dirname } from 'node:path'
+import { statSync, readdirSync, readFileSync } from 'node:fs'
+import { mimeType } from '../api.rip'
+
+findHljsRip = ->
+  bases = [
+    join(import.meta.dir, '..', '..', 'print', 'hljs-rip.js')
+    join(import.meta.dir, '..', '..', '..', 'print', 'hljs-rip.js')
+  ]
+  try bases.push(import.meta.resolve('@rip-lang/print/hljs-rip.js').replace(/^file:\/\//, ''))
+  for p in bases
+    try
+      statSync(p)
+      return p
+  null
+
+HLJS_RIP_PATH = findHljsRip()
+
+stripRoutePrefix = (pathname, routePath) ->
+  return pathname if routePath is '/' or routePath is '/*'
+  prefix = if routePath.endsWith('/*') then routePath.slice(0, -2) else routePath
+  if pathname.startsWith(prefix)
+    rest = pathname.slice(prefix.length)
+    return if rest is '' then '/' else rest
+  pathname
+
+isSafeWithinRoot = (root, resolved) ->
+  rootSlash = if root.endsWith('/') then root else root + '/'
+  resolved is root or resolved.startsWith(rootSlash)
+
+acceptsHtml = (req) ->
+  accept = req.headers?.get?('accept') or ''
+  accept.includes('text/html')
+
+# --- Directory listing ---
+
+esc = (s) -> s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
+fmtSize = (n) ->
+  for u in ['B', 'KB', 'MB', 'GB']
+    if n < 1024
+      return if u is 'B' then "#{n} B" else "#{n.toFixed(1)} #{u}"
+    n /= 1024
+  "#{n.toFixed(1)} TB"
+
+fmtDate = (ms) ->
+  d = new Date(ms)
+  mo = d.toLocaleString('en', { month: 'short' })
+  day = String(d.getDate()).padStart(2, '0')
+  "#{mo} #{day}, #{d.getFullYear()}"
+
+IMG_EXTS = new Set ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'avif']
+CODE_EXTS = new Set ['js', 'mjs', 'ts', 'rip', 'html', 'htm', 'css', 'json', 'xml', 'yaml', 'yml', 'sh']
+DOC_EXTS = new Set ['pdf', 'md', 'txt', 'doc', 'docx', 'rtf']
+ARCHIVE_EXTS = new Set ['zip', 'gz', 'tar', 'bz2', 'xz', '7z', 'rar']
+
+SVG_FOLDER = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" fill="currentColor" fill-opacity=".08"/></svg>'
+SVG_FILE = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>'
+SVG_IMAGE = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>'
+SVG_CODE = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>'
+SVG_DOC = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>'
+SVG_ARCHIVE = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>'
+SVG_UP = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l-6-6 6-6"/><path d="M3 12h18"/></svg>'
+
+fileIcon = (name) ->
+  ext = name.slice(name.lastIndexOf('.') + 1).toLowerCase()
+  if IMG_EXTS.has(ext) then SVG_IMAGE
+  else if CODE_EXTS.has(ext) then SVG_CODE
+  else if DOC_EXTS.has(ext) then SVG_DOC
+  else if ARCHIVE_EXTS.has(ext) then SVG_ARCHIVE
+  else SVG_FILE
+
+previewAttr = (name, href) ->
+  ext = name.slice(name.lastIndexOf('.') + 1).toLowerCase()
+  if IMG_EXTS.has(ext) then " data-pv=\"image\" data-src=\"#{esc href}\"" else ''
+
+dirRow = (ic, href, label, size = '', date = '', extra = '') ->
+  "<tr><td class=\"ic\">#{ic}</td><td class=\"nm\"><a href=\"#{esc href}\"#{extra}>#{esc label}</a></td><td class=\"sz\">#{size}</td><td class=\"dt\">#{date}</td></tr>"
+
+export renderDirectoryListing = (reqPath, fsPath, rootName) ->
+  entries = try readdirSync(fsPath, { withFileTypes: true }) catch then []
+  dirs = []
+  files = []
+  for e in entries
+    continue if e.name.startsWith('.')
+    if e.isDirectory() then dirs.push(e.name) else files.push(e.name)
+  dirs.sort()
+  files.sort()
+
+  rows = []
+  rows.push dirRow(SVG_UP, '../', '..') if reqPath isnt '/'
+  for d in dirs
+    rows.push dirRow(SVG_FOLDER, "#{d}/", d)
+  for f in files
+    try
+      s = statSync(join(fsPath, f))
+      rows.push dirRow(fileIcon(f), f, f, fmtSize(s.size), fmtDate(s.mtimeMs), previewAttr(f, f))
+    catch
+      rows.push dirRow(fileIcon(f), f, f)
+
+  numDirs = dirs.length
+  numFiles = files.length
+  counts = []
+  counts.push "#{numDirs} folder#{if numDirs isnt 1 then 's' else ''}" if numDirs > 0
+  counts.push "#{numFiles} file#{if numFiles isnt 1 then 's' else ''}" if numFiles > 0
+
+  crumbs = "<a href=\"/\">#{esc rootName}</a>"
+  href = ''
+  for part in reqPath.split('/').filter((p) -> p)
+    href += "/#{part}"
+    crumbs += "<span class=\"sep\">/</span><a href=\"#{href}/\">#{esc part}</a>"
+
+  """
+  <!DOCTYPE html>
+  <html lang="en">
+  <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>#{esc(if reqPath is '/' then rootName else reqPath.split('/').filter((p) -> p).slice(-1)[0] or rootName)}</title>
+  <style>
+  :root {
+    --bg: #f8f9fa; --card: #fff; --border: #e2e5e9; --row-border: #f0f1f3;
+    --text: #1a1d21; --secondary: #6b7280; --icon: #9ca3af;
+    --link: #2563eb; --link-visited: #7c3aed; --link-hover: #1d4ed8;
+    --hover: #f0f5ff; --sep: #cbd5e1; --bar-bg: #f3f4f6; --head-bg: #f9fafb;
+    --radius: 10px; --shadow: 0 1px 3px rgba(0,0,0,.05), 0 0 0 1px rgba(0,0,0,.03);
+  }
+  @media (prefers-color-scheme: dark) { :root {
+    --bg: #0a0a0c; --card: #161618; --border: #2a2a2e; --row-border: #1e1e22;
+    --text: #e4e4e7; --secondary: #71717a; --icon: #52525b;
+    --link: #60a5fa; --link-visited: #a78bfa; --link-hover: #93c5fd;
+    --hover: #1a1d24; --sep: #3f3f46; --bar-bg: #1c1c1f; --head-bg: #19191c;
+    --shadow: 0 1px 3px rgba(0,0,0,.3), 0 0 0 1px rgba(255,255,255,.04);
+  }}
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+    font-size: 14px; line-height: 1.5; color: var(--text); background: var(--bg);
+    -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+  .wrap { max-width: 880px; margin: 3rem auto; padding: 0 1.25rem; }
+  .card { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+  .bar { display: flex; align-items: center; justify-content: space-between;
+    padding: .75rem 1rem; gap: .75rem; border-bottom: 1px solid var(--border); background: var(--bar-bg); }
+  .crumbs { font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 0; flex-wrap: wrap; }
+  .crumbs a { color: var(--link); text-decoration: none; padding: 2px 6px; border-radius: 4px; transition: all 120ms; }
+  .crumbs a:last-child { color: var(--text); font-weight: 600; }
+  .crumbs a:hover { color: var(--link-hover); background: var(--hover); }
+  .sep { color: var(--sep); font-size: 11px; margin: 0 1px; user-select: none; }
+  .meta { font-size: 12px; color: var(--secondary); white-space: nowrap; font-weight: 400; }
+  table { width: 100%; border-collapse: collapse; }
+  th { background: var(--head-bg); text-align: left; padding: 6px 1rem; font-size: 11px;
+    font-weight: 500; color: var(--secondary); letter-spacing: .03em; border-bottom: 1px solid var(--border); }
+  th.sz { text-align: right; }
+  td { padding: 7px 1rem; vertical-align: middle; font-size: 13px; border-bottom: 1px solid var(--row-border); }
+  tr:last-child td { border-bottom: none; }
+  tbody tr { position: relative; transition: background 80ms; cursor: pointer; }
+  tbody tr:hover { background: var(--hover); }
+  .ic { width: 2.25rem; text-align: center; color: var(--icon); line-height: 0; }
+  .ic svg { vertical-align: middle; }
+  .nm a { color: var(--link); text-decoration: none; font-weight: 450; letter-spacing: -.01em; }
+  .nm a::after { content: ''; position: absolute; inset: 0; }
+  .nm a:visited { color: var(--link-visited); }
+  .nm a:hover { color: var(--link-hover); }
+  .sz { width: 5.5rem; text-align: right; color: var(--secondary); white-space: nowrap;
+    font-variant-numeric: tabular-nums; font-size: 12px; letter-spacing: .01em; }
+  .dt { color: var(--secondary); white-space: nowrap; font-size: 12px; }
+  .pop { position: fixed; z-index: 9999; pointer-events: none; width: 300px;
+    background: var(--card); border-radius: 10px; box-shadow: 0 20px 40px rgba(0,0,0,.15), 0 0 0 1px rgba(0,0,0,.05);
+    overflow: hidden; opacity: 0; transform: translateY(4px) scale(.98);
+    transition: opacity 120ms ease, transform 120ms ease; }
+  .pop.on { opacity: 1; transform: none; }
+  .pop-b { display: flex; align-items: center; justify-content: center; min-height: 80px; padding: 8px; }
+  .pop-b img { display: block; max-width: 100%; max-height: 220px; border-radius: 4px; }
+  @media (max-width: 640px) {
+    .wrap { margin: 1rem auto; } td { padding: 8px .75rem; }
+    .dt { display: none; } .bar { padding: .625rem .75rem; } .pop { display: none; }
+  }
+  </style>
+  </head>
+  <body>
+  <div class="wrap"><div class="card">
+  <div class="bar"><div class="crumbs">#{crumbs}</div><div class="meta">#{counts.join(' · ')}</div></div>
+  <table>
+  <thead><tr><th></th><th>Name</th><th class="sz">Size</th><th class="dt">Modified</th></tr></thead>
+  <tbody>#{rows.join('\n')}</tbody>
+  </table>
+  </div></div>
+  <script>
+  !function(){var p,c,ox=14,oy=14;function mk(){if(p)return p;p=document.createElement('div');p.className='pop';p.innerHTML='<div class="pop-b"></div>';document.body.appendChild(p);return p}function show(a,e){var s=a.dataset.src;if(!s)return;var el=mk(),b=el.firstChild;b.innerHTML='';var img=new Image();img.src=s;b.appendChild(img);c=a;el.classList.add('on');place(e.clientX,e.clientY)}function hide(){c=null;if(p)p.classList.remove('on')}function place(x,y){if(!p)return;var r=p.getBoundingClientRect(),m=12,l=x+ox,t=y+oy;if(l+r.width>innerWidth-m)l=x-r.width-ox;if(t+r.height>innerHeight-m)t=innerHeight-r.height-m;if(l<m)l=m;if(t<m)t=m;p.style.left=l+'px';p.style.top=t+'px'}document.addEventListener('mouseover',function(e){var a=e.target.closest('[data-pv]');if(a)show(a,e)});document.addEventListener('mousemove',function(e){if(c)place(e.clientX,e.clientY)});document.addEventListener('mouseout',function(e){var a=e.target.closest('[data-pv]');if(a&&a===c)hide()});document.addEventListener('scroll',hide,{passive:true});document.addEventListener('keydown',function(e){if(e.key==='Escape')hide()});window.addEventListener('blur',hide);var dt=0,hx=/\.html?$/i;document.addEventListener('click',function(e){var a=e.target.closest('td.nm a');if(!a)return;var h=a.getAttribute('href');if(!h||h.endsWith('/'))return;if(!hx.test(h))return;e.preventDefault();clearTimeout(dt);dt=setTimeout(function(){location.href=h},250)});document.addEventListener('dblclick',function(e){var a=e.target.closest('td.nm a');if(!a)return;var h=a.getAttribute('href');if(!h||h.endsWith('/'))return;if(!hx.test(h))return;e.preventDefault();clearTimeout(dt);location.href=h+'?view'})}();
+  </script>
+  </body>
+  </html>
+  """
+
+# --- Markdown rendering ---
+
+export renderMarkdown = (filePath) ->
+  md = readFileSync(filePath, 'utf8')
+  body = Bun.markdown.html(md)
+  name = esc(basename(filePath))
+  """
+  <!DOCTYPE html>
+  <html lang="en">
+  <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>#{name}</title>
+  <style>
+  :root { --bg: #fff; --text: #1a1d21; --muted: #6b7280; --link: #2563eb; --code-bg: #f4f4f5; --border: #e2e5e9; --pre-bg: #fafafa; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #0a0a0c; --text: #e4e4e7; --muted: #71717a; --link: #60a5fa; --code-bg: #1e1e22; --border: #2a2a2e; --pre-bg: #161618; } }
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+    font-size: 16px; line-height: 1.7; color: var(--text); background: var(--bg);
+    max-width: 720px; margin: 0 auto; padding: 3rem 1.5rem;
+    -webkit-font-smoothing: antialiased; }
+  h1, h2, h3, h4 { margin: 1.75em 0 .5em; line-height: 1.3; }
+  h1 { font-size: 1.75rem; } h2 { font-size: 1.375rem; } h3 { font-size: 1.125rem; }
+  p, ul, ol, blockquote, pre, table { margin: 0 0 1em; }
+  a { color: var(--link); text-decoration: none; } a:hover { text-decoration: underline; }
+  code { font-family: 'SF Mono', 'Fira Code', monospace; font-size: .875em; background: var(--code-bg); padding: 2px 5px; border-radius: 4px; }
+  pre { background: var(--pre-bg); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; overflow-x: auto; }
+  pre code { background: none; padding: 0; font-size: .8125rem; }
+  blockquote { border-left: 3px solid var(--border); padding-left: 1rem; color: var(--muted); }
+  img { max-width: 100%; border-radius: 6px; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { padding: .5rem .75rem; border: 1px solid var(--border); text-align: left; font-size: .875rem; }
+  th { font-weight: 600; background: var(--pre-bg); }
+  hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+  @page { margin: 0.5in; }
+  @media print {
+    body { background: #fff; color: #1a1a1a; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    pre { background: #f4f4f5; box-shadow: inset 0 0 0 1000px #f4f4f5; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    code { background: #f0f0f2; box-shadow: inset 0 0 0 1000px #f0f0f2; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    pre code { background: none; box-shadow: none; }
+    th { background: #f6f8fa; box-shadow: inset 0 0 0 1000px #f6f8fa; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    a { color: #2563eb; }
+  }
+  </style>
+  </head>
+  <body>#{body}</body>
+  </html>
+  """
+
+# --- Text file rendering with syntax highlighting ---
+
+BINARY_EXTS = new Set [
+  'png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'ico', 'bmp', 'tiff', 'tif'
+  'svg'
+  'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'rtf'
+  'zip', 'gz', 'tar', 'bz2', 'xz', '7z', 'rar', 'dmg', 'iso'
+  'mp3', 'mp4', 'wav', 'ogg', 'webm', 'flac', 'aac', 'm4a', 'avi', 'mov', 'mkv'
+  'woff', 'woff2', 'ttf', 'otf', 'eot'
+  'wasm', 'bin', 'exe', 'dll', 'so', 'dylib', 'o', 'a'
+  'sqlite', 'db', 'duckdb'
+  'DS_Store'
+]
+
+HLJS_LANG_MAP =
+  js: 'javascript', mjs: 'javascript', cjs: 'javascript', jsx: 'javascript'
+  ts: 'typescript', tsx: 'typescript'
+  rb: 'ruby', py: 'python', rs: 'rust', go: 'go', sh: 'bash', zsh: 'bash'
+  cr: 'crystal', ex: 'elixir', exs: 'elixir', elm: 'elm', hs: 'haskell'
+  lua: 'lua', nim: 'nim', zig: 'zig', pl: 'perl', r: 'r', m: 'objectivec'
+  yml: 'yaml', toml: 'ini', conf: 'ini', cfg: 'ini'
+  rip: 'rip', coffee: 'coffeescript'
+  md: 'markdown', htm: 'xml'
+  dockerfile: 'dockerfile', makefile: 'makefile'
+  jsonc: 'json', gql: 'graphql'
+
+export isTextFile = (filePath) ->
+  name = basename(filePath).toLowerCase()
+  ext = name.slice(name.lastIndexOf('.') + 1)
+  not BINARY_EXTS.has(ext)
+
+hljsLang = (filePath) ->
+  name = basename(filePath).toLowerCase()
+  ext = name.slice(name.lastIndexOf('.') + 1)
+  HLJS_LANG_MAP[ext] or HLJS_LANG_MAP[name] or ext
+
+export renderTextFile = (filePath) ->
+  content = readFileSync(filePath, 'utf8')
+  name = basename(filePath)
+  lang = hljsLang(filePath)
+  """
+  <!DOCTYPE html>
+  <html lang="en">
+  <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>#{esc name}</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
+  <style>
+  :root { --bg: #fff; --text: #1a1d21; --border: #e2e5e9; --bar-bg: #f3f4f6; --secondary: #6b7280; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #0d1117; --text: #e4e4e7; --border: #2a2a2e; --bar-bg: #161618; --secondary: #71717a; } }
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--text); }
+  .wrap { max-width: 960px; margin: 3rem auto; padding: 0 1.25rem; }
+  .card { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+  .bar { display: flex; align-items: center; justify-content: space-between; padding: .625rem 1.25rem; background: var(--bar-bg); border-bottom: 1px solid var(--border); }
+  .name { font-size: 13px; font-weight: 600; }
+  .meta { font-size: 12px; color: var(--secondary); }
+  pre { margin: 0; border: none; border-radius: 0; }
+  pre code, pre code.hljs { display: block; padding: 1rem 1.25rem 1.5rem; font-size: 13px; line-height: 1.6; font-family: ui-monospace, 'SF Mono', 'Fira Code', monospace; overflow-x: auto; }
+  @page { margin: 0.5in; }
+  @media print { .bar { background: #f3f4f6; box-shadow: inset 0 0 0 1000px #f3f4f6; -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+  </style>
+  </head>
+  <body>
+  <div class="wrap"><div class="card">
+  <div class="bar"><span class="name">#{esc name}</span><span class="meta">#{n = content.split('\\n').length}#{n} line#{if n isnt 1 then 's' else ''}</span></div>
+  <pre><code class="language-#{lang}">#{esc content}</code></pre>
+  </div></div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+  #{if lang is 'rip' and HLJS_RIP_PATH then '<script src="/_rip/hljs-rip.js"></script><script>hljs.registerLanguage("rip",hljsRip);hljs.highlightAll()</script>' else '<script>hljs.highlightAll()</script>'}
+  </body>
+  </html>
+  """
+
+# --- Browse file response (shared by browse.rip and serveStaticRoute) ---
+
+export serveBrowseFile = (filePath, url) ->
+  viewSource = url.search is '?view'
+  isHtml = filePath.endsWith('.html') or filePath.endsWith('.htm')
+  if filePath.endsWith('.md') and not viewSource
+    html = renderMarkdown(filePath)
+    return new Response(html, { headers: { 'content-type': 'text/html; charset=UTF-8' } })
+  if isTextFile(filePath) and (viewSource or not isHtml)
+    html = renderTextFile(filePath)
+    return new Response(html, { headers: { 'content-type': 'text/html; charset=UTF-8' } })
+  null
+
+# --- Static file serving ---
+
+export INDEX_FILES = ['index.html', 'index.rip', 'index.ts', 'index.tsx', 'index.jsx', 'index.js']
+
+export findIndexFile = (dir) ->
+  for name in INDEX_FILES
+    p = join(dir, name)
+    try
+      if statSync(p).isFile()
+        return p
+  null
+
+export serveRipHighlightGrammar = ->
+  return null unless HLJS_RIP_PATH
+  content = readFileSync(HLJS_RIP_PATH, 'utf8')
+  wrapped = content.replace('export default function', 'var hljsRip = function')
+  file = Bun.file(HLJS_RIP_PATH)
+  etag = "W/\"#{file.lastModified}-#{file.size}\""
+  new Response(wrapped, { headers: { 'content-type': 'application/javascript; charset=UTF-8', 'etag': etag, 'cache-control': 'public, max-age=86400' } })
+
+export serveStaticRoute = (req, url, route) ->
+  method = req.method or 'GET'
+  return new Response(null, { status: 405 }) unless method is 'GET' or method is 'HEAD'
+
+  if url.pathname is '/_rip/hljs-rip.js'
+    res = serveRipHighlightGrammar()
+    return res if res
+
+  base = route.root or route.static
+  return new Response('Not Found', { status: 404 }) unless base
+
+  staticDir = if route.static and route.static isnt '.'
+    if route.static.startsWith('/') then route.static else resolve(base, route.static)
+  else
+    base
+
+  pathname = try decodeURIComponent(url.pathname) catch then url.pathname
+  relative = stripRoutePrefix(pathname, route.path or '/*')
+  filePath = resolve(staticDir, '.' + relative)
+
+  return new Response('Forbidden', { status: 403 }) unless isSafeWithinRoot(staticDir, filePath)
+
+  try
+    stat = statSync(filePath)
+    if stat.isDirectory()
+      unless pathname.endsWith('/')
+        return Response.redirect("#{pathname}/", 301)
+      indexPath = findIndexFile(filePath)
+      if indexPath
+        file = Bun.file(indexPath)
+        return new Response(file, { headers: { 'content-type': 'text/html; charset=UTF-8' } })
+      if route.browse and acceptsHtml(req)
+        rootName = basename(staticDir)
+        html = renderDirectoryListing(pathname, filePath, rootName)
+        return new Response(html, { headers: { 'content-type': 'text/html; charset=UTF-8' } })
+    if stat.isFile()
+      if route.browse and acceptsHtml(req)
+        res = serveBrowseFile(filePath, url)
+        return res if res
+      file = Bun.file(filePath)
+      return new Response(file, { headers: { 'content-type': mimeType(filePath) } })
+
+  if route.spa and acceptsHtml(req)
+    spaPath = join(staticDir, 'index.html')
+    try
+      spaStat = statSync(spaPath)
+      if spaStat.isFile()
+        file = Bun.file(spaPath)
+        return new Response(file, { headers: { 'content-type': 'text/html; charset=UTF-8' } })
+
+  new Response('Not Found', { status: 404 })
+
+export buildRedirectResponse = (req, url, route) ->
+  target = route.redirect?.to or '/'
+  status = route.redirect?.status or 302
+  Response.redirect(target, status)

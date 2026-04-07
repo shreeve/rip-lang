@@ -1,7 +1,7 @@
-# realtime.rip — edge/realtime.rip unit tests
+# realtime.rip — serving/realtime.rip unit tests
 
-import { test, eq, ok } from '../test.rip'
-import { createHub, generateClientId, addClient, removeClient, processResponse, handlePublish, getRealtimeStats } from '../edge/realtime.rip'
+import { test, eq, ok } from './runner.rip'
+import { createHub, generateClientId, addClient, removeClient, processResponse, handlePublish, getRealtimeStats } from '../serving/realtime.rip'
 
 # --- Hub lifecycle ---
 

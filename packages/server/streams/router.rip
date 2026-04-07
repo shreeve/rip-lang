@@ -30,7 +30,7 @@ export compileStreamTable = (routes = []) ->
         id: route.id
         order: route.order or 0
         listen: route.listen
-        upstream: route.upstream
+        proxy: route.proxy
         sni: pattern
         sniKind: sniKind(pattern)
         timeouts: route.timeouts or {}
@@ -54,4 +54,4 @@ export matchStreamRoute = (table, listenPort, sni) ->
 
 export describeStreamRoute = (route) ->
   return null unless route
-  "#{route.listen} #{route.sni} -> #{route.upstream}"
+  "#{route.listen} #{route.sni} -> #{route.proxy}"
