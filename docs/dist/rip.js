@@ -5126,7 +5126,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
                     props.push({ code: `'${eventKey}': ${val}`, srcLine });
                   } else if (typeof key === "string") {
                     if (key === "key") {
-                      const val = this.generateInComponent(value, "value");
+                      const val = this.emitInComponent(value, "value");
                       const marker = srcLine != null ? ` // @rip-src:${srcLine}` : "";
                       constructions.push(`    (${val});${marker}`);
                       continue;
@@ -5154,20 +5154,20 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
             if (head2 === "if" || head2 === "unless") {
               const condition = node[1];
               if (condition != null) {
-                const condCode = this.generateInComponent(condition, "value");
+                const condCode = this.emitInComponent(condition, "value");
                 const srcLine = node.loc?.r;
                 const srcMarker = srcLine != null ? ` // @rip-src:${srcLine}` : "";
                 constructions.push(`    ${condCode};${srcMarker}`);
               }
             } else if (head2 === "?:") {
-              const ternCode = this.generateInComponent(node, "value");
+              const ternCode = this.emitInComponent(node, "value");
               const srcLine = node.loc?.r;
               const srcMarker = srcLine != null ? ` // @rip-src:${srcLine}` : "";
               constructions.push(`    ${ternCode};${srcMarker}`);
             } else if (head2 === "switch") {
               const discriminant = node[1];
               if (discriminant != null) {
-                const discCode = this.generateInComponent(discriminant, "value");
+                const discCode = this.emitInComponent(discriminant, "value");
                 const srcLine = node.loc?.r;
                 const srcMarker = srcLine != null ? ` // @rip-src:${srcLine}` : "";
                 constructions.push(`    ${discCode};${srcMarker}`);
@@ -5176,14 +5176,14 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
               const vars = node[1];
               const iterable = node[2];
               if (iterable != null) {
-                const iterCode = this.generateInComponent(iterable, "value");
+                const iterCode = this.emitInComponent(iterable, "value");
                 const srcLine = node.loc?.r;
                 const srcMarker = srcLine != null ? ` // @rip-src:${srcLine}` : "";
                 let varPattern;
                 if (Array.isArray(vars)) {
                   if (vars.length === 1) {
                     const v = vars[0];
-                    varPattern = Array.isArray(v) ? this.generateDestructuringPattern(v) : String(v);
+                    varPattern = Array.isArray(v) ? this.emitDestructuringPattern(v) : String(v);
                   } else if (head2 === "for-of") {
                     varPattern = `[${vars.map((v) => String(v)).join(", ")}]`;
                   } else {
@@ -5207,7 +5207,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
             } else if (head2 === "__text__") {
               const textExpr = node[1];
               if (textExpr != null) {
-                const exprCode = this.generateInComponent(textExpr, "value");
+                const exprCode = this.emitInComponent(textExpr, "value");
                 const srcLine = node.loc?.r;
                 const srcMarker = srcLine != null ? ` // @rip-src:${srcLine}` : "";
                 constructions.push(`    ${exprCode};${srcMarker}`);
@@ -5216,7 +5216,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
             const emitBareIdent = (child, parentNode, isTextChild) => {
               if (typeof child !== "string" || !/^[a-z][\w-]*$/.test(child))
                 return;
-              if (CodeGenerator.GENERATORS[child])
+              if (CodeEmitter.GENERATORS[child])
                 return;
               if (child === "null" || child === "undefined" || child === "true" || child === "false")
                 return;
@@ -5239,7 +5239,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
                 constructions.push(`    __ripEl('${child}');${srcMarker}`);
               }
             };
-            const isTagHead = typeof head2 === "string" && /^[a-z][\w-]*$/.test(head2) && !CodeGenerator.GENERATORS[head2] && TEMPLATE_TAGS.has(head2.split(/[.#]/)[0]);
+            const isTagHead = typeof head2 === "string" && /^[a-z][\w-]*$/.test(head2) && !CodeEmitter.GENERATORS[head2] && TEMPLATE_TAGS.has(head2.split(/[.#]/)[0]);
             if (head2 === "block") {
               for (let i = 1;i < node.length; i++)
                 emitBareIdent(node[i], node, false);
@@ -5258,13 +5258,13 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
                     continue;
                   if (TEMPLATE_TAGS.has(ch.split(/[.#]/)[0]))
                     continue;
-                  if (/^[a-z][\w-]*$/.test(ch) && !CodeGenerator.GENERATORS[ch])
+                  if (/^[a-z][\w-]*$/.test(ch) && !CodeEmitter.GENERATORS[ch])
                     continue;
                   if (/^(if|unless|switch|for-in|for-of|for-as|while|until|loop|loop-n|try|throw|break|continue|break-if|continue-if|control|when|return|def|->|=>|class|enum|state|computed|readonly|effect|=|program)$/.test(ch))
                     continue;
                 }
                 try {
-                  const exprCode = this.generateInComponent(child, "value");
+                  const exprCode = this.emitInComponent(child, "value");
                   const srcLine = child.loc?.r ?? node.loc?.r;
                   const srcMarker = srcLine != null ? ` // @rip-src:${srcLine}` : "";
                   constructions.push(`    ${exprCode};${srcMarker}`);
@@ -10611,7 +10611,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   }
   // src/browser.js
   var VERSION = "3.13.134";
-  var BUILD_DATE = "2026-04-07@16:56:21GMT";
+  var BUILD_DATE = "2026-04-07@18:04:09GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
