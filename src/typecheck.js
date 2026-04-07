@@ -1353,6 +1353,10 @@ export async function runCheck(targetDir, opts = {}) {
       const pos = mapToSourcePos(entry, d.start);
       if (!pos) continue;
 
+      // Drop diagnostics that map beyond the source file (e.g. from component
+      // stubs where the compiled line has no real source counterpart).
+      if (pos.line >= srcLines.length) continue;
+
       // Remap IIFE-switch diagnostics to the enclosing function declaration
       const adj = adjustSwitchDiagnostic(entry.source, pos, d.code);
       if (adj) { pos.line = adj.line; pos.col = adj.col; }

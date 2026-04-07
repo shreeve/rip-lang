@@ -313,6 +313,14 @@ function publishDiagnostics(filePath) {
 
         const startRaw = tc.mapToSourcePos(c, d.start);
         if (!startRaw) continue;
+
+        // Drop diagnostics that map beyond the source file (e.g. from component
+        // stubs where the compiled line has no real source counterpart).
+        if (c.source) {
+          const sourceLineCount = c.source.split('\n').length;
+          if (startRaw.line >= sourceLineCount) continue;
+        }
+
         const startPos = { line: startRaw.line, character: startRaw.col };
 
         // Compute end position: try mapping the end offset, and fall back to
