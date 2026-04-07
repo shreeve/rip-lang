@@ -79,13 +79,27 @@ peer = do ->
     when 'anthropic' then { provider: 'anthropic', model: 'claude-opus-4-6', name: 'Claude Opus 4.6' }
     else { provider: 'openai', model: 'gpt-5.4', name: 'GPT-5.4' }
 
+MODEL_ALIASES =!
+  openai:      { provider: 'openai',    model: 'gpt-5.4',         name: 'GPT-5.4' }
+  gpt:         { provider: 'openai',    model: 'gpt-5.4',         name: 'GPT-5.4' }
+  'gpt-5.4':   { provider: 'openai',    model: 'gpt-5.4',         name: 'GPT-5.4' }
+  anthropic:   { provider: 'anthropic', model: 'claude-opus-4-6', name: 'Claude Opus 4.6' }
+  claude:      { provider: 'anthropic', model: 'claude-opus-4-6', name: 'Claude Opus 4.6' }
+  opus:        { provider: 'anthropic', model: 'claude-opus-4-6', name: 'Claude Opus 4.6' }
+  'claude-opus-4-6': { provider: 'anthropic', model: 'claude-opus-4-6', name: 'Claude Opus 4.6' }
+
+resolvePeer = (modelOverride) ->
+  return peer unless modelOverride
+  key = String(modelOverride).trim().toLowerCase()
+  MODEL_ALIASES[key] or peer
+
 log = (...args) -> console.error '[mcp-ai]', ...args
 
 # ==============================================================================
 # Provider API calls
 # ==============================================================================
 
-callOpenAI = (messages, maxTokens) ->
+callOpenAI = (messages, maxTokens, model = 'gpt-5.4') ->
   key = getKey('OPENAI_API_KEY')
   throw new Error('OPENAI_API_KEY not set — add it to ~/.config/rip/credentials') unless key
 
@@ -95,14 +109,14 @@ callOpenAI = (messages, maxTokens) ->
       'Content-Type': 'application/json'
       'Authorization': "Bearer #{key}"
     body: JSON.stringify
-      model: 'gpt-5.4'
+      model: model
       messages: messages
       max_completion_tokens: maxTokens
   data = await resp.json()
   throw new Error(data.error?.message or JSON.stringify(data.error)) if data.error
   data.choices[0].message.content
 
-callAnthropic = (messages, maxTokens) ->
+callAnthropic = (messages, maxTokens, model = 'claude-opus-4-6') ->
   key = getKey('ANTHROPIC_API_KEY')
   throw new Error('ANTHROPIC_API_KEY not set — add it to ~/.config/rip/credentials') unless key
 
@@ -116,7 +130,7 @@ callAnthropic = (messages, maxTokens) ->
       'x-api-key': key
       'anthropic-version': '2023-06-01'
     body: JSON.stringify
-      model: 'claude-opus-4-6'
+      model: model
       max_tokens: maxTokens
       system: system or undefined
       messages: userMessages
@@ -124,11 +138,35 @@ callAnthropic = (messages, maxTokens) ->
   throw new Error(data.error?.message or JSON.stringify(data.error)) if data.error
   data.content[0].text
 
-callPeer = (messages, maxTokens = 8192) ->
-  if peer.provider is 'anthropic'
-    callAnthropic(messages, maxTokens)
+callPeer = (messages, maxTokens = 8192, modelOverride = null) ->
+  target = resolvePeer(modelOverride)
+  if target.provider is 'anthropic'
+    callAnthropic(messages, maxTokens, target.model)
   else
-    callOpenAI(messages, maxTokens)
+    callOpenAI(messages, maxTokens, target.model)
+
+extractJson = (text) ->
+  return null unless text
+  trimmed = String(text).trim()
+
+  try
+    return JSON.parse(trimmed)
+  catch
+
+  fenceMatch = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i)
+  if fenceMatch
+    try
+      return JSON.parse(fenceMatch[1].trim())
+    catch
+
+  start = trimmed.indexOf('{')
+  end = trimmed.lastIndexOf('}')
+  if start >= 0 and end > start
+    try
+      return JSON.parse(trimmed.slice(start, end + 1))
+    catch
+
+  null
 
 # ==============================================================================
 # Conversation state for multi-turn discuss
@@ -142,6 +180,14 @@ conversations = {}
 
 TOOLS =! [
   {
+    name: 'status'
+    description: """Return MCP server status, including default peer, supported \
+      model aliases, credential availability, and version information."""
+    inputSchema:
+      type: 'object'
+      properties: {}
+  }
+  {
     name: 'chat'
     description: """Send a message to the peer AI and get a response. \
       Use for quick questions, second opinions, or brainstorming."""
@@ -150,6 +196,7 @@ TOOLS =! [
       properties:
         message: { type: 'string', description: 'The message to send' }
         system:  { type: 'string', description: 'System prompt override' }
+        model:   { type: 'string', description: 'Optional peer model override: gpt-5.4, openai, claude-opus-4-6, anthropic, etc.' }
       required: ['message']
   }
   {
@@ -164,6 +211,8 @@ TOOLS =! [
         language: { type: 'string', description: 'Programming language (zig, rip, python, etc.)' }
         context:  { type: 'string', description: 'Context: what the code does, project info, constraints' }
         focus:    { type: 'string', description: 'Review focus: bugs, performance, style, security, all (default: all)' }
+        model:    { type: 'string', description: 'Optional peer model override: gpt-5.4, openai, claude-opus-4-6, anthropic, etc.' }
+        format:   { type: 'string', description: 'Response format: text (default) or json' }
       required: ['code']
   }
   {
@@ -177,6 +226,7 @@ TOOLS =! [
         message: { type: 'string', description: 'Your message in the conversation' }
         system:  { type: 'string', description: 'System prompt (only used on first message or reset)' }
         reset:   { type: 'boolean', description: 'Clear history and start fresh' }
+        model:   { type: 'string', description: 'Optional peer model override: gpt-5.4, openai, claude-opus-4-6, anthropic, etc.' }
       required: ['conversation_id', 'message']
   }
 ]
@@ -204,6 +254,64 @@ REVIEW_SYSTEM =! """\
   Be specific: reference line numbers or code snippets. Don't pad with praise \
   — focus on what matters. If the code is good, say so briefly and move on."""
 
+REVIEW_JSON_SYSTEM =! """\
+  You are an expert code reviewer. Return ONLY valid JSON. Do not wrap it in \
+  markdown fences. Use this exact shape:
+
+  {
+    "summary": "short overall review",
+    "findings": [
+      {
+        "severity": "high | medium | low",
+        "category": "correctness | safety | performance | style | suggestion",
+        "title": "short finding title",
+        "details": "specific explanation",
+        "location": "optional file/symbol/line reference",
+        "suggestion": "optional concrete fix"
+      }
+    ]
+  }
+
+  If there are no meaningful findings, return an empty findings array and a short summary.
+  The output must be strictly valid JSON."""
+
+# --- status ---
+
+handleStatus = (_) ->
+  aliasGroups = {}
+  seenModels = {}
+
+  for own alias, target of MODEL_ALIASES
+    key = "#{target.provider}:#{target.model}"
+    if not aliasGroups[key]
+      aliasGroups[key] =
+        provider: target.provider
+        model: target.model
+        name: target.name
+        aliases: []
+    aliasGroups[key].aliases.push alias
+    seenModels[key] = true
+
+  availableModels = Object.values(aliasGroups).map (entry) ->
+    provider: entry.provider
+    model: entry.model
+    name: entry.name
+    aliases: entry.aliases.sort()
+
+  {
+    server: 'rip-ai-mcp'
+    version: VERSION
+    default_peer:
+      provider: peer.provider
+      model: peer.model
+      name: peer.name
+    credentials:
+      openai: !!getKey('OPENAI_API_KEY')
+      anthropic: !!getKey('ANTHROPIC_API_KEY')
+    supported_models: availableModels
+    tools: TOOLS.map((t) -> t.name)
+  }
+
 # --- chat ---
 
 handleChat = (params) ->
@@ -213,8 +321,9 @@ handleChat = (params) ->
       { role: 'system', content: params.system or DEFAULT_SYSTEM }
       { role: 'user', content: params.message }
     ]
-    response = await callPeer(messages)
-    { response, peer: peer.name }
+    target = resolvePeer(params.model)
+    response = await callPeer(messages, 8192, params.model)
+    { response, peer: target.name, model: target.model }
   catch err
     { error: err.message }
 
@@ -224,19 +333,34 @@ handleReview = (params) ->
   return { error: 'Missing code parameter' } unless params.code
   try
     focus = params.focus or 'all'
+    format = String(params.format or 'text').toLowerCase()
+    return { error: "Invalid format '#{params.format}'. Use 'text' or 'json'." } unless format in ['text', 'json']
     fence = '`' + '`' + '`'
     lang = params.language or ''
     prompt = "Review this #{lang} code"
     prompt += " (focus: #{focus})" unless focus is 'all'
     prompt += ":\n\n#{params.context}\n" if params.context
     prompt += "\n#{fence}#{lang}\n#{params.code}\n#{fence}"
+    if format is 'json'
+      prompt += "\n\nReturn only valid JSON using the schema from the system prompt."
 
     messages = [
-      { role: 'system', content: REVIEW_SYSTEM }
+      { role: 'system', content: if format is 'json' then REVIEW_JSON_SYSTEM else REVIEW_SYSTEM }
       { role: 'user', content: prompt }
     ]
-    response = await callPeer(messages)
-    { response, peer: peer.name }
+    target = resolvePeer(params.model)
+    response = await callPeer(messages, 8192, params.model)
+    if format is 'json'
+      parsed = extractJson(response)
+      return {
+        response: parsed or null
+        raw_response: response unless parsed
+        peer: target.name
+        model: target.model
+        format: format
+        parse_error: 'Peer did not return valid JSON' unless parsed
+      }
+    { response, peer: target.name, model: target.model, format: format }
   catch err
     { error: err.message }
 
@@ -257,10 +381,11 @@ handleDiscuss = (params) ->
     convo.messages.push { role: 'user', content: params.message }
     convo.turns += 1
 
-    response = await callPeer(convo.messages)
+    target = resolvePeer(params.model)
+    response = await callPeer(convo.messages, 8192, params.model)
     convo.messages.push { role: 'assistant', content: response }
 
-    { response, peer: peer.name, conversation_id: id, turn: convo.turns }
+    { response, peer: target.name, model: target.model, conversation_id: id, turn: convo.turns }
   catch err
     { error: err.message }
 
@@ -273,10 +398,13 @@ INSTRUCTIONS =! """\
   to get a second opinion, collaborative code review, or have a multi-turn \
   discussion with another AI.
 
-  Available tools: chat, review, discuss.
+  Available tools: status, chat, review, discuss.
 
   Guidelines:
-  - Use `review` for code review — include language and context for best results
+  - Use `status` to inspect the default peer, supported model aliases, and \
+    credential availability
+  - Use `review` for code review — include language and context for best results; \
+    use `format: "json"` when structured output is needed
   - Use `chat` for one-off questions or quick second opinions
   - Use `discuss` for multi-turn conversations — pick a conversation_id and \
     keep using it to maintain context across calls
@@ -317,7 +445,9 @@ dispatch = (msg) ->
       name = params?.name
       args = params?.arguments or {}
 
-      if name is 'chat'
+      if name is 'status'
+        result = handleStatus(args)
+      else if name is 'chat'
         result = await handleChat(args)
       else if name is 'review'
         result = await handleReview(args)
