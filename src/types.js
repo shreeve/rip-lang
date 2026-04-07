@@ -415,6 +415,32 @@ function collectStructuralType(tokens, indentIdx) {
     }
     if (t[0] === 'TERMINATOR') { j++; continue; }
 
+    // Index signature: [key: Type]: ValueType
+    if (depth === 1 && t[0] === '[') {
+      let sigTokens = [];
+      j++; // skip [
+      // Collect tokens through matching ]
+      while (j < tokens.length && tokens[j][0] !== ']') {
+        sigTokens.push(tokens[j]);
+        j++;
+      }
+      j++; // skip ]
+      // Skip : separator after ]
+      if (tokens[j]?.[1] === ':' || tokens[j]?.[0] === 'TYPE_ANNOTATION') j++;
+      // Collect value type
+      let valTypeTokens = [];
+      while (j < tokens.length) {
+        let pt = tokens[j];
+        if (pt[0] === 'TERMINATOR' || pt[0] === 'OUTDENT') break;
+        valTypeTokens.push(pt);
+        j++;
+      }
+      let sigStr = buildTypeString(sigTokens);
+      let valStr = buildTypeString(valTypeTokens);
+      props.push(`[${sigStr}]: ${valStr}`);
+      continue;
+    }
+
     // Collect a property line: name (? optional) : type
     // Property tokens can be PROPERTY, IDENTIFIER, or keyword tags whose
     // value is a valid identifier (e.g. RENDER "render" in interfaces).

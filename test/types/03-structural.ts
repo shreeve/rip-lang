@@ -106,9 +106,16 @@ let badField: FormField = { label: 'Name' }
 // @ts-expect-error — wrong element type in generic structural type
 let badPaged: PagedResult<string> = { data: [1, 2], page: 1, total: 2 }
 
-// ── Gap: index signatures ──
-// These work in TypeScript but emit with a missing `[` in Rip.
-//
-type Dictionary = {
-  [key: string]: number
+// ── Index signatures ──
+
+// Mixed: regular props + index signature
+type MixedMap = {
+  name: string
+  [key: string]: unknown
 }
+
+let mixed: MixedMap = { name: 'test', extra: 42 }
+console.log('mixed:', mixed)
+
+// @ts-expect-error — missing required named prop in index signature type
+let badMixed: MixedMap = { extra: 42 }
