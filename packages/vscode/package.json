@@ -78,6 +78,16 @@
         "embeddedLanguages": {
           "meta.embedded.block.rip": "rip"
         }
+      },
+      {
+        "scopeName": "rip.injection.markdown",
+        "path": "./syntaxes/rip-markdown-injection.tmLanguage.json",
+        "injectTo": [
+          "text.html.markdown"
+        ],
+        "embeddedLanguages": {
+          "meta.embedded.block.rip": "rip"
+        }
       }
     ],
     "configurationDefaults": {
