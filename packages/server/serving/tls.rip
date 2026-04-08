@@ -2,8 +2,8 @@
 # serving/tls.rip — TLS material loading helpers
 # ==============================================================================
 
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { readFileSync, readdirSync, existsSync } from 'node:fs'
+import { join, basename, extname } from 'node:path'
 import { X509Certificate } from 'node:crypto'
 
 hostSpecificity = (serverName) ->
@@ -66,3 +66,69 @@ export loadTlsMaterial = (flags, serverDir, acmeLoadCertFn) ->
     warn "rip-server: failed to load TLS certs from #{certsDir}: #{e.message}"
     warn 'Use --cert/--key to provide your own, or use http to disable TLS.'
     exit 2
+
+# ==============================================================================
+# SSL directory scanning — scan for cert/key pairs, extract SANs
+# ==============================================================================
+
+normalizeHostname = (host) ->
+  return null unless typeof host is 'string'
+  host = host.trim().toLowerCase().replace(/\.$/, '')
+  return null unless host.length > 0
+  host
+
+parseCertSans = (certPath) ->
+  pem = readFileSync(certPath, 'utf8')
+  x = new X509Certificate(pem)
+  san = x.subjectAltName or ''
+  san.split(',')
+    .map (entry) -> entry.trim()
+    .filter (entry) -> entry.startsWith('DNS:')
+    .map (entry) -> normalizeHostname(entry.slice(4))
+    .filter Boolean
+
+export scanSslDirectory = (sslPath) ->
+  certMap = new Map()
+  return certMap unless sslPath
+
+  files = try
+    readdirSync(sslPath).sort()
+  catch err
+    throw new Error "cannot read ssl directory #{sslPath}: #{err.message}"
+
+  fileSet = new Set(files)
+
+  for crtFile in files
+    continue unless extname(crtFile) is '.crt'
+    stem = basename(crtFile, '.crt')
+    keyFile = "#{stem}.key"
+    continue unless fileSet.has(keyFile)
+
+    certPath = join(sslPath, crtFile)
+    keyPath  = join(sslPath, keyFile)
+
+    sans = null
+    try
+      sans = parseCertSans(certPath)
+    catch err
+      warn "rip-server: failed to parse certificate #{certPath}: #{err.message}"
+    continue unless sans
+
+    for san in sans
+      certMap.set(san, { certPath, keyPath }) unless certMap.has(san)
+
+  certMap
+
+export matchCertForHost = (certMap, hostname) ->
+  host = normalizeHostname(hostname)
+  return null unless host
+
+  return certMap.get(host) if certMap.has(host)
+
+  hostLabels = host.split('.')
+  return null unless hostLabels.length >= 2
+
+  wildcard = "*.#{hostLabels.slice(1).join('.')}"
+  return certMap.get(wildcard) if certMap.has(wildcard)
+
+  null

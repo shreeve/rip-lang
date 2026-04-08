@@ -5,6 +5,7 @@
 import { existsSync, statSync } from 'node:fs'
 import { join, dirname, resolve, basename } from 'node:path'
 import { normalizeStreams, parseHostPort } from '../streams/config.rip'
+import { scanSslDirectory, matchCertForHost } from './tls.rip'
 
 CONFIG_FILE = 'serve.rip'
 VALID_REDIRECT_STATUSES = new Set([301, 302, 307, 308])
@@ -687,8 +688,225 @@ export normalizeAppConfig = (appId, appConfig, baseDir) ->
   throw validationError("app #{appId}", errors) if errors.length > 0
   normalized
 
+# ==============================================================================
+# serve.rip normalizer: ssl + sites + apps
+# ==============================================================================
+
+SERVE_KEYS = new Set(%w[ssl sites apps version server])
+
+parseAppSpec = (appName, spec, knownSites, errors, path) ->
+  tokens = String(spec or '').trim().split(/\s+/).filter(Boolean)
+  unless tokens.length > 0
+    pushError(errors, 'E_APP_EMPTY', path, "app #{appName}: empty spec")
+    return null
+
+  targetTokens = tokens.filter (t) -> /^(https?:\/\/|tcp:\/\/|\.\/|\.\.\/|\/)/.test(t)
+
+  if targetTokens.length > 1
+    pushError(errors, 'E_APP_MULTI_TARGET', path, "app #{appName}: multiple targets: #{targetTokens.join(', ')}", 'Only one path or URL prefix is allowed.')
+    return null
+
+  if targetTokens.length is 1
+    target = targetTokens[0]
+    siteNames = tokens.filter (t) -> t isnt target
+  else
+    target = '.'
+    siteNames = tokens
+
+  unknown = siteNames.filter (s) -> not knownSites.has(s)
+  if unknown.length > 0
+    pushError(errors, 'E_APP_UNKNOWN_SITE', path, "app #{appName}: unknown site(s): #{unknown.join(', ')}", "Define these in the sites section.")
+    return null
+
+  kind = if /^https?:\/\//.test(target) then 'http-proxy'
+  else if /^tcp:\/\//.test(target) then 'tcp-proxy'
+  else 'local'
+
+  { kind, target, siteNames }
+
+normalizeServeRip = (config, baseDir) ->
+  errors = []
+
+  for key of config
+    unless SERVE_KEYS.has(key)
+      pushError(errors, 'E_UNKNOWN_KEY', key, "unknown top-level key: #{key}", 'Allowed keys: ssl, sites, apps, version, server.')
+
+  # SSL directory
+  sslPath = if typeof config.ssl is 'string' then config.ssl else null
+  certMap = new Map()
+  if sslPath
+    certMap = scanSslDirectory(sslPath)
+
+  # Sites: siteName -> hostname
+  siteToHost = new Map()
+  hostToSite = new Map()
+  if config.sites?
+    unless isPlainObject(config.sites)
+      pushError(errors, 'E_SITES_TYPE', 'sites', 'sites must be an object')
+    else
+      for siteName, hostname of config.sites
+        host = String(hostname).toLowerCase().trim()
+        unless host
+          pushError(errors, 'E_SITE_EMPTY', "sites.#{siteName}", "site #{siteName}: hostname is empty")
+          continue
+        if hostToSite.has(host)
+          pushError(errors, 'E_SITE_DUPLICATE_HOST', "sites.#{siteName}", "hostname #{host} is already assigned to site #{hostToSite.get(host)}")
+          continue
+        siteToHost.set(String(siteName), host)
+        hostToSite.set(host, String(siteName))
+
+  knownSites = new Set(siteToHost.keys())
+
+  # Server settings (optional, defaults)
+  serverSettings = normalizeServerSettings(config.server or {}, errors)
+
+  # Apps
+  apps = {}
+  proxies = {}
+  httpProxies = {}
+  tcpProxies = {}
+  sites = {}
+  resolvedCerts = {}
+  streamUpstreams = {}
+  streams = []
+
+  if config.apps?
+    unless isPlainObject(config.apps)
+      pushError(errors, 'E_APPS_TYPE', 'apps', 'apps must be an object')
+    else
+      for appName, appSpec of config.apps
+        unless typeof appSpec is 'string'
+          if isPlainObject(appSpec)
+            pushError(errors, 'E_APP_OBJECT', "apps.#{appName}", "object app specs are not supported; use a string like 'siteName1 siteName2'")
+          else
+            pushError(errors, 'E_APP_INVALID', "apps.#{appName}", "app value must be a string")
+          continue
+
+        parsed = parseAppSpec(appName, appSpec, knownSites, errors, "apps.#{appName}")
+        continue unless parsed
+
+        hostnames = parsed.siteNames.map (s) -> siteToHost.get(s)
+
+        if parsed.kind is 'local'
+          entryPath = if parsed.target is '.' then baseDir else resolve(baseDir, parsed.target)
+          indexFile = join(entryPath, 'index.rip')
+          entry = if existsSync(indexFile) then indexFile else null
+
+          apps[appName] =
+            id: appName
+            entry: entry
+            hosts: hostnames
+            workers: null
+            maxQueue: 512
+            queueTimeoutMs: 30000
+            readTimeoutMs: 30000
+            env: {}
+
+          for hostname in hostnames
+            sites[hostname] =
+              host: hostname
+              timeouts: {}
+              routes: [
+                id: "#{appName}-default"
+                host: hostname
+                path: '/'
+                methods: '*'
+                priority: 0
+                proxy: null
+                app: appName
+                static: null
+                root: null
+                spa: false
+                browse: false
+                redirect: null
+                headers: null
+                websocket: false
+                timeouts: {}
+              ]
+
+            cert = matchCertForHost(certMap, hostname) if certMap.size > 0
+            resolvedCerts[hostname] = cert if cert
+
+        else if parsed.kind is 'http-proxy'
+          proxyId = "proxy-#{appName}"
+          url = new URL(parsed.target)
+          proxies[proxyId] =
+            id: proxyId
+            kind: 'http'
+            hosts: ["#{url.protocol}//#{url.host}"]
+            targets: [{ url: parsed.target, weight: 1 }]
+            healthCheck: null
+            retry: { count: 1, delayMs: 0 }
+            timeouts: { connectMs: 10000, readMs: 30000 }
+          httpProxies[proxyId] = proxies[proxyId]
+
+          for hostname in hostnames
+            sites[hostname] =
+              host: hostname
+              timeouts: {}
+              routes: [
+                id: "#{appName}-proxy"
+                host: hostname
+                path: '/'
+                methods: '*'
+                priority: 0
+                proxy: proxyId
+                app: null
+                static: null
+                root: null
+                spa: false
+                browse: false
+                redirect: null
+                headers: null
+                websocket: true
+                timeouts: {}
+              ]
+
+            cert = matchCertForHost(certMap, hostname) if certMap.size > 0
+            resolvedCerts[hostname] = cert if cert
+
+        else if parsed.kind is 'tcp-proxy'
+          proxyId = "tcp-#{appName}"
+          url = new URL(parsed.target.replace('tcp://', 'http://'))
+          tcpProxies[proxyId] =
+            id: proxyId
+            targets: [{ host: url.hostname, port: parseInt(url.port) }]
+            connectTimeoutMs: 10000
+          streamUpstreams[proxyId] = tcpProxies[proxyId]
+
+          for hostname in hostnames
+            streams.push
+              id: proxyId
+              order: streams.length
+              listen: 443
+              sni: [hostname]
+              proxy: proxyId
+              timeouts: {}
+
+            cert = matchCertForHost(certMap, hostname) if certMap.size > 0
+            resolvedCerts[hostname] = cert if cert
+
+  throw validationError(CONFIG_FILE, errors) if errors.length > 0
+
+  {
+    kind: 'serve'
+    version: config.version or 2
+    server: serverSettings
+    proxies
+    upstreams: httpProxies
+    apps
+    certs: {}
+    rules: {}
+    groups: {}
+    routes: []
+    sites
+    resolvedCerts
+    streamUpstreams
+    streams
+  }
+
 export normalizeConfig = (config, baseDir) ->
-  normalizeServeConfig(config, baseDir)
+  normalizeServeRip(config, baseDir)
 
 export normalizeEdgeConfig = (config, baseDir) -> normalizeConfig(config, baseDir)
 
