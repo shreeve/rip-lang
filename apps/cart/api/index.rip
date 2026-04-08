@@ -9,8 +9,8 @@ products = [
   { id: 6, name: 'Headphones',   image: '🎧', price: 19.99 }
 ]
 
-get '/api/products', -> products
+get '/api/products' -> products
 
-post '/api/orders', ->
+post '/api/orders' ->
   order = @json()
   { success: true, orderId: rand(1000, 9999) }

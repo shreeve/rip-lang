@@ -6,6 +6,8 @@ export Cart = component
 
   mounted: ->
     document.title = 'Cart - Rip'
+    status = 'idle'
+    error = ''
 
   updateQuantity: (item, qty) ->
     @app.data.cart.items = @app.data.cart.items.map (i) ->
@@ -40,7 +42,12 @@ export Cart = component
       p "Your order has been placed successfully."
       a href: "/"
         button "Continue Shopping"
-    else if items.length
+    else if not items.length
+      h1 "Cart"
+      p "Your cart is empty."
+      a href: "/"
+        button "Continue Shopping"
+    else
       h1 "Cart"
       div.overflow-auto
         table.cart-table
@@ -84,8 +91,3 @@ export Cart = component
         button.outline.secondary.link @click: @clearCart, "Clear Cart"
       if status is 'error'
         p.error error
-    else
-      h1 "Cart"
-      p "Your cart is empty."
-      a href: "/"
-        button "Continue Shopping"
