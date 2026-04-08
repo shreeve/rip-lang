@@ -3,20 +3,18 @@ name: UI Quality
 on:
   pull_request:
     paths:
-      - 'packages/ui/**'
-      - 'docs/dist/**'
-      - 'src/**'
-      - 'package.json'
-      - 'bun.lock'
+      - 'docs/dist/rip.min.js'
+      - 'packages/ui/browser/**'
+      - 'packages/ui/shared/**'
+      - 'packages/ui/index.*'
       - '.github/workflows/ui-quality.yml'
   push:
     branches: [main, edge]
     paths:
-      - 'packages/ui/**'
-      - 'docs/dist/**'
-      - 'src/**'
-      - 'package.json'
-      - 'bun.lock'
+      - 'docs/dist/rip.min.js'
+      - 'packages/ui/browser/**'
+      - 'packages/ui/shared/**'
+      - 'packages/ui/index.*'
       - '.github/workflows/ui-quality.yml'
 
 jobs:
@@ -46,9 +44,6 @@ jobs:
       - name: Install Playwright browsers
         working-directory: packages/ui
         run: bunx playwright install --with-deps chromium firefox
-
-      - name: Build browser bundle
-        run: bun run build
 
       - name: Run UI browser matrix
         run: bun run --cwd packages/ui test:e2e -- --project=chromium --project=firefox
