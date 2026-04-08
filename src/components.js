@@ -2146,6 +2146,18 @@ export function installComponentSupport(CodeEmitter, Lexer) {
 
   proto.emitConditional = function(sexpr) {
     this._pendingAutoWire = false;
+
+    // Fold flat else-if chains into nested structure.
+    // Parser emits: ['if', c1, t1, ['if', c2, t2], ..., finalElse]
+    // We need:      ['if', c1, t1, ['if', c2, t2, [..., finalElse]]]
+    if (sexpr.length > 4) {
+      let chain = sexpr[sexpr.length - 1];
+      for (let i = sexpr.length - 2; i >= 3; i--) {
+        chain = [...sexpr[i], chain];
+      }
+      sexpr = [sexpr[0], sexpr[1], sexpr[2], chain];
+    }
+
     const [, condition, thenBlock, elseBlock] = sexpr;
 
     const anchorVar = this.newElementVar('anchor');
@@ -2203,6 +2215,9 @@ export function installComponentSupport(CodeEmitter, Lexer) {
       setupLines.push(`    }`);
     }
     setupLines.push(`  ${effClose}`);
+    if (this._factoryMode) {
+      setupLines.push(`  disposers.push(() => { if (currentBlock) { currentBlock.d(true); currentBlock = null; } });`);
+    }
     setupLines.push(`}`);
 
     this._setupLines.push(setupLines.join('\n    '));

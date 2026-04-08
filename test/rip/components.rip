@@ -618,6 +618,7 @@ code "conditional inside loop threads loop vars", '''
               if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');
             }
           }));
+          disposers.push(() => { if (currentBlock) { currentBlock.d(true); currentBlock = null; } });
         }
       },
       d(detaching) {
