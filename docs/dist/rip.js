@@ -6048,6 +6048,13 @@ ${blockFactoriesCode}return ${lines.join(`
     };
     proto.emitConditional = function(sexpr) {
       this._pendingAutoWire = false;
+      if (sexpr.length > 4) {
+        let chain = sexpr[sexpr.length - 1];
+        for (let i = sexpr.length - 2;i >= 3; i--) {
+          chain = [...sexpr[i], chain];
+        }
+        sexpr = [sexpr[0], sexpr[1], sexpr[2], chain];
+      }
       const [, condition, thenBlock, elseBlock] = sexpr;
       const anchorVar = this.newElementVar("anchor");
       this._createLines.push(`${anchorVar} = document.createComment('if');`);
@@ -6099,6 +6106,9 @@ ${blockFactoriesCode}return ${lines.join(`
         setupLines.push(`    }`);
       }
       setupLines.push(`  ${effClose}`);
+      if (this._factoryMode) {
+        setupLines.push(`  disposers.push(() => { if (currentBlock) { currentBlock.d(true); currentBlock = null; } });`);
+      }
       setupLines.push(`}`);
       this._setupLines.push(setupLines.join(`
     `));
@@ -10611,7 +10621,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   }
   // src/browser.js
   var VERSION = "3.13.134";
-  var BUILD_DATE = "2026-04-07@18:04:09GMT";
+  var BUILD_DATE = "2026-04-08@11:38:45GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
