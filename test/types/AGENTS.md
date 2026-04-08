@@ -84,9 +84,10 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 ### ❌ Not working (language-level changes or runtime validation needed)
 
-| Category                       | Tested In     | Notes                                                                                            |
-| ------------------------------ | ------------- | ------------------------------------------------------------------------------------------------ |
-| Runtime return-type validation | 10-validation | Return types are erased — `response.json()` is unvalidated `any`; no `schema.parse()` equivalent |
+| Category                       | Tested In     | Notes                                                                                                         |
+| ------------------------------ | ------------- | ------------------------------------------------------------------------------------------------------------- |
+| `@app.data` stash typing       | 09-components | `@app.data` is `any` — no way to declare or flow a stash type across components. RFC in `apps/cart/README.md` |
+| Runtime return-type validation | 10-validation | Return types are erased — `response.json()` is unvalidated `any`; no `schema.parse()` equivalent              |
 
 ### 🔶 Partial
 
@@ -134,7 +135,6 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Render block text exprs        | 09-components  | `= expr` text expressions emitted into type-checking stub; typos caught via "Cannot find name"                                     |
 | Dot-completion accuracy        | 09-components  | Source map fix + LSP dot-recovery: single-line `__rip__` patching for trailing-dot completions                                     |
 | Generic components             | 09-components  | `Name<T extends C> = component` — type params flow through DTS, stub, and ConstructorParameters inference                          |
-| Shared state typing (stash)    | 09-components  | `stash:: { cart: { items: CartItem[] } }` — full shape in .d.ts; wrong types, typos, bad args all caught; on par with zustand      |
 | Type inference (split decl.)   | 11-inference   | `patchUninitializedTypes` infers from first assignment — top-level, block-scoped (if/for/while/try/switch), and destructured       |
 | Strict mode                    | *(all files)*  | `strict: true` — `noImplicitAny`, full null checks, strict function types all active; hardcoded in all paths                       |
 | Project-level type enforcement | *(all files)*  | CLI `--strict`, `rip.json`, or `package.json`; `# @nocheck` / `"exclude"` to opt out; LSP squiggles + auto-reload                  |

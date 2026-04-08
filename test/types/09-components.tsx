@@ -231,11 +231,18 @@ function GenericUsageTests() {
   )
 }
 
-// ── Stash vs zustand: shared client state (shopping cart) ──
+// ── Stash vs zustand: typed shared state ──
+//
+// zustand types the store everywhere it's used via create<State>().
+// Rip's stash (`@app.data`) is completely untyped today — there is no
+// mechanism to flow a type declaration into the framework stash across
+// components. See the Typed Stash RFC in apps/cart/README.md.
+//
+// The zustand code below shows what Rip is missing — a single type
+// declaration that makes every access site type-safe.
 
 import { create } from 'zustand'
 
-// Same shape as CartItem in 09-components.rip
 type CartItem = {
   id: number
   name: string
@@ -278,6 +285,9 @@ function CartDemo() {
 }
 
 // ── Negative tests: zustand catches every mistake ──
+//
+// Rip has NO equivalent today. @app.data is `any` — none of these
+// errors would be caught in a real Rip UI app.
 
 // @ts-expect-error — wrong type: items should be CartItem[], not string
 const bad1 = create<Cart>(() => ({ items: 'not an array', addItem: () => { }, removeItem: () => { }, total: () => 0 }))
@@ -300,6 +310,3 @@ function _negativeTests() {
   // @ts-expect-error — nonexistent path
   const bad4 = cart.tax
 }
-
-// All caught at compile time. Rip's typed stash catches the same
-// errors — the :: annotation flows through to the .d.ts.

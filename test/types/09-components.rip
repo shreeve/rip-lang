@@ -227,72 +227,37 @@ export GenericUsageTests = component
       # @ts-expect-error — object missing 'label' field (has 'name' instead)
       Select options: [{ value: "a", name: "A" }]
 
-# ── Stash vs zustand: shared client state (shopping cart) ──
+# ── Stash: framework-level shared state (NOT YET TYPED) ──
 #
-# A shopping cart is pure client state — created in the browser,
-# shared across routes/components, persisted to localStorage.
-# This is exactly what stash and zustand are for.
-
-# Define the cart shape — data + methods, like a zustand store:
-type CartItem =
-  id: number
-  name: string
-  price: number
-  quantity: number
-
-type Cart =
-  items: CartItem[]
-  addItem: (item: CartItem) => void
-  removeItem: (item: CartItem) => void
-  total: () => number
-
-# In a real Rip app, the stash is seeded (possibly empty) and shared:
-#   <script data-state='{"cart": {"items": []}}'>
+# In a real Rip UI app, the stash is `@app.data` — a deep reactive Proxy
+# shared across all components. Today it is completely untyped (`any`).
+# `@app.data.cart.itms` (typo) compiles without error.
 #
-# There is ONE global stash per app — a deep reactive proxy. Different
-# "stores" are just paths within it (stash.cart, stash.theme, etc.).
-# This is unlike zustand, where each store is a separate create() call.
-# Below we simulate this with a module-level object — the access pattern
-# is identical to how components use stash in the browser.
-
-stash:: { cart: Cart } =
-  cart:
-    items: []
-    addItem: (item) -> stash.cart.items = [...stash.cart.items, item]
-    removeItem: (item) -> stash.cart.items = stash.cart.items.filter (i) -> i.id isnt item.id
-    total: -> stash.cart.items.reduce ((sum:: number, i) -> sum + i.price * i.quantity), 0
-
-export CartDemo = component
-  render
-    div
-      span "#{stash.cart.items.length} items — $#{stash.cart.total()}"
-      button
-        @click: -> stash.cart.addItem { id: 1, name: "Widget", price: 9.99, quantity: 1 }
-        "Add to Cart"
-      ul
-        for item in stash.cart.items
-          li "#{item.name} x#{item.quantity} — $#{item.price}"
-
-# ── Negative: stash type safety ──
+# The RFC in apps/cart/README.md proposes a `stash.rip` convention:
+# if app/stash.rip exports a default type, the type checker flows it
+# into `@app.data` across all components. Until that's implemented,
+# there is no stash type safety in real apps.
 #
-# The :: annotation on stash flows through to the .d.ts, so TypeScript
-# catches every mistake — reads, writes, and method calls.
-
-export StashTypeTests = component
-  badAccess: ->
-    # Writes
-    # @ts-expect-error — wrong type: items should be CartItem[], not string
-    stash.cart.items = "not an array"
-    # @ts-expect-error — wrong item shape: missing required fields
-    stash.cart.addItem { broken: true }
-    # @ts-expect-error — wrong arg type: number instead of CartItem
-    stash.cart.removeItem 42
-
-    # Reads
-    # @ts-expect-error — typo: 'item' doesn't exist, it's 'items'
-    stash.cart.item
-    # @ts-expect-error — nonexistent path
-    stash.cart.tax
-
-  render
-    null
+# What it would look like (not yet implemented):
+#
+#   # app/stash.rip
+#   type CartItem =
+#     id:: number
+#     name:: string
+#     price:: number
+#     quantity:: number
+#
+#   export default type
+#     cart::
+#       items:: CartItem[]
+#
+#   # app/routes/cart.rip — @app.data.cart.items is CartItem[]
+#   for item in @app.data.cart.items
+#     .item
+#       .name = item.name
+#       .price = "$#{item.price.toFixed(2)}"
+#
+#   # @app.data.cart.itms would be a compile error
+#
+# Compare with the tsx companion which shows zustand achieving this
+# today — create<State>() types the store everywhere it's used.
