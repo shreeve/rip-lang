@@ -53,6 +53,7 @@ rip server
 
 ### Critical Rules
 
+- **Never guess what code does — verify it.** Before claiming something is unnecessary, redundant, or works a certain way, read the source. This applies to Rip internals, packages, and external dependencies alike. If you can't verify, say so.
 - **Never edit `src/parser.js`** — it is generated
 - **Never edit `src/grammar/solar.rip`** — it is given
 - **Never commit without running tests** — `bun run test` must pass
