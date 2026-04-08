@@ -254,6 +254,7 @@ export parseFlags = (argv, defaultEntryPath = null) ->
     reloadConfig: has('--reload') or has('-r')
     listApps: has('--list') or has('-l')
     stopServer: has('--stop') or has('-s')
+    restartServer: has('--restart')
     envOverride: envOverride
     debug: has('--debug')
   }
@@ -322,6 +323,7 @@ export runHelpOutput = (argv) ->
       -i, --info              Show running server status
       -l, --list              List registered hosts
       -r, --reload            Reload config on running server
+      --restart               Hot restart (rebuild everything, keep listeners)
       -s, --stop              Stop running server
       --watch=<glob>          Watch glob pattern (default: *.rip)
       --static                Disable hot reload and file watching
@@ -398,6 +400,21 @@ export reloadConfig = (prefix, getControlSocketPathFn, fetchFn, exitFn) ->
       exitFn(1)
   catch e
     warn "rip-server: reload failed: #{e?.message or e}"
+    exitFn(1)
+
+export restartServer = (prefix, getControlSocketPathFn, fetchFn, exitFn) ->
+  controlUnix = getControlSocketPathFn(prefix)
+  try
+    res = fetchFn!('http://localhost/restart', { unix: controlUnix, method: 'POST' })
+    j = res.json!
+    if j?.ok
+      p "rip-server: hot restart complete"
+    else
+      reason = j?.error or 'unknown'
+      warn "rip-server: restart failed: #{reason}"
+      exitFn(1)
+  catch e
+    warn "rip-server: restart failed: #{e?.message or e}"
     exitFn(1)
 
 export listApps = (prefix, getControlSocketPathFn, fetchFn, exitFn) ->

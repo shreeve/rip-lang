@@ -178,3 +178,38 @@ When changing:
 - websocket proxy routes
 - stream passthrough drain semantics
 - shared-port HTTPS multiplexer mode for `streams.listen == httpsPort`
+
+Consider these rules if they affect your changes.
+
+## Runtime state model
+
+When the main server process is running, it holds these categories of state.
+Understanding this is essential for features like `--restart` (hot reconfigure)
+where listeners stay open but everything else tears down and rebuilds.
+
+### Kept open during restart (expensive to recreate)
+
+- `@server` — HTTP listener (`Bun.serve` on port 80/443)
+- `@httpsServer` — HTTPS listener
+- `@internalHttpsServer` — internal TLS multiplexer (when stream config shares the HTTPS port)
+
+These are the only resources that cause a port gap if recreated. The `--restart`
+command explicitly preserves them.
+
+### Torn down and rebuilt during restart
+
+- **Workers** — all child processes killed and respawned with fresh code
+- **Control socket** (`@control`) — closed and reopened on the same path
+- **File watchers** — `Manager.codeWatchers` and `Manager.appWatchers` closed and re-registered
+- **mDNS** — `dns-sd` child processes killed and restarted
+- **Timers** — queue sweep interval, reload poll interval, debounce timers
+- **Config/routing** — `@flags` re-read, `@servingRuntime`/`@streamRuntime` rebuilt, `@appRegistry` rebuilt
+- **TLS material** — reloaded from disk (picks up new certs)
+- **Caches** — metrics, rate limiter, watch groups, challenge store all reset
+- **PID file** — rewritten
+
+### Never held by the server (owned by workers or external)
+
+- Session data (in cookies, not server memory)
+- Database connections (workers connect independently via rip-db HTTP)
+- rip-db process (detached, survives server restart)
