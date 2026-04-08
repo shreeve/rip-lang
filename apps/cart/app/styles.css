@@ -1,0 +1,128 @@
+:root {
+  --pico-spacing: 1.2rem;
+  --pico-border-radius: 0.5rem;
+}
+
+h1 {
+  margin-bottom: 2rem;
+}
+
+button[aria-busy='true'] {
+  position: relative;
+  color: transparent;
+}
+
+button[aria-busy='true']::before {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+button.link {
+  border: none;
+  padding: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.error {
+  color: var(--pico-del-color);
+  margin-top: 1rem;
+}
+
+main.container {
+  margin-top: 1rem;
+  margin-bottom: 2rem;
+  padding-block: 0;
+}
+
+.product-filters {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 2rem;
+
+  input[type='search'] {
+    margin: 0;
+  }
+
+  select {
+    width: auto;
+    margin: 0;
+  }
+}
+
+.product-list {
+  display: grid;
+  gap: 1.2rem;
+
+  @media (min-width: 500px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Nested @media syntax highlighting broken in VS Code: https://github.com/microsoft/vscode-css/issues/9 */
+  @media (min-width: 768px) {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  article {
+    border-radius: 0.625rem;
+    margin: 0;
+
+    .image {
+      font-size: 2rem;
+      margin-bottom: 0.8rem;
+    }
+
+    button {
+      font-size: 0.9375rem;
+      padding: 0.4rem 0.8rem;
+    }
+  }
+}
+
+.cart-table {
+  td {
+    font-variant-numeric: tabular-nums;
+
+    &:first-child {
+      white-space: nowrap;
+    }
+  }
+
+  .stepper {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+
+    button {
+      padding: 0.1rem 0.5rem;
+    }
+
+    input[type='number'] {
+      width: 2.5rem;
+      height: auto;
+      margin: 0;
+      padding: 0.1rem 0.4rem;
+      text-align: center;
+      font-size: 0.875rem;
+
+      &::-webkit-inner-spin-button,
+      &::-webkit-outer-spin-button {
+        appearance: none;
+      }
+    }
+  }
+
+  button {
+    font-size: 0.875rem;
+    padding: 0.3rem 0.6rem;
+  }
+}
+
+.cart-actions {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  margin-top: 2rem;
+}

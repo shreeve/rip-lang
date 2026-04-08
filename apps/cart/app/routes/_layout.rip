@@ -1,0 +1,15 @@
+export Layout = component
+  totalItems ~= (@app.data.cart?.items or []).reduce(((sum, i) -> sum + (i.quantity or 1)), 0)
+
+  render
+    nav.container
+      ul
+        li
+          strong "Shop"
+      ul
+        li
+          a href: "/", "Products"
+        li
+          a href: "/cart", "Cart (#{totalItems})"
+    main.container
+      div id: "content"

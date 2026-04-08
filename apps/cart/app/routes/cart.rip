@@ -1,0 +1,91 @@
+export Cart = component
+  items ~= @app.data.cart?.items or []
+  totalPrice ~= items.reduce(((sum, i) -> sum + i.price * (i.quantity or 1)), 0)
+  status := 'idle'
+  error := ''
+
+  mounted: ->
+    document.title = 'Cart - Rip'
+
+  updateQuantity: (item, qty) ->
+    @app.data.cart.items = @app.data.cart.items.map (i) ->
+      if i.id is item.id then { ...i, quantity: qty } else i
+
+  removeItem: (item) ->
+    @app.data.cart.items = @app.data.cart.items.filter (i) -> i.id isnt item.id
+
+  clearCart: ->
+    @app.data.cart.items = []
+
+  placeOrder: ->
+    status = 'loading'
+    error = ''
+    try
+      res = await fetch '/api/orders',
+        method: 'POST'
+        headers: { 'Content-Type': 'application/json' }
+        body: JSON.stringify
+          items: items.map (i) -> { productId: i.id, quantity: i.quantity }
+      unless res.ok
+        throw new Error 'Order failed'
+      @clearCart()
+      status = 'success'
+    catch err
+      error = 'Something went wrong. Please try again.'
+      status = 'error'
+
+  render
+    if status is 'success'
+      h1 "Order Placed!"
+      p "Your order has been placed successfully."
+      a href: "/"
+        button "Continue Shopping"
+    else if items.length
+      h1 "Cart"
+      div.overflow-auto
+        table.cart-table
+          thead
+            tr
+              th "Product"
+              th "Price"
+              th "Quantity"
+              th "Subtotal"
+              th
+          tbody
+            for item in items
+              tr
+                td.name "#{item.image} #{item.name}"
+                td "$#{item.price.toFixed(2)}"
+                td
+                  div.stepper
+                    button.outline @click: (->
+                      if item.quantity <= 1
+                        @removeItem(item)
+                      else
+                        @updateQuantity(item, item.quantity - 1)
+                    ), "−"
+                    input
+                      type: "number"
+                      value: item.quantity
+                      @input: (e) -> @updateQuantity(item, Math.max(1, Number(e.target.value) or 1))
+                    button.outline @click: (-> @updateQuantity(item, item.quantity + 1)), "+"
+                td "$#{(item.price * item.quantity).toFixed(2)}"
+                td
+                  button.outline.secondary @click: (-> @removeItem(item)), "Remove"
+          tfoot
+            tr
+              td colspan: 3
+                strong "Total"
+              td
+                strong "$#{totalPrice.toFixed(2)}"
+              td
+      div.cart-actions
+        button aria-busy: status is 'loading', disabled: status is 'loading', @click: @placeOrder, "Place Order"
+        button.outline.secondary.link @click: @clearCart, "Clear Cart"
+      if status is 'error'
+        p.error error
+    else
+      h1 "Cart"
+      p "Your cart is empty."
+      a href: "/"
+        button "Continue Shopping"

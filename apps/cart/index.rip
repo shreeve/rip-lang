@@ -1,0 +1,18 @@
+import { get, post, use, start, notFound } from '@rip-lang/server'
+import { serve } from '@rip-lang/server/middleware'
+import './api/index.rip'
+
+dir = import.meta.dir
+use serve
+  dir: "#{dir}/app"
+  bundle:
+    app: []
+  watch: true
+  state:
+    cart: { items: [] }
+
+get '/styles.css' -> @send "#{dir}/app/styles.css", 'text/css; charset=UTF-8'
+
+notFound -> @send "#{dir}/app/index.html", 'text/html; charset=UTF-8'
+
+start!

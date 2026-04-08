@@ -1,0 +1,69 @@
+export Products = component
+  products := []
+  search := ''
+  sort := ''
+  error := null
+  loaded := false
+
+  filtered ~=
+    result = products.slice()
+    if search
+      term = search.toLowerCase()
+      result = result.filter (p) -> p.name.toLowerCase().includes(term)
+    if sort is 'price-asc'
+      result.sort (a, b) -> a.price - b.price
+    else if sort is 'price-desc'
+      result.sort (a, b) -> b.price - a.price
+    result
+
+  mounted: ->
+    document.title = 'Products - Rip'
+    try
+      res = await fetch '/api/products'
+      products = await res.json()
+    catch err
+      error = err.message
+    finally
+      loaded = true
+
+  inCart: (product) ->
+    (@app.data.cart?.items or []).some (i) -> i.id is product.id
+
+  toggleCart: (product) ->
+    if @inCart(product)
+      @app.data.cart.items = @app.data.cart.items.filter (i) -> i.id isnt product.id
+    else
+      @app.data.cart.items = [...@app.data.cart.items, { ...product, quantity: 1 }]
+
+  clearFilters: ->
+    search = ''
+    sort = ''
+
+  render
+    if error
+      p.error "Failed to load products"
+    else if loaded
+      h1 "Products"
+      div.product-filters
+        input
+          type: "search"
+          placeholder: "Search products..."
+          value <=> search
+        select value <=> sort
+          option value: "", disabled: true, "Sort"
+          option value: "price-asc", "Price: Low to High"
+          option value: "price-desc", "Price: High to Low"
+      if filtered.length
+        div.product-list
+          for product in filtered
+            article
+              div.image product.image
+              h5 product.name
+              p "$#{product.price.toFixed(2)}"
+              if @inCart(product)
+                button.outline @click: (-> @toggleCart(product)), "Added to Cart"
+              else
+                button.outline @click: (-> @toggleCart(product)), "Add to Cart"
+      else
+        p "No products found. "
+          button.outline.link @click: @clearFilters, "Clear Filters"
