@@ -40,7 +40,7 @@ import { getControlSocketPath, getPidFilePath, handleWorkerControl, handleWatchC
 import { getLanIP as controlGetLanIP, startMdnsAdvertisement as controlStartMdnsAdvertisement, stopMdnsAdvertisements as controlStopMdnsAdvertisements } from './control/mdns.rip'
 import { registerWatchGroup, handleWatchGroup, broadcastWatchChange } from './control/watchers.rip'
 import { computeHideUrls, logStartupSummary, createCleanup, installShutdownHandlers, setEventJsonMode, logEvent } from './control/lifecycle.rip'
-import { runVersionOutput, runHelpOutput, stopServer, reloadConfig, listApps, showInfo, parseFlags } from './control/cli.rip'
+import { runVersionOutput, runHelpOutput, stopServer, restartServer, reloadConfig, listApps, showInfo, parseFlags } from './control/cli.rip'
 import { runSetupMode, runWorkerMode } from './control/worker.rip'
 import { Manager } from './control/manager.rip'
 
@@ -581,6 +581,47 @@ class Server
 
     controlStopMdnsAdvertisements(@mdnsProcesses)
 
+  restart: ->
+    logEvent('server_restart', { uptime: Math.floor((nowMs() - @startedAt) / 1000) })
+
+    # --- Teardown (listeners stay open) ---
+    @manager?.teardown!
+    stopHealthChecks(@servingRuntime.upstreamPool)
+    stopHealthChecks(runtime.upstreamPool) for runtime in @retiredServingRuntimes
+    stopStreamListeners(@streamRuntime, true)
+    stopStreamListeners(runtime, true) for runtime in @retiredStreamRuntimes
+    clearInterval(@queueSweepTimer) if @queueSweepTimer
+    try @control?.stop()
+    controlStopMdnsAdvertisements(@mdnsProcesses)
+
+    # Drain queues
+    for [appId, app] as @appRegistry.apps
+      while app.queue.length > 0
+        job = app.queue.shift()
+        try job.resolve(new Response('Server restarting', { status: 503, headers: { 'Retry-After': '1' } }))
+
+    # --- Reload ---
+    @tlsMaterial = @loadTlsMaterial()
+    @reloadRuntimeConfig!(@flags, 'restart', false)
+
+    # --- Rebuild ---
+    @queueSweepTimer = setInterval =>
+      for [appId, app] as @appRegistry.apps
+        now = Date.now()
+        while app.queue.length > 0 and now - app.queue[0].enqueuedAt > app.queueTimeoutMs
+          job = app.queue.shift()
+          try job.resolve(new Response('Queue timeout', { status: 504 }))
+          @metrics.queueTimeouts++
+    , 1000
+
+    @startControl!
+    @startActiveStreamListeners() if @streamListenersDeferred or @streamRuntime.listeners.size is 0
+
+    # --- Restart workers ---
+    @manager?.start!
+
+    logEvent('server_restart_complete', {})
+
   proxyRouteToUpstream: (req, route, requestId, clientIp, runtime) ->
     proxyRouteToUpstreamFn!(req, route, requestId, clientIp, runtime, @metrics, @flags, @maybeAddSecurityHeaders.bind(@), @logAccess.bind(@))
 
@@ -913,6 +954,13 @@ class Server
       res = handleReloadControl(req, result)
       return res.response if res.handled
 
+    if req.method is 'POST' and url.pathname is '/restart'
+      try
+        @restart!
+        return new Response(JSON.stringify({ ok: true, restarted: true }), { headers: { 'content-type': 'application/json' } })
+      catch e
+        return new Response(JSON.stringify({ ok: false, error: e?.message or 'restart failed' }), { status: 500, headers: { 'content-type': 'application/json' } })
+
     if url.pathname is '/registry' and req.method is 'GET'
       res = handleRegistryControl(req, @appRegistry.hostIndex)
       return res.response if res.handled
@@ -990,6 +1038,9 @@ main = ->
     return
   if flags.listApps
     listApps!(flags.socketPrefix, getControlSocketPath, fetch, exit)
+    return
+  if flags.restartServer
+    restartServer!(flags.socketPrefix, getControlSocketPath, fetch, exit)
     return
   if flags.stopServer
     stopServer(flags.socketPrefix, getPidFilePath, existsSync, readFileSync, process.kill.bind(process), Bun.spawnSync, import.meta.path)

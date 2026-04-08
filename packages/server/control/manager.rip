@@ -244,6 +244,17 @@ export class Manager
           workers[idx] = @spawnWorker(app.appId, @currentVersion) if idx >= 0
         @deferredDeaths.clear()
 
+  teardown: ->
+    @shuttingDown = true
+    @stop!
+    @shuttingDown = false
+    @currentMtimes.clear()
+    @rollingApps.clear()
+    @lastRollAt.clear()
+    @retiringIds.clear()
+    @restartBudgets.clear()
+    @deferredDeaths.clear()
+
   getEntryMtime: (appId = null) ->
     app = @getAppState(appId or @defaultAppId)
     entry = app?.config?.entry or @flags.appEntry
