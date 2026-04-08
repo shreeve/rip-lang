@@ -44,7 +44,8 @@ jobs:
             ${{ runner.os }}-playwright-
 
       - name: Install Playwright browsers
-        run: bunx playwright install chromium firefox
+        working-directory: packages/ui
+        run: bunx playwright install --with-deps chromium firefox
 
       - name: Build browser bundle
         run: bun run build
