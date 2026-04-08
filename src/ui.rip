@@ -798,6 +798,10 @@ export createRenderer = (opts = {}) ->
         mp.appendChild cached._target
         currentComponent = cached
         currentRoute = route.file
+        cached.params = params if params
+        cached.query = query if query
+        cached.mounted() if cached.mounted
+        cached.load!(params, query) if cached.load
       else
         pageWrapper = document.createElement('div')
         pageWrapper.setAttribute 'data-component', route.file

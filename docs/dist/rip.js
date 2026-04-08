@@ -10621,7 +10621,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   }
   // src/browser.js
   var VERSION = "3.13.134";
-  var BUILD_DATE = "2026-04-08@11:38:45GMT";
+  var BUILD_DATE = "2026-04-08@12:44:30GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -11861,6 +11861,14 @@ ${indented}`);
             mp.appendChild(cached._target);
             currentComponent = cached;
             currentRoute = route.file;
+            if (params)
+              cached.params = params;
+            if (query)
+              cached.query = query;
+            if (cached.mounted)
+              cached.mounted();
+            if (cached.load)
+              await cached.load(params, query);
           } else {
             pageWrapper = document.createElement("div");
             pageWrapper.setAttribute("data-component", route.file);
