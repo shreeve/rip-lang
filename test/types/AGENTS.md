@@ -18,20 +18,28 @@ rip -d FILE.rip     # 4. inspect generated .d.ts
 **Full suite** (always run after single-file checks):
 
 ```bash
-rip check                                                                 # 5. type-check all .rip files
-bunx tsc                                                                  # 6. type-check all .ts files
-for f in *.rip; do printf "\n── %s ──\n" "$f" && rip "$f"; done           # 7. run all .rip
-for f in *.ts *.tsx; do printf "\n── %s ──\n" "$f" && bun run "$f"; done  # 8. run all .ts
+# allow comments when pasting into zsh
+setopt INTERACTIVE_COMMENTS
+# 5. type-check all .rip files
+rip check
+# 6. type-check all .ts files
+bunx tsc
+# 7. run all .rip
+for f in *.rip; do printf "\n── %s ──\n" "$f" && rip "$f"; done
+# 8. run all .ts
+for f in *.ts *.tsx; do printf "\n── %s ──\n" "$f" && bun run "$f"; done
+# 9. output parity
 for n in 01-basic 02-aliases 03-structural 04-unions 05-interfaces 06-functions 07-integration 08-reactive 09-components 10-validation 11-inference; do
   ext=ts; [[ "$n" == 09-* ]] && ext=tsx
   rip "$n.rip" > /tmp/rip_out.txt 2>&1
   bun run "$n.$ext" > /tmp/ts_out.txt 2>&1
   diff -q /tmp/rip_out.txt /tmp/ts_out.txt > /dev/null 2>&1 && echo "✓ $n" || echo "✗ $n — MISMATCH"
-done                                                                      # 9. output parity
+done
+# 10. strict mode enforcement
 echo 'x = "hello"' > /tmp/_strict_probe.rip && echo 'x()' >> /tmp/_strict_probe.rip \
   && cp /tmp/_strict_probe.rip _strict_probe.rip \
   && rip check 2>&1 | grep -q 'TS2349' && echo "✓ strict mode" \
-  || echo "✗ strict mode — NOT ENFORCED"; rm -f _strict_probe.rip         # 10. strict mode enforcement
+  || echo "✗ strict mode — NOT ENFORCED"; rm -f _strict_probe.rip
 ```
 
 All commands must pass. 09-components (.rip and .tsx) are silent at runtime but type-check correctly. Report results in a summary table. If errors appear, isolate with single-file commands. Update the status table below as features are fixed or regress.
