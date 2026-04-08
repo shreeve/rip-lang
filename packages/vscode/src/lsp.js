@@ -2118,6 +2118,8 @@ async function loadCompiler(root) {
       try { return await import(p); } catch (e) { connection.console.log(`[rip] compiler failed: ${e.message}`); }
     }
   }
+  for (const d of [root, __dirname]) { try { return await import(require.resolve('rip-lang', { paths: [d] })); } catch {} }
+  try { return await import(require.resolve('rip-lang')); } catch {}
   return null;
 }
 
@@ -2127,6 +2129,13 @@ async function loadTypecheck(root) {
       try { return await import(p); } catch (e) { connection.console.log(`[rip] typecheck failed: ${e.message}`); }
     }
   }
+  for (const d of [root, __dirname]) {
+    try {
+      const resolved = require.resolve('rip-lang', { paths: [d] });
+      return await import(path.join(path.dirname(resolved), 'typecheck.js'));
+    } catch {}
+  }
+  try { return await import(path.join(path.dirname(require.resolve('rip-lang')), 'typecheck.js')); } catch {}
   return null;
 }
 
