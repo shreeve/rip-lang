@@ -70,19 +70,19 @@ Each file exercises a specific type feature. Status key:
 - **fail** — `rip check` or runtime reports errors
 - **partial** — some features in the file work, others don't
 
-| File               | Feature                                                     | Status | Notes                                                                   |
-| ------------------ | ----------------------------------------------------------- | ------ | ----------------------------------------------------------------------- |
-| 01-basic.rip       | `::` on variables, nullable (`T \| null`, `T \| undefined`) | pass   |                                                                         |
-| 02-aliases.rip     | `type` aliases (simple, union, typeof, function)            | pass   | Function type aliases: `(a: T) => R`, generics, negative tests          |
-| 03-structural.rip  | `type` blocks, optional, readonly, recursive, generic       | pass   | Nested `type` blocks, index signatures, deep nesting, negative tests    |
-| 04-unions.rip      | Inline, block, discriminated unions + switch narrowing      | pass   | Narrowing + exhaustiveness verified via strict mode                     |
-| 05-interfaces.rip  | `interface`, `extends`, optional members                    | pass   |                                                                         |
-| 06-functions.rip   | Typed functions, arrows, overloads, and array transforms    | pass   | 22 negative tests; overloads narrow return types                        |
-| 07-integration.rip | Cross-module imports of typed functions                     | pass   | Cross-file type flow via .d.ts                                          |
-| 08-reactive.rip    | `:: T :=`, `:: T ~=`, `:: T =!`, `:: T ~>`                  | pass   | Reactive state annotations                                              |
-| 09-components.rip  | `@prop:: T :=`, `@prop:: T`, default validation             | pass   | Required props, default-vs-type validation, 4 negative body tests       |
-| 10-validation.rip  | Runtime validation use cases (4 real-world patterns)        | pass   | API shape, composition, discriminated union config, 3rd-party transform |
-| 11-inference.rip   | Type inference on unannotated variables                     | pass   | Top-level, block-scoped, and destructured inference all patched         |
+| File               | Feature                                                     | Status | Notes                                                                                       |
+| ------------------ | ----------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------- |
+| 01-basic.rip       | `::` on variables, nullable (`T \| null`, `T \| undefined`) | pass   |                                                                                             |
+| 02-aliases.rip     | `type` aliases (simple, union, typeof, function)            | pass   | Function type aliases: `(a: T) => R`, generics, negative tests                              |
+| 03-structural.rip  | `type` blocks, optional, readonly, recursive, generic       | pass   | Nested `type` blocks, index signatures, deep nesting, negative tests                        |
+| 04-unions.rip      | Inline, block, discriminated unions + switch narrowing      | pass   | Narrowing + exhaustiveness verified via strict mode                                         |
+| 05-interfaces.rip  | `interface`, `extends`, optional members                    | pass   |                                                                                             |
+| 06-functions.rip   | Typed functions, arrows, overloads, and array transforms    | pass   | 22 negative tests; overloads narrow return types                                            |
+| 07-integration.rip | Cross-module imports of typed functions                     | pass   | Cross-file type flow via .d.ts                                                              |
+| 08-reactive.rip    | `:: T :=`, `:: T ~=`, `:: T =!`, `:: T ~>`                  | pass   | Reactive state annotations                                                                  |
+| 09-components.rip  | `@prop:: T :=`, `@prop:: T`, default validation             | pass   | Required props, default-vs-type validation, 4 negative body tests                           |
+| 10-validation.rip  | Runtime validation use cases (4 real-world patterns)        | pass   | API shape, composition, discriminated union config, 3rd-party transform                     |
+| 11-inference.rip   | Type inference on unannotated variables                     | pass   | Top-level, block-scoped, destructured, inline-let in functions, block-confined in functions |
 
 ## Type Safety Gap Analysis
 
@@ -144,6 +144,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Dot-completion accuracy        | 09-components  | Source map fix + LSP dot-recovery: single-line `__rip__` patching for trailing-dot completions                                     |
 | Generic components             | 09-components  | `Name<T extends C> = component` — type params flow through DTS, stub, and ConstructorParameters inference                          |
 | Type inference (split decl.)   | 11-inference   | `patchUninitializedTypes` infers from first assignment — top-level, block-scoped (if/for/while/try/switch), and destructured       |
+| Type inference (inline-let)    | 11-inference   | Inline-let emits `let x = value;` — top-level, inside functions, and block-confined in functions; no patcher needed                |
 | Strict mode                    | *(all files)*  | `strict: true` — `noImplicitAny`, full null checks, strict function types all active; hardcoded in all paths                       |
 | Project-level type enforcement | *(all files)*  | CLI `--strict`, `rip.json`, or `package.json`; `# @nocheck` / `"exclude"` to opt out; LSP squiggles + auto-reload                  |
 | Hover types                    | *(IDE only)*   | Column-aware source maps, overload preference, typed implementation params                                                         |

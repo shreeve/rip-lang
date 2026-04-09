@@ -34,8 +34,8 @@ code "function arg logical", "fn((a && b))", "fn(a && b);"
 # Assignment RHS (no redundant outer parens)
 # ==============================================================================
 
-code "assignment simple", "x = (5 + 3)", "let x;\n\nx = 5 + 3;"
-code "assignment logical", "x = (a || b)", "let x;\n\nx = a || b;"
+code "assignment simple", "x = (5 + 3)", "let x = 5 + 3;"
+code "assignment logical", "x = (a || b)", "let x = a || b;"
 
 # ==============================================================================
 # Array Index (no redundant outer parens)
@@ -55,8 +55,8 @@ test "object literal statement", "({x: 1})", {x: 1}
 # Mixed Precedence Safety (must preserve parens for operators)
 # ==============================================================================
 
-test "arithmetic with or preserves parens", "x = 5 - (3 || 2)", 2
-code "arithmetic mixed precedence", "x = a - (b || c)", "let x;\n\nx = a - (b || c);"
+test "arithmetic with or preserves parens", "x = 5 - (3 || 2)\nx", 2
+code "arithmetic mixed precedence", "x = a - (b || c)", "let x = a - (b || c);"
 
 # ==============================================================================
 # Postfix If/Unless with Multiple Operators (clean logical chains)

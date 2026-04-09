@@ -53,7 +53,7 @@ test "tagged template with interpolation", 'tag = (strings, ...values) -> values
 
 # $"..." tagged template syntax ($ bridge)
 code "$ tagged template basic", 'sh $"hello"', 'sh`hello`'
-code "$ tagged template interpolation", 'x = sh $"hello #{name}"', 'let x;\nx = sh`hello ${name}`'
+code "$ tagged template interpolation", 'x = sh $"hello #{name}"', 'let x = sh`hello ${name}`'
 code "$ tagged template single-quote", "sh \$'hello'", 'sh`hello`'
 
 test "$ tagged template receives strings", 'tag = (strings, ...values) -> strings[0]\ntag $"hello"', "hello"
@@ -465,9 +465,7 @@ code 'heregex compiler', '''
     \d+
     ///
   ''', '''
-  let pattern;
-
-  pattern = /\d+/;
+  let pattern = /\d+/;
 '''
 
 # Heregex with flags in output
@@ -475,11 +473,7 @@ code 'heregex flags compiler', '''
   pattern = ///
     test
     ///gi
-  ''', '''
-  let pattern;
-
-  pattern = /test/gi;
-'''
+  ''', "let pattern = /test/gi;"
 
 # Heregex with comments completely removed
 code 'heregex comment removal', '''
@@ -487,9 +481,7 @@ code 'heregex comment removal', '''
     \d+  # digit
     ///
   ''', '''
-  let pattern;
-
-  pattern = /\d+/;
+  let pattern = /\d+/;
 '''
 
 # Heregex character class preserved
@@ -498,9 +490,7 @@ code 'heregex char class compiler', '''
     [ \t]+
     ///
   ''', '''
-  let pattern;
-
-  pattern = /[ \t]+/;
+  let pattern = /[ \t]+/;
 '''
 
 # Interpolation generates template literal
@@ -513,10 +503,8 @@ code 'heredoc compiler', """
     line2
     '''
   """, """
-  let x;
-
-  x = `line1
-  line2`;
+let x = `line1
+line2`;
 """
 
 # JavaScript-style ${} interpolation (for JS refugees)

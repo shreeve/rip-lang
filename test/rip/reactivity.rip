@@ -25,10 +25,8 @@ code "state read", '''
   count := 0
   x = count
   ''', '''
-  let x;
-
   const count = __state(0);
-  x = count.value
+  let x = count.value
   ''', skip
 
 # ==============================================================================

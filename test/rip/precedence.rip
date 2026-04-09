@@ -88,10 +88,8 @@ code "multiline object with or", """
     b: 'other'
   x.a + x.b
 """, """
-let foo, x;
-
-foo = null;
-x = {a: (foo || 'default'), b: 'other'};
+let foo = null;
+let x = {a: (foo || 'default'), b: 'other'};
 (x.a + x.b);
 """
 

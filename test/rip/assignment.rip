@@ -12,8 +12,8 @@ test "assign null", "x = null; x", null
 test "assign expression", "x = 5 + 3; x", 8
 
 # Code generation tests
-code "simple assignment", "x = 42", "let x;\nx = 42"
-code "assignment with expression", "y = a + b", "let y;\n\ny = a + b"
+code "simple assignment", "x = 42", "let x = 42;"
+code "assignment with expression", "y = a + b", "let y = a + b;"
 
 # ==============================================================================
 # Multiple Assignments

@@ -10,10 +10,10 @@
 # Type Annotations on Variables — Erased from JS
 # ==============================================================================
 
-code "typed variable", "count:: number = 0", "let count;\ncount = 0"
-code "typed string variable", 'name:: string = "Rip"', 'let name;\nname = "Rip"'
-code "typed array variable", "ids:: number[] = []", "let ids;\nids = []"
-code "typed generic variable", "items:: Map<string, number> = x", "let items;\nitems = x"
+code "typed variable", "count:: number = 0", "let count;\ncount = 0;"
+code "typed string variable", 'name:: string = "Rip"', "let name;\nname = \"Rip\";"
+code "typed array variable", "ids:: number[] = []", "let ids;\nids = [];"
+code "typed generic variable", "items:: Map<string, number> = x", "let items;\nitems = x;"
 
 # ==============================================================================
 # Type Annotations on Constants — Erased from JS
@@ -285,7 +285,7 @@ test "enum used in computation", '''
 # ==============================================================================
 
 # Generic types survive in annotations without affecting JS
-code "nested generic annotation", "cache:: Map<string, Set<number>> = x", "let cache;\ncache = x"
+code "nested generic annotation", "cache:: Map<string, Set<number>> = x", "let cache;\ncache = x;"
 
 # Multiple typed variables in sequence
 test "multiple typed variables", '''

@@ -11,7 +11,7 @@ export Products = component
   filtered ~=
     result = products.slice()
     if search
-      term:: string = search.toLowerCase()
+      term = search.toLowerCase()
       result = result.filter (p) -> p.name.toLowerCase().includes(term)
     if sort is 'price-asc'
       result.sort (a, b) -> a.price - b.price

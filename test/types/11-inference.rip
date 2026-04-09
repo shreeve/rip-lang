@@ -1,23 +1,30 @@
 # 11-inference.rip — Type inference on unannotated variables
 #
-# Rip compiles `x = expr` as `let x; x = expr;` (split declaration).
-# patchUninitializedTypes infers the type from the first top-level
-# assignment. This file tests where that works and where it doesn't.
+# Two mechanisms enable inference on unannotated variables:
+#
+#   1. Inline-let — the compiler emits `let x = value;` instead of
+#      `let x; x = value;` when safe, giving TS a direct initializer.
+#      Works at program level, inside functions, and in block-confined
+#      variables (e.g., only used inside one if-branch).
+#
+#   2. patchUninitializedTypes — for variables that must be hoisted
+#      (e.g., used across multiple blocks), the type-checker patches
+#      the symbol's type from the first assignment at check time.
 
-# ── Setup: typed base variables ──
+# ── Setup ──
 
-count:: number = 0
-ratio:: number = 3.14
-items:: string[] = ["a", "b", "c"]
+count = 0
+ratio = 3.14
+items = ["a", "b", "c"]
 
-def double(n:: number):: number
+def double(n:: number)
   n * 2
 
-def expectString(x:: string):: string
+def expectString(x:: string)
   x
 
 # ──────────────────────────────────────────────────
-# WORKS — top-level assignment with a concrete RHS
+# Top-level assignment with a concrete RHS
 # ──────────────────────────────────────────────────
 
 # ── Primitives ──
@@ -64,7 +71,7 @@ msg = 42
 console.log total, label, active, result, upper, joined, first, msg
 
 # ──────────────────────────────────────────────────
-# WORKS — block-scoped and destructured assignments
+# Block-scoped and destructured assignments
 # ──────────────────────────────────────────────────
 
 # ── Block-scoped first assignment ──
@@ -87,3 +94,57 @@ expectString insideIf
 expectString a
 
 console.log insideIf, a, b
+
+# ──────────────────────────────────────────────────
+# Inline-let inside functions
+# ──────────────────────────────────────────────────
+
+# Variables inside functions get `let x = value;` at the assignment
+# site. TS infers the type directly from the initializer — no patcher
+# needed. This is the inline-let mechanism at work.
+
+def expectNum(x:: number)
+  x
+
+def process(data:: string[])
+  csv = data.join ", "
+  loud = csv.toUpperCase()
+  loud
+
+out = process items
+# @ts-expect-error — out inferred as string
+expectNum out
+
+def filterBy(query:: string)
+  q = query.toLowerCase()
+  items.filter (s) -> s.includes(q)
+
+matches = filterBy "a"
+# @ts-expect-error — matches inferred as string[]
+expectNum matches
+
+console.log out, matches
+
+# ──────────────────────────────────────────────────
+# Block-confined inside functions
+# ──────────────────────────────────────────────────
+
+# Variables confined to one branch inside a function get `let`
+# emitted at the block level. Before inline-let, these were
+# hoisted to the function top as `let x;` — TS saw `any`.
+
+def search(data:: string[], query:: string)
+  if query.length > 0
+    needle = query.toLowerCase()
+    hits = data.filter (n) -> n.toLowerCase().includes(needle)
+    # @ts-expect-error — hits inferred as string[]
+    expectNum hits
+    hits.join ", "
+  else
+    "no results"
+
+found = search items, "a"
+# @ts-expect-error — found inferred as string
+expectNum found
+
+console.log found

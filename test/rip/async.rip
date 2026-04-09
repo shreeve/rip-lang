@@ -280,10 +280,9 @@ code "yield from generates yield*", '''
   gen = ->
     yield from other()
   ''', '''
-  let gen;
-  gen = function*() {
-    return yield* other();
-  };
+let gen = function*() {
+  return yield* other();
+};
 '''
 
 # ==============================================================================
@@ -451,24 +450,22 @@ code "switch expr await emits await before IIFE", '''
     when 'a' then fetch!
     else 0
   ''', '''
-  let x;
-  x = await (async () => { switch (val) {
-    case 'a':
-      return await fetch();
-    default:
-      return 0;
-  } })();
-  '''
+let x = await (async () => { switch (val) {
+  case 'a':
+    return await fetch();
+  default:
+    return 0;
+} })();
+'''
 
 # Codegen: try expression with await must emit "await" before async IIFE
 code "try expr await emits await before IIFE", '''
   x = try fetch!
   ''', '''
-  let x;
-  x = await (async () => { try {
-    return await fetch();
-  } catch {} })();
-  '''
+let x = await (async () => { try {
+  return await fetch();
+} catch {} })();
+'''
 
 # Codegen: switch-as-if-chain with await must emit "await (async () => ...)()"
 code "switch-as-if expr await emits await before IIFE", '''
@@ -476,27 +473,25 @@ code "switch-as-if expr await emits await before IIFE", '''
     when a then fetch!
     else 0
   ''', '''
-  let x;
-  x = await (async () => { if (a) {
-    return await fetch();
-  } else {
-    return 0;
-  } })();
-  '''
+let x = await (async () => { if (a) {
+  return await fetch();
+} else {
+  return 0;
+} })();
+'''
 
 # Codegen: comprehension with await must emit "await" before async IIFE
 code "comprehension await emits await before IIFE", '''
   x = (fetch!(v) for v in arr)
   ''', '''
-  let x;
-  x = await (async () => {
-    const result = [];
-    for (const v of arr) {
-      result.push(await fetch(v));
-    }
-    return result;
-  })();
-  '''
+let x = await (async () => {
+  const result = [];
+  for (const v of arr) {
+    result.push(await fetch(v));
+  }
+  return result;
+})();
+'''
 
 # ==============================================================================
 # Async IIFE scope — await in discriminants, conditions, finally blocks
@@ -546,14 +541,13 @@ code "switch discriminant await emits async IIFE", '''
     when 'a' then 1
     else 2
   ''', '''
-  let x;
-  x = await (async () => { switch (await getAction()) {
-    case 'a':
-      return 1;
-    default:
-      return 2;
-  } })();
-  '''
+let x = await (async () => { switch (await getAction()) {
+  case 'a':
+    return 1;
+  default:
+    return 2;
+} })();
+'''
 
 # Codegen: switch-as-if with await in condition
 code "switch-as-if condition await emits async IIFE", '''
@@ -561,13 +555,12 @@ code "switch-as-if condition await emits async IIFE", '''
     when isReady!() then 'yes'
     else 'no'
   ''', '''
-  let x;
-  x = await (async () => { if (await isReady()) {
-    return 'yes';
-  } else {
-    return 'no';
-  } })();
-  '''
+let x = await (async () => { if (await isReady()) {
+  return 'yes';
+} else {
+  return 'no';
+} })();
+'''
 
 # Codegen: try with await in finally
 code "try finally await emits async IIFE", '''
@@ -578,15 +571,14 @@ code "try finally await emits async IIFE", '''
   finally
     cleanup!()
   ''', '''
-  let x;
-  x = await (async () => { try {
-    return something();
-  } catch (e) {
-    return fallback();
-  } finally {
-    await cleanup();
-  } })();
-  '''
+let x = await (async () => { try {
+  return something();
+} catch (e) {
+  return fallback();
+} finally {
+  await cleanup();
+} })();
+'''
 
 # Runtime: object comprehension with await
 test "object comprehension with await resolves values", '''
@@ -601,16 +593,15 @@ test "object comprehension with await resolves values", '''
 code "object comprehension await emits async IIFE", '''
   x = {k: fetch!(v) for k, v of obj}
   ''', '''
-  let x;
-  x = await (async () => {
-    const result = {};
-    for (const k in obj) {
-      const v = obj[k];
-      result[k] = await fetch(v);
-    }
-    return result;
-  })();
-  '''
+let x = await (async () => {
+  const result = {};
+  for (const k in obj) {
+    const v = obj[k];
+    result[k] = await fetch(v);
+  }
+  return result;
+})();
+'''
 
 # ==============================================================================
 # If-expression with await (multi-statement IIFE path)
@@ -663,14 +654,16 @@ code "if expr await emits async IIFE", '''
   else
     0
   ''', '''
-  let a, x;
-  x = await (async () => { if (cond) {
-    a = await fetch();
-    return (a + 1);
-  } else {
-    return 0;
-  } })();
-  '''
+let a;
+
+
+let x = await (async () => { if (cond) {
+  a = await fetch();
+  return (a + 1);
+} else {
+  return 0;
+} })();
+'''
 
 # ==============================================================================
 # Nested async expression constructs

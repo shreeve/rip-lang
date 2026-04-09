@@ -281,12 +281,11 @@ code "void function no implicit return in compiler", '''
     x = 42
     x * 2
   ''', '''
-  function process() {
-    let x;
-    x = 42;
-    (x * 2);
-    return;
-  }
+function process() {
+  let x = 42;
+  (x * 2);
+  return;
+}
 '''
 
 code "void function early return no value", '''
@@ -362,11 +361,10 @@ code "void fat arrow compiler", '''
   process! = (x) =>
     x * 2
   ''', '''
-  let process;
-  process = x => {
-    (x * 2);
-    return;
-  };
+let process = x => {
+  (x * 2);
+  return;
+};
 '''
 
 # NOTE: Object method void syntax (fn!:) not yet supported by parser

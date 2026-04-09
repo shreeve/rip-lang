@@ -179,7 +179,7 @@ test "async do", "x = do -> await Promise.resolve(42)\nx", 42
 
 # Code generation
 code "do expression", "do -> 42", "(function() { return 42; })()"
-code "do block", "do ->\n  x = 5\n  x * 2", "(function() {\n  let x;\n  x = 5;\n  return (x * 2);\n})();"
+code "do block", "do ->\n  x = 5\n  x * 2", "(function() {\n  let x = 5;\n  return (x * 2);\n})();"
 
 # ==============================================================================
 # Control flow short-circuits: or return / or throw / and return / and throw
@@ -279,17 +279,15 @@ test "standalone and throw", """
 code "or return assignment generates if", """
   sql = read 'body' or return { error: 'Empty' }
 """, """
-let sql;
-
-if (!(sql = read('body'))) return {error: 'Empty'};
+let sql = read('body');
+if (!sql) return {error: 'Empty'};
 """
 
 code "or throw assignment generates if", """
   data = fetchData() or throw new Error 'No data'
 """, """
-let data;
-
-if (!(data = fetchData())) throw new Error('No data');
+let data = fetchData();
+if (!data) throw new Error('No data');
 """
 
 code "and return assignment generates if", """
@@ -438,17 +436,15 @@ test "standalone ?? throw with undefined", """
 code "?? return assignment generates if with nullish check", """
   data = getValue() ?? return { error: 'No value' }
 """, """
-let data;
-
-if ((data = getValue()) == null) return {error: 'No value'};
+let data = getValue();
+if (data == null) return {error: 'No value'};
 """
 
 code "?? throw assignment generates if with nullish check", """
   data = getValue() ?? throw new Error 'Missing'
 """, """
-let data;
-
-if ((data = getValue()) == null) throw new Error('Missing');
+let data = getValue();
+if (data == null) throw new Error('Missing');
 """
 
 code "standalone ?? return generates if with nullish check", """
@@ -509,13 +505,12 @@ code 'switch with explicit return', '''
       when 'a'
         return "A"
   ''', '''
-  let fn;
-  fn = function(x) {
-    switch (x) {
-      case 'a':
-        return "A";
-    }
-  };
+let fn = function(x) {
+  switch (x) {
+    case 'a':
+      return "A";
+  }
+};
 '''
 
 # ==============================================================================
@@ -591,22 +586,21 @@ code 'switch statement with code after', '''
         result = 'other'
     return result
   ''', '''
-  let fn;
-  fn = function(x) {
-    let result;
-    switch (x) {
-      case 1:
-        result = 'one';
-        break;
-      case 2:
-        result = 'two';
-        break;
-      default:
-        result = 'other';
-        break;
-    }
-    return result;
-  };
+let fn = function(x) {
+  let result;
+  switch (x) {
+    case 1:
+      result = 'one';
+      break;
+    case 2:
+      result = 'two';
+      break;
+    default:
+      result = 'other';
+      break;
+  }
+  return result;
+};
 '''
 
 test "switch collects all variables from all cases", '''
@@ -708,23 +702,21 @@ test 'postfix unless with binary op in argument', '''
 code 'return with postfix unless', '''
   fn = -> return 5 unless x
   ''', '''
-  let fn;
-  fn = function() {
-    if (!x) {
-      return 5;
-    }
-  };
+let fn = function() {
+  if (!x) {
+    return 5;
+  }
+};
 '''
 
 code 'return negative literal with postfix unless', '''
   fn = -> return -1 unless x
 ''', '''
-  let fn;
-  fn = function() {
-    if (!x) {
-      return (-1);
-    }
-  };
+let fn = function() {
+  if (!x) {
+    return (-1);
+  }
+};
 '''
 
 test 'return negative literal with postfix unless skips early return', '''
@@ -750,24 +742,22 @@ code 'sole postfix return if generates if statement', '''
   fn = ->
     return 5 if flag
 ''', '''
-  let fn;
-  fn = function() {
-    if (flag) {
-      return 5;
-    }
-  };
+let fn = function() {
+  if (flag) {
+    return 5;
+  }
+};
 '''
 
 code 'sole postfix return if not generates if statement', '''
   fn = ->
     return -1 if not x
 ''', '''
-  let fn;
-  fn = function() {
-    if (!x) {
-      return (-1);
-    }
-  };
+let fn = function() {
+  if (!x) {
+    return (-1);
+  }
+};
 '''
 
 code 'block if not with return generates if statement', '''
@@ -775,12 +765,11 @@ code 'block if not with return generates if statement', '''
     if not x
       return -1
 ''', '''
-  let fn;
-  fn = function() {
-    if (!x) {
-      return (-1);
-    }
-  };
+let fn = function() {
+  if (!x) {
+    return (-1);
+  }
+};
 '''
 
 code 'block unless with return generates if statement', '''
@@ -788,12 +777,11 @@ code 'block unless with return generates if statement', '''
     unless x
       return -1
 ''', '''
-  let fn;
-  fn = function() {
-    if (!x) {
-      return (-1);
-    }
-  };
+let fn = function() {
+  if (!x) {
+    return (-1);
+  }
+};
 '''
 
 test 'conditional assignment with typeof check', '''
@@ -878,10 +866,7 @@ test "multi-branch if-else-if returns correct value", '''
 
 code "if-else-if generates proper chain", '''
   x = if a then 1 else if b then 2 else if c then 3 else 4
-  ''', '''
-  let x;
-  x = a ? 1 : (b ? 2 : (c ? 3 : 4));
-'''
+  ''', "let x = a ? 1 : (b ? 2 : (c ? 3 : 4));"
 
 # ==============================================================================
 # If/Else as Last Statement (IIFE avoidance)
@@ -922,18 +907,16 @@ code 'if/else last statement uses early returns not IIFE', '''
       symbols = handle.split(' ')
       [symbols, null]
   ''', '''
-  let fn;
-
-  fn = function(handle) {
-    let action, symbols;
-    if (Array.isArray(handle)) {
-      symbols = handle[0];
-      action = handle[1];
-      return [symbols, action];
-    } else {
-      symbols = handle.split(' ');
-      return [symbols, null];
-    }
+let fn = function(handle) {
+  let action, symbols;
+  if (Array.isArray(handle)) {
+    symbols = handle[0];
+    action = handle[1];
+    return [symbols, action];
+  } else {
+    symbols = handle.split(' ');
+    return [symbols, null];
+  }
 };
 '''
 
@@ -960,10 +943,7 @@ test 'ternary with side effect after assignment', '''
 
 code 'if-else in value context uses ternary not IIFE for simple branches', '''
   x = if cond then "yes" else "no"
-  ''', '''
-  let x;
-  x = cond ? "yes" : "no";
-'''
+  ''', "let x = cond ? \"yes\" : \"no\";"
 
 # ==============================================================================
 # Ternary Edge Cases
@@ -999,10 +979,7 @@ test 'ternary with method call', '''
 
 code 'ternary with typeof and or - minimal parens', '''
   action = if typeof handle[1] is 'string' or handle.length is 3 then handle[1] else null
-  ''', '''
-  let action;
-  action = ((typeof handle[1] === 'string') || (handle.length === 3)) ? handle[1] : null;
-'''
+  ''', "let action = ((typeof handle[1] === 'string') || (handle.length === 3)) ? handle[1] : null;"
 
 test 'ternary with complex condition works', '''
   fn = (handle) ->
@@ -1098,17 +1075,16 @@ code "or-throw in sibling exports hoists variable in each function", '''
     store = getData()
     store
   ''', '''
-  export const first = (function(data) {
-    let store;
-    if (!(store = getData())) throw new Error('no context');
-    return store.value;
-  });
-  export const second = (function() {
-    let store;
-    store = getData();
-    return store;
-  });
-  '''
+export const first = (function(data) {
+  let store = getData();
+  if (!store) throw new Error('no context');
+  return store.value;
+});
+export const second = (function() {
+  let store = getData();
+  return store;
+});
+'''
 
 # bare try (no catch) — must generate valid JS with catch {}
 test "bare try expression returns value on success", """
@@ -1135,19 +1111,15 @@ code "bare try statement generates catch {}", "try foo()", "try {\n  foo();\n} c
 code "postfix if with multi-arg call in value context", '''
   f = -> foo "a", "b" if true
   ''', '''
-  let f;
-
-  f = function() {
-    return (true ? foo("a", "b") : undefined);
-  }
-  '''
+let f = function() {
+  return (true ? foo("a", "b") : undefined);
+};
+'''
 
 code "postfix if with @method call in value context", '''
   f = -> @header "a", "b" if cond
   ''', '''
-  let f;
-
-  f = function() {
-    return (cond ? this.header("a", "b") : undefined);
-  }
-  '''
+let f = function() {
+  return (cond ? this.header("a", "b") : undefined);
+};
+'''
