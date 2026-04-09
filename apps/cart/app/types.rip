@@ -1,10 +1,10 @@
 export type Product =
-  id:: number
-  name:: string
-  image:: string
-  price:: number
+  id: number
+  name: string
+  image: string
+  price: number
 
-export type CartItem = Product & { quantity:: number }
+export type CartItem = Product & { quantity: number }
 
 export type CartData =
-  items:: CartItem[]
+  items: CartItem[]

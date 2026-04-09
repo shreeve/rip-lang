@@ -33,7 +33,7 @@ export function hasTypeAnnotations(source) {
     line = line.replace(/#.*$/, '');
     // Strip string literals (single and double quoted)
     line = line.replace(/"(?:[^"\\]|\\.)*"/g, '""').replace(/'(?:[^'\\]|\\.)*'/g, "''");
-    return /::[ \t=]/.test(line);
+    return /::[ \t=]/.test(line) || /(?:^|export\s+)type\s+[A-Z]/.test(line.trimStart());
   });
 }
 
