@@ -2,7 +2,7 @@ import { CartData } from '../types.rip'
 
 export Layout = component
   cart:: CartData ~= @app.data.cart
-  totalItems ~= cart.items.reduce(((sum, i) -> sum + (i.quantity or 1)), 0)
+  totalItems ~= cart.items.reduce(((sum, i) -> sum + i.quantity), 0)
 
   render
     nav.container

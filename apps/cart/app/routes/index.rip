@@ -1,4 +1,4 @@
-import { Product, CartData, CartItem } from '../types.rip'
+import { Product, CartData } from '../types.rip'
 
 export Products = component
   products:: Product[] := []
