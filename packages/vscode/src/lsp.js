@@ -195,11 +195,15 @@ function compileRip(filePath, source) {
       updateComponentRegistry(filePath, source, entry.dts);
       // Eagerly populate intrinsic props cache so value completions work
       // even after later compilation failures (e.g. `type:` with no value).
-      for (const [name, info] of componentRegistry) {
-        if (info.source === filePath && info.inheritsTag) {
-          const ownPropNames = new Set(info.props.map(p => p.name));
-          resolveIntrinsicProps(name, ownPropNames);
+      try {
+        for (const [name, info] of componentRegistry) {
+          if (info.source === filePath && info.inheritsTag) {
+            const ownPropNames = new Set(info.props.map(p => p.name));
+            resolveIntrinsicProps(name, ownPropNames);
+          }
         }
+      } catch (e) {
+        connection.console.log(`[rip] intrinsic props error ${path.basename(filePath)}: ${e.message}`);
       }
     }
 

@@ -1,7 +1,9 @@
+import { CartData, CartItem } from '../types.rip'
+
 export Cart = component
-  items ~= @app.data.cart?.items or []
-  totalPrice ~= items.reduce(((sum, i) -> sum + i.price * (i.quantity or 1)), 0)
-  status := 'idle'
+  cart:: CartData ~= @app.data.cart
+  totalPrice ~= cart.items.reduce(((sum, i) -> sum + i.price * (i.quantity or 1)), 0)
+  status:: 'idle' | 'loading' | 'success' | 'error' := 'idle'
   error := ''
 
   mounted: ->
@@ -9,15 +11,15 @@ export Cart = component
     status = 'idle'
     error = ''
 
-  updateQuantity: (item, qty) ->
-    @app.data.cart.items = @app.data.cart.items.map (i) ->
+  updateQuantity: (item:: CartItem, qty:: number) ->
+    cart.items = cart.items.map (i) ->
       if i.id is item.id then { ...i, quantity: qty } else i
 
-  removeItem: (item) ->
-    @app.data.cart.items = @app.data.cart.items.filter (i) -> i.id isnt item.id
+  removeItem: (item:: CartItem) ->
+    cart.items = cart.items.filter (i) -> i.id isnt item.id
 
   clearCart: ->
-    @app.data.cart.items = []
+    cart.items = []
 
   placeOrder: ->
     status = 'loading'
@@ -27,7 +29,7 @@ export Cart = component
         method: 'POST'
         headers: { 'Content-Type': 'application/json' }
         body: JSON.stringify
-          items: items.map (i) -> { productId: i.id, quantity: i.quantity }
+          items: cart.items.map (i) -> { productId: i.id, quantity: i.quantity }
       unless res.ok
         throw new Error 'Order failed'
       @clearCart()
@@ -42,7 +44,7 @@ export Cart = component
       p "Your order has been placed successfully."
       a href: "/"
         button "Continue Shopping"
-    else if not items.length
+    else if not cart.items.length
       h1 "Cart"
       p "Your cart is empty."
       a href: "/"
@@ -59,7 +61,7 @@ export Cart = component
               th "Subtotal"
               th
           tbody
-            for item in items
+            for item in cart.items
               tr
                 td.name "#{item.image} #{item.name}"
                 td "$#{item.price.toFixed(2)}"
@@ -73,7 +75,8 @@ export Cart = component
                     ), "−"
                     input
                       type: "number"
-                      value: item.quantity
+                      value: String(item.quantity)
+                      # @ts-expect-error
                       @input: (e) -> @updateQuantity(item, Math.max(1, Number(e.target.value) or 1))
                     button.outline @click: (-> @updateQuantity(item, item.quantity + 1)), "+"
                 td "$#{(item.price * item.quantity).toFixed(2)}"
@@ -81,7 +84,7 @@ export Cart = component
                   button.outline.secondary @click: (-> @removeItem(item)), "Remove"
           tfoot
             tr
-              td colspan: 3
+              td colSpan: 3
                 strong "Total"
               td
                 strong "$#{totalPrice.toFixed(2)}"

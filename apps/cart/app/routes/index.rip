@@ -1,5 +1,7 @@
+import { Product, CartData, CartItem } from '../types.rip'
+
 export Products = component
-  products := []
+  products:: Product[] := []
   search := ''
   sort := ''
   error := null
@@ -8,7 +10,7 @@ export Products = component
   filtered ~=
     result = products.slice()
     if search
-      term = search.toLowerCase()
+      term:: string = search.toLowerCase()
       result = result.filter (p) -> p.name.toLowerCase().includes(term)
     if sort is 'price-asc'
       result.sort (a, b) -> a.price - b.price
@@ -22,18 +24,20 @@ export Products = component
       res = await fetch '/api/products'
       products = await res.json()
     catch err
-      error = err.message
+      error = String(err)
     finally
       loaded = true
 
-  inCart: (product) ->
-    (@app.data.cart?.items or []).some (i) -> i.id is product.id
+  cart:: CartData ~= @app.data.cart
 
-  toggleCart: (product) ->
+  inCart: (product:: Product) ->
+    (cart?.items or []).some (i) -> i.id is product.id
+
+  toggleCart: (product:: Product) ->
     if @inCart(product)
-      @app.data.cart.items = @app.data.cart.items.filter (i) -> i.id isnt product.id
+      cart.items = cart.items.filter (i) -> i.id isnt product.id
     else
-      @app.data.cart.items = [...@app.data.cart.items, { ...product, quantity: 1 }]
+      cart.items = [...cart.items, { ...product, quantity: 1 }]
 
   clearFilters: ->
     search = ''

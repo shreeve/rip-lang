@@ -724,7 +724,7 @@ export function installComponentSupport(CodeEmitter, Lexer) {
       } else if (op === 'computed') {
         const varName = getMemberName(stmt[1]);
         if (varName) {
-          derivedVars.push({ name: varName, expr: stmt[2] });
+          derivedVars.push({ name: varName, expr: stmt[2], type: getMemberType(stmt[1]) });
           memberNames.add(varName);
           reactiveMembers.add(varName);
         }
@@ -805,7 +805,7 @@ export function installComponentSupport(CodeEmitter, Lexer) {
       const sl = [];
       const componentTypeParams = this._componentTypeParams || '';
       sl.push(`class ${componentTypeParams}{`);
-      sl.push('  declare _root: Element | null;');
+      sl.push('  declare _root: Element | null; declare app: any;');
       sl.push('  emit(_name: string, _detail?: any): void {}');
 
       // Constructor — typed props for public state/readonly (matches DTS)
@@ -850,14 +850,16 @@ export function installComponentSupport(CodeEmitter, Lexer) {
         const ts = expandType(type) || inferLiteralType(value);
         sl.push(ts ? `  declare ${name}: ${ts};` : `  declare ${name}: any;`);
       }
-      for (const { name, expr } of derivedVars) {
+      for (const { name, expr, type } of derivedVars) {
+        const ts = expandType(type);
+        const typeAnnot = ts ? `: Computed<${ts}>` : '';
         if (this.is(expr, 'block')) {
           const transformed = this.transformComponentMembers(expr);
           const body = this.emitFunctionBody(transformed);
-          sl.push(`  ${name} = __computed(() => ${body});`);
+          sl.push(`  ${name}${typeAnnot} = __computed(() => ${body});`);
         } else {
           const val = this.emitInComponent(expr, 'value');
-          sl.push(`  ${name} = __computed(() => ${val});`);
+          sl.push(`  ${name}${typeAnnot} = __computed(() => ${val});`);
         }
       }
 

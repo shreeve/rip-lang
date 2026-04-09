@@ -283,10 +283,13 @@ export function patchUninitializedTypes(ts, service, compiledEntries) {
     if (ts.isBlock(stmt)) stmt.statements.forEach(s => patchAssignment(s, uninitialized));
   }
 
-  for (const [filePath] of compiledEntries) {
+  for (const [filePath, entry] of compiledEntries) {
+    if (!entry.hasTypes) continue; // @ts-nocheck files skip diagnostics; no need to patch
     const sf = program.getSourceFile(toVirtual(filePath));
     if (!sf) continue;
-    patchStatements(sf.statements);
+    try { patchStatements(sf.statements); } catch (e) {
+      console.warn(`[rip] patchTypes failed for ${filePath}: ${e.message}`);
+    }
   }
 }
 
@@ -902,8 +905,11 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
   // Inject intrinsic element type declarations for render block type-checking.
   // Uses TypeScript's built-in DOM types (HTMLElementTagNameMap, etc.) as the
   // source of truth for tag names, attribute types, and event handler types.
+  // Skip type aliases if the DTS already includes them (types.js prepends for component files).
   if (hasTypes && (/\b__ripEl\b/.test(code) || /\b__RipProps\b/.test(headerDts))) {
-    headerDts = [...INTRINSIC_TYPE_DECLS, INTRINSIC_FN_DECL].join('\n') + '\n' + headerDts;
+    const alreadyHasTypes = /\btype __RipElementMap\b/.test(headerDts);
+    const parts = alreadyHasTypes ? [INTRINSIC_FN_DECL] : [...INTRINSIC_TYPE_DECLS, INTRINSIC_FN_DECL];
+    headerDts = parts.join('\n') + '\n' + headerDts;
   }
 
   if (hasTypes && /\bARIA\./.test(code) && !/\bdeclare const ARIA\b/.test(headerDts)) {
