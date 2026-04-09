@@ -99,6 +99,7 @@
     let proto = Lexer.prototype;
     proto.rewriteTypes = function() {
       let tokens = this.tokens;
+      let typeRefNames = this.typeRefNames = new Set;
       let gen = (tag, val, origin) => {
         let t = [tag, val];
         t.pre = 0;
@@ -177,6 +178,10 @@
           if (!target.data)
             target.data = {};
           target.data[propName] = typeStr;
+          for (let tt of typeTokens) {
+            if (tt[0] === "IDENTIFIER")
+              typeRefNames.add(tt[1]);
+          }
           let removeCount = 1 + typeTokens.consumed;
           tokens2.splice(i, removeCount);
           return 0;
@@ -4820,7 +4825,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         } else if (op === "computed") {
           const varName = getMemberName(stmt[1]);
           if (varName) {
-            derivedVars.push({ name: varName, expr: stmt[2] });
+            derivedVars.push({ name: varName, expr: stmt[2], type: getMemberType(stmt[1]) });
             memberNames.add(varName);
             reactiveMembers.add(varName);
           }
@@ -4895,7 +4900,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         const sl = [];
         const componentTypeParams = this._componentTypeParams || "";
         sl.push(`class ${componentTypeParams}{`);
-        sl.push("  declare _root: Element | null;");
+        sl.push("  declare _root: Element | null; declare app: any;");
         sl.push("  emit(_name: string, _detail?: any): void {}");
         const propEntries = [];
         for (const { name, type, isPublic, required } of stateVars) {
@@ -4940,14 +4945,16 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           const ts = expandType(type) || inferLiteralType(value);
           sl.push(ts ? `  declare ${name}: ${ts};` : `  declare ${name}: any;`);
         }
-        for (const { name, expr } of derivedVars) {
+        for (const { name, expr, type } of derivedVars) {
+          const ts = expandType(type);
+          const typeAnnot = ts ? `: Computed<${ts}>` : "";
           if (this.is(expr, "block")) {
             const transformed = this.transformComponentMembers(expr);
             const body2 = this.emitFunctionBody(transformed);
-            sl.push(`  ${name} = __computed(() => ${body2});`);
+            sl.push(`  ${name}${typeAnnot} = __computed(() => ${body2});`);
           } else {
             const val = this.emitInComponent(expr, "value");
-            sl.push(`  ${name} = __computed(() => ${val});`);
+            sl.push(`  ${name}${typeAnnot} = __computed(() => ${val});`);
           }
         }
         sl.push("  _init(props) {");
@@ -10493,6 +10500,54 @@ if (typeof globalThis !== 'undefined') {
         typeTokens = [...tokens];
       }
       tokens = tokens.filter((t) => t[0] !== "TYPE_DECL");
+      if (lexer.typeRefNames?.size > 0) {
+        let typeRefNames = lexer.typeRefNames;
+        let usedNames = new Set;
+        let inImport = false;
+        for (let t of tokens) {
+          if (t[0] === "IMPORT") {
+            inImport = true;
+            continue;
+          }
+          if (inImport && t[0] === "TERMINATOR") {
+            inImport = false;
+            continue;
+          }
+          if (inImport)
+            continue;
+          if (t[0] === "IDENTIFIER")
+            usedNames.add(t[1]);
+        }
+        for (let i = tokens.length - 1;i >= 0; i--) {
+          if (tokens[i][0] !== "IMPORT")
+            continue;
+          let j = i + 1;
+          if (j >= tokens.length)
+            continue;
+          if (tokens[j][0] === "CALL_START" || tokens[j][0] === "(")
+            continue;
+          if (tokens[j][0] === "STRING")
+            continue;
+          let names = [];
+          while (j < tokens.length && tokens[j][0] !== "FROM" && tokens[j][0] !== "TERMINATOR") {
+            if (tokens[j][0] === "IDENTIFIER")
+              names.push(tokens[j][1]);
+            j++;
+          }
+          if (names.length === 0)
+            continue;
+          if (names.some((n) => usedNames.has(n)))
+            continue;
+          if (!names.some((n) => typeRefNames.has(n)))
+            continue;
+          let end = j;
+          while (end < tokens.length && tokens[end][0] !== "TERMINATOR")
+            end++;
+          if (end < tokens.length)
+            end++;
+          tokens.splice(i, end - i);
+        }
+      }
       while (tokens.length > 0 && tokens[0][0] === "TERMINATOR") {
         tokens.shift();
       }
@@ -10621,7 +10676,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   }
   // src/browser.js
   var VERSION = "3.13.134";
-  var BUILD_DATE = "2026-04-08@12:44:30GMT";
+  var BUILD_DATE = "2026-04-09@16:09:00GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

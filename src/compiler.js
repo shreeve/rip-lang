@@ -3399,6 +3399,46 @@ export class Compiler {
     // Remove TYPE_DECL markers — the parser doesn't know about them
     tokens = tokens.filter(t => t[0] !== 'TYPE_DECL');
 
+    // Elide type-only imports — after type stripping, imported names that were
+    // only used in type annotations no longer appear in the token stream.
+    // Only elide when at least one name was consumed by type annotation stripping.
+    if (lexer.typeRefNames?.size > 0) {
+      let typeRefNames = lexer.typeRefNames;
+      let usedNames = new Set();
+      let inImport = false;
+      for (let t of tokens) {
+        if (t[0] === 'IMPORT') { inImport = true; continue; }
+        if (inImport && t[0] === 'TERMINATOR') { inImport = false; continue; }
+        if (inImport) continue;
+        if (t[0] === 'IDENTIFIER') usedNames.add(t[1]);
+      }
+      for (let i = tokens.length - 1; i >= 0; i--) {
+        if (tokens[i][0] !== 'IMPORT') continue;
+        let j = i + 1;
+        if (j >= tokens.length) continue;
+        // Skip dynamic imports: import(expr)
+        if (tokens[j][0] === 'CALL_START' || tokens[j][0] === '(') continue;
+        // Skip side-effect imports: import 'module'
+        if (tokens[j][0] === 'STRING') continue;
+        // Collect imported names between IMPORT and FROM
+        let names = [];
+        while (j < tokens.length && tokens[j][0] !== 'FROM' && tokens[j][0] !== 'TERMINATOR') {
+          if (tokens[j][0] === 'IDENTIFIER') names.push(tokens[j][1]);
+          j++;
+        }
+        if (names.length === 0) continue;
+        // Keep if any name is used at runtime
+        if (names.some(n => usedNames.has(n))) continue;
+        // Only elide if at least one name was used in a type annotation
+        if (!names.some(n => typeRefNames.has(n))) continue;
+        // All imported names are type-only — remove IMPORT through TERMINATOR
+        let end = j;
+        while (end < tokens.length && tokens[end][0] !== 'TERMINATOR') end++;
+        if (end < tokens.length) end++; // include TERMINATOR
+        tokens.splice(i, end - i);
+      }
+    }
+
     // Strip leading terminators that may result from removed type declarations
     while (tokens.length > 0 && tokens[0][0] === 'TERMINATOR') {
       tokens.shift();

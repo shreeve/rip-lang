@@ -81,6 +81,7 @@ export function installTypeSupport(Lexer) {
 
   proto.rewriteTypes = function() {
     let tokens = this.tokens;
+    let typeRefNames = this.typeRefNames = new Set();
     let gen = (tag, val, origin) => {
       let t = [tag, val];
       t.pre = 0;
@@ -168,6 +169,11 @@ export function installTypeSupport(Lexer) {
 
         if (!target.data) target.data = {};
         target.data[propName] = typeStr;
+
+        // Track identifiers used in type annotations for import elision
+        for (let tt of typeTokens) {
+          if (tt[0] === 'IDENTIFIER') typeRefNames.add(tt[1]);
+        }
 
         // Remove :: and type tokens from stream
         let removeCount = 1 + typeTokens.consumed;
