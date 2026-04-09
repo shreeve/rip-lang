@@ -15,4 +15,4 @@ get '/styles.css' -> @send "#{dir}/app/styles.css", 'text/css; charset=UTF-8'
 
 notFound -> @send "#{dir}/app/index.html", 'text/html; charset=UTF-8'
 
-start!
+start

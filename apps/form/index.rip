@@ -17,4 +17,4 @@ get '/*.css' -> @send "#{dir}/app/#{@req.path.slice(1)}"
 
 notFound -> @send "#{dir}/app/index.html", 'text/html; charset=UTF-8'
 
-start!
+start

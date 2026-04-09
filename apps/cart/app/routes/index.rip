@@ -1,6 +1,7 @@
 import { Product, CartData } from '../types.rip'
 
 export Products = component
+  cart:: CartData ~= @app.data.cart
   products:: Product[] := []
   search := ''
   sort := ''
@@ -28,10 +29,8 @@ export Products = component
     finally
       loaded = true
 
-  cart:: CartData ~= @app.data.cart
-
   inCart: (product:: Product) ->
-    (cart?.items or []).some (i) -> i.id is product.id
+    cart.items.some (i) -> i.id is product.id
 
   toggleCart: (product:: Product) ->
     if @inCart(product)
