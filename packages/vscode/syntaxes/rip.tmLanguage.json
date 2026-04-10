@@ -313,6 +313,14 @@
           "end": "$",
           "patterns": [
             {
+              "comment": "CSS class shorthand (.className)",
+              "match": "(\\.)(\\w[\\w-]*)",
+              "captures": {
+                "1": { "name": "punctuation.definition.entity.css.class.rip" },
+                "2": { "name": "entity.other.attribute-name.class.rip" }
+              }
+            },
+            {
               "comment": "Attribute name (key: value or key <=> binding)",
               "match": "\\b([a-zA-Z_$][\\w$-]*)(?=\\s*(?::(?![:=])|<=>))",
               "name": "entity.other.attribute-name.rip"
@@ -328,6 +336,35 @@
           },
           "end": "$",
           "patterns": [
+            {
+              "comment": "CSS class shorthand (.className)",
+              "match": "(\\.)(\\w[\\w-]*)",
+              "captures": {
+                "1": { "name": "punctuation.definition.entity.css.class.rip" },
+                "2": { "name": "entity.other.attribute-name.class.rip" }
+              }
+            },
+            {
+              "comment": "Attribute name (key: value or key <=> binding)",
+              "match": "\\b([a-zA-Z_$][\\w$-]*)(?=\\s*(?::(?![:=])|<=>))",
+              "name": "entity.other.attribute-name.rip"
+            },
+            { "include": "$self" }
+          ]
+        },
+        {
+          "comment": "Implicit div with CSS class shorthand (.class)",
+          "begin": "^[ \\t]+(?=\\.[a-zA-Z])",
+          "end": "$",
+          "patterns": [
+            {
+              "comment": "CSS class shorthand (.className)",
+              "match": "(\\.)(\\w[\\w-]*)",
+              "captures": {
+                "1": { "name": "punctuation.definition.entity.css.class.rip" },
+                "2": { "name": "entity.other.attribute-name.class.rip" }
+              }
+            },
             {
               "comment": "Attribute name (key: value or key <=> binding)",
               "match": "\\b([a-zA-Z_$][\\w$-]*)(?=\\s*(?::(?![:=])|<=>))",
