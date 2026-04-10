@@ -56,6 +56,7 @@ Options:
 Subcommands:
   rip check [dir]               Type-check all .rip files in directory
   rip check --strict [dir]      Require type annotations in all .rip files
+  rip check --debug [dir]       Show verbose debug logging during type-check
   rip <name> [args]             Run rip-<name> (repo bin/, node_modules, or PATH)
 
   Configure via rip.json or package.json:
@@ -141,6 +142,7 @@ async function main() {
     const exitCode = await runCheck(dir, {
       quiet: checkArgs.includes('-q') || checkArgs.includes('--quiet'),
       strict: checkArgs.includes('--strict'),
+      debug: checkArgs.includes('--debug'),
     });
     process.exit(exitCode);
   }

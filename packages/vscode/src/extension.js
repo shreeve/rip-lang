@@ -28,7 +28,15 @@ async function activate(context) {
   client = new LanguageClient('rip', 'Rip Language Server', serverOptions, clientOptions);
   client.start();
 
-  context.subscriptions.push(outputChannel);
+  context.subscriptions.push(
+    outputChannel,
+    vscode.commands.registerCommand('rip.toggleDebug', async () => {
+      const config = vscode.workspace.getConfiguration('rip');
+      const current = config.get('debug', false);
+      await config.update('debug', !current, vscode.ConfigurationTarget.Global);
+      vscode.window.showInformationMessage(`Rip debug logging ${!current ? 'enabled' : 'disabled'}`);
+    }),
+  );
 }
 
 function deactivate() {

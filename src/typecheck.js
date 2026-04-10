@@ -1409,6 +1409,7 @@ export async function runCheck(targetDir, opts = {}) {
 
   // Merge: CLI flags override config file
   const strict = opts.strict || ripConfig.strict === true;
+  const debug = opts.debug || false;
   const excludeGlobs = Array.isArray(ripConfig.exclude) ? ripConfig.exclude : [];
   const excludePatterns = excludeGlobs.map(globToRegex);
 
@@ -1462,7 +1463,7 @@ export async function runCheck(targetDir, opts = {}) {
   for (const fp of typedFiles) {
     try {
       const source = sourcesByPath.get(fp);
-      compiled.set(fp, compileForCheck(fp, source, new Compiler(), { strict }));
+      compiled.set(fp, compileForCheck(fp, source, new Compiler(), { strict, debug }));
     } catch (e) {
       compileErrors++;
       const rel = relative(rootPath, fp);
@@ -1563,7 +1564,8 @@ export async function runCheck(targetDir, opts = {}) {
       const sem = service.getSemanticDiagnostics(vf);
       const syn = service.getSyntacticDiagnostics(vf);
       diags = [...syn, ...sem];
-    } catch {
+    } catch (e) {
+      if (debug) console.warn(`[rip:check] diagnostics threw for ${relative(rootPath, fp)}: ${e.message}`);
       continue;
     }
 
@@ -1587,11 +1589,28 @@ export async function runCheck(targetDir, opts = {}) {
       if (isInjectedOverload(entry, d.start)) continue;
 
       const pos = mapToSourcePos(entry, d.start);
-      if (!pos) continue;
+      if (!pos) {
+        if (debug) {
+          const tsLine = offsetToLine(entry.tsContent, d.start);
+          const msg = ts.flattenDiagnosticMessageText(d.messageText, ' ');
+          const rel = relative(rootPath, fp);
+          console.warn(`[rip:check] diagnostic dropped: TS${d.code} at tsLine ${tsLine + 1} — mapToSourcePos returned null (${rel})`);
+          console.warn(`[rip:check]   ${msg}`);
+        }
+        continue;
+      }
 
       // Drop diagnostics that map beyond the source file (e.g. from component
       // stubs where the compiled line has no real source counterpart).
-      if (pos.line >= srcLines.length) continue;
+      if (pos.line >= srcLines.length) {
+        if (debug) {
+          const msg = ts.flattenDiagnosticMessageText(d.messageText, ' ');
+          const rel = relative(rootPath, fp);
+          console.warn(`[rip:check] diagnostic dropped: TS${d.code} mapped to line ${pos.line + 1} but source has ${srcLines.length} lines (${rel})`);
+          console.warn(`[rip:check]   ${msg}`);
+        }
+        continue;
+      }
 
       // Remap IIFE-switch diagnostics to the enclosing function declaration
       const adj = adjustSwitchDiagnostic(entry.source, pos, d.code);

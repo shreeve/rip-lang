@@ -15,10 +15,11 @@ const documents = new TextDocuments(TextDocument);
 
 let ts, compiler, tc, service, rootPath, lastPatchedProgram;
 
-// Debug logging — enabled via RIP_DEBUG=1 environment variable.
+// Debug logging — toggle via the "rip.debug" setting in VS Code,
+// or launch with RIP_DEBUG=1 to enable from startup.
 // Output goes to the VS Code "Rip Language Server" output channel.
-const RIP_DEBUG = process.env.RIP_DEBUG === '1';
-function debugLog(...args) { if (RIP_DEBUG) connection.console.log('[rip:debug] ' + args.join(' ')); }
+let ripDebug = process.env.RIP_DEBUG === '1';
+function debugLog(...args) { if (ripDebug) connection.console.log('[rip:debug] ' + args.join(' ')); }
 
 // Real .rip path → { version, source, tsContent, srcToGen, genToSrc, ... }
 const compiled = new Map();
@@ -113,7 +114,7 @@ const TS_TYPE_TO_LEGEND = [
 connection.onInitialize(async (params) => {
   rootPath = params.rootPath || process.cwd();
   connection.console.log(`[rip] root: ${rootPath}`);
-  if (RIP_DEBUG) connection.console.log(`[rip] debug logging enabled (RIP_DEBUG=${process.env.RIP_DEBUG})`);
+  if (ripDebug) connection.console.log(`[rip] debug logging enabled (RIP_DEBUG=${process.env.RIP_DEBUG})`);
 
   compiler = await loadCompiler(rootPath);
   connection.console.log(`[rip] compiler: ${compiler ? 'loaded' : 'NOT FOUND'}`);
@@ -144,13 +145,20 @@ connection.onInitialize(async (params) => {
   };
 });
 
-connection.onInitialized(() => {
+connection.onInitialized(async () => {
   connection.client.register(require('vscode-languageserver').DidChangeWatchedFilesNotification.type, {
     watchers: [
       { globPattern: '**/rip.json' },
       { globPattern: '**/package.json' },
     ],
   });
+  try {
+    const settings = await connection.workspace.getConfiguration('rip');
+    if (settings?.debug === true) {
+      ripDebug = true;
+      connection.console.log('[rip] debug logging enabled (rip.debug setting)');
+    }
+  } catch {}
   connection.console.log('[rip] ready');
 });
 
@@ -159,8 +167,21 @@ connection.onDidChangeWatchedFiles(() => {
   for (const fp of compiled.keys()) publishDiagnostics(fp);
 });
 
-connection.onDidChangeConfiguration(() => {
+connection.onDidChangeConfiguration(async () => {
+  try {
+    const settings = await connection.workspace.getConfiguration('rip');
+    if (settings) {
+      const prev = ripDebug;
+      ripDebug = settings.debug === true || process.env.RIP_DEBUG === '1';
+      if (ripDebug !== prev) connection.console.log(`[rip] debug logging ${ripDebug ? 'enabled' : 'disabled'}`);
+    }
+  } catch {}
   for (const fp of compiled.keys()) publishDiagnostics(fp);
+});
+
+connection.onNotification('rip/toggleDebug', () => {
+  ripDebug = !ripDebug;
+  connection.console.log(`[rip] debug logging ${ripDebug ? 'enabled' : 'disabled'}`);
 });
 
 // ── Document sync ──────────────────────────────────────────────────
@@ -598,7 +619,7 @@ function srcToOffset(filePath, line, col) {
   const srcLines = c.source.split('\n');
   const genLines = c.tsContent.split('\n');
   const KEYWORDS = new Set(['interface', 'type', 'enum', 'class', 'export', 'declare', 'extends', 'implements', 'import', 'from', 'def', 'const', 'let', 'var']);
-  if (srcLines[line] && genLines[genLine]) {
+  if (srcLines[line] != null && genLines[genLine] != null) {
     const srcText = srcLines[line];
     const genText = genLines[genLine];
     const leftPart = srcText.substring(0, col).match(/\w*$/)?.[0] || '';

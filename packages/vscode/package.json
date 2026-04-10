@@ -25,6 +25,12 @@
   ],
   "icon": "icon.png",
   "contributes": {
+    "commands": [
+      {
+        "command": "rip.toggleDebug",
+        "title": "Rip: Toggle Debug Logging"
+      }
+    ],
     "languages": [
       {
         "id": "rip",
@@ -108,6 +114,16 @@
         ["class:\\s*\\[([\\s\\S]*?)\\]", "[\"']([^\"']*)[\"']"],
         ["\\.\\(([\\s\\S]*?)\\)", "[\"']([^\"']*)[\"']"]
       ]
+    },
+    "configuration": {
+      "title": "Rip",
+      "properties": {
+        "rip.debug": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable verbose debug logging in the Rip Language Server output channel."
+        }
+      }
     }
   },
   "scripts": {
