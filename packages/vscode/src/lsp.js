@@ -15,12 +15,6 @@ const documents = new TextDocuments(TextDocument);
 
 let ts, compiler, tc, service, rootPath, lastPatchedProgram;
 
-// Debug logging — toggle via the "rip.debug" setting in VS Code,
-// or launch with RIP_DEBUG=1 to enable from startup.
-// Output goes to the VS Code "Rip Language Server" output channel.
-let ripDebug = process.env.RIP_DEBUG === '1';
-function debugLog(...args) { if (ripDebug) connection.console.log('[rip:debug] ' + args.join(' ')); }
-
 // Real .rip path → { version, source, tsContent, srcToGen, genToSrc, ... }
 const compiled = new Map();
 
@@ -114,7 +108,6 @@ const TS_TYPE_TO_LEGEND = [
 connection.onInitialize(async (params) => {
   rootPath = params.rootPath || process.cwd();
   connection.console.log(`[rip] root: ${rootPath}`);
-  if (ripDebug) connection.console.log(`[rip] debug logging enabled (RIP_DEBUG=${process.env.RIP_DEBUG})`);
 
   compiler = await loadCompiler(rootPath);
   connection.console.log(`[rip] compiler: ${compiler ? 'loaded' : 'NOT FOUND'}`);
@@ -152,13 +145,6 @@ connection.onInitialized(async () => {
       { globPattern: '**/package.json' },
     ],
   });
-  try {
-    const settings = await connection.workspace.getConfiguration('rip');
-    if (settings?.debug === true) {
-      ripDebug = true;
-      connection.console.log('[rip] debug logging enabled (rip.debug setting)');
-    }
-  } catch {}
   connection.console.log('[rip] ready');
 });
 
@@ -168,20 +154,7 @@ connection.onDidChangeWatchedFiles(() => {
 });
 
 connection.onDidChangeConfiguration(async () => {
-  try {
-    const settings = await connection.workspace.getConfiguration('rip');
-    if (settings) {
-      const prev = ripDebug;
-      ripDebug = settings.debug === true || process.env.RIP_DEBUG === '1';
-      if (ripDebug !== prev) connection.console.log(`[rip] debug logging ${ripDebug ? 'enabled' : 'disabled'}`);
-    }
-  } catch {}
   for (const fp of compiled.keys()) publishDiagnostics(fp);
-});
-
-connection.onNotification('rip/toggleDebug', () => {
-  ripDebug = !ripDebug;
-  connection.console.log(`[rip] debug logging ${ripDebug ? 'enabled' : 'disabled'}`);
 });
 
 // ── Document sync ──────────────────────────────────────────────────
@@ -343,19 +316,13 @@ function publishDiagnostics(filePath) {
         }
 
         const startRaw = tc.mapToSourcePos(c, d.start);
-        if (!startRaw) {
-          debugLog(`diagnostic dropped: TS${d.code} at offset ${d.start} — mapToSourcePos returned null (${path.basename(filePath)}, genLine ${tc.offsetToLine(c.tsContent, d.start)})`);
-          continue;
-        }
+        if (!startRaw) continue;
 
         // Drop diagnostics that map beyond the source file (e.g. from component
         // stubs where the compiled line has no real source counterpart).
         if (c.source) {
           const sourceLineCount = c.source.split('\n').length;
-          if (startRaw.line >= sourceLineCount) {
-            debugLog(`diagnostic dropped: TS${d.code} mapped to srcLine ${startRaw.line + 1} but file has ${sourceLineCount} lines (${path.basename(filePath)})`);
-            continue;
-          }
+          if (startRaw.line >= sourceLineCount) continue;
         }
 
         const startPos = { line: startRaw.line, character: startRaw.col };
@@ -520,7 +487,7 @@ function createService() {
     getScriptSnapshot(f) {
       const c = compiled.get(fromVirtual(f));
       if (c) return ts.ScriptSnapshot.fromString(c.tsContent);
-      try { return ts.ScriptSnapshot.fromString(fs.readFileSync(f, 'utf8')); } catch { debugLog(`getScriptSnapshot: could not read ${f}`); return undefined; }
+      try { return ts.ScriptSnapshot.fromString(fs.readFileSync(f, 'utf8')); } catch { return undefined; }
     },
     getCompilationSettings: () => settings,
     getDefaultLibFileName: (opts) => ts.getDefaultLibFilePath(opts),
@@ -580,7 +547,7 @@ function patchTypes() {
 
 function srcToOffset(filePath, line, col) {
   const c = compiled.get(filePath);
-  if (!c) { debugLog(`srcToOffset: no compiled entry for ${path.basename(filePath)}`); return undefined; }
+  if (!c) return undefined;
   let genLine = c.srcToGen.get(line);
   let genColHint = -1;  // column hint from source map, -1 = no hint
   let bestSrcCol = -1;  // srcCol of the best column-aware entry
@@ -612,8 +579,7 @@ function srcToOffset(filePath, line, col) {
   if (genLine === undefined) {
     let best = -1;
     for (const [s] of c.srcToGen) if (s <= line && s > best) best = s;
-    if (best < 0) { debugLog(`srcToOffset: no srcToGen entry for ${path.basename(filePath)}:${line + 1}`); return undefined; }
-    debugLog(`srcToOffset: ${path.basename(filePath)}:${line + 1} — no exact srcToGen, falling back to nearest line ${best + 1}`);
+    if (best < 0) return undefined;
     genLine = c.srcToGen.get(best);
   }
   const srcLines = c.source.split('\n');
@@ -673,7 +639,7 @@ function srcToOffset(filePath, line, col) {
       }
 
       // Word not on mapped line — search nearby generated lines
-      debugLog(`srcToOffset: '${word}' not on mapped genLine ${genLine} — searching ±5 nearby lines`);
+      // Word not on mapped line — search nearby generated lines
       for (let delta = 1; delta <= 5; delta++) {
         for (const tryLine of [genLine + delta, genLine - delta]) {
           if (tryLine < 0 || tryLine >= genLines.length) continue;
@@ -689,7 +655,6 @@ function srcToOffset(filePath, line, col) {
       }
     }
   }
-  debugLog(`srcToOffset: ${path.basename(filePath)}:${line + 1}:${col + 1} — word not found in ±5 range, falling back to raw genLine ${genLine}`);
   const genText = c.tsContent.split('\n')[genLine] || '';
   if (col < genText.length) return lineColToOffset(c.tsContent, genLine, col);
   return lineColToOffset(c.tsContent, genLine, 0);
@@ -1879,7 +1844,7 @@ connection.onCompletion((params) => {
         const entry = tc.compileForCheck(fp, docLines.join('\n'), compiler, { strict });
         const prev = compiled.get(fp);
         compiled.set(fp, { version: (prev?.version || 0) + 1, ...entry });
-      } catch (e) { debugLog(`dot-recovery compile failed: ${e.message}`); } // recovery failed — continue with stale data
+      } catch {} // recovery failed — continue with stale data
     }
   }
 
@@ -1982,7 +1947,6 @@ connection.onHover((params) => {
   if (!service) return null;
   const offset = srcToOffset(fp, params.position.line, params.position.character);
   if (offset === undefined) {
-    debugLog(`hover: srcToOffset returned undefined for ${path.basename(fp)}:${params.position.line + 1}:${params.position.character + 1}`);
     return null;
   }
 
@@ -1990,7 +1954,6 @@ connection.onHover((params) => {
     patchTypes();
     const info = service.getQuickInfoAtPosition(toVirtual(fp), offset);
     if (!info) {
-      debugLog(`hover: getQuickInfoAtPosition returned null at offset ${offset} (${path.basename(fp)}:${params.position.line + 1}:${params.position.character + 1})`);
       return null;
     }
     let display = ts.displayPartsToString(info.displayParts);
@@ -2065,7 +2028,6 @@ connection.onDefinition((params) => {
   if (!service) return null;
   const offset = srcToOffset(fp, params.position.line, params.position.character);
   if (offset === undefined) {
-    debugLog(`definition: srcToOffset returned undefined for ${path.basename(fp)}:${params.position.line + 1}:${params.position.character + 1}`);
     return null;
   }
 

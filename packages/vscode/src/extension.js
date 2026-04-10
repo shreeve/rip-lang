@@ -30,12 +30,6 @@ async function activate(context) {
 
   context.subscriptions.push(
     outputChannel,
-    vscode.commands.registerCommand('rip.toggleDebug', async () => {
-      const config = vscode.workspace.getConfiguration('rip');
-      const current = config.get('debug', false);
-      await config.update('debug', !current, vscode.ConfigurationTarget.Global);
-      vscode.window.showInformationMessage(`Rip debug logging ${!current ? 'enabled' : 'disabled'}`);
-    }),
   );
 }
 

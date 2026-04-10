@@ -539,9 +539,7 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
       try {
         const impSrc = readFileSync(imported, 'utf8');
         if (hasTypeAnnotations(impSrc)) { importsTyped = true; break; }
-      } catch (e) {
-        if (opts.debug) console.warn(`[rip:debug] could not read import ${imported}: ${e.message}`);
-      }
+      } catch {}
     }
   }
   const hasTypes = hasOwnTypes || importsTyped;
@@ -984,7 +982,6 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
   if (hasTypes && code) {
     const cl = code.split('\n');
     const reEsc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const debugInline = opts.debug;
 
     // Build DTS header type map for merging
     const letTypes = new Map();
@@ -1100,15 +1097,6 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
 
         doInline(v, foundAssign.line, foundAssign.indent, foundAssign.rhs);
         inlined.add(v);
-      }
-
-      if (debugInline && (inlined.size > 0 || bailed.size > 0)) {
-        const parts = [];
-        if (inlined.size) parts.push(`inlined: ${[...inlined].join(', ')}`);
-        if (bailed.size) parts.push(`bailed: ${[...bailed].join(', ')}`);
-        const remaining = vars.filter(v => !inlined.has(v) && !bailed.has(v));
-        if (remaining.length) parts.push(`unresolved: ${remaining.join(', ')}`);
-        console.warn(`[rip:inline] ${filePath} — ${parts.join('; ')}`);
       }
 
       const remaining = vars.filter(v => !inlined.has(v));
@@ -1409,7 +1397,6 @@ export async function runCheck(targetDir, opts = {}) {
 
   // Merge: CLI flags override config file
   const strict = opts.strict || ripConfig.strict === true;
-  const debug = opts.debug || false;
   const excludeGlobs = Array.isArray(ripConfig.exclude) ? ripConfig.exclude : [];
   const excludePatterns = excludeGlobs.map(globToRegex);
 
@@ -1463,7 +1450,7 @@ export async function runCheck(targetDir, opts = {}) {
   for (const fp of typedFiles) {
     try {
       const source = sourcesByPath.get(fp);
-      compiled.set(fp, compileForCheck(fp, source, new Compiler(), { strict, debug }));
+      compiled.set(fp, compileForCheck(fp, source, new Compiler(), { strict }));
     } catch (e) {
       compileErrors++;
       const rel = relative(rootPath, fp);
@@ -1565,7 +1552,9 @@ export async function runCheck(targetDir, opts = {}) {
       const syn = service.getSyntacticDiagnostics(vf);
       diags = [...syn, ...sem];
     } catch (e) {
-      if (debug) console.warn(`[rip:check] diagnostics threw for ${relative(rootPath, fp)}: ${e.message}`);
+      const rel = relative(rootPath, fp);
+      console.error(`${red('error')} ${cyan(rel)}: diagnostics failed — ${e.message}`);
+      totalErrors++;
       continue;
     }
 
@@ -1589,28 +1578,11 @@ export async function runCheck(targetDir, opts = {}) {
       if (isInjectedOverload(entry, d.start)) continue;
 
       const pos = mapToSourcePos(entry, d.start);
-      if (!pos) {
-        if (debug) {
-          const tsLine = offsetToLine(entry.tsContent, d.start);
-          const msg = ts.flattenDiagnosticMessageText(d.messageText, ' ');
-          const rel = relative(rootPath, fp);
-          console.warn(`[rip:check] diagnostic dropped: TS${d.code} at tsLine ${tsLine + 1} — mapToSourcePos returned null (${rel})`);
-          console.warn(`[rip:check]   ${msg}`);
-        }
-        continue;
-      }
+      if (!pos) continue;
 
       // Drop diagnostics that map beyond the source file (e.g. from component
       // stubs where the compiled line has no real source counterpart).
-      if (pos.line >= srcLines.length) {
-        if (debug) {
-          const msg = ts.flattenDiagnosticMessageText(d.messageText, ' ');
-          const rel = relative(rootPath, fp);
-          console.warn(`[rip:check] diagnostic dropped: TS${d.code} mapped to line ${pos.line + 1} but source has ${srcLines.length} lines (${rel})`);
-          console.warn(`[rip:check]   ${msg}`);
-        }
-        continue;
-      }
+      if (pos.line >= srcLines.length) continue;
 
       // Remap IIFE-switch diagnostics to the enclosing function declaration
       const adj = adjustSwitchDiagnostic(entry.source, pos, d.code);
