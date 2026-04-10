@@ -87,28 +87,6 @@ function Form({ title = 'Sign In' }: { title?: string } = {}) {
   )
 }
 
-// ── Conditional-scoped variable used in callback ──
-//
-// A variable first assigned inside a conditional and captured by a
-// callback (e.g. .filter()) is correctly inferred in both TS and Rip.
-
-function FilterGapTest({ items = ['a', 'b', 'c'] }: { items: string[] }) {
-  const [search] = useState('')
-
-  const filtered = (() => {
-    let result = items.slice()
-    if (search) {
-      const term = search.toLowerCase()
-      result = result.filter((s) => s.includes(term))
-      // @ts-expect-error — term is inferred as string, not number
-      term.toFixed(2)
-    }
-    return result
-  })()
-
-  return null
-}
-
 // ── Negative: wrong prop types must be caught ──
 
 function PropTypeTests() {
@@ -177,6 +155,29 @@ function RenderCondTest() {
       {countz}
     </div>
   )
+}
+
+// ── Conditional-scoped variable used in callback ──
+//
+// A variable first assigned inside a conditional and captured by a
+// callback (e.g. .filter()) is correctly inferred in both TS and Rip.
+
+function FilterGapTest() {
+  const [items] = useState(['a', 'b', 'c'])
+  const [search] = useState('')
+
+  const filtered = (() => {
+    let result = items.slice()
+    if (search) {
+      const term = search.toLowerCase()
+      result = result.filter((s) => s.includes(term))
+      // @ts-expect-error — term is inferred as string, not number
+      term.toFixed(2)
+    }
+    return result
+  })()
+
+  return null
 }
 
 // ── Event handler typing ──

@@ -67,30 +67,6 @@ export Form = component
         loading: loading
         "Sign In"
 
-# ── Conditional-scoped variable used in callback ──
-#
-# A variable first assigned inside a conditional and captured by a
-# callback (e.g. .filter()) is correctly inferred. This pattern is
-# common in filter/sort pipelines (see apps/cart). The patcher now
-# recurses into class methods and computed arrow bodies, so no
-# explicit `:: string` annotation is needed on `term`.
-
-export FilterGapTest = component
-  @items:: string[] := ["a", "b", "c"]
-  search := ''
-
-  filtered ~=
-    result = items.slice()
-    if search
-      term = search.toLowerCase()
-      result = result.filter (s) -> s.includes(term)
-      # @ts-expect-error — term is inferred as string, not number
-      term.toFixed(2)
-    result
-
-  render
-    null
-
 # ── Negative: wrong prop types must be caught ──
 #
 # These match the TSX companion's negative prop-type tests.
@@ -185,6 +161,30 @@ export RenderCondTest = component
         span "list"
       # @ts-expect-error — typo: 'countz' does not exist
       = countz
+
+# ── Conditional-scoped variable used in callback ──
+#
+# A variable first assigned inside a conditional and captured by a
+# callback (e.g. .filter()) is correctly inferred. This pattern is
+# common in filter/sort pipelines (see apps/cart). The patcher now
+# recurses into class methods and computed arrow bodies, so no
+# explicit `:: string` annotation is needed on `term`.
+
+export FilterGapTest = component
+  items:: string[] := ["a", "b", "c"]
+  search := ''
+
+  filtered ~=
+    result = items.slice()
+    if search
+      term = search.toLowerCase()
+      result = result.filter (s) -> s.includes(term)
+      # @ts-expect-error — term is inferred as string, not number
+      term.toFixed(2)
+    result
+
+  render
+    null
 
 # ── Event handler typing ──
 #
