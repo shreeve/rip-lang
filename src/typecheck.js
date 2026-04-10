@@ -951,7 +951,7 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
         for (const v of vars) {
           if (inlined.has(v) || bailed.has(v)) continue;
           const ve = reEsc(v);
-          const assignRe = new RegExp('^' + reEsc(indent) + ve + '\\s*=\\s*(.*);\\s*$');
+          const assignRe = new RegExp('^' + reEsc(indent) + ve + '\\s*=(?!=)\\s*(.*);\\s*$');
           const assign = line.match(assignRe);
           if (assign) {
             cl[j] = `${indent}let ${v} = ${assign[1]};`;
@@ -964,9 +964,44 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
       }
 
       const remaining = vars.filter(v => !inlined.has(v));
-      cl[i] = remaining.length ? `${indent}let ${remaining.join(', ')};` : '';
+      if (remaining.length) cl[i] = `${indent}let ${remaining.join(', ')};`;
+      else cl[i] = '';
     }
-    code = cl.filter(l => l !== '').join('\n');
+    code = cl.join('\n');
+  }
+
+  // Merge typed `let` declarations from the DTS header into initialized body
+  // declarations. After the shadow rewrite above, the body may have `let x = expr;`
+  // while the DTS header still has `let x: Type;`. TS uses the uninitialized header
+  // declaration for flow analysis, causing TS2454 ("used before being assigned").
+  // Fix: annotate the body declaration with the header type and remove the header line.
+  if (hasTypes && headerDts && code) {
+    const dl = headerDts.split('\n');
+    const cl = code.split('\n');
+    const letTypes = new Map();
+
+    for (let i = 0; i < dl.length; i++) {
+      const m = dl[i].match(/^(?:export\s+)?(?:declare\s+)?let\s+(\w+):\s+(.+);$/);
+      if (m) letTypes.set(m[1], { type: m[2], idx: i });
+    }
+
+    if (letTypes.size > 0) {
+      const movedDts = new Set();
+
+      for (let j = 0; j < cl.length; j++) {
+        const lm = cl[j].match(/^(\s*let\s+)(\w+)(\s*=\s*)/);
+        if (lm && letTypes.has(lm[2])) {
+          const entry = letTypes.get(lm[2]);
+          cl[j] = lm[1] + lm[2] + ': ' + entry.type + lm[3] + cl[j].slice(lm[0].length);
+          movedDts.add(entry.idx);
+        }
+      }
+
+      if (movedDts.size > 0) {
+        code = cl.join('\n');
+        headerDts = dl.filter((_, i) => !movedDts.has(i)).join('\n').trimEnd() + '\n';
+      }
+    }
   }
 
   let tsContent = (hasTypes ? headerDts + '\n' : '') + code;
