@@ -36,9 +36,12 @@ done
 
 # Symlink CLI binaries into ~/.bun/bin (already in PATH)
 mkdir -p ~/.bun/bin
-ln -sfn "$REPO_ROOT"/bin/rip ~/.bun/bin/rip
-ln -sfn "$REPO_ROOT"/bin/rip-server ~/.bun/bin/rip-server
-echo "Linked rip and rip-server into ~/.bun/bin"
+ln -sfn "$REPO_ROOT"/bin/rip                        ~/.bun/bin/rip
+ln -sfn "$REPO_ROOT"/packages/db/bin/rip-db         ~/.bun/bin/rip-db
+ln -sfn "$REPO_ROOT"/packages/script/bin/rip-script ~/.bun/bin/rip-script
+ln -sfn "$REPO_ROOT"/packages/server/bin/rip-server ~/.bun/bin/rip-server
+ln -sfn "$REPO_ROOT"/packages/swarm/bin/rip-swarm   ~/.bun/bin/rip-swarm
+echo "Linked rip packages into ~/.bun/bin"
 
 echo ""
 echo "Done. Verify with: rip --version"
