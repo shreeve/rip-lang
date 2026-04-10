@@ -4,45 +4,22 @@ Independent test files for every Rip type system feature. Each file compiles and
 
 ## Verification (ALWAYS run these)
 
-When asked to verify, validate, or check any audit file, run ALL of these commands from this directory (`test/types/`). No exceptions — don't ask the user which commands to run, just run them all.
-
-**Single file** (replace FILE with the target, e.g. `01-basic`):
+When asked to verify, validate, or check any audit file, run `bun run test:types`. No exceptions — don't ask the user which commands to run, just run it.
 
 ```bash
-rip FILE.rip        # 1. run the .rip file
-bun run FILE.ts     # 2. run the .ts companion
-rip -c FILE.rip     # 3. inspect compiled JS
-rip -d FILE.rip     # 4. inspect generated .d.ts
+bun run test:types
 ```
 
-**Full suite** (always run after single-file checks):
+All checks must pass. If errors appear, isolate with single-file commands:
 
 ```bash
-# allow comments when pasting into zsh
-setopt INTERACTIVE_COMMENTS
-# 5. type-check all .rip files
-rip check
-# 6. type-check all .ts files
-bunx tsc
-# 7. run all .rip
-for f in *.rip; do printf "\n── %s ──\n" "$f" && rip "$f"; done
-# 8. run all .ts
-for f in *.ts *.tsx; do printf "\n── %s ──\n" "$f" && bun run "$f"; done
-# 9. output parity
-for n in 01-basic 02-aliases 03-structural 04-unions 05-interfaces 06-functions 07-integration 08-reactive 09-components 10-validation 11-inference; do
-  ext=ts; [[ "$n" == 09-* ]] && ext=tsx
-  rip "$n.rip" > /tmp/rip_out.txt 2>&1
-  bun run "$n.$ext" > /tmp/ts_out.txt 2>&1
-  diff -q /tmp/rip_out.txt /tmp/ts_out.txt > /dev/null 2>&1 && echo "✓ $n" || echo "✗ $n — MISMATCH"
-done
-# 10. strict mode enforcement
-echo 'x = "hello"' > /tmp/_strict_probe.rip && echo 'x()' >> /tmp/_strict_probe.rip \
-  && cp /tmp/_strict_probe.rip _strict_probe.rip \
-  && rip check 2>&1 | grep -q 'TS2349' && echo "✓ strict mode" \
-  || echo "✗ strict mode — NOT ENFORCED"; rm -f _strict_probe.rip
+rip FILE.rip        # run the .rip file
+bun run FILE.ts     # run the .ts companion
+rip -c FILE.rip     # inspect compiled JS
+rip -d FILE.rip     # inspect generated .d.ts
 ```
 
-All commands must pass. 09-components (.rip and .tsx) are silent at runtime but type-check correctly. Report results in a summary table. If errors appear, isolate with single-file commands. Update the status table below as features are fixed or regress.
+Update the status table below as features are fixed or regress.
 
 **Picking up compiler changes in the editor:**
 
@@ -59,7 +36,7 @@ Then reload the editor window to pick up the new extension.
 
 ## Output Parity Rule
 
-**Each `.rip` file and its `.ts`/`.tsx` companion MUST produce identical console output.** This is a hard requirement — if you add, remove, or change any `console.log` in a `.rip` file, make the same change in the `.ts` companion (and vice versa). Avoid non-deterministic values (e.g. `Date.now()`, `Math.random()`) in output; use fixed literals instead. Verify with command 9 in the full suite above.
+**Each `.rip` file and its `.ts`/`.tsx` companion MUST produce identical console output.** This is a hard requirement — if you add, remove, or change any `console.log` in a `.rip` file, make the same change in the `.ts` companion (and vice versa). Avoid non-deterministic values (e.g. `Date.now()`, `Math.random()`) in output; use fixed literals instead. Verify with `bun run test:types` (the parity checks will fail on mismatch).
 
 ## Feature **Status**
 
@@ -167,12 +144,6 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | 2300, 2451 | Duplicate identifiers     | Diagnostic is in the DTS header, or the identifier is also declared in the DTS | Both instances are in the compiled body only |
 | 2307       | Cannot find module        | Module path starts with `@rip-lang/` or ends with `.rip` (Rip resolves these)  | Any other import (npm packages, JS/TS files) |
 | 2582, 2593 | Cannot find test/describe | File basename contains `test`/`spec`, or path includes `/test/` etc.           | Non-test files (e.g. `app.rip`, `index.rip`) |
-
-**Fixed:** 7005, 7006, 7034 (implicit `any` on variables and params) were removed from `SKIP_CODES`. Untyped files already get `// @ts-nocheck`, and typed files have sufficient annotations that implicit `any` never leaks through.
-
-**Fixed:** 2304 ("Cannot find name") was removed from `SKIP_CODES`. Stdlib globals (`p`, `pp`, `sleep`, `warn`, etc.) are now declared in the type-check preamble, so undefined variable references are correctly flagged.
-
-**Fixed:** 2300, 2451 ("Duplicate identifier" / "Cannot redeclare") and 2307 ("Cannot find module") were moved from blanket `SKIP_CODES` to conditional `CONDITIONAL_CODES`. Real shadowing bugs and genuinely broken imports are now reported.
 
 ## Future Notes — Runtime Return Validation
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-// Type audit verification suite — runs all checks from test/types/AGENTS.md
+// Type audit verification suite
 // Usage: bun test/types/runner.js  (or: bun run test:types)
 
 import { execSync } from 'child_process';
@@ -25,7 +25,10 @@ const check = (name, ok, detail) => {
   else { fail++; results.push({ name, ok: false, detail }); }
 };
 
-// 5. rip check
+// Clean up leftover probe from a previous crashed run
+try { unlinkSync(resolve(dir, '_strict_probe.rip')); } catch {}
+
+// Type-check all .rip files
 try {
   run(`${rip} check`);
   check('rip check', true);
@@ -33,17 +36,15 @@ try {
   check('rip check', false, stripAnsi(e.stdout?.toString() || e.message));
 }
 
-// 6. bunx tsc (dayjs missing is pre-existing, ignore TS2307 for dayjs)
+// Type-check all .ts files
 try {
   run('bunx tsc');
   check('bunx tsc', true);
 } catch (e) {
-  const out = e.stdout?.toString() || '';
-  const lines = out.split('\n').filter(l => l.trim() && !l.includes("Cannot find module 'dayjs'"));
-  check('bunx tsc', lines.length === 0, lines.join('\n'));
+  check('bunx tsc', false, e.stdout?.toString() || e.message);
 }
 
-// 7. run all .rip
+// Run all .rip files
 const ripFiles = readdirSync(dir).filter(f => f.endsWith('.rip')).sort();
 for (const f of ripFiles) {
   try {
@@ -54,27 +55,22 @@ for (const f of ripFiles) {
   }
 }
 
-// 8. run all .ts/.tsx
-const tsFiles = readdirSync(dir).filter(f => f.endsWith('.ts') || f.endsWith('.tsx')).sort();
+// Run all .ts/.tsx files
+const tsFiles = readdirSync(dir).filter(f => (f.endsWith('.ts') || f.endsWith('.tsx')) && !f.endsWith('.d.ts')).sort();
 for (const f of tsFiles) {
   try {
     run(`bun run ${f}`);
     check(`run ${f}`, true);
   } catch (e) {
-    const msg = e.stderr?.toString() || e.message;
-    const isDayjs = msg.includes("Cannot find package 'dayjs'");
-    check(`run ${f}`, isDayjs, isDayjs ? 'dayjs not installed (pre-existing)' : msg.slice(0, 200));
+    check(`run ${f}`, false, e.stderr?.toString().slice(0, 200) || e.message);
   }
 }
 
-// 9. output parity
-const parityFiles = [
-  '01-basic', '02-aliases', '03-structural', '04-unions', '05-interfaces',
-  '06-functions', '07-integration', '08-reactive', '09-components',
-  '10-validation', '11-inference',
-];
-for (const n of parityFiles) {
-  const ext = n.startsWith('09-') ? 'tsx' : 'ts';
+// Output parity — auto-discovered from .rip files that have a .ts/.tsx companion
+for (const f of ripFiles) {
+  const n = f.replace(/\.rip$/, '');
+  const ext = tsFiles.find(t => t === `${n}.tsx`) ? 'tsx' : tsFiles.find(t => t === `${n}.ts`) ? 'ts' : null;
+  if (!ext) continue;
   try {
     const ripOut = run(`${rip} ${n}.rip 2>&1`);
     const tsOut = run(`bun run ${n}.${ext} 2>&1`);
@@ -84,7 +80,7 @@ for (const n of parityFiles) {
   }
 }
 
-// 10. strict mode enforcement
+// Strict mode enforcement
 try {
   const probe = resolve(dir, '_strict_probe.rip');
   writeFileSync(probe, 'x = "hello"\nx()\n');
