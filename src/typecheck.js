@@ -502,7 +502,9 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
       try {
         const impSrc = readFileSync(imported, 'utf8');
         if (hasTypeAnnotations(impSrc)) { importsTyped = true; break; }
-      } catch {}
+      } catch (e) {
+        if (opts.debug) console.warn(`[rip:debug] could not read import ${imported}: ${e.message}`);
+      }
     }
   }
   const hasTypes = hasOwnTypes || importsTyped;
@@ -1202,7 +1204,9 @@ export function readProjectConfig(dir) {
       if (parent === d) break;
       d = parent;
     }
-  } catch {}
+  } catch (e) {
+    console.warn(`[rip] readProjectConfig error: ${e.message}`);
+  }
   return config;
 }
 
@@ -1351,7 +1355,9 @@ export async function runCheck(targetDir, opts = {}) {
         try {
           const impSrc = readFileSync(imported, 'utf8');
           compiled.set(imported, compileForCheck(imported, impSrc, new Compiler()));
-        } catch {}
+        } catch (e) {
+          console.warn(`[rip] cross-module compile failed for ${imported}: ${e.message}`);
+        }
       }
     }
   }

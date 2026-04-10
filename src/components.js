@@ -1196,7 +1196,9 @@ export function installComponentSupport(CodeEmitter, Lexer) {
                 const srcLine = child.loc?.r ?? node.loc?.r;
                 const srcMarker = srcLine != null ? ` // @rip-src:${srcLine}` : '';
                 constructions.push(`    ${exprCode};${srcMarker}`);
-              } catch {}
+              } catch (e) {
+                if (this.opts?.debug) console.warn(`[rip:debug] component construction expr failed: ${e.message}`);
+              }
             }
           }
           for (let i = 1; i < node.length; i++) walkRender(node[i]);
