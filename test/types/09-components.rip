@@ -67,6 +67,43 @@ export Form = component
         loading: loading
         "Sign In"
 
+# ── Gap: conditional-scoped variable used in callback ──
+#
+# patchUninitializedTypes does not recurse into class methods or
+# computed arrow bodies. When a variable is first assigned inside a
+# conditional and then captured by a callback (e.g. .filter()),
+# TS sees `let term;` (hoisted, no initializer) and infers `any`.
+# Under strict mode this surfaces as TS7034 / TS7005.
+#
+# The same pattern works fine in plain functions (11-inference.rip)
+# because the patcher walks top-level FunctionDeclarations. It fails
+# here because enriched component stubs emit class bodies that the
+# patcher skips. Reproduces in both computed (~=) and methods.
+#
+# Workaround: explicitly annotate the variable (`term:: string`).
+# Without `:: string`, both bodies produce:
+#   TS7034: Variable 'term' implicitly has type 'any'
+#   TS7005: Variable 'term' implicitly has an 'any' type
+#
+# When the patcher is extended to recurse into class bodies, the
+# `:: string` annotations below can be removed — inference will
+# handle them automatically, as it already does in 11-inference.rip.
+
+export FilterGapTest = component
+  @items:: string[] := ["a", "b", "c"]
+  search := ''
+
+  # Remove `:: string` to reproduce TS7034 / TS7005
+  filtered ~=
+    result = items.slice()
+    if search
+      term:: string = search.toLowerCase()
+      result = result.filter (s) -> s.includes(term)
+    result
+
+  render
+    null
+
 # ── Negative: wrong prop types must be caught ──
 #
 # These match the TSX companion's negative prop-type tests.

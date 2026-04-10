@@ -87,6 +87,29 @@ function Form({ title = 'Sign In' }: { title?: string } = {}) {
   )
 }
 
+// ── Conditional-scoped variable used in callback ──
+//
+// In React/TS, variables inside function bodies get proper inference
+// even when assigned in a conditional and captured by a callback.
+// This works natively — no special patching needed.
+// (In Rip, this is a known gap: patchUninitializedTypes skips class bodies.)
+
+function FilterGapTest({ items = ['a', 'b', 'c'] }: { items: string[] }) {
+  const [search] = useState('')
+
+  // Remove `:: string` in the Rip version to reproduce TS7034 / TS7005
+  const filtered = (() => {
+    let result = items.slice()
+    if (search) {
+      const term = search.toLowerCase()
+      result = result.filter((s) => s.includes(term))
+    }
+    return result
+  })()
+
+  return null
+}
+
 // ── Negative: wrong prop types must be caught ──
 
 function PropTypeTests() {
