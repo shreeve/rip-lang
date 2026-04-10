@@ -108,10 +108,12 @@ code 'data marker compiler', '''
   __DATA__
   test data
   ''', '''
+  let x;
+
   var DATA;
   _setDataSection();
 
-  let x = 42;
+  x = 42;
   console.log(DATA);
 
   function _setDataSection() {

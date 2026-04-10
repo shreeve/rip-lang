@@ -46,5 +46,5 @@ code "try catch", "try\n  x\ncatch e\n  y", "try {\n  x;\n} catch (e) {\n  y;\n}
 # Expressions KEEP Semicolons
 # ==============================================================================
 
-code "function expression", "f = -> 42", "let f = function() {\n  return 42;\n};"
-code "class expression", "C = class Foo", "let C = class Foo {\n};"
+code "function expression", "f = -> 42", "let f;\n\nf = function() {\n  return 42;\n};"
+code "class expression", "C = class Foo", "let C;\n\nC = class Foo {\n};"

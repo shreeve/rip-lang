@@ -2,9 +2,9 @@
 //
 // TypeScript companion showing native inference behavior.
 // TS infers from initializers directly — `let x = value` gives
-// the type immediately. Rip emits inline-let for most variables,
-// achieving the same result. For hoisted variables, Rip's
-// patchUninitializedTypes fills in the type at check time.
+// the type immediately. Rip's shadow-TS rewrite achieves the same
+// result for straight-line assignments. For variables that remain
+// hoisted, patchUninitializedTypes fills in the type at check time.
 
 // ── Setup ──
 

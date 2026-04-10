@@ -282,7 +282,8 @@ code "void function no implicit return in compiler", '''
     x * 2
   ''', '''
 function process() {
-  let x = 42;
+  let x;
+  x = 42;
   (x * 2);
   return;
 }
@@ -361,7 +362,8 @@ code "void fat arrow compiler", '''
   process! = (x) =>
     x * 2
   ''', '''
-let process = x => {
+let process;
+process = x => {
   (x * 2);
   return;
 };

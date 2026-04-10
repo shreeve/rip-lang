@@ -2502,7 +2502,8 @@ code "computed with block body", '''
     _init(props) {
       this.x = __state(0);
       this.doubled = __computed(() => {
-    let v = this.x.value * 2;
+    let v;
+    v = this.x.value * 2;
     return (v + 0);
   });
     }
@@ -2531,7 +2532,8 @@ code "effect with block body", '''
     _init(props) {
       this.x = __state(0);
       __effect(() => {
-    let v = this.x.value + 1;
+    let v;
+    v = this.x.value + 1;
     p(v);
     return;
   });

@@ -2,14 +2,15 @@
 #
 # Two mechanisms enable inference on unannotated variables:
 #
-#   1. Inline-let — the compiler emits `let x = value;` instead of
-#      `let x; x = value;` when safe, giving TS a direct initializer.
-#      Works at program level, inside functions, and in block-confined
-#      variables (e.g., only used inside one if-branch).
+#   1. Shadow-TS rewrite — in the shadow TypeScript file used for type
+#      checking, hoisted `let x; x = value;` is rewritten to `let x = value;`
+#      for same-scope straight-line assignments. This gives TS a direct
+#      initializer to infer types from. Only affects the type-checking
+#      path — runtime JS always hoists for correct scoping.
 #
-#   2. patchUninitializedTypes — for variables that must be hoisted
-#      (e.g., used across multiple blocks), the type-checker patches
-#      the symbol's type from the first assignment at check time.
+#   2. patchUninitializedTypes — for variables that remain hoisted in
+#      the shadow TS (e.g., first assignment inside a branch), the
+#      type-checker patches the symbol's type from the first assignment.
 
 # ── Setup ──
 
@@ -96,12 +97,12 @@ expectString a
 console.log insideIf, a, b
 
 # ──────────────────────────────────────────────────
-# Inline-let inside functions
+# Shadow-TS rewrite inside functions
 # ──────────────────────────────────────────────────
 
-# Variables inside functions get `let x = value;` at the assignment
-# site. TS infers the type directly from the initializer — no patcher
-# needed. This is the inline-let mechanism at work.
+# Variables inside functions are hoisted in runtime JS, but the
+# shadow TS rewrites straight-line assignments to `let x = value;`
+# so TS can infer types from the initializer.
 
 def expectNum(x:: number)
   x
@@ -129,9 +130,9 @@ console.log out, matches
 # Block-confined inside functions
 # ──────────────────────────────────────────────────
 
-# Variables confined to one branch inside a function get `let`
-# emitted at the block level. Before inline-let, these were
-# hoisted to the function top as `let x;` — TS saw `any`.
+# Variables confined to one branch stay hoisted in both runtime JS
+# and shadow TS. patchUninitializedTypes walks into the branch to
+# find the first assignment and infers the type.
 
 def search(data:: string[], query:: string)
   if query.length > 0

@@ -916,6 +916,59 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
     headerDts = ARIA_TYPE_DECLS.join('\n') + '\n' + headerDts;
   }
 
+  // Inline hoisted `let` declarations at their first assignment in the shadow
+  // TS file. Rip always hoists `let` to the top of scope for correct JS
+  // scoping. For TypeScript inference, we move the declaration inline so TS
+  // can infer types from initializers (e.g., `let x; x = 1` → `let x = 1`).
+  // Only rewrites same-scope, straight-line assignments — stops at control
+  // flow to avoid changing binding visibility in the shadow file.
+  if (hasTypes && code) {
+    const cl = code.split('\n');
+    for (let i = 0; i < cl.length; i++) {
+      const m = cl[i].match(/^(\s*)let\s+([A-Za-z_$][\w$]*(?:\s*,\s*[A-Za-z_$][\w$]*)*)\s*;\s*$/);
+      if (!m) continue;
+      // Only process hoist-position lets (first non-blank line after `{` or start of file)
+      let prev = null;
+      for (let k = i - 1; k >= 0; k--) { if (cl[k].trim() !== '') { prev = cl[k]; break; } }
+      if (prev !== null && !/\{\s*$/.test(prev)) continue;
+
+      const indent = m[1];
+      const vars = m[2].split(/\s*,\s*/);
+      const inlined = new Set();
+      const bailed = new Set();
+      const reEsc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+      for (let j = i + 1; j < cl.length; j++) {
+        const line = cl[j];
+        if (line.trim() === '') continue;
+        // End of scope
+        if (new RegExp('^' + reEsc(indent) + '}').test(line)) break;
+        // Skip deeper-indented lines
+        if (line.startsWith(indent + '  ')) continue;
+        // Stop at structural statements
+        if (new RegExp('^' + reEsc(indent) + '(?:if\\b|for\\b|while\\b|switch\\b|try\\b|catch\\b|finally\\b|function\\b|class\\b|do\\b|\\{|\\})').test(line)) break;
+
+        for (const v of vars) {
+          if (inlined.has(v) || bailed.has(v)) continue;
+          const ve = reEsc(v);
+          const assignRe = new RegExp('^' + reEsc(indent) + ve + '\\s*=\\s*(.*);\\s*$');
+          const assign = line.match(assignRe);
+          if (assign) {
+            cl[j] = `${indent}let ${v} = ${assign[1]};`;
+            inlined.add(v);
+            continue;
+          }
+          if (new RegExp('\\b' + ve + '\\b').test(line)) bailed.add(v);
+        }
+        if (vars.every(v => inlined.has(v) || bailed.has(v))) break;
+      }
+
+      const remaining = vars.filter(v => !inlined.has(v));
+      cl[i] = remaining.length ? `${indent}let ${remaining.join(', ')};` : '';
+    }
+    code = cl.filter(l => l !== '').join('\n');
+  }
+
   let tsContent = (hasTypes ? headerDts + '\n' : '') + code;
   const headerLines = hasTypes ? countLines(headerDts + '\n') : 1;
 

@@ -5,24 +5,24 @@
 # Single Parameter (NO parens)
 # ==============================================================================
 
-code "arrow single param", "f = (x) => x * 2", "let f = x => (x * 2);"
-code "arrow single param block", "f = (x) =>\n  x * 2", "let f = x => (x * 2);"
+code "arrow single param", "f = (x) => x * 2", "let f;\nf = x => (x * 2);"
+code "arrow single param block", "f = (x) =>\n  x * 2", "let f;\nf = x => (x * 2);"
 test "arrow single param execution", "f = (x) => x * 2\nf(5)", 10
 
 # ==============================================================================
 # Multiple Parameters (KEEP parens)
 # ==============================================================================
 
-code "arrow no params", "f = => 42", "let f = () => 42;"
-code "arrow two params", "f = (x, y) => x + y", "let f = (x, y) => (x + y);"
+code "arrow no params", "f = => 42", "let f;\nf = () => 42;"
+code "arrow two params", "f = (x, y) => x + y", "let f;\nf = (x, y) => (x + y);"
 
 # ==============================================================================
 # Special Cases (KEEP parens)
 # ==============================================================================
 
-code "arrow destructuring", "f = ({x, y}) => x + y", "let f = ({x, y}) => (x + y);"
-code "arrow default param", "f = (x = 5) => x", "let f = (x = 5) => x;"
-code "arrow rest param", "f = (...args) => args", "let f = (...args) => args;"
+code "arrow destructuring", "f = ({x, y}) => x + y", "let f;\nf = ({x, y}) => (x + y);"
+code "arrow default param", "f = (x = 5) => x", "let f;\nf = (x = 5) => x;"
+code "arrow rest param", "f = (...args) => args", "let f;\nf = (...args) => args;"
 
 # ==============================================================================
 # Implicit Objects in Single-Line Arrow Bodies
@@ -32,7 +32,8 @@ code "arrow rest param", "f = (...args) => args", "let f = (...args) => args;"
 code "arrow throw implicit object", """
   f = -> throw status: 400, error: "oops"
   """, """
-let f = function() {
+let f;
+f = function() {
   throw {status: 400, error: "oops"};
 };
 """
@@ -52,7 +53,8 @@ test "arrow throw implicit object runtime", """
 code "arrow return implicit object", """
   f = -> return status: 200, data: "ok"
   """, """
-let f = function() {
+let f;
+f = function() {
   return {status: 200, data: "ok"};
 };
 """
@@ -67,7 +69,8 @@ test "arrow return implicit object runtime", """
 code "arrow implicit object body", """
   f = -> status: 200, data: "ok"
   """, """
-let f = function() {
+let f;
+f = function() {
   return {status: 200, data: "ok"};
 };
 """
@@ -82,7 +85,8 @@ test "arrow implicit object body runtime", """
 code "arrow params throw implicit object", """
   error = (note = "oops!", code = 400) -> throw status: code, error: note
   """, """
-let error = function(note = "oops!", code = 400) {
+let error;
+error = function(note = "oops!", code = 400) {
   throw {status: code, error: note};
 };
 """
@@ -90,7 +94,7 @@ let error = function(note = "oops!", code = 400) {
 # Fat arrow with implicit object
 code "fat arrow implicit object", """
   f = => status: 200, data: "ok"
-  """, "let f = () => ({status: 200, data: \"ok\"});"
+  """, "let f;\nf = () => ({status: 200, data: \"ok\"});"
 
 # Comma that SHOULD end arrow body (not an implicit object)
 code "arrow comma ends body not object", """

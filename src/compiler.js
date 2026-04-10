@@ -663,17 +663,6 @@ export class CodeEmitter {
       else body.push(stmt);
     }
 
-    // Classify program-level variables for inline declarations
-    let prevInlinePending = this._inlineVarsPending;
-    let programInlineVars = new Set();
-    if (this.programVars.size > 0 && body.length > 0) {
-      let classified = this.classifyVarsForInlining(body, this.programVars);
-      programInlineVars = classified.inlineVars;
-      // '_' is always emitted as 'var _' (not 'let'), so must not be inlined
-      programInlineVars.delete('_');
-      if (programInlineVars.size > 0) this._inlineVarsPending = new Set(programInlineVars);
-    }
-
     // Generate body first to detect needed helpers
     let blockStmts = ['def', 'class', 'if', 'for-in', 'for-of', 'for-as', 'while', 'loop', 'switch', 'try'];
     let stmtEntries = body.map((stmt, index) => {
@@ -700,8 +689,6 @@ export class CodeEmitter {
     });
     let statementsCode = stmtEntries.map(e => e.code).join('\n');
 
-    this._inlineVarsPending = prevInlinePending;
-
     let needsBlank = false;
 
     if (imports.length > 0) {
@@ -713,7 +700,7 @@ export class CodeEmitter {
       let hasUnderscore = this.programVars.has('_');
       if (hasUnderscore) this.programVars.delete('_');
       if (this.programVars.size > 0) {
-        let vars = Array.from(this.programVars).filter(v => !programInlineVars.has(v)).sort().join(', ');
+        let vars = Array.from(this.programVars).sort().join(', ');
         if (vars) {
           if (needsBlank) code += '\n';
           code += `let ${vars};\n`;
@@ -911,14 +898,6 @@ export class CodeEmitter {
         if (ctrlOp === '||') return `(() => { const __v = ${exprCode}; if (!__v) ${ctrlCode}; return (${targetCode} = __v); })()`;
         return `(() => { const __v = ${exprCode}; if (__v) ${ctrlCode}; return (${targetCode} = __v); })()`;
       }
-      // Inline `let` for control flow — split into declaration + guard
-      let tgtName = (typeof target === 'string') ? target : (target instanceof String) ? str(target) : null;
-      if (tgtName && context === 'statement' && this._inlineVarsPending?.delete(tgtName)) {
-        let ind = this.indent();
-        if (ctrlOp === '??') return `let ${targetCode} = ${exprCode};\n${ind}if (${targetCode} == null) ${ctrlCode}`;
-        if (ctrlOp === '||') return `let ${targetCode} = ${exprCode};\n${ind}if (!${targetCode}) ${ctrlCode}`;
-        return `let ${targetCode} = ${exprCode};\n${ind}if (${targetCode}) ${ctrlCode}`;
-      }
       if (ctrlOp === '??') return `if ((${targetCode} = ${exprCode}) == null) ${ctrlCode}`;
       if (ctrlOp === '||') return `if (!(${targetCode} = ${exprCode})) ${ctrlCode}`;
       return `if ((${targetCode} = ${exprCode})) ${ctrlCode}`;
@@ -962,8 +941,6 @@ export class CodeEmitter {
         let unwrapped = Array.isArray(wrappedValue) && wrappedValue.length === 1 ? wrappedValue[0] : wrappedValue;
         let fullValue = [binOp, left, unwrapped];
         let t = this.emit(target, 'value'), c = this.emit(condition, 'value'), v = this.emit(fullValue, 'value');
-        let tgtName = (typeof target === 'string') ? target : (target instanceof String) ? str(target) : null;
-        if (tgtName && this._inlineVarsPending?.delete(tgtName)) return `let ${t};\n${this.indent()}if (${c}) ${t} = ${v}`;
         return `if (${c}) ${t} = ${v}`;
       }
     }
@@ -978,8 +955,6 @@ export class CodeEmitter {
         let t = this.emit(target, 'value');
         let condCode = this.unwrapLogical(this.emit(condition, 'value'));
         let v = this.emit(unwrapped, 'value');
-        let tgtName = (typeof target === 'string') ? target : (target instanceof String) ? str(target) : null;
-        if (tgtName && this._inlineVarsPending?.delete(tgtName)) return `let ${t};\n${this.indent()}if (${condCode}) ${t} = ${v}`;
         return `if (${condCode}) ${t} = ${v}`;
       }
     }
@@ -1005,12 +980,6 @@ export class CodeEmitter {
     this._componentTypeParams = prevComponentTypeParams;
     let isObjLit = this.is(value, 'object');
     if (!isObjLit) valueCode = this.unwrap(valueCode);
-
-    // Inline `let` at first assignment for variables classified as inlinable
-    let targetName = (typeof target === 'string') ? target : (target instanceof String) ? str(target) : null;
-    if (head === '=' && targetName && context === 'statement' && this._inlineVarsPending?.delete(targetName)) {
-      return `let ${targetCode} = ${valueCode}`;
-    }
 
     let needsParensVal = context === 'value';
     let needsParensObj = context === 'statement' && this.is(target, 'object');
@@ -2442,19 +2411,9 @@ export class CodeEmitter {
         this.restMiddleParam = null;
       }
 
-      // Classify variables: inline `let` at first assignment vs hoist to top
-      let prevInlinePending = this._inlineVarsPending;
-      let inlineVars = new Set();
-      if (newVars.size > 0 && statements.length > 0) {
-        let classified = this.classifyVarsForInlining(statements, newVars);
-        inlineVars = classified.inlineVars;
-        if (inlineVars.size > 0) this._inlineVarsPending = new Set(inlineVars);
-      }
-
       this.indentLevel++;
       let code = '{\n';
-      let hoistVars = new Set([...newVars].filter(v => !inlineVars.has(v)));
-      if (hoistVars.size > 0) code += this.indent() + `let ${Array.from(hoistVars).sort().join(', ')};\n`;
+      if (newVars.size > 0) code += this.indent() + `let ${Array.from(newVars).sort().join(', ')};\n`;
 
       let firstIsSuper = autoAssignments.length > 0 && statements.length > 0 &&
                          Array.isArray(statements[0]) && statements[0][0] === 'super';
@@ -2485,22 +2444,12 @@ export class CodeEmitter {
             if (typeof target === 'string' && Array.isArray(value)) {
               let vh = value[0];
               if (vh === 'comprehension' || vh === 'for-in') {
-                // Comprehension targets with inline vars: declare before the loop
-                if (this._inlineVarsPending?.delete(target)) code += this.indent() + `let ${target};\n`;
                 this.comprehensionTarget = target;
                 code += this.emit(value, 'value');
                 this.comprehensionTarget = null;
                 code += this.indent() + `return ${target};\n`;
                 return;
               }
-            }
-            // Handle inline vars at last statement (auto-return): split into let + return
-            if ((typeof target === 'string' || target instanceof String) && this._inlineVarsPending?.has(str(target))) {
-              this._inlineVarsPending.delete(str(target));
-              let assignCode = this.emit(stmt, 'statement');
-              code += this.indent() + 'let ' + this.addSemicolon(stmt, assignCode) + '\n';
-              code += this.indent() + `return ${str(target)};\n`;
-              return;
             }
           }
 
@@ -2530,7 +2479,6 @@ export class CodeEmitter {
         if (!noRetStmts.includes(lastH)) code += this.indent() + 'return;\n';
       }
 
-      this._inlineVarsPending = prevInlinePending;
       this.indentLevel--;
       code += this.indent() + '}';
       this.scopeStack.pop();
@@ -3161,197 +3109,6 @@ export class CodeEmitter {
     if ((this.is(sexpr, 'def') || this.is(sexpr, '->') || this.is(sexpr, '=>') || this.is(sexpr, 'class'))) return false;
     if (Array.isArray(sexpr)) return sexpr.some(item => this.containsYield(item));
     return false;
-  }
-
-  // ---------------------------------------------------------------------------
-  // Variable inlining — emit `let` at first assignment instead of hoisting
-  // ---------------------------------------------------------------------------
-
-  // Check if an s-expression references a variable name (stopping at function boundaries)
-  referencesVar(sexpr, varName) {
-    if (!sexpr) return false;
-    if (sexpr instanceof String) return str(sexpr) === varName;
-    if (typeof sexpr === 'string') return sexpr === varName;
-    if (!Array.isArray(sexpr)) return false;
-    let h = sexpr[0];
-    let hs = (typeof h === 'string') ? h : (h instanceof String) ? str(h) : null;
-    if (hs === 'def' || hs === '->' || hs === '=>' || hs === 'effect') return false;
-    // Property access: only check the object, not the property name
-    if (hs === '.' || hs === '?.') return this.referencesVar(sexpr[1], varName);
-    // Object literal: check values but not simple string keys
-    if (hs === 'object') {
-      for (let i = 1; i < sexpr.length; i++) {
-        let pair = sexpr[i];
-        if (Array.isArray(pair)) {
-          if (this.is(pair, '...')) { if (this.referencesVar(pair[1], varName)) return true; }
-          else if (pair.length >= 2) { if (this.referencesVar(pair[pair.length - 1], varName)) return true; }
-        } else { if (this.referencesVar(pair, varName)) return true; }
-      }
-      return false;
-    }
-    return sexpr.some(item => this.referencesVar(item, varName));
-  }
-
-  // Check if the first reference to a variable in DFS order is a `=` assignment
-  // at statement level (not inside a value expression like another assignment's RHS).
-  // Returns true only when it's safe to emit `let` at the first assignment site.
-  firstRefIsAssignment(sexpr, varName) {
-    let result = null; // null = not found, 'write' = statement-level assignment, 'read' = read/value
-    let isVar = (n) => (n instanceof String ? str(n) : n) === varName;
-    let walk = (node, inValue) => {
-      if (result !== null) return;
-      if (!node) return;
-      if (!Array.isArray(node)) { if (isVar(node)) result = 'read'; return; }
-      let h = node[0];
-      let hs = (typeof h === 'string') ? h : (h instanceof String) ? str(h) : null;
-      if (hs === 'def' || hs === '->' || hs === '=>' || hs === 'effect') return;
-      // Assignment to our variable
-      if (hs === '=' && (typeof node[1] === 'string' || node[1] instanceof String) && str(node[1]) === varName) {
-        if (inValue) { result = 'read'; return; } // In value context — can't emit `let` here
-        result = this.referencesVar(node[2], varName) ? 'read' : 'write';
-        return;
-      }
-      // Compound assignment reads the variable
-      if (CodeEmitter.ASSIGNMENT_OPS.has(hs) && hs !== '=' &&
-          (typeof node[1] === 'string' || node[1] instanceof String) && str(node[1]) === varName) {
-        result = 'read'; return;
-      }
-      // Property access: only check object
-      if (hs === '.' || hs === '?.') { walk(node[1], inValue); return; }
-      // Object literal: skip simple string keys
-      if (hs === 'object') {
-        for (let i = 1; i < node.length; i++) {
-          let pair = node[i];
-          if (Array.isArray(pair)) {
-            if (this.is(pair, '...')) walk(pair[1], true);
-            else if (pair.length >= 2) walk(pair[pair.length - 1], true);
-          } else walk(pair, true);
-        }
-        return;
-      }
-      // Block: children are at statement level
-      if (hs === 'block') { for (let i = 1; i < node.length; i++) walk(node[i], false); return; }
-      // If: condition is value, branches maintain parent context
-      if (hs === 'if') { walk(node[1], true); for (let i = 2; i < node.length; i++) walk(node[i], inValue); return; }
-      // Loops: iterable/condition is value, body is statement
-      if (hs === 'for-in' || hs === 'for-of' || hs === 'for-as') { walk(node[2], true); if (node.length > 3) walk(node[node.length - 1], false); return; }
-      if (hs === 'while') { walk(node[1], true); walk(node[2], false); return; }
-      // Try: blocks are statement level
-      if (hs === 'try') { for (let i = 1; i < node.length; i++) walk(node[i], false); return; }
-      // Other assignments: RHS is value context
-      if (CodeEmitter.ASSIGNMENT_OPS.has(hs)) { walk(node[2], true); return; }
-      // Default: everything else is value context
-      for (let i = 0; i < node.length; i++) walk(node[i], true);
-    };
-    walk(sexpr, false); // top of a statement is statement context
-    return result === 'write';
-  }
-
-  // Check if all references to a variable within a statement are contained in a
-  // single block child. Returns false if the variable appears at multiple nesting
-  // levels (e.g., inside an if-branch AND at the same level as the if).
-  allRefsInSingleBlock(sexpr, varName) {
-    if (!Array.isArray(sexpr)) return false;
-    let h = sexpr[0];
-    let hs = (typeof h === 'string') ? h : (h instanceof String) ? str(h) : null;
-    // For 'if': check condition + each branch. Variable must appear in exactly one branch,
-    // and NOT in the condition. Then recurse into that branch.
-    if (hs === 'if') {
-      if (this.referencesVar(sexpr[1], varName)) return false; // in condition
-      let branchCount = 0;
-      let refBranch = null;
-      for (let i = 2; i < sexpr.length; i++) {
-        if (this.referencesVar(sexpr[i], varName)) { branchCount++; refBranch = sexpr[i]; }
-      }
-      if (branchCount !== 1) return false;
-      return this.allRefsInSingleBlock(refBranch, varName);
-    }
-    // For 'block': variable must appear in only one child statement.
-    // Then recurse into that child.
-    if (hs === 'block') {
-      let childCount = 0;
-      let refChild = null;
-      for (let i = 1; i < sexpr.length; i++) {
-        if (this.referencesVar(sexpr[i], varName)) { childCount++; refChild = sexpr[i]; }
-      }
-      if (childCount !== 1) return false;
-      // If the single child IS a direct assignment to this variable, we've bottomed out — safe.
-      if (Array.isArray(refChild) && refChild[0] === '=' &&
-          (typeof refChild[1] === 'string' || refChild[1] instanceof String) &&
-          str(refChild[1]) === varName) return true;
-      return this.allRefsInSingleBlock(refChild, varName);
-    }
-    // For loops: iterable/condition must not reference var, body is a block — recurse.
-    if (hs === 'for-in' || hs === 'for-of' || hs === 'for-as') {
-      if (this.referencesVar(sexpr[2], varName)) return false;
-      return true;
-    }
-    if (hs === 'while') {
-      if (this.referencesVar(sexpr[1], varName)) return false;
-      return true;
-    }
-    // For try: recurse
-    if (hs === 'try') return true;
-    return false;
-  }
-
-  // Classify variables into those that can have `let` inlined at their first assignment
-  // vs those that must be hoisted to the function/program top.
-  classifyVarsForInlining(statements, vars) {
-    if (vars.size === 0) return { inlineVars: new Set(), hoistVars: new Set(vars) };
-
-    // Pre-scan: variables with type annotations (::) must be hoisted. The DTS header
-    // declares them as `let x: Type;` — inlining `let x = value;` in the body would
-    // create a duplicate declaration, causing TS2454 ("used before being assigned").
-    let typedVars = new Set();
-    let findTypedAssigns = (node) => {
-      if (!Array.isArray(node)) return;
-      if (node[0] === '=' && node[1] instanceof String && node[1].type && vars.has(str(node[1]))) {
-        typedVars.add(str(node[1]));
-      }
-      for (let i = 1; i < node.length; i++) findTypedAssigns(node[i]);
-    };
-    for (let stmt of statements) findTypedAssigns(stmt);
-
-    // For each variable, find which statement indices reference it
-    let varStmts = new Map();
-    for (let v of vars) varStmts.set(v, []);
-    for (let i = 0; i < statements.length; i++) {
-      for (let v of vars) {
-        if (this.referencesVar(statements[i], v)) varStmts.get(v).push(i);
-      }
-    }
-    let inlineVars = new Set(), hoistVars = new Set();
-    for (let [v, indices] of varStmts) {
-      if (indices.length === 0) { hoistVars.add(v); continue; }
-      // Typed variables must be hoisted — DTS header already declares them
-      if (typedVars.has(v)) { hoistVars.add(v); continue; }
-      let firstIdx = indices[0];
-      let firstStmt = statements[firstIdx];
-      // Check if the first statement containing this variable is a direct `=` assignment to it
-      let isDirectAssign = Array.isArray(firstStmt) && firstStmt[0] === '=' &&
-                           (typeof firstStmt[1] === 'string' || firstStmt[1] instanceof String) &&
-                           str(firstStmt[1]) === v &&
-                           !this.referencesVar(firstStmt[2], v);
-      if (isDirectAssign) {
-        // First reference is a direct body-level assignment — safe to inline `let` here
-        // (same scope as hoisted `let`, but TS can infer the type from the initializer)
-        inlineVars.add(v);
-      } else if (indices.length === 1 && !this.is(firstStmt, 'switch') &&
-                 this.allRefsInSingleBlock(firstStmt, v) &&
-                 this.firstRefIsAssignment(firstStmt, v)) {
-        // All references are within a single block branch of a non-switch statement
-        // (e.g., all inside one if-branch, one for body, etc.) and the first DFS
-        // reference is a direct assignment. JS 'let' block scoping is safe here
-        // because the variable never escapes that single block.
-        inlineVars.add(v);
-      } else {
-        // Variable spans multiple statements, is in a switch, or first ref is a read.
-        // Must hoist to ensure correct scoping.
-        hoistVars.add(v);
-      }
-    }
-    return { inlineVars, hoistVars };
   }
 
   // Class helpers

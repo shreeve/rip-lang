@@ -66,7 +66,7 @@ test "throw in ternary", '''
 
 # Code generation
 code "throw", "throw e", "throw e"
-code "or throw as guard pattern", 'x = fn() or throw "err"', "let x = fn();\nif (!x) throw \"err\";"
+code "or throw as guard pattern", 'x = fn() or throw "err"', "let x;\nif (!(x = fn())) throw \"err\";"
 
 # ==============================================================================
 # Parser Errors
@@ -161,7 +161,8 @@ code 'throw in else block', '''
     else
       throw new Error("bad")
   ''', '''
-let fn = function(x) {
+let fn;
+fn = function(x) {
   if (x) {
     return "ok";
   } else {
