@@ -7658,6 +7658,15 @@ if (typeof globalThis !== 'undefined') {
         else
           body.push(stmt);
       }
+      let prevInlinePending = this._inlineVarsPending;
+      let programInlineVars = new Set;
+      if (this.programVars.size > 0 && body.length > 0) {
+        let classified = this.classifyVarsForInlining(body, this.programVars);
+        programInlineVars = classified.inlineVars;
+        programInlineVars.delete("_");
+        if (programInlineVars.size > 0)
+          this._inlineVarsPending = new Set(programInlineVars);
+      }
       let blockStmts = ["def", "class", "if", "for-in", "for-of", "for-as", "while", "loop", "switch", "try"];
       let stmtEntries = body.map((stmt, index) => {
         let isSingle = body.length === 1 && imports.length === 0;
@@ -7685,6 +7694,7 @@ if (typeof globalThis !== 'undefined') {
       });
       let statementsCode = stmtEntries.map((e) => e.code).join(`
 `);
+      this._inlineVarsPending = prevInlinePending;
       let needsBlank = false;
       if (imports.length > 0) {
         code += imports.map((s) => this.addSemicolon(s, this.emit(s, "statement"))).join(`
@@ -7696,13 +7706,15 @@ if (typeof globalThis !== 'undefined') {
         if (hasUnderscore)
           this.programVars.delete("_");
         if (this.programVars.size > 0) {
-          let vars = Array.from(this.programVars).sort().join(", ");
-          if (needsBlank)
-            code += `
+          let vars = Array.from(this.programVars).filter((v) => !programInlineVars.has(v)).sort().join(", ");
+          if (vars) {
+            if (needsBlank)
+              code += `
 `;
-          code += `let ${vars};
+            code += `let ${vars};
 `;
-          needsBlank = true;
+            needsBlank = true;
+          }
         }
         if (hasUnderscore) {
           if (needsBlank)
@@ -7899,6 +7911,18 @@ function _setDataSection() {
             return `(() => { const __v = ${exprCode}; if (!__v) ${ctrlCode}; return (${targetCode2} = __v); })()`;
           return `(() => { const __v = ${exprCode}; if (__v) ${ctrlCode}; return (${targetCode2} = __v); })()`;
         }
+        let tgtName = typeof target === "string" ? target : target instanceof String ? str(target) : null;
+        if (tgtName && context === "statement" && this._inlineVarsPending?.delete(tgtName)) {
+          let ind = this.indent();
+          if (ctrlOp === "??")
+            return `let ${targetCode2} = ${exprCode};
+${ind}if (${targetCode2} == null) ${ctrlCode}`;
+          if (ctrlOp === "||")
+            return `let ${targetCode2} = ${exprCode};
+${ind}if (!${targetCode2}) ${ctrlCode}`;
+          return `let ${targetCode2} = ${exprCode};
+${ind}if (${targetCode2}) ${ctrlCode}`;
+        }
         if (ctrlOp === "??")
           return `if ((${targetCode2} = ${exprCode}) == null) ${ctrlCode}`;
         if (ctrlOp === "||")
@@ -7944,6 +7968,10 @@ function _setDataSection() {
           let unwrapped = Array.isArray(wrappedValue) && wrappedValue.length === 1 ? wrappedValue[0] : wrappedValue;
           let fullValue = [binOp, left, unwrapped];
           let t = this.emit(target, "value"), c = this.emit(condition, "value"), v = this.emit(fullValue, "value");
+          let tgtName = typeof target === "string" ? target : target instanceof String ? str(target) : null;
+          if (tgtName && this._inlineVarsPending?.delete(tgtName))
+            return `let ${t};
+${this.indent()}if (${c}) ${t} = ${v}`;
           return `if (${c}) ${t} = ${v}`;
         }
       }
@@ -7955,6 +7983,10 @@ function _setDataSection() {
           let t = this.emit(target, "value");
           let condCode = this.unwrapLogical(this.emit(condition, "value"));
           let v = this.emit(unwrapped, "value");
+          let tgtName = typeof target === "string" ? target : target instanceof String ? str(target) : null;
+          if (tgtName && this._inlineVarsPending?.delete(tgtName))
+            return `let ${t};
+${this.indent()}if (${condCode}) ${t} = ${v}`;
           return `if (${condCode}) ${t} = ${v}`;
         }
       }
@@ -7978,6 +8010,10 @@ function _setDataSection() {
       let isObjLit = this.is(value, "object");
       if (!isObjLit)
         valueCode = this.unwrap(valueCode);
+      let targetName = typeof target === "string" ? target : target instanceof String ? str(target) : null;
+      if (head === "=" && targetName && context === "statement" && this._inlineVarsPending?.delete(targetName)) {
+        return `let ${targetCode} = ${valueCode}`;
+      }
       let needsParensVal = context === "value";
       let needsParensObj = context === "statement" && this.is(target, "object");
       if (needsParensVal || needsParensObj)
@@ -9392,11 +9428,20 @@ export default ${expr[1]}`;
           statements = [...extr, ...statements];
           this.restMiddleParam = null;
         }
+        let prevInlinePending = this._inlineVarsPending;
+        let inlineVars = new Set;
+        if (newVars.size > 0 && statements.length > 0) {
+          let classified = this.classifyVarsForInlining(statements, newVars);
+          inlineVars = classified.inlineVars;
+          if (inlineVars.size > 0)
+            this._inlineVarsPending = new Set(inlineVars);
+        }
         this.indentLevel++;
         let code = `{
 `;
-        if (newVars.size > 0)
-          code += this.indent() + `let ${Array.from(newVars).sort().join(", ")};
+        let hoistVars = new Set([...newVars].filter((v) => !inlineVars.has(v)));
+        if (hoistVars.size > 0)
+          code += this.indent() + `let ${Array.from(hoistVars).sort().join(", ")};
 `;
         let firstIsSuper = autoAssignments.length > 0 && statements.length > 0 && Array.isArray(statements[0]) && statements[0][0] === "super";
         let genStatements = (stmts) => {
@@ -9424,6 +9469,9 @@ export default ${expr[1]}`;
               if (typeof target === "string" && Array.isArray(value)) {
                 let vh = value[0];
                 if (vh === "comprehension" || vh === "for-in") {
+                  if (this._inlineVarsPending?.delete(target))
+                    code += this.indent() + `let ${target};
+`;
                   this.comprehensionTarget = target;
                   code += this.emit(value, "value");
                   this.comprehensionTarget = null;
@@ -9431,6 +9479,15 @@ export default ${expr[1]}`;
 `;
                   return;
                 }
+              }
+              if ((typeof target === "string" || target instanceof String) && this._inlineVarsPending?.has(str(target))) {
+                this._inlineVarsPending.delete(str(target));
+                let assignCode = this.emit(stmt, "statement");
+                code += this.indent() + "let " + this.addSemicolon(stmt, assignCode) + `
+`;
+                code += this.indent() + `return ${str(target)};
+`;
+                return;
               }
             }
             let needsReturn = !isConstructor && !sideEffectOnly && isLast && !noRetStmts.includes(h) && !loopStmts.includes(h) && !this.hasExplicitControlFlow(stmt);
@@ -9468,6 +9525,7 @@ export default ${expr[1]}`;
             code += this.indent() + `return;
 `;
         }
+        this._inlineVarsPending = prevInlinePending;
         this.indentLevel--;
         code += this.indent() + "}";
         this.scopeStack.pop();
@@ -10223,6 +10281,220 @@ ${this.indent()}}`;
         return sexpr.some((item) => this.containsYield(item));
       return false;
     }
+    referencesVar(sexpr, varName) {
+      if (!sexpr)
+        return false;
+      if (sexpr instanceof String)
+        return str(sexpr) === varName;
+      if (typeof sexpr === "string")
+        return sexpr === varName;
+      if (!Array.isArray(sexpr))
+        return false;
+      let h = sexpr[0];
+      let hs = typeof h === "string" ? h : h instanceof String ? str(h) : null;
+      if (hs === "def" || hs === "->" || hs === "=>" || hs === "effect")
+        return false;
+      if (hs === "." || hs === "?.")
+        return this.referencesVar(sexpr[1], varName);
+      if (hs === "object") {
+        for (let i = 1;i < sexpr.length; i++) {
+          let pair = sexpr[i];
+          if (Array.isArray(pair)) {
+            if (this.is(pair, "...")) {
+              if (this.referencesVar(pair[1], varName))
+                return true;
+            } else if (pair.length >= 2) {
+              if (this.referencesVar(pair[pair.length - 1], varName))
+                return true;
+            }
+          } else {
+            if (this.referencesVar(pair, varName))
+              return true;
+          }
+        }
+        return false;
+      }
+      return sexpr.some((item) => this.referencesVar(item, varName));
+    }
+    firstRefIsAssignment(sexpr, varName) {
+      let result = null;
+      let isVar = (n) => (n instanceof String ? str(n) : n) === varName;
+      let walk = (node, inValue) => {
+        if (result !== null)
+          return;
+        if (!node)
+          return;
+        if (!Array.isArray(node)) {
+          if (isVar(node))
+            result = "read";
+          return;
+        }
+        let h = node[0];
+        let hs = typeof h === "string" ? h : h instanceof String ? str(h) : null;
+        if (hs === "def" || hs === "->" || hs === "=>" || hs === "effect")
+          return;
+        if (hs === "=" && (typeof node[1] === "string" || node[1] instanceof String) && str(node[1]) === varName) {
+          if (inValue) {
+            result = "read";
+            return;
+          }
+          result = this.referencesVar(node[2], varName) ? "read" : "write";
+          return;
+        }
+        if (CodeEmitter.ASSIGNMENT_OPS.has(hs) && hs !== "=" && (typeof node[1] === "string" || node[1] instanceof String) && str(node[1]) === varName) {
+          result = "read";
+          return;
+        }
+        if (hs === "." || hs === "?.") {
+          walk(node[1], inValue);
+          return;
+        }
+        if (hs === "object") {
+          for (let i = 1;i < node.length; i++) {
+            let pair = node[i];
+            if (Array.isArray(pair)) {
+              if (this.is(pair, "..."))
+                walk(pair[1], true);
+              else if (pair.length >= 2)
+                walk(pair[pair.length - 1], true);
+            } else
+              walk(pair, true);
+          }
+          return;
+        }
+        if (hs === "block") {
+          for (let i = 1;i < node.length; i++)
+            walk(node[i], false);
+          return;
+        }
+        if (hs === "if") {
+          walk(node[1], true);
+          for (let i = 2;i < node.length; i++)
+            walk(node[i], inValue);
+          return;
+        }
+        if (hs === "for-in" || hs === "for-of" || hs === "for-as") {
+          walk(node[2], true);
+          if (node.length > 3)
+            walk(node[node.length - 1], false);
+          return;
+        }
+        if (hs === "while") {
+          walk(node[1], true);
+          walk(node[2], false);
+          return;
+        }
+        if (hs === "try") {
+          for (let i = 1;i < node.length; i++)
+            walk(node[i], false);
+          return;
+        }
+        if (CodeEmitter.ASSIGNMENT_OPS.has(hs)) {
+          walk(node[2], true);
+          return;
+        }
+        for (let i = 0;i < node.length; i++)
+          walk(node[i], true);
+      };
+      walk(sexpr, false);
+      return result === "write";
+    }
+    allRefsInSingleBlock(sexpr, varName) {
+      if (!Array.isArray(sexpr))
+        return false;
+      let h = sexpr[0];
+      let hs = typeof h === "string" ? h : h instanceof String ? str(h) : null;
+      if (hs === "if") {
+        if (this.referencesVar(sexpr[1], varName))
+          return false;
+        let branchCount = 0;
+        let refBranch = null;
+        for (let i = 2;i < sexpr.length; i++) {
+          if (this.referencesVar(sexpr[i], varName)) {
+            branchCount++;
+            refBranch = sexpr[i];
+          }
+        }
+        if (branchCount !== 1)
+          return false;
+        return this.allRefsInSingleBlock(refBranch, varName);
+      }
+      if (hs === "block") {
+        let childCount = 0;
+        let refChild = null;
+        for (let i = 1;i < sexpr.length; i++) {
+          if (this.referencesVar(sexpr[i], varName)) {
+            childCount++;
+            refChild = sexpr[i];
+          }
+        }
+        if (childCount !== 1)
+          return false;
+        if (Array.isArray(refChild) && refChild[0] === "=" && (typeof refChild[1] === "string" || refChild[1] instanceof String) && str(refChild[1]) === varName)
+          return true;
+        return this.allRefsInSingleBlock(refChild, varName);
+      }
+      if (hs === "for-in" || hs === "for-of" || hs === "for-as") {
+        if (this.referencesVar(sexpr[2], varName))
+          return false;
+        return true;
+      }
+      if (hs === "while") {
+        if (this.referencesVar(sexpr[1], varName))
+          return false;
+        return true;
+      }
+      if (hs === "try")
+        return true;
+      return false;
+    }
+    classifyVarsForInlining(statements, vars) {
+      if (vars.size === 0)
+        return { inlineVars: new Set, hoistVars: new Set(vars) };
+      let typedVars = new Set;
+      let findTypedAssigns = (node) => {
+        if (!Array.isArray(node))
+          return;
+        if (node[0] === "=" && node[1] instanceof String && node[1].type && vars.has(str(node[1]))) {
+          typedVars.add(str(node[1]));
+        }
+        for (let i = 1;i < node.length; i++)
+          findTypedAssigns(node[i]);
+      };
+      for (let stmt of statements)
+        findTypedAssigns(stmt);
+      let varStmts = new Map;
+      for (let v of vars)
+        varStmts.set(v, []);
+      for (let i = 0;i < statements.length; i++) {
+        for (let v of vars) {
+          if (this.referencesVar(statements[i], v))
+            varStmts.get(v).push(i);
+        }
+      }
+      let inlineVars = new Set, hoistVars = new Set;
+      for (let [v, indices] of varStmts) {
+        if (indices.length === 0) {
+          hoistVars.add(v);
+          continue;
+        }
+        if (typedVars.has(v)) {
+          hoistVars.add(v);
+          continue;
+        }
+        let firstIdx = indices[0];
+        let firstStmt = statements[firstIdx];
+        let isDirectAssign = Array.isArray(firstStmt) && firstStmt[0] === "=" && (typeof firstStmt[1] === "string" || firstStmt[1] instanceof String) && str(firstStmt[1]) === v && !this.referencesVar(firstStmt[2], v);
+        if (isDirectAssign) {
+          inlineVars.add(v);
+        } else if (indices.length === 1 && !this.is(firstStmt, "switch") && this.allRefsInSingleBlock(firstStmt, v) && this.firstRefIsAssignment(firstStmt, v)) {
+          inlineVars.add(v);
+        } else {
+          hoistVars.add(v);
+        }
+      }
+      return { inlineVars, hoistVars };
+    }
     extractMemberName(mk) {
       if (this.is(mk, ".") && mk[1] === "this")
         return mk[2];
@@ -10675,8 +10947,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeEmitter({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.13.134";
-  var BUILD_DATE = "2026-04-09@16:09:00GMT";
+  var VERSION = "3.13.135";
+  var BUILD_DATE = "2026-04-10@10:00:31GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -10968,56 +11240,12 @@ ${indented}`);
     createRenderer: () => createRenderer,
     createComponents: () => createComponents
   });
-  var PATH_RE;
-  var PERSISTED;
-  var PROXIES;
-  var RAW;
-  var SIGNALS;
-  var STASH;
   var __batch;
   var __effect;
   var __state;
-  var _ariaBindDialog;
-  var _ariaBindPopover;
-  var _ariaHasAnchor;
-  var _ariaListNav;
-  var _ariaLockScroll;
-  var _ariaModalStack;
-  var _ariaNAV;
-  var _ariaPopupDismiss;
-  var _ariaPopupGuard;
-  var _ariaPosition;
-  var _ariaPositionBelow;
-  var _ariaRovingNav;
-  var _ariaTrapFocus;
-  var _ariaUnlockScroll;
-  var _ariaWireAria;
-  var _keysVersion;
-  var _proxy;
-  var _toFn;
-  var _writeVersion;
-  var arraysEqual;
-  var buildComponentMap;
-  var buildRoutes;
-  var compileAndImport;
-  var connectWatch;
-  var fileToComponentName;
-  var fileToPattern;
-  var findAllComponents;
-  var findComponent;
   var getContext;
-  var getLayoutChain;
-  var getSignal;
   var hasContext;
-  var keysSignal;
-  var makeProxy;
-  var matchRoute;
-  var patternToRegex;
   var setContext;
-  var stashGet;
-  var stashSet;
-  var walk;
-  var wrapDeep;
   globalThis.abort ??= (msg) => {
     if (msg)
       console.error(msg);
@@ -11047,46 +11275,42 @@ ${indented}`);
   globalThis.zip ??= (...a) => a[0].map((_, i) => a.map((b) => b[i]));
   ({ __state, __effect, __batch } = globalThis.__rip);
   ({ setContext, getContext, hasContext } = globalThis.__ripComponent || {});
-  STASH = Symbol("stash");
-  SIGNALS = Symbol("signals");
-  RAW = Symbol("raw");
-  PERSISTED = Symbol("persisted");
-  PROXIES = new WeakMap;
-  _keysVersion = 0;
-  _writeVersion = __state(0);
-  getSignal = function(target, prop) {
-    let sig;
+  var STASH = Symbol("stash");
+  var SIGNALS = Symbol("signals");
+  var RAW = Symbol("raw");
+  var PERSISTED = Symbol("persisted");
+  var PROXIES = new WeakMap;
+  var _keysVersion = 0;
+  var _writeVersion = __state(0);
+  var getSignal = function(target, prop) {
     if (!target[SIGNALS]) {
       Object.defineProperty(target, SIGNALS, { value: new Map, enumerable: false });
     }
-    sig = target[SIGNALS].get(prop);
+    let sig = target[SIGNALS].get(prop);
     if (!sig) {
       sig = __state(target[prop]);
       target[SIGNALS].set(prop, sig);
     }
     return sig;
   };
-  keysSignal = function(target) {
+  var keysSignal = function(target) {
     return getSignal(target, Symbol.for("keys"));
   };
-  wrapDeep = function(value) {
-    let existing;
+  var wrapDeep = function(value) {
     if (!(value != null && typeof value === "object"))
       return value;
     if (value[STASH])
       return value;
     if (value instanceof Date || value instanceof RegExp || value instanceof Map || value instanceof Set || value instanceof Promise)
       return value;
-    existing = PROXIES.get(value);
+    let existing = PROXIES.get(value);
     if (existing)
       return existing;
     return makeProxy(value);
   };
-  makeProxy = function(target) {
-    let handler, proxy;
-    proxy = null;
-    handler = { get: function(target2, prop) {
-      let sig, val;
+  var makeProxy = function(target) {
+    let proxy = null;
+    let handler = { get: function(target2, prop) {
       if (prop === STASH)
         return true;
       if (prop === RAW)
@@ -11105,15 +11329,14 @@ ${indented}`);
         return function(path, val2) {
           return stashSet(proxy, path, val2);
         };
-      sig = getSignal(target2, prop);
-      val = sig.value;
+      let sig = getSignal(target2, prop);
+      let val = sig.value;
       if (val != null && typeof val === "object")
         return wrapDeep(val);
       return val;
     }, set: function(target2, prop, value) {
-      let old, r;
-      old = target2[prop];
-      r = value?.[RAW] ? value[RAW] : value;
+      let old = target2[prop];
+      let r = value?.[RAW] ? value[RAW] : value;
       if (r === old)
         return true;
       target2[prop] = r;
@@ -11126,9 +11349,8 @@ ${indented}`);
       _writeVersion.value++;
       return true;
     }, deleteProperty: function(target2, prop) {
-      let sig;
       delete target2[prop];
-      sig = target2[SIGNALS]?.get(prop);
+      let sig = target2[SIGNALS]?.get(prop);
       if (sig != null)
         sig.value = undefined;
       keysSignal(target2).value = ++_keysVersion;
@@ -11141,16 +11363,15 @@ ${indented}`);
     PROXIES.set(target, proxy);
     return proxy;
   };
-  PATH_RE = /([./][^./\[\s]+|\[[-+]?\d+\]|\[(?:"[^"]+"|'[^']+')\])/;
-  walk = function(path) {
-    let chr, i, list, part, result;
-    list = ("." + path).split(PATH_RE);
+  var PATH_RE = /([./][^./\[\s]+|\[[-+]?\d+\]|\[(?:"[^"]+"|'[^']+')\])/;
+  var walk = function(path) {
+    let list = ("." + path).split(PATH_RE);
     list.shift();
-    result = [];
-    i = 0;
+    let result = [];
+    let i = 0;
     while (i < list.length) {
-      part = list[i];
-      chr = part[0];
+      let part = list[i];
+      let chr = part[0];
       if (chr === "." || chr === "/") {
         result.push(part.slice(1));
       } else if (chr === "[") {
@@ -11164,10 +11385,9 @@ ${indented}`);
     }
     return result;
   };
-  stashGet = function(proxy, path) {
-    let obj, segs;
-    segs = walk(path);
-    obj = proxy;
+  var stashGet = function(proxy, path) {
+    let segs = walk(path);
+    let obj = proxy;
     for (const seg of segs) {
       if (!(obj != null))
         return;
@@ -11175,10 +11395,9 @@ ${indented}`);
     }
     return obj;
   };
-  stashSet = function(proxy, path, value) {
-    let obj, segs;
-    segs = walk(path);
-    obj = proxy;
+  var stashSet = function(proxy, path, value) {
+    let segs = walk(path);
+    let obj = proxy;
     for (let i = 0;i < segs.length; i++) {
       const seg = segs[i];
       if (i === segs.length - 1) {
@@ -11201,24 +11420,23 @@ ${indented}`);
     return obj?.[STASH] === true;
   };
   var persistStash = function(app, opts = {}) {
-    let _save, saved, savedData, storage, storageKey, target;
-    target = raw(app) || app;
+    let target = raw(app) || app;
     if (target[PERSISTED])
       return;
     target[PERSISTED] = true;
-    storage = opts.local ? localStorage : sessionStorage;
-    storageKey = opts.key || "__rip_app";
+    let storage = opts.local ? localStorage : sessionStorage;
+    let storageKey = opts.key || "__rip_app";
     try {
-      saved = storage.getItem(storageKey);
+      let saved = storage.getItem(storageKey);
       if (saved) {
-        savedData = JSON.parse(saved);
+        let savedData = JSON.parse(saved);
         for (const k in savedData) {
           const v = savedData[k];
           app.data[k] = v;
         }
       }
     } catch {}
-    _save = function() {
+    let _save = function() {
       return (() => {
         try {
           return storage.setItem(storageKey, JSON.stringify(raw(app.data)));
@@ -11228,9 +11446,8 @@ ${indented}`);
       })();
     };
     __effect(function() {
-      let t;
       _writeVersion.value;
-      t = setTimeout(_save, 2000);
+      let t = setTimeout(_save, 2000);
       return function() {
         return clearTimeout(t);
       };
@@ -11238,17 +11455,15 @@ ${indented}`);
     return window.addEventListener("beforeunload", _save);
   };
   var createResource = function(fn, opts = {}) {
-    let _data, _error, _loading, load, resource;
-    _data = __state(opts.initial || null);
-    _loading = __state(false);
-    _error = __state(null);
-    load = async function() {
-      let result;
+    let _data = __state(opts.initial || null);
+    let _loading = __state(false);
+    let _error = __state(null);
+    let load = async function() {
       _loading.value = true;
       _error.value = null;
       return await (async () => {
         try {
-          result = await fn();
+          let result = await fn();
           return _data.value = result;
         } catch (err) {
           return _error.value = err;
@@ -11257,7 +11472,7 @@ ${indented}`);
         }
       })();
     };
-    resource = { data: undefined, loading: undefined, error: undefined, refetch: load };
+    let resource = { data: undefined, loading: undefined, error: undefined, refetch: load };
     Object.defineProperty(resource, "data", { get: function() {
       return _data.value;
     } });
@@ -11271,14 +11486,13 @@ ${indented}`);
       load();
     return resource;
   };
-  _toFn = function(source) {
+  var _toFn = function(source) {
     return typeof source === "function" ? source : function() {
       return source.value;
     };
   };
-  _proxy = function(out, source) {
-    let obj;
-    obj = { read: function() {
+  var _proxy = function(out, source) {
+    let obj = { read: function() {
       return out.read();
     } };
     Object.defineProperty(obj, "value", { get: function() {
@@ -11289,13 +11503,11 @@ ${indented}`);
     return obj;
   };
   var delay = function(ms, source) {
-    let fn, out;
-    fn = _toFn(source);
-    out = __state(!!fn());
+    let fn = _toFn(source);
+    let out = __state(!!fn());
     __effect(function() {
-      let t;
       if (fn()) {
-        t = setTimeout(function() {
+        let t = setTimeout(function() {
           return out.value = true;
         }, ms);
         return function() {
@@ -11308,13 +11520,11 @@ ${indented}`);
     return typeof source !== "function" ? _proxy(out, source) : out;
   };
   var debounce = function(ms, source) {
-    let fn, out;
-    fn = _toFn(source);
-    out = __state(fn());
+    let fn = _toFn(source);
+    let out = __state(fn());
     __effect(function() {
-      let t, val;
-      val = fn();
-      t = setTimeout(function() {
+      let val = fn();
+      let t = setTimeout(function() {
         return out.value = val;
       }, ms);
       return function() {
@@ -11324,20 +11534,18 @@ ${indented}`);
     return typeof source !== "function" ? _proxy(out, source) : out;
   };
   var throttle = function(ms, source) {
-    let fn, last, out;
-    fn = _toFn(source);
-    out = __state(fn());
-    last = 0;
+    let fn = _toFn(source);
+    let out = __state(fn());
+    let last = 0;
     __effect(function() {
-      let now, remaining, t, val;
-      val = fn();
-      now = Date.now();
-      remaining = ms - (now - last);
+      let val = fn();
+      let now = Date.now();
+      let remaining = ms - (now - last);
       if (remaining <= 0) {
         out.value = val;
         return last = now;
       } else {
-        t = setTimeout(function() {
+        let t = setTimeout(function() {
           out.value = fn();
           return last = Date.now();
         }, remaining);
@@ -11349,15 +11557,13 @@ ${indented}`);
     return typeof source !== "function" ? _proxy(out, source) : out;
   };
   var hold = function(ms, source) {
-    let fn, out;
-    fn = _toFn(source);
-    out = __state(!!fn());
+    let fn = _toFn(source);
+    let out = __state(!!fn());
     __effect(function() {
-      let t;
       if (fn()) {
         return out.value = true;
       } else {
-        t = setTimeout(function() {
+        let t = setTimeout(function() {
           return out.value = false;
         }, ms);
         return function() {
@@ -11368,11 +11574,10 @@ ${indented}`);
     return typeof source !== "function" ? _proxy(out, source) : out;
   };
   var createComponents = function() {
-    let compiled, files, notify, watchers;
-    files = new Map;
-    watchers = [];
-    compiled = new Map;
-    notify = function(event, path) {
+    let files = new Map;
+    let watchers = [];
+    let compiled = new Map;
+    let notify = function(event, path) {
       for (const watcher of watchers) {
         watcher(event, path);
       }
@@ -11380,8 +11585,7 @@ ${indented}`);
     return { read: function(path) {
       return files.get(path);
     }, write: function(path, content) {
-      let isNew;
-      isNew = !files.has(path);
+      let isNew = !files.has(path);
       files.set(path, content);
       compiled.delete(path);
       return notify(isNew ? "create" : "change", path);
@@ -11394,12 +11598,11 @@ ${indented}`);
     }, size: function() {
       return files.size;
     }, list: function(dir = "") {
-      let prefix, rest, result;
-      result = [];
-      prefix = dir ? dir + "/" : "";
+      let result = [];
+      let prefix = dir ? dir + "/" : "";
       for (const [path] of files) {
         if (path.startsWith(prefix)) {
-          rest = path.slice(prefix.length);
+          let rest = path.slice(prefix.length);
           if (rest.includes("/"))
             continue;
           result.push(path);
@@ -11407,9 +11610,8 @@ ${indented}`);
       }
       return result;
     }, listAll: function(dir = "") {
-      let prefix, result;
-      result = [];
-      prefix = dir ? dir + "/" : "";
+      let result = [];
+      let prefix = dir ? dir + "/" : "";
       for (const [path] of files) {
         if (path.startsWith(prefix))
           result.push(path);
@@ -11431,9 +11633,8 @@ ${indented}`);
       return compiled.set(path, result);
     } };
   };
-  fileToPattern = function(rel) {
-    let pattern;
-    pattern = rel.replace(/\.rip$/, "");
+  var fileToPattern = function(rel) {
+    let pattern = rel.replace(/\.rip$/, "");
     pattern = pattern.replace(/\[\.\.\.(\w+)\]/g, "*$1");
     pattern = pattern.replace(/\[(\w+)\]/g, ":$1");
     if (pattern === "index")
@@ -11441,10 +11642,9 @@ ${indented}`);
     pattern = pattern.replace(/\/index$/, "");
     return "/" + pattern;
   };
-  patternToRegex = function(pattern) {
-    let names, str2;
-    names = [];
-    str2 = pattern.replace(/\*(\w+)/g, function(_, name) {
+  var patternToRegex = function(pattern) {
+    let names = [];
+    let str2 = pattern.replace(/\*(\w+)/g, function(_, name) {
       names.push(name);
       return "(.+)";
     }).replace(/:(\w+)/g, function(_, name) {
@@ -11453,12 +11653,11 @@ ${indented}`);
     });
     return { regex: new RegExp("^" + str2 + "$"), names };
   };
-  matchRoute = function(path, routes) {
-    let match, params;
+  var matchRoute = function(path, routes) {
     for (const route of routes) {
-      match = path.match(route.regex.regex);
+      let match = path.match(route.regex.regex);
       if (match) {
-        params = {};
+        let params = {};
         for (let i = 0;i < route.regex.names.length; i++) {
           const name = route.regex.names[i];
           params[name] = decodeURIComponent(match[i + 1]);
@@ -11468,38 +11667,36 @@ ${indented}`);
     }
     return null;
   };
-  buildRoutes = function(components, root = "components") {
-    let allFiles, dir, layouts, name, regex, rel, routes, segs, urlPattern;
-    routes = [];
-    layouts = new Map;
-    allFiles = components.listAll(root);
+  var buildRoutes = function(components, root = "components") {
+    let routes = [];
+    let layouts = new Map;
+    let allFiles = components.listAll(root);
     for (const filePath of allFiles) {
-      rel = filePath.slice(root.length + 1);
+      let rel = filePath.slice(root.length + 1);
       if (!rel.endsWith(".rip"))
         continue;
-      name = rel.split("/").pop();
+      let name = rel.split("/").pop();
       if (name === "_layout.rip") {
-        dir = rel === "_layout.rip" ? "" : rel.slice(0, -"/_layout.rip".length);
+        let dir = rel === "_layout.rip" ? "" : rel.slice(0, -"/_layout.rip".length);
         layouts.set(dir, filePath);
         continue;
       }
       if (name.startsWith("_"))
         continue;
-      segs = rel.split("/");
+      let segs = rel.split("/");
       if (segs.length > 1 && segs.some(function(s, i) {
         return i < segs.length - 1 && s.startsWith("_");
       }))
         continue;
-      urlPattern = fileToPattern(rel);
-      regex = patternToRegex(urlPattern);
+      let urlPattern = fileToPattern(rel);
+      let regex = patternToRegex(urlPattern);
       routes.push({ pattern: urlPattern, regex, file: filePath, rel });
     }
     routes.sort(function(a, b) {
-      let aCatch, aDyn, bCatch, bDyn;
-      aDyn = (a.pattern.match(/:/g) || []).length;
-      bDyn = (b.pattern.match(/:/g) || []).length;
-      aCatch = a.pattern.includes("*") ? 1 : 0;
-      bCatch = b.pattern.includes("*") ? 1 : 0;
+      let aDyn = (a.pattern.match(/:/g) || []).length;
+      let bDyn = (b.pattern.match(/:/g) || []).length;
+      let aCatch = a.pattern.includes("*") ? 1 : 0;
+      let bCatch = b.pattern.includes("*") ? 1 : 0;
       if (aCatch !== bCatch)
         return aCatch - bCatch;
       if (aDyn !== bDyn)
@@ -11508,12 +11705,11 @@ ${indented}`);
     });
     return { routes, layouts };
   };
-  getLayoutChain = function(routeFile, root, layouts) {
-    let chain, dir, rel, segments;
-    chain = [];
-    rel = routeFile.slice(root.length + 1);
-    segments = rel.split("/");
-    dir = "";
+  var getLayoutChain = function(routeFile, root, layouts) {
+    let chain = [];
+    let rel = routeFile.slice(root.length + 1);
+    let segments = rel.split("/");
+    let dir = "";
     if (layouts.has(""))
       chain.push(layouts.get(""));
     for (let i = 0;i < segments.length; i++) {
@@ -11527,18 +11723,17 @@ ${indented}`);
     return chain;
   };
   var createRouter = function(components, opts = {}) {
-    let _hash, _layouts, _navigating, _params, _path, _query, _route, addBase, base, hashMode, navCallbacks, onClick, onError, onPopState, readUrl, resolve, root, router, stripBase, tree, writeUrl;
-    root = opts.root || "components";
-    base = opts.base || "";
-    hashMode = opts.hash || false;
-    onError = opts.onError || null;
-    stripBase = function(url) {
+    let root = opts.root || "components";
+    let base = opts.base || "";
+    let hashMode = opts.hash || false;
+    let onError = opts.onError || null;
+    let stripBase = function(url) {
       return base && url.startsWith(base) ? url.slice(base.length) || "/" : url;
     };
-    addBase = function(path) {
+    let addBase = function(path) {
       return base ? base + path : path;
     };
-    readUrl = function() {
+    let readUrl = function() {
       let h;
       if (hashMode) {
         h = location.hash.slice(1);
@@ -11549,31 +11744,30 @@ ${indented}`);
         return location.pathname + location.search + location.hash;
       }
     };
-    writeUrl = function(path) {
+    let writeUrl = function(path) {
       return hashMode ? path === "/" ? location.pathname : "#" + path.slice(1) : addBase(path);
     };
-    _path = __state(stripBase(hashMode ? readUrl() : location.pathname));
-    _params = __state({});
-    _route = __state(null);
-    _layouts = __state([]);
-    _query = __state({});
-    _hash = __state("");
-    _navigating = delay(100, __state(false));
-    tree = buildRoutes(components, root);
-    navCallbacks = new Set;
+    let _path = __state(stripBase(hashMode ? readUrl() : location.pathname));
+    let _params = __state({});
+    let _route = __state(null);
+    let _layouts = __state([]);
+    let _query = __state({});
+    let _hash = __state("");
+    let _navigating = delay(100, __state(false));
+    let tree = buildRoutes(components, root);
+    let navCallbacks = new Set;
     components.watch(function(event, path) {
       if (!path.startsWith(root + "/"))
         return;
       return tree = buildRoutes(components, root);
     });
-    resolve = function(url) {
-      let hash, path, queryStr, rawPath, result;
-      rawPath = url.split("?")[0].split("#")[0];
-      path = stripBase(rawPath);
+    let resolve = function(url) {
+      let rawPath = url.split("?")[0].split("#")[0];
+      let path = stripBase(rawPath);
       path = path[0] === "/" ? path : "/" + path;
-      queryStr = url.split("?")[1]?.split("#")[0] || "";
-      hash = url.includes("#") ? url.split("#")[1] : "";
-      result = matchRoute(path, tree.routes);
+      let queryStr = url.split("?")[1]?.split("#")[0] || "";
+      let hash = url.includes("#") ? url.split("#")[1] : "";
+      let result = matchRoute(path, tree.routes);
       if (result) {
         __batch(function() {
           _path.value = path;
@@ -11592,33 +11786,32 @@ ${indented}`);
         onError({ status: 404, path });
       return false;
     };
-    onPopState = function() {
+    let onPopState = function() {
       return resolve(readUrl());
     };
     if (typeof window !== "undefined")
       window.addEventListener("popstate", onPopState);
-    onClick = function(e) {
-      let dest, target, url;
+    let onClick = function(e) {
       if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey)
         return;
-      target = e.target;
+      let target = e.target;
       while (target && target.tagName !== "A") {
         target = target.parentElement;
       }
       if (!target?.href)
         return;
-      url = new URL(target.href, location.origin);
+      let url = new URL(target.href, location.origin);
       if (url.origin !== location.origin)
         return;
       if (target.target === "_blank" || target.hasAttribute("data-external"))
         return;
       e.preventDefault();
-      dest = hashMode && url.hash ? url.hash.slice(1) || "/" : url.pathname + url.search + url.hash;
+      let dest = hashMode && url.hash ? url.hash.slice(1) || "/" : url.pathname + url.search + url.hash;
       return router.push(dest);
     };
     if (typeof document !== "undefined")
       document.addEventListener("click", onClick);
-    router = { push: function(url) {
+    let router = { push: function(url) {
       return resolve(url) ? history.pushState(null, "", writeUrl(_path.read())) : undefined;
     }, replace: function(url) {
       return resolve(url) ? history.replaceState(null, "", writeUrl(_path.read())) : undefined;
@@ -11674,7 +11867,7 @@ ${indented}`);
     } });
     return router;
   };
-  arraysEqual = function(a, b) {
+  var arraysEqual = function(a, b) {
     if (a.length !== b.length)
       return false;
     for (let i = 0;i < a.length; i++) {
@@ -11684,7 +11877,7 @@ ${indented}`);
     }
     return true;
   };
-  findComponent = function(mod) {
+  var findComponent = function(mod) {
     for (const key in mod) {
       const val = mod[key];
       if (typeof val === "function" && (val.prototype?.mount || val.prototype?._create))
@@ -11692,9 +11885,8 @@ ${indented}`);
     }
     return typeof mod.default === "function" ? mod.default : undefined;
   };
-  findAllComponents = function(mod) {
-    let result;
-    result = {};
+  var findAllComponents = function(mod) {
+    let result = {};
     for (const key in mod) {
       const val = mod[key];
       if (typeof val === "function" && (val.prototype?.mount || val.prototype?._create)) {
@@ -11703,23 +11895,21 @@ ${indented}`);
     }
     return result;
   };
-  fileToComponentName = function(filePath) {
-    let name;
-    name = filePath.split("/").pop().replace(/\.rip$/, "");
+  var fileToComponentName = function(filePath) {
+    let name = filePath.split("/").pop().replace(/\.rip$/, "");
     return name.replace(/(^|[-_])([a-z])/g, function(_, sep, ch) {
       return ch.toUpperCase();
     });
   };
-  buildComponentMap = function(components, root = "components") {
-    let fileName, map, name;
-    map = {};
+  var buildComponentMap = function(components, root = "components") {
+    let map = {};
     for (const path of components.listAll(root)) {
       if (!path.endsWith(".rip"))
         continue;
-      fileName = path.split("/").pop();
+      let fileName = path.split("/").pop();
       if (fileName.startsWith("_"))
         continue;
-      name = fileToComponentName(path);
+      let name = fileToComponentName(path);
       if (map[name]) {
         console.warn(`[Rip] Component name collision: ${name} (${map[name]} vs ${path})`);
       }
@@ -11727,23 +11917,23 @@ ${indented}`);
     }
     return map;
   };
-  compileAndImport = async function(source, compile2, components = null, path = null, resolver = null) {
-    let blob, cached, depMod, depSource, found, header, js, mod, names, needed, preamble, url;
+  var compileAndImport = async function(source, compile2, components = null, path = null, resolver = null) {
+    let cached, found, names, needed, preamble;
     if (components && path) {
       cached = components.getCompiled(path);
       if (cached)
         return cached;
     }
-    js = compile2(source);
+    let js = compile2(source);
     if (resolver) {
       needed = {};
       for (const name in resolver.map) {
         const depPath = resolver.map[name];
         if (depPath !== path && js.includes(`new ${name}(`)) {
           if (!resolver.classes[name]) {
-            depSource = components.read(depPath);
+            let depSource = components.read(depPath);
             if (depSource) {
-              depMod = await compileAndImport(depSource, compile2, components, depPath, resolver);
+              let depMod = await compileAndImport(depSource, compile2, components, depPath, resolver);
               found = findAllComponents(depMod);
               for (const k in found) {
                 const v = found[k];
@@ -11762,11 +11952,11 @@ ${indented}`);
         js = preamble + js;
       }
     }
-    header = path ? `// ${path}
+    let header = path ? `// ${path}
 ` : "";
-    blob = new Blob([header + js], { type: "application/javascript" });
-    url = URL.createObjectURL(blob);
-    mod = await import(url);
+    let blob = new Blob([header + js], { type: "application/javascript" });
+    let url = URL.createObjectURL(blob);
+    let mod = await import(url);
     if (resolver) {
       found = findAllComponents(mod);
       for (const k in found) {
@@ -11779,26 +11969,26 @@ ${indented}`);
     return mod;
   };
   var createRenderer = function(opts = {}) {
-    let app, cacheComponent, compile2, componentCache, components, container, currentComponent, currentLayouts, currentParams, currentRoute, disposeEffect, generation, layoutInstances, maxCacheSize, mountPoint, mountRoute, onError, renderer, resolver, router, target, unmount;
+    let app, compile2, components, onError, resolver, router, target;
     ({ router, app, components, resolver, compile: compile2, target, onError } = opts);
-    container = typeof target === "string" ? document.querySelector(target) : target || document.getElementById("app");
+    let container = typeof target === "string" ? document.querySelector(target) : target || document.getElementById("app");
     if (!container) {
       container = document.createElement("div");
       container.id = "app";
       document.body.appendChild(container);
     }
     container.style.opacity = "0";
-    currentComponent = null;
-    currentRoute = null;
-    currentParams = null;
-    currentLayouts = [];
-    layoutInstances = [];
-    mountPoint = container;
-    generation = 0;
-    disposeEffect = null;
-    componentCache = new Map;
-    maxCacheSize = opts.cacheSize || 10;
-    cacheComponent = function() {
+    let currentComponent = null;
+    let currentRoute = null;
+    let currentParams = null;
+    let currentLayouts = [];
+    let layoutInstances = [];
+    let mountPoint = container;
+    let generation = 0;
+    let disposeEffect = null;
+    let componentCache = new Map;
+    let maxCacheSize = opts.cacheSize || 10;
+    let cacheComponent = function() {
       let evicted, oldest;
       if (currentComponent && currentRoute) {
         if (currentComponent.beforeUnmount)
@@ -11815,7 +12005,7 @@ ${indented}`);
         return currentRoute = null;
       }
     };
-    unmount = function() {
+    let unmount = function() {
       cacheComponent();
       for (let _i = layoutInstances.length - 1;_i >= 0; _i--) {
         const inst = layoutInstances[_i];
@@ -11837,8 +12027,8 @@ ${indented}`);
         return componentCache.delete(path);
       }
     });
-    mountRoute = async function(info) {
-      let Component, LayoutClass, cached, gen2, handled, inst, instance, layoutFiles, layoutMod, layoutSource, layoutsChanged, mod, mp, oldTarget, pageWrapper, params, pre, query, route, slot, source, wrapper;
+    let mountRoute = async function(info) {
+      let layoutFiles, params, query, route;
       ({ route, params, layouts: layoutFiles, query } = info);
       if (!route)
         return;
@@ -11846,61 +12036,61 @@ ${indented}`);
         return;
       }
       currentParams = params;
-      gen2 = ++generation;
+      let gen2 = ++generation;
       router.navigating = true;
       return await (async () => {
         try {
-          source = components.read(route.file);
+          let source = components.read(route.file);
           if (!source) {
             if (onError)
               onError({ status: 404, message: `File not found: ${route.file}` });
             router.navigating = false;
             return;
           }
-          mod = await compileAndImport(source, compile2, components, route.file, resolver);
+          let mod = await compileAndImport(source, compile2, components, route.file, resolver);
           if (gen2 !== generation) {
             router.navigating = false;
             return;
           }
-          Component = findComponent(mod);
+          let Component = findComponent(mod);
           if (!Component) {
             if (onError)
               onError({ status: 500, message: `No component found in ${route.file}` });
             router.navigating = false;
             return;
           }
-          layoutsChanged = !arraysEqual(layoutFiles, currentLayouts);
-          oldTarget = currentComponent?._target;
+          let layoutsChanged = !arraysEqual(layoutFiles, currentLayouts);
+          let oldTarget = currentComponent?._target;
           if (layoutsChanged) {
             unmount();
           } else {
             cacheComponent();
           }
-          mp = layoutsChanged ? container : mountPoint;
+          let mp = layoutsChanged ? container : mountPoint;
           if (layoutsChanged && layoutFiles.length > 0) {
             container.innerHTML = "";
             mp = container;
             for (const layoutFile of layoutFiles) {
-              layoutSource = components.read(layoutFile);
+              let layoutSource = components.read(layoutFile);
               if (!layoutSource)
                 continue;
-              layoutMod = await compileAndImport(layoutSource, compile2, components, layoutFile, resolver);
+              let layoutMod = await compileAndImport(layoutSource, compile2, components, layoutFile, resolver);
               if (gen2 !== generation) {
                 router.navigating = false;
                 return;
               }
-              LayoutClass = findComponent(layoutMod);
+              let LayoutClass = findComponent(layoutMod);
               if (!LayoutClass)
                 continue;
-              inst = new LayoutClass({ app, params, router });
+              let inst = new LayoutClass({ app, params, router });
               if (inst.beforeMount)
                 inst.beforeMount();
-              wrapper = document.createElement("div");
+              let wrapper = document.createElement("div");
               wrapper.setAttribute("data-layout", layoutFile);
               mp.appendChild(wrapper);
               inst.mount(wrapper);
               layoutInstances.push(inst);
-              slot = wrapper.querySelector("#content") || wrapper;
+              let slot = wrapper.querySelector("#content") || wrapper;
               mp = slot;
             }
             currentLayouts = [...layoutFiles];
@@ -11910,7 +12100,7 @@ ${indented}`);
             currentLayouts = [];
             mountPoint = container;
           }
-          cached = componentCache.get(route.file);
+          let cached = componentCache.get(route.file);
           if (cached) {
             componentCache.delete(route.file);
             mp.appendChild(cached._target);
@@ -11925,10 +12115,10 @@ ${indented}`);
             if (cached.load)
               await cached.load(params, query);
           } else {
-            pageWrapper = document.createElement("div");
+            let pageWrapper = document.createElement("div");
             pageWrapper.setAttribute("data-component", route.file);
             mp.appendChild(pageWrapper);
-            instance = new Component({ app, params, query, router });
+            let instance = new Component({ app, params, query, router });
             if (instance.beforeMount)
               instance.beforeMount();
             instance.mount(pageWrapper);
@@ -11951,12 +12141,12 @@ ${indented}`);
           console.error(`Renderer: error mounting ${route.file}:`, err);
           if (onError)
             onError({ status: 500, message: err.message, error: err });
-          handled = false;
+          let handled = false;
           for (let _i = layoutInstances.length - 1;_i >= 0; _i--) {
-            const inst2 = layoutInstances[_i];
-            if (inst2.onError) {
+            const inst = layoutInstances[_i];
+            if (inst.onError) {
               try {
-                inst2.onError(err);
+                inst.onError(err);
                 handled = true;
                 break;
               } catch (boundaryErr) {
@@ -11966,7 +12156,7 @@ ${indented}`);
           }
           return (() => {
             if (!handled) {
-              pre = document.createElement("pre");
+              let pre = document.createElement("pre");
               pre.style.cssText = "color:red;padding:1em";
               pre.textContent = err.stack || err.message;
               container.innerHTML = "";
@@ -11976,10 +12166,9 @@ ${indented}`);
         }
       })();
     };
-    renderer = { start: function() {
+    let renderer = { start: function() {
       disposeEffect = __effect(function() {
-        let current;
-        current = router.current;
+        let current = router.current;
         return current.route ? mountRoute(current) : undefined;
       });
       router.init();
@@ -11992,19 +12181,16 @@ ${indented}`);
       }
       return container.innerHTML = "";
     }, remount: function() {
-      let current;
-      current = router.current;
+      let current = router.current;
       return current.route ? mountRoute(current) : undefined;
     }, cache: componentCache };
     return renderer;
   };
-  connectWatch = function(url) {
-    let connect, maxDelay, retryDelay;
-    retryDelay = 1000;
-    maxDelay = 30000;
-    connect = function() {
-      let es;
-      es = new EventSource(url);
+  var connectWatch = function(url) {
+    let retryDelay = 1000;
+    let maxDelay = 30000;
+    let connect = function() {
+      let es = new EventSource(url);
       es.addEventListener("connected", function() {
         retryDelay = 1000;
         return console.log("[Rip] Hot reload connected");
@@ -12029,17 +12215,17 @@ ${indented}`);
     return connect();
   };
   var launch = async function(appBase = "", opts = {}) {
-    let app, appComponents, bundle, cached, classesKey, compile2, el, etag, etagKey, hash, headers, persist, renderer, res, resolver, router, target;
+    let bundle, cached, el, etag, etagKey, headers, res;
     globalThis.__ripLaunched = true;
     if (typeof appBase === "object") {
       opts = appBase;
       appBase = "";
     }
     appBase = appBase.replace(/\/+$/, "");
-    target = opts.target || "#app";
-    compile2 = opts.compile || null;
-    persist = opts.persist || false;
-    hash = opts.hash || false;
+    let target = opts.target || "#app";
+    let compile2 = opts.compile || null;
+    let persist = opts.persist || false;
+    let hash = opts.hash || false;
     if (!compile2) {
       compile2 = globalThis?.compileToJS || null;
     }
@@ -12072,7 +12258,7 @@ ${indented}`);
     } else {
       throw new Error("launch: no bundle or bundleUrl provided");
     }
-    app = stash({ components: {}, routes: {}, data: {} });
+    let app = stash({ components: {}, routes: {}, data: {} });
     globalThis.__ripApp = app;
     if (bundle.data)
       app.data = bundle.data;
@@ -12082,19 +12268,19 @@ ${indented}`);
     if (persist && typeof sessionStorage !== "undefined") {
       persistStash(app, { local: persist === "local", key: `__rip_${appBase}` });
     }
-    appComponents = createComponents();
+    let appComponents = createComponents();
     if (bundle.components)
       appComponents.load(bundle.components);
-    classesKey = `__rip_${appBase.replace(/\//g, "_") || "app"}`;
-    resolver = { map: buildComponentMap(appComponents), classes: {}, key: classesKey };
+    let classesKey = `__rip_${appBase.replace(/\//g, "_") || "app"}`;
+    let resolver = { map: buildComponentMap(appComponents), classes: {}, key: classesKey };
     if (typeof globalThis !== "undefined")
       globalThis[classesKey] = resolver.classes;
     if (app.data.title && typeof document !== "undefined")
       document.title = app.data.title;
-    router = createRouter(appComponents, { root: "components", base: appBase, hash, onError: function(err) {
+    let router = createRouter(appComponents, { root: "components", base: appBase, hash, onError: function(err) {
       return console.error(`[Rip] Error ${err.status}: ${err.message || err.path}`);
     } });
-    renderer = createRenderer({ router, app, components: appComponents, resolver, compile: compile2, target, onError: function(err) {
+    let renderer = createRenderer({ router, app, components: appComponents, resolver, compile: compile2, target, onError: function(err) {
       return console.error(`[Rip] ${err.message}`, err.error);
     } });
     renderer.start();
@@ -12107,7 +12293,7 @@ ${indented}`);
     }
     return { app, components: appComponents, router, renderer };
   };
-  _ariaNAV = function(e, fn) {
+  var _ariaNAV = function(e, fn) {
     if (!fn)
       return;
     e.preventDefault();
@@ -12121,7 +12307,7 @@ ${indented}`);
     }, true);
     globalThis.__ariaFocusTrackerBound = true;
   }
-  _ariaListNav = function(e, h) {
+  var _ariaListNav = function(e, h) {
     if (e.isComposing)
       return;
     return (() => {
@@ -12148,19 +12334,18 @@ ${indented}`);
       }
     })();
   };
-  _ariaPopupDismiss = function(open, popup, close, els = [], repos = null) {
-    let get, onDown, onScroll;
+  var _ariaPopupDismiss = function(open, popup, close, els = [], repos = null) {
     if (!open)
       return;
-    get = function(x) {
+    let get = function(x) {
       return typeof x === "function" ? x() : x;
     };
-    onDown = (e) => {
+    let onDown = (e) => {
       return ![get(popup), ...els.map(get)].some(function(el) {
         return el?.contains(e.target);
       }) ? close() : undefined;
     };
-    onScroll = (e) => {
+    let onScroll = (e) => {
       if (get(popup)?.contains(e.target))
         return;
       return repos ? repos() : close();
@@ -12172,37 +12357,35 @@ ${indented}`);
       return window.removeEventListener("scroll", onScroll, true);
     };
   };
-  _ariaPopupGuard = function(delay2 = 250) {
-    let blockedUntil;
-    blockedUntil = 0;
+  var _ariaPopupGuard = function(delay2 = 250) {
+    let blockedUntil = 0;
     return { block: function(ms = delay2) {
       return blockedUntil = Date.now() + ms;
     }, canOpen: function() {
       return Date.now() >= blockedUntil;
     } };
   };
-  _ariaBindPopover = function(open, popover, setOpen, source = null) {
-    let currentFocus, desired, el, get, onToggle, opts, restoreEl, restoreFocus, shown, src, syncState;
-    get = function(x) {
+  var _ariaBindPopover = function(open, popover, setOpen, source = null) {
+    let opts, src;
+    let get = function(x) {
       return typeof x === "function" ? x() : x;
     };
-    currentFocus = function() {
-      let active, last;
-      active = document.activeElement;
+    let currentFocus = function() {
+      let active = document.activeElement;
       if (active && active !== document.body)
         return active;
-      last = globalThis.__ariaLastFocusedEl;
+      let last = globalThis.__ariaLastFocusedEl;
       if (last?.isConnected !== false)
         return last;
       return null;
     };
-    el = get(popover);
+    let el = get(popover);
     if (!el)
       return;
     if (!Object.hasOwn(HTMLElement.prototype, "togglePopover"))
       return;
-    restoreEl = null;
-    syncState = function(isOpen) {
+    let restoreEl = null;
+    let syncState = function(isOpen) {
       if (isOpen) {
         el.hidden = false;
         try {
@@ -12217,13 +12400,12 @@ ${indented}`);
         return el.hidden = true;
       }
     };
-    restoreFocus = function() {
-      let focusAttempt, target;
-      target = restoreEl;
+    let restoreFocus = function() {
+      let target = restoreEl;
       restoreEl = null;
       if (!target?.focus)
         return;
-      focusAttempt = function(tries = 6) {
+      let focusAttempt = function(tries = 6) {
         if (!(target.isConnected !== false))
           return;
         try {
@@ -12241,9 +12423,8 @@ ${indented}`);
         return focusAttempt();
       });
     };
-    onToggle = function(e) {
-      let isOpen;
-      isOpen = e.newState === "open";
+    let onToggle = function(e) {
+      let isOpen = e.newState === "open";
       if (isOpen) {
         restoreEl = get(source) || currentFocus();
         syncState(true);
@@ -12254,8 +12435,8 @@ ${indented}`);
       return setOpen?.(isOpen);
     };
     el.addEventListener("toggle", onToggle);
-    shown = el.matches(":popover-open");
-    desired = !!open;
+    let shown = el.matches(":popover-open");
+    let desired = !!open;
     if (shown !== desired) {
       src = get(source);
       if (desired) {
@@ -12273,26 +12454,24 @@ ${indented}`);
       return el.removeEventListener("toggle", onToggle);
     };
   };
-  _ariaBindDialog = function(open, dialog, setOpen, dismissable = true) {
-    let currentFocus, el, get, onCancel, onClose, restoreEl, restoreFocus, syncState;
-    get = function(x) {
+  var _ariaBindDialog = function(open, dialog, setOpen, dismissable = true) {
+    let get = function(x) {
       return typeof x === "function" ? x() : x;
     };
-    currentFocus = function() {
-      let active, last;
-      active = document.activeElement;
+    let currentFocus = function() {
+      let active = document.activeElement;
       if (active && active !== document.body)
         return active;
-      last = globalThis.__ariaLastFocusedEl;
+      let last = globalThis.__ariaLastFocusedEl;
       if (last?.isConnected !== false)
         return last;
       return null;
     };
-    el = get(dialog);
+    let el = get(dialog);
     if (!el?.showModal)
       return;
-    restoreEl = null;
-    syncState = function(isOpen) {
+    let restoreEl = null;
+    let syncState = function(isOpen) {
       if (isOpen) {
         el.hidden = false;
         try {
@@ -12307,13 +12486,12 @@ ${indented}`);
         return el.hidden = true;
       }
     };
-    restoreFocus = function() {
-      let focusAttempt, target;
-      target = restoreEl;
+    let restoreFocus = function() {
+      let target = restoreEl;
       restoreEl = null;
       if (!target?.focus)
         return;
-      focusAttempt = function(tries = 6) {
+      let focusAttempt = function(tries = 6) {
         if (!(target.isConnected !== false))
           return;
         try {
@@ -12331,14 +12509,14 @@ ${indented}`);
         return focusAttempt();
       });
     };
-    onCancel = function(e) {
+    let onCancel = function(e) {
       if (!dismissable) {
         e.preventDefault();
         return;
       }
       return setOpen?.(false);
     };
-    onClose = function() {
+    let onClose = function() {
       setOpen?.(false);
       syncState(false);
       return restoreFocus();
@@ -12362,12 +12540,11 @@ ${indented}`);
       return el.removeEventListener("close", onClose);
     };
   };
-  _ariaRovingNav = function(e, h, orientation = "vertical") {
-    let horz, vert;
+  var _ariaRovingNav = function(e, h, orientation = "vertical") {
     if (e.isComposing)
       return;
-    vert = orientation !== "horizontal";
-    horz = orientation !== "vertical";
+    let vert = orientation !== "horizontal";
+    let horz = orientation !== "vertical";
     return (() => {
       switch (e.key) {
         case "ArrowDown":
@@ -12394,16 +12571,15 @@ ${indented}`);
       }
     })();
   };
-  _ariaPositionBelow = function(trigger, popup, gap = 4, setVisible = true) {
-    let fl, tr;
+  var _ariaPositionBelow = function(trigger, popup, gap = 4, setVisible = true) {
     if (!(trigger && popup))
       return;
-    tr = trigger.getBoundingClientRect();
+    let tr = trigger.getBoundingClientRect();
     popup.style.position = "fixed";
     popup.style.left = `${tr.left}px`;
     popup.style.top = `${tr.bottom + gap}px`;
     popup.style.minWidth = `${tr.width}px`;
-    fl = popup.getBoundingClientRect();
+    let fl = popup.getBoundingClientRect();
     if (fl.bottom > window.innerHeight)
       popup.style.top = `${tr.top - fl.height - gap}px`;
     if (fl.right > window.innerWidth)
@@ -12411,19 +12587,17 @@ ${indented}`);
     return setVisible ? popup.style.visibility = "visible" : undefined;
   };
   var _FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
-  _ariaTrapFocus = function(panel) {
-    let handler;
-    handler = function(e) {
-      let first, last, list;
+  var _ariaTrapFocus = function(panel) {
+    let handler = function(e) {
       if (!(e.key === "Tab"))
         return;
-      list = Array.from(panel.querySelectorAll(_FOCUSABLE)).filter(function(f) {
+      let list = Array.from(panel.querySelectorAll(_FOCUSABLE)).filter(function(f) {
         return f.offsetParent !== null;
       });
       if (!list.length)
         return;
-      first = list[0];
-      last = list[list.length - 1];
+      let first = list[0];
+      let last = list[list.length - 1];
       return e.shiftKey ? document.activeElement === first ? (e.preventDefault(), last.focus()) : undefined : document.activeElement === last ? (e.preventDefault(), first.focus()) : undefined;
     };
     panel.addEventListener("keydown", handler);
@@ -12431,25 +12605,23 @@ ${indented}`);
       return panel.removeEventListener("keydown", handler);
     };
   };
-  _ariaWireAria = function(panel, id) {
-    let desc, heading;
+  var _ariaWireAria = function(panel, id) {
     if (!panel)
       return;
-    heading = panel.querySelector("h1,h2,h3,h4,h5,h6");
+    let heading = panel.querySelector("h1,h2,h3,h4,h5,h6");
     if (heading) {
       heading.id ??= `${id}-title`;
       panel.setAttribute("aria-labelledby", heading.id);
     }
-    desc = panel.querySelector("p");
+    let desc = panel.querySelector("p");
     if (desc) {
       desc.id ??= `${id}-desc`;
       return panel.setAttribute("aria-describedby", desc.id);
     }
   };
-  _ariaModalStack = [];
-  _ariaLockScroll = function(instance) {
-    let scrollY;
-    scrollY = window.scrollY;
+  var _ariaModalStack = [];
+  var _ariaLockScroll = function(instance) {
+    let scrollY = window.scrollY;
     _ariaModalStack.push({ instance, scrollY });
     if (_ariaModalStack.length === 1) {
       document.body.style.position = "fixed";
@@ -12457,9 +12629,9 @@ ${indented}`);
       return document.body.style.width = "100%";
     }
   };
-  _ariaUnlockScroll = function(instance) {
-    let idx, scrollY;
-    idx = _ariaModalStack.findIndex(function(m) {
+  var _ariaUnlockScroll = function(instance) {
+    let scrollY;
+    let idx = _ariaModalStack.findIndex(function(m) {
       return m.instance === instance;
     });
     if (idx < 0)
@@ -12472,19 +12644,18 @@ ${indented}`);
       return window.scrollTo(0, scrollY);
     }
   };
-  _ariaHasAnchor = function() {
-    let anchor, floating, rect;
+  var _ariaHasAnchor = function() {
     return (() => {
       try {
         if (!document?.createElement)
           return false;
-        anchor = document.createElement("div");
-        floating = document.createElement("div");
+        let anchor = document.createElement("div");
+        let floating = document.createElement("div");
         anchor.style.cssText = "position:fixed;top:100px;left:100px;width:10px;height:10px;anchor-name:--probe";
         floating.style.cssText = "position:fixed;inset:auto;margin:0;position-anchor:--probe;position-area:bottom start;width:10px;height:10px";
         document.body.appendChild(anchor);
         document.body.appendChild(floating);
-        rect = floating.getBoundingClientRect();
+        let rect = floating.getBoundingClientRect();
         anchor.remove();
         floating.remove();
         return rect.top > 50;
@@ -12493,13 +12664,13 @@ ${indented}`);
       }
     })();
   }();
-  _ariaPosition = function(trigger, floating, opts = {}) {
-    let align, matchWidth, name, offset, placement, rect, side;
+  var _ariaPosition = function(trigger, floating, opts = {}) {
+    let align, name, rect, side;
     if (!(trigger && floating))
       return;
-    placement = opts.placement ?? "bottom start";
-    offset = opts.offset ?? 4;
-    matchWidth = opts.matchWidth ?? false;
+    let placement = opts.placement ?? "bottom start";
+    let offset = opts.offset ?? 4;
+    let matchWidth = opts.matchWidth ?? false;
     if (_ariaHasAnchor) {
       name = `--anchor-${floating.id || Math.random().toString(36).slice(2, 8)}`;
       trigger.style.anchorName = name;
