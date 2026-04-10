@@ -3,13 +3,12 @@
 // Type audit verification suite
 // Usage: bun test/types/runner.js  (or: bun run test:types)
 
-import { execSync } from 'child_process';
+import { execSync, spawn } from 'child_process';
 import { readdirSync, writeFileSync, unlinkSync } from 'fs';
 import { resolve, dirname } from 'path';
 
 const dir = dirname(new URL(import.meta.url).pathname);
 const rip = resolve(dir, '../../bin/rip');
-const run = (cmd, opts = {}) => execSync(cmd, { cwd: dir, stdio: 'pipe', timeout: 30000, ...opts }).toString();
 const stripAnsi = s => s.replace(/\x1b\[[0-9;]*m/g, '');
 
 const isColor = process.stdout.isTTY !== false;
@@ -25,67 +24,63 @@ const check = (name, ok, detail) => {
   else { fail++; results.push({ name, ok: false, detail }); }
 };
 
+// Async exec helper — returns { ok, stdout, stderr }
+const exec = (cmd, args) => new Promise(resolve => {
+  const proc = spawn(cmd, args, { cwd: dir, stdio: 'pipe', timeout: 30000 });
+  let stdout = '', stderr = '';
+  proc.stdout.on('data', d => stdout += d);
+  proc.stderr.on('data', d => stderr += d);
+  proc.on('close', code => resolve({ ok: code === 0, stdout, stderr }));
+});
+
 // Clean up leftover probe from a previous crashed run
 try { unlinkSync(resolve(dir, '_strict_probe.rip')); } catch {}
 
-// Type-check all .rip files
-try {
-  run(`${rip} check`);
-  check('rip check', true);
-} catch (e) {
-  check('rip check', false, stripAnsi(e.stdout?.toString() || e.message));
-}
-
-// Type-check all .ts files
-try {
-  run('bunx tsc');
-  check('bunx tsc', true);
-} catch (e) {
-  check('bunx tsc', false, e.stdout?.toString() || e.message);
-}
-
-// Run all .rip files
+// Discover files
 const ripFiles = readdirSync(dir).filter(f => f.endsWith('.rip')).sort();
-for (const f of ripFiles) {
-  try {
-    run(`${rip} ${f}`);
-    check(`run ${f}`, true);
-  } catch (e) {
-    check(`run ${f}`, false, e.stderr?.toString().slice(0, 200) || e.message);
-  }
-}
-
-// Run all .ts/.tsx files
 const tsFiles = readdirSync(dir).filter(f => (f.endsWith('.ts') || f.endsWith('.tsx')) && !f.endsWith('.d.ts')).sort();
-for (const f of tsFiles) {
-  try {
-    run(`bun run ${f}`);
-    check(`run ${f}`, true);
-  } catch (e) {
-    check(`run ${f}`, false, e.stderr?.toString().slice(0, 200) || e.message);
+
+// Run everything in parallel: type-checks + all file executions
+const [ripCheck, tsc, ...fileResults] = await Promise.all([
+  exec(rip, ['check']),
+  exec('bunx', ['tsc']),
+  ...ripFiles.map(async f => ({ file: f, type: 'rip', ...await exec(rip, [f]) })),
+  ...tsFiles.map(async f => ({ file: f, type: 'ts', ...await exec('bun', ['run', f]) })),
+]);
+
+// Type-check results
+check('rip check', ripCheck.ok, stripAnsi(ripCheck.stdout || ripCheck.stderr));
+check('bunx tsc', tsc.ok, tsc.stdout || tsc.stderr);
+
+// File run results + cache output for parity
+const ripOutput = {}, tsOutput = {};
+for (const r of fileResults) {
+  const output = r.stdout + r.stderr;
+  if (r.type === 'rip') {
+    check(`run ${r.file}`, r.ok, output.slice(0, 200));
+    if (r.ok) ripOutput[r.file] = r.stdout;
+  } else {
+    check(`run ${r.file}`, r.ok, output.slice(0, 200));
+    if (r.ok) tsOutput[r.file] = r.stdout;
   }
 }
 
-// Output parity — auto-discovered from .rip files that have a .ts/.tsx companion
+// Output parity — compare cached output from .rip and .ts/.tsx runs
 for (const f of ripFiles) {
   const n = f.replace(/\.rip$/, '');
-  const ext = tsFiles.find(t => t === `${n}.tsx`) ? 'tsx' : tsFiles.find(t => t === `${n}.ts`) ? 'ts' : null;
-  if (!ext) continue;
-  try {
-    const ripOut = run(`${rip} ${n}.rip 2>&1`);
-    const tsOut = run(`bun run ${n}.${ext} 2>&1`);
-    check(`parity ${n}`, ripOut === tsOut, `output differs`);
-  } catch {
-    check(`parity ${n}`, true, 'skipped (runtime error)');
-  }
+  const companion = tsFiles.find(t => t === `${n}.tsx`) || tsFiles.find(t => t === `${n}.ts`);
+  if (!companion) continue;
+  const rOut = ripOutput[f], tOut = tsOutput[companion];
+  if (rOut != null && tOut != null) check(`parity ${n}`, rOut === tOut, 'output differs');
+  else check(`parity ${n}`, true, 'skipped (runtime error)');
 }
 
-// Strict mode enforcement
+// Strict mode enforcement (must run sequentially — writes a probe file)
 try {
   const probe = resolve(dir, '_strict_probe.rip');
   writeFileSync(probe, 'x = "hello"\nx()\n');
   try {
-    run(`${rip} check`);
+    execSync(`${rip} check`, { cwd: dir, stdio: 'pipe', timeout: 30000 });
     check('strict mode', false, 'rip check exited 0 — expected TS2349');
   } catch (e) {
     const out = stripAnsi(e.stdout?.toString() || '');
