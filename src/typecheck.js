@@ -198,6 +198,17 @@ export function patchUninitializedTypes(ts, service, compiledEntries) {
       if (ts.isFunctionDeclaration(stmt) && stmt.body) {
         patchStatements(stmt.body.statements);
       }
+      // Recurse into function expressions / arrows assigned to variables
+      // or passed as arguments (e.g., __computed(() => { let x; ... }))
+      const walkForFunctions = (node) => {
+        if (!node) return;
+        if ((ts.isFunctionExpression(node) || ts.isArrowFunction(node)) && node.body) {
+          if (ts.isBlock(node.body)) patchStatements(node.body.statements);
+          return;
+        }
+        ts.forEachChild(node, walkForFunctions);
+      };
+      walkForFunctions(stmt);
     }
   }
 
