@@ -37,3 +37,12 @@ The biggest benefit is not perfect correctness, but better maintainability and f
 ### Summary
 
 Types do not remove all bugs, but they provide fast feedback, clearer interfaces, and safer refactoring. These qualities make large codebases easier to maintain and evolve over time.
+
+## Schema
+
+```rip
+schema Donkey
+  name: string
+  smell: 'Good' | 'Bad' | 'Ugly'
+  transform: (foo) => 'bar'
+```
