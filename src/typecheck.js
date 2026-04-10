@@ -198,17 +198,54 @@ export function patchUninitializedTypes(ts, service, compiledEntries) {
       if (ts.isFunctionDeclaration(stmt) && stmt.body) {
         patchStatements(stmt.body.statements);
       }
-      // Recurse into function expressions / arrows assigned to variables
-      // or passed as arguments (e.g., __computed(() => { let x; ... }))
-      const walkForFunctions = (node) => {
+      // Recurse into function expressions / arrows in known patterns:
+      // - Variable initializers: const x = __computed(() => { ... })
+      // - Call expression arguments: __effect(() => { ... })
+      // Avoids broad ts.forEachChild to prevent patching unrelated nested scopes.
+      const walkInitializersAndArgs = (node) => {
         if (!node) return;
         if ((ts.isFunctionExpression(node) || ts.isArrowFunction(node)) && node.body) {
           if (ts.isBlock(node.body)) patchStatements(node.body.statements);
           return;
         }
-        ts.forEachChild(node, walkForFunctions);
+        // Variable declarations: recurse into each initializer
+        if (ts.isVariableStatement(node)) {
+          for (const decl of node.declarationList.declarations) {
+            if (decl.initializer) walkInitializersAndArgs(decl.initializer);
+          }
+          return;
+        }
+        // Expression statements: recurse into the expression
+        if (ts.isExpressionStatement(node)) {
+          walkInitializersAndArgs(node.expression);
+          return;
+        }
+        // Call expressions: recurse into each argument
+        if (ts.isCallExpression(node)) {
+          for (const arg of node.arguments) walkInitializersAndArgs(arg);
+          // Also check the expression being called (e.g., chained calls)
+          if (ts.isCallExpression(node.expression)) walkInitializersAndArgs(node.expression);
+          return;
+        }
+        // Parenthesized: unwrap
+        if (ts.isParenthesizedExpression(node)) {
+          walkInitializersAndArgs(node.expression);
+          return;
+        }
+        // Class declarations/expressions: recurse into property initializers and method bodies
+        if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) {
+          for (const member of node.members) {
+            if (ts.isPropertyDeclaration(member) && member.initializer) {
+              walkInitializersAndArgs(member.initializer);
+            }
+            if ((ts.isMethodDeclaration(member) || ts.isConstructorDeclaration(member)) && member.body) {
+              patchStatements(member.body.statements);
+            }
+          }
+          return;
+        }
       };
-      walkForFunctions(stmt);
+      walkInitializersAndArgs(stmt);
     }
   }
 
@@ -930,13 +967,48 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
   }
 
   // Inline hoisted `let` declarations at their first assignment in the shadow
-  // TS file. Rip always hoists `let` to the top of scope for correct JS
-  // scoping. For TypeScript inference, we move the declaration inline so TS
-  // can infer types from initializers (e.g., `let x; x = 1` → `let x = 1`).
-  // Only rewrites same-scope, straight-line assignments — stops at control
-  // flow to avoid changing binding visibility in the shadow file.
+  // TS file, then merge DTS header types into the inlined declarations.
+  //
+  // Phase 1 — straight-line: scan same-indent lines from the hoisted `let`
+  // downward, stopping at structural statements (if/for/while/etc.). This
+  // handles the common case where assignment immediately follows declaration.
+  //
+  // Phase 2 — block-confined: for variables not resolved in phase 1, check
+  // if the first assignment is inside a deeper block and ALL references to
+  // the variable are confined to that block. If so, inline there. TS still
+  // enforces block scoping in non-executed code, so we must verify the
+  // variable isn't referenced after the block exits.
+  //
+  // DTS header types are merged during inlining: `let x: Type = value;`.
+  // Header lines that were merged are removed afterward to avoid TS2454.
   if (hasTypes && code) {
     const cl = code.split('\n');
+    const reEsc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const debugInline = opts.debug;
+
+    // Build DTS header type map for merging
+    const letTypes = new Map();
+    const movedDts = new Set();
+    let dl;
+    if (headerDts) {
+      dl = headerDts.split('\n');
+      for (let i = 0; i < dl.length; i++) {
+        const m = dl[i].match(/^(?:export\s+)?(?:declare\s+)?let\s+(\w+):\s+(.+);$/);
+        if (m) letTypes.set(m[1], { type: m[2], idx: i });
+      }
+    }
+
+    // Helper: inline a variable at the given line
+    const doInline = (v, lineIdx, indent, rhs) => {
+      const dts = letTypes.get(v);
+      if (dts) {
+        cl[lineIdx] = `${indent}let ${v}: ${dts.type} = ${rhs};`;
+        movedDts.add(dts.idx);
+      } else {
+        cl[lineIdx] = `${indent}let ${v} = ${rhs};`;
+      }
+    };
+
     for (let i = 0; i < cl.length; i++) {
       const m = cl[i].match(/^(\s*)let\s+([A-Za-z_$][\w$]*(?:\s*,\s*[A-Za-z_$][\w$]*)*)\s*;\s*$/);
       if (!m) continue;
@@ -945,29 +1017,29 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
       for (let k = i - 1; k >= 0; k--) { if (cl[k].trim() !== '') { prev = cl[k]; break; } }
       if (prev !== null && !/\{\s*$/.test(prev)) continue;
 
-      const indent = m[1];
+      const baseIndent = m[1];
       const vars = m[2].split(/\s*,\s*/);
       const inlined = new Set();
       const bailed = new Set();
-      const reEsc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const scopeEndRe = new RegExp('^' + reEsc(baseIndent) + '}');
 
+      // Phase 1: straight-line scan at base indent
       for (let j = i + 1; j < cl.length; j++) {
         const line = cl[j];
         if (line.trim() === '') continue;
-        // End of scope
-        if (new RegExp('^' + reEsc(indent) + '}').test(line)) break;
+        if (scopeEndRe.test(line)) break;
         // Skip deeper-indented lines
-        if (line.startsWith(indent + '  ')) continue;
-        // Stop at structural statements
-        if (new RegExp('^' + reEsc(indent) + '(?:if\\b|for\\b|while\\b|switch\\b|try\\b|catch\\b|finally\\b|function\\b|class\\b|do\\b|\\{|\\})').test(line)) break;
-
+        if (line.startsWith(baseIndent + '  ')) continue;
+        // Stop at structural statements (if/for/while/switch/try/do/function/class)
+        if (/^\s*(?:if|for|while|switch|try|do|function|class)\s*[\s({]/.test(line)) break;
+        if (/^\s*\} (?:else|catch|finally)/.test(line)) break;
         for (const v of vars) {
           if (inlined.has(v) || bailed.has(v)) continue;
           const ve = reEsc(v);
-          const assignRe = new RegExp('^' + reEsc(indent) + ve + '\\s*=(?!=)\\s*(.*);\\s*$');
+          const assignRe = new RegExp('^' + reEsc(baseIndent) + ve + '\\s*=(?!=)\\s*(.*);\\s*$');
           const assign = line.match(assignRe);
           if (assign) {
-            cl[j] = `${indent}let ${v} = ${assign[1]};`;
+            doInline(v, j, baseIndent, assign[1]);
             inlined.add(v);
             continue;
           }
@@ -976,44 +1048,78 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
         if (vars.every(v => inlined.has(v) || bailed.has(v))) break;
       }
 
+      // Phase 2: block-confined scan for remaining variables
+      for (const v of vars) {
+        if (inlined.has(v) || bailed.has(v)) continue;
+        const ve = reEsc(v);
+        const vRe = new RegExp('\\b' + ve + '\\b');
+
+        // Find the first reference and first assignment anywhere in the scope
+        let firstRefLine = -1, foundAssign = null;
+        for (let j = i + 1; j < cl.length; j++) {
+          const line = cl[j];
+          if (line.trim() === '') continue;
+          if (scopeEndRe.test(line)) break;
+          if (!vRe.test(line)) continue;
+          if (firstRefLine < 0) firstRefLine = j;
+          if (!foundAssign) {
+            const lineIndent = line.match(/^(\s*)/)[1];
+            const assignRe = new RegExp('^' + reEsc(lineIndent) + ve + '\\s*=(?!=)\\s*(.*);\\s*$');
+            const am = line.match(assignRe);
+            if (am) foundAssign = { line: j, indent: lineIndent, rhs: am[1] };
+          }
+          if (foundAssign) break;
+        }
+
+        if (!foundAssign) continue;
+        if (foundAssign.indent === baseIndent) continue; // phase 1 territory
+        if (firstRefLine !== foundAssign.line) continue;  // read before write
+
+        // Find where the enclosing block exits (first line at indent < assignment indent)
+        let blockEndLine = -1;
+        for (let j = foundAssign.line + 1; j < cl.length; j++) {
+          const line = cl[j];
+          if (line.trim() === '') continue;
+          if (scopeEndRe.test(line)) { blockEndLine = j; break; }
+          const li = line.match(/^(\s*)/)[1];
+          if (li.length < foundAssign.indent.length) { blockEndLine = j; break; }
+        }
+
+        // Check if the variable is referenced after the block exits
+        let hasRefAfterBlock = false;
+        if (blockEndLine >= 0) {
+          for (let j = blockEndLine + 1; j < cl.length; j++) {
+            const line = cl[j];
+            if (line.trim() === '') continue;
+            if (scopeEndRe.test(line)) break;
+            if (vRe.test(line)) { hasRefAfterBlock = true; break; }
+          }
+        }
+
+        if (hasRefAfterBlock) continue; // used outside the block — leave hoisted
+
+        doInline(v, foundAssign.line, foundAssign.indent, foundAssign.rhs);
+        inlined.add(v);
+      }
+
+      if (debugInline && (inlined.size > 0 || bailed.size > 0)) {
+        const parts = [];
+        if (inlined.size) parts.push(`inlined: ${[...inlined].join(', ')}`);
+        if (bailed.size) parts.push(`bailed: ${[...bailed].join(', ')}`);
+        const remaining = vars.filter(v => !inlined.has(v) && !bailed.has(v));
+        if (remaining.length) parts.push(`unresolved: ${remaining.join(', ')}`);
+        console.warn(`[rip:inline] ${filePath} — ${parts.join('; ')}`);
+      }
+
       const remaining = vars.filter(v => !inlined.has(v));
-      if (remaining.length) cl[i] = `${indent}let ${remaining.join(', ')};`;
+      if (remaining.length) cl[i] = `${baseIndent}let ${remaining.join(', ')};`;
       else cl[i] = '';
     }
     code = cl.join('\n');
-  }
 
-  // Merge typed `let` declarations from the DTS header into initialized body
-  // declarations. After the shadow rewrite above, the body may have `let x = expr;`
-  // while the DTS header still has `let x: Type;`. TS uses the uninitialized header
-  // declaration for flow analysis, causing TS2454 ("used before being assigned").
-  // Fix: annotate the body declaration with the header type and remove the header line.
-  if (hasTypes && headerDts && code) {
-    const dl = headerDts.split('\n');
-    const cl = code.split('\n');
-    const letTypes = new Map();
-
-    for (let i = 0; i < dl.length; i++) {
-      const m = dl[i].match(/^(?:export\s+)?(?:declare\s+)?let\s+(\w+):\s+(.+);$/);
-      if (m) letTypes.set(m[1], { type: m[2], idx: i });
-    }
-
-    if (letTypes.size > 0) {
-      const movedDts = new Set();
-
-      for (let j = 0; j < cl.length; j++) {
-        const lm = cl[j].match(/^(\s*let\s+)(\w+)(\s*=\s*)/);
-        if (lm && letTypes.has(lm[2])) {
-          const entry = letTypes.get(lm[2]);
-          cl[j] = lm[1] + lm[2] + ': ' + entry.type + lm[3] + cl[j].slice(lm[0].length);
-          movedDts.add(entry.idx);
-        }
-      }
-
-      if (movedDts.size > 0) {
-        code = cl.join('\n');
-        headerDts = dl.filter((_, i) => !movedDts.has(i)).join('\n').trimEnd() + '\n';
-      }
+    // Remove DTS header lines that were merged into body declarations
+    if (movedDts.size > 0 && dl) {
+      headerDts = dl.filter((_, i) => !movedDts.has(i)).join('\n').trimEnd() + '\n';
     }
   }
 
@@ -1022,6 +1128,25 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
 
   // Build bidirectional line maps
   const { srcToGen, genToSrc, srcColToGen } = buildLineMap(result.reverseMap, result.map, headerLines);
+
+  // Fix srcToGen entries that point to lines emptied by Phase 2 inlining.
+  // When a hoisted `let` is inlined, its original line becomes empty (""), but
+  // buildLineMap still maps source lines to that position.  Redirect to the
+  // nearest non-empty alternative from srcColToGen.
+  const tsLines = tsContent.split('\n');
+  for (const [srcLine, genLine] of srcToGen) {
+    if (genLine >= 0 && genLine < tsLines.length && tsLines[genLine] === '') {
+      const colEntries = srcColToGen.get(srcLine);
+      if (colEntries) {
+        for (const e of colEntries) {
+          if (e.genLine >= 0 && e.genLine < tsLines.length && tsLines[e.genLine] !== '') {
+            srcToGen.set(srcLine, e.genLine);
+            break;
+          }
+        }
+      }
+    }
+  }
 
   // Snapshot code-section mappings before DTS mapping can overwrite them.
   // Needed by @ts-expect-error injection which must target code lines, not DTS.
