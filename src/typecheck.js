@@ -14,7 +14,7 @@ import { Compiler, getStdlibCode } from './compiler.js';
 import { INTRINSIC_TYPE_DECLS, INTRINSIC_FN_DECL, ARIA_TYPE_DECLS, SIGNAL_INTERFACE, SIGNAL_FN, COMPUTED_INTERFACE, COMPUTED_FN, EFFECT_FN } from './types.js';
 import { createRequire } from 'module';
 import { readFileSync, existsSync, readdirSync } from 'fs';
-import { mapToSourcePos, offsetToLine, getLineText, findNearestWord, lineColToOffset, offsetToLineCol, adjustSwitchDiagnostic, isInjectedOverload } from './sourcemap-utils.js';
+import { mapToSourcePos, offsetToLine, getLineText, findNearestWord, lineColToOffset, offsetToLineCol, adjustSwitchDiagnostic, isInjectedOverload, srcToOffset } from './sourcemap-utils.js';
 import { resolve, relative, dirname } from 'path';
 import { buildLineMap } from './sourcemaps.js';
 
@@ -1278,7 +1278,7 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
 
 // ── Source mapping helpers (delegated to sourcemap-utils.js) ───────
 
-export { mapToSourcePos, offsetToLine, getLineText, findNearestWord, lineColToOffset, offsetToLineCol, adjustSwitchDiagnostic, isInjectedOverload } from './sourcemap-utils.js';
+export { mapToSourcePos, offsetToLine, getLineText, findNearestWord, lineColToOffset, offsetToLineCol, adjustSwitchDiagnostic, isInjectedOverload, srcToOffset } from './sourcemap-utils.js';
 
 // Map a TypeScript diagnostic offset back to a Rip source line number.
 // Returns -1 if the offset falls in the DTS header.
@@ -1721,6 +1721,187 @@ export async function runCheck(targetDir, opts = {}) {
         }
       }
     }
+  }
+
+  // ── Source map audit ─────────────────────────────────────────────
+  // Walk every identifier in each Rip source file and verify the source map
+  // round-trip: srcToOffset must resolve, and getQuickInfoAtPosition must
+  // return hover info for it.  Failures indicate source map gaps that make
+  // hover/definition/completion silently break in the editor.
+
+  const AUDIT_SKIP = new Set([
+    'if', 'else', 'then', 'unless', 'switch', 'when', 'for', 'while', 'until',
+    'loop', 'do', 'try', 'catch', 'finally', 'throw', 'return', 'break',
+    'continue', 'yield', 'await', 'new', 'delete', 'typeof', 'instanceof',
+    'in', 'of', 'as', 'is', 'isnt', 'not', 'and', 'or', 'yes', 'no',
+    'true', 'false', 'null', 'undefined', 'this', 'super', 'class', 'extends',
+    'import', 'export', 'from', 'default', 'def', 'render', 'component',
+    'type', 'interface', 'enum', 'const', 'let', 'var', 'void', 'async',
+    'static', 'get', 'set', 'constructor', 'declare', 'implements', 'readonly',
+    'offer', 'accept', 'it', 'stash',
+    // Type keywords — never have hover info in value position
+    'number', 'string', 'boolean', 'any', 'unknown', 'never', 'object',
+    'symbol', 'bigint',
+  ]);
+  // Standard library: runtime globals injected by Rip (no TS declaration)
+  const STDLIB = new Set([
+    'abort', 'assert', 'exit', 'kind', 'noop', 'p', 'pp', 'raise', 'rand',
+    'sleep', 'todo', 'warn', 'zip',
+  ]);
+  // Build string and comment regions for a source line so the audit can
+  // accurately skip identifiers inside strings/comments without being fooled
+  // by interpolation `#{}`, escaped quotes, or apostrophes in double-quoted
+  // strings.  Returns an array of [start, end] ranges that are "non-code".
+  function nonCodeRegions(line) {
+    const regions = [];
+    let i = 0;
+    while (i < line.length) {
+      const ch = line[i];
+      // Single-line comment — any # outside a string starts a comment
+      // (#{} interpolation only exists inside double-quoted strings)
+      if (ch === '#') {
+        regions.push([i, line.length]);
+        return regions;
+      }
+      // String literal
+      if (ch === '"' || ch === "'") {
+        const quote = ch;
+        const start = i;
+        i++;
+        while (i < line.length) {
+          if (line[i] === '\\') { i += 2; continue; }
+          if (line[i] === '#' && line[i + 1] === '{' && quote === '"') {
+            // Interpolation — skip to matching }
+            let depth = 1;
+            i += 2;
+            while (i < line.length && depth > 0) {
+              if (line[i] === '{') depth++;
+              else if (line[i] === '}') depth--;
+              if (depth > 0) i++;
+            }
+            if (i < line.length) i++; // skip closing }
+            continue;
+          }
+          if (line[i] === quote) { i++; break; }
+          i++;
+        }
+        regions.push([start, i]);
+        continue;
+      }
+      i++;
+    }
+    return regions;
+  }
+  let auditGaps = 0;
+  const auditResults = [];
+
+  for (const [fp, entry] of compiled) {
+    if (!entry.hasTypes) continue;
+    const srcLines = entry.source.split('\n');
+    const vf = toVirtual(fp);
+    const gaps = [];
+
+    // Detect render block line ranges (indented under `render`)
+    const renderLines = new Set();
+    let renderIndent = -1;
+    for (let i = 0; i < srcLines.length; i++) {
+      const line = srcLines[i];
+      const trimmed = line.trimStart();
+      const indent = line.length - trimmed.length;
+      if (/^render\b/.test(trimmed)) {
+        renderIndent = indent;
+        renderLines.add(i);
+        continue;
+      }
+      if (renderIndent >= 0) {
+        if (trimmed === '' || indent > renderIndent) { renderLines.add(i); continue; }
+        renderIndent = -1;
+      }
+    }
+
+    for (let line = 0; line < srcLines.length; line++) {
+      const srcLine = srcLines[line];
+      // Skip comments, blank lines, and render blocks
+      if (/^\s*(#|$)/.test(srcLine)) continue;
+      if (renderLines.has(line)) continue;
+
+      // Build string/comment regions for accurate skipping
+      const skipRegions = nonCodeRegions(srcLine);
+
+      // Detect type-annotation region: everything after :: (but not ::=)
+      // e.g. "x:: number = 42" — skip "number" but not "x"
+      // e.g. "def add(a:: number, b:: number):: number" — skip all type words
+      let typeRegions = [];
+      const typeRe = /::\s*/g;
+      let tm;
+      while ((tm = typeRe.exec(srcLine)) !== null) {
+        // Skip :: inside string/comment regions
+        if (skipRegions.some(([s, e]) => tm.index >= s && tm.index < e)) continue;
+        // Find the end of this type annotation (next = or , or ) or EOL)
+        const start = tm.index + tm[0].length;
+        // Walk forward to find the boundary
+        let depth = 0, end = srcLine.length;
+        for (let i = start; i < srcLine.length; i++) {
+          const ch = srcLine[i];
+          if (ch === '(' || ch === '[' || ch === '{' || ch === '<') depth++;
+          else if (ch === ')' || ch === ']' || ch === '}' || ch === '>') {
+            if (depth > 0) depth--;
+            else { end = i; break; }
+          }
+          else if (depth === 0 && (ch === ',' || (ch === '=' && srcLine[i + 1] !== '>'))) { end = i; break; }
+        }
+        typeRegions.push([start, end]);
+      }
+
+      const re = /\b([a-zA-Z_$]\w*)\b/g;
+      let m;
+      while ((m = re.exec(srcLine)) !== null) {
+        const word = m[1];
+        if (AUDIT_SKIP.has(word)) continue;
+        if (STDLIB.has(word)) continue;
+        // Skip @prop references (start with @)
+        if (m.index > 0 && srcLine[m.index - 1] === '@') continue;
+        // Skip base element name in `component extends <element>`
+        if (/\bextends\s+$/.test(srcLine.slice(0, m.index)) && /\bcomponent\b/.test(srcLine)) continue;
+        // Skip words in type-annotation position
+        if (typeRegions.some(([s, e]) => m.index >= s && m.index < e)) continue;
+        // Skip words inside strings or comments
+        if (skipRegions.some(([s, e]) => m.index >= s && m.index < e)) continue;
+
+        const col = m.index;
+        const offset = srcToOffset(entry, line, col);
+        if (offset === undefined) {
+          gaps.push({ line: line + 1, col: col + 1, word, issue: 'no mapping' });
+          continue;
+        }
+        try {
+          const info = service.getQuickInfoAtPosition(vf, offset);
+          if (!info) {
+            gaps.push({ line: line + 1, col: col + 1, word, issue: 'no hover info' });
+          }
+        } catch {
+          gaps.push({ line: line + 1, col: col + 1, word, issue: 'hover query failed' });
+        }
+      }
+    }
+
+    if (gaps.length > 0) {
+      auditResults.push({ file: fp, gaps });
+      auditGaps += gaps.length;
+    }
+  }
+
+  // Print audit results
+  if (auditResults.length > 0) {
+    console.log(bold('\n── Source Map Audit ──\n'));
+    for (const { file, gaps } of auditResults) {
+      const rel = relative(rootPath, file);
+      for (const g of gaps) {
+        const loc = `${cyan(rel)}${dim(':')}${yellow(String(g.line))}${dim(':')}${yellow(String(g.col))}`;
+        console.log(`${loc} ${dim('-')} ${yellow('warning')} ${dim('audit:')} ${g.issue} for '${g.word}'`);
+      }
+    }
+    console.log(`\n${yellow(String(auditGaps))} source map gap${auditGaps === 1 ? '' : 's'} found\n`);
   }
 
   // Print results — tsc format with Rip source positions

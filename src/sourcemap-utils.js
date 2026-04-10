@@ -364,3 +364,158 @@ export function mapToSourcePos(entry, offset) {
   }
   return { line: srcLine, col: srcCol };
 }
+
+// Map a Rip source (line, col) to a TypeScript virtual file byte offset.
+// This is the forward direction: source → generated (used for hover, definition, etc.)
+//
+// `entry` must have: tsContent, source, srcToGen, srcColToGen (optional)
+// Returns undefined if no mapping can be established.
+export function srcToOffset(entry, line, col) {
+  if (!entry) return undefined;
+  let genLine = entry.srcToGen.get(line);
+  let genColHint = -1;
+  let bestSrcCol = -1;
+
+  // Column-aware lookup
+  if (entry.srcColToGen) {
+    const colEntries = entry.srcColToGen.get(line);
+    if (colEntries && colEntries.length > 0) {
+      let best = colEntries[0];
+      for (const e of colEntries) {
+        if (e.srcCol <= col && (best.srcCol > col || e.srcCol > best.srcCol)) best = e;
+      }
+      if (best.srcCol > col) {
+        for (const e of colEntries) {
+          if (Math.abs(e.srcCol - col) < Math.abs(best.srcCol - col)) best = e;
+        }
+      }
+      genLine = best.genLine;
+      genColHint = best.genCol;
+      bestSrcCol = best.srcCol;
+    }
+  }
+
+  if (genLine === undefined) {
+    let best = -1;
+    for (const [s] of entry.srcToGen) if (s <= line && s > best) best = s;
+    if (best < 0) return undefined;
+    genLine = entry.srcToGen.get(best);
+  }
+
+  const srcLines = entry.source.split('\n');
+  const genLines = entry.tsContent.split('\n');
+  const KEYWORDS = new Set(['interface', 'type', 'enum', 'class', 'export', 'declare', 'extends', 'implements', 'import', 'from', 'def', 'const', 'let', 'var']);
+
+  if (srcLines[line] != null && genLines[genLine] != null) {
+    const srcText = srcLines[line];
+    const genText = genLines[genLine];
+    const leftPart = srcText.substring(0, col).match(/\w*$/)?.[0] || '';
+    const rightPart = srcText.substring(col).match(/^\w*/)?.[0] || '';
+    let wordMatch = (leftPart + rightPart) ? [leftPart + rightPart] : null;
+    if (wordMatch && KEYWORDS.has(wordMatch[0])) {
+      const after = srcText.substring(col + wordMatch[0].length).match(/\s+(\w+)/);
+      if (after) wordMatch = [after[1]];
+    }
+    if (wordMatch) {
+      const word = wordMatch[0];
+      const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const wordStart = col - leftPart.length;
+      const useHint = genColHint >= 0 && bestSrcCol >= wordStart && bestSrcCol < wordStart + word.length;
+
+      // Prefer the overload signature line (genLine-1) when it exists and
+      // contains the same identifier — overloads carry typed parameters.
+      let targetLine = genLine;
+      let targetText = genText;
+      if (genLine > 0) {
+        const prevText = genLines[genLine - 1] || '';
+        if (/^(?:export\s+)?function\s+\w+\(.*\).*;\s*$/.test(prevText)) {
+          const re0 = new RegExp('\\b' + escaped + '\\b');
+          if (re0.test(prevText)) { targetLine = genLine - 1; targetText = prevText; }
+        }
+      }
+
+      const re = new RegExp('\\b' + escaped + '\\b', 'g');
+      let m, bestCol = -1, bestDist = Infinity;
+      // When the word doesn't fall exactly on a mapped srcCol, extrapolate
+      // the expected gen column from the nearest mapping entry.  This avoids
+      // picking a same-named word inside a string literal that happens to be
+      // closer to the raw source column.
+      const expectedGenCol = useHint ? genColHint
+        : genColHint >= 0 ? genColHint + (col - bestSrcCol) : col;
+      while ((m = re.exec(targetText)) !== null) {
+        const dist = Math.abs(m.index - expectedGenCol);
+        if (dist < bestDist) { bestDist = dist; bestCol = m.index; }
+      }
+      if (bestCol >= 0) return lineColToOffset(entry.tsContent, targetLine, bestCol);
+
+      // Fall back to original genLine if overload didn't match
+      if (targetLine !== genLine) {
+        const re1b = new RegExp('\\b' + escaped + '\\b', 'g');
+        let m1b, bestCol1b = -1, bestDist1b = Infinity;
+        while ((m1b = re1b.exec(genText)) !== null) {
+          const dist = Math.abs(m1b.index - expectedGenCol);
+          if (dist < bestDist1b) { bestDist1b = dist; bestCol1b = m1b.index; }
+        }
+        if (bestCol1b >= 0) return lineColToOffset(entry.tsContent, genLine, bestCol1b);
+      }
+
+      // Word not on mapped line — search nearby generated lines
+      for (let delta = 1; delta <= 5; delta++) {
+        for (const tryLine of [genLine + delta, genLine - delta]) {
+          if (tryLine < 0 || tryLine >= genLines.length) continue;
+          const tryText = genLines[tryLine];
+          const re2 = new RegExp('\\b' + escaped + '\\b', 'g');
+          let m2, best2 = -1, bestDist2 = Infinity;
+          while ((m2 = re2.exec(tryText)) !== null) {
+            const dist2 = Math.abs(m2.index - col);
+            if (dist2 < bestDist2) { bestDist2 = dist2; best2 = m2.index; }
+          }
+          if (best2 >= 0) return lineColToOffset(entry.tsContent, tryLine, best2);
+        }
+      }
+
+      // Neighbor-line fallback: when the word isn't on the mapped gen line or
+      // nearby ±5 lines, check neighboring source lines for srcColToGen entries
+      // that point to gen lines containing the word.  Handles multi-line
+      // expressions collapsed to one gen line, bodiless overload signatures
+      // mapped to wrong gen lines, etc.
+      if (entry.srcColToGen) {
+        const candidateGenLines = new Set();
+        for (let d = 0; d <= 10; d++) {
+          for (const sl of d === 0 ? [line] : [line - d, line + d]) {
+            if (sl < 0) continue;
+            const ce = entry.srcColToGen.get(sl);
+            if (ce) {
+              for (const e of ce) candidateGenLines.add(e.genLine);
+            }
+          }
+        }
+        // Also try gen lines near those candidates (overload signatures are
+        // typically on the line just before the function body)
+        const expanded = new Set(candidateGenLines);
+        for (const gl of candidateGenLines) {
+          for (let d = 1; d <= 3; d++) {
+            expanded.add(gl - d);
+            expanded.add(gl + d);
+          }
+        }
+        let bestAlt = -1, bestAltCol = -1, bestAltDist = Infinity;
+        for (const gl of expanded) {
+          if (gl < 0 || gl >= genLines.length) continue;
+          const altText = genLines[gl] || '';
+          const re3 = new RegExp('\\b' + escaped + '\\b', 'g');
+          let m3;
+          while ((m3 = re3.exec(altText)) !== null) {
+            const dist3 = Math.abs(m3.index - expectedGenCol);
+            if (dist3 < bestAltDist) { bestAltDist = dist3; bestAltCol = m3.index; bestAlt = gl; }
+          }
+        }
+        if (bestAltCol >= 0) return lineColToOffset(entry.tsContent, bestAlt, bestAltCol);
+      }
+    }
+  }
+
+  const genText = entry.tsContent.split('\n')[genLine] || '';
+  if (col < genText.length) return lineColToOffset(entry.tsContent, genLine, col);
+  return lineColToOffset(entry.tsContent, genLine, 0);
+}

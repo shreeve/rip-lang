@@ -72,6 +72,12 @@ for (const f of ripFiles) {
   else check(`parity ${n}`, true, 'skipped (runtime error)');
 }
 
+// Extract source map audit gaps from rip check output
+const auditOutput = stripAnsi(ripCheck.stdout || '');
+const auditLines = auditOutput.split('\n').filter(l => l.includes('warning audit:'));
+const auditSummaryMatch = auditOutput.match(/(\d+) source map gaps? found/);
+const auditGapCount = auditSummaryMatch ? +auditSummaryMatch[1] : auditLines.length;
+
 // Summary
 console.log(bold('\n── Type Audit Results ──\n'));
 for (const r of results) {
@@ -81,5 +87,16 @@ for (const r of results) {
     if (r.detail) for (const line of r.detail.split('\n').slice(0, 5)) console.log(`    ${dim(line)}`);
   }
 }
+
+if (auditGapCount > 0) {
+  const yellow = s => isColor ? `\x1b[33m${s}\x1b[0m` : s;
+  console.log(yellow(`\n── Source Map Gaps (${auditGapCount}) ──\n`));
+  for (const line of auditLines) {
+    // "file.rip:10:5 - warning audit: no hover info for 'foo'" → "file.rip:10:5 — no hover info for 'foo'"
+    const cleaned = line.replace(/\s*-\s*warning audit:\s*/, ' — ').trim();
+    console.log(`  ${yellow('⚠')} ${cleaned}`);
+  }
+}
+
 console.log(`\n${bold(pass + fail + ' checks')}: ${green(pass + ' passing')}${fail ? ', ' + red(fail + ' failing') : ''}\n`);
 process.exit(fail > 0 ? 1 : 0);
