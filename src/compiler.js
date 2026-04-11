@@ -318,12 +318,30 @@ export class CodeEmitter {
     }
   }
 
+  // Check whether a column position falls inside a string literal on a line of
+  // generated JavaScript/TypeScript.  Used by recordSubMappings to skip false
+  // matches (e.g. identifiers appearing as values inside union type strings).
+  static _isColInsideString(line, col) {
+    let inStr = false, quote = '';
+    for (let i = 0; i < line.length && i < col; i++) {
+      let ch = line[i];
+      if (inStr) {
+        if (ch === '\\') { i++; continue; }
+        if (ch === quote) inStr = false;
+      } else if (ch === '"' || ch === "'" || ch === '`') {
+        inStr = true; quote = ch;
+      }
+    }
+    return inStr;
+  }
+
   // Walk the s-expression tree and record source map entries for
   // sub-expressions that carry .loc, giving column-level precision.
   recordSubMappings(code, sexpr, lineOffset) {
     let stmtOrigLine = sexpr.loc ? sexpr.loc.r : 0;
     let subs = [];
     this.collectSubExprs(sexpr, subs);
+    let codeLines = code.split('\n');
     for (let { name, origLine, origCol } of subs) {
       let escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       let re = new RegExp('\\b' + escaped + '\\b', 'g');
@@ -332,11 +350,15 @@ export class CodeEmitter {
       while ((m = re.exec(code)) !== null) {
         let before = code.substring(0, m.index);
         let nl = before.split('\n');
-        let genLine = lineOffset + nl.length - 1;
+        let genLineInStmt = nl.length - 1;
         let genCol = nl[nl.length - 1].length;
+        // Skip matches inside string literals — prevents false mappings when
+        // an identifier also appears as a string value (e.g. union type member)
+        let lineText = codeLines[genLineInStmt];
+        if (lineText && CodeEmitter._isColInsideString(lineText, genCol)) continue;
+        let genLine = lineOffset + genLineInStmt;
         // Prefer matches on the same relative line within the statement,
         // falling back to column distance as tiebreaker.
-        let genLineInStmt = nl.length - 1;
         let dist = Math.abs(genLineInStmt - origLineInStmt) * 10000 + Math.abs(genCol - origCol);
         if (dist < bestDist) { bestDist = dist; bestMatch = { genLine, genCol }; }
       }
