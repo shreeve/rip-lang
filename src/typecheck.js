@@ -764,6 +764,28 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
     }
   }
 
+  // Remove non-exported `declare class X` blocks from the DTS header when the
+  // code body has `X = class { ... }` (non-exported component stubs).  TS treats
+  // `declare class X` as a class declaration and reports TS2629 when the body
+  // later reassigns `X = class { ... }`.  The body's class expression already
+  // contains all type info (from stubComponents), so the header block is redundant.
+  if (hasTypes && headerDts && code) {
+    const dl = headerDts.split('\n');
+    const removedLines = new Set();
+    for (let i = 0; i < dl.length; i++) {
+      const m = dl[i].match(/^declare\s+class\s+(\w+)/);
+      if (!m) continue;
+      const name = m[1];
+      if (!new RegExp('^' + name + '\\s*=\\s*class\\b', 'm').test(code)) continue;
+      let j = i;
+      while (j < dl.length && !dl[j].match(/^\}/)) j++;
+      for (let k = i; k <= j; k++) removedLines.add(k);
+    }
+    if (removedLines.size > 0) {
+      headerDts = dl.filter((_, i) => !removedLines.has(i)).join('\n').trimEnd() + '\n';
+    }
+  }
+
   // Copy typed constructor props parameter to _init(props) in component classes.
   // Components compile constructor(props: T) and _init(props) separately — TS
   // needs _init to have the same props type to avoid noImplicitAny.
