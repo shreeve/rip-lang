@@ -5565,9 +5565,7 @@ ${blockFactoriesCode}return ${lines.join(`
       this._inheritsTargetBound = false;
       const statements = this.is(body, "block") ? body.slice(1) : [body];
       let rootVar;
-      if (statements.length === 0) {
-        rootVar = "null";
-      } else if (statements.length === 1 && statements[0] === "null") {
+      if (statements.length === 0 || statements.length === 1 && statements[0] === "null") {
         rootVar = "null";
       } else if (statements.length === 1) {
         this._pendingAutoWire = !!this._autoEventHandlers;
@@ -7346,10 +7344,30 @@ if (typeof globalThis !== 'undefined') {
 `).length;
       }
     }
+    static _isColInsideString(line, col) {
+      let inStr = false, quote = "";
+      for (let i = 0;i < line.length && i < col; i++) {
+        let ch = line[i];
+        if (inStr) {
+          if (ch === "\\") {
+            i++;
+            continue;
+          }
+          if (ch === quote)
+            inStr = false;
+        } else if (ch === '"' || ch === "'" || ch === "`") {
+          inStr = true;
+          quote = ch;
+        }
+      }
+      return inStr;
+    }
     recordSubMappings(code, sexpr, lineOffset) {
       let stmtOrigLine = sexpr.loc ? sexpr.loc.r : 0;
       let subs = [];
       this.collectSubExprs(sexpr, subs);
+      let codeLines = code.split(`
+`);
       for (let { name, origLine, origCol } of subs) {
         let escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         let re = new RegExp("\\b" + escaped + "\\b", "g");
@@ -7359,9 +7377,12 @@ if (typeof globalThis !== 'undefined') {
           let before = code.substring(0, m.index);
           let nl = before.split(`
 `);
-          let genLine = lineOffset + nl.length - 1;
-          let genCol = nl[nl.length - 1].length;
           let genLineInStmt = nl.length - 1;
+          let genCol = nl[nl.length - 1].length;
+          let lineText = codeLines[genLineInStmt];
+          if (lineText && CodeEmitter._isColInsideString(lineText, genCol))
+            continue;
+          let genLine = lineOffset + genLineInStmt;
           let dist = Math.abs(genLineInStmt - origLineInStmt) * 1e4 + Math.abs(genCol - origCol);
           if (dist < bestDist) {
             bestDist = dist;
@@ -10681,7 +10702,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   }
   // src/browser.js
   var VERSION = "3.13.137";
-  var BUILD_DATE = "2026-04-11@09:38:37GMT";
+  var BUILD_DATE = "2026-04-11@12:00:01GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -11792,7 +11813,6 @@ ${indented}`);
       container.id = "app";
       document.body.appendChild(container);
     }
-    container.style.opacity = "0";
     currentComponent = null;
     currentRoute = null;
     currentParams = null;
@@ -11943,16 +11963,9 @@ ${indented}`);
               await instance.load(params, query);
           }
           oldTarget?.remove();
-          router.navigating = false;
-          return container.style.opacity === "0" ? document.fonts.ready.then(function() {
-            return requestAnimationFrame(function() {
-              container.style.transition = "opacity 150ms ease-in";
-              return container.style.opacity = "1";
-            });
-          }) : undefined;
+          return router.navigating = false;
         } catch (err) {
           router.navigating = false;
-          container.style.opacity = "1";
           console.error(`Renderer: error mounting ${route.file}:`, err);
           if (onError)
             onError({ status: 500, message: err.message, error: err });
