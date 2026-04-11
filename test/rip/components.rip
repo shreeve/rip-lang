@@ -12,6 +12,46 @@ opts = { skipPreamble: true, skipRuntimes: true, skipDataPart: true }
 # Basic Rendering — elements and text nodes
 # ==============================================================================
 
+code "render null (block form)", '''
+  export A = component
+    render
+      null
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {}
+    _create() {
+      return null;
+    }
+  }
+  ''', opts
+
+code "render null (inline)", '''
+  export A = component
+    render null
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {}
+    _create() {
+      return null;
+    }
+  }
+  ''', opts
+
+code "render null with state (inline)", '''
+  export A = component
+    count := 0
+    render null
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {
+      this.count = __state(0);
+    }
+    _create() {
+      return null;
+    }
+  }
+  ''', opts
+
 code "single element", '''
   export A = component
     render

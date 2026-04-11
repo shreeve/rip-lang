@@ -793,7 +793,8 @@ grammar =
   #          div.card
   #            h1 "Hello"
   Render: [
-    o 'RENDER Block', '["render", 2]'
+    o 'RENDER Block'      , '["render", 2]'
+    o 'RENDER Expression' , '["render", 2]'
   ]
 
   # ============================================================================

@@ -1534,7 +1534,7 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     const statements = this.is(body, 'block') ? body.slice(1) : [body];
 
     let rootVar;
-    if (statements.length === 0) {
+    if (statements.length === 0 || (statements.length === 1 && statements[0] === 'null')) {
       rootVar = 'null';
     } else if (statements.length === 1) {
       this._pendingAutoWire = !!this._autoEventHandlers;
@@ -2895,7 +2895,7 @@ class __Component {
     this._target = target;
     try {
       this._root = this._create();
-      target.appendChild(this._root);
+      if (this._root) target.appendChild(this._root);
       if (this._setup) this._setup();
       if (this.mounted) this.mounted();
     } catch (error) {
