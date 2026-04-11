@@ -176,3 +176,150 @@ Every major reactive state library types its store without sacrificing runtime f
 - **Solid** — `createStore<T>()` takes a type parameter; runtime is a reactive Proxy
 
 None of these make the runtime less flexible. Types are a compile-time lens over a dynamic runtime.
+
+---
+
+## RFC: Auto-Scan Bundle
+
+### Background
+
+Today, every app must explicitly list which subdirectories of `app/` to include in the client bundle:
+
+```coffee
+use serve
+  dir: "#{dir}/app"
+  bundle:
+    app: ['components', 'utils']
+```
+
+### The Problem
+
+The `bundle` config only accepts **directory names** to scan. This creates two kinds of friction:
+
+1. **Flat files can't be bundled.** A file at `app/utils.rip` has no way to get included — you're forced to create a `utils/` subdirectory, leading to awkward paths like `app/utils/utils.rip`.
+2. **Forgetting a directory is a silent browser-only failure.** The server-side type checker sees the real filesystem, so `rip check` passes. But the browser can't resolve the import, and the error is a cryptic "module not found" from a blob URL.
+
+### Proposal
+
+**Auto-scan `app/` by default.** The server bundles all `.rip` files found anywhere under the app directory, excluding:
+
+- `routes/` — already handled separately with `components/` prefix keys
+- `index.rip` files — already skipped (server entry points, not client code)
+
+No `bundle` config needed for the common case. A file at `app/utils.rip` or `app/helpers/format.rip` just works.
+
+#### Store key structure
+
+**Preserve the directory structure** in store keys. Currently, all configured dirs are flattened into `components/_lib/`, losing the directory name:
+
+| File path                | Current key                   | Proposed key                         |
+| ------------------------ | ----------------------------- | ------------------------------------ |
+| `app/components/bar.rip` | `components/_lib/bar.rip`     | `components/_lib/components/bar.rip` |
+| `app/utils/helpers.rip`  | `components/_lib/helpers.rip` | `components/_lib/utils/helpers.rip`  |
+| `app/utils.rip`          | *(can't be bundled)*          | `components/_lib/utils.rip`          |
+
+This eliminates the fragile basename-fallback path resolution in the browser. Import specifiers resolve exactly because the store key mirrors the filesystem layout.
+
+#### Config changes
+
+| Config                            | Behavior                                            |
+| --------------------------------- | --------------------------------------------------- |
+| *(no `bundle` key)*               | Auto-scan `app/`, single `app` bundle (new default) |
+| `bundle: { app: ['components'] }` | Explicit dirs, current behavior (backward compat)   |
+
+#### Watch
+
+Auto-scan mode watches `appDir` itself (excluding `routes/`, which is already watched separately).
+
+### Migration
+
+| App         | Change                                                                                                                            |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| cart        | Remove `bundle:` key entirely                                                                                                     |
+| streamline  | Remove `bundle:` key                                                                                                              |
+| form        | Remove `bundle:` key (`routes` in dir list is redundant)                                                                          |
+| analytics   | Remove `bundle:` key                                                                                                              |
+| results     | Remove `bundle:` key                                                                                                              |
+| trusthealth | Remove `bundle:` key                                                                                                              |
+| medlabs     | Already uses `app: ['.']` — effectively auto-scan. Remove `bundle: app:` line. Keep `ui:` for external package (separate concern) |
+| starter     | Keep `bundle:` for external `ui` dir (separate concern)                                                                           |
+
+### Edge cases
+
+- **`app/routes/` overlap**: excluded from auto-scan since routes get `components/{file}` keys, not `_lib/` keys. Double-including would create duplicates with different prefixes.
+- **Non-`.rip` files**: glob is `**/*.rip`, so CSS/JS/images are naturally excluded.
+- **Empty `app/`**: works fine — bundle has routes only, empty `_lib`.
+
+---
+
+## RFC: Auto-Infer `data-router` and `data-reload`
+
+### Background
+
+Currently, the HTML bootstrap requires four attributes beyond the `src`:
+
+```html
+<script defer src="/rip/rip.min.js"
+  data-src="app"
+  data-mount="App"
+  data-router
+  data-reload>
+</script>
+```
+
+### The Problem
+
+Most of these are boilerplate or dead code:
+
+- **`data-src="app"`** — the main bundle is always called `app` by convention
+- **`data-mount="App"`** — unused in routed apps (`launch()` handles mounting internally, never reads this attribute)
+- **`data-router`** — required to enable file-based routing, but if the app has a `routes/` directory, file-based routing is the obvious intent
+- **`data-reload`** — required for hot reload, but the server already sends `watch: true` in the bundle data
+
+Forgetting `data-router` produces a blank page with no error. Forgetting `data-reload` means silently stale code during development. Both are hard to diagnose.
+
+### Proposal
+
+**Server-driven inference.** The server already knows the project structure — it should tell the browser what to do via the bundle JSON, not rely on the developer to mirror that knowledge in HTML attributes.
+
+#### Routing
+
+The presence of a `routes/` directory is the structural choice that enables file-based routing — same convention as Next.js (`pages/`), SvelteKit (`routes/`), and Nuxt (`pages/`). The server already checks whether `routesDir` exists. When route files are included in the bundle, the server sets `data.router = true` in the bundle JSON. The browser reads this flag and uses `launch()` accordingly.
+
+This is deterministic from the file system, not a heuristic. The chain is:
+
+1. `app/routes/` exists with `.rip` files → structural choice
+2. Server sets `bundle.data.router = true`
+3. Browser reads `data.router`, enables `launch()` path
+
+#### Reload
+
+The bundle JSON already carries `data.watch` from the server's `watch: true` config. The browser should use it directly.
+
+#### Bundle URL
+
+Default to `/app` when `data-src` is omitted.
+
+#### `data-mount`
+
+Not needed for routed apps — `launch()` handles mounting. Only relevant for the non-router eval path (inline scripts, demos).
+
+#### Result
+
+The minimal routed app HTML becomes:
+
+```html
+<script defer src="/rip/rip.min.js"></script>
+```
+
+With overrides still available:
+
+- `data-src="ui app"` — load specific/multiple bundles
+- `data-router="hash"` — hash-based routing
+- `data-router="false"` — explicitly disable routing (opt out)
+- `data-mount="App"` — mount a named component (non-router apps)
+
+### Trade-offs
+
+- **Default flip for routing**: Today apps opt *in* to file-based routing. After this change, having a `routes/` directory opts you in automatically. Any app that has route files but does its own routing (e.g., medlabs, which uses a custom `pushState` router in `shell.rip`) would need `data-router="false"` or should be migrated to file-based routing. Medlabs is likely non-idiomatic here.
+- **Reload is low risk**: `watch: true` is only set in dev, and the reload mechanism is harmless when the `/watch` endpoint doesn't exist.
