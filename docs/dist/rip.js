@@ -1409,6 +1409,8 @@
         } else {
           lines.push(`  constructor(props${propsOpt}: ${inheritedPropsType});`);
         }
+      } else {
+        lines.push(`  constructor(props?: {});`);
       }
       for (let [refName, refType] of refMembers) {
         bodyMembers.push(`  ${refName}: ${refType};`);
@@ -10702,7 +10704,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   }
   // src/browser.js
   var VERSION = "3.13.137";
-  var BUILD_DATE = "2026-04-11@12:00:01GMT";
+  var BUILD_DATE = "2026-04-11@13:48:10GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

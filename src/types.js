@@ -1546,6 +1546,8 @@ function emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars, so
       } else {
         lines.push(`  constructor(props${propsOpt}: ${inheritedPropsType});`);
       }
+    } else {
+      lines.push(`  constructor(props?: {});`);
     }
     for (let [refName, refType] of refMembers) {
       bodyMembers.push(`  ${refName}: ${refType};`);
