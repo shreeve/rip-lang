@@ -1132,7 +1132,9 @@ export function installComponentSupport(CodeEmitter, Lexer) {
               return; // Don't walk children again below
             }
           } else if (head === '__text__') {
-            // = expr — text expression: emit the expression for type-checking
+            // = expr — text expression: emit the expression for type-checking.
+            // Return early — the expression is fully handled; walking children
+            // would mis-interpret the call target as an element tag name.
             const textExpr = node[1];
             if (textExpr != null) {
               const exprCode = this.emitInComponent(textExpr, 'value');
@@ -1140,6 +1142,18 @@ export function installComponentSupport(CodeEmitter, Lexer) {
               const srcMarker = srcLine != null ? ` // @rip-src:${srcLine}` : '';
               constructions.push(`    ${exprCode};${srcMarker}`);
             }
+            return;
+          } else if (head === 'str') {
+            // Interpolated string — emit the full expression so TS sees
+            // references to variables/functions inside the interpolation
+            // (e.g. "#{format(x)}" must count as a read of `format`).
+            try {
+              const exprCode = this.emitInComponent(node, 'value');
+              const srcLine = node.loc?.r;
+              const srcMarker = srcLine != null ? ` // @rip-src:${srcLine}` : '';
+              constructions.push(`    ${exprCode};${srcMarker}`);
+            } catch {}
+            return;
           }
 
           // Emit a bare lowercase identifier as either a property access

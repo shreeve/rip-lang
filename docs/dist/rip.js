@@ -5222,6 +5222,15 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
                 const srcMarker = srcLine != null ? ` // @rip-src:${srcLine}` : "";
                 constructions.push(`    ${exprCode};${srcMarker}`);
               }
+              return;
+            } else if (head2 === "str") {
+              try {
+                const exprCode = this.emitInComponent(node, "value");
+                const srcLine = node.loc?.r;
+                const srcMarker = srcLine != null ? ` // @rip-src:${srcLine}` : "";
+                constructions.push(`    ${exprCode};${srcMarker}`);
+              } catch {}
+              return;
             }
             const emitBareIdent = (child, parentNode, isTextChild) => {
               if (typeof child !== "string" || !/^[a-z][\w-]*$/.test(child))
@@ -10704,7 +10713,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   }
   // src/browser.js
   var VERSION = "3.13.137";
-  var BUILD_DATE = "2026-04-11@13:48:10GMT";
+  var BUILD_DATE = "2026-04-11@16:45:28GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -11041,6 +11050,7 @@ ${indented}`);
   var makeProxy;
   var matchRoute;
   var patternToRegex;
+  var resolveStorePath;
   var setContext;
   var stashGet;
   var stashSet;
@@ -11755,18 +11765,91 @@ ${indented}`);
     }
     return map;
   };
+  resolveStorePath = function(specifier, currentPath, components) {
+    let basename, candidate, clean, parts;
+    clean = specifier.replace(/^(\.\.\/|\.\/)+/, "");
+    basename = clean.split("/").pop();
+    if (currentPath) {
+      parts = currentPath.split("/");
+      parts.pop();
+      for (const seg of specifier.split("/")) {
+        if (seg === "..") {
+          parts.pop();
+        } else {
+          if (!(seg === ".")) {
+            parts.push(seg);
+          }
+        }
+      }
+      candidate = parts.join("/");
+      if (components.exists(candidate))
+        return candidate;
+    }
+    if (components.exists(`components/_lib/${clean}`))
+      return `components/_lib/${clean}`;
+    if (components.exists(`components/${clean}`))
+      return `components/${clean}`;
+    for (const p of components.listAll("components")) {
+      if (p.endsWith(`/${basename}`))
+        return p;
+    }
+    return null;
+  };
   compileAndImport = async function(source, compile2, components = null, path = null, resolver = null) {
-    let blob, cached, depMod, depSource, found, header, js, mod, names, needed, preamble, url;
+    let blob, blobUrl, cached, depMod, depSource, found, full, header, importedNames, js, matches, mod, msg, namedImports, names, needed, post, pre, preamble, replacement, ripImportRe, specifier, storePath, url;
     if (components && path) {
       cached = components.getCompiled(path);
       if (cached)
         return cached;
     }
+    if (resolver && path) {
+      resolver.compiling ??= {};
+      resolver.compiling[path] = true;
+    }
     js = compile2(source);
     if (resolver) {
+      importedNames = new Set;
+      if (components) {
+        ripImportRe = /^(\s*import\s+(?:\{([^}]+)\}\s+from\s+|.*?\s+from\s+)?['"])([^'"]*\.rip)(['"];?\s*)$/gm;
+        matches = Array.from(js.matchAll(ripImportRe));
+        for (let _i = matches.length - 1;_i >= 0; _i--) {
+          const m = matches[_i];
+          [full, pre, namedImports, specifier, post] = m;
+          storePath = resolveStorePath(specifier, path, components);
+          if (storePath === path)
+            continue;
+          if (!storePath) {
+            msg = `[Rip] Could not resolve import: ${specifier}`;
+            if (path)
+              msg += ` (from ${path})`;
+            console.warn(msg);
+            continue;
+          }
+          if (!resolver.blobUrls?.[storePath]) {
+            if (resolver.compiling?.[storePath])
+              continue;
+            depSource = components.read(storePath);
+            if (depSource) {
+              await compileAndImport(depSource, compile2, components, storePath, resolver);
+            }
+          }
+          blobUrl = resolver.blobUrls?.[storePath];
+          if (blobUrl) {
+            replacement = `${pre}${blobUrl}${post}`;
+            js = js.slice(0, m.index) + replacement + js.slice(m.index + full.length);
+            if (namedImports) {
+              for (const n of namedImports.split(",")) {
+                importedNames.add(n.trim().split(/\s+as\s+/).pop().trim());
+              }
+            }
+          }
+        }
+      }
       needed = {};
       for (const name in resolver.map) {
         const depPath = resolver.map[name];
+        if (importedNames.has(name))
+          continue;
         if (depPath !== path && js.includes(`new ${name}(`)) {
           if (!resolver.classes[name]) {
             depSource = components.read(depPath);
@@ -11794,6 +11877,12 @@ ${indented}`);
 ` : "";
     blob = new Blob([header + js], { type: "application/javascript" });
     url = URL.createObjectURL(blob);
+    if (resolver && path) {
+      resolver.blobUrls ??= {};
+      resolver.blobUrls[path] = url;
+      if (resolver.compiling)
+        delete resolver.compiling[path];
+    }
     mod = await import(url);
     if (resolver) {
       found = findAllComponents(mod);

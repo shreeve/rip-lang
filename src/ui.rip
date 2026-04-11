@@ -626,18 +626,77 @@ buildComponentMap = (components, root = 'components') ->
     map[name] = path
   map
 
+# Resolve a .rip import specifier to a path in the component store
+resolveStorePath = (specifier, currentPath, components) ->
+  clean = specifier.replace(/^(\.\.\/|\.\/)+/, '')
+  basename = clean.split('/').pop()
+  # Direct resolution relative to current file in the store
+  if currentPath
+    parts = currentPath.split('/')
+    parts.pop()
+    for seg in specifier.split('/')
+      if seg is '..'
+        parts.pop()
+      else unless seg is '.'
+        parts.push seg
+    candidate = parts.join('/')
+    return candidate if components.exists(candidate)
+  # Try common store prefixes
+  return "components/_lib/#{clean}" if components.exists("components/_lib/#{clean}")
+  return "components/#{clean}" if components.exists("components/#{clean}")
+  # Basename search as last resort
+  for p in components.listAll('components')
+    return p if p.endsWith("/#{basename}")
+  null
+
 compileAndImport = (source, compile, components = null, path = null, resolver = null) ->
   # Check compilation cache
   if components and path
     cached = components.getCompiled(path)
     return cached if cached
 
+  # Mark as in-progress to prevent circular dependency loops
+  if resolver and path
+    resolver.compiling ?= {}
+    resolver.compiling[path] = true
+
   js = compile(source)
 
-  # Resolve component dependencies — scan for PascalCase references in compiled JS
   if resolver
+    importedNames = new Set()
+
+    # Step 1: Rewrite .rip imports to blob URLs
+    if components
+      ripImportRe = /^(\s*import\s+(?:\{([^}]+)\}\s+from\s+|.*?\s+from\s+)?['"])([^'"]*\.rip)(['"];?\s*)$/gm
+      matches = Array.from(js.matchAll(ripImportRe))
+      # Walk matches in reverse so string indices stay valid after each splice
+      for m in matches by -1
+        [full, pre, namedImports, specifier, post] = m
+        storePath = resolveStorePath(specifier, path, components)
+        continue if storePath is path
+        unless storePath
+          msg = "[Rip] Could not resolve import: #{specifier}"
+          msg += " (from #{path})" if path
+          console.warn msg
+          continue
+        # Guard against circular imports — skip if already being compiled
+        unless resolver.blobUrls?[storePath]
+          continue if resolver.compiling?[storePath]
+          depSource = components.read(storePath)
+          if depSource
+            compileAndImport! depSource, compile, components, storePath, resolver
+        blobUrl = resolver.blobUrls?[storePath]
+        if blobUrl
+          replacement = "#{pre}#{blobUrl}#{post}"
+          js = js.slice(0, m.index) + replacement + js.slice(m.index + full.length)
+          if namedImports
+            for n in namedImports.split(',')
+              importedNames.add(n.trim().split(/\s+as\s+/).pop().trim())
+
+    # Step 2: Implicit component resolution — for template-used components not explicitly imported
     needed = {}
     for name, depPath of resolver.map
+      continue if importedNames.has(name)
       if depPath isnt path and js.includes("new #{name}(")
         unless resolver.classes[name]
           depSource = components.read(depPath)
@@ -656,6 +715,13 @@ compileAndImport = (source, compile, components = null, path = null, resolver = 
   header = if path then "// #{path}\n" else ''
   blob = new Blob([header + js], { type: 'application/javascript' })
   url = URL.createObjectURL(blob)
+
+  # Cache blob URL so other files can rewrite imports to point here
+  if resolver and path
+    resolver.blobUrls ?= {}
+    resolver.blobUrls[path] = url
+    delete resolver.compiling[path] if resolver.compiling
+
   mod = await import(url)
 
   # Register any components from this module
