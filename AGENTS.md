@@ -217,6 +217,17 @@ rip -cm example.rip
 > That syntax does not exist in Rip. Always use `x ?? y` for nullish coalescing
 > or `x ? y : z` for a full ternary. There is no two-operand `?` form.
 
+> **CRITICAL — no comma before a trailing `->` arrow:**
+>
+> - `sketch "xy" ->` — CORRECT
+> - `sketch "xy", ->` — WRONG (unnecessary comma)
+> - `get '/path' ->` — CORRECT
+> - `get '/path', ->` — WRONG
+>
+> When a `->` function is the last argument to a call, do **not** put a comma
+> before it. The arrow implicitly closes the argument list. This applies to
+> all calls: `get`, `post`, `sketch`, `test`, `setTimeout`, etc.
+
 ### Removed (from CoffeeScript / Rip 2.x)
 
 | Feature                            | Replacement                                           |
