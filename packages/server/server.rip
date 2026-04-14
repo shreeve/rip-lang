@@ -689,16 +689,12 @@ class Server
     # Route table — proxy routes can handle hosts outside the managed app registry
     runtime = @servingRuntime
     matchedRoute = matchRoute(runtime.routeTable, host, url.pathname, req.method)
-    warn "[debug-match] host=#{host} path=#{url.pathname} matched=#{matchedRoute?.id or 'null'} proxy=#{matchedRoute?.proxy or 'null'}"
     if matchedRoute?.proxy and matchedRoute.websocket and bunServer
       return @upgradeProxyWebSocket(req, bunServer, matchedRoute, requestId, runtime)
     if matchedRoute?.proxy
-      warn "[debug-proxy] entering proxy for host=#{host} proxy=#{matchedRoute.proxy}"
       @retainRuntime(runtime)
       try
-        res = @proxyRouteToUpstream!(req, matchedRoute, requestId, clientIp, runtime)
-        warn "[debug-proxy] result status=#{res?.status} for host=#{host}"
-        return res
+        return @proxyRouteToUpstream!(req, matchedRoute, requestId, clientIp, runtime)
       finally
         @releaseRuntime(runtime)
     if matchedRoute?.static
@@ -713,9 +709,7 @@ class Server
 
     # Resolve host to app — app traffic falls back to the managed worker registry
     appId = matchedRoute?.app or resolveHost(@appRegistry, host)
-    unless appId
-      warn "[debug-404] Host not found: host=#{host} matchedRoute=#{matchedRoute?.id or 'null'}"
-      return new Response('Host not found', { status: 404 })
+    return new Response('Host not found', { status: 404 }) unless appId
     app = getAppState(@appRegistry, appId)
     return new Response('Host not found', { status: 404 }) unless app
 
