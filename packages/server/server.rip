@@ -689,6 +689,7 @@ class Server
     # Route table — proxy routes can handle hosts outside the managed app registry
     runtime = @servingRuntime
     matchedRoute = matchRoute(runtime.routeTable, host, url.pathname, req.method)
+    warn "[debug] host=#{host} path=#{url.pathname} matched=#{matchedRoute?.id or 'null'} proxy=#{matchedRoute?.proxy or 'null'} routes=#{runtime.routeTable?.routes?.length}" unless matchedRoute
     if matchedRoute?.proxy and matchedRoute.websocket and bunServer
       return @upgradeProxyWebSocket(req, bunServer, matchedRoute, requestId, runtime)
     if matchedRoute?.proxy
