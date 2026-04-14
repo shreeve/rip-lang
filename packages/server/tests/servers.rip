@@ -1,5 +1,8 @@
 import { test, eq, ok } from './runner.rip'
 import { normalizeConfig } from '../serving/config.rip'
+import { dirname } from 'node:path'
+
+FIXTURE_DIR = dirname(import.meta.path) + '/fixtures'
 
 getErrors = (fn) ->
   try
@@ -14,7 +17,7 @@ test "local app creates site routes with correct host", ->
       dev: 'dev.example.com'
     apps:
       web: 'dev'
-  }, '/home/shreeve')
+  }, FIXTURE_DIR)
   eq config.kind, 'serve'
   ok config.sites['dev.example.com']
   eq config.sites['dev.example.com'].host, 'dev.example.com'
@@ -29,7 +32,7 @@ test "multiple sites on one app", ->
       www: 'www.example.com'
     apps:
       web: 'dev prod www'
-  }, '/home/shreeve')
+  }, FIXTURE_DIR)
   eq Object.keys(config.sites).length, 3
   eq config.sites['local.example.com'].routes[0].app, 'web'
   eq config.sites['example.com'].routes[0].app, 'web'
@@ -69,7 +72,7 @@ test "server settings and version are optional", ->
       dev: 'example.com'
     apps:
       web: 'dev'
-  }, '/home/shreeve')
+  }, FIXTURE_DIR)
   eq config.version, 2
   ok config.server
 
@@ -79,7 +82,7 @@ test "hostnames are lowercased", ->
       dev: 'Dev.EXAMPLE.com'
     apps:
       web: 'dev'
-  }, '/home/shreeve')
+  }, FIXTURE_DIR)
   ok config.sites['dev.example.com']
 
 test "mixed app kinds in one config", ->
@@ -93,13 +96,27 @@ test "mixed app kinds in one config", ->
       web: 'dev prod'
       incus: 'https://10.0.0.50:8443 incus'
       mysql: 'tcp://10.0.0.50:3306 db'
-  }, '/home/shreeve')
+  }, FIXTURE_DIR)
   eq Object.keys(config.sites).length, 3
   eq config.sites['local.example.com'].routes[0].app, 'web'
   eq config.sites['example.com'].routes[0].app, 'web'
   eq config.sites['incus.example.com'].routes[0].proxy, 'proxy-incus'
   eq config.streams.length, 1
   eq config.streams[0].sni[0], 'db.example.com'
+
+test "static fallback when no index.rip with browse flag", ->
+  config = normalizeConfig({
+    sites:
+      zion: 'dev.zionlabshare.com'
+    apps:
+      zion: '/tmp/nonexistent-static-dir zion browse'
+  }, '/home/shreeve')
+  route = config.sites['dev.zionlabshare.com'].routes[0]
+  eq route.static, '.'
+  eq route.browse, true
+  eq route.app, null
+  eq route.id, 'zion-static'
+  eq config.apps.zion, undefined
 
 test "rejects multiple apps on same site", ->
   errors = getErrors ->

@@ -23,7 +23,7 @@ export default
     web: 'dev prod'
 ```
 
-Top-level keys: `ssl`, `sites`, `apps`, `version`, `server`.
+Top-level keys: `ssl`, `hsts`, `acme`, `sites`, `apps`, `version`, `server`.
 
 ## Top-level sections
 
@@ -41,6 +41,28 @@ Given `/ssl/example.com.crt` and `/ssl/example.com.key`, Rip reads the SANs
 from the certificate and maps each hostname to that cert/key pair.
 
 Relative paths resolve against the config file directory.
+
+### `hsts`
+
+Enable `Strict-Transport-Security` headers on HTTPS responses:
+
+```coffee
+hsts: true
+```
+
+Tells browsers to always use HTTPS for this domain. Can also be set inside
+`server:` if you prefer grouping settings there.
+
+### `acme`
+
+Automatic certificate management via Let's Encrypt:
+
+```coffee
+acme: ['example.com', 'www.example.com']
+```
+
+Or `acme: true` to enable for all configured domains. HTTP-01 challenges are
+served on port 80 automatically. Can also be set inside `server:`.
 
 ### `sites`
 
@@ -67,27 +89,36 @@ apps:
   patient: '../patient dev prod'
   incus:   'https://10.0.0.50:8443 incus'
   mysql:   'tcp://10.0.0.50:3306 db'
+  zion:    '/home/shreeve/www zion browse'
 ```
 
 Each value is a space-separated string of tokens:
 
 - **Site names** reference entries in `sites`
 - **An optional target** specifies what to serve
+- **Optional flags** (`browse`, `spa`) modify static serving behavior
 
 Target kind is inferred from prefix:
 
 | Prefix | Kind | Behavior |
 |--------|------|----------|
-| `./`, `../`, `/` | local | Rip app at that path |
-| *(none)* | local | Rip app in current directory |
+| `./`, `../`, `/` | local | Rip app (if `index.rip` exists) or static files |
+| *(none)* | local | Rip app in current directory or static files |
 | `http://`, `https://` | HTTP proxy | Reverse proxy to URL |
 | `tcp://` | TCP proxy | Layer 4 SNI passthrough |
+
+Flags:
+
+| Flag | Effect |
+|------|--------|
+| `browse` | Enable directory listing for static sites |
+| `spa` | Single-page app fallback (serve `index.html` for missing paths) |
 
 Rules:
 
 - Each site may be bound by exactly one app
 - TCP targets must include a port (`tcp://host:port`)
-- Local apps look for `index.rip` in the target directory
+- Local targets with `index.rip` become Rip apps; without it, static file serving
 - HTTP proxy routes automatically enable WebSocket upgrade
 
 ### `server`
@@ -160,20 +191,20 @@ Config updates must be:
 ```coffee
 export default
   ssl: '/ssl'
-
-  server:
-    hsts: true
-    acme: ['medlabs.health', 'trusthealth.com']
+  hsts: true
+  acme: ['medlabs.health', 'trusthealth.com']
 
   sites:
     dev:      'local.medlabs.health'
     prod:     'medlabs.health'
+    zion:     'dev.zionlabshare.com'
     incus:    'incus.trusthealth.com'
     db:       'db.trusthealth.com'
 
   apps:
     medlabs:  'dev prod'
     patient:  '../patient dev prod'
+    zion:     '/home/shreeve/www zion browse'
     incus:    'https://10.0.0.50:8443 incus'
     mysql:    'tcp://10.0.0.50:3306 db'
 ```

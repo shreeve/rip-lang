@@ -205,7 +205,8 @@ export normalizeAppConfig = (appId, appConfig, baseDir) ->
 # serve.rip normalizer: ssl + sites + apps
 # ==============================================================================
 
-SERVE_KEYS = new Set(%w[ssl sites apps version server])
+SERVE_KEYS = new Set(%w[ssl hsts acme sites apps version server])
+KNOWN_FLAGS = new Set(%w[browse spa])
 
 parseAppSpec = (appName, spec, knownSites, errors, path) ->
   tokens = String(spec or '').trim().split(/\s+/).filter(Boolean)
@@ -219,12 +220,15 @@ parseAppSpec = (appName, spec, knownSites, errors, path) ->
     pushError(errors, 'E_APP_MULTI_TARGET', path, "app #{appName}: multiple targets: #{targetTokens.join(', ')}", 'Only one path or URL prefix is allowed.')
     return null
 
-  if targetTokens.length is 1
+  rest = if targetTokens.length is 1
     target = targetTokens[0]
-    siteNames = tokens.filter (t) -> t isnt target
+    tokens.filter (t) -> t isnt target
   else
     target = '.'
-    siteNames = tokens
+    tokens
+
+  flags = new Set(rest.filter (t) -> KNOWN_FLAGS.has(t))
+  siteNames = rest.filter (t) -> not KNOWN_FLAGS.has(t)
 
   if siteNames.length is 0
     pushError(errors, 'E_APP_NO_SITES', path, "app #{appName}: no site names specified", "Add at least one site name from the sites section.")
@@ -239,14 +243,14 @@ parseAppSpec = (appName, spec, knownSites, errors, path) ->
   else if /^tcp:\/\//.test(target) then 'tcp-proxy'
   else 'local'
 
-  { kind, target, siteNames }
+  { kind, target, siteNames, flags }
 
 normalizeServeRip = (config, baseDir) ->
   errors = []
 
   for key of config
     unless SERVE_KEYS.has(key)
-      pushError(errors, 'E_UNKNOWN_KEY', key, "unknown top-level key: #{key}", 'Allowed keys: ssl, sites, apps, version, server.')
+      pushError(errors, 'E_UNKNOWN_KEY', key, "unknown top-level key: #{key}", 'Allowed keys: ssl, hsts, acme, sites, apps, version, server.')
 
   # SSL directory (resolve relative paths against config base dir)
   sslPath = if typeof config.ssl is 'string' and config.ssl.trim()
@@ -284,8 +288,11 @@ normalizeServeRip = (config, baseDir) ->
 
   knownSites = new Set(siteToHost.keys())
 
-  # Server settings (optional, defaults)
-  serverSettings = normalizeServerSettings(config.server or {}, errors)
+  # Server settings — top-level hsts/acme merge into server block
+  serverBlock = Object.assign({}, config.server or {})
+  serverBlock.hsts = config.hsts if config.hsts? and not serverBlock.hsts?
+  serverBlock.acme = config.acme if config.acme? and not serverBlock.acme?
+  serverSettings = normalizeServerSettings(serverBlock, errors)
 
   # Apps
   apps = {}
@@ -328,39 +335,62 @@ normalizeServeRip = (config, baseDir) ->
         if parsed.kind is 'local'
           entryPath = if parsed.target is '.' then baseDir else resolve(baseDir, parsed.target)
           indexFile = join(entryPath, 'index.rip')
-          entry = if existsSync(indexFile) then indexFile else null
+          isApp = existsSync(indexFile)
 
-          apps[appName] =
-            id: appName
-            entry: entry
-            hosts: hostnames
-            workers: null
-            maxQueue: 512
-            queueTimeoutMs: 30000
-            readTimeoutMs: 30000
-            env: {}
+          if isApp
+            apps[appName] =
+              id: appName
+              entry: indexFile
+              hosts: hostnames
+              workers: null
+              maxQueue: 512
+              queueTimeoutMs: 30000
+              readTimeoutMs: 30000
+              env: {}
 
           for hostname in hostnames
-            sites[hostname] =
-              host: hostname
-              timeouts: {}
-              routes: [
-                id: "#{appName}-default"
+            if isApp
+              sites[hostname] =
                 host: hostname
-                path: '/*'
-                methods: '*'
-                priority: 0
-                proxy: null
-                app: appName
-                static: null
-                root: null
-                spa: false
-                browse: false
-                redirect: null
-                headers: null
-                websocket: false
                 timeouts: {}
-              ]
+                routes: [
+                  id: "#{appName}-default"
+                  host: hostname
+                  path: '/*'
+                  methods: '*'
+                  priority: 0
+                  proxy: null
+                  app: appName
+                  static: null
+                  root: null
+                  spa: false
+                  browse: false
+                  redirect: null
+                  headers: null
+                  websocket: false
+                  timeouts: {}
+                ]
+            else
+              sites[hostname] =
+                host: hostname
+                timeouts: {}
+                routes: [
+                  id: "#{appName}-static"
+                  host: hostname
+                  path: '/*'
+                  methods: '*'
+                  priority: 0
+                  proxy: null
+                  app: null
+                  static: '.'
+                  root: entryPath
+                  spa: parsed.flags.has('spa')
+                  browse: parsed.flags.has('browse')
+                  redirect: null
+                  headers: null
+                  websocket: false
+                  timeouts: {}
+                ]
 
             cert = matchCertForHost(certMap, hostname) if certMap.size > 0
             resolvedCerts[hostname] = cert if cert
@@ -475,6 +505,8 @@ export summarizeConfig = (configPath, normalized) ->
       streams: (normalized.streams or []).length
     canonicalShape:
       ssl: true
+      hsts: true
+      acme: true
       sites: true
       apps: true
       version: true

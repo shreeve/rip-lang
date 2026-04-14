@@ -1,5 +1,8 @@
 import { test, eq, ok } from './runner.rip'
 import { normalizeConfig, summarizeConfig, formatConfigErrors } from '../serving/config.rip'
+import { dirname } from 'node:path'
+
+FIXTURE_DIR = dirname(import.meta.path) + '/fixtures'
 
 getErrors = (fn) ->
   try
@@ -15,7 +18,7 @@ test "normalizeConfig accepts local app with sites", ->
       prod: 'example.com'
     apps:
       web: 'dev prod'
-  , '/srv')
+  , FIXTURE_DIR)
   eq normalized.kind, 'serve'
   eq Object.keys(normalized.sites).length, 2
   eq normalized.sites['local.example.com'].routes[0].app, 'web'
@@ -27,7 +30,7 @@ test "normalizeConfig generates catch-all route paths", ->
       dev: 'example.com'
     apps:
       web: 'dev'
-  , '/srv')
+  , FIXTURE_DIR)
   eq normalized.sites['example.com'].routes[0].path, '/*'
 
 test "normalizeConfig accepts local app at relative path", ->
@@ -35,7 +38,7 @@ test "normalizeConfig accepts local app at relative path", ->
     sites:
       dev: 'example.com'
     apps:
-      patient: '../patient dev'
+      patient: "#{FIXTURE_DIR} dev"
   , '/srv')
   eq normalized.sites['example.com'].routes[0].app, 'patient'
   eq normalized.apps.patient.id, 'patient'
@@ -156,6 +159,31 @@ test "normalizeConfig rejects tcp proxy without port", ->
     , '/srv')
   ok errors.some((err) -> err.code is 'E_APP_TCP_PORT')
 
+test "normalizeConfig accepts top-level hsts and acme", ->
+  normalized = normalizeConfig(
+    hsts: true
+    acme: ['example.com']
+    sites:
+      dev: 'example.com'
+    apps:
+      web: 'dev'
+  , FIXTURE_DIR)
+  eq normalized.server.hsts, true
+  eq normalized.server.acme, true
+  eq normalized.server.acmeDomains[0], 'example.com'
+
+test "normalizeConfig server block overrides top-level hsts", ->
+  normalized = normalizeConfig(
+    hsts: true
+    server:
+      hsts: false
+    sites:
+      dev: 'example.com'
+    apps:
+      web: 'dev'
+  , FIXTURE_DIR)
+  eq normalized.server.hsts, false
+
 test "normalizeConfig preserves server settings", ->
   normalized = normalizeConfig(
     server:
@@ -188,6 +216,64 @@ test "formatConfigErrors includes code path and hint", ->
   ok output.includes('[E_APP_EMPTY]')
   ok output.includes('apps.web')
   ok output.includes('Hint:')
+
+test "normalizeConfig generates static route when no index.rip", ->
+  normalized = normalizeConfig(
+    sites:
+      dev: 'example.com'
+    apps:
+      zion: '/tmp/nonexistent-dir-for-test dev'
+  , '/srv')
+  route = normalized.sites['example.com'].routes[0]
+  eq route.static, '.'
+  eq route.app, null
+  ok route.root.includes('nonexistent-dir-for-test')
+
+test "normalizeConfig passes browse flag to static route", ->
+  normalized = normalizeConfig(
+    sites:
+      dev: 'example.com'
+    apps:
+      zion: '/tmp/nonexistent-dir-for-test dev browse'
+  , '/srv')
+  route = normalized.sites['example.com'].routes[0]
+  eq route.static, '.'
+  eq route.browse, true
+  eq route.spa, false
+
+test "normalizeConfig passes spa flag to static route", ->
+  normalized = normalizeConfig(
+    sites:
+      dev: 'example.com'
+    apps:
+      zion: '/tmp/nonexistent-dir-for-test dev spa'
+  , '/srv')
+  route = normalized.sites['example.com'].routes[0]
+  eq route.static, '.'
+  eq route.spa, true
+  eq route.browse, false
+
+test "normalizeConfig flags are not treated as site names", ->
+  normalized = normalizeConfig(
+    sites:
+      dev: 'example.com'
+    apps:
+      zion: '/tmp/nonexistent-dir-for-test dev browse spa'
+  , '/srv')
+  eq Object.keys(normalized.sites).length, 1
+  route = normalized.sites['example.com'].routes[0]
+  eq route.browse, true
+  eq route.spa, true
+
+test "normalizeConfig rejects unknown non-flag non-site tokens", ->
+  errors = getErrors ->
+    normalizeConfig(
+      sites:
+        dev: 'example.com'
+      apps:
+        web: 'dev bogus'
+    , '/srv')
+  ok errors.some((err) -> err.code is 'E_APP_UNKNOWN_SITE')
 
 test "summarizeConfig reports canonical counts", ->
   summary = summarizeConfig('/srv/serve.rip',

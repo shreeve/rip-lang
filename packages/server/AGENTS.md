@@ -90,7 +90,7 @@ Process management and operator control surfaces.
 
 ## `serve.rip`
 
-Top-level keys: `ssl`, `sites`, `apps`, `version`, `server`.
+Top-level keys: `ssl`, `hsts`, `acme`, `sites`, `apps`, `version`, `server`.
 
 ### Config model
 
@@ -113,19 +113,22 @@ apps:
   patient: '../patient dev prod'           # local app at relative path
   incus: 'https://10.0.0.50:8443 incus'   # HTTP reverse proxy
   mysql: 'tcp://10.0.0.50:3306 db'        # TCP passthrough by SNI
+  zion: '/home/shreeve/www zion browse'    # static directory with browsing
 ```
 
 Target kinds inferred from prefix:
 
-- `./`, `../`, `/` or none → local Rip app
+- `./`, `../`, `/` or none → local Rip app (if `index.rip` exists) or static files
 - `http://`, `https://` → HTTP reverse proxy
 - `tcp://` → Layer 4 TCP/TLS passthrough
+
+Optional flags: `browse` (directory listing), `spa` (single-page app fallback).
 
 ### Constraints
 
 - Each site may be bound by exactly one app
 - TCP proxies require a port in the URL
-- Local apps look for `index.rip` in the target directory
+- Local targets with `index.rip` become Rip apps; without it, static file serving
 
 ## Where logic belongs
 

@@ -69,8 +69,8 @@ backends, automatic TLS, or TCP/TLS passthrough.
 
 ## `serve.rip`
 
-`serve.rip` is the one config file. Top-level keys: `ssl`, `sites`, `apps`,
-`version`, `server`.
+`serve.rip` is the one config file. Top-level keys: `ssl`, `hsts`, `acme`,
+`sites`, `apps`, `version`, `server`.
 
 ```coffee
 export default
@@ -108,6 +108,7 @@ String-based app specs binding targets to sites:
 apps:
   medlabs: 'dev prod'
   patient: '../patient dev prod'
+  zion:    '/home/shreeve/www zion browse'
   incus:   'https://10.0.0.50:8443 incus'
   mysql:   'tcp://10.0.0.50:3306 db'
 ```
@@ -116,10 +117,12 @@ Target kind is inferred from prefix:
 
 | Prefix | Kind | Behavior |
 |--------|------|----------|
-| `./`, `../`, `/` | local | Rip app at that path |
-| *(none)* | local | Rip app in current directory |
+| `./`, `../`, `/` | local | Rip app (if `index.rip` exists) or static files |
+| *(none)* | local | Rip app in current directory or static files |
 | `http://`, `https://` | HTTP proxy | Reverse proxy to URL |
 | `tcp://` | TCP proxy | Layer 4 SNI passthrough |
+
+Optional flags: `browse` (directory listing), `spa` (SPA fallback).
 
 Rules:
 
@@ -148,20 +151,20 @@ server:
 ```coffee
 export default
   ssl: '/ssl'
-
-  server:
-    hsts: true
-    acme: ['medlabs.health', 'trusthealth.com']
+  hsts: true
+  acme: ['medlabs.health', 'trusthealth.com']
 
   sites:
     dev:      'local.medlabs.health'
     prod:     'medlabs.health'
+    zion:     'dev.zionlabshare.com'
     incus:    'incus.trusthealth.com'
     db:       'db.trusthealth.com'
 
   apps:
     medlabs:  'dev prod'
     patient:  '../patient dev prod'
+    zion:     '/home/shreeve/www zion browse'
     incus:    'https://10.0.0.50:8443 incus'
     mysql:    'tcp://10.0.0.50:3306 db'
 ```
