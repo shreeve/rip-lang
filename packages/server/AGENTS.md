@@ -37,7 +37,7 @@ part of the core serving story. They are serving guarantees, not side features.
 HTTP serving layer. Everything that handles an inbound HTTP request after it
 arrives at the server.
 
-- `config.rip` — `serve.rip` loading, composition, and validation
+- `config.rip` — `serve.rip` loading, validation, and normalization
 - `forwarding.rip` — response builders, request IDs, error responses, worker forwarding
 - `logging.rip` — access logging, debug flags, formatting utilities
 - `metrics.rip` — diagnostics counters/gauges and response builders
@@ -50,7 +50,7 @@ arrives at the server.
 - `runtime.rip` — serving runtime lifecycle helpers
 - `security.rip` — request validation and smuggling defenses
 - `static.rip` — static file serving, traversal safety, SPA fallback
-- `tls.rip` — TLS loading helpers
+- `tls.rip` — TLS loading helpers, SSL directory scanning, SAN matching
 - `upstream.rip` — HTTP proxy backend pools, health checks, retry
 - `verify.rip` — post-activate verification policy
 
@@ -90,39 +90,42 @@ Process management and operator control surfaces.
 
 ## `serve.rip`
 
-Canonical top-level keys:
+Top-level keys: `ssl`, `sites`, `apps`, `version`, `server`.
 
-- `version`
-- `server` (global settings; `edge` accepted as deprecated alias)
-- `certs`
-- `proxies`
-- `apps`
-- `rules`
-- `groups`
-- `hosts`
-- `streams`
+### Config model
 
-Public config model:
+- `ssl` — path to directory of `.crt`/`.key` pairs (auto-scanned by SAN)
+- `sites` — named aliases mapping to hostnames
+- `apps` — string-based app specs binding targets to sites
+- `server` — optional global settings (hsts, acme, timeouts, verify)
 
-- `certs` — reusable TLS identities
-- `proxies` — named backends; host URLs decide transport
-- `rules` — reusable HTTP rule bundles
-- `groups` — reusable hostname lists
-- `hosts` — canonical authoring surface
+### App spec format
 
-Transport rules for `proxies.*.hosts`:
+Each app value is a string of space-separated tokens:
 
-- `http://...` => HTTP proxy backend
-- `https://...` => HTTPS proxy backend
-- `tcp://...` => raw TCP backend
-- mixed schemes in one proxy are invalid
+- Site names reference entries in the `sites` section
+- An optional target token (path or URL) specifies what to serve
+- No target means current directory (`.`)
 
-Host rules:
+```coffee
+apps:
+  web: 'dev prod'                          # local app, current dir, on dev+prod
+  patient: '../patient dev prod'           # local app at relative path
+  incus: 'https://10.0.0.50:8443 incus'   # HTTP reverse proxy
+  mysql: 'tcp://10.0.0.50:3306 db'        # TCP passthrough by SNI
+```
 
-- `rules` may be a rule-set ID, inline rule array, or mixed array of both
-- host rules use `proxy`, not `upstream`
-- host-level `proxy: 'tcpBackend'` creates the default TLS passthrough binding
-- `certs.name: '/ssl/site'` expands to `site.crt` + `site.key`
+Target kinds inferred from prefix:
+
+- `./`, `../`, `/` or none → local Rip app
+- `http://`, `https://` → HTTP reverse proxy
+- `tcp://` → Layer 4 TCP/TLS passthrough
+
+### Constraints
+
+- Each site may be bound by exactly one app
+- TCP proxies require a port in the URL
+- Local apps look for `index.rip` in the target directory
 
 ## Where logic belongs
 
@@ -151,7 +154,7 @@ bun run test
 
 When changing:
 
-- config parsing -> update `tests/serve_config.rip`, `tests/servers.rip`, `tests/proxy.rip`
+- config parsing -> update `tests/config.rip`, `tests/servers.rip`
 - routing -> update `tests/router.rip`, `tests/registry.rip`
 - HTTP backend behavior -> update `tests/upstream.rip`
 - stream behavior -> update `tests/streams_*.rip`

@@ -8,221 +8,116 @@ getErrors = (fn) ->
   catch e
     e.validationErrors or []
 
-test "normalizes hosts into concrete site entries", ->
+test "local app creates site routes with correct host", ->
   config = normalizeConfig({
-    hosts:
-      '*.trusthealth.com':
-        cert: '/ssl/trusthealth.com.crt'
-        key:  '/ssl/trusthealth.com.key'
-        root: '/mnt/trusthealth'
-        rules: [
-          { path: '/*', static: '.', spa: true }
-        ]
+    sites:
+      dev: 'dev.example.com'
+    apps:
+      web: 'dev'
   }, '/home/shreeve')
-  eq config.version, 1
   eq config.kind, 'serve'
-  ok config.sites['*.trusthealth.com']
-  eq config.sites['*.trusthealth.com'].host, '*.trusthealth.com'
-  eq config.sites['*.trusthealth.com'].routes.length, 1
+  ok config.sites['dev.example.com']
+  eq config.sites['dev.example.com'].host, 'dev.example.com'
+  eq config.sites['dev.example.com'].routes.length, 1
+  eq config.sites['dev.example.com'].routes[0].app, 'web'
 
-test "extracts cert map from host blocks and certs", ->
+test "multiple sites on one app", ->
   config = normalizeConfig({
-    certs:
-      zion: '/ssl/zionlabshare.com'
-    hosts:
-      '*.trusthealth.com':
-        cert: '/ssl/trusthealth.com.crt'
-        key:  '/ssl/trusthealth.com.key'
-        rules: [
-          { path: '/*', static: '/mnt/web' }
-        ]
-      '*.zionlabshare.com':
-        cert: 'zion'
-        rules: [
-          { path: '/*', static: '/mnt/zion' }
-        ]
+    sites:
+      dev: 'local.example.com'
+      prod: 'example.com'
+      www: 'www.example.com'
+    apps:
+      web: 'dev prod www'
   }, '/home/shreeve')
-  ok config.resolvedCerts['*.trusthealth.com']
-  ok config.resolvedCerts['*.zionlabshare.com']
-  ok config.resolvedCerts['*.trusthealth.com'].certPath.endsWith('trusthealth.com.crt')
-  ok config.resolvedCerts['*.zionlabshare.com'].certPath.endsWith('zionlabshare.com.crt')
+  eq Object.keys(config.sites).length, 3
+  eq config.sites['local.example.com'].routes[0].app, 'web'
+  eq config.sites['example.com'].routes[0].app, 'web'
+  eq config.sites['www.example.com'].routes[0].app, 'web'
 
-test "inherits host root into static routes", ->
+test "http proxy creates proxy entry and websocket route", ->
   config = normalizeConfig({
-    hosts:
-      '*.example.com':
-        root: '/mnt/site'
-        rules: [
-          { path: '/*', static: '.' }
-        ]
+    sites:
+      incus: 'incus.example.com'
+    apps:
+      incus: 'https://10.0.0.50:8443 incus'
   }, '/home/shreeve')
-  route = config.sites['*.example.com'].routes[0]
-  ok route.root.includes('mnt/site')
+  route = config.sites['incus.example.com'].routes[0]
+  eq route.proxy, 'proxy-incus'
+  eq route.websocket, true
+  eq route.app, null
+  proxy = config.proxies['proxy-incus']
+  ok proxy
+  eq proxy.kind, 'http'
 
-test "route root overrides host root", ->
+test "tcp proxy creates stream entries", ->
   config = normalizeConfig({
-    hosts:
-      '*.example.com':
-        root: '/mnt/default'
-        rules: [
-          { path: '/*', static: '.', root: '/mnt/override' }
-        ]
+    sites:
+      db: 'db.example.com'
+    apps:
+      mysql: 'tcp://10.0.0.50:3306 db'
   }, '/home/shreeve')
-  route = config.sites['*.example.com'].routes[0]
-  ok route.root.includes('mnt/override')
-
-test "rules inherit host from the host block", ->
-  config = normalizeConfig({
-    hosts:
-      app.example.com:
-        rules: [
-          { path: '/*', static: '/mnt/app' }
-        ]
-  }, '/home/shreeve')
-  route = config.sites['app.example.com'].routes[0]
-  eq route.host, 'app.example.com'
-
-test "preserves spa flag on rules", ->
-  config = normalizeConfig({
-    hosts:
-      '*.example.com':
-        rules: [
-          { path: '/*', static: '/mnt/app', spa: true }
-        ]
-  }, '/home/shreeve')
-  route = config.sites['*.example.com'].routes[0]
-  eq route.spa, true
-
-test "rejects host block with no rules and no root", ->
-  errors = getErrors ->
-    normalizeConfig({
-      hosts:
-        '*.example.com':
-          cert: '/ssl/example.com.crt'
-          key:  '/ssl/example.com.key'
-    }, '/home/shreeve')
-  ok errors.some((err) -> err.code is 'E_SERVER_RULES')
-
-test "root-only host block generates implicit static route", ->
-  config = normalizeConfig({
-    hosts:
-      '*.example.com':
-        root: '/mnt/site'
-  }, '/home/shreeve')
-  routes = config.sites['*.example.com'].routes
-  eq routes.length, 1
-  eq routes[0].static, '.'
-  ok routes[0].root.includes('mnt/site')
-
-test "root-only host block with spa", ->
-  config = normalizeConfig({
-    hosts:
-      '*.example.com':
-        root: '/mnt/site'
-        spa:  true
-  }, '/home/shreeve')
-  eq config.sites['*.example.com'].routes[0].spa, true
-
-test "passthrough host block creates stream entries", ->
-  config = normalizeConfig({
-    proxies:
-      incus:
-        hosts: ['tcp://127.0.0.1:8443']
-    hosts:
-      incus.example.com:
-        proxy: 'incus'
-  }, '/home/shreeve')
-  ok config.streamUpstreams['incus']
+  eq config.sites['db.example.com'], undefined
+  ok config.streamUpstreams['tcp-mysql']
   eq config.streams.length, 1
-  eq config.streams[0].proxy, 'incus'
-  eq config.streams[0].sni[0], 'incus.example.com'
-
-test "passthrough host block has no sites entry", ->
-  config = normalizeConfig({
-    proxies:
-      incus:
-        hosts: ['tcp://127.0.0.1:8443']
-    hosts:
-      incus.example.com:
-        proxy: 'incus'
-  }, '/home/shreeve')
-  eq config.sites['incus.example.com'], undefined
+  eq config.streams[0].proxy, 'tcp-mysql'
+  eq config.streams[0].sni[0], 'db.example.com'
 
 test "server settings and version are optional", ->
   config = normalizeConfig({
-    hosts:
-      '*.example.com':
-        root: '/mnt/site'
+    sites:
+      dev: 'example.com'
+    apps:
+      web: 'dev'
   }, '/home/shreeve')
-  eq config.version, 1
+  eq config.version, 2
   ok config.server
 
-test "rejects route host fields inside host blocks", ->
-  errors = getErrors ->
-    normalizeConfig({
-      hosts:
-        '*.example.com':
-          rules: [{ path: '/*', static: '.', host: 'other.com' }]
-    }, '/home/shreeve')
-  ok errors.some((err) -> err.code is 'E_SERVER_ROUTE_HOST')
-
-test "validates proxy references in host rules", ->
-  errors = getErrors ->
-    normalizeConfig({
-      proxies:
-        api:
-          hosts: ['http://127.0.0.1:4000']
-      hosts:
-        '*.example.com':
-          rules: [{ path: '/api/*', proxy: 'nonexistent' }]
-    }, '/home/shreeve')
-  ok errors.some((err) -> err.code is 'E_ROUTE_PROXY_REF')
-
-test "validates app references in host rules", ->
-  errors = getErrors ->
-    normalizeConfig({
-      hosts:
-        '*.example.com':
-          rules: [{ path: '/*', app: 'nonexistent' }]
-    }, '/home/shreeve')
-  ok errors.some((err) -> err.code is 'E_ROUTE_APP_REF')
-
-test "host block with app field creates app route", ->
+test "hostnames are lowercased", ->
   config = normalizeConfig({
-    hosts:
-      'dev.example.com':
-        cert: '/ssl/example.com.crt'
-        key:  '/ssl/example.com.key'
-        app:  'browser'
+    sites:
+      dev: 'Dev.EXAMPLE.com'
     apps:
-      browser:
-        entry: '/srv/browse.rip'
-        root:  '/mnt/www'
+      web: 'dev'
   }, '/home/shreeve')
-  route = config.sites['dev.example.com'].routes[0]
-  eq route.app, 'browser'
-  eq route.host, 'dev.example.com'
-  ok config.resolvedCerts['dev.example.com']
+  ok config.sites['dev.example.com']
 
-test "host block rejects unknown app reference", ->
+test "mixed app kinds in one config", ->
+  config = normalizeConfig({
+    sites:
+      dev: 'local.example.com'
+      prod: 'example.com'
+      incus: 'incus.example.com'
+      db: 'db.example.com'
+    apps:
+      web: 'dev prod'
+      incus: 'https://10.0.0.50:8443 incus'
+      mysql: 'tcp://10.0.0.50:3306 db'
+  }, '/home/shreeve')
+  eq Object.keys(config.sites).length, 3
+  eq config.sites['local.example.com'].routes[0].app, 'web'
+  eq config.sites['example.com'].routes[0].app, 'web'
+  eq config.sites['incus.example.com'].routes[0].proxy, 'proxy-incus'
+  eq config.streams.length, 1
+  eq config.streams[0].sni[0], 'db.example.com'
+
+test "rejects multiple apps on same site", ->
   errors = getErrors ->
     normalizeConfig({
-      hosts:
-        'dev.example.com':
-          app: 'nonexistent'
+      sites:
+        dev: 'example.com'
+      apps:
+        a: 'dev'
+        b: 'dev'
     }, '/home/shreeve')
-  ok errors.some((err) -> err.code is 'E_SERVER_APP_REF')
+  ok errors.some((err) -> err.code is 'E_SITE_MULTI_BIND')
 
-test "rejects TCP proxy host blocks that also terminate TLS", ->
+test "rejects app with multiple targets", ->
   errors = getErrors ->
     normalizeConfig({
-      proxies:
-        incus:
-          hosts: ['tcp://127.0.0.1:8443']
-      hosts:
-        'incus.example.com':
-          proxy: 'incus'
-          cert: '/ssl/example.com.crt'
-          key:  '/ssl/example.com.key'
+      sites:
+        dev: 'example.com'
+      apps:
+        web: './a ./b dev'
     }, '/home/shreeve')
-  ok errors.some((err) -> err.code is 'E_SERVER_TCP_PROXY_ONLY')
+  ok errors.some((err) -> err.code is 'E_APP_MULTI_TARGET')

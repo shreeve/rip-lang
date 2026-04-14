@@ -31,7 +31,7 @@ Written entirely in Rip. Runs on Bun.
 - Shared-port HTTPS multiplexer
 - Atomic config reload with verification and rollback
 - Drain semantics, diagnostics, and control APIs
-- Composable `serve.rip` config with reusable groups and rules
+- Composable `serve.rip` config
 
 ## Quick Start
 
@@ -64,272 +64,106 @@ rip server
 
 ### Add `serve.rip`
 
-Add `serve.rip` next to your entry file when you want host routing, shared
-apps, proxy backends, reusable TLS, or TCP passthrough.
+Add `serve.rip` next to your entry file when you want host routing, proxy
+backends, automatic TLS, or TCP/TLS passthrough.
 
-## Canonical `serve.rip`
+## `serve.rip`
 
-`serve.rip` is the one config file. There are no alternate config formats.
-
-Canonical top-level keys:
-
-- `version`
-- `server` (`edge` is a deprecated alias)
-- `certs`
-- `proxies`
-- `apps`
-- `rules`
-- `groups`
-- `hosts`
-- `streams`
-
-`hosts` is the canonical authoring surface. Reuse happens through:
-
-- `certs` for reusable TLS identities
-- `proxies` for named HTTP or TCP backends
-- `rules` for reusable HTTP route bundles
-- `groups` for reusable hostname lists
-
-Everything normalizes into concrete hosts, resolved TLS pairs, concrete route
-lists, and concrete stream routes.
-
-### Minimal shape
+`serve.rip` is the one config file. Top-level keys: `ssl`, `sites`, `apps`,
+`version`, `server`.
 
 ```coffee
 export default
-  version: 1
-  server: {}
-  certs: {}
-  proxies: {}
-  apps: {}
-  rules: {}
-  groups: {}
-  hosts: {}
-  streams: []
+  ssl: '/path/to/ssl'
+
+  sites:
+    dev:  'local.example.com'
+    prod: 'example.com'
+
+  apps:
+    web: 'dev prod'
 ```
 
-## Config Reference
+### `ssl`
 
-### `certs`
+Path to a directory of `.crt`/`.key` file pairs. Rip scans the directory,
+parses X509 SANs, and automatically matches certificates to hostnames.
 
-Preferred shorthand:
+### `sites`
+
+Named aliases mapping to hostnames:
 
 ```coffee
-certs:
-  trusthealth: '/ssl/trusthealth.com'
+sites:
+  dev:    'local.medlabs.health'
+  prod:   'medlabs.health'
+  incus:  'incus.trusthealth.com'
 ```
-
-This expands to:
-
-- `cert: '/ssl/trusthealth.com.crt'`
-- `key: '/ssl/trusthealth.com.key'`
-
-Explicit object form is also allowed.
-
-### `proxies`
-
-Named backend proxy targets. Transport is inferred from URL scheme:
-
-- `http://...` => HTTP proxy
-- `https://...` => HTTPS proxy
-- `tcp://...` => raw TCP proxy
-
-```coffee
-proxies:
-  api:
-    hosts: ['http://127.0.0.1:4000']
-    check:
-      path: '/health'
-      intervalMs: 5000
-      timeoutMs: 2000
-    retry:
-      attempts: 2
-      retryOn: [502, 503, 504]
-    timeouts:
-      connectMs: 2000
-      readMs: 30000
-
-  incus:
-    hosts: ['tcp://127.0.0.1:8443']
-    connectTimeoutMs: 5000
-```
-
-Mixed scheme families in one proxy are invalid.
 
 ### `apps`
 
-Named managed Rip apps with worker and queue settings.
-
-### `rules`
-
-Reusable HTTP rule bundles:
+String-based app specs binding targets to sites:
 
 ```coffee
-rules:
-  web: [
-    { path: '/api/*', proxy: 'api' }
-    { path: '/*', app: 'web' }
-  ]
+apps:
+  medlabs: 'dev prod'
+  patient: '../patient dev prod'
+  incus:   'https://10.0.0.50:8443 incus'
+  mysql:   'tcp://10.0.0.50:3306 db'
 ```
 
-You do not have to use `rules`. Hosts may also define inline rules.
+Target kind is inferred from prefix:
 
-### `groups`
-
-Reusable hostname lists.
-
-### `hosts`
-
-The canonical config surface. Each binding resolves to one or more concrete
-hosts and owns the HTTP or passthrough behavior for those hosts.
-
-Examples:
-
-```coffee
-hosts:
-  'example.com':
-    cert: 'main'
-    rules: [
-      { path: '/api/*', proxy: 'api' }
-      { path: '/*', app: 'web' }
-    ]
-
-  publicWeb:
-    hosts: 'publicWeb'
-    cert: 'main'
-    rules: 'web'
-
-hosts: *{
-  ['example.com', 'foo.bar.com']:
-    cert: 'main'
-    rules: 'web'
-}
-```
-
-Host block fields:
-
-- `hosts`
-- `cert`
-- `key`
-- `rules`
-- `proxy`
-- `app`
-- `root`
-- `spa`
-- `browse`
-- `timeouts`
+| Prefix | Kind | Behavior |
+|--------|------|----------|
+| `./`, `../`, `/` | local | Rip app at that path |
+| *(none)* | local | Rip app in current directory |
+| `http://`, `https://` | HTTP proxy | Reverse proxy to URL |
+| `tcp://` | TCP proxy | Layer 4 SNI passthrough |
 
 Rules:
 
-- host rules use `proxy`, not `upstream`
-- rule arrays can be inline, reusable, or mixed
-- rules inside a host block must not specify `host`
-- `proxy` shorthand can target HTTP or TCP proxies
-- if host-level `proxy` points to a TCP proxy, Rip creates the default `:443` SNI stream route for that host
+- Each site may be bound by exactly one app
+- TCP targets must include a port
+- HTTP proxy routes automatically enable WebSocket upgrade
+- If a TCP stream route shares the HTTPS port, Rip switches into multiplexer
+  mode: matching SNI is passed through at Layer 4, everything else falls
+  through to Rip's internal HTTPS server
 
-### `streams`
+### `server`
 
-Explicit Layer 4 routes:
+Optional global settings:
 
 ```coffee
-streams: [
-  { listen: 443, sni: ['db.example.com'], proxy: 'db' }
-]
+server:
+  hsts: true
+  acme: ['example.com']
+  timeouts:
+    connectMs: 2000
+    readMs: 30000
 ```
-
-If a stream route shares the HTTPS port, Rip switches that port into shared
-multiplexer mode: matching SNI is passed through at Layer 4, and everything
-else falls through to Rip's internal HTTPS server.
 
 ## Clean Example
 
 ```coffee
 export default
-  version: 1
+  ssl: '/ssl'
 
   server:
     hsts: true
-    trustedProxies: ['10.0.0.0/8', '127.0.0.1']
-    timeouts:
-      connectMs: 2000
-      readMs: 30000
-    verify:
-      requireHealthyProxies: true
-      requireReadyApps: true
-      includeUnroutedManagedApps: false
-      minHealthyTargetsPerProxy: 1
+    acme: ['medlabs.health', 'trusthealth.com']
 
-  certs:
-    trusthealth: '/ssl/trusthealth.com'
-    zion: '/ssl/zionlabshare.com'
-
-  proxies:
-    api:
-      hosts: ['http://127.0.0.1:7201']
-      check:
-        path: '/health'
-        intervalMs: 5000
-        timeoutMs: 2000
-
-    redmine:
-      hosts: ['http://127.0.0.1:7101']
-      check:
-        path: '/'
-        intervalMs: 5000
-        timeoutMs: 2000
-
-    incus:
-      hosts: ['tcp://127.0.0.1:8443']
+  sites:
+    dev:      'local.medlabs.health'
+    prod:     'medlabs.health'
+    incus:    'incus.trusthealth.com'
+    db:       'db.trusthealth.com'
 
   apps:
-    web:
-      entry: './apps/web/index.rip'
-      workers: 4
-
-    admin:
-      entry: './apps/admin/index.rip'
-      workers: 2
-
-  rules:
-    web: [
-      { path: '/api/*', proxy: 'api' }
-      { path: '/*', app: 'web' }
-    ]
-
-    admin: [
-      { path: '/api/*', proxy: 'api' }
-      { path: '/*', app: 'admin' }
-    ]
-
-    redmine: [
-      { path: '/*', proxy: 'redmine' }
-    ]
-
-  groups:
-    trustSites: ['trusthealth.com', 'www.trusthealth.com']
-    zionSites: ['zionlabshare.com', 'www.zionlabshare.com']
-
-  hosts:
-    trustSites:
-      hosts: 'trustSites'
-      cert: 'trusthealth'
-      rules: 'web'
-
-    zionSites:
-      hosts: 'zionSites'
-      cert: 'zion'
-      rules: 'web'
-
-    'admin.trusthealth.com':
-      cert: 'trusthealth'
-      rules: 'admin'
-
-    'projects.trusthealth.com':
-      cert: 'trusthealth'
-      rules: 'redmine'
-
-    'incus.trusthealth.com':
-      proxy: 'incus'
+    medlabs:  'dev prod'
+    patient:  '../patient dev prod'
+    incus:    'https://10.0.0.50:8443 incus'
+    mysql:    'tcp://10.0.0.50:3306 db'
 ```
 
 ## Operator Runbook

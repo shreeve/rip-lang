@@ -8,199 +8,193 @@ getErrors = (fn) ->
   catch e
     e.validationErrors or []
 
-test "normalizeConfig accepts composable groups rules and certs", ->
+test "normalizeConfig accepts local app with sites", ->
   normalized = normalizeConfig(
-    certs:
-      trusthealth: '/ssl/trusthealth.com'
-    rules:
-      web: [
-        { path: '/*', app: 'web' }
-      ]
-    groups:
-      publicWeb: ['example.com', 'www.example.com']
+    sites:
+      dev: 'local.example.com'
+      prod: 'example.com'
     apps:
-      web:
-        entry: './web/index.rip'
-    hosts:
-      publicWeb:
-        hosts: 'publicWeb'
-        cert: 'trusthealth'
-        rules: 'web'
+      web: 'dev prod'
   , '/srv')
   eq normalized.kind, 'serve'
   eq Object.keys(normalized.sites).length, 2
+  eq normalized.sites['local.example.com'].routes[0].app, 'web'
   eq normalized.sites['example.com'].routes[0].app, 'web'
-  eq normalized.sites['www.example.com'].routes[0].app, 'web'
-  ok normalized.resolvedCerts['example.com']
-  ok normalized.resolvedCerts['www.example.com']
 
-test "normalizeConfig accepts map-literal style grouped host keys", ->
+test "normalizeConfig generates catch-all route paths", ->
   normalized = normalizeConfig(
-    certs:
-      shared: '/ssl/shared'
-    rules:
-      web: [
-        { path: '/*', app: 'web' }
-      ]
+    sites:
+      dev: 'example.com'
     apps:
-      web:
-        entry: './web/index.rip'
-    hosts: *{
-      ['example.com', 'foo.bar.com', 'larry.me.org']:
-        cert: 'shared'
-        rules: 'web'
-    }
+      web: 'dev'
   , '/srv')
-  eq Object.keys(normalized.sites).length, 3
-  eq normalized.sites['foo.bar.com'].routes[0].app, 'web'
-  ok normalized.resolvedCerts['larry.me.org']
+  eq normalized.sites['example.com'].routes[0].path, '/*'
 
-test "normalizeConfig allows rule-set refs mixed with inline rules", ->
+test "normalizeConfig accepts local app at relative path", ->
   normalized = normalizeConfig(
-    rules:
-      web: [
-        { path: '/*', app: 'web' }
-      ]
-    proxies:
-      api:
-        hosts: ['http://127.0.0.1:4000']
+    sites:
+      dev: 'example.com'
     apps:
-      web:
-        entry: './web/index.rip'
-    hosts:
-      'example.com':
-        rules: [
-          { path: '/api/*', proxy: 'api' }
-          'web'
-        ]
+      patient: '../patient dev'
   , '/srv')
-  eq normalized.sites['example.com'].routes.length, 2
-  eq normalized.sites['example.com'].routes[0].proxy, 'api'
-  eq normalized.sites['example.com'].routes[1].app, 'web'
+  eq normalized.sites['example.com'].routes[0].app, 'patient'
+  eq normalized.apps.patient.id, 'patient'
 
-test "normalizeConfig preserves verify policy", ->
+test "normalizeConfig accepts http proxy app", ->
   normalized = normalizeConfig(
-    edge:
+    sites:
+      incus: 'incus.example.com'
+    apps:
+      incus: 'https://10.0.0.50:8443 incus'
+  , '/srv')
+  eq Object.keys(normalized.sites).length, 1
+  route = normalized.sites['incus.example.com'].routes[0]
+  eq route.proxy, 'proxy-incus'
+  eq route.websocket, true
+  eq route.path, '/*'
+  ok normalized.upstreams['proxy-incus']
+  eq normalized.upstreams['proxy-incus'].targets[0], 'https://10.0.0.50:8443'
+
+test "normalizeConfig accepts tcp proxy app", ->
+  normalized = normalizeConfig(
+    sites:
+      db: 'db.example.com'
+    apps:
+      mysql: 'tcp://10.0.0.50:3306 db'
+  , '/srv')
+  ok normalized.streamUpstreams['tcp-mysql']
+  eq normalized.streams.length, 1
+  eq normalized.streams[0].sni[0], 'db.example.com'
+  eq normalized.streams[0].proxy, 'tcp-mysql'
+
+test "normalizeConfig rejects empty app spec", ->
+  errors = getErrors ->
+    normalizeConfig(
+      sites:
+        dev: 'example.com'
+      apps:
+        web: ''
+    , '/srv')
+  ok errors.some((err) -> err.code is 'E_APP_EMPTY')
+
+test "normalizeConfig rejects app with no sites", ->
+  errors = getErrors ->
+    normalizeConfig(
+      sites:
+        dev: 'example.com'
+      apps:
+        proxy: 'https://10.0.0.50:8443'
+    , '/srv')
+  ok errors.some((err) -> err.code is 'E_APP_NO_SITES')
+
+test "normalizeConfig rejects unknown site names", ->
+  errors = getErrors ->
+    normalizeConfig(
+      sites:
+        dev: 'example.com'
+      apps:
+        web: 'dev missing'
+    , '/srv')
+  ok errors.some((err) -> err.code is 'E_APP_UNKNOWN_SITE')
+
+test "normalizeConfig rejects duplicate site bindings", ->
+  errors = getErrors ->
+    normalizeConfig(
+      sites:
+        dev: 'example.com'
+      apps:
+        web: 'dev'
+        api: 'dev'
+    , '/srv')
+  ok errors.some((err) -> err.code is 'E_SITE_MULTI_BIND')
+
+test "normalizeConfig rejects object app specs", ->
+  errors = getErrors ->
+    normalizeConfig(
+      sites:
+        dev: 'example.com'
+      apps:
+        web:
+          entry: './index.rip'
+    , '/srv')
+  ok errors.some((err) -> err.code is 'E_APP_OBJECT')
+
+test "normalizeConfig rejects unknown top-level keys", ->
+  errors = getErrors ->
+    normalizeConfig(
+      hosts:
+        'example.com':
+          root: '/mnt/site'
+      apps: {}
+    , '/srv')
+  ok errors.some((err) -> err.code is 'E_UNKNOWN_KEY')
+
+test "normalizeConfig rejects duplicate hostnames in sites", ->
+  errors = getErrors ->
+    normalizeConfig(
+      sites:
+        dev: 'example.com'
+        prod: 'example.com'
+    , '/srv')
+  ok errors.some((err) -> err.code is 'E_SITE_DUPLICATE_HOST')
+
+test "normalizeConfig rejects non-string site hostnames", ->
+  errors = getErrors ->
+    normalizeConfig(
+      sites:
+        dev: 42
+    , '/srv')
+  ok errors.some((err) -> err.code is 'E_SITE_HOST_TYPE')
+
+test "normalizeConfig rejects tcp proxy without port", ->
+  errors = getErrors ->
+    normalizeConfig(
+      sites:
+        db: 'db.example.com'
+      apps:
+        mysql: 'tcp://10.0.0.50 db'
+    , '/srv')
+  ok errors.some((err) -> err.code is 'E_APP_TCP_PORT')
+
+test "normalizeConfig preserves server settings", ->
+  normalized = normalizeConfig(
+    server:
+      hsts: true
       verify:
         requireHealthyProxies: false
-        requireReadyApps: true
-        includeUnroutedManagedApps: false
         minHealthyTargetsPerProxy: 2
-    hosts:
-      '*.example.com':
-        root: '/mnt/site'
+    sites:
+      dev: 'example.com'
+    apps:
+      web: 'dev'
   , '/srv')
+  eq normalized.server.hsts, true
   eq normalized.server.verify.requireHealthyProxies, false
-  eq normalized.server.verify.includeUnroutedManagedApps, false
   eq normalized.server.verify.minHealthyTargetsPerProxy, 2
 
-test "normalizeConfig accepts TCP proxies and streams", ->
-  normalized = normalizeConfig(
-    proxies:
-      incus:
-        hosts: ['tcp://127.0.0.1:8443']
-    hosts:
-      '*.example.com':
-        root: '/mnt/site'
-    streams: [
-      { listen: 8443, sni: ['incus.example.com'], proxy: 'incus' }
-    ]
-  , '/srv')
-  ok normalized.streamUpstreams['incus']
-  eq normalized.streams.length, 1
-
-test "normalizeConfig rejects wildcard ACME domains", ->
-  errors = getErrors ->
-    normalizeConfig(
-      server:
-        acme: ['*.example.com']
-      hosts:
-        '*.example.com':
-          root: '/mnt/site'
-    , '/srv')
-  ok errors.some((err) -> err.code is 'E_ACME_WILDCARD')
-
-test "normalizeConfig rejects unknown rule-set references", ->
-  errors = getErrors ->
-    normalizeConfig(
-      hosts:
-        '*.example.com':
-          rules: 'missing'
-    , '/srv')
-  ok errors.some((err) -> err.code is 'E_RULE_UNKNOWN')
-
-test "normalizeConfig rejects inline app definitions on host blocks", ->
-  errors = getErrors ->
-    normalizeConfig(
-      hosts:
-        'api.example.com':
-          app:
-            entry: './api/index.rip'
-    , '/srv')
-  ok errors.some((err) -> err.code is 'E_SERVER_APP_INLINE')
-
-test "normalizeConfig rejects duplicate hosts after expansion", ->
-  errors = getErrors ->
-    normalizeConfig(
-      groups:
-        publicWeb: ['example.com']
-      hosts:
-        publicWeb:
-          hosts: 'publicWeb'
-          root: '/srv/site'
-        'example.com':
-          root: '/srv/other'
-    , '/srv')
-  ok errors.some((err) -> err.code is 'E_HOST_DUPLICATE')
-
-test "normalizeConfig infers HTTP and TCP proxy kinds from hosts", ->
-  normalized = normalizeConfig(
-    proxies:
-      api:
-        hosts: ['http://127.0.0.1:4000']
-        check:
-          path: '/health'
-      incus:
-        hosts: ['tcp://127.0.0.1:8443']
-    hosts:
-      'example.com':
-        rules: [{ path: '/api/*', proxy: 'api' }]
-      'incus.example.com':
-        proxy: 'incus'
-  , '/srv')
-  eq normalized.proxies.api.kind, 'http'
-  eq normalized.proxies.incus.kind, 'tcp'
-  eq normalized.streams[0].proxy, 'incus'
-
-test "normalizeConfig rejects mixed proxy host kinds", ->
-  errors = getErrors ->
-    normalizeConfig(
-      proxies:
-        bad:
-          hosts: ['http://127.0.0.1:4000', 'tcp://127.0.0.1:8443']
-      hosts:
-        'example.com':
-          root: '/srv/site'
-    , '/srv')
-  ok errors.some((err) -> err.code is 'E_PROXY_KIND_MIX')
+test "normalizeConfig works with minimal config", ->
+  normalized = normalizeConfig({}, '/srv')
+  eq normalized.kind, 'serve'
+  eq Object.keys(normalized.sites).length, 0
+  eq Object.keys(normalized.apps).length, 0
 
 test "formatConfigErrors includes code path and hint", ->
   output = formatConfigErrors('serve.rip', [
-    code: 'E_ROUTE_ACTION'
-    path: 'hosts.publicWeb.rules[0]'
-    message: 'route must define exactly one action'
-    hint: 'Choose one action field per route.'
+    code: 'E_APP_EMPTY'
+    path: 'apps.web'
+    message: 'app web: empty spec'
+    hint: 'Add site names.'
   ])
-  ok output.includes('[E_ROUTE_ACTION]')
-  ok output.includes('hosts.publicWeb.rules[0]')
+  ok output.includes('[E_APP_EMPTY]')
+  ok output.includes('apps.web')
   ok output.includes('Hint:')
 
 test "summarizeConfig reports canonical counts", ->
   summary = summarizeConfig('/srv/serve.rip',
     kind: 'serve'
-    version: 1
+    version: 2
     server: {}
-    proxies: { app: { id: 'app', kind: 'http', hosts: ['http://127.0.0.1:3000'] } }
+    proxies: { 'proxy-incus': { id: 'proxy-incus', kind: 'http' } }
     apps: { web: { entry: '/srv/web/index.rip' } }
     sites:
       'example.com':

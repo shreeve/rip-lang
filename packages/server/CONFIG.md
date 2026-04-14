@@ -7,225 +7,114 @@ Rip Server serves content. Here, `content` means anything you want to make
 reachable over the network: a static site, a Rip app, a proxied HTTP service,
 or a TCP/TLS service.
 
-`serve.rip` is the operator model for publishing and routing that content. It
-combines:
-
-- config shape
-- config lifecycle
-- runtime contracts
-- scheduler policy
-- implementation constraints that matter to operators
-
-Those lifecycle and runtime constraints are part of serving, not side systems.
-TLS, proxy health, verification, rollback, drain, reload, and diagnostics are
-the guarantees that make serving safe and coherent.
+`serve.rip` is the operator model for publishing and routing that content.
 
 ## Canonical shape
 
-`serve.rip` is the only config file and `hosts` is the canonical authoring
-surface.
-
 ```coffee
 export default
-  version: 1
-  server: {}
-  certs: {}
-  proxies: {}
-  apps: {}
-  rules: {}
-  groups: {}
-  hosts: {}
-  streams: []
+  ssl: '/path/to/ssl'
+
+  sites:
+    dev:  'local.example.com'
+    prod: 'example.com'
+
+  apps:
+    web: 'dev prod'
 ```
 
-There are no alternate top-level route/site models.
+Top-level keys: `ssl`, `sites`, `apps`, `version`, `server`.
 
 ## Top-level sections
 
-### `server`
+### `ssl`
 
-`edge` is accepted as an alias for backward compatibility.
-
-Global settings:
-
-- `acme` (boolean or array of domains)
-- `cert`
-- `key`
-- `hsts`
-- `trustedProxies`
-- `timeouts`
-- `verify`
-
-Verification settings:
-
-- `requireHealthyProxies`
-- `requireReadyApps`
-- `includeUnroutedManagedApps`
-- `minHealthyTargetsPerProxy`
-
-### `certs`
-
-Reusable TLS identities.
-
-Preferred shorthand:
+Path to a directory containing `.crt` and `.key` file pairs. Rip scans the
+directory, pairs files by stem name, parses X509 SANs, and automatically
+matches certificates to hostnames.
 
 ```coffee
-certs:
-  trusthealth: '/ssl/trusthealth.com'
+ssl: '/ssl'
 ```
 
-This expands to:
+Given `/ssl/example.com.crt` and `/ssl/example.com.key`, Rip reads the SANs
+from the certificate and maps each hostname to that cert/key pair.
 
-- `cert: '/ssl/trusthealth.com.crt'`
-- `key: '/ssl/trusthealth.com.key'`
+Relative paths resolve against the config file directory.
 
-Explicit object form is also valid:
+### `sites`
+
+Named aliases mapping to hostnames:
 
 ```coffee
-certs:
-  trusthealth:
-    cert: '/ssl/trusthealth.com.crt'
-    key: '/ssl/trusthealth.com.key'
+sites:
+  dev:    'local.medlabs.health'
+  prod:   'medlabs.health'
+  incus:  'incus.trusthealth.com'
+  db:     'db.trusthealth.com'
 ```
 
-### `proxies`
-
-Named backend proxy targets.
-
-Transport kind is inferred from URL scheme:
-
-- `http://...` => HTTP proxy
-- `https://...` => HTTPS proxy
-- `tcp://...` => raw TCP proxy
-
-```coffee
-proxies:
-  api:
-    hosts: ['http://127.0.0.1:4000']
-    check:
-      path: '/health'
-      intervalMs: 5000
-      timeoutMs: 2000
-    retry:
-      attempts: 2
-      retryOn: [502, 503, 504]
-    timeouts:
-      connectMs: 2000
-      readMs: 30000
-
-  incus:
-    hosts: ['tcp://127.0.0.1:8443']
-    connectTimeoutMs: 5000
-```
-
-Rules:
-
-- HTTP proxies may use `check`, `retry`, and `timeouts`
-- TCP proxies may use `connectTimeoutMs`
-- mixed scheme families in one proxy are invalid
+Site names are short labels used in app specs. Each hostname may only appear
+once across all sites.
 
 ### `apps`
 
-Named managed Rip applications with worker and queue settings.
+String-based app specs that bind targets to sites:
 
 ```coffee
 apps:
-  web:
-    entry: './apps/web/index.rip'
-    workers: 4
-    maxQueue: 512
-    queueTimeoutMs: 30000
-    readTimeoutMs: 30000
+  medlabs: 'dev prod'
+  patient: '../patient dev prod'
+  incus:   'https://10.0.0.50:8443 incus'
+  mysql:   'tcp://10.0.0.50:3306 db'
 ```
 
-### `rules`
+Each value is a space-separated string of tokens:
 
-Named reusable HTTP rule bundles.
+- **Site names** reference entries in `sites`
+- **An optional target** specifies what to serve
 
-```coffee
-rules:
-  web: [
-    { path: '/api/*', proxy: 'api' }
-    { path: '/*', app: 'web' }
-  ]
-```
+Target kind is inferred from prefix:
 
-You do not have to use `rules`. Hosts may also define inline rules or mixed
-arrays of named and inline rules.
-
-### `groups`
-
-Named reusable host lists.
-
-```coffee
-groups:
-  publicWeb: ['example.com', 'www.example.com']
-```
-
-### `hosts`
-
-The canonical config surface. Each binding resolves to one or more concrete
-hosts and owns the HTTP or passthrough behavior for those hosts.
-
-Examples:
-
-```coffee
-hosts:
-  'example.com':
-    cert: 'main'
-    rules: [
-      { path: '/api/*', proxy: 'api' }
-      { path: '/*', app: 'web' }
-    ]
-
-  publicWeb:
-    hosts: 'publicWeb'
-    cert: 'main'
-    rules: 'web'
-
-hosts: *{
-  ['example.com', 'foo.bar.com']:
-    cert: 'main'
-    rules: 'web'
-}
-```
-
-Host block fields:
-
-- `hosts`
-- `cert`
-- `key`
-- `rules`
-- `proxy`
-- `app`
-- `root`
-- `spa`
-- `browse`
-- `timeouts`
+| Prefix | Kind | Behavior |
+|--------|------|----------|
+| `./`, `../`, `/` | local | Rip app at that path |
+| *(none)* | local | Rip app in current directory |
+| `http://`, `https://` | HTTP proxy | Reverse proxy to URL |
+| `tcp://` | TCP proxy | Layer 4 SNI passthrough |
 
 Rules:
 
-- `cert` references a named entry in `certs`, unless paired with inline `key`
-- `rules` can reference named rules, inline rules, or both
-- rules inside a host block must not specify `host`
-- `proxy` is a shorthand catch-all proxy binding
-- `app` is a shorthand catch-all app binding
-- `root` is a shorthand catch-all static binding
-- if `proxy` targets a TCP proxy, Rip generates the default `:443` SNI stream route automatically
+- Each site may be bound by exactly one app
+- TCP targets must include a port (`tcp://host:port`)
+- Local apps look for `index.rip` in the target directory
+- HTTP proxy routes automatically enable WebSocket upgrade
 
-### `streams`
+### `server`
 
-Explicit Layer 4 stream routes matched by `listen` port and SNI.
+Optional global settings:
 
 ```coffee
-streams: [
-  { listen: 443, sni: ['db.example.com'], proxy: 'db' }
-]
+server:
+  hsts: true
+  acme: ['example.com', 'www.example.com']
+  timeouts:
+    connectMs: 2000
+    readMs: 30000
+  verify:
+    requireHealthyProxies: true
+    requireReadyApps: true
 ```
 
-If a stream route shares the HTTPS port, Rip switches that port into shared
-multiplexer mode: matching SNI is passed through at Layer 4, and everything
-else falls through to Rip's internal HTTPS server.
+Fields:
+
+- `acme` (boolean or array of domains)
+- `cert`, `key` (explicit TLS paths)
+- `certDir` (ACME certificate storage directory)
+- `hsts` (enable Strict-Transport-Security)
+- `trustedProxies` (array of trusted proxy addresses)
+- `timeouts` (`connectMs`, `readMs`)
+- `verify` (post-activate verification policy)
 
 ## Config lifecycle
 
@@ -240,30 +129,13 @@ Config updates must be:
 
 ### Apply pipeline
 
-1. Parse
-   - Load `serve.rip`
-   - Evaluate synchronously in config context
-   - Reject on syntax or runtime errors
-2. Validate
-   - Require `version: 1`
-   - Validate supported top-level keys
-   - Validate reusable config references, wildcard hosts, websocket route requirements, timeout shapes, and verification policy
-3. Normalize
-   - Expand defaults
-   - Normalize certs, proxies, apps, rules, groups, concrete host bindings, timeouts, and verification policy
-   - Compile the deterministic route table
-4. Stage
-   - Build a new edge runtime generation
-   - Prepare managed app registry changes
-   - Do not affect active traffic yet
-5. Activate
-   - Swap the active runtime atomically
-   - Route new traffic through the new generation
-   - Keep the old generation retired for rollback or drain
-6. Post-activate verify
-   - Check referenced HTTP proxies, healthy target counts, and managed app worker readiness
-7. Rollback
-   - Restore the previous registry snapshot and active runtime if verification fails
+1. Parse — load `serve.rip`, evaluate synchronously
+2. Validate — check top-level keys, sites, apps, URLs, ports
+3. Normalize — expand app specs into routes, proxies, streams
+4. Stage — build new runtime generation
+5. Activate — swap active runtime atomically
+6. Post-activate verify — check proxy health and app readiness
+7. Rollback — restore previous snapshot if verification fails
 
 ### Trigger modes
 
@@ -271,12 +143,9 @@ Config updates must be:
 - `SIGHUP`
 - control API: `POST /reload`
 
-All triggers use the same reload path and safeguards.
-
 ### Failure behavior
 
-- Parse or validate failure: keep serving the existing config
-- Stage failure: keep serving the existing config
+- Parse or validate failure: keep serving existing config
 - Post-activate verification failure: rollback automatically
 
 ### Draining behavior
@@ -286,123 +155,70 @@ All triggers use the same reload path and safeguards.
   - websocket proxy connections that started on them are still open
 - Health checks stop only after a retired runtime finishes draining
 
-## Contracts
+## Clean Example
 
-### `AppDescriptor`
+```coffee
+export default
+  ssl: '/ssl'
 
-```ts
-type AppDescriptor = {
-  id: string
-  entry: string | null
-  appBaseDir: string | null
-  hosts: string[]
-  workers: number | null
-  maxQueue: number
-  queueTimeoutMs: number
-  readTimeoutMs: number
-  env: Record<string, string>
-}
+  server:
+    hsts: true
+    acme: ['medlabs.health', 'trusthealth.com']
+
+  sites:
+    dev:      'local.medlabs.health'
+    prod:     'medlabs.health'
+    incus:    'incus.trusthealth.com'
+    db:       'db.trusthealth.com'
+
+  apps:
+    medlabs:  'dev prod'
+    patient:  '../patient dev prod'
+    incus:    'https://10.0.0.50:8443 incus'
+    mysql:    'tcp://10.0.0.50:3306 db'
 ```
 
-### `RouteRule`
+## Operator Runbook
 
-```ts
-type RouteRule = {
-  id: string
-  host: string | "*" | "*.example.com"
-  path: string
-  methods: string[] | "*"
-  priority: number
-  proxy?: string | null
-  app?: string | null
-  static?: string | null
-  redirect?: { to: string, status: number } | null
-  headers?: { set?: Record<string, string>, remove?: string[] } | null
-  websocket?: boolean
-  timeouts?: Partial<TimeoutPolicy>
-}
+### Start with an explicit config file
+
+```bash
+rip server --file=./serve.rip
 ```
 
-Route rules are normalized from `serve.rip` host bindings. Authoring
-composition through `rules`, `groups`, `certs`, and `proxies` must be fully
-resolved before route compilation.
+### Validate config without serving
 
-### `VerifyPolicy`
-
-```ts
-type VerifyPolicy = {
-  requireHealthyProxies: boolean
-  requireReadyApps: boolean
-  includeUnroutedManagedApps: boolean
-  minHealthyTargetsPerProxy: number
-}
+```bash
+rip server --check-config
+rip server --check-config --file=./serve.rip
 ```
 
-Defaults:
+### Reload config safely
 
-- `requireHealthyProxies: true`
-- `requireReadyApps: true`
-- `includeUnroutedManagedApps: true`
-- `minHealthyTargetsPerProxy: 1`
-
-### `EdgeRuntime`
-
-```ts
-type EdgeRuntime = {
-  id: string
-  upstreamPool: UpstreamPool
-  routeTable: RouteTable
-  configInfo: ConfigInfo
-  verifyPolicy: VerifyPolicy | null
-  inflight: number
-  wsConnections: number
-  retiredAt: string | null
-}
+```bash
+kill -HUP "$(cat /tmp/rip_myapp.pid)"
 ```
 
-## Scheduler policy
+or:
 
-v1 uses **least-inflight** per app pool.
+```bash
+curl --unix-socket /tmp/rip_myapp.ctl.sock -X POST http://localhost/reload
+```
 
-Selection order:
+### Binding to ports 80 and 443
 
-1. filter to workers in `ready` state
-2. choose the worker with lowest `inflight`
-3. tie-break by lowest `workerId`
+Ports below 1024 require elevated privileges. If you see a permission
+error on startup, grant Bun the capability once:
 
-Fallback behavior:
+```bash
+sudo setcap cap_net_bind_service=+ep $(which bun)
+```
 
-- if all workers are saturated and queue depth `< maxQueue`: enqueue
-- if queue depth `>= maxQueue`: return `503` with `Retry-After`
+This survives reboots but **not Bun upgrades** — re-run it after
+`bun upgrade`.
 
-Retry interaction:
+### Diagnostics
 
-- retry only idempotent requests by default
-- never retry after partial upstream response
-- retry decisions occur after scheduler selection and only on retry-eligible failures
-
-## Operational constraints
-
-- Config evaluation must be deterministic
-- No async work while evaluating config
-- No network I/O while evaluating config
-- Validation errors must include field path, message, and remediation hint
-
-TLS posture in v1:
-
-- dynamic SNI selection was not observed
-- in-process cert hot reload was not observed
-- graceful restart cert activation works
-- ACME HTTP-01 is the reliable baseline
-
-## Historical notes worth keeping
-
-Accepted design choices that still matter:
-
-- single project architecture with two runtime roles:
-  - EdgeControlPlane
-  - AppDataPlane
-- direct request path remains `client -> ingress -> worker`
-- config apply lifecycle is atomic
-- `server.rip` should stay orchestration/wiring, not business logic
-- prefer themed files over generic utility dumping grounds
+```bash
+curl http://localhost/diagnostics
+```

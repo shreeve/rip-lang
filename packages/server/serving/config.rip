@@ -4,28 +4,11 @@
 
 import { existsSync, statSync } from 'node:fs'
 import { join, dirname, resolve, basename } from 'node:path'
-import { normalizeStreams, parseHostPort } from '../streams/config.rip'
 import { scanSslDirectory, matchCertForHost } from './tls.rip'
 
 CONFIG_FILE = 'serve.rip'
-VALID_REDIRECT_STATUSES = new Set([301, 302, 307, 308])
-TOP_LEVEL_KEYS = new Set(%w[
-  version server edge proxies apps certs rules groups hosts streams
-])
-
 isPlainObject = (value) ->
   value? and typeof value is 'object' and not Array.isArray(value) and not (value instanceof Map)
-
-isEntriesSource = (value) ->
-  isPlainObject(value) or value instanceof Map
-
-entriesOf = (value) ->
-  if value instanceof Map then Array.from(value.entries())
-  else if isPlainObject(value) then Object.entries(value)
-  else []
-
-cloneRoute = (route) ->
-  Object.assign({}, route)
 
 dedupe = (list) ->
   Array.from(new Set(list))
@@ -209,476 +192,6 @@ normalizeServerSettings = (value, errors) ->
     verify: normalizeVerifyPolicy(value.verify, 'server.verify', errors)
   }
 
-normalizeProxyConfig = (proxyId, proxyConfig, path, errors) ->
-  unless isPlainObject(proxyConfig)
-    pushError(errors, 'E_PROXY_TYPE', path, 'proxy config must be an object', "Use #{proxyId}: { hosts: ['http://127.0.0.1:3000'] }.")
-    proxyConfig = {}
-  rawHosts = proxyConfig.hosts
-  httpHosts = []
-  tcpTargets = []
-  unless Array.isArray(rawHosts) and rawHosts.length > 0
-    pushError(errors, 'E_PROXY_HOSTS', "#{path}.hosts", 'proxy must define at least one host', "Use `hosts: ['http://127.0.0.1:3000']` or `hosts: ['tcp://127.0.0.1:8443']`.")
-  else
-    for host, idx in rawHosts
-      unless typeof host is 'string' and host.trim()
-        pushError(errors, 'E_PROXY_HOST_VALUE', "#{path}.hosts[#{idx}]", 'proxy host must be a non-empty string', "Use `'http://127.0.0.1:3000'` or `'tcp://127.0.0.1:8443'`.")
-        continue
-      value = host.trim()
-      try
-        url = new URL(value)
-        switch url.protocol
-          when 'http:', 'https:'
-            httpHosts.push(value)
-          when 'tcp:'
-            port = parseInt(url.port)
-            unless Number.isFinite(port) and port > 0 and port <= 65535 and url.hostname
-              pushError(errors, 'E_PROXY_HOST_VALUE', "#{path}.hosts[#{idx}]", 'tcp proxy hosts must include a valid hostname and port', "Use `'tcp://127.0.0.1:8443'`.")
-              continue
-            tcpTargets.push
-              targetId: "#{url.hostname}:#{port}"
-              host: url.hostname
-              port: port
-              source: value
-          else
-            pushError(errors, 'E_PROXY_HOST_VALUE', "#{path}.hosts[#{idx}]", 'proxy hosts must use http://, https://, or tcp://', "Use `'http://127.0.0.1:3000'`, `'https://api.example.com'`, or `'tcp://127.0.0.1:8443'`.")
-      catch
-        pushError(errors, 'E_PROXY_HOST_VALUE', "#{path}.hosts[#{idx}]", 'proxy host must be a valid URL with http://, https://, or tcp://', "Use `'http://127.0.0.1:3000'` or `'tcp://127.0.0.1:8443'`.")
-  if httpHosts.length > 0 and tcpTargets.length > 0
-    pushError(errors, 'E_PROXY_KIND_MIX', path, 'proxy hosts must all use the same transport scheme family', 'Split HTTP(S) and TCP backends into separate proxy entries.')
-  kind = if httpHosts.length > 0 then 'http' else if tcpTargets.length > 0 then 'tcp' else null
-  if kind is 'tcp'
-    pushError(errors, 'E_PROXY_TCP_CHECK', "#{path}.check", 'TCP proxies do not support `check`', 'Remove `check` or use HTTP backend URLs.') if proxyConfig.check?
-    pushError(errors, 'E_PROXY_TCP_RETRY', "#{path}.retry", 'TCP proxies do not support `retry`', 'Remove `retry` or use HTTP backend URLs.') if proxyConfig.retry?
-    pushError(errors, 'E_PROXY_TCP_TIMEOUTS', "#{path}.timeouts", 'TCP proxies do not support `timeouts`', 'Use `connectTimeoutMs` for TCP proxies.') if proxyConfig.timeouts?
-    return {
-      id: proxyId
-      kind: 'tcp'
-      hosts: (rawHosts or []).slice()
-      targets: tcpTargets
-      connectTimeoutMs: normalizePositiveInt(proxyConfig.connectTimeoutMs, 5000, "#{path}.connectTimeoutMs", errors, 'connectTimeoutMs')
-    }
-  {
-    id: proxyId
-    kind: 'http'
-    hosts: httpHosts
-    targets: httpHosts
-    healthCheck:
-      path: if typeof proxyConfig.check?.path is 'string' and proxyConfig.check.path.startsWith('/') then proxyConfig.check.path else '/health'
-      intervalMs: normalizePositiveInt(proxyConfig.check?.intervalMs, 5000, "#{path}.check.intervalMs", errors, 'check.intervalMs')
-      timeoutMs: normalizePositiveInt(proxyConfig.check?.timeoutMs, 2000, "#{path}.check.timeoutMs", errors, 'check.timeoutMs')
-    retry:
-      attempts: normalizePositiveInt(proxyConfig.retry?.attempts, 2, "#{path}.retry.attempts", errors, 'retry.attempts')
-      retryOn: if Array.isArray(proxyConfig.retry?.retryOn) and proxyConfig.retry.retryOn.length > 0 then proxyConfig.retry.retryOn else [502, 503, 504]
-    timeouts: normalizeTimeouts(proxyConfig.timeouts, "#{path}.timeouts", errors)
-  }
-
-normalizeCertProfile = (certId, certConfig, baseDir, path, errors) ->
-  if typeof certConfig is 'string' and certConfig.trim()
-    stem = certConfig.trim()
-    fullStem = if stem.startsWith('/') then stem else resolve(baseDir, stem)
-    return {
-      id: certId
-      certPath: "#{fullStem}.crt"
-      keyPath: "#{fullStem}.key"
-    }
-  unless isPlainObject(certConfig)
-    pushError(errors, 'E_CERT_TYPE', path, 'cert entry must be a string stem or an object', "Use #{certId}: '/ssl/site' or #{certId}: { cert: '/ssl/site.crt', key: '/ssl/site.key' }.")
-    certConfig = {}
-  hasCert = certConfig.cert?
-  hasKey = certConfig.key?
-  if hasCert isnt hasKey
-    pushError(errors, 'E_CERT_PAIR', path, 'cert entry must define both cert and key', "Add both `cert` and `key`.")
-  certPath = if typeof certConfig.cert is 'string' and certConfig.cert.trim() then resolve(baseDir, certConfig.cert) else null
-  keyPath = if typeof certConfig.key is 'string' and certConfig.key.trim() then resolve(baseDir, certConfig.key) else null
-  {
-    id: certId
-    certPath
-    keyPath
-  }
-
-normalizeCertProfiles = (value, baseDir, errors) ->
-  profiles = {}
-  return profiles unless value?
-  unless isEntriesSource(value)
-    pushError(errors, 'E_CERTS_TYPE', 'certs', 'certs must be an object or map keyed by cert ID', "Use `certs: { trusthealth: '/ssl/trusthealth.com' }`.")
-    return profiles
-  for [certId, certConfig] in entriesOf(value)
-    profiles[String(certId)] = normalizeCertProfile(String(certId), certConfig, baseDir, "certs.#{certId}", errors)
-  profiles
-
-normalizeGroups = (value, errors) ->
-  groups = {}
-  return groups unless value?
-  unless isEntriesSource(value)
-    pushError(errors, 'E_GROUPS_TYPE', 'groups', 'groups must be an object or map keyed by group ID', "Use `groups: { publicWeb: ['example.com', 'www.example.com'] }`.")
-    return groups
-  for [groupId, groupConfig] in entriesOf(value)
-    groups[String(groupId)] = normalizeHosts(groupConfig, "groups.#{groupId}", errors)
-  groups
-
-normalizeRules = (value, errors) ->
-  sets = {}
-  return sets unless value?
-  unless isEntriesSource(value)
-    pushError(errors, 'E_RULES_TYPE', 'rules', 'rules must be an object or map keyed by rule-set ID', "Use `rules: { web: [{ path: '/*', app: 'web' }] }`.")
-    return sets
-  for [setId, setConfig] in entriesOf(value)
-    path = "rules.#{setId}"
-    unless Array.isArray(setConfig)
-      pushError(errors, 'E_RULE_VALUE', path, 'rule set must be an array of route objects', "Use `web: [{ path: '/*', app: 'web' }]`.")
-      continue
-    routes = []
-    for routeConfig, idx in setConfig
-      unless isPlainObject(routeConfig)
-        pushError(errors, 'E_ROUTE_TYPE', "#{path}[#{idx}]", 'route must be an object', "Use `{ path: '/*', app: 'web' }`.")
-        continue
-      routes.push(cloneRoute(routeConfig))
-    sets[String(setId)] = routes
-  sets
-
-resolveHostToken = (token, path, errors, groups) ->
-  unless typeof token is 'string' and token.trim()
-    pushError(errors, 'E_HOST_SELECTOR_TOKEN', path, 'host selector entries must be strings', "Use `'example.com'`, `'*.example.com'`, or a host-group ID.")
-    return []
-  trimmed = token.trim()
-  if groups[trimmed]? and not trimmed.includes('.') and trimmed isnt '*' and not trimmed.startsWith('*.')
-    return groups[trimmed]
-  normalizeHosts([trimmed], path, errors)
-
-expandHostSelector = (selector, path, errors, groups) ->
-  out = []
-  if typeof selector is 'string'
-    out = resolveHostToken(selector, path, errors, groups)
-  else if Array.isArray(selector)
-    for item, idx in selector
-      out = out.concat(resolveHostToken(item, "#{path}[#{idx}]", errors, groups))
-  else
-    pushError(errors, 'E_HOST_SELECTOR', path, 'hosts selector must be a string or array of strings', "Use `hosts: 'publicWeb'` or `hosts: ['example.com', 'www.example.com']`.")
-  dedupe(out)
-
-expandRules = (value, path, errors, rulesets) ->
-  routes = []
-  pushInlineRoute = (routeConfig, sourcePath) ->
-    unless isPlainObject(routeConfig)
-      pushError(errors, 'E_ROUTE_TYPE', sourcePath, 'route must be an object', "Use `{ path: '/*', app: 'web' }`.")
-      return
-    routes.push({ config: cloneRoute(routeConfig), sourcePath })
-
-  pushRuleSet = (ruleSetId, sourcePath) ->
-    unless typeof ruleSetId is 'string' and ruleSetId.trim()
-      pushError(errors, 'E_RULE_REF', sourcePath, 'rule-set references must be strings', "Use `rules: 'web'` or `rules: ['web', ...]`.")
-      return
-    routeSet = rulesets[ruleSetId]
-    unless routeSet?
-      pushError(errors, 'E_RULE_UNKNOWN', sourcePath, "unknown rule set #{ruleSetId}", 'Define the rule set under `rules` first.')
-      return
-    for routeConfig, idx in routeSet
-      routes.push({ config: cloneRoute(routeConfig), sourcePath: "#{sourcePath}[#{idx}]" })
-
-  return routes unless value?
-  if typeof value is 'string'
-    pushRuleSet(value, path)
-  else if Array.isArray(value)
-    for item, idx in value
-      itemPath = "#{path}[#{idx}]"
-      if typeof item is 'string'
-        pushRuleSet(item, itemPath)
-      else
-        pushInlineRoute(item, itemPath)
-  else
-    pushError(errors, 'E_SERVER_RULES_TYPE', path, 'rules must be a rule-set ID or an array of route objects/rule-set IDs', "Use `rules: 'web'` or `rules: [{ path: '/*', app: 'web' }]`.")
-  routes
-
-normalizeHostBoundRoute = (routeConfig, idx, host, hostRoot, baseDir, path, errors, knownHttpProxies, knownApps) ->
-  unless isPlainObject(routeConfig)
-    pushError(errors, 'E_ROUTE_TYPE', path, 'route must be an object', "Use `{ path: '/*', app: 'web' }`.")
-    routeConfig = {}
-  if routeConfig.host?
-    pushError(errors, 'E_SERVER_ROUTE_HOST', "#{path}.host", 'rules inside `hosts` blocks must not specify host', "Remove the `host` field; the host comes from the block or selector.")
-  actionKeys = ['proxy', 'app', 'static', 'redirect', 'headers'].filter((key) -> routeConfig[key]?)
-  if actionKeys.length isnt 1
-    pushError(errors, 'E_ROUTE_ACTION', path, 'route must define exactly one action: proxy, app, static, redirect, or headers', "Choose one action field per route.")
-  routePath = if typeof routeConfig.path is 'string' and routeConfig.path.startsWith('/') then routeConfig.path else null
-  pushError(errors, 'E_ROUTE_PATH', "#{path}.path", 'route path must be a string starting with /', "Use `path: '/*'`.") unless routePath
-  if routeConfig.proxy? and not knownHttpProxies.has(routeConfig.proxy)
-    pushError(errors, 'E_ROUTE_PROXY_REF', "#{path}.proxy", "unknown HTTP proxy #{routeConfig.proxy}", 'Define the proxy under `proxies` with HTTP URLs first.')
-  if routeConfig.app? and not knownApps.has(routeConfig.app)
-    pushError(errors, 'E_ROUTE_APP_REF', "#{path}.app", "unknown app #{routeConfig.app}", 'Define the app under `apps` first.')
-  if routeConfig.websocket is true and not routeConfig.proxy?
-    pushError(errors, 'E_ROUTE_WEBSOCKET', "#{path}.websocket", 'websocket routes currently require a proxy action', 'Set `proxy: ...` on the route or remove `websocket: true`.')
-  if routeConfig.static?
-    pushError(errors, 'E_ROUTE_STATIC_TYPE', "#{path}.static", 'static must be a string path', "Use `static: '.'` or `static: '/path/to/dir'`.") unless typeof routeConfig.static is 'string'
-    pushError(errors, 'E_ROUTE_SPA_TYPE', "#{path}.spa", 'spa must be a boolean', "Use `spa: true` or remove it.") if routeConfig.spa? and typeof routeConfig.spa isnt 'boolean'
-    pushError(errors, 'E_ROUTE_ROOT_TYPE', "#{path}.root", 'root must be a string path', "Use `root: '/path/to/dir'`.") if routeConfig.root? and typeof routeConfig.root isnt 'string'
-  if routeConfig.redirect?
-    unless isPlainObject(routeConfig.redirect) and typeof routeConfig.redirect.to is 'string'
-      pushError(errors, 'E_REDIRECT_TO', "#{path}.redirect", 'redirect must have a `to` string', "Use `redirect: { to: 'https://example.com', status: 301 }`.")
-    if routeConfig.redirect?.status? and not VALID_REDIRECT_STATUSES.has(routeConfig.redirect.status)
-      pushError(errors, 'E_REDIRECT_STATUS', "#{path}.redirect.status", 'redirect status must be 301, 302, 307, or 308', "Use `status: 301` or `status: 302`.")
-  effectiveRoot = if typeof routeConfig.root is 'string' then resolve(baseDir, routeConfig.root) else if hostRoot then hostRoot else null
-  {
-    id:        routeConfig.id or "route-#{idx + 1}"
-    host:      host.toLowerCase()
-    path:      routePath or '/'
-    methods:   if routeConfig.methods? then routeConfig.methods else '*'
-    priority:  normalizePositiveInt(routeConfig.priority, idx, "#{path}.priority", errors, 'priority')
-    proxy:     routeConfig.proxy or null
-    app:       routeConfig.app or null
-    static:    routeConfig.static or null
-    root:      effectiveRoot
-    spa:       routeConfig.spa is true
-    browse:    routeConfig.browse is true
-    redirect:  routeConfig.redirect or null
-    headers:   routeConfig.headers or null
-    websocket: routeConfig.websocket is true
-    timeouts:  normalizeTimeouts(routeConfig.timeouts, "#{path}.timeouts", errors)
-  }
-
-resolveCertPair = (serverConfig, path, baseDir, certProfiles, errors) ->
-  if serverConfig.key? and not serverConfig.cert?
-    pushError(errors, 'E_SERVER_CERT_PAIR', path, 'host block must define cert when key is present', "Add `cert: '/ssl/site.crt'` or remove `key`.")
-    return { certPath: null, keyPath: null }
-  if serverConfig.cert? and serverConfig.key?
-    {
-      certPath: if typeof serverConfig.cert is 'string' and serverConfig.cert.trim() then resolve(baseDir, serverConfig.cert) else null
-      keyPath:  if typeof serverConfig.key is 'string' and serverConfig.key.trim() then resolve(baseDir, serverConfig.key) else null
-    }
-  else if serverConfig.cert?
-    unless typeof serverConfig.cert is 'string' and serverConfig.cert.trim()
-      pushError(errors, 'E_SERVER_CERT_REF', "#{path}.cert", 'cert must reference a named cert or be paired with key', "Use `cert: 'trusthealth'` or define both `cert` and `key` file paths.")
-      return { certPath: null, keyPath: null }
-    profile = certProfiles[serverConfig.cert]
-    unless profile
-      pushError(errors, 'E_SERVER_CERT_UNKNOWN', "#{path}.cert", "unknown cert #{serverConfig.cert}", 'Define the cert under `certs` first.')
-      return { certPath: null, keyPath: null }
-    { certPath: profile.certPath, keyPath: profile.keyPath }
-  else
-    { certPath: null, keyPath: null }
-
-implicitAppRoute = (host, appId) ->
-  id:        'route-1'
-  host:      host.toLowerCase()
-  path:      '/*'
-  methods:   '*'
-  priority:  0
-  proxy:     null
-  app:       appId
-  static:    null
-  root:      null
-  spa:       false
-  browse:    false
-  redirect:  null
-  headers:   null
-  websocket: false
-  timeouts:  {}
-
-implicitStaticRoute = (host, root, spa = false, browse = false) ->
-  id:        'route-1'
-  host:      host.toLowerCase()
-  path:      '/*'
-  methods:   '*'
-  priority:  0
-  proxy:     null
-  app:       null
-  static:    '.'
-  root:      root
-  spa:       spa
-  browse:    browse
-  redirect:  null
-  headers:   null
-  websocket: false
-  timeouts:  {}
-
-normalizeHostBlockForHost = (host, serverConfig, path, baseDir, errors, knownHttpProxies, knownTcpProxies, knownApps, rulesets, certProfiles) ->
-  unless isPlainObject(serverConfig)
-    pushError(errors, 'E_SERVER_TYPE', path, 'host block must be an object', "Use '#{host}': { rules: 'web' }.")
-    return null
-
-  hasSelector = serverConfig.hosts?
-  serverRoot = if typeof serverConfig.root is 'string' then resolve(baseDir, serverConfig.root) else null
-  serverSpa = serverConfig.spa is true
-  serverBrowse = serverConfig.browse is true
-  serverProxy = if typeof serverConfig.proxy is 'string' and serverConfig.proxy.trim() then serverConfig.proxy.trim() else null
-  serverApp = if typeof serverConfig.app is 'string' and serverConfig.app.trim() then serverConfig.app.trim() else null
-  if serverConfig.proxy? and not serverProxy
-    pushError(errors, 'E_SERVER_PROXY_REF', "#{path}.proxy", 'proxy must reference a named proxy ID', "Use `proxy: 'api'`.")
-  if serverProxy and (serverConfig.rules? or serverApp or serverRoot)
-    pushError(errors, 'E_SERVER_PROXY_CONFLICT', path, 'host block shorthand `proxy` cannot be combined with rules, app, or root', 'Use only one host-level shorthand or switch to explicit `rules`.')
-  if serverConfig.app? and not serverApp
-    pushError(errors, 'E_SERVER_APP_REF', "#{path}.app", 'app must reference a named app ID', "Define the app under `apps` and reference it with `app: 'web'`.")
-  if isPlainObject(serverConfig.app)
-    pushError(errors, 'E_SERVER_APP_INLINE', "#{path}.app", 'inline app definitions are not supported in serve.rip', 'Define the app under `apps` and reference it by ID.')
-  if serverApp and not knownApps.has(serverApp)
-    pushError(errors, 'E_SERVER_APP_REF', "#{path}.app", "unknown app #{serverApp}", 'Define the app under `apps` first.')
-
-  if serverProxy and knownTcpProxies.has(serverProxy)
-    for forbidden in ['cert', 'key', 'rules', 'app', 'root', 'spa', 'browse']
-      pushError(errors, 'E_SERVER_TCP_PROXY_ONLY', "#{path}.#{forbidden}", 'TCP proxy host blocks cannot also define TLS termination, rules, apps, or static roots', "Use only proxy: '#{serverProxy}' in this block.") if serverConfig[forbidden]?
-    return {
-      host: host.toLowerCase()
-      routes: []
-      timeouts: {}
-      certPath: null
-      keyPath: null
-      passthroughProxy: serverProxy
-    }
-
-  { certPath, keyPath } = resolveCertPair(serverConfig, path, baseDir, certProfiles, errors)
-  timeouts = normalizeTimeouts(serverConfig.timeouts, "#{path}.timeouts", errors)
-  routes = []
-  if serverConfig.rules?
-    expanded = expandRules(serverConfig.rules, "#{path}.rules", errors, rulesets)
-    for resolvedRoute, idx in expanded
-      routes.push(normalizeHostBoundRoute(resolvedRoute.config, idx, host, serverRoot, baseDir, resolvedRoute.sourcePath, errors, knownHttpProxies, knownApps))
-  else if serverProxy
-    if not knownHttpProxies.has(serverProxy)
-      pushError(errors, 'E_SERVER_PROXY_REF', "#{path}.proxy", "unknown HTTP proxy #{serverProxy}", 'Define the proxy under `proxies` with HTTP URLs first.')
-    routes.push
-      id:        'route-1'
-      host:      host.toLowerCase()
-      path:      '/*'
-      methods:   '*'
-      priority:  0
-      proxy:     serverProxy
-      app:       null
-      static:    null
-      root:      null
-      spa:       false
-      browse:    false
-      redirect:  null
-      headers:   null
-      websocket: false
-      timeouts:  {}
-  else if serverApp
-    routes.push(implicitAppRoute(host, serverApp))
-  else if serverRoot
-    routes.push(implicitStaticRoute(host, serverRoot, serverSpa, serverBrowse))
-  else
-    hint = if hasSelector then "Add `rules`, `proxy`, `app`, or `root` to the shared host block." else "Add `rules`, `proxy`, `app`, or `root` to this host block."
-    pushError(errors, 'E_SERVER_RULES', path, 'host block must define rules, proxy, app, or root', hint)
-
-  {
-    host: host.toLowerCase()
-    routes: routes.filter(Boolean)
-    timeouts
-    certPath
-    keyPath
-    passthroughProxy: null
-  }
-
-normalizeHostsSection = (value, baseDir, errors, knownHttpProxies, knownTcpProxies, knownApps, rulesets, groups, certProfiles) ->
-  sites = {}
-  resolvedCerts = {}
-  passthroughUpstreams = {}
-  passthroughStreams = []
-
-  unless isEntriesSource(value)
-    pushError(errors, 'E_HOSTS_SECTION', 'hosts', 'hosts must be an object or map', "Use `hosts: { 'example.com': { rules: 'web' } }` or `hosts: *{ ['example.com', 'www.example.com']: { rules: 'web' } }`.")
-    return { sites, resolvedCerts, passthroughUpstreams, passthroughStreams }
-
-  seenHosts = new Set()
-  entries = entriesOf(value)
-  for [entryKey, serverConfig], entryIdx in entries
-    entryLabel = if typeof entryKey is 'string' then entryKey else "entry-#{entryIdx + 1}"
-    entryPath = "hosts.#{entryLabel}"
-    concreteHosts = []
-    if Array.isArray(entryKey)
-      if serverConfig?.hosts?
-        pushError(errors, 'E_HOST_ENTRY_SELECTOR_DUP', "#{entryPath}.hosts", 'host blocks cannot define both an array key and a `hosts` selector', "Use the map key array or the `hosts` field, not both.")
-      concreteHosts = expandHostSelector(entryKey, "#{entryPath}[key]", errors, groups)
-    else if typeof entryKey is 'string'
-      if serverConfig?.hosts?
-        concreteHosts = expandHostSelector(serverConfig.hosts, "#{entryPath}.hosts", errors, groups)
-      else
-        concreteHosts = normalizeHosts([entryKey], entryPath, errors)
-    else
-      pushError(errors, 'E_HOST_ENTRY_KEY', entryPath, 'host entry keys must be strings or arrays of strings', "Use `'example.com': { ... }` or `*{ ['example.com', 'www.example.com']: { ... } }`.")
-      continue
-
-    for host in concreteHosts
-      if seenHosts.has(host)
-        pushError(errors, 'E_HOST_DUPLICATE', entryPath, "host #{host} is defined more than once", 'Each concrete host may be configured only once in `serve.rip`.')
-        continue
-      seenHosts.add(host)
-      normalized = normalizeHostBlockForHost(host, serverConfig, entryPath, baseDir, errors, knownHttpProxies, knownTcpProxies, knownApps, rulesets, certProfiles)
-      continue unless normalized
-      if normalized.passthroughProxy
-        passthroughStreams.push({ id: normalized.passthroughProxy, order: passthroughStreams.length, listen: 443, sni: [normalized.host], proxy: normalized.passthroughProxy, timeouts: {} })
-      else
-        sites[normalized.host] = { host: normalized.host, timeouts: normalized.timeouts, routes: normalized.routes }
-        if normalized.certPath and normalized.keyPath
-          resolvedCerts[normalized.host] = { certPath: normalized.certPath, keyPath: normalized.keyPath }
-
-  { sites, resolvedCerts, passthroughUpstreams, passthroughStreams }
-
-normalizeServeConfig = (config, baseDir) ->
-  errors = []
-  for key of config
-    pushError(errors, 'E_UNKNOWN_KEY', key, "unknown top-level key #{key}", 'Allowed keys: version, server, proxies, apps, certs, rules, groups, hosts, streams.') unless TOP_LEVEL_KEYS.has(key)
-
-  if config.edge? and not config.server?
-    warn "rip-server: 'edge' is deprecated in serve.rip; use 'server' instead"
-  serverSettings = normalizeServerSettings(config.server or config.edge or {}, errors)
-
-  proxies = {}
-  httpProxies = {}
-  tcpProxies = {}
-  if config.proxies?
-    unless isEntriesSource(config.proxies)
-      pushError(errors, 'E_PROXIES_TYPE', 'proxies', 'proxies must be an object or map keyed by proxy ID', "Use `proxies: { api: { hosts: ['http://127.0.0.1:3000'] } }`.")
-    else
-      for [proxyId, proxyConfig] in entriesOf(config.proxies)
-        normalizedProxy = normalizeProxyConfig(String(proxyId), proxyConfig, "proxies.#{proxyId}", errors)
-        proxies[String(proxyId)] = normalizedProxy
-        if normalizedProxy.kind is 'http'
-          httpProxies[String(proxyId)] = normalizedProxy
-        else if normalizedProxy.kind is 'tcp'
-          tcpProxies[String(proxyId)] =
-            id: normalizedProxy.id
-            targets: normalizedProxy.targets
-            connectTimeoutMs: normalizedProxy.connectTimeoutMs
-
-  apps = {}
-  if config.apps?
-    unless isEntriesSource(config.apps)
-      pushError(errors, 'E_APPS_TYPE', 'apps', 'apps must be an object or map keyed by app ID', "Use `apps: { web: { entry: './web/index.rip' } }`.")
-    else
-      for [appId, appConfig] in entriesOf(config.apps)
-        apps[String(appId)] = normalizeAppConfigInto(String(appId), appConfig, baseDir, "apps.#{appId}", errors)
-
-  certProfiles = normalizeCertProfiles(config.certs, baseDir, errors)
-  groups = normalizeGroups(config.groups, errors)
-  rules = normalizeRules(config.rules, errors)
-
-  knownHttpProxies = new Set(Object.keys(httpProxies))
-  knownTcpProxies = new Set(Object.keys(tcpProxies))
-  knownApps = new Set(Object.keys(apps))
-  { sites, resolvedCerts, passthroughUpstreams, passthroughStreams } = normalizeHostsSection(config.hosts, baseDir, errors, knownHttpProxies, knownTcpProxies, knownApps, rules, groups, certProfiles)
-
-  streamUpstreams = Object.assign({}, tcpProxies, passthroughUpstreams)
-  knownStreamProxies = new Set(Object.keys(streamUpstreams))
-  streams = normalizeStreams(config.streams, knownStreamProxies, errors)
-  streams = passthroughStreams.concat(streams)
-
-  throw validationError(CONFIG_FILE, errors) if errors.length > 0
-
-  {
-    kind: 'serve'
-    version: config.version or 1
-    server: serverSettings
-    proxies
-    upstreams: httpProxies
-    apps
-    certs: certProfiles
-    rules
-    groups
-    routes: []
-    sites
-    resolvedCerts
-    streamUpstreams
-    streams
-  }
-
 export createConfigError = (code, path, message, hint = null) ->
   { code, path, message, hint }
 
@@ -713,6 +226,10 @@ parseAppSpec = (appName, spec, knownSites, errors, path) ->
     target = '.'
     siteNames = tokens
 
+  if siteNames.length is 0
+    pushError(errors, 'E_APP_NO_SITES', path, "app #{appName}: no site names specified", "Add at least one site name from the sites section.")
+    return null
+
   unknown = siteNames.filter (s) -> not knownSites.has(s)
   if unknown.length > 0
     pushError(errors, 'E_APP_UNKNOWN_SITE', path, "app #{appName}: unknown site(s): #{unknown.join(', ')}", "Define these in the sites section.")
@@ -731,11 +248,18 @@ normalizeServeRip = (config, baseDir) ->
     unless SERVE_KEYS.has(key)
       pushError(errors, 'E_UNKNOWN_KEY', key, "unknown top-level key: #{key}", 'Allowed keys: ssl, sites, apps, version, server.')
 
-  # SSL directory
-  sslPath = if typeof config.ssl is 'string' then config.ssl else null
+  # SSL directory (resolve relative paths against config base dir)
+  sslPath = if typeof config.ssl is 'string' and config.ssl.trim()
+    raw = config.ssl.trim()
+    if raw.startsWith('/') then raw else resolve(baseDir, raw)
+  else
+    null
   certMap = new Map()
   if sslPath
-    certMap = scanSslDirectory(sslPath)
+    try
+      certMap = scanSslDirectory(sslPath)
+    catch err
+      pushError(errors, 'E_SSL_DIR', 'ssl', "cannot read ssl directory: #{err.message}", "Check the path and permissions.")
 
   # Sites: siteName -> hostname
   siteToHost = new Map()
@@ -745,7 +269,10 @@ normalizeServeRip = (config, baseDir) ->
       pushError(errors, 'E_SITES_TYPE', 'sites', 'sites must be an object')
     else
       for siteName, hostname of config.sites
-        host = String(hostname).toLowerCase().trim()
+        unless typeof hostname is 'string'
+          pushError(errors, 'E_SITE_HOST_TYPE', "sites.#{siteName}", "site #{siteName}: hostname must be a string")
+          continue
+        host = hostname.toLowerCase().trim()
         unless host
           pushError(errors, 'E_SITE_EMPTY', "sites.#{siteName}", "site #{siteName}: hostname is empty")
           continue
@@ -769,6 +296,14 @@ normalizeServeRip = (config, baseDir) ->
   resolvedCerts = {}
   streamUpstreams = {}
   streams = []
+  siteBindings = new Map()
+
+  bindSite = (siteName, appName, path) ->
+    if siteBindings.has(siteName)
+      pushError(errors, 'E_SITE_MULTI_BIND', path, "site #{siteName} is already bound by app #{siteBindings.get(siteName)}")
+      return false
+    siteBindings.set(siteName, appName)
+    true
 
   if config.apps?
     unless isPlainObject(config.apps)
@@ -784,6 +319,9 @@ normalizeServeRip = (config, baseDir) ->
 
         parsed = parseAppSpec(appName, appSpec, knownSites, errors, "apps.#{appName}")
         continue unless parsed
+
+        for sn in parsed.siteNames
+          bindSite(sn, appName, "apps.#{appName}")
 
         hostnames = parsed.siteNames.map (s) -> siteToHost.get(s)
 
@@ -809,7 +347,7 @@ normalizeServeRip = (config, baseDir) ->
               routes: [
                 id: "#{appName}-default"
                 host: hostname
-                path: '/'
+                path: '/*'
                 methods: '*'
                 priority: 0
                 proxy: null
@@ -829,14 +367,20 @@ normalizeServeRip = (config, baseDir) ->
 
         else if parsed.kind is 'http-proxy'
           proxyId = "proxy-#{appName}"
-          url = new URL(parsed.target)
+          url = null
+          try
+            url = new URL(parsed.target)
+          catch
+            pushError(errors, 'E_APP_URL', "apps.#{appName}", "app #{appName}: invalid URL #{parsed.target}")
+          continue unless url
+          origin = "#{url.protocol}//#{url.host}"
           proxies[proxyId] =
             id: proxyId
             kind: 'http'
-            hosts: ["#{url.protocol}//#{url.host}"]
-            targets: [{ url: parsed.target, weight: 1 }]
+            hosts: [origin]
+            targets: [origin]
             healthCheck: null
-            retry: { count: 1, delayMs: 0 }
+            retry: {}
             timeouts: { connectMs: 10000, readMs: 30000 }
           httpProxies[proxyId] = proxies[proxyId]
 
@@ -847,7 +391,7 @@ normalizeServeRip = (config, baseDir) ->
               routes: [
                 id: "#{appName}-proxy"
                 host: hostname
-                path: '/'
+                path: '/*'
                 methods: '*'
                 priority: 0
                 proxy: proxyId
@@ -867,10 +411,19 @@ normalizeServeRip = (config, baseDir) ->
 
         else if parsed.kind is 'tcp-proxy'
           proxyId = "tcp-#{appName}"
-          url = new URL(parsed.target.replace('tcp://', 'http://'))
+          url = null
+          try
+            url = new URL(parsed.target.replace('tcp://', 'http://'))
+          catch
+            pushError(errors, 'E_APP_URL', "apps.#{appName}", "app #{appName}: invalid URL #{parsed.target}")
+          continue unless url
+          port = parseInt(url.port)
+          unless Number.isFinite(port) and port > 0 and port <= 65535
+            pushError(errors, 'E_APP_TCP_PORT', "apps.#{appName}", "app #{appName}: tcp target must include a valid port", "Use 'tcp://host:port siteName'.")
+            continue
           tcpProxies[proxyId] =
             id: proxyId
-            targets: [{ host: url.hostname, port: parseInt(url.port) }]
+            targets: [{ host: url.hostname, port }]
             connectTimeoutMs: 10000
           streamUpstreams[proxyId] = tcpProxies[proxyId]
 
@@ -895,9 +448,6 @@ normalizeServeRip = (config, baseDir) ->
     proxies
     upstreams: httpProxies
     apps
-    certs: {}
-    rules: {}
-    groups: {}
     routes: []
     sites
     resolvedCerts
@@ -907,8 +457,6 @@ normalizeServeRip = (config, baseDir) ->
 
 export normalizeConfig = (config, baseDir) ->
   normalizeServeRip(config, baseDir)
-
-export normalizeEdgeConfig = (config, baseDir) -> normalizeConfig(config, baseDir)
 
 export summarizeConfig = (configPath, normalized) ->
   path = resolve(configPath)
@@ -926,15 +474,11 @@ export summarizeConfig = (configPath, normalized) ->
       routes: routeCount
       streams: (normalized.streams or []).length
     canonicalShape:
+      ssl: true
+      sites: true
+      apps: true
       version: true
       server: true
-      proxies: true
-      apps: true
-      certs: true
-      rules: true
-      groups: true
-      hosts: true
-      streams: true
   }
 
 export loadConfig = (configPath) ->
@@ -981,4 +525,3 @@ export applyConfig = (config, registry, registerAppFn, baseDir) ->
     registered.push(normalizedApp)
   registered
 
-export applyEdgeConfig = (config, registry, registerAppFn, baseDir) -> applyConfig(config, registry, registerAppFn, baseDir)
