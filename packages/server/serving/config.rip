@@ -409,7 +409,7 @@ normalizeServeRip = (config, baseDir) ->
             kind: 'http'
             hosts: [origin]
             targets: [origin]
-            healthCheck: {}
+            healthCheck: { path: '/' }
             retry: {}
             timeouts: { connectMs: 10000, readMs: 30000 }
           httpProxies[proxyId] = proxies[proxyId]
