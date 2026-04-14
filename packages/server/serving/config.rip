@@ -432,7 +432,7 @@ normalizeServeRip = (config, baseDir) ->
                 browse: false
                 redirect: null
                 headers: null
-                websocket: true
+                websocket: false
                 timeouts: {}
               ]
 
