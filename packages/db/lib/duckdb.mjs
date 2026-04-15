@@ -16,7 +16,7 @@
 
 import { dlopen, ptr, CString, read as ffiRead } from 'bun:ffi';
 import { platform } from 'process';
-import { existsSync } from 'fs';
+import { existsSync, realpathSync } from 'fs';
 
 // ==============================================================================
 // Find DuckDB Library
@@ -162,10 +162,13 @@ const lib = dlopen(libPath, {
 // Load shim for duckdb_fetch_chunk (takes duckdb_result by value — 48-byte struct
 // that Bun FFI cannot marshal). The shim accepts duckdb_result* instead.
 function findShimLibrary() {
-  const dir = libPath.replace(/\/[^/]+$/, '');
+  const realLibPath = realpathSync(libPath);
+  const dir = realLibPath.replace(/\/[^/]+$/, '');
+  const symDir = libPath.replace(/\/[^/]+$/, '');
   const ext = platform === 'darwin' ? 'dylib' : 'so';
   const candidates = [
     `${dir}/libduckdb-shim.${ext}`,
+    `${symDir}/libduckdb-shim.${ext}`,
     new URL('./libduckdb-shim.' + ext, import.meta.url).pathname,
   ];
   if (process.env.DUCKDB_SHIM_PATH) candidates.unshift(process.env.DUCKDB_SHIM_PATH);
