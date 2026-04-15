@@ -93,15 +93,13 @@ export generateNginxConfig = (normalized) ->
     groups.get(groupKey).hostnames.push(hostname)
 
   # --- Preamble ---
-  out.push """
-    worker_processes auto;
-    pid /run/nginx.pid;
-
-    events {
-        worker_connections 4096;
-        multi_accept on;
-    }
-  """
+  out.push "worker_processes auto;"
+  out.push "pid /run/nginx.pid;"
+  out.push ""
+  out.push "events {"
+  out.push "    worker_connections 4096;"
+  out.push "    multi_accept on;"
+  out.push "}"
 
   # --- Stream block (if TCP passthrough exists) ---
   if hasStreams
@@ -117,11 +115,7 @@ export generateNginxConfig = (normalized) ->
       upstreamName = "stream_#{stream.proxy.replace(/[^a-zA-Z0-9]/g, '_')}"
       for sni in (stream.sni or [])
         mapEntries.push "        #{sni} #{upstreamName};"
-      upstreamBlocks.push """
-            upstream #{upstreamName} {
-                server #{target.host}:#{target.port};
-            }
-        """
+      upstreamBlocks.push "    upstream #{upstreamName} {\n        server #{target.host}:#{target.port};\n    }"
 
     out.push ""
     out.push "    map $ssl_preread_server_name $tls_backend {"
@@ -133,21 +127,19 @@ export generateNginxConfig = (normalized) ->
     for block in upstreamBlocks
       out.push block
 
-    out.push """
-        upstream https_terminator {
-            server 127.0.0.1:#{INTERNAL_PORT};
-        }
-
-        server {
-            listen 443;
-            listen [::]:443;
-            proxy_pass $tls_backend;
-            ssl_preread on;
-            proxy_connect_timeout 10s;
-            proxy_timeout 1h;
-        }
-    }
-    """
+    out.push "    upstream https_terminator {"
+    out.push "        server 127.0.0.1:#{INTERNAL_PORT};"
+    out.push "    }"
+    out.push ""
+    out.push "    server {"
+    out.push "        listen 443;"
+    out.push "        listen [::]:443;"
+    out.push "        proxy_pass $tls_backend;"
+    out.push "        ssl_preread on;"
+    out.push "        proxy_connect_timeout 10s;"
+    out.push "        proxy_timeout 1h;"
+    out.push "    }"
+    out.push "}"
 
   # --- HTTP block ---
   out.push ""
