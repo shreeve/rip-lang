@@ -51,7 +51,7 @@ staticBlock = (root, browse = false, spa = false) ->
 export generateNginxConfig = (normalized) ->
   out = []
   hasStreams = (normalized.streams or []).length > 0
-  httpsListen = if hasStreams then "127.0.0.1:#{INTERNAL_PORT} ssl http2" else "443 ssl http2"
+  httpsListen = if hasStreams then "127.0.0.1:#{INTERNAL_PORT} ssl" else "443 ssl"
   hsts = normalized.server?.hsts is true
 
   # Collect all hostnames for port 80 redirect
@@ -95,7 +95,7 @@ export generateNginxConfig = (normalized) ->
 
   # --- Preamble ---
   out.push "worker_processes auto;"
-  out.push "pid /run/nginx.pid;"
+  out.push "pid logs/nginx.pid;"
   out.push "pcre_jit on;"
   out.push ""
   out.push "events {"
@@ -213,6 +213,7 @@ export generateNginxConfig = (normalized) ->
     out.push ""
     out.push "    server {"
     out.push "        listen #{httpsListen};"
+    out.push "        http2 on;"
     out.push "        server_name #{hostnames.join(' ')};"
     out.push ""
     if cert?.certPath and cert?.keyPath
@@ -267,6 +268,7 @@ export generateNginxConfig = (normalized) ->
     out.push ""
     out.push "    server {"
     out.push "        listen #{httpsListen} default_server;"
+    out.push "        http2 on;"
     out.push "        server_name _;"
     out.push ""
     out.push "        #{sslBlock(defaultCert.certPath, defaultCert.keyPath).split('\n').join('\n        ')}"
