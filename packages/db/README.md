@@ -455,14 +455,24 @@ Bun's FFI on Linux x64 cannot pass the 48-byte `duckdb_result` struct by value
 (required by `duckdb_fetch_chunk`). A tiny C shim is required — it wraps the
 by-value call and accepts a pointer instead.
 
+You need two `.so` files on Linux:
+
+| File | Size | Purpose |
+|------|------|---------|
+| `libduckdb.so` | ~68 MB | DuckDB itself |
+| `libduckdb-shim.so` | ~16 KB | Struct-by-value wrapper |
+
+Build the shim and place it next to `libduckdb.so`:
+
 ```bash
-# Build the shim (place it next to libduckdb.so)
 gcc -shared -fPIC -o /usr/local/lib/libduckdb-shim.so \
   lib/duckdb-shim.c -L /usr/local/lib -lduckdb
 ```
 
-The FFI driver finds the shim automatically when it's in the same directory
-as `libduckdb.so`. To override, set `DUCKDB_SHIM_PATH`.
+The FFI driver resolves symlinks when searching, so if
+`/usr/local/lib/libduckdb.so` is a symlink to (e.g.) `~/.duckdb/latest/`,
+place the shim in the symlink target directory alongside the real
+`libduckdb.so`. To override, set `DUCKDB_SHIM_PATH`.
 
 ## License
 
