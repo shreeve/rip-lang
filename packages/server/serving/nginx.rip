@@ -4,6 +4,11 @@
 
 INTERNAL_PORT = 4443
 
+certPathsForHost = (hostname, sslPath) ->
+  domain = hostname.replace(/^\*\./, '')
+  base   = domain.split('.').slice(-2).join('.')
+  { certPath: "#{sslPath}/#{base}.crt", keyPath: "#{sslPath}/#{base}.key" }
+
 sslBlock = (certPath, keyPath) ->
   lines = []
   lines.push "ssl_certificate #{certPath};"
@@ -216,12 +221,12 @@ export generateNginxConfig = (normalized) ->
     out.push "        http2 on;"
     out.push "        server_name #{hostnames.join(' ')};"
     out.push ""
-    if cert?.certPath and cert?.keyPath
-      out.push "        #{sslBlock(cert.certPath, cert.keyPath).split('\n').join('\n        ')}"
-      out.push ""
-    else
-      out.push "        # WARNING: no TLS certificate found for #{hostnames.join(', ')}"
-      out.push "        # Add certs to your ssl directory or configure manually"
+    certPath = cert?.certPath
+    keyPath  = cert?.keyPath
+    if not certPath and normalized.sslPath
+      { certPath, keyPath } = certPathsForHost(hostnames[0], normalized.sslPath)
+    if certPath and keyPath
+      out.push "        #{sslBlock(certPath, keyPath).split('\n').join('\n        ')}"
       out.push ""
     if hsts
       out.push '        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;'
@@ -258,20 +263,27 @@ export generateNginxConfig = (normalized) ->
     out.push "    }"
 
   # Default catch-all server for unknown SNI (use first non-passthrough cert, sorted for determinism)
-  defaultCert = null
+  defaultCertPath = null
+  defaultKeyPath  = null
   for hostname in Object.keys(normalized.resolvedCerts or {}).sort()
     unless passthroughHostnames.has(hostname)
-      defaultCert = normalized.resolvedCerts[hostname]
+      defaultCertPath = normalized.resolvedCerts[hostname].certPath
+      defaultKeyPath  = normalized.resolvedCerts[hostname].keyPath
       break
+  if not defaultCertPath and normalized.sslPath
+    for hostname in Object.keys(normalized.sites or {}).sort()
+      unless passthroughHostnames.has(hostname)
+        { certPath: defaultCertPath, keyPath: defaultKeyPath } = certPathsForHost(hostname, normalized.sslPath)
+        break
 
-  if defaultCert
+  if defaultCertPath and defaultKeyPath
     out.push ""
     out.push "    server {"
     out.push "        listen #{httpsListen} default_server;"
     out.push "        http2 on;"
     out.push "        server_name _;"
     out.push ""
-    out.push "        #{sslBlock(defaultCert.certPath, defaultCert.keyPath).split('\n').join('\n        ')}"
+    out.push "        #{sslBlock(defaultCertPath, defaultKeyPath).split('\n').join('\n        ')}"
     out.push ""
     out.push "        return 421;"
     out.push "    }"

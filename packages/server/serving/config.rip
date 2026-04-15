@@ -245,8 +245,9 @@ parseAppSpec = (appName, spec, knownSites, errors, path) ->
 
   { kind, target, siteNames, flags }
 
-normalizeServeRip = (config, baseDir) ->
+normalizeServeRip = (config, baseDir, options = {}) ->
   errors = []
+  lenient = options.lenient or false
 
   for key of config
     unless SERVE_KEYS.has(key)
@@ -263,7 +264,8 @@ normalizeServeRip = (config, baseDir) ->
     try
       certMap = scanSslDirectory(sslPath)
     catch err
-      pushError(errors, 'E_SSL_DIR', 'ssl', "cannot read ssl directory: #{err.message}", "Check the path and permissions.")
+      unless lenient
+        pushError(errors, 'E_SSL_DIR', 'ssl', "cannot read ssl directory: #{err.message}", "Check the path and permissions.")
 
   # Sites: siteName -> hostname
   siteToHost = new Map()
@@ -335,7 +337,7 @@ normalizeServeRip = (config, baseDir) ->
         if parsed.kind is 'local'
           entryPath = if parsed.target is '.' then baseDir else resolve(baseDir, parsed.target)
           indexFile = join(entryPath, 'index.rip')
-          isApp = existsSync(indexFile)
+          isApp = if lenient then false else existsSync(indexFile)
 
           if isApp
             apps[appName] =
@@ -475,6 +477,7 @@ normalizeServeRip = (config, baseDir) ->
     kind: 'serve'
     version: config.version or 2
     server: serverSettings
+    sslPath
     proxies
     upstreams: httpProxies
     apps
@@ -485,8 +488,8 @@ normalizeServeRip = (config, baseDir) ->
     streams
   }
 
-export normalizeConfig = (config, baseDir) ->
-  normalizeServeRip(config, baseDir)
+export normalizeConfig = (config, baseDir, options = {}) ->
+  normalizeServeRip(config, baseDir, options)
 
 export summarizeConfig = (configPath, normalized) ->
   path = resolve(configPath)
@@ -513,10 +516,10 @@ export summarizeConfig = (configPath, normalized) ->
       server: true
   }
 
-export loadConfig = (configPath) ->
+export loadConfig = (configPath, options = {}) ->
   return null unless existsSync(configPath)
   raw = moduleObject!(configPath, CONFIG_FILE)
-  normalizeConfig(raw, dirname(configPath))
+  normalizeConfig(raw, dirname(configPath), options)
 
 export checkConfigFile = (configPath) ->
   resolved = resolve(configPath)

@@ -1038,7 +1038,7 @@ main = ->
     unless configSource?.path
       warn 'rip-server: no serve.rip found for nginx generation'
       exit 1
-    config = loadConfig!(configSource.path)
+    config = loadConfig!(configSource.path, { lenient: true })
     p generateNginxConfig(config)
     return
   if flags.showInfo
