@@ -469,6 +469,13 @@ gcc -shared -fPIC -o /usr/local/lib/libduckdb-shim.so \
   lib/duckdb-shim.c -L /usr/local/lib -lduckdb
 ```
 
+or
+
+```bash
+gcc -shared -fPIC -o ~/.duckdb/latest/libduckdb-shim.so \
+  packages/db/lib/duckdb-shim.c -L ~/.duckdb/latest -lduckdb
+```
+
 The FFI driver resolves symlinks when searching, so if
 `/usr/local/lib/libduckdb.so` is a symlink to (e.g.) `~/.duckdb/latest/`,
 place the shim in the symlink target directory alongside the real
