@@ -96,6 +96,7 @@ export generateNginxConfig = (normalized) ->
   # --- Preamble ---
   out.push "worker_processes auto;"
   out.push "pid /run/nginx.pid;"
+  out.push "pcre_jit on;"
   out.push ""
   out.push "events {"
   out.push "    worker_connections 4096;"
@@ -161,6 +162,7 @@ export generateNginxConfig = (normalized) ->
   out.push "    keepalive_timeout 65;"
   out.push "    keepalive_requests 1000;"
   out.push "    client_max_body_size 100m;"
+  out.push "    max_headers 100;"
   out.push ""
 
   # Timeouts
