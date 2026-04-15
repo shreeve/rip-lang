@@ -106,6 +106,7 @@ class Server
       host = if alias.includes('.') then alias else "#{alias}.local"
       appHosts.push(host)
     appHosts.push("#{@flags.appName}.ripdev.io")
+    appHosts.push('*') unless @flags.httpsPort?
     registerApp(@appRegistry, @defaultAppId,
       entry: @flags.appEntry
       appBaseDir: @flags.appBaseDir
