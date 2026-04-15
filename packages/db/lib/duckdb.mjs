@@ -62,8 +62,17 @@ function findDuckDBLibrary() {
 const libPath = findDuckDBLibrary();
 
 // ==============================================================================
-// Load DuckDB C API (modern chunk-based + lifecycle functions)
+// Load DuckDB C API
 // ==============================================================================
+//
+// Bun FFI on Linux x64 has two bugs:
+//   1. Passing a JS number as a 'ptr' argument corrupts the value — use 'u64' + BigInt
+//   2. Cannot pass structs by value (e.g. 48-byte duckdb_result) — needs C shim
+//
+// All opaque handles (database, connection, stmt, chunk, vector, logical_type)
+// are declared as 'u64' args and stored as BigInt. Buffer pointers (where we pass
+// ptr(buf)) remain 'ptr'. String-returning functions remain 'ptr' returns.
+//
 
 const lib = dlopen(libPath, {
   // Database lifecycle
@@ -71,85 +80,115 @@ const lib = dlopen(libPath, {
   duckdb_close:   { args: ['ptr'], returns: 'void' },
 
   // Connection lifecycle
-  duckdb_connect:    { args: ['ptr', 'ptr'], returns: 'i32' },
+  duckdb_connect:    { args: ['u64', 'ptr'], returns: 'i32' },
   duckdb_disconnect: { args: ['ptr'], returns: 'void' },
 
   // Query execution
-  duckdb_query:          { args: ['ptr', 'ptr', 'ptr'], returns: 'i32' },
+  duckdb_query:          { args: ['u64', 'ptr', 'ptr'], returns: 'i32' },
   duckdb_destroy_result: { args: ['ptr'], returns: 'void' },
 
   // Prepared statements
-  duckdb_prepare:          { args: ['ptr', 'ptr', 'ptr'], returns: 'i32' },
-  duckdb_prepare_error:    { args: ['ptr'], returns: 'ptr' },
+  duckdb_prepare:          { args: ['u64', 'ptr', 'ptr'], returns: 'i32' },
+  duckdb_prepare_error:    { args: ['u64'], returns: 'ptr' },
   duckdb_destroy_prepare:  { args: ['ptr'], returns: 'void' },
-  duckdb_bind_null:        { args: ['ptr', 'u64'], returns: 'i32' },
-  duckdb_bind_boolean:     { args: ['ptr', 'u64', 'bool'], returns: 'i32' },
-  duckdb_bind_int32:       { args: ['ptr', 'u64', 'i32'], returns: 'i32' },
-  duckdb_bind_int64:       { args: ['ptr', 'u64', 'i64'], returns: 'i32' },
-  duckdb_bind_double:      { args: ['ptr', 'u64', 'f64'], returns: 'i32' },
-  duckdb_bind_varchar:     { args: ['ptr', 'u64', 'ptr'], returns: 'i32' },
-  duckdb_execute_prepared: { args: ['ptr', 'ptr'], returns: 'i32' },
-  duckdb_clear_bindings:   { args: ['ptr'], returns: 'i32' },
+  duckdb_bind_null:        { args: ['u64', 'u64'], returns: 'i32' },
+  duckdb_bind_boolean:     { args: ['u64', 'u64', 'bool'], returns: 'i32' },
+  duckdb_bind_int32:       { args: ['u64', 'u64', 'i32'], returns: 'i32' },
+  duckdb_bind_int64:       { args: ['u64', 'u64', 'i64'], returns: 'i32' },
+  duckdb_bind_double:      { args: ['u64', 'u64', 'f64'], returns: 'i32' },
+  duckdb_bind_varchar:     { args: ['u64', 'u64', 'ptr'], returns: 'i32' },
+  duckdb_execute_prepared: { args: ['u64', 'ptr'], returns: 'i32' },
+  duckdb_clear_bindings:   { args: ['u64'], returns: 'i32' },
 
   // Appender API
-  duckdb_appender_create:        { args: ['ptr', 'ptr', 'ptr', 'ptr'], returns: 'i32' },
-  duckdb_appender_error:         { args: ['ptr'], returns: 'ptr' },
-  duckdb_appender_flush:         { args: ['ptr'], returns: 'i32' },
-  duckdb_appender_close:         { args: ['ptr'], returns: 'i32' },
+  duckdb_appender_create:        { args: ['u64', 'ptr', 'ptr', 'ptr'], returns: 'i32' },
+  duckdb_appender_error:         { args: ['u64'], returns: 'ptr' },
+  duckdb_appender_flush:         { args: ['u64'], returns: 'i32' },
+  duckdb_appender_close:         { args: ['u64'], returns: 'i32' },
   duckdb_appender_destroy:       { args: ['ptr'], returns: 'i32' },
-  duckdb_appender_end_row:       { args: ['ptr'], returns: 'i32' },
-  duckdb_append_bool:            { args: ['ptr', 'bool'], returns: 'i32' },
-  duckdb_append_int32:           { args: ['ptr', 'i32'], returns: 'i32' },
-  duckdb_append_int64:           { args: ['ptr', 'i64'], returns: 'i32' },
-  duckdb_append_double:          { args: ['ptr', 'f64'], returns: 'i32' },
-  duckdb_append_varchar:         { args: ['ptr', 'ptr'], returns: 'i32' },
-  duckdb_append_null:            { args: ['ptr'], returns: 'i32' },
-  duckdb_appender_add_column:    { args: ['ptr', 'ptr'], returns: 'i32' },
-  duckdb_appender_clear_columns: { args: ['ptr'], returns: 'i32' },
+  duckdb_appender_end_row:       { args: ['u64'], returns: 'i32' },
+  duckdb_append_bool:            { args: ['u64', 'bool'], returns: 'i32' },
+  duckdb_append_int32:           { args: ['u64', 'i32'], returns: 'i32' },
+  duckdb_append_int64:           { args: ['u64', 'i64'], returns: 'i32' },
+  duckdb_append_double:          { args: ['u64', 'f64'], returns: 'i32' },
+  duckdb_append_varchar:         { args: ['u64', 'ptr'], returns: 'i32' },
+  duckdb_append_null:            { args: ['u64'], returns: 'i32' },
+  duckdb_appender_add_column:    { args: ['u64', 'ptr'], returns: 'i32' },
+  duckdb_appender_clear_columns: { args: ['u64'], returns: 'i32' },
 
-  // Result inspection
+  // Result inspection (result is always ptr(buf), not a handle)
   duckdb_column_count:  { args: ['ptr'], returns: 'u64' },
   duckdb_column_name:   { args: ['ptr', 'u64'], returns: 'ptr' },
   duckdb_column_type:   { args: ['ptr', 'u64'], returns: 'i32' },
   duckdb_result_error:  { args: ['ptr'], returns: 'ptr' },
 
-  // Modern chunk-based API (non-deprecated)
-  duckdb_fetch_chunk:             { args: ['ptr'], returns: 'ptr' },
-  duckdb_data_chunk_get_size:     { args: ['ptr'], returns: 'u64' },
-  duckdb_data_chunk_get_vector:   { args: ['ptr', 'u64'], returns: 'ptr' },
-  duckdb_vector_get_data:         { args: ['ptr'], returns: 'ptr' },
-  duckdb_vector_get_validity:     { args: ['ptr'], returns: 'ptr' },
+  // Chunk-based API (handles as u64)
+  duckdb_data_chunk_get_size:     { args: ['u64'], returns: 'u64' },
+  duckdb_data_chunk_get_vector:   { args: ['u64', 'u64'], returns: 'u64' },
+  duckdb_vector_get_data:         { args: ['u64'], returns: 'u64' },
+  duckdb_vector_get_validity:     { args: ['u64'], returns: 'u64' },
   duckdb_destroy_data_chunk:      { args: ['ptr'], returns: 'void' },
 
-  // Logical type introspection (for DECIMAL, ENUM, LIST, STRUCT, ARRAY)
-  duckdb_column_logical_type:     { args: ['ptr', 'u64'], returns: 'ptr' },
+  // Logical type introspection (handles as u64)
+  duckdb_column_logical_type:     { args: ['ptr', 'u64'], returns: 'u64' },
   duckdb_destroy_logical_type:    { args: ['ptr'], returns: 'void' },
-  duckdb_get_type_id:             { args: ['ptr'], returns: 'i32' },
-  duckdb_decimal_width:           { args: ['ptr'], returns: 'u8' },
-  duckdb_decimal_scale:           { args: ['ptr'], returns: 'u8' },
-  duckdb_decimal_internal_type:   { args: ['ptr'], returns: 'i32' },
-  duckdb_enum_internal_type:      { args: ['ptr'], returns: 'i32' },
-  duckdb_enum_dictionary_size:    { args: ['ptr'], returns: 'u32' },
-  duckdb_enum_dictionary_value:   { args: ['ptr', 'u64'], returns: 'ptr' },
+  duckdb_get_type_id:             { args: ['u64'], returns: 'i32' },
+  duckdb_decimal_width:           { args: ['u64'], returns: 'u8' },
+  duckdb_decimal_scale:           { args: ['u64'], returns: 'u8' },
+  duckdb_decimal_internal_type:   { args: ['u64'], returns: 'i32' },
+  duckdb_enum_internal_type:      { args: ['u64'], returns: 'i32' },
+  duckdb_enum_dictionary_size:    { args: ['u64'], returns: 'u32' },
+  duckdb_enum_dictionary_value:   { args: ['u64', 'u64'], returns: 'ptr' },
 
-  // Nested type vector access (LIST, STRUCT, ARRAY)
-  duckdb_list_vector_get_child:   { args: ['ptr'], returns: 'ptr' },
-  duckdb_list_vector_get_size:    { args: ['ptr'], returns: 'u64' },
-  duckdb_struct_vector_get_child: { args: ['ptr', 'u64'], returns: 'ptr' },
-  duckdb_struct_type_child_count: { args: ['ptr'], returns: 'u64' },
-  duckdb_struct_type_child_name:  { args: ['ptr', 'u64'], returns: 'ptr' },
-  duckdb_struct_type_child_type:  { args: ['ptr', 'u64'], returns: 'ptr' },
-  duckdb_list_type_child_type:    { args: ['ptr'], returns: 'ptr' },
-  duckdb_array_vector_get_child:  { args: ['ptr'], returns: 'ptr' },
-  duckdb_array_type_child_type:   { args: ['ptr'], returns: 'ptr' },
-  duckdb_array_type_array_size:   { args: ['ptr'], returns: 'u64' },
+  // Nested type vector access (handles as u64)
+  duckdb_list_vector_get_child:   { args: ['u64'], returns: 'u64' },
+  duckdb_list_vector_get_size:    { args: ['u64'], returns: 'u64' },
+  duckdb_struct_vector_get_child: { args: ['u64', 'u64'], returns: 'u64' },
+  duckdb_struct_type_child_count: { args: ['u64'], returns: 'u64' },
+  duckdb_struct_type_child_name:  { args: ['u64', 'u64'], returns: 'ptr' },
+  duckdb_struct_type_child_type:  { args: ['u64', 'u64'], returns: 'u64' },
+  duckdb_list_type_child_type:    { args: ['u64'], returns: 'u64' },
+  duckdb_array_vector_get_child:  { args: ['u64'], returns: 'u64' },
+  duckdb_array_type_child_type:   { args: ['u64'], returns: 'u64' },
+  duckdb_array_type_array_size:   { args: ['u64'], returns: 'u64' },
 
   // Memory
-  duckdb_free: { args: ['ptr'], returns: 'void' },
+  duckdb_free: { args: ['u64'], returns: 'void' },
 
   // Library info
   duckdb_library_version: { args: [], returns: 'ptr' },
 }).symbols;
+
+// Load shim for duckdb_fetch_chunk (takes duckdb_result by value — 48-byte struct
+// that Bun FFI cannot marshal). The shim accepts duckdb_result* instead.
+function findShimLibrary() {
+  const dir = libPath.replace(/\/[^/]+$/, '');
+  const ext = platform === 'darwin' ? 'dylib' : 'so';
+  const candidates = [
+    `${dir}/libduckdb-shim.${ext}`,
+    new URL('./libduckdb-shim.' + ext, import.meta.url).pathname,
+  ];
+  if (process.env.DUCKDB_SHIM_PATH) candidates.unshift(process.env.DUCKDB_SHIM_PATH);
+  for (const p of candidates) {
+    if (existsSync(p)) return p;
+  }
+  return null;
+}
+
+const shimPath = findShimLibrary();
+const shim = shimPath ? dlopen(shimPath, {
+  shim_fetch_chunk: { args: ['ptr'], returns: 'u64' },
+}).symbols : null;
+
+// Fetch chunk: use shim (pointer-based) or fall back to direct call (macOS ARM64)
+const fetchChunk = shim
+  ? (rp) => shim.shim_fetch_chunk(rp)
+  : (() => {
+      const fn = dlopen(libPath, {
+        duckdb_fetch_chunk: { args: ['ptr'], returns: 'u64' },
+      }).symbols.duckdb_fetch_chunk;
+      return (rp) => fn(rp);
+    })();
 
 // ==============================================================================
 // DuckDB Type Constants
@@ -227,12 +266,13 @@ function allocPtr() {
   return new Uint8Array(8);
 }
 
-function readPtr(buf) {
-  return ffiRead.ptr(ptr(buf), 0);
+function readHandle(buf) {
+  return new DataView(buf.buffer).getBigUint64(0, true);
 }
 
 // Read a duckdb_string_t (16 bytes) from a data pointer at a given row offset
 function readString(dataPtr, row) {
+  if (!dataPtr) return null;
   const offset = row * 16;  // duckdb_string_t is 16 bytes
   const length = ffiRead.u32(dataPtr, offset);
 
@@ -266,6 +306,7 @@ function isValid(validityPtr, row) {
 
 // Format a hugeint (16 bytes: lower uint64 at offset 0, upper int64 at offset 8) as UUID
 function readUUID(dataPtr, row) {
+  if (!dataPtr) return null;
   const offset = row * 16;
   const lower = ffiRead.u64(dataPtr, offset);
   const upper = ffiRead.i64(dataPtr, offset + 8);
@@ -293,7 +334,7 @@ class Database {
     const pathBytes = path && path !== ':memory:' ? toCString(path) : null;
     const result = lib.duckdb_open(pathBytes ? ptr(pathBytes) : null, ptr(this.#ptrBuf));
     if (result !== 0) throw new Error('Failed to open database');
-    this.#handle = readPtr(this.#ptrBuf);
+    this.#handle = readHandle(this.#ptrBuf);
   }
 
   get handle() { return this.#handle; }
@@ -324,7 +365,7 @@ class Connection {
     this.#ptrBuf = allocPtr();
     const result = lib.duckdb_connect(db.handle, ptr(this.#ptrBuf));
     if (result !== 0) throw new Error('Failed to create connection');
-    this.#handle = readPtr(this.#ptrBuf);
+    this.#handle = readHandle(this.#ptrBuf);
   }
 
   get handle() { return this.#handle; }
@@ -346,12 +387,12 @@ class Connection {
   #querySimple(sql) {
     const resultPtr = new Uint8Array(64);  // duckdb_result struct is ~48 bytes
     const sqlBytes = toCString(sql);
-    lib.duckdb_query(this.#handle, ptr(sqlBytes), ptr(resultPtr));
+    const status = lib.duckdb_query(this.#handle, ptr(sqlBytes), ptr(resultPtr));
 
     const rp = ptr(resultPtr);
-    const errorPtr = lib.duckdb_result_error(rp);
-    if (errorPtr) {
-      const error = fromCString(errorPtr);
+    if (status !== 0) {
+      const errorPtr = lib.duckdb_result_error(rp);
+      const error = errorPtr ? fromCString(errorPtr) : 'Query failed';
       lib.duckdb_destroy_result(rp);
       throw new Error(error);
     }
@@ -369,7 +410,7 @@ class Connection {
 
     const prepStatus = lib.duckdb_prepare(this.#handle, ptr(sqlBytes), ptr(stmtPtr));
     if (prepStatus !== 0) {
-      const stmtHandle = readPtr(stmtPtr);
+      const stmtHandle = readHandle(stmtPtr);
       if (stmtHandle) {
         const errPtr = lib.duckdb_prepare_error(stmtHandle);
         const errMsg = errPtr ? fromCString(errPtr) : 'Failed to prepare statement';
@@ -379,7 +420,7 @@ class Connection {
       throw new Error('Failed to prepare statement');
     }
 
-    const stmtHandle = readPtr(stmtPtr);
+    const stmtHandle = readHandle(stmtPtr);
 
     try {
       this.#bindParams(stmtHandle, params);
@@ -453,7 +494,7 @@ class Connection {
             for (let d = 0; d < dictSize; d++) {
               const vp = lib.duckdb_enum_dictionary_value(logType, BigInt(d));
               col.enumDict.push(fromCString(vp));
-              if (vp) lib.duckdb_free(vp);
+              if (vp) lib.duckdb_free(BigInt(vp));
             }
           } else if (type === DUCKDB_TYPE.LIST) {
             const childLogType = lib.duckdb_list_type_child_type(logType);
@@ -471,7 +512,7 @@ class Connection {
               const ct = lib.duckdb_struct_type_child_type(logType, BigInt(i));
               const childType = ct ? lib.duckdb_get_type_id(ct) : DUCKDB_TYPE.VARCHAR;
               col.structChildren.push({ name: fromCString(np) || `f${i}`, type: childType });
-              if (np) lib.duckdb_free(np);
+              if (np) lib.duckdb_free(BigInt(np));
               if (ct) {
                 const ltBuf2 = allocPtr();
                 new DataView(ltBuf2.buffer).setBigUint64(0, BigInt(ct), true);
@@ -521,13 +562,12 @@ class Connection {
     const chunkBuf = allocPtr();
 
     while (true) {
-      const chunk = lib.duckdb_fetch_chunk(rp);
+      const chunk = fetchChunk(rp);
       if (!chunk) break;
 
       const chunkSize = Number(lib.duckdb_data_chunk_get_size(chunk));
       if (chunkSize === 0) {
-        const dv = new DataView(chunkBuf.buffer);
-        dv.setBigUint64(0, BigInt(chunk), true);
+        new DataView(chunkBuf.buffer).setBigUint64(0, BigInt(chunk), true);
         lib.duckdb_destroy_data_chunk(ptr(chunkBuf));
         break;
       }
@@ -539,8 +579,10 @@ class Connection {
       for (let c = 0; c < colCount; c++) {
         const vec = lib.duckdb_data_chunk_get_vector(chunk, BigInt(c));
         colVec.push(vec);
-        colData.push(lib.duckdb_vector_get_data(vec));
-        colValidity.push(lib.duckdb_vector_get_validity(vec));
+        const dp = vec ? lib.duckdb_vector_get_data(vec) : 0n;
+        colData.push(Number(dp));
+        const vp = vec ? lib.duckdb_vector_get_validity(vec) : 0n;
+        colValidity.push(Number(vp));
       }
 
       // Extract rows from this chunk
@@ -558,8 +600,7 @@ class Connection {
       }
 
       // Destroy chunk
-      const dv = new DataView(chunkBuf.buffer);
-      dv.setBigUint64(0, BigInt(chunk), true);
+      new DataView(chunkBuf.buffer).setBigUint64(0, BigInt(chunk), true);
       lib.duckdb_destroy_data_chunk(ptr(chunkBuf));
     }
 
@@ -744,15 +785,13 @@ class Connection {
       }
 
       case DUCKDB_TYPE.LIST: {
-        // Read list entry (offset + length) from parent, then read child values
         if (!vec) return null;
-        const entryOffset = row * 16; // duckdb_list_entry is 16 bytes (uint64 offset + uint64 length)
+        const entryOffset = row * 16;
         const listOffset = Number(ffiRead.u64(dataPtr, entryOffset));
         const listLength = Number(ffiRead.u64(dataPtr, entryOffset + 8));
         const childVec = lib.duckdb_list_vector_get_child(vec);
-        const childData = lib.duckdb_vector_get_data(childVec);
-        const childValidity = lib.duckdb_vector_get_validity(childVec);
-        // Determine child type from the vector's column type
+        const childData = Number(lib.duckdb_vector_get_data(childVec));
+        const childValidity = Number(lib.duckdb_vector_get_validity(childVec));
         const childType = col?.childType || DUCKDB_TYPE.VARCHAR;
         const result = [];
         for (let i = 0; i < listLength; i++) {
@@ -767,15 +806,14 @@ class Connection {
       }
 
       case DUCKDB_TYPE.STRUCT: {
-        // Read each child vector at the row index
         if (!vec) return null;
         const obj = {};
         const childCount = col?.structChildren?.length || 0;
         for (let i = 0; i < childCount; i++) {
           const child = col.structChildren[i];
           const childVec = lib.duckdb_struct_vector_get_child(vec, BigInt(i));
-          const childData = lib.duckdb_vector_get_data(childVec);
-          const childValidity = lib.duckdb_vector_get_validity(childVec);
+          const childData = Number(lib.duckdb_vector_get_data(childVec));
+          const childValidity = Number(lib.duckdb_vector_get_validity(childVec));
           if (!isValid(childValidity, row)) {
             obj[child.name] = null;
           } else {
@@ -786,19 +824,17 @@ class Connection {
       }
 
       case DUCKDB_TYPE.MAP: {
-        // MAP is internally a LIST of STRUCTs with 'key' and 'value' fields
         if (!vec) return null;
         const entryOffset = row * 16;
         const listOffset = Number(ffiRead.u64(dataPtr, entryOffset));
         const listLength = Number(ffiRead.u64(dataPtr, entryOffset + 8));
         const childVec = lib.duckdb_list_vector_get_child(vec);
-        // MAP child is a STRUCT with key (child 0) and value (child 1)
         const keyVec = lib.duckdb_struct_vector_get_child(childVec, 0n);
         const valVec = lib.duckdb_struct_vector_get_child(childVec, 1n);
-        const keyData = lib.duckdb_vector_get_data(keyVec);
-        const valData = lib.duckdb_vector_get_data(valVec);
-        const keyValidity = lib.duckdb_vector_get_validity(keyVec);
-        const valValidity = lib.duckdb_vector_get_validity(valVec);
+        const keyData = Number(lib.duckdb_vector_get_data(keyVec));
+        const valData = Number(lib.duckdb_vector_get_data(valVec));
+        const keyValidity = Number(lib.duckdb_vector_get_validity(keyVec));
+        const valValidity = Number(lib.duckdb_vector_get_validity(valVec));
         const keyType = col?.keyType || DUCKDB_TYPE.VARCHAR;
         const valType = col?.valueType || DUCKDB_TYPE.VARCHAR;
         const obj = {};
@@ -814,12 +850,11 @@ class Connection {
       }
 
       case DUCKDB_TYPE.ARRAY: {
-        // Fixed-size array: child elements are contiguous, arraySize elements per row
         if (!vec) return null;
         const arraySize = col?.arraySize || 0;
         const childVec = lib.duckdb_array_vector_get_child(vec);
-        const childData = lib.duckdb_vector_get_data(childVec);
-        const childValidity = lib.duckdb_vector_get_validity(childVec);
+        const childData = Number(lib.duckdb_vector_get_data(childVec));
+        const childValidity = Number(lib.duckdb_vector_get_validity(childVec));
         const childType = col?.childType || DUCKDB_TYPE.VARCHAR;
         const baseIdx = row * arraySize;
         const result = [];
@@ -914,7 +949,7 @@ class Connection {
 
       const status = lib.duckdb_appender_create(this.#handle, null, ptr(tableBytes), ptr(appenderPtr));
       if (status !== 0) {
-        const handle = readPtr(appenderPtr);
+        const handle = readHandle(appenderPtr);
         if (handle) {
           const errPtr = lib.duckdb_appender_error(handle);
           const errMsg = errPtr ? fromCString(errPtr) : 'Failed to create appender';
@@ -924,7 +959,7 @@ class Connection {
         throw new Error('Failed to create appender');
       }
 
-      const appenderHandle = readPtr(appenderPtr);
+      const appenderHandle = readHandle(appenderPtr);
 
       try {
         if (columns && columns.length > 0) {
@@ -973,7 +1008,7 @@ class Connection {
 
       const prepStatus = lib.duckdb_prepare(this.#handle, ptr(sqlBytes), ptr(stmtPtr));
       if (prepStatus !== 0) {
-        const stmtHandle = readPtr(stmtPtr);
+        const stmtHandle = readHandle(stmtPtr);
         if (stmtHandle) {
           const errPtr = lib.duckdb_prepare_error(stmtHandle);
           const errMsg = errPtr ? fromCString(errPtr) : 'Failed to prepare statement';
@@ -983,7 +1018,7 @@ class Connection {
         throw new Error('Failed to prepare statement');
       }
 
-      const stmtHandle = readPtr(stmtPtr);
+      const stmtHandle = readHandle(stmtPtr);
       let totalRows = 0;
 
       try {

@@ -449,6 +449,21 @@ Set `DUCKDB_LIB_PATH` if DuckDB is not in a standard location:
 DUCKDB_LIB_PATH=/path/to/libduckdb.dylib rip-db
 ```
 
+### Linux: FFI Shim Required
+
+Bun's FFI on Linux x64 cannot pass the 48-byte `duckdb_result` struct by value
+(required by `duckdb_fetch_chunk`). A tiny C shim is required — it wraps the
+by-value call and accepts a pointer instead.
+
+```bash
+# Build the shim (place it next to libduckdb.so)
+gcc -shared -fPIC -o /usr/local/lib/libduckdb-shim.so \
+  lib/duckdb-shim.c -L /usr/local/lib -lduckdb
+```
+
+The FFI driver finds the shim automatically when it's in the same directory
+as `libduckdb.so`. To override, set `DUCKDB_SHIM_PATH`.
+
 ## License
 
 MIT
