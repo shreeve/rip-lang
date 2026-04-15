@@ -94,6 +94,8 @@ export normalizeUpstream = (id, config = {}) ->
   timeouts =
     connectMs: toPositiveInt(config.timeouts?.connectMs or config.timeout?.connectMs, 2000)
     readMs: toPositiveInt(config.timeouts?.readMs or config.timeout?.readMs, 30000)
+  healthEnabled = config.healthCheck isnt false
+  healthConfig = if healthEnabled then mergeHealth(config.healthCheck or {}) else null
   targets = toArray(config.targets).map (url, idx) ->
     url: url
     targetId: "#{id}:#{idx}"
@@ -109,14 +111,14 @@ export normalizeUpstream = (id, config = {}) ->
     circuitOpenedAt: null
     circuitCooldownMs: null
     circuitProbeInFlight: false
-    health: mergeHealth(config.healthCheck)
+    health: healthConfig or mergeHealth({})
     retry: mergeRetry(config.retry)
     timeouts: timeouts
     circuitConfig: mergeCircuit(config.circuit)
     meta: config.meta or {}
   {
     id
-    healthCheck: mergeHealth(config.healthCheck)
+    healthCheck: healthConfig
     retry: mergeRetry(config.retry)
     timeouts: timeouts
     circuit: mergeCircuit(config.circuit)
@@ -241,6 +243,7 @@ export checkTargetHealth = (pool, target, fetchFn = null) ->
 export startHealthCheck = (pool, upstreamId) ->
   upstream = getUpstream(pool, upstreamId)
   return null unless upstream
+  return null unless upstream.healthCheck
   stopHealthCheck(pool, upstreamId)
 
   targets = upstream.targets
