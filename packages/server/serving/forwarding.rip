@@ -16,6 +16,7 @@ export formatPort = (protocol, port) ->
     ":#{port}"
 
 export maybeAddSecurityHeaders = (httpsActive, hstsEnabled, headers) ->
+  headers.delete('server')
   if httpsActive and hstsEnabled
     headers.set('strict-transport-security', 'max-age=31536000; includeSubDomains') unless headers.has('strict-transport-security')
 
@@ -56,6 +57,7 @@ export buildUpstreamResponse = (res, req, totalSeconds, workerSeconds, maybeAddS
   silent = res.headers.get('rip-no-log') is '1'
   headers = stripInternalHeaders(res.headers)
   headers.delete('date')
+  headers.delete('server')
   maybeAddSecurityHeaders(headers)
   logAccess(req, res, totalSeconds, workerSeconds) unless silent
   new Response(res.body, { status: res.status, statusText: res.statusText, headers })
