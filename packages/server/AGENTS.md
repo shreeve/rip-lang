@@ -38,6 +38,7 @@ HTTP serving layer. Everything that handles an inbound HTTP request after it
 arrives at the server.
 
 - `config.rip` — `serve.rip` loading, validation, and normalization
+- `nginx.rip` — generate nginx.conf from normalized serve.rip config
 - `forwarding.rip` — response builders, request IDs, error responses, worker forwarding
 - `logging.rip` — access logging, debug flags, formatting utilities
 - `metrics.rip` — diagnostics counters/gauges and response builders

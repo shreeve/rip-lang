@@ -17,7 +17,8 @@ import { dirname, join } from 'node:path'
 import { networkInterfaces } from 'node:os'
 
 import { nowMs, isDebug, applyFlagSideEffects, logAccessJson, logAccessHuman, stripInternalHeaders } from './serving/logging.rip'
-import { applyConfig, formatConfigErrors } from './serving/config.rip'
+import { applyConfig, formatConfigErrors, loadConfig, resolveConfigSource, findConfigFile } from './serving/config.rip'
+import { generateNginxConfig } from './serving/nginx.rip'
 import { createAppRegistry, registerApp, resolveHost, getAppState, removeApp } from './serving/registry.rip'
 import { compileRouteTable, matchRoute, describeRoute } from './serving/router.rip'
 import { serveStaticRoute, buildRedirectResponse } from './serving/static.rip'
@@ -1030,6 +1031,15 @@ main = ->
   applyFlagSideEffects(flags)
   if flags.checkConfig
     runCheckConfig!(flags)
+    return
+  if flags.nginx
+    configSource = resolveConfigSource(flags.appEntry, flags.configPath)
+    configSource = { kind: 'serve', path: findConfigFile(flags.appEntry) } unless configSource
+    unless configSource?.path
+      warn 'rip-server: no serve.rip found for nginx generation'
+      exit 1
+    config = loadConfig!(configSource.path)
+    p generateNginxConfig(config)
     return
   if flags.showInfo
     showInfo!(fetch, exit)

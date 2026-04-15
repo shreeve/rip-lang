@@ -1,0 +1,278 @@
+# ==============================================================================
+# serving/nginx.rip — generate nginx.conf from normalized serve.rip config
+# ==============================================================================
+
+INTERNAL_PORT = 4443
+
+sslBlock = (certPath, keyPath) ->
+  lines = []
+  lines.push "ssl_certificate #{certPath};"
+  lines.push "ssl_certificate_key #{keyPath};"
+  lines.join('\n')
+
+proxyBlock = (origin) ->
+  lines = []
+  lines.push "location / {"
+  lines.push "    proxy_pass #{origin};"
+  lines.push "    proxy_http_version 1.1;"
+  lines.push "    proxy_set_header Host $host;"
+  lines.push "    proxy_set_header X-Real-IP $remote_addr;"
+  lines.push "    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;"
+  lines.push "    proxy_set_header X-Forwarded-Proto https;"
+  lines.push "    proxy_set_header X-Forwarded-Host $host;"
+  lines.push "    proxy_set_header Upgrade $http_upgrade;"
+  lines.push "    proxy_set_header Connection $connection_upgrade;"
+  lines.push "    proxy_read_timeout 1h;"
+  lines.push "    proxy_send_timeout 1h;"
+  lines.push "}"
+  lines
+
+staticBlock = (root, browse = false, spa = false) ->
+  lines = []
+  lines.push "root #{root};"
+  lines.push "index index.html;"
+  lines.push ""
+  lines.push "location / {"
+  if spa
+    lines.push "    try_files $uri $uri/ /index.html;"
+  else if browse
+    lines.push "    autoindex on;"
+    lines.push "    try_files $uri $uri/ =404;"
+  else
+    lines.push "    try_files $uri $uri/ =404;"
+  lines.push "}"
+  lines.push ""
+  lines.push "location ~ /\\. {"
+  lines.push "    deny all;"
+  lines.push "}"
+  lines
+
+export generateNginxConfig = (normalized) ->
+  out = []
+  hasStreams = (normalized.streams or []).length > 0
+  httpsListen = if hasStreams then "127.0.0.1:#{INTERNAL_PORT} ssl http2" else "443 ssl http2"
+  hsts = normalized.server?.hsts is true
+
+  # Collect all hostnames for port 80 redirect
+  allHostnames = []
+  passthroughHostnames = new Set()
+
+  for stream in (normalized.streams or [])
+    for sni in (stream.sni or [])
+      passthroughHostnames.add(sni)
+      allHostnames.push(sni)
+
+  # Build site server blocks grouped by (certPath, keyPath, behavior)
+  serverBlocks = []
+  for hostname, siteConfig of (normalized.sites or {})
+    cert = normalized.resolvedCerts?[hostname]
+    routes = siteConfig.routes or []
+    route = routes[0]
+    continue unless route
+    allHostnames.push(hostname)
+
+    serverBlocks.push({ hostname, cert, route, siteConfig })
+
+  # Group server blocks by (certPath, keyPath, proxyOrigin or staticRoot)
+  groups = new Map()
+  for block in serverBlocks
+    { hostname, cert, route } = block
+    certKey = if cert then "#{cert.certPath}:#{cert.keyPath}" else 'nocert'
+    if route.proxy
+      origin = normalized.proxies?[route.proxy]?.targets?[0] or ''
+      groupKey = "proxy:#{certKey}:#{origin}"
+    else if route.static
+      groupKey = "static:#{certKey}:#{route.root}:#{route.spa}:#{route.browse}"
+    else if route.app
+      groupKey = "app:#{certKey}:#{route.app}"
+    else
+      groupKey = "other:#{certKey}:#{hostname}"
+
+    unless groups.has(groupKey)
+      groups.set(groupKey, { hostnames: [], cert, route, block })
+    groups.get(groupKey).hostnames.push(hostname)
+
+  # --- Preamble ---
+  out.push """
+    worker_processes auto;
+    pid /run/nginx.pid;
+
+    events {
+        worker_connections 4096;
+        multi_accept on;
+    }
+  """
+
+  # --- Stream block (if TCP passthrough exists) ---
+  if hasStreams
+    out.push ""
+    out.push "stream {"
+
+    mapEntries = []
+    upstreamBlocks = []
+    for stream in (normalized.streams or [])
+      targets = normalized.streamUpstreams?[stream.proxy]?.targets or []
+      target = targets[0]
+      continue unless target
+      upstreamName = "stream_#{stream.proxy.replace(/[^a-zA-Z0-9]/g, '_')}"
+      for sni in (stream.sni or [])
+        mapEntries.push "        #{sni} #{upstreamName};"
+      upstreamBlocks.push """
+            upstream #{upstreamName} {
+                server #{target.host}:#{target.port};
+            }
+        """
+
+    out.push ""
+    out.push "    map $ssl_preread_server_name $tls_backend {"
+    for entry in mapEntries
+      out.push entry
+    out.push "        default https_terminator;"
+    out.push "    }"
+    out.push ""
+    for block in upstreamBlocks
+      out.push block
+
+    out.push """
+        upstream https_terminator {
+            server 127.0.0.1:#{INTERNAL_PORT};
+        }
+
+        server {
+            listen 443;
+            listen [::]:443;
+            proxy_pass $tls_backend;
+            ssl_preread on;
+            proxy_connect_timeout 10s;
+            proxy_timeout 1h;
+        }
+    }
+    """
+
+  # --- HTTP block ---
+  out.push ""
+  out.push "http {"
+  out.push "    include mime.types;"
+  out.push "    default_type application/octet-stream;"
+  out.push ""
+  out.push "    server_tokens off;"
+  out.push "    sendfile on;"
+  out.push "    tcp_nopush on;"
+  out.push "    tcp_nodelay on;"
+  out.push "    keepalive_timeout 65;"
+  out.push "    keepalive_requests 1000;"
+  out.push "    client_max_body_size 100m;"
+  out.push ""
+
+  # Timeouts
+  out.push "    client_body_timeout 15s;"
+  out.push "    client_header_timeout 15s;"
+  out.push "    send_timeout 30s;"
+  out.push ""
+
+  # TLS settings
+  out.push "    ssl_protocols TLSv1.2 TLSv1.3;"
+  out.push "    ssl_ciphers 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305';"
+  out.push "    ssl_prefer_server_ciphers off;"
+  out.push "    ssl_session_cache shared:SSL:50m;"
+  out.push "    ssl_session_timeout 1d;"
+  out.push "    ssl_session_tickets off;"
+  out.push "    ssl_ecdh_curve X25519:prime256v1:secp384r1;"
+  out.push ""
+  out.push "    ssl_stapling on;"
+  out.push "    ssl_stapling_verify on;"
+  out.push "    resolver 1.1.1.1 1.0.0.1 8.8.8.8 8.8.4.4 valid=300s ipv6=off;"
+  out.push "    resolver_timeout 5s;"
+  out.push ""
+
+  # Rate limiting
+  out.push "    limit_req_zone $binary_remote_addr zone=perip:10m rate=20r/s;"
+  out.push "    limit_conn_zone $binary_remote_addr zone=connperip:10m;"
+  out.push ""
+
+  # WebSocket upgrade map
+  out.push "    map $http_upgrade $connection_upgrade {"
+  out.push "        default upgrade;"
+  out.push "        '' close;"
+  out.push "    }"
+  out.push ""
+
+  # Port 80 redirect
+  uniqueHostnames = Array.from(new Set(allHostnames))
+  out.push "    server {"
+  out.push "        listen 80;"
+  out.push "        listen [::]:80;"
+  out.push "        server_name #{uniqueHostnames.join(' ')};" if uniqueHostnames.length > 0
+  out.push "        return 301 https://$host$request_uri;"
+  out.push "    }"
+
+  # Per-group server blocks
+  for [groupKey, group] as groups.entries()
+    { hostnames, cert, route } = group
+    out.push ""
+    out.push "    server {"
+    out.push "        listen #{httpsListen};"
+    out.push "        server_name #{hostnames.join(' ')};"
+    out.push ""
+    if cert?.certPath and cert?.keyPath
+      out.push "        #{sslBlock(cert.certPath, cert.keyPath).split('\n').join('\n        ')}"
+      out.push ""
+    else
+      out.push "        # WARNING: no TLS certificate found for #{hostnames.join(', ')}"
+      out.push "        # Add certs to your ssl directory or configure manually"
+      out.push ""
+    if hsts
+      out.push '        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;'
+    out.push '        add_header X-Content-Type-Options "nosniff" always;'
+    out.push '        add_header Referrer-Policy "strict-origin-when-cross-origin" always;'
+    out.push '        add_header X-Frame-Options "SAMEORIGIN" always;'
+    out.push ""
+    out.push "        limit_req zone=perip burst=40 nodelay;"
+    out.push "        limit_conn connperip 20;"
+    out.push ""
+
+    if route.proxy
+      origin = normalized.proxies?[route.proxy]?.targets?[0] or 'http://127.0.0.1:3000'
+      for line in proxyBlock(origin)
+        out.push "        #{line}"
+    else if route.static?
+      for line in staticBlock(route.root, route.browse, route.spa)
+        out.push "        #{line}"
+    else if route.app
+      out.push "        # TODO: set proxy_pass to the port where '#{route.app}' listens"
+      out.push "        location / {"
+      out.push "            proxy_pass http://127.0.0.1:3000; # adjust port"
+      out.push "            proxy_http_version 1.1;"
+      out.push "            proxy_set_header Host $host;"
+      out.push "            proxy_set_header X-Real-IP $remote_addr;"
+      out.push "            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;"
+      out.push "            proxy_set_header X-Forwarded-Proto https;"
+      out.push "            proxy_set_header X-Forwarded-Host $host;"
+      out.push "            proxy_set_header Upgrade $http_upgrade;"
+      out.push "            proxy_set_header Connection $connection_upgrade;"
+      out.push "        }"
+
+    out.push "    }"
+
+  # Default catch-all server for unknown SNI (use first non-passthrough cert, sorted for determinism)
+  defaultCert = null
+  for hostname in Object.keys(normalized.resolvedCerts or {}).sort()
+    unless passthroughHostnames.has(hostname)
+      defaultCert = normalized.resolvedCerts[hostname]
+      break
+
+  if defaultCert
+    out.push ""
+    out.push "    server {"
+    out.push "        listen #{httpsListen} default_server;"
+    out.push "        server_name _;"
+    out.push ""
+    out.push "        #{sslBlock(defaultCert.certPath, defaultCert.keyPath).split('\n').join('\n        ')}"
+    out.push ""
+    out.push "        return 421;"
+    out.push "    }"
+
+  out.push "}"
+  out.push ""
+
+  out.join('\n')

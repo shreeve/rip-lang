@@ -184,6 +184,14 @@ rip server --check-config
 rip server --check-config --file=./serve.rip
 ```
 
+### Generate nginx.conf
+
+```bash
+rip server -n > /etc/nginx/nginx.conf && nginx -s reload
+```
+
+Generates a complete, production-hardened nginx config from your `serve.rip`.
+
 ### Reload config safely
 
 ```bash

@@ -224,6 +224,19 @@ rip server --check-config
 rip server --check-config --file=./serve.rip
 ```
 
+### Generate nginx.conf
+
+Generate a production-ready nginx.conf from your `serve.rip`:
+
+```bash
+rip server -n > /etc/nginx/nginx.conf && nginx -s reload
+rip server -n --file=./serve.rip > nginx.conf
+```
+
+This outputs a complete nginx config with TLS hardening, rate limiting, security
+headers, and WebSocket support. When TCP passthrough and HTTP sites share port
+443, the output uses nginx's `stream` module with `ssl_preread` for SNI routing.
+
 ### Reload config safely
 
 ```bash

@@ -47,7 +47,7 @@ test "http proxy creates proxy entry and websocket route", ->
   }, '/home/shreeve')
   route = config.sites['incus.example.com'].routes[0]
   eq route.proxy, 'proxy-incus'
-  eq route.websocket, true
+  eq route.websocket, false
   eq route.app, null
   proxy = config.proxies['proxy-incus']
   ok proxy

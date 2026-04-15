@@ -1,0 +1,249 @@
+import { test, eq, ok } from './runner.rip'
+import { generateNginxConfig } from '../serving/nginx.rip'
+
+makeConfig = (overrides = {}) ->
+  Object.assign({
+    kind: 'serve'
+    version: 2
+    server: { hsts: false, verify: {} }
+    proxies: {}
+    upstreams: {}
+    apps: {}
+    routes: []
+    sites: {}
+    resolvedCerts: {}
+    streamUpstreams: {}
+    streams: []
+  }, overrides)
+
+test "proxy app generates proxy_pass and WebSocket headers", ->
+  config = makeConfig
+    proxies:
+      'proxy-web':
+        id: 'proxy-web'
+        kind: 'http'
+        targets: ['http://127.0.0.1:7201']
+    sites:
+      'example.com':
+        host: 'example.com'
+        routes: [{ id: 'web-proxy', host: 'example.com', path: '/*', proxy: 'proxy-web' }]
+  out = generateNginxConfig(config)
+  ok out.includes('proxy_pass http://127.0.0.1:7201')
+  ok out.includes('proxy_set_header Upgrade $http_upgrade')
+  ok out.includes('proxy_set_header Connection $connection_upgrade')
+  ok out.includes('proxy_set_header Host $host')
+  ok out.includes('proxy_set_header X-Forwarded-Proto https')
+
+test "static app generates root and autoindex for browse", ->
+  config = makeConfig
+    sites:
+      'example.com':
+        host: 'example.com'
+        routes: [{ id: 'static', host: 'example.com', path: '/*', static: '.', root: '/var/www', browse: true, spa: false }]
+  out = generateNginxConfig(config)
+  ok out.includes('root /var/www')
+  ok out.includes('autoindex on')
+  ok out.includes('try_files $uri $uri/ =404')
+  ok out.includes('location ~ /\\.')
+  ok out.includes('deny all')
+
+test "SPA app generates try_files fallback to index.html", ->
+  config = makeConfig
+    sites:
+      'example.com':
+        host: 'example.com'
+        routes: [{ id: 'spa', host: 'example.com', path: '/*', static: '.', root: '/var/www', browse: false, spa: true }]
+  out = generateNginxConfig(config)
+  ok out.includes('try_files $uri $uri/ /index.html')
+  ok not out.includes('autoindex on')
+
+test "TCP app generates stream block with ssl_preread", ->
+  config = makeConfig
+    streamUpstreams:
+      'tcp-incus':
+        id: 'tcp-incus'
+        targets: [{ host: '127.0.0.1', port: 8443 }]
+    streams: [
+      { id: 'tcp-incus', sni: ['incus.example.com'], proxy: 'tcp-incus' }
+    ]
+  out = generateNginxConfig(config)
+  ok out.includes('stream {')
+  ok out.includes('ssl_preread on')
+  ok out.includes('incus.example.com')
+  ok out.includes('127.0.0.1:8443')
+
+test "mixed HTTP+TCP uses internal terminator on 4443", ->
+  config = makeConfig
+    proxies:
+      'proxy-web':
+        id: 'proxy-web'
+        kind: 'http'
+        targets: ['http://127.0.0.1:3000']
+    sites:
+      'example.com':
+        host: 'example.com'
+        routes: [{ id: 'web', host: 'example.com', path: '/*', proxy: 'proxy-web' }]
+    streamUpstreams:
+      'tcp-db':
+        id: 'tcp-db'
+        targets: [{ host: '127.0.0.1', port: 5432 }]
+    streams: [
+      { id: 'tcp-db', sni: ['db.example.com'], proxy: 'tcp-db' }
+    ]
+  out = generateNginxConfig(config)
+  ok out.includes('stream {')
+  ok out.includes('127.0.0.1:4443 ssl http2')
+  ok out.includes('https_terminator')
+  ok not out.includes('listen 443 ssl http2')
+
+test "HTTP-only config listens directly on 443", ->
+  config = makeConfig
+    proxies:
+      'proxy-web':
+        id: 'proxy-web'
+        kind: 'http'
+        targets: ['http://127.0.0.1:3000']
+    sites:
+      'example.com':
+        host: 'example.com'
+        routes: [{ id: 'web', host: 'example.com', path: '/*', proxy: 'proxy-web' }]
+  out = generateNginxConfig(config)
+  ok not out.includes('stream {')
+  ok out.includes('listen 443 ssl http2')
+  ok not out.includes('4443')
+
+test "HSTS emitted when server.hsts is true", ->
+  config = makeConfig
+    server: { hsts: true, verify: {} }
+    proxies:
+      'proxy-web':
+        id: 'proxy-web'
+        kind: 'http'
+        targets: ['http://127.0.0.1:3000']
+    sites:
+      'example.com':
+        host: 'example.com'
+        routes: [{ id: 'web', host: 'example.com', path: '/*', proxy: 'proxy-web' }]
+  out = generateNginxConfig(config)
+  ok out.includes('Strict-Transport-Security')
+  ok out.includes('max-age=31536000')
+
+test "HSTS not emitted when server.hsts is false", ->
+  config = makeConfig
+    proxies:
+      'proxy-web':
+        id: 'proxy-web'
+        kind: 'http'
+        targets: ['http://127.0.0.1:3000']
+    sites:
+      'example.com':
+        host: 'example.com'
+        routes: [{ id: 'web', host: 'example.com', path: '/*', proxy: 'proxy-web' }]
+  out = generateNginxConfig(config)
+  ok not out.includes('Strict-Transport-Security')
+
+test "cert paths from resolvedCerts used correctly", ->
+  config = makeConfig
+    proxies:
+      'proxy-web':
+        id: 'proxy-web'
+        kind: 'http'
+        targets: ['http://127.0.0.1:3000']
+    sites:
+      'example.com':
+        host: 'example.com'
+        routes: [{ id: 'web', host: 'example.com', path: '/*', proxy: 'proxy-web' }]
+    resolvedCerts:
+      'example.com':
+        certPath: '/ssl/example.com.crt'
+        keyPath: '/ssl/example.com.key'
+  out = generateNginxConfig(config)
+  ok out.includes('ssl_certificate /ssl/example.com.crt')
+  ok out.includes('ssl_certificate_key /ssl/example.com.key')
+
+test "default catch-all server included when certs exist", ->
+  config = makeConfig
+    proxies:
+      'proxy-web':
+        id: 'proxy-web'
+        kind: 'http'
+        targets: ['http://127.0.0.1:3000']
+    sites:
+      'example.com':
+        host: 'example.com'
+        routes: [{ id: 'web', host: 'example.com', path: '/*', proxy: 'proxy-web' }]
+    resolvedCerts:
+      'example.com':
+        certPath: '/ssl/example.com.crt'
+        keyPath: '/ssl/example.com.key'
+  out = generateNginxConfig(config)
+  ok out.includes('default_server')
+  ok out.includes('return 421')
+
+test "port 80 redirect includes all hostnames", ->
+  config = makeConfig
+    proxies:
+      'proxy-web':
+        id: 'proxy-web'
+        kind: 'http'
+        targets: ['http://127.0.0.1:3000']
+    sites:
+      'example.com':
+        host: 'example.com'
+        routes: [{ id: 'web', host: 'example.com', path: '/*', proxy: 'proxy-web' }]
+      'api.example.com':
+        host: 'api.example.com'
+        routes: [{ id: 'api', host: 'api.example.com', path: '/*', proxy: 'proxy-web' }]
+    streamUpstreams:
+      'tcp-db':
+        id: 'tcp-db'
+        targets: [{ host: '127.0.0.1', port: 5432 }]
+    streams: [
+      { id: 'tcp-db', sni: ['db.example.com'], proxy: 'tcp-db' }
+    ]
+  out = generateNginxConfig(config)
+  ok out.includes('server_name')
+  ok out.includes('db.example.com')
+  ok out.includes('example.com')
+  ok out.includes('api.example.com')
+  ok out.includes('return 301 https://$host$request_uri')
+
+test "security headers always included", ->
+  config = makeConfig
+    sites:
+      'example.com':
+        host: 'example.com'
+        routes: [{ id: 'static', host: 'example.com', path: '/*', static: '.', root: '/var/www' }]
+  out = generateNginxConfig(config)
+  ok out.includes('X-Content-Type-Options')
+  ok out.includes('X-Frame-Options')
+  ok out.includes('Referrer-Policy')
+
+test "server_tokens off is set", ->
+  config = makeConfig()
+  out = generateNginxConfig(config)
+  ok out.includes('server_tokens off')
+
+test "shared sites with same cert and proxy merge into one block", ->
+  config = makeConfig
+    proxies:
+      'proxy-web':
+        id: 'proxy-web'
+        kind: 'http'
+        targets: ['http://127.0.0.1:7201']
+    sites:
+      'medlabs.health':
+        host: 'medlabs.health'
+        routes: [{ id: 'r1', host: 'medlabs.health', path: '/*', proxy: 'proxy-web' }]
+      '*.medlabs.health':
+        host: '*.medlabs.health'
+        routes: [{ id: 'r2', host: '*.medlabs.health', path: '/*', proxy: 'proxy-web' }]
+    resolvedCerts:
+      'medlabs.health':
+        certPath: '/ssl/medlabs.health.crt'
+        keyPath: '/ssl/medlabs.health.key'
+      '*.medlabs.health':
+        certPath: '/ssl/medlabs.health.crt'
+        keyPath: '/ssl/medlabs.health.key'
+  out = generateNginxConfig(config)
+  ok out.includes('server_name medlabs.health *.medlabs.health')

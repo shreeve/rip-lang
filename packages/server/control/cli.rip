@@ -255,6 +255,7 @@ export parseFlags = (argv, defaultEntryPath = null) ->
     listApps: has('--list') or has('-l')
     stopServer: has('--stop') or has('-s')
     restartServer: has('--restart')
+    nginx: has('--nginx') or has('-n')
     envOverride: envOverride
     debug: has('--debug')
   }
@@ -319,6 +320,7 @@ export runHelpOutput = (argv) ->
       -h, --help              Show this help
       -v, --version           Show version
       -c, --check             Validate config and exit
+      -n, --nginx             Generate nginx.conf to stdout
       -f, --file <path>       Specify config file path
       -i, --info              Show running server status
       -l, --list              List registered hosts

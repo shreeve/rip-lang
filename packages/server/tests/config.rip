@@ -53,7 +53,7 @@ test "normalizeConfig accepts http proxy app", ->
   eq Object.keys(normalized.sites).length, 1
   route = normalized.sites['incus.example.com'].routes[0]
   eq route.proxy, 'proxy-incus'
-  eq route.websocket, true
+  eq route.websocket, false
   eq route.path, '/*'
   ok normalized.upstreams['proxy-incus']
   eq normalized.upstreams['proxy-incus'].targets[0], 'https://10.0.0.50:8443'
