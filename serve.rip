@@ -1,0 +1,17 @@
+home = process.env.HOME
+
+export default
+  ssl: "${home}/ssl"
+  hsts: true
+
+  sites:
+    incus:    'incus.trusthealth.com'
+    zion:     'dev.zionlabshare.com'
+    redmine:  'projects.trusthealth.com'
+    medlabs:  '*.medlabs.health'
+
+  apps:
+    incus:    'tcp://127.0.0.1:8443 incus'
+    zion:     "${home}/www zion browse"
+    redmine:  'http://127.0.0.1:7101 redmine'
+    ola:      'http://127.0.0.1:7201 medlabs'
