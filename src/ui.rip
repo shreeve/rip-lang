@@ -30,7 +30,8 @@ export { setContext, getContext, hasContext }
 #
 # Wraps a plain object in a Proxy that lazily creates fine-grained signals
 # for each property. Nested objects are wrapped recursively. Supports path-
-# based access via get/set methods (e.g., stash.get('users[0].name')).
+# based bracket access (e.g., app['data/theme/title']) and 7 reserved methods
+# for atomic/structural operations: inc, dec, flip, join, keys, has, del.
 # ==============================================================================
 
 STASH     = Symbol('stash')
@@ -38,9 +39,15 @@ SIGNALS   = Symbol('signals')
 RAW       = Symbol('raw')
 PERSISTED = Symbol('persisted')
 PROXIES   = new WeakMap()
+METHODS   = new WeakMap()
 
 _keysVersion = 0
 _writeVersion = __state(0)
+_depth = 0
+
+isPathKey = (prop) -> typeof prop is 'string' and (prop.indexOf('.') isnt -1 or prop.indexOf('/') isnt -1 or prop.indexOf('[') isnt -1)
+
+isNum = (val) -> /^-?\d+$/.test val
 
 getSignal = (target, prop) ->
   unless target[SIGNALS]
@@ -73,9 +80,11 @@ makeProxy = (target) ->
         keysSignal(target).value
         return target.length
 
-      # Stash API methods
-      return ((path) -> stashGet(proxy, path)) if prop is 'get'
-      return ((path, val) -> stashSet(proxy, path, val)) if prop is 'set'
+      if not _depth and isPathKey(prop)
+        return stashGet(proxy, prop)
+
+      fn = stashMethodFn(proxy, prop)
+      return fn if fn
 
       sig = getSignal(target, prop)
       val = sig.value
@@ -84,6 +93,10 @@ makeProxy = (target) ->
       val
 
     set: (target, prop, value) ->
+      if not _depth and isPathKey(prop)
+        stashSet(proxy, prop, value)
+        return true
+
       old = target[prop]
       r = if value?[RAW] then value[RAW] else value
       return true if r is old
@@ -102,6 +115,7 @@ makeProxy = (target) ->
       sig = target[SIGNALS]?.get(prop)
       sig?.value = undefined
       keysSignal(target).value = ++_keysVersion
+      _writeVersion.value++
       true
 
     ownKeys: (target) ->
@@ -133,24 +147,115 @@ walk = (path) ->
     i += 2
   result
 
+resolveIndex = (seg, obj) ->
+  if typeof seg is 'number' and seg < 0
+    t = raw(obj)
+    return t.length + seg if Array.isArray(t)
+  seg
+
 stashGet = (proxy, path) ->
   segs = walk(path)
   obj = proxy
-  for seg in segs
-    return undefined unless obj?
-    obj = obj[seg]
-  obj
+  _depth++
+  try
+    for seg in segs
+      return undefined unless obj?
+      obj = obj[resolveIndex(seg, obj)]
+    obj
+  finally
+    _depth--
 
 stashSet = (proxy, path, value) ->
   segs = walk(path)
   obj = proxy
-  for seg, i in segs
-    if i is segs.length - 1
-      obj[seg] = value
-    else
-      obj[seg] = {} unless obj[seg]?
-      obj = obj[seg]
-  value
+  _depth++
+  try
+    for seg, i in segs
+      key = resolveIndex(seg, obj)
+      if i is segs.length - 1
+        obj[key] = value
+      else
+        unless obj[key]?
+          nextSeg = segs[i + 1]
+          obj[key] = if typeof nextSeg is 'number' or isNum(nextSeg) then [] else {}
+        obj = obj[key]
+    value
+  finally
+    _depth--
+
+# Stash methods — reserved names for atomic/structural operations
+STASH_METHOD_NAMES = { inc: true, dec: true, flip: true, join: true, keys: true, has: true, del: true }
+
+stashMethodFn = (proxy, prop) ->
+  return undefined unless STASH_METHOD_NAMES[prop]
+  cache = METHODS.get(proxy)
+  unless cache
+    cache = {}
+    METHODS.set(proxy, cache)
+  return cache[prop] if cache[prop]
+  fn = switch prop
+    when 'inc'  then (path, step = 1) -> cur = stashGet(proxy, path) ?? 0; stashSet(proxy, path, cur + step)
+    when 'dec'  then (path, step = 1) -> cur = stashGet(proxy, path) ?? 0; stashSet(proxy, path, cur - step)
+    when 'flip' then (path) -> cur = stashGet(proxy, path) ?? false; stashSet(proxy, path, not cur)
+    when 'join' then (path, obj) ->
+      __batch ->
+        target = stashGet(proxy, path)
+        unless target? and typeof target is 'object'
+          stashSet(proxy, path, {})
+          target = stashGet(proxy, path)
+        _depth++
+        try
+          target[k] = v for k, v of obj
+        finally
+          _depth--
+    when 'keys' then (path) ->
+      _depth++
+      try
+        segs = walk(path)
+        obj = proxy
+        for seg in segs
+          return [] unless obj?
+          obj = obj[resolveIndex(seg, obj)]
+        return [] unless obj? and typeof obj is 'object'
+        t = raw(obj)
+        keysSignal(t).value
+        Object.keys(t)
+      finally
+        _depth--
+    when 'has' then (path) ->
+      _depth++
+      try
+        segs = walk(path)
+        return false unless segs.length > 0
+        obj = proxy
+        for seg, i in segs
+          key = resolveIndex(seg, obj)
+          if i is segs.length - 1
+            t = raw(obj)
+            keysSignal(t).value
+            return Object.prototype.hasOwnProperty.call(t, key)
+          return false unless obj?
+          obj = obj[key]
+        false
+      finally
+        _depth--
+    when 'del' then (path) ->
+      _depth++
+      try
+        segs = walk(path)
+        return unless segs.length > 0
+        obj = proxy
+        for seg, i in segs
+          key = resolveIndex(seg, obj)
+          if i is segs.length - 1
+            delete obj[key]
+            return
+          return unless obj?
+          obj = obj[key]
+      finally
+        _depth--
+  cache[prop] = fn
+  fn
 
 export stash = (data = {}) -> makeProxy(data)
 
