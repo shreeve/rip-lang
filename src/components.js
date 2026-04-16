@@ -145,7 +145,7 @@ export function installComponentSupport(CodeEmitter, Lexer) {
 
     let isComponent = (name) => {
       if (!name || typeof name !== 'string') return false;
-      return /^[A-Z]/.test(name);
+      return /^[A-Z][A-Za-z0-9]*[a-z][A-Za-z0-9]*$/.test(name);
     };
 
     let isTemplateTag = (name) => {
@@ -538,7 +538,7 @@ export function installComponentSupport(CodeEmitter, Lexer) {
    */
   proto.isComponent = function(name) {
     if (!name || typeof name !== 'string') return false;
-    return /^[A-Z]/.test(name);
+    return /^[A-Z][A-Za-z0-9]*[a-z][A-Za-z0-9]*$/.test(name);
   };
 
   /**

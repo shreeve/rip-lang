@@ -150,6 +150,18 @@ Key ideas:
 - file-based routing
 - hot reload through `/watch`
 
+Component naming in render templates:
+
+- **PascalCase** names are child components — must start with uppercase, contain at least one lowercase letter, and have no underscores (`App`, `AuthScreen`, `HomeSection`)
+- **ALL_CAPS** names are regular variables/constants, not components (`DEFAULT_SCREEN`, `SECTIONS`, `MAX_RETRIES`)
+- **Lowercase** names are DOM elements (`div`, `span`, `button`)
+
+Stash reactivity in components:
+
+- Inside a component's `render`, only expressions rooted at `this` (`@app.data...`, component members) are tracked as reactive by the compiler
+- Shared-scope variables are treated as static — they render once and never update
+- To use stash data reactively, declare a component-local binding: `theme = @app.data.theme`
+
 ```coffee
 import { get, use, start, notFound } from '@rip-lang/server'
 import { serve } from '@rip-lang/server/middleware'

@@ -17,6 +17,16 @@ Accessible headless widgets written in Rip. They expose `$` attributes for styli
 - use reactive arrays directly: `toasts = [...toasts, { message: "Saved!" }]`
 - prefix module-scope lowercase names to avoid shared-scope collisions
 
+## Component Naming
+
+In render templates, the compiler uses naming conventions to distinguish components from variables:
+
+- **PascalCase** (uppercase start, at least one lowercase letter, no underscores) = child component: `App`, `AuthScreen`, `Checkbox`
+- **ALL_CAPS** or names with underscores = regular variable/constant: `DEFAULT_SCREEN`, `SECTIONS`, `A`, `IO`
+- **lowercase** = DOM element: `div`, `span`, `button`
+
+Stash reactivity: inside a component's `render`, only expressions rooted at `this` are tracked as reactive. To use stash data reactively, declare a component-local binding (`theme = @app.data.theme`), not a shared-scope alias.
+
 ## Critical Gotchas
 
 - do not shadow prop names with locals inside component methods; matching names rewrite to `this.name.value`

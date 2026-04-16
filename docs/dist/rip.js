@@ -4413,7 +4413,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       let isComponent = (name) => {
         if (!name || typeof name !== "string")
           return false;
-        return /^[A-Z]/.test(name);
+        return /^[A-Z][A-Za-z0-9]*[a-z][A-Za-z0-9]*$/.test(name);
       };
       let isTemplateTag = (name) => {
         return isHtmlTag(name) || isComponent(name);
@@ -4703,7 +4703,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
     proto.isComponent = function(name) {
       if (!name || typeof name !== "string")
         return false;
-      return /^[A-Z]/.test(name);
+      return /^[A-Z][A-Za-z0-9]*[a-z][A-Za-z0-9]*$/.test(name);
     };
     proto.collectTemplateClasses = function(sexpr) {
       const classes = [];
@@ -10744,7 +10744,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   }
   // src/browser.js
   var VERSION = "3.13.137";
-  var BUILD_DATE = "2026-04-16@09:20:51GMT";
+  var BUILD_DATE = "2026-04-16@19:43:33GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

@@ -300,6 +300,12 @@ div.card.active
 .card.primary.("flex", x)
 ```
 
+Tag and component name resolution:
+
+- **Lowercase names** that match the template tag set are **DOM elements** (`div`, `span`, `button`)
+- **PascalCase names** are **child components** — must start with uppercase, contain at least one lowercase letter, and have no underscores (`App`, `AuthScreen`, `HomeSection`)
+- **ALL_CAPS names** are treated as regular variables, not components (`DEFAULT_SCREEN`, `SECTIONS`, `A`, `IO`)
+
 Key mechanisms:
 
 - `startsWithTag` — backward scan to decide whether a line starts a template tag
