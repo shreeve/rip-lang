@@ -8,39 +8,49 @@
 # rip from source. Re-run after adding new packages.
 
 set -euo pipefail
+shopt -s nullglob
 
-MONO_REPO="$(cd "$(dirname "$0")/.." && pwd)"
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+USER_MOD="$HOME/node_modules"
+GLOB_MOD="$HOME/.bun/install/global/node_modules"
+GLOB_BIN="$HOME/.bun/bin"
 
 # Remove rip-lang from bun's global manifest if present,
 # otherwise `bun i -g <anything>` will reinstall it from npm.
-if grep -qE '"rip-lang"|"@rip-lang/' ~/package.json 2>/dev/null; then
+if grep -qE '"rip-lang"|"@rip-lang/' "$HOME/package.json" 2>/dev/null; then
   echo "Removing rip-lang from bun's global manifest..."
   bun remove -g rip-lang @rip-lang/all 2>/dev/null || true
 fi
 
-# Clean slate
-rm -rf ~/node_modules/rip-lang
-rm -rf ~/node_modules/@rip-lang
-mkdir -p ~/node_modules/@rip-lang
+# Clean slate — link into both ~/node_modules (NODE_PATH fallback)
+# and bun's global install tree (where global require/import resolves)
+rm -rf "$USER_MOD/rip-lang"
+rm -rf "$USER_MOD/@rip-lang"
+rm -rf "$GLOB_MOD/rip-lang"
+rm -rf "$GLOB_MOD/@rip-lang"
+mkdir -p "$USER_MOD/@rip-lang" "$GLOB_MOD/@rip-lang" "$GLOB_BIN"
 
 # Symlink compiler
-ln -sfn "$MONO_REPO" ~/node_modules/rip-lang
-echo "Linked rip-lang -> $MONO_REPO"
+ln -sfn "$REPO_DIR" "$USER_MOD/rip-lang"
+ln -sfn "$REPO_DIR" "$GLOB_MOD/rip-lang"
+echo "Linked rip-lang -> $REPO_DIR"
 
 # Symlink packages
-for pkg in "$MONO_REPO"/packages/*/; do
-  name=$(basename "$pkg")
-  ln -sfn "$pkg" ~/node_modules/@rip-lang/"$name"
+for pkg in "$REPO_DIR"/packages/*/; do
+  [[ -f "$pkg/package.json" ]] || continue
+  name=${pkg%/}
+  name=${name##*/}
+  ln -sfn "$pkg" "$USER_MOD/@rip-lang/$name"
+  ln -sfn "$pkg" "$GLOB_MOD/@rip-lang/$name"
   echo "Linked @rip-lang/$name -> $pkg"
 done
 
 # Symlink CLI binaries into ~/.bun/bin (already in PATH)
-mkdir -p ~/.bun/bin
-ln -sfn "$MONO_REPO"/bin/rip                        ~/.bun/bin/rip
-ln -sfn "$MONO_REPO"/packages/db/bin/rip-db         ~/.bun/bin/rip-db
-ln -sfn "$MONO_REPO"/packages/print/bin/rip-print   ~/.bun/bin/rip-print
-ln -sfn "$MONO_REPO"/packages/server/bin/rip-server ~/.bun/bin/rip-server
-echo "Linked rip packages into ~/.bun/bin"
+ln -sfn "$REPO_DIR"/bin/rip                        "$GLOB_BIN"/rip
+ln -sfn "$REPO_DIR"/packages/db/bin/rip-db         "$GLOB_BIN"/rip-db
+ln -sfn "$REPO_DIR"/packages/print/bin/rip-print   "$GLOB_BIN"/rip-print
+ln -sfn "$REPO_DIR"/packages/server/bin/rip-server "$GLOB_BIN"/rip-server
+echo "Linked binaries into $GLOB_BIN"
 
-echo ""
+echo
 echo "Done. Verify with: rip --version"
