@@ -10744,7 +10744,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   }
   // src/browser.js
   var VERSION = "3.13.137";
-  var BUILD_DATE = "2026-04-16@09:01:34GMT";
+  var BUILD_DATE = "2026-04-16@09:20:51GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -11038,11 +11038,7 @@ ${indented}`);
   });
   var METHODS;
   var PATH_RE;
-  var PERSISTED;
   var PROXIES;
-  var RAW;
-  var SIGNALS;
-  var STASH;
   var STASH_METHOD_NAMES;
   var __batch;
   var __effect;
@@ -11123,10 +11119,6 @@ ${indented}`);
   globalThis.zip ??= (...a) => a[0].map((_, i) => a.map((b) => b[i]));
   ({ __state, __effect, __batch } = globalThis.__rip);
   ({ setContext, getContext, hasContext } = globalThis.__ripComponent || {});
-  STASH = Symbol("stash");
-  SIGNALS = Symbol("signals");
-  RAW = Symbol("raw");
-  PERSISTED = Symbol("persisted");
   PROXIES = new WeakMap;
   METHODS = new WeakMap;
   _keysVersion = 0;
@@ -11140,13 +11132,13 @@ ${indented}`);
   };
   getSignal = function(target, prop) {
     let sig;
-    if (!target[SIGNALS]) {
-      Object.defineProperty(target, SIGNALS, { value: new Map, enumerable: false });
+    if (!target[Symbol.for("signals")]) {
+      Object.defineProperty(target, Symbol.for("signals"), { value: new Map, enumerable: false });
     }
-    sig = target[SIGNALS].get(prop);
+    sig = target[Symbol.for("signals")].get(prop);
     if (!sig) {
       sig = __state(target[prop]);
-      target[SIGNALS].set(prop, sig);
+      target[Symbol.for("signals")].set(prop, sig);
     }
     return sig;
   };
@@ -11157,7 +11149,7 @@ ${indented}`);
     let existing;
     if (!(value != null && typeof value === "object"))
       return value;
-    if (value[STASH])
+    if (value[Symbol.for("stash")])
       return value;
     if (value instanceof Date || value instanceof RegExp || value instanceof Map || value instanceof Set || value instanceof Promise)
       return value;
@@ -11171,9 +11163,9 @@ ${indented}`);
     proxy = null;
     handler = { get: function(target2, prop) {
       let fn, sig, val;
-      if (prop === STASH)
+      if (prop === Symbol.for("stash"))
         return true;
-      if (prop === RAW)
+      if (prop === Symbol.for("raw"))
         return target2;
       if (typeof prop === "symbol")
         return Reflect.get(target2, prop);
@@ -11199,12 +11191,12 @@ ${indented}`);
         return true;
       }
       old = target2[prop];
-      r = value?.[RAW] ? value[RAW] : value;
+      r = value?.[Symbol.for("raw")] ? value[Symbol.for("raw")] : value;
       if (r === old)
         return true;
       target2[prop] = r;
-      if (target2[SIGNALS]?.has(prop)) {
-        target2[SIGNALS].get(prop).value = r;
+      if (target2[Symbol.for("signals")]?.has(prop)) {
+        target2[Symbol.for("signals")].get(prop).value = r;
       }
       if (old === undefined && r !== undefined) {
         keysSignal(target2).value = ++_keysVersion;
@@ -11214,7 +11206,7 @@ ${indented}`);
     }, deleteProperty: function(target2, prop) {
       let sig;
       delete target2[prop];
-      sig = target2[SIGNALS]?.get(prop);
+      sig = target2[Symbol.for("signals")]?.get(prop);
       if (sig != null)
         sig.value = undefined;
       keysSignal(target2).value = ++_keysVersion;
@@ -11452,17 +11444,17 @@ ${indented}`);
     return makeProxy(data);
   };
   var raw = function(proxy) {
-    return proxy?.[RAW] ? proxy[RAW] : proxy;
+    return proxy?.[Symbol.for("raw")] ? proxy[Symbol.for("raw")] : proxy;
   };
   var isStash = function(obj) {
-    return obj?.[STASH] === true;
+    return obj?.[Symbol.for("stash")] === true;
   };
   var persistStash = function(app, opts = {}) {
     let _save, saved, savedData, storage, storageKey, target;
     target = raw(app) || app;
-    if (target[PERSISTED])
+    if (target[Symbol.for("persisted")])
       return;
-    target[PERSISTED] = true;
+    target[Symbol.for("persisted")] = true;
     storage = opts.local ? localStorage : sessionStorage;
     storageKey = opts.key || "__rip_app";
     try {

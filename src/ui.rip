@@ -34,10 +34,6 @@ export { setContext, getContext, hasContext }
 # for atomic/structural operations: inc, dec, flip, join, keys, has, del.
 # ==============================================================================
 
-STASH     = Symbol('stash')
-SIGNALS   = Symbol('signals')
-RAW       = Symbol('raw')
-PERSISTED = Symbol('persisted')
 PROXIES   = new WeakMap()
 METHODS   = new WeakMap()
 
@@ -50,19 +46,19 @@ isPathKey = (prop) -> typeof prop is 'string' and (prop.indexOf('.') isnt -1 or 
 isNum = (val) -> /^-?\d+$/.test val
 
 getSignal = (target, prop) ->
-  unless target[SIGNALS]
-    Object.defineProperty target, SIGNALS, { value: new Map(), enumerable: false }
-  sig = target[SIGNALS].get(prop)
+  unless target[:signals]
+    Object.defineProperty target, :signals, { value: new Map(), enumerable: false }
+  sig = target[:signals].get(prop)
   unless sig
     sig = __state(target[prop])
-    target[SIGNALS].set(prop, sig)
+    target[:signals].set(prop, sig)
   sig
 
-keysSignal = (target) -> getSignal(target, Symbol.for('keys'))
+keysSignal = (target) -> getSignal(target, :keys)
 
 wrapDeep = (value) ->
   return value unless value? and typeof value is 'object'
-  return value if value[STASH]
+  return value if value[:stash]
   return value if value instanceof Date or value instanceof RegExp or value instanceof Map or value instanceof Set or value instanceof Promise
   existing = PROXIES.get(value)
   return existing if existing
@@ -72,8 +68,8 @@ makeProxy = (target) ->
   proxy = null
   handler =
     get: (target, prop) ->
-      return true if prop is STASH
-      return target if prop is RAW
+      return true if prop is :stash
+      return target if prop is :raw
       return Reflect.get(target, prop) if typeof prop is 'symbol'
 
       if prop is 'length' and Array.isArray(target)
@@ -98,12 +94,12 @@ makeProxy = (target) ->
         return true
 
       old = target[prop]
-      r = if value?[RAW] then value[RAW] else value
+      r = if value?[:raw] then value[:raw] else value
       return true if r is old
       target[prop] = r
 
-      if target[SIGNALS]?.has(prop)
-        target[SIGNALS].get(prop).value = r
+      if target[:signals]?.has(prop)
+        target[:signals].get(prop).value = r
       if old is undefined and r isnt undefined
         keysSignal(target).value = ++_keysVersion
       _writeVersion.value++
@@ -112,7 +108,7 @@ makeProxy = (target) ->
 
     deleteProperty: (target, prop) ->
       delete target[prop]
-      sig = target[SIGNALS]?.get(prop)
+      sig = target[:signals]?.get(prop)
       sig?.value = undefined
       keysSignal(target).value = ++_keysVersion
       _writeVersion.value++
@@ -259,14 +255,14 @@ stashMethodFn = (proxy, prop) ->
 
 export stash = (data = {}) -> makeProxy(data)
 
-export raw = (proxy) -> if proxy?[RAW] then proxy[RAW] else proxy
+export raw = (proxy) -> if proxy?[:raw] then proxy[:raw] else proxy
 
-export isStash = (obj) -> obj?[STASH] is true
+export isStash = (obj) -> obj?[:stash] is true
 
 export persistStash = (app, opts = {}) ->
   target = raw(app) or app
-  return if target[PERSISTED]
-  target[PERSISTED] = true
+  return if target[:persisted]
+  target[:persisted] = true
   storage = if opts.local then localStorage else sessionStorage
   storageKey = opts.key or '__rip_app'
   try
