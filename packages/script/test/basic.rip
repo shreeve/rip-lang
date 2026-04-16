@@ -2,7 +2,7 @@
 # @rip-lang/script — Tests
 # ==============================================================================
 
-import Script, { prompts, replace, quote, REDO, SKIP, ELSE, THIS, PURE } from '../script.rip'
+import Script, { prompts, replace, quote, enter } from '../script.rip'
 
 # ==[ Test Harness ]==
 
@@ -17,165 +17,376 @@ def test(name, fn)
   catch e
     fail++
     p "  \x1b[31m✗\x1b[0m #{name}"
-    p "    #{e.message}"
+    p "    #{e?.message ?? String(e)}"
+
+def withChat(fn)
+  chat = Script.spawn! 'bash', ['--noprofile', '--norc'], line: "\n", live: false, slow: 5
+  try
+    fn!(chat)
+  finally
+    chat.disconnect!
 
 p "\n\x1b[1m@rip-lang/script\x1b[0m\n"
 
 # ==[ Helper Function Tests ]==
 
-test "map literal creates a Map", ->
+test! "quote wraps in double quotes", ->
+  assert quote("hello") is '"hello"'
+  assert quote("SMITH,JOHN") is '"SMITH,JOHN"'
+  assert quote("") is '""'
+
+test! "replace returns a 3-entry Map", ->
+  m = replace("newvalue")
+  assert m instanceof Map
+  assert m.size is 3
+
+test! "prompts passes through object", ->
+  obj = prompts("KEY:": ["val"], "DATE:": "")
+  assert obj["KEY:"][0] is "val"
+  assert obj["DATE:"] is ""
+
+test! "prompts preserves all keys", ->
+  obj = prompts("A:": "1", "B:": "2", "C:": "3")
+  assert Object.keys(obj).length is 3
+
+# ==[ Symbol Literals ]==
+
+test! "control symbols are unique", ->
+  assert typeof :redo is 'symbol'
+  assert typeof :skip is 'symbol'
+  assert typeof :else is 'symbol'
+  assert typeof :this is 'symbol'
+  assert typeof :pure is 'symbol'
+  assert :redo isnt :skip
+  assert :skip isnt :else
+  assert :else isnt :this
+  assert :this isnt :pure
+
+test! "symbols are interned", ->
+  a = :redo
+  b = :redo
+  assert a is b
+
+test! "symbol descriptions match", ->
+  assert :redo.description is 'redo'
+  assert :skip.description is 'skip'
+  assert :else.description is 'else'
+
+# ==[ Map Literal Tests ]==
+
+test! "map literal creates a Map", ->
   m = *{ a: 1, b: 2 }
   assert m instanceof Map
   assert m.get("a") is 1
   assert m.get("b") is 2
 
-test "map literal supports regex keys", ->
-  m = *{ /^test/: "found", ELSE: "fallback" }
+test! "map literal supports regex keys", ->
+  m = *{ /^test/: "found", :else: "fallback" }
   assert m instanceof Map
   assert m.size is 2
 
-test "quote wraps in double quotes", ->
-  assert quote("hello") is '"hello"'
-  assert quote("SMITH,JOHN") is '"SMITH,JOHN"'
-
-test "replace returns a Map for the replace dance", ->
-  m = replace("newvalue")
+test! "map literal with symbol keys", ->
+  m = *{ :else: "fallback", :redo: "retry" }
   assert m instanceof Map
-  assert m.size is 3
-
-test "prompts passes through object", ->
-  obj = prompts("KEY:": ["val"], "DATE:": "")
-  assert obj["KEY:"][0] is "val"
-  assert obj["DATE:"] is ""
-
-# ==[ Control Constants ]==
-
-test "control constants are unique symbols", ->
-  assert typeof REDO is 'symbol'
-  assert typeof SKIP is 'symbol'
-  assert typeof ELSE is 'symbol'
-  assert typeof THIS is 'symbol'
-  assert typeof PURE is 'symbol'
-  assert REDO isnt SKIP
-  assert SKIP isnt ELSE
+  assert m.get(:else) is "fallback"
+  assert m.get(:redo) is "retry"
 
 # ==[ Trace Mode Tests ]==
 
-test "trace mode creates a callable", ->
+test! "trace mode creates a callable", ->
   chat = Script.trace()
   assert typeof chat is 'function'
 
-test "trace mode logs expect/send pairs", ->
+test! "trace mode returns null for empty list", ->
+  chat = Script.trace()
+  result = chat! []
+  assert result is null
+
+test! "trace mode logs expect/send pairs", ->
   chat = Script.trace()
   chat! [
     "prompt>", "hello"
     "result:", "world"
   ]
 
-test "trace mode handles objects", ->
+test! "trace mode handles objects", ->
   chat = Script.trace()
   chat! [
     "prompt>", "test"
     { "option1:": "a", "option2:": "b" }
   ]
 
-test "trace mode handles conditionals", ->
+test! "trace mode handles conditionals", ->
   chat = Script.trace()
   chat! [
     [true, "prompt>", "yes"]
     [false, "prompt>", "no"]
   ]
 
-test "trace mode returns null for empty list", ->
+test! "trace mode handles nested arrays", ->
   chat = Script.trace()
-  result = chat! []
-  assert result is null
+  chat! [
+    "prompt>", "start"
+    ["inner>", "nested"]
+  ]
+
+test! "trace mode handles functions", ->
+  called = false
+  chat = Script.trace()
+  chat! [
+    "prompt>", "test"
+    -> called = true; true
+  ]
+  assert called, "function was not called"
+
+# ==[ Chat API Tests ]==
+
+test! "chat exposes buffer property", ->
+  chat = Script.trace()
+  assert typeof chat.buffer is 'string'
+
+test! "chat exposes last property", ->
+  chat = Script.trace()
+  assert chat.last is null
+
+test! "chat exposes send method", ->
+  chat = Script.trace()
+  assert typeof chat.send is 'function'
+
+test! "chat exposes read method", ->
+  chat = Script.trace()
+  assert typeof chat.read is 'function'
+
+test! "chat exposes disconnect method", ->
+  chat = Script.trace()
+  assert typeof chat.disconnect is 'function'
 
 # ==[ Spawn Integration Tests ]==
 
-test "spawn and basic expect/send", ->
-  chat = Script.spawn! 'bash', [], line: "\n", live: false, slow: 5
-
-  chat! [
-    /\$\s*/, "echo RIPTEST123"
-    "RIPTEST123", ""
-  ]
-
-  chat.disconnect!
-
-test "spawn with conditional array (true)", ->
-  chat = Script.spawn! 'bash', [], line: "\n", live: false, slow: 5
-
-  chat! [
-    /\$\s*/, "echo START"
-    "START", ""
-    [true
-      /\$\s*/, "echo EXTRA"
-      "EXTRA", ""
+test! "spawn and basic expect/send", ->
+  withChat! (chat) ->
+    chat! [
+      /\$\s*/, "echo RIPTEST123"
+      "RIPTEST123", ""
     ]
-    /\$\s*/, "echo DONE"
-    "DONE", ""
-  ]
 
-  chat.disconnect!
-
-test "spawn with conditional array (false skips)", ->
-  chat = Script.spawn! 'bash', [], line: "\n", live: false, slow: 5
-
-  chat! [
-    /\$\s*/, "echo ONLY"
-    "ONLY", ""
-    [false
-      /\$\s*/, "echo NEVER"
-      "NEVER", ""
+test! "spawn captures regex groups", ->
+  withChat! (chat) ->
+    chat! [
+      /\$\s*/, "echo VERSION=42"
+      /VERSION=(\d+)\n/
     ]
-    /\$\s*/, "echo END"
-    "END", ""
-  ]
+    assert chat.last is "42", "expected '42' but got #{JSON.stringify(chat.last)}"
 
-  chat.disconnect!
+test! "spawn captures multiple regex groups", ->
+  withChat! (chat) ->
+    chat! [
+      /\$\s*/, "echo NAME=Alice AGE=30"
+      /NAME=(\w+) AGE=(\d+)\n/
+    ]
+    assert chat.last is "Alice", "expected 'Alice' but got #{JSON.stringify(chat.last)}"
 
-test "spawn with object multiplexer", ->
-  chat = Script.spawn! 'bash', [], line: "\n", live: false, slow: 5
+test! "spawn with function callback", ->
+  withChat! (chat) ->
+    captured = null
+    chat! [
+      /\$\s*/, "echo DATA=hello"
+      /DATA=(\w+)\n/, (...args) ->
+        captured = args[1]
+        true
+    ]
+    assert captured?, "callback was not called"
+    assert captured is "hello", "expected 'hello' but got #{JSON.stringify(captured)}"
 
-  chat! [
-    /\$\s*/, "echo TESTMUX"
-    { "TESTMUX": null }
-    /\$\s*/, "echo DONE"
-    "DONE", ""
-  ]
+test! "spawn with conditional array (true)", ->
+  withChat! (chat) ->
+    chat! [
+      /\$\s*/, "echo START"
+      "START", ""
+      [true
+        /\$\s*/, "echo EXTRA"
+        "EXTRA", ""
+      ]
+      /\$\s*/, "echo DONE"
+      "DONE", ""
+    ]
 
-  chat.disconnect!
+test! "spawn with conditional array (false skips)", ->
+  withChat! (chat) ->
+    chat! [
+      /\$\s*/, "echo ONLY"
+      "ONLY", ""
+      [false
+        /\$\s*/, "echo NEVER"
+        "NEVER", ""
+      ]
+      /\$\s*/, "echo END"
+      "END", ""
+    ]
 
-test "spawn captures regex groups", ->
-  chat = Script.spawn! 'bash', [], line: "\n", live: false, slow: 5
+test! "spawn with object multiplexer", ->
+  withChat! (chat) ->
+    chat! [
+      /\$\s*/, "echo TESTMUX"
+      { "TESTMUX": null }
+      /\$\s*/, "echo DONE"
+      "DONE", ""
+    ]
 
-  chat! [
-    /\$\s*/, "echo VERSION=42"
-    /VERSION=(\d+)/
-  ]
+test! "spawn with multi-key multiplexer", ->
+  withChat! (chat) ->
+    chat! [
+      /\$\s*/, "echo BRAVO"
+      { "ALPHA": "got-alpha", "BRAVO": "got-bravo" }
+    ]
 
-  assert chat.last is "42"
-  chat.disconnect!
+test! "spawn multi-step conversation", ->
+  withChat! (chat) ->
+    chat! [
+      /\$\s*/, "echo STEP1"
+      "STEP1", ""
+      /\$\s*/, "echo STEP2"
+      "STEP2", ""
+      /\$\s*/, "echo STEP3"
+      "STEP3", ""
+    ]
 
-test "spawn with function callback", ->
-  chat = Script.spawn! 'bash', [], line: "\n", live: false, slow: 5
-  captured = null
+test! "spawn with sub-script array", ->
+  withChat! (chat) ->
+    chat! [
+      /\$\s*/, "echo OUTER"
+      "OUTER", ""
+      [/\$\s*/, "echo INNER"
+       "INNER", ""]
+      /\$\s*/, "echo AFTER"
+      "AFTER", ""
+    ]
 
-  chat! [
-    /\$\s*/, "echo DATA=hello"
-    /DATA=(\w+)\n/, (...args) ->
-      captured = args[1]
+test! "spawn buffer clears after match", ->
+  withChat! (chat) ->
+    chat! [
+      /\$\s*/, "echo AAA; echo BBB"
+      "AAA", ""
+    ]
+    assert not chat.buffer.includes("AAA"), "buffer should not contain matched text"
+
+test! "spawn with numeric send", ->
+  withChat! (chat) ->
+    chat! [
+      /\$\s*/, "cat"
+      null
+      42
+      null
+      /42\n/
+    ]
+
+test! "spawn with regex key in Map multiplexer", ->
+  withChat! (chat) ->
+    chat! [
+      /\$\s*/, "echo ITEM=hello"
+      *{ /ITEM=(\w+)\n/: null }
+      /\$\s*/, "echo DONE"
+      "DONE", ""
+    ]
+
+test! "spawn with :skip stops current list", ->
+  withChat! (chat) ->
+    result = chat! [
+      /\$\s*/, "echo A"
+      "A", ""
+      /\$\s*/, "echo B"
+      "B", -> :skip
+    ]
+    assert result is :skip, "expected :skip but got #{JSON.stringify(result)}"
+
+test! "spawn with boolean true continues", ->
+  withChat! (chat) ->
+    chat! [
+      /\$\s*/, "echo OK"
+      "OK", ""
       true
-  ]
+      /\$\s*/, "echo DONE"
+      "DONE", ""
+    ]
 
-  assert captured?, "callback was not called"
-  assert captured is "hello", "expected 'hello' but got #{JSON.stringify(captured)}"
-  chat.disconnect!
+test! "spawn with explicit null mode toggle", ->
+  withChat! (chat) ->
+    chat! [
+      /\$\s*/, "echo TOGGLE_TEST"
+      "TOGGLE_TEST"
+      null
+      ""
+      null
+      /\$\s*/, "echo DONE"
+      "DONE", ""
+    ]
+
+test! "spawn with onMatch callback", ->
+  matches = []
+  chat = Script.spawn! 'bash', ['--noprofile', '--norc'],
+    line: "\n", live: false, slow: 5
+    onMatch: (pattern, matched) -> matches.push pattern
+  try
+    chat! [
+      /\$\s*/, "echo TRACK"
+      "TRACK", ""
+    ]
+    assert matches.length > 0, "onMatch was never called"
+  finally
+    chat.disconnect!
+
+test! "spawn with onSend callback", ->
+  sent = []
+  chat = Script.spawn! 'bash', ['--noprofile', '--norc'],
+    line: "\n", live: false, slow: 5
+    onSend: (text) -> sent.push text
+  try
+    chat! [
+      /\$\s*/, "echo TRACED"
+      "TRACED", ""
+    ]
+    assert sent.includes("echo TRACED"), "onSend should have captured 'echo TRACED'"
+  finally
+    chat.disconnect!
+
+test! "spawn with onRecv callback", ->
+  chunks = []
+  chat = Script.spawn! 'bash', ['--noprofile', '--norc'],
+    line: "\n", live: false, slow: 5
+    onRecv: (data) -> chunks.push data
+  try
+    chat! [
+      /\$\s*/, "echo RECV_TEST"
+      "RECV_TEST", ""
+    ]
+    assert chunks.length > 0, "onRecv was never called"
+  finally
+    chat.disconnect!
+
+# ==[ Helper Structure Tests ]==
+
+test! "replace Map has expected keys", ->
+  m = replace("val")
+  keys = [...m.keys()]
+  assert keys.length is 3
+  assert typeof keys[0] is 'string'
+  assert typeof keys[1] is 'string'
+  assert keys[2] is :else
+
+test! "enter returns a Map with 'Are you adding' key", ->
+  m = enter("test")
+  assert m instanceof Map
+  assert m.has("Are you adding")
+
+test! "enter merges extra entries", ->
+  m = enter("test", {"Confirm:": "Y"})
+  assert m instanceof Map
+  assert m.has("Are you adding")
+  assert m.has("Confirm:")
 
 # ==[ Results ]==
 
 p "\n\x1b[32m#{pass} passing\x1b[0m"
 p "\x1b[31m#{fail} failing\x1b[0m" if fail > 0
 p ""
-process.exit(1) if fail > 0
+process.exitCode = 1 if fail > 0

@@ -1,4 +1,4 @@
-import Script, { PURE } from '../script.rip'
+import Script from '../script.rip'
 
 chat = Script.ssh! 'trust',
   cols: process.stdout.columns ?? 120
@@ -6,7 +6,7 @@ chat = Script.ssh! 'trust',
 
 chat! [
   '~> '  , "mc"
-  'Hint:', [PURE, "\x1b0"]
+  'Hint:', [:pure, "\x1b0"]
   '~> '  , "exit"
 ]
 

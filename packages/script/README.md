@@ -50,7 +50,7 @@ You pass it an array. It processes each element by type:
 - **Objects/Maps** branch on multiple possible prompts (first match wins)
 - **Arrays** nest sub-scripts or execute conditionally
 - **Functions** inject dynamic behavior — their return value becomes the next instruction
-- **Symbols** control flow: `REDO`, `SKIP`, `ELSE`, `THIS`, `PURE`
+- **Symbols** control flow: `:redo`, `:skip`, `:else`, `:this`, `:pure`
 
 ## Connection Types
 
@@ -156,14 +156,12 @@ chat! [
 When you need regex keys or mixed key types, use a map literal (`*{ }`):
 
 ```coffee
-import { ELSE } from '@rip-lang/script'
-
 chat! [
   "Enter name:", "SMITH,JOHN"
   *{
     /^NAME:/: [""]                           # regex key
     "CHOOSE 1": [1]                          # string key
-    ELSE: null                               # fallback — nothing matched
+    :else: null                              # fallback — nothing matched
   }
 ]
 ```
@@ -240,19 +238,39 @@ pair = chat! [
 systemInfo = pair[1]                        # the captured group
 ```
 
-### Control Flow
+### Control Flow Symbols
+
+Rip symbol literals (`:name`) control the engine's behavior. No imports needed —
+they're interned values available everywhere:
+
+| Symbol | Purpose |
+|--------|---------|
+| `:redo` | Re-enter the current multiplexer (after reading more data) |
+| `:skip` | Skip the current item, continue to next |
+| `:else` | Fallback key in multiplexers — fires when no other key matches |
+| `:this` | In a multiplexer value, return the matched text itself |
+| `:pure` | Raw mode — no line terminator, no ANSI stripping |
 
 ```coffee
-import { REDO, SKIP, ELSE, THIS, PURE } from '@rip-lang/script'
-```
+# :skip — bail out of a script early
+chat! [
+  "prompt>", "command"
+  "result:", -> :skip                       # stop processing this list
+]
 
-| Constant | Purpose |
-|----------|---------|
-| `REDO` | Re-enter the current multiplexer (after reading more data) |
-| `SKIP` | Skip the current item, continue to next |
-| `ELSE` | Fallback key in multiplexers — fires when no other key matches |
-| `THIS` | In a multiplexer value, return the matched text itself |
-| `PURE` | Raw mode — no line terminator, no ANSI stripping |
+# :else — fallback when no key matches in a multiplexer
+*{
+  /^NAME:/: [""]
+  "CHOOSE 1": [1]
+  :else: null                               # default handler
+}
+
+# :pure — send raw bytes without line terminator
+chat! [
+  "prompt>", "command"
+  "Hint:", [:pure, "\x1b0"]                 # raw escape sequence
+]
+```
 
 ## Helper Functions
 
@@ -264,7 +282,7 @@ Use map literals for multiplexers with regex keys or mixed key types:
 *{
   /^NAME:/: [""]
   "CHOOSE 1": [1]
-  ELSE: null
+  :else: null
 }
 ```
 
@@ -367,7 +385,7 @@ chat = Script.ssh! 'user@host',
 | `RegExp` | Pattern Match | Match against output buffer, captures available. |
 | `null` | Mode Toggle | Flip between listen and talk modes. |
 | `true` | Continue | No-op pass-through. |
-| `false` / `Symbol` | Control Signal | `REDO`, `SKIP`, etc. — flow control. |
+| `false` / `Symbol` | Control Signal | `:redo`, `:skip`, etc. — flow control. |
 | `Object` | Multiplexer | Try each string key against buffer. First match wins. |
 | `Map` | Multiplexer | Like Object but supports regex keys. Use `*{ }` map literals. |
 | `Array` | Sub-script | Nest a conversation. Boolean first element = conditional. |

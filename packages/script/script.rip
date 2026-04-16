@@ -10,13 +10,13 @@
 # sending input. The data structure IS the program.
 # ==============================================================================
 
-# ==[ Control Flow Constants ]==
-
-export REDO =! Symbol 'redo'
-export SKIP =! Symbol 'skip'
-export ELSE =! Symbol 'else'
-export THIS =! Symbol 'this'
-export PURE =! Symbol 'pure'
+# ==[ Control Flow Symbols ]==
+#
+# :redo  — re-enter the current multiplexer
+# :skip  — skip the current item, continue to next
+# :else  — fallback key in multiplexers
+# :this  — return the matched text itself
+# :pure  — raw mode (no line terminator, no ANSI stripping)
 
 # ==[ Helpers ]==
 
@@ -190,27 +190,27 @@ class Engine
       back
     else if Array.isArray(val)
       back = @chat!(null, ...val) unless val.length is 0
-      back = REDO if val.length <= 1
+      back = :redo if val.length <= 1
       back
     else if typeof val is 'function'
       back = invoke! val, back
       if Array.isArray(back)
-        if back.length > 0 and back[0] is PURE
+        if back.length > 0 and back[0] is :pure
           savedLine = @line
           @line = ''
           back = @chat!(null, ...back.slice(1)) unless back.length is 1
           @line = savedLine
-          back = REDO if back.length <= 2
+          back = :redo if back.length <= 2
         else
           back = @chat!(null, ...back) unless back.length is 0
-          back = REDO if back.length <= 1
+          back = :redo if back.length <= 1
       back
     else if val instanceof Map or (typeof val is 'object' and val isnt null and not Array.isArray(val))
       @chat! val
     else if val is true or val is null
       val
     else if val is false or typeof val is 'symbol'
-      if val is THIS
+      if val is :this
         if Array.isArray(back) then back[0] else back
       else
         val
@@ -226,12 +226,12 @@ class Engine
   # Type dispatch:
   #   null           → toggle mode
   #   true           → no-op continue
-  #   false / Symbol → control signal (REDO, SKIP, etc.)
+  #   false / Symbol → control signal (:redo, :skip, etc.)
   #   String/Number  → match (listen) or send (talk)
   #   RegExp         → pattern match against buffer
   #   Object         → multiplexer (string keys, first match wins)
   #   Map            → multiplexer (any key type, for regex keys)
-  #   Array          → sub-script; [boolean, ...] for conditional; [PURE, ...] for raw mode
+  #   Array          → sub-script; [boolean, ...] for conditional; [:pure, ...] for raw mode
   #   Function       → callback, return value becomes next item
 
   chat: (...args) ->
@@ -263,7 +263,7 @@ class Engine
         # -- symbol: control signal --
         else if type is 'symbol'
           back = item
-          return back unless back is REDO
+          return back unless back is :redo
 
         # -- string / number: match or send --
         else if type is 'string' or type is 'number'
@@ -313,10 +313,10 @@ class Engine
         # -- map / object: multiplexer --
         else if type is 'map' or type is 'object'
           entries = if item instanceof Map then [...item.entries()] else Object.entries(item)
-          hasElse = entries.some ([k]) -> k is ELSE or k is 'else'
+          hasElse = entries.some ([k]) -> k is :else or k is 'else'
           elseVal = null
           for [ek, ev] in entries
-            elseVal = ev if ek is ELSE or ek is 'else'
+            elseVal = ev if ek is :else or ek is 'else'
 
           matched = false
 
@@ -328,11 +328,11 @@ class Engine
             back = null
           else if fast and elseVal?
             matched = true
-            back = ELSE
+            back = :else
             @dispatchVal! elseVal, back
           else
             for [key, val] in entries
-              continue if key is ELSE or key is 'else'
+              continue if key is :else or key is 'else'
               ktype = kind(key)
 
               if ktype is 'string' or ktype is 'number'
@@ -369,11 +369,11 @@ class Engine
             fast = false
             talk = false
             done = true
-            done = false if back is REDO
+            done = false if back is :redo
 
         # -- array: sub-script or conditional --
         else if type is 'array'
-          if item.length > 0 and item[0] is PURE
+          if item.length > 0 and item[0] is :pure
             savedLine = @line
             savedAnsi = @ansi
             @line = ''
@@ -391,7 +391,7 @@ class Engine
         # -- function: callback --
         else if type is 'function' or type is 'asyncfunction'
           back = invoke! item, back
-          item = back unless back is REDO
+          item = back unless back is :redo
           done = false
 
         # -- unknown --
@@ -399,8 +399,8 @@ class Engine
           raise "Script can't handle #{type}: #{JSON.stringify(item)}"
 
       # Between items: check control signals
-      break if back is REDO
-      break if back is SKIP
+      break if back is :redo
+      break if back is :skip
 
     back
 
@@ -483,7 +483,7 @@ export def replace(value)
   *{
     "Replace ": ["...", " With ", value, "  Replace ", ""]
     "// ":      value
-    ELSE:       value
+    :else:      value
   }
 
 # Force exact match with double quotes
