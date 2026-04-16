@@ -263,6 +263,9 @@ export class CodeEmitter {
     'regex': 'emitRegex',
     'tagged-template': 'emitTaggedTemplate',
     'str': 'emitString',
+
+    // Symbol literals
+    'symbol': 'emitSymbol',
   };
 
   constructor(options = {}) {
@@ -1651,6 +1654,12 @@ export class CodeEmitter {
     if (ops.length === 1) return this.emit(ops[0], 'value');
     return `(${ops.map(o => this.emit(o, 'value')).join(' || ')})`;
   }
+
+  // ---------------------------------------------------------------------------
+  // Symbol literals
+  // ---------------------------------------------------------------------------
+
+  emitSymbol(head, rest) { return `Symbol.for(${JSON.stringify(rest[0])})`; }
 
   // ---------------------------------------------------------------------------
   // Data structures

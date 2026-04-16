@@ -116,6 +116,12 @@ table = *{
   null: "nothing"
 }
 
+# Symbols — Ruby-style interned symbols via Symbol.for()
+status = :active              # Symbol.for("active")
+state = :ready                # Symbol.for("ready")
+:redo is :redo                # true (globally interned)
+typeof :hello                 # "symbol"
+
 # Ranges
 nums = [1..5]      # [1, 2, 3, 4, 5]
 exclusive = [1...5]  # [1, 2, 3, 4]
@@ -337,6 +343,7 @@ Multiple lines
 | `not of` | Not of | `k not of obj` | Negated key existence |
 | `<=>` | Two-way bind | `value <=> name` | Bidirectional reactive binding (render blocks) |
 | `*{ }` | Map literal | `*{/pat/: val}` | `new Map([[/pat/, val]])` |
+| `:name` | Symbol literal | `:redo` | `Symbol.for("redo")` — Ruby-style interned symbol |
 
 ## Assignment Operators
 
@@ -2041,6 +2048,10 @@ a ?? b         # nullish coalescing
 
 # Word arrays
 %w[foo bar baz]   # ["foo", "bar", "baz"] — Ruby-style word literal
+
+# Symbol literals — Ruby-style interned symbols
+:redo             # Symbol.for("redo")
+:active           # Symbol.for("active")
 
 # Map literals — real Map with any key type
 *{ /regex/: val, "key": val, 42: val }

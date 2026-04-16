@@ -239,6 +239,7 @@ All use `globalThis` with `??=` — override any by redeclaring locally.
 | `*>` (merge assign) | `*>obj = {a: 1}` | `Object.assign(obj, {a: 1})` |
 | `or return` | `x = get() or return err` | Guard clause (Ruby-style) |
 | `?? throw` | `x = get() ?? throw err` | Nullish guard |
+| `:name` (symbol) | `:redo`, `:active` | Ruby-style interned symbol (`Symbol.for`) |
 
 ### Heredoc & Heregex
 

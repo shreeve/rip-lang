@@ -122,6 +122,7 @@ grammar =
     o 'BOOL'      # true/false
     o 'INFINITY'  # Infinity
     o 'NAN'       # NaN
+    o 'SYMBOL'    , '["symbol", 1]'
   ]
 
   AlphaNumeric: [
@@ -360,6 +361,7 @@ grammar =
     o 'Array'
     o 'Object'
     o 'Parenthetical'
+    o 'SYMBOL'     , '["symbol", 1]'
   ]
 
   # ============================================================================

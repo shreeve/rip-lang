@@ -1,0 +1,78 @@
+# Test: Symbol Literals
+# Tests the :symbol syntax that compiles to Symbol.for('name')
+
+# ==============================================================================
+# Basic Symbol Literals
+# ==============================================================================
+
+# Code generation — :name compiles to Symbol.for("name")
+code "symbol literal", ":redo", 'Symbol.for("redo")'
+code "symbol literal skip", ":skip", 'Symbol.for("skip")'
+code "symbol literal with underscore", ":foo_bar", 'Symbol.for("foo_bar")'
+code "symbol literal with digits", ":item2", 'Symbol.for("item2")'
+code "symbol literal dollar", ":$special", 'Symbol.for("$special")'
+
+# Runtime — symbols are actual JS symbols
+test "symbol typeof", "typeof :redo", "symbol"
+test "symbol identity", ":redo is :redo", true
+test "symbol inequality", ":redo isnt :skip", true
+test "symbol description", ":hello.description", "hello"
+
+# ==============================================================================
+# Symbols in Expressions
+# ==============================================================================
+
+# Assignment
+test "symbol assignment", "x = :done; typeof x", "symbol"
+test "symbol readonly", "x =! :frozen; x is :frozen", true
+
+# Array elements
+test "symbol in array", "arr = [:a, :b, :c]; arr.length", 3
+test "symbol array identity", "arr = [:x]; arr[0] is :x", true
+
+# Object values
+test "symbol as object value", 'obj = {status: :active}; obj.status is :active', true
+test "symbol in object literal", 'obj = {a: :one, b: :two}; obj.a is :one and obj.b is :two', true
+
+# Function arguments
+test "symbol as argument", """
+  fn = (x) -> x is :yes
+  fn(:yes)
+  """, true
+test "symbol multiple args", """
+  fn = (a, b) -> a is :x and b is :y
+  fn(:x, :y)
+  """, true
+
+# Comparison
+test "symbol equality", ":abc is :abc", true
+test "symbol with switch", '''
+  x = :red
+  switch x
+    when :red then "stop"
+    when :green then "go"
+    else "unknown"
+  ''', "stop"
+
+# ==============================================================================
+# Colon Disambiguation
+# ==============================================================================
+
+# Ternary should still work with spaces
+test "ternary with spaces", "true ? :yes : :no", Symbol.for("yes")
+test "ternary strings still work", "true ? 'a' : 'b'", "a"
+
+# Object property colon vs symbol value
+test "object with symbol value", '{key: :val}.key is :val', true
+
+# ==============================================================================
+# Symbols Are Interned (Symbol.for semantics)
+# ==============================================================================
+
+test "symbols are interned across expressions", '''
+  a = :hello
+  b = :hello
+  a is b
+  ''', true
+
+test "symbol matches Symbol.for", ':test is Symbol.for("test")', true

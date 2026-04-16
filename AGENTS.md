@@ -251,6 +251,7 @@ rip -cm example.rip
 | tagged template `$`   | `sh $"cmd #{x}"` | injection-safe tagged template             |
 | dotted keys           | `{a.b: 1}`       | flat string key in object literals         |
 | map literal           | `*{a: 1}`        | real `Map` with any key type               |
+| symbol literal        | `:redo`          | interned symbol via `Symbol.for('redo')`   |
 
 ### Kept
 
@@ -301,6 +302,7 @@ rip -cm example.rip
 | `$"..."`    | Tagged template  | `sh $"cmd #{val}"`           |
 | `a.b:`      | Dotted key       | `{host.name: "x"}`          |
 | `*{ }`      | Map literal      | `*{/pat/: val, a: 1}`       |
+| `:name`     | Symbol literal   | `:redo`, `:skip`, `:active`  |
 
 ### Standard Library
 
@@ -354,6 +356,45 @@ The receiving function detects mode via `kind(args[0])`:
 - `'array'` with `.raw` → tagged template (strings + values separated)
 - `'array'` without `.raw` → plain argv array (direct exec)
 - `'string'` → regular string (shell interpretation)
+
+### Symbol Literals (`:name`)
+
+Ruby-style symbol literals. `:name` compiles to `Symbol.for('name')` — globally
+interned, so `:redo === :redo` is true everywhere without imports.
+
+```coffee
+status = :active
+x = :redo
+
+# Symbols are real JavaScript symbols
+typeof :redo            # "symbol"
+:redo is :redo          # true (interned)
+:redo isnt :skip        # true
+
+# Use anywhere a value is expected
+arr = [:a, :b, :c]
+obj = {status: :active}
+fn :redo, :skip         # implicit call with symbol args
+
+# Switch on symbols
+switch state
+  when :ready then start()
+  when :done then finish()
+
+# Interned — matches Symbol.for
+:test is Symbol.for("test")  # true
+```
+
+The colon must be immediately followed by an identifier character (no space).
+This is unambiguous with all other colon uses in Rip:
+
+| Syntax | Meaning |
+| --- | --- |
+| `:redo` | Symbol literal |
+| `:=` | Reactive assign |
+| `::` | Prototype access / type annotation |
+| `name:` | Property key |
+| `? a : b` | Ternary branch (space after `:`) |
 
 ### Error Suppression (`try` without `catch`)
 

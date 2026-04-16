@@ -107,6 +107,7 @@ let INDEXABLE = new Set([
   ...CALLABLE,
   'NUMBER', 'INFINITY', 'NAN', 'STRING', 'STRING_END',
   'REGEX', 'REGEX_END', 'BOOL', 'NULL', 'UNDEFINED', '}', 'MAP_END',
+  'SYMBOL',
 ]);
 
 // Tokens that can follow IMPLICIT_FUNC to start an implicit call
@@ -118,6 +119,7 @@ let IMPLICIT_CALL = new Set([
   'UNDEFINED', 'NULL', 'BOOL', 'UNARY', 'DO', 'DO_IIFE',
   'YIELD', 'AWAIT', 'UNARY_MATH', 'SUPER', 'THROW',
   '@', '->', '=>', '[', '(', '{', 'MAP_START', '--', '++',
+  'SYMBOL',
 ]);
 
 // Tokens that can start an implicit call (unspaced, like +/-)
@@ -133,6 +135,7 @@ let IMPLICIT_END = new Set([
 let IMPLICIT_COMMA_BEFORE_ARROW = new Set([
   'STRING', 'STRING_END', 'REGEX', 'REGEX_END', 'NUMBER',
   'BOOL', 'NULL', 'UNDEFINED', 'INFINITY', 'NAN', ']', '}', 'MAP_END',
+  'SYMBOL',
 ]);
 
 // Tokens that start/end balanced pairs
@@ -505,6 +508,9 @@ export class Lexer {
 
     // Don't treat colon as property when in ternary context
     if (colon && prev && prev[0] === 'TERNARY') colon = null;
+
+    // Don't capture spaced colon when followed by identifier start (symbol literal)
+    if (colon && colon.length > 1 && /[a-zA-Z_$]/.test(this.chunk[idLen + colon.length])) colon = null;
 
     // Property vs identifier
     if (colon || (prev && (prev[0] === '.' || prev[0] === '?.' || (!prev.spaced && prev[0] === '@')))) {
@@ -1163,6 +1169,23 @@ export class Lexer {
   }
 
   // --------------------------------------------------------------------------
+  // Symbol Literal: :name → Symbol.for('name')
+  // --------------------------------------------------------------------------
+
+  symbolToken() {
+    if (this.chunk[0] !== ':') return 0;
+    let next = this.chunk[1];
+    if (!next || next === '=' || next === ':' || /\s/.test(next)) return 0;
+    if (!/[a-zA-Z_$]/.test(next)) return 0;
+    let match = /^((?:(?!\s)[$\w\x7f-\uffff])+)/.exec(this.chunk.slice(1));
+    if (!match) return 0;
+    let name = match[1];
+    let total = name.length + 1;
+    this.emit('SYMBOL', name, {len: total});
+    return total;
+  }
+
+  // --------------------------------------------------------------------------
   // 9. Literal Token (operators, punctuation, everything else)
   // --------------------------------------------------------------------------
 
@@ -1170,6 +1193,10 @@ export class Lexer {
     // %w word literal: %w[foo bar baz] → ["foo", "bar", "baz"]
     let wl = this.wordLiteral();
     if (wl) return wl;
+
+    // :name symbol literal: :redo → Symbol.for("redo")
+    let sl = this.symbolToken();
+    if (sl) return sl;
 
     let match = OPERATOR_RE.exec(this.chunk);
     let val = match ? match[0] : this.chunk.charAt(0);
