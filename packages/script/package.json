@@ -8,7 +8,7 @@
     ".": "./script.rip"
   },
   "scripts": {
-    "test": "rip test/script.test.rip"
+    "test": "rip test/basic.rip"
   },
   "keywords": [
     "rip",
