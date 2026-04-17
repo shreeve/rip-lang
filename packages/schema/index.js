@@ -27,7 +27,6 @@ export { SchemaLexer } from './lexer.js'
 export { Schema } from './runtime.js'
 export { generateTypes } from './emit-types.js'
 export { generateSQL } from './emit-sql.js'
-export { generateZod } from './emit-zod.js'
 export { formatParseError } from './errors.js'
 
 export function parse(source, filename) {

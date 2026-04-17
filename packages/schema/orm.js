@@ -407,8 +407,14 @@ export class Model {
         }
       }
 
-      const sql = `INSERT INTO ${tableName} (${cols.join(', ')}) VALUES (${placeholders.join(', ')})`;
-      await query(sql, values);
+      const sql = `INSERT INTO ${tableName} (${cols.join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING *`;
+      const result = await query(sql, values);
+      // Populate auto-generated columns (id, timestamps, defaults) from the returned row
+      if (result.data?.[0] && result.columns) {
+        for (let i = 0; i < result.columns.length; i++) {
+          this._data[result.columns[i].name] = result.data[0][i];
+        }
+      }
       this._persisted = true;
     }
 
@@ -515,7 +521,7 @@ export class Model {
     const result = await query(sql, params);
     return result.data.map(row => {
       const link = {};
-      for (let i = 0; i < result.meta.length; i++) link[_toCamelCase(result.meta[i].name)] = row[i];
+      for (let i = 0; i < result.columns.length; i++) link[_toCamelCase(result.columns[i].name)] = row[i];
       return link;
     });
   }
@@ -537,9 +543,9 @@ export class Model {
   // Class methods — Query API
   // ---------------------------------------------------------------------------
 
-  static _materialize(meta, row) {
+  static _materialize(columns, row) {
     const data = {};
-    for (let i = 0; i < meta.length; i++) data[meta[i].name] = row[i];
+    for (let i = 0; i < columns.length; i++) data[columns[i].name] = row[i];
     return new this(data, true);
   }
 
@@ -549,7 +555,7 @@ export class Model {
     const sql = `SELECT * FROM ${this.tableName()} WHERE "${pk}" = ?${soft} LIMIT 1`;
     const result = await query(sql, [id]);
     if (result.rows === 0) return null;
-    return this._materialize(result.meta, result.data[0]);
+    return this._materialize(result.columns, result.data[0]);
   }
 
   static async findMany(ids) {
@@ -559,7 +565,7 @@ export class Model {
     const soft = this._softDelete ? ' AND "deleted_at" IS NULL' : '';
     const sql = `SELECT * FROM ${this.tableName()} WHERE "${pk}" IN (${placeholders})${soft}`;
     const result = await query(sql, ids);
-    return result.data.map(row => this._materialize(result.meta, row));
+    return result.data.map(row => this._materialize(result.columns, row));
   }
 
   static async all(limit = null) {
@@ -730,7 +736,7 @@ class Query {
         const soft = RelModel._softDelete ? ' AND "deleted_at" IS NULL' : '';
         const sql = `SELECT * FROM ${RelModel.tableName()} WHERE "${rel.foreignKey}" IN (${placeholders})${soft}`;
         const result = await query(sql, pkValues);
-        const allRelated = result.data.map(row => RelModel._materialize(result.meta, row));
+        const allRelated = result.data.map(row => RelModel._materialize(result.columns, row));
 
         if (rel.type === 'hasMany') {
           const byFk = new Map();
@@ -801,7 +807,7 @@ class Query {
   async all() {
     const { sql, params } = this.toSQL();
     const result = await query(sql, params);
-    const records = result.data.map(row => this._model._materialize(result.meta, row));
+    const records = result.data.map(row => this._model._materialize(result.columns, row));
     return this._loadIncludes(records);
   }
 

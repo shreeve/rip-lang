@@ -16,7 +16,6 @@ import { parse as _rawParse } from './parser.js'
 import { formatParseError } from './errors.js'
 import { generateSQL } from './emit-sql.js'
 import { generateTypes } from './emit-types.js'
-import { generateZod } from './emit-zod.js'
 
 // =============================================================================
 // Built-in Type Validators
@@ -142,10 +141,6 @@ export class Schema {
 
   toTypes() {
     return generateTypes(this._ast)
-  }
-
-  toZod() {
-    return generateZod(this._ast)
   }
 
   _registerEnum(def) {
