@@ -31,6 +31,9 @@ const typeMap = {
 
 const numericTypes = new Set(['integer', 'number'])
 
+// TypeScript type of the auto-generated primary key / foreign key
+const ID_TS = 'number'
+
 // Convert an S-expression value back to a readable form for JSDoc
 function formatDefault(val) {
   if (Array.isArray(val)) {
@@ -141,7 +144,7 @@ function emitInterface(def, enums, isModel) {
 
   // Models get an auto-generated id field
   if (isModel) {
-    lines.push(`${indent}id: string;`)
+    lines.push(`${indent}id: ${ID_TS};`)
   }
 
   if (Array.isArray(body)) {
@@ -163,7 +166,7 @@ function emitInterface(def, enums, isModel) {
         const [, target, opts] = member
         const fk = toForeignKey(target)
         const isOptional = isRelationOptional(opts)
-        lines.push(`${indent}${fk}${isOptional ? '?' : ''}: string;`)
+        lines.push(`${indent}${fk}${isOptional ? '?' : ''}: ${ID_TS};`)
         lines.push(`${indent}${target.toLowerCase()}?: ${target};`)
 
       } else if (kind === 'has_many') {
@@ -350,11 +353,11 @@ function hasLinks(ast) {
 function emitLinkInterface() {
   return [
     'export interface Link {',
-    '  id: string;',
+    `  id: ${ID_TS};`,
     '  sourceType: string;',
-    '  sourceId: string;',
+    `  sourceId: ${ID_TS};`,
     '  targetType: string;',
-    '  targetId: string;',
+    `  targetId: ${ID_TS};`,
     '  role: string;',
     '  whenFrom?: Date;',
     '  whenTill?: Date;',

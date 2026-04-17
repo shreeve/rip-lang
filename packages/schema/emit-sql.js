@@ -29,6 +29,10 @@ const sqlTypeMap = {
   any:      'JSON',
 }
 
+// Auto-generated primary key: SQL column type + sequence-driven default
+const ID_SQL = 'INTEGER'
+const sequenceName = (tableName) => `${tableName}_seq`
+
 // =============================================================================
 // Naming helpers
 // =============================================================================
@@ -243,8 +247,8 @@ function emitTableSQL(def, enums) {
   const columns = []
   const indexes = []
 
-  // Auto-generated primary key
-  columns.push('  id UUID PRIMARY KEY DEFAULT gen_random_uuid()')
+  // Auto-generated primary key (backed by a per-table sequence)
+  columns.push(`  id ${ID_SQL} PRIMARY KEY DEFAULT nextval('${sequenceName(tableName)}')`)
 
   if (Array.isArray(body)) {
     for (const member of body) {
@@ -267,7 +271,7 @@ function emitTableSQL(def, enums) {
         const fkCol = toForeignKeyCol(target)
         const refTable = toTableName(target)
         const notNull = isRelationOptional(opts) ? '' : ' NOT NULL'
-        columns.push(`  ${fkCol} UUID${notNull} REFERENCES ${refTable}(id)`)
+        columns.push(`  ${fkCol} ${ID_SQL}${notNull} REFERENCES ${refTable}(id)`)
 
       } else if (kind === 'index') {
         const [, fields, unique] = member
@@ -279,7 +283,11 @@ function emitTableSQL(def, enums) {
     }
   }
 
-  const lines = [`CREATE TABLE ${tableName} (`]
+  const lines = [
+    `CREATE SEQUENCE ${sequenceName(tableName)} START 1;`,
+    '',
+    `CREATE TABLE ${tableName} (`,
+  ]
   lines.push(columns.join(',\n'))
   lines.push(');')
 
@@ -344,12 +352,14 @@ function hasLinks(models) {
 
 function emitLinksTableSQL() {
   const lines = [
+    'CREATE SEQUENCE links_seq START 1;',
+    '',
     'CREATE TABLE links (',
-    '  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),',
+    `  id ${ID_SQL} PRIMARY KEY DEFAULT nextval('links_seq'),`,
     '  source_type VARCHAR NOT NULL,',
-    '  source_id UUID NOT NULL,',
+    `  source_id ${ID_SQL} NOT NULL,`,
     '  target_type VARCHAR NOT NULL,',
-    '  target_id UUID NOT NULL,',
+    `  target_id ${ID_SQL} NOT NULL,`,
     '  role VARCHAR NOT NULL,',
     '  when_from TIMESTAMP,',
     '  when_till TIMESTAMP,',
@@ -418,13 +428,15 @@ export function generateSQL(ast, options = {}) {
 
   // Tables
   if (emitTables) {
-    // Optionally drop existing tables
+    // Optionally drop existing tables and their sequences
     if (dropFirst) {
       const drops = []
       for (let i = 1; i < ast.length; i++) {
         const def = ast[i]
         if (Array.isArray(def) && def[0] === 'model') {
-          drops.push(`DROP TABLE IF EXISTS ${toTableName(def[1])} CASCADE;`)
+          const tableName = toTableName(def[1])
+          drops.push(`DROP TABLE IF EXISTS ${tableName} CASCADE;`)
+          drops.push(`DROP SEQUENCE IF EXISTS ${sequenceName(tableName)};`)
         }
       }
       if (drops.length > 0) {
@@ -447,7 +459,7 @@ export function generateSQL(ast, options = {}) {
     // Auto-generate links table if any model uses @link
     if (hasLinks(models)) {
       if (dropFirst) {
-        blocks.push('DROP TABLE IF EXISTS links CASCADE;')
+        blocks.push('DROP TABLE IF EXISTS links CASCADE;\nDROP SEQUENCE IF EXISTS links_seq;')
       }
       blocks.push(emitLinksTableSQL())
     }

@@ -132,7 +132,7 @@ export enum Role {
 }
 
 export interface User {
-  id: string;
+  id: number;
   /** @minLength 1 @maxLength 100 */
   name: string;
   /** @unique */
@@ -143,7 +143,7 @@ export interface User {
   bio?: string;
   /** @default true */
   active: boolean;
-  organizationId: string;
+  organizationId: number;
   organization?: Organization;
   posts?: Post[];
   createdAt: Date;
@@ -172,14 +172,16 @@ const errors = user.$validate()
 ```sql
 CREATE TYPE role AS ENUM ('admin', 'user', 'guest');
 
+CREATE SEQUENCE users_seq START 1;
+
 CREATE TABLE users (
-  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id               INTEGER PRIMARY KEY DEFAULT nextval('users_seq'),
   name             VARCHAR(100) NOT NULL,
   email            VARCHAR NOT NULL UNIQUE,
   role             role DEFAULT 'user',
   bio              TEXT,
   active           BOOLEAN DEFAULT true,
-  organization_id  UUID NOT NULL REFERENCES organizations(id),
+  organization_id  INTEGER NOT NULL REFERENCES organizations(id),
   created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

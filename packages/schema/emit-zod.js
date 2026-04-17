@@ -33,6 +33,9 @@ const zodMap = {
 const numericTypes = new Set(['integer', 'number'])
 const stringTypes  = new Set(['string', 'text', 'email', 'url', 'phone', 'uuid'])
 
+// Zod schema fragment for the auto-generated primary key / foreign key
+const ID_ZOD = 'z.number().int()'
+
 // Convert camelCase to snake_case for foreign key naming
 function toForeignKey(name) {
   return name[0].toLowerCase() + name.slice(1) + 'Id'
@@ -145,7 +148,7 @@ function emitZodModel(def, enums, types) {
   const updateFields = []
 
   // Models get an auto-generated id
-  fullFields.push(`${indent}id: z.string().uuid(),`)
+  fullFields.push(`${indent}id: ${ID_ZOD},`)
 
   if (Array.isArray(body)) {
     for (const member of body) {
@@ -182,11 +185,11 @@ function emitZodModel(def, enums, types) {
         const [, target, opts] = member
         const fk = toForeignKey(target)
         const isOptional = isRelationOptional(opts)
-        const fkZod = isOptional ? 'z.string().uuid().optional()' : 'z.string().uuid()'
+        const fkZod = isOptional ? `${ID_ZOD}.optional()` : ID_ZOD
 
         fullFields.push(`${indent}${fk}: ${fkZod},`)
         createFields.push(`${indent}${fk}: ${fkZod},`)
-        updateFields.push(`${indent}${fk}: z.string().uuid().optional(),`)
+        updateFields.push(`${indent}${fk}: ${ID_ZOD}.optional(),`)
       }
       // has_many/has_one skipped — Zod schemas validate input, not query results
     }
@@ -316,11 +319,11 @@ function hasLinks(ast) {
 function emitLinkSchema() {
   return [
     'export const LinkSchema = z.object({',
-    '  id: z.string().uuid(),',
+    `  id: ${ID_ZOD},`,
     '  sourceType: z.string(),',
-    '  sourceId: z.string().uuid(),',
+    `  sourceId: ${ID_ZOD},`,
     '  targetType: z.string(),',
-    '  targetId: z.string().uuid(),',
+    `  targetId: ${ID_ZOD},`,
     '  role: z.string(),',
     '  whenFrom: z.coerce.date().nullable().optional(),',
     '  whenTill: z.coerce.date().nullable().optional(),',
