@@ -61,20 +61,20 @@ export bulk = (table, columns, rows) ->
   throw new Error data.error if data.error
   data
 
-materialize = (meta, row) ->
+materialize = (columns, row) ->
   obj = {}
-  for col, i in meta
+  for col, i in columns
     obj[col.name] = row[i]
   obj
 
 export materializeAll = (result) ->
   return [] if result.rows is 0
-  result.data.map (row) -> materialize result.meta, row
+  result.data.map (row) -> materialize result.columns, row
 
 export findOne = (sql, params = []) ->
   result = query! sql, params
   return null if result.rows is 0
-  materialize result.meta, result.data[0]
+  materialize result.columns, result.data[0]
 
 export findAll = (sql, params = []) ->
   result = query! sql, params

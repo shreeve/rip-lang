@@ -33,7 +33,7 @@ dbUrl = do ->
   idx = args.indexOf('--url')
   if idx >= 0 and args[idx + 1] then args[idx + 1] else 'http://localhost:4213'
 
-log = (...args) -> console.error '[mcp-duckdb]', ...args
+log = (...args) -> warn '[mcp-duckdb]', ...args
 
 # ==============================================================================
 # HTTP — talk to rip-db
@@ -91,9 +91,9 @@ executeQuery = (params) ->
     result = await sql(query)
     return { success: false, error: result.error } if result.error
 
-    columns = result.meta?.map((c) -> c.name) or []
-    columnTypes = result.meta?.map((c) -> c.type) or []
-    rows = result.data or []
+    columns     = result.columns?.map((c) -> c.name) or []
+    columnTypes = result.columns?.map((c) -> c.type) or []
+    rows        = result.data or []
     rowCount = rows.length
 
     truncated = false
@@ -135,10 +135,10 @@ listTables = ->
       ORDER BY schema, type, name
       """
     return { success: false, error: result.error } if result.error
-    meta = result.meta or []
+    cols = result.columns or []
     tables = (result.data or []).map (row) ->
       obj = {}
-      obj[meta[i].name] = row[i] for i in [0...meta.length]
+      obj[cols[i].name] = row[i] for i in [0...cols.length]
       obj
     tableCount = tables.filter((t) -> t.type is 'table').length
     viewCount = tables.filter((t) -> t.type is 'view').length
@@ -163,10 +163,10 @@ listColumns = (params) ->
       ORDER BY column_index
       """
     return { success: false, error: result.error } if result.error
-    meta = result.meta or []
+    cols = result.columns or []
     columns = (result.data or []).map (row) ->
       obj = {}
-      obj[meta[i].name] = row[i] for i in [0...meta.length]
+      obj[cols[i].name] = row[i] for i in [0...cols.length]
       obj
     { success: true, table: safe, columns, columnCount: columns.length }
   catch err

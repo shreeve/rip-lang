@@ -46,7 +46,7 @@ use (c, next) ->
   t0 = Date.now()
   result = next!
   ms = Date.now() - t0
-  console.log "#{c.req.method} #{c.req.path} #{ms}ms"
+  p "#{c.req.method} #{c.req.path} #{ms}ms"
   result
 
 # ==============================================================================
@@ -58,7 +58,7 @@ args = process.argv.slice(2)
 
 # Handle --help and --version
 if '--help' in args or '-h' in args
-  console.log """
+  p """
     rip-db v#{VERSION} — DuckDB Server (Pure Bun FFI)
 
     Usage: rip db.rip [database] [options]
@@ -86,7 +86,7 @@ if '--help' in args or '-h' in args
   process.exit(0)
 
 if '--version' in args or '-v' in args
-  console.log "rip-db v#{VERSION}"
+  p "rip-db v#{VERSION}"
   process.exit(0)
 
 # Database and port configuration
@@ -109,16 +109,16 @@ try
 catch e
   walPath = "#{path}.wal"
   if existsSync walPath
-    console.warn "[rip-db] WAL replay failed — deleting #{walPath} and retrying"
+    warn "[rip-db] WAL replay failed — deleting #{walPath} and retrying"
     unlinkSync walPath
     db = open path
   else
     throw e
 
 conn = db.connect()
-console.log "rip-db: DuckDB #{duckdbVersion()}"
-console.log "rip-db: rip-db v#{VERSION}"
-console.log "rip-db: source #{path}"
+p "rip-db: DuckDB #{duckdbVersion()}"
+p "rip-db: rip-db v#{VERSION}"
+p "rip-db: source #{path}"
 
 # Periodic checkpoint (flush WAL to main file every 5 minutes)
 checkpoint = -> try conn.query 'CHECKPOINT'
@@ -145,45 +145,33 @@ process.on 'SIGTERM', shutdown
 binaryResponse = (data) ->
   new Response data, headers: { 'Content-Type': 'application/octet-stream' }
 
-# Check if SQL is a query that returns results
-isSelectQuery = (sql) ->
-  upper = sql.trim().toUpperCase()
-  upper.startsWith('SELECT') or
-    upper.startsWith('WITH') or
-    upper.startsWith('SHOW') or
-    upper.startsWith('DESCRIBE') or
-    upper.startsWith('EXPLAIN') or
-    upper.startsWith('PRAGMA')
-
 # Log SQL query (truncated if long)
 logSQL = (sql) ->
   # sql = sql.replace(/\s+/g, ' ').trim()
-  console.log sql
+  p sql
 
 # Execute SQL and return result (uses persistent connection)
+# Always materializes whatever rows come back — works for SELECT,
+# INSERT/UPDATE/DELETE ... RETURNING, SHOW, DESCRIBE, etc.
 executeSQL = (sql, params = []) ->
   logSQL sql
   startTime = Date.now()
 
   try
-    rows = await conn.query(sql, params)
-    columns = rows.columns or []
-
-    if isSelectQuery(sql)
-      {
-        meta: columns.map((col) -> { name: col.name, type: col.typeName })
-        data: rows.map((row) -> columns.map((col) -> row[col.name]))
-        rows: rows.length
-        time: (Date.now() - startTime) / 1000
-      }
-    else
-      { meta: [], data: [], rows: 0, time: (Date.now() - startTime) / 1000 }
+    result = await conn.query(sql, params)
+    cols = result.columns or []
+    {
+      columns: cols.map (col) -> { name: col.name, type: col.typeName }
+      data: result.map (row) -> cols.map (col) -> row[col.name]
+      rows: result.length
+      time: (Date.now() - startTime) / 1000
+    }
   catch err
     { error: err.message }
 
 # Bulk insert via Appender API (fastest path for pure inserts)
 executeAppend = (table, columns, rows) ->
-  console.log "APPEND #{table} (#{rows.length} rows)"
+  p "APPEND #{table} (#{rows.length} rows)"
   startTime = Date.now()
   try
     await conn.append(table, columns, rows)
@@ -317,7 +305,7 @@ post '/ddb/run' ->
     # Handle _duckdb_ui catalog queries - return empty success instead of error
     if msg.includes('_duckdb_ui')
       return binaryResponse serializeSuccessResult [], []
-    console.error "POST /ddb/run error:", msg
+    warn "POST /ddb/run error:", msg
     binaryResponse serializeErrorResult msg
 
 # POST /shutdown — Gracefully close the database and exit
@@ -445,13 +433,13 @@ get '/*' ->
       headers: headers
 
   catch err
-    console.error "Proxy error for #{reqPath}:", err?.message
+    warn "Proxy error for #{reqPath}:", err?.message
     new Response "Failed to fetch UI asset: #{reqPath}", { status: 502 }
 
 # ==============================================================================
 # Start Server
 # ==============================================================================
 
-console.log "rip-db: server http://localhost:#{port}"
+p "rip-db: server http://localhost:#{port}"
 
 start port: port, silent: true
