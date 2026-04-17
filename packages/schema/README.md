@@ -374,14 +374,15 @@ Computed properties and custom validation live in model code (see
 ### Relationships
 
 ```coffee
-@belongs_to User                      # Creates user_id foreign key
-@belongs_to Category, { optional: true }
-@has_one Profile                      # (or @one Profile)
-@has_many Post                        # (or @many Post)
-@has_many Comment                     # (or @many Comment)
+@belongs_to User            # required — FK is NOT NULL
+@belongs_to Category?       # optional — FK is nullable
+@has_one Profile            # (or @one Profile)
+@has_many Post              # (or @many Post)
 ```
 
-`@one` and `@many` are shorthand aliases for `@has_one` and `@has_many`.
+A `?` suffix marks a relation optional, matching the field-modifier convention
+(`email?`, `bio?`). `@one` and `@many` are shorthand aliases for `@has_one`
+and `@has_many`.
 
 ### Links (Universal Temporal Associations)
 

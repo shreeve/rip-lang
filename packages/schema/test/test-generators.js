@@ -177,6 +177,39 @@ const noHeader = generateTypes(basicAST, { header: '' })
 assert(!noHeader.startsWith('//'), 'custom empty header')
 
 // =============================================================================
+// Test: Optional relations with '?'
+// =============================================================================
+
+console.log("\nOptional relations with '?'")
+console.log('─'.repeat(50))
+
+const optRelSchema = `
+@model Category
+  name! string
+  @timestamps
+
+@model Article
+  title! string
+  @belongs_to Category
+  @belongs_to Author?
+  @timestamps
+
+@model Author
+  name! string
+  @timestamps
+`
+
+const optRelAST = parse(optRelSchema)
+const optRelSQL = generateSQL(optRelAST)
+const optRelTS  = generateTypes(optRelAST)
+
+assertContains(optRelSQL, 'category_id UUID NOT NULL REFERENCES categories(id)', 'required belongs_to is NOT NULL')
+assertContains(optRelSQL, 'author_id UUID REFERENCES authors(id)', 'optional belongs_to is nullable')
+assertNotContains(optRelSQL, 'author_id UUID NOT NULL REFERENCES', 'optional belongs_to has no NOT NULL')
+assertContains(optRelTS, 'categoryId: string;', 'required FK field is non-optional in TS')
+assertContains(optRelTS, 'authorId?: string;', 'optional FK field is optional in TS')
+
+// =============================================================================
 // Summary
 // =============================================================================
 

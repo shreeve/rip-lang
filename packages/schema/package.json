@@ -17,7 +17,7 @@
     "./emit-sql": "./emit-sql.js"
   },
   "scripts": {
-    "parser": "bun ../../src/grammar/solar.rip -o parser.js grammar.rip",
+    "parser": "bun --preload ../../rip-loader.js ../../scripts/build-schema-parser.js",
     "generate": "bun generate.js",
     "test": "bun test/test-generators.js"
   },
