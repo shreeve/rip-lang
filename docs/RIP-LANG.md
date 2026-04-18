@@ -1752,8 +1752,9 @@ User = schema :model
   afterCreate:       -> p "Welcome, #{@name}!"
 ```
 
-`:enum` bodies are different: bare identifiers (`admin`), or `name: value`
-pairs for valued enums.
+`:enum` bodies are different: bare identifiers (`admin`), `:symbol` literals
+(`:admin` — same meaning, nicer visual cue), or `name: value` pairs for
+valued enums.
 
 ```coffee
 Role = schema :enum
@@ -1761,11 +1762,22 @@ Role = schema :enum
   user
   guest
 
-Status = schema :enum
-  pending: 0
-  active:  1
-  done:    2
+# Shorter: a schema whose body is all `:symbol` lines infers :enum.
+# The `:enum` kind marker is optional in that case.
+Role = schema
+  :admin
+  :user
+  :guest
+
+Status = schema
+  :pending: 0
+  :active:  1
+  :done:    2
 ```
+
+The `:symbol` form pairs well with constraint defaults — `status string,
+[:draft]` is the same as `status string, ["draft"]` but reads more clearly
+next to the enum declaration.
 
 ### Runtime API
 

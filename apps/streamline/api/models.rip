@@ -1,8 +1,8 @@
 # Streamline Swim School — data model declarations
 
-export SpotStatus = schema :enum
-  available
-  booked
+export SpotStatus = schema
+  :available
+  :booked
 
 export User = schema :model
   role?           string, [1, 20]
@@ -22,7 +22,7 @@ export User = schema :model
 export Spot = schema :model
   week!           date
   slot!           string, [5, 5]
-  status          string, ["available"]
+  status          string, [:available]
   child?          json
 
   @belongs_to User?

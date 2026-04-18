@@ -194,6 +194,16 @@ function parseSchemaBody(kind, bodyTokens, ctx) {
   let entries = [];
   let lines = splitBodyLines(bodyTokens);
 
+  // Kind inference: a body whose first non-empty line begins with a
+  // SYMBOL token is unambiguously an enum. Promote the default :input
+  // kind to :enum so `schema\n  :draft\n  :active` needs no marker.
+  // Explicit `:input` or any other kind stays as written.
+  if (kind === KIND_DEFAULT && !ctx.kindLoc && lines.length > 0 &&
+      lines[0][0]?.[0] === 'SYMBOL') {
+    kind = 'enum';
+    ctx.kind = 'enum';
+  }
+
   if (kind === 'enum') {
     for (let line of lines) {
       parseEnumLine(line, entries);
@@ -438,10 +448,11 @@ function parseEnumLine(line, entries) {
   if (!first) return;
   // `admin` lines tokenize as IDENTIFIER; `pending: 0` tokenizes as
   // PROPERTY ':' Literal because the identifier regex absorbs a trailing
-  // colon.
-  if (first[0] !== 'IDENTIFIER' && first[0] !== 'PROPERTY') {
+  // colon; `:admin` tokenizes as SYMBOL. All three forms are accepted
+  // and produce the same string member name.
+  if (first[0] !== 'IDENTIFIER' && first[0] !== 'PROPERTY' && first[0] !== 'SYMBOL') {
     throw schemaError(first,
-      `Enum member must be an identifier, got ${first[0]}.`);
+      `Enum member must be an identifier or :symbol, got ${first[0]}.`);
   }
   let name = first[1];
   let second = line[1];
@@ -696,7 +707,8 @@ function compileDirectiveArgsLiteral(name, tokens) {
 }
 
 // Evaluate a small expression as a literal. Accepts NUMBER, STRING, BOOL,
-// NULL, UNDEFINED, REGEX, and unary minus on NUMBER. Anything else throws.
+// NULL, UNDEFINED, REGEX, SYMBOL (returns its name string — for enum-member
+// defaults like `[:draft]`), and unary minus on NUMBER. Anything else throws.
 function evalLiteralTokens(tokens, fieldEntry) {
   if (!tokens.length) {
     throw schemaError(null, 'Empty constraint value.');
@@ -710,13 +722,14 @@ function evalLiteralTokens(tokens, fieldEntry) {
     if (tag === 'NULL') return null;
     if (tag === 'UNDEFINED') return undefined;
     if (tag === 'REGEX') return parseRegexLiteral(first[1]);
+    if (tag === 'SYMBOL') return first[1];
   }
   if (tokens.length === 2 && tag === '-' && tokens[1][0] === 'NUMBER') {
     return -Number(tokens[1][1]);
   }
   // Deterministic but not literal — IDENTIFIER references aren't supported.
   throw schemaError(first,
-    `Constraint values must be literals (number, string, boolean, null, regex). Got ${tag}.`);
+    `Constraint values must be literals (number, string, boolean, null, regex, :symbol). Got ${tag}.`);
 }
 
 function parseRegexLiteral(val) {

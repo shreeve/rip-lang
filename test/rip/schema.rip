@@ -230,6 +230,58 @@ fail "admin: 1 in :model is not allowed (bare value binding)", '''
   '''
 
 # ==============================================================================
+# Symbol-literal enum members and inferred :enum kind
+# ==============================================================================
+
+code ":symbol members work under explicit :enum", '''
+  R = schema :enum
+    :draft
+    :active
+    :done
+  ''', '''
+  let R;
+  R = __schema({kind: "enum", name: "R", entries: [{tag: "enum-member", name: "draft"}, {tag: "enum-member", name: "active"}, {tag: "enum-member", name: "done"}]});
+  ''', opts
+
+code "bare schema with :symbol body infers :enum kind", '''
+  Status = schema
+    :draft
+    :active
+  ''', '''
+  let Status;
+  Status = __schema({kind: "enum", name: "Status", entries: [{tag: "enum-member", name: "draft"}, {tag: "enum-member", name: "active"}]});
+  ''', opts
+
+code ":symbol with value (valued enum)", '''
+  Tier = schema :enum
+    :free:  0
+    :pro:   1
+  ''', '''
+  let Tier;
+  Tier = __schema({kind: "enum", name: "Tier", entries: [{tag: "enum-member", name: "free", value: 0}, {tag: "enum-member", name: "pro", value: 1}]});
+  ''', opts
+
+code "constraint :symbol compiles to its name string", '''
+  X = schema
+    status! string, [:draft]
+  ''', '''
+  let X;
+  X = __schema({kind: "input", name: "X", entries: [{tag: "field", name: "status", modifiers: ["!"], typeName: "string", array: false, constraints: {default: "draft"}}]});
+  ''', opts
+
+test ":symbol enum round-trips the member name", '''
+  Status = schema
+    :draft
+    :active
+  [Status.parse("draft"), Status.ok("draft"), Status.ok("unknown")]
+''', ["draft", true, false]
+
+fail "explicit :input prevents inference (:symbol is not a field)", '''
+  X = schema :input
+    :oops
+  '''
+
+# ==============================================================================
 # Phase 3: runtime — .parse, .safe, .ok for :input, :shape, :enum
 # ==============================================================================
 
