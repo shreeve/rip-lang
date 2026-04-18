@@ -284,6 +284,47 @@ pattern = ///
 
 ---
 
+## Schema
+
+**Rip Schema** is a first-class language construct for declaring data inline. One keyword — `schema` — covers what would otherwise take three libraries: a validator (Zod-style), an ORM (Prisma/ActiveRecord-style), and a migration tool. Schemas live in `.rip` source, compile alongside the rest of your code, and are real runtime values you can export, pass around, and derive from. Unlike Rip's compile-time `type` / `interface` system (which is erased from JS output), schemas exist at runtime because they validate, construct class instances, run ORM queries, and emit SQL — all from a single declaration that your editor also type-checks via automatic shadow TypeScript.
+
+A schema has one of **five kinds**, selected by a `:symbol` after the keyword. `:input` (the default) is a field validator. `:shape` adds methods and computed getters — validators with behavior, like a `Money` or `Address` value. `:enum` declares a closed set of members using `:symbol` literals (`:draft`, `:active 1`) and exposes `.parse()` that accepts either the member name or its value. `:mixin` declares a reusable field group — non-instantiable, consumed by other schemas via `@mixin Name` with diamond-dedup and cycle detection. `:model` is the big one: DB-backed, with a full async ORM (`find`, `where`, `create`, `save`, `destroy`), migration-grade DDL emission (`toSQL`), Rails-ordered lifecycle hooks (ten recognized names from `beforeValidation` through `afterDestroy`), and `@belongs_to` / `@has_many` / `@has_one` relations that resolve lazily through a process-global registry.
+
+```coffee
+# Validator
+SignupInput = schema
+  email!    email
+  password! string, [8, 100]
+
+# Shape with behavior
+Address = schema :shape
+  street! string
+  city!   string
+  full: ~> "#{@street}, #{@city}"
+
+# Enumeration
+Status = schema
+  :pending 0
+  :active  1
+  :done    2
+
+# DB-backed model
+User = schema :model
+  name!   string
+  email!# email
+  @timestamps
+  @has_many Order
+  beforeValidation: -> @email = @email.toLowerCase()
+```
+
+The **body syntax is declarative**, not general Rip code. Four line forms are legal: fields (`name! type, [min, max]`), directives (`@timestamps`, `@mixin Name`, `@belongs_to User?`), methods (`name: -> body`), and computed getters (`name: ~> body`). Modifiers `!`, `#`, `?` mark required, unique, and optional. Constraint brackets take literal values (numbers, strings, booleans, regex, `:symbol`); arbitrary expressions are compile errors. Every instantiable schema exposes the same three-method runtime API: `.parse(data)` returns a cleaned value or throws `SchemaError` with structured `.issues`; `.safe(data)` returns `{ok, value, errors}` without throwing; `.ok(data)` is a boolean fast path that allocates no error arrays. All three have async dammit variants — `User.find! 1`, `user.save!` — that are the idiomatic form in Rip source.
+
+**`:model` is where the pieces converge.** One declaration gives you a validator, a class with fields as enumerable own properties and methods/getters on the prototype, a chainable async query builder (`User.where(active: true).order("last_name").all!`), migration DDL that works standalone (`User.toSQL()` never touches the database), belongs-to/has-many accessors that resolve cross-module through the registry, and full shadow TypeScript with `ModelSchema<Instance, Data>` typing that propagates through schema algebra. Hydrated instances carry both snake_case and camelCase aliases on DB-derived columns (`order.user_id` and `order.userId` read the same slot), so raw SQL helpers and ORM access coexist cleanly. A single-function adapter interface (`adapter.query(sql, params)`) routes all database I/O, so tests use in-memory mocks and production uses rip-db without the ORM caring.
+
+**Schema algebra** — `.pick`, `.omit`, `.partial`, `.required`, `.extend` — always returns a new `:shape` and always drops behavior. `User.omit "password"` produces a validator for `User` minus the password field; it won't have `.find()` or the `beforeSave` hook. This invariant is enforced both at runtime (ORM methods throw on derived shapes with a targeted diagnostic pointing at query projection) and at the TypeScript level (algebra generics are parameterized over `Data`, not `Instance`, so the derived types correctly omit methods and ORM surface). Internally, the whole feature is a compiler sidecar — 54% of the implementation lives in `src/schema.js` and touches the core compiler in under 100 lines of wiring. A four-layer lazy runtime (raw descriptor → normalized metadata → validator plan → ORM plan / DDL plan) means module load is cheap, migration scripts never build the ORM plan, and validator-only consumers never build the class machinery. The full reference is in [docs/RIP-SCHEMA.md](docs/RIP-SCHEMA.md).
+
+---
+
 ## vs React / Vue / Solid
 
 | Concept | React | Vue | Solid | Rip |
