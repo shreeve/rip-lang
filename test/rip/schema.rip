@@ -607,6 +607,195 @@ fail "reserved ORM name as field in :model", '''
   User.toSQL()
 '''
 
+# ==============================================================================
+# Phase 5: :mixin expansion, cycles, collisions
+# ==============================================================================
+
+test "mixin expands fields into host :model", '''
+  Timestamps = schema :mixin
+    createdAt! datetime
+    updatedAt! datetime
+  User = schema :model
+    name! string
+    @mixin Timestamps
+  [...User._normalize().fields.keys()]
+''', ["name", "createdAt", "updatedAt"]
+
+test "mixin chains via nested @mixin", '''
+  A = schema :mixin
+    a! string
+  B = schema :mixin
+    b! string
+    @mixin A
+  User = schema :model
+    name! string
+    @mixin B
+  [...User._normalize().fields.keys()]
+''', ["name", "a", "b"]
+
+test "diamond mixin inclusion dedupes", '''
+  Base = schema :mixin
+    id! uuid
+  Left = schema :mixin
+    left! string
+    @mixin Base
+  Right = schema :mixin
+    right! string
+    @mixin Base
+  User = schema :model
+    name! string
+    @mixin Left
+    @mixin Right
+  [...User._normalize().fields.keys()]
+''', ["name", "id", "left", "right"]
+
+test "mixin collision is a compile-time error", '''
+  A = schema :mixin
+    conflict! string
+  B = schema :mixin
+    conflict! integer
+  User = schema :model
+    @mixin A
+    @mixin B
+  result = null
+  try
+    User._normalize()
+    result = "no-throw"
+  catch e
+    result = [e.name, e.issues[0].error]
+  result
+''', ["SchemaError", "mixin-collision"]
+
+test "mixin cycle throws with chain", '''
+  A = schema :mixin
+    @mixin B
+  B = schema :mixin
+    @mixin A
+  try
+    A._normalize()
+    "no-throw"
+  catch e
+    e.issues[0].error
+''', "mixin-cycle"
+
+fail ":mixin rejects method entries at parse time", '''
+  X = schema :mixin
+    a! string
+    greet: -> "hi"
+'''
+
+fail ":mixin rejects computed entries at parse time", '''
+  X = schema :mixin
+    a! string
+    full: ~> "hi"
+'''
+
+fail ":mixin rejects non-@mixin directives", '''
+  X = schema :mixin
+    a! string
+    @timestamps
+'''
+
+# ==============================================================================
+# Phase 6: schema algebra (.pick / .omit / .partial / .required / .extend)
+# ==============================================================================
+
+test ".pick returns a :shape with only named fields", '''
+  User = schema :model
+    name! string
+    email! email
+    bio? text
+  Picked = User.pick("name", "email")
+  [Picked.kind, [...Picked._normalize().fields.keys()]]
+''', ["shape", ["name", "email"]]
+
+test ".omit returns a :shape without named fields", '''
+  User = schema :model
+    name! string
+    email! email
+    password! string
+  Safe = User.omit("password")
+  [Safe.kind, [...Safe._normalize().fields.keys()]]
+''', ["shape", ["name", "email"]]
+
+test ".partial flips all fields to optional", '''
+  X = schema
+    name! string
+    age! integer
+  P = X.partial()
+  [P._normalize().fields.get("name").required, P._normalize().fields.get("age").required]
+''', [false, false]
+
+test ".required(keys) forces required on listed fields", '''
+  X = schema
+    name? string
+    age? integer
+  R = X.required("name")
+  [R._normalize().fields.get("name").required, R._normalize().fields.get("age").required]
+''', [true, false]
+
+test ".extend merges two schemas' fields", '''
+  A = schema :shape
+    a! string
+  B = schema :shape
+    b! integer
+  M = A.extend(B)
+  [...M._normalize().fields.keys()]
+''', ["a", "b"]
+
+test ".extend throws on field collision", '''
+  A = schema :shape
+    name! string
+  B = schema :shape
+    name! integer
+  result = null
+  try
+    A.extend(B)
+    result = "no-throw"
+  catch e
+    result = e.message.includes("collides")
+  result
+''', true
+
+test "algebra on :model returns :shape; ORM methods throw", '''
+  User = schema :model
+    name! string
+    email! email
+  UserPublic = User.omit("email")
+  findErr = null
+  toSQLErr = null
+  try
+    await UserPublic.find(1)
+  catch e
+    findErr = e.message.includes(":model-only")
+  try
+    UserPublic.toSQL()
+  catch e
+    toSQLErr = e.message.includes(":model-only")
+  [UserPublic.kind, findErr, toSQLErr, typeof UserPublic.parse]
+''', ["shape", true, true, "function"]
+
+test "algebra preserves sourceModel through chain", '''
+  User = schema :model
+    name! string
+    email! email
+  A = User.pick("name")
+  B = A.partial()
+  [A._sourceModel is User, B._sourceModel is User]
+''', [true, true]
+
+test "algebra drops behavior (D13)", '''
+  Address = schema :shape
+    street! string
+    city! string
+    full: ~> @street + ", " + @city
+    normalize: -> @city
+  ShortAddress = Address.pick("street", "city")
+  a = Address.parse({street: "X", city: "Y"})
+  b = ShortAddress.parse({street: "X", city: "Y"})
+  [typeof a.full, typeof a.normalize, typeof b.full, typeof b.normalize]
+''', ["string", "function", "undefined", "undefined"]
+
 type "exported schema emits export const", '''
   export Foo = schema :input
     a! string

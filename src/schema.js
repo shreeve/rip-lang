@@ -202,6 +202,22 @@ function parseSchemaBody(kind, bodyTokens, ctx) {
     for (let line of lines) {
       parseFieldedLine(kind, line, entries);
     }
+    if (kind === 'mixin') {
+      // :mixin is fields-only (D17). `@mixin Other` is the one directive
+      // allowed. Methods / computed / hooks / other directives at top
+      // level are compile errors — mixins have no lifecycle, no ORM, and
+      // shouldn't shadow behavior on host schemas either.
+      for (let e of entries) {
+        if (e.tag === 'method' || e.tag === 'computed' || e.tag === 'hook') {
+          throw schemaError({ loc: e.headerLoc || e.loc },
+            `:mixin schemas are fields-only. '${e.name}' is a ${e.tag}; move it to a :shape or :model.`);
+        }
+        if (e.tag === 'directive' && e.name !== 'mixin') {
+          throw schemaError({ loc: e.loc },
+            `:mixin schemas only accept '@mixin Name' directives. '@${e.name}' is not allowed.`);
+        }
+      }
+    }
   }
 
   return {
@@ -965,24 +981,28 @@ function __schemaFkName(model) { return __schemaSnake(model) + '_id'; }
 // references. Duplicate registration of the same model name is a hard error.
 
 const __SchemaRegistry = {
-  _models: new Map(),
+  _entries: new Map(),
   register(def) {
-    if (def.kind !== 'model') return;
-    const name = def.name;
-    if (!name) throw new Error('schema: :model must be bound to a name');
-    // Most recent registration wins. In production, users should not
-    // redefine a model name; in tests, re-registration is common and
-    // the intended semantic is "rebind". Cross-module name collisions
-    // in real apps surface as divergent behavior rather than an error;
-    // we'll tighten this once the cross-module story is exercised.
-    this._models.set(name, { def, state: 'registered' });
+    // Named schemas of any kind land here. Relations look up :model,
+    // @mixin Name looks up :mixin. Algebra (.extend etc.) accepts :shape
+    // and derived shapes. Kind is checked at lookup time.
+    if (!def.name) return;
+    // Most recent registration wins. Test harnesses rely on this because
+    // each recompile produces a fresh __SchemaDef instance with the same
+    // name. In production, redefining a named schema across modules is a
+    // design smell — Phase 8 medlabs migration will exercise it.
+    this._entries.set(def.name, { def, kind: def.kind });
   },
   get(name) {
-    const entry = this._models.get(name);
+    const entry = this._entries.get(name);
     return entry ? entry.def : null;
   },
-  has(name) { return this._models.has(name); },
-  reset() { this._models.clear(); },
+  getKind(name, kind) {
+    const entry = this._entries.get(name);
+    return entry && entry.kind === kind ? entry.def : null;
+  },
+  has(name) { return this._entries.has(name); },
+  reset() { this._entries.clear(); },
 };
 
 // ---- DB adapter seam --------------------------------------------------------
@@ -1083,7 +1103,10 @@ class __SchemaDef {
     this.name = desc.name || null;
     this._norm = null;
     this._klass = null;
-    if (this.kind === 'model') __SchemaRegistry.register(this);
+    this._sourceModel = null;
+    if (this.name && (this.kind === 'model' || this.kind === 'mixin')) {
+      __SchemaRegistry.register(this);
+    }
   }
 
   _normalize() {
@@ -1146,6 +1169,12 @@ class __SchemaDef {
           hooks.set(e.name, e.fn);
           break;
         case 'directive': {
+          if (e.name === 'mixin') {
+            // Deferred to the post-pass so we can dedupe diamond includes
+            // and detect cycles with a full expansion stack.
+            directives.push({ name: e.name, args: e.args || [] });
+            break;
+          }
           directives.push({ name: e.name, args: e.args || [] });
           if (e.name === 'timestamps') timestamps = true;
           if (e.name === 'softDelete') softDelete = true;
@@ -1160,6 +1189,17 @@ class __SchemaDef {
           enumMembers.set(e.name, e.value !== undefined ? e.value : e.name);
           break;
       }
+    }
+
+    // @mixin expansion (Phase 5). Depth-first, dedupes diamond includes
+    // in the same host expansion, detects cycles with full chain.
+    if (this.kind === 'model' || this.kind === 'shape' || this.kind === 'input' ||
+        this.kind === 'mixin') {
+      __schemaExpandMixins(this, fields, directives, {
+        stack: [this.name || '<anon>'],
+        seen: new Set([this.name || '<anon>']),
+        onCollision: (name, src) => collision(name, 'mixin-included field from ' + src),
+      });
     }
 
     // Add implicit primary key for :model unless a field already marked primary.
@@ -1439,6 +1479,99 @@ class __SchemaDef {
       throw new Error('schema: .' + api + '() is :model-only (got :' + this.kind + ')');
     }
   }
+
+  // ---- Schema algebra (Phase 6) --------------------------------------------
+  // Invariant: every algebra operation returns a :shape. Model algebra
+  // strips ORM; :shape algebra drops behavior. Derived shapes preserve
+  // field metadata (constraints, defaults, modifiers) from the source
+  // normalized descriptor.
+
+  pick(...keys) {
+    return __schemaDerive(this, (src) => {
+      const names = __schemaFlatten(keys);
+      const out = new Map();
+      for (const k of names) {
+        if (!src.has(k)) throw new Error("pick: unknown field '" + k + "' on " + (this.name || 'schema'));
+        out.set(k, src.get(k));
+      }
+      return out;
+    });
+  }
+
+  omit(...keys) {
+    return __schemaDerive(this, (src) => {
+      const drop = new Set(__schemaFlatten(keys));
+      const out = new Map();
+      for (const [k, v] of src) if (!drop.has(k)) out.set(k, v);
+      return out;
+    });
+  }
+
+  partial() {
+    return __schemaDerive(this, (src) => {
+      const out = new Map();
+      for (const [k, v] of src) out.set(k, { ...v, required: false });
+      return out;
+    });
+  }
+
+  required(...keys) {
+    return __schemaDerive(this, (src) => {
+      const req = new Set(__schemaFlatten(keys));
+      const out = new Map();
+      for (const [k, v] of src) out.set(k, { ...v, required: req.has(k) ? true : v.required });
+      return out;
+    });
+  }
+
+  extend(other) {
+    if (!(other instanceof __SchemaDef)) {
+      throw new Error('extend(): argument must be a schema value');
+    }
+    return __schemaDerive(this, (src) => {
+      const merged = new Map(src);
+      const otherFields = other._normalize().fields;
+      for (const [k, v] of otherFields) {
+        if (merged.has(k)) {
+          throw new Error("extend(): field '" + k + "' collides between " + (this.name || 'schema') + " and " + (other.name || 'other'));
+        }
+        merged.set(k, v);
+      }
+      return merged;
+    });
+  }
+}
+
+function __schemaFlatten(keys) {
+  const out = [];
+  for (const k of keys) {
+    if (typeof k === 'symbol') out.push(Symbol.keyFor(k) || k.description);
+    else if (Array.isArray(k)) for (const kk of k) out.push(typeof kk === 'symbol' ? (Symbol.keyFor(kk) || kk.description) : kk);
+    else out.push(k);
+  }
+  return out;
+}
+
+function __schemaDerive(source, transform) {
+  const src = source._normalize().fields;
+  const derivedFields = transform(src);
+  const entries = [];
+  for (const [, f] of derivedFields) {
+    const mods = [];
+    if (f.required) mods.push('!');
+    if (f.unique) mods.push('#');
+    if (f.optional && !f.required) mods.push('?');
+    entries.push({
+      tag: 'field', name: f.name, modifiers: mods,
+      typeName: f.typeName, array: f.array, constraints: f.constraints,
+    });
+  }
+  const name = (source.name || 'Schema') + 'Derived';
+  const derived = new __SchemaDef({ kind: 'shape', name, entries });
+  // sourceModel propagates through chained algebra. Tooling can follow
+  // the chain back to the original :model for projection hints.
+  derived._sourceModel = source._sourceModel || (source.kind === 'model' ? source : null);
+  return derived;
 }
 
 function __schemaCamel(col) { return String(col).replace(/_([a-z])/g, (_, c) => c.toUpperCase()); }
@@ -1461,6 +1594,51 @@ function __schemaNormalizeDirectiveRelation(directive, ownerModel) {
     return { kind: 'hasMany', target: a.target, accessor: __schemaPluralize(targetLc), foreignKey: __schemaFkName(ownerModel), optional: !!a.optional };
   }
   return null;
+}
+
+function __schemaExpandMixins(host, fields, directives, ctx) {
+  for (const d of directives) {
+    if (d.name !== 'mixin' || !d.args || !d.args[0]) continue;
+    const target = d.args[0].target;
+    if (!target) continue;
+    if (ctx.stack.includes(target)) {
+      throw new SchemaError(
+        [{field: '', error: 'mixin-cycle', message: 'mixin cycle: ' + ctx.stack.concat(target).join(' -> ')}],
+        host.name, host.kind);
+    }
+    if (ctx.seen.has(target)) continue;
+    const mx = __SchemaRegistry.getKind(target, 'mixin');
+    if (!mx) {
+      throw new SchemaError(
+        [{field: '', error: 'mixin-missing', message: 'unknown mixin: ' + target}],
+        host.name, host.kind);
+    }
+    ctx.seen.add(target);
+    ctx.stack.push(target);
+    // Recurse into nested mixins first (depth-first).
+    const childDirectives = mx._desc.entries.filter(e => e.tag === 'directive' && e.name === 'mixin')
+      .map(e => ({ name: e.name, args: e.args || [] }));
+    __schemaExpandMixins(host, fields, childDirectives, ctx);
+    // Then contribute the mixin's own fields.
+    for (const e of mx._desc.entries) {
+      if (e.tag !== 'field') continue;
+      if (fields.has(e.name)) {
+        throw new SchemaError(
+          [{field: e.name, error: 'mixin-collision', message: e.name + ' from mixin ' + target + ' collides with existing field'}],
+          host.name, host.kind);
+      }
+      fields.set(e.name, {
+        name: e.name,
+        required: e.modifiers.includes('!'),
+        unique: e.modifiers.includes('#'),
+        optional: e.modifiers.includes('?'),
+        typeName: e.typeName,
+        array: e.array === true,
+        constraints: e.constraints || null,
+      });
+    }
+    ctx.stack.pop();
+  }
 }
 
 async function __schemaResolveRelation(def, inst, rel) {
