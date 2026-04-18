@@ -86,6 +86,7 @@ grammar =
     o 'Yield'
     o 'Def'
     o 'Enum'
+    o 'Schema'
   ]
 
   # Single-line expressions (for postfix forms and inline arrows).
@@ -760,6 +761,21 @@ grammar =
 
   Enum: [
     o 'ENUM Identifier Block', '["enum", 2, 3]'
+  ]
+
+  # ============================================================================
+  # Schema
+  # ============================================================================
+  # `schema [:kind] INDENT ... OUTDENT` is parsed entirely by the schema
+  # sub-parser at lexer-rewrite time (src/schema.js). The rewriter emits
+  # a synthetic SCHEMA_BODY token whose .data carries the full descriptor
+  # (kind, entries, per-entry loc). The main grammar only sees these two
+  # terminals, which keeps schema body syntax (`name! type`, `@directive`,
+  # `name: -> body`, `name: ~> body`) fully localized and prevents
+  # state-table growth.
+
+  Schema: [
+    o 'SCHEMA SCHEMA_BODY', '["schema", 2]'
   ]
 
   # ============================================================================

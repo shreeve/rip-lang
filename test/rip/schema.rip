@@ -1,0 +1,284 @@
+# Test: Schema Keyword — Phase 1 (grammar, sub-parser, diagnostics)
+# Phase 1 validates:
+#   - `schema [:kind] INDENT ... OUTDENT` parses via the sidecar sub-parser
+#   - Fielded body: fields with modifiers !, #, ?, directives, methods, computed, hooks
+#   - Enum body: bare members and valued members
+#   - Schema-mode-aware diagnostics for the common mistakes
+#
+# The emitted JS is a `__schema({kind, entries: [...]})` call. The runtime
+# `__schema` lands in Phase 3; these tests only assert the shape of the
+# descriptor that reaches codegen.
+
+opts = { skipPreamble: true, skipRuntimes: true, skipDataPart: true }
+
+# ==============================================================================
+# Default kind :input
+# ==============================================================================
+
+code "input default kind", '''
+  SignupInput = schema
+    email!    email
+    password! string, [8, 100]
+  ''', '''
+  let SignupInput;
+  SignupInput = __schema({kind: "input", entries: [{tag: "field", name: "email", modifiers: ["!"], typeName: "email", array: false}, {tag: "field", name: "password", modifiers: ["!"], typeName: "string", array: false}]});
+  ''', opts
+
+code "explicit :input kind", '''
+  X = schema :input
+    name! string
+  ''', '''
+  let X;
+  X = __schema({kind: "input", entries: [{tag: "field", name: "name", modifiers: ["!"], typeName: "string", array: false}]});
+  ''', opts
+
+# ==============================================================================
+# :shape kind
+# ==============================================================================
+
+code "shape with fields", '''
+  Address = schema :shape
+    street! string
+    city!   string
+    state!  string
+  ''', '''
+  let Address;
+  Address = __schema({kind: "shape", entries: [{tag: "field", name: "street", modifiers: ["!"], typeName: "string", array: false}, {tag: "field", name: "city", modifiers: ["!"], typeName: "string", array: false}, {tag: "field", name: "state", modifiers: ["!"], typeName: "string", array: false}]});
+  ''', opts
+
+code "shape with method and computed", '''
+  Address = schema :shape
+    street! string
+    full: ~> @street
+    normalize: -> @
+  ''', '''
+  let Address;
+  Address = __schema({kind: "shape", entries: [{tag: "field", name: "street", modifiers: ["!"], typeName: "string", array: false}, {tag: "computed", name: "full", arrow: "~>"}, {tag: "method", name: "normalize", arrow: "->"}]});
+  ''', opts
+
+# ==============================================================================
+# :enum kind
+# ==============================================================================
+
+code "bare enum", '''
+  Role = schema :enum
+    admin
+    user
+    guest
+  ''', '''
+  let Role;
+  Role = __schema({kind: "enum", entries: [{tag: "enum-member", name: "admin"}, {tag: "enum-member", name: "user"}, {tag: "enum-member", name: "guest"}]});
+  ''', opts
+
+code "valued enum", '''
+  Status = schema :enum
+    pending: 0
+    active:  1
+    done:    2
+  ''', '''
+  let Status;
+  Status = __schema({kind: "enum", entries: [{tag: "enum-member", name: "pending", value: 0}, {tag: "enum-member", name: "active", value: 1}, {tag: "enum-member", name: "done", value: 2}]});
+  ''', opts
+
+code "string-valued enum", '''
+  Tier = schema :enum
+    free: "free"
+    pro:  "pro"
+  ''', '''
+  let Tier;
+  Tier = __schema({kind: "enum", entries: [{tag: "enum-member", name: "free", value: "free"}, {tag: "enum-member", name: "pro", value: "pro"}]});
+  ''', opts
+
+# ==============================================================================
+# :mixin kind
+# ==============================================================================
+
+code "mixin with fields only", '''
+  Timestamps = schema :mixin
+    createdAt! datetime
+    updatedAt! datetime
+  ''', '''
+  let Timestamps;
+  Timestamps = __schema({kind: "mixin", entries: [{tag: "field", name: "createdAt", modifiers: ["!"], typeName: "datetime", array: false}, {tag: "field", name: "updatedAt", modifiers: ["!"], typeName: "datetime", array: false}]});
+  ''', opts
+
+# ==============================================================================
+# :model kind — fields, unique (#), optional (?), directives, computed, methods, hooks
+# ==============================================================================
+
+code "model with modifiers and directives", '''
+  User = schema :model
+    name!    string
+    email!#  email
+    bio?     text
+    @timestamps
+    @belongs_to Organization
+  ''', '''
+  let User;
+  User = __schema({kind: "model", entries: [{tag: "field", name: "name", modifiers: ["!"], typeName: "string", array: false}, {tag: "field", name: "email", modifiers: ["!","#"], typeName: "email", array: false}, {tag: "field", name: "bio", modifiers: ["?"], typeName: "text", array: false}, {tag: "directive", name: "timestamps"}, {tag: "directive", name: "belongs_to"}]});
+  ''', opts
+
+code "model recognizes known hook names", '''
+  User = schema :model
+    name! string
+    beforeSave:   -> @
+    afterCreate:  -> @
+    greet:        -> @
+    identifier:   ~> @name
+  ''', '''
+  let User;
+  User = __schema({kind: "model", entries: [{tag: "field", name: "name", modifiers: ["!"], typeName: "string", array: false}, {tag: "hook", name: "beforeSave", arrow: "->"}, {tag: "hook", name: "afterCreate", arrow: "->"}, {tag: "method", name: "greet", arrow: "->"}, {tag: "computed", name: "identifier", arrow: "~>"}]});
+  ''', opts
+
+code "shape does not classify hook names as hooks", '''
+  X = schema :shape
+    name! string
+    beforeSave: -> @
+  ''', '''
+  let X;
+  X = __schema({kind: "shape", entries: [{tag: "field", name: "name", modifiers: ["!"], typeName: "string", array: false}, {tag: "method", name: "beforeSave", arrow: "->"}]});
+  ''', opts
+
+# ==============================================================================
+# Array field type
+# ==============================================================================
+
+code "array field type", '''
+  X = schema :shape
+    tags! string[]
+  ''', '''
+  let X;
+  X = __schema({kind: "shape", entries: [{tag: "field", name: "tags", modifiers: ["!"], typeName: "string", array: true}]});
+  ''', opts
+
+# ==============================================================================
+# Export support
+# ==============================================================================
+
+code "exported schema", '''
+  export User = schema :model
+    name! string
+  ''', '''
+  export const User = __schema({kind: "model", entries: [{tag: "field", name: "name", modifiers: ["!"], typeName: "string", array: false}]});
+  ''', opts
+
+# ==============================================================================
+# `schema` identifier outside declaration context is preserved
+# ==============================================================================
+
+code "schema as variable still works", '''
+  export schema = 42
+  schema + 1
+  ''', '''
+  export const schema = 42;
+  (schema + 1);
+  ''', opts
+
+code "schema.member access", '''
+  x = schema.member
+  ''', '''
+  let x;
+  x = schema.member;
+  ''', opts
+
+# ==============================================================================
+# Schema-mode-aware diagnostics
+# ==============================================================================
+
+# Field with `name: type` instead of `name type`
+fail "field with colon before type", '''
+  X = schema
+    name: string
+  '''
+
+# Bare value binding at schema top-level
+fail "bare value binding in non-enum", '''
+  X = schema
+    answer: 42
+  '''
+
+# Unknown kind
+fail "unknown schema kind", '''
+  X = schema :widget
+    name! string
+  '''
+
+# Missing type
+fail "field missing type", '''
+  X = schema
+    name!
+  '''
+
+# Bad arrow after colon
+fail "bad arrow after colon", '''
+  X = schema
+    greet: 42
+  '''
+
+# ==============================================================================
+# Multi-line method bodies survive the sub-parser (nested INDENT/OUTDENT)
+# ==============================================================================
+
+code "multi-line method body (nested indent)", '''
+  X = schema :shape
+    name! string
+    greet: ->
+      @name
+  ''', '''
+  let X;
+  X = __schema({kind: "shape", entries: [{tag: "field", name: "name", modifiers: ["!"], typeName: "string", array: false}, {tag: "method", name: "greet", arrow: "->"}]});
+  ''', opts
+
+code "multi-line computed body", '''
+  X = schema :shape
+    name! string
+    full: ~>
+      @name + "!"
+  ''', '''
+  let X;
+  X = __schema({kind: "shape", entries: [{tag: "field", name: "name", modifiers: ["!"], typeName: "string", array: false}, {tag: "computed", name: "full", arrow: "~>"}]});
+  ''', opts
+
+# ==============================================================================
+# Field with constraints — token slice survives for later phases
+# ==============================================================================
+
+code "field with constraints", '''
+  X = schema
+    password! string, [8, 100]
+  ''', '''
+  let X;
+  X = __schema({kind: "input", entries: [{tag: "field", name: "password", modifiers: ["!"], typeName: "string", array: false}]});
+  ''', opts
+
+# ==============================================================================
+# Comments between schema entries
+# ==============================================================================
+
+code "comments between entries", '''
+  X = schema :shape
+    # first field
+    name! string
+    # second
+    age? integer
+  ''', '''
+  let X;
+  X = __schema({kind: "shape", entries: [{tag: "field", name: "name", modifiers: ["!"], typeName: "string", array: false}, {tag: "field", name: "age", modifiers: ["?"], typeName: "integer", array: false}]});
+  ''', opts
+
+# ==============================================================================
+# `admin: 1` is valid in :enum but an error in non-enum
+# ==============================================================================
+
+code "admin: 1 is a valued enum member in :enum", '''
+  R = schema :enum
+    admin: 1
+  ''', '''
+  let R;
+  R = __schema({kind: "enum", entries: [{tag: "enum-member", name: "admin", value: 1}]});
+  ''', opts
+
+fail "admin: 1 in :model is not allowed (bare value binding)", '''
+  X = schema :model
+    admin: 1
+  '''

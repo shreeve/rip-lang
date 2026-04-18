@@ -12,6 +12,7 @@ import { Lexer } from './lexer.js';
 import { parser } from './parser.js';
 import { installComponentSupport } from './components.js';
 import { emitTypes, emitEnum } from './types.js';
+import { installSchemaSupport } from './schema.js';
 import { SourceMapGenerator } from './sourcemaps.js';
 import { RipError, toRipError } from './error.js';
 
@@ -250,6 +251,9 @@ export class CodeEmitter {
 
     // Types
     'enum': 'emitEnum',
+
+    // Schema
+    'schema': 'emitSchema',
 
     // Modules
     'import': 'emitImport',
@@ -3585,6 +3589,12 @@ installComponentSupport(CodeEmitter, Lexer);
 // =============================================================================
 
 CodeEmitter.prototype.emitEnum = emitEnum;
+
+// =============================================================================
+// Schema Support (prototype installation)
+// =============================================================================
+
+installSchemaSupport(null, CodeEmitter);
 
 // =============================================================================
 // Convenience Functions
