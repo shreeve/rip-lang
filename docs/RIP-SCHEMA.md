@@ -651,7 +651,10 @@ user.toJSON()      # plain object of declared fields (no methods/getters)
 ```
 
 Plus any methods, computed getters, and relation accessors you declared
-on the schema.
+on the schema. Naming tip: methods that produce a fresh projection
+(e.g. `user.toPublic()`, `order.toCard()`) follow Rip's
+`to` / `as` / `from` / `parse` conversion convention — see
+[RIP-LANG.md §15 "Conversion Method Naming"](./RIP-LANG.md#conversion-method-naming).
 
 ### Lifecycle hooks
 

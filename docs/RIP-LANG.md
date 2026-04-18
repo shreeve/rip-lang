@@ -2024,6 +2024,58 @@ class EventEmitter
     @
 ```
 
+## Conversion Method Naming
+
+When a type exposes methods that convert between representations, Rip
+follows a convention borrowed from Rust, Swift, and .NET for naming
+them. The prefix signals what kind of thing you get back:
+
+| Prefix    | Meaning                                   | What you get                                    |
+| --------- | ----------------------------------------- | ----------------------------------------------- |
+| `toX()`   | Convert — produce a new independent value | New object; mutating it doesn't affect `self`   |
+| `asX()`   | View / cast — reinterpret `self` as an `X` | Wrapper or lens; may share state with `self`    |
+| `fromX()` | Static constructor from an `X`            | New instance built from external data           |
+| `parseX`  | Parse an `X`-formatted representation     | Validated, typed value                          |
+
+The test when naming your own method: **if mutating the returned value
+can affect the original, it's `as`; otherwise it's `to`.** Equivalently:
+did real work happen (allocation, copy, serialization)? Then `to`.
+Zero-cost reinterpretation? Then `as`.
+
+```coffee
+# toX — converts, produces an independent value
+user.toJSON()         # plain object; mutating it doesn't change user
+user.toPublic()       # filtered plain object for wire responses
+User.toSQL()          # CREATE TABLE DDL string
+events.toArray()      # materialized Array from an iterator / Set
+
+# asX — reinterprets, may share state
+# No Rip idioms today; reserved for zero-cost views. A future
+# buffer.asUint8Array() would wrap the same memory, not copy it.
+
+# fromX — static construction from another type
+Array.from(iter)
+String.fromCharCode(65)
+
+# parseX — typed parse from a wire / string format
+Schema.parse(data)    # validates, returns a typed instance
+parseInt("42")
+```
+
+`parse` and `to` are duals: `Schema.parse(data)` takes a wire
+representation in, `instance.toJSON()` produces one out. Picking the
+right prefix ahead of time keeps the pair discoverable without
+remembering which method name you chose last time.
+
+Related prefixes worth recognizing from other ecosystems, even though
+Rip doesn't have idiomatic uses today:
+
+- `intoX` — consume `self`, return `X` (Rust's ownership transfer).
+  JS garbage collection makes ownership invisible, so Rip just uses
+  `toX` for the same cases.
+- `withX` — immutable update returning a modified copy of `self` with
+  one field changed. Useful for record types with many optional fields.
+
 ---
 
 # 16. Quick Reference
