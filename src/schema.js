@@ -1,3 +1,5 @@
+import { parser } from './parser.js';
+
 // Schema System — inline `schema` declarations compile to runtime validator
 // and ORM plans.
 //
@@ -89,10 +91,16 @@ export function installSchemaSupport(Lexer, CodeEmitter) {
     Lexer.prototype.rewriteSchema = function() {
       rewriteSchema(this);
     };
+    // Captured body tokens need the tail rewriter passes before parsing.
+    // parseBodyTokens runs those passes on a fresh Lexer instance.
+    parseBodyTokens._LexerCtor = Lexer;
   }
   if (CodeEmitter) {
     CodeEmitter.prototype.emitSchema = function(head, rest, context) {
       return emitSchemaNode(this, head, rest, context);
+    };
+    CodeEmitter.prototype.getSchemaRuntime = function() {
+      return getSchemaRuntime();
     };
   }
 }
@@ -435,21 +443,28 @@ function parseEnumLine(line, entries) {
 // ============================================================================
 
 function emitSchemaNode(emitter, head, rest, context) {
-  // rest[0] is the SCHEMA_BODY node — either a String with .data attached
-  // (from the parser metadata bridge) or (rare path) a plain value.
+  // rest[0] is the SCHEMA_BODY node. The parser metadata bridge wraps the
+  // token value in `new String()` and copies token.data fields onto it, so
+  // the descriptor surfaces as `node.descriptor` here.
   let node = rest[0];
   let descriptor = readDescriptor(node);
   if (!descriptor) {
     throw new Error('schema: missing descriptor on SCHEMA_BODY token');
   }
-  let literal = descriptorLiteral(descriptor);
-  return `__schema(${literal})`;
+  emitter.usesSchemas = true;
+
+  // The binding name is threaded through `_schemaName` by emitAssignment
+  // (parallels `_componentName`). When present, we embed it so SchemaError,
+  // generated class name, and debug output all have a stable identity.
+  let schemaName = emitter._schemaName || null;
+
+  let parts = [`kind: ${JSON.stringify(descriptor.kind)}`];
+  if (schemaName) parts.push(`name: ${JSON.stringify(schemaName)}`);
+  parts.push(`entries: [${descriptor.entries.map(e => entryLiteral(emitter, e)).join(', ')}]`);
+  return `__schema({${parts.join(', ')}})`;
 }
 
 function readDescriptor(node) {
-  // The parser metadata bridge wraps the token value in `new String()` and
-  // copies token.data fields onto it via Object.assign. So the descriptor
-  // surfaces as `node.descriptor` here, not `node.data.descriptor`.
   if (node && typeof node === 'object') {
     if (node.descriptor) return node.descriptor;
     if (node.data?.descriptor) return node.data.descriptor;
@@ -457,17 +472,7 @@ function readDescriptor(node) {
   return null;
 }
 
-// Emit a JS object literal for a descriptor. Phase 1 emission is lossy by
-// design — body tokens are stubbed; Phase 3 wires real Rip codegen.
-function descriptorLiteral(d) {
-  let parts = [
-    `kind: ${JSON.stringify(d.kind)}`,
-    `entries: [${d.entries.map(entryLiteral).join(', ')}]`,
-  ];
-  return `{${parts.join(', ')}}`;
-}
-
-function entryLiteral(e) {
+function entryLiteral(emitter, e) {
   switch (e.tag) {
     case 'field': {
       let obj = [
@@ -481,15 +486,20 @@ function entryLiteral(e) {
     }
     case 'directive': {
       let obj = [`tag: "directive"`, `name: ${JSON.stringify(e.name)}`];
+      if (e.argTokens && e.argTokens.length) {
+        let argsCode = compileDirectiveArgs(emitter, e.argTokens);
+        if (argsCode) obj.push(`args: ${argsCode}`);
+      }
       return `{${obj.join(', ')}}`;
     }
     case 'computed':
     case 'method':
     case 'hook': {
+      let fnCode = compileCallableFn(emitter, e);
       let obj = [
         `tag: ${JSON.stringify(e.tag)}`,
         `name: ${JSON.stringify(e.name)}`,
-        `arrow: ${JSON.stringify(e.arrow)}`,
+        `fn: ${fnCode}`,
       ];
       return `{${obj.join(', ')}}`;
     }
@@ -501,6 +511,122 @@ function entryLiteral(e) {
     default:
       return `{tag: "unknown"}`;
   }
+}
+
+// Compile a callable body (`-> body` or `~> body`) to a JS `function(...)`
+// expression with dynamic `this`. Both computed getters and methods are
+// emitted using the Rip thin-arrow codegen, which naturally produces a
+// `function() { ... }` (Rip `->` is NOT a JS arrow). This gives us the
+// right `this` semantics for instance-attached methods and proto getters.
+function compileCallableFn(emitter, entry) {
+  let bodySexpr = parseBodyTokens(entry.bodyTokens);
+  if (!bodySexpr) {
+    // Empty body — emit a no-op.
+    return `(function() {})`;
+  }
+  // Wrap as a thin-arrow with no params. `emit` in value context produces
+  // a parenthesized function expression.
+  let arrowSexpr = ['->', [], bodySexpr];
+  return emitter.emit(arrowSexpr, 'value');
+}
+
+// Placeholder for future directive-arg compilation. Phase 4 populates this.
+function compileDirectiveArgs(emitter, argTokens) {
+  return null;
+}
+
+// Run the tail rewriter passes on a captured body token slice, then feed
+// the result through parser.parse() via a temporary lex adapter. The
+// returned s-expression is the parsed body — either a single statement or
+// a block of statements — ready to wrap in `['->', [], body]`.
+function parseBodyTokens(bodyTokens) {
+  if (!bodyTokens || !bodyTokens.length) return null;
+
+  // The body tokens were captured by rewriteSchema BEFORE rewriteTypes,
+  // tagPostfixConditionals, rewriteTaggedTemplates, addImplicitBracesAndParens,
+  // and addImplicitCallCommas ran. Run those tail passes on a sub-lexer
+  // whose `this.tokens` is the body slice.
+  let LexerCtor = parseBodyTokens._LexerCtor;
+  if (!LexerCtor) {
+    throw new Error('schema: parseBodyTokens called before Lexer was wired');
+  }
+  let sub = Object.create(LexerCtor.prototype);
+  let toks = bodyTokens.slice();
+  // Multi-line callable bodies open with a matched INDENT ... OUTDENT pair
+  // wrapping the statements. parser.parse() expects a Body (list of Lines),
+  // not a leading INDENT, so strip the outer pair when the first INDENT's
+  // matching OUTDENT is the last token.
+  if (toks.length >= 2 && toks[0]?.[0] === 'INDENT') {
+    let depth = 0;
+    let lastOutdent = -1;
+    for (let k = 0; k < toks.length; k++) {
+      if (toks[k][0] === 'INDENT') depth++;
+      else if (toks[k][0] === 'OUTDENT') {
+        depth--;
+        if (depth === 0) { lastOutdent = k; break; }
+      }
+    }
+    if (lastOutdent === toks.length - 1) {
+      toks = toks.slice(1, -1);
+    }
+  }
+  sub.tokens = toks;
+  sub.seenFor = sub.seenImport = sub.seenExport = false;
+  sub.ends = [];
+  sub.indent = 0;
+  sub.outdebt = 0;
+  sub.indents = [];
+  // Ensure a terminating TERMINATOR so parser.parse() sees a clean EOF.
+  let lastTag = sub.tokens[sub.tokens.length - 1]?.[0];
+  if (lastTag !== 'TERMINATOR') {
+    sub.tokens.push(mkToken('TERMINATOR', '\n', bodyTokens[bodyTokens.length - 1]));
+  }
+  try {
+    sub.rewriteTypes?.();
+    sub.tagPostfixConditionals?.();
+    sub.rewriteTaggedTemplates?.();
+    sub.addImplicitBracesAndParens?.();
+    sub.addImplicitCallCommas?.();
+  } catch (e) {
+    // If a tail pass throws, surface a clean schema error.
+    throw schemaError(bodyTokens[0], `schema: failed to compile body: ${e.message}`);
+  }
+  let tokens = sub.tokens.filter(t => t[0] !== 'TYPE_DECL');
+
+  // Swap parser.lexer, parse, restore.
+  let savedLexer = parser.lexer;
+  parser.lexer = {
+    tokens, pos: 0,
+    setInput() {},
+    lex() {
+      if (this.pos >= this.tokens.length) return 1;
+      let token = this.tokens[this.pos++];
+      let val = token[1];
+      if (token.data) {
+        val = new String(val);
+        Object.assign(val, token.data);
+      }
+      this.text = val;
+      this.loc = token.loc;
+      this.line = token.loc?.r;
+      return token[0];
+    },
+  };
+  let sexpr;
+  try {
+    sexpr = parser.parse('');
+  } finally {
+    parser.lexer = savedLexer;
+  }
+
+  // sexpr is `['program', ...statements]`. Unwrap to a body we can feed
+  // a thin-arrow AST. One statement → the statement itself. Multiple →
+  // ['block', ...].
+  if (!Array.isArray(sexpr) || sexpr[0] !== 'program') return null;
+  let stmts = sexpr.slice(1);
+  if (stmts.length === 0) return null;
+  if (stmts.length === 1) return stmts[0];
+  return ['block', ...stmts];
 }
 
 // ============================================================================
@@ -583,3 +709,276 @@ function schemaError(tok, message) {
   err.code = 'E_SCHEMA';
   return err;
 }
+
+// ============================================================================
+// Runtime — injected into compiled output when the source uses `schema`
+// ============================================================================
+//
+// Four-layer architecture (D22):
+//   Layer 1 — Descriptor: the object passed to `__schema({...})`. Raw
+//             metadata from compiler, plus real functions for callables.
+//   Layer 2 — Normalized: fields map / methods map / computed map / hooks
+//             map / directives / enum members. Built lazily on first
+//             downstream need. Collision and kind-legality checks live
+//             here (Phase 4 tightens them).
+//   Layer 3 — Validator plan: compiled validator tree. Built on first
+//             `.parse` / `.safe` / `.ok`.
+//   Layer 4 — ORM plan (Phase 4) and DDL plan (Phase 4) — not in Phase 3.
+//
+// Public API per kind (v1):
+//   .parse(data)  throws SchemaError on failure, returns value
+//   .safe(data)   {ok: true, value, errors: null} | {ok: false, value: null, errors: [...]}
+//   .ok(data)     boolean, fast path (no allocation)
+//
+// Result `value` shape:
+//   :shape   — generated class instance (fields enumerable own props,
+//              methods non-enumerable prototype fns, computed non-enumerable
+//              prototype getters)
+//   :input   — plain object (same class-instance plumbing; Phase 3 treats
+//              :input like :shape sans methods for consistency)
+//   :enum    — the member value (or name when the enum is bare)
+//   :mixin   — non-instantiable; raises `Cannot parse :mixin`
+//   :model   — Phase 4 (the class additionally wires ORM methods)
+
+const SCHEMA_RUNTIME = `
+// ---- Rip Schema Runtime ----------------------------------------------------
+
+class SchemaError extends Error {
+  constructor(issues, schemaName, schemaKind) {
+    super(__schemaFormatIssues(issues, schemaName));
+    this.name = 'SchemaError';
+    this.issues = issues;
+    this.schemaName = schemaName || null;
+    this.schemaKind = schemaKind || null;
+  }
+}
+
+function __schemaFormatIssues(issues, name) {
+  if (!issues || !issues.length) return 'SchemaError';
+  const head = name ? name + ': ' : '';
+  return head + issues.map(i => i.message || i.error || 'invalid').join('; ');
+}
+
+const __schemaTypes = {
+  string:   v => typeof v === 'string',
+  number:   v => typeof v === 'number' && !Number.isNaN(v),
+  integer:  v => Number.isInteger(v),
+  boolean:  v => typeof v === 'boolean',
+  date:     v => v instanceof Date && !Number.isNaN(v.getTime()),
+  datetime: v => v instanceof Date && !Number.isNaN(v.getTime()),
+  email:    v => typeof v === 'string' && /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(v),
+  url:      v => typeof v === 'string' && /^https?:\\/\\/.+/.test(v),
+  uuid:     v => typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v),
+  phone:    v => typeof v === 'string' && /^[\\d\\s\\-+()]+$/.test(v),
+  text:     v => typeof v === 'string',
+  json:     v => v !== undefined,
+  any:      ()  => true,
+};
+
+function __schemaCheckValue(v, typeName) {
+  const check = __schemaTypes[typeName];
+  return check ? check(v) : true;
+}
+
+class __SchemaDef {
+  constructor(desc) {
+    this._desc = desc;
+    this.kind = desc.kind;
+    this.name = desc.name || null;
+    this._norm = null;
+    this._klass = null;
+  }
+
+  _normalize() {
+    if (this._norm) return this._norm;
+    const fields = new Map();
+    const methods = new Map();
+    const computed = new Map();
+    const hooks = new Map();
+    const directives = [];
+    const enumMembers = new Map();
+    const reserved = new Set(['parse', 'safe', 'ok']);
+
+    const note = (name, loc) => {
+      const where = [];
+      if (fields.has(name)) where.push('field');
+      if (methods.has(name)) where.push('method');
+      if (computed.has(name)) where.push('computed');
+      if (hooks.has(name)) where.push('hook');
+      if (enumMembers.has(name)) where.push('enum-member');
+      if (reserved.has(name)) where.push('reserved');
+      return where;
+    };
+
+    for (const e of this._desc.entries) {
+      switch (e.tag) {
+        case 'field': {
+          const where = note(e.name);
+          if (where.length) throw new SchemaError([{field: e.name, error: 'collision', message: e.name + ' collides with ' + where.join(', ')}], this.name, this.kind);
+          fields.set(e.name, {
+            name: e.name,
+            required: e.modifiers.includes('!'),
+            unique: e.modifiers.includes('#'),
+            optional: e.modifiers.includes('?'),
+            typeName: e.typeName,
+            array: e.array === true,
+          });
+          break;
+        }
+        case 'method': {
+          const where = note(e.name);
+          if (where.length) throw new SchemaError([{field: e.name, error: 'collision', message: e.name + ' collides with ' + where.join(', ')}], this.name, this.kind);
+          methods.set(e.name, e.fn);
+          break;
+        }
+        case 'computed': {
+          const where = note(e.name);
+          if (where.length) throw new SchemaError([{field: e.name, error: 'collision', message: e.name + ' collides with ' + where.join(', ')}], this.name, this.kind);
+          computed.set(e.name, e.fn);
+          break;
+        }
+        case 'hook': {
+          if (hooks.has(e.name)) throw new SchemaError([{field: e.name, error: 'collision', message: 'duplicate hook: ' + e.name}], this.name, this.kind);
+          hooks.set(e.name, e.fn);
+          break;
+        }
+        case 'directive':
+          directives.push({name: e.name, args: e.args || []});
+          break;
+        case 'enum-member':
+          enumMembers.set(e.name, e.value !== undefined ? e.value : e.name);
+          break;
+      }
+    }
+    return (this._norm = { fields, methods, computed, hooks, directives, enumMembers });
+  }
+
+  _getClass() {
+    if (this._klass) return this._klass;
+    const name = this.name || 'Schema';
+    const klass = ({[name]: class {
+      constructor(data) {
+        if (data && typeof data === 'object') {
+          for (const k of Object.keys(data)) this[k] = data[k];
+        }
+      }
+    }})[name];
+    const norm = this._normalize();
+    for (const [n, fn] of norm.methods) {
+      Object.defineProperty(klass.prototype, n, {value: fn, writable: true, enumerable: false, configurable: true});
+    }
+    for (const [n, fn] of norm.computed) {
+      Object.defineProperty(klass.prototype, n, {get: fn, enumerable: false, configurable: true});
+    }
+    return (this._klass = klass);
+  }
+
+  _validateFields(data, collect) {
+    const norm = this._normalize();
+    const errors = collect ? [] : null;
+    for (const [n, f] of norm.fields) {
+      const v = data == null ? undefined : data[n];
+      if (v === undefined || v === null) {
+        if (f.required) {
+          if (!collect) return false;
+          errors.push({field: n, error: 'required', message: n + ' is required'});
+        }
+        continue;
+      }
+      if (f.array) {
+        if (!Array.isArray(v)) {
+          if (!collect) return false;
+          errors.push({field: n, error: 'type', message: n + ' must be an array'});
+          continue;
+        }
+        for (let i = 0; i < v.length; i++) {
+          if (!__schemaCheckValue(v[i], f.typeName)) {
+            if (!collect) return false;
+            errors.push({field: n, error: 'type', message: n + '[' + i + '] must be ' + f.typeName});
+          }
+        }
+      } else if (!__schemaCheckValue(v, f.typeName)) {
+        if (!collect) return false;
+        errors.push({field: n, error: 'type', message: n + ' must be ' + f.typeName});
+      }
+    }
+    return collect ? errors : true;
+  }
+
+  _validateEnum(data, collect) {
+    const norm = this._normalize();
+    for (const [n, v] of norm.enumMembers) {
+      if (data === n || data === v) return collect ? [] : true;
+    }
+    if (!collect) return false;
+    const members = [...norm.enumMembers.keys()].join(', ');
+    return [{field: '', error: 'enum', message: (this.name || 'enum') + ' expected one of: ' + members}];
+  }
+
+  _materializeEnum(data) {
+    const norm = this._normalize();
+    for (const [n, v] of norm.enumMembers) {
+      if (data === n || data === v) return v;
+    }
+    return data;
+  }
+
+  parse(data) {
+    if (this.kind === 'mixin') {
+      throw new Error(":mixin schema '" + (this.name || 'anon') + "' is not instantiable");
+    }
+    if (this.kind === 'enum') {
+      const errs = this._validateEnum(data, true);
+      if (errs.length) throw new SchemaError(errs, this.name, this.kind);
+      return this._materializeEnum(data);
+    }
+    const errs = this._validateFields(data, true);
+    if (errs.length) throw new SchemaError(errs, this.name, this.kind);
+    const klass = this._getClass();
+    return new klass(data);
+  }
+
+  safe(data) {
+    if (this.kind === 'mixin') {
+      return {ok: false, value: null, errors: [{field: '', error: 'mixin', message: 'not instantiable'}]};
+    }
+    if (this.kind === 'enum') {
+      const errs = this._validateEnum(data, true);
+      if (errs.length) return {ok: false, value: null, errors: errs};
+      return {ok: true, value: this._materializeEnum(data), errors: null};
+    }
+    const errs = this._validateFields(data, true);
+    if (errs.length) return {ok: false, value: null, errors: errs};
+    const klass = this._getClass();
+    return {ok: true, value: new klass(data), errors: null};
+  }
+
+  ok(data) {
+    if (this.kind === 'mixin') return false;
+    if (this.kind === 'enum') return this._validateEnum(data, false);
+    return this._validateFields(data, false);
+  }
+}
+
+function __schema(descriptor) { return new __SchemaDef(descriptor); }
+
+if (typeof globalThis !== 'undefined') {
+  globalThis.__ripSchema = { __schema, SchemaError };
+}
+
+// === End Schema Runtime ===
+`;
+
+function getSchemaRuntime() {
+  return SCHEMA_RUNTIME.trimStart();
+}
+
+// Eagerly install the runtime on globalThis at module load so downstream
+// compilation units emitted with `skipRuntimes: true` (a common test-harness
+// setting) can pick up `{__schema, SchemaError}` without a separate bootstrap
+// step. The same pattern is used by the reactive and component runtimes.
+if (typeof globalThis !== 'undefined' && !globalThis.__ripSchema) {
+  try { (0, eval)(SCHEMA_RUNTIME); } catch {}
+}
+
+export { SCHEMA_RUNTIME };

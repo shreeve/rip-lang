@@ -799,6 +799,17 @@ export class CodeEmitter {
       needsBlank = true;
     }
 
+    if (this.usesSchemas && !skip) {
+      if (skipRT) {
+        code += 'var { __schema, SchemaError } = globalThis.__ripSchema;\n';
+      } else if (typeof globalThis !== 'undefined' && globalThis.__ripSchema) {
+        code += 'const { __schema, SchemaError } = globalThis.__ripSchema;\n';
+      } else {
+        code += this.getSchemaRuntime();
+      }
+      needsBlank = true;
+    }
+
     if (this.dataSection !== null && this.dataSection !== undefined && !skip) {
       code += 'var DATA;\n_setDataSection();\n';
       needsBlank = true;
@@ -1000,13 +1011,18 @@ export class CodeEmitter {
 
     const prevComponentName = this._componentName;
     const prevComponentTypeParams = this._componentTypeParams;
+    const prevSchemaName = this._schemaName;
     if (this.is(value, 'component') && (typeof target === 'string' || target instanceof String)) {
       this._componentName = str(target);
       this._componentTypeParams = target.typeParams || '';
     }
+    if (this.is(value, 'schema') && (typeof target === 'string' || target instanceof String)) {
+      this._schemaName = str(target);
+    }
     let valueCode = this.emit(value, 'value');
     this._componentName = prevComponentName;
     this._componentTypeParams = prevComponentTypeParams;
+    this._schemaName = prevSchemaName;
     let isObjLit = this.is(value, 'object');
     if (!isObjLit) valueCode = this.unwrap(valueCode);
 
@@ -2197,13 +2213,16 @@ export class CodeEmitter {
       if (this.is(decl, '=')) {
         const prev = this._componentName;
         const prevTP = this._componentTypeParams;
+        const prevSchema = this._schemaName;
         if (this.is(decl[2], 'component')) {
           this._componentName = str(decl[1]);
           this._componentTypeParams = decl[1]?.typeParams || '';
         }
+        if (this.is(decl[2], 'schema')) this._schemaName = str(decl[1]);
         const result = `const ${decl[1]} = ${this.emit(decl[2], 'value')}`;
         this._componentName = prev;
         this._componentTypeParams = prevTP;
+        this._schemaName = prevSchema;
         return result;
       }
       if (Array.isArray(decl) && decl.every(i => typeof i === 'string')) return '';
@@ -2212,13 +2231,16 @@ export class CodeEmitter {
     if (this.is(decl, '=')) {
       const prev = this._componentName;
       const prevTP = this._componentTypeParams;
+      const prevSchema = this._schemaName;
       if (this.is(decl[2], 'component')) {
         this._componentName = str(decl[1]);
         this._componentTypeParams = decl[1]?.typeParams || '';
       }
+      if (this.is(decl[2], 'schema')) this._schemaName = str(decl[1]);
       const result = `export const ${decl[1]} = ${this.emit(decl[2], 'value')}`;
       this._componentName = prev;
       this._componentTypeParams = prevTP;
+      this._schemaName = prevSchema;
       return result;
     }
     if (Array.isArray(decl) && decl.every(i => typeof i === 'string')) return `export { ${decl.join(', ')} }`;
