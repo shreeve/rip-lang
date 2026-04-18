@@ -983,11 +983,14 @@ const __SCHEMA_UNCOUNTABLE = new Set(['equipment','information','rice','money','
 const __SCHEMA_IRREGULAR = new Map([['person','people'],['man','men'],['woman','women'],['child','children'],['tooth','teeth'],['foot','feet'],['mouse','mice']]);
 function __schemaPluralize(w) {
   const lw = w.toLowerCase();
-  if (__SCHEMA_UNCOUNTABLE.has(lw)) return lw;
+  if (__SCHEMA_UNCOUNTABLE.has(lw)) return w;
   if (__SCHEMA_IRREGULAR.has(lw)) return __SCHEMA_IRREGULAR.get(lw);
-  if (/[^aeiouy]y$/i.test(lw)) return lw.slice(0, -1) + 'ies';
-  if (/(s|x|z|ch|sh)$/i.test(lw)) return lw + 'es';
-  return lw + 's';
+  // Preserve case of the input — pluralizer operates on the trailing form
+  // but keeps the rest unchanged, so orderItem becomes orderItems
+  // and User becomes Users.
+  if (/[^aeiouy]y$/i.test(w)) return w.slice(0, -1) + 'ies';
+  if (/(s|x|z|ch|sh)$/i.test(w)) return w + 'es';
+  return w + 's';
 }
 function __schemaTableName(model) { return __schemaPluralize(__schemaSnake(model)); }
 function __schemaFkName(model) { return __schemaSnake(model) + '_id'; }
@@ -1077,6 +1080,7 @@ class __SchemaQuery {
   limit(n) { this._limit = n; return this; }
   offset(n) { this._offset = n; return this; }
   order(spec) { this._order = spec; return this; }
+  orderBy(spec) { return this.order(spec); }
   _buildSQL() {
     const n = this._def._normalize();
     const table = n.tableName;
@@ -1305,23 +1309,33 @@ class __SchemaDef {
 
   _hydrate(columns, row) {
     // DB rows are trusted: hydrate into a class instance without
-    // revalidating. Fields arrive as snake_case columns; convert back to
-    // camelCase property names declared on the schema. Fields that don't
-    // appear in the normalized set (e.g., id, created_at, updated_at for
-    // implicit primary/timestamp columns) are attached as extras so the
-    // user can still see them.
+    // revalidating. Column names arrive snake_case; declared fields live
+    // under their camelCase names, while implicit columns (id, created_at,
+    // updated_at, relation FKs) surface under their camelCase equivalents.
+    // For ergonomics, each snake_case column name also aliases to the
+    // camelCase property via a non-enumerable accessor — so
+    // order.user_id and order.userId both read the same value.
     const data = {};
     for (let i = 0; i < columns.length; i++) {
       data[__schemaCamel(columns[i].name)] = row[i];
     }
     const k = this._getClass();
     const inst = new k(data, true);
-    // Attach non-field columns (id, created_at, updated_at, deleted_at,
-    // relation FKs) as extras for downstream ORM use.
     for (const key of Object.keys(data)) {
       if (!(key in inst)) {
         Object.defineProperty(inst, key, {
           value: data[key], enumerable: true, writable: true, configurable: true,
+        });
+      }
+    }
+    for (let i = 0; i < columns.length; i++) {
+      const snake = columns[i].name;
+      const camel = __schemaCamel(snake);
+      if (snake !== camel && !(snake in inst)) {
+        Object.defineProperty(inst, snake, {
+          enumerable: false, configurable: true,
+          get() { return this[camel]; },
+          set(v) { this[camel] = v; },
         });
       }
     }
@@ -1479,8 +1493,23 @@ class __SchemaDef {
 
   async create(data) {
     this._assertModel('create');
+    // Accept both snake_case and camelCase keys in input data. The
+    // runtime canonicalizes to camelCase so instance properties line up
+    // with declared field names.
     const klass = this._getClass();
-    const inst = new klass(this._applyDefaults({ ...(data || {}) }), false);
+    const canonical = {};
+    if (data && typeof data === 'object') {
+      for (const k of Object.keys(data)) canonical[__schemaCamel(k)] = data[k];
+    }
+    const inst = new klass(this._applyDefaults(canonical), false);
+    // FK columns like user_id canonicalize to userId and need to
+    // round-trip through the INSERT path, so attach them as own
+    // properties even though they aren't declared fields.
+    for (const [k, v] of Object.entries(canonical)) {
+      if (!(k in inst)) {
+        Object.defineProperty(inst, k, { value: v, enumerable: true, writable: true, configurable: true });
+      }
+    }
     await __schemaSave(this, inst);
     return inst;
   }
@@ -1725,11 +1754,19 @@ async function __schemaSave(def, inst) {
     const res = await __schemaAdapter.query(sql, values);
     if (res.data?.[0] && res.columns) {
       for (let i = 0; i < res.columns.length; i++) {
-        const key = __schemaCamel(res.columns[i].name);
+        const snake = res.columns[i].name;
+        const key = __schemaCamel(snake);
         if (!(key in inst)) {
           Object.defineProperty(inst, key, { value: res.data[0][i], enumerable: true, writable: true, configurable: true });
         } else {
           inst[key] = res.data[0][i];
+        }
+        if (snake !== key && !(snake in inst)) {
+          Object.defineProperty(inst, snake, {
+            enumerable: false, configurable: true,
+            get() { return this[key]; },
+            set(v) { this[key] = v; },
+          });
         }
       }
     }
