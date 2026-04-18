@@ -4,52 +4,42 @@
 
 # Rip Schema
 
-> **Schemas describe data at runtime and rest, in one unified Rip syntax.**
+> **One keyword. A validator, a class, an ORM, a migration tool, and a TypeScript type — from a single declaration.**
 
-Rip Schema is a first-class language construct for declaring data — validators,
-domain models, database-backed entities, and every structural derivation in
-between. It lives inline in `.rip` source. There are no separate `.schema`
-files, no packages to import, no runtime bootstrap. One keyword covers the
-surface area that would otherwise require Zod plus Prisma plus a migration tool
-plus a DTO library.
+In a typical TypeScript application the shape of a `User` is described four
+times. Once as a Zod schema for input validation. Once as a Prisma model for
+the database. Once as a generated TypeScript type for the editor. Once as a
+DTO class for API projections. Every change has to be propagated across all
+four. Every divergence becomes a bug.
+
+Rip Schema collapses all four into one declaration:
 
 ```coffee
-# A validator
-SignupInput = schema
-  email!    email
-  password! string, [8, 100]
-
-# A domain shape with behavior
-Address = schema :shape
-  street! string
-  city!   string
-  full: ~> "#{@street}, #{@city}"
-
-# A DB-backed model
 User = schema :model
-  name!   string
+  name!   string, [1, 100]
   email!# email
   @timestamps
   @has_many Order
   identifier:       ~> "#{@name} <#{@email}>"
   beforeValidation: -> @email = @email.toLowerCase()
-
-# An enumeration
-Status = schema
-  :draft
-  :active
-  :done
 ```
 
-Every one of those is a runtime value. They validate (`.parse/.safe/.ok`),
-they compose (`.pick/.omit/.partial/.extend`), and for models they query
-(`User.find(1)`, `user.save()`, `User.toSQL()`). They also produce shadow
-TypeScript declarations, so your editor knows their shape without a separate
-build step.
+From that single line of source, the language gives you:
 
-This guide is the canonical reference for the feature. Part I teaches the
-concepts and syntax. Part II is reference tables you'll want to look up. Part
-III covers architecture for contributors.
+- a **runtime validator** — `User.parse(data)` / `.safe()` / `.ok()`
+- a **generated class** with your methods and `~>` computed getters bound as prototype getters
+- a **TypeScript type** — `ModelSchema<UserInstance, UserData>`, automatic, no codegen step
+- an **async ORM** — `User.find! 1`, `User.where(active: true).all!`, `user.save!`
+- **migration-grade DDL** — `User.toSQL()` emits `CREATE TABLE`, indexes, foreign keys
+- **schema algebra** — `User.omit("password")` produces a correctly-typed derived shape
+
+Schemas are runtime values. You pass them around, export them, derive from
+them, reference them anywhere an expression is valid. They're not a separate
+language — they're a vocabulary inside Rip.
+
+This guide is the canonical reference. Part I teaches the concepts and
+syntax. Part II is reference tables you'll look up. Part III covers
+architecture for contributors.
 
 ---
 
@@ -70,19 +60,21 @@ III covers architecture for contributors.
 12. [SchemaError and diagnostics](#12-schemaerror-and-diagnostics)
 13. [Common mistakes](#13-common-mistakes)
 14. [Recipes](#14-recipes)
+15. [What's not here yet](#15-whats-not-here-yet)
 
 ## Part II — Reference
-15. [Capability matrix](#15-capability-matrix)
-16. [Field types](#16-field-types)
-17. [Directives](#17-directives)
-18. [Hook reference](#18-hook-reference)
-19. [Constraints](#19-constraints)
-20. [Relations](#20-relations)
-21. [Design invariants](#21-design-invariants)
+16. [Capability matrix](#16-capability-matrix)
+17. [Field types](#17-field-types)
+18. [Directives](#18-directives)
+19. [Hook reference](#19-hook-reference)
+20. [Constraints](#20-constraints)
+21. [Relations](#21-relations)
+22. [Design invariants](#22-design-invariants)
 
 ## Part III — Architecture
-22. [Runtime architecture](#22-runtime-architecture)
-23. [Compiler integration](#23-compiler-integration)
+23. [Runtime architecture](#23-runtime-architecture)
+24. [Compiler integration](#24-compiler-integration)
+25. [FAQ](#25-faq)
 
 ---
 
@@ -118,6 +110,62 @@ coherent description of each data shape for three audiences:
 
 Rip Schema gives all three from a single declaration. Write the shape once
 and the language handles the rest.
+
+### What this replaces
+
+In the JavaScript and TypeScript ecosystem, covering the same surface area
+requires stitching together several independent libraries — each with its own
+schema dialect, its own types, its own runtime, its own failure modes:
+
+| Concern                     | Typical TypeScript stack            | Rip Schema                           |
+| --------------------------- | ----------------------------------- | ------------------------------------ |
+| Input validation            | Zod, Yup, Joi, io-ts, Valibot       | `schema :input` + `.parse/.safe`     |
+| Domain objects with logic   | hand-written classes + `zod.infer`  | `schema :shape`                      |
+| Database models             | Prisma, Drizzle, TypeORM, Sequelize | `schema :model`                      |
+| Migrations / DDL            | Prisma migrate, Drizzle Kit, knex   | `Model.toSQL()`                      |
+| API projections / DTOs      | `.pick` / `.omit` on Zod + class    | `Model.pick/.omit/.partial/.extend`  |
+| Static types for the editor | Inferred from every library above   | Automatic shadow TS — no codegen     |
+| Fixed value sets            | TS `enum` or string unions          | `schema :enum` (runtime + static)    |
+| Shared field groups         | Intersection types + manual merge   | `schema :mixin` + `@mixin Name`      |
+
+The equivalent TypeScript stack for a single model is roughly:
+
+```ts
+// validator.ts
+export const UserInput = z.object({
+  name: z.string().min(1).max(100),
+  email: z.string().email(),
+})
+
+// schema.prisma
+model User {
+  id    Int    @id @default(autoincrement())
+  name  String
+  email String @unique
+  orders Order[]
+}
+
+// user.ts
+export class User {
+  constructor(public data: Prisma.User) {}
+  get identifier() { return `${this.data.name} <${this.data.email}>` }
+}
+
+// dto.ts
+export const UserPublic = UserInput.omit({ email: true })
+export type UserPublic = z.infer<typeof UserPublic>
+```
+
+Four files. Three dialects (Zod, Prisma DSL, TS). Two codegen steps. Drift
+between them is a category of bug that only exists because the description
+lives in more than one place.
+
+The Rip Schema equivalent is the five-line `:model` declaration in the
+opening of this document. The validator, the database model, the class with
+its derived property, and the `UserPublic` DTO all fall out of that one
+declaration — as runtime values, with full editor support, without codegen.
+
+This is not incremental. One keyword replaces an entire category of tooling.
 
 ---
 
@@ -408,7 +456,7 @@ zip!       string, [/^\d{5}$/]    # regex-validated
 ```
 
 Directives attach behavior that isn't a field. The set depends on the
-kind (see [§17](#17-directives)). Examples:
+kind (see [§18](#18-directives)). Examples:
 
 ```coffee
 @timestamps                       # adds createdAt/updatedAt columns (:model only)
@@ -427,7 +475,7 @@ name: -> body
 
 Thin-arrow method bound on the generated class prototype. `this` is the
 instance. For `:model`, method names matching known [hook
-names](#18-hook-reference) bind to the lifecycle; on other kinds those
+names](#19-hook-reference) bind to the lifecycle; on other kinds those
 names are just methods.
 
 ```coffee
@@ -608,7 +656,7 @@ on the schema.
 ### Lifecycle hooks
 
 Hooks are methods whose name matches one of the [ten recognized hook
-names](#18-hook-reference). On `:model` they bind into the lifecycle; on
+names](#19-hook-reference). On `:model` they bind into the lifecycle; on
 other kinds they're just regular methods.
 
 **Save flow:**
@@ -681,7 +729,7 @@ Targets resolve lazily through a process-global registry keyed by name.
 Circular and cross-module references work — import the file that defines
 the target, and relation calls succeed.
 
-See [§20 Relations](#20-relations) for the full table of directive →
+See [§21 Relations](#21-relations) for the full table of directive →
 accessor → return type.
 
 ### DDL (`.toSQL()`)
@@ -1316,9 +1364,70 @@ before the database exists or before the ORM is wired.
 
 ---
 
+## 15. What's not here yet
+
+Rip Schema covers a large surface area with one keyword, but it deliberately
+does not yet cover every feature you might find across the union of Zod,
+Prisma, Drizzle, and the rest. These are intentional omissions — each one
+has an open design question that hasn't been resolved in a way that fits the
+language.
+
+### Validator features not yet in
+
+- **Union and discriminated-union schemas** — `schema.union(A, B)` with a
+  `:discriminator` key. Today you express alternation by running multiple
+  `.safe()` calls manually.
+- **Custom refinements** — `.refine(fn, message)` and `.superRefine(fn)`.
+  Today arbitrary checks live in a `beforeValidation` hook on `:model`, or
+  as a post-`.parse` check in your code.
+- **Transforms** — `.transform(input -> output)` that changes the parsed
+  value's shape. Fields can be normalized inside `beforeValidation`, but
+  the output type is currently identical to the input type.
+- **Coercion** — `coerce.number`, `coerce.date`, etc. Today numeric strings
+  are not auto-cast to numbers during `.parse()`.
+- **Async refinements** — validators that await a database or network
+  call. Today the validator is purely synchronous.
+
+### ORM features not yet in
+
+- **Transactions** — `schema.transaction -> ...` with rollback semantics.
+  Today each ORM call is its own statement.
+- **Eager loading** — `User.where(...).includes(:orders)`. Today relations
+  are lazy (`user.orders!` on demand).
+- **Query scopes** — named, composable `Model.scope(name, ...)` reusable
+  across `.where` chains.
+- **Soft deletes** — a built-in `@soft_delete` directive with automatic
+  query-filter application. Today you add a `deleted_at` field yourself.
+- **Polymorphic associations** — `@belongs_to :commentable, polymorphic: true`.
+- **Non-SQL adapters** — Mongo, Redis, Elasticsearch. The adapter contract
+  is `query(sql, params)`, which assumes SQL.
+
+### Type features not yet in
+
+- **Recursive schemas** — `Tree = schema :shape` that references itself
+  in a nested field. Compiler allows it; shadow TS currently emits
+  `unknown` for the recursive branch.
+- **Generic schemas** — `Paginated<T> = schema :shape ...` parameterized
+  by another schema. Today you define a concrete `PaginatedUser` per type.
+- **Branded / nominal types** — `UserId = schema :input` whose parsed
+  value is nominally distinct from `number`.
+
+### Deferred by design
+
+- **Per-schema adapters** — every schema currently uses the one global
+  adapter. Multi-database setups require swapping before the call.
+- **JSON Schema / OpenAPI export** — `User.toJSONSchema()`. The
+  four-layer runtime makes this feasible; no canonical emitter exists yet.
+
+None of these are architectural impossibilities. Each is a conscious pause
+while the core shape of the feature settles. If one of these is blocking
+you, file a proposal — the sidecar design makes most of them additive.
+
+---
+
 # Part II — Reference
 
-## 15. Capability matrix
+## 16. Capability matrix
 
 What each kind's body can contain:
 
@@ -1341,7 +1450,7 @@ accepted, but they're just methods with no lifecycle binding.
 
 ---
 
-## 16. Field types
+## 17. Field types
 
 Built-in type names and their runtime / SQL / TypeScript mappings:
 
@@ -1369,7 +1478,7 @@ user-defined shapes and enums compose.
 
 ---
 
-## 17. Directives
+## 18. Directives
 
 ### For any fielded kind
 
@@ -1393,7 +1502,7 @@ user-defined shapes and enums compose.
 
 ---
 
-## 18. Hook reference
+## 19. Hook reference
 
 Ten recognized hook names. On `:model` they bind into the lifecycle; on
 other kinds they're plain methods.
@@ -1416,7 +1525,7 @@ to the caller.
 
 ---
 
-## 19. Constraints
+## 20. Constraints
 
 Constraint brackets follow a field type:
 
@@ -1472,7 +1581,7 @@ This is the same rule Rip applies to any trailing-comma continuation.
 
 ---
 
-## 20. Relations
+## 21. Relations
 
 ### Directive → accessor → return type
 
@@ -1505,7 +1614,7 @@ name and the caller's schema name included.
 
 ---
 
-## 21. Design invariants
+## 22. Design invariants
 
 Seven rules that define how Rip Schema behaves. Worth keeping in mind
 when debugging or extending:
@@ -1535,7 +1644,7 @@ when debugging or extending:
 
 # Part III — Architecture
 
-## 22. Runtime architecture
+## 23. Runtime architecture
 
 Each schema goes through four layers. Each layer is built lazily on first
 need, and the caches are independent.
@@ -1625,7 +1734,7 @@ through this interface.
 
 ---
 
-## 23. Compiler integration
+## 24. Compiler integration
 
 The schema keyword is implemented as a compiler sidecar in
 `src/schema.js`, alongside the existing type and component sidecars.
@@ -1691,7 +1800,81 @@ its footprint in the main compiler is small.
 
 ---
 
-*This document describes Rip Schema as it exists in Rip at the time of
-writing. If something in here diverges from what the compiler does,
-the compiler is authoritative — file a diagnostic and we'll fix the
-docs.*
+## 25. FAQ
+
+**Why not just use Zod?**
+Zod gives you the validator. It doesn't give you the ORM, the DDL, the
+class, the computed getters, or the derived DTOs. Rip Schema is all of
+that from one declaration. If you only need the validator, `schema :input`
+is the equivalent surface — and the derived shadow TS is indistinguishable
+from `z.infer<>`.
+
+**Is this a full ORM replacement for Prisma / Drizzle?**
+For the common CRUD shape — yes. `find`, `where`, `create`, `save`,
+`destroy`, relations, migrations, hooks, lifecycle callbacks, and
+validations are all present and running in production apps. For
+transactions, eager loading, scopes, and soft deletes — not yet; see
+§15.
+
+**Does the runtime belong to `schema.js` or is it loaded separately?**
+It's inlined. When a file uses `schema`, the compiler injects a small
+preamble (under `SCHEMA_RUNTIME` in `src/schema.js`) that defines
+`SchemaError`, `__SchemaDef`, `__SchemaRegistry`, `Query`, and the
+helpers. No import statement, no package dependency, no bootstrap call.
+
+**How big is the runtime?**
+About 2,250 lines total across runtime + compile-time emission, including
+the ORM, the DDL emitter, the registry, the validator plan, and the
+hydration logic. The preamble injected into your compiled output is a
+fraction of that (the ORM and DDL paths are tree-shaken if unused).
+
+**Is `.parse()` strict or permissive with extra keys?**
+Permissive with stripping. Unknown keys are silently dropped — they
+don't appear on the returned value or instance, and they don't cause a
+validation error. This matches the invariant that `.parse()` returns
+clean data shaped only by the declared fields. If you need hard
+rejection of unexpected keys, check `Object.keys(input)` against
+`Object.keys(Schema.parse(input))` yourself.
+
+**Can I use a schema from TypeScript?**
+Not yet directly — Rip emits shadow `.d.ts` for editor support, but a
+separate `.ts` consumer doesn't see those. Exporting from `.rip` and
+importing the result into `.ts` works: you get the runtime object; you
+lose the algebra-level generic inference. This is on the roadmap.
+
+**What happens when the adapter isn't configured?**
+ORM methods throw a `SchemaError` with a clear "no adapter configured"
+message. Validation (`.parse`, `.safe`, `.ok`) and DDL (`.toSQL`) work
+without an adapter.
+
+**Does `:model` require a database?**
+No. `:model` works as a standalone class-with-validation. If you never
+call an ORM method, no adapter is invoked. DDL emission is a pure
+function of the schema definition.
+
+**What's the relationship between `enum` and `schema :enum`?**
+The keyword `enum` is a compile-time-only declaration — it exists in the
+type system and disappears from JS. `schema :enum` exists at runtime —
+you can call `.parse()` on it, iterate its members, and use it as a
+field type. Use `enum` when you only need the static type; use
+`schema :enum` when runtime membership matters.
+
+**Can algebra operations (`.pick` / `.omit`) be chained?**
+Yes. They compose: `User.omit("password").pick("name", "email").partial()`
+produces a `:shape` with the intersection of the three operations.
+
+**What does `:shape` have that a plain JS class doesn't?**
+Runtime validation on construction. Computed getters automatically
+typed in shadow TS. Fields are enumerable own properties (so `JSON.stringify`
+works cleanly). Methods and computed getters live on the prototype (so
+they don't pollute iteration). Algebra methods (`.pick`, `.omit`, etc.)
+that derive new schemas. And the whole thing is one declaration.
+
+**If I find a bug, what's authoritative — the docs or the compiler?**
+The compiler. This document describes current behavior; when they
+diverge, the compiler wins and the docs get fixed. File a diagnostic.
+
+---
+
+Schemas live at the core of almost every program. In Rip, one keyword
+handles that core. Write the shape once, and the language does the rest.
