@@ -446,15 +446,23 @@ function parseCallableLine(kind, headerTok, line, entries) {
 function parseEnumLine(line, entries) {
   let first = line[0];
   if (!first) return;
-  // Accepted forms:
-  //   admin               bare IDENTIFIER member
-  //   :admin              bare SYMBOL member
-  //   pending: 0          valued member (IDENTIFIER retagged PROPERTY
-  //                       because the identifier regex absorbs trailing `:`)
-  //   :pending: 0         valued SYMBOL member (legacy `:` separator)
-  //   :pending 0          valued SYMBOL member (preferred — the `:` prefix
-  //                       on the symbol already marks it, no separator needed)
-  if (first[0] !== 'IDENTIFIER' && first[0] !== 'PROPERTY' && first[0] !== 'SYMBOL') {
+  // Enum member forms (only three):
+  //   admin          bare IDENTIFIER member → maps to name string "admin"
+  //   :admin         bare SYMBOL member     → same
+  //   :pending 0     valued SYMBOL member   → maps "pending" → 0 (or 0 → 0)
+  //
+  // Mixing valued and bare members in the same enum is allowed but
+  // unusual: unvalued entries map to their name string while valued
+  // entries keep their literal. The runtime Map is heterogeneous in
+  // that case — users who want clean numeric enums should value every
+  // member explicitly.
+  if (first[0] !== 'IDENTIFIER' && first[0] !== 'SYMBOL') {
+    if (first[0] === 'PROPERTY') {
+      // Old `name: value` form. Reject with a clear pointer to the
+      // new idiom so migration is mechanical.
+      throw schemaError(first,
+        `Enum member '${first[1]}: ...' — valued members use ':name value' now (drop the trailing colon, add a leading :). E.g. ':${first[1]} 0'.`);
+    }
     throw schemaError(first,
       `Enum member must be an identifier or :symbol, got ${first[0]}.`);
   }
@@ -465,37 +473,24 @@ function parseEnumLine(line, entries) {
     return;
   }
 
-  // SYMBOL members skip the colon separator: `:pending 0` goes straight
-  // to the value token. IDENTIFIER/PROPERTY members keep the colon for
-  // backward compat (and because `pending 0` without the colon would be
-  // ambiguous with a schema field definition).
-  let valTok;
-  if (first[0] === 'SYMBOL' && second[0] !== ':') {
-    valTok = second;
-    if (line.length > 2) {
-      throw schemaError(line[2],
-        `Extra tokens after enum member '${name}' value.`);
-    }
-  } else {
-    if (second[0] !== ':') {
-      throw schemaError(second,
-        `Enum member '${name}' — expected ':' before value.`);
-    }
-    valTok = line[2];
-    if (!valTok) {
-      throw schemaError(second,
-        `Enum member '${name}' has no value after ':'.`);
-    }
-    if (line.length > 3) {
-      throw schemaError(line[3],
-        `Extra tokens after enum member '${name}' value.`);
-    }
+  // Only the SYMBOL form can carry a value (space-separated, no colon).
+  // A bare IDENTIFIER followed by another token is a syntax error.
+  if (first[0] !== 'SYMBOL') {
+    throw schemaError(second,
+      `Enum member '${name}' — bare identifier members take no value. Use ':${name} value' for valued entries.`);
   }
-
+  if (second[0] === ':') {
+    throw schemaError(second,
+      `Enum member ':${name}' — drop the ':' separator before the value. Use ':${name} value'.`);
+  }
+  if (line.length > 2) {
+    throw schemaError(line[2],
+      `Extra tokens after enum member ':${name}' value.`);
+  }
   entries.push({
     tag: 'enum-member',
     name,
-    value: literalOf(valTok),
+    value: literalOf(second),
     loc: first.loc,
   });
 }

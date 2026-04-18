@@ -1752,24 +1752,30 @@ User = schema :model
   afterCreate:       -> p "Welcome, #{@name}!"
 ```
 
-`:enum` bodies are different: bare identifiers (`admin`), `:symbol` literals
-(`:admin` — same meaning, nicer visual cue), or `name: value` pairs for
-valued enums. A schema whose body is all `:symbol` lines infers `:enum`
-automatically — the kind marker is optional in that case.
+`:enum` bodies use one of three member forms:
 
 ```coffee
-# Bare member forms — all three equivalent
-Role = schema :enum         Role = schema :enum         Role = schema
-  admin                       :admin                      :admin
-  user                        :user                       :user
-  guest                       :guest                      :guest
+# Bare members — maps each name to its name string
+Role = schema :enum         Role = schema
+  admin                       :admin
+  user                        :user
+  guest                       :guest
 
-# Valued members — `:symbol` form drops the colon separator
+# Valued members — maps each name to its literal value
 Status = schema             Status = schema :enum
-  :pending 0                  pending: 0
-  :active  1                  active:  1
-  :done    2                  done:    2
+  :pending 0                  :pending 0
+  :active  1                  :active  1
+  :done    2                  :done    2
 ```
+
+A schema whose body is all `:symbol` lines infers `:enum` automatically —
+the kind marker is optional in that case. Valued members must use the
+`:name value` form (symbol prefix, then space, then literal); the value
+is any literal (number, string, boolean, null, regex).
+
+Both `Status.parse("pending")` and `Status.parse(0)` return `0`.
+Unvalued members map to their own name string, so bare-member
+`Role.parse("admin")` returns `"admin"`.
 
 The `:symbol` form pairs well with constraint defaults — `status string,
 [:draft]` is the same as `status string, ["draft"]` but reads more clearly

@@ -61,9 +61,9 @@ code "bare enum", '''
 
 code "valued enum", '''
   Status = schema :enum
-    pending: 0
-    active:  1
-    done:    2
+    :pending 0
+    :active  1
+    :done    2
   ''', '''
   let Status;
   Status = __schema({kind: "enum", name: "Status", entries: [{tag: "enum-member", name: "pending", value: 0}, {tag: "enum-member", name: "active", value: 1}, {tag: "enum-member", name: "done", value: 2}]});
@@ -71,8 +71,8 @@ code "valued enum", '''
 
 code "string-valued enum", '''
   Tier = schema :enum
-    free: "free"
-    pro:  "pro"
+    :free "free"
+    :pro  "pro"
   ''', '''
   let Tier;
   Tier = __schema({kind: "enum", name: "Tier", entries: [{tag: "enum-member", name: "free", value: "free"}, {tag: "enum-member", name: "pro", value: "pro"}]});
@@ -216,9 +216,9 @@ code "comments between entries", '''
   X = __schema({kind: "shape", name: "X", entries: [{tag: "field", name: "name", modifiers: ["!"], typeName: "string", array: false}, {tag: "field", name: "age", modifiers: ["?"], typeName: "integer", array: false}]});
   ''', opts
 
-code "admin: 1 is a valued enum member in :enum", '''
+code ":admin 1 is a valued symbol member", '''
   R = schema :enum
-    admin: 1
+    :admin 1
   ''', '''
   let R;
   R = __schema({kind: "enum", name: "R", entries: [{tag: "enum-member", name: "admin", value: 1}]});
@@ -227,6 +227,11 @@ code "admin: 1 is a valued enum member in :enum", '''
 fail "admin: 1 in :model is not allowed (bare value binding)", '''
   X = schema :model
     admin: 1
+  '''
+
+fail "valued enum with bare name: value form is rejected", '''
+  R = schema :enum
+    pending: 0
   '''
 
 # ==============================================================================
@@ -261,14 +266,10 @@ code ":symbol with value drops the colon separator", '''
   Tier = __schema({kind: "enum", name: "Tier", entries: [{tag: "enum-member", name: "free", value: 0}, {tag: "enum-member", name: "pro", value: 1}]});
   ''', opts
 
-code ":symbol with value still accepts colon separator (legacy)", '''
-  Tier = schema :enum
-    :free:  0
-    :pro:   1
-  ''', '''
-  let Tier;
-  Tier = __schema({kind: "enum", name: "Tier", entries: [{tag: "enum-member", name: "free", value: 0}, {tag: "enum-member", name: "pro", value: 1}]});
-  ''', opts
+fail ":symbol with trailing-colon separator is rejected", '''
+  R = schema :enum
+    :free: 0
+  '''
 
 test ":symbol valued enum round-trip", '''
   Status = schema
@@ -357,8 +358,8 @@ test ":enum bare members", '''
 
 test ":enum valued members return value", '''
   Status = schema :enum
-    pending: 0
-    active: 1
+    :pending 0
+    :active  1
   [Status.parse("pending"), Status.parse(1), Status.ok("active"), Status.ok(99)]
   ''', [0, 1, true, false]
 
@@ -489,8 +490,8 @@ type ":enum emits union + const with predicate ok()", '''
 
 type "valued :enum emits number union", '''
   Status = schema :enum
-    pending: 0
-    active: 1
+    :pending 0
+    :active  1
   ''', INTRINSICS + "\n" + '''
   type Status = 0 | 1;
   declare const Status: { parse(data: unknown): Status; safe(data: unknown): SchemaSafeResult<Status>; ok(data: unknown): data is Status; };
