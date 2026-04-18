@@ -504,8 +504,8 @@ bun run bump major
 |-------|-------------|
 | [docs/RIP-LANG.md](docs/RIP-LANG.md) | Full language reference (syntax, operators, reactivity, types, components) |
 | [docs/RIP-TYPES.md](docs/RIP-TYPES.md) | Type system specification |
-| [AGENTS.md](AGENTS.md) | Compiler architecture, S-expressions, component system internals |
-| [AGENTS.md](AGENTS.md) | AI agents — get up to speed for working on the compiler |
+| [docs/RIP-SCHEMA.md](docs/RIP-SCHEMA.md) | Schema keyword — validators, models, ORM, DDL, algebra |
+| [AGENTS.md](AGENTS.md) | AI agents — compiler architecture, subsystems, conventions |
 
 ---
 

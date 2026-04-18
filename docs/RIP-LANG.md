@@ -1699,271 +1699,52 @@ CSV.save! 'output.csv', rows
 
 ## schema — Inline validators, models, and DDL
 
-The `schema` keyword declares a schema value inline. It covers input
-validation, shape modeling, enumerations, mixin field groups, and
-database-backed models — including DDL emission and a full ORM.
-
-### Kinds
-
-Five kinds, selected by a `:symbol` after the keyword. The default is
-`:input`.
+The `schema` keyword declares a runtime data description inline — a
+validator, a domain shape, an enumeration, a reusable field group, or a
+full DB-backed model. One keyword covers input validation, class
+generation, persistence, migration DDL, and shadow TypeScript.
 
 ```coffee
-SignupInput = schema            # :input — field validator
-Address = schema :shape         # :shape — validator with methods/computed
-Role    = schema :enum          # :enum — union of members (see below)
-Auditable = schema :mixin       # :mixin — reusable fields, non-instantiable
-User    = schema :model         # :model — DB-backed with full ORM
-```
+# Validator
+SignupInput = schema
+  email!    email
+  password! string, [8, 100]
 
-### Body syntax
+# Shape with behavior
+Address = schema :shape
+  street! string
+  city!   string
+  full: ~> "#{@street}, #{@city}"
 
-All kinds except `:enum` use the same body syntax. Only these line forms are
-allowed — arbitrary Rip code is not. The sub-parser reports schema-mode-aware
-errors on everything else.
-
-- **Field**: `name[!|?|#]* type [, constraints] [, attrs]`
-  - `!` required, `#` unique, `?` optional
-  - constraints in `[...]`: `[min, max]` length/range, `[default]`, `[/regex/]`
-- **Directive**: `@name [args]` — `@timestamps`, `@softDelete`, `@index`,
-  `@belongs_to Target`, `@has_many Target`, `@has_one Target`,
-  `@mixin Name` to include another mixin
-- **Computed getter**: `name: ~> body` — reactive-style arrow, compiles to a
-  prototype getter on the parsed instance
-- **Method or hook**: `name: -> body` — thin arrow. For `:model`, known hook
-  names bind lifecycle (see below); everywhere else it's a regular method
-
-```coffee
-User = schema :model
-  name!    string, [1, 100]
-  email!#  email
-  bio?     text, [0, 1000]
-  role?    string, ["user"]
-  @timestamps
-  @belongs_to Organization
-  @has_many Order
-  @index [role, active]
-  @mixin Auditable
-  identifier: ~> "#{@name} <#{@email}>"
-  isAdmin:    ~> @role is 'admin'
-  greet:             -> "Hello, #{@name}!"
-  beforeValidation:  -> @email = @email.toLowerCase()
-  afterCreate:       -> p "Welcome, #{@name}!"
-```
-
-`:enum` bodies take `:symbol` members. A schema whose body is all
-`:symbol` lines infers `:enum`, so the kind marker is optional.
-
-```coffee
-# Bare members — each maps to its own name string
-Role = schema
-  :admin
-  :user
-  :guest
-
-# Valued members — each name maps to the literal; the value is any
-# literal (number, string, boolean, null, regex)
+# Enumeration
 Status = schema
   :pending 0
   :active  1
   :done    2
-```
 
-`.parse()` accepts either the member name or its value and returns
-the value. `Role.parse("admin")` returns `"admin"`;
-`Status.parse("pending")` and `Status.parse(0)` both return `0`.
-
-Symbol literals also work as constraint defaults, which pairs well
-with enum declarations:
-
-```coffee
-Order = schema :model
-  status  string, [:draft]       # same as ["draft"], clearer context
-```
-
-### Runtime API
-
-Every instantiable kind (`:input`, `:shape`, `:enum`, `:model`) exposes the
-same three entry points:
-
-```coffee
-# Throws SchemaError on invalid input, returns a cleaned value
-input = SignupInput.parse rawJson
-
-# Structured result — no throwing
-result = SignupInput.safe rawJson
-# Success: {ok: true, value: <parsed>, errors: null}
-# Failure: {ok: false, value: null, errors: [{field, error, message}, ...]}
-
-# Boolean fast path — no error-array allocation
-valid = SignupInput.ok rawJson
-
-# Async variants via the dammit operator
-input  = SignupInput.parse! rawJson
-result = SignupInput.safe!  rawJson
-valid  = SignupInput.ok!    rawJson
-```
-
-For `:shape` and `:model`, `.parse()` returns a generated class instance:
-declared fields are enumerable own properties, methods live on the prototype
-as regular `function()`s (so `this` binds to the instance), and computed
-getters are non-enumerable prototype getters.
-
-For `:enum`, `.parse()` returns the member value (or the name for bare
-enums). `Role.parse("admin")` returns `"admin"`; `Status.parse("pending")`
-returns `0`.
-
-### :model — ORM and DDL
-
-Model schemas carry the full ORM surface on top of the base validator:
-
-```coffee
-user  = User.find! 1
-users = User.where(active: true).all!
-user  = User.create! name: "Alice", email: "a@b.c"
-user.save!
-user.destroy!
-
-# DDL for migrations — works with or without the ORM adapter wired
-sql = User.toSQL()
-```
-
-Query builder is chainable and async-terminal: `.where`, `.limit`, `.offset`,
-`.order` / `.orderBy` return the query; `.all()`, `.first()`, `.count()`
-terminate with a promise.
-
-#### Hook lifecycle (Rails order)
-
-Ten hook names are recognized on `:model` bodies. The save flow:
-
-```text
-beforeValidation → validate → afterValidation →
-beforeSave → (beforeCreate | beforeUpdate) →
-INSERT/UPDATE → (afterCreate | afterUpdate) → afterSave
-```
-
-The destroy flow:
-
-```text
-beforeDestroy → DELETE (or soft-delete UPDATE) → afterDestroy
-```
-
-On non-`:model` kinds, those names are plain methods — no lifecycle.
-
-#### Relations
-
-```coffee
+# DB-backed model with ORM and migrations
 User = schema :model
-  name! string
+  name!   string
+  email!# email
+  @timestamps
   @has_many Order
+  beforeValidation: -> @email = @email.toLowerCase()
 
-Order = schema :model
-  @belongs_to User
-  @belongs_to Organization?    # the ? makes the FK nullable
+# Usage
+input  = SignupInput.parse rawJson     # throws SchemaError on invalid
+result = SignupInput.safe  rawJson     # {ok, value, errors}
+valid  = SignupInput.ok    rawJson     # boolean
+
+user   = User.create! name: "Alice", email: "a@b.c"
+orders = user.orders!                  # Promise<OrderInstance[]>
+sql    = User.toSQL()
+
+UserPublic = User.omit "password"      # algebra returns :shape
 ```
 
-Relation methods are async and live on the instance prototype:
-
-```coffee
-owner  = order.user!
-orders = user.orders!
-```
-
-Targets resolve lazily through a process-global registry keyed by name —
-circular and cross-module relations work without explicit wiring.
-
-#### Adapter seam
-
-`.find()`, `.create()`, `.save()`, `.destroy()`, `.where(...).all()` all call
-through a single adapter interface:
-
-```coffee
-# Default adapter uses fetch against rip-db.
-# Install a custom one (e.g. for tests) before any ORM call fires:
-globalThis.__ripSchema.__schemaSetAdapter
-  query: (sql, params) ->
-    ...
-```
-
-### Mixins
-
-`:mixin` schemas are fields-only and non-instantiable. They exist to share
-field groups across models and shapes. Consume them with the `@mixin`
-directive on the host:
-
-```coffee
-Timestamps = schema :mixin
-  createdAt! datetime
-  updatedAt! datetime
-
-User = schema :model
-  name! string
-  @mixin Timestamps
-```
-
-Mixins can chain (a mixin may itself `@mixin` another). Diamond inclusion
-dedupes per host. Duplicate-field collisions and cycles both fail with a
-clear error at Layer 2 normalization.
-
-### Schema algebra
-
-Algebra operators derive new schemas from existing ones. The result is
-always `:shape` — behavior (methods, computed getters, hooks, ORM) is
-dropped; only fields survive.
-
-```coffee
-UserPublic = User.omit "password"
-UserCreate = User.pick "name", "email"
-UserUpdate = User.partial()
-AdminUser  = User.extend schema :shape
-  permissions! string[]
-```
-
-- `.pick(...keys)` — new shape with only the listed fields
-- `.omit(...keys)` — new shape without the listed fields
-- `.partial()` — every field becomes optional
-- `.required(...keys)` — the listed fields become required (others unchanged)
-- `.extend(other)` — merge another schema's fields; collisions throw
-
-### SchemaError
-
-`.parse()` and `.save()` throw `SchemaError` on validation failure:
-
-```coffee
-try
-  User.parse badData
-catch err
-  err.name         # 'SchemaError'
-  err.schemaName   # 'User'
-  err.schemaKind   # 'model'
-  err.issues       # [{field, error, message}, ...]
-```
-
-### Shadow TypeScript
-
-`rip check` and the VS Code extension see virtual TypeScript declarations
-for every named schema — `Schema<Out, In>` for most kinds, `ModelSchema<
-Instance, Data>` for `:model`, and data-keyed algebra generics. Relation
-accessors to same-file targets resolve to `Promise<TargetInstance | null>`;
-cross-file targets degrade to `unknown` rather than emit unresolved
-references.
-
-### Forbidden forms
-
-The sub-parser rejects these with schema-specific diagnostics:
-
-- Fields use `name type` (space, no colon) — `name: type` errors
-- Bare value bindings `answer: 42` at schema top-level are not
-  allowed outside `:enum` bodies
-- Methods, computed getters, and non-`@mixin` directives in `:mixin`
-  bodies are errors — mixins are fields-only
-- Enum members must be `:symbol` form: `:admin` (bare) or
-  `:pending 0` (valued). Identifier-with-colon `pending: 0` errors
-- Unknown `:kind` (only `:input`, `:shape`, `:enum`, `:mixin`,
-  `:model` are valid)
-- `.find()` / `.create()` / `.toSQL()` on an algebra-derived shape
-  throw — derived shapes aren't DB-backed; query the source model
-  and project the result
+**See [docs/RIP-SCHEMA.md](./RIP-SCHEMA.md) for the comprehensive guide** —
+all five kinds, every body form, the ORM and DDL contract, hooks, mixins,
+algebra, shadow TypeScript, and the architecture.
 
 ## Full-Stack Example
 
