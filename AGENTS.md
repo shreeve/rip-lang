@@ -61,6 +61,7 @@ rip server
 - **Never add dependencies** — zero dependencies is a core principle
 - **Never read or execute scripts directly** — use `bun run <name>`
 - **Never write `x ? y` in Rip** — binary existential was removed; use `x ?? y` or full ternary `x ? y : z`
+- **Never write `await fn(args)` in `.rip` source when `fn!` will do** — the dammit operator is the idiomatic form. `fetch! url` compiles to `await fetch(url)`; `User.find! 1` to `await User.find(1)`; `user.save!` to `await user.save()`. Reserve raw `await` for JS interop in `.js` files, tests that document the await→!  equivalence, and the rare cases where `fn!` is ambiguous with a dammit-returning expression.
 - Run `bun run parser` after grammar changes
 - Run `bun run build` after codegen, `components.js`, `browser.js`, or `ui.rip` changes
 - Run `bun run bump` for the standard release flow
@@ -239,6 +240,22 @@ rip -cm example.rip
 > When a `->` function is the last argument to a call, do **not** put a comma
 > before it. The arrow implicitly closes the argument list. This applies to
 > all calls: `get`, `post`, `sketch`, `test`, `setTimeout`, etc.
+
+> **CRITICAL — use the dammit operator, not raw `await`, in `.rip` source:**
+>
+> - `fetch! url` — CORRECT (compiles to `await fetch(url)`)
+> - `await fetch(url)` — WRONG in `.rip` source (JS idiom leaking in)
+> - `User.find! 1` — CORRECT
+> - `user.save!` — CORRECT (no parens needed)
+> - `User.where(active: true).all!` — CORRECT (dammit only on the
+>   terminating call in a chain; `.where/.order/.limit` are sync)
+> - `await User.find(1)` — WRONG (write `User.find! 1`)
+>
+> `!` is Rip's native async marker. It handles the `await`, inserts the
+> call parens if absent, and reads more cleanly in a chain. Reserve raw
+> `await` for JS/TS interop files, test fixtures that document the
+> equivalence, or the rare case where `fn!` is ambiguous with a
+> dammit-returning expression (basically never).
 
 ### Removed (from CoffeeScript / Rip 2.x)
 
