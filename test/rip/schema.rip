@@ -349,3 +349,89 @@ test ":input field array validation", '''
   r = X.safe({tags: ["a", 42, "c"]})
   [r.ok, r.errors[0].error]
   ''', [false, 'type']
+
+# ==============================================================================
+# Phase 3.5: shadow TypeScript emission
+# ==============================================================================
+
+type ":input emits Schema<ValueType>", '''
+  SignupInput = schema
+    email! email
+    password! string
+  ''', '''
+  interface SchemaIssue { field: string; error: string; message: string; }
+  type SchemaSafeResult<T> = { ok: true; value: T; errors: null } | { ok: false; value: null; errors: SchemaIssue[] };
+  interface Schema<T> { parse(data: unknown): T; safe(data: unknown): SchemaSafeResult<T>; ok(data: unknown): boolean; }
+
+  type SignupInputValue = { email: string; password: string };
+  declare const SignupInput: Schema<SignupInputValue>;
+  '''
+
+type ":shape emits Data + Instance types", '''
+  Address = schema :shape
+    street! string
+    city! string
+    full: ~> "x"
+    normalize: -> @
+  ''', '''
+  interface SchemaIssue { field: string; error: string; message: string; }
+  type SchemaSafeResult<T> = { ok: true; value: T; errors: null } | { ok: false; value: null; errors: SchemaIssue[] };
+  interface Schema<T> { parse(data: unknown): T; safe(data: unknown): SchemaSafeResult<T>; ok(data: unknown): boolean; }
+
+  type AddressData = { street: string; city: string };
+  type AddressInstance = AddressData & { readonly full: unknown; normalize: (...args: any[]) => unknown };
+  declare const Address: Schema<AddressInstance>;
+  '''
+
+type ":enum emits union + const with predicate ok()", '''
+  Role = schema :enum
+    admin
+    user
+    guest
+  ''', '''
+  interface SchemaIssue { field: string; error: string; message: string; }
+  type SchemaSafeResult<T> = { ok: true; value: T; errors: null } | { ok: false; value: null; errors: SchemaIssue[] };
+  interface Schema<T> { parse(data: unknown): T; safe(data: unknown): SchemaSafeResult<T>; ok(data: unknown): boolean; }
+
+  type Role = "admin" | "user" | "guest";
+  declare const Role: { parse(data: unknown): Role; safe(data: unknown): SchemaSafeResult<Role>; ok(data: unknown): data is Role; };
+  '''
+
+type "valued :enum emits number union", '''
+  Status = schema :enum
+    pending: 0
+    active: 1
+  ''', '''
+  interface SchemaIssue { field: string; error: string; message: string; }
+  type SchemaSafeResult<T> = { ok: true; value: T; errors: null } | { ok: false; value: null; errors: SchemaIssue[] };
+  interface Schema<T> { parse(data: unknown): T; safe(data: unknown): SchemaSafeResult<T>; ok(data: unknown): boolean; }
+
+  type Status = 0 | 1;
+  declare const Status: { parse(data: unknown): Status; safe(data: unknown): SchemaSafeResult<Status>; ok(data: unknown): data is Status; };
+  '''
+
+type "optional fields marked with ?", '''
+  User = schema
+    name!  string
+    bio?   text
+    age    integer
+  ''', '''
+  interface SchemaIssue { field: string; error: string; message: string; }
+  type SchemaSafeResult<T> = { ok: true; value: T; errors: null } | { ok: false; value: null; errors: SchemaIssue[] };
+  interface Schema<T> { parse(data: unknown): T; safe(data: unknown): SchemaSafeResult<T>; ok(data: unknown): boolean; }
+
+  type UserValue = { name: string; bio?: string; age?: number };
+  declare const User: Schema<UserValue>;
+  '''
+
+type "exported schema emits export const", '''
+  export Foo = schema :input
+    a! string
+  ''', '''
+  interface SchemaIssue { field: string; error: string; message: string; }
+  type SchemaSafeResult<T> = { ok: true; value: T; errors: null } | { ok: false; value: null; errors: SchemaIssue[] };
+  interface Schema<T> { parse(data: unknown): T; safe(data: unknown): SchemaSafeResult<T>; ok(data: unknown): boolean; }
+
+  export type FooValue = { a: string };
+  export const Foo: Schema<FooValue>;
+  '''

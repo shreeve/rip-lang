@@ -12,6 +12,7 @@
 
 import { Compiler, getStdlibCode } from './compiler.js';
 import { INTRINSIC_TYPE_DECLS, INTRINSIC_FN_DECL, ARIA_TYPE_DECLS, SIGNAL_INTERFACE, SIGNAL_FN, COMPUTED_INTERFACE, COMPUTED_FN, EFFECT_FN } from './types.js';
+import { hasSchemas } from './schema.js';
 import { createRequire } from 'module';
 import { readFileSync, existsSync, readdirSync } from 'fs';
 import { mapToSourcePos, offsetToLine, getLineText, findNearestWord, lineColToOffset, offsetToLineCol, adjustSwitchDiagnostic, isInjectedOverload, srcToOffset } from './sourcemap-utils.js';
@@ -530,7 +531,7 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
   // A `# @nocheck` comment near the top of the file opts out entirely.
   // In strict mode, all non-nocheck files are type-checked.
   const nocheck = /^#\s*@nocheck\b/m.test(source.slice(0, NOCHECK_SCAN_LIMIT));
-  const hasOwnTypes = !nocheck && (hasTypeAnnotations(source) || !!opts.strict);
+  const hasOwnTypes = !nocheck && (hasTypeAnnotations(source) || hasSchemas(source) || !!opts.strict);
   let importsTyped = false;
   if (!hasOwnTypes && !nocheck) {
     const ripImports = [...source.matchAll(/from\s+['"]([^'"]*\.rip)['"]/g)];

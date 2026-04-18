@@ -1,3 +1,5 @@
+import { SCHEMA_INTRINSIC_DECLS, emitSchemaTypes } from './schema.js';
+
 // Type System — Optional type annotations and .d.ts emission for Rip
 //
 // Architecture:
@@ -1320,6 +1322,7 @@ export function emitTypes(tokens, sexpr = null, source = '') {
 
   // Walk s-expression tree for component declarations
   let componentVars = new Set();
+  let hasSchemaDecls = false;
   if (sexpr) {
     usesRipIntrinsicProps = emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars, sourceLines) || usesRipIntrinsicProps;
 
@@ -1329,6 +1332,23 @@ export function emitTypes(tokens, sexpr = null, source = '') {
         let match = lines[k].match(/(?:declare |export )*(?:const|let) (\w+)/);
         if (match && componentVars.has(match[1])) lines.splice(k, 1);
       }
+    }
+
+    // Schema declarations — strip any prior auto-emitted `declare let Foo`
+    // for the same bindings (they are re-emitted as typed Schema<T>).
+    let schemaLines = [];
+    hasSchemaDecls = emitSchemaTypes(sexpr, schemaLines);
+    if (hasSchemaDecls) {
+      let bindings = new Set();
+      for (let line of schemaLines) {
+        let m = line.match(/(?:declare |export )*const (\w+)/);
+        if (m) bindings.add(m[1]);
+      }
+      for (let k = lines.length - 1; k >= 0; k--) {
+        let m = lines[k].match(/(?:declare |export )*(?:const|let) (\w+)/);
+        if (m && bindings.has(m[1])) lines.splice(k, 1);
+      }
+      lines.push(...schemaLines);
     }
   }
 
@@ -1352,6 +1372,9 @@ export function emitTypes(tokens, sexpr = null, source = '') {
   }
   if (usesSignal || usesComputed) {
     preamble.push(EFFECT_FN);
+  }
+  if (hasSchemaDecls) {
+    preamble.push(...SCHEMA_INTRINSIC_DECLS);
   }
   if (preamble.length > 0) {
     preamble.push('');

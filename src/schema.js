@@ -973,6 +973,188 @@ function getSchemaRuntime() {
   return SCHEMA_RUNTIME.trimStart();
 }
 
+// ============================================================================
+// Shadow TypeScript — Phase 3.5
+// ============================================================================
+//
+// Emits virtual `.d.ts` / `.ts` declarations for :input, :shape, and :enum
+// schemas so the TS language service can offer autocomplete and catch
+// AST-shape mistakes before Phase 4 layers in :model/ORM/algebra. Written
+// to mirror `emitComponentTypes()` in src/types.js — same prototype:
+// `emitSchemaTypes(sexpr, lines)` returns true when any schema declaration
+// was found (drives preamble injection), mutates `lines` with declarations.
+//
+// Type surface (locked with peer AI):
+//
+//   interface Schema<T> {
+//     parse(data: unknown): T;
+//     safe(data: unknown): SchemaSafeResult<T>;
+//     ok(data: unknown): boolean;
+//   }
+//
+// `:input`  emits  declare const Foo: Schema<FooValue>;
+// `:shape`  emits  declare const Foo: Schema<FooInstance>;   where
+//                  FooInstance = FooData & {methods/readonly getters}.
+// `:enum`   emits  declare const Role: { parse(...): Role; ok(d): d is Role; ... }
+//
+// Methods are typed `(...args: any[]) => unknown`. Computed are
+// `readonly name: unknown`. Body inference is out of scope for 3.5.
+
+export const SCHEMA_INTRINSIC_DECLS = [
+  'interface SchemaIssue { field: string; error: string; message: string; }',
+  'type SchemaSafeResult<T> = { ok: true; value: T; errors: null } | { ok: false; value: null; errors: SchemaIssue[] };',
+  'interface Schema<T> { parse(data: unknown): T; safe(data: unknown): SchemaSafeResult<T>; ok(data: unknown): boolean; }',
+];
+
+const RIP_TYPE_TO_TS = {
+  string:   'string',
+  text:     'string',
+  email:    'string',
+  url:      'string',
+  uuid:     'string',
+  phone:    'string',
+  number:   'number',
+  integer:  'number',
+  boolean:  'boolean',
+  date:     'Date',
+  datetime: 'Date',
+  json:     'unknown',
+  any:      'any',
+};
+
+function mapFieldType(entry) {
+  let base = RIP_TYPE_TO_TS[entry.typeName] ?? entry.typeName;
+  return entry.array ? `${base}[]` : base;
+}
+
+// Extract descriptor from a SCHEMA_BODY s-expr node. Grammar reduces
+// `['schema', SCHEMA_BODY_VAL]` where the value is the String wrapper
+// carrying `.descriptor` via the metadata bridge.
+function descriptorFromSchemaNode(schemaNode) {
+  if (!Array.isArray(schemaNode)) return null;
+  let head = schemaNode[0]?.valueOf?.() ?? schemaNode[0];
+  if (head !== 'schema') return null;
+  let body = schemaNode[1];
+  if (!body || typeof body !== 'object') return null;
+  if (body.descriptor) return body.descriptor;
+  if (body.data?.descriptor) return body.data.descriptor;
+  return null;
+}
+
+// Walk the parsed s-expression for named schema declarations. Mirrors
+// `emitComponentTypes` in structure: returns true when at least one
+// schema was found; appends declarations (plus `export` keyword when
+// appropriate) to `lines`.
+export function emitSchemaTypes(sexpr, lines) {
+  if (!Array.isArray(sexpr)) return false;
+  let found = false;
+
+  let head = sexpr[0]?.valueOf?.() ?? sexpr[0];
+
+  // Detect the two wrapper shapes:
+  //   [= Name Schema]
+  //   [export [= Name Schema]]
+  let exported = false;
+  let assignNode = null;
+  if (head === 'export' && Array.isArray(sexpr[1])) {
+    let inner = sexpr[1];
+    let innerHead = inner[0]?.valueOf?.() ?? inner[0];
+    if (innerHead === '=') {
+      exported = true;
+      assignNode = inner;
+    }
+  } else if (head === '=') {
+    assignNode = sexpr;
+  }
+
+  if (assignNode && Array.isArray(assignNode[2])) {
+    let name = assignNode[1]?.valueOf?.() ?? assignNode[1];
+    let descriptor = descriptorFromSchemaNode(assignNode[2]);
+    if (typeof name === 'string' && descriptor) {
+      emitOneSchemaType(name, descriptor, exported, lines);
+      found = true;
+    }
+  }
+
+  // Recurse into program/block nodes so schemas nested inside a top-level
+  // block or export surface too.
+  if (head === 'program' || head === 'block') {
+    for (let i = 1; i < sexpr.length; i++) {
+      if (Array.isArray(sexpr[i])) {
+        if (emitSchemaTypes(sexpr[i], lines)) found = true;
+      }
+    }
+  } else if (head === 'export' && Array.isArray(sexpr[1]) && !assignNode) {
+    if (emitSchemaTypes(sexpr[1], lines)) found = true;
+  }
+
+  return found;
+}
+
+function emitOneSchemaType(name, descriptor, exported, lines) {
+  let exp = exported ? 'export ' : '';
+  let decl = exported ? '' : 'declare ';
+
+  if (descriptor.kind === 'enum') {
+    let members = [];
+    for (let e of descriptor.entries) {
+      if (e.tag !== 'enum-member') continue;
+      let v = e.value !== undefined ? e.value : e.name;
+      members.push(typeof v === 'string' ? JSON.stringify(v) : String(v));
+    }
+    let union = members.length ? members.join(' | ') : 'never';
+    lines.push(`${exp}type ${name} = ${union};`);
+    lines.push(`${exp}${decl}const ${name}: { parse(data: unknown): ${name}; safe(data: unknown): SchemaSafeResult<${name}>; ok(data: unknown): data is ${name}; };`);
+    return;
+  }
+
+  if (descriptor.kind === 'mixin') {
+    // :mixin is non-instantiable — expose it as a type-only alias of its
+    // field struct so tooling can still reference the shape.
+    let fieldProps = fieldPropList(descriptor);
+    lines.push(`${exp}type ${name} = { ${fieldProps.join('; ')} };`);
+    return;
+  }
+
+  // :input / :shape / :model (Phase 4 takes over :model; for now treat
+  // it like :shape for type-surface purposes)
+  let fieldProps = fieldPropList(descriptor);
+  let methods = [];
+  let computed = [];
+  for (let e of descriptor.entries) {
+    if (e.tag === 'method' || e.tag === 'hook') {
+      methods.push(`${e.name}: (...args: any[]) => unknown`);
+    } else if (e.tag === 'computed') {
+      computed.push(`readonly ${e.name}: unknown`);
+    }
+  }
+
+  let hasBehavior = methods.length > 0 || computed.length > 0;
+  if (descriptor.kind === 'shape' && hasBehavior) {
+    let dataName = `${name}Data`;
+    let instName = `${name}Instance`;
+    lines.push(`${exp}type ${dataName} = { ${fieldProps.join('; ')} };`);
+    let behaviorMembers = [...computed, ...methods];
+    lines.push(`${exp}type ${instName} = ${dataName} & { ${behaviorMembers.join('; ')} };`);
+    lines.push(`${exp}${decl}const ${name}: Schema<${instName}>;`);
+  } else {
+    let valueName = `${name}Value`;
+    lines.push(`${exp}type ${valueName} = { ${fieldProps.join('; ')} };`);
+    lines.push(`${exp}${decl}const ${name}: Schema<${valueName}>;`);
+  }
+}
+
+function fieldPropList(descriptor) {
+  let props = [];
+  for (let e of descriptor.entries) {
+    if (e.tag !== 'field') continue;
+    let required = e.modifiers.includes('!');
+    let mark = required ? '' : '?';
+    props.push(`${e.name}${mark}: ${mapFieldType(e)}`);
+  }
+  return props;
+}
+
 // Eagerly install the runtime on globalThis at module load so downstream
 // compilation units emitted with `skipRuntimes: true` (a common test-harness
 // setting) can pick up `{__schema, SchemaError}` without a separate bootstrap
