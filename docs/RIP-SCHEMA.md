@@ -2,11 +2,9 @@
   <img src="https://raw.githubusercontent.com/shreeve/rip-lang/main/docs/assets/rip-schema-logo-960w.png" alt="Rip Schema Logo" width="400">
 </p>
 
-<img src="https://raw.githubusercontent.com/shreeve/rip-lang/main/docs/assets/rip.png" style="width:50px" /> <br>
-
 # Rip Schema
 
-> **Schemas describe runtime data. Types describe compile-time shapes. Both live in Rip.**
+> **Schemas describe data at runtime and rest, in one unified Rip syntax.**
 
 Rip Schema is a first-class language construct for declaring data — validators,
 domain models, database-backed entities, and every structural derivation in
