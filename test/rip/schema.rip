@@ -568,7 +568,7 @@ test "save() hook order: beforeValidation -> validate -> beforeSave -> INSERT ->
     afterCreate:      -> trace.push "afterCreate"
     afterSave:        -> trace.push "afterSave"
   adapter.canned.__default = {columns: [{name: "id"}, {name: "name"}], data: [[1, "X"]], rows: 1}
-  await User.create({name: "X"})
+  User.create! {name: "X"}
   trace
 ''', ["beforeValidation", "afterValidation", "beforeSave", "beforeCreate", "afterCreate", "afterSave"]
 
@@ -580,7 +580,7 @@ test "save() throws SchemaError on invalid without running beforeSave", modelHea
     beforeSave: -> trace.push "bs"
   errorInfo = null
   try
-    await User.create({})
+    User.create! {}
   catch e
     errorInfo = [e.name, e.issues[0].error, trace.length]
   errorInfo
@@ -593,7 +593,7 @@ test ".save() persists declared fields only (not computed getters)", modelHeader
     name! string
     upper: ~> @name.toUpperCase()
   adapter.canned.__default = {columns: [{name: "id"}, {name: "name"}], data: [[1, "a"]], rows: 1}
-  await User.create({name: "a"})
+  User.create! {name: "a"}
   cols = adapter.calls[0].sql
   [cols.includes("\\"name\\""), cols.includes("upper")]
 ''', [true, false]
@@ -642,7 +642,7 @@ test "has_many relation resolves from registry", modelHeader + '''
     else
       {columns: [{name: "id"}, {name: "name"}], data: [[1, "Alice"]], rows: 1}
   u = User2.find! 1
-  orders = await u.orders()
+  orders = u.orders!
   orders.length
 ''', 2
 
@@ -819,7 +819,7 @@ test "algebra on :model returns :shape; ORM methods throw", '''
   findErr = null
   toSQLErr = null
   try
-    await UserPublic.find(1)
+    UserPublic.find! 1
   catch e
     findErr = e.message.includes(":model-only")
   try

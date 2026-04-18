@@ -1804,11 +1804,11 @@ returns `0`.
 Model schemas carry the full ORM surface on top of the base validator:
 
 ```coffee
-user  = await User.find 1
-users = await User.where(active: true).all()
-user  = await User.create name: "Alice", email: "a@b.c"
-await user.save()
-await user.destroy()
+user  = User.find! 1
+users = User.where(active: true).all!
+user  = User.create! name: "Alice", email: "a@b.c"
+user.save!
+user.destroy!
 
 # DDL for migrations — works with or without the ORM adapter wired
 sql = User.toSQL()
@@ -1851,8 +1851,8 @@ Order = schema :model
 Relation methods are async and live on the instance prototype:
 
 ```coffee
-owner = await order.user()
-orders = await user.orders()
+owner  = order.user!
+orders = user.orders!
 ```
 
 Targets resolve lazily through a process-global registry keyed by name —

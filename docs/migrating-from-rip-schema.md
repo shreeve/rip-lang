@@ -47,7 +47,7 @@ export schema = do ->
 # api/routes/users.rip
 import { schema } from '../db.rip'
 User = schema.model 'User'
-user = await User.find id
+user = User.find! id
 ```
 
 ### After
@@ -71,7 +71,7 @@ globalThis.__ripSchema.__schemaSetAdapter
 ```coffee
 # api/routes/users.rip
 import { User } from '../db.rip'
-user = await User.find id
+user = User.find! id
 ```
 
 ## DDL migration
