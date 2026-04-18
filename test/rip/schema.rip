@@ -252,7 +252,16 @@ code "bare schema with :symbol body infers :enum kind", '''
   Status = __schema({kind: "enum", name: "Status", entries: [{tag: "enum-member", name: "draft"}, {tag: "enum-member", name: "active"}]});
   ''', opts
 
-code ":symbol with value (valued enum)", '''
+code ":symbol with value drops the colon separator", '''
+  Tier = schema
+    :free 0
+    :pro  1
+  ''', '''
+  let Tier;
+  Tier = __schema({kind: "enum", name: "Tier", entries: [{tag: "enum-member", name: "free", value: 0}, {tag: "enum-member", name: "pro", value: 1}]});
+  ''', opts
+
+code ":symbol with value still accepts colon separator (legacy)", '''
   Tier = schema :enum
     :free:  0
     :pro:   1
@@ -260,6 +269,13 @@ code ":symbol with value (valued enum)", '''
   let Tier;
   Tier = __schema({kind: "enum", name: "Tier", entries: [{tag: "enum-member", name: "free", value: 0}, {tag: "enum-member", name: "pro", value: 1}]});
   ''', opts
+
+test ":symbol valued enum round-trip", '''
+  Status = schema
+    :draft     0
+    :active    1
+  [Status.parse("draft"), Status.parse(0), Status.parse("active"), Status.parse(1)]
+''', [0, 0, 1, 1]
 
 code "constraint :symbol compiles to its name string", '''
   X = schema

@@ -446,10 +446,14 @@ function parseCallableLine(kind, headerTok, line, entries) {
 function parseEnumLine(line, entries) {
   let first = line[0];
   if (!first) return;
-  // `admin` lines tokenize as IDENTIFIER; `pending: 0` tokenizes as
-  // PROPERTY ':' Literal because the identifier regex absorbs a trailing
-  // colon; `:admin` tokenizes as SYMBOL. All three forms are accepted
-  // and produce the same string member name.
+  // Accepted forms:
+  //   admin               bare IDENTIFIER member
+  //   :admin              bare SYMBOL member
+  //   pending: 0          valued member (IDENTIFIER retagged PROPERTY
+  //                       because the identifier regex absorbs trailing `:`)
+  //   :pending: 0         valued SYMBOL member (legacy `:` separator)
+  //   :pending 0          valued SYMBOL member (preferred — the `:` prefix
+  //                       on the symbol already marks it, no separator needed)
   if (first[0] !== 'IDENTIFIER' && first[0] !== 'PROPERTY' && first[0] !== 'SYMBOL') {
     throw schemaError(first,
       `Enum member must be an identifier or :symbol, got ${first[0]}.`);
@@ -460,19 +464,34 @@ function parseEnumLine(line, entries) {
     entries.push({ tag: 'enum-member', name, value: undefined, loc: first.loc });
     return;
   }
-  if (second[0] !== ':') {
-    throw schemaError(second,
-      `Enum member '${name}' — expected ':' before value.`);
+
+  // SYMBOL members skip the colon separator: `:pending 0` goes straight
+  // to the value token. IDENTIFIER/PROPERTY members keep the colon for
+  // backward compat (and because `pending 0` without the colon would be
+  // ambiguous with a schema field definition).
+  let valTok;
+  if (first[0] === 'SYMBOL' && second[0] !== ':') {
+    valTok = second;
+    if (line.length > 2) {
+      throw schemaError(line[2],
+        `Extra tokens after enum member '${name}' value.`);
+    }
+  } else {
+    if (second[0] !== ':') {
+      throw schemaError(second,
+        `Enum member '${name}' — expected ':' before value.`);
+    }
+    valTok = line[2];
+    if (!valTok) {
+      throw schemaError(second,
+        `Enum member '${name}' has no value after ':'.`);
+    }
+    if (line.length > 3) {
+      throw schemaError(line[3],
+        `Extra tokens after enum member '${name}' value.`);
+    }
   }
-  let valTok = line[2];
-  if (!valTok) {
-    throw schemaError(second,
-      `Enum member '${name}' has no value after ':'.`);
-  }
-  if (line.length > 3) {
-    throw schemaError(line[3],
-      `Extra tokens after enum member '${name}' value.`);
-  }
+
   entries.push({
     tag: 'enum-member',
     name,

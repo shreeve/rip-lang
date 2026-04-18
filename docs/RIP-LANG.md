@@ -1754,25 +1754,21 @@ User = schema :model
 
 `:enum` bodies are different: bare identifiers (`admin`), `:symbol` literals
 (`:admin` — same meaning, nicer visual cue), or `name: value` pairs for
-valued enums.
+valued enums. A schema whose body is all `:symbol` lines infers `:enum`
+automatically — the kind marker is optional in that case.
 
 ```coffee
-Role = schema :enum
-  admin
-  user
-  guest
+# Bare member forms — all three equivalent
+Role = schema :enum         Role = schema :enum         Role = schema
+  admin                       :admin                      :admin
+  user                        :user                       :user
+  guest                       :guest                      :guest
 
-# Shorter: a schema whose body is all `:symbol` lines infers :enum.
-# The `:enum` kind marker is optional in that case.
-Role = schema
-  :admin
-  :user
-  :guest
-
-Status = schema
-  :pending: 0
-  :active:  1
-  :done:    2
+# Valued members — `:symbol` form drops the colon separator
+Status = schema             Status = schema :enum
+  :pending 0                  pending: 0
+  :active  1                  active:  1
+  :done    2                  done:    2
 ```
 
 The `:symbol` form pairs well with constraint defaults — `status string,
