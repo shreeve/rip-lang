@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/shreeve/rip-lang/main/docs/assets/rip-schema-logo-960w.png" alt="Rip Schema Logo" width="400">
+</p>
+
 <img src="https://raw.githubusercontent.com/shreeve/rip-lang/main/docs/assets/rip.png" style="width:50px" /> <br>
 
 # Rip Schema
