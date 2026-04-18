@@ -801,9 +801,9 @@ export class CodeEmitter {
 
     if (this.usesSchemas && !skip) {
       if (skipRT) {
-        code += 'var { __schema, SchemaError } = globalThis.__ripSchema;\n';
+        code += 'var { __schema, SchemaError, __SchemaRegistry, __schemaSetAdapter } = globalThis.__ripSchema;\n';
       } else if (typeof globalThis !== 'undefined' && globalThis.__ripSchema) {
-        code += 'const { __schema, SchemaError } = globalThis.__ripSchema;\n';
+        code += 'const { __schema, SchemaError, __SchemaRegistry, __schemaSetAdapter } = globalThis.__ripSchema;\n';
       } else {
         code += this.getSchemaRuntime();
       }

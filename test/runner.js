@@ -53,24 +53,103 @@ function normalizeCode(code) {
 // Test helper: Execute code and compare result
 // Note: This is async to support await - but await on non-promises is instant,
 // so synchronous tests have zero performance impact
+let _testChain = Promise.resolve();
 function test(name, code, expected) {
-  const p = _runTest(name, code, expected);
-  pendingTests.push(p);
+  // Serialize async tests via a promise chain. Concurrent execution
+  // across tests that mutate shared module-level runtime state (registry,
+  // adapters, globals) produces nondeterministic failures.
+  _testChain = _testChain.then(() => _runTest(name, code, expected));
+  pendingTests.push(_testChain);
 }
 
 async function _runTest(name, code, expected) {
   try {
     const result = compile(code);
 
-    // Check if code contains for-await or top-level await (needs async wrapper)
-    const needsAsyncWrapper = result.code.includes('for await') ||
-                              (result.code.includes('await ') && !result.code.includes('async function'));
+    // True when the compiled code has an `await` at module scope
+    // (outside any function body). A `{` opens a function body when it
+    // follows `)` or `=>` and the `)` is NOT preceded by a control
+    // keyword (if/for/while/catch/switch/with) at the same scope. We
+    // push onto a function-scope stack and pop when the matching `}`
+    // closes. `await` encountered with an empty stack is top-level and
+    // forces AsyncFunction wrapping.
+    const CONTROL_KEYWORDS = new Set(['if','for','while','catch','switch','with']);
+    const needsAsyncWrapper = (() => {
+      if (result.code.includes('for await')) return true;
+      if (!/\bawait\b/.test(result.code)) return false;
+      const code = result.code;
+      let inStr = null;
+      const stack = [];
+      let braceDepth = 0;
+      for (let i = 0; i < code.length; i++) {
+        const c = code[i];
+        if (inStr) {
+          if (c === '\\') { i++; continue; }
+          if (c === inStr) inStr = null;
+          continue;
+        }
+        if (c === '"' || c === "'" || c === '`') { inStr = c; continue; }
+        if (c === '/' && code[i + 1] === '/') {
+          while (i < code.length && code[i] !== '\n') i++;
+          continue;
+        }
+        if (c === '{') {
+          braceDepth++;
+          let k = i - 1;
+          while (k >= 0 && /\s/.test(code[k])) k--;
+          let isFunc = false;
+          if (k >= 1 && code[k] === '>' && code[k - 1] === '=') {
+            isFunc = true;
+          } else if (code[k] === ')') {
+            // Find the matching `(` and look at the keyword before it.
+            let d = 1, j = k - 1;
+            while (j >= 0 && d > 0) {
+              if (code[j] === ')') d++;
+              else if (code[j] === '(') d--;
+              if (d === 0) break;
+              j--;
+            }
+            // j is at the matching `(`.
+            let m = j - 1;
+            while (m >= 0 && /\s/.test(code[m])) m--;
+            let end = m + 1;
+            while (m >= 0 && /[\w$]/.test(code[m])) m--;
+            const prevWord = code.slice(m + 1, end);
+            isFunc = !CONTROL_KEYWORDS.has(prevWord);
+          }
+          if (isFunc) stack.push(braceDepth);
+          continue;
+        }
+        if (c === '}') {
+          if (stack.length && stack[stack.length - 1] === braceDepth) stack.pop();
+          braceDepth--;
+          continue;
+        }
+        if (stack.length === 0 && c === 'a' && code.slice(i, i + 6) === 'await ' &&
+            (i === 0 || !/[\w$]/.test(code[i - 1]))) {
+          return true;
+        }
+      }
+      return false;
+    })();
 
     let actual;
     if (needsAsyncWrapper) {
-      // Wrap in async function for for-await support
+      // AsyncFunction doesn't auto-return the last expression the way
+      // eval() does. Inject a `return` on the last expression-statement
+      // so the test helper receives the value.
       const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
-      const fn = new AsyncFunction(result.code);
+      const lines = result.code.split('\n');
+      let lastIdx = lines.length - 1;
+      while (lastIdx >= 0 && lines[lastIdx].trim() === '') lastIdx--;
+      if (lastIdx >= 0) {
+        const stripped = lines[lastIdx].trim().replace(/;$/, '');
+        if (!/^(if|for|while|do|class|function|async function|const|let|var|return|throw|try|switch|import|export|await\s*$)\b/.test(stripped) &&
+            !stripped.startsWith('{') && !stripped.endsWith('{') && !stripped.endsWith('}')) {
+          lines[lastIdx] = lines[lastIdx].replace(stripped, 'return ' + stripped);
+        }
+      }
+      const fn = new AsyncFunction(lines.join('\n'));
       actual = await fn();
     } else {
       // Regular eval (preserves function types like AsyncFunction)
@@ -100,6 +179,10 @@ async function _runTest(name, code, expected) {
     fileTests.fail++;
     totalTests.fail++;
     console.log(`  ${colors.red}✗${colors.reset} ${name}`);
+    if (process.env.DEBUG_RUNNER) {
+      console.log('--- DBG stack ---');
+      console.log(error.stack);
+    }
     failures.push({
       file: currentFile,
       test: name,

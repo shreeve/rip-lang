@@ -482,14 +482,16 @@ function entryLiteral(emitter, e) {
         `typeName: ${JSON.stringify(e.typeName)}`,
         `array: ${e.array ? 'true' : 'false'}`,
       ];
+      if (e.constraintTokens) {
+        let c = compileConstraintsLiteral(e.constraintTokens, e);
+        if (c) obj.push(`constraints: ${c}`);
+      }
       return `{${obj.join(', ')}}`;
     }
     case 'directive': {
       let obj = [`tag: "directive"`, `name: ${JSON.stringify(e.name)}`];
-      if (e.argTokens && e.argTokens.length) {
-        let argsCode = compileDirectiveArgs(emitter, e.argTokens);
-        if (argsCode) obj.push(`args: ${argsCode}`);
-      }
+      let args = compileDirectiveArgsLiteral(e.name, e.argTokens || []);
+      if (args) obj.push(`args: ${args}`);
       return `{${obj.join(', ')}}`;
     }
     case 'computed':
@@ -530,9 +532,165 @@ function compileCallableFn(emitter, entry) {
   return emitter.emit(arrowSexpr, 'value');
 }
 
-// Placeholder for future directive-arg compilation. Phase 4 populates this.
-function compileDirectiveArgs(emitter, argTokens) {
+// ----------------------------------------------------------------------------
+// Compile-time constraint + directive argument evaluation
+// ----------------------------------------------------------------------------
+//
+// Constraints are captured as raw token slices in Phase 1. Here we evaluate
+// them at compile time into a normalized `{min?, max?, default?, regex?}`
+// shape that serves both validation (runtime) and DDL emission. Only
+// literal-deterministic values are allowed — identifiers, calls, and
+// expressions are rejected with a clear error.
+//
+// `[a]`       → {default: a}
+// `[a, b]`    → {min: a, max: b}     (number or length depending on type)
+// `[a, b, c]` → {min: a, max: b, default: c}
+// `[/regex/]` → {regex: /regex/}     (regex-only default form)
+// `[/re/, def]` is rejected as ambiguous; users write `[/re/]` + attrs for
+// other constraints.
+
+function compileConstraintsLiteral(tokens, fieldEntry) {
+  // tokens start with INDEX_START / `[` and end with the matching closer
+  let inner = tokens.slice(1, -1);
+  let items = splitTopLevelByComma(inner);
+  if (!items.length) return null;
+
+  // Evaluate each item as a literal.
+  let values = items.map(part => evalLiteralTokens(part, fieldEntry));
+
+  // Interpret array form.
+  let c = {};
+  if (values.length === 1) {
+    let v = values[0];
+    if (v instanceof RegExp) c.regex = v;
+    else c.default = v;
+  } else if (values.length === 2) {
+    if (values[0] instanceof RegExp || values[1] instanceof RegExp) {
+      throw schemaError(tokens[0],
+        `Regex constraints must be written as [/re/] on their own line; got mixed form.`);
+    }
+    c.min = values[0];
+    c.max = values[1];
+  } else if (values.length >= 3) {
+    c.min = values[0];
+    c.max = values[1];
+    c.default = values[2];
+  }
+  return constraintLiteral(c);
+}
+
+function constraintLiteral(c) {
+  let parts = [];
+  if (c.min !== undefined) parts.push(`min: ${serializeLiteral(c.min)}`);
+  if (c.max !== undefined) parts.push(`max: ${serializeLiteral(c.max)}`);
+  if (c.default !== undefined) parts.push(`default: ${serializeLiteral(c.default)}`);
+  if (c.regex !== undefined) parts.push(`regex: ${c.regex.toString()}`);
+  return parts.length ? `{${parts.join(', ')}}` : null;
+}
+
+function serializeLiteral(v) {
+  if (v === null) return 'null';
+  if (v === undefined) return 'undefined';
+  if (typeof v === 'string') return JSON.stringify(v);
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  if (v instanceof RegExp) return v.toString();
+  return JSON.stringify(v);
+}
+
+// Compile directive args to a JS literal list or null. Each directive has
+// its own arg shape — we centralize the parsing here so Layer 2 can rely
+// on normalized structures.
+function compileDirectiveArgsLiteral(name, tokens) {
+  if (!tokens.length) return null;
+
+  // Relation directives: `@belongs_to Org`, `@belongs_to Org?`,
+  // `@has_many Order`, `@has_one Profile`, `@one X`, `@many X`.
+  if (name === 'belongs_to' || name === 'has_many' || name === 'has_one' ||
+      name === 'one' || name === 'many' || name === 'mixin') {
+    let t0 = tokens[0];
+    if (!t0 || (t0[0] !== 'IDENTIFIER' && t0[0] !== 'PROPERTY')) {
+      throw schemaError(t0 || tokens[tokens.length - 1],
+        `@${name} requires a target name.`);
+    }
+    let target = t0[1];
+    // `@belongs_to User?` tokenizes as IDENTIFIER "User" with
+    // data.predicate=true. A trailing `?` in a later token position is
+    // also accepted for robustness.
+    let optional = t0.data?.predicate === true;
+    let pos = 1;
+    if (!optional && tokens[pos]?.[0] === '?') { optional = true; pos++; }
+    let parts = [`target: ${JSON.stringify(target)}`];
+    if (optional) parts.push('optional: true');
+    return `[{${parts.join(', ')}}]`;
+  }
+
+  // `@index field` or `@index [a, b]` or `@index [a, b] #` for unique.
+  if (name === 'index') {
+    let fields = [];
+    let unique = false;
+    let pos = 0;
+    if (tokens[pos]?.[0] === 'IDENTIFIER' || tokens[pos]?.[0] === 'PROPERTY') {
+      fields.push(tokens[pos][1]);
+      pos++;
+    } else if (tokens[pos]?.[0] === '[' || tokens[pos]?.[0] === 'INDEX_START') {
+      let inner = [];
+      let depth = 1;
+      pos++;
+      while (pos < tokens.length && depth > 0) {
+        let t = tokens[pos];
+        if (t[0] === '[' || t[0] === 'INDEX_START') depth++;
+        if (t[0] === ']' || t[0] === 'INDEX_END') {
+          depth--;
+          if (depth === 0) { pos++; break; }
+        }
+        inner.push(t);
+        pos++;
+      }
+      for (let part of splitTopLevelByComma(inner)) {
+        if (part[0] && (part[0][0] === 'IDENTIFIER' || part[0][0] === 'PROPERTY')) {
+          fields.push(part[0][1]);
+        }
+      }
+    }
+    if (tokens[pos]?.[0] === '#') unique = true;
+    let parts = [`fields: ${JSON.stringify(fields)}`];
+    if (unique) parts.push('unique: true');
+    return `[{${parts.join(', ')}}]`;
+  }
+
+  // Bare flag-like directives (@timestamps, @softDelete) don't take args.
+  // Anything else — capture as raw literal tokens conservatively.
   return null;
+}
+
+// Evaluate a small expression as a literal. Accepts NUMBER, STRING, BOOL,
+// NULL, UNDEFINED, REGEX, and unary minus on NUMBER. Anything else throws.
+function evalLiteralTokens(tokens, fieldEntry) {
+  if (!tokens.length) {
+    throw schemaError(null, 'Empty constraint value.');
+  }
+  let first = tokens[0];
+  let tag = first[0];
+  if (tokens.length === 1) {
+    if (tag === 'NUMBER') return Number(first[1]);
+    if (tag === 'STRING') return JSON.parse(first[1]);
+    if (tag === 'BOOL') return first[1] === 'true';
+    if (tag === 'NULL') return null;
+    if (tag === 'UNDEFINED') return undefined;
+    if (tag === 'REGEX') return parseRegexLiteral(first[1]);
+  }
+  if (tokens.length === 2 && tag === '-' && tokens[1][0] === 'NUMBER') {
+    return -Number(tokens[1][1]);
+  }
+  // Deterministic but not literal — IDENTIFIER references aren't supported.
+  throw schemaError(first,
+    `Constraint values must be literals (number, string, boolean, null, regex). Got ${tag}.`);
+}
+
+function parseRegexLiteral(val) {
+  let s = typeof val === 'string' ? val : String(val);
+  let m = s.match(/^\/(.*)\/([gimsuy]*)$/s);
+  return m ? new RegExp(m[1], m[2]) : new RegExp(s);
 }
 
 // Run the tail rewriter passes on a captured body token slice, then feed
@@ -742,6 +900,13 @@ function schemaError(tok, message) {
 
 const SCHEMA_RUNTIME = `
 // ---- Rip Schema Runtime ----------------------------------------------------
+// Four layers, lazy compilation:
+//   1 (descriptor)   object passed to __schema({...}). Raw metadata.
+//   2 (normalized)   fields/methods/computed/hooks/relations/constraints.
+//                    Collision checks. Table name derivation. Built once.
+//   3 (validator)    compiled validator plan. Built on first .parse.
+//   4a (ORM plan)    built on first .find/.create/.save.
+//   4b (DDL plan)    built on first .toSQL(). Independent of 4a.
 
 class SchemaError extends Error {
   constructor(issues, schemaName, schemaKind) {
@@ -780,6 +945,137 @@ function __schemaCheckValue(v, typeName) {
   return check ? check(v) : true;
 }
 
+// Naming utilities (snake_case column/table names, irregular plurals).
+function __schemaSnake(s) { return s.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase(); }
+const __SCHEMA_UNCOUNTABLE = new Set(['equipment','information','rice','money','species','series','fish','sheep','data']);
+const __SCHEMA_IRREGULAR = new Map([['person','people'],['man','men'],['woman','women'],['child','children'],['tooth','teeth'],['foot','feet'],['mouse','mice']]);
+function __schemaPluralize(w) {
+  const lw = w.toLowerCase();
+  if (__SCHEMA_UNCOUNTABLE.has(lw)) return lw;
+  if (__SCHEMA_IRREGULAR.has(lw)) return __SCHEMA_IRREGULAR.get(lw);
+  if (/[^aeiouy]y$/i.test(lw)) return lw.slice(0, -1) + 'ies';
+  if (/(s|x|z|ch|sh)$/i.test(lw)) return lw + 'es';
+  return lw + 's';
+}
+function __schemaTableName(model) { return __schemaPluralize(__schemaSnake(model)); }
+function __schemaFkName(model) { return __schemaSnake(model) + '_id'; }
+
+// ---- Registry ---------------------------------------------------------------
+// Process-global, resettable, with placeholder state for forward/circular
+// references. Duplicate registration of the same model name is a hard error.
+
+const __SchemaRegistry = {
+  _models: new Map(),
+  register(def) {
+    if (def.kind !== 'model') return;
+    const name = def.name;
+    if (!name) throw new Error('schema: :model must be bound to a name');
+    // Most recent registration wins. In production, users should not
+    // redefine a model name; in tests, re-registration is common and
+    // the intended semantic is "rebind". Cross-module name collisions
+    // in real apps surface as divergent behavior rather than an error;
+    // we'll tighten this once the cross-module story is exercised.
+    this._models.set(name, { def, state: 'registered' });
+  },
+  get(name) {
+    const entry = this._models.get(name);
+    return entry ? entry.def : null;
+  },
+  has(name) { return this._models.has(name); },
+  reset() { this._models.clear(); },
+};
+
+// ---- DB adapter seam --------------------------------------------------------
+// Default adapter uses fetch to rip-db /sql. Tests can swap with
+// __schemaSetAdapter(...) before running queries.
+
+function __schemaDefaultAdapter() {
+  const url = (typeof process !== 'undefined' && process.env?.DB_URL) || 'http://localhost:4213';
+  return {
+    async query(sql, params) {
+      const body = params && params.length ? { sql, params } : { sql };
+      const res = await fetch(url + '/sql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      return data;
+    }
+  };
+}
+
+let __schemaAdapter = __schemaDefaultAdapter();
+function __schemaSetAdapter(a) { __schemaAdapter = a; }
+
+// ---- Query builder ----------------------------------------------------------
+
+class __SchemaQuery {
+  constructor(def, opts = {}) {
+    this._def = def;
+    this._clauses = [];
+    this._params = [];
+    this._limit = null;
+    this._offset = null;
+    this._order = null;
+    this._includeDeleted = opts.includeDeleted === true;
+  }
+  where(cond, ...params) {
+    if (typeof cond === 'string') {
+      this._clauses.push(cond);
+      this._params.push(...params);
+    } else if (cond && typeof cond === 'object') {
+      for (const [k, v] of Object.entries(cond)) {
+        const col = __schemaSnake(k);
+        if (v === null || v === undefined) {
+          this._clauses.push('"' + col + '" IS NULL');
+        } else {
+          this._clauses.push('"' + col + '" = ?');
+          this._params.push(v);
+        }
+      }
+    }
+    return this;
+  }
+  limit(n) { this._limit = n; return this; }
+  offset(n) { this._offset = n; return this; }
+  order(spec) { this._order = spec; return this; }
+  _buildSQL() {
+    const n = this._def._normalize();
+    const table = n.tableName;
+    const parts = ['SELECT * FROM "' + table + '"'];
+    const where = [...this._clauses];
+    if (!this._includeDeleted && n.softDelete) where.push('"deleted_at" IS NULL');
+    if (where.length) parts.push('WHERE ' + where.join(' AND '));
+    if (this._order) parts.push('ORDER BY ' + this._order);
+    if (this._limit != null) parts.push('LIMIT ' + this._limit);
+    if (this._offset != null) parts.push('OFFSET ' + this._offset);
+    return parts.join(' ');
+  }
+  async all() {
+    const sql = this._buildSQL();
+    const res = await __schemaAdapter.query(sql, this._params);
+    return (res.data || []).map(row => this._def._hydrate(res.columns, row));
+  }
+  async first() {
+    this._limit = 1;
+    const arr = await this.all();
+    return arr[0] || null;
+  }
+  async count() {
+    const n = this._def._normalize();
+    const parts = ['SELECT COUNT(*) FROM "' + n.tableName + '"'];
+    const where = [...this._clauses];
+    if (!this._includeDeleted && n.softDelete) where.push('"deleted_at" IS NULL');
+    if (where.length) parts.push('WHERE ' + where.join(' AND '));
+    const res = await __schemaAdapter.query(parts.join(' '), this._params);
+    return res.data?.[0]?.[0] || 0;
+  }
+}
+
+// ---- __SchemaDef ------------------------------------------------------------
+
 class __SchemaDef {
   constructor(desc) {
     this._desc = desc;
@@ -787,34 +1083,46 @@ class __SchemaDef {
     this.name = desc.name || null;
     this._norm = null;
     this._klass = null;
+    if (this.kind === 'model') __SchemaRegistry.register(this);
   }
 
   _normalize() {
     if (this._norm) return this._norm;
+
     const fields = new Map();
     const methods = new Map();
     const computed = new Map();
     const hooks = new Map();
     const directives = [];
     const enumMembers = new Map();
-    const reserved = new Set(['parse', 'safe', 'ok']);
+    const relations = new Map();
+    let timestamps = false;
+    let softDelete = false;
 
-    const note = (name, loc) => {
-      const where = [];
-      if (fields.has(name)) where.push('field');
-      if (methods.has(name)) where.push('method');
-      if (computed.has(name)) where.push('computed');
-      if (hooks.has(name)) where.push('hook');
-      if (enumMembers.has(name)) where.push('enum-member');
-      if (reserved.has(name)) where.push('reserved');
-      return where;
+    // Reserved names by kind. ORM/instance names cannot appear as fields
+    // or methods on a :model because they conflict with generated methods.
+    const reservedStatic = new Set(['parse','safe','ok','find','findMany','where','all','first','count','create','toSQL']);
+    const reservedInstance = new Set(['save','destroy','reload','ok','errors','toJSON']);
+    const reserved = new Set([...reservedStatic, ...reservedInstance]);
+
+    const collision = (n, where) => {
+      throw new SchemaError(
+        [{field: n, error: 'collision', message: n + ' collides with ' + where}],
+        this.name, this.kind);
+    };
+    const noteCollision = (n) => {
+      if (fields.has(n)) collision(n, 'field');
+      if (methods.has(n)) collision(n, 'method');
+      if (computed.has(n)) collision(n, 'computed');
+      if (hooks.has(n)) collision(n, 'hook');
+      if (relations.has(n)) collision(n, 'relation');
+      if (this.kind === 'model' && reserved.has(n)) collision(n, 'reserved ORM name');
     };
 
     for (const e of this._desc.entries) {
       switch (e.tag) {
-        case 'field': {
-          const where = note(e.name);
-          if (where.length) throw new SchemaError([{field: e.name, error: 'collision', message: e.name + ' collides with ' + where.join(', ')}], this.name, this.kind);
+        case 'field':
+          noteCollision(e.name);
           fields.set(e.name, {
             name: e.name,
             required: e.modifiers.includes('!'),
@@ -822,55 +1130,146 @@ class __SchemaDef {
             optional: e.modifiers.includes('?'),
             typeName: e.typeName,
             array: e.array === true,
+            constraints: e.constraints || null,
           });
           break;
-        }
-        case 'method': {
-          const where = note(e.name);
-          if (where.length) throw new SchemaError([{field: e.name, error: 'collision', message: e.name + ' collides with ' + where.join(', ')}], this.name, this.kind);
+        case 'method':
+          noteCollision(e.name);
           methods.set(e.name, e.fn);
           break;
-        }
-        case 'computed': {
-          const where = note(e.name);
-          if (where.length) throw new SchemaError([{field: e.name, error: 'collision', message: e.name + ' collides with ' + where.join(', ')}], this.name, this.kind);
+        case 'computed':
+          noteCollision(e.name);
           computed.set(e.name, e.fn);
           break;
-        }
-        case 'hook': {
-          if (hooks.has(e.name)) throw new SchemaError([{field: e.name, error: 'collision', message: 'duplicate hook: ' + e.name}], this.name, this.kind);
+        case 'hook':
+          if (hooks.has(e.name)) collision(e.name, 'duplicate hook');
           hooks.set(e.name, e.fn);
           break;
-        }
-        case 'directive':
-          directives.push({name: e.name, args: e.args || []});
+        case 'directive': {
+          directives.push({ name: e.name, args: e.args || [] });
+          if (e.name === 'timestamps') timestamps = true;
+          if (e.name === 'softDelete') softDelete = true;
+          const rel = __schemaNormalizeDirectiveRelation(e, this.name);
+          if (rel) {
+            noteCollision(rel.accessor);
+            relations.set(rel.accessor, rel);
+          }
           break;
+        }
         case 'enum-member':
           enumMembers.set(e.name, e.value !== undefined ? e.value : e.name);
           break;
       }
     }
-    return (this._norm = { fields, methods, computed, hooks, directives, enumMembers });
+
+    // Add implicit primary key for :model unless a field already marked primary.
+    const primaryKey = 'id';
+    const tableName = this.kind === 'model' ? __schemaTableName(this.name) : null;
+
+    this._norm = {
+      fields, methods, computed, hooks, directives, enumMembers, relations,
+      timestamps, softDelete, primaryKey, tableName,
+    };
+    return this._norm;
   }
 
   _getClass() {
     if (this._klass) return this._klass;
+    const norm = this._normalize();
     const name = this.name || 'Schema';
+    const def = this;
+
+    const fieldNames = [...norm.fields.keys()];
     const klass = ({[name]: class {
-      constructor(data) {
+      constructor(data, persisted = false) {
+        // Internal state is non-enumerable so Object.keys(inst) lists
+        // only declared fields that received a value.
+        Object.defineProperty(this, '_dirty', { value: new Set(), enumerable: false, writable: false, configurable: true });
+        Object.defineProperty(this, '_persisted', { value: persisted === true, enumerable: false, writable: true, configurable: true });
+        Object.defineProperty(this, '_snapshot', { value: null, enumerable: false, writable: true, configurable: true });
         if (data && typeof data === 'object') {
-          for (const k of Object.keys(data)) this[k] = data[k];
+          for (const k of fieldNames) {
+            if (k in data && data[k] !== undefined) this[k] = data[k];
+          }
         }
       }
     }})[name];
-    const norm = this._normalize();
+
     for (const [n, fn] of norm.methods) {
-      Object.defineProperty(klass.prototype, n, {value: fn, writable: true, enumerable: false, configurable: true});
+      Object.defineProperty(klass.prototype, n, {
+        value: fn, writable: true, enumerable: false, configurable: true,
+      });
     }
     for (const [n, fn] of norm.computed) {
-      Object.defineProperty(klass.prototype, n, {get: fn, enumerable: false, configurable: true});
+      Object.defineProperty(klass.prototype, n, {
+        get: fn, enumerable: false, configurable: true,
+      });
     }
-    return (this._klass = klass);
+
+    // Relation methods: user.organization(). Accepts no args; returns
+    // a promise to a target-model instance (or array for has_many).
+    for (const [acc, rel] of norm.relations) {
+      Object.defineProperty(klass.prototype, acc, {
+        enumerable: false, configurable: true,
+        value: async function() { return __schemaResolveRelation(def, this, rel); },
+      });
+    }
+
+    // Instance ORM methods — only for :model kind.
+    if (this.kind === 'model') {
+      Object.defineProperty(klass.prototype, 'save', {
+        enumerable: false, configurable: true, writable: true,
+        value: async function() { return __schemaSave(def, this); },
+      });
+      Object.defineProperty(klass.prototype, 'destroy', {
+        enumerable: false, configurable: true, writable: true,
+        value: async function() { return __schemaDestroy(def, this); },
+      });
+      Object.defineProperty(klass.prototype, 'ok', {
+        enumerable: false, configurable: true, writable: true,
+        value: function() { return def._validateFields(this, false); },
+      });
+      Object.defineProperty(klass.prototype, 'errors', {
+        enumerable: false, configurable: true, writable: true,
+        value: function() { return def._validateFields(this, true); },
+      });
+      Object.defineProperty(klass.prototype, 'toJSON', {
+        enumerable: false, configurable: true, writable: true,
+        value: function() {
+          const out = {};
+          for (const k of norm.fields.keys()) out[k] = this[k];
+          return out;
+        },
+      });
+    }
+
+    this._klass = klass;
+    return klass;
+  }
+
+  _hydrate(columns, row) {
+    // DB rows are trusted: hydrate into a class instance without
+    // revalidating. Fields arrive as snake_case columns; convert back to
+    // camelCase property names declared on the schema. Fields that don't
+    // appear in the normalized set (e.g., id, created_at, updated_at for
+    // implicit primary/timestamp columns) are attached as extras so the
+    // user can still see them.
+    const data = {};
+    for (let i = 0; i < columns.length; i++) {
+      data[__schemaCamel(columns[i].name)] = row[i];
+    }
+    const k = this._getClass();
+    const inst = new k(data, true);
+    // Attach non-field columns (id, created_at, updated_at, deleted_at,
+    // relation FKs) as extras for downstream ORM use.
+    for (const key of Object.keys(data)) {
+      if (!(key in inst)) {
+        Object.defineProperty(inst, key, {
+          value: data[key], enumerable: true, writable: true, configurable: true,
+        });
+      }
+    }
+    return inst;
   }
 
   _validateFields(data, collect) {
@@ -891,18 +1290,46 @@ class __SchemaDef {
           errors.push({field: n, error: 'type', message: n + ' must be an array'});
           continue;
         }
+        let bad = false;
         for (let i = 0; i < v.length; i++) {
           if (!__schemaCheckValue(v[i], f.typeName)) {
             if (!collect) return false;
             errors.push({field: n, error: 'type', message: n + '[' + i + '] must be ' + f.typeName});
+            bad = true;
           }
         }
+        if (bad) continue;
       } else if (!__schemaCheckValue(v, f.typeName)) {
         if (!collect) return false;
         errors.push({field: n, error: 'type', message: n + ' must be ' + f.typeName});
+        continue;
+      }
+      // Apply constraint checks.
+      const c = f.constraints;
+      if (c) {
+        if (typeof v === 'string') {
+          if (c.min != null && v.length < c.min) { if (!collect) return false; errors.push({field: n, error: 'min', message: n + ' must be at least ' + c.min + ' chars'}); }
+          if (c.max != null && v.length > c.max) { if (!collect) return false; errors.push({field: n, error: 'max', message: n + ' must be at most ' + c.max + ' chars'}); }
+          if (c.regex && !c.regex.test(v)) { if (!collect) return false; errors.push({field: n, error: 'pattern', message: n + ' is invalid'}); }
+        } else if (typeof v === 'number') {
+          if (c.min != null && v < c.min) { if (!collect) return false; errors.push({field: n, error: 'min', message: n + ' must be >= ' + c.min}); }
+          if (c.max != null && v > c.max) { if (!collect) return false; errors.push({field: n, error: 'max', message: n + ' must be <= ' + c.max}); }
+        }
       }
     }
     return collect ? errors : true;
+  }
+
+  _applyDefaults(data) {
+    const norm = this._normalize();
+    for (const [n, f] of norm.fields) {
+      if ((data[n] === undefined || data[n] === null) && f.constraints?.default !== undefined) {
+        const d = f.constraints.default;
+        data[n] = (typeof d === 'object' && d !== null && !(d instanceof RegExp))
+          ? structuredClone(d) : d;
+      }
+    }
+    return data;
   }
 
   _validateEnum(data, collect) {
@@ -932,10 +1359,11 @@ class __SchemaDef {
       if (errs.length) throw new SchemaError(errs, this.name, this.kind);
       return this._materializeEnum(data);
     }
-    const errs = this._validateFields(data, true);
+    const working = this._applyDefaults({ ...(data || {}) });
+    const errs = this._validateFields(working, true);
     if (errs.length) throw new SchemaError(errs, this.name, this.kind);
     const klass = this._getClass();
-    return new klass(data);
+    return new klass(working, false);
   }
 
   safe(data) {
@@ -947,23 +1375,310 @@ class __SchemaDef {
       if (errs.length) return {ok: false, value: null, errors: errs};
       return {ok: true, value: this._materializeEnum(data), errors: null};
     }
-    const errs = this._validateFields(data, true);
+    const working = this._applyDefaults({ ...(data || {}) });
+    const errs = this._validateFields(working, true);
     if (errs.length) return {ok: false, value: null, errors: errs};
     const klass = this._getClass();
-    return {ok: true, value: new klass(data), errors: null};
+    return {ok: true, value: new klass(working, false), errors: null};
   }
 
   ok(data) {
     if (this.kind === 'mixin') return false;
     if (this.kind === 'enum') return this._validateEnum(data, false);
-    return this._validateFields(data, false);
+    const working = this._applyDefaults({ ...(data || {}) });
+    return this._validateFields(working, false);
   }
+
+  // ---- :model static ORM methods --------------------------------------------
+
+  async find(id) {
+    this._assertModel('find');
+    const norm = this._normalize();
+    const soft = norm.softDelete ? ' AND "deleted_at" IS NULL' : '';
+    const sql = 'SELECT * FROM "' + norm.tableName + '" WHERE "' + norm.primaryKey + '" = ?' + soft + ' LIMIT 1';
+    const res = await __schemaAdapter.query(sql, [id]);
+    if (!res.rows) return null;
+    return this._hydrate(res.columns, res.data[0]);
+  }
+
+  where(cond, ...params) {
+    this._assertModel('where');
+    return new __SchemaQuery(this).where(cond, ...params);
+  }
+
+  all() {
+    this._assertModel('all');
+    return new __SchemaQuery(this).all();
+  }
+
+  first() {
+    this._assertModel('first');
+    return new __SchemaQuery(this).first();
+  }
+
+  count() {
+    this._assertModel('count');
+    return new __SchemaQuery(this).count();
+  }
+
+  async create(data) {
+    this._assertModel('create');
+    const klass = this._getClass();
+    const inst = new klass(this._applyDefaults({ ...(data || {}) }), false);
+    await __schemaSave(this, inst);
+    return inst;
+  }
+
+  toSQL(options) {
+    this._assertModel('toSQL');
+    return __schemaToSQL(this, options);
+  }
+
+  _assertModel(api) {
+    if (this.kind !== 'model') {
+      throw new Error('schema: .' + api + '() is :model-only (got :' + this.kind + ')');
+    }
+  }
+}
+
+function __schemaCamel(col) { return String(col).replace(/_([a-z])/g, (_, c) => c.toUpperCase()); }
+
+function __schemaNormalizeDirectiveRelation(directive, ownerModel) {
+  const args = directive.args;
+  if (!args || !args.length) return null;
+  const a = args[0];
+  const name = directive.name;
+  if (name === 'belongs_to') {
+    const targetLc = a.target[0].toLowerCase() + a.target.slice(1);
+    return { kind: 'belongsTo', target: a.target, accessor: targetLc, foreignKey: __schemaFkName(a.target), optional: !!a.optional };
+  }
+  if (name === 'has_one' || name === 'one') {
+    const targetLc = a.target[0].toLowerCase() + a.target.slice(1);
+    return { kind: 'hasOne', target: a.target, accessor: targetLc, foreignKey: __schemaFkName(ownerModel), optional: !!a.optional };
+  }
+  if (name === 'has_many' || name === 'many') {
+    const targetLc = a.target[0].toLowerCase() + a.target.slice(1);
+    return { kind: 'hasMany', target: a.target, accessor: __schemaPluralize(targetLc), foreignKey: __schemaFkName(ownerModel), optional: !!a.optional };
+  }
+  return null;
+}
+
+async function __schemaResolveRelation(def, inst, rel) {
+  const target = __SchemaRegistry.get(rel.target);
+  if (!target) throw new Error('schema: unknown relation target "' + rel.target + '" from ' + (def.name || 'anon'));
+  const pk = def._normalize().primaryKey;
+  if (rel.kind === 'belongsTo') {
+    const fk = inst[__schemaCamel(rel.foreignKey)];
+    return fk != null ? await target.find(fk) : null;
+  }
+  if (rel.kind === 'hasOne') {
+    return await target.where({ [rel.foreignKey]: inst[pk] }).first();
+  }
+  if (rel.kind === 'hasMany') {
+    return await target.where({ [rel.foreignKey]: inst[pk] }).all();
+  }
+  return null;
+}
+
+// ---- Save / Destroy --------------------------------------------------------
+// Rails-style lifecycle (D18):
+//   beforeValidation -> validate -> afterValidation ->
+//   beforeSave -> (beforeCreate|beforeUpdate) -> INSERT/UPDATE ->
+//   (afterCreate|afterUpdate) -> afterSave
+// Destroy:
+//   beforeDestroy -> DELETE -> afterDestroy
+
+async function __schemaRunHook(def, inst, name) {
+  const fn = def._normalize().hooks.get(name);
+  if (fn) await fn.call(inst);
+}
+
+async function __schemaSave(def, inst) {
+  const norm = def._normalize();
+  const isNew = !inst._persisted;
+
+  await __schemaRunHook(def, inst, 'beforeValidation');
+  const errs = def._validateFields(inst, true);
+  if (errs.length) throw new SchemaError(errs, def.name, def.kind);
+  await __schemaRunHook(def, inst, 'afterValidation');
+
+  await __schemaRunHook(def, inst, 'beforeSave');
+  if (isNew) await __schemaRunHook(def, inst, 'beforeCreate');
+  else       await __schemaRunHook(def, inst, 'beforeUpdate');
+
+  if (isNew) {
+    const cols = [], placeholders = [], values = [];
+    for (const [n, f] of norm.fields) {
+      const v = inst[n];
+      if (v == null) continue;
+      cols.push('"' + __schemaSnake(n) + '"');
+      placeholders.push('?');
+      values.push(__schemaSerialize(v, f));
+    }
+    // Include relation FKs. belongsTo FKs are camelCase properties on
+    // the instance (e.g. organizationId for organization_id).
+    for (const [, rel] of norm.relations) {
+      if (rel.kind !== 'belongsTo') continue;
+      const fkCamel = __schemaCamel(rel.foreignKey);
+      const v = inst[fkCamel];
+      if (v != null) {
+        cols.push('"' + rel.foreignKey + '"');
+        placeholders.push('?');
+        values.push(v);
+      }
+    }
+    const sql = 'INSERT INTO "' + norm.tableName + '" (' + cols.join(', ') + ') VALUES (' + placeholders.join(', ') + ') RETURNING *';
+    const res = await __schemaAdapter.query(sql, values);
+    if (res.data?.[0] && res.columns) {
+      for (let i = 0; i < res.columns.length; i++) {
+        const key = __schemaCamel(res.columns[i].name);
+        if (!(key in inst)) {
+          Object.defineProperty(inst, key, { value: res.data[0][i], enumerable: true, writable: true, configurable: true });
+        } else {
+          inst[key] = res.data[0][i];
+        }
+      }
+    }
+    inst._persisted = true;
+  } else {
+    const sets = [], values = [];
+    for (const [n, f] of norm.fields) {
+      sets.push('"' + __schemaSnake(n) + '" = ?');
+      values.push(__schemaSerialize(inst[n], f));
+    }
+    if (sets.length) {
+      const pk = norm.primaryKey;
+      values.push(inst[pk]);
+      const sql = 'UPDATE "' + norm.tableName + '" SET ' + sets.join(', ') + ' WHERE "' + pk + '" = ?';
+      await __schemaAdapter.query(sql, values);
+    }
+  }
+  inst._dirty.clear();
+
+  if (isNew) await __schemaRunHook(def, inst, 'afterCreate');
+  else       await __schemaRunHook(def, inst, 'afterUpdate');
+  await __schemaRunHook(def, inst, 'afterSave');
+  return inst;
+}
+
+async function __schemaDestroy(def, inst) {
+  if (!inst._persisted) return inst;
+  const norm = def._normalize();
+  await __schemaRunHook(def, inst, 'beforeDestroy');
+  if (norm.softDelete) {
+    const now = new Date().toISOString();
+    await __schemaAdapter.query('UPDATE "' + norm.tableName + '" SET "deleted_at" = ? WHERE "' + norm.primaryKey + '" = ?', [now, inst[norm.primaryKey]]);
+    inst.deletedAt = now;
+  } else {
+    await __schemaAdapter.query('DELETE FROM "' + norm.tableName + '" WHERE "' + norm.primaryKey + '" = ?', [inst[norm.primaryKey]]);
+    inst._persisted = false;
+  }
+  await __schemaRunHook(def, inst, 'afterDestroy');
+  return inst;
+}
+
+function __schemaSerialize(v, field) {
+  if (field && field.typeName === 'json' && v != null && typeof v === 'object') {
+    return JSON.stringify(v);
+  }
+  return v;
+}
+
+// ---- DDL emission (.toSQL) --------------------------------------------------
+// Layer 4b: runs on first .toSQL() call. Independent of ORM \u2014 migration
+// scripts that never touch .find/.create still work.
+
+const __SCHEMA_SQL_TYPES = {
+  string: 'VARCHAR', text: 'TEXT', integer: 'INTEGER', number: 'DOUBLE',
+  boolean: 'BOOLEAN', date: 'DATE', datetime: 'TIMESTAMP', email: 'VARCHAR',
+  url: 'VARCHAR', uuid: 'UUID', phone: 'VARCHAR', json: 'JSON', any: 'JSON',
+};
+
+function __schemaToSQL(def, options) {
+  const { dropFirst = false, header } = options || {};
+  const norm = def._normalize();
+  const blocks = [];
+  if (header) blocks.push(header);
+
+  const table = norm.tableName;
+  const seq = table + '_seq';
+  if (dropFirst) {
+    blocks.push('DROP TABLE IF EXISTS ' + table + ' CASCADE;\\nDROP SEQUENCE IF EXISTS ' + seq + ';');
+  }
+
+  const columns = [];
+  const indexes = [];
+  columns.push('  ' + norm.primaryKey + " INTEGER PRIMARY KEY DEFAULT nextval('" + seq + "')");
+
+  for (const [n, f] of norm.fields) {
+    columns.push(__schemaColumnDDL(n, f));
+    if (f.unique) {
+      indexes.push('CREATE UNIQUE INDEX idx_' + table + '_' + __schemaSnake(n) + ' ON ' + table + ' ("' + __schemaSnake(n) + '");');
+    }
+  }
+
+  for (const [, rel] of norm.relations) {
+    if (rel.kind !== 'belongsTo') continue;
+    const refTable = __schemaTableName(rel.target);
+    const notNull = rel.optional ? '' : ' NOT NULL';
+    columns.push('  ' + rel.foreignKey + ' INTEGER' + notNull + ' REFERENCES ' + refTable + '(id)');
+  }
+
+  if (norm.timestamps) {
+    columns.push('  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP');
+    columns.push('  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP');
+  }
+  if (norm.softDelete) {
+    columns.push('  deleted_at TIMESTAMP');
+  }
+
+  // @index directives
+  for (const d of norm.directives) {
+    if (d.name !== 'index') continue;
+    const ixArgs = d.args?.[0] || {};
+    const fields = (ixArgs.fields || []).map(__schemaSnake);
+    if (!fields.length) continue;
+    const u = ixArgs.unique ? 'UNIQUE ' : '';
+    indexes.push('CREATE ' + u + 'INDEX idx_' + table + '_' + fields.join('_') + ' ON ' + table + ' (' + fields.map(f => '"' + f + '"').join(', ') + ');');
+  }
+
+  blocks.push('CREATE SEQUENCE ' + seq + ' START 1;');
+  blocks.push('CREATE TABLE ' + table + ' (\\n' + columns.join(',\\n') + '\\n);');
+  if (indexes.length) blocks.push(indexes.join('\\n'));
+
+  return blocks.join('\\n\\n') + '\\n';
+}
+
+function __schemaColumnDDL(name, field) {
+  let base = __SCHEMA_SQL_TYPES[field.typeName] || 'VARCHAR';
+  if (field.array) base = 'JSON';
+  if (base === 'VARCHAR' && field.constraints?.max != null) {
+    base = 'VARCHAR(' + field.constraints.max + ')';
+  }
+  const parts = ['  ' + __schemaSnake(name) + ' ' + base];
+  if (field.required) parts.push('NOT NULL');
+  if (field.unique) parts.push('UNIQUE');
+  if (field.constraints?.default !== undefined) {
+    parts.push('DEFAULT ' + __schemaSQLDefault(field.constraints.default));
+  }
+  return parts.join(' ');
+}
+
+function __schemaSQLDefault(v) {
+  if (v === true) return 'true';
+  if (v === false) return 'false';
+  if (v === null) return 'NULL';
+  if (typeof v === 'number') return String(v);
+  if (typeof v === 'string') return "'" + v.replace(/'/g, "''") + "'";
+  return "'" + String(v).replace(/'/g, "''") + "'";
 }
 
 function __schema(descriptor) { return new __SchemaDef(descriptor); }
 
 if (typeof globalThis !== 'undefined') {
-  globalThis.__ripSchema = { __schema, SchemaError };
+  globalThis.__ripSchema = {
+    __schema, SchemaError, __SchemaRegistry, __schemaSetAdapter,
+  };
 }
 
 // === End Schema Runtime ===

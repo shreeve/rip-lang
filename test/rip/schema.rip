@@ -18,7 +18,7 @@ code "input default kind", '''
     password! string, [8, 100]
   ''', '''
   let SignupInput;
-  SignupInput = __schema({kind: "input", name: "SignupInput", entries: [{tag: "field", name: "email", modifiers: ["!"], typeName: "email", array: false}, {tag: "field", name: "password", modifiers: ["!"], typeName: "string", array: false}]});
+  SignupInput = __schema({kind: "input", name: "SignupInput", entries: [{tag: "field", name: "email", modifiers: ["!"], typeName: "email", array: false}, {tag: "field", name: "password", modifiers: ["!"], typeName: "string", array: false, constraints: {min: 8, max: 100}}]});
   ''', opts
 
 code "explicit :input kind", '''
@@ -96,7 +96,7 @@ code "model with modifiers and directives", '''
     @belongs_to Organization
   ''', '''
   let User;
-  User = __schema({kind: "model", name: "User", entries: [{tag: "field", name: "name", modifiers: ["!"], typeName: "string", array: false}, {tag: "field", name: "email", modifiers: ["!","#"], typeName: "email", array: false}, {tag: "field", name: "bio", modifiers: ["?"], typeName: "text", array: false}, {tag: "directive", name: "timestamps"}, {tag: "directive", name: "belongs_to"}]});
+  User = __schema({kind: "model", name: "User", entries: [{tag: "field", name: "name", modifiers: ["!"], typeName: "string", array: false}, {tag: "field", name: "email", modifiers: ["!","#"], typeName: "email", array: false}, {tag: "field", name: "bio", modifiers: ["?"], typeName: "text", array: false}, {tag: "directive", name: "timestamps"}, {tag: "directive", name: "belongs_to", args: [{target: "Organization"}]}]});
   ''', opts
 
 code "model recognizes known hook names", '''
@@ -202,7 +202,7 @@ code "field with constraints", '''
     password! string, [8, 100]
   ''', '''
   let X;
-  X = __schema({kind: "input", name: "X", entries: [{tag: "field", name: "password", modifiers: ["!"], typeName: "string", array: false}]});
+  X = __schema({kind: "input", name: "X", entries: [{tag: "field", name: "password", modifiers: ["!"], typeName: "string", array: false, constraints: {min: 8, max: 100}}]});
   ''', opts
 
 code "comments between entries", '''
@@ -423,6 +423,189 @@ type "optional fields marked with ?", '''
   type UserValue = { name: string; bio?: string; age?: number };
   declare const User: Schema<UserValue>;
   '''
+
+# ==============================================================================
+# Phase 4: :model runtime — ORM, hooks, DDL, relations
+# ==============================================================================
+#
+# Each :model test installs a fresh in-memory adapter that records SQL
+# calls and returns canned results, then resets the registry so tests
+# don't leak state between cases.
+
+modelHeader = '''
+  adapter =
+    calls: []
+    canned: {}
+    query: (sql, params) ->
+      @calls.push {sql, params}
+      if @canned[sql] then @canned[sql] else (@canned.__default ?? {columns: [], data: [], rows: 0})
+  __schemaSetAdapter adapter
+  __SchemaRegistry.reset()
+
+'''
+
+# -- toSQL works without adapter or ORM boot --
+
+test ":model toSQL emits CREATE TABLE", modelHeader + '''
+  User = schema :model
+    name! string, [1, 100]
+    email!# email
+    @timestamps
+  sql = User.toSQL()
+  [sql.includes("CREATE TABLE users"), sql.includes("VARCHAR(100)"), sql.includes("UNIQUE"), sql.includes("created_at"), sql.includes("updated_at")]
+''', [true, true, true, true, true]
+
+test ":model toSQL emits belongs_to FK", modelHeader + '''
+  User = schema :model
+    name! string
+  Order = schema :model
+    @belongs_to User
+  sql = Order.toSQL()
+  [sql.includes("user_id INTEGER NOT NULL REFERENCES users(id)")]
+''', [true]
+
+test ":model toSQL marks optional belongs_to as nullable", modelHeader + '''
+  User = schema :model
+    name! string
+  Order = schema :model
+    @belongs_to User?
+  sql = Order.toSQL()
+  hasFK = sql.match(/user_id INTEGER REFERENCES users\\(id\\)/)?
+  hasFK
+''', true
+
+# -- .find / .create / .where / .all --
+
+test ":model.create inserts and hydrates", modelHeader + '''
+  User = schema :model
+    name! string
+    email! email
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "name"}, {name: "email"}], data: [[1, "Alice", "a@b.c"]], rows: 1}
+  u = User.create! {name: "Alice", email: "a@b.c"}
+  [u.id, u.name, u.email, u._persisted]
+''', [1, "Alice", "a@b.c", true]
+
+test ":model.find returns null when no row", modelHeader + '''
+  User = schema :model
+    name! string
+  adapter.canned.__default = {columns: [], data: [], rows: 0}
+  r = User.find! 999
+  r
+''', null
+
+test ":model.where.all issues SELECT with WHERE clause", modelHeader + '''
+  User = schema :model
+    name! string
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "name"}], data: [[1, "A"], [2, "B"]], rows: 2}
+  results = User.where(active: true).all!
+  [results.length, adapter.calls[0].sql.includes("WHERE"), adapter.calls[0].params[0]]
+''', [2, true, true]
+
+# -- hooks: beforeSave normalizes before validation is re-read; afterCreate fires --
+
+test "save() hook order: beforeValidation -> validate -> beforeSave -> INSERT -> afterCreate -> afterSave", modelHeader + '''
+  trace = []
+  User = schema :model
+    name! string
+    beforeValidation: -> trace.push "beforeValidation"
+    afterValidation:  -> trace.push "afterValidation"
+    beforeSave:       -> trace.push "beforeSave"
+    beforeCreate:     -> trace.push "beforeCreate"
+    afterCreate:      -> trace.push "afterCreate"
+    afterSave:        -> trace.push "afterSave"
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "name"}], data: [[1, "X"]], rows: 1}
+  await User.create({name: "X"})
+  trace
+''', ["beforeValidation", "afterValidation", "beforeSave", "beforeCreate", "afterCreate", "afterSave"]
+
+test "save() throws SchemaError on invalid without running beforeSave", modelHeader + '''
+  trace = []
+  User = schema :model
+    name! string
+    afterValidation: -> trace.push "av"
+    beforeSave: -> trace.push "bs"
+  errorInfo = null
+  try
+    await User.create({})
+  catch e
+    errorInfo = [e.name, e.issues[0].error, trace.length]
+  errorInfo
+''', ["SchemaError", "required", 0]
+
+# -- getter excluded from persistence --
+
+test ".save() persists declared fields only (not computed getters)", modelHeader + '''
+  User = schema :model
+    name! string
+    upper: ~> @name.toUpperCase()
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "name"}], data: [[1, "a"]], rows: 1}
+  await User.create({name: "a"})
+  cols = adapter.calls[0].sql
+  [cols.includes("\\"name\\""), cols.includes("upper")]
+''', [true, false]
+
+# -- relations resolve lazily, even cross-module style (same registry) --
+
+test "belongs_to relation resolves from registry", modelHeader + '''
+  User = schema :model
+    name! string
+  Order = schema :model
+    @belongs_to User
+  # find-by-id mock: returns different rows depending on SQL
+  adapter.query = (sql, params) ->
+    adapter.calls.push {sql, params}
+    if sql.match /FROM "users"/
+      {columns: [{name: "id"}, {name: "name"}], data: [[params[0], "Alice"]], rows: 1}
+    else
+      {columns: [{name: "id"}, {name: "user_id"}], data: [[7, 42]], rows: 1}
+  order = Order.find! 7
+  owner = order.user!
+  [owner.name, order.userId]
+''', ["Alice", 42]
+
+test "has_many relation resolves from registry", modelHeader + '''
+  User = schema :model
+    name! string
+  Order = schema :model
+    @belongs_to User
+  adapter.query = (sql, params) ->
+    adapter.calls.push {sql, params}
+    if sql.match /FROM "orders"/
+      {columns: [{name: "id"}, {name: "user_id"}], data: [[10, 1], [11, 1]], rows: 2}
+    else
+      {columns: [{name: "id"}, {name: "name"}], data: [[1, "Alice"]], rows: 1}
+  User.entries = User._desc.entries.concat [{tag: "directive", name: "has_many", args: [{target: "Order"}]}]
+  # Re-register the enriched descriptor so relations pick it up.
+  User2 = schema :model
+    name! string
+    @has_many Order
+  __SchemaRegistry.register User2
+  adapter.calls = []
+  adapter.query = (sql, params) ->
+    adapter.calls.push {sql, params}
+    if sql.match /FROM "orders"/
+      {columns: [{name: "id"}, {name: "user_id"}], data: [[10, 1], [11, 1]], rows: 2}
+    else
+      {columns: [{name: "id"}, {name: "name"}], data: [[1, "Alice"]], rows: 1}
+  u = User2.find! 1
+  orders = await u.orders()
+  orders.length
+''', 2
+
+# -- namespace collisions --
+
+fail "field vs method collision in :model", '''
+  User = schema :model
+    name! string
+    name: -> "hi"
+  User.toSQL()
+'''
+
+fail "reserved ORM name as field in :model", '''
+  User = schema :model
+    find! string
+  User.toSQL()
+'''
 
 type "exported schema emits export const", '''
   export Foo = schema :input
