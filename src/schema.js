@@ -1014,6 +1014,7 @@ const __schemaTypes = {
   url:      v => typeof v === 'string' && /^https?:\\/\\/.+/.test(v),
   uuid:     v => typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v),
   phone:    v => typeof v === 'string' && /^[\\d\\s\\-+()]+$/.test(v),
+  zip:      v => typeof v === 'string' && /^\\d{5}(-\\d{4})?$/.test(v),
   text:     v => typeof v === 'string',
   json:     v => v !== undefined,
   any:      ()  => true,
@@ -1870,7 +1871,7 @@ function __schemaSerialize(v, field) {
 const __SCHEMA_SQL_TYPES = {
   string: 'VARCHAR', text: 'TEXT', integer: 'INTEGER', number: 'DOUBLE',
   boolean: 'BOOLEAN', date: 'DATE', datetime: 'TIMESTAMP', email: 'VARCHAR',
-  url: 'VARCHAR', uuid: 'UUID', phone: 'VARCHAR', json: 'JSON', any: 'JSON',
+  url: 'VARCHAR', uuid: 'UUID', phone: 'VARCHAR', zip: 'VARCHAR', json: 'JSON', any: 'JSON',
 };
 
 function __schemaToSQL(def, options) {
@@ -2044,6 +2045,7 @@ const RIP_TYPE_TO_TS = {
   url:      'string',
   uuid:     'string',
   phone:    'string',
+  zip:      'string',
   number:   'number',
   integer:  'number',
   boolean:  'boolean',

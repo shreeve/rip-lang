@@ -1465,6 +1465,7 @@ Built-in type names and their runtime / SQL / TypeScript mappings:
 | `url`      | string + `/^https?:\/\/.+/`          | `VARCHAR`   | `string`   |
 | `uuid`     | string + UUID regex                  | `UUID`      | `string`   |
 | `phone`    | string + `/^[\d\s\-+()]+$/`          | `VARCHAR`   | `string`   |
+| `zip`      | string + `/^\d{5}(-\d{4})?$/` (US)   | `VARCHAR`   | `string`   |
 | `number`   | `typeof v === 'number'` and not NaN  | `DOUBLE`    | `number`   |
 | `integer`  | `Number.isInteger(v)`                | `INTEGER`   | `number`   |
 | `boolean`  | `typeof v === 'boolean'`             | `BOOLEAN`   | `boolean`  |

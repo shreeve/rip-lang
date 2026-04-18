@@ -432,6 +432,24 @@ test ":input .safe returns {ok: false, value: null, errors: [...]} on failure", 
   [r.ok, r.value, r.errors[0].field, r.errors[0].error]
   ''', [false, null, 'email', 'type']
 
+test "zip type accepts US 5-digit form", '''
+  Form = schema
+    zip! zip
+  Form.ok({zip: "94301"})
+  ''', true
+
+test "zip type accepts ZIP+4 form", '''
+  Form = schema
+    zip! zip
+  Form.ok({zip: "94301-1234"})
+  ''', true
+
+test "zip type rejects non-matching strings", '''
+  Form = schema
+    zip! zip
+  [Form.ok({zip: "abcde"}), Form.ok({zip: "1234"}), Form.ok({zip: "94301-12"})]
+  ''', [false, false, false]
+
 test "required field missing is an error", '''
   Signup = schema
     email! email
