@@ -43,6 +43,7 @@ rip server
 | `src/lexer.js`            | Yes       | Lexer and rewriter                                     |
 | `src/types.js`            | Yes       | Type system sidecar                                    |
 | `src/components.js`       | Yes       | Component system sidecar                               |
+| `src/schema.js`           | Yes       | Schema system sidecar (`schema` keyword)               |
 | `src/grammar/grammar.rip` | Carefully | Run `bun run parser` after changes                     |
 | `src/parser.js`           | Never     | Generated file                                         |
 | `src/sourcemaps.js`       | Yes       | Source map generator                                   |
@@ -176,7 +177,6 @@ start port: 3000
 ### Other Packages
 
 - `@rip-lang/db` — DuckDB server with official UI and ActiveRecord-style client
-- `@rip-lang/schema` — ORM and validation
 - `@rip-lang/swarm` — worker-thread job runner
 - `@rip-lang/csv` — CSV parser and writer
 - `@rip-lang/http` — zero-dependency HTTP client

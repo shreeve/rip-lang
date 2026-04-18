@@ -72,7 +72,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Category                       | Tested In     | Notes                                                                                                         |
 | ------------------------------ | ------------- | ------------------------------------------------------------------------------------------------------------- |
 | `@app.data` stash typing       | 09-components | `@app.data` is `any` — no way to declare or flow a stash type across components. RFC in `apps/cart/README.md` |
-| Runtime return-type validation | 10-validation | Return types are erased — `response.json()` is unvalidated `any`; no `schema.parse()` equivalent              |
+| Runtime return-type validation | 10-validation | Return types are erased — `response.json()` is unvalidated `any`. An app can wire `Schema.parse()` in the return-hook bridge (see below) for runtime enforcement. |
 
 ### 🔶 Partial
 
@@ -153,24 +153,24 @@ This captures design notes for the `Runtime return-type validation` gap in `10-v
 
 `rip check` verifies declared return types at compile time, but runtime values are not validated. Example: `response.json()` in a function typed as `Promise<User>` can return invalid data and still run.
 
-### Why `@rip-lang/schema` is a likely fit
+### Why the `schema` keyword is a likely fit
 
-- Existing runtime validator API (`Schema.validate(typeName, value)`)
+- First-class runtime validator API (`Schema.parse / .safe / .ok`)
 - Good support for boundary checks (named object types, nested types, arrays, required/optional)
-- Already in this monorepo, no new external dependency needed
+- Already built into the language, no extra dependency needed
 
 ### Practical MVP (no grammar changes)
 
 1. **Compiler hook**: in `src/compiler.js`, detect functions with explicit return types (`User`, `Promise<User>`).
 2. **Return wrapper**: inject runtime helper around return values for eligible functions.
 3. **Validation contract**: use a global hook (for decoupling), e.g. `globalThis.__ripReturnValidator(typeName, value)`.
-4. **Schema adapter**: app code can wire `@rip-lang/schema` by setting the hook to call `schema.validate(...)`.
+4. **Schema adapter**: app code wires a named schema for each type it wants enforced, e.g. `__setReturnValidator('User', User.parse)`.
 5. **Tests**: extend `test/types/10-validation.rip` with pass/fail runtime cases for typed API payloads.
 
 ### Important caveats
 
 - Start with **named type returns**; full arbitrary type expression validation is larger scope.
-- `@rip-lang/schema` is good for boundary validation, but not a complete replacement for full TypeScript-level runtime type semantics.
+- The schema runtime is good for boundary validation, but not a complete replacement for full TypeScript-level runtime type semantics.
 - Consider option-gating first rollout (e.g. compiler/runtime flag) to avoid breaking existing apps.
 
 ## TypeScript Companions

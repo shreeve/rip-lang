@@ -533,6 +533,79 @@ Types are processed at the token layer before parsing.
 
 `rip --shadow file.rip` dumps the virtual TypeScript file that `rip check` and the VS Code extension feed into the TypeScript language service.
 
+---
+
+## Schema System
+
+Inline schemas are a third compiler sidecar — `schema.js` — that parallels
+`types.js` and `components.js`.
+
+### Lexer path
+
+- `installSchemaSupport(Lexer, CodeEmitter)` adds `rewriteSchema()` to the
+  Lexer prototype. It runs between `rewriteRender()` and `rewriteTypes()` in
+  the rewriter pipeline.
+- `rewriteSchema()` detects a contextual `schema` identifier at expression-
+  start positions followed by either a `:kind` SYMBOL or a direct INDENT.
+  The matching INDENT...OUTDENT range is parsed by a schema-specific
+  sub-parser and collapsed into a single `SCHEMA_BODY` token whose `.data`
+  carries a structured descriptor (kind, entries, per-entry `.loc`).
+- The main grammar has one tiny production, `Schema: SCHEMA SCHEMA_BODY`,
+  under `Expression`. Schema body syntax (`name! type`, `@directive`,
+  `name: ~> body`, `name: -> body`) never reaches the main parser, so the
+  state table stays lean.
+- Bodies of methods, computed getters, and hooks are captured as token
+  slices. At codegen time those slices run through the tail rewriter
+  passes (implicit braces, tagged templates, etc.) and feed into
+  `parser.parse()` via a temporary lex adapter. The parsed body is wrapped
+  as a thin-arrow `['->', [], body]` AST and emitted through the existing
+  codegen path — Rip `->` is already a `function()` (not a JS arrow), so
+  `this` binds to the instance.
+
+### Layered runtime
+
+The descriptor passed to `__schema({...})` is Layer 1. Layer 2 normalization
+(fields, methods, computed, hooks, relations, expanded mixins, collision
+checks) runs once per schema on first downstream use. Layer 3 (validator
+plan) builds on the first `.parse/.safe/.ok`; Layer 4a (ORM) on the first
+`.find/.create/.save`; Layer 4b (DDL) on the first `.toSQL()`. The four
+caches are independent — a migration script that only calls `.toSQL()` never
+builds the ORM plan.
+
+### Registry
+
+`__SchemaRegistry` (process-global) holds every named `:model` and `:mixin`.
+Relations look up `:model` targets by name; `@mixin Name` looks up `:mixin`
+targets. Registration happens in the `__SchemaDef` constructor so just
+importing a file that defines named schemas activates them. Tests can call
+`__SchemaRegistry.reset()` between runs.
+
+### Algebra invariant
+
+`.pick/.omit/.partial/.required/.extend` always return `kind: 'shape'` and
+drop behavior (methods, computed, hooks) — only fields survive. Calling
+`.find()`/`.toSQL()` on a derived shape throws a dedicated error pointing
+the user at query projection on the source model. This invariant is
+checked both in runtime tests (Phase 6) and in the shadow TS signatures.
+
+### Shadow TS
+
+`emitSchemaTypes(sexpr, lines)` walks the parsed s-expression for named
+schema declarations, emits mixins first so intersections resolve, then
+emits type aliases and `declare const` per kind:
+
+- `:input` → `Schema<ValueType, ValueType>`
+- `:shape` → `Schema<ShapeInstance, ShapeData>` (or `Schema<Data, Data>` when
+  fields-only)
+- `:model` → `ModelSchema<Instance, Data>` with ORM methods and relation
+  accessors (same-file targets typed, cross-file degrades to `unknown`)
+- `:mixin` → field-only `type Foo = { ... }` alias, no runtime value
+- `:enum` → discriminated-union alias + const with `ok(data): data is
+  Role` type predicate
+
+`hasSchemas(source)` is the cheap probe that gates intrinsic preamble
+injection and file-level type checking (parallels `hasTypeAnnotations`).
+
 Typical debugging sequence:
 
 ```bash

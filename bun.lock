@@ -51,16 +51,6 @@
         "rip-lang": ">=3.13.137",
       },
     },
-    "packages/schema": {
-      "name": "@rip-lang/schema",
-      "version": "0.3.115",
-      "bin": {
-        "rip-schema": "./generate.js",
-      },
-      "dependencies": {
-        "rip-lang": ">=3.13.137",
-      },
-    },
     "packages/script": {
       "name": "@rip-lang/script",
       "version": "0.1.11",
@@ -70,7 +60,7 @@
     },
     "packages/server": {
       "name": "@rip-lang/server",
-      "version": "1.4.18",
+      "version": "1.4.19",
       "bin": {
         "rip-server": "./bin/rip-server",
       },
@@ -199,8 +189,6 @@
     "@rip-lang/http": ["@rip-lang/http@workspace:packages/http"],
 
     "@rip-lang/print": ["@rip-lang/print@workspace:packages/print"],
-
-    "@rip-lang/schema": ["@rip-lang/schema@workspace:packages/schema"],
 
     "@rip-lang/script": ["@rip-lang/script@workspace:packages/script"],
 

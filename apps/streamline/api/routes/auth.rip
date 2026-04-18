@@ -4,11 +4,10 @@ import { get, post, prefix, read, session, error } from '@rip-lang/server'
 import { verifyIdToken as verifyAppleToken } from '../lib/apple.rip'
 import { authenticateWithCode as googleAuth } from '../lib/google.rip'
 import { Stash } from '../lib/stash.rip'
-import { schema } from '../db.rip'
+import { User } from '../db.rip'
 import configData from '../../config.rip'
 
 config = Stash configData
-User = schema.model 'User'
 
 generateCode = -> String(Math.floor(100000 + Math.random() * 900000))
 

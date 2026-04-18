@@ -1,6 +1,5 @@
 # Database — connection, queries, and one-time setup
 
-import { Schema } from '../../../packages/schema/orm.js'
 import { openSync } from 'node:fs'
 import { Stash } from './lib/stash.rip'
 import configData from '../config.rip'
@@ -9,14 +8,21 @@ config = Stash configData
 DB_URL = config.database.url
 DB_FILE = config.database.file
 
-# ==============================================================================
-# Connection (runs on import — every worker gets a schema + query helper)
-# ==============================================================================
+# Re-export every model, mixin, and enum for route imports.
+export * from './models.rip'
+import { User, Spot, Booking, SpotStatus } from './models.rip'
 
-export schema = do ->
-  s = Schema.load '../app.schema', import.meta.url
-  s.connect DB_URL
-  s
+# Configure the schema adapter to talk to rip-db at DB_URL.
+globalThis.__ripSchema.__schemaSetAdapter
+  query: (sql, params) ->
+    body = if params?.length then { sql, params } else { sql }
+    res = fetch! "#{DB_URL}/sql",
+      method: 'POST'
+      headers: { 'Content-Type': 'application/json' }
+      body: JSON.stringify body
+    data = res.json!
+    throw new Error data.error if data.error
+    data
 
 export sql = (query, params) ->
   body = if params then { sql: query, params } else { sql: query }
@@ -36,10 +42,6 @@ export bulk = (table, columns, rows) ->
   data = res.json!
   warn "[db] Bulk warning: #{data.error}" if data.error
   data
-
-# ==============================================================================
-# Setup (called once by manager or single-process — never by workers)
-# ==============================================================================
 
 dbReachable = ->
   try
@@ -75,11 +77,13 @@ export setup = ->
   check = sql! "SELECT count(*) FROM information_schema.tables WHERE table_name = 'spots'"
   return if check.data?[0]?[0] > 0
 
-  for stmt in schema.toSQL().split(';')
+  # Hand-order DDL by dependency — User before Spot/Booking, Booking before
+  # Spot (since Spot belongs_to Booking).
+  allDDL = [User.toSQL(), Booking.toSQL(), Spot.toSQL()].join('\n\n')
+  for stmt in allDDL.split(';')
     sql! stmt.trim() + ';' if stmt.trim()
   p '[setup] Tables created'
 
-  # Seed 4 weeks of spots starting from next Monday
   today = new Date()
   day = today.getDay()
   daysUntilMonday = if day is 0 then 1 else if day is 1 then 0 else 8 - day
@@ -97,7 +101,6 @@ export setup = ->
   bulk! 'spots', ['week', 'slot'], spotRows
   p "[setup] Seeded #{spotRows.length} spots for 4 weeks starting #{monday.toISOString().slice(0, 10)}"
 
-  # Seed users
   userRows = [
     ['user',  'Test',  'User',     'test@streamlineschool.com']
     ['admin', 'Steve', 'Shreeve',  'steve@streamlineschool.com']

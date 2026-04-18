@@ -435,7 +435,6 @@ Rip includes optional packages for full-stack development:
 | [@rip-lang/ui](packages/ui/) | — | Unified UI system — browser widgets, email components, shared helpers, Tailwind integration |
 | [@rip-lang/swarm](packages/swarm/) | 1.2.18 | Parallel job runner with worker pool |
 | [@rip-lang/csv](packages/csv/) | 1.3.6 | CSV parser + writer |
-| [@rip-lang/schema](packages/schema/) | 0.3.8 | Unified schema → TypeScript types, SQL DDL, validation, ORM |
 | [VS Code Extension](packages/vscode/) | 0.5.7 | Syntax highlighting, type intelligence, source maps |
 
 ```bash

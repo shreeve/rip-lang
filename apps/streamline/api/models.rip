@@ -1,0 +1,40 @@
+# Streamline Swim School — data model declarations
+
+export SpotStatus = schema :enum
+  available
+  booked
+
+export User = schema :model
+  role?           string, [1, 20]
+  firstName?      string, [1, 50]
+  lastName?       string, [1, 50]
+  email!#         email
+  phone?          string, [1, 20]
+  source?         string, [0, 100]
+  photo?          url
+  code?           string
+  codeExpiresAt?  datetime
+
+  @has_many Spot
+  @has_many Booking
+  @timestamps
+
+export Spot = schema :model
+  week!           date
+  slot!           string, [5, 5]
+  status          string, ["available"]
+  child?          json
+
+  @belongs_to User?
+  @belongs_to Booking?
+  @timestamps
+
+export Booking = schema :model
+  week!           date
+  slot!           string, [5, 5]
+  children        json
+  meta?           json
+
+  @belongs_to User
+  @has_many Spot
+  @timestamps
