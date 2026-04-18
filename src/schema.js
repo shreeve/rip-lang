@@ -261,10 +261,26 @@ function parseFieldedLine(kind, line, entries) {
     if (!nameTok || (nameTok[0] !== 'IDENTIFIER' && nameTok[0] !== 'PROPERTY')) {
       throw schemaError(first, "Expected directive name after '@'.");
     }
+    let argTokens = line.slice(2);
+    // Pre-parse structured args so shadow-TS and runtime-codegen share
+    // the same descriptor shape. Relation and mixin directives get a
+    // `[{target, optional?}]` array; other directives leave `args` unset.
+    let args = null;
+    let dname = nameTok[1];
+    if (dname === 'belongs_to' || dname === 'has_many' || dname === 'has_one' ||
+        dname === 'one' || dname === 'many' || dname === 'mixin') {
+      let t0 = argTokens[0];
+      if (t0 && (t0[0] === 'IDENTIFIER' || t0[0] === 'PROPERTY')) {
+        let optional = t0.data?.predicate === true;
+        if (!optional && argTokens[1]?.[0] === '?') optional = true;
+        args = [{ target: t0[1], optional }];
+      }
+    }
     entries.push({
       tag: 'directive',
-      name: nameTok[1],
-      argTokens: line.slice(2),
+      name: dname,
+      args,
+      argTokens,
       loc: first.loc,
     });
     return;
@@ -1896,7 +1912,44 @@ function getSchemaRuntime() {
 export const SCHEMA_INTRINSIC_DECLS = [
   'interface SchemaIssue { field: string; error: string; message: string; }',
   'type SchemaSafeResult<T> = { ok: true; value: T; errors: null } | { ok: false; value: null; errors: SchemaIssue[] };',
-  'interface Schema<T> { parse(data: unknown): T; safe(data: unknown): SchemaSafeResult<T>; ok(data: unknown): boolean; }',
+  // Base Schema interface. `Out` is the parsed value type; `In` is the
+  // data shape (defaults to unknown). Algebra methods are parameterized
+  // over `In` so chained operations on a typed :shape or :model derive
+  // correctly; when `In` defaults to unknown, `keyof In` is `never` and
+  // algebra methods don't autocomplete — which is the right behavior
+  // for :input schemas where the input shape isn't statically known.
+  'interface Schema<Out, In = unknown> {',
+  '  parse(data: In): Out;',
+  '  safe(data: In): SchemaSafeResult<Out>;',
+  '  ok(data: unknown): boolean;',
+  '  pick<K extends keyof In>(...keys: K[]): Schema<Pick<In, K>, Pick<In, K>>;',
+  '  omit<K extends keyof In>(...keys: K[]): Schema<Omit<In, K>, Omit<In, K>>;',
+  '  partial(): Schema<Partial<In>, Partial<In>>;',
+  '  required<K extends keyof In>(...keys: K[]): Schema<Omit<In, K> & Required<Pick<In, K>>, Omit<In, K> & Required<Pick<In, K>>>;',
+  '  extend<U>(other: Schema<U>): Schema<In & U, In & U>;',
+  '}',
+  // Chainable query builder for :model.
+  'interface SchemaQuery<T> {',
+  '  all(): Promise<T[]>;',
+  '  first(): Promise<T | null>;',
+  '  count(): Promise<number>;',
+  '  limit(n: number): SchemaQuery<T>;',
+  '  offset(n: number): SchemaQuery<T>;',
+  '  order(spec: string): SchemaQuery<T>;',
+  '}',
+  // ModelSchema extends the base schema surface with ORM methods. Algebra
+  // over `Data` (not `Instance`) so derived shapes reflect runtime
+  // behavior-dropping semantics.
+  'interface ModelSchema<Instance, Data = unknown> extends Schema<Instance, Data> {',
+  '  find(id: unknown): Promise<Instance | null>;',
+  '  findMany(ids: unknown[]): Promise<Instance[]>;',
+  '  where(cond: Record<string, unknown> | string, ...params: unknown[]): SchemaQuery<Instance>;',
+  '  all(limit?: number): Promise<Instance[]>;',
+  '  first(): Promise<Instance | null>;',
+  '  count(cond?: Record<string, unknown>): Promise<number>;',
+  '  create(data: Partial<Data>): Promise<Instance>;',
+  '  toSQL(options?: { dropFirst?: boolean; header?: string }): string;',
+  '}',
 ];
 
 const RIP_TYPE_TO_TS = {
@@ -1934,115 +1987,203 @@ function descriptorFromSchemaNode(schemaNode) {
   return null;
 }
 
-// Walk the parsed s-expression for named schema declarations. Mirrors
-// `emitComponentTypes` in structure: returns true when at least one
-// schema was found; appends declarations (plus `export` keyword when
-// appropriate) to `lines`.
+// Walk the parsed s-expression collecting every named schema declaration.
+// Mixins are emitted first so subsequent :shape/:model type aliases can
+// reference them in `& Timestamps`-style intersections. Within a group,
+// source order is preserved. Returns true when at least one schema was
+// found (drives intrinsic preamble injection).
 export function emitSchemaTypes(sexpr, lines) {
-  if (!Array.isArray(sexpr)) return false;
-  let found = false;
+  const collected = [];
+  collectSchemas(sexpr, collected);
+  if (!collected.length) return false;
 
-  let head = sexpr[0]?.valueOf?.() ?? sexpr[0];
+  // Set of locally-known schema names (for relation-accessor type
+  // resolution — same-file targets get typed, unknown targets degrade).
+  const known = new Set(collected.map(c => c.name));
+  const byName = new Map(collected.map(c => [c.name, c]));
 
-  // Detect the two wrapper shapes:
-  //   [= Name Schema]
-  //   [export [= Name Schema]]
+  // Mixin types first so type aliases down-file can reference them.
+  for (const c of collected) {
+    if (c.descriptor.kind === 'mixin') emitOneSchemaType(c, byName, known, lines);
+  }
+  for (const c of collected) {
+    if (c.descriptor.kind !== 'mixin') emitOneSchemaType(c, byName, known, lines);
+  }
+  return true;
+}
+
+function collectSchemas(sexpr, out) {
+  if (!Array.isArray(sexpr)) return;
+  const head = sexpr[0]?.valueOf?.() ?? sexpr[0];
   let exported = false;
   let assignNode = null;
   if (head === 'export' && Array.isArray(sexpr[1])) {
-    let inner = sexpr[1];
-    let innerHead = inner[0]?.valueOf?.() ?? inner[0];
-    if (innerHead === '=') {
-      exported = true;
-      assignNode = inner;
-    }
+    const inner = sexpr[1];
+    const innerHead = inner[0]?.valueOf?.() ?? inner[0];
+    if (innerHead === '=') { exported = true; assignNode = inner; }
+    else collectSchemas(sexpr[1], out);
   } else if (head === '=') {
     assignNode = sexpr;
-  }
-
-  if (assignNode && Array.isArray(assignNode[2])) {
-    let name = assignNode[1]?.valueOf?.() ?? assignNode[1];
-    let descriptor = descriptorFromSchemaNode(assignNode[2]);
-    if (typeof name === 'string' && descriptor) {
-      emitOneSchemaType(name, descriptor, exported, lines);
-      found = true;
-    }
-  }
-
-  // Recurse into program/block nodes so schemas nested inside a top-level
-  // block or export surface too.
-  if (head === 'program' || head === 'block') {
+  } else if (head === 'program' || head === 'block') {
     for (let i = 1; i < sexpr.length; i++) {
-      if (Array.isArray(sexpr[i])) {
-        if (emitSchemaTypes(sexpr[i], lines)) found = true;
-      }
+      if (Array.isArray(sexpr[i])) collectSchemas(sexpr[i], out);
     }
-  } else if (head === 'export' && Array.isArray(sexpr[1]) && !assignNode) {
-    if (emitSchemaTypes(sexpr[1], lines)) found = true;
   }
-
-  return found;
+  if (assignNode && Array.isArray(assignNode[2])) {
+    const name = assignNode[1]?.valueOf?.() ?? assignNode[1];
+    const descriptor = descriptorFromSchemaNode(assignNode[2]);
+    if (typeof name === 'string' && descriptor) {
+      out.push({ name, descriptor, exported });
+    }
+  }
 }
 
-function emitOneSchemaType(name, descriptor, exported, lines) {
-  let exp = exported ? 'export ' : '';
-  let decl = exported ? '' : 'declare ';
+function emitOneSchemaType(collected, byName, known, lines) {
+  const { name, descriptor, exported } = collected;
+  const exp = exported ? 'export ' : '';
+  const decl = exported ? '' : 'declare ';
 
   if (descriptor.kind === 'enum') {
-    let members = [];
-    for (let e of descriptor.entries) {
+    const members = [];
+    for (const e of descriptor.entries) {
       if (e.tag !== 'enum-member') continue;
-      let v = e.value !== undefined ? e.value : e.name;
+      const v = e.value !== undefined ? e.value : e.name;
       members.push(typeof v === 'string' ? JSON.stringify(v) : String(v));
     }
-    let union = members.length ? members.join(' | ') : 'never';
+    const union = members.length ? members.join(' | ') : 'never';
     lines.push(`${exp}type ${name} = ${union};`);
     lines.push(`${exp}${decl}const ${name}: { parse(data: unknown): ${name}; safe(data: unknown): SchemaSafeResult<${name}>; ok(data: unknown): data is ${name}; };`);
     return;
   }
 
   if (descriptor.kind === 'mixin') {
-    // :mixin is non-instantiable — expose it as a type-only alias of its
-    // field struct so tooling can still reference the shape.
-    let fieldProps = fieldPropList(descriptor);
+    // :mixin is declaration-time-only; expose it as a field type alias
+    // so hosts that `@mixin Foo` can intersect it into their Data type.
+    // No value declaration — mixins aren't user-facing runtime values.
+    const fieldProps = fieldPropList(descriptor);
     lines.push(`${exp}type ${name} = { ${fieldProps.join('; ')} };`);
     return;
   }
 
-  // :input / :shape / :model (Phase 4 takes over :model; for now treat
-  // it like :shape for type-surface purposes)
-  let fieldProps = fieldPropList(descriptor);
-  let methods = [];
-  let computed = [];
-  for (let e of descriptor.entries) {
-    if (e.tag === 'method' || e.tag === 'hook') {
+  const fieldProps = fieldPropList(descriptor);
+  const mixinRefs = mixinIntersections(descriptor, byName);
+  const methods = [];
+  const computed = [];
+  for (const e of descriptor.entries) {
+    if (e.tag === 'method') {
       methods.push(`${e.name}: (...args: any[]) => unknown`);
     } else if (e.tag === 'computed') {
       computed.push(`readonly ${e.name}: unknown`);
     }
+    // hooks are intentionally omitted — they fire automatically and
+    // shouldn't appear in autocomplete.
   }
 
-  let hasBehavior = methods.length > 0 || computed.length > 0;
-  if (descriptor.kind === 'shape' && hasBehavior) {
-    let dataName = `${name}Data`;
-    let instName = `${name}Instance`;
-    lines.push(`${exp}type ${dataName} = { ${fieldProps.join('; ')} };`);
-    let behaviorMembers = [...computed, ...methods];
-    lines.push(`${exp}type ${instName} = ${dataName} & { ${behaviorMembers.join('; ')} };`);
-    lines.push(`${exp}${decl}const ${name}: Schema<${instName}>;`);
-  } else {
-    let valueName = `${name}Value`;
-    lines.push(`${exp}type ${valueName} = { ${fieldProps.join('; ')} };`);
-    lines.push(`${exp}${decl}const ${name}: Schema<${valueName}>;`);
+  const dataBase = `{ ${fieldProps.join('; ')} }`;
+  const dataType = mixinRefs.length ? `${dataBase} & ${mixinRefs.join(' & ')}` : dataBase;
+
+  if (descriptor.kind === 'model') {
+    const dataName = `${name}Data`;
+    const instName = `${name}Instance`;
+    const relationAccessors = modelRelationAccessors(descriptor, known);
+    const instanceExtras = [
+      ...computed,
+      ...methods,
+      ...relationAccessors,
+      `save(): Promise<${instName}>`,
+      `destroy(): Promise<${instName}>`,
+      `ok(): boolean`,
+      `errors(): SchemaIssue[]`,
+      `toJSON(): ${dataName}`,
+    ];
+    lines.push(`${exp}type ${dataName} = ${dataType};`);
+    lines.push(`${exp}type ${instName} = ${dataName} & { ${instanceExtras.join('; ')} };`);
+    lines.push(`${exp}${decl}const ${name}: ModelSchema<${instName}, ${dataName}>;`);
+    return;
   }
+
+  if (descriptor.kind === 'shape') {
+    const dataName = `${name}Data`;
+    const instName = `${name}Instance`;
+    const hasBehavior = methods.length + computed.length > 0;
+    lines.push(`${exp}type ${dataName} = ${dataType};`);
+    if (hasBehavior) {
+      lines.push(`${exp}type ${instName} = ${dataName} & { ${[...computed, ...methods].join('; ')} };`);
+      lines.push(`${exp}${decl}const ${name}: Schema<${instName}, ${dataName}>;`);
+    } else {
+      lines.push(`${exp}${decl}const ${name}: Schema<${dataName}, ${dataName}>;`);
+    }
+    return;
+  }
+
+  // :input — parse returns the Data shape directly (no behavior).
+  const valueName = `${name}Value`;
+  lines.push(`${exp}type ${valueName} = ${dataType};`);
+  lines.push(`${exp}${decl}const ${name}: Schema<${valueName}, ${valueName}>;`);
+}
+
+// Return an array of mixin type-reference strings for `& Foo & Bar` joins.
+function mixinIntersections(descriptor, byName) {
+  const refs = [];
+  for (const e of descriptor.entries) {
+    if (e.tag !== 'directive' || e.name !== 'mixin') continue;
+    const args = e.args;
+    const target = args && args[0] && args[0].target;
+    if (!target) continue;
+    const known = byName && byName.get(target);
+    if (known && known.descriptor.kind === 'mixin') {
+      refs.push(target);
+    }
+  }
+  return refs;
+}
+
+// Emit relation accessor type declarations for :model instances. For
+// targets declared in the same file we emit a typed Promise; for
+// unknown (cross-file) targets we degrade to `Promise<unknown>` rather
+// than emit an unresolved bare name.
+function modelRelationAccessors(descriptor, known) {
+  const out = [];
+  for (const e of descriptor.entries) {
+    if (e.tag !== 'directive') continue;
+    const args = e.args;
+    if (!args || !args[0]) continue;
+    const target = args[0].target;
+    if (!target) continue;
+    const optional = args[0].optional === true;
+    const targetLc = target[0].toLowerCase() + target.slice(1);
+    const instName = `${target}Instance`;
+    const isKnown = known && known.has(target);
+    if (e.name === 'belongs_to') {
+      const retT = isKnown ? (optional ? `${instName} | null` : `${instName} | null`) : 'unknown';
+      out.push(`${targetLc}(): Promise<${retT}>`);
+    } else if (e.name === 'has_one' || e.name === 'one') {
+      const retT = isKnown ? `${instName} | null` : 'unknown';
+      out.push(`${targetLc}(): Promise<${retT}>`);
+    } else if (e.name === 'has_many' || e.name === 'many') {
+      const retT = isKnown ? `${instName}[]` : 'unknown[]';
+      const pluralLc = __schemaClientPluralize(targetLc);
+      out.push(`${pluralLc}(): Promise<${retT}>`);
+    }
+  }
+  return out;
+}
+
+// Minimal pluralizer for accessor names. Keep in sync with the runtime
+// __schemaPluralize rules (same surface for declaration parity).
+function __schemaClientPluralize(w) {
+  const lw = w.toLowerCase();
+  if (/[^aeiouy]y$/i.test(w)) return w.slice(0, -1) + 'ies';
+  if (/(s|x|z|ch|sh)$/i.test(w)) return w + 'es';
+  return w + 's';
 }
 
 function fieldPropList(descriptor) {
-  let props = [];
-  for (let e of descriptor.entries) {
+  const props = [];
+  for (const e of descriptor.entries) {
     if (e.tag !== 'field') continue;
-    let required = e.modifiers.includes('!');
-    let mark = required ? '' : '?';
+    const required = e.modifiers.includes('!');
+    const mark = required ? '' : '?';
     props.push(`${e.name}${mark}: ${mapFieldType(e)}`);
   }
   return props;

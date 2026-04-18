@@ -351,20 +351,50 @@ test ":input field array validation", '''
   ''', [false, 'type']
 
 # ==============================================================================
-# Phase 3.5: shadow TypeScript emission
+# Phases 3.5 + 7: shadow TypeScript emission
 # ==============================================================================
 
-type ":input emits Schema<ValueType>", '''
+INTRINSICS = '''
+  interface SchemaIssue { field: string; error: string; message: string; }
+  type SchemaSafeResult<T> = { ok: true; value: T; errors: null } | { ok: false; value: null; errors: SchemaIssue[] };
+  interface Schema<Out, In = unknown> {
+    parse(data: In): Out;
+    safe(data: In): SchemaSafeResult<Out>;
+    ok(data: unknown): boolean;
+    pick<K extends keyof In>(...keys: K[]): Schema<Pick<In, K>, Pick<In, K>>;
+    omit<K extends keyof In>(...keys: K[]): Schema<Omit<In, K>, Omit<In, K>>;
+    partial(): Schema<Partial<In>, Partial<In>>;
+    required<K extends keyof In>(...keys: K[]): Schema<Omit<In, K> & Required<Pick<In, K>>, Omit<In, K> & Required<Pick<In, K>>>;
+    extend<U>(other: Schema<U>): Schema<In & U, In & U>;
+  }
+  interface SchemaQuery<T> {
+    all(): Promise<T[]>;
+    first(): Promise<T | null>;
+    count(): Promise<number>;
+    limit(n: number): SchemaQuery<T>;
+    offset(n: number): SchemaQuery<T>;
+    order(spec: string): SchemaQuery<T>;
+  }
+  interface ModelSchema<Instance, Data = unknown> extends Schema<Instance, Data> {
+    find(id: unknown): Promise<Instance | null>;
+    findMany(ids: unknown[]): Promise<Instance[]>;
+    where(cond: Record<string, unknown> | string, ...params: unknown[]): SchemaQuery<Instance>;
+    all(limit?: number): Promise<Instance[]>;
+    first(): Promise<Instance | null>;
+    count(cond?: Record<string, unknown>): Promise<number>;
+    create(data: Partial<Data>): Promise<Instance>;
+    toSQL(options?: { dropFirst?: boolean; header?: string }): string;
+  }
+
+  '''
+
+type ":input emits Schema<Value, Value>", '''
   SignupInput = schema
     email! email
     password! string
-  ''', '''
-  interface SchemaIssue { field: string; error: string; message: string; }
-  type SchemaSafeResult<T> = { ok: true; value: T; errors: null } | { ok: false; value: null; errors: SchemaIssue[] };
-  interface Schema<T> { parse(data: unknown): T; safe(data: unknown): SchemaSafeResult<T>; ok(data: unknown): boolean; }
-
+  ''', INTRINSICS + "\n" + '''
   type SignupInputValue = { email: string; password: string };
-  declare const SignupInput: Schema<SignupInputValue>;
+  declare const SignupInput: Schema<SignupInputValue, SignupInputValue>;
   '''
 
 type ":shape emits Data + Instance types", '''
@@ -373,14 +403,10 @@ type ":shape emits Data + Instance types", '''
     city! string
     full: ~> "x"
     normalize: -> @
-  ''', '''
-  interface SchemaIssue { field: string; error: string; message: string; }
-  type SchemaSafeResult<T> = { ok: true; value: T; errors: null } | { ok: false; value: null; errors: SchemaIssue[] };
-  interface Schema<T> { parse(data: unknown): T; safe(data: unknown): SchemaSafeResult<T>; ok(data: unknown): boolean; }
-
+  ''', INTRINSICS + "\n" + '''
   type AddressData = { street: string; city: string };
   type AddressInstance = AddressData & { readonly full: unknown; normalize: (...args: any[]) => unknown };
-  declare const Address: Schema<AddressInstance>;
+  declare const Address: Schema<AddressInstance, AddressData>;
   '''
 
 type ":enum emits union + const with predicate ok()", '''
@@ -388,11 +414,7 @@ type ":enum emits union + const with predicate ok()", '''
     admin
     user
     guest
-  ''', '''
-  interface SchemaIssue { field: string; error: string; message: string; }
-  type SchemaSafeResult<T> = { ok: true; value: T; errors: null } | { ok: false; value: null; errors: SchemaIssue[] };
-  interface Schema<T> { parse(data: unknown): T; safe(data: unknown): SchemaSafeResult<T>; ok(data: unknown): boolean; }
-
+  ''', INTRINSICS + "\n" + '''
   type Role = "admin" | "user" | "guest";
   declare const Role: { parse(data: unknown): Role; safe(data: unknown): SchemaSafeResult<Role>; ok(data: unknown): data is Role; };
   '''
@@ -401,11 +423,7 @@ type "valued :enum emits number union", '''
   Status = schema :enum
     pending: 0
     active: 1
-  ''', '''
-  interface SchemaIssue { field: string; error: string; message: string; }
-  type SchemaSafeResult<T> = { ok: true; value: T; errors: null } | { ok: false; value: null; errors: SchemaIssue[] };
-  interface Schema<T> { parse(data: unknown): T; safe(data: unknown): SchemaSafeResult<T>; ok(data: unknown): boolean; }
-
+  ''', INTRINSICS + "\n" + '''
   type Status = 0 | 1;
   declare const Status: { parse(data: unknown): Status; safe(data: unknown): SchemaSafeResult<Status>; ok(data: unknown): data is Status; };
   '''
@@ -415,13 +433,49 @@ type "optional fields marked with ?", '''
     name!  string
     bio?   text
     age    integer
-  ''', '''
-  interface SchemaIssue { field: string; error: string; message: string; }
-  type SchemaSafeResult<T> = { ok: true; value: T; errors: null } | { ok: false; value: null; errors: SchemaIssue[] };
-  interface Schema<T> { parse(data: unknown): T; safe(data: unknown): SchemaSafeResult<T>; ok(data: unknown): boolean; }
-
+  ''', INTRINSICS + "\n" + '''
   type UserValue = { name: string; bio?: string; age?: number };
-  declare const User: Schema<UserValue>;
+  declare const User: Schema<UserValue, UserValue>;
+  '''
+
+type ":model emits ModelSchema<Instance, Data> with relation accessors", '''
+  Org = schema :model
+    name! string
+  User = schema :model
+    name! string
+    @belongs_to Org
+  ''', INTRINSICS + "\n" + '''
+  type OrgData = { name: string };
+  type OrgInstance = OrgData & { save(): Promise<OrgInstance>; destroy(): Promise<OrgInstance>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): OrgData };
+  declare const Org: ModelSchema<OrgInstance, OrgData>;
+  type UserData = { name: string };
+  type UserInstance = UserData & { org(): Promise<OrgInstance | null>; save(): Promise<UserInstance>; destroy(): Promise<UserInstance>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): UserData };
+  declare const User: ModelSchema<UserInstance, UserData>;
+  '''
+
+type ":mixin emits field-type alias; host Data intersects mixins", '''
+  User = schema :model
+    name! string
+    @mixin Timestamps
+  Timestamps = schema :mixin
+    createdAt! datetime
+    updatedAt! datetime
+  ''', INTRINSICS + "\n" + '''
+  type Timestamps = { createdAt: Date; updatedAt: Date };
+  type UserData = { name: string } & Timestamps;
+  type UserInstance = UserData & { save(): Promise<UserInstance>; destroy(): Promise<UserInstance>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): UserData };
+  declare const User: ModelSchema<UserInstance, UserData>;
+  '''
+
+type "cross-file relation target degrades to unknown", '''
+  User = schema :model
+    name! string
+    @belongs_to Organization
+    @has_many Order
+  ''', INTRINSICS + "\n" + '''
+  type UserData = { name: string };
+  type UserInstance = UserData & { organization(): Promise<unknown>; orders(): Promise<unknown[]>; save(): Promise<UserInstance>; destroy(): Promise<UserInstance>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): UserData };
+  declare const User: ModelSchema<UserInstance, UserData>;
   '''
 
 # ==============================================================================
@@ -799,11 +853,7 @@ test "algebra drops behavior (D13)", '''
 type "exported schema emits export const", '''
   export Foo = schema :input
     a! string
-  ''', '''
-  interface SchemaIssue { field: string; error: string; message: string; }
-  type SchemaSafeResult<T> = { ok: true; value: T; errors: null } | { ok: false; value: null; errors: SchemaIssue[] };
-  interface Schema<T> { parse(data: unknown): T; safe(data: unknown): SchemaSafeResult<T>; ok(data: unknown): boolean; }
-
+  ''', INTRINSICS + "\n" + '''
   export type FooValue = { a: string };
-  export const Foo: Schema<FooValue>;
+  export const Foo: Schema<FooValue, FooValue>;
   '''
