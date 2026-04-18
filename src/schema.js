@@ -212,11 +212,11 @@ function parseSchemaBody(kind, bodyTokens, ctx) {
     for (let line of lines) {
       parseFieldedLine(kind, line, entries);
     }
+    // Capability-matrix enforcement by kind. `@mixin` is allowed as a
+    // field-inclusion directive on every fielded kind because it adds
+    // fields (not behavior). Other directives are restricted per the
+    // matrix in the language reference.
     if (kind === 'mixin') {
-      // :mixin is fields-only (D17). `@mixin Other` is the one directive
-      // allowed. Methods / computed / hooks / other directives at top
-      // level are compile errors — mixins have no lifecycle, no ORM, and
-      // shouldn't shadow behavior on host schemas either.
       for (let e of entries) {
         if (e.tag === 'method' || e.tag === 'computed' || e.tag === 'hook') {
           throw schemaError({ loc: e.headerLoc || e.loc },
@@ -225,6 +225,31 @@ function parseSchemaBody(kind, bodyTokens, ctx) {
         if (e.tag === 'directive' && e.name !== 'mixin') {
           throw schemaError({ loc: e.loc },
             `:mixin schemas only accept '@mixin Name' directives. '@${e.name}' is not allowed.`);
+        }
+      }
+    } else if (kind === 'input') {
+      for (let e of entries) {
+        if (e.tag === 'method' || e.tag === 'computed' || e.tag === 'hook') {
+          throw schemaError({ loc: e.headerLoc || e.loc },
+            `:input schemas are fields-only. '${e.name}' is a ${e.tag}; use :shape or :model if you need behavior.`);
+        }
+        if (e.tag === 'directive' && e.name !== 'mixin') {
+          throw schemaError({ loc: e.loc },
+            `:input schemas only accept '@mixin Name' directives. '@${e.name}' is not allowed.`);
+        }
+      }
+    } else if (kind === 'shape') {
+      // :shape accepts fields, methods, computed, and @mixin. Hooks
+      // and ORM-bound directives (timestamps, softDelete, index,
+      // belongs_to, has_many, has_one, link) are :model-only.
+      for (let e of entries) {
+        if (e.tag === 'hook') {
+          throw schemaError({ loc: e.headerLoc || e.loc },
+            `:shape schemas don't have lifecycle hooks. '${e.name}' runs only on :model; move it or remove it.`);
+        }
+        if (e.tag === 'directive' && e.name !== 'mixin') {
+          throw schemaError({ loc: e.loc },
+            `:shape schemas only accept '@mixin Name'. '@${e.name}' is :model-only.`);
         }
       }
     }
@@ -381,9 +406,18 @@ function parseFieldedLine(kind, line, entries) {
       throw schemaError(rest[0],
         `Expected ',' between type and constraints for field '${name}'.`);
     }
-    // Split top-level by commas.
+    // Split top-level by commas. Multi-line trailers (`name! type,\n
+    // [8, 100]`) introduce surrounding INDENT/OUTDENT tokens that
+    // don't affect semantics — strip them from each part so the head
+    // is the literal `[` or `{`.
     let parts = splitTopLevelByComma(rest.slice(1));
     for (let part of parts) {
+      while (part.length && (part[0][0] === 'INDENT' || part[0][0] === 'TERMINATOR')) {
+        part = part.slice(1);
+      }
+      while (part.length && (part[part.length - 1][0] === 'OUTDENT' || part[part.length - 1][0] === 'TERMINATOR')) {
+        part = part.slice(0, -1);
+      }
       if (!part.length) continue;
       let head = part[0];
       if (head[0] === '[' || head[0] === 'INDEX_START') {

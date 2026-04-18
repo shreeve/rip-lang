@@ -239,6 +239,98 @@ fail "valued enum with bare name: value form is rejected", '''
   '''
 
 # ==============================================================================
+# Kind-capability enforcement (§3 matrix)
+# ==============================================================================
+
+fail ":input rejects methods", '''
+  X = schema :input
+    name! string
+    greet: -> "hi"
+  '''
+
+fail ":input rejects computed getters", '''
+  X = schema :input
+    name! string
+    upper: ~> @name
+  '''
+
+fail ":input rejects non-@mixin directives", '''
+  X = schema :input
+    name! string
+    @timestamps
+  '''
+
+fail ":shape rejects @timestamps", '''
+  X = schema :shape
+    name! string
+    @timestamps
+  '''
+
+fail ":shape rejects @belongs_to", '''
+  X = schema :shape
+    name! string
+    @belongs_to Other
+  '''
+
+code ":input + @mixin is allowed (field sharing)", '''
+  Base = schema :mixin
+    id! uuid
+  X = schema :input
+    name! string
+    @mixin Base
+  ''', '''
+  let Base, X;
+  Base = __schema({kind: "mixin", name: "Base", entries: [{tag: "field", name: "id", modifiers: ["!"], typeName: "uuid", array: false}]});
+  X = __schema({kind: "input", name: "X", entries: [{tag: "field", name: "name", modifiers: ["!"], typeName: "string", array: false}, {tag: "directive", name: "mixin", args: [{target: "Base"}]}]});
+  ''', opts
+
+code ":shape + @mixin is allowed (field sharing)", '''
+  Stamps = schema :mixin
+    createdAt! datetime
+  Addr = schema :shape
+    street! string
+    @mixin Stamps
+  ''', '''
+  let Addr, Stamps;
+  Stamps = __schema({kind: "mixin", name: "Stamps", entries: [{tag: "field", name: "createdAt", modifiers: ["!"], typeName: "datetime", array: false}]});
+  Addr = __schema({kind: "shape", name: "Addr", entries: [{tag: "field", name: "street", modifiers: ["!"], typeName: "string", array: false}, {tag: "directive", name: "mixin", args: [{target: "Stamps"}]}]});
+  ''', opts
+
+# ==============================================================================
+# Remaining §9.1 coverage
+# ==============================================================================
+
+fail "field vs computed collision in :model", '''
+  User = schema :model
+    name! string
+    name: ~> @email
+  User.toSQL()
+'''
+
+fail "reserved instance method name collides as a field", '''
+  User = schema :model
+    save! string
+  User.toSQL()
+'''
+
+test "algebra on :input returns :shape (kind transition)", '''
+  Signup = schema
+    email!    email
+    password! string
+  Compact = Signup.pick("email")
+  [Compact.kind, [...Compact._normalize().fields.keys()]]
+''', ["shape", ["email"]]
+
+code "multi-line field constraints parse", '''
+  X = schema
+    password! string,
+      [8, 100]
+  ''', '''
+  let X;
+  X = __schema({kind: "input", name: "X", entries: [{tag: "field", name: "password", modifiers: ["!"], typeName: "string", array: false, constraints: {min: 8, max: 100}}]});
+  ''', opts
+
+# ==============================================================================
 # Symbol-literal enum members and inferred :enum kind
 # ==============================================================================
 
@@ -718,6 +810,24 @@ test "has_many relation resolves from registry", modelHeader + '''
   orders = u.orders!
   orders.length
 ''', 2
+
+test "self-referential :model — Category @belongs_to Category?", modelHeader + '''
+  Category = schema :model
+    name! string
+    @belongs_to Category?
+  sql = Category.toSQL()
+  [sql.includes("category_id INTEGER REFERENCES categories(id)"), Category.kind]
+''', [true, "model"]
+
+test ".toSQL() with circular @belongs_to / @has_many doesn't loop", modelHeader + '''
+  User = schema :model
+    name! string
+    @has_many Order
+  Order = schema :model
+    total integer
+    @belongs_to User
+  [User.toSQL().includes("CREATE TABLE users"), Order.toSQL().includes("user_id INTEGER NOT NULL REFERENCES users(id)")]
+''', [true, true]
 
 # -- namespace collisions --
 
