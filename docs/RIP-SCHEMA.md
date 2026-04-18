@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/shreeve/rip-lang/main/docs/assets/rip-schema-logo-960w.png" alt="Rip Schema Logo" width="400">
+  <img src="https://raw.githubusercontent.com/shreeve/rip-lang/main/docs/assets/rip-schema-social.png" alt="Rip Schema Logo" width="640">
 </p>
 
 # Rip Schema
