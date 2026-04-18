@@ -569,8 +569,8 @@ The descriptor passed to `__schema({...})` is Layer 1. Layer 2 normalization
 checks) runs once per schema on first downstream use. Layer 3 (validator
 plan) builds on the first `.parse/.safe/.ok`; Layer 4a (ORM) on the first
 `.find/.create/.save`; Layer 4b (DDL) on the first `.toSQL()`. The four
-caches are independent — a migration script that only calls `.toSQL()` never
-builds the ORM plan.
+caches are independent — a DDL-emitting script that only calls `.toSQL()`
+never builds the ORM plan.
 
 ### Registry
 
@@ -584,9 +584,9 @@ importing a file that defines named schemas activates them. Tests can call
 
 `.pick/.omit/.partial/.required/.extend` always return `kind: 'shape'` and
 drop behavior (methods, computed, hooks) — only fields survive. Calling
-`.find()`/`.toSQL()` on a derived shape throws a dedicated error pointing
-the user at query projection on the source model. This invariant is
-checked both in runtime tests (Phase 6) and in the shadow TS signatures.
+`.find()` / `.toSQL()` on a derived shape throws a dedicated error
+pointing the user at query projection on the source model. Runtime tests
+and the shadow TS signatures both enforce this.
 
 ### Shadow TS
 

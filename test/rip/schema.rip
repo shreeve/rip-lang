@@ -1,15 +1,13 @@
-# Test: Schema Keyword — Phases 1 + 3
+# Test: Schema Keyword
 #
-# Phase 1 tests validate the grammar / sub-parser / schema-mode-aware
-# diagnostics via `code` snapshots of the emitted `__schema({...})` call.
-# Phase 3 tests validate the runtime via `test` (compile + execute) for
-# .parse / .safe / .ok on :input, :shape, :enum, plus the canary
-# from plan §9.2 (the :shape half; algebra lands in Phase 6).
+# `code` snapshots pin the emitted `__schema({...})` shape for every
+# syntactic form. `test` cases execute the runtime against the compiled
+# output. `type` cases snapshot shadow TypeScript emission.
 
 opts = { skipPreamble: true, skipRuntimes: true, skipDataPart: true }
 
 # ==============================================================================
-# Phase 1: emission shape
+# Emission shape
 # ==============================================================================
 
 code "input default kind", '''
@@ -49,15 +47,21 @@ code "shape with method and computed", '''
   Address = __schema({kind: "shape", name: "Address", entries: [{tag: "field", name: "street", modifiers: ["!"], typeName: "string", array: false}, {tag: "computed", name: "full", fn: (function() { return this.street; })}, {tag: "method", name: "normalize", fn: (function() { return this; })}]});
   ''', opts
 
-code "bare enum", '''
+code "bare :symbol enum", '''
   Role = schema :enum
-    admin
-    user
-    guest
+    :admin
+    :user
+    :guest
   ''', '''
   let Role;
   Role = __schema({kind: "enum", name: "Role", entries: [{tag: "enum-member", name: "admin"}, {tag: "enum-member", name: "user"}, {tag: "enum-member", name: "guest"}]});
   ''', opts
+
+fail "bare identifier enum members are rejected", '''
+  Role = schema :enum
+    admin
+    user
+  '''
 
 code "valued enum", '''
   Status = schema :enum
@@ -150,7 +154,7 @@ code "schema.member access", '''
   x = schema.member;
   ''', opts
 
-# Schema-mode-aware diagnostics (Phase 1)
+# Schema-mode-aware diagnostics
 
 fail "field with colon before type", '''
   X = schema
@@ -299,7 +303,7 @@ fail "explicit :input prevents inference (:symbol is not a field)", '''
   '''
 
 # ==============================================================================
-# Phase 3: runtime — .parse, .safe, .ok for :input, :shape, :enum
+# Runtime — .parse, .safe, .ok for :input, :shape, :enum
 # ==============================================================================
 
 test ":input .parse returns cleaned value", '''
@@ -350,9 +354,9 @@ test "optional field missing is fine", '''
   ''', true
 
 test ":enum bare members", '''
-  Role = schema :enum
-    admin
-    user
+  Role = schema
+    :admin
+    :user
   [Role.parse("admin"), Role.ok("admin"), Role.ok("other")]
   ''', ["admin", true, false]
 
@@ -420,7 +424,7 @@ test ":input field array validation", '''
   ''', [false, 'type']
 
 # ==============================================================================
-# Phases 3.5 + 7: shadow TypeScript emission
+# Shadow TypeScript emission
 # ==============================================================================
 
 INTRINSICS = '''
@@ -479,10 +483,10 @@ type ":shape emits Data + Instance types", '''
   '''
 
 type ":enum emits union + const with predicate ok()", '''
-  Role = schema :enum
-    admin
-    user
-    guest
+  Role = schema
+    :admin
+    :user
+    :guest
   ''', INTRINSICS + "\n" + '''
   type Role = "admin" | "user" | "guest";
   declare const Role: { parse(data: unknown): Role; safe(data: unknown): SchemaSafeResult<Role>; ok(data: unknown): data is Role; };
@@ -548,7 +552,7 @@ type "cross-file relation target degrades to unknown", '''
   '''
 
 # ==============================================================================
-# Phase 4: :model runtime — ORM, hooks, DDL, relations
+# :model runtime — ORM, hooks, DDL, relations
 # ==============================================================================
 #
 # Each :model test installs a fresh in-memory adapter that records SQL
@@ -731,7 +735,7 @@ fail "reserved ORM name as field in :model", '''
 '''
 
 # ==============================================================================
-# Phase 5: :mixin expansion, cycles, collisions
+# :mixin expansion, cycles, collisions
 # ==============================================================================
 
 test "mixin expands fields into host :model", '''
@@ -820,7 +824,7 @@ fail ":mixin rejects non-@mixin directives", '''
 '''
 
 # ==============================================================================
-# Phase 6: schema algebra (.pick / .omit / .partial / .required / .extend)
+# Schema algebra: .pick / .omit / .partial / .required / .extend
 # ==============================================================================
 
 test ".pick returns a :shape with only named fields", '''

@@ -446,25 +446,18 @@ function parseCallableLine(kind, headerTok, line, entries) {
 function parseEnumLine(line, entries) {
   let first = line[0];
   if (!first) return;
-  // Enum member forms (only three):
-  //   admin          bare IDENTIFIER member → maps to name string "admin"
-  //   :admin         bare SYMBOL member     → same
-  //   :pending 0     valued SYMBOL member   → maps "pending" → 0 (or 0 → 0)
+  // Enum member forms:
+  //   :admin          bare symbol    → maps to name string "admin"
+  //   :pending 0      valued symbol  → maps "pending" (and 0) to 0
   //
-  // Mixing valued and bare members in the same enum is allowed but
-  // unusual: unvalued entries map to their name string while valued
-  // entries keep their literal. The runtime Map is heterogeneous in
-  // that case — users who want clean numeric enums should value every
-  // member explicitly.
-  if (first[0] !== 'IDENTIFIER' && first[0] !== 'SYMBOL') {
-    if (first[0] === 'PROPERTY') {
-      // Old `name: value` form. Reject with a clear pointer to the
-      // new idiom so migration is mechanical.
-      throw schemaError(first,
-        `Enum member '${first[1]}: ...' — valued members use ':name value' now (drop the trailing colon, add a leading :). E.g. ':${first[1]} 0'.`);
-    }
+  // Values are any literal (number, string, boolean, null, regex).
+  // Mixing bare and valued members in one enum is permitted but
+  // unusual: the Map is heterogeneous when you do it — bare entries
+  // hold name strings, valued entries hold their literal. Keep the
+  // members uniform if that matters for downstream consumers.
+  if (first[0] !== 'SYMBOL') {
     throw schemaError(first,
-      `Enum member must be an identifier or :symbol, got ${first[0]}.`);
+      `Enum member must be a :symbol. Use ':${first[1] ?? 'name'}' for a bare member or ':${first[1] ?? 'name'} value' for a valued one.`);
   }
   let name = first[1];
   let second = line[1];
@@ -472,16 +465,9 @@ function parseEnumLine(line, entries) {
     entries.push({ tag: 'enum-member', name, value: undefined, loc: first.loc });
     return;
   }
-
-  // Only the SYMBOL form can carry a value (space-separated, no colon).
-  // A bare IDENTIFIER followed by another token is a syntax error.
-  if (first[0] !== 'SYMBOL') {
-    throw schemaError(second,
-      `Enum member '${name}' — bare identifier members take no value. Use ':${name} value' for valued entries.`);
-  }
   if (second[0] === ':') {
     throw schemaError(second,
-      `Enum member ':${name}' — drop the ':' separator before the value. Use ':${name} value'.`);
+      `Enum member ':${name}' — drop the ':' before the value. Use ':${name} value'.`);
   }
   if (line.length > 2) {
     throw schemaError(line[2],
@@ -1033,10 +1019,10 @@ const __SchemaRegistry = {
     // @mixin Name looks up :mixin. Algebra (.extend etc.) accepts :shape
     // and derived shapes. Kind is checked at lookup time.
     if (!def.name) return;
-    // Most recent registration wins. Test harnesses rely on this because
-    // each recompile produces a fresh __SchemaDef instance with the same
-    // name. In production, redefining a named schema across modules is a
-    // design smell — Phase 8 medlabs migration will exercise it.
+    // Most recent registration wins. Recompilation produces a fresh
+    // __SchemaDef with the same name; the registry rebinds. Cross-
+    // module name collisions should be avoided — schema names are
+    // app-global identifiers for relation resolution.
     this._entries.set(def.name, { def, kind: def.kind });
   },
   get(name) {
@@ -1337,11 +1323,12 @@ class __SchemaDef {
   _hydrate(columns, row) {
     // DB rows are trusted: hydrate into a class instance without
     // revalidating. Column names arrive snake_case; declared fields live
-    // under their camelCase names, while implicit columns (id, created_at,
+    // under their camelCase names, and implicit columns (id, created_at,
     // updated_at, relation FKs) surface under their camelCase equivalents.
-    // For ergonomics, each snake_case column name also aliases to the
-    // camelCase property via a non-enumerable accessor — so
-    // order.user_id and order.userId both read the same value.
+    // Each snake_case column name also aliases the camelCase property via
+    // a non-enumerable accessor so order.user_id and order.userId read
+    // the same slot — useful when DB column names leak into user code
+    // via raw SQL helpers.
     const data = {};
     for (let i = 0; i < columns.length; i++) {
       data[__schemaCamel(columns[i].name)] = row[i];
@@ -1520,9 +1507,9 @@ class __SchemaDef {
 
   async create(data) {
     this._assertModel('create');
-    // Accept both snake_case and camelCase keys in input data. The
-    // runtime canonicalizes to camelCase so instance properties line up
-    // with declared field names.
+    // Input keys may be snake_case or camelCase; the runtime
+    // canonicalizes to camelCase so instance properties line up with
+    // declared field names.
     const klass = this._getClass();
     const canonical = {};
     if (data && typeof data === 'object') {
@@ -1843,8 +1830,8 @@ function __schemaSerialize(v, field) {
 }
 
 // ---- DDL emission (.toSQL) --------------------------------------------------
-// Layer 4b: runs on first .toSQL() call. Independent of ORM \u2014 migration
-// scripts that never touch .find/.create still work.
+// Layer 4b: runs on first .toSQL() call. Independent of ORM — scripts
+// that build schema from DDL never touch .find/.create.
 
 const __SCHEMA_SQL_TYPES = {
   string: 'VARCHAR', text: 'TEXT', integer: 'INTEGER', number: 'DOUBLE',

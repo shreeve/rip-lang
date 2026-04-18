@@ -1699,22 +1699,21 @@ CSV.save! 'output.csv', rows
 
 ## schema — Inline validators, models, and DDL
 
-The `schema` keyword declares a reusable schema value inline. It covers
-everything from input validation through database-backed models and DDL
-emission. Schemas live in `.rip` source — no separate `.schema` files, no
-package to import.
+The `schema` keyword declares a schema value inline. It covers input
+validation, shape modeling, enumerations, mixin field groups, and
+database-backed models — including DDL emission and a full ORM.
 
 ### Kinds
 
 Five kinds, selected by a `:symbol` after the keyword. The default is
-`:input` (the most common Zod-replacement case).
+`:input`.
 
 ```coffee
-SignupInput = schema            # :input (default)
-Address = schema :shape         # :shape — no DB, has methods/computed
-Role    = schema :enum          # :enum — union of members
+SignupInput = schema            # :input — field validator
+Address = schema :shape         # :shape — validator with methods/computed
+Role    = schema :enum          # :enum — union of members (see below)
 Auditable = schema :mixin       # :mixin — reusable fields, non-instantiable
-User    = schema :model         # :model — DB-backed, full ORM
+User    = schema :model         # :model — DB-backed with full ORM
 ```
 
 ### Body syntax
@@ -1752,34 +1751,35 @@ User = schema :model
   afterCreate:       -> p "Welcome, #{@name}!"
 ```
 
-`:enum` bodies use one of three member forms:
+`:enum` bodies take `:symbol` members. A schema whose body is all
+`:symbol` lines infers `:enum`, so the kind marker is optional.
 
 ```coffee
-# Bare members — maps each name to its name string
-Role = schema :enum         Role = schema
-  admin                       :admin
-  user                        :user
-  guest                       :guest
+# Bare members — each maps to its own name string
+Role = schema
+  :admin
+  :user
+  :guest
 
-# Valued members — maps each name to its literal value
-Status = schema             Status = schema :enum
-  :pending 0                  :pending 0
-  :active  1                  :active  1
-  :done    2                  :done    2
+# Valued members — each name maps to the literal; the value is any
+# literal (number, string, boolean, null, regex)
+Status = schema
+  :pending 0
+  :active  1
+  :done    2
 ```
 
-A schema whose body is all `:symbol` lines infers `:enum` automatically —
-the kind marker is optional in that case. Valued members must use the
-`:name value` form (symbol prefix, then space, then literal); the value
-is any literal (number, string, boolean, null, regex).
+`.parse()` accepts either the member name or its value and returns
+the value. `Role.parse("admin")` returns `"admin"`;
+`Status.parse("pending")` and `Status.parse(0)` both return `0`.
 
-Both `Status.parse("pending")` and `Status.parse(0)` return `0`.
-Unvalued members map to their own name string, so bare-member
-`Role.parse("admin")` returns `"admin"`.
+Symbol literals also work as constraint defaults, which pairs well
+with enum declarations:
 
-The `:symbol` form pairs well with constraint defaults — `status string,
-[:draft]` is the same as `status string, ["draft"]` but reads more clearly
-next to the enum declaration.
+```coffee
+Order = schema :model
+  status  string, [:draft]       # same as ["draft"], clearer context
+```
 
 ### Runtime API
 
@@ -1948,18 +1948,22 @@ accessors to same-file targets resolve to `Promise<TargetInstance | null>`;
 cross-file targets degrade to `unknown` rather than emit unresolved
 references.
 
-### Forbidden forms (schema-specific diagnostics)
+### Forbidden forms
 
-The sub-parser rejects:
+The sub-parser rejects these with schema-specific diagnostics:
 
-- `name: type` — fields use `name type` (space, no colon)
-- `answer: 42` at schema top-level — bare value bindings aren't allowed
-  (the `name: <literal>` form is valid only in `:enum` bodies)
-- methods, computed getters, and non-`@mixin` directives in `:mixin` bodies
-- unknown `:kind` — only `:input`, `:shape`, `:enum`, `:mixin`, `:model`
-- algebra on `:model` attempting `.find()` — returns a dedicated error
-  pointing to query projection (`User.where(...).all()` with explicit
-  projection) since derived shapes aren't DB-backed
+- Fields use `name type` (space, no colon) — `name: type` errors
+- Bare value bindings `answer: 42` at schema top-level are not
+  allowed outside `:enum` bodies
+- Methods, computed getters, and non-`@mixin` directives in `:mixin`
+  bodies are errors — mixins are fields-only
+- Enum members must be `:symbol` form: `:admin` (bare) or
+  `:pending 0` (valued). Identifier-with-colon `pending: 0` errors
+- Unknown `:kind` (only `:input`, `:shape`, `:enum`, `:mixin`,
+  `:model` are valid)
+- `.find()` / `.create()` / `.toSQL()` on an algebra-derived shape
+  throw — derived shapes aren't DB-backed; query the source model
+  and project the result
 
 ## Full-Stack Example
 
