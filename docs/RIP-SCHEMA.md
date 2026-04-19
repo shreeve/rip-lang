@@ -422,7 +422,7 @@ a schema-specific diagnostic.
 ### Field
 
 ```coffee
-name[!|?|#]*  [type]  [range]  [default]  [regex]  [attrs]  [-> transform]
+name[!|?|#]*  [type]  [range]  [default]  [regex]  [attrs]  [, -> transform]
 ```
 
 Modifiers:
@@ -477,10 +477,16 @@ Rules:
 - **Declared type is the OUTPUT type** — the validator checks the
   transform's *return value*. The input shape is implicit.
 - **Transform is terminal** on the field line — nothing follows `->`.
-- **Comma before `->` is optional** (matches Rip's general "no comma
-  before a trailing arrow" rule — `get '/path' ->` works the same way).
-  `password! 8..100 -> it.pwd.trim()` and `password! 8..100, -> …` are
-  equivalent. Pick whichever reads better on a given line.
+- **Comma before `->` is required** whenever anything precedes it on
+  the line (type, range, regex, default, attrs). The comma is a
+  structural boundary between the field declaration and the
+  transform, not an argument separator — without it, lines like
+  `email!# email -> fn` misleadingly suggest `email` is an input to
+  the arrow. The bare form `name! -> fn` (nothing before the arrow
+  except the name and modifiers) parses comma-less because there's
+  nothing to elide. This is unlike Rip's general `get '/path' ->`
+  rule: in a function call the arrow is the last argument; in a
+  schema field it's a distinct semantic slot.
 - **Runs once at `.parse()`**, never on DB hydrate (rows arrive
   canonical).
 - **Survives algebra** (`.pick`, `.omit`, etc.) — field semantics, not

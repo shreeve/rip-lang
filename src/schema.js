@@ -422,6 +422,17 @@ function parseFieldedLine(kind, line, entries) {
   // self-identifying by its head token shape. Raw token slices are
   // captured here and semantic-parsed at compile time.
   let rest = line.slice(pos);
+
+  // Comma-required rule: if a type was consumed and the next token is
+  // `->` (no comma separator), reject with a clear diagnostic. The
+  // comma is a structural boundary between the field declaration and
+  // the transform; skipping it makes `email!# email -> fn` read as
+  // if 'email' were an argument to the arrow, which it isn't.
+  let typeConsumed = typeFirst?.[0] === 'IDENTIFIER' || typeFirst?.[0] === 'STRING';
+  if (typeConsumed && rest[0]?.[0] === '->') {
+    throw schemaError(rest[0],
+      `Field '${name}' has a transform after the type; a comma is required before '->'. Write '${name} ${typeName}, -> …'.`);
+  }
   let constraintTokens = null;
   let attrsTokens = null;
   let rangeTokens = null;
@@ -442,52 +453,36 @@ function parseFieldedLine(kind, line, entries) {
     let parts = splitTopLevelByComma(rest);
     for (let i = 0; i < parts.length; i++) {
       let part = parts[i];
-      // Scan for a top-level `->`. The comma before a trailing transform
-      // is optional (mirrors Rip's general "no comma before a trailing
-      // arrow" rule: `get '/foo' ->` doesn't need a comma either). If
-      // an arrow is present, split the part into pre-arrow constraints
-      // and the transform body, and require the transform to be
-      // terminal on the field line.
-      let arrowIdx = findTopLevelArrowIdx(part);
-      let preArrow = part;
-      let postArrow = null;
-      if (arrowIdx >= 0) {
-        if (i !== parts.length - 1) {
-          throw schemaError(part[arrowIdx],
-            `Transform '-> …' must be the last element on the field line for '${name}'.`);
-        }
-        preArrow = part.slice(0, arrowIdx);
-        postArrow = part.slice(arrowIdx + 1);
-        // Drop trailing INDENT/OUTDENT/TERMINATOR from preArrow — those
-        // were part of the transform body wrapping, not the constraint.
-        while (preArrow.length && (
-          preArrow[preArrow.length - 1][0] === 'INDENT' ||
-          preArrow[preArrow.length - 1][0] === 'OUTDENT' ||
-          preArrow[preArrow.length - 1][0] === 'TERMINATOR'
-        )) {
-          preArrow = preArrow.slice(0, -1);
-        }
-      }
-      part = preArrow;
+      // Strip leading INDENT/TERMINATOR so we can inspect the head token.
       while (part.length && (part[0][0] === 'INDENT' || part[0][0] === 'TERMINATOR')) {
         part = part.slice(1);
       }
-      while (part.length && (part[part.length - 1][0] === 'OUTDENT' || part[part.length - 1][0] === 'TERMINATOR')) {
-        part = part.slice(0, -1);
-      }
-      if (postArrow !== null) {
-        // Record the transform body; let classification of preArrow
-        // continue normally below (it may be empty, a range, a regex,
-        // a bracketed default, or attrs).
-        if (transformTokens) {
-          throw schemaError(part[0] || postArrow[0],
-            `Field '${name}' has more than one transform.`);
-        }
-        transformTokens = postArrow;
-        if (!part.length) continue;
-      }
       if (!part.length) continue;
+
+      // A `->` at the head of a part is the transform arrow — the
+      // preceding comma separated it out. `->` elsewhere in the part
+      // (after content) means the user wrote something like
+      // `email -> fn` without the separator; the comma is required
+      // as a structural boundary between the field declaration and
+      // the transform.
+      if (part[0][0] !== '->') {
+        let innerArrow = findTopLevelArrowIdx(part);
+        if (innerArrow > 0) {
+          throw schemaError(part[innerArrow],
+            `Field '${name}' has a transform after other content; a comma is required before '->'. Write 'name! <constraints>, -> <body>'.`);
+        }
+      }
       let head = part[0];
+      // For non-transform parts, also strip trailing OUTDENT/TERMINATOR.
+      // Transform parts own their INDENT/OUTDENT wrapping — parseBodyTokens
+      // handles it.
+      if (head[0] !== '->') {
+        while (part.length && (part[part.length - 1][0] === 'OUTDENT' || part[part.length - 1][0] === 'TERMINATOR')) {
+          part = part.slice(0, -1);
+        }
+        if (!part.length) continue;
+        head = part[0];
+      }
       if (head[0] === '[' || head[0] === 'INDEX_START') {
         if (constraintTokens) {
           throw schemaError(head,
@@ -512,6 +507,14 @@ function parseFieldedLine(kind, line, entries) {
             `Field '${name}' has more than one regex constraint.`);
         }
         regexToken = head;
+      } else if (head[0] === '->') {
+        // Transform part. Must be the last comma-separated part on the
+        // line (transform is terminal).
+        if (i !== parts.length - 1) {
+          throw schemaError(head,
+            `Transform '-> …' must be the last element on the field line for '${name}'.`);
+        }
+        transformTokens = part.slice(1);
       } else {
         throw schemaError(head,
           `Unexpected trailer for field '${name}'. Expected '[…]' default, '{…}' attrs, '/regex/', 'min..max' range, or '-> transform'.`);

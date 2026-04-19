@@ -612,32 +612,49 @@ fail "transform: must be the last element on the line", '''
     x! -> it.foo, [1, 5]
   '''
 
-# The comma before a trailing transform is optional — matches Rip's
-# general rule that `fn arg ->` never needs a comma before the arrow.
+# Comma-less `-> transform` is ONLY legal when nothing precedes it on
+# the line (bare transform on the modifier alone). When a type,
+# constraint, default, regex, or attrs is present, the comma before
+# '->' is required as a structural boundary between the field
+# declaration and the transform.
 
-test "transform: comma-less after type", '''
+test "transform: comma-less bare form (no type, no constraints)", '''
   X = schema
-    email!# email -> it.email.toLowerCase()
+    id! -> it.Id
+  X.parse({Id: "abc"}).id
+  ''', "abc"
+
+test "transform: comma required after type", '''
+  X = schema
+    email!# email, -> it.email.toLowerCase()
   X.parse({email: "HELLO@X.COM"}).email
   ''', "hello@x.com"
 
-test "transform: comma-less after range", '''
+test "transform: comma required after range", '''
   X = schema
-    password! 8..100 -> it.password.trim()
+    password! 8..100, -> it.password.trim()
   X.parse({password: "  secretpass123  "}).password
   ''', "secretpass123"
 
-test "transform: comma-less after regex", '''
+fail "transform: missing comma after type is rejected", '''
+  X = schema
+    email!# email -> it.email.toLowerCase()
+  '''
+
+fail "transform: missing comma after range is rejected", '''
+  X = schema
+    password! 8..100 -> it.password.trim()
+  '''
+
+fail "transform: missing comma after regex is rejected", '''
   X = schema
     code! /^[A-Z]+$/ -> it.Code.toUpperCase()
-  X.parse({Code: "abc"}).code
-  ''', "ABC"
+  '''
 
-test "transform: comma-less after default", '''
+fail "transform: missing comma after default is rejected", '''
   X = schema
     role? ["guest"] -> it.Role
-  X.parse({Role: "admin"}).role
-  ''', "admin"
+  '''
 
 # Phase 7 — eager derived fields `!>`.
 
