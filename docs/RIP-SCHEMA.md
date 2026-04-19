@@ -263,9 +263,11 @@ AdminUser  = User.extend schema :shape
   permissions! string[]
 ```
 
-Derived schemas are always `:shape`. Fields survive. Methods, computed
-getters, hooks, and ORM methods are dropped — algebra is a structural
-operation, not a behavioral one.
+Derived schemas are always `:shape`. **Field semantics survive** —
+type, constraints, inline transforms all carry through. **Instance
+behavior is dropped** — methods, computed getters (`~>`), eager
+derived fields (`!>`), hooks, and ORM methods don't carry through.
+Algebra is a structural operation on fields, not a behavioral one.
 
 ---
 
@@ -339,10 +341,14 @@ SignupInput = schema
 
 ### `:shape`
 
-A validator with behavior. Body allows fields, methods (`-> body`),
-computed getters (`~> body`), and `@mixin`. `.parse(data)` returns a class
-instance — declared fields are enumerable own properties, methods live on
-the prototype, computed getters are non-enumerable prototype getters.
+A validator with behavior. Body accepts every field form — including
+inline transforms (`name! type, -> body`) and the three colon-anchored
+forms: methods (`name: -> body`), computed getters (`name: ~> body`),
+and eager-derived fields (`name: !> body`). `@mixin` is the one
+directive allowed. `.parse(data)` returns a class instance — declared
+fields and eager-derived are own enumerable properties, methods live
+on the prototype, computed getters are non-enumerable prototype
+getters.
 
 ```coffee
 Address = schema :shape
@@ -396,9 +402,13 @@ directives inside a mixin body are compile errors.
 
 ### `:model`
 
-A DB-backed entity. Everything `:shape` offers, plus: relations,
-lifecycle hooks, the full ORM surface (`find`, `where`, `create`, `save`,
-`destroy`, `toSQL`), and a process-global registry entry.
+A DB-backed entity. Everything `:shape` offers (all field forms,
+methods, computed, eager-derived, inline transforms), plus: relations,
+lifecycle hooks, the full ORM surface (`find`, `where`, `create`,
+`save`, `destroy`, `toSQL`), and a process-global registry entry.
+Eager-derived fields re-run on DB hydrate so they appear on instances
+returned from `.find()` / `.where()` exactly as they do on parsed
+instances.
 
 ```coffee
 User = schema :model
@@ -978,21 +988,35 @@ Algebra operators derive new schemas from existing ones:
 | `.required(...keys)`    | the listed fields become required (others unchanged)           |
 | `.extend(other)`        | merge another schema's fields; collisions throw                |
 
-### Two invariants to remember
+### Three invariants to remember
 
 > **Algebra always returns `:shape`**, never `:model` or `:input`. On a
 > model, the ORM surface is stripped — `UserPublic.find()` throws.
 
-> **Algebra drops behavior.** Methods, computed getters, and hooks from
-> the source don't carry through to the derived shape. Fields and their
-> metadata (modifiers, constraints) survive.
+> **Field semantics survive; instance behavior does not.** What carries
+> through to the derived shape: type (including literal unions),
+> modifiers, constraints (range, regex, default, attrs), and **inline
+> transforms** (`name, -> fn(it)`). What gets dropped: methods (`->`),
+> computed getters (`~>`), eager-derived fields (`!>`), hooks, and ORM
+> methods. The transform is "how this field's value is obtained from
+> raw input" — a property of the field, not of the instance — so it
+> travels with the field through algebra.
+
+> **Transforms-survive has a subtle consequence**: a derived schema may
+> still read raw-input keys that don't appear in its declared output
+> shape. `User.pick 'slug'` where `slug` is declared as
+> `slug! -> "#{it.FirstName}-#{it.LastName}".toLowerCase()` continues
+> to read `FirstName` and `LastName` from the input even though neither
+> is in the output. This is deliberate and documented; it makes
+> PascalCase-remap transforms composable with `.pick`.
 
 ```coffee
 User = schema :model
   name!    string
-  email!#  email
+  email!#  email, -> it.email.toLowerCase()
   password! string
   full: ~> "#{@name} <#{@email}>"
+  tagline: !> "#{@name} (active)"
 
 UserPublic = User.omit "password"
 
@@ -1000,8 +1024,10 @@ UserPublic.kind                     # 'shape'
 typeof UserPublic.find              # 'function' — but throws when called
 UserPublic.find(1)                  # throws: :model-only
 
-u = UserPublic.parse {name: "A", email: "a@b.c"}
-typeof u.full                       # 'undefined' — behavior dropped
+u = UserPublic.parse {name: "A", email: "X@B.C"}
+u.email                             # 'x@b.c' — transform survived
+typeof u.full                       # 'undefined' — ~> dropped
+typeof u.tagline                    # 'undefined' — !> dropped
 ```
 
 `.extend(other)` is the exception to "algebra only drops" — it adds
@@ -1524,19 +1550,23 @@ you, file a proposal — the sidecar design makes most of them additive.
 
 What each kind's body can contain:
 
-| Feature                     | `:input` | `:shape` | `:enum`  | `:mixin` | `:model` |
-| --------------------------- | -------- | -------- | -------- | -------- | -------- |
-| Fields (`name! type`)       | ✓        | ✓        | —        | ✓        | ✓        |
-| `@mixin` directive          | ✓        | ✓        | —        | ✓        | ✓        |
-| Other directives            | —        | —        | —        | —        | ✓        |
-| Methods (`name: -> body`)   | —        | ✓        | —        | —        | ✓        |
-| Computed (`name: ~> body`)  | —        | ✓        | —        | —        | ✓        |
-| Hooks (by known name)       | —        | methods  | —        | —        | ✓        |
-| Enum members (`:symbol`)    | —        | —        | ✓        | —        | —        |
-| Algebra (`.pick` etc.)      | ✓ → shape | ✓ → shape | —       | —        | ✓ → shape |
-| ORM (`.find`, `.create`)    | —        | —        | —        | —        | ✓        |
-| `.parse` / `.safe` / `.ok`  | ✓        | ✓        | ✓        | —        | ✓        |
-| `.toSQL()`                  | —        | —        | —        | —        | ✓        |
+| Feature                                 | `:input` | `:shape` | `:enum`  | `:mixin` | `:model` |
+| --------------------------------------- | -------- | -------- | -------- | -------- | -------- |
+| Fields (`name` with optional type)      | ✓        | ✓        | —        | ✓        | ✓        |
+| Literal-union type (`"a" \| "b"`)       | ✓        | ✓        | —        | ✓        | ✓        |
+| Range / regex / default / attrs         | ✓        | ✓        | —        | ✓        | ✓        |
+| Inline transforms (`name, -> fn(it)`)   | ✓        | ✓        | —        | —        | ✓        |
+| `@mixin` directive                      | ✓        | ✓        | —        | ✓        | ✓        |
+| Other directives                        | —        | —        | —        | —        | ✓        |
+| Methods (`name: -> body`)               | —        | ✓        | —        | —        | ✓        |
+| Computed getter (`name: ~> body`)       | —        | ✓        | —        | —        | ✓        |
+| Eager-derived field (`name: !> body`)   | —        | ✓        | —        | —        | ✓        |
+| Hooks (by known name)                   | —        | methods  | —        | —        | ✓        |
+| Enum members (`:symbol`)                | —        | —        | ✓        | —        | —        |
+| Algebra (`.pick` etc.)                  | ✓ → shape | ✓ → shape | —       | —        | ✓ → shape |
+| ORM (`.find`, `.create`)                | —        | —        | —        | —        | ✓        |
+| `.parse` / `.safe` / `.ok`              | ✓        | ✓        | ✓        | —        | ✓        |
+| `.toSQL()`                              | —        | —        | —        | —        | ✓        |
 
 "methods" in the `:shape` / Hooks row means: hook-named functions are
 accepted, but they're just methods with no lifecycle binding.
@@ -1751,29 +1781,51 @@ name and the caller's schema name included.
 
 ## 22. Design invariants
 
-Seven rules that define how Rip Schema behaves. Worth keeping in mind
+Eleven rules that define how Rip Schema behaves. Worth keeping in mind
 when debugging or extending:
 
 1. **Default kind is `:input`.** `schema` with no marker and a
    field-shaped body gets the most common validation case with no
    ceremony.
 2. **Fields use `name type`, not `name: type`.** The colon is reserved
-   for methods and computed. Using the colon form produces a compile
-   error pointing at the right syntax.
+   for methods, computed, and eager-derived. Using the colon form
+   produces a compile error pointing at the right syntax.
 3. **`:shape` has no lifecycle.** Hook names on `:shape` are methods —
    no binding. Lifecycle is a `:model` concern because it's coupled to
    persistence.
 4. **Algebra on `:model` returns `:shape`.** ORM methods are stripped.
    Invariant 1 of the algebra section.
-5. **Algebra drops behavior.** Methods, computed getters, and hooks
-   aren't carried through `.pick/.omit/.partial/.required/.extend`.
-   Fields and field metadata survive.
+5. **Algebra drops instance behavior but preserves field semantics.**
+   Methods, computed getters (`~>`), eager-derived fields (`!>`), and
+   hooks are dropped by `.pick/.omit/.partial/.required/.extend`.
+   Fields and their metadata — including **inline transforms** — carry
+   through. The transform describes how a field's value is obtained
+   from raw input; it's a property of the field, not the instance.
 6. **`:mixin` is non-instantiable.** Mixins declare fields for reuse —
    they don't have a runtime identity of their own.
 7. **Schema names are global.** Relations and `@mixin` references
    resolve by bare name through a process-global registry. Two models
    with the same name in different modules produce the "last loaded
    wins" behavior — avoid it.
+8. **Default field type is `string`.** Omitting the type slot is
+   legal; `name!` means "required string". Explicit types
+   (`integer`, `email`, `"M" | "F"`, etc.) are needed only when
+   string isn't what you want.
+9. **Transforms are terminal on the field line.** `-> body` must be
+   the last element; nothing follows it. The comma before `->` is
+   required whenever anything precedes it (type, range, regex,
+   default, attrs) — only the bare form `name! -> body` is
+   comma-less, because there's nothing to elide.
+10. **Transforms run on `.parse()` only, never on hydrate.** DB rows
+    arrive canonical; re-running a transform on hydrate would
+    double-coerce. Eager-derived (`!>`) is the opposite — it runs on
+    parse AND hydrate so instances loaded from the DB have the same
+    shape as parsed ones.
+11. **Eager-derived fields are materialized once, not reactive.** `!>`
+    fires at construction time (parse or hydrate) and stores the
+    result as an own enumerable property. Mutating a dependency
+    afterward does **not** update the derived value — it stays stale
+    by design. Use `~>` for always-current derivations.
 
 ---
 

@@ -551,9 +551,12 @@ Inline schemas are a third compiler sidecar — `schema.js` — that parallels
   sub-parser and collapsed into a single `SCHEMA_BODY` token whose `.data`
   carries a structured descriptor (kind, entries, per-entry `.loc`).
 - The main grammar has one tiny production, `Schema: SCHEMA SCHEMA_BODY`,
-  under `Expression`. Schema body syntax (`name! type`, `@directive`,
-  `name: ~> body`, `name: -> body`) never reaches the main parser, so the
-  state table stays lean.
+  under `Expression`. Schema body syntax — field declarations (with
+  optional type, `min..max` range, `[default]`, `/regex/`, `{attrs}`,
+  terminal `-> transform` with whole-raw-input `it`), directives
+  (`@name`), methods (`name: -> body`), computed getters
+  (`name: ~> body`), and eager-derived fields (`name: !> body`) —
+  never reaches the main parser, so the state table stays lean.
 - Bodies of methods, computed getters, and hooks are captured as token
   slices. At codegen time those slices run through the tail rewriter
   passes (implicit braces, tagged templates, etc.) and feed into
@@ -582,11 +585,39 @@ importing a file that defines named schemas activates them. Tests can call
 
 ### Algebra invariant
 
-`.pick/.omit/.partial/.required/.extend` always return `kind: 'shape'` and
-drop behavior (methods, computed, hooks) — only fields survive. Calling
-`.find()` / `.toSQL()` on a derived shape throws a dedicated error
-pointing the user at query projection on the source model. Runtime tests
-and the shadow TS signatures both enforce this.
+`.pick/.omit/.partial/.required/.extend` always return `kind: 'shape'`.
+**Field semantics survive** — type (including literal unions), modifiers,
+constraints, and **inline transforms** — because they describe how a
+field's value is obtained from raw input, not what the instance does.
+**Instance behavior drops** — methods, computed getters (`~>`),
+eager-derived fields (`!>`), hooks, and ORM methods. Calling `.find()`
+or `.toSQL()` on a derived shape throws a dedicated error pointing
+the user at query projection on the source model. Runtime tests and
+the shadow TS signatures both enforce this.
+
+### Parser invariants (don't break these)
+
+- **Field-line classification**: `IDENTIFIER` start → field; `PROPERTY`
+  start (trailing `:` absorbed into the identifier's tag) → callable.
+  Don't merge the two paths.
+- **Type slot is optional** and defaults to `string` — the parser only
+  consumes a type when `typeFirst[0] === 'IDENTIFIER'` or `'STRING'`
+  (the literal-union case). Anything else triggers the default.
+- **Transform is terminal**: once `->` appears as a field-line part,
+  no further comma-separated parts are allowed. Reject with a diagnostic
+  that says "move everything else before the arrow".
+- **Comma before `->` is required** whenever anything precedes it
+  (type, range, regex, default, attrs). Only the bare form `name! -> fn`
+  parses comma-less. There are two enforcement points: after type
+  consumption (if `rest[0]` is `->`), and inside the parts loop (via
+  `findTopLevelArrowIdx` scanning depth-zero arrows within a part).
+- **Transforms run on `.parse()` only, never `_hydrate`.** Hydrate
+  bypasses the whole parse pipeline (`_applyTransforms` → defaults →
+  validation → assign) and goes directly from column row to instance.
+- **Eager-derived (`!>`) runs on both parse AND hydrate** — in
+  declaration order, on the partially-constructed instance. It is
+  NOT re-run on field mutation (materialized once, stored as own
+  enumerable property).
 
 ### Shadow TS
 

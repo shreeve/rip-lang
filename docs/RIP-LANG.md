@@ -1708,7 +1708,7 @@ generation, persistence, migration DDL, and shadow TypeScript.
 # Validator
 SignupInput = schema
   email!    email
-  password! string, [8, 100]
+  password! string, 8..100
 
 # Shape with behavior
 Address = schema :shape
