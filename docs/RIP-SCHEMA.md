@@ -422,7 +422,7 @@ a schema-specific diagnostic.
 ### Field
 
 ```coffee
-name[!|?|#]*  [type]  [range]  [default]  [regex]  [attrs]  [, -> transform]
+name[!|?|#]*  [type]  [range]  [default]  [regex]  [attrs]  [-> transform]
 ```
 
 Modifiers:
@@ -477,6 +477,10 @@ Rules:
 - **Declared type is the OUTPUT type** — the validator checks the
   transform's *return value*. The input shape is implicit.
 - **Transform is terminal** on the field line — nothing follows `->`.
+- **Comma before `->` is optional** (matches Rip's general "no comma
+  before a trailing arrow" rule — `get '/path' ->` works the same way).
+  `password! 8..100 -> it.pwd.trim()` and `password! 8..100, -> …` are
+  equivalent. Pick whichever reads better on a given line.
 - **Runs once at `.parse()`**, never on DB hydrate (rows arrive
   canonical).
 - **Survives algebra** (`.pick`, `.omit`, etc.) — field semantics, not

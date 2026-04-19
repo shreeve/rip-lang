@@ -612,6 +612,33 @@ fail "transform: must be the last element on the line", '''
     x! -> it.foo, [1, 5]
   '''
 
+# The comma before a trailing transform is optional — matches Rip's
+# general rule that `fn arg ->` never needs a comma before the arrow.
+
+test "transform: comma-less after type", '''
+  X = schema
+    email!# email -> it.email.toLowerCase()
+  X.parse({email: "HELLO@X.COM"}).email
+  ''', "hello@x.com"
+
+test "transform: comma-less after range", '''
+  X = schema
+    password! 8..100 -> it.password.trim()
+  X.parse({password: "  secretpass123  "}).password
+  ''', "secretpass123"
+
+test "transform: comma-less after regex", '''
+  X = schema
+    code! /^[A-Z]+$/ -> it.Code.toUpperCase()
+  X.parse({Code: "abc"}).code
+  ''', "ABC"
+
+test "transform: comma-less after default", '''
+  X = schema
+    role? ["guest"] -> it.Role
+  X.parse({Role: "admin"}).role
+  ''', "admin"
+
 # Phase 7 — eager derived fields `!>`.
 
 test "eager derived: computed at parse, stored as own property", '''

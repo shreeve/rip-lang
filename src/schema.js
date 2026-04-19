@@ -442,22 +442,49 @@ function parseFieldedLine(kind, line, entries) {
     let parts = splitTopLevelByComma(rest);
     for (let i = 0; i < parts.length; i++) {
       let part = parts[i];
-      // Peek at the head before stripping: transforms own their
-      // INDENT/OUTDENT wrapping (needed by parseBodyTokens) so we
-      // must not strip the trailing OUTDENT from a transform part.
-      let peekHead = part[0];
-      let j = 0;
-      while (j < part.length && (part[j][0] === 'INDENT' || part[j][0] === 'TERMINATOR')) j++;
-      peekHead = part[j];
-      let isTransform = peekHead?.[0] === '->';
+      // Scan for a top-level `->`. The comma before a trailing transform
+      // is optional (mirrors Rip's general "no comma before a trailing
+      // arrow" rule: `get '/foo' ->` doesn't need a comma either). If
+      // an arrow is present, split the part into pre-arrow constraints
+      // and the transform body, and require the transform to be
+      // terminal on the field line.
+      let arrowIdx = findTopLevelArrowIdx(part);
+      let preArrow = part;
+      let postArrow = null;
+      if (arrowIdx >= 0) {
+        if (i !== parts.length - 1) {
+          throw schemaError(part[arrowIdx],
+            `Transform '-> …' must be the last element on the field line for '${name}'.`);
+        }
+        preArrow = part.slice(0, arrowIdx);
+        postArrow = part.slice(arrowIdx + 1);
+        // Drop trailing INDENT/OUTDENT/TERMINATOR from preArrow — those
+        // were part of the transform body wrapping, not the constraint.
+        while (preArrow.length && (
+          preArrow[preArrow.length - 1][0] === 'INDENT' ||
+          preArrow[preArrow.length - 1][0] === 'OUTDENT' ||
+          preArrow[preArrow.length - 1][0] === 'TERMINATOR'
+        )) {
+          preArrow = preArrow.slice(0, -1);
+        }
+      }
+      part = preArrow;
       while (part.length && (part[0][0] === 'INDENT' || part[0][0] === 'TERMINATOR')) {
-        if (isTransform) break;
         part = part.slice(1);
       }
-      if (!isTransform) {
-        while (part.length && (part[part.length - 1][0] === 'OUTDENT' || part[part.length - 1][0] === 'TERMINATOR')) {
-          part = part.slice(0, -1);
+      while (part.length && (part[part.length - 1][0] === 'OUTDENT' || part[part.length - 1][0] === 'TERMINATOR')) {
+        part = part.slice(0, -1);
+      }
+      if (postArrow !== null) {
+        // Record the transform body; let classification of preArrow
+        // continue normally below (it may be empty, a range, a regex,
+        // a bracketed default, or attrs).
+        if (transformTokens) {
+          throw schemaError(part[0] || postArrow[0],
+            `Field '${name}' has more than one transform.`);
         }
+        transformTokens = postArrow;
+        if (!part.length) continue;
       }
       if (!part.length) continue;
       let head = part[0];
@@ -485,18 +512,6 @@ function parseFieldedLine(kind, line, entries) {
             `Field '${name}' has more than one regex constraint.`);
         }
         regexToken = head;
-      } else if (head[0] === '->' || isTransform) {
-        // Transform: `-> body`. Inside the body, `it` refers to the
-        // whole raw input object. Transform is TERMINAL on the field
-        // line — nothing can follow.
-        if (i !== parts.length - 1) {
-          throw schemaError(head,
-            `Transform '-> …' must be the last element on the field line for '${name}'. Move everything else before the arrow.`);
-        }
-        // Drop everything up through the `->` itself; keep INDENT/OUTDENT
-        // wrapping on either side (parseBodyTokens handles it).
-        let arrowIdx = part.findIndex(t => t[0] === '->');
-        transformTokens = part.slice(arrowIdx + 1);
       } else {
         throw schemaError(head,
           `Unexpected trailer for field '${name}'. Expected '[…]' default, '{…}' attrs, '/regex/', 'min..max' range, or '-> transform'.`);
@@ -524,6 +539,24 @@ function parseFieldedLine(kind, line, entries) {
     transformTokens,
     loc: first.loc,
   });
+}
+
+// Scan a constraint part for a top-level `->` (depth-zero arrow). Returns
+// the index of the arrow or -1 if absent. Used to split parts like
+// `8..100 -> transform` without requiring a comma between them.
+function findTopLevelArrowIdx(tokens) {
+  let depth = 0;
+  for (let i = 0; i < tokens.length; i++) {
+    let tag = tokens[i][0];
+    if (tag === '(' || tag === '[' || tag === '{' ||
+        tag === 'CALL_START' || tag === 'INDEX_START' ||
+        tag === 'PARAM_START') depth++;
+    else if (tag === ')' || tag === ']' || tag === '}' ||
+             tag === 'CALL_END' || tag === 'INDEX_END' ||
+             tag === 'PARAM_END') depth--;
+    else if (depth === 0 && tag === '->') return i;
+  }
+  return -1;
 }
 
 // Range constraint: `min..max` with optional leading `-` on either endpoint.
