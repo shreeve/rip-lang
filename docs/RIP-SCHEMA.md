@@ -600,6 +600,76 @@ important distinction in the schema body:
 > `!>` for cases where the materialization is itself the goal
 > (JSON payload shape, computed labels at construction time).
 
+### Refinement (`@ensure`)
+
+Schema-level cross-field invariants. Where field constraints check one
+value against its own type and range, `@ensure` checks the whole object
+against a predicate — "these fields together must satisfy this rule."
+
+Two forms, same semantics:
+
+```coffee
+# Inline — a single invariant
+@ensure "name and email must differ", (u) -> u.name isnt u.email
+
+# Array — multiple invariants in one block
+@ensure [
+  "end after start",    (u) -> u.start < u.end
+  "complex rule", (u) ->
+    normalized = u.name.toLowerCase()
+    not RESERVED_NAMES.includes(normalized)
+]
+```
+
+Both forms compile to the same internal representation; use whichever
+reads cleanest for the case at hand. The inline form is nicer for
+one-offs; the array form keeps related invariants visually grouped.
+
+Rules:
+
+- **Message is required** and must be a string literal. It comes first
+  (before the fn) and is the only thing reported when the predicate
+  fails — write it from the user's perspective, not the developer's.
+- **Predicate takes an explicit parameter.** Refinements declare the
+  object parameter by name (`(u) -> ...`) rather than using implicit
+  `this`. Makes the contract of "what the predicate sees" visible.
+- **Truthy passes, falsy fails.** The predicate's return is coerced to
+  boolean — any truthy value (object, array, non-zero number, non-empty
+  string, `true`) passes; any falsy value (`false`, `null`, `undefined`,
+  `0`, `''`, `NaN`) fails with the declared message.
+- **Thrown exceptions fail.** If the predicate throws, the refinement
+  counts as failed with the declared message — the exception doesn't
+  propagate. Write safe predicates; this is a guard, not error
+  recovery.
+- **All refinements run.** No short-circuit between refinements —
+  every predicate runs even if earlier ones failed. Issues collect in
+  declaration order.
+- **Refinements run after field validation.** Predicates can assume
+  declared fields are typed and defaulted. If any per-field error fires,
+  refinements don't run at all — their input would be malformed.
+- **Refinements run before eager-derived fields.** An `!>` body can
+  assume the instance satisfies its invariants.
+- **Refinements are skipped on DB hydrate.** `.find()`, `.where()`,
+  `.all()` deliver trusted rows; re-validating predicates on hydrate
+  would be wasted work.
+- **Refinements drop on algebra.** Any derivation (`.pick`, `.omit`,
+  `.partial`, `.required`, `.extend`) returns a `:shape` without any
+  refinements from the source. See [§10](#10-schema-algebra).
+
+**Scope**: `:input`, `:shape`, and `:model` accept `@ensure`. `:enum`
+and `:mixin` reject it at compile time with a diagnostic pointing at
+where to put the invariant instead.
+
+**Issue shape** when a refinement fails:
+
+```js
+{ field: '', error: 'ensure', message: 'your declared message' }
+```
+
+`field: ''` matches the convention for other schema-level errors
+(`enum`, `mixin`, `derived`) — the issue isn't attached to any single
+declared field.
+
 ### Rules to remember
 
 - Fields use `name type` — **no colon**. `name: type` is a compile error.
@@ -997,10 +1067,13 @@ Algebra operators derive new schemas from existing ones:
 > through to the derived shape: type (including literal unions),
 > modifiers, constraints (range, regex, default, attrs), and **inline
 > transforms** (`name, -> fn(it)`). What gets dropped: methods (`->`),
-> computed getters (`~>`), eager-derived fields (`!>`), hooks, and ORM
-> methods. The transform is "how this field's value is obtained from
-> raw input" — a property of the field, not of the instance — so it
-> travels with the field through algebra.
+> computed getters (`~>`), eager-derived fields (`!>`), hooks, ORM
+> methods, and `@ensure` refinements. The transform is "how this
+> field's value is obtained from raw input" — a property of the field,
+> not of the instance — so it travels with the field through algebra.
+> Refinements, by contrast, are schema-level invariants that reference
+> field names — there's no static guarantee those names survive a
+> `.pick` or `.omit`, so refinements drop unconditionally.
 
 > **Transforms-survive has a subtle consequence**: a derived schema may
 > still read raw-input keys that don't appear in its declared output
@@ -1496,16 +1569,23 @@ language.
   String-literal unions in the type slot (`"a" | "b"`) are in;
   schema-constituent unions over arbitrary shapes are not. Today you
   express cross-shape alternation by running multiple `.safe()` calls.
-- **Custom refinements** — `.refine(fn, message)` and `.superRefine(fn)`.
-  Today arbitrary checks live in a `beforeValidation` hook on `:model`,
-  as a post-`.parse` check in your code, or inside an inline field
-  transform that throws on invalid input.
+- **Nested-schema validation in a field type** — declaring `patient!
+  PatientShape` and having `.parse()` run `PatientShape.parse()` on
+  the nested value with per-field errors attached at `patient.X`
+  paths. The syntax parses; the validator layer currently treats any
+  unknown type identifier as unvalidated.
+- **Issue paths** — `@ensure` issues today use `field: ''` (the whole
+  object). Per-field attribution (`field: 'email'`) on a refinement
+  isn't supported; write the field-specific rule as a constraint or
+  inline transform instead.
 - **Coercion built-in types** — `coerce.number`, `coerce.date`, etc.
   as dedicated type names. Today a field transform handles the same
   case (`shippedAt? date, -> new Date(it.shippedAt)`); coerce types
   would just be a stdlib convenience over the transform mechanism.
-- **Async refinements** — validators that await a database or network
-  call. Today the validator is purely synchronous.
+- **Async refinements** — `@ensure` predicates are sync. Async
+  refinements (that await a database or network check) would need
+  either a separate `@ensureAsync` directive or a full async variant
+  of the whole validate pipeline.
 
 ### ORM features not yet in
 
@@ -1557,6 +1637,7 @@ What each kind's body can contain:
 | Range / regex / default / attrs         | ✓        | ✓        | —        | ✓        | ✓        |
 | Inline transforms (`name, -> fn(it)`)   | ✓        | ✓        | —        | —        | ✓        |
 | `@mixin` directive                      | ✓        | ✓        | —        | ✓        | ✓        |
+| `@ensure` refinement                    | ✓        | ✓        | —        | —        | ✓        |
 | Other directives                        | —        | —        | —        | —        | ✓        |
 | Methods (`name: -> body`)               | —        | ✓        | —        | —        | ✓        |
 | Computed getter (`name: ~> body`)       | —        | ✓        | —        | —        | ✓        |
@@ -1609,6 +1690,7 @@ user-defined shapes and enums compose.
 | Directive       | Effect                                                            |
 | --------------- | ----------------------------------------------------------------- |
 | `@mixin Name`   | Pull in the fields of mixin `Name` at Layer 2 normalization       |
+| `@ensure "msg", (x) -> pred` | Cross-field refinement — see [§5](#refinement-ensure). Allowed on `:input` / `:shape` / `:model`; rejected on `:enum` / `:mixin`. |
 
 ### `:model`-only
 
@@ -1781,7 +1863,7 @@ name and the caller's schema name included.
 
 ## 22. Design invariants
 
-Eleven rules that define how Rip Schema behaves. Worth keeping in mind
+Twelve rules that define how Rip Schema behaves. Worth keeping in mind
 when debugging or extending:
 
 1. **Default kind is `:input`.** `schema` with no marker and a
@@ -1796,11 +1878,12 @@ when debugging or extending:
 4. **Algebra on `:model` returns `:shape`.** ORM methods are stripped.
    Invariant 1 of the algebra section.
 5. **Algebra drops instance behavior but preserves field semantics.**
-   Methods, computed getters (`~>`), eager-derived fields (`!>`), and
-   hooks are dropped by `.pick/.omit/.partial/.required/.extend`.
-   Fields and their metadata — including **inline transforms** — carry
-   through. The transform describes how a field's value is obtained
-   from raw input; it's a property of the field, not the instance.
+   Methods, computed getters (`~>`), eager-derived fields (`!>`),
+   hooks, and `@ensure` refinements are dropped by
+   `.pick/.omit/.partial/.required/.extend`. Fields and their metadata
+   — including **inline transforms** — carry through. The transform
+   describes how a field's value is obtained from raw input; it's a
+   property of the field, not the instance.
 6. **`:mixin` is non-instantiable.** Mixins declare fields for reuse —
    they don't have a runtime identity of their own.
 7. **Schema names are global.** Relations and `@mixin` references
@@ -1826,6 +1909,14 @@ when debugging or extending:
     result as an own enumerable property. Mutating a dependency
     afterward does **not** update the derived value — it stays stale
     by design. Use `~>` for always-current derivations.
+12. **Refinements are schema-level, not field-level.** `@ensure`
+    predicates run after per-field validation succeeds, once per
+    parse, against the whole defaulted and typed object. They fail
+    with a declared message that ships verbatim to the caller;
+    thrown exceptions inside a predicate count as failure, not
+    error. Refinements are skipped on DB hydrate (trusted data)
+    and dropped by every algebra op (structural derivation never
+    carries non-structural invariants).
 
 ---
 
@@ -1854,16 +1945,23 @@ For each declared field, in order:
   6. Assign as own enumerable property on the instance
 
 After all declared fields:
-  7. Run `!>` eager-derived entries in declaration order
+  7. Run `@ensure` refinements in declaration order
+     — reads the fully-typed, defaulted working object; every
+       refinement runs (no short-circuit); failures collect as
+       {field: '', error: 'ensure', message} issues; if any
+       fail, .parse() throws SchemaError, .safe() returns
+       {ok: false, errors}, and .ok() returns false
+       (steps 8+ do not run)
+  8. Run `!>` eager-derived entries in declaration order
      — reads the now-populated instance; results land as own
        enumerable properties; earlier `!>` values are readable
        by later ones, forward references are not
 ```
 
 The `_hydrate` path (used by `.find`, `.where`, etc.) **skips step 1's
-transform, step 2's default, and steps 3–5 entirely** — DB rows are
-already in canonical field shape. It still runs step 7 so eager-derived
-fields appear on hydrated instances just as they do on parsed ones.
+transform, step 2's default, steps 3–5, and step 7's refinements** —
+DB rows are trusted. It still runs step 8 so eager-derived fields
+appear on hydrated instances just as they do on parsed ones.
 
 ### Value mutation after parse
 
@@ -2087,6 +2185,19 @@ field type. Use `enum` when you only need the static type; use
 **Can algebra operations (`.pick` / `.omit`) be chained?**
 Yes. They compose: `User.omit("password").pick("name", "email").partial()`
 produces a `:shape` with the intersection of the three operations.
+
+**How do I express cross-field rules — "passwords must match", "end after start"?**
+Use `@ensure`. See [§5](#refinement-ensure) and the summary in [§22](#22-design-invariants)
+invariant 12. Messages are required, predicates are plain Rip fns,
+thrown exceptions count as failure, and all refinements run every time
+(no short-circuit between refinements).
+
+**Can I put `@ensure` on a `:mixin` so it travels with the mixin's fields?**
+No. `:mixin` is fields-only, by design. Refinements attach to the host
+schema because they describe invariants on the whole parsed object,
+and a mixin doesn't have a "whole object" of its own — it's a pile of
+fields that get merged into the host. Put the refinement on the host
+where the invariant has meaning.
 
 **What does `:shape` have that a plain JS class doesn't?**
 Runtime validation on construction. Computed getters automatically

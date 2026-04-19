@@ -555,8 +555,9 @@ Inline schemas are a third compiler sidecar — `schema.js` — that parallels
   optional type, `min..max` range, `[default]`, `/regex/`, `{attrs}`,
   terminal `-> transform` with whole-raw-input `it`), directives
   (`@name`), methods (`name: -> body`), computed getters
-  (`name: ~> body`), and eager-derived fields (`name: !> body`) —
-  never reaches the main parser, so the state table stays lean.
+  (`name: ~> body`), eager-derived fields (`name: !> body`), and
+  `@ensure "msg", (x) -> predicate` refinements — never reaches the
+  main parser, so the state table stays lean.
 - Bodies of methods, computed getters, and hooks are captured as token
   slices. At codegen time those slices run through the tail rewriter
   passes (implicit braces, tagged templates, etc.) and feed into
@@ -590,10 +591,14 @@ importing a file that defines named schemas activates them. Tests can call
 constraints, and **inline transforms** — because they describe how a
 field's value is obtained from raw input, not what the instance does.
 **Instance behavior drops** — methods, computed getters (`~>`),
-eager-derived fields (`!>`), hooks, and ORM methods. Calling `.find()`
-or `.toSQL()` on a derived shape throws a dedicated error pointing
-the user at query projection on the source model. Runtime tests and
-the shadow TS signatures both enforce this.
+eager-derived fields (`!>`), hooks, ORM methods, and `@ensure`
+refinements. Calling `.find()` or `.toSQL()` on a derived shape throws
+a dedicated error pointing the user at query projection on the source
+model. Refinements drop because they're schema-level invariants that
+reference field names by identifier — the algebra operation has no
+static way to know which names survive the derivation, so the safe
+rule is "never carry them through." Runtime tests and the shadow TS
+signatures both enforce this.
 
 ### Parser invariants (don't break these)
 
@@ -618,6 +623,19 @@ the shadow TS signatures both enforce this.
   declaration order, on the partially-constructed instance. It is
   NOT re-run on field mutation (materialized once, stored as own
   enumerable property).
+- **`@ensure` is a special directive** — parsed into its own
+  `tag: 'ensure'` entry (distinct from generic `tag: 'directive'`)
+  because it carries a compiled fn + message, not just args. Both
+  inline (`@ensure "msg", (x) -> body`) and array
+  (`@ensure [ "msg", fn, "msg", fn ]`) forms compile to one entry
+  per refinement; downstream runtime can't tell them apart. The
+  array-form splitter treats both `,` and TERMINATOR as element
+  separators at depth 0 to match Rip's array-literal convention.
+- **Refinements run AFTER field validation and BEFORE eager-derived.**
+  `.parse/.safe/.ok` short-circuit refinements when per-field errors
+  fire (predicates assume field types are correct). `_hydrate` skips
+  refinements entirely (trusted data). See
+  `_applyRefinements` in `src/schema.js`.
 
 ### Shadow TS
 
