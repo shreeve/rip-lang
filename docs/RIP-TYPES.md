@@ -721,25 +721,32 @@ export function getUser(id: number): User | undefined;
 ## Boundary Validation
 
 Types are compile-time contracts. For data entering your system, validate
-at boundaries:
+at boundaries — and in Rip, the `schema` keyword is the native way to do
+it. Schemas are runtime validators AND a source of TypeScript types (via
+shadow `.d.ts` emission), so one declaration gives you both the check
+and the type.
 
 ```coffee
-import { z } from "zod"
+# Declare the wire shape — runtime validator + type source of truth
+User = schema :input
+  id!    integer
+  name!  1..50
+  email! email
 
-# Define schema (runtime validation + type source of truth)
-UserSchema = z.object
-  id: z.number()
-  name: z.string()
-  email: z.string().email()
-
-# Derive type from schema
-type User = z.infer<typeof UserSchema>
-
-# Validate at API boundary
+# Validate at an API boundary
 def createUser(req:: Request):: User
-  data = req.json!
-  UserSchema.parse(data)
+  User.parse req.json!        # throws SchemaError on invalid
+
+# Or non-throwing for structured error responses
+result = User.safe req.json!
+# result: {ok: true, value: User} | {ok: false, errors: [...]}
 ```
+
+The compiler emits the TypeScript `User` type from the schema definition
+automatically. No `z.infer<>` step. See [RIP-SCHEMA.md](./RIP-SCHEMA.md)
+for the full schema reference — field grammar, modifiers, constraints,
+cross-field `@ensure` refinements, `:model` ORM surface, algebra
+(`.pick/.omit/.partial/.extend`), and shadow TypeScript emission.
 
 Once data passes boundary validation, trust the types internally — no need
 to re-validate.

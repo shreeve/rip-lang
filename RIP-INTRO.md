@@ -160,20 +160,29 @@ One `schema` keyword covers what usually takes three libraries: a validator (Zod
 
 ### Body is a declarative sub-DSL
 
-Exactly four legal line forms:
+Six line forms, all declarative:
 
-1. **Fields** — `name! type, [min, max]`
-2. **Directives** — `@timestamps`, `@mixin Name`, `@belongs_to User?`
-3. **Methods** — `name: -> body`
-4. **Computed getters** — `name: ~> body`
+1. **Fields** — `name! type, min..max` (type optional, defaults to `string`)
+2. **Inline field transforms** — `name!, -> fn(it)` (comma-terminal; runs on `.parse()` only)
+3. **Directives** — `@timestamps`, `@mixin Name`, `@belongs_to User?`
+4. **Methods** — `name: -> body`
+5. **Computed getters** — `name: ~> body` (lazy; re-runs on every access)
+6. **Eager-derived fields** — `name: !> body` (materialized once at parse/hydrate, stored as own property)
 
-Field modifiers: `!` required, `#` unique, `?` optional. Constraint brackets accept only **literal** values (numbers, strings, booleans, regex, `:symbol`) — arbitrary expressions are a compile error. This is the whole point: the body describes data, not code.
+Plus the cross-field refinement directive:
+
+- **`@ensure "msg", (u) -> predicate`** — schema-level invariants, one per line or grouped as `@ensure [...]` with `msg, fn` pairs
+
+Field modifiers: `!` required, `#` unique, `?` optional. Type slot is optional; omitting it means `string`. Constraints self-identify: `n..m` for ranges, `[value]` for defaults, `/regex/` for patterns, `{key: val}` for attrs. String-literal unions (`"M" | "F" | "U"`) substitute for small enum sets in the type slot.
 
 ```coffee
-# Validator (the default :input kind)
+# Validator with a cross-field refinement
 SignupInput = schema
-  email!    email
-  password! string, [8, 100]
+  email!     email
+  password!  8..100
+  password2! 8..100
+
+  @ensure "passwords must match", (u) -> u.password is u.password2
 
 # Shape — validator with behavior
 Address = schema :shape
@@ -191,6 +200,7 @@ Status = schema
 User = schema :model
   name!   string
   email!# email
+  role?   "admin" | "user"
   @timestamps
   @has_many Order
   beforeValidation: -> @email = @email.toLowerCase()
@@ -383,11 +393,15 @@ A close second is **non-reactive reads due to aliasing / stash access patterns**
 
 | Line form | Example |
 |---|---|
-| Field | `email! email` |
+| Field (type implicit string) | `name! 1..50` |
 | Field + modifiers | `email!# email` (required + unique) |
-| Field + constraints | `password! string, [8, 100]` |
+| Field + range | `password! 8..100` |
+| Field + literal union | `sex? "M" \| "F" \| "U"` |
+| Inline field transform | `email!, -> it.email.toLowerCase()` |
 | Directive | `@timestamps`, `@has_many Order`, `@mixin Address` |
 | Method | `toPublic: -> {id: @id, email: @email}` |
-| Computed getter | `fullName: ~> "#{@firstName} #{@lastName}"` |
+| Computed getter (lazy) | `fullName: ~> "#{@firstName} #{@lastName}"` |
+| Eager-derived field | `slug: !> @name.toLowerCase()` |
+| Cross-field refinement | `@ensure "passwords match", (u) -> u.password is u.password2` |
 
 The body is data, not code — and that's what makes the whole thing compile into a validator, a class, a query builder, DDL, and TypeScript types at once.

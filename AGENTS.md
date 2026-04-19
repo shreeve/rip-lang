@@ -487,6 +487,44 @@ Two-way binding (`<=>`) compiles to an effect that pushes signal state into the 
 
 Implementation details are in `src/AGENTS.md`.
 
+### Schemas
+
+Rip schemas are a first-class language keyword that covers runtime
+validation, domain shapes, enums, reusable field bundles, and DB-backed
+models — one `schema` block declares the whole thing and shadow
+TypeScript types fall out automatically.
+
+| Kind      | Use for                                                    |
+| --------- | ---------------------------------------------------------- |
+| `:input`  | request-body / form validator (the default)                |
+| `:shape`  | validator + instance methods + computed getters            |
+| `:enum`   | closed set of `:symbol` members                            |
+| `:mixin`  | reusable field group, composed via `@mixin Name`           |
+| `:model`  | DB-backed: ORM (`find`/`where`/`create`/`save`/`destroy`), DDL (`.toSQL()`), hooks, relations |
+
+Body forms (six declarative line shapes):
+
+| Form                     | Example                                         |
+| ------------------------ | ----------------------------------------------- |
+| Field                    | `name! 1..50` (type slot optional, defaults to `string`) |
+| Inline field transform   | `email!, -> it.email.toLowerCase()`            |
+| Directive                | `@timestamps`, `@mixin Name`, `@belongs_to User?` |
+| Method                   | `name: -> body`                                 |
+| Computed getter (lazy)   | `name: ~> body`                                 |
+| Eager-derived field      | `name: !> body` (materialized once, stored as own property) |
+
+Cross-field invariants use `@ensure`:
+
+```coffee
+Signup = schema :input
+  password!  8..100
+  password2! 8..100
+  @ensure "passwords must match", (u) -> u.password is u.password2
+```
+
+Full reference: [`docs/RIP-SCHEMA.md`](./docs/RIP-SCHEMA.md). Compiler
+internals and parser invariants: [`src/AGENTS.md`](./src/AGENTS.md).
+
 ---
 
 ## Loader and CLI

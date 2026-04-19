@@ -1707,8 +1707,11 @@ generation, persistence, migration DDL, and shadow TypeScript.
 ```coffee
 # Validator
 SignupInput = schema
-  email!    email
-  password! string, 8..100
+  email!     email
+  password!  8..100
+  password2! 8..100
+
+  @ensure "passwords must match", (u) -> u.password is u.password2
 
 # Shape with behavior
 Address = schema :shape
@@ -1741,6 +1744,13 @@ sql    = User.toSQL()
 
 UserPublic = User.omit "password"      # algebra returns :shape
 ```
+
+Body forms: fields (`name! type`, with optional range/regex/default/attrs
+and terminal `-> transform`), methods (`name: -> body`), computed getters
+(`name: ~> body`), eager-derived fields (`name: !> body`), directives
+(`@mixin`, `@timestamps`, `@has_many`, `@belongs_to`, `@index`,
+`@softDelete`), and `@ensure "msg", (x) -> predicate` cross-field
+refinements. Inline and array forms are both accepted for `@ensure`.
 
 **See [docs/RIP-SCHEMA.md](./RIP-SCHEMA.md) for the comprehensive guide** —
 all five kinds, every body form, the ORM and DDL contract, hooks, mixins,
