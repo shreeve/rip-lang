@@ -621,6 +621,22 @@ export registerValidator = (name, fn) -> validators[name] = fn
 export getValidator      = (name)     -> validators[name]
 
 # ==============================================================================
+# check() — Apply a Validator to an Arbitrary Value
+# ==============================================================================
+#
+# read(name, type)  — pull `name` from the current request, validate as `type`
+# check(value, type) — take a `value` you already have, validate as `type`
+#
+# Same validator set, same return contract (null on miss). Use `check` for
+# session fields, env vars, config values, or any input that lives outside
+# a request body/query.
+
+export check = (value, type) ->
+  f = validators[type] or return
+  v = if type in ['array', 'hash', 'json'] then value else String(value ?? '')
+  f(v)
+
+# ==============================================================================
 # read() — Sinatra-style Parameter Reading
 # ==============================================================================
 
