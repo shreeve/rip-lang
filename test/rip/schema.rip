@@ -488,6 +488,30 @@ fail "range: duplicate ranges rejected", '''
     name! 1..20, 5..10
   '''
 
+# Phase 4 — bare regex `/pattern/` (no brackets).
+
+test "regex: bare regex validates pattern", '''
+  Form = schema
+    zip! /^\\d{5}$/
+  [Form.ok({zip: "94301"}), Form.ok({zip: "abcde"}), Form.ok({zip: "1234"})]
+  ''', [true, false, false]
+
+test "regex: combined with range", '''
+  Form = schema
+    code! 4..10, /^[A-Z]+$/
+  [Form.ok({code: "HELLO"}), Form.ok({code: "abc"}), Form.ok({code: "AB"})]
+  ''', [true, false, false]
+
+fail "regex: old bracket form [/.../] is rejected", '''
+  X = schema
+    zip! string, [/^\\d{5}$/]
+  '''
+
+fail "regex: duplicate regex rejected", '''
+  X = schema
+    zip! /^\\d+$/, /^[a-z]+$/
+  '''
+
 test ":input .ok returns boolean true on valid", '''
   Signup = schema
     email! email

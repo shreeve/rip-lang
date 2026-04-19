@@ -197,7 +197,7 @@ Address = schema :shape
   street! string, 1..200
   city!   string
   state!  string, 2..2
-  zip!    string, [/^\d{5}$/]
+  zip!    string, /^\d{5}$/
 
   # Computed getters (~>) read instance fields and return derived values
   full: ~> "#{@street}, #{@city}, #{@state} #{@zip}"
@@ -446,7 +446,7 @@ email!#    email                  # required, unique, email-format-validated
 bio?       text, 0..1000          # optional text, 0-1000 chars
 role?      string, ["user"]       # optional, default "user"
 status     string, [:draft]       # default :draft — same as ["draft"]
-zip!       string, [/^\d{5}$/]    # regex-validated
+zip!       string, /^\d{5}$/      # regex-validated
 ```
 
 ### Directive
@@ -1544,14 +1544,14 @@ name[!|?|#]  [type]  [constraint]  [constraint]  …
 | ---------------- | ----------------------------------------------------------- |
 | `min..max`       | Size (string/array length) or value range (numeric)         |
 | `[value]`        | Default value (single literal in brackets)                  |
-| `[/regex/]`      | Pattern constraint                                          |
+| `/regex/`        | Pattern constraint (bare regex literal)                     |
 | `{key: value}`   | Attrs (unique, index, etc.)                                 |
 
 ```coffee
 password!  string, 8..100                     # length range
 age?       integer, 0..120                    # value range
 role?      string, ["guest"]                  # default
-zip!       string, [/^\d{5}$/]                # regex pattern
+zip!       string, /^\d{5}$/                  # regex pattern
 status?    string, 3..20, ["pending"]         # range AND default
 ```
 
@@ -1599,23 +1599,24 @@ Trailing comma + indent continues the line:
 ```coffee
 password! string,
   8..100,
-  [/[A-Z]/]
+  /[A-Z]/
 ```
 
 This is the same rule Rip applies to any trailing-comma continuation.
 
 ### Migration from v1
 
-The bracket form `[min, max]` and `[min, max, default]` are retired.
-The compiler emits a migration diagnostic pointing at the exact
-replacement:
+Three bracket forms are retired in v2 in favor of shape-identifying
+constraint forms. The compiler emits a migration diagnostic pointing
+at the exact replacement:
 
 ```
 name! string, [8, 100]          → name! string, 8..100
 name! string, [8, 100, 42]      → name! string, 8..100, [42]
+zip!  string, [/^\d{5}$/]       → zip!  string, /^\d{5}$/
 ```
 
-The single-value form `[a]` (default or regex) is unchanged.
+The single-value form `[a]` (default) is unchanged.
 
 ---
 

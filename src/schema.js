@@ -403,6 +403,7 @@ function parseFieldedLine(kind, line, entries) {
   let constraintTokens = null;
   let attrsTokens = null;
   let rangeTokens = null;
+  let regexToken = null;
 
   if (rest.length > 0) {
     // The leading comma is only required when a type was consumed. If
@@ -443,9 +444,15 @@ function parseFieldedLine(kind, line, entries) {
             `Field '${name}' has more than one range constraint. Only one 'min..max' per field.`);
         }
         rangeTokens = part;
+      } else if (head[0] === 'REGEX' && part.length === 1) {
+        if (regexToken) {
+          throw schemaError(head,
+            `Field '${name}' has more than one regex constraint.`);
+        }
+        regexToken = head;
       } else {
         throw schemaError(head,
-          `Unexpected trailer for field '${name}'. Expected '[…]' default, '{…}' attrs, or 'min..max' range.`);
+          `Unexpected trailer for field '${name}'. Expected '[…]' default, '{…}' attrs, '/regex/', or 'min..max' range.`);
       }
     }
   }
@@ -459,6 +466,7 @@ function parseFieldedLine(kind, line, entries) {
     constraintTokens,
     attrsTokens,
     rangeTokens,
+    regexToken,
     loc: first.loc,
   });
 }
@@ -597,7 +605,8 @@ function entryLiteral(emitter, e) {
       ];
       let range = e.rangeTokens ? compileRangeTokens(e.rangeTokens, e) : null;
       let bracket = e.constraintTokens ? compileConstraintsLiteral(e.constraintTokens, e) : null;
-      let merged = mergeFieldConstraints(range, bracket, e);
+      let regex = e.regexToken ? regexLiteralOf(e.regexToken) : null;
+      let merged = mergeFieldConstraints(range, bracket, regex, e);
       if (merged) obj.push(`constraints: ${merged}`);
       return `{${obj.join(', ')}}`;
     }
@@ -662,27 +671,27 @@ function compileCallableFn(emitter, entry) {
 // `[/re/, def]` is rejected as ambiguous; users write `[/re/]` + attrs for
 // other constraints.
 
-// The bracket form `[…]` is now reserved for a SINGLE payload — either
-// the default value or a regex constraint. Multi-element numeric forms
-// `[n, n]` and `[n, n, n]` were retired in v2 in favor of `n..n` range
-// syntax; they are rejected with a migration diagnostic pointing at the
-// exact replacement.
+// The bracket form `[…]` is now reserved for a SINGLE default value.
+// Regex constraints use the bare `/pattern/` form (phase 4); numeric
+// ranges use `min..max` (phase 3). Both old bracketed forms are
+// rejected with a migration diagnostic pointing at the exact
+// replacement.
 function compileConstraintsLiteral(tokens, fieldEntry) {
   let inner = tokens.slice(1, -1);
   let items = splitTopLevelByComma(inner);
-  if (!items.length) return { c: null, rangeFromBracket: null };
+  if (!items.length) return { c: null };
 
   let values = items.map(part => evalLiteralTokens(part, fieldEntry));
 
   if (values.length === 1) {
     let v = values[0];
-    let c = {};
-    if (v instanceof RegExp) c.regex = v;
-    else c.default = v;
-    return { c, rangeFromBracket: null };
+    if (v instanceof RegExp) {
+      throw schemaError(tokens[0],
+        `Regex constraints are written bare, not in brackets. Replace '[${v}]' with '${v}'.`);
+    }
+    return { c: { default: v } };
   }
 
-  // Old forms — reject with migration diagnostic.
   if (values.length === 2 && typeof values[0] === 'number' && typeof values[1] === 'number') {
     throw schemaError(tokens[0],
       `Size/value ranges use 'min..max' syntax, not brackets. Replace '[${values[0]}, ${values[1]}]' with '${values[0]}..${values[1]}'.`);
@@ -692,7 +701,20 @@ function compileConstraintsLiteral(tokens, fieldEntry) {
       `Range + default is two separate constraints in v2. Replace '[${values[0]}, ${values[1]}, ${values[2]}]' with '${values[0]}..${values[1]}, [${values[2]}]'.`);
   }
   throw schemaError(tokens[0],
-    `Constraint bracket takes a single default value or regex in v2. Got ${values.length} elements.`);
+    `Constraint bracket takes a single default value in v2. Got ${values.length} elements.`);
+}
+
+// Extract a regex literal from a bare REGEX token. The lexer's raw text
+// includes the surrounding `/.../` plus any flags.
+function regexLiteralOf(tok) {
+  let raw = tok[1];
+  let m = /^\/((?:\\.|[^\\/])+)\/([a-z]*)$/.exec(raw);
+  if (!m) throw schemaError(tok, `Invalid regex literal ${JSON.stringify(raw)}.`);
+  try {
+    return new RegExp(m[1], m[2]);
+  } catch (e) {
+    throw schemaError(tok, `Invalid regex '${raw}': ${e.message}`);
+  }
 }
 
 // Evaluate an `n..n` range token slice into {min, max}. Caller has
@@ -719,15 +741,18 @@ function compileRangeTokens(tokens, fieldEntry) {
   return { min, max };
 }
 
-// Merge the optional range and bracket-constraint into a single literal
-// object. Bracket form (now reserved for default/regex) never produces
-// min/max, so the merge is non-overlapping by construction.
-function mergeFieldConstraints(range, bracketLiteral, fieldEntry) {
-  // bracketLiteral is the raw {c, …} result from compileConstraintsLiteral
+// Merge the optional range, bracket-default, and bare-regex constraints
+// into a single literal object. Each source contributes disjoint keys
+// by construction — range sets min/max, bracket sets default, regex
+// sets regex.
+function mergeFieldConstraints(range, bracketLiteral, regex, fieldEntry) {
   let c = (bracketLiteral && bracketLiteral.c) || {};
   if (range) {
     c.min = range.min;
     c.max = range.max;
+  }
+  if (regex) {
+    c.regex = regex;
   }
   if (c.min === undefined && c.max === undefined && c.default === undefined && c.regex === undefined) {
     return null;
