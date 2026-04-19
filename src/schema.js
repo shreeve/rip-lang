@@ -426,6 +426,7 @@ function parseFieldedLine(kind, line, entries) {
   let attrsTokens = null;
   let rangeTokens = null;
   let regexToken = null;
+  let transformTokens = null;
 
   if (rest.length > 0) {
     // The leading comma is only required when a type was consumed. If
@@ -439,12 +440,24 @@ function parseFieldedLine(kind, line, entries) {
     // don't affect semantics — strip them from each part so the head
     // is the literal `[` or `{`.
     let parts = splitTopLevelByComma(rest);
-    for (let part of parts) {
+    for (let i = 0; i < parts.length; i++) {
+      let part = parts[i];
+      // Peek at the head before stripping: transforms own their
+      // INDENT/OUTDENT wrapping (needed by parseBodyTokens) so we
+      // must not strip the trailing OUTDENT from a transform part.
+      let peekHead = part[0];
+      let j = 0;
+      while (j < part.length && (part[j][0] === 'INDENT' || part[j][0] === 'TERMINATOR')) j++;
+      peekHead = part[j];
+      let isTransform = peekHead?.[0] === '->';
       while (part.length && (part[0][0] === 'INDENT' || part[0][0] === 'TERMINATOR')) {
+        if (isTransform) break;
         part = part.slice(1);
       }
-      while (part.length && (part[part.length - 1][0] === 'OUTDENT' || part[part.length - 1][0] === 'TERMINATOR')) {
-        part = part.slice(0, -1);
+      if (!isTransform) {
+        while (part.length && (part[part.length - 1][0] === 'OUTDENT' || part[part.length - 1][0] === 'TERMINATOR')) {
+          part = part.slice(0, -1);
+        }
       }
       if (!part.length) continue;
       let head = part[0];
@@ -472,9 +485,21 @@ function parseFieldedLine(kind, line, entries) {
             `Field '${name}' has more than one regex constraint.`);
         }
         regexToken = head;
+      } else if (head[0] === '->' || isTransform) {
+        // Transform: `-> body`. Inside the body, `it` refers to the
+        // whole raw input object. Transform is TERMINAL on the field
+        // line — nothing can follow.
+        if (i !== parts.length - 1) {
+          throw schemaError(head,
+            `Transform '-> …' must be the last element on the field line for '${name}'. Move everything else before the arrow.`);
+        }
+        // Drop everything up through the `->` itself; keep INDENT/OUTDENT
+        // wrapping on either side (parseBodyTokens handles it).
+        let arrowIdx = part.findIndex(t => t[0] === '->');
+        transformTokens = part.slice(arrowIdx + 1);
       } else {
         throw schemaError(head,
-          `Unexpected trailer for field '${name}'. Expected '[…]' default, '{…}' attrs, '/regex/', or 'min..max' range.`);
+          `Unexpected trailer for field '${name}'. Expected '[…]' default, '{…}' attrs, '/regex/', 'min..max' range, or '-> transform'.`);
       }
     }
   }
@@ -496,6 +521,7 @@ function parseFieldedLine(kind, line, entries) {
     attrsTokens,
     rangeTokens,
     regexToken,
+    transformTokens,
     loc: first.loc,
   });
 }
@@ -640,6 +666,9 @@ function entryLiteral(emitter, e) {
       let regex = e.regexToken ? regexLiteralOf(e.regexToken) : null;
       let merged = mergeFieldConstraints(range, bracket, regex, e);
       if (merged) obj.push(`constraints: ${merged}`);
+      if (e.transformTokens) {
+        obj.push(`transform: ${compileTransformFn(emitter, e.transformTokens)}`);
+      }
       return `{${obj.join(', ')}}`;
     }
     case 'directive': {
@@ -682,6 +711,18 @@ function compileCallableFn(emitter, entry) {
   }
   // Wrap as a thin-arrow with no params. `emit` in value context produces
   // a parenthesized function expression.
+  let arrowSexpr = ['->', [], bodySexpr];
+  return emitter.emit(arrowSexpr, 'value');
+}
+
+// Compile an inline field transform body (`-> body`). The body receives
+// the raw input object via Rip's implicit `it` parameter; no explicit
+// params are emitted. Transform runs on .parse() only, not on hydrate.
+function compileTransformFn(emitter, bodyTokens) {
+  let bodySexpr = parseBodyTokens(bodyTokens);
+  if (!bodySexpr) {
+    return `(function() { return undefined; })`;
+  }
   let arrowSexpr = ['->', [], bodySexpr];
   return emitter.emit(arrowSexpr, 'value');
 }
@@ -1359,6 +1400,7 @@ class __SchemaDef {
             literals: e.literals || null,
             array: e.array === true,
             constraints: e.constraints || null,
+            transform: e.transform || null,
           });
           break;
         case 'method':
@@ -1594,6 +1636,25 @@ class __SchemaDef {
     return data;
   }
 
+  // Inline field transforms run once during parse (and safe/ok), never
+  // during DB hydrate. Each transform receives the whole raw input
+  // object as 'it'; its return value becomes the field's candidate
+  // value before default + validation. Transform errors surface as
+  // {error: 'transform'} issues on the final result.
+  _applyTransforms(raw, working) {
+    const norm = this._normalize();
+    const errors = [];
+    for (const [n, f] of norm.fields) {
+      if (!f.transform) continue;
+      try {
+        working[n] = f.transform(raw);
+      } catch (e) {
+        errors.push({field: n, error: 'transform', message: e?.message || String(e)});
+      }
+    }
+    return errors;
+  }
+
   _validateEnum(data, collect) {
     const norm = this._normalize();
     for (const [n, v] of norm.enumMembers) {
@@ -1621,8 +1682,11 @@ class __SchemaDef {
       if (errs.length) throw new SchemaError(errs, this.name, this.kind);
       return this._materializeEnum(data);
     }
-    const working = this._applyDefaults({ ...(data || {}) });
-    const errs = this._validateFields(working, true);
+    const raw = data || {};
+    const working = { ...raw };
+    const transformErrors = this._applyTransforms(raw, working);
+    this._applyDefaults(working);
+    const errs = transformErrors.concat(this._validateFields(working, true));
     if (errs.length) throw new SchemaError(errs, this.name, this.kind);
     const klass = this._getClass();
     return new klass(working, false);
@@ -1637,8 +1701,11 @@ class __SchemaDef {
       if (errs.length) return {ok: false, value: null, errors: errs};
       return {ok: true, value: this._materializeEnum(data), errors: null};
     }
-    const working = this._applyDefaults({ ...(data || {}) });
-    const errs = this._validateFields(working, true);
+    const raw = data || {};
+    const working = { ...raw };
+    const transformErrors = this._applyTransforms(raw, working);
+    this._applyDefaults(working);
+    const errs = transformErrors.concat(this._validateFields(working, true));
     if (errs.length) return {ok: false, value: null, errors: errs};
     const klass = this._getClass();
     return {ok: true, value: new klass(working, false), errors: null};
@@ -1647,7 +1714,11 @@ class __SchemaDef {
   ok(data) {
     if (this.kind === 'mixin') return false;
     if (this.kind === 'enum') return this._validateEnum(data, false);
-    const working = this._applyDefaults({ ...(data || {}) });
+    const raw = data || {};
+    const working = { ...raw };
+    const transformErrors = this._applyTransforms(raw, working);
+    if (transformErrors.length) return false;
+    this._applyDefaults(working);
     return this._validateFields(working, false);
   }
 
@@ -1798,9 +1869,16 @@ function __schemaDerive(source, transform) {
     if (f.required) mods.push('!');
     if (f.unique) mods.push('#');
     if (f.optional && !f.required) mods.push('?');
+    // Field semantics (type, literals, constraints, transform) survive
+    // algebra. Instance behavior (methods, computed, hooks) does not —
+    // it's dropped by construction because the derived schema is rebuilt
+    // as kind-shape without callable entries.
     entries.push({
       tag: 'field', name: f.name, modifiers: mods,
-      typeName: f.typeName, array: f.array, constraints: f.constraints,
+      typeName: f.typeName, array: f.array,
+      literals: f.literals || null,
+      constraints: f.constraints,
+      transform: f.transform || null,
     });
   }
   const name = (source.name || 'Schema') + 'Derived';
@@ -1873,6 +1951,7 @@ function __schemaExpandMixins(host, fields, directives, ctx) {
         literals: e.literals || null,
         array: e.array === true,
         constraints: e.constraints || null,
+        transform: e.transform || null,
       });
     }
     ctx.stack.pop();

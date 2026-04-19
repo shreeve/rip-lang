@@ -555,6 +555,63 @@ fail "literal union: rejects array suffix", '''
     x! "a" | "b" []
   '''
 
+# Phase 6 — inline field transforms (`-> fn(it)`).
+
+test "transform: remaps input field name", '''
+  X = schema
+    id! -> it.Id
+  out = X.parse({Id: "abc"})
+  out.id
+  ''', "abc"
+
+test "transform: derives from other raw keys", '''
+  Y = schema
+    slug! -> "#{it.FirstName}-#{it.LastName}".toLowerCase()
+  out = Y.parse({FirstName: "Alice", LastName: "Smith"})
+  out.slug
+  ''', "alice-smith"
+
+test "transform: coerces wire string to Date via constructor", '''
+  Order = schema :shape
+    shippedAt? datetime, -> if it.shippedAt then new Date(it.shippedAt) else null
+  out = Order.parse({shippedAt: "2026-04-18T10:00:00Z"})
+  out.shippedAt instanceof Date
+  ''', true
+
+test "transform: combined with default for missing input", '''
+  X = schema
+    role? ["guest"], -> it.Role
+  out = X.parse({})
+  out.role
+  ''', "guest"
+
+test "transform: output validated against declared type", '''
+  X = schema
+    n! integer, -> it.count
+  [X.ok({count: 5}), X.ok({count: "five"})]
+  ''', [true, false]
+
+test "transform: thrown error surfaces as issue", '''
+  X = schema
+    x! -> throw new Error("bad")
+  r = X.safe({})
+  [r.ok, r.errors[0].error, r.errors[0].message]
+  ''', [false, 'transform', 'bad']
+
+test "transform: survives algebra (.pick preserves transform)", '''
+  User = schema :shape
+    email!# email, -> it.email.toLowerCase()
+    name!# -> it.Name
+  Slim = User.pick("email", "name")
+  out = Slim.parse({email: "ALICE@X.com", Name: "Alice"})
+  [out.email, out.name]
+  ''', ["alice@x.com", "Alice"]
+
+fail "transform: must be the last element on the line", '''
+  X = schema
+    x! -> it.foo, [1, 5]
+  '''
+
 test ":input .ok returns boolean true on valid", '''
   Signup = schema
     email! email
