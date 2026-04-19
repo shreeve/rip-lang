@@ -422,7 +422,7 @@ a schema-specific diagnostic.
 ### Field
 
 ```coffee
-name[!|?|#]*  type  [, constraints]  [, attrs]
+name[!|?|#]*  [type]  [range]  [default]  [regex]  [attrs]  [, -> transform]
 ```
 
 Modifiers:
@@ -437,17 +437,52 @@ Any combination works (`email!#` means required + unique). Order among
 modifiers doesn't matter. No modifier means "present but not required" —
 equivalent to `?` for validation purposes.
 
-Types are a single identifier (optionally followed by `[]` for arrays):
+**Type is optional** — when omitted, the field defaults to `string`. Type
+expressions accept:
+
+- a type identifier (`string`, `email`, `integer`, …)
+- an array suffix (`string[]`)
+- a string-literal union (`"M" | "F" | "U"`) — value must be one of the
+  listed members; 2+ members required, no mixing with base types
 
 ```coffee
-name!      string                 # required string
-tags!      string[]               # required array of strings
-email!#    email                  # required, unique, email-format-validated
-bio?       text, 0..1000          # optional text, 0-1000 chars
-role?      string, ["user"]       # optional, default "user"
-status     string, [:draft]       # default :draft — same as ["draft"]
-zip!       string, /^\d{5}$/      # regex-validated
+name!                                   # required string (default type)
+tags!      string[]                     # required array of strings
+email!#    email                        # required, unique, email-format-validated
+bio?       text, 0..1000                # optional text, 0-1000 chars
+role?      string, ["user"]             # optional, default "user"
+status     string, [:draft]             # default :draft — same as ["draft"]
+zip!       string, /^\d{5}$/            # regex-validated
+sex?       "M" | "F" | "U"              # literal union
+priority   "low" | "med" | "high", [:med]  # literal union + default
 ```
+
+### Inline field transform
+
+A `-> body` at the end of a field line derives the field's value from the
+raw input. `it` inside the body refers to the **whole raw input object**
+(not just the field's wire value), so transforms can pick from a
+differently-named key, compose across multiple inputs, or coerce types:
+
+```coffee
+id!          -> it.Id                                    # remap PascalCase input
+displayName! -> it.DisplayName
+shippedAt?   date, -> new Date(it.shippedAt)             # wire string → Date
+slug!        -> "#{it.FirstName}-#{it.LastName}".toLowerCase()
+email!#      email, -> it.email.toLowerCase().trim()     # normalize + validate
+```
+
+Rules:
+
+- **Declared type is the OUTPUT type** — the validator checks the
+  transform's *return value*. The input shape is implicit.
+- **Transform is terminal** on the field line — nothing follows `->`.
+- **Runs once at `.parse()`**, never on DB hydrate (rows arrive
+  canonical).
+- **Survives algebra** (`.pick`, `.omit`, etc.) — field semantics, not
+  instance behavior. A picked schema may still read raw-input keys not
+  in its output shape.
+- **Errors** in the transform wrap as `{error: 'transform'}` issues.
 
 ### Directive
 
@@ -486,21 +521,64 @@ beforeSave: ->
   @slug  = @name.toLowerCase().replace(/\s+/g, '-')
 ```
 
-### Computed getter
+### Computed getter (lazy)
 
 ```coffee
 name: ~> body
 ```
 
-Reactive-style arrow, emitted as a prototype getter via
-`Object.defineProperty(proto, name, {get: fn})`. Called on read, not
-stored. Excluded from DDL and persistence.
+Reactive-style arrow, emitted as a non-enumerable prototype getter via
+`Object.defineProperty(proto, name, {get: fn})`. **Re-evaluates on every
+access** — reflects the current instance state. Excluded from DDL and
+persistence.
 
 ```coffee
 full:       ~> "#{@street}, #{@city}"
 identifier: ~> "#{@name} <#{@email}>"
 isAdmin:    ~> @role is 'admin'
 ```
+
+### Eager-derived field
+
+```coffee
+name: !> body
+```
+
+Materialized-once derivation. Runs during `.parse()` (and on DB hydrate)
+after all declared fields are populated. Stored as an **own enumerable
+property**, so it appears in `Object.keys(inst)` and `JSON.stringify(inst)`.
+Excluded from DDL and persistence — re-computed on hydrate from the
+declared fields.
+
+```coffee
+fullName:    !> "#{@firstName} #{@lastName}".trim()
+orderNumber: !> "ORD-#{String(@id).padStart(6, '0')}"
+slug:        !> @fullName.toLowerCase().replace(/\s+/g, '-')
+```
+
+Declaration order matters — an `!>` can read earlier declared fields
+and earlier `!>` values, but not later ones.
+
+### `!>` vs `~>` — pick the right one
+
+They look similar and come from the same grammar family, but they
+behave very differently after mutation. This is the single most
+important distinction in the schema body:
+
+| | `name: !> body` (eager) | `name: ~> body` (lazy) |
+|---|---|---|
+| Fires | once at parse / hydrate | every access |
+| Stored as | own enumerable property | non-enumerable prototype getter |
+| `Object.keys(inst)` | includes it | does not |
+| `JSON.stringify(inst)` | includes it | does not |
+| After `inst.field = x` | **stale** — does not recompute | **live** — reflects the new value |
+| Use for | serialized/materialized derivations, labels that ship over the wire | computed properties that should always reflect current state |
+
+> **Important**: an `!>` field will appear *stale* if you mutate a
+> dependency afterwards. That's by design — it's a snapshot, not a
+> reactive binding. When in doubt, pick `~>` for live values and save
+> `!>` for cases where the materialization is itself the goal
+> (JSON payload shape, computed labels at construction time).
 
 ### Rules to remember
 
@@ -1377,17 +1455,19 @@ language.
 
 ### Validator features not yet in
 
-- **Union and discriminated-union schemas** — `schema.union(A, B)` with a
-  `:discriminator` key. Today you express alternation by running multiple
-  `.safe()` calls manually.
+- **Full discriminated-union schemas** — `schema.union(A, B)` with a
+  `:discriminator` key that dispatches to the matching constituent.
+  String-literal unions in the type slot (`"a" | "b"`) are in;
+  schema-constituent unions over arbitrary shapes are not. Today you
+  express cross-shape alternation by running multiple `.safe()` calls.
 - **Custom refinements** — `.refine(fn, message)` and `.superRefine(fn)`.
-  Today arbitrary checks live in a `beforeValidation` hook on `:model`, or
-  as a post-`.parse` check in your code.
-- **Transforms** — `.transform(input -> output)` that changes the parsed
-  value's shape. Fields can be normalized inside `beforeValidation`, but
-  the output type is currently identical to the input type.
-- **Coercion** — `coerce.number`, `coerce.date`, etc. Today numeric strings
-  are not auto-cast to numbers during `.parse()`.
+  Today arbitrary checks live in a `beforeValidation` hook on `:model`,
+  as a post-`.parse` check in your code, or inside an inline field
+  transform that throws on invalid input.
+- **Coercion built-in types** — `coerce.number`, `coerce.date`, etc.
+  as dedicated type names. Today a field transform handles the same
+  case (`shippedAt? date, -> new Date(it.shippedAt)`); coerce types
+  would just be a stdlib convenience over the transform mechanism.
 - **Async refinements** — validators that await a database or network
   call. Today the validator is purely synchronous.
 
@@ -1693,6 +1773,44 @@ when debugging or extending:
 
 Each schema goes through four layers. Each layer is built lazily on first
 need, and the caches are independent.
+
+### The canonical field parse pipeline
+
+`.parse()` applies each declared field's value through a fixed sequence.
+Knowing the order makes the difference between transform-before-default
+(correct) and transform-after-default (surprising) predictable:
+
+```text
+For each declared field, in order:
+  1. Obtain raw candidate
+     — transform(raw) if declared, else raw[fieldName]
+  2. Apply default if the candidate is missing/undefined
+  3. Required / optional / nullability check
+  4. Validate per declared type
+     — literal-union membership, primitive type, array
+  5. Apply range / regex / attrs constraints
+  6. Assign as own enumerable property on the instance
+
+After all declared fields:
+  7. Run `!>` eager-derived entries in declaration order
+     — reads the now-populated instance; results land as own
+       enumerable properties; earlier `!>` values are readable
+       by later ones, forward references are not
+```
+
+The `_hydrate` path (used by `.find`, `.where`, etc.) **skips step 1's
+transform, step 2's default, and steps 3–5 entirely** — DB rows are
+already in canonical field shape. It still runs step 7 so eager-derived
+fields appear on hydrated instances just as they do on parsed ones.
+
+### Value mutation after parse
+
+Mutating a field after parse **does not re-run `!>` entries** — they
+were materialized at parse time. Lazy computed (`~>`) values do reflect
+the current state on every access. This distinction is the key
+difference between the two arrows; see §5 for the side-by-side
+comparison.
+
 
 ### Layer 1 — Descriptor
 
