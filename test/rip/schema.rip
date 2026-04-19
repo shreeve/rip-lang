@@ -171,10 +171,10 @@ fail "unknown schema kind", '''
     name! string
   '''
 
-fail "field missing type", '''
-  X = schema
-    name!
-  '''
+# NOTE: `name!` with no type was previously an error. As of Phase 2 of
+# the grammar cleanup the type slot is optional and defaults to `string`.
+# A dedicated negative case is no longer applicable; see the
+# "default-string: …" runtime tests below for the positive coverage.
 
 fail "bad arrow after colon", '''
   X = schema
@@ -405,6 +405,41 @@ test ":input .parse returns cleaned value", '''
   out = Signup.parse({email: "a@b.c", password: "xyz"})
   out.email
   ''', "a@b.c"
+
+# Phase 2 — type slot is optional; bare modifier means `string`.
+# These forms were previously invalid ("Schema field X is missing a type").
+
+test "default-string: bare required modifier", '''
+  Form = schema
+    name!
+  out = Form.parse({name: "Alice"})
+  out.name
+  ''', "Alice"
+
+test "default-string: bare optional modifier accepts missing field", '''
+  Form = schema
+    name?
+  out = Form.parse({})
+  out.name
+  ''', undefined
+
+test "default-string: still validates the inferred string type", '''
+  Form = schema
+    name!
+  Form.ok({name: 42})
+  ''', false
+
+test "default-string: constraint immediately after modifier", '''
+  Form = schema
+    phone? [1, 20]
+  [Form.ok({phone: "555-0100"}), Form.ok({phone: ""}), Form.ok({})]
+  ''', [true, false, true]
+
+test "default-string: required+unique without explicit type", '''
+  U = schema :shape
+    code!#
+  U.ok({code: "abc"})
+  ''', true
 
 test ":input .ok returns boolean true on valid", '''
   Signup = schema

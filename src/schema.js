@@ -368,21 +368,21 @@ function parseFieldedLine(kind, line, entries) {
   // Reject a stray colon here — gives a clear diagnostic for the common
   // mistake `name: type` instead of `name type`.
   let typeFirst = line[pos];
-  if (!typeFirst) {
-    throw schemaError(first, `Schema field '${name}' is missing a type.`);
-  }
-  if (typeFirst[0] === ':') {
+  if (typeFirst?.[0] === ':') {
     throw schemaError(typeFirst,
       `Schema fields use 'name type' (space, no colon). Got 'name:'. For methods/computed use 'name: -> body' or 'name: ~> body'.`);
   }
 
-  // Type: IDENTIFIER, optionally followed by `[]` for array.
-  if (typeFirst[0] !== 'IDENTIFIER') {
-    throw schemaError(typeFirst,
-      `Expected type name for schema field '${name}'. Got ${typeFirst[0]}.`);
+  // Type: IDENTIFIER, optionally followed by `[]` for array. The type
+  // slot is OPTIONAL — if the next token isn't a type-starting token,
+  // the field defaults to `string` and we fall through to constraint
+  // parsing. Lets `name!` parse as a required string, `phone? [1, 20]`
+  // parse as an optional string with length constraint, etc.
+  let typeName = 'string';
+  if (typeFirst?.[0] === 'IDENTIFIER') {
+    typeName = typeFirst[1];
+    pos++;
   }
-  let typeName = typeFirst[1];
-  pos++;
   let array = false;
   // `string[]` tokenizes as IDENTIFIER INDEX_START INDEX_END (or `[` `]`
   // depending on context; closeOpenIndexes retags the empty bracket pair
@@ -402,15 +402,17 @@ function parseFieldedLine(kind, line, entries) {
   let attrsTokens = null;
 
   if (rest.length > 0) {
-    if (rest[0]?.[0] !== ',') {
-      throw schemaError(rest[0],
-        `Expected ',' between type and constraints for field '${name}'.`);
+    // The leading comma is only required when a type was consumed. If
+    // the type slot was empty, constraints may follow the modifiers
+    // directly (`name? [1, 20]`). Both shapes produce the same parts.
+    if (rest[0]?.[0] === ',') {
+      rest = rest.slice(1);
     }
     // Split top-level by commas. Multi-line trailers (`name! type,\n
     // [8, 100]`) introduce surrounding INDENT/OUTDENT tokens that
     // don't affect semantics — strip them from each part so the head
     // is the literal `[` or `{`.
-    let parts = splitTopLevelByComma(rest.slice(1));
+    let parts = splitTopLevelByComma(rest);
     for (let part of parts) {
       while (part.length && (part[0][0] === 'INDENT' || part[0][0] === 'TERMINATOR')) {
         part = part.slice(1);
