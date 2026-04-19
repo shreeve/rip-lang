@@ -1540,12 +1540,16 @@ name[!|?|#]  [type]  [constraint]  [constraint]  …
 
 ### The forms
 
-| Form             | Meaning                                                     |
-| ---------------- | ----------------------------------------------------------- |
-| `min..max`       | Size (string/array length) or value range (numeric)         |
-| `[value]`        | Default value (single literal in brackets)                  |
-| `/regex/`        | Pattern constraint (bare regex literal)                     |
-| `{key: value}`   | Attrs (unique, index, etc.)                                 |
+The **type** slot accepts an identifier (`string`, `email`, etc.) or
+a string-literal union; the **constraint** forms live after the type:
+
+| Form                 | Slot       | Meaning                                                |
+| -------------------- | ---------- | ------------------------------------------------------ |
+| `"a" \| "b" \| …`    | type       | String-literal union (value must be one of the listed members) |
+| `min..max`           | constraint | Size (string/array length) or value range (numeric)    |
+| `[value]`            | constraint | Default value (single literal in brackets)             |
+| `/regex/`            | constraint | Pattern constraint (bare regex literal)                |
+| `{key: value}`       | constraint | Attrs (unique, index, etc.)                            |
 
 ```coffee
 password!  string, 8..100                     # length range
@@ -1553,6 +1557,8 @@ age?       integer, 0..120                    # value range
 role?      string, ["guest"]                  # default
 zip!       string, /^\d{5}$/                  # regex pattern
 status?    string, 3..20, ["pending"]         # range AND default
+sex?       "M" | "F" | "U"                    # literal union
+status?    "draft" | "active" | "done", [:draft]  # union + default
 ```
 
 ### Range semantics by field type

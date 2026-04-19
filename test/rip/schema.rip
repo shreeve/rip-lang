@@ -512,6 +512,49 @@ fail "regex: duplicate regex rejected", '''
     zip! /^\\d+$/, /^[a-z]+$/
   '''
 
+# Phase 5 — string-literal unions in the type slot.
+
+test "literal union: accepts declared members", '''
+  Form = schema
+    sex! "M" | "F" | "U"
+  [Form.ok({sex: "M"}), Form.ok({sex: "F"}), Form.ok({sex: "U"})]
+  ''', [true, true, true]
+
+test "literal union: rejects non-members", '''
+  Form = schema
+    sex! "M" | "F" | "U"
+  [Form.ok({sex: "X"}), Form.ok({sex: "m"}), Form.ok({sex: 1})]
+  ''', [false, false, false]
+
+test "literal union: works with default", '''
+  Form = schema
+    sex? "M" | "F" | "U", ["U"]
+  out = Form.parse({})
+  out.sex
+  ''', "U"
+
+test "literal union: SchemaError lists allowed members", '''
+  Form = schema
+    sex! "M" | "F" | "U"
+  r = Form.safe({sex: "X"})
+  [r.ok, r.errors[0].error, r.errors[0].message.includes('"M"'), r.errors[0].message.includes('"U"')]
+  ''', [false, 'enum', true, true]
+
+fail "literal union: rejects mixing with identifier type", '''
+  X = schema
+    x! "a" | "b" | string
+  '''
+
+fail "literal union: rejects single-literal (use default)", '''
+  X = schema
+    x! "only"
+  '''
+
+fail "literal union: rejects array suffix", '''
+  X = schema
+    x! "a" | "b" []
+  '''
+
 test ":input .ok returns boolean true on valid", '''
   Signup = schema
     email! email

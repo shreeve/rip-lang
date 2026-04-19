@@ -373,15 +373,37 @@ function parseFieldedLine(kind, line, entries) {
       `Schema fields use 'name type' (space, no colon). Got 'name:'. For methods/computed use 'name: -> body' or 'name: ~> body'.`);
   }
 
-  // Type: IDENTIFIER, optionally followed by `[]` for array. The type
-  // slot is OPTIONAL — if the next token isn't a type-starting token,
-  // the field defaults to `string` and we fall through to constraint
-  // parsing. Lets `name!` parse as a required string, `phone? [1, 20]`
-  // parse as an optional string with length constraint, etc.
+  // Type: IDENTIFIER (optionally followed by `[]` for array) OR a
+  // string-literal union like `"M" | "F" | "U"`. The type slot is
+  // OPTIONAL — if the next token isn't a type-starting token, the
+  // field defaults to `string` and we fall through to constraint
+  // parsing.
   let typeName = 'string';
+  let literals = null;
   if (typeFirst?.[0] === 'IDENTIFIER') {
     typeName = typeFirst[1];
     pos++;
+  } else if (typeFirst?.[0] === 'STRING') {
+    // Literal union: collect alternating STRING | STRING | STRING...
+    literals = [JSON.parse(typeFirst[1])];
+    pos++;
+    while (line[pos]?.[0] === '|' && line[pos + 1]?.[0] === 'STRING') {
+      pos++; // consume '|'
+      literals.push(JSON.parse(line[pos][1]));
+      pos++;
+    }
+    // Forbid mixing with identifier types or null/undefined.
+    if (line[pos]?.[0] === '|') {
+      let next = line[pos + 1];
+      let tag = next?.[0] ?? '<end>';
+      throw schemaError(next || line[pos],
+        `Literal unions contain string literals only. '${tag}' is not allowed as a union member. Use the '?' modifier for nullability.`);
+    }
+    if (literals.length < 2) {
+      throw schemaError(typeFirst,
+        `Literal union needs at least two string literals. Use '${JSON.stringify(literals[0])}' as a default with '[${JSON.stringify(literals[0])}]' instead.`);
+    }
+    typeName = 'literal-union';
   }
   let array = false;
   // `string[]` tokenizes as IDENTIFIER INDEX_START INDEX_END (or `[` `]`
@@ -457,12 +479,19 @@ function parseFieldedLine(kind, line, entries) {
     }
   }
 
+  // Array suffix is incompatible with literal-union types in v2.
+  if (array && literals) {
+    throw schemaError(typeFirst,
+      `Array-of-literal-union is not supported. Use 'string[]' if you need an array of strings.`);
+  }
+
   entries.push({
     tag: 'field',
     name,
     modifiers,
     typeName,
     array,
+    literals,
     constraintTokens,
     attrsTokens,
     rangeTokens,
@@ -603,6 +632,9 @@ function entryLiteral(emitter, e) {
         `typeName: ${JSON.stringify(e.typeName)}`,
         `array: ${e.array ? 'true' : 'false'}`,
       ];
+      if (e.literals) {
+        obj.push(`literals: ${JSON.stringify(e.literals)}`);
+      }
       let range = e.rangeTokens ? compileRangeTokens(e.rangeTokens, e) : null;
       let bracket = e.constraintTokens ? compileConstraintsLiteral(e.constraintTokens, e) : null;
       let regex = e.regexToken ? regexLiteralOf(e.regexToken) : null;
@@ -1324,6 +1356,7 @@ class __SchemaDef {
             unique: e.modifiers.includes('#'),
             optional: e.modifiers.includes('?'),
             typeName: e.typeName,
+            literals: e.literals || null,
             array: e.array === true,
             constraints: e.constraints || null,
           });
@@ -1522,6 +1555,12 @@ class __SchemaDef {
           }
         }
         if (bad) continue;
+      } else if (f.typeName === 'literal-union') {
+        if (!f.literals.includes(v)) {
+          if (!collect) return false;
+          errors.push({field: n, error: 'enum', message: n + ' must be one of ' + f.literals.map(l => JSON.stringify(l)).join(', ')});
+          continue;
+        }
       } else if (!__schemaCheckValue(v, f.typeName)) {
         if (!collect) return false;
         errors.push({field: n, error: 'type', message: n + ' must be ' + f.typeName});
@@ -1831,6 +1870,7 @@ function __schemaExpandMixins(host, fields, directives, ctx) {
         unique: e.modifiers.includes('#'),
         optional: e.modifiers.includes('?'),
         typeName: e.typeName,
+        literals: e.literals || null,
         array: e.array === true,
         constraints: e.constraints || null,
       });
@@ -2160,6 +2200,9 @@ const RIP_TYPE_TO_TS = {
 };
 
 function mapFieldType(entry) {
+  if (entry.typeName === 'literal-union' && entry.literals?.length) {
+    return entry.literals.map(l => JSON.stringify(l)).join(' | ');
+  }
   let base = RIP_TYPE_TO_TS[entry.typeName] ?? entry.typeName;
   return entry.array ? `${base}[]` : base;
 }
