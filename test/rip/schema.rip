@@ -719,6 +719,228 @@ test "eager derived: collides with field name (runtime error)", '''
   [err?.name, err?.issues?[0]?.error]
   ''', ["SchemaError", "collision"]
 
+# ------------------------------------------------------------------------------
+# Phase 8 — refinements (`@ensure "msg", (fn)` inline or `@ensure [...]` array).
+# Schema-level cross-field predicates. Run after field validation, before
+# eager-derived. Skipped on _hydrate. Dropped by all algebra.
+
+test "ensure: inline form passes when predicate returns truthy", '''
+  X = schema :shape
+    name! 1..50
+    email! email
+    @ensure "name and email must differ", (u) -> u.name isnt u.email
+  out = X.parse({name: "Alice", email: "a@b.c"})
+  out.name
+  ''', "Alice"
+
+test "ensure: inline form fails when predicate returns false", '''
+  X = schema :shape
+    name! 1..50
+    email! email
+    @ensure "name and email must differ", (u) -> u.name isnt u.email
+  err = null
+  try
+    X.parse({name: "a@b.c", email: "a@b.c"})
+  catch e
+    err = e
+  [err?.name, err?.issues?[0]?.error, err?.issues?[0]?.field, err?.issues?[0]?.message]
+  ''', ["SchemaError", "ensure", "", "name and email must differ"]
+
+test "ensure: falsy values (null, 0, '') all fail", '''
+  X = schema :shape
+    name!
+    @ensure "always fails", (u) -> null
+  r = X.safe({name: "x"})
+  [r.ok, r.errors[0].error, r.errors[0].message]
+  ''', [false, "ensure", "always fails"]
+
+test "ensure: truthy non-boolean (object, array) pass", '''
+  X = schema :shape
+    name!
+    @ensure "never", (u) -> {any: "truthy"}
+  r = X.safe({name: "x"})
+  [r.ok, r.errors]
+  ''', [true, null]
+
+test "ensure: thrown exception becomes ensure issue with user message", '''
+  X = schema :shape
+    name!
+    @ensure "custom msg", (u) -> throw new Error("boom")
+  r = X.safe({name: "x"})
+  [r.ok, r.errors[0].error, r.errors[0].message]
+  ''', [false, "ensure", "custom msg"]
+
+test "ensure: array form — multiple refinements collect all issues", '''
+  X = schema :shape
+    a!
+    b!
+    @ensure [
+      "a bad", (u) -> u.a is "ok"
+      "b bad", (u) -> u.b is "ok"
+    ]
+  r = X.safe({a: "x", b: "y"})
+  [r.ok, r.errors.length, r.errors[0].message, r.errors[1].message]
+  ''', [false, 2, "a bad", "b bad"]
+
+test "ensure: array form — declaration order preserved", '''
+  X = schema :shape
+    x!
+    @ensure [
+      "first",  (u) -> false
+      "second", (u) -> false
+      "third",  (u) -> false
+    ]
+  r = X.safe({x: "y"})
+  r.errors.map((e) -> e.message)
+  ''', ["first", "second", "third"]
+
+test "ensure: multiple inline @ensure lines also collect all issues", '''
+  X = schema :shape
+    a!
+    b!
+    @ensure "a bad", (u) -> u.a is "ok"
+    @ensure "b bad", (u) -> u.b is "ok"
+  r = X.safe({a: "x", b: "y"})
+  [r.ok, r.errors.length, r.errors[0].message, r.errors[1].message]
+  ''', [false, 2, "a bad", "b bad"]
+
+test "ensure: mixed inline and array forms in same schema", '''
+  X = schema :shape
+    a!
+    b!
+    c!
+    @ensure "inline rule", (u) -> u.a is "ok"
+    @ensure [
+      "array rule 1", (u) -> u.b is "ok"
+      "array rule 2", (u) -> u.c is "ok"
+    ]
+  r = X.safe({a: "x", b: "y", c: "z"})
+  r.errors.map((e) -> e.message)
+  ''', ["inline rule", "array rule 1", "array rule 2"]
+
+test "ensure: short-circuits when field validation fails", '''
+  X = schema :shape
+    name! 1..50
+    @ensure "never seen", (u) -> throw new Error("should not run")
+  r = X.safe({})
+  [r.ok, r.errors[0].error]
+  ''', [false, "required"]
+
+test "ensure: sees defaulted values", '''
+  X = schema :shape
+    role! "admin" | "user", ["user"]
+    @ensure "must be user", (u) -> u.role is "user"
+  r = X.safe({})
+  [r.ok, r.errors]
+  ''', [true, null]
+
+test "ensure: sees transformed values", '''
+  X = schema :shape
+    id!, -> String(it.Id).toUpperCase()
+    @ensure "must start with X", (u) -> u.id.startsWith("X")
+  r = X.safe({Id: "x123"})
+  [r.ok, r.value?.id]
+  ''', [true, "X123"]
+
+test "ensure: runs BEFORE eager-derived fields", '''
+  X = schema :shape
+    a!
+    @ensure "a bad", (u) -> u.a is "ok"
+    upper: !> @a.toUpperCase()
+  r = X.safe({a: "bad"})
+  [r.ok, r.errors[0].error, r.errors[0].message]
+  ''', [false, "ensure", "a bad"]
+
+test "ensure: .ok() runs refinements", '''
+  X = schema :shape
+    name!
+    @ensure "must be ok", (u) -> u.name is "ok"
+  [X.ok({name: "ok"}), X.ok({name: "bad"})]
+  ''', [true, false]
+
+test "ensure: multi-line fn body in array form", '''
+  X = schema :shape
+    name!
+    @ensure [
+      "not reserved", (u) ->
+        normalized = u.name.toLowerCase()
+        normalized isnt "reserved"
+    ]
+  [X.ok({name: "Alice"}), X.ok({name: "Reserved"})]
+  ''', [true, false]
+
+fail "ensure: rejected on :enum", '''
+  X = schema :enum
+    :a
+    :b
+    @ensure "nope", (u) -> true
+  '''
+
+fail "ensure: rejected on :mixin", '''
+  X = schema :mixin
+    name!
+    @ensure "nope", (u) -> true
+  '''
+
+test "ensure: dropped on .pick", '''
+  X = schema :shape
+    a!
+    b!
+    @ensure "never", (u) -> false
+  Picked = X.pick("a")
+  r = Picked.safe({a: "x"})
+  [r.ok, r.errors]
+  ''', [true, null]
+
+test "ensure: dropped on .omit", '''
+  X = schema :shape
+    a!
+    b!
+    @ensure "never", (u) -> false
+  Trimmed = X.omit("b")
+  r = Trimmed.safe({a: "x"})
+  [r.ok, r.errors]
+  ''', [true, null]
+
+test "ensure: dropped on .partial", '''
+  X = schema :shape
+    a!
+    @ensure "never", (u) -> false
+  P = X.partial()
+  r = P.safe({})
+  [r.ok, r.errors]
+  ''', [true, null]
+
+test "ensure: dropped on .extend", '''
+  A = schema :shape
+    a!
+    @ensure "never", (u) -> false
+  B = schema :shape
+    b!
+  M = A.extend(B)
+  r = M.safe({a: "x", b: "y"})
+  [r.ok, r.errors]
+  ''', [true, null]
+
+test "ensure: works on :input schemas", '''
+  I = schema :input
+    pw!
+    pw2!
+    @ensure "passwords must match", (u) -> u.pw is u.pw2
+  r = I.safe({pw: "a", pw2: "b"})
+  [r.ok, r.errors[0].message]
+  ''', [false, "passwords must match"]
+
+test "ensure: hydrate skips refinements (trusted data)", '''
+  X = schema :model
+    name!
+    @ensure "never", (u) -> false
+  inst = X._hydrate([{name: "name"}], ["Alice"])
+  [inst.name, inst instanceof X._getClass()]
+  ''', ["Alice", true]
+
+# ------------------------------------------------------------------------------
+
 test ":input .ok returns boolean true on valid", '''
   Signup = schema
     email! email

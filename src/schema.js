@@ -222,12 +222,20 @@ function parseSchemaBody(kind, bodyTokens, ctx) {
           throw schemaError({ loc: e.headerLoc || e.loc },
             `:mixin schemas are fields-only. '${e.name}' is a ${e.tag}; move it to a :shape or :model.`);
         }
+        if (e.tag === 'ensure') {
+          throw schemaError({ loc: e.headerLoc || e.loc },
+            `:mixin schemas don't accept @ensure refinements. Move the invariant to a :shape or :model that composes this mixin.`);
+        }
         if (e.tag === 'directive' && e.name !== 'mixin') {
           throw schemaError({ loc: e.loc },
             `:mixin schemas only accept '@mixin Name' directives. '@${e.name}' is not allowed.`);
         }
       }
     } else if (kind === 'input') {
+      // :input accepts fields, @mixin, and @ensure (cross-field predicates
+      // are a natural fit for form validation — "passwords must match").
+      // Other methods, computed getters, hooks, and non-mixin directives
+      // are rejected.
       for (let e of entries) {
         if (e.tag === 'method' || e.tag === 'computed' || e.tag === 'hook') {
           throw schemaError({ loc: e.headerLoc || e.loc },
@@ -235,7 +243,7 @@ function parseSchemaBody(kind, bodyTokens, ctx) {
         }
         if (e.tag === 'directive' && e.name !== 'mixin') {
           throw schemaError({ loc: e.loc },
-            `:input schemas only accept '@mixin Name' directives. '@${e.name}' is not allowed.`);
+            `:input schemas only accept '@mixin Name' and '@ensure'. '@${e.name}' is not allowed.`);
         }
       }
     } else if (kind === 'shape') {
@@ -319,11 +327,33 @@ function parseFieldedLine(kind, line, entries) {
       throw schemaError(first, "Expected directive name after '@'.");
     }
     let argTokens = line.slice(2);
+    let dname = nameTok[1];
+
+    // `@ensure` is a refinement directive with its own grammar — it takes
+    // either an inline `"msg", (args) -> body` or a bracketed array of
+    // those pairs. Emits one `tag: "ensure"` entry per refinement; the
+    // per-entry shape mirrors methods so compileCallableFn-style codegen
+    // can fire.
+    if (dname === 'ensure') {
+      let pairs = parseEnsurePairs(argTokens, first);
+      for (let p of pairs) {
+        entries.push({
+          tag: 'ensure',
+          name: 'ensure',
+          message: p.message,
+          paramTokens: p.paramTokens,
+          bodyTokens: p.bodyTokens,
+          loc: p.loc,
+          headerLoc: first.loc,
+        });
+      }
+      return;
+    }
+
     // Pre-parse structured args so shadow-TS and runtime-codegen share
     // the same descriptor shape. Relation and mixin directives get a
     // `[{target, optional?}]` array; other directives leave `args` unset.
     let args = null;
-    let dname = nameTok[1];
     if (dname === 'belongs_to' || dname === 'has_many' || dname === 'has_one' ||
         dname === 'one' || dname === 'many' || dname === 'mixin') {
       let t0 = argTokens[0];
@@ -655,6 +685,216 @@ function parseCallableLine(kind, headerTok, line, entries) {
   });
 }
 
+// Parse `@ensure` arguments into one or more refinement pairs. Accepts two
+// forms:
+//
+//   inline: `@ensure "msg", (args) -> body`
+//   array:  `@ensure [ "msg", (args) -> body
+//                     , "msg", (args) -> body
+//                     , ... ]`
+//
+// Both forms compile to the SAME entry shape — each pair becomes one
+// `{tag: "ensure", message, paramTokens, bodyTokens}` entry. Downstream
+// runtime code can't tell the two source forms apart.
+//
+// The directive arrives wrapped in the implicit CALL_START/CALL_END pair
+// because Rip sees `@ensure args...` as a call; we strip that wrapper
+// before looking for the array bracket or the inline string.
+function parseEnsurePairs(argTokens, directiveTok) {
+  let tokens = argTokens;
+  if (!tokens.length) {
+    throw schemaError(directiveTok,
+      "@ensure requires 'message, (x) -> body' or '[...]' array of pairs.");
+  }
+  // Strip implicit call wrapper if present.
+  if (tokens[0]?.[0] === 'CALL_START' &&
+      tokens[tokens.length - 1]?.[0] === 'CALL_END') {
+    tokens = tokens.slice(1, -1);
+  }
+  if (!tokens.length) {
+    throw schemaError(directiveTok,
+      "@ensure requires 'message, (x) -> body' or '[...]' array of pairs.");
+  }
+
+  let first = tokens[0];
+  // Array form: tokens start with `[` (or INDEX_START).
+  if (first[0] === '[' || first[0] === 'INDEX_START') {
+    let inner = extractEnsureBracketInner(tokens, first);
+    let parts = splitEnsureElements(inner);
+    if (parts.length === 0) {
+      throw schemaError(first, "@ensure [...] must contain at least one 'message, fn' pair.");
+    }
+    if (parts.length % 2 !== 0) {
+      throw schemaError(first,
+        `@ensure [...] must have pairs of 'message, fn' (got ${parts.length} elements; odd count).`);
+    }
+    let pairs = [];
+    for (let i = 0; i < parts.length; i += 2) {
+      pairs.push(extractEnsurePair(parts[i], parts[i + 1], first));
+    }
+    return pairs;
+  }
+
+  // Inline form: STRING, (args) -> body
+  let parts = splitTopLevelByComma(tokens);
+  if (parts.length < 2) {
+    throw schemaError(first,
+      "@ensure inline form must be 'message, (x) -> body'. Did you forget the comma?");
+  }
+  if (parts.length > 2) {
+    throw schemaError(first,
+      `@ensure inline form takes exactly 'message, fn' (got ${parts.length} comma-separated parts). Use '@ensure [...]' for multiple refinements.`);
+  }
+  return [extractEnsurePair(parts[0], parts[1], first)];
+}
+
+// Walk `[ ... ]` tokens and return the inner slice. Rejects trailing
+// tokens after the close bracket. Strips an outermost INDENT/OUTDENT
+// pair if the bracket body is multi-line (Rip wraps multi-line array
+// contents in one), since @ensure splits pairs at depth 0 and that
+// outer wrap would hide every internal comma/newline.
+function extractEnsureBracketInner(tokens, openTok) {
+  let depth = 0;
+  let inner = [];
+  for (let i = 0; i < tokens.length; i++) {
+    let t = tokens[i];
+    let tag = t[0];
+    if (tag === '[' || tag === 'INDEX_START') {
+      depth++;
+      if (depth === 1) continue;
+    }
+    if (tag === ']' || tag === 'INDEX_END') {
+      depth--;
+      if (depth === 0) {
+        if (i < tokens.length - 1) {
+          throw schemaError(tokens[i + 1],
+            "@ensure [...] must be the only argument — extra tokens after ']'.");
+        }
+        // Strip outer INDENT/OUTDENT pair if it wraps the whole inner.
+        if (inner.length >= 2 &&
+            inner[0][0] === 'INDENT' &&
+            inner[inner.length - 1][0] === 'OUTDENT') {
+          let wd = 0, matched = false;
+          for (let k = 0; k < inner.length; k++) {
+            if (inner[k][0] === 'INDENT') wd++;
+            else if (inner[k][0] === 'OUTDENT') {
+              wd--;
+              if (wd === 0 && k === inner.length - 1) { matched = true; break; }
+              if (wd === 0) break;
+            }
+          }
+          if (matched) inner = inner.slice(1, -1);
+        }
+        return inner;
+      }
+    }
+    if (depth >= 1) inner.push(t);
+  }
+  throw schemaError(openTok, "@ensure: unclosed '['.");
+}
+
+// Split an @ensure array body into elements. Mirrors Rip's array-literal
+// rule: both `,` and newlines (TERMINATOR) are element separators at
+// depth 0. This lets users write rows without trailing commas:
+//
+//   @ensure [
+//     "msg1", (u) -> body
+//     "msg2", (u) -> body     <-- no comma needed between pairs
+//   ]
+function splitEnsureElements(tokens) {
+  let parts = [];
+  let cur = [];
+  let depth = 0;
+  for (let t of tokens) {
+    let tag = t[0];
+    if (tag === '(' || tag === '[' || tag === '{' ||
+        tag === 'CALL_START' || tag === 'INDEX_START' ||
+        tag === 'PARAM_START' || tag === 'INDENT') depth++;
+    if (tag === ')' || tag === ']' || tag === '}' ||
+        tag === 'CALL_END' || tag === 'INDEX_END' ||
+        tag === 'PARAM_END' || tag === 'OUTDENT') depth--;
+    if (depth === 0 && (tag === ',' || tag === 'TERMINATOR')) {
+      if (cur.length) { parts.push(cur); cur = []; }
+      continue;
+    }
+    cur.push(t);
+  }
+  if (cur.length) parts.push(cur);
+  return parts;
+}
+
+// Extract one refinement pair from `messagePart` and `fnPart` (two token
+// slices already split by splitTopLevelByComma). Validates shape at parse
+// time so typos surface with targeted diagnostics instead of runtime
+// "expected function" noise.
+function extractEnsurePair(messagePart, fnPart, refTok) {
+  if (!messagePart || !messagePart.length) {
+    throw schemaError(refTok, "@ensure: missing message (expected a string literal).");
+  }
+  if (messagePart.length !== 1 || messagePart[0][0] !== 'STRING') {
+    throw schemaError(messagePart[0] || refTok,
+      "@ensure: each refinement's first element must be a string literal message.");
+  }
+  let msgTok = messagePart[0];
+  let message = JSON.parse(msgTok[1]);
+
+  if (!fnPart || !fnPart.length) {
+    throw schemaError(msgTok, "@ensure: missing function after message.");
+  }
+  // The fn part should open with `(` / PARAM_START and contain `->`. An
+  // `->` with no params (e.g. `-> true`) is rejected — refinements must
+  // declare the object parameter explicitly.
+  let t0 = fnPart[0];
+  if (t0[0] !== '(' && t0[0] !== 'PARAM_START') {
+    throw schemaError(t0,
+      "@ensure: expected '(args) -> body' after the message. Predicates must declare their parameter explicitly — '(u) -> ...'.");
+  }
+  // Walk matching paren to find PARAM_END.
+  let depth = 1;
+  let pos = 1;
+  let paramTokens = [];
+  while (pos < fnPart.length && depth > 0) {
+    let t = fnPart[pos];
+    let tag = t[0];
+    if (tag === '(' || tag === 'PARAM_START') depth++;
+    if (tag === ')' || tag === 'PARAM_END') {
+      depth--;
+      if (depth === 0) { pos++; break; }
+    }
+    paramTokens.push(t);
+    pos++;
+  }
+  if (depth !== 0) {
+    throw schemaError(t0, "@ensure: unclosed '(' in predicate parameters.");
+  }
+  let arrowTok = fnPart[pos];
+  if (!arrowTok || arrowTok[0] !== '->') {
+    throw schemaError(arrowTok || fnPart[pos - 1] || msgTok,
+      "@ensure: expected '->' after predicate parameters.");
+  }
+  let bodyTokens = fnPart.slice(pos + 1);
+  if (!bodyTokens.length) {
+    throw schemaError(arrowTok, "@ensure: predicate function body is empty.");
+  }
+  return { message, paramTokens, bodyTokens, loc: msgTok.loc };
+}
+
+// Extract param names from `(u)` or `(u, opts)` token slice. Accepts
+// plain identifiers only (no destructuring, defaults, or rest args —
+// refinements don't need that complexity yet).
+function ensureParamNames(paramTokens, refTok) {
+  if (!paramTokens.length) return [];
+  let parts = splitTopLevelByComma(paramTokens);
+  return parts.map(part => {
+    let pTokens = part.filter(t => t[0] !== 'TERMINATOR');
+    if (pTokens.length !== 1 || pTokens[0][0] !== 'IDENTIFIER') {
+      throw schemaError(pTokens[0] || refTok,
+        "@ensure: predicate parameters must be plain identifiers.");
+    }
+    return pTokens[0][1];
+  });
+}
+
 function parseEnumLine(line, entries) {
   let first = line[0];
   if (!first) return;
@@ -667,6 +907,13 @@ function parseEnumLine(line, entries) {
   // unusual: the Map is heterogeneous when you do it — bare entries
   // hold name strings, valued entries hold their literal. Keep the
   // members uniform if that matters for downstream consumers.
+  if (first[0] === '@') {
+    let nameTok = line[1];
+    let dname = nameTok && (nameTok[0] === 'IDENTIFIER' || nameTok[0] === 'PROPERTY')
+      ? nameTok[1] : 'directive';
+    throw schemaError(first,
+      `:enum schemas don't accept '@${dname}'. Enums hold only :symbol members. Move the invariant to a :shape or :model that uses this enum as a field type.`);
+  }
   if (first[0] !== 'SYMBOL') {
     throw schemaError(first,
       `Enum member must be a :symbol. Use ':${first[1] ?? 'name'}' for a bare member or ':${first[1] ?? 'name'} value' for a valued one.`);
@@ -756,6 +1003,15 @@ function entryLiteral(emitter, e) {
       if (args) obj.push(`args: ${args}`);
       return `{${obj.join(', ')}}`;
     }
+    case 'ensure': {
+      let fnCode = compileEnsureFn(emitter, e);
+      let obj = [
+        `tag: "ensure"`,
+        `message: ${JSON.stringify(e.message)}`,
+        `fn: ${fnCode}`,
+      ];
+      return `{${obj.join(', ')}}`;
+    }
     case 'computed':
     case 'method':
     case 'hook':
@@ -804,6 +1060,20 @@ function compileTransformFn(emitter, bodyTokens) {
     return `(function() { return undefined; })`;
   }
   let arrowSexpr = ['->', [], bodySexpr];
+  return emitter.emit(arrowSexpr, 'value');
+}
+
+// Compile an `@ensure` predicate — `(args) -> body` — into a thin-arrow
+// function expression with explicit params. Unlike transforms (which use
+// implicit `it`), refinements require the parameter to be named so the
+// contract of "what the predicate sees" is visible at the call site.
+function compileEnsureFn(emitter, entry) {
+  let bodySexpr = parseBodyTokens(entry.bodyTokens);
+  if (!bodySexpr) {
+    return `(function() { return undefined; })`;
+  }
+  let params = ensureParamNames(entry.paramTokens, entry);
+  let arrowSexpr = ['->', params, bodySexpr];
   return emitter.emit(arrowSexpr, 'value');
 }
 
@@ -1457,6 +1727,7 @@ class __SchemaDef {
     const directives = [];
     const enumMembers = new Map();
     const relations = new Map();
+    const refinements = [];
     let timestamps = false;
     let softDelete = false;
 
@@ -1526,6 +1797,12 @@ class __SchemaDef {
         case 'enum-member':
           enumMembers.set(e.name, e.value !== undefined ? e.value : e.name);
           break;
+        case 'ensure':
+          // Refinements are schema-level invariants (cross-field
+          // predicates). Declaration order is preserved so diagnostics
+          // come out in the order authored.
+          refinements.push({ message: e.message, fn: e.fn });
+          break;
       }
     }
 
@@ -1546,6 +1823,7 @@ class __SchemaDef {
 
     this._norm = {
       fields, methods, computed, derived, hooks, directives, enumMembers, relations,
+      refinements,
       timestamps, softDelete, primaryKey, tableName,
     };
     return this._norm;
@@ -1573,6 +1851,46 @@ class __SchemaDef {
         value: v, enumerable: true, writable: true, configurable: true,
       });
     }
+  }
+
+  // Run '@ensure' refinements — cross-field invariants — against a
+  // fully-typed, fully-defaulted data object. Returns [] if all pass,
+  // or an array of {field: '', error: 'ensure', message} issues for
+  // every failing refinement.
+  //
+  // Semantics:
+  //   - Truthy return → pass; falsy → fail with the declared message.
+  //   - Thrown exception → fail with the declared message (the thrown
+  //     error's own message is used only if the refinement declared
+  //     no message, which can't happen via the parser since message
+  //     is required — but downstream code-built defs might omit it).
+  //   - All refinements run; declaration order preserved in output.
+  //   - Caller short-circuits: per-field validation errors skip this
+  //     step entirely (predicates assume field types are correct).
+  //   - Skipped on _hydrate — trusted DB data bypasses refinements.
+  _applyRefinements(data) {
+    const norm = this._normalize();
+    if (!norm.refinements.length) return [];
+    const errs = [];
+    for (const r of norm.refinements) {
+      let ok = false;
+      try {
+        ok = !!r.fn(data);
+      } catch (e) {
+        errs.push({
+          field: '', error: 'ensure',
+          message: r.message || e?.message || 'refinement failed',
+        });
+        continue;
+      }
+      if (!ok) {
+        errs.push({
+          field: '', error: 'ensure',
+          message: r.message || 'refinement failed',
+        });
+      }
+    }
+    return errs;
   }
 
   _getClass() {
@@ -1823,6 +2141,11 @@ class __SchemaDef {
     this._applyDefaults(working);
     const errs = transformErrors.concat(this._validateFields(working, true));
     if (errs.length) throw new SchemaError(errs, this.name, this.kind);
+    // Refinements run AFTER per-field validation so predicates can
+    // assume declared fields are typed and defaulted. A field-level
+    // failure short-circuits: we never reach this line with errs.
+    const refineErrs = this._applyRefinements(working);
+    if (refineErrs.length) throw new SchemaError(refineErrs, this.name, this.kind);
     const klass = this._getClass();
     const inst = new klass(working, false);
     this._applyEagerDerived(inst);
@@ -1844,6 +2167,8 @@ class __SchemaDef {
     this._applyDefaults(working);
     const errs = transformErrors.concat(this._validateFields(working, true));
     if (errs.length) return {ok: false, value: null, errors: errs};
+    const refineErrs = this._applyRefinements(working);
+    if (refineErrs.length) return {ok: false, value: null, errors: refineErrs};
     const klass = this._getClass();
     const inst = new klass(working, false);
     try { this._applyEagerDerived(inst); }
@@ -1861,7 +2186,9 @@ class __SchemaDef {
     const transformErrors = this._applyTransforms(raw, working);
     if (transformErrors.length) return false;
     this._applyDefaults(working);
-    return this._validateFields(working, false);
+    if (!this._validateFields(working, false)) return false;
+    // Per-field validation passed — refinements are the final gate.
+    return this._applyRefinements(working).length === 0;
   }
 
   // ---- :model static ORM methods --------------------------------------------
