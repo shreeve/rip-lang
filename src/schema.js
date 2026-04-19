@@ -286,6 +286,28 @@ function splitBodyLines(tokens) {
 }
 
 // Fielded body: field, directive, or callable.
+// Field-line grammar (v2, locked):
+//
+//   name[!|?|#]*  [type]  [range]  [default]  [regex]  [attrs]  [, -> transform]
+//
+// Invariants enforced here:
+//   1. Line classification: IDENTIFIER-start = field; PROPERTY-start (the
+//      lexer absorbs trailing `:` into the identifier's tag) = callable.
+//   2. Type slot is optional — default is `string`. Identifier types
+//      (`email`, `integer`, …), array suffix (`string[]`), and string-
+//      literal unions (`"M" | "F" | "U"`) are the three valid shapes.
+//   3. Literal unions require 2+ members, all string literals, no mixing
+//      with identifier types or null. Nullability is carried by the `?`
+//      modifier, not by union membership.
+//   4. The `->` transform is TERMINAL — nothing follows it on the line.
+//   5. Comma before `->` is required when anything precedes the arrow
+//      (type, range, regex, default, attrs). Only the bare form
+//      `name! -> body` parses comma-less, because there's nothing to
+//      elide.
+//   6. Each comma-separated rest part is one of: `[…]` default,
+//      `{…}` attrs, `/regex/` pattern, `n..n` range, `-> transform`.
+//      The head token uniquely identifies the form. Duplicates of any
+//      single form are rejected.
 function parseFieldedLine(kind, line, entries) {
   let first = line[0];
   if (!first) return;
@@ -789,24 +811,22 @@ function compileTransformFn(emitter, bodyTokens) {
 // Compile-time constraint + directive argument evaluation
 // ----------------------------------------------------------------------------
 //
-// Constraints are captured as raw token slices in Phase 1. Here we evaluate
-// them at compile time into a normalized `{min?, max?, default?, regex?}`
-// shape that serves both validation (runtime) and DDL emission. Only
-// literal-deterministic values are allowed — identifiers, calls, and
-// expressions are rejected with a clear error.
+// Constraints are captured as raw token slices during the lexer pass; this
+// layer evaluates them into a normalized {min?, max?, default?, regex?}
+// shape shared by runtime validation and DDL emission. Only literal-
+// deterministic values are accepted — identifiers, calls, and arbitrary
+// expressions are rejected.
 //
-// `[a]`       → {default: a}
-// `[a, b]`    → {min: a, max: b}     (number or length depending on type)
-// `[a, b, c]` → {min: a, max: b, default: c}
-// `[/regex/]` → {regex: /regex/}     (regex-only default form)
-// `[/re/, def]` is rejected as ambiguous; users write `[/re/]` + attrs for
-// other constraints.
-
-// The bracket form `[…]` is now reserved for a SINGLE default value.
-// Regex constraints use the bare `/pattern/` form (phase 4); numeric
-// ranges use `min..max` (phase 3). Both old bracketed forms are
-// rejected with a migration diagnostic pointing at the exact
-// replacement.
+// v2 constraint grammar (each form is self-identifying by token shape):
+//   `min..max`    — range: string length / array length / numeric value
+//   `[value]`     — default: a single literal payload in brackets
+//   `/regex/`     — pattern: bare regex literal, no wrapping brackets
+//   `{key: val}`  — attrs: object literal for `unique`, `index`, etc.
+//   `-> body`     — transform: terminal, comma-required before arrow
+//                   when anything precedes (see parseFieldedLine)
+//
+// Pre-v2 multi-element bracket forms (`[n, n]`, `[n, n, n]`, `[/re/]`) are
+// explicitly rejected with migration diagnostics pointing at the new form.
 function compileConstraintsLiteral(tokens, fieldEntry) {
   let inner = tokens.slice(1, -1);
   let items = splitTopLevelByComma(inner);
@@ -1238,6 +1258,20 @@ function __schemaFormatIssues(issues, name) {
   return head + issues.map(i => i.message || i.error || 'invalid').join('; ');
 }
 
+// Reserved names are hoisted to module scope — they're pure data and
+// rebuilding them per _normalize() call wastes allocations. Static: names
+// that become class-level methods on :model (parse, find, toSQL, …).
+// Instance: names that become instance methods (save, destroy, toJSON, …).
+// A declared field, method, computed, or derived that collides with
+// either set on a :model raises a collision error during normalize.
+const __SCHEMA_RESERVED_STATIC = new Set([
+  'parse','safe','ok','find','findMany','where','all','first','count','create','toSQL',
+]);
+const __SCHEMA_RESERVED_INSTANCE = new Set([
+  'save','destroy','reload','ok','errors','toJSON',
+]);
+const __SCHEMA_RESERVED = new Set([...__SCHEMA_RESERVED_STATIC, ...__SCHEMA_RESERVED_INSTANCE]);
+
 const __schemaTypes = {
   string:   v => typeof v === 'string',
   number:   v => typeof v === 'number' && !Number.isNaN(v),
@@ -1426,12 +1460,6 @@ class __SchemaDef {
     let timestamps = false;
     let softDelete = false;
 
-    // Reserved names by kind. ORM/instance names cannot appear as fields
-    // or methods on a :model because they conflict with generated methods.
-    const reservedStatic = new Set(['parse','safe','ok','find','findMany','where','all','first','count','create','toSQL']);
-    const reservedInstance = new Set(['save','destroy','reload','ok','errors','toJSON']);
-    const reserved = new Set([...reservedStatic, ...reservedInstance]);
-
     const collision = (n, where) => {
       throw new SchemaError(
         [{field: n, error: 'collision', message: n + ' collides with ' + where}],
@@ -1443,7 +1471,7 @@ class __SchemaDef {
       if (computed.has(n)) collision(n, 'computed');
       if (hooks.has(n)) collision(n, 'hook');
       if (relations.has(n)) collision(n, 'relation');
-      if (this.kind === 'model' && reserved.has(n)) collision(n, 'reserved ORM name');
+      if (this.kind === 'model' && __SCHEMA_RESERVED.has(n)) collision(n, 'reserved ORM name');
     };
 
     for (const e of this._desc.entries) {
@@ -1523,25 +1551,27 @@ class __SchemaDef {
     return this._norm;
   }
 
-  // Run eager-derived entries (!>), setting each as an own enumerable
-  // property on the instance. Called at the end of parse/safe and on
-  // hydrate. Not re-run on field mutation — the value is materialized
-  // at instance-creation time and stays. Use ~> for live recomputation.
+  // Run eager-derived entries (!>) — one pass, in declaration order.
+  //
+  // Invariants worth keeping in mind here:
+  //   - Fires at parse/safe time AND at DB hydrate time (declared fields
+  //     are populated by then in both paths).
+  //   - NOT re-run on field mutation — the value is materialized once at
+  //     instance creation and stays. Use ~> for live recomputation.
+  //   - Stored as own enumerable properties, so they round-trip through
+  //     Object.keys and JSON.stringify. Excluded from DB persistence by
+  //     _getSaveableData (writes declared fields only).
+  //   - Thrown errors propagate. parse() wraps them into SchemaError
+  //     before surfacing; safe() captures into {error: 'derived'}
+  //     issues; hydrate lets them crash fast as data-integrity signals.
   _applyEagerDerived(inst) {
     const norm = this._normalize();
     if (!norm.derived.size) return;
     for (const [n, fn] of norm.derived) {
-      try {
-        const v = fn.call(inst);
-        Object.defineProperty(inst, n, {
-          value: v, enumerable: true, writable: true, configurable: true,
-        });
-      } catch (e) {
-        // Throwing from an eager-derived during parse surfaces as a
-        // SchemaError; during hydrate it crashes fast. We let it
-        // propagate — parse/safe wrappers convert to SchemaError.
-        throw e;
-      }
+      const v = fn.call(inst);
+      Object.defineProperty(inst, n, {
+        value: v, enumerable: true, writable: true, configurable: true,
+      });
     }
   }
 
@@ -1761,6 +1791,23 @@ class __SchemaDef {
     return data;
   }
 
+  // Canonical field parse pipeline — run per-field in declaration order,
+  // then an after-fields pass for eager-derived. This is the SINGLE
+  // source of truth for parse-time field semantics; _hydrate bypasses
+  // steps 1-5 entirely (DB rows arrive canonical) and picks up at step 7.
+  //
+  //   1. Obtain raw candidate   — transform(raw) if declared, else raw[name]
+  //   2. Apply default          — if candidate missing/undefined
+  //   3. Required check         — optional/required/nullability
+  //   4. Type validation        — primitive / literal-union / array
+  //   5. Constraint checks      — range, regex, attrs
+  //   6. Assign to instance     — own enumerable property
+  //   7. Eager-derived pass     — run !> entries in declaration order
+  //
+  // Transforms (step 1) run on parse/safe/ok only. Hydrate skips them
+  // because DB columns already hold the canonical values. Eager-derived
+  // (step 7) fires on BOTH paths so hydrated instances have the same
+  // shape as parsed ones.
   parse(data) {
     if (this.kind === 'mixin') {
       throw new Error(":mixin schema '" + (this.name || 'anon') + "' is not instantiable");
@@ -1955,6 +2002,19 @@ function __schemaFlatten(keys) {
   return out;
 }
 
+// Schema algebra — .pick / .omit / .partial / .required / .extend all
+// land here. The v2 invariants encoded in this function:
+//
+//   - Derived schemas are always kind: 'shape', regardless of source kind.
+//     ORM surface on :model is dropped.
+//   - Field semantics SURVIVE algebra: type, literals, constraints,
+//     inline transforms. Transforms-survive means a derived schema can
+//     still read raw-input keys that aren't in its declared output shape.
+//   - Instance behavior DOES NOT survive: methods, computed (~>), eager
+//     derived (!>), and hooks all get dropped because the rebuilt
+//     descriptor has no callable entries.
+//   - _sourceModel propagates through chained algebra so tooling can
+//     trace derived shapes back to the origin :model.
 function __schemaDerive(source, transform) {
   const src = source._normalize().fields;
   const derivedFields = transform(src);
@@ -1964,10 +2024,6 @@ function __schemaDerive(source, transform) {
     if (f.required) mods.push('!');
     if (f.unique) mods.push('#');
     if (f.optional && !f.required) mods.push('?');
-    // Field semantics (type, literals, constraints, transform) survive
-    // algebra. Instance behavior (methods, computed, hooks) does not —
-    // it's dropped by construction because the derived schema is rebuilt
-    // as kind-shape without callable entries.
     entries.push({
       tag: 'field', name: f.name, modifiers: mods,
       typeName: f.typeName, array: f.array,
