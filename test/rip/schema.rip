@@ -13,7 +13,7 @@ opts = { skipPreamble: true, skipRuntimes: true, skipDataPart: true }
 code "input default kind", '''
   SignupInput = schema
     email!    email
-    password! string, [8, 100]
+    password! string, 8..100
   ''', '''
   let SignupInput;
   SignupInput = __schema({kind: "input", name: "SignupInput", entries: [{tag: "field", name: "email", modifiers: ["!"], typeName: "email", array: false}, {tag: "field", name: "password", modifiers: ["!"], typeName: "string", array: false, constraints: {min: 8, max: 100}}]});
@@ -203,7 +203,7 @@ code "multi-line computed body", '''
 
 code "field with constraints", '''
   X = schema
-    password! string, [8, 100]
+    password! string, 8..100
   ''', '''
   let X;
   X = __schema({kind: "input", name: "X", entries: [{tag: "field", name: "password", modifiers: ["!"], typeName: "string", array: false, constraints: {min: 8, max: 100}}]});
@@ -324,7 +324,7 @@ test "algebra on :input returns :shape (kind transition)", '''
 code "multi-line field constraints parse", '''
   X = schema
     password! string,
-      [8, 100]
+      8..100
   ''', '''
   let X;
   X = __schema({kind: "input", name: "X", entries: [{tag: "field", name: "password", modifiers: ["!"], typeName: "string", array: false, constraints: {min: 8, max: 100}}]});
@@ -431,7 +431,7 @@ test "default-string: still validates the inferred string type", '''
 
 test "default-string: constraint immediately after modifier", '''
   Form = schema
-    phone? [1, 20]
+    phone? 1..20
   [Form.ok({phone: "555-0100"}), Form.ok({phone: ""}), Form.ok({})]
   ''', [true, false, true]
 
@@ -440,6 +440,53 @@ test "default-string: required+unique without explicit type", '''
     code!#
   U.ok({code: "abc"})
   ''', true
+
+# Phase 3 — range constraint `min..max`.
+
+test "range: string length", '''
+  Form = schema
+    password! 8..16
+  [Form.ok({password: "hello123"}), Form.ok({password: "short"}), Form.ok({password: "x" + "y".repeat(20)})]
+  ''', [true, false, false]
+
+test "range: integer value", '''
+  Form = schema
+    age! integer, 0..120
+  [Form.ok({age: 30}), Form.ok({age: -1}), Form.ok({age: 121})]
+  ''', [true, false, false]
+
+test "range: exactly-N via n..n", '''
+  Form = schema
+    code! 4..4
+  [Form.ok({code: "abcd"}), Form.ok({code: "abc"}), Form.ok({code: "abcde"})]
+  ''', [true, false, false]
+
+test "range: combined with default in bracket", '''
+  Form = schema
+    role? 3..20, ["guest"]
+  out = Form.parse({})
+  [out.role, Form.ok({role: "admin"}), Form.ok({role: "ab"})]
+  ''', ["guest", true, false]
+
+fail "range: old bracket form [n, n] is rejected", '''
+  X = schema
+    name! string, [8, 100]
+  '''
+
+fail "range: old triple bracket form [n, n, n] is rejected", '''
+  X = schema
+    name! string, [8, 100, 42]
+  '''
+
+fail "range: reversed endpoints rejected", '''
+  X = schema
+    password! 100..8
+  '''
+
+fail "range: duplicate ranges rejected", '''
+  X = schema
+    name! 1..20, 5..10
+  '''
 
 test ":input .ok returns boolean true on valid", '''
   Signup = schema
@@ -720,7 +767,7 @@ modelHeader = '''
 
 test ":model toSQL emits CREATE TABLE", modelHeader + '''
   User = schema :model
-    name! string, [1, 100]
+    name! string, 1..100
     email!# email
     @timestamps
   sql = User.toSQL()

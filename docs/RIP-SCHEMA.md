@@ -16,7 +16,7 @@ Rip Schema collapses all four into one declaration:
 
 ```coffee
 User = schema :model
-  name!   string, [1, 100]
+  name!   string, 1..100
   email!# email
   @timestamps
   @has_many Order
@@ -176,8 +176,8 @@ This is not incremental. One keyword replaces an entire category of tooling.
 ```coffee
 SignupInput = schema
   email!    email
-  password! string, [8, 100]
-  age?      integer, [18, 120]
+  password! string, 8..100
+  age?      integer, 18..120
 
 # Throws SchemaError on failure, returns a cleaned value on success
 input = SignupInput.parse rawJson
@@ -194,9 +194,9 @@ valid = SignupInput.ok rawJson
 
 ```coffee
 Address = schema :shape
-  street! string, [1, 200]
+  street! string, 1..200
   city!   string
-  state!  string, [2, 2]
+  state!  string, 2..2
   zip!    string, [/^\d{5}$/]
 
   # Computed getters (~>) read instance fields and return derived values
@@ -230,7 +230,7 @@ Status.ok "unknown"      # false
 
 ```coffee
 User = schema :model
-  name!    string, [1, 100]
+  name!    string, 1..100
   email!#  email
   @timestamps
   @has_many Order
@@ -334,7 +334,7 @@ returns a plain validated object. No behavior, no persistence.
 ```coffee
 SignupInput = schema
   email!    email
-  password! string, [8, 100]
+  password! string, 8..100
 ```
 
 ### `:shape`
@@ -443,7 +443,7 @@ Types are a single identifier (optionally followed by `[]` for arrays):
 name!      string                 # required string
 tags!      string[]               # required array of strings
 email!#    email                  # required, unique, email-format-validated
-bio?       text, [0, 1000]        # optional text, 0-1000 chars
+bio?       text, 0..1000          # optional text, 0-1000 chars
 role?      string, ["user"]       # optional, default "user"
 status     string, [:draft]       # default :draft — same as ["draft"]
 zip!       string, [/^\d{5}$/]    # regex-validated
@@ -1240,8 +1240,8 @@ import { post, read } from '@rip-lang/server'
 
 SignupInput = schema
   email!    email
-  password! string, [8, 100]
-  age?      integer, [18, 120]
+  password! string, 8..100
+  age?      integer, 18..120
 
 post '/signup' ->
   raw = @json()                       # whatever shape the client sent
@@ -1257,7 +1257,7 @@ post '/signup' ->
 
 ```coffee
 User = schema :model
-  name!    string, [1, 100]
+  name!    string, 1..100
   email!#  email
   @timestamps
   @has_many Order
@@ -1282,7 +1282,7 @@ owner  = orders[0].user!                 # the same user
 ```coffee
 Money = schema :shape
   amount!   integer
-  currency! string, [3, 3]
+  currency! string, 3..3
 
   formatted: ~>
     symbol = {USD: "$", EUR: "€", JPY: "¥"}[@currency] ?? @currency
@@ -1531,43 +1531,63 @@ to the caller.
 
 ## 20. Constraints
 
-Constraint brackets follow a field type:
+Each constraint on a field line is self-identifying by its token
+shape. Multiple constraints combine on one field, separated by commas:
 
 ```coffee
-name type, [constraint1, constraint2, ...]
+name[!|?|#]  [type]  [constraint]  [constraint]  …
 ```
 
-### Shapes by arity
+### The forms
 
-| Form                | Meaning                                     |
-| ------------------- | ------------------------------------------- |
-| `[a]`               | `default = a`                               |
-| `[a, b]`            | `min = a`, `max = b`                        |
-| `[a, b, c]`         | `min = a`, `max = b`, `default = c`         |
-| `[/regex/]`         | `regex = /regex/`                           |
+| Form             | Meaning                                                     |
+| ---------------- | ----------------------------------------------------------- |
+| `min..max`       | Size (string/array length) or value range (numeric)         |
+| `[value]`        | Default value (single literal in brackets)                  |
+| `[/regex/]`      | Pattern constraint                                          |
+| `{key: value}`   | Attrs (unique, index, etc.)                                 |
 
-### Constraint semantics by field type
+```coffee
+password!  string, 8..100                     # length range
+age?       integer, 0..120                    # value range
+role?      string, ["guest"]                  # default
+zip!       string, [/^\d{5}$/]                # regex pattern
+status?    string, 3..20, ["pending"]         # range AND default
+```
 
-| Field type | `min` / `max` mean      | `regex` applies? |
-| ---------- | ----------------------- | ---------------- |
-| `string` / `text` / `email` / `url` / `phone` | string length | yes |
-| `integer` / `number` | numeric range | no |
-| `date` / `datetime`  | not used      | no |
+### Range semantics by field type
 
-`default` applies to any field type. Defaults are applied before
-validation when the field is missing or `null`.
+| Field type                 | `min..max` means  |
+| -------------------------- | ----------------- |
+| `string` / `text` / formatted-string types | string length   |
+| `integer` / `number`       | numeric value     |
+| `array` (`T[]`)            | array length      |
+| `date` / `datetime` / `boolean` | compile error — ranges don't apply |
+| literal union (`"a" \| "b"`) | compile error — membership is the bound |
 
-### Literal-only values
+### Exactly-N
 
-Constraint values are evaluated at compile time and must be literals:
+Use `n..n` for "exactly N":
+
+```coffee
+sex?    1..1                     # single-character sex code
+npi!    10..10                   # NPI is exactly 10 digits
+code!   6..6                     # fixed-length code
+```
+
+Reads as "between N and N" which collapses to "exactly N."
+
+### Literal values in the default bracket
+
+The bracket `[…]` now holds a single value — the default. Values are
+evaluated at compile time and must be literals:
 
 - Numbers (including negative: `-10`)
 - Strings (`"text"`)
 - Booleans (`true`, `false`)
 - `null`, `undefined`
-- Regex literals (`/^\d+$/`)
-- `:symbol` (compiles to the symbol's name as a string — useful for enum
-  defaults: `[:draft]` ≡ `["draft"]`)
+- `:symbol` (compiles to the symbol's name as a string — useful for
+  enum defaults: `[:draft]` ≡ `["draft"]`)
 
 Arbitrary expressions, identifier references, and function calls are
 rejected at parse time with a clear error.
@@ -1578,10 +1598,24 @@ Trailing comma + indent continues the line:
 
 ```coffee
 password! string,
-  [8, 100]
+  8..100,
+  [/[A-Z]/]
 ```
 
 This is the same rule Rip applies to any trailing-comma continuation.
+
+### Migration from v1
+
+The bracket form `[min, max]` and `[min, max, default]` are retired.
+The compiler emits a migration diagnostic pointing at the exact
+replacement:
+
+```
+name! string, [8, 100]          → name! string, 8..100
+name! string, [8, 100, 42]      → name! string, 8..100, [42]
+```
+
+The single-value form `[a]` (default or regex) is unchanged.
 
 ---
 
