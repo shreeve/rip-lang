@@ -549,17 +549,38 @@ function parseCallableLine(kind, headerTok, line, entries) {
     throw schemaError(headerTok,
       `Expected ':' after '${name}' before arrow.`);
   }
+  // Three arrow forms:
+  //   name: -> body   — method / hook
+  //   name: ~> body   — lazy computed getter (EFFECT token)
+  //   name: !> body   — eager derived field (UNARY_MATH '!' + COMPARE '>')
   let arrowTok = line[2];
-  if (!arrowTok || (arrowTok[0] !== '->' && arrowTok[0] !== 'EFFECT')) {
+  let nextTok = line[3];
+  let arrow, arrowLoc, bodyStart;
+  if (arrowTok && arrowTok[0] === '->') {
+    arrow = '->';
+    arrowLoc = arrowTok.loc;
+    bodyStart = 3;
+  } else if (arrowTok && arrowTok[0] === 'EFFECT') {
+    arrow = '~>';
+    arrowLoc = arrowTok.loc;
+    bodyStart = 3;
+  } else if (arrowTok && arrowTok[0] === 'UNARY_MATH' && arrowTok[1] === '!' &&
+             nextTok && nextTok[0] === 'COMPARE' && nextTok[1] === '>' &&
+             !arrowTok.spaced) {
+    arrow = '!>';
+    arrowLoc = arrowTok.loc;
+    bodyStart = 4;
+  } else {
     throw schemaError(colonTok,
-      `Schema top-level '${name}:' must be followed by '->' (method/hook) or '~>' (computed getter).`);
+      `Schema top-level '${name}:' must be followed by '->' (method/hook), '~>' (computed getter), or '!>' (eager derived).`);
   }
-  let arrow = arrowTok[0] === 'EFFECT' ? '~>' : '->';
-  let bodyTokens = line.slice(3);
+  let bodyTokens = line.slice(bodyStart);
   let isHook = HOOK_NAMES.has(name);
   let entryTag;
   if (arrow === '~>') {
     entryTag = 'computed';
+  } else if (arrow === '!>') {
+    entryTag = 'derived';
   } else if (kind === 'model' && isHook) {
     entryTag = 'hook';
   } else {
@@ -572,7 +593,7 @@ function parseCallableLine(kind, headerTok, line, entries) {
     paramTokens: [],
     bodyTokens,
     headerLoc: headerTok.loc,
-    arrowLoc: arrowTok.loc,
+    arrowLoc,
   });
 }
 
@@ -679,7 +700,8 @@ function entryLiteral(emitter, e) {
     }
     case 'computed':
     case 'method':
-    case 'hook': {
+    case 'hook':
+    case 'derived': {
       let fnCode = compileCallableFn(emitter, e);
       let obj = [
         `tag: ${JSON.stringify(e.tag)}`,
@@ -1360,6 +1382,7 @@ class __SchemaDef {
     const fields = new Map();
     const methods = new Map();
     const computed = new Map();
+    const derived = new Map();
     const hooks = new Map();
     const directives = [];
     const enumMembers = new Map();
@@ -1411,6 +1434,10 @@ class __SchemaDef {
           noteCollision(e.name);
           computed.set(e.name, e.fn);
           break;
+        case 'derived':
+          noteCollision(e.name);
+          derived.set(e.name, e.fn);
+          break;
         case 'hook':
           if (hooks.has(e.name)) collision(e.name, 'duplicate hook');
           hooks.set(e.name, e.fn);
@@ -1454,10 +1481,32 @@ class __SchemaDef {
     const tableName = this.kind === 'model' ? __schemaTableName(this.name) : null;
 
     this._norm = {
-      fields, methods, computed, hooks, directives, enumMembers, relations,
+      fields, methods, computed, derived, hooks, directives, enumMembers, relations,
       timestamps, softDelete, primaryKey, tableName,
     };
     return this._norm;
+  }
+
+  // Run eager-derived entries (!>), setting each as an own enumerable
+  // property on the instance. Called at the end of parse/safe and on
+  // hydrate. Not re-run on field mutation — the value is materialized
+  // at instance-creation time and stays. Use ~> for live recomputation.
+  _applyEagerDerived(inst) {
+    const norm = this._normalize();
+    if (!norm.derived.size) return;
+    for (const [n, fn] of norm.derived) {
+      try {
+        const v = fn.call(inst);
+        Object.defineProperty(inst, n, {
+          value: v, enumerable: true, writable: true, configurable: true,
+        });
+      } catch (e) {
+        // Throwing from an eager-derived during parse surfaces as a
+        // SchemaError; during hydrate it crashes fast. We let it
+        // propagate — parse/safe wrappers convert to SchemaError.
+        throw e;
+      }
+    }
   }
 
   _getClass() {
@@ -1567,6 +1616,9 @@ class __SchemaDef {
         });
       }
     }
+    // Eager-derived fields re-run on hydrate — they're not persisted
+    // and must be re-computed from the declared fields now present.
+    this._applyEagerDerived(inst);
     return inst;
   }
 
@@ -1689,7 +1741,9 @@ class __SchemaDef {
     const errs = transformErrors.concat(this._validateFields(working, true));
     if (errs.length) throw new SchemaError(errs, this.name, this.kind);
     const klass = this._getClass();
-    return new klass(working, false);
+    const inst = new klass(working, false);
+    this._applyEagerDerived(inst);
+    return inst;
   }
 
   safe(data) {
@@ -1708,7 +1762,12 @@ class __SchemaDef {
     const errs = transformErrors.concat(this._validateFields(working, true));
     if (errs.length) return {ok: false, value: null, errors: errs};
     const klass = this._getClass();
-    return {ok: true, value: new klass(working, false), errors: null};
+    const inst = new klass(working, false);
+    try { this._applyEagerDerived(inst); }
+    catch (e) {
+      return {ok: false, value: null, errors: [{field: '', error: 'derived', message: e?.message || String(e)}]};
+    }
+    return {ok: true, value: inst, errors: null};
   }
 
   ok(data) {

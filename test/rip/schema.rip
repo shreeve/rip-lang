@@ -612,6 +612,69 @@ fail "transform: must be the last element on the line", '''
     x! -> it.foo, [1, 5]
   '''
 
+# Phase 7 — eager derived fields `!>`.
+
+test "eager derived: computed at parse, stored as own property", '''
+  X = schema :shape
+    firstName!
+    lastName!
+    fullName: !> "#{@firstName} #{@lastName}"
+  out = X.parse({firstName: "Alice", lastName: "Smith"})
+  [out.fullName, Object.keys(out).includes("fullName")]
+  ''', ["Alice Smith", true]
+
+test "eager derived: does NOT re-run on field mutation (stale by design)", '''
+  X = schema :shape
+    name!
+    tag: !> @name.toLowerCase()
+  out = X.parse({name: "Alice"})
+  out.name = "Bob"
+  out.tag
+  ''', "alice"
+
+test "eager derived: different from ~> (lazy getter)", '''
+  X = schema :shape
+    name!
+    lazy: ~> @name.toLowerCase()
+    eager: !> @name.toLowerCase()
+  out = X.parse({name: "Alice"})
+  before = [out.lazy, out.eager]
+  out.name = "Bob"
+  after = [out.lazy, out.eager]
+  [before, after]
+  ''', [["alice", "alice"], ["bob", "alice"]]
+
+test "eager derived: runs in declaration order (can read earlier !>)", '''
+  X = schema :shape
+    first!
+    last!
+    full: !> "#{@first} #{@last}"
+    slug: !> @full.toLowerCase().replace(/\\s/g, "-")
+  out = X.parse({first: "Alice", last: "Smith"})
+  [out.full, out.slug]
+  ''', ["Alice Smith", "alice-smith"]
+
+test "eager derived: NOT persisted to DB (excluded from save)", '''
+  X = schema :shape
+    name!
+    fullName: !> "Dr. #{@name}"
+  out = X.parse({name: "Alice"})
+  out.toJSON ?= -> {name: @name}
+  JSON.stringify(out).includes("fullName")
+  ''', false
+
+test "eager derived: collides with field name (runtime error)", '''
+  X = schema :shape
+    name!
+    name: !> "x"
+  err = null
+  try
+    X.parse({name: "hi"})
+  catch e
+    err = e
+  [err?.name, err?.issues?[0]?.error]
+  ''', ["SchemaError", "collision"]
+
 test ":input .ok returns boolean true on valid", '''
   Signup = schema
     email! email
