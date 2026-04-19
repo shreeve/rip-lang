@@ -631,11 +631,13 @@ signatures both enforce this.
   per refinement; downstream runtime can't tell them apart. The
   array-form splitter treats both `,` and TERMINATOR as element
   separators at depth 0 to match Rip's array-literal convention.
-- **Refinements run AFTER field validation and BEFORE eager-derived.**
-  `.parse/.safe/.ok` short-circuit refinements when per-field errors
+- **@ensure runs AFTER field validation and BEFORE eager-derived.**
+  `.parse/.safe/.ok` short-circuit `@ensure` when per-field errors
   fire (predicates assume field types are correct). `_hydrate` skips
-  refinements entirely (trusted data). See
-  `_applyRefinements` in `src/schema.js`.
+  `@ensure` entirely (trusted data). Runtime method name
+  `_applyEnsures` mirrors the directive (parallel to
+  `_applyTransforms` for `-> transform` and `_applyEagerDerived` for
+  `!> derived`). See `src/schema.js`.
 
 ### Shadow TS
 

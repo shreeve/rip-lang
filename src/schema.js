@@ -1727,7 +1727,7 @@ class __SchemaDef {
     const directives = [];
     const enumMembers = new Map();
     const relations = new Map();
-    const refinements = [];
+    const ensures = [];
     let timestamps = false;
     let softDelete = false;
 
@@ -1798,10 +1798,10 @@ class __SchemaDef {
           enumMembers.set(e.name, e.value !== undefined ? e.value : e.name);
           break;
         case 'ensure':
-          // Refinements are schema-level invariants (cross-field
+          // @ensure entries are schema-level invariants (cross-field
           // predicates). Declaration order is preserved so diagnostics
           // come out in the order authored.
-          refinements.push({ message: e.message, fn: e.fn });
+          ensures.push({ message: e.message, fn: e.fn });
           break;
       }
     }
@@ -1823,7 +1823,7 @@ class __SchemaDef {
 
     this._norm = {
       fields, methods, computed, derived, hooks, directives, enumMembers, relations,
-      refinements,
+      ensures,
       timestamps, softDelete, primaryKey, tableName,
     };
     return this._norm;
@@ -1853,40 +1853,46 @@ class __SchemaDef {
     }
   }
 
-  // Run '@ensure' refinements — cross-field invariants — against a
-  // fully-typed, fully-defaulted data object. Returns [] if all pass,
-  // or an array of {field: '', error: 'ensure', message} issues for
-  // every failing refinement.
+  // Run '@ensure' predicates — schema-level cross-field invariants —
+  // against a fully-typed, fully-defaulted data object. Returns [] if
+  // all pass, or an array of {field: '', error: 'ensure', message}
+  // issues for every failing predicate.
+  //
+  // Naming: '_applyEnsures' mirrors '_applyTransforms' and
+  // '_applyEagerDerived' — runtime method name matches the directive
+  // it services. The industry term for this pattern is 'refinement'
+  // (Zod's '.refine', design-by-contract postconditions); in Rip the
+  // user-visible name is '@ensure' and the code tracks that.
   //
   // Semantics:
   //   - Truthy return → pass; falsy → fail with the declared message.
   //   - Thrown exception → fail with the declared message (the thrown
-  //     error's own message is used only if the refinement declared
-  //     no message, which can't happen via the parser since message
-  //     is required — but downstream code-built defs might omit it).
-  //   - All refinements run; declaration order preserved in output.
+  //     error's own message is used only if the @ensure declared no
+  //     message, which can't happen via the parser since message is
+  //     required — but downstream code-built defs might omit it).
+  //   - All @ensures run; declaration order preserved in output.
   //   - Caller short-circuits: per-field validation errors skip this
   //     step entirely (predicates assume field types are correct).
-  //   - Skipped on _hydrate — trusted DB data bypasses refinements.
-  _applyRefinements(data) {
+  //   - Skipped on _hydrate — trusted DB data bypasses @ensures.
+  _applyEnsures(data) {
     const norm = this._normalize();
-    if (!norm.refinements.length) return [];
+    if (!norm.ensures.length) return [];
     const errs = [];
-    for (const r of norm.refinements) {
+    for (const r of norm.ensures) {
       let ok = false;
       try {
         ok = !!r.fn(data);
       } catch (e) {
         errs.push({
           field: '', error: 'ensure',
-          message: r.message || e?.message || 'refinement failed',
+          message: r.message || e?.message || 'ensure failed',
         });
         continue;
       }
       if (!ok) {
         errs.push({
           field: '', error: 'ensure',
-          message: r.message || 'refinement failed',
+          message: r.message || 'ensure failed',
         });
       }
     }
@@ -2141,11 +2147,11 @@ class __SchemaDef {
     this._applyDefaults(working);
     const errs = transformErrors.concat(this._validateFields(working, true));
     if (errs.length) throw new SchemaError(errs, this.name, this.kind);
-    // Refinements run AFTER per-field validation so predicates can
+    // @ensure runs AFTER per-field validation so predicates can
     // assume declared fields are typed and defaulted. A field-level
     // failure short-circuits: we never reach this line with errs.
-    const refineErrs = this._applyRefinements(working);
-    if (refineErrs.length) throw new SchemaError(refineErrs, this.name, this.kind);
+    const ensureErrs = this._applyEnsures(working);
+    if (ensureErrs.length) throw new SchemaError(ensureErrs, this.name, this.kind);
     const klass = this._getClass();
     const inst = new klass(working, false);
     this._applyEagerDerived(inst);
@@ -2167,8 +2173,8 @@ class __SchemaDef {
     this._applyDefaults(working);
     const errs = transformErrors.concat(this._validateFields(working, true));
     if (errs.length) return {ok: false, value: null, errors: errs};
-    const refineErrs = this._applyRefinements(working);
-    if (refineErrs.length) return {ok: false, value: null, errors: refineErrs};
+    const ensureErrs = this._applyEnsures(working);
+    if (ensureErrs.length) return {ok: false, value: null, errors: ensureErrs};
     const klass = this._getClass();
     const inst = new klass(working, false);
     try { this._applyEagerDerived(inst); }
@@ -2187,8 +2193,8 @@ class __SchemaDef {
     if (transformErrors.length) return false;
     this._applyDefaults(working);
     if (!this._validateFields(working, false)) return false;
-    // Per-field validation passed — refinements are the final gate.
-    return this._applyRefinements(working).length === 0;
+    // Per-field validation passed — @ensure predicates are the final gate.
+    return this._applyEnsures(working).length === 0;
   }
 
   // ---- :model static ORM methods --------------------------------------------
