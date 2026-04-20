@@ -1069,6 +1069,152 @@ test ":input field array validation", '''
   ''', [false, 'type']
 
 # ==============================================================================
+# Nested schema-typed fields
+# ==============================================================================
+#
+# A declared typeName that matches a registered :shape / :input / :model
+# validates the value against that schema recursively. Arrays of such
+# types validate each element. Enum-typed fields accept only members.
+# Unknown typenames remain permissive (forward references, unresolved
+# cross-file names).
+
+test "nested :shape field validates each property", '''
+  Address = schema :shape
+    street! string
+    city!   string
+  User = schema :shape
+    name!     string
+    address!  Address
+  r = User.safe({name: "Alice", address: {street: 123, city: "SF"}})
+  [r.ok, r.errors[0].field, r.errors[0].error]
+  ''', [false, "address.street", "type"]
+
+test "nested :shape field accepts valid nested value", '''
+  Address = schema :shape
+    street! string
+    city!   string
+  User = schema :shape
+    name!     string
+    address!  Address
+  r = User.safe({name: "Alice", address: {street: "1 Main St", city: "SF"}})
+  [r.ok, r.errors]
+  ''', [true, null]
+
+test "nested :shape field rejects non-object value", '''
+  Address = schema :shape
+    street! string
+  User = schema :shape
+    address! Address
+  r = User.safe({address: "not an object"})
+  [r.ok, r.errors[0].field, r.errors[0].error]
+  ''', [false, "address", "type"]
+
+test "nested :shape field validates missing nested required field", '''
+  Address = schema :shape
+    street! string
+    city!   string
+  User = schema :shape
+    address! Address
+  r = User.safe({address: {street: "1 Main St"}})
+  [r.ok, r.errors[0].field, r.errors[0].error]
+  ''', [false, "address.city", "required"]
+
+test "array of nested :shape validates each element", '''
+  Item = schema :shape
+    id!   integer
+    name! string
+  Order = schema :shape
+    items! Item[]
+  r = Order.safe({items: [{id: 1, name: "A"}, {id: "bad", name: "B"}, {id: 3, name: 4}]})
+  [r.ok, r.errors.length, r.errors[0].field, r.errors[0].error, r.errors[1].field, r.errors[1].error]
+  ''', [false, 2, "items[1].id", "type", "items[2].name", "type"]
+
+test "array of nested :shape accepts valid elements", '''
+  Item = schema :shape
+    id!   integer
+    name! string
+  Order = schema :shape
+    items! Item[]
+  r = Order.safe({items: [{id: 1, name: "A"}, {id: 2, name: "B"}]})
+  [r.ok, r.errors]
+  ''', [true, null]
+
+test "nested :input field validates via registry", '''
+  Login = schema :input
+    email!    email
+    password! string
+  Envelope = schema :shape
+    kind!    string
+    payload! Login
+  r = Envelope.safe({kind: "login", payload: {email: "bad", password: "x"}})
+  [r.ok, r.errors[0].field, r.errors[0].error]
+  ''', [false, "payload.email", "type"]
+
+test "enum-typed field accepts declared members", '''
+  Role = schema :enum
+    :admin
+    :user
+  User = schema :shape
+    name! string
+    role! Role
+  r = User.safe({name: "Alice", role: "admin"})
+  [r.ok, r.errors]
+  ''', [true, null]
+
+test "enum-typed field rejects non-members", '''
+  Role = schema :enum
+    :admin
+    :user
+  User = schema :shape
+    name! string
+    role! Role
+  r = User.safe({name: "Alice", role: "other"})
+  [r.ok, r.errors[0].field, r.errors[0].error]
+  ''', [false, "role", "enum"]
+
+test "nested schemas survive .parse() (throws with prefixed path)", '''
+  Address = schema :shape
+    street! string
+  User = schema :shape
+    address! Address
+  try
+    User.parse({address: {street: 42}})
+    "no-throw"
+  catch e
+    [e.name, e.issues[0].field]
+  ''', ["SchemaError", "address.street"]
+
+test "unknown typename stays permissive (forward refs)", '''
+  X = schema :shape
+    thing! SomethingNotRegistered
+  r = X.safe({thing: {any: "value"}})
+  [r.ok, r.errors]
+  ''', [true, null]
+
+test "nested :shape in optional field skips when missing", '''
+  Address = schema :shape
+    street! string
+  User = schema :shape
+    name!     string
+    address?  Address
+  r = User.safe({name: "Alice"})
+  [r.ok, r.errors]
+  ''', [true, null]
+
+test "deeply nested (3 levels) propagates path", '''
+  Coord = schema :shape
+    lat! number
+    lng! number
+  Address = schema :shape
+    city!  string
+    coord! Coord
+  User = schema :shape
+    address! Address
+  r = User.safe({address: {city: "SF", coord: {lat: "bad", lng: 0}}})
+  [r.ok, r.errors[0].field, r.errors[0].error]
+  ''', [false, "address.coord.lat", "type"]
+
+# ==============================================================================
 # Shadow TypeScript emission
 # ==============================================================================
 

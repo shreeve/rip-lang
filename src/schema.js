@@ -1564,6 +1564,53 @@ function __schemaCheckValue(v, typeName) {
   return check ? check(v) : true;
 }
 
+// Validate a single value against a typeName, returning either null (ok)
+// or an array of issues relative to the value's own root. Primitive
+// typenames dispatch through the __schemaTypes map; typenames that
+// resolve to a registered :shape / :input / :model validate the value
+// as a nested object; typenames that resolve to a :enum enforce
+// membership. Unknown typenames stay permissive so forward-references
+// and cross-module names do not hard-fail — matches pre-registry behavior.
+function __schemaValidateValue(v, typeName) {
+  const prim = __schemaTypes[typeName];
+  if (prim) {
+    return prim(v) ? null : [{field: '', error: 'type', message: 'must be ' + typeName}];
+  }
+  const subDef = __SchemaRegistry.get(typeName);
+  if (!subDef) return null;
+  if (subDef.kind === 'enum') {
+    const errs = subDef._validateEnum(v, true);
+    return errs.length ? [{field: '', error: 'enum', message: errs[0].message}] : null;
+  }
+  if (subDef.kind === 'mixin') {
+    return [{field: '', error: 'type', message: ':mixin ' + typeName + ' is not usable as a field type'}];
+  }
+  if (v === null || typeof v !== 'object' || Array.isArray(v)) {
+    return [{field: '', error: 'type', message: 'must be a ' + typeName + ' object'}];
+  }
+  const subErrs = subDef._validateFields(v, true);
+  return subErrs.length ? subErrs : null;
+}
+
+// Merge a child path segment into an existing field path. Produces
+// 'addr.street' for object descent, 'items[0].name' for array descent.
+function __schemaJoinField(head, child) {
+  if (!child) return head;
+  return head + (child.startsWith('[') ? child : '.' + child);
+}
+
+// Rewrite a child issue's message so the leading "<childField> " token
+// (present on most leaf messages: "name is required", "id must be
+// integer") is replaced by the joined parent path — avoiding the
+// duplicated "items[1].id id must be integer" reading.
+function __schemaRewriteMessage(joinedField, childField, childMessage) {
+  if (!childField) return joinedField + ' ' + childMessage;
+  if (childMessage.startsWith(childField)) {
+    return joinedField + childMessage.slice(childField.length);
+  }
+  return joinedField + ': ' + childMessage;
+}
+
 // Naming utilities (snake_case column/table names, irregular plurals).
 function __schemaSnake(s) { return s.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase(); }
 const __SCHEMA_UNCOUNTABLE = new Set(['equipment','information','rice','money','species','series','fish','sheep','data']);
@@ -1711,9 +1758,6 @@ class __SchemaDef {
     this._norm = null;
     this._klass = null;
     this._sourceModel = null;
-    if (this.name && (this.kind === 'model' || this.kind === 'mixin')) {
-      __SchemaRegistry.register(this);
-    }
   }
 
   _normalize() {
@@ -2032,9 +2076,18 @@ class __SchemaDef {
         }
         let bad = false;
         for (let i = 0; i < v.length; i++) {
-          if (!__schemaCheckValue(v[i], f.typeName)) {
+          const issues = __schemaValidateValue(v[i], f.typeName);
+          if (issues) {
             if (!collect) return false;
-            errors.push({field: n, error: 'type', message: n + '[' + i + '] must be ' + f.typeName});
+            const head = n + '[' + i + ']';
+            for (const e of issues) {
+              const joined = __schemaJoinField(head, e.field);
+              errors.push({
+                field: joined,
+                error: e.error,
+                message: __schemaRewriteMessage(joined, e.field, e.message),
+              });
+            }
             bad = true;
           }
         }
@@ -2045,10 +2098,20 @@ class __SchemaDef {
           errors.push({field: n, error: 'enum', message: n + ' must be one of ' + f.literals.map(l => JSON.stringify(l)).join(', ')});
           continue;
         }
-      } else if (!__schemaCheckValue(v, f.typeName)) {
-        if (!collect) return false;
-        errors.push({field: n, error: 'type', message: n + ' must be ' + f.typeName});
-        continue;
+      } else {
+        const issues = __schemaValidateValue(v, f.typeName);
+        if (issues) {
+          if (!collect) return false;
+          for (const e of issues) {
+            const joined = __schemaJoinField(n, e.field);
+            errors.push({
+              field: joined,
+              error: e.error,
+              message: __schemaRewriteMessage(joined, e.field, e.message),
+            });
+          }
+          continue;
+        }
       }
       // Apply constraint checks.
       const c = f.constraints;
@@ -2660,7 +2723,16 @@ function __schemaSQLDefault(v) {
   return "'" + String(v).replace(/'/g, "''") + "'";
 }
 
-function __schema(descriptor) { return new __SchemaDef(descriptor); }
+function __schema(descriptor) {
+  const def = new __SchemaDef(descriptor);
+  // Every user-declared named schema lands in the registry so
+  // nested-typed fields (address! Address, items! OrderItem[],
+  // role! Role) can resolve their type reference at validate time.
+  // Algebra-derived schemas (.pick/.omit/.partial/…) bypass this
+  // factory so their synthetic names don't shadow the source.
+  if (def.name) __SchemaRegistry.register(def);
+  return def;
+}
 
 if (typeof globalThis !== 'undefined') {
   globalThis.__ripSchema = {
