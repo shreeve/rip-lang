@@ -154,6 +154,175 @@ code "schema.member access", '''
   x = schema.member;
   ''', opts
 
+# Inline one-liner form: `schema [:kind]; entry; entry; ...` up to the
+# end of the line. Semicolons become field separators via the same
+# TERMINATOR-split the indented body uses. Methods / computed / hooks /
+# transforms (anything with `->` / `~>` / `!>`) are rejected because
+# their bodies are ambiguous with subsequent `;`-separated entries.
+
+code "inline: three bare fields", '''
+  Addr = schema :shape; street?; city?; state?
+  ''', '''
+  let Addr;
+  Addr = __schema({kind: "shape", name: "Addr", entries: [{tag: "field", name: "street", modifiers: ["?"], typeName: "string", array: false}, {tag: "field", name: "city", modifiers: ["?"], typeName: "string", array: false}, {tag: "field", name: "state", modifiers: ["?"], typeName: "string", array: false}]});
+  ''', opts
+
+code "inline: fields with ranges", '''
+  Addr = schema :shape; street? ..200; city? ..100; state? ..2
+  ''', '''
+  let Addr;
+  Addr = __schema({kind: "shape", name: "Addr", entries: [{tag: "field", name: "street", modifiers: ["?"], typeName: "string", array: false, constraints: {max: 200}}, {tag: "field", name: "city", modifiers: ["?"], typeName: "string", array: false, constraints: {max: 100}}, {tag: "field", name: "state", modifiers: ["?"], typeName: "string", array: false, constraints: {max: 2}}]});
+  ''', opts
+
+code "inline: required + email type", '''
+  Login = schema; email! email; password! 8..100
+  ''', '''
+  let Login;
+  Login = __schema({kind: "input", name: "Login", entries: [{tag: "field", name: "email", modifiers: ["!"], typeName: "email", array: false}, {tag: "field", name: "password", modifiers: ["!"], typeName: "string", array: false, constraints: {min: 8, max: 100}}]});
+  ''', opts
+
+code "inline: enum members", '''
+  Role = schema :enum; :admin; :user; :guest
+  ''', '''
+  let Role;
+  Role = __schema({kind: "enum", name: "Role", entries: [{tag: "enum-member", name: "admin"}, {tag: "enum-member", name: "user"}, {tag: "enum-member", name: "guest"}]});
+  ''', opts
+
+code "inline: bare schema infers :enum from :symbol members", '''
+  Tier = schema; :free; :pro; :enterprise
+  ''', '''
+  let Tier;
+  Tier = __schema({kind: "enum", name: "Tier", entries: [{tag: "enum-member", name: "free"}, {tag: "enum-member", name: "pro"}, {tag: "enum-member", name: "enterprise"}]});
+  ''', opts
+
+code "inline: directive + field", '''
+  Payload = schema :input; @mixin Base; name!
+  Base = schema :mixin; id! uuid
+  ''', '''
+  let Base, Payload;
+  Payload = __schema({kind: "input", name: "Payload", entries: [{tag: "directive", name: "mixin", args: [{target: "Base"}]}, {tag: "field", name: "name", modifiers: ["!"], typeName: "string", array: false}]});
+  Base = __schema({kind: "mixin", name: "Base", entries: [{tag: "field", name: "id", modifiers: ["!"], typeName: "uuid", array: false}]});
+  ''', opts
+
+code "inline: composes with schema.defaultMaxString pragma", '''
+  schema.defaultMaxString = 100
+  Form = schema :shape; name!; bio? text
+  ''', '''
+  let Form;
+  Form = __schema({kind: "shape", name: "Form", entries: [{tag: "field", name: "name", modifiers: ["!"], typeName: "string", array: false, constraints: {max: 100}}, {tag: "field", name: "bio", modifiers: ["?"], typeName: "text", array: false}]});
+  ''', opts
+
+code "inline: required implies min=1 with ..N shorthand", '''
+  X = schema :shape; nick! ..10
+  ''', '''
+  let X;
+  X = __schema({kind: "shape", name: "X", entries: [{tag: "field", name: "nick", modifiers: ["!"], typeName: "string", array: false, constraints: {min: 1, max: 10}}]});
+  ''', opts
+
+fail "inline: rejects `->` (method/hook/transform)", '''
+  X = schema :shape; name!; greet: -> @name
+  '''
+
+fail "inline: rejects `~>` (computed)", '''
+  X = schema :shape; name!; full: ~> @name
+  '''
+
+fail "inline: rejects `!>` (eager derived)", '''
+  X = schema :shape; name!; tag: !> @name.toUpperCase()
+  '''
+
+fail "inline: rejects inline transform `id! -> it.Id`", '''
+  X = schema :shape; id! -> it.Id
+  '''
+
+# Runtime parity — the inline form produces byte-equivalent descriptors,
+# so parse/safe/ok all behave exactly as the indented form.
+
+test "inline: .parse validates fields", '''
+  Addr = schema :shape; street? ..200; city? ..100; state? ..2
+  r = Addr.safe({street: "1 Main", city: "SF", state: "CA"})
+  [r.ok, r.value.street, r.value.city]
+  ''', [true, "1 Main", "SF"]
+
+test "inline: rejects field over max", '''
+  Form = schema; name! ..5
+  [Form.ok({name: "ok"}), Form.ok({name: "too long"})]
+  ''', [true, false]
+
+# Empty inline body — `X = schema :shape;` with nothing between `;`
+# and the newline is almost certainly a typo; reject loudly.
+
+fail "inline: empty body rejected with :kind", '''
+  X = schema :shape;
+  '''
+
+fail "inline: empty body rejected without :kind", '''
+  X = schema;
+  '''
+
+# Inline body termination — newline at depth 0 ends the inline span
+# and does NOT consume the next statement's tokens. This is the core
+# correctness property of the inline collector.
+
+code "inline: newline at depth 0 ends body, next statement survives", '''
+  Form = schema :shape; name!; email! email
+  y = 1
+  ''', '''
+  let Form, y;
+  Form = __schema({kind: "shape", name: "Form", entries: [{tag: "field", name: "name", modifiers: ["!"], typeName: "string", array: false}, {tag: "field", name: "email", modifiers: ["!"], typeName: "email", array: false}]});
+  y = 1;
+  ''', opts
+
+code "inline: two inline schemas on consecutive lines", '''
+  A = schema :shape; a!
+  B = schema :shape; b!
+  ''', '''
+  let A, B;
+  A = __schema({kind: "shape", name: "A", entries: [{tag: "field", name: "a", modifiers: ["!"], typeName: "string", array: false}]});
+  B = __schema({kind: "shape", name: "B", entries: [{tag: "field", name: "b", modifiers: ["!"], typeName: "string", array: false}]});
+  ''', opts
+
+# Inline body with arrows — the rejection scan only fires at depth 0.
+# A literal-union or type-arg expression can contain arrow-like tokens
+# at nested depth (none exist in schema grammar today, but the guard
+# must stay scoped). This test pins the depth-scoping rule so a future
+# refactor can't accidentally tighten it.
+test "inline: literal-union + other fields parse in order", '''
+  Form = schema :shape; role! "admin" | "user" | "guest"; name!
+  r = Form.safe({role: "admin", name: "Alice"})
+  [r.ok, r.value.role, r.value.name]
+  ''', [true, "admin", "Alice"]
+
+# Inline directive entries — `@timestamps`, `@belongs_to X`, `@mixin M`
+# — all parse correctly inline alongside fields. Punctuation-heavy
+# grammars are the most likely place for the inline collector to get
+# semicolon-splitting wrong, so each form needs explicit coverage.
+
+code "inline: multiple directives + fields in one schema", '''
+  User = schema :model; name!; @timestamps; @belongs_to Org
+  Org = schema :model; name!
+  ''', '''
+  let Org, User;
+  User = __schema({kind: "model", name: "User", entries: [{tag: "field", name: "name", modifiers: ["!"], typeName: "string", array: false}, {tag: "directive", name: "timestamps"}, {tag: "directive", name: "belongs_to", args: [{target: "Org"}]}]});
+  Org = __schema({kind: "model", name: "Org", entries: [{tag: "field", name: "name", modifiers: ["!"], typeName: "string", array: false}]});
+  ''', opts
+
+# Trailing semicolon before newline — Rip's lexer collapses `;\n`
+# into a single `;`-valued TERMINATOR, so naive end-of-inline
+# detection via token value misses this case. The inline collector
+# uses source-row metadata to catch it and trims the trailing
+# TERMINATOR out of the splice span so the next statement isn't
+# accidentally pulled into the schema body.
+
+code "inline: trailing semicolon before newline", '''
+  X = schema :shape; name!;
+  y = 1
+  ''', '''
+  let X, y;
+  X = __schema({kind: "shape", name: "X", entries: [{tag: "field", name: "name", modifiers: ["!"], typeName: "string", array: false}]});
+  y = 1;
+  ''', opts
+
 # Schema-mode-aware diagnostics
 
 fail "field with colon before type", '''
@@ -487,6 +656,242 @@ fail "range: duplicate ranges rejected", '''
   X = schema
     name! 1..20, 5..10
   '''
+
+# Open-ended range shorthands — `..N` means "at most N" (no min);
+# `N..` means "at least N" (no max). Either endpoint may be omitted,
+# but not both.
+
+code "open-ended: max-only (..N) on optional field has no implicit min", '''
+  X = schema
+    password? ..100
+  ''', '''
+  let X;
+  X = __schema({kind: "input", name: "X", entries: [{tag: "field", name: "password", modifiers: ["?"], typeName: "string", array: false, constraints: {max: 100}}]});
+  ''', opts
+
+code "open-ended: max-only (..N) on required field implies min=1", '''
+  X = schema
+    password! ..100
+  ''', '''
+  let X;
+  X = __schema({kind: "input", name: "X", entries: [{tag: "field", name: "password", modifiers: ["!"], typeName: "string", array: false, constraints: {min: 1, max: 100}}]});
+  ''', opts
+
+code "open-ended: min-only (N..) emits min without max", '''
+  X = schema
+    password! 8..
+  ''', '''
+  let X;
+  X = __schema({kind: "input", name: "X", entries: [{tag: "field", name: "password", modifiers: ["!"], typeName: "string", array: false, constraints: {min: 8}}]});
+  ''', opts
+
+test "open-ended max-only on ? allows empty string", '''
+  F = schema
+    name? ..5
+  [F.ok({name: "abc"}), F.ok({name: "abcdef"}), F.ok({name: ""})]
+  ''', [true, false, true]
+
+test "open-ended max-only on ! rejects empty string (implicit min=1)", '''
+  F = schema
+    name! ..5
+  [F.ok({name: "abc"}), F.ok({name: "abcdef"}), F.ok({name: ""})]
+  ''', [true, false, false]
+
+test "open-ended min-only validates lower bound", '''
+  F = schema
+    name! 3..
+  [F.ok({name: "ab"}), F.ok({name: "abc"}), F.ok({name: "x".repeat(200)})]
+  ''', [false, true, true]
+
+test "open-ended range on integer field", '''
+  F = schema
+    age! integer, 0..
+  [F.ok({age: -1}), F.ok({age: 0}), F.ok({age: 99})]
+  ''', [false, true, true]
+
+test "open-ended range composes with pragma (min from user, max from pragma)", '''
+  schema.defaultMaxString = 50
+  F = schema
+    name! 3..
+  [F.ok({name: "ab"}), F.ok({name: "abc"}), F.ok({name: "x".repeat(60)})]
+  ''', [false, true, false]
+
+test "open-ended range with explicit max overrides pragma", '''
+  schema.defaultMaxString = 50
+  F = schema
+    name! ..10
+  [F.ok({name: "x".repeat(5)}), F.ok({name: "x".repeat(20)})]
+  ''', [true, false]
+
+fail "open-ended: bare '..' is rejected", '''
+  X = schema
+    name! ..
+  '''
+
+# Negative endpoints on open-ended ranges — `isRangeConstraintTokens`
+# now treats `-` as part of an optional endpoint, so these must parse.
+# Reversed check fires only when both endpoints are present.
+
+code "open-ended: max-only negative (..-1)", '''
+  X = schema :shape
+    signed? integer, ..-1
+  ''', '''
+  let X;
+  X = __schema({kind: "shape", name: "X", entries: [{tag: "field", name: "signed", modifiers: ["?"], typeName: "integer", array: false, constraints: {max: -1}}]});
+  ''', opts
+
+fail "post-merge consistency catches sugar-induced min > max", '''
+  X = schema
+    n! ..0
+  '''
+
+fail "post-merge consistency catches sugar vs user-negative max", '''
+  X = schema
+    n! ..-1
+  '''
+
+code "open-ended: min-only negative (-5..)", '''
+  X = schema :shape
+    signed? integer, -5..
+  ''', '''
+  let X;
+  X = __schema({kind: "shape", name: "X", entries: [{tag: "field", name: "signed", modifiers: ["?"], typeName: "integer", array: false, constraints: {min: -5}}]});
+  ''', opts
+
+code "bounded: negative-to-negative range (-5..-1)", '''
+  X = schema :shape
+    signed! integer, -5..-1
+  ''', '''
+  let X;
+  X = __schema({kind: "shape", name: "X", entries: [{tag: "field", name: "signed", modifiers: ["!"], typeName: "integer", array: false, constraints: {min: -5, max: -1}}]});
+  ''', opts
+
+# Emitted-shape asserts for open-ended forms — if a future cleanup
+# accidentally reintroduces `undefined` into the constraint object,
+# these tests fail rather than silently passing on runtime behavior.
+
+code "emit-shape: ..N omits min key entirely", '''
+  X = schema :shape
+    name? ..20
+  ''', '''
+  let X;
+  X = __schema({kind: "shape", name: "X", entries: [{tag: "field", name: "name", modifiers: ["?"], typeName: "string", array: false, constraints: {max: 20}}]});
+  ''', opts
+
+code "emit-shape: N.. omits max key entirely", '''
+  X = schema :shape
+    name? 5..
+  ''', '''
+  let X;
+  X = __schema({kind: "shape", name: "X", entries: [{tag: "field", name: "name", modifiers: ["?"], typeName: "string", array: false, constraints: {min: 5}}]});
+  ''', opts
+
+# Reversed-range check must NOT fire on open-ended forms — reversed
+# detection requires both endpoints to exist.
+
+fail "reversed check fires on closed range", '''
+  X = schema
+    n! 10..5
+  '''
+
+code "reversed check does not fire on open-ended ..N", '''
+  X = schema
+    n? ..5
+  ''', '''
+  let X;
+  X = __schema({kind: "input", name: "X", entries: [{tag: "field", name: "n", modifiers: ["?"], typeName: "string", array: false, constraints: {max: 5}}]});
+  ''', opts
+
+code "reversed check does not fire on open-ended N..", '''
+  X = schema
+    n? 5..
+  ''', '''
+  let X;
+  X = __schema({kind: "input", name: "X", entries: [{tag: "field", name: "n", modifiers: ["?"], typeName: "string", array: false, constraints: {min: 5}}]});
+  ''', opts
+
+# Pragma vs user-declared max — user's explicit `..N` always wins.
+
+test "pragma does not override explicit ..N on optional field", '''
+  schema.defaultMaxString = 100
+  F = schema
+    name? ..10
+  [F.ok({name: "ok"}), F.ok({name: "way-way-way-too-long"})]
+  ''', [true, false]
+
+# Required-implies-min shorthand — `!` + `..N` auto-sets min=1 so
+# "required AND non-empty" is the default reading. Explicit mins
+# (including explicit `0..N`) override this; bare `!` without range
+# stays unchanged (empty string remains acceptable unless bounded).
+
+code "! + ..N implies min=1", '''
+  X = schema
+    name! ..20
+  ''', '''
+  let X;
+  X = __schema({kind: "input", name: "X", entries: [{tag: "field", name: "name", modifiers: ["!"], typeName: "string", array: false, constraints: {min: 1, max: 20}}]});
+  ''', opts
+
+code "? + ..N has no implicit min", '''
+  X = schema
+    name? ..20
+  ''', '''
+  let X;
+  X = __schema({kind: "input", name: "X", entries: [{tag: "field", name: "name", modifiers: ["?"], typeName: "string", array: false, constraints: {max: 20}}]});
+  ''', opts
+
+code "bare modifier (no ! no ?) has no implicit min", '''
+  X = schema :shape
+    name ..20
+  ''', '''
+  let X;
+  X = __schema({kind: "shape", name: "X", entries: [{tag: "field", name: "name", modifiers: [], typeName: "string", array: false, constraints: {max: 20}}]});
+  ''', opts
+
+code "!# (required+unique) + ..N implies min=1", '''
+  X = schema
+    token!# ..60
+  ''', '''
+  let X;
+  X = __schema({kind: "input", name: "X", entries: [{tag: "field", name: "token", modifiers: ["!","#"], typeName: "string", array: false, constraints: {min: 1, max: 60}}]});
+  ''', opts
+
+code "! + N..N (explicit min) does not override", '''
+  X = schema
+    code! 4..8
+  ''', '''
+  let X;
+  X = __schema({kind: "input", name: "X", entries: [{tag: "field", name: "code", modifiers: ["!"], typeName: "string", array: false, constraints: {min: 4, max: 8}}]});
+  ''', opts
+
+code "! + N.. (explicit min, open max) does not trigger implicit", '''
+  X = schema
+    code! 4..
+  ''', '''
+  let X;
+  X = __schema({kind: "input", name: "X", entries: [{tag: "field", name: "code", modifiers: ["!"], typeName: "string", array: false, constraints: {min: 4}}]});
+  ''', opts
+
+code "! bare (no range) leaves min unset — existing semantics preserved", '''
+  X = schema
+    name!
+  ''', '''
+  let X;
+  X = __schema({kind: "input", name: "X", entries: [{tag: "field", name: "name", modifiers: ["!"], typeName: "string", array: false}]});
+  ''', opts
+
+test "! bare still accepts empty string (min unchanged)", '''
+  F = schema
+    name!
+  [F.ok({name: ""}), F.ok({name: "x"}), F.ok({})]
+  ''', [true, true, false]
+
+test "! + pragma only (no ..N) does not imply min=1", '''
+  schema.defaultMaxString = 50
+  F = schema
+    name!
+  [F.ok({name: ""}), F.ok({name: "x".repeat(60)})]
+  ''', [true, false]
 
 # Phase 4 — bare regex `/pattern/` (no brackets).
 
@@ -1067,6 +1472,261 @@ test ":input field array validation", '''
   r = X.safe({tags: ["a", 42, "c"]})
   [r.ok, r.errors[0].error]
   ''', [false, 'type']
+
+# ==============================================================================
+# File-level `schema.<key>` pragmas
+# ==============================================================================
+#
+# `schema.defaultMaxString = N` fills in a `max` constraint on every
+# VARCHAR-like field (string, email, url, phone, zip, or bare) in
+# subsequent schemas when the user wrote no explicit narrowing of their
+# own. `text` is the opt-out for long-form content and is never capped.
+
+code "pragma caps bare and explicit string types", '''
+  schema.defaultMaxString = 100
+  Form = schema
+    name!
+    email! email
+    url? url
+  ''', '''
+  let Form;
+  Form = __schema({kind: "input", name: "Form", entries: [{tag: "field", name: "name", modifiers: ["!"], typeName: "string", array: false, constraints: {max: 100}}, {tag: "field", name: "email", modifiers: ["!"], typeName: "email", array: false, constraints: {max: 100}}, {tag: "field", name: "url", modifiers: ["?"], typeName: "url", array: false, constraints: {max: 100}}]});
+  ''', opts
+
+code "pragma does not touch text type (long-form opt-out)", '''
+  schema.defaultMaxString = 100
+  Post = schema
+    title!
+    body? text
+  ''', '''
+  let Post;
+  Post = __schema({kind: "input", name: "Post", entries: [{tag: "field", name: "title", modifiers: ["!"], typeName: "string", array: false, constraints: {max: 100}}, {tag: "field", name: "body", modifiers: ["?"], typeName: "text", array: false}]});
+  ''', opts
+
+code "pragma does not touch explicit range", '''
+  schema.defaultMaxString = 100
+  Form = schema
+    password! 8..200
+  ''', '''
+  let Form;
+  Form = __schema({kind: "input", name: "Form", entries: [{tag: "field", name: "password", modifiers: ["!"], typeName: "string", array: false, constraints: {min: 8, max: 200}}]});
+  ''', opts
+
+code "pragma does not touch regex-constrained field", '''
+  schema.defaultMaxString = 100
+  Form = schema
+    zip! /^\\d{5}$/
+  ''', '''
+  let Form;
+  Form = __schema({kind: "input", name: "Form", entries: [{tag: "field", name: "zip", modifiers: ["!"], typeName: "string", array: false, constraints: {regex: /^\\d{5}$/}}]});
+  ''', opts
+
+code "pragma does not touch literal-union field", '''
+  schema.defaultMaxString = 100
+  Form = schema
+    role? "admin" | "user"
+  ''', '''
+  let Form;
+  Form = __schema({kind: "input", name: "Form", entries: [{tag: "field", name: "role", modifiers: ["?"], typeName: "literal-union", array: false, literals: ["admin","user"]}]});
+  ''', opts
+
+code "pragma does not touch integer/number/boolean/date types", '''
+  schema.defaultMaxString = 100
+  Form = schema
+    age! integer
+    amount! number
+    active? boolean
+    bornOn? date
+  ''', '''
+  let Form;
+  Form = __schema({kind: "input", name: "Form", entries: [{tag: "field", name: "age", modifiers: ["!"], typeName: "integer", array: false}, {tag: "field", name: "amount", modifiers: ["!"], typeName: "number", array: false}, {tag: "field", name: "active", modifiers: ["?"], typeName: "boolean", array: false}, {tag: "field", name: "bornOn", modifiers: ["?"], typeName: "date", array: false}]});
+  ''', opts
+
+code "pragma applies to later schemas only (snapshotted per decl)", '''
+  Before = schema
+    name!
+  schema.defaultMaxString = 100
+  After = schema
+    name!
+  ''', '''
+  let After, Before;
+  Before = __schema({kind: "input", name: "Before", entries: [{tag: "field", name: "name", modifiers: ["!"], typeName: "string", array: false}]});
+  After = __schema({kind: "input", name: "After", entries: [{tag: "field", name: "name", modifiers: ["!"], typeName: "string", array: false, constraints: {max: 100}}]});
+  ''', opts
+
+code "pragma = 0 disables previously-set default", '''
+  schema.defaultMaxString = 100
+  Capped = schema
+    name!
+  schema.defaultMaxString = 0
+  Open = schema
+    name!
+  ''', '''
+  let Capped, Open;
+  Capped = __schema({kind: "input", name: "Capped", entries: [{tag: "field", name: "name", modifiers: ["!"], typeName: "string", array: false, constraints: {max: 100}}]});
+  Open = __schema({kind: "input", name: "Open", entries: [{tag: "field", name: "name", modifiers: ["!"], typeName: "string", array: false}]});
+  ''', opts
+
+code "pragma composes with user-declared bracket default", '''
+  schema.defaultMaxString = 100
+  Form = schema
+    role? ["guest"]
+  ''', '''
+  let Form;
+  Form = __schema({kind: "input", name: "Form", entries: [{tag: "field", name: "role", modifiers: ["?"], typeName: "string", array: false, constraints: {max: 100, default: "guest"}}]});
+  ''', opts
+
+fail "pragma rejects unknown key", '''
+  schema.defaultMacString = 100
+  X = schema
+    name!
+  '''
+
+fail "pragma rejects non-number value", '''
+  schema.defaultMaxString = "100"
+  X = schema
+    name!
+  '''
+
+fail "pragma rejects negative value", '''
+  schema.defaultMaxString = -5
+  X = schema
+    name!
+  '''
+
+fail "pragma rejects decimal value", '''
+  schema.defaultMaxString = 1.5
+  X = schema
+    name!
+  '''
+
+# Top-level scope enforcement — file-level pragmas must not appear
+# inside function / class / block bodies. Left alone, a nested pragma
+# would silently leak into module-scope schemas declared after the
+# block, which is confusing at best and wrong at worst.
+
+fail "pragma rejected inside function body", '''
+  foo = ->
+    schema.defaultMaxString = 10
+  Y = schema
+    name!
+  '''
+
+fail "pragma rejected inside if block", '''
+  if true
+    schema.defaultMaxString = 10
+  Y = schema
+    name!
+  '''
+
+fail "pragma rejected inside for loop body", '''
+  for i in [1..3]
+    schema.defaultMaxString = 10
+  Y = schema
+    name!
+  '''
+
+fail "pragma rejected inside class body", '''
+  class Foo
+    schema.defaultMaxString = 10
+  Y = schema
+    name!
+  '''
+
+# Depth-recovery regression tests — after collapsing a nested schema
+# (indented or inline), the outer scanner's depth must return to 0 so
+# subsequent top-level pragmas are accepted. Catches a bug where the
+# inline collector was eating the surrounding block's OUTDENT.
+
+code "pragma accepted after nested INDENTED schema ends", '''
+  if cond
+    X = schema
+      name!
+  schema.defaultMaxString = 10
+  Y = schema
+    name!
+  ''', '''
+  let X, Y;
+  if (cond) {
+    X = __schema({kind: "input", name: "X", entries: [{tag: "field", name: "name", modifiers: ["!"], typeName: "string", array: false}]});
+  }
+  Y = __schema({kind: "input", name: "Y", entries: [{tag: "field", name: "name", modifiers: ["!"], typeName: "string", array: false, constraints: {max: 10}}]});
+  ''', opts
+
+code "pragma accepted after nested INLINE schema ends", '''
+  if cond
+    X = schema :shape; name!
+  schema.defaultMaxString = 10
+  Y = schema
+    name!
+  ''', '''
+  let X, Y;
+  if (cond) {
+    X = __schema({kind: "shape", name: "X", entries: [{tag: "field", name: "name", modifiers: ["!"], typeName: "string", array: false}]});
+  }
+  Y = __schema({kind: "input", name: "Y", entries: [{tag: "field", name: "name", modifiers: ["!"], typeName: "string", array: false, constraints: {max: 10}}]});
+  ''', opts
+
+# VARCHAR coverage — every type in VARCHAR_TYPES gets the cap.
+
+code "pragma caps phone", '''
+  schema.defaultMaxString = 30
+  X = schema
+    p! phone
+  ''', '''
+  let X;
+  X = __schema({kind: "input", name: "X", entries: [{tag: "field", name: "p", modifiers: ["!"], typeName: "phone", array: false, constraints: {max: 30}}]});
+  ''', opts
+
+code "pragma caps zip", '''
+  schema.defaultMaxString = 30
+  X = schema
+    z! zip
+  ''', '''
+  let X;
+  X = __schema({kind: "input", name: "X", entries: [{tag: "field", name: "z", modifiers: ["!"], typeName: "zip", array: false, constraints: {max: 30}}]});
+  ''', opts
+
+code "pragma does NOT cap uuid (fixed-format)", '''
+  schema.defaultMaxString = 30
+  X = schema
+    id! uuid
+  ''', '''
+  let X;
+  X = __schema({kind: "input", name: "X", entries: [{tag: "field", name: "id", modifiers: ["!"], typeName: "uuid", array: false}]});
+  ''', opts
+
+code "multiple pragma updates are snapshotted per declaration", '''
+  schema.defaultMaxString = 10
+  A = schema
+    n!
+  schema.defaultMaxString = 20
+  B = schema
+    n!
+  schema.defaultMaxString = 0
+  C = schema
+    n!
+  ''', '''
+  let A, B, C;
+  A = __schema({kind: "input", name: "A", entries: [{tag: "field", name: "n", modifiers: ["!"], typeName: "string", array: false, constraints: {max: 10}}]});
+  B = __schema({kind: "input", name: "B", entries: [{tag: "field", name: "n", modifiers: ["!"], typeName: "string", array: false, constraints: {max: 20}}]});
+  C = __schema({kind: "input", name: "C", entries: [{tag: "field", name: "n", modifiers: ["!"], typeName: "string", array: false}]});
+  ''', opts
+
+test "pragma enforces cap at runtime", '''
+  schema.defaultMaxString = 10
+  Form = schema
+    name!
+  [Form.ok({name: "short"}), Form.ok({name: "way too long for this"})]
+  ''', [true, false]
+
+test "pragma cap surfaces as max issue at runtime", '''
+  schema.defaultMaxString = 5
+  Form = schema
+    name!
+  r = Form.safe({name: "too long"})
+  [r.ok, r.errors[0].error]
+  ''', [false, "max"]
 
 # ==============================================================================
 # Nested schema-typed fields

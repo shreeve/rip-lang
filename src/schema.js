@@ -109,12 +109,88 @@ export function installSchemaSupport(Lexer, CodeEmitter) {
 // Lexer pass: rewriteSchema
 // ============================================================================
 
+// Known keys for the `schema.<key> = <value>` file-level pragma. Each
+// pragma takes effect from its declaration forward and is scoped to the
+// current compilation unit — schemas in other files are unaffected.
+// Extend this map when new pragma keys land.
+const SCHEMA_PRAGMA_KEYS = new Set(['defaultMaxString']);
+
 function rewriteSchema(lexer) {
   let tokens = lexer.tokens;
-  for (let i = 0; i < tokens.length; i++) {
-    if (!isSchemaStart(tokens, i)) continue;
-    collapseSchemaAt(lexer, tokens, i);
+  // File-scoped config, updated in-place as pragmas are encountered, then
+  // snapshotted into each schema descriptor at collapse time so post-pragma
+  // changes don't mutate earlier schemas retroactively.
+  let config = { defaultMaxString: null };
+  // Top-level INDENT/OUTDENT depth. Pragmas are file-level only so we
+  // reject them inside function / class / block bodies — otherwise a
+  // pragma nested in `foo = ->` would leak to module-scope schemas
+  // declared later on. Schemas themselves get collapsed out of the
+  // token stream before their internal INDENT/OUTDENT reach this
+  // counter, so depth reflects only user-written nesting.
+  let depth = 0;
+  let i = 0;
+  while (i < tokens.length) {
+    let t = tokens[i];
+    if (t[0] === 'INDENT') depth++;
+    else if (t[0] === 'OUTDENT') depth--;
+    let consumed = matchSchemaPragma(tokens, i, config, depth);
+    if (consumed > 0) {
+      tokens.splice(i, consumed);
+      continue;
+    }
+    if (isSchemaStart(tokens, i)) {
+      collapseSchemaAt(lexer, tokens, i, config);
+    }
+    i++;
   }
+}
+
+// Recognize `schema.<key> = <value>` at statement position. Returns the
+// number of tokens consumed (including any trailing TERMINATOR) when the
+// pragma is applied, or 0 when the sequence isn't a pragma. Unknown keys
+// and non-literal values error loudly — silently ignoring a typo like
+// `schema.defaultMacString = 100` would bake a wrong value into every
+// downstream schema.
+function matchSchemaPragma(tokens, i, config, depth) {
+  let t = tokens[i];
+  if (!t || t[0] !== 'IDENTIFIER' || t[1] !== 'schema') return 0;
+  if (tokens[i + 1]?.[0] !== '.') return 0;
+  let keyTok = tokens[i + 2];
+  if (!keyTok || keyTok[0] !== 'PROPERTY') return 0;
+  if (tokens[i + 3]?.[0] !== '=') return 0;
+  // Pragmas must start a statement — the `schema` identifier must be
+  // preceded by nothing, TERMINATOR, INDENT, or OUTDENT so we don't
+  // accidentally rewrite `foo.schema.defaultMaxString = 100` or similar.
+  let prev = tokens[i - 1];
+  if (prev) {
+    let ptag = prev[0];
+    if (ptag !== 'TERMINATOR' && ptag !== 'INDENT' && ptag !== 'OUTDENT') return 0;
+  }
+  let key = keyTok[1];
+  if (!SCHEMA_PRAGMA_KEYS.has(key)) {
+    throw schemaError(keyTok,
+      `Unknown schema pragma 'schema.${key}'. Known pragmas: ${[...SCHEMA_PRAGMA_KEYS].join(', ')}.`);
+  }
+  if (depth > 0) {
+    throw schemaError(keyTok,
+      `Schema pragma 'schema.${key}' must be declared at file top level. It was found inside a nested block (function / class / if / loop body), where it would leak into later top-level schemas.`);
+  }
+  let valTok = tokens[i + 4];
+  if (!valTok || valTok[0] !== 'NUMBER') {
+    throw schemaError(valTok || keyTok,
+      `Pragma 'schema.${key}' requires a number literal. Example: schema.${key} = 100.`);
+  }
+  let n = Number(valTok[1]);
+  if (!Number.isFinite(n) || n < 0 || !Number.isInteger(n)) {
+    throw schemaError(valTok,
+      `Pragma 'schema.${key}' expects a non-negative integer (got ${valTok[1]}). Use 0 to disable.`);
+  }
+  // `0` means "no default cap" — explicit way to reset a pragma mid-file.
+  config[key] = n === 0 ? null : n;
+  // Consume trailing TERMINATOR so the pragma line leaves no blank statement behind.
+  let end = i + 5;
+  if (tokens[end]?.[0] === 'TERMINATOR') end++;
+  return end - i;
 }
 
 function isSchemaStart(tokens, i) {
@@ -133,17 +209,26 @@ function isSchemaStart(tokens, i) {
       if (!EXPR_START_PREV.has(ptag)) return false;
     }
   }
-  // What follows: optional SYMBOL (kind), optional TERMINATOR, then INDENT.
+  // What follows determines the body form:
+  //   SYMBOL? then INDENT           — indented block body.
+  //   SYMBOL? then `TERMINATOR ;`   — inline body (one-liner), with field
+  //                                   entries separated by more `;`
+  //                                   terminators up to the newline.
   let j = i + 1;
   if (tokens[j]?.[0] === 'SYMBOL') j++;
-  if (tokens[j]?.[0] === 'TERMINATOR') j++;
+  if (tokens[j]?.[0] === 'TERMINATOR') {
+    if (tokens[j][1] === ';') return true;
+    j++;
+  }
   return tokens[j]?.[0] === 'INDENT';
 }
 
 // Collapse `IDENTIFIER 'schema' [SYMBOL kind] [TERMINATOR] INDENT ... OUTDENT`
 // at position i into `SCHEMA SCHEMA_BODY`. SCHEMA_BODY carries a structured
-// descriptor on .data.
-function collapseSchemaAt(lexer, tokens, i) {
+// descriptor on .data. `config` snapshots any `schema.<key>` pragmas in
+// effect at this point so later pragma changes don't retroactively alter
+// earlier schemas.
+function collapseSchemaAt(lexer, tokens, i, config) {
   let schemaTok = tokens[i];
   let kindToken = null;
   let kind = KIND_DEFAULT;
@@ -159,31 +244,105 @@ function collapseSchemaAt(lexer, tokens, i) {
     kind = k;
     j++;
   }
-  if (tokens[j]?.[0] === 'TERMINATOR') j++;
 
-  if (tokens[j]?.[0] !== 'INDENT') {
-    throw schemaError(schemaTok,
-      `Expected indented schema body after 'schema${kindToken ? ' :' + kind : ''}'.`);
+  let bodyTokens;
+  let endIdx;
+  if (tokens[j]?.[0] === 'TERMINATOR' && tokens[j][1] === ';') {
+    // Inline one-liner: `schema [:kind]; field; field; ...` up to the
+    // next `\n` TERMINATOR at depth 0. The `;` separators are already
+    // TERMINATOR tokens, so splitBodyLines handles them unchanged.
+    // Arrows (`->`, `~>`, `!>`) would make the body ambiguous with
+    // subsequent `;`-separated fields, so methods/computed/hooks/
+    // transforms are rejected on the inline form.
+    let inlineStart = j + 1;
+    let end = inlineStart;
+    let depth = 0;
+    // Rip's lexer collapses `;\n` into a single `;`-valued TERMINATOR,
+    // so value-based "end of inline" detection alone misses trailing
+    // `X = schema :shape; name!;\ny = 1`. We track the inline body's
+    // starting row and break the moment a token's row advances past
+    // it at depth 0 — that captures both plain `\n` and the folded
+    // `;\n` case.
+    let startRow = tokens[inlineStart]?.loc?.r ?? null;
+    while (end < tokens.length) {
+      let tk = tokens[end];
+      let tag = tk[0];
+      if (depth === 0 && startRow != null && tk.loc && tk.loc.r > startRow) break;
+      if (tag === '(' || tag === '[' || tag === '{' ||
+          tag === 'CALL_START' || tag === 'INDEX_START' || tag === 'PARAM_START') depth++;
+      else if (tag === ')' || tag === ']' || tag === '}' ||
+               tag === 'CALL_END' || tag === 'INDEX_END' || tag === 'PARAM_END') depth--;
+      // Inline body ends at the first depth-0 newline OR at any
+      // INDENT/OUTDENT — INDENT would mean the user opened a block
+      // (incompatible with inline), and OUTDENT means we're exiting
+      // a surrounding block and must leave that token in place for
+      // the outer scanner's depth bookkeeping.
+      else if (depth === 0 && tag === 'TERMINATOR' && tk[1] !== ';') break;
+      else if (depth === 0 && (tag === 'INDENT' || tag === 'OUTDENT')) break;
+      // Arrows (`->` method/hook/transform, `~>` computed, `!>` eager
+      // derived) make field bodies ambiguous with subsequent
+      // `;`-separated entries on the same line, so reject them early
+      // with a clear message that points users at the indented form.
+      // `~>` lexes as EFFECT; `!>` lexes as UNARY_MATH '!' + COMPARE '>'.
+      else if (depth === 0 && tag === '->') {
+        throw schemaError(tk, `Inline schema body does not support '->' (method/hook/transform). Use the indented form.`);
+      }
+      else if (depth === 0 && tag === 'EFFECT') {
+        throw schemaError(tk, `Inline schema body does not support '~>' (computed getter). Use the indented form.`);
+      }
+      else if (depth === 0 && tag === 'UNARY_MATH' && tk[1] === '!' &&
+               tokens[end + 1]?.[0] === 'COMPARE' && tokens[end + 1][1] === '>') {
+        throw schemaError(tk, `Inline schema body does not support '!>' (eager derived). Use the indented form.`);
+      }
+      end++;
+    }
+    // A trailing TERMINATOR at the boundary (`;` that the lexer folded
+    // with `\n`, or a plain `\n` that happened to land inside our
+    // capture range) must remain in the token stream as a statement
+    // separator between this schema and whatever follows on the next
+    // line. Trim it out of the body / splice span so the parser
+    // keeps seeing it. splitBodyLines is safe with a body that
+    // doesn't end in TERMINATOR.
+    while (end > inlineStart && tokens[end - 1][0] === 'TERMINATOR') end--;
+    bodyTokens = tokens.slice(inlineStart, end);
+    endIdx = end;
+    // Empty inline body (`X = schema :shape;` with nothing after the
+    // leading `;`) is almost always a typo — an indented body that
+    // wasn't written, or a stray `;` on an otherwise complete decl.
+    // Fail loud rather than emit a schema with no entries.
+    if (!bodyTokens.length) {
+      throw schemaError(schemaTok,
+        `Inline schema body is empty. Either add '; field; …' entries after 'schema${kindToken ? ' :' + kind : ''};' or switch to the indented form.`);
+    }
+  } else {
+    if (tokens[j]?.[0] === 'TERMINATOR') j++;
+    if (tokens[j]?.[0] !== 'INDENT') {
+      throw schemaError(schemaTok,
+        `Expected indented schema body after 'schema${kindToken ? ' :' + kind : ''}'.`);
+    }
+    let indentIdx = j;
+    let outdentIdx = findMatchingOutdent(tokens, indentIdx);
+    if (outdentIdx < 0) {
+      throw schemaError(tokens[indentIdx], 'Unterminated schema body.');
+    }
+    bodyTokens = tokens.slice(indentIdx + 1, outdentIdx);
+    endIdx = outdentIdx + 1; // include the OUTDENT itself in the replaced span
   }
-  let indentIdx = j;
 
-  let outdentIdx = findMatchingOutdent(tokens, indentIdx);
-  if (outdentIdx < 0) {
-    throw schemaError(tokens[indentIdx], 'Unterminated schema body.');
-  }
-
-  let bodyTokens = tokens.slice(indentIdx + 1, outdentIdx);
   let descriptor = parseSchemaBody(kind, bodyTokens, {
     schemaLoc: schemaTok.loc,
     kindLoc: kindToken?.loc ?? null,
     kind,
+    // Snapshot pragmas in effect at this decl so later pragma writes
+    // don't retroactively change already-parsed schemas.
+    defaultMaxString: config?.defaultMaxString ?? null,
   });
 
-  // Replace range `[i, outdentIdx]` with `SCHEMA SCHEMA_BODY`.
+  // Replace range `[i, endIdx-1]` with `SCHEMA SCHEMA_BODY`.
   let schemaNewTok = mkToken('SCHEMA', 'schema', schemaTok);
   let bodyNewTok = mkToken('SCHEMA_BODY', kind, schemaTok);
   bodyNewTok.data = { descriptor };
-  tokens.splice(i, outdentIdx - i + 1, schemaNewTok, bodyNewTok);
+  tokens.splice(i, endIdx - i, schemaNewTok, bodyNewTok);
 }
 
 // ============================================================================
@@ -210,7 +369,7 @@ function parseSchemaBody(kind, bodyTokens, ctx) {
     }
   } else {
     for (let line of lines) {
-      parseFieldedLine(kind, line, entries);
+      parseFieldedLine(kind, line, entries, ctx);
     }
     // Capability-matrix enforcement by kind. `@mixin` is allowed as a
     // field-inclusion directive on every fielded kind because it adds
@@ -316,7 +475,13 @@ function splitBodyLines(tokens) {
 //      `{…}` attrs, `/regex/` pattern, `n..n` range, `-> transform`.
 //      The head token uniquely identifies the form. Duplicates of any
 //      single form are rejected.
-function parseFieldedLine(kind, line, entries) {
+// VARCHAR-like primitive types — the `schema.defaultMaxString` pragma
+// applies a default `max` to these when no explicit range/regex/literals
+// are declared. `text` stays uncapped by design (it's the opt-out for
+// long-form content); `uuid` has fixed length; `json`/`any` aren't strings.
+const VARCHAR_TYPES = new Set(['string', 'email', 'url', 'phone', 'zip']);
+
+function parseFieldedLine(kind, line, entries, ctx) {
   let first = line[0];
   if (!first) return;
 
@@ -580,6 +745,19 @@ function parseFieldedLine(kind, line, entries) {
       `Array-of-literal-union is not supported. Use 'string[]' if you need an array of strings.`);
   }
 
+  // The `schema.defaultMaxString` pragma baked into this schema's ctx
+  // is a candidate for any VARCHAR-like primitive that isn't already
+  // narrowed by a regex or literal-union. The final "fill it in only
+  // if max is still absent" decision happens in mergeFieldConstraints
+  // so open-ended ranges (`5..` → only min) still get the pragma's max.
+  // Using `!= null` (not truthy) keeps future non-positive pragma
+  // values valid if more keys land here.
+  let defaultMax = null;
+  if (ctx?.defaultMaxString != null && !regexToken && !literals &&
+      VARCHAR_TYPES.has(typeName)) {
+    defaultMax = ctx.defaultMaxString;
+  }
+
   entries.push({
     tag: 'field',
     name,
@@ -592,6 +770,7 @@ function parseFieldedLine(kind, line, entries) {
     rangeTokens,
     regexToken,
     transformTokens,
+    defaultMax,
     loc: first.loc,
   });
 }
@@ -614,20 +793,27 @@ function findTopLevelArrowIdx(tokens) {
   return -1;
 }
 
-// Range constraint: `min..max` with optional leading `-` on either endpoint.
+// Range constraint: `min..max` with optional leading `-` on either
+// endpoint. Either endpoint may be omitted for open-ended ranges —
+// `..N` is "at most N" (no min), `N..` is "at least N" (no max). At
+// least one endpoint must be present; a bare `..` is rejected.
 // Operates on a top-level comma-split part; stripping any surrounding
 // INDENT/OUTDENT is handled by the caller.
 function isRangeConstraintTokens(tokens) {
   let i = 0;
-  if (tokens[i]?.[0] === '-') i++;
-  if (tokens[i]?.[0] !== 'NUMBER') return false;
-  i++;
+  // Left endpoint (optional).
+  let hasLeft = false;
+  if (tokens[i]?.[0] === '-' && tokens[i + 1]?.[0] === 'NUMBER') { i += 2; hasLeft = true; }
+  else if (tokens[i]?.[0] === 'NUMBER') { i++; hasLeft = true; }
+  // Dots.
   if (tokens[i]?.[0] !== '..') return false;
   i++;
-  if (tokens[i]?.[0] === '-') i++;
-  if (tokens[i]?.[0] !== 'NUMBER') return false;
-  i++;
-  return i === tokens.length;
+  // Right endpoint (optional).
+  let hasRight = false;
+  if (tokens[i]?.[0] === '-' && tokens[i + 1]?.[0] === 'NUMBER') { i += 2; hasRight = true; }
+  else if (tokens[i]?.[0] === 'NUMBER') { i++; hasRight = true; }
+  // Need at least one endpoint, and nothing trailing.
+  return (hasLeft || hasRight) && i === tokens.length;
 }
 
 function parseCallableLine(kind, headerTok, line, entries) {
@@ -1138,11 +1324,13 @@ function regexLiteralOf(tok) {
   }
 }
 
-// Evaluate an `n..n` range token slice into {min, max}. Caller has
-// already verified shape via isRangeConstraintTokens.
+// Evaluate a range token slice into {min?, max?}. Caller has already
+// verified shape via isRangeConstraintTokens. Open-ended forms omit
+// the corresponding key rather than emitting undefined, so downstream
+// constraint serialization stays clean.
 function compileRangeTokens(tokens, fieldEntry) {
   let i = 0;
-  let readOne = () => {
+  let readOneAt = () => {
     let sign = 1;
     if (tokens[i]?.[0] === '-') { sign = -1; i++; }
     let numTok = tokens[i++];
@@ -1152,14 +1340,19 @@ function compileRangeTokens(tokens, fieldEntry) {
     }
     return sign * v;
   };
-  let min = readOne();
+  let min;
+  if (tokens[i]?.[0] !== '..') min = readOneAt();
   i++; // consume `..`
-  let max = readOne();
-  if (min > max) {
+  let max;
+  if (i < tokens.length) max = readOneAt();
+  if (min !== undefined && max !== undefined && min > max) {
     throw schemaError(tokens[0],
       `Range '${min}..${max}' is reversed. Write the smaller endpoint first.`);
   }
-  return { min, max };
+  let out = {};
+  if (min !== undefined) out.min = min;
+  if (max !== undefined) out.max = max;
+  return out;
 }
 
 // Merge the optional range, bracket-default, and bare-regex constraints
@@ -1168,12 +1361,48 @@ function compileRangeTokens(tokens, fieldEntry) {
 // sets regex.
 function mergeFieldConstraints(range, bracketLiteral, regex, fieldEntry) {
   let c = (bracketLiteral && bracketLiteral.c) || {};
+  // Track whether this field's range used open-left shorthand (`..N`).
+  // The implicit-min sugar is gated on *syntax* (range omitted its
+  // min) rather than on merged state, so a future sugar that also
+  // writes to c.min can't accidentally trigger the implicit.
+  let openLeftRange = range && range.min === undefined;
   if (range) {
-    c.min = range.min;
-    c.max = range.max;
+    if (range.min !== undefined) c.min = range.min;
+    if (range.max !== undefined) c.max = range.max;
+    // Open-min shorthand (`..N`) with a `!` modifier implies min=1 —
+    // "required and non-empty" is the default reading for required
+    // varchar-like fields. Gated on openLeftRange syntactically so
+    // adding more sugar layers later doesn't trigger this by accident.
+    if (openLeftRange && c.min === undefined && fieldEntry?.modifiers?.includes('!')) {
+      c.min = 1;
+    }
   }
   if (regex) {
     c.regex = regex;
+  }
+  // File-level `schema.defaultMaxString` pragma fills in max only when
+  // the field didn't narrow the max any other way — parseFieldedLine
+  // suppresses defaultMax on regex / literal-union fields already, so
+  // this last check covers the open-ended `N..` case (min set, max
+  // still unbounded) where the pragma should fill the gap.
+  if (fieldEntry?.defaultMax != null && c.max === undefined) {
+    c.max = fieldEntry.defaultMax;
+  }
+  // Post-merge consistency check. Sugar (`!` implicit min=1) and the
+  // pragma default max can compose with a user-written explicit max to
+  // produce min > max — e.g. `name! ..0` would naively emit
+  // `{min: 1, max: 0}`, a constraint no value can satisfy. The
+  // parse-time reversed-range check only sees syntactically-present
+  // endpoints, so we re-validate here after every sugar has been
+  // applied. Error message names the actual sources so the user can
+  // pinpoint which side to fix.
+  if (c.min !== undefined && c.max !== undefined && c.min > c.max) {
+    let minSrc = (range && range.min !== undefined) ? `range min ${range.min}` : 'implicit min=1 from `!`';
+    let maxSrc = (range && range.max !== undefined)
+      ? `range max ${range.max}`
+      : `pragma defaultMaxString=${fieldEntry?.defaultMax}`;
+    throw schemaError({ loc: fieldEntry?.loc },
+      `Field '${fieldEntry?.name}' would have impossible constraints min=${c.min} > max=${c.max} after sugar is applied (${minSrc} vs ${maxSrc}). Write an explicit range or drop the conflicting pragma.`);
   }
   if (c.min === undefined && c.max === undefined && c.default === undefined && c.regex === undefined) {
     return null;
