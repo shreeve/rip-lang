@@ -405,9 +405,6 @@ The UI framework is built into rip-lang: file-based router, reactive stash, comp
 | **Reactivity** | None | Built-in |
 | **Dependencies** | Multiple | Zero |
 | **Self-hosting** | No | Yes |
-| **Lexer** | 3,558 LOC | 2,024 LOC |
-| **Compiler** | 10,346 LOC | 3,293 LOC |
-| **Total** | 17,760 LOC | ~11,890 LOC |
 
 Smaller codebase, modern output, built-in reactivity.
 
@@ -442,25 +439,10 @@ await rip("res = fetch! 'https://api.example.com/todos/1'; res.json!")  // → {
 
 ```
 Source  ->  Lexer  ->  emitTypes  ->  Parser  ->  S-Expressions  ->  Codegen  ->  JavaScript
-           (1,778)    (types.js)     (359)       ["=", "x", 42]     (3,334)      + source map
+                       (types.js)                 ["=", "x", 42]                + source map
 ```
 
-Simple arrays (with `.loc`) instead of AST node classes. The compiler is self-hosting — `bun run parser` rebuilds from source.
-
-| Component | File | Lines |
-|-----------|------|-------|
-| Lexer + Rewriter | `src/lexer.js` | 1,778 |
-| Grammar | `src/grammar/grammar.rip` | 948 |
-| Parser Generator | `src/grammar/solar.rip` | 929 |
-| Parser (generated) | `src/parser.js` | 359 |
-| Compiler + Codegen | `src/compiler.js` | 3,334 |
-| Component System | `src/components.js` | 2,026 |
-| Browser Engine | `src/browser.js` | 194 |
-| Source Maps | `src/sourcemaps.js` | 189 |
-| Type System | `src/types.js` | 1,091 |
-| Type Checking | `src/typecheck.js` | 442 |
-| REPL | `src/repl.js` | 600 |
-| **Total** | | **~11,890** |
+Simple arrays (with `.loc`) instead of AST node classes. The compiler is self-hosting — `bun run parser` rebuilds from source. The implementation lives across a handful of focused modules under `src/` — lexer, compiler, schema, types, typecheck, components, parser, browser, REPL — plus the grammar sources under `src/grammar/`. Run `wc -l src/*.js` for current sizes.
 
 ---
 
@@ -468,16 +450,16 @@ Simple arrays (with `.loc`) instead of AST node classes. The compiler is self-ho
 
 Rip includes optional packages for full-stack development:
 
-| Package | Version | Purpose |
-|---------|---------|---------|
-| [rip-lang](https://www.npmjs.com/package/rip-lang) | 3.13.62 | Core language compiler |
-| [@rip-lang/server](packages/server/) | 1.3.12 | Multi-worker app server (web framework, hot reload, HTTPS, mDNS) |
-| [@rip-lang/db](packages/db/) | 1.3.15 | DuckDB server with official UI + ActiveRecord-style client |
-| [@rip-lang/ui](packages/ui/) | — | Unified UI system — browser widgets, email components, shared helpers, Tailwind integration |
-| [@rip-lang/swarm](packages/swarm/) | 1.2.18 | Parallel job runner with worker pool |
-| [@rip-lang/csv](packages/csv/) | 1.3.6 | CSV parser + writer |
-| [@rip-lang/time](packages/time/) | 1.0.0 | Immutable date/time with IANA timezones + `Duration` (US-English, zero runtime deps) |
-| [VS Code Extension](packages/vscode/) | 0.5.7 | Syntax highlighting, type intelligence, source maps |
+| Package | Purpose |
+|---------|---------|
+| [rip-lang](https://www.npmjs.com/package/rip-lang) | Core language compiler |
+| [@rip-lang/server](packages/server/) | Multi-worker app server (web framework, hot reload, HTTPS, mDNS) |
+| [@rip-lang/db](packages/db/) | DuckDB server with official UI + ActiveRecord-style client |
+| [@rip-lang/ui](packages/ui/) | Unified UI system — browser widgets, email components, shared helpers, Tailwind integration |
+| [@rip-lang/swarm](packages/swarm/) | Parallel job runner with worker pool |
+| [@rip-lang/csv](packages/csv/) | CSV parser + writer |
+| [@rip-lang/time](packages/time/) | Immutable date/time with IANA timezones + `Duration` (US-English, zero runtime deps) |
+| [VS Code Extension](packages/vscode/) | Syntax highlighting, type intelligence, source maps |
 
 ```bash
 bun add -g @rip-lang/db    # Installs everything (rip-lang + server + db)
@@ -515,7 +497,7 @@ rip file.rip           # Run
 rip -c file.rip        # Compile
 rip -t file.rip        # Tokens
 rip -s file.rip        # S-expressions
-bun run test           # 1436 tests
+bun run test:all       # full test suite
 bun run parser         # Rebuild parser
 bun run build          # Build browser bundle
 ```

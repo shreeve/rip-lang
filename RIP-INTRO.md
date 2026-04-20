@@ -18,7 +18,7 @@
 
 ## 1. Rip — the big idea in one sentence
 
-Rip is CoffeeScript's ergonomic syntax retargeted at ES2022, with **reactivity as language primitives** (`:=`, `~=`, `~>`, `<=>`) and **schemas as language primitives** (`schema :model`, `:shape`, `:enum`, `:mixin`, `:input`), delivered as a **zero-dependency self-hosting compiler in ~11,890 LOC**.
+Rip is CoffeeScript's ergonomic syntax retargeted at ES2022, with **reactivity as language primitives** (`:=`, `~=`, `~>`, `<=>`) and **schemas as language primitives** (`schema :model`, `:shape`, `:enum`, `:mixin`, `:input`), delivered as a **zero-dependency, self-hosting compiler**.
 
 The three commitments that make it distinctive:
 
@@ -32,19 +32,8 @@ The three commitments that make it distinctive:
 
 ```
 Source → Lexer → emitTypes → Parser → S-expressions → CodeEmitter → JavaScript
-        (1,778)  (types.js)  (359)   (arrays + .loc)   (3,334)     + source map
+                 (types.js)          (arrays + .loc)                + source map
 ```
-
-| Component | File | Lines |
-|---|---|---|
-| Lexer + Rewriter | `src/lexer.js` | 1,778 |
-| Grammar | `src/grammar/grammar.rip` | 948 |
-| Parser Generator | `src/grammar/solar.rip` | 929 |
-| Parser (generated) | `src/parser.js` | 359 |
-| Compiler + Codegen | `src/compiler.js` | 3,334 |
-| Component System | `src/components.js` | 2,026 |
-| Type System | `src/types.js` | 1,091 |
-| **Total** | | **~11,890** |
 
 S-expressions are plain arrays with `.loc` metadata (`["=", "x", 42]`), not AST classes. That one choice is the main reason the compiler is so small — and it is a deliberate **maintainability tradeoff**: fewer static guarantees, harder to evolve, but compact and readable.
 
