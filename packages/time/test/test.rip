@@ -1,0 +1,809 @@
+# ==============================================================================
+# @rip-lang/time tests — black-box parity against upstream time
+# ==============================================================================
+
+import time, { Duration } from '../time.rip'
+import ref   from 'dayjs'
+
+pass = 0
+fail = 0
+
+def test(name, fn)
+  try
+    fn()
+    pass++
+    console.log "  ✓ #{name}"
+  catch e
+    fail++
+    console.log "  ✗ #{name}: #{e.message}"
+
+def eq(a, b, msg = '')
+  ja = JSON.stringify(a)
+  jb = JSON.stringify(b)
+  unless ja is jb
+    throw new Error "#{msg}expected #{jb}, got #{ja}"
+
+def approxEq(a, b, tolerance = 0.0001)
+  unless Math.abs(a - b) <= tolerance
+    throw new Error "expected ~#{b}, got #{a}"
+
+# ==[ Construction & basic getters ]==
+
+console.log "\nConstruction & getters"
+
+test "now()", ->
+  now = time()
+  eq now.year(),  new Date().getFullYear()
+  eq now.month(), new Date().getMonth()
+  eq now.date(),  new Date().getDate()
+
+test "from ISO string", ->
+  d = time('2026-04-19')
+  eq d.year(),  2026
+  eq d.month(), 3
+  eq d.date(),  19
+
+test "from ISO datetime", ->
+  d = time('2026-04-19T14:30:45')
+  eq d.hour(),   14
+  eq d.minute(), 30
+  eq d.second(), 45
+
+test "from US MM/DD/YYYY", ->
+  d = time('04/19/2026')
+  eq d.year(),  2026
+  eq d.month(), 3
+  eq d.date(),  19
+
+test "from US M/D/YY", ->
+  d = time('4/19/26')
+  eq d.year(),  2026
+  eq d.month(), 3
+  eq d.date(),  19
+
+test "from US with time & AM/PM", ->
+  d = time('04/19/2026 3:45 PM')
+  eq d.hour(),   15
+  eq d.minute(), 45
+
+test "from US 12 AM", ->
+  eq time('04/19/2026 12:00 AM').hour(), 0
+
+test "from US 12 PM", ->
+  eq time('04/19/2026 12:00 PM').hour(), 12
+
+test "from Date object", ->
+  d = time(new Date(2026, 3, 19))
+  eq d.year(), 2026
+  eq d.date(), 19
+
+test "from timestamp", ->
+  ts = Date.UTC(2026, 3, 19)
+  eq time.utc(ts).year(),  2026
+  eq time.utc(ts).month(), 3
+
+test "from another time (clone)", ->
+  a = time('2026-04-19')
+  b = time(a)
+  eq b.year(),  2026
+  eq a is b, false
+
+test "unix seconds", ->
+  d = time.unix(1760000000)
+  eq d.unix(), 1760000000
+
+test "isValid true", ->
+  eq time('2026-04-19').isValid(), true
+
+test "isValid false", ->
+  eq time('not-a-date').isValid(), false
+
+test "null is invalid", ->
+  eq time(null).isValid(), false
+
+# ==[ Immutability ]==
+
+console.log "\nImmutability"
+
+test "add returns new instance", ->
+  a = time('2026-04-19')
+  b = a.add(1, :day)
+  eq a.date(), 19
+  eq b.date(), 20
+
+test "set returns new instance", ->
+  a = time('2026-04-19')
+  b = a.set(:year, 2027)
+  eq a.year(), 2026
+  eq b.year(), 2027
+
+# ==[ Formatting parity with upstream ]==
+
+console.log "\nFormat (matches upstream time)"
+
+FORMAT_CASES = [
+  '2026-04-19'
+  '2026-04-19T08:05:03'
+  '2024-02-29'
+  '2026-01-01'
+  '2026-12-31T23:59:59'
+]
+
+FORMAT_PATTERNS = [
+  'YYYY'
+  'YY'
+  'M'
+  'MM'
+  'MMM'
+  'MMMM'
+  'D'
+  'DD'
+  'd'
+  'dd'
+  'ddd'
+  'dddd'
+  'H'
+  'HH'
+  'h'
+  'hh'
+  'a'
+  'A'
+  'm'
+  'mm'
+  's'
+  'ss'
+  'YYYY-MM-DD'
+  'MM/DD/YYYY'
+  'MMM D, YYYY'
+  'dddd, MMMM D, YYYY'
+  'h:mm A'
+]
+
+for dateStr in FORMAT_CASES
+  for formatStr in FORMAT_PATTERNS
+    inp = dateStr
+    pat = formatStr
+    test "format #{pat} for #{inp}", ->
+      eq time(inp).format(pat), ref(inp).format(pat)
+
+# Extensions baked in (upstream needs advancedFormat plugin for these)
+test "format Do ordinal (built in)", ->
+  eq time('2026-04-01').format('Do'),  '1st'
+  eq time('2026-04-02').format('Do'),  '2nd'
+  eq time('2026-04-03').format('Do'),  '3rd'
+  eq time('2026-04-04').format('Do'),  '4th'
+  eq time('2026-04-11').format('Do'), '11th'
+  eq time('2026-04-12').format('Do'), '12th'
+  eq time('2026-04-13').format('Do'), '13th'
+  eq time('2026-04-21').format('Do'), '21st'
+  eq time('2026-04-22').format('Do'), '22nd'
+
+test "format Q quarter (built in)", ->
+  eq time('2026-01-15').format('Q'), '1'
+  eq time('2026-05-15').format('Q'), '2'
+  eq time('2026-08-15').format('Q'), '3'
+  eq time('2026-11-15').format('Q'), '4'
+
+test "format bracket literal", ->
+  eq time('2026-04-19').format('[Today is] MMMM Do'), 'Today is April 19th'
+
+# ==[ Arithmetic parity ]==
+
+console.log "\nArithmetic"
+
+test "add 1 day", ->
+  eq time('2026-04-19').add(1, :day).format('YYYY-MM-DD'),
+     ref('2026-04-19').add(1, 'day').format('YYYY-MM-DD')
+
+test "add 1 month from Jan 31", ->
+  eq time('2026-01-31').add(1, :month).format('YYYY-MM-DD'),
+     ref('2026-01-31').add(1, 'month').format('YYYY-MM-DD')
+
+test "add 1 year Feb 29 leap", ->
+  eq time('2024-02-29').add(1, :year).format('YYYY-MM-DD'),
+     ref('2024-02-29').add(1, 'year').format('YYYY-MM-DD')
+
+test "subtract 2 weeks", ->
+  eq time('2026-04-19').subtract(2, :week).format('YYYY-MM-DD'),
+     ref('2026-04-19').subtract(2, 'week').format('YYYY-MM-DD')
+
+test "add hours", ->
+  eq time('2026-04-19T10:00').add(5, :hour).format('HH:mm'),
+     ref('2026-04-19T10:00').add(5, 'hour').format('HH:mm')
+
+test "add with string unit", ->
+  eq time('2026-04-19').add(1, 'days').format('YYYY-MM-DD'),
+     ref('2026-04-19').add(1, 'days').format('YYYY-MM-DD')
+
+# ==[ startOf / endOf parity ]==
+
+console.log "\nstartOf / endOf"
+
+for unit in ['year', 'month', 'week', 'day', 'hour', 'minute', 'second']
+  u = unit
+  test "startOf(#{u})", ->
+    eq time('2026-04-19T14:30:45.123').startOf(u).format('YYYY-MM-DD HH:mm:ss.SSS'),
+       ref('2026-04-19T14:30:45.123').startOf(u).format('YYYY-MM-DD HH:mm:ss.SSS')
+  test "endOf(#{u})", ->
+    eq time('2026-04-19T14:30:45.123').endOf(u).format('YYYY-MM-DD HH:mm:ss.SSS'),
+       ref('2026-04-19T14:30:45.123').endOf(u).format('YYYY-MM-DD HH:mm:ss.SSS')
+
+test "endOf month for February leap", ->
+  eq time('2024-02-15').endOf(:month).format('YYYY-MM-DD'), '2024-02-29'
+
+test "endOf month for February non-leap", ->
+  eq time('2023-02-15').endOf(:month).format('YYYY-MM-DD'), '2023-02-28'
+
+# ==[ Diff parity ]==
+
+console.log "\ndiff"
+
+for unit in ['year', 'month', 'week', 'day', 'hour', 'minute', 'second']
+  u = unit
+  test "diff(#{u})", ->
+    a = '2026-04-19T10:30:00'
+    b = '2020-01-15T08:15:30'
+    eq time(a).diff(time(b), u), ref(a).diff(ref(b), u)
+
+test "diff float", ->
+  a = '2026-04-19T10:30:00'
+  b = '2026-04-18T22:30:00'
+  approxEq time(a).diff(time(b), :hour, true),
+           ref(a).diff(ref(b), 'hour', true)
+
+test "diff default ms", ->
+  a = time('2026-04-19T10:30:00')
+  b = time('2026-04-19T10:30:05')
+  eq a.diff(b), -5000
+
+# ==[ Comparisons ]==
+
+console.log "\nComparisons"
+
+test "isBefore", ->
+  eq time('2026-04-18').isBefore(time('2026-04-19')), true
+  eq time('2026-04-19').isBefore(time('2026-04-19')), false
+
+test "isAfter", ->
+  eq time('2026-04-20').isAfter(time('2026-04-19')), true
+  eq time('2026-04-19').isAfter(time('2026-04-19')), false
+
+test "isSame default (ms)", ->
+  eq time('2026-04-19').isSame(time('2026-04-19')), true
+
+test "isSame :day", ->
+  eq time('2026-04-19T10:00').isSame(time('2026-04-19T23:59'), :day), true
+  eq time('2026-04-19T00:00').isSame(time('2026-04-20T00:00'), :day), false
+
+test "isBefore with unit", ->
+  eq time('2026-04-19').isBefore(time('2026-05-10'), :month), true
+  eq time('2026-04-30').isBefore(time('2026-04-01'), :month), false
+
+test "isBetween exclusive", ->
+  d = time('2026-04-19')
+  eq d.isBetween(time('2026-04-18'), time('2026-04-20')), true
+  eq d.isBetween(time('2026-04-19'), time('2026-04-20')), false
+
+test "isBetween inclusive []", ->
+  d = time('2026-04-19')
+  eq d.isBetween(time('2026-04-19'), time('2026-04-20'), :day, '[]'), true
+
+# ==[ Extras ]==
+
+console.log "\nExtras"
+
+test "daysInMonth Feb leap", ->
+  eq time('2024-02-10').daysInMonth(), 29
+
+test "daysInMonth Feb non-leap", ->
+  eq time('2023-02-10').daysInMonth(), 28
+
+test "daysInMonth April", ->
+  eq time('2026-04-10').daysInMonth(), 30
+
+test "isLeapYear", ->
+  eq time('2024-01-01').isLeapYear(), true
+  eq time('2023-01-01').isLeapYear(), false
+  eq time('2000-01-01').isLeapYear(), true
+  eq time('1900-01-01').isLeapYear(), false
+
+test "quarter", ->
+  eq time('2026-01-15').quarter(), 1
+  eq time('2026-04-15').quarter(), 2
+  eq time('2026-07-15').quarter(), 3
+  eq time('2026-12-15').quarter(), 4
+
+test "dayOfYear", ->
+  eq time('2026-01-01').dayOfYear(), 1
+  eq time('2026-12-31').dayOfYear(), 365
+  eq time('2024-12-31').dayOfYear(), 366
+
+test "unix", ->
+  a = time('2026-04-19T00:00:00Z')
+  eq a.unix(), Math.floor(Date.UTC(2026, 3, 19) / 1000)
+
+test "valueOf", ->
+  a = time('2026-04-19T00:00:00Z')
+  eq a.valueOf(), Date.UTC(2026, 3, 19)
+
+test "min()", ->
+  a = time('2026-04-18')
+  b = time('2026-04-19')
+  c = time('2026-04-20')
+  eq time.min(a, b, c).format('YYYY-MM-DD'), '2026-04-18'
+  eq time.min([a, b, c]).format('YYYY-MM-DD'), '2026-04-18'
+
+test "max()", ->
+  a = time('2026-04-18')
+  b = time('2026-04-19')
+  c = time('2026-04-20')
+  eq time.max(a, b, c).format('YYYY-MM-DD'), '2026-04-20'
+
+# ==[ UTC mode ]==
+
+console.log "\nUTC mode"
+
+test "time.utc()", ->
+  d = time.utc('2026-04-19T00:00:00Z')
+  eq d.year(),  2026
+  eq d.month(), 3
+  eq d.date(),  19
+  eq d.hour(),  0
+  eq d.isUTC(), true
+
+test "toISOString round-trip", ->
+  d = time.utc('2026-04-19T12:34:56Z')
+  eq d.toISOString(), '2026-04-19T12:34:56.000Z'
+
+test "utc().local() preserves instant", ->
+  d1 = time.utc('2026-04-19T00:00:00Z')
+  d2 = d1.local()
+  eq d1.valueOf(), d2.valueOf()
+
+# ==[ Relative time ]==
+
+console.log "\nRelative time"
+
+test "from seconds ago", ->
+  now  = time()
+  then_ = now.subtract(30, :second)
+  eq then_.from(now), 'a few seconds ago'
+
+test "from minute ago (singular)", ->
+  now  = time()
+  then_ = now.subtract(1, :minute)
+  eq then_.from(now), 'a minute ago'
+
+test "in minutes (future)", ->
+  now  = time()
+  then_ = now.add(5, :minute)
+  eq then_.from(now), 'in 5 minutes'
+
+test "hour boundary", ->
+  now = time()
+  eq now.subtract(50, :minute).from(now), 'an hour ago'
+
+test "year", ->
+  now = time()
+  eq now.subtract(2, :year).from(now), '2 years ago'
+
+# ==[ Custom format parsing ]==
+
+console.log "\nCustom format parsing"
+
+test "MM/DD/YYYY h:mm A", ->
+  d = time.parse('04/19/2026 3:45 PM', 'MM/DD/YYYY h:mm A')
+  eq d.year(),  2026
+  eq d.month(), 3
+  eq d.date(),  19
+  eq d.hour(),  15
+  eq d.minute(),45
+
+test "MMM D, YYYY", ->
+  d = time.parse('Apr 19, 2026', 'MMM D, YYYY')
+  eq d.year(),  2026
+  eq d.month(), 3
+  eq d.date(),  19
+
+test "YYYY-MM-DD (explicit)", ->
+  d = time.parse('2026-04-19', 'YYYY-MM-DD')
+  eq d.year(),  2026
+  eq d.month(), 3
+  eq d.date(),  19
+
+# ==[ Same-or-Before/After, isToday/Yesterday/Tomorrow ]==
+
+console.log "\nisSameOrBefore / isSameOrAfter"
+
+test "isSameOrBefore true when same", ->
+  d = time('2026-04-19')
+  eq d.isSameOrBefore(time('2026-04-19')), true
+
+test "isSameOrBefore true when before", ->
+  eq time('2026-04-18').isSameOrBefore(time('2026-04-19')), true
+
+test "isSameOrBefore false when after", ->
+  eq time('2026-04-20').isSameOrBefore(time('2026-04-19')), false
+
+test "isSameOrAfter true when same", ->
+  eq time('2026-04-19').isSameOrAfter(time('2026-04-19')), true
+
+test "isSameOrAfter true when after", ->
+  eq time('2026-04-20').isSameOrAfter(time('2026-04-19')), true
+
+test "isSameOrBefore respects unit", ->
+  a = time('2026-04-19T10:00')
+  b = time('2026-04-19T23:59')
+  eq a.isSameOrBefore(b, :day), true
+  eq b.isSameOrAfter(a, :day),  true
+
+console.log "\nisToday / isYesterday / isTomorrow"
+
+test "isToday for now", ->
+  eq time().isToday(), true
+
+test "isToday for yesterday = false", ->
+  eq time().subtract(1, :day).isToday(), false
+
+test "isYesterday", ->
+  eq time().subtract(1, :day).isYesterday(), true
+  eq time().isYesterday(), false
+  eq time().subtract(2, :day).isYesterday(), false
+
+test "isTomorrow", ->
+  eq time().add(1, :day).isTomorrow(), true
+  eq time().isTomorrow(), false
+  eq time().add(2, :day).isTomorrow(), false
+
+# ==[ weekday ]==
+
+console.log "\nweekday"
+
+test "weekday() getter equals day() in US", ->
+  # 2026-04-19 is a Sunday
+  d = time('2026-04-19')
+  eq d.weekday(), 0
+  eq d.weekday(), d.day()
+
+test "weekday(1) moves to Monday", ->
+  # From Sunday 2026-04-19 → Monday 2026-04-20
+  d = time('2026-04-19')
+  eq d.weekday(1).format('YYYY-MM-DD'), '2026-04-20'
+
+test "weekday(6) moves to Saturday (same week)", ->
+  # From Wednesday → Saturday of same week
+  d = time('2026-04-22')   # Wed
+  eq d.weekday(6).format('YYYY-MM-DD'), '2026-04-25'
+
+test "weekday(0) moves to Sunday (start of week)", ->
+  d = time('2026-04-22')   # Wed
+  eq d.weekday(0).format('YYYY-MM-DD'), '2026-04-19'
+
+# ==[ calendar ]==
+
+console.log "\ncalendar"
+
+test "calendar today", ->
+  now = time()
+  out = now.calendar()
+  # "Today at h:mm A"
+  eq /^Today at /.test(out), true
+
+test "calendar yesterday", ->
+  y = time().subtract(1, :day)
+  eq /^Yesterday at /.test(y.calendar()), true
+
+test "calendar tomorrow", ->
+  t = time().add(1, :day)
+  eq /^Tomorrow at /.test(t.calendar()), true
+
+test "calendar next week", ->
+  # 3 days ahead should hit 'nextWeek' bucket (dddd [at] h:mm A)
+  t = time().add(3, :day)
+  out = t.calendar()
+  day = t.format('dddd')
+  eq /at /.test(out), true
+  eq out.startsWith(day), true
+
+test "calendar last week", ->
+  t = time().subtract(3, :day)
+  out = t.calendar()
+  eq out.startsWith('Last '), true
+
+test "calendar far past uses sameElse (MM/DD/YYYY)", ->
+  t = time('2020-01-15')
+  out = t.calendar()
+  eq out, '01/15/2020'
+
+test "calendar custom format", ->
+  formats = { sameDay: '[Right now]' }
+  eq time().calendar(null, formats), 'Right now'
+
+# ==[ Timezone (US) ]==
+
+console.log "\nTimezone"
+
+# UTC anchor — known instant: 2026-04-19 18:00:00 UTC
+INSTANT =! '2026-04-19T18:00:00Z'
+
+test "tz Pacific/Honolulu offset", ->
+  d = time.utc(INSTANT).tz('Pacific/Honolulu')
+  eq d.utcOffset(), -600
+  eq d.hour(),   8
+  eq d.format('HH:mm Z'), '08:00 -10:00'
+
+test "tz HT alias (= Pacific/Honolulu)", ->
+  d = time.utc(INSTANT).tz('HT')
+  eq d.utcOffset(), -600
+  eq d.timezone(),  'Pacific/Honolulu'
+
+test "tz ET during April (DST active)", ->
+  d = time.utc(INSTANT).tz('ET')
+  # April 19, 2026 is EDT (UTC-4)
+  eq d.utcOffset(), -240
+  eq d.hour(), 14
+  eq d.format('HH:mm Z'), '14:00 -04:00'
+
+test "tz ET during January (standard)", ->
+  d = time.utc('2026-01-15T18:00:00Z').tz('ET')
+  # January is EST (UTC-5)
+  eq d.utcOffset(), -300
+  eq d.hour(), 13
+  eq d.format('HH:mm Z'), '13:00 -05:00'
+
+test "tz AZ (Phoenix, never DST)", ->
+  # April — rest of the Mountain zone is on MDT (UTC-6) but Phoenix stays MST (UTC-7)
+  apr = time.utc(INSTANT).tz('AZ')
+  jan = time.utc('2026-01-15T18:00:00Z').tz('AZ')
+  eq apr.utcOffset(), -420
+  eq jan.utcOffset(), -420
+  eq apr.format('Z'), '-07:00'
+
+test "tz MT vs AZ in summer", ->
+  mt = time.utc(INSTANT).tz('MT')
+  az = time.utc(INSTANT).tz('AZ')
+  # Same instant: MDT = -06:00, MST (AZ) = -07:00 → Denver reads one hour later
+  eq mt.utcOffset() - az.utcOffset(), 60
+
+test "tz AKT (Anchorage)", ->
+  d = time.utc(INSTANT).tz('AKT')
+  # April — AKDT (UTC-8)
+  eq d.utcOffset(), -480
+  eq d.hour(), 10
+
+test "tz ChST (Guam, UTC+10, no DST)", ->
+  d = time.utc(INSTANT).tz('ChST')
+  eq d.utcOffset(), 600
+  eq d.hour(), 4          # next day 04:00 local
+  eq d.date(), 20
+
+test "tz SST (American Samoa, UTC-11)", ->
+  d = time.utc(INSTANT).tz('SST')
+  eq d.utcOffset(), -660
+
+test "tz AST (Puerto Rico, UTC-4, no DST)", ->
+  apr = time.utc(INSTANT).tz('AST')
+  jan = time.utc('2026-01-15T18:00:00Z').tz('AST')
+  eq apr.utcOffset(), -240
+  eq jan.utcOffset(), -240
+
+test "tz IANA raw name pass-through", ->
+  d = time.utc(INSTANT).tz('America/Chicago')
+  eq d.utcOffset(), -300   # April → CDT
+
+test "tz preserves underlying instant", ->
+  utc = time.utc(INSTANT)
+  hi  = utc.tz('HT')
+  ny  = utc.tz('ET')
+  eq utc.valueOf(), hi.valueOf()
+  eq utc.valueOf(), ny.valueOf()
+
+test "tz chain: HI → NY reads correct NY wall clock", ->
+  hi = time.utc(INSTANT).tz('HT')
+  ny = hi.tz('ET')
+  eq ny.hour(),   14
+  eq ny.format('MM/DD/YYYY HH:mm'), '04/19/2026 14:00'
+
+test "time.tz factory interprets wall-clock in zone", ->
+  # "3:00 PM Hawaii time" on April 19 = 2026-04-20T01:00:00Z
+  d = time.tz('2026-04-19 15:00:00', 'Pacific/Honolulu')
+  eq d.valueOf(), Date.UTC(2026, 3, 20, 1, 0, 0)
+  eq d.format('HH:mm'), '15:00'
+
+test "time.tz factory with ET", ->
+  # "9:00 AM ET" on April 19 2026 (EDT, UTC-4) = 13:00 UTC
+  d = time.tz('2026-04-19 09:00:00', 'ET')
+  eq d.valueOf(), Date.UTC(2026, 3, 19, 13, 0, 0)
+
+test "time.tz.guess()", ->
+  zone = time.tz.guess()
+  eq typeof zone, 'string'
+  eq zone.length > 0, true
+
+test "aliases resolve consistently", ->
+  for short in ['ET', 'EST', 'EDT']
+    u = short
+    eq time.utc(INSTANT).tz(u).timezone(), 'America/New_York'
+  for short in ['HT', 'HST', 'HAST']
+    u = short
+    eq time.utc(INSTANT).tz(u).timezone(), 'Pacific/Honolulu'
+
+test "format tokens use zoned fields", ->
+  d = time.utc(INSTANT).tz('HT')
+  eq d.format('dddd, MMMM D, YYYY h:mm A'), 'Sunday, April 19, 2026 8:00 AM'
+
+test "format z (short zone name)", ->
+  eq time.utc(INSTANT).tz('HT').format('z'), 'HST'
+  eq time.utc(INSTANT).tz('ET').format('z'), 'EDT'          # April = DST
+  eq time.utc('2026-01-15T18:00Z').tz('ET').format('z'), 'EST'
+  eq time.utc(INSTANT).tz('AZ').format('z'), 'MST'          # never DST
+
+test "format zzz (long zone name)", ->
+  eq time.utc(INSTANT).tz('HT').format('zzz'),
+     'Hawaii-Aleutian Standard Time'
+  eq time.utc(INSTANT).tz('ET').format('zzz'),
+     'Eastern Daylight Time'
+
+test "DST spring-forward instant (US 2026-03-08 at 2 AM → 3 AM ET)", ->
+  # 07:00 UTC on 2026-03-08 = 02:00 EST, which jumps to 03:00 EDT.
+  # In ET, this instant's wall clock is 03:00 EDT.
+  d = time.utc('2026-03-08T07:00:00Z').tz('ET')
+  eq d.hour(),   3
+  eq d.utcOffset(), -240
+
+# ==[ Unit alias parity ]==
+
+console.log "\nUnit aliases"
+
+for u in ['year', 'years', 'y']
+  unit = u
+  test "add 1 '#{unit}' (year)", ->
+    eq time('2026-04-19').add(1, unit).year(), 2027
+
+for u in ['month', 'months', 'M']
+  unit = u
+  test "add 1 '#{unit}' (month)", ->
+    eq time('2026-01-15').add(1, unit).month(), 1
+
+# ==[ Duration ]==
+
+console.log "\nDuration"
+
+test "zero duration", ->
+  d = time.duration()
+  eq d.asMilliseconds(), 0
+  eq d.toISOString(), 'P0D'
+
+test "from number (ms)", ->
+  d = time.duration(5000)
+  eq d.asSeconds(), 5
+  eq d.seconds(),   5
+
+test "from number + unit", ->
+  eq time.duration(90, :minute).asMinutes(), 90
+  eq time.duration(90, 'minutes').asMinutes(), 90
+  eq time.duration(2,  :hour).asMinutes(),   120
+  eq time.duration(1,  :day).asHours(),       24
+
+test "from object", ->
+  d = time.duration({ hours: 1, minutes: 30 })
+  eq d.asMinutes(), 90
+  eq d.hours(),      1
+  eq d.minutes(),   30
+
+test "from ISO string", ->
+  eq time.duration('PT30M').asMinutes(),      30
+  eq time.duration('PT1H30M').asMinutes(),    90
+  eq time.duration('P1DT2H').asHours(),       26
+  eq time.duration('P1Y2M3D').years(),         1
+  eq time.duration('P1Y2M3D').months(),        2
+  eq time.duration('P1Y2M3D').days(),          3
+
+test "from negative ISO string", ->
+  d = time.duration('-PT30M')
+  eq d.asMinutes(), -30
+
+test "component getters (normalized)", ->
+  d = time.duration({ hours: 25, minutes: 90, seconds: 70 })
+  # 25h + 90m + 70s = 95,470,000 ms = 1d 2h 31m 10s
+  eq d.days(),    1
+  eq d.hours(),   2
+  eq d.minutes(), 31
+  eq d.seconds(), 10
+  # Total is still unchanged:
+  eq Math.round(d.asHours() * 100) / 100, 26.52
+
+test "as* total getters", ->
+  d = time.duration({ hours: 1, minutes: 30 })
+  eq d.asMilliseconds(), 5400000
+  eq d.asSeconds(),      5400
+  eq d.asMinutes(),      90
+  eq d.asHours(),        1.5
+
+test "add / subtract durations", ->
+  a = time.duration(1, :hour)
+  b = time.duration(30, :minute)
+  eq a.add(b).asMinutes(),      90
+  eq a.subtract(b).asMinutes(), 30
+  eq a.add(15, :minute).asMinutes(), 75
+
+test "toISOString round-trips", ->
+  for iso in ['PT30M', 'PT1H', 'P1D', 'P1Y']
+    s = iso
+    eq time.duration(s).toISOString(), s
+
+test "toISOString complex", ->
+  d = time.duration({ years: 1, months: 2, days: 3, hours: 4, minutes: 5, seconds: 6 })
+  eq d.toISOString(), 'P1Y2M3DT4H5M6S'
+
+test "toJSON delegates to toISOString", ->
+  d = time.duration(90, :minute)
+  eq d.toJSON(), 'PT1H30M'
+
+test "negated", ->
+  eq time.duration(1, :hour).negated().asMinutes(), -60
+
+test "abs", ->
+  eq time.duration(-1, :hour).abs().asMinutes(), 60
+
+test "humanize (no suffix)", ->
+  eq time.duration(1, :hour).humanize(),    'an hour'
+  eq time.duration(2, :hour).humanize(),    '2 hours'
+  eq time.duration(30, :minute).humanize(), '30 minutes'
+  eq time.duration(2, :day).humanize(),     '2 days'
+
+test "humanize (with suffix)", ->
+  # Future (positive duration)
+  eq time.duration(1, :hour).humanize(true),    'in an hour'
+  # Past (negative duration)
+  eq time.duration(-1, :hour).humanize(true),   'an hour ago'
+
+test "format", ->
+  d = time.duration({ hours: 2, minutes: 5, seconds: 9 })
+  eq d.format('HH:mm:ss'),     '02:05:09'
+  eq d.format('H [hr] m [min]'),  '2 hr 5 min'
+
+test "isDuration predicate", ->
+  eq time.isDuration(time.duration(1, :hour)), true
+  eq time.isDuration(time()),                   false
+  eq time.isDuration({}),                        false
+  eq time.isDuration(null),                      false
+
+test "valueOf returns ms", ->
+  eq +time.duration(1, :second), 1000
+
+test "Duration class exported", ->
+  eq time.duration(1, :hour) instanceof Duration, true
+
+# ==[ Dayjs.add(Duration) integration ]==
+
+console.log "\nDayjs arithmetic with Duration"
+
+test "time.add(Duration)", ->
+  d = time('2026-04-19T10:00:00')
+  result = d.add(time.duration({ hours: 2, minutes: 30 }))
+  eq result.format('YYYY-MM-DD HH:mm'), '2026-04-19 12:30'
+
+test "time.subtract(Duration)", ->
+  d = time('2026-04-19T10:00:00')
+  result = d.subtract(time.duration(1, :hour))
+  eq result.format('YYYY-MM-DD HH:mm'), '2026-04-19 09:00'
+
+test "duration across DST (ET spring-forward)", ->
+  before = time.utc('2026-03-08T06:00:00Z')     # 1:00 AM EST
+  after  = before.add(time.duration(2, :hour))  # +2h instant-wise
+  # 06Z + 2h = 08Z; in ET (now EDT after 07Z), that's 04:00 EDT
+  eq after.tz('ET').format('HH:mm'), '04:00'
+
+test "real-world: specimen age", ->
+  collected = time.utc('2026-04-19T08:00:00Z')
+  analyzed  = time.utc('2026-04-19T14:47:00Z')
+  age       = time.duration(analyzed.diff(collected))
+  eq age.asMinutes(), 407
+  eq age.humanize(),  '7 hours'   # bucketed to nearest relative time
+
+# ==[ Summary ]==
+
+console.log "\n#{'='.repeat(60)}"
+console.log "Results: #{pass} passed, #{fail} failed"
+process.exit(fail > 0 ? 1 : 0)

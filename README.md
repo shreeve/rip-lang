@@ -476,6 +476,7 @@ Rip includes optional packages for full-stack development:
 | [@rip-lang/ui](packages/ui/) | — | Unified UI system — browser widgets, email components, shared helpers, Tailwind integration |
 | [@rip-lang/swarm](packages/swarm/) | 1.2.18 | Parallel job runner with worker pool |
 | [@rip-lang/csv](packages/csv/) | 1.3.6 | CSV parser + writer |
+| [@rip-lang/time](packages/time/) | 1.0.0 | Immutable date/time with IANA timezones + `Duration` (US-English, zero runtime deps) |
 | [VS Code Extension](packages/vscode/) | 0.5.7 | Syntax highlighting, type intelligence, source maps |
 
 ```bash

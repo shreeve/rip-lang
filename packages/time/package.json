@@ -1,0 +1,45 @@
+{
+  "name": "@rip-lang/time",
+  "version": "1.0.0",
+  "description": "Rip Time — tiny, immutable, US-English date/time library with timezones and durations, zero dependencies",
+  "type": "module",
+  "main": "time.rip",
+  "exports": {
+    ".": "./time.rip"
+  },
+  "scripts": {
+    "test": "rip test/test.rip"
+  },
+  "keywords": [
+    "date",
+    "time",
+    "timezone",
+    "duration",
+    "immutable",
+    "format",
+    "parse",
+    "bun",
+    "rip"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shreeve/rip-lang.git",
+    "directory": "packages/time"
+  },
+  "homepage": "https://github.com/shreeve/rip-lang/tree/main/packages/time#readme",
+  "bugs": {
+    "url": "https://github.com/shreeve/rip-lang/issues"
+  },
+  "author": "Steve Shreeve <steve.shreeve@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "rip-lang": ">=3.13.137"
+  },
+  "devDependencies": {
+    "dayjs": "^1.11.20"
+  },
+  "files": [
+    "time.rip",
+    "README.md"
+  ]
+}

@@ -1,0 +1,1059 @@
+# ==============================================================================
+# @rip-lang/time — Rip Time: tiny, immutable, US-English date/time library
+#
+# Author: Steve Shreeve (steve.shreeve@gmail.com)
+#   Date: April 19, 2026
+#
+# A pure-Rip date/time toolkit, inspired by time and scoped to US English:
+#   - immutable wrapper over the native `Date` object
+#   - parse / format / add / subtract / startOf / endOf / diff
+#   - get / set with either symbol units (`:year`) or strings (`'year'`)
+#   - isBefore / isAfter / isSame / isSameOrBefore / isSameOrAfter /
+#     isBetween / isValid / isLeapYear / isToday / isYesterday / isTomorrow
+#   - fromNow / from / to / toNow / calendar (English)
+#   - utc() / local() / isUTC() / utcOffset() / weekday()
+#   - tz('HT' | 'Pacific/Honolulu' | ...) — all US zones + any IANA name,
+#     DST-aware via the runtime's built-in Intl data
+#   - dayOfYear / weekOfYear / quarter / daysInMonth
+#   - customParseFormat built in — parse `MM/DD/YYYY`, `h:mm A`, etc.
+#   - Duration — ISO-8601 parse/format, component getters, as*()/humanize()
+#
+# No locale registry, no plugin system — one file, zero deps, batteries in.
+# ==============================================================================
+
+# ==[ US Timezone Aliases ]==
+
+# Short US zone names → IANA zone names. Accept both common abbreviations and
+# unambiguous shorthand. `MT` means "Mountain Time (observes DST)"; Arizona
+# users should pass `'AZ'` or `'America/Phoenix'` explicitly since it never
+# observes DST. Anything containing a `/` is treated as a raw IANA name.
+US_TIMEZONES =!
+  ET:   'America/New_York'
+  EST:  'America/New_York'
+  EDT:  'America/New_York'
+  CT:   'America/Chicago'
+  CST:  'America/Chicago'
+  CDT:  'America/Chicago'
+  MT:   'America/Denver'
+  MST:  'America/Denver'
+  MDT:  'America/Denver'
+  PT:   'America/Los_Angeles'
+  PST:  'America/Los_Angeles'
+  PDT:  'America/Los_Angeles'
+  AKT:  'America/Anchorage'
+  AKST: 'America/Anchorage'
+  AKDT: 'America/Anchorage'
+  HT:   'Pacific/Honolulu'
+  HST:  'Pacific/Honolulu'
+  HAST: 'Pacific/Honolulu'
+  HADT: 'America/Adak'          # Hawaii-Aleutian DST zone (western AK)
+  AZ:   'America/Phoenix'       # Arizona, no DST
+  AST:  'America/Puerto_Rico'   # Atlantic (PR, USVI)
+  ChST: 'Pacific/Guam'          # Chamorro (Guam, CNMI)
+  SST:  'Pacific/Pago_Pago'     # Samoa
+
+def resolveZone(zone)
+  return zone unless zone
+  return zone if typeof zone is 'string' and zone.includes('/')
+  US_TIMEZONES[zone] ?? zone
+
+# ==[ Time Constants ]==
+
+MS_SECOND =! 1000
+MS_MINUTE =! 60 * MS_SECOND
+MS_HOUR   =! 60 * MS_MINUTE
+MS_DAY    =! 24 * MS_HOUR
+MS_WEEK   =! 7  * MS_DAY
+
+INVALID_DATE =! 'Invalid Date'
+ISO_FORMAT   =! 'YYYY-MM-DDTHH:mm:ssZ'
+UTC_FORMAT   =! 'YYYY-MM-DDTHH:mm:ss[Z]'
+
+# ==[ English Locale (baked in) ]==
+
+WEEKDAYS       =! 'Sunday Monday Tuesday Wednesday Thursday Friday Saturday'.split(' ')
+WEEKDAYS_SHORT =! 'Sun Mon Tue Wed Thu Fri Sat'.split(' ')
+WEEKDAYS_MIN   =! 'Su Mo Tu We Th Fr Sa'.split(' ')
+MONTHS         =! 'January February March April May June July August September October November December'.split(' ')
+MONTHS_SHORT   =! 'Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.split(' ')
+
+RELATIVE_TIME =!
+  future: 'in %s'
+  past:   '%s ago'
+  s:      'a few seconds'
+  m:      'a minute'
+  mm:     '%d minutes'
+  h:      'an hour'
+  hh:     '%d hours'
+  d:      'a day'
+  dd:     '%d days'
+  M:      'a month'
+  MM:     '%d months'
+  y:      'a year'
+  yy:     '%d years'
+
+CALENDAR_FORMAT =!
+  sameDay:  '[Today at] h:mm A'
+  nextDay:  '[Tomorrow at] h:mm A'
+  nextWeek: 'dddd [at] h:mm A'
+  lastDay:  '[Yesterday at] h:mm A'
+  lastWeek: '[Last] dddd [at] h:mm A'
+  sameElse: 'MM/DD/YYYY'
+
+RELATIVE_THRESHOLDS =! [
+  { l: 's',  r: 44, d: :second  }
+  { l: 'm',  r: 89               }
+  { l: 'mm', r: 44, d: :minute   }
+  { l: 'h',  r: 89               }
+  { l: 'hh', r: 21, d: :hour     }
+  { l: 'd',  r: 35               }
+  { l: 'dd', r: 25, d: :day      }
+  { l: 'M',  r: 45               }
+  { l: 'MM', r: 10, d: :month    }
+  { l: 'y',  r: 17               }
+  { l: 'yy',        d: :year     }
+]
+
+# ==[ Regex ]==
+
+# ISO-ish: YYYY[-/]MM?[-/]DD?[T ]HH?:mm?:ss?[.sss]
+REGEX_ISO      =! /^(\d{4})[-\/]?(\d{1,2})?[-\/]?(\d{0,2})[Tt\s]*(\d{1,2})?:?(\d{1,2})?:?(\d{1,2})?[.:]?(\d+)?$/
+# US: M/D/YYYY or MM/DD/YYYY (2-digit year also accepted) with optional h:mm(:ss)? am/pm
+REGEX_US       =! /^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})(?:[\sT]+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?\s*(AM|PM|am|pm)?)?$/
+REGEX_FORMAT   =! /\[([^\]]+)\]|YYYY|YY|MMMM|MMM|MM|M|Do|DD|D|dddd|ddd|dd|d|HH|H|hh|h|mm|m|ss|s|SSS|a|A|Q|ZZ|Z|zzz|z/g
+REGEX_PARSE    =! /(\[[^\[]*\])|([\-_:\/.,()\s]+)|(YYYY|YY|MMMM|MMM|MM|M|DD|D|HH|H|hh|h|mm|m|ss|s|SSS|SS|S|a|A|Q|ZZ|Z)/g
+
+# ==[ Unit Normalization ]==
+
+# Accept any of: `:year`, `'year'`, `'years'`, `'y'`, `'Y'`, `'yr'` → `:year`
+# Returns a canonical symbol. Unknown units pass through as the string.
+UNIT_ALIASES =!
+  y:    :year
+  yr:   :year
+  yrs:  :year
+  year: :year
+  M:    :month
+  mo:   :month
+  mon:  :month
+  w:    :week
+  wk:   :week
+  d:    :day
+  D:    :date
+  dt:   :date
+  date: :date
+  h:    :hour
+  hr:   :hour
+  m:    :minute
+  min:  :minute
+  s:    :second
+  sec:  :second
+  ms:   :millisecond
+  msec: :millisecond
+  Q:    :quarter
+  q:    :quarter
+
+def prettyUnit(u)
+  return :millisecond unless u?
+  return u if typeof u is 'symbol'
+  key = String(u).replace(/s$/, '')
+  UNIT_ALIASES[key] ?? Symbol.for(key.toLowerCase())
+
+# ==[ Small Helpers ]==
+
+def pad(n, len = 2)
+  s = String(n)
+  return s if s.length >= len
+  '0'.repeat(len - s.length) + s
+
+def absFloor(n)
+  n < 0 ? Math.ceil(n) or 0 : Math.floor(n)
+
+def ordinalSuffix(n)
+  v = n % 100
+  return 'th' if v >= 11 and v <= 13
+  switch n % 10
+    when 1 then 'st'
+    when 2 then 'nd'
+    when 3 then 'rd'
+    else 'th'
+
+def meridiem(hour, lowercase)
+  m = hour < 12 ? 'AM' : 'PM'
+  lowercase ? m.toLowerCase() : m
+
+def tzOffsetString(instance)
+  mins  = -instance.utcOffset()
+  abs   = Math.abs(mins)
+  hours = Math.floor(abs / 60)
+  rest  = abs % 60
+  sign  = mins <= 0 ? '+' : '-'
+  "#{sign}#{pad(hours, 2)}:#{pad(rest, 2)}"
+
+# Extract wall-clock parts for `date` as they appear in `zone`. Uses the
+# runtime's built-in Intl data (IANA) so DST transitions are handled for free.
+# Cache the formatter per-zone — construction is the expensive part.
+_zoneFormatters =! {}
+
+def zoneFormatter(zone)
+  _zoneFormatters[zone] ?? do ->
+    _zoneFormatters[zone] = new Intl.DateTimeFormat 'en-US',
+      hour12:   false
+      timeZone: zone
+      year:   'numeric'
+      month:  '2-digit'
+      day:    '2-digit'
+      hour:   '2-digit'
+      minute: '2-digit'
+      second: '2-digit'
+
+def zonedParts(date, zone)
+  out = {}
+  for { type, value } in zoneFormatter(zone).formatToParts(date)
+    out[type] = value
+  # Some platforms report midnight as 24:00:00 in en-US; normalize.
+  out.hour = '00' if out.hour is '24'
+  out
+
+# Returns the zone's offset from UTC, in minutes EAST of UTC (time convention).
+# Honolulu => -600, New York winter => -300, New York summer => -240, UTC => 0.
+def zoneOffsetMinutes(date, zone)
+  p = zonedParts(date, zone)
+  asUTC = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second)
+  Math.round((asUTC - date.getTime()) / 60000)
+
+# Zone name abbreviation (e.g., "HST", "EDT") or long name ("Eastern Daylight Time").
+# Cached per (zone, long) pair for hot-path use.
+_zoneNameFormatters =! {}
+
+def zoneAbbreviation(date, zone, long = false)
+  key = "#{zone ?? 'local'}|#{long ? 'L' : 'S'}"
+  dtf = _zoneNameFormatters[key] ?? do ->
+    _zoneNameFormatters[key] = new Intl.DateTimeFormat 'en-US',
+      timeZone: zone ?? undefined
+      timeZoneName: long ? 'long' : 'short'
+  for { type, value } in dtf.formatToParts(date)
+    return value if type is 'timeZoneName'
+  ''
+
+# time's month-diff algorithm, kept bit-for-bit so diff(:month) and
+# diff(:year) results match the reference implementation.
+def monthDiff(a, b)
+  return -monthDiff(b, a) if a.date() < b.date()
+  whole   = ((b.year() - a.year()) * 12) + (b.month() - a.month())
+  anchor  = a.clone().add(whole, :month)
+  c       = b - anchor < 0
+  anchor2 = a.clone().add(whole + (c ? -1 : 1), :month)
+  +(-(whole + ((b - anchor) / (c ? (anchor - anchor2) : (anchor2 - anchor)))) or 0)
+
+# ==[ Parsing ]==
+
+def parseOffset(s)
+  return 0 if not s or s is 'Z'
+  parts = s.match(/([+-]|\d\d)/g) ?? ['+', '0', '0']
+  mins  = (+parts[1] * 60) + (+(parts[2] ?? 0))
+  return 0 if mins is 0
+  if parts[0] is '+' then -mins else mins
+
+def parseTwoDigitYear(n)
+  n = +n
+  n + (n > 68 ? 1900 : 2000)
+
+# Parse a string against an explicit format like `'MM/DD/YYYY h:mm A'`.
+# Returns a Date or null if the format doesn't match. Uses an internal
+# bail exception so each branch can just `bail()` on mismatch.
+class ParseMismatch extends Error then noop
+
+bail =! -> throw new ParseMismatch()
+
+def parseWithFormat(input, fmt, utc = false)
+  parts  = { year: 1970, month: 0, date: 1, hours: 0, minutes: 0, seconds: 0, ms: 0, afternoon: null, zone: null }
+  cursor = 0
+
+  readNum = (len) ->
+    slice = input.slice(cursor).match(/^\d+/)
+    bail() unless slice
+    n = slice[0].slice(0, len)
+    cursor += n.length
+    +n
+
+  readWord = ->
+    slice = input.slice(cursor).match(/^\d*[^-_:\/.,()\s\d]+/)
+    bail() unless slice
+    cursor += slice[0].length
+    slice[0]
+
+  readStr = (s) ->
+    bail() unless input.slice(cursor, cursor + s.length) is s
+    cursor += s.length
+
+  try
+    for token in fmt.match(REGEX_PARSE) ?? []
+      if token[0] is '[' and token[token.length - 1] is ']'
+        readStr(token.slice(1, -1))
+        continue
+      if /^[\-_:\/.,()\s]+$/.test(token)
+        while cursor < input.length and /[\-_:\/.,()\s]/.test(input[cursor])
+          cursor++
+        continue
+
+      switch token
+        when 'YYYY'        then parts.year   = readNum(4)
+        when 'YY'          then parts.year   = parseTwoDigitYear(readNum(2))
+        when 'M', 'MM'     then parts.month  = readNum(2) - 1
+        when 'MMM'
+          w = readWord().toLowerCase()
+          i = MONTHS_SHORT.findIndex (x) -> x.toLowerCase() is w
+          bail() if i < 0
+          parts.month = i
+        when 'MMMM'
+          w = readWord().toLowerCase()
+          i = MONTHS.findIndex (x) -> x.toLowerCase() is w
+          bail() if i < 0
+          parts.month = i
+        when 'D', 'DD'     then parts.date    = readNum(2)
+        when 'H', 'HH', 'h', 'hh' then parts.hours = readNum(2)
+        when 'm', 'mm'     then parts.minutes = readNum(2)
+        when 's', 'ss'     then parts.seconds = readNum(2)
+        when 'SSS'         then parts.ms      = readNum(3)
+        when 'SS'          then parts.ms      = readNum(2) * 10
+        when 'S'           then parts.ms      = readNum(1) * 100
+        when 'A', 'a'      then parts.afternoon = /^p/i.test(readWord())
+        when 'Z', 'ZZ'
+          slice = input.slice(cursor).match(/^(Z|[+-]\d\d:?\d{0,2})/)
+          bail() unless slice
+          cursor += slice[0].length
+          parts.zone = parseOffset(slice[0])
+        when 'Q'           then parts.month = (readNum(1) - 1) * 3
+        else readStr(token)
+  catch e
+    return null if e instanceof ParseMismatch
+    throw e
+
+  if parts.afternoon is true and parts.hours < 12
+    parts.hours += 12
+  else if parts.afternoon is false and parts.hours is 12
+    parts.hours = 0
+
+  { year, month, date, hours, minutes, seconds, ms, zone } = parts
+
+  if zone?
+    new Date(Date.UTC(year, month, date, hours, minutes, seconds, ms) + (zone * MS_MINUTE))
+  else if utc
+    new Date(Date.UTC(year, month, date, hours, minutes, seconds, ms))
+  else
+    new Date(year, month, date, hours, minutes, seconds, ms)
+
+# Auto-detect parsing. Never throws; returns an invalid Date for garbage.
+def parseDate(input, utc = false)
+  return new Date(NaN) if input is null
+  return new Date()    unless input?
+  return new Date(input.getTime()) if input instanceof Date
+  return new Date(input) if typeof input is 'number'
+
+  if typeof input is 'string'
+    # Explicit trailing Z — let the engine parse it
+    return new Date(input) if /Z$/i.test(input)
+
+    # Try US format first (M/D/YYYY) since ISO regex would reject it
+    m = input.match(REGEX_US)
+    if m
+      month = +m[1] - 1
+      day   = +m[2]
+      year  = m[3].length is 2 ? parseTwoDigitYear(m[3]) : +m[3]
+      h     = +(m[4] ?? 0)
+      mm    = +(m[5] ?? 0)
+      s     = +(m[6] ?? 0)
+      ap    = m[7]
+      if ap
+        lc = ap.toLowerCase()
+        h = 0  if lc is 'am' and h is 12
+        h += 12 if lc is 'pm' and h < 12
+      return utc ? new Date(Date.UTC(year, month, day, h, mm, s)) : new Date(year, month, day, h, mm, s)
+
+    # ISO-ish fallback (YYYY-MM-DD...)
+    m = input.match(REGEX_ISO)
+    if m
+      month = (+m[2] or 1) - 1
+      ms    = +((m[7] ?? '0').slice(0, 3))
+      args  = [+m[1], month, +(m[3] or 1), +(m[4] or 0), +(m[5] or 0), +(m[6] or 0), ms]
+      return utc ? new Date(Date.UTC(...args)) : new Date(...args)
+
+  new Date(input)
+
+# ==[ Time class ]==
+
+IS_TIME_TAG =! '$isTimeObject'
+
+def isTime(x)
+  x instanceof Time or !!(x and x[IS_TIME_TAG])
+
+class Time
+  constructor: (cfg = {}) ->
+    @$u     = !!cfg.utc
+    @$z     = cfg.zone ?? null          # IANA zone name, or null for local/UTC
+    @$d     = if cfg.fromInstance then cfg.fromInstance else parseDate(cfg.input, @$u)
+    @$fmt   = cfg.format                # only set when coming from parseWithFormat
+    @[IS_TIME_TAG] = true
+    @_refresh()
+
+  _refresh: ->
+    d = @$d
+    if @$z
+      p = zonedParts(d, @$z)
+      @$y  = +p.year
+      @$M  = +p.month - 1
+      @$D  = +p.day
+      @$H  = +p.hour
+      @$m  = +p.minute
+      @$s  = +p.second
+      @$ms = d.getUTCMilliseconds()    # Intl doesn't give milliseconds
+      # Derive weekday from reconstructed wall-clock date (zone-independent).
+      @$W = new Date(Date.UTC(@$y, @$M, @$D)).getUTCDay()
+    else if @$u
+      @$y  = d.getUTCFullYear()
+      @$M  = d.getUTCMonth()
+      @$D  = d.getUTCDate()
+      @$W  = d.getUTCDay()
+      @$H  = d.getUTCHours()
+      @$m  = d.getUTCMinutes()
+      @$s  = d.getUTCSeconds()
+      @$ms = d.getUTCMilliseconds()
+    else
+      @$y  = d.getFullYear()
+      @$M  = d.getMonth()
+      @$D  = d.getDate()
+      @$W  = d.getDay()
+      @$H  = d.getHours()
+      @$m  = d.getMinutes()
+      @$s  = d.getSeconds()
+      @$ms = d.getMilliseconds()
+    this
+
+  # ---- Validity & identity ----
+  isValid: -> @$d.toString() isnt INVALID_DATE
+  clone: ->
+    new Time({ fromInstance: new Date(@$d.getTime()), utc: @$u, zone: @$z })
+
+  # ---- Getters (symbol or method form) ----
+  year:        -> @$y
+  month:       -> @$M          # 0..11
+  date:        -> @$D          # 1..31
+  day:         -> @$W          # 0..6 (Sun=0)
+  hour:        -> @$H
+  minute:      -> @$m
+  second:      -> @$s
+  millisecond: -> @$ms
+  quarter:     -> Math.floor(@$M / 3) + 1
+
+  daysInMonth: -> @endOf(:month).$D
+  isLeapYear:  -> (@$y % 4 is 0 and @$y % 100 isnt 0) or (@$y % 400 is 0)
+
+  dayOfYear: ->
+    start = new Date(Date.UTC(@$y, 0, 1))
+    here  = new Date(Date.UTC(@$y, @$M, @$D))
+    Math.floor((here - start) / MS_DAY) + 1
+
+  # ISO-ish week-of-year with configurable Sunday start (US default).
+  weekOfYear: (startDow = 0) ->
+    # move to the first day of this week
+    gap    = (@$W - startDow + 7) % 7
+    start  = @subtract(gap, :day).startOf(:day)
+    yrStart= time(new Date(start.year(), 0, 1))
+    yrGap  = (yrStart.day() - startDow + 7) % 7
+    anchor = yrStart.subtract(yrGap, :day)
+    Math.round((start - anchor) / MS_WEEK) + 1
+
+  # ---- Generic get / set ----
+  get: (u) ->
+    switch prettyUnit(u)
+      when :year        then @$y
+      when :month       then @$M
+      when :date        then @$D
+      when :day         then @$W
+      when :hour        then @$H
+      when :minute      then @$m
+      when :second      then @$s
+      when :millisecond then @$ms
+      when :quarter     then @quarter()
+      else undefined
+
+  set: (u, v) ->
+    @clone()._mutSet(prettyUnit(u), v)
+
+  # In-place setter used after clone(). Never call on an instance you don't own.
+  _mutSet: (unit, int) ->
+    utcPad = @$u ? 'setUTC' : 'set'
+    methodName = switch unit
+      when :year        then "#{utcPad}FullYear"
+      when :month       then "#{utcPad}Month"
+      when :date, :day  then "#{utcPad}Date"
+      when :hour        then "#{utcPad}Hours"
+      when :minute      then "#{utcPad}Minutes"
+      when :second      then "#{utcPad}Seconds"
+      when :millisecond then "#{utcPad}Milliseconds"
+      else null
+    return this unless methodName
+    arg = unit is :day ? @$D + (int - @$W) : int
+
+    if unit is :month or unit is :year
+      tmp = new Date(@$d.getTime())
+      if @$u
+        tmp.setUTCDate(1)
+      else
+        tmp.setDate(1)
+      tmp[methodName](arg)
+      # clamp date to month length
+      mDays = daysInGivenMonth(tmp, @$u)
+      origDay = @$D
+      if @$u
+        tmp.setUTCDate(Math.min(origDay, mDays))
+      else
+        tmp.setDate(Math.min(origDay, mDays))
+      @$d = tmp
+    else
+      @$d[methodName](arg)
+
+    @_refresh()
+    this
+
+  # ---- Arithmetic ----
+  add: (number, u) ->
+    # Accept a Duration as a single argument: d.add(dur)
+    if isDuration(number)
+      return applyDuration(this, number, 1)
+
+    number = Number(number)
+    unit = prettyUnit(u)
+
+    if unit is :year
+      return @set(:year, @$y + number)
+    if unit is :month
+      return @set(:month, @$M + number)
+    if unit is :day
+      return @_addDays(number)
+    if unit is :week
+      return @_addDays(number * 7)
+
+    step = switch unit
+      when :hour        then MS_HOUR
+      when :minute      then MS_MINUTE
+      when :second      then MS_SECOND
+      when :millisecond then 1
+      else 1
+    ms = @$d.getTime() + (number * step)
+    new Time({ fromInstance: new Date(ms), utc: @$u })
+
+  _addDays: (n) ->
+    d = @clone()
+    if @$u
+      d.$d.setUTCDate(d.$D + Math.round(n))
+    else
+      d.$d.setDate(d.$D + Math.round(n))
+    d._refresh()
+
+  subtract: (n, u) ->
+    return applyDuration(this, n, -1) if isDuration(n)
+    @add(-n, u)
+
+  # ---- startOf / endOf ----
+  startOf: (u, isStartOf = true) -> @_bound(prettyUnit(u), isStartOf)
+  endOf:   (u) -> @_bound(prettyUnit(u), false)
+
+  _bound: (unit, isStart) ->
+    make = (y, m, d) =>
+      stamp = @$u ? Date.UTC(y, m, d) : new Date(y, m, d).getTime()
+      ins = new Time({ fromInstance: new Date(stamp), utc: @$u })
+      isStart ? ins : ins._endOfDay()
+
+    switch unit
+      when :year
+        isStart ? make(@$y, 0, 1) : make(@$y, 11, 31)
+      when :quarter
+        q = @quarter() - 1
+        isStart ? make(@$y, q * 3, 1) : make(@$y, (q * 3) + 3, 0)
+      when :month
+        isStart ? make(@$y, @$M, 1) : make(@$y, @$M + 1, 0)
+      when :week
+        gap = @$W   # Sunday-start
+        isStart ? make(@$y, @$M, @$D - gap) : make(@$y, @$M, @$D + (6 - gap))
+      when :day, :date
+        @_setClock(isStart ? [0, 0, 0, 0] : [23, 59, 59, 999])
+      when :hour
+        @_setClock(isStart ? [@$H, 0, 0, 0] : [@$H, 59, 59, 999])
+      when :minute
+        @_setClock(isStart ? [@$H, @$m, 0, 0] : [@$H, @$m, 59, 999])
+      when :second
+        @_setClock(isStart ? [@$H, @$m, @$s, 0] : [@$H, @$m, @$s, 999])
+      else
+        @clone()
+
+  _endOfDay: -> @_setClock([23, 59, 59, 999])
+
+  _setClock: (hms) ->
+    d = @clone()
+    if @$u
+      d.$d.setUTCHours(...hms)
+    else
+      d.$d.setHours(...hms)
+    d._refresh()
+
+  # ---- Comparison ----
+  isSame: (that, u) ->
+    other = time(that)
+    unit  = u ?? :millisecond
+    @startOf(unit) <= other and other <= @endOf(unit)
+
+  isBefore: (that, u = :millisecond) ->
+    time(that) > @endOf(u)
+
+  isAfter: (that, u = :millisecond) ->
+    time(that) < @startOf(u)
+
+  isSameOrBefore: (that, u) -> @isSame(that, u) or @isBefore(that, u)
+  isSameOrAfter:  (that, u) -> @isSame(that, u) or @isAfter(that, u)
+
+  isToday:     -> @format('YYYY-MM-DD') is time().format('YYYY-MM-DD')
+  isYesterday: -> @format('YYYY-MM-DD') is time().subtract(1, :day).format('YYYY-MM-DD')
+  isTomorrow:  -> @format('YYYY-MM-DD') is time().add(1, :day).format('YYYY-MM-DD')
+
+  # Day of week relative to Sunday (US week start). As a getter this is a
+  # direct alias for `.day()`; as a setter it moves to day-of-week `input`
+  # within the current week (0=Sun, 1=Mon, ..., 6=Sat).
+  weekday: (input) ->
+    return @$W unless input?
+    @subtract(@$W, :day).add(input, :day)
+
+  # Humanize a datetime relative to a reference (default: now).
+  # Uses the same buckets as moment.js calendar(): yesterday, today, tomorrow,
+  # last/next week, or a plain MM/DD/YYYY fallback.
+  calendar: (reference, formats = {}) ->
+    ref  = (if reference? then time(reference) else time()).startOf(:day)
+    diff = @diff(ref, :day, true)
+    bucket = switch
+      when diff < -6 then 'sameElse'
+      when diff < -1 then 'lastWeek'
+      when diff <  0 then 'lastDay'
+      when diff <  1 then 'sameDay'
+      when diff <  2 then 'nextDay'
+      when diff <  7 then 'nextWeek'
+      else 'sameElse'
+    fmt = formats[bucket] ?? CALENDAR_FORMAT[bucket]
+    return fmt.call(this, time()) if typeof fmt is 'function'
+    @format(fmt)
+
+  # inclusivity: '()' exclusive, '[]' inclusive, '[)' / '(]' mixed
+  isBetween: (from, to, u = :millisecond, inc = '()') ->
+    a = time(from)
+    b = time(to)
+    [a, b] = [b, a] if a > b
+    leftOk  = inc[0] is '[' ? not @isBefore(a, u) : @isAfter(a, u)
+    rightOk = inc[1] is ']' ? not @isAfter(b, u)  : @isBefore(b, u)
+    leftOk and rightOk
+
+  # ---- Diff ----
+  diff: (input, u, float = false) ->
+    unit  = prettyUnit(u)
+    that  = time(input)
+    zDelt = (that.utcOffset() - @utcOffset()) * MS_MINUTE
+    raw   = this - that
+
+    result = switch unit
+      when :year    then monthDiff(this, that) / 12
+      when :quarter then monthDiff(this, that) / 3
+      when :month   then monthDiff(this, that)
+      when :week    then (raw - zDelt) / MS_WEEK
+      when :day     then (raw - zDelt) / MS_DAY
+      when :hour    then raw / MS_HOUR
+      when :minute  then raw / MS_MINUTE
+      when :second  then raw / MS_SECOND
+      else raw   # milliseconds
+
+    if float then result else absFloor(result)
+
+  # ---- UTC / timezone mode ----
+  utc: (keepLocalTime = false) ->
+    ins = new Time({ fromInstance: new Date(@$d.getTime()), utc: true })
+    keepLocalTime ? ins.add(@utcOffset(), :minute) : ins
+
+  local: ->
+    new Time({ fromInstance: new Date(@$d.getTime()), utc: false })
+
+  isUTC: -> @$u
+
+  # Convert this instant into `zone` for display purposes. The underlying UTC
+  # timestamp is preserved unless `keepLocalTime` is true, in which case the
+  # wall-clock numbers are preserved and the instant shifts.
+  tz: (zone, keepLocalTime = false) ->
+    iana = resolveZone(zone)
+    ins  = new Time({ fromInstance: new Date(@$d.getTime()), zone: iana })
+    return ins unless keepLocalTime
+    # Recompute the Date so the wall-clock in `iana` matches this instance's.
+    target = Date.UTC(@$y, @$M, @$D, @$H, @$m, @$s, @$ms)
+    offset = zoneOffsetMinutes(new Date(target), iana)
+    shifted = new Date(target - offset * 60000)
+    # DST boundary: re-check offset at the resulting instant and re-apply if
+    # the zone's offset has changed between the two moments.
+    offset2 = zoneOffsetMinutes(shifted, iana)
+    if offset2 isnt offset
+      shifted = new Date(target - offset2 * 60000)
+    new Time({ fromInstance: shifted, zone: iana })
+
+  # The IANA zone name this instance is anchored to, or null for local/UTC.
+  timezone: -> @$z
+
+  # Rounded to the nearest 15 minutes per the FF24 workaround in upstream.
+  utcOffset: ->
+    return zoneOffsetMinutes(@$d, @$z) if @$z
+    return 0 if @$u
+    -Math.round(@$d.getTimezoneOffset() / 15) * 15
+
+  # ---- Output ----
+  valueOf:     -> @$d.getTime()
+  unix:        -> Math.floor(@valueOf() / 1000)
+  toDate:      -> new Date(@valueOf())
+  toJSON:      -> @isValid() ? @toISOString() : null
+  toISOString: -> @$d.toISOString()
+  toString:    -> @$d.toUTCString()
+
+  # ---- Relative time (English, fixed thresholds) ----
+  fromNow: (withoutSuffix) -> @from(time(), withoutSuffix)
+  toNow:   (withoutSuffix) -> @to(time(), withoutSuffix)
+  from:    (input, withoutSuffix) -> fromToBase(input, withoutSuffix, this, false)
+  to:      (input, withoutSuffix) -> fromToBase(input, withoutSuffix, this, true)
+
+  # ---- Format ----
+  format: (fmtStr) ->
+    return INVALID_DATE unless @isValid()
+    str  = fmtStr ?? (@$u ? UTC_FORMAT : ISO_FORMAT)
+    zone = tzOffsetString(this)
+
+    str.replace REGEX_FORMAT, (match, literal) =>
+      return literal if literal?
+      switch match
+        when 'YY'   then String(@$y).slice(-2)
+        when 'YYYY' then pad(@$y, 4)
+        when 'M'    then String(@$M + 1)
+        when 'MM'   then pad(@$M + 1, 2)
+        when 'MMM'  then MONTHS_SHORT[@$M]
+        when 'MMMM' then MONTHS[@$M]
+        when 'D'    then String(@$D)
+        when 'Do'   then "#{@$D}#{ordinalSuffix(@$D)}"
+        when 'DD'   then pad(@$D, 2)
+        when 'd'    then String(@$W)
+        when 'dd'   then WEEKDAYS_MIN[@$W]
+        when 'ddd'  then WEEKDAYS_SHORT[@$W]
+        when 'dddd' then WEEKDAYS[@$W]
+        when 'H'    then String(@$H)
+        when 'HH'   then pad(@$H, 2)
+        when 'h'    then String(@$H % 12 or 12)
+        when 'hh'   then pad(@$H % 12 or 12, 2)
+        when 'a'    then meridiem(@$H, true)
+        when 'A'    then meridiem(@$H, false)
+        when 'm'    then String(@$m)
+        when 'mm'   then pad(@$m, 2)
+        when 's'    then String(@$s)
+        when 'ss'   then pad(@$s, 2)
+        when 'SSS'  then pad(@$ms, 3)
+        when 'Q'    then String(@quarter())
+        when 'Z'    then zone
+        when 'ZZ'   then zone.replace(':', '')
+        when 'z'    then zoneAbbreviation(@$d, @$z, false)
+        when 'zzz'  then zoneAbbreviation(@$d, @$z, true)
+        else match
+
+# ==[ Inner helpers that need the class defined ]==
+
+def daysInGivenMonth(date, utc)
+  y = utc ? date.getUTCFullYear() : date.getFullYear()
+  m = utc ? date.getUTCMonth()    : date.getMonth()
+  new Date(Date.UTC(y, m + 1, 0)).getUTCDate()
+
+def fromToBase(input, withoutSuffix, instance, isFrom)
+  result   = null
+  isFuture = false
+  chosen   = null
+
+  i = 0
+  while i < RELATIVE_THRESHOLDS.length
+    step = RELATIVE_THRESHOLDS[i]
+    if step.d
+      result = if isFrom
+        time(input).diff(instance, step.d, true)
+      else
+        instance.diff(input, step.d, true)
+    abs = Math.round(Math.abs(result))
+    isFuture = result > 0
+    if not step.r or abs <= step.r
+      step = RELATIVE_THRESHOLDS[i - 1] if abs <= 1 and i > 0
+      tpl = RELATIVE_TIME[step.l]
+      chosen = if typeof tpl is 'string' then tpl.replace('%d', abs) else String(abs)
+      break
+    i++
+
+  return chosen if withoutSuffix
+  wrap = if isFuture then RELATIVE_TIME.future else RELATIVE_TIME.past
+  wrap.replace('%s', chosen)
+
+# ==[ Duration ]==
+
+MS_YEAR  =! MS_DAY * 365
+MS_MONTH =! MS_YEAR / 12
+
+UNIT_TO_MS =!
+  years:        MS_YEAR
+  months:       MS_MONTH
+  weeks:        MS_WEEK
+  days:         MS_DAY
+  hours:        MS_HOUR
+  minutes:      MS_MINUTE
+  seconds:      MS_SECOND
+  milliseconds: 1
+
+# Canonicalize any unit input ('y', :year, 'years', ...) to the plural string
+# key used by UNIT_TO_MS / the Duration component map.
+def durationUnit(u)
+  key = prettyUnit(u).description
+  "#{key}s"
+
+DURATION_REGEX_PARSE  =! /^(-|\+)?P(?:([-+]?[0-9,.]*)Y)?(?:([-+]?[0-9,.]*)M)?(?:([-+]?[0-9,.]*)W)?(?:([-+]?[0-9,.]*)D)?(?:T(?:([-+]?[0-9,.]*)H)?(?:([-+]?[0-9,.]*)M)?(?:([-+]?[0-9,.]*)S)?)?$/
+DURATION_REGEX_FORMAT =! /\[([^\]]+)\]|YYYY|YY|Y|MM|M|DD|D|HH|H|mm|m|ss|s|SSS/g
+
+def isDuration(x)
+  x instanceof Duration
+
+class Duration
+  constructor: (input, unit) ->
+    @$d = {}
+
+    # Undefined input → zero duration
+    if input is undefined
+      @$ms = 0
+      @_parseFromMs()
+      return
+
+    # Unit-qualified: time.duration(90, 'minutes')
+    if unit?
+      @$ms = input * UNIT_TO_MS[durationUnit(unit)]
+      @_parseFromMs()
+      return
+
+    # Number: plain milliseconds
+    if typeof input is 'number'
+      @$ms = input
+      @_parseFromMs()
+      return
+
+    # Object: { hours: 1, minutes: 30 } — normalize components via ms round-trip
+    if typeof input is 'object' and not (input instanceof String)
+      for own k, v of input
+        @$d[durationUnit(k)] = v
+      @_calcMs()
+      @_parseFromMs()
+      return
+
+    # String: ISO-8601 duration, 'PT30M', 'P1Y2M3D', '-P1D'
+    if typeof input is 'string'
+      m = input.match(DURATION_REGEX_PARSE)
+      if m
+        sign = m[1] is '-' ? -1 : 1
+        parts = m.slice(2).map (v) -> if v? then sign * Number(v) else 0
+        [@$d.years, @$d.months, @$d.weeks, @$d.days, @$d.hours, @$d.minutes, @$d.seconds] = parts
+        @_calcMs()
+        @_parseFromMs()
+        return
+
+    # Fallback: zero duration for anything unrecognized
+    @$ms = 0
+    @_parseFromMs()
+
+  _calcMs: ->
+    @$ms = 0
+    for own k, ms of UNIT_TO_MS
+      @$ms += (@$d[k] ?? 0) * ms
+
+  _parseFromMs: ->
+    ms = @$ms
+    round = (n) -> if n < 0 then Math.ceil(n) else Math.floor(n)
+    @$d.years = round(ms / MS_YEAR); ms %= MS_YEAR
+    @$d.months = round(ms / MS_MONTH); ms %= MS_MONTH
+    @$d.days = round(ms / MS_DAY); ms %= MS_DAY
+    @$d.hours = round(ms / MS_HOUR); ms %= MS_HOUR
+    @$d.minutes = round(ms / MS_MINUTE); ms %= MS_MINUTE
+    @$d.seconds = round(ms / MS_SECOND); ms %= MS_SECOND
+    @$d.milliseconds = ms
+    this
+
+  clone: -> new Duration(@$ms)
+
+  # Component getter — e.g., `.hours()` returns the hour component (0..23)
+  # after normalization. Use `.asHours()` for the total duration in hours.
+  get: (unit) ->
+    key = durationUnit(unit)
+    if key is 'milliseconds'
+      @$ms % 1000
+    else if key is 'weeks'
+      n = @$ms / UNIT_TO_MS[key]
+      if n < 0 then Math.ceil(n) else Math.floor(n)
+    else
+      @$d[key] ?? 0
+
+  # Total duration expressed in `unit`
+  as: (unit) -> @$ms / UNIT_TO_MS[durationUnit(unit)]
+
+  add: (input, unit) ->
+    other = switch
+      when isDuration(input) then input.$ms
+      when unit?             then input * UNIT_TO_MS[durationUnit(unit)]
+      else new Duration(input).$ms
+    new Duration(@$ms + other)
+
+  subtract: (input, unit) ->
+    other = switch
+      when isDuration(input) then input.$ms
+      when unit?             then input * UNIT_TO_MS[durationUnit(unit)]
+      else new Duration(input).$ms
+    new Duration(@$ms - other)
+
+  negated: -> new Duration(-@$ms)
+  abs:     -> new Duration(Math.abs(@$ms))
+
+  valueOf: -> @$ms
+
+  milliseconds:   -> @get(:millisecond)
+  seconds:        -> @get(:second)
+  minutes:        -> @get(:minute)
+  hours:          -> @get(:hour)
+  days:           -> @get(:day)
+  weeks:          -> @get(:week)
+  months:         -> @get(:month)
+  years:          -> @get(:year)
+
+  asMilliseconds: -> @as(:millisecond)
+  asSeconds:      -> @as(:second)
+  asMinutes:      -> @as(:minute)
+  asHours:        -> @as(:hour)
+  asDays:         -> @as(:day)
+  asWeeks:        -> @as(:week)
+  asMonths:       -> @as(:month)
+  asYears:        -> @as(:year)
+
+  # ISO-8601 duration string: 'P1Y2M3DT4H5M6S' or 'PT30M' etc.
+  toISOString: ->
+    part = (n, sym) ->
+      return '' unless n
+      "#{Math.abs(n)}#{sym}"
+    negative = @$ms < 0
+    # Always extract from absolute value's components, track sign separately.
+    src = if negative then @abs() else this
+    Y = part(src.$d.years,   'Y')
+    M = part(src.$d.months,  'M')
+    days = (src.$d.days ?? 0) + ((src.$d.weeks ?? 0) * 7)
+    D = part(days, 'D')
+    H = part(src.$d.hours,   'H')
+    mm = part(src.$d.minutes, 'M')
+    secs = (src.$d.seconds ?? 0) + ((src.$d.milliseconds ?? 0) / 1000)
+    secs = Math.round(secs * 1000) / 1000
+    S = part(secs, 'S')
+    T = if H or mm or S then 'T' else ''
+    sign = if negative then '-' else ''
+    out = "#{sign}P#{Y}#{M}#{D}#{T}#{H}#{mm}#{S}"
+    if out is 'P' or out is '-P' then 'P0D' else out
+
+  toJSON: -> @toISOString()
+
+  format: (fmtStr = 'YYYY-MM-DDTHH:mm:ss') ->
+    parts =
+      Y:    String(@$d.years ?? 0)
+      YY:   pad(@$d.years ?? 0, 2)
+      YYYY: pad(@$d.years ?? 0, 4)
+      M:    String(@$d.months ?? 0)
+      MM:   pad(@$d.months ?? 0, 2)
+      D:    String(@$d.days ?? 0)
+      DD:   pad(@$d.days ?? 0, 2)
+      H:    String(@$d.hours ?? 0)
+      HH:   pad(@$d.hours ?? 0, 2)
+      m:    String(@$d.minutes ?? 0)
+      mm:   pad(@$d.minutes ?? 0, 2)
+      s:    String(@$d.seconds ?? 0)
+      ss:   pad(@$d.seconds ?? 0, 2)
+      SSS:  pad(@$d.milliseconds ?? 0, 3)
+    fmtStr.replace DURATION_REGEX_FORMAT, (match, literal) ->
+      literal ?? parts[match] ?? match
+
+  # English humanize: '2 hours', 'a day', 'a few seconds'. With `withSuffix`:
+  # 'in 2 hours' or '2 hours ago' depending on sign.
+  humanize: (withSuffix = false) ->
+    now = time()
+    other = now.add(@$ms, :millisecond)
+    other.from(now, not withSuffix)
+
+# Apply a Duration to a Time instance (used by Time#add/subtract).
+def applyDuration(date, dur, sign)
+  date
+    .add(sign * (dur.$d.years ?? 0),        :year)
+    .add(sign * (dur.$d.months ?? 0),       :month)
+    .add(sign * ((dur.$d.weeks ?? 0) * 7),  :day)
+    .add(sign * (dur.$d.days ?? 0),         :day)
+    .add(sign * (dur.$d.hours ?? 0),        :hour)
+    .add(sign * (dur.$d.minutes ?? 0),      :minute)
+    .add(sign * (dur.$d.seconds ?? 0),      :second)
+    .add(sign * (dur.$d.milliseconds ?? 0), :millisecond)
+
+# ==[ Factory ]==
+
+time = (input, opts = {}) ->
+  return input.clone() if isTime(input)
+  new Time({ input, utc: !!opts.utc, format: opts.format })
+
+time.utc = (input) ->
+  new Time({ input, utc: true })
+
+# Parse with an explicit format — `time.parse('04/19/2026 3:45 PM', 'MM/DD/YYYY h:mm A')`
+time.parse = (input, fmt, utc = false) ->
+  d = parseWithFormat(input, fmt, utc)
+  return time(NaN) unless d?
+  new Time({ fromInstance: d, utc })
+
+# Parse an input and anchor it to an IANA zone. If the input is a string
+# without timezone info, the wall-clock is interpreted AS IF IN `zone`.
+# Otherwise the instant is preserved and just reinterpreted for display.
+time.tz = (input, zone) ->
+  iana = resolveZone(zone)
+  if typeof input is 'string' and not /Z$|[+-]\d\d:?\d\d$/.test(input)
+    # Parse as UTC to get the wall-clock numbers, then shift by zone offset.
+    asUTC   = parseDate(input, true)
+    offset  = zoneOffsetMinutes(asUTC, iana)
+    shifted = new Date(asUTC.getTime() - offset * 60000)
+    offset2 = zoneOffsetMinutes(shifted, iana)
+    if offset2 isnt offset
+      shifted = new Date(asUTC.getTime() - offset2 * 60000)
+    new Time({ fromInstance: shifted, zone: iana })
+  else
+    time(input).tz(iana)
+
+time.tz.guess = -> Intl.DateTimeFormat().resolvedOptions().timeZone
+time.tz.aliases = US_TIMEZONES
+
+time.unix    = (secs)      -> time(secs * 1000)
+time.isTime = isTime
+
+# Duration factory — accepts a number+unit, a number (ms), an object, or an
+# ISO-8601 duration string.
+time.duration   = (input, unit) -> new Duration(input, unit)
+time.isDuration = isDuration
+time.Duration   = Duration
+
+time.min = (...args) ->
+  list = if Array.isArray(args[0]) then args[0] else args
+  list.reduce (a, b) -> if a < b then a else b
+
+time.max = (...args) ->
+  list = if Array.isArray(args[0]) then args[0] else args
+  list.reduce (a, b) -> if a > b then a else b
+
+# Version and constants exposed for callers.
+time.version = '1.0.0'
+time.Time   = Time
+
+export default time
+export { Time, Duration, isTime, isDuration }
