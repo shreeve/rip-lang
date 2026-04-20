@@ -681,6 +681,55 @@ declared field.
 - The grammar is whitespace-sensitive: indentation opens the body, dedent
   closes it, trailing comma + indent continues a field line onto the next.
 
+### Inline one-liner body
+
+For small sub-shapes — the ones where indented-block ceremony outweighs
+the declaration itself — the body can be written inline, with `;` as
+the entry separator:
+
+```coffee
+Address = schema :shape; street?; line2?; city? ..100; state? ..2; zip? ..10
+Billing = schema :shape; type? "client" | "insurance" | "patient"
+Money   = schema :shape; amount! integer, 0..; currency! 3..3
+```
+
+Same grammar as the indented form — every field / directive / enum
+form works inline. The emitted `__schema({...})` descriptor is
+byte-for-byte identical to the equivalent indented block, so runtime
+behavior (parse, safe, ok, algebra) is unchanged.
+
+**What's not allowed inline:**
+
+Method bodies can themselves contain `;`, which would be ambiguous
+with the entry separator. So anything with an arrow — `->` (method /
+hook / transform), `~>` (computed getter), `!>` (eager-derived) — is
+rejected on the inline form with a message pointing to the indented
+form:
+
+```coffee
+# compile error — point at the indented form:
+X = schema :shape; name!; greet: -> @name   # ✗ '->' not allowed inline
+X = schema :shape; name!; full:  ~> @name   # ✗ '~>' not allowed inline
+X = schema :shape; name!; tag:   !> @x      # ✗ '!>' not allowed inline
+X = schema :shape; id! -> it.Id             # ✗ inline transform not allowed
+```
+
+An **empty inline body** (`X = schema :shape;` with nothing after
+the leading `;`) is also rejected — almost always a typo.
+
+### When to use which form
+
+- **Inline** for small sub-shapes that exist to be referenced from
+  another schema (`Address`, `Money`, `Coord`, short wire fragments
+  for external APIs). The whole declaration fits in one visual
+  row and reads more like a type alias than a class.
+- **Indented block** for anything with methods, hooks, computed
+  getters, `@ensure` refinements, or more than ~5 fields. Column
+  alignment makes large field lists scannable in a way one-liners
+  can't.
+
+Rip doesn't enforce a choice; it just makes both cheap.
+
 ---
 
 ## 6. The runtime API
@@ -1309,6 +1358,20 @@ or :model.
 :shape schemas only accept '@mixin Name'. '@timestamps' is :model-only.
 
 mixin cycle: A -> B -> A
+
+Inline schema body does not support '->' (method/hook/transform).
+Use the indented form.
+
+Inline schema body is empty. Either add '; field; …' entries after
+'schema :shape;' or switch to the indented form.
+
+Schema pragma 'schema.defaultMaxString' must be declared at file top
+level. It was found inside a nested block (function / class / if /
+loop body), where it would leak into later top-level schemas.
+
+Field 'n' would have impossible constraints min=1 > max=0 after sugar
+is applied (implicit min=1 from `!` vs range max 0). Write an explicit
+range or drop the conflicting pragma.
 ```
 
 ---
@@ -1569,11 +1632,6 @@ language.
   String-literal unions in the type slot (`"a" | "b"`) are in;
   schema-constituent unions over arbitrary shapes are not. Today you
   express cross-shape alternation by running multiple `.safe()` calls.
-- **Nested-schema validation in a field type** — declaring `patient!
-  PatientShape` and having `.parse()` run `PatientShape.parse()` on
-  the nested value with per-field errors attached at `patient.X`
-  paths. The syntax parses; the validator layer currently treats any
-  unknown type identifier as unvalidated.
 - **Issue paths** — `@ensure` issues today use `field: ''` (the whole
   object). Per-field attribution (`field: 'email'`) on a refinement
   isn't supported; write the field-specific rule as a constraint or
@@ -1677,9 +1735,39 @@ Built-in type names and their runtime / SQL / TypeScript mappings:
 
 Arrays: `type[]`. SQL stores as `JSON` (DuckDB native), TS is `T[]`.
 
-Custom identifiers: unknown type names are accepted (validator skipped,
-SQL defaults to `JSON`, TS uses the identifier as-is). This is how
-user-defined shapes and enums compose.
+**Nested-schema identifiers.** When a field's type name resolves to
+another schema in the process-global `__SchemaRegistry`, the
+validator recurses:
+
+```coffee
+Address = schema :shape
+  street?  ..200
+  city?    ..100
+
+User = schema :shape
+  name!      ..50
+  address!   Address          # per-field validation recurses into Address
+  mailing?   Address          # optional; skipped if missing, validated if present
+
+Order = schema :shape
+  items!     OrderItem[]      # arrays of schema-typed values validate each element
+```
+
+Errors from the nested validator surface with path-prefixed `field`
+entries on the parent's issue list (`address.street`,
+`items[0].name`, `items[3].price`, etc.). Validation recurses as
+deep as the registry resolution allows — three-level nesting is
+tested, deeper nesting is bounded only by the data itself.
+
+The resolver is lazy — it runs at `.parse()` time, not at
+declaration, so forward references between modules resolve as long
+as both are loaded before the first validation call.
+
+**Unknown identifiers.** If a type name isn't a built-in *and* isn't
+in the registry at validation time, the field is accepted without a
+runtime check (SQL defaults to `JSON`, TS uses the identifier
+as-is). This keeps forward references from hard-failing and lets
+user-defined enums or shapes compose incrementally.
 
 ---
 
@@ -1785,6 +1873,45 @@ code!   6..6                     # fixed-length code
 
 Reads as "between N and N" which collapses to "exactly N."
 
+### Open-ended ranges
+
+Either endpoint may be omitted. The implicit meaning depends on the
+modifier:
+
+| Form       | Modifier | Meaning                                                |
+| ---------- | -------- | ------------------------------------------------------ |
+| `..N`      | `?`      | at most N, no minimum (empty string / negative OK)     |
+| `..N`      | `!`      | at most N, **implicit `min=1`** — required AND non-empty |
+| `N..`      | any      | at least N, no maximum (the file-level `schema.defaultMaxString` pragma fills it if set) |
+| `..`       | —        | rejected — at least one endpoint must be present       |
+
+The `!` + `..N` rule exists because required fields with `..N`
+almost universally want `1..N` in practice (100% of required ranges
+in production code today). Writing `..N` instead of `1..N` drops the
+redundant `1` that the `!` modifier already implies:
+
+```coffee
+# These pairs mean the same thing:
+firstName!  1..50           firstName!  ..50
+name!       1..100          name!       ..100
+email!      1..320          email!      ..320
+
+# But explicit always wins:
+admin!      0..50           # explicit min=0 stays (rare: required but empty allowed)
+age!        0..120          # explicit min=0 stays (newborns are zero)
+score!      0..100          # explicit min=0 stays (test score can be zero)
+```
+
+If the sugar would produce an impossible constraint (`! ..0` →
+`{min:1, max:0}`), the compiler rejects it at parse time with an
+error naming the conflicting sources.
+
+Optional (`?`) fields with `..N` are a mirror-image rule: `..20`
+means "no minimum" rather than implicit-zero, so the `?` case stays
+open for integers (allows negatives) and strings (allows empty).
+When an optional field must also be non-empty when present, write
+the min explicitly: `phone? 1..20`.
+
 ### Literal values in the default bracket
 
 The bracket `[…]` now holds a single value — the default. Values are
@@ -1825,6 +1952,53 @@ zip!  string, [/^\d{5}$/]       → zip!  string, /^\d{5}$/
 ```
 
 The single-value form `[a]` (default) is unchanged.
+
+### File-level pragma: `schema.defaultMaxString`
+
+A defensive ceiling on every VARCHAR-like field in the file. Fills
+in `max` for fields that the user otherwise left unbounded:
+
+```coffee
+schema.defaultMaxString = 500
+
+User = schema :model
+  name!                         # → {min: 1, max: 500}  (sugar + pragma)
+  email!#    email              # → {max: 500}
+  code?                         # → {max: 500}
+  password!  8..200             # → {min: 8, max: 200}  (explicit wins)
+  bio?       text               # → no constraint       (text opts out)
+  zip!       /^\d{5}$/          # → {regex: /^\d{5}$/}  (regex opts out)
+  status?    "on" | "off"       # → literal union       (union opts out)
+```
+
+**Scope and semantics:**
+
+- **Top-level only.** Declaring the pragma inside a function / class
+  / `if` / loop body is a compile error — the rule has to be
+  syntactically anchored to the file so it can't leak between
+  scopes.
+- **Per-declaration snapshot.** Each schema captures the pragma
+  value in effect at *its* declaration. Later pragma writes don't
+  retroactively alter earlier schemas.
+- **Applies only to VARCHAR-like primitives** — `string`, `email`,
+  `url`, `phone`, `zip` (and bare fields, which default to
+  `string`). `text` stays uncapped by design (it's the opt-out for
+  long-form content). `integer`, `number`, `boolean`, `date`,
+  `datetime`, `uuid`, `json`, `any` are all untouched.
+- **User's explicit constraints always win.** An explicit range,
+  regex, or literal-union on the field suppresses the pragma's
+  max. Open-ended `N..` fields are the one composition case — the
+  user's min is preserved and the pragma fills the open max.
+- **`0` resets the pragma.** Useful for turning it off again mid-file.
+
+**Valid values:** non-negative integer literals. Decimals, strings,
+negatives, and unknown keys are all hard-fail compile errors with
+specific diagnostics.
+
+The pragma is the first of a family — the scanner accepts `schema.<key>`
+generally and errors on unknown keys, so future ceilings (a
+`defaultMaxInt`, an `defaultStringType`, etc.) can land additively
+without changing the scanner shape.
 
 ---
 
