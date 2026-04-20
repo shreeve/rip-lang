@@ -269,6 +269,36 @@ behavior is dropped** — methods, computed getters (`~>`), eager
 derived fields (`!>`), hooks, and ORM methods don't carry through.
 Algebra is a structural operation on fields, not a behavioral one.
 
+### Idiomatic shorthands
+
+Most production code uses a few syntactic sugars. All are optional;
+the Quick Tour above works as written.
+
+```coffee
+# Open-ended ranges. With `!` (required), `..N` implies `min=1`.
+User = schema
+  firstName!  ..50              # required, 1..50 chars
+  bio?        text              # `text` is unbounded by design
+  phone?      1..20
+
+# File-level default cap for uncapped VARCHAR-like fields.
+schema.defaultMaxString = 500
+
+Profile = schema :model
+  name!                         # → {min: 1, max: 500}
+  email!#     email             # → {max: 500}
+  bio?        text              # → uncapped (text opts out)
+
+# One-line small shapes, plus a registered schema used as a field type.
+Address = schema :shape; street? ..200; city? ..100; zip? ..10
+
+Order = schema :shape
+  address!    Address           # validation recurses; errors like "address.street"
+```
+
+See §5 for body-syntax details, §17 for nested type references, and
+§20 for constraint and pragma rules.
+
 ---
 
 ## 3. Schemas vs types
@@ -1615,6 +1645,41 @@ p "[migrate] schema created"
 Because `.toSQL()` doesn't call the adapter, migration scripts work
 before the database exists or before the ORM is wired.
 
+### Composing nested shapes
+
+Small sub-shapes referenced by name compose into a larger contract.
+Validation recurses into each referenced schema; errors carry
+path-prefixed `field` entries so callers can pinpoint the failing
+sub-field:
+
+```coffee
+Address = schema :shape
+  street!   ..200
+  city!     ..100
+  state?    ..2
+  zip?      ..10
+
+Customer = schema :shape
+  id?       integer
+  name!     ..100
+  address!  Address
+
+OrderRequest = schema :shape
+  customer! Customer
+  notes?    ..500
+
+r = OrderRequest.safe body
+if r.ok
+  process r.value
+else
+  for e in r.errors
+    # e.g.  field: "customer.address.street"  error: "required"
+    console.log e.field, e.error, e.message
+```
+
+Registered `:shape` / `:input` / `:model` names can all be referenced
+as field types — see §17 for resolution rules.
+
 ---
 
 ## 15. What's not here yet
@@ -1735,9 +1800,10 @@ Built-in type names and their runtime / SQL / TypeScript mappings:
 
 Arrays: `type[]`. SQL stores as `JSON` (DuckDB native), TS is `T[]`.
 
-**Nested-schema identifiers.** When a field's type name resolves to
-another schema in the process-global `__SchemaRegistry`, the
-validator recurses:
+**Nested-schema identifiers.** A field's type name may be another
+schema declared with `:shape`, `:input`, or `:model`. When the name
+resolves to one of those in the process-global `__SchemaRegistry`,
+the validator recurses into the referenced schema:
 
 ```coffee
 Address = schema :shape
@@ -2320,10 +2386,10 @@ preamble (under `SCHEMA_RUNTIME` in `src/schema.js`) that defines
 helpers. No import statement, no package dependency, no bootstrap call.
 
 **How big is the runtime?**
-About 2,250 lines total across runtime + compile-time emission, including
-the ORM, the DDL emitter, the registry, the validator plan, and the
-hydration logic. The preamble injected into your compiled output is a
-fraction of that (the ORM and DDL paths are tree-shaken if unused).
+It includes the validator plan, registry, hydration logic, ORM
+support, and DDL emission. In multi-bundle processes, Rip binds
+`schema` to a shared `globalThis.__ripSchema` singleton, so bundles
+share one registry and one adapter per process.
 
 **Is `.parse()` strict or permissive with extra keys?**
 Permissive with stripping. Unknown keys are silently dropped — they
