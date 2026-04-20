@@ -27,8 +27,7 @@
     "scripts/serve.js",
     "rip-loader.js",
     "README.md",
-    "LICENSE",
-    "CHANGELOG.md"
+    "LICENSE"
   ],
   "scripts": {
     "build": "bun scripts/build.js",
