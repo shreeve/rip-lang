@@ -6,7 +6,8 @@
   "main": "db.rip",
   "exports": {
     ".": "./db.rip",
-    "./client": "./client.rip"
+    "./client": "./client.rip",
+    "./embed": "./embed.rip"
   },
   "bin": {
     "rip-db": "./bin/rip-db"
@@ -45,6 +46,7 @@
   "files": [
     "db.rip",
     "client.rip",
+    "embed.rip",
     "lib/",
     "bin/",
     "README.md"

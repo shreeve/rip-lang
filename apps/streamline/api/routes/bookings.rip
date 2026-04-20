@@ -2,7 +2,7 @@
 
 import { get, post, prefix, read } from '@rip-lang/server'
 import { userScope } from '../lib/auth.rip'
-import { sql, Booking } from '../db.rip'
+import { query, Booking } from '../db.rip'
 
 prefix '/api/bookings', ->
 
@@ -32,11 +32,11 @@ prefix '/api/bookings', ->
       bookingIds.push booking.id
 
       needed = item.children?.length or 1
-      data = sql! 'SELECT id FROM spots WHERE week = ? AND slot = ? AND status = ? LIMIT ?', [item.week, item.slot, 'available', needed]
+      data = query! 'SELECT id FROM spots WHERE week = ? AND slot = ? AND status = ? LIMIT ?', [item.week, item.slot, 'available', needed]
 
       for row in (data.data or [])
         spotId = row[0]
-        sql! 'UPDATE spots SET status = ?, user_id = ?, booking_id = ? WHERE id = ?', ['booked', user.id, booking.id, spotId]
+        query! 'UPDATE spots SET status = ?, user_id = ?, booking_id = ? WHERE id = ?', ['booked', user.id, booking.id, spotId]
 
     # send
     { bookingIds }

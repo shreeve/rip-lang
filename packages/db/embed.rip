@@ -1,0 +1,50 @@
+# @rip-lang/db/embed — process lifecycle helpers for rip-db.
+#
+# `ensureRunning(url, opts)` is the typical "am I running, if not
+# start me" pattern apps use during boot. It checks if a rip-db
+# server answers at `url/sql`; if not, it spawns `rip-db ${opts.file}`
+# as a detached child with stdio redirected to a log file, then polls
+# until the server is healthy or a retry budget runs out.
+#
+# Returns one of:
+#   'running'  — an existing rip-db answered; nothing was started
+#   'started'  — we spawned rip-db and it became reachable
+# Throws otherwise.
+
+import { openSync, closeSync } from 'node:fs'
+
+# Verifies the target is *actually* a rip-db (healthy 2xx response to a
+# trivial SELECT), not just any server that answers `/sql`.
+reachable = (url) ->
+  try
+    res = fetch! "#{url}/sql",
+      method: 'POST'
+      headers: { 'Content-Type': 'application/json' }
+      body: JSON.stringify sql: 'SELECT 1'
+    return false unless res?.ok
+    data = res.json!
+    not data?.error
+  catch
+    false
+
+export ensureRunning = (url, opts = {}) ->
+  return 'running' if reachable! url
+
+  { file, logFile, attempts = 10, intervalMs = 200 } = opts
+  throw new Error "ensureRunning: `opts.file` is required to spawn rip-db" unless file
+
+  logPath = logFile or "#{file}.log"
+  fd = openSync logPath, 'a'
+  try
+    proc = Bun.spawn ['rip-db', file], stdio: ['ignore', fd, fd], detached: true
+    proc.unref()
+  finally
+    # The spawned child holds its own copy of the fd; close the parent's copy
+    # to avoid a descriptor leak when ensureRunning is called repeatedly.
+    closeSync fd
+
+  for attempt in [1..attempts]
+    sleep! intervalMs
+    return 'started' if reachable! url
+
+  throw new Error "Failed to start rip-db at #{url} — see #{logPath} for details"

@@ -181,6 +181,25 @@ let SINGLE_CLOSERS = new Set(['TERMINATOR', 'CATCH', 'FINALLY', 'ELSE', 'OUTDENT
 // Tokens that indicate end-of-line
 let LINE_BREAK = new Set(['INDENT', 'OUTDENT', 'TERMINATOR']);
 
+// Compound-key recognition shared by three lexer sites:
+//   - the implicit-call guard (blocks `IDENT -IDENT :` from wrapping as `IDENT(-IDENT)`)
+//   - the `:` handler (collapses the chain into a single STRING token)
+//   - `looksObjectish` (tells the implicit-object tracker an indented chain is still a key)
+//
+// A compound key is an IDENTIFIER followed by `[ (. | -) (IDENTIFIER|PROPERTY) ]+` and then `:`.
+// `.` accepts any spacing (pre-existing behavior). `-` requires no whitespace *or*
+// newline on either side, so legitimate subtraction (`a - b: 1`) and line-broken
+// expressions (`foo-\n  bar:`) remain unaffected.
+let isIdentOrProp = t => t?.[0] === 'IDENTIFIER' || t?.[0] === 'PROPERTY';
+let isCompoundSep = (sep, rhs) => {
+  if (sep?.[0] === '.') return true;
+  if (sep?.[0] === '-') {
+    return sep.spaced === false && !sep.newLine &&
+           rhs?.spaced === false && !rhs?.newLine;
+  }
+  return false;
+};
+
 // Tokens that close implicit calls when following a newline
 let CALL_CLOSERS = new Set(['.', '?.']);
 
@@ -1708,7 +1727,20 @@ export class Lexer {
       }
 
       // Detect implicit function calls
-      if (IMPLICIT_FUNC.has(tag) && token.spaced &&
+      //
+      // Before firing on `IDENT -IDENT`, check if the real pattern is a
+      // compound-key chain (`data-src:`). If so, let the `:` handler
+      // collapse it to a STRING — don't wrap it as `data(-src)`.
+      let looksLikeCompoundKey = false;
+      if (nextTag === '-' && !nextToken.spaced && !nextToken.newLine && isIdentOrProp(token)) {
+        for (let k = i; k < tokens.length - 2; k += 2) {
+          if (!isCompoundSep(tokens[k + 1], tokens[k + 2])) break;
+          if (!isIdentOrProp(tokens[k + 2])) break;
+          if (tokens[k + 3]?.[0] === ':') { looksLikeCompoundKey = true; break; }
+        }
+      }
+
+      if (!looksLikeCompoundKey && IMPLICIT_FUNC.has(tag) && token.spaced &&
           (IMPLICIT_CALL.has(nextTag) || (nextTag === '...' && IMPLICIT_CALL.has(tokens[i + 2]?.[0])) ||
            (IMPLICIT_UNSPACED_CALL.has(nextTag) && !nextToken.spaced && !nextToken.newLine)) &&
           !((tag === ']' || tag === '}') && (nextTag === '->' || nextTag === '=>'))) {
@@ -1735,17 +1767,21 @@ export class Lexer {
           return forward(1);
         }
 
-        // Dotted keys: collapse `IDENTIFIER . PROPERTY . PROPERTY` into a STRING
-        if (tokens[i - 1]?.[0] === 'PROPERTY' && tokens[i - 2]?.[0] === '.') {
+        // Compound keys: collapse `IDENTIFIER [ (. | -) (IDENTIFIER|PROPERTY) ]+` into a STRING.
+        // Walks backwards from `:` through a chain, then rebuilds the string by concatenating
+        // each token's raw value (identifiers carry safe characters; separators contribute
+        // a literal `.` or `-`). See `isCompoundSep` for spacing rules.
+        // Examples: `www.amazon.com:`, `data-src:`, `beta-site.amazon.com:`.
+        if (isIdentOrProp(tokens[i - 1]) && isCompoundSep(tokens[i - 2], tokens[i - 1])) {
           let j = i - 2;
-          while (j >= 2 && tokens[j]?.[0] === '.' && (tokens[j - 1]?.[0] === 'PROPERTY' || tokens[j - 1]?.[0] === 'IDENTIFIER')) {
+          while (j >= 2 && isCompoundSep(tokens[j], tokens[j + 1]) && isIdentOrProp(tokens[j - 1])) {
             j -= 2;
           }
           j += 1;
-          if (tokens[j]?.[0] === 'IDENTIFIER' || tokens[j]?.[0] === 'PROPERTY') {
-            let parts = [];
-            for (let k = j; k < i; k += 2) parts.push(tokens[k][1]);
-            let str = gen('STRING', `"${parts.join('.')}"`, tokens[j]);
+          if (isIdentOrProp(tokens[j])) {
+            let buf = '';
+            for (let k = j; k < i; k++) buf += tokens[k][1];
+            let str = gen('STRING', `"${buf}"`, tokens[j]);
             str.pre = tokens[j].pre;
             str.spaced = tokens[j].spaced;
             str.newLine = tokens[j].newLine;
@@ -1943,11 +1979,13 @@ export class Lexer {
     if (!this.tokens[j]) return false;
     if (this.tokens[j]?.[0] === '@' && this.tokens[j + 2]?.[0] === ':') return true;
     if (this.tokens[j + 1]?.[0] === ':') return true;
-    // Dotted keys: IDENTIFIER . PROPERTY ... :
-    if ((this.tokens[j]?.[0] === 'IDENTIFIER' || this.tokens[j]?.[0] === 'PROPERTY') && this.tokens[j + 1]?.[0] === '.') {
-      let k = j + 2;
-      while (this.tokens[k]?.[0] === 'PROPERTY' && this.tokens[k + 1]?.[0] === '.') k += 2;
-      if (this.tokens[k]?.[0] === 'PROPERTY' && this.tokens[k + 1]?.[0] === ':') return true;
+    // Compound keys: IDENTIFIER [ (. | -) (IDENTIFIER|PROPERTY) ]+ :
+    if (isIdentOrProp(this.tokens[j])) {
+      for (let k = j + 1; k < this.tokens.length; k += 2) {
+        if (!isCompoundSep(this.tokens[k], this.tokens[k + 1])) break;
+        if (!isIdentOrProp(this.tokens[k + 1])) break;
+        if (this.tokens[k + 2]?.[0] === ':') return true;
+      }
     }
     if (EXPRESSION_START.has(this.tokens[j]?.[0])) {
       let end = null;

@@ -1,87 +1,38 @@
 # Database — connection, queries, and one-time setup
 
-import { openSync } from 'node:fs'
+import { connect as connectDb, query, bulk } from '@rip-lang/db/client'
+import { ensureRunning } from '@rip-lang/db/embed'
 import { Stash } from './lib/stash.rip'
 import configData from '../config.rip'
 
-config = Stash configData
-DB_URL = config.database.url
+config  = Stash configData
+DB_URL  = config.database.url
 DB_FILE = config.database.file
 
 # Re-export every model, mixin, and enum for route imports.
+# Also loads the schema runtime so connectDb can wire its adapter.
 export * from './models.rip'
 import { User, Spot, Booking, SpotStatus } from './models.rip'
 
-# Configure the schema adapter to talk to rip-db at DB_URL.
-globalThis.__ripSchema.__schemaSetAdapter
-  query: (sql, params) ->
-    body = if params?.length then { sql, params } else { sql }
-    res = fetch! "#{DB_URL}/sql",
-      method: 'POST'
-      headers: { 'Content-Type': 'application/json' }
-      body: JSON.stringify body
-    data = res.json!
-    throw new Error data.error if data.error
-    data
+# Bind both the client and the schema ORM to DB_URL.
+connectDb DB_URL
 
-export sql = (query, params) ->
-  body = if params then { sql: query, params } else { sql: query }
-  res = fetch! "#{DB_URL}/sql",
-    method: 'POST'
-    headers: { 'Content-Type': 'application/json' }
-    body: JSON.stringify body
-  data = res.json!
-  warn "[db] SQL warning: #{data.error}" if data.error
-  data
-
-export bulk = (table, columns, rows) ->
-  res = fetch! "#{DB_URL}/sql",
-    method: 'POST'
-    headers: { 'Content-Type': 'application/json' }
-    body: JSON.stringify { table, columns, rows }
-  data = res.json!
-  warn "[db] Bulk warning: #{data.error}" if data.error
-  data
-
-dbReachable = ->
-  try
-    fetch! "#{DB_URL}/sql",
-      method: 'POST'
-      headers: { 'Content-Type': 'application/json' }
-      body: JSON.stringify sql: 'SELECT 1'
-    true
-  catch
-    false
-
-startDb = ->
-  logFile = "#{DB_FILE}.log"
-  fd = openSync logFile, 'a'
-  Bun.spawn(['rip-db', DB_FILE],
-    stdout: fd
-    stderr: fd
-    stdio: ['ignore', fd, fd]
-  ).unref()
-
-  for attempt in [1..10]
-    sleep! 200
-    return if dbReachable!
-
-  abort "Failed to start rip-db — see #{logFile} for details"
+export { query, bulk }
 
 export setup = ->
-  unless dbReachable!
-    p "[setup] Starting rip-db #{DB_FILE}..."
-    startDb!
+  status = ensureRunning! DB_URL, file: DB_FILE
+  if status is 'started'
+    p "[setup] Started rip-db #{DB_FILE}"
     p "[setup] DuckDB UI: #{DB_URL}"
 
-  check = sql! "SELECT count(*) FROM information_schema.tables WHERE table_name = 'spots'"
+  check = query! "SELECT count(*) FROM information_schema.tables WHERE table_name = 'spots'"
   return if check.data?[0]?[0] > 0
 
   # Hand-order DDL by dependency — User before Spot/Booking, Booking before
   # Spot (since Spot belongs_to Booking).
   allDDL = [User.toSQL(), Booking.toSQL(), Spot.toSQL()].join('\n\n')
   for stmt in allDDL.split(';')
-    sql! stmt.trim() + ';' if stmt.trim()
+    query! stmt.trim() + ';' if stmt.trim()
   p '[setup] Tables created'
 
   today = new Date()

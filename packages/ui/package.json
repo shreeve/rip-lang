@@ -9,6 +9,7 @@
     "./browser/*": "./browser/components/*.rip",
     "./email": "./email/email.rip",
     "./email/*": "./email/*.rip",
+    "./html": "./html.rip",
     "./shared": "./shared/styles.rip",
     "./tailwind": "./tailwind/tailwind.rip"
   },
@@ -17,6 +18,7 @@
     "email/",
     "shared/",
     "tailwind/",
+    "html.rip",
     "README.md",
     "AGENTS.md",
     "ui.rip"

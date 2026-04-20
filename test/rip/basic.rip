@@ -84,7 +84,9 @@ code "computed property code", "{[key]: value}", "({[key]: value})"
 test "interpolated string key", 'k = "x"\no = {"#{k}": 42}\no.x', 42
 test "interpolated string key access", 'n = "name"\no = {"#{n}": "Alice"}\no.name', "Alice"
 
-# Dotted keys (rescued syntax — treated as flat string keys)
+# Compound keys (rescued syntax — dot- and hyphen-separated identifier
+# chains are collapsed into flat string keys). Hyphens require no
+# whitespace on either side; dots accept either.
 test "dotted key simple", 'o = { a.b: 1 }; o["a.b"]', 1
 test "dotted key triple", 'o = { one.two.three: 44 }; o["one.two.three"]', 44
 test "dotted key mixed", 'o = { one.two.three: 44, five: 66 }; o["one.two.three"] + o.five', 110
@@ -92,6 +94,35 @@ code "dotted key codegen", '{ a.b: 1 }', "({'a.b': 1})"
 code "dotted key triple codegen", '{ one.two.three: 44 }', "({'one.two.three': 44})"
 test "dotted key implicit object", 'a =\n  x.y:\n    z: 1\na["x.y"].z', 1
 test "dotted key implicit siblings", 'a =\n  x.y: 1\n  w.z: 2\na["x.y"] + a["w.z"]', 3
+
+# Hyphen keys
+test "hyphen key simple", 'o = { data-src: 1 }; o["data-src"]', 1
+test "hyphen key triple", 'o = { a-b-c: 7 }; o["a-b-c"]', 7
+test "hyphen key implicit siblings", 'a =\n  data-src: 1\n  data-foo-bar: 2\na["data-src"] + a["data-foo-bar"]', 3
+test "hyphen key mixed with normal", 'o = { data-x: 1, static: 2, foo-bar-baz: 4 }; o["data-x"] + o.static + o["foo-bar-baz"]', 7
+code "hyphen key codegen", '{ data-src: 1 }', "({'data-src': 1})"
+
+# Mixed dot + hyphen
+test "mixed key dot-hyphen", 'o = { beta-site.amazon.com: 100 }; o["beta-site.amazon.com"]', 100
+test "mixed key hyphen-dot", 'o = { api.v1-beta.example.com: 200 }; o["api.v1-beta.example.com"]', 200
+code "mixed key codegen", '{ beta-site.amazon.com: 1 }', "({'beta-site.amazon.com': 1})"
+
+# Subtraction / negation must remain intact — the no-space rule is the disambiguator.
+test "minus with spaces stays subtraction", 'a = 10; b = 3; a - b', 7
+test "negative function arg stays negation", 'max = (x, y) -> if x > y then x else y\nmax 1, -2', 1
+test "unary negation unchanged", '(-5)', -5
+
+# Newline between hyphen parts must NOT form a compound key. Asserted by
+# showing subtraction still reaches the RHS even when the first `-` sits
+# tight against its left operand and the second operand starts on the
+# next (indented) line.
+test "hyphen with newline does not compound", '''
+a = 100
+b = 30
+x = a-
+  b
+x
+''', 70
 
 # ==============================================================================
 # Inclusive Ranges (..)

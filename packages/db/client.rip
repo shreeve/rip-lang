@@ -29,7 +29,24 @@
 
 _dbUrl = null
 
-export connect = (url) -> _dbUrl = url
+# Bind the client to a rip-db URL. If the schema runtime has been
+# loaded into this process (via any model import), also install an
+# adapter that routes `User.find!` / `User.where!` through the same
+# URL — eliminating per-app adapter boilerplate.
+#
+# The schema runtime is populated eagerly by any `import` of a file
+# that uses `schema`, so calling `connect` after importing models
+# wires everything.
+#
+# The adapter is a reference to `query` itself (not a closure over the
+# URL): `query` re-reads `_dbUrl` on every call via `dbUrl()`, so a
+# later `connect(newUrl)` repoints both client and schema layer without
+# needing to reinstall the adapter.
+export connect = (url) ->
+  _dbUrl = url
+  if globalThis.__ripSchema?.__schemaSetAdapter
+    globalThis.__ripSchema.__schemaSetAdapter { query }
+  url
 
 dbUrl = -> _dbUrl or process.env.DB_URL or 'http://localhost:4213'
 
