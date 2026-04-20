@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/time",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Rip Time — tiny, immutable, US-English date/time library with timezones and durations, zero dependencies",
   "type": "module",
   "main": "time.rip",
@@ -33,7 +33,7 @@
   "author": "Steve Shreeve <steve.shreeve@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "rip-lang": ">=3.13.137"
+    "rip-lang": ">=3.14.0"
   },
   "devDependencies": {
     "dayjs": "^1.11.20"
