@@ -1,0 +1,165 @@
+#!/usr/bin/env rip
+# =============================================================================
+# capture-live.rip — Capture live /ddb/run integration fixtures
+# =============================================================================
+#
+# Spins up a short-lived rip-db process against a :memory: database, CREATEs
+# a test table, INSERTs rows, then POSTs SELECTs to /ddb/run to capture the
+# raw response bytes.
+#
+# Produces two fixtures in test/fixtures/integration/ :
+#   small_mixed.bin      — single-chunk, multi-type (int, varchar, ts, null)
+#   multichunk.bin       — uses X-Rip-DB-Chunk-Size header to force splitting
+#                          across a 64-row validity word boundary
+#
+# These fixtures have no .golden — they are NOT part of the decoder's
+# golden-equivalence test (the encoder-driven fixtures prove semantics).
+# Their purpose is to confirm that bytes emitted by the live server decode
+# cleanly and produce a plausible structure. The accompanying .info file
+# records structural assertions (chunk count, row count, column names/types)
+# for optional inspection.
+#
+# Run:
+#   rip packages/db/extension/scripts/capture-live.rip
+# =============================================================================
+
+import { writeFileSync, mkdirSync, existsSync } from 'fs'
+import { join } from 'path'
+import { spawn } from 'child_process'
+
+HERE    = import.meta.dir
+OUT_DIR = join HERE, '..', 'test', 'fixtures', 'integration'
+mkdirSync OUT_DIR, recursive: true
+
+PORT = 4214  # offset from rip-db's default to avoid conflicts
+BASE = "http://localhost:#{PORT}"
+
+# -----------------------------------------------------------------------------
+# Start rip-db
+# -----------------------------------------------------------------------------
+
+dbScript = join HERE, '..', '..', 'db.rip'
+p "starting rip-db on :#{PORT}…"
+
+proc = spawn 'rip', [dbScript, ':memory:', "--port=#{PORT}"],
+  stdio: ['ignore', 'pipe', 'pipe']
+  env:   process.env
+
+proc.stdout.on 'data', (d) -> process.stderr.write "[rip-db] #{d}"
+proc.stderr.on 'data', (d) -> process.stderr.write "[rip-db] #{d}"
+
+cleanup = ->
+  try proc.kill 'SIGTERM'
+
+process.on 'exit',  cleanup
+process.on 'SIGINT', -> cleanup() ; process.exit 130
+
+# Wait for health
+await do ->
+  for i in [0...50]
+    try
+      r = await fetch "#{BASE}/health"
+      if r.ok
+        p "rip-db ready"
+        return
+    catch
+      # retry
+    await sleep 100
+  throw new Error 'rip-db did not come up within 5s'
+
+# -----------------------------------------------------------------------------
+# Helper
+# -----------------------------------------------------------------------------
+
+runSql = (sql) ->
+  r = await fetch "#{BASE}/sql",
+    method: 'POST'
+    headers: { 'Content-Type': 'application/json' }
+    body: JSON.stringify { sql }
+  await r.json()
+
+ddbRun = (sql, headers = {}) ->
+  r = await fetch "#{BASE}/ddb/run",
+    method: 'POST'
+    headers: { 'Content-Type': 'text/plain', ...headers }
+    body: sql
+  throw new Error "ddb/run returned #{r.status}" unless r.ok
+  buf = await r.arrayBuffer()
+  new Uint8Array buf
+
+# -----------------------------------------------------------------------------
+# Seed schema + data
+# -----------------------------------------------------------------------------
+
+p "seeding test schema…"
+
+await runSql '''
+  CREATE TABLE fixtures_small AS
+  SELECT
+    CAST(i AS INTEGER)                     AS id,
+    CASE WHEN i % 4 = 0 THEN NULL
+         ELSE 'row-' || CAST(i AS VARCHAR) END AS label,
+    CAST(TIMESTAMP '2024-01-01 00:00:00' + INTERVAL (i) HOUR AS TIMESTAMP)
+                                            AS ts,
+    CAST(i * 1.5 AS DOUBLE)                AS ratio,
+    UUID()                                 AS uid
+  FROM range(0, 20) AS t(i)
+'''
+
+await runSql '''
+  CREATE TABLE fixtures_multichunk AS
+  SELECT
+    CAST(i AS BIGINT) AS n,
+    CASE WHEN i % 13 = 0 THEN NULL ELSE 'x-' || CAST(i AS VARCHAR) END AS name,
+    CAST(i * 0.001 AS DOUBLE) AS val
+  FROM range(0, 150) AS t(i)
+'''
+
+# -----------------------------------------------------------------------------
+# Capture 1: small mixed (single-chunk default)
+# -----------------------------------------------------------------------------
+
+p "capturing small_mixed…"
+bytes = await ddbRun 'SELECT * FROM fixtures_small ORDER BY id'
+writeFileSync join(OUT_DIR, 'small_mixed.bin'), bytes
+writeFileSync join(OUT_DIR, 'small_mixed.info'), """
+  source: live /ddb/run
+  query: SELECT * FROM fixtures_small ORDER BY id
+  expected_rows: 20
+  expected_cols: 5
+  expected_columns:
+    - id        INTEGER
+    - label     VARCHAR (nulls at i % 4 == 0)
+    - ts        TIMESTAMP
+    - ratio     DOUBLE
+    - uid       UUID
+  chunks: 1
+  """
+p "  wrote #{bytes.length} bytes"
+
+# -----------------------------------------------------------------------------
+# Capture 2: multichunk crossing a 64-row validity boundary
+# -----------------------------------------------------------------------------
+
+p "capturing multichunk (chunkSize=40, 150 rows → 4 chunks: 40/40/40/30)…"
+bytes2 = await ddbRun 'SELECT * FROM fixtures_multichunk ORDER BY n',
+  'X-Rip-DB-Chunk-Size': '40'
+writeFileSync join(OUT_DIR, 'multichunk.bin'), bytes2
+writeFileSync join(OUT_DIR, 'multichunk.info'), """
+  source: live /ddb/run
+  query: SELECT * FROM fixtures_multichunk ORDER BY n
+  headers: X-Rip-DB-Chunk-Size=40
+  expected_rows: 150
+  expected_cols: 3
+  expected_columns:
+    - n     BIGINT
+    - name  VARCHAR (nulls at i % 13 == 0)
+    - val   DOUBLE
+  chunks: 4            # 40 + 40 + 40 + 30
+  boundary_note: chunk boundaries cross the 64-row validity word twice
+  """
+p "  wrote #{bytes2.length} bytes"
+
+p "done. stopping rip-db."
+cleanup()
+process.exit 0

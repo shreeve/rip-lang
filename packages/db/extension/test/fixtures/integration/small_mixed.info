@@ -1,0 +1,11 @@
+source: live /ddb/run
+query: SELECT * FROM fixtures_small ORDER BY id
+expected_rows: 20
+expected_cols: 5
+expected_columns:
+  - id        INTEGER
+  - label     VARCHAR (nulls at i % 4 == 0)
+  - ts        TIMESTAMP
+  - ratio     DOUBLE
+  - uid       UUID
+chunks: 1

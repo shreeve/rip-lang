@@ -1,0 +1,813 @@
+#!/usr/bin/env rip
+# =============================================================================
+# capture-fixtures.rip — Generate golden fixtures for the ripdb decoder
+# =============================================================================
+#
+# For each fixture spec this script writes:
+#   <name>.bin      raw bytes produced by `serializeSuccessResult`
+#                   (or `serializeErrorResult`), byte-identical to what
+#                   rip-db's `/ddb/run` would return for the same data.
+#   <name>.golden   canonical text rendering of the expected decoded result.
+#                   The decoder_test harness decodes the .bin, renders its
+#                   own output using the same format, and does a byte-for-byte
+#                   compare against this file.
+#
+# Peer-AI rule: the .golden file is generated from the same *input spec* that
+# was fed to the encoder, not from decoding the .bin file. That keeps the
+# decoder honest: it has to match an independently-derived expectation.
+#
+# Run:
+#   rip packages/db/extension/scripts/capture-fixtures.rip
+#
+# Running this twice must produce byte-identical output for every fixture.
+# Fixtures are committed; changes are reviewed as diffs.
+#
+# =============================================================================
+
+import { writeFileSync, mkdirSync, rmSync, existsSync } from 'fs'
+import { join, dirname } from 'path'
+import {
+  LogicalTypeId
+  BinarySerializer
+  serializeSuccessResult
+  serializeErrorResult
+} from '../../lib/duckdb-binary.rip'
+
+# -----------------------------------------------------------------------------
+# Paths
+# -----------------------------------------------------------------------------
+
+HERE       = import.meta.dir
+EXT_ROOT   = join HERE, '..'
+FIX_ROOT   = join EXT_ROOT, 'test', 'fixtures'
+TYPES_DIR  = join FIX_ROOT, 'types'
+ENVS_DIR   = join FIX_ROOT, 'envelopes'
+MALF_DIR   = join FIX_ROOT, 'malformed'
+MANIFEST   = join FIX_ROOT, 'manifest.json'
+
+# Fresh sub-directories each run — forces idempotency on the encoder-driven
+# fixture set. We deliberately do NOT touch `integration/`, which is owned by
+# capture-live.rip and has its own re-run lifecycle.
+for sub in [TYPES_DIR, ENVS_DIR, MALF_DIR]
+  rmSync sub, recursive: true, force: true if existsSync sub
+mkdirSync TYPES_DIR, recursive: true
+mkdirSync ENVS_DIR,  recursive: true
+mkdirSync MALF_DIR,  recursive: true
+
+# -----------------------------------------------------------------------------
+# Mirror helpers — independent implementations of the encoder's value mappers.
+# Used to compute the "raw wire value" that the decoder must produce. These
+# are *not* called on the encoder side; the encoder has its own copies inside
+# duckdb-binary.rip. Drift between these mirrors and the real encoder will
+# surface as a test failure (encoded bytes decoded ≠ expected golden), which
+# is exactly the signal we want.
+# -----------------------------------------------------------------------------
+
+mirror =
+  dateToDays: (v) ->
+    return null unless v?
+    if typeof v is 'number' then v
+    else if v instanceof Date
+      Math.floor v.getTime() / 86400000
+    else if typeof v is 'string'
+      Math.floor new Date(v).getTime() / 86400000
+    else 0
+
+  timestampToMicros: (v) ->
+    return null unless v?
+    if typeof v is 'bigint' then v
+    else if v instanceof Date
+      BigInt(v.getTime()) * 1000n
+    else if typeof v is 'string'
+      BigInt(new Date(v).getTime()) * 1000n
+    else if typeof v is 'number'
+      BigInt(v) * 1000n
+    else 0n
+
+  timestampToSecs: (v) ->
+    return null unless v?
+    if typeof v is 'bigint' then v
+    else if v instanceof Date then BigInt Math.floor v.getTime() / 1000
+    else if typeof v is 'string' then BigInt Math.floor new Date(v).getTime() / 1000
+    else if typeof v is 'number' then BigInt v
+    else 0n
+
+  timestampToMillis: (v) ->
+    return null unless v?
+    if typeof v is 'bigint' then v
+    else if v instanceof Date then BigInt v.getTime()
+    else if typeof v is 'string' then BigInt new Date(v).getTime()
+    else if typeof v is 'number' then BigInt(v) * 1000n
+    else 0n
+
+  timestampToNanos: (v) ->
+    return null unless v?
+    if typeof v is 'bigint' then v
+    else if v instanceof Date then BigInt(v.getTime()) * 1000000n
+    else if typeof v is 'string' then BigInt(new Date(v).getTime()) * 1000000n
+    else if typeof v is 'number' then BigInt(v) * 1000000000n
+    else 0n
+
+  timeToMicros: (v) ->
+    return null unless v?
+    m = String(v).match /^(\d+):(\d+):(\d+)(?:\.(\d+))?/
+    return 0n unless m
+    frac = (m[4] or '').padEnd(6, '0').slice(0, 6)
+    BigInt(parseInt(m[1],10)*3600 + parseInt(m[2],10)*60 + parseInt(m[3],10))*1000000n + BigInt(parseInt(frac,10))
+
+  timeToNanos: (v) ->
+    return null unless v?
+    m = String(v).match /^(\d+):(\d+):(\d+)(?:\.(\d+))?/
+    return 0n unless m
+    frac = (m[4] or '').padEnd(9, '0').slice(0, 9)
+    BigInt(parseInt(m[1],10)*3600 + parseInt(m[2],10)*60 + parseInt(m[3],10))*1000000000n + BigInt(parseInt(frac,10))
+
+  timeToPackedTZ: (v) ->
+    return null unless v?
+    m = String(v).match /^(\d+):(\d+):(\d+)(?:\.(\d+))?([+-])(\d+):(\d+)$/
+    return 0n unless m
+    frac = (m[4] or '').padEnd(6, '0').slice(0, 6)
+    h = parseInt m[1], 10
+    mn= parseInt m[2], 10
+    s = parseInt m[3], 10
+    sign = if m[5] is '+' then 1 else -1
+    offH = parseInt m[6], 10
+    offM = parseInt m[7], 10
+    micros = BigInt(h*3600 + mn*60 + s)*1000000n + BigInt(parseInt(frac,10))
+    offsetSec = sign * (offH*3600 + offM*60)
+    (micros << 24n) | BigInt(offsetSec + 86399)
+
+  uuidToHugeint: (uuid) ->
+    return null unless uuid?
+    hexStr = String(uuid).replace(/-/g, '')
+    full = BigInt "0x#{hexStr}"
+    hi   = (full >> 64n) ^ (1n << 63n)
+    mask = (1n << 64n) - 1n
+    lo   = full & mask
+    # Convert hi from unsigned-64-bit pattern to signed i64 for golden:
+    hiS  = if (hi & (1n << 63n)) isnt 0n then hi - (1n << 64n) else hi
+    { lo, hi: hiS }
+
+  stringToHugeint: (v) ->
+    return null unless v?
+    big = BigInt v
+    mask = (1n << 64n) - 1n
+    lo = big & mask
+    hi = big >> 64n  # arithmetic shift → signed i64-range
+    { lo, hi }
+
+  stringToUhugeint: (v) ->
+    return null unless v?
+    big = BigInt v
+    mask = (1n << 64n) - 1n
+    lo = big & mask
+    hi = (big >> 64n) & mask
+    { lo, hi }
+
+  parseInterval: (v) ->
+    return null unless v?
+    s = String v
+    months = 0
+    days   = 0
+    micros = 0n
+    if m = s.match /(-?\d+)\s+month/
+      months = parseInt m[1], 10
+    if m = s.match /(-?\d+)\s+day/
+      days = parseInt m[1], 10
+    if m = s.match /(-?[\d.]+)\s+second/
+      micros = BigInt Math.round parseFloat(m[1]) * 1000000
+    { months, days, micros }
+
+  # Direct interval value passthrough (for cases where the encoder's text
+  # parser can't express what we want, e.g. mixed-sign).
+  intervalRaw: ({ months, days, micros }) ->
+    { months, days, micros: BigInt(micros) }
+
+  # Float bit patterns
+  f32Bits: (n) ->
+    buf = new ArrayBuffer 4
+    dv  = new DataView buf
+    dv.setFloat32 0, n, true
+    dv.getUint32  0, true
+
+  f64Bits: (n) ->
+    buf = new ArrayBuffer 8
+    dv  = new DataView buf
+    dv.setBigUint64 0, (if n? then do ->
+      # Use setFloat64 then read as bigint
+      b = new ArrayBuffer 8
+      d = new DataView b
+      d.setFloat64 0, n, true
+      d.getBigUint64 0, true
+    else 0n), true
+    dv.getBigUint64 0, true
+
+# -----------------------------------------------------------------------------
+# Golden writer — emits canonical text the C++ decoder must reproduce verbatim.
+# Format is defined in test/fixtures/README.md; any change to it is a wire-spec
+# change requiring a decoder update in the same commit.
+# -----------------------------------------------------------------------------
+
+class Golden
+  constructor: ->
+    @lines = []
+
+  line: (s) ->
+    @lines.push s
+
+  toText: ->
+    @lines.join('\n') + '\n'
+
+hex = (u8) ->
+  [...u8].map((b) -> b.toString(16).padStart(2, '0')).join('')
+
+toHex = (s) ->
+  hex new TextEncoder().encode s
+
+# Compute the raw-wire value for a row's value under a given typeId.
+# Returns null for null, or a "tagged value" object the golden writer consumes.
+wireValue = (typeId, v) ->
+  return { tag: 'NULL' } unless v?
+
+  switch typeId
+    when LogicalTypeId.BOOLEAN   then { tag: 'BOOL', n: (if v then 1 else 0) }
+    when LogicalTypeId.TINYINT   then { tag: 'I8',  n: v }
+    when LogicalTypeId.UTINYINT  then { tag: 'U8',  n: v }
+    when LogicalTypeId.SMALLINT  then { tag: 'I16', n: v }
+    when LogicalTypeId.USMALLINT then { tag: 'U16', n: v }
+    when LogicalTypeId.INTEGER   then { tag: 'I32', n: v }
+    when LogicalTypeId.UINTEGER  then { tag: 'U32', n: v }
+    when LogicalTypeId.BIGINT    then { tag: 'I64', n: BigInt(v) }
+    when LogicalTypeId.UBIGINT   then { tag: 'U64', n: BigInt(v) }
+    when LogicalTypeId.FLOAT     then { tag: 'F32BITS', n: mirror.f32Bits(v) }
+    when LogicalTypeId.DOUBLE    then { tag: 'F64BITS', n: mirror.f64Bits(v) }
+    when LogicalTypeId.DATE      then { tag: 'I32', n: mirror.dateToDays(v) }
+    when LogicalTypeId.TIMESTAMP      then { tag: 'I64', n: mirror.timestampToMicros(v) }
+    when LogicalTypeId.TIMESTAMP_TZ   then { tag: 'I64', n: mirror.timestampToMicros(v) }
+    when LogicalTypeId.TIMESTAMP_SEC  then { tag: 'I64', n: mirror.timestampToSecs(v) }
+    when LogicalTypeId.TIMESTAMP_MS   then { tag: 'I64', n: mirror.timestampToMillis(v) }
+    when LogicalTypeId.TIMESTAMP_NS   then { tag: 'I64', n: mirror.timestampToNanos(v) }
+    when LogicalTypeId.TIME      then { tag: 'I64', n: mirror.timeToMicros(v) }
+    when LogicalTypeId.TIME_NS   then { tag: 'I64', n: mirror.timeToNanos(v) }
+    when LogicalTypeId.TIME_TZ   then { tag: 'U64', n: mirror.timeToPackedTZ(v) }
+    when LogicalTypeId.UUID
+      { lo, hi } = mirror.uuidToHugeint(v)
+      { tag: 'UUIDPAIR', lo, hi }
+    when LogicalTypeId.HUGEINT
+      { lo, hi } = mirror.stringToHugeint(v)
+      { tag: 'HUGEPAIR', lo, hi }
+    when LogicalTypeId.UHUGEINT
+      { lo, hi } = mirror.stringToUhugeint(v)
+      { tag: 'UHUGEPAIR', lo, hi }
+    when LogicalTypeId.INTERVAL
+      iv = if v and typeof v is 'object' and 'months' of v
+        mirror.intervalRaw v
+      else
+        mirror.parseInterval v
+      { tag: 'INTERVAL', months: iv.months, days: iv.days, micros: iv.micros }
+    when LogicalTypeId.VARCHAR, LogicalTypeId.CHAR
+      bytes = new TextEncoder().encode String(v)
+      { tag: 'BYTES', len: bytes.length, hex: hex(bytes) }
+    else
+      throw new Error "wireValue: unhandled typeId #{typeId}"
+
+formatWire = (w) ->
+  switch w.tag
+    when 'NULL'      then 'NULL'
+    when 'BOOL'      then "BOOL #{w.n}"
+    when 'I8','U8','I16','U16','I32','U32' then "#{w.tag} #{w.n}"
+    when 'I64','U64' then "#{w.tag} #{w.n.toString()}"
+    when 'F32BITS'   then "F32BITS 0x#{w.n.toString(16).padStart(8,'0')}"
+    when 'F64BITS'   then "F64BITS 0x#{w.n.toString(16).padStart(16,'0')}"
+    when 'UUIDPAIR'  then "UUIDPAIR lo=#{w.lo.toString()} hi=#{w.hi.toString()}"
+    when 'HUGEPAIR'  then "HUGEPAIR lo=#{w.lo.toString()} hi=#{w.hi.toString()}"
+    when 'UHUGEPAIR' then "UHUGEPAIR lo=#{w.lo.toString()} hi=#{w.hi.toString()}"
+    when 'INTERVAL'  then "INTERVAL months=#{w.months} days=#{w.days} micros=#{w.micros.toString()}"
+    when 'BYTES'     then "BYTES #{w.len} #{w.hex}"
+    else throw new Error "formatWire: unknown tag #{w.tag}"
+
+# Build a golden text file from a spec.
+#   spec.columns: [{name, typeId}]
+#   spec.rows: [[v, v, ...], ...]
+#   spec.chunkSize: optional; when set, splits rows into chunks of that size
+buildGolden = (spec) ->
+  g = new Golden()
+  g.line 'ENVELOPE SUCCESS'
+  chunkSize = spec.chunkSize
+  chunks = if chunkSize? and chunkSize > 0 and spec.rows.length > chunkSize
+    out = []
+    for i in [0...Math.ceil(spec.rows.length / chunkSize)]
+      out.push spec.rows.slice i * chunkSize, i * chunkSize + chunkSize
+    out
+  else
+    [spec.rows]
+  g.line "CHUNKS #{chunks.length}"
+  g.line "ROWS #{spec.rows.length}"
+  g.line "COLS #{spec.columns.length}"
+  for col, idx in spec.columns
+    g.line "COL #{idx} typeId=#{col.typeId} name_hex=#{toHex(col.name)}"
+  for chunk, ci in chunks
+    g.line "CHUNK #{ci} rows=#{chunk.length}"
+    for row, ri in chunk
+      for col, coli in spec.columns
+        w = wireValue col.typeId, row[coli]
+        g.line "CELL #{ci} #{ri} #{coli} #{formatWire(w)}"
+  g.toText()
+
+# -----------------------------------------------------------------------------
+# Emit a success fixture (bin + golden)
+# -----------------------------------------------------------------------------
+
+emitted = []
+
+emit = (relPath, spec) ->
+  # Encoder consumes {name, type} where type is a DuckDB type name string;
+  # but fixtures speak in terms of typeIds, so we provide a tiny type-name
+  # for each column that `mapDuckDBType` will resolve back to the same typeId.
+  encoderCols = spec.columns.map (c) ->
+    { name: c.name, type: typeNameForId(c.typeId) }
+  opts = {}
+  opts.chunkSize = spec.chunkSize if spec.chunkSize?
+  bytes  = new Uint8Array serializeSuccessResult encoderCols, spec.rows, opts
+  golden = buildGolden spec
+
+  binPath    = join FIX_ROOT, "#{relPath}.bin"
+  goldPath   = join FIX_ROOT, "#{relPath}.golden"
+  mkdirSync dirname(binPath), recursive: true
+  writeFileSync binPath,  bytes
+  writeFileSync goldPath, golden
+
+  emitted.push { path: relPath, rows: spec.rows.length, cols: spec.columns.length, chunkSize: spec.chunkSize ?? null }
+  p "  wrote #{relPath}.bin (#{bytes.length} bytes, #{spec.rows.length} rows)"
+
+# Map a typeId back to a canonical DuckDB type name the encoder's
+# `mapDuckDBType` will resolve to the same id.
+typeNameForId = (id) ->
+  switch id
+    when LogicalTypeId.BOOLEAN       then 'BOOLEAN'
+    when LogicalTypeId.TINYINT       then 'TINYINT'
+    when LogicalTypeId.SMALLINT      then 'SMALLINT'
+    when LogicalTypeId.INTEGER       then 'INTEGER'
+    when LogicalTypeId.BIGINT        then 'BIGINT'
+    when LogicalTypeId.UTINYINT      then 'UTINYINT'
+    when LogicalTypeId.USMALLINT     then 'USMALLINT'
+    when LogicalTypeId.UINTEGER      then 'UINTEGER'
+    when LogicalTypeId.UBIGINT       then 'UBIGINT'
+    when LogicalTypeId.HUGEINT       then 'HUGEINT'
+    when LogicalTypeId.UHUGEINT      then 'UHUGEINT'
+    when LogicalTypeId.FLOAT         then 'FLOAT'
+    when LogicalTypeId.DOUBLE        then 'DOUBLE'
+    when LogicalTypeId.DATE          then 'DATE'
+    when LogicalTypeId.TIME          then 'TIME'
+    when LogicalTypeId.TIME_NS       then 'TIME_NS'
+    when LogicalTypeId.TIME_TZ       then 'TIME_TZ'
+    when LogicalTypeId.TIMESTAMP     then 'TIMESTAMP'
+    when LogicalTypeId.TIMESTAMP_SEC then 'TIMESTAMP_SEC'
+    when LogicalTypeId.TIMESTAMP_MS  then 'TIMESTAMP_MS'
+    when LogicalTypeId.TIMESTAMP_NS  then 'TIMESTAMP_NS'
+    when LogicalTypeId.TIMESTAMP_TZ  then 'TIMESTAMPTZ'
+    when LogicalTypeId.INTERVAL      then 'INTERVAL'
+    when LogicalTypeId.UUID          then 'UUID'
+    when LogicalTypeId.VARCHAR       then 'VARCHAR'
+    # Pass 'CHAR(1)' so that `mapDuckDBType`'s `startsWith 'CHAR'` branch
+    # returns LogicalTypeId.CHAR (24), not VARCHAR (25). The plain 'CHAR'
+    # token is explicitly folded into VARCHAR by the encoder's switch.
+    when LogicalTypeId.CHAR          then 'CHAR(1)'
+    else throw new Error "typeNameForId: no name for typeId #{id}"
+
+# -----------------------------------------------------------------------------
+# Null patterns
+# -----------------------------------------------------------------------------
+
+# All five patterns + bursty (added per peer-AI round 5)
+# The "bursty" pattern: 77 rows, nulls at specified irregular indices
+BURSTY_NULLS = new Set [0, 1, 5, 6, 7, 8, 15, 31, 32, 47, 63, 64, 65, 76]
+BURSTY_LEN   = 77
+
+applyPattern = (pattern, values) ->
+  # Non-null source values (must be long enough for the pattern's row count)
+  n = values.length
+  switch pattern
+    when 'all_valid'
+      values
+    when 'all_null'
+      values.map -> null
+    when 'alternating'
+      values.map (v, i) -> if i % 2 is 0 then null else v
+    when 'every_64th'
+      # Exactly 192 rows (3 validity-words); null at indices 63, 127, 191
+      values.map (v, i) -> if ((i + 1) % 64) is 0 then null else v
+    when 'partial_word'
+      # 67 rows (not a multiple of 64); nulls scattered
+      values.map (v, i) -> if i in [0, 3, 64, 65, 66] then null else v
+    when 'bursty'
+      values.map (v, i) -> if BURSTY_NULLS.has(i) then null else v
+    else throw new Error "unknown pattern #{pattern}"
+
+# Row counts by pattern
+rowCountFor = (pattern) ->
+  switch pattern
+    when 'all_valid', 'all_null', 'alternating' then 64
+    when 'every_64th'  then 192
+    when 'partial_word' then 67
+    when 'bursty'       then BURSTY_LEN
+    else throw new Error "unknown pattern #{pattern}"
+
+# -----------------------------------------------------------------------------
+# Value generators — return an array of `n` non-null "user-friendly" values
+# that the encoder can serialize. Deterministic; no randomness.
+# -----------------------------------------------------------------------------
+
+bigi = (n) -> BigInt n
+
+pad2 = (n) -> String(n).padStart(2, '0')
+
+formatTime = (totalSec, frac, fracDigits) ->
+  h = Math.floor(totalSec / 3600)
+  m = Math.floor((totalSec % 3600) / 60)
+  s = totalSec % 60
+  fracStr = String(frac).padStart(fracDigits, '0')
+  "#{pad2 h}:#{pad2 m}:#{pad2 s}.#{fracStr}"
+
+# 128-bit two's-complement min/max:
+HUGE_MAX = (1n << 127n) - 1n          # 170141183460469231731687303715884105727
+HUGE_MIN = -(1n << 127n)              # -170141183460469231731687303715884105728
+UHUGE_MAX = (1n << 128n) - 1n
+
+gen =
+  BOOLEAN:       (n) -> [0...n].map (i) -> (i % 2) is 0
+  TINYINT:       (n) -> [0...n].map (i) -> (((i * 7) % 256) - 128)
+  UTINYINT:      (n) -> [0...n].map (i) -> ((i * 13) % 256)
+  SMALLINT:      (n) -> [0...n].map (i) -> (((i * 919) % 65536) - 32768)
+  USMALLINT:     (n) -> [0...n].map (i) -> ((i * 1319) % 65536)
+  INTEGER:       (n) -> [0...n].map (i) -> (i * 2654435761) | 0
+  UINTEGER:      (n) -> [0...n].map (i) -> ((i * 2654435761) >>> 0)
+  BIGINT:        (n) ->
+    # In-range signed 64-bit: take unsigned product mod 2^64, then reinterpret
+    # as signed. Deterministic, covers negatives, stays within the encoder's
+    # `setBigInt64` accepted range.
+    mod64 = 1n << 64n
+    bias  = 1n << 63n
+    [0...n].map (i) ->
+      u = (bigi(i) * 1152921504606846976n) % mod64
+      s = if u >= bias then u - mod64 else u
+      s.toString()
+  UBIGINT:       (n) ->
+    mod64 = 1n << 64n
+    [0...n].map (i) -> ((bigi(i) * 1152921504606846976n) % mod64).toString()
+  HUGEINT:       (n) -> [0...n].map (i) -> (bigi(i) * (1n << 100n) - (1n << 126n)).toString()
+  UHUGEINT:      (n) -> [0...n].map (i) -> (bigi(i) * (1n << 100n)).toString()
+  FLOAT:         (n) -> [0...n].map (i) -> Math.sin(i) * Math.pow(2, (i % 20) - 10)
+  DOUBLE:        (n) -> [0...n].map (i) -> Math.cos(i) * Math.pow(2, (i % 40) - 20)
+  DATE:          (n) -> [0...n].map (i) -> (i * 37) - 10000     # days
+  TIME:          (n) -> [0...n].map (i) -> formatTime (i * 1234567) % 86400, (i * 123) % 1000000, 6
+  TIME_NS:       (n) -> [0...n].map (i) -> formatTime (i * 7654321) % 86400, (i * 98765) % 1000000000, 9
+  TIME_TZ:       (n) ->
+    offs = ['+14:00', '-12:00', '+00:00', '+05:30', '-08:00']
+    [0...n].map (i) -> "#{formatTime (i * 1234567) % 86400, (i * 101) % 1000000, 6}#{offs[i % offs.length]}"
+  TIMESTAMP:     (n) -> [0...n].map (i) -> BigInt(i) * 1234567890n - (1n << 40n)  # micros
+  TIMESTAMP_SEC: (n) -> [0...n].map (i) -> BigInt(i) * 3600n - 1000000n            # secs
+  TIMESTAMP_MS:  (n) -> [0...n].map (i) -> BigInt(i) * 1000000n - (1n << 35n)       # millis
+  TIMESTAMP_NS:  (n) -> [0...n].map (i) -> BigInt(i) * 1_000_000_000n - (1n << 50n) # nanos
+  TIMESTAMP_TZ:  (n) -> [0...n].map (i) -> BigInt(i) * 987654321n                    # micros
+  INTERVAL:      (n) ->
+    [0...n].map (i) ->
+      { months: i - 5, days: (i * 7) % 365, micros: BigInt(i) * 1000000n - 1000n }
+  UUID:          (n) ->
+    [0...n].map (i) ->
+      h = (BigInt(i) * 0xdeadbeefcafef00dn + (1n << 120n)).toString(16).padStart(32, '0').slice(-32)
+      "#{h.slice(0,8)}-#{h.slice(8,12)}-#{h.slice(12,16)}-#{h.slice(16,20)}-#{h.slice(20,32)}"
+  VARCHAR:       (n) ->
+    [0...n].map (i) ->
+      # Mix short (inlineable) and long strings; include unicode and edge bytes.
+      base = if (i % 7) is 0 then ''
+      else if (i % 7) is 1 then "x"
+      else if (i % 7) is 2 then "short-#{i}"
+      else if (i % 7) is 3 then "inline≤12? #{i}"
+      else if (i % 7) is 4 then "unicode ∆∆∆ 🦆 #{i}"
+      else if (i % 7) is 5 then "long-string-over-twelve-bytes-row-#{i}-padding-padding-padding"
+      else "mixed\ttab\nnewline\"quote\\slash row=#{i}"
+      base
+  CHAR:          (n) ->
+    # CHAR decodes identically to VARCHAR on the wire.
+    [0...n].map (i) -> "c#{(i * 31) % 10000}"
+
+TYPE_LIST = [
+  'BOOLEAN'
+  'TINYINT', 'UTINYINT'
+  'SMALLINT', 'USMALLINT'
+  'INTEGER', 'UINTEGER'
+  'BIGINT', 'UBIGINT'
+  'HUGEINT', 'UHUGEINT'
+  'FLOAT', 'DOUBLE'
+  'DATE'
+  'TIME', 'TIME_NS', 'TIME_TZ'
+  'TIMESTAMP', 'TIMESTAMP_SEC', 'TIMESTAMP_MS', 'TIMESTAMP_NS', 'TIMESTAMP_TZ'
+  'INTERVAL'
+  'UUID'
+  'VARCHAR', 'CHAR'
+]
+
+typeIdOf = (name) -> LogicalTypeId[name]
+
+# -----------------------------------------------------------------------------
+# Emit: one folder per type × six null patterns
+# -----------------------------------------------------------------------------
+
+p "capturing per-type × null-pattern matrix…"
+
+for typeName in TYPE_LIST
+  tid = typeIdOf typeName
+  dir = "types/#{typeName.toLowerCase()}"
+  col = { name: typeName.toLowerCase(), typeId: tid }
+  for pattern in ['all_valid', 'all_null', 'alternating', 'every_64th', 'partial_word', 'bursty']
+    n = rowCountFor pattern
+    base = gen[typeName] n
+    vals = applyPattern pattern, base
+    rows = vals.map (v) -> [v]
+    emit "#{dir}/#{pattern}", { columns: [col], rows }
+
+# -----------------------------------------------------------------------------
+# Per-type edge fixtures
+# -----------------------------------------------------------------------------
+
+p "capturing per-type edge fixtures…"
+
+edges =
+  BOOLEAN:   [true, false, null, true, null]
+  TINYINT:   [-128, -1, 0, 1, 127, null]
+  UTINYINT:  [0, 1, 127, 128, 255, null]
+  SMALLINT:  [-32768, -1, 0, 1, 32767, null]
+  USMALLINT: [0, 1, 32767, 32768, 65535, null]
+  INTEGER:   [-2147483648, -1, 0, 1, 2147483647, null]
+  UINTEGER:  [0, 1, 2147483647, 2147483648, 4294967295, null]
+  BIGINT:    ['-9223372036854775808', '-1', '0', '1', '9223372036854775807', null]
+  UBIGINT:   ['0', '1', '9223372036854775807', '9223372036854775808', '18446744073709551615', null]
+  HUGEINT:   [HUGE_MIN.toString(), '-1', '0', '1', HUGE_MAX.toString(), null]
+  UHUGEINT:  ['0', '1', ((1n<<64n)-1n).toString(), (1n<<64n).toString(), UHUGE_MAX.toString(), null]
+  FLOAT:     [0, -0, 1, -1, 3.14159, Number.MIN_VALUE, null]
+  DOUBLE:    [0, -0, 1, -1, 3.141592653589793, Number.MIN_VALUE, Number.MAX_VALUE, null]
+  DATE:      [-10000, -1, 0, 1, 19480, null] # 1970-01-01 = 0; 2023-05-27 = 19504
+  TIME:      ['00:00:00', '23:59:59.999999', '12:34:56.789', null]
+  TIME_NS:   ['00:00:00', '23:59:59.999999999', '12:34:56.123456789', null]
+  TIME_TZ:   ['00:00:00+00:00', '23:59:59.999999+14:00', '12:00:00-12:00', '00:00:00+05:30', null]
+  TIMESTAMP: [0n, 1n, -1n, 1234567890123456n, -9_000_000_000_000_000n, null]
+  TIMESTAMP_SEC: [0n, 1n, -1n, 1_700_000_000n, null]
+  TIMESTAMP_MS:  [0n, 1n, -1n, 1_700_000_000_000n, null]
+  TIMESTAMP_NS:  [0n, 1n, -1n, 1_700_000_000_000_000_000n, null]
+  TIMESTAMP_TZ:  [0n, 1n, -1n, 1_700_000_000_000_000n, null]
+  INTERVAL:
+    # Includes zero, mixed-sign (months negative, days positive, micros positive),
+    # and unnormalized cases per peer-AI guidance.
+    [
+      { months: 0, days: 0, micros: 0n }
+      { months: -5, days: 3, micros: 1_500_000n }
+      { months: 12, days: -30, micros: -1n }
+      { months: 2147483647, days: -2147483648, micros: 9_000_000_000_000n }
+      null
+    ]
+  UUID:
+    [
+      '00000000-0000-0000-0000-000000000000'
+      'ffffffff-ffff-ffff-ffff-ffffffffffff'
+      '80000000-0000-0000-0000-000000000000' # MSB set — exercises sign-bit XOR
+      '12345678-9abc-def0-1234-56789abcdef0'
+      null
+    ]
+  VARCHAR:
+    [
+      ''                     # empty
+      'a'                    # 1 byte
+      'abcdefghijkl'         # 12 bytes (inline boundary)
+      'abcdefghijklm'        # 13 bytes (non-inline)
+      'x'.repeat(1000)       # long
+      'unicode ∆∆∆ 🦆'        # multibyte
+      'zero\u0000byte'        # embedded NUL
+      null
+    ]
+  CHAR:
+    ['a', 'bc', 'defg', '', null]
+
+for typeName in TYPE_LIST
+  tid  = typeIdOf typeName
+  col  = { name: typeName.toLowerCase(), typeId: tid }
+  rows = edges[typeName].map (v) -> [v]
+  emit "types/#{typeName.toLowerCase()}/edges", { columns: [col], rows }
+
+# -----------------------------------------------------------------------------
+# Envelope fixtures
+# -----------------------------------------------------------------------------
+
+p "capturing envelope fixtures…"
+
+emitError = (relPath, message) ->
+  bytes = new Uint8Array serializeErrorResult message
+  g = new Golden()
+  g.line 'ENVELOPE ERROR'
+  g.line "MESSAGE_HEX #{toHex(message)}"
+  binPath  = join FIX_ROOT, "#{relPath}.bin"
+  goldPath = join FIX_ROOT, "#{relPath}.golden"
+  mkdirSync dirname(binPath), recursive: true
+  writeFileSync binPath,  bytes
+  writeFileSync goldPath, g.toText()
+  emitted.push { path: relPath, error: message }
+  p "  wrote #{relPath}.bin (#{bytes.length} bytes, error)"
+
+emitError 'envelopes/error_simple', 'Simple error message'
+emitError 'envelopes/error_unicode', 'unicode error ∆ 🦆 table "x" not found'
+emitError 'envelopes/error_empty', ''
+
+# Zero rows with N columns
+emit 'envelopes/zero_rows_multi_col', {
+  columns: [
+    { name: 'id',   typeId: LogicalTypeId.INTEGER }
+    { name: 'name', typeId: LogicalTypeId.VARCHAR }
+    { name: 'ts',   typeId: LogicalTypeId.TIMESTAMP }
+  ]
+  rows: []
+}
+
+# Zero rows, zero columns (degenerate but legal)
+emit 'envelopes/zero_rows_zero_cols', { columns: [], rows: [] }
+
+# -----------------------------------------------------------------------------
+# Multi-chunk fixtures (via new chunkSize encoder option)
+# -----------------------------------------------------------------------------
+
+p "capturing multi-chunk fixtures…"
+
+# Two equal chunks of 64 rows each, INTEGER column with nulls in each chunk
+do ->
+  col = { name: 'n', typeId: LogicalTypeId.INTEGER }
+  rows = [0...128].map (i) -> [(if (i % 16) is 15 then null else i)]
+  emit 'envelopes/multichunk_128_cs64', { columns: [col], rows, chunkSize: 64 }
+
+# 130 rows, chunkSize 64 → 64 + 64 + 2 (last chunk partial-word)
+do ->
+  col = { name: 'n', typeId: LogicalTypeId.INTEGER }
+  rows = [0...130].map (i) -> [(if (i % 20) is 0 then null else i)]
+  emit 'envelopes/multichunk_130_cs64', { columns: [col], rows, chunkSize: 64 }
+
+# Multi-chunk, multi-column, mixed types including Tier-2
+do ->
+  cols = [
+    { name: 'i',   typeId: LogicalTypeId.INTEGER }
+    { name: 's',   typeId: LogicalTypeId.VARCHAR }
+    { name: 'id',  typeId: LogicalTypeId.UUID }
+    { name: 'iv',  typeId: LogicalTypeId.INTERVAL }
+  ]
+  rows = [0...100].map (i) -> [
+    (if (i % 13) is 0 then null else i)
+    "row-#{i}"
+    (if (i % 7) is 0 then null else "12345678-1234-1234-1234-#{String(i).padStart(12, '0')}")
+    { months: (i % 12), days: i, micros: BigInt(i) * 1000n }
+  ]
+  emit 'envelopes/multichunk_mixed_cs33', { columns: cols, rows, chunkSize: 33 }
+
+# -----------------------------------------------------------------------------
+# Malformed fixtures — byte-patched, no golden, decoder must REJECT cleanly.
+# -----------------------------------------------------------------------------
+
+p "capturing malformed fixtures…"
+
+malformed = []
+
+emitMalformed = (relPath, bytes, expectedError) ->
+  binPath = join FIX_ROOT, "#{relPath}.bin"
+  mkdirSync dirname(binPath), recursive: true
+  writeFileSync binPath, bytes
+  # .reject file declares the expected rejection (free-form substring match)
+  writeFileSync (binPath.replace /\.bin$/, '.reject'), expectedError + '\n'
+  malformed.push { path: relPath, expectedError }
+  p "  wrote #{relPath}.bin (#{bytes.length} bytes, expect reject: #{expectedError})"
+
+# Start from a known-good INTEGER all_valid fixture and mutate.
+baseCols = [{ name: 'n', type: 'INTEGER' }]
+baseRows = [0...8].map (i) -> [i]
+baseBytes = new Uint8Array serializeSuccessResult baseCols, baseRows
+
+# 1. Truncated frame (chop last 4 bytes)
+emitMalformed 'malformed/truncated_end',
+  baseBytes.slice 0, baseBytes.length - 4
+  'unexpected end of buffer'
+
+# 2. Truncated envelope header (chop last 20 bytes)
+emitMalformed 'malformed/truncated_mid',
+  baseBytes.slice 0, Math.floor(baseBytes.length / 2)
+  'unexpected end of buffer'
+
+# 3. Totally empty buffer
+emitMalformed 'malformed/empty', new Uint8Array(0), 'unexpected end of buffer'
+
+# 4. Wrong end marker
+do ->
+  mut = new Uint8Array baseBytes
+  # Replace final end marker 0xFFFF with 0x0000
+  mut[mut.length - 1] = 0x00
+  mut[mut.length - 2] = 0x00
+  emitMalformed 'malformed/bad_end_marker', mut, 'expected end marker'
+
+# 5. Unknown typeId (patch the single-byte typeId right after the type's field 100)
+do ->
+  # Find the pattern: 0x64 0x00 (field 100) in type record, followed by 1 byte.
+  # Simpler: construct a custom bad-typeId fixture from scratch.
+  s = new BinarySerializer()
+  s.writeBoolean 100, true
+  s.writeFieldId 101
+  # column names list
+  s.writeList 100, ['x'], (s, v) -> s.writeString v
+  # column types list with a garbage typeId
+  s.writeList 101, [0], (s) ->
+    s.writeFieldId 100
+    s.writeUint8 200                 # unknown typeId
+    s.writeFieldId 101
+    s.writeUint8 0
+    s.writeEndMarker()
+  s.writeEndMarker()
+  # one empty chunk
+  s.writeFieldId 102
+  s.writeVarInt 1
+  s.writeFieldId 100 ; s.writeVarInt 0          # row_count = 0 via writePropertyVarInt pattern
+  s.writeFieldId 101 ; s.writeVarInt 0          # empty vectors list
+  s.writeEndMarker()
+  s.writeEndMarker()
+  emitMalformed 'malformed/unknown_type_id',
+    new Uint8Array(s.buffer)
+    'unknown typeId'
+
+# 6. String length claims to overrun payload
+do ->
+  s = new BinarySerializer()
+  s.writeBoolean 100, true
+  s.writeFieldId 101
+  s.writeList 100, ['v'], (s, v) -> s.writeString v
+  s.writeList 101, [0], (s) ->
+    s.writeFieldId 100
+    s.writeUint8 LogicalTypeId.VARCHAR
+    s.writeFieldId 101
+    s.writeUint8 0
+    s.writeEndMarker()
+  s.writeEndMarker()
+  # one chunk with 1 row, string with length claimed=999 but only 3 bytes
+  s.writeFieldId 102
+  s.writeVarInt 1
+  s.writeFieldId 100 ; s.writeVarInt 1
+  s.writeFieldId 101 ; s.writeVarInt 1            # one vector
+  s.writeFieldId 100 ; s.writeUint8 0              # allValid=0 (no bitmap)
+  # field 102 is a list<string>: writeList varint(1) then one item
+  s.writeFieldId 102 ; s.writeVarInt 1
+  s.writeVarInt 999                                # bogus length prefix
+  s.buffer.push 0x61, 0x62, 0x63                   # only 3 bytes present
+  s.writeEndMarker()
+  s.writeEndMarker()
+  s.writeEndMarker()
+  emitMalformed 'malformed/string_len_overrun',
+    new Uint8Array(s.buffer)
+    'string length'
+
+# 7. Bitmap too short for declared row count
+do ->
+  s = new BinarySerializer()
+  s.writeBoolean 100, true
+  s.writeFieldId 101
+  s.writeList 100, ['n'], (s, v) -> s.writeString v
+  s.writeList 101, [0], (s) ->
+    s.writeFieldId 100 ; s.writeUint8 LogicalTypeId.INTEGER
+    s.writeFieldId 101 ; s.writeUint8 0
+    s.writeEndMarker()
+  s.writeEndMarker()
+  s.writeFieldId 102 ; s.writeVarInt 1
+  s.writeFieldId 100 ; s.writeVarInt 100            # claim 100 rows
+  s.writeFieldId 101 ; s.writeVarInt 1              # one vector
+  s.writeFieldId 100 ; s.writeUint8 1               # allValid=1 → bitmap follows
+  s.writeFieldId 101 ; s.writeVarInt 4              # only 4 bytes of bitmap (needs 16)
+  s.buffer.push 0xff, 0xff, 0xff, 0xff
+  s.writeFieldId 102 ; s.writeVarInt 400            # matches 100*4 data bytes
+  for _ in [0...400]
+    s.buffer.push 0
+  s.writeEndMarker() ; s.writeEndMarker() ; s.writeEndMarker()
+  emitMalformed 'malformed/bitmap_too_short',
+    new Uint8Array(s.buffer)
+    'bitmap'
+
+# 8. Bad boolean top-level success marker (neither 0 nor 1)
+do ->
+  mut = new Uint8Array baseBytes
+  # Index 2 is the success-byte (after field id 0x64 0x00)
+  mut[2] = 0x55
+  emitMalformed 'malformed/bad_success_byte', mut, 'boolean'
+
+# -----------------------------------------------------------------------------
+# Manifest
+# -----------------------------------------------------------------------------
+
+manifest =
+  fixtureFormatVersion: 1
+  encoderSource: 'packages/db/lib/duckdb-binary.rip'
+  generatedBy:   'packages/db/extension/scripts/capture-fixtures.rip'
+  success:       emitted
+  malformed:     malformed
+
+writeFileSync MANIFEST, JSON.stringify(manifest, null, 2) + '\n'
+p "wrote manifest.json (#{emitted.length} success + #{malformed.length} malformed)"
+p "done."

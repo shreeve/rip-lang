@@ -1,0 +1,6 @@
+# Build outputs
+decoder_test
+decoder_test.dSYM/
+*.o
+*.dSYM/
+

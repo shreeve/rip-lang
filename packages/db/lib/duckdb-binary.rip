@@ -161,7 +161,7 @@ export class BinarySerializer
 # Result serializers
 # ==============================================================================
 
-export serializeSuccessResult = (columns, rows) ->
+export serializeSuccessResult = (columns, rows, opts = {}) ->
   s = new BinarySerializer()
 
   # field_100: success = true
@@ -171,10 +171,24 @@ export serializeSuccessResult = (columns, rows) ->
   s.writeFieldId 101
   serializeColumnNamesAndTypes s, columns
 
-  # field_102: list<DataChunk> (one chunk with all rows)
-  s.writeFieldId 102
-  s.writeVarInt 1
-  serializeDataChunk s, columns, rows
+  # field_102: list<DataChunk>. Default is a single chunk with all rows.
+  # When opts.chunkSize is provided (fixture capture / tests), split rows
+  # into chunks of that size (last chunk may be smaller). This keeps live
+  # UI clients on the existing single-chunk shape while letting the decoder
+  # test harness exercise multi-chunk framing against the real encoder.
+  chunkSize = opts.chunkSize
+  if chunkSize? and chunkSize > 0 and rows.length > chunkSize
+    chunkCount = Math.ceil(rows.length / chunkSize)
+    s.writeFieldId 102
+    s.writeVarInt chunkCount
+    for i in [0...chunkCount]
+      start = i * chunkSize
+      slice = rows.slice start, start + chunkSize
+      serializeDataChunk s, columns, slice
+  else
+    s.writeFieldId 102
+    s.writeVarInt 1
+    serializeDataChunk s, columns, rows
 
   s.writeEndMarker()
   s.toArrayBuffer()
@@ -537,7 +551,17 @@ timestampToNanos = (value) ->
   else 0n
 
 parseInterval = (value) ->
-  return { months: 0, days: 0, micros: 0n } unless value
+  return { months: 0, days: 0, micros: 0n } unless value?
+  # Accept a raw `{months, days, micros}` object as a pass-through — useful
+  # for callers (fixture generators, tests) that want to construct intervals
+  # with values the text form can't express (e.g., mixed signs across fields,
+  # INT32_MIN days). Objects are detected via presence of the `months` key.
+  if typeof value is 'object' and not (value instanceof Date) and 'months' of value
+    return {
+      months: value.months ?? 0
+      days:   value.days   ?? 0
+      micros: BigInt (value.micros ?? 0)
+    }
   str = String value
   months = 0
   days = 0

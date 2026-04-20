@@ -1,0 +1,11 @@
+source: live /ddb/run
+query: SELECT * FROM fixtures_multichunk ORDER BY n
+headers: X-Rip-DB-Chunk-Size=40
+expected_rows: 150
+expected_cols: 3
+expected_columns:
+  - n     BIGINT
+  - name  VARCHAR (nulls at i % 13 == 0)
+  - val   DOUBLE
+chunks: 4            # 40 + 40 + 40 + 30
+boundary_note: chunk boundaries cross the 64-row validity word twice
