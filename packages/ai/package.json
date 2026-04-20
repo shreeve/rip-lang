@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/ai",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "AI-to-AI collaboration MCP server — peer review and multi-turn discussion between AI models",
   "type": "module",
   "main": "mcp.rip",
@@ -33,7 +33,7 @@
   "author": "Steve Shreeve <steve.shreeve@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "rip-lang": ">=3.14.0"
+    "rip-lang": ">=3.14.1"
   },
   "files": [
     "mcp.rip",

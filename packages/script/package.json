@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/script",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "description": "Homoiconic interaction engine — automate stateful conversations with remote systems using nested data structures",
   "type": "module",
   "main": "script.rip",
@@ -29,7 +29,7 @@
   "author": "Steve Shreeve <steve.shreeve@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "rip-lang": ">=3.14.0"
+    "rip-lang": ">=3.14.1"
   },
   "files": [
     "script.rip",

@@ -2141,6 +2141,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
     err.code = "E_SCHEMA";
     return err;
   }
+  var SCHEMA_RUNTIME_ABI_VERSION = 1;
   var SCHEMA_RUNTIME = `
 // ---- Rip Schema Runtime ----------------------------------------------------
 // Four layers, lazy compilation:
@@ -2150,6 +2151,26 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
 //   3 (validator)    compiled validator plan. Built on first .parse.
 //   4a (ORM plan)    built on first .find/.create/.save.
 //   4b (DDL plan)    built on first .toSQL(). Independent of 4a.
+//
+// Instance-singleton model:
+// The runtime installs itself on globalThis.__ripSchema the first time a
+// compiled bundle executes. Subsequent bundles that inject the same runtime
+// template detect the existing installation and bind to it instead of
+// re-running the body — giving every bundle a single shared registry,
+// adapter, and class identity. The IIFE wrapper below enforces that.
+
+var { __schema, SchemaError, __SchemaRegistry, __schemaSetAdapter } = (function() {
+  if (typeof globalThis !== 'undefined' && globalThis.__ripSchema) {
+    if (globalThis.__ripSchema.__version !== ${SCHEMA_RUNTIME_ABI_VERSION}) {
+      throw new Error(
+        "rip-schema runtime version mismatch: loaded runtime is v" +
+        globalThis.__ripSchema.__version +
+        ", but this bundle expects v" + ${SCHEMA_RUNTIME_ABI_VERSION} +
+        ". Two compiled Rip bundles with incompatible schema runtimes are loaded in the same process."
+      );
+    }
+    return globalThis.__ripSchema;
+  }
 
 class SchemaError extends Error {
   constructor(issues, schemaName, schemaKind) {
@@ -2461,13 +2482,12 @@ class __SchemaDef {
           hooks.set(e.name, e.fn);
           break;
         case 'directive': {
-          if (e.name === 'mixin') {
-            // Deferred to the post-pass so we can dedupe diamond includes
-            // and detect cycles with a full expansion stack.
-            directives.push({ name: e.name, args: e.args || [] });
-            break;
-          }
           directives.push({ name: e.name, args: e.args || [] });
+          // @mixin is recorded but further handling is deferred to the
+          // post-pass so we can dedupe diamond includes and detect
+          // cycles with a full expansion stack. All other directives
+          // get their relation / timestamps / softDelete processing now.
+          if (e.name === 'mixin') break;
           if (e.name === 'timestamps') timestamps = true;
           if (e.name === 'softDelete') softDelete = true;
           const rel = __schemaNormalizeDirectiveRelation(e, this.name);
@@ -3373,11 +3393,13 @@ function __schema(descriptor) {
   return def;
 }
 
-if (typeof globalThis !== 'undefined') {
-  globalThis.__ripSchema = {
+  const exports = {
     __schema, SchemaError, __SchemaRegistry, __schemaSetAdapter,
+    __version: ${SCHEMA_RUNTIME_ABI_VERSION},
   };
-}
+  if (typeof globalThis !== 'undefined') globalThis.__ripSchema = exports;
+  return exports;
+})();
 
 // === End Schema Runtime ===
 `;
@@ -13572,8 +13594,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeEmitter({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.14.0";
-  var BUILD_DATE = "2026-04-20@09:13:03GMT";
+  var VERSION = "3.14.1";
+  var BUILD_DATE = "2026-04-20@10:25:54GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
