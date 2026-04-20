@@ -304,6 +304,74 @@ virtual host:
 When no TCP passthrough apps exist, the `stream {}` block is omitted entirely
 and `http {}` listens directly on port 443.
 
+## Multi-path sites
+
+When a site binds multiple apps at distinct path prefixes (`site@/path` syntax
+in `serve.rip`), the generator emits one `server { … }` block per hostname
+with one `location <mountPath>` per route, sorted by descending path
+specificity so nginx's longest-prefix rule matches the user's intent.
+
+Given:
+
+```coffee
+sites:
+  relay: 'relay.trusthealth.com'
+
+apps:
+  mqtt: 'http://127.0.0.1:9001 relay@/mqtt'
+  repl: '/var/www/relay-repl relay@/repl browse'
+```
+
+`rip server -n` emits (abbreviated):
+
+```nginx
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name relay.trusthealth.com;
+
+    ssl_certificate     /home/shreeve/ssl/trusthealth.com.crt;
+    ssl_certificate_key /home/shreeve/ssl/trusthealth.com.key;
+
+    # ... HSTS + security headers + rate limits ...
+
+    location /mqtt {
+        proxy_pass http://127.0.0.1:9001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        # ... X-Forwarded-* ...
+        proxy_read_timeout 1h;
+        proxy_send_timeout 1h;
+        proxy_buffering off;
+    }
+
+    location = /repl { return 301 /repl/; }
+    location /repl/ {
+        alias /var/www/relay-repl/;
+        index index.html;
+        autoindex on;
+        try_files $uri $uri/ =404;
+    }
+
+    location ~ /\. {
+        deny all;
+    }
+}
+```
+
+Two conventions the generator follows:
+
+- **Proxy mounts omit the trailing slash** (`location /mqtt`) so bare URLs
+  like `wss://host/mqtt` (common for MQTT/WS firmware) match directly.
+  `/mqttfake` technically matches too, but the upstream backend 4xx's it —
+  harmless.
+- **Static subpath mounts use trailing slash** (`location /repl/`) plus an
+  exact-match redirect (`location = /repl { return 301 /repl/; }`) so bare
+  `/repl` sends browsers to the canonical trailing-slash URL. `alias` then
+  strips the prefix before resolving against the filesystem root.
+- **Root-mounted static** keeps using `root` (no `alias`).
+
 ## Upgrading nginx
 
 Build the new version in a container, pull it to `/opt/nginx-X.Y.Z`, and move

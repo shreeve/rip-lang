@@ -208,6 +208,37 @@ export normalizeAppConfig = (appId, appConfig, baseDir) ->
 SERVE_KEYS = new Set(%w[ssl hsts acme sites apps version server])
 KNOWN_FLAGS = new Set(%w[browse spa])
 
+canonicalizeMountPath = (raw, appName, errors, path) ->
+  # raw === null means "no @ in the token" -> default to root mount
+  return '/' if raw is null
+  s = String(raw)
+  if s is ''
+    pushError(errors, 'E_APP_PATH_FORMAT', path, "app #{appName}: trailing '@' with no mount path", "Drop the '@' to mount at root, or write '@/foo' for a path mount.")
+    return null
+  unless s.startsWith '/'
+    pushError(errors, 'E_APP_PATH_FORMAT', path, "app #{appName}: mount path must start with '/' (got #{JSON.stringify(s)})", "Use 'site@/foo' for a path mount.")
+    return null
+  if s.includes '//'
+    pushError(errors, 'E_APP_PATH_FORMAT', path, "app #{appName}: mount path cannot contain '//' (got #{JSON.stringify(s)})")
+    return null
+  if /[?#]/.test(s)
+    pushError(errors, 'E_APP_PATH_FORMAT', path, "app #{appName}: mount path cannot contain '?' or '#' (got #{JSON.stringify(s)})", "Mount paths are URL prefixes, not full URLs; drop any query or fragment.")
+    return null
+  if /[\s\x00-\x1f]/.test(s)
+    pushError(errors, 'E_APP_PATH_FORMAT', path, "app #{appName}: mount path cannot contain whitespace or control characters (got #{JSON.stringify(s)})")
+    return null
+  # canonical form: '/' for root, '/foo' or '/foo/bar' otherwise (no trailing '/', no '/*')
+  s = s.slice(0, -2) if s.endsWith '/*'
+  s = s.slice(0, -1) if s.length > 1 and s.endsWith '/'
+  s or '/'
+
+routerPathFor = (mountPath) ->
+  if mountPath is '/' then '/*' else "#{mountPath}/*"
+
+sanitizeMountForId = (mountPath) ->
+  return 'root' if mountPath is '/'
+  mountPath.slice(1).replace(/\//g, '-')
+
 parseAppSpec = (appName, spec, knownSites, errors, path) ->
   tokens = String(spec or '').trim().split(/\s+/).filter(Boolean)
   unless tokens.length > 0
@@ -228,22 +259,49 @@ parseAppSpec = (appName, spec, knownSites, errors, path) ->
     tokens
 
   flags = new Set(rest.filter (t) -> KNOWN_FLAGS.has(t))
-  siteNames = rest.filter (t) -> not KNOWN_FLAGS.has(t)
+  nonFlags = rest.filter (t) -> not KNOWN_FLAGS.has(t)
 
-  if siteNames.length is 0
+  if nonFlags.length is 0
     pushError(errors, 'E_APP_NO_SITES', path, "app #{appName}: no site names specified", "Add at least one site name from the sites section.")
     return null
 
-  unknown = siteNames.filter (s) -> not knownSites.has(s)
-  if unknown.length > 0
-    pushError(errors, 'E_APP_UNKNOWN_SITE', path, "app #{appName}: unknown site(s): #{unknown.join(', ')}", "Define these in the sites section.")
+  bindings = []
+  unknownSites = []
+  malformed = false
+  for token in nonFlags
+    atIdx = token.indexOf('@')
+    site = if atIdx is -1 then token else token.slice(0, atIdx)
+    rawMount = if atIdx is -1 then null else token.slice(atIdx + 1)
+    if site is ''
+      pushError(errors, 'E_APP_SITE_MISSING', path, "app #{appName}: site name missing before '@' (got #{JSON.stringify(token)})", "Write 'siteName@/path', not '@/path'.")
+      malformed = true
+      continue
+    unless knownSites.has(site)
+      unknownSites.push(site)
+      continue
+    mountPath = canonicalizeMountPath(rawMount, appName, errors, path)
+    unless mountPath?
+      malformed = true
+      continue
+    bindings.push({ site, mountPath })
+
+  if unknownSites.length > 0
+    pushError(errors, 'E_APP_UNKNOWN_SITE', path, "app #{appName}: unknown site(s): #{unknownSites.join(', ')}", "Define these in the sites section.")
     return null
+
+  return null if malformed or bindings.length is 0
 
   kind = if /^https?:\/\//.test(target) then 'http-proxy'
   else if /^tcp:\/\//.test(target) then 'tcp-proxy'
   else 'local'
 
-  { kind, target, siteNames, flags }
+  if kind is 'tcp-proxy'
+    nonRoot = bindings.filter (b) -> b.mountPath isnt '/'
+    if nonRoot.length > 0
+      pushError(errors, 'E_APP_TCP_PATH', path, "app #{appName}: tcp proxies cannot mount at a path (got '#{nonRoot[0].mountPath}')", "TCP passthrough is SNI-routed on port 443; remove the '@/path'.")
+      return null
+
+  { kind, target, bindings, flags }
 
 normalizeServeRip = (config, baseDir, options = {}) ->
   errors = []
@@ -307,12 +365,18 @@ normalizeServeRip = (config, baseDir, options = {}) ->
   streams = []
   siteBindings = new Map()
 
-  bindSite = (siteName, appName, path) ->
-    if siteBindings.has(siteName)
-      pushError(errors, 'E_SITE_MULTI_BIND', path, "site #{siteName} is already bound by app #{siteBindings.get(siteName)}")
+  bindSite = (siteName, mountPath, appName, path) ->
+    key = "#{siteName}@#{mountPath}"
+    if siteBindings.has(key)
+      suffix = if mountPath is '/' then '' else " at #{mountPath}"
+      pushError(errors, 'E_SITE_MULTI_BIND', path, "site #{siteName}#{suffix} is already bound by app #{siteBindings.get(key)}")
       return false
-    siteBindings.set(siteName, appName)
+    siteBindings.set(key, appName)
     true
+
+  ensureSite = (hostname) ->
+    sites[hostname] ?= { host: hostname, timeouts: {}, routes: [] }
+    sites[hostname]
 
   if config.apps?
     unless isPlainObject(config.apps)
@@ -329,10 +393,10 @@ normalizeServeRip = (config, baseDir, options = {}) ->
         parsed = parseAppSpec(appName, appSpec, knownSites, errors, "apps.#{appName}")
         continue unless parsed
 
-        for sn in parsed.siteNames
-          bindSite(sn, appName, "apps.#{appName}")
+        for b in parsed.bindings
+          bindSite(b.site, b.mountPath, appName, "apps.#{appName}")
 
-        hostnames = parsed.siteNames.map (s) -> siteToHost.get(s)
+        uniqueHostnames = Array.from(new Set(parsed.bindings.map((b) -> siteToHost.get(b.site))))
 
         if parsed.kind is 'local'
           entryPath = if parsed.target is '.' then baseDir else resolve(baseDir, parsed.target)
@@ -343,56 +407,54 @@ normalizeServeRip = (config, baseDir, options = {}) ->
             apps[appName] =
               id: appName
               entry: indexFile
-              hosts: hostnames
+              hosts: uniqueHostnames
               workers: null
               maxQueue: 512
               queueTimeoutMs: 30000
               readTimeoutMs: 30000
               env: {}
 
-          for hostname in hostnames
+          for b in parsed.bindings
+            hostname = siteToHost.get(b.site)
+            site = ensureSite(hostname)
+            mountPath = b.mountPath
+            idSuffix = if mountPath is '/' then '' else "-#{sanitizeMountForId(mountPath)}"
             if isApp
-              sites[hostname] =
+              site.routes.push
+                id: "#{appName}-#{b.site}-default#{idSuffix}"
                 host: hostname
+                path: routerPathFor(mountPath)
+                mountPath: mountPath
+                methods: '*'
+                priority: 0
+                proxy: null
+                app: appName
+                static: null
+                root: null
+                spa: false
+                browse: false
+                redirect: null
+                headers: null
+                websocket: false
                 timeouts: {}
-                routes: [
-                  id: "#{appName}-default"
-                  host: hostname
-                  path: '/*'
-                  methods: '*'
-                  priority: 0
-                  proxy: null
-                  app: appName
-                  static: null
-                  root: null
-                  spa: false
-                  browse: false
-                  redirect: null
-                  headers: null
-                  websocket: false
-                  timeouts: {}
-                ]
             else
-              sites[hostname] =
+              site.routes.push
+                id: "#{appName}-#{b.site}-static#{idSuffix}"
                 host: hostname
+                path: routerPathFor(mountPath)
+                mountPath: mountPath
+                methods: '*'
+                priority: 0
+                proxy: null
+                app: null
+                static: '.'
+                root: entryPath
+                spa: parsed.flags.has('spa')
+                browse: parsed.flags.has('browse')
+                redirect: null
+                headers: null
+                websocket: false
                 timeouts: {}
-                routes: [
-                  id: "#{appName}-static"
-                  host: hostname
-                  path: '/*'
-                  methods: '*'
-                  priority: 0
-                  proxy: null
-                  app: null
-                  static: '.'
-                  root: entryPath
-                  spa: parsed.flags.has('spa')
-                  browse: parsed.flags.has('browse')
-                  redirect: null
-                  headers: null
-                  websocket: false
-                  timeouts: {}
-                ]
 
             cert = matchCertForHost(certMap, hostname) if certMap.size > 0
             resolvedCerts[hostname] = cert if cert
@@ -416,27 +478,28 @@ normalizeServeRip = (config, baseDir, options = {}) ->
             timeouts: { connectMs: 10000, readMs: 30000 }
           httpProxies[proxyId] = proxies[proxyId]
 
-          for hostname in hostnames
-            sites[hostname] =
+          for b in parsed.bindings
+            hostname = siteToHost.get(b.site)
+            site = ensureSite(hostname)
+            mountPath = b.mountPath
+            idSuffix = if mountPath is '/' then '' else "-#{sanitizeMountForId(mountPath)}"
+            site.routes.push
+              id: "#{appName}-#{b.site}-proxy#{idSuffix}"
               host: hostname
+              path: routerPathFor(mountPath)
+              mountPath: mountPath
+              methods: '*'
+              priority: 0
+              proxy: proxyId
+              app: null
+              static: null
+              root: null
+              spa: false
+              browse: false
+              redirect: null
+              headers: null
+              websocket: false
               timeouts: {}
-              routes: [
-                id: "#{appName}-proxy"
-                host: hostname
-                path: '/*'
-                methods: '*'
-                priority: 0
-                proxy: proxyId
-                app: null
-                static: null
-                root: null
-                spa: false
-                browse: false
-                redirect: null
-                headers: null
-                websocket: false
-                timeouts: {}
-              ]
 
             cert = matchCertForHost(certMap, hostname) if certMap.size > 0
             resolvedCerts[hostname] = cert if cert
@@ -459,7 +522,7 @@ normalizeServeRip = (config, baseDir, options = {}) ->
             connectTimeoutMs: 10000
           streamUpstreams[proxyId] = tcpProxies[proxyId]
 
-          for hostname in hostnames
+          for hostname in uniqueHostnames
             streams.push
               id: proxyId
               order: streams.length

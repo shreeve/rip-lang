@@ -90,6 +90,52 @@ test "compiled route preserves root field", ->
   matched = matchRoute(table, 'app.example.com', '/index.html')
   eq matched.root, '/mnt/site'
 
+test "matchRoute resolves path-mounted apps on same host", ->
+  table = compileRouteTable([], {
+    'relay.example.com':
+      routes: [
+        { id: 'mqtt-proxy', path: '/mqtt/*', proxy: 'proxy-mqtt' }
+        { id: 'repl-static', path: '/repl/*', static: '.', root: '/var/www/relay-repl', browse: true }
+      ]
+  })
+  eq matchRoute(table, 'relay.example.com', '/mqtt').proxy, 'proxy-mqtt'
+  eq matchRoute(table, 'relay.example.com', '/mqtt/foo/bar').proxy, 'proxy-mqtt'
+  eq matchRoute(table, 'relay.example.com', '/repl/').root, '/var/www/relay-repl'
+  eq matchRoute(table, 'relay.example.com', '/repl/index.html').root, '/var/www/relay-repl'
+
+test "matchRoute accepts bare mount path, trailing slash, and nested paths", ->
+  table = compileRouteTable([], {
+    'relay.example.com':
+      routes: [
+        { id: 'mqtt', path: '/mqtt/*', proxy: 'proxy-mqtt' }
+      ]
+  })
+  eq matchRoute(table, 'relay.example.com', '/mqtt').proxy, 'proxy-mqtt'
+  eq matchRoute(table, 'relay.example.com', '/mqtt/').proxy, 'proxy-mqtt'
+  eq matchRoute(table, 'relay.example.com', '/mqtt/foo/bar').proxy, 'proxy-mqtt'
+
+test "matchRoute respects segment boundary on mount path", ->
+  table = compileRouteTable([], {
+    'relay.example.com':
+      routes: [
+        { id: 'mqtt', path: '/mqtt/*', proxy: 'proxy-mqtt' }
+      ]
+  })
+  # '/mqttfake' must NOT match '/mqtt/*' — segment boundary protection
+  eq matchRoute(table, 'relay.example.com', '/mqttfake'), null
+  eq matchRoute(table, 'relay.example.com', '/mqtt-abc'), null
+
+test "matchRoute prefers subpath mount over root on same host", ->
+  table = compileRouteTable([], {
+    'relay.example.com':
+      routes: [
+        { id: 'root', path: '/*', static: '.', root: '/var/www/site' }
+        { id: 'mqtt', path: '/mqtt/*', proxy: 'proxy-mqtt' }
+      ]
+  })
+  eq matchRoute(table, 'relay.example.com', '/mqtt/foo').proxy, 'proxy-mqtt'
+  eq matchRoute(table, 'relay.example.com', '/index.html').static, '.'
+
 test "compiled route preserves spa field", ->
   table = compileRouteTable([], {
     '*.example.com':

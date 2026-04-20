@@ -193,9 +193,21 @@ start port: 3000
 - `import.meta.dir` resolves to the package's actual filesystem path
 - `@rip-lang/server` binds `this` to the request context
 
-`rip server` uses the globally installed `@rip-lang/server/server.rip`, not the workspace copy. Changes to `packages/server/` do not affect `rip server` until that package is published or otherwise updated in the global install.
+### Dev machine setup — run from source, not from npm
 
-For server-only changes, publish just that package instead of doing a full release. Use `bun run bump` for full rip-lang releases.
+The dev workflow in this repo is to **run everything out of the checkout**, not from installed npm packages. Three scripts enforce that:
+
+| Script | When it runs | What it does |
+| --- | --- | --- |
+| `bun run link-global` | once per machine, manual | Symlinks CLIs (`rip`, `rip-db`, `rip-print`, `rip-server`) into `~/.bun/bin/`, symlinks `rip-lang` and every `@rip-lang/<pkg>` into `~/node_modules/` and `~/.bun/install/global/node_modules/`, and strips any npm-installed `rip-lang` from bun's global manifest so `bun i -g anything` can't silently shadow the workspace |
+| `bun run link-local` | auto, every `bun install` (postinstall) | Replaces every `node_modules/.bun/rip-lang@*/node_modules/rip-lang/` cache inside this repo with a symlink to the repo root, plus re-links top-level `node_modules/rip-lang` |
+| `bun run link-check` | auto, every `bun install` (postinstall) | Guardrail: verifies `require.resolve('rip-lang/package.json')` lands inside the repo. If a stale tarball is shadowing the workspace it fails fast with a `rm -rf node_modules bun.lock && bun install` remediation |
+
+After `bun run link-global`, every `rip server` invocation — from any cwd — executes `packages/server/server.rip` in this workspace via `packages/server/bin/rip-server` and its `import.meta.url` lookup. Edits to `packages/server/*` are picked up on the next run. **No publish, no `bun add -g`, no copy of `@rip-lang/server` anywhere — only symlinks pointing back at this repo.**
+
+The `bin/rip` subcommand dispatch (`bin/rip-<name>` → `bin/<name>` → `packages/*/bin/rip-<name>` → local `node_modules/.bin` → PATH) converges on the workspace at either step 3 (when cwd is inside the repo) or step 5 (when `rip-server` on the global PATH is the link-global symlink). Either path runs workspace code.
+
+Use `bun run bump` for full rip-lang releases; publishing `@rip-lang/server` and friends to npm is for downstream consumers outside this repo, not for using them locally.
 
 Widget conventions and gotchas are in `packages/ui/AGENTS.md`. Browser runtime details are in `docs/AGENTS.md`.
 

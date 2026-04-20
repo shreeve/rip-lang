@@ -115,6 +115,8 @@ apps:
   incus: 'https://10.0.0.50:8443 incus'   # HTTP reverse proxy
   mysql: 'tcp://10.0.0.50:3306 db'        # TCP passthrough by SNI
   zion: '/home/shreeve/www zion browse'    # static directory with browsing
+  mqtt: 'http://127.0.0.1:9001 relay@/mqtt'             # mount at /mqtt
+  repl: '/var/www/relay-repl relay@/repl browse'        # mount at /repl
 ```
 
 Target kinds inferred from prefix:
@@ -125,9 +127,16 @@ Target kinds inferred from prefix:
 
 Optional flags: `browse` (directory listing), `spa` (single-page app fallback).
 
+Site tokens optionally carry a mount path: `site@/path`. Multiple apps can
+bind the same site at distinct path prefixes; omit `@/path` to mount at root.
+Canonicalization: `/x`, `/x/`, `/x/*` all collapse to `/x`. Subpath static
+mounts use `alias` semantics (mount prefix stripped before resolving against
+`root`). TCP proxies cannot be path-mounted.
+
 ### Constraints
 
-- Each site may be bound by exactly one app
+- Each `(site, mountPath)` pair may be bound by exactly one app; `/` plus
+  subpath mounts on the same site are allowed
 - TCP proxies require a port in the URL
 - Local targets with `index.rip` become Rip apps; without it, static file serving
 
@@ -139,6 +148,10 @@ Optional flags: `browse` (directory listing), `spa` (single-page app fallback).
 - Layer 4 TCP/TLS routing and ingress selection -> `streams/*`
 - CLI / app-entry resolution -> `control/cli.rip`
 - orchestration / wiring across serving modes -> `server.rip`
+- `serve.rip` app-spec parsing + `site@/path` mount canonicalization -> `serving/config.rip`
+- mount-path route matching + longest-prefix scoring -> `serving/router.rip`
+- mount-prefix stripping for static file resolution -> `serving/static.rip` (`stripRoutePrefix`)
+- nginx `location` emission per mount -> `serving/nginx.rip` (`emitRouteLocation`)
 
 Avoid adding generic utility files.
 

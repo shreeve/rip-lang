@@ -224,7 +224,123 @@ test "server_tokens off is set", ->
   out = generateNginxConfig(config)
   ok out.includes('server_tokens off')
 
-test "shared sites with same cert and proxy merge into one block", ->
+test "multi-path site emits one server block with a location per route", ->
+  config = makeConfig
+    proxies:
+      'proxy-mqtt':
+        id: 'proxy-mqtt'
+        kind: 'http'
+        targets: ['http://127.0.0.1:9001']
+    sites:
+      'relay.example.com':
+        host: 'relay.example.com'
+        routes: [
+          { id: 'mqtt-proxy', host: 'relay.example.com', path: '/mqtt/*', mountPath: '/mqtt', proxy: 'proxy-mqtt' }
+          { id: 'repl-static', host: 'relay.example.com', path: '/repl/*', mountPath: '/repl', static: '.', root: '/var/www/relay-repl', browse: true, spa: false }
+        ]
+  out = generateNginxConfig(config)
+  ok out.includes('server_name relay.example.com')
+  # Proxy: single location with no trailing slash so bare /mqtt works for WS firmware
+  ok out.includes('location /mqtt {')
+  ok out.includes('proxy_pass http://127.0.0.1:9001')
+  # Static: trailing-slash location + exact-match redirect so bare /repl -> /repl/
+  ok out.includes('location = /repl { return 301 /repl/; }')
+  ok out.includes('location /repl/ {')
+  ok out.includes('alias /var/www/relay-repl/')
+  ok out.includes('autoindex on')
+
+test "subpath static mount uses alias not root and emits bare-URL redirect", ->
+  config = makeConfig
+    sites:
+      'example.com':
+        host: 'example.com'
+        routes: [
+          { id: 'api-static', host: 'example.com', path: '/api/*', mountPath: '/api', static: '.', root: '/var/www/api' }
+        ]
+  out = generateNginxConfig(config)
+  ok out.includes('location = /api { return 301 /api/; }')
+  ok out.includes('location /api/ {')
+  ok out.includes('alias /var/www/api/')
+
+test "subpath proxy mount uses bare-path location (no trailing slash) so bare URL matches", ->
+  config = makeConfig
+    proxies:
+      'proxy-mqtt':
+        id: 'proxy-mqtt'
+        kind: 'http'
+        targets: ['http://127.0.0.1:9001']
+    sites:
+      'relay.example.com':
+        host: 'relay.example.com'
+        routes: [
+          { id: 'mqtt', host: 'relay.example.com', path: '/mqtt/*', mountPath: '/mqtt', proxy: 'proxy-mqtt' }
+        ]
+  out = generateNginxConfig(config)
+  ok out.includes('location /mqtt {')
+  ok not out.includes('location /mqtt/ {')
+
+test "root static mount keeps using root directive", ->
+  config = makeConfig
+    sites:
+      'example.com':
+        host: 'example.com'
+        routes: [
+          { id: 'root', host: 'example.com', path: '/*', mountPath: '/', static: '.', root: '/var/www' }
+        ]
+  out = generateNginxConfig(config)
+  ok out.includes('location / {')
+  ok out.includes('root /var/www;')
+
+test "local app mounted at subpath emits location with the mount prefix", ->
+  config = makeConfig
+    sites:
+      'example.com':
+        host: 'example.com'
+        routes: [
+          { id: 'api-app', host: 'example.com', path: '/api/*', mountPath: '/api', app: 'api' }
+        ]
+  out = generateNginxConfig(config)
+  ok out.includes('location /api {')
+  ok out.includes("# TODO: set proxy_pass to the port where 'api' listens")
+  ok out.includes('proxy_set_header Upgrade $http_upgrade')
+
+test "SPA flag on subpath mount generates try_files fallback to mounted index.html", ->
+  config = makeConfig
+    sites:
+      'example.com':
+        host: 'example.com'
+        routes: [
+          { id: 'app-spa', host: 'example.com', path: '/app/*', mountPath: '/app', static: '.', root: '/var/www/app', spa: true, browse: false }
+        ]
+  out = generateNginxConfig(config)
+  ok out.includes('location = /app { return 301 /app/; }')
+  ok out.includes('location /app/ {')
+  ok out.includes('alias /var/www/app/')
+  ok out.includes('try_files $uri $uri/ /app/index.html;')
+  ok not out.includes('autoindex on')
+
+test "more specific path mount is emitted before less specific on same host", ->
+  config = makeConfig
+    proxies:
+      'proxy-admin':
+        id: 'proxy-admin'
+        kind: 'http'
+        targets: ['http://127.0.0.1:9100']
+    sites:
+      'example.com':
+        host: 'example.com'
+        routes: [
+          { id: 'root', host: 'example.com', path: '/*', mountPath: '/', static: '.', root: '/var/www' }
+          { id: 'admin-proxy', host: 'example.com', path: '/admin/*', mountPath: '/admin', proxy: 'proxy-admin' }
+        ]
+  out = generateNginxConfig(config)
+  adminIdx = out.indexOf('location /admin {')
+  rootIdx = out.indexOf('location / {')
+  ok adminIdx >= 0
+  ok rootIdx >= 0
+  ok adminIdx < rootIdx
+
+test "distinct hostnames get their own server blocks (no cross-host merging)", ->
   config = makeConfig
     proxies:
       'proxy-web':
@@ -246,4 +362,9 @@ test "shared sites with same cert and proxy merge into one block", ->
         certPath: '/ssl/medlabs.health.crt'
         keyPath: '/ssl/medlabs.health.key'
   out = generateNginxConfig(config)
-  ok out.includes('server_name medlabs.health *.medlabs.health')
+  # Each hostname gets its own HTTPS server block with a single-hostname server_name
+  ok out.includes('server_name medlabs.health;')
+  ok out.includes('server_name *.medlabs.health;')
+  # Two HTTPS server blocks (listen 443 ...) should be emitted, one per hostname
+  httpsCount = out.split('listen 443 ssl http2;').length - 1
+  ok httpsCount >= 2, "expected at least 2 HTTPS server blocks, got #{httpsCount}"

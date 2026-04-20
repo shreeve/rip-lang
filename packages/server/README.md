@@ -124,9 +124,28 @@ Target kind is inferred from prefix:
 
 Optional flags: `browse` (directory listing), `spa` (SPA fallback).
 
+### Path-scoped mounts
+
+A site token can carry a mount path with `site@/path`, letting multiple apps
+share one hostname at different path prefixes:
+
+```coffee
+sites:
+  relay: 'relay.trusthealth.com'
+
+apps:
+  mqtt: 'http://127.0.0.1:9001 relay@/mqtt'
+  repl: '/var/www/relay-repl relay@/repl browse'
+```
+
+`wss://relay.trusthealth.com/mqtt` hits the MQTT proxy; `https://relay.trusthealth.com/repl`
+serves the static directory. Omitting `@/path` keeps the old root-mount
+behavior. TCP proxies cannot be path-mounted.
+
 Rules:
 
-- Each site may be bound by exactly one app
+- Each `(site, mountPath)` pair may be bound by exactly one app; `/` plus
+  subpath mounts on the same site are allowed
 - TCP targets must include a port
 - HTTP proxy routes automatically enable WebSocket upgrade
 - If a TCP stream route shares the HTTPS port, Rip switches into multiplexer

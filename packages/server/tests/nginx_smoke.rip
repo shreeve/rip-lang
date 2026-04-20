@@ -1,0 +1,94 @@
+import { test, ok } from './runner.rip'
+import { generateNginxConfig } from '../serving/nginx.rip'
+import { writeFileSync, mkdtempSync, rmSync, existsSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+
+# --- Real nginx syntax smoke test ---
+#
+# Spawns `nginx -t -c <tmpfile>` against a generated config to prove nginx
+# actually parses it. Auto-skips when nginx is not on PATH. Uses dummy
+# cert/key files on disk so the `ssl_certificate` references resolve.
+
+findNginx = ->
+  for p in ['/opt/nginx/sbin/nginx', '/usr/sbin/nginx', '/usr/local/sbin/nginx', '/usr/local/bin/nginx']
+    return p if existsSync(p)
+  which = Bun.spawnSync(['which', 'nginx'])
+  out = new TextDecoder().decode(which.stdout).trim()
+  return out if out and existsSync(out)
+  null
+
+# Generate dummy PEM-shaped cert + key files (just well-formed enough that nginx's
+# filesystem check passes; nginx -t parses PEMs during the test, so we use a real
+# self-signed pair generated once at test time).
+makeSelfSignedCerts = (dir) ->
+  openssl = Bun.spawnSync([
+    'openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', "#{dir}/cert.key"
+    '-out', "#{dir}/cert.crt", '-days', '1', '-subj', '/CN=test.local'
+  ], stderr: 'pipe', stdout: 'pipe')
+  openssl.exitCode is 0
+
+runNginxCheck = (nginxPath, confPath) ->
+  proc = Bun.spawnSync([nginxPath, '-t', '-c', confPath], stderr: 'pipe', stdout: 'pipe')
+  {
+    ok: proc.exitCode is 0
+    out: new TextDecoder().decode(proc.stdout)
+    err: new TextDecoder().decode(proc.stderr)
+  }
+
+nginxBin = findNginx()
+
+if nginxBin
+  test "nginx -t accepts generated config for multi-path site (smoke)", ->
+    dir = mkdtempSync(join(tmpdir(), 'rip-nginx-smoke-'))
+    try
+      ok makeSelfSignedCerts(dir), 'openssl must be available to generate smoke certs'
+      config =
+        kind: 'serve'
+        version: 2
+        server: { hsts: true, verify: {} }
+        proxies:
+          'proxy-mqtt': { id: 'proxy-mqtt', kind: 'http', targets: ['http://127.0.0.1:9001'] }
+        upstreams: {}
+        apps: {}
+        routes: []
+        sites:
+          'relay.example.com':
+            host: 'relay.example.com'
+            routes: [
+              { id: 'r-mqtt', host: 'relay.example.com', path: '/mqtt/*', mountPath: '/mqtt', proxy: 'proxy-mqtt' }
+              { id: 'r-repl', host: 'relay.example.com', path: '/repl/*', mountPath: '/repl', static: '.', root: "#{dir}/repl", browse: true, spa: false }
+            ]
+        resolvedCerts:
+          'relay.example.com':
+            certPath: "#{dir}/cert.crt"
+            keyPath: "#{dir}/cert.key"
+        streamUpstreams: {}
+        streams: []
+
+      out = generateNginxConfig(config)
+
+      # nginx -t needs a writable pid + logs dir; redirect via prefix
+      nginxConf = """
+        pid #{dir}/nginx.pid;
+        error_log #{dir}/error.log;
+        worker_processes 1;
+        events { worker_connections 128; }
+        #{out.replace(/^worker_processes [^;]+;[\s\S]*?events \{[\s\S]*?\}/, '')
+             .replace('logs/access.log', "#{dir}/access.log")
+             .replace('logs/error.log', "#{dir}/error.log")
+             .replace('logs/nginx.pid', "#{dir}/nginx.pid")}
+        """
+      # Ensure static root exists (nginx -t checks alias paths)
+      try Bun.write(join(dir, 'repl', '.keep'), '')
+      confPath = join(dir, 'nginx.conf')
+      writeFileSync(confPath, nginxConf)
+
+      { ok: nginxOk, err } = runNginxCheck(nginxBin, confPath)
+      ok nginxOk, "nginx -t rejected generated config:\n#{err}"
+    finally
+      rmSync dir, { recursive: true, force: true }
+else
+  # Silent skip when nginx is not installed — common in CI containers.
+  # (Intentionally no test registered; runner will just not see this case.)
+  null

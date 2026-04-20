@@ -1,6 +1,8 @@
 import { test, eq, ok } from './runner.rip'
-import { normalizeConfig, summarizeConfig, formatConfigErrors } from '../serving/config.rip'
-import { dirname } from 'node:path'
+import { normalizeConfig, summarizeConfig, formatConfigErrors, checkConfigFile } from '../serving/config.rip'
+import { dirname, join } from 'node:path'
+import { writeFileSync, mkdirSync, rmSync, mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 
 FIXTURE_DIR = dirname(import.meta.path) + '/fixtures'
 
@@ -274,6 +276,151 @@ test "normalizeConfig rejects unknown non-flag non-site tokens", ->
         web: 'dev bogus'
     , '/srv')
   ok errors.some((err) -> err.code is 'E_APP_UNKNOWN_SITE')
+
+test "normalizeConfig accepts site@/path mount", ->
+  normalized = normalizeConfig(
+    sites:
+      relay: 'relay.example.com'
+    apps:
+      mqtt: 'http://127.0.0.1:9001 relay@/mqtt'
+  , '/srv')
+  routes = normalized.sites['relay.example.com'].routes
+  eq routes.length, 1
+  eq routes[0].path, '/mqtt/*'
+  eq routes[0].mountPath, '/mqtt'
+  eq routes[0].proxy, 'proxy-mqtt'
+
+test "normalizeConfig allows multiple apps mounted at distinct paths on one site", ->
+  normalized = normalizeConfig(
+    sites:
+      relay: 'relay.example.com'
+    apps:
+      mqtt: 'http://127.0.0.1:9001 relay@/mqtt'
+      repl: '/tmp/nonexistent-relay-repl relay@/repl browse'
+  , '/srv')
+  routes = normalized.sites['relay.example.com'].routes
+  eq routes.length, 2
+  mqttRoute = routes.find((r) -> r.mountPath is '/mqtt')
+  replRoute = routes.find((r) -> r.mountPath is '/repl')
+  ok mqttRoute
+  ok replRoute
+  eq mqttRoute.path, '/mqtt/*'
+  eq mqttRoute.proxy, 'proxy-mqtt'
+  eq replRoute.path, '/repl/*'
+  eq replRoute.static, '.'
+  eq replRoute.browse, true
+
+test "normalizeConfig allows root mount to coexist with subpath mount", ->
+  normalized = normalizeConfig(
+    sites:
+      relay: 'relay.example.com'
+    apps:
+      root: '/tmp/nonexistent-relay-root relay'
+      mqtt: 'http://127.0.0.1:9001 relay@/mqtt'
+  , '/srv')
+  routes = normalized.sites['relay.example.com'].routes
+  eq routes.length, 2
+  paths = routes.map((r) -> r.mountPath).sort()
+  eq paths, ['/', '/mqtt']
+
+test "normalizeConfig canonicalizes mount paths", ->
+  for raw in ['/mqtt', '/mqtt/', '/mqtt/*']
+    normalized = normalizeConfig(
+      sites:
+        relay: 'relay.example.com'
+      apps:
+        mqtt: "http://127.0.0.1:9001 relay@#{raw}"
+    , '/srv')
+    eq normalized.sites['relay.example.com'].routes[0].mountPath, '/mqtt'
+    eq normalized.sites['relay.example.com'].routes[0].path, '/mqtt/*'
+
+test "normalizeConfig rejects duplicate (site, path) bindings", ->
+  errors = getErrors ->
+    normalizeConfig(
+      sites:
+        relay: 'relay.example.com'
+      apps:
+        a: 'http://127.0.0.1:9001 relay@/mqtt'
+        b: 'http://127.0.0.1:9002 relay@/mqtt'
+    , '/srv')
+  ok errors.some((err) -> err.code is 'E_SITE_MULTI_BIND')
+
+test "normalizeConfig rejects tcp proxy with path mount", ->
+  errors = getErrors ->
+    normalizeConfig(
+      sites:
+        db: 'db.example.com'
+      apps:
+        mysql: 'tcp://10.0.0.50:3306 db@/db'
+    , '/srv')
+  ok errors.some((err) -> err.code is 'E_APP_TCP_PATH')
+
+test "normalizeConfig rejects malformed mount path", ->
+  for bad in ['relay@mqtt', 'relay@//mqtt', 'relay@/mqtt?x', 'relay@/mqtt#f', 'relay@']
+    errors = getErrors ->
+      normalizeConfig(
+        sites:
+          relay: 'relay.example.com'
+        apps:
+          bad: "http://127.0.0.1:9001 #{bad}"
+      , '/srv')
+    ok errors.some((err) -> err.code is 'E_APP_PATH_FORMAT'),
+      "expected E_APP_PATH_FORMAT for #{JSON.stringify(bad)}, got #{JSON.stringify(errors.map((e) -> e.code))}"
+
+test "normalizeConfig rejects missing site before @", ->
+  errors = getErrors ->
+    normalizeConfig(
+      sites:
+        relay: 'relay.example.com'
+      apps:
+        bad: 'http://127.0.0.1:9001 @/mqtt'
+    , '/srv')
+  ok errors.some((err) -> err.code is 'E_APP_SITE_MISSING')
+
+test "normalizeConfig gives every route a site-qualified id", ->
+  normalized = normalizeConfig(
+    sites:
+      relay: 'relay.example.com'
+    apps:
+      mqtt: 'http://127.0.0.1:9001 relay@/mqtt'
+      repl: '/tmp/nonexistent-relay-repl relay@/repl browse'
+  , '/srv')
+  ids = normalized.sites['relay.example.com'].routes.map((r) -> r.id).sort()
+  eq ids, ['mqtt-relay-proxy-mqtt', 'repl-relay-static-repl']
+
+test "normalizeConfig supports wildcard host with multi-path mounts", ->
+  normalized = normalizeConfig(
+    sites:
+      wild: '*.example.com'
+    apps:
+      api: 'http://127.0.0.1:9000 wild@/api'
+      static: '/tmp/nonexistent-wild-static wild browse'
+  , '/srv')
+  routes = normalized.sites['*.example.com'].routes
+  eq routes.length, 2
+  mounts = routes.map((r) -> r.mountPath).sort()
+  eq mounts, ['/', '/api']
+
+test "checkConfigFile validates a multi-path serve.rip from disk", ->
+  dir = mkdtempSync(join(tmpdir(), 'rip-mp-'))
+  try
+    writeFileSync join(dir, 'serve.rip'), """
+      export default
+        sites:
+          relay: 'relay.example.com'
+
+        apps:
+          mqtt: 'http://127.0.0.1:9001 relay@/mqtt'
+          repl: '/var/www/relay-repl relay@/repl browse'
+      """
+    result = checkConfigFile!(join(dir, 'serve.rip'))
+    eq result.kind, 'serve'
+    eq result.summary.counts.hosts, 1
+    eq result.summary.counts.routes, 2
+    eq result.summary.counts.apps, 0   # no local rip apps, just http proxy + static
+    ok result.summary.counts.proxies >= 1
+  finally
+    rmSync dir, { recursive: true, force: true }
 
 test "summarizeConfig reports canonical counts", ->
   summary = summarizeConfig('/srv/serve.rip',

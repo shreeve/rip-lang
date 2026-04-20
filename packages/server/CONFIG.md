@@ -114,9 +114,38 @@ Flags:
 | `browse` | Enable directory listing for static sites |
 | `spa` | Single-page app fallback (serve `index.html` for missing paths) |
 
+### Path-scoped mounts: `site@/path`
+
+A site-name token can carry a mount path, letting multiple apps share one
+hostname at different path prefixes:
+
+```coffee
+sites:
+  relay: 'relay.trusthealth.com'
+
+apps:
+  mqtt: 'http://127.0.0.1:9001 relay@/mqtt'
+  repl: '/var/www/relay-repl relay@/repl browse'
+```
+
+- Omitting `@/path` is equivalent to `@/` (mount at root) — the old behavior.
+- Mount paths are canonicalized: `/mqtt`, `/mqtt/`, and `/mqtt/*` all collapse
+  to `/mqtt`.
+- The router picks the most specific match at request time (longest-prefix
+  wins, exact beats prefix).
+- Static mounts at a subpath use nginx `alias` semantics — `/repl/foo.html`
+  resolves to `{root}/foo.html`, not `{root}/repl/foo.html`. **The mount
+  prefix is stripped before filesystem lookup.**
+- Proxy mounts at a subpath forward the **full original path** upstream —
+  a request to `/mqtt/foo` reaches the backend as `/mqtt/foo`, not `/foo`.
+  If the upstream expects the prefix stripped, it needs to handle that
+  itself (or you need a proper path rewrite, which is a future feature).
+- TCP proxies cannot be path-mounted (L4 passthrough has no URL path).
+
 Rules:
 
-- Each site may be bound by exactly one app
+- Each `(site, mountPath)` pair may be bound by exactly one app; `/` plus
+  subpath mounts on the same site are allowed and combine naturally.
 - TCP targets must include a port (`tcp://host:port`)
 - Local targets with `index.rip` become Rip apps; without it, static file serving
 - HTTP proxy routes automatically enable WebSocket upgrade

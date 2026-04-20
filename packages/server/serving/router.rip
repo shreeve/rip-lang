@@ -40,7 +40,11 @@ routeMatchesPath = (route, pathname) ->
   if route.pathKind is 'exact'
     pathname is route.path
   else
-    pathname.startsWith(route.pathBase)
+    base = route.pathBase
+    return true if pathname.startsWith(base)
+    # Allow bare mount path: '/mqtt/*' (pathBase '/mqtt/') also matches '/mqtt'
+    return pathname is base.slice(0, -1) if base.length > 1 and base.endsWith('/')
+    false
 
 routeMatchesMethod = (route, method) ->
   route.methods is '*' or route.methods.includes(String(method).toUpperCase())

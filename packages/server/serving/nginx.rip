@@ -9,57 +9,112 @@ certPathsForHost = (hostname, sslPath) ->
   base   = domain.split('.').slice(-2).join('.')
   { certPath: "#{sslPath}/#{base}.crt", keyPath: "#{sslPath}/#{base}.key" }
 
-sslBlock = (certPath, keyPath) ->
-  lines = []
-  lines.push "ssl_certificate #{certPath};"
-  lines.push "ssl_certificate_key #{keyPath};"
-  lines.join('\n')
+mountPathFor = (route) ->
+  return route.mountPath if route.mountPath?
+  p = route.path or '/'
+  return '/' if p is '/' or p is '/*'
+  return p.slice(0, -2) if p.endsWith('/*')
+  p
 
-proxyBlock = (origin) ->
+# Proxy/app locations omit the trailing slash so nginx matches both bare
+# `/mqtt` (what clients and WS firmware actually send) and `/mqtt/...`.
+# Static locations need the trailing slash for `alias` semantics.
+locationPathFor = (mountPath, withTrailingSlash = false) ->
+  return '/' if mountPath is '/'
+  if withTrailingSlash then "#{mountPath}/" else mountPath
+
+sortRoutesBySpecificity = (routes) ->
+  routes.slice().sort (a, b) ->
+    aExact = if (a.path or '/').endsWith('*') then 1 else 0
+    bExact = if (b.path or '/').endsWith('*') then 1 else 0
+    return aExact - bExact if aExact isnt bExact
+    (mountPathFor(b) or '/').length - (mountPathFor(a) or '/').length
+
+emitProxyHeaders = (indent) ->
+  [
+    "#{indent}proxy_http_version 1.1;"
+    "#{indent}proxy_set_header Host $host;"
+    "#{indent}proxy_set_header X-Real-IP $remote_addr;"
+    "#{indent}proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;"
+    "#{indent}proxy_set_header X-Forwarded-Proto https;"
+    "#{indent}proxy_set_header X-Forwarded-Host $host;"
+    "#{indent}proxy_set_header X-Forwarded-Port 443;"
+    "#{indent}proxy_set_header Upgrade $http_upgrade;"
+    "#{indent}proxy_set_header Connection $connection_upgrade;"
+  ]
+
+emitProxyLocation = (indent, location, origin) ->
   lines = []
-  lines.push "location / {"
-  lines.push "    proxy_pass #{origin};"
-  lines.push "    proxy_http_version 1.1;"
-  lines.push "    proxy_set_header Host $host;"
-  lines.push "    proxy_set_header X-Real-IP $remote_addr;"
-  lines.push "    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;"
-  lines.push "    proxy_set_header X-Forwarded-Proto https;"
-  lines.push "    proxy_set_header X-Forwarded-Host $host;"
-  lines.push "    proxy_set_header X-Forwarded-Port 443;"
-  lines.push "    proxy_set_header Upgrade $http_upgrade;"
-  lines.push "    proxy_set_header Connection $connection_upgrade;"
-  lines.push "    proxy_read_timeout 1h;"
-  lines.push "    proxy_send_timeout 1h;"
-  lines.push "}"
+  lines.push "#{indent}location #{location} {"
+  lines.push "#{indent}    proxy_pass #{origin};"
+  for line in emitProxyHeaders("#{indent}    ")
+    lines.push line
+  lines.push "#{indent}    proxy_read_timeout 1h;"
+  lines.push "#{indent}    proxy_send_timeout 1h;"
+  lines.push "#{indent}    proxy_buffering off;"
+  lines.push "#{indent}}"
   lines
 
-staticBlock = (root, browse = false, spa = false) ->
+emitStaticLocation = (indent, mountPath, root, browse, spa) ->
   lines = []
-  lines.push "root #{root};"
-  lines.push "index index.html;"
-  lines.push ""
-  lines.push "location / {"
-  if spa
-    lines.push "    try_files $uri $uri/ /index.html;"
-  else if browse
-    lines.push "    autoindex on;"
-    lines.push "    try_files $uri $uri/ =404;"
+  if mountPath is '/'
+    lines.push "#{indent}location / {"
+    lines.push "#{indent}    root #{root};"
+    lines.push "#{indent}    index index.html;"
+    if spa
+      lines.push "#{indent}    try_files $uri $uri/ /index.html;"
+    else if browse
+      lines.push "#{indent}    autoindex on;"
+      lines.push "#{indent}    try_files $uri $uri/ =404;"
+    else
+      lines.push "#{indent}    try_files $uri $uri/ =404;"
+    lines.push "#{indent}}"
   else
-    lines.push "    try_files $uri $uri/ =404;"
-  lines.push "}"
-  lines.push ""
-  lines.push "location ~ /\\. {"
-  lines.push "    deny all;"
-  lines.push "}"
+    # Subpath static mount: alias requires trailing-slash location. Also emit
+    # an exact-match redirect so bare `/repl` goes to `/repl/` instead of 404.
+    trimmed = if root.endsWith('/') then root else "#{root}/"
+    lines.push "#{indent}location = #{mountPath} { return 301 #{mountPath}/; }"
+    lines.push "#{indent}location #{mountPath}/ {"
+    lines.push "#{indent}    alias #{trimmed};"
+    lines.push "#{indent}    index index.html;"
+    if spa
+      lines.push "#{indent}    try_files $uri $uri/ #{mountPath}/index.html;"
+    else if browse
+      lines.push "#{indent}    autoindex on;"
+      lines.push "#{indent}    try_files $uri $uri/ =404;"
+    else
+      lines.push "#{indent}    try_files $uri $uri/ =404;"
+    lines.push "#{indent}}"
   lines
+
+emitAppLocation = (indent, location, appId) ->
+  lines = []
+  lines.push "#{indent}# TODO: set proxy_pass to the port where '#{appId}' listens"
+  lines.push "#{indent}location #{location} {"
+  lines.push "#{indent}    proxy_pass http://127.0.0.1:3000; # adjust port"
+  for line in emitProxyHeaders("#{indent}    ")
+    lines.push line
+  lines.push "#{indent}}"
+  lines
+
+emitRouteLocation = (indent, route, normalized) ->
+  mountPath = mountPathFor(route)
+  if route.proxy
+    origin = normalized.proxies?[route.proxy]?.targets?[0] or 'http://127.0.0.1:3000'
+    emitProxyLocation(indent, locationPathFor(mountPath), origin)
+  else if route.static?
+    emitStaticLocation(indent, mountPath, route.root, route.browse, route.spa)
+  else if route.app
+    emitAppLocation(indent, locationPathFor(mountPath), route.app)
+  else
+    []
 
 export generateNginxConfig = (normalized) ->
   out = []
   hasStreams = (normalized.streams or []).length > 0
-  httpsListen = if hasStreams then "127.0.0.1:#{INTERNAL_PORT} ssl" else "443 ssl"
+  httpsListen = if hasStreams then "127.0.0.1:#{INTERNAL_PORT} ssl http2" else "443 ssl http2"
   hsts = normalized.server?.hsts is true
 
-  # Collect all hostnames for port 80 redirect
   allHostnames = []
   passthroughHostnames = new Set()
 
@@ -68,35 +123,18 @@ export generateNginxConfig = (normalized) ->
       passthroughHostnames.add(sni)
       allHostnames.push(sni)
 
-  # Build site server blocks grouped by (certPath, keyPath, behavior)
+  # One server block per hostname (no cross-host coalescing: simpler + avoids
+  # silent merges when per-route fields diverge)
   serverBlocks = []
   for hostname, siteConfig of (normalized.sites or {})
-    cert = normalized.resolvedCerts?[hostname]
-    routes = siteConfig.routes or []
-    route = routes[0]
-    continue unless route
+    routes = (siteConfig.routes or []).filter(Boolean)
+    continue if routes.length is 0
     allHostnames.push(hostname)
-
-    serverBlocks.push({ hostname, cert, route, siteConfig })
-
-  # Group server blocks by (certPath, keyPath, proxyOrigin or staticRoot)
-  groups = new Map()
-  for block in serverBlocks
-    { hostname, cert, route } = block
-    certKey = if cert then "#{cert.certPath}:#{cert.keyPath}" else 'nocert'
-    if route.proxy
-      origin = normalized.proxies?[route.proxy]?.targets?[0] or ''
-      groupKey = "proxy:#{certKey}:#{origin}"
-    else if route.static
-      groupKey = "static:#{certKey}:#{route.root}:#{route.spa}:#{route.browse}"
-    else if route.app
-      groupKey = "app:#{certKey}:#{route.app}"
-    else
-      groupKey = "other:#{certKey}:#{hostname}"
-
-    unless groups.has(groupKey)
-      groups.set(groupKey, { hostnames: [], cert, route, block })
-    groups.get(groupKey).hostnames.push(hostname)
+    cert = normalized.resolvedCerts?[hostname]
+    serverBlocks.push
+      hostname: hostname
+      cert: cert
+      routes: sortRoutesBySpecificity(routes)
 
   # --- Preamble ---
   out.push "worker_processes auto;"
@@ -169,14 +207,10 @@ export generateNginxConfig = (normalized) ->
   out.push "    client_max_body_size 100m;"
   out.push "    max_headers 100;"
   out.push ""
-
-  # Timeouts
   out.push "    client_body_timeout 15s;"
   out.push "    client_header_timeout 15s;"
   out.push "    send_timeout 30s;"
   out.push ""
-
-  # TLS settings
   out.push "    ssl_protocols TLSv1.2 TLSv1.3;"
   out.push "    ssl_ciphers 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305';"
   out.push "    ssl_prefer_server_ciphers off;"
@@ -190,13 +224,9 @@ export generateNginxConfig = (normalized) ->
   out.push "    resolver 1.1.1.1 1.0.0.1 8.8.8.8 8.8.4.4 valid=300s ipv6=off;"
   out.push "    resolver_timeout 5s;"
   out.push ""
-
-  # Rate limiting
   out.push "    limit_req_zone $binary_remote_addr zone=perip:10m rate=20r/s;"
   out.push "    limit_conn_zone $binary_remote_addr zone=connperip:10m;"
   out.push ""
-
-  # WebSocket upgrade map
   out.push "    map $http_upgrade $connection_upgrade {"
   out.push "        default upgrade;"
   out.push "        '' close;"
@@ -212,21 +242,22 @@ export generateNginxConfig = (normalized) ->
   out.push "        return 301 https://$host$request_uri;"
   out.push "    }"
 
-  # Per-group server blocks
-  for [groupKey, group] as groups.entries()
-    { hostnames, cert, route } = group
+  # Per-hostname server blocks
+  for block in serverBlocks
+    { hostname, cert, routes } = block
     out.push ""
     out.push "    server {"
     out.push "        listen #{httpsListen};"
-    out.push "        http2 on;"
-    out.push "        server_name #{hostnames.join(' ')};"
+    out.push "        listen [::]:#{httpsListen};"
+    out.push "        server_name #{hostname};"
     out.push ""
     certPath = cert?.certPath
     keyPath  = cert?.keyPath
     if not certPath and normalized.sslPath
-      { certPath, keyPath } = certPathsForHost(hostnames[0], normalized.sslPath)
+      { certPath, keyPath } = certPathsForHost(hostname, normalized.sslPath)
     if certPath and keyPath
-      out.push "        #{sslBlock(certPath, keyPath).split('\n').join('\n        ')}"
+      out.push "        ssl_certificate #{certPath};"
+      out.push "        ssl_certificate_key #{keyPath};"
       out.push ""
     if hsts
       out.push '        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;'
@@ -238,31 +269,17 @@ export generateNginxConfig = (normalized) ->
     out.push "        limit_conn connperip 20;"
     out.push ""
 
-    if route.proxy
-      origin = normalized.proxies?[route.proxy]?.targets?[0] or 'http://127.0.0.1:3000'
-      for line in proxyBlock(origin)
-        out.push "        #{line}"
-    else if route.static?
-      for line in staticBlock(route.root, route.browse, route.spa)
-        out.push "        #{line}"
-    else if route.app
-      out.push "        # TODO: set proxy_pass to the port where '#{route.app}' listens"
-      out.push "        location / {"
-      out.push "            proxy_pass http://127.0.0.1:3000; # adjust port"
-      out.push "            proxy_http_version 1.1;"
-      out.push "            proxy_set_header Host $host;"
-      out.push "            proxy_set_header X-Real-IP $remote_addr;"
-      out.push "            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;"
-      out.push "            proxy_set_header X-Forwarded-Proto https;"
-      out.push "            proxy_set_header X-Forwarded-Host $host;"
-      out.push "            proxy_set_header X-Forwarded-Port 443;"
-      out.push "            proxy_set_header Upgrade $http_upgrade;"
-      out.push "            proxy_set_header Connection $connection_upgrade;"
-      out.push "        }"
+    for route in routes
+      for line in emitRouteLocation('        ', route, normalized)
+        out.push line
+      out.push ""
 
+    out.push "        location ~ /\\. {"
+    out.push "            deny all;"
+    out.push "        }"
     out.push "    }"
 
-  # Default catch-all server for unknown SNI (use first non-passthrough cert, sorted for determinism)
+  # Default catch-all server for unknown SNI
   defaultCertPath = null
   defaultKeyPath  = null
   for hostname in Object.keys(normalized.resolvedCerts or {}).sort()
@@ -280,10 +297,11 @@ export generateNginxConfig = (normalized) ->
     out.push ""
     out.push "    server {"
     out.push "        listen #{httpsListen} default_server;"
-    out.push "        http2 on;"
+    out.push "        listen [::]:#{httpsListen} default_server;"
     out.push "        server_name _;"
     out.push ""
-    out.push "        #{sslBlock(defaultCertPath, defaultKeyPath).split('\n').join('\n        ')}"
+    out.push "        ssl_certificate #{defaultCertPath};"
+    out.push "        ssl_certificate_key #{defaultKeyPath};"
     out.push ""
     out.push "        return 421;"
     out.push "    }"

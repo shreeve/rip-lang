@@ -115,7 +115,7 @@ test "static fallback when no index.rip with browse flag", ->
   eq route.static, '.'
   eq route.browse, true
   eq route.app, null
-  eq route.id, 'zion-static'
+  eq route.id, 'zion-zion-static'
   eq config.apps.zion, undefined
 
 test "rejects multiple apps on same site", ->
