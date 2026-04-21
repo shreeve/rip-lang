@@ -892,6 +892,32 @@ public:
 		return create_info->ToString();
 	}
 
+	// Remaining non-DUCKDB_API TableCatalogEntry virtuals. Each mirrors the
+	// stock base-class default so host behaviour is preserved. Moving them
+	// into the .so keeps our vtable self-contained on Linux where the host
+	// doesn't export them.
+	DataTable &GetStorage() override {
+		throw InternalException("ripdb: GetStorage called on a remote table (not a DuckTableEntry)");
+	}
+	unique_ptr<BlockingSample> GetSample() override { return nullptr; }
+	TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data,
+	                              const EntryLookupInfo &) override {
+		return GetScanFunction(context, bind_data);
+	}
+	vector<ColumnSegmentInfo> GetColumnSegmentInfo(const QueryContext &) override { return {}; }
+	void BindUpdateConstraints(Binder &, LogicalGet &, LogicalProjection &, LogicalUpdate &,
+	                           ClientContext &) override {
+		throw PermissionException("ripdb: remote tables are read-only — UPDATE is not supported");
+	}
+	virtual_column_map_t GetVirtualColumns() const override {
+		virtual_column_map_t cols;
+		cols.insert(make_pair(COLUMN_IDENTIFIER_ROW_ID, TableColumn("rowid", LogicalType::ROW_TYPE)));
+		return cols;
+	}
+	vector<column_t> GetRowIdColumns() const override {
+		return { COLUMN_IDENTIFIER_ROW_ID };
+	}
+
 private:
 	string remote_name_;
 };
