@@ -59,16 +59,10 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/types/data_chunk.hpp"
-// In DuckDB ≥ post-v1.5.2 the vector helpers (FlatVector, StringVector, …)
-// were split out of duckdb/common/types/vector.hpp into their own headers.
-// On v1.5.2 they still live inside types/vector.hpp (pulled in via
-// data_chunk.hpp above), so these explicit includes are only needed on
-// newer dev builds. __has_include lets one source compile against both.
-#if __has_include("duckdb/common/vector/flat_vector.hpp")
-#include "duckdb/common/vector/flat_vector.hpp"
-#include "duckdb/common/vector/string_vector.hpp"
-#endif
+// All DuckDB-header-layout and API-rename drift between v1.5.2 and the
+// post-v1.5.2 dev tree is absorbed by ripdb_compat.hpp — this is the only
+// header we need for the vector + logical-operator machinery used below.
+#include "ripdb_compat.hpp"
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/storage/database_size.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
@@ -705,7 +699,7 @@ static idx_t ResolveColumnIndex(const LogicalGet &get,
                                  const BoundColumnRefExpression &col_ref,
                                  const RipScanBindData &bd) {
 	if (col_ref.binding.table_index != get.table_index) return static_cast<idx_t>(-1);
-	const auto &cidx = get.GetColumnIndex(col_ref.binding);
+	const auto &cidx = ripdb_compat::GetColumnIndex(get, col_ref.binding);
 	idx_t primary = cidx.GetPrimaryIndex();
 	if (primary >= bd.all_column_names.size()) return static_cast<idx_t>(-1);
 	return primary;
@@ -1302,26 +1296,26 @@ static void WriteCellToVector(Vector &vec, idx_t row_idx, const Cell &cell) {
 	const auto &type = vec.GetType();
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
-		FlatVector::GetDataMutable<bool>(vec)[row_idx] = cell.b;
+		ripdb_compat::FlatVecMutable<bool>(vec)[row_idx] = cell.b;
 		break;
 	case LogicalTypeId::TINYINT:
-		FlatVector::GetDataMutable<int8_t>(vec)[row_idx] = static_cast<int8_t>(cell.i64);
+		ripdb_compat::FlatVecMutable<int8_t>(vec)[row_idx] = static_cast<int8_t>(cell.i64);
 		break;
 	case LogicalTypeId::UTINYINT:
-		FlatVector::GetDataMutable<uint8_t>(vec)[row_idx] = static_cast<uint8_t>(cell.u64);
+		ripdb_compat::FlatVecMutable<uint8_t>(vec)[row_idx] = static_cast<uint8_t>(cell.u64);
 		break;
 	case LogicalTypeId::SMALLINT:
-		FlatVector::GetDataMutable<int16_t>(vec)[row_idx] = static_cast<int16_t>(cell.i64);
+		ripdb_compat::FlatVecMutable<int16_t>(vec)[row_idx] = static_cast<int16_t>(cell.i64);
 		break;
 	case LogicalTypeId::USMALLINT:
-		FlatVector::GetDataMutable<uint16_t>(vec)[row_idx] = static_cast<uint16_t>(cell.u64);
+		ripdb_compat::FlatVecMutable<uint16_t>(vec)[row_idx] = static_cast<uint16_t>(cell.u64);
 		break;
 	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::DATE:
-		FlatVector::GetDataMutable<int32_t>(vec)[row_idx] = static_cast<int32_t>(cell.i64);
+		ripdb_compat::FlatVecMutable<int32_t>(vec)[row_idx] = static_cast<int32_t>(cell.i64);
 		break;
 	case LogicalTypeId::UINTEGER:
-		FlatVector::GetDataMutable<uint32_t>(vec)[row_idx] = static_cast<uint32_t>(cell.u64);
+		ripdb_compat::FlatVecMutable<uint32_t>(vec)[row_idx] = static_cast<uint32_t>(cell.u64);
 		break;
 	case LogicalTypeId::BIGINT:
 	case LogicalTypeId::TIMESTAMP:
@@ -1331,52 +1325,52 @@ static void WriteCellToVector(Vector &vec, idx_t row_idx, const Cell &cell) {
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIME_NS:
-		FlatVector::GetDataMutable<int64_t>(vec)[row_idx] = cell.i64;
+		ripdb_compat::FlatVecMutable<int64_t>(vec)[row_idx] = cell.i64;
 		break;
 	case LogicalTypeId::UBIGINT:
 	case LogicalTypeId::TIME_TZ:
 		// TIME_TZ on the wire is u64; DuckDB's physical type is also a packed
 		// 64-bit value (dtime_tz_t wrapping uint64). Storing the raw u64 is
 		// the same byte sequence DuckDB expects.
-		FlatVector::GetDataMutable<uint64_t>(vec)[row_idx] = cell.u64;
+		ripdb_compat::FlatVecMutable<uint64_t>(vec)[row_idx] = cell.u64;
 		break;
 	case LogicalTypeId::FLOAT: {
 		uint32_t bits = cell.f32bits;
 		float f;
 		std::memcpy(&f, &bits, sizeof(f));
-		FlatVector::GetDataMutable<float>(vec)[row_idx] = f;
+		ripdb_compat::FlatVecMutable<float>(vec)[row_idx] = f;
 		break;
 	}
 	case LogicalTypeId::DOUBLE: {
 		uint64_t bits = cell.f64bits;
 		double d;
 		std::memcpy(&d, &bits, sizeof(d));
-		FlatVector::GetDataMutable<double>(vec)[row_idx] = d;
+		ripdb_compat::FlatVecMutable<double>(vec)[row_idx] = d;
 		break;
 	}
 	case LogicalTypeId::HUGEINT:
 	case LogicalTypeId::UUID: {
 		// Both physically stored as hugeint_t (16 bytes lo + hi).
-		auto *out = FlatVector::GetDataMutable<hugeint_t>(vec);
+		auto *out = ripdb_compat::FlatVecMutable<hugeint_t>(vec);
 		out[row_idx].lower = cell.i128.lo;
 		out[row_idx].upper = cell.i128.hi;
 		break;
 	}
 	case LogicalTypeId::UHUGEINT: {
-		auto *out = FlatVector::GetDataMutable<uhugeint_t>(vec);
+		auto *out = ripdb_compat::FlatVecMutable<uhugeint_t>(vec);
 		out[row_idx].lower = cell.u128.lo;
 		out[row_idx].upper = cell.u128.hi;
 		break;
 	}
 	case LogicalTypeId::INTERVAL: {
-		auto *out = FlatVector::GetDataMutable<interval_t>(vec);
+		auto *out = ripdb_compat::FlatVecMutable<interval_t>(vec);
 		out[row_idx].months = cell.iv.months;
 		out[row_idx].days   = cell.iv.days;
 		out[row_idx].micros = cell.iv.micros;
 		break;
 	}
 	case LogicalTypeId::VARCHAR: {
-		auto *out = FlatVector::GetDataMutable<string_t>(vec);
+		auto *out = ripdb_compat::FlatVecMutable<string_t>(vec);
 		out[row_idx] = StringVector::AddString(vec, cell.bytes.data(), cell.bytes.size());
 		break;
 	}
@@ -1390,16 +1384,16 @@ static void WriteCellToVector(Vector &vec, idx_t row_idx, const Cell &cell) {
 		auto phys = type.InternalType();
 		switch (phys) {
 		case PhysicalType::INT16:
-			FlatVector::GetDataMutable<int16_t>(vec)[row_idx] = static_cast<int16_t>(cell.i64);
+			ripdb_compat::FlatVecMutable<int16_t>(vec)[row_idx] = static_cast<int16_t>(cell.i64);
 			break;
 		case PhysicalType::INT32:
-			FlatVector::GetDataMutable<int32_t>(vec)[row_idx] = static_cast<int32_t>(cell.i64);
+			ripdb_compat::FlatVecMutable<int32_t>(vec)[row_idx] = static_cast<int32_t>(cell.i64);
 			break;
 		case PhysicalType::INT64:
-			FlatVector::GetDataMutable<int64_t>(vec)[row_idx] = cell.i64;
+			ripdb_compat::FlatVecMutable<int64_t>(vec)[row_idx] = cell.i64;
 			break;
 		case PhysicalType::INT128: {
-			auto *out = FlatVector::GetDataMutable<hugeint_t>(vec);
+			auto *out = ripdb_compat::FlatVecMutable<hugeint_t>(vec);
 			out[row_idx].lower = cell.i128.lo;
 			out[row_idx].upper = cell.i128.hi;
 			break;
@@ -1438,7 +1432,7 @@ static void RipScanFunction(ClientContext &, TableFunctionInput &input, DataChun
 					// Synthetic sequential rowid. DuckDB doesn't rely on these
 					// values being stable across queries, only that they're
 					// unique within a scan, which they are.
-					FlatVector::GetDataMutable<int64_t>(output.data[col])[out_row] =
+					ripdb_compat::FlatVecMutable<int64_t>(output.data[col])[out_row] =
 					    state.emitted_rows + static_cast<int64_t>(out_row);
 				} else {
 					const auto &cell = chunk.columns[oc.decoded_idx][state.row_cursor];
@@ -1583,10 +1577,10 @@ static void RipRefreshFunction(ClientContext &, TableFunctionInput &input, DataC
 	}
 	auto &bd = input.bind_data->Cast<RipRefreshBindData>();
 
-	auto *names_out = FlatVector::GetDataMutable<string_t>(output.data[0]);
+	auto *names_out = ripdb_compat::FlatVecMutable<string_t>(output.data[0]);
 	names_out[0]    = StringVector::AddString(output.data[0], bd.catalog_name);
-	FlatVector::GetDataMutable<int64_t>(output.data[1])[0] = bd.stats.loaded;
-	FlatVector::GetDataMutable<int64_t>(output.data[2])[0] = bd.stats.refused;
+	ripdb_compat::FlatVecMutable<int64_t>(output.data[1])[0] = bd.stats.loaded;
+	ripdb_compat::FlatVecMutable<int64_t>(output.data[2])[0] = bd.stats.refused;
 	output.SetCardinality(1);
 	state.emitted = true;
 }
