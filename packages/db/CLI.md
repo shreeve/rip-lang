@@ -43,6 +43,7 @@ This is the open-source equivalent of MotherDuck's `md:` integration. MotherDuck
 11. [Open questions deferred past M1](#open-questions-deferred-past-m1)
 12. [References into the DuckDB source tree](#references-into-the-duckdb-source-tree)
 13. [Implementation progress](#implementation-progress)
+14. [Design sketch — complex types (deferred)](#design-sketch--complex-types-deferred)
 
 ---
 
@@ -378,7 +379,7 @@ LogicalType MapToWireType(const string &server_reported_type) {
 }
 ```
 
-Users who want native support for the remaining types will need both sides upgraded; until then, those types appear as VARCHAR text to the client, which is honest and functional.
+Users who want native support for the remaining types will need both sides upgraded; until then, those types appear as VARCHAR text to the client, which is honest and functional. See [§ Design sketch — complex types](#design-sketch--complex-types-deferred) for the planned approach to the six complex types (LIST, STRUCT, MAP, ARRAY, UNION, ENUM) that sit on this path.
 
 **Semantic caveats for specific fallback types:**
 
@@ -928,7 +929,9 @@ Since we expose a single `main` schema, DuckDB's catalog resolver should handle 
 
 **Mitigation:** Documented per-type semantic caveats in the [Types that fall back to VARCHAR](#types-that-fall-back-to-varchar-on-the-wire) section. For M2, negotiate a proper native encoding on rip-db's side for at least DECIMAL and LIST (the most commonly-used fallback types in practice).
 
-**Status:** **DECIMAL: closed** (commit `956b202`). DECIMAL columns round-trip natively with full DuckDB precision — server emits the unscaled integer at the correct physical width (int16/32/64/128 based on DECIMAL(W,S)), decoder parses the on-wire width/scale from new type-record fields, ripdb surfaces `LogicalType::DECIMAL(w, s)` in the catalog and writes values directly into DuckDB's decimal flat vector. `sum(price)` is exact, not floating-point. **LIST: deferred.** LIST (and STRUCT / MAP / ARRAY / UNION, which share the same architectural shape) requires recursive type encoding, variable-length per-row storage, nested null tracking, and DuckDB ListVector binding — substantially larger than DECIMAL and best handled as a dedicated "complex types" milestone rather than bolted on here. Until that milestone, these types continue to arrive VARCHAR-stringified per the Types-fall-back-to-VARCHAR section.
+**Status:** **DECIMAL: closed** (commit `956b202`). DECIMAL columns round-trip natively with full DuckDB precision — server emits the unscaled integer at the correct physical width (int16/32/64/128 based on DECIMAL(W,S)), decoder parses the on-wire width/scale from new type-record fields, ripdb surfaces `LogicalType::DECIMAL(w, s)` in the catalog and writes values directly into DuckDB's decimal flat vector. `sum(price)` is exact, not floating-point.
+
+**LIST (and STRUCT / MAP / ARRAY / UNION): deferred by design.** These share an architectural shape (recursive type metadata, variable-length per-row storage, two-level null tracking, per-type DuckDB vector write paths) that's categorically larger than DECIMAL's closure — see [§ Design sketch — complex types](#design-sketch--complex-types-deferred) for the full technical breakdown, wire-format proposal, and suggested implementation order. Until that milestone, these types continue to arrive VARCHAR-stringified per the Types-fall-back-to-VARCHAR section.
 
 ### Risk 13: Name normalization beyond quoting
 
@@ -1357,12 +1360,12 @@ inline duplication is still cheaper than an abstraction — extract
 a shared `scripts/lib/spawnManaged.rip` helper once a third caller
 shows up.
 
-### Commit 4 — M2: predicate pushdown + refresh + interrupt + URL + chunked  ✅ landed across 5 commits
+### Commit 4 — M2: pushdown / refresh / interrupt / URL / chunked / DECIMAL  ✅ landed across 6 commits
 
 **Scope:** All six M2 candidates from the Full M1 scope / Deferred to
-M2+ lists, in five commits on `rip-duck`. See [Peer-AI round 7 decisions
-(pre-code)](#peer-ai-round-7-decisions-pre-code) for the
-pre-implementation design discussion that shaped the work.
+M2+ lists, plus the DECIMAL portion of Risk 12, across six commits on
+`rip-duck`. See [Peer-AI round 7 decisions (pre-code)](#peer-ai-round-7-decisions-pre-code)
+for the pre-implementation design discussion that shaped the work.
 
 | M2 item | Status | Commit |
 |---------|--------|--------|
@@ -1372,14 +1375,17 @@ pre-implementation design discussion that shaped the work.
 | M2.4 — `rip_refresh('catalog')` | ✅ landed | `1384e0d` |
 | M2.5 — query interrupt | ✅ landed (client-side) | `fd6c95c` |
 | M2.6 — URL normalization | ✅ landed | `e7d9ad8` |
-| Risk 12 — DECIMAL native wire | ✅ landed (LIST deferred) | `956b202` |
+| Risk 12 — DECIMAL native wire | ✅ landed (LIST deferred — see [§ Design sketch](#design-sketch--complex-types-deferred)) | `956b202` |
 
 **Shipped artifacts (M2-only, on top of Commit 2):**
 
 | File | M2 change |
 |------|-----------|
-| `packages/db/extension/ripdb.cpp` | +predicate pushdown (`TryTranslateExpression`, `RipPushdownFilter`, `FormatLiteralSQL`); +`rip_refresh` table function; +chunked transfer-encoding decoder (`DechunkHttpBody`); +interrupt-aware HTTP client with query-id + best-effort `/ddb/interrupt`; +URL normalization (`NormalizeUrl`). |
-| `packages/db/extension/extension_test.cpp` | +M2-per-feature test cases (URL normalization, `rip_refresh` behavior, pushdown subset coverage, dechunker unit tests). 14 → 53 cases. |
+| `packages/db/extension/ripdb.cpp` | +predicate pushdown (`TryTranslateExpression`, `RipPushdownFilter`, `FormatLiteralSQL`); +`rip_refresh` table function; +chunked transfer-encoding decoder (`DechunkHttpBody`); +interrupt-aware HTTP client with query-id + best-effort `/ddb/interrupt`; +URL normalization (`NormalizeUrl`); +DECIMAL path (`ParseDecimalWidthScale`, DECIMAL in `MapToWireType`, DECIMAL branch in `WriteCellToVector`, bind-vs-wire width/scale validator in `RipScanInitGlobal`). |
+| `packages/db/extension/extension_test.cpp` | +M2-per-feature test cases (URL normalization, `rip_refresh` behavior, pushdown subset coverage, dechunker unit tests, DECIMAL round-trip + exact arithmetic + typeof checks). 14 → 59 cases. |
+| `packages/db/extension/decoder.{h,cpp}` | +`TypeId::DECIMAL = 21`; +`decimal_width`/`decimal_scale` on `ColumnInfo`; type-record reader loops optional fields and accepts 102/103 for DECIMAL; +`decode_decimal` dispatcher; DECIMAL-aware golden rendering. |
+| `packages/db/lib/duckdb-binary.rip` | +`parseDecimalWidthScale` / `decimalPhysicalBytes` / `serializeDecimalBytes` / `decimalToUnscaledBigInt` helpers; `mapDuckDBType` routes DECIMAL off the VARCHAR fallback; `serializeType` emits fields 102/103 only for DECIMAL. |
+| `packages/db/lib/duckdb.mjs` | Embed `DECIMAL(W,S)` precision into `typeName` for DECIMAL columns (previously just `"DECIMAL"` — a silent precision loss across the FFI/serializer boundary). |
 
 **M2.1 — predicate pushdown.** Partial pushdown via DuckDB's
 `pushdown_complex_filter` callback. Filters we fully translate are
@@ -1498,6 +1504,22 @@ absolute.
   as `WHERE ("currency" = 'O''Malley')` in the remote SQL — the
   single quote is correctly doubled.
 
+**Risk 12 (DECIMAL portion) — native wire encoding.** DECIMAL
+columns round-trip with exact precision end-to-end. Unscaled signed
+integer on the wire at DuckDB's physical width (int16/32/64/128
+based on precision class), new type-record fields 102 (width) and
+103 (scale) only for DECIMAL typeId, catalog surfaces
+`LogicalType::DECIMAL(w, s)` instead of VARCHAR. Bind-time-vs-wire
+validation in `RipScanInitGlobal` throws a clear error (suggesting
+`rip_refresh`) if the remote schema drifts between attach and scan.
+FFI gap surfaced and fixed: `duckdb.mjs` previously returned just
+`"DECIMAL"` for `col.typeName` (no precision), which would have
+silently defaulted to DECIMAL(18,3) through the encoder; now it
+embeds the full `DECIMAL(W,S)` string. `sum(price) = 2625.00` on
+20 DECIMAL(10,2) rows is exact DECIMAL(38,2), not floating-point
+drift. LIST (and STRUCT/MAP/ARRAY/UNION/ENUM) deferred to a
+dedicated milestone — see [§ Design sketch](#design-sketch--complex-types-deferred).
+
 **Invariants this commit locks in:**
 
 1. Pushdown is conservative-by-default: the `TryTranslateExpression`
@@ -1512,6 +1534,28 @@ absolute.
    than `chunked` alone. No silent "maybe it's gzip, try that" path.
 5. Every HTTP call that goes through the scan path is interrupt-
    pollable; the catalog-path HTTP calls are not yet (documented).
+6. **FFI type-name contract.** The duckdb.mjs FFI wrapper's
+   `col.typeName` must carry every precision/parameter the encoder
+   needs to faithfully represent the type on the wire. DECIMAL
+   embeds `(W,S)`; any future parameterized type (parameterized
+   VARCHAR, DECIMAL variants, fixed-width ARRAY, ENUM with dict
+   size) must augment `typeName` the same way rather than relying
+   on a separate `col.*` field. The encoder's type-string parser
+   is the single source of truth for parameter extraction.
+7. **Catalog/wire type agreement.** For any type whose wire format
+   carries metadata (DECIMAL today, more complex types tomorrow),
+   the scan path must validate that the decoded wire-metadata
+   matches the catalog's bind-time expectation. Silent divergence
+   = silent data corruption. The DECIMAL width/scale check in
+   `RipScanInitGlobal` is the template — a mismatch throws with
+   a specific `rip_refresh`-to-reload suggestion.
+8. **Wire-format extension policy.** New types add new
+   type-record field ids (104+ will be the next recursion-aware
+   fields for complex types). Existing type records stay
+   byte-identical for backward compat; only the types that need
+   the new fields carry them. Decoders reject unknown field ids
+   for a given typeId explicitly rather than skipping with a
+   length convention we haven't designed.
 
 **Deferred past M2:**
 
@@ -1530,9 +1574,204 @@ absolute.
 - Native wire encoding for LIST, STRUCT, MAP, ARRAY, UNION (shared
   architectural shape: recursive type encoding + variable-length
   per-row storage + nested null tracking + DuckDB complex-vector
-  binding). Dedicated "complex types" milestone; DECIMAL closure
-  in `956b202` does not change their current VARCHAR-fallback
-  behavior.
+  binding). Dedicated "complex types" milestone with full design
+  sketch in [§ Design sketch — complex types](#design-sketch--complex-types-deferred);
+  DECIMAL closure in `956b202` does not change their current
+  VARCHAR-fallback behavior.
 - Golden-fixture coverage for DECIMAL across the null-pattern
   matrix (extension_test already proves the code paths end-to-end;
   capture-fixtures.rip addition is a mechanical follow-up).
+
+---
+
+## Design sketch — complex types (deferred)
+
+Scope: LIST, STRUCT, MAP, ARRAY, UNION, and ENUM — the six remaining
+types that fall back to VARCHAR stringification on the wire. This
+section is a starting point for the dedicated "complex types"
+milestone flagged throughout the doc (Risk 12, Commit 4 deferred
+list, M2 status table). It is not implementation — it is the
+design pass that implementation will begin from.
+
+### Why these are architecturally different from DECIMAL
+
+DECIMAL's closure (`956b202`) extended the existing decoder /
+encoder / binding shape with minimal change:
+
+- flat type record (one typeId + two scalar fields)
+- fixed-width per-row value (int16 / int32 / int64 / int128)
+- one validity bitmap per column
+- `Cell` stays a flat tagged union
+- `WriteCellToVector` gains one `case LogicalTypeId::DECIMAL`
+
+The six complex types break all five assumptions simultaneously.
+That's why they're a milestone rather than a follow-up.
+
+**1. The type record becomes recursive.** A LIST's child type is
+itself a type record. `LIST(LIST(INTEGER))` has nested records.
+STRUCT has one child record per field, each with a field name.
+MAP's internal representation is `LIST(STRUCT(key, value))` —
+recursive in two places. The current grammar (flat typeId + optional
+scalar fields) doesn't scale; the decoder needs a recursive entry
+point.
+
+**2. Per-row values are variable-length.** DECIMAL(10,2) is exactly
+8 bytes per row, always. LIST rows can be 0, 3, or 1,000,000
+elements. STRUCT rows are fixed-schema but the nested fields may
+themselves be variable. The wire format needs either offsets+flat
+(DuckDB-native) or per-row length prefixes (simpler but requires
+double-copy on decode).
+
+**3. Null tracking becomes two-level.** For a LIST column: one
+bitmap per column for "is this row's list null" (distinct from
+"empty list"), plus another bitmap in the child vector for
+"is this specific element null". For STRUCT: row-level bitmap
+(is this row's struct null — all fields simultaneously) plus
+per-field child-vector bitmaps. Getting the two levels straight
+is where silent data corruption sneaks in if the fixture matrix
+doesn't cover both axes.
+
+**4. The `Cell` struct isn't recursive.** Today's `Cell` is a
+flat tagged union chosen for decoder predictability. Storing a
+LIST value means one of:
+
+  - **(A) Make `Cell` recursive** — add a `ListValue` variant with
+    `vector<Cell>` inline. Simplest dispatch; increases every non-
+    list Cell's footprint from ~32 to ~48 bytes (vector header).
+  - **(B) Side-table per chunk** — keep `Cell` flat, store list
+    values in a parallel `vector<vector<vector<Cell>>>` on the
+    `Chunk` struct. Zero cost for flat cells; renderer dispatch
+    gets more complex.
+  - **(C) Separate `DecodedList` type** with its own lifecycle.
+    Extra bookkeeping throughout renderers and writers.
+
+  Pick during the design pass. (A) is simplest; (B) is more
+  efficient; (C) is most explicit. All are defensible.
+
+**5. DuckDB vector APIs are per-type.** For DECIMAL we used
+`FlatVector::GetDataMutable<T>(vec)[row_idx] = value`. That does
+not apply to LIST:
+
+```cpp
+auto child_base = ListVector::GetListSize(vec);
+ListVector::Reserve(vec, child_base + row_element_count);
+auto &child_vec = ListVector::GetEntry(vec);
+for (idx_t i = 0; i < row_element_count; ++i) {
+    WriteCellToVector(child_vec, child_base + i, row_elements[i]);
+}
+ListVector::SetListSize(vec, child_base + row_element_count);
+FlatVector::GetData<list_entry_t>(vec)[row_idx] =
+    list_entry_t { child_base, row_element_count };
+```
+
+STRUCT uses `StructVector::GetEntries` to iterate child flat
+vectors. MAP is STRUCT-of-LIST on the physical layer. ENUM has a
+dictionary inline in the logical type. Each complex type is its
+own write-path subproject — the common framework ends where
+DuckDB's vector-type switch begins.
+
+### Wire format proposal (sketch — finalize during milestone design)
+
+Extend the type record to a proper recursive grammar. DECIMAL's
+fields 102/103 stay, and the grammar generalizes to new field ids:
+
+```
+type record:
+  field 100 (u8):      typeId
+  field 101 (u8):      legacy "extra" = 0
+  field 102:           scalar metadata #1 (DECIMAL width, ENUM dict size, ...)
+  field 103:           scalar metadata #2 (DECIMAL scale, ...)
+  field 104:           nested type record       ← NEW  (LIST/ARRAY child type)
+  field 105:           list of nested records   ← NEW  (STRUCT fields, MAP key+value)
+  field 106:           list of strings          ← NEW  (STRUCT field names, ENUM dict entries)
+  end 0xFFFF
+```
+
+Decoder recurses when it sees field 104 or 105 (calls the
+type-record parser on the nested bytes). Wire payloads:
+
+- **LIST**: offsets (u32 per row, end-pointer convention) then
+  child vector payload (itself a recursive decode_vector call).
+- **ARRAY**: same as LIST but with a fixed declared length; the
+  offsets array can be elided (derived from `row_idx * array_len`).
+- **STRUCT**: N child vector payloads sequentially; each has its
+  own validity bitmap per DuckDB's convention.
+- **MAP**: represented as STRUCT-of-LIST on the wire, matching
+  DuckDB's internal shape.
+- **ENUM**: u8/u16/u32 index into the dictionary stored in field 106.
+- **UNION**: tag byte per row + per-tag child vectors. Needs its own
+  sub-design; consider deferring to after the other five.
+
+### Suggested implementation order
+
+1. **ENUM**. No recursion; dictionary comes over as a list of
+   strings in field 106. Proves the "new fields for complex metadata"
+   extension pattern without the recursion complexity. ~half a day.
+2. **LIST-of-primitives** (no nesting, no structs inside). Forces
+   variable-length payloads, two-level nulls, and the DuckDB
+   `ListVector` write path. The big architectural commit. ~1 day
+   plus peer-AI design review.
+3. **Nested LIST** (LIST of LIST). Adds type-record recursion to
+   the decoder and encoder. Small once step 2 is solid.
+4. **STRUCT**. Second major write-path subproject; much of the
+   type-record recursion from step 3 reused. ~half to full day.
+5. **MAP**. Built on STRUCT-of-LIST. Mostly metadata/name
+   conventions. ~half day.
+6. **ARRAY**. Fixed-size variant of LIST. Small once LIST is done.
+7. **UNION**. Discriminated tagged type; separate design pass
+   before implementing.
+
+### Test strategy
+
+Per type, the existing null-pattern matrix (all_valid, all_null,
+alternating, every_64th, partial_word, bursty) multiplied across:
+
+- **Row-level null patterns** — is the LIST / STRUCT value itself
+  null?
+- **Element-level null patterns** — within non-null containers,
+  which elements are null?
+- **Empty-container edge cases** — empty list vs null list;
+  struct with all fields null vs struct itself null (NOT the same).
+- **Child type coverage** — at minimum INT, VARCHAR, DOUBLE as
+  leaf types; recursion tested via LIST(LIST(INT)) and
+  STRUCT(LIST(VARCHAR), INT).
+
+The null-pattern matrix becomes a product space. A realistic
+decoder-level fixture count for LIST alone is 6 patterns × 3 child
+types × 4 combinatorial shapes (row-null/empty/one-child-null/
+all-children-null) = ~72 fixtures. Plus per-type for STRUCT / MAP /
+ARRAY / ENUM / UNION. Capture via `capture-fixtures.rip` extensions,
+one generator function per shape.
+
+### What unblocks this milestone
+
+Either:
+
+1. **Dedicated design session** with peer-AI review choosing
+   between Cell-recursive vs side-table, nailing down the
+   wire-format grammar (final field ids, STRUCT field-name
+   encoding, UNION tag layout), and validating the DuckDB vector
+   write paths against pinned headers.
+2. **Concrete user demand** for a LIST-heavy or STRUCT-heavy
+   workload against rip-db — the kind of pressure that picks
+   between LIST-only scoped vs full-complex-types ambitious.
+
+Without one of those, staying on VARCHAR-stringification fallback
+is the honest outcome. The current behavior (columns of complex
+type arrive as text to the client, labeled VARCHAR in the catalog,
+round-trip preserved via `CAST`) is functional for exploration
+workloads. M2's DECIMAL closure covers the common business /
+transaction case that motivated Risk 12.
+
+### Non-goals (for this milestone when it happens)
+
+- **Predicate pushdown for complex-type filters.** Even when we
+  expose LIST natively, filters like `'foo' IN list_col` or
+  `struct_col.x > 5` are their own safe-subset extension to M2.1
+  and don't need to land together.
+- **Complex-type arithmetic on the wire.** DuckDB's scalar
+  functions on LISTs (e.g. `list_length`, `list_concat`) execute
+  locally on the client. The scan just delivers values; the
+  planner handles operators.
+- **Server-side DDL for creating complex-typed tables.** Write
+  forwarding is a separate milestone (M3+).
