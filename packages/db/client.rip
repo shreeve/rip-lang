@@ -59,24 +59,49 @@ export esc = (v) ->
   return String(v) if typeof v is 'number'
   "'" + String(v).replace(/'/g, "''") + "'"
 
+# Structured error thrown on rip-db server-side failures. Carries the HTTP
+# status, the server-side `errorCode` (e.g. 'TABLE_NOT_FOUND', 'SQL_SYNTAX'),
+# and any `errorDetails` the server included. Backwards-compatible: falls
+# back cleanly when the server still returns the old `{error: "str"}` shape.
+#
+# NB: the constructor takes a bag-of-options (`opts`) rather than destructuring
+# in the parameter list because the Rip compiler currently miscompiles pattern
+# destructuring inside a class constructor signature. Once that's fixed this
+# can be switched to `constructor: (message, {code, details, httpStatus} = {})`.
+export class RipDBError extends Error
+  constructor: (message, opts = {}) ->
+    super(message)
+    @name = 'RipDBError'
+    @code = opts.code or null
+    @details = opts.details or null
+    @httpStatus = opts.httpStatus or null
+
+# Throws RipDBError iff the response indicates failure, otherwise returns data.
+# Accepts both envelope shapes — new ({ok:false, error, errorCode, errorDetails})
+# and legacy ({error: "str"}).
+throwIfError = (res, data) ->
+  hasError = data?.ok is false or (data?.error and typeof data.error is 'string' and data.error.length > 0)
+  return data unless hasError
+  message = if typeof data.error is 'string' then data.error else (data?.error?.message or 'Unknown rip-db error')
+  throw new RipDBError message,
+    code: data?.errorCode or data?.error?.code or null
+    details: data?.errorDetails or data?.error?.details or null
+    httpStatus: res?.status or null
+
 export query = (sql, params = []) ->
   body = if params.length > 0 then { sql, params } else { sql }
   res = fetch! "#{dbUrl()}/sql",
     method: 'POST'
     headers: { 'Content-Type': 'application/json' }
     body: JSON.stringify body
-  data = res.json!
-  throw new Error data.error if data.error
-  data
+  throwIfError res, res.json!
 
 export bulk = (table, columns, rows) ->
   res = fetch! "#{dbUrl()}/sql",
     method: 'POST'
     headers: { 'Content-Type': 'application/json' }
     body: JSON.stringify { table, columns, rows }
-  data = res.json!
-  throw new Error data.error if data.error
-  data
+  throwIfError res, res.json!
 
 materialize = (columns, row) ->
   obj = {}

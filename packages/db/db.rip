@@ -67,21 +67,37 @@ if '--help' in args or '-h' in args
       database    Path to DuckDB file (default: :memory:)
 
     Options:
-      --port=N    Port to listen on (default: 4213)
-      --help      Show this help
-      --version   Show version
+      --port=N              Port to listen on (default: 4213, env DB_PORT)
+      --host=ADDR           Interface to bind to (default: 127.0.0.1)
+                            Use 0.0.0.0 to expose on all interfaces — REQUIRES --auth-token
+      --auth-token=TOKEN    Bearer token required for /shutdown when bound non-locally
+      --help, -h            Show this help
+      --version, -v         Show version
 
     Endpoints:
-      GET  /           Official DuckDB UI
-      POST /sql        Execute SQL (JSON API)
-      POST /ddb/run    DuckDB UI binary protocol
-      GET  /health     Health check
-      GET  /tables     List all tables
+      GET  /                  Official DuckDB UI
+      POST /sql               Execute SQL (JSON API)
+      POST /                  Execute raw SQL (body is the query)
+      POST /ddb/run           DuckDB UI binary protocol
+      POST /ddb/tokenize      SQL tokenizer (UI syntax highlighting)
+      GET  /health            Health check
+      GET  /tables            List all tables
+      GET  /schema/:table     Table schema
+      POST /shutdown          Graceful CHECKPOINT + exit
+
+    Security:
+      rip-db is trusted-network software. The default bind of 127.0.0.1 means
+      only local processes can reach /sql and /shutdown. Passing --host 0.0.0.0
+      (or any non-localhost address) makes the server reachable from the network;
+      when that happens, /shutdown becomes token-gated and a startup warning
+      is printed. rip-db does not authenticate /sql itself — do not expose it
+      to untrusted networks.
 
     Examples:
-      rip db.rip                    # In-memory database on port 4213
-      rip db.rip mydb.duckdb        # File-based database
-      rip db.rip :memory: --port=8080
+      rip db.rip                              # In-memory, localhost only
+      rip db.rip mydb.duckdb                  # File-based, localhost only
+      rip db.rip mydb.duckdb --port=8080
+      rip db.rip mydb.duckdb --host=0.0.0.0 --auth-token=$(openssl rand -hex 32)
   """
   process.exit(0)
 
@@ -95,13 +111,22 @@ path = process.env.DB_PATH or args.find((a) -> not a.startsWith('-')) or do ->
   files = Array.from(glob.scanSync('.'))
   if files.length is 1 then files[0] else ':memory:'
 
-# Support both --port=N and --port N
-portArg = do ->
+# Parse --flag=value or --flag value for a given flag name
+flagValue = (name) ->
+  prefix = "--#{name}="
   for a, i in args
-    return a.split('=')[1] if a.startsWith('--port=')
-    return args[i + 1] if a is '--port' and args[i + 1]
+    return a.slice(prefix.length) if a.startsWith(prefix)
+    return args[i + 1] if a is "--#{name}" and args[i + 1]
   null
-port = parseInt(process.env.DB_PORT or portArg) or 4213
+
+port      = parseInt(process.env.DB_PORT or flagValue('port')) or 4213
+host      = process.env.DB_HOST or flagValue('host') or '127.0.0.1'
+authToken = process.env.DB_AUTH_TOKEN or flagValue('auth-token') or null
+
+# Security posture — /shutdown is unconditionally gated when the server is
+# reachable from the network (bound to anything other than loopback). If
+# no auth token is supplied there, /shutdown returns 403 unconditionally.
+isLocalBind = host in ['127.0.0.1', '::1', 'localhost']
 
 # Open database (with WAL recovery on failure)
 try
@@ -119,6 +144,18 @@ conn = db.connect()
 p "rip-db: DuckDB #{duckdbVersion()}"
 p "rip-db: rip-db v#{VERSION}"
 p "rip-db: source #{path}"
+p "rip-db: bind   #{host}:#{port} (#{if isLocalBind then 'local-only' else 'NETWORK-REACHABLE'})"
+
+unless isLocalBind
+  warn ""
+  warn "  ⚠️  rip-db is listening on #{host}:#{port} — reachable from the network."
+  warn "      /sql accepts arbitrary SQL from any client that can reach this port."
+  warn "      Do NOT expose rip-db to untrusted networks."
+  if authToken
+    warn "      /shutdown requires Authorization: Bearer <token>."
+  else
+    warn "      /shutdown is DISABLED (no --auth-token provided)."
+  warn ""
 
 # Periodic checkpoint (flush WAL to main file every 5 minutes)
 checkpoint = -> try conn.query 'CHECKPOINT'
@@ -138,36 +175,123 @@ process.on 'SIGINT',  shutdown
 process.on 'SIGTERM', shutdown
 
 # ==============================================================================
-# Helpers
+# Helpers — response envelope + structured errors
 # ==============================================================================
+#
+# Envelope shape (success):
+#   {
+#     ok: true,
+#     kind: 'select' | 'write',
+#     columns: [{name, type}, ...],
+#     data: [[...], [...]],
+#     rowCount: N,        # primary
+#     timeMs: M,          # primary
+#     # --- legacy aliases, still populated for one major-version cycle ---
+#     rows: N,            # same as rowCount
+#     time: M/1000,       # same as timeMs/1000 (seconds)
+#   }
+#
+# Envelope shape (error):
+#   {
+#     ok: false,
+#     error: "human-readable message",    # legacy-compatible string
+#     errorCode: 'SQL_ERROR' | 'TABLE_NOT_FOUND' | 'BAD_REQUEST' | 'FORBIDDEN' | 'INTERNAL',
+#     errorDetails: {...}?,
+#     timeMs: M,
+#   }
+#
+# The POST /sql endpoint returns 200 for successful queries, 400 for malformed
+# request bodies, 404 for missing resources (GET /schema/:table), and 422 for
+# SQL-level errors. The envelope shape is identical across status codes.
 
 # Helper for binary responses
 binaryResponse = (data) ->
   new Response data, headers: { 'Content-Type': 'application/octet-stream' }
 
-# Log SQL query (truncated if long)
-logSQL = (sql) ->
-  # sql = sql.replace(/\s+/g, ' ').trim()
-  p sql
+# Helper for structured JSON responses with a specific HTTP status
+jsonResponse = (body, status = 200) ->
+  new Response JSON.stringify(body),
+    status: status
+    headers: { 'Content-Type': 'application/json' }
 
-# Execute SQL and return result (uses persistent connection)
+# Classify a driver/user error into a stable code for programmatic handling.
+# Pattern-matched on message text because DuckDB doesn't ship typed C API
+# errors. This is intentionally a small taxonomy — better a few high-signal
+# codes than a dozen low-precision ones.
+errorCodeOf = (err) ->
+  msg = (err?.message or '').toLowerCase()
+  if /does not exist|not found|no such table|catalog error/.test(msg)
+    'TABLE_NOT_FOUND'
+  else if /syntax error|parser error/.test(msg)
+    'SQL_SYNTAX'
+  else if /conversion|cast|type mismatch|invalid input/.test(msg)
+    'TYPE_ERROR'
+  else if /read|i\/o|permission/.test(msg)
+    'IO_ERROR'
+  else
+    'SQL_ERROR'
+
+# Log SQL query (full text for now; follow-up will add log levels + redaction)
+logSQL = (sql) -> p sql
+
+# Build a success envelope from a driver result. `kind` is inferred from
+# whether the statement produced column metadata (a `SELECT`-like statement
+# returns columns; DDL / pure writes don't).
+successEnvelope = (result, startTime) ->
+  ms = Date.now() - startTime
+  cols = result.columns or []
+  colInfo = cols.map (col) -> { name: col.name, type: col.typeName }
+  data = result.map (row) -> cols.map (col) -> row[col.name]
+  {
+    ok: true
+    kind: if cols.length > 0 then 'select' else 'write'
+    columns: colInfo
+    data: data
+    rowCount: data.length
+    timeMs: ms
+    # Legacy aliases — populated to preserve existing clients for one cycle.
+    rows: data.length
+    time: ms / 1000
+  }
+
+# Build an error envelope. `httpStatus` is the caller's hint for what HTTP
+# code to return; the envelope body is the same regardless.
+errorEnvelope = (err, startTime, code = null) ->
+  msg = err?.message or String(err)
+  ms = Date.now() - startTime
+  {
+    ok: false
+    error: msg                               # legacy-compatible string
+    errorCode: code or errorCodeOf(err)
+    timeMs: ms
+  }
+
+# Convenience: envelope for mutations that don't return rows (e.g. Appender
+# bulk-insert). Still looks like a `success` envelope with `kind: 'write'`.
+writeEnvelope = (rowCount, startTime) ->
+  ms = Date.now() - startTime
+  {
+    ok: true
+    kind: 'write'
+    columns: []
+    data: []
+    rowCount: rowCount
+    timeMs: ms
+    rows: rowCount                           # legacy alias
+    time: ms / 1000                          # legacy alias
+  }
+
+# Execute SQL and return an envelope (uses persistent connection).
 # Always materializes whatever rows come back — works for SELECT,
 # INSERT/UPDATE/DELETE ... RETURNING, SHOW, DESCRIBE, etc.
 executeSQL = (sql, params = []) ->
   logSQL sql
   startTime = Date.now()
-
   try
     result = await conn.query(sql, params)
-    cols = result.columns or []
-    {
-      columns: cols.map (col) -> { name: col.name, type: col.typeName }
-      data: result.map (row) -> cols.map (col) -> row[col.name]
-      rows: result.length
-      time: (Date.now() - startTime) / 1000
-    }
+    successEnvelope result, startTime
   catch err
-    { error: err.message }
+    errorEnvelope err, startTime
 
 # Bulk insert via Appender API (fastest path for pure inserts)
 executeAppend = (table, columns, rows) ->
@@ -175,9 +299,9 @@ executeAppend = (table, columns, rows) ->
   startTime = Date.now()
   try
     await conn.append(table, columns, rows)
-    { rows: rows.length, time: (Date.now() - startTime) / 1000 }
+    writeEnvelope rows.length, startTime
   catch err
-    { error: err.message }
+    errorEnvelope err, startTime
 
 # Batch execute a prepared statement with multiple param sets
 executeBatch = (sql, paramSets) ->
@@ -185,9 +309,25 @@ executeBatch = (sql, paramSets) ->
   startTime = Date.now()
   try
     await conn.queryBatch(sql, paramSets)
-    { rows: paramSets.length, time: (Date.now() - startTime) / 1000 }
+    writeEnvelope paramSets.length, startTime
   catch err
-    { error: err.message }
+    errorEnvelope err, startTime
+
+# Convert an envelope into a proper HTTP Response with the right status code.
+# Note: `TABLE_NOT_FOUND` inside a `/sql` query is still a SQL-level error
+# (the *request* was well-formed; the underlying table isn't there), so it
+# maps to 422, not 404. The dedicated `GET /schema/:table` route uses its
+# own mapping where a missing table legitimately IS the resource-not-found
+# case and returns 404.
+envelopeToResponse = (env) ->
+  return jsonResponse(env, 200) if env.ok
+  status = switch env.errorCode
+    when 'SQL_SYNTAX', 'SQL_ERROR', 'TYPE_ERROR', 'TABLE_NOT_FOUND' then 422
+    when 'BAD_REQUEST' then 400
+    when 'FORBIDDEN' then 403
+    when 'IO_ERROR' then 500
+    else 500
+  jsonResponse env, status
 
 # ==============================================================================
 # JSON Endpoints (for custom apps)
@@ -200,49 +340,89 @@ executeBatch = (sql, paramSets) ->
 #   { sql, params: [...] }           → prepared statement
 #   { sql, params: [[...], [...]] }  → batch prepared (reuse stmt)
 #   { table, columns, rows }         → appender API (fastest insert)
+# Helper — validate that a putative SQL argument is a non-empty string before
+# dispatching to the driver. `body?.sql or body` in the JSON path can leave
+# `sql` set to the body object itself when neither `.sql` nor a raw-text body
+# is present; catch that here instead of deep inside the FFI layer.
+isRunnableSql = (s) -> typeof s is 'string' and s.trim().length > 0
+
+emptyQueryResponse = (startTime) ->
+  jsonResponse
+    ok: false
+    error: 'Empty query'
+    errorCode: 'BAD_REQUEST'
+    timeMs: Date.now() - startTime
+  , 400
+
 post '/sql' ->
   contentType = @req.header('content-type') or ''
+  startTime = Date.now()
+  sql = null
+  params = []
+
   if contentType.includes('application/json')
     body = read()
 
     if body?.table and body?.rows
-      return executeAppend body.table, body.columns, body.rows
+      # `!` on the call is call-and-await; without it envelopeToResponse would
+      # wrap an unresolved Promise instead of the envelope object.
+      return envelopeToResponse (executeAppend! body.table, body.columns, body.rows)
 
-    sql = body?.sql or body
+    raw = body?.sql
+    raw = body if not raw and typeof body is 'string'
+    sql = raw if isRunnableSql(raw)
     params = body?.params or []
 
-    if params.length > 0 and Array.isArray(params[0])
-      return executeBatch sql, params
+    if sql and params.length > 0 and Array.isArray(params[0])
+      return envelopeToResponse (executeBatch! sql, params)
   else
-    sql = read 'body', 'string'
-    params = []
+    raw = read 'body', 'string'
+    sql = raw if isRunnableSql(raw)
 
-  return { error: 'Empty query' } unless sql
-  executeSQL sql, params
+  return emptyQueryResponse(startTime) unless sql
+  envelopeToResponse (executeSQL! sql, params)
 
 # POST / — Raw SQL in body (duck-ui compatible)
 post '/' ->
-  sql = read 'body', 'string'
-  return { error: 'Empty query' } unless sql
-  executeSQL sql
+  startTime = Date.now()
+  raw = read 'body', 'string'
+  return emptyQueryResponse(startTime) unless isRunnableSql(raw)
+  envelopeToResponse (executeSQL! raw)
 
-# GET /health — Health check
+# GET /health — Health check (NB: not wrapped in the envelope; the shape is
+# hot-path monitoring data used by orchestrators and hasn't changed since 1.x)
 get '/health' ->
   { status: 'ok', version: VERSION }
 
-# GET /tables — List all tables
+# GET /tables — List all tables (kept with legacy `tables:` shape; this
+# endpoint is small and predictable and pre-dates the envelope migration)
 get '/tables' ->
   rows = await conn.query "SELECT table_name FROM information_schema.tables WHERE table_schema = 'main'"
   { tables: rows.map((r) -> r.table_name) }
 
-# GET /schema/:table — Get table schema
+# GET /schema/:table — Get table schema. Returns 404 when the table doesn't
+# exist, 200 with the DESCRIBE output when it does. Both paths use the
+# structured envelope for consistency with /sql.
 get '/schema/:table' ->
+  startTime = Date.now()
   table = read('table').replace(/[^a-zA-Z0-9_]/g, '')
   try
     rows = await conn.query "DESCRIBE \"#{table}\""
-    { schema: rows }
+    # Success — shape mirrors the envelope's {ok, data, timeMs} with
+    # a domain-specific `schema` alias for back-compat.
+    jsonResponse {
+      ok: true
+      schema: rows
+      table: table
+      timeMs: Date.now() - startTime
+    }
   catch err
-    { error: err.message }
+    env = errorEnvelope err, startTime
+    # DESCRIBE of a missing table returns a catalog error → 404 is the right
+    # code to tell clients "this resource doesn't exist" rather than "the
+    # server is broken".
+    status = if env.errorCode is 'TABLE_NOT_FOUND' then 404 else 422
+    jsonResponse env, status
 
 # ==============================================================================
 # DuckDB UI Binary Protocol
@@ -318,8 +498,23 @@ post '/ddb/run' ->
     warn "POST /ddb/run error:", msg
     binaryResponse serializeErrorResult msg
 
-# POST /shutdown — Gracefully close the database and exit
+# POST /shutdown — Gracefully close the database and exit.
+# When bound to a non-local interface, this route is token-gated; if no token
+# is configured, it is disabled entirely. Local binds allow shutdown freely
+# because, by definition, only local processes can reach the socket.
 post '/shutdown' ->
+  unless isLocalBind
+    unless authToken
+      return new Response(
+        JSON.stringify({ok: false, error: {code: 'FORBIDDEN', message: 'shutdown is disabled on non-local binds (no --auth-token configured)'}}),
+        status: 403, headers: {'Content-Type': 'application/json'}
+      )
+    provided = @req.header('authorization') or ''
+    unless provided is "Bearer #{authToken}"
+      return new Response(
+        JSON.stringify({ok: false, error: {code: 'FORBIDDEN', message: 'shutdown requires a valid bearer token'}}),
+        status: 403, headers: {'Content-Type': 'application/json'}
+      )
   setImmediate shutdown
   { ok: true }
 
@@ -450,6 +645,7 @@ get '/*' ->
 # Start Server
 # ==============================================================================
 
-p "rip-db: server http://localhost:#{port}"
+displayHost = if isLocalBind then 'localhost' else host
+p "rip-db: server http://#{displayHost}:#{port}"
 
-start port: port, silent: true
+start host: host, port: port, silent: true
