@@ -7,7 +7,9 @@
 >
 > **Commit 3 (subprocess hardening) landed as `4f12e17` on `rip-duck`.** `smoke-server.rip` and `capture-live.rip` now spawn rip-db in a detached process group and tear it down via group-signaling, so the inner-loop test scripts never leak rip-db processes on pipe breakage / Ctrl-C / SIGTERM / uncaught throws. No functional change to the extension.
 >
-> **M2 landed on `rip-duck` across commits `e7d9ad8` (URL normalization), `1384e0d` (`rip_refresh`), `84bb022` (predicate pushdown), `fd6c95c` (query interrupt), `5448d66` (chunked transfer + parallel-scan decision), `956b202` (Risk 12 DECIMAL — native wire encoding).** 59/59 extension_test cases passing. Predicate pushdown runs for `=`/`<>`/`<`/`<=`/`>`/`>=`/`IS NULL`/`IS NOT NULL`/`AND` on INT/BOOL/VARCHAR; unsupported filters fall back to local DuckDB evaluation. Chunked Transfer-Encoding responses decode correctly. DECIMAL columns round-trip natively with exact precision (LIST still deferred with STRUCT/MAP/ARRAY/UNION to a dedicated "complex types" milestone). Parallel scan is intentionally single-threaded in M2 — see Commit 4 below for the full rationale.
+> **M2 landed on `rip-duck` across commits `e7d9ad8` (URL normalization), `1384e0d` (`rip_refresh`), `84bb022` (predicate pushdown), `5448d66` (parallel-scan decision), `956b202` (Risk 12 DECIMAL — native wire encoding).** 48/48 extension_test cases passing. Predicate pushdown runs for `=`/`<>`/`<`/`<=`/`>`/`>=`/`IS NULL`/`IS NOT NULL`/`AND` on INT/BOOL/VARCHAR; unsupported filters fall back to local DuckDB evaluation. DECIMAL columns round-trip natively with exact precision (LIST still deferred with STRUCT/MAP/ARRAY/UNION to a dedicated "complex types" milestone). Parallel scan is intentionally single-threaded in M2 — see Commit 4 below for the full rationale.
+>
+> **M2.2 (chunked Transfer-Encoding) and M2.5 (query interrupt) were reverted** as half-features (see Commit 5 below): M2.2's dechunker had no live code path because rip-db never emits chunked bodies, and M2.5's client-side wiring was paired with a server-side `/ddb/interrupt` that's still a stub — so "Ctrl-C" was only half-delivered (client socket closes, remote query continues to completion). Both are recoverable if their preconditions ever change.
 
 **Goal:** Make the stock `duckdb` CLI treat a running `rip-db` HTTP server as an attachable DuckDB database, with native table/column TAB completion. Other libduckdb-based clients (Python, R, DBeaver, DuckDB UI, JDBC) that permit loading signed/unsigned extensions inherit the integration automatically, but explicit compatibility verification is per-client and not an M1 promise.
 
@@ -1370,10 +1372,10 @@ for the pre-implementation design discussion that shaped the work.
 | M2 item | Status | Commit |
 |---------|--------|--------|
 | M2.1 — predicate pushdown | ✅ landed | `84bb022` |
-| M2.2 — chunked HTTP response | ✅ partial (protocol compat) | `5448d66` |
+| M2.2 — chunked HTTP response | ❌ reverted as half-feature (see Commit 5) | `5448d66` → revert |
 | M2.3 — parallel scan | ⏸️ deferred with rationale | `5448d66` |
 | M2.4 — `rip_refresh('catalog')` | ✅ landed | `1384e0d` |
-| M2.5 — query interrupt | ✅ landed (client-side) | `fd6c95c` |
+| M2.5 — query interrupt | ❌ reverted as half-feature (see Commit 5) | `fd6c95c` → revert |
 | M2.6 — URL normalization | ✅ landed | `e7d9ad8` |
 | Risk 12 — DECIMAL native wire | ✅ landed (LIST deferred — see [§ Design sketch](#design-sketch--complex-types-deferred)) | `956b202` |
 
@@ -1559,10 +1561,19 @@ dedicated milestone — see [§ Design sketch](#design-sketch--complex-types-def
 
 **Deferred past M2:**
 
-- True per-chunk streaming decode (M3; requires `decoder.h`
-  pull-iterator refactor).
+- Streaming decode, including real HTTP chunked Transfer-Encoding
+  support (M3; requires `decoder.h` pull-iterator refactor). The
+  M2.2 dechunker that landed in `5448d66` was reverted as a
+  half-feature (see Commit 5); any re-introduction should be part
+  of the M3 streaming work so the chunked path has an actual
+  trigger.
 - Parallel scan (M3+; gated on rip-db partition support OR a
   work-stealing remote streaming decoder).
+- Query interrupt (revisit alongside a server-side rip-db query
+  registry). The M2.5 client-side wiring in `fd6c95c` was reverted
+  as a half-feature (see Commit 5) — `/ddb/interrupt` is a stub
+  server-side and the client wiring on its own delivered only
+  half the contract.
 - Write forwarding (M3+).
 - Server-side query registry for real `/ddb/interrupt` tracking
   (server-side rip-db task, not ripdb.cpp).
@@ -1581,6 +1592,96 @@ dedicated milestone — see [§ Design sketch](#design-sketch--complex-types-def
 - Golden-fixture coverage for DECIMAL across the null-pattern
   matrix (extension_test already proves the code paths end-to-end;
   capture-fixtures.rip addition is a mechanical follow-up).
+
+### Commit 5 — revert M2.2 (chunked TE) and M2.5 (query interrupt) as half-features  ✅ landed
+
+**Scope:** Remove the M2.2 HTTP chunked Transfer-Encoding decoder
+and the M2.5 client-side query-interrupt wiring from `ripdb.cpp`
+and `extension_test.cpp`. Both reached M2 "landed" status but were
+subsequently reclassified as half-features on re-review, based on
+the criterion "does this code do something the user actually
+observes in the current deployment?"
+
+**Why each was reverted:**
+
+- **M2.2 — chunked Transfer-Encoding.** rip-db never emits
+  `Transfer-Encoding: chunked` — it always uses `Content-Length`.
+  There's no reverse proxy in front of rip-db in the target
+  deployment. The dechunker was exercised only by synthetic unit
+  tests feeding hand-crafted byte strings; the live CLI → rip-db
+  code path never triggered it. Dead code in production.
+- **M2.5 — query interrupt.** The client side generated a query
+  ID, set `SO_RCVTIMEO=250ms`, polled
+  `context.IsInterrupted()` between reads, and on Ctrl-C fired a
+  best-effort `POST /ddb/interrupt` with the query ID. The
+  *server* side of `/ddb/interrupt` is still a stub that just
+  returns an empty success envelope — no query registry, no
+  lookup by `X-Rip-DB-Query-Id`, no actual cancellation. So
+  Ctrl-C let the CLI return to its prompt quickly (client-side
+  bail), but the remote query kept running to completion on
+  rip-db, and its result was just discarded when it arrived on
+  the closed socket. Half of the intended contract; the server
+  half was always out of scope for ripdb.cpp anyway.
+
+**Removed:**
+
+- `DechunkHttpBody` helper + `DechunkForTest` hook in `ripdb.cpp`.
+- 11 dechunker unit tests in `extension_test.cpp` (single chunk,
+  two chunks, chunk-ext ignored, empty body, mixed-case hex,
+  large chunk, trailer fields ignored, and 4 malformed-input
+  rejection cases).
+- `GenerateQueryId` helper and the `<random>` include.
+- The `PostBinary(..., ClientContext *, string query_id)`
+  overload and `SendInterrupt` method on `RipHttpClient`.
+- Socket timeouts (`SO_RCVTIMEO`, `SO_SNDTIMEO`) and the
+  `<sys/time.h>` include.
+- Interrupt-aware recv loop (fast-path pre-check,
+  `EAGAIN/EWOULDBLOCK` poll for `IsInterrupted()`).
+- `query_id` field on `RipScanGlobalState`.
+- Chunked-TE parsing branch in `DoRequest`; restored the explicit
+  rejection of `Transfer-Encoding: chunked` that M1 originally
+  had.
+
+**Kept (unchanged):**
+
+- All of M2.1 (predicate pushdown), M2.3 (parallel-scan
+  deferral), M2.4 (`rip_refresh`), M2.6 (URL normalization), and
+  Risk 12 DECIMAL closure.
+
+**Test count:**
+
+- Before revert: 59 / 59 extension_test cases.
+- After revert: 48 / 48. All the same functional paths — only
+  the 11 dechunker unit tests disappeared.
+- Decoder golden-fixture tests: still 200 / 200 (not touched).
+
+**Binary-size delta:**
+
+- `ripdb.cpp`: ~1827 → ~1650 lines (~10% smaller).
+- `extension_test` binary: ~992 KB → ~962 KB.
+- `ripdb.duckdb_extension` loadable: ~263 KB → ~243 KB.
+
+**If either feature is needed later:**
+
+- **M2.2:** re-add if rip-db or a proxy in front of it starts
+  emitting chunked. This is also worth doing as part of the M3
+  streaming decoder refactor (real per-chunk streaming makes
+  chunked TE valuable where today it was just protocol compat).
+- **M2.5:** re-add alongside the server-side query registry work
+  that makes `/ddb/interrupt` actually cancel queries. Without
+  that server cooperation, the client-side wiring alone doesn't
+  deliver the intended contract and is strictly maintenance cost.
+
+**Lesson captured (also applies to future milestones):** a
+feature earns its place in the codebase by doing something the
+user can observe, not by having been tested in isolation. The
+sunk-cost argument ("but we already wrote and tested it") doesn't
+justify keeping code that has no live trigger path. When a
+planned feature turns out to need server-side cooperation that
+isn't in scope (M2.5), or depends on a wire-format condition
+that doesn't occur in the target deployment (M2.2), it's better
+to revert the half-delivery than to ship code that silently does
+nothing.
 
 ---
 

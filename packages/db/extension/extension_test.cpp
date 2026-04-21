@@ -30,7 +30,6 @@
 
 namespace duckdb { namespace ripdb {
 void Load(ExtensionLoader &loader);                 // re-declared here; defined in ripdb.cpp
-std::string DechunkForTest(const std::string &in);  // M2.2 unit-test hook
 } }
 
 struct TestStats {
@@ -169,96 +168,6 @@ int main(int argc, char **argv) {
 
 	TestStats s;
 	std::printf("# ripdb extension in-process smoke (rip-db @ %s)\n", rip_db_url);
-
-	// ----------------------------------------------------------------
-	// M2.2 — HTTP chunked transfer-encoding decoder unit tests.
-	// These exercise DechunkForTest() directly without touching the
-	// live server. rip-db itself doesn't emit chunked responses today;
-	// these cases cover the wire-format paths the client must handle
-	// when a future rip-db / reverse-proxy does.
-	// ----------------------------------------------------------------
-	auto expect_dechunk = [&](const std::string &label, const std::string &in,
-	                           const std::string &expected) {
-		++s.total;
-		try {
-			auto got = duckdb::ripdb::DechunkForTest(in);
-			if (got == expected) {
-				++s.passed;
-				std::printf("PASS  dechunker: %s\n", label.c_str());
-			} else {
-				std::printf("FAIL  dechunker: %s — expected %zu bytes, got %zu\n",
-				            label.c_str(), expected.size(), got.size());
-			}
-		} catch (const std::exception &e) {
-			std::printf("FAIL  dechunker: %s — threw: %s\n", label.c_str(), e.what());
-		}
-	};
-	auto expect_dechunk_throws = [&](const std::string &label, const std::string &in,
-	                                   const std::string &needle) {
-		++s.total;
-		try {
-			duckdb::ripdb::DechunkForTest(in);
-			std::printf("FAIL  dechunker: %s — expected throw, succeeded\n", label.c_str());
-		} catch (const std::exception &e) {
-			if (std::string(e.what()).find(needle) != std::string::npos) {
-				++s.passed;
-				std::printf("PASS  dechunker: %s — rejected with '%s'\n", label.c_str(), needle.c_str());
-			} else {
-				std::printf("FAIL  dechunker: %s — threw but message missing '%s': %s\n",
-				            label.c_str(), needle.c_str(), e.what());
-			}
-		}
-	};
-
-	// Single chunk.
-	expect_dechunk("single chunk",
-	               "5\r\nhello\r\n0\r\n\r\n",
-	               "hello");
-	// Two chunks.
-	expect_dechunk("two chunks",
-	               "5\r\nhello\r\n5\r\nworld\r\n0\r\n\r\n",
-	               "helloworld");
-	// Chunk with chunk-ext (extension after ';' must be ignored).
-	expect_dechunk("chunk-ext ignored",
-	               "3;name=value\r\nabc\r\n0\r\n\r\n",
-	               "abc");
-	// Empty body (last-chunk only).
-	expect_dechunk("empty body",
-	               "0\r\n\r\n",
-	               "");
-	// Hex size upper/lowercase.
-	expect_dechunk("hex size mixed case",
-	               "A\r\n0123456789\r\n0\r\n\r\n",
-	               "0123456789");
-	// Large (> 1 buffer worth) chunks.
-	{
-		std::string big(5000, 'x');
-		char hdr[32];
-		std::snprintf(hdr, sizeof(hdr), "%zx\r\n", big.size());
-		std::string in = std::string(hdr) + big + "\r\n0\r\n\r\n";
-		expect_dechunk("5000-byte chunk", in, big);
-	}
-	// Trailers after 0-chunk must be tolerated (we ignore them).
-	expect_dechunk("trailer fields ignored",
-	               "3\r\nfoo\r\n0\r\nX-Trailer: whatever\r\n\r\n",
-	               "foo");
-
-	// Bad: non-hex chunk size.
-	expect_dechunk_throws("non-hex size rejected",
-	                      "zzz\r\nhi\r\n0\r\n\r\n",
-	                      "bad chunk size");
-	// Bad: chunk overruns buffer.
-	expect_dechunk_throws("overrunning chunk rejected",
-	                      "FF\r\nonly-a-few-bytes\r\n0\r\n\r\n",
-	                      "overruns buffer");
-	// Bad: missing CRLF after chunk data.
-	expect_dechunk_throws("missing CRLF after data",
-	                      "3\r\nabcXX0\r\n\r\n",
-	                      "missing CRLF after chunk data");
-	// Bad: truncated (no terminating 0-chunk).
-	expect_dechunk_throws("truncated stream",
-	                      "3\r\nabc\r\n",
-	                      "truncated");
 
 	// ATTACH the remote database under alias 'rip'.
 	expect_ok(con,
