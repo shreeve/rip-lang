@@ -63,13 +63,18 @@ export esc = (v) ->
 # status, the server-side `errorCode` (e.g. 'TABLE_NOT_FOUND', 'SQL_SYNTAX'),
 # and any `errorDetails` the server included. Backwards-compatible: falls
 # back cleanly when the server still returns the old `{error: "str"}` shape.
+#
+# NB: the constructor takes a bag-of-options (`opts`) rather than destructuring
+# in the parameter list because the Rip compiler currently miscompiles pattern
+# destructuring inside a class constructor signature. Once that's fixed this
+# can be switched to `constructor: (message, {code, details, httpStatus} = {})`.
 export class RipDBError extends Error
-  constructor: (message, { code, details, httpStatus } = {}) ->
+  constructor: (message, opts = {}) ->
     super(message)
     @name = 'RipDBError'
-    @code = code or null
-    @details = details or null
-    @httpStatus = httpStatus or null
+    @code = opts.code or null
+    @details = opts.details or null
+    @httpStatus = opts.httpStatus or null
 
 # Throws RipDBError iff the response indicates failure, otherwise returns data.
 # Accepts both envelope shapes — new ({ok:false, error, errorCode, errorDetails})

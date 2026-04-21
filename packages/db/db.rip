@@ -314,13 +314,18 @@ executeBatch = (sql, paramSets) ->
     errorEnvelope err, startTime
 
 # Convert an envelope into a proper HTTP Response with the right status code.
+# Note: `TABLE_NOT_FOUND` inside a `/sql` query is still a SQL-level error
+# (the *request* was well-formed; the underlying table isn't there), so it
+# maps to 422, not 404. The dedicated `GET /schema/:table` route uses its
+# own mapping where a missing table legitimately IS the resource-not-found
+# case and returns 404.
 envelopeToResponse = (env) ->
   return jsonResponse(env, 200) if env.ok
   status = switch env.errorCode
-    when 'TABLE_NOT_FOUND' then 404
-    when 'SQL_SYNTAX', 'SQL_ERROR', 'TYPE_ERROR' then 422
+    when 'SQL_SYNTAX', 'SQL_ERROR', 'TYPE_ERROR', 'TABLE_NOT_FOUND' then 422
     when 'BAD_REQUEST' then 400
     when 'FORBIDDEN' then 403
+    when 'IO_ERROR' then 500
     else 500
   jsonResponse env, status
 
@@ -335,35 +340,54 @@ envelopeToResponse = (env) ->
 #   { sql, params: [...] }           → prepared statement
 #   { sql, params: [[...], [...]] }  → batch prepared (reuse stmt)
 #   { table, columns, rows }         → appender API (fastest insert)
+# Helper — validate that a putative SQL argument is a non-empty string before
+# dispatching to the driver. `body?.sql or body` in the JSON path can leave
+# `sql` set to the body object itself when neither `.sql` nor a raw-text body
+# is present; catch that here instead of deep inside the FFI layer.
+isRunnableSql = (s) -> typeof s is 'string' and s.trim().length > 0
+
+emptyQueryResponse = (startTime) ->
+  jsonResponse
+    ok: false
+    error: 'Empty query'
+    errorCode: 'BAD_REQUEST'
+    timeMs: Date.now() - startTime
+  , 400
+
 post '/sql' ->
   contentType = @req.header('content-type') or ''
   startTime = Date.now()
+  sql = null
+  params = []
+
   if contentType.includes('application/json')
     body = read()
 
     if body?.table and body?.rows
-      return envelopeToResponse executeAppend(body.table, body.columns, body.rows)
+      # `!` on the call is call-and-await; without it envelopeToResponse would
+      # wrap an unresolved Promise instead of the envelope object.
+      return envelopeToResponse (executeAppend! body.table, body.columns, body.rows)
 
-    sql = body?.sql or body
+    raw = body?.sql
+    raw = body if not raw and typeof body is 'string'
+    sql = raw if isRunnableSql(raw)
     params = body?.params or []
 
-    if params.length > 0 and Array.isArray(params[0])
-      return envelopeToResponse executeBatch(sql, params)
+    if sql and params.length > 0 and Array.isArray(params[0])
+      return envelopeToResponse (executeBatch! sql, params)
   else
-    sql = read 'body', 'string'
-    params = []
+    raw = read 'body', 'string'
+    sql = raw if isRunnableSql(raw)
 
-  unless sql
-    return jsonResponse({ok: false, error: 'Empty query', errorCode: 'BAD_REQUEST', timeMs: Date.now() - startTime}, 400)
-  envelopeToResponse executeSQL(sql, params)
+  return emptyQueryResponse(startTime) unless sql
+  envelopeToResponse (executeSQL! sql, params)
 
 # POST / — Raw SQL in body (duck-ui compatible)
 post '/' ->
   startTime = Date.now()
-  sql = read 'body', 'string'
-  unless sql
-    return jsonResponse({ok: false, error: 'Empty query', errorCode: 'BAD_REQUEST', timeMs: Date.now() - startTime}, 400)
-  envelopeToResponse executeSQL(sql)
+  raw = read 'body', 'string'
+  return emptyQueryResponse(startTime) unless isRunnableSql(raw)
+  envelopeToResponse (executeSQL! raw)
 
 # GET /health — Health check (NB: not wrapped in the envelope; the shape is
 # hot-path monitoring data used by orchestrators and hasn't changed since 1.x)
