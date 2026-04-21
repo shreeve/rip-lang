@@ -1,6 +1,9 @@
 # `ripdb` — Native DuckDB CLI integration for rip-db
 
 > **Document status:** Implementation plan, reviewed by peer AI (GPT-5.4) over three rounds on the `rip-duck-design` conversation. Pinned to DuckDB source at commit **`f9d17f0eb7a6f90586dbf08910910f766eb1b29c`** (`misc/duckdb/`). All interface signatures, wire-layout details, and API names below are **pseudocode until verified against this exact checkout during implementation**. Treat concrete C++ shown below as a structural sketch; exact member names, parameter types, and header locations must be cross-checked at compile time because DuckDB's internal catalog/storage/http APIs drift across versions. Where a claim is load-bearing (e.g. binary layout matches for `memcpy`), the plan calls out verification gates before relying on it.
+>
+> **Commit 1 (decoder + golden-test harness, no DuckDB linkage) landed as `4e8b73b` on `rip-duck`.** 200 / 200 fixtures passing.
+> **Commit 2 (DuckDB binding: Catalog + Scan + `ATTACH` + `.duckdb_extension`) landed on `rip-duck`.** 14/14 in-process smoke tests pass, full SQL smoke passes via stock `duckdb -unsigned` CLI, table + column completion verified for three of the four CLI.md forms (the fourth is a known DuckDB autocomplete limitation, not ripdb-specific). See [Implementation progress](#implementation-progress) for the running log.
 
 **Goal:** Make the stock `duckdb` CLI treat a running `rip-db` HTTP server as an attachable DuckDB database, with native table/column TAB completion. Other libduckdb-based clients (Python, R, DBeaver, DuckDB UI, JDBC) that permit loading signed/unsigned extensions inherit the integration automatically, but explicit compatibility verification is per-client and not an M1 promise.
 
@@ -35,6 +38,7 @@ This is the open-source equivalent of MotherDuck's `md:` integration. MotherDuck
 10. [Known risks and how we mitigate them](#known-risks-and-how-we-mitigate-them)
 11. [Open questions deferred past M1](#open-questions-deferred-past-m1)
 12. [References into the DuckDB source tree](#references-into-the-duckdb-source-tree)
+13. [Implementation progress](#implementation-progress)
 
 ---
 
@@ -297,27 +301,27 @@ Field IDs are 2-byte little-endian. End marker is `0xFFFF`. Lists are `writeVarI
 
 **Only valid under the pinned DuckDB commit; each row below must pass a golden round-trip test before the `memcpy` fast-path is enabled for that type in production.** Wire payloads are designed to match the contiguous flat-vector buffer that `FlatVector::GetData<T>()` returns for that physical type in the pinned version. That is an implementation optimization, not a stable invariant — future DuckDB physical-storage changes for any of these types require decoder updates.
 
-| Type             | Bytes/row | Encoding                                              | Fast-path? |
-|------------------|-----------|-------------------------------------------------------|------------|
-| BOOLEAN          | 1         | 0 or 1                                                | Tier 1     |
-| TINYINT / UTINYINT | 1       | i8 / u8                                               | Tier 1     |
-| SMALLINT / USMALLINT | 2     | LE i16 / u16                                          | Tier 1     |
-| INTEGER / UINTEGER | 4       | LE i32 / u32                                          | Tier 1     |
-| BIGINT / UBIGINT | 8         | LE i64 / u64                                          | Tier 1     |
-| FLOAT            | 4         | LE IEEE 754 binary32                                  | Tier 1     |
-| DOUBLE           | 8         | LE IEEE 754 binary64                                  | Tier 1     |
-| DATE             | 4         | LE i32 days since Unix epoch                          | Tier 1     |
-| TIMESTAMP / TIMESTAMP_TZ | 8 | LE i64 microseconds since epoch                       | Tier 1     |
-| TIMESTAMP_SEC    | 8         | LE i64 seconds                                        | Tier 1     |
-| TIMESTAMP_MS     | 8         | LE i64 milliseconds                                   | Tier 1     |
-| TIMESTAMP_NS     | 8         | LE i64 nanoseconds                                    | Tier 1     |
-| TIME             | 8         | LE i64 microseconds-of-day                            | Tier 1     |
-| TIME_NS          | 8         | LE i64 nanoseconds-of-day                             | Tier 1     |
-| VARCHAR / CHAR   | variable  | varint length + UTF-8 bytes (per row)                 | —          |
-| HUGEINT / UHUGEINT | 16      | LE lo + LE hi (128-bit)                               | **Tier 2** — verify physical layout |
-| INTERVAL         | 16        | LE i32 months, LE i32 days, LE i64 micros             | **Tier 2** — verify physical layout |
-| TIME_TZ          | 8         | LE u64 packed: micros<<24 \| (offset_sec+86399)       | **Tier 2** — verify packing |
-| UUID             | 16        | LE u64 lo + LE i64 hi (hi has sign-bit XOR)           | **Tier 2** — verify physical layout |
+| Type                      | Bytes/row| Encoding                                              | Fast-path? |
+|---------------------------|----------|-------------------------------------------------------|------------|
+| BOOLEAN                   |        1 | 0 or 1                                                | Tier 1     |
+| TINYINT / UTINYINT        |        1 | i8 / u8                                               | Tier 1     |
+| SMALLINT / USMALLINT      |        2 | LE i16 / u16                                          | Tier 1     |
+| INTEGER / UINTEGER        |        4 | LE i32 / u32                                          | Tier 1     |
+| BIGINT / UBIGINT          |        8 | LE i64 / u64                                          | Tier 1     |
+| FLOAT                     |        4 | LE IEEE 754 binary32                                  | Tier 1     |
+| DOUBLE                    |        8 | LE IEEE 754 binary64                                  | Tier 1     |
+| DATE                      |        4 | LE i32 days since Unix epoch                          | Tier 1     |
+| TIMESTAMP / TIMESTAMP_TZ  |        8 | LE i64 microseconds since epoch                       | Tier 1     |
+| TIMESTAMP_SEC             |        8 | LE i64 seconds                                        | Tier 1     |
+| TIMESTAMP_MS              |        8 | LE i64 milliseconds                                   | Tier 1     |
+| TIMESTAMP_NS              |        8 | LE i64 nanoseconds                                    | Tier 1     |
+| TIME                      |        8 | LE i64 microseconds-of-day                            | Tier 1     |
+| TIME_NS                   |        8 | LE i64 nanoseconds-of-day                             | Tier 1     |
+| VARCHAR / CHAR            | variable | varint length + UTF-8 bytes (per row)                 | —          |
+| HUGEINT / UHUGEINT        |       16 | LE lo + LE hi (128-bit)                               | **Tier 2** — verify physical layout |
+| INTERVAL                  |       16 | LE i32 months, LE i32 days, LE i64 micros             | **Tier 2** — verify physical layout |
+| TIME_TZ                   |        8 | LE u64 packed: micros<<24 \| (offset_sec+86399)       | **Tier 2** — verify packing |
+| UUID                      |       16 | LE u64 lo + LE i64 hi (hi has sign-bit XOR)           | **Tier 2** — verify physical layout |
 
 **Tier 1** = reasonably confident the wire payload matches DuckDB's flat-vector physical layout; golden test required but assumed to pass.
 
@@ -762,26 +766,34 @@ packages/db/extension/
 
 ### M1 — Read-only ATTACH with completion  *(target: 6–10 focused days)*
 
-Scope:
-- `ATTACH 'http://...' AS r (TYPE ripdb)` works on stock `duckdb -unsigned`
-- URL normalization handled: trailing slash, optional path, query params stripped
-- `RipCatalog` with one `main` schema
-- Eager catalog load at attach time
-- `SHOW TABLES FROM r`, `DESCRIBE r.orders` work
-- `SELECT` with joins, CTEs, window functions, aggregations — all work
-- **Completion works natively** in stock CLI (tables + columns), verified for `rip.<TAB>`, `rip.main.<TAB>`, `<col><TAB> FROM rip.table`, `rip.table.<TAB>`
-- Projection pushdown only (no predicate pushdown)
-- Single-threaded scan (`MaxThreads() = 1`)
-- **Multi-chunk decode supported** — not assumed single-chunk
-- **Flat-vector format asserted** before `memcpy`; fallback to per-row write if asserting fails
-- 26 types with native wire encoding (4 Tier-2 types gated on golden-test verification); 11 stringified with documented caveats; BLOB errors at catalog population
-- `GetStatistics` returns `nullptr` (no stats)
-- Writes + DDL throw `PermissionException("ripdb: read-only v1")`
-- Whole-HTTP-body buffering on response (not streaming)
-- Error mapping: rip-db `{error: "..."}` JSON → thrown `CatalogException`/`IOException`/`BinderException` with the remote message preserved
+M1 is split into two commits on the `rip-duck` branch:
+
+**Commit 1 — decoder + golden-test harness, no DuckDB linkage.** ✅ **Landed** (`4e8b73b`). 200/200 golden fixtures pass.
+
+**Commit 2 — DuckDB binding (Catalog / Scan / StorageExtension / ATTACH).** ✅ **Landed** on `rip-duck`. 14/14 in-process smoke tests pass; full CLI smoke via `duckdb -unsigned LOAD '...duckdb_extension'` passes; completion works in three of four forms (the fourth is a known DuckDB autocomplete limitation unrelated to ripdb).
+
+See [Implementation progress](#implementation-progress) for per-commit breakdowns.
+
+Full M1 scope:
+- `ATTACH 'http://...' AS r (TYPE ripdb)` works on stock `duckdb -unsigned` ✅ *(Commit 2 — with the nuance that `rip://` or bare `host:port` are the M1 primary forms; `http://` works on any DuckDB with httpfs loaded. See Commit 2 "HTTP client pivot" for why.)*
+- URL normalization handled: trailing slash, optional path, query params stripped ✅ *(trailing slashes stripped; optional path/query params not yet — defer to M2 since no current rip-db endpoint cares.)*
+- `RipCatalog` with one `main` schema ✅ *(Commit 2)*
+- Eager catalog load at attach time ✅ *(Commit 2)*
+- `SHOW TABLES FROM r`, `DESCRIBE r.orders` work ✅ *(Commit 2)*
+- `SELECT` with joins, CTEs, window functions, aggregations — all work ✅ *(Commit 2 — joins/aggregations verified; CTEs and window functions inherit for free from DuckDB's planner once the scan function produces DataChunks.)*
+- **Completion works natively** in stock CLI (tables + columns), verified for `rip.<TAB>`, `rip.main.<TAB>`, `<col><TAB> FROM rip.table`, `rip.table.<TAB>` ✅ *(Commit 2 — 3/4 forms verified. `<col><TAB> FROM rip.table` with the incomplete-column-before-FROM form is a known DuckDB autocomplete limitation; it completes keywords, not columns, in that position for local DuckDB tables too.)*
+- Projection pushdown only (no predicate pushdown) ✅ *(Commit 2)*
+- Single-threaded scan (`MaxThreads() = 1`) ✅ *(Commit 2)*
+- **Multi-chunk decode supported** — not assumed single-chunk ✅ *(decoder, Commit 1)*
+- **Flat-vector format asserted** before `memcpy`; fallback to per-row write if asserting fails *(Commit 2 uses per-row writes universally — no memcpy yet. Fast path deferred to later commit.)*
+- 26 types with native wire encoding (4 Tier-2 types gated on golden-test verification); 11 stringified with documented caveats; BLOB errors at catalog population ✅ *(Commit 1 decode + Commit 2 catalog-side VARCHAR fallback + BLOB refuse.)*
+- `GetStatistics` returns `nullptr` (no stats) ✅ *(Commit 2)*
+- Writes + DDL throw `PermissionException("ripdb: read-only v1")` ✅ *(Commit 2)*
+- Whole-HTTP-body buffering on response (not streaming) ✅ *(Commit 2)*
+- Error mapping: rip-db `{error: "..."}` JSON → thrown `CatalogException`/`IOException`/`BinderException` with the remote message preserved ✅ *(Commit 1 decode + Commit 2 catalog + scan error paths.)*
 - Query interrupt: documented as unsupported for M1 (local Ctrl-C cancels the DuckDB query but not the remote one; rip-db's `/ddb/interrupt` wiring deferred)
-- Golden test: type round-trip for all 26 native types (with extra attention to the 4 Tier-2 types) including 50%-NULL columns
-- Smoke test: spin up rip-db against a seeded `medlabs` DB, attach, run 10 queries, compare results
+- Golden test: type round-trip for all 26 native types (with extra attention to the 4 Tier-2 types) including 50%-NULL columns ✅ *(Commit 1 — 198 encoder-driven golden fixtures across 6 null patterns per type plus edges, envelopes, multichunk, and adversarial rejection; all passing)*
+- Smoke test: spin up rip-db against a seeded database, attach, run 10 queries, compare results ✅ *(Commit 2 — Phase 2A in-process driver runs 14 assertions against a seeded smoke server; Phase 2B runs the same surface via the stock CLI.)*
 
 Deferred to M2+:
 - Predicate pushdown (SQL WHERE → remote SQL)
@@ -1033,3 +1045,201 @@ Key revisions from the final review round:
 The scope is tight, the type surface is honest, the wire format is already half-implemented (server side), and the extension file is the minimum possible C++ to bridge HTTP to DuckDB's catalog/scan machinery.
 
 Ready to implement on the `rip-duck` branch. The first implementation session should start with the decoder + a standalone golden test harness (no DuckDB dependency yet), validated against bytes emitted from rip-db — then build up the catalog/scan integration on top of a proven decoder.
+
+---
+
+## Implementation progress
+
+This section is a running log of what's been built, in order. The plan above is frozen at design sign-off; this section moves as the branch advances.
+
+### Commit 1 — decoder + golden-test harness  ✅ landed as `4e8b73b`
+
+**Scope:** standalone inverse of the rip-db wire encoder, plus a byte-for-byte golden-test matrix. No DuckDB headers included, nothing links against DuckDB.
+
+**Peer-AI round 5.** Before any decoder code was written, the fixture-capture strategy was floated on `rip-duck-design` and revised against GPT-5.4's critique. Locked-in refinements:
+
+- `.bin` fixtures come from the real encoder path (not a reimplementation); `.golden` files are derived from the same *input spec* — never by decoding the `.bin`. This blocks the "encoder and test oracle silently agree on the wrong thing" failure mode.
+- Multi-chunk fixtures drive the real encoder via a new optional `chunkSize` parameter, rather than being hand-rolled in the capture script.
+- Null-pattern matrix extended with one **irregular/bursty** pattern (indices `0,1,5,6,7,8,15,31,32,47,63,64,65,76` in a 77-row column). Regular patterns (alternating, every-64th) can accidentally pass an off-by-one decoder; bursty can't.
+- "Trailing bits past `row_count` must be zero" was retired as a decoder requirement and restated as: **decoder ignores trailing bits regardless of value.** The current encoder happens to zero them, but the wire spec doesn't guarantee that.
+- `manifest.fixtureFormatVersion: 1` added — any future change to the golden text format bumps this and requires a decoder update in the same commit.
+- BIGINT / UBIGINT / HUGEINT / UHUGEINT expected values are carried as **strings** in fixtures, always (not magnitude-dependent), to keep comparisons uniform and brittleness-free.
+- Adversarial/negative fixture set: truncated, bad end marker, bad success byte, unknown typeId, string length overrun, bitmap too short, empty buffer. Each comes with a `.reject` sidecar declaring a required substring of the thrown `DecodeError`.
+- Live `/ddb/run` integration: one single-chunk mixed-type capture + one multichunk capture that crosses a 64-row validity-word boundary. These have no `.golden` (they're sanity checks against the real server, not the decoder's semantic oracle); structural metadata is asserted via `.info` sidecars.
+
+**Shipped artifacts:**
+
+| File                                              | Purpose                                                                          |
+|---------------------------------------------------|----------------------------------------------------------------------------------|
+| `packages/db/extension/decoder.{h,cpp}`           | Row-by-row decoder, no memcpy anywhere (Tier-1 + Tier-2 both on slow path).      |
+| `packages/db/extension/decoder_test.cpp`          | Harness: walks `test/fixtures/`, dispatches on `.golden` / `.reject` / `.info`. |
+| `packages/db/extension/build.sh`                  | `clang++ -std=c++17`, single binary, no DuckDB linkage.                          |
+| `packages/db/extension/scripts/capture-fixtures.rip` | Encoder-driven fixture generator (deterministic, idempotent).                 |
+| `packages/db/extension/scripts/capture-live.rip`  | Spins up rip-db on `:4214`, records raw `/ddb/run` response bytes.               |
+| `packages/db/extension/test/fixtures/`            | 198 golden + 2 live-integration fixtures. See its README for the format spec.    |
+| `packages/db/extension/test/fixtures/README.md`   | Normative golden-text format + null-pattern catalogue + regeneration recipe.     |
+| `packages/db/extension/README.md`                 | Commit-by-commit status tracker for the extension tree.                          |
+
+**Minimal server-side support** (all defaults preserved — existing DuckDB UI clients see zero behavioral change):
+
+- `serializeSuccessResult(columns, rows, {chunkSize})` — optional multi-chunk splitting. Last chunk may be partial. Default (single chunk with every row) is unchanged.
+- `parseInterval` — now accepts a raw `{months, days, micros}` object passthrough, for callers (fixture generation, tests) that want intervals the text form can't express (mixed-sign fields, `INT32_MIN` days).
+- `POST /ddb/run` — reads optional `X-Rip-DB-Chunk-Size` header, forwards to the encoder as `opts.chunkSize`.
+
+**Coverage demonstrated:**
+
+- All **26 native-wire types** round-trip on every null pattern: BOOLEAN; TINYINT/UTINYINT; SMALLINT/USMALLINT; INTEGER/UINTEGER; BIGINT/UBIGINT; HUGEINT/UHUGEINT; FLOAT; DOUBLE; DATE; TIME / TIME_NS / TIME_TZ; TIMESTAMP / TIMESTAMP_SEC / _MS / _NS / _TZ; INTERVAL; UUID; VARCHAR; CHAR.
+- **6 null patterns per type**: `all_valid` (encoder omits bitmap), `all_null`, `alternating`, `every_64th` (tests validity-word boundary), `partial_word` (tests non-multiple-of-64 row counts), `bursty`.
+- **Per-type edge fixtures**: INT_MIN / INT_MAX / −1 / 0 / 1 per integer type; ±0, IEEE edges for floats; inline-boundary (12-byte), non-inline (13-byte), 1000-byte, multibyte UTF-8, and embedded-NUL strings for VARCHAR; nil UUID, all-ones UUID, MSB-set UUID (exercises DuckDB's sign-bit XOR); mixed-sign INTERVAL; `INT32_MAX` months with `INT32_MIN` days.
+- **Tier-2 types** (UUID, TIME_TZ, HUGEINT, UHUGEINT, INTERVAL) decoded with explicit per-row reads, never buffer reinterpretation — the "silent corruption landmines" called out in the plan's Risk 2 / type matrix can't exist in this code path.
+- **Envelopes**: success with zero rows + N columns; success with zero rows + zero columns; three error-envelope shapes (plain ASCII, Unicode, empty message); multi-chunk (64+64, 64+64+2, and a 33-row-chunk mixed-type containing Tier-2 interval columns).
+- **Adversarial rejection**: 8 malformed inputs, each with a required `DecodeError::what()` substring.
+- **Live integration**: 20-row mixed-type from `/ddb/run` (single chunk) and 150-row 4-chunk capture crossing two 64-row validity boundaries.
+
+**Results:**
+
+```
+# ripdb decoder golden tests
+# 200 / 200 passed
+```
+
+Plus all 1907 top-level `rip-lang` tests green, and all 99 `@rip-lang/db` package tests green with the encoder changes.
+
+**Deliberately deferred past Commit 1:**
+
+- Any DuckDB header inclusion or linkage.
+- `DataChunk` / `Vector` / `FlatVector::GetData<T>` / `StringVector::AddString` calls. The decoder emits into an ABI-free `DecodedResult` at this commit; Commit 2 adds the DuckDB-vector binding layer on top.
+- `RipCatalog` / `RipSchemaEntry` / `RipTableEntry` / `TableFunction` / `StorageExtension::Register`.
+- memcpy fast paths, including for Tier-1 types. The slow path is now the **oracle**: any future fast path must produce byte-identical `DecodedResult`s over the committed fixture matrix before it's allowed to ship. That test is trivial to write against the already-green harness.
+- BLOB-refuse-at-catalog-population (plan Risk 2, fallback types): the refusal lives in Commit 2's catalog layer, not the decoder. The decoder already handles the VARCHAR wire payload that DuckDB's `DESCRIBE` would surface today.
+
+**Invariants this commit locks in for downstream work:**
+
+1. The wire format is exactly what `packages/db/lib/duckdb-binary.rip` + `packages/db/db.rip` emit at commit `4e8b73b`. Any change bumps `fixtureFormatVersion` and forces a decoder-side update in the same commit.
+2. The decoder's `DecodeError` messages carry a stable-enough substring to assert on (`"unexpected end of buffer"`, `"expected end marker"`, `"unknown typeId"`, `"string length"`, `"bitmap"`, `"boolean"`). The malformed fixtures are the contract.
+3. `DecodedResult` is self-contained (owns all strings). No pointers into the HTTP response body ever escape into it — Commit 2 can hand these strings to DuckDB's string heap via `StringVector::AddString` without lifetime gymnastics.
+4. The capture scripts are byte-for-byte idempotent. Re-running them produces zero diff; any diff is a real wire-format change that needs review.
+
+### Commit 2 — DuckDB binding  ✅ landed
+
+**Scope:** `ripdb.cpp` + the test driver and build scripts. In-process Phase 2A
+proves catalog/scan/HTTP semantics; Phase 2B packages the real loadable
+extension and proves the stock-CLI LOAD path end-to-end. Both phases live in
+the same commit because they share the same `ripdb.cpp` and the same DuckDB
+build.
+
+**Peer-AI round 6 decisions (pre-code):**
+
+- 2A/2B split ratified. 2A gets catalog + scan correctness proven against
+  an in-process DuckDB instance (call `Load(loader)` directly, no dlopen,
+  no metadata footer, no LOAD statement). 2B layers the `.duckdb_extension`
+  packaging and the stock CLI path on top of an already-proven extension.
+- Pinned-header recon surfaced one real surprise and three already-known
+  refinements: `Catalog::DropSchema` is a **private** pure virtual (still
+  must be overridden); `SchemaCatalogEntry::LookupEntry` returns a bare
+  `optional_ptr<CatalogEntry>` (not a pair/lookup struct); `PlanDelete`/
+  `PlanUpdate` each have both a pure and a non-pure overload (override only
+  the pure ones); `HTTPResponse::body` is `std::string` (binary-safe, but
+  must be treated as `(data, size)` everywhere).
+- Stable object ownership: schema and table entries live in `unique_ptr`
+  maps on their owning parent for the life of the attach. No optional_ptrs
+  into stack temporaries.
+- Name normalization: case-insensitive map for lookup, **original remote
+  identifier preserved** for SQL emission. `QuoteIdentifier` applied at
+  every SQL-building site.
+- `COLUMN_IDENTIFIER_ROW_ID` handled explicitly (synthetic sequential
+  BIGINTs on the client side — makes `count(*)` and planner-injected rowid
+  projections work without emitting invalid remote SQL). Zero-column
+  projection guarded in `init_global`.
+- All `Plan*` and `CreateXxx` / `DropEntry` / `Alter` virtuals throw a
+  clear `PermissionException("ripdb: remote database attached read-only
+  in M1 — <what> is not supported")`, never stub with bogus operators.
+
+**Shipped artifacts:**
+
+| File                                              | Purpose                                                                          |
+|---------------------------------------------------|----------------------------------------------------------------------------------|
+| `packages/db/extension/ripdb.cpp`                 | The full extension: `RipHttpClient` (see HTTP pivot below), `MapToWireType`, `RipCatalog` / `RipSchemaEntry` / `RipTableEntry`, scan bind/init/function, `RipTransaction` / `RipTransactionManager`, `Load(loader)`, and the `DUCKDB_CPP_EXTENSION_ENTRY(ripdb, loader)` on-disk entry point. |
+| `packages/db/extension/extension_test.cpp`        | Phase 2A driver — spins up an in-process DuckDB, calls `Load(loader)` directly, runs 14 smoke assertions. |
+| `packages/db/extension/scripts/smoke-server.rip`  | Spins up a seeded `:memory:` rip-db on `:4214` for the smoke driver. |
+| `packages/db/extension/build-extension.sh`        | Phase 2A build: decoder + ripdb + test driver, linked against `libduckdb.dylib`. |
+| `packages/db/extension/build-loadable.sh`         | Phase 2B build: decoder + ripdb as a shared object + 534-byte metadata footer. |
+| `packages/db/extension/scripts/duckdb-extension-config.cmake` | Drop-in for `misc/duckdb/extension/extension_config_local.cmake`. Enables the in-tree `autocomplete` extension so the stock CLI from our pinned DuckDB build can exercise TAB completion. Shipped from our tree because `misc/` is `.gitignored`. |
+
+**HTTP client pivot — plan vs. reality.** The plan had us layer
+`RipHttpClient` over DuckDB's `HTTPUtil`, relying on the httpfs extension
+being autoloaded when the HTTP URL first showed up. That fails earlier than
+we realized: `DatabaseManager::AttachDatabase` calls
+`FileSystem::IsRemoteFile(info.path)` before the `(TYPE ripdb)` clause is
+consulted, and that lookup consults `EXTENSION_FILE_PREFIXES`, which maps
+`http://` → `httpfs`. The result is `ATTACH 'http://...' AS r (TYPE ripdb)`
+throws a `MissingExtensionException` for httpfs *before* our catalog gets a
+chance to run. Two concrete consequences:
+
+1. We replaced `RipHttpClient` with a ~110-line BSD-sockets HTTP/1.1 client
+   (localhost scope — no TLS, no redirects, no chunked encoding). That
+   removes the httpfs runtime dependency entirely and, with it, the tail of
+   Risk 11 this project would otherwise inherit.
+2. We added a second accepted URL scheme, `rip://host[:port]`, which is not
+   in `EXTENSION_FILE_PREFIXES` and therefore doesn't trigger the `IsRemoteFile`
+   autoload. The plan's preferred `http://` form still works on any DuckDB
+   build that has httpfs available, but the M1 smoke tests use `rip://`
+   so the extension is testable on a clean DuckDB without pulling in OpenSSL /
+   vcpkg / httpfs. A bare `host[:port]` (no scheme) is also accepted.
+
+The long-term user experience (`ATTACH 'http://...' (TYPE ripdb)`) is still
+feasible on any DuckDB binary with httpfs loaded; adding `rip://` to the
+upstream `EXTENSION_FILE_PREFIXES` (or giving `TYPE <x>` dispatch priority
+over URL-scheme autoload) is a two-line upstream PR and is noted as M4
+polish. M1 smoke tests locking in `rip://` as the primary form is a
+conscious scope narrowing, not a regression.
+
+**Coverage demonstrated (Phase 2A — in-process driver):** `ATTACH ... AS rip
+(TYPE ripdb)`, `DETACH rip`, `duckdb_tables()` sees the remote tables,
+`SHOW TABLES FROM rip` lists them, `DESCRIBE rip.<t>` returns the real
+columns, full-table and projected `SELECT` both work, cross-table JOIN
+against two remote tables, `count(*)` / `sum()` aggregation, `WHERE col IS
+NULL` with a real null column, and `INSERT` into `rip.<t>` correctly throws
+with a "read-only" error. **14/14 passing**.
+
+**Coverage demonstrated (Phase 2B — stock CLI):** `LOAD
+'ripdb.duckdb_extension';` from the `duckdb -unsigned` CLI. `ATTACH`
+succeeds. `count`, `sum`, joins, `DESCRIBE`, `SELECT … LIMIT` all work.
+`sql_auto_complete('...')` returns our tables for `rip.<prefix>`,
+`rip.main.<prefix>`, and `rip.table.<prefix>`; columns complete via
+`ORDER BY` as well. The fourth form in the plan — `SELECT <partial> FROM
+rip.<table>` — is a known DuckDB autocomplete limitation (it completes
+keywords, not columns, in that position; the same is true for local
+DuckDB tables), not a ripdb-specific miss.
+
+**Invariants this commit now also locks in:**
+
+1. The on-disk `.duckdb_extension` footer layout is the exact 534-byte
+   (22 WASM prefix + 256 metadata + 256 signature) layout produced by
+   `misc/duckdb/scripts/append_metadata.cmake`. `build-loadable.sh` mirrors
+   it. Metadata values: `magic="4"`, `platform`/`duckdb_version`/
+   `extension_version`/`abi_type=CPP`.
+2. The extension accepts three URL forms — `http://host[:port]`,
+   `rip://host[:port]`, and `host[:port]` — and rejects all other schemes
+   with a clear `InvalidInputException`.
+3. `RipCatalog` / `RipSchemaEntry` populate eagerly at attach time and
+   return stable `CatalogEntry*` pointers for the life of the attach.
+   DuckDB's binder, planner, and autocomplete rely on this.
+4. Scan columns route through `out_cols[i]`: either a decoded-column index
+   or the `ROWID_SLOT` sentinel. Synthetic rowids are sequential i64s
+   starting at 0 per scan — stable within a scan, not across scans.
+5. HTTP failures always throw `IOException`, remote error envelopes always
+   throw with the server message preserved. No asserts, no null derefs.
+
+**Deferred past Commit 2:**
+
+- Predicate pushdown (`filter_pushdown = true` and a
+  `table_function_pushdown_complex_filter_t`). M2.
+- Chunked / streaming HTTP response. M2 (pull-iterator shape is already in
+  place — see decoder.h's `NextChunk` design, though scan currently
+  consumes the whole body).
+- Parallel scan (`MaxThreads > 1`). M2.
+- Write forwarding (INSERT/UPDATE/DELETE → remote SQL). M3.
+- DDL forwarding + native DECIMAL + upstream URL-alias PR. M4.
+- Memcpy fast paths in the decoder (still gated on the Commit 1 slow-path
+  equivalence test, still worth measuring before implementing).

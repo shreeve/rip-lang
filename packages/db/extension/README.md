@@ -9,21 +9,33 @@ this README just tracks what's been landed here.
 | Commit | Scope                                                                   | Status |
 |--------|--------------------------------------------------------------------------|--------|
 | **1**  | Decoder + standalone golden-test harness, **no DuckDB linkage**          | ✅ landed |
-| 2      | Catalog + Scan + StorageExtension registration, ATTACH + SELECT working  | planned |
-| 3      | Write forwarding                                                         | planned |
-| 4      | DDL + native DECIMAL + upstream PR                                       | planned |
+| **2**  | `ripdb.cpp` catalog + scan + `StorageExtension`, in-process driver, real `.duckdb_extension` via stock `duckdb -unsigned` | ✅ landed |
+| 3      | Predicate pushdown, chunked HTTP, parallel scan                          | planned |
+| 4      | Write forwarding + DDL + native DECIMAL + upstream PR                    | planned |
 
-## Commit 1 layout
+## Layout
 
 ```
 packages/db/extension/
-├── decoder.h, decoder.cpp      standalone decoder (no DuckDB headers)
-├── decoder_test.cpp            golden-test harness (libstdc++ + <filesystem> only)
-├── build.sh                    clang++ -std=c++17, single binary
+├── decoder.{h,cpp}             Commit 1 — standalone decoder (no DuckDB headers)
+├── ripdb.cpp                   Commit 2 — the extension itself: catalog + scan
+│                                + transaction manager + storage extension
+│                                + DUCKDB_CPP_EXTENSION_ENTRY entry point
+├── decoder_test.cpp            Commit 1 golden-test harness
+├── extension_test.cpp          Commit 2 Phase 2A in-process smoke driver
+├── build.sh                    Commit 1 test build
+├── build-extension.sh          Commit 2 Phase 2A build (links libduckdb, runs
+│                                extension_test against rip-db on :4214)
+├── build-loadable.sh           Commit 2 Phase 2B build — compiles
+│                                ripdb.duckdb_extension as a shared library
+│                                and appends the 534-byte metadata footer so it
+│                                loads via `duckdb -unsigned / LOAD '...'`
 ├── scripts/
-│   ├── capture-fixtures.rip    encoder-driven fixture generator
-│   └── capture-live.rip        live /ddb/run integration capture (spins up rip-db)
-└── test/fixtures/              see test/fixtures/README.md for the format spec
+│   ├── capture-fixtures.rip    Commit 1 — encoder-driven fixture generator
+│   ├── capture-live.rip        Commit 1 — live /ddb/run integration capture
+│   └── smoke-server.rip        Commit 2 — :memory: rip-db seeded with two
+│                                tables used by extension_test
+└── test/fixtures/              Commit 1 — see fixtures/README.md for the format spec
     ├── types/<type>/<pattern>.{bin,golden}    190 encoder-driven fixtures
     ├── envelopes/{error_*,zero_rows_*,multichunk_*}.{bin,golden}
     ├── malformed/*.{bin,reject}               8 adversarial-byte fixtures
@@ -33,10 +45,41 @@ packages/db/extension/
 
 ## Build & run
 
+### Commit 1 — decoder golden tests (no DuckDB needed)
+
 ```
 ./build.sh                    # compile and run tests; exit 0 on all-pass
 ./build.sh --no-run           # compile only
 ./decoder_test test/fixtures  # run tests against a specific fixture root
+```
+
+### Commit 2 — the extension itself
+
+Prerequisite: build DuckDB from `misc/duckdb/` once (~2.5 minutes):
+
+```
+cd ../../../misc/duckdb && make release
+```
+
+Then, in one terminal, start the seeded rip-db smoke server:
+
+```
+rip packages/db/extension/scripts/smoke-server.rip   # serves on :4214
+```
+
+In another terminal, either:
+
+```
+# Phase 2A — in-process driver (fast iteration, no packaging)
+./build-extension.sh           # compiles + runs extension_test (14 assertions)
+
+# Phase 2B — real .duckdb_extension + stock CLI
+./build-loadable.sh            # produces ripdb.duckdb_extension with metadata footer
+../../../misc/duckdb/build/release/duckdb -unsigned -c \
+  "LOAD '$PWD/ripdb.duckdb_extension';
+   ATTACH 'rip://localhost:4214' AS rip (TYPE ripdb);
+   SHOW TABLES FROM rip;
+   SELECT count(*) FROM rip.smoke_orders;"
 ```
 
 ### Regenerating fixtures

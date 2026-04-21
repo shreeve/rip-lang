@@ -1,0 +1,118 @@
+#!/usr/bin/env rip
+# =============================================================================
+# smoke-server.rip — Spin up a rip-db server for extension_test to talk to.
+# =============================================================================
+#
+# Starts rip-db on :4214 against a :memory: database, seeds two small tables
+# (smoke_people, smoke_orders) that extension_test.cpp expects, and stays up
+# until SIGINT/SIGTERM.
+#
+# Usage:
+#   rip packages/db/extension/scripts/smoke-server.rip
+#
+# Run extension_test in another terminal against http://localhost:4214.
+# =============================================================================
+
+import { spawn } from 'child_process'
+import { join, dirname } from 'path'
+
+HERE    = import.meta.dir
+DB_RIP  = join HERE, '..', '..', 'db.rip'
+PORT    = parseInt(process.env.RIPDB_SMOKE_PORT or '4214', 10)
+BASE    = "http://localhost:#{PORT}"
+
+p "starting rip-db on :#{PORT} (press Ctrl-C to stop)…"
+
+proc = spawn 'rip', [DB_RIP, ':memory:', "--port=#{PORT}"],
+  stdio: ['ignore', 'pipe', 'pipe']
+  env:   process.env
+
+cleanup = ->
+  try proc.kill 'SIGTERM'
+
+# If our own stdout/stderr pipe breaks (e.g. the terminal that launched
+# us was piped through `| tail` and the reader exited), we'd otherwise
+# spin on EPIPE forwarding child output. Detect it, clean up the child,
+# and exit so we don't leave an orphan burning CPU.
+forward = (d) ->
+  try
+    process.stderr.write "[rip-db] #{d}"
+  catch
+    cleanup()
+    process.exit 0
+
+proc.stdout.on 'data', forward
+proc.stderr.on 'data', forward
+
+for stream in [process.stdout, process.stderr]
+  stream.on 'error', (err) ->
+    if err?.code is 'EPIPE'
+      cleanup()
+      process.exit 0
+
+process.on 'exit', cleanup
+process.on 'SIGINT', ->
+  cleanup()
+  process.exit 130
+process.on 'SIGTERM', ->
+  cleanup()
+  process.exit 143
+process.on 'SIGPIPE', ->
+  cleanup()
+  process.exit 0
+
+# Wait for /health
+await do ->
+  for _ in [0...50]
+    try
+      r = await fetch "#{BASE}/health"
+      if r.ok
+        return
+    catch
+      # retry
+    await sleep 100
+  throw new Error 'rip-db did not come up within 5s'
+
+runSql = (sql) ->
+  r = await fetch "#{BASE}/sql",
+    method:  'POST'
+    headers: { 'Content-Type': 'application/json' }
+    body:    JSON.stringify { sql }
+  body = await r.json()
+  if body?.error
+    throw new Error "seed error: #{body.error}\nSQL: #{sql}"
+  body
+
+p "seeding schema…"
+
+# 10 people, half with NULL birthdates (tests NULL handling in extension_test).
+await runSql '''
+  CREATE TABLE smoke_people AS
+  SELECT
+    CAST(i AS INTEGER)                   AS id,
+    'person-' || CAST(i AS VARCHAR)      AS full_name,
+    CASE WHEN i % 2 = 0 THEN NULL
+         ELSE DATE '1980-01-01' + INTERVAL (i) YEAR END AS birthdate,
+    CAST(i * 3.14 AS DOUBLE)             AS score
+  FROM range(1, 11) AS t(i)
+'''
+
+# 20 orders: 2 per person, mixed amounts and currencies.
+await runSql '''
+  CREATE TABLE smoke_orders AS
+  SELECT
+    CAST(i AS INTEGER)                        AS id,
+    CAST(((i - 1) % 10) + 1 AS INTEGER)       AS person_id,
+    'SKU-' || CAST(i AS VARCHAR)              AS sku,
+    CASE WHEN i % 3 = 0 THEN 'EUR' ELSE 'USD' END AS currency,
+    CAST(i * 12.50 AS DOUBLE)                 AS amount
+  FROM range(1, 21) AS t(i)
+'''
+
+p "ready: #{BASE}"
+p "  smoke_people: 10 rows"
+p "  smoke_orders: 20 rows"
+p "  (Ctrl-C to stop)"
+
+# Block forever.
+await new Promise (resolve) -> noop()
