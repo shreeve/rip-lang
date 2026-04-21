@@ -186,6 +186,58 @@ jobs:
           fi
           echo "ok — $f (${size} bytes, arch=${want_arch}, platform=${{ matrix.platform }})"
 
+      # ----- Runtime load test ---------------------------------------------
+      # Principle: CI should validate the artifact's FUNCTION, not just its
+      # SHAPE. The smoke check above only confirms file format, size, and
+      # footer magic. Symbol-resolution bugs (e.g. hidden-visibility methods
+      # like CatalogEntry::AlterEntry on Linux) pass every shape check yet
+      # still fail at dlopen time on the user's machine. This step runs an
+      # actual `LOAD <path>;` against the matching stock duckdb binary — the
+      # same operation an end-user does — so any such failure turns the job
+      # red before a broken .gz reaches Pages.
+      #
+      # Native matrix entries test directly. The osx_amd64 entry is cross-
+      # built on an arm64 runner; Rosetta 2 (available on macos-latest)
+      # executes the x86_64 binary so we can still do a real LOAD there.
+      - name: Runtime load test (LOAD the extension and run a query)
+        shell: bash
+        run: |
+          set -euo pipefail
+          ext="${{ github.workspace }}/packages/db/extension/ripdb.duckdb_extension"
+
+          # Pick an invoker that can run the binary on this runner + target.
+          # Linux entries are always native; osx_arm64 is native; osx_amd64
+          # is x86_64 running on an arm64 host, so we need Rosetta.
+          case "${{ matrix.platform }}:${{ matrix.os }}" in
+            osx_amd64:macos-*)
+              # Install Rosetta if it isn't already; arch -x86_64 invokes it.
+              if ! arch -x86_64 true 2>/dev/null; then
+                echo "Installing Rosetta 2 (one-shot)..."
+                sudo softwareupdate --install-rosetta --agree-to-license
+              fi
+              invoker=(arch -x86_64)
+              duckdb_bin="${{ github.workspace }}/misc/duckdb-bin/duckdb"
+              ;;
+            *)
+              invoker=()
+              duckdb_bin="${{ github.workspace }}/misc/duckdb-bin/duckdb"
+              ;;
+          esac
+
+          # Capture both stdout and stderr so dlopen errors surface in the log.
+          set +e
+          out=$("${invoker[@]}" "$duckdb_bin" -unsigned \
+                -cmd "LOAD '$ext';" \
+                -c "SELECT 'ripdb loaded' AS status;" 2>&1)
+          rc=$?
+          set -e
+          echo "$out"
+          if [[ $rc -ne 0 ]] || ! grep -q 'ripdb loaded' <<<"$out"; then
+            echo "::error::Runtime LOAD failed for ${{ matrix.platform }} (exit=$rc)"
+            exit 1
+          fi
+          echo "ok — ${{ matrix.platform }} extension loaded and executed a query"
+
       - name: Gzip extension
         shell: bash
         run: |
