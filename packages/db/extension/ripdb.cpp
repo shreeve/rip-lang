@@ -60,8 +60,15 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+// In DuckDB ≥ post-v1.5.2 the vector helpers (FlatVector, StringVector, …)
+// were split out of duckdb/common/types/vector.hpp into their own headers.
+// On v1.5.2 they still live inside types/vector.hpp (pulled in via
+// data_chunk.hpp above), so these explicit includes are only needed on
+// newer dev builds. __has_include lets one source compile against both.
+#if __has_include("duckdb/common/vector/flat_vector.hpp")
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
+#endif
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/storage/database_size.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
