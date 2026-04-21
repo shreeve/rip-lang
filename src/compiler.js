@@ -2385,7 +2385,14 @@ export class CodeEmitter {
     if (typeof param === 'string') return param;
     if (param instanceof String) return param.valueOf();
     if (this.is(param, 'rest')) return `...${param[1]}`;
-    if (this.is(param, 'default')) return `${param[1]} = ${this.emit(param[2], 'value')}`;
+    if (this.is(param, 'default')) {
+      // `param[1]` is either a plain identifier string (e.g. `x = 5`) or a
+      // destructuring pattern AST node (e.g. `{a, b} = {}`). Recurse via
+      // `formatParam` so patterns emit as `{a, b}` / `[x, y]` instead of
+      // being coerced to a string via `Array.prototype.toString`, which
+      // produced the famous `(object,,a,a,,b,b = {})` mis-rendering.
+      return `${this.formatParam(param[1])} = ${this.emit(param[2], 'value')}`;
+    }
     if (this.is(param, '.') && param[1] === 'this') return param[2];
     if (this.is(param, 'array')) {
       let els = param.slice(1).map(el => {

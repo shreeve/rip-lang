@@ -36,7 +36,7 @@ code "thin arrow destructuring with default",
   "let f;\nf = function({a, b} = {}) {\n  return (a + b);\n};"
 code "second-position destructuring with default",
   "f = (x, {a, b} = {}) -> x + a + b",
-  "let f;\nf = function(x, {a, b} = {}) {\n  return (x + a + b);\n};"
+  "let f;\nf = function(x, {a, b} = {}) {\n  return ((x + a) + b);\n};"
 test "destructuring with default — runtime",
   "f = ({a, b} = {}) -> a + b\nf({a: 1, b: 2})", 3
 test "destructuring with default — omitted",
