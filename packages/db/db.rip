@@ -175,36 +175,123 @@ process.on 'SIGINT',  shutdown
 process.on 'SIGTERM', shutdown
 
 # ==============================================================================
-# Helpers
+# Helpers — response envelope + structured errors
 # ==============================================================================
+#
+# Envelope shape (success):
+#   {
+#     ok: true,
+#     kind: 'select' | 'write',
+#     columns: [{name, type}, ...],
+#     data: [[...], [...]],
+#     rowCount: N,        # primary
+#     timeMs: M,          # primary
+#     # --- legacy aliases, still populated for one major-version cycle ---
+#     rows: N,            # same as rowCount
+#     time: M/1000,       # same as timeMs/1000 (seconds)
+#   }
+#
+# Envelope shape (error):
+#   {
+#     ok: false,
+#     error: "human-readable message",    # legacy-compatible string
+#     errorCode: 'SQL_ERROR' | 'TABLE_NOT_FOUND' | 'BAD_REQUEST' | 'FORBIDDEN' | 'INTERNAL',
+#     errorDetails: {...}?,
+#     timeMs: M,
+#   }
+#
+# The POST /sql endpoint returns 200 for successful queries, 400 for malformed
+# request bodies, 404 for missing resources (GET /schema/:table), and 422 for
+# SQL-level errors. The envelope shape is identical across status codes.
 
 # Helper for binary responses
 binaryResponse = (data) ->
   new Response data, headers: { 'Content-Type': 'application/octet-stream' }
 
-# Log SQL query (truncated if long)
-logSQL = (sql) ->
-  # sql = sql.replace(/\s+/g, ' ').trim()
-  p sql
+# Helper for structured JSON responses with a specific HTTP status
+jsonResponse = (body, status = 200) ->
+  new Response JSON.stringify(body),
+    status: status
+    headers: { 'Content-Type': 'application/json' }
 
-# Execute SQL and return result (uses persistent connection)
+# Classify a driver/user error into a stable code for programmatic handling.
+# Pattern-matched on message text because DuckDB doesn't ship typed C API
+# errors. This is intentionally a small taxonomy — better a few high-signal
+# codes than a dozen low-precision ones.
+errorCodeOf = (err) ->
+  msg = (err?.message or '').toLowerCase()
+  if /does not exist|not found|no such table|catalog error/.test(msg)
+    'TABLE_NOT_FOUND'
+  else if /syntax error|parser error/.test(msg)
+    'SQL_SYNTAX'
+  else if /conversion|cast|type mismatch|invalid input/.test(msg)
+    'TYPE_ERROR'
+  else if /read|i\/o|permission/.test(msg)
+    'IO_ERROR'
+  else
+    'SQL_ERROR'
+
+# Log SQL query (full text for now; follow-up will add log levels + redaction)
+logSQL = (sql) -> p sql
+
+# Build a success envelope from a driver result. `kind` is inferred from
+# whether the statement produced column metadata (a `SELECT`-like statement
+# returns columns; DDL / pure writes don't).
+successEnvelope = (result, startTime) ->
+  ms = Date.now() - startTime
+  cols = result.columns or []
+  colInfo = cols.map (col) -> { name: col.name, type: col.typeName }
+  data = result.map (row) -> cols.map (col) -> row[col.name]
+  {
+    ok: true
+    kind: if cols.length > 0 then 'select' else 'write'
+    columns: colInfo
+    data: data
+    rowCount: data.length
+    timeMs: ms
+    # Legacy aliases — populated to preserve existing clients for one cycle.
+    rows: data.length
+    time: ms / 1000
+  }
+
+# Build an error envelope. `httpStatus` is the caller's hint for what HTTP
+# code to return; the envelope body is the same regardless.
+errorEnvelope = (err, startTime, code = null) ->
+  msg = err?.message or String(err)
+  ms = Date.now() - startTime
+  {
+    ok: false
+    error: msg                               # legacy-compatible string
+    errorCode: code or errorCodeOf(err)
+    timeMs: ms
+  }
+
+# Convenience: envelope for mutations that don't return rows (e.g. Appender
+# bulk-insert). Still looks like a `success` envelope with `kind: 'write'`.
+writeEnvelope = (rowCount, startTime) ->
+  ms = Date.now() - startTime
+  {
+    ok: true
+    kind: 'write'
+    columns: []
+    data: []
+    rowCount: rowCount
+    timeMs: ms
+    rows: rowCount                           # legacy alias
+    time: ms / 1000                          # legacy alias
+  }
+
+# Execute SQL and return an envelope (uses persistent connection).
 # Always materializes whatever rows come back — works for SELECT,
 # INSERT/UPDATE/DELETE ... RETURNING, SHOW, DESCRIBE, etc.
 executeSQL = (sql, params = []) ->
   logSQL sql
   startTime = Date.now()
-
   try
     result = await conn.query(sql, params)
-    cols = result.columns or []
-    {
-      columns: cols.map (col) -> { name: col.name, type: col.typeName }
-      data: result.map (row) -> cols.map (col) -> row[col.name]
-      rows: result.length
-      time: (Date.now() - startTime) / 1000
-    }
+    successEnvelope result, startTime
   catch err
-    { error: err.message }
+    errorEnvelope err, startTime
 
 # Bulk insert via Appender API (fastest path for pure inserts)
 executeAppend = (table, columns, rows) ->
@@ -212,9 +299,9 @@ executeAppend = (table, columns, rows) ->
   startTime = Date.now()
   try
     await conn.append(table, columns, rows)
-    { rows: rows.length, time: (Date.now() - startTime) / 1000 }
+    writeEnvelope rows.length, startTime
   catch err
-    { error: err.message }
+    errorEnvelope err, startTime
 
 # Batch execute a prepared statement with multiple param sets
 executeBatch = (sql, paramSets) ->
@@ -222,9 +309,20 @@ executeBatch = (sql, paramSets) ->
   startTime = Date.now()
   try
     await conn.queryBatch(sql, paramSets)
-    { rows: paramSets.length, time: (Date.now() - startTime) / 1000 }
+    writeEnvelope paramSets.length, startTime
   catch err
-    { error: err.message }
+    errorEnvelope err, startTime
+
+# Convert an envelope into a proper HTTP Response with the right status code.
+envelopeToResponse = (env) ->
+  return jsonResponse(env, 200) if env.ok
+  status = switch env.errorCode
+    when 'TABLE_NOT_FOUND' then 404
+    when 'SQL_SYNTAX', 'SQL_ERROR', 'TYPE_ERROR' then 422
+    when 'BAD_REQUEST' then 400
+    when 'FORBIDDEN' then 403
+    else 500
+  jsonResponse env, status
 
 # ==============================================================================
 # JSON Endpoints (for custom apps)
@@ -239,47 +337,68 @@ executeBatch = (sql, paramSets) ->
 #   { table, columns, rows }         → appender API (fastest insert)
 post '/sql' ->
   contentType = @req.header('content-type') or ''
+  startTime = Date.now()
   if contentType.includes('application/json')
     body = read()
 
     if body?.table and body?.rows
-      return executeAppend body.table, body.columns, body.rows
+      return envelopeToResponse executeAppend(body.table, body.columns, body.rows)
 
     sql = body?.sql or body
     params = body?.params or []
 
     if params.length > 0 and Array.isArray(params[0])
-      return executeBatch sql, params
+      return envelopeToResponse executeBatch(sql, params)
   else
     sql = read 'body', 'string'
     params = []
 
-  return { error: 'Empty query' } unless sql
-  executeSQL sql, params
+  unless sql
+    return jsonResponse({ok: false, error: 'Empty query', errorCode: 'BAD_REQUEST', timeMs: Date.now() - startTime}, 400)
+  envelopeToResponse executeSQL(sql, params)
 
 # POST / — Raw SQL in body (duck-ui compatible)
 post '/' ->
+  startTime = Date.now()
   sql = read 'body', 'string'
-  return { error: 'Empty query' } unless sql
-  executeSQL sql
+  unless sql
+    return jsonResponse({ok: false, error: 'Empty query', errorCode: 'BAD_REQUEST', timeMs: Date.now() - startTime}, 400)
+  envelopeToResponse executeSQL(sql)
 
-# GET /health — Health check
+# GET /health — Health check (NB: not wrapped in the envelope; the shape is
+# hot-path monitoring data used by orchestrators and hasn't changed since 1.x)
 get '/health' ->
   { status: 'ok', version: VERSION }
 
-# GET /tables — List all tables
+# GET /tables — List all tables (kept with legacy `tables:` shape; this
+# endpoint is small and predictable and pre-dates the envelope migration)
 get '/tables' ->
   rows = await conn.query "SELECT table_name FROM information_schema.tables WHERE table_schema = 'main'"
   { tables: rows.map((r) -> r.table_name) }
 
-# GET /schema/:table — Get table schema
+# GET /schema/:table — Get table schema. Returns 404 when the table doesn't
+# exist, 200 with the DESCRIBE output when it does. Both paths use the
+# structured envelope for consistency with /sql.
 get '/schema/:table' ->
+  startTime = Date.now()
   table = read('table').replace(/[^a-zA-Z0-9_]/g, '')
   try
     rows = await conn.query "DESCRIBE \"#{table}\""
-    { schema: rows }
+    # Success — shape mirrors the envelope's {ok, data, timeMs} with
+    # a domain-specific `schema` alias for back-compat.
+    jsonResponse {
+      ok: true
+      schema: rows
+      table: table
+      timeMs: Date.now() - startTime
+    }
   catch err
-    { error: err.message }
+    env = errorEnvelope err, startTime
+    # DESCRIBE of a missing table returns a catalog error → 404 is the right
+    # code to tell clients "this resource doesn't exist" rather than "the
+    # server is broken".
+    status = if env.errorCode is 'TABLE_NOT_FOUND' then 404 else 422
+    jsonResponse env, status
 
 # ==============================================================================
 # DuckDB UI Binary Protocol
