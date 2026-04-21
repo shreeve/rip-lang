@@ -166,8 +166,8 @@ The MCP server's default target is `http://localhost:4213`; pass
 |---|---|---|
 | `/health` | GET | Health check — returns `{status:"ok", version}` |
 | `/tables` | GET | List all tables in the main schema |
-| `/schema/:table` | GET | Column list + types for one table |
-| `/shutdown` | POST | Graceful CHECKPOINT + exit |
+| `/schema/:table` | GET | Column list + types (404 if the table doesn't exist) |
+| `/shutdown` | POST | Graceful CHECKPOINT + exit — [token-gated on non-local binds](#security-model) |
 
 ### Which one should I use?
 
@@ -511,7 +511,107 @@ curl -X POST http://localhost:4213/ -d "SELECT 42 as answer"
 |----------|--------|-------------|
 | `/health` | GET | Health check |
 | `/tables` | GET | List all tables |
-| `/schema/:table` | GET | Table schema |
+| `/schema/:table` | GET | Table schema (404 if table doesn't exist) |
+| `/shutdown` | POST | Graceful CHECKPOINT + exit — token-gated on non-local binds |
+
+### Response Envelope
+
+Every `/sql` response uses a single envelope shape. Successful queries:
+
+```json
+{
+  "ok": true,
+  "kind": "select",
+  "columns": [{"name": "id", "type": "INTEGER"}, {"name": "name", "type": "VARCHAR"}],
+  "data": [[1, "Alice"], [2, "Bob"]],
+  "rowCount": 2,
+  "timeMs": 4,
+
+  "rows": 2,         // legacy alias — same as rowCount
+  "time": 0.004      // legacy alias — same as timeMs / 1000
+}
+```
+
+`kind` is `"select"` when the query produced column metadata (SELECT, DESCRIBE,
+SHOW, INSERT … RETURNING …) and `"write"` otherwise (pure INSERT/UPDATE/DELETE,
+DDL, bulk append).
+
+Errors:
+
+```json
+{
+  "ok": false,
+  "error": "Table 'users' does not exist",    // legacy string
+  "errorCode": "TABLE_NOT_FOUND",
+  "timeMs": 1
+}
+```
+
+`errorCode` is drawn from a small stable taxonomy so clients can branch on it:
+
+| Code | Meaning |
+|---|---|
+| `SQL_ERROR` | Generic DuckDB error |
+| `SQL_SYNTAX` | Parse / syntax |
+| `TYPE_ERROR` | Cast, conversion, invalid input |
+| `TABLE_NOT_FOUND` | Catalog miss (also drives the 404 on `/schema/:table`) |
+| `IO_ERROR` | Read / permission / I/O failure |
+| `BAD_REQUEST` | Malformed HTTP body |
+| `FORBIDDEN` | Auth-gated route refused |
+| `INTERNAL` | Uncategorised |
+
+Status codes follow standard REST conventions — `200` success, `400` bad
+request, `404` missing resource (schema lookup), `422` SQL-level user error,
+`500` driver / internal failure. The JSON body uses the same shape on every
+status.
+
+**Migration note:** the `rows` and `time` fields and the top-level string
+`error` field are **legacy aliases**. New clients should read `rowCount`,
+`timeMs`, `ok`, and `errorCode`. Legacy fields stay populated for one major
+version and will be removed in the next one. The Rip client library
+(`@rip-lang/db/client`) already uses the new fields and exposes a typed
+`RipDBError` exception on failures — migrations on the client side are
+invisible if you use it.
+
+## Security model
+
+rip-db is **trusted-network software**. It is designed for:
+
+- Local use from your own machine (the default)
+- Internal services on a private network behind an already-trusted boundary
+
+It is **not** designed to face the public internet directly. `/sql` accepts
+arbitrary SQL from any client that can reach the port, including `DROP TABLE`
+and `ATTACH 'some-remote' …`. There is no per-query authentication, no row-
+level security, and no query allow-list.
+
+### Defaults
+
+- **Bind:** `127.0.0.1` — reachable only from the local machine.
+- **`/shutdown`:** allowed without auth, because only local processes can
+  reach it in the default configuration.
+
+### When binding to a non-local interface
+
+You can expose rip-db to a network with `--host 0.0.0.0` (or any non-
+loopback address). When you do:
+
+- A **loud startup warning** is printed to stderr calling out that `/sql` is
+  now reachable and shutdown behaviour changed.
+- **`/shutdown` is disabled** entirely unless you also pass
+  `--auth-token <token>`. The token is then required as
+  `Authorization: Bearer <token>` on the request.
+
+```bash
+rip-db mydb.duckdb \
+  --host=0.0.0.0 \
+  --port=4213 \
+  --auth-token=$(openssl rand -hex 32)
+```
+
+No additional auth is applied to `/sql` or other read/write routes — it is
+your responsibility to put rip-db behind a reverse proxy, a VPN, an SSH
+tunnel, or equivalent when network-exposed.
 
 ## DuckDB UI
 
