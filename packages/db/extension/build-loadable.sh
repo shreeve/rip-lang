@@ -51,7 +51,15 @@ if [[ "$LIBRARY_VERSION" == *-dev* ]]; then
 else
 	FOOTER_DUCKDB_VERSION="$LIBRARY_VERSION"
 fi
-PLATFORM="$($DUCKDB_BIN -csv -noheader -c 'PRAGMA platform' | tr -d '\r\n ')"
+# Platform. Auto-detected from the DuckDB CLI by default, but callers
+# (e.g. cross-compilation in CI) can override explicitly by exporting
+# OVERRIDE_PLATFORM — in that case, the embedded metadata AND any
+# platform-specific compile flags come from the override.
+if [[ -n "${OVERRIDE_PLATFORM:-}" ]]; then
+	PLATFORM="$OVERRIDE_PLATFORM"
+else
+	PLATFORM="$($DUCKDB_BIN -csv -noheader -c 'PRAGMA platform' | tr -d '\r\n ')"
+fi
 
 echo "# footer metadata:"
 echo "#   platform         = $PLATFORM"
@@ -64,6 +72,10 @@ echo "#   abi_type         = CPP"
 # ----------------------------------------------------------------------------
 
 CXX="${CXX:-clang++}"
+# Extra compile/link flags, word-split so shells pass each token cleanly
+# to the compiler. Used by CI to cross-compile osx_amd64 on a macos-latest
+# (arm64) runner via `-arch x86_64`. Empty string when unset — safe under
+# `set -u` because ${VAR:-} always expands to at least the empty string.
 
 set -x
 "$CXX" \
@@ -76,6 +88,7 @@ set -x
 	-Wno-unused-parameter \
 	-Wno-unused-function \
 	-Wno-switch \
+	${CXXFLAGS:-} \
 	-I "$DUCKDB/src/include" \
 	-I "$DUCKDB/third_party/yyjson/include" \
 	"$HERE/decoder.cpp" \

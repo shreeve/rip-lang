@@ -88,14 +88,22 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: macos-latest,     platform: osx_arm64,    duckdb_zip: osx-universal }
-          - { os: macos-13,         platform: osx_amd64,    duckdb_zip: osx-universal }
-          - { os: ubuntu-latest,    platform: linux_amd64,  duckdb_zip: linux-amd64   }
-          - { os: ubuntu-24.04-arm, platform: linux_arm64,  duckdb_zip: linux-arm64   }
+          - { os: macos-latest,     platform: osx_arm64,    duckdb_zip: osx-universal, cross: false }
+          # osx_amd64 cross-compiles from the always-available macos-latest
+          # (arm64) runner — `-arch x86_64` produces a fat-free Intel binary,
+          # and the macos-13 Intel runner pool is too scarce to rely on.
+          - { os: macos-latest,     platform: osx_amd64,    duckdb_zip: osx-universal, cross: true  }
+          - { os: ubuntu-latest,    platform: linux_amd64,  duckdb_zip: linux-amd64,   cross: false }
+          - { os: ubuntu-24.04-arm, platform: linux_arm64,  duckdb_zip: linux-arm64,   cross: false }
     runs-on: ${{ matrix.os }}
     env:
       DUCKDB_VERSION:    ${{ needs.prep.outputs.duckdb_version }}
       RIPDB_EXT_VERSION: ${{ needs.prep.outputs.ripdb_version }}
+      # For cross-compiled matrix entries, feed the platform through
+      # build-loadable.sh explicitly (instead of asking the host's duckdb
+      # what platform we're on), and set the right -arch flag.
+      OVERRIDE_PLATFORM: ${{ matrix.cross && matrix.platform || '' }}
+      CXXFLAGS:          ${{ matrix.cross && (matrix.platform == 'osx_amd64' && '-arch x86_64' || matrix.platform == 'osx_arm64' && '-arch arm64' || '') || '' }}
 
     steps:
       - name: Checkout
@@ -145,21 +153,38 @@ jobs:
         run: |
           set -euo pipefail
           f="packages/db/extension/ripdb.duckdb_extension"
-          # 1) Platform matches the matrix entry
-          detected=$(misc/duckdb-bin/duckdb -csv -noheader -c 'PRAGMA platform' | tr -d '\r\n ')
-          if [[ "$detected" != "${{ matrix.platform }}" ]]; then
-            echo "::error::Platform mismatch: got '$detected', expected '${{ matrix.platform }}'"; exit 1
+          # 1) Binary architecture matches the matrix target. For cross-builds
+          #    (osx_amd64 on an arm64 runner) this is the only check that
+          #    actually validates what we shipped — the host PRAGMA platform
+          #    reports the runner's arch, not the target.
+          info=$(file "$f")
+          echo "file: $info"
+          case "${{ matrix.platform }}" in
+            osx_arm64)    want_arch="arm64" ;;
+            osx_amd64)    want_arch="x86_64" ;;
+            linux_amd64)  want_arch="x86-64" ;;
+            linux_arm64)  want_arch="aarch64" ;;
+            *)            want_arch="${{ matrix.platform }}" ;;
+          esac
+          if ! echo "$info" | grep -q "$want_arch"; then
+            echo "::error::Binary arch mismatch: expected '$want_arch' for ${{ matrix.platform }}, got '$info'"
+            exit 1
           fi
-          # 2) File is non-trivially sized
+          # 2) Non-trivial size
           size=$(wc -c < "$f")
           if [[ "$size" -lt 100000 ]]; then
             echo "::error::Extension is suspiciously small ($size bytes)"; exit 1
           fi
-          # 3) Contains the DuckDB metadata footer magic string near the end
+          # 3) DuckDB metadata footer magic present
           if ! tail -c 1024 "$f" | grep -aq 'duckdb_signature'; then
             echo "::error::Metadata footer magic string not found"; exit 1
           fi
-          echo "ok — $f ($size bytes, platform=${detected})"
+          # 4) Footer's embedded platform string matches matrix.platform
+          if ! tail -c 1024 "$f" | grep -aq "${{ matrix.platform }}"; then
+            echo "::error::Footer platform string '${{ matrix.platform }}' not found in metadata"
+            exit 1
+          fi
+          echo "ok — $f (${size} bytes, arch=${want_arch}, platform=${{ matrix.platform }})"
 
       - name: Gzip extension
         shell: bash
