@@ -76,7 +76,12 @@ jobs:
       - name: Install dependencies
         working-directory: ${{ matrix.dir }}
         run: |
-          if [[ -f package-lock.json ]]; then
+          # The rip extension uses `workspace:*` deps, which npm rejects
+          # with `Unsupported URL Type "workspace:"`. Use bun install for
+          # those; npm for everything else.
+          if ${{ matrix.needs_bun }}; then
+            bun install --frozen-lockfile 2>/dev/null || bun install
+          elif [[ -f package-lock.json ]]; then
             npm ci
           else
             echo "::warning::No package-lock.json in ${{ matrix.dir }} — using npm install (non-reproducible)"
@@ -112,14 +117,15 @@ jobs:
           if [[ "$got" != "$want" ]]; then
             echo "::error::Packaged extension name '$got' does not match '$want'"; exit 1
           fi
-          # 3) `main` entrypoint actually exists inside the zip
+          # 3) `main` entrypoint actually exists as a zip entry
           main=$(node -p 'require("/tmp/ext-pkg.json").main || ""')
           if [[ -z "$main" ]]; then
             echo "::error::Packaged extension has no 'main' field"; exit 1
           fi
-          # Strip leading "./" for zip -l grep
           main_clean="${main#./}"
-          if ! unzip -l "$vsix" | awk '{print $NF}' | grep -Fxq "extension/${main_clean}"; then
+          # unzip -p returns 0 only when the entry exists; route stdout
+          # to /dev/null to avoid spamming the log with the entry's bytes.
+          if ! unzip -p "$vsix" "extension/${main_clean}" > /dev/null 2>&1; then
             echo "::error::main entrypoint 'extension/${main_clean}' not found in $vsix"
             unzip -l "$vsix" | head -40
             exit 1
