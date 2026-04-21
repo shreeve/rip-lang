@@ -6,6 +6,8 @@
 > **Commit 2 (DuckDB binding: Catalog + Scan + `ATTACH` + `.duckdb_extension`) landed on `rip-duck`.** 14/14 in-process smoke tests pass, full SQL smoke passes via stock `duckdb -unsigned` CLI, table + column completion verified for three of the four CLI.md forms (the fourth is a known DuckDB autocomplete limitation, not ripdb-specific). See [Implementation progress](#implementation-progress) for the running log.
 >
 > **Commit 3 (subprocess hardening) landed as `4f12e17` on `rip-duck`.** `smoke-server.rip` and `capture-live.rip` now spawn rip-db in a detached process group and tear it down via group-signaling, so the inner-loop test scripts never leak rip-db processes on pipe breakage / Ctrl-C / SIGTERM / uncaught throws. No functional change to the extension.
+>
+> **M2 landed on `rip-duck` across commits `e7d9ad8` (URL normalization), `1384e0d` (`rip_refresh`), `84bb022` (predicate pushdown), `fd6c95c` (query interrupt), `5448d66` (chunked transfer + parallel-scan decision).** 53/53 extension_test cases passing. Predicate pushdown runs for `=`/`<>`/`<`/`<=`/`>`/`>=`/`IS NULL`/`IS NOT NULL`/`AND` on INT/BOOL/VARCHAR; unsupported filters fall back to local DuckDB evaluation. Chunked Transfer-Encoding responses decode correctly. Parallel scan is intentionally single-threaded in M2 — see Commit 4 below for the full rationale.
 
 **Goal:** Make the stock `duckdb` CLI treat a running `rip-db` HTTP server as an attachable DuckDB database, with native table/column TAB completion. Other libduckdb-based clients (Python, R, DBeaver, DuckDB UI, JDBC) that permit loading signed/unsigned extensions inherit the integration automatically, but explicit compatibility verification is per-client and not an M1 promise.
 
@@ -1349,3 +1351,173 @@ is now duplicated across the two scripts. With only two callers,
 inline duplication is still cheaper than an abstraction — extract
 a shared `scripts/lib/spawnManaged.rip` helper once a third caller
 shows up.
+
+### Commit 4 — M2: predicate pushdown + refresh + interrupt + URL + chunked  ✅ landed across 5 commits
+
+**Scope:** All six M2 candidates from the Full M1 scope / Deferred to
+M2+ lists, in five commits on `rip-duck`. See [Peer-AI round 7 decisions
+(pre-code)](#peer-ai-round-7-decisions-pre-code) for the
+pre-implementation design discussion that shaped the work.
+
+| M2 item | Status | Commit |
+|---------|--------|--------|
+| M2.1 — predicate pushdown | ✅ landed | `84bb022` |
+| M2.2 — chunked HTTP response | ✅ partial (protocol compat) | `5448d66` |
+| M2.3 — parallel scan | ⏸️ deferred with rationale | `5448d66` |
+| M2.4 — `rip_refresh('catalog')` | ✅ landed | `1384e0d` |
+| M2.5 — query interrupt | ✅ landed (client-side) | `fd6c95c` |
+| M2.6 — URL normalization | ✅ landed | `e7d9ad8` |
+
+**Shipped artifacts (M2-only, on top of Commit 2):**
+
+| File | M2 change |
+|------|-----------|
+| `packages/db/extension/ripdb.cpp` | +predicate pushdown (`TryTranslateExpression`, `RipPushdownFilter`, `FormatLiteralSQL`); +`rip_refresh` table function; +chunked transfer-encoding decoder (`DechunkHttpBody`); +interrupt-aware HTTP client with query-id + best-effort `/ddb/interrupt`; +URL normalization (`NormalizeUrl`). |
+| `packages/db/extension/extension_test.cpp` | +M2-per-feature test cases (URL normalization, `rip_refresh` behavior, pushdown subset coverage, dechunker unit tests). 14 → 53 cases. |
+
+**M2.1 — predicate pushdown.** Partial pushdown via DuckDB's
+`pushdown_complex_filter` callback. Filters we fully translate are
+consumed from the caller's vector and emitted as a WHERE clause in
+the remote SQL; filters we leave behind are applied locally by
+DuckDB. Conservative safe subset (per peer-AI round 7):
+
+- **Translate:** `= != < <= > >=` (operands swappable),
+  `IS NULL`, `IS NOT NULL`, `AND` of any translatable children.
+  Column types: TINYINT..BIGINT + unsigned variants, BOOLEAN,
+  VARCHAR.
+- **Skip:** OR (partial-OR is unsound; full-OR has NULL 3VL risk),
+  column-vs-column, non-literal RHS, LIKE/regex (collation
+  semantics not proven equivalent), FLOAT/DOUBLE/DATE/TIMESTAMP/
+  DECIMAL (remote literal semantics not proven equivalent enough
+  yet), implicit casts wrapping the column.
+- **Literal formatting:** integers as decimal text; booleans as
+  `TRUE/FALSE`; VARCHAR quote-doubled + single-quoted. Verified
+  injection-safe via test with input `'O''Malley'`.
+- **Column resolution:** `BoundColumnRefExpression::binding.column_index`
+  is a LogicalGet projection index, not a table-column index; we map
+  it via `LogicalGet::GetColumnIndex(binding).GetPrimaryIndex()`.
+  Got this wrong initially (filters addressed wrong columns); the
+  test matrix caught it immediately.
+
+**M2.2 — chunked Transfer-Encoding.** RFC 7230 §4.1 dechunker in the
+HTTP client. Chunk-ext accepted and ignored; trailers skipped; any
+coding other than exactly `chunked` (e.g. `chunked + gzip`) is
+rejected. The decoder is still one-shot — **true per-chunk streaming
+is deferred to M3** gated on a `decoder.h` refactor. The value in
+M2 is protocol compatibility: rip-db or any reverse proxy can emit
+chunked responses without breaking ripdb. 11 unit tests cover
+positive (single, multi, chunk-ext, empty, large, trailer-after-0,
+mixed-case hex) and negative (non-hex size, overrun, missing CRLF,
+truncated) cases.
+
+**M2.3 — parallel scan: deliberately deferred.** `MaxThreads() = 1`
+is the honest outcome for M2. Every candidate client-side
+partitioning strategy has a specific blocker:
+
+- **OFFSET/LIMIT:** requires deterministic ORDER BY, pathological
+  cost on large offsets, correctness depends on snapshot semantics
+  we don't formalize.
+- **Key-range (`WHERE id >= lo AND id < hi`):** needs per-table PK
+  metadata and monotonicity assumptions we don't surface.
+- **Hash-partitioning:** every worker scans the full table and
+  filters — net negative on a single remote DuckDB instance.
+- **Server-assisted partitioning:** correct, but requires rip-db
+  server work not in scope for this ripdb.cpp commit.
+
+rip-db is also a single Bun event loop in front of one DuckDB
+instance, so N-way HTTP fanout today would only overlap network
+latency on localhost — marginal gain for the cost. The rationale
+is documented inline on `RipScanGlobalState::MaxThreads()` so the
+next reader sees what's blocking.
+
+**M2.4 — `rip_refresh('catalog')`.** Table function that re-queries
+`/tables` + `/schema/:t` for an attached ripdb catalog and
+atomically swaps in a fresh `RipSchemaEntry`. Returns
+`(catalog VARCHAR, tables_loaded BIGINT, tables_refused BIGINT)`.
+Works via either `SELECT * FROM rip_refresh('rip')` or
+`CALL rip_refresh('rip')`. Refactor: `PopulateMainSchema()` split
+into `PopulateSchema(RipSchemaEntry&)` so both `Initialize()` and
+`Refresh()` share the path, with explicit refuse/load counting.
+
+Semantics: the swap invalidates `optional_ptr<CatalogEntry>`
+handles from prior queries (which is the whole point of refresh —
+schema may have changed). In-flight scans retain their
+self-contained `RipScanBindData` and keep running against the old
+schema; new queries rebind against the fresh one. Cooperative, not
+transactional — if `Refresh()` throws, the old schema is untouched.
+
+**M2.5 — query interrupt.** Client-side wiring:
+
+- Per-scan random query id (`X-Rip-DB-Query-Id` header) generated
+  in `RipScanInitGlobal` and threaded through to the HTTP call.
+- Interrupt-aware recv loop: `SO_RCVTIMEO = 250ms` on the scan's
+  socket; on each timeout we poll `ClientContext::IsInterrupted()`.
+- On interrupt: best-effort POST `/ddb/interrupt` carrying the
+  same query id (separate short-lived socket, 500ms send timeout,
+  fire-and-forget), then throw `InterruptException`.
+- Fast-path pre-check: if `IsInterrupted()` is already set, throw
+  before connecting.
+
+Server-side tracking is a stub for now (rip-db's `/ddb/interrupt`
+returns an empty success envelope); when rip-db grows a real
+registry keyed on `X-Rip-DB-Query-Id`, the client side will start
+having teeth without further work here. Only the scan path is
+interrupt-aware in M2; catalog-population calls (tiny responses)
+still block — they happen at ATTACH/refresh time.
+
+**M2.6 — URL normalization.** `NormalizeUrl` strips fragment (`#...`),
+query string (`?...`), path component (first `/` after the scheme),
+and any trailing slashes during ATTACH parsing. A URL like
+`'http://localhost:4213/some/path/?debug=1&foo=bar#anchor////'`
+is canonicalized to `'http://localhost:4213'`. Path-prefix support
+(using the path component to prefix request paths) is a plausible
+future extension but not needed today — rip-db's endpoints are
+absolute.
+
+**Coverage demonstrated:**
+
+- **extension_test**: **53 / 53** passing. Covers every M2 shape
+  (URL forms, pushdown subset per-operator and per-type, rip_refresh
+  stats + semantics, dechunker unit tests).
+- **Stock `duckdb -unsigned` CLI**: `LOAD` + `ATTACH` + `EXPLAIN`
+  end-to-end verified; the EXPLAIN for
+  `SELECT count(*) FROM rip.smoke_orders WHERE currency = 'EUR' AND person_id < 5`
+  shows no local FILTER operator — both predicates are pushed, and
+  the rip-db log confirms the remote query:
+  ```
+  SELECT "id" FROM "main"."smoke_orders"
+    WHERE ("currency" = 'EUR') AND ("person_id" < 5)
+  ```
+- **SQL injection safety**: `currency = 'O''Malley'` round-trips
+  as `WHERE ("currency" = 'O''Malley')` in the remote SQL — the
+  single quote is correctly doubled.
+
+**Invariants this commit locks in:**
+
+1. Pushdown is conservative-by-default: the `TryTranslateExpression`
+   switch returns false for anything it doesn't explicitly handle.
+   Adding types or operators is an opt-in edit, not a silent
+   opt-out — keeps the correctness story auditable.
+2. Literal formatting is strictly type-gated; no `snprintf("%s", ...)`
+   or string concatenation that could inject unescaped characters.
+3. `rip_refresh` always returns one row of stats, even when
+   tables_loaded == 0. Consumers can rely on the shape.
+4. The chunked-transfer decoder rejects any coding combination other
+   than `chunked` alone. No silent "maybe it's gzip, try that" path.
+5. Every HTTP call that goes through the scan path is interrupt-
+   pollable; the catalog-path HTTP calls are not yet (documented).
+
+**Deferred past M2:**
+
+- True per-chunk streaming decode (M3; requires `decoder.h`
+  pull-iterator refactor).
+- Parallel scan (M3+; gated on rip-db partition support OR a
+  work-stealing remote streaming decoder).
+- Write forwarding (M3+).
+- Server-side query registry for real `/ddb/interrupt` tracking
+  (server-side rip-db task, not ripdb.cpp).
+- Predicate pushdown for timestamp/date/float/decimal/LIKE (each
+  deferred with a specific semantic caveat; see the M2.1 "Skip"
+  list for the rationale per type).
+- Memcpy fast paths in the decoder (still the Commit-1 slow-path
+  serves as oracle; worth measuring before implementing).
