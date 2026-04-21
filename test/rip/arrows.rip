@@ -24,6 +24,24 @@ code "arrow destructuring", "f = ({x, y}) => x + y", "let f;\nf = ({x, y}) => (x
 code "arrow default param", "f = (x = 5) => x", "let f;\nf = (x = 5) => x;"
 code "arrow rest param", "f = (...args) => args", "let f;\nf = (...args) => args;"
 
+# Destructured parameter + default value (e.g. bag-of-options API pattern).
+# Currently emits a malformed parameter list like `(object,,a,a,,b,b = {})`
+# in every function form; these tests pin the correct shape so the fix can
+# land cleanly. See https://… (compiler issue).
+code "arrow destructuring with default",
+  "f = ({a, b} = {}) => a + b",
+  "let f;\nf = ({a, b} = {}) => (a + b);"
+code "thin arrow destructuring with default",
+  "f = ({a, b} = {}) -> a + b",
+  "let f;\nf = function({a, b} = {}) {\n  return (a + b);\n};"
+code "second-position destructuring with default",
+  "f = (x, {a, b} = {}) -> x + a + b",
+  "let f;\nf = function(x, {a, b} = {}) {\n  return (x + a + b);\n};"
+test "destructuring with default — runtime",
+  "f = ({a, b} = {}) -> a + b\nf({a: 1, b: 2})", 3
+test "destructuring with default — omitted",
+  "f = ({a, b} = {a: 10, b: 20}) -> a + b\nf()", 30
+
 # ==============================================================================
 # Implicit Objects in Single-Line Arrow Bodies
 # ==============================================================================
