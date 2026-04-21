@@ -41,22 +41,91 @@ BASE = "http://localhost:#{PORT}"
 dbScript = join HERE, '..', '..', 'db.rip'
 p "starting rip-db on :#{PORT}…"
 
+# detached: true — see smoke-server.rip. Without it, killing our `proc`
+# (the rip CLI wrapper) leaves the actual rip-db bun grandchild orphaned.
 proc = spawn 'rip', [dbScript, ':memory:', "--port=#{PORT}"],
-  stdio: ['ignore', 'pipe', 'pipe']
-  env:   process.env
+  stdio:    ['ignore', 'pipe', 'pipe']
+  env:      process.env
+  detached: true
+
+# Lifecycle flags (see smoke-server.rip for the long version).
+ready        = false
+shuttingDown = false
+exiting      = false
+childExit    = null
+
+killGroup = (signal) ->
+  return unless proc?.pid
+  try
+    process.kill -proc.pid, signal
+  catch err
+    throw err unless err?.code in ['ESRCH', 'EPERM']
+
+cleanup = ->
+  return if shuttingDown
+  shuttingDown = true
+  killGroup 'SIGTERM'
+  setTimeout (-> killGroup 'SIGKILL'), 500
+
+# Wait for the child group to actually die before we leave (see smoke-server.rip).
+exitCleanly = (code = 0) ->
+  return if exiting
+  exiting = true
+
+  done = false
+  timer = null
+  finalize = ->
+    return if done
+    done = true
+    clearTimeout timer if timer?
+    killGroup 'SIGKILL'
+    process.exit code
+
+  if childExit
+    finalize()
+    return
+
+  proc.once 'exit', finalize
+  cleanup()
+  timer = setTimeout finalize, 3000
 
 proc.stdout.on 'data', (d) -> process.stderr.write "[rip-db] #{d}"
 proc.stderr.on 'data', (d) -> process.stderr.write "[rip-db] #{d}"
 
-cleanup = ->
-  try proc.kill 'SIGTERM'
+proc.on 'error', (err) ->
+  console.error "failed to spawn rip-db: #{err?.message ?? err}"
+  process.exit 1
 
-process.on 'exit',  cleanup
-process.on 'SIGINT', -> cleanup() ; process.exit 130
+proc.on 'exit', (code, signal) ->
+  childExit = { code, signal }
+  return if shuttingDown
+  return unless ready
+  console.error "rip-db exited unexpectedly (code=#{code}, signal=#{signal})"
+  process.exit code or 1
 
-# Wait for health
+streamError = (name) ->
+  (err) ->
+    if err?.code is 'EPIPE'
+      exitCleanly 0
+    else
+      console.error "#{name} error: #{err?.message ?? err}"
+      process.exit 1
+
+process.stdout.on 'error', streamError 'stdout'
+process.stderr.on 'error', streamError 'stderr'
+
+process.on 'exit', ->
+  shuttingDown = true
+  killGroup 'SIGKILL'
+
+process.on 'SIGINT',  -> exitCleanly 130
+process.on 'SIGTERM', -> exitCleanly 143
+
+# Wait for health, failing fast if the child dies during startup.
 await do ->
   for i in [0...50]
+    if childExit
+      throw new Error "rip-db exited during startup (code=#{childExit.code}, signal=#{childExit.signal})"
     try
       r = await fetch "#{BASE}/health"
       if r.ok
@@ -66,6 +135,8 @@ await do ->
       # retry
     await sleep 100
   throw new Error 'rip-db did not come up within 5s'
+
+ready = true
 
 # -----------------------------------------------------------------------------
 # Helper
@@ -161,5 +232,4 @@ writeFileSync join(OUT_DIR, 'multichunk.info'), """
 p "  wrote #{bytes2.length} bytes"
 
 p "done. stopping rip-db."
-cleanup()
-process.exit 0
+exitCleanly 0

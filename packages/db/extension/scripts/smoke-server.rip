@@ -14,7 +14,7 @@
 # =============================================================================
 
 import { spawn } from 'child_process'
-import { join, dirname } from 'path'
+import { join } from 'path'
 
 HERE    = import.meta.dir
 DB_RIP  = join HERE, '..', '..', 'db.rip'
@@ -23,55 +23,123 @@ BASE    = "http://localhost:#{PORT}"
 
 p "starting rip-db on :#{PORT} (press Ctrl-C to stop)…"
 
+# detached: true puts the rip-db process tree in its own group, so we
+# can signal the *whole* group. Without this, the rip CLI wrapper and
+# its bun grandchild live in our group — killing the wrapper leaves
+# the grandchild as an orphan rip-db.
 proc = spawn 'rip', [DB_RIP, ':memory:', "--port=#{PORT}"],
-  stdio: ['ignore', 'pipe', 'pipe']
-  env:   process.env
+  stdio:    ['ignore', 'pipe', 'pipe']
+  env:      process.env
+  detached: true
+
+# Lifecycle flags:
+#   ready        — /health has returned OK; startup is done.
+#   shuttingDown — we initiated termination. Makes cleanup idempotent and
+#                  lets the child 'exit' handler distinguish "we asked
+#                  for this" from "rip-db died on its own".
+#   childExit    — recorded child exit status; polled by the health loop
+#                  during startup so we fail fast with a useful message.
+ready        = false
+shuttingDown = false
+exiting      = false
+childExit    = null
+
+# killGroup: signal the entire rip-db process group (wrapper + bun +
+# any rip-db children). A negative pid means "process group" to kill(2).
+# ESRCH (Linux) and EPERM (macOS) both mean "target is gone" during
+# cleanup — swallow them; surface anything else.
+killGroup = (signal) ->
+  return unless proc?.pid
+  try
+    process.kill -proc.pid, signal
+  catch err
+    throw err unless err?.code in ['ESRCH', 'EPERM']
 
 cleanup = ->
-  try proc.kill 'SIGTERM'
+  return if shuttingDown
+  shuttingDown = true
+  killGroup 'SIGTERM'
+  setTimeout (-> killGroup 'SIGKILL'), 500
 
-# If our own stdout/stderr pipe breaks (e.g. the terminal that launched
-# us was piped through `| tail` and the reader exited), we'd otherwise
-# spin on EPIPE forwarding child output. Detect it, clean up the child,
-# and exit so we don't leave an orphan burning CPU.
-forward = (d) ->
-  try
-    process.stderr.write "[rip-db] #{d}"
-  catch
-    cleanup()
-    process.exit 0
+# exitCleanly: terminate the child group and wait for it to actually
+# die before we leave, so we never outlive our own subprocess. Short-
+# circuits if the child has already exited. Idempotent.
+exitCleanly = (code = 0) ->
+  return if exiting
+  exiting = true
 
-proc.stdout.on 'data', forward
-proc.stderr.on 'data', forward
+  done = false
+  timer = null
+  finalize = ->
+    return if done
+    done = true
+    clearTimeout timer if timer?
+    killGroup 'SIGKILL'
+    process.exit code
 
-for stream in [process.stdout, process.stderr]
-  stream.on 'error', (err) ->
+  # If the child is already gone, just exit.
+  if childExit
+    finalize()
+    return
+
+  # Register 'exit' BEFORE sending signals so we never miss it.
+  proc.once 'exit', finalize
+  cleanup()
+  timer = setTimeout finalize, 3000
+
+proc.stdout.on 'data', (d) -> process.stderr.write "[rip-db] #{d}"
+proc.stderr.on 'data', (d) -> process.stderr.write "[rip-db] #{d}"
+
+proc.on 'error', (err) ->
+  console.error "failed to spawn rip-db: #{err?.message ?? err}"
+  process.exit 1
+
+proc.on 'exit', (code, signal) ->
+  childExit = { code, signal }
+  return if shuttingDown                    # we asked for this
+  return unless ready                        # startup loop will surface it
+  console.error "rip-db exited unexpectedly (code=#{code}, signal=#{signal})"
+  process.exit code or 1
+
+# If our own stderr (or stdout, since `2>&1` collapses them) breaks —
+# typically because the reader behind `| tail`/`| head` exited — bail
+# out instead of looping on EPIPE and leaving an orphan burning CPU.
+# Non-EPIPE errors are unexpected and surface as fatal.
+streamError = (name) ->
+  (err) ->
     if err?.code is 'EPIPE'
-      cleanup()
-      process.exit 0
+      exitCleanly 0
+    else
+      console.error "#{name} error: #{err?.message ?? err}"
+      process.exit 1
 
-process.on 'exit', cleanup
-process.on 'SIGINT', ->
-  cleanup()
-  process.exit 130
-process.on 'SIGTERM', ->
-  cleanup()
-  process.exit 143
-process.on 'SIGPIPE', ->
-  cleanup()
-  process.exit 0
+process.stdout.on 'error', streamError 'stdout'
+process.stderr.on 'error', streamError 'stderr'
 
-# Wait for /health
+# Synchronous last-resort: if the parent exits by any other path
+# (uncaught throw, unhandled rejection, etc.), make sure the whole
+# child group goes with it. SIGKILL is delivered synchronously.
+process.on 'exit', ->
+  shuttingDown = true
+  killGroup 'SIGKILL'
+
+process.on 'SIGINT',  -> exitCleanly 130
+process.on 'SIGTERM', -> exitCleanly 143
+
+# Wait for /health (up to 5s), failing fast if the child dies first.
 await do ->
   for _ in [0...50]
+    if childExit
+      throw new Error "rip-db exited during startup (code=#{childExit.code}, signal=#{childExit.signal})"
     try
       r = await fetch "#{BASE}/health"
-      if r.ok
-        return
+      return if r.ok
     catch
       # retry
     await sleep 100
   throw new Error 'rip-db did not come up within 5s'
+
+ready = true
 
 runSql = (sql) ->
   r = await fetch "#{BASE}/sql",
@@ -114,5 +182,5 @@ p "  smoke_people: 10 rows"
 p "  smoke_orders: 20 rows"
 p "  (Ctrl-C to stop)"
 
-# Block forever.
-await new Promise (resolve) -> noop()
+# Block forever — until a signal handler or the child's 'exit' handler fires.
+await new Promise ->
