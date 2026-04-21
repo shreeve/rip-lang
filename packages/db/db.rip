@@ -67,21 +67,37 @@ if '--help' in args or '-h' in args
       database    Path to DuckDB file (default: :memory:)
 
     Options:
-      --port=N    Port to listen on (default: 4213)
-      --help      Show this help
-      --version   Show version
+      --port=N              Port to listen on (default: 4213, env DB_PORT)
+      --host=ADDR           Interface to bind to (default: 127.0.0.1)
+                            Use 0.0.0.0 to expose on all interfaces — REQUIRES --auth-token
+      --auth-token=TOKEN    Bearer token required for /shutdown when bound non-locally
+      --help, -h            Show this help
+      --version, -v         Show version
 
     Endpoints:
-      GET  /           Official DuckDB UI
-      POST /sql        Execute SQL (JSON API)
-      POST /ddb/run    DuckDB UI binary protocol
-      GET  /health     Health check
-      GET  /tables     List all tables
+      GET  /                  Official DuckDB UI
+      POST /sql               Execute SQL (JSON API)
+      POST /                  Execute raw SQL (body is the query)
+      POST /ddb/run           DuckDB UI binary protocol
+      POST /ddb/tokenize      SQL tokenizer (UI syntax highlighting)
+      GET  /health            Health check
+      GET  /tables            List all tables
+      GET  /schema/:table     Table schema
+      POST /shutdown          Graceful CHECKPOINT + exit
+
+    Security:
+      rip-db is trusted-network software. The default bind of 127.0.0.1 means
+      only local processes can reach /sql and /shutdown. Passing --host 0.0.0.0
+      (or any non-localhost address) makes the server reachable from the network;
+      when that happens, /shutdown becomes token-gated and a startup warning
+      is printed. rip-db does not authenticate /sql itself — do not expose it
+      to untrusted networks.
 
     Examples:
-      rip db.rip                    # In-memory database on port 4213
-      rip db.rip mydb.duckdb        # File-based database
-      rip db.rip :memory: --port=8080
+      rip db.rip                              # In-memory, localhost only
+      rip db.rip mydb.duckdb                  # File-based, localhost only
+      rip db.rip mydb.duckdb --port=8080
+      rip db.rip mydb.duckdb --host=0.0.0.0 --auth-token=$(openssl rand -hex 32)
   """
   process.exit(0)
 
@@ -95,13 +111,22 @@ path = process.env.DB_PATH or args.find((a) -> not a.startsWith('-')) or do ->
   files = Array.from(glob.scanSync('.'))
   if files.length is 1 then files[0] else ':memory:'
 
-# Support both --port=N and --port N
-portArg = do ->
+# Parse --flag=value or --flag value for a given flag name
+flagValue = (name) ->
+  prefix = "--#{name}="
   for a, i in args
-    return a.split('=')[1] if a.startsWith('--port=')
-    return args[i + 1] if a is '--port' and args[i + 1]
+    return a.slice(prefix.length) if a.startsWith(prefix)
+    return args[i + 1] if a is "--#{name}" and args[i + 1]
   null
-port = parseInt(process.env.DB_PORT or portArg) or 4213
+
+port      = parseInt(process.env.DB_PORT or flagValue('port')) or 4213
+host      = process.env.DB_HOST or flagValue('host') or '127.0.0.1'
+authToken = process.env.DB_AUTH_TOKEN or flagValue('auth-token') or null
+
+# Security posture — /shutdown is unconditionally gated when the server is
+# reachable from the network (bound to anything other than loopback). If
+# no auth token is supplied there, /shutdown returns 403 unconditionally.
+isLocalBind = host in ['127.0.0.1', '::1', 'localhost']
 
 # Open database (with WAL recovery on failure)
 try
@@ -119,6 +144,18 @@ conn = db.connect()
 p "rip-db: DuckDB #{duckdbVersion()}"
 p "rip-db: rip-db v#{VERSION}"
 p "rip-db: source #{path}"
+p "rip-db: bind   #{host}:#{port} (#{if isLocalBind then 'local-only' else 'NETWORK-REACHABLE'})"
+
+unless isLocalBind
+  warn ""
+  warn "  ⚠️  rip-db is listening on #{host}:#{port} — reachable from the network."
+  warn "      /sql accepts arbitrary SQL from any client that can reach this port."
+  warn "      Do NOT expose rip-db to untrusted networks."
+  if authToken
+    warn "      /shutdown requires Authorization: Bearer <token>."
+  else
+    warn "      /shutdown is DISABLED (no --auth-token provided)."
+  warn ""
 
 # Periodic checkpoint (flush WAL to main file every 5 minutes)
 checkpoint = -> try conn.query 'CHECKPOINT'
@@ -318,8 +355,23 @@ post '/ddb/run' ->
     warn "POST /ddb/run error:", msg
     binaryResponse serializeErrorResult msg
 
-# POST /shutdown — Gracefully close the database and exit
+# POST /shutdown — Gracefully close the database and exit.
+# When bound to a non-local interface, this route is token-gated; if no token
+# is configured, it is disabled entirely. Local binds allow shutdown freely
+# because, by definition, only local processes can reach the socket.
 post '/shutdown' ->
+  unless isLocalBind
+    unless authToken
+      return new Response(
+        JSON.stringify({ok: false, error: {code: 'FORBIDDEN', message: 'shutdown is disabled on non-local binds (no --auth-token configured)'}}),
+        status: 403, headers: {'Content-Type': 'application/json'}
+      )
+    provided = @req.header('authorization') or ''
+    unless provided is "Bearer #{authToken}"
+      return new Response(
+        JSON.stringify({ok: false, error: {code: 'FORBIDDEN', message: 'shutdown requires a valid bearer token'}}),
+        status: 403, headers: {'Content-Type': 'application/json'}
+      )
   setImmediate shutdown
   { ok: true }
 
@@ -450,6 +502,7 @@ get '/*' ->
 # Start Server
 # ==============================================================================
 
-p "rip-db: server http://localhost:#{port}"
+displayHost = if isLocalBind then 'localhost' else host
+p "rip-db: server http://#{displayHost}:#{port}"
 
-start port: port, silent: true
+start host: host, port: port, silent: true
