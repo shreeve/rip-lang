@@ -3,14 +3,27 @@
 #
 # Replaces the earlier hand-rolled matrix. Using DuckDB's own reusable workflow
 # means the extension is built in-tree against the pinned DuckDB source
-# submodule with their build macros (build_loadable_extension / build_static_
-# extension), which is the only supported path for extensions that subclass
-# internal C++ catalog classes (TableCatalogEntry, SchemaCatalogEntry, etc.)
-# and need to work across Linux and macOS release binaries.
+# submodule with their build macros (build_loadable_extension /
+# build_static_extension), which is the only supported path for extensions that
+# subclass internal C++ catalog classes (TableCatalogEntry, SchemaCatalogEntry,
+# etc.) and need to work across Linux and macOS release binaries.
 #
-# Scope: currently just osx_arm64 + linux_amd64 — the two platforms actively
-# in use. Adding osx_amd64 / linux_arm64 / wasm in the future is a matter of
+# Scope: currently just osx_arm64 + linux_amd64 — the two platforms actively in
+# use. Adding osx_amd64 / linux_arm64 / wasm in the future is a matter of
 # dropping entries from `exclude_archs` below.
+#
+# Artifacts produced by the `build` job land as:
+#   ripdb-v1.5.2-extension-<platform>/ripdb.duckdb_extension
+#
+# The `publish` job picks those up, gzips them, stages under
+# docs/extensions/duckdb/v1.5.2/<platform>/ripdb.duckdb_extension.gz, and
+# commits back to main. Pages then serves them at:
+#   https://shreeve.github.io/rip-lang/extensions/duckdb/v1.5.2/<platform>/ripdb.duckdb_extension.gz
+#
+# End-users install with:
+#   SET allow_unsigned_extensions = true;
+#   INSTALL ripdb FROM 'https://shreeve.github.io/rip-lang/extensions/duckdb';
+#   LOAD ripdb;
 # =============================================================================
 
 name: Build ripdb DuckDB extension
@@ -21,8 +34,8 @@ on:
     paths:
       - 'packages/db/extension/**'
       - '.github/workflows/ripdb-extension.yml'
-      # Build-config files at repo root (the extension-template layout that
-      # the reusable workflow expects).
+      # Build-config files at repo root (the extension-template layout the
+      # reusable workflow expects).
       - 'Makefile'
       - 'CMakeLists.txt'
       - 'extension_config.cmake'
@@ -37,11 +50,8 @@ concurrency:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Build via DuckDB's reusable distribution workflow.
-  # The extension root is packages/db/extension/, but the reusable workflow
-  # assumes the extension is at repo root. We work around that by using
-  # `override_repository` to effectively treat this repo as-is and leaning on
-  # `working_directory` handling inside the workflow.
+  # 1) Build via DuckDB's reusable distribution workflow. Builds in-tree
+  # against the pinned DuckDB source submodule using their build macros.
   # ---------------------------------------------------------------------------
   build:
     name: Build
@@ -50,8 +60,145 @@ jobs:
       extension_name: ripdb
       duckdb_version: v1.5.2
       ci_tools_version: v1.5-variegata
-      # For now: only build linux_amd64 in CI. Mac (osx_arm64) can be
-      # verified locally on a developer machine much faster than in CI
-      # (no DuckDB-from-source cold compile), so we skip it in CI until
-      # the Linux build is green and we want a full release matrix.
-      exclude_archs: 'osx_arm64;osx_amd64;linux_arm64;linux_amd64_musl;linux_arm64_musl;linux_amd64_gcc4;linux_arm64_gcc4;windows_amd64;windows_arm64;windows_amd64_mingw;windows_amd64_rtools;wasm_mvp;wasm_eh;wasm_threads'
+      # Keep the CI footprint narrow: the two platforms we actively use.
+      # Dropping a string from this list re-enables that platform in CI.
+      exclude_archs: 'osx_amd64;linux_arm64;linux_amd64_musl;linux_arm64_musl;linux_amd64_gcc4;linux_arm64_gcc4;windows_amd64;windows_arm64;windows_amd64_mingw;windows_amd64_rtools;wasm_mvp;wasm_eh;wasm_threads'
+
+  # ---------------------------------------------------------------------------
+  # 2) Publish — gzip each per-platform artifact, drop it into
+  # docs/extensions/duckdb/<duckdb_version>/<platform>/, regenerate
+  # manifest.json, and commit back to main so Pages picks it up.
+  #
+  # Runs only on main, on tags, or on manual dispatch. Feature branches still
+  # build + validate via the `build` job but never auto-commit.
+  # ---------------------------------------------------------------------------
+  publish:
+    name: Publish to docs/extensions/duckdb
+    needs: build
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.ref == 'refs/heads/main' ||
+      github.ref_type == 'tag'
+    # Serialize commit-back-to-main across multiple publishers of the same
+    # Pages tree (e.g. VSCode extensions workflow). Queue, don't drop.
+    concurrency:
+      group: extensions-publish
+      cancel-in-progress: false
+    permissions:
+      contents: write
+
+    env:
+      DUCKDB_VERSION: v1.5.2
+
+    steps:
+      - name: Checkout main (target for the auto-commit)
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Download all per-platform artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          # Matches `ripdb-v1.5.2-extension-<platform>` uploaded by the
+          # reusable build workflow.
+          pattern: ripdb-${{ env.DUCKDB_VERSION }}-extension-*
+          merge-multiple: false
+
+      - name: Stage gzipped extensions under docs/extensions/duckdb
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== artifacts tree ==="
+          find artifacts -type f | sort
+          echo ""
+
+          any=0
+          for src_dir in artifacts/ripdb-${DUCKDB_VERSION}-extension-*; do
+            [[ -d "$src_dir" ]] || continue
+            plat="${src_dir##*-extension-}"
+            src="$src_dir/ripdb.duckdb_extension"
+            if [[ ! -f "$src" ]]; then
+              echo "::warning::Missing ripdb.duckdb_extension for $plat — skipping"
+              continue
+            fi
+
+            # Sanity check: footer must carry the matrix's platform string.
+            if ! tail -c 1024 "$src" | grep -aq "$plat"; then
+              echo "::error::Footer platform string '$plat' not present in $src"
+              exit 1
+            fi
+
+            dest="docs/extensions/duckdb/${DUCKDB_VERSION}/${plat}"
+            mkdir -p "$dest"
+            gzip -n -9 -c "$src" > "$dest/ripdb.duckdb_extension.gz"
+            echo "staged: ${DUCKDB_VERSION}/${plat}/ripdb.duckdb_extension.gz ($(wc -c < "$dest/ripdb.duckdb_extension.gz") bytes)"
+            any=1
+          done
+
+          if [[ "$any" -eq 0 ]]; then
+            echo "::error::No extension artifacts were staged — did the build job run?"
+            exit 1
+          fi
+
+      - name: Regenerate manifest.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, glob, datetime
+          root = "docs/extensions/duckdb"
+          versions = {}
+          for p in sorted(glob.glob(f"{root}/v*/")):
+              v = os.path.basename(p.rstrip('/'))
+              plats = sorted(
+                  os.path.basename(d.rstrip('/'))
+                  for d in glob.glob(f"{p}*/")
+                  if os.path.isfile(os.path.join(d, "ripdb.duckdb_extension.gz"))
+              )
+              if plats:
+                  versions[v] = plats
+          manifest = {
+              "extension":  "ripdb",
+              "base_url":   "https://shreeve.github.io/rip-lang/extensions/duckdb",
+              "updated_at": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "versions":   versions,
+          }
+          with open(f"{root}/manifest.json", "w") as f:
+              json.dump(manifest, f, indent=2)
+              f.write("\n")
+          print(json.dumps(manifest, indent=2))
+          PY
+
+      - name: Commit & push if changed
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add docs/extensions/duckdb
+          if git diff --cached --quiet; then
+            echo "No changes to publish — artifacts matched what's already on main."
+            exit 0
+          fi
+
+          ref_short="${GITHUB_SHA:0:7}"
+          msg="pages(ripdb): publish ${DUCKDB_VERSION} builds (${ref_short})"
+          git commit -m "$msg"
+
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then
+              echo "pushed on attempt $attempt"
+              exit 0
+            fi
+            echo "push failed — rebasing and retrying (attempt $attempt)"
+            git pull --rebase origin main
+          done
+          echo "::error::Failed to push after 3 attempts"
+          exit 1
