@@ -45,30 +45,140 @@ DuckDB's extension system.
 
 ## What It Does
 
-Rip DB sits between your clients and DuckDB, providing two interfaces:
+Rip DB sits between your clients and DuckDB. One process owns the database
+file; everything else talks to it over HTTP (plus a dedicated DuckDB binary
+protocol for the UI). Six different clients can connect to the same running
+server:
 
 ```
-┌─────────────┐          ┌─────────────┐          ┌─────────────┐
-│  DuckDB UI  │  binary  │   rip-db    │   FFI    │   DuckDB    │
-│  (Browser)  │◀────────▶│   (Bun)     │◀────────▶│  (native)   │
-└─────────────┘          └─────────────┘          └─────────────┘
-                               ▲
-                               │ HTTP/S
-                               │ (JSON)
-                               ▼
-                      ┌─────────────────┐
-                      │  HTTP Clients   │
-                      │  (curl, apps)   │
-                      └─────────────────┘
+                            ┌──────────────────────┐    FFI    ┌────────────┐
+                            │       rip-db         │◀─────────▶│   DuckDB   │
+                            │       (Bun)          │           │  (native)  │
+                            └──────────┬───────────┘           └────────────┘
+                                       │
+             ┌───────────┬─────────────┼─────────────┬───────────┐
+             ▼           ▼             ▼             ▼           ▼
+       ┌───────────┐ ┌─────────┐ ┌──────────┐ ┌────────────┐ ┌────────┐
+       │  Browser  │ │ duckdb  │ │  Your    │ │   curl /   │ │  MCP   │
+       │ DuckDB UI │ │  CLI +  │ │  app     │ │    HTTP    │ │  (LLM) │
+       │           │ │  ripdb  │ │  (Rip)   │ │   clients  │ │        │
+       └───────────┘ └─────────┘ └──────────┘ └────────────┘ └────────┘
 ```
 
-**DuckDB UI** — The official DuckDB notebook interface loads instantly in your
-browser. Rip DB proxies the UI assets from ui.duckdb.org and implements the
-full binary serialization protocol that the UI uses to communicate with DuckDB.
+Writes from your Rip app are immediately visible in the browser UI, to a
+`curl` script, through a stock `duckdb` CLI, and to an LLM over MCP. Zero
+duplication, zero sync — every client sees the same DuckDB file.
 
-**JSON API** — Any HTTP client can execute SQL queries and receive JSON
-responses. Three execution strategies are selected automatically based on the
-request shape — the caller never needs to think about it.
+See **[Ways to Connect](#ways-to-connect)** below for install-and-use
+instructions for each client.
+
+## Ways to Connect
+
+### 1. Browser — Official DuckDB UI
+
+Open `http://localhost:4213/` and you get the full DuckDB notebook
+interface: SQL notebooks, syntax highlighting, tab completion, query
+history, data exploration. The UI assets are proxied from `ui.duckdb.org`
+and Rip DB implements the full binary serialization protocol the UI uses.
+
+### 2. Stock `duckdb` CLI — via the `ripdb` extension
+
+The `ripdb` DuckDB extension lets the official `duckdb` CLI attach any
+running `rip-db` server as a first-class database — full SQL, catalog
+browsing, tab completion, and joins against local tables.
+
+```bash
+# One-time install from our GitHub Pages custom repository:
+duckdb -unsigned
+```
+```sql
+SET allow_unsigned_extensions = true;
+INSTALL ripdb FROM 'https://shreeve.github.io/rip-lang/extensions/duckdb';
+
+-- Every session thereafter:
+LOAD ripdb;
+ATTACH 'rip://localhost:4213' AS r (TYPE ripdb);
+SHOW TABLES FROM r;
+SELECT * FROM r.users WHERE active = true LIMIT 10;
+```
+
+Remote schemas and columns tab-complete like any other DuckDB database.
+Multi-platform binaries (`osx_arm64`, `osx_amd64`, `linux_amd64`,
+`linux_arm64`) are published automatically — see
+[`packages/db/extension/README.md`](./extension/README.md) for details.
+
+### 3. Rip client library — `@rip-lang/db/client`
+
+Use from your own Rip code. Parameterized queries, an ActiveRecord-style
+Model, and smart dispatch (single insert → prepared stmt, bulk insert →
+Appender API).
+
+```coffee
+import { connect, query, findAll, Model } from '@rip-lang/db/client'
+
+connect 'http://localhost:4213'   # or set DB_URL env var
+
+User = Model 'users'
+user  = User.find! 42
+users = User.where(active: true).limit(10).all!
+User.insert! { name: 'Alice', email: 'alice@example.com' }
+```
+
+See the [Database Client](#database-client) section for the full reference.
+
+### 4. Plain HTTP — any language, any tool
+
+The JSON API at `/sql` accepts parameterized queries, batch prepared
+statements, or bulk-insert directives. Works from any language that
+speaks HTTP. See [JSON API](#json-api) for the full contract.
+
+```bash
+curl -X POST http://localhost:4213/sql \
+  -H 'Content-Type: application/json' \
+  -d '{"sql":"SELECT * FROM users WHERE id = $1","params":[42]}'
+```
+
+### 5. MCP server — for LLMs (Cursor, Claude Desktop, …)
+
+`packages/db/mcp.rip` is an MCP stdio server that exposes three tools
+(`execute_query`, `list_tables`, `list_columns`) over the Model Context
+Protocol. LLMs connect once and can explore your live data.
+
+Add to `~/.cursor/mcp.json` (or equivalent for your LLM tool):
+
+```json
+{
+  "mcpServers": {
+    "rip-db": {
+      "command": "rip",
+      "args": ["/path/to/rip-lang/packages/db/mcp.rip"]
+    }
+  }
+}
+```
+
+The MCP server's default target is `http://localhost:4213`; pass
+`--url <other>` to point at a different `rip-db`.
+
+### 6. Minimal HTTP endpoints — scripts, monitoring, ops
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/health` | GET | Health check — returns `{status:"ok", version}` |
+| `/tables` | GET | List all tables in the main schema |
+| `/schema/:table` | GET | Column list + types for one table |
+| `/shutdown` | POST | Graceful CHECKPOINT + exit |
+
+### Which one should I use?
+
+| Task | Best fit |
+|---|---|
+| Interactive exploration, ad-hoc queries | Browser UI |
+| SQL power-user, scripting at the shell | Stock `duckdb` CLI + `ripdb` extension |
+| Your app's data layer | Rip client (`Model`, `query!`, `findAll!`) |
+| Integration from non-Rip services | Plain HTTP |
+| LLM-driven debugging / analytics | MCP |
+| Monitoring / health checks | Minimal endpoints |
 
 ## Features
 

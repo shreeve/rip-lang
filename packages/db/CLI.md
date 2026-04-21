@@ -10,6 +10,14 @@ ATTACH 'rip://host:port' AS r (TYPE ripdb);
 
 `r.t` then participates in DuckDB's standard catalog interface — queried, described, tab-completed, and joined with other attached databases like any local table. Catalog and scan operations are served over HTTP, and result data is materialized as DuckDB `DataChunk`s.
 
+> **Looking for install instructions?** This file is the *spec* for the extension.
+> The one-line install recipe (`INSTALL ripdb FROM '…';`) lives in the user-facing
+> guide at [`../README.md`](../README.md#2-stock-duckdb-cli--via-the-ripdb-extension)
+> → *Ways to Connect → Stock `duckdb` CLI*. Build and test instructions for
+> hacking on the extension itself live in [`extension/README.md`](./extension/README.md).
+> This document focuses on the contract, wire protocol, architecture, and
+> maintenance notes.
+
 ---
 
 ## Problem it solves
@@ -33,21 +41,13 @@ With ripdb loaded in the stock `duckdb` CLI:
 
 ## Quick start
 
-```bash
-# one terminal: run rip-db against a database file
-$ rip-db database.duckdb                    # serves on :4213
+Installation and the standard ATTACH/SELECT flow are documented in the
+user-facing guide: [`../README.md`](../README.md#2-stock-duckdb-cli--via-the-ripdb-extension)
+→ *Ways to Connect → Stock `duckdb` CLI*. Short version: `INSTALL ripdb FROM 'https://shreeve.github.io/rip-lang/extensions/duckdb';`, then `ATTACH 'rip://host:port' AS r (TYPE ripdb);`.
 
-# another terminal: stock duckdb CLI, -unsigned permits unsigned extensions
-$ duckdb -unsigned
-D LOAD '/path/to/ripdb.duckdb_extension';
-D ATTACH 'rip://localhost:4213' AS r (TYPE ripdb);
-D SHOW TABLES FROM r;
-D DESCRIBE r.patients;
-D SELECT * FROM r.patients WHERE age > 40 ORDER BY id LIMIT 20;
-D .quit                                     -- rip-db keeps running
-```
-
-`rip-refresh('r')` picks up remote schema changes without a detach/attach cycle:
+One extension-specific feature worth calling out here, since it doesn't fit
+the general connect narrative: `rip_refresh('r')` picks up remote schema
+changes without a detach/attach cycle.
 
 ```sql
 D CALL rip_refresh('r');
