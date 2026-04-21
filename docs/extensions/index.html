@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>rip-lang extensions</title>
+<style>
+  :root { --bg:#fff; --text:#1a1d21; --muted:#6b7280; --link:#2563eb; --code-bg:#f4f4f5; --border:#e2e5e9; --pre-bg:#fafafa; --card:#fff; --card-border:#e2e5e9; }
+  @media (prefers-color-scheme:dark) {
+    :root { --bg:#0a0a0c; --text:#e4e4e7; --muted:#71717a; --link:#60a5fa; --code-bg:#1e1e22; --border:#2a2a2e; --pre-bg:#161618; --card:#161618; --card-border:#2a2a2e; }
+  }
+  *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',system-ui,sans-serif;
+    font-size:16px; line-height:1.7; color:var(--text); background:var(--bg);
+    max-width:760px; margin:0 auto; padding:3rem 1.5rem; }
+  h1 { font-size:1.875rem; letter-spacing:-0.02em; }
+  h2 { font-size:1.25rem; margin:2em 0 .75em; }
+  .lead { color:var(--muted); font-size:1.0625rem; margin:.5em 0 2rem; }
+  a { color:var(--link); text-decoration:none; } a:hover { text-decoration:underline; }
+  code { font-family:'SF Mono','JetBrains Mono',ui-monospace,monospace;
+    font-size:.875em; background:var(--code-bg); padding:2px 5px; border-radius:4px; }
+  pre { background:var(--pre-bg); border:1px solid var(--border); border-radius:8px;
+    padding:1rem 1.25rem; overflow-x:auto; margin:0 0 1em; }
+  pre code { background:none; padding:0; font-size:.8125rem; line-height:1.6; }
+  .cards { display:grid; grid-template-columns:1fr; gap:1rem; margin:1em 0; }
+  @media (min-width:640px) { .cards { grid-template-columns:1fr 1fr; } }
+  .card { border:1px solid var(--card-border); border-radius:12px; padding:1.25rem;
+    background:var(--card); transition:transform 120ms ease, box-shadow 120ms ease; }
+  .card:hover { transform:translateY(-1px); box-shadow:0 4px 14px rgba(0,0,0,.05); }
+  .card h3 { font-size:1.0625rem; margin-bottom:.25em; }
+  .card p { color:var(--muted); font-size:.9375rem; margin-bottom:.75em; }
+  .card a.more { font-size:.8125rem; font-weight:500; }
+  footer { margin-top:4rem; padding-top:1.5rem; border-top:1px solid var(--border);
+    color:var(--muted); font-size:.875rem; }
+</style>
+</head>
+<body>
+
+<h1>rip-lang extensions</h1>
+<p class="lead">Drop-in extensions for DuckDB, VS Code, and Cursor — built straight from the <a href="https://github.com/shreeve/rip-lang">rip-lang</a> monorepo.</p>
+
+<h2>DuckDB</h2>
+<div class="cards">
+  <a class="card" href="duckdb/">
+    <h3>ripdb</h3>
+    <p>Native DuckDB extension that exposes a rip-db server as a first-class attached database.</p>
+    <span class="more">Install instructions →</span>
+  </a>
+</div>
+
+<h2>VS Code / Cursor</h2>
+<div class="cards">
+  <a class="card" href="vscode/print/">
+    <h3>rip-lang.print</h3>
+    <p>Syntax-highlighted source printer. Right-click any file or folder, choose <em>Rip Print</em>, and get a clean printable document.</p>
+    <span class="more">Download .vsix →</span>
+  </a>
+  <a class="card" href="vscode/rip/">
+    <h3>rip-lang.rip</h3>
+    <p>Language support for the Rip programming language — grammars, commands, and editor integration.</p>
+    <span class="more">Download .vsix →</span>
+  </a>
+</div>
+
+<h2>Why custom hosting?</h2>
+<p>
+  The <code>ripdb</code> DuckDB extension is unsigned and therefore isn't published on
+  the official <code>extensions.duckdb.org</code> community index. The VS Code extensions
+  are published separately to the Marketplace, but the <code>.vsix</code> files here
+  let you install the exact build that ships with the current source tree (handy for
+  Cursor, offline setups, or pre-release testing).
+</p>
+
+<footer>
+  Updated by the
+  <a href="https://github.com/shreeve/rip-lang/actions">rip-lang GitHub Actions</a>
+  on every release. The full tree is served by GitHub Pages from
+  <a href="https://github.com/shreeve/rip-lang/tree/main/docs/extensions"><code>main/docs/extensions/</code></a>.
+</footer>
+
+</body>
+</html>

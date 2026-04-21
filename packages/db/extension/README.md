@@ -82,6 +82,79 @@ In another terminal, either:
    SELECT count(*) FROM rip.smoke_orders;"
 ```
 
+### Publishing / consuming via a custom repository
+
+The [`.github/workflows/ripdb-extension.yml`](../../../.github/workflows/ripdb-extension.yml)
+workflow builds `ripdb.duckdb_extension` for four native platforms
+(`osx_arm64`, `osx_amd64`, `linux_amd64`, `linux_arm64`), gzips each one,
+and commits the tree into `docs/extensions/duckdb/` on `main`. The
+existing Pages site (served from `main /docs`) then exposes them at the
+DuckDB-custom-repository URL layout:
+
+```
+https://shreeve.github.io/rip-lang/extensions/duckdb/<duckdb_version>/<platform>/ripdb.duckdb_extension.gz
+```
+
+End-users consume it with:
+
+```sql
+SET allow_unsigned_extensions = true;
+INSTALL ripdb FROM 'https://shreeve.github.io/rip-lang/extensions/duckdb';
+LOAD ripdb;
+```
+
+The workflow triggers on pushes to the extension sources (rebuilds against
+the default `v1.5.2` DuckDB) or via **Actions → Build ripdb DuckDB extension
+→ Run workflow** when you want to override the DuckDB or ripdb version. Each
+run only touches its `<duckdb_version>/<platform>/` cell — previous versions
+stay put, so multiple DuckDB releases are supported simultaneously.
+
+No manual Pages setup is needed: the existing `main /docs` Pages source
+picks up the new `docs/extensions/duckdb/` subtree automatically.
+
+#### How DuckDB picks the right build
+
+Client-side DuckDB already knows its own version and platform and builds
+the full URL itself. When a user runs
+`INSTALL ripdb FROM '<base>'`, DuckDB fetches exactly:
+
+```
+<base>/<duckdb_version>/<platform>/ripdb.duckdb_extension.gz
+```
+
+and then cross-checks the 534-byte metadata footer inside the file
+against its own version + platform before loading. The URL path *is* the
+version-routing mechanism — the client never has to know what versions
+you publish. If the user's DuckDB version isn't in the published tree
+(e.g. they're on `v1.4.0` but we only publish `v1.5.2`), the fetch
+returns 404 and they get a clear install error pointing at the missing
+version. The fix is to run the workflow again with that DuckDB version
+as input — it adds a new `v1.4.0/` subfolder alongside the existing
+ones and both DuckDB releases work simultaneously.
+
+#### Quick end-to-end verification
+
+After the workflow publishes the first build, a user can sanity-check
+everything without any DuckDB session state:
+
+```bash
+# 1) Which DuckDB are you running?
+duckdb -csv -noheader -c "SELECT library_version FROM pragma_version()"
+# → v1.5.2
+
+# 2) Which platform?
+duckdb -csv -noheader -c "PRAGMA platform"
+# → osx_arm64
+
+# 3) Is a build published for that exact (version, platform) pair?
+curl -I "https://shreeve.github.io/rip-lang/extensions/duckdb/v1.5.2/osx_arm64/ripdb.duckdb_extension.gz"
+# → HTTP/2 200 with content-type: application/octet-stream
+```
+
+If step 3 returns **200**, the install will succeed. If it returns
+**404**, the (version, platform) cell hasn't been published yet — run
+the workflow with the missing version as input.
+
 ### Regenerating fixtures
 
 ```
