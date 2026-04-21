@@ -112,6 +112,36 @@ static string RstripSlashes(const string &s) {
 	return s.substr(0, end);
 }
 
+// Normalize an ATTACH URL down to just the scheme+host+port that the HTTP
+// client actually cares about. Drops — in order — fragment (#...), query
+// string (?...), path component (first '/' after the scheme), and any
+// trailing slashes. Accepts all three forms the extension recognizes
+// (http://, rip://, bare host[:port]).
+//
+// Rationale (CLI.md §M1 "URL normalization handled" — deferred to M2):
+// rip-db's endpoints are absolute paths (/tables, /schema/:t, /ddb/run),
+// so any path component in the attach URL is irrelevant. Rather than
+// ignoring it silently mid-request, we strip it at parse time so the
+// stored base_url is canonical. A future milestone can add optional
+// path-prefix support by preserving the path and prepending it to
+// request paths — not needed today.
+static string NormalizeUrl(const string &raw) {
+	string s = raw;
+	// Fragment.
+	size_t hash_pos = s.find('#');
+	if (hash_pos != string::npos) s.erase(hash_pos);
+	// Query string.
+	size_t q_pos = s.find('?');
+	if (q_pos != string::npos) s.erase(q_pos);
+	// Path (first '/' after the scheme, if any). Bare host[:port] has no
+	// scheme; treat the first '/' as the path start in that case too.
+	size_t scheme_end = s.find("://");
+	size_t host_start = (scheme_end == string::npos) ? 0 : scheme_end + 3;
+	size_t path_start = s.find('/', host_start);
+	if (path_start != string::npos) s.erase(path_start);
+	return RstripSlashes(s);
+}
+
 // Parse a minimal host/port URL. Accepted shapes:
 //   http://host[:port]     — the long-term UX per CLI.md, but currently
 //                            blocked by DuckDB's EXTENSION_FILE_PREFIXES
@@ -1078,10 +1108,10 @@ static unique_ptr<Catalog> RipAttach(optional_ptr<StorageExtensionInfo>, ClientC
                                       AttachedDatabase &db, const string &, AttachInfo &info,
                                       AttachOptions &options) {
 	RipConnOptions opts;
-	opts.base_url = RstripSlashes(info.path);
+	opts.base_url = NormalizeUrl(info.path);
 	if (opts.base_url.empty()) {
 		throw InvalidInputException(
-		    "ripdb: ATTACH requires a URL path, e.g. ATTACH 'http://localhost:4213' AS r (TYPE ripdb)");
+		    "ripdb: ATTACH requires a URL, e.g. ATTACH 'http://localhost:4213' AS r (TYPE ripdb)");
 	}
 
 	// Optional per-attach options (timeout for now; auth/etc deferred).

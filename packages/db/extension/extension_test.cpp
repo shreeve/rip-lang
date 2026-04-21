@@ -169,6 +169,34 @@ int main(int argc, char **argv) {
 	// DETACH to exercise catalog cleanup.
 	expect_ok(con, "DETACH rip", s, "DETACH rip");
 
+	// M2.6 — URL normalization. ATTACH with a noisy URL (path + query
+	// string + fragment + trailing slashes) must be stripped back to
+	// its canonical scheme+host+port form and still work end-to-end.
+	{
+		std::string noisy = std::string(rip_db_url) + "/some/path/?debug=1&foo=bar#anchor////";
+		expect_ok(con, std::string("ATTACH '") + noisy + "' AS rip_noisy (TYPE ripdb)",
+		          s, "ATTACH with path+query+fragment+trailing slashes");
+		expect_rows(con, "SELECT * FROM rip_noisy.smoke_people", 10,
+		            s, "noisy-URL attach produces the same rows");
+		expect_ok(con, "DETACH rip_noisy", s, "DETACH rip_noisy");
+	}
+
+	// M2.6 — bare host:port form (no scheme) must still work.
+	{
+		// Derive bare form from rip_db_url by dropping the scheme if present.
+		std::string bare = rip_db_url;
+		auto sep = bare.find("://");
+		if (sep != std::string::npos) bare = bare.substr(sep + 3);
+		// Strip any path that may have sneaked in (defensive).
+		auto slash = bare.find('/');
+		if (slash != std::string::npos) bare = bare.substr(0, slash);
+		expect_ok(con, std::string("ATTACH '") + bare + "' AS rip_bare (TYPE ripdb)",
+		          s, "ATTACH with bare host:port (no scheme)");
+		expect_rows(con, "SELECT * FROM rip_bare.smoke_orders", 20,
+		            s, "bare-host attach produces the same rows");
+		expect_ok(con, "DETACH rip_bare", s, "DETACH rip_bare");
+	}
+
 	std::printf("\n# %d / %d passed\n", s.passed, s.total);
 	return (s.passed == s.total) ? 0 : 1;
 }
