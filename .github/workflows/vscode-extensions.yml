@@ -2,7 +2,7 @@
 # Build & publish the rip-lang VS Code / Cursor extensions (.vsix)
 #
 # Produces a download tree under docs/extensions/vscode/<name>/, which the
-# existing GitHub Pages site (served from main /docs) exposes at:
+# existing GitHub Pages site (main /docs) exposes at:
 #
 #   https://<owner>.github.io/<repo>/extensions/vscode/<name>/<name>-<version>.vsix
 #   https://<owner>.github.io/<repo>/extensions/vscode/<name>/<name>-latest.vsix
@@ -13,31 +13,36 @@
 #   cursor --install-extension ./print-latest.vsix
 #   (or `code --install-extension ...` for VS Code)
 #
+# Each extension builds via its own `npm run package` script, which keeps the
+# packaging knobs (vsce flags, build steps) in the extension's package.json
+# rather than duplicated here. The rip extension additionally needs Bun +
+# esbuild; that's handled with a matrix-conditional `oven-sh/setup-bun`.
+#
 # Triggers:
-#   * push to main / rip-duck when either extension's sources change
-#   * pushed tag  print-v* or rip-vscode-v*
+#   * push to main / rip-duck / pages-extensions when an extension's sources
+#     change
+#   * pushed tag  print-v*  or  rip-vscode-v*  (publishes current HEAD)
 #   * manual (workflow_dispatch)
+#
+# Branch protection:
+#   The `publish` job pushes to main as github-actions[bot]. If branch
+#   protection is enabled, allow that bot to bypass review for
+#   `docs/extensions/vscode/**` — or retarget the publish step.
 # =============================================================================
 
 name: Build rip-lang VS Code extensions
 
 on:
   push:
-    branches: [main, rip-duck]
+    branches: [main, rip-duck, pages-extensions]
+    tags:
+      - 'print-v*'
+      - 'rip-vscode-v*'
     paths:
       - 'packages/print/vscode/**'
       - 'packages/vscode/**'
       - '.github/workflows/vscode-extensions.yml'
-    tags:
-      - 'print-v*'
-      - 'rip-vscode-v*'
   workflow_dispatch:
-
-# Share the "publish" lane with the ripdb workflow so commits to
-# docs/extensions/ never race.
-concurrency:
-  group: extensions-publish
-  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -50,8 +55,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: print, dir: packages/print/vscode }
-          - { name: rip,   dir: packages/vscode       }
+          - { name: print, dir: packages/print/vscode, needs_bun: false }
+          - { name: rip,   dir: packages/vscode,       needs_bun: true  }
 
     steps:
       - name: Checkout
@@ -62,28 +67,65 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Setup Bun (${{ matrix.name }} needs esbuild via bun)
+        if: matrix.needs_bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
       - name: Install dependencies
         working-directory: ${{ matrix.dir }}
         run: |
-          if [[ -f package-lock.json ]]; then npm ci
-          elif [[ -f yarn.lock ]]; then npm i -g yarn && yarn --frozen-lockfile
-          else npm install
+          if [[ -f package-lock.json ]]; then
+            npm ci
+          else
+            echo "::warning::No package-lock.json in ${{ matrix.dir }} — using npm install (non-reproducible)"
+            npm install
           fi
 
-      - name: Read version
-        id: pkg
-        working-directory: ${{ matrix.dir }}
-        shell: bash
-        run: |
-          v=$(node -p "require('./package.json').version")
-          echo "version=$v" >> "$GITHUB_OUTPUT"
-          echo "Built ${{ matrix.name }} v$v"
-
-      - name: Package .vsix
+      - name: Package .vsix (via extension's own `npm run package`)
         working-directory: ${{ matrix.dir }}
         run: |
-          npx --yes @vscode/vsce package --allow-missing-repository
+          set -euo pipefail
+          if npm run | grep -q '^  package$'; then
+            npm run package
+          else
+            echo "::error::${{ matrix.dir }}/package.json has no 'package' script"
+            exit 1
+          fi
+          # Clean up any stray .vsix from previous runs in the working dir,
+          # then keep only the newest (the one we just built).
           ls -la *.vsix
+
+      - name: Smoke-test .vsix contents
+        working-directory: ${{ matrix.dir }}
+        run: |
+          set -euo pipefail
+          vsix=$(ls -t *.vsix | head -1)
+          echo "Validating $vsix"
+          # 1) Valid zip
+          unzip -tq "$vsix"
+          # 2) Contains extension/package.json with the expected name
+          unzip -p "$vsix" extension/package.json > /tmp/ext-pkg.json
+          got=$(node -p 'require("/tmp/ext-pkg.json").name')
+          want="${{ matrix.name }}"
+          if [[ "$got" != "$want" ]]; then
+            echo "::error::Packaged extension name '$got' does not match '$want'"; exit 1
+          fi
+          # 3) `main` entrypoint actually exists inside the zip
+          main=$(node -p 'require("/tmp/ext-pkg.json").main || ""')
+          if [[ -z "$main" ]]; then
+            echo "::error::Packaged extension has no 'main' field"; exit 1
+          fi
+          # Strip leading "./" for zip -l grep
+          main_clean="${main#./}"
+          if ! unzip -l "$vsix" | awk '{print $NF}' | grep -Fxq "extension/${main_clean}"; then
+            echo "::error::main entrypoint 'extension/${main_clean}' not found in $vsix"
+            unzip -l "$vsix" | head -40
+            exit 1
+          fi
+          size=$(wc -c < "$vsix")
+          echo "ok — $vsix (${size} bytes, name=${got}, main=${main})"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -97,7 +139,17 @@ jobs:
     name: Publish to docs/extensions/vscode
     needs: build
     runs-on: ubuntu-latest
-    if: github.event_name != 'pull_request'
+    # Only write to docs/ on main, on tags, or when manually dispatched.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.ref == 'refs/heads/main' ||
+      github.ref_type == 'tag'
+    # Serialise only the commit-back-to-main step, shared with the ripdb
+    # workflow so the two publishers never race on docs/extensions/.
+    concurrency:
+      group: extensions-publish
+      cancel-in-progress: false
+
     steps:
       - name: Checkout main (so we can commit back)
         uses: actions/checkout@v4
@@ -111,59 +163,102 @@ jobs:
         with:
           path: artifacts
           pattern: vsix-*
+          merge-multiple: false
 
-      - name: Stage into docs/extensions/vscode/<name>/
+      # Uses Python (not shell) to generate per-extension index.html so that
+      # filenames and versions are HTML-escaped correctly and the output is
+      # deterministic — independent of `ls` ordering or special chars.
+      - name: Stage .vsix and generate landing pages
         shell: bash
+        env:
+          GH_REPO_OWNER: ${{ github.repository_owner }}
+          GH_REPO_NAME:  ${{ github.event.repository.name }}
         run: |
           set -euo pipefail
+          python3 - <<'PY'
+          import glob, html, os, shutil, sys
 
-          stage() {
-            local name="$1"
-            local src_dir="artifacts/vsix-${name}"
-            local dest="docs/extensions/vscode/${name}"
-            if [[ ! -d "$src_dir" ]]; then
-              echo "::warning::No artifact for $name — skipping"
-              return 0
-            fi
+          owner = os.environ["GH_REPO_OWNER"]
+          repo  = os.environ["GH_REPO_NAME"]
+          base  = f"https://{owner}.github.io/{repo}/extensions/vscode"
 
-            local vsix
-            vsix=$(ls "$src_dir"/*.vsix 2>/dev/null | head -1)
-            if [[ -z "$vsix" ]]; then
-              echo "::warning::No .vsix in $src_dir — skipping"
-              return 0
-            fi
+          for name in ("print", "rip"):
+              src_dir = f"artifacts/vsix-{name}"
+              if not os.path.isdir(src_dir):
+                  print(f"[{name}] no artifact — skipping", file=sys.stderr)
+                  continue
 
-            mkdir -p "$dest"
-            cp "$vsix" "$dest/"
-            # Also maintain a "latest" alias so users don't need to know the version.
-            cp "$vsix" "$dest/${name}-latest.vsix"
+              vsixes = sorted(glob.glob(f"{src_dir}/*.vsix"))
+              if not vsixes:
+                  print(f"[{name}] no .vsix in {src_dir} — skipping", file=sys.stderr)
+                  continue
 
-            # Small index.html per extension with the one-line install instructions.
-            cat > "$dest/index.html" <<HTML
-          <!DOCTYPE html>
-          <html lang="en"><head><meta charset="UTF-8">
+              # Use the newest (by filename sort — vsce uses name-X.Y.Z.vsix)
+              newest = vsixes[-1]
+              dest = f"docs/extensions/vscode/{name}"
+              os.makedirs(dest, exist_ok=True)
+              shutil.copy2(newest, dest)
+              shutil.copy2(newest, f"{dest}/{name}-latest.vsix")
+              print(f"[{name}] staged {os.path.basename(newest)}")
+
+              # Enumerate what's currently published for this extension so
+              # the landing page lists all versions (not just this run's).
+              all_versions = sorted(
+                  (os.path.basename(f) for f in glob.glob(f"{dest}/{name}-*.vsix")
+                   if not f.endswith(f"{name}-latest.vsix")),
+                  reverse=True,
+              )
+
+              safe_name = html.escape(name)
+              install_url = f"{base}/{name}/{name}-latest.vsix"
+              items = "\n      ".join(
+                  f'<li><a href="./{html.escape(v)}"><code>{html.escape(v)}</code></a></li>'
+                  for v in all_versions
+              ) or '<li><em>no versions published yet</em></li>'
+
+              with open(f"{dest}/index.html", "w") as f:
+                  f.write(f"""<!DOCTYPE html>
+          <html lang="en">
+          <head>
+          <meta charset="UTF-8">
           <meta name="viewport" content="width=device-width, initial-scale=1">
-          <title>${name} — rip-lang VS Code extension</title>
-          <style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;max-width:720px;margin:0 auto;padding:3rem 1.5rem;line-height:1.7;color:#1a1d21;}code{font-family:'SF Mono',ui-monospace,monospace;background:#f4f4f5;padding:2px 5px;border-radius:4px;font-size:.875em}pre{background:#fafafa;border:1px solid #e2e5e9;border-radius:8px;padding:1rem 1.25rem;overflow-x:auto}pre code{background:none;padding:0}a{color:#2563eb;text-decoration:none}a:hover{text-decoration:underline}h1{font-size:1.5rem}ul{padding-left:1.25rem}@media (prefers-color-scheme:dark){body{color:#e4e4e7;background:#0a0a0c}code{background:#1e1e22}pre{background:#161618;border-color:#2a2a2e}a{color:#60a5fa}}</style>
-          </head><body>
-          <h1>rip-lang.${name}</h1>
-          <p>VS Code / Cursor extension. Install with:</p>
-          <pre><code>curl -LO https://${GITHUB_REPOSITORY_OWNER}.github.io/$(echo $GITHUB_REPOSITORY | cut -d/ -f2)/extensions/vscode/${name}/${name}-latest.vsix
-          cursor --install-extension ./${name}-latest.vsix</code></pre>
-          <p>Or pin to a specific version below.</p>
+          <title>rip-lang.{safe_name} — VS Code / Cursor extension</title>
+          <style>
+            :root {{ --bg:#fff; --text:#1a1d21; --muted:#6b7280; --link:#2563eb; --code-bg:#f4f4f5; --border:#e2e5e9; --pre-bg:#fafafa; }}
+            @media (prefers-color-scheme:dark) {{ :root {{ --bg:#0a0a0c; --text:#e4e4e7; --muted:#71717a; --link:#60a5fa; --code-bg:#1e1e22; --border:#2a2a2e; --pre-bg:#161618; }} }}
+            *, *::before, *::after {{ margin:0; padding:0; box-sizing:border-box; }}
+            body {{ font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',system-ui,sans-serif; font-size:16px; line-height:1.7; color:var(--text); background:var(--bg); max-width:720px; margin:0 auto; padding:3rem 1.5rem; }}
+            h1 {{ font-size:1.75rem; letter-spacing:-0.02em; }}
+            h2 {{ font-size:1.25rem; margin:2em 0 .5em; }}
+            p, pre, ul {{ margin:0 0 1em; }} ul {{ padding-left:1.25rem; }}
+            code {{ font-family:'SF Mono',ui-monospace,monospace; font-size:.875em; background:var(--code-bg); padding:2px 5px; border-radius:4px; }}
+            pre {{ background:var(--pre-bg); border:1px solid var(--border); border-radius:8px; padding:1rem 1.25rem; overflow-x:auto; }}
+            pre code {{ background:none; padding:0; font-size:.8125rem; line-height:1.6; }}
+            a {{ color:var(--link); text-decoration:none; }} a:hover {{ text-decoration:underline; }}
+            footer {{ margin-top:3rem; padding-top:1.5rem; border-top:1px solid var(--border); color:var(--muted); font-size:.875rem; }}
+          </style>
+          </head>
+          <body>
+          <h1>rip-lang.{safe_name}</h1>
+          <p>VS Code / Cursor extension, published from the <a href="https://github.com/{html.escape(owner)}/{html.escape(repo)}">{html.escape(repo)}</a> monorepo.</p>
+
+          <h2>Install (latest)</h2>
+          <pre><code>curl -LO {html.escape(install_url)}
+          cursor --install-extension ./{html.escape(name)}-latest.vsix
+
+          # VS Code:
+          # code --install-extension ./{html.escape(name)}-latest.vsix</code></pre>
+
           <h2>Versions</h2>
           <ul>
-          $(ls "$dest" | grep -E "^${name}-[0-9]" | sort -V -r | while read f; do echo "            <li><a href=\"./${f}\"><code>${f}</code></a></li>"; done)
+              {items}
           </ul>
-          <p>← <a href="../">all rip-lang extensions</a></p>
-          </body></html>
-          HTML
-            echo "staged: $dest/"
-            ls -la "$dest"
-          }
 
-          stage print
-          stage rip
+          <footer>← <a href="../../">all rip-lang extensions</a></footer>
+          </body>
+          </html>
+          """)
+          PY
 
       - name: Commit & push if changed
         shell: bash
@@ -180,17 +275,15 @@ jobs:
             exit 0
           fi
 
-          # Summarize which extensions updated for a meaningful commit msg.
+          # Summarise which extensions updated for a meaningful commit msg.
           summary=""
           for n in print rip; do
             d="docs/extensions/vscode/$n"
             [[ -d "$d" ]] || continue
-            newest=$(ls -t "$d"/*.vsix 2>/dev/null | head -1 || true)
-            [[ -z "$newest" ]] && continue
-            v=$(basename "$newest" .vsix | sed "s/^${n}-//")
-            # Skip the "latest" alias for the summary label
-            [[ "$v" == "latest" ]] && continue
-            summary+="${n} ${v}, "
+            for f in "$d"/${n}-[0-9]*.vsix; do
+              [[ -f "$f" ]] || continue
+              summary+="$(basename "$f" .vsix), "
+            done
           done
           summary="${summary%, }"
           [[ -z "$summary" ]] && summary="vsix updates"
