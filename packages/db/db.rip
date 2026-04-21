@@ -394,10 +394,25 @@ post '/' ->
 get '/health' ->
   { status: 'ok', version: VERSION }
 
-# GET /tables — List all tables (kept with legacy `tables:` shape; this
-# endpoint is small and predictable and pre-dates the envelope migration)
+# GET /tables — List all real tables in the main schema.
+#
+# Uses DuckDB's duckdb_tables() catalog function rather than
+# information_schema.tables because the DuckDB UI extension registers
+# virtual catalog entries (`notebooks`, `notebook_versions`,
+# `current_notebook_id`, `has_onboarded`) in `main` that show up in
+# information_schema but can't be DESCRIBEd. Those entries would cause
+# downstream consumers (notably the `ripdb` CLI extension's catalog
+# loader) to log schema-load failures for state that was never meant
+# to be part of the user-visible API surface.
+#
+# Shape `{tables: [name, ...]}` is kept for back-compat with existing
+# clients; this endpoint pre-dates the envelope migration.
 get '/tables' ->
-  rows = await conn.query "SELECT table_name FROM information_schema.tables WHERE table_schema = 'main'"
+  rows = await conn.query """
+    SELECT table_name FROM duckdb_tables()
+    WHERE database_name = current_database() AND schema_name = 'main'
+    ORDER BY table_name
+    """
   { tables: rows.map((r) -> r.table_name) }
 
 # GET /schema/:table — Get table schema. Returns 404 when the table doesn't

@@ -214,6 +214,20 @@ describeIf('rip-db HTTP integration', () => {
     expect(body.schema.length).toBe(2);
   });
 
+  // -------------------------------------------------------------------------
+  // /tables — real BASE tables only, no UI-extension virtual entries
+  // -------------------------------------------------------------------------
+
+  test('GET /tables — lists real tables only (via duckdb_tables())', async () => {
+    await postJSON(`${server.url}/sql`, { sql: 'CREATE TABLE tables_a (id INTEGER)' });
+    await postJSON(`${server.url}/sql`, { sql: 'CREATE TABLE tables_b (id INTEGER)' });
+    const res = await fetch(`${server.url}/tables`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(Array.isArray(body.tables)).toBe(true);
+    expect(body.tables).toEqual(expect.arrayContaining(['tables_a', 'tables_b']));
+  });
+
   test('GET /schema/:table — 404 on missing table (not 200 with error body)', async () => {
     const res = await fetch(`${server.url}/schema/no_such_table`);
     expect(res.status).toBe(404);
