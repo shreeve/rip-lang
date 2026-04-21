@@ -7,7 +7,7 @@
 >
 > **Commit 3 (subprocess hardening) landed as `4f12e17` on `rip-duck`.** `smoke-server.rip` and `capture-live.rip` now spawn rip-db in a detached process group and tear it down via group-signaling, so the inner-loop test scripts never leak rip-db processes on pipe breakage / Ctrl-C / SIGTERM / uncaught throws. No functional change to the extension.
 >
-> **M2 landed on `rip-duck` across commits `e7d9ad8` (URL normalization), `1384e0d` (`rip_refresh`), `84bb022` (predicate pushdown), `fd6c95c` (query interrupt), `5448d66` (chunked transfer + parallel-scan decision).** 53/53 extension_test cases passing. Predicate pushdown runs for `=`/`<>`/`<`/`<=`/`>`/`>=`/`IS NULL`/`IS NOT NULL`/`AND` on INT/BOOL/VARCHAR; unsupported filters fall back to local DuckDB evaluation. Chunked Transfer-Encoding responses decode correctly. Parallel scan is intentionally single-threaded in M2 — see Commit 4 below for the full rationale.
+> **M2 landed on `rip-duck` across commits `e7d9ad8` (URL normalization), `1384e0d` (`rip_refresh`), `84bb022` (predicate pushdown), `fd6c95c` (query interrupt), `5448d66` (chunked transfer + parallel-scan decision), `956b202` (Risk 12 DECIMAL — native wire encoding).** 59/59 extension_test cases passing. Predicate pushdown runs for `=`/`<>`/`<`/`<=`/`>`/`>=`/`IS NULL`/`IS NOT NULL`/`AND` on INT/BOOL/VARCHAR; unsupported filters fall back to local DuckDB evaluation. Chunked Transfer-Encoding responses decode correctly. DECIMAL columns round-trip natively with exact precision (LIST still deferred with STRUCT/MAP/ARRAY/UNION to a dedicated "complex types" milestone). Parallel scan is intentionally single-threaded in M2 — see Commit 4 below for the full rationale.
 
 **Goal:** Make the stock `duckdb` CLI treat a running `rip-db` HTTP server as an attachable DuckDB database, with native table/column TAB completion. Other libduckdb-based clients (Python, R, DBeaver, DuckDB UI, JDBC) that permit loading signed/unsigned extensions inherit the integration automatically, but explicit compatibility verification is per-client and not an M1 promise.
 
@@ -361,8 +361,10 @@ DuckDB's internal layout is `duckdb_string_t` (16 bytes: inline for ≤12 bytes,
 Per `duckdb-binary.rip`'s `mapDuckDBType`, the following types are **stringified server-side**:
 
 ```
-DECIMAL, ENUM, LIST, STRUCT, MAP, UNION, ARRAY, BLOB, BIT, JSON, VARIANT, GEOMETRY
+ENUM, LIST, STRUCT, MAP, UNION, ARRAY, BLOB, BIT, JSON, VARIANT, GEOMETRY
 ```
+
+(DECIMAL was on this list in M1 and the first half of M2; it gained native wire encoding in commit `956b202` — Risk 12 partial closure — and no longer falls back.)
 
 When a remote table has one of these types, `/ddb/run` returns wire-VARCHAR bytes. **The catalog must reflect this**: `/schema/:t` currently reports the *real* logical type (via `DESCRIBE`), but the wire delivers VARCHAR. We handle this extension-side by applying the same fallback table in our catalog population:
 
@@ -370,12 +372,13 @@ When a remote table has one of these types, `/ddb/run` returns wire-VARCHAR byte
 LogicalType MapToWireType(const string &server_reported_type) {
     // Mirror mapDuckDBType from duckdb-binary.rip
     // Fixed types: return them as-is
-    // DECIMAL/ENUM/LIST/STRUCT/MAP/UNION/ARRAY/BLOB/BIT/JSON → return VARCHAR
+    // DECIMAL → parse width/scale → LogicalType::DECIMAL(w, s)   (native wire, commit 956b202)
+    // ENUM/LIST/STRUCT/MAP/UNION/ARRAY/BLOB/BIT/JSON → return VARCHAR
     // ...
 }
 ```
 
-Users who want native support for those types will need both sides upgraded; for M1, unsupported types appear as VARCHAR text to the client, which is honest and functional.
+Users who want native support for the remaining types will need both sides upgraded; until then, those types appear as VARCHAR text to the client, which is honest and functional.
 
 **Semantic caveats for specific fallback types:**
 
@@ -925,6 +928,8 @@ Since we expose a single `main` schema, DuckDB's catalog resolver should handle 
 
 **Mitigation:** Documented per-type semantic caveats in the [Types that fall back to VARCHAR](#types-that-fall-back-to-varchar-on-the-wire) section. For M2, negotiate a proper native encoding on rip-db's side for at least DECIMAL and LIST (the most commonly-used fallback types in practice).
 
+**Status:** **DECIMAL: closed** (commit `956b202`). DECIMAL columns round-trip natively with full DuckDB precision — server emits the unscaled integer at the correct physical width (int16/32/64/128 based on DECIMAL(W,S)), decoder parses the on-wire width/scale from new type-record fields, ripdb surfaces `LogicalType::DECIMAL(w, s)` in the catalog and writes values directly into DuckDB's decimal flat vector. `sum(price)` is exact, not floating-point. **LIST: deferred.** LIST (and STRUCT / MAP / ARRAY / UNION, which share the same architectural shape) requires recursive type encoding, variable-length per-row storage, nested null tracking, and DuckDB ListVector binding — substantially larger than DECIMAL and best handled as a dedicated "complex types" milestone rather than bolted on here. Until that milestone, these types continue to arrive VARCHAR-stringified per the Types-fall-back-to-VARCHAR section.
+
 ### Risk 13: Name normalization beyond quoting
 
 **Risk:** `QuoteIdentifier` handles double-quote escaping but not case-folding, Unicode normalization, or DuckDB's identifier canonicalization rules. A remote table named `Orders` (mixed case) may not be findable if the client queries `SELECT * FROM rip.orders` and our `LookupEntry` does case-insensitive lookup against a map keyed by original case.
@@ -1367,6 +1372,7 @@ pre-implementation design discussion that shaped the work.
 | M2.4 — `rip_refresh('catalog')` | ✅ landed | `1384e0d` |
 | M2.5 — query interrupt | ✅ landed (client-side) | `fd6c95c` |
 | M2.6 — URL normalization | ✅ landed | `e7d9ad8` |
+| Risk 12 — DECIMAL native wire | ✅ landed (LIST deferred) | `956b202` |
 
 **Shipped artifacts (M2-only, on top of Commit 2):**
 
@@ -1521,3 +1527,12 @@ absolute.
   list for the rationale per type).
 - Memcpy fast paths in the decoder (still the Commit-1 slow-path
   serves as oracle; worth measuring before implementing).
+- Native wire encoding for LIST, STRUCT, MAP, ARRAY, UNION (shared
+  architectural shape: recursive type encoding + variable-length
+  per-row storage + nested null tracking + DuckDB complex-vector
+  binding). Dedicated "complex types" milestone; DECIMAL closure
+  in `956b202` does not change their current VARCHAR-fallback
+  behavior.
+- Golden-fixture coverage for DECIMAL across the null-pattern
+  matrix (extension_test already proves the code paths end-to-end;
+  capture-fixtures.rip addition is a mechanical follow-up).
