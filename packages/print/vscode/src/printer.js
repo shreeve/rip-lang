@@ -6,7 +6,28 @@
 
 const hljs = require('highlight.js');
 const fs   = require('fs');
+const os   = require('os');
 const path = require('path');
+const { spawnSync } = require('child_process');
+
+// GUI-launched VS Code / Cursor often has a stripped PATH that omits
+// ~/.bun/bin, Homebrew, etc. Try a few common install locations in order.
+function resolveBunBin() {
+  const candidates = [
+    'bun',
+    path.join(os.homedir(), '.bun', 'bin', 'bun'),
+    '/opt/homebrew/bin/bun',
+    '/usr/local/bin/bun',
+  ];
+  for (const c of candidates) {
+    try {
+      // Quick probe: `bun --version` returns 0 if the binary works.
+      const probe = spawnSync(c, ['--version'], { encoding: 'utf8' });
+      if (!probe.error && probe.status === 0) return c;
+    } catch { /* try next */ }
+  }
+  return null;
+}
 
 // Register Rip language
 const ripLanguage = require('../lib/hljs-rip');
@@ -420,4 +441,89 @@ ${fileSections}
 </html>`;
 }
 
-module.exports = { generatePrintHtml, walkDir, getLang, defaultExclude, skipDirs };
+// ============================================================================
+// Single-markdown-file mode — render the document via Bun, wrap in static.rip CSS
+// ============================================================================
+
+/**
+ * Render a single markdown file into a standalone HTML document by shelling out
+ * to `bun -e` (Bun.markdown.html). The CSS template matches packages/server
+ * /serving/static.rip's renderMarkdown exactly.
+ *
+ * Returns null on any failure (bun not on PATH, non-zero exit, empty stdout,
+ * or thrown error), so callers can gracefully fall back to generatePrintHtml.
+ *
+ * @param {string} fileName - Display name for the <title>
+ * @param {string} markdown - Raw markdown source
+ * @param {Object} [options]
+ * @param {boolean} [options.dark] - Force-dark variant (otherwise auto via prefers-color-scheme)
+ * @returns {string|null}
+ */
+function generateMarkdownHtml(fileName, markdown, options = {}) {
+  const { dark = false } = options;
+
+  const bunBin = resolveBunBin();
+  if (!bunBin) return null;
+
+  let body;
+  try {
+    const res = spawnSync(
+      bunBin,
+      ['-e', "process.stdout.write(Bun.markdown.html(require('fs').readFileSync(0,'utf8')))"],
+      { input: markdown, encoding: 'utf8', maxBuffer: 50 * 1024 * 1024 }
+    );
+    if (res.error || res.status !== 0 || !res.stdout) return null;
+    body = res.stdout;
+  } catch {
+    return null;
+  }
+
+  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const name = esc(fileName);
+
+  const rootVars = dark
+    ? ':root { --bg: #0a0a0c; --text: #e4e4e7; --muted: #71717a; --link: #60a5fa; --code-bg: #1e1e22; --border: #2a2a2e; --pre-bg: #161618; }'
+    : ":root { --bg: #fff; --text: #1a1d21; --muted: #6b7280; --link: #2563eb; --code-bg: #f4f4f5; --border: #e2e5e9; --pre-bg: #fafafa; }\n  @media (prefers-color-scheme: dark) { :root { --bg: #0a0a0c; --text: #e4e4e7; --muted: #71717a; --link: #60a5fa; --code-bg: #1e1e22; --border: #2a2a2e; --pre-bg: #161618; } }";
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${name}</title>
+<style>
+  ${rootVars}
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+    font-size: 16px; line-height: 1.7; color: var(--text); background: var(--bg);
+    max-width: 720px; margin: 0 auto; padding: 3rem 1.5rem;
+    -webkit-font-smoothing: antialiased; }
+  h1, h2, h3, h4 { margin: 1.75em 0 .5em; line-height: 1.3; }
+  h1 { font-size: 1.75rem; } h2 { font-size: 1.375rem; } h3 { font-size: 1.125rem; }
+  p, ul, ol, blockquote, pre, table { margin: 0 0 1em; }
+  a { color: var(--link); text-decoration: none; } a:hover { text-decoration: underline; }
+  code { font-family: 'SF Mono', 'Fira Code', monospace; font-size: .875em; background: var(--code-bg); padding: 2px 5px; border-radius: 4px; }
+  pre { background: var(--pre-bg); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; overflow-x: auto; }
+  pre code { background: none; padding: 0; font-size: .8125rem; }
+  blockquote { border-left: 3px solid var(--border); padding-left: 1rem; color: var(--muted); }
+  img { max-width: 100%; border-radius: 6px; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { padding: .5rem .75rem; border: 1px solid var(--border); text-align: left; font-size: .875rem; }
+  th { font-weight: 600; background: var(--pre-bg); }
+  hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+  @page { margin: 0.5in; }
+  @media print {
+    body { background: #fff; color: #1a1a1a; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    pre { background: #f4f4f5; box-shadow: inset 0 0 0 1000px #f4f4f5; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    code { background: #f0f0f2; box-shadow: inset 0 0 0 1000px #f0f0f2; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    pre code { background: none; box-shadow: none; }
+    th { background: #f6f8fa; box-shadow: inset 0 0 0 1000px #f6f8fa; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    a { color: #2563eb; }
+  }
+</style>
+</head>
+<body>${body}</body>
+</html>`;
+}
+
+module.exports = { generatePrintHtml, generateMarkdownHtml, walkDir, getLang, defaultExclude, skipDirs };

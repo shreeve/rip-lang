@@ -14,6 +14,67 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'fs'
 import { basename, extname, join, relative } from 'path'
 import { execSync } from 'child_process'
 
+# ==============================================================================
+# Markdown rendering (single-file mode — matches static.rip styling exactly)
+# ==============================================================================
+
+def escMdHtml(s)
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
+def renderSingleMarkdown(filePath, forceDark = false)
+  md = readFileSync filePath, 'utf-8'
+  body = Bun.markdown.html(md)
+  name = escMdHtml basename(filePath)
+
+  # Force-dark override: apply dark values at :root and drop the media query.
+  # Otherwise: use the exact styling from static.rip (light + prefers-color-scheme).
+  rootVars = if forceDark
+    ':root { --bg: #0a0a0c; --text: #e4e4e7; --muted: #71717a; --link: #60a5fa; --code-bg: #1e1e22; --border: #2a2a2e; --pre-bg: #161618; }'
+  else
+    ':root { --bg: #fff; --text: #1a1d21; --muted: #6b7280; --link: #2563eb; --code-bg: #f4f4f5; --border: #e2e5e9; --pre-bg: #fafafa; }\n  @media (prefers-color-scheme: dark) { :root { --bg: #0a0a0c; --text: #e4e4e7; --muted: #71717a; --link: #60a5fa; --code-bg: #1e1e22; --border: #2a2a2e; --pre-bg: #161618; } }'
+
+  """
+  <!DOCTYPE html>
+  <html lang="en">
+  <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>#{name}</title>
+  <style>
+  #{rootVars}
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+    font-size: 16px; line-height: 1.7; color: var(--text); background: var(--bg);
+    max-width: 720px; margin: 0 auto; padding: 3rem 1.5rem;
+    -webkit-font-smoothing: antialiased; }
+  h1, h2, h3, h4 { margin: 1.75em 0 .5em; line-height: 1.3; }
+  h1 { font-size: 1.75rem; } h2 { font-size: 1.375rem; } h3 { font-size: 1.125rem; }
+  p, ul, ol, blockquote, pre, table { margin: 0 0 1em; }
+  a { color: var(--link); text-decoration: none; } a:hover { text-decoration: underline; }
+  code { font-family: 'SF Mono', 'Fira Code', monospace; font-size: .875em; background: var(--code-bg); padding: 2px 5px; border-radius: 4px; }
+  pre { background: var(--pre-bg); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; overflow-x: auto; }
+  pre code { background: none; padding: 0; font-size: .8125rem; }
+  blockquote { border-left: 3px solid var(--border); padding-left: 1rem; color: var(--muted); }
+  img { max-width: 100%; border-radius: 6px; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { padding: .5rem .75rem; border: 1px solid var(--border); text-align: left; font-size: .875rem; }
+  th { font-weight: 600; background: var(--pre-bg); }
+  hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+  @page { margin: 0.5in; }
+  @media print {
+    body { background: #fff; color: #1a1a1a; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    pre { background: #f4f4f5; box-shadow: inset 0 0 0 1000px #f4f4f5; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    code { background: #f0f0f2; box-shadow: inset 0 0 0 1000px #f0f0f2; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    pre code { background: none; box-shadow: none; }
+    th { background: #f6f8fa; box-shadow: inset 0 0 0 1000px #f6f8fa; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    a { color: #2563eb; }
+  }
+  </style>
+  </head>
+  <body>#{body}</body>
+  </html>
+  """
+
 # Register Rip language with highlight.js
 hljs.registerLanguage 'rip', ripLanguage
 
@@ -120,6 +181,14 @@ if allFiles.length is 0
   process.exit(1)
 
 console.log "#{allFiles.length} file#{if allFiles.length > 1 then 's' else ''}"
+
+# ==============================================================================
+# Single-markdown-file fast path: render the document instead of its source
+# ==============================================================================
+
+singleMarkdown = allFiles.length is 1 and allFiles[0].toLowerCase().endsWith('.md')
+
+console.log "  #{allFiles[0]} (rendering as markdown)" if singleMarkdown
 
 # ==============================================================================
 # Language detection
@@ -436,6 +505,10 @@ html = """
   </body>
   </html>
   """
+
+# Single-markdown-file mode: replace the source-view HTML with a rendered document.
+# (The source-view was built above and is discarded here — negligible work for 1 file.)
+html = renderSingleMarkdown allFiles[0], dark if singleMarkdown
 
 # ==============================================================================
 # Serve and open browser
