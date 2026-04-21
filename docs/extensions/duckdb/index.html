@@ -47,13 +47,17 @@ LOAD ripdb;</code></pre>
   session before <code>LOAD</code>.
 </p>
 
-<h2>Supported platforms</h2>
+<h2>Currently published</h2>
 <div class="platforms">
   <code>osx_arm64</code>
-  <code>osx_amd64</code>
   <code>linux_amd64</code>
-  <code>linux_arm64</code>
 </div>
+<p>
+  Additional platforms (<code>osx_amd64</code>, <code>linux_arm64</code>,
+  <code>wasm_*</code>, <code>windows_*</code>) are supported by the build
+  system but not currently published. They'll reappear here once enabled in
+  the <a href="https://github.com/shreeve/rip-lang/blob/main/.github/workflows/ripdb-extension.yml">CI matrix</a>.
+</p>
 
 <h2>URL layout</h2>
 <p>Each build is published under the path DuckDB expects for a custom repository:</p>
