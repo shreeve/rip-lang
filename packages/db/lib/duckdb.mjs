@@ -488,8 +488,13 @@ class Connection {
         const logType = lib.duckdb_column_logical_type(rp, BigInt(c));
         if (logType) {
           if (type === DUCKDB_TYPE.DECIMAL) {
+            col.decimalWidth = lib.duckdb_decimal_width(logType);
             col.decimalScale = lib.duckdb_decimal_scale(logType);
             col.decimalInternalType = lib.duckdb_decimal_internal_type(logType);
+            // Inline precision into typeName so downstream consumers
+            // (serializer, catalog schema JSON) get the full DECIMAL(W,S)
+            // string without having to look up width/scale separately.
+            col.typeName = `DECIMAL(${col.decimalWidth},${col.decimalScale})`;
           } else if (type === DUCKDB_TYPE.ENUM) {
             col.enumInternalType = lib.duckdb_enum_internal_type(logType);
             const dictSize = lib.duckdb_enum_dictionary_size(logType);

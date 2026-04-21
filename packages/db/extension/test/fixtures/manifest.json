@@ -1,0 +1,1175 @@
+{
+  "fixtureFormatVersion": 1,
+  "encoderSource": "packages/db/lib/duckdb-binary.rip",
+  "generatedBy": "packages/db/extension/scripts/capture-fixtures.rip",
+  "success": [
+    {
+      "path": "types/boolean/all_valid",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/boolean/all_null",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/boolean/alternating",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/boolean/every_64th",
+      "rows": 192,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/boolean/partial_word",
+      "rows": 67,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/boolean/bursty",
+      "rows": 77,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/tinyint/all_valid",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/tinyint/all_null",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/tinyint/alternating",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/tinyint/every_64th",
+      "rows": 192,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/tinyint/partial_word",
+      "rows": 67,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/tinyint/bursty",
+      "rows": 77,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/utinyint/all_valid",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/utinyint/all_null",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/utinyint/alternating",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/utinyint/every_64th",
+      "rows": 192,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/utinyint/partial_word",
+      "rows": 67,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/utinyint/bursty",
+      "rows": 77,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/smallint/all_valid",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/smallint/all_null",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/smallint/alternating",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/smallint/every_64th",
+      "rows": 192,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/smallint/partial_word",
+      "rows": 67,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/smallint/bursty",
+      "rows": 77,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/usmallint/all_valid",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/usmallint/all_null",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/usmallint/alternating",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/usmallint/every_64th",
+      "rows": 192,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/usmallint/partial_word",
+      "rows": 67,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/usmallint/bursty",
+      "rows": 77,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/integer/all_valid",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/integer/all_null",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/integer/alternating",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/integer/every_64th",
+      "rows": 192,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/integer/partial_word",
+      "rows": 67,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/integer/bursty",
+      "rows": 77,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/uinteger/all_valid",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/uinteger/all_null",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/uinteger/alternating",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/uinteger/every_64th",
+      "rows": 192,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/uinteger/partial_word",
+      "rows": 67,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/uinteger/bursty",
+      "rows": 77,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/bigint/all_valid",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/bigint/all_null",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/bigint/alternating",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/bigint/every_64th",
+      "rows": 192,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/bigint/partial_word",
+      "rows": 67,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/bigint/bursty",
+      "rows": 77,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/ubigint/all_valid",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/ubigint/all_null",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/ubigint/alternating",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/ubigint/every_64th",
+      "rows": 192,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/ubigint/partial_word",
+      "rows": 67,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/ubigint/bursty",
+      "rows": 77,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/hugeint/all_valid",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/hugeint/all_null",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/hugeint/alternating",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/hugeint/every_64th",
+      "rows": 192,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/hugeint/partial_word",
+      "rows": 67,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/hugeint/bursty",
+      "rows": 77,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/uhugeint/all_valid",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/uhugeint/all_null",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/uhugeint/alternating",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/uhugeint/every_64th",
+      "rows": 192,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/uhugeint/partial_word",
+      "rows": 67,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/uhugeint/bursty",
+      "rows": 77,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/float/all_valid",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/float/all_null",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/float/alternating",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/float/every_64th",
+      "rows": 192,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/float/partial_word",
+      "rows": 67,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/float/bursty",
+      "rows": 77,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/double/all_valid",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/double/all_null",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/double/alternating",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/double/every_64th",
+      "rows": 192,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/double/partial_word",
+      "rows": 67,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/double/bursty",
+      "rows": 77,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/date/all_valid",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/date/all_null",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/date/alternating",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/date/every_64th",
+      "rows": 192,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/date/partial_word",
+      "rows": 67,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/date/bursty",
+      "rows": 77,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/time/all_valid",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/time/all_null",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/time/alternating",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/time/every_64th",
+      "rows": 192,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/time/partial_word",
+      "rows": 67,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/time/bursty",
+      "rows": 77,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/time_ns/all_valid",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/time_ns/all_null",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/time_ns/alternating",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/time_ns/every_64th",
+      "rows": 192,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/time_ns/partial_word",
+      "rows": 67,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/time_ns/bursty",
+      "rows": 77,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/time_tz/all_valid",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/time_tz/all_null",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/time_tz/alternating",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/time_tz/every_64th",
+      "rows": 192,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/time_tz/partial_word",
+      "rows": 67,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/time_tz/bursty",
+      "rows": 77,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/timestamp/all_valid",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/timestamp/all_null",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/timestamp/alternating",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/timestamp/every_64th",
+      "rows": 192,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/timestamp/partial_word",
+      "rows": 67,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/timestamp/bursty",
+      "rows": 77,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/timestamp_sec/all_valid",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/timestamp_sec/all_null",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/timestamp_sec/alternating",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/timestamp_sec/every_64th",
+      "rows": 192,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/timestamp_sec/partial_word",
+      "rows": 67,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/timestamp_sec/bursty",
+      "rows": 77,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/timestamp_ms/all_valid",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/timestamp_ms/all_null",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/timestamp_ms/alternating",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/timestamp_ms/every_64th",
+      "rows": 192,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/timestamp_ms/partial_word",
+      "rows": 67,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/timestamp_ms/bursty",
+      "rows": 77,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/timestamp_ns/all_valid",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/timestamp_ns/all_null",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/timestamp_ns/alternating",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/timestamp_ns/every_64th",
+      "rows": 192,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/timestamp_ns/partial_word",
+      "rows": 67,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/timestamp_ns/bursty",
+      "rows": 77,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/timestamp_tz/all_valid",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/timestamp_tz/all_null",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/timestamp_tz/alternating",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/timestamp_tz/every_64th",
+      "rows": 192,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/timestamp_tz/partial_word",
+      "rows": 67,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/timestamp_tz/bursty",
+      "rows": 77,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/interval/all_valid",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/interval/all_null",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/interval/alternating",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/interval/every_64th",
+      "rows": 192,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/interval/partial_word",
+      "rows": 67,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/interval/bursty",
+      "rows": 77,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/uuid/all_valid",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/uuid/all_null",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/uuid/alternating",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/uuid/every_64th",
+      "rows": 192,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/uuid/partial_word",
+      "rows": 67,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/uuid/bursty",
+      "rows": 77,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/varchar/all_valid",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/varchar/all_null",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/varchar/alternating",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/varchar/every_64th",
+      "rows": 192,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/varchar/partial_word",
+      "rows": 67,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/varchar/bursty",
+      "rows": 77,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/char/all_valid",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/char/all_null",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/char/alternating",
+      "rows": 64,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/char/every_64th",
+      "rows": 192,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/char/partial_word",
+      "rows": 67,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/char/bursty",
+      "rows": 77,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/boolean/edges",
+      "rows": 5,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/tinyint/edges",
+      "rows": 6,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/utinyint/edges",
+      "rows": 6,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/smallint/edges",
+      "rows": 6,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/usmallint/edges",
+      "rows": 6,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/integer/edges",
+      "rows": 6,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/uinteger/edges",
+      "rows": 6,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/bigint/edges",
+      "rows": 6,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/ubigint/edges",
+      "rows": 6,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/hugeint/edges",
+      "rows": 6,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/uhugeint/edges",
+      "rows": 6,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/float/edges",
+      "rows": 7,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/double/edges",
+      "rows": 8,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/date/edges",
+      "rows": 6,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/time/edges",
+      "rows": 4,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/time_ns/edges",
+      "rows": 4,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/time_tz/edges",
+      "rows": 5,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/timestamp/edges",
+      "rows": 6,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/timestamp_sec/edges",
+      "rows": 5,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/timestamp_ms/edges",
+      "rows": 5,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/timestamp_ns/edges",
+      "rows": 5,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/timestamp_tz/edges",
+      "rows": 5,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/interval/edges",
+      "rows": 5,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/uuid/edges",
+      "rows": 5,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/varchar/edges",
+      "rows": 8,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "types/char/edges",
+      "rows": 5,
+      "cols": 1,
+      "chunkSize": null
+    },
+    {
+      "path": "envelopes/error_simple",
+      "error": "Simple error message"
+    },
+    {
+      "path": "envelopes/error_unicode",
+      "error": "unicode error ∆ 🦆 table \"x\" not found"
+    },
+    {
+      "path": "envelopes/error_empty",
+      "error": ""
+    },
+    {
+      "path": "envelopes/zero_rows_multi_col",
+      "rows": 0,
+      "cols": 3,
+      "chunkSize": null
+    },
+    {
+      "path": "envelopes/zero_rows_zero_cols",
+      "rows": 0,
+      "cols": 0,
+      "chunkSize": null
+    },
+    {
+      "path": "envelopes/multichunk_128_cs64",
+      "rows": 128,
+      "cols": 1,
+      "chunkSize": 64
+    },
+    {
+      "path": "envelopes/multichunk_130_cs64",
+      "rows": 130,
+      "cols": 1,
+      "chunkSize": 64
+    },
+    {
+      "path": "envelopes/multichunk_mixed_cs33",
+      "rows": 100,
+      "cols": 4,
+      "chunkSize": 33
+    }
+  ],
+  "malformed": [
+    {
+      "path": "malformed/truncated_end",
+      "expectedError": "unexpected end of buffer"
+    },
+    {
+      "path": "malformed/truncated_mid",
+      "expectedError": "unexpected end of buffer"
+    },
+    {
+      "path": "malformed/empty",
+      "expectedError": "unexpected end of buffer"
+    },
+    {
+      "path": "malformed/bad_end_marker",
+      "expectedError": "expected end marker"
+    },
+    {
+      "path": "malformed/unknown_type_id",
+      "expectedError": "unknown typeId"
+    },
+    {
+      "path": "malformed/string_len_overrun",
+      "expectedError": "string length"
+    },
+    {
+      "path": "malformed/bitmap_too_short",
+      "expectedError": "bitmap"
+    },
+    {
+      "path": "malformed/bad_success_byte",
+      "expectedError": "boolean"
+    }
+  ]
+}

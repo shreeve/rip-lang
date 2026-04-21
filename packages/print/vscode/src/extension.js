@@ -9,7 +9,7 @@ const vscode = require('vscode');
 const path   = require('path');
 const fs     = require('fs');
 const os     = require('os');
-const { generatePrintHtml, walkDir } = require('./printer');
+const { generatePrintHtml, generateMarkdownHtml, walkDir } = require('./printer');
 
 // ============================================================================
 // Activation
@@ -108,7 +108,15 @@ function openInBrowser(files) {
   const dark = themeKind === vscode.ColorThemeKind.Dark
             || themeKind === vscode.ColorThemeKind.HighContrastDark;
 
-  const html = generatePrintHtml(files, { dark });
+  // Single markdown file: render as a document via Bun, not as highlighted source.
+  // Falls through to generatePrintHtml if Bun isn't available or the spawn fails.
+  let html = null;
+  if (files.length === 1 && files[0].file.toLowerCase().endsWith('.md')) {
+    html = generateMarkdownHtml(files[0].file, files[0].code, { dark });
+  }
+  if (html === null) {
+    html = generatePrintHtml(files, { dark });
+  }
 
   // Write to temp file and open in default browser
   const tmpFile = path.join(os.tmpdir(), `rip-print-${Date.now()}.html`);

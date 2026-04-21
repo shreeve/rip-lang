@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ripdb — DuckDB extension repository</title>
+<style>
+  :root { --bg: #fff; --text: #1a1d21; --muted: #6b7280; --link: #2563eb; --code-bg: #f4f4f5; --border: #e2e5e9; --pre-bg: #fafafa; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0a0a0c; --text: #e4e4e7; --muted: #71717a; --link: #60a5fa; --code-bg: #1e1e22; --border: #2a2a2e; --pre-bg: #161618; }
+  }
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif;
+    font-size: 16px; line-height: 1.7; color: var(--text); background: var(--bg);
+    max-width: 720px; margin: 0 auto; padding: 3rem 1.5rem; }
+  h1 { font-size: 1.75rem; margin-bottom: .25em; letter-spacing: -0.02em; }
+  h2 { font-size: 1.25rem; margin: 2em 0 .5em; }
+  p, ul, ol, pre { margin: 0 0 1em; }
+  p.lead { color: var(--muted); font-size: 1.0625rem; margin-bottom: 2rem; }
+  code { font-family: 'SF Mono', 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+    font-size: .875em; background: var(--code-bg); padding: 2px 5px; border-radius: 4px; }
+  pre { background: var(--pre-bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: 1rem 1.25rem; overflow-x: auto; }
+  pre code { background: none; padding: 0; font-size: .8125rem; line-height: 1.6; }
+  a { color: var(--link); text-decoration: none; } a:hover { text-decoration: underline; }
+  .platforms { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: .5rem; margin: 1em 0; }
+  .platforms code { display: block; text-align: center; padding: .5em; }
+  footer { margin-top: 4rem; padding-top: 1.5rem; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: .875rem; }
+</style>
+</head>
+<body>
+
+<h1>ripdb</h1>
+<p class="lead">A custom DuckDB extension repository. Install <code>ripdb</code> directly from this URL.</p>
+
+<h2>Install</h2>
+<pre><code>SET allow_unsigned_extensions = true;
+INSTALL ripdb FROM 'PAGE_BASE_URL';
+LOAD ripdb;</code></pre>
+
+<p>
+  Custom-repository extensions are unsigned, so you need the
+  <code>allow_unsigned_extensions</code> setting — pass it on startup
+  (<code>duckdb -unsigned</code>) or <code>SET</code> it at the top of your
+  session before <code>LOAD</code>.
+</p>
+
+<h2>Supported platforms</h2>
+<div class="platforms">
+  <code>osx_arm64</code>
+  <code>osx_amd64</code>
+  <code>linux_amd64</code>
+  <code>linux_arm64</code>
+</div>
+
+<h2>URL layout</h2>
+<p>Each build is published under the path DuckDB expects for a custom repository:</p>
+<pre><code>&lt;base&gt;/&lt;duckdb_version&gt;/&lt;platform&gt;/ripdb.duckdb_extension.gz</code></pre>
+<p>See <a href="manifest.json"><code>manifest.json</code></a> for the exact set of builds available on this instance.</p>
+
+<h2>Verify before installing</h2>
+<p>DuckDB builds the full URL itself from your client's version and platform. You can sanity-check that the right build is published — no DuckDB session needed:</p>
+<pre><code># 1) Your DuckDB version
+duckdb -csv -noheader -c "SELECT library_version FROM pragma_version()"
+# → v1.5.2
+
+# 2) Your platform
+duckdb -csv -noheader -c "PRAGMA platform"
+# → osx_arm64
+
+# 3) Is a build published for that (version, platform) pair?
+curl -I "PAGE_BASE_URL/v1.5.2/osx_arm64/ripdb.duckdb_extension.gz"
+# → HTTP/2 200 means INSTALL will succeed
+# → HTTP/2 404 means that cell isn't published yet — run the workflow
+#   with your DuckDB version as input.</code></pre>
+
+<footer>
+  Built by the
+  <a href="https://github.com/shreeve/rip-lang/actions/workflows/ripdb-extension.yml">ripdb-extension workflow</a>
+  in the <a href="https://github.com/shreeve/rip-lang">rip-lang</a> repository.
+</footer>
+
+<script>
+  // Rewrite PAGE_BASE_URL to the actual origin at load time — works on any fork.
+  document.querySelectorAll('pre code').forEach(el => {
+    el.textContent = el.textContent.replace(/PAGE_BASE_URL/g, location.origin + location.pathname.replace(/\/$/, ''));
+  });
+</script>
+
+</body>
+</html>

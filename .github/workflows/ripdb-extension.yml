@@ -1,0 +1,313 @@
+# =============================================================================
+# Build & publish the ripdb DuckDB extension
+#
+# Produces a DuckDB "custom repository" tree under docs/extensions/duckdb/,
+# which the existing GitHub Pages site (main /docs) exposes at:
+#
+#   https://<owner>.github.io/<repo>/extensions/duckdb/<duckdb_version>/<platform>/ripdb.duckdb_extension.gz
+#
+# End-users install with:
+#
+#   SET allow_unsigned_extensions = true;
+#   INSTALL ripdb FROM 'https://<owner>.github.io/<repo>/extensions/duckdb';
+#   LOAD ripdb;
+#
+# Triggers:
+#   * push to main or an allow-listed dev branch (extension source paths only)
+#   * pushed tag  ripdb-extension-v*  (fixed release — ripdb_version is
+#     derived from the tag name, not from workflow defaults)
+#   * manual (workflow_dispatch) — override DuckDB / ripdb versions
+#
+# Branch protection:
+#   The `publish` job pushes to main as github-actions[bot]. If you enable
+#   branch protection on main, that bot account must be on the allow-list
+#   for direct pushes, or this job's push step will fail. Change the
+#   `if:` guard on `publish:` below to route elsewhere if needed.
+# =============================================================================
+
+name: Build ripdb DuckDB extension
+
+on:
+  # One unified push trigger. Branch filters + tag filters are OR'd; GitHub
+  # evaluates `paths:` only for branch pushes (tags have no base to diff
+  # against), which is exactly what we want: tag pushes always run.
+  push:
+    branches: [main, rip-duck, pages-extensions]
+    tags:
+      - 'ripdb-extension-v*'
+    paths:
+      - 'packages/db/extension/**'
+      - '.github/workflows/ripdb-extension.yml'
+  workflow_dispatch:
+    inputs:
+      duckdb_version:
+        description: 'DuckDB release tag (e.g. v1.5.2)'
+        default: 'v1.5.2'
+        required: true
+      ripdb_version:
+        description: 'ripdb extension version (e.g. 0.1.0)'
+        default: '0.1.0'
+        required: true
+
+permissions:
+  contents: write   # needed for the auto-commit to main
+
+jobs:
+  # --------------------------------------------------------------------------
+  # 0) Resolve versions — centralises the "which version are we publishing?"
+  # logic so tag-triggered runs get the right ripdb_version automatically.
+  # --------------------------------------------------------------------------
+  prep:
+    name: Resolve versions
+    runs-on: ubuntu-latest
+    outputs:
+      duckdb_version: ${{ steps.versions.outputs.duckdb }}
+      ripdb_version:  ${{ steps.versions.outputs.ripdb }}
+    steps:
+      - id: versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          duckdb="${{ inputs.duckdb_version || 'v1.5.2' }}"
+          ripdb="${{ inputs.ripdb_version || '0.1.0' }}"
+          if [[ "${GITHUB_REF_TYPE:-}" == "tag" && "${GITHUB_REF_NAME:-}" =~ ^ripdb-extension-v(.+)$ ]]; then
+            ripdb="${BASH_REMATCH[1]}"
+            echo "Derived ripdb_version=${ripdb} from tag ${GITHUB_REF_NAME}"
+          fi
+          echo "duckdb=${duckdb}" >> "$GITHUB_OUTPUT"
+          echo "ripdb=${ripdb}"   >> "$GITHUB_OUTPUT"
+          echo "→ duckdb=${duckdb}, ripdb=${ripdb}"
+
+  # --------------------------------------------------------------------------
+  # 1) Matrix build — one .duckdb_extension per platform
+  # --------------------------------------------------------------------------
+  build:
+    name: Build (${{ matrix.platform }})
+    needs: prep
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-latest,     platform: osx_arm64,    duckdb_zip: osx-universal, cross: false }
+          # osx_amd64 cross-compiles from the always-available macos-latest
+          # (arm64) runner — `-arch x86_64` produces a fat-free Intel binary,
+          # and the macos-13 Intel runner pool is too scarce to rely on.
+          - { os: macos-latest,     platform: osx_amd64,    duckdb_zip: osx-universal, cross: true  }
+          - { os: ubuntu-latest,    platform: linux_amd64,  duckdb_zip: linux-amd64,   cross: false }
+          - { os: ubuntu-24.04-arm, platform: linux_arm64,  duckdb_zip: linux-arm64,   cross: false }
+    runs-on: ${{ matrix.os }}
+    env:
+      DUCKDB_VERSION:    ${{ needs.prep.outputs.duckdb_version }}
+      RIPDB_EXT_VERSION: ${{ needs.prep.outputs.ripdb_version }}
+      # For cross-compiled matrix entries, feed the platform through
+      # build-loadable.sh explicitly (instead of asking the host's duckdb
+      # what platform we're on), and set the right -arch flag.
+      OVERRIDE_PLATFORM: ${{ matrix.cross && matrix.platform || '' }}
+      CXXFLAGS:          ${{ matrix.cross && (matrix.platform == 'osx_amd64' && '-arch x86_64' || matrix.platform == 'osx_arm64' && '-arch arm64' || '') || '' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ----- DuckDB source (for C++ headers only; not built) ---------------
+      - name: Cache DuckDB source
+        id: duckdb-src-cache
+        uses: actions/cache@v4
+        with:
+          path: misc/duckdb-src
+          key: duckdb-src-${{ needs.prep.outputs.duckdb_version }}
+
+      - name: Clone DuckDB (${{ needs.prep.outputs.duckdb_version }})
+        if: steps.duckdb-src-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          git clone --depth 1 --branch "$DUCKDB_VERSION" \
+            https://github.com/duckdb/duckdb.git misc/duckdb-src
+
+      # ----- DuckDB CLI binary (for PRAGMA platform + version extraction) --
+      - name: Download DuckDB CLI for ${{ matrix.platform }}
+        shell: bash
+        run: |
+          mkdir -p misc/duckdb-bin
+          url="https://github.com/duckdb/duckdb/releases/download/${DUCKDB_VERSION}/duckdb_cli-${{ matrix.duckdb_zip }}.zip"
+          echo "Downloading $url"
+          curl -fL -o /tmp/duckdb_cli.zip "$url"
+          unzip -o /tmp/duckdb_cli.zip -d misc/duckdb-bin
+          chmod +x misc/duckdb-bin/duckdb
+          misc/duckdb-bin/duckdb -csv -noheader -c 'SELECT library_version, source_id FROM pragma_version()'
+          misc/duckdb-bin/duckdb -csv -noheader -c 'PRAGMA platform'
+
+      - name: Build ripdb extension
+        shell: bash
+        env:
+          DUCKDB_SRC:   ${{ github.workspace }}/misc/duckdb-src
+          DUCKDB_BUILD: ${{ github.workspace }}/misc/duckdb-bin
+        run: |
+          cd packages/db/extension
+          chmod +x build-loadable.sh
+          ./build-loadable.sh
+
+      # ----- Smoke validation ----------------------------------------------
+      - name: Verify build output
+        shell: bash
+        run: |
+          set -euo pipefail
+          f="packages/db/extension/ripdb.duckdb_extension"
+          # 1) Binary architecture matches the matrix target. For cross-builds
+          #    (osx_amd64 on an arm64 runner) this is the only check that
+          #    actually validates what we shipped — the host PRAGMA platform
+          #    reports the runner's arch, not the target.
+          info=$(file "$f")
+          echo "file: $info"
+          case "${{ matrix.platform }}" in
+            osx_arm64)    want_arch="arm64" ;;
+            osx_amd64)    want_arch="x86_64" ;;
+            linux_amd64)  want_arch="x86-64" ;;
+            linux_arm64)  want_arch="aarch64" ;;
+            *)            want_arch="${{ matrix.platform }}" ;;
+          esac
+          if ! echo "$info" | grep -q "$want_arch"; then
+            echo "::error::Binary arch mismatch: expected '$want_arch' for ${{ matrix.platform }}, got '$info'"
+            exit 1
+          fi
+          # 2) Non-trivial size
+          size=$(wc -c < "$f")
+          if [[ "$size" -lt 100000 ]]; then
+            echo "::error::Extension is suspiciously small ($size bytes)"; exit 1
+          fi
+          # 3) DuckDB metadata footer magic present
+          if ! tail -c 1024 "$f" | grep -aq 'duckdb_signature'; then
+            echo "::error::Metadata footer magic string not found"; exit 1
+          fi
+          # 4) Footer's embedded platform string matches matrix.platform
+          if ! tail -c 1024 "$f" | grep -aq "${{ matrix.platform }}"; then
+            echo "::error::Footer platform string '${{ matrix.platform }}' not found in metadata"
+            exit 1
+          fi
+          echo "ok — $f (${size} bytes, arch=${want_arch}, platform=${{ matrix.platform }})"
+
+      - name: Gzip extension
+        shell: bash
+        run: |
+          cd packages/db/extension
+          gzip -n -9 -c ripdb.duckdb_extension > ripdb.duckdb_extension.gz
+          ls -la ripdb.duckdb_extension*
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ripdb-${{ matrix.platform }}
+          path: packages/db/extension/ripdb.duckdb_extension.gz
+          if-no-files-found: error
+          retention-days: 30
+
+  # --------------------------------------------------------------------------
+  # 2) Publish — commit the assembled tree into docs/extensions/duckdb/
+  # --------------------------------------------------------------------------
+  publish:
+    name: Publish to docs/extensions/duckdb
+    needs: [prep, build]
+    runs-on: ubuntu-latest
+    # Only write to docs/ on main, on tags, or when manually dispatched.
+    # Feature-branch pushes build + validate but never commit — that lets us
+    # iterate on this workflow without racing the bot's auto-commits.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.ref == 'refs/heads/main' ||
+      github.ref_type == 'tag'
+    # Serialize only the commit-back-to-main step, so builds can run in
+    # parallel across different publisher workflows.
+    concurrency:
+      group: extensions-publish
+      cancel-in-progress: false
+    env:
+      DUCKDB_VERSION:    ${{ needs.prep.outputs.duckdb_version }}
+      RIPDB_EXT_VERSION: ${{ needs.prep.outputs.ripdb_version }}
+
+    steps:
+      - name: Checkout main (so we can commit back)
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Download all platform artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: ripdb-*
+          # Each artifact lands in its own artifacts/ripdb-<plat>/ subdir —
+          # this is the default and what the next step expects.
+          merge-multiple: false
+
+      - name: Stage built files under docs/extensions/duckdb
+        shell: bash
+        run: |
+          set -euo pipefail
+          for plat in osx_arm64 osx_amd64 linux_amd64 linux_arm64; do
+            src="artifacts/ripdb-${plat}/ripdb.duckdb_extension.gz"
+            if [[ ! -f "$src" ]]; then
+              echo "::warning::Missing build artifact for $plat — skipping"
+              continue
+            fi
+            dest="docs/extensions/duckdb/${DUCKDB_VERSION}/${plat}"
+            mkdir -p "$dest"
+            cp "$src" "$dest/ripdb.duckdb_extension.gz"
+            echo "staged: ${DUCKDB_VERSION}/${plat}/ripdb.duckdb_extension.gz ($(wc -c < "$src") bytes)"
+          done
+
+      - name: Refresh manifest & landing page
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p docs/extensions/duckdb
+          cp packages/db/extension/scripts/pages-index.html \
+             docs/extensions/duckdb/index.html
+          python3 - <<'PY'
+          import json, os, glob, datetime
+          root = "docs/extensions/duckdb"
+          versions = {}
+          for p in sorted(glob.glob(f"{root}/v*/")):
+              v = os.path.basename(p.rstrip('/'))
+              plats = sorted(os.path.basename(d.rstrip('/'))
+                             for d in glob.glob(f"{p}*/"))
+              versions[v] = plats
+          m = {
+              "extension":  "ripdb",
+              "base_url":   "https://shreeve.github.io/rip-lang/extensions/duckdb",
+              "updated_at": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "versions":   versions,
+          }
+          with open(f"{root}/manifest.json", "w") as f:
+              json.dump(m, f, indent=2)
+          print(json.dumps(m, indent=2))
+          PY
+
+      - name: Commit & push if changed
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add docs/extensions/duckdb
+          if git diff --cached --quiet; then
+            echo "No changes — nothing to publish."
+            exit 0
+          fi
+
+          msg="pages: publish ripdb ${RIPDB_EXT_VERSION} for DuckDB ${DUCKDB_VERSION}"
+          git commit -m "$msg"
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then
+              echo "pushed on attempt $attempt"
+              exit 0
+            fi
+            echo "push failed — rebasing and retrying (attempt $attempt)"
+            git pull --rebase origin main
+          done
+          echo "::error::Failed to push after 3 attempts"
+          exit 1

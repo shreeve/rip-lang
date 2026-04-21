@@ -161,7 +161,7 @@ export class BinarySerializer
 # Result serializers
 # ==============================================================================
 
-export serializeSuccessResult = (columns, rows) ->
+export serializeSuccessResult = (columns, rows, opts = {}) ->
   s = new BinarySerializer()
 
   # field_100: success = true
@@ -171,10 +171,24 @@ export serializeSuccessResult = (columns, rows) ->
   s.writeFieldId 101
   serializeColumnNamesAndTypes s, columns
 
-  # field_102: list<DataChunk> (one chunk with all rows)
-  s.writeFieldId 102
-  s.writeVarInt 1
-  serializeDataChunk s, columns, rows
+  # field_102: list<DataChunk>. Default is a single chunk with all rows.
+  # When opts.chunkSize is provided (fixture capture / tests), split rows
+  # into chunks of that size (last chunk may be smaller). This keeps live
+  # UI clients on the existing single-chunk shape while letting the decoder
+  # test harness exercise multi-chunk framing against the real encoder.
+  chunkSize = opts.chunkSize
+  if chunkSize? and chunkSize > 0 and rows.length > chunkSize
+    chunkCount = Math.ceil(rows.length / chunkSize)
+    s.writeFieldId 102
+    s.writeVarInt chunkCount
+    for i in [0...chunkCount]
+      start = i * chunkSize
+      slice = rows.slice start, start + chunkSize
+      serializeDataChunk s, columns, slice
+  else
+    s.writeFieldId 102
+    s.writeVarInt 1
+    serializeDataChunk s, columns, rows
 
   s.writeEndMarker()
   s.toArrayBuffer()
@@ -200,6 +214,31 @@ export serializeTokenizeResult = (tokens) ->
 # Internal serializers
 # ==============================================================================
 
+# Parse DuckDB DECIMAL(W,S) type string into {width, scale}. Returns
+# null for non-DECIMAL types. Accepted forms:
+#   DECIMAL(10,2)     → {width: 10, scale: 2}
+#   DECIMAL(10, 2)    → same (whitespace tolerant)
+#   DECIMAL           → {width: 18, scale: 3} (DuckDB's default)
+parseDecimalWidthScale = (typeName) ->
+  return null unless typeName
+  upper = String(typeName).toUpperCase()
+  return null unless upper.startsWith 'DECIMAL'
+  if m = upper.match /^DECIMAL\s*\(\s*(\d+)\s*,\s*(\d+)\s*\)/
+    { width: parseInt(m[1], 10), scale: parseInt(m[2], 10) }
+  else
+    # DuckDB's "DECIMAL" with no parens uses (18, 3). Matches its
+    # DecimalType::DEFAULT_WIDTH / DEFAULT_SCALE.
+    { width: 18, scale: 3 }
+
+# Physical storage width for a DECIMAL(W,S) — mirrors DuckDB's internal
+# layout so the wire values can be memcpy'd directly into the client's
+# decimal vector. Bytes per value.
+decimalPhysicalBytes = (width) ->
+  if width <=  4 then 2
+  else if width <=  9 then 4
+  else if width <= 18 then 8
+  else                     16
+
 serializeColumnNamesAndTypes = (s, columns) ->
   s.writeList 100, columns, (s, col) -> s.writeString col.name
   s.writeList 101, columns, (s, col) -> serializeType s, col
@@ -210,7 +249,16 @@ serializeType = (s, column) ->
   s.writeFieldId 100
   s.writeUint8 typeId
   s.writeFieldId 101
-  s.writeUint8 0  # null (no extra type info for basic types)
+  s.writeUint8 0  # legacy "extra" placeholder (kept for wire-layout stability)
+  # DECIMAL carries its precision as additional type fields. Decoders
+  # that don't recognize them should treat them as protocol violations,
+  # not silent data (the type record is authoritative for on-wire width).
+  if typeId is LogicalTypeId.DECIMAL
+    ws = parseDecimalWidthScale(column.type) ?? { width: 18, scale: 3 }
+    s.writeFieldId 102
+    s.writeUint8 ws.width
+    s.writeFieldId 103
+    s.writeUint8 ws.scale
   s.writeEndMarker()
 
 serializeDataChunk = (s, columns, rows) ->
@@ -423,6 +471,21 @@ serializeVector = (s, column, values) ->
         dv.setBigUint64 i * 16 + 8, hi, true
       s.writeData bytes
 
+    when LogicalTypeId.DECIMAL
+      # Native DECIMAL wire encoding. Unscaled integer in the physical
+      # width DuckDB uses for this precision:
+      #   width  1..4  → int16    (2 bytes)
+      #   width  5..9  → int32    (4 bytes)
+      #   width 10..18 → int64    (8 bytes)
+      #   width 19..38 → int128   (16 bytes, lo+hi)
+      # Value 12.34 for DECIMAL(10,2) is sent as the integer 1234.
+      ws = parseDecimalWidthScale(column.type) ?? { width: 18, scale: 3 }
+      physBytes = decimalPhysicalBytes(ws.width)
+      s.writeFieldId 102
+      bytes = new Uint8Array(values.length * physBytes)
+      serializeDecimalBytes bytes, values, ws.scale, physBytes
+      s.writeData bytes
+
     else
       s.writeList 102, values, (s, v) -> s.writeString stringify(v)
 
@@ -537,7 +600,17 @@ timestampToNanos = (value) ->
   else 0n
 
 parseInterval = (value) ->
-  return { months: 0, days: 0, micros: 0n } unless value
+  return { months: 0, days: 0, micros: 0n } unless value?
+  # Accept a raw `{months, days, micros}` object as a pass-through — useful
+  # for callers (fixture generators, tests) that want to construct intervals
+  # with values the text form can't express (e.g., mixed signs across fields,
+  # INT32_MIN days). Objects are detected via presence of the `months` key.
+  if typeof value is 'object' and not (value instanceof Date) and 'months' of value
+    return {
+      months: value.months ?? 0
+      days:   value.days   ?? 0
+      micros: BigInt (value.micros ?? 0)
+    }
   str = String value
   months = 0
   days = 0
@@ -565,6 +638,64 @@ stringToUhugeint = (value) ->
   lo = big & mask64
   hi = (big >> 64n) & mask64
   { lo, hi }
+
+# Pack a vector of DECIMAL values into a pre-allocated byte buffer,
+# little-endian, in the physical width indicated by `physBytes`
+# (2/4/8/16 for int16/32/64/128 respectively). Two's-complement for
+# the 128-bit path.
+DECIMAL_MASK64 = (1n << 64n) - 1n
+serializeDecimalBytes = (bytes, values, scale, physBytes) ->
+  dv = new DataView(bytes.buffer)
+  for v, i in values
+    unscaled = decimalToUnscaledBigInt(v, scale)
+    pos = i * physBytes
+    if physBytes is 2
+      dv.setInt16 pos, Number(unscaled), true
+    else if physBytes is 4
+      dv.setInt32 pos, Number(unscaled), true
+    else if physBytes is 8
+      dv.setBigInt64 pos, unscaled, true
+    else
+      lo = unscaled & DECIMAL_MASK64
+      hi = unscaled >> 64n
+      dv.setBigUint64(pos,     lo, true)
+      dv.setBigInt64(pos + 8, hi, true)
+  return
+
+# Convert a DECIMAL-typed JS value into the unscaled BigInt DuckDB stores
+# on the wire. Accepts numbers, strings, BigInts. Null / undefined → 0.
+# Rounds half-away-from-zero on the last scale digit to match DuckDB's
+# text → DECIMAL cast behavior.
+decimalToUnscaledBigInt = (value, scale) ->
+  return 0n unless value?
+  # Already-scaled BigInt: trust the caller (e.g. tests passing literal
+  # unscaled values via { bigint: true }).
+  return value if typeof value is 'bigint'
+  str = String(value).trim()
+  return 0n if str is ''
+  neg = false
+  if str[0] is '-'
+    neg = true
+    str = str.slice 1
+  else if str[0] is '+'
+    str = str.slice 1
+  # Split on decimal point. Extract integer and fractional parts.
+  parts = str.split '.'
+  intPart  = parts[0] or '0'
+  fracPart = parts[1] or ''
+  # Truncate or pad fractional part to exactly `scale` digits. If there
+  # are more fractional digits than `scale`, round half-away-from-zero
+  # based on the first dropped digit.
+  round = false
+  if fracPart.length > scale
+    nextDigit = fracPart.charCodeAt(scale) - 48
+    round = nextDigit >= 5
+    fracPart = fracPart.slice 0, scale
+  else if fracPart.length < scale
+    fracPart = fracPart + '0'.repeat(scale - fracPart.length)
+  unscaled = BigInt(intPart + fracPart)
+  unscaled += 1n if round
+  if neg then -unscaled else unscaled
 
 mapDuckDBType = (typeName) ->
   return LogicalTypeId.VARCHAR unless typeName
@@ -606,7 +737,7 @@ mapDuckDBType = (typeName) ->
     when 'ARRAY' then LogicalTypeId.VARCHAR
     when 'JSON', 'VARIANT' then LogicalTypeId.VARCHAR
     else
-      if upper.startsWith 'DECIMAL' then LogicalTypeId.VARCHAR
+      if upper.startsWith 'DECIMAL' then LogicalTypeId.DECIMAL
       else if upper.startsWith 'VARCHAR' then LogicalTypeId.VARCHAR
       else if upper.startsWith 'CHAR' then LogicalTypeId.CHAR
       else LogicalTypeId.VARCHAR

@@ -1,0 +1,8 @@
+ENVELOPE SUCCESS
+CHUNKS 1
+ROWS 0
+COLS 3
+COL 0 typeId=13 name_hex=6964
+COL 1 typeId=25 name_hex=6e616d65
+COL 2 typeId=19 name_hex=7473
+CHUNK 0 rows=0

@@ -298,7 +298,17 @@ post '/ddb/run' ->
         val = row[col.name]
         if val is undefined then null else val
 
-    binaryResponse serializeSuccessResult colInfo, arrayRows
+    # Optional per-request chunking hint. Lets clients (e.g. the ripdb
+    # extension's fixture capture) exercise the multi-chunk wire path against
+    # the live server without changing default single-chunk behavior for the
+    # DuckDB UI.
+    chunkHeader = @req.header('x-rip-db-chunk-size')
+    opts = {}
+    if chunkHeader
+      cs = parseInt chunkHeader, 10
+      opts.chunkSize = cs if cs > 0
+
+    binaryResponse serializeSuccessResult colInfo, arrayRows, opts
 
   catch err
     msg = err?.message or 'Unknown error'

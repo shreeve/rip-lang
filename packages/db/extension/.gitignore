@@ -1,0 +1,9 @@
+# Build outputs
+decoder_test
+decoder_test.dSYM/
+extension_test
+extension_test.dSYM/
+ripdb.duckdb_extension
+*.o
+*.dSYM/
+

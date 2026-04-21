@@ -60,6 +60,34 @@ rip -c file.rip                # Compile to JavaScript
 
 ---
 
+## Extensions
+
+Pre-built binaries and VS Code / Cursor extensions are published via GitHub Pages — see the [extensions hub](https://shreeve.github.io/rip-lang/extensions/) for details.
+
+**`ripdb`** — DuckDB extension that exposes a rip-db server as a first-class attached database:
+
+```sql
+SET allow_unsigned_extensions = true;
+INSTALL ripdb FROM 'https://shreeve.github.io/rip-lang/extensions/duckdb';
+LOAD ripdb;
+```
+
+**`rip-lang.print`** — syntax-highlighted source printer for VS Code / Cursor:
+
+```bash
+curl -LO https://shreeve.github.io/rip-lang/extensions/vscode/print/print-latest.vsix
+cursor --install-extension ./print-latest.vsix
+```
+
+**`rip-lang.rip`** — Rip language support for VS Code / Cursor:
+
+```bash
+curl -LO https://shreeve.github.io/rip-lang/extensions/vscode/rip/rip-latest.vsix
+cursor --install-extension ./rip-latest.vsix
+```
+
+---
+
 ## Language
 
 ### Functions & Classes

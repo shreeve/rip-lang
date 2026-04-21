@@ -86,6 +86,19 @@ squares = (x * x for x in [1..10]) # Comprehensions
 str =~ /Hello, (\w+)/              # Regex match
 ```
 
+## Installation
+
+### Direct download (newest published build)
+
+```sh
+curl -LO https://shreeve.github.io/rip-lang/extensions/vscode/rip/rip-latest.vsix
+cursor --install-extension ./rip-latest.vsix
+# or: code --install-extension ./rip-latest.vsix
+```
+
+Previous versions and a one-click install page live at
+<https://shreeve.github.io/rip-lang/extensions/vscode/rip/>.
+
 ## Requirements
 
 [Bun](https://bun.sh/) must be installed — the language server runs under Bun for fast startup.
