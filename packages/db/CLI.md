@@ -284,11 +284,11 @@ For JSON-shaped data, DuckDB's scalar JSON operators (`->>`, `json_extract`, `js
 
 ## Compatibility and trust assumptions
 
-- **DuckDB version coupling.** The extension is ABI-coupled to a specific DuckDB build. Rebuild after each DuckDB upgrade. `build-loadable.sh` writes a 534-byte metadata footer (`magic="4"`, `platform`, `duckdb_version`, `extension_version`, `abi_type=CPP`); a mismatched CLI refuses to `LOAD` the extension with a version-mismatch error.
+- **DuckDB version coupling.** The extension is ABI-coupled to a specific DuckDB build. Rebuild after each DuckDB upgrade. DuckDB's `build_loadable_extension()` CMake macro (via `duckdb/extension-ci-tools`) writes a 534-byte metadata footer (`magic="4"`, `platform`, `duckdb_version`, `extension_version`, `abi_type=CPP`); a mismatched CLI refuses to `LOAD` the extension with a version-mismatch error.
 - **rip-db version coupling.** ripdb and rip-db are developed together. Mismatched wire versions surface as `DecodeError` from the first `POST /ddb/run`.
 - **Transport.** Plain HTTP. No auth. No TLS. Designed for localhost or trusted-network use. Running ripdb against an untrusted network endpoint is out of scope.
 - **Extension signing.** The built `.duckdb_extension` file is unsigned. The stock CLI requires `-unsigned` (or an equivalent setting) to `LOAD` it. Users in environments that require signed extensions need a private signing key.
-- **Supported platforms.** Whatever DuckDB itself supports as a C++ extension target. Build scripts are written for macOS and Linux.
+- **Supported platforms.** Whatever DuckDB itself supports as a C++ extension target. CI currently publishes `osx_arm64` and `linux_amd64` at `docs/extensions/duckdb/<duckdb_version>/<platform>/`; `osx_amd64`, `linux_arm64`, `wasm_*`, and `windows_*` targets are supported by the build system but not currently enabled in CI (drop them from `exclude_archs` in the workflow to re-enable).
 
 ---
 
@@ -296,9 +296,29 @@ For JSON-shaped data, DuckDB's scalar JSON operators (`->>`, `json_extract`, `js
 
 ### Prerequisites
 
-1. Clone DuckDB at a compatible commit into `misc/duckdb/`.
-2. `cd misc/duckdb && make release` — produces `libduckdb.dylib` (or `.so` / `.dll`) and the `duckdb` CLI.
-3. For tab completion to include remote tables, ensure the DuckDB build includes the in-tree `autocomplete` extension. `packages/db/extension/scripts/duckdb-extension-config.cmake` is a drop-in for `misc/duckdb/extension/extension_config_local.cmake` that enables it.
+The extension is built in-tree against DuckDB using the
+[`duckdb/extension-ci-tools`](https://github.com/duckdb/extension-ci-tools)
+template — the same infrastructure DuckDB itself uses for `postgres_scanner`,
+`sqlite_scanner`, etc. Submodules at the repo root pin both DuckDB and the
+CI-tools helpers:
+
+```
+/
+├── duckdb/                   # pinned DuckDB source (v1.5.2)
+├── extension-ci-tools/       # pinned build helpers (v1.5-variegata)
+├── Makefile                  # wraps duckdb_extension.Makefile from the submodule
+├── CMakeLists.txt            # symlinked to the extension's CMakeLists.txt
+├── extension_config.cmake    # points at packages/db/extension/
+├── vcpkg.json                # extension dependencies
+└── packages/db/extension/
+    └── CMakeLists.txt        # the actual extension CMake project
+```
+
+Initialize the submodules once on a fresh clone:
+
+```bash
+git submodule update --init --recursive
+```
 
 ### In-process test driver (fast iteration)
 
@@ -312,12 +332,34 @@ Links `decoder.cpp + ripdb.cpp + extension_test.cpp` against `libduckdb`, calls 
 
 ### Loadable `.duckdb_extension`
 
+The canonical loadable build is driven from the **repo root** via the
+`Makefile` that wraps DuckDB's `duckdb_extension.Makefile`:
+
 ```bash
-cd packages/db/extension
-./build-loadable.sh
+# From the repo root:
+make release
+# → build/release/duckdb                                      (stock CLI, built once)
+# → build/release/repository/v1.5.2/<platform>/ripdb.duckdb_extension
 ```
 
-Produces `ripdb.duckdb_extension`: a shared object plus a 534-byte DuckDB metadata footer (22-byte WASM prefix + 256-byte metadata + 256-byte signature). This is the file the stock CLI `LOAD`s.
+Behind the scenes this invokes DuckDB's `build_loadable_extension()` CMake
+macro with `EXTENSION_STATIC_BUILD=1`, which compiles the extension
+**in-tree** against DuckDB sources and statically links the DuckDB
+internals the extension depends on (catalog base classes, vector system,
+etc.) into the extension's own `.so`. This is the supported path for
+extensions that subclass internal C++ catalog classes and avoids the
+cross-DSO symbol-visibility issues that break out-of-tree loadable
+extensions on Linux.
+
+The resulting `.duckdb_extension` carries a 534-byte DuckDB metadata footer
+(22-byte WASM prefix + 256-byte metadata + 256-byte signature) that the
+stock CLI validates before `LOAD`.
+
+Legacy scripts `build-extension.sh` / `build-loadable.sh` in
+`packages/db/extension/` predate the extension-template pivot and remain
+for fast, DuckDB-free iteration on `decoder.cpp`; they are **not** the
+path for producing a releasable `.duckdb_extension` — use `make release`
+instead.
 
 ### rip-db smoke server
 
