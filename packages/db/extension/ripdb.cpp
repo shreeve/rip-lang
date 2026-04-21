@@ -840,18 +840,17 @@ public:
 
 	TableFunction GetScanFunction(ClientContext &, unique_ptr<FunctionData> &bind_data) override;
 
-	// CatalogEntry base-class overrides. Required on Linux where DuckDB is
-	// built with -fvisibility=hidden and the methods below are not
-	// DUCKDB_API-tagged in the public headers, so they're not exported by
-	// the runtime. Without these overrides, our vtable slots resolve to the
-	// hidden base symbols and dlopen fails with `undefined symbol`.
-	//
-	// Only the CatalogEntry base methods that aren't further overridden by
-	// TableCatalogEntry / StandardEntry (those classes DO export via
-	// DUCKDB_API or inline-in-header) need handling here.
+	// Base-class overrides. Required even for some DUCKDB_API-tagged methods
+	// because DuckDB's release binary doesn't reliably export them on Linux
+	// or native-arm64 macOS (the annotation in the header does not guarantee
+	// presence in the shipped .so/.dylib — LTO / visibility / version-script
+	// strip can drop them). Without these overrides, our vtable slots resolve
+	// to hidden host symbols and dlopen fails with `undefined symbol`.
 	//
 	// Semantics mirror the DuckDB defaults: write paths throw (ripdb is a
-	// read-only view of a remote database); pure-notification paths no-op.
+	// read-only view of a remote database); pure-notification paths no-op;
+	// GetInfo re-implements TableCatalogEntry::GetInfo inline so DESCRIBE
+	// and friends keep working.
 	unique_ptr<CatalogEntry> AlterEntry(ClientContext &, AlterInfo &) override {
 		throw PermissionException("ripdb: remote tables are read-only — ALTER is not supported");
 	}
@@ -866,6 +865,27 @@ public:
 	void Verify(Catalog &) override {}
 	void Rollback(CatalogEntry &) override {}
 	void OnDrop() override {}
+
+	// Inline reimplementation of TableCatalogEntry::GetInfo — identical to
+	// the stock DuckDB impl but lives in our .so so no external symbol is
+	// needed. All accessed members (columns/constraints via protected,
+	// catalog/schema/name/comment/tags/temporary/internal/dependencies via
+	// public) resolve to the base-class member layout at compile time.
+	unique_ptr<CreateInfo> GetInfo() const override {
+		auto result = make_uniq<CreateTableInfo>();
+		result->catalog = catalog.GetName();
+		result->schema = schema.name;
+		result->table = name;
+		result->columns = columns.Copy();
+		result->constraints.reserve(constraints.size());
+		result->dependencies = dependencies;
+		for (auto &c : constraints) result->constraints.emplace_back(c->Copy());
+		result->temporary = temporary;
+		result->internal = internal;
+		result->comment = comment;
+		result->tags = tags;
+		return std::move(result);
+	}
 
 private:
 	string remote_name_;
