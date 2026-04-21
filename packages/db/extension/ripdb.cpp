@@ -840,6 +840,18 @@ public:
 
 	TableFunction GetScanFunction(ClientContext &, unique_ptr<FunctionData> &bind_data) override;
 
+	// AlterEntry overrides. Required on Linux where DuckDB is built with
+	// -fvisibility=hidden and CatalogEntry::AlterEntry (not DUCKDB_API-tagged)
+	// isn't exported by the runtime. Without these overrides, our vtable's
+	// AlterEntry slot resolves to the hidden base symbol and dlopen fails.
+	// Read-only by policy — ripdb is a view of a remote database.
+	unique_ptr<CatalogEntry> AlterEntry(ClientContext &, AlterInfo &) override {
+		throw PermissionException("ripdb: remote tables are read-only — ALTER is not supported");
+	}
+	unique_ptr<CatalogEntry> AlterEntry(CatalogTransaction, AlterInfo &) override {
+		throw PermissionException("ripdb: remote tables are read-only — ALTER is not supported");
+	}
+
 private:
 	string remote_name_;
 };
@@ -894,6 +906,14 @@ public:
 
 	void DropEntry(ClientContext &, DropInfo &) override                                                 { ReadOnly("DROP"); }
 	void Alter(CatalogTransaction, AlterInfo &) override                                                 { ReadOnly("ALTER"); }
+
+	// AlterEntry overrides (on CatalogEntry, not SchemaCatalogEntry::Alter).
+	// Same motivation as in RipTableEntry — Linux DuckDB is built with
+	// -fvisibility=hidden and these base-class methods aren't DUCKDB_API-
+	// exported, so we must supply our own implementations to keep the vtable
+	// self-contained. No-op / throw semantics: ripdb is read-only.
+	unique_ptr<CatalogEntry> AlterEntry(ClientContext &, AlterInfo &) override         { ReadOnly("ALTER"); }
+	unique_ptr<CatalogEntry> AlterEntry(CatalogTransaction, AlterInfo &) override      { ReadOnly("ALTER"); }
 
 private:
 	case_insensitive_map_t<unique_ptr<RipTableEntry>> tables_;
