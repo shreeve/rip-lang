@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>rip-lang.rip — VS Code / Cursor extension</title>
+<style>
+  :root { --bg:#fff; --text:#1a1d21; --muted:#6b7280; --link:#2563eb; --code-bg:#f4f4f5; --border:#e2e5e9; --pre-bg:#fafafa; }
+  @media (prefers-color-scheme:dark) { :root { --bg:#0a0a0c; --text:#e4e4e7; --muted:#71717a; --link:#60a5fa; --code-bg:#1e1e22; --border:#2a2a2e; --pre-bg:#161618; } }
+  *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',system-ui,sans-serif; font-size:16px; line-height:1.7; color:var(--text); background:var(--bg); max-width:720px; margin:0 auto; padding:3rem 1.5rem; }
+  h1 { font-size:1.75rem; letter-spacing:-0.02em; }
+  h2 { font-size:1.25rem; margin:2em 0 .5em; }
+  p, pre, ul { margin:0 0 1em; } ul { padding-left:1.25rem; }
+  code { font-family:'SF Mono',ui-monospace,monospace; font-size:.875em; background:var(--code-bg); padding:2px 5px; border-radius:4px; }
+  pre { background:var(--pre-bg); border:1px solid var(--border); border-radius:8px; padding:1rem 1.25rem; overflow-x:auto; }
+  pre code { background:none; padding:0; font-size:.8125rem; line-height:1.6; }
+  a { color:var(--link); text-decoration:none; } a:hover { text-decoration:underline; }
+  footer { margin-top:3rem; padding-top:1.5rem; border-top:1px solid var(--border); color:var(--muted); font-size:.875rem; }
+</style>
+</head>
+<body>
+<h1>rip-lang.rip</h1>
+<p>VS Code / Cursor extension, published from the <a href="https://github.com/shreeve/rip-lang">rip-lang</a> monorepo.</p>
+
+<h2>Install (latest)</h2>
+<pre><code>curl -LO https://shreeve.github.io/rip-lang/extensions/vscode/rip/rip-latest.vsix
+cursor --install-extension ./rip-latest.vsix
+
+# VS Code:
+# code --install-extension ./rip-latest.vsix</code></pre>
+
+<h2>Versions</h2>
+<ul>
+    <li><a href="./rip-0.5.15.vsix"><code>rip-0.5.15.vsix</code></a></li>
+</ul>
+
+<footer>← <a href="../../">all rip-lang extensions</a></footer>
+</body>
+</html>
