@@ -409,10 +409,41 @@ static std::vector<Cell> decode_interval(Reader& r, uint32_t row_count, const st
 }
 
 // ---------------------------------------------------------------------------
+// DECIMAL decoder. DuckDB's internal physical layout depends on precision:
+//   width  1..4  → int16  (2 bytes)
+//   width  5..9  → int32  (4 bytes)
+//   width 10..18 → int64  (8 bytes)
+//   width 19..38 → int128 (16 bytes, lo+hi)
+// The value on the wire is the unscaled signed integer. We emit the same
+// Cell tag variants used by the underlying integer width, and the
+// ColumnInfo's decimal_width / decimal_scale carry enough metadata for
+// the renderer and the DuckDB-binding layer to reconstruct the original.
+static std::vector<Cell> decode_decimal(Reader& r, uint32_t row_count,
+                                         const std::vector<bool>& valid,
+                                         uint8_t width) {
+  if (width == 0 || width > 38) {
+    throw DecodeError(std::string("decimal width ") + std::to_string((int)width)
+                      + " out of range (must be 1..38)");
+  }
+  if (width <= 4) {
+    return decode_int_fixed<int16_t, Cell::I16>(r, row_count, valid, "vector.decimal.i16");
+  }
+  if (width <= 9) {
+    return decode_int_fixed<int32_t, Cell::I32>(r, row_count, valid, "vector.decimal.i32");
+  }
+  if (width <= 18) {
+    return decode_int_fixed<int64_t, Cell::I64>(r, row_count, valid, "vector.decimal.i64");
+  }
+  // width 19..38: int128 signed (lo unsigned, hi signed), 16 bytes LE.
+  return decode_hugeint(r, row_count, valid);
+}
+
+// ---------------------------------------------------------------------------
 // Vector dispatcher.
 // ---------------------------------------------------------------------------
 
-static std::vector<Cell> decode_vector(Reader& r, TypeId type_id, uint32_t row_count) {
+static std::vector<Cell> decode_vector(Reader& r, const ColumnInfo& col, uint32_t row_count) {
+  TypeId type_id = (TypeId)col.typeId;
   r.expect_field(100, "vector.has_validity");
   uint8_t has_validity = r.u8("vector.has_validity");
   if (has_validity > 1) {
@@ -449,6 +480,7 @@ static std::vector<Cell> decode_vector(Reader& r, TypeId type_id, uint32_t row_c
     case TypeId::HUGEINT:       cells = decode_hugeint (r, row_count, valid); break;
     case TypeId::UHUGEINT:      cells = decode_uhugeint(r, row_count, valid); break;
     case TypeId::INTERVAL:      cells = decode_interval(r, row_count, valid); break;
+    case TypeId::DECIMAL:       cells = decode_decimal (r, row_count, valid, col.decimal_width); break;
     default:
       throw DecodeError(std::string("unknown typeId ") + std::to_string((int)type_id));
   }
@@ -493,49 +525,66 @@ DecodedResult decode(const uint8_t* data, size_t len) {
   if (type_count != name_count) {
     throw DecodeError("column names/types count mismatch");
   }
-  std::vector<uint8_t> type_ids;
-  type_ids.reserve(type_count);
-  for (uint32_t i = 0; i < type_count; ++i) {
+  // Each type record: field 100 (typeId u8) + field 101 (legacy extra u8)
+  // + optional type-specific fields + 0xFFFF end. For DECIMAL, fields
+  // 102 (width u8) + 103 (scale u8) carry precision metadata.
+  out.success.columns.reserve(name_count);
+  for (uint32_t i = 0; i < name_count; ++i) {
+    ColumnInfo c;
+    c.name = names[i];
     r.expect_field(100, "type.id");
-    uint8_t t = r.u8("type.id");
+    c.typeId = r.u8("type.id");
     r.expect_field(101, "type.extra");
     (void)r.u8("type.extra");
-    r.expect_end("type.end");
-    type_ids.push_back(t);
+    // Loop reading any additional type-specific fields until the end
+    // marker. Unknown field ids are protocol errors — we can't skip
+    // them without a length-prefix convention, so rejecting is safe.
+    while (true) {
+      uint16_t fid = r.field_id("type.next_field");
+      if (fid == 0xFFFF) break;
+      if ((TypeId)c.typeId == TypeId::DECIMAL && fid == 102) {
+        c.decimal_width = r.u8("type.decimal_width");
+      } else if ((TypeId)c.typeId == TypeId::DECIMAL && fid == 103) {
+        c.decimal_scale = r.u8("type.decimal_scale");
+      } else {
+        char buf[96];
+        std::snprintf(buf, sizeof(buf),
+                      "unexpected type-record field 0x%04x for typeId %u",
+                      fid, (unsigned)c.typeId);
+        throw DecodeError(buf);
+      }
+    }
+    out.success.columns.push_back(std::move(c));
   }
   r.expect_end("columns.end");
 
   // Pre-validate typeIds against our known set so malformed fixtures reject
-  // before any chunk decoding. (This also matches the "unknown typeId"
-  // rejection expected by malformed/unknown_type_id.reject.)
+  // before any chunk decoding.
   auto is_known_type = [](uint8_t t) {
     switch ((TypeId)t) {
       case TypeId::BOOLEAN:   case TypeId::TINYINT:       case TypeId::SMALLINT:
       case TypeId::INTEGER:   case TypeId::BIGINT:        case TypeId::DATE:
       case TypeId::TIME:      case TypeId::TIMESTAMP_SEC: case TypeId::TIMESTAMP_MS:
-      case TypeId::TIMESTAMP: case TypeId::TIMESTAMP_NS:  case TypeId::FLOAT:
-      case TypeId::DOUBLE:    case TypeId::CHAR:          case TypeId::VARCHAR:
-      case TypeId::INTERVAL:  case TypeId::UTINYINT:      case TypeId::USMALLINT:
-      case TypeId::UINTEGER:  case TypeId::UBIGINT:       case TypeId::TIMESTAMP_TZ:
-      case TypeId::TIME_TZ:   case TypeId::TIME_NS:       case TypeId::HUGEINT:
-      case TypeId::UHUGEINT:  case TypeId::UUID:
+      case TypeId::TIMESTAMP: case TypeId::TIMESTAMP_NS:  case TypeId::DECIMAL:
+      case TypeId::FLOAT:     case TypeId::DOUBLE:        case TypeId::CHAR:
+      case TypeId::VARCHAR:   case TypeId::INTERVAL:      case TypeId::UTINYINT:
+      case TypeId::USMALLINT: case TypeId::UINTEGER:      case TypeId::UBIGINT:
+      case TypeId::TIMESTAMP_TZ: case TypeId::TIME_TZ:    case TypeId::TIME_NS:
+      case TypeId::HUGEINT:   case TypeId::UHUGEINT:      case TypeId::UUID:
         return true;
       default:
         return false;
     }
   };
-  for (uint8_t t : type_ids) {
-    if (!is_known_type(t)) {
-      throw DecodeError(std::string("unknown typeId ") + std::to_string((int)t));
+  for (const auto &c : out.success.columns) {
+    if (!is_known_type(c.typeId)) {
+      throw DecodeError(std::string("unknown typeId ") + std::to_string((int)c.typeId));
     }
-  }
-
-  out.success.columns.reserve(name_count);
-  for (uint32_t i = 0; i < name_count; ++i) {
-    ColumnInfo c;
-    c.typeId = type_ids[i];
-    c.name   = names[i];
-    out.success.columns.push_back(std::move(c));
+    if ((TypeId)c.typeId == TypeId::DECIMAL &&
+        (c.decimal_width == 0 || c.decimal_width > 38)) {
+      throw DecodeError(std::string("decimal width ") + std::to_string((int)c.decimal_width)
+                        + " out of range (must be 1..38)");
+    }
   }
 
   // field 102: list<DataChunk>
@@ -554,7 +603,7 @@ DecodedResult decode(const uint8_t* data, size_t len) {
     }
     ch.columns.reserve(vec_count);
     for (uint32_t vi = 0; vi < vec_count; ++vi) {
-      ch.columns.push_back(decode_vector(r, (TypeId)type_ids[vi], ch.rowCount));
+      ch.columns.push_back(decode_vector(r, out.success.columns[vi], ch.rowCount));
     }
     r.expect_end("chunk.end");
     out.success.chunks.push_back(std::move(ch));
@@ -639,7 +688,31 @@ static std::string render_cell(const Cell& c) {
   return "UNKNOWN";
 }
 
-static std::string render_cell_typed(const Cell& c, uint8_t typeId) {
+static std::string render_cell_typed(const Cell& c, const ColumnInfo& col) {
+  uint8_t typeId = col.typeId;
+  // DECIMAL gets its own rendering — underlying integer is the unscaled
+  // value; we output it together with the declared width/scale so the
+  // golden fixture captures the full on-wire precision.
+  if ((TypeId)typeId == TypeId::DECIMAL && c.tag != Cell::NUL) {
+    char tmp[128];
+    std::string value_str;
+    switch (c.tag) {
+      case Cell::I16:
+      case Cell::I32:
+      case Cell::I64:
+        value_str = std::to_string((long long)c.i64);
+        break;
+      case Cell::I128V:
+        value_str = i128_to_decimal(make_i128(c.i128.lo, c.i128.hi));
+        break;
+      default:
+        return "DEC UNKNOWN_PHYSICAL";
+    }
+    std::snprintf(tmp, sizeof(tmp), "DEC width=%u scale=%u value=%s",
+                  (unsigned)col.decimal_width, (unsigned)col.decimal_scale,
+                  value_str.c_str());
+    return tmp;
+  }
   if (c.tag == Cell::I128V) {
     char tmp[96];
     if ((TypeId)typeId == TypeId::UUID) {
@@ -692,7 +765,15 @@ std::string renderGolden(const DecodedResult& r) {
 
   for (size_t i = 0; i < r.success.columns.size(); ++i) {
     const auto& c = r.success.columns[i];
-    std::snprintf(buf, sizeof(buf), "COL %zu typeId=%u name_hex=", i, (unsigned)c.typeId);
+    if ((TypeId)c.typeId == TypeId::DECIMAL) {
+      std::snprintf(buf, sizeof(buf),
+                    "COL %zu typeId=%u width=%u scale=%u name_hex=",
+                    i, (unsigned)c.typeId, (unsigned)c.decimal_width,
+                    (unsigned)c.decimal_scale);
+    } else {
+      std::snprintf(buf, sizeof(buf), "COL %zu typeId=%u name_hex=",
+                    i, (unsigned)c.typeId);
+    }
     out += buf;
     out += hex_of_bytes(c.name);
     out += "\n";
@@ -706,7 +787,7 @@ std::string renderGolden(const DecodedResult& r) {
       for (size_t col = 0; col < ch.columns.size(); ++col) {
         std::snprintf(buf, sizeof(buf), "CELL %zu %u %zu ", ci, ri, col);
         out += buf;
-        out += render_cell_typed(ch.columns[col][ri], r.success.columns[col].typeId);
+        out += render_cell_typed(ch.columns[col][ri], r.success.columns[col]);
         out += "\n";
       }
     }

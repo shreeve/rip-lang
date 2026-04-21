@@ -539,6 +539,44 @@ struct CatalogTypeResult {
 	LogicalType type = LogicalType::VARCHAR;
 };
 
+// Parse "DECIMAL(w,s)" (whitespace-tolerant) into width + scale. Returns
+// false for a non-DECIMAL string or a syntactically invalid one. Bare
+// "DECIMAL" with no parens matches DuckDB's DEFAULT precision (18, 3).
+static bool ParseDecimalWidthScale(const string &type_upper, uint8_t &width, uint8_t &scale) {
+	if (type_upper.compare(0, 7, "DECIMAL") != 0) return false;
+	// Bare DECIMAL → DuckDB default
+	size_t after = 7;
+	while (after < type_upper.size() && (type_upper[after] == ' ' || type_upper[after] == '\t')) ++after;
+	if (after >= type_upper.size() || type_upper[after] != '(') {
+		width = 18; scale = 3;
+		return true;
+	}
+	++after;  // consume '('
+	auto skip_ws = [&]() {
+		while (after < type_upper.size() && (type_upper[after] == ' ' || type_upper[after] == '\t')) ++after;
+	};
+	auto parse_uint = [&](uint32_t &out) {
+		skip_ws();
+		size_t start = after;
+		while (after < type_upper.size() && type_upper[after] >= '0' && type_upper[after] <= '9') ++after;
+		if (after == start) return false;
+		out = static_cast<uint32_t>(std::strtoul(type_upper.c_str() + start, nullptr, 10));
+		return true;
+	};
+	uint32_t w = 0, s = 0;
+	if (!parse_uint(w)) return false;
+	skip_ws();
+	if (after >= type_upper.size() || type_upper[after] != ',') return false;
+	++after;
+	if (!parse_uint(s)) return false;
+	skip_ws();
+	if (after >= type_upper.size() || type_upper[after] != ')') return false;
+	if (w == 0 || w > 38 || s > w) return false;
+	width = static_cast<uint8_t>(w);
+	scale = static_cast<uint8_t>(s);
+	return true;
+}
+
 static CatalogTypeResult MapToWireType(const string &server_reported_type) {
 	CatalogTypeResult r;
 	string upper = StringUtil::Upper(server_reported_type);
@@ -551,6 +589,19 @@ static CatalogTypeResult MapToWireType(const string &server_reported_type) {
 		r.refuse = true;
 		r.refuse_reason = "BLOB columns are not supported by the ripdb extension in M1 "
 		                  "(server-side stringification is lossy; refused per CLI.md).";
+		return r;
+	}
+
+	// DECIMAL(W,S) — native wire encoding in M2.
+	if (starts_with("DECIMAL")) {
+		uint8_t w = 18, s = 3;
+		if (!ParseDecimalWidthScale(upper, w, s)) {
+			r.refuse = true;
+			r.refuse_reason = StringUtil::Format(
+			    "ripdb: could not parse DECIMAL precision from '%s'", server_reported_type);
+			return r;
+		}
+		r.type = LogicalType::DECIMAL(w, s);
 		return r;
 	}
 
@@ -589,7 +640,9 @@ static CatalogTypeResult MapToWireType(const string &server_reported_type) {
 	// Fallback-to-VARCHAR types (the encoder stringifies these). We expose
 	// VARCHAR in the catalog so the binder/planner doesn't promise a type
 	// the wire can't deliver. See CLI.md "Types that fall back to VARCHAR".
-	if (starts_with("DECIMAL") || upper == "ENUM" || starts_with("LIST(") || upper == "LIST" ||
+	// DECIMAL was on this list in M1; M2.1-follow-up gives it native
+	// encoding (see the DECIMAL branch above), so it's out of this list.
+	if (upper == "ENUM" || starts_with("LIST(") || upper == "LIST" ||
 	    starts_with("STRUCT(") || upper == "STRUCT" || starts_with("MAP(") || upper == "MAP" ||
 	    starts_with("UNION(") || upper == "UNION" || starts_with("ARRAY(") || upper == "ARRAY" ||
 	    upper == "BIT" || upper == "BITSTRING" || upper == "JSON" || upper == "VARIANT" ||
@@ -1383,6 +1436,33 @@ RipScanInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
 		                  static_cast<unsigned long long>(state->remote_projected_ids.size()));
 	}
 
+	// For DECIMAL columns, verify the wire-reported width/scale match
+	// what the catalog handed us. A mismatch means the remote schema
+	// changed between the attach-time DESCRIBE and this scan — easiest
+	// recovery is to refresh and retry (rip_refresh('…')), and we'd
+	// silently mis-write without this check.
+	for (idx_t i = 0; i < state->decoded->success.columns.size(); ++i) {
+		const auto &wire_col = state->decoded->success.columns[i];
+		if (wire_col.typeId != 21 /* DECIMAL */) continue;
+		idx_t remote_idx = state->remote_projected_ids[i];
+		const auto &expected = bd.all_column_types[remote_idx];
+		if (expected.id() != LogicalTypeId::DECIMAL) {
+			throw IOException(
+			    "ripdb: remote returned DECIMAL for column '%s' but catalog expected %s "
+			    "(remote schema may have changed — call rip_refresh to reload)",
+			    bd.all_column_names[remote_idx], expected.ToString());
+		}
+		uint8_t expected_w = DecimalType::GetWidth(expected);
+		uint8_t expected_s = DecimalType::GetScale(expected);
+		if (wire_col.decimal_width != expected_w || wire_col.decimal_scale != expected_s) {
+			throw IOException(
+			    "ripdb: remote returned DECIMAL(%u,%u) for column '%s' but catalog expected "
+			    "DECIMAL(%u,%u) (remote schema may have changed — call rip_refresh to reload)",
+			    (unsigned)wire_col.decimal_width, (unsigned)wire_col.decimal_scale,
+			    bd.all_column_names[remote_idx], (unsigned)expected_w, (unsigned)expected_s);
+		}
+	}
+
 	return std::move(state);
 }
 
@@ -1473,6 +1553,37 @@ static void WriteCellToVector(Vector &vec, idx_t row_idx, const Cell &cell) {
 	case LogicalTypeId::VARCHAR: {
 		auto *out = FlatVector::GetDataMutable<string_t>(vec);
 		out[row_idx] = StringVector::AddString(vec, cell.bytes.data(), cell.bytes.size());
+		break;
+	}
+	case LogicalTypeId::DECIMAL: {
+		// DECIMAL's physical storage depends on width: INT16 / INT32 /
+		// INT64 / INT128. The decoder picked the matching Cell tag
+		// (I16/I32/I64/I128V) based on the wire width, and the catalog
+		// built a LogicalType::DECIMAL(w, s) whose InternalType() lines
+		// up with that — so we dispatch on the physical type and copy
+		// the unscaled integer straight through.
+		auto phys = type.InternalType();
+		switch (phys) {
+		case PhysicalType::INT16:
+			FlatVector::GetDataMutable<int16_t>(vec)[row_idx] = static_cast<int16_t>(cell.i64);
+			break;
+		case PhysicalType::INT32:
+			FlatVector::GetDataMutable<int32_t>(vec)[row_idx] = static_cast<int32_t>(cell.i64);
+			break;
+		case PhysicalType::INT64:
+			FlatVector::GetDataMutable<int64_t>(vec)[row_idx] = cell.i64;
+			break;
+		case PhysicalType::INT128: {
+			auto *out = FlatVector::GetDataMutable<hugeint_t>(vec);
+			out[row_idx].lower = cell.i128.lo;
+			out[row_idx].upper = cell.i128.hi;
+			break;
+		}
+		default:
+			throw NotImplementedException(
+			    "ripdb: DECIMAL physical type %s not supported",
+			    TypeIdToString(phys));
+		}
 		break;
 	}
 	default:

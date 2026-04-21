@@ -311,7 +311,7 @@ int main(int argc, char **argv) {
 	// Read-only guard.
 	++s.total;
 	{
-		auto r = con.Query("INSERT INTO rip.smoke_orders VALUES (999, 1, 'nope', 'USD', 0.0)");
+		auto r = con.Query("INSERT INTO rip.smoke_orders VALUES (999, 1, 'nope', 'USD', 0.0, 0.00)");
 		if (r->HasError() && r->GetError().find("read-only") != std::string::npos) {
 			++s.passed;
 			std::printf("PASS  INSERT rejected with read-only error\n");
@@ -459,6 +459,45 @@ int main(int argc, char **argv) {
 	expect_rows(con,
 	            "SELECT * FROM rip.smoke_orders WHERE amount > 100.0", 12,
 	            s, "M2.1 — DOUBLE filter (not pushed) returns correct rows");
+
+	// Risk 12 — native DECIMAL encoding.
+	// smoke_orders.price is DECIMAL(10,2). Must round-trip with exact
+	// precision, be exposed as DECIMAL in the catalog (not VARCHAR),
+	// and participate in arithmetic and aggregation natively.
+	expect_contains(con,
+	            "SELECT column_type FROM (DESCRIBE rip.smoke_orders) WHERE column_name = 'price'",
+	            "DECIMAL(10,2)",
+	            s, "DECIMAL(10,2) surfaces as DECIMAL in the catalog");
+
+	expect_contains(con,
+	            "SELECT typeof(price) FROM rip.smoke_orders LIMIT 1",
+	            "DECIMAL(10,2)",
+	            s, "typeof(price) is DECIMAL(10,2) at runtime");
+
+	// Exact-value round-trip. i=1 → 1*12.50 = 12.50
+	expect_contains(con,
+	            "SELECT price FROM rip.smoke_orders WHERE id = 1",
+	            "12.50",
+	            s, "DECIMAL round-trips 12.50 exactly");
+
+	// Sum: 12.50 + 25.00 + 37.50 + ... + 250.00 = 12.50 * (1+2+...+20)
+	//      = 12.50 * 210 = 2625.00  — exact because DECIMAL is exact.
+	expect_contains(con,
+	            "SELECT sum(price) FROM rip.smoke_orders",
+	            "2625.00",
+	            s, "DECIMAL sum is exact (2625.00)");
+
+	// DECIMAL arithmetic round-trips DECIMAL, not DOUBLE.
+	expect_contains(con,
+	            "SELECT typeof(sum(price)) FROM rip.smoke_orders",
+	            "DECIMAL",
+	            s, "sum(DECIMAL) stays DECIMAL");
+
+	// Count rows where DECIMAL comparison holds (checks bind-time type
+	// compatibility). price > 100 matches i=9..20 → 12 rows.
+	expect_rows(con,
+	            "SELECT * FROM rip.smoke_orders WHERE price > 100.00", 12,
+	            s, "DECIMAL > literal comparison");
 
 	expect_ok(con, "DETACH rip", s, "DETACH rip after pushdown tests");
 

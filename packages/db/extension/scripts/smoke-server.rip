@@ -165,7 +165,9 @@ await runSql '''
   FROM range(1, 11) AS t(i)
 '''
 
-# 20 orders: 2 per person, mixed amounts and currencies.
+# 20 orders: 2 per person, mixed amounts and currencies. `price` is a
+# DECIMAL(10,2) so M2.1-follow-up's native DECIMAL encoding gets
+# exercised (previously ripdb would surface this as VARCHAR).
 await runSql '''
   CREATE TABLE smoke_orders AS
   SELECT
@@ -173,7 +175,8 @@ await runSql '''
     CAST(((i - 1) % 10) + 1 AS INTEGER)       AS person_id,
     'SKU-' || CAST(i AS VARCHAR)              AS sku,
     CASE WHEN i % 3 = 0 THEN 'EUR' ELSE 'USD' END AS currency,
-    CAST(i * 12.50 AS DOUBLE)                 AS amount
+    CAST(i * 12.50 AS DOUBLE)                 AS amount,
+    CAST(i * 12.50 AS DECIMAL(10,2))          AS price
   FROM range(1, 21) AS t(i)
 '''
 

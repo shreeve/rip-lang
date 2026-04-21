@@ -32,6 +32,7 @@ enum class TypeId : uint8_t {
   TIMESTAMP_MS  = 18,
   TIMESTAMP     = 19,
   TIMESTAMP_NS  = 20,
+  DECIMAL       = 21,
   FLOAT         = 22,
   DOUBLE        = 23,
   CHAR          = 24,
@@ -109,6 +110,11 @@ struct Cell {
 struct ColumnInfo {
   uint8_t     typeId = 0;
   std::string name;
+  // Only set when typeId == DECIMAL. Carries the on-wire precision so
+  // the scan layer can build DuckDB's LogicalType::DECIMAL(w, s) and
+  // the golden-text renderer can format values correctly.
+  uint8_t     decimal_width = 0;
+  uint8_t     decimal_scale = 0;
 };
 
 struct Chunk {
