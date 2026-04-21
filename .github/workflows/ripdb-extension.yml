@@ -208,6 +208,8 @@ jobs:
           # Pick an invoker that can run the binary on this runner + target.
           # Linux entries are always native; osx_arm64 is native; osx_amd64
           # is x86_64 running on an arm64 host, so we need Rosetta.
+          duckdb_bin="${{ github.workspace }}/misc/duckdb-bin/duckdb"
+          invoker=""
           case "${{ matrix.platform }}:${{ matrix.os }}" in
             osx_amd64:macos-*)
               # Install Rosetta if it isn't already; arch -x86_64 invokes it.
@@ -215,18 +217,16 @@ jobs:
                 echo "Installing Rosetta 2 (one-shot)..."
                 sudo softwareupdate --install-rosetta --agree-to-license
               fi
-              invoker=(arch -x86_64)
-              duckdb_bin="${{ github.workspace }}/misc/duckdb-bin/duckdb"
-              ;;
-            *)
-              invoker=()
-              duckdb_bin="${{ github.workspace }}/misc/duckdb-bin/duckdb"
+              invoker="arch -x86_64"
               ;;
           esac
 
           # Capture both stdout and stderr so dlopen errors surface in the log.
+          # `invoker` is a whitespace-delimited prefix (possibly empty) — word-
+          # split intentionally. The `set -u`-safe empty-string expansion
+          # avoids the array-unbound-variable pitfall we hit earlier.
           set +e
-          out=$("${invoker[@]}" "$duckdb_bin" -unsigned \
+          out=$($invoker "$duckdb_bin" -unsigned \
                 -cmd "LOAD '$ext';" \
                 -c "SELECT 'ripdb loaded' AS status;" 2>&1)
           rc=$?

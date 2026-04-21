@@ -866,11 +866,12 @@ public:
 	void Rollback(CatalogEntry &) override {}
 	void OnDrop() override {}
 
-	// Inline reimplementation of TableCatalogEntry::GetInfo — identical to
-	// the stock DuckDB impl but lives in our .so so no external symbol is
-	// needed. All accessed members (columns/constraints via protected,
-	// catalog/schema/name/comment/tags/temporary/internal/dependencies via
-	// public) resolve to the base-class member layout at compile time.
+	// Inline reimplementations of TableCatalogEntry::GetInfo and ::ToSQL —
+	// identical to the stock DuckDB impls but defined in our .so so no
+	// external symbol is needed. All accessed members (columns/constraints
+	// via protected, catalog/schema/name/comment/tags/temporary/internal/
+	// dependencies via public) resolve to the base-class member layout at
+	// compile time, and CreateInfo::ToString is DUCKDB_API so it survives.
 	unique_ptr<CreateInfo> GetInfo() const override {
 		auto result = make_uniq<CreateTableInfo>();
 		result->catalog = catalog.GetName();
@@ -885,6 +886,10 @@ public:
 		result->comment = comment;
 		result->tags = tags;
 		return std::move(result);
+	}
+	string ToSQL() const override {
+		auto create_info = GetInfo();
+		return create_info->ToString();
 	}
 
 private:
