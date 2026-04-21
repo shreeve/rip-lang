@@ -97,6 +97,10 @@
 namespace duckdb {
 namespace ripdb {
 
+// Forward decl so extension_test.cpp can exercise the chunked decoder
+// in isolation without going through a live HTTP server.
+string DechunkForTest(const string &in);
+
 // Pull the Commit-1 decoder types into this namespace so we don't have to
 // fully-qualify `::ripdb::Cell` everywhere. The decoder lives in its own
 // top-level `ripdb` namespace (outside DuckDB); our extension namespace is
@@ -116,6 +120,80 @@ struct RipConnOptions {
 	uint16_t port         = 80;  // derived
 	uint64_t timeout_seconds = 30;
 };
+
+// M2.2 — HTTP/1.1 chunked transfer-encoding decoder. Takes the raw
+// bytes AFTER the HTTP header terminator and returns the dechunked
+// body. Throws IOException on malformed input. Ignores any trailer
+// headers that appear after the final 0-chunk.
+//
+// The grammar per RFC 7230 §4.1:
+//     chunked-body   = *chunk
+//                       last-chunk
+//                       trailer-part
+//                       CRLF
+//     chunk          = chunk-size [ chunk-ext ] CRLF chunk-data CRLF
+//     chunk-size     = 1*HEXDIG
+//     last-chunk     = 1*("0") [ chunk-ext ] CRLF
+//     trailer-part   = *( header-field CRLF )
+//
+// We accept chunk-ext but ignore it. Trailers are skipped entirely —
+// rip-db doesn't emit any today.
+static string DechunkHttpBody(const string &in, const char *verb, const string &path) {
+	string out;
+	out.reserve(in.size());
+	size_t i = 0;
+	while (i < in.size()) {
+		size_t eol = in.find("\r\n", i);
+		if (eol == string::npos) {
+			throw IOException("ripdb: %s %s — malformed chunked response (missing chunk-size CRLF)",
+			                   verb, path);
+		}
+		string size_line = in.substr(i, eol - i);
+		size_t semi = size_line.find(';');
+		if (semi != string::npos) size_line.resize(semi);  // drop chunk-ext
+		// Trim trailing whitespace.
+		while (!size_line.empty() && (size_line.back() == ' ' || size_line.back() == '\t')) {
+			size_line.pop_back();
+		}
+		if (size_line.empty()) {
+			throw IOException("ripdb: %s %s — malformed chunked response (empty chunk size)",
+			                   verb, path);
+		}
+		char *endp = nullptr;
+		errno = 0;
+		unsigned long chunk_size = std::strtoul(size_line.c_str(), &endp, 16);
+		if (errno != 0 || endp == size_line.c_str() || *endp != '\0') {
+			throw IOException("ripdb: %s %s — malformed chunked response (bad chunk size '%s')",
+			                   verb, path, size_line);
+		}
+		i = eol + 2;
+		if (chunk_size == 0) {
+			// Last-chunk: skip trailer-part (if any) up to the terminating
+			// CRLF. We don't validate trailer contents.
+			return out;
+		}
+		if (i + chunk_size > in.size()) {
+			throw IOException("ripdb: %s %s — malformed chunked response (chunk %lu bytes overruns buffer)",
+			                   verb, path, chunk_size);
+		}
+		out.append(in, i, chunk_size);
+		i += chunk_size;
+		if (i + 2 > in.size() || in[i] != '\r' || in[i+1] != '\n') {
+			throw IOException("ripdb: %s %s — malformed chunked response (missing CRLF after chunk data)",
+			                   verb, path);
+		}
+		i += 2;
+	}
+	throw IOException("ripdb: %s %s — malformed chunked response (truncated, no terminating 0-chunk)",
+	                   verb, path);
+}
+
+// Expose the chunked decoder for the in-process unit test — see
+// extension_test.cpp "M2.2 — dechunker". The forward declaration
+// at the top of the namespace makes this visible across TUs.
+string DechunkForTest(const string &in) {
+	return DechunkHttpBody(in, "TEST", "/");
+}
 
 // Random 128-bit hex string, generated once per scan. Used as the
 // X-Rip-DB-Query-Id header so a cancellation can target this specific
@@ -351,9 +429,6 @@ private:
 			raw.append(buf, (size_t)n);
 		}
 
-		// Parse status line + headers. We intentionally reject Transfer-Encoding:
-		// chunked — the rip-db server never emits it, and correct chunked
-		// parsing belongs in a real HTTP client (R15 in CLI.md).
 		size_t header_end = raw.find("\r\n\r\n");
 		if (header_end == string::npos) {
 			throw IOException("ripdb: %s %s — malformed HTTP response (no header terminator)",
@@ -370,25 +445,47 @@ private:
 		}
 		int status = std::atoi(head.c_str() + sp1 + 1);
 
-		// Reject Transfer-Encoding: chunked (explicitly not supported).
 		string lower = StringUtil::Lower(head);
-		if (lower.find("transfer-encoding:") != string::npos &&
-		    lower.find("chunked") != string::npos) {
-			throw IOException(
-			    "ripdb: %s %s — Transfer-Encoding: chunked is not supported by the M1 HTTP client",
-			    verb, path);
-		}
 
-		// Respect Content-Length if present — some servers over-send when the
-		// connection is kept alive; but with Connection: close above it should
-		// match body length regardless.
-		size_t cl_pos = lower.find("content-length:");
-		if (cl_pos != string::npos) {
-			size_t val_start = cl_pos + strlen("content-length:");
-			while (val_start < lower.size() && (lower[val_start] == ' ' || lower[val_start] == '\t')) ++val_start;
-			long claimed = std::strtol(lower.c_str() + val_start, nullptr, 10);
-			if (claimed >= 0 && static_cast<size_t>(claimed) < body.size()) {
-				body.resize(static_cast<size_t>(claimed));
+		// M2.2 — if the response is Transfer-Encoding: chunked, decode
+		// chunk-by-chunk into a single contiguous buffer. This is
+		// protocol-compatibility only: the body is still fully
+		// buffered before the decoder runs. Real per-chunk streaming
+		// is an M3 item gated on a decoder refactor.
+		//
+		// We require EXACT "chunked" as the sole transfer-coding; any
+		// additional coding (gzip, compress, ...) is rejected.
+		size_t te_pos = lower.find("transfer-encoding:");
+		if (te_pos != string::npos) {
+			size_t eol = lower.find("\r\n", te_pos);
+			if (eol == string::npos) eol = lower.size();
+			string te_val = lower.substr(te_pos + strlen("transfer-encoding:"),
+			                             eol - te_pos - strlen("transfer-encoding:"));
+			// Trim leading/trailing whitespace.
+			size_t lo = 0, hi = te_val.size();
+			while (lo < hi && (te_val[lo] == ' ' || te_val[lo] == '\t')) ++lo;
+			while (hi > lo && (te_val[hi-1] == ' ' || te_val[hi-1] == '\t')) --hi;
+			string te_trimmed = te_val.substr(lo, hi - lo);
+			if (te_trimmed == "chunked") {
+				body = DechunkHttpBody(body, verb, path);
+				// Chunked bodies ignore any Content-Length header per RFC 7230.
+			} else {
+				throw IOException(
+				    "ripdb: %s %s — unsupported Transfer-Encoding '%s' (expected 'chunked')",
+				    verb, path, te_trimmed);
+			}
+		} else {
+			// Respect Content-Length if present — some servers over-send
+			// when the connection is kept alive; but with Connection:
+			// close above it should match body length regardless.
+			size_t cl_pos = lower.find("content-length:");
+			if (cl_pos != string::npos) {
+				size_t val_start = cl_pos + strlen("content-length:");
+				while (val_start < lower.size() && (lower[val_start] == ' ' || lower[val_start] == '\t')) ++val_start;
+				long claimed = std::strtol(lower.c_str() + val_start, nullptr, 10);
+				if (claimed >= 0 && static_cast<size_t>(claimed) < body.size()) {
+					body.resize(static_cast<size_t>(claimed));
+				}
 			}
 		}
 
@@ -600,6 +697,16 @@ struct RipScanGlobalState : public GlobalTableFunctionState {
 	// in-flight request. Opaque hex string; server treats as-is.
 	string                    query_id;
 
+	// M2.3 — parallel scan. Deliberately disabled in M2: we have no
+	// generic correctness-preserving partitioning strategy (OFFSET/
+	// LIMIT requires stable ordering and has pathological cost on
+	// large offsets; key-range needs per-table PK metadata we don't
+	// surface; hash-partitioning needs server-side cooperation).
+	// rip-db also serializes /ddb/run requests behind a single DuckDB
+	// instance today, so N-way fanout would only overlap network
+	// latency — marginal on localhost. True parallel scan lands when
+	// either (a) rip-db advertises per-table partition support, or
+	// (b) the remote scan moves to streaming decode with work-stealing.
 	idx_t MaxThreads() const override { return 1; }
 };
 
