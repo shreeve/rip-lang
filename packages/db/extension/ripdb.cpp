@@ -67,6 +67,15 @@
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension_install_info.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
 #include "yyjson.hpp"
 
 #include <cstring>
@@ -471,6 +480,13 @@ struct RipScanBindData : public TableFunctionData {
 	// Full table column metadata in remote-declared order (NOT projected).
 	vector<string>        all_column_names;
 	vector<LogicalType>   all_column_types;
+	// Predicate pushdown (M2.1). Each entry is a parenthesized SQL
+	// fragment, AND-combined at scan time. Populated by
+	// RipPushdownFilter (complex-filter callback) with only the
+	// subset of filters we can translate safely. Filters that don't
+	// translate are left in the caller's filter vector and applied
+	// locally by DuckDB after the scan. See CLI.md §M2.1.
+	vector<string>        pushed_wheres;
 
 	RipScanBindData(string base_url_p, string schema_name_p, string table_name_p,
 	                vector<string> names, vector<LogicalType> types)
@@ -514,11 +530,232 @@ RipScanInitGlobal(ClientContext &context, TableFunctionInitInput &input);
 
 static void RipScanFunction(ClientContext &context, TableFunctionInput &input, DataChunk &output);
 
+// ---------------------------------------------------------------------------
+// M2.1 — predicate pushdown.
+//
+// Conservative safe subset per CLI.md / peer-AI design review (GPT-5.4):
+//   translate:  = != < <= > >=  (column vs literal)
+//               IS NULL, IS NOT NULL
+//               AND of translatable children
+//   skip:       OR (even when all branches translate — partial-OR is unsound;
+//                   full-OR has 3VL NULL risk we don't want to inherit in M2)
+//               LIKE/regex, function calls, column-vs-column,
+//               non-literal RHS, timestamp/float/decimal/date (remote SQL
+//               literal semantics not proven equivalent enough yet)
+//
+// Columns currently pushable: integer family (TINYINT..BIGINT + unsigned),
+// BOOLEAN, VARCHAR. Everything else → we return false, DuckDB applies the
+// filter locally after the scan. This is partial pushdown via the
+// `pushdown_complex_filter` callback — filters we consume are REMOVED
+// from the caller's vector; anything we leave behind DuckDB handles.
+// ---------------------------------------------------------------------------
+
+static bool IsSafePushdownType(const LogicalType &t) {
+	switch (t.id()) {
+	case LogicalTypeId::TINYINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::UTINYINT:
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::BOOLEAN:
+	case LogicalTypeId::VARCHAR:
+		return true;
+	default:
+		return false;
+	}
+}
+
+// Format a Value as a SQL literal safe for inclusion in a WHERE clause.
+// Returns false for unsupported types or NULL constants (comparison
+// against NULL in SQL is 3VL-unsound; DuckDB's IS NULL / IS NOT NULL
+// filters are how NULL-testing actually arrives, and those have their
+// own translation path).
+static bool FormatLiteralSQL(const Value &v, string &out) {
+	if (v.IsNull()) return false;
+	switch (v.type().id()) {
+	case LogicalTypeId::TINYINT:
+		out = std::to_string(v.GetValue<int8_t>());  return true;
+	case LogicalTypeId::SMALLINT:
+		out = std::to_string(v.GetValue<int16_t>()); return true;
+	case LogicalTypeId::INTEGER:
+		out = std::to_string(v.GetValue<int32_t>()); return true;
+	case LogicalTypeId::BIGINT:
+		out = std::to_string(v.GetValue<int64_t>()); return true;
+	case LogicalTypeId::UTINYINT:
+		out = std::to_string(v.GetValue<uint8_t>());  return true;
+	case LogicalTypeId::USMALLINT:
+		out = std::to_string(v.GetValue<uint16_t>()); return true;
+	case LogicalTypeId::UINTEGER:
+		out = std::to_string(v.GetValue<uint32_t>()); return true;
+	case LogicalTypeId::UBIGINT:
+		out = std::to_string(v.GetValue<uint64_t>()); return true;
+	case LogicalTypeId::BOOLEAN:
+		out = v.GetValue<bool>() ? "TRUE" : "FALSE"; return true;
+	case LogicalTypeId::VARCHAR: {
+		auto s = v.GetValue<string>();
+		string escaped;
+		escaped.reserve(s.size() + 2);
+		escaped.push_back('\'');
+		for (char c : s) {
+			if (c == '\'') escaped.append("''");
+			else           escaped.push_back(c);
+		}
+		escaped.push_back('\'');
+		out = std::move(escaped);
+		return true;
+	}
+	default:
+		return false;
+	}
+}
+
+// Map ExpressionType to its SQL comparison operator. Returns nullptr for
+// anything outside our whitelist.
+static const char *ComparisonOp(ExpressionType t) {
+	switch (t) {
+	case ExpressionType::COMPARE_EQUAL:                return "=";
+	case ExpressionType::COMPARE_NOTEQUAL:             return "<>";
+	case ExpressionType::COMPARE_LESSTHAN:             return "<";
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:    return "<=";
+	case ExpressionType::COMPARE_GREATERTHAN:          return ">";
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO: return ">=";
+	default:                                            return nullptr;
+	}
+}
+
+// Resolve a BoundColumnRefExpression's ColumnBinding into a remote-table
+// column index (position in bd.all_column_names). The BoundColumnRef's
+// binding.column_index is a LogicalGet-level projection index, not a
+// table-level one, so we must consult `get` to get the real mapping.
+// Returns UINT64_MAX on any failure (binding not found, out of range, etc.).
+static idx_t ResolveColumnIndex(const LogicalGet &get,
+                                 const BoundColumnRefExpression &col_ref,
+                                 const RipScanBindData &bd) {
+	if (col_ref.binding.table_index != get.table_index) return static_cast<idx_t>(-1);
+	const auto &cidx = get.GetColumnIndex(col_ref.binding);
+	idx_t primary = cidx.GetPrimaryIndex();
+	if (primary >= bd.all_column_names.size()) return static_cast<idx_t>(-1);
+	return primary;
+}
+
+// Walk an Expression tree and translate it to a remote SQL fragment.
+// Returns true if the WHOLE subtree translates; false means this subtree
+// (and anything containing it) must be applied locally.
+static bool TryTranslateExpression(const Expression &expr,
+                                   const LogicalGet &get,
+                                   const RipScanBindData &bd, string &out) {
+	switch (expr.GetExpressionClass()) {
+	case ExpressionClass::BOUND_COMPARISON: {
+		auto &cmp = expr.Cast<BoundComparisonExpression>();
+		const char *op = ComparisonOp(cmp.GetExpressionType());
+		if (!op) return false;
+		const BoundColumnRefExpression *col_ref = nullptr;
+		const BoundConstantExpression  *lit     = nullptr;
+		bool swapped = false;
+		if (cmp.left->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
+		    cmp.right->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+			col_ref = &cmp.left->Cast<BoundColumnRefExpression>();
+			lit     = &cmp.right->Cast<BoundConstantExpression>();
+		} else if (cmp.left->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
+		           cmp.right->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+			col_ref = &cmp.right->Cast<BoundColumnRefExpression>();
+			lit     = &cmp.left->Cast<BoundConstantExpression>();
+			swapped = true;
+		} else {
+			return false;
+		}
+		idx_t cidx = ResolveColumnIndex(get, *col_ref, bd);
+		if (cidx == static_cast<idx_t>(-1)) return false;
+		if (!IsSafePushdownType(bd.all_column_types[cidx])) return false;
+		if (lit->value.type().id() != bd.all_column_types[cidx].id()) return false;
+		string lit_sql;
+		if (!FormatLiteralSQL(lit->value, lit_sql)) return false;
+		string col_sql = QuoteIdentifier(bd.all_column_names[cidx]);
+		const char *emit_op = op;
+		if (swapped) {
+			switch (cmp.GetExpressionType()) {
+			case ExpressionType::COMPARE_LESSTHAN:             emit_op = ">";  break;
+			case ExpressionType::COMPARE_LESSTHANOREQUALTO:    emit_op = ">="; break;
+			case ExpressionType::COMPARE_GREATERTHAN:          emit_op = "<";  break;
+			case ExpressionType::COMPARE_GREATERTHANOREQUALTO: emit_op = "<="; break;
+			default: break;
+			}
+		}
+		out = "(" + col_sql + " " + emit_op + " " + lit_sql + ")";
+		return true;
+	}
+	case ExpressionClass::BOUND_OPERATOR: {
+		auto &op = expr.Cast<BoundOperatorExpression>();
+		auto et = op.GetExpressionType();
+		if ((et != ExpressionType::OPERATOR_IS_NULL &&
+		     et != ExpressionType::OPERATOR_IS_NOT_NULL) || op.children.size() != 1) {
+			return false;
+		}
+		if (op.children[0]->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+			return false;
+		}
+		auto &col_ref = op.children[0]->Cast<BoundColumnRefExpression>();
+		idx_t cidx = ResolveColumnIndex(get, col_ref, bd);
+		if (cidx == static_cast<idx_t>(-1)) return false;
+		// NULL-tests are safe for any column type — the type only
+		// affects value comparison, not presence.
+		string col_sql = QuoteIdentifier(bd.all_column_names[cidx]);
+		out = "(" + col_sql + (et == ExpressionType::OPERATOR_IS_NULL ? " IS NULL)" : " IS NOT NULL)");
+		return true;
+	}
+	case ExpressionClass::BOUND_CONJUNCTION: {
+		auto &conj = expr.Cast<BoundConjunctionExpression>();
+		if (conj.GetExpressionType() != ExpressionType::CONJUNCTION_AND) return false;
+		if (conj.children.empty()) return false;
+		string combined;
+		combined.reserve(64);
+		combined.push_back('(');
+		for (idx_t i = 0; i < conj.children.size(); ++i) {
+			string child_sql;
+			if (!TryTranslateExpression(*conj.children[i], get, bd, child_sql)) return false;
+			if (i) combined.append(" AND ");
+			combined.append(child_sql);
+		}
+		combined.push_back(')');
+		out = std::move(combined);
+		return true;
+	}
+	default:
+		return false;
+	}
+}
+
+static void RipPushdownFilter(ClientContext & /*context*/, LogicalGet &get,
+                               FunctionData *bind_data,
+                               vector<unique_ptr<Expression>> &filters) {
+	if (!bind_data) return;
+	auto &bd = bind_data->Cast<RipScanBindData>();
+
+	// Walk in-place; consume (remove) any top-level filter we can
+	// fully translate. Anything left behind stays in DuckDB's plan
+	// and is applied locally after the scan — this is the correctness
+	// guarantee of the `pushdown_complex_filter` contract.
+	auto it = filters.begin();
+	while (it != filters.end()) {
+		string sql;
+		if (TryTranslateExpression(**it, get, bd, sql)) {
+			bd.pushed_wheres.push_back(std::move(sql));
+			it = filters.erase(it);
+		} else {
+			++it;
+		}
+	}
+}
+
 static TableFunction MakeRipScanFunction() {
 	TableFunction fn("ripdb_scan", {}, RipScanFunction, RipScanBind, RipScanInitGlobal);
-	fn.projection_pushdown = true;
-	fn.filter_pushdown     = false;
-	fn.filter_prune        = false;
+	fn.projection_pushdown     = true;
+	fn.filter_pushdown         = false;  // partial pushdown via complex-filter callback
+	fn.filter_prune            = false;
+	fn.pushdown_complex_filter = RipPushdownFilter;
 	return fn;
 }
 
@@ -871,6 +1108,15 @@ static string BuildRemoteSelect(const RipScanBindData &bd, const vector<idx_t> &
 	sql += QuoteIdentifier(bd.schema_name);
 	sql += '.';
 	sql += QuoteIdentifier(bd.table_name);
+	// M2.1 — pushed predicates. AND-combined; DuckDB handles anything
+	// left in its local plan (the complex-filter callback's contract).
+	if (!bd.pushed_wheres.empty()) {
+		sql += " WHERE ";
+		for (size_t i = 0; i < bd.pushed_wheres.size(); ++i) {
+			if (i) sql += " AND ";
+			sql += bd.pushed_wheres[i];
+		}
+	}
 	return sql;
 }
 

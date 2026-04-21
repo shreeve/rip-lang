@@ -293,6 +293,84 @@ int main(int argc, char **argv) {
 	// DETACH to exercise catalog cleanup.
 	expect_ok(con, "DETACH rip", s, "DETACH rip");
 
+	// M2.1 — predicate pushdown. Conservative subset: = != < <= > >=,
+	// IS NULL, IS NOT NULL, AND of those, on INT / BOOL / VARCHAR.
+	// Everything else falls back to local DuckDB filtering. Results
+	// must be identical either way; we verify by running queries that
+	// exercise each shape and checking row counts.
+	expect_ok(con, "ATTACH '" + std::string(rip_db_url) + "' AS rip (TYPE ripdb)",
+	          s, "re-ATTACH rip for pushdown tests");
+
+	// = on INTEGER (person 5 has 2 orders).
+	expect_rows(con,
+	            "SELECT * FROM rip.smoke_orders WHERE person_id = 5", 2,
+	            s, "M2.1 — person_id = 5 returns 2 rows");
+
+	// != on INTEGER.
+	expect_rows(con,
+	            "SELECT * FROM rip.smoke_orders WHERE person_id != 5", 18,
+	            s, "M2.1 — person_id != 5 returns 18 rows");
+
+	// < / > on INTEGER.
+	expect_rows(con,
+	            "SELECT * FROM rip.smoke_people WHERE id < 5", 4,
+	            s, "M2.1 — id < 5 returns 4 rows");
+	expect_rows(con,
+	            "SELECT * FROM rip.smoke_people WHERE id >= 8", 3,
+	            s, "M2.1 — id >= 8 returns 3 rows");
+
+	// = on VARCHAR (currency EUR appears every 3rd row: i=3,6,9,...,18 → 6 rows).
+	expect_rows(con,
+	            "SELECT * FROM rip.smoke_orders WHERE currency = 'EUR'", 6,
+	            s, "M2.1 — currency = 'EUR' returns 6 rows");
+	expect_rows(con,
+	            "SELECT * FROM rip.smoke_orders WHERE currency = 'USD'", 14,
+	            s, "M2.1 — currency = 'USD' returns 14 rows");
+
+	// IS NOT NULL (complements the existing IS NULL case).
+	expect_rows(con,
+	            "SELECT * FROM rip.smoke_people WHERE birthdate IS NOT NULL", 5,
+	            s, "M2.1 — birthdate IS NOT NULL returns 5 rows");
+
+	// AND of two predicates across two columns — top-level CONJUNCTION_AND
+	// arrives as separate filter entries, each pushed independently.
+	expect_rows(con,
+	            "SELECT * FROM rip.smoke_orders WHERE currency = 'USD' AND person_id < 5", 6,
+	            s, "M2.1 — currency='USD' AND person_id<5 returns 6 rows");
+
+	// SQL injection safety — a VARCHAR literal containing a single quote
+	// must be properly escaped. `currency LIKE 'E%'` is not pushed;
+	// `currency = '''; DROP TABLE...' ` must not parse-error the remote.
+	expect_rows(con,
+	            "SELECT * FROM rip.smoke_orders WHERE currency = 'O''Malley'", 0,
+	            s, "M2.1 — quoted-literal escape works (0 rows, no injection)");
+
+	// Swapped operands: literal on the left.
+	expect_rows(con,
+	            "SELECT * FROM rip.smoke_people WHERE 5 < id", 5,
+	            s, "M2.1 — 5 < id (swapped) returns 5 rows");
+
+	// Non-pushable filter must still produce correct results via local
+	// fallback (DuckDB applies LIKE itself — the scan returns all rows).
+	expect_rows(con,
+	            "SELECT * FROM rip.smoke_orders WHERE sku LIKE 'SKU-1%'", 11,
+	            s, "M2.1 — LIKE (not pushable) falls back to local, correct result");
+
+	// Mixed: one pushable (`currency = 'USD'`) + one non-pushable (`sku LIKE`).
+	// Pushable half goes remote, the LIKE is applied locally by DuckDB.
+	expect_rows(con,
+	            "SELECT * FROM rip.smoke_orders "
+	            "WHERE currency = 'USD' AND sku LIKE 'SKU-%'", 14,
+	            s, "M2.1 — mixed pushable + non-pushable filters, correct result");
+
+	// DOUBLE comparison is deliberately NOT pushed (peer-AI guidance:
+	// float semantics are subtle). Must still produce correct results.
+	expect_rows(con,
+	            "SELECT * FROM rip.smoke_orders WHERE amount > 100.0", 12,
+	            s, "M2.1 — DOUBLE filter (not pushed) returns correct rows");
+
+	expect_ok(con, "DETACH rip", s, "DETACH rip after pushdown tests");
+
 	// M2.6 — URL normalization. ATTACH with a noisy URL (path + query
 	// string + fragment + trailing slashes) must be stripped back to
 	// its canonical scheme+host+port form and still work end-to-end.
