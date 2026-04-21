@@ -1,0 +1,5 @@
+{
+    "name": "ripdb",
+    "description": "DuckDB storage extension that attaches a running rip-db server",
+    "dependencies": []
+}
