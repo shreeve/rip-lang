@@ -21,6 +21,12 @@ on:
     paths:
       - 'packages/db/extension/**'
       - '.github/workflows/ripdb-extension.yml'
+      # Build-config files at repo root (the extension-template layout that
+      # the reusable workflow expects).
+      - 'Makefile'
+      - 'CMakeLists.txt'
+      - 'extension_config.cmake'
+      - 'vcpkg.json'
     tags:
       - 'ripdb-extension-v*'
   workflow_dispatch:
