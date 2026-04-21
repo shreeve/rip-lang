@@ -38,3 +38,12 @@ notes.txt
 /packages/ui/test-results/
 /packages/ui/tests/results/
 apps/medlabs/
+
+# --- Published extension artifacts ---------------------------------------
+# Un-ignore compiled artifacts inside docs/extensions/ so GitHub Pages can
+# serve them. `*.vsix` and `*.duckdb*` above would otherwise exclude the
+# .vsix downloads and the .duckdb_extension.gz files the CI publish step
+# commits to this tree.
+!docs/extensions/**/*.vsix
+!docs/extensions/**/*.duckdb_extension
+!docs/extensions/**/*.duckdb_extension.gz
