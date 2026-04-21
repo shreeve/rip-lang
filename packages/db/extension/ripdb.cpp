@@ -89,8 +89,10 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <random>
 
 namespace duckdb {
 namespace ripdb {
@@ -114,6 +116,21 @@ struct RipConnOptions {
 	uint16_t port         = 80;  // derived
 	uint64_t timeout_seconds = 30;
 };
+
+// Random 128-bit hex string, generated once per scan. Used as the
+// X-Rip-DB-Query-Id header so a cancellation can target this specific
+// request on the server. Randomness quality is best-effort — no
+// cryptographic requirement, just uniqueness within the session.
+static string GenerateQueryId() {
+	static thread_local std::mt19937_64 rng { std::random_device{}() };
+	uint64_t a = rng();
+	uint64_t b = rng();
+	char out[33];
+	std::snprintf(out, sizeof(out), "%016llx%016llx",
+	              static_cast<unsigned long long>(a),
+	              static_cast<unsigned long long>(b));
+	return string(out);
+}
 
 static string RstripSlashes(const string &s) {
 	auto end = s.size();
@@ -223,31 +240,82 @@ public:
 		             "Accept: */*\r\n"
 		             "Connection: close\r\n"
 		             "\r\n";
-		return DoRequest("GET", path, req);
+		return DoRequest("GET", path, req, nullptr, {});
 	}
 
 	string PostBinary(const string &path, const string &content_type, const string &body) {
+		return PostBinary(path, content_type, body, nullptr, {});
+	}
+
+	// M2.5: interrupt-aware variant. If context is non-null, recv() uses a
+	// short timeout and polls context->IsInterrupted() between read
+	// attempts. On interrupt, sends a best-effort POST /ddb/interrupt
+	// carrying `query_id` (so a future server-side upgrade can match the
+	// cancellation to the in-flight request) and throws InterruptException.
+	string PostBinary(const string &path, const string &content_type,
+	                   const string &body, optional_ptr<ClientContext> context,
+	                   const string &query_id) {
 		string req = "POST " + path + " HTTP/1.1\r\n"
 		             "Host: " + options_.host + ":" + std::to_string(options_.port) + "\r\n"
 		             "User-Agent: ripdb/0.1\r\n"
 		             "Content-Type: " + content_type + "\r\n"
-		             "Content-Length: " + std::to_string(body.size()) + "\r\n"
-		             "Connection: close\r\n"
-		             "\r\n";
+		             "Content-Length: " + std::to_string(body.size()) + "\r\n";
+		if (!query_id.empty()) {
+			req += "X-Rip-DB-Query-Id: " + query_id + "\r\n";
+		}
+		req += "Connection: close\r\n\r\n";
 		req.append(body);
-		return DoRequest("POST", path, req);
+		return DoRequest("POST", path, req, context, query_id);
+	}
+
+	// Fire-and-forget POST /ddb/interrupt. Best effort — failures are
+	// swallowed since this runs inside an already-failing request path.
+	void SendInterrupt(const string &query_id) noexcept {
+		int fd = ConnectTo(options_.host, options_.port);
+		if (fd < 0) return;
+		struct CloseGuard { int fd; ~CloseGuard() { if (fd >= 0) ::close(fd); } } guard { fd };
+		// Short send timeout — don't block the caller if the server's stuck.
+		struct timeval tv { 0, 500000 }; // 500ms
+		::setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+		string req = "POST /ddb/interrupt HTTP/1.1\r\n"
+		             "Host: " + options_.host + ":" + std::to_string(options_.port) + "\r\n"
+		             "User-Agent: ripdb/0.1\r\n"
+		             "Content-Length: 0\r\n";
+		if (!query_id.empty()) req += "X-Rip-DB-Query-Id: " + query_id + "\r\n";
+		req += "Connection: close\r\n\r\n";
+		const char *p = req.data(); size_t left = req.size();
+		while (left > 0) {
+			ssize_t n = ::send(fd, p, left, 0);
+			if (n <= 0) return;
+			p += n; left -= (size_t)n;
+		}
+		// Don't wait for the reply — best-effort.
 	}
 
 	const RipConnOptions &options() const { return options_; }
 
 private:
-	string DoRequest(const char *verb, const string &path, const string &raw_request) {
+	string DoRequest(const char *verb, const string &path, const string &raw_request,
+	                  optional_ptr<ClientContext> context, const string &query_id) {
 		int fd = ConnectTo(options_.host, options_.port);
 		if (fd < 0) {
 			throw IOException("ripdb: %s %s — connect to %s:%d failed: %s",
 			                   verb, path, options_.host, options_.port, SafeStrerror(errno));
 		}
 		struct CloseGuard { int fd; ~CloseGuard() { if (fd >= 0) ::close(fd); } } guard { fd };
+
+		// Fast-path interrupt check: if the user already hit Ctrl-C, bail
+		// before touching the network.
+		if (context && context->IsInterrupted()) {
+			throw InterruptException();
+		}
+
+		// When a context is supplied, give recv a short timeout so we can
+		// periodically poll IsInterrupted().
+		if (context) {
+			struct timeval tv { 0, 250000 }; // 250ms
+			::setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+		}
 
 		const char *p    = raw_request.data();
 		size_t      left = raw_request.size();
@@ -261,7 +329,7 @@ private:
 			left -= (size_t)n;
 		}
 
-		// Slurp entire response.
+		// Slurp entire response; poll interrupt between recv calls.
 		string raw;
 		char   buf[16384];
 		while (true) {
@@ -269,6 +337,15 @@ private:
 			if (n == 0) break;
 			if (n < 0) {
 				if (errno == EINTR) continue;
+				if ((errno == EAGAIN || errno == EWOULDBLOCK) && context) {
+					// recv timeout — check for interrupt and keep going.
+					if (context->IsInterrupted()) {
+						// Best-effort tell the server to cancel this query.
+						SendInterrupt(query_id);
+						throw InterruptException();
+					}
+					continue;
+				}
 				throw IOException("ripdb: %s %s — recv failed: %s", verb, path, SafeStrerror(errno));
 			}
 			raw.append(buf, (size_t)n);
@@ -517,6 +594,11 @@ struct RipScanGlobalState : public GlobalTableFunctionState {
 	idx_t                     chunk_cursor   = 0;
 	idx_t                     row_cursor     = 0;      // within current chunk
 	int64_t                   emitted_rows   = 0;      // for synthetic rowids
+
+	// M2.5 — query identifier sent to rip-db as X-Rip-DB-Query-Id. Used
+	// by the cancellation path so POST /ddb/interrupt can match the
+	// in-flight request. Opaque hex string; server treats as-is.
+	string                    query_id;
 
 	idx_t MaxThreads() const override { return 1; }
 };
@@ -1178,7 +1260,10 @@ RipScanInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
 	opts.base_url = bd.base_url;
 	RipHttpClient http(db, opts);
 
-	string body = http.PostBinary("/ddb/run", "text/plain", sql);
+	// M2.5 — generate a query id for this scan so a DuckDB interrupt
+	// can target the remote request via POST /ddb/interrupt.
+	state->query_id = GenerateQueryId();
+	string body = http.PostBinary("/ddb/run", "text/plain", sql, &context, state->query_id);
 	state->decoded = make_uniq<DecodedResult>(
 	    decode(reinterpret_cast<const uint8_t *>(body.data()), body.size()));
 	if (state->decoded->isError) {
