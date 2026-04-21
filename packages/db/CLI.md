@@ -4,6 +4,8 @@
 >
 > **Commit 1 (decoder + golden-test harness, no DuckDB linkage) landed as `4e8b73b` on `rip-duck`.** 200 / 200 fixtures passing.
 > **Commit 2 (DuckDB binding: Catalog + Scan + `ATTACH` + `.duckdb_extension`) landed on `rip-duck`.** 14/14 in-process smoke tests pass, full SQL smoke passes via stock `duckdb -unsigned` CLI, table + column completion verified for three of the four CLI.md forms (the fourth is a known DuckDB autocomplete limitation, not ripdb-specific). See [Implementation progress](#implementation-progress) for the running log.
+>
+> **Commit 3 (subprocess hardening) landed as `4f12e17` on `rip-duck`.** `smoke-server.rip` and `capture-live.rip` now spawn rip-db in a detached process group and tear it down via group-signaling, so the inner-loop test scripts never leak rip-db processes on pipe breakage / Ctrl-C / SIGTERM / uncaught throws. No functional change to the extension.
 
 **Goal:** Make the stock `duckdb` CLI treat a running `rip-db` HTTP server as an attachable DuckDB database, with native table/column TAB completion. Other libduckdb-based clients (Python, R, DBeaver, DuckDB UI, JDBC) that permit loading signed/unsigned extensions inherit the integration automatically, but explicit compatibility verification is per-client and not an M1 promise.
 
@@ -1205,9 +1207,10 @@ with a "read-only" error. **14/14 passing**.
 **Coverage demonstrated (Phase 2B — stock CLI):** `LOAD
 'ripdb.duckdb_extension';` from the `duckdb -unsigned` CLI. `ATTACH`
 succeeds. `count`, `sum`, joins, `DESCRIBE`, `SELECT … LIMIT` all work.
-`sql_auto_complete('...')` returns our tables for `rip.<prefix>`,
-`rip.main.<prefix>`, and `rip.table.<prefix>`; columns complete via
-`ORDER BY` as well. The fourth form in the plan — `SELECT <partial> FROM
+`sql_auto_complete('...')` returns the remote tables for
+`rip.<prefix>` and `rip.main.<prefix>`, and the remote columns for
+`rip.<table>.<prefix>`; columns also complete in `ORDER BY <prefix>`
+position. The fourth form in the plan — `SELECT <partial> FROM
 rip.<table>` — is a known DuckDB autocomplete limitation (it completes
 keywords, not columns, in that position; the same is true for local
 DuckDB tables), not a ripdb-specific miss.
@@ -1243,3 +1246,106 @@ DuckDB tables), not a ripdb-specific miss.
 - DDL forwarding + native DECIMAL + upstream URL-alias PR. M4.
 - Memcpy fast paths in the decoder (still gated on the Commit 1 slow-path
   equivalence test, still worth measuring before implementing).
+
+### Commit 3 — smoke-server / capture-live subprocess hardening  ✅ landed as `4f12e17`
+
+**Scope:** `smoke-server.rip` and `capture-live.rip` only. No change to
+the extension, the decoder, the wire protocol, or any catalog semantics.
+Purely a robustness fix for the inner-loop test scripts so they never
+leak rip-db processes regardless of how the parent is torn down.
+
+**Motivation.** The Commit 2 `smoke-server.rip` spawned `rip ...`, and
+`rip` is a thin Bun wrapper that runs `spawnSync('bun', ['--preload',
+loader, db.rip, ...])`. Our `proc` handle was therefore the wrapper,
+not the actual rip-db bun. Sending SIGTERM to `proc` killed the wrapper
+but left the bun grandchild orphaned, and if a downstream pipe reader
+had closed (`| tail -30` exiting after N lines), the orphaned
+grandchild's forwarded output kept triggering EPIPE in a tight loop —
+a normal `rip smoke-server.rip 2>&1 | tail -30` session consumed
+~6 minutes of CPU before it was noticed.
+
+**Root-cause fix.** Spawn with `detached: true` so the rip-db subtree
+is in its own process group. All signaling goes through
+`process.kill(-proc.pid, signal)` (negative pid = process group) so
+the wrapper and the grandchild die together. `killGroup` swallows
+`ESRCH` (Linux) and `EPERM` (macOS) — both mean "target is already
+gone" during cleanup.
+
+**Subprocess lifecycle, now explicit:**
+
+- `cleanup()` is idempotent (`shuttingDown` flag), sends SIGTERM, then
+  SIGKILL 500ms later if the child still hasn't exited.
+- `exitCleanly()` is idempotent (`exiting` flag) and waits for the
+  child's `'exit'` event — or a 3s safety timeout — before calling
+  `process.exit`, so the parent never outlives its own subprocess.
+- `proc.once 'exit'` is registered **before** signals are sent,
+  eliminating a fast-child-death race that would otherwise block on
+  the 3s timeout.
+- Synchronous last-resort SIGKILL in `process.on 'exit'` catches
+  uncaught throws and unhandled rejections (the one path `cleanup`'s
+  async escalation can't reach, because the JS event loop is already
+  done).
+- `proc.on 'error'` handler surfaces spawn failures (missing `rip`
+  binary, etc.) with a clear one-line message.
+- `proc.on 'exit'` + `ready` flag: startup failure throws from the
+  `/health` loop with the child's real exit code/signal rather than
+  timing out; post-startup failure logs and exits with the child's
+  code.
+- Stream `'error'` handlers on both stdout and stderr: EPIPE triggers
+  clean exit, non-EPIPE is logged and fatal (were silently swallowed
+  before).
+
+**Dropped code that didn't do what it claimed:**
+
+- The synchronous `try/catch` around `process.stderr.write` (EPIPE on
+  Node/Bun surfaces via the stream's `'error'` event, never as a
+  synchronous throw — the try was dead code).
+- The `process.on 'SIGPIPE'` handler (Node/Bun intercepts SIGPIPE and
+  converts it into stream `'error'` events — the handler never fired).
+- Unused `dirname` import in `smoke-server.rip`.
+- `await new Promise (resolve) -> noop()` — replaced with
+  `await new Promise ->`, which compiles to `new Promise(() => {})`
+  and is unambiguously never-resolving without the extra noop.
+
+**Peer-AI review** (round 1 + 2) caught two real bugs before landing:
+the non-EPIPE stream errors were being silently swallowed, and the
+`cleanup()`-before-`once('exit')` ordering had a race where a very
+fast child exit would block us for the full 3s timeout. Both fixed.
+
+**Coverage demonstrated:**
+
+- 14/14 `extension_test` cases still pass against the hardened
+  smoke-server.
+- `capture-live` end-to-end runs to completion, writes both integration
+  fixtures, and tears down with zero orphans. "rip-db: shutting down
+  server" is visible in its output — proof SIGTERM reached the bun
+  process, not just the wrapper.
+- Head-pipe stress: `rip smoke-server.rip 2>&1 | head -3` × 5 rapid
+  back-to-back invocations — zero surviving rip-db processes after
+  the last one.
+- Autocomplete (all 3 working forms + ORDER BY) re-verified against
+  the same smoke-server: `rip.smok<TAB>` → `smoke_orders` /
+  `smoke_people`; `rip.main.smok<TAB>` → same; `rip.smoke_people.fu<TAB>`
+  → `full` / `full_name`; `ORDER BY am<TAB>` → `amount`. Form 3
+  (`SELECT <partial> FROM rip.table`) returns 0 suggestions, same as
+  for local tables — the known DuckDB autocomplete limitation is
+  re-confirmed to be ripdb-independent.
+
+**Invariants this commit locks in:**
+
+1. `smoke-server.rip` and `capture-live.rip` never leak rip-db
+   processes regardless of teardown path: SIGINT, SIGTERM, EPIPE on
+   stdout/stderr, uncaught throw, unhandled rejection, or pipe-reader
+   exit.
+2. Both scripts fail fast — and with the real error — when rip-db
+   dies during startup. No more 5-second "rip-db did not come up
+   within 5s" when the truth is "rip-db exited with code 1 at 200ms".
+3. The scripts are signal-compatible with `process.kill(-pid, sig)`
+   group signaling from anywhere — including test harnesses that use
+   `pkill -f smoke-server.rip` or equivalent.
+
+**Not fixed here, by design:** the same subprocess-management pattern
+is now duplicated across the two scripts. With only two callers,
+inline duplication is still cheaper than an abstraction — extract
+a shared `scripts/lib/spawnManaged.rip` helper once a third caller
+shows up.
