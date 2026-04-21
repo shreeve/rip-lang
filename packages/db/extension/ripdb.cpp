@@ -602,6 +602,13 @@ private:
 // RipCatalog — owns the single 'main' schema and the HTTP client.
 // ---------------------------------------------------------------------------
 
+// Stats returned by a catalog populate/refresh pass — surfaced by
+// rip_refresh() so users can see at a glance what happened.
+struct RipRefreshStats {
+	int64_t loaded  = 0;   // tables successfully registered
+	int64_t refused = 0;   // tables skipped (refused type, per-table error, etc.)
+};
+
 class RipCatalog : public Catalog {
 public:
 	RipCatalog(AttachedDatabase &db, RipConnOptions options)
@@ -616,8 +623,31 @@ public:
 		info.schema = "main";
 		info.internal = true;
 		main_schema_ = make_uniq<RipSchemaEntry>(*this, info);
-		PopulateMainSchema();
+		last_refresh_stats_ = PopulateSchema(*main_schema_);
 	}
+
+	// Refresh: rebuild the catalog from the remote /tables + /schema/:t
+	// endpoints. Swaps in a NEW RipSchemaEntry with fresh RipTableEntry
+	// instances, so any cached optional_ptr<CatalogEntry> in DuckDB's
+	// binder (from previous queries) becomes stale. This is by design
+	// — the whole point of refresh is to pick up remote schema changes,
+	// which in DuckDB means rebinding.
+	//
+	// Callers must ensure no query that holds pointers into this
+	// catalog's tables is currently executing. `rip_refresh('r')` runs
+	// at query boundaries, which satisfies this.
+	RipRefreshStats Refresh() {
+		CreateSchemaInfo info;
+		info.schema = "main";
+		info.internal = true;
+		auto new_schema = make_uniq<RipSchemaEntry>(*this, info);
+		auto stats = PopulateSchema(*new_schema);
+		main_schema_ = std::move(new_schema);
+		last_refresh_stats_ = stats;
+		return stats;
+	}
+
+	const RipRefreshStats &LastRefreshStats() const { return last_refresh_stats_; }
 
 	string GetCatalogType() override { return "ripdb"; }
 
@@ -669,12 +699,13 @@ private:
 		RipSchemaEntry::ReadOnly("DROP SCHEMA");
 	}
 
-	void PopulateMainSchema();
+	RipRefreshStats PopulateSchema(RipSchemaEntry &schema);
 
 private:
 	RipConnOptions               options_;
 	unique_ptr<RipHttpClient>    http_;
 	unique_ptr<RipSchemaEntry>   main_schema_;
+	RipRefreshStats              last_refresh_stats_;
 };
 
 // ---------------------------------------------------------------------------
@@ -757,7 +788,8 @@ RipTableMeta ParseSchemaResponse(const string &table_name, const string &body) {
 
 } // anonymous namespace
 
-void RipCatalog::PopulateMainSchema() {
+RipRefreshStats RipCatalog::PopulateSchema(RipSchemaEntry &schema) {
+	RipRefreshStats stats;
 	string tables_body = http_->GetText("/tables");
 	auto names = ParseTablesResponse(tables_body);
 
@@ -769,11 +801,13 @@ void RipCatalog::PopulateMainSchema() {
 			// Don't poison the whole attach because of one bad table.
 			Printer::Print(StringUtil::Format(
 			    "ripdb: failed to load schema for table '%s' (%s); skipping.", table_name, e.what()));
+			++stats.refused;
 			continue;
 		}
 		auto meta = ParseSchemaResponse(table_name, schema_body);
 		if (meta.refused) {
 			Printer::Print(meta.refuse_reason);
+			++stats.refused;
 			continue;
 		}
 
@@ -784,9 +818,11 @@ void RipCatalog::PopulateMainSchema() {
 		for (auto &col : meta.columns) {
 			info.columns.AddColumn(ColumnDefinition(col.name, col.type));
 		}
-		auto table_entry = make_uniq<RipTableEntry>(*this, *main_schema_, info, meta.name);
-		main_schema_->AddTable(std::move(table_entry));
+		auto table_entry = make_uniq<RipTableEntry>(*this, schema, info, meta.name);
+		schema.AddTable(std::move(table_entry));
+		++stats.loaded;
 	}
+	return stats;
 }
 
 // ---------------------------------------------------------------------------
@@ -1101,6 +1137,93 @@ private:
 };
 
 // ---------------------------------------------------------------------------
+// rip_refresh(catalog_name) — table function that re-queries the remote
+// /tables + /schema/:t endpoints for an already-attached ripdb catalog and
+// atomically swaps in a fresh RipSchemaEntry. Returns one row of stats.
+//
+// Usage:
+//   CALL rip_refresh('rip');                    -- CALL syntax (table func)
+//   SELECT * FROM rip_refresh('rip');           -- equivalent
+//   -- → (catalog VARCHAR, tables_loaded BIGINT, tables_refused BIGINT)
+//
+// Semantics:
+//   - The catalog pointer swap invalidates any optional_ptr<CatalogEntry>
+//     the binder may have cached from prior queries. Since rip_refresh
+//     runs at a query boundary, in-flight scans retain their bind data
+//     (which is self-contained — see RipScanBindData); subsequent queries
+//     re-bind and see the new schema.
+//   - This is cooperative, not transactional: if refresh throws midway
+//     (e.g. remote /tables endpoint fails), the old schema is untouched.
+// ---------------------------------------------------------------------------
+
+struct RipRefreshBindData : public TableFunctionData {
+	string           catalog_name;
+	RipRefreshStats  stats;
+	RipRefreshBindData(string n, RipRefreshStats s)
+	    : catalog_name(std::move(n)), stats(s) {}
+};
+
+struct RipRefreshGlobalState : public GlobalTableFunctionState {
+	bool emitted = false;
+	idx_t MaxThreads() const override { return 1; }
+};
+
+static unique_ptr<FunctionData>
+RipRefreshBind(ClientContext &context, TableFunctionBindInput &input,
+               vector<LogicalType> &return_types, vector<string> &names) {
+	if (input.inputs.size() != 1 || input.inputs[0].IsNull()) {
+		throw BinderException(
+		    "rip_refresh: requires one VARCHAR argument, the attached catalog name");
+	}
+	auto catalog_name = input.inputs[0].ToString();
+
+	auto &db_mgr = DatabaseManager::Get(context);
+	auto attached = db_mgr.GetDatabase(context, catalog_name);
+	if (!attached) {
+		throw CatalogException("rip_refresh: no attached database named '%s'", catalog_name);
+	}
+	auto &cat = attached->GetCatalog();
+	if (cat.GetCatalogType() != "ripdb") {
+		throw InvalidInputException(
+		    "rip_refresh: '%s' is not a ripdb catalog (type: '%s')",
+		    catalog_name, cat.GetCatalogType());
+	}
+	auto &rip_cat = cat.Cast<RipCatalog>();
+	auto stats = rip_cat.Refresh();
+
+	return_types = {LogicalType::VARCHAR, LogicalType::BIGINT, LogicalType::BIGINT};
+	names        = {"catalog", "tables_loaded", "tables_refused"};
+	return make_uniq<RipRefreshBindData>(std::move(catalog_name), stats);
+}
+
+static unique_ptr<GlobalTableFunctionState>
+RipRefreshInitGlobal(ClientContext &, TableFunctionInitInput &) {
+	return make_uniq<RipRefreshGlobalState>();
+}
+
+static void RipRefreshFunction(ClientContext &, TableFunctionInput &input, DataChunk &output) {
+	auto &state = input.global_state->Cast<RipRefreshGlobalState>();
+	if (state.emitted) {
+		output.SetCardinality(0);
+		return;
+	}
+	auto &bd = input.bind_data->Cast<RipRefreshBindData>();
+
+	auto *names_out = FlatVector::GetDataMutable<string_t>(output.data[0]);
+	names_out[0]    = StringVector::AddString(output.data[0], bd.catalog_name);
+	FlatVector::GetDataMutable<int64_t>(output.data[1])[0] = bd.stats.loaded;
+	FlatVector::GetDataMutable<int64_t>(output.data[2])[0] = bd.stats.refused;
+	output.SetCardinality(1);
+	state.emitted = true;
+}
+
+static TableFunction MakeRipRefreshFunction() {
+	TableFunction fn("rip_refresh", {LogicalType::VARCHAR},
+	                  RipRefreshFunction, RipRefreshBind, RipRefreshInitGlobal);
+	return fn;
+}
+
+// ---------------------------------------------------------------------------
 // Storage extension entry points + Load.
 // ---------------------------------------------------------------------------
 
@@ -1139,6 +1262,8 @@ void Load(ExtensionLoader &loader) {
 	ext->attach = RipAttach;
 	ext->create_transaction_manager = RipCreateTxnMgr;
 	StorageExtension::Register(config, "ripdb", std::move(ext));
+
+	loader.RegisterFunction(MakeRipRefreshFunction());
 }
 
 } // namespace ripdb

@@ -17,7 +17,16 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <string>
+
+// For the M2.4 refresh test we need to mutate the remote schema mid-run;
+// easiest way is to POST to rip-db's /sql endpoint directly (same code
+// path the smoke-server uses to seed, now reused from C++). Plain BSD
+// sockets, enough to fire a one-shot request at localhost.
+#include <netdb.h>
+#include <sys/socket.h>
+#include <unistd.h>
 
 namespace duckdb { namespace ripdb {
 void Load(ExtensionLoader &loader);                 // re-declared here; defined in ripdb.cpp
@@ -27,6 +36,61 @@ struct TestStats {
 	int total   = 0;
 	int passed  = 0;
 };
+
+// Minimal localhost HTTP POST — used only to mutate the remote schema
+// during the M2.4 rip_refresh test. Returns the response body on 2xx,
+// empty string on any failure (best effort; the test will assert on
+// expected SQL-side effects afterward).
+static std::string PostSql(const std::string &host, int port, const std::string &sql) {
+	struct addrinfo hints {};
+	hints.ai_family   = AF_UNSPEC;
+	hints.ai_socktype = SOCK_STREAM;
+	struct addrinfo *res = nullptr;
+	if (getaddrinfo(host.c_str(), std::to_string(port).c_str(), &hints, &res) != 0) return {};
+	int fd = -1;
+	for (auto *ai = res; ai; ai = ai->ai_next) {
+		fd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
+		if (fd >= 0 && connect(fd, ai->ai_addr, ai->ai_addrlen) == 0) break;
+		if (fd >= 0) { close(fd); fd = -1; }
+	}
+	freeaddrinfo(res);
+	if (fd < 0) return {};
+
+	// rip-db's /sql endpoint expects JSON with a "sql" field.
+	std::string body = "{\"sql\":\"";
+	for (char c : sql) {
+		if (c == '"' || c == '\\') body += '\\';
+		body += c;
+	}
+	body += "\"}";
+	std::string req = "POST /sql HTTP/1.1\r\n"
+	                   "Host: " + host + ":" + std::to_string(port) + "\r\n"
+	                   "Content-Type: application/json\r\n"
+	                   "Content-Length: " + std::to_string(body.size()) + "\r\n"
+	                   "Connection: close\r\n\r\n" + body;
+
+	const char *p = req.data(); size_t left = req.size();
+	while (left > 0) { ssize_t n = send(fd, p, left, 0); if (n <= 0) break; p += n; left -= (size_t)n; }
+
+	std::string raw; char buf[4096];
+	while (true) { ssize_t n = recv(fd, buf, sizeof(buf), 0); if (n <= 0) break; raw.append(buf, (size_t)n); }
+	close(fd);
+	return raw;
+}
+
+// Parse "rip://host:port" / "http://host:port" / "host:port" into host + port.
+static bool ParseHostPort(const std::string &url, std::string &host, int &port) {
+	std::string rest = url;
+	auto sep = rest.find("://");
+	if (sep != std::string::npos) rest = rest.substr(sep + 3);
+	auto slash = rest.find('/');
+	if (slash != std::string::npos) rest = rest.substr(0, slash);
+	auto colon = rest.find(':');
+	if (colon == std::string::npos) { host = rest; port = 80; return !host.empty(); }
+	host = rest.substr(0, colon);
+	port = std::atoi(rest.c_str() + colon + 1);
+	return !host.empty() && port > 0;
+}
 
 static void expect_ok(duckdb::Connection &con, const std::string &sql, TestStats &s,
                        const char *label) {
@@ -162,6 +226,66 @@ int main(int argc, char **argv) {
 			std::printf("PASS  INSERT rejected with read-only error\n");
 		} else {
 			std::printf("FAIL  INSERT should be rejected with read-only error, got: %s\n",
+			            r->HasError() ? r->GetError().c_str() : "<no error>");
+		}
+	}
+
+	// M2.4 — rip_refresh('catalog_name'). Returns one stats row and
+	// picks up remote schema changes without requiring DETACH + ATTACH.
+	expect_rows(con,
+	            "SELECT * FROM rip_refresh('rip')", 1,
+	            s, "rip_refresh('rip') returns one stats row");
+	expect_contains(con,
+	            "SELECT tables_loaded FROM rip_refresh('rip')", "2",
+	            s, "rip_refresh reports 2 tables loaded");
+
+	// Create a new remote table, then rip_refresh should surface it.
+	{
+		std::string host; int port = 0;
+		bool parsed = ParseHostPort(rip_db_url, host, port);
+		++s.total;
+		if (!parsed) {
+			std::printf("FAIL  could not parse host/port from %s\n", rip_db_url);
+		} else {
+			auto resp = PostSql(host, port,
+			                    "CREATE TABLE smoke_fresh AS SELECT 42 AS answer");
+			if (resp.find("200") == std::string::npos) {
+				std::printf("FAIL  creating remote smoke_fresh — server response: %s\n", resp.c_str());
+			} else {
+				++s.passed;
+				std::printf("PASS  created remote smoke_fresh via /sql\n");
+			}
+		}
+	}
+
+	// Without refresh, the new table is NOT visible.
+	++s.total;
+	{
+		auto r = con.Query("SELECT * FROM rip.smoke_fresh");
+		if (r->HasError()) {
+			++s.passed;
+			std::printf("PASS  pre-refresh: rip.smoke_fresh is not visible\n");
+		} else {
+			std::printf("FAIL  pre-refresh: rip.smoke_fresh should not exist yet\n");
+		}
+	}
+
+	// After rip_refresh, the new table appears.
+	expect_contains(con,
+	            "SELECT tables_loaded FROM rip_refresh('rip')", "3",
+	            s, "rip_refresh reports 3 tables loaded after CREATE TABLE");
+	expect_rows(con, "SELECT * FROM rip.smoke_fresh", 1,
+	            s, "post-refresh: rip.smoke_fresh is queryable");
+
+	// Error paths.
+	++s.total;
+	{
+		auto r = con.Query("SELECT * FROM rip_refresh('no_such_catalog')");
+		if (r->HasError() && r->GetError().find("no attached database") != std::string::npos) {
+			++s.passed;
+			std::printf("PASS  rip_refresh rejects unknown catalog\n");
+		} else {
+			std::printf("FAIL  rip_refresh should reject unknown catalog, got: %s\n",
 			            r->HasError() ? r->GetError().c_str() : "<no error>");
 		}
 	}
