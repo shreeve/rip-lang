@@ -38,6 +38,17 @@ syntax highlighting instead of JavaScript.
 
 ## Installation
 
+### Direct download (newest published build)
+
+```sh
+curl -LO https://shreeve.github.io/rip-lang/extensions/vscode/print/print-latest.vsix
+cursor --install-extension ./print-latest.vsix
+# or: code --install-extension ./print-latest.vsix
+```
+
+Previous versions and a one-click install page live at
+<https://shreeve.github.io/rip-lang/extensions/vscode/print/>.
+
 ### From the Marketplace
 
 Search for "Rip Print" in the Extensions panel, or visit:
