@@ -270,6 +270,26 @@ rip -cm example.rip
 > equivalence, or the rare case where `fn!` is ambiguous with a
 > dammit-returning expression (basically never).
 
+> **CRITICAL — don't shadow Rip's injected globals:**
+>
+> Rip auto-injects these helpers into `globalThis` at the top of every
+> compiled file (see the Standard Library table below): `p`, `pp`,
+> `warn`, `kind`, `assert`, `abort`, `exit`, `noop`, `rand`, `sleep`,
+> `todo`, `raise`, `zip`. If you declare a local variable with the same
+> name, the compiler emits code that silently mis-references them, with
+> failure modes that don't mention shadowing at all — common ones
+> include strict-mode "Duplicate parameter name" errors and
+> "`x` is not defined" at runtime:
+>
+> - `p = navigator.clipboard.writeText(...)` — WRONG (shadows `globalThis.p` = `console.log`)
+> - `prom = navigator.clipboard.writeText(...)` — CORRECT
+> - `warn = condition ? 'yellow' : 'red'` — WRONG (shadows `globalThis.warn` = `console.warn`)
+> - `lvl = condition ? 'yellow' : 'red'` — CORRECT
+>
+> If you catch yourself using a short name that matches any Standard
+> Library helper, rename. One-letter names like `p` are particularly
+> risky.
+
 ### Removed (from CoffeeScript / Rip 2.x)
 
 | Feature                            | Replacement                                           |
