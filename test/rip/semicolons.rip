@@ -27,7 +27,7 @@ code "unless block", "unless x\n  y", "if (!x) {\n  y;\n}"
 # Loops (NO semicolon after })
 # ==============================================================================
 
-code "for loop", "for x in arr\n  x", "for (const x of arr) {\n  x;\n}"
+code "for loop", "for x in arr\n  x", "for (x of arr) {\n  x;\n}"
 code "while loop", "while x\n  y", "while (x) {\n  y;\n}"
 
 # ==============================================================================

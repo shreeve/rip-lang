@@ -469,6 +469,12 @@ export class CodeEmitter {
       return;
     }
 
+    if (head === 'for-in' || head === 'for-of' || head === 'for-as') {
+      this.collectVarsFromLoopHead(rest[0], this.programVars);
+      rest.slice(1).forEach(item => this.collectProgramVariables(item));
+      return;
+    }
+
     if (head === 'def' || head === '->' || head === '=>' || head === 'effect') return;
 
     if (head === 'if') {
@@ -519,6 +525,11 @@ export class CodeEmitter {
         else if (this.is(target, 'array')) this.collectVarsFromArray(target, vars);
         else if (this.is(target, 'object')) this.collectVarsFromObject(target, vars);
         collect(value);
+        return;
+      }
+      if (head === 'for-in' || head === 'for-of' || head === 'for-as') {
+        this.collectVarsFromLoopHead(rest[0], vars);
+        rest.slice(1).forEach(collect);
         return;
       }
       if (head === 'def' || head === '->' || head === '=>' || head === 'effect') return;
@@ -1461,7 +1472,7 @@ export class CodeEmitter {
         let stmts = body.slice(1);
         this.indentLevel++;
         let lines = [];
-        if (!noVar) lines.push(`const ${itemVarPattern} = ${iterCode}[${idxName}];`);
+        if (!noVar) lines.push(`${itemVarPattern} = ${iterCode}[${idxName}];`);
         if (guard) {
           lines.push(`if (${this.emit(guard, 'value')}) {`);
           this.indentLevel++;
@@ -1481,8 +1492,8 @@ export class CodeEmitter {
           : loopHeader + `{ ${this.emit(body, 'statement')}; }`;
       }
       return guard
-        ? loopHeader + `{ const ${itemVarPattern} = ${iterCode}[${idxName}]; if (${this.emit(guard, 'value')}) ${this.emit(body, 'statement')}; }`
-        : loopHeader + `{ const ${itemVarPattern} = ${iterCode}[${idxName}]; ${this.emit(body, 'statement')}; }`;
+        ? loopHeader + `{ ${itemVarPattern} = ${iterCode}[${idxName}]; if (${this.emit(guard, 'value')}) ${this.emit(body, 'statement')}; }`
+        : loopHeader + `{ ${itemVarPattern} = ${iterCode}[${idxName}]; ${this.emit(body, 'statement')}; }`;
     }
 
     // Index variable → traditional for loop
@@ -1492,7 +1503,7 @@ export class CodeEmitter {
       if (this.is(body, 'block')) {
         code += '{\n';
         this.indentLevel++;
-        code += this.indent() + `const ${itemVarPattern} = ${iterCode}[${indexVar}];\n`;
+        code += this.indent() + `${itemVarPattern} = ${iterCode}[${indexVar}];\n`;
         if (guard) {
           code += this.indent() + `if (${this.unwrap(this.emit(guard, 'value'))}) {\n`;
           this.indentLevel++;
@@ -1506,8 +1517,8 @@ export class CodeEmitter {
         code += this.indent() + '}';
       } else {
         code += guard
-          ? `{ const ${itemVarPattern} = ${iterCode}[${indexVar}]; if (${this.unwrap(this.emit(guard, 'value'))}) ${this.emit(body, 'statement')}; }`
-          : `{ const ${itemVarPattern} = ${iterCode}[${indexVar}]; ${this.emit(body, 'statement')}; }`;
+          ? `{ ${itemVarPattern} = ${iterCode}[${indexVar}]; if (${this.unwrap(this.emit(guard, 'value'))}) ${this.emit(body, 'statement')}; }`
+          : `{ ${itemVarPattern} = ${iterCode}[${indexVar}]; ${this.emit(body, 'statement')}; }`;
       }
       return code;
     }
@@ -1531,7 +1542,8 @@ export class CodeEmitter {
     }
 
     // Default: for-of
-    let code = `for (const ${itemVarPattern} of ${this.emit(iterable, 'value')}) `;
+    let bind = noVar ? 'let ' : '';
+    let code = `for (${bind}${itemVarPattern} of ${this.emit(iterable, 'value')}) `;
     code += guard ? this.emitLoopBodyWithGuard(body, guard) : this.emitLoopBody(body);
     return code;
   }
@@ -1546,7 +1558,7 @@ export class CodeEmitter {
 
     let [keyVar, valueVar] = Array.isArray(vars) ? vars : [vars];
     let objCode = this.emit(obj, 'value');
-    let code = `for (const ${keyVar} in ${objCode}) `;
+    let code = `for (${keyVar} in ${objCode}) `;
 
     if (own && !valueVar && !guard) {
       if (this.is(body, 'block')) {
@@ -1564,7 +1576,7 @@ export class CodeEmitter {
         this.indentLevel++;
         let lines = [];
         if (own) lines.push(`if (!Object.hasOwn(${objCode}, ${keyVar})) continue;`);
-        lines.push(`const ${valueVar} = ${objCode}[${keyVar}];`);
+        lines.push(`${valueVar} = ${objCode}[${keyVar}];`);
         if (guard) {
           lines.push(`if (${this.emit(guard, 'value')}) {`);
           this.indentLevel++;
@@ -1579,7 +1591,7 @@ export class CodeEmitter {
       }
       let inline = '';
       if (own) inline += `if (!Object.hasOwn(${objCode}, ${keyVar})) continue; `;
-      inline += `const ${valueVar} = ${objCode}[${keyVar}]; `;
+      inline += `${valueVar} = ${objCode}[${keyVar}]; `;
       if (guard) inline += `if (${this.emit(guard, 'value')}) `;
       inline += `${this.emit(body, 'statement')};`;
       return code + `{ ${inline} }`;
@@ -1626,7 +1638,7 @@ export class CodeEmitter {
       itemVarPattern = this.emitDestructuringPattern(firstVar);
     else itemVarPattern = firstVar;
 
-    let code = `for ${awaitKw}(const ${itemVarPattern} of ${iterCode}) `;
+    let code = `for ${awaitKw}(${itemVarPattern} of ${iterCode}) `;
 
     if (needsTempVar && destructStmts.length > 0) {
       let stmts = this.unwrapBlock(body);
@@ -2000,16 +2012,17 @@ export class CodeEmitter {
       let header = isNeg
         ? `for (let ${idxN} = ${ic}.length - 1; ${idxN} >= 0; ${update})`
         : `for (let ${idxN} = 0; ${idxN} < ${ic}.length; ${update})`;
-      return { header, setup: noVar ? null : `const ${ivp} = ${ic}[${idxN}];` };
+      return { header, setup: noVar ? null : `${ivp} = ${ic}[${idxN}];` };
     }
     if (indexVar) {
       let ic = this.emit(iterable, 'value');
       return {
         header: `for (let ${indexVar} = 0; ${indexVar} < ${ic}.length; ${indexVar}++)`,
-        setup: `const ${ivp} = ${ic}[${indexVar}];`,
+        setup: `${ivp} = ${ic}[${indexVar}];`,
       };
     }
-    return { header: `for (const ${ivp} of ${this.emit(iterable, 'value')})`, setup: null };
+    let bind = noVar ? 'let ' : '';
+    return { header: `for (${bind}${ivp} of ${this.emit(iterable, 'value')})`, setup: null };
   }
 
   // Shared: parse a for-of (object) iterator and return { header, own, vv, oc, kvp }.
@@ -2019,7 +2032,7 @@ export class CodeEmitter {
     let kvp = (this.is(kv, 'array') || this.is(kv, 'object'))
       ? this.emitDestructuringPattern(kv) : kv;
     let oc = this.emit(iterable, 'value');
-    return { header: `for (const ${kvp} in ${oc})`, own, vv, oc, kvp };
+    return { header: `for (${kvp} in ${oc})`, own, vv, oc, kvp };
   }
 
   // Shared: parse a for-as (iterator) spec and return { header }.
@@ -2028,7 +2041,7 @@ export class CodeEmitter {
     let [fv] = va;
     let ivp = (this.is(fv, 'array') || this.is(fv, 'object'))
       ? this.emitDestructuringPattern(fv) : fv;
-    return { header: `for ${isAwait ? 'await ' : ''}(const ${ivp} of ${this.emit(iterable, 'value')})` };
+    return { header: `for ${isAwait ? 'await ' : ''}(${ivp} of ${this.emit(iterable, 'value')})` };
   }
 
   emitComprehension(head, rest, context) {
@@ -2055,7 +2068,7 @@ export class CodeEmitter {
         code += this.indent() + header + ' {\n';
         this.indentLevel++;
         if (own) code += this.indent() + `if (!Object.hasOwn(${oc}, ${kvp})) continue;\n`;
-        if (vv) code += this.indent() + `const ${vv} = ${oc}[${kvp}];\n`;
+        if (vv) code += this.indent() + `${vv} = ${oc}[${kvp}];\n`;
       } else if (iterType === 'for-as') {
         let { header } = this._forAsHeader(vars, iterable, iter[3]);
         code += this.indent() + header + ' {\n';
@@ -2119,10 +2132,10 @@ export class CodeEmitter {
       if (iterType === 'for-of') {
         let [kv, vv] = vars;
         let oc = this.emit(iterable, 'value');
-        code += this.indent() + `for (const ${kv} in ${oc}) {\n`;
+        code += this.indent() + `for (${kv} in ${oc}) {\n`;
         this.indentLevel++;
         if (own) code += this.indent() + `if (!Object.hasOwn(${oc}, ${kv})) continue;\n`;
-        if (vv) code += this.indent() + `const ${vv} = ${oc}[${kv}];\n`;
+        if (vv) code += this.indent() + `${vv} = ${oc}[${kv}];\n`;
       }
     }
     for (let guard of guards) { code += this.indent() + `if (${this.emit(guard, 'value')}) {\n`; this.indentLevel++; }
@@ -2783,7 +2796,7 @@ export class CodeEmitter {
         code += header + ' {\n';
         this.indentLevel++;
         if (own) code += this.indent() + `if (!Object.hasOwn(${oc}, ${kvp})) continue;\n`;
-        if (vv) code += this.indent() + `const ${vv} = ${oc}[${kvp}];\n`;
+        if (vv) code += this.indent() + `${vv} = ${oc}[${kvp}];\n`;
         emitBody();
         this.indentLevel--;
         code += this.indent() + '}';
@@ -3147,8 +3160,25 @@ export class CodeEmitter {
       if (typeof item === 'string') { varSet.add(item); return; }
       if (Array.isArray(item)) {
         if (item[0] === '...' && typeof item[1] === 'string') varSet.add(item[1]);
+        else if (item[0] === '=' && typeof item[1] === 'string') varSet.add(item[1]);
         else if (item[0] === 'array') this.collectVarsFromArray(item, varSet);
         else if (item[0] === 'object') this.collectVarsFromObject(item, varSet);
+      }
+    });
+  }
+
+  // Collect names bound by a for-in / for-of / for-as head. `vars` is the
+  // second slot of the loop s-expression and always arrives as an array of
+  // entries — e.g. ['x'], ['x', 'i'], ['k', 'v'], [['array', 'a', 'b']],
+  // or [undefined] for no-var range loops.
+  collectVarsFromLoopHead(vars, varSet) {
+    if (!Array.isArray(vars)) return;
+    vars.forEach(v => {
+      if (v == null) return;
+      if (typeof v === 'string') { varSet.add(v); return; }
+      if (Array.isArray(v)) {
+        if (v[0] === 'array') this.collectVarsFromArray(v, varSet);
+        else if (v[0] === 'object') this.collectVarsFromObject(v, varSet);
       }
     });
   }

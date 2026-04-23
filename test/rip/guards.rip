@@ -204,7 +204,7 @@ code 'for-in guard code', '''
   for x in arr when x > 5
     console.log x
   ''', '''
-  for (const x of arr) {
+  for (x of arr) {
     if (x > 5) {
       console.log(x);
     }
@@ -215,8 +215,8 @@ code 'for-of guard code', '''
   for k, v of obj when v > 0
     console.log k
   ''', '''
-  for (const k in obj) {
-    const v = obj[k];
+  for (k in obj) {
+    v = obj[k];
     if ((v > 0)) {
       console.log(k);
     }
@@ -227,9 +227,9 @@ code 'for-of with own code', '''
   for own k, v of obj
     console.log k
   ''', '''
-  for (const k in obj) {
+  for (k in obj) {
 if (!Object.hasOwn(obj, k)) continue;
-const v = obj[k];
+v = obj[k];
 console.log(k);
 }
 '''
@@ -333,7 +333,7 @@ code 'for-as with guard', '''
   for x as iter when x > 0
     console.log x
   ''', '''
-  for (const x of iter) {
+  for (x of iter) {
     if (x > 0) {
       console.log(x);
     }

@@ -13,13 +13,30 @@ test "for-in range", "sum = 0; for i in [1..5]\n  sum += i\nsum", 15
 # For-in with destructuring and defaults
 test "for-in destructuring with defaults", "arr = [[1, 2, 3], [4, 5], [6]]\nresult = []\nfor [a, b = 99, c = 88] in arr\n  result.push(a + b + c)\nresult", [6, 97, 193]
 
+# Loop variable must be reassignable inside the body (CoffeeScript idiom)
+test "for-in reassign loop var", '''
+  out = []
+  for x in ["  a ", " b  "]
+    x = x.trim()
+    out.push x
+  out
+  ''', ["a", "b"]
+
+test "for-in indexed reassign loop var", '''
+  out = []
+  for x, i in ["  a ", " b  "]
+    x = x.trim()
+    out.push "#{i}:#{x}"
+  out
+  ''', ["0:a", "1:b"]
+
 # Range loop without variable (N-time repetition)
 test "range loop without var", "result = ''; for [1...5]\n  result += 'x'\nresult", "xxxx"
 test "range loop without var with by", "result = ''; for [1...10] by 2\n  result += 'x'\nresult", "xxxxx"
 test "postfix range without var", "result = ''; (result += 'x' for [1...5]); result", "xxxx"
 
 # Code generation
-code "for-in loop", "for x in arr\n  x", "for (const x of arr) { x; }"
+code "for-in loop", "for x in arr\n  x", "for (x of arr) { x; }"
 code "range loop no var", "for [1...5]\n  doSomething()", "for (let _i = 1; _i < 5; _i++) {\n  doSomething();\n}"
 
 # ==============================================================================
@@ -30,10 +47,20 @@ code "range loop no var", "for [1...5]\n  doSomething()", "for (let _i = 1; _i <
 test "for-of object", "obj = {a: 1, b: 2}; sum = 0; for key, val of obj\n  sum += val\nsum", 3
 test "for-of keys only", "obj = {a: 1, b: 2}; keys = []; for key of obj\n  keys.push(key)\nkeys.length", 2
 
+# For-of must allow reassigning the value variable inside the body
+test "for-of reassign value var", '''
+  obj = {a: "  1 "}
+  out = null
+  for k, v of obj
+    v = v.trim()
+    out = v
+  out
+  ''', "1"
+
 # Code generation
-code "for-of loop", "for k, v of obj\n  v", "for (const k in obj) {\nconst v = obj[k];\nv;\n}"
-code "for own", "for own k of obj\n  k", "for (const k in obj) {\nif (!Object.hasOwn(obj, k)) continue;\nk;\n}"
-code "for own with value", "for own k, v of obj\n  v", "for (const k in obj) {\nif (!Object.hasOwn(obj, k)) continue;\nconst v = obj[k];\nv;\n}"
+code "for-of loop", "for k, v of obj\n  v", "for (k in obj) {\nv = obj[k];\nv;\n}"
+code "for own", "for own k of obj\n  k", "for (k in obj) {\nif (!Object.hasOwn(obj, k)) continue;\nk;\n}"
+code "for own with value", "for own k, v of obj\n  v", "for (k in obj) {\nif (!Object.hasOwn(obj, k)) continue;\nv = obj[k];\nv;\n}"
 
 # ==============================================================================
 # While Loops: "while"
@@ -130,8 +157,8 @@ test "for-as destructure array", '''
   ''', 21
 
 # Code generation
-code "for-as loop", "for x as iter\n  x", "for (const x of iter) { x; }"
-code "for-as destructure gen", "for [k, v] as m.entries()\n  k", "for (const [k, v] of m.entries()) { k; }"
+code "for-as loop", "for x as iter\n  x", "for (x of iter) { x; }"
+code "for-as destructure gen", "for [k, v] as m.entries()\n  k", "for ([k, v] of m.entries()) { k; }"
 
 # ==============================================================================
 # Nested Loops
@@ -192,7 +219,7 @@ code 'break in for loop', '''
     if x > 5
       break
   ''', '''
-  for (const x of arr) {
+  for (x of arr) {
     if (x > 5) {
       break;
     }
@@ -269,7 +296,7 @@ code 'reverse iteration generates countdown', '''
     console.log x
   ''', '''
   for (let _i = arr.length - 1; _i >= 0; _i--) {
-    const x = arr[_i];
+    x = arr[_i];
     console.log(x);
   }
 '''

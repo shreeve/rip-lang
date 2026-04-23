@@ -695,7 +695,7 @@ code 'postfix unless on call generates if statement', '''
   for item in arr
     actions.push item unless item > 3
   ''', '''
-  for (const item of arr) {
+  for (item of arr) {
     if (!(item > 3)) actions.push(item);
   }
 '''

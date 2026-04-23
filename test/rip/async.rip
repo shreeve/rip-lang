@@ -92,7 +92,7 @@ code "async for-as loop", '''
   for await x as iterable
     x
 ''', '''
-for await (const x of iterable) {
+for await (x of iterable) {
   x;
 };
 '''
@@ -101,7 +101,7 @@ code "async for-as with destructuring", '''
   for await [a, b] as iterable
     a + b
 ''', '''
-for await (const [a, b] of iterable) {
+for await ([a, b] of iterable) {
   (a + b);
 };
 '''
@@ -111,7 +111,7 @@ code "async for with break", '''
     break if x > 10
     x
 ''', '''
-for await (const x of iterable) {
+for await (x of iterable) {
   if (x > 10) break;
   x;
 }
@@ -122,7 +122,7 @@ code "async for with continue", '''
     continue if x < 5
     x
 ''', '''
-for await (const x of iterable) {
+for await (x of iterable) {
   if (x < 5) continue;
   x;
 }
@@ -133,7 +133,7 @@ code "as! loop", '''
   for x as! iterable
     x
 ''', '''
-for await (const x of iterable) {
+for await (x of iterable) {
   x;
 };
 '''
@@ -142,7 +142,7 @@ code "as! with destructuring", '''
   for [a, b] as! iterable
     a + b
 ''', '''
-for await (const [a, b] of iterable) {
+for await ([a, b] of iterable) {
   (a + b);
 };
 '''
@@ -152,7 +152,7 @@ code "as! with break", '''
     break if x > 10
     x
 ''', '''
-for await (const x of iterable) {
+for await (x of iterable) {
   if (x > 10) break;
   x;
 }
@@ -163,7 +163,7 @@ code "as! with continue", '''
     continue if x < 5
     x
 ''', '''
-for await (const x of iterable) {
+for await (x of iterable) {
   if (x < 5) continue;
   x;
 }
@@ -496,7 +496,7 @@ let x;
 
 x = await (async () => {
   const result = [];
-  for (const v of arr) {
+  for (v of arr) {
     result.push(await fetch(v));
   }
   return result;
@@ -613,8 +613,8 @@ let x;
 
 x = await (async () => {
   const result = {};
-  for (const k in obj) {
-    const v = obj[k];
+  for (k in obj) {
+    v = obj[k];
     result[k] = await fetch(v);
   }
   return result;
