@@ -203,8 +203,12 @@ def request(input, opts = {})
 def makeInstance(defaults = {})
   inst = (input, opts = {}) -> request(input, mergeOptions(defaults, opts))
 
-  for own m, name of { get: 'GET', post: 'POST', put: 'PUT', patch: 'PATCH', del: 'DELETE', head: 'HEAD' }
-    inst[m] = (input, opts = {}) -> inst(input, { ...opts, method: name })
+  inst.get   = (input, opts = {}) -> inst(input, { ...opts, method: 'GET' })
+  inst.post  = (input, opts = {}) -> inst(input, { ...opts, method: 'POST' })
+  inst.put   = (input, opts = {}) -> inst(input, { ...opts, method: 'PUT' })
+  inst.patch = (input, opts = {}) -> inst(input, { ...opts, method: 'PATCH' })
+  inst.del   = (input, opts = {}) -> inst(input, { ...opts, method: 'DELETE' })
+  inst.head  = (input, opts = {}) -> inst(input, { ...opts, method: 'HEAD' })
 
   inst.create = (opts = {}) -> makeInstance(opts)
   inst.extend = (opts = {}) -> makeInstance(mergeOptions(defaults, opts))
@@ -216,4 +220,7 @@ def makeInstance(defaults = {})
 
 # ==[ Public API ]==
 
-export http = makeInstance()
+http = makeInstance()
+
+export default http
+export { http }
