@@ -243,6 +243,11 @@ grammar =
     o 'Value INDEX_START INDENT Expression OUTDENT INDEX_END'                   , '["[]", 1, 4]'
     o 'Value INDEX_START Slice INDEX_END'                                       , '["[]", 1, 3]'
     o 'Value INDEX_START INDENT Slice OUTDENT INDEX_END'                        , '["[]", 1, 4]'
+    # Pick operator: obj.{a, b: c, d = default} → { a: obj.a, c: obj.b, d: obj.d ?? default }
+    o 'Value PICK_START    PickList OptComma PICK_END'                      , '[".{}",       1, ...3]'
+    o 'Value OPTPICK_START PickList OptComma PICK_END'                      , '["?.{}",   1, ...3]'
+    o 'Value PICK_START    INDENT PickList OptComma OUTDENT PICK_END'       , '[".{}",       1, ...4]'
+    o 'Value OPTPICK_START INDENT PickList OptComma OUTDENT PICK_END'       , '["?.{}",   1, ...4]'
     # Regex indexing with capture group
     o 'Value INDEX_START RegexWithIndex INDEX_END'                              , '[$3[0], $1, ...$3.slice(1)]'
     # ES6 optional indexing (?.[ )
@@ -323,6 +328,11 @@ grammar =
     # Indexing
     o 'ObjSpreadExpr INDEX_START Expression INDEX_END'                , '["[]", 1, 3]'
     o 'ObjSpreadExpr INDEX_START INDENT Expression OUTDENT INDEX_END', '["[]", 1, 4]'
+    # Pick — {...obj.{a, b}} inside object literal spread
+    o 'ObjSpreadExpr PICK_START    PickList OptComma PICK_END'                      , '[".{}",       1, ...3]'
+    o 'ObjSpreadExpr OPTPICK_START PickList OptComma PICK_END'                      , '["?.{}",   1, ...3]'
+    o 'ObjSpreadExpr PICK_START    INDENT PickList OptComma OUTDENT PICK_END'       , '[".{}",       1, ...4]'
+    o 'ObjSpreadExpr OPTPICK_START INDENT PickList OptComma OUTDENT PICK_END'       , '["?.{}",   1, ...4]'
   ]
 
   # ============================================================================
@@ -346,6 +356,36 @@ grammar =
     o 'MapAssignable : Expression'                , '[":", 1, 3]'
     o 'MapAssignable : INDENT Expression OUTDENT' , '[":", 1, 4]'
     o '... Expression'                            , '["...", 2]'
+  ]
+
+  # ============================================================================
+  # Pick Expressions — obj.{a, b: newB, c = 'default', d: newD = 'x'}
+  #
+  # Each item compiles to a 3-tuple [srcKey, dstKey, defaultOrNull] that
+  # the codegen emits as `dstKey: (source.srcKey ?? default)` — nullish,
+  # intentionally different from JS destructure defaults (undefined-only).
+  #
+  # PickKey is restricted to Identifier/Property so we don't admit strings,
+  # numbers, or computed keys in v1.
+  # ============================================================================
+
+  PickList: [
+    o 'PickItem'                                         , '[1]'
+    o 'PickList , PickItem'                              , '[...1, 3]'
+    o 'PickList OptComma TERMINATOR PickItem'            , '[...1, 4]'
+    o 'PickList OptComma INDENT PickList OptComma OUTDENT', '[...1, ...4]'
+  ]
+
+  PickItem: [
+    o 'PickKey'                                 , '[1, 1, null]'   # shorthand {a}        → ["a", "a", null]
+    o 'PickKey : PickKey'                       , '[1, 3, null]'   # rename   {a: b}      → ["a", "b", null]
+    o 'PickKey = Expression'                    , '[1, 1, 3]'      # default  {a = 5}     → ["a", "a", 5]
+    o 'PickKey : PickKey = Expression'          , '[1, 3, 5]'      # both     {a: b = 5}  → ["a", "b", 5]
+  ]
+
+  PickKey: [
+    o 'Identifier'
+    o 'Property'
   ]
 
   MapAssignable: [

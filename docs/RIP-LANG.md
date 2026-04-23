@@ -556,6 +556,93 @@ Common use cases: config objects, options bags, state initialization, DOM
 styling, merging defaults with overrides — anywhere you're setting multiple
 properties on an existing object.
 
+## Pick Operator (`.{ }`)
+
+A Rip original. Project a subset of an object's properties into a new object,
+with optional renaming and defaults — sugar for the common
+destructure-then-construct pattern:
+
+```coffee
+# Without .{ } — repetitive
+response = { firstName: user.firstName, lastName: user.lastName, dob: user.dob }
+
+# With .{ } — clean
+response = user.{firstName, lastName, dob}
+```
+
+`obj.{a, b, c}` compiles to `{ a: obj.a, b: obj.b, c: obj.c }`. The source is
+evaluated once — if it's a complex expression (call, member access, indexed),
+an arrow IIFE binds a single temp so getters and reactive reads fire exactly
+once.
+
+### Forms
+
+```coffee
+# Bare keys — project as-is
+user.{firstName, lastName}
+# → {firstName: user.firstName, lastName: user.lastName}
+
+# Rename — left side is source key, right side is destination key
+user.{firstName: given, lastName: family}
+# → {given: user.firstName, family: user.lastName}
+
+# Nullish default — fires on undefined OR null (deliberately broader than
+# JS destructure's undefined-only default, to match DB NULL reality)
+user.{role = 'guest', active = true}
+# → {role: (user.role ?? 'guest'), active: (user.active ?? true)}
+
+# Rename + default combined
+user.{role: r = 'guest'}
+# → {r: (user.role ?? 'guest')}
+
+# Multi-line
+response = user.{
+  firstName
+  lastName
+  dob
+  role = 'patient'
+}
+```
+
+### Optional chain (`?.{ }`)
+
+Returns `undefined` when the source is null/undefined, preserving the
+distinction from a present-but-empty result:
+
+```coffee
+maybeUser?.{firstName, lastName}
+# → maybeUser == null ? undefined : {firstName: maybeUser.firstName, ...}
+```
+
+### Reserved words work
+
+Reserved-word keys like `default`, `class`, `delete`, `new`, `typeof`, `if`
+are automatically treated as property names inside a pick body — the same
+way they work after a `.` for plain member access:
+
+```coffee
+# Common real-world case (HTML/DOM/frameworks use `class`, `default`, …)
+props.{class, default, onClick}
+# → {class: props.class, default: props.default, onClick: props.onClick}
+```
+
+### Semantics
+
+- **Missing keys** read as `undefined` (normal property read on the source).
+- **Source evaluated once** for complex expressions (`getUser().{a, b}` only
+  calls `getUser()` one time).
+- **Defaults fire on nullish** (`??`) — both `undefined` and `null` trigger,
+  unlike JS destructure which only fires on `undefined`.
+- **Chainable** — `user.{firstName, role}.role` works.
+
+### Not supported (use explicit objects for these)
+
+- Spread inside body: `user.{...rest}` is rejected.
+- Computed or string/number keys: `user.{[k]}`, `user.{'a'}`, `user.{0}` are
+  rejected.
+- Nested picks: `user.{address.{city, zip}}` is not supported in v1 — use an
+  explicit object or a helper for now.
+
 ## Prototype Operator (`::`)
 
 Access `.prototype` with `::` (CoffeeScript-style). Disambiguated from type annotations by spacing:

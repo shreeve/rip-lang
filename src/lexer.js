@@ -140,8 +140,8 @@ let IMPLICIT_COMMA_BEFORE_ARROW = new Set([
 ]);
 
 // Tokens that start/end balanced pairs
-let EXPRESSION_START = new Set(['(', '[', '{', 'MAP_START', 'INDENT', 'CALL_START', 'PARAM_START', 'INDEX_START', 'STRING_START', 'INTERPOLATION_START', 'REGEX_START']);
-let EXPRESSION_END   = new Set([')', ']', '}', 'MAP_END', 'OUTDENT', 'CALL_END', 'PARAM_END', 'INDEX_END', 'STRING_END', 'INTERPOLATION_END', 'REGEX_END']);
+let EXPRESSION_START = new Set(['(', '[', '{', 'MAP_START', 'PICK_START', 'OPTPICK_START', 'INDENT', 'CALL_START', 'PARAM_START', 'INDEX_START', 'STRING_START', 'INTERPOLATION_START', 'REGEX_START']);
+let EXPRESSION_END   = new Set([')', ']', '}', 'MAP_END', 'PICK_END', 'OUTDENT', 'CALL_END', 'PARAM_END', 'INDEX_END', 'STRING_END', 'INTERPOLATION_END', 'REGEX_END']);
 
 // Balanced pair inverses
 let INVERSES = {
@@ -156,6 +156,8 @@ let INVERSES = {
   'INTERPOLATION_START': 'INTERPOLATION_END', 'INTERPOLATION_END': 'INTERPOLATION_START',
   'REGEX_START': 'REGEX_END', 'REGEX_END': 'REGEX_START',
   'MAP_START': 'MAP_END', 'MAP_END': 'MAP_START',
+  'PICK_START': 'PICK_END', 'PICK_END': 'PICK_START',
+  'OPTPICK_START': 'PICK_END',
 };
 
 // Tokens that close a clause (for normalizeLines)
@@ -445,6 +447,47 @@ export class Lexer {
     return p ? p[1] : undefined;
   }
 
+  // True when the next identifier/keyword-shaped token would sit in a
+  // pick-key position of a `.{` or `?.{` body. Used by identifierToken()
+  // to tag reserved-word keys (`default`, `class`, `delete`, …) as
+  // PROPERTY so they don't later become keyword/UNARY tokens (which
+  // would suppress a following TERMINATOR in multi-line bodies).
+  //
+  // Pick-key position means prev is one of: `{` (first key), `,`
+  // (subsequent key), `:` (rename dest), TERMINATOR/INDENT/OUTDENT
+  // (newline-separated key), AND we're inside a `{` that was
+  // preceded by a tight `.` or `?.`.
+  inPickKeyPos() {
+    let prev = this.prev();
+    if (!prev) return false;
+    let p = prev[0];
+    if (p !== '{' && p !== ',' && p !== ':' &&
+        p !== 'TERMINATOR' && p !== 'INDENT' && p !== 'OUTDENT') return false;
+    // Walk back to find the enclosing `{`. Bail out on a few structural
+    // tokens that mean we've left any pick body.
+    let depth = 0;
+    let toks = this.tokens;
+    for (let k = toks.length - 1; k >= 0; k--) {
+      let t = toks[k];
+      let tt = t[0];
+      if (tt === '}' || tt === 'PICK_END') { depth++; continue; }
+      if (tt === '{' || tt === 'PICK_START' || tt === 'OPTPICK_START') {
+        if (depth === 0) {
+          let before = toks[k - 1];
+          return !!(before && (before[0] === '.' || before[0] === '?.') &&
+                    !before.spaced && !t.spaced);
+        }
+        depth--;
+        continue;
+      }
+      // Cheap early-outs — if we escape the local block context, we
+      // clearly aren't inside any pick body.
+      if (depth === 0 && (tt === '(' || tt === 'CALL_START' ||
+          tt === '[' || tt === 'INDEX_START')) return false;
+    }
+    return false;
+  }
+
   // --------------------------------------------------------------------------
   // 1. Identifier Token
   // --------------------------------------------------------------------------
@@ -533,7 +576,7 @@ export class Lexer {
     if (colon && colon.length > 1 && /[a-zA-Z_$]/.test(this.chunk[idLen + colon.length])) colon = null;
 
     // Property vs identifier
-    if (colon || (prev && (prev[0] === '.' || prev[0] === '?.' || (!prev.spaced && prev[0] === '@')))) {
+    if (colon || (prev && (prev[0] === '.' || prev[0] === '?.' || (!prev.spaced && prev[0] === '@'))) || this.inPickKeyPos()) {
       tag = 'PROPERTY';
 
       // In render blocks, consume hyphenated CSS class names: .counter-display → PROPERTY "counter-display"
@@ -1433,6 +1476,8 @@ export class Lexer {
   rewrite(tokens) {
     this.tokens = tokens;
     this.removeLeadingNewlines();
+    this.rewriteDottedPicks();  // .{ and ?.{ — must run before map literals so
+                                // pick bodies see raw { } for depth counting
     this.rewriteMapLiterals();
     this.closeMergeAssignments();
     this.closeOpenCalls();
@@ -1472,6 +1517,71 @@ export class Lexer {
         let tag = tokens[j][0];
         if (tag === '{' || tag === 'MAP_START') depth++;
         if (tag === '}') { depth--; if (depth === 0) tokens[j][0] = 'MAP_END'; }
+      }
+    }
+  }
+
+  // Pick operator: `obj.{a, b}` → { a: obj.a, b: obj.b }
+  //                `obj?.{a, b}` → obj == null ? undefined : { a: obj.a, b: obj.b }
+  //
+  // Recognize `.` or `?.` followed immediately by `{` at postfix position
+  // (preceded by an INDEXABLE value). Retag the `.` away and mark the braces
+  // as PICK_START/PICK_END (or OPTPICK_START/PICK_END for optional chain),
+  // leaving the body tokens to parse via the Pick grammar.
+  //
+  // Runs before rewriteMapLiterals() so pick bodies see raw `{`/`}` for
+  // depth tracking; map literals inside defaults are handled on the next
+  // pass after pick braces have been distinguished.
+  rewriteDottedPicks() {
+    let tokens = this.tokens;
+    for (let i = 0; i < tokens.length; i++) {
+      let tag = tokens[i][0];
+      if (tag !== '.' && tag !== '?.') continue;
+      let next = tokens[i + 1];
+      if (!next || next[0] !== '{') continue;
+      if (tokens[i].spaced || tokens[i].newLine) continue;
+      if (next.spaced) continue;  // newLine is OK — allows multiline body: `obj.{\n  a\n  b\n}`
+      let prev = tokens[i - 1];
+      if (!prev || !INDEXABLE.has(prev[0])) continue;
+      let optional = (tag === '?.');
+      tokens.splice(i, 1);
+      tokens[i][0] = optional ? 'OPTPICK_START' : 'PICK_START';
+      // Walk the body: track depth to find the matching close, and retag
+      // keyword-shaped tokens (DEFAULT, CLASS, DELETE, IF, …) to PROPERTY
+      // when they're in a PickKey position (bare key, rename dest, or
+      // after separator). Mirrors how `obj.default` already works — inside
+      // a pick body, keyword-shaped words are property names, not keywords.
+      let depth = 1;
+      // Key-position tracker: a token in "key position" is one that should
+      // be a PickKey. Flips to false after consuming a key. Comma, colon,
+      // TERMINATOR, and INDENT inside the body reset to key position. `=`
+      // starts a default expression (keywords stay as keywords there).
+      let atKeyPos = true;
+      let inDefault = false;
+      for (let j = i + 1; j < tokens.length && depth > 0; j++) {
+        let t = tokens[j];
+        let tt = t[0];
+        if (tt === '{' || tt === 'PICK_START' || tt === 'OPTPICK_START') { depth++; continue; }
+        if (tt === '}') {
+          depth--;
+          if (depth === 0) { tokens[j][0] = 'PICK_END'; break; }
+          continue;
+        }
+        if (depth !== 1) continue;  // nested — don't touch
+        if (tt === ',' || tt === 'TERMINATOR' || tt === 'INDENT' || tt === 'OUTDENT') {
+          atKeyPos = true; inDefault = false; continue;
+        }
+        if (tt === ':' && !inDefault) { atKeyPos = true; continue; }
+        if (tt === '=') { atKeyPos = false; inDefault = true; continue; }
+        if (!atKeyPos || inDefault) continue;
+        // In key position: if token has an identifier-shaped value but
+        // isn't already IDENTIFIER/PROPERTY, retag. This covers every
+        // Rip keyword without maintaining an explicit list.
+        let val = typeof t[1] === 'string' ? t[1] : null;
+        if (val && /^[A-Za-z_$][\w$]*$/.test(val) && tt !== 'IDENTIFIER' && tt !== 'PROPERTY') {
+          t[0] = 'PROPERTY';
+        }
+        atKeyPos = false;
       }
     }
   }
@@ -1801,7 +1911,7 @@ export class Lexer {
         if (stackTop()) {
           let [stackTag, stackIdx] = stackTop();
           let stackNext = stack[stack.length - 2];
-          let isBrace = (t) => t === '{' || t === 'MAP_START';
+          let isBrace = (t) => t === '{' || t === 'MAP_START' || t === 'PICK_START' || t === 'OPTPICK_START';
           if ((isBrace(stackTag) || (stackTag === 'INDENT' && isBrace(stackNext?.[0]) && !isImplicit(stackNext))) &&
               (startsLine || this.tokens[s - 1]?.[0] === ',' || isBrace(this.tokens[s - 1]?.[0]) || isBrace(this.tokens[s]?.[0]))) {
             return forward(1);

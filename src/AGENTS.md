@@ -93,6 +93,13 @@ Complete node reference:
 ['map-literal', ...pairs]       // *{ } → new Map([[key, value], ...])
 ['...', expr]                   // Spread (prefix only)
 
+// Pick operator — obj.{ } / obj?.{ }
+// Heads use syntax-shape strings (not `pick`/`optpick`) so they can't
+// collide with a user function of the same name: `pick(false)` as an
+// ordinary call would otherwise be misrouted through the emitter table.
+['.{}',  source, ...items]      // items: [srcKey, dstKey, defaultExpr|null]
+['?.{}', source, ...items]      // optional-chain pick — undefined if source null
+
 // Operators
 ['+', left, right]   ['-', left, right]   ['*', left, right]
 ['/', left, right]   ['%', left, right]   ['**', left, right]

@@ -1,0 +1,259 @@
+# Test: Pick Operator `.{ }` and `?.{ }`
+#
+# Sugar for destructure-then-construct: `whom.{a, b: c, d = 5}` compiles to
+# `{ a: whom.a, c: whom.b, d: whom.d ?? 5 }`.
+#
+# Semantics (deliberate):
+# - Missing keys → `undefined` (source.key read)
+# - Default fires on **nullish** (undefined OR null), NOT destructure-faithful
+#   undefined-only. This is chosen to match DB NULL reality in app code.
+# - Source evaluated ONCE for complex expressions (arrow IIFE) or inline for
+#   simple identifiers / `this`.
+# - Optional-chain `?.{ }` returns `undefined` when source is null/undefined,
+#   preserving the distinction from a present-but-empty result.
+
+# ==============================================================================
+# Runtime — bare picks
+# ==============================================================================
+
+test "bare single"         , "o = {a: 1}; o.{a}"                         , {a: 1}
+test "bare multi"          , "o = {a: 1, b: 2, c: 3}; o.{a, b}"          , {a: 1, b: 2}
+test "missing key → undef" , "o = {a: 1}; r = o.{a, b}; [r.a, r.b]"      , [1, undefined]
+test "bare from literal"   , "({a: 1, b: 2}).{a, b}"                     , {a: 1, b: 2}
+test "bare this"           , """
+  obj = {x: 1, y: 2}
+  obj.{x, y}
+""", {x: 1, y: 2}
+
+# ==============================================================================
+# Runtime — rename (`src: dst`)
+# ==============================================================================
+
+test "rename single"       , "o = {firstName: 'Alice'}; o.{firstName: fn}" , {fn: 'Alice'}
+test "rename mixed"        , "o = {a: 1, b: 2}; o.{a: x, b}"              , {x: 1, b: 2}
+# Reserved-word keys like `default`, `class`, `delete` aren't supported in
+# the PickKey slot in v1 — the lexer tokenizes them as keyword tokens, not
+# PROPERTY tokens. Use an explicit object literal for those cases:
+#   result = { default: whom.default }
+# Can revisit with a lexer retag inside pick bodies if it becomes common.
+
+# ==============================================================================
+# Runtime — default (`name = expr`) — nullish semantics
+# ==============================================================================
+
+test "default fires on undefined", "o = {}; o.{role = 'user'}"            , {role: 'user'}
+test "default fires on null"     , "o = {role: null}; o.{role = 'user'}"  , {role: 'user'}
+test "default skipped: present"  , "o = {role: 'admin'}; o.{role = 'u'}"  , {role: 'admin'}
+test "default skipped: false"    , "o = {active: false}; o.{active = true}", {active: false}
+test "default skipped: 0"        , "o = {count: 0}; o.{count = 5}"        , {count: 0}
+test "default skipped: empty str", "o = {label: ''}; o.{label = 'x'}"     , {label: ''}
+test "default is expression"     , "y = 10; o = {}; o.{x = y * 2}"        , {x: 20}
+test "default + rename"          , "o = {}; o.{role: r = 'guest'}"        , {r: 'guest'}
+
+# ==============================================================================
+# Runtime — optional-chain (`?.{ }`)
+# ==============================================================================
+
+test "optpick null src"        , "o = null; o?.{a, b}"                    , undefined
+test "optpick undefined src"   , "o = undefined; o?.{a}"                  , undefined
+test "optpick present src"     , "o = {a: 1, b: 2}; o?.{a, b}"            , {a: 1, b: 2}
+test "optpick with rename"     , "o = {first: 'A'}; o?.{first: f}"        , {f: 'A'}
+test "optpick + default"       , "o = {}; o?.{role = 'u'}"                , {role: 'u'}
+test "optpick null → no default", "o = null; o?.{role = 'u'}"             , undefined
+
+# ==============================================================================
+# Runtime — lazy default evaluation
+# ==============================================================================
+
+test "default not evaluated when source present" , """
+  calls = 0
+  fire = -> (calls += 1; 'default')
+  o = {role: 'admin'}
+  r = o.{role = fire()}
+  [r.role, calls]
+""", ['admin', 0]
+
+test "default evaluated on missing" , """
+  calls = 0
+  fire = -> (calls += 1; 'default')
+  o = {}
+  r = o.{role = fire()}
+  [r.role, calls]
+""", ['default', 1]
+
+test "default evaluated on null"    , """
+  calls = 0
+  fire = -> (calls += 1; 'fallback')
+  o = {role: null}
+  r = o.{role = fire()}
+  [r.role, calls]
+""", ['fallback', 1]
+
+test "optpick nullish → default not evaluated" , """
+  calls = 0
+  fire = -> (calls += 1; 'boom')
+  o = null
+  r = o?.{role = fire()}
+  [r, calls]
+""", [undefined, 0]
+
+# ==============================================================================
+# Runtime — source evaluated exactly once
+# ==============================================================================
+
+test "complex source: evaluated once" , """
+  calls = 0
+  src = ->
+    calls += 1
+    {a: 1, b: 2, c: 3}
+  r = src().{a, b, c}
+  [r, calls]
+""", [{a: 1, b: 2, c: 3}, 1]
+
+test "optpick complex source: evaluated once when present" , """
+  calls = 0
+  src = ->
+    calls += 1
+    {a: 1, b: 2}
+  r = src()?.{a, b}
+  [r, calls]
+""", [{a: 1, b: 2}, 1]
+
+test "optpick complex source: evaluated once when null" , """
+  calls = 0
+  src = ->
+    calls += 1
+    null
+  r = src()?.{a, b}
+  [r, calls]
+""", [undefined, 1]
+
+# ==============================================================================
+# Runtime — chaining and composition
+# ==============================================================================
+
+test "chain property access after pick" , "o = {a: 1}; o.{a}.a"           , 1
+test "pick from array element"          , "xs = [{a: 1}]; xs[0].{a}"      , {a: 1}
+test "nested default with object literal", "o = {}; o.{cfg = {enabled: true}}", {cfg: {enabled: true}}
+test "nested default with map literal"   , "o = {}; o.{cfg = *{k: 1}}; true", true  # smoke test
+test "duplicate dest keys: last wins"    , "o = {a: 1, b: 2}; o.{a, b: a}" , {a: 2}
+
+# ==============================================================================
+# Multiline body
+# ==============================================================================
+
+test "multiline bare", """
+  o = {a: 1, b: 2, c: 3}
+  o.{
+    a
+    b
+    c
+  }
+""", {a: 1, b: 2, c: 3}
+
+test "multiline mixed forms", """
+  o = {firstName: 'Alice', lastName: 'X', role: null}
+  o.{
+    firstName: fn
+    lastName
+    role = 'user'
+  }
+""", {fn: 'Alice', lastName: 'X', role: 'user'}
+
+# ==============================================================================
+# Codegen shape assertions
+# ==============================================================================
+
+opts = { skipPreamble: true, skipRuntimes: true }
+
+code "simple src inlines"     , "result = whom.{a, b}"           , """
+  let result;
+  result = ({a: whom.a, b: whom.b});
+""", opts
+
+code "complex src uses IIFE"  , "result = foo().{a, b}"          , """
+  let result;
+  result = ((_) => ({a: _.a, b: _.b}))(foo());
+""", opts
+
+code "rename inverts"         , "result = o.{a: b}"              , """
+  let result;
+  result = ({b: o.a});
+""", opts
+
+code "default uses nullish"   , "result = o.{a = 5}"             , """
+  let result;
+  result = ({a: (o.a ?? 5)});
+""", opts
+
+code "optpick simple"         , "result = whom?.{a, b}"          , """
+  let result;
+  result = (whom == null ? undefined : {a: whom.a, b: whom.b});
+""", opts
+
+code "optpick complex src"    , "result = foo()?.{a, b}"         , """
+  let result;
+  result = ((_) => _ == null ? undefined : ({a: _.a, b: _.b}))(foo());
+""", opts
+
+code "this source inlines"    , "x = @.{a, b}"                   , """
+  let x;
+  x = ({a: this.a, b: this.b});
+""", opts
+
+code "this.x uses IIFE"       , "x = @foo.{a, b}"                , """
+  let x;
+  x = ((_) => ({a: _.a, b: _.b}))(this.foo);
+""", opts
+
+# ==============================================================================
+# Parse errors — things we explicitly REJECT
+# ==============================================================================
+
+fail "empty pick is a parse error"          , "o = {}; o.{}"
+fail "empty optpick is a parse error"       , "o = {}; o?.{}"
+fail "spread in pick body rejected"         , "o = {}; o.{...rest}"
+fail "string key rejected"                  , "o = {}; o.{'a'}"
+fail "number key rejected"                  , "o = {}; o.{0}"
+fail "computed key rejected"                , "o = {}; k = 'x'; o.{[k]}"
+fail "string value on dest side rejected"   , "o = {}; o.{a: 'string'}"
+fail "nested pick v1 rejected"              , "o = {}; o.{address.{city}}"
+
+# ==============================================================================
+# Spacing rules — `.` and `{` must be tight
+# ==============================================================================
+
+fail "space between . and { rejected"       , "o = {}; o. {a}"
+
+# These should parse (space before `.` is allowed per existing `.name` access)
+test "space before . is ok", "o = {a: 1}; o .{a}", {a: 1}
+
+# ==============================================================================
+# Runtime — reserved words as pick keys
+# ==============================================================================
+# Rip retags reserved-word tokens (default, class, delete, if, …) to PROPERTY
+# when they appear in a pick-key position. This mirrors how `obj.default`
+# already works for plain property access.
+
+test "reserved: default bare"       , "o = {default: 1}; o.{default}"                    , {default: 1}
+test "reserved: class bare"         , "o = {class: 'btn'}; o.{class}"                    , {class: 'btn'}
+test "reserved: delete bare"        , "o = {delete: true}; o.{delete}"                   , {delete: true}
+test "reserved: new bare"           , "o = {new: 1}; o.{new}"                            , {new: 1}
+test "reserved: typeof bare"        , "o = {typeof: 's'}; o.{typeof}"                    , {typeof: 's'}
+test "reserved: if bare"            , "o = {if: 1}; o.{if}"                              , {if: 1}
+test "reserved: multiple"           , "o = {class: 'c', default: 1}; o.{class, default}" , {class: 'c', default: 1}
+test "reserved: rename src"         , "o = {default: 9}; o.{default: d}"                 , {d: 9}
+test "reserved: rename dest"        , "o = {x: 9}; o.{x: default}"                       , {default: 9}
+test "reserved: with regular key"   , "o = {a: 1, class: 'c'}; o.{a, class}"             , {a: 1, class: 'c'}
+test "reserved: optpick"            , "o = null; o?.{default, class}"                    , undefined
+test "reserved: optpick present"    , "o = {class: 'c'}; o?.{class}"                     , {class: 'c'}
+test "reserved: multiline"          , '''
+o = {default: 1, class: 'c', delete: true, new: 2}
+o.{
+  default
+  class
+  delete
+  new
+}
+''', {default: 1, class: 'c', delete: true, new: 2}
+test "reserved: default value ok"   , "o = {}; o.{role = 'u', class: c = 'btn'}"         , {role: 'u', c: 'btn'}

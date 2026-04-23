@@ -198,6 +198,12 @@ export class CodeEmitter {
     'optcall': 'emitOptCall',
     'regex-index': 'emitRegexIndex',
 
+    // Pick operator — obj.{a, b: c, d = default}
+    // Heads are non-identifier shapes so they can't collide with a user
+    // function named `pick` (e.g. `pick = (x) -> ...; pick(false)`).
+    '.{}':  'emitPick',
+    '?.{}': 'emitOptPick',
+
     // Functions
     'def': 'emitDef',
     '->': 'emitThinArrow',
@@ -1023,7 +1029,7 @@ export class CodeEmitter {
     this._componentName = prevComponentName;
     this._componentTypeParams = prevComponentTypeParams;
     this._schemaName = prevSchemaName;
-    let isObjLit = this.is(value, 'object');
+    let isObjLit = this.is(value, 'object') || this.is(value, '.{}') || this.is(value, '?.{}');
     if (!isObjLit) valueCode = this.unwrap(valueCode);
 
     let needsParensVal = context === 'value';
@@ -1056,6 +1062,75 @@ export class CodeEmitter {
   emitOptionalProperty(head, rest) {
     let [obj, prop] = rest;
     return `${this.emit(obj, 'value')}?.${prop}`;
+  }
+
+  // Pick operator: obj.{a, b: c, d = default}
+  //
+  // Semantics:
+  //   - missing key → `undefined` (source.key just reads as undefined)
+  //   - default fires on nullish (`??`), deliberately broader than JS
+  //     destructure's undefined-only defaults, to match DB NULL reality.
+  //   - rename `a: b` emits `b: source.a` (inverse of destructure pattern)
+  //
+  // Codegen strategy:
+  //   - Simple source (bare identifier, `this`) → inline, no function alloc
+  //   - Complex source (call, member, indexed, etc.) → arrow IIFE binds
+  //     a single-letter temp to ensure single evaluation and avoid
+  //     repeating getter reads.
+  //
+  // AST: ["pick", source, [srcKey, dstKey, defaultOrNull], ...]
+  emitPick(head, rest, context, sexpr) {
+    let [source, ...items] = rest;
+    let sourceCode = this.emit(source, 'value');
+    let simple = this._isSimplePickSource(source);
+    let ref = simple ? sourceCode : '_';
+
+    let body = items.map(([srcKey, dstKey, def]) => {
+      let access = `${ref}.${str(srcKey)}`;
+      if (def !== null && def !== undefined) {
+        access = `(${access} ?? ${this.emit(def, 'value')})`;
+      }
+      return `${str(dstKey)}: ${access}`;
+    }).join(', ');
+
+    // Always parenthesize the object literal so at statement position it
+    // parses as an expression, not a block. `x = ({a:...})` is harmless;
+    // bare `{a:...}` at statement-top would parse as a block in JS.
+    if (simple) return `({${body}})`;
+    return `((_) => ({${body}}))(${sourceCode})`;
+  }
+
+  // Optional-chain pick: obj?.{a, b}
+  //   - If source is null/undefined, result is `undefined` (not `{}`)
+  //   - Otherwise identical to pick semantics above
+  emitOptPick(head, rest, context, sexpr) {
+    let [source, ...items] = rest;
+    let sourceCode = this.emit(source, 'value');
+    let simple = this._isSimplePickSource(source);
+    let ref = simple ? sourceCode : '_';
+
+    let body = items.map(([srcKey, dstKey, def]) => {
+      let access = `${ref}.${str(srcKey)}`;
+      if (def !== null && def !== undefined) {
+        access = `(${access} ?? ${this.emit(def, 'value')})`;
+      }
+      return `${str(dstKey)}: ${access}`;
+    }).join(', ');
+
+    if (simple) return `(${sourceCode} == null ? undefined : {${body}})`;
+    return `((_) => _ == null ? undefined : ({${body}}))(${sourceCode})`;
+  }
+
+  // A pick source is "simple" only when it's safe to reference multiple
+  // times with no observable difference from a single-evaluation form.
+  // That restricts to:
+  //   - bare identifier    (no side effects, no getters)
+  //   - `this`             (same)
+  // Member access like `this.x` or `obj.y` must NOT be inlined: getters
+  // and reactive tracking can observe each read.
+  _isSimplePickSource(node) {
+    if (typeof node === 'string') return true;
+    return false;
   }
 
   emitRegexIndex(head, rest) {

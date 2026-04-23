@@ -365,6 +365,8 @@ rip -cm example.rip
 | `a.b:`      | Dotted key       | `{host.name: "x"}`          |
 | `*{ }`      | Map literal      | `*{/pat/: val, a: 1}`       |
 | `:name`     | Symbol literal   | `:redo`, `:skip`, `:active`  |
+| `.{ }`      | Pick             | `user.{firstName, lastName}` |
+| `?.{ }`     | Optional pick    | `maybeUser?.{a, b}`          |
 
 ### Standard Library
 
