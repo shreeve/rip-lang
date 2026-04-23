@@ -47,3 +47,4 @@ apps/medlabs/
 !docs/extensions/**/*.vsix
 !docs/extensions/**/*.duckdb_extension
 !docs/extensions/**/*.duckdb_extension.gz
+trustlabs/
