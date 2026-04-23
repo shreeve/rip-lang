@@ -33,32 +33,29 @@
 #   preflight: boolean — handle OPTIONS before route matching (default: false)
 #
 
-import { get, enableCorsPreflight } from '@rip-lang/server'
+import { get, setCorsPreflightPolicy } from '@rip-lang/server'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 import { existsSync, realpathSync } from 'node:fs'
 
 export cors = (opts = {}) ->
-  origin = opts.origin or '*'
-  methods = opts.methods or 'GET,POST,PUT,PATCH,DELETE,OPTIONS'
-  headers = opts.headers or 'Content-Type,Authorization,X-Requested-With'
-  credentials = opts.credentials or false
-  maxAge = opts.maxAge or 86400
+  origin        = opts.origin or '*'
+  methods       = opts.methods or 'GET,POST,PUT,PATCH,DELETE,OPTIONS'
+  headers       = opts.headers or 'Content-Type,Authorization,X-Requested-With'
+  credentials   = opts.credentials or false
+  maxAge        = opts.maxAge or 86400
   exposeHeaders = opts.exposeHeaders or ''
 
   # Normalize arrays to comma-separated strings
-  methods = methods.join(',') if Array.isArray(methods)
-  headers = headers.join(',') if Array.isArray(headers)
+  methods       = methods.join(',')       if Array.isArray(methods)
+  headers       = headers.join(',')       if Array.isArray(headers)
   exposeHeaders = exposeHeaders.join(',') if Array.isArray(exposeHeaders)
 
-  # Enable early OPTIONS handling if preflight option is set
-  enableCorsPreflight() if opts.preflight
-
-  (c, next) ->
-    requestOrigin = c.req.header('Origin')
-
-    # Determine allowed origin
-    allowedOrigin = if typeof origin is 'function'
+  # Shared origin-validation logic. Used BOTH by this middleware (on
+  # actual requests) AND by the early-OPTIONS preflight handler, so
+  # the two code paths can never disagree about what's allowed.
+  resolveAllowedOrigin = (requestOrigin) ->
+    if typeof origin is 'function'
       if origin(requestOrigin) then requestOrigin else null
     else if Array.isArray(origin)
       if origin.includes(requestOrigin) then requestOrigin else null
@@ -67,6 +64,21 @@ export cors = (opts = {}) ->
     else
       origin
 
+  # Install the preflight policy so api.rip's early-OPTIONS handler uses
+  # the SAME origin validation. Without this, preflight would advertise
+  # a reflected-origin+credentials policy regardless of what the user
+  # configured here — a misleading posture.
+  if opts.preflight
+    setCorsPreflightPolicy (requestOrigin) ->
+      allowedOrigin: resolveAllowedOrigin(requestOrigin)
+      methods:       methods
+      headers:       headers
+      credentials:   credentials
+      maxAge:        maxAge
+
+  (c, next) ->
+    requestOrigin = c.req.header('Origin')
+    allowedOrigin = resolveAllowedOrigin(requestOrigin)
     return next!() unless allowedOrigin
 
     # Set CORS headers
@@ -74,7 +86,10 @@ export cors = (opts = {}) ->
     c.header 'Access-Control-Allow-Methods', methods
     c.header 'Access-Control-Allow-Headers', headers
 
-    if credentials
+    # Only emit credentials when allowed AND origin is specific (not '*').
+    # Credentials + wildcard is a browser-rejected misconfig; refuse to
+    # emit so the misconfig is loud, not silent.
+    if credentials and allowedOrigin isnt '*'
       c.header 'Access-Control-Allow-Credentials', 'true'
 
     if exposeHeaders

@@ -24,30 +24,53 @@ import { posix } from 'node:path'
 # Module State
 # ==============================================================================
 
-_                = null  # Match capture holder for Rip's =~
-_errorHandler    = null  # Custom error handler
-_notFoundHandler = null  # Custom 404 handler
-_rawFilter       = null  # Raw request filter (before body parsing)
-_beforeFilters   = []    # Before request filters
-_afterFilters    = []    # After request filters
-_routes          = []    # Route definitions
-_middlewares     = []    # Global middleware functions
-_prefix          = ''    # Current route prefix for grouping
-_corsPreflight   = false # Enable early OPTIONS handling (set by cors middleware)
+_                     = null  # Match capture holder for Rip's =~
+_errorHandler         = null  # Custom error handler
+_notFoundHandler      = null  # Custom 404 handler
+_rawFilter            = null  # Raw request filter (before body parsing)
+_beforeFilters        = []    # Before request filters
+_afterFilters         = []    # After request filters
+_routes               = []    # Route definitions
+_middlewares          = []    # Global middleware functions
+_prefix               = ''    # Current route prefix for grouping
+_corsPreflightPolicy  = null  # Policy fn set by cors middleware: see setCorsPreflightPolicy
 
 export resetGlobals = ->
-  _errorHandler    = null
-  _notFoundHandler = null
-  _rawFilter       = null
-  _beforeFilters   = []
-  _afterFilters    = []
-  _routes          = []
-  _middlewares     = []
-  _prefix          = ''
-  _corsPreflight   = false
+  _errorHandler        = null
+  _notFoundHandler     = null
+  _rawFilter           = null
+  _beforeFilters       = []
+  _afterFilters        = []
+  _routes              = []
+  _middlewares         = []
+  _prefix              = ''
+  _corsPreflightPolicy = null
 
-# Enable early OPTIONS handling (called by cors middleware with preflight: true)
-export enableCorsPreflight = -> _corsPreflight = true
+# Register a CORS preflight policy. Called by the `cors()` middleware when
+# opts.preflight is set. The policy function receives the request Origin
+# header and returns an object shaped like:
+#
+#   {
+#     allowedOrigin: string | null,   # null means reject / no headers
+#     methods: string,                # "GET,POST,..."
+#     headers: string,                # "Content-Type,..."
+#     credentials: boolean,
+#     maxAge: number                  # seconds
+#   }
+#
+# Early-OPTIONS handling uses this SAME policy so the preflight response
+# and the actual-request CORS check agree. Without it, preflight could
+# advertise a permissive policy (reflect any origin + credentials) that
+# the middleware would later reject on the real request — a misleading
+# posture that middleware/CSRF audits would flag.
+export setCorsPreflightPolicy = (fn) ->
+  _corsPreflightPolicy = if typeof fn is 'function' then fn else null
+
+# Back-compat shim. The old API enabled an unconditionally-permissive
+# preflight handler; the new API threads the policy through. Calling
+# this with no policy leaves preflight disabled, which is safer than
+# the old permissive default.
+export enableCorsPreflight = -> null
 
 # AsyncLocalStorage for request context (enables sync read() in handlers)
 export requestContext = new AsyncLocalStorage()
@@ -336,17 +359,28 @@ export fetch = (req) ->
     res = fetch!(new Request(req.url, { method: 'GET', headers: req.headers }))
     return new Response(null, { status: res.status, headers: res.headers })
 
-  # Handle CORS preflight (OPTIONS) requests early, before route matching
-  # Enabled when cors middleware is used with preflight: true
-  if method is 'OPTIONS' and _corsPreflight
-    return new Response null,
-      status: 204
-      headers:
-        'Access-Control-Allow-Origin': req.headers.get('origin') or '*'
-        'Access-Control-Allow-Credentials': 'true'
-        'Access-Control-Allow-Methods': 'GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS'
-        'Access-Control-Allow-Headers': req.headers.get('access-control-request-headers') or 'Content-Type,Authorization'
-        'Access-Control-Max-Age': '86400'
+  # Handle CORS preflight (OPTIONS) requests early, before route matching.
+  # The policy function is set by `cors({preflight: true})` and MUST agree
+  # with the middleware's origin validation — otherwise preflight could
+  # advertise a more permissive CORS posture than the app actually enforces.
+  if method is 'OPTIONS' and _corsPreflightPolicy?
+    requestOrigin = req.headers.get('origin')
+    decision = try _corsPreflightPolicy(requestOrigin) catch then null
+    if decision? and decision.allowedOrigin?
+      h =
+        'Access-Control-Allow-Origin':   decision.allowedOrigin
+        'Access-Control-Allow-Methods':  decision.methods  or 'GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS'
+        'Access-Control-Allow-Headers':  decision.headers  or (req.headers.get('access-control-request-headers') or 'Content-Type,Authorization')
+        'Access-Control-Max-Age':        String(decision.maxAge or 86400)
+      # Credentials: ONLY when the policy allows it AND the origin is not
+      # the wildcard (browsers reject credentials + '*' anyway, but the
+      # combination is a well-known misconfig worth refusing to emit).
+      if decision.credentials and decision.allowedOrigin isnt '*'
+        h['Access-Control-Allow-Credentials'] = 'true'
+      return new Response null, { status: 204, headers: h }
+    # Policy rejected this origin — fall through with no CORS headers.
+    # Browsers interpret a missing Access-Control-Allow-Origin as deny.
+    return new Response null, { status: 204 }
 
   match = matchRoute(method, pathname)
 
