@@ -35,6 +35,11 @@ export runWorkerMode = ->
     inflight: false
     handled: 0
     handler: null
+    # draining: set true when the worker is about to retire (maxRequests or
+    # maxSeconds exceeded). Once set, new requests get 503 with Retry-After
+    # so the dispatcher routes them to a fresh worker. The graceful SIGTERM
+    # handler waits for any last in-flight request to complete before exit.
+    draining: false
 
   getHandler = ->
     return workerState.handler if workerState.handler
@@ -98,7 +103,17 @@ export runWorkerMode = ->
     maxRequestBodySize: 100 * 1024 * 1024
     fetch: (req) ->
       url = new URL(req.url)
-      return new Response(if workerState.appReady then 'ok' else 'not-ready') if url.pathname is '/ready'
+      if url.pathname is '/ready'
+        status = if workerState.draining then 'draining'
+        else if workerState.appReady then 'ok' else 'not-ready'
+        return new Response(status)
+
+      # Draining workers refuse new work so the dispatcher moves on to a
+      # fresh worker instead of getting a 503-busy race with exit().
+      if workerState.draining
+        return new Response 'draining',
+          status: 503
+          headers: { 'Rip-Worker-Draining': '1', 'Retry-After': '0', 'Rip-Worker-Id': String(workerId) }
 
       if workerState.inflight
         return new Response 'busy',
@@ -118,11 +133,22 @@ export runWorkerMode = ->
         warn "[worker #{workerId}] ERROR:", err
         new Response('error', { status: 500 })
       finally
-        workerState.inflight = false
         workerState.handled++
         exceededReqs = workerState.handled >= maxRequests
         exceededTime = maxSeconds > 0 and (Date.now() - startedAtMs) / 1000 >= maxSeconds
-        setTimeout (-> exit 0), 10 if exceededReqs or exceededTime
+        if exceededReqs or exceededTime
+          # Order matters: flip draining FIRST so any request that arrives
+          # between `inflight = false` and SIGTERM sees 503-draining and
+          # goes to another worker. Then clear inflight so the graceful
+          # shutdown handler doesn't wait on our own completed request.
+          workerState.draining = true
+          workerState.inflight = false
+          # Route through SIGTERM so the shutdown handler can drain (it
+          # already waits up to SHUTDOWN_TIMEOUT_MS for any in-flight
+          # request). setImmediate lets this response flush first.
+          setImmediate -> process.kill(process.pid, 'SIGTERM')
+        else
+          workerState.inflight = false
 
   selfJoin!
 
