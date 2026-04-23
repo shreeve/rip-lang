@@ -580,12 +580,12 @@ export validators =
   bool:      (v) -> if v =~ /^(true|t|1|yes|y|on)$/i then true else if v =~ /^(false|f|0|no|n|off)$/i then false else null
 
   # Contact, geo, identity
-  email:     (v) -> v[/^([a-zA-Z0-9._%+-]+)@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})$/i] and _[0]
+  email:     (v) -> v[/^([a-zA-Z0-9._%+-]+)@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})$/i] and _[0].toLowerCase()
   state:     (v) -> v[/^([a-z][a-z])$/i]              and _[1].toUpperCase()
   zip:       (v) -> v[/^(\d{5})/]                     and _[1]
   zipplus4:  (v) -> v[/^(\d{5})-?(\d{4})$/]           and "#{_[1]}-#{_[2]}"
   ssn:       (v) -> v[/^(\d{3})-?(\d{2})-?(\d{4})$/]  and "#{_[1]}#{_[2]}#{_[3]}"
-  sex:       (v) -> v[/^(m|male|f|female|o|other)$/i] and _[1][0].toLowerCase()
+  sex:       (v) -> v[/^(m|male|f|female|o|other|u|unknown|unspec(?:ified)?)$/i] and _[1][0].toUpperCase()
 
   # Phone
   phone:     (v) -> toPhone(v)
@@ -649,9 +649,13 @@ export read = (name = null, type = null, miss = null) ->
     throw Object.assign(new Error("Missing required field: #{name}"), { status: 400 }) if must
     return miss ?? null
 
-  # get value from store
+  # get value from store — supports dotted paths for nested JSON bodies,
+  # e.g. read 'patient.firstName' walks {patient: {firstName: ...}}
   v = store.data or {}
-  v = v[name] if name?
+  if name?
+    for part in name.split('.')
+      break unless v? and typeof v is 'object'
+      v = v[part]
   return v if type is 'raw'
   v = v.trim() if typeof v is 'string'
 

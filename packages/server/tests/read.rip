@@ -154,12 +154,18 @@ t "bool junk"               , 'wat'  , null  -> read 'v', 'bool'
 # ==============================================================================
 
 t "email ok"                , 'a+b@ex.co'  , 'a+b@ex.co'  -> read 'v', 'email'
+t "email lowercases"        , 'Jane@EX.CO' , 'jane@ex.co' -> read 'v', 'email'
 t "email bad"               , 'nope@'      , null         -> read 'v', 'email'
 t "state uppercases"        , 'ca'         , 'CA'         -> read 'v', 'state'
 t "zip reads 5"             , '12345'      , '12345'      -> read 'v', 'zip'
 t "zipplus4 formats"        , '12345-6789' , '12345-6789' -> read 'v', 'zipplus4'
 t "ssn strips punct"        , '123-45-6789', '123456789'  -> read 'v', 'ssn'
-t "sex normalizes"          , 'Female'     , 'f'          -> read 'v', 'sex'
+t "sex M"                   , 'M'          , 'M'          -> read 'v', 'sex'
+t "sex female→F"            , 'Female'     , 'F'          -> read 'v', 'sex'
+t "sex other→O"             , 'o'          , 'O'          -> read 'v', 'sex'
+t "sex unknown→U"           , 'Unknown'    , 'U'          -> read 'v', 'sex'
+t "sex unspecified→U"       , 'unspec'     , 'U'          -> read 'v', 'sex'
+t "sex bad"                 , 'wat'        , null         -> read 'v', 'sex'
 
 # ==============================================================================
 # technical/web
@@ -245,6 +251,40 @@ t "miss uses default"       , undefined, 'no' -> read 'v', 'email', 'no'
 t "miss uses fn"            , undefined, 'no' -> read 'v', 'email', -> 'no'
 f "required w/ default"     , undefined       -> read 'v', 'email!', 'nope'
 t "required w/ miss()"      , undefined, 'ok' -> read 'v', 'email!', -> 'ok'
+
+# ==============================================================================
+# Dotted paths — nested JSON body navigation
+# ==============================================================================
+#
+# read 'a.b.c' walks the body tree; silently yields null on any missing segment.
+# Uses its own helper since the data store is an object, not a single value.
+
+tp = (name, data, now, fn) ->
+  total++
+  requestContext.run { data: data }, ->
+    try
+      actual = fn()
+      if deepEq(actual, now)
+        passed++
+        p "✓ #{name}"
+      else
+        failed++
+        p "✗ #{name}"
+        p "    data:     #{stringify(data)}"
+        p "    expected: #{stringify(now)}"
+        p "    actual:   #{stringify(actual)}"
+    catch err
+      failed++
+      p "✗ #{name} — threw: #{err.message}"
+
+tp "dotted top-level"        , { x: 'hi' }                          , 'hi'    -> read 'x'
+tp "dotted one level"        , { a: { b: 'nested' } }               , 'nested' -> read 'a.b'
+tp "dotted two levels"       , { a: { b: { c: 'deep' } } }          , 'deep'  -> read 'a.b.c'
+tp "dotted missing mid"      , { a: {} }                            , null    -> read 'a.b.c'
+tp "dotted missing leaf"     , { a: { b: {} } }                     , null    -> read 'a.b.c'
+tp "dotted with validator"   , { patient: { dob: '1985-01-15' } }   , '1985-01-15' -> read 'patient.dob', 'date'
+tp "dotted validator fail"   , { patient: { dob: 'nope' } }         , null    -> read 'patient.dob', 'date'
+tp "dotted name normalizes"  , { patient: { firstName: 'jane' } }   , 'Jane'  -> read 'patient.firstName', 'name'
 
 # ==============================================================================
 # Results

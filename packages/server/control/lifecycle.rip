@@ -77,9 +77,9 @@ export logStartupSummary = (server, flags, buildRipdevUrlFn, formatPortFn) ->
     lines.push "  #{d}config#{r}   #{configInfo.path}"
   lines.push "  #{d}workers#{r}  #{flags.workers}"
   if flags.reload
-    lines.push "  #{d}reload#{r}  #{flags.watch or '*.rip'}"
+    lines.push "  #{d}reload#{r}   #{flags.watch or '*.rip'}"
   else
-    lines.push "  #{d}reload#{r}  #{y}off#{r} #{d}(#{r}#{y}--static#{r}#{d} / #{r}#{y}RIP_STATIC#{r}#{d})#{r}"
+    lines.push "  #{d}reload#{r}   #{y}off#{r} #{d}(#{r}#{y}--static#{r}#{d} / #{r}#{y}RIP_STATIC#{r}#{d})#{r}"
 
   if hosts.length > 0
     lines.push ''
