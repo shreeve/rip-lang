@@ -91,3 +91,83 @@ Bad candidates for premature abstraction:
 - token rendering rules
 - chip-specific behaviors
 - widget-specific content semantics
+
+## Component render gotchas
+
+Two sharp edges that an AI assistant will hit the first time it writes a
+non-trivial render template. Both produce error messages that do not
+mention the actual cause.
+
+### Don't shadow HTML tag names inside render scopes
+
+Lowercase identifiers in render templates are DOM elements emitted by
+the Pug-like DSL. If you declare a local variable (or `for` loop
+variable) with the same name as a tag, the codegen mis-routes the
+reference and you get confusing runtime errors such as
+`ReferenceError: code is not defined` inside an unrelated component.
+
+```coffee
+# WRONG — `code` is an HTML element name (<code>)
+for ex in ep.examples
+  code = if ex.curl? then buildCurl(ep, ex.curl) else ex.code
+  CodeBlock label: ex.label, code: code
+
+# CORRECT — rename the local
+for ex in ep.examples
+  src = if ex.curl? then buildCurl(ep, ex.curl) else ex.code
+  CodeBlock label: ex.label, code: src
+
+# BETTER — push the conditional into a helper, no local at all
+exampleCode = (ep, ex) ->
+  if ex.curl? then buildCurl(ep, ex.curl) else ex.code
+
+CodeBlock label: ex.label, code: exampleCode(ep, ex)
+```
+
+Names to avoid as render-scope locals: `p`, `code`, `a`, `span`, `div`,
+`li`, `time`, `table`, `nav`, `form`, `pre`, `h1`–`h6`, `br`, `button`,
+`input`, `label`, `main`, `section`, `aside`, `img`, `ul`, `ol`, `th`,
+`td`, `tr`, `style`, `script`.
+
+### Don't use `i` as an explicit loop index inside nested render loops
+
+Rip collects every enclosing loop variable — outer and inner — into the
+reactive patch function's parameter list. An outer `for item in items`
+silently allocates an `i` counter there, so an inner loop using `i` as
+an explicit index produces a strict-mode "Duplicate parameter name"
+compile error at runtime.
+
+```coffee
+# WRONG — outer emits implicit `i`, inner also uses `i` → dup param
+for item in items
+  for v, i in item.enum
+    code = v
+
+# CORRECT — rename the inner index
+for item in items
+  for v, idx in item.enum
+    code = v
+```
+
+Use `idx`, `n`, or `j` for nested-loop indexes.
+
+### Debugging "Duplicate parameter name" and friends quickly
+
+These errors surface at module load with no line number pointing at
+your source. Fastest reproduction path:
+
+```bash
+# extract the inline <script type="text/rip"> block and compile it
+awk '/<script type="text\/rip">/,/<\/script>/' file.html |
+  sed '1d; $d' > /tmp/inline.rip
+rip -c -q /tmp/inline.rip > /tmp/inline.js
+
+# feed the compiled JS to Node's Function parser — it points right at
+# the bad function signature (e.g. `p(ctx, v, i, item, i) { ... }`)
+node -e 'try { new Function(require("fs").readFileSync("/tmp/inline.js","utf8")) }
+         catch(e) { console.log(e.message) }'
+```
+
+The emitted patch function is named `p` and takes every closure
+variable as a positional parameter — duplicates there are always the
+clue you're looking for.
