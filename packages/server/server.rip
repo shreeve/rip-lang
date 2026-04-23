@@ -25,7 +25,7 @@ import { serveStaticRoute, buildRedirectResponse } from './serving/static.rip'
 import { createUpstreamPool, addUpstream, getUpstream, releaseTarget, startHealthChecks, stopHealthChecks, checkTargetHealth } from './serving/upstream.rip'
 import { formatPort, maybeAddSecurityHeaders as addSecurityHeaders, buildStatusBody, buildRipdevUrl, generateRequestId, watchUnavailableResponse, serverBusyResponse, serviceUnavailableResponse, gatewayTimeoutResponse, queueTimeoutResponse, buildUpstreamResponse, forwardOnceWithTimeout, createWsPassthrough } from './serving/forwarding.rip'
 import { proxyRouteToUpstream as proxyRouteToUpstreamFn, upgradeProxyWebSocket as upgradeProxyWebSocketFn } from './serving/proxy.rip'
-import { isCurrentVersion as schedulerIsCurrentVersion, getNextAvailableSocket as schedulerGetNextAvailableSocket, releaseWorker as schedulerReleaseWorker, shouldRetryBodylessBusy, processQueuedJob, drainQueueOnce } from './serving/queue.rip'
+import { isCurrentVersion as schedulerIsCurrentVersion, getNextAvailableSocket as schedulerGetNextAvailableSocket, releaseWorker as schedulerReleaseWorker, isRetryableBusy, maybeCloneForRetry, processQueuedJob, drainQueueOnce } from './serving/queue.rip'
 import { createServingRuntime, createReloadHistoryEntry, restoreRegistrySnapshot, configNote, loadRuntimeConfig, runCheckConfig } from './serving/runtime.rip'
 import { buildVerificationResult, verifyRouteRuntime } from './serving/verify.rip'
 import { loadTlsMaterial as loadTls, printCertSummary, buildTlsArray } from './serving/tls.rip'
@@ -863,23 +863,35 @@ class Server
     workerSeconds = 0
     released = false
 
+    # Pre-clone body-bearing requests so we can retry on 503-busy/draining.
+    # Bodyless methods don't need cloning (headers + URL are safe to reuse).
+    # Returns null if the body is too large or clone fails — in that case
+    # retry is skipped and the worker's 503 surfaces to the client.
+    retryReq = maybeCloneForRetry(req)
+
     try
       socket.inflight = 1
       t0 = performance.now()
       res = @forwardOnce!(req, socket.socket, app)
       workerSeconds = (performance.now() - t0) / 1000
 
-      if shouldRetryBodylessBusy(req, res)
-        retry = @getNextAvailableSocket(app)
-        if retry and retry isnt socket
-          @releaseWorker(socket, app)
-          released = true
-          retry.inflight = 1
-          t1 = performance.now()
-          res = @forwardOnce!(req, retry.socket, app)
-          workerSeconds = (performance.now() - t1) / 1000
-          @releaseWorker(retry, app)
-          return @buildResponse(res, req, start, workerSeconds, requestId)
+      # Worker says it can't take this request right now (busy or draining).
+      # Route to another idle worker if one exists. Bodyless methods reuse
+      # the original request; body methods need the pre-clone (null skips).
+      if isRetryableBusy(res)
+        hasBody = req.method in ['POST', 'PUT', 'PATCH']
+        canRetry = (not hasBody) or retryReq?
+        if canRetry
+          retry = @getNextAvailableSocket(app)
+          if retry and retry isnt socket
+            @releaseWorker(socket, app)
+            released = true
+            retry.inflight = 1
+            t1 = performance.now()
+            res = @forwardOnce!((if hasBody then retryReq else req), retry.socket, app)
+            workerSeconds = (performance.now() - t1) / 1000
+            @releaseWorker(retry, app)
+            return @buildResponse(res, req, start, workerSeconds, requestId)
     catch err
       warn "[server] forwardToWorker error:", err.message or err if isDebug()
       app.sockets = app.sockets.filter((x) -> x.socket isnt socket.socket)

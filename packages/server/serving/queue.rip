@@ -20,10 +20,35 @@ export releaseWorker = (sockets, availableWorkers, newestVersion, worker) ->
   if isCurrentVersion(newestVersion, worker)
     availableWorkers.push(worker)
 
-export shouldRetryBodylessBusy = (req, res) ->
-  req.method in ['GET', 'HEAD', 'OPTIONS', 'DELETE'] and
-    res.status is 503 and
-    res.headers.get('Rip-Worker-Busy') is '1'
+# Upper bound for auto-cloning body-bearing requests so we can retry on
+# 503-busy. Requests larger than this don't get a clone and therefore
+# can't be retried (the original body stream is consumed by the first
+# fetch). 10 MB is generous for typical JSON/form APIs and bounded enough
+# to avoid memory amplification under pathological inputs.
+export MAX_RETRY_CLONE_BYTES = 10 * 1024 * 1024
+
+# A response is "retryable busy" when the worker explicitly reports it
+# can't take the request right now — either it was handling another
+# request (Rip-Worker-Busy) or it's draining on retirement
+# (Rip-Worker-Draining). In both cases routing to another worker is
+# safe and preserves idempotency (we've sent the request exactly once
+# to one worker; that worker refused it before observing side effects).
+export isRetryableBusy = (res) ->
+  return false unless res?.status is 503
+  res.headers.get('Rip-Worker-Busy') is '1' or
+    res.headers.get('Rip-Worker-Draining') is '1'
+
+# Return a clone of `req` suitable for a retry, or null if we can't
+# safely clone (missing content-length, too big, or clone threw). The
+# caller uses the clone on retry; if null, retry is skipped.
+export maybeCloneForRetry = (req) ->
+  return null unless req.method in ['POST', 'PUT', 'PATCH']
+  # Require a known, bounded content-length. Streaming bodies without a
+  # declared size get no clone — safer to 503 than buffer unboundedly.
+  len = parseInt(req.headers.get('content-length') or '', 10)
+  return null unless Number.isFinite(len) and len >= 0 and len <= MAX_RETRY_CLONE_BYTES
+  try req.clone()
+  catch then null
 
 # --- Queue ---
 

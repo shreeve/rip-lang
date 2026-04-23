@@ -2,7 +2,7 @@
 
 import { test, eq, ok } from './runner.rip'
 import { createAppRegistry, registerApp, resolveHost, getAppState, removeApp } from '../serving/registry.rip'
-import { isCurrentVersion, getNextAvailableSocket, releaseWorker, shouldRetryBodylessBusy, drainQueueOnce } from '../serving/queue.rip'
+import { isCurrentVersion, getNextAvailableSocket, releaseWorker, isRetryableBusy, maybeCloneForRetry, drainQueueOnce } from '../serving/queue.rip'
 
 # --- Registry ---
 
@@ -110,17 +110,47 @@ test "releaseWorker resets inflight and re-adds to pool", ->
   eq w.inflight, 0
   eq available.length, 1
 
-test "shouldRetryBodylessBusy for GET + 503 + busy header", ->
-  req = { method: 'GET' }
+test "isRetryableBusy matches 503 + Rip-Worker-Busy", ->
   headers = new Headers({ 'Rip-Worker-Busy': '1' })
   res = { status: 503, headers }
-  ok shouldRetryBodylessBusy(req, res)
+  ok isRetryableBusy(res)
 
-test "shouldRetryBodylessBusy rejects POST", ->
-  req = { method: 'POST' }
-  headers = new Headers({ 'Rip-Worker-Busy': '1' })
+test "isRetryableBusy matches 503 + Rip-Worker-Draining", ->
+  headers = new Headers({ 'Rip-Worker-Draining': '1' })
   res = { status: 503, headers }
-  eq shouldRetryBodylessBusy(req, res), false
+  ok isRetryableBusy(res)
+
+test "isRetryableBusy false for 503 without busy/draining header", ->
+  headers = new Headers()
+  res = { status: 503, headers }
+  eq isRetryableBusy(res), false
+
+test "isRetryableBusy false for non-503", ->
+  headers = new Headers({ 'Rip-Worker-Busy': '1' })
+  res = { status: 200, headers }
+  eq isRetryableBusy(res), false
+
+test "maybeCloneForRetry returns null for GET (bodyless, no clone needed)", ->
+  req = { method: 'GET', headers: new Headers() }
+  eq maybeCloneForRetry(req), null
+
+test "maybeCloneForRetry returns null when content-length is missing", ->
+  req = { method: 'POST', headers: new Headers(), clone: -> 'CLONE' }
+  eq maybeCloneForRetry(req), null
+
+test "maybeCloneForRetry clones POST with small content-length", ->
+  req =
+    method: 'POST'
+    headers: new Headers({ 'content-length': '256' })
+    clone: -> 'CLONE'
+  eq maybeCloneForRetry(req), 'CLONE'
+
+test "maybeCloneForRetry returns null for oversized body", ->
+  req =
+    method: 'POST'
+    headers: new Headers({ 'content-length': String(20 * 1024 * 1024) })
+    clone: -> 'CLONE'
+  eq maybeCloneForRetry(req), null
 
 # --- Queue ---
 
