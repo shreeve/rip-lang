@@ -1,0 +1,118 @@
+# csrf.rip — CSRF middleware (double-submit cookie + HMAC binding)
+
+import { test, eq, ok } from './runner.rip'
+import { csrf } from '../middleware.rip'
+
+# Run the middleware once. Headers and cookies arrive as plain hash;
+# `mutate` lets a test poke at the context before the inner handler
+# runs (typically to set csrfToken-driven response state).
+runCsrf = (opts, method, headers = {}, mutate) ->
+  mw = csrf(opts)
+  c =
+    csrfToken: null
+    req:
+      method: method
+      header: (name) -> headers[name] or headers[name.toLowerCase()] or null
+    _response: null
+
+  # Mirror api.rip's compose(): if the middleware short-circuits and
+  # returns a Response (e.g., 403 on failed CSRF check), capture it
+  # into c._response. Otherwise the inner handler installs the OK
+  # response itself.
+  result = await mw(c, ->
+    mutate(c) if mutate
+    c._response = new Response('ok')
+    null
+  )
+  c._response = result if result instanceof Response
+
+  setCookie = c._response?.headers?.get('Set-Cookie') or null
+  status = c._response?.status or 0
+  bodyText = c._response and (await c._response.clone().text() or '')
+  { status, setCookie, csrfToken: c.csrfToken, body: bodyText }
+
+cookieValueFromSet = (setCookie) ->
+  return null unless setCookie
+  first = setCookie.split(';')[0]
+  i = first.indexOf('=')
+  return null if i < 0
+  decodeURIComponent(first.slice(i + 1))
+
+test "csrf: GET without cookie mints + sets cookie", ->
+  result = await runCsrf({ secret: 'csrf-secret' }, 'GET', {})
+  eq result.status, 200
+  ok result.csrfToken?, 'token exposed to handler'
+  ok result.setCookie?, 'cookie set in response'
+
+test "csrf: GET with existing valid cookie reuses it (no Set-Cookie)", ->
+  # First request mints a cookie.
+  first = await runCsrf({ secret: 'csrf-secret' }, 'GET', {})
+  cookieVal = cookieValueFromSet(first.setCookie)
+  # Second GET with that cookie should NOT re-emit Set-Cookie.
+  second = await runCsrf({ secret: 'csrf-secret' }, 'GET',
+    Cookie: "csrf_token=#{cookieVal}"
+  )
+  eq second.setCookie, null
+  eq second.csrfToken, first.csrfToken
+
+test "csrf: POST without token returns 403", ->
+  result = await runCsrf({ secret: 'csrf-secret' }, 'POST', {})
+  eq result.status, 403
+
+test "csrf: POST with matching header passes", ->
+  first = await runCsrf({ secret: 'csrf-secret' }, 'GET', {})
+  cookieVal = cookieValueFromSet(first.setCookie)
+  second = await runCsrf({ secret: 'csrf-secret' }, 'POST',
+    Cookie: "csrf_token=#{cookieVal}"
+    'X-CSRF-Token': first.csrfToken
+  )
+  eq second.status, 200
+
+test "csrf: POST with mismatched header returns 403", ->
+  first = await runCsrf({ secret: 'csrf-secret' }, 'GET', {})
+  cookieVal = cookieValueFromSet(first.setCookie)
+  second = await runCsrf({ secret: 'csrf-secret' }, 'POST',
+    Cookie: "csrf_token=#{cookieVal}"
+    'X-CSRF-Token': 'wrong-token'
+  )
+  eq second.status, 403
+
+test "csrf: POST with cookie but no header returns 403", ->
+  first = await runCsrf({ secret: 'csrf-secret' }, 'GET', {})
+  cookieVal = cookieValueFromSet(first.setCookie)
+  second = await runCsrf({ secret: 'csrf-secret' }, 'POST',
+    Cookie: "csrf_token=#{cookieVal}"
+  )
+  eq second.status, 403
+
+test "csrf: forged cookie (no signature) rejected when secret set", ->
+  # Attacker fabricates a raw token without the server's HMAC. Without
+  # a matching signature, parseCsrfCookie returns null and the request
+  # is treated as having no cookie at all.
+  result = await runCsrf({ secret: 'csrf-secret' }, 'POST',
+    Cookie: "csrf_token=attacker-supplied-token"
+    'X-CSRF-Token': 'attacker-supplied-token'
+  )
+  eq result.status, 403
+
+test "csrf: exempt() skips the check", ->
+  result = await runCsrf({ secret: 'csrf-secret', exempt: -> true }, 'POST', {})
+  eq result.status, 200
+
+test "csrf: SameSite + Secure attributes propagate", ->
+  result = await runCsrf({ secret: 'csrf-secret', secure: true, sameSite: 'Strict' }, 'GET', {})
+  ok result.setCookie.includes('Secure'), 'Secure attribute present'
+  ok result.setCookie.includes('SameSite=Strict'), 'SameSite=Strict present'
+
+test "csrf: cookie does NOT include HttpOnly (must be readable by JS)", ->
+  result = await runCsrf({ secret: 'csrf-secret' }, 'GET', {})
+  ok not result.setCookie.includes('HttpOnly'), 'CSRF cookie must be JS-readable'
+
+test "csrf without secret: pure double-submit still works", ->
+  # No secret = no HMAC signature. Cookie is the raw token. The double
+  # submit comparison still rejects mismatched values.
+  result = await runCsrf({}, 'POST',
+    Cookie: 'csrf_token=abc123'
+    'X-CSRF-Token': 'abc123'
+  )
+  eq result.status, 200

@@ -263,6 +263,27 @@ Built-in protections include:
 - oversized URL rejection
 - null-byte URL rejection
 - path traversal protection for static serving
+- CORS preflight policy unified with `cors()` middleware (no
+  reflect-any-origin during OPTIONS short-circuit)
+- per-IP token-bucket rate limiter with LRU eviction, O(1) per check
+
+Middleware to opt into:
+
+- `csrf()` — double-submit cookie + HMAC-bound token. Recommended for
+  any form/cookie-authenticated app:
+
+  ```rip
+  use sessions secret: process.env.SESSION_SECRET, encrypt: true
+  use csrf     secret: process.env.CSRF_SECRET
+  ```
+
+  Handlers receive the token as `c.csrfToken` for embedding in HTML
+  forms or fetch headers (`X-CSRF-Token`).
+
+- `sessions({encrypt: true})` — AES-256-GCM (AEAD) sealed cookie.
+  Required when storing tokens, internal IDs, or any non-public data
+  in session. The default signed mode is tamper-proof but the payload
+  is **client-readable**.
 
 ## Roadmap
 

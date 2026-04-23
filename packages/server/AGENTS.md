@@ -28,7 +28,8 @@ part of the core serving story. They are serving guarantees, not side features.
 ### Top level
 
 - `api.rip` — framework API: routing, validators, context, `start()`
-- `middleware.rip` — built-in middleware
+- `middleware.rip` — built-in middleware (`cors`, `csrf`, `sessions`,
+  `compress`, `secureHeaders`, `logger`, `serve`, `htmlJson`)
 - `browse.rip` — directory browser (fallback when no app entry exists)
 - `server.rip` — orchestration hub: Manager, Server, startup, request dispatch
 
