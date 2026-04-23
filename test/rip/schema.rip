@@ -2167,6 +2167,82 @@ test ".save() persists declared fields only (not computed getters)", modelHeader
   [cols.includes("\\"name\\""), cols.includes("upper")]
 ''', [true, false]
 
+# -- toJSON iterates own enumerable properties: id + declared + timestamps --
+# -- + @belongs_to FKs + !> eager-derived; excludes methods, ~> getters,   --
+# -- and internal state (_dirty/_persisted/_snapshot).                     --
+
+test ":model toJSON includes id and declared fields", modelHeader + '''
+  User = schema :model
+    name! string
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "name"}], data: [[7, "Alice"]], rows: 1}
+  u = User.create! {name: "Alice"}
+  json = u.toJSON()
+  [json.id, json.name]
+''', [7, "Alice"]
+
+test ":model toJSON includes @timestamps columns", modelHeader + '''
+  User = schema :model
+    name! string
+    @timestamps
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "name"}, {name: "created_at"}, {name: "updated_at"}], data: [[1, "a", "T1", "T2"]], rows: 1}
+  u = User.create! {name: "a"}
+  json = u.toJSON()
+  [json.id, json.name, json.createdAt, json.updatedAt]
+''', [1, "a", "T1", "T2"]
+
+test ":model toJSON includes @belongs_to FK columns", modelHeader + '''
+  Org = schema :model
+    name! string
+  User = schema :model
+    name! string
+    @belongs_to Org
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "name"}, {name: "org_id"}], data: [[1, "Alice", 42]], rows: 1}
+  u = User.create! {name: "Alice", orgId: 42}
+  json = u.toJSON()
+  [json.id, json.orgId]
+''', [1, 42]
+
+test ":model toJSON includes !> eager-derived fields", modelHeader + '''
+  User = schema :model
+    firstName! string
+    lastName!  string
+    displayName: !> "#{@firstName} #{@lastName}"
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "first_name"}, {name: "last_name"}], data: [[1, "Alice", "Smith"]], rows: 1}
+  u = User.find! 1
+  u.toJSON().displayName
+''', "Alice Smith"
+
+test ":model toJSON excludes methods, ~> computed getters, and internal state", modelHeader + '''
+  User = schema :model
+    name! string
+    greet: -> "Hi, #{@name}"
+    upper: ~> @name.toUpperCase()
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "name"}], data: [[1, "Alice"]], rows: 1}
+  u = User.create! {name: "Alice"}
+  json = u.toJSON()
+  keys = Object.keys(json)
+  [
+    ('greet'     in keys)
+    ('upper'     in keys)
+    ('_dirty'    in keys)
+    ('_persisted' in keys)
+    ('_snapshot' in keys)
+  ]
+''', [false, false, false, false, false]
+
+test ":model toJSON survives JSON.stringify round-trip with id preserved", modelHeader + '''
+  User = schema :model
+    name! string
+    @timestamps
+    @belongs_to Org
+  Org = schema :model
+    name! string
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "name"}, {name: "org_id"}, {name: "created_at"}, {name: "updated_at"}], data: [[11, "Alice", 3, "T1", "T2"]], rows: 1}
+  u = User.create! {name: "Alice", orgId: 3}
+  obj = JSON.parse(JSON.stringify(u))
+  [obj.id, obj.name, obj.orgId, obj.createdAt, obj.updatedAt]
+''', [11, "Alice", 3, "T1", "T2"]
+
 # -- relations resolve lazily, even cross-module style (same registry) --
 
 test "belongs_to relation resolves from registry", modelHeader + '''

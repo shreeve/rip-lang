@@ -895,7 +895,10 @@ user.save!         # validate, run hooks, INSERT or UPDATE
 user.destroy!      # run hooks, DELETE (or UPDATE deleted_at for @softDelete)
 user.ok()          # boolean — current fields validate
 user.errors()      # SchemaIssue[] — current fields' errors
-user.toJSON()      # plain object of declared fields (no methods/getters)
+user.toJSON()      # plain object of own enumerable properties
+                   #   (id, declared fields, @timestamps columns, @softDelete
+                   #    deletedAt, @belongs_to FKs, !> eager-derived — but NOT
+                   #    methods, ~> computed getters, or internal state)
 ```
 
 Plus any methods, computed getters, and relation accessors you declared

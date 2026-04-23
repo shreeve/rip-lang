@@ -2287,11 +2287,20 @@ class __SchemaDef {
         enumerable: false, configurable: true, writable: true,
         value: function() { return def._validateFields(this, true); },
       });
+      // toJSON mirrors the instance's own enumerable properties, which by
+      // construction are: the primary key, declared fields, @timestamps
+      // columns, @softDelete timestamp, @belongs_to FK columns, and any
+      // !> eager-derived fields. Internal state (_dirty, _persisted,
+      // _snapshot) is defined non-enumerable; methods and ~> computed
+      // getters live on the prototype. So iterating own keys picks up
+      // exactly the user-facing wire shape without special-casing each
+      // category — and stays correct when new implicit columns get added
+      // to the runtime.
       Object.defineProperty(klass.prototype, 'toJSON', {
         enumerable: false, configurable: true, writable: true,
         value: function() {
           const out = {};
-          for (const k of norm.fields.keys()) out[k] = this[k];
+          for (const k of Object.keys(this)) out[k] = this[k];
           return out;
         },
       });
