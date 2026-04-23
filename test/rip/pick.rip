@@ -228,6 +228,13 @@ fail "space between . and { rejected"       , "o = {}; o. {a}"
 # These should parse (space before `.` is allowed per existing `.name` access)
 test "space before . is ok", "o = {a: 1}; o .{a}", {a: 1}
 
+# Whitespace INSIDE the body is fine — it shouldn't interfere with recognition
+# of `.{` as a pick operator. Regression test for a bug where a `{` followed
+# by whitespace (e.g. `{ a, b }`) was mistakenly skipped by the pick rewriter.
+test "spaces inside body"       , "o = {a: 1, b: 2}; o.{ a, b }"        , {a: 1, b: 2}
+test "spaces around single key" , "o = {a: 1}; o.{ a }"                 , {a: 1}
+test "spaces + trailing comma"  , "o = {a: 1, b: 2}; o.{ a, b, }"       , {a: 1, b: 2}
+
 # ==============================================================================
 # Runtime — reserved words as pick keys
 # ==============================================================================

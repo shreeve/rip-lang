@@ -1539,8 +1539,14 @@ export class Lexer {
       if (tag !== '.' && tag !== '?.') continue;
       let next = tokens[i + 1];
       if (!next || next[0] !== '{') continue;
+      // `.` must sit tight to the next `{`: no whitespace between them.
+      // In Rip, token.spaced means "followed by whitespace", so checking
+      // tokens[i].spaced (the `.`) catches `. {` cases. We DON'T check
+      // next.spaced — that would mean "whitespace after `{`" which is
+      // perfectly fine (`obj.{ a, b }` should work like `obj.{a, b}`).
+      // Similarly, next.newLine is OK — it allows multiline bodies like
+      // `obj.{\n  a\n  b\n}`.
       if (tokens[i].spaced || tokens[i].newLine) continue;
-      if (next.spaced) continue;  // newLine is OK — allows multiline body: `obj.{\n  a\n  b\n}`
       let prev = tokens[i - 1];
       if (!prev || !INDEXABLE.has(prev[0])) continue;
       let optional = (tag === '?.');
