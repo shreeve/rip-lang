@@ -17,16 +17,31 @@ passed = 0
 failed = 0
 failures = []
 
+_pending = []
+
 export test = (name, fn) ->
-  try
-    result = fn()
-    await result if result?.then
-    passed++
-    p "  ✓ #{name}"
-  catch e
-    failed++
-    failures.push { name, error: e.message or String(e) }
-    p "  ✗ #{name}: #{e.message or e}"
+  # Queue instead of run-immediately. Tests that use `await` inside `fn`
+  # previously completed AFTER the file's top-level finished, which meant
+  # the runner's file-loop moved on and the test output/counters landed
+  # in the summary silently (or not at all if the summary printed first).
+  # By queuing Promises here we can synchronously gather them and then
+  # await them serially after each file loads — same test APIs, reliable
+  # ordering, both sync and async `fn` bodies work.
+  _pending.push { name, fn }
+
+_runPending = ->
+  batch = _pending
+  _pending = []
+  for { name, fn } in batch
+    try
+      result = fn()
+      await result if result?.then
+      passed++
+      p "  ✓ #{name}"
+    catch e
+      failed++
+      failures.push { name, error: e.message or String(e) }
+      p "  ✗ #{name}: #{e.message or e}"
 
 export eq = (actual, expected) ->
   a = JSON.stringify(actual)
@@ -49,7 +64,11 @@ p "rip-server tests: #{files.length} files\n"
 for file in files
   p "  #{file}"
   try
+    # Load the file: test() calls inside queue into _pending, then we
+    # serially await them. This guarantees both ordering and visibility
+    # of async test output/counters.
     import!(join(testDir, file))
+    await _runPending!()
   catch e
     failed++
     failures.push { name: "#{file} (load)", error: e.message or String(e) }

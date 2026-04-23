@@ -1,0 +1,118 @@
+# sessions.rip — session middleware crypto tests (signed + encrypted)
+
+import { test, eq, ok } from './runner.rip'
+import { sessions } from '../middleware.rip'
+
+# Run the middleware once against a fake context. Returns
+# { session, setCookie } so tests can inspect the out-bound cookie
+# and the decoded session state after round-trip.
+runSessions = (opts, cookieHeader, mutate) ->
+  mw = sessions(opts)
+  c =
+    session: {}
+    req:
+      header: (name) ->
+        return cookieHeader if name.toLowerCase() is 'cookie'
+        null
+    _response: null
+
+  await mw(c, ->
+    mutate(c) if mutate
+    c._response = new Response('ok')
+    null
+  )
+
+  setCookie = c._response?.headers?.get('Set-Cookie') or null
+  { session: c.session, setCookie }
+
+# Pull the value from "name=VALUE; ..." — the first segment.
+cookieValue = (setCookieStr) ->
+  return null unless setCookieStr
+  first = setCookieStr.split(';')[0]
+  eq_idx = first.indexOf('=')
+  return null if eq_idx < 0
+  decodeURIComponent(first.slice(eq_idx + 1))
+
+# -----------------------------------------------------------------------------
+# Signed mode (default) — tamper-proof, NOT confidential
+# -----------------------------------------------------------------------------
+
+test "signed session round-trips", ->
+  secret = 'test-secret-long-enough'
+  first = await runSessions({ secret }, '', (c) -> c.session.userId = 42)
+  cookie = cookieValue(first.setCookie)
+  ok cookie?, 'set-cookie written'
+  second = await runSessions({ secret }, "session=#{encodeURIComponent(cookie)}", null)
+  eq second.session.userId, 42
+
+test "signed session payload is client-readable (base64 JSON)", ->
+  secret = 'test-secret-long-enough'
+  first = await runSessions({ secret }, '', (c) -> c.session.userId = 7)
+  cookie = cookieValue(first.setCookie)
+  [payload, sig] = cookie.split('--')
+  decoded = JSON.parse(decodeURIComponent(escape(atob(payload))))
+  eq decoded.userId, 7
+
+test "signed session: tampered cookie rejected", ->
+  secret = 'test-secret-long-enough'
+  first = await runSessions({ secret }, '', (c) -> c.session.userId = 9)
+  cookie = cookieValue(first.setCookie)
+  [payload, sig] = cookie.split('--')
+  badSig = (if sig[0] is '0' then '1' else '0') + sig.slice(1)
+  tampered = "#{payload}--#{badSig}"
+  second = await runSessions({ secret }, "session=#{encodeURIComponent(tampered)}", null)
+  eq second.session, {}
+
+# -----------------------------------------------------------------------------
+# Encrypted mode — AEAD (AES-256-GCM), confidential AND tamper-proof
+# -----------------------------------------------------------------------------
+
+test "encrypted session round-trips", ->
+  secret = 'encrypt-secret-32-chars-or-more'
+  first = await runSessions({ secret, encrypt: true }, '', (c) -> c.session.token = 'abc-xyz')
+  cookie = cookieValue(first.setCookie)
+  ok cookie?.startsWith('v1.'), 'encrypted cookie starts with v1. version prefix'
+  second = await runSessions({ secret, encrypt: true }, "session=#{encodeURIComponent(cookie)}", null)
+  eq second.session.token, 'abc-xyz'
+
+test "encrypted session: plaintext does not leak into ciphertext", ->
+  secret = 'encrypt-secret-32-chars-or-more'
+  first = await runSessions({ secret, encrypt: true }, '', (c) -> c.session.secretVal = 'do-not-leak')
+  cookie = cookieValue(first.setCookie)
+  b64 = cookie.slice(3).replace(/-/g, '+').replace(/_/g, '/')
+  pad = b64.length % 4
+  b64 += '='.repeat(4 - pad) if pad
+  decoded = atob(b64)
+  ok not decoded.includes('do-not-leak'), 'plaintext must not appear in ciphertext'
+
+test "encrypted session: tampered ciphertext decrypts to empty", ->
+  secret = 'encrypt-secret-32-chars-or-more'
+  first = await runSessions({ secret, encrypt: true }, '', (c) -> c.session.userId = 1)
+  cookie = cookieValue(first.setCookie)
+  body = cookie.slice(3)
+  flipped = (if body[5] is 'A' then 'B' else 'A') + body.slice(1)
+  tampered = "v1.#{flipped}"
+  second = await runSessions({ secret, encrypt: true }, "session=#{encodeURIComponent(tampered)}", null)
+  eq second.session, {}
+
+test "encrypted session: wrong secret decrypts to empty", ->
+  secret1 = 'first-secret-32-chars-or-more'
+  secret2 = 'second-secret-32-chars-or-more'
+  first = await runSessions({ secret: secret1, encrypt: true }, '', (c) -> c.session.x = 'y')
+  cookie = cookieValue(first.setCookie)
+  second = await runSessions({ secret: secret2, encrypt: true }, "session=#{encodeURIComponent(cookie)}", null)
+  eq second.session, {}
+
+test "encrypted session: different nonces per encryption", ->
+  secret = 'encrypt-secret-32-chars-or-more'
+  a = await runSessions({ secret, encrypt: true }, '', (c) -> c.session.v = 42)
+  b = await runSessions({ secret, encrypt: true }, '', (c) -> c.session.v = 42)
+  ok cookieValue(a.setCookie) isnt cookieValue(b.setCookie), 'nonces randomize each ciphertext'
+
+test "encrypted session: missing secret throws at middleware creation", ->
+  thrown = null
+  try
+    sessions({ encrypt: true })
+  catch e
+    thrown = e
+  ok thrown?, 'sessions({encrypt: true}) without secret must throw'

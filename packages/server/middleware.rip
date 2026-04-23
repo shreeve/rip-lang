@@ -216,33 +216,46 @@ export compress = (opts = {}) ->
 # ==============================================================================
 #
 # Options:
-#   secret: string (REQUIRED for production — signs cookie to prevent tampering)
-#   name: string (cookie name, default 'session')
-#   maxAge: number (seconds, default 86400 = 24 hours)
-#   secure: boolean (HTTPS only)
-#   httpOnly: boolean (default true)
-#   sameSite: 'Strict' | 'Lax' | 'None' (default 'Lax')
+#   secret:   string   REQUIRED for production. Signing or encryption key.
+#   encrypt:  boolean  When true, session is AES-256-GCM encrypted (AEAD).
+#                      Default false → HMAC-SHA256 signed (tamper-proof,
+#                      but the payload is CLIENT-READABLE).
+#   name:     string   cookie name, default 'session'
+#   maxAge:   number   seconds, default 86400 (24h)
+#   secure:   boolean  Secure attribute (HTTPS only), default false
+#   httpOnly: boolean  default true
+#   sameSite: 'Strict' | 'Lax' | 'None', default 'Lax'
+#
+# Confidentiality vs. integrity
+# -----------------------------
+# The default (signed) session protects INTEGRITY: no client can tamper
+# with their session without the signature failing. But the payload is
+# just base64-encoded JSON — ANYONE with the cookie can read it. Do NOT
+# store secrets (access tokens, PII, internal identifiers) in signed
+# sessions.
+#
+# For confidentiality, pass `encrypt: true`. Sessions are then sealed
+# with AES-256-GCM (authenticated encryption): the client sees only an
+# opaque ciphertext and cannot read or modify the payload without the
+# key. The 256-bit key is derived from `secret` via SHA-256.
 #
 # Usage:
 #   import { session } from '@rip-lang/server'
 #   import { sessions } from '@rip-lang/server/middleware'
 #
-#   use sessions secret: process.env.SESSION_SECRET
+#   use sessions
+#     secret:  process.env.SESSION_SECRET
+#     encrypt: true             # enable AES-256-GCM confidentiality
 #
 #   before ->
-#     session.userId = 123
-#
-#   get '/profile' ->
-#     { userId: session.userId }
-#
-# Security:
-#   Without `secret`, sessions use plain base64 (INSECURE — dev only).
-#   With `secret`, sessions are HMAC-SHA256 signed (tamper-proof).
+#     session.accessToken = '...'   # safe to store — client can't read
 #
 # Note: Self-contained — parses cookies directly from request headers.
 #
 
-# HMAC-SHA256 signing helpers
+# --- crypto helpers ---
+
+# HMAC-SHA256 signing helpers (used for the signed-only mode)
 hmacSign = (data, secret) ->
   encoder = new TextEncoder()
   key = crypto.subtle.importKey! 'raw', encoder.encode(secret),
@@ -259,15 +272,65 @@ hmacVerify = (data, signature, secret) ->
     result |= expected.charCodeAt(i) ^ signature.charCodeAt(i)
   result is 0
 
-encodeSession = (data, secret) ->
+# AES-256-GCM AEAD helpers. Derives a 32-byte key from `secret` via
+# SHA-256 (deterministic — same secret → same key). Cookie format is
+# base64url("v1." + nonce(12) + ciphertext || tag(16)). Version prefix
+# lets us migrate to future schemes without breaking old cookies.
+u8ToB64url = (u8) ->
+  bin = ''
+  bin += String.fromCharCode(b) for b in u8
+  btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+
+b64urlToU8 = (s) ->
+  s = s.replace(/-/g, '+').replace(/_/g, '/')
+  pad = s.length % 4
+  s += '='.repeat(4 - pad) if pad
+  bin = atob(s)
+  Uint8Array.from(bin, (c) -> c.charCodeAt(0))
+
+deriveAesKey = (secret) ->
+  encoder = new TextEncoder()
+  hash = crypto.subtle.digest! 'SHA-256', encoder.encode(secret)
+  crypto.subtle.importKey! 'raw', hash, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']
+
+aeadEncrypt = (data, secret) ->
+  key = deriveAesKey!(secret)
+  nonce = crypto.getRandomValues(new Uint8Array(12))
+  encoder = new TextEncoder()
+  plaintext = encoder.encode(JSON.stringify(data))
+  ciphertext = crypto.subtle.encrypt! { name: 'AES-GCM', iv: nonce }, key, plaintext
+  ct = new Uint8Array(ciphertext)
+  combined = new Uint8Array(nonce.length + ct.length)
+  combined.set(nonce, 0)
+  combined.set(ct, nonce.length)
+  "v1.#{u8ToB64url(combined)}"
+
+aeadDecrypt = (cookie, secret) ->
+  return {} unless cookie?.startsWith('v1.')
+  try
+    combined = b64urlToU8(cookie.slice(3))
+    return {} unless combined.length > 12
+    nonce = combined.slice(0, 12)
+    ct = combined.slice(12)
+    key = deriveAesKey!(secret)
+    plain = crypto.subtle.decrypt! { name: 'AES-GCM', iv: nonce }, key, ct
+    JSON.parse(new TextDecoder().decode(plain))
+  catch
+    {}
+
+encodeSession = (data, secret, encrypt) ->
+  if encrypt and secret
+    return aeadEncrypt!(data, secret)
   json = JSON.stringify(data)
   payload = btoa(unescape(encodeURIComponent(json)))
   return payload unless secret
   signature = hmacSign! payload, secret
   "#{payload}--#{signature}"
 
-decodeSession = (cookie, secret) ->
+decodeSession = (cookie, secret, encrypt) ->
   return {} unless cookie
+  if encrypt and secret
+    return aeadDecrypt!(cookie, secret)
   try
     if secret
       [payload, signature] = cookie.split('--')
@@ -280,16 +343,23 @@ decodeSession = (cookie, secret) ->
     {}
 
 export sessions = (opts = {}) ->
-  secret = opts.secret
+  secret     = opts.secret
+  encrypt    = opts.encrypt is true
   cookieName = opts.name or 'session'
-  maxAge = opts.maxAge or 86400
-  secure = opts.secure or false
-  httpOnly = opts.httpOnly ?? true
-  sameSite = opts.sameSite or 'Lax'
+  maxAge     = opts.maxAge or 86400
+  secure     = opts.secure or false
+  httpOnly   = opts.httpOnly ?? true
+  sameSite   = opts.sameSite or 'Lax'
 
-  # Warn if no secret in production
+  # Warn if no secret in production (signed mode is tamper-resistant
+  # only with a secret; unsigned mode is strictly dev-only).
   if not secret and process.env.NODE_ENV is 'production'
     warn 'WARNING: sessions() without secret is insecure. Set secret option for production.'
+
+  # Encrypt mode requires a secret; fail loudly at middleware install
+  # rather than silently falling back to signed mode.
+  if encrypt and not secret
+    throw new Error('sessions({encrypt: true}) requires a secret for key derivation')
 
   (c, next) ->
     # Parse cookie header
@@ -301,7 +371,7 @@ export sessions = (opts = {}) ->
 
     # Decode existing session
     raw = cookies[cookieName]
-    c.session = decodeSession! raw, secret
+    c.session = await decodeSession(raw, secret, encrypt)
 
     # Track original for change detection
     original = JSON.stringify(c.session)
@@ -311,7 +381,7 @@ export sessions = (opts = {}) ->
     # Save session if changed
     current = JSON.stringify(c.session)
     if current isnt original and c._response?
-      encoded = encodeSession! c.session, secret
+      encoded = await encodeSession(c.session, secret, encrypt)
       parts = ["#{cookieName}=#{encodeURIComponent(encoded)}"]
       parts.push "Path=/"
       parts.push "Max-Age=#{maxAge}"
