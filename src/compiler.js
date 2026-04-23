@@ -2611,8 +2611,24 @@ export class CodeEmitter {
             }
           }
 
+          if (!isConstructor && !sideEffectOnly && isLast && loopStmts.includes(h)) {
+            if (this.containsYield(stmt)) {
+              code += this.indent() + this.addSemicolon(stmt, this.emit(stmt, 'statement')) + '\n';
+              return;
+            }
+            code += this.indent() + 'const _result = [];\n';
+            this.comprehensionTarget = '_result';
+            let saved = this._skipCompTargetInit;
+            this._skipCompTargetInit = true;
+            code += this.emit(stmt, 'value');
+            this._skipCompTargetInit = saved;
+            this.comprehensionTarget = null;
+            code += this.indent() + 'return _result;\n';
+            return;
+          }
+
           let needsReturn = !isConstructor && !sideEffectOnly && isLast &&
-                           !noRetStmts.includes(h) && !loopStmts.includes(h) &&
+                           !noRetStmts.includes(h) &&
                            !this.hasExplicitControlFlow(stmt);
           let ctx = needsReturn ? 'value' : 'statement';
           let sc = this.emit(stmt, ctx);
@@ -2727,28 +2743,80 @@ export class CodeEmitter {
 
   emitComprehensionWithTarget(expr, iterators, guards, targetVar) {
     let code = '';
-    code += this.indent() + `${targetVar} = [];\n`;
-    let unwrappedExpr = (this.is(expr, 'block') && expr.length === 2) ? expr[1] : expr;
+    if (!this._skipCompTargetInit) code += this.indent() + `${targetVar} = [];\n`;
+
+    let hasCtrl = (node) => {
+      if (typeof node === 'string' && (node === 'break' || node === 'continue')) return true;
+      if (!Array.isArray(node)) return false;
+      if (['break', 'continue', 'return', 'throw'].includes(node[0])) return true;
+      if (node[0] === 'if') return node.slice(1).some(hasCtrl);
+      return node.some(hasCtrl);
+    };
+
+    let emitBody = () => {
+      let loopTypes = ['for-in', 'for-of', 'for-as', 'while', 'loop'];
+      if (this.is(expr, 'block')) {
+        for (let i = 0; i < expr.length - 1; i++) {
+          let s = expr[i + 1], isLast = i === expr.length - 2;
+          if (!isLast || hasCtrl(s) || (Array.isArray(s) && loopTypes.includes(s[0]))) {
+            code += this.indent() + this.emit(s, 'statement') + ';\n';
+          } else {
+            code += this.indent() + `${targetVar}.push(${this.emit(s, 'value')});\n`;
+          }
+        }
+      } else if (hasCtrl(expr)) {
+        code += this.indent() + this.emit(expr, 'statement') + ';\n';
+      } else {
+        code += this.indent() + `${targetVar}.push(${this.emit(expr, 'value')});\n`;
+      }
+    };
 
     if (iterators.length === 1) {
       let [iterType, vars, iterable, stepOrOwn] = iterators[0];
+
       if (iterType === 'for-in') {
         let { header, setup } = this._forInHeader(vars, iterable, stepOrOwn);
         code += this.indent() + header + ' {\n';
         this.indentLevel++;
         if (setup) code += this.indent() + setup + '\n';
-        if (guards && guards.length > 0) {
-          code += this.indent() + `if (${guards.map(g => this.emit(g, 'value')).join(' && ')}) {\n`;
-          this.indentLevel++;
-        }
-        code += this.indent() + `${targetVar}.push(${this.unwrap(this.emit(unwrappedExpr, 'value'))});\n`;
-        if (guards && guards.length > 0) { this.indentLevel--; code += this.indent() + '}\n'; }
+        if (guards?.length > 0) { code += this.indent() + `if (${guards.map(g => this.emit(g, 'value')).join(' && ')}) {\n`; this.indentLevel++; }
+        emitBody();
+        if (guards?.length > 0) { this.indentLevel--; code += this.indent() + '}\n'; }
+        this.indentLevel--;
+        code += this.indent() + '}\n';
+        return code;
+      }
+
+      if (iterType === 'for-of') {
+        let { header, own, vv, oc, kvp } = this._forOfHeader(vars, iterable, stepOrOwn);
+        code += this.indent() + header + ' {\n';
+        this.indentLevel++;
+        if (own) code += this.indent() + `if (!Object.hasOwn(${oc}, ${kvp})) continue;\n`;
+        if (vv) code += this.indent() + `${vv} = ${oc}[${kvp}];\n`;
+        if (guards?.length > 0) { code += this.indent() + `if (${guards.map(g => this.emit(g, 'value')).join(' && ')}) {\n`; this.indentLevel++; }
+        emitBody();
+        if (guards?.length > 0) { this.indentLevel--; code += this.indent() + '}\n'; }
+        this.indentLevel--;
+        code += this.indent() + '}\n';
+        return code;
+      }
+
+      if (iterType === 'for-as') {
+        let { header } = this._forAsHeader(vars, iterable, stepOrOwn);
+        code += this.indent() + header + ' {\n';
+        this.indentLevel++;
+        if (guards?.length > 0) { code += this.indent() + `if (${guards.map(g => this.emit(g, 'value')).join(' && ')}) {\n`; this.indentLevel++; }
+        emitBody();
+        if (guards?.length > 0) { this.indentLevel--; code += this.indent() + '}\n'; }
         this.indentLevel--;
         code += this.indent() + '}\n';
         return code;
       }
     }
-    return this.indent() + `${targetVar} = (() => { /* complex comprehension */ })();\n`;
+
+    code = '';
+    code += this.indent() + `${targetVar} = ${this.emit(['comprehension', expr, iterators, guards || []], 'value')};\n`;
+    return code;
   }
 
   emitComprehensionAsLoop(expr, iterators, guards) {

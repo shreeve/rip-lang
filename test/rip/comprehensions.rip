@@ -108,7 +108,7 @@ code "function comprehension assignment", '''
     let items, x;
     items = [];
     for (x of [1, 2, 3]) {
-      items.push(x * 2);
+      items.push((x * 2));
     }
     return items;
   }
@@ -123,7 +123,7 @@ code "function for-in assignment", '''
     let items, x;
     items = [];
     for (x of [1, 2, 3]) {
-      items.push(x * 2);
+      items.push((x * 2));
     }
     return items;
   }
