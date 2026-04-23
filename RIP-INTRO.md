@@ -258,7 +258,7 @@ api/
                        Partner, Order, OrderItem) + 4 enums + createOrderWithItems
   lib/                 auth, labcorp, orders, email, migrate, stash, npi
   routes/              auth, user, patients, tests, orders, labcorp
-  migrations/          Timestamped SQL (YYYYMMDDHHMMSSmmm-*.sql)
+  migrations/          Timestamped SQL (YYYYMMDDHHMMSS-*.sql)
   scripts/             labcorp-token refresh, smoke test (in-memory adapter)
 app/
   index.html           data-state, data-mount=App, data-src="ui app"
