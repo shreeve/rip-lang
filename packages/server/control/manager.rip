@@ -135,6 +135,16 @@ export class Manager
     @monitor(tracked)
     tracked
 
+  # Restart-budget key: `appId:slotIdx`. Previously keyed by slot index
+  # alone, which had two bugs:
+  #   - Different apps with the same slot index shared a budget, so one
+  #     app's instability could backoff another app's restarts.
+  #   - After a pool swap (hot reload), old budgets persisted against
+  #     the new workers — a healthy fresh worker could inherit the
+  #     previous occupant's exhausted counter. _doSwap now clears
+  #     budgets for the app, and restartBudgetKey makes them per-app.
+  restartBudgetKey: (appId, slotIdx) -> "#{appId}:#{slotIdx}"
+
   monitor: (w) ->
     w.process.exited.then =>
       return if @shuttingDown
@@ -150,7 +160,8 @@ export class Manager
       slotIdx = workers.findIndex((x) -> x.id is w.id)
       return if slotIdx < 0
 
-      budget = @restartBudgets.get(slotIdx) or { count: 0, backoffMs: 1000 }
+      key = @restartBudgetKey(w.appId, slotIdx)
+      budget = @restartBudgets.get(key) or { count: 0, backoffMs: 1000 }
 
       if nowMs() - w.startedAt > STABILITY_THRESHOLD_MS
         budget.count = 0
@@ -158,16 +169,25 @@ export class Manager
 
       budget.count++
       budget.backoffMs = Math.min(budget.backoffMs * 2, MAX_BACKOFF_MS)
-      @restartBudgets.set(slotIdx, budget)
+      @restartBudgets.set(key, budget)
 
       if budget.count > MAX_RESTART_COUNT
-        logEvent('worker_abandon', { workerId: w.id, slot: slotIdx, restarts: budget.count })
+        logEvent('worker_abandon', { workerId: w.id, appId: w.appId, slot: slotIdx, restarts: budget.count })
         return
       @server?.metrics and @server.metrics.workerRestarts++
-      logEvent('worker_restart', { workerId: w.id, slot: slotIdx, attempt: budget.count, backoffMs: budget.backoffMs })
+      logEvent('worker_restart', { workerId: w.id, appId: w.appId, slot: slotIdx, attempt: budget.count, backoffMs: budget.backoffMs })
       setTimeout =>
         workers[slotIdx] = @spawnWorker(w.appId, @currentVersion) if slotIdx < workers.length
       , budget.backoffMs
+
+  # Clear all restart budgets for an app. Called after a successful pool
+  # swap so the fresh workers don't inherit the outgoing pool's crash
+  # accounting. Without this, repeated reloads + occasional crashes can
+  # push a healthy worker into exhausted-backoff state.
+  clearRestartBudgetsForApp: (appId) ->
+    prefix = "#{appId}:"
+    keys = Array.from(@restartBudgets.keys()).filter((k) -> k.startsWith(prefix))
+    @restartBudgets.delete(k) for k in keys
 
   waitWorkerReady: (socketPath, timeoutMs = SWAP_READY_TIMEOUT_MS) ->
     waitForWorkerReady(socketPath, timeoutMs)
@@ -242,6 +262,9 @@ export class Manager
       @currentVersion = nextVersion
       @appliedGen.set(appId, targetGen)
       @lastBootError.delete(appId)
+      # Fresh pool = fresh restart accounting. Old pool's budgets no
+      # longer apply; the new workers should be judged on their own.
+      @clearRestartBudgetsForApp(appId)
 
       @_retireWorkersInBackground(oldWorkers)
 
