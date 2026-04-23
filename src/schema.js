@@ -1432,6 +1432,11 @@ function serializeLiteral(v) {
 // its own arg shape — we centralize the parsing here so Layer 2 can rely
 // on normalized structures.
 function compileDirectiveArgsLiteral(name, tokens) {
+  // @idStart requires its arg, so validate before the generic empty-bail.
+  if (name === 'idStart' && !tokens.length) {
+    throw schemaError(null,
+      '@idStart requires an integer literal, e.g. @idStart 10001.');
+  }
   if (!tokens.length) return null;
 
   // Relation directives: `@belongs_to Org`, `@belongs_to Org?`,
@@ -1487,6 +1492,29 @@ function compileDirectiveArgsLiteral(name, tokens) {
     let parts = [`fields: ${JSON.stringify(fields)}`];
     if (unique) parts.push('unique: true');
     return `[{${parts.join(', ')}}]`;
+  }
+
+  // @idStart N sets the seed value for the table's auto-id sequence.
+  // Accepts a single integer literal (optionally negative). Consumed by
+  // .toSQL(); models that never call .toSQL() simply ignore it.
+  if (name === 'idStart') {
+    let tok = tokens[0];
+    let sign = 1;
+    let numTok = tok;
+    if (tok && tok[0] === '-' && tokens[1] && tokens[1][0] === 'NUMBER') {
+      sign = -1;
+      numTok = tokens[1];
+    }
+    if (!numTok || numTok[0] !== 'NUMBER') {
+      throw schemaError(tok || tokens[tokens.length - 1],
+        '@idStart requires an integer literal, e.g. @idStart 10001.');
+    }
+    let n = sign * Number(numTok[1]);
+    if (!Number.isInteger(n)) {
+      throw schemaError(numTok,
+        '@idStart requires an integer literal; got ' + numTok[1] + '.');
+    }
+    return '[{value: ' + n + '}]';
   }
 
   // Bare flag-like directives (@timestamps, @softDelete) don't take args.
@@ -2901,7 +2929,8 @@ const __SCHEMA_SQL_TYPES = {
 };
 
 function __schemaToSQL(def, options) {
-  const { dropFirst = false, header } = options || {};
+  const opts = options || {};
+  const { dropFirst = false, header } = opts;
   const norm = def._normalize();
   const blocks = [];
   if (header) blocks.push(header);
@@ -2910,6 +2939,23 @@ function __schemaToSQL(def, options) {
   const seq = table + '_seq';
   if (dropFirst) {
     blocks.push('DROP TABLE IF EXISTS ' + table + ' CASCADE;\\nDROP SEQUENCE IF EXISTS ' + seq + ';');
+  }
+
+  // Sequence seed: explicit option wins over @idStart directive wins over 1.
+  // DuckDB 1.5.2 does not implement ALTER SEQUENCE ... RESTART WITH N, so the
+  // baseline has to be set at creation — hence the knob lives here, not in a
+  // post-create migration.
+  let idStart = 1;
+  for (const d of norm.directives) {
+    if (d.name === 'idStart' && d.args?.[0] && Number.isInteger(d.args[0].value)) {
+      idStart = d.args[0].value;
+    }
+  }
+  if (opts.idStart !== undefined) {
+    if (!Number.isInteger(opts.idStart)) {
+      throw new Error('schema.toSQL(): idStart must be an integer; got ' + String(opts.idStart));
+    }
+    idStart = opts.idStart;
   }
 
   const columns = [];
@@ -2948,7 +2994,7 @@ function __schemaToSQL(def, options) {
     indexes.push('CREATE ' + u + 'INDEX idx_' + table + '_' + fields.join('_') + ' ON ' + table + ' (' + fields.map(f => '"' + f + '"').join(', ') + ');');
   }
 
-  blocks.push('CREATE SEQUENCE ' + seq + ' START 1;');
+  blocks.push('CREATE SEQUENCE ' + seq + ' START ' + idStart + ';');
   blocks.push('CREATE TABLE ' + table + ' (\\n' + columns.join(',\\n') + '\\n);');
   if (indexes.length) blocks.push(indexes.join('\\n'));
 
@@ -3071,7 +3117,7 @@ export const SCHEMA_INTRINSIC_DECLS = [
   '  first(): Promise<Instance | null>;',
   '  count(cond?: Record<string, unknown>): Promise<number>;',
   '  create(data: Partial<Data>): Promise<Instance>;',
-  '  toSQL(options?: { dropFirst?: boolean; header?: string }): string;',
+  '  toSQL(options?: { dropFirst?: boolean; header?: string; idStart?: number }): string;',
   '}',
 ];
 

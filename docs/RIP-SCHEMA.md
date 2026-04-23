@@ -547,6 +547,7 @@ kind (see [§18](#18-directives)). Examples:
 @timestamps                       # adds createdAt/updatedAt columns (:model only)
 @softDelete                       # adds deletedAt, soft-deletes on .destroy() (:model only)
 @index [role, active]             # composite index (:model only)
+@idStart 10001                    # seed for the auto-id sequence (:model only, .toSQL())
 @belongs_to Organization?         # nullable FK (:model only)
 @has_many Order                   # has-many relation (:model only)
 @mixin Timestamps                 # pull in a mixin's fields (any fielded kind)
@@ -1005,6 +1006,25 @@ User.toSQL()
 
 `.toSQL()` works independently of the ORM. A migration script that never
 calls `.find()` or `.create()` can still emit full DDL.
+
+#### Sequence start value
+
+The auto-id sequence seeds at `1` by default. Override per-model with the
+`@idStart N` directive, or per-call with the `idStart` option (the option
+wins):
+
+```coffee
+User = schema :model
+  name! string
+  @idStart 10001            # customer-facing IDs start at 10001
+
+User.toSQL()                # → CREATE SEQUENCE users_seq START 10001;
+User.toSQL(idStart: 50000)  # → CREATE SEQUENCE users_seq START 50000;
+```
+
+Required because DuckDB (as of 1.5.2) does not implement
+`ALTER SEQUENCE … RESTART WITH N` — so the seed has to be baked into the
+initial `CREATE SEQUENCE` rather than bumped in a follow-up migration.
 
 To emit a whole application's schema, call `.toSQL()` per model and join.
 Order by FK dependency (models referenced via `@belongs_to` come first):
@@ -1855,6 +1875,7 @@ user-defined enums or shapes compose incrementally.
 | `@index [a, b, c]`            | Composite index on the listed columns                               |
 | `@index column`               | Single-column index (same as `@index [column]`)                     |
 | `@index [...] #`              | Unique index                                                        |
+| `@idStart N`                  | Seed value for the auto-id sequence in `.toSQL()` output (default `1`). Overridden per-call by `toSQL(idStart: N)`. |
 | `@belongs_to Target`          | FK column `target_id` referencing `targets.id`, NOT NULL            |
 | `@belongs_to Target?`         | Same, nullable                                                      |
 | `@has_one Target`             | Accessor `target()` returning one                                   |

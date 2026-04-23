@@ -1907,7 +1907,7 @@ INTRINSICS = '''
     first(): Promise<Instance | null>;
     count(cond?: Record<string, unknown>): Promise<number>;
     create(data: Partial<Data>): Promise<Instance>;
-    toSQL(options?: { dropFirst?: boolean; header?: string }): string;
+    toSQL(options?: { dropFirst?: boolean; header?: string; idStart?: number }): string;
   }
 
   '''
@@ -2051,6 +2051,51 @@ test ":model toSQL marks optional belongs_to as nullable", modelHeader + '''
   hasFK = sql.match(/user_id INTEGER REFERENCES users\\(id\\)/)?
   hasFK
 ''', true
+
+# -- toSQL: sequence start value (default / directive / option / precedence) --
+#
+# DuckDB 1.5.2 does not implement `ALTER SEQUENCE ... RESTART WITH N`, so the
+# seed value must be baked into the `CREATE SEQUENCE` statement. `@idStart N`
+# lives with the model; `.toSQL({ idStart: N })` is the caller override.
+
+test ":model toSQL defaults sequence to START 1", modelHeader + '''
+  User = schema :model
+    name! string
+  User.toSQL().includes("CREATE SEQUENCE users_seq START 1;")
+''', true
+
+test ":model toSQL honors @idStart directive", modelHeader + '''
+  User = schema :model
+    name! string
+    @idStart 10001
+  User.toSQL().includes("CREATE SEQUENCE users_seq START 10001;")
+''', true
+
+test ":model toSQL option idStart overrides @idStart directive", modelHeader + '''
+  User = schema :model
+    name! string
+    @idStart 10001
+  User.toSQL(idStart: 50000).includes("CREATE SEQUENCE users_seq START 50000;")
+''', true
+
+test ":model toSQL accepts negative @idStart", modelHeader + '''
+  User = schema :model
+    name! string
+    @idStart -5
+  User.toSQL().includes("CREATE SEQUENCE users_seq START -5;")
+''', true
+
+fail "@idStart rejects non-integer literal", '''
+  User = schema :model
+    name! string
+    @idStart 3.14
+'''
+
+fail "@idStart rejects missing argument", '''
+  User = schema :model
+    name! string
+    @idStart
+'''
 
 # -- .find / .create / .where / .all --
 
