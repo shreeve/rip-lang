@@ -157,18 +157,35 @@ unless isLocalBind
     warn "      /shutdown is DISABLED (no --auth-token provided)."
   warn ""
 
-# Periodic checkpoint (flush WAL to main file every 5 minutes)
-checkpoint = -> try conn.query 'CHECKPOINT'
+# Periodic checkpoint (flush WAL to main file every 5 minutes). The `!` is
+# the await operator in Rip — without it, the CHECKPOINT query fires and
+# the function returns before DuckDB actually runs it, which silently
+# defeats the periodic flush (and used to defeat the shutdown flush too).
+checkpoint = ->
+  try conn.query! 'CHECKPOINT'
+  catch err
+    warn "rip-db: periodic checkpoint failed: #{err?.message or err}"
 checkpointTimer = setInterval checkpoint, 5 * 60 * 1000
 
-# Graceful shutdown: checkpoint and exit (DuckDB FFI close segfaults in Bun)
+# Graceful shutdown: FORCE CHECKPOINT + process.exit. We don't call
+# duckdb_close() — via Bun FFI it segfaults, so the DB handle intentionally
+# leaks into the dying process. FORCE CHECKPOINT completes even if other
+# work is in flight, which plain CHECKPOINT can refuse to do. Errors are
+# surfaced instead of silently swallowed so a failed flush is visible.
 shuttingDown = false
+finalCheckpoint = ->
+  try
+    conn.query! 'FORCE CHECKPOINT'
+    p 'rip-db: final checkpoint flushed'
+  catch err
+    warn "rip-db: final checkpoint failed: #{err?.message or err}"
+
 shutdown = ->
   return if shuttingDown
   p "\n\nrip-db: shutting down server"
   shuttingDown = true
   clearInterval checkpointTimer if checkpointTimer
-  try checkpoint()
+  finalCheckpoint!
   exit!
 
 process.on 'SIGINT',  shutdown
