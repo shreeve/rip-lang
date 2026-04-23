@@ -452,6 +452,24 @@ class Server
         newVersion: @configInfo?.version or null
       }
 
+  # Apply a loaded runtime config. When `verifyAfterActivate` is true
+  # (control-API reload, etc.), the staged runtime is VERIFIED BEFORE
+  # it replaces the live pointer, so requests never see a broken
+  # config while rollback is in flight.
+  #
+  # Ordering:
+  #   1. Stage: build runtime + stream runtime (starts health checks on
+  #      the staged upstream pool — needed for proxy verification).
+  #   2. Snapshot: capture the registry and live runtimes so we can
+  #      unwind on failure.
+  #   3. Register: applyConfig updates the app registry so verify can
+  #      resolve hosts/apps. This IS observable to live traffic, but
+  #      the active runtime pointer hasn't moved yet.
+  #   4. Verify (if requested): health-check upstreams / check routes
+  #      against the staged runtime. On failure we restore the registry
+  #      snapshot and tear down the staged runtimes — no activation.
+  #   5. Activate: only after verify passes. activateRuntime is a pure
+  #      pointer swap; activateStreamRuntime stops/starts listeners.
   applyRuntimeConfig: (loaded, options = {}) ->
     source = options.source or 'startup'
     verifyAfterActivate = options.verifyAfterActivate is true
@@ -460,8 +478,6 @@ class Server
       hostIndex: new Map(@appRegistry.hostIndex)
       wildcardIndex: new Map(@appRegistry.wildcardIndex)
       configured: new Set(@configuredAppIds)
-    oldRuntime = @servingRuntime
-    oldStreamRuntime = @streamRuntime
     stagedRuntime = @buildRuntime(loaded)
     stagedStreamRuntime = @buildStreamRuntimeForConfig(loaded)
 
@@ -476,21 +492,44 @@ class Server
       registered = applyConfig(loaded.normalized, @appRegistry, registerApp, baseDir)
       for app in registered
         @configuredAppIds.add(app.id) unless app.id is @defaultAppId
-      oldRuntime = @activateRuntime(stagedRuntime)
-      oldStreamRuntime = @activateStreamRuntime(stagedStreamRuntime, deferListeners: source is 'startup')
+
+      # Verify BEFORE activation when requested. On failure we restore
+      # the registry snapshot and stop the staged runtime's side-effects
+      # (health checks, any stream listeners) without ever flipping
+      # @servingRuntime or @streamRuntime.
       if verifyAfterActivate
         result = @verifyRuntime!(stagedRuntime, loaded)
         unless result.ok
-          @rollbackRuntime(oldRuntime, stagedRuntime, snapshot, result)
-          @rollbackStreamRuntime(oldStreamRuntime, stagedStreamRuntime)
+          stopHealthChecks(stagedRuntime.upstreamPool)
+          stopStreamListeners(stagedStreamRuntime, true)
+          restoreRegistrySnapshot(@appRegistry, snapshot)
+          @configuredAppIds = new Set(snapshot.configured)
           logEvent('config_rollback',
             source: source
-            oldVersion: oldRuntime?.configInfo?.version
+            oldVersion: @servingRuntime?.configInfo?.version
             newVersion: stagedRuntime?.configInfo?.version
             reason: result.message
             code: result.code
           )
+          # Surface verification failure on the CURRENT (unchanged)
+          # runtime's configInfo so /status and reload-history reflect
+          # the reject outcome without implying a rollback happened.
+          @configInfo = Object.assign({}, @configInfo,
+            lastResult: 'rejected'
+            lastError: result.message
+            lastErrorCode: result.code
+            lastErrorDetails: result.details or null
+            loadedAt: new Date().toISOString()
+          )
+          @servingRuntime.configInfo = @configInfo if @servingRuntime?.configInfo
           return false
+
+      # Verify passed (or wasn't requested) — activate now. Pointer swap
+      # is atomic; the first request after this sees the new runtime.
+      oldRuntime = @activateRuntime(stagedRuntime)
+      oldStreamRuntime = @activateStreamRuntime(stagedStreamRuntime, deferListeners: source is 'startup')
+
+      if verifyAfterActivate
         @configInfo = Object.assign({}, @configInfo,
           lastResult: 'applied'
           lastError: null
