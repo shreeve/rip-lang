@@ -48,13 +48,12 @@ export postWorkerQuit = (socketPrefix, workerId) ->
     body = JSON.stringify({ op: 'quit', workerId })
     fetch!('http://localhost/worker', { method: 'POST', body, headers: { 'content-type': 'application/json' }, unix: ctl })
 
-export waitForWorkerReady = (socketPath, timeoutMs = 5000) ->
+export waitForWorkerReady = (socketPath, timeoutMs = 15000) ->
   start = Date.now()
   while Date.now() - start < timeoutMs
     try
-      res = fetch!('http://localhost/ready', { unix: socketPath, method: 'GET' })
+      res = fetch!('http://localhost/ready', { unix: socketPath, method: 'GET', signal: AbortSignal.timeout(200) })
       if res.ok
-        txt = res.text!
-        return true if txt is 'ok'
+        return true if res.text! is 'ok'
     await new Promise (r) -> setTimeout(r, 30)
   false

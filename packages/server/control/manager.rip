@@ -2,8 +2,8 @@
 # control/manager.rip — worker pool manager
 # ==============================================================================
 
-import { existsSync, statSync, unlinkSync, watch, utimesSync } from 'node:fs'
-import { basename, dirname, join } from 'node:path'
+import { existsSync, unlinkSync, watch } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { spawnTrackedWorker, postWorkerQuit, waitForWorkerReady } from './workers.rip'
 import { shouldTriggerCodeReload, registerAppWatchDirs } from './watchers.rip'
 import { logEvent } from './lifecycle.rip'
@@ -11,6 +11,7 @@ import { logEvent } from './lifecycle.rip'
 MAX_BACKOFF_MS = 30000
 MAX_RESTART_COUNT = 10
 STABILITY_THRESHOLD_MS = 60000
+SWAP_READY_TIMEOUT_MS = 15000
 
 nowMs = -> Date.now()
 
@@ -18,20 +19,21 @@ export class Manager
   constructor: (@flags, @serverPath) ->
     @appWorkers = new Map()
     @shuttingDown = false
-    @lastCheck = 0
-    @currentMtimes = new Map()
-    @rollingApps = new Set()
-    @lastRollAt = new Map()
     @nextWorkerId = -1
     @retiringIds = new Set()
     @restartBudgets = new Map()
-    @deferredDeaths = new Set()
     @currentVersion = 1
     @server = null
     @dbUrl = null
     @appWatchers = new Map()
     @codeWatchers = new Map()
     @defaultAppId = @flags.appName
+
+    # Lazy reload state — per app
+    @observedGen   = new Map()   # appId -> integer, bumped on file change
+    @appliedGen    = new Map()   # appId -> integer, matches active pool
+    @swapInFlight  = new Map()   # appId -> Promise, coalesces concurrent callers
+    @lastBootError = new Map()   # appId -> { gen, error }, memoized boot failure
 
   getWorkers: (appId) ->
     appId = appId or @defaultAppId
@@ -89,45 +91,23 @@ export class Manager
       for i in [0...desiredWorkers]
         w = @spawnWorker!(app.appId, @currentVersion)
         workers.push(w)
+      @observedGen.set(app.appId, 0)
+      @appliedGen.set(app.appId, 0)
 
+    # Lazy reload: watcher bumps observedGen; the next request triggers a swap.
+    # Reload is gated by @flags.reload; watch pattern defaults to '*.rip'.
     if @flags.reload
+      watchPattern = @flags.watch or '*.rip'
       for app in @allAppStates()
-        @currentMtimes.set(app.appId, @getEntryMtime(app.appId))
-
-      interval = setInterval =>
-        return clearInterval(interval) if @shuttingDown
-        now = Date.now()
-        return if now - @lastCheck < 100
-        @lastCheck = now
-        for app in @allAppStates()
-          appId = app.appId
-          mt = @getEntryMtime(appId)
-          previous = @currentMtimes.get(appId) or 0
-          if mt > previous
-            continue if @rollingApps.has(appId)
-            continue if now - (@lastRollAt.get(appId) or 0) < 200
-            @currentMtimes.set(appId, mt)
-            @rollingApps.add(appId)
-            @lastRollAt.set(appId, now)
-            @rollingRestart(appId).finally => @rollingApps.delete(appId)
-      , 50
-
-      if @flags.watch
-        for app in @allAppStates()
-          continue unless app.config.entry and app.config.appBaseDir
-          entryFile = app.config.entry
-          entryBase = basename(entryFile)
-          try
-            watcher = watch app.config.appBaseDir, { recursive: true }, (event, filename) =>
-              return unless shouldTriggerCodeReload(filename, @flags.watch, entryBase)
-              try
-                now = new Date()
-                utimesSync(entryFile, now, now)
-              catch
-                null
-            @codeWatchers.set(app.appId, watcher)
-          catch e
-            warn "rip-server: directory watch failed for #{app.appId}: #{e.message}"
+        continue unless app.config.entry and app.config.appBaseDir
+        appId = app.appId
+        try
+          watcher = watch app.config.appBaseDir, { recursive: true }, (event, filename) =>
+            return unless shouldTriggerCodeReload(filename, watchPattern, null)
+            @onFileChange(appId)
+          @codeWatchers.set(appId, watcher)
+        catch e
+          warn "rip-server: directory watch failed for #{appId}: #{e.message}"
 
   stop: ->
     for [appId, workers] as @appWorkers
@@ -159,9 +139,10 @@ export class Manager
     w.process.exited.then =>
       return if @shuttingDown
       return if @retiringIds.has(w.id)
-      if @rollingApps.has(w.appId)
-        @deferredDeaths.add(w.id)
-        return
+      # Suppress crash-respawn while a swap is staging a new pool:
+      # delayed setTimeout() respawns from an old-pool crash could otherwise
+      # clobber a freshly-installed new worker after the atomic flip.
+      return if @swapInFlight.has(w.appId)
 
       postWorkerQuit(@flags.socketPrefix, w.id)
 
@@ -188,74 +169,121 @@ export class Manager
         workers[slotIdx] = @spawnWorker(w.appId, @currentVersion) if slotIdx < workers.length
       , budget.backoffMs
 
-  waitWorkerReady: (socketPath, timeoutMs = 5000) ->
+  waitWorkerReady: (socketPath, timeoutMs = SWAP_READY_TIMEOUT_MS) ->
     waitForWorkerReady(socketPath, timeoutMs)
 
-  rollingRestart: (appId = null) ->
-    apps = if appId then [@getAppState(appId)].filter(Boolean) else @allAppStates()
+  # ==========================================================================
+  # Lazy reload.
+  #   watcher  → onFileChange(appId)       → observedGen++
+  #   request  → ensureFresh(appId)        → (if stale) _doSwap → atomic flip
+  #
+  # Invariants:
+  #   - observedGen is monotonic, bumped by the file watcher
+  #   - appliedGen matches the currently-active pool
+  #   - at most one _doSwap runs per app at a time (swapInFlight promise)
+  #   - ensureFresh() guarantees applied >= target captured at call time
+  #   - old-pool retirement runs in the background; callers return as soon
+  #     as the new pool is flipped in (doesn't wait for drains)
+  # ==========================================================================
+
+  onFileChange: (appId) ->
+    appId = appId or @defaultAppId
+    next = (@observedGen.get(appId) or 0) + 1
+    @observedGen.set(appId, next)
+    prior = @lastBootError.get(appId)
+    @lastBootError.delete(appId) if prior and prior.gen < next
+
+  ensureFresh: (appId) ->
+    appId = appId or @defaultAppId
+    target = @observedGen.get(appId) or 0
+
+    loop
+      applied = @appliedGen.get(appId) or 0
+      return if applied >= target
+
+      failure = @lastBootError.get(appId)
+      throw failure.error if failure and failure.gen > applied and failure.gen <= target
+
+      inflight = @swapInFlight.get(appId)
+      if inflight
+        try await inflight.promise
+        catch then null  # swallow; loop re-evaluates applied vs target
+        continue
+
+      promise = @_doSwap(appId, target)
+      entry = { gen: target, promise }
+      @swapInFlight.set(appId, entry)
+      try
+        await promise
+      finally
+        current = @swapInFlight.get(appId)
+        @swapInFlight.delete(appId) if current is entry
+
+  _doSwap: (appId, targetGen) ->
+    app = @getAppState(appId)
+    throw new Error "unknown app #{appId}" unless app
     nextVersion = @currentVersion + 1
+    desired = app.config.workers or @flags.workers
 
-    for app in apps
-      workers = @getWorkers(app.appId)
-      olds = [...workers]
-      pairs = []
+    newWorkers = []
+    try
+      for i in [0...desired]
+        newWorkers.push @spawnWorker!(appId, nextVersion)
 
-      for oldWorker in olds
-        replacement = @spawnWorker!(app.appId, nextVersion)
-        workers.push(replacement)
-        pairs.push({ old: oldWorker, replacement })
+      readyResults = Promise.all!(newWorkers.map((w) => @waitWorkerReady(w.socketPath)))
+      unless readyResults.every((ok) -> ok)
+        throw new Error "workers failed readiness for app #{appId}"
 
-      readyResults = Promise.all!(pairs.map((p) => @waitWorkerReady(p.replacement.socketPath, 3000)))
-      allReady = readyResults.every((ready) -> ready)
-      unless allReady
-        warn "[manager] Rolling restart aborted: not all new workers ready for app #{app.appId}"
-        for pair, i in pairs
-          unless readyResults[i]
-            try pair.replacement.process.kill()
-            idx = workers.indexOf(pair.replacement)
-            workers.splice(idx, 1) if idx >= 0
-        if @deferredDeaths.size > 0
-          for deadId as @deferredDeaths
-            idx = workers.findIndex((x) -> x.id is deadId)
-            workers[idx] = @spawnWorker(app.appId, @currentVersion) if idx >= 0
-          @deferredDeaths.clear()
-        return
+      workers = @getWorkers(appId)
+      oldWorkers = [...workers]
+      workers.length = 0
+      workers.push(...newWorkers)
 
       @currentVersion = nextVersion
+      @appliedGen.set(appId, targetGen)
+      @lastBootError.delete(appId)
 
-      for { old } in pairs
-        @retiringIds.add(old.id)
-        try old.process.kill()
+      @_retireWorkersInBackground(oldWorkers)
 
-      Promise.all!(pairs.map(({ old }) -> old.process.exited.catch(-> null)))
+      logEvent('worker_swap', { appId, gen: targetGen, workers: desired })
+      undefined
+    catch err
+      for w in newWorkers
+        try w.process.kill()
+        try unlinkSync(w.socketPath)
+      @lastBootError.set(appId, { gen: targetGen, error: err })
+      warn "[manager] reload failed for #{appId} at gen #{targetGen}: #{err?.message or err}"
+      throw err
 
-      for { old } in pairs
-        postWorkerQuit(@flags.socketPrefix, old.id)
+  # Fire-and-forget retirement. Caller (swap) does not wait for drain.
+  # Kills old workers, waits for exit, notifies the server via control
+  # socket, and clears retiring IDs in a finally block so state never leaks.
+  _retireWorkersInBackground: (oldWorkers) ->
+    return unless oldWorkers.length
+    retiring = new Set(oldWorkers.map((w) -> w.id))
+    @retiringIds.add(id) for id as retiring
 
-      retiring = new Set(pairs.map((p) -> p.old.id))
-      filtered = workers.filter((w) -> not retiring.has(w.id))
-      workers.length = 0
-      workers.push(...filtered)
-      @retiringIds.delete(id) for id as retiring
+    for w in oldWorkers
+      try w.process.kill()
 
-      if @deferredDeaths.size > 0
-        for deadId as @deferredDeaths
-          idx = workers.findIndex((x) -> x.id is deadId)
-          workers[idx] = @spawnWorker(app.appId, @currentVersion) if idx >= 0
-        @deferredDeaths.clear()
+    do =>
+      try
+        await Promise.all(oldWorkers.map((w) -> w.process.exited.catch(-> null)))
+        for w in oldWorkers
+          postWorkerQuit(@flags.socketPrefix, w.id)
+      catch err
+        warn "[manager] background retirement error: #{err?.message or err}"
+      finally
+        @retiringIds.delete(id) for id as retiring
+    undefined
 
   teardown: ->
     @shuttingDown = true
     @stop!
     @shuttingDown = false
-    @currentMtimes.clear()
-    @rollingApps.clear()
-    @lastRollAt.clear()
+    @observedGen.clear()
+    @appliedGen.clear()
+    @swapInFlight.clear()
+    @lastBootError.clear()
     @retiringIds.clear()
     @restartBudgets.clear()
-    @deferredDeaths.clear()
-
-  getEntryMtime: (appId = null) ->
-    app = @getAppState(appId or @defaultAppId)
-    entry = app?.config?.entry or @flags.appEntry
-    try statSync(entry).mtimeMs catch then 0

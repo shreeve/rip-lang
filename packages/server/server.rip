@@ -715,6 +715,18 @@ class Server
     app = getAppState(@appRegistry, appId)
     return new Response('Host not found', { status: 404 }) unless app
 
+    # Lazy reload: if files changed, swap the worker pool before dispatching.
+    # The first request after a save pays the cold-boot cost; subsequent
+    # requests (or any concurrent ones) share the same in-flight swap.
+    if @manager
+      try
+        @manager.ensureFresh!(appId)
+      catch err
+        body = if typeof err?.formatHTML is 'function' then err.formatHTML()
+        else "<!DOCTYPE html><html><body><pre>#{(err?.stack or err?.message or String(err))}</pre></body></html>"
+        html = "<!DOCTYPE html><html><head><meta charset=utf-8><title>Rip Reload Error</title></head><body>#{body}</body></html>"
+        return new Response(html, { status: 500, headers: { 'content-type': 'text/html; charset=UTF-8' } })
+
     @retainRuntime(runtime) if matchedRoute?.app
 
     # Fast path: try available worker

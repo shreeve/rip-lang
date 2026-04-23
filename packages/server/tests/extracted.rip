@@ -115,4 +115,7 @@ test "Manager constructor initializes expected state", ->
   eq mgr.shuttingDown, false
   eq mgr.defaultAppId, 'test'
   ok mgr.restartBudgets instanceof Map
-  ok mgr.deferredDeaths instanceof Set
+  ok mgr.observedGen instanceof Map
+  ok mgr.appliedGen instanceof Map
+  ok mgr.swapInFlight instanceof Map
+  ok mgr.lastBootError instanceof Map

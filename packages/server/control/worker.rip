@@ -83,10 +83,15 @@ export runWorkerMode = ->
       ctl = getControlSocketPath(socketPrefix)
       fetch!('http://localhost/worker', { method: 'POST', body, headers: { 'content-type': 'application/json' }, unix: ctl })
 
-  # Preload handler
+  # Preload handler — import app entry, resolve handler, flip ready flag.
+  # Always derive appReady from workerState.handler presence so a failed
+  # preload cannot leave a stale handler from a prior import path.
   try
-    initial = getHandler!
-    workerState.appReady = typeof initial is 'function'
+    getHandler!
+  catch e
+    workerState.handler = null
+    warn "[worker #{workerId}] preload failed: #{e?.message or e}"
+  workerState.appReady = typeof workerState.handler is 'function'
 
   server = Bun.serve
     unix: socketPath
