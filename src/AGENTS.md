@@ -383,6 +383,31 @@ Compile-time optimizations:
 - array-based `state.blocks[]`
 - `state.keys = items.slice()` for default item-as-key behavior
 
+### Nested Loop Variable Collision (known gotcha)
+
+The emitted patch function for a reactive block is named `p` and takes
+every enclosing loop variable as a positional parameter:
+
+```javascript
+// For a render with `for item in items` containing `for v, i in item.enum`
+p(ctx, v, i, item, i) { ... }   // duplicate `i` — invalid in strict mode
+```
+
+The outer `for item in items` allocates an implicit `i` counter even
+when the user wrote no explicit index. If the inner loop uses `i` as an
+explicit index, both end up in `p`'s signature and V8 throws
+`Duplicate parameter name not allowed in this context` at parse time.
+
+Current workaround (author-facing, documented in
+`packages/ui/AGENTS.md`): use a different inner index name (`idx`, `n`,
+`j`).
+
+Long-term fix: the emitter should generate unique internal names for
+auto-allocated loop counters (e.g. `__i0`, `__i1`) rather than reusing
+`i`, so no user-chosen name can ever collide. The fix lives in whichever
+`emitFor*` path closes over the block into a patch function — search
+for sites that build the `p(ctx, ...args)` signature in `compiler.js`.
+
 ### Error Boundaries
 
 `onError` walks the `_parent` chain.
