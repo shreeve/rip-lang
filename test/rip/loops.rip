@@ -161,6 +161,27 @@ code "for-as loop", "for x as iter\n  x", "for (x of iter) { x; }"
 code "for-as destructure gen", "for [k, v] as m.entries()\n  k", "for ([k, v] of m.entries()) { k; }"
 
 # ==============================================================================
+# For as Object Property Value (no parens required)
+# ==============================================================================
+
+test "for-in as object property value", '''
+  items = ["a", "b"]
+  data =
+    codes: for x in items
+      tag: x
+    other: 99
+  [data.codes.length, data.codes[0].tag, data.other]
+  ''', [2, "a", 99]
+
+test "for-in property value with body logic", '''
+  list = [1, 2, 3, 4]
+  data =
+    evens: for x in list when x % 2 is 0
+      x * 10
+  data.evens
+  ''', [20, 40]
+
+# ==============================================================================
 # Nested Loops
 # ==============================================================================
 

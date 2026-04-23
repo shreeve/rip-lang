@@ -172,7 +172,7 @@ let IMPLICIT_FUNC = new Set([
 let TAGGABLE = new Set(['IDENTIFIER', 'PROPERTY', ')', 'CALL_END', ']', 'INDEX_END']);
 
 // Control flow tokens that don't end implicit calls/objects
-let CONTROL_IN_IMPLICIT = new Set(['IF', 'TRY', 'FINALLY', 'CATCH', 'CLASS', 'SWITCH', 'COMPONENT']);
+let CONTROL_IN_IMPLICIT = new Set(['IF', 'TRY', 'FINALLY', 'CATCH', 'CLASS', 'SWITCH', 'COMPONENT', 'FOR']);
 
 // Single-liner keywords that get implicit INDENT/OUTDENT
 let SINGLE_LINERS = new Set(['ELSE', '->', '=>', 'TRY', 'FINALLY', 'THEN']);
