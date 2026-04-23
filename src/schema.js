@@ -2882,6 +2882,13 @@ async function __schemaSave(def, inst) {
         }
       }
     }
+    // Now that the RETURNING columns (id, @timestamps, FKs) are on the
+    // instance, !> eager-derived fields can see them. Mirrors the hydrate
+    // path, which runs _applyEagerDerived once all declared fields are
+    // populated. Per-docs semantics ("materialize once, not reactive")
+    // still hold — we're firing once, at end of construction, not on
+    // subsequent mutations.
+    def._applyEagerDerived(inst);
     inst._persisted = true;
   } else {
     const sets = [], values = [];

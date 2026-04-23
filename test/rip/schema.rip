@@ -2212,6 +2212,21 @@ test ":model toJSON includes !> eager-derived fields", modelHeader + '''
   u.toJSON().displayName
 ''', "Alice Smith"
 
+# !> eager-derived fields must also run on .create() after the INSERT
+# RETURNING data lands — otherwise DB-assigned slots (id, @timestamps,
+# belongs_to FKs) would be invisible to the derivation.
+
+test ":model.create() runs !> eager-derived after RETURNING columns arrive", modelHeader + '''
+  User = schema :model
+    firstName! string
+    lastName!  string
+    displayName: !> "#{@firstName} #{@lastName}"
+    withId:      !> "u-#{@id}"
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "first_name"}, {name: "last_name"}], data: [[42, "Alice", "Smith"]], rows: 1}
+  u = User.create! {firstName: "Alice", lastName: "Smith"}
+  [u.displayName, u.withId]
+''', ["Alice Smith", "u-42"]
+
 test ":model toJSON excludes methods, ~> computed getters, and internal state", modelHeader + '''
   User = schema :model
     name! string
@@ -2222,11 +2237,11 @@ test ":model toJSON excludes methods, ~> computed getters, and internal state", 
   json = u.toJSON()
   keys = Object.keys(json)
   [
-    ('greet'     in keys)
-    ('upper'     in keys)
-    ('_dirty'    in keys)
+    ('greet'      in keys)
+    ('upper'      in keys)
+    ('_dirty'     in keys)
     ('_persisted' in keys)
-    ('_snapshot' in keys)
+    ('_snapshot'  in keys)
   ]
 ''', [false, false, false, false, false]
 
