@@ -1546,42 +1546,17 @@ export class Lexer {
       let optional = (tag === '?.');
       tokens.splice(i, 1);
       tokens[i][0] = optional ? 'OPTPICK_START' : 'PICK_START';
-      // Walk the body: track depth to find the matching close, and retag
-      // keyword-shaped tokens (DEFAULT, CLASS, DELETE, IF, …) to PROPERTY
-      // when they're in a PickKey position (bare key, rename dest, or
-      // after separator). Mirrors how `obj.default` already works — inside
-      // a pick body, keyword-shaped words are property names, not keywords.
+      // Find the matching close brace, retagging as PICK_END. Reserved-word
+      // keys inside the body are already handled upstream by inPickKeyPos()
+      // during initial tokenization — no second pass needed here.
       let depth = 1;
-      // Key-position tracker: a token in "key position" is one that should
-      // be a PickKey. Flips to false after consuming a key. Comma, colon,
-      // TERMINATOR, and INDENT inside the body reset to key position. `=`
-      // starts a default expression (keywords stay as keywords there).
-      let atKeyPos = true;
-      let inDefault = false;
       for (let j = i + 1; j < tokens.length && depth > 0; j++) {
-        let t = tokens[j];
-        let tt = t[0];
-        if (tt === '{' || tt === 'PICK_START' || tt === 'OPTPICK_START') { depth++; continue; }
-        if (tt === '}') {
+        let tt = tokens[j][0];
+        if (tt === '{' || tt === 'PICK_START' || tt === 'OPTPICK_START') depth++;
+        else if (tt === '}') {
           depth--;
           if (depth === 0) { tokens[j][0] = 'PICK_END'; break; }
-          continue;
         }
-        if (depth !== 1) continue;  // nested — don't touch
-        if (tt === ',' || tt === 'TERMINATOR' || tt === 'INDENT' || tt === 'OUTDENT') {
-          atKeyPos = true; inDefault = false; continue;
-        }
-        if (tt === ':' && !inDefault) { atKeyPos = true; continue; }
-        if (tt === '=') { atKeyPos = false; inDefault = true; continue; }
-        if (!atKeyPos || inDefault) continue;
-        // In key position: if token has an identifier-shaped value but
-        // isn't already IDENTIFIER/PROPERTY, retag. This covers every
-        // Rip keyword without maintaining an explicit list.
-        let val = typeof t[1] === 'string' ? t[1] : null;
-        if (val && /^[A-Za-z_$][\w$]*$/.test(val) && tt !== 'IDENTIFIER' && tt !== 'PROPERTY') {
-          t[0] = 'PROPERTY';
-        }
-        atKeyPos = false;
       }
     }
   }

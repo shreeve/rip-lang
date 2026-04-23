@@ -1078,7 +1078,7 @@ export class CodeEmitter {
   //     a single-letter temp to ensure single evaluation and avoid
   //     repeating getter reads.
   //
-  // AST: ["pick", source, [srcKey, dstKey, defaultOrNull], ...]
+  // AST: [".{}", source, [srcKey, dstKey, defaultOrNull], ...]
   emitPick(head, rest, context, sexpr) {
     let [source, ...items] = rest;
     let sourceCode = this.emit(source, 'value');
@@ -1123,14 +1123,20 @@ export class CodeEmitter {
 
   // A pick source is "simple" only when it's safe to reference multiple
   // times with no observable difference from a single-evaluation form.
-  // That restricts to:
-  //   - bare identifier    (no side effects, no getters)
-  //   - `this`             (same)
-  // Member access like `this.x` or `obj.y` must NOT be inlined: getters
-  // and reactive tracking can observe each read.
+  // Restricted to AST shapes that are atomically identifier-like:
+  //   - bare identifier  (AST is a plain string like "whom")
+  //   - `this`           (AST is the literal string "this")
+  //   - `@`              (AST is the literal string "@")
+  // Member access like `this.x` or `obj.y` is NOT simple: getters and
+  // reactive tracking can observe each read, so we force an IIFE to
+  // evaluate the source exactly once.
   _isSimplePickSource(node) {
-    if (typeof node === 'string') return true;
-    return false;
+    if (typeof node !== 'string') return false;
+    // Identifier-shape or `@`/`this` only. Rejects string-typed AST nodes
+    // that happen to carry non-identifier content (defensive; current AST
+    // doesn't produce such strings but future shape changes are bounded).
+    return node === 'this' || node === '@' ||
+      /^[A-Za-z_$][\w$]*$/.test(node);
   }
 
   emitRegexIndex(head, rest) {
