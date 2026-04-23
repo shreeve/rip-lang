@@ -5382,7 +5382,7 @@ function __schema(descriptor) {
     "THIS"
   ]);
   var TAGGABLE = new Set(["IDENTIFIER", "PROPERTY", ")", "CALL_END", "]", "INDEX_END"]);
-  var CONTROL_IN_IMPLICIT = new Set(["IF", "TRY", "FINALLY", "CATCH", "CLASS", "SWITCH", "COMPONENT"]);
+  var CONTROL_IN_IMPLICIT = new Set(["IF", "TRY", "FINALLY", "CATCH", "CLASS", "SWITCH", "COMPONENT", "FOR"]);
   var SINGLE_LINERS = new Set(["ELSE", "->", "=>", "TRY", "FINALLY", "THEN"]);
   var SINGLE_CLOSERS = new Set(["TERMINATOR", "CATCH", "FINALLY", "ELSE", "OUTDENT", "LEADING_WHEN"]);
   var LINE_BREAK = new Set(["INDENT", "OUTDENT", "TERMINATOR"]);
@@ -12572,7 +12572,25 @@ export default ${expr[1]}`;
                 }
               }
             }
-            let needsReturn = !isConstructor && !sideEffectOnly && isLast && !noRetStmts.includes(h) && !loopStmts.includes(h) && !this.hasExplicitControlFlow(stmt);
+            if (!isConstructor && !sideEffectOnly && isLast && loopStmts.includes(h)) {
+              if (this.containsYield(stmt)) {
+                code += this.indent() + this.addSemicolon(stmt, this.emit(stmt, "statement")) + `
+`;
+                return;
+              }
+              code += this.indent() + `const _result = [];
+`;
+              this.comprehensionTarget = "_result";
+              let saved = this._skipCompTargetInit;
+              this._skipCompTargetInit = true;
+              code += this.emit(stmt, "value");
+              this._skipCompTargetInit = saved;
+              this.comprehensionTarget = null;
+              code += this.indent() + `return _result;
+`;
+              return;
+            }
+            let needsReturn = !isConstructor && !sideEffectOnly && isLast && !noRetStmts.includes(h) && !this.hasExplicitControlFlow(stmt);
             let ctx = needsReturn ? "value" : "statement";
             let sc = this.emit(stmt, ctx);
             if (needsReturn)
@@ -12698,9 +12716,41 @@ ${this.indent()}}`;
     }
     emitComprehensionWithTarget(expr, iterators, guards, targetVar) {
       let code = "";
-      code += this.indent() + `${targetVar} = [];
+      if (!this._skipCompTargetInit)
+        code += this.indent() + `${targetVar} = [];
 `;
-      let unwrappedExpr = this.is(expr, "block") && expr.length === 2 ? expr[1] : expr;
+      let hasCtrl = (node) => {
+        if (typeof node === "string" && (node === "break" || node === "continue"))
+          return true;
+        if (!Array.isArray(node))
+          return false;
+        if (["break", "continue", "return", "throw"].includes(node[0]))
+          return true;
+        if (node[0] === "if")
+          return node.slice(1).some(hasCtrl);
+        return node.some(hasCtrl);
+      };
+      let emitBody = () => {
+        let loopTypes = ["for-in", "for-of", "for-as", "while", "loop"];
+        if (this.is(expr, "block")) {
+          for (let i = 0;i < expr.length - 1; i++) {
+            let s = expr[i + 1], isLast = i === expr.length - 2;
+            if (!isLast || hasCtrl(s) || Array.isArray(s) && loopTypes.includes(s[0])) {
+              code += this.indent() + this.emit(s, "statement") + `;
+`;
+            } else {
+              code += this.indent() + `${targetVar}.push(${this.emit(s, "value")});
+`;
+            }
+          }
+        } else if (hasCtrl(expr)) {
+          code += this.indent() + this.emit(expr, "statement") + `;
+`;
+        } else {
+          code += this.indent() + `${targetVar}.push(${this.emit(expr, "value")});
+`;
+        }
+      };
       if (iterators.length === 1) {
         let [iterType, vars, iterable, stepOrOwn] = iterators[0];
         if (iterType === "for-in") {
@@ -12711,14 +12761,61 @@ ${this.indent()}}`;
           if (setup)
             code += this.indent() + setup + `
 `;
-          if (guards && guards.length > 0) {
+          if (guards?.length > 0) {
             code += this.indent() + `if (${guards.map((g) => this.emit(g, "value")).join(" && ")}) {
 `;
             this.indentLevel++;
           }
-          code += this.indent() + `${targetVar}.push(${this.unwrap(this.emit(unwrappedExpr, "value"))});
+          emitBody();
+          if (guards?.length > 0) {
+            this.indentLevel--;
+            code += this.indent() + `}
 `;
-          if (guards && guards.length > 0) {
+          }
+          this.indentLevel--;
+          code += this.indent() + `}
+`;
+          return code;
+        }
+        if (iterType === "for-of") {
+          let { header, own, vv, oc, kvp } = this._forOfHeader(vars, iterable, stepOrOwn);
+          code += this.indent() + header + ` {
+`;
+          this.indentLevel++;
+          if (own)
+            code += this.indent() + `if (!Object.hasOwn(${oc}, ${kvp})) continue;
+`;
+          if (vv)
+            code += this.indent() + `${vv} = ${oc}[${kvp}];
+`;
+          if (guards?.length > 0) {
+            code += this.indent() + `if (${guards.map((g) => this.emit(g, "value")).join(" && ")}) {
+`;
+            this.indentLevel++;
+          }
+          emitBody();
+          if (guards?.length > 0) {
+            this.indentLevel--;
+            code += this.indent() + `}
+`;
+          }
+          this.indentLevel--;
+          code += this.indent() + `}
+`;
+          return code;
+        }
+        if (iterType === "for-as") {
+          let { header } = this._forAsHeader(vars, iterable, stepOrOwn);
+          code += this.indent() + header + ` {
+`;
+          this.indentLevel++;
+          if (guards?.length > 0) {
+            code += this.indent() + `if (${guards.map((g) => this.emit(g, "value")).join(" && ")}) {
+`;
+            this.indentLevel++;
+          }
+          emitBody();
+          if (guards?.length > 0) {
             this.indentLevel--;
             code += this.indent() + `}
 `;
@@ -12729,8 +12826,10 @@ ${this.indent()}}`;
           return code;
         }
       }
-      return this.indent() + `${targetVar} = (() => { /* complex comprehension */ })();
+      code = "";
+      code += this.indent() + `${targetVar} = ${this.emit(["comprehension", expr, iterators, guards || []], "value")};
 `;
+      return code;
     }
     emitComprehensionAsLoop(expr, iterators, guards) {
       let code = "";
@@ -13835,8 +13934,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeEmitter({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.14.3";
-  var BUILD_DATE = "2026-04-23@15:51:16GMT";
+  var VERSION = "3.14.4";
+  var BUILD_DATE = "2026-04-23@16:29:21GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -14715,9 +14814,11 @@ ${indented}`);
     compiled = new Map;
     notify = function(event, path) {
       let watcher;
+      const _result = [];
       for (watcher of watchers) {
-        watcher(event, path);
+        _result.push(watcher(event, path));
       }
+      return _result;
     };
     return { read: function(path) {
       return files.get(path);
@@ -14759,10 +14860,12 @@ ${indented}`);
       return result;
     }, load: function(obj) {
       let content, key;
+      const _result = [];
       for (key in obj) {
         content = obj[key];
-        files.set(key, content);
+        _result.push(files.set(key, content));
       }
+      return _result;
     }, watch: function(fn) {
       watchers.push(fn);
       return function() {
@@ -15432,11 +15535,13 @@ ${indented}`);
       });
       es.addEventListener("css", function() {
         let link;
+        const _result = [];
         for (link of document.querySelectorAll('link[rel="stylesheet"]')) {
           url = new URL(link.href);
           url.searchParams.set("_t", Date.now());
           link.href = url.toString();
         }
+        return _result;
       });
       return es.onerror = function() {
         es.close();
