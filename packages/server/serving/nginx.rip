@@ -243,6 +243,7 @@ export generateNginxConfig = (normalized) ->
   # Per-hostname server blocks
   for block in serverBlocks
     { hostname, cert, routes } = block
+    hasStaticRoutes = routes.some((route) -> route.static?)
     out.push ""
     out.push "    server {"
     out.push "        listen #{httpsListen};"
@@ -272,9 +273,10 @@ export generateNginxConfig = (normalized) ->
         out.push line
       out.push ""
 
-    out.push "        location ~ /\\. {"
-    out.push "            deny all;"
-    out.push "        }"
+    if hasStaticRoutes
+      out.push "        location ~ /\\. {"
+      out.push "            deny all;"
+      out.push "        }"
     out.push "    }"
 
   # Default catch-all server for unknown SNI

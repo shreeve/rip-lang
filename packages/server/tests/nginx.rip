@@ -33,6 +33,7 @@ test "proxy app generates proxy_pass and WebSocket headers", ->
   ok out.includes('proxy_set_header Connection $connection_upgrade')
   ok out.includes('proxy_set_header Host $host')
   ok out.includes('proxy_set_header X-Forwarded-Proto https')
+  ok not out.includes('location ~ /\\.')
 
 test "static app generates root and autoindex for browse", ->
   config = makeConfig
