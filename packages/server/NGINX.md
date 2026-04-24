@@ -120,7 +120,6 @@ stream {
 
     server {
         listen 443;
-        listen [::]:443;
         proxy_pass $tls_backend;
         ssl_preread on;
         proxy_connect_timeout 10s;
@@ -174,7 +173,6 @@ http {
 
     server {
         listen 80;
-        listen [::]:80;
         server_name incus.trusthealth.com dev.zionlabshare.com projects.trusthealth.com *.medlabs.health;
         return 301 https://$host$request_uri;
     }
@@ -326,8 +324,8 @@ apps:
 
 ```nginx
 server {
-    listen 443 ssl http2;
-    listen [::]:443 ssl http2;
+    listen 443 ssl;
+    http2 on;
     server_name relay.trusthealth.com;
 
     ssl_certificate     /home/shreeve/ssl/trusthealth.com.crt;

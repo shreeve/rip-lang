@@ -112,7 +112,7 @@ emitRouteLocation = (indent, route, normalized) ->
 export generateNginxConfig = (normalized) ->
   out = []
   hasStreams = (normalized.streams or []).length > 0
-  httpsListen = if hasStreams then "127.0.0.1:#{INTERNAL_PORT} ssl http2" else "443 ssl http2"
+  httpsListen = if hasStreams then "127.0.0.1:#{INTERNAL_PORT} ssl" else "443 ssl"
   hsts = normalized.server?.hsts is true
 
   allHostnames = []
@@ -178,7 +178,6 @@ export generateNginxConfig = (normalized) ->
     out.push ""
     out.push "    server {"
     out.push "        listen 443;"
-    out.push "        listen [::]:443;"
     out.push "        proxy_pass $tls_backend;"
     out.push "        ssl_preread on;"
     out.push "        proxy_connect_timeout 10s;"
@@ -237,7 +236,6 @@ export generateNginxConfig = (normalized) ->
   uniqueHostnames = Array.from(new Set(allHostnames))
   out.push "    server {"
   out.push "        listen 80;"
-  out.push "        listen [::]:80;"
   out.push "        server_name #{uniqueHostnames.join(' ')};" if uniqueHostnames.length > 0
   out.push "        return 301 https://$host$request_uri;"
   out.push "    }"
@@ -248,7 +246,7 @@ export generateNginxConfig = (normalized) ->
     out.push ""
     out.push "    server {"
     out.push "        listen #{httpsListen};"
-    out.push "        listen [::]:#{httpsListen};"
+    out.push "        http2 on;"
     out.push "        server_name #{hostname};"
     out.push ""
     certPath = cert?.certPath
@@ -297,7 +295,7 @@ export generateNginxConfig = (normalized) ->
     out.push ""
     out.push "    server {"
     out.push "        listen #{httpsListen} default_server;"
-    out.push "        listen [::]:#{httpsListen} default_server;"
+    out.push "        http2 on;"
     out.push "        server_name _;"
     out.push ""
     out.push "        ssl_certificate #{defaultCertPath};"

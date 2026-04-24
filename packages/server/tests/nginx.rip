@@ -92,9 +92,11 @@ test "mixed HTTP+TCP uses internal terminator on 4443", ->
     ]
   out = generateNginxConfig(config)
   ok out.includes('stream {')
-  ok out.includes('127.0.0.1:4443 ssl http2')
+  ok out.includes('listen 127.0.0.1:4443 ssl;')
+  ok out.includes('http2 on;')
   ok out.includes('https_terminator')
   ok not out.includes('listen 443 ssl http2')
+  ok not out.includes('listen [::]')
 
 test "HTTP-only config listens directly on 443", ->
   config = makeConfig
@@ -109,7 +111,10 @@ test "HTTP-only config listens directly on 443", ->
         routes: [{ id: 'web', host: 'example.com', path: '/*', proxy: 'proxy-web' }]
   out = generateNginxConfig(config)
   ok not out.includes('stream {')
-  ok out.includes('listen 443 ssl http2')
+  ok out.includes('listen 443 ssl;')
+  ok out.includes('http2 on;')
+  ok not out.includes('listen 443 ssl http2')
+  ok not out.includes('listen [::]')
   ok not out.includes('4443')
 
 test "HSTS emitted when server.hsts is true", ->
@@ -366,5 +371,6 @@ test "distinct hostnames get their own server blocks (no cross-host merging)", -
   ok out.includes('server_name medlabs.health;')
   ok out.includes('server_name *.medlabs.health;')
   # Two HTTPS server blocks (listen 443 ...) should be emitted, one per hostname
-  httpsCount = out.split('listen 443 ssl http2;').length - 1
+  httpsCount = out.split('listen 443 ssl;').length - 1
   ok httpsCount >= 2, "expected at least 2 HTTPS server blocks, got #{httpsCount}"
+  ok not out.includes('listen [::]')
