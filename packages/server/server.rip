@@ -873,11 +873,11 @@ class Server
     app = app or getAppState(@appRegistry, @defaultAppId)
     schedulerReleaseWorker(app.sockets, app.availableWorkers, app.newestVersion, worker)
 
-  logAccess: (req, res, totalSeconds, workerSeconds) ->
+  logAccess: (req, res, totalSeconds, workerSeconds, mark = null) ->
     if @flags.jsonLogging
-      logAccessJson(@flags.appName, req, res, totalSeconds, workerSeconds)
+      logAccessJson(@flags.appName, req, res, totalSeconds, workerSeconds, mark)
     else if @flags.accessLog
-      logAccessHuman(@flags.appName, req, res, totalSeconds, workerSeconds)
+      logAccessHuman(@flags.appName, req, res, totalSeconds, workerSeconds, mark)
 
   buildResponse: (res, req, start, workerSeconds, requestId) ->
     totalSeconds = (performance.now() - start) / 1000

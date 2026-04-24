@@ -86,13 +86,27 @@ test "async generator with multiple yields", '''
   fn.constructor.name
 ''', "AsyncGeneratorFunction"
 
+# Closure capture across an async for-await loop must also be per-iteration.
+test "for await as closure captures per iteration", '''
+  makeIter = ->
+    yield await 1
+    yield await 2
+    yield await 3
+  fn = ->
+    handlers = []
+    for await x as makeIter()
+      handlers.push -> x
+    handlers.map (h) -> h()
+  fn!()
+''', [1, 2, 3]
+
 # Code generation tests (Rip-specific format with 'let')
 # These verify we generate correct modern ES2022 syntax
 code "async for-as loop", '''
   for await x as iterable
     x
 ''', '''
-for await (x of iterable) {
+for await (let x of iterable) {
   x;
 };
 '''
@@ -101,7 +115,7 @@ code "async for-as with destructuring", '''
   for await [a, b] as iterable
     a + b
 ''', '''
-for await ([a, b] of iterable) {
+for await (let [a, b] of iterable) {
   (a + b);
 };
 '''
@@ -111,7 +125,7 @@ code "async for with break", '''
     break if x > 10
     x
 ''', '''
-for await (x of iterable) {
+for await (let x of iterable) {
   if (x > 10) break;
   x;
 }
@@ -122,7 +136,7 @@ code "async for with continue", '''
     continue if x < 5
     x
 ''', '''
-for await (x of iterable) {
+for await (let x of iterable) {
   if (x < 5) continue;
   x;
 }
@@ -133,7 +147,7 @@ code "as! loop", '''
   for x as! iterable
     x
 ''', '''
-for await (x of iterable) {
+for await (let x of iterable) {
   x;
 };
 '''
@@ -142,7 +156,7 @@ code "as! with destructuring", '''
   for [a, b] as! iterable
     a + b
 ''', '''
-for await ([a, b] of iterable) {
+for await (let [a, b] of iterable) {
   (a + b);
 };
 '''
@@ -152,7 +166,7 @@ code "as! with break", '''
     break if x > 10
     x
 ''', '''
-for await (x of iterable) {
+for await (let x of iterable) {
   if (x > 10) break;
   x;
 }
@@ -163,7 +177,7 @@ code "as! with continue", '''
     continue if x < 5
     x
 ''', '''
-for await (x of iterable) {
+for await (let x of iterable) {
   if (x < 5) continue;
   x;
 }
@@ -496,7 +510,7 @@ let x;
 
 x = await (async () => {
   const result = [];
-  for (v of arr) {
+  for (let v of arr) {
     result.push(await fetch(v));
   }
   return result;
@@ -613,8 +627,8 @@ let x;
 
 x = await (async () => {
   const result = {};
-  for (k in obj) {
-    v = obj[k];
+  for (let k in obj) {
+    let v = obj[k];
     result[k] = await fetch(v);
   }
   return result;

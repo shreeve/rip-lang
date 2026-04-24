@@ -12,7 +12,7 @@
 #   Handlers:   onError, notFound
 #   Errors:     error!, notice!, bail!
 #   Validation: read, validators, registerValidator, getValidator
-#   Context:    ctx, session, env, subrequest
+#   Context:    ctx, session, env, subrequest, mark
 #   Utilities:  isBlank, toName, toPhone, mimeType
 #   Dev:        resetGlobals
 # ==============================================================================
@@ -418,16 +418,26 @@ export fetch = (req) ->
 
 # Internal: Execute handler with middleware and error handling
 runHandler = (c, handler) ->
+  # Stamp the opt-in correlation id (`@mark = ...` in the handler) onto an
+  # internal response header. rip-server strips `rip-mark` before returning
+  # to the client, but surfaces it in the access log — so one handler line
+  # (`@mark = corrId`) ties the access log, any `mark()` reads in library
+  # code, and downstream logs together without leaking the id to clients.
+  applyMark = (r) ->
+    return r unless r? and c.mark?
+    try r.headers.set('rip-mark', String(c.mark))
+    r
   try
     # Compose runs: middlewares → before filters → handler → after filters
     compose!(_middlewares, _beforeFilters, _afterFilters, handler)(c)
-    c._response or new Response('', { status: 204 })
+    applyMark(c._response or new Response('', { status: 204 }))
   catch err
     warn 'Request error:', err if not err?.status or err.status >= 500
-    if _errorHandler?
+    res = if _errorHandler?
       _errorHandler.call!(c, err, c)
     else
       new Response err?.message or 'Internal Server Error', { status: err?.status or 500 }
+    applyMark(res)
 
 # ==============================================================================
 # Server Startup
@@ -462,6 +472,17 @@ export App = (fn) ->
 export ctx = ->
   store = requestContext.getStore()
   store?.env or null
+
+# mark() — current request's correlation id (whatever the handler assigned
+# to `@mark`). Returns null if no handler has set one, or if called outside
+# a request. Use from library code that needs to tag logs/artifacts with
+# the same id the access log shows:
+#
+#   labcorpFetch = (path, opts) ->
+#     corrId = mark()
+#     console.log "[labcorp] #{corrId or '-'} → #{opts.method} #{path}"
+#
+export mark = -> requestContext.getStore()?.env?.mark or null
 
 # Subrequest — run a function with new data but same @ context
 # Enables read() to work against a synthetic payload while preserving

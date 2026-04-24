@@ -55,11 +55,15 @@ export queueTimeoutResponse = ->
 
 export buildUpstreamResponse = (res, req, totalSeconds, workerSeconds, maybeAddSecurityHeaders, logAccess, stripInternalHeaders) ->
   silent = res.headers.get('rip-no-log') is '1'
+  # `rip-mark` is an opt-in correlation id the handler sets via `@mark = ...`.
+  # Read BEFORE stripping so the access log can surface it, but the outgoing
+  # response never leaks the internal header to the client.
+  mark = res.headers.get('rip-mark') or null
   headers = stripInternalHeaders(res.headers)
   headers.delete('date')
   headers.delete('server')
   maybeAddSecurityHeaders(headers)
-  logAccess(req, res, totalSeconds, workerSeconds) unless silent
+  logAccess(req, res, totalSeconds, workerSeconds, mark) unless silent
   new Response(res.body, { status: res.status, statusText: res.statusText, headers })
 
 # --- Reverse proxy to external upstream ---

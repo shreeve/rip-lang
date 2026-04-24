@@ -20,7 +20,7 @@ code "until condition", "until x > 10\n  x++", "while (!(x > 10)) {\n  (x++);\n}
 # For Loop Guards
 # ==============================================================================
 
-code "for with guard", "for x in arr when x > 5\n  x", "for (x of arr) {\n  if (x > 5) {\n    x;\n  }\n}"
+code "for with guard", "for x in arr when x > 5\n  x", "for (let x of arr) {\n  if (x > 5) {\n    x;\n  }\n}"
 
 # ==============================================================================
 # Function Arguments (no redundant outer parens)

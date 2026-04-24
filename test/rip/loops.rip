@@ -35,8 +35,40 @@ test "range loop without var", "result = ''; for [1...5]\n  result += 'x'\nresul
 test "range loop without var with by", "result = ''; for [1...10] by 2\n  result += 'x'\nresult", "xxxxx"
 test "postfix range without var", "result = ''; (result += 'x' for [1...5]); result", "xxxx"
 
+# Closure capture: loop variable must be fresh per iteration so that
+# closures created inside the body see *this* iteration's value, not
+# the last value the loop variable held. Regression for the bug where
+# `for (x of arr)` without `let` caused all closures to share one binding.
+test "for-in closure captures per iteration", '''
+  handlers = []
+  for x in [1, 2, 3]
+    handlers.push -> x
+  handlers.map (h) -> h()
+  ''', [1, 2, 3]
+
+test "for-in indexed closure captures per iteration", '''
+  handlers = []
+  for x, i in ["a", "b", "c"]
+    handlers.push -> "#{i}:#{x}"
+  handlers.map (h) -> h()
+  ''', ["0:a", "1:b", "2:c"]
+
+test "for-in destructured closure captures per iteration", '''
+  handlers = []
+  for [a, b] in [[1, 2], [3, 4], [5, 6]]
+    handlers.push -> a + b
+  handlers.map (h) -> h()
+  ''', [3, 7, 11]
+
+test "for-in reverse closure captures per iteration", '''
+  handlers = []
+  for x in [1, 2, 3] by -1
+    handlers.push -> x
+  handlers.map (h) -> h()
+  ''', [3, 2, 1]
+
 # Code generation
-code "for-in loop", "for x in arr\n  x", "for (x of arr) { x; }"
+code "for-in loop", "for x in arr\n  x", "for (let x of arr) { x; }"
 code "range loop no var", "for [1...5]\n  doSomething()", "for (let _i = 1; _i < 5; _i++) {\n  doSomething();\n}"
 
 # ==============================================================================
@@ -57,10 +89,18 @@ test "for-of reassign value var", '''
   out
   ''', "1"
 
+# Closure capture: same per-iteration semantics for object iteration
+test "for-of closure captures per iteration", '''
+  handlers = []
+  for k, v of {a: 1, b: 2, c: 3}
+    handlers.push -> "#{k}=#{v}"
+  handlers.map((h) -> h()).sort()
+  ''', ["a=1", "b=2", "c=3"]
+
 # Code generation
-code "for-of loop", "for k, v of obj\n  v", "for (k in obj) {\nv = obj[k];\nv;\n}"
-code "for own", "for own k of obj\n  k", "for (k in obj) {\nif (!Object.hasOwn(obj, k)) continue;\nk;\n}"
-code "for own with value", "for own k, v of obj\n  v", "for (k in obj) {\nif (!Object.hasOwn(obj, k)) continue;\nv = obj[k];\nv;\n}"
+code "for-of loop", "for k, v of obj\n  v", "for (let k in obj) {\nlet v = obj[k];\nv;\n}"
+code "for own", "for own k of obj\n  k", "for (let k in obj) {\nif (!Object.hasOwn(obj, k)) continue;\nk;\n}"
+code "for own with value", "for own k, v of obj\n  v", "for (let k in obj) {\nif (!Object.hasOwn(obj, k)) continue;\nlet v = obj[k];\nv;\n}"
 
 # ==============================================================================
 # While Loops: "while"
@@ -156,9 +196,28 @@ test "for-as destructure array", '''
   sum
   ''', 21
 
+# Closure capture for for-as. Includes a Map-like case that exercises
+# the bundle-registration pattern from @rip-lang/server/middleware.
+test "for-as closure captures per iteration", '''
+  handlers = []
+  for x as [10, 20, 30]
+    handlers.push -> x
+  handlers.map (h) -> h()
+  ''', [10, 20, 30]
+
+test "for-as destructured closure captures per iteration", '''
+  bundles = new Map()
+  bundles.set 'ui',  ['a']
+  bundles.set 'app', ['b']
+  handlers = {}
+  for [name, dirs] as bundles
+    handlers[name] = -> { name, dirs }
+  [handlers.ui(), handlers.app()]
+  ''', [{name: 'ui', dirs: ['a']}, {name: 'app', dirs: ['b']}]
+
 # Code generation
-code "for-as loop", "for x as iter\n  x", "for (x of iter) { x; }"
-code "for-as destructure gen", "for [k, v] as m.entries()\n  k", "for ([k, v] of m.entries()) { k; }"
+code "for-as loop", "for x as iter\n  x", "for (let x of iter) { x; }"
+code "for-as destructure gen", "for [k, v] as m.entries()\n  k", "for (let [k, v] of m.entries()) { k; }"
 
 # ==============================================================================
 # For as Object Property Value (no parens required)
@@ -240,7 +299,7 @@ code 'break in for loop', '''
     if x > 5
       break
   ''', '''
-  for (x of arr) {
+  for (let x of arr) {
     if (x > 5) {
       break;
     }
@@ -317,7 +376,7 @@ code 'reverse iteration generates countdown', '''
     console.log x
   ''', '''
   for (let _i = arr.length - 1; _i >= 0; _i--) {
-    x = arr[_i];
+    let x = arr[_i];
     console.log(x);
   }
 '''

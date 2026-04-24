@@ -66,10 +66,10 @@ test "nested comprehension side effects", '''
 code "nested comprehension plain loops", '''
   for x in [1, 2]
     process(y) for y in [1, 2, 3]
-  ''', "for (x of [1, 2]) {\n  for (y of [1, 2, 3]) {\n    process(y);\n  }\n}"
+  ''', "for (let x of [1, 2]) {\n  for (let y of [1, 2, 3]) {\n    process(y);\n  }\n}"
 
 # Code generation
-code "comprehension", "(x * 2 for x in arr)", "(() => {\n  const result = [];\n  for (x of arr) {\n    result.push((x * 2));\n  }\n  return result;\n})()"
+code "comprehension", "(x * 2 for x in arr)", "(() => {\n  const result = [];\n  for (let x of arr) {\n    result.push((x * 2));\n  }\n  return result;\n})()"
 
 # ==============================================================================
 # Object Comprehensions: "object-comprehension"
@@ -94,7 +94,7 @@ test 'object comprehension key-value', '''
   ''', {x: 'x', y: 'y'}
 
 # Code generation
-code "object comprehension", "{k: v * 2 for k, v of obj}", "(() => {\n  const result = {};\n  for (k in obj) {\n    v = obj[k];\n    result[k] = (v * 2);\n  }\n  return result;\n})()"
+code "object comprehension", "{k: v * 2 for k, v of obj}", "(() => {\n  const result = {};\n  for (let k in obj) {\n    let v = obj[k];\n    result[k] = (v * 2);\n  }\n  return result;\n})()"
 
 # ==============================================================================
 # Function-Local Comprehension Assignment (direct array building, no IIFE)
@@ -107,7 +107,7 @@ code "function comprehension assignment", '''
   function makeList() {
     let items, x;
     items = [];
-    for (x of [1, 2, 3]) {
+    for (let x of [1, 2, 3]) {
       items.push((x * 2));
     }
     return items;
@@ -122,7 +122,7 @@ code "function for-in assignment", '''
   function makeList() {
     let items, x;
     items = [];
-    for (x of [1, 2, 3]) {
+    for (let x of [1, 2, 3]) {
       items.push((x * 2));
     }
     return items;

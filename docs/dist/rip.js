@@ -11414,7 +11414,7 @@ function _setDataSection() {
           this.indentLevel++;
           let lines = [];
           if (!noVar)
-            lines.push(`${itemVarPattern} = ${iterCode}[${idxName}];`);
+            lines.push(`let ${itemVarPattern} = ${iterCode}[${idxName}];`);
           if (guard) {
             lines.push(`if (${this.emit(guard, "value")}) {`);
             this.indentLevel++;
@@ -11433,7 +11433,7 @@ ${this.indent()}}`;
         if (noVar) {
           return guard ? loopHeader + `{ if (${this.emit(guard, "value")}) ${this.emit(body, "statement")}; }` : loopHeader + `{ ${this.emit(body, "statement")}; }`;
         }
-        return guard ? loopHeader + `{ ${itemVarPattern} = ${iterCode}[${idxName}]; if (${this.emit(guard, "value")}) ${this.emit(body, "statement")}; }` : loopHeader + `{ ${itemVarPattern} = ${iterCode}[${idxName}]; ${this.emit(body, "statement")}; }`;
+        return guard ? loopHeader + `{ let ${itemVarPattern} = ${iterCode}[${idxName}]; if (${this.emit(guard, "value")}) ${this.emit(body, "statement")}; }` : loopHeader + `{ let ${itemVarPattern} = ${iterCode}[${idxName}]; ${this.emit(body, "statement")}; }`;
       }
       if (indexVar) {
         let iterCode = this.emit(iterable, "value");
@@ -11442,7 +11442,7 @@ ${this.indent()}}`;
           code2 += `{
 `;
           this.indentLevel++;
-          code2 += this.indent() + `${itemVarPattern} = ${iterCode}[${indexVar}];
+          code2 += this.indent() + `let ${itemVarPattern} = ${iterCode}[${indexVar}];
 `;
           if (guard) {
             code2 += this.indent() + `if (${this.unwrap(this.emit(guard, "value"))}) {
@@ -11462,7 +11462,7 @@ ${this.indent()}}`;
           this.indentLevel--;
           code2 += this.indent() + "}";
         } else {
-          code2 += guard ? `{ ${itemVarPattern} = ${iterCode}[${indexVar}]; if (${this.unwrap(this.emit(guard, "value"))}) ${this.emit(body, "statement")}; }` : `{ ${itemVarPattern} = ${iterCode}[${indexVar}]; ${this.emit(body, "statement")}; }`;
+          code2 += guard ? `{ let ${itemVarPattern} = ${iterCode}[${indexVar}]; if (${this.unwrap(this.emit(guard, "value"))}) ${this.emit(body, "statement")}; }` : `{ let ${itemVarPattern} = ${iterCode}[${indexVar}]; ${this.emit(body, "statement")}; }`;
         }
         return code2;
       }
@@ -11482,8 +11482,7 @@ ${this.indent()}}`;
           return code2;
         }
       }
-      let bind = noVar ? "let " : "";
-      let code = `for (${bind}${itemVarPattern} of ${this.emit(iterable, "value")}) `;
+      let code = `for (let ${itemVarPattern} of ${this.emit(iterable, "value")}) `;
       code += guard ? this.emitLoopBodyWithGuard(body, guard) : this.emitLoopBody(body);
       return code;
     }
@@ -11495,7 +11494,7 @@ ${this.indent()}}`;
       }
       let [keyVar, valueVar] = Array.isArray(vars) ? vars : [vars];
       let objCode = this.emit(obj, "value");
-      let code = `for (${keyVar} in ${objCode}) `;
+      let code = `for (let ${keyVar} in ${objCode}) `;
       if (own && !valueVar && !guard) {
         if (this.is(body, "block")) {
           this.indentLevel++;
@@ -11515,7 +11514,7 @@ ${this.indent()}}`;
           let lines = [];
           if (own)
             lines.push(`if (!Object.hasOwn(${objCode}, ${keyVar})) continue;`);
-          lines.push(`${valueVar} = ${objCode}[${keyVar}];`);
+          lines.push(`let ${valueVar} = ${objCode}[${keyVar}];`);
           if (guard) {
             lines.push(`if (${this.emit(guard, "value")}) {`);
             this.indentLevel++;
@@ -11534,7 +11533,7 @@ ${this.indent()}}`;
         let inline = "";
         if (own)
           inline += `if (!Object.hasOwn(${objCode}, ${keyVar})) continue; `;
-        inline += `${valueVar} = ${objCode}[${keyVar}]; `;
+        inline += `let ${valueVar} = ${objCode}[${keyVar}]; `;
         if (guard)
           inline += `if (${this.emit(guard, "value")}) `;
         inline += `${this.emit(body, "statement")};`;
@@ -11582,7 +11581,7 @@ ${this.indent()}}`;
         itemVarPattern = this.emitDestructuringPattern(firstVar);
       else
         itemVarPattern = firstVar;
-      let code = `for ${awaitKw}(${itemVarPattern} of ${iterCode}) `;
+      let code = `for ${awaitKw}(let ${itemVarPattern} of ${iterCode}) `;
       if (needsTempVar && destructStmts.length > 0) {
         let stmts = this.unwrapBlock(body);
         let allStmts = this.withIndent(() => [
@@ -11934,30 +11933,29 @@ ${this.indent()}}`;
         let isPlus1 = !isNeg && (step === "1" || step === 1 || str(step) === "1");
         let update = isMinus1 ? `${idxN}--` : isPlus1 ? `${idxN}++` : `${idxN} += ${stc}`;
         let header = isNeg ? `for (let ${idxN} = ${ic}.length - 1; ${idxN} >= 0; ${update})` : `for (let ${idxN} = 0; ${idxN} < ${ic}.length; ${update})`;
-        return { header, setup: noVar ? null : `${ivp} = ${ic}[${idxN}];` };
+        return { header, setup: noVar ? null : `let ${ivp} = ${ic}[${idxN}];` };
       }
       if (indexVar) {
         let ic = this.emit(iterable, "value");
         return {
           header: `for (let ${indexVar} = 0; ${indexVar} < ${ic}.length; ${indexVar}++)`,
-          setup: `${ivp} = ${ic}[${indexVar}];`
+          setup: `let ${ivp} = ${ic}[${indexVar}];`
         };
       }
-      let bind = noVar ? "let " : "";
-      return { header: `for (${bind}${ivp} of ${this.emit(iterable, "value")})`, setup: null };
+      return { header: `for (let ${ivp} of ${this.emit(iterable, "value")})`, setup: null };
     }
     _forOfHeader(vars, iterable, own) {
       let va = Array.isArray(vars) ? vars : [vars];
       let [kv, vv] = va;
       let kvp = this.is(kv, "array") || this.is(kv, "object") ? this.emitDestructuringPattern(kv) : kv;
       let oc = this.emit(iterable, "value");
-      return { header: `for (${kvp} in ${oc})`, own, vv, oc, kvp };
+      return { header: `for (let ${kvp} in ${oc})`, own, vv, oc, kvp };
     }
     _forAsHeader(vars, iterable, isAwait) {
       let va = Array.isArray(vars) ? vars : [vars];
       let [fv] = va;
       let ivp = this.is(fv, "array") || this.is(fv, "object") ? this.emitDestructuringPattern(fv) : fv;
-      return { header: `for ${isAwait ? "await " : ""}(${ivp} of ${this.emit(iterable, "value")})` };
+      return { header: `for ${isAwait ? "await " : ""}(let ${ivp} of ${this.emit(iterable, "value")})` };
     }
     emitComprehension(head, rest, context) {
       let [expr, iterators, guards] = rest;
@@ -11991,7 +11989,7 @@ ${this.indent()}}`;
             code += this.indent() + `if (!Object.hasOwn(${oc}, ${kvp})) continue;
 `;
           if (vv)
-            code += this.indent() + `${vv} = ${oc}[${kvp}];
+            code += this.indent() + `let ${vv} = ${oc}[${kvp}];
 `;
         } else if (iterType === "for-as") {
           let { header } = this._forAsHeader(vars, iterable, iter[3]);
@@ -12073,14 +12071,14 @@ ${this.indent()}}`;
         if (iterType === "for-of") {
           let [kv, vv] = vars;
           let oc = this.emit(iterable, "value");
-          code += this.indent() + `for (${kv} in ${oc}) {
+          code += this.indent() + `for (let ${kv} in ${oc}) {
 `;
           this.indentLevel++;
           if (own)
             code += this.indent() + `if (!Object.hasOwn(${oc}, ${kv})) continue;
 `;
           if (vv)
-            code += this.indent() + `${vv} = ${oc}[${kv}];
+            code += this.indent() + `let ${vv} = ${oc}[${kv}];
 `;
         }
       }
@@ -12786,7 +12784,7 @@ ${this.indent()}}`;
             code += this.indent() + `if (!Object.hasOwn(${oc}, ${kvp})) continue;
 `;
           if (vv)
-            code += this.indent() + `${vv} = ${oc}[${kvp}];
+            code += this.indent() + `let ${vv} = ${oc}[${kvp}];
 `;
           if (guards?.length > 0) {
             code += this.indent() + `if (${guards.map((g) => this.emit(g, "value")).join(" && ")}) {
@@ -12883,7 +12881,7 @@ ${this.indent()}}`;
             code += this.indent() + `if (!Object.hasOwn(${oc}, ${kvp})) continue;
 `;
           if (vv)
-            code += this.indent() + `${vv} = ${oc}[${kvp}];
+            code += this.indent() + `let ${vv} = ${oc}[${kvp}];
 `;
           emitBody();
           this.indentLevel--;
@@ -13934,8 +13932,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeEmitter({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.14.4";
-  var BUILD_DATE = "2026-04-23@16:29:21GMT";
+  var VERSION = "3.14.5";
+  var BUILD_DATE = "2026-04-24@12:50:45GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -14450,10 +14448,10 @@ ${indented}`);
     _depth++;
     return (() => {
       try {
-        for (seg of segs) {
+        for (let seg2 of segs) {
           if (!(obj != null))
             return;
-          obj = obj[resolveIndex(seg, obj)];
+          obj = obj[resolveIndex(seg2, obj)];
         }
         return obj;
       } finally {
@@ -14469,8 +14467,8 @@ ${indented}`);
     return (() => {
       try {
         for (let i2 = 0;i2 < segs.length; i2++) {
-          seg = segs[i2];
-          key = resolveIndex(seg, obj);
+          let seg2 = segs[i2];
+          key = resolveIndex(seg2, obj);
           if (i2 === segs.length - 1) {
             obj[key] = value;
           } else {
@@ -14533,9 +14531,9 @@ ${indented}`);
                 try {
                   return (() => {
                     const result = [];
-                    for (k in obj) {
-                      v = obj[k];
-                      result.push(target[k] = v);
+                    for (let k2 in obj) {
+                      let v2 = obj[k2];
+                      result.push(target[k2] = v2);
                     }
                     return result;
                   })();
@@ -14553,10 +14551,10 @@ ${indented}`);
               try {
                 segs = walk(path);
                 obj = proxy;
-                for (seg of segs) {
+                for (let seg2 of segs) {
                   if (!(obj != null))
                     return [];
-                  obj = obj[resolveIndex(seg, obj)];
+                  obj = obj[resolveIndex(seg2, obj)];
                 }
                 if (!(obj != null && typeof obj === "object"))
                   return [];
@@ -14579,8 +14577,8 @@ ${indented}`);
                   return false;
                 obj = proxy;
                 for (let i2 = 0;i2 < segs.length; i2++) {
-                  seg = segs[i2];
-                  key = resolveIndex(seg, obj);
+                  let seg2 = segs[i2];
+                  key = resolveIndex(seg2, obj);
                   if (i2 === segs.length - 1) {
                     t = raw(obj);
                     keysSignal(t).value;
@@ -14609,8 +14607,8 @@ ${indented}`);
                 return (() => {
                   const result = [];
                   for (let i2 = 0;i2 < segs.length; i2++) {
-                    seg = segs[i2];
-                    key = resolveIndex(seg, obj);
+                    let seg2 = segs[i2];
+                    key = resolveIndex(seg2, obj);
                     if (i2 === segs.length - 1) {
                       delete obj[key];
                       return;
@@ -14652,9 +14650,9 @@ ${indented}`);
       saved = storage.getItem(storageKey);
       if (saved) {
         savedData = JSON.parse(saved);
-        for (k in savedData) {
-          v = savedData[k];
-          app.data[k] = v;
+        for (let k2 in savedData) {
+          let v2 = savedData[k2];
+          app.data[k2] = v2;
         }
       }
     } catch {}
@@ -14815,8 +14813,8 @@ ${indented}`);
     notify = function(event, path) {
       let watcher;
       const _result = [];
-      for (watcher of watchers) {
-        _result.push(watcher(event, path));
+      for (let watcher2 of watchers) {
+        _result.push(watcher2(event, path));
       }
       return _result;
     };
@@ -14840,12 +14838,12 @@ ${indented}`);
       let path, prefix, rest, result;
       result = [];
       prefix = dir ? dir + "/" : "";
-      for ([path] of files) {
-        if (path.startsWith(prefix)) {
-          rest = path.slice(prefix.length);
+      for (let [path2] of files) {
+        if (path2.startsWith(prefix)) {
+          rest = path2.slice(prefix.length);
           if (rest.includes("/"))
             continue;
-          result.push(path);
+          result.push(path2);
         }
       }
       return result;
@@ -14853,17 +14851,17 @@ ${indented}`);
       let path, prefix, result;
       result = [];
       prefix = dir ? dir + "/" : "";
-      for ([path] of files) {
-        if (path.startsWith(prefix))
-          result.push(path);
+      for (let [path2] of files) {
+        if (path2.startsWith(prefix))
+          result.push(path2);
       }
       return result;
     }, load: function(obj) {
       let content, key;
       const _result = [];
-      for (key in obj) {
-        content = obj[key];
-        _result.push(files.set(key, content));
+      for (let key2 in obj) {
+        let content2 = obj[key2];
+        _result.push(files.set(key2, content2));
       }
       return _result;
     }, watch: function(fn) {
@@ -14901,15 +14899,15 @@ ${indented}`);
   };
   matchRoute = function(path, routes) {
     let i, match, name, params, route;
-    for (route of routes) {
-      match = path.match(route.regex.regex);
+    for (let route2 of routes) {
+      match = path.match(route2.regex.regex);
       if (match) {
         params = {};
-        for (let i2 = 0;i2 < route.regex.names.length; i2++) {
-          name = route.regex.names[i2];
-          params[name] = decodeURIComponent(match[i2 + 1]);
+        for (let i2 = 0;i2 < route2.regex.names.length; i2++) {
+          let name2 = route2.regex.names[i2];
+          params[name2] = decodeURIComponent(match[i2 + 1]);
         }
-        return { route, params };
+        return { route: route2, params };
       }
     }
     return null;
@@ -14919,14 +14917,14 @@ ${indented}`);
     routes = [];
     layouts = new Map;
     allFiles = components.listAll(root);
-    for (filePath of allFiles) {
-      rel = filePath.slice(root.length + 1);
+    for (let filePath2 of allFiles) {
+      rel = filePath2.slice(root.length + 1);
       if (!rel.endsWith(".rip"))
         continue;
       name = rel.split("/").pop();
       if (name === "_layout.rip") {
         dir = rel === "_layout.rip" ? "" : rel.slice(0, -"/_layout.rip".length);
-        layouts.set(dir, filePath);
+        layouts.set(dir, filePath2);
         continue;
       }
       if (name.startsWith("_"))
@@ -14938,7 +14936,7 @@ ${indented}`);
         continue;
       urlPattern = fileToPattern(rel);
       regex = patternToRegex(urlPattern);
-      routes.push({ pattern: urlPattern, regex, file: filePath, rel });
+      routes.push({ pattern: urlPattern, regex, file: filePath2, rel });
     }
     routes.sort(function(a, b) {
       let aCatch, aDyn, bCatch, bDyn;
@@ -14963,10 +14961,10 @@ ${indented}`);
     if (layouts.has(""))
       chain.push(layouts.get(""));
     for (let i2 = 0;i2 < segments.length; i2++) {
-      seg = segments[i2];
+      let seg2 = segments[i2];
       if (i2 === segments.length - 1)
         break;
-      dir = dir ? dir + "/" + seg : seg;
+      dir = dir ? dir + "/" + seg2 : seg2;
       if (layouts.has(dir))
         chain.push(layouts.get(dir));
     }
@@ -15029,8 +15027,8 @@ ${indented}`);
           _query.value = Object.fromEntries(new URLSearchParams(queryStr));
           return _hash.value = hash;
         });
-        for (cb of navCallbacks) {
-          cb(router.current);
+        for (let cb2 of navCallbacks) {
+          cb2(router.current);
         }
         return true;
       }
@@ -15125,28 +15123,28 @@ ${indented}`);
     if (a.length !== b.length)
       return false;
     for (let i2 = 0;i2 < a.length; i2++) {
-      item = a[i2];
-      if (item !== b[i2])
+      let item2 = a[i2];
+      if (item2 !== b[i2])
         return false;
     }
     return true;
   };
   findComponent = function(mod) {
     let key, val;
-    for (key in mod) {
-      val = mod[key];
-      if (typeof val === "function" && (val.prototype?.mount || val.prototype?._create))
-        return val;
+    for (let key2 in mod) {
+      let val2 = mod[key2];
+      if (typeof val2 === "function" && (val2.prototype?.mount || val2.prototype?._create))
+        return val2;
     }
     return typeof mod.default === "function" ? mod.default : undefined;
   };
   findAllComponents = function(mod) {
     let key, result, val;
     result = {};
-    for (key in mod) {
-      val = mod[key];
-      if (typeof val === "function" && (val.prototype?.mount || val.prototype?._create)) {
-        result[key] = val;
+    for (let key2 in mod) {
+      let val2 = mod[key2];
+      if (typeof val2 === "function" && (val2.prototype?.mount || val2.prototype?._create)) {
+        result[key2] = val2;
       }
     }
     return result;
@@ -15161,17 +15159,17 @@ ${indented}`);
   buildComponentMap = function(components, root = "components") {
     let fileName, map, name, path;
     map = {};
-    for (path of components.listAll(root)) {
-      if (!path.endsWith(".rip"))
+    for (let path2 of components.listAll(root)) {
+      if (!path2.endsWith(".rip"))
         continue;
-      fileName = path.split("/").pop();
+      fileName = path2.split("/").pop();
       if (fileName.startsWith("_"))
         continue;
-      name = fileToComponentName(path);
+      name = fileToComponentName(path2);
       if (map[name]) {
-        console.warn(`[Rip] Component name collision: ${name} (${map[name]} vs ${path})`);
+        console.warn(`[Rip] Component name collision: ${name} (${map[name]} vs ${path2})`);
       }
-      map[name] = path;
+      map[name] = path2;
     }
     return map;
   };
@@ -15182,12 +15180,12 @@ ${indented}`);
     if (currentPath) {
       parts = currentPath.split("/");
       parts.pop();
-      for (seg of specifier.split("/")) {
-        if (seg === "..") {
+      for (let seg2 of specifier.split("/")) {
+        if (seg2 === "..") {
           parts.pop();
         } else {
-          if (!(seg === ".")) {
-            parts.push(seg);
+          if (!(seg2 === ".")) {
+            parts.push(seg2);
           }
         }
       }
@@ -15199,9 +15197,9 @@ ${indented}`);
       return `components/_lib/${clean}`;
     if (components.exists(`components/${clean}`))
       return `components/${clean}`;
-    for (p of components.listAll("components")) {
-      if (p.endsWith(`/${basename}`))
-        return p;
+    for (let p2 of components.listAll("components")) {
+      if (p2.endsWith(`/${basename}`))
+        return p2;
     }
     return null;
   };
@@ -15223,8 +15221,8 @@ ${indented}`);
         ripImportRe = /^(\s*import\s+(?:\{([^}]+)\}\s+from\s+|.*?\s+from\s+)?['"])([^'"]*\.rip)(['"];?\s*)$/gm;
         matches = Array.from(js.matchAll(ripImportRe));
         for (let _i = matches.length - 1;_i >= 0; _i--) {
-          m = matches[_i];
-          [full, pre, namedImports, specifier, post] = m;
+          let m2 = matches[_i];
+          [full, pre, namedImports, specifier, post] = m2;
           storePath = resolveStorePath(specifier, path, components);
           if (storePath === path)
             continue;
@@ -15246,34 +15244,34 @@ ${indented}`);
           blobUrl = resolver.blobUrls?.[storePath];
           if (blobUrl) {
             replacement = `${pre}${blobUrl}${post}`;
-            js = js.slice(0, m.index) + replacement + js.slice(m.index + full.length);
+            js = js.slice(0, m2.index) + replacement + js.slice(m2.index + full.length);
             if (namedImports) {
-              for (n of namedImports.split(",")) {
-                importedNames.add(n.trim().split(/\s+as\s+/).pop().trim());
+              for (let n2 of namedImports.split(",")) {
+                importedNames.add(n2.trim().split(/\s+as\s+/).pop().trim());
               }
             }
           }
         }
       }
       needed = {};
-      for (name in resolver.map) {
-        depPath = resolver.map[name];
-        if (importedNames.has(name))
+      for (let name2 in resolver.map) {
+        let depPath2 = resolver.map[name2];
+        if (importedNames.has(name2))
           continue;
-        if (depPath !== path && js.includes(`new ${name}(`)) {
-          if (!resolver.classes[name]) {
-            depSource = components.read(depPath);
+        if (depPath2 !== path && js.includes(`new ${name2}(`)) {
+          if (!resolver.classes[name2]) {
+            depSource = components.read(depPath2);
             if (depSource) {
-              depMod = await compileAndImport(depSource, compile2, components, depPath, resolver);
+              depMod = await compileAndImport(depSource, compile2, components, depPath2, resolver);
               found = findAllComponents(depMod);
-              for (k in found) {
-                v = found[k];
-                resolver.classes[k] = v;
+              for (let k2 in found) {
+                let v2 = found[k2];
+                resolver.classes[k2] = v2;
               }
             }
           }
-          if (resolver.classes[name])
-            needed[name] = true;
+          if (resolver.classes[name2])
+            needed[name2] = true;
         }
       }
       names = Object.keys(needed);
@@ -15296,9 +15294,9 @@ ${indented}`);
     mod = await import(url);
     if (resolver) {
       found = findAllComponents(mod);
-      for (k in found) {
-        v = found[k];
-        resolver.classes[k] = v;
+      for (let k2 in found) {
+        let v2 = found[k2];
+        resolver.classes[k2] = v2;
       }
     }
     if (components && path)
@@ -15345,12 +15343,12 @@ ${indented}`);
       let inst;
       cacheComponent();
       for (let _i = layoutInstances.length - 1;_i >= 0; _i--) {
-        inst = layoutInstances[_i];
-        if (inst.beforeUnmount)
-          inst.beforeUnmount();
-        if (inst.unmounted)
-          inst.unmounted();
-        inst._target?.remove();
+        let inst2 = layoutInstances[_i];
+        if (inst2.beforeUnmount)
+          inst2.beforeUnmount();
+        if (inst2.unmounted)
+          inst2.unmounted();
+        inst2._target?.remove();
       }
       layoutInstances = [];
       return mountPoint = container;
@@ -15407,11 +15405,11 @@ ${indented}`);
           if (layoutsChanged && layoutFiles.length > 0) {
             container.innerHTML = "";
             mp = container;
-            for (layoutFile of layoutFiles) {
-              layoutSource = components.read(layoutFile);
+            for (let layoutFile2 of layoutFiles) {
+              layoutSource = components.read(layoutFile2);
               if (!layoutSource)
                 continue;
-              layoutMod = await compileAndImport(layoutSource, compile2, components, layoutFile, resolver);
+              layoutMod = await compileAndImport(layoutSource, compile2, components, layoutFile2, resolver);
               if (gen2 !== generation) {
                 router.navigating = false;
                 return;
@@ -15423,7 +15421,7 @@ ${indented}`);
               if (inst.beforeMount)
                 inst.beforeMount();
               wrapper = document.createElement("div");
-              wrapper.setAttribute("data-layout", layoutFile);
+              wrapper.setAttribute("data-layout", layoutFile2);
               mp.appendChild(wrapper);
               inst.mount(wrapper);
               layoutInstances.push(inst);
@@ -15473,10 +15471,10 @@ ${indented}`);
             onError({ status: 500, message: err.message, error: err });
           handled = false;
           for (let _i = layoutInstances.length - 1;_i >= 0; _i--) {
-            inst = layoutInstances[_i];
-            if (inst.onError) {
+            let inst2 = layoutInstances[_i];
+            if (inst2.onError) {
               try {
-                inst.onError(err);
+                inst2.onError(err);
                 handled = true;
                 break;
               } catch (boundaryErr) {
@@ -15536,10 +15534,10 @@ ${indented}`);
       es.addEventListener("css", function() {
         let link;
         const _result = [];
-        for (link of document.querySelectorAll('link[rel="stylesheet"]')) {
-          url = new URL(link.href);
+        for (let link2 of document.querySelectorAll('link[rel="stylesheet"]')) {
+          url = new URL(link2.href);
           url.searchParams.set("_t", Date.now());
-          link.href = url.toString();
+          link2.href = url.toString();
         }
         return _result;
       });
