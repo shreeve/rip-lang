@@ -3,7 +3,7 @@
 // Bundle-graph guardrail.
 //
 // The browser bundle (docs/dist/rip.min.js) is built from src/browser.js +
-// the compiled src/ui.rip. Any module statically reachable from src/browser.js
+// the compiled src/app.rip. Any module statically reachable from src/browser.js
 // ends up in the bundle, so accidental imports of CLI/server/editor-only code
 // silently inflate the browser payload.
 //
@@ -46,7 +46,7 @@ const FORBIDDEN_PREFIXES = [
 ];
 
 // Browser bundle's persistent entry. The build script wraps this with a
-// transient _entry.js that adds ui.rip; we walk the persistent half.
+// transient _entry.js that adds app.rip; we walk the persistent half.
 const ENTRY = 'src/browser.js';
 
 // Match ES import statements. Captures the source specifier on group 1 or 2.

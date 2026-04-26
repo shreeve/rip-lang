@@ -14,7 +14,7 @@ export const BUILD_DATE = "0000-00-00@00:00:00GMT";
 import { compile, compileToJS, formatSExpr, getReactiveRuntime, getComponentRuntime } from './compiler.js';
 
 // Eagerly register Rip's reactive and component runtimes on globalThis so that
-// framework code (ui.rip) and browser-compiled scripts can use them directly
+// framework code (app.rip) and browser-compiled scripts can use them directly
 if (typeof globalThis !== 'undefined') {
   if (!globalThis.__rip) new Function(getReactiveRuntime())();
   if (!globalThis.__ripComponent) new Function(getComponentRuntime())();
@@ -99,13 +99,13 @@ async function processRipScripts() {
       }
 
       // Launch with the last bundle (app bundle) — handles router, renderer, stash
-      const ui = importRip.modules?.['ui.rip'];
-      if (ui?.launch) {
+      const app = importRip.modules?.['app.rip'];
+      if (app?.launch) {
         const appBundle = bundles[bundles.length - 1];
         const persistAttr = runtimeTag.getAttribute('data-persist');
         const launchOpts = { bundle: appBundle, hash: routerAttr === 'hash' };
         if (persistAttr != null) launchOpts.persist = persistAttr === 'local' ? 'local' : true;
-        await ui.launch('', launchOpts);
+        await app.launch('', launchOpts);
       }
     } else {
       // No routing — expand bundles into individual sources, compile everything
@@ -232,10 +232,10 @@ export { processRipScripts };
 /**
  * Import a .rip file as an ES module
  * Fetches the URL, compiles Rip→JS, dynamically imports via Blob URL
- * Usage: const { launch } = await importRip('/ui.rip')
+ * Usage: const { launch } = await importRip('/app.rip')
  *
  * Pre-compiled modules can be registered on importRip.modules to skip fetching.
- * The browser bundle uses this to embed ui.rip without a server round-trip.
+ * The browser bundle uses this to embed app.rip without a server round-trip.
  */
 export async function importRip(url) {
   for (const [key, mod] of Object.entries(importRip.modules)) {

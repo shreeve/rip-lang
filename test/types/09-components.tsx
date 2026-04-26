@@ -310,7 +310,7 @@ function CartDemo() {
 // ── Negative tests: zustand catches every mistake ──
 //
 // Rip has NO equivalent today. @app.data is `any` — none of these
-// errors would be caught in a real Rip UI app.
+// errors would be caught in a real Rip app.
 
 // @ts-expect-error — wrong type: items should be CartItem[], not string
 const bad1 = create<Cart>(() => ({ items: 'not an array', addItem: () => { }, removeItem: () => { }, total: () => 0 }))

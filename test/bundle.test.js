@@ -118,13 +118,17 @@ check('compileToJS strips type annotations from runtime output', () => {
   if (!out.includes('42')) throw new Error('value missing: ' + out);
 });
 
-check("app framework registered as importRip.modules['ui.rip']", () => {
-  // PHASE-1D-RENAME-MARKER: when src/ui.rip is renamed to src/app.rip,
-  // this assertion changes to importRip.modules['app.rip']. No alias.
-  const ui = globalThis.importRip.modules['ui.rip'];
-  if (!ui) throw new Error("importRip.modules['ui.rip'] missing");
-  if (typeof ui.launch !== 'function') throw new Error('launch missing');
-  if (typeof ui.stash !== 'function') throw new Error('stash missing');
+check("app framework registered as importRip.modules['app.rip']", () => {
+  const app = globalThis.importRip.modules['app.rip'];
+  if (!app) throw new Error("importRip.modules['app.rip'] missing");
+  if (typeof app.launch !== 'function') throw new Error('launch missing');
+  if (typeof app.stash !== 'function') throw new Error('stash missing');
+});
+
+check("legacy 'ui.rip' key is NOT registered (atomic rename, no alias)", () => {
+  if (globalThis.importRip.modules['ui.rip']) {
+    throw new Error("'ui.rip' key still present — rename not atomic");
+  }
 });
 
 check('bundle exposes language version', () => {

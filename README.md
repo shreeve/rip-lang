@@ -365,9 +365,11 @@ Rip's reactivity is framework-agnostic — use it with React, Vue, Svelte, or va
 
 ---
 
-## Rip UI
+## Rip App
 
-Load `rip.min.js` (~54KB Brotli) — the Rip compiler and UI framework in one file. Components are `.rip` source files, compiled on demand, rendered with fine-grained reactivity. No build step. No bundler.
+Load `rip.min.js` (~88KB Brotli) — the Rip compiler and Rip App framework in one file. Components are `.rip` source files, compiled on demand, rendered with fine-grained reactivity. No build step. No bundler.
+
+(Rip UI is the separate widget package at `packages/ui/`. The two terms do not overlap.)
 
 ```html
 <script defer src="rip.min.js" data-mount="Home"></script>

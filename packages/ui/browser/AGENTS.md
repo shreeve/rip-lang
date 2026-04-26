@@ -115,7 +115,7 @@ Method references (`@methodName`) always compile correctly in template attribute
 
 ## ARIA Keyboard and Popup Helpers
 
-`ARIA.listNav`, `ARIA.rovingNav`, and `ARIA.popupDismiss` are built into `rip.min.js` (defined in `src/ui.rip`) and available globally in any component without imports.
+`ARIA.listNav`, `ARIA.rovingNav`, and `ARIA.popupDismiss` are built into `rip.min.js` (defined in `src/app.rip`) and available globally in any component without imports.
 
 ### ARIA.listNav — popup list keyboard navigation
 

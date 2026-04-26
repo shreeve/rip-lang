@@ -1460,7 +1460,7 @@ ids   = read 'ids', 'ids'       # "1,2,3" → [1, 2, 3]
 slug  = read 'slug', 'slug'     # URL-safe slug
 ```
 
-## Rip UI — Reactive Web Framework (built into rip-lang)
+## Rip App — Application Framework (built into rip-lang)
 
 Zero-build reactive framework. Ships the compiler to the browser and compiles `.rip` components on demand. File-based routing, unified reactive stash, and SSE hot reload.
 

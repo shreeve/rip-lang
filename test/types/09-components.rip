@@ -253,7 +253,7 @@ export GenericUsageTests = component
 
 # ── Stash: framework-level shared state (NOT YET TYPED) ──
 #
-# In a real Rip UI app, the stash is `@app.data` — a deep reactive Proxy
+# In a real Rip app, the stash is `@app.data` — a deep reactive Proxy
 # shared across all components. Today it is completely untyped (`any`).
 # `@app.data.cart.itms` (typo) compiles without error.
 #

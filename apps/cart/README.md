@@ -1,6 +1,6 @@
 # Cart Demo
 
-A minimal shopping cart built with Rip UI to exercise reactive components, file-based routing, and stash-based shared state.
+A minimal shopping cart built with Rip App to exercise reactive components, file-based routing, and stash-based shared state.
 
 ## Running
 
@@ -15,9 +15,9 @@ rip server
 
 ### Background
 
-The Rip UI renderer caches component instances across navigations. When you navigate away from a route, the component (with its DOM tree and reactive state) is stored in a `Map`. When you navigate back, the cached instance is re-inserted into the DOM instead of creating a fresh one.
+The Rip App renderer caches component instances across navigations. When you navigate away from a route, the component (with its DOM tree and reactive state) is stored in a `Map`. When you navigate back, the cached instance is re-inserted into the DOM instead of creating a fresh one.
 
-This has been in `src/ui.rip` since the first commit (March 2026). The only stated rationale is one line in a section comment: *"component caching for back/forward navigation."* There is no design doc, no measured performance bottleneck, and no changelog entry explaining why it was added.
+This has been in `src/app.rip` since the first commit (March 2026). The only stated rationale is one line in a section comment: *"component caching for back/forward navigation."* There is no design doc, no measured performance bottleneck, and no changelog entry explaining why it was added.
 
 ### The Problem
 
@@ -56,7 +56,7 @@ TanStack Router is especially relevant: it's the most cache-aware router in the 
 
 ### The Two Caches
 
-It's important to distinguish the two caching layers in `ui.rip`:
+It's important to distinguish the two caching layers in `app.rip`:
 
 1. **Compilation cache** (`getCompiled`/`setCompiled`) — caches the compiled JS module. This is cheap, correct, and should stay.
 2. **Component instance cache** (`componentCache`) — caches the mounted component with its DOM and state. This is the source of the problems.

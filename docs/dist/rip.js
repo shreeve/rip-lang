@@ -12782,7 +12782,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   }
   // src/browser.js
   var VERSION = "3.14.5";
-  var BUILD_DATE = "2026-04-26@04:28:03GMT";
+  var BUILD_DATE = "2026-04-26@04:34:12GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -12863,14 +12863,14 @@ ${js}
             }
           }
         }
-        const ui = importRip.modules?.["ui.rip"];
-        if (ui?.launch) {
+        const app = importRip.modules?.["app.rip"];
+        if (app?.launch) {
           const appBundle = bundles[bundles.length - 1];
           const persistAttr = runtimeTag.getAttribute("data-persist");
           const launchOpts = { bundle: appBundle, hash: routerAttr === "hash" };
           if (persistAttr != null)
             launchOpts.persist = persistAttr === "local" ? "local" : true;
-          await ui.launch("", launchOpts);
+          await app.launch("", launchOpts);
         }
       } else {
         const expanded = [];
@@ -13054,9 +13054,9 @@ ${indented}`);
       }
     });
   }
-  // docs/dist/_ui.js
-  var exports__ui = {};
-  __export(exports__ui, {
+  // docs/dist/_app.js
+  var exports__app = {};
+  __export(exports__app, {
     throttle: () => throttle,
     stash: () => stash,
     setContext: () => setContext,
@@ -14955,8 +14955,8 @@ ${indented}`);
   globalThis.ARIA ??= globalThis.__aria;
 
   // docs/dist/_entry.js
-  importRip.modules["ui.rip"] = exports__ui;
-  for (const [k, v] of Object.entries(exports__ui))
+  importRip.modules["app.rip"] = exports__app;
+  for (const [k, v] of Object.entries(exports__app))
     if (typeof v === "function")
       globalThis[k] = v;
 })();

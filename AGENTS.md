@@ -63,7 +63,7 @@ rip server
 - **Never write `x ? y` in Rip** — binary existential was removed; use `x ?? y` or full ternary `x ? y : z`
 - **Never write `await fn(args)` in `.rip` source when `fn!` will do** — the dammit operator is the idiomatic form. `fetch! url` compiles to `await fetch(url)`; `User.find! 1` to `await User.find(1)`; `user.save!` to `await user.save()`. Reserve raw `await` for JS interop in `.js` files, tests that document the await→!  equivalence, and the rare cases where `fn!` is ambiguous with a dammit-returning expression.
 - Run `bun run parser` after grammar changes
-- Run `bun run build` after codegen, `components.js`, `browser.js`, or `ui.rip` changes
+- Run `bun run build` after codegen, `components.js`, `browser.js`, or `app.rip` changes
 - Run `bun run bump` for the standard release flow
 
 ## Compilation Pipeline
@@ -140,9 +140,11 @@ notFound -> @send 'index.html', 'text/html; charset=UTF-8'
 start port: 3000
 ```
 
-### Rip UI
+### Rip App
 
-Zero-build reactive web framework built into Rip. The browser loads `rip.min.js`, compiles `<script type="text/rip">` sources into one shared scope, and renders with fine-grained DOM updates.
+Application framework built into Rip — stash, resource, timing, components store, file-based router, renderer, launch, and shared ARIA helpers. Lives in `src/app.rip`, compiled into `rip.min.js` so a single `<script src="rip.min.js">` is enough to build a complete app. `<script type="text/rip">` sources compile into one shared scope, and the framework renders with fine-grained DOM updates.
+
+(Rip UI is the separate widget package at `packages/ui/` — `Dropdown`, `MultiSelect`, `Combobox`, etc. — distributed as `@rip-lang/ui`. The two terms do not overlap.)
 
 Key ideas:
 

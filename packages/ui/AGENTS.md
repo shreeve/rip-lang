@@ -42,7 +42,7 @@ This startup sequence gets an agent much closer to “current project reality”
 
 For complex browser widgets, prefer a layered design:
 
-- keep generic popup, focus, keyboard, and timing logic in the shared `ARIA` helper layer in `src/ui.rip`
+- keep generic popup, focus, keyboard, and timing logic in the shared `ARIA` helper layer in `src/app.rip`
 - keep component-specific semantics local to the widget (`chips`, token removal, selection rules, etc.)
 - do not solve browser event-ordering bugs independently in every component if the underlying problem is generic
 
@@ -74,7 +74,7 @@ What it should demonstrate:
 
 When building or refactoring browser widgets:
 
-- extract the smallest stable shared primitive into `src/ui.rip`
+- extract the smallest stable shared primitive into `src/app.rip`
 - do not create a giant generic base component prematurely
 - reuse `ARIA.popupGuard()` for pointer-driven close/reopen timing problems in popup-style controls
 - keep styling fixes in the gallery CSS unless the component itself is shipping opinionated visuals
