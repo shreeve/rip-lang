@@ -552,28 +552,6 @@
     let endIdx = findMatchingOutdent(tokens, indentIdx);
     return { typeText: members.join(" | "), endIdx };
   }
-  function emitEnum(head, rest, context) {
-    let [name, body] = rest;
-    let enumName = name?.valueOf?.() ?? name;
-    let pairs = [];
-    if (Array.isArray(body)) {
-      let items = body[0] === "block" ? body.slice(1) : [body];
-      for (let item of items) {
-        if (Array.isArray(item)) {
-          if (item[0]?.valueOf?.() === "=") {
-            let key = item[1]?.valueOf?.() ?? item[1];
-            let val = item[2]?.valueOf?.() ?? item[2];
-            pairs.push([key, val]);
-          }
-        }
-      }
-    }
-    if (pairs.length === 0)
-      return `const ${enumName} = {}`;
-    let forward = pairs.map(([k, v]) => `${k}: ${v}`).join(", ");
-    let reverse = pairs.map(([k, v]) => `${v}: "${k}"`).join(", ");
-    return `const ${enumName} = {${forward}, ${reverse}}`;
-  }
 
   // src/parser.js
   var parserInstance = {
@@ -12751,7 +12729,28 @@ if (typeof globalThis !== 'undefined') {
     }
   }
   installComponentSupport(CodeEmitter, Lexer);
-  CodeEmitter.prototype.emitEnum = emitEnum;
+  CodeEmitter.prototype.emitEnum = function emitEnum(head, rest, context) {
+    let [name, body] = rest;
+    let enumName = name?.valueOf?.() ?? name;
+    let pairs = [];
+    if (Array.isArray(body)) {
+      let items = body[0] === "block" ? body.slice(1) : [body];
+      for (let item of items) {
+        if (Array.isArray(item)) {
+          if (item[0]?.valueOf?.() === "=") {
+            let key = item[1]?.valueOf?.() ?? item[1];
+            let val = item[2]?.valueOf?.() ?? item[2];
+            pairs.push([key, val]);
+          }
+        }
+      }
+    }
+    if (pairs.length === 0)
+      return `const ${enumName} = {}`;
+    let forward = pairs.map(([k, v]) => `${k}: ${v}`).join(", ");
+    let reverse = pairs.map(([k, v]) => `${v}: "${k}"`).join(", ");
+    return `const ${enumName} = {${forward}, ${reverse}}`;
+  };
   installSchemaSupport(null, CodeEmitter);
   function compile(source, options = {}) {
     return new Compiler(options).compile(source);
@@ -12783,7 +12782,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   }
   // src/browser.js
   var VERSION = "3.14.5";
-  var BUILD_DATE = "2026-04-26@04:26:54GMT";
+  var BUILD_DATE = "2026-04-26@04:28:03GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

@@ -1,11 +1,16 @@
-// Type System — token-stream type stripping + runtime enum codegen.
+// Type System — token-stream type stripping (browser-safe half).
 //
-// This module is browser-safe — the lexer needs installTypeSupport() to
-// strip type annotations from the token stream so user-typed Rip parses,
-// and the compiler needs emitEnum() to emit runtime JavaScript for enum
-// blocks. The .d.ts emission half (emitTypes, intrinsic decl tables,
-// component-type emitter) lives in src/types-emit.js, which is reachable
-// only from CLI entry points and typecheck.js.
+// This module exists for one purpose: install rewriteTypes() on the lexer
+// so user-typed Rip source parses cleanly. Type annotations are stored as
+// token metadata and the parser never sees them, so all of this code only
+// runs when source contains `::` annotations or `type` / `interface` /
+// `enum` declarations.
+//
+// The .d.ts emission half (emitTypes, intrinsic decl tables, component-
+// type emitter) lives in src/types-emit.js, which is reachable only from
+// CLI entry points and typecheck.js. Runtime enum codegen lives in
+// compiler.js (CodeEmitter.prototype.emitEnum) — that's real codegen,
+// not type machinery.
 
 // ============================================================================
 // installTypeSupport — adds rewriteTypes() to Lexer.prototype
@@ -595,32 +600,3 @@ function collectBlockUnion(tokens, startIdx) {
   return { typeText: members.join(' | '), endIdx };
 }
 
-// ============================================================================
-// emitEnum — runtime JavaScript enum object (CodeEmitter method)
-// ============================================================================
-
-export function emitEnum(head, rest, context) {
-  let [name, body] = rest;
-  let enumName = name?.valueOf?.() ?? name;
-
-  // Parse enum body from s-expression
-  let pairs = [];
-  if (Array.isArray(body)) {
-    let items = body[0] === 'block' ? body.slice(1) : [body];
-    for (let item of items) {
-      if (Array.isArray(item)) {
-        if (item[0]?.valueOf?.() === '=') {
-          let key = item[1]?.valueOf?.() ?? item[1];
-          let val = item[2]?.valueOf?.() ?? item[2];
-          pairs.push([key, val]);
-        }
-      }
-    }
-  }
-
-  if (pairs.length === 0) return `const ${enumName} = {}`;
-
-  let forward = pairs.map(([k, v]) => `${k}: ${v}`).join(', ');
-  let reverse = pairs.map(([k, v]) => `${v}: "${k}"`).join(', ');
-  return `const ${enumName} = {${forward}, ${reverse}}`;
-}

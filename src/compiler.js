@@ -11,8 +11,6 @@
 import { Lexer } from './lexer.js';
 import { parser } from './parser.js';
 import { installComponentSupport } from './components.js';
-import { emitEnum } from './types.js';
-
 // Type emission is CLI/editor-only. types-emit.js registers itself via
 // setTypesEmitter() at module load. The browser never imports types-emit,
 // so _typesEmitter stays null and .d.ts output is silently skipped.
@@ -3797,10 +3795,36 @@ export class Compiler {
 installComponentSupport(CodeEmitter, Lexer);
 
 // =============================================================================
-// Type Support (enum generator)
+// Enum Codegen (CodeEmitter method)
 // =============================================================================
+// `enum` blocks compile to a runtime JavaScript object that maps both
+// forward (key → value) and reverse (value → key). This is real codegen,
+// not type machinery, so it lives with the rest of the emitter dispatch.
 
-CodeEmitter.prototype.emitEnum = emitEnum;
+CodeEmitter.prototype.emitEnum = function emitEnum(head, rest, context) {
+  let [name, body] = rest;
+  let enumName = name?.valueOf?.() ?? name;
+
+  let pairs = [];
+  if (Array.isArray(body)) {
+    let items = body[0] === 'block' ? body.slice(1) : [body];
+    for (let item of items) {
+      if (Array.isArray(item)) {
+        if (item[0]?.valueOf?.() === '=') {
+          let key = item[1]?.valueOf?.() ?? item[1];
+          let val = item[2]?.valueOf?.() ?? item[2];
+          pairs.push([key, val]);
+        }
+      }
+    }
+  }
+
+  if (pairs.length === 0) return `const ${enumName} = {}`;
+
+  let forward = pairs.map(([k, v]) => `${k}: ${v}`).join(', ');
+  let reverse = pairs.map(([k, v]) => `${v}: "${k}"`).join(', ');
+  return `const ${enumName} = {${forward}, ${reverse}}`;
+};
 
 // =============================================================================
 // Schema Support (prototype installation)
