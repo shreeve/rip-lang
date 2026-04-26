@@ -67,10 +67,6 @@ rip server
 - Run `bun run build:schema-runtime` after editing any `src/schema/runtime-*.js` fragment (CI's `test:schema-fresh` fails on staleness)
 - Run `bun run bump` for the standard release flow
 
-### Known Issues
-
-- **Parser: postfix `for` on an implicit method call binds the comprehension as the call's argument and absorbs the next sibling statement.** `obj.method arg for arg as iter` parses as `obj.method(arg for arg as iter)` (one call, array-as-argument) instead of `(obj.method arg) for arg as iter` (a comprehension that calls the method per iteration). When a sibling `if` block follows on the next line, it gets pulled in as a *second argument* to the call instead of remaining a separate statement. Two sites in `src/grammar/solar.rip` (lines 158 and 482) work around this with explicit `for` blocks (search "workaround: postfix-for on call"). Pinned by tests at `test/rip/comprehensions.rip` `forward for-of comprehension` and adjacent. **Real fix needed in the lexer rewriter / grammar:** terminate the implicit-call argument list before the postfix `for`, so the comprehension wraps the call rather than becoming an argument. Until that's fixed, user code hitting this pattern needs the explicit-for-loop workaround.
-
 ## Compilation Pipeline
 
 ```text

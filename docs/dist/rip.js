@@ -3833,6 +3833,31 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
   ]);
   var TAGGABLE = new Set(["IDENTIFIER", "PROPERTY", ")", "CALL_END", "]", "INDEX_END"]);
   var CONTROL_IN_IMPLICIT = new Set(["IF", "TRY", "FINALLY", "CATCH", "CLASS", "SWITCH", "COMPONENT", "FOR"]);
+  var VALUE_END_TAGS = new Set([
+    "IDENTIFIER",
+    "PROPERTY",
+    "NUMBER",
+    "STRING",
+    "STRING_END",
+    "REGEX",
+    "REGEX_END",
+    ")",
+    "CALL_END",
+    "]",
+    "INDEX_END",
+    "}",
+    "MAP_END",
+    "PICK_END",
+    "BOOL",
+    "NULL",
+    "UNDEFINED",
+    "INFINITY",
+    "NAN",
+    "SUPER",
+    "THIS",
+    "@",
+    "SYMBOL"
+  ]);
   var SINGLE_LINERS = new Set(["ELSE", "->", "=>", "TRY", "FINALLY", "THEN"]);
   var SINGLE_CLOSERS = new Set(["TERMINATOR", "CATCH", "FINALLY", "ELSE", "OUTDENT", "LEADING_WHEN"]);
   var LINE_BREAK = new Set(["INDENT", "OUTDENT", "TERMINATOR"]);
@@ -5143,7 +5168,8 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           tokens.splice(j, 0, gen("}", "}"));
           i += 1;
         };
-        if ((inImplicitCall() || inImplicitObject()) && CONTROL_IN_IMPLICIT.has(tag)) {
+        let isPostfixFor = tag === "FOR" && !token.newLine && VALUE_END_TAGS.has(prevTag);
+        if ((inImplicitCall() || inImplicitObject()) && CONTROL_IN_IMPLICIT.has(tag) && !isPostfixFor) {
           stack.push(["CONTROL", i, { ours: true }]);
           return forward(1);
         }
@@ -12419,7 +12445,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   }
   // src/browser.js
   var VERSION = "3.14.5";
-  var BUILD_DATE = "2026-04-26@08:42:25GMT";
+  var BUILD_DATE = "2026-04-26@08:50:06GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

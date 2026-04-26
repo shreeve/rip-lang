@@ -174,6 +174,15 @@ let TAGGABLE = new Set(['IDENTIFIER', 'PROPERTY', ')', 'CALL_END', ']', 'INDEX_E
 // Control flow tokens that don't end implicit calls/objects
 let CONTROL_IN_IMPLICIT = new Set(['IF', 'TRY', 'FINALLY', 'CATCH', 'CLASS', 'SWITCH', 'COMPONENT', 'FOR']);
 
+// Tokens that complete an expression value. Used to detect postfix-position
+// for keywords that exist in both prefix and postfix forms (FOR has no
+// dedicated POST_FOR token like POST_IF, so we infer it from context).
+let VALUE_END_TAGS = new Set([
+  'IDENTIFIER', 'PROPERTY', 'NUMBER', 'STRING', 'STRING_END', 'REGEX', 'REGEX_END',
+  ')', 'CALL_END', ']', 'INDEX_END', '}', 'MAP_END', 'PICK_END',
+  'BOOL', 'NULL', 'UNDEFINED', 'INFINITY', 'NAN', 'SUPER', 'THIS', '@', 'SYMBOL',
+]);
+
 // Single-liner keywords that get implicit INDENT/OUTDENT
 let SINGLE_LINERS = new Set(['ELSE', '->', '=>', 'TRY', 'FINALLY', 'THEN']);
 
@@ -1782,8 +1791,21 @@ export class Lexer {
         i += 1;
       };
 
-      // Don't end implicit on INDENT for control flow inside implicit
-      if ((inImplicitCall() || inImplicitObject()) && CONTROL_IN_IMPLICIT.has(tag)) {
+      // Don't end implicit on INDENT for control flow inside implicit.
+      //
+      // Special case: FOR is the only entry in CONTROL_IN_IMPLICIT that can
+      // appear in postfix position (no POST_FOR token exists, unlike
+      // POST_IF / POST_UNLESS). When FOR follows a value-completing token
+      // on the same line (e.g. `addSymbol s for s in xs`), it's a postfix
+      // comprehension that should END the implicit call so the comprehension
+      // wraps the call rather than becoming the call's argument. Detect
+      // postfix FOR by: not at the start of a new line, AND the previous
+      // token is a value-completing token (IDENTIFIER, ), ], literal, etc.).
+      // Prefix FOR (after `:`, `=`, `->`, comma, etc.) keeps the existing
+      // CONTROL behaviour. Falling through lets the IMPLICIT_END handler
+      // below close the implicit call.
+      let isPostfixFor = tag === 'FOR' && !token.newLine && VALUE_END_TAGS.has(prevTag);
+      if ((inImplicitCall() || inImplicitObject()) && CONTROL_IN_IMPLICIT.has(tag) && !isPostfixFor) {
         stack.push(['CONTROL', i, {ours: true}]);
         return forward(1);
       }

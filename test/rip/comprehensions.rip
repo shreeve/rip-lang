@@ -210,3 +210,74 @@ test "for-of as last stmt of fn still auto-collects to _result", '''
       k
   fn().sort()
   ''', ['a', 'b']
+
+# ==============================================================================
+# Regression: lexer rewriter — postfix `for` after implicit call argument
+# ==============================================================================
+# `obj.method arg for arg as iter` previously parsed as
+# `obj.method(arg for arg as iter)` because the lexer rewriter pushed a
+# CONTROL frame on FOR inside an implicit call, suppressing the
+# IMPLICIT_END close. Now FOR after a value-completing token (IDENTIFIER,
+# `)`, `]`, etc.) on the same line ends the implicit call so the
+# comprehension wraps the call rather than becoming its argument.
+
+test "postfix for on implicit call invokes per-iteration", '''
+  fn = ->
+    syms = []
+    log = (s) -> syms.push s
+    log s for s in ['a', 'b', 'c']
+    syms.join ','
+  fn()
+  ''', 'a,b,c'
+
+test "postfix for on method call (object.method arg for ...)", '''
+  fn = ->
+    obj = items: []
+    addItem = (o, x) -> o.items.push x
+    addItem obj, x for x in [1, 2, 3]
+    obj.items
+  fn()
+  ''', [1, 2, 3]
+
+test "postfix for + sibling if remain independent statements", '''
+  fn = ->
+    syms = []
+    log = (s) -> syms.push s
+    flag = true
+    log s for s in ['a', 'b']
+    if flag
+      log 'Y'
+    syms.join ','
+  fn()
+  ''', 'a,b,Y'
+
+test "postfix for as iter on implicit call", '''
+  fn = ->
+    out = []
+    push = (x) -> out.push x
+    items = ['x', 'y', 'z']
+    push s for s as items
+    out.join ','
+  fn()
+  ''', 'x,y,z'
+
+# Negative regression: prefix FOR after `:` in implicit object literal
+# must still keep the object open (this previously failed when the postfix
+# detection was too eager).
+test "prefix for as object property value still parses", '''
+  items = ['a', 'b']
+  data =
+    codes: for x in items
+      x.toUpperCase()
+    other: 99
+  [data.codes.length, data.codes[0], data.other]
+  ''', [2, 'A', 99]
+
+# Negative regression: prefix FOR as RHS of assignment still parses.
+test "prefix for as assignment RHS still parses", '''
+  fn = ->
+    nums = for x in [1, 2, 3]
+      x * 10
+    nums
+  fn()
+  ''', [10, 20, 30]

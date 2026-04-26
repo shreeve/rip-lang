@@ -154,10 +154,7 @@ class Generator
       for handle in handles
         [symbols, action, precedence] = @_parseHandle handle
 
-        # Workaround: postfix `for` on an implicit call binds the comprehension
-        # as the call's argument. See AGENTS.md "Known Issues".
-        for symbol in symbols
-          addSymbol symbol
+        addSymbol symbol for symbol in symbols
 
         # Process semantic actions
         if action
@@ -481,11 +478,7 @@ class Generator
         follows = @types[item.rule.type]?.follows
         if follows
           item.lookaheads.clear()
-          # Workaround: postfix `for` on a method call binds the comprehension
-          # as the call's argument (parser-level implicit-call ambiguity).
-          # Explicit for-loop is idiomatic anyway. See AGENTS.md "Known Issues".
-          for token as follows
-            item.lookaheads.add token
+          item.lookaheads.add token for token as follows
 
   # ============================================================================
   # Parse Table Generation
