@@ -11,7 +11,13 @@
 import { Lexer } from './lexer.js';
 import { parser } from './parser.js';
 import { installComponentSupport } from './components.js';
-import { emitTypes, emitEnum } from './types.js';
+import { emitEnum } from './types.js';
+
+// Type emission is CLI/editor-only. types-emit.js registers itself via
+// setTypesEmitter() at module load. The browser never imports types-emit,
+// so _typesEmitter stays null and .d.ts output is silently skipped.
+let _typesEmitter = null;
+export function setTypesEmitter(fn) { _typesEmitter = fn; }
 import { installSchemaSupport } from './schema.js';
 import { SourceMapGenerator } from './sourcemaps.js';
 import { RipError, toRipError } from './error.js';
@@ -3689,7 +3695,7 @@ export class Compiler {
 
     // If only terminators remain (type-only source), emit types and return early
     if (tokens.every(t => t[0] === 'TERMINATOR')) {
-      if (typeTokens) dts = emitTypes(typeTokens, ['program'], source);
+      if (typeTokens && _typesEmitter) dts = _typesEmitter(typeTokens, ['program'], source);
       return { tokens, sexpr: ['program'], code: '', dts, data: dataSection, reactiveVars: {} };
     }
 
@@ -3773,8 +3779,8 @@ export class Compiler {
     }
 
     // Step 5: Emit .d.ts from annotated tokens + parsed s-expression
-    if (typeTokens) {
-      dts = emitTypes(typeTokens, sexpr, source);
+    if (typeTokens && _typesEmitter) {
+      dts = _typesEmitter(typeTokens, sexpr, source);
     }
 
     return { tokens, sexpr, code, dts, map, reverseMap, data: dataSection, reactiveVars: generator.reactiveVars };

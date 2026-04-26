@@ -60,6 +60,521 @@
     BUILD_DATE: () => BUILD_DATE
   });
 
+  // src/types.js
+  function installTypeSupport(Lexer) {
+    let proto = Lexer.prototype;
+    proto.rewriteTypes = function() {
+      let tokens = this.tokens;
+      let typeRefNames = this.typeRefNames = new Set;
+      let gen = (tag, val, origin) => {
+        let t = [tag, val];
+        t.pre = 0;
+        t.data = null;
+        t.loc = origin?.loc ?? { r: 0, c: 0, n: 0 };
+        t.spaced = false;
+        t.newLine = false;
+        t.generated = true;
+        if (origin)
+          t.origin = origin;
+        return t;
+      };
+      this.scanTokens((token, i, tokens2) => {
+        let tag = token[0];
+        if (tag === "IDENTIFIER") {
+          let next = tokens2[i + 1];
+          if (next && next[0] === "COMPARE" && next[1] === "<" && !next.spaced) {
+            let isDef = tokens2[i - 1]?.[0] === "DEF";
+            let genTokens = collectBalancedAngles(tokens2, i + 1);
+            if (genTokens) {
+              let afterAngles = i + 1 + genTokens.length;
+              let isComponent = !isDef && tokens2[afterAngles]?.[0] === "=" && tokens2[afterAngles + 1]?.[0] === "COMPONENT";
+              if (isDef || isComponent) {
+                if (!token.data)
+                  token.data = {};
+                token.data.typeParams = buildTypeString(genTokens);
+                tokens2.splice(i + 1, genTokens.length);
+                if (isDef && tokens2[i + 1]?.[0] === "(") {
+                  tokens2[i + 1][0] = "CALL_START";
+                  let d = 1, m = i + 2;
+                  while (m < tokens2.length && d > 0) {
+                    if (tokens2[m][0] === "(" || tokens2[m][0] === "CALL_START")
+                      d++;
+                    if (tokens2[m][0] === ")" || tokens2[m][0] === "CALL_END")
+                      d--;
+                    if (d === 0)
+                      tokens2[m][0] = "CALL_END";
+                    m++;
+                  }
+                }
+              }
+            }
+          }
+        }
+        if (tag === "TYPE_ANNOTATION") {
+          let prevToken = tokens2[i - 1];
+          if (!prevToken)
+            return 1;
+          let typeTokens = collectTypeExpression(tokens2, i + 1);
+          let typeStr = buildTypeString(typeTokens);
+          let target = prevToken;
+          let propName = "type";
+          if (prevToken[0] === "CALL_END" || prevToken[0] === ")") {
+            let d = 1, k = i - 2;
+            while (k >= 0 && d > 0) {
+              let kTag = tokens2[k][0];
+              if (kTag === "CALL_END" || kTag === ")")
+                d++;
+              if (kTag === "CALL_START" || kTag === "(")
+                d--;
+              k--;
+            }
+            if (k >= 0)
+              target = tokens2[k];
+            propName = "returnType";
+          } else if (prevToken[0] === "PARAM_END") {
+            let arrowIdx = i + 1 + typeTokens.consumed;
+            let arrowToken = tokens2[arrowIdx];
+            if (arrowToken && (arrowToken[0] === "->" || arrowToken[0] === "=>")) {
+              target = arrowToken;
+            }
+            propName = "returnType";
+          } else if (prevToken[0] === "IDENTIFIER" && i >= 2 && tokens2[i - 2]?.[0] === "DEF") {
+            propName = "returnType";
+          }
+          if (!target.data)
+            target.data = {};
+          target.data[propName] = typeStr;
+          for (let tt of typeTokens) {
+            if (tt[0] === "IDENTIFIER")
+              typeRefNames.add(tt[1]);
+          }
+          let removeCount = 1 + typeTokens.consumed;
+          tokens2.splice(i, removeCount);
+          return 0;
+        }
+        if (tag === "IDENTIFIER" && token[1] === "type") {
+          let prevTag = tokens2[i - 1]?.[0];
+          let atStatement = !prevTag || prevTag === "TERMINATOR" || prevTag === "INDENT" || prevTag === "EXPORT";
+          if (!atStatement)
+            return 1;
+          let nameIdx = i + 1;
+          let nameToken = tokens2[nameIdx];
+          if (!nameToken || nameToken[0] !== "IDENTIFIER")
+            return 1;
+          let name = nameToken[1];
+          let exported = prevTag === "EXPORT";
+          let removeFrom = exported ? i - 1 : i;
+          let eqIdx = nameIdx + 1;
+          if (tokens2[eqIdx]?.[0] === "COMPARE" && tokens2[eqIdx]?.[1] === "<" && !tokens2[eqIdx].spaced) {
+            let genTokens = collectBalancedAngles(tokens2, eqIdx);
+            if (genTokens) {
+              if (!nameToken.data)
+                nameToken.data = {};
+              nameToken.data.typeParams = buildTypeString(genTokens);
+              tokens2.splice(eqIdx, genTokens.length);
+            }
+          }
+          if (tokens2[eqIdx]?.[0] !== "=")
+            return 1;
+          let makeDecl = (typeText) => {
+            let dt = gen("TYPE_DECL", name, nameToken);
+            dt.data = { name, typeText, exported };
+            if (nameToken.data?.typeParams)
+              dt.data.typeParams = nameToken.data.typeParams;
+            return dt;
+          };
+          let afterEq = eqIdx + 1;
+          let next = tokens2[afterEq];
+          if (next && (next[0] === "TERMINATOR" || next[0] === "INDENT")) {
+            let result = collectBlockUnion(tokens2, afterEq);
+            if (result) {
+              tokens2.splice(removeFrom, result.endIdx - removeFrom + 1, makeDecl(result.typeText));
+              return 0;
+            }
+          }
+          if (next && next[0] === "INDENT") {
+            let endIdx = findMatchingOutdent(tokens2, afterEq);
+            tokens2.splice(removeFrom, endIdx - removeFrom + 1, makeDecl(collectStructuralType(tokens2, afterEq)));
+            return 0;
+          }
+          let typeTokens = collectTypeExpression(tokens2, afterEq);
+          tokens2.splice(removeFrom, afterEq + typeTokens.consumed - removeFrom, makeDecl(buildTypeString(typeTokens)));
+          return 0;
+        }
+        if (tag === "INTERFACE") {
+          let exported = i >= 1 && tokens2[i - 1]?.[0] === "EXPORT";
+          let nameIdx = i + 1;
+          let nameToken = tokens2[nameIdx];
+          if (!nameToken)
+            return 1;
+          let name = nameToken[1];
+          let extendsName = null;
+          let bodyIdx = nameIdx + 1;
+          if (tokens2[bodyIdx]?.[0] === "EXTENDS") {
+            extendsName = tokens2[bodyIdx + 1]?.[1];
+            bodyIdx = bodyIdx + 2;
+          }
+          if (tokens2[bodyIdx]?.[0] === "INDENT") {
+            let typeText = collectStructuralType(tokens2, bodyIdx);
+            let endIdx = findMatchingOutdent(tokens2, bodyIdx);
+            let declToken = gen("TYPE_DECL", name, nameToken);
+            declToken.data = {
+              name,
+              kind: "interface",
+              extends: extendsName,
+              typeText,
+              exported
+            };
+            let removeFrom = exported ? i - 1 : i;
+            let removeCount = endIdx - removeFrom + 1;
+            tokens2.splice(removeFrom, removeCount, declToken);
+            return 0;
+          }
+          return 1;
+        }
+        return 1;
+      });
+      for (let i = tokens.length - 1;i >= 0; i--) {
+        if (tokens[i][0] !== "DEF")
+          continue;
+        let nameToken = tokens[i + 1];
+        if (!nameToken || nameToken[0] !== "IDENTIFIER")
+          continue;
+        let j = i + 2;
+        if (tokens[j]?.[0] !== "CALL_START")
+          continue;
+        let depth = 1;
+        j++;
+        while (j < tokens.length && depth > 0) {
+          if (tokens[j][0] === "CALL_START")
+            depth++;
+          if (tokens[j][0] === "CALL_END")
+            depth--;
+          j++;
+        }
+        let callEndIdx = j - 1;
+        let next = tokens[j];
+        if (next && next[0] !== "TERMINATOR")
+          continue;
+        let hasTypes = nameToken.data?.returnType;
+        if (!hasTypes) {
+          for (let k = i + 2;k <= callEndIdx; k++) {
+            if (tokens[k].data?.type) {
+              hasTypes = true;
+              break;
+            }
+          }
+        }
+        if (!hasTypes)
+          continue;
+        let overloadTokens = tokens.slice(i, j + 1);
+        let exported = i >= 1 && tokens[i - 1]?.[0] === "EXPORT";
+        let spliceFrom = exported ? i - 1 : i;
+        let spliceCount = j + 1 - spliceFrom;
+        let marker = gen("TYPE_DECL", nameToken[1], nameToken);
+        marker.data = {
+          name: nameToken[1],
+          kind: "overload",
+          overloadTokens,
+          exported
+        };
+        if (nameToken.data?.typeParams)
+          marker.data.typeParams = nameToken.data.typeParams;
+        tokens.splice(spliceFrom, spliceCount, marker);
+      }
+    };
+  }
+  function collectTypeExpression(tokens, j) {
+    let typeTokens = [];
+    let depth = 0;
+    let startJ = j;
+    while (j < tokens.length) {
+      let t = tokens[j];
+      let tTag = t[0];
+      let isOpen = tTag === "(" || tTag === "[" || tTag === "{" || tTag === "CALL_START" || tTag === "PARAM_START" || tTag === "INDEX_START" || tTag === "COMPARE" && t[1] === "<";
+      let isClose = tTag === ")" || tTag === "]" || tTag === "}" || tTag === "CALL_END" || tTag === "PARAM_END" || tTag === "INDEX_END" || tTag === "COMPARE" && t[1] === ">";
+      if (tTag === "SHIFT" && t[1] === ">>" && depth >= 2) {
+        depth -= 2;
+        typeTokens.push(t);
+        j++;
+        continue;
+      }
+      if (isOpen) {
+        depth++;
+        typeTokens.push(t);
+        j++;
+        continue;
+      }
+      if (isClose) {
+        if (depth > 0) {
+          depth--;
+          typeTokens.push(t);
+          j++;
+          continue;
+        }
+        break;
+      }
+      if (depth === 0) {
+        if (tTag === "INDENT" && typeTokens.length > 0 && typeTokens[typeTokens.length - 1][0] === "=>") {
+          j++;
+          let nest = 1;
+          while (j < tokens.length && nest > 0) {
+            if (tokens[j][0] === "INDENT") {
+              nest++;
+              j++;
+            } else if (tokens[j][0] === "OUTDENT") {
+              nest--;
+              j++;
+            } else {
+              typeTokens.push(tokens[j]);
+              j++;
+            }
+          }
+          continue;
+        }
+        if (tTag === "=" || tTag === "REACTIVE_ASSIGN" || tTag === "COMPUTED_ASSIGN" || tTag === "READONLY_ASSIGN" || tTag === "EFFECT" || tTag === "TERMINATOR" || tTag === "INDENT" || tTag === "OUTDENT" || tTag === "->" || tTag === ",") {
+          break;
+        }
+      }
+      typeTokens.push(t);
+      j++;
+    }
+    typeTokens.consumed = j - startJ;
+    return typeTokens;
+  }
+  function buildTypeString(typeTokens) {
+    if (typeTokens.length === 0)
+      return "";
+    if (typeTokens[0]?.[0] === "=>")
+      typeTokens.unshift(["", "()"]);
+    let typeStr = typeTokens.map((t) => t[1]).join(" ").replace(/\s+/g, " ").trim();
+    typeStr = typeStr.replace(/\s*<\s*/g, "<").replace(/\s*>\s*/g, ">").replace(/\s*\[\s*/g, "[").replace(/\s*\]\s*/g, "]").replace(/\s*\(\s*/g, "(").replace(/\s*\)\s*/g, ")").replace(/\s*,\s*/g, ", ").replace(/\s*=>\s*/g, " => ").replace(/ :: /g, ": ").replace(/:: /g, ": ").replace(/ : /g, ": ");
+    return typeStr;
+  }
+  function collectBalancedAngles(tokens, j) {
+    if (j >= tokens.length)
+      return null;
+    let t = tokens[j];
+    if (t[0] !== "COMPARE" || t[1] !== "<")
+      return null;
+    let collected = [t];
+    let depth = 1;
+    let k = j + 1;
+    while (k < tokens.length && depth > 0) {
+      let tk = tokens[k];
+      collected.push(tk);
+      if (tk[0] === "COMPARE" && tk[1] === "<")
+        depth++;
+      else if (tk[0] === "COMPARE" && tk[1] === ">")
+        depth--;
+      k++;
+    }
+    return depth === 0 ? collected : null;
+  }
+  function collectStructuralType(tokens, indentIdx) {
+    let props = [];
+    let j = indentIdx + 1;
+    let depth = 1;
+    while (j < tokens.length && depth > 0) {
+      let t = tokens[j];
+      if (t[0] === "INDENT") {
+        depth++;
+        j++;
+        continue;
+      }
+      if (t[0] === "OUTDENT") {
+        depth--;
+        if (depth === 0)
+          break;
+        j++;
+        continue;
+      }
+      if (t[0] === "TERMINATOR") {
+        j++;
+        continue;
+      }
+      if (depth === 1 && t[0] === "[") {
+        let sigTokens = [];
+        j++;
+        while (j < tokens.length && tokens[j][0] !== "]") {
+          sigTokens.push(tokens[j]);
+          j++;
+        }
+        j++;
+        if (tokens[j]?.[1] === ":" || tokens[j]?.[0] === "TYPE_ANNOTATION")
+          j++;
+        let valTypeTokens = [];
+        while (j < tokens.length) {
+          let pt = tokens[j];
+          if (pt[0] === "TERMINATOR" || pt[0] === "OUTDENT")
+            break;
+          valTypeTokens.push(pt);
+          j++;
+        }
+        let sigStr = buildTypeString(sigTokens);
+        let valStr = buildTypeString(valTypeTokens);
+        props.push(`[${sigStr}]: ${valStr}`);
+        continue;
+      }
+      let isProperty = t[0] === "PROPERTY" || t[0] === "IDENTIFIER" || depth === 1 && /^[a-zA-Z_$]/.test(t[1]) && tokens[j + 1]?.[0] === "TYPE_ANNOTATION";
+      if (depth === 1 && isProperty) {
+        let propName = t[1];
+        let optional = false;
+        let readonly = false;
+        j++;
+        if (propName === "readonly" && tokens[j] && (tokens[j][0] === "PROPERTY" || tokens[j][0] === "IDENTIFIER" || /^[a-zA-Z_$]/.test(tokens[j][1]) && tokens[j + 1]?.[0] === "TYPE_ANNOTATION")) {
+          readonly = true;
+          propName = tokens[j][1];
+          if (tokens[j].data?.predicate)
+            optional = true;
+          j++;
+        }
+        if (t.data?.predicate)
+          optional = true;
+        if (tokens[j]?.[1] === "?" && !tokens[j]?.spaced) {
+          optional = true;
+          j++;
+        }
+        if (tokens[j]?.[1] === ":" || tokens[j]?.[0] === "TYPE_ANNOTATION")
+          j++;
+        let propTypeTokens = [];
+        let typeDepth = 0;
+        while (j < tokens.length) {
+          let pt = tokens[j];
+          if (pt[0] === "IDENTIFIER" && pt[1] === "type" && tokens[j + 1]?.[0] === "INDENT") {
+            j++;
+            let nestedType = collectStructuralType(tokens, j);
+            propTypeTokens.push(["", nestedType]);
+            let nd = 1;
+            j++;
+            while (j < tokens.length && nd > 0) {
+              if (tokens[j][0] === "INDENT")
+                nd++;
+              if (tokens[j][0] === "OUTDENT")
+                nd--;
+              j++;
+            }
+            continue;
+          }
+          if (pt[0] === "INDENT") {
+            typeDepth++;
+            j++;
+            continue;
+          }
+          if (pt[0] === "OUTDENT") {
+            if (typeDepth > 0) {
+              typeDepth--;
+              j++;
+              continue;
+            }
+            break;
+          }
+          if (pt[0] === "TERMINATOR" && typeDepth === 0)
+            break;
+          propTypeTokens.push(pt);
+          j++;
+        }
+        let typeStr = buildTypeString(propTypeTokens);
+        let prefix = readonly ? "readonly " : "";
+        let optMark = optional ? "?" : "";
+        props.push(`${prefix}${propName}${optMark}: ${typeStr}`);
+      } else {
+        j++;
+      }
+    }
+    return "{ " + props.join("; ") + " }";
+  }
+  function findMatchingOutdent(tokens, idx) {
+    let depth = 0;
+    for (let j = idx;j < tokens.length; j++) {
+      if (tokens[j][0] === "INDENT")
+        depth++;
+      if (tokens[j][0] === "OUTDENT") {
+        depth--;
+        if (depth === 0)
+          return j;
+      }
+    }
+    return tokens.length - 1;
+  }
+  function collectBlockUnion(tokens, startIdx) {
+    let j = startIdx;
+    if (tokens[j]?.[0] === "TERMINATOR")
+      j++;
+    if (tokens[j]?.[0] !== "INDENT")
+      return null;
+    let indentIdx = j;
+    j++;
+    while (j < tokens.length && tokens[j][0] === "TERMINATOR")
+      j++;
+    if (!tokens[j] || tokens[j][1] !== "|")
+      return null;
+    let members = [];
+    let depth = 1;
+    j = indentIdx + 1;
+    while (j < tokens.length && depth > 0) {
+      let t = tokens[j];
+      if (t[0] === "INDENT") {
+        depth++;
+        j++;
+        continue;
+      }
+      if (t[0] === "OUTDENT") {
+        depth--;
+        if (depth === 0)
+          break;
+        j++;
+        continue;
+      }
+      if (t[0] === "TERMINATOR") {
+        j++;
+        continue;
+      }
+      if (t[1] === "|" && depth === 1) {
+        j++;
+        let memberTokens = [];
+        while (j < tokens.length) {
+          let mt = tokens[j];
+          if (mt[0] === "TERMINATOR" || mt[0] === "OUTDENT" || mt[1] === "|" && depth === 1)
+            break;
+          memberTokens.push(mt);
+          j++;
+        }
+        if (memberTokens.length > 0) {
+          members.push(buildTypeString(memberTokens));
+        }
+        continue;
+      }
+      j++;
+    }
+    if (members.length === 0)
+      return null;
+    let endIdx = findMatchingOutdent(tokens, indentIdx);
+    return { typeText: members.join(" | "), endIdx };
+  }
+  function emitEnum(head, rest, context) {
+    let [name, body] = rest;
+    let enumName = name?.valueOf?.() ?? name;
+    let pairs = [];
+    if (Array.isArray(body)) {
+      let items = body[0] === "block" ? body.slice(1) : [body];
+      for (let item of items) {
+        if (Array.isArray(item)) {
+          if (item[0]?.valueOf?.() === "=") {
+            let key = item[1]?.valueOf?.() ?? item[1];
+            let val = item[2]?.valueOf?.() ?? item[2];
+            pairs.push([key, val]);
+          }
+        }
+      }
+    }
+    if (pairs.length === 0)
+      return `const ${enumName} = {}`;
+    let forward = pairs.map(([k, v]) => `${k}: ${v}`).join(", ");
+    let reverse = pairs.map(([k, v]) => `${v}: "${k}"`).join(", ");
+    return `const ${enumName} = {${forward}, ${reverse}}`;
+  }
+
   // src/parser.js
   var parserInstance = {
     symbolIds: { $accept: 0, $end: 1, error: 2, Root: 3, Body: 4, Line: 5, TERMINATOR: 6, Expression: 7, ExpressionLine: 8, Statement: 9, Return: 10, STATEMENT: 11, Import: 12, Export: 13, Value: 14, Code: 15, Operation: 16, Assign: 17, ReactiveAssign: 18, ComputedAssign: 19, ReadonlyAssign: 20, Effect: 21, If: 22, Try: 23, While: 24, For: 25, Switch: 26, Class: 27, Component: 28, Render: 29, Throw: 30, Yield: 31, Def: 32, Enum: 33, Schema: 34, CodeLine: 35, OperationLine: 36, Assignable: 37, Literal: 38, Parenthetical: 39, Range: 40, Invocation: 41, DoIife: 42, This: 43, Super: 44, MetaProperty: 45, MapLiteral: 46, AlphaNumeric: 47, JS: 48, Regex: 49, UNDEFINED: 50, NULL: 51, BOOL: 52, INFINITY: 53, NAN: 54, SYMBOL: 55, NUMBER: 56, String: 57, Identifier: 58, IDENTIFIER: 59, Property: 60, PROPERTY: 61, STRING: 62, STRING_START: 63, Interpolations: 64, STRING_END: 65, InterpolationChunk: 66, INTERPOLATION_START: 67, INTERPOLATION_END: 68, INDENT: 69, OUTDENT: 70, REGEX: 71, REGEX_START: 72, REGEX_END: 73, RegexWithIndex: 74, ",": 75, "=": 76, REACTIVE_ASSIGN: 77, COMPUTED_ASSIGN: 78, Block: 79, READONLY_ASSIGN: 80, EFFECT: 81, SimpleAssignable: 82, Array: 83, Object: 84, ThisProperty: 85, ".": 86, "?.": 87, INDEX_START: 88, INDEX_END: 89, Slice: 90, PICK_START: 91, PickList: 92, OptComma: 93, PICK_END: 94, OPTPICK_START: 95, ES6_OPTIONAL_INDEX: 96, "{": 97, ObjAssignable: 98, ":": 99, FOR: 100, ForVariables: 101, FOROF: 102, "}": 103, WHEN: 104, OWN: 105, AssignList: 106, AssignObj: 107, ObjRestValue: 108, SimpleObjAssignable: 109, "[": 110, "]": 111, "@": 112, "...": 113, ObjSpreadExpr: 114, SUPER: 115, Arguments: 116, DYNAMIC_IMPORT: 117, MAP_START: 118, MAP_END: 119, MapAssignList: 120, MapAssignObj: 121, MapAssignable: 122, PickItem: 123, PickKey: 124, Elisions: 125, ArgElisionList: 126, OptElisions: 127, ArgElision: 128, Arg: 129, Elision: 130, RangeDots: 131, "..": 132, DEF: 133, CALL_START: 134, ParamList: 135, CALL_END: 136, PARAM_START: 137, PARAM_END: 138, FuncGlyph: 139, "->": 140, "=>": 141, Param: 142, ParamVar: 143, Splat: 144, ES6_OPTIONAL_CALL: 145, ArgList: 146, SimpleArgs: 147, THIS: 148, NEW_TARGET: 149, IMPORT_META: 150, "(": 151, ")": 152, RETURN: 153, THROW: 154, YIELD: 155, FROM: 156, IfBlock: 157, IF: 158, ELSE: 159, UnlessBlock: 160, UNLESS: 161, POST_IF: 162, POST_UNLESS: 163, TRY: 164, Catch: 165, FINALLY: 166, CATCH: 167, SWITCH: 168, Whens: 169, When: 170, LEADING_WHEN: 171, WhileSource: 172, WHILE: 173, UNTIL: 174, Loop: 175, LOOP: 176, FORIN: 177, BY: 178, FORAS: 179, AWAIT: 180, FORASAWAIT: 181, ForValue: 182, CLASS: 183, EXTENDS: 184, ENUM: 185, SCHEMA: 186, SCHEMA_BODY: 187, COMPONENT: 188, ComponentBody: 189, ComponentLine: 190, OFFER: 191, ACCEPT: 192, RENDER: 193, IMPORT: 194, ImportDefaultSpecifier: 195, ImportNamespaceSpecifier: 196, ImportSpecifierList: 197, ImportSpecifier: 198, AS: 199, DEFAULT: 200, IMPORT_ALL: 201, EXPORT: 202, ExportSpecifierList: 203, EXPORT_ALL: 204, ExportSpecifier: 205, UNARY: 206, DO: 207, DO_IIFE: 208, UNARY_MATH: 209, "-": 210, "+": 211, "?": 212, PRESENCE: 213, "--": 214, "++": 215, MATH: 216, "**": 217, SHIFT: 218, COMPARE: 219, "&": 220, "^": 221, "|": 222, "||": 223, "??": 224, "&&": 225, PIPE: 226, RELATION: 227, TERNARY: 228, COMPOUND_ASSIGN: 229 },
@@ -1119,7 +1634,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         throw schemaError(schemaTok, `Expected indented schema body after 'schema${kindToken ? " :" + kind : ""}'.`);
       }
       let indentIdx = j;
-      let outdentIdx = findMatchingOutdent(tokens, indentIdx);
+      let outdentIdx = findMatchingOutdent2(tokens, indentIdx);
       if (outdentIdx < 0) {
         throw schemaError(tokens[indentIdx], "Unterminated schema body.");
       }
@@ -2114,7 +2629,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       mods.push("?");
     return mods;
   }
-  function findMatchingOutdent(tokens, indentIdx) {
+  function findMatchingOutdent2(tokens, indentIdx) {
     let depth = 0;
     for (let j = indentIdx;j < tokens.length; j++) {
       if (tokens[j][0] === "INDENT")
@@ -3485,1676 +4000,10 @@ function __schema(descriptor) {
   function getSchemaRuntime() {
     return SCHEMA_RUNTIME.trimStart();
   }
-  var SCHEMA_INTRINSIC_DECLS = [
-    "interface SchemaIssue { field: string; error: string; message: string; }",
-    "type SchemaSafeResult<T> = { ok: true; value: T; errors: null } | { ok: false; value: null; errors: SchemaIssue[] };",
-    "interface Schema<Out, In = unknown> {",
-    "  parse(data: In): Out;",
-    "  safe(data: In): SchemaSafeResult<Out>;",
-    "  ok(data: unknown): boolean;",
-    "  pick<K extends keyof In>(...keys: K[]): Schema<Pick<In, K>, Pick<In, K>>;",
-    "  omit<K extends keyof In>(...keys: K[]): Schema<Omit<In, K>, Omit<In, K>>;",
-    "  partial(): Schema<Partial<In>, Partial<In>>;",
-    "  required<K extends keyof In>(...keys: K[]): Schema<Omit<In, K> & Required<Pick<In, K>>, Omit<In, K> & Required<Pick<In, K>>>;",
-    "  extend<U>(other: Schema<U>): Schema<In & U, In & U>;",
-    "}",
-    "interface SchemaQuery<T> {",
-    "  all(): Promise<T[]>;",
-    "  first(): Promise<T | null>;",
-    "  count(): Promise<number>;",
-    "  limit(n: number): SchemaQuery<T>;",
-    "  offset(n: number): SchemaQuery<T>;",
-    "  order(spec: string): SchemaQuery<T>;",
-    "}",
-    "interface ModelSchema<Instance, Data = unknown> extends Schema<Instance, Data> {",
-    "  find(id: unknown): Promise<Instance | null>;",
-    "  findMany(ids: unknown[]): Promise<Instance[]>;",
-    "  where(cond: Record<string, unknown> | string, ...params: unknown[]): SchemaQuery<Instance>;",
-    "  all(limit?: number): Promise<Instance[]>;",
-    "  first(): Promise<Instance | null>;",
-    "  count(cond?: Record<string, unknown>): Promise<number>;",
-    "  create(data: Partial<Data>): Promise<Instance>;",
-    "  toSQL(options?: { dropFirst?: boolean; header?: string; idStart?: number }): string;",
-    "}"
-  ];
-  var RIP_TYPE_TO_TS = {
-    string: "string",
-    text: "string",
-    email: "string",
-    url: "string",
-    uuid: "string",
-    phone: "string",
-    zip: "string",
-    number: "number",
-    integer: "number",
-    boolean: "boolean",
-    date: "Date",
-    datetime: "Date",
-    json: "unknown",
-    any: "any"
-  };
-  function mapFieldType(entry) {
-    if (entry.typeName === "literal-union" && entry.literals?.length) {
-      return entry.literals.map((l) => JSON.stringify(l)).join(" | ");
-    }
-    let base = RIP_TYPE_TO_TS[entry.typeName] ?? entry.typeName;
-    return entry.array ? `${base}[]` : base;
-  }
-  function descriptorFromSchemaNode(schemaNode) {
-    if (!Array.isArray(schemaNode))
-      return null;
-    let head = schemaNode[0]?.valueOf?.() ?? schemaNode[0];
-    if (head !== "schema")
-      return null;
-    let body = schemaNode[1];
-    if (!body || typeof body !== "object")
-      return null;
-    if (body.descriptor)
-      return body.descriptor;
-    if (body.data?.descriptor)
-      return body.data.descriptor;
-    return null;
-  }
-  function emitSchemaTypes(sexpr, lines) {
-    const collected = [];
-    collectSchemas(sexpr, collected);
-    if (!collected.length)
-      return false;
-    const known = new Set(collected.map((c) => c.name));
-    const byName = new Map(collected.map((c) => [c.name, c]));
-    for (const c of collected) {
-      if (c.descriptor.kind === "mixin")
-        emitOneSchemaType(c, byName, known, lines);
-    }
-    for (const c of collected) {
-      if (c.descriptor.kind !== "mixin")
-        emitOneSchemaType(c, byName, known, lines);
-    }
-    return true;
-  }
-  function collectSchemas(sexpr, out) {
-    if (!Array.isArray(sexpr))
-      return;
-    const head = sexpr[0]?.valueOf?.() ?? sexpr[0];
-    let exported = false;
-    let assignNode = null;
-    if (head === "export" && Array.isArray(sexpr[1])) {
-      const inner = sexpr[1];
-      const innerHead = inner[0]?.valueOf?.() ?? inner[0];
-      if (innerHead === "=") {
-        exported = true;
-        assignNode = inner;
-      } else
-        collectSchemas(sexpr[1], out);
-    } else if (head === "=") {
-      assignNode = sexpr;
-    } else if (head === "program" || head === "block") {
-      for (let i = 1;i < sexpr.length; i++) {
-        if (Array.isArray(sexpr[i]))
-          collectSchemas(sexpr[i], out);
-      }
-    }
-    if (assignNode && Array.isArray(assignNode[2])) {
-      const name = assignNode[1]?.valueOf?.() ?? assignNode[1];
-      const descriptor = descriptorFromSchemaNode(assignNode[2]);
-      if (typeof name === "string" && descriptor) {
-        out.push({ name, descriptor, exported });
-      }
-    }
-  }
-  function emitOneSchemaType(collected, byName, known, lines) {
-    const { name, descriptor, exported } = collected;
-    const exp = exported ? "export " : "";
-    const decl = exported ? "" : "declare ";
-    if (descriptor.kind === "enum") {
-      const members = [];
-      for (const e of descriptor.entries) {
-        if (e.tag !== "enum-member")
-          continue;
-        const v = e.value !== undefined ? e.value : e.name;
-        members.push(typeof v === "string" ? JSON.stringify(v) : String(v));
-      }
-      const union = members.length ? members.join(" | ") : "never";
-      lines.push(`${exp}type ${name} = ${union};`);
-      lines.push(`${exp}${decl}const ${name}: { parse(data: unknown): ${name}; safe(data: unknown): SchemaSafeResult<${name}>; ok(data: unknown): data is ${name}; };`);
-      return;
-    }
-    if (descriptor.kind === "mixin") {
-      const fieldProps2 = fieldPropList(descriptor);
-      lines.push(`${exp}type ${name} = { ${fieldProps2.join("; ")} };`);
-      return;
-    }
-    const fieldProps = fieldPropList(descriptor);
-    const mixinRefs = mixinIntersections(descriptor, byName);
-    const methods = [];
-    const computed = [];
-    for (const e of descriptor.entries) {
-      if (e.tag === "method") {
-        methods.push(`${e.name}: (...args: any[]) => unknown`);
-      } else if (e.tag === "computed") {
-        computed.push(`readonly ${e.name}: unknown`);
-      }
-    }
-    const dataBase = `{ ${fieldProps.join("; ")} }`;
-    const dataType = mixinRefs.length ? `${dataBase} & ${mixinRefs.join(" & ")}` : dataBase;
-    if (descriptor.kind === "model") {
-      const dataName = `${name}Data`;
-      const instName = `${name}Instance`;
-      const relationAccessors = modelRelationAccessors(descriptor, known);
-      const instanceExtras = [
-        ...computed,
-        ...methods,
-        ...relationAccessors,
-        `save(): Promise<${instName}>`,
-        `destroy(): Promise<${instName}>`,
-        `ok(): boolean`,
-        `errors(): SchemaIssue[]`,
-        `toJSON(): ${dataName}`
-      ];
-      lines.push(`${exp}type ${dataName} = ${dataType};`);
-      lines.push(`${exp}type ${instName} = ${dataName} & { ${instanceExtras.join("; ")} };`);
-      lines.push(`${exp}${decl}const ${name}: ModelSchema<${instName}, ${dataName}>;`);
-      return;
-    }
-    if (descriptor.kind === "shape") {
-      const dataName = `${name}Data`;
-      const instName = `${name}Instance`;
-      const hasBehavior = methods.length + computed.length > 0;
-      lines.push(`${exp}type ${dataName} = ${dataType};`);
-      if (hasBehavior) {
-        lines.push(`${exp}type ${instName} = ${dataName} & { ${[...computed, ...methods].join("; ")} };`);
-        lines.push(`${exp}${decl}const ${name}: Schema<${instName}, ${dataName}>;`);
-      } else {
-        lines.push(`${exp}${decl}const ${name}: Schema<${dataName}, ${dataName}>;`);
-      }
-      return;
-    }
-    const valueName = `${name}Value`;
-    lines.push(`${exp}type ${valueName} = ${dataType};`);
-    lines.push(`${exp}${decl}const ${name}: Schema<${valueName}, ${valueName}>;`);
-  }
-  function mixinIntersections(descriptor, byName) {
-    const refs = [];
-    for (const e of descriptor.entries) {
-      if (e.tag !== "directive" || e.name !== "mixin")
-        continue;
-      const args = e.args;
-      const target = args && args[0] && args[0].target;
-      if (!target)
-        continue;
-      const known = byName && byName.get(target);
-      if (known && known.descriptor.kind === "mixin") {
-        refs.push(target);
-      }
-    }
-    return refs;
-  }
-  function modelRelationAccessors(descriptor, known) {
-    const out = [];
-    for (const e of descriptor.entries) {
-      if (e.tag !== "directive")
-        continue;
-      const args = e.args;
-      if (!args || !args[0])
-        continue;
-      const target = args[0].target;
-      if (!target)
-        continue;
-      const optional = args[0].optional === true;
-      const targetLc = target[0].toLowerCase() + target.slice(1);
-      const instName = `${target}Instance`;
-      const isKnown = known && known.has(target);
-      if (e.name === "belongs_to") {
-        const retT = isKnown ? optional ? `${instName} | null` : `${instName} | null` : "unknown";
-        out.push(`${targetLc}(): Promise<${retT}>`);
-      } else if (e.name === "has_one" || e.name === "one") {
-        const retT = isKnown ? `${instName} | null` : "unknown";
-        out.push(`${targetLc}(): Promise<${retT}>`);
-      } else if (e.name === "has_many" || e.name === "many") {
-        const retT = isKnown ? `${instName}[]` : "unknown[]";
-        const pluralLc = __schemaClientPluralize(targetLc);
-        out.push(`${pluralLc}(): Promise<${retT}>`);
-      }
-    }
-    return out;
-  }
-  function __schemaClientPluralize(w) {
-    const lw = w.toLowerCase();
-    if (/[^aeiouy]y$/i.test(w))
-      return w.slice(0, -1) + "ies";
-    if (/(s|x|z|ch|sh)$/i.test(w))
-      return w + "es";
-    return w + "s";
-  }
-  function fieldPropList(descriptor) {
-    const props = [];
-    for (const e of descriptor.entries) {
-      if (e.tag !== "field")
-        continue;
-      const required = e.modifiers.includes("!");
-      const mark = required ? "" : "?";
-      props.push(`${e.name}${mark}: ${mapFieldType(e)}`);
-    }
-    return props;
-  }
   if (typeof globalThis !== "undefined" && !globalThis.__ripSchema) {
     try {
       (0, eval)(SCHEMA_RUNTIME);
     } catch {}
-  }
-
-  // src/types.js
-  var INTRINSIC_TYPE_DECLS = [
-    "type __RipElementMap = HTMLElementTagNameMap & Omit<SVGElementTagNameMap, keyof HTMLElementTagNameMap>;",
-    "type __RipTag = keyof __RipElementMap;",
-    "type __RipBrowserElement = Omit<HTMLElement, 'querySelector' | 'querySelectorAll' | 'closest' | 'setAttribute' | 'hidden'> & { hidden: boolean | 'until-found'; setAttribute(qualifiedName: string, value: any): void; querySelector(selectors: string): __RipBrowserElement | null; querySelectorAll(selectors: string): NodeListOf<__RipBrowserElement>; closest(selectors: string): __RipBrowserElement | null; };",
-    "type __RipDomEl<K extends __RipTag> = Omit<__RipElementMap[K], 'querySelector' | 'querySelectorAll' | 'closest' | 'setAttribute' | 'hidden'> & __RipBrowserElement;",
-    "type __RipAttrKeys<T> = { [K in keyof T]-?: K extends 'style' | 'classList' | 'className' | 'nodeValue' | 'textContent' | 'innerHTML' | 'innerText' | 'outerHTML' | 'outerText' | 'scrollLeft' | 'scrollTop' ? never : K extends `on${string}` | `aria${string}Element` | `aria${string}Elements` ? never : T[K] extends (...args: any[]) => any ? never : (<V>() => V extends Pick<T, K> ? 1 : 2) extends (<V>() => V extends { -readonly [P in K]: T[P] } ? 1 : 2) ? K : never }[keyof T] & string;",
-    "type __RipEvents = { [K in keyof HTMLElementEventMap as `@${K}`]?: ((event: HTMLElementEventMap[K]) => void) | null };",
-    "type __RipClassValue = string | boolean | null | undefined | Record<string, boolean> | __RipClassValue[];",
-    "type __RipProps<K extends __RipTag> = { [P in __RipAttrKeys<__RipElementMap[K]>]?: __RipElementMap[K][P] } & __RipEvents & { ref?: string; class?: __RipClassValue | __RipClassValue[]; style?: string; [k: `data-${string}`]: any; [k: `aria-${string}`]: any };"
-  ];
-  var ARIA_TYPE_DECLS = [
-    "type __RipAriaNavHandlers = { next?: () => void; prev?: () => void; first?: () => void; last?: () => void; select?: () => void; dismiss?: () => void; tab?: () => void; char?: () => void; };",
-    "declare const ARIA: {",
-    "  bindPopover(open: boolean, popover: () => Element | null | undefined, setOpen: (isOpen: boolean) => void, source?: (() => Element | null | undefined) | null): void;",
-    "  bindDialog(open: boolean, dialog: () => Element | null | undefined, setOpen: (isOpen: boolean) => void, dismissable?: boolean): void;",
-    "  popupDismiss(open: boolean, popup: () => Element | null | undefined, close: () => void, els?: Array<() => Element | null | undefined>, repos?: (() => void) | null): void;",
-    "  popupGuard(delay?: number): any;",
-    "  listNav(event: KeyboardEvent, handlers: __RipAriaNavHandlers): void;",
-    "  rovingNav(event: KeyboardEvent, handlers: __RipAriaNavHandlers, orientation?: 'vertical' | 'horizontal' | 'both'): void;",
-    "  positionBelow(trigger: Element | null | undefined, popup: Element | null | undefined, gap?: number, setVisible?: boolean): void;",
-    "  position(trigger: Element | null | undefined, floating: Element | null | undefined, opts?: any): void;",
-    "  trapFocus(panel: Element | null | undefined): void;",
-    "  wireAria(panel: Element, id: string): void;",
-    "  lockScroll(instance: any): void;",
-    "  unlockScroll(instance: any): void;",
-    "  hasAnchor: boolean;",
-    "  [key: string]: any;",
-    "};"
-  ];
-  var SIGNAL_INTERFACE = "interface Signal<T> { value: T; read(): T; lock(): Signal<T>; free(): Signal<T>; kill(): T; }";
-  var SIGNAL_FN = "declare function __state<T>(value: T | Signal<T>): Signal<T>;";
-  var COMPUTED_INTERFACE = "interface Computed<T> { readonly value: T; read(): T; lock(): Computed<T>; free(): Computed<T>; kill(): T; }";
-  var COMPUTED_FN = "declare function __computed<T>(fn: () => T): Computed<T>;";
-  var EFFECT_FN = "declare function __effect(fn: () => void | (() => void)): () => void;";
-  function installTypeSupport(Lexer) {
-    let proto = Lexer.prototype;
-    proto.rewriteTypes = function() {
-      let tokens = this.tokens;
-      let typeRefNames = this.typeRefNames = new Set;
-      let gen = (tag, val, origin) => {
-        let t = [tag, val];
-        t.pre = 0;
-        t.data = null;
-        t.loc = origin?.loc ?? { r: 0, c: 0, n: 0 };
-        t.spaced = false;
-        t.newLine = false;
-        t.generated = true;
-        if (origin)
-          t.origin = origin;
-        return t;
-      };
-      this.scanTokens((token, i, tokens2) => {
-        let tag = token[0];
-        if (tag === "IDENTIFIER") {
-          let next = tokens2[i + 1];
-          if (next && next[0] === "COMPARE" && next[1] === "<" && !next.spaced) {
-            let isDef = tokens2[i - 1]?.[0] === "DEF";
-            let genTokens = collectBalancedAngles(tokens2, i + 1);
-            if (genTokens) {
-              let afterAngles = i + 1 + genTokens.length;
-              let isComponent = !isDef && tokens2[afterAngles]?.[0] === "=" && tokens2[afterAngles + 1]?.[0] === "COMPONENT";
-              if (isDef || isComponent) {
-                if (!token.data)
-                  token.data = {};
-                token.data.typeParams = buildTypeString(genTokens);
-                tokens2.splice(i + 1, genTokens.length);
-                if (isDef && tokens2[i + 1]?.[0] === "(") {
-                  tokens2[i + 1][0] = "CALL_START";
-                  let d = 1, m = i + 2;
-                  while (m < tokens2.length && d > 0) {
-                    if (tokens2[m][0] === "(" || tokens2[m][0] === "CALL_START")
-                      d++;
-                    if (tokens2[m][0] === ")" || tokens2[m][0] === "CALL_END")
-                      d--;
-                    if (d === 0)
-                      tokens2[m][0] = "CALL_END";
-                    m++;
-                  }
-                }
-              }
-            }
-          }
-        }
-        if (tag === "TYPE_ANNOTATION") {
-          let prevToken = tokens2[i - 1];
-          if (!prevToken)
-            return 1;
-          let typeTokens = collectTypeExpression(tokens2, i + 1);
-          let typeStr = buildTypeString(typeTokens);
-          let target = prevToken;
-          let propName = "type";
-          if (prevToken[0] === "CALL_END" || prevToken[0] === ")") {
-            let d = 1, k = i - 2;
-            while (k >= 0 && d > 0) {
-              let kTag = tokens2[k][0];
-              if (kTag === "CALL_END" || kTag === ")")
-                d++;
-              if (kTag === "CALL_START" || kTag === "(")
-                d--;
-              k--;
-            }
-            if (k >= 0)
-              target = tokens2[k];
-            propName = "returnType";
-          } else if (prevToken[0] === "PARAM_END") {
-            let arrowIdx = i + 1 + typeTokens.consumed;
-            let arrowToken = tokens2[arrowIdx];
-            if (arrowToken && (arrowToken[0] === "->" || arrowToken[0] === "=>")) {
-              target = arrowToken;
-            }
-            propName = "returnType";
-          } else if (prevToken[0] === "IDENTIFIER" && i >= 2 && tokens2[i - 2]?.[0] === "DEF") {
-            propName = "returnType";
-          }
-          if (!target.data)
-            target.data = {};
-          target.data[propName] = typeStr;
-          for (let tt of typeTokens) {
-            if (tt[0] === "IDENTIFIER")
-              typeRefNames.add(tt[1]);
-          }
-          let removeCount = 1 + typeTokens.consumed;
-          tokens2.splice(i, removeCount);
-          return 0;
-        }
-        if (tag === "IDENTIFIER" && token[1] === "type") {
-          let prevTag = tokens2[i - 1]?.[0];
-          let atStatement = !prevTag || prevTag === "TERMINATOR" || prevTag === "INDENT" || prevTag === "EXPORT";
-          if (!atStatement)
-            return 1;
-          let nameIdx = i + 1;
-          let nameToken = tokens2[nameIdx];
-          if (!nameToken || nameToken[0] !== "IDENTIFIER")
-            return 1;
-          let name = nameToken[1];
-          let exported = prevTag === "EXPORT";
-          let removeFrom = exported ? i - 1 : i;
-          let eqIdx = nameIdx + 1;
-          if (tokens2[eqIdx]?.[0] === "COMPARE" && tokens2[eqIdx]?.[1] === "<" && !tokens2[eqIdx].spaced) {
-            let genTokens = collectBalancedAngles(tokens2, eqIdx);
-            if (genTokens) {
-              if (!nameToken.data)
-                nameToken.data = {};
-              nameToken.data.typeParams = buildTypeString(genTokens);
-              tokens2.splice(eqIdx, genTokens.length);
-            }
-          }
-          if (tokens2[eqIdx]?.[0] !== "=")
-            return 1;
-          let makeDecl = (typeText) => {
-            let dt = gen("TYPE_DECL", name, nameToken);
-            dt.data = { name, typeText, exported };
-            if (nameToken.data?.typeParams)
-              dt.data.typeParams = nameToken.data.typeParams;
-            return dt;
-          };
-          let afterEq = eqIdx + 1;
-          let next = tokens2[afterEq];
-          if (next && (next[0] === "TERMINATOR" || next[0] === "INDENT")) {
-            let result = collectBlockUnion(tokens2, afterEq);
-            if (result) {
-              tokens2.splice(removeFrom, result.endIdx - removeFrom + 1, makeDecl(result.typeText));
-              return 0;
-            }
-          }
-          if (next && next[0] === "INDENT") {
-            let endIdx = findMatchingOutdent2(tokens2, afterEq);
-            tokens2.splice(removeFrom, endIdx - removeFrom + 1, makeDecl(collectStructuralType(tokens2, afterEq)));
-            return 0;
-          }
-          let typeTokens = collectTypeExpression(tokens2, afterEq);
-          tokens2.splice(removeFrom, afterEq + typeTokens.consumed - removeFrom, makeDecl(buildTypeString(typeTokens)));
-          return 0;
-        }
-        if (tag === "INTERFACE") {
-          let exported = i >= 1 && tokens2[i - 1]?.[0] === "EXPORT";
-          let nameIdx = i + 1;
-          let nameToken = tokens2[nameIdx];
-          if (!nameToken)
-            return 1;
-          let name = nameToken[1];
-          let extendsName = null;
-          let bodyIdx = nameIdx + 1;
-          if (tokens2[bodyIdx]?.[0] === "EXTENDS") {
-            extendsName = tokens2[bodyIdx + 1]?.[1];
-            bodyIdx = bodyIdx + 2;
-          }
-          if (tokens2[bodyIdx]?.[0] === "INDENT") {
-            let typeText = collectStructuralType(tokens2, bodyIdx);
-            let endIdx = findMatchingOutdent2(tokens2, bodyIdx);
-            let declToken = gen("TYPE_DECL", name, nameToken);
-            declToken.data = {
-              name,
-              kind: "interface",
-              extends: extendsName,
-              typeText,
-              exported
-            };
-            let removeFrom = exported ? i - 1 : i;
-            let removeCount = endIdx - removeFrom + 1;
-            tokens2.splice(removeFrom, removeCount, declToken);
-            return 0;
-          }
-          return 1;
-        }
-        return 1;
-      });
-      for (let i = tokens.length - 1;i >= 0; i--) {
-        if (tokens[i][0] !== "DEF")
-          continue;
-        let nameToken = tokens[i + 1];
-        if (!nameToken || nameToken[0] !== "IDENTIFIER")
-          continue;
-        let j = i + 2;
-        if (tokens[j]?.[0] !== "CALL_START")
-          continue;
-        let depth = 1;
-        j++;
-        while (j < tokens.length && depth > 0) {
-          if (tokens[j][0] === "CALL_START")
-            depth++;
-          if (tokens[j][0] === "CALL_END")
-            depth--;
-          j++;
-        }
-        let callEndIdx = j - 1;
-        let next = tokens[j];
-        if (next && next[0] !== "TERMINATOR")
-          continue;
-        let hasTypes = nameToken.data?.returnType;
-        if (!hasTypes) {
-          for (let k = i + 2;k <= callEndIdx; k++) {
-            if (tokens[k].data?.type) {
-              hasTypes = true;
-              break;
-            }
-          }
-        }
-        if (!hasTypes)
-          continue;
-        let overloadTokens = tokens.slice(i, j + 1);
-        let exported = i >= 1 && tokens[i - 1]?.[0] === "EXPORT";
-        let spliceFrom = exported ? i - 1 : i;
-        let spliceCount = j + 1 - spliceFrom;
-        let marker = gen("TYPE_DECL", nameToken[1], nameToken);
-        marker.data = {
-          name: nameToken[1],
-          kind: "overload",
-          overloadTokens,
-          exported
-        };
-        if (nameToken.data?.typeParams)
-          marker.data.typeParams = nameToken.data.typeParams;
-        tokens.splice(spliceFrom, spliceCount, marker);
-      }
-    };
-  }
-  function collectTypeExpression(tokens, j) {
-    let typeTokens = [];
-    let depth = 0;
-    let startJ = j;
-    while (j < tokens.length) {
-      let t = tokens[j];
-      let tTag = t[0];
-      let isOpen = tTag === "(" || tTag === "[" || tTag === "{" || tTag === "CALL_START" || tTag === "PARAM_START" || tTag === "INDEX_START" || tTag === "COMPARE" && t[1] === "<";
-      let isClose = tTag === ")" || tTag === "]" || tTag === "}" || tTag === "CALL_END" || tTag === "PARAM_END" || tTag === "INDEX_END" || tTag === "COMPARE" && t[1] === ">";
-      if (tTag === "SHIFT" && t[1] === ">>" && depth >= 2) {
-        depth -= 2;
-        typeTokens.push(t);
-        j++;
-        continue;
-      }
-      if (isOpen) {
-        depth++;
-        typeTokens.push(t);
-        j++;
-        continue;
-      }
-      if (isClose) {
-        if (depth > 0) {
-          depth--;
-          typeTokens.push(t);
-          j++;
-          continue;
-        }
-        break;
-      }
-      if (depth === 0) {
-        if (tTag === "INDENT" && typeTokens.length > 0 && typeTokens[typeTokens.length - 1][0] === "=>") {
-          j++;
-          let nest = 1;
-          while (j < tokens.length && nest > 0) {
-            if (tokens[j][0] === "INDENT") {
-              nest++;
-              j++;
-            } else if (tokens[j][0] === "OUTDENT") {
-              nest--;
-              j++;
-            } else {
-              typeTokens.push(tokens[j]);
-              j++;
-            }
-          }
-          continue;
-        }
-        if (tTag === "=" || tTag === "REACTIVE_ASSIGN" || tTag === "COMPUTED_ASSIGN" || tTag === "READONLY_ASSIGN" || tTag === "EFFECT" || tTag === "TERMINATOR" || tTag === "INDENT" || tTag === "OUTDENT" || tTag === "->" || tTag === ",") {
-          break;
-        }
-      }
-      typeTokens.push(t);
-      j++;
-    }
-    typeTokens.consumed = j - startJ;
-    return typeTokens;
-  }
-  function buildTypeString(typeTokens) {
-    if (typeTokens.length === 0)
-      return "";
-    if (typeTokens[0]?.[0] === "=>")
-      typeTokens.unshift(["", "()"]);
-    let typeStr = typeTokens.map((t) => t[1]).join(" ").replace(/\s+/g, " ").trim();
-    typeStr = typeStr.replace(/\s*<\s*/g, "<").replace(/\s*>\s*/g, ">").replace(/\s*\[\s*/g, "[").replace(/\s*\]\s*/g, "]").replace(/\s*\(\s*/g, "(").replace(/\s*\)\s*/g, ")").replace(/\s*,\s*/g, ", ").replace(/\s*=>\s*/g, " => ").replace(/ :: /g, ": ").replace(/:: /g, ": ").replace(/ : /g, ": ");
-    return typeStr;
-  }
-  function collectBalancedAngles(tokens, j) {
-    if (j >= tokens.length)
-      return null;
-    let t = tokens[j];
-    if (t[0] !== "COMPARE" || t[1] !== "<")
-      return null;
-    let collected = [t];
-    let depth = 1;
-    let k = j + 1;
-    while (k < tokens.length && depth > 0) {
-      let tk = tokens[k];
-      collected.push(tk);
-      if (tk[0] === "COMPARE" && tk[1] === "<")
-        depth++;
-      else if (tk[0] === "COMPARE" && tk[1] === ">")
-        depth--;
-      k++;
-    }
-    return depth === 0 ? collected : null;
-  }
-  function collectStructuralType(tokens, indentIdx) {
-    let props = [];
-    let j = indentIdx + 1;
-    let depth = 1;
-    while (j < tokens.length && depth > 0) {
-      let t = tokens[j];
-      if (t[0] === "INDENT") {
-        depth++;
-        j++;
-        continue;
-      }
-      if (t[0] === "OUTDENT") {
-        depth--;
-        if (depth === 0)
-          break;
-        j++;
-        continue;
-      }
-      if (t[0] === "TERMINATOR") {
-        j++;
-        continue;
-      }
-      if (depth === 1 && t[0] === "[") {
-        let sigTokens = [];
-        j++;
-        while (j < tokens.length && tokens[j][0] !== "]") {
-          sigTokens.push(tokens[j]);
-          j++;
-        }
-        j++;
-        if (tokens[j]?.[1] === ":" || tokens[j]?.[0] === "TYPE_ANNOTATION")
-          j++;
-        let valTypeTokens = [];
-        while (j < tokens.length) {
-          let pt = tokens[j];
-          if (pt[0] === "TERMINATOR" || pt[0] === "OUTDENT")
-            break;
-          valTypeTokens.push(pt);
-          j++;
-        }
-        let sigStr = buildTypeString(sigTokens);
-        let valStr = buildTypeString(valTypeTokens);
-        props.push(`[${sigStr}]: ${valStr}`);
-        continue;
-      }
-      let isProperty = t[0] === "PROPERTY" || t[0] === "IDENTIFIER" || depth === 1 && /^[a-zA-Z_$]/.test(t[1]) && tokens[j + 1]?.[0] === "TYPE_ANNOTATION";
-      if (depth === 1 && isProperty) {
-        let propName = t[1];
-        let optional = false;
-        let readonly = false;
-        j++;
-        if (propName === "readonly" && tokens[j] && (tokens[j][0] === "PROPERTY" || tokens[j][0] === "IDENTIFIER" || /^[a-zA-Z_$]/.test(tokens[j][1]) && tokens[j + 1]?.[0] === "TYPE_ANNOTATION")) {
-          readonly = true;
-          propName = tokens[j][1];
-          if (tokens[j].data?.predicate)
-            optional = true;
-          j++;
-        }
-        if (t.data?.predicate)
-          optional = true;
-        if (tokens[j]?.[1] === "?" && !tokens[j]?.spaced) {
-          optional = true;
-          j++;
-        }
-        if (tokens[j]?.[1] === ":" || tokens[j]?.[0] === "TYPE_ANNOTATION")
-          j++;
-        let propTypeTokens = [];
-        let typeDepth = 0;
-        while (j < tokens.length) {
-          let pt = tokens[j];
-          if (pt[0] === "IDENTIFIER" && pt[1] === "type" && tokens[j + 1]?.[0] === "INDENT") {
-            j++;
-            let nestedType = collectStructuralType(tokens, j);
-            propTypeTokens.push(["", nestedType]);
-            let nd = 1;
-            j++;
-            while (j < tokens.length && nd > 0) {
-              if (tokens[j][0] === "INDENT")
-                nd++;
-              if (tokens[j][0] === "OUTDENT")
-                nd--;
-              j++;
-            }
-            continue;
-          }
-          if (pt[0] === "INDENT") {
-            typeDepth++;
-            j++;
-            continue;
-          }
-          if (pt[0] === "OUTDENT") {
-            if (typeDepth > 0) {
-              typeDepth--;
-              j++;
-              continue;
-            }
-            break;
-          }
-          if (pt[0] === "TERMINATOR" && typeDepth === 0)
-            break;
-          propTypeTokens.push(pt);
-          j++;
-        }
-        let typeStr = buildTypeString(propTypeTokens);
-        let prefix = readonly ? "readonly " : "";
-        let optMark = optional ? "?" : "";
-        props.push(`${prefix}${propName}${optMark}: ${typeStr}`);
-      } else {
-        j++;
-      }
-    }
-    return "{ " + props.join("; ") + " }";
-  }
-  function findMatchingOutdent2(tokens, idx) {
-    let depth = 0;
-    for (let j = idx;j < tokens.length; j++) {
-      if (tokens[j][0] === "INDENT")
-        depth++;
-      if (tokens[j][0] === "OUTDENT") {
-        depth--;
-        if (depth === 0)
-          return j;
-      }
-    }
-    return tokens.length - 1;
-  }
-  function collectBlockUnion(tokens, startIdx) {
-    let j = startIdx;
-    if (tokens[j]?.[0] === "TERMINATOR")
-      j++;
-    if (tokens[j]?.[0] !== "INDENT")
-      return null;
-    let indentIdx = j;
-    j++;
-    while (j < tokens.length && tokens[j][0] === "TERMINATOR")
-      j++;
-    if (!tokens[j] || tokens[j][1] !== "|")
-      return null;
-    let members = [];
-    let depth = 1;
-    j = indentIdx + 1;
-    while (j < tokens.length && depth > 0) {
-      let t = tokens[j];
-      if (t[0] === "INDENT") {
-        depth++;
-        j++;
-        continue;
-      }
-      if (t[0] === "OUTDENT") {
-        depth--;
-        if (depth === 0)
-          break;
-        j++;
-        continue;
-      }
-      if (t[0] === "TERMINATOR") {
-        j++;
-        continue;
-      }
-      if (t[1] === "|" && depth === 1) {
-        j++;
-        let memberTokens = [];
-        while (j < tokens.length) {
-          let mt = tokens[j];
-          if (mt[0] === "TERMINATOR" || mt[0] === "OUTDENT" || mt[1] === "|" && depth === 1)
-            break;
-          memberTokens.push(mt);
-          j++;
-        }
-        if (memberTokens.length > 0) {
-          members.push(buildTypeString(memberTokens));
-        }
-        continue;
-      }
-      j++;
-    }
-    if (members.length === 0)
-      return null;
-    let endIdx = findMatchingOutdent2(tokens, indentIdx);
-    return { typeText: members.join(" | "), endIdx };
-  }
-  function emitTypes(tokens, sexpr = null, source = "") {
-    let lines = [];
-    let indentLevel = 0;
-    let indentStr = "  ";
-    let indent = () => indentStr.repeat(indentLevel);
-    let inClass = false;
-    let classFields = new Set;
-    let usesSignal = false;
-    let usesComputed = false;
-    let usesRipIntrinsicProps = false;
-    const sourceLines = typeof source === "string" ? source.split(`
-`) : [];
-    for (let i = 0;i < tokens.length; i++) {
-      const tag = tokens[i][0];
-      if (tag === "REACTIVE_ASSIGN")
-        usesSignal = true;
-      else if (tag === "COMPUTED_ASSIGN")
-        usesComputed = true;
-    }
-    let emitBlock = (prefix, body, suffix) => {
-      if (body.startsWith("{ ") && body.endsWith(" }")) {
-        let depth = 0, firstTopClose = -1;
-        for (let c = 0;c < body.length; c++) {
-          if (body[c] === "{")
-            depth++;
-          else if (body[c] === "}") {
-            depth--;
-            if (depth === 0) {
-              firstTopClose = c;
-              break;
-            }
-          }
-        }
-        if (firstTopClose === body.length - 1) {
-          let inner = body.slice(2, -2);
-          let props = [], start = 0, d = 0;
-          for (let c = 0;c < inner.length; c++) {
-            if (inner[c] === "{")
-              d++;
-            else if (inner[c] === "}")
-              d--;
-            else if (d === 0 && inner[c] === ";" && inner[c + 1] === " ") {
-              props.push(inner.slice(start, c));
-              start = c + 2;
-            }
-          }
-          if (start < inner.length)
-            props.push(inner.slice(start));
-          props = props.filter((p) => p.trim());
-          if (props.length > 0) {
-            lines.push(`${indent()}${prefix}{`);
-            indentLevel++;
-            for (let prop of props)
-              lines.push(`${indent()}${prop};`);
-            indentLevel--;
-            lines.push(`${indent()}}${suffix}`);
-            return;
-          }
-        }
-      }
-      lines.push(`${indent()}${prefix}${body}${suffix}`);
-    };
-    let skipDefault = (tokens2, j) => {
-      j++;
-      let dd = 0;
-      while (j < tokens2.length) {
-        let dt = tokens2[j];
-        if (dt[0] === "(" || dt[0] === "[" || dt[0] === "{")
-          dd++;
-        if (dt[0] === ")" || dt[0] === "]" || dt[0] === "}") {
-          if (dd === 0)
-            break;
-          dd--;
-        }
-        if (dd === 0 && dt[1] === ",")
-          break;
-        j++;
-      }
-      return j;
-    };
-    let collectDestructuredObj = (tokens2, startJ) => {
-      let props = [];
-      let hasAnyType = false;
-      let j = startJ + 1;
-      let d = 1;
-      while (j < tokens2.length && d > 0) {
-        if (tokens2[j][0] === "{")
-          d++;
-        if (tokens2[j][0] === "}")
-          d--;
-        if (d <= 0) {
-          j++;
-          break;
-        }
-        if (tokens2[j][0] === "..." || tokens2[j][0] === "SPREAD") {
-          j++;
-          if (tokens2[j]?.[0] === "IDENTIFIER") {
-            props.push({ kind: "rest", propName: tokens2[j][1] });
-            j++;
-          }
-          continue;
-        }
-        if (tokens2[j][0] === "PROPERTY" && tokens2[j + 1]?.[0] === ":") {
-          let propName = tokens2[j][1];
-          j += 2;
-          if (tokens2[j]?.[0] === "{") {
-            let inner = collectDestructuredObj(tokens2, j);
-            if (inner.hasAnyType)
-              hasAnyType = true;
-            props.push({ kind: "nested-obj", propName, inner });
-            j = inner.endJ;
-            continue;
-          }
-          if (tokens2[j]?.[0] === "[") {
-            let inner = collectDestructuredArr(tokens2, j);
-            if (inner.hasAnyType)
-              hasAnyType = true;
-            props.push({ kind: "nested-arr", propName, inner });
-            j = inner.endJ;
-            continue;
-          }
-          if (tokens2[j]?.[0] === "IDENTIFIER") {
-            let localName = tokens2[j][1];
-            let type = tokens2[j].data?.type;
-            if (type)
-              hasAnyType = true;
-            let hasDefault = tokens2[j + 1]?.[0] === "=";
-            props.push({ kind: "rename", propName, localName, type: type ? expandSuffixes(type) : null, hasDefault });
-            j++;
-            if (hasDefault)
-              j = skipDefault(tokens2, j);
-          }
-          continue;
-        }
-        if (tokens2[j][0] === "IDENTIFIER") {
-          let name = tokens2[j][1];
-          let type = tokens2[j].data?.type;
-          if (type)
-            hasAnyType = true;
-          let hasDefault = tokens2[j + 1]?.[0] === "=";
-          props.push({ kind: "simple", propName: name, type: type ? expandSuffixes(type) : null, hasDefault });
-          j++;
-          if (hasDefault)
-            j = skipDefault(tokens2, j);
-          continue;
-        }
-        j++;
-      }
-      let patternParts = [];
-      let typeParts = [];
-      for (let p of props) {
-        if (p.kind === "rest") {
-          patternParts.push(`...${p.propName}`);
-          typeParts.push(`[key: string]: unknown`);
-        } else if (p.kind === "nested-obj" || p.kind === "nested-arr") {
-          patternParts.push(`${p.propName}: ${p.inner.patternStr}`);
-          typeParts.push(`${p.propName}: ${p.inner.typeStr}`);
-        } else if (p.kind === "rename") {
-          patternParts.push(`${p.propName}: ${p.localName}`);
-          typeParts.push(`${p.propName}${p.hasDefault ? "?" : ""}: ${p.type || "any"}`);
-        } else {
-          patternParts.push(p.propName);
-          typeParts.push(`${p.propName}${p.hasDefault ? "?" : ""}: ${p.type || "any"}`);
-        }
-      }
-      return {
-        patternStr: `{${patternParts.join(", ")}}`,
-        typeStr: `{${typeParts.join(", ")}}`,
-        endJ: j,
-        hasAnyType
-      };
-    };
-    let collectDestructuredArr = (tokens2, startJ) => {
-      let names = [];
-      let elemTypes = [];
-      let hasAnyType = false;
-      let j = startJ + 1;
-      let d = 1;
-      while (j < tokens2.length && d > 0) {
-        if (tokens2[j][0] === "[")
-          d++;
-        if (tokens2[j][0] === "]")
-          d--;
-        if (d > 0 && tokens2[j][0] === "IDENTIFIER") {
-          let name = tokens2[j][1];
-          let type = tokens2[j].data?.type;
-          names.push(name);
-          elemTypes.push(type ? expandSuffixes(type) : null);
-          if (type)
-            hasAnyType = true;
-        }
-        j++;
-      }
-      return {
-        patternStr: `[${names.join(", ")}]`,
-        typeStr: `[${elemTypes.map((t) => t || "any").join(", ")}]`,
-        endJ: j,
-        hasAnyType
-      };
-    };
-    let collectParams = (tokens2, startIdx) => {
-      let params = [];
-      let fields = [];
-      let j = startIdx;
-      let openTag = tokens2[j]?.[0];
-      if (openTag !== "CALL_START" && openTag !== "PARAM_START")
-        return { params, fields, endIdx: j };
-      let closeTag = openTag === "CALL_START" ? "CALL_END" : "PARAM_END";
-      j++;
-      let depth = 0;
-      while (j < tokens2.length && !(tokens2[j][0] === closeTag && depth === 0)) {
-        let tok = tokens2[j];
-        if (tok[1] === "," && depth === 0) {
-          j++;
-          continue;
-        }
-        if (tok[0] === "{" || tok[0] === "[" || tok[0] === "CALL_START" || tok[0] === "PARAM_START" || tok[0] === "INDEX_START")
-          depth++;
-        if (tok[0] === "}" || tok[0] === "]" || tok[0] === "CALL_END" || tok[0] === "PARAM_END" || tok[0] === "INDEX_END") {
-          depth--;
-          j++;
-          continue;
-        }
-        if (tok[0] === "@") {
-          j++;
-          if (tokens2[j]?.[0] === "PROPERTY" || tokens2[j]?.[0] === "IDENTIFIER") {
-            let name = tokens2[j][1];
-            let type = tokens2[j].data?.type;
-            params.push(type ? `${name}: ${expandSuffixes(type)}` : name);
-            if (type)
-              fields.push({ name, type: expandSuffixes(type) });
-            j++;
-          }
-          continue;
-        }
-        if (tok[0] === "SPREAD" || tok[1] === "...") {
-          j++;
-          if (tokens2[j]?.[0] === "IDENTIFIER") {
-            let name = tokens2[j][1];
-            let type = tokens2[j].data?.type;
-            params.push(type ? `...${name}: ${expandSuffixes(type)}` : `...${name}: any[]`);
-            j++;
-          }
-          continue;
-        }
-        if (tok[0] === "{") {
-          depth--;
-          let result = collectDestructuredObj(tokens2, j);
-          j = result.endJ;
-          if (result.hasAnyType) {
-            params.push(`${result.patternStr}: ${result.typeStr}`);
-          } else {
-            params.push(result.patternStr);
-          }
-          continue;
-        }
-        if (tok[0] === "[") {
-          depth--;
-          let result = collectDestructuredArr(tokens2, j);
-          j = result.endJ;
-          if (result.hasAnyType) {
-            params.push(`${result.patternStr}: ${result.typeStr}`);
-          } else {
-            params.push(result.patternStr);
-          }
-          continue;
-        }
-        if (tok[0] === "IDENTIFIER") {
-          let paramName = tok[1];
-          let paramType = tok.data?.type;
-          let hasDefault = false;
-          if (tokens2[j + 1]?.[0] === "=") {
-            hasDefault = true;
-          }
-          let isOptional = hasDefault || tok.data?.predicate;
-          if (paramType) {
-            params.push(`${paramName}${isOptional ? "?" : ""}: ${expandSuffixes(paramType)}`);
-          } else {
-            params.push(paramName);
-          }
-          j++;
-          if (hasDefault) {
-            j++;
-            let dd = 0;
-            while (j < tokens2.length) {
-              let dt = tokens2[j];
-              if (dt[0] === "(" || dt[0] === "[" || dt[0] === "{")
-                dd++;
-              if (dt[0] === ")" || dt[0] === "]" || dt[0] === "}")
-                dd--;
-              if (dd === 0 && (dt[1] === "," || dt[0] === "CALL_END"))
-                break;
-              j++;
-            }
-          }
-          continue;
-        }
-        j++;
-      }
-      return { params, fields, endIdx: j };
-    };
-    for (let i = 0;i < tokens.length; i++) {
-      let t = tokens[i];
-      let tag = t[0];
-      let exported = false;
-      if (tag === "EXPORT") {
-        exported = true;
-        i++;
-        if (i >= tokens.length)
-          break;
-        t = tokens[i];
-        tag = t[0];
-        if (tag === "DEFAULT") {
-          i++;
-          if (i >= tokens.length)
-            break;
-          t = tokens[i];
-          tag = t[0];
-          if (tag === "IDENTIFIER") {
-            lines.push(`${indent()}export default ${t[1]};`);
-          }
-          continue;
-        }
-      }
-      if (tag === "IMPORT") {
-        let importTokens = [];
-        let j = i + 1;
-        while (j < tokens.length && tokens[j][0] !== "TERMINATOR") {
-          importTokens.push(tokens[j]);
-          j++;
-        }
-        let raw = "import " + importTokens.map((tk) => tk[1]).join(" ");
-        raw = raw.replace(/\s+/g, " ").replace(/\s*,\s*/g, ", ").replace(/\{\s*/g, "{ ").replace(/\s*\}/g, " }").trim();
-        lines.push(`${indent()}${raw};`);
-        i = j;
-        continue;
-      }
-      if (tag === "TYPE_DECL") {
-        let data = t.data;
-        if (!data)
-          continue;
-        let exp = exported || data.exported ? "export " : "";
-        let params = data.typeParams || "";
-        if (data.kind === "overload") {
-          let ot = data.overloadTokens;
-          let nameToken = ot[1];
-          let { params: paramList } = collectParams(ot, 2);
-          let returnType = nameToken.data?.returnType;
-          let ret = returnType ? `: ${expandSuffixes(returnType)}` : "";
-          let declare = inClass ? "" : exp ? "" : "declare ";
-          let typeParams = data.typeParams || "";
-          if (inClass) {
-            lines.push(`${indent()}${data.name}${typeParams}(${paramList.join(", ")})${ret};`);
-          } else {
-            lines.push(`${indent()}${exp}${declare}function ${data.name}${typeParams}(${paramList.join(", ")})${ret};`);
-          }
-        } else if (data.kind === "interface") {
-          let ext = data.extends ? ` extends ${data.extends}` : "";
-          emitBlock(`${exp}interface ${data.name}${params}${ext} `, data.typeText || "{}", "");
-        } else {
-          let typeText = expandSuffixes(data.typeText || "");
-          emitBlock(`${exp}type ${data.name}${params} = `, typeText, ";");
-        }
-        continue;
-      }
-      if (tag === "ENUM") {
-        let exp = exported ? "export " : "";
-        let nameToken = tokens[i + 1];
-        if (!nameToken)
-          continue;
-        let enumName = nameToken[1];
-        let j = i + 2;
-        if (tokens[j]?.[0] === "INDENT") {
-          lines.push(`${indent()}${exp}enum ${enumName} {`);
-          indentLevel++;
-          j++;
-          let members = [];
-          while (j < tokens.length && tokens[j][0] !== "OUTDENT") {
-            if (tokens[j][0] === "TERMINATOR") {
-              j++;
-              continue;
-            }
-            if (tokens[j][0] === "IDENTIFIER") {
-              let memberName = tokens[j][1];
-              j++;
-              if (tokens[j]?.[1] === "=") {
-                j++;
-                let val = tokens[j]?.[1];
-                members.push(`${memberName} = ${val}`);
-                j++;
-              } else {
-                members.push(memberName);
-              }
-            } else {
-              j++;
-            }
-          }
-          for (let m = 0;m < members.length; m++) {
-            let comma = m < members.length - 1 ? "," : "";
-            lines.push(`${indent()}${members[m]}${comma}`);
-          }
-          indentLevel--;
-          lines.push(`${indent()}}`);
-        }
-        continue;
-      }
-      if (tag === "CLASS") {
-        let exp = exported ? "export " : "";
-        let classNameToken = tokens[i + 1];
-        if (!classNameToken)
-          continue;
-        let className = classNameToken[1];
-        let ext = "";
-        let j = i + 2;
-        if (tokens[j]?.[0] === "EXTENDS") {
-          ext = ` extends ${tokens[j + 1]?.[1] || ""}`;
-          j += 2;
-        }
-        if (tokens[j]?.[0] === "INDENT") {
-          let hasTypedMembers = false;
-          let k = j + 1;
-          while (k < tokens.length && tokens[k][0] !== "OUTDENT") {
-            if (tokens[k].data?.type || tokens[k].data?.returnType) {
-              hasTypedMembers = true;
-              break;
-            }
-            k++;
-          }
-          if (hasTypedMembers) {
-            lines.push(`${indent()}${exp}declare class ${className}${ext} {`);
-            inClass = true;
-            classFields.clear();
-            indentLevel++;
-          }
-        }
-        continue;
-      }
-      if (tag === "DEF") {
-        let nameToken = tokens[i + 1];
-        if (!nameToken)
-          continue;
-        let fnName = nameToken[1];
-        let returnType = nameToken.data?.returnType;
-        if (!returnType && nameToken.data?.await === true)
-          returnType = "void";
-        let typeParams = nameToken.data?.typeParams || "";
-        let { params, endIdx } = collectParams(tokens, i + 2);
-        if (returnType || params.some((p) => p.includes(":"))) {
-          let exp = exported ? "export " : "";
-          let declare = inClass ? "" : exported ? "" : "declare ";
-          let ret = returnType ? `: ${expandSuffixes(returnType)}` : "";
-          let paramStr = params.join(", ");
-          if (inClass) {
-            lines.push(`${indent()}${fnName}${typeParams}(${paramStr})${ret};`);
-          } else {
-            lines.push(`${indent()}${exp}${declare}function ${fnName}${typeParams}(${paramStr})${ret};`);
-          }
-        }
-        i = endIdx;
-        continue;
-      }
-      if (tag === "{" && inClass) {
-        let j = i + 1;
-        let braceDepth = 1;
-        while (j < tokens.length && braceDepth > 0) {
-          let tok = tokens[j];
-          if (tok[0] === "{") {
-            braceDepth++;
-            j++;
-            continue;
-          }
-          if (tok[0] === "}") {
-            braceDepth--;
-            j++;
-            continue;
-          }
-          if (tok[0] === "TERMINATOR") {
-            j++;
-            continue;
-          }
-          if (tok[0] === "PROPERTY" && braceDepth === 1) {
-            let methodName = tok[1];
-            let returnType = tok.data?.returnType;
-            j++;
-            if (tokens[j]?.[1] === ":")
-              j++;
-            let params = [];
-            let fields = [];
-            if (tokens[j]?.[0] === "PARAM_START") {
-              let result = collectParams(tokens, j);
-              params = result.params;
-              fields = result.fields;
-              j = result.endIdx + 1;
-            }
-            if (tokens[j]?.[0] === "->" || tokens[j]?.[0] === "=>")
-              j++;
-            if (tokens[j]?.[0] === "INDENT") {
-              let d = 1;
-              j++;
-              while (j < tokens.length && d > 0) {
-                if (tokens[j][0] === "INDENT")
-                  d++;
-                if (tokens[j][0] === "OUTDENT")
-                  d--;
-                j++;
-              }
-            }
-            if (returnType || params.some((p) => p.includes(":"))) {
-              let ret = returnType ? `: ${expandSuffixes(returnType)}` : "";
-              let paramStr = params.join(", ");
-              if (methodName === "constructor" && fields.length) {
-                for (let f of fields) {
-                  if (!classFields.has(f.name)) {
-                    lines.push(`${indent()}${f.name}: ${f.type};`);
-                    classFields.add(f.name);
-                  }
-                }
-              }
-              lines.push(`${indent()}${methodName}(${paramStr})${ret};`);
-            }
-            continue;
-          }
-          j++;
-        }
-        i = j - 1;
-        continue;
-      }
-      if (tag === "INDENT") {
-        continue;
-      }
-      if (tag === "OUTDENT") {
-        if (inClass) {
-          indentLevel--;
-          lines.push(`${indent()}}`);
-          inClass = false;
-        }
-        continue;
-      }
-      if (tag === "IDENTIFIER" && !inClass && tokens[i + 1]?.[0] === "=" && (tokens[i + 2]?.[0] === "PARAM_START" || tokens[i + 2]?.[0] === "(")) {
-        let fnName = t[1];
-        let j = i + 2;
-        let { params } = collectParams(tokens, j);
-        let k = j;
-        let depth = 0;
-        while (k < tokens.length) {
-          if (tokens[k][0] === "PARAM_START" || tokens[k][0] === "(")
-            depth++;
-          if (tokens[k][0] === "PARAM_END" || tokens[k][0] === ")")
-            depth--;
-          if (depth === 0 && (tokens[k][0] === "->" || tokens[k][0] === "=>"))
-            break;
-          k++;
-        }
-        let returnType = tokens[k]?.data?.returnType;
-        if (returnType || params.some((p) => p.includes(":"))) {
-          let exp = exported ? "export " : "";
-          let declare = exported ? "" : "declare ";
-          let ret = returnType ? `: ${expandSuffixes(returnType)}` : "";
-          let paramStr = params.join(", ");
-          lines.push(`${indent()}${exp}${declare}function ${fnName}(${paramStr})${ret};`);
-          continue;
-        }
-      }
-      if (tag === "IDENTIFIER" && t.data?.type) {
-        let varName = t[1];
-        let type = expandSuffixes(t.data.type);
-        let next = tokens[i + 1];
-        if (next) {
-          let exp = exported ? "export " : "";
-          let declare = exported ? "" : "declare ";
-          if (next[0] === "READONLY_ASSIGN") {
-            lines.push(`${indent()}${exp}${declare}const ${varName}: ${type};`);
-          } else if (next[0] === "REACTIVE_ASSIGN") {
-            usesSignal = true;
-            lines.push(`${indent()}${exp}${declare}const ${varName}: Signal<${type}>;`);
-          } else if (next[0] === "COMPUTED_ASSIGN") {
-            usesComputed = true;
-            lines.push(`${indent()}${exp}${declare}const ${varName}: Computed<${type}>;`);
-          } else if (next[0] === "EFFECT") {
-            lines.push(`${indent()}${exp}${declare}const ${varName}: () => void;`);
-          } else if (next[0] === "=") {
-            let arrowIdx = i + 2;
-            if (tokens[arrowIdx]?.[0] === "PARAM_START") {
-              let d = 1, k = arrowIdx + 1;
-              while (k < tokens.length && d > 0) {
-                if (tokens[k][0] === "PARAM_START")
-                  d++;
-                if (tokens[k][0] === "PARAM_END")
-                  d--;
-                k++;
-              }
-              arrowIdx = k;
-            }
-            let arrowToken = tokens[arrowIdx];
-            if (arrowToken && (arrowToken[0] === "->" || arrowToken[0] === "=>") && arrowToken.data?.returnType) {
-              let returnType = expandSuffixes(arrowToken.data.returnType);
-              let { params } = collectParams(tokens, i + 2);
-              let paramStr = params.join(", ");
-              lines.push(`${indent()}${exp}${declare}function ${varName}(${paramStr}): ${returnType};`);
-            } else if (inClass) {
-              lines.push(`${indent()}${varName}: ${type};`);
-              classFields.add(varName);
-            } else {
-              lines.push(`${indent()}${exp}let ${varName}: ${type};`);
-            }
-          } else if (inClass) {
-            lines.push(`${indent()}${varName}: ${type};`);
-            classFields.add(varName);
-          }
-        } else if (inClass) {
-          lines.push(`${indent()}${varName}: ${type};`);
-        }
-      }
-    }
-    let componentVars = new Set;
-    let hasSchemaDecls = false;
-    if (sexpr) {
-      usesRipIntrinsicProps = emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars, sourceLines) || usesRipIntrinsicProps;
-      if (componentVars.size > 0) {
-        for (let k = lines.length - 1;k >= 0; k--) {
-          let match = lines[k].match(/(?:declare |export )*(?:const|let) (\w+)/);
-          if (match && componentVars.has(match[1]))
-            lines.splice(k, 1);
-        }
-      }
-      let schemaLines = [];
-      hasSchemaDecls = emitSchemaTypes(sexpr, schemaLines);
-      if (hasSchemaDecls) {
-        let bindings = new Set;
-        for (let line of schemaLines) {
-          let m = line.match(/(?:declare |export )*const (\w+)/);
-          if (m)
-            bindings.add(m[1]);
-        }
-        for (let k = lines.length - 1;k >= 0; k--) {
-          let m = lines[k].match(/(?:declare |export )*(?:const|let) (\w+)/);
-          if (m && bindings.has(m[1]))
-            lines.splice(k, 1);
-        }
-        lines.push(...schemaLines);
-      }
-    }
-    if (lines.length === 0)
-      return null;
-    let preamble = [];
-    if (usesRipIntrinsicProps) {
-      preamble.push(...INTRINSIC_TYPE_DECLS);
-    }
-    if (/\bARIA\./.test(source)) {
-      preamble.push(...ARIA_TYPE_DECLS);
-    }
-    if (usesSignal) {
-      preamble.push(SIGNAL_INTERFACE);
-      preamble.push(SIGNAL_FN);
-    }
-    if (usesComputed) {
-      preamble.push(COMPUTED_INTERFACE);
-      preamble.push(COMPUTED_FN);
-    }
-    if (usesSignal || usesComputed) {
-      preamble.push(EFFECT_FN);
-    }
-    if (hasSchemaDecls) {
-      preamble.push(...SCHEMA_INTRINSIC_DECLS);
-    }
-    if (preamble.length > 0) {
-      preamble.push("");
-    }
-    return preamble.concat(lines).join(`
-`) + `
-`;
-  }
-  function expandSuffixes(typeStr) {
-    if (!typeStr)
-      return typeStr;
-    typeStr = typeStr.replace(/::/g, ":");
-    typeStr = typeStr.replace(/(\w+(?:<[^>]+>)?)\?\?/g, "$1 | null | undefined");
-    typeStr = typeStr.replace(/(\w+(?:<[^>]+>)?)\?(?![.:])/g, "$1 | undefined");
-    typeStr = typeStr.replace(/(\w+(?:<[^>]+>)?)\!/g, "NonNullable<$1>");
-    return typeStr;
-  }
-  function emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars, sourceLines) {
-    if (!Array.isArray(sexpr))
-      return false;
-    let head = sexpr[0]?.valueOf?.() ?? sexpr[0];
-    let usesIntrinsicProps = false;
-    const refMembers = new Map;
-    const isIntrinsicTag = (name2) => typeof name2 === "string" && /^[a-z]/.test(name2);
-    const collectRefMembers = (node) => {
-      if (!Array.isArray(node))
-        return;
-      let nodeHead = node[0]?.valueOf?.() ?? node[0];
-      if (isIntrinsicTag(nodeHead)) {
-        for (let i = 1;i < node.length; i++) {
-          let child = node[i];
-          if (!Array.isArray(child))
-            continue;
-          let childHead = child[0]?.valueOf?.() ?? child[0];
-          if (childHead !== "object")
-            continue;
-          for (let j = 1;j < child.length; j++) {
-            let entry = child[j];
-            if (!Array.isArray(entry))
-              continue;
-            let key = entry[0]?.valueOf?.() ?? entry[0];
-            if (key !== "ref")
-              continue;
-            let refName = entry[1]?.valueOf?.() ?? entry[1];
-            if (typeof refName === "string")
-              refName = refName.replace(/^["']|["']$/g, "");
-            if (typeof refName === "string" && !refMembers.has(refName)) {
-              refMembers.set(refName, `__RipDomEl<'${nodeHead}'> | null`);
-            }
-          }
-        }
-      }
-      for (let i = 1;i < node.length; i++) {
-        if (Array.isArray(node[i]))
-          collectRefMembers(node[i]);
-      }
-    };
-    let exported = false;
-    let name = null;
-    let compNode = null;
-    let typeParams = "";
-    if (head === "export" && Array.isArray(sexpr[1])) {
-      exported = true;
-      let inner = sexpr[1];
-      let innerHead = inner[0]?.valueOf?.() ?? inner[0];
-      if (innerHead === "=" && Array.isArray(inner[2]) && (inner[2][0]?.valueOf?.() ?? inner[2][0]) === "component") {
-        typeParams = inner[1]?.typeParams || "";
-        name = inner[1]?.valueOf?.() ?? inner[1];
-        compNode = inner[2];
-      }
-    } else if (head === "=" && Array.isArray(sexpr[2]) && (sexpr[2][0]?.valueOf?.() ?? sexpr[2][0]) === "component") {
-      typeParams = sexpr[1]?.typeParams || "";
-      name = sexpr[1]?.valueOf?.() ?? sexpr[1];
-      compNode = sexpr[2];
-    }
-    if (name && compNode) {
-      let exp = exported ? "export " : "";
-      let inheritsTag = compNode[1]?.valueOf?.() ?? null;
-      let inheritedPropsType = inheritsTag ? `__RipProps<'${inheritsTag}'>` : null;
-      if (inheritedPropsType)
-        usesIntrinsicProps = true;
-      let body = compNode[2];
-      let members = Array.isArray(body) && (body[0]?.valueOf?.() ?? body[0]) === "block" ? body.slice(1) : body ? [body] : [];
-      let publicProps = [];
-      let bodyMembers = [];
-      let hasRequired = false;
-      let inferLiteralType = (v) => {
-        let s = v?.valueOf?.() ?? v;
-        if (typeof s !== "string")
-          return null;
-        if (s === "true" || s === "false")
-          return "boolean";
-        if (/^-?\d+(\.\d+)?$/.test(s))
-          return "number";
-        if (s.startsWith('"') || s.startsWith("'"))
-          return "string";
-        return null;
-      };
-      for (let member of members) {
-        if (!Array.isArray(member))
-          continue;
-        let mHead = member[0]?.valueOf?.() ?? member[0];
-        let target, propName, isProp, type, hasDefault;
-        if (mHead === "state" || mHead === "readonly" || mHead === "computed") {
-          target = member[1];
-          isProp = Array.isArray(target) && (target[0]?.valueOf?.() ?? target[0]) === "." && (target[1]?.valueOf?.() ?? target[1]) === "this";
-          propName = isProp ? target[2]?.valueOf?.() ?? target[2] : target?.valueOf?.() ?? target;
-          type = isProp ? target[2]?.type : target?.type;
-          hasDefault = true;
-          if (!isProp) {
-            componentVars.add(propName);
-            let wrapper = mHead === "computed" ? "Computed" : "Signal";
-            let typeStr2 = type ? expandSuffixes(type) : inferLiteralType(member[2]) || "any";
-            bodyMembers.push(`  ${propName}: ${wrapper}<${typeStr2}>;`);
-            continue;
-          }
-        } else if (mHead === ".") {
-          isProp = (member[1]?.valueOf?.() ?? member[1]) === "this";
-          propName = isProp ? member[2]?.valueOf?.() ?? member[2] : null;
-          type = isProp ? member[2]?.type : null;
-          hasDefault = false;
-          if (!isProp && propName)
-            componentVars.add(propName);
-        } else if (mHead === "object") {
-          for (let i = 1;i < member.length; i++) {
-            let entry = member[i];
-            if (!Array.isArray(entry) || entry.length < 3)
-              continue;
-            let methName = entry[1]?.valueOf?.() ?? entry[1];
-            let funcDef = entry[2];
-            if (!Array.isArray(funcDef))
-              continue;
-            let fHead = funcDef[0]?.valueOf?.() ?? funcDef[0];
-            if (fHead !== "->" && fHead !== "=>")
-              continue;
-            let params = funcDef[1];
-            if (!Array.isArray(params))
-              continue;
-            let hasTypedParams = params.some((p) => p?.type);
-            if (!hasTypedParams)
-              continue;
-            let paramStrs = [];
-            for (let p of params) {
-              let pName = p?.valueOf?.() ?? p;
-              let pType = p?.type ? expandSuffixes(p.type) : "any";
-              paramStrs.push(`${pName}: ${pType}`);
-            }
-            bodyMembers.push(`  ${methName}(${paramStrs.join(", ")}): void;`);
-          }
-          continue;
-        } else if (mHead === "render") {
-          usesIntrinsicProps = true;
-          collectRefMembers(member[1]);
-          continue;
-        } else {
-          continue;
-        }
-        if (!isProp || !propName)
-          continue;
-        let typeStr = type ? expandSuffixes(type) : "any";
-        let opt = hasDefault ? "?" : "";
-        if (!hasDefault)
-          hasRequired = true;
-        publicProps.push(`    ${propName}${opt}: ${typeStr};`);
-        if (mHead === "state") {
-          publicProps.push(`    __bind_${propName}__?: Signal<${typeStr}>;`);
-        }
-      }
-      lines.push(`${exp}declare class ${name}${typeParams} {`);
-      if (publicProps.length > 0 || inheritedPropsType) {
-        let propsOpt = hasRequired ? "" : "?";
-        if (publicProps.length > 0) {
-          lines.push(`  constructor(props${propsOpt}: {`);
-          for (let p of publicProps)
-            lines.push(p);
-          lines.push(inheritedPropsType ? `  } & ${inheritedPropsType});` : "  });");
-        } else {
-          lines.push(`  constructor(props${propsOpt}: ${inheritedPropsType});`);
-        }
-      } else {
-        lines.push(`  constructor(props?: {});`);
-      }
-      for (let [refName, refType] of refMembers) {
-        bodyMembers.push(`  ${refName}: ${refType};`);
-      }
-      for (let m of bodyMembers)
-        lines.push(m);
-      lines.push(`}`);
-    }
-    if (head === "program" || head === "block") {
-      for (let i = 1;i < sexpr.length; i++) {
-        if (Array.isArray(sexpr[i])) {
-          usesIntrinsicProps = emitComponentTypes(sexpr[i], lines, indent, indentLevel, componentVars, sourceLines) || usesIntrinsicProps;
-        }
-      }
-    }
-    if (head === "export" && Array.isArray(sexpr[1]) && !compNode) {
-      usesIntrinsicProps = emitComponentTypes(sexpr[1], lines, indent, indentLevel, componentVars, sourceLines) || usesIntrinsicProps;
-    }
-    return usesIntrinsicProps;
-  }
-  function emitEnum(head, rest, context) {
-    let [name, body] = rest;
-    let enumName = name?.valueOf?.() ?? name;
-    let pairs = [];
-    if (Array.isArray(body)) {
-      let items = body[0] === "block" ? body.slice(1) : [body];
-      for (let item of items) {
-        if (Array.isArray(item)) {
-          if (item[0]?.valueOf?.() === "=") {
-            let key = item[1]?.valueOf?.() ?? item[1];
-            let val = item[2]?.valueOf?.() ?? item[2];
-            pairs.push([key, val]);
-          }
-        }
-      }
-    }
-    if (pairs.length === 0)
-      return `const ${enumName} = {}`;
-    let forward = pairs.map(([k, v]) => `${k}: ${v}`).join(", ");
-    let reverse = pairs.map(([k, v]) => `${v}: "${k}"`).join(", ");
-    return `const ${enumName} = {${forward}, ${reverse}}`;
   }
 
   // src/lexer.js
@@ -10042,6 +8891,7 @@ if (typeof globalThis !== 'undefined') {
   }
 
   // src/compiler.js
+  var _typesEmitter = null;
   var meta = (node, key) => node instanceof String ? node[key] : undefined;
   var str = (node) => node instanceof String ? node.valueOf() : node;
   var INLINE_FORMS = new Set([
@@ -13808,8 +12658,8 @@ if (typeof globalThis !== 'undefined') {
         tokens.shift();
       }
       if (tokens.every((t) => t[0] === "TERMINATOR")) {
-        if (typeTokens)
-          dts = emitTypes(typeTokens, ["program"], source);
+        if (typeTokens && _typesEmitter)
+          dts = _typesEmitter(typeTokens, ["program"], source);
         return { tokens, sexpr: ["program"], code: "", dts, data: dataSection, reactiveVars: {} };
       }
       let lastLexedLoc = null;
@@ -13888,8 +12738,8 @@ if (typeof globalThis !== 'undefined') {
         code += `
 //# sourceMappingURL=${this.options.filename}.js.map`;
       }
-      if (typeTokens) {
-        dts = emitTypes(typeTokens, sexpr, source);
+      if (typeTokens && _typesEmitter) {
+        dts = _typesEmitter(typeTokens, sexpr, source);
       }
       return { tokens, sexpr, code, dts, map, reverseMap, data: dataSection, reactiveVars: generator.reactiveVars };
     }
@@ -13933,7 +12783,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   }
   // src/browser.js
   var VERSION = "3.14.5";
-  var BUILD_DATE = "2026-04-26@04:18:19GMT";
+  var BUILD_DATE = "2026-04-26@04:25:01GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

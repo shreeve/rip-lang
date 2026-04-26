@@ -17,6 +17,10 @@
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join, extname, relative } from 'path';
 import { compile } from '../src/compiler.js';
+// Side-effect import: registers emitTypes via setTypesEmitter() so the
+// `type` test mode and any test asserting result.dts gets real output.
+// The browser bundle never reaches this module — see check-bundle-graph.js.
+import '../src/types-emit.js';
 
 // ANSI colors
 const colors = {
