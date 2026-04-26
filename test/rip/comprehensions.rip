@@ -156,3 +156,57 @@ test "forward for-of comprehension", '''
     { k, v }
   result
   ''', [{ k: 'a', v: 1 }, { k: 'b', v: 2 }, { k: 'c', v: 3 }]
+
+# ==============================================================================
+# Regression: comprehensionTarget scoping
+# ==============================================================================
+# When a function's body ends with a `loop` (auto-return wrapping logic
+# previously set comprehensionTarget = '_result' for the entire body), an
+# inner parenthesized comprehension on an assignment RHS would inherit
+# that target and emit a bare for-loop without its own IIFE — producing
+# invalid JS like `expected =     for (let x of ...)`.
+#
+# This pinned the bug that broke `bun run parser` when solar.rip:723 used
+# `expected = ("..." for own p of ...)` inside an outer `loop`. The fix
+# (1) skips auto-collect for `loop`/`while` (which have no comprehension
+# wrapping path) and (2) consume-and-clears comprehensionTarget at the
+# direct-target site so nested comprehensions always get their own IIFE.
+test "parenthesized comprehension RHS keeps own IIFE inside outer loop", '''
+  fn = (input) ->
+    done = false
+    loop
+      if done then return
+      expected = (x * 2 for x in [1, 2, 3])
+      return expected
+  fn 'go'
+  ''', [2, 4, 6]
+
+# Companion test — same shape, but with an object comprehension `for own ... of`,
+# matching the original solar.rip:723 pattern more closely.
+test "for-own-of comprehension RHS keeps own IIFE inside outer loop", '''
+  fn = ->
+    done = false
+    obj = { a: 1, b: 2, c: 3 }
+    loop
+      if done then return
+      expected = ("k=#{k}" for own k of obj)
+      return expected.sort()
+  fn()
+  ''', ['k=a', 'k=b', 'k=c']
+
+# Negative companion — the auto-return-loop wrapping must continue to work for
+# `for-in` / `for-of` / `for-as` (the legitimate cases where _result is wired
+# up via the comprehension wrapping path).
+test "for-in as last stmt of fn still auto-collects to _result", '''
+  fn = ->
+    for x in [1, 2, 3]
+      x * 10
+  fn()
+  ''', [10, 20, 30]
+
+test "for-of as last stmt of fn still auto-collects to _result", '''
+  fn = ->
+    for own k of {a: 1, b: 2}
+      k
+  fn().sort()
+  ''', ['a', 'b']

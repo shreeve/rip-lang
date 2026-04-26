@@ -1705,7 +1705,6 @@ function __schemaFkName(m)    { return ''; }   // ditto
       };
       symbol = preErrorSymbol = state = action = r = p = len = newState = expected = null;
       rv = {};
-      const _result = [];
       while (true) {
         state = stk[stk.length - 1];
         if (symbol == null)
@@ -1713,15 +1712,17 @@ function __schemaFkName(m)    { return ''; }   // ditto
         action = parseTable[state]?.[symbol];
         if (action == null) {
           errStr = "";
-          if (!recovering) {
-            expected = [];
-            for (let p2 in parseTable[state]) {
-              if (!Object.hasOwn(parseTable[state], p2))
-                continue;
-              if (this.tokenNames[p2] && p2 > TERROR)
-                expected.push(`'${this.tokenNames[p2]}'`);
-            }
-          }
+          if (!recovering)
+            expected = (() => {
+              const result = [];
+              for (let p2 in parseTable[state]) {
+                if (!Object.hasOwn(parseTable[state], p2))
+                  continue;
+                if (this.tokenNames[p2] && p2 > TERROR)
+                  result.push(`'${this.tokenNames[p2]}'`);
+              }
+              return result;
+            })();
           errStr = (() => {
             if (lexer.showPosition)
               return `Parse error on line ${tokenLine + 1}:
@@ -1768,7 +1769,6 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         } else if (action === 0)
           return vals[vals.length - 1];
       }
-      return _result;
     },
     trace() {},
     ctx: {}
@@ -10412,8 +10412,15 @@ ${this.indent()}}`;
       let [expr, iterators, guards] = rest;
       if (context === "statement")
         return this.emitComprehensionAsLoop(expr, iterators, guards);
-      if (this.comprehensionTarget)
-        return this.emitComprehensionWithTarget(expr, iterators, guards, this.comprehensionTarget);
+      if (this.comprehensionTarget) {
+        let target = this.comprehensionTarget;
+        this.comprehensionTarget = null;
+        try {
+          return this.emitComprehensionWithTarget(expr, iterators, guards, target);
+        } finally {
+          this.comprehensionTarget = target;
+        }
+      }
       let hasAwait = this.containsAwait(expr) || iterators.some((i) => this.containsAwait(i)) || guards.some((g) => this.containsAwait(g));
       let code = this.asyncIIFEOpen(hasAwait) + `
 `;
@@ -11023,6 +11030,12 @@ export default ${expr[1]}`;
             }
             if (!isConstructor && !sideEffectOnly && isLast && loopStmts.includes(h)) {
               if (this.containsYield(stmt)) {
+                code += this.indent() + this.addSemicolon(stmt, this.emit(stmt, "statement")) + `
+`;
+                return;
+              }
+              let isCollectibleLoop = h === "for-in" || h === "for-of" || h === "for-as";
+              if (!isCollectibleLoop) {
                 code += this.indent() + this.addSemicolon(stmt, this.emit(stmt, "statement")) + `
 `;
                 return;
@@ -12406,7 +12419,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   }
   // src/browser.js
   var VERSION = "3.14.5";
-  var BUILD_DATE = "2026-04-26@08:24:49GMT";
+  var BUILD_DATE = "2026-04-26@08:42:25GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

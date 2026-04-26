@@ -284,7 +284,6 @@ const parserInstance = {
     };
     symbol = preErrorSymbol = state = action = r = p = len = newState = expected = null;
     rv = {};
-    const _result = [];
     while (!0) {
       state = stk[stk.length - 1];
       if (symbol == null)
@@ -292,15 +291,17 @@ const parserInstance = {
       action = parseTable[state]?.[symbol];
       if (action == null) {
         errStr = "";
-        if (!recovering) {
-          expected = [];
-          for (let p in parseTable[state]) {
-            if (!Object.hasOwn(parseTable[state], p))
-              continue;
-            if (this.tokenNames[p] && p > TERROR)
-              expected.push(`'${this.tokenNames[p]}'`);
-          }
-        }
+        if (!recovering)
+          expected = (() => {
+            const result = [];
+            for (let p in parseTable[state]) {
+              if (!Object.hasOwn(parseTable[state], p))
+                continue;
+              if (this.tokenNames[p] && p > TERROR)
+                result.push(`'${this.tokenNames[p]}'`);
+            }
+            return result;
+          })();
         errStr = (() => {
           if (lexer.showPosition)
             return `Parse error on line ${tokenLine + 1}:
@@ -347,7 +348,6 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       } else if (action === 0)
         return vals[vals.length - 1];
     }
-    return _result;
   },
   trace() {},
   ctx: {},

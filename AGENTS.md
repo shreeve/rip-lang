@@ -69,14 +69,7 @@ rip server
 
 ### Known Issues
 
-- **Compiler regression: comprehensions in expression context auto-leak `_result` from outer auto-return loops.** As of HEAD, three related patterns miscompile when they appear inside a function whose outer body has loops the auto-return-comprehension logic latches onto:
-  1. **Postfix `for` on a method call.** `obj.method arg for arg as iter` — produces a malformed IIFE with the for-loop *outside* the wrapping `(() => {...})()` and with `_result.push(...)` referencing an outer-leaked target instead of a fresh `result`.
-  2. **Parenthesized comprehension on the RHS of an assignment.** `expected = (x for own k of obj when ...)` — emits `expected = ` followed by a bare `for` loop, no IIFE at all.
-  3. **Postfix `for` on a call where a sibling `if` follows.** The compiler treats the `if` branch as a *second argument* to the call, producing `addSymbol(comprehension, ifBranch)` instead of two independent statements.
-  
-  The shared root cause is `compiler.js`'s auto-return-loop logic (added after `61269e2b` in commit `f346e339 feat: auto-return loops as comprehensions from function bodies`) hijacking `comprehensionTarget` to a function-scoped `_result` and not properly scoping it to the outermost loop. Inner comprehensions in expression context inherit the wrong target and skip their own IIFE.
-  
-  **Current state:** `src/grammar/solar.rip` is the only known affected file. The three sites are worked around with explicit `for` blocks (commented at each site, search "Workaround for compiler regression" in solar.rip). `bun run parser` succeeds; bundle size unchanged. **Real fix needed:** scope `comprehensionTarget` to the loop that introduced it (don't leak across statement / argument boundaries), and respect the void-method (`!:`) marker when deciding whether to apply auto-return-comprehension transformation. Until that's fixed, user code hitting the same patterns will need the same explicit-for-loop workaround.
+- **Parser: postfix `for` on an implicit method call binds the comprehension as the call's argument and absorbs the next sibling statement.** `obj.method arg for arg as iter` parses as `obj.method(arg for arg as iter)` (one call, array-as-argument) instead of `(obj.method arg) for arg as iter` (a comprehension that calls the method per iteration). When a sibling `if` block follows on the next line, it gets pulled in as a *second argument* to the call instead of remaining a separate statement. Two sites in `src/grammar/solar.rip` (lines 158 and 482) work around this with explicit `for` blocks (search "workaround: postfix-for on call"). Pinned by tests at `test/rip/comprehensions.rip` `forward for-of comprehension` and adjacent. **Real fix needed in the lexer rewriter / grammar:** terminate the implicit-call argument list before the postfix `for`, so the comprehension wraps the call rather than becoming an argument. Until that's fixed, user code hitting this pattern needs the explicit-for-loop workaround.
 
 ## Compilation Pipeline
 

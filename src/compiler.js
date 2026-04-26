@@ -2049,7 +2049,22 @@ export class CodeEmitter {
   emitComprehension(head, rest, context) {
     let [expr, iterators, guards] = rest;
     if (context === 'statement') return this.emitComprehensionAsLoop(expr, iterators, guards);
-    if (this.comprehensionTarget) return this.emitComprehensionWithTarget(expr, iterators, guards, this.comprehensionTarget);
+    if (this.comprehensionTarget) {
+      // Consume-and-clear: the auto-return-loop logic sets comprehensionTarget
+      // expecting ONE consumer (the direct value-context comprehension being
+      // routed to the named target). Without clearing here, nested
+      // comprehensions inside this comprehension's body (call args, RHS
+      // expressions) would inherit the target and skip their own IIFE,
+      // producing malformed JS or wrong semantics. The body's own emit calls
+      // see comprehensionTarget = null and correctly produce IIFEs.
+      let target = this.comprehensionTarget;
+      this.comprehensionTarget = null;
+      try {
+        return this.emitComprehensionWithTarget(expr, iterators, guards, target);
+      } finally {
+        this.comprehensionTarget = target;
+      }
+    }
 
     // Enclosed: expr, iterators (iterable expressions), guards
     let hasAwait = this.containsAwait(expr) || iterators.some(i => this.containsAwait(i)) || guards.some(g => this.containsAwait(g));
@@ -2615,6 +2630,21 @@ export class CodeEmitter {
 
           if (!isConstructor && !sideEffectOnly && isLast && loopStmts.includes(h)) {
             if (this.containsYield(stmt)) {
+              code += this.indent() + this.addSemicolon(stmt, this.emit(stmt, 'statement')) + '\n';
+              return;
+            }
+            // Auto-return-loop: only for-in/for-of/for-as auto-collect into
+            // _result, because emitForIn/emitForOf/emitForAs at value-context
+            // wrap themselves in a comprehension that consumes
+            // comprehensionTarget. `loop` and `while` have no such wrapping —
+            // emitLoop/emitWhile just emit `while(...) { body }` and any
+            // comprehensionTarget set here would LEAK into nested
+            // expression-context comprehensions inside the body (causing
+            // them to be routed to the wrong target and skip their own
+            // IIFE). Loops with explicit `return X` inside their body
+            // already work correctly; emit them as plain statements.
+            let isCollectibleLoop = h === 'for-in' || h === 'for-of' || h === 'for-as';
+            if (!isCollectibleLoop) {
               code += this.indent() + this.addSemicolon(stmt, this.emit(stmt, 'statement')) + '\n';
               return;
             }
