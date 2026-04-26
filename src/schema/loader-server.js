@@ -1,5 +1,18 @@
 // Schema runtime loader — server / CLI / migration variant.
 //
+// Why this file exists (peer-review: "are loaders just picking which
+// fragments to concatenate, or doing real work?"):
+//
+//   The loader is the IMPORT BOUNDARY. By having loader-server.js
+//   import all five fragments and loader-browser.js import only
+//   validate + browser-stubs, Bun's tree-shaker can statically
+//   determine which fragment string constants reach which entry
+//   point. If the mode-switch logic lived in src/schema.js (which is
+//   reachable from BOTH browser and server entries), every fragment
+//   constant would be statically reachable from every entry, and
+//   tree-shaking couldn't remove anything. The two-loader split is
+//   what makes the bundle savings real.
+//
 // Side-effect import. Adds a runtime provider that supports all four
 // modes (validate / browser / server / migration) and eagerly installs
 // the migration runtime on globalThis at module load.
@@ -9,10 +22,6 @@
 //   - test/runner.js, test/types/...  (test runner)
 //   - src/typecheck.js                (LSP / rip check)
 //   - any server-side code that imports src/compiler.js
-//
-// The browser bundle imports loader-browser.js INSTEAD, which only
-// references validate + browser-stubs fragments — so server-only
-// fragments (db-naming, orm, ddl) are tree-shaken from the bundle.
 
 import {
   SCHEMA_RUNTIME_WRAPPER_HEAD,

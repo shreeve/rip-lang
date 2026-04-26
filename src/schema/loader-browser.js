@@ -1,13 +1,19 @@
 // Schema runtime loader — browser variant.
 //
+// Why this file exists: this is the IMPORT BOUNDARY for the browser
+// bundle. By only importing validate + browser-stubs fragments here,
+// Bun's tree-shaker can omit db-naming / orm / ddl from the bundle.
+// If the mode-switch lived in src/schema.js (reachable from every
+// entry), the bundler couldn't statically prove the unused fragments
+// were unreachable and would keep them. The loader split is the lever
+// that makes the bundle savings real.
+//
+// See loader-server.js for the corresponding server / CLI variant
+// that imports all five fragments.
+//
 // Side-effect import. Adds a runtime provider that supports validate
 // and browser modes only. Eagerly installs the browser runtime on
 // globalThis at module load.
-//
-// The browser-only set of fragments is what gets tree-shaken into the
-// browser bundle: validate (~31 KB) + browser-stubs (~1 KB). DB-naming,
-// ORM, and DDL are not imported here, so Bun's tree-shaker leaves them
-// out of `docs/dist/rip.min.js`.
 
 import {
   SCHEMA_RUNTIME_WRAPPER_HEAD,
