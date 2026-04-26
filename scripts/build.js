@@ -13,6 +13,12 @@ if (guard.status !== 0) {
   process.exit(guard.status ?? 1);
 }
 
+const fresh = spawnSync('bun', ['scripts/build-schema-runtime.js', '--check', '--quiet'], { stdio: 'inherit' });
+if (fresh.status !== 0) {
+  console.error('\nAborting build — schema runtime is stale. Run: bun run build:schema-runtime');
+  process.exit(fresh.status ?? 1);
+}
+
 
 const packageJson = JSON.parse(readFileSync('./package.json', 'utf-8'));
 const version = packageJson.version;

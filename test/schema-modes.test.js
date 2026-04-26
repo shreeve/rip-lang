@@ -374,7 +374,7 @@ const inputDescriptor = {
   ],
 };
 
-function tryValidate(ctx) {
+function tryValidate(rt) {
   const sch = rt.__schema(inputDescriptor);
   const ok = sch.parse({ email: 'a@b.c', age: 30 });
   return ok.email + ':' + ok.age;
@@ -408,7 +408,7 @@ await check('SchemaError on missing required field has the same message in all m
   const v = evalRuntimeIsolated(mod.getSchemaRuntime({ mode: 'validate' }));
   const b = evalRuntimeIsolated(mod.getSchemaRuntime({ mode: 'browser' }));
   const s = evalRuntimeIsolated(mod.getSchemaRuntime({ mode: 'server' }));
-  const grab = (ctx) => {
+  const grab = (rt) => {
     const sch = rt.__schema(inputDescriptor);
     try { sch.parse({}); return null; }
     catch (e) { return e.message; }
@@ -448,11 +448,10 @@ if (refCtx) {
     }
   });
 
-  await check(":model-only API error mentions kind and method", () => {
+  await check(":model-only API error mentions kind and method", async () => {
     const sch = refCtx.__schema({ kind: 'shape', name: 'NotModel', entries: [] });
     let msg;
-    try { sch.find(1); }
-    catch (e) { msg = e.message; }
+    try { await sch.find(1); } catch (e) { msg = e.message; }
     if (!msg || !/find/.test(msg) || !/model/i.test(msg)) {
       throw new Error(':model-only error message changed: ' + msg);
     }

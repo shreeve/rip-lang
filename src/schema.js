@@ -1,5 +1,14 @@
 import { parser } from './parser.js';
-import { SCHEMA_RUNTIME } from './schema/runtime.js';
+import {
+  SCHEMA_RUNTIME_ABI_VERSION,
+  SCHEMA_RUNTIME_WRAPPER_HEAD,
+  SCHEMA_RUNTIME_WRAPPER_TAIL,
+  SCHEMA_VALIDATE_RUNTIME,
+  SCHEMA_DB_NAMING_RUNTIME,
+  SCHEMA_ORM_RUNTIME,
+  SCHEMA_DDL_RUNTIME,
+  SCHEMA_BROWSER_STUBS_RUNTIME,
+} from './schema/runtime.generated.js';
 
 // Schema System — inline `schema` declarations compile to runtime validator
 // and ORM plans.
@@ -101,7 +110,12 @@ export function installSchemaSupport(Lexer, CodeEmitter) {
       return emitSchemaNode(this, head, rest, context);
     };
     CodeEmitter.prototype.getSchemaRuntime = function() {
-      return getSchemaRuntime();
+      // Compiler-controlled mode. Defaults to 'migration' (everything) for
+      // compatibility with existing CLI / Node compilation, where the user
+      // might invoke any schema feature including .toSQL(). Browser-bundle
+      // build overrides to 'browser' for size reduction — see Phase 2 step 3.
+      const mode = this.options?.schemaMode || 'migration';
+      return getSchemaRuntime({ mode });
     };
   }
 }
@@ -1760,19 +1774,46 @@ function schemaError(tok, message) {
 //   :mixin   — non-instantiable; raises `Cannot parse :mixin`
 //   :model   — Phase 4 (the class additionally wires ORM methods)
 
-// Schema runtime ABI version. Bump when the shape of a __schema({...})
-// descriptor or any cross-bundle-visible runtime surface changes
-// incompatibly. Two bundles that disagree on this number can't share
-// one runtime, so a mismatch at load time throws rather than silently
-// fragmenting. Tracks runtime contract — not the rip-lang product
-// semver.
-const SCHEMA_RUNTIME_ABI_VERSION = 1;
+// =============================================================================
+// Mode-matrix runtime composition
+// =============================================================================
+// Schemas are compiled to a runtime preamble that gets injected into compiled
+// output. The four modes select different fragment combinations:
+//
+//   validate   = VALIDATE                                (pure)
+//   browser    = VALIDATE + BROWSER_STUBS                (browser bundle)
+//   server     = VALIDATE + DB_NAMING + ORM              (default, server runtime)
+//   migration  = VALIDATE + DB_NAMING + ORM + DDL        (migration tool)
+//
+// Every mode wraps the body in the same singleton-install IIFE so multiple
+// bundles loading in the same process share one __ripSchema slot.
 
-
-function getSchemaRuntime() {
-  return SCHEMA_RUNTIME.trimStart();
+export function getSchemaRuntime({ mode = 'server' } = {}) {
+  let body;
+  switch (mode) {
+    case 'validate':
+      body = SCHEMA_VALIDATE_RUNTIME;
+      break;
+    case 'browser':
+      body = SCHEMA_VALIDATE_RUNTIME + '\n' + SCHEMA_BROWSER_STUBS_RUNTIME;
+      break;
+    case 'server':
+      body = SCHEMA_VALIDATE_RUNTIME + '\n' + SCHEMA_DB_NAMING_RUNTIME + '\n' + SCHEMA_ORM_RUNTIME;
+      break;
+    case 'migration':
+      body = SCHEMA_VALIDATE_RUNTIME + '\n' + SCHEMA_DB_NAMING_RUNTIME + '\n' + SCHEMA_ORM_RUNTIME + '\n' + SCHEMA_DDL_RUNTIME;
+      break;
+    default:
+      throw new Error(`unknown schema runtime mode: ${mode}`);
+  }
+  return (SCHEMA_RUNTIME_WRAPPER_HEAD + body + SCHEMA_RUNTIME_WRAPPER_TAIL).trimStart();
 }
 
+// Backwards-compatible default export — full migration runtime. Used by
+// the eager singleton install below (matches Node-side default mode) and
+// by tests that import SCHEMA_RUNTIME directly. Browser entry never imports
+// SCHEMA_RUNTIME — it builds its own via getSchemaRuntime({ mode: 'browser' }).
+export const SCHEMA_RUNTIME = getSchemaRuntime({ mode: 'migration' });
 
 // Eagerly install the runtime on globalThis at module load so downstream
 // compilation units emitted with `skipRuntimes: true` (a common test-harness
@@ -1782,4 +1823,12 @@ if (typeof globalThis !== 'undefined' && !globalThis.__ripSchema) {
   try { (0, eval)(SCHEMA_RUNTIME); } catch {}
 }
 
-export { SCHEMA_RUNTIME };
+// Re-exports for tests and external consumers.
+export {
+  SCHEMA_RUNTIME_ABI_VERSION,
+  SCHEMA_VALIDATE_RUNTIME,
+  SCHEMA_DB_NAMING_RUNTIME,
+  SCHEMA_ORM_RUNTIME,
+  SCHEMA_DDL_RUNTIME,
+  SCHEMA_BROWSER_STUBS_RUNTIME,
+};

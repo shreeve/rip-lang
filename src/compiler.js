@@ -3763,6 +3763,11 @@ export class Compiler {
       skipDataPart: this.options.skipDataPart,
       stubComponents: this.options.stubComponents,
       reactiveVars: this.options.reactiveVars,
+      // Schema runtime mode: 'browser' / 'validate' / 'server' / 'migration'.
+      // Default 'migration' covers the common case (CLI, server, tests) where
+      // the user might call any schema feature including .toSQL(). The browser
+      // bundle build script overrides to 'browser' for size reduction.
+      schemaMode: this.options.schemaMode,
       sourceMap,
     });
     let code = generator.compile(sexpr);

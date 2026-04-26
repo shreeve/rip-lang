@@ -1,14 +1,20 @@
-// AUTOGEN-NOTICE: extracted verbatim from the SCHEMA_RUNTIME template
-// literal originally embedded in src/schema.js. This file is the new
-// source of truth for the schema runtime body. Phase 2 will split this
-// into fragments under src/schema/runtime-{validate,db-naming,orm,ddl,
-// browser-stubs}.js. For now it remains the unified body.
+// AUTOGEN-NOTICE: do not edit by hand. Regenerate with:
+//   bun scripts/build-schema-runtime.js
 //
-// Edits made here will appear in compiled bundles on the next module load.
-// Tests pin the public surface via test/schema-errors.test.js and
-// test/schema-modes.test.js.
+// Source fragments:
+//   src/schema/runtime-validate.js       (universal — browser + server)
+//   src/schema/runtime-db-naming.js      (server + migration)
+//   src/schema/runtime-orm.js            (server + migration)
+//   src/schema/runtime-ddl.js            (migration only)
+//   src/schema/runtime-browser-stubs.js  (browser only)
+//
+// CI: bun scripts/build-schema-runtime.js --check fails if this file
+// would change after regeneration. Edit the fragments, run the build
+// script, and commit.
 
-export const SCHEMA_RUNTIME = `
+export const SCHEMA_RUNTIME_ABI_VERSION = 1;
+
+export const SCHEMA_RUNTIME_WRAPPER_HEAD = `
 // ---- Rip Schema Runtime ----------------------------------------------------
 // Four layers, lazy compilation:
 //   1 (descriptor)   object passed to __schema({...}). Raw metadata.
@@ -38,7 +44,26 @@ var { __schema, SchemaError, __SchemaRegistry, __schemaSetAdapter } = (function(
     return globalThis.__ripSchema;
   }
 
-class SchemaError extends Error {
+`;
+export const SCHEMA_RUNTIME_WRAPPER_TAIL = `
+  // __schemaSetAdapter is server/migration-only. In validate or browser
+  // modes it doesn't exist; export an undefined slot so destructure works.
+  const __schemaSetAdapterExport = typeof __schemaSetAdapter !== 'undefined'
+    ? __schemaSetAdapter
+    : undefined;
+  const exports = {
+    __schema, SchemaError, __SchemaRegistry,
+    __schemaSetAdapter: __schemaSetAdapterExport,
+    __version: 1,
+  };
+  if (typeof globalThis !== 'undefined') globalThis.__ripSchema = exports;
+  return exports;
+})();
+
+// === End Schema Runtime ===
+`;
+
+export const SCHEMA_VALIDATE_RUNTIME       = `class SchemaError extends Error {
   constructor(issues, schemaName, schemaKind) {
     super(__schemaFormatIssues(issues, schemaName));
     this.name = 'SchemaError';
@@ -54,12 +79,6 @@ function __schemaFormatIssues(issues, name) {
   return head + issues.map(i => i.message || i.error || 'invalid').join('; ');
 }
 
-// Reserved names are hoisted to module scope — they're pure data and
-// rebuilding them per _normalize() call wastes allocations. Static: names
-// that become class-level methods on :model (parse, find, toSQL, …).
-// Instance: names that become instance methods (save, destroy, toJSON, …).
-// A declared field, method, computed, or derived that collides with
-// either set on a :model raises a collision error during normalize.
 const __SCHEMA_RESERVED_STATIC = new Set([
   'parse','safe','ok','find','findMany','where','all','first','count','create','toSQL',
 ]);
@@ -90,13 +109,6 @@ function __schemaCheckValue(v, typeName) {
   return check ? check(v) : true;
 }
 
-// Validate a single value against a typeName, returning either null (ok)
-// or an array of issues relative to the value's own root. Primitive
-// typenames dispatch through the __schemaTypes map; typenames that
-// resolve to a registered :shape / :input / :model validate the value
-// as a nested object; typenames that resolve to a :enum enforce
-// membership. Unknown typenames stay permissive so forward-references
-// and cross-module names do not hard-fail — matches pre-registry behavior.
 function __schemaValidateValue(v, typeName) {
   const prim = __schemaTypes[typeName];
   if (prim) {
@@ -118,17 +130,11 @@ function __schemaValidateValue(v, typeName) {
   return subErrs.length ? subErrs : null;
 }
 
-// Merge a child path segment into an existing field path. Produces
-// 'addr.street' for object descent, 'items[0].name' for array descent.
 function __schemaJoinField(head, child) {
   if (!child) return head;
   return head + (child.startsWith('[') ? child : '.' + child);
 }
 
-// Rewrite a child issue's message so the leading "<childField> " token
-// (present on most leaf messages: "name is required", "id must be
-// integer") is replaced by the joined parent path — avoiding the
-// duplicated "items[1].id id must be integer" reading.
 function __schemaRewriteMessage(joinedField, childField, childMessage) {
   if (!childField) return joinedField + ' ' + childMessage;
   if (childMessage.startsWith(childField)) {
@@ -137,27 +143,9 @@ function __schemaRewriteMessage(joinedField, childField, childMessage) {
   return joinedField + ': ' + childMessage;
 }
 
-// Naming utilities (snake_case column/table names, irregular plurals).
 function __schemaSnake(s) { return s.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase(); }
-const __SCHEMA_UNCOUNTABLE = new Set(['equipment','information','rice','money','species','series','fish','sheep','data']);
-const __SCHEMA_IRREGULAR = new Map([['person','people'],['man','men'],['woman','women'],['child','children'],['tooth','teeth'],['foot','feet'],['mouse','mice']]);
-function __schemaPluralize(w) {
-  const lw = w.toLowerCase();
-  if (__SCHEMA_UNCOUNTABLE.has(lw)) return w;
-  if (__SCHEMA_IRREGULAR.has(lw)) return __SCHEMA_IRREGULAR.get(lw);
-  // Preserve case of the input — pluralizer operates on the trailing form
-  // but keeps the rest unchanged, so orderItem becomes orderItems
-  // and User becomes Users.
-  if (/[^aeiouy]y$/i.test(w)) return w.slice(0, -1) + 'ies';
-  if (/(s|x|z|ch|sh)$/i.test(w)) return w + 'es';
-  return w + 's';
-}
-function __schemaTableName(model) { return __schemaPluralize(__schemaSnake(model)); }
-function __schemaFkName(model) { return __schemaSnake(model) + '_id'; }
 
-// ---- Registry ---------------------------------------------------------------
-// Process-global, resettable, with placeholder state for forward/circular
-// references. Duplicate registration of the same model name is a hard error.
+function __schemaCamel(col) { return String(col).replace(/_([a-z])/g, (_, c) => c.toUpperCase()); }
 
 const __SchemaRegistry = {
   _entries: new Map(),
@@ -183,98 +171,6 @@ const __SchemaRegistry = {
   has(name) { return this._entries.has(name); },
   reset() { this._entries.clear(); },
 };
-
-// ---- DB adapter seam --------------------------------------------------------
-// Default adapter uses fetch to rip-db /sql. Tests can swap with
-// __schemaSetAdapter(...) before running queries.
-
-function __schemaDefaultAdapter() {
-  const url = (typeof process !== 'undefined' && process.env?.DB_URL) || 'http://localhost:4213';
-  return {
-    async query(sql, params) {
-      const body = params && params.length ? { sql, params } : { sql };
-      const res = await fetch(url + '/sql', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
-      return data;
-    }
-  };
-}
-
-let __schemaAdapter = __schemaDefaultAdapter();
-function __schemaSetAdapter(a) { __schemaAdapter = a; }
-
-// ---- Query builder ----------------------------------------------------------
-
-class __SchemaQuery {
-  constructor(def, opts = {}) {
-    this._def = def;
-    this._clauses = [];
-    this._params = [];
-    this._limit = null;
-    this._offset = null;
-    this._order = null;
-    this._includeDeleted = opts.includeDeleted === true;
-  }
-  where(cond, ...params) {
-    if (typeof cond === 'string') {
-      this._clauses.push(cond);
-      this._params.push(...params);
-    } else if (cond && typeof cond === 'object') {
-      for (const [k, v] of Object.entries(cond)) {
-        const col = __schemaSnake(k);
-        if (v === null || v === undefined) {
-          this._clauses.push('"' + col + '" IS NULL');
-        } else {
-          this._clauses.push('"' + col + '" = ?');
-          this._params.push(v);
-        }
-      }
-    }
-    return this;
-  }
-  limit(n) { this._limit = n; return this; }
-  offset(n) { this._offset = n; return this; }
-  order(spec) { this._order = spec; return this; }
-  orderBy(spec) { return this.order(spec); }
-  _buildSQL() {
-    const n = this._def._normalize();
-    const table = n.tableName;
-    const parts = ['SELECT * FROM "' + table + '"'];
-    const where = [...this._clauses];
-    if (!this._includeDeleted && n.softDelete) where.push('"deleted_at" IS NULL');
-    if (where.length) parts.push('WHERE ' + where.join(' AND '));
-    if (this._order) parts.push('ORDER BY ' + this._order);
-    if (this._limit != null) parts.push('LIMIT ' + this._limit);
-    if (this._offset != null) parts.push('OFFSET ' + this._offset);
-    return parts.join(' ');
-  }
-  async all() {
-    const sql = this._buildSQL();
-    const res = await __schemaAdapter.query(sql, this._params);
-    return (res.data || []).map(row => this._def._hydrate(res.columns, row));
-  }
-  async first() {
-    this._limit = 1;
-    const arr = await this.all();
-    return arr[0] || null;
-  }
-  async count() {
-    const n = this._def._normalize();
-    const parts = ['SELECT COUNT(*) FROM "' + n.tableName + '"'];
-    const where = [...this._clauses];
-    if (!this._includeDeleted && n.softDelete) where.push('"deleted_at" IS NULL');
-    if (where.length) parts.push('WHERE ' + where.join(' AND '));
-    const res = await __schemaAdapter.query(parts.join(' '), this._params);
-    return res.data?.[0]?.[0] || 0;
-  }
-}
-
-// ---- __SchemaDef ------------------------------------------------------------
 
 class __SchemaDef {
   constructor(desc) {
@@ -411,6 +307,7 @@ class __SchemaDef {
   //   - Thrown errors propagate. parse() wraps them into SchemaError
   //     before surfacing; safe() captures into {error: 'derived'}
   //     issues; hydrate lets them crash fast as data-integrity signals.
+
   _applyEagerDerived(inst) {
     const norm = this._normalize();
     if (!norm.derived.size) return;
@@ -443,6 +340,7 @@ class __SchemaDef {
   //   - Caller short-circuits: per-field validation errors skip this
   //     step entirely (predicates assume field types are correct).
   //   - Skipped on _hydrate — trusted DB data bypasses @ensures.
+
   _applyEnsures(data) {
     const norm = this._normalize();
     if (!norm.ensures.length) return [];
@@ -680,6 +578,7 @@ class __SchemaDef {
   // object as 'it'; its return value becomes the field's candidate
   // value before default + validation. Transform errors surface as
   // {error: 'transform'} issues on the final result.
+
   _applyTransforms(raw, working) {
     const norm = this._normalize();
     const errors = [];
@@ -729,6 +628,7 @@ class __SchemaDef {
   // because DB columns already hold the canonical values. Eager-derived
   // (step 7) fires on BOTH paths so hydrated instances have the same
   // shape as parsed ones.
+
   parse(data) {
     if (this.kind === 'mixin') {
       throw new Error(":mixin schema '" + (this.name || 'anon') + "' is not instantiable");
@@ -796,76 +696,6 @@ class __SchemaDef {
 
   // ---- :model static ORM methods --------------------------------------------
 
-  async find(id) {
-    this._assertModel('find');
-    const norm = this._normalize();
-    const soft = norm.softDelete ? ' AND "deleted_at" IS NULL' : '';
-    const sql = 'SELECT * FROM "' + norm.tableName + '" WHERE "' + norm.primaryKey + '" = ?' + soft + ' LIMIT 1';
-    const res = await __schemaAdapter.query(sql, [id]);
-    if (!res.rows) return null;
-    return this._hydrate(res.columns, res.data[0]);
-  }
-
-  where(cond, ...params) {
-    this._assertModel('where');
-    return new __SchemaQuery(this).where(cond, ...params);
-  }
-
-  all() {
-    this._assertModel('all');
-    return new __SchemaQuery(this).all();
-  }
-
-  first() {
-    this._assertModel('first');
-    return new __SchemaQuery(this).first();
-  }
-
-  count() {
-    this._assertModel('count');
-    return new __SchemaQuery(this).count();
-  }
-
-  async create(data) {
-    this._assertModel('create');
-    // Input keys may be snake_case or camelCase; the runtime
-    // canonicalizes to camelCase so instance properties line up with
-    // declared field names.
-    const klass = this._getClass();
-    const canonical = {};
-    if (data && typeof data === 'object') {
-      for (const k of Object.keys(data)) canonical[__schemaCamel(k)] = data[k];
-    }
-    const inst = new klass(this._applyDefaults(canonical), false);
-    // FK columns like user_id canonicalize to userId and need to
-    // round-trip through the INSERT path, so attach them as own
-    // properties even though they aren't declared fields.
-    for (const [k, v] of Object.entries(canonical)) {
-      if (!(k in inst)) {
-        Object.defineProperty(inst, k, { value: v, enumerable: true, writable: true, configurable: true });
-      }
-    }
-    await __schemaSave(this, inst);
-    return inst;
-  }
-
-  toSQL(options) {
-    this._assertModel('toSQL');
-    return __schemaToSQL(this, options);
-  }
-
-  _assertModel(api) {
-    if (this.kind !== 'model') {
-      throw new Error('schema: .' + api + '() is :model-only (got :' + this.kind + ')');
-    }
-  }
-
-  // ---- Schema algebra (Phase 6) --------------------------------------------
-  // Invariant: every algebra operation returns a :shape. Model algebra
-  // strips ORM; :shape algebra drops behavior. Derived shapes preserve
-  // field metadata (constraints, defaults, modifiers) from the source
-  // normalized descriptor.
-
   pick(...keys) {
     return __schemaDerive(this, (src) => {
       const names = __schemaFlatten(keys);
@@ -932,19 +762,6 @@ function __schemaFlatten(keys) {
   return out;
 }
 
-// Schema algebra — .pick / .omit / .partial / .required / .extend all
-// land here. The v2 invariants encoded in this function:
-//
-//   - Derived schemas are always kind: 'shape', regardless of source kind.
-//     ORM surface on :model is dropped.
-//   - Field semantics SURVIVE algebra: type, literals, constraints,
-//     inline transforms. Transforms-survive means a derived schema can
-//     still read raw-input keys that aren't in its declared output shape.
-//   - Instance behavior DOES NOT survive: methods, computed (~>), eager
-//     derived (!>), and hooks all get dropped because the rebuilt
-//     descriptor has no callable entries.
-//   - _sourceModel propagates through chained algebra so tooling can
-//     trace derived shapes back to the origin :model.
 function __schemaDerive(source, transform) {
   const src = source._normalize().fields;
   const derivedFields = transform(src);
@@ -969,8 +786,6 @@ function __schemaDerive(source, transform) {
   derived._sourceModel = source._sourceModel || (source.kind === 'model' ? source : null);
   return derived;
 }
-
-function __schemaCamel(col) { return String(col).replace(/_([a-z])/g, (_, c) => c.toUpperCase()); }
 
 function __schemaNormalizeDirectiveRelation(directive, ownerModel) {
   const args = directive.args;
@@ -1039,6 +854,122 @@ function __schemaExpandMixins(host, fields, directives, ctx) {
   }
 }
 
+function __schema(descriptor) {
+  const def = new __SchemaDef(descriptor);
+  // Every user-declared named schema lands in the registry so
+  // nested-typed fields (address! Address, items! OrderItem[],
+  // role! Role) can resolve their type reference at validate time.
+  // Algebra-derived schemas (.pick/.omit/.partial/…) bypass this
+  // factory so their synthetic names don't shadow the source.
+  if (def.name) __SchemaRegistry.register(def);
+  return def;
+}
+`;
+export const SCHEMA_DB_NAMING_RUNTIME      = `const __SCHEMA_UNCOUNTABLE = new Set(['equipment','information','rice','money','species','series','fish','sheep','data']);
+
+const __SCHEMA_IRREGULAR = new Map([['person','people'],['man','men'],['woman','women'],['child','children'],['tooth','teeth'],['foot','feet'],['mouse','mice']]);
+
+function __schemaPluralize(w) {
+  const lw = w.toLowerCase();
+  if (__SCHEMA_UNCOUNTABLE.has(lw)) return w;
+  if (__SCHEMA_IRREGULAR.has(lw)) return __SCHEMA_IRREGULAR.get(lw);
+  // Preserve case of the input — pluralizer operates on the trailing form
+  // but keeps the rest unchanged, so orderItem becomes orderItems
+  // and User becomes Users.
+  if (/[^aeiouy]y$/i.test(w)) return w.slice(0, -1) + 'ies';
+  if (/(s|x|z|ch|sh)$/i.test(w)) return w + 'es';
+  return w + 's';
+}
+
+function __schemaTableName(model) { return __schemaPluralize(__schemaSnake(model)); }
+
+function __schemaFkName(model) { return __schemaSnake(model) + '_id'; }
+`;
+export const SCHEMA_ORM_RUNTIME            = `function __schemaDefaultAdapter() {
+  const url = (typeof process !== 'undefined' && process.env?.DB_URL) || 'http://localhost:4213';
+  return {
+    async query(sql, params) {
+      const body = params && params.length ? { sql, params } : { sql };
+      const res = await fetch(url + '/sql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      return data;
+    }
+  };
+}
+
+let __schemaAdapter = __schemaDefaultAdapter();
+
+function __schemaSetAdapter(a) { __schemaAdapter = a; }
+
+class __SchemaQuery {
+  constructor(def, opts = {}) {
+    this._def = def;
+    this._clauses = [];
+    this._params = [];
+    this._limit = null;
+    this._offset = null;
+    this._order = null;
+    this._includeDeleted = opts.includeDeleted === true;
+  }
+  where(cond, ...params) {
+    if (typeof cond === 'string') {
+      this._clauses.push(cond);
+      this._params.push(...params);
+    } else if (cond && typeof cond === 'object') {
+      for (const [k, v] of Object.entries(cond)) {
+        const col = __schemaSnake(k);
+        if (v === null || v === undefined) {
+          this._clauses.push('"' + col + '" IS NULL');
+        } else {
+          this._clauses.push('"' + col + '" = ?');
+          this._params.push(v);
+        }
+      }
+    }
+    return this;
+  }
+  limit(n) { this._limit = n; return this; }
+  offset(n) { this._offset = n; return this; }
+  order(spec) { this._order = spec; return this; }
+  orderBy(spec) { return this.order(spec); }
+  _buildSQL() {
+    const n = this._def._normalize();
+    const table = n.tableName;
+    const parts = ['SELECT * FROM "' + table + '"'];
+    const where = [...this._clauses];
+    if (!this._includeDeleted && n.softDelete) where.push('"deleted_at" IS NULL');
+    if (where.length) parts.push('WHERE ' + where.join(' AND '));
+    if (this._order) parts.push('ORDER BY ' + this._order);
+    if (this._limit != null) parts.push('LIMIT ' + this._limit);
+    if (this._offset != null) parts.push('OFFSET ' + this._offset);
+    return parts.join(' ');
+  }
+  async all() {
+    const sql = this._buildSQL();
+    const res = await __schemaAdapter.query(sql, this._params);
+    return (res.data || []).map(row => this._def._hydrate(res.columns, row));
+  }
+  async first() {
+    this._limit = 1;
+    const arr = await this.all();
+    return arr[0] || null;
+  }
+  async count() {
+    const n = this._def._normalize();
+    const parts = ['SELECT COUNT(*) FROM "' + n.tableName + '"'];
+    const where = [...this._clauses];
+    if (!this._includeDeleted && n.softDelete) where.push('"deleted_at" IS NULL');
+    if (where.length) parts.push('WHERE ' + where.join(' AND '));
+    const res = await __schemaAdapter.query(parts.join(' '), this._params);
+    return res.data?.[0]?.[0] || 0;
+  }
+}
+
 async function __schemaResolveRelation(def, inst, rel) {
   const target = __SchemaRegistry.get(rel.target);
   if (!target) throw new Error('schema: unknown relation target "' + rel.target + '" from ' + (def.name || 'anon'));
@@ -1055,14 +986,6 @@ async function __schemaResolveRelation(def, inst, rel) {
   }
   return null;
 }
-
-// ---- Save / Destroy --------------------------------------------------------
-// Rails-style lifecycle (D18):
-//   beforeValidation -> validate -> afterValidation ->
-//   beforeSave -> (beforeCreate|beforeUpdate) -> INSERT/UPDATE ->
-//   (afterCreate|afterUpdate) -> afterSave
-// Destroy:
-//   beforeDestroy -> DELETE -> afterDestroy
 
 async function __schemaRunHook(def, inst, name) {
   const fn = def._normalize().hooks.get(name);
@@ -1175,11 +1098,74 @@ function __schemaSerialize(v, field) {
   return v;
 }
 
-// ---- DDL emission (.toSQL) --------------------------------------------------
-// Layer 4b: runs on first .toSQL() call. Independent of ORM — scripts
-// that build schema from DDL never touch .find/.create.
+// ORM prototype augmentations — added to __SchemaDef
 
-const __SCHEMA_SQL_TYPES = {
+__SchemaDef.prototype.find = async function (id) {
+  this._assertModel('find');
+  const norm = this._normalize();
+  const soft = norm.softDelete ? ' AND "deleted_at" IS NULL' : '';
+  const sql = 'SELECT * FROM "' + norm.tableName + '" WHERE "' + norm.primaryKey + '" = ?' + soft + ' LIMIT 1';
+  const res = await __schemaAdapter.query(sql, [id]);
+  if (!res.rows) return null;
+  return this._hydrate(res.columns, res.data[0]);
+};
+
+__SchemaDef.prototype.where = function (cond, ...params) {
+  this._assertModel('where');
+  return new __SchemaQuery(this).where(cond, ...params);
+};
+
+__SchemaDef.prototype.all = function () {
+  this._assertModel('all');
+  return new __SchemaQuery(this).all();
+};
+
+__SchemaDef.prototype.first = function () {
+  this._assertModel('first');
+  return new __SchemaQuery(this).first();
+};
+
+__SchemaDef.prototype.count = function () {
+  this._assertModel('count');
+  return new __SchemaQuery(this).count();
+};
+
+__SchemaDef.prototype.create = async function (data) {
+  this._assertModel('create');
+  // Input keys may be snake_case or camelCase; the runtime
+  // canonicalizes to camelCase so instance properties line up with
+  // declared field names.
+  const klass = this._getClass();
+  const canonical = {};
+  if (data && typeof data === 'object') {
+    for (const k of Object.keys(data)) canonical[__schemaCamel(k)] = data[k];
+  }
+  const inst = new klass(this._applyDefaults(canonical), false);
+  // FK columns like user_id canonicalize to userId and need to
+  // round-trip through the INSERT path, so attach them as own
+  // properties even though they aren't declared fields.
+  for (const [k, v] of Object.entries(canonical)) {
+    if (!(k in inst)) {
+      Object.defineProperty(inst, k, { value: v, enumerable: true, writable: true, configurable: true });
+    }
+  }
+  await __schemaSave(this, inst);
+  return inst;
+};
+
+__SchemaDef.prototype._assertModel = function (api) {
+  if (this.kind !== 'model') {
+    throw new Error('schema: .' + api + '() is :model-only (got :' + this.kind + ')');
+  }
+}
+
+// ---- Schema algebra (Phase 6) --------------------------------------------
+// Invariant: every algebra operation returns a :shape. Model algebra
+// strips ORM; :shape algebra drops behavior. Derived shapes preserve
+// field metadata (constraints, defaults, modifiers) from the source
+// normalized descriptor.
+`;
+export const SCHEMA_DDL_RUNTIME            = `const __SCHEMA_SQL_TYPES = {
   string: 'VARCHAR', text: 'TEXT', integer: 'INTEGER', number: 'DOUBLE',
   boolean: 'BOOLEAN', date: 'DATE', datetime: 'TIMESTAMP', email: 'VARCHAR',
   url: 'VARCHAR', uuid: 'UUID', phone: 'VARCHAR', zip: 'VARCHAR', json: 'JSON', any: 'JSON',
@@ -1282,24 +1268,29 @@ function __schemaSQLDefault(v) {
   return "'" + String(v).replace(/'/g, "''") + "'";
 }
 
-function __schema(descriptor) {
-  const def = new __SchemaDef(descriptor);
-  // Every user-declared named schema lands in the registry so
-  // nested-typed fields (address! Address, items! OrderItem[],
-  // role! Role) can resolve their type reference at validate time.
-  // Algebra-derived schemas (.pick/.omit/.partial/…) bypass this
-  // factory so their synthetic names don't shadow the source.
-  if (def.name) __SchemaRegistry.register(def);
-  return def;
-}
+// DDL prototype augmentation — added to __SchemaDef
 
-  const exports = {
-    __schema, SchemaError, __SchemaRegistry, __schemaSetAdapter,
-    __version: 1,
-  };
-  if (typeof globalThis !== 'undefined') globalThis.__ripSchema = exports;
-  return exports;
-})();
+__SchemaDef.prototype.toSQL = function (options) {
+  this._assertModel('toSQL');
+  return __schemaToSQL(this, options);
+};
+`;
+export const SCHEMA_BROWSER_STUBS_RUNTIME  = `// Browser stubs — replace ORM and DDL methods with throwing stubs.
+// Loaded ONLY in browser mode. Each stub throws sync (even for methods
+// that are async in the real runtime); test suite pins this behavior.
 
-// === End Schema Runtime ===
+const __schemaBrowserStub = (api) => function() {
+  throw new Error(
+    "schema." + api + "() is not available in the browser. " +
+    "Import @rip-lang/db on the server."
+  );
+};
+
+__SchemaDef.prototype.find    = __schemaBrowserStub('find');
+__SchemaDef.prototype.where   = __schemaBrowserStub('where');
+__SchemaDef.prototype.all     = __schemaBrowserStub('all');
+__SchemaDef.prototype.first   = __schemaBrowserStub('first');
+__SchemaDef.prototype.count   = __schemaBrowserStub('count');
+__SchemaDef.prototype.create  = __schemaBrowserStub('create');
+__SchemaDef.prototype.toSQL   = __schemaBrowserStub('toSQL');
 `;
