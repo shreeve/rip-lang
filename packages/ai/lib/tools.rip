@@ -1,0 +1,447 @@
+# ==============================================================================
+# tools.rip — MCP tool definitions + handlers
+#
+# Tools (11):
+#   status                — server info, credentials, defaults, conversation count
+#   list_models           — live + local merged catalog
+#   chat                  — one-shot peer message, no persistence
+#   discuss               — multi-turn, persistent
+#   panel                 — fan-out to several models, optional synthesis
+#   fresh_review          — isolated review with exclude_models
+#   list_conversations    — paginated list
+#   get_conversation      — full transcript
+#   delete_conversation   — cascade delete
+#   export_conversation   — json | markdown
+#   redact                — content | all
+#
+# Each handler returns a plain JS object (the dispatcher wraps it as MCP
+# content). On unrecoverable issues (missing creds, invalid params), throws.
+# ==============================================================================
+
+import * as cred       from './credentials.rip'
+import * as att        from './attachments.rip'
+import * as providers  from './providers.rip'
+
+DEFAULT_DISCUSS_SYSTEM =! '''
+  You are a senior software engineer collaborating with another AI on a real
+  codebase. Be direct, technical, and specific. When you disagree, explain
+  why with concrete reasoning. When you spot issues, name what's wrong and
+  how to fix it. Keep responses focused and actionable. If an attachment is
+  provided, read it carefully — quote it when relevant.
+'''
+
+DEFAULT_REVIEW_SYSTEM =! '''
+  You are an independent reviewer who has not previously seen this artifact.
+  Be skeptical and exact. Identify correctness bugs, safety issues, performance
+  problems, missing edge cases, and unclear design. Praise sparingly and only
+  when the code earns it. Reference specific lines or symbols where possible.
+  Return concise, prioritized findings.
+'''
+
+PANEL_SYNTHESIS_SYSTEM =! '''
+  You are synthesizing a multi-model panel. Do not introduce new claims that
+  aren't supported by at least one panelist. Identify clear consensus,
+  meaningful disagreements, and the strongest actionable recommendation.
+  Be brief.
+'''
+
+# ==============================================================================
+# Helpers
+# ==============================================================================
+
+usageZero = -> { tokens_in: 0, tokens_out: 0, cost_usd: 0 }
+
+addUsage = (a, b) ->
+  tokens_in:  (a.tokens_in or 0)  + (b.tokens_in or 0)
+  tokens_out: (a.tokens_out or 0) + (b.tokens_out or 0)
+  cost_usd:   (a.cost_usd or 0)   + (b.cost_usd or 0)
+
+normalizeMessages = (history, userText) ->
+  out = []
+  for m in history
+    continue if m.role is 'system'
+    role = if m.role is 'assistant' then 'assistant' else 'user'
+    out.push { role, text: m.text }
+  out.push { role: 'user', text: userText } if userText?
+  out
+
+independenceWarnings = (conversation, attachments) ->
+  warnings = []
+  return warnings unless conversation?.independent_of?.length
+  for label in conversation.independent_of
+    needle = String(label).toLowerCase()
+    for a in attachments or []
+      if String(a.name or '').toLowerCase().includes(needle) or String(a.source or '').toLowerCase().includes(needle)
+        warnings.push "artifact '#{a.name}' may break independence from '#{label}'"
+  warnings
+
+# ==============================================================================
+# status
+# ==============================================================================
+
+export status = (ctx) ->
+  store = ctx.store
+  d = providers.defaults()
+  warn = cred.filePermissionsLooseWarning()
+  warnings = []
+  warnings.push warn if warn
+  warnings.push "store recovered from corruption: #{store.recoveryError}" if store.recovered
+  {
+    server:
+      name: 'rip-ai'
+      version: ctx.version
+      db_path: store.dbPath
+    credentials: providers.credentialStatus()
+    defaults: d
+    conversations: store.counts()
+    warnings: warnings
+  }
+
+# ==============================================================================
+# list_models
+# ==============================================================================
+
+export list_models = (ctx, params = {}) ->
+  res = providers.listAll!
+    provider: params.provider
+    refresh: params.refresh is true
+  res
+
+# ==============================================================================
+# chat
+# ==============================================================================
+
+export chat = (ctx, params) ->
+  raise "missing 'prompt'" unless params.prompt
+  spec = providers.resolveModel(params.model, providers.defaults().chat)
+
+  loaded = att.load! ctx.store, null, params.attachments
+  messages = [{ role: 'user', text: params.prompt }]
+  result = providers.chat!
+    model: spec.id
+    system: params.system or null
+    messages: messages
+    attachments: loaded.attachments
+    max_tokens: params.max_tokens
+    max_cost_usd: params.max_cost_usd
+  warnings = [...(loaded.warnings or []), ...(result.warnings or [])]
+  {
+    model: result.model
+    text: result.text
+    attachments: att.viewsFor(loaded.attachments)
+    usage:
+      tokens_in:  result.tokens_in
+      tokens_out: result.tokens_out
+      cost_usd:   result.cost_usd
+    warnings: warnings
+  }
+
+# ==============================================================================
+# discuss
+# ==============================================================================
+
+export discuss = (ctx, params) ->
+  raise "missing 'message'" unless params.message
+  store = ctx.store
+  spec = providers.resolveModel(params.model, providers.defaults().discuss)
+
+  conv =
+    if params.conversation_id
+      store.findConversation(params.conversation_id) or
+      store.createConversation({ id: params.conversation_id, default_provider: spec.provider, default_model: spec.id, independent_of: params.independent_of })
+    else
+      store.createConversation({ default_provider: spec.provider, default_model: spec.id, independent_of: params.independent_of })
+
+  store.upsertConversation(conv.id, { independent_of: params.independent_of }) if params.independent_of?.length
+
+  loaded = att.load! store, conv.id, params.attachments
+  warnings = [...loaded.warnings, ...independenceWarnings(conv, loaded.attachments)]
+
+  history = store.listMessages(conv.id)
+  messages = normalizeMessages(history, params.message)
+
+  systemPrompt = params.system or DEFAULT_DISCUSS_SYSTEM unless history.length and history[0].role is 'system'
+  systemPrompt ?= history[0]?.text if history[0]?.role is 'system'
+
+  result = providers.chat!
+    model: spec.id
+    system: systemPrompt
+    messages: messages
+    attachments: loaded.attachments
+    max_tokens: params.max_tokens
+    max_cost_usd: params.max_cost_usd
+
+  if not history.length and (params.system or DEFAULT_DISCUSS_SYSTEM)
+    store.appendMessage(conv.id, { role: 'system', text: systemPrompt or DEFAULT_DISCUSS_SYSTEM })
+
+  userMsg = store.appendMessage(conv.id, {
+    role: 'user'
+    text: params.message
+    attachments: att.viewsFor(loaded.attachments)
+  })
+
+  changed = loaded.changed
+  assistantWarnings = [...warnings, ...(result.warnings or [])]
+
+  asstMsg = store.appendMessage(conv.id, {
+    role: 'assistant'
+    provider: spec.provider
+    model: spec.id
+    text: result.text
+    tokens_in:  result.tokens_in
+    tokens_out: result.tokens_out
+    cost_usd:   result.cost_usd
+    warnings: assistantWarnings
+    metadata: { finish_reason: result.finish_reason, changed_attachments: changed }
+  })
+
+  fresh = store.findConversation(conv.id)
+
+  {
+    conversation_id: conv.id
+    message_id: userMsg.id
+    response_id: asstMsg.id
+    model: result.model
+    text: result.text
+    attachments: att.viewsFor(loaded.attachments)
+    changed_attachments: changed
+    usage:
+      tokens_in:  result.tokens_in
+      tokens_out: result.tokens_out
+      cost_usd:   result.cost_usd
+    conversation_usage:
+      tokens_in:  fresh.total_tokens_in
+      tokens_out: fresh.total_tokens_out
+      cost_usd:   fresh.total_cost_usd
+    warnings: assistantWarnings
+  }
+
+# ==============================================================================
+# panel
+# ==============================================================================
+
+export panel = (ctx, params) ->
+  raise "missing 'prompt'" unless params.prompt
+  raise "panel requires 'models' (non-empty array)" unless params.models?.length
+  store = ctx.store
+
+  loaded = att.load! store, null, params.attachments
+  messages = [{ role: 'user', text: params.prompt }]
+  perModelCap = params.per_model_max_cost_usd
+
+  callOne = (modelSpec) ->
+    try
+      spec = providers.parseModel(modelSpec)
+      result = providers.chat!
+        model: spec.id
+        system: params.system or null
+        messages: messages
+        attachments: loaded.attachments
+        max_tokens: params.max_tokens
+        max_cost_usd: perModelCap
+      return {
+        model: result.model
+        ok: true
+        text: result.text
+        usage: { tokens_in: result.tokens_in, tokens_out: result.tokens_out, cost_usd: result.cost_usd }
+        finish_reason: result.finish_reason
+        warnings: result.warnings or []
+        error: null
+      }
+    catch err
+      return { model: String(modelSpec), ok: false, text: null, usage: usageZero(), error: err.message, warnings: [] }
+
+  pending = Promise.all(params.models.map(callOne))
+  responses = pending!
+
+  total = responses.reduce(((acc, r) -> addUsage(acc, r.usage)), usageZero())
+
+  successes = responses.filter (r) -> r.ok
+  raise "all panelists failed" if successes.length is 0
+
+  synthesis = null
+  if params.synthesize is true and successes.length > 1
+    synModel = params.synthesis_model or providers.defaults().synthesis
+    synSpec = providers.parseModel(synModel)
+    synPrompt = buildSynthesisPrompt(params.prompt, successes)
+    synResult = providers.chat!
+      model: synSpec.id
+      system: PANEL_SYNTHESIS_SYSTEM
+      messages: [{ role: 'user', text: synPrompt }]
+      attachments: []
+      max_tokens: params.max_tokens
+    synthesis =
+      model: synResult.model
+      text:  synResult.text
+      usage:
+        tokens_in:  synResult.tokens_in
+        tokens_out: synResult.tokens_out
+        cost_usd:   synResult.cost_usd
+    total = addUsage(total, synthesis.usage)
+
+  warnings = [...loaded.warnings]
+  for r in responses
+    warnings.push "#{r.model}: #{r.error}" unless r.ok
+
+  {
+    responses: responses
+    synthesis: synthesis
+    attachments: att.viewsFor(loaded.attachments)
+    usage: total
+    warnings: warnings
+  }
+
+buildSynthesisPrompt = (userPrompt, successes) ->
+  parts = []
+  parts.push "User prompt:\n#{userPrompt}"
+  parts.push "Model responses:"
+  for r in successes
+    parts.push "[#{r.model}]\n#{r.text}"
+  parts.join('\n\n')
+
+# ==============================================================================
+# fresh_review
+# ==============================================================================
+
+export fresh_review = (ctx, params) ->
+  raise "missing 'artifact'" unless params.artifact
+  store = ctx.store
+
+  excluded = (params.exclude_models or []).map (m) -> providers.parseModel(m).id
+  selectedSpec = null
+  if params.model
+    spec = providers.parseModel(params.model)
+    raise "requested model '#{spec.id}' is in exclude_models" if excluded.includes(spec.id)
+    selectedSpec = spec
+  else
+    candidates = candidateModels()
+    selectedSpec = candidates.find (c) -> not excluded.includes(c.id) and credentialedFor(c.provider)
+    raise "no available model after exclusions: #{excluded.join(', ')}" unless selectedSpec
+
+  artifactInput = if typeof params.artifact is 'string' then { type: 'file', path: params.artifact } else params.artifact
+  loaded = att.load! store, null, [artifactInput, ...(params.attachments or [])]
+
+  prompt = params.prompt or "Please review the attached artifact independently. Be direct and specific."
+  result = providers.chat!
+    model: selectedSpec.id
+    system: DEFAULT_REVIEW_SYSTEM
+    messages: [{ role: 'user', text: prompt }]
+    attachments: loaded.attachments
+    max_tokens: params.max_tokens
+    max_cost_usd: params.max_cost_usd
+
+  warnings = [...loaded.warnings, ...(result.warnings or [])]
+  warnings.push "excluded: #{excluded.join(', ')}" if excluded.length
+
+  {
+    model: result.model
+    excluded_models: excluded
+    text: result.text
+    attachments: att.viewsFor(loaded.attachments)
+    usage:
+      tokens_in:  result.tokens_in
+      tokens_out: result.tokens_out
+      cost_usd:   result.cost_usd
+    warnings: warnings
+  }
+
+candidateModels = ->
+  ds = providers.defaults()
+  for id in [ds.fresh_review, ds.discuss, ds.chat]
+    providers.parseModel(id)
+
+credentialedFor = (provider) ->
+  switch provider
+    when 'openai'    then cred.has('OPENAI_API_KEY')
+    when 'anthropic' then cred.has('ANTHROPIC_API_KEY')
+    else false
+
+# ==============================================================================
+# Conversation management
+# ==============================================================================
+
+export list_conversations = (ctx, params = {}) ->
+  rows = ctx.store.listConversations
+    limit: params.limit
+    before: params.before
+    include_redacted: params.include_redacted
+  conversations = rows.map (r) ->
+    id: r.id
+    title: r.title
+    created_at: r.created_at
+    updated_at: r.updated_at
+    default_model: r.default_model
+    total_tokens_in:  r.total_tokens_in
+    total_tokens_out: r.total_tokens_out
+    total_cost_usd:   r.total_cost_usd
+    redacted_at: r.redacted_at
+    independent_of: r.independent_of
+  { conversations: conversations }
+
+export get_conversation = (ctx, params) ->
+  raise "missing 'conversation_id'" unless params.conversation_id
+  conv = ctx.store.findConversation(params.conversation_id)
+  raise "conversation not found: #{params.conversation_id}" unless conv
+  msgs = ctx.store.listMessages(conv.id)
+  unless params.include_attachments is true
+    msgs = msgs.map (m) ->
+      copy = { ...m }
+      copy.attachments = m.attachments.map (a) -> { id: a.id, name: a.name, sha256: a.sha256, kind: a.kind, bytes: a.bytes }
+      copy
+  { conversation: conv, messages: msgs }
+
+export delete_conversation = (ctx, params) ->
+  raise "missing 'conversation_id'" unless params.conversation_id
+  conv = ctx.store.findConversation(params.conversation_id)
+  raise "conversation not found: #{params.conversation_id}" unless conv
+  ctx.store.deleteConversation(conv.id)
+  { deleted: true, conversation_id: conv.id }
+
+export export_conversation = (ctx, params) ->
+  raise "missing 'conversation_id'" unless params.conversation_id
+  conv = ctx.store.findConversation(params.conversation_id)
+  raise "conversation not found: #{params.conversation_id}" unless conv
+  msgs = ctx.store.listMessages(conv.id)
+  format = (params.format or 'json').toLowerCase()
+  raise "format must be 'json' or 'markdown'" unless format in ['json', 'markdown']
+
+  if format is 'json'
+    return {
+      conversation_id: conv.id
+      format: 'json'
+      content: JSON.stringify({ conversation: conv, messages: msgs }, null, 2)
+    }
+
+  lines = []
+  lines.push "# Conversation #{conv.id}"
+  lines.push ""
+  lines.push "- Created: #{conv.created_at}"
+  lines.push "- Updated: #{conv.updated_at}"
+  lines.push "- Default model: #{conv.default_model or '(none)'}"
+  lines.push "- Total cost: $#{Number(conv.total_cost_usd or 0).toFixed(4)} (#{conv.total_tokens_in} in, #{conv.total_tokens_out} out)"
+  lines.push ""
+  for m in msgs
+    label =
+      switch m.role
+        when 'user'      then 'User'
+        when 'assistant' then "Assistant (#{m.model or 'unknown'})"
+        when 'system'    then 'System'
+        else m.role
+    lines.push "## #{label} — seq #{m.seq}"
+    lines.push m.text
+    lines.push ""
+    if m.attachments?.length
+      lines.push "_Attachments: #{m.attachments.map((a) -> a.name).join(', ')}_"
+      lines.push ""
+  {
+    conversation_id: conv.id
+    format: 'markdown'
+    content: lines.join('\n')
+  }
+
+export redact = (ctx, params) ->
+  raise "missing 'conversation_id'" unless params.conversation_id
+  mode = params.mode or 'content'
+  raise "mode must be 'content' or 'all'" unless mode in ['content', 'all']
+  conv = ctx.store.redactConversation(params.conversation_id, mode)
+  { redacted: true, mode: mode, conversation_id: conv.id }

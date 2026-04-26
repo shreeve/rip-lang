@@ -1,0 +1,304 @@
+# ==============================================================================
+# @rip-lang/ai — Persistent multi-model AI consultation MCP server
+#
+# Author: Steve Shreeve (steve.shreeve@gmail.com)
+#
+# Tools (11):
+#   status, list_models,
+#   chat, discuss, panel, fresh_review,
+#   list_conversations, get_conversation, delete_conversation,
+#   export_conversation, redact
+#
+# Persistence:
+#   ~/.config/rip-ai/conversations.db   (SQLite, mode 0600)
+#   ~/.config/rip-ai/attachments/...    (content-addressed cache)
+#   ~/.config/rip-ai/models.json        (catalog disk cache)
+#
+# Credentials:
+#   env vars OPENAI_API_KEY / ANTHROPIC_API_KEY (preferred)
+#   ~/.config/rip/credentials                  (KEY=value, mode 0600)
+#
+# Cursor MCP config (~/.cursor/mcp.json):
+#   {
+#     "mcpServers": {
+#       "ai": { "command": "rip-ai" }
+#     }
+#   }
+# ==============================================================================
+
+import { createInterface } from 'readline'
+import * as store    from './lib/store.rip'
+import * as toolset  from './lib/tools.rip'
+
+VERSION =! '1.0.0'
+PROTOCOL =! '2024-11-05'
+MAX_RESPONSE =! 256_000
+
+# ==============================================================================
+# Tool catalogue (MCP schema)
+# ==============================================================================
+
+ATTACHMENT_SCHEMA =! {
+  type: 'array'
+  description: 'Attachments. Each item is a file, url, or blob.'
+  items:
+    type: 'object'
+    properties:
+      type:    { type: 'string', enum: ['file', 'url', 'blob'] }
+      path:    { type: 'string', description: "Required when type is 'file'." }
+      url:     { type: 'string', description: "Required when type is 'url'." }
+      name:    { type: 'string', description: "Display name (required for blob)." }
+      content: { type: 'string', description: "Required when type is 'blob'." }
+      mime:    { type: 'string', description: 'Optional MIME type override.' }
+    required: ['type']
+}
+
+TOOLS =! [
+  {
+    name: 'status'
+    description: 'Inspect the MCP server: credential availability, defaults, conversation count, db path.'
+    inputSchema: { type: 'object', properties: {} }
+  }
+  {
+    name: 'list_models'
+    description: 'Live model catalog from configured providers, merged with local capability + pricing metadata.'
+    inputSchema:
+      type: 'object'
+      properties:
+        provider: { type: 'string', enum: ['openai', 'anthropic'] }
+        refresh:  { type: 'boolean', description: 'Bypass memory cache and re-query providers.' }
+  }
+  {
+    name: 'chat'
+    description: 'One-shot peer message. No persistence.'
+    inputSchema:
+      type: 'object'
+      properties:
+        prompt:        { type: 'string' }
+        model:         { type: 'string', description: '"provider:model" or alias (gpt, opus, haiku, ...).' }
+        system:        { type: 'string' }
+        attachments:   ATTACHMENT_SCHEMA
+        max_tokens:    { type: 'integer' }
+        max_cost_usd:  { type: 'number',  description: 'Refuse if estimated input cost would exceed this cap.' }
+      required: ['prompt']
+  }
+  {
+    name: 'discuss'
+    description: 'Multi-turn peer conversation, persistent across server restarts. Pass conversation_id to continue.'
+    inputSchema:
+      type: 'object'
+      properties:
+        conversation_id: { type: 'string', description: 'Existing conversation, or omit to create one.' }
+        message:         { type: 'string' }
+        model:           { type: 'string' }
+        system:          { type: 'string', description: 'Used only on first turn.' }
+        attachments:     ATTACHMENT_SCHEMA
+        independent_of:  { type: 'array', items: { type: 'string' }, description: 'Artifact / conversation labels to stay independent from.' }
+        max_tokens:      { type: 'integer' }
+        max_cost_usd:    { type: 'number' }
+      required: ['message']
+  }
+  {
+    name: 'panel'
+    description: 'Send the same prompt to multiple models in parallel. Optional cheap-model synthesis.'
+    inputSchema:
+      type: 'object'
+      properties:
+        prompt:                  { type: 'string' }
+        models:                  { type: 'array', items: { type: 'string' } }
+        system:                  { type: 'string' }
+        attachments:             ATTACHMENT_SCHEMA
+        synthesize:              { type: 'boolean', description: 'Run synthesis over successful responses.' }
+        synthesis_model:         { type: 'string' }
+        max_tokens:              { type: 'integer' }
+        per_model_max_cost_usd:  { type: 'number' }
+      required: ['prompt', 'models']
+  }
+  {
+    name: 'fresh_review'
+    description: 'Independent review of an artifact. exclude_models avoids any model that previously coauthored it.'
+    inputSchema:
+      type: 'object'
+      properties:
+        artifact:        { description: 'Path string or attachment object {type, path|url|content, name?}.' }
+        prompt:          { type: 'string' }
+        model:           { type: 'string' }
+        exclude_models:  { type: 'array', items: { type: 'string' } }
+        attachments:     ATTACHMENT_SCHEMA
+        max_tokens:      { type: 'integer' }
+        max_cost_usd:    { type: 'number' }
+      required: ['artifact']
+  }
+  {
+    name: 'list_conversations'
+    description: 'Paginated list of stored conversations.'
+    inputSchema:
+      type: 'object'
+      properties:
+        limit:            { type: 'integer' }
+        before:           { type: 'string', description: 'updated_at cursor for pagination.' }
+        include_redacted: { type: 'boolean' }
+  }
+  {
+    name: 'get_conversation'
+    description: 'Full transcript for a conversation.'
+    inputSchema:
+      type: 'object'
+      properties:
+        conversation_id:     { type: 'string' }
+        include_attachments: { type: 'boolean', description: 'Include full attachment metadata in messages.' }
+      required: ['conversation_id']
+  }
+  {
+    name: 'delete_conversation'
+    description: 'Cascade delete a conversation and its messages.'
+    inputSchema:
+      type: 'object'
+      properties:
+        conversation_id: { type: 'string' }
+      required: ['conversation_id']
+  }
+  {
+    name: 'export_conversation'
+    description: 'Export a conversation as json or markdown.'
+    inputSchema:
+      type: 'object'
+      properties:
+        conversation_id: { type: 'string' }
+        format:          { type: 'string', enum: ['json', 'markdown'] }
+      required: ['conversation_id']
+  }
+  {
+    name: 'redact'
+    description: "Redact a conversation. mode='content' replaces text; mode='all' removes messages."
+    inputSchema:
+      type: 'object'
+      properties:
+        conversation_id: { type: 'string' }
+        mode:            { type: 'string', enum: ['content', 'all'] }
+      required: ['conversation_id']
+  }
+]
+
+INSTRUCTIONS =! '''
+  Persistent multi-model AI consultation. Use:
+    - status / list_models     — discover what's available
+    - chat                     — one-shot second opinion
+    - discuss                  — multi-turn collaboration with state across restarts
+    - panel                    — fan out to several models, optional synthesis
+    - fresh_review             — independent review with coauthor exclusion
+    - list_/get_/delete_/export_/redact_conversation — manage stored conversations
+
+  Conversations persist on disk and survive server restarts. Attachments are
+  loaded once and content-addressed; pass them again on later turns and the
+  server will detect changes since the peer's last view.
+
+  When relaying peer feedback, attribute it (e.g. "GPT-5.5 suggests…").
+'''
+
+# ==============================================================================
+# Tool dispatch
+# ==============================================================================
+
+HANDLERS =! {
+  status:              toolset.status
+  list_models:         toolset.list_models
+  chat:                toolset.chat
+  discuss:             toolset.discuss
+  panel:               toolset.panel
+  fresh_review:        toolset.fresh_review
+  list_conversations:  toolset.list_conversations
+  get_conversation:    toolset.get_conversation
+  delete_conversation: toolset.delete_conversation
+  export_conversation: toolset.export_conversation
+  redact:              toolset.redact
+}
+
+ASYNC_TOOLS =! { chat: 1, discuss: 1, panel: 1, fresh_review: 1, list_models: 1 }
+
+callTool = (ctx, name, args) ->
+  fn = HANDLERS[name]
+  raise "unknown tool: #{name}" unless fn
+  if ASYNC_TOOLS[name]
+    fn! ctx, args
+  else
+    fn(ctx, args)
+
+# ==============================================================================
+# JSON-RPC framing
+# ==============================================================================
+
+ok       = (id, result) -> JSON.stringify({ jsonrpc: '2.0', id, result })
+fail     = (id, code, message, data) ->
+  err = { code, message }
+  err.data = data if data?
+  JSON.stringify({ jsonrpc: '2.0', id, error: err })
+
+toolContent = (result) ->
+  text = JSON.stringify(result, null, 2)
+  if text.length > MAX_RESPONSE
+    text = text.slice(0, MAX_RESPONSE) + '\n\n[truncated]'
+  [{ type: 'text', text }]
+
+dispatch = (ctx, msg) ->
+  { id, method, params } = msg
+
+  switch method
+    when 'initialize'
+      ok id,
+        protocolVersion: PROTOCOL
+        capabilities: { tools: {} }
+        serverInfo: { name: 'rip-ai', version: VERSION }
+        instructions: INSTRUCTIONS
+
+    when 'notifications/initialized', 'notifications/cancelled'
+      null
+
+    when 'tools/list'
+      ok id, { tools: TOOLS }
+
+    when 'tools/call'
+      name = params?.name
+      args = params?.arguments or {}
+      try
+        result = callTool! ctx, name, args
+        ok id, { content: toolContent(result), isError: false }
+      catch err
+        msg = err?.message or String(err)
+        ok id, { content: [{ type: 'text', text: JSON.stringify({ error: msg }, null, 2) }], isError: true }
+
+    else
+      if id?
+        fail id, -32601, "Unknown method: #{method}"
+      else
+        null
+
+# ==============================================================================
+# Main
+# ==============================================================================
+
+log = (...args) -> console.error '[rip-ai]', ...args
+
+main = ->
+  s = store.open()
+  ctx = { store: s, version: VERSION }
+
+  log "v#{VERSION} ready (db=#{s.dbPath})"
+  log "store recovered from corruption" if s.recovered
+
+  rl = createInterface({ input: process.stdin })
+  rl.on 'line', (line) ->
+    return unless line.trim()
+    try
+      msg = JSON.parse(line)
+    catch
+      process.stdout.write fail(null, -32700, "Parse error") + '\n'
+      return
+    try
+      out = dispatch! ctx, msg
+      process.stdout.write out + '\n' if out
+    catch err
+      log "dispatch error: #{err.message}"
+      process.stdout.write fail(msg?.id, -32603, "Internal error: #{err.message}") + '\n' if msg?.id?
+
+main!

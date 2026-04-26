@@ -1,0 +1,378 @@
+# ==============================================================================
+# store.rip — SQLite-backed persistence for conversations, messages, attachments
+#
+# Database: ~/.config/rip-ai/conversations.db (WAL, foreign keys on)
+# Permissions: parent dir 0700, db files 0600
+#
+# Public API:
+#   open()                                  — initialize and return a Store
+#   store.createConversation(opts)          — new conversation, return row
+#   store.upsertConversation(id, opts)      — update title / defaults / independence
+#   store.findConversation(id)              — row or null
+#   store.listConversations(opts)           — paginated list
+#   store.deleteConversation(id)            — cascade delete
+#   store.redactConversation(id, mode)      — content | all
+#   store.appendMessage(id, message)        — atomic insert + totals update
+#   store.listMessages(id)                  — ordered messages for conversation
+#   store.recordAttachment(meta)            — upsert attachment by sha256
+#   store.findAttachmentBySource(id, src)   — last attachment with same source path
+# ==============================================================================
+
+import { Database } from 'bun:sqlite'
+import { existsSync, mkdirSync, renameSync, chmodSync } from 'fs'
+import { join } from 'path'
+import { randomBytes } from 'crypto'
+
+home = process.env.HOME or process.env.USERPROFILE or ''
+ROOT_DIR =! join(home, '.config', 'rip-ai')
+DB_PATH =!  join(ROOT_DIR, 'conversations.db')
+
+DDL =! '''
+  PRAGMA foreign_keys = ON;
+  PRAGMA journal_mode = WAL;
+  PRAGMA synchronous  = NORMAL;
+
+  CREATE TABLE IF NOT EXISTS conversations (
+    id TEXT PRIMARY KEY,
+    title TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    default_provider TEXT,
+    default_model TEXT,
+    total_tokens_in  INTEGER NOT NULL DEFAULT 0,
+    total_tokens_out INTEGER NOT NULL DEFAULT 0,
+    total_cost_usd   REAL    NOT NULL DEFAULT 0,
+    independent_of_json TEXT NOT NULL DEFAULT '[]',
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    redacted_at TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS messages (
+    id TEXT PRIMARY KEY,
+    conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    seq INTEGER NOT NULL,
+    role TEXT NOT NULL CHECK (role IN ('system','user','assistant','review','synthesis')),
+    provider TEXT,
+    model TEXT,
+    text TEXT NOT NULL,
+    attachments_json TEXT NOT NULL DEFAULT '[]',
+    tokens_in  INTEGER NOT NULL DEFAULT 0,
+    tokens_out INTEGER NOT NULL DEFAULT 0,
+    cost_usd   REAL    NOT NULL DEFAULT 0,
+    warnings_json TEXT NOT NULL DEFAULT '[]',
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL,
+    UNIQUE (conversation_id, seq)
+  );
+
+  CREATE TABLE IF NOT EXISTS attachments (
+    id TEXT PRIMARY KEY,
+    sha256 TEXT NOT NULL UNIQUE,
+    kind TEXT NOT NULL CHECK (kind IN ('file','url','blob')),
+    name TEXT NOT NULL,
+    source TEXT,
+    mime TEXT,
+    bytes INTEGER NOT NULL,
+    cache_path TEXT NOT NULL,
+    first_seen_at TEXT NOT NULL,
+    last_seen_at  TEXT NOT NULL,
+    metadata_json TEXT NOT NULL DEFAULT '{}'
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_messages_conversation_seq ON messages(conversation_id, seq);
+  CREATE INDEX IF NOT EXISTS idx_messages_model ON messages(provider, model);
+  CREATE INDEX IF NOT EXISTS idx_attachments_sha256 ON attachments(sha256);
+'''
+
+now = -> new Date().toISOString()
+hex = (bytes) -> randomBytes(bytes).toString('hex')
+
+genConversationId = -> "c_#{hex(8)}"
+genMessageId      = -> "m_#{hex(10)}"
+
+ensureRoot = ->
+  unless existsSync(ROOT_DIR)
+    mkdirSync(ROOT_DIR, { recursive: true, mode: 0o700 })
+  try chmodSync(ROOT_DIR, 0o700)
+
+quarantine = (path) ->
+  return unless existsSync(path)
+  stamp = new Date().toISOString().replace(/[^\d]/g, '').slice(0, 14)
+  for ext in ['', '-shm', '-wal']
+    src = "#{path}#{ext}"
+    if existsSync(src)
+      try renameSync(src, "#{src}.corrupt.#{stamp}")
+
+openDatabase = ->
+  ensureRoot()
+  try
+    db = new Database(DB_PATH, { create: true })
+    db.exec(DDL)
+    try chmodSync(DB_PATH, 0o600)
+    return { db, recovered: false, error: null }
+  catch err
+    quarantine(DB_PATH)
+    db = new Database(DB_PATH, { create: true })
+    db.exec(DDL)
+    try chmodSync(DB_PATH, 0o600)
+    { db, recovered: true, error: err.message }
+
+# ==============================================================================
+# Row helpers
+# ==============================================================================
+
+parseJson = (text, fallback) ->
+  return fallback unless text
+  try JSON.parse(text) catch then fallback
+
+inflateConversation = (row) ->
+  return null unless row
+  {
+    id: row.id
+    title: row.title
+    created_at: row.created_at
+    updated_at: row.updated_at
+    default_provider: row.default_provider
+    default_model: row.default_model
+    total_tokens_in:  row.total_tokens_in
+    total_tokens_out: row.total_tokens_out
+    total_cost_usd:   row.total_cost_usd
+    independent_of: parseJson(row.independent_of_json, [])
+    metadata: parseJson(row.metadata_json, {})
+    redacted_at: row.redacted_at
+  }
+
+inflateMessage = (row) ->
+  return null unless row
+  {
+    id: row.id
+    conversation_id: row.conversation_id
+    seq: row.seq
+    role: row.role
+    provider: row.provider
+    model: row.model
+    text: row.text
+    attachments: parseJson(row.attachments_json, [])
+    tokens_in:  row.tokens_in
+    tokens_out: row.tokens_out
+    cost_usd:   row.cost_usd
+    warnings: parseJson(row.warnings_json, [])
+    metadata: parseJson(row.metadata_json, {})
+    created_at: row.created_at
+  }
+
+# ==============================================================================
+# Store factory
+# ==============================================================================
+
+export open = ->
+  { db, recovered, error } = openDatabase()
+
+  stmts =
+    conversationById: db.query 'SELECT * FROM conversations WHERE id = ?'
+    messageById: db.query 'SELECT * FROM messages WHERE id = ?'
+    insertConversation: db.query '''
+      INSERT INTO conversations (id, title, created_at, updated_at, default_provider, default_model, independent_of_json, metadata_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    '''
+    updateConversation: db.query '''
+      UPDATE conversations SET title = ?, updated_at = ?, default_provider = ?, default_model = ?, independent_of_json = ?, metadata_json = ?
+      WHERE id = ?
+    '''
+    touchConversationUpdated: db.query 'UPDATE conversations SET updated_at = ? WHERE id = ?'
+    addToTotals: db.query '''
+      UPDATE conversations
+      SET total_tokens_in  = total_tokens_in  + ?,
+          total_tokens_out = total_tokens_out + ?,
+          total_cost_usd   = total_cost_usd   + ?,
+          updated_at = ?
+      WHERE id = ?
+    '''
+    nextSeq: db.query 'SELECT COALESCE(MAX(seq), 0) + 1 AS seq FROM messages WHERE conversation_id = ?'
+    insertMessage: db.query '''
+      INSERT INTO messages (id, conversation_id, seq, role, provider, model, text, attachments_json, tokens_in, tokens_out, cost_usd, warnings_json, metadata_json, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    '''
+    listMessages: db.query 'SELECT * FROM messages WHERE conversation_id = ? ORDER BY seq ASC'
+    listConversations: db.query '''
+      SELECT * FROM conversations
+      WHERE (?1 = 1 OR redacted_at IS NULL)
+        AND (?2 IS NULL OR updated_at < ?2)
+      ORDER BY updated_at DESC
+      LIMIT ?3
+    '''
+    countConversations: db.query 'SELECT COUNT(*) AS n FROM conversations'
+    sumCost: db.query 'SELECT COALESCE(SUM(total_cost_usd), 0) AS total FROM conversations'
+    deleteConversation: db.query 'DELETE FROM conversations WHERE id = ?'
+    deleteMessages: db.query 'DELETE FROM messages WHERE conversation_id = ?'
+    redactContent: db.query '''
+      UPDATE messages SET text = '[redacted]', attachments_json = '[]'
+      WHERE conversation_id = ?
+    '''
+    markRedacted: db.query 'UPDATE conversations SET redacted_at = ?, updated_at = ? WHERE id = ?'
+    findAttachmentBySha: db.query 'SELECT * FROM attachments WHERE sha256 = ?'
+    insertAttachment: db.query '''
+      INSERT INTO attachments (id, sha256, kind, name, source, mime, bytes, cache_path, first_seen_at, last_seen_at, metadata_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    '''
+    touchAttachment: db.query 'UPDATE attachments SET last_seen_at = ? WHERE sha256 = ?'
+    lastAttachmentBySource: db.query '''
+      SELECT a.*
+      FROM messages m, json_each(m.attachments_json) j
+      JOIN attachments a ON a.id = json_extract(j.value, '$.id')
+      WHERE m.conversation_id = ? AND a.source = ?
+      ORDER BY m.seq DESC
+      LIMIT 1
+    '''
+
+  store = {}
+  store.db = db
+  store.dbPath = DB_PATH
+  store.rootDir = ROOT_DIR
+  store.recovered = recovered
+  store.recoveryError = error
+
+  store.createConversation = (opts = {}) ->
+    id = opts.id or genConversationId()
+    ts = now()
+    stmts.insertConversation.run(
+      id
+      opts.title or null
+      ts, ts
+      opts.default_provider or null
+      opts.default_model or null
+      JSON.stringify(opts.independent_of or [])
+      JSON.stringify(opts.metadata or {})
+    )
+    inflateConversation(stmts.conversationById.get(id))
+
+  store.findConversation = (id) ->
+    inflateConversation(stmts.conversationById.get(id))
+
+  store.upsertConversation = (id, opts = {}) ->
+    existingRow = stmts.conversationById.get(id)
+    return store.createConversation({ ...opts, id }) unless existingRow
+    existing = inflateConversation(existingRow)
+    ts = now()
+    stmts.updateConversation.run(
+      opts.title ?? existing.title
+      ts
+      opts.default_provider ?? existing.default_provider
+      opts.default_model    ?? existing.default_model
+      JSON.stringify(opts.independent_of ?? existing.independent_of)
+      JSON.stringify(opts.metadata ?? existing.metadata)
+      id
+    )
+    inflateConversation(stmts.conversationById.get(id))
+
+  store.appendMessage = (conversationId, message) ->
+    conv = stmts.conversationById.get(conversationId)
+    throw new Error("conversation not found: #{conversationId}") unless conv
+
+    seq = stmts.nextSeq.get(conversationId).seq
+    msgId = message.id or genMessageId()
+    ts = now()
+    stmts.insertMessage.run(
+      msgId
+      conversationId
+      seq
+      message.role
+      message.provider or null
+      message.model or null
+      message.text
+      JSON.stringify(message.attachments or [])
+      message.tokens_in  or 0
+      message.tokens_out or 0
+      message.cost_usd   or 0
+      JSON.stringify(message.warnings or [])
+      JSON.stringify(message.metadata or {})
+      ts
+    )
+
+    if message.tokens_in or message.tokens_out or message.cost_usd
+      stmts.addToTotals.run(
+        message.tokens_in  or 0
+        message.tokens_out or 0
+        message.cost_usd   or 0
+        ts
+        conversationId
+      )
+    else
+      stmts.touchConversationUpdated.run(ts, conversationId)
+
+    inflateMessage(stmts.messageById.get(msgId))
+
+  store.listMessages = (conversationId) ->
+    stmts.listMessages.all(conversationId).map(inflateMessage)
+
+  store.listConversations = (opts = {}) ->
+    limit  = opts.limit  ?? 50
+    before = opts.before ?? null
+    includeRedacted = opts.include_redacted ?? false
+    rows = stmts.listConversations.all(
+      if includeRedacted then 1 else 0
+      before
+      limit
+    )
+    rows.map(inflateConversation)
+
+  store.counts = ->
+    n = stmts.countConversations.get()?.n or 0
+    total = stmts.sumCost.get()?.total or 0
+    { conversations: n, total_cost_usd: total }
+
+  store.deleteConversation = (id) ->
+    stmts.deleteConversation.run(id)
+
+  store.redactConversation = (id, mode = 'content') ->
+    conv = stmts.conversationById.get(id)
+    throw new Error("conversation not found: #{id}") unless conv
+    ts = now()
+    switch mode
+      when 'content' then stmts.redactContent.run(id)
+      when 'all'     then stmts.deleteMessages.run(id)
+      else raise "redact mode must be 'content' or 'all'"
+    stmts.markRedacted.run(ts, ts, id)
+    inflateConversation(stmts.conversationById.get(id))
+
+  store.recordAttachment = (meta) ->
+    existing = stmts.findAttachmentBySha.get(meta.sha256)
+    ts = now()
+    if existing
+      stmts.touchAttachment.run(ts, meta.sha256)
+      return { ...existing, last_seen_at: ts, reused: true }
+    attId = "sha256:#{meta.sha256}"
+    stmts.insertAttachment.run(
+      attId
+      meta.sha256
+      meta.kind
+      meta.name
+      meta.source or null
+      meta.mime or null
+      meta.bytes
+      meta.cache_path
+      ts, ts
+      JSON.stringify(meta.metadata or {})
+    )
+    {
+      id: attId
+      sha256: meta.sha256
+      kind: meta.kind
+      name: meta.name
+      source: meta.source or null
+      mime: meta.mime or null
+      bytes: meta.bytes
+      cache_path: meta.cache_path
+      first_seen_at: ts
+      last_seen_at: ts
+      reused: false
+    }
+
+  store.findAttachmentBySha = (sha) ->
+    stmts.findAttachmentBySha.get(sha)
+
+  store.findLastAttachmentBySource = (conversationId, source) ->
+    return null unless source
+    stmts.lastAttachmentBySource.get(conversationId, source)
+
+  store

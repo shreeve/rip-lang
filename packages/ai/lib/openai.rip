@@ -1,0 +1,88 @@
+# ==============================================================================
+# openai.rip — OpenAI provider adapter
+#
+# Wraps /v1/chat/completions and /v1/models. Returns the normalized adapter
+# shape: { provider, listModels, chat }. Pricing and capability metadata are
+# applied in providers.rip; this module only handles HTTP and message shape.
+# ==============================================================================
+
+import * as cred from './credentials.rip'
+import * as att  from './attachments.rip'
+
+API =! 'https://api.openai.com/v1'
+
+export provider =! 'openai'
+
+requireKey = ->
+  key = cred.get('OPENAI_API_KEY')
+  raise "OPENAI_API_KEY not set" unless key
+  key
+
+headers = ->
+  'authorization': "Bearer #{requireKey()}"
+  'content-type': 'application/json'
+
+# ==============================================================================
+# Live model listing
+# ==============================================================================
+
+export listModels = ->
+  res = fetch! "#{API}/models", { headers: headers() }
+  raise "OpenAI /models returned HTTP #{res.status}" unless res.ok
+  data = res.json!
+  rows = data?.data or []
+  for row in rows
+    {
+      provider_model: row.id
+      id: "openai:#{row.id}"
+      created_at: row.created and new Date(row.created * 1000).toISOString()
+      raw: { owned_by: row.owned_by }
+    }
+
+# ==============================================================================
+# Chat
+# ==============================================================================
+
+renderUserContent = (text, attachments) ->
+  parts = []
+  parts.push { type: 'text', text } if text
+  block = att.renderText(attachments, { changed: attachments.filter((a) -> a.changed_since_last_view) }) if attachments?.length
+  parts.push { type: 'text', text: block } if block
+  parts
+
+buildMessages = ({ system, messages, attachments }) ->
+  out = []
+  out.push { role: 'system', content: system } if system
+  for msg, idx in messages
+    if msg.role is 'user' and idx is messages.length - 1 and attachments?.length
+      out.push { role: 'user', content: renderUserContent(msg.text, attachments) }
+    else
+      out.push { role: msg.role, content: msg.text }
+  out
+
+export chat = ({ model, system, messages, attachments, max_tokens }) ->
+  body =
+    model: model
+    messages: buildMessages({ system, messages, attachments })
+  body.max_completion_tokens = max_tokens if max_tokens
+
+  res = fetch! "#{API}/chat/completions",
+    method: 'POST'
+    headers: headers()
+    body: JSON.stringify(body)
+
+  data = res.json!
+  if data?.error
+    raise "OpenAI: #{data.error.message or JSON.stringify(data.error)}"
+  raise "OpenAI returned HTTP #{res.status}" unless res.ok
+
+  choice = data.choices?[0]
+  text = choice?.message?.content or ''
+  usage = data.usage or {}
+  {
+    text
+    tokens_in:  usage.prompt_tokens     or 0
+    tokens_out: usage.completion_tokens or 0
+    finish_reason: choice?.finish_reason or null
+    raw: data
+  }

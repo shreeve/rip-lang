@@ -1,0 +1,314 @@
+# ==============================================================================
+# attachments.rip — first-class file/url/blob attachments
+#
+# Each attachment is loaded once, content-addressed (SHA-256), cached on disk,
+# and recorded in the store. Across turns, the same content is reused; changed
+# files are detected by comparing the new hash to the most recent attachment
+# with the same source path in this conversation.
+#
+# Provider serialization is plain text — each attachment becomes a tagged
+# block embedded in the user message. Provider-native file uploads are out of
+# scope.
+#
+# Caps:
+#   - 2 MB per attachment
+#   - 8 MB per call
+#   - URL: http/https only, max 3 redirects, 10 s timeout, no private IP literals
+# ==============================================================================
+
+import { readFileSync, statSync, existsSync, mkdirSync, writeFileSync, chmodSync } from 'fs'
+import { join, basename, isAbsolute, resolve } from 'path'
+import { createHash } from 'crypto'
+
+home = process.env.HOME or process.env.USERPROFILE or ''
+CACHE_DIR =! join(home, '.config', 'rip-ai', 'attachments')
+
+MAX_BYTES_PER_ATTACHMENT =! 2 * 1024 * 1024
+MAX_BYTES_PER_CALL       =! 8 * 1024 * 1024
+URL_TIMEOUT_MS =! 10000
+URL_MAX_REDIRECTS =! 3
+
+PRIVATE_HOST_PATTERNS =! [
+  /^localhost$/i
+  /^0\.0\.0\.0$/
+  /^127\./
+  /^10\./
+  /^192\.168\./
+  /^169\.254\./
+  /^172\.(1[6-9]|2[0-9]|3[0-1])\./
+  /^::1$/
+  /^fe80:/i
+  /^f[cd][0-9a-f]{2}:/i
+]
+
+# ==============================================================================
+# Hashing + cache
+# ==============================================================================
+
+ensureCacheDir = ->
+  unless existsSync(CACHE_DIR)
+    mkdirSync(CACHE_DIR, { recursive: true, mode: 0o700 })
+
+shardedPath = (sha256) ->
+  join(CACHE_DIR, sha256.slice(0, 2), sha256.slice(2, 4), sha256)
+
+writeCached = (sha256, bytes) ->
+  ensureCacheDir()
+  path = shardedPath(sha256)
+  unless existsSync(path)
+    mkdirSync(join(path, '..'), { recursive: true, mode: 0o700 })
+    writeFileSync(path, bytes, { mode: 0o600 })
+    try chmodSync(path, 0o600)
+  path
+
+hashBytes = (bytes) ->
+  createHash('sha256').update(bytes).digest('hex')
+
+# ==============================================================================
+# URL safety
+# ==============================================================================
+
+validateUrl = (str) ->
+  parsed = null
+  try
+    parsed = new URL(str)
+  catch
+    raise "invalid URL: #{str}"
+  unless parsed.protocol is 'http:' or parsed.protocol is 'https:'
+    raise "URL must be http or https: #{str}"
+  host = parsed.hostname
+  for re in PRIVATE_HOST_PATTERNS
+    raise "URL host #{host} is in a private/reserved range" if re.test(host)
+  parsed
+
+# ==============================================================================
+# Loaders
+# ==============================================================================
+
+guessMime = (name) ->
+  ext = String(name or '').toLowerCase().split('.').pop()
+  switch ext
+    when 'json'                            then 'application/json'
+    when 'md', 'markdown'                  then 'text/markdown'
+    when 'txt', 'log'                      then 'text/plain'
+    when 'js', 'mjs', 'cjs'                then 'text/javascript'
+    when 'ts'                              then 'text/typescript'
+    when 'rip', 'coffee'                   then 'text/x-rip'
+    when 'css'                             then 'text/css'
+    when 'html', 'htm'                     then 'text/html'
+    when 'yaml', 'yml'                     then 'application/yaml'
+    when 'xml'                             then 'application/xml'
+    when 'csv'                             then 'text/csv'
+    when 'sql'                             then 'application/sql'
+    else 'application/octet-stream'
+
+asUtf8 = (bytes, mime) ->
+  return null unless bytes
+  return null if /^image\//.test(mime) or /^audio\//.test(mime) or /^video\//.test(mime)
+  buf = if Buffer.isBuffer(bytes) then bytes else Buffer.from(bytes)
+  for i in [0...buf.length]
+    return null if buf[i] is 0
+  buf.toString('utf-8')
+
+loadFile = (input) ->
+  raise "file attachment requires .path" unless input.path
+  path = if isAbsolute(input.path) then input.path else resolve(input.path)
+  raise "file not found: #{path}" unless existsSync(path)
+  st = statSync(path)
+  raise "file too large: #{path} (#{st.size} bytes, max #{MAX_BYTES_PER_ATTACHMENT})" if st.size > MAX_BYTES_PER_ATTACHMENT
+  bytes = readFileSync(path)
+  sha = hashBytes(bytes)
+  cachePath = writeCached(sha, bytes)
+  mime = input.mime or guessMime(path)
+  text = asUtf8(bytes, mime)
+  {
+    kind: 'file'
+    name: input.name or basename(path)
+    source: path
+    mime: mime
+    sha256: sha
+    bytes: bytes.length
+    cache_path: cachePath
+    text: text
+    binary: not text?
+    mtime_ms: st.mtimeMs
+  }
+
+loadBlob = (input) ->
+  raise "blob attachment requires .name and .content" unless input.name and (input.content?)
+  buf = Buffer.from(String(input.content), 'utf-8')
+  raise "blob too large: #{input.name} (#{buf.length} bytes)" if buf.length > MAX_BYTES_PER_ATTACHMENT
+  sha = hashBytes(buf)
+  cachePath = writeCached(sha, buf)
+  mime = input.mime or guessMime(input.name)
+  {
+    kind: 'blob'
+    name: input.name
+    source: null
+    mime: mime
+    sha256: sha
+    bytes: buf.length
+    cache_path: cachePath
+    text: buf.toString('utf-8')
+    binary: false
+  }
+
+fetchUrl = (rawUrl) ->
+  validateUrl(rawUrl)
+  current = rawUrl
+  for hop in [0..URL_MAX_REDIRECTS]
+    parsed = validateUrl(current)
+    res = fetch! parsed.toString(),
+      redirect: 'manual'
+      signal: AbortSignal.timeout(URL_TIMEOUT_MS)
+      headers: { 'user-agent': 'rip-ai/1.0' }
+    if res.status >= 300 and res.status < 400 and res.headers.get('location')
+      raise "too many redirects fetching #{rawUrl}" if hop is URL_MAX_REDIRECTS
+      current = new URL(res.headers.get('location'), parsed).toString()
+      continue
+    raise "URL #{rawUrl} returned HTTP #{res.status}" unless res.ok
+    return { res, finalUrl: parsed.toString() }
+  raise "redirect loop fetching #{rawUrl}"
+
+loadUrl = (input) ->
+  raise "url attachment requires .url" unless input.url
+  { res, finalUrl } = fetchUrl! input.url
+  contentLength = parseInt(res.headers.get('content-length') or '0', 10)
+  raise "URL too large: #{input.url} (#{contentLength} bytes)" if contentLength > MAX_BYTES_PER_ATTACHMENT
+  ab = res.arrayBuffer!
+  buf = Buffer.from(ab)
+  raise "URL too large: #{input.url} (#{buf.length} bytes)" if buf.length > MAX_BYTES_PER_ATTACHMENT
+  sha = hashBytes(buf)
+  cachePath = writeCached(sha, buf)
+  mime = input.mime or res.headers.get('content-type')?.split(';')[0]?.trim() or guessMime(finalUrl)
+  text = asUtf8(buf, mime)
+  {
+    kind: 'url'
+    name: input.name or finalUrl
+    source: finalUrl
+    mime: mime
+    sha256: sha
+    bytes: buf.length
+    cache_path: cachePath
+    text: text
+    binary: not text?
+  }
+
+loadOne = (input) ->
+  switch input.type
+    when 'file' then loadFile! input
+    when 'url'  then loadUrl! input
+    when 'blob' then loadBlob(input)
+    else raise "unknown attachment type: #{input.type}"
+
+# ==============================================================================
+# Public: load + record + change-detect
+# ==============================================================================
+
+export load = (store, conversationId, inputs = []) ->
+  return { attachments: [], totalBytes: 0, warnings: [], changed: [] } unless inputs?.length
+
+  warnings = []
+  changed = []
+  loaded = []
+  totalBytes = 0
+
+  for input in inputs
+    meta = loadOne! input
+    totalBytes += meta.bytes
+    raise "attachments exceed per-call cap (#{MAX_BYTES_PER_CALL} bytes)" if totalBytes > MAX_BYTES_PER_CALL
+
+    record = store.recordAttachment(meta) if store
+    record ?= {
+      id: "sha256:#{meta.sha256}"
+      sha256: meta.sha256
+      kind: meta.kind
+      name: meta.name
+      source: meta.source
+      mime: meta.mime
+      bytes: meta.bytes
+      cache_path: meta.cache_path
+    }
+
+    changedSinceLast = false
+    if store and conversationId and meta.source
+      prior = store.findLastAttachmentBySource(conversationId, meta.source)
+      if prior and prior.sha256 isnt meta.sha256
+        changedSinceLast = true
+        changed.push { name: meta.name, source: meta.source, prev_sha256: prior.sha256, sha256: meta.sha256 }
+
+    if meta.binary
+      warnings.push "attachment '#{meta.name}' is binary; only metadata is sent to the peer"
+
+    loaded.push {
+      id: record.id
+      sha256: record.sha256
+      kind: record.kind
+      name: record.name
+      source: record.source
+      mime: record.mime
+      bytes: record.bytes
+      cache_path: record.cache_path
+      text: meta.text
+      binary: meta.binary
+      changed_since_last_view: changedSinceLast
+    }
+
+  { attachments: loaded, totalBytes, warnings, changed }
+
+# ==============================================================================
+# Public: provider rendering
+# ==============================================================================
+
+snippet = (att) ->
+  return "[binary #{att.mime or 'octet-stream'}, #{att.bytes} bytes, sha256=#{att.sha256.slice(0, 12)}…]" if att.binary
+  text = att.text or ''
+  text
+
+attachmentTextBlock = (att) ->
+  header = """<attachment name="#{att.name}" type="#{att.kind}" bytes="#{att.bytes}" sha256="#{att.sha256}\""""
+  header += " source=\"#{att.source}\"" if att.source
+  header += " mime=\"#{att.mime}\"" if att.mime
+  header += '>'
+  body = snippet(att)
+  "#{header}\n#{body}\n</attachment>"
+
+changeNote = (changed) ->
+  return null unless changed?.length
+  lines = changed.map (c) ->
+    "  - #{c.name}: #{c.prev_sha256.slice(0, 12)}… → #{c.sha256.slice(0, 12)}…"
+  "Attached files changed since your last view:\n" + lines.join('\n')
+
+export renderText = (attachments, opts = {}) ->
+  return '' unless attachments?.length
+  parts = []
+  parts.push changeNote(opts.changed) if opts.changed?.length
+  for att in attachments
+    parts.push attachmentTextBlock(att)
+  parts.filter(Boolean).join('\n\n')
+
+export renderForOpenAI = (attachments, opts) ->
+  text = renderText(attachments, opts)
+  return [] unless text
+  [{ type: 'text', text }]
+
+export renderForAnthropic = (attachments, opts) ->
+  text = renderText(attachments, opts)
+  return [] unless text
+  [{ type: 'text', text }]
+
+export viewFor = (att) ->
+  {
+    id: att.id
+    sha256: att.sha256
+    kind: att.kind
+    name: att.name
+    source: att.source
+    mime: att.mime
+    bytes: att.bytes
+    binary: att.binary
+    changed_since_last_view: att.changed_since_last_view
+  }
+
+export viewsFor = (attachments) ->
+  attachments.map(viewFor)

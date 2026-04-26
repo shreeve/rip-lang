@@ -1,0 +1,104 @@
+# ==============================================================================
+# anthropic.rip — Anthropic provider adapter
+#
+# Wraps /v1/messages and /v1/models. Returns the normalized adapter shape:
+# { provider, listModels, chat }. Pricing and capability metadata live in
+# providers.rip; this module only handles HTTP and message shape.
+# ==============================================================================
+
+import * as cred from './credentials.rip'
+import * as att  from './attachments.rip'
+
+API =! 'https://api.anthropic.com/v1'
+ANTHROPIC_VERSION =! '2023-06-01'
+
+export provider =! 'anthropic'
+
+requireKey = ->
+  key = cred.get('ANTHROPIC_API_KEY')
+  raise "ANTHROPIC_API_KEY not set" unless key
+  key
+
+headers = ->
+  'x-api-key': requireKey()
+  'anthropic-version': ANTHROPIC_VERSION
+  'content-type': 'application/json'
+
+# ==============================================================================
+# Live model listing
+# ==============================================================================
+
+export listModels = ->
+  res = fetch! "#{API}/models", { headers: headers() }
+  raise "Anthropic /models returned HTTP #{res.status}" unless res.ok
+  data = res.json!
+  rows = data?.data or []
+  for row in rows
+    {
+      provider_model: row.id
+      id: "anthropic:#{row.id}"
+      created_at: row.created_at or null
+      raw: { display_name: row.display_name, type: row.type }
+    }
+
+# ==============================================================================
+# Chat
+# ==============================================================================
+
+renderUserBlocks = (text, attachments) ->
+  blocks = []
+  blocks.push { type: 'text', text } if text
+  block = att.renderText(attachments, { changed: attachments.filter((a) -> a.changed_since_last_view) }) if attachments?.length
+  blocks.push { type: 'text', text: block } if block
+  blocks
+
+# Anthropic does not accept system as a message; it goes in a top-level field.
+splitSystem = (system, messages) ->
+  systemParts = []
+  systemParts.push system if system
+  rest = []
+  for msg in messages
+    if msg.role is 'system'
+      systemParts.push msg.text if msg.text
+    else
+      rest.push msg
+  { system: systemParts.join('\n\n'), messages: rest }
+
+buildMessages = ({ messages, attachments }) ->
+  out = []
+  for msg, idx in messages
+    role = if msg.role is 'assistant' then 'assistant' else 'user'
+    if role is 'user' and idx is messages.length - 1 and attachments?.length
+      out.push { role, content: renderUserBlocks(msg.text, attachments) }
+    else
+      out.push { role, content: [{ type: 'text', text: msg.text }] }
+  out
+
+export chat = ({ model, system, messages, attachments, max_tokens }) ->
+  { system: sys, messages: rest } = splitSystem(system, messages)
+  body =
+    model: model
+    max_tokens: max_tokens or 4096
+    messages: buildMessages({ messages: rest, attachments })
+  body.system = sys if sys
+
+  res = fetch! "#{API}/messages",
+    method: 'POST'
+    headers: headers()
+    body: JSON.stringify(body)
+
+  data = res.json!
+  if data?.error
+    raise "Anthropic: #{data.error.message or JSON.stringify(data.error)}"
+  raise "Anthropic returned HTTP #{res.status}" unless res.ok
+
+  parts = data?.content or []
+  text = parts.filter((p) -> p.type is 'text').map((p) -> p.text).join('')
+  usage = data?.usage or {}
+  {
+    text
+    tokens_in:  usage.input_tokens  or 0
+    tokens_out: usage.output_tokens or 0
+    finish_reason: data?.stop_reason or null
+    raw: data
+  }

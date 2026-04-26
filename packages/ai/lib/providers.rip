@@ -1,0 +1,295 @@
+# ==============================================================================
+# providers.rip — registry, pricing, capability metadata, model catalog
+#
+# Public API:
+#   parseModel(spec)             — "provider:model" or alias → { provider, model, id }
+#   defaults()                   — default chat / discuss / synthesis / fresh_review IDs
+#   credentialStatus()           — { openai: {available, source}, anthropic: ... }
+#   priceFor(id)                 — { input_per_million, output_per_million } | null
+#   computeCost(id, tin, tout)   — number (usd)
+#   estimateInputTokens(text)    — rough int (chars / 4)
+#   listAll(opts)                — { models, fetched_at, cache: { hit, ttl_seconds } }
+#   chat(opts)                   — dispatch to adapter, compute cost, return normalized
+# ==============================================================================
+
+import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync } from 'fs'
+import { join } from 'path'
+import * as cred       from './credentials.rip'
+import * as openai     from './openai.rip'
+import * as anthropic  from './anthropic.rip'
+
+home = process.env.HOME or process.env.USERPROFILE or ''
+ROOT_DIR =! join(home, '.config', 'rip-ai')
+DISK_CACHE =! join(ROOT_DIR, 'models.json')
+
+MEMORY_TTL_MS =! 5 * 60 * 1000
+DISK_TTL_MS   =! 24 * 60 * 60 * 1000
+
+ADAPTERS =! { openai, anthropic }
+
+# ==============================================================================
+# Local metadata — pricing + capabilities
+# Pricing is per 1M tokens (USD). Numbers are approximate; user should
+# update as providers change their public rates.
+# ==============================================================================
+
+LOCAL_META =! {
+  'openai:gpt-5.5':           { tier: 'frontier', context: 400000, tool_use: true,  strengths: ['reasoning', 'coding', 'review'],   pricing: { input_per_million: 5,  output_per_million: 15 } }
+  'openai:gpt-5.5-mini':      { tier: 'cheap',    context: 400000, tool_use: true,  strengths: ['fast', 'extraction', 'synthesis'], pricing: { input_per_million: 0.4, output_per_million: 1.2 } }
+  'openai:gpt-5.4':           { tier: 'frontier', context: 256000, tool_use: true,  strengths: ['reasoning', 'coding'],              pricing: { input_per_million: 5,  output_per_million: 15 } }
+  'openai:gpt-5.4-mini':      { tier: 'cheap',    context: 128000, tool_use: false, strengths: ['fast'],                              pricing: { input_per_million: 0.3, output_per_million: 1.0 } }
+  'anthropic:claude-opus-4-7':    { tier: 'frontier', context: 200000, tool_use: true,  strengths: ['coding', 'long-doc review'],     pricing: { input_per_million: 15, output_per_million: 75 } }
+  'anthropic:claude-opus-4-6':    { tier: 'frontier', context: 200000, tool_use: true,  strengths: ['coding', 'long-doc review'],     pricing: { input_per_million: 15, output_per_million: 75 } }
+  'anthropic:claude-sonnet-4-5':  { tier: 'mid',      context: 200000, tool_use: true,  strengths: ['fast coding', 'review'],          pricing: { input_per_million: 3,  output_per_million: 15 } }
+  'anthropic:claude-haiku-4-1':   { tier: 'cheap',    context: 200000, tool_use: true,  strengths: ['fast', 'synthesis', 'extraction'],pricing: { input_per_million: 1,  output_per_million: 5 } }
+}
+
+ALIASES =! {
+  'gpt':                'openai:gpt-5.5'
+  'gpt-5':              'openai:gpt-5.5'
+  'gpt-5.5':            'openai:gpt-5.5'
+  'gpt-5.5-mini':       'openai:gpt-5.5-mini'
+  'mini':               'openai:gpt-5.5-mini'
+  'gpt-5.4':            'openai:gpt-5.4'
+  'gpt-5.4-mini':       'openai:gpt-5.4-mini'
+  'openai':             'openai:gpt-5.5'
+  'claude':             'anthropic:claude-opus-4-7'
+  'opus':               'anthropic:claude-opus-4-7'
+  'claude-opus':        'anthropic:claude-opus-4-7'
+  'claude-opus-4-7':    'anthropic:claude-opus-4-7'
+  'claude-opus-4-6':    'anthropic:claude-opus-4-6'
+  'claude-sonnet':      'anthropic:claude-sonnet-4-5'
+  'claude-sonnet-4-5':  'anthropic:claude-sonnet-4-5'
+  'sonnet':             'anthropic:claude-sonnet-4-5'
+  'claude-haiku':       'anthropic:claude-haiku-4-1'
+  'claude-haiku-4-1':   'anthropic:claude-haiku-4-1'
+  'haiku':              'anthropic:claude-haiku-4-1'
+  'anthropic':          'anthropic:claude-opus-4-7'
+}
+
+DEFAULT_CHAT      =! 'openai:gpt-5.5'
+DEFAULT_DISCUSS   =! 'anthropic:claude-opus-4-7'
+DEFAULT_SYNTHESIS =! 'openai:gpt-5.5-mini'
+DEFAULT_FRESH     =! 'openai:gpt-5.5'
+
+export defaults = ->
+  chat: DEFAULT_CHAT
+  discuss: DEFAULT_DISCUSS
+  synthesis: DEFAULT_SYNTHESIS
+  fresh_review: DEFAULT_FRESH
+
+# ==============================================================================
+# Credentials
+# ==============================================================================
+
+export credentialStatus = ->
+  openai:    { available: cred.has('OPENAI_API_KEY'),    source: cred.source('OPENAI_API_KEY') }
+  anthropic: { available: cred.has('ANTHROPIC_API_KEY'), source: cred.source('ANTHROPIC_API_KEY') }
+
+# ==============================================================================
+# Model parsing
+# ==============================================================================
+
+export parseModel = (spec) ->
+  raise "model required" unless spec
+  s = String(spec).trim()
+  raise "empty model" unless s.length
+  alias = ALIASES[s.toLowerCase()]
+  s = alias if alias
+  idx = s.indexOf(':')
+  raise "unknown model alias: #{spec}" if idx < 1
+  provider = s.slice(0, idx)
+  model = s.slice(idx + 1)
+  raise "unsupported provider: #{provider}" unless ADAPTERS[provider]
+  { provider, model, id: "#{provider}:#{model}" }
+
+# ==============================================================================
+# Pricing + cost
+# ==============================================================================
+
+export priceFor = (id) ->
+  LOCAL_META[id]?.pricing or null
+
+export estimateInputTokens = (text) ->
+  return 0 unless text
+  Math.ceil(String(text).length / 4)
+
+export computeCost = (id, tokensIn, tokensOut) ->
+  p = priceFor(id)
+  return 0 unless p
+  ((tokensIn or 0) / 1_000_000) * p.input_per_million +
+  ((tokensOut or 0) / 1_000_000) * p.output_per_million
+
+# ==============================================================================
+# Catalog cache (memory + disk)
+# ==============================================================================
+
+memCache = null
+memFetchedAt = 0
+
+readDiskCache = ->
+  return null unless existsSync(DISK_CACHE)
+  try
+    raw = readFileSync(DISK_CACHE, 'utf-8')
+    JSON.parse(raw)
+  catch
+    null
+
+writeDiskCache = (payload) ->
+  try
+    mkdirSync(ROOT_DIR, { recursive: true, mode: 0o700 }) unless existsSync(ROOT_DIR)
+    writeFileSync(DISK_CACHE, JSON.stringify(payload, null, 2), { mode: 0o600 })
+
+mergeMeta = (live) ->
+  byId = {}
+  knownIds = Object.keys(LOCAL_META)
+  for id in knownIds
+    meta = LOCAL_META[id]
+    [provider, model] = id.split(':')
+    byId[id] =
+      id: id
+      provider: provider
+      provider_model: model
+      display: model
+      available: false
+      tool_use: meta.tool_use
+      context: meta.context
+      tier: meta.tier
+      strengths: meta.strengths
+      pricing: meta.pricing
+      source: 'local'
+  for entry in live
+    existing = byId[entry.id]
+    if existing
+      existing.available = true
+      existing.created_at = entry.created_at if entry.created_at
+      existing.source = 'live+local'
+    else
+      [provider, model] = entry.id.split(':')
+      byId[entry.id] =
+        id: entry.id
+        provider: provider
+        provider_model: model
+        display: model
+        available: true
+        tool_use: false
+        context: null
+        tier: 'unknown'
+        strengths: []
+        pricing: null
+        created_at: entry.created_at
+        source: 'live'
+  Object.values(byId).sort (a, b) ->
+    return -1 if a.tier is 'frontier' and b.tier isnt 'frontier'
+    return 1  if b.tier is 'frontier' and a.tier isnt 'frontier'
+    a.id.localeCompare(b.id)
+
+fetchLive = (providerName) ->
+  adapter = ADAPTERS[providerName]
+  return [] unless adapter and cred.has(providerEnvKey(providerName))
+  try
+    return adapter.listModels!
+  catch err
+    console.error "[rip-ai] #{providerName} listModels failed: #{err.message}"
+    []
+
+providerEnvKey = (providerName) ->
+  switch providerName
+    when 'openai'    then 'OPENAI_API_KEY'
+    when 'anthropic' then 'ANTHROPIC_API_KEY'
+    else null
+
+export listAll = (opts = {}) ->
+  filter = opts.provider or null
+  refresh = opts.refresh is true
+  age = Date.now() - memFetchedAt
+
+  if memCache and not refresh and age < MEMORY_TTL_MS
+    models = if filter then memCache.filter((m) -> m.provider is filter) else memCache
+    return { models, fetched_at: new Date(memFetchedAt).toISOString(), cache: { hit: true, ttl_seconds: Math.ceil((MEMORY_TTL_MS - age) / 1000) } }
+
+  liveAll = []
+  warnings = []
+  for providerName in Object.keys(ADAPTERS)
+    continue if filter and filter isnt providerName
+    rows = fetchLive! providerName
+    liveAll = liveAll.concat(rows)
+    warnings.push "#{providerName} catalog unavailable" if rows.length is 0 and cred.has(providerEnvKey(providerName))
+
+  if liveAll.length is 0
+    disk = readDiskCache()
+    if disk?.models
+      memCache = disk.models
+      memFetchedAt = Date.parse(disk.fetched_at) or 0
+      models = if filter then memCache.filter((m) -> m.provider is filter) else memCache
+      return { models, fetched_at: disk.fetched_at, cache: { hit: 'disk', ttl_seconds: 0 }, warnings }
+
+  merged = mergeMeta(liveAll)
+  memCache = merged
+  memFetchedAt = Date.now()
+  payload = { models: merged, fetched_at: new Date(memFetchedAt).toISOString() }
+  writeDiskCache(payload)
+  models = if filter then merged.filter((m) -> m.provider is filter) else merged
+  { models, fetched_at: payload.fetched_at, cache: { hit: false, ttl_seconds: Math.floor(MEMORY_TTL_MS / 1000) }, warnings }
+
+# ==============================================================================
+# Unified chat dispatch
+# ==============================================================================
+
+export resolveModel = (spec, fallback) ->
+  if spec
+    return parseModel(spec)
+  if fallback
+    return parseModel(fallback)
+  parseModel(DEFAULT_CHAT)
+
+export chat = (opts) ->
+  { provider, model, id } = resolveModel(opts.model, opts.fallback)
+  adapter = ADAPTERS[provider]
+  raise "unsupported provider: #{provider}" unless adapter
+
+  estimateIn = estimateInputTokens(joinForEstimate(opts))
+  capCheck = checkCostCap(id, estimateIn, opts.max_cost_usd)
+  raise capCheck.error if capCheck.error
+
+  result = adapter.chat!
+    model: model
+    system: opts.system
+    messages: opts.messages
+    attachments: opts.attachments
+    max_tokens: opts.max_tokens
+
+  cost = computeCost(id, result.tokens_in, result.tokens_out)
+  warnings = []
+  if opts.max_cost_usd and cost > opts.max_cost_usd
+    warnings.push "actual cost $#{cost.toFixed(4)} exceeded cap $#{Number(opts.max_cost_usd).toFixed(4)}"
+
+  {
+    model: id
+    provider: provider
+    provider_model: model
+    text: result.text
+    tokens_in:  result.tokens_in
+    tokens_out: result.tokens_out
+    cost_usd:   cost
+    finish_reason: result.finish_reason
+    warnings:   warnings
+  }
+
+joinForEstimate = (opts) ->
+  parts = []
+  parts.push opts.system if opts.system
+  for msg in (opts.messages or [])
+    parts.push msg.text if msg.text
+  for att in (opts.attachments or [])
+    parts.push att.text if att.text
+  parts.join('\n\n')
+
+checkCostCap = (id, tokensInEstimate, cap) ->
+  return { ok: true } unless cap
+  p = priceFor(id)
+  return { ok: true } unless p
+  minInputCost = (tokensInEstimate / 1_000_000) * p.input_per_million
+  if minInputCost > cap
+    return { error: "estimated input cost $#{minInputCost.toFixed(4)} exceeds max_cost_usd $#{Number(cap).toFixed(4)}" }
+  { ok: true }

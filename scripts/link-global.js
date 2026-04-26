@@ -5,6 +5,7 @@
 // Run once per machine (re-run safely — it's idempotent). Symlinks:
 //
 //   ~/.bun/bin/rip                               -> $REPO/bin/rip
+//   ~/.bun/bin/rip-ai                            -> $REPO/packages/ai/bin/rip-ai
 //   ~/.bun/bin/rip-db                            -> $REPO/packages/db/bin/rip-db
 //   ~/.bun/bin/rip-print                         -> $REPO/packages/print/bin/rip-print
 //   ~/.bun/bin/rip-server                        -> $REPO/packages/server/bin/rip-server
@@ -107,10 +108,11 @@ for (const scope of [userMod, globMod]) {
 mkdirSync(globBin, { recursive: true })
 
 const bins = [
-  ['rip',        'bin/rip'],
-  ['rip-db',     'packages/db/bin/rip-db'],
-  ['rip-print',  'packages/print/bin/rip-print'],
-  ['rip-server', 'packages/server/bin/rip-server'],
+  ['rip',         'bin/rip'],
+  ['rip-ai',      'packages/ai/bin/rip-ai'],
+  ['rip-db',      'packages/db/bin/rip-db'],
+  ['rip-print',   'packages/print/bin/rip-print'],
+  ['rip-server',  'packages/server/bin/rip-server'],
 ]
 
 for (const [binName, relPath] of bins) {
