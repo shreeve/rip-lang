@@ -251,8 +251,7 @@ export panel = (ctx, params) ->
     catch err
       return { model: String(modelSpec), ok: false, text: null, usage: usageZero(), error: err.message, warnings: [] }
 
-  pending = Promise.all(params.models.map(callOne))
-  responses = pending!
+  responses = Promise.all! params.models.map(callOne)
 
   total = responses.reduce(((acc, r) -> addUsage(acc, r.usage)), usageZero())
 

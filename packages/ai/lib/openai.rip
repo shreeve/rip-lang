@@ -32,12 +32,10 @@ export listModels = ->
   data = res.json!
   rows = data?.data or []
   for row in rows
-    {
-      provider_model: row.id
-      id: "openai:#{row.id}"
-      created_at: row.created and new Date(row.created * 1000).toISOString()
-      raw: { owned_by: row.owned_by }
-    }
+    provider_model: row.id
+    id: "openai:#{row.id}"
+    created_at: row.created and new Date(row.created * 1000).toISOString()
+    raw: { owned_by: row.owned_by }
 
 # ==============================================================================
 # Chat

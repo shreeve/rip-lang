@@ -34,12 +34,10 @@ export listModels = ->
   data = res.json!
   rows = data?.data or []
   for row in rows
-    {
-      provider_model: row.id
-      id: "anthropic:#{row.id}"
-      created_at: row.created_at or null
-      raw: { display_name: row.display_name, type: row.type }
-    }
+    provider_model: row.id
+    id: "anthropic:#{row.id}"
+    created_at: row.created_at or null
+    raw: { display_name: row.display_name, type: row.type }
 
 # ==============================================================================
 # Chat

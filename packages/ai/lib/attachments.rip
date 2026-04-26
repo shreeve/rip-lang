@@ -69,11 +69,7 @@ hashBytes = (bytes) ->
 # ==============================================================================
 
 validateUrl = (str) ->
-  parsed = null
-  try
-    parsed = new URL(str)
-  catch
-    raise "invalid URL: #{str}"
+  parsed = (try new URL(str)) or raise "invalid URL: #{str}"
   unless parsed.protocol is 'http:' or parsed.protocol is 'https:'
     raise "URL must be http or https: #{str}"
   host = parsed.hostname
