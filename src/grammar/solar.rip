@@ -154,8 +154,9 @@ class Generator
       for handle in handles
         [symbols, action, precedence] = @_parseHandle handle
 
-        # Add symbols to grammar
-        addSymbol symbol for symbol in symbols
+        # Add symbols to grammar (workaround: postfix-for on call miscompiles)
+        for symbol in symbols
+          addSymbol symbol
 
         # Process semantic actions
         if action
@@ -479,7 +480,11 @@ class Generator
         follows = @types[item.rule.type]?.follows
         if follows
           item.lookaheads.clear()
-          item.lookaheads.add token for token as follows
+          # Workaround for compiler regression: postfix `for` on a method
+          # call inside a void method (`!:`) miscompiles. Explicit for-loop
+          # is idiomatic anyway. See AGENTS.md "Known Issues".
+          for token as follows
+            item.lookaheads.add token
 
   # ============================================================================
   # Parse Table Generation
@@ -716,7 +721,12 @@ class Generator
       unless action?
         errStr = ''
         unless recovering
-          expected = ("'#{@tokenNames[p]}'" for own p of parseTable[state] when @tokenNames[p] and p > TERROR)
+          # Workaround for compiler regression: comprehension RHS in
+          # assignment miscompiles. Build the array explicitly.
+          expected = []
+          for own p of parseTable[state]
+            if @tokenNames[p] and p > TERROR
+              expected.push "'#{@tokenNames[p]}'"
         errStr = if lexer.showPosition
           "Parse error on line #{tokenLine + 1}:\n#{lexer.showPosition()}\nExpecting #{expected.join(', ')}, got '#{@tokenNames[symbol] or symbol}'"
         else

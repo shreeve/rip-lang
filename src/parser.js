@@ -256,16 +256,16 @@ const parserInstance = {
     }
   },
   parse(input) {
-    let EOF, TERROR, action, errStr, expected, len, lex, lexer, loc, locs, newState, p, parseTable, preErrorSymbol, r, recovering, rv, sharedState, state, stk, symbol, tokenLen, tokenLine, tokenLoc, tokenText, vals;
+    let EOF, TERROR, action, errStr, expected, k, len, lex, lexer, loc, locs, newState, p, parseTable, preErrorSymbol, r, recovering, rv, sharedState, state, stk, symbol, tokenLen, tokenLine, tokenLoc, tokenText, v, vals;
     [stk, vals, locs] = [[0], [null], []];
     [parseTable, tokenText, tokenLine, tokenLen, recovering] = [this.parseTable, "", 0, 0, 0];
     [TERROR, EOF] = [2, 1];
     lexer = Object.create(this.lexer);
     sharedState = { ctx: {} };
-    for (const k in this.ctx) {
+    for (let k in this.ctx) {
       if (!Object.hasOwn(this.ctx, k))
         continue;
-      const v = this.ctx[k];
+      let v = this.ctx[k];
       sharedState.ctx[k] = v;
     }
     lexer.setInput(input, sharedState.ctx);
@@ -284,6 +284,7 @@ const parserInstance = {
     };
     symbol = preErrorSymbol = state = action = r = p = len = newState = expected = null;
     rv = {};
+    const _result = [];
     while (!0) {
       state = stk[stk.length - 1];
       if (symbol == null)
@@ -291,17 +292,15 @@ const parserInstance = {
       action = parseTable[state]?.[symbol];
       if (action == null) {
         errStr = "";
-        if (!recovering)
-          expected = (() => {
-            const result = [];
-            for (const p in parseTable[state]) {
-              if (!Object.hasOwn(parseTable[state], p))
-                continue;
-              if (this.tokenNames[p] && p > TERROR)
-                result.push(`'${this.tokenNames[p]}'`);
-            }
-            return result;
-          })();
+        if (!recovering) {
+          expected = [];
+          for (let p in parseTable[state]) {
+            if (!Object.hasOwn(parseTable[state], p))
+              continue;
+            if (this.tokenNames[p] && p > TERROR)
+              expected.push(`'${this.tokenNames[p]}'`);
+          }
+        }
         errStr = (() => {
           if (lexer.showPosition)
             return `Parse error on line ${tokenLine + 1}:
@@ -348,6 +347,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       } else if (action === 0)
         return vals[vals.length - 1];
     }
+    return _result;
   },
   trace() {},
   ctx: {},

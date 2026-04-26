@@ -1677,17 +1677,17 @@ function __schemaFkName(m)    { return ''; }   // ditto
       }
     },
     parse(input) {
-      let EOF, TERROR, action, errStr, expected, len, lex, lexer, loc, locs, newState, p, parseTable, preErrorSymbol, r, recovering, rv, sharedState, state, stk, symbol, tokenLen, tokenLine, tokenLoc, tokenText, vals;
+      let EOF, TERROR, action, errStr, expected, k, len, lex, lexer, loc, locs, newState, p, parseTable, preErrorSymbol, r, recovering, rv, sharedState, state, stk, symbol, tokenLen, tokenLine, tokenLoc, tokenText, v, vals;
       [stk, vals, locs] = [[0], [null], []];
       [parseTable, tokenText, tokenLine, tokenLen, recovering] = [this.parseTable, "", 0, 0, 0];
       [TERROR, EOF] = [2, 1];
       lexer = Object.create(this.lexer);
       sharedState = { ctx: {} };
-      for (const k in this.ctx) {
-        if (!Object.hasOwn(this.ctx, k))
+      for (let k2 in this.ctx) {
+        if (!Object.hasOwn(this.ctx, k2))
           continue;
-        const v = this.ctx[k];
-        sharedState.ctx[k] = v;
+        let v2 = this.ctx[k2];
+        sharedState.ctx[k2] = v2;
       }
       lexer.setInput(input, sharedState.ctx);
       [sharedState.ctx.lexer, sharedState.ctx.parser] = [lexer, this];
@@ -1705,6 +1705,7 @@ function __schemaFkName(m)    { return ''; }   // ditto
       };
       symbol = preErrorSymbol = state = action = r = p = len = newState = expected = null;
       rv = {};
+      const _result = [];
       while (true) {
         state = stk[stk.length - 1];
         if (symbol == null)
@@ -1712,17 +1713,15 @@ function __schemaFkName(m)    { return ''; }   // ditto
         action = parseTable[state]?.[symbol];
         if (action == null) {
           errStr = "";
-          if (!recovering)
-            expected = (() => {
-              const result = [];
-              for (const p2 in parseTable[state]) {
-                if (!Object.hasOwn(parseTable[state], p2))
-                  continue;
-                if (this.tokenNames[p2] && p2 > TERROR)
-                  result.push(`'${this.tokenNames[p2]}'`);
-              }
-              return result;
-            })();
+          if (!recovering) {
+            expected = [];
+            for (let p2 in parseTable[state]) {
+              if (!Object.hasOwn(parseTable[state], p2))
+                continue;
+              if (this.tokenNames[p2] && p2 > TERROR)
+                expected.push(`'${this.tokenNames[p2]}'`);
+            }
+          }
           errStr = (() => {
             if (lexer.showPosition)
               return `Parse error on line ${tokenLine + 1}:
@@ -1769,6 +1768,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         } else if (action === 0)
           return vals[vals.length - 1];
       }
+      return _result;
     },
     trace() {},
     ctx: {}
@@ -12406,7 +12406,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   }
   // src/browser.js
   var VERSION = "3.14.5";
-  var BUILD_DATE = "2026-04-26@07:22:58GMT";
+  var BUILD_DATE = "2026-04-26@08:24:49GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

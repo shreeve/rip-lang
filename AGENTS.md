@@ -69,15 +69,14 @@ rip server
 
 ### Known Issues
 
-- **Compiler regression: `obj.method arg for arg as iter` as call-arg-postfix-comprehension.** As of HEAD, this pattern compiles to a malformed IIFE that collects results into an array and passes them as a single argument, rather than calling `.method(arg)` once per iteration. The bug appears to be in `src/compiler.js`'s auto-return-loop / comprehension-context detection, introduced after commit `61269e2b` (parser.js was last successfully regenerated at that commit). Symptom: `bun run parser` fails to regenerate `src/parser.js` because `src/grammar/solar.rip:482` uses this pattern and the resulting JS is invalid. **Workaround until fixed:** check out a fresh copy at the last-good commit and regenerate from there:
-  ```bash
-  cd ~/Data/Code
-  git clone git@github.com:shreeve/rip-lang.git rip-lang-clean
-  cd rip-lang-clean && git checkout 61269e2b && bun install
-  bun run parser   # regenerates src/parser.js cleanly
-  # then copy parser.js (and any grammar.rip changes) back to rip-lang/
-  ```
-  Alternatively, rewrite the offending solar.rip / user code lines as explicit `for` blocks. **Real fix:** repair the comprehension-context detection so postfix `for` on a call expression compiles to a statement-level for-loop (one call per iteration), not an array-collecting IIFE.
+- **Compiler regression: comprehensions in expression context auto-leak `_result` from outer auto-return loops.** As of HEAD, three related patterns miscompile when they appear inside a function whose outer body has loops the auto-return-comprehension logic latches onto:
+  1. **Postfix `for` on a method call.** `obj.method arg for arg as iter` — produces a malformed IIFE with the for-loop *outside* the wrapping `(() => {...})()` and with `_result.push(...)` referencing an outer-leaked target instead of a fresh `result`.
+  2. **Parenthesized comprehension on the RHS of an assignment.** `expected = (x for own k of obj when ...)` — emits `expected = ` followed by a bare `for` loop, no IIFE at all.
+  3. **Postfix `for` on a call where a sibling `if` follows.** The compiler treats the `if` branch as a *second argument* to the call, producing `addSymbol(comprehension, ifBranch)` instead of two independent statements.
+  
+  The shared root cause is `compiler.js`'s auto-return-loop logic (added after `61269e2b` in commit `f346e339 feat: auto-return loops as comprehensions from function bodies`) hijacking `comprehensionTarget` to a function-scoped `_result` and not properly scoping it to the outermost loop. Inner comprehensions in expression context inherit the wrong target and skip their own IIFE.
+  
+  **Current state:** `src/grammar/solar.rip` is the only known affected file. The three sites are worked around with explicit `for` blocks (commented at each site, search "Workaround for compiler regression" in solar.rip). `bun run parser` succeeds; bundle size unchanged. **Real fix needed:** scope `comprehensionTarget` to the loop that introduced it (don't leak across statement / argument boundaries), and respect the void-method (`!:`) marker when deciding whether to apply auto-return-comprehension transformation. Until that's fixed, user code hitting the same patterns will need the same explicit-for-loop workaround.
 
 ## Compilation Pipeline
 
