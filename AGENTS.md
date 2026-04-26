@@ -64,7 +64,12 @@ rip server
 - **Never write `await fn(args)` in `.rip` source when `fn!` will do** — the dammit operator is the idiomatic form. `fetch! url` compiles to `await fetch(url)`; `User.find! 1` to `await User.find(1)`; `user.save!` to `await user.save()`. Reserve raw `await` for JS interop in `.js` files, tests that document the await→!  equivalence, and the rare cases where `fn!` is ambiguous with a dammit-returning expression.
 - Run `bun run parser` after grammar changes
 - Run `bun run build` after codegen, `components.js`, `browser.js`, or `app.rip` changes
+- Run `bun run build:schema-runtime` after editing any `src/schema/runtime-*.js` fragment (CI's `test:schema-fresh` fails on staleness)
 - Run `bun run bump` for the standard release flow
+
+### Known Issues
+
+- **Compiler regression: `obj.method arg for arg as iter` as call-arg-postfix-comprehension.** As of HEAD, this pattern compiles to a malformed IIFE that collects results into an array and passes them as a single argument, rather than calling `.method(arg)` once per iteration. The bug appears to be in `src/compiler.js`'s auto-return-loop / comprehension-context detection, introduced after commit `61269e2b` (parser.js was last successfully regenerated at that commit). Symptom: `bun run parser` fails to regenerate `src/parser.js` because `src/grammar/solar.rip:482` uses this pattern and the resulting JS is invalid. **Workaround:** keep `/Users/shreeve/Data/Code/rip-lang-clean` checked out at `61269e2b` as a known-good regeneration vehicle; or rewrite the offending lines as explicit `for` blocks. **Real fix:** repair the comprehension-context detection so postfix `for` on a call expression compiles to a statement-level for-loop (one call per iteration), not an array-collecting IIFE.
 
 ## Compilation Pipeline
 

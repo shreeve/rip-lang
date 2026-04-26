@@ -16,7 +16,15 @@ The browser bundle (`docs/dist/rip.min.js`) is built from `src/browser.js` plus 
 | `src/lexer.js` | yes | tokenizer + rewriter pipeline |
 | `src/compiler.js` | yes | codegen + reactive runtime + component runtime + `compileToJS` + `setTypesEmitter` hook + `emitEnum` |
 | `src/components.js` | yes | render rewriter + component runtime |
-| `src/schema.js` | yes | lexer rewrite + emitSchema codegen + `SCHEMA_RUNTIME` (validation core, ORM, DDL — Phase 2 will further split this) |
+| `src/schema.js` | yes | lexer rewrite + body parser + emitSchema codegen + `setSchemaRuntimeProvider` hook (no fragment imports) |
+| `src/schema/loader-browser.js` | yes (browser only) | imports validate + browser-stubs fragments; eager-installs browser runtime; registers provider |
+| `src/schema/loader-server.js` | **no** (CLI / server / tests) | imports all five fragments; eager-installs migration runtime; registers provider |
+| `src/schema/runtime.generated.js` | yes (browser uses 2 of 5 exports) | autogen from `runtime-*.js` fragments; CI staleness check via `bun run test:schema-fresh` |
+| `src/schema/runtime-validate.js` | source for the `validate` fragment (universal) |
+| `src/schema/runtime-db-naming.js` | source for `db-naming` fragment (server + migration) |
+| `src/schema/runtime-orm.js` | source for `orm` fragment (server + migration) |
+| `src/schema/runtime-ddl.js` | source for `ddl` fragment (migration only) |
+| `src/schema/runtime-browser-stubs.js` | source for `browser-stubs` fragment (browser only) |
 | `src/types.js` | yes | only `installTypeSupport(Lexer)` — token-stream type stripper |
 | `src/error.js` | yes | runtime error formatting |
 | `src/sourcemaps.js` | yes | inline source-map generation |
@@ -29,7 +37,9 @@ The browser bundle (`docs/dist/rip.min.js`) is built from `src/browser.js` plus 
 
 The forbidden list in `scripts/check-bundle-graph.js` enforces this. If a code change would put a forbidden module on the browser graph, `bun run build` aborts before the bundler runs.
 
-### Registration-hook pattern (`setTypesEmitter`)
+### Registration-hook pattern (`setTypesEmitter`, `setSchemaRuntimeProvider`)
+
+The same pattern is used twice — once for `.d.ts` emission, once for the schema runtime body. Both make the bundler's tree-shaker keep CLI/server-only code out of the browser bundle.
 
 `compiler.js` exports `setTypesEmitter(fn)`. The default emitter is `null`. The two `compile()` callsites that produce `.d.ts` output guard with `(typeTokens && _typesEmitter)` and silently skip if no emitter is registered.
 
@@ -49,6 +59,19 @@ import '../src/types-emit.js';
 The browser bundle never imports `types-emit.js`, so the emitter stays null and the `.d.ts` path is dead code that the bundler prunes.
 
 **Failure mode to remember:** If you write code that calls `compile(source, { types: 'emit' })` and inspects `result.dts`, you **must** import `src/types-emit.js` (directly or indirectly) somewhere in that code path. Without it, `result.dts` is `null` regardless of source content. Symptom: types emission "silently does nothing" — no error, no warning, just empty output. The fix is one line: `import '../src/types-emit.js';`.
+
+The schema runtime uses an analogous hook: `src/schema.js` exports `setSchemaRuntimeProvider(fn)`, default null. `src/schema/loader-server.js` and `src/schema/loader-browser.js` are the two providers. CLI / tests / server side-effect-import `loader-server.js` (full migration runtime, all four modes). The browser bundle (`src/browser.js`) side-effect-imports `loader-browser.js` (validate + browser-stubs only). Same failure mode applies — call `getSchemaRuntime()` without registering a provider and you get a clear error pointing at which loader to import.
+
+The mode matrix exposed by `getSchemaRuntime({ mode })`:
+
+| mode | composition | typical caller |
+| --- | --- | --- |
+| `validate` | VALIDATE | isomorphic validate-only contexts |
+| `browser` | VALIDATE + BROWSER_STUBS | the `<script type="text/rip">` runtime |
+| `server` | VALIDATE + DB_NAMING + ORM | `@rip-lang/server` and friends |
+| `migration` | VALIDATE + DB_NAMING + ORM + DDL | CLI / migration tool / tests (default) |
+
+Edits to `src/schema/runtime-*.js` require running `bun run build:schema-runtime` to regenerate `runtime.generated.js`. CI fails (`bun run test:schema-fresh`) if the generated file is stale.
 
 ---
 
@@ -620,15 +643,23 @@ Types are processed at the token layer before parsing.
 ## Schema System
 
 Inline schemas are a third compiler sidecar that parallels `types.js` and
-`components.js`. The implementation is split across two files by execution
-context, mirroring the types split:
+`components.js`. The implementation is split across several files by
+execution context, mirroring the types split:
 
 - `schema.js` (browser + server) — lexer rewrite, body parsers, `emitSchema`
-  codegen, and the `SCHEMA_RUNTIME` template literal that gets injected into
-  compiled output when `hasSchemas(source)` is true. The runtime currently
-  carries validation, ORM, and DDL together; Phase 2 of the bundle
-  restructure will split that into a validation-only browser path and an
-  ORM/DDL augmentation for server contexts.
+  codegen, and `setSchemaRuntimeProvider` hook. The runtime body itself
+  is **not** here; this file imports zero fragments so the bundler can
+  decide per-entry which fragments to include.
+- `schema/runtime-{validate,db-naming,orm,ddl,browser-stubs}.js` (sources)
+  and `schema/runtime.generated.js` (autogen) — five runtime fragments
+  composed at call time by `getSchemaRuntime({ mode })`. Edit a source
+  fragment, run `bun run build:schema-runtime` to refresh the generated
+  file, commit. CI's `test:schema-fresh` fails on staleness.
+- `schema/loader-server.js` and `schema/loader-browser.js` — the import
+  boundary that decides which fragments end up in which bundle. Server
+  loader pulls all five; browser loader pulls only validate + browser-stubs.
+  Bun's tree-shaker uses these import sets to omit server-only fragments
+  from `docs/dist/rip.min.js`.
 - `schema-types.js` (CLI/LSP only) — `emitSchemaTypes` walks parsed schema
   s-expressions and emits `declare const Foo: Schema<...>` lines for the
   TypeScript language service. Imported only by `types-emit.js` and
