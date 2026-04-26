@@ -36,9 +36,16 @@
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 
+// Side-effect import: register the server-side runtime provider so
+// getSchemaRuntime supports all four modes. Browser-loader supports
+// only validate + browser; this test exercises every mode and so
+// must use the server loader.
+import '../src/schema/loader-server.js';
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, '..');
 const schemaPath = resolve(repoRoot, 'src/schema.js');
+const generatedPath = resolve(repoRoot, 'src/schema/runtime.generated.js');
 
 function color(code, s) {
   return process.stdout.isTTY ? `\x1b[${code}m${s}\x1b[0m` : s;
@@ -84,6 +91,11 @@ async function loadSchemaModule() {
   return await import(url);
 }
 
+async function loadGenerated() {
+  const url = `file://${generatedPath}?t=${Date.now()}`;
+  return await import(url);
+}
+
 function evalRuntimeIsolated(runtimeSrc) {
   // Wrap the runtime body in a function that aliases globalThis to a
   // fresh sandbox and returns the runtime's destructured exports.
@@ -104,45 +116,44 @@ function evalRuntimeIsolated(runtimeSrc) {
 console.log('\n' + color('36', '── Module exports (mode matrix wiring) ──'));
 
 const mod = await loadSchemaModule();
+const gen = await loadGenerated();
 
-await check('exports getSchemaRuntime as a function taking { mode }', () => {
+await check('schema.js exports getSchemaRuntime as a function taking { mode }', () => {
   if (typeof mod.getSchemaRuntime !== 'function') {
     throw new Error("schema.js does not export getSchemaRuntime");
   }
-  // Must accept an options object with mode. Calling with mode: 'validate'
-  // should return a string runtime.
   const out = mod.getSchemaRuntime({ mode: 'validate' });
   if (typeof out !== 'string') throw new Error('getSchemaRuntime({mode:"validate"}) must return a string');
   if (out.length < 1000) throw new Error('validate runtime suspiciously short: ' + out.length + ' bytes');
 });
 
-await check('exports SCHEMA_VALIDATE_RUNTIME constant', () => {
-  if (typeof mod.SCHEMA_VALIDATE_RUNTIME !== 'string') {
-    throw new Error('SCHEMA_VALIDATE_RUNTIME not exported');
+await check('runtime.generated.js exports SCHEMA_VALIDATE_RUNTIME', () => {
+  if (typeof gen.SCHEMA_VALIDATE_RUNTIME !== 'string') {
+    throw new Error('SCHEMA_VALIDATE_RUNTIME not in runtime.generated.js');
   }
 });
 
-await check('exports SCHEMA_DB_NAMING_RUNTIME constant', () => {
-  if (typeof mod.SCHEMA_DB_NAMING_RUNTIME !== 'string') {
-    throw new Error('SCHEMA_DB_NAMING_RUNTIME not exported');
+await check('runtime.generated.js exports SCHEMA_DB_NAMING_RUNTIME', () => {
+  if (typeof gen.SCHEMA_DB_NAMING_RUNTIME !== 'string') {
+    throw new Error('SCHEMA_DB_NAMING_RUNTIME not in runtime.generated.js');
   }
 });
 
-await check('exports SCHEMA_ORM_RUNTIME constant', () => {
-  if (typeof mod.SCHEMA_ORM_RUNTIME !== 'string') {
-    throw new Error('SCHEMA_ORM_RUNTIME not exported');
+await check('runtime.generated.js exports SCHEMA_ORM_RUNTIME', () => {
+  if (typeof gen.SCHEMA_ORM_RUNTIME !== 'string') {
+    throw new Error('SCHEMA_ORM_RUNTIME not in runtime.generated.js');
   }
 });
 
-await check('exports SCHEMA_DDL_RUNTIME constant', () => {
-  if (typeof mod.SCHEMA_DDL_RUNTIME !== 'string') {
-    throw new Error('SCHEMA_DDL_RUNTIME not exported');
+await check('runtime.generated.js exports SCHEMA_DDL_RUNTIME', () => {
+  if (typeof gen.SCHEMA_DDL_RUNTIME !== 'string') {
+    throw new Error('SCHEMA_DDL_RUNTIME not in runtime.generated.js');
   }
 });
 
-await check('exports SCHEMA_BROWSER_STUBS_RUNTIME constant', () => {
-  if (typeof mod.SCHEMA_BROWSER_STUBS_RUNTIME !== 'string') {
-    throw new Error('SCHEMA_BROWSER_STUBS_RUNTIME not exported');
+await check('runtime.generated.js exports SCHEMA_BROWSER_STUBS_RUNTIME', () => {
+  if (typeof gen.SCHEMA_BROWSER_STUBS_RUNTIME !== 'string') {
+    throw new Error('SCHEMA_BROWSER_STUBS_RUNTIME not in runtime.generated.js');
   }
 });
 

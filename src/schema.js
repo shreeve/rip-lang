@@ -1,14 +1,13 @@
 import { parser } from './parser.js';
-import {
-  SCHEMA_RUNTIME_ABI_VERSION,
-  SCHEMA_RUNTIME_WRAPPER_HEAD,
-  SCHEMA_RUNTIME_WRAPPER_TAIL,
-  SCHEMA_VALIDATE_RUNTIME,
-  SCHEMA_DB_NAMING_RUNTIME,
-  SCHEMA_ORM_RUNTIME,
-  SCHEMA_DDL_RUNTIME,
-  SCHEMA_BROWSER_STUBS_RUNTIME,
-} from './schema/runtime.generated.js';
+
+// Runtime-string composition is delegated to a registered provider so the
+// bundler can tree-shake server-only fragments out of the browser bundle.
+// One of `src/schema/loader-server.js` or `src/schema/loader-browser.js`
+// must be side-effect-imported before any compileToJS call that emits
+// schemas. (The bundle's own browser.js imports loader-browser.js;
+// CLI / typecheck / test runner imports loader-server.js.)
+let _schemaRuntimeProvider = null;
+export function setSchemaRuntimeProvider(fn) { _schemaRuntimeProvider = fn; }
 
 // Schema System — inline `schema` declarations compile to runtime validator
 // and ORM plans.
@@ -1775,60 +1774,28 @@ function schemaError(tok, message) {
 //   :model   — Phase 4 (the class additionally wires ORM methods)
 
 // =============================================================================
-// Mode-matrix runtime composition
+// Runtime composition (delegated to registered provider)
 // =============================================================================
-// Schemas are compiled to a runtime preamble that gets injected into compiled
-// output. The four modes select different fragment combinations:
+// Mode matrix:
 //
 //   validate   = VALIDATE                                (pure)
 //   browser    = VALIDATE + BROWSER_STUBS                (browser bundle)
-//   server     = VALIDATE + DB_NAMING + ORM              (default, server runtime)
+//   server     = VALIDATE + DB_NAMING + ORM              (server runtime)
 //   migration  = VALIDATE + DB_NAMING + ORM + DDL        (migration tool)
 //
-// Every mode wraps the body in the same singleton-install IIFE so multiple
-// bundles loading in the same process share one __ripSchema slot.
+// The actual fragment imports + composition live in the loader files so
+// only the fragments needed by a given entry are bundled. Browser bundles
+// import loader-browser.js (validate + browser-stubs only); CLI / server
+// imports loader-server.js (all five fragments).
 
-export function getSchemaRuntime({ mode = 'server' } = {}) {
-  let body;
-  switch (mode) {
-    case 'validate':
-      body = SCHEMA_VALIDATE_RUNTIME;
-      break;
-    case 'browser':
-      body = SCHEMA_VALIDATE_RUNTIME + '\n' + SCHEMA_BROWSER_STUBS_RUNTIME;
-      break;
-    case 'server':
-      body = SCHEMA_VALIDATE_RUNTIME + '\n' + SCHEMA_DB_NAMING_RUNTIME + '\n' + SCHEMA_ORM_RUNTIME;
-      break;
-    case 'migration':
-      body = SCHEMA_VALIDATE_RUNTIME + '\n' + SCHEMA_DB_NAMING_RUNTIME + '\n' + SCHEMA_ORM_RUNTIME + '\n' + SCHEMA_DDL_RUNTIME;
-      break;
-    default:
-      throw new Error(`unknown schema runtime mode: ${mode}`);
+export function getSchemaRuntime(opts = {}) {
+  if (!_schemaRuntimeProvider) {
+    throw new Error(
+      "schema runtime provider not registered. Side-effect-import either " +
+      "'src/schema/loader-server.js' (CLI / server / tests) or " +
+      "'src/schema/loader-browser.js' (browser bundle) before calling " +
+      "any compileToJS that emits schemas."
+    );
   }
-  return (SCHEMA_RUNTIME_WRAPPER_HEAD + body + SCHEMA_RUNTIME_WRAPPER_TAIL).trimStart();
+  return _schemaRuntimeProvider(opts);
 }
-
-// Backwards-compatible default export — full migration runtime. Used by
-// the eager singleton install below (matches Node-side default mode) and
-// by tests that import SCHEMA_RUNTIME directly. Browser entry never imports
-// SCHEMA_RUNTIME — it builds its own via getSchemaRuntime({ mode: 'browser' }).
-export const SCHEMA_RUNTIME = getSchemaRuntime({ mode: 'migration' });
-
-// Eagerly install the runtime on globalThis at module load so downstream
-// compilation units emitted with `skipRuntimes: true` (a common test-harness
-// setting) can pick up `{__schema, SchemaError}` without a separate bootstrap
-// step. The same pattern is used by the reactive and component runtimes.
-if (typeof globalThis !== 'undefined' && !globalThis.__ripSchema) {
-  try { (0, eval)(SCHEMA_RUNTIME); } catch {}
-}
-
-// Re-exports for tests and external consumers.
-export {
-  SCHEMA_RUNTIME_ABI_VERSION,
-  SCHEMA_VALIDATE_RUNTIME,
-  SCHEMA_DB_NAMING_RUNTIME,
-  SCHEMA_ORM_RUNTIME,
-  SCHEMA_DDL_RUNTIME,
-  SCHEMA_BROWSER_STUBS_RUNTIME,
-};

@@ -1,6 +1,12 @@
 // Browser-compatible entry point for Rip compiler
 // Includes runtime for <script type="text/rip"> support
 
+// Side-effect import — registers the BROWSER schema runtime provider.
+// Pulls in only the validate + browser-stubs fragments; tree-shakes
+// db-naming, orm, and ddl fragments out of the bundle. Must be the
+// first import so any later module-load eager-installs see it.
+import './schema/loader-browser.js';
+
 export { Lexer } from './lexer.js';
 export { parser } from './parser.js';
 export { CodeEmitter, Compiler, compile, compileToJS, formatSExpr, getStdlibCode, getReactiveRuntime, getComponentRuntime, RipError, formatError, formatErrorHTML } from './compiler.js';

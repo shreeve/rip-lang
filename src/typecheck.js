@@ -13,6 +13,7 @@
 import { Compiler, getStdlibCode } from './compiler.js';
 import { INTRINSIC_TYPE_DECLS, INTRINSIC_FN_DECL, ARIA_TYPE_DECLS, SIGNAL_INTERFACE, SIGNAL_FN, COMPUTED_INTERFACE, COMPUTED_FN, EFFECT_FN } from './types-emit.js';
 import { hasSchemas } from './schema.js';
+import './schema/loader-server.js';   // registers full schema runtime provider
 import { createRequire } from 'module';
 import { readFileSync, existsSync, readdirSync } from 'fs';
 import { resolve, relative, dirname } from 'path';

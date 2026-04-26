@@ -17,10 +17,11 @@
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join, extname, relative } from 'path';
 import { compile } from '../src/compiler.js';
-// Side-effect import: registers emitTypes via setTypesEmitter() so the
-// `type` test mode and any test asserting result.dts gets real output.
-// The browser bundle never reaches this module — see check-bundle-graph.js.
+// Side-effect imports — register the CLI-side type emitter and full
+// schema runtime so the test runner exercises the same code paths as
+// `bin/rip`. The browser bundle reaches NEITHER of these modules.
 import '../src/types-emit.js';
+import '../src/schema/loader-server.js';
 
 // ANSI colors
 const colors = {
