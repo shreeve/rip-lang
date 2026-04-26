@@ -2,9 +2,17 @@
 
 import { readFileSync, writeFileSync, unlinkSync } from 'fs';
 import { brotliCompressSync } from 'zlib';
+import { spawnSync } from 'child_process';
 import { compileToJS } from '../src/compiler.js';
 
 console.log('Building browser bundle...\n');
+
+const guard = spawnSync('bun', ['scripts/check-bundle-graph.js', '--quiet'], { stdio: 'inherit' });
+if (guard.status !== 0) {
+  console.error('\nAborting build — fix the bundle graph violation above.');
+  process.exit(guard.status ?? 1);
+}
+
 
 const packageJson = JSON.parse(readFileSync('./package.json', 'utf-8'));
 const version = packageJson.version;
