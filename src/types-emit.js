@@ -1,4 +1,4 @@
-import { SCHEMA_INTRINSIC_DECLS, emitSchemaTypes } from "./schema-types.js";
+import { SCHEMA_INTRINSIC_DECLS, emitSchemaTypes } from "./schema/dts-emit.js";
 import { setTypesEmitter } from "./compiler.js";
 
 // Type System — .d.ts emission for Rip (CLI / typecheck only).

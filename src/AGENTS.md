@@ -1,6 +1,6 @@
 # Compiler Subsystem — Agent Guide
 
-This covers `compiler.js`, `lexer.js`, `components.js`, `browser.js`, `types.js`, `types-emit.js`, `schema.js`, `schema-types.js`, `app.rip`, `typecheck.js`, and the `grammar/` directory.
+This covers `compiler.js`, `lexer.js`, `components.js`, `browser.js`, `types.js`, `types-emit.js`, `schema.js`, `schema/dts-emit.js`, `app.rip`, `typecheck.js`, and the `grammar/` directory.
 
 ---
 
@@ -31,7 +31,7 @@ The browser bundle (`docs/dist/rip.min.js`) is built from `src/browser.js` plus 
 | `src/generated/dom-tags.js` | yes | HTML/SVG tag set for render-block tag detection |
 | `src/generated/dom-events.js` | yes | event-name set for `onClick`/`onKeydown` auto-wire |
 | `src/types-emit.js` | **no** | `.d.ts` emitter + intrinsic decl tables — CLI / typecheck only |
-| `src/schema-types.js` | **no** | schema `.d.ts` emitter — CLI / typecheck only |
+| `src/schema/dts-emit.js` | **no** | schema `.d.ts` emitter — CLI / typecheck only |
 | `src/typecheck.js` | **no** | TypeScript LSP integration — CLI only |
 | `src/repl.js` | **no** | interactive CLI REPL |
 
@@ -660,10 +660,12 @@ execution context, mirroring the types split:
   loader pulls all five; browser loader pulls only validate + browser-stubs.
   Bun's tree-shaker uses these import sets to omit server-only fragments
   from `docs/dist/rip.min.js`.
-- `schema-types.js` (CLI/LSP only) — `emitSchemaTypes` walks parsed schema
-  s-expressions and emits `declare const Foo: Schema<...>` lines for the
-  TypeScript language service. Imported only by `types-emit.js` and
-  `typecheck.js`.
+- `schema/dts-emit.js` (CLI/LSP only) — `emitSchemaTypes` walks parsed
+  schema s-expressions and emits `declare const Foo: Schema<...>` lines
+  for the TypeScript language service. Imported only by `types-emit.js`
+  and `typecheck.js`. Lives inside `src/schema/` so all schema-related
+  code is colocated; the `dts-emit` name signals that this is a
+  compile-time `.d.ts` emitter, not a `runtime-*` fragment.
 
 ### Lexer path
 

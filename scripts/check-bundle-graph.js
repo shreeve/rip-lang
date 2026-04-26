@@ -33,7 +33,7 @@ const repoRoot = resolve(import.meta.dir, '..');
 const FORBIDDEN = [
   'src/typecheck.js',
   'src/types-emit.js',
-  'src/schema-types.js',
+  'src/schema/dts-emit.js',
   'src/schema/runtime-orm.js',
   'src/schema/runtime-ddl.js',
   'src/repl.js',
