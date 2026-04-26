@@ -1,6 +1,54 @@
 # Compiler Subsystem — Agent Guide
 
-This covers `compiler.js`, `lexer.js`, `components.js`, `browser.js`, `types.js`, `typecheck.js`, and the `grammar/` directory.
+This covers `compiler.js`, `lexer.js`, `components.js`, `browser.js`, `types.js`, `types-emit.js`, `schema.js`, `schema-types.js`, `app.rip`, `typecheck.js`, and the `grammar/` directory.
+
+---
+
+## Module Map — browser-side vs CLI-only
+
+The browser bundle (`docs/dist/rip.min.js`) is built from `src/browser.js` plus the compiled `src/app.rip`. Every module statically reachable from either entry ends up in the bundle. `scripts/check-bundle-graph.js` walks both entries on every `bun run build` and fails if any reachable file matches a forbidden list.
+
+| Module | Browser? | Purpose |
+| --- | --- | --- |
+| `src/browser.js` | yes (entry) | `<script type="text/rip">` discovery, `processRipScripts`, `importRip`, REPL |
+| `src/app.rip` | yes (entry) | Rip App framework runtime: stash, resource, timing, components store, router, renderer, launch, ARIA helpers |
+| `src/parser.js` | yes | generated LR table |
+| `src/lexer.js` | yes | tokenizer + rewriter pipeline |
+| `src/compiler.js` | yes | codegen + reactive runtime + component runtime + `compileToJS` + `setTypesEmitter` hook + `emitEnum` |
+| `src/components.js` | yes | render rewriter + component runtime |
+| `src/schema.js` | yes | lexer rewrite + emitSchema codegen + `SCHEMA_RUNTIME` (validation core, ORM, DDL — Phase 2 will further split this) |
+| `src/types.js` | yes | only `installTypeSupport(Lexer)` — token-stream type stripper |
+| `src/error.js` | yes | runtime error formatting |
+| `src/sourcemaps.js` | yes | inline source-map generation |
+| `src/generated/dom-tags.js` | yes | HTML/SVG tag set for render-block tag detection |
+| `src/generated/dom-events.js` | yes | event-name set for `onClick`/`onKeydown` auto-wire |
+| `src/types-emit.js` | **no** | `.d.ts` emitter + intrinsic decl tables — CLI / typecheck only |
+| `src/schema-types.js` | **no** | schema `.d.ts` emitter — CLI / typecheck only |
+| `src/typecheck.js` | **no** | TypeScript LSP integration — CLI only |
+| `src/repl.js` | **no** | interactive CLI REPL |
+
+The forbidden list in `scripts/check-bundle-graph.js` enforces this. If a code change would put a forbidden module on the browser graph, `bun run build` aborts before the bundler runs.
+
+### Registration-hook pattern (`setTypesEmitter`)
+
+`compiler.js` exports `setTypesEmitter(fn)`. The default emitter is `null`. The two `compile()` callsites that produce `.d.ts` output guard with `(typeTokens && _typesEmitter)` and silently skip if no emitter is registered.
+
+`src/types-emit.js` calls `setTypesEmitter(emitTypes)` at module load. Any caller that wants `.d.ts` output side-effect-imports `types-emit.js`:
+
+```javascript
+// CLI entry — bin/rip
+import '../src/types-emit.js';   // installs emitter
+
+// LSP integration
+import { ... } from './types-emit.js';
+
+// Test runner that exercises type emission
+import '../src/types-emit.js';
+```
+
+The browser bundle never imports `types-emit.js`, so the emitter stays null and the `.d.ts` path is dead code that the bundler prunes.
+
+**Failure mode to remember:** If you write code that calls `compile(source, { types: 'emit' })` and inspects `result.dts`, you **must** import `src/types-emit.js` (directly or indirectly) somewhere in that code path. Without it, `result.dts` is `null` regardless of source content. Symptom: types emission "silently does nothing" — no error, no warning, just empty output. The fix is one line: `import '../src/types-emit.js';`.
 
 ---
 
@@ -552,12 +600,14 @@ enum Status
 
 ### Architecture
 
-Type emission logic lives in `types.js`. Type-checking integration and diagnostic filtering live in `typecheck.js`.
+Type emission is split across two files by execution context:
 
-- `installTypeSupport(Lexer)` adds `rewriteTypes()`
-- `emitTypes(tokens)` emits `.d.ts`
-- `emitEnum()` emits runtime JS for enums
-- `typecheck.js` drives `rip check` and mediates TypeScript diagnostics
+- `types.js` (browser-side, ~21 KB) — `installTypeSupport(Lexer)` adds `rewriteTypes()` to strip type annotations from the token stream so user-typed Rip parses. This is the only thing the browser needs from type machinery.
+- `types-emit.js` (CLI/LSP only, ~38 KB) — `emitTypes(tokens, sexpr, source)` generates `.d.ts`, plus `expandSuffixes`, `emitComponentTypes`, and the intrinsic declaration tables (`INTRINSIC_TYPE_DECLS`, `SIGNAL_*`, `COMPUTED_*`, `EFFECT_*`, etc.). Registers itself with the compiler at module load via `setTypesEmitter()`.
+
+`emitEnum` (runtime JS for `enum` blocks) lives in `compiler.js` next to the rest of the codegen dispatch — it's not type machinery, it's real runtime emission.
+
+`typecheck.js` (CLI only) drives `rip check`, mediates TypeScript diagnostics, and side-effect-imports `types-emit.js` for the intrinsic decl tables.
 
 Types are processed at the token layer before parsing.
 
@@ -569,8 +619,20 @@ Types are processed at the token layer before parsing.
 
 ## Schema System
 
-Inline schemas are a third compiler sidecar — `schema.js` — that parallels
-`types.js` and `components.js`.
+Inline schemas are a third compiler sidecar that parallels `types.js` and
+`components.js`. The implementation is split across two files by execution
+context, mirroring the types split:
+
+- `schema.js` (browser + server) — lexer rewrite, body parsers, `emitSchema`
+  codegen, and the `SCHEMA_RUNTIME` template literal that gets injected into
+  compiled output when `hasSchemas(source)` is true. The runtime currently
+  carries validation, ORM, and DDL together; Phase 2 of the bundle
+  restructure will split that into a validation-only browser path and an
+  ORM/DDL augmentation for server contexts.
+- `schema-types.js` (CLI/LSP only) — `emitSchemaTypes` walks parsed schema
+  s-expressions and emits `declare const Foo: Schema<...>` lines for the
+  TypeScript language service. Imported only by `types-emit.js` and
+  `typecheck.js`.
 
 ### Lexer path
 
