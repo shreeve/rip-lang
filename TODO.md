@@ -13,35 +13,7 @@ Sections:
 
 ## Polish & cleanups
 
-### 1. Additional lexer contexts not explicitly tested for compound keys
-
-**Severity:** low (defensive coverage)
-
-**Affected files:**
-- `test/rip/basic.rip` (coverage gap)
-- `src/lexer.js` (paths that share the `:` handler)
-
-**What it is.** Current tests cover top-level object literals, inline object
-literals, and implicit multi-line objects. They do NOT exercise:
-
-- Destructuring patterns (e.g. `{ data-src } = obj`) — compound-key support
-  here is probably not meaningful, but a negative test would document that.
-- Class-body key-like positions, if any path permits them.
-- Comments interleaved between chain tokens (e.g. `foo-/*x*/bar:`).
-
-`@data-x:` has been manually verified to work.
-
-**Why deferred.** The three known hot sites (implicit-call guard, `:`
-handler, `looksObjectish`) share helpers from module scope so drift is
-unlikely. Existing 12 tests already cover the main regression surface.
-
-**What a fix looks like.** One or two more tests per context, focused on
-"does not misparse / does not silently become a compound key where it
-shouldn't". Small additions to `test/rip/basic.rip`.
-
----
-
-### 2. `renderDocument` name is slightly narrower than it sounds
+### 1. `renderDocument` name is slightly narrower than it sounds
 
 **Severity:** low (naming)
 
@@ -65,7 +37,7 @@ imports across apps.
 
 ## Forward-looking
 
-### 3. Browser debugger with source maps
+### 2. Browser debugger with source maps
 
 Implement `debugger` statement support in browser-compiled Rip code with
 source maps, so the browser DevTools takes you directly to the Rip source
@@ -91,7 +63,7 @@ each `<script type="text/rip">` source — it just needs to pass
 
 ---
 
-### 4. Migration diff generator (`rip migrate generate`)
+### 3. Migration diff generator (`rip migrate generate`)
 
 Automate the "edit a `:model` schema → figure out the `ALTER TABLE`
 statements" step. Today `Model.toSQL()` is a **snapshot generator** — it

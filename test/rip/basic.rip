@@ -124,6 +124,45 @@ x = a-
 x
 ''', 70
 
+# Compound keys in class-body property positions. The same compound-key
+# rewrite that fires inside object literals also fires in class bodies,
+# so `data-src: value` declares a hyphenated instance property reachable
+# via bracket notation. Catches a regression if the `:` handler in the
+# lexer were ever specialized to skip class bodies.
+test "compound key in class-body property", '''
+  class Setting
+    data-src: "default"
+    api.host: "localhost"
+  s = new Setting()
+  [s["data-src"], s["api.host"]]
+''', ["default", "localhost"]
+
+# Block comments are zero-width — putting one between hyphen parts still
+# forms a single compound key. (Whitespace would block compound-key
+# formation; comments don't count as whitespace because they're stripped
+# before the compound-key rewrite sees the token stream.)
+test "compound key tolerates block comment between parts", '''
+  o = { foo-###x###bar: 7 }
+  o["foo-bar"]
+''', 7
+
+# Destructuring with an explicit string key + binding name works — this
+# is the canonical way to destructure a hyphen-keyed object.
+test "compound-key destructuring with explicit renaming", '''
+  o = { "data-src": 1, b: 2 }
+  { "data-src": ds, b } = o
+  [ds, b]
+''', [1, 2]
+
+# Destructuring shorthand cannot use compound keys — JS variable names
+# can't contain hyphens, so `{ data-src } = o` has no valid local
+# binding to introduce and must be rejected by the parser. Use the
+# explicit `{ "data-src": ds } = o` form instead (above test).
+fail "compound-key destructuring shorthand is rejected", '''
+  o = { "data-src": 1 }
+  { data-src } = o
+'''
+
 # ==============================================================================
 # Inclusive Ranges (..)
 # ==============================================================================
