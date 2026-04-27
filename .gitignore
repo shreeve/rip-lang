@@ -28,10 +28,7 @@ packages/vscode/dist/
 *.duckdb*
 
 # Project-specific
-/apps/candor/
-/apps/medlabs/
-/apps/trustlabs/
-/apps/websites/
+/apps/
 notes.txt
 
 # Personal infra config (kept locally, not part of the language repo)

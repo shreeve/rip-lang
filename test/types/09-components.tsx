@@ -259,7 +259,7 @@ function GenericUsageTests() {
 // zustand types the store everywhere it's used via create<State>().
 // Rip's stash (`@app.data`) is completely untyped today — there is no
 // mechanism to flow a type declaration into the framework stash across
-// components. See the Typed Stash RFC in apps/cart/README.md.
+// components. See the Typed Stash RFC in examples/cart/README.md.
 //
 // The zustand code below shows what Rip is missing — a single type
 // declaration that makes every access site type-safe.

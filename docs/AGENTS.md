@@ -37,7 +37,7 @@ App.mount()
 - `index.html` — playground
 - `demo.html` and `charts.html` — dashboard demos
 - `sierpinski.html` — CDN demo
-- `example/index.html` and `results/index.html` — app launchers / examples. `example/index.json` is generated from `apps/demo/` via `bun run bundle:demo` (the source-of-truth lives in `apps/demo/`, the JSON is the deployable artifact).
+- `example/index.html` and `results/index.html` — app launchers / examples. `example/index.json` is generated from `docs/demo/` via `bun run bundle:demo` (the source-of-truth lives in `docs/demo/`, the JSON is the deployable artifact).
 - `ui/index.html` — widget gallery
 
 Static demos can be opened via `file://`. The playground and example app require `bun run serve`.

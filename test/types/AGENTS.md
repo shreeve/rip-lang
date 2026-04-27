@@ -71,7 +71,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 | Category                       | Tested In     | Notes                                                                                                         |
 | ------------------------------ | ------------- | ------------------------------------------------------------------------------------------------------------- |
-| `@app.data` stash typing       | 09-components | `@app.data` is `any` — no way to declare or flow a stash type across components. RFC in `apps/cart/README.md` |
+| `@app.data` stash typing       | 09-components | `@app.data` is `any` — no way to declare or flow a stash type across components. RFC in `examples/cart/README.md` |
 | Runtime return-type validation | 10-validation | Return types are erased — `response.json()` is unvalidated `any`. An app can wire `Schema.parse()` in the return-hook bridge (see below) for runtime enforcement. |
 
 ### 🔶 Partial

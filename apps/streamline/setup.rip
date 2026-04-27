@@ -1,3 +1,0 @@
-# Setup shim — rip serve runs this once before spawning workers
-import { setup } from './api/db.rip'
-export { setup }

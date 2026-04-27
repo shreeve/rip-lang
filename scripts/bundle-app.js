@@ -14,7 +14,7 @@
 // Example:
 //   bun run bundle:demo
 //   # equivalent to:
-//   bun scripts/bundle-app.js apps/demo -o docs/example/index.json -t "Rip App Demo"
+//   bun scripts/bundle-app.js docs/demo -o docs/example/index.json -t "Rip App Demo"
 
 import { readdirSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join, dirname, relative } from 'path';

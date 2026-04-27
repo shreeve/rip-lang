@@ -5,7 +5,7 @@ The canonical "everything in one file" demo of the Rip App framework. Six compon
 ## Layout
 
 ```
-apps/demo/
+docs/demo/
 ├── components/
 │   ├── _layout.rip   — root layout with nav + error boundary
 │   ├── index.rip     — Home page (file-based routing: / → index.rip)
@@ -22,7 +22,7 @@ apps/demo/
 ```bash
 bun run bundle:demo
 # wraps:
-# bun scripts/bundle-app.js apps/demo -o docs/example/index.json -t "Rip App Demo"
+# bun scripts/bundle-app.js docs/demo -o docs/example/index.json -t "Rip App Demo"
 ```
 
 Output: `docs/example/index.json` — a single ~17 KB file containing every component's raw `.rip` source plus all CSS, ready to ship to any static host. The launcher at `docs/example/index.html` fetches it once and runs the whole app from memory: no bundler, no build step, no per-component network requests.

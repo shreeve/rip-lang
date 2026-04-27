@@ -5,7 +5,7 @@ A minimal shopping cart built with Rip App to exercise reactive components, file
 ## Running
 
 ```bash
-cd apps/cart
+cd examples/cart
 rip server
 ```
 
