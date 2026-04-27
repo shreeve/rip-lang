@@ -761,7 +761,16 @@ compileAndImport = (source, compile, components = null, path = null, resolver = 
     resolver.compiling ?= {}
     resolver.compiling[path] = true
 
-  js = compile(source)
+  # Browser-debugger support — when enabled, compile with an inline source
+  # map keyed to the component's logical path. We still need to compensate
+  # for line shifts introduced by the header + preamble we prepend below;
+  # `prefixLines` tracks that and we apply `offsetSourceMap` once at the end.
+  debug = globalThis?.__ripDebug?.enabled and path
+  prefixLines = 0
+  js = if debug
+    compile(source, sourceMap: 'inline', filename: path)
+  else
+    compile(source)
 
   if resolver
     importedNames = new Set()
@@ -812,9 +821,21 @@ compileAndImport = (source, compile, components = null, path = null, resolver = 
     if names.length > 0
       preamble = "const {#{names.join(', ')}} = globalThis['#{resolver.key}'];\n"
       js = preamble + js
+      prefixLines += 1
 
   header = if path then "// #{path}\n" else ''
-  blob = new Blob([header + js], { type: 'application/javascript' })
+  prefixLines += 1 if header
+  finalJs = header + js
+
+  # Source-map post-processing: prepend N semicolons to map.mappings so
+  # generated lines line up with `header + preamble + js`. The Blob URL
+  # itself becomes the source identity in DevTools, so an explicit
+  # //# sourceURL pragma isn't needed here (only for eval'd code).
+  if debug and prefixLines > 0
+    offset = globalThis?.__ripDebug?.offsetSourceMap
+    finalJs = offset(finalJs, prefixLines) if offset
+
+  blob = new Blob([finalJs], { type: 'application/javascript' })
   url = URL.createObjectURL(blob)
 
   # Cache blob URL so other files can rewrite imports to point here
@@ -1171,6 +1192,7 @@ export launch = (appBase = '', opts = {}) ->
       components: appComponents
       router: router
       renderer: renderer
+      resolver: resolver
       cache: renderer.cache
       version: '0.3.0'
 

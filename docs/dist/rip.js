@@ -12454,7 +12454,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   }
   // src/browser.js
   var VERSION = "3.14.5";
-  var BUILD_DATE = "2026-04-27@04:29:31GMT";
+  var BUILD_DATE = "2026-04-27@04:54:42GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -12514,6 +12514,14 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
 ${tagged}
 })()`;
   }
+  if (typeof globalThis !== "undefined") {
+    globalThis.__ripDebug = {
+      enabled: true,
+      offsetSourceMap,
+      addSourceURL,
+      sanitizeSourceURL
+    };
+  }
   async function processRipScripts() {
     const sources = [];
     const runtimeTag = document.querySelector('script[src$="rip.min.js"], script[src$="rip.js"]');
@@ -12563,6 +12571,8 @@ ${tagged}
       const hasRouter = routerAttr != null;
       if (hasRouter && bundles.length > 0) {
         const debug = runtimeTag?.getAttribute("data-debug") !== "false";
+        if (globalThis.__ripDebug)
+          globalThis.__ripDebug.enabled = debug;
         const baseOpts = { skipRuntimes: true, skipExports: true, skipImports: true };
         let inlineCounter = 0;
         for (const s of individual) {
@@ -12612,6 +12622,8 @@ ${js}
         }
         expanded.push(...individual);
         const debug = runtimeTag?.getAttribute("data-debug") !== "false";
+        if (globalThis.__ripDebug)
+          globalThis.__ripDebug.enabled = debug;
         const baseOpts = { skipRuntimes: true, skipExports: true, skipImports: true };
         const compiled = [];
         let inlineCounter = 0;
@@ -13773,7 +13785,7 @@ ${indented}`);
     return null;
   };
   compileAndImport = async function(source, compile2, components = null, path = null, resolver = null) {
-    let blob, blobUrl, cached, depMod, depPath, depSource, found, full, header, importedNames, js, k, m, matches, mod, msg, n, name, namedImports, names, needed, post, pre, preamble, replacement, ripImportRe, specifier, storePath, url, v;
+    let blob, blobUrl, cached, debug, depMod, depPath, depSource, finalJs, found, full, header, importedNames, js, k, m, matches, mod, msg, n, name, namedImports, names, needed, offset, post, pre, preamble, prefixLines, replacement, ripImportRe, specifier, storePath, url, v;
     if (components && path) {
       cached = components.getCompiled(path);
       if (cached)
@@ -13783,7 +13795,9 @@ ${indented}`);
       resolver.compiling ??= {};
       resolver.compiling[path] = true;
     }
-    js = compile2(source);
+    debug = globalThis?.__ripDebug?.enabled && path;
+    prefixLines = 0;
+    js = debug ? compile2(source, { sourceMap: "inline", filename: path }) : compile2(source);
     if (resolver) {
       importedNames = new Set;
       if (components) {
@@ -13848,11 +13862,20 @@ ${indented}`);
         preamble = `const {${names.join(", ")}} = globalThis['${resolver.key}'];
 `;
         js = preamble + js;
+        prefixLines += 1;
       }
     }
     header = path ? `// ${path}
 ` : "";
-    blob = new Blob([header + js], { type: "application/javascript" });
+    if (header)
+      prefixLines += 1;
+    finalJs = header + js;
+    if (debug && prefixLines > 0) {
+      offset = globalThis?.__ripDebug?.offsetSourceMap;
+      if (offset)
+        finalJs = offset(finalJs, prefixLines);
+    }
+    blob = new Blob([finalJs], { type: "application/javascript" });
     url = URL.createObjectURL(blob);
     if (resolver && path) {
       resolver.blobUrls ??= {};
@@ -14193,7 +14216,7 @@ ${indented}`);
     }
     if (typeof window !== "undefined") {
       window.app = app;
-      window.__RIP__ = { app, components: appComponents, router, renderer, cache: renderer.cache, version: "0.3.0" };
+      window.__RIP__ = { app, components: appComponents, router, renderer, resolver, cache: renderer.cache, version: "0.3.0" };
     }
     return { app, components: appComponents, router, renderer };
   };

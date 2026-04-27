@@ -100,6 +100,22 @@ function wrapForEval(js, ripName) {
   return `(async()=>{\n${tagged}\n})()`;
 }
 
+// Expose the helpers on globalThis so `app.rip` (compiled separately into
+// the bundle) can apply the same source-map post-processing to its
+// component-load path. The `enabled` flag is owned by processRipScripts —
+// when it reads `data-debug` from the runtime <script> tag, it sets this
+// flag accordingly. Code paths outside processRipScripts (notably
+// `app.launch()`'s component compile path) gate their source-map work on
+// __ripDebug.enabled.
+if (typeof globalThis !== 'undefined') {
+  globalThis.__ripDebug = {
+    enabled: true,    // default ON — processRipScripts may flip to false
+    offsetSourceMap,
+    addSourceURL,
+    sanitizeSourceURL,
+  };
+}
+
 // Browser runtime: collect all sources (inline scripts, data-src files, bundles),
 // compile them in a shared scope, and execute as one async IIFE.
 //
@@ -161,10 +177,11 @@ async function processRipScripts() {
       // Compile non-bundle sources (inline scripts, individual .rip files)
       // with per-component source maps for browser-debugger support. The
       // bundle itself is launched separately via `app.launch(bundle)` —
-      // its components get compiled inside the framework on demand and
-      // are not source-mapped here. (Source-map support inside
-      // `launch()` is a separate, bigger change.)
+      // its components get source maps too via `globalThis.__ripDebug`,
+      // which `app.rip`'s component-compile path reads to apply the same
+      // offset+sourceURL treatment we apply here.
       const debug = runtimeTag?.getAttribute('data-debug') !== 'false';
+      if (globalThis.__ripDebug) globalThis.__ripDebug.enabled = debug;
       const baseOpts = { skipRuntimes: true, skipExports: true, skipImports: true };
       let inlineCounter = 0;
       for (const s of individual) {
@@ -211,6 +228,9 @@ async function processRipScripts() {
       // map (DevTools only honours the last sourceMappingURL inside an
       // eval, so concatenating maps doesn't work).
       const debug = runtimeTag?.getAttribute('data-debug') !== 'false';
+      // Update the global flag so app.launch()'s compile path (in app.rip)
+      // sees the same setting as our local `debug` variable.
+      if (globalThis.__ripDebug) globalThis.__ripDebug.enabled = debug;
       const baseOpts = { skipRuntimes: true, skipExports: true, skipImports: true };
       const compiled = [];
       let inlineCounter = 0;

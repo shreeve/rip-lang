@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rip source-map smoke test (app.launch / bundle path)</title>
+  <script defer src="dist/rip.min.js"></script>
+</head>
+<body>
+  <h1>app.launch source-map verification</h1>
+  <p>Companion to <code>_test-debugger.html</code>. That fixture verifies inline
+  scripts compiled by <code>processRipScripts()</code>; this one verifies the
+  bundle path used by <code>app.launch()</code> — every lazily-compiled
+  component gets an inline source map keyed to its <code>.rip</code> path.</p>
+  <p>Open DevTools → Console for the diagnostic dump. Open DevTools → Sources
+  panel — files like <code>components/counter.rip</code> should appear as
+  navigable virtual files showing original Rip source.</p>
+
+  <div id="app"></div>
+
+  <script type="text/rip">
+    res = await fetch('example/index.json')
+    bundle = res.json!
+
+    if bundle.css
+      style = document.createElement('style')
+      style.textContent = bundle.css
+      document.head.appendChild style
+
+    await launch hash: true, bundle: bundle
+
+    # Visit every route to trigger lazy-compile, then walk every Blob URL
+    # the framework created and assert each contains an inline source map
+    # whose generated-line mappings have been shifted by the prefix lines
+    # we prepend (header + optional preamble).
+    routes = ['', '#counter', '#todos', '#about']
+    for r in routes
+      window.location.hash = r.slice(1)
+      await sleep 100
+    await sleep 200
+
+    blobUrls = window.__RIP__.resolver.blobUrls or {}
+    paths = Object.keys(blobUrls)
+    console.log "[Phase 2] inspecting #{paths.length} blob(s)..."
+
+    mapRe = /\/\/# sourceMappingURL=data:application\/json;base64,/
+
+    okCount = 0
+    for path in paths
+      url = blobUrls[path]
+      r = await fetch(url)
+      js = r.text!
+      hasMap = mapRe.test(js)
+      okCount += 1 if hasMap
+      tag = if hasMap then 'OK' else 'MISS'
+      console.log "[Phase 2] #{tag} #{path}: bytes=#{js.length}"
+
+      if hasMap
+        b64 = js.match(/sourceMappingURL=data:application\/json;base64,([A-Za-z0-9+\/=]+)/)?[1]
+        if b64
+          map = JSON.parse atob(b64)
+          console.log "[Phase 2]   sources: #{JSON.stringify(map.sources)} mappings prefix: #{JSON.stringify(map.mappings.slice(0, 8))}"
+
+    if okCount is paths.length and paths.length > 0
+      console.log "[Phase 2] PASS — all #{paths.length} components have inline source maps"
+    else
+      console.error "[Phase 2] FAIL — only #{okCount}/#{paths.length} components have inline source maps"
+  </script>
+</body>
+</html>
