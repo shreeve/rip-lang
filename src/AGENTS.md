@@ -556,6 +556,16 @@ The browser bundle is an IIFE loaded with `<script defer>`, not `type="module"`,
 
 `let` declarations are stripped so values can persist in sloppy-mode eval, while `const` is hoisted to `globalThis`.
 
+### `window.__RIP__` — same surface on both compile paths (don't break this)
+
+`processRipScripts()` has two compile paths: with `data-router` it calls `app.launch()`; without `data-router` it inlines the bundles into one async-IIFE eval. Both paths expose the **same** debug surface on `window.__RIP__`, and consumers (e.g. the docs UI gallery's view-source feature) read from it indiscriminately:
+
+- `window.__RIP__.components.read("components/<id>.rip")` — returns the bundled `.rip` source text.
+
+`launch()` already wires this up (see `app.rip` ~1190). The no-router path used to silently skip it, so `window.__RIP__` was undefined for any deploy that used `data-src="bundle.json"` alone — view-source UIs would silently fail. The fix mirrors `launch()`'s setup: build a `createComponents()` store from the bundles and expose it on `window.__RIP__.components` (see `browser.js` ~226–239).
+
+**Invariant:** any future refactor of either compile path must keep `window.__RIP__.components.read(path)` working after boot. The regression test that locks this in lives in `test/bundle.test.js` (boot-simulation driver — fakes a `<script src="rip.min.js" data-src="bundle.json">` runtime tag and a synthetic bundle, awaits `globalThis.__ripScriptsReady`, asserts `read()` returns the source). If you delete or move that block in `browser.js`, that test will fail with `window.__RIP__ missing — no-router path did not wire components store`.
+
 ---
 
 ## Reactivity Implementation
