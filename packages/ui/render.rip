@@ -1,0 +1,53 @@
+# packages/ui/render.rip — shared SSR core for @rip-lang/ui
+#
+# Synchronously instantiates a Rip component against a temporary DOM
+# shim and returns its rendered root. Used by both `./html.rip` (HTML
+# output) and `./email/render.rip` (XHTML email output with Tailwind
+# class inlining).
+#
+# This module mutates `globalThis.{document,Node,SVGElement}` for the
+# duration of a render and restores them on exit. The serialization
+# invariant is enforced at runtime: a nested or concurrent call throws
+# rather than silently corrupting the outer render's state.
+#
+# Synchronous only. Do not add `await` to this code path or to any
+# `_create` / `_setup` / `mounted` / `after` callback that runs during
+# render. An await would yield control mid-render and trip the
+# assertion (and, before this guard existed, would produce silent
+# cross-render corruption).
+
+import { Node, Document } from './email/dom.rip'
+
+# Shared renderer.
+#
+# `after(root)` is an optional hook that runs after `mounted()` but
+# before `finally`, while `globalThis.document` still points at the
+# render's DOM. Used by the email renderer to inline Tailwind classes
+# while the shim is still active.
+export _renderComponent = (ComponentClass, props = {}, after = null) ->
+  if globalThis.document?.__ripRenderActive
+    raise "Concurrent or nested Rip SSR detected — renders must be serialized per process. See packages/ui/render.rip header for details."
+
+  prevDoc  = globalThis.document
+  prevNode = globalThis.Node
+  prevSVG  = globalThis.SVGElement
+
+  doc = Document.new()
+  doc.__ripRenderActive = true
+  globalThis.document = doc
+  globalThis.Node = Node
+  globalThis.SVGElement = class SVGStub extends Node
+
+  try
+    root = doc.createElement('__root')
+    instance = ComponentClass.new(props)
+    el = instance._create()
+    root.appendChild(el)
+    instance._setup()  if instance._setup
+    instance.mounted() if instance.mounted
+    after(root) if after
+    root
+  finally
+    globalThis.document = prevDoc
+    globalThis.Node = prevNode
+    globalThis.SVGElement = prevSVG

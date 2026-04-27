@@ -6,74 +6,14 @@ about gitignored private apps have been removed.
 
 Sections:
 
-- [Correctness issues](#correctness-issues) — bugs / hazards that affect output or runtime behavior
 - [Polish & cleanups](#polish--cleanups) — DRY, naming, docs, test coverage
 - [Forward-looking](#forward-looking) — substantial features not yet started
 
 ---
 
-## Correctness issues
-
-### 1. Server-side rendering mutates `globalThis.document` process-wide
-
-**Severity:** high (correctness under concurrency)
-
-**Affected files:**
-- `packages/ui/html.rip` — `_renderComponent`
-- `packages/ui/email/render.rip` — identical pattern (pre-existing)
-
-**What it is.** Both renderers swap `globalThis.document`, `globalThis.Node`,
-and `globalThis.SVGElement` for the duration of a render, then restore them in
-`finally`. In any process where two renders overlap (parallel `await
-Promise.all(...)`, concurrent request handlers, etc.) they observe each
-other's state. Current symptoms range from wrong output to cross-request
-contamination. The `html.rip` header already documents this as a requirement
-that renders be serialized per process.
-
-**Why deferred.** Inherited convention from the email package, which is in
-production use. Fixing one without the other leaves an inconsistent model.
-The fix touches a hot path and wants careful testing.
-
-**What a fix looks like.**
-- Thread `document`/`Node`/`SVGElement` through an explicit render context
-  argument, removing the `globalThis` dance entirely. Components that read
-  `document` from globals become the only remaining callers to handle.
-- Alternatively, isolate each render in an `AsyncLocalStorage` scope and
-  read `document` from the store. Lower-risk but leaks the abstraction into
-  the component DSL's environment access.
-- Apply the fix in both `html.rip` and `email/render.rip` together, then
-  extract the shared `_renderComponent` core (see issue #2).
-
----
-
 ## Polish & cleanups
 
-### 2. `_renderComponent` duplicated across `ui/html.rip` and `ui/email/render.rip`
-
-**Severity:** medium (DRY)
-
-**Affected files:**
-- `packages/ui/html.rip` — `_renderComponent` (~13 lines)
-- `packages/ui/email/render.rip` — `_renderComponent` (~25 lines, includes
-  Tailwind inlining and XHTML doctype)
-
-**What it is.** The DOM-shim setup, component instantiation, and teardown
-logic is essentially the same in both files. The email version adds two
-opt-in concerns (XHTML doctype, Tailwind inlining). Today they drift
-independently.
-
-**Why deferred.** The two renderers are working; no urgent correctness issue.
-Naturally paired with issue #1 — any fix to the concurrency hazard will want
-to touch both files anyway.
-
-**What a fix looks like.** Extract the shared core to a new `packages/ui/render.rip`
-(or into `packages/ui/email/dom.rip`). `html.rip` and `email/render.rip`
-become thin wrappers that add their respective concerns (doctype, Tailwind
-inlining). Ideally paired with #1.
-
----
-
-### 3. Grammar docs don't mention hyphen / mixed compound keys
+### 1. Grammar docs don't mention hyphen / mixed compound keys
 
 **Severity:** low (docs)
 
@@ -96,7 +36,7 @@ no newline on either side of `-`" discipline. Two short examples
 
 ---
 
-### 4. Additional lexer contexts not explicitly tested for compound keys
+### 2. Additional lexer contexts not explicitly tested for compound keys
 
 **Severity:** low (defensive coverage)
 
@@ -124,7 +64,7 @@ shouldn't". Small additions to `test/rip/basic.rip`.
 
 ---
 
-### 5. `renderDocument` name is slightly narrower than it sounds
+### 3. `renderDocument` name is slightly narrower than it sounds
 
 **Severity:** low (naming)
 
@@ -148,7 +88,7 @@ imports across apps.
 
 ## Forward-looking
 
-### 6. Browser debugger with source maps
+### 4. Browser debugger with source maps
 
 Implement `debugger` statement support in browser-compiled Rip code with
 source maps, so the browser DevTools takes you directly to the Rip source
@@ -174,7 +114,7 @@ each `<script type="text/rip">` source — it just needs to pass
 
 ---
 
-### 7. Migration diff generator (`rip migrate generate`)
+### 5. Migration diff generator (`rip migrate generate`)
 
 Automate the "edit a `:model` schema → figure out the `ALTER TABLE`
 statements" step. Today `Model.toSQL()` is a **snapshot generator** — it

@@ -8,14 +8,20 @@
 #   text = toText(MyEmail, name: "Alice")
 #   { html, text } = renderEmail(MyEmail, name: "Alice")
 #
+# Wraps the shared renderer in `../render.rip` with email-specific
+# concerns: an XHTML 1.0 Transitional doctype and Tailwind class
+# inlining (Tailwind doesn't run client-side in email).
+#
 # Notes:
 # - rendering is synchronous and swaps in a temporary global DOM shim
-# - do not add awaits or async work inside this render path
+# - do not add awaits or async work inside this render path; see the
+#   serialization invariant in `../render.rip`
 # - custom Tailwind configs must be prepared ahead of time via
 #   `@rip-lang/ui/tailwind.prepareConfig(config)` before sync rendering
 # ==============================================================================
 
-import { Node, Document, serializeChildren, toPlainText } from './dom.rip'
+import { _renderComponent } from '../render.rip'
+import { serializeChildren, toPlainText } from './dom.rip'
 import { inlineEmailTree, takeEmailTailwindRoots, configKey } from '../tailwind/tailwind.rip'
 
 XHTML_DOCTYPE =! '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">'
@@ -38,45 +44,28 @@ _resolveTailwindConfig = (entries = []) ->
 
   first
 
-_renderComponent = (ComponentClass, props = {}) ->
-  prevDoc  = globalThis.document
-  prevNode = globalThis.Node
-  prevSVG  = globalThis.SVGElement
-
-  doc = Document.new()
-  globalThis.document = doc
-  globalThis.Node = Node
-  globalThis.SVGElement = class SVGStub extends Node
-
-  try
-    root = doc.createElement('__root')
-    instance = ComponentClass.new(props)
-    el = instance._create()
-    root.appendChild(el)
-    instance._setup() if instance._setup
-    instance.mounted() if instance.mounted
-
-    entries = takeEmailTailwindRoots()
-    if entries.length
-      result = inlineEmailTree(root, _resolveTailwindConfig(entries))
-      warn "Tailwind: unsupported classes ignored: #{result.unsupported.join(' ')}" if result.unsupported?.length
-
-    root
-  finally
-    globalThis.document = prevDoc
-    globalThis.Node = prevNode
-    globalThis.SVGElement = prevSVG
+# Hook passed to the shared renderer: inline Tailwind classes after the
+# component tree is mounted but while the DOM shim is still active. The
+# shared renderer's `after(root)` callback contract puts us in exactly
+# the right spot — root is fully built, globalThis.document still
+# points at the render's shim, and we run inside the same try/finally
+# so any throw still restores the prior globals.
+_inlineTailwind = (root) ->
+  entries = takeEmailTailwindRoots()
+  return unless entries.length
+  result = inlineEmailTree(root, _resolveTailwindConfig(entries))
+  warn "Tailwind: unsupported classes ignored: #{result.unsupported.join(' ')}" if result.unsupported?.length
 
 export renderEmail = (ComponentClass, props = {}) ->
-  root = _renderComponent(ComponentClass, props)
+  root = _renderComponent(ComponentClass, props, _inlineTailwind)
   html = serializeChildren(root)
   text = toPlainText(root)
   { html: "#{XHTML_DOCTYPE}#{html}", text }
 
 export toHTML = (ComponentClass, props = {}) ->
-  root = _renderComponent(ComponentClass, props)
+  root = _renderComponent(ComponentClass, props, _inlineTailwind)
   "#{XHTML_DOCTYPE}#{serializeChildren(root)}"
 
 export toText = (ComponentClass, props = {}) ->
-  root = _renderComponent(ComponentClass, props)
+  root = _renderComponent(ComponentClass, props, _inlineTailwind)
   toPlainText(root)

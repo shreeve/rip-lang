@@ -1,44 +1,17 @@
 # @rip-lang/ui/html — server-side HTML rendering for Rip components.
 #
-# Instantiates any Rip component against a temporary DOM shim and
-# serializes the resulting tree to an HTML string. No doctype is
-# prepended by `toHTML` — callers that want `<!DOCTYPE html>` can use
-# `renderDocument`, which prepends the HTML5 doctype for them.
+# Instantiates any Rip component via the shared renderer in
+# `./render.rip` and serializes the resulting tree to an HTML string.
+# `toHTML` returns a fragment; `renderDocument` prepends an HTML5
+# doctype for `<html>`-rooted components.
 #
-# `@rip-lang/ui/email` wraps the same machinery with XHTML doctype
-# and Tailwind class inlining; use that when producing email HTML.
-#
-# ⚠ Concurrency: `_renderComponent` mutates `globalThis.document`,
-# `globalThis.Node`, and `globalThis.SVGElement` for the duration of
-# the render. If two renders run concurrently in the same process
-# (e.g. `await Promise.all([...])`-style parallel SSR), they will
-# observe each other's state. Renders must be serialized per process.
-# Same limitation applies to `@rip-lang/ui/email`.
+# `@rip-lang/ui/email` uses the same shared renderer with an XHTML
+# doctype and Tailwind class inlining; use that when producing email
+# HTML. SSR concurrency rules and the runtime-enforced serialization
+# invariant are documented in `./render.rip`.
 
-import { Node, Document, serializeChildren } from './email/dom.rip'
-
-_renderComponent = (ComponentClass, props = {}) ->
-  prevDoc  = globalThis.document
-  prevNode = globalThis.Node
-  prevSVG  = globalThis.SVGElement
-
-  doc = Document.new()
-  globalThis.document = doc
-  globalThis.Node = Node
-  globalThis.SVGElement = class SVGStub extends Node
-
-  try
-    root = doc.createElement('__root')
-    instance = ComponentClass.new(props)
-    el = instance._create()
-    root.appendChild(el)
-    instance._setup() if instance._setup
-    instance.mounted() if instance.mounted
-    root
-  finally
-    globalThis.document = prevDoc
-    globalThis.Node = prevNode
-    globalThis.SVGElement = prevSVG
+import { _renderComponent } from './render.rip'
+import { serializeChildren } from './email/dom.rip'
 
 export toHTML = (ComponentClass, props = {}) ->
   serializeChildren _renderComponent(ComponentClass, props)
