@@ -12453,8 +12453,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeEmitter({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.15.2";
-  var BUILD_DATE = "2026-04-27@06:15:56GMT";
+  var VERSION = "3.15.3";
+  var BUILD_DATE = "2026-04-27@07:02:58GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -12631,9 +12631,8 @@ ${js}
           if (!s.code)
             continue;
           const ripName = s.url || `inline-${++inlineCounter}.rip`;
-          const opts = debug ? { ...baseOpts, sourceMap: "inline", filename: ripName } : baseOpts;
           try {
-            const js = compileToJS(s.code, opts);
+            const js = compileToJS(s.code, baseOpts);
             compiled.push({ js, url: ripName });
           } catch (e) {
             console.error(formatError(e, { source: s.code, file: ripName, color: false }));
@@ -12662,30 +12661,27 @@ ${js}
           }
         }
         if (compiled.length > 0) {
-          let anyError = false;
-          for (const c of compiled) {
-            try {
-              await (0, eval)(debug ? wrapForEval(c.js, c.url) : `(async()=>{
-${c.js}
-})()`);
-            } catch (e) {
-              anyError = true;
-              if (e instanceof SyntaxError)
-                console.error(`Rip syntax error in ${c.url}: ${e.message}`);
-              else
-                console.error(`Rip runtime error in ${c.url}:`, e);
-            }
-          }
           const mount = runtimeTag?.getAttribute("data-mount");
-          if (mount) {
-            const target = runtimeTag.getAttribute("data-target") || "body";
-            try {
-              await (0, eval)(`(async()=>{ ${mount}.mount(${JSON.stringify(target)}); })()`);
-            } catch (e) {
-              console.error(`Rip mount error (${mount}):`, e);
-            }
+          const target = runtimeTag?.getAttribute("data-target") || "body";
+          const mountSnippet = mount ? `
+${mount}.mount(${JSON.stringify(target)});
+` : "";
+          const merged = compiled.map((c) => c.js).join(`
+;
+`);
+          let ok = true;
+          try {
+            await (0, eval)(`(async()=>{
+${merged}${mountSnippet}
+})()`);
+          } catch (e) {
+            ok = false;
+            if (e instanceof SyntaxError)
+              console.error(`Rip syntax error: ${e.message}`);
+            else
+              console.error("Rip runtime error:", e);
           }
-          if (!anyError)
+          if (ok)
             document.body.classList.add("ready");
         }
       }
