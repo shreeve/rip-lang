@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/schema",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Schema language feature for Rip — validation, ORM, DDL, .d.ts emission",
   "type": "module",
   "private": true,

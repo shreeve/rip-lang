@@ -12453,7 +12453,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeEmitter({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.14.5";
+  var VERSION = "3.15.0";
   var BUILD_DATE = "2026-04-27@05:15:26GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
