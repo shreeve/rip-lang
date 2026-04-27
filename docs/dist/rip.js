@@ -12453,8 +12453,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeEmitter({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.15.1";
-  var BUILD_DATE = "2026-04-27@06:14:13GMT";
+  var VERSION = "3.15.2";
+  var BUILD_DATE = "2026-04-27@06:15:56GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

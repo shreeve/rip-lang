@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/shreeve/rip-lang/commits/main"><img src="https://img.shields.io/badge/version-3.15.1-blue.svg" alt="Version"></a>
+  <a href="https://github.com/shreeve/rip-lang/commits/main"><img src="https://img.shields.io/badge/version-3.15.2-blue.svg" alt="Version"></a>
   <a href="#zero-dependencies"><img src="https://img.shields.io/badge/dependencies-ZERO-brightgreen.svg" alt="Dependencies"></a>
   <a href="#"><img src="https://img.shields.io/badge/tests-1%2C436%2F1%2C436-brightgreen.svg" alt="Tests"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
