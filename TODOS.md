@@ -64,7 +64,7 @@ $ rip migrate apply
 
 ### Implementation sketch
 
-- **Snapshot serializer** — walk `.toSQL()`-equivalent internals and emit a structured JSON representation (tables → columns with types/constraints/defaults, indexes, foreign keys). Small extension of existing Layer 4b DDL emitter in `src/schema.js`.
+- **Snapshot serializer** — walk `.toSQL()`-equivalent internals and emit a structured JSON representation (tables → columns with types/constraints/defaults, indexes, foreign keys). Small extension of existing Layer 4b DDL emitter in `packages/schema/src/schema.js`.
 - **Snapshot diff** — naive structural diff is enough for most operations (add column, drop column, type change, index add/drop, FK add/drop). Handles 80% of cases without getting clever.
 - **Rename detection** — when a table has "N removed columns, N added columns of identical type+constraints," flag as ambiguous and prompt the user. Django's heuristic. Well-understood.
 - **SQL emitter** — per dialect. Start with DuckDB (Rip's current target); PostgreSQL and SQLite follow naturally since the DDL subset Rip generates is standard.

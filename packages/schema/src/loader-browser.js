@@ -21,7 +21,7 @@ import {
   SCHEMA_VALIDATE_RUNTIME,
   SCHEMA_BROWSER_STUBS_RUNTIME,
 } from './runtime.generated.js';
-import { setSchemaRuntimeProvider } from '../schema.js';
+import { setSchemaRuntimeProvider } from './schema.js';
 
 function provider({ mode = 'browser' } = {}) {
   let body;

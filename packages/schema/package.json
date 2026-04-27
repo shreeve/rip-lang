@@ -1,0 +1,23 @@
+{
+  "name": "@rip-lang/schema",
+  "version": "0.1.0",
+  "description": "Schema language feature for Rip — validation, ORM, DDL, .d.ts emission",
+  "type": "module",
+  "private": true,
+  "main": "./src/schema.js",
+  "exports": {
+    ".": "./src/schema.js",
+    "./dts-emit": "./src/dts-emit.js",
+    "./loader-browser": "./src/loader-browser.js",
+    "./loader-server": "./src/loader-server.js"
+  },
+  "scripts": {
+    "build:runtime": "bun scripts/build-runtime.js",
+    "test:runtime-fresh": "bun scripts/build-runtime.js --check",
+    "test:singleton": "bun test/singleton.test.js",
+    "test:errors": "bun test/errors.test.js",
+    "test:modes": "bun test/modes.test.js",
+    "test:build": "bun test/build.test.js",
+    "test": "bun test/singleton.test.js && bun test/errors.test.js && bun test/modes.test.js && bun test/build.test.js"
+  }
+}

@@ -1,9 +1,9 @@
 // Schema runtime fragment: ddl (migration only)
 //
 // This file is the source of truth for one slice of the schema runtime.
-// Edit here, then run `bun scripts/build-schema-runtime.js` to regenerate
-// `src/schema/runtime.generated.js`. Tests pin the public surface via
-// test/schema-errors.test.js, test/schema-modes.test.js, and the source
+// Edit here, then run `bun run --cwd packages/schema build:runtime` to regenerate
+// `packages/schema/src/runtime.generated.js`. Tests pin the public surface via
+// packages/schema/test/errors.test.js, packages/schema/test/modes.test.js, and the source
 // schema test suite.
 //
 // Fragments are concatenated INSIDE one shared IIFE wrapper at build time.

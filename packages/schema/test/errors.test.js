@@ -22,7 +22,7 @@
  *   7. version mismatch error format
  */
 
-import { SCHEMA_RUNTIME } from '../src/schema/loader-server.js';
+import { SCHEMA_RUNTIME } from '../src/loader-server.js';
 
 function color(code, s) { return process.stdout.isTTY ? `\x1b[${code}m${s}\x1b[0m` : s; }
 const green = s => color('32;1', s);

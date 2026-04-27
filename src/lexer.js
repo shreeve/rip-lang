@@ -40,7 +40,7 @@
 // ==========================================================================
 
 import { installTypeSupport } from './types.js';
-import { installSchemaSupport } from './schema.js';
+import { installSchemaSupport } from '@rip-lang/schema';
 
 // ==========================================================================
 // Token Category Sets

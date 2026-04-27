@@ -2324,7 +2324,7 @@ through this interface.
 ## 24. Compiler integration
 
 The schema keyword is implemented as a compiler sidecar in
-`src/schema.js`, alongside the existing type and component sidecars.
+`packages/schema/src/schema.js`, alongside the existing type and component sidecars.
 This isolates the feature from the rest of the compiler: the main Rip
 grammar has two productions for the schema keyword (not hundreds), and
 the schema-specific body syntax never reaches the main parser.
@@ -2373,7 +2373,7 @@ binds to the instance correctly without special codegen.
 
 | File                 | Role                                                               |
 | -------------------- | ------------------------------------------------------------------ |
-| `src/schema.js`      | Sub-parser, `emitSchema`, Layer 1-4 runtime, shadow TS walker, `installSchemaSupport` |
+| `packages/schema/src/schema.js`      | Sub-parser, `emitSchema`, Layer 1-4 runtime, shadow TS walker, `installSchemaSupport` |
 | `src/lexer.js`       | Hook point — calls `rewriteSchema()`; comment-token fix for `#` modifier |
 | `src/grammar/grammar.rip` | The one `Schema` production                                  |
 | `src/compiler.js`    | Dispatch for the `schema` s-expression head; preamble injection    |
@@ -2381,7 +2381,7 @@ binds to the instance correctly without special codegen.
 | `src/typecheck.js`   | `hasSchemas()` probe so schema-only files aren't `@ts-nocheck`d     |
 | `test/rip/schema.rip` | The test suite                                                    |
 
-The total wiring in the core compiler (outside `src/schema.js`) is under
+The total wiring in the core compiler (outside `packages/schema/src/schema.js`) is under
 100 lines. That's the sidecar pattern working — the feature is big, but
 its footprint in the main compiler is small.
 
@@ -2405,7 +2405,7 @@ transactions, eager loading, scopes, and soft deletes — not yet; see
 
 **Does the runtime belong to `schema.js` or is it loaded separately?**
 It's inlined. When a file uses `schema`, the compiler injects a small
-preamble (under `SCHEMA_RUNTIME` in `src/schema.js`) that defines
+preamble (under `SCHEMA_RUNTIME` in `packages/schema/src/schema.js`) that defines
 `SchemaError`, `__SchemaDef`, `__SchemaRegistry`, `Query`, and the
 helpers. No import statement, no package dependency, no bootstrap call.
 

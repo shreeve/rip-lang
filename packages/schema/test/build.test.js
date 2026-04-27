@@ -8,7 +8,7 @@
  *     same source must produce a byte-identical runtime.generated.js.
  *     Catches Map iteration order, timestamp drift, ad-hoc randomness.
  *
- *  2. Fragment isolation — each src/schema/runtime-*.js file must parse
+ *  2. Fragment isolation — each src/runtime-*.js file must parse
  *     as standalone JavaScript (via Bun's syntax check). They're not
  *     individually executable (they reference cross-fragment symbols),
  *     but stray braces / unclosed strings should fail fast — not as
@@ -27,7 +27,7 @@ import { fileURLToPath } from 'url';
 import { spawnSync } from 'child_process';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const repoRoot = resolve(__dirname, '..');
+const packageRoot = resolve(__dirname, '..');
 
 function color(code, s) { return process.stdout.isTTY ? `\x1b[${code}m${s}\x1b[0m` : s; }
 const green = s => color('32;1', s);
@@ -54,11 +54,11 @@ function check(name, fn) {
 
 console.log('\n' + color('36', '── build determinism ──'));
 
-check('build-schema-runtime produces byte-identical output across runs', () => {
-  const before = readFileSync(resolve(repoRoot, 'src/schema/runtime.generated.js'), 'utf8');
-  const r = spawnSync('bun', ['scripts/build-schema-runtime.js'], { cwd: repoRoot, stdio: 'pipe' });
-  if (r.status !== 0) throw new Error('build-schema-runtime exited non-zero: ' + r.stderr.toString());
-  const after = readFileSync(resolve(repoRoot, 'src/schema/runtime.generated.js'), 'utf8');
+check('build-runtime produces byte-identical output across runs', () => {
+  const before = readFileSync(resolve(packageRoot, 'src/runtime.generated.js'), 'utf8');
+  const r = spawnSync('bun', ['scripts/build-runtime.js'], { cwd: packageRoot, stdio: 'pipe' });
+  if (r.status !== 0) throw new Error('build-runtime exited non-zero: ' + r.stderr.toString());
+  const after = readFileSync(resolve(packageRoot, 'src/runtime.generated.js'), 'utf8');
   if (before !== after) {
     throw new Error('regeneration produced different bytes — non-deterministic build');
   }
@@ -80,7 +80,7 @@ const fragments = [
 
 for (const f of fragments) {
   check(`${f} parses as standalone JavaScript`, () => {
-    const path = resolve(repoRoot, 'src/schema', f);
+    const path = resolve(packageRoot, 'src', f);
     const src = readFileSync(path, 'utf8');
     // Just parse. Cross-fragment identifier references resolve at runtime
     // (this fragment isn't actually run standalone — only concatenated with
@@ -106,7 +106,7 @@ check('browser stub message includes "@rip-lang/db on the server"', async () => 
   // this run; we just verify the message text directly via a fresh eval.)
   const { SCHEMA_RUNTIME_WRAPPER_HEAD, SCHEMA_RUNTIME_WRAPPER_TAIL,
           SCHEMA_VALIDATE_RUNTIME, SCHEMA_BROWSER_STUBS_RUNTIME } =
-    await import('../src/schema/runtime.generated.js');
+    await import('../src/runtime.generated.js');
   const body = SCHEMA_VALIDATE_RUNTIME + '\n' + SCHEMA_BROWSER_STUBS_RUNTIME;
   const runtimeSrc = SCHEMA_RUNTIME_WRAPPER_HEAD + body + SCHEMA_RUNTIME_WRAPPER_TAIL;
   const sandbox = {};
@@ -142,7 +142,7 @@ check('loader-server then loader-browser in same process keep singleton intact',
   const { SCHEMA_RUNTIME_WRAPPER_HEAD, SCHEMA_RUNTIME_WRAPPER_TAIL,
           SCHEMA_VALIDATE_RUNTIME, SCHEMA_DB_NAMING_RUNTIME,
           SCHEMA_ORM_RUNTIME, SCHEMA_BROWSER_STUBS_RUNTIME } =
-    await import('../src/schema/runtime.generated.js');
+    await import('../src/runtime.generated.js');
 
   const serverSrc = SCHEMA_RUNTIME_WRAPPER_HEAD +
     SCHEMA_VALIDATE_RUNTIME + '\n' + SCHEMA_DB_NAMING_RUNTIME + '\n' + SCHEMA_ORM_RUNTIME +

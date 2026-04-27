@@ -32,7 +32,7 @@ import {
   SCHEMA_DDL_RUNTIME,
   SCHEMA_BROWSER_STUBS_RUNTIME,
 } from './runtime.generated.js';
-import { setSchemaRuntimeProvider } from '../schema.js';
+import { setSchemaRuntimeProvider } from './schema.js';
 
 function provider({ mode = 'migration' } = {}) {
   let body;

@@ -808,7 +808,7 @@ grammar =
   # Schema
   # ============================================================================
   # `schema [:kind] INDENT ... OUTDENT` is parsed entirely by the schema
-  # sub-parser at lexer-rewrite time (src/schema.js). The rewriter emits
+  # sub-parser at lexer-rewrite time (packages/schema/src/schema.js). The rewriter emits
   # a synthetic SCHEMA_BODY token whose .data carries the full descriptor
   # (kind, entries, per-entry loc). The main grammar only sees these two
   # terminals, which keeps schema body syntax (`name! type`, `@directive`,

@@ -1,11 +1,15 @@
-import { parser } from './parser.js';
+// Schema reaches up to the host's parser table to re-parse @ensure predicate
+// bodies. This is the one host coupling point — host's lexer/compiler import
+// installSchemaSupport from us, we import the parser back. Future extraction
+// would replace this with a setSchemaParser(parser) injection from the host.
+import { parser } from '../../../src/parser.js';
 
 // Runtime-string composition is delegated to a registered provider so the
 // bundler can tree-shake server-only fragments out of the browser bundle.
-// One of `src/schema/loader-server.js` or `src/schema/loader-browser.js`
+// One of `@rip-lang/schema/loader-server` or `@rip-lang/schema/loader-browser`
 // must be side-effect-imported before any compileToJS call that emits
-// schemas. (The bundle's own browser.js imports loader-browser.js;
-// CLI / typecheck / test runner imports loader-server.js.)
+// schemas. (The bundle's own browser.js imports loader-browser; CLI /
+// typecheck / test runner imports loader-server.)
 let _schemaRuntimeProvider = null;
 export function setSchemaRuntimeProvider(fn) { _schemaRuntimeProvider = fn; }
 
@@ -1792,8 +1796,8 @@ export function getSchemaRuntime(opts = {}) {
   if (!_schemaRuntimeProvider) {
     throw new Error(
       "schema runtime provider not registered. Side-effect-import either " +
-      "'src/schema/loader-server.js' (CLI / server / tests) or " +
-      "'src/schema/loader-browser.js' (browser bundle) before calling " +
+      "'@rip-lang/schema/loader-server' (CLI / server / tests) or " +
+      "'@rip-lang/schema/loader-browser' (browser bundle) before calling " +
       "any compileToJS that emits schemas."
     );
   }

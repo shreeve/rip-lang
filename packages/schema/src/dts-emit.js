@@ -12,7 +12,7 @@
 // `declare const Foo: Schema<...>` / ModelSchema / etc. lines.
 //
 // All the runtime (parsing, validation, ORM, DDL, registry) lives in
-// ../schema.js and the runtime-*.js fragments in this same directory,
+// ./schema.js and the runtime-*.js fragments in this same directory,
 // shared between browser and server. The `runtime-*` files are concatenated
 // at build into runtime.generated.js and execute at runtime; THIS file is
 // orthogonal — it runs at compile time and never reaches runtime.

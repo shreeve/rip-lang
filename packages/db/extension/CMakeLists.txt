@@ -16,7 +16,7 @@ endif()
 # Our own headers sit next to the sources. yyjson is bundled with duckdb.
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../../duckdb/third_party/yyjson/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../../vendor/duckdb/third_party/yyjson/include
 )
 
 set(EXTENSION_SOURCES

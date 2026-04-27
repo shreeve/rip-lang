@@ -4,13 +4,16 @@
   "workspaces": {
     "": {
       "name": "rip-lang",
+      "dependencies": {
+        "@rip-lang/schema": "workspace:*",
+      },
       "devDependencies": {
         "typescript": "5.9.3",
       },
     },
     "packages/ai": {
       "name": "@rip-lang/ai",
-      "version": "2.0.0",
+      "version": "1.0.0",
       "bin": {
         "rip-ai": "./bin/rip-ai",
       },
@@ -53,6 +56,10 @@
         "highlight.js": "^11.11.1",
         "rip-lang": ">=3.14.5",
       },
+    },
+    "packages/schema": {
+      "name": "@rip-lang/schema",
+      "version": "0.1.0",
     },
     "packages/script": {
       "name": "@rip-lang/script",
@@ -202,6 +209,8 @@
     "@rip-lang/http": ["@rip-lang/http@workspace:packages/http"],
 
     "@rip-lang/print": ["@rip-lang/print@workspace:packages/print"],
+
+    "@rip-lang/schema": ["@rip-lang/schema@workspace:packages/schema"],
 
     "@rip-lang/script": ["@rip-lang/script@workspace:packages/script"],
 

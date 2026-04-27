@@ -43,7 +43,7 @@ rip server
 | `src/lexer.js`            | Yes       | Lexer and rewriter                                     |
 | `src/types.js`            | Yes       | Type system sidecar                                    |
 | `src/components.js`       | Yes       | Component system sidecar                               |
-| `src/schema.js`           | Yes       | Schema system sidecar (`schema` keyword)               |
+| `packages/schema/src/`    | Yes       | Schema feature package (`schema` keyword) — entry `schema.js`, runtime fragments, loaders, `dts-emit.js`. Imported as `@rip-lang/schema`. |
 | `src/grammar/grammar.rip` | Carefully | Run `bun run parser` after changes                     |
 | `src/parser.js`           | Never     | Generated file                                         |
 | `src/sourcemaps.js`       | Yes       | Source map generator                                   |
@@ -64,7 +64,7 @@ rip server
 - **Never write `await fn(args)` in `.rip` source when `fn!` will do** — the dammit operator is the idiomatic form. `fetch! url` compiles to `await fetch(url)`; `User.find! 1` to `await User.find(1)`; `user.save!` to `await user.save()`. Reserve raw `await` for JS interop in `.js` files, tests that document the await→!  equivalence, and the rare cases where `fn!` is ambiguous with a dammit-returning expression.
 - Run `bun run parser` after grammar changes
 - Run `bun run build` after codegen, `components.js`, `browser.js`, or `app.rip` changes
-- Run `bun run build:schema-runtime` after editing any `src/schema/runtime-*.js` fragment (CI's `test:schema-fresh` fails on staleness)
+- Run `bun run build:schema-runtime` after editing any `packages/schema/src/runtime-*.js` fragment (CI's `test:schema-fresh` fails on staleness)
 - Run `bun run bump` for the standard release flow
 
 ## Compilation Pipeline
