@@ -10,7 +10,7 @@
 # HTML. SSR concurrency rules and the runtime-enforced serialization
 # invariant are documented in `./render.rip`.
 
-import { _renderComponent } from './render.rip'
+import { _renderComponent } from './shared/render.rip'
 import { serializeChildren } from './email/dom.rip'
 
 export toHTML = (ComponentClass, props = {}) ->

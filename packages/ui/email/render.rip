@@ -20,7 +20,7 @@
 #   `@rip-lang/ui/tailwind.prepareConfig(config)` before sync rendering
 # ==============================================================================
 
-import { _renderComponent } from '../render.rip'
+import { _renderComponent } from '../shared/render.rip'
 import { serializeChildren, toPlainText } from './dom.rip'
 import { inlineEmailTree, takeEmailTailwindRoots, configKey } from '../tailwind/tailwind.rip'
 

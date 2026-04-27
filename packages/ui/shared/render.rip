@@ -1,9 +1,10 @@
-# packages/ui/render.rip — shared SSR core for @rip-lang/ui
+# packages/ui/shared/render.rip — shared SSR core for @rip-lang/ui
 #
 # Synchronously instantiates a Rip component against a temporary DOM
-# shim and returns its rendered root. Used by both `./html.rip` (HTML
-# output) and `./email/render.rip` (XHTML email output with Tailwind
-# class inlining).
+# shim and returns its rendered root. Used by both `../html.rip` (HTML
+# output) and `../email/render.rip` (XHTML email output with Tailwind
+# class inlining), per the cross-domain helpers convention documented
+# in `./README.md`.
 #
 # This module mutates `globalThis.{document,Node,SVGElement}` for the
 # duration of a render and restores them on exit. The serialization
@@ -16,7 +17,7 @@
 # assertion (and, before this guard existed, would produce silent
 # cross-render corruption).
 
-import { Node, Document } from './email/dom.rip'
+import { Node, Document } from '../email/dom.rip'
 
 # Shared renderer.
 #
