@@ -105,8 +105,18 @@ colors = %w(red green blue)   # any delimiter: [] () {} <> || !! etc.
 
 # Objects
 user = {name: "Alice", age: 30}
-shorthand = {name, age}  # Same as {name: name, age: age}
-config = {api.host: "localhost", api.port: 3000}  # Dotted keys → flat string keys
+shorthand = {name, age}              # Same as {name: name, age: age}
+
+# Compound keys — dot- and hyphen-separated identifier chains collapse
+# into a single flat string key. Useful for config trees and DOM-style
+# attribute names without quote noise.
+config = {api.host: "localhost", api.port: 3000}     # → {'api.host': ..., 'api.port': ...}
+attrs  = {data-src: "/img.png", aria-label: "logo"}  # → {'data-src': ..., 'aria-label': ...}
+hosts  = {beta-site.amazon.com: 100}                 # → {'beta-site.amazon.com': 100}
+
+# No whitespace or newline is allowed on either side of `-` in a hyphen
+# key — that's how `data-src` stays a single key while `a - b` stays
+# subtraction. Dots are more permissive (whitespace either side is fine).
 
 # Map literals — real JavaScript Map with any key type
 table = *{
@@ -2224,8 +2234,10 @@ a[/pat/, 1]    # regex extract
 a?             # existence check (a != null)
 a ?? b         # nullish coalescing
 
-# Dotted keys
-{a.b: 1}          # {'a.b': 1} — flat string key
+# Compound keys — dotted, hyphenated, or mixed (collapse to flat string keys)
+{a.b: 1}                       # {'a.b': 1}
+{data-src: 1}                  # {'data-src': 1} — no whitespace around `-`
+{beta-site.amazon.com: 100}    # {'beta-site.amazon.com': 100} — mixed
 
 # Word arrays
 %w[foo bar baz]   # ["foo", "bar", "baz"] — Ruby-style word literal

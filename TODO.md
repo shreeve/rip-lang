@@ -13,30 +13,7 @@ Sections:
 
 ## Polish & cleanups
 
-### 1. Grammar docs don't mention hyphen / mixed compound keys
-
-**Severity:** low (docs)
-
-**Affected files:**
-- `docs/RIP-LANG.md` — the section covering dotted keys (near line 409:
-  "In component render blocks, `x.y` on its own line is parsed as a tag…")
-
-**What it is.** Tests in `test/rip/basic.rip:99–107` document the behavior
-(`hyphen key simple`, `mixed key dot-hyphen`, etc.), but the primary language
-reference still only mentions dotted keys. A user reading the docs won't
-discover that `data-src: "x"` works, nor the no-whitespace discipline.
-
-**Why deferred.** Feature works and is tested; documentation lag is a
-low-severity kind of debt.
-
-**What a fix looks like.** Extend the existing dotted-keys paragraph with one
-sentence explaining the hyphen and mixed forms, plus the "no whitespace and
-no newline on either side of `-`" discipline. Two short examples
-(`data-src: 1`, `beta-site.amazon.com: 1`) are enough.
-
----
-
-### 2. Additional lexer contexts not explicitly tested for compound keys
+### 1. Additional lexer contexts not explicitly tested for compound keys
 
 **Severity:** low (defensive coverage)
 
@@ -64,7 +41,7 @@ shouldn't". Small additions to `test/rip/basic.rip`.
 
 ---
 
-### 3. `renderDocument` name is slightly narrower than it sounds
+### 2. `renderDocument` name is slightly narrower than it sounds
 
 **Severity:** low (naming)
 
@@ -88,7 +65,7 @@ imports across apps.
 
 ## Forward-looking
 
-### 4. Browser debugger with source maps
+### 3. Browser debugger with source maps
 
 Implement `debugger` statement support in browser-compiled Rip code with
 source maps, so the browser DevTools takes you directly to the Rip source
@@ -114,7 +91,7 @@ each `<script type="text/rip">` source — it just needs to pass
 
 ---
 
-### 5. Migration diff generator (`rip migrate generate`)
+### 4. Migration diff generator (`rip migrate generate`)
 
 Automate the "edit a `:model` schema → figure out the `ALTER TABLE`
 statements" step. Today `Model.toSQL()` is a **snapshot generator** — it
