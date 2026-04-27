@@ -1,43 +1,13 @@
 # TODO
 
-Real issues and forward-looking work for the rip-lang repo. Each entry
-is verified against the current code — items resolved by past work or
-about gitignored private apps have been removed.
-
-Sections:
-
-- [Polish & cleanups](#polish--cleanups) — DRY, naming, docs, test coverage
-- [Forward-looking](#forward-looking) — substantial features not yet started
+Forward-looking work for the rip-lang repo. The earlier polish and
+correctness items have all been resolved (see commit history). What
+remains are two substantial future features that are worth building
+when there's a real trigger — neither is on a critical path today.
 
 ---
 
-## Polish & cleanups
-
-### 1. `renderDocument` name is slightly narrower than it sounds
-
-**Severity:** low (naming)
-
-**Affected files:**
-- `packages/ui/html.rip`
-
-**What it is.** `renderDocument(Component, props)` unconditionally prepends
-`<!DOCTYPE html>`. That's correct when the component's root is `<html>`, but
-misleading if someone tries to render a non-document component through it.
-
-**Why deferred.** The name is plausible and the lower-level `toHTML` (which
-does NOT prepend the doctype) is the right escape hatch. Renaming churns
-imports across apps.
-
-**What a fix looks like.** Either:
-- Rename to `renderHtmlDocument` (or `renderPage`) and update callers.
-- Leave the name; tighten the docstring to say "for `<html>`-rooted
-  components; use `toHTML` for fragments".
-
----
-
-## Forward-looking
-
-### 2. Browser debugger with source maps
+## 1. Browser debugger with source maps
 
 Implement `debugger` statement support in browser-compiled Rip code with
 source maps, so the browser DevTools takes you directly to the Rip source
@@ -63,7 +33,7 @@ each `<script type="text/rip">` source — it just needs to pass
 
 ---
 
-### 3. Migration diff generator (`rip migrate generate`)
+## 2. Migration diff generator (`rip migrate generate`)
 
 Automate the "edit a `:model` schema → figure out the `ALTER TABLE`
 statements" step. Today `Model.toSQL()` is a **snapshot generator** — it
