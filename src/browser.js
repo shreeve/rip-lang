@@ -222,14 +222,22 @@ async function processRipScripts() {
       }
       expanded.push(...individual);
 
-      // Source maps are ON by default — `data-debug="false"` opts out.
-      // Individually compile each source with its own source map; we'll
-      // sequentially eval them per-component so each has a self-consistent
-      // map (DevTools only honours the last sourceMappingURL inside an
-      // eval, so concatenating maps doesn't work).
+      // Bundle / multi-source path. Components defined in one .rip file
+      // need to be visible to siblings (e.g. `WidgetGallery` referencing
+      // sibling widgets like `Toast`, `Dialog`, `Menu`). To make that
+      // work we concatenate every compiled chunk into ONE async-IIFE and
+      // eval it as a single closure — declarations made by one source
+      // are visible to all subsequent sources via lexical scope.
+      //
+      // Trade-off: source maps don't work in concat mode (each
+      // `compileToJS` call emits its own map; concatenation would need a
+      // map merger we don't have). Source maps still work for:
+      //   - the data-router path (app.launch component compile, Phase 2)
+      //   - the single-inline-script path (one source = one map)
+      // The bundle no-router path is mostly used by component libraries
+      // (packages/ui itself) where step-debugging is less critical.
+      // Inline source maps are skipped here unconditionally.
       const debug = runtimeTag?.getAttribute('data-debug') !== 'false';
-      // Update the global flag so app.launch()'s compile path (in app.rip)
-      // sees the same setting as our local `debug` variable.
       if (globalThis.__ripDebug) globalThis.__ripDebug.enabled = debug;
       const baseOpts = { skipRuntimes: true, skipExports: true, skipImports: true };
       const compiled = [];
@@ -237,11 +245,8 @@ async function processRipScripts() {
       for (const s of expanded) {
         if (!s.code) continue;
         const ripName = s.url || `inline-${++inlineCounter}.rip`;
-        const opts = debug
-          ? { ...baseOpts, sourceMap: 'inline', filename: ripName }
-          : baseOpts;
         try {
-          const js = compileToJS(s.code, opts);
+          const js = compileToJS(s.code, baseOpts);
           compiled.push({ js, url: ripName });
         } catch (e) {
           console.error(_formatError(e, { source: s.code, file: ripName, color: false }));
@@ -269,35 +274,26 @@ async function processRipScripts() {
         }
       }
 
-      // Execute compiled code per-component so each has its own valid
-      // source map (DevTools only honours the last `sourceMappingURL`
-      // pragma inside one evaluated chunk, so concatenating multiple
-      // source-mapped chunks would lose all but the last). Components
-      // share scope via globalThis attachment — typical Rip definitions
-      // (`Foo = component`, `Bar = ...`) compile to globalThis-attached
-      // bindings under `skipExports/skipImports`, which survive between
-      // the per-component evals.
+      // Concatenate all compiled chunks into one async IIFE so component
+      // declarations made in earlier chunks are visible (via lexical
+      // scope) to later chunks AND to the final mount step. Without
+      // this, each chunk's `let Foo = class ...` dies when its IIFE
+      // returns and `WidgetGallery` (defined in one chunk) can't see
+      // `Toast` (defined in another).
       if (compiled.length > 0) {
-        let anyError = false;
-        for (const c of compiled) {
-          try {
-            await (0, eval)(debug ? wrapForEval(c.js, c.url) : `(async()=>{\n${c.js}\n})()`);
-          } catch (e) {
-            anyError = true;
-            if (e instanceof SyntaxError) console.error(`Rip syntax error in ${c.url}: ${e.message}`);
-            else console.error(`Rip runtime error in ${c.url}:`, e);
-          }
-        }
-
-        // Final mount step — runs after all components are defined.
         const mount = runtimeTag?.getAttribute('data-mount');
-        if (mount) {
-          const target = runtimeTag.getAttribute('data-target') || 'body';
-          try { await (0, eval)(`(async()=>{ ${mount}.mount(${JSON.stringify(target)}); })()`); }
-          catch (e) { console.error(`Rip mount error (${mount}):`, e); }
+        const target = runtimeTag?.getAttribute('data-target') || 'body';
+        const mountSnippet = mount ? `\n${mount}.mount(${JSON.stringify(target)});\n` : '';
+        const merged = compiled.map(c => c.js).join('\n;\n');
+        let ok = true;
+        try {
+          await (0, eval)(`(async()=>{\n${merged}${mountSnippet}\n})()`);
+        } catch (e) {
+          ok = false;
+          if (e instanceof SyntaxError) console.error(`Rip syntax error: ${e.message}`);
+          else console.error('Rip runtime error:', e);
         }
-
-        if (!anyError) document.body.classList.add('ready');
+        if (ok) document.body.classList.add('ready');
       }
     }
   }
