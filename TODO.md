@@ -73,34 +73,7 @@ inlining). Ideally paired with #1.
 
 ---
 
-### 3. `apps/streamline` still uses sentinel `index.html` (medlabs migration not yet propagated)
-
-**Severity:** low (asymmetry within sample apps)
-
-**Affected files:**
-- `apps/streamline/app/index.html`
-- `apps/streamline/index.rip` (the `.replace()` chain in the server entry)
-
-**What it is.** medlabs (private) was migrated to the Rip `Document`
-component + `renderDocument` pattern. streamline (tracked) still keeps a raw
-`.html` file with `__UPPERCASE__` sentinels and a chain of `.replace()` calls
-in its server entry.
-
-**Why deferred.** The migration is short but needs end-to-end testing of the
-specific site-bundle cascade, fonts, and any app-specific state. Not urgent;
-the sentinel pattern works.
-
-**What a fix looks like.** Mirror the (already-completed) medlabs migration
-in streamline:
-1. Create `app/index.rip` exporting a `Document` component.
-2. Import `renderDocument` from `@rip-lang/ui/html` in the server entry.
-3. Replace the `readFileSync` + `.replace()` chain with
-   `renderDocument Document, bundle: bundle`.
-4. Delete `app/index.html`.
-
----
-
-### 4. Grammar docs don't mention hyphen / mixed compound keys
+### 3. Grammar docs don't mention hyphen / mixed compound keys
 
 **Severity:** low (docs)
 
@@ -123,7 +96,7 @@ no newline on either side of `-`" discipline. Two short examples
 
 ---
 
-### 5. Additional lexer contexts not explicitly tested for compound keys
+### 4. Additional lexer contexts not explicitly tested for compound keys
 
 **Severity:** low (defensive coverage)
 
@@ -151,7 +124,7 @@ shouldn't". Small additions to `test/rip/basic.rip`.
 
 ---
 
-### 6. `renderDocument` name is slightly narrower than it sounds
+### 5. `renderDocument` name is slightly narrower than it sounds
 
 **Severity:** low (naming)
 
@@ -175,7 +148,7 @@ imports across apps.
 
 ## Forward-looking
 
-### 7. Browser debugger with source maps
+### 6. Browser debugger with source maps
 
 Implement `debugger` statement support in browser-compiled Rip code with
 source maps, so the browser DevTools takes you directly to the Rip source
@@ -201,7 +174,7 @@ each `<script type="text/rip">` source — it just needs to pass
 
 ---
 
-### 8. Migration diff generator (`rip migrate generate`)
+### 7. Migration diff generator (`rip migrate generate`)
 
 Automate the "edit a `:model` schema → figure out the `ALTER TABLE`
 statements" step. Today `Model.toSQL()` is a **snapshot generator** — it
