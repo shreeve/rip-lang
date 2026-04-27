@@ -34,6 +34,10 @@ packages/vscode/dist/
 /apps/websites/
 notes.txt
 
+# Personal infra config (kept locally, not part of the language repo)
+/nginx.conf
+/serve.rip
+
 # UI test artifacts
 /packages/ui/playwright-report/
 /packages/ui/test-results/
