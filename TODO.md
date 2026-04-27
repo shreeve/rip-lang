@@ -7,8 +7,9 @@ there's a real trigger — it's not on a critical path today.
 
 (Browser debugger / DevTools source-map support is now complete across
 both code paths — inline `<script type="text/rip">` blocks and bundle
-components compiled via `app.launch()`. Verified end-to-end with the
-`docs/_test-debugger.html` and `docs/_test-phase2.html` fixtures.)
+components compiled via `app.launch()`. Verified end-to-end via the
+unit tests and bundle smoke checks; ongoing correctness is covered by
+`test/bundle.test.js` and the regular test suite.)
 
 ---
 
