@@ -28,16 +28,16 @@ packages/vscode/dist/
 *.duckdb*
 
 # Project-specific
-notes.txt
 /apps/candor/
+/apps/medlabs/
 /apps/trustlabs/
 /apps/websites/
+notes.txt
 
 # UI test artifacts
 /packages/ui/playwright-report/
 /packages/ui/test-results/
 /packages/ui/tests/results/
-apps/medlabs/
 
 # --- Published extension artifacts ---------------------------------------
 # Un-ignore compiled artifacts inside docs/extensions/ so GitHub Pages can
@@ -47,4 +47,3 @@ apps/medlabs/
 !docs/extensions/**/*.vsix
 !docs/extensions/**/*.duckdb_extension
 !docs/extensions/**/*.duckdb_extension.gz
-trustlabs/
