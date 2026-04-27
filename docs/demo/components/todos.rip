@@ -34,7 +34,7 @@ export Todos = component
 
       .card
         .todo-input-row
-          input.input type: "text", value: newTodo, placeholder: "What needs to be done?", @keydown: @handleKey
+          input.input type: "text", value <=> newTodo, placeholder: "What needs to be done?", @keydown: @handleKey
           button.btn.btn-primary @click: @addTodo, "Add"
 
         ul.todo-list
