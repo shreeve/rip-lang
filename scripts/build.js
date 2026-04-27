@@ -24,26 +24,28 @@ const packageJson = JSON.parse(readFileSync('./package.json', 'utf-8'));
 const version = packageJson.version;
 
 // BUILD_DATE strategy: when the working tree is clean (no uncommitted
-// changes in source the bundle is built from), use HEAD's commit
-// timestamp. This makes `bun run build` byte-deterministic on a given
-// commit — re-running the build (e.g. via `test:bundle`) on the same
-// commit produces identical dist files, eliminating the "rebuild
-// updated only the timestamp" git-status churn.
+// changes in the source paths the bundle is built from), derive the
+// timestamp from the most recent commit that *actually touched* one
+// of those paths. This makes `bun run build` byte-deterministic on
+// any given commit and immune to "non-source" commits (docs-only,
+// test fixtures, TODOs, etc.) that bump HEAD without changing what
+// the bundle contains.
 //
 // When source IS dirty (a build of in-progress work), fall back to
 // wall-clock time, since dirty bytes don't correspond to any commit.
+const SOURCE_PATHS = ['src/', 'packages/schema/src/', 'scripts/build.js'];
+
 function getBuildDate() {
   try {
     const dirty = spawnSync('git', [
-      'status', '--porcelain', '--',
-      'src/', 'packages/schema/src/', 'scripts/build.js',
+      'status', '--porcelain', '--', ...SOURCE_PATHS,
     ], { encoding: 'utf8' }).stdout.trim();
     if (dirty) throw new Error('dirty source');
 
     const iso = spawnSync('git', [
-      'log', '-1', '--format=%cI', 'HEAD',
+      'log', '-1', '--format=%cI', 'HEAD', '--', ...SOURCE_PATHS,
     ], { encoding: 'utf8' }).stdout.trim();
-    if (!iso) throw new Error('no HEAD');
+    if (!iso) throw new Error('no source-touching commit found');
 
     return new Date(iso).toISOString().replace('T', '@').substring(0, 19) + 'GMT';
   } catch {

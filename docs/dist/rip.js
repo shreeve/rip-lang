@@ -12454,7 +12454,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   }
   // src/browser.js
   var VERSION = "3.14.5";
-  var BUILD_DATE = "2026-04-27@04:54:42GMT";
+  var BUILD_DATE = "2026-04-27@05:15:26GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
