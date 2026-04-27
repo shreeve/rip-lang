@@ -21,7 +21,7 @@
 #   https://shreeve.github.io/rip-lang/extensions/duckdb/v1.5.2/<platform>/ripdb.duckdb_extension.gz
 #
 # End-users install with:
-#   SET allow_unsigned_extensions = true;
+#   $ duckdb -unsigned
 #   INSTALL ripdb FROM 'https://shreeve.github.io/rip-lang/extensions/duckdb';
 #   LOAD ripdb;
 # =============================================================================

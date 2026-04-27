@@ -66,8 +66,10 @@ Pre-built binaries and VS Code / Cursor extensions are published via GitHub Page
 
 **`ripdb`** — DuckDB extension that exposes a rip-db server as a first-class attached database:
 
+```bash
+duckdb -unsigned        # required for custom-repo extensions
+```
 ```sql
-SET allow_unsigned_extensions = true;
 INSTALL ripdb FROM 'https://shreeve.github.io/rip-lang/extensions/duckdb';
 LOAD ripdb;
 ```

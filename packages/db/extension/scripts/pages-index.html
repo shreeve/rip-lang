@@ -36,15 +36,17 @@
 <p class="lead">A custom DuckDB extension repository. Install <code>ripdb</code> directly from this URL.</p>
 
 <h2>Install</h2>
-<pre><code>SET allow_unsigned_extensions = true;
+<pre><code>$ duckdb -unsigned
 INSTALL ripdb FROM 'PAGE_BASE_URL';
 LOAD ripdb;</code></pre>
 
 <p>
-  Custom-repository extensions are unsigned, so you need the
-  <code>allow_unsigned_extensions</code> setting — pass it on startup
-  (<code>duckdb -unsigned</code>) or <code>SET</code> it at the top of your
-  session before <code>LOAD</code>.
+  Custom-repository extensions are unsigned. Start DuckDB with the
+  <code>-unsigned</code> CLI flag — that's the only supported way to
+  enable unsigned-extension support. <code>SET allow_unsigned_extensions
+  = true;</code> from a running session is rejected with
+  <em>"Cannot change allow_unsigned_extensions setting while database is
+  running."</em>
 </p>
 
 <h2>Supported platforms</h2>

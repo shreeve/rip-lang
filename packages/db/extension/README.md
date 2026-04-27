@@ -14,9 +14,15 @@ your rip-db server, but you get DuckDB's full SQL engine on top of it.
 
 ## Quick start
 
+Launch DuckDB with `-unsigned` (required for custom-repository extensions
+— see the *Unsigned extensions* section below for why and the alternatives):
+
+```bash
+duckdb -unsigned
+```
+
 ```sql
 -- one-time install from our GitHub Pages repository
-SET allow_unsigned_extensions = true;
 INSTALL ripdb FROM 'https://shreeve.github.io/rip-lang/extensions/duckdb';
 
 -- every session
@@ -83,24 +89,24 @@ DuckDB itself against data streamed from rip-db over HTTP.
 ## Unsigned extensions
 
 `ripdb` is an unsigned extension (we don't publish through the DuckDB
-extension repository). That means you need to allow unsigned extensions
-for your DuckDB session. Any of these work:
+extension repository). That means you need to start your DuckDB session
+with the `-unsigned` flag:
 
 ```bash
-# Option 1: start DuckDB with the flag
+# Start interactively
 duckdb -unsigned
 
-# Option 2: pass it on startup
-duckdb -c "SET allow_unsigned_extensions = true; LOAD ripdb; ..."
-
-# Option 3: a ~/.duckdbrc that auto-loads on every session start
-echo "SET allow_unsigned_extensions = true;" >> ~/.duckdbrc
-echo "LOAD ripdb;" >> ~/.duckdbrc
+# Or run a one-shot command
+duckdb -unsigned -c "LOAD ripdb; ATTACH 'rip://localhost:4213' AS r (TYPE ripdb); SHOW TABLES FROM r;"
 ```
 
-> Note: `SET allow_unsigned_extensions` cannot be changed after the database
-> is running. Set it in `~/.duckdbrc` or via `duckdb -unsigned` — not with
-> a mid-session `SET`.
+> **Don't try to enable it via `SET allow_unsigned_extensions = true;`** —
+> that setting is startup-only. Any attempt to change it after the
+> database is running (including from `~/.duckdbrc`, from `duckdb -c
+> "SET ..."`, or from a SQL prompt) errors with *"Cannot change
+> allow_unsigned_extensions setting while database is running."* The
+> `-unsigned` CLI flag is the supported way; pass it once on startup
+> and you're set for the whole session.
 
 ---
 

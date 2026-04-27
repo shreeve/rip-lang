@@ -88,11 +88,14 @@ running `rip-db` server as a first-class database — full SQL, catalog
 browsing, tab completion, and joins against local tables.
 
 ```bash
-# One-time install from our GitHub Pages custom repository:
+# Start DuckDB with unsigned-extension support enabled at the CLI flag.
+# (`-unsigned` is required by DuckDB for custom-repo INSTALL FROM. Don't
+# also `SET allow_unsigned_extensions = true;` — that setting can only
+# change at startup, and `-unsigned` already enabled it.)
 duckdb -unsigned
 ```
 ```sql
-SET allow_unsigned_extensions = true;
+-- One-time install from our GitHub Pages custom repository:
 INSTALL ripdb FROM 'https://shreeve.github.io/rip-lang/extensions/duckdb';
 
 -- Every session thereafter:
