@@ -152,6 +152,113 @@ if (child.status !== 0 && !child.stdout) {
   process.exit(1);
 }
 
+// Boot-simulation driver. Loads the bundle into a richer document stub
+// that mimics a runtime <script src="rip.min.js" data-src="bundle.json">
+// tag, stubs fetch to return a synthetic bundle, awaits the auto-boot
+// (processRipScripts → globalThis.__ripScriptsReady), then asserts the
+// no-router bundle path exposes the same components-source API surface
+// that launch() does. Regression-tests the Apr 2026 fix where
+// window.__RIP__.components silently went missing on no-router deploys.
+const bootDriver = `
+const { readFileSync } = require('fs');
+
+let bootListener = null;
+
+globalThis.window = globalThis;
+globalThis.location = { pathname: '/', search: '', hash: '', href: 'http://test/' };
+globalThis.document = {
+  readyState: 'loading',
+  addEventListener: (event, fn) => { if (event === 'DOMContentLoaded') bootListener = fn; },
+  body: { classList: { add: () => {} }, prepend: () => {} },
+  head: { appendChild: () => {} },
+  createElement: () => ({ setAttribute: () => {}, appendChild: () => {}, addEventListener: () => {} }),
+  querySelector: (sel) => {
+    if (sel.startsWith('script[src')) {
+      const attrs = { 'data-src': 'bundle.json' };
+      return {
+        getAttribute: (a) => (a in attrs ? attrs[a] : null),
+        setAttribute: () => {},
+        hasAttribute: (a) => a in attrs,
+      };
+    }
+    return null;
+  },
+  querySelectorAll: () => [],
+};
+
+const FAKE_SOURCE = '# foo widget\\nFoo = component\\n  render\\n    div "hi"';
+const fetchCalls = [];
+globalThis.fetch = async (url) => {
+  fetchCalls.push(url);
+  if (url === 'bundle.json') {
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ components: { 'components/foo.rip': FAKE_SOURCE } }),
+      text: async () => '',
+      headers: { get: () => null },
+    };
+  }
+  return { ok: false, status: 404, json: async () => ({}), text: async () => '', headers: { get: () => null } };
+};
+
+const bundleSrc = readFileSync(${JSON.stringify(bundlePath)}, 'utf8');
+(0, eval)(bundleSrc);
+
+(async () => {
+  const results = [];
+  function check(name, fn) {
+    try { fn(); results.push({ name, ok: true }); }
+    catch (e) { results.push({ name, ok: false, error: e.message }); }
+  }
+
+  // Trigger DOMContentLoaded → processRipScripts via the captured listener.
+  if (typeof bootListener === 'function') bootListener();
+  if (globalThis.__ripScriptsReady) await globalThis.__ripScriptsReady;
+
+  check('processRipScripts fetched bundle.json', () => {
+    if (!fetchCalls.includes('bundle.json')) {
+      throw new Error('fetch never called for bundle.json: ' + JSON.stringify(fetchCalls));
+    }
+  });
+
+  check('window.__RIP__ exposed on no-router bundle path', () => {
+    if (!globalThis.window.__RIP__) throw new Error('window.__RIP__ missing — no-router path did not wire components store');
+  });
+
+  check('window.__RIP__.components.read returns bundled source', () => {
+    const store = globalThis.window.__RIP__ && globalThis.window.__RIP__.components;
+    if (!store) throw new Error('__RIP__.components missing');
+    if (typeof store.read !== 'function') throw new Error('__RIP__.components.read is not a function');
+    const src = store.read('components/foo.rip');
+    if (!src) throw new Error('components.read returned empty');
+    if (!src.includes('Foo = component')) throw new Error('wrong source: ' + src);
+  });
+
+  process.stdout.write('\\u0001RESULTS\\u0001' + JSON.stringify(results) + '\\u0001RESULTS\\u0001');
+})();
+`;
+
+const bootChild = spawnSync('bun', ['-e', bootDriver], {
+  cwd: repoRoot,
+  stdio: ['ignore', 'pipe', 'pipe'],
+  encoding: 'utf8',
+});
+
+if (bootChild.status !== 0 && !bootChild.stdout) {
+  console.error(red('Boot-simulation driver crashed:'));
+  console.error(bootChild.stderr);
+  process.exit(1);
+}
+
+const mBoot = bootChild.stdout.match(/\u0001RESULTS\u0001(.*?)\u0001RESULTS\u0001/);
+if (!mBoot) {
+  console.error(red('Boot-simulation driver produced no result envelope.'));
+  console.error('stdout:', bootChild.stdout);
+  console.error('stderr:', bootChild.stderr);
+  process.exit(1);
+}
+
 const m = child.stdout.match(/\u0001RESULTS\u0001(.*?)\u0001RESULTS\u0001/);
 if (!m) {
   console.error(red('Driver produced no result envelope.'));
@@ -160,7 +267,7 @@ if (!m) {
   process.exit(1);
 }
 
-const results = JSON.parse(m[1]);
+const results = [...JSON.parse(m[1]), ...JSON.parse(mBoot[1])];
 let passed = 0, failed = 0;
 for (const r of results) {
   if (r.ok) {
