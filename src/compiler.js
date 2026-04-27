@@ -354,21 +354,45 @@ export class CodeEmitter {
 
   // Walk the s-expression tree and record source map entries for
   // sub-expressions that carry .loc, giving column-level precision.
+  //
+  // Performance: the inner loop runs M × N times where M = sub-expressions
+  // and N = regex matches per sub-expression. Computing genLine/genCol via
+  // `code.substring(0, m.index).split('\n')` was O(N) per match, making
+  // the function O(M × N²) overall and catastrophic on large generated
+  // blocks (a 100KB statement was taking 36 seconds in the browser).
+  //
+  // Fix: precompute a sorted `lineStarts` array (offset of each line's
+  // first character), then binary-search to convert offset → line/col in
+  // O(log N) per match. Brings the inline-gallery compile from 36s → ~30ms.
   recordSubMappings(code, sexpr, lineOffset) {
     let stmtOrigLine = sexpr.loc ? sexpr.loc.r : 0;
     let subs = [];
     this.collectSubExprs(sexpr, subs);
     let codeLines = code.split('\n');
+    // lineStarts[i] = offset in `code` of the first char on line i.
+    // Length is codeLines.length; lineStarts[0] is 0.
+    const lineStarts = [0];
+    for (let i = 0; i < code.length; i++) {
+      if (code.charCodeAt(i) === 10) lineStarts.push(i + 1);
+    }
+    // Binary-search the largest lineStart <= offset; that gives the line.
+    const offsetToLine = (offset) => {
+      let lo = 0, hi = lineStarts.length - 1;
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        if (lineStarts[mid] <= offset) lo = mid + 1;
+        else hi = mid - 1;
+      }
+      return hi;
+    };
     for (let { name, origLine, origCol } of subs) {
       let escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       let re = new RegExp('\\b' + escaped + '\\b', 'g');
       let m, bestMatch = null, bestDist = Infinity;
       let origLineInStmt = origLine - stmtOrigLine;
       while ((m = re.exec(code)) !== null) {
-        let before = code.substring(0, m.index);
-        let nl = before.split('\n');
-        let genLineInStmt = nl.length - 1;
-        let genCol = nl[nl.length - 1].length;
+        const genLineInStmt = offsetToLine(m.index);
+        const genCol = m.index - lineStarts[genLineInStmt];
         // Skip matches inside string literals — prevents false mappings when
         // an identifier also appears as a string value (e.g. union type member)
         let lineText = codeLines[genLineInStmt];

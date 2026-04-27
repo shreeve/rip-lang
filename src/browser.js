@@ -10,6 +10,7 @@ import './schema/loader-browser.js';
 export { Lexer } from './lexer.js';
 export { parser } from './parser.js';
 export { CodeEmitter, Compiler, compile, compileToJS, formatSExpr, getStdlibCode, getReactiveRuntime, getComponentRuntime, RipError, formatError, formatErrorHTML } from './compiler.js';
+import { mergeChunksWithInlineMap } from './sourcemap-merge.js';
 import { getStdlibCode, formatError as _formatError } from './compiler.js';
 
 // Version info (replaced during build)
@@ -224,19 +225,17 @@ async function processRipScripts() {
 
       // Bundle / multi-source path. Components defined in one .rip file
       // need to be visible to siblings (e.g. `WidgetGallery` referencing
-      // sibling widgets like `Toast`, `Dialog`, `Menu`). To make that
-      // work we concatenate every compiled chunk into ONE async-IIFE and
-      // eval it as a single closure — declarations made by one source
-      // are visible to all subsequent sources via lexical scope.
+      // `Toast`, `Dialog`, `Menu`). To make that work we concatenate
+      // every compiled chunk into ONE async-IIFE and eval it as a
+      // single closure — declarations made by one source are visible
+      // to all subsequent sources via lexical scope.
       //
-      // Trade-off: source maps don't work in concat mode (each
-      // `compileToJS` call emits its own map; concatenation would need a
-      // map merger we don't have). Source maps still work for:
-      //   - the data-router path (app.launch component compile, Phase 2)
-      //   - the single-inline-script path (one source = one map)
-      // The bundle no-router path is mostly used by component libraries
-      // (packages/ui itself) where step-debugging is less critical.
-      // Inline source maps are skipped here unconditionally.
+      // For source maps: each compileToJS call emits its own per-chunk
+      // map; mergeChunksWithInlineMap merges them into ONE V3 map with
+      // a multi-entry `sources` / `sourcesContent` array. DevTools
+      // reads the single merged map and shows each `.rip` file as a
+      // navigable source — same UX as the data-router path, no
+      // per-component IIFE split that would break lexical scope.
       const debug = runtimeTag?.getAttribute('data-debug') !== 'false';
       if (globalThis.__ripDebug) globalThis.__ripDebug.enabled = debug;
       const baseOpts = { skipRuntimes: true, skipExports: true, skipImports: true };
@@ -245,8 +244,11 @@ async function processRipScripts() {
       for (const s of expanded) {
         if (!s.code) continue;
         const ripName = s.url || `inline-${++inlineCounter}.rip`;
+        const opts = debug
+          ? { ...baseOpts, sourceMap: 'inline', filename: ripName }
+          : baseOpts;
         try {
-          const js = compileToJS(s.code, baseOpts);
+          const js = compileToJS(s.code, opts);
           compiled.push({ js, url: ripName });
         } catch (e) {
           console.error(_formatError(e, { source: s.code, file: ripName, color: false }));
@@ -280,14 +282,27 @@ async function processRipScripts() {
       // this, each chunk's `let Foo = class ...` dies when its IIFE
       // returns and `WidgetGallery` (defined in one chunk) can't see
       // `Toast` (defined in another).
+      //
+      // mergeChunksWithInlineMap concatenates the per-chunk JS bodies
+      // (stripping their individual `//# sourceMappingURL=` pragmas)
+      // and emits ONE V3 map at the end whose `sources` array holds
+      // every chunk's original `.rip` filename. DevTools shows each
+      // `.rip` file as its own source even though everything runs in
+      // one eval'd closure.
       if (compiled.length > 0) {
         const mount = runtimeTag?.getAttribute('data-mount');
         const target = runtimeTag?.getAttribute('data-target') || 'body';
         const mountSnippet = mount ? `\n${mount}.mount(${JSON.stringify(target)});\n` : '';
-        const merged = compiled.map(c => c.js).join('\n;\n');
+        const mergedBody = mergeChunksWithInlineMap(compiled.map(c => ({ js: c.js })));
+        // Inject the mount call BEFORE the trailing sourceMappingURL pragma
+        // so the pragma stays at the end of the eval'd chunk (DevTools
+        // requires it there). If no mount, mergedBody is emitted as-is.
+        const wrapped = mount
+          ? mergedBody.replace(/(\n\/\/# sourceMappingURL=[^\n]*\n?)?$/, mountSnippet + '$1')
+          : mergedBody;
         let ok = true;
         try {
-          await (0, eval)(`(async()=>{\n${merged}${mountSnippet}\n})()`);
+          await (0, eval)(`(async()=>{\n${wrapped}\n})()`);
         } catch (e) {
           ok = false;
           if (e instanceof SyntaxError) console.error(`Rip syntax error: ${e.message}`);
