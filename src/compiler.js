@@ -3805,7 +3805,20 @@ export class Compiler {
     let map = sourceMap ? sourceMap.toJSON() : null;
     let reverseMap = sourceMap ? sourceMap.toReverseMap() : null;
     if (map && this.options.sourceMap === 'inline') {
-      let b64 = typeof Buffer !== 'undefined' ? Buffer.from(map).toString('base64') : btoa(map);
+      // map is already a JSON string (sourceMaps.toJSON() stringifies). UTF-8
+      // safe encode: btoa() only handles Latin-1, so pre-encode non-ASCII via
+      // TextEncoder before base64 in browsers. Bun's Buffer handles utf-8
+      // directly. Source files containing emoji, em-dashes, accented chars,
+      // etc. would otherwise break with `Failed to execute 'btoa'`.
+      let b64;
+      if (typeof Buffer !== 'undefined') {
+        b64 = Buffer.from(map, 'utf8').toString('base64');
+      } else {
+        const bytes = new TextEncoder().encode(map);
+        let bin = '';
+        for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+        b64 = btoa(bin);
+      }
       code += `\n//# sourceMappingURL=data:application/json;base64,${b64}`;
     } else if (map && this.options.filename) {
       code += `\n//# sourceMappingURL=${this.options.filename}.js.map`;

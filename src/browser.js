@@ -32,6 +32,74 @@ const dedent = s => {
   return s.replace(RegExp(`^[ \t]{${i}}`, 'gm'), '').trim();
 }
 
+// ---------------------------------------------------------------------------
+// Source-map helpers — for browser-side debugger + DevTools navigation.
+//
+// `compileToJS(src, { sourceMap: 'inline', filename: <name>.rip })` returns
+// JS with a trailing `//# sourceMappingURL=data:application/json;base64,...`
+// comment. We add a leading `//# sourceURL=<name>.rip.js` so DevTools shows
+// the eval'd code as a navigable virtual file (named differently than the
+// source-map's `sources[]` entry to avoid DevTools merging entries).
+//
+// CR/LF in the `sourceURL` would let an attacker inject another pragma; sanitize.
+// ---------------------------------------------------------------------------
+
+const sanitizeSourceURL = (url) =>
+  String(url).replace(/[\r\n]/g, '').replace(/\s+$/g, '');
+
+// Insert `//# sourceURL=<name>` BEFORE the existing `//# sourceMappingURL=...`
+// comment (or append at end if none). NEVER prepend — that would shift every
+// generated-line mapping by 1 line, breaking line-only source maps.
+function addSourceURL(js, generatedName) {
+  const safe = sanitizeSourceURL(generatedName);
+  const pragma = `//# sourceURL=${safe}`;
+  const mapRe = /\n?\/\/# sourceMappingURL=[^\n]*\s*$/;
+  const m = js.match(mapRe);
+  if (m) return js.slice(0, m.index) + '\n' + pragma + js.slice(m.index);
+  return js + '\n' + pragma;
+}
+
+// Shift all generated-line mappings by N lines by prepending N semicolons to
+// the `mappings` field. Each `;` in source-map V3 mappings represents an empty
+// generated line. Used to compensate for a runtime async IIFE wrapper that
+// adds N lines BEFORE the compiled code.
+function offsetSourceMap(js, offsetLines) {
+  if (!offsetLines) return js;
+  return js.replace(
+    /\/\/# sourceMappingURL=data:application\/json;base64,([A-Za-z0-9+/=]+)/,
+    (_, b64) => {
+      let json;
+      try {
+        // UTF-8-safe decode: counterpart of the encode in compiler.js. The
+        // map JSON may contain non-ASCII chars (sourcesContent), so we go
+        // bytes -> string via TextDecoder.
+        const bin = atob(b64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        json = new TextDecoder().decode(bytes);
+      } catch { return _; /* leave unchanged on decode failure */ }
+      let map;
+      try { map = JSON.parse(json); } catch { return _; }
+      map.mappings = ';'.repeat(offsetLines) + map.mappings;
+      // UTF-8-safe re-encode.
+      const bytes = new TextEncoder().encode(JSON.stringify(map));
+      let out = '';
+      for (let i = 0; i < bytes.length; i++) out += String.fromCharCode(bytes[i]);
+      return `//# sourceMappingURL=data:application/json;base64,${btoa(out)}`;
+    }
+  );
+}
+
+// Wrap compiled JS in an async IIFE for top-level await support, applying the
+// 1-line source-map offset that the wrapper introduces, AND adding a
+// `sourceURL` pragma so DevTools shows the eval'd code with a sensible name.
+function wrapForEval(js, ripName) {
+  const generatedName = `${sanitizeSourceURL(ripName)}.js`;
+  const shifted = offsetSourceMap(js, 1);
+  const tagged = addSourceURL(shifted, generatedName);
+  return `(async()=>{\n${tagged}\n})()`;
+}
+
 // Browser runtime: collect all sources (inline scripts, data-src files, bundles),
 // compile them in a shared scope, and execute as one async IIFE.
 //
@@ -91,17 +159,24 @@ async function processRipScripts() {
     // for full routing support. Otherwise compile everything upfront.
     if (hasRouter && bundles.length > 0) {
       // Compile non-bundle sources (inline scripts, individual .rip files)
-      const opts = { skipRuntimes: true, skipExports: true, skipImports: true };
-      if (individual.length > 0) {
-        let js = '';
-        for (const s of individual) {
-          try { js += compileToJS(s.code, opts) + '\n'; }
-          catch (e) { console.error(_formatError(e, { source: s.code, file: s.url || 'inline', color: false })); }
-        }
-        if (js) {
-          try { await (0, eval)(`(async()=>{\n${js}\n})()`); }
-          catch (e) { console.error('Rip runtime error:', e); }
-        }
+      // with per-component source maps for browser-debugger support. The
+      // bundle itself is launched separately via `app.launch(bundle)` —
+      // its components get compiled inside the framework on demand and
+      // are not source-mapped here. (Source-map support inside
+      // `launch()` is a separate, bigger change.)
+      const debug = runtimeTag?.getAttribute('data-debug') !== 'false';
+      const baseOpts = { skipRuntimes: true, skipExports: true, skipImports: true };
+      let inlineCounter = 0;
+      for (const s of individual) {
+        const ripName = s.url || `inline-${++inlineCounter}.rip`;
+        const opts = debug
+          ? { ...baseOpts, sourceMap: 'inline', filename: ripName }
+          : baseOpts;
+        let js;
+        try { js = compileToJS(s.code, opts); }
+        catch (e) { console.error(_formatError(e, { source: s.code, file: ripName, color: false })); continue; }
+        try { await (0, eval)(debug ? wrapForEval(js, ripName) : `(async()=>{\n${js}\n})()`); }
+        catch (e) { console.error(`Rip runtime error in ${ripName}:`, e); }
       }
 
       // Launch with the last bundle (app bundle) — handles router, renderer, stash
@@ -130,15 +205,26 @@ async function processRipScripts() {
       }
       expanded.push(...individual);
 
-      const opts = { skipRuntimes: true, skipExports: true, skipImports: true };
+      // Source maps are ON by default — `data-debug="false"` opts out.
+      // Individually compile each source with its own source map; we'll
+      // sequentially eval them per-component so each has a self-consistent
+      // map (DevTools only honours the last sourceMappingURL inside an
+      // eval, so concatenating maps doesn't work).
+      const debug = runtimeTag?.getAttribute('data-debug') !== 'false';
+      const baseOpts = { skipRuntimes: true, skipExports: true, skipImports: true };
       const compiled = [];
+      let inlineCounter = 0;
       for (const s of expanded) {
         if (!s.code) continue;
+        const ripName = s.url || `inline-${++inlineCounter}.rip`;
+        const opts = debug
+          ? { ...baseOpts, sourceMap: 'inline', filename: ripName }
+          : baseOpts;
         try {
           const js = compileToJS(s.code, opts);
-          compiled.push({ js, url: s.url || 'inline' });
+          compiled.push({ js, url: ripName });
         } catch (e) {
-          console.error(_formatError(e, { source: s.code, file: s.url || 'inline', color: false }));
+          console.error(_formatError(e, { source: s.code, file: ripName, color: false }));
         }
       }
 
@@ -163,30 +249,35 @@ async function processRipScripts() {
         }
       }
 
-      // Execute all compiled code in shared scope
+      // Execute compiled code per-component so each has its own valid
+      // source map (DevTools only honours the last `sourceMappingURL`
+      // pragma inside one evaluated chunk, so concatenating multiple
+      // source-mapped chunks would lose all but the last). Components
+      // share scope via globalThis attachment — typical Rip definitions
+      // (`Foo = component`, `Bar = ...`) compile to globalThis-attached
+      // bindings under `skipExports/skipImports`, which survive between
+      // the per-component evals.
       if (compiled.length > 0) {
-        let js = compiled.map(c => c.js).join('\n');
+        let anyError = false;
+        for (const c of compiled) {
+          try {
+            await (0, eval)(debug ? wrapForEval(c.js, c.url) : `(async()=>{\n${c.js}\n})()`);
+          } catch (e) {
+            anyError = true;
+            if (e instanceof SyntaxError) console.error(`Rip syntax error in ${c.url}: ${e.message}`);
+            else console.error(`Rip runtime error in ${c.url}:`, e);
+          }
+        }
 
+        // Final mount step — runs after all components are defined.
         const mount = runtimeTag?.getAttribute('data-mount');
         if (mount) {
           const target = runtimeTag.getAttribute('data-target') || 'body';
-          js += `\n${mount}.mount(${JSON.stringify(target)});`;
+          try { await (0, eval)(`(async()=>{ ${mount}.mount(${JSON.stringify(target)}); })()`); }
+          catch (e) { console.error(`Rip mount error (${mount}):`, e); }
         }
 
-        try {
-          await (0, eval)(`(async()=>{\n${js}\n})()`);
-          document.body.classList.add('ready');
-        } catch (e) {
-          if (e instanceof SyntaxError) {
-            console.error(`Rip syntax error in combined output: ${e.message}`);
-            for (const c of compiled) {
-              try { new Function(`(async()=>{\n${c.js}\n})()`); }
-              catch (e2) { console.error(`  → source: ${c.url}`, e2.message); }
-            }
-          } else {
-            console.error('Rip runtime error:', e);
-          }
-        }
+        if (!anyError) document.body.classList.add('ready');
       }
     }
   }

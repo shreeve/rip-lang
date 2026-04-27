@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Rip source-map smoke test</title>
+  <script defer src="dist/rip.min.js"></script>
+</head>
+<body>
+  <h1>Rip source-map smoke test</h1>
+  <p>Open DevTools → Sources panel. You should see <code>inline-1.rip</code> as a navigable virtual file.</p>
+  <p>Click the button to throw — the stack should map to the .rip line, not eval.</p>
+  <button id="boom">Throw!</button>
+
+  <script type="text/rip">
+    boom = ->
+      msg = "from line 4 of the .rip source"
+      raise new Error msg
+
+    document.getElementById('boom').addEventListener 'click', ->
+      try
+        boom()
+      catch e
+        console.error 'rip-side error:', e
+        console.log 'stack:', e.stack
+
+    console.log 'rip script loaded'
+  </script>
+</body>
+</html>
