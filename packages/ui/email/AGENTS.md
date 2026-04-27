@@ -7,7 +7,7 @@ Internally, the components use native lowercase HTML tags in Rip render blocks a
 Key APIs:
 - `toHTML`
 - `toText`
-- `renderEmail`
+- `toEmail`
 
 Type all exported component props explicitly with `@prop:: T := default`.
 

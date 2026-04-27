@@ -363,14 +363,14 @@ test "toText returns plain text string", '''
   result.includes('hello world')
   ''', true
 
-test "renderEmail returns html and text", '''
-  { renderEmail } = emailRender
+test "toEmail returns html and text", '''
+  { toEmail } = emailRender
   TestEmail = component
     render
       div
         h1 "Title"
         p "Body"
-  { html, text } = renderEmail(TestEmail)
+  { html, text } = toEmail(TestEmail)
   html.includes('<h1>Title</h1>') and text.includes('Title') and text.includes('Body')
   ''', true
 
@@ -727,20 +727,20 @@ test "full email plain text", '''
   result.includes('Welcome, Bob!') and result.includes('Get started (https://example.com)')
   ''', true
 
-test "renderEmail with conditional", '''
-  { renderEmail } = emailRender
+test "toEmail with conditional", '''
+  { toEmail } = emailRender
   TestEmail = component
     @show =! true
     render
       div
         if @show
           p "visible"
-  { html } = renderEmail(TestEmail, show: true)
+  { html } = toEmail(TestEmail, show: true)
   html.includes('<p>visible</p>')
   ''', true
 
-test "renderEmail with nested native tags", '''
-  { renderEmail } = emailRender
+test "toEmail with nested native tags", '''
+  { toEmail } = emailRender
   TestEmail = component
     render
       table role: "presentation", border: "0", cellpadding: "0", cellspacing: "0"
@@ -748,18 +748,18 @@ test "renderEmail with nested native tags", '''
           tr
             td
               p "content"
-  { html } = renderEmail(TestEmail)
+  { html } = toEmail(TestEmail)
   html.includes('<table') and html.includes('<td><p>content</p></td>')
   ''', true
 
-test "renderEmail plain text output", '''
-  { renderEmail } = emailRender
+test "toEmail plain text output", '''
+  { toEmail } = emailRender
   TestEmail = component
     render
       div
         h1 "Title"
         p "Body text"
         a href: "https://example.com", "Click"
-  { text } = renderEmail(TestEmail)
+  { text } = toEmail(TestEmail)
   text.includes('Title') and text.includes('Body text') and text.includes('Click (https://example.com)')
   ''', true

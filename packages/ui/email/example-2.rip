@@ -5,7 +5,7 @@
 # Run from packages/ui/email:
 #   ../../../bin/rip example-2.rip > example-2.html
 #
-import { renderEmail, Email, Head, Body, Preview, Font, Container, Section, Row, Column, Heading, Text, Button, Divider, Link } from './email.rip'
+import { toEmail, Email, Head, Body, Preview, Font, Container, Section, Row, Column, Heading, Text, Button, Divider, Link } from './email.rip'
 
 updates = [
   {
@@ -61,7 +61,7 @@ export WeeklyDigestEmail = component
               'the support center'
             = '.'
 
-result = renderEmail WeeklyDigestEmail,
+result = toEmail WeeklyDigestEmail,
   dashboardUrl: 'https://example.com/dashboard'
   name: 'Alice'
 

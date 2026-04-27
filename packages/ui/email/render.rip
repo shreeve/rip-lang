@@ -2,20 +2,26 @@
 # Render — instantiate a Rip component and produce email HTML + plain text
 #
 # Usage:
-#   import { toHTML, toText, renderEmail } from '@rip-lang/ui/email'
+#   import { toHTML, toText, toEmail } from '@rip-lang/ui/email'
 #
-#   html = toHTML(MyEmail, name: "Alice")
-#   text = toText(MyEmail, name: "Alice")
-#   { html, text } = renderEmail(MyEmail, name: "Alice")
+#   html = toHTML(MyEmail, name: "Alice")              # XHTML body string
+#   text = toText(MyEmail, name: "Alice")              # plain text string
+#   { html, text } = toEmail(MyEmail, name: "Alice")   # combined deliverable
 #
-# Wraps the shared renderer in `../render.rip` with email-specific
+# Wraps the shared renderer in `../shared/render.rip` with email-specific
 # concerns: an XHTML 1.0 Transitional doctype and Tailwind class
 # inlining (Tailwind doesn't run client-side in email).
+#
+# Naming: the email module disambiguates by FORMAT (toHTML / toText /
+# toEmail). The html module disambiguates by SHAPE (toFragment / toPage)
+# because all of its outputs are HTML. Path provides domain context, so
+# `email.toHTML` doesn't repeat "Email" and `html.toPage` doesn't repeat
+# "HTML".
 #
 # Notes:
 # - rendering is synchronous and swaps in a temporary global DOM shim
 # - do not add awaits or async work inside this render path; see the
-#   serialization invariant in `../render.rip`
+#   serialization invariant in `../shared/render.rip`
 # - custom Tailwind configs must be prepared ahead of time via
 #   `@rip-lang/ui/tailwind.prepareConfig(config)` before sync rendering
 # ==============================================================================
@@ -56,12 +62,6 @@ _inlineTailwind = (root) ->
   result = inlineEmailTree(root, _resolveTailwindConfig(entries))
   warn "Tailwind: unsupported classes ignored: #{result.unsupported.join(' ')}" if result.unsupported?.length
 
-export renderEmail = (ComponentClass, props = {}) ->
-  root = _renderComponent(ComponentClass, props, _inlineTailwind)
-  html = serializeChildren(root)
-  text = toPlainText(root)
-  { html: "#{XHTML_DOCTYPE}#{html}", text }
-
 export toHTML = (ComponentClass, props = {}) ->
   root = _renderComponent(ComponentClass, props, _inlineTailwind)
   "#{XHTML_DOCTYPE}#{serializeChildren(root)}"
@@ -69,3 +69,9 @@ export toHTML = (ComponentClass, props = {}) ->
 export toText = (ComponentClass, props = {}) ->
   root = _renderComponent(ComponentClass, props, _inlineTailwind)
   toPlainText(root)
+
+export toEmail = (ComponentClass, props = {}) ->
+  root = _renderComponent(ComponentClass, props, _inlineTailwind)
+  html = serializeChildren(root)
+  text = toPlainText(root)
+  { html: "#{XHTML_DOCTYPE}#{html}", text }

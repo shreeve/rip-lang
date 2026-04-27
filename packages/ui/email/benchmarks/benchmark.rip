@@ -1,4 +1,4 @@
-import { renderEmail, toHTML } from '../email.rip'
+import { toEmail, toHTML } from '../email.rip'
 import { prepareConfig } from '../../tailwind/tailwind.rip'
 import { PlainBenchEmail, TailwindBenchEmail, benchTailwindConfig } from './samples.rip'
 
@@ -51,16 +51,16 @@ cases = [
     run: -> toHTML(PlainBenchEmail)
   }
   {
-    name: 'renderEmail plain'
-    run: -> renderEmail(PlainBenchEmail)
+    name: 'toEmail plain'
+    run: -> toEmail(PlainBenchEmail)
   }
   {
     name: 'toHTML tailwind'
     run: -> toHTML(TailwindBenchEmail)
   }
   {
-    name: 'renderEmail tailwind'
-    run: -> renderEmail(TailwindBenchEmail)
+    name: 'toEmail tailwind'
+    run: -> toEmail(TailwindBenchEmail)
   }
   {
     name: 'toHTML tailwind themed'
@@ -71,9 +71,9 @@ cases = [
         linkClass: 'text-accent'
   }
   {
-    name: 'renderEmail tailwind themed'
+    name: 'toEmail tailwind themed'
     run: ->
-      renderEmail TailwindBenchEmail,
+      toEmail TailwindBenchEmail,
         config: benchTailwindConfig
         buttonClass: 'rounded-md bg-brand px-4 py-3 text-sm font-semibold text-white'
         linkClass: 'text-accent'

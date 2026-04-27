@@ -1,20 +1,22 @@
 # @rip-lang/ui/html — server-side HTML rendering for Rip components.
 #
-# Two output surfaces:
+# Two output surfaces, both `to<Output>`:
 #
-#   toHTML(Component, props)
+#   toFragment(Component, props)
 #     Returns a fragment HTML string. No `<!DOCTYPE html>` prefix.
 #     Use for partials, embedded components, or anything stitched into
 #     a larger document by the caller.
 #
-#   renderPage(Component, props)
+#   toPage(Component, props)
 #     Returns a full HTML page — `<!DOCTYPE html>` + serialized tree.
 #     Use when the component's root is `<html>` and you're producing
 #     a complete deliverable to ship to a browser.
 #
-# Naming parallels `@rip-lang/ui/email`'s `renderEmail` (full email
-# deliverable) — `render<Output>` produces a finished artifact, while
-# `to<Format>` produces a fragment in that format.
+# Naming convention across @rip-lang/ui:
+#   * The html module disambiguates by SHAPE — toFragment vs toPage.
+#   * The email module disambiguates by FORMAT — toHTML, toText, toEmail.
+#   * Each module's path provides the domain context, so names don't
+#     repeat it (e.g. you call `html.toPage(...)`, not `html.toHTMLPage`).
 #
 # Both surfaces use the shared renderer in `./shared/render.rip`,
 # which mutates `globalThis.{document,Node,SVGElement}` for the
@@ -24,8 +26,8 @@
 import { _renderComponent } from './shared/render.rip'
 import { serializeChildren } from './email/dom.rip'
 
-export toHTML = (ComponentClass, props = {}) ->
+export toFragment = (ComponentClass, props = {}) ->
   serializeChildren _renderComponent(ComponentClass, props)
 
-export renderPage = (ComponentClass, props = {}) ->
-  "<!DOCTYPE html>\n#{toHTML ComponentClass, props}"
+export toPage = (ComponentClass, props = {}) ->
+  "<!DOCTYPE html>\n#{toFragment ComponentClass, props}"

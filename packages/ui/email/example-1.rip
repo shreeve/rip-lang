@@ -4,7 +4,7 @@
 # Run from packages/ui/email:
 #   ../../../bin/rip example-1.rip > example-1.html
 #
-import { renderEmail, Email, Head, Body, Preview, Font, Container, Heading, Text, Button, Divider, Link } from './email.rip'
+import { toEmail, Email, Head, Body, Preview, Font, Container, Heading, Text, Button, Divider, Link } from './email.rip'
 
 export WelcomeEmail = component
   @name:: string := "friend"
@@ -34,7 +34,7 @@ export WelcomeEmail = component
             Link href: @loginUrl, style: 'color:#0f766e'
               = @loginUrl
 
-result = renderEmail WelcomeEmail,
+result = toEmail WelcomeEmail,
   name: 'Alice'
   loginUrl: 'https://example.com/login'
 

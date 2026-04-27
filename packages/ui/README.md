@@ -28,7 +28,7 @@ Headless, accessible browser widgets authored in Rip. They remain source-first a
 
 ### Email
 
-Curated PascalCase email components with `toHTML`, `toText`, and `renderEmail` helpers, built on a server-side DOM shim and serializer.
+Curated PascalCase email components with `toHTML`, `toText`, and `toEmail` helpers, built on a server-side DOM shim and serializer.
 
 ### Shared
 

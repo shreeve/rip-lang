@@ -9,7 +9,7 @@ import { toHTML, Email, Head, Body, Container, Heading, Text, Button } from '@ri
 Exports:
 - `toHTML`
 - `toText`
-- `renderEmail`
+- `toEmail`
 - `Email`, `Head`, `Body`, `Preview`, `Font`, `Container`, `Section`, `Row`, `Column`, `Heading`, `Text`, `Link`, `Image`, `Divider`, `Button`, `Markdown`, `CodeBlock`, `CodeInline`, `Tailwind`
 
 Implementation notes:
@@ -25,7 +25,7 @@ Implementation notes:
 
 ## Render model
 
-- `toHTML`, `toText`, and `renderEmail` are synchronous.
+- `toHTML`, `toText`, and `toEmail` are synchronous.
 - Rendering works by swapping in a temporary global DOM shim while the email component tree is created and serialized.
 - Keep this render path synchronous. Do not introduce awaits into component lifecycle code that runs during email rendering.
 
