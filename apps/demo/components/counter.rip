@@ -1,0 +1,33 @@
+# Counter Page
+
+export Counter = component
+  count := @app.data.count or 0
+  step  := 1
+
+  ~> @app.data.count = count
+
+  increment: -> count += step
+  decrement: -> count -= step
+  reset:     -> count = 0
+
+  render
+    div
+      .page-header
+        h1.page-title "Counter"
+        p.page-subtitle "Reactive state — persists across reload"
+
+      .card
+        .counter-display "#{count}"
+
+        .counter-controls
+          button.btn @click: @decrement, "- #{step}"
+          button.btn @click: @reset, "Reset"
+          button.btn.btn-primary @click: @increment, "+ #{step}"
+
+      .card
+        .card-title "Step Size"
+        .btn-group
+          button.btn @click: (-> step = 1), "1"
+          button.btn @click: (-> step = 5), "5"
+          button.btn @click: (-> step = 10), "10"
+          button.btn @click: (-> step = 100), "100"

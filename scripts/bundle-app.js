@@ -1,12 +1,20 @@
 #!/usr/bin/env bun
 
-// Bundle a Rip UI app into a static JSON file.
+// Bundle a Rip app into a single static JSON file.
+//
+// Walks <source-dir>/components/**/*.rip and <source-dir>/css/*.css, packs
+// them into one JSON with shape { css, components, data } where components
+// maps relative paths to raw .rip source strings. The launcher HTML loads
+// the JSON, injects `css` into a <style>, and calls `launch bundle: bundle`
+// to mount the app — no bundler, no per-component fetches at runtime.
 //
 // Usage:
 //   bun scripts/bundle-app.js <source-dir> [-o output] [-t title]
 //
 // Example:
-//   bun scripts/bundle-app.js packages/ui/apps/demo -o docs/example/index.json -t "Rip UI Demo"
+//   bun run bundle:demo
+//   # equivalent to:
+//   bun scripts/bundle-app.js apps/demo -o docs/example/index.json -t "Rip App Demo"
 
 import { readdirSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join, dirname, relative } from 'path';

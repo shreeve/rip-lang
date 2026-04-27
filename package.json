@@ -37,6 +37,7 @@
     "bump": "bun scripts/bump.js",
     "gen:dom": "bun scripts/gen-dom.js",
     "gallery": "bun scripts/gallery.js",
+    "bundle:demo": "bun scripts/bundle-app.js apps/demo -o docs/example/index.json -t 'Rip App Demo'",
     "parser": "bun src/grammar/solar.rip -o src/parser.js src/grammar/grammar.rip",
     "postinstall": "bun scripts/link-local.js --quiet && bun scripts/link-check.js --quiet",
     "link-local": "bun scripts/link-local.js",

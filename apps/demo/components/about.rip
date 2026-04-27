@@ -1,0 +1,36 @@
+# About Page — uses the Card component for content sections
+
+export About = component
+
+  render
+    div
+      .page-header
+        h1.page-title "About Rip App"
+        p.page-subtitle "Zero-build reactive web apps!"
+
+      Card title: "The Idea"
+        p "Traditional frameworks build and bundle on the server, then ship static artifacts. Rip App ships the 40KB compiler to the browser instead. Components arrive as .rip source files, are compiled on demand, and render with fine-grained reactivity. No build step, no bundler, no configuration files."
+
+      Card title: "Two Keywords"
+        p "The component model adds exactly two keywords to the Rip language: component and render. Everything else — reactive state (:=), computed values (~=), effects (~>), methods, lifecycle hooks — is standard Rip syntax that already exists."
+
+      Card title: "Architecture"
+        p "Components live as source files in the unified stash. The Router maps URLs to components using file-based conventions (like Next.js). When you navigate, the Renderer compiles the matching .rip file and mounts the resulting component. Each reactive binding creates a direct DOM effect — no virtual DOM diffing."
+
+      Card title: "Stack"
+        .btn-group
+          .stat
+            span "Compiler "
+            span.stat-value "40KB"
+          .stat
+            span "Framework "
+            span.stat-value "~8KB"
+          .stat
+            span "Build step "
+            span.stat-value "None"
+          .stat
+            span "Dependencies "
+            span.stat-value "Zero"
+
+      Card title: "Modules"
+        p "The framework lives in one file: app.rip. It uses Rip's built-in reactive primitives directly — the same signals that power := and ~= in components. Deep reactive stash with path navigation. Component store for source management. File-based router mapping URLs to components. Renderer that compiles and mounts components with layout support."

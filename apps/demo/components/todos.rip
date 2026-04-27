@@ -1,0 +1,48 @@
+# Todos Page
+
+export Todos = component
+  newTodo := ''
+  todos := @app.data.todos or []
+  nextId := (@app.data.nextId or 1)
+
+  ~> @app.data.todos = todos
+  ~> @app.data.nextId = nextId
+
+  remaining ~= todos.filter((t) -> not t.done).length
+
+  addTodo: ->
+    if newTodo.trim()
+      todos = [...todos, { id: nextId, text: newTodo.trim(), done: false }]
+      nextId++
+      newTodo = ''
+
+  deleteTodo: (id) ->
+    todos = todos.filter (t) -> t.id isnt id
+
+  clearAll: ->
+    todos = []
+
+  handleKey: (e) ->
+    if e.key is 'Enter'
+      @addTodo()
+
+  render
+    div
+      .page-header
+        h1.page-title "Todos"
+        p.page-subtitle "List rendering and state management"
+
+      .card
+        .todo-input-row
+          input.input type: "text", value: newTodo, placeholder: "What needs to be done?", @keydown: @handleKey
+          button.btn.btn-primary @click: @addTodo, "Add"
+
+        ul.todo-list
+          for todo in todos
+            li.todo-item
+              span.todo-text todo.text
+              button.todo-delete @click: (=> @deleteTodo(todo.id)), "x"
+
+        .todo-stats
+          span "#{remaining} remaining"
+          button.btn.btn-sm @click: @clearAll, "Clear all"
