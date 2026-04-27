@@ -100,4 +100,17 @@ await build(['./docs/dist/_entry.js'], 'rip.min.js', true);
 try { unlinkSync('./docs/dist/_app.js'); } catch {}
 try { unlinkSync('./docs/dist/_entry.js'); } catch {}
 
+// Refresh the UI gallery's component bundle so docs/ui/ never drifts from
+// the canonical sources at packages/ui/browser/components/.
+const uiBundle = spawnSync('bun', [
+  'scripts/bundle-app.js',
+  'packages/ui/browser',
+  '-o', 'docs/ui/bundle.json',
+  '-t', 'Rip UI',
+], { stdio: 'inherit' });
+if (uiBundle.status !== 0) {
+  console.error('\nAborting build — bundle:ui failed.');
+  process.exit(uiBundle.status ?? 1);
+}
+
 console.log(`\n✨ rip.min.js ready • Version ${version} • ${buildDate}`);

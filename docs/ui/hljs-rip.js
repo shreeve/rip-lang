@@ -163,12 +163,6 @@ export default function(hljs) {
     ],
   };
 
-  const MAP_LITERAL = {
-    className: 'operator',
-    begin: /\*(?=\{)/,
-    relevance: 5,
-  };
-
   const OPERATORS = {
     className: 'operator',
     begin: /\|>|::|:=|~=|~>|<=>|\.=|=!|!\?|\?!|=~|\?\?=|\?\?|\?\.|\.\.\.|\.\.|=>|->|\*\*|\/\/|%%|===|!==|==|!=|<=|>=|&&|\|\||[+\-*\/%&|^~<>=!?]/,
@@ -205,7 +199,6 @@ export default function(hljs) {
       INSTANCE_VAR,
       SIGIL_ATTR,
       TYPE_KEYWORDS,
-      MAP_LITERAL,
       OPERATORS,
       { // inline JS (backtick)
         className: 'string',

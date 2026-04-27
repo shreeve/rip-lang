@@ -12688,7 +12688,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
 
   // src/browser.js
   var VERSION = "3.15.4";
-  var BUILD_DATE = "2026-04-27@08:44:03GMT";
+  var BUILD_DATE = "2026-04-27@10:08:31GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -12855,6 +12855,18 @@ ${js}
           }
         }
         expanded.push(...individual);
+        if (bundles.length > 0 && typeof globalThis.createComponents === "function") {
+          const sourceStore = globalThis.createComponents();
+          for (const b of bundles) {
+            if (b.components)
+              sourceStore.load(b.components);
+          }
+          if (typeof window !== "undefined") {
+            if (!window.__RIP__)
+              window.__RIP__ = {};
+            window.__RIP__.components = sourceStore;
+          }
+        }
         const debug = runtimeTag?.getAttribute("data-debug") !== "false";
         if (globalThis.__ripDebug)
           globalThis.__ripDebug.enabled = debug;

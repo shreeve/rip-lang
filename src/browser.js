@@ -223,6 +223,21 @@ async function processRipScripts() {
       }
       expanded.push(...individual);
 
+      // Expose the components-source store on window.__RIP__ so source-text
+      // access (e.g. view-source UIs) works the same on the no-router path
+      // as it does after launch(). Mirrors what launch() sets up — minus
+      // app/router/renderer, since those don't exist on this path.
+      if (bundles.length > 0 && typeof globalThis.createComponents === 'function') {
+        const sourceStore = globalThis.createComponents();
+        for (const b of bundles) {
+          if (b.components) sourceStore.load(b.components);
+        }
+        if (typeof window !== 'undefined') {
+          if (!window.__RIP__) window.__RIP__ = {};
+          window.__RIP__.components = sourceStore;
+        }
+      }
+
       // Bundle / multi-source path. Components defined in one .rip file
       // need to be visible to siblings (e.g. `WidgetGallery` referencing
       // `Toast`, `Dialog`, `Menu`). To make that work we concatenate

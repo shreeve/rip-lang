@@ -38,6 +38,6 @@ App.mount()
 - `demo.html` and `charts.html` — dashboard demos
 - `sierpinski.html` — CDN demo
 - `example/index.html` and `results/index.html` — app launchers / examples. `example/index.json` is generated from `docs/demo/` via `bun run bundle:demo` (the source-of-truth lives in `docs/demo/`, the JSON is the deployable artifact).
-- `ui/index.html` — widget gallery
+- `ui/index.html` — widget gallery. `ui/bundle.json` is generated from `packages/ui/browser/components/` via `bun run bundle:ui` (auto-runs as part of `bun run build`). The source-of-truth is the workspace package; the JSON is the deployable artifact. The gallery loads the bundle at boot via `data-src="bundle.json"` and reads view-source text synchronously from the in-memory components store (`window.__RIP__.components.read("components/<id>.rip")`) — no per-component fetches.
 
 Static demos can be opened via `file://`. The playground and example app require `bun run serve`.
