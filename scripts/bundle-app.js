@@ -18,6 +18,7 @@
 
 import { readdirSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join, dirname, relative } from 'path';
+import { brotliCompressSync } from 'zlib';
 
 const args = process.argv.slice(2);
 const sourceDir = args[0];
@@ -80,9 +81,12 @@ const json = JSON.stringify(bundle, null, 2);
 if (output) {
   mkdirSync(dirname(output), { recursive: true });
   writeFileSync(output, json);
+  const br = brotliCompressSync(Buffer.from(json));
+  writeFileSync(`${output}.br`, br);
   const componentCount = Object.keys(components).length;
   const size = (Buffer.byteLength(json) / 1024).toFixed(1);
-  console.log(`Bundled ${componentCount} components → ${output} (${size} KB)`);
+  const brSize = (br.length / 1024).toFixed(1);
+  console.log(`Bundled ${componentCount} components → ${output} (${size} KB, ${brSize} KB Brotli)`);
 } else {
   process.stdout.write(json);
 }
