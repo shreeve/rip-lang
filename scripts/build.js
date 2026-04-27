@@ -22,7 +22,36 @@ if (fresh.status !== 0) {
 
 const packageJson = JSON.parse(readFileSync('./package.json', 'utf-8'));
 const version = packageJson.version;
-const buildDate = new Date().toISOString().replace('T', '@').substring(0, 19) + 'GMT';
+
+// BUILD_DATE strategy: when the working tree is clean (no uncommitted
+// changes in source the bundle is built from), use HEAD's commit
+// timestamp. This makes `bun run build` byte-deterministic on a given
+// commit — re-running the build (e.g. via `test:bundle`) on the same
+// commit produces identical dist files, eliminating the "rebuild
+// updated only the timestamp" git-status churn.
+//
+// When source IS dirty (a build of in-progress work), fall back to
+// wall-clock time, since dirty bytes don't correspond to any commit.
+function getBuildDate() {
+  try {
+    const dirty = spawnSync('git', [
+      'status', '--porcelain', '--',
+      'src/', 'packages/schema/src/', 'scripts/build.js',
+    ], { encoding: 'utf8' }).stdout.trim();
+    if (dirty) throw new Error('dirty source');
+
+    const iso = spawnSync('git', [
+      'log', '-1', '--format=%cI', 'HEAD',
+    ], { encoding: 'utf8' }).stdout.trim();
+    if (!iso) throw new Error('no HEAD');
+
+    return new Date(iso).toISOString().replace('T', '@').substring(0, 19) + 'GMT';
+  } catch {
+    return new Date().toISOString().replace('T', '@').substring(0, 19) + 'GMT';
+  }
+}
+
+const buildDate = getBuildDate();
 
 console.log(`Version: ${version}`);
 console.log(`Build: ${buildDate}\n`);
