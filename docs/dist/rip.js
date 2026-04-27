@@ -8308,6 +8308,20 @@ if (typeof globalThis !== 'undefined') {
       return JSON.stringify(map);
     }
   }
+  function vlqDecode(str) {
+    const values = [];
+    let i = 0;
+    while (i < str.length) {
+      let value = 0, shift = 0, digit;
+      do {
+        digit = B64.indexOf(str[i++]);
+        value |= (digit & 31) << shift;
+        shift += 5;
+      } while (digit & 32);
+      values.push(value & 1 ? -(value >> 1) : value >> 1);
+    }
+    return values;
+  }
 
   // src/error.js
   class RipError extends Error {
@@ -8880,17 +8894,30 @@ if (typeof globalThis !== 'undefined') {
       this.collectSubExprs(sexpr, subs);
       let codeLines = code.split(`
 `);
+      const lineStarts = [0];
+      for (let i = 0;i < code.length; i++) {
+        if (code.charCodeAt(i) === 10)
+          lineStarts.push(i + 1);
+      }
+      const offsetToLine = (offset) => {
+        let lo = 0, hi = lineStarts.length - 1;
+        while (lo <= hi) {
+          const mid = lo + hi >> 1;
+          if (lineStarts[mid] <= offset)
+            lo = mid + 1;
+          else
+            hi = mid - 1;
+        }
+        return hi;
+      };
       for (let { name, origLine, origCol } of subs) {
         let escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         let re = new RegExp("\\b" + escaped + "\\b", "g");
         let m, bestMatch = null, bestDist = Infinity;
         let origLineInStmt = origLine - stmtOrigLine;
         while ((m = re.exec(code)) !== null) {
-          let before = code.substring(0, m.index);
-          let nl = before.split(`
-`);
-          let genLineInStmt = nl.length - 1;
-          let genCol = nl[nl.length - 1].length;
+          const genLineInStmt = offsetToLine(m.index);
+          const genCol = m.index - lineStarts[genLineInStmt];
           let lineText = codeLines[genLineInStmt];
           if (lineText && CodeEmitter._isColInsideString(lineText, genCol))
             continue;
@@ -12452,9 +12479,216 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   function getComponentRuntime() {
     return new CodeEmitter({}).getComponentRuntime();
   }
+  // src/sourcemap-merge.js
+  var SEPARATOR = `
+;
+`;
+  var SEPARATOR_LINES = 2;
+  function extractMap(js) {
+    const re = /\n?\/\/# sourceMappingURL=data:application\/json(?:;charset=[^;,]+)?;base64,([A-Za-z0-9+/=]+)\s*$/;
+    const m = js.match(re);
+    if (!m)
+      return { js, mapJSON: null };
+    let mapJSON;
+    try {
+      const bin = atob(m[1]);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0;i < bin.length; i++)
+        bytes[i] = bin.charCodeAt(i);
+      mapJSON = new TextDecoder().decode(bytes);
+    } catch {
+      return { js: js.slice(0, m.index), mapJSON: null };
+    }
+    return { js: js.slice(0, m.index), mapJSON };
+  }
+  function countNewlines(str2) {
+    let n = 0;
+    for (let i = 0;i < str2.length; i++)
+      if (str2.charCodeAt(i) === 10)
+        n++;
+    return n;
+  }
+  function decodeMappings(mappingsStr) {
+    const lines = mappingsStr.split(";");
+    const result = [];
+    let src = 0, origLine = 0, origCol = 0, nameIdx = 0;
+    for (const line of lines) {
+      const segs = [];
+      let genCol = 0;
+      if (line.length > 0) {
+        for (const segStr of line.split(",")) {
+          if (segStr.length === 0)
+            continue;
+          const fields = vlqDecode(segStr);
+          genCol += fields[0];
+          if (fields.length === 1) {
+            segs.push({ genCol });
+          } else {
+            src += fields[1];
+            origLine += fields[2];
+            origCol += fields[3];
+            const seg = { genCol, src, origLine, origCol };
+            if (fields.length >= 5) {
+              nameIdx += fields[4];
+              seg.name = nameIdx;
+            }
+            segs.push(seg);
+          }
+        }
+      }
+      result.push(segs);
+    }
+    return result;
+  }
+  function encodeMappings(perLineSegs) {
+    let prevGenCol = 0;
+    let prevSrc = 0, prevOrigLine = 0, prevOrigCol = 0, prevNameIdx = 0;
+    const out = [];
+    for (const segs of perLineSegs) {
+      prevGenCol = 0;
+      const lineParts = [];
+      for (const seg of segs) {
+        if (seg.src == null) {
+          lineParts.push(vlqEncode(seg.genCol - prevGenCol));
+        } else {
+          let s = vlqEncode(seg.genCol - prevGenCol);
+          s += vlqEncode(seg.src - prevSrc);
+          s += vlqEncode(seg.origLine - prevOrigLine);
+          s += vlqEncode(seg.origCol - prevOrigCol);
+          if (seg.name != null) {
+            s += vlqEncode(seg.name - prevNameIdx);
+            prevNameIdx = seg.name;
+          }
+          prevSrc = seg.src;
+          prevOrigLine = seg.origLine;
+          prevOrigCol = seg.origCol;
+          lineParts.push(s);
+        }
+        prevGenCol = seg.genCol;
+      }
+      out.push(lineParts.join(","));
+    }
+    return out.join(";");
+  }
+  function mergeChunks(chunks) {
+    const stripped = chunks.map((c) => {
+      if (c.mapJSON !== undefined)
+        return { js: c.js, mapJSON: c.mapJSON };
+      return extractMap(c.js);
+    });
+    const anyMap = stripped.some((c) => c.mapJSON);
+    const mergedJS = stripped.map((c) => c.js).join(SEPARATOR);
+    if (!anyMap)
+      return { js: mergedJS, mapJSON: null };
+    const mergedSources = [];
+    const mergedSourcesContent = [];
+    const sourceIndexByName = new Map;
+    const mergedNames = [];
+    const nameIndexByName = new Map;
+    function addSource(name, content) {
+      if (sourceIndexByName.has(name))
+        return sourceIndexByName.get(name);
+      const idx = mergedSources.length;
+      mergedSources.push(name);
+      mergedSourcesContent.push(content ?? null);
+      sourceIndexByName.set(name, idx);
+      return idx;
+    }
+    function addName(name) {
+      if (nameIndexByName.has(name))
+        return nameIndexByName.get(name);
+      const idx = mergedNames.length;
+      mergedNames.push(name);
+      nameIndexByName.set(name, idx);
+      return idx;
+    }
+    const chunkInfos = [];
+    let lineOffset = 0;
+    for (let i = 0;i < stripped.length; i++) {
+      const c = stripped[i];
+      const info = { lineOffset, srcRemap: [], nameRemap: [], perLineSegs: null };
+      if (c.mapJSON) {
+        let map;
+        try {
+          map = JSON.parse(c.mapJSON);
+        } catch {
+          map = null;
+        }
+        if (map && typeof map.mappings === "string") {
+          const sources = map.sources || [];
+          const sourcesContent = map.sourcesContent || [];
+          info.srcRemap = sources.map((s, idx) => addSource(s, sourcesContent[idx]));
+          const names = map.names || [];
+          info.nameRemap = names.map((n) => addName(n));
+          info.perLineSegs = decodeMappings(map.mappings);
+        }
+      }
+      chunkInfos.push(info);
+      const chunkLines = countNewlines(c.js);
+      const sepLines = i < stripped.length - 1 ? SEPARATOR_LINES : 0;
+      lineOffset += chunkLines + sepLines;
+    }
+    const totalLines = lineOffset + 1;
+    const mergedPerLineSegs = new Array(totalLines).fill(null).map(() => []);
+    for (const info of chunkInfos) {
+      if (!info.perLineSegs)
+        continue;
+      for (let li = 0;li < info.perLineSegs.length; li++) {
+        const target = info.lineOffset + li;
+        if (target >= mergedPerLineSegs.length) {
+          while (mergedPerLineSegs.length <= target)
+            mergedPerLineSegs.push([]);
+        }
+        for (const seg of info.perLineSegs[li]) {
+          if (seg.src == null) {
+            mergedPerLineSegs[target].push({ genCol: seg.genCol });
+          } else {
+            const remapped = {
+              genCol: seg.genCol,
+              src: info.srcRemap[seg.src],
+              origLine: seg.origLine,
+              origCol: seg.origCol
+            };
+            if (seg.name != null)
+              remapped.name = info.nameRemap[seg.name];
+            mergedPerLineSegs[target].push(remapped);
+          }
+        }
+      }
+    }
+    const mergedMappings = encodeMappings(mergedPerLineSegs);
+    const mergedMap = {
+      version: 3,
+      sources: mergedSources,
+      sourcesContent: mergedSourcesContent,
+      names: mergedNames,
+      mappings: mergedMappings
+    };
+    return { js: mergedJS, mapJSON: JSON.stringify(mergedMap) };
+  }
+  function utf8ToBase64(str2) {
+    if (typeof Buffer !== "undefined") {
+      return Buffer.from(str2, "utf8").toString("base64");
+    }
+    const bytes = new TextEncoder().encode(str2);
+    let bin = "";
+    for (let i = 0;i < bytes.length; i++)
+      bin += String.fromCharCode(bytes[i]);
+    return btoa(bin);
+  }
+  function mergeChunksWithInlineMap(chunks) {
+    const { js, mapJSON } = mergeChunks(chunks);
+    if (!mapJSON)
+      return js;
+    const b64 = utf8ToBase64(mapJSON);
+    return js + `
+//# sourceMappingURL=data:application/json;base64,` + b64 + `
+`;
+  }
+
   // src/browser.js
-  var VERSION = "3.15.3";
-  var BUILD_DATE = "2026-04-27@07:02:58GMT";
+  var VERSION = "3.15.4";
+  var BUILD_DATE = "2026-04-27@08:44:03GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -12631,8 +12865,9 @@ ${js}
           if (!s.code)
             continue;
           const ripName = s.url || `inline-${++inlineCounter}.rip`;
+          const opts = debug ? { ...baseOpts, sourceMap: "inline", filename: ripName } : baseOpts;
           try {
-            const js = compileToJS(s.code, baseOpts);
+            const js = compileToJS(s.code, opts);
             compiled.push({ js, url: ripName });
           } catch (e) {
             console.error(formatError(e, { source: s.code, file: ripName, color: false }));
@@ -12666,13 +12901,12 @@ ${js}
           const mountSnippet = mount ? `
 ${mount}.mount(${JSON.stringify(target)});
 ` : "";
-          const merged = compiled.map((c) => c.js).join(`
-;
-`);
+          const mergedBody = mergeChunksWithInlineMap(compiled.map((c) => ({ js: c.js })));
+          const wrapped = mount ? mergedBody.replace(/(\n\/\/# sourceMappingURL=[^\n]*\n?)?$/, mountSnippet + "$1") : mergedBody;
           let ok = true;
           try {
             await (0, eval)(`(async()=>{
-${merged}${mountSnippet}
+${wrapped}
 })()`);
           } catch (e) {
             ok = false;
