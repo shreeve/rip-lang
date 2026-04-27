@@ -16,7 +16,7 @@ import { installComponentSupport } from './components.js';
 // so _typesEmitter stays null and .d.ts output is silently skipped.
 let _typesEmitter = null;
 export function setTypesEmitter(fn) { _typesEmitter = fn; }
-import { installSchemaSupport } from '@rip-lang/schema';
+import { installSchemaSupport } from './schema/schema.js';
 import { SourceMapGenerator } from './sourcemaps.js';
 import { RipError, toRipError } from './error.js';
 

@@ -21,7 +21,7 @@ import { compile } from '../src/compiler.js';
 // schema runtime so the test runner exercises the same code paths as
 // `bin/rip`. The browser bundle reaches NEITHER of these modules.
 import '../src/types-emit.js';
-import '@rip-lang/schema/loader-server';
+import '../src/schema/loader-server.js';
 
 // ANSI colors
 const colors = {

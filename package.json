@@ -17,9 +17,6 @@
     },
     "./loader": "./rip-loader.js"
   },
-  "dependencies": {
-    "@rip-lang/schema": "workspace:*"
-  },
   "bin": {
     "rip": "bin/rip"
   },
@@ -46,9 +43,9 @@
     "serve": "bun scripts/serve.js",
     "test": "bun test/runner.js",
     "test:types": "bun test/types/runner.js",
-    "test:schema": "bun run --cwd packages/schema test",
-    "test:schema-fresh": "bun run --cwd packages/schema test:runtime-fresh",
-    "build:schema-runtime": "bun run --cwd packages/schema build:runtime",
+    "test:schema": "bun test/schema/singleton.test.js && bun test/schema/errors.test.js && bun test/schema/modes.test.js && bun test/schema/build.test.js",
+    "test:schema-fresh": "bun scripts/build-schema-runtime.js --check",
+    "build:schema-runtime": "bun scripts/build-schema-runtime.js",
     "test:bundle": "bun test/bundle.test.js",
     "test:graph": "bun scripts/check-bundle-graph.js",
     "test:server": "./bin/rip packages/server/tests/runner.rip",

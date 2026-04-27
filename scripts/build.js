@@ -13,7 +13,7 @@ if (guard.status !== 0) {
   process.exit(guard.status ?? 1);
 }
 
-const fresh = spawnSync('bun', ['packages/schema/scripts/build-runtime.js', '--check', '--quiet'], { stdio: 'inherit' });
+const fresh = spawnSync('bun', ['scripts/build-schema-runtime.js', '--check', '--quiet'], { stdio: 'inherit' });
 if (fresh.status !== 0) {
   console.error('\nAborting build — schema runtime is stale. Run: bun run build:schema-runtime');
   process.exit(fresh.status ?? 1);
@@ -33,7 +33,7 @@ const version = packageJson.version;
 //
 // When source IS dirty (a build of in-progress work), fall back to
 // wall-clock time, since dirty bytes don't correspond to any commit.
-const SOURCE_PATHS = ['src/', 'packages/schema/src/', 'scripts/build.js'];
+const SOURCE_PATHS = ['src/', 'scripts/build.js'];
 
 function getBuildDate() {
   try {

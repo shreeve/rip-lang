@@ -27,7 +27,7 @@ import { fileURLToPath } from 'url';
 import { spawnSync } from 'child_process';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const packageRoot = resolve(__dirname, '..');
+const repoRoot = resolve(__dirname, '..', '..');
 
 function color(code, s) { return process.stdout.isTTY ? `\x1b[${code}m${s}\x1b[0m` : s; }
 const green = s => color('32;1', s);
@@ -55,10 +55,10 @@ function check(name, fn) {
 console.log('\n' + color('36', '── build determinism ──'));
 
 check('build-runtime produces byte-identical output across runs', () => {
-  const before = readFileSync(resolve(packageRoot, 'src/runtime.generated.js'), 'utf8');
-  const r = spawnSync('bun', ['scripts/build-runtime.js'], { cwd: packageRoot, stdio: 'pipe' });
-  if (r.status !== 0) throw new Error('build-runtime exited non-zero: ' + r.stderr.toString());
-  const after = readFileSync(resolve(packageRoot, 'src/runtime.generated.js'), 'utf8');
+  const before = readFileSync(resolve(repoRoot, 'src/schema/runtime.generated.js'), 'utf8');
+  const r = spawnSync('bun', ['scripts/build-schema-runtime.js'], { cwd: repoRoot, stdio: 'pipe' });
+  if (r.status !== 0) throw new Error('build-schema-runtime exited non-zero: ' + r.stderr.toString());
+  const after = readFileSync(resolve(repoRoot, 'src/schema/runtime.generated.js'), 'utf8');
   if (before !== after) {
     throw new Error('regeneration produced different bytes — non-deterministic build');
   }
@@ -80,7 +80,7 @@ const fragments = [
 
 for (const f of fragments) {
   check(`${f} parses as standalone JavaScript`, () => {
-    const path = resolve(packageRoot, 'src', f);
+    const path = resolve(repoRoot, 'src/schema', f);
     const src = readFileSync(path, 'utf8');
     // Just parse. Cross-fragment identifier references resolve at runtime
     // (this fragment isn't actually run standalone — only concatenated with

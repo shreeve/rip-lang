@@ -33,9 +33,9 @@ const repoRoot = resolve(import.meta.dir, '..');
 const FORBIDDEN = [
   'src/typecheck.js',
   'src/types-emit.js',
-  'packages/schema/src/dts-emit.js',
-  'packages/schema/src/runtime-orm.js',
-  'packages/schema/src/runtime-ddl.js',
+  'src/schema/dts-emit.js',
+  'src/schema/runtime-orm.js',
+  'src/schema/runtime-ddl.js',
   'src/repl.js',
 ];
 
@@ -65,42 +65,9 @@ function isRelative(spec) {
   return spec.startsWith('./') || spec.startsWith('../') || spec.startsWith('/');
 }
 
-// Resolve a workspace specifier (e.g. '@rip-lang/schema/loader-browser') by
-// reading its package.json `exports` map. We only handle workspace deps
-// because that's the only way the browser bundle pulls in another package.
-// Bare specifiers for npm/node-builtins return null (not in our source tree).
-function resolveWorkspaceImport(spec) {
-  if (!spec.startsWith('@rip-lang/')) return null;
-  const rest  = spec.slice('@rip-lang/'.length);
-  const slash = rest.indexOf('/');
-  const pkg   = slash === -1 ? rest : rest.slice(0, slash);
-  const sub   = slash === -1 ? '.'  : './' + rest.slice(slash + 1);
-  const pkgJsonPath = resolve(repoRoot, 'packages', pkg, 'package.json');
-  if (!existsSync(pkgJsonPath)) return null;
-  let pkgJson;
-  try { pkgJson = JSON.parse(readFileSync(pkgJsonPath, 'utf8')); }
-  catch { return null; }
-  const exp = pkgJson.exports;
-  if (!exp) {
-    if (sub === '.' && pkgJson.main) {
-      return resolve(repoRoot, 'packages', pkg, pkgJson.main);
-    }
-    return null;
-  }
-  const target = exp[sub];
-  if (!target) return null;
-  // exports value is a string path or a conditional-export object — we only
-  // need the file path, so unwrap the simple-string case.
-  const filePath = typeof target === 'string' ? target : target.default;
-  if (!filePath) return null;
-  return resolve(repoRoot, 'packages', pkg, filePath);
-}
-
 function resolveImport(fromAbs, spec) {
-  // Workspace deps walk into their package's source.
-  const ws = resolveWorkspaceImport(spec);
-  if (ws) return existsSync(ws) ? ws : null;
-  // Skip remaining bare specifiers (npm packages, node:builtins, data:, etc.)
+  // Skip bare specifiers (npm packages, node:builtins, data:, etc.) — schema
+  // is in-tree under src/schema/, so the bundle only walks relative imports.
   if (!isRelative(spec)) return null;
   let abs = resolve(dirname(fromAbs), spec);
   // Try as-is, then common extensions, then as a directory index. .rip

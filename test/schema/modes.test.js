@@ -40,12 +40,12 @@ import { dirname, resolve } from 'path';
 // getSchemaRuntime supports all four modes. Browser-loader supports
 // only validate + browser; this test exercises every mode and so
 // must use the server loader.
-import '../src/loader-server.js';
+import '../../src/schema/loader-server.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const packageRoot = resolve(__dirname, '..');
-const schemaPath = resolve(packageRoot, 'src/schema.js');
-const generatedPath = resolve(packageRoot, 'src/runtime.generated.js');
+const repoRoot = resolve(__dirname, '..', '..');
+const schemaPath = resolve(repoRoot, 'src/schema/schema.js');
+const generatedPath = resolve(repoRoot, 'src/schema/runtime.generated.js');
 
 function color(code, s) {
   return process.stdout.isTTY ? `\x1b[${code}m${s}\x1b[0m` : s;

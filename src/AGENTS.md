@@ -1,6 +1,6 @@
 # Compiler Subsystem — Agent Guide
 
-This covers `compiler.js`, `lexer.js`, `components.js`, `browser.js`, `types.js`, `types-emit.js`, `app.rip`, `typecheck.js`, and the `grammar/` directory. The schema feature lives in `packages/schema/` (entry point `packages/schema/src/schema.js`, imported here as `@rip-lang/schema`); see `packages/schema/README.md` for its layout.
+This covers `compiler.js`, `lexer.js`, `components.js`, `browser.js`, `types.js`, `types-emit.js`, `app.rip`, `typecheck.js`, the `schema/` subdirectory, and the `grammar/` directory. The schema feature lives in `src/schema/` (entry `src/schema/schema.js`, imported via relative paths like `./schema/schema.js` from sibling modules).
 
 ---
 
@@ -16,22 +16,22 @@ The browser bundle (`docs/dist/rip.min.js`) is built from `src/browser.js` plus 
 | `src/lexer.js` | yes | tokenizer + rewriter pipeline |
 | `src/compiler.js` | yes | codegen + reactive runtime + component runtime + `compileToJS` + `setTypesEmitter` hook + `emitEnum` |
 | `src/components.js` | yes | render rewriter + component runtime |
-| `packages/schema/src/schema.js` | yes (via `@rip-lang/schema`) | lexer rewrite + body parser + emitSchema codegen + `setSchemaRuntimeProvider` hook (no fragment imports) |
-| `packages/schema/src/loader-browser.js` | yes (browser only, via `@rip-lang/schema/loader-browser`) | imports validate + browser-stubs fragments; eager-installs browser runtime; registers provider |
-| `packages/schema/src/loader-server.js` | **no** (CLI / server / tests, via `@rip-lang/schema/loader-server`) | imports all five fragments; eager-installs migration runtime; registers provider |
-| `packages/schema/src/runtime.generated.js` | yes (browser uses 2 of 5 exports) | autogen from `runtime-*.js` fragments; CI staleness check via `bun run test:schema-fresh` |
-| `packages/schema/src/runtime-validate.js` | source for the `validate` fragment (universal) |
-| `packages/schema/src/runtime-db-naming.js` | source for `db-naming` fragment (server + migration) |
-| `packages/schema/src/runtime-orm.js` | source for `orm` fragment (server + migration) |
-| `packages/schema/src/runtime-ddl.js` | source for `ddl` fragment (migration only) |
-| `packages/schema/src/runtime-browser-stubs.js` | source for `browser-stubs` fragment (browser only) |
+| `src/schema/schema.js` | yes (via `./schema/schema.js`) | lexer rewrite + body parser + emitSchema codegen + `setSchemaRuntimeProvider` hook (no fragment imports) |
+| `src/schema/loader-browser.js` | yes (browser only, via `./schema/loader-browser.js`) | imports validate + browser-stubs fragments; eager-installs browser runtime; registers provider |
+| `src/schema/loader-server.js` | **no** (CLI / server / tests, via `./schema/loader-server.js`) | imports all five fragments; eager-installs migration runtime; registers provider |
+| `src/schema/runtime.generated.js` | yes (browser uses 2 of 5 exports) | autogen from `runtime-*.js` fragments; CI staleness check via `bun run test:schema-fresh` |
+| `src/schema/runtime-validate.js` | source for the `validate` fragment (universal) |
+| `src/schema/runtime-db-naming.js` | source for `db-naming` fragment (server + migration) |
+| `src/schema/runtime-orm.js` | source for `orm` fragment (server + migration) |
+| `src/schema/runtime-ddl.js` | source for `ddl` fragment (migration only) |
+| `src/schema/runtime-browser-stubs.js` | source for `browser-stubs` fragment (browser only) |
 | `src/types.js` | yes | only `installTypeSupport(Lexer)` — token-stream type stripper |
 | `src/error.js` | yes | runtime error formatting |
 | `src/sourcemaps.js` | yes | inline source-map generation |
 | `src/generated/dom-tags.js` | yes | HTML/SVG tag set for render-block tag detection |
 | `src/generated/dom-events.js` | yes | event-name set for `onClick`/`onKeydown` auto-wire |
 | `src/types-emit.js` | **no** | `.d.ts` emitter + intrinsic decl tables — CLI / typecheck only |
-| `packages/schema/src/dts-emit.js` | **no** | schema `.d.ts` emitter — CLI / typecheck only |
+| `src/schema/dts-emit.js` | **no** | schema `.d.ts` emitter — CLI / typecheck only |
 | `src/typecheck.js` | **no** | TypeScript LSP integration — CLI only |
 | `src/repl.js` | **no** | interactive CLI REPL |
 
@@ -60,7 +60,7 @@ The browser bundle never imports `types-emit.js`, so the emitter stays null and 
 
 **Failure mode to remember:** If you write code that calls `compile(source, { types: 'emit' })` and inspects `result.dts`, you **must** import `src/types-emit.js` (directly or indirectly) somewhere in that code path. Without it, `result.dts` is `null` regardless of source content. Symptom: types emission "silently does nothing" — no error, no warning, just empty output. The fix is one line: `import '../src/types-emit.js';`.
 
-The schema runtime uses an analogous hook: `packages/schema/src/schema.js` exports `setSchemaRuntimeProvider(fn)`, default null. `packages/schema/src/loader-server.js` and `packages/schema/src/loader-browser.js` are the two providers. CLI / tests / server side-effect-import `@rip-lang/schema/loader-server` (full migration runtime, all four modes). The browser bundle (`src/browser.js`) side-effect-imports `@rip-lang/schema/loader-browser` (validate + browser-stubs only). Same failure mode applies — call `getSchemaRuntime()` without registering a provider and you get a clear error pointing at which loader to import.
+The schema runtime uses an analogous hook: `src/schema/schema.js` exports `setSchemaRuntimeProvider(fn)`, default null. `src/schema/loader-server.js` and `src/schema/loader-browser.js` are the two providers. CLI / tests / server side-effect-import `./schema/loader-server.js` (full migration runtime, all four modes). The browser bundle (`src/browser.js`) side-effect-imports `./schema/loader-browser.js` (validate + browser-stubs only). Same failure mode applies — call `getSchemaRuntime()` without registering a provider and you get a clear error pointing at which loader to import.
 
 The mode matrix exposed by `getSchemaRuntime({ mode })`:
 
@@ -71,7 +71,7 @@ The mode matrix exposed by `getSchemaRuntime({ mode })`:
 | `server` | VALIDATE + DB_NAMING + ORM | `@rip-lang/server` and friends |
 | `migration` | VALIDATE + DB_NAMING + ORM + DDL | CLI / migration tool / tests (default) |
 
-Edits to `packages/schema/src/runtime-*.js` require running `bun run build:schema-runtime` (delegates to the schema package) to regenerate `runtime.generated.js`. CI fails (`bun run test:schema-fresh`) if the generated file is stale.
+Edits to `src/schema/runtime-*.js` require running `bun run build:schema-runtime` to regenerate `runtime.generated.js`. CI fails (`bun run test:schema-fresh`) if the generated file is stale.
 
 ---
 
@@ -643,29 +643,31 @@ Types are processed at the token layer before parsing.
 ## Schema System
 
 Inline schemas are a compiler sidecar that parallels `types.js` and
-`components.js`, but unlike those two it lives in its own workspace
-package — `packages/schema/`, imported here as `@rip-lang/schema`. The
-implementation is split across several files by execution context:
+`components.js` — a feature of the rip-lang compiler, just organized
+into its own subdirectory `src/schema/` because of its size. Schema
+mutates the host parser's lexer to re-parse `@ensure` predicate
+bodies, so it isn't a clean separable package; the subdirectory is
+purely for source organization. The implementation is split across
+several files by execution context:
 
-- `packages/schema/src/schema.js` (browser + server) — lexer rewrite,
+- `src/schema/schema.js` (browser + server) — lexer rewrite,
   body parsers, `emitSchema` codegen, and `setSchemaRuntimeProvider`
   hook. The runtime body itself is **not** here; this file imports zero
   fragments so the bundler can decide per-entry which fragments to include.
-- `packages/schema/src/runtime-{validate,db-naming,orm,ddl,browser-stubs}.js`
-  (sources) and `packages/schema/src/runtime.generated.js` (autogen) —
+- `src/schema/runtime-{validate,db-naming,orm,ddl,browser-stubs}.js`
+  (sources) and `src/schema/runtime.generated.js` (autogen) —
   five runtime fragments composed at call time by `getSchemaRuntime({ mode })`.
   Edit a source fragment, run `bun run build:schema-runtime` to refresh
   the generated file, commit. CI's `test:schema-fresh` fails on staleness.
-- `@rip-lang/schema/loader-server` and `@rip-lang/schema/loader-browser`
+- `src/schema/loader-server.js` and `src/schema/loader-browser.js`
   — the import boundary that decides which fragments end up in which
   bundle. Server loader pulls all five; browser loader pulls only
   validate + browser-stubs. Bun's tree-shaker uses these import sets to
   omit server-only fragments from `docs/dist/rip.min.js`.
-- `@rip-lang/schema/dts-emit` (CLI/LSP only) — `emitSchemaTypes` walks
+- `src/schema/dts-emit.js` (CLI/LSP only) — `emitSchemaTypes` walks
   parsed schema s-expressions and emits `declare const Foo: Schema<...>`
   lines for the TypeScript language service. Imported only by
-  `types-emit.js` and `typecheck.js`. Lives inside `packages/schema/src/`
-  so all schema-related code is colocated; the `dts-emit` name signals
+  `types-emit.js` and `typecheck.js`. The `dts-emit` name signals
   that this is a compile-time `.d.ts` emitter, not a `runtime-*` fragment.
 
 ### Lexer path
@@ -765,7 +767,7 @@ signatures both enforce this.
   `@ensure` entirely (trusted data). Runtime method name
   `_applyEnsures` mirrors the directive (parallel to
   `_applyTransforms` for `-> transform` and `_applyEagerDerived` for
-  `!> derived`). See `packages/schema/src/schema.js`.
+  `!> derived`). See `src/schema/schema.js`.
 
 ### Shadow TS
 

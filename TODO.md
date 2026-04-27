@@ -73,7 +73,7 @@ $ rip migrate apply
 - **Snapshot serializer** — walk `.toSQL()`-equivalent internals and emit a
   structured JSON representation (tables → columns with types/constraints/defaults,
   indexes, foreign keys). Small extension of the existing Layer 4b DDL
-  emitter in `packages/schema/src/schema.js`.
+  emitter in `src/schema/schema.js`.
 - **Snapshot diff** — naive structural diff is enough for most operations
   (add column, drop column, type change, index add/drop, FK add/drop).
   Handles 80% of cases without getting clever.

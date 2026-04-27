@@ -24,7 +24,6 @@
     "ui.rip"
   ],
   "dependencies": {
-    "rip-lang": ">=3.15.0",
     "tailwindcss": "^4",
     "css-tree": "^3"
   },

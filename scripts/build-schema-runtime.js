@@ -1,12 +1,12 @@
 #!/usr/bin/env bun
 // Schema runtime build script.
 //
-// Reads the five fragment files under packages/schema/src/runtime-*.js,
-// strips their header comments, and writes packages/schema/src/runtime.generated.js
+// Reads the five fragment files under src/schema/runtime-*.js, strips
+// their header comments, and writes src/schema/runtime.generated.js
 // exporting one string constant per fragment plus the IIFE wrapper
 // head and tail.
 //
-// `getSchemaRuntime({mode})` in src/schema.js composes the right
+// `getSchemaRuntime({mode})` in src/schema/schema.js composes the right
 // fragments at call time. The generated file is committed to the
 // repo so fresh clones work without a build step. CI runs --check to
 // fail if the working tree's runtime.generated.js doesn't match what
@@ -18,10 +18,10 @@ import { readFileSync, writeFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
-const __dirname   = dirname(fileURLToPath(import.meta.url));
-const packageRoot = resolve(__dirname, '..');
-const fragDir     = resolve(packageRoot, 'src');
-const generated   = resolve(fragDir, 'runtime.generated.js');
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const repoRoot  = resolve(__dirname, '..');
+const fragDir   = resolve(repoRoot, 'src/schema');
+const generated = resolve(fragDir, 'runtime.generated.js');
 
 const fragments = [
   'runtime-validate.js',
@@ -115,17 +115,17 @@ function esc(s) {
 }
 
 const generatedSrc = `// AUTOGEN-NOTICE: do not edit by hand. Regenerate with:
-//   bun packages/schema/scripts/build-runtime.js
-//   (or: bun run --cwd packages/schema build:runtime)
+//   bun scripts/build-schema-runtime.js
+//   (or: bun run build:schema-runtime)
 //
 // Source fragments:
-//   packages/schema/src/runtime-validate.js       (universal — browser + server)
-//   packages/schema/src/runtime-db-naming.js      (server + migration)
-//   packages/schema/src/runtime-orm.js            (server + migration)
-//   packages/schema/src/runtime-ddl.js            (migration only)
-//   packages/schema/src/runtime-browser-stubs.js  (browser only)
+//   src/schema/runtime-validate.js       (universal — browser + server)
+//   src/schema/runtime-db-naming.js      (server + migration)
+//   src/schema/runtime-orm.js            (server + migration)
+//   src/schema/runtime-ddl.js            (migration only)
+//   src/schema/runtime-browser-stubs.js  (browser only)
 //
-// CI: bun packages/schema/scripts/build-runtime.js --check fails if this file
+// CI: bun scripts/build-schema-runtime.js --check fails if this file
 // would change after regeneration. Edit the fragments, run the build
 // script, and commit.
 
@@ -151,13 +151,13 @@ if (process.argv.includes('--check')) {
     }
     process.exit(0);
   }
-  console.error('schema runtime is stale. Run: bun packages/schema/scripts/build-runtime.js');
+  console.error('schema runtime is stale. Run: bun scripts/build-schema-runtime.js');
   process.exit(1);
 }
 
 writeFileSync(generated, generatedSrc);
 
-console.log('wrote packages/schema/src/runtime.generated.js');
+console.log('wrote src/schema/runtime.generated.js');
 console.log('  total file:    ', Buffer.byteLength(generatedSrc).toString().padStart(7), 'bytes');
 const sizes = {
   WRAPPER_HEAD: Buffer.byteLength(WRAPPER_HEAD),

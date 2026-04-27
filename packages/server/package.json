@@ -46,9 +46,6 @@
   },
   "author": "Steve Shreeve <steve.shreeve@gmail.com>",
   "license": "MIT",
-  "dependencies": {
-    "rip-lang": ">=3.15.0"
-  },
   "files": [
     "api.rip",
     "browse.rip",

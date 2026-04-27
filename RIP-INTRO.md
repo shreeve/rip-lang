@@ -221,7 +221,7 @@ Hydrated instances carry **both snake_case and camelCase aliases** on DB-derived
 - **Single-function adapter.** `adapter.query(sql, params)` is the entire DB interface. Tests use in-memory mocks; production uses `rip-db`; the ORM doesn't care.
 - **Schema algebra** — `.pick`, `.omit`, `.partial`, `.required`, `.extend` — always returns a `:shape` and **drops behavior**. `User.omit "password"` won't have `.find()` or the `beforeSave` hook. Enforced at runtime *and* at the TypeScript level.
 - **Four-layer lazy runtime**: raw descriptor → normalized metadata → validator plan → ORM/DDL plan. Migration scripts never build the ORM plan; validator-only consumers never build the class machinery.
-- **~54% sidecar** (`packages/schema/src/schema.js`), with **<100 lines of core compiler wiring**.
+- **~54% sidecar** (`src/schema/schema.js`), with **<100 lines of core compiler wiring**.
 
 ### Where it wins — and where it doesn't
 

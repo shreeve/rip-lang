@@ -9,7 +9,7 @@ import { Compiler, formatError } from '../src/compiler.js';
 // bundle imports a different schema loader so server-only fragments
 // (db-naming/orm/ddl) tree-shake out of docs/dist/rip.min.js.
 import '../src/types-emit.js';        // registers emitTypes for .d.ts output
-import '@rip-lang/schema/loader-server'; // registers full schema runtime
+import '../src/schema/loader-server.js'; // registers full schema runtime
 import packageJson from '../package.json' with { type: 'json' };
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

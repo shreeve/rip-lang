@@ -39,8 +39,5 @@
   "scripts": {
     "test": "bun --preload ../../rip-loader.js test/runner.rip"
   },
-  "type": "module",
-  "dependencies": {
-    "rip-lang": ">=3.15.0"
-  }
+  "type": "module"
 }

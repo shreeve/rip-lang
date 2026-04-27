@@ -1,15 +1,15 @@
 // AUTOGEN-NOTICE: do not edit by hand. Regenerate with:
-//   bun packages/schema/scripts/build-runtime.js
-//   (or: bun run --cwd packages/schema build:runtime)
+//   bun scripts/build-schema-runtime.js
+//   (or: bun run build:schema-runtime)
 //
 // Source fragments:
-//   packages/schema/src/runtime-validate.js       (universal — browser + server)
-//   packages/schema/src/runtime-db-naming.js      (server + migration)
-//   packages/schema/src/runtime-orm.js            (server + migration)
-//   packages/schema/src/runtime-ddl.js            (migration only)
-//   packages/schema/src/runtime-browser-stubs.js  (browser only)
+//   src/schema/runtime-validate.js       (universal — browser + server)
+//   src/schema/runtime-db-naming.js      (server + migration)
+//   src/schema/runtime-orm.js            (server + migration)
+//   src/schema/runtime-ddl.js            (migration only)
+//   src/schema/runtime-browser-stubs.js  (browser only)
 //
-// CI: bun packages/schema/scripts/build-runtime.js --check fails if this file
+// CI: bun scripts/build-schema-runtime.js --check fails if this file
 // would change after regeneration. Edit the fragments, run the build
 // script, and commit.
 

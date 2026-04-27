@@ -60,7 +60,7 @@
     BUILD_DATE: () => BUILD_DATE
   });
 
-  // packages/schema/src/runtime.generated.js
+  // src/schema/runtime.generated.js
   var SCHEMA_RUNTIME_WRAPPER_HEAD = `
 // ---- Rip Schema Runtime ----------------------------------------------------
 // Four layers, lazy compilation:
@@ -1786,7 +1786,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
   var parser = /* @__PURE__ */ createParser();
   var parse = parser.parse.bind(parser);
 
-  // packages/schema/src/schema.js
+  // src/schema/schema.js
   var _schemaRuntimeProvider = null;
   function setSchemaRuntimeProvider(fn) {
     _schemaRuntimeProvider = fn;
@@ -3082,12 +3082,12 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
   }
   function getSchemaRuntime(opts = {}) {
     if (!_schemaRuntimeProvider) {
-      throw new Error("schema runtime provider not registered. Side-effect-import either " + "'@rip-lang/schema/loader-server' (CLI / server / tests) or " + "'@rip-lang/schema/loader-browser' (browser bundle) before calling " + "any compileToJS that emits schemas.");
+      throw new Error("schema runtime provider not registered. Side-effect-import either " + "'./schema/loader-server.js' (CLI / server / tests) or " + "'./schema/loader-browser.js' (browser bundle) before calling " + "any compileToJS that emits schemas.");
     }
     return _schemaRuntimeProvider(opts);
   }
 
-  // packages/schema/src/loader-browser.js
+  // src/schema/loader-browser.js
   function provider({ mode = "browser" } = {}) {
     let body;
     switch (mode) {
@@ -12453,8 +12453,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeEmitter({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.15.0";
-  var BUILD_DATE = "2026-04-27@05:15:26GMT";
+  var VERSION = "3.15.1";
+  var BUILD_DATE = "2026-04-27@06:14:13GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
