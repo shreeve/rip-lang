@@ -12372,7 +12372,16 @@ if (typeof globalThis !== 'undefined') {
       let map = sourceMap ? sourceMap.toJSON() : null;
       let reverseMap = sourceMap ? sourceMap.toReverseMap() : null;
       if (map && this.options.sourceMap === "inline") {
-        let b64 = typeof Buffer !== "undefined" ? Buffer.from(map).toString("base64") : btoa(map);
+        let b64;
+        if (typeof Buffer !== "undefined") {
+          b64 = Buffer.from(map, "utf8").toString("base64");
+        } else {
+          const bytes = new TextEncoder().encode(map);
+          let bin = "";
+          for (let i = 0;i < bytes.length; i++)
+            bin += String.fromCharCode(bytes[i]);
+          b64 = btoa(bin);
+        }
         code += `
 //# sourceMappingURL=data:application/json;base64,${b64}`;
       } else if (map && this.options.filename) {
@@ -12445,7 +12454,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   }
   // src/browser.js
   var VERSION = "3.14.5";
-  var BUILD_DATE = "2026-04-27@02:52:10GMT";
+  var BUILD_DATE = "2026-04-27@04:29:31GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -12457,6 +12466,54 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     const i = Math.min(...(m || []).map((x) => x.length));
     return s.replace(RegExp(`^[ 	]{${i}}`, "gm"), "").trim();
   };
+  var sanitizeSourceURL = (url) => String(url).replace(/[\r\n]/g, "").replace(/\s+$/g, "");
+  function addSourceURL(js, generatedName) {
+    const safe = sanitizeSourceURL(generatedName);
+    const pragma = `//# sourceURL=${safe}`;
+    const mapRe = /\n?\/\/# sourceMappingURL=[^\n]*\s*$/;
+    const m = js.match(mapRe);
+    if (m)
+      return js.slice(0, m.index) + `
+` + pragma + js.slice(m.index);
+    return js + `
+` + pragma;
+  }
+  function offsetSourceMap(js, offsetLines) {
+    if (!offsetLines)
+      return js;
+    return js.replace(/\/\/# sourceMappingURL=data:application\/json;base64,([A-Za-z0-9+/=]+)/, (_, b64) => {
+      let json;
+      try {
+        const bin = atob(b64);
+        const bytes2 = new Uint8Array(bin.length);
+        for (let i = 0;i < bin.length; i++)
+          bytes2[i] = bin.charCodeAt(i);
+        json = new TextDecoder().decode(bytes2);
+      } catch {
+        return _;
+      }
+      let map;
+      try {
+        map = JSON.parse(json);
+      } catch {
+        return _;
+      }
+      map.mappings = ";".repeat(offsetLines) + map.mappings;
+      const bytes = new TextEncoder().encode(JSON.stringify(map));
+      let out = "";
+      for (let i = 0;i < bytes.length; i++)
+        out += String.fromCharCode(bytes[i]);
+      return `//# sourceMappingURL=data:application/json;base64,${btoa(out)}`;
+    });
+  }
+  function wrapForEval(js, ripName) {
+    const generatedName = `${sanitizeSourceURL(ripName)}.js`;
+    const shifted = offsetSourceMap(js, 1);
+    const tagged = addSourceURL(shifted, generatedName);
+    return `(async()=>{
+${tagged}
+})()`;
+  }
   async function processRipScripts() {
     const sources = [];
     const runtimeTag = document.querySelector('script[src$="rip.min.js"], script[src$="rip.js"]');
@@ -12505,25 +12562,25 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
       const routerAttr = runtimeTag?.getAttribute("data-router");
       const hasRouter = routerAttr != null;
       if (hasRouter && bundles.length > 0) {
-        const opts = { skipRuntimes: true, skipExports: true, skipImports: true };
-        if (individual.length > 0) {
-          let js = "";
-          for (const s of individual) {
-            try {
-              js += compileToJS(s.code, opts) + `
-`;
-            } catch (e) {
-              console.error(formatError(e, { source: s.code, file: s.url || "inline", color: false }));
-            }
+        const debug = runtimeTag?.getAttribute("data-debug") !== "false";
+        const baseOpts = { skipRuntimes: true, skipExports: true, skipImports: true };
+        let inlineCounter = 0;
+        for (const s of individual) {
+          const ripName = s.url || `inline-${++inlineCounter}.rip`;
+          const opts = debug ? { ...baseOpts, sourceMap: "inline", filename: ripName } : baseOpts;
+          let js;
+          try {
+            js = compileToJS(s.code, opts);
+          } catch (e) {
+            console.error(formatError(e, { source: s.code, file: ripName, color: false }));
+            continue;
           }
-          if (js) {
-            try {
-              await (0, eval)(`(async()=>{
+          try {
+            await (0, eval)(debug ? wrapForEval(js, ripName) : `(async()=>{
 ${js}
 })()`);
-            } catch (e) {
-              console.error("Rip runtime error:", e);
-            }
+          } catch (e) {
+            console.error(`Rip runtime error in ${ripName}:`, e);
           }
         }
         const app = importRip.modules?.["app.rip"];
@@ -12554,16 +12611,20 @@ ${js}
           }
         }
         expanded.push(...individual);
-        const opts = { skipRuntimes: true, skipExports: true, skipImports: true };
+        const debug = runtimeTag?.getAttribute("data-debug") !== "false";
+        const baseOpts = { skipRuntimes: true, skipExports: true, skipImports: true };
         const compiled = [];
+        let inlineCounter = 0;
         for (const s of expanded) {
           if (!s.code)
             continue;
+          const ripName = s.url || `inline-${++inlineCounter}.rip`;
+          const opts = debug ? { ...baseOpts, sourceMap: "inline", filename: ripName } : baseOpts;
           try {
             const js = compileToJS(s.code, opts);
-            compiled.push({ js, url: s.url || "inline" });
+            compiled.push({ js, url: ripName });
           } catch (e) {
-            console.error(formatError(e, { source: s.code, file: s.url || "inline", color: false }));
+            console.error(formatError(e, { source: s.code, file: ripName, color: false }));
           }
         }
         if (!globalThis.__ripApp && runtimeTag) {
@@ -12589,35 +12650,31 @@ ${js}
           }
         }
         if (compiled.length > 0) {
-          let js = compiled.map((c) => c.js).join(`
-`);
+          let anyError = false;
+          for (const c of compiled) {
+            try {
+              await (0, eval)(debug ? wrapForEval(c.js, c.url) : `(async()=>{
+${c.js}
+})()`);
+            } catch (e) {
+              anyError = true;
+              if (e instanceof SyntaxError)
+                console.error(`Rip syntax error in ${c.url}: ${e.message}`);
+              else
+                console.error(`Rip runtime error in ${c.url}:`, e);
+            }
+          }
           const mount = runtimeTag?.getAttribute("data-mount");
           if (mount) {
             const target = runtimeTag.getAttribute("data-target") || "body";
-            js += `
-${mount}.mount(${JSON.stringify(target)});`;
-          }
-          try {
-            await (0, eval)(`(async()=>{
-${js}
-})()`);
-            document.body.classList.add("ready");
-          } catch (e) {
-            if (e instanceof SyntaxError) {
-              console.error(`Rip syntax error in combined output: ${e.message}`);
-              for (const c of compiled) {
-                try {
-                  new Function(`(async()=>{
-${c.js}
-})()`);
-                } catch (e2) {
-                  console.error(`  → source: ${c.url}`, e2.message);
-                }
-              }
-            } else {
-              console.error("Rip runtime error:", e);
+            try {
+              await (0, eval)(`(async()=>{ ${mount}.mount(${JSON.stringify(target)}); })()`);
+            } catch (e) {
+              console.error(`Rip mount error (${mount}):`, e);
             }
           }
+          if (!anyError)
+            document.body.classList.add("ready");
         }
       }
     }

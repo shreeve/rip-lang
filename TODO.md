@@ -7,29 +7,51 @@ when there's a real trigger — neither is on a critical path today.
 
 ---
 
-## 1. Browser debugger with source maps
+## 1. Browser debugger / DevTools navigation: extend to bundle components
 
-Implement `debugger` statement support in browser-compiled Rip code with
-source maps, so the browser DevTools takes you directly to the Rip source
-line.
+**Phase 1 done** (commit on `browser-debugger` branch): inline
+`<script type="text/rip">` blocks and individual external `.rip` URLs
+now emit per-component source maps with `//# sourceURL=<name>.rip.js`
+and `//# sourceMappingURL=data:application/json;base64,...` pragmas.
+Each compiled chunk is eval'd separately so DevTools' "last
+sourceMappingURL wins" rule doesn't truncate mappings, and the runtime
+async-IIFE wrapper's 1-line offset is compensated by prepending `;` to
+the source-map mappings string before eval.
 
-Rip already generates Source Map V3 via `rip -m` (inline, line-level
-mappings). The missing piece: get source maps into browser-compiled code
-(`rip.min.js` compiles `.rip` files on the fly via `processRipScripts()`).
-The compiled JS needs an inline `//# sourceMappingURL=data:...` comment that
-maps back to the original `.rip` source.
+Verified: a `console.log` in the inline script is now attributed to
+`inline-1.rip.js:31:0` (our `sourceURL` pragma) instead of an anonymous
+eval VM. Stack traces from thrown errors carry the `.rip.js` filename
+through frames.
 
-This would enable:
+**Phase 2 (this TODO):** bundle components compiled via `app.launch()`
+in `src/app.rip` (the path most real apps take, including
+`docs/example/`). At line ~764 of `app.rip`, components are compiled
+with `js = compile(source)` — no `sourceMap` / `filename` options
+threaded through. To extend coverage:
 
-- `debugger` in Rip source → browser pauses at the Rip line
-- Stack traces pointing to `.rip` files and line numbers
-- Step debugging through Rip source in DevTools
-- Breakpoints set directly in `.rip` files via DevTools Sources panel
+1. Pass `{ sourceMap: 'inline', filename: <component-path> }` to
+   `compile()` calls inside `app.rip`'s renderer.
+2. Apply the same wrapper-offset / `sourceURL` treatment we did in
+   `browser.js` — but `app.rip` is Rip code, so the helpers either
+   need to live somewhere both bundles can reach (e.g. a shared
+   module exposed via globalThis) or be duplicated for that path.
+3. Account for any additional wrappers `app.rip`'s renderer adds
+   around component code before eval.
 
-The `SourceMapGenerator` in `src/sourcemaps.js` (~190 LOC) already produces
-the VLQ-encoded mappings. The browser entry point `src/browser.js` compiles
-each `<script type="text/rip">` source — it just needs to pass
-`{ sourceMap: true }` and append the map to the compiled output.
+Effort estimate: ~1-2 hours. Mostly threading options + duplicating
+the three small helpers (`offsetSourceMap`, `addSourceURL`,
+`sanitizeSourceURL`) into the app-side compile path. Risk: getting
+the line-offset accounting right when the renderer wraps differently
+than `processRipScripts` does.
+
+**Not addressed (browser/V8 limitation, not a Rip implementation
+issue):** `error.stack` strings contain raw eval-position lines, not
+source-mapped ones. DevTools' UI (Sources panel, console
+stack-frame links) DOES use source maps — but the literal string
+returned by `Error.stack` is not rewritten across browsers. If you
+need programmatically-mapped stack traces, that's a separate feature
+(would need a `source-map`-style consumer wired into a
+`captureStackTrace` override).
 
 ---
 
