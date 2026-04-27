@@ -1,6 +1,6 @@
 [submodule "duckdb"]
-	path = vendor/duckdb
+	path = packages/db/duckdb
 	url = https://github.com/duckdb/duckdb.git
 [submodule "extension-ci-tools"]
-	path = vendor/extension-ci-tools
+	path = packages/db/extension-ci-tools
 	url = https://github.com/duckdb/extension-ci-tools.git

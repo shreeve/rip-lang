@@ -299,19 +299,22 @@ For JSON-shaped data, DuckDB's scalar JSON operators (`->>`, `json_extract`, `js
 The extension is built in-tree against DuckDB using the
 [`duckdb/extension-ci-tools`](https://github.com/duckdb/extension-ci-tools)
 template — the same infrastructure DuckDB itself uses for `postgres_scanner`,
-`sqlite_scanner`, etc. Submodules at the repo root pin both DuckDB and the
-CI-tools helpers:
+`sqlite_scanner`, etc. Everything lives inside `packages/db/`, matching the
+standard DuckDB extension-repo layout (submodules sit alongside the build
+config files). A 3-line forwarding Makefile at the repo root delegates
+`make ...` invocations to `packages/db/`, which keeps DuckDB's upstream
+reusable GitHub workflow (which expects `make` at root) compatible.
 
 ```
-/
-├── duckdb/                   # pinned DuckDB source (v1.5.2)
-├── extension-ci-tools/       # pinned build helpers (v1.5-variegata)
-├── Makefile                  # wraps duckdb_extension.Makefile from the submodule
-├── CMakeLists.txt            # symlinked to the extension's CMakeLists.txt
-├── extension_config.cmake    # points at packages/db/extension/
-├── vcpkg.json                # extension dependencies
-└── packages/db/extension/
-    └── CMakeLists.txt        # the actual extension CMake project
+/Makefile                              # 3-line forwarder → packages/db
+packages/db/
+├── Makefile                           # wraps duckdb_extension.Makefile
+├── extension_config.cmake             # points at extension/
+├── vcpkg.json                         # extension dependencies
+├── duckdb/                            # pinned DuckDB source (v1.5.2)
+├── extension-ci-tools/                # pinned build helpers (v1.5-variegata)
+└── extension/
+    └── CMakeLists.txt                 # the actual extension CMake project
 ```
 
 Initialize the submodules once on a fresh clone:

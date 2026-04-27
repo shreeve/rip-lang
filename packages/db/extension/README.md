@@ -248,21 +248,24 @@ users pass to `INSTALL ripdb FROM '...'`.
 
 ### Repo layout (extension-template convention)
 
-DuckDB's extension-template requires a specific top-level layout:
+DuckDB's extension-template requires a specific layout (Makefile alongside
+the duckdb/ submodule). To keep the rip-lang root clean, that layout lives
+*inside* `packages/db/`, with a 3-line forwarding Makefile at repo root
+that delegates to it:
 
 ```
-/
-├── Makefile                  # wraps extension-ci-tools's duckdb_extension.Makefile
-├── CMakeLists.txt            # (symlinked to extension's CMakeLists.txt)
-├── extension_config.cmake    # points at packages/db/extension/
-├── vcpkg.json                # extension dependencies (empty — we use raw sockets)
-├── duckdb/                   # pinned DuckDB source submodule (v1.5.2)
-├── extension-ci-tools/       # pinned build helpers submodule (v1.5-variegata)
-└── packages/db/extension/
-    ├── CMakeLists.txt        # real CMakeLists for the extension
-    ├── decoder.{h,cpp}       # the wire-format decoder (no DuckDB linkage)
-    ├── ripdb.cpp             # the extension itself: catalog, scan, attach
-    ├── ripdb_compat.hpp      # DuckDB API compat shim across DuckDB versions
+/Makefile                          # 3-line forwarder → packages/db
+packages/db/
+├── Makefile                       # wraps extension-ci-tools's duckdb_extension.Makefile
+├── extension_config.cmake         # points at sibling extension/
+├── vcpkg.json                     # extension dependencies (empty — we use raw sockets)
+├── duckdb/                        # pinned DuckDB source submodule (v1.5.2)
+├── extension-ci-tools/            # pinned build helpers submodule (v1.5-variegata)
+└── extension/
+    ├── CMakeLists.txt             # real CMakeLists for the extension
+    ├── decoder.{h,cpp}            # the wire-format decoder (no DuckDB linkage)
+    ├── ripdb.cpp                  # the extension itself: catalog, scan, attach
+    ├── ripdb_compat.hpp           # DuckDB API compat shim across DuckDB versions
     └── ...
 ```
 

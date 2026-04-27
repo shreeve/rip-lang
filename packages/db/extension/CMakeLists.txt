@@ -13,10 +13,11 @@ if(NOT MSVC)
     )
 endif()
 
-# Our own headers sit next to the sources. yyjson is bundled with duckdb.
+# Our own headers sit next to the sources. yyjson is bundled with duckdb,
+# which is a sibling submodule of this extension's parent dir.
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../../vendor/duckdb/third_party/yyjson/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../duckdb/third_party/yyjson/include
 )
 
 set(EXTENSION_SOURCES
