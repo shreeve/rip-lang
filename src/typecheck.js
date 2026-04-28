@@ -375,12 +375,60 @@ export const CONDITIONAL_CODES = new Set([2300, 2451, 2307, 2582, 2593]);
 //   dts        — the .d.ts content (for identifier checks)
 //   flatMessage — flattened diagnostic message string (only needed for 2307)
 //   filePath   — original .rip file path (only needed for 2582/2593)
-export function shouldSuppressConditional(code, start, length, tsContent, headerLines, dts, flatMessage, filePath) {
+export function shouldSuppressConditional(code, start, length, tsContent, headerLines, dts, flatMessage, filePath, relatedInformation) {
   if (code === 2300 || code === 2451) {
     // Duplicate identifier: suppress when one endpoint is in the DTS header.
     const diagLine = offsetToLine(tsContent, start);
     if (diagLine < headerLines) return true; // diagnostic is on the header declaration
-    // Body-side: check if the identifier also lives in the DTS header
+
+    // Body-side: if TS attached relatedInformation pointing at the other
+    // declaration, trust it. When the *other* endpoint is also in the body
+    // (same file), this is a real shadowing collision and must surface.
+    if (Array.isArray(relatedInformation) && relatedInformation.length) {
+      for (const r of relatedInformation) {
+        if (r.start === undefined) continue;
+        // Only consider related info in the same virtual file.
+        if (r.file && r.file.text !== tsContent) continue;
+        const rLine = offsetToLine(tsContent, r.start);
+        if (rLine >= headerLines) return false; // body ↔ body collision — real bug
+      }
+      return true; // every related endpoint sits in the DTS header → structural
+    }
+
+    // Skip the dts-heuristic for import specifiers — TS doesn't double-emit
+    // imports the way it does `def`/`class`, so a body-side 2300 on an import
+    // name is real iff the same name is imported by 2+ body import statements.
+    // (When only one body import has the name, the duplicate is the dts copy
+    // that the typecheck virtual file injects, which is structural noise.)
+    const lineStart = tsContent.lastIndexOf('\n', start - 1) + 1;
+    const lineSoFar = tsContent.substring(lineStart, start);
+    if (/^\s*import\b/.test(lineSoFar)) {
+      const ident = length ? tsContent.substring(start, start + length).trim() : '';
+      if (ident) {
+        // Walk only body lines (past the dts header) and tally imports of `ident`.
+        const bodyStart = (() => {
+          let pos = 0, line = 0;
+          while (line < headerLines && pos < tsContent.length) {
+            const nl = tsContent.indexOf('\n', pos);
+            if (nl < 0) return tsContent.length;
+            pos = nl + 1; line++;
+          }
+          return pos;
+        })();
+        const body = tsContent.slice(bodyStart);
+        const importRe = /^[ \t]*import\s+(?:[A-Za-z_$][\w$]*\s*,\s*)?\{([^}]*)\}\s+from\b/gm;
+        let im, hits = 0;
+        const wordRe = new RegExp('\\b' + ident.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b');
+        while ((im = importRe.exec(body))) {
+          if (wordRe.test(im[1])) hits++;
+          if (hits > 1) break;
+        }
+        return hits < 2; // suppress only when there's no real body↔body collision
+      }
+      return false;
+    }
+
+    // Fallback when no relatedInformation: use the dts identifier heuristic.
     const ident = length ? tsContent.substring(start, start + length).trim() : '';
     if (ident && dts) {
       const escaped = ident.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -2120,7 +2168,7 @@ export async function runCheck(targetDir, opts = {}) {
       // Conditional suppression — narrowed instead of blanket
       if (CONDITIONAL_CODES.has(d.code)) {
         const flatMsg = d.code === 2307 ? ts.flattenDiagnosticMessageText(d.messageText, '\n') : null;
-        if (shouldSuppressConditional(d.code, d.start, d.length, entry.tsContent, entry.headerLines, entry.dts, flatMsg, fp)) continue;
+        if (shouldSuppressConditional(d.code, d.start, d.length, entry.tsContent, entry.headerLines, entry.dts, flatMsg, fp, d.relatedInformation)) continue;
       }
 
       // Skip 6133 on compiler-generated _render() construction variables (_0, _1, …)

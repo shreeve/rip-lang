@@ -414,8 +414,21 @@ export function emitTypes(tokens, sexpr = null, source = '') {
     if (tag === 'IMPORT') {
       let importTokens = [];
       let j = i + 1;
-      while (j < tokens.length && tokens[j][0] !== 'TERMINATOR') {
-        importTokens.push(tokens[j]);
+      let depth = 0;
+      while (j < tokens.length) {
+        const tk = tokens[j];
+        const tg = tk[0];
+        if (tg === '{' || tg === '[' || tg === '(') depth++;
+        else if (tg === '}' || tg === ']' || tg === ')') depth--;
+        // Stop at top-level TERMINATOR; skip inner TERMINATORs and the
+        // synthetic INDENT/OUTDENT pair the lexer inserts inside multi-line
+        // braced import lists.
+        if (tg === 'TERMINATOR') {
+          if (depth <= 0) break;
+          j++; continue;
+        }
+        if (tg === 'INDENT' || tg === 'OUTDENT') { j++; continue; }
+        importTokens.push(tk);
         j++;
       }
       // Reconstruct: join with spaces, then clean up spacing

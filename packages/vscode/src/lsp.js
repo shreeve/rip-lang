@@ -506,7 +506,7 @@ function publishDiagnostics(filePath) {
         // Conditional suppression — narrowed instead of blanket
         if (tc.CONDITIONAL_CODES?.has(d.code)) {
           const flatMsg = d.code === 2307 ? ts.flattenDiagnosticMessageText(d.messageText, '\n') : null;
-          if (tc.shouldSuppressConditional(d.code, d.start, d.length, c.tsContent, c.headerLines, c.dts, flatMsg, filePath)) continue;
+          if (tc.shouldSuppressConditional(d.code, d.start, d.length, c.tsContent, c.headerLines, c.dts, flatMsg, filePath, d.relatedInformation)) continue;
         }
 
         // Skip 6133 on compiler-generated _render() construction variables (_0, _1, …)
@@ -564,6 +564,54 @@ function publishDiagnostics(filePath) {
           endPos = { line: endRaw.line, character: endRaw.col };
         } else {
           endPos = { line: startPos.line, character: startPos.character + (d.length || 1) };
+        }
+
+        // 2300/2451 (Duplicate identifier) on import lines: the compiler does
+        // not emit per-name source-map entries for import specifiers, so every
+        // duplicate imported name collapses onto the same source position and
+        // gets deduped away. Remap by finding the Nth body-import in tsContent
+        // and the matching Nth import in the source, then locating the named
+        // identifier inside that statement's `{ ... }` list.
+        if ((d.code === 2300 || d.code === 2451) && c.source && d.length) {
+          const tsLineStart = c.tsContent.lastIndexOf('\n', d.start - 1) + 1;
+          const tsLineEnd = c.tsContent.indexOf('\n', d.start);
+          const tsLine = c.tsContent.slice(tsLineStart, tsLineEnd === -1 ? undefined : tsLineEnd);
+          if (/^\s*import\b/.test(tsLine)) {
+            const ident = c.tsContent.substring(d.start, d.start + d.length);
+            // Count body-imports preceding this one (1-based index).
+            let bodyImportIdx = 0;
+            const tsLineNum = tc.offsetToLine(c.tsContent, d.start);
+            const tsLines = c.tsContent.split('\n');
+            for (let i = c.headerLines; i <= tsLineNum; i++) {
+              if (/^\s*import\b/.test(tsLines[i] || '')) bodyImportIdx++;
+            }
+            // Walk the source for the Nth import and find the identifier within
+            // the multi-line spec list.
+            const srcImportRe = /^[ \t]*import\s+(?:[A-Za-z_$][\w$]*\s*,\s*)?\{([\s\S]*?)\}\s+from\s+['"][^'"]+['"]/gm;
+            let sm, srcImportIdx = 0;
+            while ((sm = srcImportRe.exec(c.source))) {
+              srcImportIdx++;
+              if (srcImportIdx !== bodyImportIdx) continue;
+              const bracesStart = sm.index + sm[0].indexOf('{') + 1;
+              const bracesEnd = bracesStart + sm[1].length;
+              const inner = c.source.substring(bracesStart, bracesEnd);
+              const nameRe = new RegExp('\\b' + ident.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b');
+              const im = inner.match(nameRe);
+              if (im) {
+                const absOffset = bracesStart + im.index;
+                const before = c.source.slice(0, absOffset);
+                const newlineCount = (before.match(/\n/g) || []).length;
+                const lastNewline = before.lastIndexOf('\n');
+                const newLine = newlineCount;
+                const newCol = absOffset - (lastNewline + 1);
+                startPos.line = newLine;
+                startPos.character = newCol;
+                endPos.line = newLine;
+                endPos.character = newCol + ident.length;
+              }
+              break;
+            }
+          }
         }
 
         // For unused-import diagnostics (6133/6196), TS spans the entire import
@@ -2173,26 +2221,79 @@ connection.onHover((params) => {
   const fp = uriToPath(params.textDocument.uri);
   if (!fp.endsWith('.rip')) return null;
 
-  // Import path hover — show module info like TypeScript does
+  // Import path / import-name hover — handle both single-line and multi-line
+  // imports, since the Rip compiler doesn't emit per-name source map entries
+  // for import specifiers, so the default TS hover path can't find them.
   const doc = documents.get(params.textDocument.uri);
   const srcLines = doc ? doc.getText().split('\n') : null;
   if (srcLines) {
-    const srcLine = srcLines[params.position.line];
-    if (srcLine) {
-      const fromMatch = srcLine.match(/from\s+['"]([^'"]+)['"]/);
+    const fullText = doc.getText();
+    // Locate any import statement containing the cursor's line.
+    const importRe = /^[ \t]*import\s+(?:(?:[A-Za-z_$][\w$]*\s*,\s*)?\{[\s\S]*?\}|[A-Za-z_$][\w$]*)\s+from\s+(['"])([^'"]+)\1/gm;
+    let imp;
+    while ((imp = importRe.exec(fullText))) {
+      const startLine = fullText.slice(0, imp.index).split('\n').length - 1;
+      const endLine = fullText.slice(0, imp.index + imp[0].length).split('\n').length - 1;
+      if (params.position.line < startLine || params.position.line > endLine) continue;
+
+      // Cursor is inside this import. Resolve the target file once.
+      let importPath = imp[2];
+      if (!path.isAbsolute(importPath)) importPath = path.resolve(path.dirname(fp), importPath);
+      if (!importPath.endsWith('.rip') && fs.existsSync(importPath + '.rip')) importPath += '.rip';
+      // Display the specifier as written (matches TypeScript hover style),
+      // but resolve to verify the file exists before showing module info.
+      const moduleHover = fs.existsSync(importPath)
+        ? { contents: { kind: 'markdown', value: `\`\`\`typescript\nmodule "${imp[2]}"\n\`\`\`` } }
+        : null;
+
+      // If the cursor sits on the path string (always on the `from` line), show module info.
+      const srcLine = srcLines[params.position.line];
+      const fromMatch = srcLine?.match(/from\s+['"]([^'"]+)['"]/);
       if (fromMatch) {
         const pathStart = fromMatch.index + fromMatch[0].indexOf(fromMatch[1]) - 1;
         const pathEnd = pathStart + fromMatch[1].length + 2;
         const col = params.position.character;
-        if (col >= pathStart && col < pathEnd) {
-          let importPath = fromMatch[1];
-          if (!path.isAbsolute(importPath)) importPath = path.resolve(path.dirname(fp), importPath);
-          if (!importPath.endsWith('.rip') && fs.existsSync(importPath + '.rip')) importPath += '.rip';
-          if (fs.existsSync(importPath)) {
-            return { contents: { kind: 'markdown', value: `\`\`\`typescript\nmodule "${importPath}"\n\`\`\`` } };
+        if (col >= pathStart && col < pathEnd) return moduleHover;
+      }
+
+      // Otherwise see if the cursor is on an imported identifier and ask the
+      // TS service for the equivalent quick info from the collapsed import line.
+      const word = getWordAtPosition(fullText, params.position);
+      if (word && word !== 'import' && word !== 'from' && word !== 'as' && service) {
+        const c = compiled.get(fp);
+        if (c?.tsContent) {
+          const tsLines = c.tsContent.split('\n');
+          // Find the collapsed `import ... from '<path>'` line in tsContent
+          // matching this import's source path (the post-compile path may have
+          // a `.js`/`.rip.js` extension appended; match by basename).
+          const baseSpec = imp[2].replace(/\.[^./]+$/, '');
+          const escBase = baseSpec.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const lineRe = new RegExp(`^\\s*import\\b[^\\n]*from\\s+['"]${escBase}(?:\\.(?:rip|js|ts|mjs|cjs))?['"]`);
+          for (let li = 0; li < tsLines.length; li++) {
+            if (!lineRe.test(tsLines[li])) continue;
+            const wordRe = new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
+            const m = tsLines[li].match(wordRe);
+            if (!m) break;
+            const lineOffset = tsLines.slice(0, li).join('\n').length + (li > 0 ? 1 : 0);
+            const offset = lineOffset + m.index;
+            try {
+              patchTypes();
+              const info = service.getQuickInfoAtPosition(toVirtual(fp), offset);
+              if (info) {
+                let display = ts.displayPartsToString(info.displayParts);
+                display = unwrapReactiveType(display);
+                display = display.replace(/\b__bind_(\w+)__\b/g, '$1');
+                const docs = ts.displayPartsToString(info.documentation || []);
+                let value = '```typescript\n' + display + '\n```';
+                if (docs) value += '\n\n' + docs;
+                return { contents: { kind: 'markdown', value } };
+              }
+            } catch {}
+            break;
           }
         }
       }
+      break;
     }
   }
 
@@ -2276,22 +2377,59 @@ connection.onDefinition((params) => {
       }];
     }
 
-    // Import go-to-definition — resolve import paths directly
-    const srcLine = doc.getText().split('\n')[params.position.line];
-    const fromMatch = srcLine?.match(/from\s+['"]([^'"]+)['"]/);
+    // Import go-to-definition — resolve import paths directly. Handles both
+    // single-line `import { x } from '...'` and multi-line forms where the
+    // cursor is on a name inside a `{ ... }` list spanning several lines.
+    const fullText = doc.getText();
+    const srcLines = fullText.split('\n');
+    const srcLine = srcLines[params.position.line];
+
+    // First try the same-line `from '...'` match (covers single-line imports
+    // and the `from` line itself in a multi-line import).
+    let fromMatch = srcLine?.match(/from\s+['"]([^'"]+)['"]/);
+    let fromLine = params.position.line;
+
+    // If not on the `from` line, locate the enclosing multi-line import by
+    // walking the file's `import` statements and seeing which one the cursor
+    // falls inside.
+    if (!fromMatch) {
+      const importRe = /^[ \t]*import\s+(?:(?:[A-Za-z_$][\w$]*\s*,\s*)?\{[\s\S]*?\}|[A-Za-z_$][\w$]*)\s+from\s+['"]([^'"]+)['"]/gm;
+      let m;
+      while ((m = importRe.exec(fullText))) {
+        const startOffset = m.index;
+        const endOffset = m.index + m[0].length;
+        const startLine = fullText.slice(0, startOffset).split('\n').length - 1;
+        const endLine = fullText.slice(0, endOffset).split('\n').length - 1;
+        if (params.position.line >= startLine && params.position.line <= endLine) {
+          // Synthesize a fromMatch with index pointing into the `from` line.
+          const fromIdx = m[0].lastIndexOf('from ');
+          const absFromOffset = startOffset + fromIdx;
+          fromLine = fullText.slice(0, absFromOffset).split('\n').length - 1;
+          const lineStart = fullText.lastIndexOf('\n', absFromOffset - 1) + 1;
+          const localFromIdx = absFromOffset - lineStart;
+          fromMatch = m[0].slice(fromIdx).match(/from\s+['"]([^'"]+)['"]/);
+          if (fromMatch) fromMatch.index = localFromIdx;
+          break;
+        }
+      }
+    }
+
     if (fromMatch) {
       let importPath = fromMatch[1];
       if (!path.isAbsolute(importPath)) importPath = path.resolve(path.dirname(fp), importPath);
       if (!importPath.endsWith('.rip') && fs.existsSync(importPath + '.rip')) importPath += '.rip';
       if (fs.existsSync(importPath)) {
-        // Check if cursor is on the module path string (quote to quote)
-        const pathStart = fromMatch.index + fromMatch[0].indexOf(fromMatch[1]) - 1;
-        const pathEnd = pathStart + fromMatch[1].length + 2;
+        // Check if cursor is on the module path string (quote to quote) — only
+        // meaningful when the cursor is actually on the `from` line.
+        const onFromLine = params.position.line === fromLine;
+        const pathStart = onFromLine ? fromMatch.index + fromMatch[0].indexOf(fromMatch[1]) - 1 : -1;
+        const pathEnd = onFromLine ? pathStart + fromMatch[1].length + 2 : -1;
         const col = params.position.character;
-        const line = params.position.line;
-        const originRange = { start: { line, character: pathStart }, end: { line, character: pathEnd } };
+        const originRange = onFromLine
+          ? { start: { line: fromLine, character: pathStart }, end: { line: fromLine, character: pathEnd } }
+          : null;
         const target = { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } };
-        if (col >= pathStart && col < pathEnd) {
+        if (onFromLine && col >= pathStart && col < pathEnd) {
           return [{ targetUri: pathToUri(importPath), targetRange: target, targetSelectionRange: target, originSelectionRange: originRange }];
         }
         if (word && word !== 'from' && word !== 'import') {
