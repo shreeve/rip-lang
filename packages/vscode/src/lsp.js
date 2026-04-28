@@ -126,10 +126,13 @@ connection.onInitialize(async (params) => {
   return {
     capabilities: {
       textDocumentSync: TextDocumentSyncKind.Full,
-      completionProvider: { triggerCharacters: ['.', '"', "'", '/', ':', ' ', '@'] },
+      completionProvider: {
+        triggerCharacters: ['.', '"', "'", '/', ':', ' ', '@'],
+      },
       hoverProvider: true,
       definitionProvider: true,
       signatureHelpProvider: { triggerCharacters: ['(', ','] },
+      codeActionProvider: { codeActionKinds: ['quickfix'] },
       semanticTokensProvider: {
         legend: { tokenTypes: SEMANTIC_TOKEN_TYPES, tokenModifiers: SEMANTIC_TOKEN_MODIFIERS },
         full: true,
@@ -143,16 +146,221 @@ connection.onInitialized(async () => {
     watchers: [
       { globPattern: '**/rip.json' },
       { globPattern: '**/package.json' },
+      { globPattern: '**/*.rip' },
     ],
   });
   connection.console.log('[rip] ready');
+  if (compiler && tc) indexWorkspaceRipFiles();
 });
 
-connection.onDidChangeWatchedFiles(() => {
-  configCache.clear();
-  for (const fp of compiled.keys()) publishDiagnostics(fp);
+connection.onDidChangeWatchedFiles((params) => {
+  let cfgChanged = false;
+  for (const change of (params.changes || [])) {
+    const fp = uriToPath(change.uri);
+    if (fp.endsWith('.rip')) {
+      if (change.type === 3 /* Deleted */) {
+        compiled.delete(fp);
+        discoveredRipFiles.delete(fp);
+        removeFromIndex(fp);
+        connection.sendDiagnostics({ uri: change.uri, diagnostics: [] });
+      } else if (change.type === 1 /* Created */) {
+        discoveredRipFiles.add(fp);
+        if (exportIndexBuilt) updateExportIndexFor(fp);
+      } else if (compiled.has(fp) && compiler && tc) {
+        // Only recompile files we already have in `compiled` (i.e. open or
+        // previously imported). Untouched discovered files stay lazy.
+        try { compileRip(fp, fs.readFileSync(fp, 'utf8')); } catch {}
+        if (exportIndexBuilt) updateExportIndexFor(fp);
+      } else if (exportIndexBuilt && discoveredRipFiles.has(fp)) {
+        updateExportIndexFor(fp);
+      }
+    } else {
+      cfgChanged = true;
+    }
+  }
+  if (cfgChanged) {
+    configCache.clear();
+    rebuildProjectInfo();
+    for (const fp of compiled.keys()) publishDiagnostics(fp);
+  }
 });
 
+// Rebuild project-root + workspace-package info by re-walking the workspace.
+// Only inspects directory entries (no .rip indexing), so it's cheap.
+function rebuildProjectInfo() {
+  projectRoots.clear();
+  projectRootCache.clear();
+  bareSpecForEntry.clear();
+  (function walk(dir) {
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const ent of entries) {
+      if (ent.isFile() && (ent.name === 'package.json' || ent.name === 'rip.json')) {
+        if (ent.name === 'package.json') loadPackageJson(dir);
+        else projectRoots.add(dir);
+      }
+    }
+    for (const ent of entries) {
+      if (INDEX_SKIP_DIRS.has(ent.name)) continue;
+      if (ent.isDirectory()) walk(path.join(dir, ent.name));
+    }
+  })(rootPath);
+}
+
+// Workspace .rip files discovered by a fast directory walk. Stored as paths
+// only — they are NOT added to the TypeScript Program (doing so would force
+// TS to compile each one when building diagnostics, which dominates startup).
+// Instead we maintain our own lightweight export index used to produce
+// auto-import suggestions, mirroring how TS's AutoImportProviderProject works
+// for .ts files.
+const discoveredRipFiles = new Set();
+
+// Map<exportedName, Set<absoluteFilePath>> — built lazily on first request and
+// kept fresh by onDidChangeWatchedFiles. Built by regex-scanning .rip sources
+// (no compilation), so 1000s of files take <100ms.
+const exportIndex = new Map();
+const exportIndexByFile = new Map(); // Map<fp, Set<name>> for incremental updates
+let exportIndexBuilt = false;
+
+// Project-scoping data — populated alongside discovery. A project root is any
+// directory containing a `package.json` or `rip.json`. Files in different
+// projects may not auto-import each other via relative paths.
+const projectRoots = new Set();          // Set<dir>
+const projectRootCache = new Map();      // Map<dir, projectRoot|null>
+// Files that are the entry point of a workspace package, mapped to the bare
+// specifier callers should use (e.g. '@rip-lang/server', '@rip-lang/server/middleware').
+const bareSpecForEntry = new Map();      // Map<fp, bareSpec>
+
+function findProjectRoot(fp) {
+  const dir = path.dirname(fp);
+  if (projectRootCache.has(dir)) return projectRootCache.get(dir);
+  let cur = dir;
+  while (cur && cur.length >= rootPath.length) {
+    if (projectRoots.has(cur)) {
+      projectRootCache.set(dir, cur);
+      return cur;
+    }
+    const parent = path.dirname(cur);
+    if (parent === cur) break;
+    cur = parent;
+  }
+  projectRootCache.set(dir, null);
+  return null;
+}
+
+// Read a package.json and register its entry points (from `exports` or `main`)
+// as bare-specifier targets. Subpath exports become `name + subpath.slice(1)`,
+// e.g. exports['./middleware'] of '@rip-lang/server' -> '@rip-lang/server/middleware'.
+function loadPackageJson(dir) {
+  projectRoots.add(dir);
+  let pkg;
+  try { pkg = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')); } catch { return; }
+  if (!pkg.name) return;
+  const addEntry = (sub, target) => {
+    if (typeof target !== 'string') {
+      // Conditional exports object — prefer default/import/require.
+      target = target?.default || target?.import || target?.require;
+    }
+    if (typeof target !== 'string' || !target.endsWith('.rip')) return;
+    const full = path.resolve(dir, target);
+    const spec = sub === '.' ? pkg.name : pkg.name + sub.slice(1);
+    bareSpecForEntry.set(full, spec);
+  };
+  if (pkg.exports && typeof pkg.exports === 'object') {
+    for (const [sub, target] of Object.entries(pkg.exports)) addEntry(sub, target);
+  } else if (typeof pkg.exports === 'string') {
+    addEntry('.', pkg.exports);
+  } else if (typeof pkg.main === 'string') {
+    addEntry('.', pkg.main);
+  }
+}
+
+function scanExports(source) {
+  const names = new Set();
+  const lines = source.split('\n');
+  for (const raw of lines) {
+    const line = raw.replace(/#.*$/, '');
+    let m;
+    if ((m = /^\s*export\s+def\s+([A-Za-z_$][\w$]*)!?/.exec(line))) names.add(m[1]);
+    else if ((m = /^\s*export\s+class\s+([A-Za-z_$][\w$]*)/.exec(line))) names.add(m[1]);
+    else if ((m = /^\s*export\s+(?:async\s+)?(?:function|const|let|var)\s+([A-Za-z_$][\w$]*)/.exec(line))) names.add(m[1]);
+    else if ((m = /^\s*export\s+([A-Za-z_$][\w$]*)\s*(?:<[^=]*>)?\s*=/.exec(line))) names.add(m[1]);
+    else if ((m = /^\s*export\s*\{([^}]+)\}/.exec(line))) {
+      for (const part of m[1].split(',')) {
+        const id = part.trim().split(/\s+as\s+/i).pop();
+        if (id && /^[A-Za-z_$][\w$]*$/.test(id)) names.add(id);
+      }
+    }
+  }
+  return names;
+}
+
+function removeFromIndex(fp) {
+  const old = exportIndexByFile.get(fp);
+  if (!old) return;
+  for (const name of old) {
+    const set = exportIndex.get(name);
+    if (!set) continue;
+    set.delete(fp);
+    if (!set.size) exportIndex.delete(name);
+  }
+  exportIndexByFile.delete(fp);
+}
+
+function addToIndex(fp, names) {
+  exportIndexByFile.set(fp, names);
+  for (const name of names) {
+    let set = exportIndex.get(name);
+    if (!set) { set = new Set(); exportIndex.set(name, set); }
+    set.add(fp);
+  }
+}
+
+function updateExportIndexFor(fp) {
+  removeFromIndex(fp);
+  let source;
+  try { source = fs.readFileSync(fp, 'utf8'); } catch { return; }
+  addToIndex(fp, scanExports(source));
+}
+
+function ensureExportIndex() {
+  if (exportIndexBuilt) return;
+  exportIndexBuilt = true;
+  const start = Date.now();
+  for (const fp of discoveredRipFiles) updateExportIndexFor(fp);
+  connection.console.log(`[rip] export index built: ${exportIndex.size} symbol(s) across ${discoveredRipFiles.size} file(s) in ${Date.now() - start}ms`);
+}
+const INDEX_SKIP_DIRS = new Set([
+  'node_modules', '.git', 'dist', 'build', '.cache', '.next', 'out',
+  'coverage', '.turbo', '.parcel-cache', '.bun', 'tmp', 'temp',
+]);
+function indexWorkspaceRipFiles() {
+  const start = Date.now();
+  let count = 0;
+  (function walk(dir) {
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const ent of entries) {
+      if (ent.isFile() && (ent.name === 'package.json' || ent.name === 'rip.json')) {
+        if (ent.name === 'package.json') loadPackageJson(dir);
+        else projectRoots.add(dir);
+      }
+    }
+    for (const ent of entries) {
+      if (INDEX_SKIP_DIRS.has(ent.name)) continue;
+      const full = path.join(dir, ent.name);
+      if (ent.isDirectory()) walk(full);
+      else if (ent.isFile() && ent.name.endsWith('.rip')) {
+        discoveredRipFiles.add(full);
+        count++;
+      }
+    }
+  })(rootPath);
+  connection.console.log(`[rip] discovered ${count} .rip file(s), ${projectRoots.size} project(s), ${bareSpecForEntry.size} package entrypoint(s) in ${Date.now() - start}ms`);
+}
+
+// Lazily compile a .rip file for the TS Program without publishing diagnostics
+// (used when TS asks for a snapshot of a file the user isn't editing).
 connection.onDidChangeConfiguration(async () => {
   for (const fp of compiled.keys()) publishDiagnostics(fp);
 });
@@ -1513,6 +1721,7 @@ connection.onRequest('textDocument/semanticTokens/full', (params) => {
 connection.onCompletion((params) => {
   const fp = uriToPath(params.textDocument.uri);
   if (!fp.endsWith('.rip')) return [];
+  ensureExportIndex();
 
   // Component prop completions
   const doc = documents.get(params.textDocument.uri);
@@ -1746,7 +1955,7 @@ connection.onCompletion((params) => {
     const r = service.getCompletionsAtPosition(toVirtual(fp), offset, { includeExternalModuleExports: true, includeInsertTextCompletions: true });
     if (!r) return [];
     const vf = toVirtual(fp);
-    return {
+    const result = {
       isIncomplete: false,
       items: r.entries.map((e) => {
         const item = {
@@ -1768,8 +1977,152 @@ connection.onCompletion((params) => {
         return item;
       }),
     };
+
+    // Augment with auto-import suggestions from our export index for any
+    // exported symbol not already imported. TS will surface symbols from any
+    // file in its Program (transitive imports), but it doesn't attach import
+    // edits — we add those here. For symbols TS doesn't know about at all
+    // (workspace .rip files outside the Program), we add a fresh item.
+    const c = compiled.get(fp);
+    if (c) {
+      const existingImports = collectImportedNames(c.source);
+      const itemsByLabel = new Map();
+      for (const it of result.items) itemsByLabel.set(it.label.replace(/\?$/, ''), it);
+      for (const [name, sources] of exportIndex) {
+        if (existingImports.has(name)) continue;
+        for (const targetFp of sources) {
+          if (targetFp === fp) continue;
+          const spec = resolveSpecForTarget(fp, targetFp);
+          if (!spec) continue;
+          const edit = buildImportEdit(c.source, spec, name);
+          if (!edit) continue;
+          const verb = edit.update ? 'Update' : 'Add';
+          delete edit.update;
+          const existing = itemsByLabel.get(name);
+          if (existing) {
+            // TS already suggested this symbol — attach the import edit.
+            existing.labelDetails = { description: spec };
+            existing.detail = `${verb} import from "${spec}"\n${existing.detail || ''}`.trim();
+            existing.additionalTextEdits = [edit];
+          } else {
+            // Workspace symbol TS doesn't know about — add a new item.
+            result.items.push({
+              label: name,
+              kind: 9 /* Module */,
+              sortText: 'z' + name,
+              labelDetails: { description: spec },
+              detail: `${verb} import from "${spec}"`,
+              additionalTextEdits: [edit],
+            });
+          }
+          break; // first match wins
+        }
+      }
+    }
+
+    return result;
   } catch (e) { connection.console.log(`[rip] completion error: ${e.message}`); return []; }
 });
+
+// Collect names of identifiers already imported in `source` so we don't suggest
+// importing them again. Handles `import { a, b }`, `import x`, `import x, { y }`.
+function collectImportedNames(source) {
+  const names = new Set();
+  const re = /^\s*import\s+(?:(?:([A-Za-z_$][\w$]*)\s*,\s*)?\{([^}]*)\}|([A-Za-z_$][\w$]*))\s+from\s+['"][^'"]+['"]/gm;
+  let m;
+  while ((m = re.exec(source))) {
+    if (m[1]) names.add(m[1]);
+    if (m[3]) names.add(m[3]);
+    if (m[2]) {
+      for (const part of m[2].split(',')) {
+        const id = part.trim().split(/\s+as\s+/i).pop();
+        if (id) names.add(id);
+      }
+    }
+  }
+  return names;
+}
+
+// Compute the relative module specifier from `fromFp` to `toFp`, preserving
+// the `.rip` extension and prefixing `./` when needed.
+function relativeRipSpecifier(fromFp, toFp) {
+  let spec = path.relative(path.dirname(fromFp), toFp);
+  if (!spec.startsWith('.') && !path.isAbsolute(spec)) spec = './' + spec;
+  return spec.split(path.sep).join('/');
+}
+
+// Decide what specifier to use when importing `targetFp` from `fromFp`, or
+// null if the target shouldn't be suggested.
+//   - same project root  -> relative `.rip` path
+//   - cross-project, but `targetFp` is a workspace package entry -> bare spec
+//   - otherwise -> null (skip; would be a cross-project relative path)
+function resolveSpecForTarget(fromFp, targetFp) {
+  const fromRoot = findProjectRoot(fromFp);
+  const toRoot = findProjectRoot(targetFp);
+  if (fromRoot && toRoot && fromRoot === toRoot) return relativeRipSpecifier(fromFp, targetFp);
+  return bareSpecForEntry.get(targetFp) || null;
+}
+
+// Build an LSP TextEdit that adds `name` to an import from `spec` in `source`.
+// If an import line already exists for that specifier, augment its braces;
+// otherwise insert a fresh `import { name } from 'spec'` line at the top
+// (after any leading shebang/comment block).
+function buildImportEdit(source, spec, name) {
+  const lines = source.split('\n');
+  const re = /^(\s*)import\s+(\{([^}]*)\}|([A-Za-z_$][\w$]*))\s+from\s+(['"])([^'"]+)\5\s*$/;
+  for (let i = 0; i < lines.length; i++) {
+    const m = re.exec(lines[i]);
+    if (!m || m[6] !== spec) continue;
+    const indent = m[1], quote = m[5];
+    if (m[3] !== undefined) {
+      // Named import — add to braces if not present.
+      const existing = m[3].split(',').map(s => s.trim()).filter(Boolean);
+      if (existing.includes(name)) return null; // already imported
+      existing.push(name);
+      const newLine = `${indent}import { ${existing.join(', ')} } from ${quote}${spec}${quote}`;
+      return {
+        range: { start: { line: i, character: 0 }, end: { line: i, character: lines[i].length } },
+        newText: newLine,
+        update: true,
+      };
+    } else {
+      // Default import — convert to `default, { name }`.
+      const def = m[4];
+      if (def === name) return null;
+      const newLine = `${indent}import ${def}, { ${name} } from ${quote}${spec}${quote}`;
+      return {
+        range: { start: { line: i, character: 0 }, end: { line: i, character: lines[i].length } },
+        newText: newLine,
+        update: true,
+      };
+    }
+  }
+  // No matching import line — insert a new one at an appropriate location.
+  // Mirror TypeScript: after the shebang and the leading file-header comment
+  // block (the first contiguous run of `#` lines starting at line 0), and
+  // after any existing imports. Don't skip comments that appear deeper in
+  // the file — those belong to the code below them.
+  let insertAt = 0;
+  let i = 0;
+  if (lines[0]?.startsWith('#!')) { insertAt = 1; i = 1; }
+  while (i < lines.length && /^\s*#/.test(lines[i])) { insertAt = i + 1; i++; }
+  while (i < lines.length) {
+    const l = lines[i];
+    if (/^\s*$/.test(l)) { i++; continue; }
+    if (/^\s*import\b/.test(l)) { insertAt = i + 1; i++; continue; }
+    break;
+  }
+  // Ensure a blank line separates the import block from following code.
+  const needsBlankAfter = lines[insertAt] !== undefined && !/^\s*(import\b|$)/.test(lines[insertAt]);
+  // Ensure a blank line separates a fresh import from a preceding header
+  // comment or shebang (TS does the same).
+  const prev = insertAt > 0 ? lines[insertAt - 1] : '';
+  const needsBlankBefore = insertAt > 0 && !/^\s*(import\b|$)/.test(prev);
+  return {
+    range: { start: { line: insertAt, character: 0 }, end: { line: insertAt, character: 0 } },
+    newText: `${needsBlankBefore ? '\n' : ''}import { ${name} } from '${spec}'\n${needsBlankAfter ? '\n' : ''}`,
+  };
+}
 
 connection.onHover((params) => {
   const fp = uriToPath(params.textDocument.uri);
@@ -1947,6 +2300,51 @@ connection.onDefinition((params) => {
       return { uri: pathToUri(realPath), range: { start: pos, end: pos } };
     });
   } catch (e) { connection.console.log(`[rip] definition error: ${e.message}`); return null; }
+});
+
+// codeAction — auto-import quick fix for "Cannot find name" diagnostics
+// (TS2304, TS2552, TS2503). Uses our own export index instead of TS's
+// code-fix machinery so it does not require workspace .rip files to be in
+// the TS Program (which would massively slow down startup).
+const AUTO_IMPORT_CODES = new Set([2304, 2552, 2503]);
+connection.onCodeAction((params) => {
+  const fp = uriToPath(params.textDocument.uri);
+  if (!fp.endsWith('.rip')) return [];
+  const c = compiled.get(fp);
+  if (!c) return [];
+
+  const diags = (params.context?.diagnostics || []).filter((d) => {
+    const code = typeof d.code === 'string' ? Number(d.code) : d.code;
+    return AUTO_IMPORT_CODES.has(code);
+  });
+  if (!diags.length) return [];
+  ensureExportIndex();
+
+  const srcLines = c.source.split('\n');
+  const actions = [];
+  for (const diag of diags) {
+    const line = srcLines[diag.range.start.line] || '';
+    const name = line.slice(diag.range.start.character, diag.range.end.character).trim();
+    if (!name || !/^[A-Za-z_$][\w$]*$/.test(name)) continue;
+    const sources = exportIndex.get(name);
+    if (!sources) continue;
+    for (const targetFp of sources) {
+      if (targetFp === fp) continue;
+      const spec = resolveSpecForTarget(fp, targetFp);
+      if (!spec) continue;
+      const edit = buildImportEdit(c.source, spec, name);
+      if (!edit) continue;
+      const verb = edit.update ? 'Update' : 'Add';
+      delete edit.update;
+      actions.push({
+        title: `${verb} import { ${name} } from "${spec}"`,
+        kind: 'quickfix',
+        diagnostics: [diag],
+        edit: { changes: { [pathToUri(fp)]: [edit] } },
+      });
+    }
+  }
+  return actions;
 });
 
 connection.onSignatureHelp((params) => {
