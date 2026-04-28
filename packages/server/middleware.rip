@@ -35,7 +35,7 @@
 
 import { get, setCorsPreflightPolicy } from '@rip-lang/server'
 import { fileURLToPath } from 'node:url'
-import { dirname, resolve } from 'node:path'
+import { dirname, resolve, relative } from 'node:path'
 import { existsSync, realpathSync } from 'node:fs'
 
 export cors = (opts = {}) ->
@@ -714,9 +714,11 @@ pre{margin:0;white-space:pre-wrap;word-break:break-word}
 # Options:
 #   dir:        string          — app directory on disk (default: '.')
 #   routes:     string          — page components directory, relative to dir (default: 'routes')
-#   bundle:     string[]|object — directories for bundle endpoint(s) (default: ['components'])
-#                                 Array: single bundle at {prefix}/bundle
-#                                 Object: named bundles — { ui: [...], app: [...] } → {prefix}/ui, {prefix}/app
+#   bundle:     string[]|object — bundle config (default: auto-scan whole appDir as 'app')
+#                                 Omitted: single 'app' bundle scans appDir recursively
+#                                 Array:   single 'app' bundle scans the listed dirs
+#                                 Object:  named bundles — { ui: [...], app: [...] } → {prefix}/ui, {prefix}/app
+#                                          If 'app' key is missing, an auto-scanned 'app' bundle is added
 #   app:        string          — URL mount point (default: '')
 #   title:      string          — document title
 #   state:      object          — initial app state passed via bundle
@@ -726,14 +728,18 @@ pre{margin:0;white-space:pre-wrap;word-break:break-word}
 export serve = (opts = {}) ->
   prefix        = opts.app or ''
   appDir        = opts.dir or '.'
-  routesDir     = "#{appDir}/#{opts.routes or 'routes'}"
-  rawBundle     = opts.bundle or opts.components or ['components']
+  routesName    = opts.routes or 'routes'
+  routesDir     = "#{appDir}/#{routesName}"
+  rawBundle     = opts.bundle or opts.components
   bundles       = new Map()
   if Array.isArray(rawBundle)
-    bundles.set 'bundle', rawBundle.map (d) -> "#{appDir}/#{d}"
-  else if typeof rawBundle is 'object'
+    bundles.set 'app', rawBundle.map (d) -> "#{appDir}/#{d}"
+  else if rawBundle and typeof rawBundle is 'object'
     for name, dirs of rawBundle
       bundles.set name, dirs.map (d) -> "#{appDir}/#{d}"
+    bundles.set 'app', [appDir] unless bundles.has('app')
+  else
+    bundles.set 'app', [appDir]
   enableWatch   = if opts.watch? then opts.watch else process.env.SOCKET_PREFIX?
   appState      = opts.state or null
   appTitle      = opts.title or null
@@ -785,9 +791,15 @@ export serve = (opts = {}) ->
       for path in Array.from(glob.scanSync(routesDir)).sort()
         components["components/#{path}"] = Bun.file("#{routesDir}/#{path}").text!
     for dir in dirs
+      rel = relative(appDir, dir)
+      isExternal = rel.startsWith('..')
+      isAppDir   = rel is '' or rel is '.'
+      keyPrefix  = if isExternal then name else if isAppDir then '' else rel
       for path in Array.from(glob.scanSync(dir)).sort()
         continue if path is 'index.rip' or path.endsWith('/index.rip')
-        key = "components/_lib/#{path}"
+        # In auto-scan mode, skip the routes/ subtree (already keyed by routes branch above)
+        continue if isAppDir and (path is routesName or path.startsWith("#{routesName}/"))
+        key = if keyPrefix then "components/_lib/#{keyPrefix}/#{path}" else "components/_lib/#{path}"
         components[key] = Bun.file("#{dir}/#{path}").text! unless components[key]
     bundle = { components }
     if includeRoutes

@@ -12688,7 +12688,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
 
   // src/browser.js
   var VERSION = "3.15.4";
-  var BUILD_DATE = "2026-04-27@10:09:13GMT";
+  var BUILD_DATE = "2026-04-28@01:07:15GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -12760,11 +12760,13 @@ ${tagged}
     const sources = [];
     const runtimeTag = document.querySelector('script[src$="rip.min.js"], script[src$="rip.js"]');
     const dataSrc = runtimeTag?.getAttribute("data-src");
-    if (dataSrc) {
+    if (dataSrc !== null && dataSrc !== undefined) {
       for (const url of dataSrc.trim().split(/\s+/)) {
         if (url)
           sources.push({ url });
       }
+    } else if (runtimeTag) {
+      sources.push({ url: "/app" });
     }
     for (const script of document.querySelectorAll('script[type="text/rip"]')) {
       if (script.src) {
@@ -13997,9 +13999,8 @@ ${indented}`);
     return map;
   };
   resolveStorePath = function(specifier, currentPath, components) {
-    let basename, candidate, clean, p, parts, seg;
+    let candidate, clean, parts, seg;
     clean = specifier.replace(/^(\.\.\/|\.\/)+/, "");
-    basename = clean.split("/").pop();
     if (currentPath) {
       parts = currentPath.split("/");
       parts.pop();
@@ -14020,10 +14021,6 @@ ${indented}`);
       return `components/_lib/${clean}`;
     if (components.exists(`components/${clean}`))
       return `components/${clean}`;
-    for (let p2 of components.listAll("components")) {
-      if (p2.endsWith(`/${basename}`))
-        return p2;
-    }
     return null;
   };
   compileAndImport = async function(source, compile2, components = null, path = null, resolver = null) {

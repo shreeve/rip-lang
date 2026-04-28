@@ -126,12 +126,15 @@ async function processRipScripts() {
   const sources = [];
 
   // Step 1: Collect data-src URLs from the runtime script tag
+  // When data-src is omitted, default to '/app' (auto-scanned bundle from serve middleware).
   const runtimeTag = document.querySelector('script[src$="rip.min.js"], script[src$="rip.js"]');
   const dataSrc = runtimeTag?.getAttribute('data-src');
-  if (dataSrc) {
+  if (dataSrc !== null && dataSrc !== undefined) {
     for (const url of dataSrc.trim().split(/\s+/)) {
       if (url) sources.push({ url });
     }
+  } else if (runtimeTag) {
+    sources.push({ url: '/app' });
   }
 
   // Step 2: Collect all <script type="text/rip"> tags (inline and external)

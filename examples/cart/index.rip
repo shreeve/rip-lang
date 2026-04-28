@@ -5,8 +5,6 @@ import './api/index.rip'
 dir = import.meta.dir
 use serve
   dir: "#{dir}/app"
-  bundle:
-    app: []
   watch: true
   state:
     cart: { items: [] }

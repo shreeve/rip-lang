@@ -730,7 +730,6 @@ buildComponentMap = (components, root = 'components') ->
 # Resolve a .rip import specifier to a path in the component store
 resolveStorePath = (specifier, currentPath, components) ->
   clean = specifier.replace(/^(\.\.\/|\.\/)+/, '')
-  basename = clean.split('/').pop()
   # Direct resolution relative to current file in the store
   if currentPath
     parts = currentPath.split('/')
@@ -745,9 +744,6 @@ resolveStorePath = (specifier, currentPath, components) ->
   # Try common store prefixes
   return "components/_lib/#{clean}" if components.exists("components/_lib/#{clean}")
   return "components/#{clean}" if components.exists("components/#{clean}")
-  # Basename search as last resort
-  for p in components.listAll('components')
-    return p if p.endsWith("/#{basename}")
   null
 
 compileAndImport = (source, compile, components = null, path = null, resolver = null) ->
