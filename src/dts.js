@@ -1,9 +1,12 @@
-import { SCHEMA_INTRINSIC_DECLS, emitSchemaTypes } from "./schema/dts-emit.js";
+import { SCHEMA_INTRINSIC_DECLS, emitSchemaTypes } from "./schema/dts.js";
 import { setTypesEmitter } from "./compiler.js";
 
 // Type System — .d.ts emission for Rip (CLI / typecheck only).
 //
-// This module is a CLI/editor-only sidecar:
+// This module is the type system's sibling to src/schema/dts.js —
+// both are CLI/editor-only `.d.ts` emitters for their respective
+// subsystem. The `dts` name signals "compile-time .d.ts emitter,
+// never reachable from the browser bundle."
 //
 //   emitTypes(tokens, sexpr, source) — generates .d.ts from annotated
 //     tokens and the parsed s-expression tree.
@@ -1014,7 +1017,7 @@ function emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars, so
 // Registration — install emitTypes into the compiler at module load.
 // ============================================================================
 // The compiler exposes setTypesEmitter() as a no-op-friendly hook. When
-// nothing imports types-emit.js (browser bundle), the emitter stays null
+// nothing imports dts.js (browser bundle), the emitter stays null
 // and compile()s .d.ts output is silently skipped. CLI entry points and
 // typecheck.js import this module specifically to install the emitter.
 

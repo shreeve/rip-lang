@@ -43,6 +43,10 @@
         "highlight.js": "^11.11.1",
       },
     },
+    "packages/rsx": {
+      "name": "@rip-lang/rsx",
+      "version": "0.1.0",
+    },
     "packages/script": {
       "name": "@rip-lang/script",
       "version": "0.1.18",
@@ -172,6 +176,8 @@
     "@rip-lang/http": ["@rip-lang/http@workspace:packages/http"],
 
     "@rip-lang/print": ["@rip-lang/print@workspace:packages/print"],
+
+    "@rip-lang/rsx": ["@rip-lang/rsx@workspace:packages/rsx"],
 
     "@rip-lang/script": ["@rip-lang/script@workspace:packages/script"],
 

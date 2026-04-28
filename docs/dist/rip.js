@@ -8322,6 +8322,261 @@ if (typeof globalThis !== 'undefined') {
     }
     return values;
   }
+  var MERGE_SEPARATOR = `
+;
+`;
+  var MERGE_SEPARATOR_LINES = 2;
+  function extractInlineMap(js) {
+    const re = /\n?\/\/# sourceMappingURL=data:application\/json(?:;charset=[^;,]+)?;base64,([A-Za-z0-9+/=]+)\s*$/;
+    const m = js.match(re);
+    if (!m)
+      return { js, mapJSON: null };
+    let mapJSON;
+    try {
+      const bin = atob(m[1]);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0;i < bin.length; i++)
+        bytes[i] = bin.charCodeAt(i);
+      mapJSON = new TextDecoder().decode(bytes);
+    } catch {
+      return { js: js.slice(0, m.index), mapJSON: null };
+    }
+    return { js: js.slice(0, m.index), mapJSON };
+  }
+  function countNewlines(str) {
+    let n = 0;
+    for (let i = 0;i < str.length; i++)
+      if (str.charCodeAt(i) === 10)
+        n++;
+    return n;
+  }
+  function decodeMappings(mappingsStr) {
+    const lines = mappingsStr.split(";");
+    const result = [];
+    let src = 0, origLine = 0, origCol = 0, nameIdx = 0;
+    for (const line of lines) {
+      const segs = [];
+      let genCol = 0;
+      if (line.length > 0) {
+        for (const segStr of line.split(",")) {
+          if (segStr.length === 0)
+            continue;
+          const fields = vlqDecode(segStr);
+          genCol += fields[0];
+          if (fields.length === 1) {
+            segs.push({ genCol });
+          } else {
+            src += fields[1];
+            origLine += fields[2];
+            origCol += fields[3];
+            const seg = { genCol, src, origLine, origCol };
+            if (fields.length >= 5) {
+              nameIdx += fields[4];
+              seg.name = nameIdx;
+            }
+            segs.push(seg);
+          }
+        }
+      }
+      result.push(segs);
+    }
+    return result;
+  }
+  function encodeMappings(perLineSegs) {
+    let prevGenCol = 0;
+    let prevSrc = 0, prevOrigLine = 0, prevOrigCol = 0, prevNameIdx = 0;
+    const out = [];
+    for (const segs of perLineSegs) {
+      prevGenCol = 0;
+      const lineParts = [];
+      for (const seg of segs) {
+        if (seg.src == null) {
+          lineParts.push(vlqEncode(seg.genCol - prevGenCol));
+        } else {
+          let s = vlqEncode(seg.genCol - prevGenCol);
+          s += vlqEncode(seg.src - prevSrc);
+          s += vlqEncode(seg.origLine - prevOrigLine);
+          s += vlqEncode(seg.origCol - prevOrigCol);
+          if (seg.name != null) {
+            s += vlqEncode(seg.name - prevNameIdx);
+            prevNameIdx = seg.name;
+          }
+          prevSrc = seg.src;
+          prevOrigLine = seg.origLine;
+          prevOrigCol = seg.origCol;
+          lineParts.push(s);
+        }
+        prevGenCol = seg.genCol;
+      }
+      out.push(lineParts.join(","));
+    }
+    return out.join(";");
+  }
+  function mergeChunks(chunks) {
+    const stripped = chunks.map((c) => {
+      if (c.mapJSON !== undefined)
+        return { js: c.js, mapJSON: c.mapJSON };
+      return extractInlineMap(c.js);
+    });
+    const anyMap = stripped.some((c) => c.mapJSON);
+    const mergedJS = stripped.map((c) => c.js).join(MERGE_SEPARATOR);
+    if (!anyMap)
+      return { js: mergedJS, mapJSON: null };
+    const mergedSources = [];
+    const mergedSourcesContent = [];
+    const sourceIndexByName = new Map;
+    const mergedNames = [];
+    const nameIndexByName = new Map;
+    function addSource(name, content) {
+      if (sourceIndexByName.has(name))
+        return sourceIndexByName.get(name);
+      const idx = mergedSources.length;
+      mergedSources.push(name);
+      mergedSourcesContent.push(content ?? null);
+      sourceIndexByName.set(name, idx);
+      return idx;
+    }
+    function addName(name) {
+      if (nameIndexByName.has(name))
+        return nameIndexByName.get(name);
+      const idx = mergedNames.length;
+      mergedNames.push(name);
+      nameIndexByName.set(name, idx);
+      return idx;
+    }
+    const chunkInfos = [];
+    let lineOffset = 0;
+    for (let i = 0;i < stripped.length; i++) {
+      const c = stripped[i];
+      const info = { lineOffset, srcRemap: [], nameRemap: [], perLineSegs: null };
+      if (c.mapJSON) {
+        let map;
+        try {
+          map = JSON.parse(c.mapJSON);
+        } catch {
+          map = null;
+        }
+        if (map && typeof map.mappings === "string") {
+          const sources = map.sources || [];
+          const sourcesContent = map.sourcesContent || [];
+          info.srcRemap = sources.map((s, idx) => addSource(s, sourcesContent[idx]));
+          const names = map.names || [];
+          info.nameRemap = names.map((n) => addName(n));
+          info.perLineSegs = decodeMappings(map.mappings);
+        }
+      }
+      chunkInfos.push(info);
+      const chunkLines = countNewlines(c.js);
+      const sepLines = i < stripped.length - 1 ? MERGE_SEPARATOR_LINES : 0;
+      lineOffset += chunkLines + sepLines;
+    }
+    const totalLines = lineOffset + 1;
+    const mergedPerLineSegs = new Array(totalLines).fill(null).map(() => []);
+    for (const info of chunkInfos) {
+      if (!info.perLineSegs)
+        continue;
+      for (let li = 0;li < info.perLineSegs.length; li++) {
+        const target = info.lineOffset + li;
+        if (target >= mergedPerLineSegs.length) {
+          while (mergedPerLineSegs.length <= target)
+            mergedPerLineSegs.push([]);
+        }
+        for (const seg of info.perLineSegs[li]) {
+          if (seg.src == null) {
+            mergedPerLineSegs[target].push({ genCol: seg.genCol });
+          } else {
+            const remapped = {
+              genCol: seg.genCol,
+              src: info.srcRemap[seg.src],
+              origLine: seg.origLine,
+              origCol: seg.origCol
+            };
+            if (seg.name != null)
+              remapped.name = info.nameRemap[seg.name];
+            mergedPerLineSegs[target].push(remapped);
+          }
+        }
+      }
+    }
+    const mergedMappings = encodeMappings(mergedPerLineSegs);
+    const mergedMap = {
+      version: 3,
+      sources: mergedSources,
+      sourcesContent: mergedSourcesContent,
+      names: mergedNames,
+      mappings: mergedMappings
+    };
+    return { js: mergedJS, mapJSON: JSON.stringify(mergedMap) };
+  }
+  function utf8ToBase64(str) {
+    if (typeof Buffer !== "undefined") {
+      return Buffer.from(str, "utf8").toString("base64");
+    }
+    const bytes = new TextEncoder().encode(str);
+    let bin = "";
+    for (let i = 0;i < bytes.length; i++)
+      bin += String.fromCharCode(bytes[i]);
+    return btoa(bin);
+  }
+  function mergeChunksWithInlineMap(chunks) {
+    const { js, mapJSON } = mergeChunks(chunks);
+    if (!mapJSON)
+      return js;
+    const b64 = utf8ToBase64(mapJSON);
+    return js + `
+//# sourceMappingURL=data:application/json;base64,` + b64 + `
+`;
+  }
+
+  // src/stdlib.js
+  function getStdlibCode() {
+    return `// rip:stdlib:begin
+globalThis.abort  ??= (msg) => { if (msg) console.error(msg); process.exit(1); };
+globalThis.assert ??= (v, msg) => { if (!v) throw new Error(msg || "Assertion failed"); };
+globalThis.exit   ??= (code) => process.exit(code || 0);
+globalThis.kind   ??= (v) => v != null ? (v.constructor?.name || Object.prototype.toString.call(v).slice(8, -1)).toLowerCase() : String(v);
+globalThis.noop   ??= () => {};
+globalThis.p      ??= console.log;
+globalThis.pp     ??= (v) => { console.dir(v, { depth: null, colors: true }); return v; };
+globalThis.pj     ??= (v) => { console.log(JSON.stringify(v, null, 2)); return v; };
+globalThis.pr     ??= (() => {
+  const BARE = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
+  const esc = (s, q) => s.replace(/\\\\/g, "\\\\\\\\").replace(/\\n/g, "\\\\n").replace(/\\r/g, "\\\\r").replace(/\\t/g, "\\\\t").replace(new RegExp(q, 'g'), "\\\\" + q);
+  const qs = (s) => !s.includes("'") ? "'" + esc(s, "'") + "'" : !s.includes('"') ? '"' + esc(s, '"').split("#{").join("\\\\#{") + '"' : "'" + esc(s, "'") + "'";
+  const ks = (k) => { if (typeof k === 'symbol') { const n = Symbol.keyFor(k); return n && BARE.test(n) ? ':' + n : qs(String(k)); } return BARE.test(k) ? k : qs(k); };
+  const fmt = (v, d) => {
+    if (v === null) return 'null';
+    if (v === undefined) return 'undefined';
+    const t = typeof v;
+    if (t === 'number' || t === 'boolean') return String(v);
+    if (t === 'string') return qs(v);
+    if (t === 'symbol') { const n = Symbol.keyFor(v); return n && BARE.test(n) ? ':' + n : null; }
+    if (Array.isArray(v)) {
+      if (v.length === 0) return '[]';
+      const pad = '  '.repeat(d + 1), end = '  '.repeat(d);
+      return '[\\n' + pad + v.map(x => fmt(x, d + 1) ?? 'null').join('\\n' + pad) + '\\n' + end + ']';
+    }
+    if (t === 'object') {
+      const proto = Object.getPrototypeOf(v);
+      if (proto !== Object.prototype && proto !== null) return null;
+      const keys = Object.keys(v);
+      if (keys.length === 0) return '{}';
+      const pad = '  '.repeat(d + 1), end = '  '.repeat(d);
+      return '{\\n' + pad + keys.map(k => ks(k) + ': ' + (fmt(v[k], d + 1) ?? 'null')).join('\\n' + pad) + '\\n' + end + '}';
+    }
+    return null;
+  };
+  return (v) => { const s = fmt(v, 0); s !== null ? console.log(s) : console.dir(v, { depth: null, colors: true }); return v; };
+})();
+globalThis.raise  ??= (a, b) => { throw (b !== undefined ? new a(b) : new Error(a)); };
+globalThis.rand   ??= (a, b) => b !== undefined ? (a > b && ([a, b] = [b, a]), Math.floor(Math.random() * (b - a + 1) + a)) : a ? Math.floor(Math.random() * a) : Math.random();
+globalThis.sleep  ??= (ms) => new Promise(r => setTimeout(r, ms));
+globalThis.todo   ??= (msg) => { throw new Error(msg || "Not implemented"); };
+globalThis.warn   ??= console.warn;
+globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
+// rip:stdlib:end
+`;
+  }
 
   // src/error.js
   class RipError extends Error {
@@ -12457,238 +12712,15 @@ if (typeof globalThis !== 'undefined') {
   function compileToJS(source, options = {}) {
     return new Compiler(options).compileToJS(source);
   }
-  function getStdlibCode() {
-    return `globalThis.abort  ??= (msg) => { if (msg) console.error(msg); process.exit(1); };
-globalThis.assert ??= (v, msg) => { if (!v) throw new Error(msg || "Assertion failed"); };
-globalThis.exit   ??= (code) => process.exit(code || 0);
-globalThis.kind   ??= (v) => v != null ? (v.constructor?.name || Object.prototype.toString.call(v).slice(8, -1)).toLowerCase() : String(v);
-globalThis.noop   ??= () => {};
-globalThis.p      ??= console.log;
-globalThis.pp     ??= (v) => { console.log(JSON.stringify(v, null, 2)); return v; };
-globalThis.raise  ??= (a, b) => { throw (b !== undefined ? new a(b) : new Error(a)); };
-globalThis.rand   ??= (a, b) => b !== undefined ? (a > b && ([a, b] = [b, a]), Math.floor(Math.random() * (b - a + 1) + a)) : a ? Math.floor(Math.random() * a) : Math.random();
-globalThis.sleep  ??= (ms) => new Promise(r => setTimeout(r, ms));
-globalThis.todo   ??= (msg) => { throw new Error(msg || "Not implemented"); };
-globalThis.warn   ??= console.warn;
-globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
-`;
-  }
   function getReactiveRuntime() {
     return new CodeEmitter({}).getReactiveRuntime();
   }
   function getComponentRuntime() {
     return new CodeEmitter({}).getComponentRuntime();
   }
-  // src/sourcemap-merge.js
-  var SEPARATOR = `
-;
-`;
-  var SEPARATOR_LINES = 2;
-  function extractMap(js) {
-    const re = /\n?\/\/# sourceMappingURL=data:application\/json(?:;charset=[^;,]+)?;base64,([A-Za-z0-9+/=]+)\s*$/;
-    const m = js.match(re);
-    if (!m)
-      return { js, mapJSON: null };
-    let mapJSON;
-    try {
-      const bin = atob(m[1]);
-      const bytes = new Uint8Array(bin.length);
-      for (let i = 0;i < bin.length; i++)
-        bytes[i] = bin.charCodeAt(i);
-      mapJSON = new TextDecoder().decode(bytes);
-    } catch {
-      return { js: js.slice(0, m.index), mapJSON: null };
-    }
-    return { js: js.slice(0, m.index), mapJSON };
-  }
-  function countNewlines(str2) {
-    let n = 0;
-    for (let i = 0;i < str2.length; i++)
-      if (str2.charCodeAt(i) === 10)
-        n++;
-    return n;
-  }
-  function decodeMappings(mappingsStr) {
-    const lines = mappingsStr.split(";");
-    const result = [];
-    let src = 0, origLine = 0, origCol = 0, nameIdx = 0;
-    for (const line of lines) {
-      const segs = [];
-      let genCol = 0;
-      if (line.length > 0) {
-        for (const segStr of line.split(",")) {
-          if (segStr.length === 0)
-            continue;
-          const fields = vlqDecode(segStr);
-          genCol += fields[0];
-          if (fields.length === 1) {
-            segs.push({ genCol });
-          } else {
-            src += fields[1];
-            origLine += fields[2];
-            origCol += fields[3];
-            const seg = { genCol, src, origLine, origCol };
-            if (fields.length >= 5) {
-              nameIdx += fields[4];
-              seg.name = nameIdx;
-            }
-            segs.push(seg);
-          }
-        }
-      }
-      result.push(segs);
-    }
-    return result;
-  }
-  function encodeMappings(perLineSegs) {
-    let prevGenCol = 0;
-    let prevSrc = 0, prevOrigLine = 0, prevOrigCol = 0, prevNameIdx = 0;
-    const out = [];
-    for (const segs of perLineSegs) {
-      prevGenCol = 0;
-      const lineParts = [];
-      for (const seg of segs) {
-        if (seg.src == null) {
-          lineParts.push(vlqEncode(seg.genCol - prevGenCol));
-        } else {
-          let s = vlqEncode(seg.genCol - prevGenCol);
-          s += vlqEncode(seg.src - prevSrc);
-          s += vlqEncode(seg.origLine - prevOrigLine);
-          s += vlqEncode(seg.origCol - prevOrigCol);
-          if (seg.name != null) {
-            s += vlqEncode(seg.name - prevNameIdx);
-            prevNameIdx = seg.name;
-          }
-          prevSrc = seg.src;
-          prevOrigLine = seg.origLine;
-          prevOrigCol = seg.origCol;
-          lineParts.push(s);
-        }
-        prevGenCol = seg.genCol;
-      }
-      out.push(lineParts.join(","));
-    }
-    return out.join(";");
-  }
-  function mergeChunks(chunks) {
-    const stripped = chunks.map((c) => {
-      if (c.mapJSON !== undefined)
-        return { js: c.js, mapJSON: c.mapJSON };
-      return extractMap(c.js);
-    });
-    const anyMap = stripped.some((c) => c.mapJSON);
-    const mergedJS = stripped.map((c) => c.js).join(SEPARATOR);
-    if (!anyMap)
-      return { js: mergedJS, mapJSON: null };
-    const mergedSources = [];
-    const mergedSourcesContent = [];
-    const sourceIndexByName = new Map;
-    const mergedNames = [];
-    const nameIndexByName = new Map;
-    function addSource(name, content) {
-      if (sourceIndexByName.has(name))
-        return sourceIndexByName.get(name);
-      const idx = mergedSources.length;
-      mergedSources.push(name);
-      mergedSourcesContent.push(content ?? null);
-      sourceIndexByName.set(name, idx);
-      return idx;
-    }
-    function addName(name) {
-      if (nameIndexByName.has(name))
-        return nameIndexByName.get(name);
-      const idx = mergedNames.length;
-      mergedNames.push(name);
-      nameIndexByName.set(name, idx);
-      return idx;
-    }
-    const chunkInfos = [];
-    let lineOffset = 0;
-    for (let i = 0;i < stripped.length; i++) {
-      const c = stripped[i];
-      const info = { lineOffset, srcRemap: [], nameRemap: [], perLineSegs: null };
-      if (c.mapJSON) {
-        let map;
-        try {
-          map = JSON.parse(c.mapJSON);
-        } catch {
-          map = null;
-        }
-        if (map && typeof map.mappings === "string") {
-          const sources = map.sources || [];
-          const sourcesContent = map.sourcesContent || [];
-          info.srcRemap = sources.map((s, idx) => addSource(s, sourcesContent[idx]));
-          const names = map.names || [];
-          info.nameRemap = names.map((n) => addName(n));
-          info.perLineSegs = decodeMappings(map.mappings);
-        }
-      }
-      chunkInfos.push(info);
-      const chunkLines = countNewlines(c.js);
-      const sepLines = i < stripped.length - 1 ? SEPARATOR_LINES : 0;
-      lineOffset += chunkLines + sepLines;
-    }
-    const totalLines = lineOffset + 1;
-    const mergedPerLineSegs = new Array(totalLines).fill(null).map(() => []);
-    for (const info of chunkInfos) {
-      if (!info.perLineSegs)
-        continue;
-      for (let li = 0;li < info.perLineSegs.length; li++) {
-        const target = info.lineOffset + li;
-        if (target >= mergedPerLineSegs.length) {
-          while (mergedPerLineSegs.length <= target)
-            mergedPerLineSegs.push([]);
-        }
-        for (const seg of info.perLineSegs[li]) {
-          if (seg.src == null) {
-            mergedPerLineSegs[target].push({ genCol: seg.genCol });
-          } else {
-            const remapped = {
-              genCol: seg.genCol,
-              src: info.srcRemap[seg.src],
-              origLine: seg.origLine,
-              origCol: seg.origCol
-            };
-            if (seg.name != null)
-              remapped.name = info.nameRemap[seg.name];
-            mergedPerLineSegs[target].push(remapped);
-          }
-        }
-      }
-    }
-    const mergedMappings = encodeMappings(mergedPerLineSegs);
-    const mergedMap = {
-      version: 3,
-      sources: mergedSources,
-      sourcesContent: mergedSourcesContent,
-      names: mergedNames,
-      mappings: mergedMappings
-    };
-    return { js: mergedJS, mapJSON: JSON.stringify(mergedMap) };
-  }
-  function utf8ToBase64(str2) {
-    if (typeof Buffer !== "undefined") {
-      return Buffer.from(str2, "utf8").toString("base64");
-    }
-    const bytes = new TextEncoder().encode(str2);
-    let bin = "";
-    for (let i = 0;i < bytes.length; i++)
-      bin += String.fromCharCode(bytes[i]);
-    return btoa(bin);
-  }
-  function mergeChunksWithInlineMap(chunks) {
-    const { js, mapJSON } = mergeChunks(chunks);
-    if (!mapJSON)
-      return js;
-    const b64 = utf8ToBase64(mapJSON);
-    return js + `
-//# sourceMappingURL=data:application/json;base64,` + b64 + `
-`;
-  }
-
   // src/browser.js
   var VERSION = "3.15.4";
-  var BUILD_DATE = "2026-04-28@01:07:15GMT";
+  var BUILD_DATE = "2026-04-28@20:37:44GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -13118,9 +13150,68 @@ ${indented}`);
   globalThis.noop ??= () => {};
   globalThis.p ??= console.log;
   globalThis.pp ??= (v) => {
+    console.dir(v, { depth: null, colors: true });
+    return v;
+  };
+  globalThis.pj ??= (v) => {
     console.log(JSON.stringify(v, null, 2));
     return v;
   };
+  globalThis.pr ??= (() => {
+    const BARE = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
+    const esc2 = (s, q) => s.replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/\r/g, "\\r").replace(/\t/g, "\\t").replace(new RegExp(q, "g"), "\\" + q);
+    const qs = (s) => !s.includes("'") ? "'" + esc2(s, "'") + "'" : !s.includes('"') ? '"' + esc2(s, '"').split("#{").join("\\#{") + '"' : "'" + esc2(s, "'") + "'";
+    const ks = (k) => {
+      if (typeof k === "symbol") {
+        const n = Symbol.keyFor(k);
+        return n && BARE.test(n) ? ":" + n : qs(String(k));
+      }
+      return BARE.test(k) ? k : qs(k);
+    };
+    const fmt = (v, d) => {
+      if (v === null)
+        return "null";
+      if (v === undefined)
+        return "undefined";
+      const t = typeof v;
+      if (t === "number" || t === "boolean")
+        return String(v);
+      if (t === "string")
+        return qs(v);
+      if (t === "symbol") {
+        const n = Symbol.keyFor(v);
+        return n && BARE.test(n) ? ":" + n : null;
+      }
+      if (Array.isArray(v)) {
+        if (v.length === 0)
+          return "[]";
+        const pad = "  ".repeat(d + 1), end = "  ".repeat(d);
+        return `[
+` + pad + v.map((x) => fmt(x, d + 1) ?? "null").join(`
+` + pad) + `
+` + end + "]";
+      }
+      if (t === "object") {
+        const proto = Object.getPrototypeOf(v);
+        if (proto !== Object.prototype && proto !== null)
+          return null;
+        const keys = Object.keys(v);
+        if (keys.length === 0)
+          return "{}";
+        const pad = "  ".repeat(d + 1), end = "  ".repeat(d);
+        return `{
+` + pad + keys.map((k) => ks(k) + ": " + (fmt(v[k], d + 1) ?? "null")).join(`
+` + pad) + `
+` + end + "}";
+      }
+      return null;
+    };
+    return (v) => {
+      const s = fmt(v, 0);
+      s !== null ? console.log(s) : console.dir(v, { depth: null, colors: true });
+      return v;
+    };
+  })();
   globalThis.raise ??= (a, b) => {
     throw b !== undefined ? new a(b) : new Error(a);
   };

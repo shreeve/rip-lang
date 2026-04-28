@@ -43,7 +43,7 @@ rip server
 | `src/lexer.js`            | Yes       | Lexer and rewriter                                     |
 | `src/types.js`            | Yes       | Type system sidecar                                    |
 | `src/components.js`       | Yes       | Component system sidecar                               |
-| `src/schema/`    | Yes       | Schema feature subdirectory (`schema` keyword) — entry `schema.js`, runtime fragments, loaders, `dts-emit.js`. Imported from sibling modules as `./schema/schema.js`. |
+| `src/schema/`    | Yes       | Schema feature subdirectory (`schema` keyword) — entry `schema.js`, runtime fragments, loaders, `dts.js`. Imported from sibling modules as `./schema/schema.js`. |
 | `src/grammar/grammar.rip` | Carefully | Run `bun run parser` after changes                     |
 | `src/parser.js`           | Never     | Generated file                                         |
 | `src/sourcemaps.js`       | Yes       | Source map generator                                   |
@@ -375,21 +375,34 @@ rip -cm example.rip
 
 Rip injects helpers via `globalThis` in compiled output, the CLI REPL, and the browser REPL.
 
-| Function          | Description                      |
-| ----------------- | -------------------------------- |
-| `abort(msg?)`     | log to stderr, exit with code 1  |
-| `assert(v, msg?)` | throw if falsy                   |
-| `exit(code?)`     | exit process                     |
-| `kind(v)`         | lowercase type name              |
-| `noop()`          | no-op                            |
-| `p(...args)`      | `console.log` shorthand          |
-| `pp(v)`           | pretty-print JSON, returns value |
-| `raise(a, b?)`    | throw error                      |
-| `rand(a?, b?)`    | random number                    |
-| `sleep(ms)`       | promise-based delay              |
-| `todo(msg?)`      | throw not implemented            |
-| `warn(...args)`   | `console.warn` shorthand         |
-| `zip(...arrays)`  | zip arrays pairwise              |
+| Function          | Description                                              |
+| ----------------- | -------------------------------------------------------- |
+| `abort(msg?)`     | log to stderr, exit with code 1                          |
+| `assert(v, msg?)` | throw if falsy                                           |
+| `exit(code?)`     | exit process                                             |
+| `kind(v)`         | lowercase type name                                      |
+| `noop()`          | no-op                                                    |
+| `p(...args)`      | `console.log` shorthand                                  |
+| `pp(v)`           | pretty-print with depth-unlimited inspect, returns value |
+| `pr(v)`           | pretty-print in Rip syntax, returns value                |
+| `pj(v)`           | pretty-print as JSON, returns value                      |
+| `raise(a, b?)`    | throw error                                              |
+| `rand(a?, b?)`    | random number                                            |
+| `sleep(ms)`       | promise-based delay                                      |
+| `todo(msg?)`      | throw not implemented                                    |
+| `warn(...args)`   | `console.warn` shorthand                                 |
+| `zip(...arrays)`  | zip arrays pairwise                                      |
+
+The four print helpers cover four mental modes:
+
+- `p`  — raw `console.log` (variadic, what you reach for first).
+- `pp` — depth-unlimited inspect (when `console.log` truncates with `[Object]`).
+- `pr` — Rip syntax (when you want to copy into a `.rip` file or round-trip through `compile`).
+- `pj` — JSON syntax (when you want to feed the output to `curl`, jq, or a JSON tool).
+
+`pr` falls back to deep inspect when given a value that has no faithful Rip-literal form (class instances, `Date`, `BigInt`, `Map`, etc.) — so it's safe to call on any value during debugging.
+
+The strict `stringify(value)` is also exported from `rip-lang` for tools that need to emit `.rip` files programmatically; it throws on non-literal values rather than falling back, preserving the round-trip property.
 
 All helpers use `??=` so they can be overridden.
 

@@ -32,8 +32,8 @@ const repoRoot = resolve(import.meta.dir, '..');
 // so this list can list future files we're about to extract.
 const FORBIDDEN = [
   'src/typecheck.js',
-  'src/types-emit.js',
-  'src/schema/dts-emit.js',
+  'src/dts.js',
+  'src/schema/dts.js',
   'src/schema/runtime-orm.js',
   'src/schema/runtime-ddl.js',
   'src/repl.js',
