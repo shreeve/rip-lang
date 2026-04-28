@@ -47,19 +47,19 @@ Each file exercises a specific type feature. Status key:
 - **fail** — `rip check` or runtime reports errors
 - **partial** — some features in the file work, others don't
 
-| File               | Feature                                                     | Status | Notes                                                                                       |
-| ------------------ | ----------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------- |
-| 01-basic.rip       | `::` on variables, nullable (`T \| null`, `T \| undefined`) | pass   |                                                                                             |
-| 02-aliases.rip     | `type` aliases (simple, union, typeof, function)            | pass   | Function type aliases: `(a: T) => R`, generics, negative tests                              |
-| 03-structural.rip  | `type` blocks, optional, readonly, recursive, generic       | pass   | Nested `type` blocks, index signatures, deep nesting, negative tests                        |
-| 04-unions.rip      | Inline, block, discriminated unions + switch narrowing      | pass   | Narrowing + exhaustiveness verified via strict mode                                         |
-| 05-interfaces.rip  | `interface`, `extends`, optional members                    | pass   |                                                                                             |
-| 06-functions.rip   | Typed functions, arrows, overloads, and array transforms    | pass   | 22 negative tests; overloads narrow return types                                            |
-| 07-integration.rip | Cross-module imports of typed functions                     | pass   | Cross-file type flow via .d.ts                                                              |
-| 08-reactive.rip    | `:: T :=`, `:: T ~=`, `:: T =!`, `:: T ~>`                  | pass   | Reactive state annotations                                                                  |
-| 09-components.rip  | `@prop:: T :=`, `@prop:: T`, default validation             | pass   | Required props, default-vs-type validation, 4 negative body tests                           |
-| 10-validation.rip  | Runtime validation use cases (4 real-world patterns)        | pass   | API shape, composition, discriminated union config, 3rd-party transform                     |
-| 11-inference.rip   | Type inference on unannotated variables                     | pass   | Top-level, block-scoped, destructured, inline-let in functions, block-confined in functions |
+| File               | Feature                                                     | Status | Notes                                                      |
+| ------------------ | ----------------------------------------------------------- | ------ | ---------------------------------------------------------- |
+| 01-basic.rip       | `::` on variables, nullable (`T \| null`, `T \| undefined`) | pass   |                                                            |
+| 02-aliases.rip     | `type` aliases (simple, union, typeof, function)            | pass   | Function aliases `(a: T) => R` with generics + negatives   |
+| 03-structural.rip  | `type` blocks, optional, readonly, recursive, generic       | pass   | Nested blocks, index signatures, deep nesting, negatives   |
+| 04-unions.rip      | Inline, block, discriminated unions + switch narrowing      | pass   | Narrowing + exhaustiveness via strict mode                 |
+| 05-interfaces.rip  | `interface`, `extends`, optional members                    | pass   |                                                            |
+| 06-functions.rip   | Typed functions, arrows, overloads, array transforms        | pass   | 22 negative tests; overloads narrow return types           |
+| 07-integration.rip | Cross-module imports of typed functions                     | pass   | Cross-file type flow via `.d.ts`                           |
+| 08-reactive.rip    | `:: T :=`, `:: T ~=`, `:: T =!`, `:: T ~>`                  | pass   | Reactive state annotations                                 |
+| 09-components.rip  | `@prop:: T :=`, `@prop:: T`, default validation             | pass   | Required props, default-vs-type, 4 negative body tests     |
+| 10-validation.rip  | Runtime validation use cases (4 real-world patterns)        | pass   | API shape, composition, discriminated config, 3rd-party    |
+| 11-inference.rip   | Type inference on unannotated variables                     | pass   | Top-level, block-scoped, destructured, inline-let in funcs |
 
 ## Type Safety Gap Analysis
 
@@ -69,10 +69,10 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 ### ❌ Not working (language-level changes or runtime validation needed)
 
-| Category                       | Tested In     | Notes                                                                                                         |
-| ------------------------------ | ------------- | ------------------------------------------------------------------------------------------------------------- |
-| `@app.data` stash typing       | 09-components | `@app.data` is `any` — no way to declare or flow a stash type across components. RFC in `examples/cart/README.md` |
-| Runtime return-type validation | 10-validation | Return types are erased — `response.json()` is unvalidated `any`. An app can wire `Schema.parse()` in the return-hook bridge (see below) for runtime enforcement. |
+| Category                       | Tested In     | Notes                                                                                      |
+| ------------------------------ | ------------- | ------------------------------------------------------------------------------------------ |
+| `@app.data` stash typing       | 09-components | `@app.data` is `any` — no cross-component stash typing. RFC in `examples/cart/README.md`   |
+| Runtime return-type validation | 10-validation | Return types erased; `response.json()` is `any`. See "Future Notes" for the schema bridge. |
 
 ### 🔶 Partial
 
@@ -84,52 +84,54 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 ### ✅ Working
 
-| Category                       | Tested In      | Notes                                                                                                                              |
-| ------------------------------ | -------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| Variable type mismatches       | 01-basic       | Same-file typed variables                                                                                                          |
-| Readonly / immutability        | 01-basic       | `=!` emits `const`/`declare const`; reassignment caught (TS2588); `readonly` field mutation caught (TS2540)                        |
-| Nullable safety                | 01-basic       | `strict: true` enables full `strictNullChecks` — null/undefined caught at all usage sites; 2 negative tests                        |
-| Function type aliases          | 02-aliases     | `type Fn = (a: T) => R` — standalone function type aliases with generics; negative test for wrong return type                      |
-| Nested structural types        | 03-structural  | `data: type\n    host: string` → `data: { host: string }` — recursive nesting, depth-aware DTS formatting                          |
-| Index signatures               | 03-structural  | `[key: string]: number` — string, number, and mixed (props + index sig) all emit correct DTS                                       |
-| Generic types                  | 03-structural  | Structs, functions, constraints, nested (`Box<Box<T>>`), multi-param, unions — all emit correct DTS                                |
-| Object shape checking          | 03-structural  | Missing fields, extra fields                                                                                                       |
-| Property access checking       | 03-structural  | Typos, nonexistent fields                                                                                                          |
-| Union value checking           | 04-unions      | Literal unions validated                                                                                                           |
-| Union narrowing + exhaust.     | 04-unions      | Switch narrowing + exhaustiveness; squiggles land on correct `when` branch                                                         |
-| Inline discriminated unions    | 04-unions      | Hover shows union members, not internal names; DTS error mapping fixed for variable-aware positioning                              |
-| Function argument types        | 06-functions   | Same-file typed functions                                                                                                          |
-| Function return types          | 06-functions   | Same-file typed functions                                                                                                          |
-| Optional param `?`             | 06-functions   | `y?:: T` emits `y?: T` in .d.ts                                                                                                    |
-| Destructured typed params      | 06-functions   | `{name:: string, age:: number}` in params; emits `{name, age}: {name: string, age: number}` in .d.ts                               |
-| Destructured defaults          | 06-functions   | `{name:: string = "anon"}` → optional `?` in .d.ts type, correct `{name = "anon"}` codegen                                         |
-| Destructured rest              | 06-functions   | `{name:: string, ...rest}` → `...rest` in pattern, `[key: string]: unknown` in .d.ts type                                          |
-| Destructured rename            | 06-functions   | `{name: userName:: string}` → prop name `name` in .d.ts type, `{name: userName}` in pattern                                        |
-| Array destructured params      | 06-functions   | `[first:: string, second:: string]` → tuple `[string, string]` in .d.ts                                                            |
-| Nested destructured params     | 06-functions   | `{user: {name:: string, age:: number}}` → `{user: {name: string, age: number}}` in .d.ts                                           |
-| `void` return annotation       | 06-functions   | `def fn!` emits `: void` in .d.ts; `!` sigil suppresses implicit return and declares void return type                              |
-| Async/await unwrapping         | 06-functions   | `!` compiles to `await`; return types inferred or explicit; `Promise<T>` → `T`                                                     |
-| Function overloads             | 06-functions   | Bodiless `def` overload signatures → `declare function` in DTS; `rip check` relocates to adjacent non-ambient overloads            |
-| Cross-file type flow           | 07-integration | Via .d.ts; untyped files get `@ts-nocheck`; unresolved `.rip` imports flagged                                                      |
-| Component prop types           | 09-components  | Enriched stub gives Signal<T>/Computed<T> declarations; TS checks computeds, methods, and render block intrinsic elements          |
-| Required component props       | 09-components  | `@prop:: T` (no `:=`) — required in constructor, caught at usage sites                                                             |
-| Prop default validation        | 09-components  | `@prop:: T := val` — validates default against declared type; squiggle on prop name                                                |
-| Element type inheritance       | 09-components  | `component extends tag` widens constructor props with `__RipProps<'tag'>`; invalid tags caught with clean error                    |
-| Event handler typing           | 09-components  | Inline handlers typed via `__RipEvents`; named method refs typed via stub-injected `HTMLElementEventMap` annotations               |
-| Render block conditionals      | 09-components  | `if`/`unless`/`?:` conditions, `switch` discriminants, and `for` loop iterables emitted into type-checking stub                    |
-| Render block text exprs        | 09-components  | `= expr` text expressions emitted into type-checking stub; typos caught via "Cannot find name"                                     |
-| Dot-completion accuracy        | 09-components  | Source map fix + LSP dot-recovery: single-line `__rip__` patching for trailing-dot completions                                     |
-| Generic components             | 09-components  | `Name<T extends C> = component` — type params flow through DTS, stub, and ConstructorParameters inference                          |
-| Type inference (split decl.)   | 11-inference   | `patchUninitializedTypes` infers from first assignment — top-level, block-scoped (if/for/while/try/switch), and destructured       |
-| Type inference (inline-let)    | 11-inference   | Inline-let emits `let x = value;` — top-level, inside functions, and block-confined in functions; no patcher needed                |
-| Strict mode                    | *(all files)*  | `strict: true` — `noImplicitAny`, full null checks, strict function types all active; hardcoded in all paths                       |
-| Project-level type enforcement | *(all files)*  | CLI `--strict`, `rip.json`, or `package.json`; `# @nocheck` / `"exclude"` to opt out; LSP squiggles + auto-reload                  |
-| Hover types                    | *(IDE only)*   | Column-aware source maps, overload preference, typed implementation params                                                         |
-| Union value autocomplete       | *(IDE only)*   | String literal union completions for prop values, prop defaults, and typed variable assignments                                    |
-| Semantic token provider        | *(IDE only)*   | Bridges TS `getEncodedSemanticClassifications()` to Rip source; typed files get semantic tokens, reactive vars not marked readonly |
-| Unused variable dimming        | *(IDE only)*   | Forwards `DiagnosticTag.Unnecessary` from TS; expands hoisted-let 6199 into per-variable 6133; scoped source mapping for functions |
-| Deprecated strikethrough       | *(IDE only)*   | Forwards `DiagnosticTag.Deprecated` from TS suggestion diagnostics; hover includes JSDoc `@deprecated`, `@param` tags              |
-| Go-to-def on imports           | *(IDE only)*   | Resolves import paths directly; symbol names jump to definition in target file; path string navigates to file                      |
+| Category                       | Tested In      | Notes                                                                                |
+| ------------------------------ | -------------- | ------------------------------------------------------------------------------------ |
+| Variable type mismatches       | 01-basic       | Same-file typed variables                                                            |
+| Readonly / immutability        | 01-basic       | `=!` → `const`/`declare const`; reassignment + readonly mutation caught              |
+| Nullable safety                | 01-basic       | Full `strictNullChecks` at all usage sites; 2 negative tests                         |
+| Function type aliases          | 02-aliases     | `type Fn = (a: T) => R` with generics; negative test for wrong return                |
+| Nested structural types        | 03-structural  | `data: type` blocks; recursive nesting, depth-aware DTS formatting                   |
+| Index signatures               | 03-structural  | `[key: string]: number`; string, number, and mixed (props + sig) emit correct DTS    |
+| Generic types                  | 03-structural  | Structs, functions, constraints, nested, multi-param, unions                         |
+| Object shape checking          | 03-structural  | Missing fields, extra fields                                                         |
+| Property access checking       | 03-structural  | Typos, nonexistent fields                                                            |
+| Union value checking           | 04-unions      | Literal unions validated                                                             |
+| Union narrowing + exhaust.     | 04-unions      | Switch narrowing; squiggles land on correct `when` branch                            |
+| Inline discriminated unions    | 04-unions      | Hover shows union members; variable-aware DTS error positioning                      |
+| Function argument types        | 06-functions   | Same-file typed functions                                                            |
+| Function return types          | 06-functions   | Same-file typed functions                                                            |
+| Optional param `?`             | 06-functions   | `y?:: T` emits `y?: T`                                                               |
+| Destructured typed params      | 06-functions   | `{name:: string, age:: number}` emits matching DTS                                   |
+| Destructured defaults          | 06-functions   | `{name:: string = "anon"}` → optional `?` in DTS, correct codegen                    |
+| Destructured rest              | 06-functions   | `...rest` in pattern, `[key: string]: unknown` in DTS                                |
+| Destructured rename            | 06-functions   | `{name: userName:: string}` — prop name `name` in DTS, alias in pattern              |
+| Array destructured params      | 06-functions   | `[first:: string, second:: string]` → tuple `[string, string]`                       |
+| Nested destructured params     | 06-functions   | `{user: {name:: string, age:: number}}` emits matching DTS                           |
+| `void` return annotation       | 06-functions   | `def fn!` emits `: void`; `!` suppresses implicit return                             |
+| Async/await unwrapping         | 06-functions   | `!` → `await`; `Promise<T>` → `T`                                                    |
+| Function overloads             | 06-functions   | Bodiless `def` overloads → `declare function`; relocated to non-ambient overload     |
+| Cross-file type flow           | 07-integration | Via `.d.ts`; untyped files get `@ts-nocheck`; unresolved `.rip` imports flagged      |
+| Auto-imports                   | 07-integration | Completion + TS2304/2552/2503 quick fix; "Add all missing imports"; multi-line lists |
+| Component prop types           | 09-components  | Stub injects Signal/Computed; checks computeds, methods, render block intrinsics     |
+| Required component props       | 09-components  | `@prop:: T` (no `:=`) — required in constructor, caught at usage sites               |
+| Prop default validation        | 09-components  | `@prop:: T := val` — validates default; squiggle on prop name                        |
+| Element type inheritance       | 09-components  | `component extends tag` widens via `__RipProps<'tag'>`; invalid tags caught          |
+| Event handler typing           | 09-components  | Inline via `__RipEvents`; named refs via stub-injected `HTMLElementEventMap`         |
+| Render block conditionals      | 09-components  | `if`/`unless`/`?:`, `switch`, `for` iterables emitted into type-checking stub        |
+| Render block text exprs        | 09-components  | `= expr` emitted into stub; typos caught via "Cannot find name"                      |
+| Dot-completion accuracy        | 09-components  | Source map fix + LSP single-line `__rip__` patching for trailing-dot                 |
+| Generic components             | 09-components  | `Name<T extends C> = component` — type params flow through DTS, stub, inference      |
+| Type inference (split decl.)   | 11-inference   | `patchUninitializedTypes` infers from first assignment; top-level + block + destruct |
+| Type inference (inline-let)    | 11-inference   | Inline-let emits `let x = value;` everywhere; no patcher needed                      |
+| Strict mode                    | *(all files)*  | `strict: true` — `noImplicitAny`, full null checks, strict function types            |
+| Project-level type enforcement | *(all files)*  | CLI `--strict`, `rip.json`, `package.json`; `# @nocheck` / `"exclude"` opt-out       |
+| Hover types                    | *(IDE only)*   | Column-aware source maps, overload preference, typed implementation params           |
+| Union value autocomplete       | *(IDE only)*   | String literal completions for prop values, defaults, typed assignments              |
+| Semantic token provider        | *(IDE only)*   | Bridges TS classifications to Rip; reactive vars not marked readonly                 |
+| Unused variable dimming        | *(IDE only)*   | `DiagnosticTag.Unnecessary`; expands hoisted-let 6199 into per-var 6133              |
+| Deprecated strikethrough       | *(IDE only)*   | `DiagnosticTag.Deprecated`; hover includes JSDoc `@deprecated`, `@param`             |
+| Go-to-def on imports           | *(IDE only)*   | Path string + symbol jump to target file; multi-line import lists supported          |
+| Hover on imports               | *(IDE only)*   | Module path as written; symbol hover via TS quick info; multi-line supported         |
 
 ### Suppressed error codes
 
@@ -139,11 +141,11 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 **Conditional suppression (5 codes in `CONDITIONAL_CODES`):** These are only suppressed when the diagnostic is structural:
 
-| Code       | What it reports           | Suppressed when                                                                | Kept when                                    |
-| ---------- | ------------------------- | ------------------------------------------------------------------------------ | -------------------------------------------- |
-| 2300, 2451 | Duplicate identifiers     | Diagnostic is in the DTS header, or the identifier is also declared in the DTS | Both instances are in the compiled body only |
-| 2307       | Cannot find module        | Module path starts with `@rip-lang/` or ends with `.rip` (Rip resolves these)  | Any other import (npm packages, JS/TS files) |
-| 2582, 2593 | Cannot find test/describe | File basename contains `test`/`spec`, or path includes `/test/` etc.           | Non-test files (e.g. `app.rip`, `index.rip`) |
+| Code       | What it reports           | Suppressed when                                                                      | Kept when                                             |
+| ---------- | ------------------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------- |
+| 2300, 2451 | Duplicate identifiers     | Other endpoint sits in the DTS header, or import line names the identifier only once | Body↔body collision, including ≥2 imports of the name |
+| 2307       | Cannot find module        | Path starts with `@rip-lang/` or ends with `.rip` (Rip resolves these)               | Any other import (npm packages, JS/TS files)          |
+| 2582, 2593 | Cannot find test/describe | File basename contains `test`/`spec`, or path includes `/test/` etc.                 | Non-test files (e.g. `app.rip`, `index.rip`)          |
 
 ## Future Notes — Runtime Return Validation
 
