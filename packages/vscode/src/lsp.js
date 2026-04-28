@@ -18,6 +18,10 @@ let ts, compiler, tc, service, rootPath, lastPatchedProgram;
 // Real .rip path → { version, source, tsContent, srcToGen, genToSrc, ... }
 const compiled = new Map();
 
+// Real .rip path → most recently published Diagnostic[] (used by the
+// "Add all missing imports" code action to look beyond the requested range).
+const lastDiagnostics = new Map();
+
 // Component name → { props: [{ name, type, required }], source, line }
 const componentRegistry = new Map();
 
@@ -160,6 +164,7 @@ connection.onDidChangeWatchedFiles((params) => {
     if (fp.endsWith('.rip')) {
       if (change.type === 3 /* Deleted */) {
         compiled.delete(fp);
+        lastDiagnostics.delete(fp);
         discoveredRipFiles.delete(fp);
         removeFromIndex(fp);
         connection.sendDiagnostics({ uri: change.uri, diagnostics: [] });
@@ -375,6 +380,7 @@ documents.onDidChangeContent(({ document }) => {
 documents.onDidClose(({ document }) => {
   const fp = uriToPath(document.uri);
   compiled.delete(fp);
+  lastDiagnostics.delete(fp);
   connection.sendDiagnostics({ uri: document.uri, diagnostics: [] });
 });
 
@@ -681,6 +687,7 @@ function publishDiagnostics(filePath) {
   }
 
   connection.sendDiagnostics({ uri: pathToUri(filePath), diagnostics });
+  lastDiagnostics.set(filePath, diagnostics);
   connection.console.log(`[rip] diagnostics ${path.basename(filePath)}: ${diagnostics.length} issues`);
 }
 
@@ -2322,6 +2329,20 @@ connection.onCodeAction((params) => {
 
   const srcLines = c.source.split('\n');
   const actions = [];
+
+  // Pick the first viable target file for `name` from this file's perspective.
+  const pickTarget = (name) => {
+    const sources = exportIndex.get(name);
+    if (!sources) return null;
+    for (const targetFp of sources) {
+      if (targetFp === fp) continue;
+      const spec = resolveSpecForTarget(fp, targetFp);
+      if (spec) return { spec };
+    }
+    return null;
+  };
+
+  // Per-diagnostic quick fixes (one action per source file that exports `name`).
   for (const diag of diags) {
     const line = srcLines[diag.range.start.line] || '';
     const name = line.slice(diag.range.start.character, diag.range.end.character).trim();
@@ -2344,6 +2365,71 @@ connection.onCodeAction((params) => {
       });
     }
   }
+
+  // "Add all missing imports" — aggregate every unresolved name in the file
+  // (not just those in the requested range), pick the first viable target for
+  // each, and emit one combined edit. Only offer when 2+ names are fixable so
+  // we don't duplicate the per-name action.
+  const allDiags = (lastDiagnostics.get(fp) || []).filter((d) => {
+    const code = typeof d.code === 'string' ? Number(d.code) : d.code;
+    return AUTO_IMPORT_CODES.has(code);
+  });
+  if (allDiags.length >= 2) {
+    const seen = new Set();
+    const picks = []; // [{ name, spec }]
+    for (const d of allDiags) {
+      const ln = srcLines[d.range.start.line] || '';
+      const name = ln.slice(d.range.start.character, d.range.end.character).trim();
+      if (!name || !/^[A-Za-z_$][\w$]*$/.test(name)) continue;
+      if (seen.has(name)) continue;
+      seen.add(name);
+      const t = pickTarget(name);
+      if (!t) continue;
+      picks.push({ name, spec: t.spec });
+    }
+    if (picks.length >= 2) {
+      // Apply each import sequentially to a working source buffer, then emit a
+      // single full-document replacement so all line numbers stay consistent.
+      let working = c.source;
+      let mutated = false;
+      for (const { name, spec } of picks) {
+        const edit = buildImportEdit(working, spec, name);
+        if (!edit) continue;
+        const lines = working.split('\n');
+        const isLineReplace = edit.range.start.line === edit.range.end.line
+          && edit.range.start.character === 0
+          && edit.range.end.character === (lines[edit.range.start.line]?.length ?? 0);
+        const before = lines.slice(0, edit.range.start.line);
+        if (isLineReplace) {
+          working = [...before, edit.newText, ...lines.slice(edit.range.start.line + 1)].join('\n');
+        } else {
+          // Pure insertion at start of `edit.range.start.line`. `newText`
+          // already includes its own trailing newline(s); strip one so the
+          // join with `\n` doesn't duplicate the line break.
+          working = [...before, edit.newText.replace(/\n$/, ''), ...lines.slice(edit.range.start.line)].join('\n');
+        }
+        mutated = true;
+      }
+      if (mutated && working !== c.source) {
+        const endLine = srcLines.length - 1;
+        const endChar = (srcLines[endLine] || '').length;
+        actions.push({
+          title: `Add all missing imports`,
+          kind: 'quickfix',
+          diagnostics: allDiags,
+          edit: {
+            changes: {
+              [pathToUri(fp)]: [{
+                range: { start: { line: 0, character: 0 }, end: { line: endLine, character: endChar } },
+                newText: working,
+              }],
+            },
+          },
+        });
+      }
+    }
+  }
+
   return actions;
 });
 
