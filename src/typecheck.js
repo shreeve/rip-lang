@@ -354,6 +354,26 @@ export const SKIP_CODES = new Set([
   1064, // Return type of async function must be Promise
 ]);
 
+// Dedup diagnostics by (start line/col, end line/col, code, message).
+// The same TS error can fire twice when the dts header and compiled body
+// both contain the offending construct (e.g. an `import { X }` line that
+// maps to the same source position from both copies).
+//
+// `getRange(d)` must return `{ startLine, startCol, endLine, endCol }`.
+// Returns a new array; does not mutate the input.
+export function dedupDiagnostics(diags, getRange) {
+  const seen = new Set();
+  const out = [];
+  for (const d of diags) {
+    const r = getRange(d);
+    const key = `${r.startLine}:${r.startCol}:${r.endLine}:${r.endCol}:${d.code}:${d.message}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(d);
+  }
+  return out;
+}
+
 // Codes that need conditional suppression (not blanket).
 // 2300/2451: Suppress only when one endpoint is in the DTS header (structural).
 //            Let through when both endpoints are in the compiled body (real shadowing).
@@ -2245,6 +2265,25 @@ export async function runCheck(targetDir, opts = {}) {
       errors.push({ line: pos.line + 1, col: pos.col + 1, len: Math.max(1, len), message, severity, code: d.code, srcLine, related });
       if (severity === 'error') totalErrors++;
       else if (severity === 'warning') totalWarnings++;
+    }
+
+    // Dedup: same diagnostic can map twice when the dts header and compiled
+    // body both contain the offending construct (e.g. an `import { X }` line).
+    {
+      const deduped = dedupDiagnostics(errors, e => ({
+        startLine: e.line, startCol: e.col,
+        endLine: e.line, endCol: e.col + e.len,
+      }));
+      if (deduped.length < errors.length) {
+        const kept = new Set(deduped);
+        for (const e of errors) {
+          if (kept.has(e)) continue;
+          if (e.severity === 'error') totalErrors--;
+          else if (e.severity === 'warning') totalWarnings--;
+        }
+        errors.length = 0;
+        errors.push(...deduped);
+      }
     }
 
     // Untyped component prop checking — flag props without :: annotation

@@ -413,6 +413,7 @@ function compileRip(filePath, source) {
     const strict = isStrictFile(filePath);
     const entry = tc.compileForCheck(filePath, source, compiler, { strict });
     const prev = compiled.get(filePath);
+    const dtsChanged = (prev?.dts || '') !== (entry.dts || '');
 
     compiled.set(filePath, {
       version: (prev?.version || 0) + 1,
@@ -437,6 +438,13 @@ function compileRip(filePath, source) {
 
     connection.console.log(`[rip] compiled ${path.basename(filePath)}: hasTypes=${entry.hasTypes}, headerLines=${entry.headerLines}`);
     publishDiagnostics(filePath);
+
+    // Republish dependents only when this file's public surface (dts) actually
+    // changed — typing inside a function body leaves the dts identical, so the
+    // common case skips the loop entirely.  When it does change, schedule a
+    // debounced pass over *open* documents only (closed files don't need
+    // squiggles refreshed; the next open will recompute).
+    if (dtsChanged) scheduleDependentRepublish(filePath);
   } catch (e) {
     // Keep the previous compiled version for completions/hover during
     // transient parse errors.  Dot-recovery (trailing `.` triggers) is
@@ -481,6 +489,31 @@ function compileRip(filePath, source) {
     connection.sendDiagnostics({ uri: pathToUri(filePath), diagnostics });
     connection.console.log(`[rip] compile error ${path.basename(filePath)}: ${e.message}`);
   }
+}
+
+// Trailing-debounced republish of dependent files.  When a file's dts changes
+// we want other open files to revalidate, but a rapid burst of keystrokes
+// shouldn't trigger N full diagnostics passes.
+//
+// Pull-based: only files that are *open* in the editor are republished.
+// Closed files don't show squiggles anyway and will recompute on next open.
+const DEPENDENT_REPUBLISH_DELAY_MS = 250;
+const pendingRepublish = new Set(); // Set<changedFilePath>
+let republishTimer = null;
+function scheduleDependentRepublish(changedPath) {
+  pendingRepublish.add(changedPath);
+  if (republishTimer) return;
+  republishTimer = setTimeout(() => {
+    republishTimer = null;
+    const changed = new Set(pendingRepublish);
+    pendingRepublish.clear();
+    for (const doc of documents.all()) {
+      const fp = uriToPath(doc.uri);
+      if (changed.has(fp)) continue; // already published immediately
+      if (!compiled.has(fp)) continue;
+      publishDiagnostics(fp);
+    }
+  }, DEPENDENT_REPUBLISH_DELAY_MS);
 }
 
 function publishDiagnostics(filePath) {
@@ -748,8 +781,15 @@ function publishDiagnostics(filePath) {
     }
   }
 
-  connection.sendDiagnostics({ uri: pathToUri(filePath), diagnostics });
-  lastDiagnostics.set(filePath, diagnostics);
+  // Dedup: same diagnostic can map twice when the dts header and compiled
+  // body both contain the offending construct (e.g. an `import { X }` line).
+  const deduped = tc.dedupDiagnostics(diagnostics, d => ({
+    startLine: d.range.start.line, startCol: d.range.start.character,
+    endLine: d.range.end.line, endCol: d.range.end.character,
+  }));
+
+  connection.sendDiagnostics({ uri: pathToUri(filePath), diagnostics: deduped });
+  lastDiagnostics.set(filePath, deduped);
   connection.console.log(`[rip] diagnostics ${path.basename(filePath)}: ${diagnostics.length} issues`);
 }
 
