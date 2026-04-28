@@ -233,16 +233,16 @@ Auto-scan mode watches `appDir` itself (excluding `routes/`, which is already wa
 
 ### Migration
 
-| App         | Change                                                                                                                            |
-| ----------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| cart        | Remove `bundle:` key entirely                                                                                                     |
-| streamline  | Remove `bundle:` key                                                                                                              |
-| form        | Remove `bundle:` key (`routes` in dir list is redundant)                                                                          |
-| analytics   | Remove `bundle:` key                                                                                                              |
-| results     | Remove `bundle:` key                                                                                                              |
-| trusthealth | Remove `bundle:` key                                                                                                              |
-| medlabs     | Already uses `app: ['.']` — effectively auto-scan. Remove `bundle: app:` line. Keep `ui:` for external package (separate concern) |
-| starter     | Keep `bundle:` for external `ui` dir (separate concern)                                                                           |
+Auto-scan only kicks in when `bundle:` is omitted, so anything using a non-default
+named bundle (e.g. an external `ui:` source) keeps working unchanged.
+
+| App                  | Current `bundle:`                                                | Change                                                          |
+| -------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------- |
+| `examples/cart`      | `app: ['components']`                                            | Remove `bundle:` entirely                                       |
+| `examples/form`      | `app: ['routes', 'components']`                                  | Remove `bundle:` entirely (`routes` is already auto-included)   |
+| `examples/analytics` | `app: ['components']`                                            | Remove `bundle:` entirely                                       |
+| `examples/results`   | `app: ['components']`                                            | Remove `bundle:` entirely                                       |
+| `apps/medlabs`       | `ui: ['../../../packages/ui/browser/components']` + `app: ['.']` | Drop the `app: ['.']` line; keep `ui:` for the external package |
 
 ### Edge cases
 
