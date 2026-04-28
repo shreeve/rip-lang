@@ -284,11 +284,25 @@ function scanExports(source) {
   const names = new Set();
   const lines = source.split('\n');
   for (const raw of lines) {
-    const line = raw.replace(/#.*$/, '');
+    // Strip trailing `#` comments, but ignore `#` inside string literals.
+    let line = raw;
+    let inS = null;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (inS) {
+        if (ch === '\\') { i++; continue; }
+        if (ch === inS) inS = null;
+      } else if (ch === '"' || ch === "'") {
+        inS = ch;
+      } else if (ch === '#') {
+        line = line.slice(0, i);
+        break;
+      }
+    }
     let m;
     if ((m = /^\s*export\s+def\s+([A-Za-z_$][\w$]*)!?/.exec(line))) names.add(m[1]);
     else if ((m = /^\s*export\s+class\s+([A-Za-z_$][\w$]*)/.exec(line))) names.add(m[1]);
-    else if ((m = /^\s*export\s+(?:async\s+)?(?:function|const|let|var)\s+([A-Za-z_$][\w$]*)/.exec(line))) names.add(m[1]);
+    else if ((m = /^\s*export\s+(?:abstract\s+)?(?:async\s+)?(?:function|const|let|var|type|interface|enum)\s+([A-Za-z_$][\w$]*)/.exec(line))) names.add(m[1]);
     else if ((m = /^\s*export\s+([A-Za-z_$][\w$]*)\s*(?:<[^=]*>)?\s*=/.exec(line))) names.add(m[1]);
     else if ((m = /^\s*export\s*\{([^}]+)\}/.exec(line))) {
       for (const part of m[1].split(',')) {
@@ -1992,11 +2006,25 @@ connection.onCompletion((params) => {
     // (workspace .rip files outside the Program), we add a fresh item.
     const c = compiled.get(fp);
     if (c) {
+      // Filter the index by the identifier prefix the user is typing. Without
+      // this we'd construct an item (and run buildImportEdit) for every
+      // exported name in the workspace on every keystroke. If there's no
+      // prefix (cold open of completion menu), cap the list so we don't
+      // produce thousands of items.
+      const lineTextPrefix = (c.source.split('\n')[params.position.line] || '').slice(0, params.position.character);
+      const partialMatch = lineTextPrefix.match(/[A-Za-z_$][\w$]*$/);
+      const partial = partialMatch ? partialMatch[0] : '';
+      const partialLc = partial.toLowerCase();
+      const MAX_AUGMENT = partial ? Infinity : 50;
+
       const existingImports = collectImportedNames(c.source);
       const itemsByLabel = new Map();
       for (const it of result.items) itemsByLabel.set(it.label.replace(/\?$/, ''), it);
+      let added = 0;
       for (const [name, sources] of exportIndex) {
+        if (added >= MAX_AUGMENT) break;
         if (existingImports.has(name)) continue;
+        if (partial && !name.toLowerCase().startsWith(partialLc)) continue;
         for (const targetFp of sources) {
           if (targetFp === fp) continue;
           const spec = resolveSpecForTarget(fp, targetFp);
@@ -2022,6 +2050,7 @@ connection.onCompletion((params) => {
               additionalTextEdits: [edit],
             });
           }
+          added++;
           break; // first match wins
         }
       }
@@ -2032,10 +2061,17 @@ connection.onCompletion((params) => {
 });
 
 // Collect names of identifiers already imported in `source` so we don't suggest
-// importing them again. Handles `import { a, b }`, `import x`, `import x, { y }`.
+// importing them again. Handles single-line and multi-line forms:
+//   import { a, b } from 'm'
+//   import x from 'm'
+//   import x, { y } from 'm'
+//   import {
+//     a,
+//     b,
+//   } from 'm'
 function collectImportedNames(source) {
   const names = new Set();
-  const re = /^\s*import\s+(?:(?:([A-Za-z_$][\w$]*)\s*,\s*)?\{([^}]*)\}|([A-Za-z_$][\w$]*))\s+from\s+['"][^'"]+['"]/gm;
+  const re = /^\s*import\s+(?:(?:([A-Za-z_$][\w$]*)\s*,\s*)?\{([\s\S]*?)\}|([A-Za-z_$][\w$]*))\s+from\s+['"][^'"]+['"]/gm;
   let m;
   while ((m = re.exec(source))) {
     if (m[1]) names.add(m[1]);
@@ -2043,7 +2079,7 @@ function collectImportedNames(source) {
     if (m[2]) {
       for (const part of m[2].split(',')) {
         const id = part.trim().split(/\s+as\s+/i).pop();
-        if (id) names.add(id);
+        if (id && /^[A-Za-z_$][\w$]*$/.test(id)) names.add(id);
       }
     }
   }
@@ -2071,44 +2107,49 @@ function resolveSpecForTarget(fromFp, targetFp) {
 }
 
 // Build an LSP TextEdit that adds `name` to an import from `spec` in `source`.
-// If an import line already exists for that specifier, augment its braces;
-// otherwise insert a fresh `import { name } from 'spec'` line at the top
-// (after any leading shebang/comment block).
+// If an import statement already exists for that specifier (single- or multi-
+// line), augment its braces; otherwise insert a fresh
+// `import { name } from 'spec'` line at the top (after any leading shebang
+// or file-header comment block).
 function buildImportEdit(source, spec, name) {
-  const lines = source.split('\n');
-  const re = /^(\s*)import\s+(\{([^}]*)\}|([A-Za-z_$][\w$]*))\s+from\s+(['"])([^'"]+)\5\s*$/;
-  for (let i = 0; i < lines.length; i++) {
-    const m = re.exec(lines[i]);
-    if (!m || m[6] !== spec) continue;
+  // Find any existing `import ... from 'spec'` (single or multi-line).
+  const re = /^([ \t]*)import\s+(?:(?:([A-Za-z_$][\w$]*)\s*,\s*)?\{([\s\S]*?)\}|([A-Za-z_$][\w$]*))\s+from\s+(['"])([^'"]+)\5[ \t]*$/gm;
+  let m;
+  while ((m = re.exec(source))) {
+    if (m[6] !== spec) continue;
     const indent = m[1], quote = m[5];
+    const def = m[2] || m[4];
+    const startLineCol = offsetToLineCol(source, m.index);
+    const endLineCol = offsetToLineCol(source, m.index + m[0].length);
     if (m[3] !== undefined) {
       // Named import — add to braces if not present.
       const existing = m[3].split(',').map(s => s.trim()).filter(Boolean);
-      if (existing.includes(name)) return null; // already imported
+      if (existing.includes(name)) return null;
       existing.push(name);
-      const newLine = `${indent}import { ${existing.join(', ')} } from ${quote}${spec}${quote}`;
+      const head = def ? `${def}, ` : '';
+      const newText = `${indent}import ${head}{ ${existing.join(', ')} } from ${quote}${spec}${quote}`;
       return {
-        range: { start: { line: i, character: 0 }, end: { line: i, character: lines[i].length } },
-        newText: newLine,
+        range: { start: startLineCol, end: endLineCol },
+        newText,
         update: true,
       };
     } else {
-      // Default import — convert to `default, { name }`.
-      const def = m[4];
+      // Bare default import — convert to `default, { name }`.
       if (def === name) return null;
-      const newLine = `${indent}import ${def}, { ${name} } from ${quote}${spec}${quote}`;
+      const newText = `${indent}import ${def}, { ${name} } from ${quote}${spec}${quote}`;
       return {
-        range: { start: { line: i, character: 0 }, end: { line: i, character: lines[i].length } },
-        newText: newLine,
+        range: { start: startLineCol, end: endLineCol },
+        newText,
         update: true,
       };
     }
   }
-  // No matching import line — insert a new one at an appropriate location.
-  // Mirror TypeScript: after the shebang and the leading file-header comment
-  // block (the first contiguous run of `#` lines starting at line 0), and
-  // after any existing imports. Don't skip comments that appear deeper in
-  // the file — those belong to the code below them.
+
+  // No matching import — insert a new one. Mirror TypeScript: after the
+  // shebang and the leading file-header comment block (the first contiguous
+  // run of `#` lines starting at line 0), and after any existing imports.
+  // Don't skip comments deeper in the file — those belong to the code below.
+  const lines = source.split('\n');
   let insertAt = 0;
   let i = 0;
   if (lines[0]?.startsWith('#!')) { insertAt = 1; i = 1; }
@@ -2119,10 +2160,7 @@ function buildImportEdit(source, spec, name) {
     if (/^\s*import\b/.test(l)) { insertAt = i + 1; i++; continue; }
     break;
   }
-  // Ensure a blank line separates the import block from following code.
   const needsBlankAfter = lines[insertAt] !== undefined && !/^\s*(import\b|$)/.test(lines[insertAt]);
-  // Ensure a blank line separates a fresh import from a preceding header
-  // comment or shebang (TS does the same).
   const prev = insertAt > 0 ? lines[insertAt - 1] : '';
   const needsBlankBefore = insertAt > 0 && !/^\s*(import\b|$)/.test(prev);
   return {
@@ -2392,22 +2430,22 @@ connection.onCodeAction((params) => {
       // single full-document replacement so all line numbers stay consistent.
       let working = c.source;
       let mutated = false;
+      const posToOffset = (text, line, character) => {
+        let off = 0, ln = 0;
+        while (ln < line) {
+          const i = text.indexOf('\n', off);
+          if (i < 0) return text.length;
+          off = i + 1;
+          ln++;
+        }
+        return off + character;
+      };
       for (const { name, spec } of picks) {
         const edit = buildImportEdit(working, spec, name);
         if (!edit) continue;
-        const lines = working.split('\n');
-        const isLineReplace = edit.range.start.line === edit.range.end.line
-          && edit.range.start.character === 0
-          && edit.range.end.character === (lines[edit.range.start.line]?.length ?? 0);
-        const before = lines.slice(0, edit.range.start.line);
-        if (isLineReplace) {
-          working = [...before, edit.newText, ...lines.slice(edit.range.start.line + 1)].join('\n');
-        } else {
-          // Pure insertion at start of `edit.range.start.line`. `newText`
-          // already includes its own trailing newline(s); strip one so the
-          // join with `\n` doesn't duplicate the line break.
-          working = [...before, edit.newText.replace(/\n$/, ''), ...lines.slice(edit.range.start.line)].join('\n');
-        }
+        const start = posToOffset(working, edit.range.start.line, edit.range.start.character);
+        const end = posToOffset(working, edit.range.end.line, edit.range.end.character);
+        working = working.slice(0, start) + edit.newText + working.slice(end);
         mutated = true;
       }
       if (mutated && working !== c.source) {
