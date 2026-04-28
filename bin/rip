@@ -8,7 +8,7 @@ import { Compiler, formatError } from '../src/compiler.js';
 // Side-effect imports — register CLI-side runtime providers. The browser
 // bundle imports a different schema loader so server-only fragments
 // (db-naming/orm/ddl) tree-shake out of docs/dist/rip.min.js.
-import '../src/types-emit.js';        // registers emitTypes for .d.ts output
+import '../src/dts.js';               // registers emitTypes for .d.ts output
 import '../src/schema/loader-server.js'; // registers full schema runtime
 import packageJson from '../package.json' with { type: 'json' };
 

@@ -1,6 +1,6 @@
 # Compiler Subsystem — Agent Guide
 
-This covers `compiler.js`, `lexer.js`, `components.js`, `browser.js`, `types.js`, `types-emit.js`, `app.rip`, `typecheck.js`, the `schema/` subdirectory, and the `grammar/` directory. The schema feature lives in `src/schema/` (entry `src/schema/schema.js`, imported via relative paths like `./schema/schema.js` from sibling modules).
+This covers `compiler.js`, `lexer.js`, `components.js`, `browser.js`, `stdlib.js`, `types.js`, `dts.js`, `app.rip`, `typecheck.js`, the `schema/` subdirectory, and the `grammar/` directory. The schema feature lives in `src/schema/` (entry `src/schema/schema.js`, imported via relative paths like `./schema/schema.js` from sibling modules).
 
 ---
 
@@ -16,6 +16,7 @@ The browser bundle (`docs/dist/rip.min.js`) is built from `src/browser.js` plus 
 | `src/lexer.js` | yes | tokenizer + rewriter pipeline |
 | `src/compiler.js` | yes | codegen + reactive runtime + component runtime + `compileToJS` + `setTypesEmitter` hook + `emitEnum` |
 | `src/components.js` | yes | render rewriter + component runtime |
+| `src/stdlib.js` | yes | `getStdlibCode()` runtime preamble (p / pp / pr / pj / kind / abort / ...) + importable `stringify(value)` + `STDLIB_TYPE_DECLS` for typecheck.js |
 | `src/schema/schema.js` | yes (via `./schema/schema.js`) | lexer rewrite + body parser + emitSchema codegen + `setSchemaRuntimeProvider` hook (no fragment imports) |
 | `src/schema/loader-browser.js` | yes (browser only, via `./schema/loader-browser.js`) | imports validate + browser-stubs fragments; eager-installs browser runtime; registers provider |
 | `src/schema/loader-server.js` | **no** (CLI / server / tests, via `./schema/loader-server.js`) | imports all five fragments; eager-installs migration runtime; registers provider |
@@ -30,8 +31,8 @@ The browser bundle (`docs/dist/rip.min.js`) is built from `src/browser.js` plus 
 | `src/sourcemaps.js` | yes | inline source-map generation |
 | `src/generated/dom-tags.js` | yes | HTML/SVG tag set for render-block tag detection |
 | `src/generated/dom-events.js` | yes | event-name set for `onClick`/`onKeydown` auto-wire |
-| `src/types-emit.js` | **no** | `.d.ts` emitter + intrinsic decl tables — CLI / typecheck only |
-| `src/schema/dts-emit.js` | **no** | schema `.d.ts` emitter — CLI / typecheck only |
+| `src/dts.js` | **no** | `.d.ts` emitter + intrinsic decl tables for the type system — CLI / typecheck only |
+| `src/schema/dts.js` | **no** | `.d.ts` emitter for schema declarations — CLI / typecheck only |
 | `src/typecheck.js` | **no** | TypeScript LSP integration — CLI only |
 | `src/repl.js` | **no** | interactive CLI REPL |
 
@@ -43,22 +44,22 @@ The same pattern is used twice — once for `.d.ts` emission, once for the schem
 
 `compiler.js` exports `setTypesEmitter(fn)`. The default emitter is `null`. The two `compile()` callsites that produce `.d.ts` output guard with `(typeTokens && _typesEmitter)` and silently skip if no emitter is registered.
 
-`src/types-emit.js` calls `setTypesEmitter(emitTypes)` at module load. Any caller that wants `.d.ts` output side-effect-imports `types-emit.js`:
+`src/dts.js` calls `setTypesEmitter(emitTypes)` at module load. Any caller that wants `.d.ts` output side-effect-imports `dts.js`:
 
 ```javascript
 // CLI entry — bin/rip
-import '../src/types-emit.js';   // installs emitter
+import '../src/dts.js';          // installs emitter
 
 // LSP integration
-import { ... } from './types-emit.js';
+import { ... } from './dts.js';
 
 // Test runner that exercises type emission
-import '../src/types-emit.js';
+import '../src/dts.js';
 ```
 
-The browser bundle never imports `types-emit.js`, so the emitter stays null and the `.d.ts` path is dead code that the bundler prunes.
+The browser bundle never imports `dts.js`, so the emitter stays null and the `.d.ts` path is dead code that the bundler prunes.
 
-**Failure mode to remember:** If you write code that calls `compile(source, { types: 'emit' })` and inspects `result.dts`, you **must** import `src/types-emit.js` (directly or indirectly) somewhere in that code path. Without it, `result.dts` is `null` regardless of source content. Symptom: types emission "silently does nothing" — no error, no warning, just empty output. The fix is one line: `import '../src/types-emit.js';`.
+**Failure mode to remember:** If you write code that calls `compile(source, { types: 'emit' })` and inspects `result.dts`, you **must** import `src/dts.js` (directly or indirectly) somewhere in that code path. Without it, `result.dts` is `null` regardless of source content. Symptom: types emission "silently does nothing" — no error, no warning, just empty output. The fix is one line: `import '../src/dts.js';`.
 
 The schema runtime uses an analogous hook: `src/schema/schema.js` exports `setSchemaRuntimeProvider(fn)`, default null. `src/schema/loader-server.js` and `src/schema/loader-browser.js` are the two providers. CLI / tests / server side-effect-import `./schema/loader-server.js` (full migration runtime, all four modes). The browser bundle (`src/browser.js`) side-effect-imports `./schema/loader-browser.js` (validate + browser-stubs only). Same failure mode applies — call `getSchemaRuntime()` without registering a provider and you get a clear error pointing at which loader to import.
 
@@ -636,11 +637,11 @@ enum Status
 Type emission is split across two files by execution context:
 
 - `types.js` (browser-side, ~21 KB) — `installTypeSupport(Lexer)` adds `rewriteTypes()` to strip type annotations from the token stream so user-typed Rip parses. This is the only thing the browser needs from type machinery.
-- `types-emit.js` (CLI/LSP only, ~38 KB) — `emitTypes(tokens, sexpr, source)` generates `.d.ts`, plus `expandSuffixes`, `emitComponentTypes`, and the intrinsic declaration tables (`INTRINSIC_TYPE_DECLS`, `SIGNAL_*`, `COMPUTED_*`, `EFFECT_*`, etc.). Registers itself with the compiler at module load via `setTypesEmitter()`.
+- `dts.js` (CLI/LSP only, ~38 KB) — `emitTypes(tokens, sexpr, source)` generates `.d.ts`, plus `expandSuffixes`, `emitComponentTypes`, and the intrinsic declaration tables (`INTRINSIC_TYPE_DECLS`, `SIGNAL_*`, `COMPUTED_*`, `EFFECT_*`, etc.). Registers itself with the compiler at module load via `setTypesEmitter()`.
 
 `emitEnum` (runtime JS for `enum` blocks) lives in `compiler.js` next to the rest of the codegen dispatch — it's not type machinery, it's real runtime emission.
 
-`typecheck.js` (CLI only) drives `rip check`, mediates TypeScript diagnostics, and side-effect-imports `types-emit.js` for the intrinsic decl tables.
+`typecheck.js` (CLI only) drives `rip check`, mediates TypeScript diagnostics, and side-effect-imports `dts.js` for the intrinsic decl tables.
 
 Types are processed at the token layer before parsing.
 
@@ -674,10 +675,10 @@ several files by execution context:
   bundle. Server loader pulls all five; browser loader pulls only
   validate + browser-stubs. Bun's tree-shaker uses these import sets to
   omit server-only fragments from `docs/dist/rip.min.js`.
-- `src/schema/dts-emit.js` (CLI/LSP only) — `emitSchemaTypes` walks
+- `src/schema/dts.js` (CLI/LSP only) — `emitSchemaTypes` walks
   parsed schema s-expressions and emits `declare const Foo: Schema<...>`
   lines for the TypeScript language service. Imported only by
-  `types-emit.js` and `typecheck.js`. The `dts-emit` name signals
+  `dts.js` and `typecheck.js`. The `dts` name signals
   that this is a compile-time `.d.ts` emitter, not a `runtime-*` fragment.
 
 ### Lexer path

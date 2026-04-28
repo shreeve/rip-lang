@@ -3,6 +3,11 @@
 import { plugin } from "bun";
 import { fileURLToPath } from "url";
 import { compileToJS, formatError } from "./src/compiler.js";
+// Register the full schema runtime provider so .rip files containing
+// `schema :model` blocks compile correctly inside spawned workers.
+// Workers are launched with `--preload rip-loader.js` and otherwise
+// would call compileToJS without ever registering a provider.
+import "./src/schema/loader-server.js";
 
 await plugin({
   name: "rip-loader",

@@ -1,0 +1,32 @@
+{
+  "name": "@rip-lang/rsx",
+  "version": "0.1.0",
+  "description": "Rip Style XML - small, safe XML parser/serializer that yields plain Rip objects",
+  "type": "module",
+  "main": "rsx.rip",
+  "exports": {
+    ".": "./rsx.rip"
+  },
+  "keywords": [
+    "xml",
+    "rsx",
+    "soap",
+    "parser",
+    "rip"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shreeve/rip-lang.git",
+    "directory": "packages/rsx"
+  },
+  "homepage": "https://github.com/shreeve/rip-lang/tree/main/packages/rsx#readme",
+  "bugs": {
+    "url": "https://github.com/shreeve/rip-lang/issues"
+  },
+  "author": "Steve Shreeve <steve.shreeve@gmail.com>",
+  "license": "MIT",
+  "files": [
+    "rsx.rip",
+    "README.md"
+  ]
+}

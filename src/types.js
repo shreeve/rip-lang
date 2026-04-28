@@ -7,7 +7,7 @@
 // `enum` declarations.
 //
 // The .d.ts emission half (emitTypes, intrinsic decl tables, component-
-// type emitter) lives in src/types-emit.js, which is reachable only from
+// type emitter) lives in src/dts.js, which is reachable only from
 // CLI entry points and typecheck.js. Runtime enum codegen lives in
 // compiler.js (CodeEmitter.prototype.emitEnum) — that's real codegen,
 // not type machinery.

@@ -11,13 +11,14 @@
 import { Lexer } from './lexer.js';
 import { parser } from './parser.js';
 import { installComponentSupport } from './components.js';
-// Type emission is CLI/editor-only. types-emit.js registers itself via
-// setTypesEmitter() at module load. The browser never imports types-emit,
+// Type emission is CLI/editor-only. dts.js registers itself via
+// setTypesEmitter() at module load. The browser never imports dts.js,
 // so _typesEmitter stays null and .d.ts output is silently skipped.
 let _typesEmitter = null;
 export function setTypesEmitter(fn) { _typesEmitter = fn; }
 import { installSchemaSupport } from './schema/schema.js';
 import { SourceMapGenerator } from './sourcemaps.js';
+import { stringify, getStdlibCode } from './stdlib.js';
 import { RipError, toRipError } from './error.js';
 
 // =============================================================================
@@ -3920,24 +3921,6 @@ export function emit(sexpr, options = {}) {
   return new CodeEmitter(options).compile(sexpr);
 }
 
-export function getStdlibCode() {
-  return `\
-globalThis.abort  ??= (msg) => { if (msg) console.error(msg); process.exit(1); };
-globalThis.assert ??= (v, msg) => { if (!v) throw new Error(msg || "Assertion failed"); };
-globalThis.exit   ??= (code) => process.exit(code || 0);
-globalThis.kind   ??= (v) => v != null ? (v.constructor?.name || Object.prototype.toString.call(v).slice(8, -1)).toLowerCase() : String(v);
-globalThis.noop   ??= () => {};
-globalThis.p      ??= console.log;
-globalThis.pp     ??= (v) => { console.log(JSON.stringify(v, null, 2)); return v; };
-globalThis.raise  ??= (a, b) => { throw (b !== undefined ? new a(b) : new Error(a)); };
-globalThis.rand   ??= (a, b) => b !== undefined ? (a > b && ([a, b] = [b, a]), Math.floor(Math.random() * (b - a + 1) + a)) : a ? Math.floor(Math.random() * a) : Math.random();
-globalThis.sleep  ??= (ms) => new Promise(r => setTimeout(r, ms));
-globalThis.todo   ??= (msg) => { throw new Error(msg || "Not implemented"); };
-globalThis.warn   ??= console.warn;
-globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
-`;
-}
-
 export function getReactiveRuntime() {
   return new CodeEmitter({}).getReactiveRuntime();
 }
@@ -3947,4 +3930,5 @@ export function getComponentRuntime() {
 }
 
 export { formatSExpr };
+export { stringify, getStdlibCode };
 export { RipError, toRipError, formatError, formatErrorHTML } from './error.js';

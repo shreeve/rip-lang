@@ -1,0 +1,445 @@
+# ==============================================================================
+# rsx.rip — Rip Style XML (XML ⇄ Rip object)
+#
+# Author: Steve Shreeve <steve.shreeve@gmail.com>
+#   Date: April 28, 2026
+#  Legal: MIT License
+# ==============================================================================
+#
+# RSX is a small forgiving XML parser and serializer for the cases where you
+# want a Rip object, not a DOM. It's the modern replacement for the legacy
+# `csex.coffee` (XML→CSON) helper: same idea, but built around a real
+# scanner/tokenizer instead of nested regular expressions, and with security
+# defaults appropriate for talking to outside systems (SOAP, healthcare EDI
+# envelopes, etc.).
+#
+# What it does:
+#   * Scans a well-formed-ish XML document into events: tag-open, tag-close,
+#     self-close, text, CDATA, comment.
+#   * Builds a plain Rip object tree where repeated child tags collapse into
+#     arrays automatically.
+#   * Strips namespace prefixes by default for ergonomic consumer code, with
+#     an opt-in mode to preserve them when round-trip fidelity matters.
+#   * Preserves CDATA content verbatim — never collapses whitespace inside.
+#   * Refuses DOCTYPE and never expands entities beyond the five built-ins.
+#     No XXE, no entity-expansion attacks.
+#
+# What it does NOT do:
+#   * Validate against a schema or DTD.
+#   * Honor xmlns binding semantics — namespace prefixes are treated as
+#     opaque labels.
+#   * Round-trip mixed content (text and elements interleaved) unless the
+#     caller passes preserveChildren: true.
+# ==============================================================================
+
+# ==[ Constants ]===============================================================
+
+DEFAULT_OPTS =! Object.freeze
+  stripNamespaces:    true     # 'ns1:Foo'         → 'Foo'
+  preserveCDATA:      true     # CDATA text is verbatim
+  trimText:           true     # collapse whitespace in non-CDATA text
+  coerceNumbers:      false    # never auto-coerce numbers from text
+  coerceBooleans:     false    # never auto-coerce booleans from text
+  attrsKey:           '@attrs' # grouped attributes key on each node
+  textKey:            '#text'  # mixed-content text key
+  forceArray:         null     # set | array | function — force these tags to arrays
+  preserveChildren:   false    # emit @children in document order
+  allowDoctype:       false    # reject <!DOCTYPE ...>
+  allowProcessingInstructions: true  # tolerate <?xml ...?> by skipping
+  maxBytes:           5 * 1024 * 1024  # 5MB hard cap
+
+# Built-in entity references. We intentionally do not expand any other
+# entity — including numeric character references for high code points
+# is fine, but we never resolve a custom <!ENTITY foo "..."> declaration.
+ENTITIES =!
+  amp:    '&'
+  lt:     '<'
+  gt:     '>'
+  quot:   '"'
+  apos:   "'"
+
+# ==[ Errors ]==================================================================
+
+class RsxError extends Error
+  constructor: (msg, @offset) ->
+    super msg
+    @name = 'RsxError'
+
+# ==[ Helpers ]=================================================================
+
+decodeEntities = (str) ->
+  return str unless str.includes '&'
+  str.replace /&(#x?[0-9a-fA-F]+|[a-zA-Z][a-zA-Z0-9]*);/g, (match, body) ->
+    if body[0] is '#'
+      hex = body[1] is 'x' or body[1] is 'X'
+      digits = hex ? body.slice(2) : body.slice(1)
+      base = hex ? 16 : 10
+      code = parseInt digits, base
+      return match unless Number.isFinite(code) and code >= 0 and code <= 0x10FFFF
+      return String.fromCodePoint code
+    if Object.prototype.hasOwnProperty.call(ENTITIES, body)
+      return ENTITIES[body]
+    match
+
+stripNs = (qname) ->
+  i = qname.indexOf ':'
+  i is -1 ? qname : qname.slice(i + 1)
+
+shouldForceArray = (forceArray, name) ->
+  return false unless forceArray?
+  return forceArray.has(name) if forceArray instanceof Set
+  return forceArray.includes(name) if Array.isArray forceArray
+  return forceArray(name) if typeof forceArray is 'function'
+  false
+
+# ==[ Scanner ]=================================================================
+
+# The scanner walks a single string, emitting events to the parser. It is
+# deliberately small: one cursor (`pos`), one buffer (`xml`), one tag-name
+# regex, no lookbehind, no recursion. Each event is dispatched through
+# `emit` which forwards to the parser callbacks.
+
+class Scanner
+  constructor: (@xml, @opts) ->
+    @len = @xml.length
+    @pos = 0
+
+    if @len > @opts.maxBytes
+      throw new RsxError "input exceeds maxBytes (#{@opts.maxBytes})", 0
+
+  scan: (handler) ->
+    @h = handler
+    while @pos < @len
+      ch = @xml.charCodeAt @pos
+      if ch is 60  # '<'
+        @scanMarkup()
+      else
+        @scanText()
+    null
+
+  scanText: ->
+    start = @pos
+    nextLt = @xml.indexOf '<', @pos
+    end = nextLt is -1 ? @len : nextLt
+    raw = @xml.slice start, end
+    @pos = end
+    return if raw.length is 0
+    text = decodeEntities raw
+    text = text.trim().replace(/\s+/g, ' ') if @opts.trimText
+    @h.text(text) if text.length > 0
+
+  scanMarkup: ->
+    next = @xml.charCodeAt @pos + 1
+
+    # Comment, CDATA, or DOCTYPE — they all start with '<!'
+    if next is 33  # '!'
+      if @xml.startsWith '<!--', @pos
+        return @scanComment()
+      if @xml.startsWith '<![CDATA[', @pos
+        return @scanCdata()
+      if @xml.startsWith '<!DOCTYPE', @pos or @xml.startsWith '<!doctype', @pos
+        unless @opts.allowDoctype
+          throw new RsxError 'DOCTYPE declarations are not allowed', @pos
+        @pos = @xml.indexOf '>', @pos
+        throw new RsxError 'unterminated DOCTYPE', @pos if @pos is -1
+        @pos += 1
+        return
+      throw new RsxError "unexpected '<!' construct", @pos
+
+    # Processing instructions <? ... ?>
+    if next is 63  # '?'
+      unless @opts.allowProcessingInstructions
+        throw new RsxError 'processing instructions are not allowed', @pos
+      end = @xml.indexOf '?>', @pos + 2
+      throw new RsxError 'unterminated processing instruction', @pos if end is -1
+      @pos = end + 2
+      return
+
+    # End tag </name>
+    if next is 47  # '/'
+      return @scanEndTag()
+
+    # Start tag (possibly self-closing) <name ...>
+    @scanStartTag()
+
+  scanComment: ->
+    end = @xml.indexOf '-->', @pos + 4
+    throw new RsxError 'unterminated comment', @pos if end is -1
+    @pos = end + 3
+
+  scanCdata: ->
+    start = @pos + 9
+    end = @xml.indexOf ']]>', start
+    throw new RsxError 'unterminated CDATA', @pos if end is -1
+    @h.cdata @xml.slice(start, end)
+    @pos = end + 3
+
+  scanEndTag: ->
+    end = @xml.indexOf '>', @pos + 2
+    throw new RsxError 'unterminated end tag', @pos if end is -1
+    name = @xml.slice(@pos + 2, end).trim()
+    @h.close name
+    @pos = end + 1
+
+  scanStartTag: ->
+    end = @findStartTagEnd @pos + 1
+    throw new RsxError 'unterminated start tag', @pos if end is -1
+
+    selfClose = @xml.charCodeAt(end - 1) is 47  # '/'
+    inner = @xml.slice(@pos + 1, selfClose ? end - 1 : end)
+    @pos = end + 1
+
+    [name, attrText] = @splitNameAndAttrs inner
+    attrs = @parseAttributes attrText
+    @h.open name, attrs, selfClose
+
+  # Locate '>' that is not inside a quoted attribute value.
+  findStartTagEnd: (from) ->
+    i = from
+    quote = 0
+    while i < @len
+      ch = @xml.charCodeAt i
+      if quote isnt 0
+        quote = 0 if ch is quote
+      else if ch is 34 or ch is 39  # " or '
+        quote = ch
+      else if ch is 62  # '>'
+        return i
+      i += 1
+    -1
+
+  splitNameAndAttrs: (inner) ->
+    inner = inner.replace(/^\s+/, '').replace(/\s+$/, '')
+    m = inner.match /^([^\s\/>]+)([\s\S]*)$/
+    throw new RsxError "missing tag name", @pos unless m
+    [m[1], m[2]]
+
+  parseAttributes: (text) ->
+    attrs = null
+    re = /([^\s=\/>"']+)\s*(?:=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]*)))?/g
+    while (m = re.exec text)
+      name = m[1]
+      raw = m[2] ?? m[3] ?? m[4] ?? ''
+      val = decodeEntities raw
+      attrs ?= {}
+      attrs[name] = val
+    attrs
+
+# ==[ Builder ]=================================================================
+
+# The Builder owns the in-progress object tree and knows how to:
+#   * push / pop the open-element stack
+#   * coerce repeated children into arrays
+#   * collapse single-text nodes into scalar values
+#   * preserve CDATA verbatim
+#   * (optional) preserve children in document order via `@children`
+
+class Builder
+  constructor: (@opts) ->
+    @root = {}
+    @stack = [@root]
+    @nameStack = ['']
+    # Per-element scratch state to decide between scalar / object / array
+    # collapse at close time.
+    @textBuf = ['']
+    @hadCdata = [false]
+    @hadElement = [false]
+    @children = if @opts.preserveChildren then [[]] else null
+
+  open: (qname, attrs, selfClose) ->
+    name = @opts.stripNamespaces ? stripNs(qname) : qname
+
+    parent = @stack[@stack.length - 1]
+    @hadElement[@hadElement.length - 1] = true
+
+    node = {}
+    if attrs
+      decoded = {}
+      for own k, v of attrs
+        decodedKey = @opts.stripNamespaces ? stripNs(k) : k
+        decoded[decodedKey] = v
+      node[@opts.attrsKey] = decoded
+
+    forceArr = shouldForceArray @opts.forceArray, name
+
+    if selfClose
+      # Self-closing element: insert directly with empty-string text shorthand.
+      val = if attrs then node else ''
+      @attach parent, name, val, forceArr
+      if @children
+        @children[@children.length - 1].push { name, value: val }
+      return
+
+    @attach parent, name, node, forceArr
+    @stack.push node
+    @nameStack.push name
+    @textBuf.push ''
+    @hadCdata.push false
+    @hadElement.push false
+    @children.push [] if @children
+
+  close: (qname) ->
+    name = @opts.stripNamespaces ? stripNs(qname) : qname
+    expected = @nameStack[@nameStack.length - 1]
+    unless name is expected
+      throw new RsxError "mismatched close tag: expected </#{expected}>, got </#{name}>"
+
+    node = @stack.pop()
+    @nameStack.pop()
+    text = @textBuf.pop()
+    @hadCdata.pop()
+    hadEl = @hadElement.pop()
+    childList = @children?.pop()
+
+    parent = @stack[@stack.length - 1]
+
+    # Collapse rule: if no child elements were ever added and the only
+    # content is text / CDATA, replace the node object with the bare text.
+    # Attribute-bearing elements keep their object form.
+    finalVal = node
+    hasAttrs = node[@opts.attrsKey]?
+    if not hadEl and not hasAttrs
+      finalVal = text
+    else if not hadEl and hasAttrs and text.length > 0
+      node[@opts.textKey] = text
+
+    if @children and childList?.length > 0 and (hadEl or @opts.preserveChildren)
+      node['@children'] = childList
+
+    @replace parent, name, node, finalVal
+
+  text: (str) ->
+    return if str.length is 0
+    return if @stack.length <= 1   # text before root element — ignore
+    @textBuf[@textBuf.length - 1] += str
+    @children?[@children.length - 1].push str if @opts.preserveChildren
+
+  cdata: (str) ->
+    return if @stack.length <= 1
+    @hadCdata[@hadCdata.length - 1] = true
+    @textBuf[@textBuf.length - 1] += str
+    @children?[@children.length - 1].push str if @opts.preserveChildren
+
+  result: -> @root
+
+  # Attach a freshly opened child to its parent under `name`. If a sibling
+  # with the same name already exists we promote it (and the new one) into
+  # an array so repeated tags become a list.
+  attach: (parent, name, value, forceArray) ->
+    if Object.prototype.hasOwnProperty.call(parent, name)
+      cur = parent[name]
+      if Array.isArray cur
+        cur.push value
+      else
+        parent[name] = [cur, value]
+    else
+      parent[name] = forceArray ? [value] : value
+
+  # Once the close tag fires we have to swap the placeholder node we
+  # inserted at open time for its final value (which may be a string
+  # collapse). Walk the parent slot and substitute the trailing entry.
+  replace: (parent, name, node, finalVal) ->
+    return if finalVal is node
+    cur = parent[name]
+    if Array.isArray cur
+      idx = cur.lastIndexOf node
+      cur[idx] = finalVal if idx isnt -1
+    else
+      parent[name] = finalVal
+
+# ==[ Public parse ]============================================================
+
+mergeOpts = (opts) ->
+  out = {}
+  out[k] = v for own k, v of DEFAULT_OPTS
+  if opts
+    for own k, v of opts
+      out[k] = v
+  if Array.isArray out.forceArray
+    out.forceArray = new Set out.forceArray
+  out
+
+export parse = (xml, opts) ->
+  throw new RsxError 'XML source must be a string' unless typeof xml is 'string'
+  options = mergeOpts opts
+  builder = new Builder options
+  scanner = new Scanner xml, options
+  scanner.scan
+    open:  (n, a, s) -> builder.open  n, a, s
+    close: (n)       -> builder.close n
+    text:  (s)       -> builder.text  s
+    cdata: (s)       -> builder.cdata s
+  builder.result()
+
+# ==[ Stringify ]===============================================================
+
+# Minimal but correct serializer. Escapes the five XML-significant
+# characters in text nodes and double-quote in attribute values. Wraps
+# any string value in CDATA when the caller asks via the `cdata` option
+# (a Set or Array of tag names whose content should be CDATA-wrapped).
+
+XML_TEXT_ESC = (s) ->
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+XML_ATTR_ESC = (s) ->
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;')
+
+formatAttrs = (attrs) ->
+  return '' unless attrs and Object.keys(attrs).length > 0
+  parts = (" #{k}=\"#{XML_ATTR_ESC String(v)}\"" for own k, v of attrs)
+  parts.join ''
+
+wrapCdata = (text) ->
+  # Splitting `]]>` into two CDATA sections is the safe way to embed it.
+  safe = text.replace /\]\]>/g, ']]]]><![CDATA[>'
+  "<![CDATA[#{safe}]]>"
+
+emitNode = (name, value, opts, depth) ->
+  pad = (opts.indent or '').repeat depth
+  if value is null or value is undefined
+    return "#{pad}<#{name}/>"
+  if Array.isArray value
+    return (emitNode(name, item, opts, depth) for item in value).join opts.newline
+  if typeof value is 'object'
+    attrs = value[opts.attrsKey or '@attrs']
+    body = []
+    for own key, sub of value
+      continue if key is (opts.attrsKey or '@attrs')
+      continue if key is (opts.textKey or '#text')
+      continue if key is '@children'
+      body.push emitNode key, sub, opts, depth + 1
+    text = value[opts.textKey or '#text']
+    if body.length is 0 and (not text? or text is '')
+      return "#{pad}<#{name}#{formatAttrs attrs}/>"
+    open = "#{pad}<#{name}#{formatAttrs attrs}>"
+    close = "</#{name}>"
+    if body.length is 0
+      inner = if shouldWrapCdata(opts.cdata, name) then wrapCdata(String text) else XML_TEXT_ESC(String text)
+      return "#{open}#{inner}#{close}"
+    parts = [open]
+    parts.push body.join opts.newline
+    parts.push "#{pad}#{close}"
+    return parts.join opts.newline
+
+  # Scalar (string / number / boolean) ─ emit as text, with optional
+  # CDATA wrapping for known-binary-ish payload tags.
+  inner = if shouldWrapCdata(opts.cdata, name) then wrapCdata(String value) else XML_TEXT_ESC(String value)
+  "#{pad}<#{name}>#{inner}</#{name}>"
+
+shouldWrapCdata = (cdata, name) ->
+  return false unless cdata?
+  return cdata.has(name) if cdata instanceof Set
+  return cdata.includes(name) if Array.isArray cdata
+  false
+
+export stringify = (rootName, value, opts = {}) ->
+  options =
+    indent:    opts.indent ?? ''
+    newline:   opts.newline ?? (opts.indent ? '\n' : '')
+    attrsKey:  opts.attrsKey ?? '@attrs'
+    textKey:   opts.textKey  ?? '#text'
+    cdata:     if Array.isArray opts.cdata then new Set opts.cdata else opts.cdata
+  options.indent = ' '.repeat(options.indent) if typeof options.indent is 'number'
+  emitNode rootName, value, options, 0
+
+export { RsxError }

@@ -10,7 +10,7 @@ import './schema/loader-browser.js';
 export { Lexer } from './lexer.js';
 export { parser } from './parser.js';
 export { CodeEmitter, Compiler, compile, compileToJS, formatSExpr, getStdlibCode, getReactiveRuntime, getComponentRuntime, RipError, formatError, formatErrorHTML } from './compiler.js';
-import { mergeChunksWithInlineMap } from './sourcemap-merge.js';
+import { mergeChunksWithInlineMap } from './sourcemaps.js';
 import { getStdlibCode, formatError as _formatError } from './compiler.js';
 
 // Version info (replaced during build)

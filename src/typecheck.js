@@ -11,7 +11,8 @@
 //   type errors mapped back to Rip source positions.
 
 import { Compiler, getStdlibCode } from './compiler.js';
-import { INTRINSIC_TYPE_DECLS, INTRINSIC_FN_DECL, ARIA_TYPE_DECLS, SIGNAL_INTERFACE, SIGNAL_FN, COMPUTED_INTERFACE, COMPUTED_FN, EFFECT_FN } from './types-emit.js';
+import { STDLIB_TYPE_DECLS } from './stdlib.js';
+import { INTRINSIC_TYPE_DECLS, INTRINSIC_FN_DECL, ARIA_TYPE_DECLS, SIGNAL_INTERFACE, SIGNAL_FN, COMPUTED_INTERFACE, COMPUTED_FN, EFFECT_FN } from './dts.js';
 import { hasSchemas } from './schema/schema.js';
 import './schema/loader-server.js';   // registers full schema runtime provider
 import { createRequire } from 'module';
@@ -1009,24 +1010,14 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
   // automatically. Precise type overrides are provided where the generic
   // fallback (...args: any[]) => any would lose useful type information.
   if (hasTypes) {
-    const preciseTypes = {
-      abort:  'declare function abort(msg?: string): never;',
-      assert: 'declare function assert(v: any, msg?: string): asserts v;',
-      exit:   'declare function exit(code?: number): never;',
-      kind:   'declare function kind(v: any): string;',
-      noop:   'declare function noop(): void;',
-      p:      'declare function p(...args: any[]): void;',
-      pp:     'declare function pp(v: any): any;',
-      raise:  'declare function raise(a: any, b?: any): never;',
-      rand:   'declare function rand(a?: number, b?: number): number;',
-      sleep:  'declare function sleep(ms: number): Promise<void>;',
-      todo:   'declare function todo(msg?: string): never;',
-      warn:   'declare function warn(...args: any[]): void;',
-      zip:    'declare function zip(...arrays: any[][]): any[][];',
-    };
+    // Helper names auto-derived from getStdlibCode() so adding a stdlib
+    // helper in stdlib.js automatically picks up a type declaration here.
+    // The precise signatures live alongside the runtime bodies in
+    // stdlib.js as STDLIB_TYPE_DECLS; helpers without an entry fall back
+    // to a generic `(...args: any[]) => any` declaration.
     const names = [...getStdlibCode().matchAll(/globalThis\.(\w+)\s*\?\?=/g)].map(m => m[1]);
     const stdlibDecls = names.map(name =>
-      preciseTypes[name] || `declare function ${name}(...args: any[]): any;`
+      STDLIB_TYPE_DECLS[name] || `declare function ${name}(...args: any[]): any;`
     );
     headerDts = stdlibDecls.join('\n') + '\n' + headerDts;
 

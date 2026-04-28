@@ -20,7 +20,7 @@ import { compile } from '../src/compiler.js';
 // Side-effect imports — register the CLI-side type emitter and full
 // schema runtime so the test runner exercises the same code paths as
 // `bin/rip`. The browser bundle reaches NEITHER of these modules.
-import '../src/types-emit.js';
+import '../src/dts.js';
 import '../src/schema/loader-server.js';
 
 // ANSI colors
@@ -45,8 +45,9 @@ let pendingTests = [];
 function normalizeCode(code) {
   return code
     .trim()
+    .replace(/\/\/ rip:stdlib:begin[\s\S]*?\/\/ rip:stdlib:end\n?/g, '') // Strip multi-line stdlib block
     .replace(/^\/\/.*\n/gm, '')             // Remove comment lines
-    .replace(/^globalThis\.\w+.*\n?/gm, '') // Remove stdlib preamble lines
+    .replace(/^globalThis\.\w+.*\n?/gm, '') // Remove single-line stdlib preamble (legacy / partial bundles)
     .replace(/^\s*let\s[^;]*;\n?/gm, '')     // Remove program-level let declarations
     .replace(/^\s*var\s[^;]*;\n?/gm, '')    // Remove program-level var declarations
     .replace(/;\s*$/gm, '')                 // Remove trailing semicolons from lines
@@ -73,33 +74,117 @@ async function _runTest(name, code, expected) {
   try {
     const result = compile(code);
 
-    // True when the compiled code has an `await` at module scope
-    // (outside any function body). A `{` opens a function body when it
-    // follows `)` or `=>` and the `)` is NOT preceded by a control
-    // keyword (if/for/while/catch/switch/with) at the same scope. We
-    // push onto a function-scope stack and pop when the matching `}`
-    // closes. `await` encountered with an empty stack is top-level and
+    // True when the compiled code has an `await` at module scope (outside
+    // any function body). The walker tracks brace depth, ignoring tokens
+    // that would otherwise look like braces/awaits but live inside:
+    //
+    //   * line comments  // ...
+    //   * block comments / * ... * /
+    //   * single/double-quoted strings (with backslash escapes)
+    //   * template literals — including `${...}` re-entry into code mode
+    //   * regex literals — disambiguated from division by previous-token
+    //     context (operators, punctuation, and a handful of keywords mean
+    //     a `/` opens a regex; identifiers/numbers/`)`/`]` mean division)
+    //
+    // A `{` opens a function body when it follows `=>` or a `)` whose
+    // matching `(` is NOT preceded by a control keyword. We push onto a
+    // function-scope stack and pop when the matching `}` closes. An
+    // `await ` keyword encountered with an empty stack is top-level and
     // forces AsyncFunction wrapping.
+    //
+    // Failure mode if this misclassifies: top-level `await` runs in a
+    // synchronous `eval()`, throws SyntaxError, the test reports the
+    // exception text instead of the expected value. The classic regression
+    // was a regex literal containing `{` (e.g. `/#\{/g`) that faked out
+    // brace tracking and silently broke ~370 schema tests.
     const CONTROL_KEYWORDS = new Set(['if','for','while','catch','switch','with']);
+    const REGEX_PUNCT = new Set('([{,;:?=!&|+-*%/<>~^'.split(''));
+    const REGEX_KEYWORDS = new Set([
+      'return','typeof','delete','void','throw','new','in','of','instanceof','await','yield'
+    ]);
     const needsAsyncWrapper = (() => {
       if (result.code.includes('for await')) return true;
       if (!/\bawait\b/.test(result.code)) return false;
       const code = result.code;
-      let inStr = null;
-      const stack = [];
+      const stack = [];        // brace depths that opened function bodies
+      const tplStack = [];     // brace depths captured at each ${...} entry
       let braceDepth = 0;
-      for (let i = 0; i < code.length; i++) {
+      // True if a `/` at this position opens a regex literal rather than
+      // a division operator. Looks at the previous non-whitespace char;
+      // identifier-like context means division, anything else means regex.
+      const isRegexHere = (pos) => {
+        let p = pos - 1;
+        while (p >= 0 && /\s/.test(code[p])) p--;
+        if (p < 0) return true;
+        const ch = code[p];
+        if (REGEX_PUNCT.has(ch)) return true;
+        if (!/[\w$]/.test(ch)) return false;
+        let end = p + 1;
+        while (p >= 0 && /[\w$]/.test(code[p])) p--;
+        return REGEX_KEYWORDS.has(code.slice(p + 1, end));
+      };
+      let i = 0;
+      while (i < code.length) {
         const c = code[i];
-        if (inStr) {
-          if (c === '\\') { i++; continue; }
-          if (c === inStr) inStr = null;
-          continue;
-        }
-        if (c === '"' || c === "'" || c === '`') { inStr = c; continue; }
+        // Line comment
         if (c === '/' && code[i + 1] === '/') {
           while (i < code.length && code[i] !== '\n') i++;
           continue;
         }
+        // Block comment
+        if (c === '/' && code[i + 1] === '*') {
+          i += 2;
+          while (i < code.length && !(code[i] === '*' && code[i + 1] === '/')) i++;
+          i += 2;
+          continue;
+        }
+        // Regex literal
+        if (c === '/' && isRegexHere(i)) {
+          i++;
+          while (i < code.length && code[i] !== '/') {
+            if (code[i] === '\\') { i += 2; continue; }
+            if (code[i] === '[') {
+              i++;
+              while (i < code.length && code[i] !== ']') {
+                if (code[i] === '\\') { i += 2; continue; }
+                i++;
+              }
+            }
+            i++;
+          }
+          i++;
+          while (i < code.length && /[gimsuy]/.test(code[i])) i++;
+          continue;
+        }
+        // Plain string literal
+        if (c === '"' || c === "'") {
+          const quote = c;
+          i++;
+          while (i < code.length && code[i] !== quote) {
+            if (code[i] === '\\') { i += 2; continue; }
+            i++;
+          }
+          i++;
+          continue;
+        }
+        // Template literal — `${...}` re-enters code mode at the current
+        // brace depth, which is what tplStack tracks.
+        if (c === '`') {
+          i++;
+          while (i < code.length && code[i] !== '`') {
+            if (code[i] === '\\') { i += 2; continue; }
+            if (code[i] === '$' && code[i + 1] === '{') {
+              tplStack.push(braceDepth);
+              braceDepth++;
+              i += 2;
+              break;
+            }
+            i++;
+          }
+          if (i < code.length && code[i] === '`') i++;
+          continue;
+        }
+        // Opening brace
         if (c === '{') {
           braceDepth++;
           let k = i - 1;
@@ -108,7 +193,6 @@ async function _runTest(name, code, expected) {
           if (k >= 1 && code[k] === '>' && code[k - 1] === '=') {
             isFunc = true;
           } else if (code[k] === ')') {
-            // Find the matching `(` and look at the keyword before it.
             let d = 1, j = k - 1;
             while (j >= 0 && d > 0) {
               if (code[j] === ')') d++;
@@ -116,7 +200,6 @@ async function _runTest(name, code, expected) {
               if (d === 0) break;
               j--;
             }
-            // j is at the matching `(`.
             let m = j - 1;
             while (m >= 0 && /\s/.test(code[m])) m--;
             let end = m + 1;
@@ -125,17 +208,42 @@ async function _runTest(name, code, expected) {
             isFunc = !CONTROL_KEYWORDS.has(prevWord);
           }
           if (isFunc) stack.push(braceDepth);
+          i++;
           continue;
         }
+        // Closing brace — could be closing a function body, an arbitrary
+        // block, or the `}` that ends a `${...}` and re-enters template-
+        // literal mode.
         if (c === '}') {
+          if (tplStack.length && tplStack[tplStack.length - 1] === braceDepth - 1) {
+            tplStack.pop();
+            braceDepth--;
+            i++;
+            // Re-enter template scan until the next `${` or backtick.
+            while (i < code.length && code[i] !== '`') {
+              if (code[i] === '\\') { i += 2; continue; }
+              if (code[i] === '$' && code[i + 1] === '{') {
+                tplStack.push(braceDepth);
+                braceDepth++;
+                i += 2;
+                break;
+              }
+              i++;
+            }
+            if (i < code.length && code[i] === '`') i++;
+            continue;
+          }
           if (stack.length && stack[stack.length - 1] === braceDepth) stack.pop();
           braceDepth--;
+          i++;
           continue;
         }
+        // Top-level await detection
         if (stack.length === 0 && c === 'a' && code.slice(i, i + 6) === 'await ' &&
             (i === 0 || !/[\w$]/.test(code[i - 1]))) {
           return true;
         }
+        i++;
       }
       return false;
     })();
