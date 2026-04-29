@@ -891,14 +891,19 @@ User
 Every `:model` instance carries:
 
 ```coffee
-user.save!         # validate, run hooks, INSERT or UPDATE
-user.destroy!      # run hooks, DELETE (or UPDATE deleted_at for @softDelete)
-user.ok()          # boolean — current fields validate
-user.errors()      # SchemaIssue[] — current fields' errors
-user.toJSON()      # plain object of own enumerable properties
-                   #   (id, declared fields, @timestamps columns, @softDelete
-                   #    deletedAt, @belongs_to FKs, !> eager-derived — but NOT
-                   #    methods, ~> computed getters, or internal state)
+user.save!              # validate, run hooks, INSERT or UPDATE
+user.destroy!           # run hooks, DELETE (or UPDATE deleted_at for @softDelete)
+user.ok()               # boolean — current fields validate
+user.errors()           # SchemaIssue[] — current fields' errors
+user.toJSON()           # plain object of own enumerable properties
+                        #   (id, declared fields, @timestamps columns, @softDelete
+                        #    deletedAt, @belongs_to FKs, !> eager-derived — but NOT
+                        #    methods, ~> computed getters, or internal state)
+user.savedChanges       # Map<fieldName, [oldValue, newValue]> from the most
+                        #   recent save() — empty Map when nothing was written
+user.markDirty 'name'   # force a column into the next UPDATE; escape hatch
+                        #   for in-place mutations of object-valued fields
+                        #   that === can't see (json, Date, etc.)
 ```
 
 Plus any methods, computed getters, and relation accessors you declared
@@ -906,6 +911,108 @@ on the schema. Naming tip: methods that produce a fresh projection
 (e.g. `user.toPublic()`, `order.toCard()`) follow Rip's
 `to` / `as` / `from` / `parse` conversion convention — see
 [RIP-LANG.md §15 "Conversion Method Naming"](./RIP-LANG.md#conversion-method-naming).
+
+### What `save()` actually writes
+
+The runtime tracks a snapshot of declared-field and `@belongs_to` FK
+column values at hydrate / INSERT / UPDATE time. On `.save()` it
+compares current values against the snapshot and emits a column-
+targeted UPDATE that touches **only the columns whose values changed**.
+If nothing changed, no SQL is issued at all.
+
+Two practical consequences:
+
+1. **No-op saves are free.** Calling `.save()` on an unchanged row is
+   a no-op — no DB round-trip, no row touched. Mirrors Active Record
+   with `partial_writes`.
+2. **`@timestamps` `updated_at` is bumped only on real writes.**
+   Calling `.save()` with no actual changes does NOT bump
+   `updated_at` (which would defeat the no-op-save optimization
+   entirely). Bumped on every UPDATE that does write something.
+
+The diff is observable as `inst.savedChanges` after the save returns
+(or inside `afterCreate` / `afterUpdate` / `afterSave` hooks). Same
+shape as Active Record's `saved_changes`:
+
+```coffee
+order = Order.find! 1                # snapshot captured
+order.notes  = "expedited"
+order.userId = 9                     # @belongs_to User FK
+order.save!
+
+order.savedChanges                   # Map(2) {"notes" => [null, "expedited"], "userId" => [7, 9]}
+order.savedChanges.size              # 2
+order.savedChanges.has 'notes'       # true
+```
+
+INSERT records `[null, newValue]` for every field/FK that was written;
+UPDATE records `[oldValue, newValue]` for every field/FK whose value
+actually changed. `@timestamps` columns appear with the new ISO
+timestamp on real INSERTs and UPDATEs.
+
+Hook firing matches Active Record exactly: `before*` and `after*` hooks
+fire on every successful `.save()`, regardless of whether SQL was
+emitted. Hooks differentiate real writes from no-ops by checking
+`@savedChanges.size` or specific keys.
+
+### In-place mutation of object-valued fields
+
+The dirty check uses value identity (`===` with NaN handling). Setter
+assignments are detected:
+
+```coffee
+user.settings = {theme: "light", notifications: true}    # new reference; detected
+user.save!
+```
+
+In-place mutations are **not**:
+
+```coffee
+user.settings.theme = "light"                            # same reference; invisible
+user.save!                                               # nothing written
+```
+
+This matches Active Record's behavior with serialized attributes —
+"Active Record by default does not detect changes inside mutable
+serialized attributes." The escape hatch is `markDirty`:
+
+```coffee
+user.settings.theme = "light"
+user.markDirty 'settings'                                # AR's `settings_will_change!`
+user.save!                                               # writes settings = '{"theme":"light",...}'
+```
+
+`markDirty` accepts both camelCase and snake_case names, validates
+against declared fields and `@belongs_to` FK column names, and throws
+on unknown names or non-persisted instances (INSERT writes every set
+field, so `markDirty` there would be a silent no-op).
+
+Same caveat applies to `Date` fields:
+
+```coffee
+order.collectedAt.setHours 5                             # in-place; invisible
+order.markDirty 'collectedAt'
+order.save!
+```
+
+If you find yourself reaching for `markDirty` often, prefer immutable
+updates instead — they're cleaner and the dirty check sees them
+automatically:
+
+```coffee
+user.settings = { ...user.settings, theme: "light" }
+order.collectedAt = new Date order.collectedAt.getTime() + 3600000
+```
+
+### Re-entry guard
+
+`.save()` cannot be re-entered on the same instance while a save is
+already in flight. Calling `@save!` from inside this instance's
+`beforeSave` / `beforeUpdate` / `afterSave` hook throws — that's
+almost always a recursion bug, and silent infinite-loop debugging is
+worse than a clear error. The guard is per-instance: independent
+instances saving in parallel are unaffected, and sequential saves on
+the same instance work fine.
 
 ### Lifecycle hooks
 
@@ -1082,6 +1189,76 @@ Order.create! userId:  7, total: 100    # same result
 ```
 
 Use whichever reads better alongside nearby raw SQL or JSON payloads.
+
+### Field-name conventions
+
+The snake_case ↔ camelCase bijection only works for identifiers
+that round-trip cleanly. The schema runtime enforces canonical
+camelCase at definition time:
+
+```coffee
+User = schema :model
+  mdmId? string                        # OK — canonical
+  mdmID? string                        # error — acronym style;
+                                       #   round-trips to mdm_i_d / mdmID
+                                       #   ambiguously
+```
+
+Rules:
+
+- Lowercase-first
+- Alphanumeric body
+- No two consecutive uppercase letters anywhere
+
+Same convention as Java Beans, Swift's "Acronyms in API names"
+guidance, and what most JS/TS codebases follow in practice.
+
+The runtime also reserves the names of its instance API
+(`save`, `destroy`, `ok`, `errors`, `toJSON`, `savedChanges`,
+`markDirty`, `_dirty` / `_persisted` / `_snapshot` / `_saving`)
+and the implicit timestamp / soft-delete columns
+(`createdAt`, `updatedAt`, `deletedAt`). Declaring any of those
+as a user field on a `:model` raises a `'reserved ORM name'`
+collision error at definition time. (Mixins are exempt — they
+can declare `createdAt` / `updatedAt` for explicit control,
+which is the alternative to the `@timestamps` directive.)
+
+### Relation target names
+
+`@belongs_to TargetName` derives the FK column from the target's
+PascalCase name via `__schemaSnake(target) + '_id'`. The same
+camelCase / snake_case bijection rule applies in reverse: target
+names should be canonical PascalCase (`User`, `UserOrg`, not
+`MDMUser`) so the derived FK column round-trips cleanly. Acronym-
+style target names aren't currently rejected at definition time,
+but writing `@belongs_to MDMUser` produces FK column `m_d_m_user_id`
+— almost certainly not what you want. Stick to PascalCase.
+
+### SQL reserved words
+
+The runtime always quotes column names in generated SQL — every
+INSERT, UPDATE, and SELECT it emits surrounds column identifiers
+with `"..."`. So a field named `order` works fine through the
+ORM:
+
+```coffee
+Trade = schema :model
+  order! integer                       # works through the ORM
+```
+
+The compiled SQL is `UPDATE "trades" SET "order" = ? WHERE "id" = ?`.
+
+The catch is **raw SQL** that you write yourself via the adapter's
+`query()` method or via `query!`. There the reserved-word collision
+becomes your problem:
+
+```coffee
+result = query! "SELECT order FROM trades"          # syntax error
+result = query! "SELECT \"order\" FROM trades"      # works
+```
+
+This matches Active Record's behavior — the ORM-generated SQL is
+always quoted, and raw SQL is always the user's responsibility.
 
 ---
 
