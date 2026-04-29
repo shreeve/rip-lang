@@ -235,6 +235,48 @@ sudo setcap cap_net_bind_service=+ep $(which bun)
 This survives reboots but **not Bun upgrades** — re-run it after
 `bun upgrade`.
 
+### Run as a systemd service
+
+A minimal unit for running `rip-server` under systemd. Save as
+`/etc/systemd/system/rip-myapp.service`:
+
+```ini
+[Unit]
+Description=Rip Server (myapp)
+After=network.target
+
+[Service]
+Type=simple
+User=rip
+WorkingDirectory=/srv/myapp
+Environment=PATH=/home/rip/.bun/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/home/rip/.bun/bin/rip server -f /srv/myapp/serve.rip
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Then:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now rip-myapp.service
+journalctl -u rip-myapp -f
+```
+
+Notes:
+
+- `WorkingDirectory` should be the directory holding `serve.rip` —
+  relative `apps:` targets resolve against it.
+- `User=rip` should be a dedicated unprivileged account. To bind ports
+  80/443 without running as root, grant Bun the capability once (see
+  "Binding to ports 80 and 443" above).
+- `rip server -r` and `rip server --restart` apply config changes and
+  rebuild workers without restarting the unit, so most edits don't need
+  `systemctl restart`.
+
 ### Diagnostics
 
 ```bash
