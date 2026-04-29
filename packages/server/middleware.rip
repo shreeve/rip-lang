@@ -195,12 +195,8 @@ export compress = (opts = {}) ->
       return if text.length < threshold
 
       # Compress using Bun's built-in CompressionStream
-      compressed = if encoding is 'gzip'
-        new Response(text).body.pipeThrough(new CompressionStream('gzip'))
-      else if encoding is 'deflate'
-        new Response(text).body.pipeThrough(new CompressionStream('deflate'))
-      else
-        return
+      return unless encoding is 'gzip' or encoding is 'deflate'
+      compressed = new Response(text).body.pipeThrough(new CompressionStream(encoding))
 
       # Create new response with compressed body
       headers = new Headers(response.headers)
