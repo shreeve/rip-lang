@@ -8,8 +8,6 @@ export Cart = component
 
   mounted: ->
     document.title = 'Cart - Rip'
-    status = 'idle'
-    error = ''
 
   updateQuantity: (item:: CartItem, qty:: number) ->
     cart.items = cart.items.map (i) ->

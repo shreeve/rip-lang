@@ -682,8 +682,9 @@ export createRouter = (components, opts = {}) ->
 #
 # Handles the full lifecycle: compile Rip source to JS, import as an ES
 # module, instantiate, mount into the DOM. Supports nested layouts with
-# slot-based composition, component caching for back/forward navigation,
-# generation tracking to prevent stale mounts, and error boundaries.
+# slot-based composition, generation tracking to prevent stale mounts,
+# and error boundaries. Every navigation creates a fresh component
+# instance — `mounted` and `unmounted` fire exactly once per visit.
 # ==============================================================================
 
 arraysEqual = (a, b) ->
@@ -872,38 +873,23 @@ export createRenderer = (opts = {}) ->
   mountPoint = container
   generation = 0
   disposeEffect = null
-  componentCache = new Map()
-  maxCacheSize = opts.cacheSize or 10
 
-  cacheComponent = ->
-    if currentComponent and currentRoute
+  unmountCurrent = ->
+    if currentComponent
       currentComponent.beforeUnmount() if currentComponent.beforeUnmount
-      componentCache.set currentRoute, currentComponent
-      # Evict oldest if over limit
-      if componentCache.size > maxCacheSize
-        oldest = componentCache.keys().next().value
-        evicted = componentCache.get(oldest)
-        evicted.unmounted() if evicted.unmounted
-        componentCache.delete oldest
-      # Don't remove _root here — leave visible until new content is ready
+      currentComponent.unmounted() if currentComponent.unmounted
+      # Don't remove _target here — leave visible until new content is ready
       currentComponent = null
       currentRoute = null
 
   unmount = ->
-    cacheComponent()
+    unmountCurrent()
     for inst in layoutInstances by -1
       inst.beforeUnmount() if inst.beforeUnmount
       inst.unmounted() if inst.unmounted
       inst._target?.remove()
     layoutInstances = []
     mountPoint = container
-
-  # Invalidate cached components when their source changes (HMR)
-  components.watch (event, path) ->
-    if componentCache.has(path)
-      evicted = componentCache.get(path)
-      evicted.unmounted() if evicted.unmounted
-      componentCache.delete path
 
   mountRoute = (info) ->
     { route, params, layouts: layoutFiles, query } = info
@@ -937,7 +923,7 @@ export createRenderer = (opts = {}) ->
       if layoutsChanged
         unmount()
       else
-        cacheComponent()
+        unmountCurrent()
 
       mp = if layoutsChanged then container else mountPoint
 
@@ -972,29 +958,17 @@ export createRenderer = (opts = {}) ->
         currentLayouts = []
         mountPoint = container
 
-      # Check component cache for a preserved instance
-      cached = componentCache.get(route.file)
-      if cached
-        componentCache.delete route.file
-        mp.appendChild cached._target
-        currentComponent = cached
-        currentRoute = route.file
-        cached.params = params if params
-        cached.query = query if query
-        cached.mounted() if cached.mounted
-        cached.load!(params, query) if cached.load
-      else
-        pageWrapper = document.createElement('div')
-        pageWrapper.setAttribute 'data-component', route.file
-        mp.appendChild pageWrapper
+      pageWrapper = document.createElement('div')
+      pageWrapper.setAttribute 'data-component', route.file
+      mp.appendChild pageWrapper
 
-        instance = new Component { app, params, query, router }
-        instance.beforeMount() if instance.beforeMount
-        instance.mount pageWrapper
-        currentComponent = instance
-        currentRoute = route.file
+      instance = new Component { app, params, query, router }
+      instance.beforeMount() if instance.beforeMount
+      instance.mount pageWrapper
+      currentComponent = instance
+      currentRoute = route.file
 
-        instance.load!(params, query) if instance.load
+      instance.load!(params, query) if instance.load
       oldTarget?.remove()
       router.navigating = false
 
@@ -1039,8 +1013,6 @@ export createRenderer = (opts = {}) ->
     remount: ->
       current = router.current
       mountRoute(current) if current.route
-
-    cache: componentCache
 
   renderer
 
@@ -1189,7 +1161,6 @@ export launch = (appBase = '', opts = {}) ->
       router: router
       renderer: renderer
       resolver: resolver
-      cache: renderer.cache
       version: '0.3.0'
 
   { app, components: appComponents, router, renderer }
