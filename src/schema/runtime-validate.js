@@ -97,6 +97,27 @@ function __schemaSnake(s) { return s.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLo
 
 function __schemaCamel(col) { return String(col).replace(/_([a-z])/g, (_, c) => c.toUpperCase()); }
 
+// Reject acronym-style camelCase like `mdmID`, `userOrgID`, or
+// `XMLHttpRequest`. Two consecutive uppercase letters break the
+// snake_case <-> camelCase bijection: `mdmID` would round-trip via
+// __schemaSnake to `mdm_i_d` and back via __schemaCamel to `mdmID`,
+// while a more natural snake_case spelling `mdm_id` round-trips to
+// `mdmId` (different identifier). Forcing canonical camelCase at
+// schema-definition time eliminates the entire class of edge case
+// in field-name resolution (markDirty, savedChanges keys, snake
+// aliases on hydrate). Same convention as Active Record / Java
+// Beans / Swift's "Acronyms in API names" guidance.
+//
+// Accepts: lowercase-first, alphanumeric body, no two consecutive
+// uppercase letters anywhere.
+//   ok:    name, mrn, firstName, mdmId, userOrgId, line2, a1b2
+//   bad:   ID, mdmID, userID, XMLHttpRequest, _foo, 1foo, foo_bar
+function __schemaValidateCanonicalName(name) {
+  if (typeof name !== 'string' || !/^[a-z][a-zA-Z0-9]*$/.test(name)) return false;
+  if (/[A-Z]{2,}/.test(name)) return false;
+  return true;
+}
+
 // Snapshot the current values of every persisted column on an instance:
 // the primary key, declared fields (from `norm.fields`), and `belongsTo`
 // FK columns (from `norm.relations`). Used by `_hydrate` and the INSERT
@@ -197,9 +218,24 @@ class __SchemaDef {
       if (this.kind === 'model' && __SCHEMA_RESERVED.has(n)) collision(n, 'reserved ORM name');
     };
 
+    const requireCanonicalName = (n, kindLabel) => {
+      if (!__schemaValidateCanonicalName(n)) {
+        throw new SchemaError(
+          [{
+            field: n,
+            error: 'invalid-name',
+            message: kindLabel + " name '" + n + "' is not canonical camelCase. " +
+              "Use a lowercase-first, alphanumeric identifier with no consecutive uppercase letters " +
+              "(e.g. 'mdmId' not 'mdmID'). This keeps snake_case <-> camelCase mapping unambiguous.",
+          }],
+          this.name, this.kind);
+      }
+    };
+
     for (const e of this._desc.entries) {
       switch (e.tag) {
         case 'field':
+          requireCanonicalName(e.name, 'field');
           noteCollision(e.name);
           fields.set(e.name, {
             name: e.name,

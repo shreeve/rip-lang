@@ -2645,6 +2645,48 @@ test "UPDATE WHERE PK survives multiple consecutive saves with diff snapshots", 
   vals[vals.length - 1]
 ''', 42
 
+# Canonical camelCase field names. Schema definition rejects field names
+# whose snake_case <-> camelCase mapping is ambiguous (acronym style),
+# so markDirty('foo_id') / savedChanges['fooId'] / hydrate's snake_case
+# alias setup all converge on a single identifier for any column.
+
+fail "field name 'mdmID' (acronym style) is rejected at schema-definition time", '''
+  User = schema :model
+    mdmID! string
+  User._normalize()
+'''
+
+fail "field name 'XMLPath' (leading acronym) is rejected", '''
+  User = schema :model
+    XMLPath! string
+  User._normalize()
+'''
+
+fail "field name '_dirty' (leading underscore, not lowercase letter) is rejected", '''
+  User = schema :model
+    _dirty! string
+  User._normalize()
+'''
+
+fail "field name '1stPlace' (leading digit) is rejected", '''
+  User = schema :model
+    1stPlace! string
+  User._normalize()
+'''
+
+test "field name 'mdmId' (canonical camelCase) is accepted", '''
+  User = schema :model
+    mdmId? string
+  [...User._normalize().fields.keys()]
+''', ["mdmId"]
+
+test "field name with adjacent vowels and digits accepted", '''
+  User = schema :model
+    line2!  string
+    addressZip? string
+  [...User._normalize().fields.keys()]
+''', ["line2", "addressZip"]
+
 # -- toJSON iterates own enumerable properties: id + declared + timestamps --
 # -- + @belongs_to FKs + !> eager-derived; excludes methods, ~> getters,   --
 # -- and internal state (_dirty/_persisted/_snapshot).                     --
