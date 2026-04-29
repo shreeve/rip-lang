@@ -133,14 +133,24 @@ async function __schemaSave(def, inst) {
   if (isNew) await __schemaRunHook(def, inst, 'beforeCreate');
   else       await __schemaRunHook(def, inst, 'beforeUpdate');
 
+  // Reset `savedChanges` at the start of every save so it always
+  // reflects the most recent write, never accumulates. Hooks running
+  // from this point until end-of-save read this Map; afterCreate /
+  // afterUpdate / afterSave see the just-completed write's diff.
+  inst.savedChanges = new Map();
+
   if (isNew) {
     const cols = [], placeholders = [], values = [];
+    // Track which declared fields actually got written so we can
+    // populate savedChanges with [null, newValue] entries below.
+    const writtenDeclared = [];
     for (const [n, f] of norm.fields) {
       const v = inst[n];
       if (v == null) continue;
       cols.push('"' + __schemaSnake(n) + '"');
       placeholders.push('?');
       values.push(__schemaSerialize(v, f));
+      writtenDeclared.push([n, v]);
     }
     // Include relation FKs. belongsTo FKs are camelCase properties on
     // the instance (e.g. organizationId for organization_id).
@@ -188,6 +198,12 @@ async function __schemaSave(def, inst) {
     def._applyEagerDerived(inst);
     inst._snapshot = __schemaSnapshot(norm, inst);
     inst._persisted = true;
+    // Populate savedChanges with [null, newValue] per declared field
+    // that was written. Mirrors Active Record: on a fresh INSERT every
+    // attribute "changed from nil to its new value". We don't include
+    // RETURNING-only columns (id, created_at, updated_at, FK cols) —
+    // the diff is for declared fields.
+    for (const [n, v] of writtenDeclared) inst.savedChanges.set(n, [null, v]);
   } else {
     // Column-targeted UPDATE: only write fields that actually changed
     // since hydrate / last save (snapshot comparison) or that the caller
@@ -214,6 +230,7 @@ async function __schemaSave(def, inst) {
     const sets = [], values = [];
     const snap = inst._snapshot;
     const dirty = inst._dirty;
+    const changes = inst.savedChanges;
     let nextSnap = null;
     for (const [n, f] of norm.fields) {
       const cur = inst[n];
@@ -224,6 +241,13 @@ async function __schemaSave(def, inst) {
       sets.push('"' + __schemaSnake(n) + '" = ?');
       values.push(__schemaSerialize(cur, f));
       nextSnap[n] = cur;
+      // Record [oldValue, newValue] for hook consumers / audit. Old
+      // value comes from the snapshot; if no snapshot existed (first
+      // save after a manually-constructed persisted instance) we
+      // record null as the old value, which is the best information
+      // we have.
+      const old = snap && Object.prototype.hasOwnProperty.call(snap, n) ? snap[n] : null;
+      changes.set(n, [old, cur]);
     }
     if (sets.length) {
       const pk = norm.primaryKey;

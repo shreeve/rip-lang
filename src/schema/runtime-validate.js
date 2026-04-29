@@ -350,6 +350,14 @@ class __SchemaDef {
         Object.defineProperty(this, '_dirty', { value: new Set(), enumerable: false, writable: false, configurable: true });
         Object.defineProperty(this, '_persisted', { value: persisted === true, enumerable: false, writable: true, configurable: true });
         Object.defineProperty(this, '_snapshot', { value: null, enumerable: false, writable: true, configurable: true });
+        // Mirrors Active Record's `saved_changes`: populated by save()
+        // with the field-level diff of the just-completed write. INSERT
+        // produces `[null, newValue]` per written field; UPDATE produces
+        // `[oldValue, newValue]` per changed field. An empty Map after a
+        // save() call means nothing was actually written. Reset to a
+        // fresh Map at the start of every save() so it always reflects
+        // the most recent save, never accumulates across calls.
+        Object.defineProperty(this, 'savedChanges', { value: new Map(), enumerable: false, writable: true, configurable: true });
         if (data && typeof data === 'object') {
           for (const k of fieldNames) {
             if (k in data && data[k] !== undefined) this[k] = data[k];

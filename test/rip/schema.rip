@@ -2333,6 +2333,100 @@ test "snapshot built BEFORE await: concurrent mutation during save survives to n
   [updates.length, sql.includes("\\"last_name\\" = ?"), sql.includes("\\"first_name\\"")]
 ''', [1, true, false]
 
+# savedChanges — Active Record-style introspection on the field-level
+# diff of the just-completed save. INSERT yields [null, newValue]; UPDATE
+# yields [oldValue, newValue]. An empty Map after .save() means nothing
+# was actually written. afterCreate / afterUpdate / afterSave hooks see
+# this Map populated with the just-completed write's diff.
+
+test "savedChanges on INSERT records [null, newValue] for every declared field written", modelHeader + '''
+  User = schema :model
+    name!   string
+    email?  email
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "name"}, {name: "email"}], data: [[1, "Alice", "a@b.c"]], rows: 1}
+  u = User.create! {name: "Alice", email: "a@b.c"}
+  [
+    u.savedChanges.size
+    u.savedChanges.get("name")
+    u.savedChanges.get("email")
+  ]
+''', [2, [null, "Alice"], [null, "a@b.c"]]
+
+test "savedChanges on UPDATE records [oldValue, newValue] for changed fields only", modelHeader + '''
+  Patient = schema :model
+    firstName! string
+    lastName!  string
+    mdmId?     string
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "first_name"}, {name: "last_name"}, {name: "mdm_id"}], data: [[10023, "Steve", "Shreeve", "L00"]], rows: 1}
+  p = Patient.find! 10023
+  p.lastName = "Smith"
+  p.mdmId    = "L01"
+  p.save!
+  [
+    p.savedChanges.size
+    p.savedChanges.has("firstName")
+    p.savedChanges.get("lastName")
+    p.savedChanges.get("mdmId")
+  ]
+''', [2, false, ["Shreeve", "Smith"], ["L00", "L01"]]
+
+test "savedChanges is empty after a no-op save", modelHeader + '''
+  Patient = schema :model
+    firstName! string
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "first_name"}], data: [[10023, "Steve"]], rows: 1}
+  p = Patient.find! 10023
+  p.save!
+  p.savedChanges.size
+''', 0
+
+test "savedChanges resets at the start of every save (no accumulation)", modelHeader + '''
+  Patient = schema :model
+    firstName! string
+    lastName!  string
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "first_name"}, {name: "last_name"}], data: [[10023, "Steve", "Shreeve"]], rows: 1}
+  p = Patient.find! 10023
+  p.firstName = "Frank"
+  p.save!  # changes firstName
+  first = p.savedChanges.get("firstName")
+  p.lastName = "Smith"
+  p.save!  # changes lastName; previous firstName diff must be gone
+  [
+    first
+    p.savedChanges.size
+    p.savedChanges.has("firstName")
+    p.savedChanges.get("lastName")
+  ]
+''', [["Steve", "Frank"], 1, false, ["Shreeve", "Smith"]]
+
+test "afterUpdate hook can read savedChanges and observe the diff", modelHeader + '''
+  observed = null
+  Patient = schema :model
+    firstName! string
+    afterUpdate: -> observed = [...@savedChanges.entries()]
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "first_name"}], data: [[10023, "Steve"]], rows: 1}
+  p = Patient.find! 10023
+  p.firstName = "Frank"
+  p.save!
+  observed
+''', [["firstName", ["Steve", "Frank"]]]
+
+test "afterUpdate hook on a no-op save sees empty savedChanges (AR-compatible)", modelHeader + '''
+  # Mirrors Active Record: after_update fires on every successful save,
+  # even when no SQL was emitted. The hook differentiates real writes
+  # from no-ops by checking savedChanges.size.
+  fired = 0
+  observed = null
+  Patient = schema :model
+    firstName! string
+    afterUpdate: ->
+      fired += 1
+      observed = @savedChanges.size
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "first_name"}], data: [[10023, "Steve"]], rows: 1}
+  p = Patient.find! 10023
+  p.save!
+  [fired, observed]
+''', [1, 0]
+
 # -- toJSON iterates own enumerable properties: id + declared + timestamps --
 # -- + @belongs_to FKs + !> eager-derived; excludes methods, ~> getters,   --
 # -- and internal state (_dirty/_persisted/_snapshot).                     --
@@ -2403,13 +2497,14 @@ test ":model toJSON excludes methods, ~> computed getters, and internal state", 
   json = u.toJSON()
   keys = Object.keys(json)
   [
-    ('greet'      in keys)
-    ('upper'      in keys)
-    ('_dirty'     in keys)
-    ('_persisted' in keys)
-    ('_snapshot'  in keys)
+    ('greet'        in keys)
+    ('upper'        in keys)
+    ('_dirty'       in keys)
+    ('_persisted'   in keys)
+    ('_snapshot'    in keys)
+    ('savedChanges' in keys)
   ]
-''', [false, false, false, false, false]
+''', [false, false, false, false, false, false]
 
 test ":model toJSON survives JSON.stringify round-trip with id preserved", modelHeader + '''
   User = schema :model
