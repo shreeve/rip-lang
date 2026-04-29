@@ -1160,9 +1160,14 @@ async function __schemaSave(def, inst) {
     // Populate savedChanges with [null, newValue] per persisted column
     // that was written (declared fields + belongsTo FKs). Mirrors
     // Active Record: on a fresh INSERT every attribute "changed from
-    // nil to its new value". RETURNING-only columns (id, timestamps)
-    // are not user-set, so they don't appear in the diff.
+    // nil to its new value". @timestamps columns get the same
+    // [null, newValue] treatment using the values RETURNING gave us
+    // — they were assigned on this INSERT, so they belong in the diff.
     for (const [n, v] of writtenColumns) inst.savedChanges.set(n, [null, v]);
+    if (norm.timestamps) {
+      if (inst.createdAt != null) inst.savedChanges.set('createdAt', [null, inst.createdAt]);
+      if (inst.updatedAt != null) inst.savedChanges.set('updatedAt', [null, inst.updatedAt]);
+    }
   } else {
     // Column-targeted UPDATE: only write fields that actually changed
     // since hydrate / last save (snapshot comparison) or that the caller
@@ -1226,6 +1231,23 @@ async function __schemaSave(def, inst) {
       nextSnap[fkCamel] = cur;
       const old = snap && Object.prototype.hasOwnProperty.call(snap, fkCamel) ? snap[fkCamel] : null;
       changes.set(fkCamel, [old, cur]);
+    }
+    // @timestamps: bump updated_at iff this UPDATE will actually emit
+    // SQL. The check sits between the diff loops and the write, so we
+    // only touch the column when sets has something else in it —
+    // never on a no-op save (which would defeat the column-targeted
+    // UPDATE optimization and reintroduce a wasted DB round-trip).
+    // The column itself isn't in \`_snapshot\` (we always overwrite it
+    // explicitly on every real write, never compare it for diffs),
+    // so we mirror the new value onto the instance and record it in
+    // savedChanges to mirror Active Record's saved_changes shape.
+    if (norm.timestamps && sets.length > 0) {
+      const newTs = new Date().toISOString();
+      const oldTs = inst.updatedAt != null ? inst.updatedAt : null;
+      sets.push('"updated_at" = ?');
+      values.push(newTs);
+      inst.updatedAt = newTs;
+      changes.set('updatedAt', [oldTs, newTs]);
     }
     if (sets.length) {
       const pk = norm.primaryKey;

@@ -2515,6 +2515,99 @@ test "Order.create! records FK column in savedChanges with [null, newValue]", mo
   o.savedChanges.get("userId")
 ''', [null, 7]
 
+# @timestamps: updated_at must be bumped on every real UPDATE write
+# (not on no-op saves, where the whole point of the column-targeted
+# UPDATE optimization is to skip touching the row entirely). On INSERT
+# the DB DEFAULT CURRENT_TIMESTAMP supplies the value; we record it
+# in savedChanges so it shows up in the AR-style diff.
+
+test "@timestamps INSERT records createdAt and updatedAt in savedChanges from RETURNING", modelHeader + '''
+  User = schema :model
+    name! string
+    @timestamps
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "name"}, {name: "created_at"}, {name: "updated_at"}], data: [[1, "Alice", "T1", "T2"]], rows: 1}
+  u = User.create! {name: "Alice"}
+  [
+    u.savedChanges.get("createdAt")
+    u.savedChanges.get("updatedAt")
+  ]
+''', [[null, "T1"], [null, "T2"]]
+
+test "@timestamps UPDATE bumps updated_at when fields change", modelHeader + '''
+  User = schema :model
+    name! string
+    @timestamps
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "name"}, {name: "created_at"}, {name: "updated_at"}], data: [[1, "Alice", "T1", "T2"]], rows: 1}
+  u = User.find! 1
+  adapter.calls = []
+  u.name = "Bob"
+  u.save!
+  updates = adapter.calls.filter (c) -> c.sql.startsWith "UPDATE"
+  sql  = updates[0]?.sql or ""
+  vals = updates[0]?.params or []
+  # updated_at was bumped to a fresh ISO string and parameter ordering
+  # mirrors the SET clause: "name" first (camelCase nameLooping) then
+  # "updated_at", then the WHERE id at the tail.
+  bumped = vals[1] isnt "T2" and typeof vals[1] is "string"
+  [
+    sql.includes("\\"updated_at\\" = ?")
+    bumped
+    u.updatedAt is vals[1]
+    u.savedChanges.get("updatedAt")?[0]
+    u.savedChanges.get("updatedAt")?[1] is vals[1]
+  ]
+''', [true, true, true, "T2", true]
+
+test "@timestamps UPDATE on a no-op save does NOT bump updated_at (no SQL)", modelHeader + '''
+  User = schema :model
+    name! string
+    @timestamps
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "name"}, {name: "created_at"}, {name: "updated_at"}], data: [[1, "Alice", "T1", "T2"]], rows: 1}
+  u = User.find! 1
+  origTs = u.updatedAt
+  adapter.calls = []
+  u.save!
+  updates = adapter.calls.filter (c) -> c.sql.startsWith "UPDATE"
+  [
+    updates.length
+    u.updatedAt is origTs              # in-memory unchanged
+    u.savedChanges.has("updatedAt")    # not a recorded diff
+  ]
+''', [0, true, false]
+
+test "@timestamps UPDATE bumps updated_at when only an FK changes", modelHeader + '''
+  User = schema :model
+    name! string
+  Order = schema :model
+    @belongs_to User
+    @timestamps
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "user_id"}, {name: "created_at"}, {name: "updated_at"}], data: [[10001, 7, "T1", "T2"]], rows: 1}
+  o = Order.find! 10001
+  adapter.calls = []
+  o.userId = 9
+  o.save!
+  updates = adapter.calls.filter (c) -> c.sql.startsWith "UPDATE"
+  sql = updates[0]?.sql or ""
+  [
+    sql.includes("\\"user_id\\" = ?")
+    sql.includes("\\"updated_at\\" = ?")
+    o.savedChanges.has("userId")
+    o.savedChanges.has("updatedAt")
+  ]
+''', [true, true, true, true]
+
+test "@timestamps schema without directive does NOT touch updated_at", modelHeader + '''
+  Stateless = schema :model
+    name! string
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "name"}], data: [[1, "Alice"]], rows: 1}
+  s = Stateless.find! 1
+  adapter.calls = []
+  s.name = "Bob"
+  s.save!
+  updates = adapter.calls.filter (c) -> c.sql.startsWith "UPDATE"
+  updates[0]?.sql.includes("updated_at")
+''', false
+
 # -- toJSON iterates own enumerable properties: id + declared + timestamps --
 # -- + @belongs_to FKs + !> eager-derived; excludes methods, ~> getters,   --
 # -- and internal state (_dirty/_persisted/_snapshot).                     --
