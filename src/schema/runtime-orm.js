@@ -121,6 +121,21 @@ async function __schemaRunHook(def, inst, name) {
 }
 
 async function __schemaSave(def, inst) {
+  // Re-entry guard. Same-instance re-entry into save() — typically a
+  // hook on this very instance calling .save() on `this` — would race
+  // the snapshot / savedChanges machinery and almost certainly loop
+  // forever. Throw a clear error instead. The flag is per-instance, so
+  // independent instances saving in parallel are unaffected; sequential
+  // saves on the same instance work fine because `finally` clears it.
+  if (inst._saving) {
+    throw new Error(
+      "schema: save() re-entered on the same " + (def.name || 'instance') +
+      "; a hook on this instance called save() while a save was already in flight."
+    );
+  }
+  inst._saving = true;
+  try {
+
   const norm = def._normalize();
   const isNew = !inst._persisted;
 
@@ -312,9 +327,24 @@ async function __schemaSave(def, inst) {
       // ignores in-memory PK mutation when building the UPDATE.
       // Falls back to `inst[pk]` only when no snapshot exists (e.g.
       // a manually-constructed persisted instance), where there's
-      // no better information available.
+      // no better information available. We log a warning in non-prod
+      // when the fallback fires, since "persisted instance with no
+      // snapshot" is almost always an accidental misuse pattern.
       const pk = norm.primaryKey;
-      const wherePk = snap && snap[pk] != null ? snap[pk] : inst[pk];
+      let wherePk;
+      if (snap && snap[pk] != null) {
+        wherePk = snap[pk];
+      } else {
+        wherePk = inst[pk];
+        if (typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production') {
+          console.warn(
+            "[schema] " + (def.name || 'save()') + ": no _snapshot, falling back to inst." + pk +
+            " for the UPDATE WHERE clause. This usually means the instance was constructed " +
+            "with _persisted = true without going through hydrate(); the WHERE will target " +
+            "whatever inst." + pk + " happens to be at save time."
+          );
+        }
+      }
       values.push(wherePk);
       const sql = 'UPDATE "' + norm.tableName + '" SET ' + sets.join(', ') + ' WHERE "' + pk + '" = ?';
       await __schemaAdapter.query(sql, values);
@@ -327,6 +357,10 @@ async function __schemaSave(def, inst) {
   else       await __schemaRunHook(def, inst, 'afterUpdate');
   await __schemaRunHook(def, inst, 'afterSave');
   return inst;
+
+  } finally {
+    inst._saving = false;
+  }
 }
 
 async function __schemaDestroy(def, inst) {

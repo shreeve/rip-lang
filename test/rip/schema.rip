@@ -2612,6 +2612,113 @@ test "@timestamps schema without directive does NOT touch updated_at", modelHead
   updates[0]?.sql.includes("updated_at")
 ''', false
 
+# save() re-entry guard: a hook on this very instance calling .save()
+# while a save is already in flight would race the snapshot /
+# savedChanges machinery and (more often) loop forever. The guard is
+# per-instance, cleared in finally so sequential saves on the same
+# instance work fine, and independent instances saving in parallel
+# are unaffected.
+
+test "save() throws on same-instance re-entry from a hook", modelHeader + '''
+  User = schema :model
+    name! string
+    beforeSave: ->
+      # Naive recursion: hook on `@` calls @.save! which would re-enter
+      # __schemaSave on the same instance.
+      @save!
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "name"}], data: [[1, "Alice"]], rows: 1}
+  msg = null
+  try
+    User.create! {name: "Alice"}
+  catch e
+    msg = e.message
+  msg? and msg.includes("re-entered")
+''', true
+
+test "save() guard clears in finally so a second save on the same instance works", modelHeader + '''
+  User = schema :model
+    name! string
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "name"}], data: [[1, "Alice"]], rows: 1}
+  u = User.create! {name: "Alice"}
+  # Subsequent save must not be blocked by leftover _saving = true.
+  u.name = "Bob"
+  u.save!
+  u._saving
+''', false
+
+test "save() throws clear the re-entry guard (no leak on validation error)", modelHeader + '''
+  User = schema :model
+    name! string
+  adapter.canned.__default = {columns: [], data: [], rows: 0}
+  threw = false
+  try
+    # Required field missing → SchemaError mid-save; finally must still
+    # clear _saving on the throw path.
+    User.create! {}
+  catch
+    threw = true
+  # We can't inspect the ephemeral inst (it never returned from create),
+  # but we can verify subsequent unrelated saves work normally — i.e.
+  # the guard didn't leak onto the class prototype somehow.
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "name"}], data: [[1, "X"]], rows: 1}
+  u = User.create! {name: "X"}
+  [threw, u._saving]
+''', [true, false]
+
+test "save() guard is per-instance: parallel saves on different instances do not interfere", modelHeader + '''
+  User = schema :model
+    name! string
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "name"}], data: [[1, "X"]], rows: 1}
+  a = User.create! {name: "A"}
+  b = User.create! {name: "B"}
+  a.name = "A2"
+  b.name = "B2"
+  # Both should save without interference.
+  await Promise.all [a.save(), b.save()]
+  [a._saving, b._saving]
+''', [false, false]
+
+# Dev-mode PK fallback warning: when a save() finds no `_snapshot`,
+# the WHERE clause falls back to `inst[pk]`. That's almost always an
+# accidental misuse pattern (manually-constructed persisted instance
+# without going through hydrate). Emit a console.warn in non-prod so
+# the symptom is visible early.
+
+test "save() emits a console.warn when PK fallback fires (non-prod)", modelHeader + '''
+  User = schema :model
+    name! string
+  klass = User._getClass()
+  # Manually construct a persisted instance with NO _snapshot. This is
+  # the misuse pattern the warning is meant to catch.
+  u = new klass({}, true)
+  Object.defineProperty(u, "id", {value: 42, enumerable: true, writable: true, configurable: true})
+  u.name = "Bob"
+  warnings = []
+  origWarn = console.warn
+  console.warn = (msg) -> warnings.push(msg)
+  try
+    u.save!
+  finally
+    console.warn = origWarn
+  warnings.length is 1 and warnings[0].includes("no _snapshot")
+''', true
+
+test "save() does NOT warn when _snapshot is present", modelHeader + '''
+  User = schema :model
+    name! string
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "name"}], data: [[42, "Alice"]], rows: 1}
+  u = User.find! 42
+  u.name = "Bob"
+  warnings = []
+  origWarn = console.warn
+  console.warn = (msg) -> warnings.push(msg)
+  try
+    u.save!
+  finally
+    console.warn = origWarn
+  warnings.length
+''', 0
+
 # Primary key snapshot: the UPDATE WHERE clause must target the
 # originally-loaded row even if user code reassigns inst.id in memory.
 # Mirrors Active Record's behavior — in-memory PK mutation is ignored
@@ -2767,9 +2874,10 @@ test ":model toJSON excludes methods, ~> computed getters, and internal state", 
     ('_dirty'       in keys)
     ('_persisted'   in keys)
     ('_snapshot'    in keys)
+    ('_saving'      in keys)
     ('savedChanges' in keys)
   ]
-''', [false, false, false, false, false, false]
+''', [false, false, false, false, false, false, false]
 
 test ":model toJSON survives JSON.stringify round-trip with id preserved", modelHeader + '''
   User = schema :model

@@ -34,6 +34,7 @@ const __SCHEMA_RESERVED_STATIC = new Set([
 ]);
 const __SCHEMA_RESERVED_INSTANCE = new Set([
   'save','destroy','reload','ok','errors','toJSON','savedChanges','markDirty',
+  '_saving',
 ]);
 // Implicit columns owned by directive-driven runtime behavior. Declaring
 // them as user fields would either shadow the runtime API (savedChanges /
@@ -413,6 +414,12 @@ class __SchemaDef {
         Object.defineProperty(this, '_dirty', { value: new Set(), enumerable: false, writable: false, configurable: true });
         Object.defineProperty(this, '_persisted', { value: persisted === true, enumerable: false, writable: true, configurable: true });
         Object.defineProperty(this, '_snapshot', { value: null, enumerable: false, writable: true, configurable: true });
+        // Re-entry guard for save(): set true while a save is in flight,
+        // cleared in __schemaSave's finally. Throws on same-instance
+        // re-entry (typically from a hook accidentally calling save()
+        // on its own instance) instead of looping forever or racing the
+        // snapshot / savedChanges machinery.
+        Object.defineProperty(this, '_saving', { value: false, enumerable: false, writable: true, configurable: true });
         // Mirrors Active Record's `saved_changes`: populated by save()
         // with the field-level diff of the just-completed write. INSERT
         // produces `[null, newValue]` per written field; UPDATE produces
