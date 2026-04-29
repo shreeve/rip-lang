@@ -33,9 +33,20 @@ const __SCHEMA_RESERVED_STATIC = new Set([
   'parse','safe','ok','find','findMany','where','all','first','count','create','toSQL',
 ]);
 const __SCHEMA_RESERVED_INSTANCE = new Set([
-  'save','destroy','reload','ok','errors','toJSON',
+  'save','destroy','reload','ok','errors','toJSON','savedChanges','markDirty',
 ]);
-const __SCHEMA_RESERVED = new Set([...__SCHEMA_RESERVED_STATIC, ...__SCHEMA_RESERVED_INSTANCE]);
+// Implicit columns owned by directive-driven runtime behavior. Declaring
+// them as user fields would either shadow the runtime API (savedChanges /
+// markDirty in INSTANCE) or produce duplicate SET writes in the same
+// UPDATE statement when @timestamps / @softDelete bump them.
+const __SCHEMA_RESERVED_IMPLICIT = new Set([
+  'createdAt','updatedAt','deletedAt',
+]);
+const __SCHEMA_RESERVED = new Set([
+  ...__SCHEMA_RESERVED_STATIC,
+  ...__SCHEMA_RESERVED_INSTANCE,
+  ...__SCHEMA_RESERVED_IMPLICIT,
+]);
 
 const __schemaTypes = {
   string:   v => typeof v === 'string',

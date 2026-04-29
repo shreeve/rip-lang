@@ -284,6 +284,18 @@ async function __schemaSave(def, inst) {
     // explicitly on every real write, never compare it for diffs),
     // so we mirror the new value onto the instance and record it in
     // savedChanges to mirror Active Record's saved_changes shape.
+    //
+    // `oldTs` is the in-memory value at this moment, which after
+    // hydrate is the DB-loaded timestamp and after a prior save in
+    // this session is the value we set then. If user code reassigns
+    // `inst.updatedAt` between saves, the recorded "old" reflects
+    // that reassignment, not what's actually in the DB. The implicit
+    // column isn't in the snapshot for the same reason it isn't in
+    // the diff loop: we always overwrite it on real writes.
+    //
+    // Declaring `updatedAt` as a regular field is rejected at schema
+    // definition (__SCHEMA_RESERVED_IMPLICIT) so we can't end up with
+    // duplicate "updated_at = ?" entries in `sets`.
     if (norm.timestamps && sets.length > 0) {
       const newTs = new Date().toISOString();
       const oldTs = inst.updatedAt != null ? inst.updatedAt : null;

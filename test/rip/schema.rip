@@ -2545,18 +2545,22 @@ test "@timestamps UPDATE bumps updated_at when fields change", modelHeader + '''
   updates = adapter.calls.filter (c) -> c.sql.startsWith "UPDATE"
   sql  = updates[0]?.sql or ""
   vals = updates[0]?.params or []
-  # updated_at was bumped to a fresh ISO string and parameter ordering
-  # mirrors the SET clause: "name" first (camelCase nameLooping) then
-  # "updated_at", then the WHERE id at the tail.
-  bumped = vals[1] isnt "T2" and typeof vals[1] is "string"
+  # The updated_at value lives at vals[length - 2] — last SET param
+  # before the WHERE-clause id. Asserting on the exact position (and
+  # checking the value parses as an ISO string) catches both "wrong
+  # column" and "right column, garbage value" regressions, even if
+  # someone later reorders the SET clauses.
+  tsVal = vals[vals.length - 2]
+  isIso = typeof tsVal is "string" and /^\\d{4}-\\d{2}-\\d{2}T/.test(tsVal)
   [
     sql.includes("\\"updated_at\\" = ?")
-    bumped
-    u.updatedAt is vals[1]
+    isIso
+    tsVal isnt "T2"            # actually changed
+    u.updatedAt is tsVal       # mirrored onto the instance
     u.savedChanges.get("updatedAt")?[0]
-    u.savedChanges.get("updatedAt")?[1] is vals[1]
+    u.savedChanges.get("updatedAt")?[1] is tsVal
   ]
-''', [true, true, true, "T2", true]
+''', [true, true, true, true, "T2", true]
 
 test "@timestamps UPDATE on a no-op save does NOT bump updated_at (no SQL)", modelHeader + '''
   User = schema :model
@@ -2629,17 +2633,18 @@ test "UPDATE WHERE uses original PK from snapshot, not the mutated in-memory id"
   vals[vals.length - 1]
 ''', 42
 
-test "UPDATE WHERE PK survives multiple consecutive saves with diff snapshots", modelHeader + '''
+test "UPDATE WHERE PK survives multiple consecutive saves AND in-memory id mutation", modelHeader + '''
   User = schema :model
     name!  string
     title? string
   adapter.canned.__default = {columns: [{name: "id"}, {name: "name"}, {name: "title"}], data: [[42, "Alice", null]], rows: 1}
   u = User.find! 42
   u.name = "Bob"
-  u.save!  # first UPDATE; nextSnap installed
+  u.save!  # first UPDATE; nextSnap installed (carrying id = 42)
+  u.id = 999  # rogue mutation between saves — must NOT redirect WHERE
   adapter.calls = []
   u.title = "Engineer"
-  u.save!  # second UPDATE; the snapshot from save #1 still holds id = 42
+  u.save!
   updates = adapter.calls.filter (c) -> c.sql.startsWith "UPDATE"
   vals = updates[0]?.params or []
   vals[vals.length - 1]
@@ -2857,6 +2862,41 @@ fail "field vs method collision in :model", '''
 fail "reserved ORM name as field in :model", '''
   User = schema :model
     find! string
+  User.toSQL()
+'''
+
+# Implicit-column names (createdAt / updatedAt / deletedAt) are managed
+# by @timestamps and @softDelete. Declaring them as user fields would
+# either shadow the runtime API or produce duplicate SET writes for
+# the same column in one UPDATE statement.
+
+fail "field 'updatedAt' as a field in :model is reserved (implicit timestamp column)", '''
+  User = schema :model
+    updatedAt? datetime
+  User.toSQL()
+'''
+
+fail "field 'createdAt' as a field in :model is reserved", '''
+  User = schema :model
+    createdAt? datetime
+  User.toSQL()
+'''
+
+fail "field 'deletedAt' as a field in :model is reserved", '''
+  User = schema :model
+    deletedAt? datetime
+  User.toSQL()
+'''
+
+fail "field 'savedChanges' as a field in :model is reserved (instance API)", '''
+  User = schema :model
+    savedChanges? string
+  User.toSQL()
+'''
+
+fail "field 'markDirty' as a field in :model is reserved (instance API)", '''
+  User = schema :model
+    markDirty? string
   User.toSQL()
 '''
 
