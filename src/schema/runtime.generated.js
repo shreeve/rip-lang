@@ -148,15 +148,25 @@ function __schemaSnake(s) { return s.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLo
 
 function __schemaCamel(col) { return String(col).replace(/_([a-z])/g, (_, c) => c.toUpperCase()); }
 
-// Snapshot the current values of every declared field on an instance.
-// Used by \`_hydrate\` and the INSERT / UPDATE branches of \`__schemaSave\`
-// (defined in the orm fragment, which loads after this one) so that a
-// later .save() can compare and emit a SET only for columns the caller
-// actually mutated. Lives in the validate fragment because \`_hydrate\`
-// owns it; the orm fragment is the consumer.
+// Snapshot the current values of every persisted column on an instance:
+// declared fields (from \`norm.fields\`) plus \`belongsTo\` FK columns (from
+// \`norm.relations\`). Used by \`_hydrate\` and the INSERT / UPDATE branches
+// of \`__schemaSave\` (defined in the orm fragment, which loads after this
+// one) so that a later .save() can compare and emit a SET only for
+// columns the caller actually mutated. Lives in the validate fragment
+// because \`_hydrate\` owns it; the orm fragment is the consumer.
+//
+// FK columns are keyed by their camelCase property name on the instance
+// (e.g. \`userId\`) — same convention the dirty Set, savedChanges Map,
+// and markDirty() resolver use.
 function __schemaSnapshot(norm, inst) {
   const snap = Object.create(null);
   for (const [n] of norm.fields) snap[n] = inst[n];
+  for (const [, rel] of norm.relations) {
+    if (rel.kind !== 'belongsTo') continue;
+    const fkCamel = __schemaCamel(rel.foreignKey);
+    snap[fkCamel] = inst[fkCamel];
+  }
   return snap;
 }
 
@@ -472,9 +482,20 @@ class __SchemaDef {
           }
           const n = __schemaCamel(name);
           const norm = def._normalize();
-          if (!norm.fields.has(n)) {
+          // Accept declared fields and \`belongsTo\` FK column names
+          // (camelCase or snake_case input both resolve via __schemaCamel).
+          let valid = norm.fields.has(n);
+          if (!valid) {
+            for (const [, rel] of norm.relations) {
+              if (rel.kind === 'belongsTo' && __schemaCamel(rel.foreignKey) === n) {
+                valid = true;
+                break;
+              }
+            }
+          }
+          if (!valid) {
             throw new Error(
-              "schema: markDirty('" + name + "') — '" + n + "' is not a declared field on " + (def.name || 'anon')
+              "schema: markDirty('" + name + "') — '" + n + "' is not a declared field or belongs_to FK on " + (def.name || 'anon')
             );
           }
           this._dirty.add(n);
@@ -1077,16 +1098,17 @@ async function __schemaSave(def, inst) {
 
   if (isNew) {
     const cols = [], placeholders = [], values = [];
-    // Track which declared fields actually got written so we can
-    // populate savedChanges with [null, newValue] entries below.
-    const writtenDeclared = [];
+    // Track which persisted columns actually got written so savedChanges
+    // can record [null, newValue] entries below. Both declared fields
+    // and belongsTo FK columns count.
+    const writtenColumns = [];
     for (const [n, f] of norm.fields) {
       const v = inst[n];
       if (v == null) continue;
       cols.push('"' + __schemaSnake(n) + '"');
       placeholders.push('?');
       values.push(__schemaSerialize(v, f));
-      writtenDeclared.push([n, v]);
+      writtenColumns.push([n, v]);
     }
     // Include relation FKs. belongsTo FKs are camelCase properties on
     // the instance (e.g. organizationId for organization_id).
@@ -1098,6 +1120,7 @@ async function __schemaSave(def, inst) {
         cols.push('"' + rel.foreignKey + '"');
         placeholders.push('?');
         values.push(v);
+        writtenColumns.push([fkCamel, v]);
       }
     }
     const sql = 'INSERT INTO "' + norm.tableName + '" (' + cols.join(', ') + ') VALUES (' + placeholders.join(', ') + ') RETURNING *';
@@ -1134,12 +1157,12 @@ async function __schemaSave(def, inst) {
     def._applyEagerDerived(inst);
     inst._snapshot = __schemaSnapshot(norm, inst);
     inst._persisted = true;
-    // Populate savedChanges with [null, newValue] per declared field
-    // that was written. Mirrors Active Record: on a fresh INSERT every
-    // attribute "changed from nil to its new value". We don't include
-    // RETURNING-only columns (id, created_at, updated_at, FK cols) —
-    // the diff is for declared fields.
-    for (const [n, v] of writtenDeclared) inst.savedChanges.set(n, [null, v]);
+    // Populate savedChanges with [null, newValue] per persisted column
+    // that was written (declared fields + belongsTo FKs). Mirrors
+    // Active Record: on a fresh INSERT every attribute "changed from
+    // nil to its new value". RETURNING-only columns (id, timestamps)
+    // are not user-set, so they don't appear in the diff.
+    for (const [n, v] of writtenColumns) inst.savedChanges.set(n, [null, v]);
   } else {
     // Column-targeted UPDATE: only write fields that actually changed
     // since hydrate / last save (snapshot comparison) or that the caller
@@ -1168,6 +1191,7 @@ async function __schemaSave(def, inst) {
     const dirty = inst._dirty;
     const changes = inst.savedChanges;
     let nextSnap = null;
+    // Declared fields.
     for (const [n, f] of norm.fields) {
       const cur = inst[n];
       const isDirty = dirty && dirty.has(n);
@@ -1184,6 +1208,24 @@ async function __schemaSave(def, inst) {
       // we have.
       const old = snap && Object.prototype.hasOwnProperty.call(snap, n) ? snap[n] : null;
       changes.set(n, [old, cur]);
+    }
+    // belongsTo FK columns. Same dirty / snapshot / savedChanges
+    // machinery as declared fields, but the SQL column name is
+    // already snake_case (rel.foreignKey) and the value isn't passed
+    // through __schemaSerialize since FKs are scalar IDs.
+    for (const [, rel] of norm.relations) {
+      if (rel.kind !== 'belongsTo') continue;
+      const fkCamel = __schemaCamel(rel.foreignKey);
+      const cur = inst[fkCamel];
+      const isDirty = dirty && dirty.has(fkCamel);
+      const changed = !snap || !Object.prototype.hasOwnProperty.call(snap, fkCamel) || !__schemaSameValue(snap[fkCamel], cur);
+      if (!isDirty && !changed) continue;
+      if (!nextSnap) nextSnap = Object.assign(Object.create(null), snap || {});
+      sets.push('"' + rel.foreignKey + '" = ?');
+      values.push(cur);
+      nextSnap[fkCamel] = cur;
+      const old = snap && Object.prototype.hasOwnProperty.call(snap, fkCamel) ? snap[fkCamel] : null;
+      changes.set(fkCamel, [old, cur]);
     }
     if (sets.length) {
       const pk = norm.primaryKey;

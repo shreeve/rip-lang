@@ -2427,6 +2427,94 @@ test "afterUpdate hook on a no-op save sees empty savedChanges (AR-compatible)",
   [fired, observed]
 ''', [1, 0]
 
+# @belongs_to FK columns (e.g. user_id from `@belongs_to User`) must
+# participate in the same dirty / snapshot / savedChanges machinery as
+# declared fields. Reassigning inst.userId must trigger an UPDATE
+# writing user_id; an unchanged FK must be skipped on no-op saves.
+
+test ".save() writes belongs_to FK column when reassigned", modelHeader + '''
+  User = schema :model
+    name! string
+  Order = schema :model
+    total integer
+    @belongs_to User
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "total"}, {name: "user_id"}], data: [[10001, 100, 7]], rows: 1}
+  o = Order.find! 10001
+  adapter.calls = []
+  o.userId = 9
+  o.save!
+  updates = adapter.calls.filter (c) -> c.sql.startsWith "UPDATE"
+  sql  = updates[0]?.sql    or ""
+  vals = updates[0]?.params or []
+  [
+    updates.length
+    sql.includes("\\"user_id\\" = ?")
+    sql.includes("\\"total\\"")
+    vals[0]                               # the new user_id
+    vals[1]                               # the WHERE-clause id
+    o.savedChanges.get("userId")          # AR-style diff
+  ]
+''', [1, true, false, 9, 10001, [7, 9]]
+
+test ".save() with no FK change emits no UPDATE", modelHeader + '''
+  User = schema :model
+    name! string
+  Order = schema :model
+    total integer
+    @belongs_to User
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "total"}, {name: "user_id"}], data: [[10001, 100, 7]], rows: 1}
+  o = Order.find! 10001
+  adapter.calls = []
+  o.save!
+  updates = adapter.calls.filter (c) -> c.sql.startsWith "UPDATE"
+  updates.length
+''', 0
+
+test ".save() writes both a declared field and an FK column when both change", modelHeader + '''
+  User = schema :model
+    name! string
+  Order = schema :model
+    total integer
+    notes? string
+    @belongs_to User
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "total"}, {name: "notes"}, {name: "user_id"}], data: [[10001, 100, "old", 7]], rows: 1}
+  o = Order.find! 10001
+  o.notes  = "new"
+  o.userId = 9
+  o.save!
+  [
+    o.savedChanges.size
+    o.savedChanges.get("notes")
+    o.savedChanges.get("userId")
+  ]
+''', [2, ["old", "new"], [7, 9]]
+
+test "markDirty() accepts belongs_to FK column name (camelCase or snake_case)", modelHeader + '''
+  User = schema :model
+    name! string
+  Order = schema :model
+    total integer
+    @belongs_to User
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "total"}, {name: "user_id"}], data: [[10001, 100, 7]], rows: 1}
+  o = Order.find! 10001
+  adapter.calls = []
+  o.markDirty 'user_id'   # snake_case alias
+  o.save!
+  updates = adapter.calls.filter (c) -> c.sql.startsWith "UPDATE"
+  updates[0]?.sql.includes("\\"user_id\\" = ?")
+''', true
+
+test "Order.create! records FK column in savedChanges with [null, newValue]", modelHeader + '''
+  User = schema :model
+    name! string
+  Order = schema :model
+    total integer
+    @belongs_to User
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "total"}, {name: "user_id"}], data: [[10001, 100, 7]], rows: 1}
+  o = Order.create! {total: 100, userId: 7}
+  o.savedChanges.get("userId")
+''', [null, 7]
+
 # -- toJSON iterates own enumerable properties: id + declared + timestamps --
 # -- + @belongs_to FKs + !> eager-derived; excludes methods, ~> getters,   --
 # -- and internal state (_dirty/_persisted/_snapshot).                     --

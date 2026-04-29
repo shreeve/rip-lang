@@ -141,16 +141,17 @@ async function __schemaSave(def, inst) {
 
   if (isNew) {
     const cols = [], placeholders = [], values = [];
-    // Track which declared fields actually got written so we can
-    // populate savedChanges with [null, newValue] entries below.
-    const writtenDeclared = [];
+    // Track which persisted columns actually got written so savedChanges
+    // can record [null, newValue] entries below. Both declared fields
+    // and belongsTo FK columns count.
+    const writtenColumns = [];
     for (const [n, f] of norm.fields) {
       const v = inst[n];
       if (v == null) continue;
       cols.push('"' + __schemaSnake(n) + '"');
       placeholders.push('?');
       values.push(__schemaSerialize(v, f));
-      writtenDeclared.push([n, v]);
+      writtenColumns.push([n, v]);
     }
     // Include relation FKs. belongsTo FKs are camelCase properties on
     // the instance (e.g. organizationId for organization_id).
@@ -162,6 +163,7 @@ async function __schemaSave(def, inst) {
         cols.push('"' + rel.foreignKey + '"');
         placeholders.push('?');
         values.push(v);
+        writtenColumns.push([fkCamel, v]);
       }
     }
     const sql = 'INSERT INTO "' + norm.tableName + '" (' + cols.join(', ') + ') VALUES (' + placeholders.join(', ') + ') RETURNING *';
@@ -198,12 +200,12 @@ async function __schemaSave(def, inst) {
     def._applyEagerDerived(inst);
     inst._snapshot = __schemaSnapshot(norm, inst);
     inst._persisted = true;
-    // Populate savedChanges with [null, newValue] per declared field
-    // that was written. Mirrors Active Record: on a fresh INSERT every
-    // attribute "changed from nil to its new value". We don't include
-    // RETURNING-only columns (id, created_at, updated_at, FK cols) —
-    // the diff is for declared fields.
-    for (const [n, v] of writtenDeclared) inst.savedChanges.set(n, [null, v]);
+    // Populate savedChanges with [null, newValue] per persisted column
+    // that was written (declared fields + belongsTo FKs). Mirrors
+    // Active Record: on a fresh INSERT every attribute "changed from
+    // nil to its new value". RETURNING-only columns (id, timestamps)
+    // are not user-set, so they don't appear in the diff.
+    for (const [n, v] of writtenColumns) inst.savedChanges.set(n, [null, v]);
   } else {
     // Column-targeted UPDATE: only write fields that actually changed
     // since hydrate / last save (snapshot comparison) or that the caller
@@ -232,6 +234,7 @@ async function __schemaSave(def, inst) {
     const dirty = inst._dirty;
     const changes = inst.savedChanges;
     let nextSnap = null;
+    // Declared fields.
     for (const [n, f] of norm.fields) {
       const cur = inst[n];
       const isDirty = dirty && dirty.has(n);
@@ -248,6 +251,24 @@ async function __schemaSave(def, inst) {
       // we have.
       const old = snap && Object.prototype.hasOwnProperty.call(snap, n) ? snap[n] : null;
       changes.set(n, [old, cur]);
+    }
+    // belongsTo FK columns. Same dirty / snapshot / savedChanges
+    // machinery as declared fields, but the SQL column name is
+    // already snake_case (rel.foreignKey) and the value isn't passed
+    // through __schemaSerialize since FKs are scalar IDs.
+    for (const [, rel] of norm.relations) {
+      if (rel.kind !== 'belongsTo') continue;
+      const fkCamel = __schemaCamel(rel.foreignKey);
+      const cur = inst[fkCamel];
+      const isDirty = dirty && dirty.has(fkCamel);
+      const changed = !snap || !Object.prototype.hasOwnProperty.call(snap, fkCamel) || !__schemaSameValue(snap[fkCamel], cur);
+      if (!isDirty && !changed) continue;
+      if (!nextSnap) nextSnap = Object.assign(Object.create(null), snap || {});
+      sets.push('"' + rel.foreignKey + '" = ?');
+      values.push(cur);
+      nextSnap[fkCamel] = cur;
+      const old = snap && Object.prototype.hasOwnProperty.call(snap, fkCamel) ? snap[fkCamel] : null;
+      changes.set(fkCamel, [old, cur]);
     }
     if (sets.length) {
       const pk = norm.primaryKey;

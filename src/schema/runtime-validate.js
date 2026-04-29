@@ -97,15 +97,25 @@ function __schemaSnake(s) { return s.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLo
 
 function __schemaCamel(col) { return String(col).replace(/_([a-z])/g, (_, c) => c.toUpperCase()); }
 
-// Snapshot the current values of every declared field on an instance.
-// Used by `_hydrate` and the INSERT / UPDATE branches of `__schemaSave`
-// (defined in the orm fragment, which loads after this one) so that a
-// later .save() can compare and emit a SET only for columns the caller
-// actually mutated. Lives in the validate fragment because `_hydrate`
-// owns it; the orm fragment is the consumer.
+// Snapshot the current values of every persisted column on an instance:
+// declared fields (from `norm.fields`) plus `belongsTo` FK columns (from
+// `norm.relations`). Used by `_hydrate` and the INSERT / UPDATE branches
+// of `__schemaSave` (defined in the orm fragment, which loads after this
+// one) so that a later .save() can compare and emit a SET only for
+// columns the caller actually mutated. Lives in the validate fragment
+// because `_hydrate` owns it; the orm fragment is the consumer.
+//
+// FK columns are keyed by their camelCase property name on the instance
+// (e.g. `userId`) — same convention the dirty Set, savedChanges Map,
+// and markDirty() resolver use.
 function __schemaSnapshot(norm, inst) {
   const snap = Object.create(null);
   for (const [n] of norm.fields) snap[n] = inst[n];
+  for (const [, rel] of norm.relations) {
+    if (rel.kind !== 'belongsTo') continue;
+    const fkCamel = __schemaCamel(rel.foreignKey);
+    snap[fkCamel] = inst[fkCamel];
+  }
   return snap;
 }
 
@@ -421,9 +431,20 @@ class __SchemaDef {
           }
           const n = __schemaCamel(name);
           const norm = def._normalize();
-          if (!norm.fields.has(n)) {
+          // Accept declared fields and `belongsTo` FK column names
+          // (camelCase or snake_case input both resolve via __schemaCamel).
+          let valid = norm.fields.has(n);
+          if (!valid) {
+            for (const [, rel] of norm.relations) {
+              if (rel.kind === 'belongsTo' && __schemaCamel(rel.foreignKey) === n) {
+                valid = true;
+                break;
+              }
+            }
+          }
+          if (!valid) {
             throw new Error(
-              "schema: markDirty('" + name + "') — '" + n + "' is not a declared field on " + (def.name || 'anon')
+              "schema: markDirty('" + name + "') — '" + n + "' is not a declared field or belongs_to FK on " + (def.name || 'anon')
             );
           }
           this._dirty.add(n);
