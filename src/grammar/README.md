@@ -140,7 +140,7 @@ names in the core generators:
 | `root` | Grammar start symbol | Root |
 | `body-list` | Left-recursive with TERMINATOR | Body, ComponentBody |
 | `comma-list` | Left-recursive with `,` | ArgList, ParamList |
-| `concat-list` | Left-recursive, no separator | Interpolations, Whens |
+| `concat-list` | Left-recursive, no separator | Interpolations, Cases |
 | `left-rec-loop` | Self-referential with terminal continuation | IfBlock |
 | `expression` | Contains the operation nonterminal | Expression |
 | `operation` | Has binary operator rules | Operation |

@@ -213,7 +213,10 @@ async function main() {
 
   if ((args.length === 0 && process.stdin.isTTY) || ripOptions.includes('-r') || ripOptions.includes('--repl')) {
     const replModule = join(__dirname, '../src/repl.js');
-    const replProcess = spawn('bun', ['--experimental-vm-modules', '-e', `import('${replModule}').then(m => m.startREPL())`], {
+    // --preload installs the rip-loader plugin so `import '@rip-lang/foo'`
+    // (and any other .rip dependency) compiles when the REPL is run from a
+    // directory without a bunfig.toml.
+    const replProcess = spawn('bun', ['--experimental-vm-modules', '--preload', loaderPath, '-e', `import('${replModule}').then(m => m.startREPL())`], {
       stdio: 'inherit',
       env: process.env
     });

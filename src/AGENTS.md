@@ -186,6 +186,8 @@ Complete node reference:
 ['++', expr, isPostfix]  ['--', expr, isPostfix]
 
 // Control Flow
+// `elseBlock` may itself be another `['if', ...]` to form an `else if` chain
+// (right-recursive nesting), or any other branch shape for a terminal else.
 ['if', condition, thenBlock, elseBlock?]
 ['unless', condition, body]
 ['?:', condition, thenExpr, elseExpr]

@@ -1081,6 +1081,17 @@ code "postfix if else compiles to ternary", '''
   x = (cond ? "a" : "b")
   '''
 
+# Explicit parens preserve "only assign if cond" semantics. The parser tags
+# parenthesized `=` nodes with a flag the codegen ternary-hoist consults, so
+# `(x = "a") if cond else "b"` keeps its conditional-assign meaning instead
+# of being hoisted into an unconditional `x = (cond ? "a" : "b")`.
+test "parenthesized assignment in ternary only assigns when cond is true", '''
+  cond = false
+  x = "before"
+  (x = "after") if cond else "skipped"
+  x
+  ''', "before"
+
 test "postfix if else nested in function", '''
   pick = (flag) -> "yes" if flag else "no"
   pick(false)

@@ -247,3 +247,19 @@ test "async method works with extra statements", '''
     await s.fetch()
   ''', 42
 
+# ==============================================================================
+# Class name restriction
+# ==============================================================================
+# `class App.Sub` and `class arr[0]` used to parse but produce broken JS
+# (`class .,App,Sub`) because the codegen interpolated the array-shaped name
+# into a `class ${name}` template. The grammar now restricts class names to
+# Identifier or ThisProperty (the latter enabling nested static classes).
+
+fail "class with member-access name does not parse",
+  'class App.Sub'
+
+fail "class with index name does not parse", '''
+  arr = []
+  class arr[0]
+  '''
+

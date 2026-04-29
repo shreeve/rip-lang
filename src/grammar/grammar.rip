@@ -23,6 +23,28 @@ o = (pattern, action, options) ->
   pattern = pattern.trim().replace /\s{2,}/g, ' '
   [pattern, action ?? 1, options]
 
+# Generate the canonical "list-with-indent" production set used by
+# AssignList, MapAssignList, ParamList, ArgList, ImportSpecifierList,
+# ExportSpecifierList, and PickList.
+#
+#   Self      — the list non-terminal's own name (used in recursive refs)
+#   Item      — the element non-terminal name
+#   empty     — when true, an empty input reduces to []
+#   bareIndent — when true, an INDENT-wrapped form unwraps via "return inner"
+#
+# Output is identical to what the seven sites used to write by hand. Any new
+# list non-terminal added in the future inherits the same shape automatically.
+listRules = (Self, Item, opts) ->
+  opts ??= {}
+  rules = []
+  rules.push(o '', '[]') if opts.empty
+  rules.push o Item, '[1]'
+  rules.push o "#{Self} , #{Item}", '[...1, 3]'
+  rules.push o "#{Self} OptComma TERMINATOR #{Item}", '[...1, 4]'
+  rules.push(o "INDENT #{Self} OptComma OUTDENT", 2) if opts.bareIndent
+  rules.push o "#{Self} OptComma INDENT #{Self} OptComma OUTDENT", '[...1, ...4]'
+  rules
+
 mode = 'sexp'
 
 grammar =
@@ -115,7 +137,7 @@ grammar =
 
   # Immediate values — numbers, strings, booleans, etc.
   Literal: [
-    o 'AlphaNumeric'
+    o 'Atom'
     o 'JS'        # Embedded JavaScript (backticks)
     o 'Regex'
     o 'UNDEFINED' , '"undefined"'
@@ -126,7 +148,8 @@ grammar =
     o 'SYMBOL'    , '["symbol", 1]'
   ]
 
-  AlphaNumeric: [
+  # A primitive literal whose code is its own representation.
+  Atom: [
     o 'NUMBER'
     o 'String'
   ]
@@ -153,7 +176,7 @@ grammar =
   ]
 
   Interpolations: [
-    o 'InterpolationChunk'                , '[1]'
+    o 'InterpolationChunk'               , '[1]'
     o 'Interpolations InterpolationChunk', '[...1, 2]'
   ]
 
@@ -231,35 +254,40 @@ grammar =
     o 'Object'  # Object destructuring
   ]
 
+  # Subjectable — anything that can carry a postfix accessor chain (`.prop`,
+  # `[idx]`, `.{a,b}`, etc.). Value covers ordinary expressions; Code lets
+  # an arrow function be the subject too, so `(-> 5).foo`, `(=> x).{a, b}`,
+  # and `(-> 5)[i]` all parse via the same rules below — no asymmetry
+  # between the two subject paths.
+  Subjectable: [
+    o 'Value'
+    o 'Code'
+  ]
+
   # Simple assignable targets — identifiers, properties, and indexed values.
   SimpleAssignable: [
     o 'Identifier'
     o 'ThisProperty'
     # Property access
-    o 'Value . Property' , '[".", 1, 3]'
-    o 'Value ?. Property', '["?.", 1, 3]'
+    o 'Subjectable . Property' , '[".", 1, 3]'
+    o 'Subjectable ?. Property', '["?.", 1, 3]'
     # Indexing
-    o 'Value INDEX_START Expression INDEX_END'                                  , '["[]", 1, 3]'
-    o 'Value INDEX_START INDENT Expression OUTDENT INDEX_END'                   , '["[]", 1, 4]'
-    o 'Value INDEX_START Slice INDEX_END'                                       , '["[]", 1, 3]'
-    o 'Value INDEX_START INDENT Slice OUTDENT INDEX_END'                        , '["[]", 1, 4]'
+    o 'Subjectable INDEX_START Expression INDEX_END'                                  , '["[]", 1, 3]'
+    o 'Subjectable INDEX_START INDENT Expression OUTDENT INDEX_END'                   , '["[]", 1, 4]'
+    o 'Subjectable INDEX_START Slice INDEX_END'                                       , '["[]", 1, 3]'
+    o 'Subjectable INDEX_START INDENT Slice OUTDENT INDEX_END'                        , '["[]", 1, 4]'
     # Pick operator: obj.{a, b: c, d = default} → { a: obj.a, c: obj.b, d: obj.d ?? default }
     # Heads `.{}` and `?.{}` are syntax-shape strings that can't collide with
     # a user function named `pick` (Rip encodes calls as [name, ...args]).
-    o 'Value PICK_START    PickList OptComma PICK_END'               , '[".{}",  1, ...3]'
-    o 'Value OPTPICK_START PickList OptComma PICK_END'               , '["?.{}", 1, ...3]'
-    o 'Value PICK_START    INDENT PickList OptComma OUTDENT PICK_END', '[".{}",  1, ...4]'
-    o 'Value OPTPICK_START INDENT PickList OptComma OUTDENT PICK_END', '["?.{}", 1, ...4]'
+    o 'Subjectable PICK_START    PickList OptComma PICK_END'               , '[".{}",  1, ...3]'
+    o 'Subjectable OPTPICK_START PickList OptComma PICK_END'               , '["?.{}", 1, ...3]'
+    o 'Subjectable PICK_START    INDENT PickList OptComma OUTDENT PICK_END', '[".{}",  1, ...4]'
+    o 'Subjectable OPTPICK_START INDENT PickList OptComma OUTDENT PICK_END', '["?.{}", 1, ...4]'
     # Regex indexing with capture group
-    o 'Value INDEX_START RegexWithIndex INDEX_END'                              , '[$3[0], $1, ...$3.slice(1)]'
+    o 'Subjectable INDEX_START RegexWithIndex INDEX_END'                              , '[$3[0], $1, ...$3.slice(1)]'
     # ES6 optional indexing (?.[ )
-    o 'Value ES6_OPTIONAL_INDEX INDEX_START Expression INDEX_END'               , '["optindex", 1, 4]'
-    o 'Value ES6_OPTIONAL_INDEX INDEX_START INDENT Expression OUTDENT INDEX_END', '["optindex", 1, 5]'
-    # Arrow function with accessor
-    o 'Code . Property'                                                         , '[".", 1, 3]'
-    o 'Code ?. Property'                                                        , '["?.", 1, 3]'
-    o 'Code INDEX_START Expression INDEX_END'                                   , '["[]", 1, 3]'
-    o 'Code INDEX_START INDENT Expression OUTDENT INDEX_END'                    , '["[]", 1, 4]'
+    o 'Subjectable ES6_OPTIONAL_INDEX INDEX_START Expression INDEX_END'               , '["optindex", 1, 4]'
+    o 'Subjectable ES6_OPTIONAL_INDEX INDEX_START INDENT Expression OUTDENT INDEX_END', '["optindex", 1, 5]'
   ]
 
   # ============================================================================
@@ -276,13 +304,7 @@ grammar =
     o '{ AssignList OptComma }', '["object", ...2]'
   ]
 
-  AssignList: [
-    o ''                                                      , '[]'
-    o 'AssignObj'                                             , '[1]'
-    o 'AssignList , AssignObj'                                , '[...1, 3]'
-    o 'AssignList OptComma TERMINATOR AssignObj'              , '[...1, 4]'
-    o 'AssignList OptComma INDENT AssignList OptComma OUTDENT', '[...1, ...4]'
-  ]
+  AssignList: listRules('AssignList', 'AssignObj', empty: true)
 
   AssignObj: [
     o 'ObjAssignable'                                  , '[null, 1, 1]'  # Shorthand: {x}
@@ -303,7 +325,7 @@ grammar =
     o 'SimpleObjAssignable'
     o '[ Expression ]'  , '["dynamicKey", 2]'
     o '@ [ Expression ]', '["[]", "this", 3]'
-    o 'AlphaNumeric'
+    o 'Atom'
   ]
 
   # Object spread/rest — ES6 prefix only
@@ -342,17 +364,10 @@ grammar =
   # ============================================================================
 
   MapLiteral: [
-    o 'MAP_START MAP_END'                        , '["map-literal"]'
     o 'MAP_START MapAssignList OptComma MAP_END' , '["map-literal", ...2]'
   ]
 
-  MapAssignList: [
-    o ''                                                              , '[]'
-    o 'MapAssignObj'                                                  , '[1]'
-    o 'MapAssignList , MapAssignObj'                                  , '[...1, 3]'
-    o 'MapAssignList OptComma TERMINATOR MapAssignObj'                , '[...1, 4]'
-    o 'MapAssignList OptComma INDENT MapAssignList OptComma OUTDENT'  , '[...1, ...4]'
-  ]
+  MapAssignList: listRules('MapAssignList', 'MapAssignObj', empty: true)
 
   MapAssignObj: [
     o 'MapAssignable : Expression'                , '[":", 1, 3]'
@@ -371,11 +386,7 @@ grammar =
   # numbers, or computed keys in v1.
   # ============================================================================
 
-  PickList: [
-    o 'PickItem'                             , '[1]'
-    o 'PickList , PickItem'                  , '[...1, 3]'
-    o 'PickList OptComma TERMINATOR PickItem', '[...1, 4]'
-  ]
+  PickList: listRules('PickList', 'PickItem')
 
   PickItem: [
     o 'PickKey'                                 , '[1, 1, null]'   # shorthand {a}        → ["a", "a", null]
@@ -393,7 +404,7 @@ grammar =
     o 'Identifier'
     o 'Property'
     o 'ThisProperty'
-    o 'AlphaNumeric'
+    o 'Atom'
     o 'Regex'
     o 'BOOL'
     o 'NULL'       , '"null"'
@@ -477,29 +488,25 @@ grammar =
 
   # Arrow functions: (params) -> body  or  (params) => body
   Code: [
-    o 'PARAM_START ParamList PARAM_END FuncGlyph Block', '[4, 2, 5]'
-    o 'FuncGlyph Block'                                , '[1, [], 2]'
+    o 'PARAM_START ParamList PARAM_END ArrowKind Block', '[4, 2, 5]'
+    o 'ArrowKind Block'                                , '[1, [], 2]'
   ]
 
   # Single-line arrow functions
   CodeLine: [
-    o 'PARAM_START ParamList PARAM_END FuncGlyph Line', '[4, 2, 5]'
-    o 'FuncGlyph Line'                                , '[1, [], 2]'
+    o 'PARAM_START ParamList PARAM_END ArrowKind Line', '[4, 2, 5]'
+    o 'ArrowKind Line'                                , '[1, [], 2]'
   ]
 
-  FuncGlyph: [
+  # `->` is a regular function (binds its own `this`).
+  # `=>` is an arrow function (lexical `this`).
+  ArrowKind: [
     o '->'
     o '=>'
   ]
 
   # Parameter list
-  ParamList: [
-    o ''                                                    , '[]'
-    o 'Param'                                               , '[1]'
-    o 'ParamList , Param'                                   , '[...1, 3]'
-    o 'ParamList OptComma TERMINATOR Param'                 , '[...1, 4]'
-    o 'ParamList OptComma INDENT ParamList OptComma OUTDENT', '[...1, ...4]'
-  ]
+  ParamList: listRules('ParamList', 'Param', empty: true)
 
   Param: [
     o 'ParamVar'
@@ -537,13 +544,7 @@ grammar =
     o 'CALL_START ArgList OptComma CALL_END', 2
   ]
 
-  ArgList: [
-    o 'Arg'                                             , '[1]'
-    o 'ArgList , Arg'                                   , '[...1, 3]'
-    o 'ArgList OptComma TERMINATOR Arg'                 , '[...1, 4]'
-    o 'INDENT ArgList OptComma OUTDENT'                 , 2
-    o 'ArgList OptComma INDENT ArgList OptComma OUTDENT', '[...1, ...4]'
-  ]
+  ArgList: listRules('ArgList', 'Arg', bareIndent: true)
 
   Arg: [
     o 'Expression'
@@ -591,9 +592,14 @@ grammar =
     o 'INDENT Body OUTDENT', '["block", ...2]'
   ]
 
+  # Parenthetical mark-up: when the inner expression is a single `=` assignment,
+  # tag it with `.parenthesized = true` so the codegen ternary-hoist doesn't
+  # silently turn `(x = "a") if cond else "b"` (conditional assign) into
+  # `x = (cond ? "a" : "b")` (unconditional). The marker is harmless for any
+  # other consumer; it's just a flag the hoist consults.
   Parenthetical: [
-    o '( Body )'               , '$2.length === 1 ? $2[0] : ["block", ...$2]'
-    o '( INDENT Body OUTDENT )', '$3.length === 1 ? $3[0] : ["block", ...$3]'
+    o '( Body )'               , '$2.length === 1 ? (Array.isArray($2[0]) && $2[0][0] === "=" && ($2[0].parenthesized = true), $2[0]) : ["block", ...$2]'
+    o '( INDENT Body OUTDENT )', '$3.length === 1 ? (Array.isArray($3[0]) && $3[0][0] === "=" && ($3[0].parenthesized = true), $3[0]) : ["block", ...$3]'
   ]
 
   OptComma: [
@@ -631,10 +637,18 @@ grammar =
   # Control Flow
   # ============================================================================
 
-  # If/Unless
+  # If/Unless — produces canonical right-recursive shape that matches the
+  # documented AST: ["if", cond, then, else?] where `else` may itself be
+  # an `["if", ...]` for elseif chains.
   IfBlock: [
-    o 'IF Expression Block'              , '["if", 2, 3]'
-    o 'IfBlock ELSE IF Expression Block' , '$1.length === 3 ? ["if", $1[1], $1[2], ["if", $4, $5]] : [...$1, ["if", $4, $5]]'
+    o 'IF Expression Block'             , '["if", 2, 3]'
+    o 'IF Expression Block IfElseTail'  , '["if", 2, 3, 4]'
+  ]
+
+  IfElseTail: [
+    o 'ELSE IF Expression Block'             , '["if", 3, 4]'
+    o 'ELSE IF Expression Block IfElseTail'  , '["if", 3, 4, 5]'
+    o 'ELSE Block'                           , 2
   ]
 
   UnlessBlock: [
@@ -644,7 +658,6 @@ grammar =
 
   If: [
     o 'IfBlock'
-    o 'IfBlock ELSE Block'               , '$1.length === 3 ? ["if", $1[1], $1[2], $3] : [...$1, $3]'
     o 'UnlessBlock'
     o 'Statement POST_IF Expression'     , '["if", 3, [1]]'
     o 'Expression POST_IF Expression'    , '["if", 3, [1]]'
@@ -665,20 +678,21 @@ grammar =
   Catch: [
     o 'CATCH Identifier Block', '[2, 3]'
     o 'CATCH Object Block'    , '[2, 3]'
+    o 'CATCH Array Block'     , '[2, 3]'
     o 'CATCH Block'           , '[null, 2]'
   ]
 
   # Switch/When
   Switch: [
-    o 'SWITCH Expression INDENT Whens OUTDENT'            , '["switch", 2, 4, null]'
-    o 'SWITCH Expression INDENT Whens ELSE Block OUTDENT' , '["switch", 2, 4, 6]'
-    o 'SWITCH INDENT Whens OUTDENT'                       , '["switch", null, 3, null]'
-    o 'SWITCH INDENT Whens ELSE Block OUTDENT'            , '["switch", null, 3, 5]'
+    o 'SWITCH Expression INDENT Cases OUTDENT'            , '["switch", 2, 4, null]'
+    o 'SWITCH Expression INDENT Cases ELSE Block OUTDENT' , '["switch", 2, 4, 6]'
+    o 'SWITCH INDENT Cases OUTDENT'                       , '["switch", null, 3, null]'
+    o 'SWITCH INDENT Cases ELSE Block OUTDENT'            , '["switch", null, 3, 5]'
   ]
 
-  Whens: [
+  Cases: [
     o 'When'      , '[1]'
-    o 'Whens When', '[...1, 2]'
+    o 'Cases When', '[...1, 2]'
   ]
 
   When: [
@@ -785,15 +799,27 @@ grammar =
   # Classes
   # ============================================================================
 
+  # Things that can appear as a class name. `Identifier` covers ordinary
+  # `class Foo`; `ThisProperty` covers nested static classes inside a class
+  # body (`class @Inner` → `static Inner = class { ... }`). The previous
+  # rule used `SimpleAssignable`, which also accepted `class App.Sub` and
+  # `class arr[0]` — both produced broken JS (`class .,App,Sub`) because
+  # the codegen interpolated the array-shaped name into a `class ${name}`
+  # template.
+  ClassName: [
+    o 'Identifier'
+    o 'ThisProperty'
+  ]
+
   Class: [
-    o 'CLASS'                                          , '["class", null, null]'
-    o 'CLASS Block'                                    , '["class", null, null, 2]'
-    o 'CLASS EXTENDS Expression'                       , '["class", null, 3]'
-    o 'CLASS EXTENDS Expression Block'                 , '["class", null, 3, 4]'
-    o 'CLASS SimpleAssignable'                         , '["class", 2, null]'
-    o 'CLASS SimpleAssignable Block'                   , '["class", 2, null, 3]'
-    o 'CLASS SimpleAssignable EXTENDS Expression'      , '["class", 2, 4]'
-    o 'CLASS SimpleAssignable EXTENDS Expression Block', '["class", 2, 4, 5]'
+    o 'CLASS'                                    , '["class", null, null]'
+    o 'CLASS Block'                              , '["class", null, null, 2]'
+    o 'CLASS EXTENDS Expression'                 , '["class", null, 3]'
+    o 'CLASS EXTENDS Expression Block'           , '["class", null, 3, 4]'
+    o 'CLASS ClassName'                          , '["class", 2, null]'
+    o 'CLASS ClassName Block'                    , '["class", 2, null, 3]'
+    o 'CLASS ClassName EXTENDS Expression'       , '["class", 2, 4]'
+    o 'CLASS ClassName EXTENDS Expression Block' , '["class", 2, 4, 5]'
   ]
 
   # ============================================================================
@@ -870,13 +896,7 @@ grammar =
     o 'IMPORT ImportDefaultSpecifier , { ImportSpecifierList OptComma } FROM String', '["import", 2, 5, 9]'
   ]
 
-  ImportSpecifierList: [
-    o 'ImportSpecifier'                                                         , '[1]'
-    o 'ImportSpecifierList , ImportSpecifier'                                   , '[...1, 3]'
-    o 'ImportSpecifierList OptComma TERMINATOR ImportSpecifier'                 , '[...1, 4]'
-    o 'INDENT ImportSpecifierList OptComma OUTDENT'                             , 2
-    o 'ImportSpecifierList OptComma INDENT ImportSpecifierList OptComma OUTDENT', '[...1, ...4]'
-  ]
+  ImportSpecifierList: listRules('ImportSpecifierList', 'ImportSpecifier', bareIndent: true)
 
   ImportSpecifier: [
     o 'Identifier'
@@ -906,7 +926,7 @@ grammar =
     o 'EXPORT ReactiveAssign'                              , '["export", 2]'
     o 'EXPORT ComputedAssign'                              , '["export", 2]'
     o 'EXPORT ReadonlyAssign'                              , '["export", 2]'
-    o 'EXPORT Effect'                                 , '["export", 2]'
+    o 'EXPORT Effect'                                      , '["export", 2]'
     o 'EXPORT DEFAULT Expression'                          , '["export-default", 3]'
     o 'EXPORT DEFAULT INDENT Object OUTDENT'               , '["export-default", 4]'
     o 'EXPORT EXPORT_ALL FROM String'                      , '["export-all", 4]'
@@ -914,13 +934,7 @@ grammar =
     o 'EXPORT { ExportSpecifierList OptComma } FROM String', '["export-from", 3, 7]'
   ]
 
-  ExportSpecifierList: [
-    o 'ExportSpecifier'                                                         , '[1]'
-    o 'ExportSpecifierList , ExportSpecifier'                                   , '[...1, 3]'
-    o 'ExportSpecifierList OptComma TERMINATOR ExportSpecifier'                 , '[...1, 4]'
-    o 'INDENT ExportSpecifierList OptComma OUTDENT'                             , 2
-    o 'ExportSpecifierList OptComma INDENT ExportSpecifierList OptComma OUTDENT', '[...1, ...4]'
-  ]
+  ExportSpecifierList: listRules('ExportSpecifierList', 'ExportSpecifier', bareIndent: true)
 
   ExportSpecifier: [
     o 'Identifier'

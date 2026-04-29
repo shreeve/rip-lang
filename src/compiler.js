@@ -937,6 +937,15 @@ export class CodeEmitter {
     let [target, value] = rest;
     let op = head === '?=' ? '??=' : head;
 
+    // Reject destructuring shapes that aren't valid binding patterns. The
+    // grammar accepts the full Array / Object expression on the LHS of `=`,
+    // so things like `[a + b] = src` and `{x: y for x in arr} = src` parse
+    // and used to either silently produce broken JS or crash the compiler
+    // with an obscure error. This walk catches them with a clear message.
+    if (this.is(target, 'array') || this.is(target, 'object')) {
+      this._validateBindingPattern(target, sexpr);
+    }
+
     // Optional chain assignment: x?.prop = val → if (x != null) x.prop = val
     let optInfo = this._findOptionalInTarget(target);
     if (optInfo) {
@@ -1406,9 +1415,13 @@ export class CodeEmitter {
     let [cond, then_, else_] = rest;
 
     // Hoist assignment: (cond ? (x = a) : b) → x = (cond ? a : b)
-    // Enables: x = "admin" if cond else "member" without parens
+    // Enables the Python-style postfix-ternary idiom:
+    //   x = "admin" if cond else "member"  →  x = (cond ? "admin" : "member")
+    // Skip when the assignment is parenthesized — the parser tags those via
+    // `.parenthesized = true` so we can preserve "only assign when cond"
+    // semantics for the explicit form `(x = "a") if cond else "b"`.
     let thenHead = then_?.[0]?.valueOf?.() ?? then_?.[0];
-    if (thenHead === '=' && Array.isArray(then_)) {
+    if (thenHead === '=' && Array.isArray(then_) && !then_.parenthesized) {
       let target = this.emit(then_[1], 'value');
       let thenVal = this.emit(then_[2], 'value');
       let elseVal = this.emit(else_, 'value');
@@ -2937,20 +2950,21 @@ export class CodeEmitter {
   // ---------------------------------------------------------------------------
 
   emitIfElseWithEarlyReturns(ifStmt) {
-    let [head, condition, thenBranch, ...elseBranches] = ifStmt;
-    let code = '';
-    let condCode = this.emit(condition, 'value');
-    code += this.indent() + `if (${condCode}) {\n`;
+    let [, condition, thenBranch, ...elseBranches] = ifStmt;
+    return this.indent() + this.emitIfElseEarlyReturnsChain(condition, thenBranch, elseBranches);
+  }
+
+  // Recursive companion to emitIfElseWithEarlyReturns. Each branch body
+  // is wrapped in braces with the last expression promoted to a return.
+  emitIfElseEarlyReturnsChain(condition, thenBranch, elseBranches) {
+    let code = `if (${this.emit(condition, 'value')}) {\n`;
     code += this.withIndent(() => this.emitBranchWithReturn(thenBranch));
     code += this.indent() + '}';
     for (let branch of elseBranches) {
       code += ' else ';
       if (this.is(branch, 'if')) {
         let [, nc, nt, ...ne] = branch;
-        code += `if (${this.emit(nc, 'value')}) {\n`;
-        code += this.withIndent(() => this.emitBranchWithReturn(nt));
-        code += this.indent() + '}';
-        for (let rb of ne) { code += ' else {\n'; code += this.withIndent(() => this.emitBranchWithReturn(rb)); code += this.indent() + '}'; }
+        code += this.emitIfElseEarlyReturnsChain(nc, nt, ne);
       } else {
         code += '{\n';
         code += this.withIndent(() => this.emitBranchWithReturn(branch));
@@ -2980,37 +2994,30 @@ export class CodeEmitter {
     if (needsIIFE) {
       // Enclosed: condition, thenBranch, elseBranches
       let hasAwait = this.containsAwait(condition) || this.containsAwait(thenBranch) || elseBranches.some(b => this.containsAwait(b));
-      let code = this.asyncIIFEOpen(hasAwait) + ' ';
-      code += `if (${this.emit(condition, 'value')}) `;
-      code += this.emitBlockWithReturns(thenBranch);
-      for (let branch of elseBranches) {
-        code += ' else ';
-        if (this.is(branch, 'if')) {
-          let [_, nc, nt, ...ne] = branch;
-          code += `if (${this.emit(nc, 'value')}) `;
-          code += this.emitBlockWithReturns(nt);
-          for (let nb of ne) {
-            code += ' else ';
-            if (this.is(nb, 'if')) {
-              let [__, nnc, nnt, ...nne] = nb;
-              code += `if (${this.emit(nnc, 'value')}) `;
-              code += this.emitBlockWithReturns(nnt);
-              elseBranches.push(...nne);
-            } else {
-              code += this.emitBlockWithReturns(nb);
-            }
-          }
-        } else {
-          code += this.emitBlockWithReturns(branch);
-        }
-      }
-      return code + ' })()';
+      return this.asyncIIFEOpen(hasAwait) + ' ' + this.emitIfChain(condition, thenBranch, elseBranches) + ' })()';
     }
     let thenExpr = this.extractExpression(this.unwrapIfBranch(thenBranch));
     let elseExpr = this.buildTernaryChain(elseBranches);
     let condCode = this.emit(condition, 'value');
     if ((this.is(condition, 'yield') || this.is(condition, 'await'))) condCode = `(${condCode})`;
     return `(${condCode} ? ${thenExpr} : ${elseExpr})`;
+  }
+
+  // Recursive emitter for `if / else if / else` chains in IIFE/value contexts.
+  // Walks the right-recursive AST: ["if", cond, then, else?] where `else` may
+  // itself be another `["if", ...]` for an elseif chain.
+  emitIfChain(condition, thenBranch, elseBranches) {
+    let code = `if (${this.emit(condition, 'value')}) ` + this.emitBlockWithReturns(thenBranch);
+    for (let branch of elseBranches) {
+      code += ' else ';
+      if (this.is(branch, 'if')) {
+        let [, nc, nt, ...ne] = branch;
+        code += this.emitIfChain(nc, nt, ne);
+      } else {
+        code += this.emitBlockWithReturns(branch);
+      }
+    }
+    return code;
   }
 
   emitIfAsStatement(condition, thenBranch, elseBranches) {
@@ -3211,6 +3218,67 @@ export class CodeEmitter {
     return null;
   }
 
+  // Walk a destructuring LHS and reject shapes that aren't valid binding
+  // patterns. `null` array elements are elision (valid). Identifiers are
+  // strings and parse as leaves. Member-access (`obj.x`) and bracket-index
+  // (`arr[i]`) shapes are valid as assignment targets. Optional chains
+  // (`obj?.x`, `arr?.[i]`) are NOT valid in JS destructuring assignment
+  // targets, so we reject them. Comprehensions, arithmetic, calls, etc.
+  // are unconditionally rejected.
+  _validateBindingPattern(node, sexpr) {
+    if (!Array.isArray(node)) return;
+    let head = node[0];
+    if (head === 'comprehension' || head === 'object-comprehension') {
+      this.error(`Cannot use ${head} as a destructuring target`, sexpr);
+    }
+    if (head === 'array') {
+      for (let elem of node.slice(1)) this._validateBindingPattern(elem, sexpr);
+      return;
+    }
+    if (head === 'object') {
+      // Object entry shapes used by the grammar:
+      //   [null, k, k]      — shorthand {x}; both slots are the same identifier
+      //   [":", k, target]  — rename {a: target}; recurse into target
+      //   ["=", k, default] — default {a = 5}; key is identifier, default is RHS
+      //   ["...", target]   — rest {...rest}; recurse into target
+      // Anything else is unexpected; fail loudly so future grammar additions
+      // can't silently pass through unvalidated.
+      for (let entry of node.slice(1)) {
+        if (!Array.isArray(entry)) continue;
+        let h = entry[0];
+        if (h === null) {
+          // Shorthand {x}: target is entry[2], which must be a bare identifier
+          // (validated by the array-leaf rules below).
+          this._validateBindingPattern(entry[2], sexpr);
+        } else if (h === ':') {
+          this._validateBindingPattern(entry[2], sexpr);
+        } else if (h === '=') {
+          // Default {a = 5}: key (entry[1]) is the binding target.
+          this._validateBindingPattern(entry[1], sexpr);
+        } else if (h === '...') {
+          this._validateBindingPattern(entry[1], sexpr);
+        } else {
+          this.error(`Unexpected object entry '${h}' in destructuring target`, sexpr);
+        }
+      }
+      return;
+    }
+    // Wrapper shapes that contain a nested target.
+    if (head === '...' || head === 'default' || head === '=') {
+      this._validateBindingPattern(node[1], sexpr);
+      return;
+    }
+    // Member access and bracket index are valid assignment targets.
+    if (head === '.' || head === '[]') return;
+    // Optional chains are NOT valid in JS destructuring-assignment context
+    // (only in optional-chain GET expressions). Reject explicitly.
+    if (head === '?.' || head === 'optindex' || head === 'optcall') {
+      this.error(`Cannot use optional chain as a destructuring target`, sexpr);
+    }
+    // Anything else is an expression that isn't a destructuring shape.
+    this.error(`Cannot use '${head}' expression as a destructuring target`, sexpr);
+  }
+
   unwrapLogical(code) {
     if (typeof code !== 'string') return code;
     while (code.startsWith('(') && code.endsWith(')')) {
@@ -3262,17 +3330,19 @@ export class CodeEmitter {
     return false;
   }
 
+  // Walk the right-recursive AST emitting nested ternaries. `branches` is the
+  // tail of an `if` s-expression — either empty (no else) or one element
+  // (the else, which may itself be another `["if", ...]`).
   buildTernaryChain(branches) {
     if (branches.length === 0) return 'undefined';
-    if (branches.length === 1) return this.extractExpression(this.unwrapIfBranch(branches[0]));
-    let first = branches[0];
-    if (this.is(first, 'if')) {
-      let [_, cond, then_, ...rest] = first;
+    let branch = this.unwrapIfBranch(branches[0]);
+    if (this.is(branch, 'if')) {
+      let [, cond, then_, ...rest] = branch;
       let thenPart = this.extractExpression(this.unwrapIfBranch(then_));
-      let elsePart = this.buildTernaryChain([...rest, ...branches.slice(1)]);
+      let elsePart = this.buildTernaryChain(rest);
       return `(${this.emit(cond, 'value')} ? ${thenPart} : ${elsePart})`;
     }
-    return this.extractExpression(this.unwrapIfBranch(first));
+    return this.extractExpression(branch);
   }
 
   // ---------------------------------------------------------------------------

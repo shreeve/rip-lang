@@ -201,3 +201,19 @@ test 'optional chain assign: inner chain skips', '''
 code 'optional chain assign: style pattern', 'el?.style.display = "none"', 'if (el != null) el.style.display = "none"'
 code 'optional chain assign: value pattern', '@_input?.value = ""', 'if (this._input != null) this._input.value = ""'
 code 'optional chain assign: subtract', 'x?.y -= 1', 'if (x != null) x.y -= 1'
+
+# ==============================================================================
+# Destructuring binding-pattern validation
+# ==============================================================================
+# The grammar accepts the full Array / Object expression on the LHS of `=`,
+# so shapes like `[a + b] = src` and `{x: y for x in arr} = src` parse.
+# emitAssignment validates the LHS is a real binding pattern and rejects
+# expression / comprehension shapes with a clear message instead of crashing
+# the codegen or producing broken JS.
+
+fail 'destructure: arithmetic expression as target', '[a + b] = src'
+
+fail 'destructure: function call as target', '[fn()] = src'
+
+fail 'destructure: comprehension as target',
+  '{x: y for x in [1]} = src'

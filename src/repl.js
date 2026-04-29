@@ -327,9 +327,23 @@ export class RipREPL {
       return varName;
     });
 
-    const staticImports = dynamicImports
-      .map(({ varName, specifier }) => `import * as ${varName} from '${specifier}';`)
-      .join('\n');
+    const staticImportLines = dynamicImports
+      .map(({ varName, specifier }) => `import * as ${varName} from '${specifier}';`);
+
+    // Extract user-written `import X from "…"` statements out of the body so they
+    // live in the SourceTextModule prelude instead of failing inside the async IIFE.
+    // Captures default, named, namespace, mixed, renamed, and side-effect imports.
+    const importedBindings = new Set();
+    js = js.replace(
+      /^import\s+(?:([^'"]+?)\s+from\s+)?(['"])([^'"]+)\2\s*;?\s*$/gm,
+      (match, spec) => {
+        staticImportLines.push(match);
+        for (const name of parseImportBindings(spec)) importedBindings.add(name);
+        return '';
+      }
+    );
+
+    const staticImports = staticImportLines.join('\n');
 
     // Restore existing variables and remove duplicate declarations
     const existingVars = Object.keys(this.vars);
@@ -351,13 +365,16 @@ export class RipREPL {
     // Build restore code
     // Non-reactive vars: let x = __vars['x'];
     // Reactive vars: const x = __vars['x']; (they're already stored)
+    // Skip names being declared by an `import` on this line — the import itself
+    // is the binding, and `let x = …` (or `const x = …`) on top would be a
+    // redeclaration. Apply the skip uniformly to both restore paths.
     const nonReactiveRestore = existingNonReactive
-      .filter(k => k !== '_')
+      .filter(k => k !== '_' && !importedBindings.has(k))
       .map(v => `let ${v} = __vars['${v}'];`)
       .join('\n');
 
     const reactiveRestore = [...this.reactiveVars]
-      .filter(v => existingVars.includes(v))
+      .filter(v => existingVars.includes(v) && !importedBindings.has(v))
       .map(v => `const ${v} = __vars['${v}'];`)
       .join('\n');
 
@@ -365,7 +382,7 @@ export class RipREPL {
 
     // Build save code (save non-reactive vars back to __vars)
     // Reactive vars are already saved via the const transformation
-    const nonReactiveVars = [...new Set([...existingNonReactive, ...declaredVars])]
+    const nonReactiveVars = [...new Set([...existingNonReactive, ...declaredVars, ...importedBindings])]
       .filter(k => k !== '_' && !this.reactiveVars.has(k));
     const saveCode = nonReactiveVars
       .map(v => `if (typeof ${v} !== 'undefined') __vars['${v}'] = ${v};`)
@@ -590,6 +607,57 @@ ${colors.cyan}Tips:${colors.reset}
       // Silently ignore errors
     }
   }
+}
+
+/**
+ * Extract local-binding names from the bindings clause of a static import.
+ *
+ * Handles:
+ *   default          → `Time`                     → ['Time']
+ *   namespace        → `* as time`                → ['time']
+ *   default + named  → `Time, { Duration }`       → ['Time', 'Duration']
+ *   default + ns     → `Time, * as ns`            → ['Time', 'ns']
+ *   named + rename   → `{ A, B as C }`            → ['A', 'C']
+ *   side-effect      → undefined / `{}`           → []
+ */
+function parseImportBindings(spec) {
+  if (!spec) return [];
+  const names = [];
+  let rest = spec.trim();
+
+  const ID = /^([A-Za-z_$][\w$]*)/;
+  const NS = /^\*\s+as\s+([A-Za-z_$][\w$]*)/;
+  const RENAME = /^([A-Za-z_$][\w$]*)\s+as\s+([A-Za-z_$][\w$]*)$/;
+
+  // Default import (must come first if present)
+  const def = rest.match(ID);
+  if (def && rest.slice(def[0].length).trimStart().match(/^[,{]|$/)) {
+    names.push(def[1]);
+    rest = rest.slice(def[0].length).trimStart();
+    if (rest.startsWith(',')) rest = rest.slice(1).trimStart();
+  }
+
+  // Namespace
+  const ns = rest.match(NS);
+  if (ns) {
+    names.push(ns[1]);
+    rest = rest.slice(ns[0].length).trimStart();
+  }
+
+  // Named bindings { A, B as C }
+  const named = rest.match(/^\{([^}]*)\}/);
+  if (named) {
+    for (const part of named[1].split(',')) {
+      const t = part.trim();
+      if (!t) continue;
+      const ren = t.match(RENAME);
+      if (ren) { names.push(ren[2]); continue; }
+      const id = t.match(/^([A-Za-z_$][\w$]*)$/);
+      if (id) names.push(id[1]);
+    }
+  }
+
+  return names;
 }
 
 /**
