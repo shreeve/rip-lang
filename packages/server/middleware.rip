@@ -787,9 +787,11 @@ export serve = (opts = {}) ->
     { brotliCompressSync } = require 'zlib'
     glob = new Bun.Glob("**/*.rip")
     components = {}
+    hasRoutes = false
     if includeRoutes and existsSync(routesDir)
       for path in Array.from(glob.scanSync(routesDir)).sort()
         components["components/#{path}"] = Bun.file("#{routesDir}/#{path}").text!
+        hasRoutes = true
     for dir in dirs
       rel = relative(appDir, dir)
       isExternal = rel.startsWith('..')
@@ -806,6 +808,7 @@ export serve = (opts = {}) ->
       data = {}
       data.title = appTitle if appTitle
       data.watch = enableWatch
+      data.router = true if hasRoutes
       if appState
         data[k] = v for k, v of appState
       bundle.data = data

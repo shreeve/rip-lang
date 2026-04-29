@@ -12720,7 +12720,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.15.4";
-  var BUILD_DATE = "2026-04-28@20:37:44GMT";
+  var BUILD_DATE = "2026-04-29@03:02:44GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -12790,6 +12790,7 @@ ${tagged}
   }
   async function processRipScripts() {
     const sources = [];
+    let lastBundle;
     const runtimeTag = document.querySelector('script[src$="rip.min.js"], script[src$="rip.js"]');
     const dataSrc = runtimeTag?.getAttribute("data-src");
     if (dataSrc !== null && dataSrc !== undefined) {
@@ -12836,7 +12837,15 @@ ${tagged}
           individual.push(s);
       }
       const routerAttr = runtimeTag?.getAttribute("data-router");
-      const hasRouter = routerAttr != null;
+      lastBundle = bundles[bundles.length - 1];
+      let hasRouter, hashRouter;
+      if (routerAttr != null) {
+        hasRouter = routerAttr !== "false";
+        hashRouter = routerAttr === "hash";
+      } else {
+        hasRouter = !!lastBundle?.data?.router;
+        hashRouter = false;
+      }
       if (hasRouter && bundles.length > 0) {
         const debug = runtimeTag?.getAttribute("data-debug") !== "false";
         if (globalThis.__ripDebug)
@@ -12863,9 +12872,8 @@ ${js}
         }
         const app = importRip.modules?.["app.rip"];
         if (app?.launch) {
-          const appBundle = bundles[bundles.length - 1];
           const persistAttr = runtimeTag.getAttribute("data-persist");
-          const launchOpts = { bundle: appBundle, hash: routerAttr === "hash" };
+          const launchOpts = { bundle: lastBundle, hash: hashRouter };
           if (persistAttr != null)
             launchOpts.persist = persistAttr === "local" ? "local" : true;
           await app.launch("", launchOpts);
@@ -12966,7 +12974,9 @@ ${wrapped}
         }
       }
     }
-    if (runtimeTag?.hasAttribute("data-reload") && !globalThis.__ripLaunched) {
+    const reloadAttr = runtimeTag?.getAttribute("data-reload");
+    const shouldReload = reloadAttr != null ? reloadAttr !== "false" : !!lastBundle?.data?.watch;
+    if (shouldReload && !globalThis.__ripLaunched) {
       let ready = false;
       let retryDelay = 1000;
       const maxDelay = 30000;

@@ -124,6 +124,7 @@ if (typeof globalThis !== 'undefined') {
 // All other URLs are fetched as JSON bundles containing multiple files.
 async function processRipScripts() {
   const sources = [];
+  let lastBundle;
 
   // Step 1: Collect data-src URLs from the runtime script tag
   // When data-src is omitted, default to '/app' (auto-scanned bundle from serve middleware).
@@ -173,7 +174,21 @@ async function processRipScripts() {
     }
 
     const routerAttr = runtimeTag?.getAttribute('data-router');
-    const hasRouter = routerAttr != null;
+    lastBundle = bundles[bundles.length - 1];
+    // data-router auto-infers from bundle.data.router (set by the server when
+    // the app has a routes/ directory). Explicit attribute always wins:
+    //   data-router            → enabled
+    //   data-router="hash"     → hash routing
+    //   data-router="false"    → explicitly disabled
+    //   (omitted)              → fall back to bundle.data.router
+    let hasRouter, hashRouter;
+    if (routerAttr != null) {
+      hasRouter = routerAttr !== 'false';
+      hashRouter = routerAttr === 'hash';
+    } else {
+      hasRouter = !!(lastBundle?.data?.router);
+      hashRouter = false;
+    }
 
     // Step 3b: If data-router is present and we have a bundle, use launch()
     // for full routing support. Otherwise compile everything upfront.
@@ -203,9 +218,8 @@ async function processRipScripts() {
       // Launch with the last bundle (app bundle) — handles router, renderer, stash
       const app = importRip.modules?.['app.rip'];
       if (app?.launch) {
-        const appBundle = bundles[bundles.length - 1];
         const persistAttr = runtimeTag.getAttribute('data-persist');
-        const launchOpts = { bundle: appBundle, hash: routerAttr === 'hash' };
+        const launchOpts = { bundle: lastBundle, hash: hashRouter };
         if (persistAttr != null) launchOpts.persist = persistAttr === 'local' ? 'local' : true;
         await app.launch('', launchOpts);
       }
@@ -333,10 +347,19 @@ async function processRipScripts() {
 
   // Step 6: data-reload enables SSE hot-reload from dev server
   // Skip if launch() was called — it connects its own SSE watch.
+  // Auto-infers from bundle.data.watch (set by the server when --watch is on).
+  // Explicit attribute always wins:
+  //   data-reload          → enabled
+  //   data-reload="false"  → explicitly disabled
+  //   (omitted)            → fall back to bundle.data.watch
   // Uses exponential backoff: 1s → 2s → 4s → … → 30s (then 30s forever).
   // The retry delay only affects reconnection to a DOWN server — once connected,
   // the server pushes reload notifications instantly regardless of this value.
-  if (runtimeTag?.hasAttribute('data-reload') && !globalThis.__ripLaunched) {
+  const reloadAttr = runtimeTag?.getAttribute('data-reload');
+  const shouldReload = reloadAttr != null
+    ? reloadAttr !== 'false'
+    : !!(lastBundle?.data?.watch);
+  if (shouldReload && !globalThis.__ripLaunched) {
     let ready = false;
     let retryDelay = 1000;
     const maxDelay = 30000;
