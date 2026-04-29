@@ -148,6 +148,26 @@ function __schemaSnake(s) { return s.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLo
 
 function __schemaCamel(col) { return String(col).replace(/_([a-z])/g, (_, c) => c.toUpperCase()); }
 
+// Snapshot the current values of every declared field on an instance.
+// Used by \`_hydrate\` and the INSERT / UPDATE branches of \`__schemaSave\`
+// (defined in the orm fragment, which loads after this one) so that a
+// later .save() can compare and emit a SET only for columns the caller
+// actually mutated. Lives in the validate fragment because \`_hydrate\`
+// owns it; the orm fragment is the consumer.
+function __schemaSnapshot(norm, inst) {
+  const snap = Object.create(null);
+  for (const [n] of norm.fields) snap[n] = inst[n];
+  return snap;
+}
+
+// SameValue-Zero: like ===, except NaN equals NaN. Used by the dirty
+// check so a persisted NaN doesn't trigger a wasted UPDATE on every
+// save. Distinguishes from Object.is by treating +0/-0 as equal, which
+// is the right semantics for SQL: the DB doesn't distinguish them.
+function __schemaSameValue(a, b) {
+  return a === b || (a !== a && b !== b);
+}
+
 const __SchemaRegistry = {
   _entries: new Map(),
   register(def) {
@@ -427,6 +447,32 @@ class __SchemaDef {
         enumerable: false, configurable: true, writable: true,
         value: function() { return def._validateFields(this, true); },
       });
+      // Public API for forcing a column into the next UPDATE when value
+      // identity can't detect the change — typically after an in-place
+      // mutation of an object-valued field (json, Date) where the JS
+      // reference is unchanged. Validates the field name against the
+      // schema so typos throw instead of silently no-op'ing, and is
+      // restricted to persisted instances since INSERT writes every
+      // non-null field anyway (silently doing nothing is a footgun).
+      Object.defineProperty(klass.prototype, 'markDirty', {
+        enumerable: false, configurable: true, writable: true,
+        value: function(name) {
+          if (!this._persisted) {
+            throw new Error(
+              "schema: markDirty('" + name + "') is only valid on persisted instances; INSERT writes every set field"
+            );
+          }
+          const n = __schemaCamel(name);
+          const norm = def._normalize();
+          if (!norm.fields.has(n)) {
+            throw new Error(
+              "schema: markDirty('" + name + "') — '" + n + "' is not a declared field on " + (def.name || 'anon')
+            );
+          }
+          this._dirty.add(n);
+          return this;
+        },
+      });
       // toJSON mirrors the instance's own enumerable properties, which by
       // construction are: the primary key, declared fields, @timestamps
       // columns, @softDelete timestamp, @belongs_to FK columns, and any
@@ -486,6 +532,15 @@ class __SchemaDef {
     // Eager-derived fields re-run on hydrate — they're not persisted
     // and must be re-computed from the declared fields now present.
     this._applyEagerDerived(inst);
+    // Capture the as-loaded values so \`save()\` can emit a column-targeted
+    // UPDATE that only touches fields the caller actually mutated. Two
+    // reasons this matters: (a) avoids a pointless DB round-trip when the
+    // caller didn't change anything, and (b) sidesteps a hard DuckDB FK
+    // limitation — UPDATEs that touch indexed columns (PK / UNIQUE) on a
+    // row referenced by another table's FK are rejected even when the
+    // value isn't really changing. Writing only dirty columns keeps no-op
+    // saves out of the index path entirely.
+    inst._snapshot = __schemaSnapshot(this._normalize(), inst);
     return inst;
   }
 
@@ -1053,19 +1108,57 @@ async function __schemaSave(def, inst) {
     // populated. Per-docs semantics ("materialize once, not reactive")
     // still hold — we're firing once, at end of construction, not on
     // subsequent mutations.
+    //
+    // Order matters here: snapshot the declared-field state BEFORE
+    // flipping \`_persisted\`, so a later save() can never see the
+    // combination "_persisted = true, _snapshot = null" (which would
+    // fall through to a full-row UPDATE and reintroduce the FK bug).
     def._applyEagerDerived(inst);
+    inst._snapshot = __schemaSnapshot(norm, inst);
     inst._persisted = true;
   } else {
+    // Column-targeted UPDATE: only write fields that actually changed
+    // since hydrate / last save (snapshot comparison) or that the caller
+    // explicitly marked dirty via .markDirty(name) — escape hatch for
+    // in-place mutations of object-valued fields where === can't detect
+    // change. Two reasons this matters:
+    //   1. Skip a wasted DB round-trip when nothing changed.
+    //   2. DuckDB's foreign-key implementation rejects UPDATE statements
+    //      that touch indexed columns (PK / UNIQUE) on a row that is
+    //      referenced by another table's FK — even when the SET is a
+    //      no-op like "mrn = mrn". A full-row UPDATE on a parent table
+    //      with any child rows is therefore a hard error in DuckDB.
+    //      Writing only changed columns keeps no-op saves entirely off
+    //      the index path.
+    //
+    // We build \`nextSnap\` from the values we are about to write — BEFORE
+    // the await — and only install it on success. Doing this after the
+    // await would be unsafe under concurrent mutation: a write to the
+    // instance during the in-flight query would be captured into the
+    // post-await snapshot, mark itself "clean", and never be persisted.
+    //
+    // \`nextSnap\` is allocated lazily on the first changed field; the
+    // common no-op-save path keeps zero allocations.
     const sets = [], values = [];
+    const snap = inst._snapshot;
+    const dirty = inst._dirty;
+    let nextSnap = null;
     for (const [n, f] of norm.fields) {
+      const cur = inst[n];
+      const isDirty = dirty && dirty.has(n);
+      const changed = !snap || !Object.prototype.hasOwnProperty.call(snap, n) || !__schemaSameValue(snap[n], cur);
+      if (!isDirty && !changed) continue;
+      if (!nextSnap) nextSnap = Object.assign(Object.create(null), snap || {});
       sets.push('"' + __schemaSnake(n) + '" = ?');
-      values.push(__schemaSerialize(inst[n], f));
+      values.push(__schemaSerialize(cur, f));
+      nextSnap[n] = cur;
     }
     if (sets.length) {
       const pk = norm.primaryKey;
       values.push(inst[pk]);
       const sql = 'UPDATE "' + norm.tableName + '" SET ' + sets.join(', ') + ' WHERE "' + pk + '" = ?';
       await __schemaAdapter.query(sql, values);
+      inst._snapshot = nextSnap;
     }
   }
   inst._dirty.clear();

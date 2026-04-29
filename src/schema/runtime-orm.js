@@ -180,19 +180,57 @@ async function __schemaSave(def, inst) {
     // populated. Per-docs semantics ("materialize once, not reactive")
     // still hold — we're firing once, at end of construction, not on
     // subsequent mutations.
+    //
+    // Order matters here: snapshot the declared-field state BEFORE
+    // flipping `_persisted`, so a later save() can never see the
+    // combination "_persisted = true, _snapshot = null" (which would
+    // fall through to a full-row UPDATE and reintroduce the FK bug).
     def._applyEagerDerived(inst);
+    inst._snapshot = __schemaSnapshot(norm, inst);
     inst._persisted = true;
   } else {
+    // Column-targeted UPDATE: only write fields that actually changed
+    // since hydrate / last save (snapshot comparison) or that the caller
+    // explicitly marked dirty via .markDirty(name) — escape hatch for
+    // in-place mutations of object-valued fields where === can't detect
+    // change. Two reasons this matters:
+    //   1. Skip a wasted DB round-trip when nothing changed.
+    //   2. DuckDB's foreign-key implementation rejects UPDATE statements
+    //      that touch indexed columns (PK / UNIQUE) on a row that is
+    //      referenced by another table's FK — even when the SET is a
+    //      no-op like "mrn = mrn". A full-row UPDATE on a parent table
+    //      with any child rows is therefore a hard error in DuckDB.
+    //      Writing only changed columns keeps no-op saves entirely off
+    //      the index path.
+    //
+    // We build `nextSnap` from the values we are about to write — BEFORE
+    // the await — and only install it on success. Doing this after the
+    // await would be unsafe under concurrent mutation: a write to the
+    // instance during the in-flight query would be captured into the
+    // post-await snapshot, mark itself "clean", and never be persisted.
+    //
+    // `nextSnap` is allocated lazily on the first changed field; the
+    // common no-op-save path keeps zero allocations.
     const sets = [], values = [];
+    const snap = inst._snapshot;
+    const dirty = inst._dirty;
+    let nextSnap = null;
     for (const [n, f] of norm.fields) {
+      const cur = inst[n];
+      const isDirty = dirty && dirty.has(n);
+      const changed = !snap || !Object.prototype.hasOwnProperty.call(snap, n) || !__schemaSameValue(snap[n], cur);
+      if (!isDirty && !changed) continue;
+      if (!nextSnap) nextSnap = Object.assign(Object.create(null), snap || {});
       sets.push('"' + __schemaSnake(n) + '" = ?');
-      values.push(__schemaSerialize(inst[n], f));
+      values.push(__schemaSerialize(cur, f));
+      nextSnap[n] = cur;
     }
     if (sets.length) {
       const pk = norm.primaryKey;
       values.push(inst[pk]);
       const sql = 'UPDATE "' + norm.tableName + '" SET ' + sets.join(', ') + ' WHERE "' + pk + '" = ?';
       await __schemaAdapter.query(sql, values);
+      inst._snapshot = nextSnap;
     }
   }
   inst._dirty.clear();

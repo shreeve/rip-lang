@@ -2167,6 +2167,172 @@ test ".save() persists declared fields only (not computed getters)", modelHeader
   [cols.includes("\\"name\\""), cols.includes("upper")]
 ''', [true, false]
 
+# .save() on an UPDATE path must only write columns that actually changed
+# since hydrate / last save. This protects against a hard DuckDB foreign-key
+# limitation: any UPDATE that touches an indexed column (PK / UNIQUE) on a
+# row referenced by another table's FK is rejected, even when the value
+# isn't really changing (e.g. SET mrn = mrn). Writing only changed columns
+# keeps no-op saves out of the index path entirely. See `__schemaSave` in
+# `src/schema/runtime-orm.js`.
+
+test ".save() with no changes emits no UPDATE", modelHeader + '''
+  Patient = schema :model
+    mrn?       string
+    firstName! string
+    lastName!  string
+    mdmId?     string
+    linkId?    string
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "mrn"}, {name: "first_name"}, {name: "last_name"}, {name: "mdm_id"}, {name: "link_id"}], data: [[10023, "MRN-1", "Steve", "S", "L00", "PID7"]], rows: 1}
+  p = Patient.find! 10023
+  adapter.calls = []
+  p.save!
+  updates = adapter.calls.filter (c) -> c.sql.startsWith "UPDATE"
+  updates.length
+''', 0
+
+test ".save() with one field change emits UPDATE for only that column", modelHeader + '''
+  Patient = schema :model
+    mrn?       string
+    firstName! string
+    lastName!  string
+    mdmId?     string
+    linkId?    string
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "mrn"}, {name: "first_name"}, {name: "last_name"}, {name: "mdm_id"}, {name: "link_id"}], data: [[10023, "MRN-1", "Steve", "S", "L00", "PID7"]], rows: 1}
+  p = Patient.find! 10023
+  adapter.calls = []
+  p.linkId = "PID9"
+  p.save!
+  updates = adapter.calls.filter (c) -> c.sql.startsWith "UPDATE"
+  sql  = updates[0]?.sql    or ""
+  vals = updates[0]?.params or []
+  [
+    updates.length
+    sql.includes("\\"link_id\\" = ?")
+    sql.includes("\\"mrn\\"")
+    sql.includes("\\"first_name\\"")
+    sql.includes("\\"mdm_id\\"")
+    vals[0]   # the new link_id
+    vals[1]   # the WHERE-clause id
+  ]
+''', [1, true, false, false, false, "PID9", 10023]
+
+test ".save() after a second mutation refreshes snapshot and writes only the new diff", modelHeader + '''
+  Patient = schema :model
+    mrn?    string
+    mdmId?  string
+    linkId? string
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "mrn"}, {name: "mdm_id"}, {name: "link_id"}], data: [[10023, "M1", "L00", null]], rows: 1}
+  p = Patient.find! 10023
+  p.linkId = "PID9"
+  p.save!
+  adapter.calls = []
+  p.mdmId = "L01"
+  p.save!
+  updates = adapter.calls.filter (c) -> c.sql.startsWith "UPDATE"
+  sql = updates[0]?.sql or ""
+  [updates.length, sql.includes("\\"mdm_id\\" = ?"), sql.includes("\\"link_id\\""), sql.includes("\\"mrn\\"")]
+''', [1, true, false, false]
+
+test "markDirty() forces an in-place-mutated json field into the next UPDATE", modelHeader + '''
+  User = schema :model
+    name!     string
+    settings? json
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "name"}, {name: "settings"}], data: [[1, "Alice", {theme: "dark"}]], rows: 1}
+  u = User.find! 1
+  adapter.calls = []
+  # In-place mutation of a JSON-valued field; the JS reference is unchanged,
+  # so === comparison can't see the diff. markDirty() is the user-facing API
+  # for telling save() to write this column anyway.
+  u.settings.theme = "light"
+  u.markDirty 'settings'
+  u.save!
+  updates = adapter.calls.filter (c) -> c.sql.startsWith "UPDATE"
+  sql = updates[0]?.sql or ""
+  vals = updates[0]?.params or []
+  [
+    updates.length
+    sql.includes("\\"settings\\" = ?")
+    sql.includes("\\"name\\"")
+    JSON.parse(vals[0]).theme
+  ]
+''', [1, true, false, "light"]
+
+test "markDirty() throws on unknown field name (typo guard)", modelHeader + '''
+  User = schema :model
+    name! string
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "name"}], data: [[1, "Alice"]], rows: 1}
+  u = User.find! 1
+  msg = null
+  try
+    u.markDirty 'naem'
+  catch e
+    msg = e.message
+  # The error must reference the bad name AND the schema name, so a typo
+  # produces a clear diagnostic rather than a silent no-op.
+  msg? and msg.includes("'naem'") and msg.includes("User")
+''', true
+
+test "markDirty() throws on non-persisted instance (INSERT writes every set field)", modelHeader + '''
+  User = schema :model
+    name! string
+  klass = User._getClass()
+  u = new klass({name: "Alice"}, false)
+  msg = null
+  try
+    u.markDirty 'name'
+  catch e
+    msg = e.message
+  msg? and msg.includes("persisted")
+''', true
+
+test "markDirty() accepts snake_case alias and resolves to camelCase field", modelHeader + '''
+  Patient = schema :model
+    firstName! string
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "first_name"}], data: [[10023, "Steve"]], rows: 1}
+  p = Patient.find! 10023
+  adapter.calls = []
+  p.markDirty 'first_name'
+  p.save!
+  updates = adapter.calls.filter (c) -> c.sql.startsWith "UPDATE"
+  [updates.length, updates[0].sql.includes("\\"first_name\\" = ?")]
+''', [1, true]
+
+test "NaN-valued field doesn't trigger forever-dirty UPDATE on no-op save", modelHeader + '''
+  Reading = schema :model
+    label! string
+    value? float
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "label"}, {name: "value"}], data: [[1, "x", NaN]], rows: 1}
+  r = Reading.find! 1
+  adapter.calls = []
+  r.save!
+  updates = adapter.calls.filter (c) -> c.sql.startsWith "UPDATE"
+  updates.length
+''', 0
+
+test "snapshot built BEFORE await: concurrent mutation during save survives to next save", modelHeader + '''
+  Patient = schema :model
+    firstName! string
+    lastName!  string
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "first_name"}, {name: "last_name"}], data: [[10023, "Steve", "Shreeve"]], rows: 1}
+  p = Patient.find! 10023
+  # Wrap the adapter to mutate the instance in flight, simulating a
+  # parallel request hitting the same in-memory inst. The query-time
+  # mutation must NOT be silently absorbed into the post-await snapshot
+  # — otherwise the change to lastName would be lost on the next save.
+  origQuery = adapter.query.bind(adapter)
+  adapter.query = (sql, params) ->
+    if sql.startsWith "UPDATE"
+      p.lastName = "MutatedDuringSave"
+    origQuery(sql, params)
+  p.firstName = "Frank"
+  p.save!  # writes only first_name
+  adapter.calls = []
+  p.save!  # must write last_name (in-flight mutation), NOT skip
+  updates = adapter.calls.filter (c) -> c.sql.startsWith "UPDATE"
+  sql = updates[0]?.sql or ""
+  [updates.length, sql.includes("\\"last_name\\" = ?"), sql.includes("\\"first_name\\"")]
+''', [1, true, false]
+
 # -- toJSON iterates own enumerable properties: id + declared + timestamps --
 # -- + @belongs_to FKs + !> eager-derived; excludes methods, ~> getters,   --
 # -- and internal state (_dirty/_persisted/_snapshot).                     --
