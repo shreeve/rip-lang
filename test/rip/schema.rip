@@ -2608,6 +2608,43 @@ test "@timestamps schema without directive does NOT touch updated_at", modelHead
   updates[0]?.sql.includes("updated_at")
 ''', false
 
+# Primary key snapshot: the UPDATE WHERE clause must target the
+# originally-loaded row even if user code reassigns inst.id in memory.
+# Mirrors Active Record's behavior — in-memory PK mutation is ignored
+# at write time. Without this, a stray `inst.id = X` would silently
+# update the wrong row (or zero rows).
+
+test "UPDATE WHERE uses original PK from snapshot, not the mutated in-memory id", modelHeader + '''
+  User = schema :model
+    name! string
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "name"}], data: [[42, "Alice"]], rows: 1}
+  u = User.find! 42
+  adapter.calls = []
+  u.id   = 999     # rogue / unintentional in-memory PK reassignment
+  u.name = "Bob"
+  u.save!
+  updates = adapter.calls.filter (c) -> c.sql.startsWith "UPDATE"
+  vals = updates[0]?.params or []
+  # WHERE id = 42 (original from snapshot), NOT 999 (the mutated value)
+  vals[vals.length - 1]
+''', 42
+
+test "UPDATE WHERE PK survives multiple consecutive saves with diff snapshots", modelHeader + '''
+  User = schema :model
+    name!  string
+    title? string
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "name"}, {name: "title"}], data: [[42, "Alice", null]], rows: 1}
+  u = User.find! 42
+  u.name = "Bob"
+  u.save!  # first UPDATE; nextSnap installed
+  adapter.calls = []
+  u.title = "Engineer"
+  u.save!  # second UPDATE; the snapshot from save #1 still holds id = 42
+  updates = adapter.calls.filter (c) -> c.sql.startsWith "UPDATE"
+  vals = updates[0]?.params or []
+  vals[vals.length - 1]
+''', 42
+
 # -- toJSON iterates own enumerable properties: id + declared + timestamps --
 # -- + @belongs_to FKs + !> eager-derived; excludes methods, ~> getters,   --
 # -- and internal state (_dirty/_persisted/_snapshot).                     --

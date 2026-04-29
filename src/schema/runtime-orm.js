@@ -293,8 +293,17 @@ async function __schemaSave(def, inst) {
       changes.set('updatedAt', [oldTs, newTs]);
     }
     if (sets.length) {
+      // WHERE uses the *original* PK from the snapshot, not the live
+      // `inst[pk]` value. If user code reassigns the in-memory PK
+      // between hydrate and save, the UPDATE still targets the row
+      // that was actually loaded — mirrors Active Record, which
+      // ignores in-memory PK mutation when building the UPDATE.
+      // Falls back to `inst[pk]` only when no snapshot exists (e.g.
+      // a manually-constructed persisted instance), where there's
+      // no better information available.
       const pk = norm.primaryKey;
-      values.push(inst[pk]);
+      const wherePk = snap && snap[pk] != null ? snap[pk] : inst[pk];
+      values.push(wherePk);
       const sql = 'UPDATE "' + norm.tableName + '" SET ' + sets.join(', ') + ' WHERE "' + pk + '" = ?';
       await __schemaAdapter.query(sql, values);
       inst._snapshot = nextSnap;

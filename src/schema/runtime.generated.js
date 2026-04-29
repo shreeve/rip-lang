@@ -149,18 +149,24 @@ function __schemaSnake(s) { return s.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLo
 function __schemaCamel(col) { return String(col).replace(/_([a-z])/g, (_, c) => c.toUpperCase()); }
 
 // Snapshot the current values of every persisted column on an instance:
-// declared fields (from \`norm.fields\`) plus \`belongsTo\` FK columns (from
-// \`norm.relations\`). Used by \`_hydrate\` and the INSERT / UPDATE branches
-// of \`__schemaSave\` (defined in the orm fragment, which loads after this
-// one) so that a later .save() can compare and emit a SET only for
-// columns the caller actually mutated. Lives in the validate fragment
-// because \`_hydrate\` owns it; the orm fragment is the consumer.
+// the primary key, declared fields (from \`norm.fields\`), and \`belongsTo\`
+// FK columns (from \`norm.relations\`). Used by \`_hydrate\` and the INSERT
+// / UPDATE branches of \`__schemaSave\` (defined in the orm fragment,
+// which loads after this one) so that a later .save() can compare and
+// emit a SET only for columns the caller actually mutated. Lives in the
+// validate fragment because \`_hydrate\` owns it; the orm fragment is
+// the consumer.
 //
 // FK columns are keyed by their camelCase property name on the instance
 // (e.g. \`userId\`) — same convention the dirty Set, savedChanges Map,
 // and markDirty() resolver use.
+//
+// The primary key is captured so __schemaSave's UPDATE WHERE clause can
+// target the originally-loaded row even if \`inst[pk]\` is reassigned in
+// memory. PK never appears in the UPDATE SET; it's identity, not data.
 function __schemaSnapshot(norm, inst) {
   const snap = Object.create(null);
+  snap[norm.primaryKey] = inst[norm.primaryKey];
   for (const [n] of norm.fields) snap[n] = inst[n];
   for (const [, rel] of norm.relations) {
     if (rel.kind !== 'belongsTo') continue;
@@ -1250,8 +1256,17 @@ async function __schemaSave(def, inst) {
       changes.set('updatedAt', [oldTs, newTs]);
     }
     if (sets.length) {
+      // WHERE uses the *original* PK from the snapshot, not the live
+      // \`inst[pk]\` value. If user code reassigns the in-memory PK
+      // between hydrate and save, the UPDATE still targets the row
+      // that was actually loaded — mirrors Active Record, which
+      // ignores in-memory PK mutation when building the UPDATE.
+      // Falls back to \`inst[pk]\` only when no snapshot exists (e.g.
+      // a manually-constructed persisted instance), where there's
+      // no better information available.
       const pk = norm.primaryKey;
-      values.push(inst[pk]);
+      const wherePk = snap && snap[pk] != null ? snap[pk] : inst[pk];
+      values.push(wherePk);
       const sql = 'UPDATE "' + norm.tableName + '" SET ' + sets.join(', ') + ' WHERE "' + pk + '" = ?';
       await __schemaAdapter.query(sql, values);
       inst._snapshot = nextSnap;
