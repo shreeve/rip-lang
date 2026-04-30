@@ -1,7 +1,7 @@
-import { Product, CartData } from '../types.rip'
+import { Product } from '../types.rip'
 
 export Products = component
-  cart:: CartData ~= @app.data.cart
+  cart ~= @app.data.cart
   products:: Product[] := []
   search := ''
   sort := ''

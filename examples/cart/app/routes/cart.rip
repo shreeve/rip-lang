@@ -1,7 +1,7 @@
-import { CartData, CartItem } from '../types.rip'
+import { CartItem } from '../types.rip'
 
 export Cart = component
-  cart:: CartData ~= @app.data.cart
+  cart ~= @app.data.cart
   totalPrice ~= cart.items.reduce(((sum, i) -> sum + i.price * i.quantity), 0)
   status:: 'idle' | 'loading' | 'success' | 'error' := 'idle'
   error := ''

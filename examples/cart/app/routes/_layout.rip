@@ -1,7 +1,5 @@
-import { CartData } from '../types.rip'
-
 export Layout = component
-  cart:: CartData ~= @app.data.cart
+  cart ~= @app.data.cart
   totalItems ~= cart.items.reduce(((sum, i) -> sum + i.quantity), 0)
 
   render

@@ -3240,19 +3240,28 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           };
           let afterEq = eqIdx + 1;
           let next = tokens2[afterEq];
+          let trackBodyRefs = (start, end) => {
+            for (let k = start;k <= end && k < tokens2.length; k++) {
+              if (tokens2[k][0] === "IDENTIFIER")
+                typeRefNames.add(tokens2[k][1]);
+            }
+          };
           if (next && (next[0] === "TERMINATOR" || next[0] === "INDENT")) {
             let result = collectBlockUnion(tokens2, afterEq);
             if (result) {
+              trackBodyRefs(afterEq, result.endIdx);
               tokens2.splice(removeFrom, result.endIdx - removeFrom + 1, makeDecl(result.typeText));
               return 0;
             }
           }
           if (next && next[0] === "INDENT") {
             let endIdx = findMatchingOutdent2(tokens2, afterEq);
+            trackBodyRefs(afterEq, endIdx);
             tokens2.splice(removeFrom, endIdx - removeFrom + 1, makeDecl(collectStructuralType(tokens2, afterEq)));
             return 0;
           }
           let typeTokens = collectTypeExpression(tokens2, afterEq);
+          trackBodyRefs(afterEq, afterEq + typeTokens.consumed - 1);
           tokens2.splice(removeFrom, afterEq + typeTokens.consumed - removeFrom, makeDecl(buildTypeString(typeTokens)));
           return 0;
         }
@@ -3272,6 +3281,12 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           if (tokens2[bodyIdx]?.[0] === "INDENT") {
             let typeText = collectStructuralType(tokens2, bodyIdx);
             let endIdx = findMatchingOutdent2(tokens2, bodyIdx);
+            for (let k = bodyIdx;k <= endIdx && k < tokens2.length; k++) {
+              if (tokens2[k][0] === "IDENTIFIER")
+                typeRefNames.add(tokens2[k][1]);
+            }
+            if (extendsName)
+              typeRefNames.add(extendsName);
             let declToken = gen("TYPE_DECL", name, nameToken);
             declToken.data = {
               name,
@@ -12745,7 +12760,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.15.4";
-  var BUILD_DATE = "2026-04-29@17:46:05GMT";
+  var BUILD_DATE = "2026-04-29@20:54:36GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

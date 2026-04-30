@@ -71,7 +71,6 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 | Category                       | Tested In     | Notes                                                                                      |
 | ------------------------------ | ------------- | ------------------------------------------------------------------------------------------ |
-| `@app.data` stash typing       | 09-components | `@app.data` is `any` — no cross-component stash typing. RFC in `examples/cart/README.md`   |
 | Runtime return-type validation | 10-validation | Return types erased; `response.json()` is `any`. See "Future Notes" for the schema bridge. |
 
 ### 🔶 Partial
@@ -121,6 +120,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Render block text exprs        | 09-components  | `= expr` emitted into stub; typos caught via "Cannot find name"                      |
 | Dot-completion accuracy        | 09-components  | Source map fix + LSP single-line `__rip__` patching for trailing-dot                 |
 | Generic components             | 09-components  | `Name<T extends C> = component` — type params flow through DTS, stub, inference      |
+| Typed `@app.data` (stash)      | 09-components  | Inferred from `serve(state: <ident>)`; cross-file via `__RipStash`                   |
 | Type inference (split decl.)   | 11-inference   | `patchUninitializedTypes` infers from first assignment; top-level + block + destruct |
 | Type inference (inline-let)    | 11-inference   | Inline-let emits `let x = value;` everywhere; no patcher needed                      |
 | Strict mode                    | *(all files)*  | `strict: true` — `noImplicitAny`, full null checks, strict function types            |

@@ -11,92 +11,71 @@ rip server
 
 ---
 
-## RFC: Typed Stash
+## Typed Stash
 
-### Background
+This demo uses Rip's [typed stash](../../docs/RIP-TYPES.md) to make `@app.data`
+type-safe across every component, with zero runtime cost.
 
-The stash (`@app.data`) is Rip's global reactive state. It's a Proxy backed by signals — similar in purpose to Zustand, Pinia, Svelte's `$state`, or Solid's `createStore`. It supports nested access (`@app.data.cart.items`), automatic dependency tracking with `~=` and `~>`, and persistence via `persistStash`.
+### How it works
 
-Today, the stash is completely untyped. `@app.data.cart.itms` (typo) compiles without complaint, fails silently at runtime, and produces no editor warnings.
-
-### Proposal
-
-Add a `stash.rip` convention. If the app directory contains a `stash.rip` file with a default export type, the type checker uses it to type `@app.data` in all components under that directory. No config needed — same pattern as routes, layouts, and components.
-
-#### 1. Declare the stash type
-
-```coffee
-# app/stash.rip
-
-type CartItem =
-  id:: string
-  name:: string
-  price:: number
-  quantity:: number
-
-export default type
-  cart::
-    items:: CartItem[]
-```
-
-The default export becomes the type of `@app.data`. Helper types like `CartItem` stay internal.
-
-#### 2. Use it — nothing changes in components
+The project's `index.rip` seeds the stash by passing a `state:` argument to
+`serve(...)`. The type checker reads the type of that seed and exposes it as
+the type of `@app.data` in every component. Typos become compile errors,
+completions list real fields, refactors stay safe — no extra files, no magic
+names.
 
 ```coffee
-# app/routes/cart.rip
-# @app.data.cart.items is now typed as CartItem[]
-# @app.data.cart.itms is a compile error
+# index.rip — type the seed however you like
+import { CartData } from './app/types.rip'
 
-for item in @app.data.cart.items
-  .item
-    .name = item.name
-    .price = "$#{item.price.toFixed(2)}"
-```
-
-The server file can import the same type to validate its initial value:
-
-```coffee
-# index.rip
-import type AppData from './app/stash.rip'
+stash:: { cart: CartData } = cart: { items: [] }
 
 use serve
   dir: "#{dir}/app"
-  state:: AppData
-    cart: { items: [] }
+  state: stash
 ```
 
-### How It Works
+```coffee
+# app/routes/cart.rip — @app.data.cart is CartData
+cart ~= @app.data.cart
 
-The type flows through the existing compilation pipeline:
+for item in cart.items
+  tr
+    td "#{item.image} #{item.name}"
+    td "$#{item.price.toFixed(2)}"
 
-1. **Type checker** sees `stash.rip` in the app directory, loads the exported type
-2. **Type emitter** adds a typed `app` property to `__Component` declarations — `app: { data: AppData, ... }` instead of today's untyped `any`
-3. **Components** accessing `@app.data.*` get completions, typo detection, and refactor safety
-4. **Runtime** is unchanged — the stash is still a dynamic Proxy, types erase completely
+# A typo like @app.data.cart.itms produces:
+#   TS2551: Property 'itms' does not exist on type 'CartData'.
+#           Did you mean 'items'?
+```
 
-### Progressive Typing
+The annotation on `stash` is optional — drop it and TypeScript infers the
+shape from the literal. Either way, every component sees `@app.data` typed
+as the seed.
 
-This follows Rip's existing gradual typing model:
+### Properties
 
-| Project state      | `@app.data` type | Behavior                         |
-| ------------------ | ---------------- | -------------------------------- |
-| No `stash.rip`     | `any`            | Today's behavior, fully dynamic  |
-| `stash.rip` exists | `AppData`        | Full type safety on stash access |
+| Project state                    | `@app.data` type | Behavior                        |
+| -------------------------------- | ---------------- | ------------------------------- |
+| No `state:` arg to `serve(...)`  | `any`            | Untyped — fully dynamic         |
+| `state: ident` in the entry file | `typeof ident`   | Type-safe on every stash access |
 
-Dynamic escape hatches still work — bracket access (`@app.data['key']`) could remain `any`, same as TypeScript index signatures.
+- **Runtime is unchanged.** The stash stays a deep reactive Proxy; types erase
+  completely. `JSON.stringify(raw(app.data))` and `persistStash` work
+  identically.
+- **No new syntax.** Annotate the seed (or don't); standard `::` works.
+- **Cross-file resolution** rides the same path as any other `.rip` import:
+  the language server compiles the entry lazily and resolves the seed type
+  through the virtual TypeScript snapshot pipeline.
 
-### Persistence
+### Prior art
 
-Persistence is unaffected. `persistStash` does `JSON.stringify(raw(app.data))` on save and `app.data[k] = v for k, v of savedData` on restore. Types erase at runtime, so the serialize/deserialize path is identical. The only consideration is schema migration — changing the stash shape between deploys while users have old persisted data — but that's a runtime concern shared by every store with persistence and orthogonal to this proposal.
-
-### Prior Art
-
-Every major reactive state library types its store without sacrificing runtime flexibility:
+Every major reactive state library types its store without sacrificing runtime
+flexibility:
 
 - **Zustand** — `create<State>()(...)` types the store; runtime uses immutable updates via `set()`
 - **Pinia** — `defineStore` infers state type from the `state()` return value; runtime is a reactive Proxy
 - **Svelte** — module-level `$state` is typed via standard TypeScript inference; runtime is a Proxy
 - **Solid** — `createStore<T>()` takes a type parameter; runtime is a reactive Proxy
 
-None of these make the runtime less flexible. Types are a compile-time lens over a dynamic runtime.
+Types are a compile-time lens over a dynamic runtime.

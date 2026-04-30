@@ -165,8 +165,7 @@ export RenderCondTest = component
 # ── Conditional-scoped variable used in callback ──
 #
 # A variable first assigned inside a conditional and captured by a
-# callback (e.g. .filter()) is correctly inferred. This pattern is
-# common in filter/sort pipelines (see examples/cart). The patcher now
+# callback (e.g. .filter()) is correctly inferred. The patcher
 # recurses into class methods and computed arrow bodies, so no
 # explicit `:: string` annotation is needed on `term`.
 
@@ -251,37 +250,85 @@ export GenericUsageTests = component
       # @ts-expect-error — object missing 'label' field (has 'name' instead)
       Select options: [{ value: "a", name: "A" }]
 
-# ── Stash: framework-level shared state (NOT YET TYPED) ──
+# ── Stash vs zustand: typed shared state ──
 #
-# In a real Rip app, the stash is `@app.data` — a deep reactive Proxy
-# shared across all components. Today it is completely untyped (`any`).
-# `@app.data.cart.itms` (typo) compiles without error.
+# zustand types its store everywhere via `create<State>()`. Rip's stash
+# (`@app.data`) is typed by inferring from the seed passed to
+# `serve(state: <ident>)` in the project's index.rip — `typeof <ident>`
+# becomes the type of `@app.data` in every component. No extra file,
+# no magic name.
 #
-# The RFC in examples/cart/README.md proposes a `stash.rip` convention:
-# if app/stash.rip exports a default type, the type checker flows it
-# into `@app.data` across all components. Until that's implemented,
-# there is no stash type safety in real apps.
+# The same inference fires when the seed is declared in the same file
+# as the components (used here so the test stays self-contained — in
+# real apps the seed lives in index.rip and the components import
+# nothing).
+
+type CartItem =
+  id: number
+  name: string
+  price: number
+  quantity: number
+
+type Cart =
+  items: CartItem[]
+  addItem: (item: CartItem) => void
+  removeItem: (item: CartItem) => void
+  total: () => number
+
+stash:: Cart =
+  items: []
+  addItem: (item) -> stash.items = [...stash.items, item]
+  removeItem: (item) -> stash.items = stash.items.filter (i) -> i.id isnt item.id
+  total: -> stash.items.reduce ((sum, i) -> sum + i.price * i.quantity), 0
+
+# Stub `serve` — only the `state: <ident>` reference matters to the
+# type checker; runtime behavior here is irrelevant.
+serve = (opts:: any) -> opts
+serve state: stash
+
+# CartDemo — Rip equivalent of the TSX `function CartDemo()`.
+# Reads `items` from the stash, derives `total` from the store method,
+# and dispatches writes through `@app.data.addItem`. zustand and Rip
+# both put data and actions on the store; any component can call
+# `@app.data.addItem(...)`, just like any React component can call
+# `useCart().addItem(...)`.
+
+export CartDemo = component
+  cart ~= @app.data
+
+  render
+    div
+      span "#{cart.items.length} items — $#{cart.total()}"
+      button @click: (-> cart.addItem(id: 1, name: 'Widget', price: 9.99, quantity: 1)), "Add to Cart"
+      ul
+        for item in cart.items
+          li "#{item.name} x#{item.quantity} — $#{item.price}"
+
+# ── Negative tests: stash typos and wrong arg types are caught ──
 #
-# What it would look like (not yet implemented):
-#
-#   # app/stash.rip
-#   type CartItem =
-#     id:: number
-#     name:: string
-#     price:: number
-#     quantity:: number
-#
-#   export default type
-#     cart::
-#       items:: CartItem[]
-#
-#   # app/routes/cart.rip — @app.data.cart.items is CartItem[]
-#   for item in @app.data.cart.items
-#     .item
-#       .name = item.name
-#       .price = "$#{item.price.toFixed(2)}"
-#
-#   # @app.data.cart.itms would be a compile error
-#
-# Compare with the tsx companion which shows zustand achieving this
-# today — create<State>() types the store everywhere it's used.
+# Mirrors the TSX zustand negatives. Read typos on `@app.data.<x>`
+# produce TS2551; wrong argument types to store methods produce TS2345,
+# just like the zustand cases in the companion file.
+
+export StashTypeTests = component
+  # @ts-expect-error — typo: 'itms' does not exist on stash
+  bad1 ~= @app.data.itms
+
+  # @ts-expect-error — CartItem has no 'qty' field
+  bad2 ~= @app.data.items[0]?.qty
+
+  # @ts-expect-error — toFixed doesn't exist on CartItem[]
+  bad3 ~= @app.data.items.toFixed(2)
+
+  # @ts-expect-error — nonexistent path
+  bad4 ~= @app.data.tax
+
+  badAdd: ->
+    # @ts-expect-error — wrong item shape: missing required fields
+    @app.data.addItem(broken: true)
+
+  badRemove: ->
+    # @ts-expect-error — wrong arg type: number instead of CartItem
+    @app.data.removeItem(42)
+
+  render null

@@ -17,8 +17,74 @@ import { hasSchemas } from './schema/schema.js';
 import './schema/loader-server.js';   // registers full schema runtime provider
 import { createRequire } from 'module';
 import { readFileSync, existsSync, readdirSync } from 'fs';
-import { resolve, relative, dirname } from 'path';
+import { resolve, relative, dirname, sep as pathSep } from 'path';
 import { buildLineMap } from './sourcemaps.js';
+
+// ── Typed stash: project entry discovery ───────────────────────────
+//
+// The stash type is inferred, not declared. The user's project entry
+// (`index.rip` co-located with `rip.json` or `package.json`) seeds the
+// stash via `serve(state: <expr>)`. The type-checker captures that
+// argument's type and exposes it as `__RipStash` on the entry's virtual
+// module. Components splice `import('<entry>').__RipStash` into their
+// `app.data` declaration.
+//
+// Discovery: walk up from each file to the nearest dir that contains an
+// `index.rip` AND a `rip.json` or `package.json` (the project anchor).
+// Cached per-directory for the process lifetime.
+const entryFileCache = new Map(); // dir → entryFile|null
+
+export function findEntryFile(filePath) {
+  let dir = dirname(filePath);
+  const visited = [];
+  while (true) {
+    if (entryFileCache.has(dir)) {
+      const cached = entryFileCache.get(dir);
+      for (const v of visited) entryFileCache.set(v, cached);
+      return cached;
+    }
+    visited.push(dir);
+    const hasAnchor = existsSync(resolve(dir, 'rip.json')) || existsSync(resolve(dir, 'package.json'));
+    if (hasAnchor) {
+      const entry = resolve(dir, 'index.rip');
+      const result = existsSync(entry) ? entry : null;
+      for (const v of visited) entryFileCache.set(v, result);
+      return result;
+    }
+    const parent = dirname(dir);
+    if (parent === dir) {
+      for (const v of visited) entryFileCache.set(v, null);
+      return null;
+    }
+    dir = parent;
+  }
+}
+
+// Build the relative import specifier from a file to its entry. Always uses
+// posix forward slashes (TS module specifiers are not platform-dependent) and
+// is guaranteed to start with './' or '../'.
+function entryImportSpec(filePath, entryFile) {
+  let rel = relative(dirname(filePath), entryFile);
+  if (pathSep !== '/') rel = rel.split(pathSep).join('/');
+  if (!rel.startsWith('.')) rel = './' + rel;
+  return rel;
+}
+
+// Find the identifier passed as `state:` to a `serve(...)` call in source.
+// Returns the identifier name, or null if not found / not a simple identifier.
+// Limitation: inline object literals are intentionally unsupported — extract
+// to a named variable for stash typing to flow.
+function findServeStateIdent(source) {
+  // Strip line comments and string literals to avoid false matches.
+  let cleaned = source.split('\n').map(line => {
+    line = line.replace(/#.*$/, '');
+    line = line.replace(/"(?:[^"\\]|\\.)*"/g, '""').replace(/'(?:[^'\\]|\\.)*'/g, "''");
+    return line;
+  }).join('\n');
+  // Match `state: <identifier>` where identifier is a bare name (no .x, no `{`).
+  const m = cleaned.match(/\bstate:\s*([A-Za-z_$][A-Za-z0-9_$]*)\b(?!\s*[\.\(])/);
+  return m ? m[1] : null;
+}
 
 // ── Shared helpers ─────────────────────────────────────────────────
 
@@ -1193,6 +1259,64 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
     }
   }
 
+  // Typed stash: the project entry (`index.rip` co-located with rip.json /
+  // package.json) seeds `@app.data` via `serve(state: <ident>)`. We expose the
+  // seed's type as `__RipStash` on the entry's virtual module, then rewrite
+  // the per-component `declare app: any` stub to point at it. Components get
+  // `app.data` typed without writing anything ceremonial — just give the seed
+  // a name and (optionally) annotate it.
+  //
+  // Two splices, both same-line so source maps are unaffected:
+  //   1. Entry file — append `export type __RipStash = typeof <ident>;`
+  //   2. Component files — replace `declare app: any` with the typed shape
+  const entryFile = findEntryFile(filePath);
+  const isEntry = entryFile && entryFile === filePath;
+  const localStateIdent = findServeStateIdent(source);
+
+  if (isEntry && localStateIdent) {
+    // Strip the state ident from the body's hoisted `let` declaration so it
+    // doesn't shadow the DTS-hoisted `let <ident>: <type>;`. Without this,
+    // `typeof <ident>` resolves to the untyped body declaration and stash
+    // typing collapses to `any` everywhere.
+    const letRe = new RegExp(`^(\\s*let\\s+)([^;]+);`, 'm');
+    code = code.replace(letRe, (full, prefix, names) => {
+      const remaining = names.split(',').map(s => s.trim()).filter(n => n !== localStateIdent);
+      return remaining.length ? `${prefix}${remaining.join(', ')};` : '';
+    });
+    code += `\nexport type __RipStash = typeof ${localStateIdent};\n`;
+  }
+
+  if (code.includes('declare app: any')) {
+    let typedApp = null;
+    if (localStateIdent) {
+      // Same-file mode: a `serve(state: X)` reference plus a local `X` lets a
+      // single file act as its own stash source (used in tests and demos).
+      typedApp = `declare app: { data: typeof ${localStateIdent}; components: any; routes: any; params: any; query: any; router: any }`;
+    } else if (entryFile && !isEntry) {
+      const spec = entryImportSpec(filePath, entryFile);
+      typedApp = `declare app: { data: import('${spec}').__RipStash; components: any; routes: any; params: any; query: any; router: any }`;
+    }
+    if (typedApp) code = code.replace(/declare app: any/g, typedApp);
+  }
+
+  // Dedupe imports: when the DTS header and the body import from the same
+  // module specifier, TypeScript reports TS2300 (Duplicate identifier) for
+  // every shared binding, which cascades and corrupts type resolution
+  // elsewhere (e.g. `typeof <stateIdent>` collapses to `any`). The DTS-side
+  // import is sufficient for type-checking; blank out matching body imports
+  // (preserve line count so source maps stay aligned).
+  if (hasTypes && headerDts && code) {
+    const dtsSpecs = new Set();
+    for (const m of headerDts.matchAll(/^\s*import\s+[^;]*?from\s+['"]([^'"]+)['"]\s*;?\s*$/gm)) {
+      dtsSpecs.add(m[1]);
+    }
+    if (dtsSpecs.size > 0) {
+      code = code.replace(/^(\s*)import\s+[^;]*?from\s+(['"])([^'"]+)\2\s*;?\s*$/gm, (full, _ws, _q, spec) => {
+        return dtsSpecs.has(spec) ? '' : full;
+      });
+    }
+  }
+
   let tsContent = (hasTypes ? headerDts + '\n' : '') + code;
   const headerLines = hasTypes ? countLines(headerDts + '\n') : 1;
 
@@ -2070,6 +2194,25 @@ export async function runCheck(targetDir, opts = {}) {
     }
   }
 
+  // Always compile the project entry file (even when excluded), so its
+  // `__RipStash` export is resolvable from typed components that consume it.
+  // Diagnostics from the entry are still suppressed via exclude when emitting
+  // results — this only ensures cross-module type info is available.
+  for (const fp of typedFiles) {
+    const entryFile = findEntryFile(fp);
+    if (entryFile && !compiled.has(entryFile) && existsSync(entryFile)) {
+      try {
+        const src = sourcesByPath.get(entryFile) ?? readFileSync(entryFile, 'utf8');
+        const compiledEntry = compileForCheck(entryFile, src, new Compiler(), { strict });
+        compiledEntry._typeOnly = true; // skip diagnostics — only here for cross-module types
+        compiled.set(entryFile, compiledEntry);
+      } catch (e) {
+        console.warn(`[rip] entry compile failed for ${entryFile}: ${e.message}`);
+      }
+      break; // single entry per project
+    }
+  }
+
   // Also compile any .rip files imported from typed files that aren't yet compiled
   for (const [fp, entry] of [...compiled.entries()]) {
     if (!entry.hasTypes) continue;
@@ -2156,6 +2299,7 @@ export async function runCheck(targetDir, opts = {}) {
 
   for (const [fp, entry] of compiled) {
     if (!entry.hasTypes) continue;
+    if (entry._typeOnly) continue;
 
     const vf = toVirtual(fp);
     let diags;
@@ -2311,6 +2455,7 @@ export async function runCheck(targetDir, opts = {}) {
     if (globalDefs.size > 0) {
       for (const [fp, entry] of compiled) {
         if (!entry.hasTypes) continue;
+        if (entry._typeOnly) continue;
         const srcLines = entry.source.split('\n');
         const errors = fileResults.find(r => r.file === fp)?.errors || [];
         const hadEntry = errors.length > 0;
@@ -2428,6 +2573,7 @@ export async function runCheck(targetDir, opts = {}) {
 
   for (const [fp, entry] of compiled) {
     if (!entry.hasTypes) continue;
+    if (entry._typeOnly) continue;
     const srcLines = entry.source.split('\n');
     const vf = toVirtual(fp);
     const gaps = [];
