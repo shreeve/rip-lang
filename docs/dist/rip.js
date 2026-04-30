@@ -6673,11 +6673,11 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           const isAsync = this.containsAwait(effectBody) ? "async " : "";
           if (this.is(effectBody, "block")) {
             const transformed = this.transformComponentMembers(effectBody);
-            const body2 = this.emitFunctionBody(transformed, [], true);
+            const body2 = this.emitFunctionBody(transformed);
             sl.push(`    __effect(${isAsync}() => ${body2});`);
           } else {
             const effectCode = this.emitInComponent(effectBody, "value");
-            sl.push(`    __effect(${isAsync}() => { ${effectCode}; });`);
+            sl.push(`    __effect(${isAsync}() => { return ${effectCode}; });`);
           }
         }
         sl.push("  }");
@@ -7132,11 +7132,11 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         const isAsync = this.containsAwait(effectBody) ? "async " : "";
         if (this.is(effectBody, "block")) {
           const transformed = this.transformComponentMembers(effectBody);
-          const body2 = this.emitFunctionBody(transformed, [], true);
+          const body2 = this.emitFunctionBody(transformed);
           lines.push(`    __effect(${isAsync}() => ${body2});`);
         } else {
           const effectCode = this.emitInComponent(effectBody, "value");
-          lines.push(`    __effect(${isAsync}() => { ${effectCode}; });`);
+          lines.push(`    __effect(${isAsync}() => { return ${effectCode}; });`);
         }
       }
       lines.push("  }");
@@ -8180,6 +8180,13 @@ function __popComponent(prev) {
   __currentComponent = prev;
 }
 
+// Bridge for the reactive runtime in compiler.js. __effect calls this to
+// auto-register its disposer with the component currently being
+// constructed/mounted, so the disposer fires on component unmount.
+function __getCurrentComponent() {
+  return __currentComponent;
+}
+
 function setContext(key, value) {
   if (!__currentComponent) throw new Error('setContext must be called during component initialization');
   if (!__currentComponent._context) __currentComponent._context = new Map();
@@ -8407,6 +8414,13 @@ class __Component {
   mount(target) {
     if (typeof target === "string") target = document.querySelector(target);
     this._target = target;
+    // _create / _setup are wrapped with __pushComponent so any __effect
+    // created inside (reactive attribute bindings, reactive text nodes,
+    // child components, user '~>' effects) auto-registers its disposer
+    // with this component via __getCurrentComponent in the runtime.
+    // Without this wrapping, effects created here lived forever and
+    // their cleanup functions never fired on unmount.
+    const prev = __pushComponent(this);
     try {
       this._root = this._create();
       if (this._root) target.appendChild(this._root);
@@ -8414,17 +8428,44 @@ class __Component {
       if (this.mounted) this.mounted();
     } catch (error) {
       __handleComponentError(error, this);
+    } finally {
+      __popComponent(prev);
     }
     return this;
   }
-  unmount() {
+  unmount({ removeDOM = true } = {}) {
+    // Symmetric to mount: tear down lifecycle hooks, all auto-registered
+    // effect disposers, child components, and (optionally) the DOM.
+    //
+    //   beforeUnmount  - user hook; runs while signals/effects are still
+    //                    live, so user code can read final state.
+    //   children       - cascade BEFORE this instance's disposers so
+    //                    children can react to parent state during their
+    //                    own teardown.
+    //   _disposers     - effect disposers auto-registered by __effect
+    //                    (cleared eagerly so a re-mount starts fresh).
+    //   unmounted      - user hook; final notification.
+    //   DOM removal    - skipped when caller wants to keep the old DOM
+    //                    visible until replacement (route transitions).
+    try {
+      if (this.beforeUnmount) this.beforeUnmount();
+    } catch (e) { console.error('[Rip] beforeUnmount error:', e); }
     if (this._children) {
       for (const child of this._children) {
-        child.unmount();
+        try { child.unmount({ removeDOM }); }
+        catch (e) { console.error('[Rip] child unmount error:', e); }
       }
     }
-    if (this.unmounted) this.unmounted();
-    if (this._root && this._root.parentNode) {
+    if (this._disposers) {
+      for (const d of this._disposers) {
+        try { d(); } catch (e) { console.error('[Rip] effect disposer error:', e); }
+      }
+      this._disposers = [];
+    }
+    try {
+      if (this.unmounted) this.unmounted();
+    } catch (e) { console.error('[Rip] unmounted error:', e); }
+    if (removeDOM && this._root && this._root.parentNode) {
       this._root.parentNode.removeChild(this._root);
     }
   }
@@ -8440,7 +8481,7 @@ class __Component {
 
 // Register on globalThis for runtime deduplication
 if (typeof globalThis !== 'undefined') {
-  globalThis.__ripComponent = { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __transition, __handleComponentError, __Component };
+  globalThis.__ripComponent = { __pushComponent, __popComponent, __getCurrentComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __transition, __handleComponentError, __Component };
 }
 
 `;
@@ -12723,7 +12764,19 @@ function __effect(fn) {
   };
 
   effect.run();
-  return () => effect.dispose();
+  const dispose = () => effect.dispose();
+  // Auto-register with the current component (if any) so disposers fire
+  // on component unmount. Without this, every __effect created inside a
+  // component's _init / _setup / _create lived forever — its callback
+  // stayed subscribed to its signals, the closure pinned the component,
+  // and any DOM/event-listener cleanup the effect had returned never
+  // fired. The bridge is intentionally cross-module: the reactive
+  // runtime (this file) doesn't depend on components.js, but components.js
+  // exposes a getter on globalThis.__ripComponent at registration time
+  // and we read it lazily so module-load order is irrelevant.
+  const cur = globalThis.__ripComponent?.__getCurrentComponent?.();
+  if (cur) (cur._disposers ??= []).push(dispose);
+  return dispose;
 }
 
 function __batch(fn) {
@@ -13014,7 +13067,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.15.4";
-  var BUILD_DATE = "2026-04-30@23:35:09GMT";
+  var BUILD_DATE = "2026-04-30@23:38:23GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -13399,6 +13452,7 @@ ${indented}`);
   var _ariaAnchorSupported;
   var _ariaBindDialog;
   var _ariaBindPopover;
+  var _ariaCombine;
   var _ariaHasAnchor;
   var _ariaListNav;
   var _ariaLockScroll;
@@ -14739,10 +14793,11 @@ ${indented}`);
     };
     unmountCurrent = function() {
       if (currentComponent) {
-        if (currentComponent.beforeUnmount)
-          currentComponent.beforeUnmount();
-        if (currentComponent.unmounted)
-          currentComponent.unmounted();
+        try {
+          currentComponent.unmount?.({ removeDOM: false });
+        } catch (e) {
+          console.error("[Rip] page unmount error:", e);
+        }
         currentComponent = null;
         return currentRoute = null;
       }
@@ -14752,11 +14807,11 @@ ${indented}`);
       unmountCurrent();
       for (let _i = layoutInstances.length - 1;_i >= 0; _i--) {
         let inst2 = layoutInstances[_i];
-        if (inst2.beforeUnmount)
-          inst2.beforeUnmount();
-        if (inst2.unmounted)
-          inst2.unmounted();
-        inst2._target?.remove();
+        try {
+          inst2.unmount?.({ removeDOM: true });
+        } catch (e) {
+          console.error("[Rip] layout unmount error:", e);
+        }
       }
       layoutInstances = [];
       mountPoint = container;
@@ -15147,28 +15202,35 @@ ${indented}`);
     })();
   };
   _ariaPopupDismiss = function(open, popup, close, els = [], repos = null) {
-    let get, onDown, onScroll;
-    if (!open)
-      return;
+    let cleanup, get, onDown, onScroll, pop;
     get = function(x) {
       return typeof x === "function" ? x() : x;
     };
+    pop = get(popup);
+    if (pop && pop.__ariaPopupDismiss) {
+      pop.__ariaPopupDismiss();
+      pop.__ariaPopupDismiss = null;
+    }
+    if (!(open && pop))
+      return;
     onDown = (e) => {
-      return ![get(popup), ...els.map(get)].some(function(el) {
+      return ![pop, ...els.map(get)].some(function(el) {
         return el?.contains(e.target);
       }) ? close() : undefined;
     };
     onScroll = (e) => {
-      if (get(popup)?.contains(e.target))
+      if (pop?.contains(e.target))
         return;
       return repos ? repos() : close();
     };
     document.addEventListener("mousedown", onDown);
     window.addEventListener("scroll", onScroll, true);
-    return function() {
+    cleanup = function() {
       document.removeEventListener("mousedown", onDown);
       return window.removeEventListener("scroll", onScroll, true);
     };
+    pop.__ariaPopupDismiss = cleanup;
+    return cleanup;
   };
   _ariaPopupGuard = function(delay2 = 250) {
     let blockedUntil;
@@ -15239,6 +15301,10 @@ ${indented}`);
         return focusAttempt();
       });
     };
+    if (el.__ariaBindPopover) {
+      el.removeEventListener("toggle", el.__ariaBindPopover);
+      el.__ariaBindPopover = null;
+    }
     onToggle = function(e) {
       let isOpen;
       isOpen = e.newState === "open";
@@ -15252,6 +15318,7 @@ ${indented}`);
       return setOpen?.(isOpen);
     };
     el.addEventListener("toggle", onToggle);
+    el.__ariaBindPopover = onToggle;
     shown = el.matches(":popover-open");
     desired = !!open;
     if (shown !== desired) {
@@ -15268,11 +15335,12 @@ ${indented}`);
       syncState(desired);
     }
     return function() {
-      return el.removeEventListener("toggle", onToggle);
+      el.removeEventListener("toggle", onToggle);
+      return el.__ariaBindPopover === onToggle ? el.__ariaBindPopover = null : undefined;
     };
   };
   _ariaBindDialog = function(open, dialog, setOpen, dismissable = true) {
-    let currentFocus, el, get, onCancel, onClose, restoreEl, restoreFocus, syncState;
+    let currentFocus, el, get, onCancel, onClose, prevCancel, prevClose, restoreEl, restoreFocus, syncState;
     get = function(x) {
       return typeof x === "function" ? x() : x;
     };
@@ -15329,6 +15397,12 @@ ${indented}`);
         return focusAttempt();
       });
     };
+    if (el.__ariaBindDialog) {
+      [prevCancel, prevClose] = el.__ariaBindDialog;
+      el.removeEventListener("cancel", prevCancel);
+      el.removeEventListener("close", prevClose);
+      el.__ariaBindDialog = null;
+    }
     onCancel = function(e) {
       if (!dismissable) {
         e.preventDefault();
@@ -15343,6 +15417,7 @@ ${indented}`);
     };
     el.addEventListener("cancel", onCancel);
     el.addEventListener("close", onClose);
+    el.__ariaBindDialog = [onCancel, onClose];
     if (open && !el.open) {
       if (!restoreEl)
         restoreEl = currentFocus();
@@ -15357,7 +15432,8 @@ ${indented}`);
     }
     return function() {
       el.removeEventListener("cancel", onCancel);
-      return el.removeEventListener("close", onClose);
+      el.removeEventListener("close", onClose);
+      return el.__ariaBindDialog?.[0] === onCancel ? el.__ariaBindDialog = null : undefined;
     };
   };
   _ariaRovingNav = function(e, h, orientation = "vertical") {
@@ -15592,7 +15668,23 @@ ${indented}`);
       return matchWidth ? floating.style.minWidth = `${rect.width}px` : undefined;
     }
   };
-  globalThis.__aria ??= { listNav: _ariaListNav, rovingNav: _ariaRovingNav, popupDismiss: _ariaPopupDismiss, popupGuard: _ariaPopupGuard, bindPopover: _ariaBindPopover, bindDialog: _ariaBindDialog, positionBelow: _ariaPositionBelow, trapFocus: _ariaTrapFocus, wireAria: _ariaWireAria, lockScroll: _ariaLockScroll, unlockScroll: _ariaUnlockScroll, position: _ariaPosition, hasAnchor: _ariaHasAnchor };
+  _ariaCombine = function(...disposers) {
+    return function() {
+      let d;
+      const _result = [];
+      for (let d2 of disposers) {
+        _result.push((() => {
+          try {
+            return d2?.();
+          } catch {
+            return null;
+          }
+        })());
+      }
+      return _result;
+    };
+  };
+  globalThis.__aria ??= { listNav: _ariaListNav, rovingNav: _ariaRovingNav, popupDismiss: _ariaPopupDismiss, popupGuard: _ariaPopupGuard, bindPopover: _ariaBindPopover, bindDialog: _ariaBindDialog, positionBelow: _ariaPositionBelow, trapFocus: _ariaTrapFocus, wireAria: _ariaWireAria, lockScroll: _ariaLockScroll, unlockScroll: _ariaUnlockScroll, position: _ariaPosition, hasAnchor: _ariaHasAnchor, combine: _ariaCombine };
   globalThis.ARIA ??= globalThis.__aria;
 
   // docs/dist/_entry.js
