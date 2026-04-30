@@ -806,9 +806,9 @@ export function installComponentSupport(CodeEmitter, Lexer) {
       const componentTypeParams = this._componentTypeParams || '';
       sl.push(`class ${componentTypeParams}{`);
       // `declare app: any` is rewritten to a typed shape by typecheck.js when
-      // the project's index.rip seeds a stash via `serve(state: <ident>)`.
-      // The compiler stays context-free; the rewrite happens in the same pass
-      // that splices function-overload signatures into the stub.
+      // the project has a typed `<root>/app/stash.rip`. The compiler stays
+      // context-free; the rewrite happens in the same pass that splices
+      // function-overload signatures into the stub.
       sl.push('  declare _root: Element | null; declare app: any;');
       sl.push('  emit(_name: string, _detail?: any): void {}');
 
