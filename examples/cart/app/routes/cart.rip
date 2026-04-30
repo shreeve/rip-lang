@@ -75,7 +75,11 @@ export Cart = component
                 strong "$#{cart.totalPrice().toFixed(2)}"
               td
       div.cart-actions
-        button aria-busy: status is 'loading', disabled: status is 'loading', @click: @placeOrder, "Place Order"
+        button
+          aria-busy: status is 'loading'
+          disabled: status is 'loading'
+          @click: @placeOrder
+          "Place Order"
         button.outline.secondary.link @click: (-> cart.clear()), "Clear Cart"
       if status is 'error'
         p.error error
