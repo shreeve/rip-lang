@@ -12986,7 +12986,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.15.4";
-  var BUILD_DATE = "2026-04-30@20:39:29GMT";
+  var BUILD_DATE = "2026-04-30@21:30:04GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -13142,7 +13142,7 @@ ${js}
           const launchOpts = { bundle: lastBundle, hash: hashRouter };
           if (persistAttr != null)
             launchOpts.persist = persistAttr === "local" ? "local" : true;
-          await app.launch("", launchOpts);
+          await app.launch(launchOpts);
         }
       } else {
         const expanded = [];
@@ -13362,9 +13362,13 @@ ${indented}`);
   var PATH_RE;
   var PROXIES;
   var STASH_METHOD_NAMES;
+  var _ARIA_POSITION_OWNED;
   var __batch;
+  var __computed;
   var __effect;
   var __state;
+  var _ariaAnchorChecked;
+  var _ariaAnchorSupported;
   var _ariaBindDialog;
   var _ariaBindPopover;
   var _ariaHasAnchor;
@@ -13376,20 +13380,24 @@ ${indented}`);
   var _ariaPopupGuard;
   var _ariaPosition;
   var _ariaPositionBelow;
+  var _ariaResetPositionStyles;
   var _ariaRovingNav;
   var _ariaTrapFocus;
   var _ariaUnlockScroll;
   var _ariaWireAria;
+  var _attachDispose;
   var _depth;
   var _keysVersion;
   var _proxy;
   var _toFn;
   var _writeVersion;
   var arraysEqual;
+  var assertBrowser;
   var buildComponentMap;
   var buildRoutes;
   var compileAndImport;
   var connectWatch;
+  var extractImportedNames;
   var fileToComponentName;
   var fileToPattern;
   var findAllComponents;
@@ -13498,8 +13506,13 @@ ${indented}`);
   };
   globalThis.warn ??= console.warn;
   globalThis.zip ??= (...a) => a[0].map((_, i) => a.map((b) => b[i]));
-  ({ __state, __effect, __batch } = globalThis.__rip);
+  ({ __state, __computed, __effect, __batch } = globalThis.__rip);
   ({ setContext, getContext, hasContext } = globalThis.__ripComponent || {});
+  assertBrowser = function(where) {
+    if (typeof window === "undefined" || typeof document === "undefined") {
+      throw new Error(`Rip App: '${where}' requires a browser environment`);
+    }
+  };
   PROXIES = new WeakMap;
   METHODS = new WeakMap;
   _keysVersion = 0;
@@ -13566,9 +13579,26 @@ ${indented}`);
         return wrapDeep(val);
       return val;
     }, set(target2, prop, value) {
-      let old, r;
+      let i, newLen, old, oldLen, r, sig;
       if (!_depth && isPathKey(prop)) {
         stashSet(proxy, prop, value);
+        return true;
+      }
+      if (Array.isArray(target2) && prop === "length") {
+        oldLen = target2.length;
+        newLen = +value;
+        target2.length = newLen;
+        if (newLen !== oldLen) {
+          if (target2[Symbol.for("signals")]) {
+            for (let i2 of ((s, e) => Array.from({ length: Math.max(0, Math.abs(e - s)) }, (_, i3) => s + i3 * (s <= e ? 1 : -1)))(Math.min(oldLen, newLen), Math.max(oldLen, newLen))) {
+              sig = target2[Symbol.for("signals")].get(String(i2));
+              if (sig != null)
+                sig.value = target2[i2];
+            }
+          }
+          keysSignal(target2).value = ++_keysVersion;
+          _writeVersion.value++;
+        }
         return true;
       }
       old = target2[prop];
@@ -13831,10 +13861,12 @@ ${indented}`);
     return obj?.[Symbol.for("stash")] === true;
   };
   var persistStash = function(app, opts = {}) {
-    let _save, k, saved, savedData, storage, storageKey, target, v;
+    let _save, disposed, effectDisposer, k, saved, savedData, storage, storageKey, target, v;
+    assertBrowser("persistStash");
     target = raw(app) || app;
-    if (target[Symbol.for("persisted")])
-      return;
+    return function() {
+      return target[Symbol.for("persisted")] ? null : undefined;
+    };
     target[Symbol.for("persisted")] = true;
     storage = opts.local ? localStorage : sessionStorage;
     storageKey = opts.key || "__rip_app";
@@ -13857,7 +13889,7 @@ ${indented}`);
         }
       })();
     };
-    __effect(function() {
+    effectDisposer = __effect(function() {
       let t;
       _writeVersion.value;
       t = setTimeout(_save, 2000);
@@ -13865,29 +13897,60 @@ ${indented}`);
         return clearTimeout(t);
       };
     });
-    return window.addEventListener("beforeunload", _save);
+    window.addEventListener("beforeunload", _save);
+    disposed = false;
+    return function() {
+      if (disposed)
+        return;
+      disposed = true;
+      effectDisposer?.();
+      window.removeEventListener("beforeunload", _save);
+      _save();
+      return target[Symbol.for("persisted")] = false;
+    };
   };
   var createResource = function(fn, opts = {}) {
-    let _data, _error, _loading, load, resource;
-    _data = __state(opts.initial || null);
+    let _data, _error, _loading, controller, dispose, generation, load, resource;
+    _data = __state(opts.initial ?? null);
     _loading = __state(false);
     _error = __state(null);
+    generation = 0;
+    controller = null;
     load = async function() {
-      let result;
+      let me, result;
+      controller?.abort();
+      controller = typeof AbortController !== "undefined" ? new AbortController : null;
+      me = ++generation;
       _loading.value = true;
       _error.value = null;
       return await (async () => {
         try {
-          result = await fn();
-          return _data.value = result;
+          result = await fn(controller?.signal);
+          if (me !== generation)
+            return;
+          _data.value = result;
+          return result;
         } catch (err) {
-          return _error.value = err;
+          if (me !== generation)
+            return;
+          if (err?.name === "AbortError")
+            return;
+          _error.value = err;
+          throw err;
         } finally {
-          _loading.value = false;
+          if (me === generation)
+            _loading.value = false;
         }
       })();
     };
-    resource = { data: undefined, loading: undefined, error: undefined, refetch: load };
+    dispose = function() {
+      generation++;
+      controller?.abort();
+      controller = null;
+      _loading.value = false;
+      return _error.value = null;
+    };
+    resource = { data: undefined, loading: undefined, error: undefined, refetch: load, dispose };
     Object.defineProperty(resource, "data", { get() {
       return _data.value;
     } });
@@ -13898,7 +13961,9 @@ ${indented}`);
       return _error.value;
     } });
     if (!opts.lazy)
-      load();
+      load().catch(function() {
+        return null;
+      });
     return resource;
   };
   _toFn = function(source) {
@@ -13906,7 +13971,13 @@ ${indented}`);
       return source.value;
     };
   };
-  _proxy = function(out, source) {
+  _attachDispose = function(target, disposer) {
+    Object.defineProperty(target, "dispose", { value() {
+      return disposer?.();
+    }, configurable: true, writable: true });
+    return target;
+  };
+  _proxy = function(out, source, disposer) {
     let obj;
     obj = { read() {
       return out.read();
@@ -13916,13 +13987,13 @@ ${indented}`);
     }, set(v) {
       return source.value = v;
     } });
-    return obj;
+    return _attachDispose(obj, disposer);
   };
   var delay = function(ms, source) {
-    let fn, out;
+    let eff, fn, out;
     fn = _toFn(source);
     out = __state(!!fn());
-    __effect(function() {
+    eff = __effect(function() {
       let t;
       if (fn()) {
         t = setTimeout(function() {
@@ -13935,13 +14006,13 @@ ${indented}`);
         return out.value = false;
       }
     });
-    return typeof source !== "function" ? _proxy(out, source) : out;
+    return typeof source !== "function" ? _proxy(out, source, eff) : _attachDispose(out, eff);
   };
   var debounce = function(ms, source) {
-    let fn, out;
+    let eff, fn, out;
     fn = _toFn(source);
     out = __state(fn());
-    __effect(function() {
+    eff = __effect(function() {
       let t, val;
       val = fn();
       t = setTimeout(function() {
@@ -13951,14 +14022,14 @@ ${indented}`);
         return clearTimeout(t);
       };
     });
-    return typeof source !== "function" ? _proxy(out, source) : out;
+    return typeof source !== "function" ? _proxy(out, source, eff) : _attachDispose(out, eff);
   };
   var throttle = function(ms, source) {
-    let fn, last, out;
+    let eff, fn, last, out;
     fn = _toFn(source);
     out = __state(fn());
     last = 0;
-    __effect(function() {
+    eff = __effect(function() {
       let now, remaining, t, val;
       val = fn();
       now = Date.now();
@@ -13976,13 +14047,13 @@ ${indented}`);
         };
       }
     });
-    return typeof source !== "function" ? _proxy(out, source) : out;
+    return typeof source !== "function" ? _proxy(out, source, eff) : _attachDispose(out, eff);
   };
   var hold = function(ms, source) {
-    let fn, out;
+    let eff, fn, out;
     fn = _toFn(source);
     out = __state(!!fn());
-    __effect(function() {
+    eff = __effect(function() {
       let t;
       if (fn()) {
         return out.value = true;
@@ -13995,18 +14066,24 @@ ${indented}`);
         };
       }
     });
-    return typeof source !== "function" ? _proxy(out, source) : out;
+    return typeof source !== "function" ? _proxy(out, source, eff) : _attachDispose(out, eff);
   };
   var createComponents = function() {
     let compiled, files, notify, watchers;
     files = new Map;
-    watchers = [];
+    watchers = new Set;
     compiled = new Map;
     notify = function(event, path) {
       let watcher;
       const _result = [];
-      for (let watcher2 of watchers) {
-        _result.push(watcher2(event, path));
+      for (let watcher2 of Array.from(watchers)) {
+        _result.push((() => {
+          try {
+            return watcher2(event, path);
+          } catch (e) {
+            return console.error("[Rip] watcher error:", e);
+          }
+        })());
       }
       return _result;
     };
@@ -14053,13 +14130,19 @@ ${indented}`);
       const _result = [];
       for (let key2 in obj) {
         let content2 = obj[key2];
-        _result.push(files.set(key2, content2));
+        files.set(key2, content2);
+        _result.push(compiled.delete(key2));
       }
       return _result;
     }, watch(fn) {
-      watchers.push(fn);
+      let disposed;
+      watchers.add(fn);
+      disposed = false;
       return function() {
-        return watchers.splice(watchers.indexOf(fn), 1);
+        if (disposed)
+          return;
+        disposed = true;
+        return watchers.delete(fn);
       };
     }, getCompiled(path) {
       return compiled.get(path);
@@ -14078,11 +14161,12 @@ ${indented}`);
     return "/" + pattern;
   };
   patternToRegex = function(pattern) {
-    let names, str2;
+    let escaped, names, str2;
     names = [];
-    str2 = pattern.replace(/\*(\w+)/g, function(_, name) {
+    escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
+    str2 = escaped.replace(/\*(\w+)/g, function(_, name) {
       names.push(name);
-      return "(.+)";
+      return "(.*)";
     }).replace(/:(\w+)/g, function(_, name) {
       names.push(name);
       return "([^/]+)";
@@ -14163,13 +14247,20 @@ ${indented}`);
     return chain;
   };
   var createRouter = function(components, opts = {}) {
-    let _hash, _layouts, _navigating, _params, _path, _query, _route, addBase, base, hashMode, navCallbacks, onClick, onError, onPopState, readUrl, resolve, root, router, stripBase, tree, writeUrl;
+    let _current, _hash, _layouts, _navigating, _normalizedUrl, _params, _path, _query, _route, addBase, base, hashMode, navCallbacks, onClick, onError, onPopState, readUrl, resolve, root, router, stripBase, tree, unwatchComponents, writeUrl;
+    assertBrowser("createRouter");
     root = opts.root || "components";
     base = opts.base || "";
     hashMode = opts.hash || false;
     onError = opts.onError || null;
     stripBase = function(url) {
-      return base && url.startsWith(base) ? url.slice(base.length) || "/" : url;
+      if (!base)
+        return url;
+      if (url === base)
+        return "/";
+      if (url.startsWith(base + "/"))
+        return url.slice(base.length);
+      return url;
     };
     addBase = function(path) {
       return base ? base + path : path;
@@ -14195,15 +14286,16 @@ ${indented}`);
     _query = __state({});
     _hash = __state("");
     _navigating = delay(100, __state(false));
+    _normalizedUrl = __state(_path.value);
     tree = buildRoutes(components, root);
     navCallbacks = new Set;
-    components.watch(function(event, path) {
+    unwatchComponents = components.watch(function(event, path) {
       if (!path.startsWith(root + "/"))
         return;
       return tree = buildRoutes(components, root);
     });
     resolve = function(url) {
-      let cb, hash, path, queryStr, rawPath, result;
+      let cb, full, hash, path, queryStr, rawPath, result;
       rawPath = url.split("?")[0].split("#")[0];
       path = stripBase(rawPath);
       path = path[0] === "/" ? path : "/" + path;
@@ -14211,13 +14303,19 @@ ${indented}`);
       hash = url.includes("#") ? url.split("#")[1] : "";
       result = matchRoute(path, tree.routes);
       if (result) {
+        full = path;
+        if (queryStr)
+          full += `?${queryStr}`;
+        if (hash)
+          full += `#${hash}`;
         __batch(function() {
           _path.value = path;
           _params.value = result.params;
           _route.value = result.route;
           _layouts.value = getLayoutChain(result.route.file, root, tree.layouts);
           _query.value = Object.fromEntries(new URLSearchParams(queryStr));
-          return _hash.value = hash;
+          _hash.value = hash;
+          return _normalizedUrl.value = full;
         });
         for (let cb2 of navCallbacks) {
           cb2(router.current);
@@ -14255,9 +14353,9 @@ ${indented}`);
     if (typeof document !== "undefined")
       document.addEventListener("click", onClick);
     router = { push(url) {
-      return resolve(url) ? history.pushState(null, "", writeUrl(_path.read())) : undefined;
+      return resolve(url) ? history.pushState(null, "", writeUrl(_normalizedUrl.read())) : undefined;
     }, replace(url) {
-      return resolve(url) ? history.replaceState(null, "", writeUrl(_path.read())) : undefined;
+      return resolve(url) ? history.replaceState(null, "", writeUrl(_normalizedUrl.read())) : undefined;
     }, back() {
       return history.back();
     }, forward() {
@@ -14277,10 +14375,16 @@ ${indented}`);
         window.removeEventListener("popstate", onPopState);
       if (typeof document !== "undefined")
         document.removeEventListener("click", onClick);
+      unwatchComponents?.();
+      unwatchComponents = null;
+      _navigating?.dispose?.();
       return navCallbacks.clear();
     } };
-    Object.defineProperty(router, "current", { get() {
+    _current = __computed(function() {
       return { path: _path.value, params: _params.value, route: _route.value, layouts: _layouts.value, query: _query.value, hash: _hash.value };
+    });
+    Object.defineProperty(router, "current", { get() {
+      return _current.value;
     } });
     Object.defineProperty(router, "path", { get() {
       return _path.value;
@@ -14323,6 +14427,9 @@ ${indented}`);
   };
   findComponent = function(mod) {
     let key, val;
+    if (typeof mod.default === "function" && (mod.default.prototype?.mount || mod.default.prototype?._create)) {
+      return mod.default;
+    }
     for (let key2 in mod) {
       let val2 = mod[key2];
       if (typeof val2 === "function" && (val2.prototype?.mount || val2.prototype?._create))
@@ -14390,8 +14497,42 @@ ${indented}`);
       return `components/${clean}`;
     return null;
   };
+  extractImportedNames = function(clause) {
+    let braceIdx, closing, inside, n, names, p, part, rest, t;
+    if (!clause)
+      return [];
+    rest = clause.trim();
+    if (!rest)
+      return [];
+    names = [];
+    braceIdx = rest.indexOf("{");
+    if (braceIdx >= 0) {
+      closing = rest.lastIndexOf("}");
+      if (closing < 0)
+        return names;
+      inside = rest.slice(braceIdx + 1, closing);
+      for (let n2 of inside.split(",")) {
+        t = n2.trim();
+        if (!t)
+          continue;
+        names.push(t.split(/\s+as\s+/).pop().trim());
+      }
+      rest = rest.slice(0, braceIdx).replace(/,\s*$/, "").trim();
+    }
+    for (let part2 of rest.split(",")) {
+      p = part2.trim();
+      if (!p)
+        continue;
+      if (/^\*\s+as\s+/.test(p)) {
+        names.push(p.replace(/^\*\s+as\s+/, "").trim());
+      } else {
+        names.push(p);
+      }
+    }
+    return names;
+  };
   compileAndImport = async function(source, compile2, components = null, path = null, resolver = null) {
-    let blob, blobUrl, cached, debug, depMod, depPath, depSource, finalJs, found, full, header, importedNames, js, k, m, matches, mod, msg, n, name, namedImports, names, needed, offset, post, pre, preamble, prefixLines, replacement, ripImportRe, specifier, storePath, url, v;
+    let anyImportRe, bindingClause, blob, blobUrl, cached, committed, debug, depMod, depPath, depSource, finalJs, found, full, header, importedNames, js, k, keyLiteral, m, matches, mod, msg, n, name, names, needed, offset, post, pre, preamble, prefixLines, previousUrl, replacement, ripImportRe, specifier, storePath, url, v;
     if (components && path) {
       cached = components.getCompiled(path);
       if (cached)
@@ -14401,108 +14542,137 @@ ${indented}`);
       resolver.compiling ??= {};
       resolver.compiling[path] = true;
     }
-    debug = globalThis?.__ripDebug?.enabled && path;
-    prefixLines = 0;
-    js = debug ? compile2(source, { sourceMap: "inline", filename: path }) : compile2(source);
-    if (resolver) {
-      importedNames = new Set;
-      if (components) {
-        ripImportRe = /^(\s*import\s+(?:\{([^}]+)\}\s+from\s+|.*?\s+from\s+)?['"])([^'"]*\.rip)(['"];?\s*)$/gm;
-        matches = Array.from(js.matchAll(ripImportRe));
-        for (let _i = matches.length - 1;_i >= 0; _i--) {
-          let m2 = matches[_i];
-          [full, pre, namedImports, specifier, post] = m2;
-          storePath = resolveStorePath(specifier, path, components);
-          if (storePath === path)
-            continue;
-          if (!storePath) {
-            msg = `[Rip] Could not resolve import: ${specifier}`;
-            if (path)
-              msg += ` (from ${path})`;
-            console.warn(msg);
-            continue;
+    return await (async () => {
+      try {
+        debug = globalThis?.__ripDebug?.enabled && path;
+        prefixLines = 0;
+        js = debug ? compile2(source, { sourceMap: "inline", filename: path }) : compile2(source);
+        if (resolver) {
+          importedNames = new Set;
+          if (components) {
+            ripImportRe = /^(\s*import\s+(?:(.*?)\s+from\s+)?['"])([^'"]*\.rip)(['"];?\s*)$/gm;
+            matches = Array.from(js.matchAll(ripImportRe));
+            for (let _i = matches.length - 1;_i >= 0; _i--) {
+              let m2 = matches[_i];
+              [full, pre, bindingClause, specifier, post] = m2;
+              storePath = resolveStorePath(specifier, path, components);
+              if (storePath === path)
+                continue;
+              if (!storePath) {
+                msg = `[Rip] Could not resolve import: ${specifier}`;
+                if (path)
+                  msg += ` (from ${path})`;
+                console.warn(msg);
+                continue;
+              }
+              if (!resolver.blobUrls?.[storePath]) {
+                if (resolver.compiling?.[storePath])
+                  continue;
+                depSource = components.read(storePath);
+                if (depSource) {
+                  await compileAndImport(depSource, compile2, components, storePath, resolver);
+                }
+              }
+              blobUrl = resolver.blobUrls?.[storePath];
+              if (blobUrl) {
+                replacement = `${pre}${blobUrl}${post}`;
+                js = js.slice(0, m2.index) + replacement + js.slice(m2.index + full.length);
+                for (let n2 of extractImportedNames(bindingClause)) {
+                  importedNames.add(n2);
+                }
+              }
+            }
           }
-          if (!resolver.blobUrls?.[storePath]) {
-            if (resolver.compiling?.[storePath])
+          anyImportRe = /^\s*import\s+(?:(.*?)\s+from\s+)?['"][^'"]*['"];?\s*$/gm;
+          for (let m2 of js.matchAll(anyImportRe)) {
+            for (let n2 of extractImportedNames(m2[1])) {
+              importedNames.add(n2);
+            }
+          }
+          needed = {};
+          for (let name2 in resolver.map) {
+            let depPath2 = resolver.map[name2];
+            if (importedNames.has(name2))
               continue;
-            depSource = components.read(storePath);
-            if (depSource) {
-              await compileAndImport(depSource, compile2, components, storePath, resolver);
-            }
-          }
-          blobUrl = resolver.blobUrls?.[storePath];
-          if (blobUrl) {
-            replacement = `${pre}${blobUrl}${post}`;
-            js = js.slice(0, m2.index) + replacement + js.slice(m2.index + full.length);
-            if (namedImports) {
-              for (let n2 of namedImports.split(",")) {
-                importedNames.add(n2.trim().split(/\s+as\s+/).pop().trim());
+            if (depPath2 !== path && js.includes(`new ${name2}(`)) {
+              if (!resolver.classes[name2]) {
+                depSource = components.read(depPath2);
+                if (depSource) {
+                  depMod = await compileAndImport(depSource, compile2, components, depPath2, resolver);
+                  found = findAllComponents(depMod);
+                  for (let k2 in found) {
+                    let v2 = found[k2];
+                    resolver.classes[k2] = v2;
+                  }
+                }
               }
+              if (resolver.classes[name2])
+                needed[name2] = true;
             }
           }
-        }
-      }
-      needed = {};
-      for (let name2 in resolver.map) {
-        let depPath2 = resolver.map[name2];
-        if (importedNames.has(name2))
-          continue;
-        if (depPath2 !== path && js.includes(`new ${name2}(`)) {
-          if (!resolver.classes[name2]) {
-            depSource = components.read(depPath2);
-            if (depSource) {
-              depMod = await compileAndImport(depSource, compile2, components, depPath2, resolver);
-              found = findAllComponents(depMod);
-              for (let k2 in found) {
-                let v2 = found[k2];
-                resolver.classes[k2] = v2;
-              }
-            }
-          }
-          if (resolver.classes[name2])
-            needed[name2] = true;
-        }
-      }
-      names = Object.keys(needed);
-      if (names.length > 0) {
-        preamble = `const {${names.join(", ")}} = globalThis['${resolver.key}'];
+          names = Object.keys(needed);
+          if (names.length > 0) {
+            keyLiteral = JSON.stringify(resolver.key);
+            preamble = `const {${names.join(", ")}} = globalThis[${keyLiteral}];
 `;
-        js = preamble + js;
-        prefixLines += 1;
-      }
-    }
-    header = path ? `// ${path}
+            js = preamble + js;
+            prefixLines += 1;
+          }
+        }
+        header = path ? `// ${path}
 ` : "";
-    if (header)
-      prefixLines += 1;
-    finalJs = header + js;
-    if (debug && prefixLines > 0) {
-      offset = globalThis?.__ripDebug?.offsetSourceMap;
-      if (offset)
-        finalJs = offset(finalJs, prefixLines);
-    }
-    blob = new Blob([finalJs], { type: "application/javascript" });
-    url = URL.createObjectURL(blob);
-    if (resolver && path) {
-      resolver.blobUrls ??= {};
-      resolver.blobUrls[path] = url;
-      if (resolver.compiling)
-        delete resolver.compiling[path];
-    }
-    mod = await import(url);
-    if (resolver) {
-      found = findAllComponents(mod);
-      for (let k2 in found) {
-        let v2 = found[k2];
-        resolver.classes[k2] = v2;
+        if (header)
+          prefixLines += 1;
+        finalJs = header + js;
+        if (debug && prefixLines > 0) {
+          offset = globalThis?.__ripDebug?.offsetSourceMap;
+          if (offset)
+            finalJs = offset(finalJs, prefixLines);
+        }
+        blob = new Blob([finalJs], { type: "application/javascript" });
+        url = URL.createObjectURL(blob);
+        previousUrl = null;
+        if (resolver && path) {
+          resolver.blobUrls ??= {};
+          previousUrl = resolver.blobUrls[path];
+          if (previousUrl && previousUrl !== url) {
+            try {
+              URL.revokeObjectURL(previousUrl);
+            } catch {}
+          }
+          resolver.blobUrls[path] = url;
+        }
+        mod = await import(url);
+        committed = true;
+        if (resolver) {
+          found = findAllComponents(mod);
+          for (let k2 in found) {
+            let v2 = found[k2];
+            resolver.classes[k2] = v2;
+          }
+        }
+        if (components && path)
+          components.setCompiled(path, mod);
+        return mod;
+      } finally {
+        if (resolver && path) {
+          if (resolver.compiling)
+            delete resolver.compiling[path];
+        }
+        if (!committed && url && resolver && path) {
+          try {
+            URL.revokeObjectURL(url);
+          } catch {}
+          if (resolver.blobUrls?.[path] === url) {
+            delete resolver.blobUrls[path];
+          }
+        }
       }
-    }
-    if (components && path)
-      components.setCompiled(path, mod);
-    return mod;
+    })();
   };
   var createRenderer = function(opts = {}) {
-    let app, compile2, components, container, currentComponent, currentLayouts, currentParams, currentRoute, disposeEffect, generation, layoutInstances, mountPoint, mountRoute, onError, renderer, resolver, router, target, unmount, unmountCurrent;
+    let app, compile2, components, container, currentComponent, currentLayouts, currentParams, currentQuery, currentRoute, disposeEffect, generation, invalidateResolver, layoutInstances, mountPoint, mountRoute, onError, renderer, resolver, router, sameKeys, target, unmount, unmountCurrent, unwatchSources;
+    assertBrowser("createRenderer");
     ({ router, app, components, resolver, compile: compile2, target, onError } = opts);
     container = typeof target === "string" ? document.querySelector(target) : target || document.getElementById("app");
     if (!container) {
@@ -14513,11 +14683,32 @@ ${indented}`);
     currentComponent = null;
     currentRoute = null;
     currentParams = null;
+    currentQuery = null;
     currentLayouts = [];
     layoutInstances = [];
     mountPoint = container;
     generation = 0;
     disposeEffect = null;
+    unwatchSources = null;
+    invalidateResolver = function(path) {
+      let depPath, name;
+      if (!resolver)
+        return;
+      if (resolver.blobUrls?.[path]) {
+        try {
+          URL.revokeObjectURL(resolver.blobUrls[path]);
+        } catch {}
+        delete resolver.blobUrls[path];
+      }
+      return resolver.classes && resolver.map ? (() => {
+        const result = [];
+        for (let name2 in resolver.map) {
+          let depPath2 = resolver.map[name2];
+          result.push(depPath2 === path ? delete resolver.classes[name2] : undefined);
+        }
+        return result;
+      })() : undefined;
+    };
     unmountCurrent = function() {
       if (currentComponent) {
         if (currentComponent.beforeUnmount)
@@ -14540,17 +14731,40 @@ ${indented}`);
         inst2._target?.remove();
       }
       layoutInstances = [];
-      return mountPoint = container;
+      mountPoint = container;
+      currentParams = null;
+      currentQuery = null;
+      return currentLayouts = [];
     };
-    mountRoute = async function(info) {
-      let Component, LayoutClass, gen2, handled, inst, instance, layoutFile, layoutFiles, layoutMod, layoutSource, layoutsChanged, mod, mp, oldTarget, pageWrapper, params, pre, query, route, slot, source, wrapper;
+    sameKeys = function(a, b) {
+      let k, v;
+      if (!(a && b))
+        return false;
+      if (Object.keys(a).length !== Object.keys(b).length)
+        return false;
+      for (let k2 in a) {
+        let v2 = a[k2];
+        if (!(b[k2] === v2))
+          return false;
+      }
+      return true;
+    };
+    mountRoute = async function(info, force = false) {
+      let Component, LayoutClass, gen2, handled, inst, instance, layoutFile, layoutFiles, layoutMod, layoutSource, layoutsChanged, mod, mp, oldTarget, pageWrapper, params, pre, query, route, sameRoute, slot, source, wrapper;
       ({ route, params, layouts: layoutFiles, query } = info);
       if (!route)
         return;
-      if (route.file === currentRoute && JSON.stringify(params) === JSON.stringify(currentParams)) {
+      sameRoute = route.file === currentRoute && sameKeys(params, currentParams);
+      if (sameRoute && !force) {
+        if (!sameKeys(query, currentQuery)) {
+          currentQuery = query;
+          if (currentComponent?.load)
+            await currentComponent.load(params, query);
+        }
         return;
       }
       currentParams = params;
+      currentQuery = query;
       gen2 = ++generation;
       router.navigating = true;
       return await (async () => {
@@ -14664,28 +14878,51 @@ ${indented}`);
         current = router.current;
         return current.route ? mountRoute(current) : undefined;
       });
+      unwatchSources = components?.watch(function(event, path) {
+        return (Array.isArray(["change", "delete"]) ? ["change", "delete"].includes(event) : (event in ["change", "delete"])) ? invalidateResolver(path) : undefined;
+      });
       router.init();
       return renderer;
     }, stop() {
+      let _, url;
       unmount();
       if (disposeEffect) {
         disposeEffect();
         disposeEffect = null;
       }
+      unwatchSources?.();
+      unwatchSources = null;
+      if (resolver?.blobUrls) {
+        for (let _2 in resolver.blobUrls) {
+          if (!Object.hasOwn(resolver.blobUrls, _2))
+            continue;
+          let url2 = resolver.blobUrls[_2];
+          try {
+            URL.revokeObjectURL(url2);
+          } catch {}
+        }
+        resolver.blobUrls = {};
+      }
       return container.innerHTML = "";
-    }, remount() {
-      let current;
+    }, remount(force = false) {
+      let current, forceFlag;
+      forceFlag = typeof force === "object" ? !!force.force : !!force;
       current = router.current;
-      return current.route ? mountRoute(current) : undefined;
+      return current.route ? mountRoute(current, forceFlag) : undefined;
     } };
     return renderer;
   };
   connectWatch = function(url) {
-    let connect, maxDelay, retryDelay;
+    let closed, connect, es, maxDelay, retryDelay, retryTimer;
+    assertBrowser("connectWatch");
     retryDelay = 1000;
     maxDelay = 30000;
+    closed = false;
+    es = null;
+    retryTimer = null;
     connect = function() {
-      let es;
+      if (closed)
+        return;
       es = new EventSource(url);
       es.addEventListener("connected", function() {
         retryDelay = 1000;
@@ -14696,31 +14933,41 @@ ${indented}`);
         return location.reload();
       });
       es.addEventListener("css", function() {
-        let link;
+        let cssUrl, link;
         const _result = [];
         for (let link2 of document.querySelectorAll('link[rel="stylesheet"]')) {
-          url = new URL(link2.href);
-          url.searchParams.set("_t", Date.now());
-          link2.href = url.toString();
+          cssUrl = new URL(link2.href);
+          cssUrl.searchParams.set("_t", Date.now());
+          link2.href = cssUrl.toString();
         }
         return _result;
       });
       return es.onerror = function() {
         es.close();
-        setTimeout(connect, retryDelay);
+        es = null;
+        if (closed)
+          return;
+        retryTimer = setTimeout(connect, retryDelay);
         return retryDelay = Math.min(retryDelay * 2, maxDelay);
       };
     };
-    return connect();
+    connect();
+    return function() {
+      if (closed)
+        return;
+      closed = true;
+      if (retryTimer) {
+        clearTimeout(retryTimer);
+        retryTimer = null;
+      }
+      es?.close();
+      return es = null;
+    };
   };
-  var launch = async function(appBase = "", opts = {}) {
-    let app, appComponents, bundle, cached, classesKey, compile2, el, etag, etagKey, hash, headers, k, persist, renderer, res, resolver, router, seedData, stashMod, stashPath, stashRaw, stashSource, target, v;
-    globalThis.__ripLaunched = true;
-    if (typeof appBase === "object") {
-      opts = appBase;
-      appBase = "";
-    }
-    appBase = appBase.replace(/\/+$/, "");
+  var launch = async function(opts = {}) {
+    let app, appBase, appComponents, bundle, cached, classesKey, compile2, destroy, destroyed, el, etag, etagKey, hash, headers, k, persist, persistDisposer, renderer, res, resolver, router, seedData, stashMod, stashPath, stashRaw, stashSource, target, v, watchDisposer;
+    assertBrowser("launch");
+    appBase = (opts.base || "").replace(/\/+$/, "");
     target = opts.target || "#app";
     compile2 = opts.compile || null;
     persist = opts.persist || false;
@@ -14728,7 +14975,7 @@ ${indented}`);
     if (!compile2) {
       compile2 = globalThis?.compileToJS || null;
     }
-    if (typeof document !== "undefined" && !document.querySelector(target)) {
+    if (!document.querySelector(target)) {
       el = document.createElement("div");
       el.id = target.replace(/^#/, "");
       document.body.prepend(el);
@@ -14764,8 +15011,7 @@ ${indented}`);
       appComponents.load(bundle.components);
     classesKey = `__rip_${appBase.replace(/\//g, "_") || "app"}`;
     resolver = { map: buildComponentMap(appComponents), classes: {}, key: classesKey };
-    if (typeof globalThis !== "undefined")
-      globalThis[classesKey] = resolver.classes;
+    globalThis[classesKey] = resolver.classes;
     stashRaw = null;
     stashPath = "components/_lib/stash.rip";
     if (appComponents.exists(stashPath)) {
@@ -14792,10 +15038,11 @@ ${indented}`);
     if (bundle.routes) {
       app.routes = bundle.routes;
     }
-    if (persist && typeof sessionStorage !== "undefined") {
-      persistStash(app, { local: persist === "local", key: `__rip_${appBase}` });
+    persistDisposer = null;
+    if (persist) {
+      persistDisposer = persistStash(app, { local: persist === "local", key: `__rip_${appBase}` });
     }
-    if (app.data.title && typeof document !== "undefined")
+    if (app.data.title)
       document.title = app.data.title;
     router = createRouter(appComponents, { root: "components", base: appBase, hash, onError(err) {
       return console.error(`[Rip] Error ${err.status}: ${err.message || err.path}`);
@@ -14804,14 +15051,31 @@ ${indented}`);
       return console.error(`[Rip] ${err.message}`, err.error);
     } });
     renderer.start();
+    watchDisposer = null;
     if (bundle.data?.watch) {
-      connectWatch(`${appBase}/watch`);
+      watchDisposer = connectWatch(`${appBase}/watch`);
     }
-    if (typeof window !== "undefined") {
-      window.app = app;
-      window.__RIP__ = { app, components: appComponents, router, renderer, resolver, version: "0.3.0" };
-    }
-    return { app, components: appComponents, router, renderer };
+    destroyed = false;
+    destroy = function() {
+      if (destroyed)
+        return;
+      destroyed = true;
+      watchDisposer?.();
+      renderer.stop();
+      router.destroy();
+      persistDisposer?.();
+      delete globalThis[classesKey];
+      delete globalThis.__ripApp;
+      delete globalThis.__ripLaunched;
+      if (window.app === app) {
+        delete window.app;
+      }
+      return window.__RIP__?.app === app ? delete window.__RIP__ : undefined;
+    };
+    window.app = app;
+    window.__RIP__ = { app, components: appComponents, router, renderer, resolver, destroy, version: "0.3.0" };
+    globalThis.__ripLaunched = true;
+    return { app, components: appComponents, router, renderer, destroy };
   };
   _ariaNAV = function(e, fn) {
     if (!fn)
@@ -15178,12 +15442,16 @@ ${indented}`);
       return window.scrollTo(0, scrollY);
     }
   };
+  _ariaAnchorChecked = false;
+  _ariaAnchorSupported = false;
   _ariaHasAnchor = function() {
     let anchor, floating, rect;
+    if (_ariaAnchorChecked)
+      return _ariaAnchorSupported;
+    if (!(typeof document !== "undefined" && document.body))
+      return false;
     return (() => {
       try {
-        if (!document?.createElement)
-          return false;
         anchor = document.createElement("div");
         floating = document.createElement("div");
         anchor.style.cssText = "position:fixed;top:100px;left:100px;width:10px;height:10px;anchor-name:--probe";
@@ -15193,12 +15461,24 @@ ${indented}`);
         rect = floating.getBoundingClientRect();
         anchor.remove();
         floating.remove();
-        return rect.top > 50;
+        _ariaAnchorSupported = rect.top > 50;
+        _ariaAnchorChecked = true;
+        return _ariaAnchorSupported;
       } catch {
-        return false;
+        _ariaAnchorChecked = true;
+        return _ariaAnchorSupported = false;
       }
     })();
-  }();
+  };
+  _ARIA_POSITION_OWNED = ["position", "inset", "top", "right", "bottom", "left", "margin", "marginTop", "marginRight", "marginBottom", "marginLeft", "transform", "minWidth", "positionAnchor", "positionArea", "positionTry", "positionVisibility"];
+  _ariaResetPositionStyles = function(el) {
+    let prop;
+    const _result = [];
+    for (let prop2 of _ARIA_POSITION_OWNED) {
+      _result.push(el.style[prop2] = "");
+    }
+    return _result;
+  };
   _ariaPosition = function(trigger, floating, opts = {}) {
     let align, matchWidth, name, offset, placement, rect, side;
     if (!(trigger && floating))
@@ -15206,7 +15486,8 @@ ${indented}`);
     placement = opts.placement ?? "bottom start";
     offset = opts.offset ?? 4;
     matchWidth = opts.matchWidth ?? false;
-    if (_ariaHasAnchor) {
+    _ariaResetPositionStyles(floating);
+    if (_ariaHasAnchor()) {
       name = `--anchor-${floating.id || Math.random().toString(36).slice(2, 8)}`;
       trigger.style.anchorName = name;
       floating.style.positionAnchor = name;
@@ -15217,10 +15498,6 @@ ${indented}`);
       floating.style.positionTry = "flip-block, flip-inline, flip-block flip-inline";
       floating.style.positionVisibility = "anchors-visible";
       [side] = placement.split(" ");
-      floating.style.marginTop = "";
-      floating.style.marginBottom = "";
-      floating.style.marginLeft = "";
-      floating.style.marginRight = "";
       switch (side) {
         case "bottom":
           floating.style.marginTop = `${offset}px`;
