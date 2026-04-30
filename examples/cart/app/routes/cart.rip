@@ -61,7 +61,6 @@ export Cart = component
                     input
                       type: "number"
                       value: String(item.quantity)
-                      # @ts-expect-error
                       @input: (e) -> cart.updateQuantity(item, Math.max(1, Number(e.target.value) or 1))
                     button.outline @click: (-> cart.updateQuantity(item, item.quantity + 1)), "+"
                 td "$#{(item.price * item.quantity).toFixed(2)}"
