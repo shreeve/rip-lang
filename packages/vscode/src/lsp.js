@@ -1817,6 +1817,16 @@ connection.onRequest('textDocument/semanticTokens/full', (params) => {
         const isTagLine = firstWord && HTML_TAG_NAMES.has(firstWord[1]);
         const isComponentLine = firstWord && /^[A-Z]/.test(firstWord[1]);
 
+        // Skip tokens that fall inside a tag-shorthand chain
+        // (`div.cart-actions`, `button.outline.secondary`).  TextMate
+        // already paints the class portion; without this guard a class
+        // name like `cart-actions` whose `cart` segment matches a real
+        // identifier elsewhere in the file gets mis-mapped here by the
+        // text-search fallback and overrides the TextMate scope.
+        if ((isTagLine || isComponentLine) && matchCol > slIndent + firstWord[1].length) {
+          const between = sl.slice(slIndent + firstWord[1].length, matchCol);
+          if (/^[.#][\w.#-]*$/.test(between)) continue;
+        }
         // When the semantic token lands on an HTML tag at the first-word
         // position (e.g. `label label` — first is the <label> tag),
         // reserve that position and redirect to the next occurrence
