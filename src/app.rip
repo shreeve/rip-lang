@@ -19,11 +19,27 @@
 # ==============================================================================
 
 # Rip's reactive primitives (registered on globalThis by rip.js)
-{ __state, __effect, __batch } = globalThis.__rip
+{ __state, __computed, __effect, __batch } = globalThis.__rip
 
 # Re-export context functions from the component runtime
 { setContext, getContext, hasContext } = globalThis.__ripComponent or {}
 export { setContext, getContext, hasContext }
+
+# Browser/SSR contract:
+#
+#   The lower tier of Rip App is environment-independent — `stash`,
+#   `createResource`, and the timing helpers (`delay`, `debounce`,
+#   `throttle`, `hold`) make no `window`/`document`/`location` calls and
+#   work fine in Node or a worker. The upper tier (`createRouter`,
+#   `createRenderer`, `launch`, `persistStash`, `connectWatch`) is
+#   browser-only and bails loudly the moment it's called outside one.
+#
+#   This split keeps the door open for SSR without scattering `typeof
+#   document isnt 'undefined'` checks across the file. SSR consumers can
+#   build app state and resources, then mount only on the browser.
+assertBrowser = (where) ->
+  if typeof window is 'undefined' or typeof document is 'undefined'
+    throw new Error "Rip App: '#{where}' requires a browser environment"
 
 # ==============================================================================
 # Stash — deep reactive proxy with path navigation
@@ -91,6 +107,23 @@ makeProxy = (target) ->
     set: (target, prop, value) ->
       if not _depth and isPathKey(prop)
         stashSet(proxy, prop, value)
+        return true
+
+      # Array length truncation: `arr.length = 0` (or any shrink) doesn't
+      # touch keysSignal in the generic write path because length is not
+      # `undefined` going in. Treat it specially so subscribers tracking
+      # `arr.length`, `arr.keys()`, or specific indices see the truncation.
+      if Array.isArray(target) and prop is 'length'
+        oldLen = target.length
+        newLen = +value
+        target.length = newLen
+        if newLen isnt oldLen
+          if target[:signals]
+            for i in [Math.min(oldLen, newLen)...Math.max(oldLen, newLen)]
+              sig = target[:signals].get(String(i))
+              sig?.value = target[i]    # undefined when truncated
+          keysSignal(target).value = ++_keysVersion
+          _writeVersion.value++
         return true
 
       old = target[prop]
@@ -259,9 +292,20 @@ export raw = (proxy) -> if proxy?[:raw] then proxy[:raw] else proxy
 
 export isStash = (obj) -> obj?[:stash] is true
 
+# Single-stash policy: Rip App assumes one stash per page (the one
+# `launch()` creates). persistStash is therefore tied to the global
+# `_writeVersion` signal — any stash write triggers the autosave debounce.
+# Apps that need multiple isolated state silos should use plain
+# `__state(...)` signals or scope state under different keys on the single
+# `app.data` stash. This matches our launch() contract (one app, one
+# stash, one renderer) and keeps the persistence story simple.
+#
+# Returns a disposer that unsubscribes the autosave effect, removes the
+# beforeunload handler, and writes one final snapshot before unwiring.
 export persistStash = (app, opts = {}) ->
+  assertBrowser 'persistStash'
   target = raw(app) or app
-  return if target[:persisted]
+  return -> null if target[:persisted]    # double-call guard returns a no-op disposer
   target[:persisted] = true
   storage = if opts.local then localStorage else sessionStorage
   storageKey = opts.key or '__rip_app'
@@ -275,11 +319,19 @@ export persistStash = (app, opts = {}) ->
   _save = ->
     try storage.setItem storageKey, JSON.stringify(raw(app.data))
     catch then null
-  __effect ->
+  effectDisposer = __effect ->
     _writeVersion.value
     t = setTimeout _save, 2000
     -> clearTimeout t
   window.addEventListener 'beforeunload', _save
+  disposed = false
+  ->
+    return if disposed
+    disposed = true
+    effectDisposer?()
+    window.removeEventListener 'beforeunload', _save
+    _save()                               # final flush so a programmatic teardown matches a real unload
+    target[:persisted] = false
 
 # ==============================================================================
 # Resource — async data loading with reactive loading/error/data states
@@ -290,32 +342,63 @@ export persistStash = (app, opts = {}) ->
 # ==============================================================================
 
 export createResource = (fn, opts = {}) ->
-  _data    = __state(opts.initial or null)
-  _loading = __state(false)
-  _error   = __state(null)
+  # `?? null` instead of `or null` so falsy initials like 0, '', false
+  # survive (the previous `or` collapsed them to null).
+  _data       = __state(opts.initial ?? null)
+  _loading    = __state(false)
+  _error      = __state(null)
+  generation  = 0       # increments on each load — old responses ignore writes
+  controller  = null    # AbortController for the in-flight fetch (if any)
 
   load = ->
+    # Cancel the previous in-flight fetch (if any) and start a new one.
+    # Without this, a fast refetch followed by a slow one finishing later
+    # would overwrite fresh data with stale data.
+    controller?.abort()
+    controller = if typeof AbortController isnt 'undefined' then new AbortController() else null
+    me = ++generation
     _loading.value = true
     _error.value = null
     try
-      result = await fn()
+      result = await fn(controller?.signal)
+      return if me isnt generation     # superseded — don't write
       _data.value = result
+      result
     catch err
+      return if me isnt generation
+      return if err?.name is 'AbortError'  # silent on abort
       _error.value = err
+      throw err                            # rethrow so refetch() callers can await + catch
     finally
-      _loading.value = false
+      _loading.value = false if me is generation
+
+  dispose = ->
+    # Bumping generation makes any in-flight call's me-check fail in its
+    # finally clause, which means the in-flight call's `_loading.value =
+    # false` is skipped — `loading` would be stuck at true. Clear loading
+    # (and any pending error) here so dispose() leaves the resource in
+    # a clean idle state regardless of timing.
+    generation++
+    controller?.abort()
+    controller = null
+    _loading.value = false
+    _error.value = null
 
   resource =
     data:    undefined
     loading: undefined
     error:   undefined
     refetch: load
+    dispose: dispose
 
-  Object.defineProperty resource, 'data', get: -> _data.value
+  Object.defineProperty resource, 'data',    get: -> _data.value
   Object.defineProperty resource, 'loading', get: -> _loading.value
-  Object.defineProperty resource, 'error', get: -> _error.value
+  Object.defineProperty resource, 'error',   get: -> _error.value
 
-  load() unless opts.lazy
+  # Eager auto-load. Errors land in resource.error via the throw above;
+  # we catch the rejected promise here so it doesn't surface as an
+  # unhandled rejection (the refetch() caller would still get the throw).
+  load().catch(-> null) unless opts.lazy
   resource
 
 # ==============================================================================
@@ -329,12 +412,31 @@ export createResource = (fn, opts = {}) ->
 _toFn = (source) ->
   if typeof source is 'function' then source else -> source.value
 
-_proxy = (out, source) ->
+# Wrap a state signal (`out`) so consumers see one of two return shapes:
+#
+#   - delay(ms, signal)  → proxy with `.value`, `.read()`, `.dispose()`
+#   - delay(ms, fn)      → out itself, augmented with `.dispose()`
+#
+# `dispose` tears down the underlying effect, which clears any pending
+# setTimeout (the effect's cleanup function does the clearTimeout). This is
+# the escape hatch for app-level lifecycle code (launch().destroy()) that
+# needs to halt all reactive timers when the app shuts down.
+#
+# Note: __effect returns a disposer function (not an effect object), so
+# `disposer` here is callable directly.
+_attachDispose = (target, disposer) ->
+  Object.defineProperty target, 'dispose',
+    value: -> disposer?()
+    configurable: true
+    writable: true
+  target
+
+_proxy = (out, source, disposer) ->
   obj = read: -> out.read()
   Object.defineProperty obj, 'value',
     get: -> out.value
     set: (v) -> source.value = v
-  obj
+  _attachDispose obj, disposer
 
 # delay(ms, source) — truthy waits ms, falsy immediate
 # Usage: showLoading := delay 200 -> loading
@@ -342,24 +444,24 @@ _proxy = (out, source) ->
 export delay = (ms, source) ->
   fn = _toFn(source)
   out = __state(!!fn())
-  __effect ->
+  eff = __effect ->
     if fn()
       t = setTimeout (-> out.value = true), ms
       -> clearTimeout t
     else
       out.value = false
-  if typeof source isnt 'function' then _proxy(out, source) else out
+  if typeof source isnt 'function' then _proxy(out, source, eff) else _attachDispose(out, eff)
 
 # debounce(ms, source) — waits ms after last change, then propagates
 # Usage: debouncedQuery := debounce 300 -> query
 export debounce = (ms, source) ->
   fn = _toFn(source)
   out = __state(fn())
-  __effect ->
+  eff = __effect ->
     val = fn()
     t = setTimeout (-> out.value = val), ms
     -> clearTimeout t
-  if typeof source isnt 'function' then _proxy(out, source) else out
+  if typeof source isnt 'function' then _proxy(out, source, eff) else _attachDispose(out, eff)
 
 # throttle(ms, source) — propagates at most once per ms
 # Usage: smoothScroll := throttle 100 -> scrollY
@@ -367,7 +469,7 @@ export throttle = (ms, source) ->
   fn = _toFn(source)
   out = __state(fn())
   last = 0
-  __effect ->
+  eff = __effect ->
     val = fn()
     now = Date.now()
     remaining = ms - (now - last)
@@ -380,20 +482,20 @@ export throttle = (ms, source) ->
         last = Date.now()
       ), remaining
       -> clearTimeout t
-  if typeof source isnt 'function' then _proxy(out, source) else out
+  if typeof source isnt 'function' then _proxy(out, source, eff) else _attachDispose(out, eff)
 
 # hold(ms, source) — once truthy, stays true for at least ms
 # Usage: showSaved := hold 2000 -> saved
 export hold = (ms, source) ->
   fn = _toFn(source)
   out = __state(!!fn())
-  __effect ->
+  eff = __effect ->
     if fn()
       out.value = true
     else
       t = setTimeout (-> out.value = false), ms
       -> clearTimeout t
-  if typeof source isnt 'function' then _proxy(out, source) else out
+  if typeof source isnt 'function' then _proxy(out, source, eff) else _attachDispose(out, eff)
 
 # ==============================================================================
 # Components — in-memory file store with watchers
@@ -405,12 +507,15 @@ export hold = (ms, source) ->
 
 export createComponents = ->
   files = new Map()
-  watchers = []
+  watchers = new Set()       # Set, not Array — idempotent disposers, no -1 splice
   compiled = new Map()
 
   notify = (event, path) ->
-    for watcher in watchers
-      watcher(event, path)
+    # Snapshot so a watcher mutating the set during iteration doesn't skip
+    # other watchers.
+    for watcher in Array.from(watchers)
+      try watcher(event, path)
+      catch e then console.error '[Rip] watcher error:', e
 
   read:    (path) -> files.get(path)
   write:   (path, content) ->
@@ -444,13 +549,27 @@ export createComponents = ->
       result.push path if path.startsWith(prefix)
     result
 
+  # load(obj) now invalidates the compiled cache for every path it
+  # writes (previously only `write` did this). A subsequent recompile
+  # has to happen anyway since the source may have changed; without
+  # cache invalidation, stale modules from a prior compile would be
+  # served indefinitely.
   load: (obj) ->
     for key, content of obj
       files.set(key, content)
+      compiled.delete(key)
 
+  # watch returns an idempotent disposer — calling it twice is a no-op
+  # rather than removing an unrelated watcher (the previous Array+
+  # indexOf+splice pattern would splice(-1, 1) on the second call,
+  # silently dropping the last-registered watcher).
   watch: (fn) ->
-    watchers.push fn
-    -> watchers.splice(watchers.indexOf(fn), 1)
+    watchers.add fn
+    disposed = false
+    ->
+      return if disposed
+      disposed = true
+      watchers.delete fn
 
   getCompiled: (path) -> compiled.get(path)
   setCompiled: (path, result) -> compiled.set(path, result)
@@ -478,8 +597,15 @@ fileToPattern = (rel) ->
 
 patternToRegex = (pattern) ->
   names = []
-  str = pattern
-    .replace /\*(\w+)/g, (_, name) -> names.push(name); '(.+)'
+  # Escape regex metacharacters in the literal portions of the pattern so
+  # a filename like `foo.bar.rip` becomes `^/foo\.bar$` (literal dot)
+  # instead of `^/foo.bar$` (any char). The escape character class
+  # deliberately omits `*` and `:` so the substitutions below can match
+  # them as raw tokens — `*name` is the catch-all marker (from
+  # `[...rest]`) and `:name` is the dynamic-segment marker (from `[name]`).
+  escaped = pattern.replace /[.+?^${}()|[\]\\]/g, '\\$&'
+  str = escaped
+    .replace /\*(\w+)/g, (_, name) -> names.push(name); '(.*)'  # `(.*)` so a root catch-all `[...rest]` matches `/`
     .replace /:(\w+)/g, (_, name) -> names.push(name); '([^/]+)'
   { regex: new RegExp('^' + str + '$'), names }
 
@@ -544,13 +670,20 @@ getLayoutChain = (routeFile, root, layouts) ->
   chain
 
 export createRouter = (components, opts = {}) ->
+  assertBrowser 'createRouter'
   root = opts.root or 'components'
   base = opts.base or ''
   hashMode = opts.hash or false
   onError = opts.onError or null
 
+  # Boundary-aware stripping: with base = '/app', strip '/app' and '/app/...'
+  # but leave '/apple' alone. The previous startsWith check turned '/apple'
+  # into '/le'.
   stripBase = (url) ->
-    if base and url.startsWith(base) then url.slice(base.length) or '/' else url
+    return url unless base
+    return '/' if url is base
+    return url.slice(base.length) if url.startsWith(base + '/')
+    url
 
   addBase = (path) ->
     if base then base + path else path
@@ -569,18 +702,22 @@ export createRouter = (components, opts = {}) ->
     else
       addBase(path)
 
-  _path       = __state(stripBase(if hashMode then readUrl() else location.pathname))
-  _params     = __state({})
-  _route      = __state(null)
-  _layouts    = __state([])
-  _query      = __state({})
-  _hash       = __state('')
-  _navigating = delay 100, __state(false)
+  _path          = __state(stripBase(if hashMode then readUrl() else location.pathname))
+  _params        = __state({})
+  _route         = __state(null)
+  _layouts       = __state([])
+  _query         = __state({})
+  _hash          = __state('')
+  _navigating    = delay 100, __state(false)
+  # Full base-relative URL (path + query + hash). Captured at resolve()
+  # time so push/replace can write the canonical destination back to
+  # history without losing the query/hash that resolve() parsed.
+  _normalizedUrl = __state(_path.value)
 
   tree = buildRoutes(components, root)
   navCallbacks = new Set()
 
-  components.watch (event, path) ->
+  unwatchComponents = components.watch (event, path) ->
     return unless path.startsWith(root + '/')
     tree = buildRoutes(components, root)
 
@@ -593,6 +730,9 @@ export createRouter = (components, opts = {}) ->
 
     result = matchRoute(path, tree.routes)
     if result
+      full = path
+      full += "?#{queryStr}" if queryStr
+      full += "##{hash}"     if hash
       __batch ->
         _path.value = path
         _params.value = result.params
@@ -600,6 +740,7 @@ export createRouter = (components, opts = {}) ->
         _layouts.value = getLayoutChain(result.route.file, root, tree.layouts)
         _query.value = Object.fromEntries(new URLSearchParams(queryStr))
         _hash.value = hash
+        _normalizedUrl.value = full
       cb(router.current) for cb in navCallbacks
       return true
 
@@ -626,11 +767,11 @@ export createRouter = (components, opts = {}) ->
   router =
     push: (url) ->
       if resolve(url)
-        history.pushState null, '', writeUrl(_path.read())
+        history.pushState null, '', writeUrl(_normalizedUrl.read())
 
     replace: (url) ->
       if resolve(url)
-        history.replaceState null, '', writeUrl(_path.read())
+        history.replaceState null, '', writeUrl(_normalizedUrl.read())
 
     back: -> history.back()
     forward: -> history.forward()
@@ -659,17 +800,29 @@ export createRouter = (components, opts = {}) ->
     destroy: ->
       window.removeEventListener 'popstate', onPopState if typeof window isnt 'undefined'
       document.removeEventListener 'click', onClick if typeof document isnt 'undefined'
+      unwatchComponents?()
+      unwatchComponents = null
+      # `_navigating` is a delay()-wrapped signal whose internal effect
+      # owns a setTimeout. dispose() drops the effect (clearing any
+      # pending timeout); without this, a router teardown mid-navigation
+      # leaves the timer dangling.
+      _navigating?.dispose?()
       navCallbacks.clear()
 
-  Object.defineProperty router, 'current', get: ->
+  # router.current as a single __computed signal, not 6 individual
+  # `.value` reads. Subscribers (e.g. the renderer's mount effect) track
+  # ONE dependency instead of six, and the computed re-runs only when an
+  # underlying signal actually changed.
+  _current = __computed ->
     { path: _path.value, params: _params.value, route: _route.value, layouts: _layouts.value, query: _query.value, hash: _hash.value }
 
-  Object.defineProperty router, 'path', get: -> _path.value
-  Object.defineProperty router, 'params', get: -> _params.value
-  Object.defineProperty router, 'route', get: -> _route.value
-  Object.defineProperty router, 'layouts', get: -> _layouts.value
-  Object.defineProperty router, 'query', get: -> _query.value
-  Object.defineProperty router, 'hash', get: -> _hash.value
+  Object.defineProperty router, 'current',    get: -> _current.value
+  Object.defineProperty router, 'path',       get: -> _path.value
+  Object.defineProperty router, 'params',     get: -> _params.value
+  Object.defineProperty router, 'route',      get: -> _route.value
+  Object.defineProperty router, 'layouts',    get: -> _layouts.value
+  Object.defineProperty router, 'query',      get: -> _query.value
+  Object.defineProperty router, 'hash',       get: -> _hash.value
   Object.defineProperty router, 'navigating',
     get: -> _navigating.value
     set: (v) -> _navigating.value = v
@@ -694,6 +847,12 @@ arraysEqual = (a, b) ->
   true
 
 findComponent = (mod) ->
+  # Prefer the default export when it's a component class. Object iteration
+  # is alphabetical, so a file with `export default Page` AND
+  # `export Helper = component` would otherwise resolve to Helper (H < P)
+  # — masking the intended top-level export.
+  if typeof mod.default is 'function' and (mod.default.prototype?.mount or mod.default.prototype?._create)
+    return mod.default
   for key, val of mod
     return val if typeof val is 'function' and (val.prototype?.mount or val.prototype?._create)
   mod.default if typeof mod.default is 'function'
@@ -747,6 +906,43 @@ resolveStorePath = (specifier, currentPath, components) ->
   return "components/#{clean}" if components.exists("components/#{clean}")
   null
 
+# Extract the local bindings introduced by an ES-module import clause —
+# i.e. the identifiers that appear between `import` and `from`. Handles:
+#
+#   `Default`                  → ['Default']
+#   `* as Foo`                 → ['Foo']
+#   `{ a, b as c }`            → ['a', 'c']
+#   `Default, { a, b as c }`   → ['Default', 'a', 'c']
+#   `Default, * as Foo`        → ['Default', 'Foo'] (rare but legal)
+#
+# The implicit-component preamble below uses this list to know which names
+# are already in scope from explicit imports, so it doesn't redeclare them
+# (which would be a SyntaxError under the const-decl preamble).
+extractImportedNames = (clause) ->
+  return [] unless clause
+  rest = clause.trim()
+  return [] unless rest
+  names = []
+  # Pull off the named-imports brace if present (always at the end of the clause).
+  braceIdx = rest.indexOf('{')
+  if braceIdx >= 0
+    closing = rest.lastIndexOf('}')
+    return names if closing < 0
+    inside = rest.slice(braceIdx + 1, closing)
+    for n in inside.split(',')
+      t = n.trim()
+      continue unless t
+      names.push t.split(/\s+as\s+/).pop().trim()
+    rest = rest.slice(0, braceIdx).replace(/,\s*$/, '').trim()
+  for part in rest.split(',')
+    p = part.trim()
+    continue unless p
+    if /^\*\s+as\s+/.test(p)
+      names.push p.replace(/^\*\s+as\s+/, '').trim()
+    else
+      names.push p
+  names
+
 compileAndImport = (source, compile, components = null, path = null, resolver = null) ->
   # Check compilation cache
   if components and path
@@ -758,101 +954,139 @@ compileAndImport = (source, compile, components = null, path = null, resolver = 
     resolver.compiling ?= {}
     resolver.compiling[path] = true
 
-  # Browser-debugger support — when enabled, compile with an inline source
-  # map keyed to the component's logical path. We still need to compensate
-  # for line shifts introduced by the header + preamble we prepend below;
-  # `prefixLines` tracks that and we apply `offsetSourceMap` once at the end.
-  debug = globalThis?.__ripDebug?.enabled and path
-  prefixLines = 0
-  js = if debug
-    compile(source, sourceMap: 'inline', filename: path)
-  else
-    compile(source)
+  try
+    # Browser-debugger support — when enabled, compile with an inline source
+    # map keyed to the component's logical path. We still need to compensate
+    # for line shifts introduced by the header + preamble we prepend below;
+    # `prefixLines` tracks that and we apply `offsetSourceMap` once at the end.
+    debug = globalThis?.__ripDebug?.enabled and path
+    prefixLines = 0
+    js = if debug
+      compile(source, sourceMap: 'inline', filename: path)
+    else
+      compile(source)
 
-  if resolver
-    importedNames = new Set()
+    if resolver
+      importedNames = new Set()
 
-    # Step 1: Rewrite .rip imports to blob URLs
-    if components
-      ripImportRe = /^(\s*import\s+(?:\{([^}]+)\}\s+from\s+|.*?\s+from\s+)?['"])([^'"]*\.rip)(['"];?\s*)$/gm
-      matches = Array.from(js.matchAll(ripImportRe))
-      # Walk matches in reverse so string indices stay valid after each splice
-      for m in matches by -1
-        [full, pre, namedImports, specifier, post] = m
-        storePath = resolveStorePath(specifier, path, components)
-        continue if storePath is path
-        unless storePath
-          msg = "[Rip] Could not resolve import: #{specifier}"
-          msg += " (from #{path})" if path
-          console.warn msg
-          continue
-        # Guard against circular imports — skip if already being compiled
-        unless resolver.blobUrls?[storePath]
-          continue if resolver.compiling?[storePath]
-          depSource = components.read(storePath)
-          if depSource
-            compileAndImport! depSource, compile, components, storePath, resolver
-        blobUrl = resolver.blobUrls?[storePath]
-        if blobUrl
-          replacement = "#{pre}#{blobUrl}#{post}"
-          js = js.slice(0, m.index) + replacement + js.slice(m.index + full.length)
-          if namedImports
-            for n in namedImports.split(',')
-              importedNames.add(n.trim().split(/\s+as\s+/).pop().trim())
+      # Step 1: Rewrite .rip imports to blob URLs
+      if components
+        # Single regex covering all import shapes: side-effect, default,
+        # namespace, named, default+named. Group 2 is the binding clause
+        # (anything between `import` and `from`); undefined for side-effect.
+        ripImportRe = /^(\s*import\s+(?:(.*?)\s+from\s+)?['"])([^'"]*\.rip)(['"];?\s*)$/gm
+        matches = Array.from(js.matchAll(ripImportRe))
+        # Walk matches in reverse so string indices stay valid after each splice
+        for m in matches by -1
+          [full, pre, bindingClause, specifier, post] = m
+          storePath = resolveStorePath(specifier, path, components)
+          continue if storePath is path
+          unless storePath
+            msg = "[Rip] Could not resolve import: #{specifier}"
+            msg += " (from #{path})" if path
+            console.warn msg
+            continue
+          # Guard against circular imports — skip if already being compiled
+          unless resolver.blobUrls?[storePath]
+            continue if resolver.compiling?[storePath]
+            depSource = components.read(storePath)
+            if depSource
+              compileAndImport! depSource, compile, components, storePath, resolver
+          blobUrl = resolver.blobUrls?[storePath]
+          if blobUrl
+            replacement = "#{pre}#{blobUrl}#{post}"
+            js = js.slice(0, m.index) + replacement + js.slice(m.index + full.length)
+            importedNames.add(n) for n in extractImportedNames(bindingClause)
 
-    # Step 2: Implicit component resolution — for template-used components not explicitly imported
-    needed = {}
-    for name, depPath of resolver.map
-      continue if importedNames.has(name)
-      if depPath isnt path and js.includes("new #{name}(")
-        unless resolver.classes[name]
-          depSource = components.read(depPath)
-          if depSource
-            depMod = compileAndImport! depSource, compile, components, depPath, resolver
-            found = findAllComponents(depMod)
-            resolver.classes[k] = v for k, v of found
-        needed[name] = true if resolver.classes[name]
+      # Sweep all remaining import statements (non-rip) and add their
+      # bindings to importedNames as well. The implicit-component preamble
+      # below would otherwise redeclare names that are already in scope
+      # from a non-rip import (e.g. `import { Card } from 'somewhere'`),
+      # producing a SyntaxError at module-import time.
+      anyImportRe = /^\s*import\s+(?:(.*?)\s+from\s+)?['"][^'"]*['"];?\s*$/gm
+      for m in js.matchAll(anyImportRe)
+        importedNames.add(n) for n in extractImportedNames(m[1])
 
-    # Inject resolved components into scope via preamble
-    names = Object.keys(needed)
-    if names.length > 0
-      preamble = "const {#{names.join(', ')}} = globalThis['#{resolver.key}'];\n"
-      js = preamble + js
-      prefixLines += 1
+      # Step 2: Implicit component resolution — for template-used components not explicitly imported
+      needed = {}
+      for name, depPath of resolver.map
+        continue if importedNames.has(name)
+        if depPath isnt path and js.includes("new #{name}(")
+          unless resolver.classes[name]
+            depSource = components.read(depPath)
+            if depSource
+              depMod = compileAndImport! depSource, compile, components, depPath, resolver
+              found = findAllComponents(depMod)
+              resolver.classes[k] = v for k, v of found
+          needed[name] = true if resolver.classes[name]
 
-  header = if path then "// #{path}\n" else ''
-  prefixLines += 1 if header
-  finalJs = header + js
+      # Inject resolved components into scope via preamble. The key is
+      # JSON.stringify'd so a `resolver.key` containing quotes/backslashes
+      # (in practice it's derived from `opts.base` which is user-controlled)
+      # produces a valid JS string literal rather than malformed code.
+      names = Object.keys(needed)
+      if names.length > 0
+        keyLiteral = JSON.stringify(resolver.key)
+        preamble = "const {#{names.join(', ')}} = globalThis[#{keyLiteral}];\n"
+        js = preamble + js
+        prefixLines += 1
 
-  # Source-map post-processing: prepend N semicolons to map.mappings so
-  # generated lines line up with `header + preamble + js`. The Blob URL
-  # itself becomes the source identity in DevTools, so an explicit
-  # //# sourceURL pragma isn't needed here (only for eval'd code).
-  if debug and prefixLines > 0
-    offset = globalThis?.__ripDebug?.offsetSourceMap
-    finalJs = offset(finalJs, prefixLines) if offset
+    header = if path then "// #{path}\n" else ''
+    prefixLines += 1 if header
+    finalJs = header + js
 
-  blob = new Blob([finalJs], { type: 'application/javascript' })
-  url = URL.createObjectURL(blob)
+    # Source-map post-processing: prepend N semicolons to map.mappings so
+    # generated lines line up with `header + preamble + js`. The Blob URL
+    # itself becomes the source identity in DevTools, so an explicit
+    # //# sourceURL pragma isn't needed here (only for eval'd code).
+    if debug and prefixLines > 0
+      offset = globalThis?.__ripDebug?.offsetSourceMap
+      finalJs = offset(finalJs, prefixLines) if offset
 
-  # Cache blob URL so other files can rewrite imports to point here
-  if resolver and path
-    resolver.blobUrls ?= {}
-    resolver.blobUrls[path] = url
-    delete resolver.compiling[path] if resolver.compiling
+    blob = new Blob([finalJs], { type: 'application/javascript' })
+    url = URL.createObjectURL(blob)
 
-  mod = await import(url)
+    # Cache blob URL so other files can rewrite imports to point here.
+    # If a previous compile registered a different blob URL for this path
+    # (hot-reload scenario), revoke the old one — otherwise it pins the
+    # old module text in memory forever.
+    previousUrl = null
+    if resolver and path
+      resolver.blobUrls ?= {}
+      previousUrl = resolver.blobUrls[path]
+      if previousUrl and previousUrl isnt url
+        try URL.revokeObjectURL(previousUrl)
+        catch then null
+      resolver.blobUrls[path] = url
 
-  # Register any components from this module
-  if resolver
-    found = findAllComponents(mod)
-    resolver.classes[k] = v for k, v of found
+    mod = await import(url)
+    committed = true
 
-  # Store in cache
-  components.setCompiled(path, mod) if components and path
-  mod
+    # Register any components from this module
+    if resolver
+      found = findAllComponents(mod)
+      resolver.classes[k] = v for k, v of found
+
+    # Store in cache
+    components.setCompiled(path, mod) if components and path
+    mod
+  finally
+    # Always clear the in-progress marker, even if compile/import threw —
+    # otherwise the path would stay pinned and re-attempts would fall
+    # through the circular-import guard.
+    if resolver and path
+      delete resolver.compiling[path] if resolver.compiling
+    # Roll back the blob URL we registered if `await import(url)` (or any
+    # later step) threw. Without this, future imports of `path` would
+    # rewrite to a URL whose JS doesn't load, pinning the failure forever.
+    if not committed and url and resolver and path
+      try URL.revokeObjectURL(url)
+      catch then null
+      if resolver.blobUrls?[path] is url
+        delete resolver.blobUrls[path]
 
 export createRenderer = (opts = {}) ->
+  assertBrowser 'createRenderer'
   { router, app, components, resolver, compile, target, onError } = opts
 
   container = if typeof target is 'string'
@@ -868,11 +1102,30 @@ export createRenderer = (opts = {}) ->
   currentComponent = null
   currentRoute = null
   currentParams = null
+  currentQuery = null
   currentLayouts = []
   layoutInstances = []
   mountPoint = container
   generation = 0
   disposeEffect = null
+  unwatchSources = null
+
+  # When a source file changes (hot reload), invalidate the resolver's
+  # cached blob URL and class registry so the next compile picks up the
+  # fresh source. Without this, a hot-reloaded module re-imports its old
+  # blob URL and the old class definition stays pinned in
+  # resolver.classes. Crude-but-correct: drop the entry for the changed
+  # path, plus any classes that came from it (we don't track origin, so
+  # we drop classes whose name maps to the changed path via resolver.map).
+  invalidateResolver = (path) ->
+    return unless resolver
+    if resolver.blobUrls?[path]
+      try URL.revokeObjectURL(resolver.blobUrls[path])
+      catch then null
+      delete resolver.blobUrls[path]
+    if resolver.classes and resolver.map
+      for name, depPath of resolver.map
+        delete resolver.classes[name] if depPath is path
 
   unmountCurrent = ->
     if currentComponent
@@ -890,13 +1143,40 @@ export createRenderer = (opts = {}) ->
       inst._target?.remove()
     layoutInstances = []
     mountPoint = container
+    # Clear param/query/layout memos too. Without this, a stop()+start()
+    # cycle (or a programmatic unmount followed by re-navigation to the
+    # same URL) finds the old memos and the sameRoute / sameKeys check
+    # in mountRoute short-circuits, never actually mounting the page.
+    currentParams = null
+    currentQuery = null
+    currentLayouts = []
 
-  mountRoute = (info) ->
+  sameKeys = (a, b) ->
+    return false unless a and b
+    return false if Object.keys(a).length isnt Object.keys(b).length
+    for k, v of a
+      return false unless b[k] is v
+    true
+
+  mountRoute = (info, force = false) ->
     { route, params, layouts: layoutFiles, query } = info
     return unless route
-    if route.file is currentRoute and JSON.stringify(params) is JSON.stringify(currentParams)
+
+    sameRoute = route.file is currentRoute and sameKeys(params, currentParams)
+
+    # Fast path: same route, same params, query changed — don't rebuild
+    # the component, just notify it via load!(). This matches what users
+    # expect when they navigate `/u/1?tab=a` → `/u/1?tab=b`: the existing
+    # instance reacts to the query change. Without this, the previous
+    # early-return swallowed the change entirely.
+    if sameRoute and not force
+      if not sameKeys(query, currentQuery)
+        currentQuery = query
+        currentComponent.load!(params, query) if currentComponent?.load
       return
+
     currentParams = params
+    currentQuery = query
 
     gen = ++generation
     router.navigating = true
@@ -1000,6 +1280,12 @@ export createRenderer = (opts = {}) ->
       disposeEffect = __effect ->
         current = router.current
         mountRoute(current) if current.route
+      # Hot-reload integration: when a source changes, drop its compiled
+      # blob URL + class registration. The render effect re-runs on the
+      # next route signal change; calling renderer.remount() forces a
+      # remount of the current route immediately.
+      unwatchSources = components?.watch (event, path) ->
+        invalidateResolver(path) if event in ['change', 'delete']
       router.init()
       renderer
 
@@ -1008,11 +1294,26 @@ export createRenderer = (opts = {}) ->
       if disposeEffect
         disposeEffect()
         disposeEffect = null
+      unwatchSources?()
+      unwatchSources = null
+      # Revoke every blob URL we created so the underlying module text
+      # can be reclaimed. Without this, every hot reload leaks one
+      # module's worth of memory per .rip file.
+      if resolver?.blobUrls
+        for own _, url of resolver.blobUrls
+          try URL.revokeObjectURL(url)
+          catch then null
+        resolver.blobUrls = {}
       container.innerHTML = ''
 
-    remount: ->
+    # `remount(true)` (or `remount({ force: true })`) forces a full
+    # unmount + remount even when the route hasn't changed. Used by hot
+    # reload after a source change so the new component class actually
+    # gets instantiated.
+    remount: (force = false) ->
+      forceFlag = if typeof force is 'object' then !!force.force else !!force
       current = router.current
-      mountRoute(current) if current.route
+      mountRoute(current, forceFlag) if current.route
 
   renderer
 
@@ -1021,10 +1322,15 @@ export createRenderer = (opts = {}) ->
 # ==============================================================================
 
 connectWatch = (url) ->
+  assertBrowser 'connectWatch'
   retryDelay = 1000
   maxDelay = 30000
+  closed = false
+  es = null
+  retryTimer = null
 
   connect = ->
+    return if closed
     es = new EventSource(url)
 
     es.addEventListener 'connected', ->
@@ -1037,16 +1343,27 @@ connectWatch = (url) ->
 
     es.addEventListener 'css', ->
       for link as document.querySelectorAll('link[rel="stylesheet"]')
-        url = new URL(link.href)
-        url.searchParams.set('_t', Date.now())
-        link.href = url.toString()
+        cssUrl = new URL(link.href)
+        cssUrl.searchParams.set('_t', Date.now())
+        link.href = cssUrl.toString()
 
     es.onerror = ->
       es.close()
-      setTimeout connect, retryDelay
+      es = null
+      return if closed
+      retryTimer = setTimeout connect, retryDelay
       retryDelay = Math.min(retryDelay * 2, maxDelay)
 
   connect()
+
+  ->
+    return if closed
+    closed = true
+    if retryTimer
+      clearTimeout retryTimer
+      retryTimer = null
+    es?.close()
+    es = null
 
 # ==============================================================================
 # Launch — fetch bundle, create stash, wire router + renderer, start app
@@ -1060,12 +1377,9 @@ connectWatch = (url) ->
 # connects SSE hot-reload.
 # ==============================================================================
 
-export launch = (appBase = '', opts = {}) ->
-  globalThis.__ripLaunched = true
-  if typeof appBase is 'object'
-    opts = appBase
-    appBase = ''
-  appBase = appBase.replace(/\/+$/, '')  # strip trailing slashes
+export launch = (opts = {}) ->
+  assertBrowser 'launch'
+  appBase = (opts.base or '').replace(/\/+$/, '')   # strip trailing slashes
   target = opts.target or '#app'
   compile = opts.compile or null
   persist = opts.persist or false
@@ -1076,7 +1390,7 @@ export launch = (appBase = '', opts = {}) ->
     compile = globalThis?.compileToJS or null
 
   # Auto-create target element
-  if typeof document isnt 'undefined' and not document.querySelector(target)
+  unless document.querySelector(target)
     el = document.createElement('div')
     el.id = target.replace(/^#/, '')
     document.body.prepend el
@@ -1114,7 +1428,7 @@ export launch = (appBase = '', opts = {}) ->
   # Build component resolver — name-to-path map + app-scoped class registry
   classesKey = "__rip_#{appBase.replace(/\//g, '_') or 'app'}"
   resolver = { map: buildComponentMap(appComponents), classes: {}, key: classesKey }
-  globalThis[classesKey] = resolver.classes if typeof globalThis isnt 'undefined'
+  globalThis[classesKey] = resolver.classes
 
   # Auto-load app/stash.rip if present — provides defaults + methods that
   # survive the server-side JSON.stringify boundary that bundle.data goes
@@ -1142,11 +1456,12 @@ export launch = (appBase = '', opts = {}) ->
     app.routes = bundle.routes
 
   # Restore persisted state (overrides bundle defaults with saved user state)
-  if persist and typeof sessionStorage isnt 'undefined'
-    persistStash app, local: persist is 'local', key: "__rip_#{appBase}"
+  persistDisposer = null
+  if persist
+    persistDisposer = persistStash app, local: persist is 'local', key: "__rip_#{appBase}"
 
   # Set document title
-  document.title = app.data.title if app.data.title and typeof document isnt 'undefined'
+  document.title = app.data.title if app.data.title
 
   # Create router
   router = createRouter appComponents,
@@ -1169,21 +1484,43 @@ export launch = (appBase = '', opts = {}) ->
   renderer.start()
 
   # Connect SSE watch if enabled
+  watchDisposer = null
   if bundle.data?.watch
-    connectWatch "#{appBase}/watch"
+    watchDisposer = connectWatch "#{appBase}/watch"
+
+  destroyed = false
+  destroy = ->
+    return if destroyed
+    destroyed = true
+    watchDisposer?()
+    renderer.stop()
+    router.destroy()
+    persistDisposer?()
+    delete globalThis[classesKey]
+    delete globalThis.__ripApp
+    delete globalThis.__ripLaunched
+    if window.app is app
+      delete window.app
+    if window.__RIP__?.app is app
+      delete window.__RIP__
 
   # Expose for console and dev tools
-  if typeof window isnt 'undefined'
-    window.app = app
-    window.__RIP__ =
-      app: app
-      components: appComponents
-      router: router
-      renderer: renderer
-      resolver: resolver
-      version: '0.3.0'
+  window.app = app
+  window.__RIP__ =
+    app: app
+    components: appComponents
+    router: router
+    renderer: renderer
+    resolver: resolver
+    destroy: destroy
+    version: '0.3.0'
 
-  { app, components: appComponents, router, renderer }
+  # Set the launched flag last so a launch that throws partway through
+  # (bundle fetch, compile, router init, etc.) doesn't leave a stale
+  # `__ripLaunched = true` blocking later relaunches.
+  globalThis.__ripLaunched = true
+
+  { app, components: appComponents, router, renderer, destroy }
 
 # ==============================================================================
 # ARIA — keyboard navigation and popup lifecycle utilities for UI components
@@ -1478,9 +1815,18 @@ _ariaUnlockScroll = (instance) ->
     document.body.style.width = ''
     window.scrollTo 0, scrollY
 
-_ariaHasAnchor = do ->
+# hasAnchor — feature-detect CSS anchor positioning support.
+# Lazy + body-aware. Probing requires `document.body` to actually exist;
+# a call before <body> is parsed must NOT memoize a `false` answer, or a
+# later call (after body exists) on a browser that DOES support anchor
+# positioning would still return the cached false. So we only flip
+# `_ariaAnchorChecked = true` after we've successfully run a real probe.
+_ariaAnchorChecked = false
+_ariaAnchorSupported = false
+_ariaHasAnchor = ->
+  return _ariaAnchorSupported if _ariaAnchorChecked
+  return false unless typeof document isnt 'undefined' and document.body
   try
-    return false unless document?.createElement
     anchor = document.createElement('div')
     floating = document.createElement('div')
     anchor.style.cssText = 'position:fixed;top:100px;left:100px;width:10px;height:10px;anchor-name:--probe'
@@ -1490,16 +1836,32 @@ _ariaHasAnchor = do ->
     rect = floating.getBoundingClientRect()
     anchor.remove()
     floating.remove()
-    rect.top > 50
+    _ariaAnchorSupported = rect.top > 50
+    _ariaAnchorChecked = true
+    _ariaAnchorSupported
   catch
-    false
+    _ariaAnchorChecked = true     # genuine probe failure — memoize as unsupported
+    _ariaAnchorSupported = false
+
+# Style properties owned by `_ariaPosition` — cleared on every call so a
+# previous placement (e.g. `bottom center` setting `transform`) doesn't bleed
+# through when we switch placement (e.g. to `bottom start`).
+_ARIA_POSITION_OWNED = ['position', 'inset', 'top', 'right', 'bottom', 'left',
+  'margin', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft',
+  'transform', 'minWidth',
+  'positionAnchor', 'positionArea', 'positionTry', 'positionVisibility']
+
+_ariaResetPositionStyles = (el) ->
+  for prop in _ARIA_POSITION_OWNED
+    el.style[prop] = ''
 
 _ariaPosition = (trigger, floating, opts = {}) ->
   return unless trigger and floating
   placement = opts.placement ?? 'bottom start'
   offset = opts.offset ?? 4
   matchWidth = opts.matchWidth ?? false
-  if _ariaHasAnchor
+  _ariaResetPositionStyles(floating)
+  if _ariaHasAnchor()
     name = "--anchor-#{floating.id or Math.random().toString(36).slice(2, 8)}"
     trigger.style.anchorName = name
     floating.style.positionAnchor = name
@@ -1510,10 +1872,6 @@ _ariaPosition = (trigger, floating, opts = {}) ->
     floating.style.positionTry = 'flip-block, flip-inline, flip-block flip-inline'
     floating.style.positionVisibility = 'anchors-visible'
     [side] = placement.split(' ')
-    floating.style.marginTop = ''
-    floating.style.marginBottom = ''
-    floating.style.marginLeft = ''
-    floating.style.marginRight = ''
     switch side
       when 'bottom' then floating.style.marginTop = "#{offset}px"
       when 'top' then floating.style.marginBottom = "#{offset}px"
@@ -1556,3 +1914,4 @@ globalThis.__aria ??= {
   position: _ariaPosition, hasAnchor: _ariaHasAnchor,
 }
 globalThis.ARIA ??= globalThis.__aria
+

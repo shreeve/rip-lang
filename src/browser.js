@@ -221,7 +221,7 @@ async function processRipScripts() {
         const persistAttr = runtimeTag.getAttribute('data-persist');
         const launchOpts = { bundle: lastBundle, hash: hashRouter };
         if (persistAttr != null) launchOpts.persist = persistAttr === 'local' ? 'local' : true;
-        await app.launch('', launchOpts);
+        await app.launch(launchOpts);
       }
     } else {
       // No routing — expand bundles into individual sources, compile everything
