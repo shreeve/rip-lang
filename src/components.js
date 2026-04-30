@@ -890,11 +890,16 @@ export function installComponentSupport(CodeEmitter, Lexer) {
         const isAsync = this.containsAwait(effectBody) ? 'async ' : '';
         if (this.is(effectBody, 'block')) {
           const transformed = this.transformComponentMembers(effectBody);
-          const body = this.emitFunctionBody(transformed, [], true);
+          // sideEffectOnly: false so the body's last expression is
+          // returned. The reactive runtime treats a returned function as
+          // the effect's cleanup — that's how '~> ARIA.bindPopover ...'
+          // gets its disposer registered. Disposer is also auto-tracked
+          // via __getCurrentComponent for unmount cleanup.
+          const body = this.emitFunctionBody(transformed);
           sl.push(`    __effect(${isAsync}() => ${body});`);
         } else {
           const effectCode = this.emitInComponent(effectBody, 'value');
-          sl.push(`    __effect(${isAsync}() => { ${effectCode}; });`);
+          sl.push(`    __effect(${isAsync}() => { return ${effectCode}; });`);
         }
       }
       sl.push('  }');
@@ -1382,17 +1387,17 @@ export function installComponentSupport(CodeEmitter, Lexer) {
       lines.push(`    setContext('${name}', this.${name});`);
     }
 
-    // Effects
+    // Effects (see comment on the parallel block above)
     for (const effect of effects) {
       const effectBody = effect[2];
       const isAsync = this.containsAwait(effectBody) ? 'async ' : '';
       if (this.is(effectBody, 'block')) {
         const transformed = this.transformComponentMembers(effectBody);
-        const body = this.emitFunctionBody(transformed, [], true);
+        const body = this.emitFunctionBody(transformed);
         lines.push(`    __effect(${isAsync}() => ${body});`);
       } else {
         const effectCode = this.emitInComponent(effectBody, 'value');
-        lines.push(`    __effect(${isAsync}() => { ${effectCode}; });`);
+        lines.push(`    __effect(${isAsync}() => { return ${effectCode}; });`);
       }
     }
 
@@ -2713,6 +2718,13 @@ function __popComponent(prev) {
   __currentComponent = prev;
 }
 
+// Bridge for the reactive runtime in compiler.js. __effect calls this to
+// auto-register its disposer with the component currently being
+// constructed/mounted, so the disposer fires on component unmount.
+function __getCurrentComponent() {
+  return __currentComponent;
+}
+
 function setContext(key, value) {
   if (!__currentComponent) throw new Error('setContext must be called during component initialization');
   if (!__currentComponent._context) __currentComponent._context = new Map();
@@ -2940,6 +2952,13 @@ class __Component {
   mount(target) {
     if (typeof target === "string") target = document.querySelector(target);
     this._target = target;
+    // _create / _setup are wrapped with __pushComponent so any __effect
+    // created inside (reactive attribute bindings, reactive text nodes,
+    // child components, user '~>' effects) auto-registers its disposer
+    // with this component via __getCurrentComponent in the runtime.
+    // Without this wrapping, effects created here lived forever and
+    // their cleanup functions never fired on unmount.
+    const prev = __pushComponent(this);
     try {
       this._root = this._create();
       if (this._root) target.appendChild(this._root);
@@ -2947,17 +2966,44 @@ class __Component {
       if (this.mounted) this.mounted();
     } catch (error) {
       __handleComponentError(error, this);
+    } finally {
+      __popComponent(prev);
     }
     return this;
   }
-  unmount() {
+  unmount({ removeDOM = true } = {}) {
+    // Symmetric to mount: tear down lifecycle hooks, all auto-registered
+    // effect disposers, child components, and (optionally) the DOM.
+    //
+    //   beforeUnmount  - user hook; runs while signals/effects are still
+    //                    live, so user code can read final state.
+    //   children       - cascade BEFORE this instance's disposers so
+    //                    children can react to parent state during their
+    //                    own teardown.
+    //   _disposers     - effect disposers auto-registered by __effect
+    //                    (cleared eagerly so a re-mount starts fresh).
+    //   unmounted      - user hook; final notification.
+    //   DOM removal    - skipped when caller wants to keep the old DOM
+    //                    visible until replacement (route transitions).
+    try {
+      if (this.beforeUnmount) this.beforeUnmount();
+    } catch (e) { console.error('[Rip] beforeUnmount error:', e); }
     if (this._children) {
       for (const child of this._children) {
-        child.unmount();
+        try { child.unmount({ removeDOM }); }
+        catch (e) { console.error('[Rip] child unmount error:', e); }
       }
     }
-    if (this.unmounted) this.unmounted();
-    if (this._root && this._root.parentNode) {
+    if (this._disposers) {
+      for (const d of this._disposers) {
+        try { d(); } catch (e) { console.error('[Rip] effect disposer error:', e); }
+      }
+      this._disposers = [];
+    }
+    try {
+      if (this.unmounted) this.unmounted();
+    } catch (e) { console.error('[Rip] unmounted error:', e); }
+    if (removeDOM && this._root && this._root.parentNode) {
       this._root.parentNode.removeChild(this._root);
     }
   }
@@ -2973,7 +3019,7 @@ class __Component {
 
 // Register on globalThis for runtime deduplication
 if (typeof globalThis !== 'undefined') {
-  globalThis.__ripComponent = { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __transition, __handleComponentError, __Component };
+  globalThis.__ripComponent = { __pushComponent, __popComponent, __getCurrentComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __transition, __handleComponentError, __Component };
 }
 
 `;

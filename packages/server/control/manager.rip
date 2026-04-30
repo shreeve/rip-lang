@@ -175,7 +175,8 @@ export class Manager
       # this is preventive maintenance, not a failure.
       if @recyclingIds.has(w.id)
         @recyclingIds.delete(w.id)
-        logEvent('worker_recycle', { workerId: w.id, appId: w.appId, slot: slotIdx })
+        # Recycle is normal preventive maintenance — uncomment to debug.
+        # logEvent('worker_recycle', { workerId: w.id, appId: w.appId, slot: slotIdx })
         workers[slotIdx] = @spawnWorker(w.appId, @currentVersion) if slotIdx < workers.length
         return
 

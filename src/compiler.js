@@ -3716,7 +3716,19 @@ function __effect(fn) {
   };
 
   effect.run();
-  return () => effect.dispose();
+  const dispose = () => effect.dispose();
+  // Auto-register with the current component (if any) so disposers fire
+  // on component unmount. Without this, every __effect created inside a
+  // component's _init / _setup / _create lived forever — its callback
+  // stayed subscribed to its signals, the closure pinned the component,
+  // and any DOM/event-listener cleanup the effect had returned never
+  // fired. The bridge is intentionally cross-module: the reactive
+  // runtime (this file) doesn't depend on components.js, but components.js
+  // exposes a getter on globalThis.__ripComponent at registration time
+  // and we read it lazily so module-load order is irrelevant.
+  const cur = globalThis.__ripComponent?.__getCurrentComponent?.();
+  if (cur) (cur._disposers ??= []).push(dispose);
+  return dispose;
 }
 
 function __batch(fn) {

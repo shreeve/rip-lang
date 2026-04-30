@@ -153,8 +153,14 @@ export MultiSelect = component
     if @_list
       @_list.setAttribute 'popover', 'manual'
       @_applyPlacement()
-    ARIA.bindPopover open, (=> @_list), ((isOpen) => open = isOpen), (=> @_input)
-    ARIA.popupDismiss open, (=> @_list), (=> @_close(false, true)), [=> @_input, => @_content]
+    # ARIA.combine: both helpers register listeners that need cleanup.
+    # Without combine, only the LAST expression's value is taken as the
+    # effect's cleanup, so the bindPopover `toggle` listener leaked on
+    # every effect re-run.
+    ARIA.combine(
+      ARIA.bindPopover  open, (=> @_list), ((isOpen) => open = isOpen), (=> @_input)
+      ARIA.popupDismiss open, (=> @_list), (=> @_close(false, true)), [=> @_input, => @_content]
+    )
 
   render
     . ref: "_content", $open: open?!, $disabled: @disabled?!
