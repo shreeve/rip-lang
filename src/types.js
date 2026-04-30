@@ -172,11 +172,19 @@ export function installTypeSupport(Lexer) {
         let afterEq = eqIdx + 1;
         let next = tokens[afterEq];
 
+        // Track identifiers in the type body so type-only imports get elided.
+        let trackBodyRefs = (start, end) => {
+          for (let k = start; k <= end && k < tokens.length; k++) {
+            if (tokens[k][0] === 'IDENTIFIER') typeRefNames.add(tokens[k][1]);
+          }
+        };
+
         // Block union: type Name = (TERMINATOR?) INDENT | "a" | "b" ... OUTDENT
         // Must check before structural — `=` suppresses TERMINATOR so INDENT follows directly
         if (next && (next[0] === 'TERMINATOR' || next[0] === 'INDENT')) {
           let result = collectBlockUnion(tokens, afterEq);
           if (result) {
+            trackBodyRefs(afterEq, result.endIdx);
             tokens.splice(removeFrom, result.endIdx - removeFrom + 1, makeDecl(result.typeText));
             return 0;
           }
@@ -185,12 +193,14 @@ export function installTypeSupport(Lexer) {
         // Structural type: type Name = INDENT ... OUTDENT
         if (next && next[0] === 'INDENT') {
           let endIdx = findMatchingOutdent(tokens, afterEq);
+          trackBodyRefs(afterEq, endIdx);
           tokens.splice(removeFrom, endIdx - removeFrom + 1, makeDecl(collectStructuralType(tokens, afterEq)));
           return 0;
         }
 
         // Simple alias: type Name = type-expression
         let typeTokens = collectTypeExpression(tokens, afterEq);
+        trackBodyRefs(afterEq, afterEq + typeTokens.consumed - 1);
         tokens.splice(removeFrom, afterEq + typeTokens.consumed - removeFrom, makeDecl(buildTypeString(typeTokens)));
         return 0;
       }
@@ -216,6 +226,10 @@ export function installTypeSupport(Lexer) {
         if (tokens[bodyIdx]?.[0] === 'INDENT') {
           let typeText = collectStructuralType(tokens, bodyIdx);
           let endIdx = findMatchingOutdent(tokens, bodyIdx);
+          for (let k = bodyIdx; k <= endIdx && k < tokens.length; k++) {
+            if (tokens[k][0] === 'IDENTIFIER') typeRefNames.add(tokens[k][1]);
+          }
+          if (extendsName) typeRefNames.add(extendsName);
           let declToken = gen('TYPE_DECL', name, nameToken);
           declToken.data = {
             name,
@@ -519,7 +533,33 @@ function collectStructuralType(tokens, indentIdx) {
       let typeStr = buildTypeString(propTypeTokens);
       let prefix = readonly ? 'readonly ' : '';
       let optMark = optional ? '?' : '';
-      props.push(`${prefix}${propName}${optMark}: ${typeStr}`);
+      // Method-shorthand: `name(args)` or `name(args): retType` — typeStr
+      // is parenthesized and has either nothing or `:` (not `::`) after the
+      // matching `)`. Emit without the property `:` separator so TS treats
+      // `this` inside the method as the containing type.
+      let methodShorthand = false;
+      if (!optional && typeStr.startsWith('(')) {
+        let depthM = 0;
+        for (let m = 0; m < typeStr.length; m++) {
+          let ch = typeStr[m];
+          if (ch === '(') depthM++;
+          else if (ch === ')') {
+            depthM--;
+            if (depthM === 0) {
+              let rest = typeStr.slice(m + 1).trimStart();
+              if (rest === '' || (rest.startsWith(':') && !rest.startsWith('::'))) {
+                methodShorthand = true;
+              }
+              break;
+            }
+          }
+        }
+      }
+      if (methodShorthand) {
+        props.push(`${prefix}${propName}${typeStr}`);
+      } else {
+        props.push(`${prefix}${propName}${optMark}: ${typeStr}`);
+      }
     } else {
       j++;
     }

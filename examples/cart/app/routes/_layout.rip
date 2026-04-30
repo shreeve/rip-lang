@@ -1,8 +1,5 @@
-import { CartData } from '../types.rip'
-
 export Layout = component
-  cart:: CartData ~= @app.data.cart
-  totalItems ~= cart.items.reduce(((sum, i) -> sum + i.quantity), 0)
+  cart ~= @app.data.cart
 
   render
     nav.container
@@ -13,6 +10,6 @@ export Layout = component
         li
           a href: "/", "Products"
         li
-          a href: "/cart", "Cart (#{totalItems})"
+          a href: "/cart", "Cart (#{cart.totalItems()})"
     main.container
       div id: "content"

@@ -254,15 +254,11 @@ function GenericUsageTests() {
   )
 }
 
-// ── Stash vs zustand: typed shared state ──
+// ── Typed shared state ──
 //
-// zustand types the store everywhere it's used via create<State>().
-// Rip's stash (`@app.data`) is completely untyped today — there is no
-// mechanism to flow a type declaration into the framework stash across
-// components. See the Typed Stash RFC in examples/cart/README.md.
-//
-// The zustand code below shows what Rip is missing — a single type
-// declaration that makes every access site type-safe.
+// Pattern: declare a `Cart`-shaped type, build a typed value of that
+// shape via zustand's `create<State>()`, and consume it from a
+// component. Mirrors the Rip side's typed-shared-state coverage.
 
 import { create } from 'zustand'
 
@@ -287,8 +283,6 @@ const useCart = create<Cart>()((set, get) => ({
   total: () => get().items.reduce((sum, i) => sum + i.price * i.quantity, 0),
 }))
 
-// Components — cart used in render (JSX equivalent of Rip render blocks)
-
 function CartDemo() {
   const cart = useCart()
 
@@ -307,10 +301,7 @@ function CartDemo() {
   )
 }
 
-// ── Negative tests: zustand catches every mistake ──
-//
-// Rip has NO equivalent today. @app.data is `any` — none of these
-// errors would be caught in a real Rip app.
+// ── Negative tests: typos and wrong arg types are caught ──
 
 // @ts-expect-error — wrong type: items should be CartItem[], not string
 const bad1 = create<Cart>(() => ({ items: 'not an array', addItem: () => { }, removeItem: () => { }, total: () => 0 }))

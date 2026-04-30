@@ -165,8 +165,7 @@ export RenderCondTest = component
 # ── Conditional-scoped variable used in callback ──
 #
 # A variable first assigned inside a conditional and captured by a
-# callback (e.g. .filter()) is correctly inferred. This pattern is
-# common in filter/sort pipelines (see examples/cart). The patcher now
+# callback (e.g. .filter()) is correctly inferred. The patcher
 # recurses into class methods and computed arrow bodies, so no
 # explicit `:: string` annotation is needed on `term`.
 
@@ -251,37 +250,75 @@ export GenericUsageTests = component
       # @ts-expect-error — object missing 'label' field (has 'name' instead)
       Select options: [{ value: "a", name: "A" }]
 
-# ── Stash: framework-level shared state (NOT YET TYPED) ──
+# ── Typed shared state ──
 #
-# In a real Rip app, the stash is `@app.data` — a deep reactive Proxy
-# shared across all components. Today it is completely untyped (`any`).
-# `@app.data.cart.itms` (typo) compiles without error.
+# Pattern: declare a `Cart`-shaped type, build a typed value of that
+# shape, and consume it from a component. Demonstrates that the type
+# DSL covers the same ground as zustand's `create<State>()` — fields,
+# methods, and negative cases (typos, wrong arg shapes) all fire.
 #
-# The RFC in examples/cart/README.md proposes a `stash.rip` convention:
-# if app/stash.rip exports a default type, the type checker flows it
-# into `@app.data` across all components. Until that's implemented,
-# there is no stash type safety in real apps.
+# In a real app, the same `Cart` type lives in `<root>/app/stash.rip`
+# and the compiler splices it into every component's `@app.data`
+# automatically. This section keeps the value-shape and negative-test
+# coverage self-contained within the audit.
+
+export type CartItem =
+  id: number
+  name: string
+  price: number
+  quantity: number
+
+export type Cart =
+  items: CartItem[]
+  addItem(item: CartItem): void
+  removeItem(item: CartItem): void
+  total(): number
+
+# Typed value of `Cart` shape. Stub bodies — the section's job is to
+# verify the type DSL covers fields, methods, and negative cases.
+cart:: Cart =
+  items: []
+  addItem: noop
+  removeItem: noop
+  total: -> 0
+
+export CartDemo = component
+  store ~= cart
+
+  render
+    div
+      span "#{store.items.length} items — $#{store.total()}"
+      button @click: (-> store.addItem(id: 1, name: 'Widget', price: 9.99, quantity: 1)), "Add to Cart"
+      ul
+        for item in store.items
+          li "#{item.name} x#{item.quantity} — $#{item.price}"
+
+# ── Negative tests: typos and wrong arg types are caught ──
 #
-# What it would look like (not yet implemented):
-#
-#   # app/stash.rip
-#   type CartItem =
-#     id:: number
-#     name:: string
-#     price:: number
-#     quantity:: number
-#
-#   export default type
-#     cart::
-#       items:: CartItem[]
-#
-#   # app/routes/cart.rip — @app.data.cart.items is CartItem[]
-#   for item in @app.data.cart.items
-#     .item
-#       .name = item.name
-#       .price = "$#{item.price.toFixed(2)}"
-#
-#   # @app.data.cart.itms would be a compile error
-#
-# Compare with the tsx companion which shows zustand achieving this
-# today — create<State>() types the store everywhere it's used.
+# Mirrors the TSX zustand negatives. Read typos produce TS2551; wrong
+# argument types to store methods produce TS2345.
+
+export CartTypeTests = component
+  store ~= cart
+
+  # @ts-expect-error — typo: 'itms' does not exist
+  bad1 ~= store.itms
+
+  # @ts-expect-error — CartItem has no 'qty' field
+  bad2 ~= store.items[0]?.qty
+
+  # @ts-expect-error — toFixed doesn't exist on CartItem[]
+  bad3 ~= store.items.toFixed(2)
+
+  # @ts-expect-error — nonexistent path
+  bad4 ~= store.tax
+
+  badAdd: ->
+    # @ts-expect-error — wrong item shape: missing required fields
+    store.addItem(broken: true)
+
+  badRemove: ->
+    # @ts-expect-error — wrong arg type: number instead of CartItem
+    store.removeItem(42)
+
+  render null

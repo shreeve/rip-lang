@@ -1,0 +1,20 @@
+import { CartItem, Product } from './types.rip'
+
+export type Cart =
+  items: CartItem[]
+  addItem(product: Product): void
+  removeItem(product: Product): void
+  updateQuantity(product: Product, quantity: number): void
+  totalItems(): number
+  totalPrice(): number
+  clear(): void
+
+export stash:: { cart: Cart } =
+  cart:
+    items: []
+    addItem: (product) -> @items = [...@items, { ...product, quantity: 1 }]
+    removeItem: (product) -> @items = @items.filter (i) -> i.id isnt product.id
+    updateQuantity: (product, quantity) -> @items = @items.map (i) -> i.id is product.id ? { ...i, quantity } : i
+    totalItems: -> @items.reduce(((sum, i) -> sum + i.quantity), 0)
+    totalPrice: -> @items.reduce(((sum, i) -> sum + i.price * i.quantity), 0)
+    clear: -> @items = []

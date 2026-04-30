@@ -1320,6 +1320,35 @@ function getWordAtPosition(text, position) {
   return start < end ? line.substring(start, end) : null;
 }
 
+// Walks `line` up to `col` tracking string-literal and `#{...}` interpolation
+// state. Returns:
+//   { inString: true,  inInterpolation: false }  cursor is inside string text
+//   { inString: true,  inInterpolation: true  }  cursor is inside #{...} expr
+//   { inString: false, inInterpolation: false }  cursor is in plain code
+// Unterminated strings (mid-typing) still count as "in string" past the open.
+function scanStringState(line, col) {
+  if (!line || col <= 0) return { inString: false, inInterpolation: false };
+  let quote = null;        // null | '"' | "'"
+  let interpDepth = 0;     // depth of `{` since last `#{` while inside string
+  for (let i = 0; i < col; i++) {
+    const ch = line[i];
+    if (quote) {
+      if (interpDepth > 0) {
+        if (ch === '{') interpDepth++;
+        else if (ch === '}') interpDepth--;
+        continue;
+      }
+      if (ch === '\\') { i++; continue; }
+      if (ch === '#' && line[i + 1] === '{') { interpDepth = 1; i++; continue; }
+      if (ch === quote) quote = null;
+    } else {
+      if (ch === '#') break;             // start of a Rip comment — bail
+      if (ch === '"' || ch === "'") quote = ch;
+    }
+  }
+  return { inString: quote !== null, inInterpolation: interpDepth > 0 };
+}
+
 function splitProps(str) {
   const segments = [];
   let start = 0, depth = 0, quote = null, colon = -1;
@@ -1441,7 +1470,11 @@ function detectBlockComponentContext(srcLines, lineIndex, col) {
     }
   }
 
-  // Cursor on a blank/incomplete line — offer prop completions
+  // Cursor on a blank/incomplete line — offer prop completions, unless the
+  // cursor is inside string text (e.g. a positional `"text content"` child
+  // line under a parent tag) where ARIA prop completions are noise.
+  const lineState = scanStringState(curLine, col);
+  if (lineState.inString || lineState.inInterpolation) return null;
   return { component, htmlTag, existingProps, propValues, currentProp: null, wantValues: false, wantProps: true };
 }
 
@@ -1510,11 +1543,24 @@ function detectComponentContext(srcLine, col, srcLines, lineIndex) {
         }
       }
     } else {
-      if (inThisSeg) wantProps = true;
+      // Positional segment (no colon). Only offer prop completions if the
+      // cursor is in plain code — being inside a string literal here means
+      // the segment is text content (or an unquoted expression), not a
+      // prop slot. Showing ARIA props in that context is just noise.
+      if (inThisSeg) {
+        const segCol = cursorInRest - seg.start;
+        const segState = scanStringState(seg.text, segCol);
+        if (!segState.inString && !segState.inInterpolation) wantProps = true;
+      }
     }
   }
 
-  if (!wantValues && !wantProps) wantProps = true;
+  if (!wantValues && !wantProps) {
+    // Don't fall back to wantProps when the cursor sits inside string text —
+    // that's positional content (or a half-typed expression), not a prop slot.
+    const restState = scanStringState(rest, cursorInRest);
+    if (!restState.inString && !restState.inInterpolation) wantProps = true;
+  }
 
   return { component, htmlTag, existingProps, propValues, currentProp, wantValues, wantProps };
 }
@@ -1837,7 +1883,13 @@ connection.onCompletion((params) => {
   if (doc) {
     const srcLines = doc.getText().split('\n');
     const srcLine = srcLines[params.position.line];
-    const ctx = detectBlockComponentContext(srcLines, params.position.line, params.position.character);
+    // Skip the component-prop completion path when the cursor sits inside a
+    // `#{...}` interpolation — that's a TS expression, not a prop slot.
+    // Plain string positional args (`a "text content"`) are handled inside
+    // detectComponentContext so that quoted prop values still get value
+    // completions (e.g. `type: "|"` → "text"|"button"|...).
+    const strState = scanStringState(srcLine, params.position.character);
+    const ctx = strState.inInterpolation ? null : detectBlockComponentContext(srcLines, params.position.line, params.position.character);
     if (ctx) {
       connection.console.log(`[rip] completion ctx: component=${ctx.component}, htmlTag=${ctx.htmlTag}, wantProps=${ctx.wantProps}, wantValues=${ctx.wantValues}, currentProp=${ctx.currentProp}`);
       const info = ctx.component ? componentRegistry.get(ctx.component) : null;

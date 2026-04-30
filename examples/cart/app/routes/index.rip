@@ -1,7 +1,7 @@
-import { Product, CartData } from '../types.rip'
+import { Product } from '../types.rip'
 
 export Products = component
-  cart:: CartData ~= @app.data.cart
+  cart ~= @app.data.cart
   products:: Product[] := []
   search := ''
   sort := ''
@@ -29,15 +29,6 @@ export Products = component
     finally
       loaded = true
 
-  inCart: (product:: Product) ->
-    cart.items.some (i) -> i.id is product.id
-
-  toggleCart: (product:: Product) ->
-    if @inCart(product)
-      cart.items = cart.items.filter (i) -> i.id isnt product.id
-    else
-      cart.items = [...cart.items, { ...product, quantity: 1 }]
-
   clearFilters: ->
     search = ''
     sort = ''
@@ -63,10 +54,10 @@ export Products = component
               div.image product.image
               h5 product.name
               p "$#{product.price.toFixed(2)}"
-              if @inCart(product)
-                button.outline @click: (-> @toggleCart(product)), "Added to Cart"
+              if cart.items.some (i) -> i.id is product.id
+                button.outline @click: (-> cart.removeItem(product)), "Added to Cart"
               else
-                button.outline @click: (-> @toggleCart(product)), "Add to Cart"
+                button.outline @click: (-> cart.addItem(product)), "Add to Cart"
       else
         p "No products found. "
           button.outline.link @click: @clearFilters, "Clear Filters"

@@ -1107,15 +1107,6 @@ export launch = (appBase = '', opts = {}) ->
   app = stash { components: {}, routes: {}, data: {} }
   globalThis.__ripApp = app
 
-  # Hydrate from bundle — any keys populate the stash
-  app.data = bundle.data if bundle.data
-  if bundle.routes
-    app.routes = bundle.routes
-
-  # Restore persisted state (overrides bundle defaults with saved user state)
-  if persist and typeof sessionStorage isnt 'undefined'
-    persistStash app, local: persist is 'local', key: "__rip_#{appBase}"
-
   # Create components store and load component sources
   appComponents = createComponents()
   appComponents.load(bundle.components) if bundle.components
@@ -1124,6 +1115,35 @@ export launch = (appBase = '', opts = {}) ->
   classesKey = "__rip_#{appBase.replace(/\//g, '_') or 'app'}"
   resolver = { map: buildComponentMap(appComponents), classes: {}, key: classesKey }
   globalThis[classesKey] = resolver.classes if typeof globalThis isnt 'undefined'
+
+  # Auto-load app/stash.rip if present — provides defaults + methods that
+  # survive the server-side JSON.stringify boundary that bundle.data goes
+  # through. Must export a top-level `stash`: write `export stash:: ... = ...`.
+  stashRaw = null
+  stashPath = 'components/_lib/stash.rip'
+  if appComponents.exists(stashPath)
+    stashSource = appComponents.read(stashPath)
+    if stashSource
+      try
+        stashMod = compileAndImport! stashSource, compile, appComponents, stashPath, resolver
+        stashRaw = stashMod.stash if stashMod?.stash
+      catch e
+        console.error "[Rip] Failed to load app/stash.rip: #{e.message}", e
+
+  # Hydrate from bundle — server seed (JSON only, no functions) overlays
+  # stash defaults *in place*, so the module's `stash` reference and
+  # `app.data` share underlying storage. Stash defaults preserve methods;
+  # bundle.data wins on key collisions (shallow).
+  if stashRaw and bundle.data
+    stashRaw[k] = v for k, v of bundle.data
+  seedData = stashRaw ?? bundle.data
+  app.data = seedData if seedData
+  if bundle.routes
+    app.routes = bundle.routes
+
+  # Restore persisted state (overrides bundle defaults with saved user state)
+  if persist and typeof sessionStorage isnt 'undefined'
+    persistStash app, local: persist is 'local', key: "__rip_#{appBase}"
 
   # Set document title
   document.title = app.data.title if app.data.title and typeof document isnt 'undefined'

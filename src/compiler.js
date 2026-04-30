@@ -1842,13 +1842,36 @@ export class CodeEmitter {
       if (this.is(pair, '...')) return `...${this.emit(pair[1], 'value')}`;
       let [operator, key, value] = pair;
       let keyCode;
+      let isSimpleKey = false;
       if (this.is(key, 'dynamicKey')) keyCode = `[${this.emit(key[1], 'value')}]`;
       else if (this.is(key, 'str')) keyCode = `[${this.emit(key, 'value')}]`;
       else {
         this.suppressReactiveUnwrap = true;
         keyCode = this.emit(key, 'value');
         this.suppressReactiveUnwrap = false;
+        isSimpleKey = !Array.isArray(key) && typeof keyCode === 'string'
+                      && /^[A-Za-z_$][\w$]*$/.test(keyCode);
       }
+
+      // Method-shorthand: `key: -> body` → `key(args) { body }`. Enables
+      // TypeScript contextual `this` binding when the object is assigned to
+      // a method-shorthand-typed slot, and produces cleaner JS output.
+      // Only for thin-arrow (`->`) — fat arrow has lexical `this` semantics.
+      // Skip when the value carries side-effect (`!`) or non-trivial meta.
+      if (operator === ':' && isSimpleKey && this.is(value, '->')) {
+        let [, mParams, mBody] = value;
+        if ((!mParams || (Array.isArray(mParams) && mParams.length === 0)) && this.containsIt(mBody)) mParams = ['it'];
+        let mSideEffect = this.nextFunctionIsVoid || false;
+        this.nextFunctionIsVoid = false;
+        let mParamList = this.emitParamList(mParams);
+        let mBodyCode = this.emitFunctionBody(mBody, mParams, mSideEffect);
+        let mIsAsync = this.containsAwait(mBody);
+        let mIsGen = this.containsYield(mBody);
+        let prefix = mIsAsync ? 'async ' : '';
+        let star = mIsGen ? '*' : '';
+        return `${prefix}${star}${keyCode}(${mParamList}) ${mBodyCode}`;
+      }
+
       let valCode = this.emit(value, 'value');
       if (operator === '=') return `${keyCode} = ${valCode}`;
       if (operator === ':') return `${keyCode}: ${valCode}`;
