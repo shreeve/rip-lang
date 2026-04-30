@@ -6850,7 +6850,35 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           const walkRender = (node) => {
             if (!Array.isArray(node))
               return;
-            const head2 = node[0]?.valueOf?.() ?? node[0];
+            let head2 = node[0]?.valueOf?.() ?? node[0];
+            if (Array.isArray(head2) && head2[0] === ".") {
+              const parts = [];
+              const collect = (h) => {
+                if (typeof h === "string") {
+                  parts.push(h);
+                  return true;
+                }
+                if (Array.isArray(h) && h[0] === "." && parts.length === 0) {
+                  if (!collect(h[1]))
+                    return false;
+                  if (typeof h[2] !== "string" || !/^[\w-]+$/.test(h[2]))
+                    return false;
+                  parts.push(".", h[2]);
+                  return true;
+                }
+                return false;
+              };
+              if (collect(head2) && parts.length >= 3 && /^[a-z][\w-]*$/.test(parts[0])) {
+                const flat = parts.join("");
+                const reshaped = [flat];
+                for (let i = 1;i < node.length; i++)
+                  reshaped.push(node[i]);
+                if (node.loc)
+                  reshaped.loc = node.loc;
+                node = reshaped;
+                head2 = flat;
+              }
+            }
             if (head2 === "object")
               return;
             if (head2 === "if" || head2 === "unless") {
@@ -13065,7 +13093,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.15.4";
-  var BUILD_DATE = "2026-04-30@23:50:22GMT";
+  var BUILD_DATE = "2026-04-30@23:56:54GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
