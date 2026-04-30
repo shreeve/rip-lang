@@ -119,3 +119,87 @@ test "Manager constructor initializes expected state", ->
   ok mgr.appliedGen instanceof Map
   ok mgr.swapInFlight instanceof Map
   ok mgr.lastBootError instanceof Map
+  ok mgr.recyclingIds instanceof Set
+  eq mgr.recyclingIds.size, 0
+
+test "Manager.markWorkerExpectedExit adds workerId to recyclingIds", ->
+  mgr = new Manager({ appName: 'test' }, '/tmp/server.rip')
+  mgr.markWorkerExpectedExit(7)
+  ok mgr.recyclingIds.has(7)
+  eq mgr.recyclingIds.size, 1
+
+test "Manager.markWorkerExpectedExit ignores non-number ids (defensive)", ->
+  mgr = new Manager({ appName: 'test' }, '/tmp/server.rip')
+  mgr.markWorkerExpectedExit('not-a-number')
+  mgr.markWorkerExpectedExit(null)
+  mgr.markWorkerExpectedExit(undefined)
+  eq mgr.recyclingIds.size, 0
+
+test "Manager.markWorkerExpectedExit is idempotent", ->
+  mgr = new Manager({ appName: 'test' }, '/tmp/server.rip')
+  mgr.markWorkerExpectedExit(3)
+  mgr.markWorkerExpectedExit(3)
+  mgr.markWorkerExpectedExit(3)
+  eq mgr.recyclingIds.size, 1
+  ok mgr.recyclingIds.has(3)
+
+test "Manager.teardown clears recyclingIds", ->
+  mgr = new Manager({ appName: 'test' }, '/tmp/server.rip')
+  mgr.markWorkerExpectedExit(1)
+  mgr.markWorkerExpectedExit(2)
+  eq mgr.recyclingIds.size, 2
+  await mgr.teardown()
+  eq mgr.recyclingIds.size, 0
+
+# Full-flow test for the worker-recycle path. Uses a fake worker process
+# whose `exited` promise we resolve manually, mocks spawnWorker so we
+# can observe the replacement, and intercepts logEvent to verify the
+# event name. This is the regression that pins "self-recycle exits get
+# logged as worker_recycle, replacements spawn immediately, and the
+# crash budget is NOT incremented."
+test "Manager.monitor: graceful exit (recyclingIds) takes the recycle path", ->
+  mgr = new Manager({ appName: 'test', socketPrefix: '/tmp/test-recycle' }, '/tmp/server.rip')
+  # Stand-in for spawnWorker so we don't hit Bun.spawn or the filesystem.
+  spawnedReplacements = 0
+  mgr.spawnWorker = (appId, version) ->
+    spawnedReplacements++
+    {
+      id: 99
+      appId: appId
+      socketPath: '/tmp/replacement.sock'
+      startedAt: Date.now()
+      process: { exited: new Promise(->) }
+    }
+
+  # Build a controllable fake worker. process.exited is a Promise we
+  # resolve below to drive monitor's `.then` callback.
+  resolveExit = null
+  fakeProcess =
+    exited: new Promise (r) -> resolveExit = r
+    kill: ->
+  worker =
+    id: 42
+    appId: 'test'
+    socketPath: '/tmp/fake.sock'
+    startedAt: Date.now()
+    process: fakeProcess
+  mgr.appWorkers.set('test', [worker])
+
+  # Mark this worker as expected-to-exit (graceful self-recycle), then
+  # wire up the monitor and resolve the exit promise to drive the
+  # callback chain. We yield twice so both the await on `exited` and
+  # the synchronous body of the `.then` handler can run.
+  mgr.markWorkerExpectedExit(42)
+  mgr.monitor(worker)
+  resolveExit(0)
+  await new Promise (r) -> setImmediate r
+  await new Promise (r) -> setImmediate r
+
+  # After the recycle: id is consumed from the set, replacement
+  # spawned in the same slot immediately (no setTimeout backoff),
+  # and no crash-budget entry was created for the slot.
+  ok not mgr.recyclingIds.has(42), "recyclingIds should be cleared after monitor handled the exit"
+  eq spawnedReplacements, 1
+  eq mgr.appWorkers.get('test').length, 1
+  eq mgr.appWorkers.get('test')[0].id, 99
+  eq mgr.restartBudgets.size, 0

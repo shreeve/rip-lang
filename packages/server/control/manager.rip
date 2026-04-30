@@ -21,6 +21,12 @@ export class Manager
     @shuttingDown = false
     @nextWorkerId = -1
     @retiringIds = new Set()
+    # Workers that have signaled a graceful self-recycle (typically via
+    # the maxRequests / maxSeconds threshold path). Populated by the
+    # control socket when the worker POSTs op='quit', consumed by
+    # `monitor` so the subsequent process exit is treated as expected
+    # rather than a crash.
+    @recyclingIds = new Set()
     @restartBudgets = new Map()
     @currentVersion = 1
     @server = null
@@ -160,6 +166,19 @@ export class Manager
       slotIdx = workers.findIndex((x) -> x.id is w.id)
       return if slotIdx < 0
 
+      # Graceful self-recycle path: the worker hit its maxRequests /
+      # maxSeconds threshold (see packages/server/control/worker.rip)
+      # and SIGTERM'd itself. It told us via the control socket
+      # before exiting, which routed through markWorkerExpectedExit
+      # to populate `recyclingIds`. Spawn the replacement immediately,
+      # log a distinct event, and don't apply crash-budget backoff —
+      # this is preventive maintenance, not a failure.
+      if @recyclingIds.has(w.id)
+        @recyclingIds.delete(w.id)
+        logEvent('worker_recycle', { workerId: w.id, appId: w.appId, slot: slotIdx })
+        workers[slotIdx] = @spawnWorker(w.appId, @currentVersion) if slotIdx < workers.length
+        return
+
       key = @restartBudgetKey(w.appId, slotIdx)
       budget = @restartBudgets.get(key) or { count: 0, backoffMs: 1000 }
 
@@ -179,6 +198,15 @@ export class Manager
       setTimeout =>
         workers[slotIdx] = @spawnWorker(w.appId, @currentVersion) if slotIdx < workers.length
       , budget.backoffMs
+
+  # Public hook so the server's control-socket handler can flag a
+  # worker as "expected to exit" the moment its `quit` message arrives,
+  # before the process actually exits. monitor() then reads from
+  # `recyclingIds` to take the graceful path. Idempotent — repeated
+  # marks for the same id are harmless.
+  markWorkerExpectedExit: (workerId) ->
+    return unless typeof workerId is 'number'
+    @recyclingIds.add(workerId)
 
   # Clear all restart budgets for an app. Called after a successful pool
   # swap so the fresh workers don't inherit the outgoing pool's crash
@@ -307,6 +335,7 @@ export class Manager
     @observedGen.clear()
     @appliedGen.clear()
     @swapInFlight.clear()
+    @recyclingIds.clear()
     @lastBootError.clear()
     @retiringIds.clear()
     @restartBudgets.clear()

@@ -996,8 +996,8 @@ class Server
     if req.method is 'POST' and url.pathname is '/worker'
       # Peek at appId from payload to route to correct app state
       body = req.text!
-      appId = try JSON.parse(body).appId
-      appId = appId or @defaultAppId
+      parsed = try JSON.parse(body)
+      appId = parsed?.appId or @defaultAppId
       app = getAppState(@appRegistry, appId) or getAppState(@appRegistry, @defaultAppId)
       res = handleWorkerControl!(new Request(req.url, { method: 'POST', headers: req.headers, body }),
         sockets: app.sockets
@@ -1008,6 +1008,13 @@ class Server
         app.sockets = res.sockets if res.sockets?
         app.availableWorkers = res.availableWorkers if res.availableWorkers?
         app.newestVersion = res.newestVersion if res.newestVersion?
+        # A worker that POSTed op='quit' is signaling a graceful exit
+        # (typically the maxRequests / maxSeconds self-recycle path).
+        # Tell the manager NOW, before the process actually exits, so
+        # its monitor() classifies the imminent exit as expected and
+        # logs `worker_recycle` instead of `worker_restart`.
+        if parsed?.op is 'quit' and typeof parsed.workerId is 'number'
+          @manager?.markWorkerExpectedExit(parsed.workerId)
         return res.response
 
     if req.method is 'POST' and url.pathname is '/watch'
