@@ -1570,18 +1570,42 @@ _ariaListNav = (e, h) ->
     when 'Tab'                then h.tab?()           # no preventDefault: allow natural focus movement
     else h.char?(e.key) if e.key.length is 1          # printable chars: typeahead
 
+# Idempotency note: this helper is designed to be re-called on every
+# change to `open` (typical Rip widget pattern: a `~>` effect re-runs
+# when `open` flips). Two leak vectors had to be plugged:
+#
+# 1. Inside Rip components, `~>` effects are compiled as void — the
+#    implicit-return cleanup mechanism that __effect supports doesn't
+#    fire, so the disposer this function returns is silently dropped.
+#    Without idempotency, every effect re-run added one more listener
+#    pair (document mousedown + window scroll) that nothing would ever
+#    remove. Now: any prior listeners stored on the popup element are
+#    removed before new ones are attached.
+#
+# 2. The previous `return unless open` early-return meant listeners
+#    from a previous open=true call still sat on document/window after
+#    open flipped back to false, and a subsequent open=true cycle added
+#    a SECOND pair on top of them. Now: the first thing every call does
+#    is tear down whatever was stored on the popup, then conditionally
+#    re-attach.
 _ariaPopupDismiss = (open, popup, close, els = [], repos = null) ->
-  return unless open
-  get      = (x) -> if typeof x is 'function' then x() else x
-  onDown   = (e) => close() unless [get(popup), ...els.map(get)].some (el) -> el?.contains(e.target)
+  get = (x) -> if typeof x is 'function' then x() else x
+  pop = get(popup)
+  if pop and pop.__ariaPopupDismiss
+    pop.__ariaPopupDismiss()
+    pop.__ariaPopupDismiss = null
+  return unless open and pop
+  onDown   = (e) => close() unless [pop, ...els.map(get)].some (el) -> el?.contains(e.target)
   onScroll = (e) =>
-    return if get(popup)?.contains(e.target)
+    return if pop?.contains(e.target)
     if repos then repos() else close()
   document.addEventListener 'mousedown', onDown
   window.addEventListener   'scroll',    onScroll, true
-  ->
+  cleanup = ->
     document.removeEventListener 'mousedown', onDown
     window.removeEventListener   'scroll',    onScroll, true
+  pop.__ariaPopupDismiss = cleanup
+  cleanup
 
 # popupGuard — per-component reopen suppression for pointer-driven popup closes.
 # Use when the same gesture that closes a popup can otherwise refocus/reclick a
@@ -1637,6 +1661,16 @@ _ariaBindPopover = (open, popover, setOpen, source = null) ->
       setTimeout (-> focusAttempt(tries - 1)), 16
     requestAnimationFrame -> focusAttempt()
 
+  # Idempotent: remove any prior `toggle` handler this helper attached
+  # to `el` before installing a new one. Inside Rip components, the `~>`
+  # effect's implicit-return cleanup doesn't fire (compiler emits a void
+  # `return;`), so the disposer this function returns gets dropped on
+  # the floor. Without this guard, every re-run of the effect would add
+  # one more `toggle` listener.
+  if el.__ariaBindPopover
+    el.removeEventListener 'toggle', el.__ariaBindPopover
+    el.__ariaBindPopover = null
+
   onToggle = (e) ->
     isOpen = e.newState is 'open'
     if isOpen
@@ -1647,6 +1681,7 @@ _ariaBindPopover = (open, popover, setOpen, source = null) ->
       restoreFocus()
     setOpen?(isOpen)
   el.addEventListener 'toggle', onToggle
+  el.__ariaBindPopover = onToggle
 
   shown = el.matches(':popover-open')
   desired = !!open
@@ -1665,7 +1700,9 @@ _ariaBindPopover = (open, popover, setOpen, source = null) ->
   else
     syncState(desired)
 
-  -> el.removeEventListener 'toggle', onToggle
+  ->
+    el.removeEventListener 'toggle', onToggle
+    el.__ariaBindPopover = null if el.__ariaBindPopover is onToggle
 
 # bindDialog — sync reactive open state with native <dialog>
 # open: reactive boolean
@@ -1708,6 +1745,16 @@ _ariaBindDialog = (open, dialog, setOpen, dismissable = true) ->
       setTimeout (-> focusAttempt(tries - 1)), 16
     requestAnimationFrame -> focusAttempt()
 
+  # Idempotent: see comment in _ariaBindPopover above. Same Rip
+  # component-effect cleanup-drop issue applies here, so we tear down
+  # any prior cancel/close listeners we attached before installing new
+  # ones.
+  if el.__ariaBindDialog
+    [prevCancel, prevClose] = el.__ariaBindDialog
+    el.removeEventListener 'cancel', prevCancel
+    el.removeEventListener 'close',  prevClose
+    el.__ariaBindDialog = null
+
   onCancel = (e) ->
     unless dismissable
       e.preventDefault()
@@ -1720,6 +1767,7 @@ _ariaBindDialog = (open, dialog, setOpen, dismissable = true) ->
     restoreFocus()
   el.addEventListener 'cancel', onCancel
   el.addEventListener 'close', onClose
+  el.__ariaBindDialog = [onCancel, onClose]
 
   if open and not el.open
     restoreEl = currentFocus() unless restoreEl
@@ -1734,6 +1782,7 @@ _ariaBindDialog = (open, dialog, setOpen, dismissable = true) ->
   ->
     el.removeEventListener 'cancel', onCancel
     el.removeEventListener 'close', onClose
+    el.__ariaBindDialog = null if el.__ariaBindDialog?[0] is onCancel
 
 _ariaRovingNav = (e, h, orientation = 'vertical') ->
   return if e.isComposing               # IME guard
@@ -1906,12 +1955,31 @@ _ariaPosition = (trigger, floating, opts = {}) ->
         when 'end' then floating.style.bottom = "#{window.innerHeight - rect.bottom}px"
     floating.style.minWidth = "#{rect.width}px" if matchWidth
 
+# combine — fold N disposers into one, in registration order. Use this in a
+# `~>` effect when more than one ARIA helper is invoked, so the effect's
+# implicit-return cleanup actually disposes ALL of them. Without combine,
+# only the LAST helper's disposer is returned and earlier helpers leak
+# their listeners on every effect re-run.
+#
+# Usage:
+#   ~>
+#     return ARIA.combine(
+#       ARIA.bindPopover  open, ...
+#       ARIA.popupDismiss open, ...
+#     )
+_ariaCombine = (...disposers) ->
+  ->
+    for d in disposers
+      try d?()
+      catch then null
+
 globalThis.__aria ??= {
   listNav: _ariaListNav, rovingNav: _ariaRovingNav, popupDismiss: _ariaPopupDismiss, popupGuard: _ariaPopupGuard,
   bindPopover: _ariaBindPopover, bindDialog: _ariaBindDialog,
   positionBelow: _ariaPositionBelow, trapFocus: _ariaTrapFocus, wireAria: _ariaWireAria,
   lockScroll: _ariaLockScroll, unlockScroll: _ariaUnlockScroll,
   position: _ariaPosition, hasAnchor: _ariaHasAnchor,
+  combine: _ariaCombine,
 }
 globalThis.ARIA ??= globalThis.__aria
 
