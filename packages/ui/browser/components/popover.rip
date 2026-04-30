@@ -30,6 +30,14 @@ export Popover = component
     align ??= 'center'
     ARIA.position trigger, floating, placement: "#{side} #{align}", offset: @offset
 
+  beforeUnmount: ->
+    # Clear pending hover timers so an unmount during the open/close
+    # delay doesn't fire on a destroyed instance.
+    clearTimeout _hoverTimer if _hoverTimer
+    clearTimeout _hoverCloseTimer if _hoverCloseTimer
+    _hoverTimer = null
+    _hoverCloseTimer = null
+
   mounted: ->
     _ready = true
     trigger = @_content?.querySelector('[data-trigger]')
@@ -40,6 +48,9 @@ export Popover = component
       trigger.setAttribute 'aria-expanded', false
       trigger.setAttribute 'aria-haspopup', 'dialog'
       trigger.setAttribute 'aria-controls', _id
+      # Hover-open ALSO checks @disabled (parity with click/keydown
+      # paths); the previous code opened a disabled popover after the
+      # hover delay because only click/keydown were guarded.
       trigger.addEventListener 'click', =>
         return if @disabled
         open = not open
@@ -50,19 +61,23 @@ export Popover = component
           open = not open
       if @openOnHover
         trigger.addEventListener 'mouseenter', =>
+          return if @disabled
           clearTimeout _hoverCloseTimer if _hoverCloseTimer
+          _hoverCloseTimer = null
           _hoverTimer = setTimeout (=> open = true), @hoverDelay
         trigger.addEventListener 'mouseleave', =>
           clearTimeout _hoverTimer if _hoverTimer
+          _hoverTimer = null
           _hoverCloseTimer = setTimeout (=> open = false), @hoverCloseDelay
       @_applyPlacement()
+
+  openPopover: ->
+    return if @disabled
+    open = true
 
   toggle: ->
     return if @disabled
     open = not open
-
-  openPopover: ->
-    open = true
 
   close: ->
     open = false

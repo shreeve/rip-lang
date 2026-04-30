@@ -13065,7 +13065,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.15.4";
-  var BUILD_DATE = "2026-04-30@23:46:58GMT";
+  var BUILD_DATE = "2026-04-30@23:50:21GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -14375,7 +14375,7 @@ ${indented}`);
       return tree = buildRoutes(components, root);
     });
     resolve = function(url) {
-      let cb, full, hash, path, queryStr, rawPath, result;
+      let cb, full, hash, path, queryStr, rawPath, result, snapshot;
       rawPath = url.split("?")[0].split("#")[0];
       path = stripBase(rawPath);
       path = path[0] === "/" ? path : "/" + path;
@@ -14397,8 +14397,13 @@ ${indented}`);
           _hash.value = hash;
           return _normalizedUrl.value = full;
         });
-        for (let cb2 of navCallbacks) {
-          cb2(router.current);
+        snapshot = Array.from(navCallbacks);
+        for (let cb2 of snapshot) {
+          try {
+            cb2(router.current);
+          } catch (err) {
+            console.error("[Rip] router onNavigate callback error:", err);
+          }
         }
         return true;
       }
@@ -14413,6 +14418,8 @@ ${indented}`);
       window.addEventListener("popstate", onPopState);
     onClick = function(e) {
       let dest, target, url;
+      if (e.defaultPrevented)
+        return;
       if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey)
         return;
       target = e.target;
@@ -14426,6 +14433,14 @@ ${indented}`);
         return;
       if (target.target === "_blank" || target.hasAttribute("data-external"))
         return;
+      if (target.hasAttribute("download"))
+        return;
+      if (target.hasAttribute("data-router-ignore"))
+        return;
+      if (base && !hashMode) {
+        if (!(url.pathname === base || url.pathname.startsWith(base + "/")))
+          return;
+      }
       e.preventDefault();
       dest = hashMode && url.hash ? url.hash.slice(1) || "/" : url.pathname + url.search + url.hash;
       return router.push(dest);
@@ -14751,7 +14766,7 @@ ${indented}`);
     })();
   };
   var createRenderer = function(opts = {}) {
-    let app, compile2, components, container, currentComponent, currentLayouts, currentParams, currentQuery, currentRoute, disposeEffect, generation, invalidateResolver, layoutInstances, mountPoint, mountRoute, onError, renderer, resolver, router, sameKeys, target, unmount, unmountCurrent, unwatchSources;
+    let app, compile2, components, container, currentComponent, currentLayouts, currentParams, currentQuery, currentRoute, disposeEffect, generation, invalidateResolver, layoutInstances, mountPoint, mountRoute, onError, renderer, resolver, router, sameKeys, started, target, unmount, unmountCurrent, unwatchSources;
     assertBrowser("createRenderer");
     ({ router, app, components, resolver, compile: compile2, target, onError } = opts);
     container = typeof target === "string" ? document.querySelector(target) : target || document.getElementById("app");
@@ -14839,8 +14854,15 @@ ${indented}`);
       if (sameRoute && !force) {
         if (!sameKeys(query, currentQuery)) {
           currentQuery = query;
-          if (currentComponent?.load)
-            await currentComponent.load(params, query);
+          if (currentComponent?.load) {
+            try {
+              await currentComponent.load(params, query);
+            } catch (err) {
+              console.error(`Renderer: error in query-only load for ${route.file}:`, err);
+              if (onError)
+                onError({ status: 500, message: err.message, error: err });
+            }
+          }
         }
         return;
       }
@@ -14943,6 +14965,7 @@ ${indented}`);
           }
           return (() => {
             if (!handled) {
+              unmount();
               pre = document.createElement("pre");
               pre.style.cssText = "color:red;padding:1em";
               pre.textContent = err.stack || err.message;
@@ -14953,7 +14976,11 @@ ${indented}`);
         }
       })();
     };
+    started = false;
     renderer = { start() {
+      if (started)
+        return renderer;
+      started = true;
       disposeEffect = __effect(function() {
         let current;
         current = router.current;
@@ -14966,6 +14993,9 @@ ${indented}`);
       return renderer;
     }, stop() {
       let _, url;
+      if (!started)
+        return;
+      started = false;
       unmount();
       if (disposeEffect) {
         disposeEffect();

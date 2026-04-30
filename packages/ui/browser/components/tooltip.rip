@@ -32,9 +32,16 @@ export Tooltip = component
     ARIA.position @_trigger, @_tip, placement: "#{side} #{align}", offset: @offset
 
   show: ->
+    # Clear BOTH timers before scheduling a new show. mouseenter +
+    # focusin can fire show() back-to-back; without clearing the
+    # previous _showTimer the second schedule wins but the first one
+    # still fires later, double-toggling state.
     clearTimeout _hideTimer if _hideTimer
+    clearTimeout _showTimer if _showTimer
+    _hideTimer = null
     delay = if (Date.now() - lastCloseTime) < GROUP_TIMEOUT then 0 else @delay
     _showTimer = setTimeout =>
+      _showTimer = null
       open = true
       entering = true
       setTimeout =>
@@ -44,8 +51,11 @@ export Tooltip = component
 
   hide: ->
     clearTimeout _showTimer if _showTimer
+    clearTimeout _hideTimer if _hideTimer
+    _showTimer = null
     exiting = true
     _hideTimer = setTimeout =>
+      _hideTimer = null
       open = false
       exiting = false
       lastCloseTime = Date.now()
@@ -53,11 +63,14 @@ export Tooltip = component
 
   _cancelHide: ->
     clearTimeout _hideTimer if _hideTimer
+    _hideTimer = null
     exiting = false
 
   beforeUnmount: ->
     clearTimeout _showTimer if _showTimer
     clearTimeout _hideTimer if _hideTimer
+    _showTimer = null
+    _hideTimer = null
 
   mounted: ->
     _ready = true

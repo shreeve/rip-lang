@@ -741,7 +741,14 @@ export createRouter = (components, opts = {}) ->
         _query.value = Object.fromEntries(new URLSearchParams(queryStr))
         _hash.value = hash
         _normalizedUrl.value = full
-      cb(router.current) for cb in navCallbacks
+      # Snapshot before iterating so a callback that adds/removes
+      # other callbacks doesn't break the loop, and try/catch each so
+      # one throwing callback doesn't prevent the rest from running
+      # (or break this resolve()'s return value).
+      snapshot = Array.from(navCallbacks)
+      for cb in snapshot
+        try cb(router.current)
+        catch err then console.error '[Rip] router onNavigate callback error:', err
       return true
 
     onError({ status: 404, path }) if onError
@@ -751,6 +758,7 @@ export createRouter = (components, opts = {}) ->
   window.addEventListener 'popstate', onPopState if typeof window isnt 'undefined'
 
   onClick = (e) ->
+    return if e.defaultPrevented
     return if e.button isnt 0 or e.metaKey or e.ctrlKey or e.shiftKey or e.altKey
     target = e.target
     target = target.parentElement while target and target.tagName isnt 'A'
@@ -758,6 +766,15 @@ export createRouter = (components, opts = {}) ->
     url = new URL(target.href, location.origin)
     return if url.origin isnt location.origin
     return if target.target is '_blank' or target.hasAttribute('data-external')
+    return if target.hasAttribute('download')
+    return if target.hasAttribute('data-router-ignore')
+    # When base is set, only intercept links that fall under it. A link
+    # to `/login` from an app mounted at `/admin` should perform a real
+    # navigation, not a router.push that resolves to a route under
+    # `/admin` (or 404s but still steals the URL bar). Hash mode bypasses
+    # this check because the hash itself is the route space.
+    if base and not hashMode
+      return unless url.pathname is base or url.pathname.startsWith(base + '/')
     e.preventDefault()
     dest = if hashMode and url.hash then (url.hash.slice(1) or '/') else (url.pathname + url.search + url.hash)
     router.push dest
@@ -1174,10 +1191,18 @@ export createRenderer = (opts = {}) ->
     # expect when they navigate `/u/1?tab=a` → `/u/1?tab=b`: the existing
     # instance reacts to the query change. Without this, the previous
     # early-return swallowed the change entirely.
+    #
+    # The load!() call is wrapped in try/catch so an async failure here
+    # surfaces through the same onError path as the full-mount path
+    # below (instead of becoming a silent unhandled rejection).
     if sameRoute and not force
       if not sameKeys(query, currentQuery)
         currentQuery = query
-        currentComponent.load!(params, query) if currentComponent?.load
+        if currentComponent?.load
+          try currentComponent.load! params, query
+          catch err
+            console.error "Renderer: error in query-only load for #{route.file}:", err
+            onError({ status: 500, message: err.message, error: err }) if onError
       return
 
     currentParams = params
@@ -1274,14 +1299,31 @@ export createRenderer = (opts = {}) ->
             console.error "Renderer: error boundary failed:", boundaryErr
 
       unless handled
+        # No error boundary handled it — wipe the container and show
+        # the stack trace. unmount() also tears down any partially-built
+        # layouts AND resets currentLayouts/mountPoint/currentParams/
+        # currentQuery so the next navigation starts from a clean state.
+        # Without unmount() here, the next nav with the same layout chain
+        # would set layoutsChanged=false and try to mount into the
+        # destroyed container DOM.
+        unmount()
         pre = document.createElement('pre')
         pre.style.cssText = 'color:red;padding:1em'
         pre.textContent = err.stack or err.message
         container.innerHTML = ''
         container.appendChild pre
 
+  started = false
+
   renderer =
     start: ->
+      # Idempotent: a double-call without an intervening stop() would
+      # otherwise install a second render effect AND a second source
+      # watcher AND re-run router.init(), leaking the prior effect
+      # subscription, the prior watcher, and triggering navigation
+      # callbacks twice.
+      return renderer if started
+      started = true
       disposeEffect = __effect ->
         current = router.current
         mountRoute(current) if current.route
@@ -1295,6 +1337,8 @@ export createRenderer = (opts = {}) ->
       renderer
 
     stop: ->
+      return unless started
+      started = false
       unmount()
       if disposeEffect
         disposeEffect()
