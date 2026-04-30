@@ -930,6 +930,12 @@ Two practical consequences:
    `updated_at` (which would defeat the no-op-save optimization
    entirely). Bumped on every UPDATE that does write something.
 
+A third practical consequence on DuckDB specifically: column-targeted
+UPDATEs sidestep DuckDB's foreign-key restriction on indexed-column
+updates of referenced parent rows. See
+[`docs/RIP-DUCKDB.md`](./RIP-DUCKDB.md) for the full rule, what works,
+what doesn't, and how to design around it.
+
 The diff is observable as `inst.savedChanges` after the save returns
 (or inside `afterCreate` / `afterUpdate` / `afterSave` hooks). Same
 shape as Active Record's `saved_changes`:

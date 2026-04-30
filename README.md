@@ -561,6 +561,7 @@ bun run bump major
 | [docs/RIP-LANG.md](docs/RIP-LANG.md) | Full language reference (syntax, operators, reactivity, types, components) |
 | [docs/RIP-TYPES.md](docs/RIP-TYPES.md) | Type system specification |
 | [docs/RIP-SCHEMA.md](docs/RIP-SCHEMA.md) | Schema keyword — validators, models, ORM, DDL, algebra |
+| [docs/RIP-DUCKDB.md](docs/RIP-DUCKDB.md) | DuckDB foreign-key constraints — what works, what doesn't, how the ORM keeps you safe |
 | [AGENTS.md](AGENTS.md) | AI agents — compiler architecture, subsystems, conventions |
 
 ---
