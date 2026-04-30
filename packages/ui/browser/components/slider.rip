@@ -10,7 +10,7 @@
 #   Slider value <=> range, min: 0, max: 100   (pass array for range mode)
 
 export Slider = component
-  @value:: number := 0
+  @value:: any := 0                                    # number | number[] (range mode)
   @min:: number := 0
   @max:: number := 100
   @step:: number := 1
@@ -32,11 +32,19 @@ export Slider = component
   _clamp: (v) -> Math.min(@max, Math.max(@min, v))
 
   _roundToStep: (v) ->
+    # Guard against step <= 0 (NaN, negative, or zero would explode the
+    # rounding into Infinity/NaN). Fallback: pass the value through
+    # unchanged.
+    return @_clamp(v) unless @step > 0
     rounded = Math.round((v - @min) / @step) * @step + @min
     precision = String(@step).split('.')[1]?.length or 0
     parseFloat rounded.toFixed(precision)
 
-  _percentOf: (v) -> ((@_clamp(v) - @min) / (@max - @min)) * 100
+  _percentOf: (v) ->
+    # Guard against max == min (would produce NaN/Infinity in CSS and
+    # ARIA values). Treat zero range as "100% filled at min".
+    return 0 unless @max > @min
+    ((@_clamp(v) - @min) / (@max - @min)) * 100
 
   _valueFromPointer: (e) ->
     rect = @_track.getBoundingClientRect()
@@ -66,7 +74,14 @@ export Slider = component
     if isRange
       arr = [...values]
       arr[idx] = val
+      # Track which value was the "active" one BEFORE sorting so we can
+      # restore activeThumb to its new index after sort. Without this,
+      # crossing thumbs (lower drags past upper) leaves activeThumb
+      # pointing at the wrong index — drag/focus jumps to the other
+      # thumb mid-gesture.
+      activeVal = arr[idx]
       arr.sort (a, b) -> a - b
+      activeThumb = arr.indexOf(activeVal) if dragging or activeThumb is idx
       @value = arr
     else
       @value = val
@@ -111,10 +126,25 @@ export Slider = component
     dragging = false
     activeThumb = -1
     _thumbOffset = 0
-    @_track.releasePointerCapture e.pointerId
+    # releasePointerCapture can throw if capture was already lost (e.g.,
+    # via pointercancel). Swallow defensively so a benign teardown
+    # doesn't surface as an unhandled error.
+    try @_track.releasePointerCapture e.pointerId
+    catch then null
     @_commitValue()
 
+  # Pointer capture can be lost involuntarily — touch interrupted by
+  # the OS, page lost focus, etc. Without this, dragging stays true
+  # and the next pointermove keeps moving the thumb without a real
+  # pointerdown.
+  _onPointerCancel: (e) ->
+    return unless dragging
+    dragging = false
+    activeThumb = -1
+    _thumbOffset = 0
+
   _onKeydown: (e, idx) ->
+    return if @disabled
     s = if e.shiftKey then @largeStep else @step
     v = values[idx]
     newVal = switch e.key
@@ -141,6 +171,8 @@ export Slider = component
         @pointerdown: @_onPointerDown
         @pointermove: @_onPointerMove
         @pointerup: @_onPointerUp
+        @pointercancel: @_onPointerCancel
+        @lostpointercapture: @_onPointerCancel
 
         # Indicator (filled portion)
         if isRange
@@ -159,6 +191,7 @@ export Slider = component
               name: @name?!
               min: @min, max: @max, step: @step
               value: val
+              disabled: @disabled
               aria-valuenow: val
               aria-valuemin: @min
               aria-valuemax: @max

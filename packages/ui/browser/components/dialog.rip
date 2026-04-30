@@ -18,8 +18,18 @@ export Dialog = component
   @initialFocus:: any := null
 
   _id =! "dlg-#{Math.random().toString(36).slice(2, 8)}"
+  _focusRaf = null
+
+  beforeUnmount: ->
+    cancelAnimationFrame _focusRaf if _focusRaf
+    _focusRaf = null
 
   ~>
+    # ARIA.bindDialog handles the native cancel/close events and toggles
+    # @open via setOpen — that's the SOLE close-emission path. The
+    # onKeydown handler does NOT additionally call @close() because that
+    # would emit `close` twice for the same Escape press (once from
+    # native cancel via bindDialog, once from our handler).
     ARIA.bindDialog @open, (=> @_dialog), ((isOpen) =>
       if not isOpen and @open
         @open = false
@@ -29,7 +39,11 @@ export Dialog = component
   ~>
     if @open
       ARIA.lockScroll(this)
-      requestAnimationFrame =>
+      # Track the RAF handle so unmount/close-during-open-transition can
+      # cancel it. Without this, fast close-then-unmount would focus
+      # detached content (and possibly throw on some browsers).
+      _focusRaf = requestAnimationFrame =>
+        _focusRaf = null
         panel = @_dialog
         if panel
           ARIA.wireAria panel, _id
@@ -39,16 +53,19 @@ export Dialog = component
           else
             panel.querySelectorAll('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])')?[0]?.focus()
       return ->
+        cancelAnimationFrame _focusRaf if _focusRaf
+        _focusRaf = null
         ARIA.unlockScroll(this)
 
   close: ->
     @open = false
-    @emit 'close'
 
   onKeydown: (e) ->
-    if e.key is 'Escape'
+    # Don't call @close() here — that would double-emit `close`. Just
+    # let the native dialog's `cancel` event flow through bindDialog,
+    # which handles preventDefault + setOpen + emit.
+    if e.key is 'Escape' and not @dismissable
       e.preventDefault()
-      @close() if @dismissable
 
   onBackdropClick: (e) ->
     if e.target is e.currentTarget and @dismissable

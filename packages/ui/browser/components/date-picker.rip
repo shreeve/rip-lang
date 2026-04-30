@@ -47,10 +47,33 @@ export DatePicker = component
   viewMonth := new Date()
   _rangeStart := null
   _hoveredDay := null
-  _inputText := ''
+  _focusedDay := null     # currently keyboard-focused day in the grid
   _id =! "dp-#{Math.random().toString(36).slice(2, 8)}"
 
-  _dayNames =! ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
+  _BASE_DAY_NAMES =! ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
+
+  # Headers rotate with @firstDayOfWeek so the column labels match the
+  # grid layout. Previously the grid shifted but the labels stayed
+  # 'Su Mo Tu...' — confusing.
+  _dayNames ~=
+    f = (+@firstDayOfWeek) %% 7
+    [..._BASE_DAY_NAMES.slice(f), ..._BASE_DAY_NAMES.slice(0, f)]
+
+  # Coerce value to a Date if it's a serialized string (from JSON
+  # persistence). The original code crashed in dpFmt(@value) when
+  # @value was a string after rehydration.
+  _coerceDate = (v) ->
+    return null unless v
+    return v if v instanceof Date
+    d = new Date(v)
+    return null if isNaN(d.getTime())
+    d
+
+  _value ~=
+    if @range
+      if Array.isArray(@value) then [_coerceDate(@value[0]), _coerceDate(@value[1])] else [null, null]
+    else
+      _coerceDate(@value)
 
   _daysInView ~=
     yr = viewMonth.getFullYear()
@@ -72,14 +95,15 @@ export DatePicker = component
 
   _displayText ~=
     if @range
-      if Array.isArray(@value) and @value[0]
-        from = dpFmt(@value[0])
-        to = if @value[1] then dpFmt(@value[1]) else '...'
+      pair = _value
+      if pair[0]
+        from = dpFmt(pair[0])
+        to = if pair[1] then dpFmt(pair[1]) else '...'
         "#{from} – #{to}"
       else
         @placeholder
     else
-      if @value then dpFmt(@value) else @placeholder
+      if _value then dpFmt(_value) else @placeholder
 
   _monthLabel ~=
     viewMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
@@ -95,7 +119,8 @@ export DatePicker = component
   _selectDay: (day) ->
     return if @disabled
     if @range
-      if _rangeStart and not dpSameDay(_rangeStart, day)
+      if _rangeStart
+        # Same-day click completes a single-day range (was a no-op).
         from = if _rangeStart < day then _rangeStart else day
         to = if _rangeStart < day then day else _rangeStart
         @value = [from, to]
@@ -109,18 +134,6 @@ export DatePicker = component
       @value = day
       @emit 'change', @value
       open = false
-    _inputText = _displayText
-
-  _onInputChange: (e) ->
-    raw = e.target.value.replace(/[^\d\/]/g, '')
-    if raw.length <= 10
-      _inputText = raw
-    if raw.length is 10
-      dt = dpParse(raw)
-      if dt
-        @value = dt
-        viewMonth = new Date(dt.getFullYear(), dt.getMonth(), 1)
-        @emit 'change', @value
 
   toggle: ->
     return if @disabled
@@ -128,29 +141,95 @@ export DatePicker = component
 
   openPicker: ->
     open = true
-    if @value and not @range
-      viewMonth = new Date(@value.getFullYear(), @value.getMonth(), 1)
-    else if @range and Array.isArray(@value) and @value[0]
-      viewMonth = new Date(@value[0].getFullYear(), @value[0].getMonth(), 1)
-    _inputText = _displayText
-    requestAnimationFrame => @_position()
+    cur = _value
+    if cur and not @range
+      viewMonth = new Date(cur.getFullYear(), cur.getMonth(), 1)
+      _focusedDay = cur
+    else if @range and Array.isArray(cur) and cur[0]
+      viewMonth = new Date(cur[0].getFullYear(), cur[0].getMonth(), 1)
+      _focusedDay = cur[0]
+    else
+      _focusedDay = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), 1)
+    requestAnimationFrame =>
+      @_position()
+      @_focusGridDay()
 
   close: ->
     open = false
     _rangeStart = null
     _hoveredDay = null
+    _focusedDay = null
 
   _position: -> ARIA.positionBelow @_trigger, @_cal, 4, false
 
-  _onKeydown: (e) ->
+  # Focus the day-cell whose date matches _focusedDay. Uses a
+  # data-date attribute we put on each gridcell button.
+  _focusGridDay: ->
+    return unless @_cal and _focusedDay
+    iso = "#{_focusedDay.getFullYear()}-#{_focusedDay.getMonth()}-#{_focusedDay.getDate()}"
+    @_cal.querySelector("[data-date='#{iso}']")?.focus()
+
+  _shiftFocus: (delta) ->
+    return unless _focusedDay
+    next = new Date(_focusedDay.getFullYear(), _focusedDay.getMonth(), _focusedDay.getDate() + delta)
+    _focusedDay = next
+    # If the new day lands outside the current view month, advance the view.
+    if next.getMonth() isnt viewMonth.getMonth() or next.getFullYear() isnt viewMonth.getFullYear()
+      viewMonth = new Date(next.getFullYear(), next.getMonth(), 1)
+    requestAnimationFrame => @_focusGridDay()
+
+  _onTriggerKeydown: (e) ->
     switch e.key
+      when 'Escape'
+        if open
+          e.preventDefault()
+          @close()
+      when 'Enter', ' ', 'ArrowDown'
+        unless open
+          e.preventDefault()
+          @openPicker()
+
+  # Full grid keyboard support (was missing entirely — the gridcells
+  # had tabIndex:-1 and no key handler so users couldn't navigate days
+  # with arrow keys at all). APG date-picker pattern:
+  #   ArrowLeft/Right  ±1 day
+  #   ArrowUp/Down     ±1 week
+  #   PageUp/Down      ±1 month
+  #   Shift+PageUp/Dn  ±1 year
+  #   Home/End         start/end of week
+  #   Enter / Space    select focused day
+  #   Escape           close + return focus to trigger
+  _onGridKeydown: (e) ->
+    return if @disabled
+    switch e.key
+      when 'ArrowLeft'  then e.preventDefault(); @_shiftFocus(-1)
+      when 'ArrowRight' then e.preventDefault(); @_shiftFocus(1)
+      when 'ArrowUp'    then e.preventDefault(); @_shiftFocus(-7)
+      when 'ArrowDown'  then e.preventDefault(); @_shiftFocus(7)
+      when 'PageUp'
+        e.preventDefault()
+        days = if e.shiftKey then 365 else 30
+        @_shiftFocus(-days)
+      when 'PageDown'
+        e.preventDefault()
+        days = if e.shiftKey then 365 else 30
+        @_shiftFocus(days)
+      when 'Home'
+        e.preventDefault()
+        # Snap to start of current week given firstDayOfWeek.
+        delta = -((_focusedDay.getDay() - @firstDayOfWeek + 7) %% 7)
+        @_shiftFocus(delta)
+      when 'End'
+        e.preventDefault()
+        delta = 6 - ((_focusedDay.getDay() - @firstDayOfWeek + 7) %% 7)
+        @_shiftFocus(delta)
+      when 'Enter', ' '
+        e.preventDefault()
+        @_selectDay(_focusedDay) if _focusedDay
       when 'Escape'
         e.preventDefault()
         @close()
         @_trigger?.focus()
-      when 'Enter', ' '
-        e.preventDefault()
-        @toggle() unless open
 
   ~>
     if open
@@ -164,26 +243,27 @@ export DatePicker = component
     . $open: open?!, $disabled: @disabled?!, $range: @range?!
 
       # Trigger
-      button ref: "_trigger", $trigger: true
+      button type: "button", ref: "_trigger", $trigger: true
         aria-haspopup: "dialog"
         aria-expanded: !!open
         disabled: @disabled
         @click: @toggle
-        @keydown: @_onKeydown
+        @keydown: @_onTriggerKeydown
         _displayText
 
       # Calendar dropdown
       if open
         div ref: "_cal", role: "dialog", aria-label: "Date picker", $calendar: true
           style: "position:fixed;z-index:50"
+          @keydown: @_onGridKeydown
 
           # Month navigation
           . $header: true
-            button $prev: true, aria-label: "Previous month", @click: @_prevMonth
+            button type: "button", $prev: true, aria-label: "Previous month", @click: @_prevMonth
               "‹"
             span $month-label: true
               _monthLabel
-            button $next: true, aria-label: "Next month", @click: @_nextMonth
+            button type: "button", $next: true, aria-label: "Next month", @click: @_nextMonth
               "›"
 
           # Day-of-week headers
@@ -192,14 +272,19 @@ export DatePicker = component
               span $weekday: true
                 dayName
 
-          # Day grid
+          # Day grid. Cells use roving-tabindex pattern: only the
+          # _focusedDay cell has tabIndex 0 so Tab moves out of the
+          # grid, but arrow keys move within. data-date is used by
+          # _focusGridDay() to find the cell to focus after view changes.
           . $days: true, role: "grid"
             for entry, dIdx in _daysInView
-              button role: "gridcell", tabIndex: -1
+              button type: "button", role: "gridcell"
+                data-date: "#{entry.date.getFullYear()}-#{entry.date.getMonth()}-#{entry.date.getDate()}"
+                tabIndex: (if dpSameDay(entry.date, _focusedDay) then 0 else -1)
                 $outside: entry.outside?!
                 $today: dpSameDay(entry.date, _today)?!
-                $selected: (if @range then (Array.isArray(@value) and (dpSameDay(entry.date, @value[0]) or dpSameDay(entry.date, @value[1]))) else dpSameDay(entry.date, @value))?!
-                $in-range: (if @range then (if _rangeStart then dpInRange(entry.date, _rangeStart, _hoveredDay or _rangeStart) else if Array.isArray(@value) and @value[0] and @value[1] then dpInRange(entry.date, @value[0], @value[1]) else false) else false)?!
+                $selected: (if @range then (Array.isArray(_value) and (dpSameDay(entry.date, _value[0]) or dpSameDay(entry.date, _value[1]))) else dpSameDay(entry.date, _value))?!
+                $in-range: (if @range then (if _rangeStart then dpInRange(entry.date, _rangeStart, _hoveredDay or _rangeStart) else if Array.isArray(_value) and _value[0] and _value[1] then dpInRange(entry.date, _value[0], _value[1]) else false) else false)?!
                 $range-start: (if @range and _rangeStart then dpSameDay(entry.date, _rangeStart) else false)?!
                 @click: (=> @_selectDay(entry.date))
                 @mouseenter: (=> _hoveredDay = entry.date)

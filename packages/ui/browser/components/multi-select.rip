@@ -42,6 +42,17 @@ export MultiSelect = component
   _val: (item) ->
     if typeof item is 'string' then item else (item.value or item.id or String(item))
 
+  # Look up the original item by stored value so chip rendering can use
+  # the friendly label even when @items are objects. Falls back to the
+  # value itself when no matching item is found (stale value, free-form).
+  _itemByVal: (v) ->
+    return v unless Array.isArray(@items)
+    for item in @items
+      return item if @_val(item) is v
+    v
+
+  _chipLabel: (v) -> @_label(@_itemByVal(v))
+
   _isSelected: (item) ->
     v = @_val(item)
     Array.isArray(@value) and v in @value
@@ -142,7 +153,12 @@ export MultiSelect = component
         e.preventDefault()
         @_close()
       when 'Backspace'
-        if not query and @value.length > 0
+        # Defensive: @value could be null/undefined if a parent reset it
+        # to a non-array value. Only act when query is empty (so
+        # Backspace inside text deletes the char) AND there's a chip to
+        # remove.
+        if not query and Array.isArray(@value) and @value.length > 0
+          e.preventDefault()
           @value = @value.slice(0, -1)
           @emit 'change', @value
       when 'Tab'
@@ -168,15 +184,16 @@ export MultiSelect = component
       # Chip area + input
       . $chips: true, @click: @_onChipsClick
         for chip in @value
-          span $chip: true
-            "#{chip}"
-            button $remove: true, aria-label: "Remove #{chip}", @mousedown: @_onRemoveMousedown, @click: (=> @_removeChip(chip))
+          span $chip: true, $value: chip
+            "#{@_chipLabel(chip)}"
+            button type: "button", $remove: true, aria-label: "Remove #{@_chipLabel(chip)}", @mousedown: @_onRemoveMousedown, @click: (=> @_removeChip(chip))
               "✕"
         input ref: "_input", type: "text", autocomplete: "off"
           role: "combobox"
           aria-expanded: !!open
           aria-haspopup: "listbox"
           aria-controls: if open then _listId else undefined
+          aria-activedescendant: if highlightedIndex >= 0 then "#{_listId}-#{highlightedIndex}" else undefined
           $disabled: @disabled?!
           disabled: @disabled
           placeholder: if @value.length is 0 then @placeholder else ''

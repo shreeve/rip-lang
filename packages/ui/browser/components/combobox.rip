@@ -134,7 +134,7 @@ export Combobox = component
           @click: @onInputClick
           @keydown: @_onKeydown
         if @query
-          button aria-label: "Clear", $clear: true, @click: @clear
+          button type: "button", aria-label: "Clear", $clear: true, @click: @clear
             "✕"
 
       # Listbox
