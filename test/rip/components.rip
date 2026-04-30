@@ -292,60 +292,66 @@ code "simple conditional", '''
   export const A = (() => {
   function create_block_0(ctx) {
     let _el1, _t0;
+    let _factoryChildren = [];
     return {
-      c() {
-        _el1 = document.createElement('span');
-        _t0 = document.createTextNode("yes");
-        _el1.appendChild(_t0);
-        this._first = _el1;
-      },
-      m(target, anchor) {
-        if (target) target.insertBefore(_el1, anchor);
-      },
-      p(ctx) {},
-      d(detaching) {
-        if (detaching && _el1) _el1.remove();
-      }
+   c() {
+     _el1 = document.createElement('span');
+     _t0 = document.createTextNode("yes");
+     _el1.appendChild(_t0);
+     this._first = _el1;
+   },
+   m(target, anchor) {
+     if (target) target.insertBefore(_el1, anchor);
+   },
+   p(ctx) {
+   },
+   d(detaching) {
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     _factoryChildren = [];
+     if (detaching && _el1) _el1.remove();
+   }
     };
   }
-
+  
   return class extends __Component {
     _init(props) {
-      this.show = __state(true);
+   this.show = __state(true);
     }
     _create() {
-      this._anchor0 = document.createComment('if');
-      return this._anchor0;
+   this._anchor0 = document.createComment('if');
+   return this._anchor0;
     }
     _setup() {
-      // Conditional: create_block_0
-      {
-        const anchor = this._anchor0;
-        let currentBlock = null;
-        let showing = null;
-        __effect(() => {
-          const show = !!(this.show.value);
-          const want = show ? 'then' : null;
-          if (want === showing) return;
-          if (currentBlock) {
-            const leaving = currentBlock;
-            if (leaving._t) { __transition(leaving._first, leaving._t, 'leave', () => leaving.d(true)); }
-            else { leaving.d(true); }
-            currentBlock = null;
-          }
-          showing = want;
-          if (want === 'then') {
-            currentBlock = create_block_0(this);
-            currentBlock.c();
-            if (anchor.parentNode) currentBlock.m(anchor.parentNode, anchor.nextSibling);
-            currentBlock.p(this);
-            if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');
-          }
-        });
-      }
+   // Conditional: create_block_0
+   {
+     const anchor = this._anchor0;
+     let currentBlock = null;
+     let showing = null;
+     __effect(() => {
+       const show = !!(this.show.value);
+       const want = show ? 'then' : null;
+       if (want === showing) return;
+   
+       if (currentBlock) {
+         const leaving = currentBlock;
+         if (leaving._t) { __transition(leaving._first, leaving._t, 'leave', () => leaving.d(true)); }
+         else { leaving.d(true); }
+         currentBlock = null;
+       }
+       showing = want;
+   
+       if (want === 'then') {
+         currentBlock = create_block_0(this);
+         currentBlock.c();
+         if (anchor.parentNode) currentBlock.m(anchor.parentNode, anchor.nextSibling);
+         currentBlock.p(this);
+         if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');
+       }
+     });
+   }
     }
   };
-  })()
+  })();
   ''', opts
 
 code "if-else conditional", '''
@@ -360,86 +366,96 @@ code "if-else conditional", '''
   export const A = (() => {
   function create_block_0(ctx) {
     let _el1, _t0;
+    let _factoryChildren = [];
     return {
-      c() {
-        _el1 = document.createElement('span');
-        _t0 = document.createTextNode("yes");
-        _el1.appendChild(_t0);
-        this._first = _el1;
-      },
-      m(target, anchor) {
-        if (target) target.insertBefore(_el1, anchor);
-      },
-      p(ctx) {},
-      d(detaching) {
-        if (detaching && _el1) _el1.remove();
-      }
+   c() {
+     _el1 = document.createElement('span');
+     _t0 = document.createTextNode("yes");
+     _el1.appendChild(_t0);
+     this._first = _el1;
+   },
+   m(target, anchor) {
+     if (target) target.insertBefore(_el1, anchor);
+   },
+   p(ctx) {
+   },
+   d(detaching) {
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     _factoryChildren = [];
+     if (detaching && _el1) _el1.remove();
+   }
     };
   }
-
+  
   function create_block_1(ctx) {
     let _el2, _t1;
+    let _factoryChildren = [];
     return {
-      c() {
-        _el2 = document.createElement('span');
-        _t1 = document.createTextNode("no");
-        _el2.appendChild(_t1);
-        this._first = _el2;
-      },
-      m(target, anchor) {
-        if (target) target.insertBefore(_el2, anchor);
-      },
-      p(ctx) {},
-      d(detaching) {
-        if (detaching && _el2) _el2.remove();
-      }
+   c() {
+     _el2 = document.createElement('span');
+     _t1 = document.createTextNode("no");
+     _el2.appendChild(_t1);
+     this._first = _el2;
+   },
+   m(target, anchor) {
+     if (target) target.insertBefore(_el2, anchor);
+   },
+   p(ctx) {
+   },
+   d(detaching) {
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     _factoryChildren = [];
+     if (detaching && _el2) _el2.remove();
+   }
     };
   }
-
+  
   return class extends __Component {
     _init(props) {
-      this.show = __state(true);
+   this.show = __state(true);
     }
     _create() {
-      this._anchor0 = document.createComment('if');
-      return this._anchor0;
+   this._anchor0 = document.createComment('if');
+   return this._anchor0;
     }
     _setup() {
-      // Conditional: create_block_0 / create_block_1
-      {
-        const anchor = this._anchor0;
-        let currentBlock = null;
-        let showing = null;
-        __effect(() => {
-          const show = !!(this.show.value);
-          const want = show ? 'then' : 'else';
-          if (want === showing) return;
-          if (currentBlock) {
-            const leaving = currentBlock;
-            if (leaving._t) { __transition(leaving._first, leaving._t, 'leave', () => leaving.d(true)); }
-            else { leaving.d(true); }
-            currentBlock = null;
-          }
-          showing = want;
-          if (want === 'then') {
-            currentBlock = create_block_0(this);
-            currentBlock.c();
-            if (anchor.parentNode) currentBlock.m(anchor.parentNode, anchor.nextSibling);
-            currentBlock.p(this);
-            if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');
-          }
-          if (want === 'else') {
-            currentBlock = create_block_1(this);
-            currentBlock.c();
-            if (anchor.parentNode) currentBlock.m(anchor.parentNode, anchor.nextSibling);
-            currentBlock.p(this);
-            if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');
-          }
-        });
-      }
+   // Conditional: create_block_0 / create_block_1
+   {
+     const anchor = this._anchor0;
+     let currentBlock = null;
+     let showing = null;
+     __effect(() => {
+       const show = !!(this.show.value);
+       const want = show ? 'then' : 'else';
+       if (want === showing) return;
+   
+       if (currentBlock) {
+         const leaving = currentBlock;
+         if (leaving._t) { __transition(leaving._first, leaving._t, 'leave', () => leaving.d(true)); }
+         else { leaving.d(true); }
+         currentBlock = null;
+       }
+       showing = want;
+   
+       if (want === 'then') {
+         currentBlock = create_block_0(this);
+         currentBlock.c();
+         if (anchor.parentNode) currentBlock.m(anchor.parentNode, anchor.nextSibling);
+         currentBlock.p(this);
+         if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');
+       }
+       if (want === 'else') {
+         currentBlock = create_block_1(this);
+         currentBlock.c();
+         if (anchor.parentNode) currentBlock.m(anchor.parentNode, anchor.nextSibling);
+         currentBlock.p(this);
+         if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');
+       }
+     });
+   }
     }
   };
-  })()
+  })();
   ''', opts
 
 # ==============================================================================
@@ -456,43 +472,47 @@ code "simple loop", '''
   export const A = (() => {
   function create_block_0(ctx, item, i) {
     let _el1, _t0;
+    let _factoryChildren = [];
     return {
-      _s: true,
-      c() {
-        _el1 = document.createElement('span');
-        _t0 = document.createTextNode(item);
-        _el1.appendChild(_t0);
-        this._first = _el1;
-      },
-      m(target, anchor) {
-        if (target) target.insertBefore(_el1, anchor);
-      },
-      p(ctx, item, i) {},
-      d(detaching) {
-        if (detaching && _el1) _el1.remove();
-      }
+   _s: true,
+   c() {
+     _el1 = document.createElement('span');
+     _t0 = document.createTextNode(item);
+     _el1.appendChild(_t0);
+     this._first = _el1;
+   },
+   m(target, anchor) {
+     if (target) target.insertBefore(_el1, anchor);
+   },
+   p(ctx, item, i) {
+   },
+   d(detaching) {
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     _factoryChildren = [];
+     if (detaching && _el1) _el1.remove();
+   }
     };
   }
-
+  
   return class extends __Component {
     _init(props) {
-      this.items = __state([1, 2, 3]);
+   this.items = __state([1, 2, 3]);
     }
     _create() {
-      this._anchor0 = document.createComment('for');
-      return this._anchor0;
+   this._anchor0 = document.createComment('for');
+   return this._anchor0;
     }
     _setup() {
-      // Loop: create_block_0
-      {
-        const __s = { blocks: [], keys: [] };
-        __effect(() => {
-          __reconcile(this._anchor0, __s, this.items.value, this, create_block_0, null);
-        });
-      }
+   // Loop: create_block_0
+   {
+     const __s = { blocks: [], keys: [] };
+     __effect(() => {
+       __reconcile(this._anchor0, __s, this.items.value, this, create_block_0, null);
+     });
+   }
     }
   };
-  })()
+  })();
   ''', opts
 
 code "text output in loop with postfix if else", '''
@@ -506,43 +526,47 @@ code "text output in loop with postfix if else", '''
   export const A = (() => {
   function create_block_0(ctx, item, i) {
     let _el1, _t0;
+    let _factoryChildren = [];
     return {
-      _s: true,
-      c() {
-        _el1 = document.createElement('span');
-        _t0 = document.createTextNode(String((item ? "Ready" : "No")));
-        _el1.appendChild(_t0);
-        this._first = _el1;
-      },
-      m(target, anchor) {
-        if (target) target.insertBefore(_el1, anchor);
-      },
-      p(ctx, item, i) {},
-      d(detaching) {
-        if (detaching && _el1) _el1.remove();
-      }
+   _s: true,
+   c() {
+     _el1 = document.createElement('span');
+     _t0 = document.createTextNode(String((item ? "Ready" : "No")));
+     _el1.appendChild(_t0);
+     this._first = _el1;
+   },
+   m(target, anchor) {
+     if (target) target.insertBefore(_el1, anchor);
+   },
+   p(ctx, item, i) {
+   },
+   d(detaching) {
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     _factoryChildren = [];
+     if (detaching && _el1) _el1.remove();
+   }
     };
   }
-
+  
   return class extends __Component {
     _init(props) {
-      this.items = __state([true]);
+   this.items = __state([true]);
     }
     _create() {
-      this._anchor0 = document.createComment('for');
-      return this._anchor0;
+   this._anchor0 = document.createComment('for');
+   return this._anchor0;
     }
     _setup() {
-      // Loop: create_block_0
-      {
-        const __s = { blocks: [], keys: [] };
-        __effect(() => {
-          __reconcile(this._anchor0, __s, this.items.value, this, create_block_0, null);
-        });
-      }
+   // Loop: create_block_0
+   {
+     const __s = { blocks: [], keys: [] };
+     __effect(() => {
+       __reconcile(this._anchor0, __s, this.items.value, this, create_block_0, null);
+     });
+   }
     }
   };
-  })()
+  })();
   ''', opts
 
 test "text output in switch loop with postfix if else compiles", '''
@@ -603,90 +627,99 @@ code "conditional inside loop threads loop vars", '''
   export const A = (() => {
   function create_block_1(ctx, item, i) {
     let _el2, _t0;
+    let _factoryChildren = [];
     return {
-      c() {
-        _el2 = document.createElement('span');
-        _t0 = document.createTextNode("yes");
-        _el2.appendChild(_t0);
-        this._first = _el2;
-      },
-      m(target, anchor) {
-        if (target) target.insertBefore(_el2, anchor);
-      },
-      p(ctx, item, i) {},
-      d(detaching) {
-        if (detaching && _el2) _el2.remove();
-      }
+   c() {
+     _el2 = document.createElement('span');
+     _t0 = document.createTextNode("yes");
+     _el2.appendChild(_t0);
+     this._first = _el2;
+   },
+   m(target, anchor) {
+     if (target) target.insertBefore(_el2, anchor);
+   },
+   p(ctx, item, i) {
+   },
+   d(detaching) {
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     _factoryChildren = [];
+     if (detaching && _el2) _el2.remove();
+   }
     };
   }
-
+  
   function create_block_0(ctx, item, i) {
     let _anchor1;
     let disposers = [];
+    let _factoryChildren = [];
     return {
-      c() {
-        _anchor1 = document.createComment('if');
-        this._first = _anchor1;
-      },
-      m(target, anchor) {
-        if (target) target.insertBefore(_anchor1, anchor);
-      },
-      p(ctx, item, i) {
-        disposers.forEach(d => d());
-        disposers = [];
-        // Conditional: create_block_1
-        {
-          const anchor = _anchor1;
-          let currentBlock = null;
-          let showing = null;
-          disposers.push(__effect(() => {
-            const show = !!(item.active);
-            const want = show ? 'then' : null;
-            if (want === showing) return;
-            if (currentBlock) {
-              const leaving = currentBlock;
-              if (leaving._t) { __transition(leaving._first, leaving._t, 'leave', () => leaving.d(true)); }
-              else { leaving.d(true); }
-              currentBlock = null;
-            }
-            showing = want;
-            if (want === 'then') {
-              currentBlock = create_block_1(ctx, item, i);
-              currentBlock.c();
-              if (anchor.parentNode) currentBlock.m(anchor.parentNode, anchor.nextSibling);
-              currentBlock.p(ctx, item, i);
-              if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');
-            }
-          }));
-          disposers.push(() => { if (currentBlock) { currentBlock.d(true); currentBlock = null; } });
-        }
-      },
-      d(detaching) {
-        disposers.forEach(d => d());
-        if (detaching && _anchor1) _anchor1.remove();
-      }
+   c() {
+     _anchor1 = document.createComment('if');
+     this._first = _anchor1;
+   },
+   m(target, anchor) {
+     if (target) target.insertBefore(_anchor1, anchor);
+   },
+   p(ctx, item, i) {
+     disposers.forEach(d => d());
+     disposers = [];
+     // Conditional: create_block_1
+   {
+     const anchor = _anchor1;
+     let currentBlock = null;
+     let showing = null;
+     disposers.push(__effect(() => {
+       const show = !!(item.active);
+       const want = show ? 'then' : null;
+       if (want === showing) return;
+   
+       if (currentBlock) {
+         const leaving = currentBlock;
+         if (leaving._t) { __transition(leaving._first, leaving._t, 'leave', () => leaving.d(true)); }
+         else { leaving.d(true); }
+         currentBlock = null;
+       }
+       showing = want;
+   
+       if (want === 'then') {
+         currentBlock = create_block_1(ctx, item, i);
+         currentBlock.c();
+         if (anchor.parentNode) currentBlock.m(anchor.parentNode, anchor.nextSibling);
+         currentBlock.p(ctx, item, i);
+         if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');
+       }
+     }, {skipRegister: true}));
+     disposers.push(() => { if (currentBlock) { currentBlock.d(true); currentBlock = null; } });
+   }
+   },
+   d(detaching) {
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     _factoryChildren = [];
+     disposers.forEach(d => d());
+     if (detaching && _anchor1) _anchor1.remove();
+   }
     };
   }
-
+  
   return class extends __Component {
     _init(props) {
-      this.items = __state([{active: true}]);
+   this.items = __state([{active: true}]);
     }
     _create() {
-      this._anchor0 = document.createComment('for');
-      return this._anchor0;
+   this._anchor0 = document.createComment('for');
+   return this._anchor0;
     }
     _setup() {
-      // Loop: create_block_0
-      {
-        const __s = { blocks: [], keys: [] };
-        __effect(() => {
-          __reconcile(this._anchor0, __s, this.items.value, this, create_block_0, null);
-        });
-      }
+   // Loop: create_block_0
+   {
+     const __s = { blocks: [], keys: [] };
+     __effect(() => {
+       __reconcile(this._anchor0, __s, this.items.value, this, create_block_0, null);
+     });
+   }
     }
   };
-  })()
+  })();
   ''', opts
 
 code "nested loops thread outer vars", '''
@@ -700,72 +733,79 @@ code "nested loops thread outer vars", '''
   export const A = (() => {
   function create_block_1(ctx, cell, ci, row, ri) {
     let _el2, _t0;
+    let _factoryChildren = [];
     return {
-      _s: true,
-      c() {
-        _el2 = document.createElement('span');
-        _t0 = document.createTextNode(cell);
-        _el2.appendChild(_t0);
-        this._first = _el2;
-      },
-      m(target, anchor) {
-        if (target) target.insertBefore(_el2, anchor);
-      },
-      p(ctx, cell, ci, row, ri) {},
-      d(detaching) {
-        if (detaching && _el2) _el2.remove();
-      }
+   _s: true,
+   c() {
+     _el2 = document.createElement('span');
+     _t0 = document.createTextNode(cell);
+     _el2.appendChild(_t0);
+     this._first = _el2;
+   },
+   m(target, anchor) {
+     if (target) target.insertBefore(_el2, anchor);
+   },
+   p(ctx, cell, ci, row, ri) {
+   },
+   d(detaching) {
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     _factoryChildren = [];
+     if (detaching && _el2) _el2.remove();
+   }
     };
   }
-
+  
   function create_block_0(ctx, row, ri) {
     let _anchor1;
     let disposers = [];
+    let _factoryChildren = [];
     return {
-      c() {
-        _anchor1 = document.createComment('for');
-        this._first = _anchor1;
-      },
-      m(target, anchor) {
-        if (target) target.insertBefore(_anchor1, anchor);
-      },
-      p(ctx, row, ri) {
-        disposers.forEach(d => d());
-        disposers = [];
-        // Loop: create_block_1
-        {
-          const __s = { blocks: [], keys: [] };
-          disposers.push(__effect(() => {
-            __reconcile(_anchor1, __s, row, ctx, create_block_1, null, row, ri);
-          }));
-        }
-      },
-      d(detaching) {
-        disposers.forEach(d => d());
-        if (detaching && _anchor1) _anchor1.remove();
-      }
+   c() {
+     _anchor1 = document.createComment('for');
+     this._first = _anchor1;
+   },
+   m(target, anchor) {
+     if (target) target.insertBefore(_anchor1, anchor);
+   },
+   p(ctx, row, ri) {
+     disposers.forEach(d => d());
+     disposers = [];
+     // Loop: create_block_1
+   {
+     const __s = { blocks: [], keys: [] };
+     disposers.push(__effect(() => {
+       __reconcile(_anchor1, __s, row, ctx, create_block_1, null, row, ri);
+     }, {skipRegister: true}));
+   }
+   },
+   d(detaching) {
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     _factoryChildren = [];
+     disposers.forEach(d => d());
+     if (detaching && _anchor1) _anchor1.remove();
+   }
     };
   }
-
+  
   return class extends __Component {
     _init(props) {
-      this.rows = __state([[1, 2]]);
+   this.rows = __state([[1, 2]]);
     }
     _create() {
-      this._anchor0 = document.createComment('for');
-      return this._anchor0;
+   this._anchor0 = document.createComment('for');
+   return this._anchor0;
     }
     _setup() {
-      // Loop: create_block_0
-      {
-        const __s = { blocks: [], keys: [] };
-        __effect(() => {
-          __reconcile(this._anchor0, __s, this.rows.value, this, create_block_0, null);
-        });
-      }
+   // Loop: create_block_0
+   {
+     const __s = { blocks: [], keys: [] };
+     __effect(() => {
+       __reconcile(this._anchor0, __s, this.rows.value, this, create_block_0, null);
+     });
+   }
     }
   };
-  })()
+  })();
   ''', opts
 
 # ==============================================================================
@@ -782,60 +822,66 @@ code "string containing 'this' in conditional factory", '''
   export const A = (() => {
   function create_block_0(ctx) {
     let _el1, _t0;
+    let _factoryChildren = [];
     return {
-      c() {
-        _el1 = document.createElement('span');
-        _t0 = document.createTextNode("this works");
-        _el1.appendChild(_t0);
-        this._first = _el1;
-      },
-      m(target, anchor) {
-        if (target) target.insertBefore(_el1, anchor);
-      },
-      p(ctx) {},
-      d(detaching) {
-        if (detaching && _el1) _el1.remove();
-      }
+   c() {
+     _el1 = document.createElement('span');
+     _t0 = document.createTextNode("this works");
+     _el1.appendChild(_t0);
+     this._first = _el1;
+   },
+   m(target, anchor) {
+     if (target) target.insertBefore(_el1, anchor);
+   },
+   p(ctx) {
+   },
+   d(detaching) {
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     _factoryChildren = [];
+     if (detaching && _el1) _el1.remove();
+   }
     };
   }
-
+  
   return class extends __Component {
     _init(props) {
-      this.show = __state(true);
+   this.show = __state(true);
     }
     _create() {
-      this._anchor0 = document.createComment('if');
-      return this._anchor0;
+   this._anchor0 = document.createComment('if');
+   return this._anchor0;
     }
     _setup() {
-      // Conditional: create_block_0
-      {
-        const anchor = this._anchor0;
-        let currentBlock = null;
-        let showing = null;
-        __effect(() => {
-          const show = !!(this.show.value);
-          const want = show ? 'then' : null;
-          if (want === showing) return;
-          if (currentBlock) {
-            const leaving = currentBlock;
-            if (leaving._t) { __transition(leaving._first, leaving._t, 'leave', () => leaving.d(true)); }
-            else { leaving.d(true); }
-            currentBlock = null;
-          }
-          showing = want;
-          if (want === 'then') {
-            currentBlock = create_block_0(this);
-            currentBlock.c();
-            if (anchor.parentNode) currentBlock.m(anchor.parentNode, anchor.nextSibling);
-            currentBlock.p(this);
-            if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');
-          }
-        });
-      }
+   // Conditional: create_block_0
+   {
+     const anchor = this._anchor0;
+     let currentBlock = null;
+     let showing = null;
+     __effect(() => {
+       const show = !!(this.show.value);
+       const want = show ? 'then' : null;
+       if (want === showing) return;
+   
+       if (currentBlock) {
+         const leaving = currentBlock;
+         if (leaving._t) { __transition(leaving._first, leaving._t, 'leave', () => leaving.d(true)); }
+         else { leaving.d(true); }
+         currentBlock = null;
+       }
+       showing = want;
+   
+       if (want === 'then') {
+         currentBlock = create_block_0(this);
+         currentBlock.c();
+         if (anchor.parentNode) currentBlock.m(anchor.parentNode, anchor.nextSibling);
+         currentBlock.p(this);
+         if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');
+       }
+     });
+   }
     }
   };
-  })()
+  })();
   ''', opts
 
 code "string containing 'this' in loop factory", '''
@@ -848,43 +894,47 @@ code "string containing 'this' in loop factory", '''
   export const A = (() => {
   function create_block_0(ctx, item, i) {
     let _el1, _t0;
+    let _factoryChildren = [];
     return {
-      _s: true,
-      c() {
-        _el1 = document.createElement('span');
-        _t0 = document.createTextNode("this also works");
-        _el1.appendChild(_t0);
-        this._first = _el1;
-      },
-      m(target, anchor) {
-        if (target) target.insertBefore(_el1, anchor);
-      },
-      p(ctx, item, i) {},
-      d(detaching) {
-        if (detaching && _el1) _el1.remove();
-      }
+   _s: true,
+   c() {
+     _el1 = document.createElement('span');
+     _t0 = document.createTextNode("this also works");
+     _el1.appendChild(_t0);
+     this._first = _el1;
+   },
+   m(target, anchor) {
+     if (target) target.insertBefore(_el1, anchor);
+   },
+   p(ctx, item, i) {
+   },
+   d(detaching) {
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     _factoryChildren = [];
+     if (detaching && _el1) _el1.remove();
+   }
     };
   }
-
+  
   return class extends __Component {
     _init(props) {
-      this.items = __state([1]);
+   this.items = __state([1]);
     }
     _create() {
-      this._anchor0 = document.createComment('for');
-      return this._anchor0;
+   this._anchor0 = document.createComment('for');
+   return this._anchor0;
     }
     _setup() {
-      // Loop: create_block_0
-      {
-        const __s = { blocks: [], keys: [] };
-        __effect(() => {
-          __reconcile(this._anchor0, __s, this.items.value, this, create_block_0, null);
-        });
-      }
+   // Loop: create_block_0
+   {
+     const __s = { blocks: [], keys: [] };
+     __effect(() => {
+       __reconcile(this._anchor0, __s, this.items.value, this, create_block_0, null);
+     });
+   }
     }
   };
-  })()
+  })();
   ''', opts
 
 # ==============================================================================
@@ -1201,6 +1251,32 @@ test "component effect cleanup runs before re-run and on unmount", '''
   a.log
   ''', ['setup-0', 'cleanup-0', 'setup-1', 'cleanup-1', 'setup-2', 'cleanup-2']
 
+# Wave 8a: a component's own effects register on that component's
+# _disposers (the auto-registration via __getCurrentComponent during
+# _init runs while the component is the current pushed component).
+test "component owns its own effect disposers", '''
+  A = component
+    x := 0
+    log =! []
+    ~> @log.push(x + 0)
+  a = A.new()
+  a._disposers?.length > 0
+  ''', true
+
+# Wave 8a: Component.unmount() is idempotent — calling it twice does
+# NOT re-fire beforeUnmount/unmounted hooks or cascade to children
+# again.
+test "Component.unmount is idempotent", '''
+  count = 0
+  A = component
+    unmounted = -> count += 1
+  a = A.new()
+  a.unmount?(removeDOM: false)
+  a.unmount?(removeDOM: false)
+  a.unmount?(removeDOM: false)
+  count
+  ''', 1
+
 test "component computed with postfix ternary", '''
   A = component
     flag := false
@@ -1400,21 +1476,24 @@ code "child component with static props", '''
         Child label: "hello"
   ''', '''
   export const A = class extends __Component {
-    _init(props) {}
+    _init(props) {
+    }
     _create() {
-      this._el0 = document.createElement('div');
-      { const __prev = __pushComponent(this); try {
-      this._inst1 = new Child({ label: "hello" });
-      this._el2 = this._inst1._root = this._inst1._create();
-      (this._children || (this._children = [])).push(this._inst1);
-      } finally { __popComponent(__prev); } }
-      this._el0.appendChild(this._el2);
-      return this._el0;
+   this._el0 = document.createElement('div');
+   { const __prev = __pushComponent(this); try {
+   this._inst1 = new Child({ label: "hello" });
+   { const __cprev = __pushComponent(this._inst1); try {
+   this._el2 = this._inst1._root = this._inst1._create();
+   } finally { __popComponent(__cprev); } }
+   (this._children || (this._children = [])).push(this._inst1);
+   } finally { __popComponent(__prev); } }
+   this._el0.appendChild(this._el2);
+   return this._el0;
     }
     _setup() {
-      try { if (this._inst1._setup) this._inst1._setup(); if (this._inst1.mounted) this._inst1.mounted(); } catch (__e) { __handleComponentError(__e, this._inst1); }
+   try { if (this._inst1._setup) { const __cprev = __pushComponent(this._inst1); try { this._inst1._setup(); } finally { __popComponent(__cprev); } } if (this._inst1.mounted) this._inst1.mounted(); } catch (__e) { __handleComponentError(__e, this._inst1); }
     }
-  }
+  };
   ''', opts
 
 code "child component with reactive prop (signal pass-through)", '''
@@ -1426,22 +1505,24 @@ code "child component with reactive prop (signal pass-through)", '''
   ''', '''
   export const A = class extends __Component {
     _init(props) {
-      this.count = __state(0);
+   this.count = __state(0);
     }
     _create() {
-      this._el0 = document.createElement('div');
-      { const __prev = __pushComponent(this); try {
-      this._inst1 = new Child({ count: this.count });
-      this._el2 = this._inst1._root = this._inst1._create();
-      (this._children || (this._children = [])).push(this._inst1);
-      } finally { __popComponent(__prev); } }
-      this._el0.appendChild(this._el2);
-      return this._el0;
+   this._el0 = document.createElement('div');
+   { const __prev = __pushComponent(this); try {
+   this._inst1 = new Child({ count: this.count });
+   { const __cprev = __pushComponent(this._inst1); try {
+   this._el2 = this._inst1._root = this._inst1._create();
+   } finally { __popComponent(__cprev); } }
+   (this._children || (this._children = [])).push(this._inst1);
+   } finally { __popComponent(__prev); } }
+   this._el0.appendChild(this._el2);
+   return this._el0;
     }
     _setup() {
-      try { if (this._inst1._setup) this._inst1._setup(); if (this._inst1.mounted) this._inst1.mounted(); } catch (__e) { __handleComponentError(__e, this._inst1); }
+   try { if (this._inst1._setup) { const __cprev = __pushComponent(this._inst1); try { this._inst1._setup(); } finally { __popComponent(__cprev); } } if (this._inst1.mounted) this._inst1.mounted(); } catch (__e) { __handleComponentError(__e, this._inst1); }
     }
-  }
+  };
   ''', opts
 
 code "child component with children (slot)", '''
@@ -1451,22 +1532,25 @@ code "child component with children (slot)", '''
         span "slot content"
   ''', '''
   export const A = class extends __Component {
-    _init(props) {}
+    _init(props) {
+    }
     _create() {
-      this._el2 = document.createElement('span');
-      this._t0 = document.createTextNode("slot content");
-      this._el2.appendChild(this._t0);
-      { const __prev = __pushComponent(this); try {
-      this._inst0 = new Child({ children: this._el2 });
-      this._el1 = this._inst0._root = this._inst0._create();
-      (this._children || (this._children = [])).push(this._inst0);
-      } finally { __popComponent(__prev); } }
-      return this._el1;
+   this._el2 = document.createElement('span');
+   this._t0 = document.createTextNode("slot content");
+   this._el2.appendChild(this._t0);
+   { const __prev = __pushComponent(this); try {
+   this._inst0 = new Child({ children: this._el2 });
+   { const __cprev = __pushComponent(this._inst0); try {
+   this._el1 = this._inst0._root = this._inst0._create();
+   } finally { __popComponent(__cprev); } }
+   (this._children || (this._children = [])).push(this._inst0);
+   } finally { __popComponent(__prev); } }
+   return this._el1;
     }
     _setup() {
-      try { if (this._inst0._setup) this._inst0._setup(); if (this._inst0.mounted) this._inst0.mounted(); } catch (__e) { __handleComponentError(__e, this._inst0); }
+   try { if (this._inst0._setup) { const __cprev = __pushComponent(this._inst0); try { this._inst0._setup(); } finally { __popComponent(__cprev); } } if (this._inst0.mounted) this._inst0.mounted(); } catch (__e) { __handleComponentError(__e, this._inst0); }
     }
-  }
+  };
   ''', opts
 
 code "child component with props and children", '''
@@ -1477,24 +1561,27 @@ code "child component with props and children", '''
           span "child content"
   ''', '''
   export const A = class extends __Component {
-    _init(props) {}
+    _init(props) {
+    }
     _create() {
-      this._el0 = document.createElement('div');
-      this._el3 = document.createElement('span');
-      this._t0 = document.createTextNode("child content");
-      this._el3.appendChild(this._t0);
-      { const __prev = __pushComponent(this); try {
-      this._inst1 = new Child({ label: "hello", children: this._el3 });
-      this._el2 = this._inst1._root = this._inst1._create();
-      (this._children || (this._children = [])).push(this._inst1);
-      } finally { __popComponent(__prev); } }
-      this._el0.appendChild(this._el2);
-      return this._el0;
+   this._el0 = document.createElement('div');
+   this._el3 = document.createElement('span');
+   this._t0 = document.createTextNode("child content");
+   this._el3.appendChild(this._t0);
+   { const __prev = __pushComponent(this); try {
+   this._inst1 = new Child({ label: "hello", children: this._el3 });
+   { const __cprev = __pushComponent(this._inst1); try {
+   this._el2 = this._inst1._root = this._inst1._create();
+   } finally { __popComponent(__cprev); } }
+   (this._children || (this._children = [])).push(this._inst1);
+   } finally { __popComponent(__prev); } }
+   this._el0.appendChild(this._el2);
+   return this._el0;
     }
     _setup() {
-      try { if (this._inst1._setup) this._inst1._setup(); if (this._inst1.mounted) this._inst1.mounted(); } catch (__e) { __handleComponentError(__e, this._inst1); }
+   try { if (this._inst1._setup) { const __cprev = __pushComponent(this._inst1); try { this._inst1._setup(); } finally { __popComponent(__cprev); } } if (this._inst1.mounted) this._inst1.mounted(); } catch (__e) { __handleComponentError(__e, this._inst1); }
     }
-  }
+  };
   ''', opts
 
 # ==============================================================================
@@ -2001,65 +2088,71 @@ code "conditional inside parent element", '''
   export const A = (() => {
   function create_block_0(ctx) {
     let _el2, _t0;
+    let _factoryChildren = [];
     return {
-      c() {
-        _el2 = document.createElement('span');
-        _t0 = document.createTextNode("a");
-        _el2.appendChild(_t0);
-        this._first = _el2;
-      },
-      m(target, anchor) {
-        if (target) target.insertBefore(_el2, anchor);
-      },
-      p(ctx) {},
-      d(detaching) {
-        if (detaching && _el2) _el2.remove();
-      }
+   c() {
+     _el2 = document.createElement('span');
+     _t0 = document.createTextNode("a");
+     _el2.appendChild(_t0);
+     this._first = _el2;
+   },
+   m(target, anchor) {
+     if (target) target.insertBefore(_el2, anchor);
+   },
+   p(ctx) {
+   },
+   d(detaching) {
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     _factoryChildren = [];
+     if (detaching && _el2) _el2.remove();
+   }
     };
   }
-
+  
   return class extends __Component {
     _init(props) {
     }
     _create() {
-      this._el0 = document.createElement('div');
-      this._anchor1 = document.createComment('if');
-      this._el0.appendChild(this._anchor1);
-      this._el3 = document.createElement('span');
-      this._t1 = document.createTextNode("after");
-      this._el3.appendChild(this._t1);
-      this._el0.appendChild(this._el3);
-      return this._el0;
+   this._el0 = document.createElement('div');
+   this._anchor1 = document.createComment('if');
+   this._el0.appendChild(this._anchor1);
+   this._el3 = document.createElement('span');
+   this._t1 = document.createTextNode("after");
+   this._el3.appendChild(this._t1);
+   this._el0.appendChild(this._el3);
+   return this._el0;
     }
     _setup() {
-      // Conditional: create_block_0
-      {
-        const anchor = this._anchor1;
-        let currentBlock = null;
-        let showing = null;
-        __effect(() => {
-          const show = !!(true);
-          const want = show ? 'then' : null;
-          if (want === showing) return;
-          if (currentBlock) {
-            const leaving = currentBlock;
-            if (leaving._t) { __transition(leaving._first, leaving._t, 'leave', () => leaving.d(true)); }
-            else { leaving.d(true); }
-            currentBlock = null;
-          }
-          showing = want;
-          if (want === 'then') {
-            currentBlock = create_block_0(this);
-            currentBlock.c();
-            if (anchor.parentNode) currentBlock.m(anchor.parentNode, anchor.nextSibling);
-            currentBlock.p(this);
-            if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');
-          }
-        });
-      }
+   // Conditional: create_block_0
+   {
+     const anchor = this._anchor1;
+     let currentBlock = null;
+     let showing = null;
+     __effect(() => {
+       const show = !!(true);
+       const want = show ? 'then' : null;
+       if (want === showing) return;
+   
+       if (currentBlock) {
+         const leaving = currentBlock;
+         if (leaving._t) { __transition(leaving._first, leaving._t, 'leave', () => leaving.d(true)); }
+         else { leaving.d(true); }
+         currentBlock = null;
+       }
+       showing = want;
+   
+       if (want === 'then') {
+         currentBlock = create_block_0(this);
+         currentBlock.c();
+         if (anchor.parentNode) currentBlock.m(anchor.parentNode, anchor.nextSibling);
+         currentBlock.p(this);
+         if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');
+       }
+     });
+   }
     }
   };
-  })()
+  })();
   ''', opts
 
 code "conditional with fragment (multiple then-children)", '''
@@ -2073,68 +2166,74 @@ code "conditional with fragment (multiple then-children)", '''
   export const A = (() => {
   function create_block_0(ctx) {
     let _frag1, _el2, _t0, _el3, _t1;
+    let _factoryChildren = [];
     return {
-      c() {
-        _frag1 = document.createDocumentFragment();
-        _el2 = document.createElement('div');
-        _t0 = document.createTextNode("a");
-        _el2.appendChild(_t0);
-        _frag1.appendChild(_el2);
-        _el3 = document.createElement('div');
-        _t1 = document.createTextNode("b");
-        _el3.appendChild(_t1);
-        _frag1.appendChild(_el3);
-        this._first = _el2;
-      },
-      m(target, anchor) {
-        if (target) target.insertBefore(_el2, anchor);
-        if (target) target.insertBefore(_el3, anchor);
-      },
-      p(ctx) {},
-      d(detaching) {
-        if (detaching && _el2) _el2.remove();
-        if (detaching && _el3) _el3.remove();
-      }
+   c() {
+     _frag1 = document.createDocumentFragment();
+     _el2 = document.createElement('div');
+     _t0 = document.createTextNode("a");
+     _el2.appendChild(_t0);
+     _frag1.appendChild(_el2);
+     _el3 = document.createElement('div');
+     _t1 = document.createTextNode("b");
+     _el3.appendChild(_t1);
+     _frag1.appendChild(_el3);
+     this._first = _el2;
+   },
+   m(target, anchor) {
+     if (target) target.insertBefore(_el2, anchor);
+     if (target) target.insertBefore(_el3, anchor);
+   },
+   p(ctx) {
+   },
+   d(detaching) {
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     _factoryChildren = [];
+     if (detaching && _el2) _el2.remove();
+     if (detaching && _el3) _el3.remove();
+   }
     };
   }
-
+  
   return class extends __Component {
     _init(props) {
-      this.show = __state(false);
+   this.show = __state(false);
     }
     _create() {
-      this._anchor0 = document.createComment('if');
-      return this._anchor0;
+   this._anchor0 = document.createComment('if');
+   return this._anchor0;
     }
     _setup() {
-      // Conditional: create_block_0
-      {
-        const anchor = this._anchor0;
-        let currentBlock = null;
-        let showing = null;
-        __effect(() => {
-          const show = !!(this.show.value);
-          const want = show ? 'then' : null;
-          if (want === showing) return;
-          if (currentBlock) {
-            const leaving = currentBlock;
-            if (leaving._t) { __transition(leaving._first, leaving._t, 'leave', () => leaving.d(true)); }
-            else { leaving.d(true); }
-            currentBlock = null;
-          }
-          showing = want;
-          if (want === 'then') {
-            currentBlock = create_block_0(this);
-            currentBlock.c();
-            if (anchor.parentNode) currentBlock.m(anchor.parentNode, anchor.nextSibling);
-            currentBlock.p(this);
-            if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');
-          }
-        });
-      }
+   // Conditional: create_block_0
+   {
+     const anchor = this._anchor0;
+     let currentBlock = null;
+     let showing = null;
+     __effect(() => {
+       const show = !!(this.show.value);
+       const want = show ? 'then' : null;
+       if (want === showing) return;
+   
+       if (currentBlock) {
+         const leaving = currentBlock;
+         if (leaving._t) { __transition(leaving._first, leaving._t, 'leave', () => leaving.d(true)); }
+         else { leaving.d(true); }
+         currentBlock = null;
+       }
+       showing = want;
+   
+       if (want === 'then') {
+         currentBlock = create_block_0(this);
+         currentBlock.c();
+         if (anchor.parentNode) currentBlock.m(anchor.parentNode, anchor.nextSibling);
+         currentBlock.p(this);
+         if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');
+       }
+     });
+   }
     }
   };
-  })()
+  })();
   ''', opts
 
 code "reactive text inside conditional factory", '''
@@ -2149,66 +2248,71 @@ code "reactive text inside conditional factory", '''
   function create_block_0(ctx) {
     let _el1, _t0;
     let disposers = [];
+    let _factoryChildren = [];
     return {
-      c() {
-        _el1 = document.createElement('span');
-        _t0 = document.createTextNode('');
-        _el1.appendChild(_t0);
-        this._first = _el1;
-      },
-      m(target, anchor) {
-        if (target) target.insertBefore(_el1, anchor);
-      },
-      p(ctx) {
-        disposers.forEach(d => d());
-        disposers = [];
-        disposers.push(__effect(() => { _t0.data = ctx.name.value; }));
-      },
-      d(detaching) {
-        disposers.forEach(d => d());
-        if (detaching && _el1) _el1.remove();
-      }
+   c() {
+     _el1 = document.createElement('span');
+     _t0 = document.createTextNode('');
+     _el1.appendChild(_t0);
+     this._first = _el1;
+   },
+   m(target, anchor) {
+     if (target) target.insertBefore(_el1, anchor);
+   },
+   p(ctx) {
+     disposers.forEach(d => d());
+     disposers = [];
+     disposers.push(__effect(() => { _t0.data = ctx.name.value; }, {skipRegister: true}));
+   },
+   d(detaching) {
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     _factoryChildren = [];
+     disposers.forEach(d => d());
+     if (detaching && _el1) _el1.remove();
+   }
     };
   }
-
+  
   return class extends __Component {
     _init(props) {
-      this.show = __state(true);
-      this.name = __state("world");
+   this.show = __state(true);
+   this.name = __state("world");
     }
     _create() {
-      this._anchor0 = document.createComment('if');
-      return this._anchor0;
+   this._anchor0 = document.createComment('if');
+   return this._anchor0;
     }
     _setup() {
-      // Conditional: create_block_0
-      {
-        const anchor = this._anchor0;
-        let currentBlock = null;
-        let showing = null;
-        __effect(() => {
-          const show = !!(this.show.value);
-          const want = show ? 'then' : null;
-          if (want === showing) return;
-          if (currentBlock) {
-            const leaving = currentBlock;
-            if (leaving._t) { __transition(leaving._first, leaving._t, 'leave', () => leaving.d(true)); }
-            else { leaving.d(true); }
-            currentBlock = null;
-          }
-          showing = want;
-          if (want === 'then') {
-            currentBlock = create_block_0(this);
-            currentBlock.c();
-            if (anchor.parentNode) currentBlock.m(anchor.parentNode, anchor.nextSibling);
-            currentBlock.p(this);
-            if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');
-          }
-        });
-      }
+   // Conditional: create_block_0
+   {
+     const anchor = this._anchor0;
+     let currentBlock = null;
+     let showing = null;
+     __effect(() => {
+       const show = !!(this.show.value);
+       const want = show ? 'then' : null;
+       if (want === showing) return;
+   
+       if (currentBlock) {
+         const leaving = currentBlock;
+         if (leaving._t) { __transition(leaving._first, leaving._t, 'leave', () => leaving.d(true)); }
+         else { leaving.d(true); }
+         currentBlock = null;
+       }
+       showing = want;
+   
+       if (want === 'then') {
+         currentBlock = create_block_0(this);
+         currentBlock.c();
+         if (anchor.parentNode) currentBlock.m(anchor.parentNode, anchor.nextSibling);
+         currentBlock.p(this);
+         if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');
+       }
+     });
+   }
     }
   };
-  })()
+  })();
   ''', opts
 
 code "loop inside parent element", '''
@@ -2222,45 +2326,49 @@ code "loop inside parent element", '''
   export const A = (() => {
   function create_block_0(ctx, item, i) {
     let _el2, _t0;
+    let _factoryChildren = [];
     return {
-      _s: true,
-      c() {
-        _el2 = document.createElement('li');
-        _t0 = document.createTextNode(item);
-        _el2.appendChild(_t0);
-        this._first = _el2;
-      },
-      m(target, anchor) {
-        if (target) target.insertBefore(_el2, anchor);
-      },
-      p(ctx, item, i) {},
-      d(detaching) {
-        if (detaching && _el2) _el2.remove();
-      }
+   _s: true,
+   c() {
+     _el2 = document.createElement('li');
+     _t0 = document.createTextNode(item);
+     _el2.appendChild(_t0);
+     this._first = _el2;
+   },
+   m(target, anchor) {
+     if (target) target.insertBefore(_el2, anchor);
+   },
+   p(ctx, item, i) {
+   },
+   d(detaching) {
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     _factoryChildren = [];
+     if (detaching && _el2) _el2.remove();
+   }
     };
   }
-
+  
   return class extends __Component {
     _init(props) {
-      this.items = __state(["a", "b"]);
+   this.items = __state(["a", "b"]);
     }
     _create() {
-      this._el0 = document.createElement('ul');
-      this._anchor1 = document.createComment('for');
-      this._el0.appendChild(this._anchor1);
-      return this._el0;
+   this._el0 = document.createElement('ul');
+   this._anchor1 = document.createComment('for');
+   this._el0.appendChild(this._anchor1);
+   return this._el0;
     }
     _setup() {
-      // Loop: create_block_0
-      {
-        const __s = { blocks: [], keys: [] };
-        __effect(() => {
-          __reconcile(this._anchor1, __s, this.items.value, this, create_block_0, null);
-        });
-      }
+   // Loop: create_block_0
+   {
+     const __s = { blocks: [], keys: [] };
+     __effect(() => {
+       __reconcile(this._anchor1, __s, this.items.value, this, create_block_0, null);
+     });
+   }
     }
   };
-  })()
+  })();
   ''', opts
 
 # ==============================================================================
@@ -2322,19 +2430,21 @@ code "bare component reference (no args)", '''
     _init(props) {
     }
     _create() {
-      this._el0 = document.createElement('div');
-      { const __prev = __pushComponent(this); try {
-      this._inst1 = new Counter({});
-      this._el2 = this._inst1._root = this._inst1._create();
-      (this._children || (this._children = [])).push(this._inst1);
-      } finally { __popComponent(__prev); } }
-      this._el0.appendChild(this._el2);
-      return this._el0;
+   this._el0 = document.createElement('div');
+   { const __prev = __pushComponent(this); try {
+   this._inst1 = new Counter({});
+   { const __cprev = __pushComponent(this._inst1); try {
+   this._el2 = this._inst1._root = this._inst1._create();
+   } finally { __popComponent(__cprev); } }
+   (this._children || (this._children = [])).push(this._inst1);
+   } finally { __popComponent(__prev); } }
+   this._el0.appendChild(this._el2);
+   return this._el0;
     }
     _setup() {
-      try { if (this._inst1._setup) this._inst1._setup(); if (this._inst1.mounted) this._inst1.mounted(); } catch (__e) { __handleComponentError(__e, this._inst1); }
+   try { if (this._inst1._setup) { const __cprev = __pushComponent(this._inst1); try { this._inst1._setup(); } finally { __popComponent(__cprev); } } if (this._inst1.mounted) this._inst1.mounted(); } catch (__e) { __handleComponentError(__e, this._inst1); }
     }
-  }
+  };
   ''', opts
 
 # ==============================================================================
@@ -2766,63 +2876,69 @@ code "transition sets _t on block factory", '''
   export const A = (() => {
   function create_block_0(ctx) {
     let _el1, _el2, _t0;
+    let _factoryChildren = [];
     return {
-      c() {
-        _el1 = document.createElement('div');
-        this._t = "fade";
-        _el2 = document.createElement('span');
-        _t0 = document.createTextNode("hello");
-        _el2.appendChild(_t0);
-        _el1.appendChild(_el2);
-        this._first = _el1;
-      },
-      m(target, anchor) {
-        if (target) target.insertBefore(_el1, anchor);
-      },
-      p(ctx) {},
-      d(detaching) {
-        if (detaching && _el1) _el1.remove();
-      }
+   c() {
+     _el1 = document.createElement('div');
+     this._t = "fade";
+     _el2 = document.createElement('span');
+     _t0 = document.createTextNode("hello");
+     _el2.appendChild(_t0);
+     _el1.appendChild(_el2);
+     this._first = _el1;
+   },
+   m(target, anchor) {
+     if (target) target.insertBefore(_el1, anchor);
+   },
+   p(ctx) {
+   },
+   d(detaching) {
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     _factoryChildren = [];
+     if (detaching && _el1) _el1.remove();
+   }
     };
   }
-
+  
   return class extends __Component {
     _init(props) {
-      this.show = __state(true);
+   this.show = __state(true);
     }
     _create() {
-      this._anchor0 = document.createComment('if');
-      return this._anchor0;
+   this._anchor0 = document.createComment('if');
+   return this._anchor0;
     }
     _setup() {
-      // Conditional: create_block_0
-      {
-        const anchor = this._anchor0;
-        let currentBlock = null;
-        let showing = null;
-        __effect(() => {
-          const show = !!(this.show.value);
-          const want = show ? 'then' : null;
-          if (want === showing) return;
-          if (currentBlock) {
-            const leaving = currentBlock;
-            if (leaving._t) { __transition(leaving._first, leaving._t, 'leave', () => leaving.d(true)); }
-            else { leaving.d(true); }
-            currentBlock = null;
-          }
-          showing = want;
-          if (want === 'then') {
-            currentBlock = create_block_0(this);
-            currentBlock.c();
-            if (anchor.parentNode) currentBlock.m(anchor.parentNode, anchor.nextSibling);
-            currentBlock.p(this);
-            if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');
-          }
-        });
-      }
+   // Conditional: create_block_0
+   {
+     const anchor = this._anchor0;
+     let currentBlock = null;
+     let showing = null;
+     __effect(() => {
+       const show = !!(this.show.value);
+       const want = show ? 'then' : null;
+       if (want === showing) return;
+   
+       if (currentBlock) {
+         const leaving = currentBlock;
+         if (leaving._t) { __transition(leaving._first, leaving._t, 'leave', () => leaving.d(true)); }
+         else { leaving.d(true); }
+         currentBlock = null;
+       }
+       showing = want;
+   
+       if (want === 'then') {
+         currentBlock = create_block_0(this);
+         currentBlock.c();
+         if (anchor.parentNode) currentBlock.m(anchor.parentNode, anchor.nextSibling);
+         currentBlock.p(this);
+         if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');
+       }
+     });
+   }
     }
   };
-  })()
+  })();
   ''', opts
 
 code "transition with ~slide preset", '''
@@ -2895,60 +3011,66 @@ code "no transition — no _t on block", '''
   export const A = (() => {
   function create_block_0(ctx) {
     let _el1, _t0;
+    let _factoryChildren = [];
     return {
-      c() {
-        _el1 = document.createElement('span');
-        _t0 = document.createTextNode("yes");
-        _el1.appendChild(_t0);
-        this._first = _el1;
-      },
-      m(target, anchor) {
-        if (target) target.insertBefore(_el1, anchor);
-      },
-      p(ctx) {},
-      d(detaching) {
-        if (detaching && _el1) _el1.remove();
-      }
+   c() {
+     _el1 = document.createElement('span');
+     _t0 = document.createTextNode("yes");
+     _el1.appendChild(_t0);
+     this._first = _el1;
+   },
+   m(target, anchor) {
+     if (target) target.insertBefore(_el1, anchor);
+   },
+   p(ctx) {
+   },
+   d(detaching) {
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     _factoryChildren = [];
+     if (detaching && _el1) _el1.remove();
+   }
     };
   }
-
+  
   return class extends __Component {
     _init(props) {
-      this.show = __state(true);
+   this.show = __state(true);
     }
     _create() {
-      this._anchor0 = document.createComment('if');
-      return this._anchor0;
+   this._anchor0 = document.createComment('if');
+   return this._anchor0;
     }
     _setup() {
-      // Conditional: create_block_0
-      {
-        const anchor = this._anchor0;
-        let currentBlock = null;
-        let showing = null;
-        __effect(() => {
-          const show = !!(this.show.value);
-          const want = show ? 'then' : null;
-          if (want === showing) return;
-          if (currentBlock) {
-            const leaving = currentBlock;
-            if (leaving._t) { __transition(leaving._first, leaving._t, 'leave', () => leaving.d(true)); }
-            else { leaving.d(true); }
-            currentBlock = null;
-          }
-          showing = want;
-          if (want === 'then') {
-            currentBlock = create_block_0(this);
-            currentBlock.c();
-            if (anchor.parentNode) currentBlock.m(anchor.parentNode, anchor.nextSibling);
-            currentBlock.p(this);
-            if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');
-          }
-        });
-      }
+   // Conditional: create_block_0
+   {
+     const anchor = this._anchor0;
+     let currentBlock = null;
+     let showing = null;
+     __effect(() => {
+       const show = !!(this.show.value);
+       const want = show ? 'then' : null;
+       if (want === showing) return;
+   
+       if (currentBlock) {
+         const leaving = currentBlock;
+         if (leaving._t) { __transition(leaving._first, leaving._t, 'leave', () => leaving.d(true)); }
+         else { leaving.d(true); }
+         currentBlock = null;
+       }
+       showing = want;
+   
+       if (want === 'then') {
+         currentBlock = create_block_0(this);
+         currentBlock.c();
+         if (anchor.parentNode) currentBlock.m(anchor.parentNode, anchor.nextSibling);
+         currentBlock.p(this);
+         if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');
+       }
+     });
+   }
     }
   };
-  })()
+  })();
   ''', opts
 
 # ==============================================================================

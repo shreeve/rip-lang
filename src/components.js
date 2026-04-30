@@ -1636,10 +1636,18 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     get() { return this._factoryMode ? 'ctx' : 'this'; }
   });
 
-  /** Push an effect line, wrapping with disposer tracking in factory mode */
+  /** Push an effect line, wrapping with disposer tracking in factory mode.
+   *
+   * Factory effects opt out of the runtime's auto-registration with the
+   * current component (skipRegister:true). The factory's own `disposers`
+   * array owns these — they're already cleaned up by d(detaching) when
+   * the block is removed. Without skipRegister, every block re-render
+   * would leak a stale disposer onto the parent's _disposers (the local
+   * factory disposers get overwritten on each p() call, but the parent
+   * keeps the stale references until parent unmount). */
   proto._pushEffect = function(body) {
     if (this._factoryMode) {
-      this._setupLines.push(`disposers.push(__effect(() => { ${body} }));`);
+      this._setupLines.push(`disposers.push(__effect(() => { ${body} }, {skipRegister: true}));`);
     } else {
       this._setupLines.push(`__effect(() => { ${body} });`);
     }
@@ -2237,8 +2245,12 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     setupLines.push(`  const anchor = ${anchorVar};`);
     setupLines.push(`  let currentBlock = null;`);
     setupLines.push(`  let showing = null;`);
+    // Factory effects skip auto-registration on the parent component
+    // (their disposers live in the local `disposers` array and are
+    // cleaned up by d(detaching)). Class-mode effects auto-register
+    // on `this` via the runtime's __getCurrentComponent bridge.
     const effOpen = this._factoryMode ? 'disposers.push(__effect(() => {' : '__effect(() => {';
-    const effClose = this._factoryMode ? '}));' : '});';
+    const effClose = this._factoryMode ? '}, {skipRegister: true}));' : '});';
     setupLines.push(`  ${effOpen}`);
     setupLines.push(`    const show = !!(${condCode});`);
     setupLines.push(`    const want = show ? 'then' : ${elseBlock ? "'else'" : 'null'};`);
@@ -2320,6 +2332,15 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     if (hasEffects) {
       factoryLines.push(`  let disposers = [];`);
     }
+    // Per-factory list of child-component instances created inside this
+    // block. d(detaching) calls .unmount() on each so child lifecycle
+    // hooks fire and child effects get cleaned up when the block is
+    // removed by reactive rendering (a `for` loop iteration changing,
+    // an `if` branch flipping, etc.). Without this, child instances
+    // were only ever unmounted when the OUTER component itself died,
+    // which silently broke the `beforeUnmount` / `unmounted` contract
+    // for any child rendered inside a conditional or loop.
+    factoryLines.push(`  let _factoryChildren = [];`);
 
     factoryLines.push(`  return {`);
 
@@ -2358,6 +2379,12 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     factoryLines.push(`    },`);
 
     factoryLines.push(`    d(detaching) {`);
+    // Unmount any child components inside this block FIRST, so their
+    // lifecycle hooks and effect disposers fire before we drop our own
+    // disposers and DOM. removeDOM:false because the parent DOM removal
+    // (below) will detach the whole subtree in one shot.
+    factoryLines.push(`      for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }`);
+    factoryLines.push(`      _factoryChildren = [];`);
     if (hasEffects) {
       factoryLines.push(`      disposers.forEach(d => d());`);
     }
@@ -2458,8 +2485,9 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     setupLines.push(`// Loop: ${blockName}`);
     setupLines.push(`{`);
     setupLines.push(`  const __s = { blocks: [], keys: [] };`);
+    // Same skipRegister contract as the conditional emitter above.
     const effOpen = this._factoryMode ? 'disposers.push(__effect(() => {' : '__effect(() => {';
-    const effClose = this._factoryMode ? '}));' : '});';
+    const effClose = this._factoryMode ? '}, {skipRegister: true}));' : '});';
     setupLines.push(`  ${effOpen}`);
     setupLines.push(`    __reconcile(${anchorVar}, __s, ${collectionCode}, ${this._self}, ${blockName}, ${keyFnCode}${outerArgs});`);
     setupLines.push(`  ${effClose}`);
@@ -2481,10 +2509,27 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     const { propsCode, reactiveProps, eventBindings, childrenSetupLines } = this.buildComponentProps(args);
 
     const s = this._self;
+    // Push parent (s) so its constructor-time __pushComponent stack is
+    // preserved across child instantiation. Then push the CHILD around
+    // its _create() / _setup() calls so any __effect those methods
+    // create auto-registers on the child's _disposers, not the parent's.
+    // Without this nested push, child reactive bindings (attribute
+    // setters, text node updaters, etc.) leaked onto the parent's
+    // _disposers — fine for cleanup-on-parent-unmount, fatal for
+    // cleanup-on-child-removal-via-conditional-render.
     this._createLines.push(`{ const __prev = __pushComponent(${s}); try {`);
     this._createLines.push(`${instVar} = new ${componentName}(${propsCode});`);
+    this._createLines.push(`{ const __cprev = __pushComponent(${instVar}); try {`);
     this._createLines.push(`${elVar} = ${instVar}._root = ${instVar}._create();`);
+    this._createLines.push(`} finally { __popComponent(__cprev); } }`);
     this._createLines.push(`(${s}._children || (${s}._children = [])).push(${instVar});`);
+    if (this._factoryMode) {
+      // Factory blocks (for/if in render) maintain their own children
+      // list so d(detaching) can unmount them when the block is removed
+      // — the parent's _children would otherwise hold stale refs until
+      // the parent itself unmounts.
+      this._createLines.push(`_factoryChildren.push(${instVar});`);
+    }
     this._createLines.push(`} finally { __popComponent(__prev); } }`);
 
     for (const { event, value } of eventBindings) {
@@ -2492,7 +2537,9 @@ export function installComponentSupport(CodeEmitter, Lexer) {
       this._createLines.push(`${elVar}.addEventListener('${event}', (e) => __batch(() => (${handlerCode})(e)));`);
     }
 
-    this._setupLines.push(`try { if (${instVar}._setup) ${instVar}._setup(); if (${instVar}.mounted) ${instVar}.mounted(); } catch (__e) { __handleComponentError(__e, ${instVar}); }`);
+    // Same per-child push wrap for _setup so reactive bindings created
+    // there register on the child too, not the parent.
+    this._setupLines.push(`try { if (${instVar}._setup) { const __cprev = __pushComponent(${instVar}); try { ${instVar}._setup(); } finally { __popComponent(__cprev); } } if (${instVar}.mounted) ${instVar}.mounted(); } catch (__e) { __handleComponentError(__e, ${instVar}); }`);
 
     for (const { key, valueCode } of reactiveProps) {
       this._pushEffect(`if (${instVar}.${key} && typeof ${instVar}.${key} === 'object' && 'value' in ${instVar}.${key}) ${instVar}.${key}.value = ${valueCode}; else if (${instVar}._setRestProp) ${instVar}._setRestProp('${key}', ${valueCode});`);
@@ -2596,7 +2643,7 @@ export function installComponentSupport(CodeEmitter, Lexer) {
           this._createLines.push(`${textVar} = document.createTextNode('');`);
           const body = `${textVar}.data = ${exprCode};`;
           const effect = this._factoryMode
-            ? `disposers.push(__effect(() => { ${body} }));`
+            ? `disposers.push(__effect(() => { ${body} }, {skipRegister: true}));`
             : `__effect(() => { ${body} });`;
           childrenSetupLines.push(effect);
         } else {
@@ -2985,6 +3032,13 @@ class __Component {
     //   unmounted      - user hook; final notification.
     //   DOM removal    - skipped when caller wants to keep the old DOM
     //                    visible until replacement (route transitions).
+    //
+    // Idempotent: a child can be unmounted by its enclosing factory's
+    // d(detaching) AND later by the parent's unmount cascade. Without
+    // the _unmounted guard, beforeUnmount/unmounted hooks would re-fire
+    // and cleanup would walk an already-empty graph for no benefit.
+    if (this._unmounted) return;
+    this._unmounted = true;
     try {
       if (this.beforeUnmount) this.beforeUnmount();
     } catch (e) { console.error('[Rip] beforeUnmount error:', e); }
@@ -2993,12 +3047,13 @@ class __Component {
         try { child.unmount({ removeDOM }); }
         catch (e) { console.error('[Rip] child unmount error:', e); }
       }
+      this._children = null;
     }
     if (this._disposers) {
       for (const d of this._disposers) {
         try { d(); } catch (e) { console.error('[Rip] effect disposer error:', e); }
       }
-      this._disposers = [];
+      this._disposers = null;
     }
     try {
       if (this.unmounted) this.unmounted();

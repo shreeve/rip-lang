@@ -3667,7 +3667,7 @@ function __computed(fn) {
   return computed;
 }
 
-function __effect(fn) {
+function __effect(fn, opts) {
   const effect = {
     dependencies: new Set(),
     _disposed: false,
@@ -3726,8 +3726,18 @@ function __effect(fn) {
   // runtime (this file) doesn't depend on components.js, but components.js
   // exposes a getter on globalThis.__ripComponent at registration time
   // and we read it lazily so module-load order is irrelevant.
-  const cur = globalThis.__ripComponent?.__getCurrentComponent?.();
-  if (cur) (cur._disposers ??= []).push(dispose);
+  //
+  // {skipRegister: true} opts out of auto-registration. Used by factory
+  // blocks (for-loops, if-blocks in render) that maintain their own
+  // local disposers array and call them via the d(detaching) hook.
+  // Without skipRegister, those effects would be registered TWICE — once
+  // in the local factory disposers and again on the parent component's
+  // _disposers — leaking stale disposer references on every block
+  // re-render until the parent itself unmounts.
+  if (!opts || !opts.skipRegister) {
+    const cur = globalThis.__ripComponent?.__getCurrentComponent?.();
+    if (cur) (cur._disposers ??= []).push(dispose);
+  }
   return dispose;
 }
 

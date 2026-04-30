@@ -6850,35 +6850,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           const walkRender = (node) => {
             if (!Array.isArray(node))
               return;
-            let head2 = node[0]?.valueOf?.() ?? node[0];
-            if (Array.isArray(head2) && head2[0] === ".") {
-              const parts = [];
-              const collect = (h) => {
-                if (typeof h === "string") {
-                  parts.push(h);
-                  return true;
-                }
-                if (Array.isArray(h) && h[0] === "." && parts.length === 0) {
-                  if (!collect(h[1]))
-                    return false;
-                  if (typeof h[2] !== "string" || !/^[\w-]+$/.test(h[2]))
-                    return false;
-                  parts.push(".", h[2]);
-                  return true;
-                }
-                return false;
-              };
-              if (collect(head2) && parts.length >= 3 && /^[a-z][\w-]*$/.test(parts[0])) {
-                const flat = parts.join("");
-                const reshaped = [flat];
-                for (let i = 1;i < node.length; i++)
-                  reshaped.push(node[i]);
-                if (node.loc)
-                  reshaped.loc = node.loc;
-                node = reshaped;
-                head2 = flat;
-              }
-            }
+            const head2 = node[0]?.valueOf?.() ?? node[0];
             if (head2 === "object")
               return;
             if (head2 === "if" || head2 === "unless") {
@@ -7342,7 +7314,7 @@ ${blockFactoriesCode}return ${lines.join(`
     });
     proto._pushEffect = function(body) {
       if (this._factoryMode) {
-        this._setupLines.push(`disposers.push(__effect(() => { ${body} }));`);
+        this._setupLines.push(`disposers.push(__effect(() => { ${body} }, {skipRegister: true}));`);
       } else {
         this._setupLines.push(`__effect(() => { ${body} });`);
       }
@@ -7814,7 +7786,7 @@ ${blockFactoriesCode}return ${lines.join(`
       setupLines.push(`  let currentBlock = null;`);
       setupLines.push(`  let showing = null;`);
       const effOpen = this._factoryMode ? "disposers.push(__effect(() => {" : "__effect(() => {";
-      const effClose = this._factoryMode ? "}));" : "});";
+      const effClose = this._factoryMode ? "}, {skipRegister: true}));" : "});";
       setupLines.push(`  ${effOpen}`);
       setupLines.push(`    const show = !!(${condCode});`);
       setupLines.push(`    const want = show ? 'then' : ${elseBlock ? "'else'" : "null"};`);
@@ -7878,6 +7850,7 @@ ${blockFactoriesCode}return ${lines.join(`
       if (hasEffects) {
         factoryLines.push(`  let disposers = [];`);
       }
+      factoryLines.push(`  let _factoryChildren = [];`);
       factoryLines.push(`  return {`);
       if (isStatic) {
         factoryLines.push(`    _s: true,`);
@@ -7909,6 +7882,8 @@ ${blockFactoriesCode}return ${lines.join(`
       }
       factoryLines.push(`    },`);
       factoryLines.push(`    d(detaching) {`);
+      factoryLines.push(`      for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }`);
+      factoryLines.push(`      _factoryChildren = [];`);
       if (hasEffects) {
         factoryLines.push(`      disposers.forEach(d => d());`);
       }
@@ -7990,7 +7965,7 @@ ${blockFactoriesCode}return ${lines.join(`
       setupLines.push(`{`);
       setupLines.push(`  const __s = { blocks: [], keys: [] };`);
       const effOpen = this._factoryMode ? "disposers.push(__effect(() => {" : "__effect(() => {";
-      const effClose = this._factoryMode ? "}));" : "});";
+      const effClose = this._factoryMode ? "}, {skipRegister: true}));" : "});";
       setupLines.push(`  ${effOpen}`);
       setupLines.push(`    __reconcile(${anchorVar}, __s, ${collectionCode}, ${this._self}, ${blockName}, ${keyFnCode}${outerArgs});`);
       setupLines.push(`  ${effClose}`);
@@ -8007,14 +7982,19 @@ ${blockFactoriesCode}return ${lines.join(`
       const s = this._self;
       this._createLines.push(`{ const __prev = __pushComponent(${s}); try {`);
       this._createLines.push(`${instVar} = new ${componentName}(${propsCode});`);
+      this._createLines.push(`{ const __cprev = __pushComponent(${instVar}); try {`);
       this._createLines.push(`${elVar} = ${instVar}._root = ${instVar}._create();`);
+      this._createLines.push(`} finally { __popComponent(__cprev); } }`);
       this._createLines.push(`(${s}._children || (${s}._children = [])).push(${instVar});`);
+      if (this._factoryMode) {
+        this._createLines.push(`_factoryChildren.push(${instVar});`);
+      }
       this._createLines.push(`} finally { __popComponent(__prev); } }`);
       for (const { event, value } of eventBindings) {
         const handlerCode = this.emitInComponent(value, "value");
         this._createLines.push(`${elVar}.addEventListener('${event}', (e) => __batch(() => (${handlerCode})(e)));`);
       }
-      this._setupLines.push(`try { if (${instVar}._setup) ${instVar}._setup(); if (${instVar}.mounted) ${instVar}.mounted(); } catch (__e) { __handleComponentError(__e, ${instVar}); }`);
+      this._setupLines.push(`try { if (${instVar}._setup) { const __cprev = __pushComponent(${instVar}); try { ${instVar}._setup(); } finally { __popComponent(__cprev); } } if (${instVar}.mounted) ${instVar}.mounted(); } catch (__e) { __handleComponentError(__e, ${instVar}); }`);
       for (const { key, valueCode } of reactiveProps) {
         this._pushEffect(`if (${instVar}.${key} && typeof ${instVar}.${key} === 'object' && 'value' in ${instVar}.${key}) ${instVar}.${key}.value = ${valueCode}; else if (${instVar}._setRestProp) ${instVar}._setRestProp('${key}', ${valueCode});`);
       }
@@ -8096,7 +8076,7 @@ ${blockFactoriesCode}return ${lines.join(`
           if (this.hasReactiveDeps(arg)) {
             this._createLines.push(`${textVar} = document.createTextNode('');`);
             const body = `${textVar}.data = ${exprCode};`;
-            const effect = this._factoryMode ? `disposers.push(__effect(() => { ${body} }));` : `__effect(() => { ${body} });`;
+            const effect = this._factoryMode ? `disposers.push(__effect(() => { ${body} }, {skipRegister: true}));` : `__effect(() => { ${body} });`;
             childrenSetupLines.push(effect);
           } else {
             this._createLines.push(`${textVar} = document.createTextNode(${exprCode});`);
@@ -8447,6 +8427,13 @@ class __Component {
     //   unmounted      - user hook; final notification.
     //   DOM removal    - skipped when caller wants to keep the old DOM
     //                    visible until replacement (route transitions).
+    //
+    // Idempotent: a child can be unmounted by its enclosing factory's
+    // d(detaching) AND later by the parent's unmount cascade. Without
+    // the _unmounted guard, beforeUnmount/unmounted hooks would re-fire
+    // and cleanup would walk an already-empty graph for no benefit.
+    if (this._unmounted) return;
+    this._unmounted = true;
     try {
       if (this.beforeUnmount) this.beforeUnmount();
     } catch (e) { console.error('[Rip] beforeUnmount error:', e); }
@@ -8455,12 +8442,13 @@ class __Component {
         try { child.unmount({ removeDOM }); }
         catch (e) { console.error('[Rip] child unmount error:', e); }
       }
+      this._children = null;
     }
     if (this._disposers) {
       for (const d of this._disposers) {
         try { d(); } catch (e) { console.error('[Rip] effect disposer error:', e); }
       }
-      this._disposers = [];
+      this._disposers = null;
     }
     try {
       if (this.unmounted) this.unmounted();
@@ -12715,7 +12703,7 @@ function __computed(fn) {
   return computed;
 }
 
-function __effect(fn) {
+function __effect(fn, opts) {
   const effect = {
     dependencies: new Set(),
     _disposed: false,
@@ -12774,8 +12762,18 @@ function __effect(fn) {
   // runtime (this file) doesn't depend on components.js, but components.js
   // exposes a getter on globalThis.__ripComponent at registration time
   // and we read it lazily so module-load order is irrelevant.
-  const cur = globalThis.__ripComponent?.__getCurrentComponent?.();
-  if (cur) (cur._disposers ??= []).push(dispose);
+  //
+  // {skipRegister: true} opts out of auto-registration. Used by factory
+  // blocks (for-loops, if-blocks in render) that maintain their own
+  // local disposers array and call them via the d(detaching) hook.
+  // Without skipRegister, those effects would be registered TWICE — once
+  // in the local factory disposers and again on the parent component's
+  // _disposers — leaking stale disposer references on every block
+  // re-render until the parent itself unmounts.
+  if (!opts || !opts.skipRegister) {
+    const cur = globalThis.__ripComponent?.__getCurrentComponent?.();
+    if (cur) (cur._disposers ??= []).push(dispose);
+  }
   return dispose;
 }
 
@@ -13067,7 +13065,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.15.4";
-  var BUILD_DATE = "2026-04-30@23:38:23GMT";
+  var BUILD_DATE = "2026-04-30@23:46:58GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
