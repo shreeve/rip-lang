@@ -250,85 +250,75 @@ export GenericUsageTests = component
       # @ts-expect-error — object missing 'label' field (has 'name' instead)
       Select options: [{ value: "a", name: "A" }]
 
-# ── Stash vs zustand: typed shared state ──
+# ── Typed shared state ──
 #
-# zustand types its store everywhere via `create<State>()`. Rip's stash
-# (`@app.data`) is typed by inferring from the seed passed to
-# `serve(state: <ident>)` in the project's index.rip — `typeof <ident>`
-# becomes the type of `@app.data` in every component. No extra file,
-# no magic name.
+# Pattern: declare a `Cart`-shaped type, build a typed value of that
+# shape, and consume it from a component. Demonstrates that the type
+# DSL covers the same ground as zustand's `create<State>()` — fields,
+# methods, and negative cases (typos, wrong arg shapes) all fire.
 #
-# The same inference fires when the seed is declared in the same file
-# as the components (used here so the test stays self-contained — in
-# real apps the seed lives in index.rip and the components import
-# nothing).
+# In a real app, the same `Cart` type lives in `<root>/app/stash.rip`
+# and the compiler splices it into every component's `@app.data`
+# automatically. This section keeps the value-shape and negative-test
+# coverage self-contained within the audit.
 
-type CartItem =
+export type CartItem =
   id: number
   name: string
   price: number
   quantity: number
 
-type Cart =
+export type Cart =
   items: CartItem[]
-  addItem: (item: CartItem) => void
-  removeItem: (item: CartItem) => void
-  total: () => number
+  addItem(item: CartItem): void
+  removeItem(item: CartItem): void
+  total(): number
 
-stash:: Cart =
+# Typed value of `Cart` shape. Stub bodies — the section's job is to
+# verify the type DSL covers fields, methods, and negative cases.
+cart:: Cart =
   items: []
-  addItem: (item) -> stash.items = [...stash.items, item]
-  removeItem: (item) -> stash.items = stash.items.filter (i) -> i.id isnt item.id
-  total: -> stash.items.reduce ((sum, i) -> sum + i.price * i.quantity), 0
-
-# Stub `serve` — only the `state: <ident>` reference matters to the
-# type checker; runtime behavior here is irrelevant.
-serve = (opts:: any) -> opts
-serve state: stash
-
-# CartDemo — Rip equivalent of the TSX `function CartDemo()`.
-# Reads `items` from the stash, derives `total` from the store method,
-# and dispatches writes through `@app.data.addItem`. zustand and Rip
-# both put data and actions on the store; any component can call
-# `@app.data.addItem(...)`, just like any React component can call
-# `useCart().addItem(...)`.
+  addItem: noop
+  removeItem: noop
+  total: -> 0
 
 export CartDemo = component
-  cart ~= @app.data
+  store ~= cart
 
   render
     div
-      span "#{cart.items.length} items — $#{cart.total()}"
-      button @click: (-> cart.addItem(id: 1, name: 'Widget', price: 9.99, quantity: 1)), "Add to Cart"
+      span "#{store.items.length} items — $#{store.total()}"
+      button @click: (-> store.addItem(id: 1, name: 'Widget', price: 9.99, quantity: 1)), "Add to Cart"
       ul
-        for item in cart.items
+        for item in store.items
           li "#{item.name} x#{item.quantity} — $#{item.price}"
 
-# ── Negative tests: stash typos and wrong arg types are caught ──
+# ── Negative tests: typos and wrong arg types are caught ──
 #
-# Mirrors the TSX zustand negatives. Read typos on `@app.data.<x>`
-# produce TS2551; wrong argument types to store methods produce TS2345,
-# just like the zustand cases in the companion file.
+# Mirrors the TSX zustand negatives. Read typos produce TS2551; wrong
+# argument types to store methods produce TS2345.
 
-export StashTypeTests = component
-  # @ts-expect-error — typo: 'itms' does not exist on stash
-  bad1 ~= @app.data.itms
+export CartTypeTests = component
+  store ~= cart
+
+  # @ts-expect-error — typo: 'itms' does not exist
+  bad1 ~= store.itms
 
   # @ts-expect-error — CartItem has no 'qty' field
-  bad2 ~= @app.data.items[0]?.qty
+  bad2 ~= store.items[0]?.qty
 
   # @ts-expect-error — toFixed doesn't exist on CartItem[]
-  bad3 ~= @app.data.items.toFixed(2)
+  bad3 ~= store.items.toFixed(2)
 
   # @ts-expect-error — nonexistent path
-  bad4 ~= @app.data.tax
+  bad4 ~= store.tax
 
   badAdd: ->
     # @ts-expect-error — wrong item shape: missing required fields
-    @app.data.addItem(broken: true)
+    store.addItem(broken: true)
 
   badRemove: ->
     # @ts-expect-error — wrong arg type: number instead of CartItem
-    @app.data.removeItem(42)
+    store.removeItem(42)
 
   render null

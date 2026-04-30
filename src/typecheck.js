@@ -22,17 +22,19 @@ import { buildLineMap } from './sourcemaps.js';
 
 // ── Typed stash: project entry discovery ───────────────────────────
 //
-// The stash type is inferred, not declared. The user's project entry
-// (`index.rip` co-located with `rip.json` or `package.json`) seeds the
-// stash via `serve(state: <expr>)`. The type-checker captures that
-// argument's type and exposes it as `__RipStash` on the entry's virtual
-// module. Components splice `import('<entry>').__RipStash` into their
-// `app.data` declaration.
+// The stash type is inferred, not declared. The user's project has a
+// dedicated `<root>/app/stash.rip` file (in the client bundle) that
+// contains a top-level `stash:: <Type> = ...` declaration. The type
+// checker exposes that variable's type as `__RipStash` on the stash
+// file's virtual module. Components splice
+// `import('<rel-to-stash>').__RipStash` into their `app.data` declaration.
 //
 // Discovery: walk up from each file to the nearest dir that contains an
-// `index.rip` AND a `rip.json` or `package.json` (the project anchor).
-// Cached per-directory for the process lifetime.
+// `index.rip` AND a `rip.json` or `package.json` (the project anchor),
+// then look for `<root>/app/stash.rip`. Cached per-directory for the
+// process lifetime.
 const entryFileCache = new Map(); // dir → entryFile|null
+const stashFileCache = new Map(); // root dir → stashFile|null
 
 export function findEntryFile(filePath) {
   let dir = dirname(filePath);
@@ -70,20 +72,17 @@ function entryImportSpec(filePath, entryFile) {
   return rel;
 }
 
-// Find the identifier passed as `state:` to a `serve(...)` call in source.
-// Returns the identifier name, or null if not found / not a simple identifier.
-// Limitation: inline object literals are intentionally unsupported — extract
-// to a named variable for stash typing to flow.
-function findServeStateIdent(source) {
-  // Strip line comments and string literals to avoid false matches.
-  let cleaned = source.split('\n').map(line => {
-    line = line.replace(/#.*$/, '');
-    line = line.replace(/"(?:[^"\\]|\\.)*"/g, '""').replace(/'(?:[^'\\]|\\.)*'/g, "''");
-    return line;
-  }).join('\n');
-  // Match `state: <identifier>` where identifier is a bare name (no .x, no `{`).
-  const m = cleaned.match(/\bstate:\s*([A-Za-z_$][A-Za-z0-9_$]*)\b(?!\s*[\.\(])/);
-  return m ? m[1] : null;
+// Locate the project's stash file (`<root>/app/stash.rip`). Returns the
+// absolute path or null. Cached per project root.
+export function findStashFile(filePath) {
+  const entryFile = findEntryFile(filePath);
+  if (!entryFile) return null;
+  const root = dirname(entryFile);
+  if (stashFileCache.has(root)) return stashFileCache.get(root);
+  const stash = resolve(root, 'app', 'stash.rip');
+  const result = existsSync(stash) ? stash : null;
+  stashFileCache.set(root, result);
+  return result;
 }
 
 // ── Shared helpers ─────────────────────────────────────────────────
@@ -1259,41 +1258,40 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
     }
   }
 
-  // Typed stash: the project entry (`index.rip` co-located with rip.json /
-  // package.json) seeds `@app.data` via `serve(state: <ident>)`. We expose the
-  // seed's type as `__RipStash` on the entry's virtual module, then rewrite
-  // the per-component `declare app: any` stub to point at it. Components get
-  // `app.data` typed without writing anything ceremonial — just give the seed
-  // a name and (optionally) annotate it.
+  // Typed stash: the project's `<root>/app/stash.rip` declares
+  // `stash:: <Type> = ...`. We expose its inferred type as `__RipStash`
+  // on the stash file's virtual module, then rewrite the per-component
+  // `declare app: any` stub to point at it. Components get `app.data`
+  // typed without writing anything ceremonial — just put the stash in
+  // `app/stash.rip`.
   //
   // Two splices, both same-line so source maps are unaffected:
-  //   1. Entry file — append `export type __RipStash = typeof <ident>;`
+  //   1. Stash file — append `export type __RipStash = typeof stash;`
   //   2. Component files — replace `declare app: any` with the typed shape
-  const entryFile = findEntryFile(filePath);
-  const isEntry = entryFile && entryFile === filePath;
-  const localStateIdent = findServeStateIdent(source);
+  const stashFile = findStashFile(filePath);
+  const isStash = stashFile && stashFile === filePath;
 
-  if (isEntry && localStateIdent) {
-    // Strip the state ident from the body's hoisted `let` declaration so it
-    // doesn't shadow the DTS-hoisted `let <ident>: <type>;`. Without this,
-    // `typeof <ident>` resolves to the untyped body declaration and stash
-    // typing collapses to `any` everywhere.
-    const letRe = new RegExp(`^(\\s*let\\s+)([^;]+);`, 'm');
+  if (isStash) {
+    // The DTS header hoists `export let stash: <Type>;` so the type is
+    // visible everywhere. The body emits either `let stash; ... stash = {...}`
+    // (no export) or `export const stash = {...}` (with export). Both
+    // conflict with the typed hoist — TS sees a redeclaration and the
+    // un-annotated body wins, collapsing the inferred type to `{ items:
+    // never[], ... }`. Rewrite both forms into a bare assignment to the
+    // already-declared `stash`, preserving the contextual type.
+    const letRe = /^(\s*let\s+)([^;=]+);/m;
     code = code.replace(letRe, (full, prefix, names) => {
-      const remaining = names.split(',').map(s => s.trim()).filter(n => n !== localStateIdent);
+      const remaining = names.split(',').map(s => s.trim()).filter(n => n !== 'stash');
       return remaining.length ? `${prefix}${remaining.join(', ')};` : '';
     });
-    code += `\nexport type __RipStash = typeof ${localStateIdent};\n`;
+    code = code.replace(/^(\s*)export\s+const\s+stash\s*=/m, '$1stash =');
+    code += `\nexport type __RipStash = typeof stash;\n`;
   }
 
   if (code.includes('declare app: any')) {
     let typedApp = null;
-    if (localStateIdent) {
-      // Same-file mode: a `serve(state: X)` reference plus a local `X` lets a
-      // single file act as its own stash source (used in tests and demos).
-      typedApp = `declare app: { data: typeof ${localStateIdent}; components: any; routes: any; params: any; query: any; router: any }`;
-    } else if (entryFile && !isEntry) {
-      const spec = entryImportSpec(filePath, entryFile);
+    if (stashFile && !isStash) {
+      const spec = entryImportSpec(filePath, stashFile);
       typedApp = `declare app: { data: import('${spec}').__RipStash; components: any; routes: any; params: any; query: any; router: any }`;
     }
     if (typedApp) code = code.replace(/declare app: any/g, typedApp);
@@ -2194,22 +2192,23 @@ export async function runCheck(targetDir, opts = {}) {
     }
   }
 
-  // Always compile the project entry file (even when excluded), so its
+  // Always compile the project's stash file (even when excluded), so its
   // `__RipStash` export is resolvable from typed components that consume it.
-  // Diagnostics from the entry are still suppressed via exclude when emitting
-  // results — this only ensures cross-module type info is available.
+  // Diagnostics from the stash file are still suppressed via exclude when
+  // emitting results — this only ensures cross-module type info is available.
+  const seenStash = new Set();
   for (const fp of typedFiles) {
-    const entryFile = findEntryFile(fp);
-    if (entryFile && !compiled.has(entryFile) && existsSync(entryFile)) {
-      try {
-        const src = sourcesByPath.get(entryFile) ?? readFileSync(entryFile, 'utf8');
-        const compiledEntry = compileForCheck(entryFile, src, new Compiler(), { strict });
-        compiledEntry._typeOnly = true; // skip diagnostics — only here for cross-module types
-        compiled.set(entryFile, compiledEntry);
-      } catch (e) {
-        console.warn(`[rip] entry compile failed for ${entryFile}: ${e.message}`);
-      }
-      break; // single entry per project
+    const stashFile = findStashFile(fp);
+    if (!stashFile || seenStash.has(stashFile)) continue;
+    seenStash.add(stashFile);
+    if (compiled.has(stashFile) || !existsSync(stashFile)) continue;
+    try {
+      const src = sourcesByPath.get(stashFile) ?? readFileSync(stashFile, 'utf8');
+      const compiledStash = compileForCheck(stashFile, src, new Compiler(), { strict });
+      compiledStash._typeOnly = true; // skip diagnostics — only here for cross-module types
+      compiled.set(stashFile, compiledStash);
+    } catch (e) {
+      console.warn(`[rip] stash compile failed for ${stashFile}: ${e.message}`);
     }
   }
 

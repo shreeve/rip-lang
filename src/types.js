@@ -533,7 +533,33 @@ function collectStructuralType(tokens, indentIdx) {
       let typeStr = buildTypeString(propTypeTokens);
       let prefix = readonly ? 'readonly ' : '';
       let optMark = optional ? '?' : '';
-      props.push(`${prefix}${propName}${optMark}: ${typeStr}`);
+      // Method-shorthand: `name(args)` or `name(args): retType` — typeStr
+      // is parenthesized and has either nothing or `:` (not `::`) after the
+      // matching `)`. Emit without the property `:` separator so TS treats
+      // `this` inside the method as the containing type.
+      let methodShorthand = false;
+      if (!optional && typeStr.startsWith('(')) {
+        let depthM = 0;
+        for (let m = 0; m < typeStr.length; m++) {
+          let ch = typeStr[m];
+          if (ch === '(') depthM++;
+          else if (ch === ')') {
+            depthM--;
+            if (depthM === 0) {
+              let rest = typeStr.slice(m + 1).trimStart();
+              if (rest === '' || (rest.startsWith(':') && !rest.startsWith('::'))) {
+                methodShorthand = true;
+              }
+              break;
+            }
+          }
+        }
+      }
+      if (methodShorthand) {
+        props.push(`${prefix}${propName}${typeStr}`);
+      } else {
+        props.push(`${prefix}${propName}${optMark}: ${typeStr}`);
+      }
     } else {
       j++;
     }

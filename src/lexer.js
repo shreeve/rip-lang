@@ -456,6 +456,21 @@ export class Lexer {
     return p ? p[1] : undefined;
   }
 
+  // True when the next type identifier sits in a method-shorthand return-type
+  // slot — i.e. previous token is `:` and the one before that closes a
+  // parameter list (`)`, `CALL_END`, `PARAM_END`). This lets reserved words
+  // like `void` appear as a return type on an interface/type method.
+  isReturnTypeSlot() {
+    let n = this.tokens.length;
+    if (n < 2) return false;
+    let t1 = this.tokens[n - 1];
+    if (!t1 || t1[1] !== ':') return false;
+    let t2 = this.tokens[n - 2];
+    if (!t2) return false;
+    let tag2 = t2[0];
+    return tag2 === ')' || tag2 === 'CALL_END' || tag2 === 'PARAM_END';
+  }
+
   // True when the next identifier/keyword-shaped token would sit in a
   // pick-key position of a `.{` or `?.{` body. Used by identifierToken()
   // to tag reserved-word keys (`default`, `class`, `delete`, …) as
@@ -621,8 +636,8 @@ export class Lexer {
 
     // Reserved words (check the base form, not the suffixed form)
     if (tag === 'IDENTIFIER' && RESERVED.has(baseId)) {
-      if (baseId === 'void' && (this.inTypeAnnotation || this.prevTag() === '=>')) {
-        // ok — void used as a type (after :: or =>)
+      if (baseId === 'void' && (this.inTypeAnnotation || this.prevTag() === '=>' || this.isReturnTypeSlot())) {
+        // ok — void used as a type (after ::, =>, or `):` method-shorthand return slot)
       } else {
         syntaxError(`reserved word '${baseId}'`, {row: this.row, col: this.col, len: idLen});
       }

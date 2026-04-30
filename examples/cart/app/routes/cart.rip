@@ -1,23 +1,10 @@
-import { CartItem } from '../types.rip'
-
 export Cart = component
   cart ~= @app.data.cart
-  totalPrice ~= cart.items.reduce(((sum, i) -> sum + i.price * i.quantity), 0)
   status:: 'idle' | 'loading' | 'success' | 'error' := 'idle'
   error := ''
 
   mounted: ->
     document.title = 'Cart - Rip'
-
-  updateQuantity: (item:: CartItem, qty:: number) ->
-    cart.items = cart.items.map (i) ->
-      if i.id is item.id then { ...i, quantity: qty } else i
-
-  removeItem: (item:: CartItem) ->
-    cart.items = cart.items.filter (i) -> i.id isnt item.id
-
-  clearCart: ->
-    cart.items = []
 
   placeOrder: ->
     status = 'loading'
@@ -30,7 +17,7 @@ export Cart = component
           items: cart.items.map (i) -> { productId: i.id, quantity: i.quantity }
       unless res.ok
         throw new Error 'Order failed'
-      @clearCart()
+      cart.clear()
       status = 'success'
     catch err
       error = 'Something went wrong. Please try again.'
@@ -67,28 +54,28 @@ export Cart = component
                   div.stepper
                     button.outline @click: (->
                       if item.quantity <= 1
-                        @removeItem(item)
+                        cart.removeItem(item)
                       else
-                        @updateQuantity(item, item.quantity - 1)
+                        cart.updateQuantity(item, item.quantity - 1)
                     ), "−"
                     input
                       type: "number"
                       value: String(item.quantity)
                       # @ts-expect-error
-                      @input: (e) -> @updateQuantity(item, Math.max(1, Number(e.target.value) or 1))
-                    button.outline @click: (-> @updateQuantity(item, item.quantity + 1)), "+"
+                      @input: (e) -> cart.updateQuantity(item, Math.max(1, Number(e.target.value) or 1))
+                    button.outline @click: (-> cart.updateQuantity(item, item.quantity + 1)), "+"
                 td "$#{(item.price * item.quantity).toFixed(2)}"
                 td
-                  button.outline.secondary @click: (-> @removeItem(item)), "Remove"
+                  button.outline.secondary @click: (-> cart.removeItem(item)), "Remove"
           tfoot
             tr
               td colSpan: 3
                 strong "Total"
               td
-                strong "$#{totalPrice.toFixed(2)}"
+                strong "$#{cart.totalPrice().toFixed(2)}"
               td
       div.cart-actions
         button aria-busy: status is 'loading', disabled: status is 'loading', @click: @placeOrder, "Place Order"
-        button.outline.secondary.link @click: @clearCart, "Clear Cart"
+        button.outline.secondary.link @click: (-> cart.clear()), "Clear Cart"
       if status is 'error'
         p.error error
