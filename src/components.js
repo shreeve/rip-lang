@@ -1063,7 +1063,36 @@ export function installComponentSupport(CodeEmitter, Lexer) {
         };
         const walkRender = (node) => {
           if (!Array.isArray(node)) return;
-          const head = node[0]?.valueOf?.() ?? node[0];
+          let head = node[0]?.valueOf?.() ?? node[0];
+
+          // Tag shorthand normalization: `button.outline` is parsed as a
+          // member-access s-expression `(. button outline)`. For render-block
+          // type-checking we want to treat it as a regular tag node with a
+          // string head `"button.outline"` so the existing intrinsic-tag
+          // logic (which splits on `[.#]`) picks it up. Without this the
+          // entire subtree (including @event handler bodies) is silently
+          // skipped from the type-check stub.
+          if (Array.isArray(head) && head[0] === '.') {
+            const parts = [];
+            const collect = (h) => {
+              if (typeof h === 'string') { parts.push(h); return true; }
+              if (Array.isArray(h) && h[0] === '.' && parts.length === 0) {
+                if (!collect(h[1])) return false;
+                if (typeof h[2] !== 'string' || !/^[\w-]+$/.test(h[2])) return false;
+                parts.push('.', h[2]);
+                return true;
+              }
+              return false;
+            };
+            if (collect(head) && parts.length >= 3 && /^[a-z][\w-]*$/.test(parts[0])) {
+              const flat = parts.join('');
+              const reshaped = [flat];
+              for (let i = 1; i < node.length; i++) reshaped.push(node[i]);
+              if (node.loc) reshaped.loc = node.loc;
+              node = reshaped;
+              head = flat;
+            }
+          }
 
           // Object nodes are property bags (key-value pairs) — their values
           // are code expressions (event handlers, bindings, literals), not

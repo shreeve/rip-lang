@@ -1422,9 +1422,11 @@ function detectBlockComponentContext(srcLines, lineIndex, col) {
     if (!componentRegistry.has(compMatch[1])) return null;
     component = compMatch[1];
   } else {
-    // Check for HTML element tag (lowercase identifier starting a line in a render block)
+    // Check for HTML element tag (lowercase identifier starting a line in a
+    // render block). Restrict to the known HTML/SVG tag set so control
+    // keywords and ordinary identifiers don't masquerade as tags.
     const tagMatch = parentTrimmed.match(/^([a-z]\w*)\b/);
-    if (tagMatch && isInRenderBlock(srcLines, parentLine)) {
+    if (tagMatch && HTML_TAG_NAMES.has(tagMatch[1]) && isInRenderBlock(srcLines, parentLine)) {
       htmlTag = tagMatch[1];
     } else {
       return null;
@@ -1475,6 +1477,12 @@ function detectBlockComponentContext(srcLines, lineIndex, col) {
   // line under a parent tag) where ARIA prop completions are noise.
   const lineState = scanStringState(curLine, col);
   if (lineState.inString || lineState.inInterpolation) return null;
+  // A real prop slot looks like `<indent>@?\w*` with nothing else before
+  // the cursor. Any whitespace, operator, or dot before the cursor means
+  // we're in an expression / statement (e.g. `for item in cart.`,
+  // `if cond`, `x = y`) — not a prop name slot.
+  const beforeCursor = curLine.slice(curIndent, col);
+  if (!/^@?\w*$/.test(beforeCursor)) return null;
   return { component, htmlTag, existingProps, propValues, currentProp: null, wantValues: false, wantProps: true };
 }
 
@@ -1492,25 +1500,37 @@ function detectComponentContext(srcLine, col, srcLines, lineIndex) {
     if (!componentRegistry.has(compMatch[1])) return null;
     component = compMatch[1];
   } else if (srcLines && lineIndex != null) {
-    // Check for inline HTML tag (lowercase identifier) inside a render block
+    // Check for inline HTML tag (lowercase identifier) inside a render block.
+    // Only treat the leading word as a tag when it's actually in the known
+    // HTML/SVG tag set — otherwise control keywords (`if`, `else`, `for`,
+    // `unless`, `switch`, `not`, etc.) and ordinary variables (`cart`,
+    // `result`, `term`, …) get mistaken for tags and trigger spurious
+    // attribute completions.
     const tagMatch = trimmed.match(/^([a-z][\w-]*)\b/);
-    if (tagMatch && isInRenderBlock(srcLines, lineIndex)) {
+    if (tagMatch && HTML_TAG_NAMES.has(tagMatch[1]) && isInRenderBlock(srcLines, lineIndex)) {
       htmlTag = tagMatch[1];
     }
   }
   if (!component && !htmlTag) return null;
   const tagOrComp = component || htmlTag;
 
-  const rest = trimmed.substring(tagOrComp.length);
+  // Skip CSS-like shorthand chain (.class, #id) immediately after the tag
+  // so `button.outline @click: …` is recognized as `button` followed by
+  // a space-separated prop slot.
+  let tagSpan = tagOrComp.length;
+  const shorthandMatch = trimmed.slice(tagSpan).match(/^[.#][\w.#-]*/);
+  if (shorthandMatch) tagSpan += shorthandMatch[0].length;
+
+  const rest = trimmed.substring(tagSpan);
   if (rest.length > 0 && rest[0] !== ' ' && rest[0] !== '\t') return null;
 
   const cursorInTrimmed = col - indent;
 
-  if (cursorInTrimmed <= tagOrComp.length) {
+  if (cursorInTrimmed <= tagSpan) {
     return { component, htmlTag, existingProps: [], propValues: new Map(), currentProp: null, wantValues: false, wantProps: false };
   }
 
-  const cursorInRest = cursorInTrimmed - tagOrComp.length;
+  const cursorInRest = cursorInTrimmed - tagSpan;
   const segments = splitProps(rest);
 
   const existingProps = [];
@@ -1889,6 +1909,26 @@ connection.onCompletion((params) => {
     // detectComponentContext so that quoted prop values still get value
     // completions (e.g. `type: "|"` → "text"|"button"|...).
     const strState = scanStringState(srcLine, params.position.character);
+    // Tag/component shorthand zone — `div.|`, `button.foo#|`, `Layout#bar.|`
+    // are CSS class / id shorthands, not prop slots. Suppress all
+    // completions here so VS Code doesn't surface attribute or @event
+    // suggestions while the user is typing a class name. Only applies
+    // inside a render block — `cart.` in a method body is member access,
+    // not a tag shorthand.
+    if (isInRenderBlock(srcLines, params.position.line)) {
+      const trimmed = srcLine.trimStart();
+      const tagStart = srcLine.length - trimmed.length;
+      const cur = params.position.character;
+      const tagMatch = trimmed.match(/^([A-Za-z][\w-]*)/);
+      if (tagMatch && cur > tagStart + tagMatch[1].length) {
+        const word = tagMatch[1];
+        const isTagOrComp = HTML_TAG_NAMES.has(word) || (/^[A-Z]/.test(word) && componentRegistry.has(word));
+        if (isTagOrComp) {
+          const between = srcLine.slice(tagStart + word.length, cur);
+          if (/^[.#][\w.#-]*$/.test(between)) return [];
+        }
+      }
+    }
     const ctx = strState.inInterpolation ? null : detectBlockComponentContext(srcLines, params.position.line, params.position.character);
     if (ctx) {
       connection.console.log(`[rip] completion ctx: component=${ctx.component}, htmlTag=${ctx.htmlTag}, wantProps=${ctx.wantProps}, wantValues=${ctx.wantValues}, currentProp=${ctx.currentProp}`);
@@ -1978,6 +2018,12 @@ connection.onCompletion((params) => {
               });
             }
           }
+          // Cursor is in a prop value slot (after `prop: `) but the prop has
+          // no enum/union to suggest. Suppress TS fallback only when the
+          // cursor is inside a string literal — otherwise (e.g. inside an
+          // event handler arrow body `@click: (-> |)`) we want regular TS
+          // completions for variables and functions in scope.
+          if (strState.inString) return [];
         }
       }
     }
@@ -2156,6 +2202,13 @@ connection.onCompletion((params) => {
       const partial = partialMatch ? partialMatch[0] : '';
       const partialLc = partial.toLowerCase();
       const MAX_AUGMENT = partial ? Infinity : 50;
+
+      // Skip auto-import augmentation when the cursor is on a member-access
+      // (e.g. `cart.|` or `cart.it|`). Those completions should only show
+      // members of the receiver, not arbitrary workspace exports.
+      const beforePartial = lineTextPrefix.slice(0, lineTextPrefix.length - partial.length);
+      const isMemberAccess = /[.?!]\s*$/.test(beforePartial);
+      if (isMemberAccess) return result;
 
       const existingImports = collectImportedNames(c.source);
       const itemsByLabel = new Map();
@@ -2727,6 +2780,11 @@ connection.onSignatureHelp((params) => {
         };
       }
     }
+    // For raw HTML tags inside a render block, suppress TS signature help —
+    // the synthetic stub `__ripEl(tag: 'a', props?: __RipProps<'a'>)` would
+    // otherwise leak compiler internals into the popup. Completions already
+    // surface the relevant attribute list.
+    if (ctx?.htmlTag) return null;
   }
 
   // TypeScript signature help
