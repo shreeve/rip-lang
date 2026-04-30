@@ -224,6 +224,52 @@ test "effect cleanup on multiple re-runs", '''
   log.join ","
   ''', "c:0,c:1"
 
+# Zombie-effect guard. An effect can be queued in __pendingEffects when a
+# signal it subscribes to changes, then disposed before the flush reaches
+# it (e.g. its parent block was destroyed by an earlier effect in the same
+# flush). Without the disposed guard in run(), the queued effect would
+# execute, re-bind __currentEffect to itself, and any signal .value read
+# would re-subscribe it via subscribers.add(__currentEffect) — leaking one
+# subscriber per flush cycle that hits this race. Symptom in apps: each
+# navigation creates one more component instance than the previous
+# (N visits => N synchronous mounts on visit N).
+
+test "disposed effect in pending queue does not run", '''
+  log = []
+  s := 0
+  d2 = null
+  e1 = __effect ->
+    v = s + 0                # read s, subscribe E1
+    log.push "e1:#{v}"
+    d2() if d2 and v > 0     # E1 disposes E2 mid-flush after the change
+  d2 = __effect ->
+    v = s + 0                # read s, subscribe E2
+    log.push "e2:#{v}"
+  s += 1                     # writes 1; both E1 & E2 queued; E1 runs and
+                             # disposes E2; flush should NOT re-run E2.
+  log.join ","
+  ''', "e1:0,e2:0,e1:1"
+
+test "disposed effect cannot re-subscribe via signal read", '''
+  log = []
+  s := 0
+  d2 = null
+  e1 = __effect ->
+    v = s + 0
+    log.push "e1:#{v}"
+    d2() if d2 and v > 0
+  d2 = __effect ->
+    v = s + 0
+    log.push "e2:#{v}"
+  # First write: E1 disposes E2 mid-flush. Without the guard, E2 would
+  # run zombie AND re-subscribe via the signal read inside its body.
+  s += 1
+  # Second write: if E2 re-subscribed during the zombie run, this would
+  # fire it again. With the guard, E2 is gone for good.
+  s += 1
+  log.join ","
+  ''', "e1:0,e2:0,e1:1,e1:2"
+
 # ==============================================================================
 # Component Composition — Signal Passthrough (foundation of reactive props)
 # ==============================================================================

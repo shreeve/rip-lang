@@ -129,9 +129,21 @@ const __SCHEMA_RESERVED_STATIC = new Set([
   'parse','safe','ok','find','findMany','where','all','first','count','create','toSQL',
 ]);
 const __SCHEMA_RESERVED_INSTANCE = new Set([
-  'save','destroy','reload','ok','errors','toJSON',
+  'save','destroy','reload','ok','errors','toJSON','savedChanges','markDirty',
+  '_saving',
 ]);
-const __SCHEMA_RESERVED = new Set([...__SCHEMA_RESERVED_STATIC, ...__SCHEMA_RESERVED_INSTANCE]);
+// Implicit columns owned by directive-driven runtime behavior. Declaring
+// them as user fields would either shadow the runtime API (savedChanges /
+// markDirty in INSTANCE) or produce duplicate SET writes in the same
+// UPDATE statement when @timestamps / @softDelete bump them.
+const __SCHEMA_RESERVED_IMPLICIT = new Set([
+  'createdAt','updatedAt','deletedAt',
+]);
+const __SCHEMA_RESERVED = new Set([
+  ...__SCHEMA_RESERVED_STATIC,
+  ...__SCHEMA_RESERVED_INSTANCE,
+  ...__SCHEMA_RESERVED_IMPLICIT,
+]);
 
 const __schemaTypes = {
   string:   v => typeof v === 'string',
@@ -192,6 +204,63 @@ function __schemaRewriteMessage(joinedField, childField, childMessage) {
 function __schemaSnake(s) { return s.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase(); }
 
 function __schemaCamel(col) { return String(col).replace(/_([a-z])/g, (_, c) => c.toUpperCase()); }
+
+// Reject acronym-style camelCase like \`mdmID\`, \`userOrgID\`, or
+// \`XMLHttpRequest\`. Two consecutive uppercase letters break the
+// snake_case <-> camelCase bijection: \`mdmID\` would round-trip via
+// __schemaSnake to \`mdm_i_d\` and back via __schemaCamel to \`mdmID\`,
+// while a more natural snake_case spelling \`mdm_id\` round-trips to
+// \`mdmId\` (different identifier). Forcing canonical camelCase at
+// schema-definition time eliminates the entire class of edge case
+// in field-name resolution (markDirty, savedChanges keys, snake
+// aliases on hydrate). Same convention as Active Record / Java
+// Beans / Swift's "Acronyms in API names" guidance.
+//
+// Accepts: lowercase-first, alphanumeric body, no two consecutive
+// uppercase letters anywhere.
+//   ok:    name, mrn, firstName, mdmId, userOrgId, line2, a1b2
+//   bad:   ID, mdmID, userID, XMLHttpRequest, _foo, 1foo, foo_bar
+function __schemaValidateCanonicalName(name) {
+  if (typeof name !== 'string' || !/^[a-z][a-zA-Z0-9]*$/.test(name)) return false;
+  if (/[A-Z]{2,}/.test(name)) return false;
+  return true;
+}
+
+// Snapshot the current values of every persisted column on an instance:
+// the primary key, declared fields (from \`norm.fields\`), and \`belongsTo\`
+// FK columns (from \`norm.relations\`). Used by \`_hydrate\` and the INSERT
+// / UPDATE branches of \`__schemaSave\` (defined in the orm fragment,
+// which loads after this one) so that a later .save() can compare and
+// emit a SET only for columns the caller actually mutated. Lives in the
+// validate fragment because \`_hydrate\` owns it; the orm fragment is
+// the consumer.
+//
+// FK columns are keyed by their camelCase property name on the instance
+// (e.g. \`userId\`) — same convention the dirty Set, savedChanges Map,
+// and markDirty() resolver use.
+//
+// The primary key is captured so __schemaSave's UPDATE WHERE clause can
+// target the originally-loaded row even if \`inst[pk]\` is reassigned in
+// memory. PK never appears in the UPDATE SET; it's identity, not data.
+function __schemaSnapshot(norm, inst) {
+  const snap = Object.create(null);
+  snap[norm.primaryKey] = inst[norm.primaryKey];
+  for (const [n] of norm.fields) snap[n] = inst[n];
+  for (const [, rel] of norm.relations) {
+    if (rel.kind !== 'belongsTo') continue;
+    const fkCamel = __schemaCamel(rel.foreignKey);
+    snap[fkCamel] = inst[fkCamel];
+  }
+  return snap;
+}
+
+// SameValue-Zero: like ===, except NaN equals NaN. Used by the dirty
+// check so a persisted NaN doesn't trigger a wasted UPDATE on every
+// save. Distinguishes from Object.is by treating +0/-0 as equal, which
+// is the right semantics for SQL: the DB doesn't distinguish them.
+function __schemaSameValue(a, b) {
+  return a === b || (a !== a && b !== b);
+}
 
 const __SchemaRegistry = {
   _entries: new Map(),
@@ -257,9 +326,24 @@ class __SchemaDef {
       if (this.kind === 'model' && __SCHEMA_RESERVED.has(n)) collision(n, 'reserved ORM name');
     };
 
+    const requireCanonicalName = (n, kindLabel) => {
+      if (!__schemaValidateCanonicalName(n)) {
+        throw new SchemaError(
+          [{
+            field: n,
+            error: 'invalid-name',
+            message: kindLabel + " name '" + n + "' is not canonical camelCase. " +
+              "Use a lowercase-first, alphanumeric identifier with no consecutive uppercase letters " +
+              "(e.g. 'mdmId' not 'mdmID'). This keeps snake_case <-> camelCase mapping unambiguous.",
+          }],
+          this.name, this.kind);
+      }
+    };
+
     for (const e of this._desc.entries) {
       switch (e.tag) {
         case 'field':
+          requireCanonicalName(e.name, 'field');
           noteCollision(e.name);
           fields.set(e.name, {
             name: e.name,
@@ -426,6 +510,20 @@ class __SchemaDef {
         Object.defineProperty(this, '_dirty', { value: new Set(), enumerable: false, writable: false, configurable: true });
         Object.defineProperty(this, '_persisted', { value: persisted === true, enumerable: false, writable: true, configurable: true });
         Object.defineProperty(this, '_snapshot', { value: null, enumerable: false, writable: true, configurable: true });
+        // Re-entry guard for save(): set true while a save is in flight,
+        // cleared in __schemaSave's finally. Throws on same-instance
+        // re-entry (typically from a hook accidentally calling save()
+        // on its own instance) instead of looping forever or racing the
+        // snapshot / savedChanges machinery.
+        Object.defineProperty(this, '_saving', { value: false, enumerable: false, writable: true, configurable: true });
+        // Mirrors Active Record's \`saved_changes\`: populated by save()
+        // with the field-level diff of the just-completed write. INSERT
+        // produces \`[null, newValue]\` per written field; UPDATE produces
+        // \`[oldValue, newValue]\` per changed field. An empty Map after a
+        // save() call means nothing was actually written. Reset to a
+        // fresh Map at the start of every save() so it always reflects
+        // the most recent save, never accumulates across calls.
+        Object.defineProperty(this, 'savedChanges', { value: new Map(), enumerable: false, writable: true, configurable: true });
         if (data && typeof data === 'object') {
           for (const k of fieldNames) {
             if (k in data && data[k] !== undefined) this[k] = data[k];
@@ -471,6 +569,43 @@ class __SchemaDef {
       Object.defineProperty(klass.prototype, 'errors', {
         enumerable: false, configurable: true, writable: true,
         value: function() { return def._validateFields(this, true); },
+      });
+      // Public API for forcing a column into the next UPDATE when value
+      // identity can't detect the change — typically after an in-place
+      // mutation of an object-valued field (json, Date) where the JS
+      // reference is unchanged. Validates the field name against the
+      // schema so typos throw instead of silently no-op'ing, and is
+      // restricted to persisted instances since INSERT writes every
+      // non-null field anyway (silently doing nothing is a footgun).
+      Object.defineProperty(klass.prototype, 'markDirty', {
+        enumerable: false, configurable: true, writable: true,
+        value: function(name) {
+          if (!this._persisted) {
+            throw new Error(
+              "schema: markDirty('" + name + "') is only valid on persisted instances; INSERT writes every set field"
+            );
+          }
+          const n = __schemaCamel(name);
+          const norm = def._normalize();
+          // Accept declared fields and \`belongsTo\` FK column names
+          // (camelCase or snake_case input both resolve via __schemaCamel).
+          let valid = norm.fields.has(n);
+          if (!valid) {
+            for (const [, rel] of norm.relations) {
+              if (rel.kind === 'belongsTo' && __schemaCamel(rel.foreignKey) === n) {
+                valid = true;
+                break;
+              }
+            }
+          }
+          if (!valid) {
+            throw new Error(
+              "schema: markDirty('" + name + "') — '" + n + "' is not a declared field or belongs_to FK on " + (def.name || 'anon')
+            );
+          }
+          this._dirty.add(n);
+          return this;
+        },
       });
       // toJSON mirrors the instance's own enumerable properties, which by
       // construction are: the primary key, declared fields, @timestamps
@@ -531,6 +666,15 @@ class __SchemaDef {
     // Eager-derived fields re-run on hydrate — they're not persisted
     // and must be re-computed from the declared fields now present.
     this._applyEagerDerived(inst);
+    // Capture the as-loaded values so \`save()\` can emit a column-targeted
+    // UPDATE that only touches fields the caller actually mutated. Two
+    // reasons this matters: (a) avoids a pointless DB round-trip when the
+    // caller didn't change anything, and (b) sidesteps a hard DuckDB FK
+    // limitation — UPDATEs that touch indexed columns (PK / UNIQUE) on a
+    // row referenced by another table's FK are rejected even when the
+    // value isn't really changing. Writing only dirty columns keeps no-op
+    // saves out of the index path entirely.
+    inst._snapshot = __schemaSnapshot(this._normalize(), inst);
     return inst;
   }
 
@@ -12311,10 +12455,15 @@ let __pendingEffects = new Set();  // Effects queued to run
 let __batching = false;       // Are we inside a batch()?
 
 // Flush all pending effects (called after state updates, or at end of batch)
+// Defense in depth: skip disposed effects. The primary guard is in
+// effect.run() itself — but filtering here avoids even calling .run() on
+// a known-dead effect, which is faster and clearer in stack traces.
 function __flushEffects() {
   const effects = [...__pendingEffects];
   __pendingEffects.clear();
-  for (const effect of effects) effect.run();
+  for (const effect of effects) {
+    if (!effect._disposed) effect.run();
+  }
 }
 
 // Shared primitive coercion (used by state and computed)
@@ -12433,8 +12582,20 @@ function __computed(fn) {
 function __effect(fn) {
   const effect = {
     dependencies: new Set(),
+    _disposed: false,
 
     run() {
+      // Zombie-run guard: an effect can be queued in __pendingEffects (when
+      // a signal it subscribes to changes) and then disposed before the
+      // flush reaches it (e.g. its parent block was destroyed by an
+      // earlier effect in the same flush). Without this guard, run()
+      // would execute fn() with __currentEffect = effect, and any signal
+      // .value read inside fn() would re-subscribe the effect by adding
+      // it back to the signal's subscribers Set — accumulating one
+      // leaked subscriber per flush cycle that hits this race. Symptom:
+      // each navigation creates one more component instance than the
+      // previous (N visits => N synchronous mounts on visit N).
+      if (effect._disposed) return;
       if (effect._cleanup) { effect._cleanup(); effect._cleanup = null; }
       for (const dep of effect.dependencies) dep.delete(effect);
       effect.dependencies.clear();
@@ -12447,6 +12608,7 @@ function __effect(fn) {
     },
 
     dispose() {
+      effect._disposed = true;
       if (effect._cleanup) { effect._cleanup(); effect._cleanup = null; }
       for (const dep of effect.dependencies) dep.delete(effect);
       effect.dependencies.clear();
@@ -12745,7 +12907,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.15.4";
-  var BUILD_DATE = "2026-04-29@17:46:05GMT";
+  var BUILD_DATE = "2026-04-30@15:56:54GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

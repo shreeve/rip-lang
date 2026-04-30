@@ -3520,10 +3520,15 @@ let __pendingEffects = new Set();  // Effects queued to run
 let __batching = false;       // Are we inside a batch()?
 
 // Flush all pending effects (called after state updates, or at end of batch)
+// Defense in depth: skip disposed effects. The primary guard is in
+// effect.run() itself — but filtering here avoids even calling .run() on
+// a known-dead effect, which is faster and clearer in stack traces.
 function __flushEffects() {
   const effects = [...__pendingEffects];
   __pendingEffects.clear();
-  for (const effect of effects) effect.run();
+  for (const effect of effects) {
+    if (!effect._disposed) effect.run();
+  }
 }
 
 // Shared primitive coercion (used by state and computed)
@@ -3642,8 +3647,22 @@ function __computed(fn) {
 function __effect(fn) {
   const effect = {
     dependencies: new Set(),
+    _disposed: false,
 
     run() {
+      // Zombie-run guard. An effect can be queued in __pendingEffects
+      // (when a signal it subscribes to changes) and then disposed
+      // before the flush reaches it — e.g. its parent block was
+      // destroyed by an earlier effect in the same flush, and that
+      // destruction's disposers ran effect.dispose(). Without this
+      // guard, run() would execute fn() with __currentEffect = effect,
+      // and any signal .value read inside fn() would re-subscribe the
+      // effect by adding it back to the signal's subscribers Set —
+      // accumulating one leaked subscriber per flush cycle that hits
+      // this race. Symptom: each navigation creates one more component
+      // instance than the previous (N visits => N synchronous mounts
+      // on visit N).
+      if (effect._disposed) return;
       if (effect._cleanup) { effect._cleanup(); effect._cleanup = null; }
       for (const dep of effect.dependencies) dep.delete(effect);
       effect.dependencies.clear();
@@ -3656,6 +3675,17 @@ function __effect(fn) {
     },
 
     dispose() {
+      // Idempotent: a parent disposer chain may legitimately reach the
+      // same effect twice in tangled cleanup paths. Quick exit avoids
+      // re-running cleanup and re-walking already-empty dependencies.
+      if (effect._disposed) return;
+      effect._disposed = true;
+      // Proactive pending-set eviction. The flush-time guard in
+      // __flushEffects also handles this, but pulling the effect out
+      // of __pendingEffects here keeps the set bounded across long
+      // batched cycles and makes disposal semantics direct rather
+      // than dependent on flush ordering.
+      __pendingEffects.delete(effect);
       if (effect._cleanup) { effect._cleanup(); effect._cleanup = null; }
       for (const dep of effect.dependencies) dep.delete(effect);
       effect.dependencies.clear();
