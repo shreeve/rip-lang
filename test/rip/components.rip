@@ -1166,6 +1166,41 @@ test "component effect runs on state change", '''
   a.log
   ''', [0, 1, 2]
 
+# Effects in components register their disposers via __getCurrentComponent
+# so that unmount() can stop them from firing on later state changes. This
+# is the contract the ARIA helpers rely on for popup listener cleanup.
+test "component effect stops on unmount", '''
+  A = component
+    x := 0
+    log =! []
+    ~> @log.push(x + 0)
+  a = A.new()
+  a.x.value = 1
+  a.unmount?(removeDOM: false)
+  a.x.value = 2
+  a.x.value = 3
+  a.log
+  ''', [0, 1]
+
+# Cleanup-via-implicit-return: when a `~>` body returns a function, the
+# reactive runtime stores it as the effect's cleanup and fires it before
+# every re-run AND on dispose. This is THE pattern ARIA.bindPopover and
+# friends rely on.
+test "component effect cleanup runs before re-run and on unmount", '''
+  A = component
+    x := 0
+    log =! []
+    ~>
+      val = x + 0
+      @log.push("setup-#{val}")
+      -> @log.push("cleanup-#{val}")
+  a = A.new()
+  a.x.value = 1
+  a.x.value = 2
+  a.unmount?(removeDOM: false)
+  a.log
+  ''', ['setup-0', 'cleanup-0', 'setup-1', 'cleanup-1', 'setup-2', 'cleanup-2']
+
 test "component computed with postfix ternary", '''
   A = component
     flag := false
@@ -2574,8 +2609,7 @@ code "effect with block body", '''
       __effect(() => {
     let v;
     v = this.x.value + 1;
-    p(v);
-    return;
+    return p(v);
   });
     }
     _create() {

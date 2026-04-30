@@ -1127,20 +1127,25 @@ export createRenderer = (opts = {}) ->
       for name, depPath of resolver.map
         delete resolver.classes[name] if depPath is path
 
+  # Component.unmount({removeDOM}) handles the full lifecycle: beforeUnmount,
+  # cascade to children, run all auto-registered effect disposers, unmounted,
+  # then optionally remove the DOM. We pass removeDOM:false for the current
+  # page so the old DOM stays visible until the new page replaces it
+  # (the explicit `oldTarget?.remove()` later in mountRoute does that),
+  # and removeDOM:true for layouts because they're being torn down for
+  # real (their wrapper div is no longer needed).
   unmountCurrent = ->
     if currentComponent
-      currentComponent.beforeUnmount() if currentComponent.beforeUnmount
-      currentComponent.unmounted() if currentComponent.unmounted
-      # Don't remove _target here — leave visible until new content is ready
+      try currentComponent.unmount?.(removeDOM: false)
+      catch e then console.error '[Rip] page unmount error:', e
       currentComponent = null
       currentRoute = null
 
   unmount = ->
     unmountCurrent()
     for inst in layoutInstances by -1
-      inst.beforeUnmount() if inst.beforeUnmount
-      inst.unmounted() if inst.unmounted
-      inst._target?.remove()
+      try inst.unmount?.(removeDOM: true)
+      catch e then console.error '[Rip] layout unmount error:', e
     layoutInstances = []
     mountPoint = container
     # Clear param/query/layout memos too. Without this, a stop()+start()
