@@ -3384,19 +3384,28 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           };
           let afterEq = eqIdx + 1;
           let next = tokens2[afterEq];
+          let trackBodyRefs = (start, end) => {
+            for (let k = start;k <= end && k < tokens2.length; k++) {
+              if (tokens2[k][0] === "IDENTIFIER")
+                typeRefNames.add(tokens2[k][1]);
+            }
+          };
           if (next && (next[0] === "TERMINATOR" || next[0] === "INDENT")) {
             let result = collectBlockUnion(tokens2, afterEq);
             if (result) {
+              trackBodyRefs(afterEq, result.endIdx);
               tokens2.splice(removeFrom, result.endIdx - removeFrom + 1, makeDecl(result.typeText));
               return 0;
             }
           }
           if (next && next[0] === "INDENT") {
             let endIdx = findMatchingOutdent2(tokens2, afterEq);
+            trackBodyRefs(afterEq, endIdx);
             tokens2.splice(removeFrom, endIdx - removeFrom + 1, makeDecl(collectStructuralType(tokens2, afterEq)));
             return 0;
           }
           let typeTokens = collectTypeExpression(tokens2, afterEq);
+          trackBodyRefs(afterEq, afterEq + typeTokens.consumed - 1);
           tokens2.splice(removeFrom, afterEq + typeTokens.consumed - removeFrom, makeDecl(buildTypeString(typeTokens)));
           return 0;
         }
@@ -3416,6 +3425,12 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           if (tokens2[bodyIdx]?.[0] === "INDENT") {
             let typeText = collectStructuralType(tokens2, bodyIdx);
             let endIdx = findMatchingOutdent2(tokens2, bodyIdx);
+            for (let k = bodyIdx;k <= endIdx && k < tokens2.length; k++) {
+              if (tokens2[k][0] === "IDENTIFIER")
+                typeRefNames.add(tokens2[k][1]);
+            }
+            if (extendsName)
+              typeRefNames.add(extendsName);
             let declToken = gen("TYPE_DECL", name, nameToken);
             declToken.data = {
               name,
@@ -3676,7 +3691,30 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         let typeStr = buildTypeString(propTypeTokens);
         let prefix = readonly ? "readonly " : "";
         let optMark = optional ? "?" : "";
-        props.push(`${prefix}${propName}${optMark}: ${typeStr}`);
+        let methodShorthand = false;
+        if (!optional && typeStr.startsWith("(")) {
+          let depthM = 0;
+          for (let m = 0;m < typeStr.length; m++) {
+            let ch = typeStr[m];
+            if (ch === "(")
+              depthM++;
+            else if (ch === ")") {
+              depthM--;
+              if (depthM === 0) {
+                let rest = typeStr.slice(m + 1).trimStart();
+                if (rest === "" || rest.startsWith(":") && !rest.startsWith("::")) {
+                  methodShorthand = true;
+                }
+                break;
+              }
+            }
+          }
+        }
+        if (methodShorthand) {
+          props.push(`${prefix}${propName}${typeStr}`);
+        } else {
+          props.push(`${prefix}${propName}${optMark}: ${typeStr}`);
+        }
       } else {
         j++;
       }
@@ -4213,6 +4251,19 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       let p = this.prev();
       return p ? p[1] : undefined;
     }
+    isReturnTypeSlot() {
+      let n = this.tokens.length;
+      if (n < 2)
+        return false;
+      let t1 = this.tokens[n - 1];
+      if (!t1 || t1[1] !== ":")
+        return false;
+      let t2 = this.tokens[n - 2];
+      if (!t2)
+        return false;
+      let tag2 = t2[0];
+      return tag2 === ")" || tag2 === "CALL_END" || tag2 === "PARAM_END";
+    }
     inPickKeyPos() {
       let prev = this.prev();
       if (!prev)
@@ -4317,7 +4368,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         tag = this.classifyKeyword(id, tag, data);
       }
       if (tag === "IDENTIFIER" && RESERVED.has(baseId)) {
-        if (baseId === "void" && (this.inTypeAnnotation || this.prevTag() === "=>")) {} else {
+        if (baseId === "void" && (this.inTypeAnnotation || this.prevTag() === "=>" || this.isReturnTypeSlot())) {} else {
           syntaxError(`reserved word '${baseId}'`, { row: this.row, col: this.col, len: idLen });
         }
       }
@@ -10638,6 +10689,7 @@ ${this.indent()}}`;
           return `...${this.emit(pair[1], "value")}`;
         let [operator, key, value] = pair;
         let keyCode;
+        let isSimpleKey = false;
         if (this.is(key, "dynamicKey"))
           keyCode = `[${this.emit(key[1], "value")}]`;
         else if (this.is(key, "str"))
@@ -10646,6 +10698,21 @@ ${this.indent()}}`;
           this.suppressReactiveUnwrap = true;
           keyCode = this.emit(key, "value");
           this.suppressReactiveUnwrap = false;
+          isSimpleKey = !Array.isArray(key) && typeof keyCode === "string" && /^[A-Za-z_$][\w$]*$/.test(keyCode);
+        }
+        if (operator === ":" && isSimpleKey && this.is(value, "->")) {
+          let [, mParams, mBody] = value;
+          if ((!mParams || Array.isArray(mParams) && mParams.length === 0) && this.containsIt(mBody))
+            mParams = ["it"];
+          let mSideEffect = this.nextFunctionIsVoid || false;
+          this.nextFunctionIsVoid = false;
+          let mParamList = this.emitParamList(mParams);
+          let mBodyCode = this.emitFunctionBody(mBody, mParams, mSideEffect);
+          let mIsAsync = this.containsAwait(mBody);
+          let mIsGen = this.containsYield(mBody);
+          let prefix = mIsAsync ? "async " : "";
+          let star = mIsGen ? "*" : "";
+          return `${prefix}${star}${keyCode}(${mParamList}) ${mBodyCode}`;
         }
         let valCode = this.emit(value, "value");
         if (operator === "=")
@@ -12585,16 +12652,18 @@ function __effect(fn) {
     _disposed: false,
 
     run() {
-      // Zombie-run guard: an effect can be queued in __pendingEffects (when
-      // a signal it subscribes to changes) and then disposed before the
-      // flush reaches it (e.g. its parent block was destroyed by an
-      // earlier effect in the same flush). Without this guard, run()
-      // would execute fn() with __currentEffect = effect, and any signal
-      // .value read inside fn() would re-subscribe the effect by adding
-      // it back to the signal's subscribers Set — accumulating one
-      // leaked subscriber per flush cycle that hits this race. Symptom:
-      // each navigation creates one more component instance than the
-      // previous (N visits => N synchronous mounts on visit N).
+      // Zombie-run guard. An effect can be queued in __pendingEffects
+      // (when a signal it subscribes to changes) and then disposed
+      // before the flush reaches it — e.g. its parent block was
+      // destroyed by an earlier effect in the same flush, and that
+      // destruction's disposers ran effect.dispose(). Without this
+      // guard, run() would execute fn() with __currentEffect = effect,
+      // and any signal .value read inside fn() would re-subscribe the
+      // effect by adding it back to the signal's subscribers Set —
+      // accumulating one leaked subscriber per flush cycle that hits
+      // this race. Symptom: each navigation creates one more component
+      // instance than the previous (N visits => N synchronous mounts
+      // on visit N).
       if (effect._disposed) return;
       if (effect._cleanup) { effect._cleanup(); effect._cleanup = null; }
       for (const dep of effect.dependencies) dep.delete(effect);
@@ -12608,7 +12677,17 @@ function __effect(fn) {
     },
 
     dispose() {
+      // Idempotent: a parent disposer chain may legitimately reach the
+      // same effect twice in tangled cleanup paths. Quick exit avoids
+      // re-running cleanup and re-walking already-empty dependencies.
+      if (effect._disposed) return;
       effect._disposed = true;
+      // Proactive pending-set eviction. The flush-time guard in
+      // __flushEffects also handles this, but pulling the effect out
+      // of __pendingEffects here keeps the set bounded across long
+      // batched cycles and makes disposal semantics direct rather
+      // than dependent on flush ordering.
+      __pendingEffects.delete(effect);
       if (effect._cleanup) { effect._cleanup(); effect._cleanup = null; }
       for (const dep of effect.dependencies) dep.delete(effect);
       effect.dependencies.clear();
@@ -12907,7 +12986,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.15.4";
-  var BUILD_DATE = "2026-04-30@15:56:54GMT";
+  var BUILD_DATE = "2026-04-30@20:39:29GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -13463,7 +13542,7 @@ ${indented}`);
   makeProxy = function(target) {
     let handler, proxy;
     proxy = null;
-    handler = { get: function(target2, prop) {
+    handler = { get(target2, prop) {
       let fn, sig, val;
       if (prop === Symbol.for("stash"))
         return true;
@@ -13486,7 +13565,7 @@ ${indented}`);
       if (val != null && typeof val === "object")
         return wrapDeep(val);
       return val;
-    }, set: function(target2, prop, value) {
+    }, set(target2, prop, value) {
       let old, r;
       if (!_depth && isPathKey(prop)) {
         stashSet(proxy, prop, value);
@@ -13505,7 +13584,7 @@ ${indented}`);
       }
       _writeVersion.value++;
       return true;
-    }, deleteProperty: function(target2, prop) {
+    }, deleteProperty(target2, prop) {
       let sig;
       delete target2[prop];
       sig = target2[Symbol.for("signals")]?.get(prop);
@@ -13514,7 +13593,7 @@ ${indented}`);
       keysSignal(target2).value = ++_keysVersion;
       _writeVersion.value++;
       return true;
-    }, ownKeys: function(target2) {
+    }, ownKeys(target2) {
       keysSignal(target2).value;
       return Reflect.ownKeys(target2);
     } };
@@ -13809,13 +13888,13 @@ ${indented}`);
       })();
     };
     resource = { data: undefined, loading: undefined, error: undefined, refetch: load };
-    Object.defineProperty(resource, "data", { get: function() {
+    Object.defineProperty(resource, "data", { get() {
       return _data.value;
     } });
-    Object.defineProperty(resource, "loading", { get: function() {
+    Object.defineProperty(resource, "loading", { get() {
       return _loading.value;
     } });
-    Object.defineProperty(resource, "error", { get: function() {
+    Object.defineProperty(resource, "error", { get() {
       return _error.value;
     } });
     if (!opts.lazy)
@@ -13829,12 +13908,12 @@ ${indented}`);
   };
   _proxy = function(out, source) {
     let obj;
-    obj = { read: function() {
+    obj = { read() {
       return out.read();
     } };
-    Object.defineProperty(obj, "value", { get: function() {
+    Object.defineProperty(obj, "value", { get() {
       return out.value;
-    }, set: function(v) {
+    }, set(v) {
       return source.value = v;
     } });
     return obj;
@@ -13931,23 +14010,23 @@ ${indented}`);
       }
       return _result;
     };
-    return { read: function(path) {
+    return { read(path) {
       return files.get(path);
-    }, write: function(path, content) {
+    }, write(path, content) {
       let isNew;
       isNew = !files.has(path);
       files.set(path, content);
       compiled.delete(path);
       return notify(isNew ? "create" : "change", path);
-    }, del: function(path) {
+    }, del(path) {
       files.delete(path);
       compiled.delete(path);
       return notify("delete", path);
-    }, exists: function(path) {
+    }, exists(path) {
       return files.has(path);
-    }, size: function() {
+    }, size() {
       return files.size;
-    }, list: function(dir = "") {
+    }, list(dir = "") {
       let path, prefix, rest, result;
       result = [];
       prefix = dir ? dir + "/" : "";
@@ -13960,7 +14039,7 @@ ${indented}`);
         }
       }
       return result;
-    }, listAll: function(dir = "") {
+    }, listAll(dir = "") {
       let path, prefix, result;
       result = [];
       prefix = dir ? dir + "/" : "";
@@ -13969,7 +14048,7 @@ ${indented}`);
           result.push(path2);
       }
       return result;
-    }, load: function(obj) {
+    }, load(obj) {
       let content, key;
       const _result = [];
       for (let key2 in obj) {
@@ -13977,14 +14056,14 @@ ${indented}`);
         _result.push(files.set(key2, content2));
       }
       return _result;
-    }, watch: function(fn) {
+    }, watch(fn) {
       watchers.push(fn);
       return function() {
         return watchers.splice(watchers.indexOf(fn), 1);
       };
-    }, getCompiled: function(path) {
+    }, getCompiled(path) {
       return compiled.get(path);
-    }, setCompiled: function(path, result) {
+    }, setCompiled(path, result) {
       return compiled.set(path, result);
     } };
   };
@@ -14175,58 +14254,58 @@ ${indented}`);
     };
     if (typeof document !== "undefined")
       document.addEventListener("click", onClick);
-    router = { push: function(url) {
+    router = { push(url) {
       return resolve(url) ? history.pushState(null, "", writeUrl(_path.read())) : undefined;
-    }, replace: function(url) {
+    }, replace(url) {
       return resolve(url) ? history.replaceState(null, "", writeUrl(_path.read())) : undefined;
-    }, back: function() {
+    }, back() {
       return history.back();
-    }, forward: function() {
+    }, forward() {
       return history.forward();
-    }, current: undefined, path: undefined, params: undefined, route: undefined, layouts: undefined, query: undefined, hash: undefined, navigating: undefined, onNavigate: function(cb) {
+    }, current: undefined, path: undefined, params: undefined, route: undefined, layouts: undefined, query: undefined, hash: undefined, navigating: undefined, onNavigate(cb) {
       navCallbacks.add(cb);
       return function() {
         return navCallbacks.delete(cb);
       };
-    }, rebuild: function() {
+    }, rebuild() {
       return tree = buildRoutes(components, root);
-    }, routes: undefined, init: function() {
+    }, routes: undefined, init() {
       resolve(readUrl());
       return router;
-    }, destroy: function() {
+    }, destroy() {
       if (typeof window !== "undefined")
         window.removeEventListener("popstate", onPopState);
       if (typeof document !== "undefined")
         document.removeEventListener("click", onClick);
       return navCallbacks.clear();
     } };
-    Object.defineProperty(router, "current", { get: function() {
+    Object.defineProperty(router, "current", { get() {
       return { path: _path.value, params: _params.value, route: _route.value, layouts: _layouts.value, query: _query.value, hash: _hash.value };
     } });
-    Object.defineProperty(router, "path", { get: function() {
+    Object.defineProperty(router, "path", { get() {
       return _path.value;
     } });
-    Object.defineProperty(router, "params", { get: function() {
+    Object.defineProperty(router, "params", { get() {
       return _params.value;
     } });
-    Object.defineProperty(router, "route", { get: function() {
+    Object.defineProperty(router, "route", { get() {
       return _route.value;
     } });
-    Object.defineProperty(router, "layouts", { get: function() {
+    Object.defineProperty(router, "layouts", { get() {
       return _layouts.value;
     } });
-    Object.defineProperty(router, "query", { get: function() {
+    Object.defineProperty(router, "query", { get() {
       return _query.value;
     } });
-    Object.defineProperty(router, "hash", { get: function() {
+    Object.defineProperty(router, "hash", { get() {
       return _hash.value;
     } });
-    Object.defineProperty(router, "navigating", { get: function() {
+    Object.defineProperty(router, "navigating", { get() {
       return _navigating.value;
-    }, set: function(v) {
+    }, set(v) {
       return _navigating.value = v;
     } });
-    Object.defineProperty(router, "routes", { get: function() {
+    Object.defineProperty(router, "routes", { get() {
       return tree.routes;
     } });
     return router;
@@ -14579,7 +14658,7 @@ ${indented}`);
         }
       })();
     };
-    renderer = { start: function() {
+    renderer = { start() {
       disposeEffect = __effect(function() {
         let current;
         current = router.current;
@@ -14587,14 +14666,14 @@ ${indented}`);
       });
       router.init();
       return renderer;
-    }, stop: function() {
+    }, stop() {
       unmount();
       if (disposeEffect) {
         disposeEffect();
         disposeEffect = null;
       }
       return container.innerHTML = "";
-    }, remount: function() {
+    }, remount() {
       let current;
       current = router.current;
       return current.route ? mountRoute(current) : undefined;
@@ -14635,7 +14714,7 @@ ${indented}`);
     return connect();
   };
   var launch = async function(appBase = "", opts = {}) {
-    let app, appComponents, bundle, cached, classesKey, compile2, el, etag, etagKey, hash, headers, persist, renderer, res, resolver, router, target;
+    let app, appComponents, bundle, cached, classesKey, compile2, el, etag, etagKey, hash, headers, k, persist, renderer, res, resolver, router, seedData, stashMod, stashPath, stashRaw, stashSource, target, v;
     globalThis.__ripLaunched = true;
     if (typeof appBase === "object") {
       opts = appBase;
@@ -14680,14 +14759,6 @@ ${indented}`);
     }
     app = stash({ components: {}, routes: {}, data: {} });
     globalThis.__ripApp = app;
-    if (bundle.data)
-      app.data = bundle.data;
-    if (bundle.routes) {
-      app.routes = bundle.routes;
-    }
-    if (persist && typeof sessionStorage !== "undefined") {
-      persistStash(app, { local: persist === "local", key: `__rip_${appBase}` });
-    }
     appComponents = createComponents();
     if (bundle.components)
       appComponents.load(bundle.components);
@@ -14695,12 +14766,41 @@ ${indented}`);
     resolver = { map: buildComponentMap(appComponents), classes: {}, key: classesKey };
     if (typeof globalThis !== "undefined")
       globalThis[classesKey] = resolver.classes;
+    stashRaw = null;
+    stashPath = "components/_lib/stash.rip";
+    if (appComponents.exists(stashPath)) {
+      stashSource = appComponents.read(stashPath);
+      if (stashSource) {
+        try {
+          stashMod = await compileAndImport(stashSource, compile2, appComponents, stashPath, resolver);
+          if (stashMod?.stash)
+            stashRaw = stashMod.stash;
+        } catch (e) {
+          console.error(`[Rip] Failed to load app/stash.rip: ${e.message}`, e);
+        }
+      }
+    }
+    if (stashRaw && bundle.data) {
+      for (let k2 in bundle.data) {
+        let v2 = bundle.data[k2];
+        stashRaw[k2] = v2;
+      }
+    }
+    seedData = stashRaw ?? bundle.data;
+    if (seedData)
+      app.data = seedData;
+    if (bundle.routes) {
+      app.routes = bundle.routes;
+    }
+    if (persist && typeof sessionStorage !== "undefined") {
+      persistStash(app, { local: persist === "local", key: `__rip_${appBase}` });
+    }
     if (app.data.title && typeof document !== "undefined")
       document.title = app.data.title;
-    router = createRouter(appComponents, { root: "components", base: appBase, hash, onError: function(err) {
+    router = createRouter(appComponents, { root: "components", base: appBase, hash, onError(err) {
       return console.error(`[Rip] Error ${err.status}: ${err.message || err.path}`);
     } });
-    renderer = createRenderer({ router, app, components: appComponents, resolver, compile: compile2, target, onError: function(err) {
+    renderer = createRenderer({ router, app, components: appComponents, resolver, compile: compile2, target, onError(err) {
       return console.error(`[Rip] ${err.message}`, err.error);
     } });
     renderer.start();
@@ -14781,9 +14881,9 @@ ${indented}`);
   _ariaPopupGuard = function(delay2 = 250) {
     let blockedUntil;
     blockedUntil = 0;
-    return { block: function(ms = delay2) {
+    return { block(ms = delay2) {
       return blockedUntil = Date.now() + ms;
-    }, canOpen: function() {
+    }, canOpen() {
       return Date.now() >= blockedUntil;
     } };
   };
