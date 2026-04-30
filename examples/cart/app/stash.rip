@@ -1,4 +1,6 @@
-import { CartItem, Product } from './types.rip'
+import { Product } from './types.rip'
+
+type CartItem = Product & { quantity: number }
 
 export type Cart =
   items: CartItem[]
