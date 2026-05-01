@@ -93,14 +93,17 @@ the user-land API it exposes.
 
 ## 2. Quick start
 
-The smallest possible Rip App is just a script tag and an inline Rip
-block:
+The smallest possible Rip App is one HTML file you can drop into any
+static server (or open straight from disk):
 
 ```html
 <!doctype html>
 <html>
 <body>
-  <script defer src="/dist/rip.min.js" data-mount="App"></script>
+  <script defer
+          src="https://shreeve.github.io/rip-lang/dist/rip.min.js"
+          data-src=""
+          data-mount="App"></script>
   <script type="text/rip">
     App = component
       name := "world"
@@ -112,12 +115,31 @@ block:
 </html>
 ```
 
-That's everything: zero build step, zero installs, zero `package.json`.
+Save as `index.html`, run `python3 -m http.server` (or any other
+static server, or just double-click the file), and you're live.
+
+What each attribute does:
+
+- `defer` — wait for the document to parse so the inline
+  `<script type="text/rip">` block is in the DOM when the framework
+  runs.
+- `src=...` — the framework bundle (compiler + reactive runtime +
+  Rip App). Use the GitHub Pages CDN URL above, or self-host a copy
+  of `dist/rip.min.js`.
+- `data-src=""` — **explicitly empty**. Without this, the runtime
+  defaults to `GET /app` (the auto-bundle endpoint provided by
+  `@rip-lang/server`'s `serve` middleware). When you're not running
+  a Rip server, the empty string suppresses that fetch.
+- `data-mount="App"` — name of the top-level component to mount
+  onto `<body>`. Defaults to `data-target` if you want a different
+  mount point (e.g. `data-target="#app"`).
+
 The browser loads `rip.min.js`, the compiled framework + compiler
-evaluate, all inline `<script type="text/rip">` blocks share scope and
-compile in-browser, and the runtime mounts the component named in
-`data-mount`. The component's reactive state (`name := "world"`) is
-fine-grained — clicking the button updates only the `<h1>`'s text node.
+evaluate, all inline `<script type="text/rip">` blocks share scope
+and compile in-browser, and the runtime calls `App.mount('body')`
+for you. The component's reactive state (`name := "world"`) is
+fine-grained — clicking the button updates only the `<h1>`'s text
+node.
 
 ### Real apps: bundles + file-based routing
 
