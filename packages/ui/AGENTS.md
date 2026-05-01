@@ -129,27 +129,29 @@ Names to avoid as render-scope locals: `p`, `code`, `a`, `span`, `div`,
 `input`, `label`, `main`, `section`, `aside`, `img`, `ul`, `ol`, `th`,
 `td`, `tr`, `style`, `script`.
 
-### Don't use `i` as an explicit loop index inside nested render loops
+### Nested `for` loops with mixed explicit / auto indices (fixed)
 
-Rip collects every enclosing loop variable — outer and inner — into the
-reactive patch function's parameter list. An outer `for item in items`
-silently allocates an `i` counter there, so an inner loop using `i` as
-an explicit index produces a strict-mode "Duplicate parameter name"
-compile error at runtime.
+The outer `for item in items` no longer silently allocates `i` and
+then collides with an inner explicit `for v, i in item.enum`. The
+compiler pre-scans the loop body for descendant explicit indices and
+picks a non-colliding name for the auto-allocated outer counter, so
+all of these now compile:
 
 ```coffee
-# WRONG — outer emits implicit `i`, inner also uses `i` → dup param
 for item in items
   for v, i in item.enum
-    code = v
+    span v
 
-# CORRECT — rename the inner index
 for item in items
-  for v, idx in item.enum
-    code = v
+  for group in item.groups
+    for v, i in group.values
+      span v
 ```
 
-Use `idx`, `n`, or `j` for nested-loop indexes.
+The remaining sharp edge is a real source-level duplicate — e.g.
+`for x, i in xs / for y, i in ys` both binding `i`. That stays a
+strict-mode error because the compiler will not silently rename a
+variable you typed.
 
 ### Debugging "Duplicate parameter name" and friends quickly
 

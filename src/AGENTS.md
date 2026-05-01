@@ -466,30 +466,35 @@ Compile-time optimizations:
 - array-based `state.blocks[]`
 - `state.keys = items.slice()` for default item-as-key behavior
 
-### Nested Loop Variable Collision (known gotcha)
+### Nested Loop Variable Collision (fixed)
 
-The emitted patch function for a reactive block is named `p` and takes
-every enclosing loop variable as a positional parameter:
+Historically, `emitTemplateLoop` would auto-allocate `i` for any
+outer loop with no explicit index. An inner `for v, i in ...` then
+explicitly bound `i`, and both ended up as positional parameters of
+the deepest factory's patch function:
 
 ```javascript
-// For a render with `for item in items` containing `for v, i in item.enum`
-p(ctx, v, i, item, i) { ... }   // duplicate `i` — invalid in strict mode
+// Pre-fix output:
+p(ctx, v, i, item, i) { ... }   // duplicate `i` — strict-mode SyntaxError
 ```
 
-The outer `for item in items` allocates an implicit `i` counter even
-when the user wrote no explicit index. If the inner loop uses `i` as an
-explicit index, both end up in `p`'s signature and V8 throws
-`Duplicate parameter name not allowed in this context` at parse time.
+The fix in `emitTemplateLoop` (`src/components.js`) calls
+`_collectExplicitLoopIdentifiers(body, usedNames)` to pre-scan the
+entire loop body for every explicit `for-in`/`for-of`/`for-as` var,
+then picks the first conventional letter (`i,j,k,l,m,n`) that's not
+in `usedNames`. If every letter collides, it falls back to
+`__rip_idx${depth}` — a name no normal user identifier writes.
 
-Current workaround (author-facing, documented in
-`packages/ui/AGENTS.md`): use a different inner index name (`idx`, `n`,
-`j`).
+The same nested case now compiles cleanly:
 
-Long-term fix: the emitter should generate unique internal names for
-auto-allocated loop counters (e.g. `__i0`, `__i1`) rather than reusing
-`i`, so no user-chosen name can ever collide. The fix lives in whichever
-`emitFor*` path closes over the block into a patch function — search
-for sites that build the `p(ctx, ...args)` signature in `compiler.js`.
+```javascript
+function create_block_outer(ctx, item, j) { ... }
+function create_block_inner(ctx, v, i, item, j) { ... }   // unique
+```
+
+User-explicit collisions (`for x, i in xs / for y, i in ys`) are
+still a real strict-mode error and are intentionally left to the
+user — the compiler doesn't silently rewrite the names you typed.
 
 ### Error Boundaries
 

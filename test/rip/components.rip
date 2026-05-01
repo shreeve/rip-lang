@@ -816,6 +816,140 @@ code "nested loops thread outer vars", '''
   ''', opts
 
 # ==============================================================================
+# Auto-allocated loop index never collides with a nested explicit index
+# ==============================================================================
+# Regression: an outer `for x in xs` (no explicit index) used to silently
+# allocate `i`. An inner `for v, i in ys` then explicitly bound `i`, and both
+# ended up as positional parameters of the deepest factory's patch function,
+# producing `function p(ctx, v, i, item, i)` — strict-mode SyntaxError. The
+# fix pre-scans the loop body for explicit descendant indices and skips any
+# name that would collide.
+
+code "outer auto-index avoids inner explicit `i`", '''
+  export A = component
+    items := [{options: [1, 2]}]
+    render
+      for item in items
+        for v, i in item.options
+          span "#{v}#{i}"
+  ''', '''
+  export const A = (() => {
+  function create_block_1(ctx, v, i, item, j) {
+    let _el2, _t0;
+    let _factoryChildren = [];
+    return {
+   _s: true,
+   c() {
+     _el2 = document.createElement('span');
+     _t0 = document.createTextNode(String(`${v}${i}`));
+     _el2.appendChild(_t0);
+     this._first = _el2;
+   },
+   m(target, anchor) {
+     if (target) target.insertBefore(_el2, anchor);
+   },
+   p(ctx, v, i, item, j) {
+   },
+   d(detaching) {
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     _factoryChildren = [];
+     if (detaching && _el2) _el2.remove();
+   }
+    };
+  }
+
+  function create_block_0(ctx, item, j) {
+    let _anchor1;
+    let disposers = [];
+    let _factoryChildren = [];
+    return {
+   c() {
+     _anchor1 = document.createComment('for');
+     this._first = _anchor1;
+   },
+   m(target, anchor) {
+     if (target) target.insertBefore(_anchor1, anchor);
+   },
+   p(ctx, item, j) {
+     disposers.forEach(d => d());
+     disposers = [];
+     // Loop: create_block_1
+   {
+     const __s = { blocks: [], keys: [] };
+     disposers.push(__effect(() => {
+       __reconcile(_anchor1, __s, item.options, ctx, create_block_1, null, item, j);
+     }, {skipRegister: true}));
+     disposers.push(() => { for (const __b of __s.blocks) { try { __b.d(true); } catch {} } __s.blocks = []; __s.keys = []; __s.items = []; });
+   }
+   },
+   d(detaching) {
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     _factoryChildren = [];
+     disposers.forEach(d => d());
+     if (detaching && _anchor1) _anchor1.remove();
+   }
+    };
+  }
+
+  return class extends __Component {
+    _init(props) {
+   this.items = __state([{options: [1, 2]}]);
+    }
+    _create() {
+   this._anchor0 = document.createComment('for');
+   return this._anchor0;
+    }
+    _setup() {
+   // Loop: create_block_0
+   {
+     const __s = { blocks: [], keys: [] };
+     __effect(() => {
+       __reconcile(this._anchor0, __s, this.items.value, this, create_block_0, null);
+     });
+     { const __cur = globalThis.__ripComponent?.__getCurrentComponent?.(); if (__cur) (__cur._disposers ??= []).push(() => { for (const __b of __s.blocks) { try { __b.d(true); } catch {} } __s.blocks = []; __s.keys = []; __s.items = []; }); }
+   }
+    }
+  };
+  })();
+  ''', opts
+
+test "nested loops with auto outer + explicit inner `i` execute correctly", '''
+  A = component
+    items := [{opts: [10, 20]}, {opts: [30]}]
+    render
+      for item in items
+        for v, i in item.opts
+          span "#{v}@#{i}"
+  inst = A.new(items: [{opts: ["a", "b"]}, {opts: ["c"]}])
+  inst._init({})
+  typeof inst._create
+''', "function"
+
+test "three-deep nested loops with i/j/k mix never collide", '''
+  A = component
+    items := [{groups: [{values: [1]}]}]
+    render
+      for item in items
+        for group in item.groups
+          for v, i in group.values
+            span "#{v}@#{i}"
+  inst = A.new(items: [{groups: [{values: [1, 2]}]}])
+  inst._init({})
+  typeof inst._create
+''', "function"
+
+test "loop body that depends on auto-allocated index `i` (row striping)", '''
+  A = component
+    rows := ["a", "b", "c"]
+    render
+      for row, i in rows
+        div class: (if i % 2 is 0 then "even" else "odd"), row
+  inst = A.new(rows: ["x", "y", "z"])
+  inst._init({})
+  typeof inst._create
+''', "function"
+
+# ==============================================================================
 # String Content in Factories — the "this works" regression test
 # ==============================================================================
 

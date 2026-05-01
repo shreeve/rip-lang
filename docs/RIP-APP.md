@@ -613,26 +613,31 @@ Names to avoid in render-scope locals: `p`, `code`, `a`, `span`,
 `ol`, `th`, `td`, `tr`, `style`, `script`. Same constraint as JSX's
 "if it's an HTML tag, don't shadow it."
 
-### Nested `for` loops can't both name `i`
+### Nested `for` loops can both name `i` (fixed)
 
-Rip collects every enclosing loop variable into the reactive patch
-function's parameter list. An outer `for item in items` silently
-emits an `i` counter; an inner loop using `i` as an explicit index
-causes a strict-mode "Duplicate parameter name" compile error.
+The outer `for item in items` no longer auto-allocates `i` and then
+collides with an inner `for v, i in ...`. The compiler now pre-scans
+the loop body for explicit descendant index names and skips any name
+that would clash, falling back to a mangled internal name only if
+every conventional letter is taken. The patch function's parameter
+list stays unique at any nesting depth.
 
 ```rip
-# WRONG
+# All of these now compile cleanly:
 for item in items
   for v, i in item.options
-    span "#{v}"
+    span "#{v}@#{i}"
 
-# CORRECT
 for item in items
-  for v, idx in item.options
-    span "#{v}"
+  for group in item.groups
+    for v, i in group.values
+      span "#{v}@#{i}"
 ```
 
-Use `idx`, `n`, or `j` for nested-loop indexes.
+(User-explicit duplicates — e.g. `for x, i in xs / for y, i in ys`
+where the same `i` is bound at two nesting levels — are still a
+strict-mode error. That's a real name conflict in the user's source,
+not something the compiler should silently rewrite.)
 
 ### Snapshot tests are brittle
 

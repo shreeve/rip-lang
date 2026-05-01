@@ -2431,12 +2431,26 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     const itemVar = varNames[0];
     let indexVar = varNames[1] || null;
     if (!indexVar) {
+      // Pick a name that won't collide with:
+      //   * outer loop vars (already in _loopVarStack)
+      //   * the current item var
+      //   * any explicit loop var bound by a *descendant* for-loop in the body
+      // The third check is what fixes the historical "two name `i`" footgun:
+      // the outer loop's auto-index becomes a positional parameter of every
+      // nested factory's patch function, so an inner explicit `i` would clash
+      // with the outer's auto-allocated `i` in strict mode. Pre-scanning the
+      // body lets us pick `j` (or further) for the outer instead, preserving
+      // the user's explicit inner name.
       const usedNames = new Set(this._loopVarStack.flatMap(v => [v.itemVar, v.indexVar]));
       usedNames.add(itemVar);
+      this._collectExplicitLoopIdentifiers(body, usedNames);
       for (const candidate of ['i', 'j', 'k', 'l', 'm', 'n']) {
         if (!usedNames.has(candidate)) { indexVar = candidate; break; }
       }
-      indexVar = indexVar || `_i${this._loopVarStack.length}`;
+      // Last-resort fallback uses a mangled name no normal user identifier
+      // collides with (double underscore prefix matches the convention used
+      // by other compiler-internal names like __ripComponent, __reconcile).
+      indexVar = indexVar || `__rip_idx${this._loopVarStack.length}`;
     }
 
     const collectionCode = this.emitInComponent(collection, 'value');
@@ -2775,6 +2789,35 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     }
 
     return false;
+  };
+
+  // _collectExplicitLoopIdentifiers — gather every explicit `for` var in a subtree
+  // --------------------------------------------------------------------------
+  // Used by emitTemplateLoop to avoid auto-allocating an outer index name
+  // (default `i`) that would collide with an inner loop's user-named index
+  // when both end up as positional parameters of the deepest factory's
+  // patch function.
+  //
+  // Walks the entire subtree (any depth, through conditionals, blocks,
+  // sibling tags) and collects every `for-in` / `for-of` / `for-as` var
+  // name. Anonymous indices (introduced by descendant emitTemplateLoop
+  // calls themselves) don't need to be tracked here — each level's
+  // emitTemplateLoop performs its own collision check using its own
+  // _loopVarStack snapshot.
+
+  proto._collectExplicitLoopIdentifiers = function(node, set) {
+    if (!Array.isArray(node)) return;
+    const head = node[0];
+    if (head === 'for-in' || head === 'for-of' || head === 'for-as') {
+      const vars = node[1];
+      const names = Array.isArray(vars) ? vars : [vars];
+      for (const n of names) {
+        if (typeof n === 'string') set.add(n);
+      }
+    }
+    for (let i = 1; i < node.length; i++) {
+      this._collectExplicitLoopIdentifiers(node[i], set);
+    }
   };
 
   // isSimpleAssignable — check if value is a plain reactive member (assignable target)
