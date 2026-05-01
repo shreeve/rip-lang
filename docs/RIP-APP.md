@@ -106,9 +106,9 @@ static server (or open straight from disk):
           data-mount="App"></script>
   <script type="text/rip">
     App = component
-      name := "world"
+      @name := "world"
       render
-        h1 "Hello, #{name}!"
+        h1 "Hello, #{@name}!"
         button @click: (=> @name = "Rip"), "Click me"
   </script>
 </body>
@@ -130,16 +130,25 @@ What each attribute does:
   defaults to `GET /app` (the auto-bundle endpoint provided by
   `@rip-lang/server`'s `serve` middleware). When you're not running
   a Rip server, the empty string suppresses that fetch.
-- `data-mount="App"` — name of the top-level component to mount
-  onto `<body>`. Defaults to `data-target` if you want a different
-  mount point (e.g. `data-target="#app"`).
+- `data-mount="App"` — name of the top-level component to mount.
+  Mounted onto `<body>` by default; pass `data-target="#app"` (or
+  any selector) to mount somewhere else.
 
 The browser loads `rip.min.js`, the compiled framework + compiler
 evaluate, all inline `<script type="text/rip">` blocks share scope
 and compile in-browser, and the runtime calls `App.mount('body')`
-for you. The component's reactive state (`name := "world"`) is
-fine-grained — clicking the button updates only the `<h1>`'s text
-node.
+for you. Clicking the button mutates `@name`; reactivity updates
+only the `<h1>`'s text node.
+
+A note on the `@` prefix: `@name := "world"` declares `name` as a
+**prop** — the parent can pass `App name: "Rip"` to override the
+default, and the component's own code reads/writes it via `@name`.
+A bare `name := "world"` (no `@`) declares an internal-only state
+that isn't exposed as a prop. The two are not interchangeable; if
+you write `name := "world"` in the declaration but then `@name = ...`
+in a handler, you'll be writing to a different binding than the one
+your render reads. **Use `@` consistently for anything you want
+both reactive and externally settable.**
 
 ### Real apps: bundles + file-based routing
 
