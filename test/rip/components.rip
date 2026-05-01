@@ -1403,6 +1403,48 @@ test "getContext terminates on cycled parent chain", '''
   result is undefined        # returned, did not hang
   ''', true
 
+# Wave 13: __pushComponent assigns _parent ONCE (on the first push
+# under a different parent). Subsequent pushes (e.g. when the same
+# component is re-pushed for its own mount or lifecycle hook)
+# preserve the construction-time parent. Without this, the
+# renderer's outer-layout -> page parent chain would survive
+# construction but be clobbered by any later self-push.
+test "__pushComponent preserves _parent across re-pushes", '''
+  A = component
+    val =! "outer"
+  B = component
+    val =! "inner"
+  outer = A.new()
+  inner = B.new()
+  __pushComponent(outer)     # outer becomes current
+  __pushComponent(inner)     # inner._parent = outer
+  __popComponent(outer)
+  __popComponent(null)
+  __pushComponent(inner)     # re-push inner with no current — must NOT clobber to null
+  __popComponent(null)
+  inner._parent is outer
+  ''', true
+
+# Wave 13: layout/page context propagation survives mount lifecycle.
+# A component constructed under a parent's scope must keep its parent
+# even after its own mount() re-pushes it.
+test "context propagates from outer to inner across re-push", '''
+  Outer = component
+    init = -> setContext("greeting", "hi")
+  Inner = component
+    val =! null
+    _init = -> @val = getContext("greeting")
+  outer = Outer.new()
+  __pushComponent(outer)
+  outer.init()
+  inner = Inner.new()        # constructor runs _init under outer scope
+  __popComponent(null)
+  __pushComponent(inner)     # later self-push must preserve _parent
+  again = getContext("greeting")
+  __popComponent(null)
+  inner.val is "hi" and again is "hi"
+  ''', true
+
 test "component computed with postfix ternary", '''
   A = component
     flag := false

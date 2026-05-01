@@ -8199,17 +8199,21 @@ ${blockFactoriesCode}return ${lines.join(`
 let __currentComponent = null;
 
 function __pushComponent(component) {
-  // Only establish the parent link when the new component differs from
-  // the one already on the stack. Otherwise pushing a component while
-  // it's already current (e.g. re-entering a child's _create from a
-  // factory's p() while the outer chain still has it as current)
-  // would set component._parent = component — a self-cycle that
-  // makes getContext() / __handleComponentError walk up forever on
-  // a missing key or unhandled error.
-  if (__currentComponent !== component) {
-    component._parent = __currentComponent;
-  }
+  // The component stack tracks the currently-active scope (so __effect
+  // and friends can find it). Parent assignment happens ONCE — on the
+  // first push that has a non-self predecessor. Later pushes (mount,
+  // beforeMount, factory re-entry) preserve the existing chain.
+  //
+  // Without the "set once" guard, the renderer's careful threading of
+  // outer-layout -> inner-layout -> page would survive construction
+  // but get clobbered the moment any of those components got re-pushed
+  // for its own lifecycle — a subsequent push with prev=null would
+  // overwrite the construction-time parent. Cross-layout context
+  // (offer in outer / accept in page) was silently broken.
   const prev = __currentComponent;
+  if (component && component._parent == null && prev && prev !== component) {
+    component._parent = prev;
+  }
   __currentComponent = component;
   return prev;
 }
@@ -13247,7 +13251,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.15.4";
-  var BUILD_DATE = "2026-05-01@04:19:50GMT";
+  var BUILD_DATE = "2026-05-01@04:23:05GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
