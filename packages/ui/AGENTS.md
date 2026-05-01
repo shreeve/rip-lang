@@ -92,18 +92,14 @@ Bad candidates for premature abstraction:
 - chip-specific behaviors
 - widget-specific content semantics
 
-## Component render gotchas
+## Render-template name resolution
 
-The two historical sharp edges (lowercase locals shadowing HTML tag
-names, and an outer auto-`i` colliding with an inner explicit `i`)
-were fixed in the compiler. Render-scope `name = expr` bindings and
-`for x in ...` loop variables both behave like normal lexical
-locals now — they shadow same-named HTML tags inside the same block
-factory. Nested loops with mixed explicit / auto indices stay
-collision-free at any depth (the compiler pre-scans the loop body
-and skips any name a descendant binds explicitly).
-
-You can now write the formerly-broken patterns directly:
+`name = expr` bindings and `for x in ...` loop variables behave as
+normal lexical locals — they shadow same-named HTML tags within the
+same block factory. Nested loops with mixed explicit / auto indices
+stay collision-free at any depth (the compiler pre-scans the body
+and avoids any name an inner loop or render-local binds). Compound
+assignments (`+=`, `-=`, …) work the same way as `=`.
 
 ```coffee
 for ex in ep.examples
@@ -116,12 +112,22 @@ for code in items
 for item in items
   for v, i in item.enum                    # outer auto-allocates `j`
     span "#{v}@#{i}"                       #   instead of `i`
+
+for ex in items
+  sum = 0                                  # `=` declares
+  sum += ex.value                          # `+=` mutates the local
+  span "#{sum}"
 ```
 
+Render bindings are creation-time captures, not reactive computeds —
+`code = ex.body` evaluates once when the block is built. For values
+that should track changes, hoist them to a class-level `:=` / `~=`
+member or read the reactive source directly inside the DOM
+expression.
+
 The one remaining strict-mode collision is a real source-level
-duplicate (e.g. `for x, i in xs / for y, i in ys` both binding `i`).
-That one is still a user error — the compiler doesn't silently
-rename a variable you typed.
+duplicate — e.g. `for x, i in xs / for y, i in ys` both binding `i`.
+The compiler will not silently rename a variable you typed.
 
 ### Debugging "Duplicate parameter name" and friends quickly
 

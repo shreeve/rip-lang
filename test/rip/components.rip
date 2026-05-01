@@ -949,6 +949,67 @@ test "loop body that depends on auto-allocated index `i` (row striping)", '''
   typeof inst._create
 ''', "function"
 
+# A render-local declaration inside the body matters too — the outer auto-
+# allocated index becomes a positional parameter of every nested factory,
+# so a body-level `let i;` (from `i = ...`) would collide with it just like
+# an inner explicit `for v, i in ...` would. The pre-scan now catches both.
+
+code "outer auto-index avoids body-level render-local declaration", '''
+  export A = component
+    items := [1, 2]
+    render
+      for x in items
+        i = 5
+        span "#{i}"
+  ''', '''
+  export const A = (() => {
+  function create_block_0(ctx, x, j) {
+    let i, _el1, _t0;
+    let _factoryChildren = [];
+    return {
+   _s: true,
+   c() {
+     i = 5;
+     _el1 = document.createElement('span');
+     _t0 = document.createTextNode(String(`${i}`));
+     _el1.appendChild(_t0);
+     this._first = _el1;
+   },
+   m(target, anchor) {
+     if (target) target.insertBefore(_el1, anchor);
+   },
+   p(ctx, x, j) {
+   },
+   d(detaching) {
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     _factoryChildren = [];
+     if (detaching && _el1) _el1.remove();
+   }
+    };
+  }
+
+  return class extends __Component {
+    _init(props) {
+   this.items = __state([1, 2]);
+    }
+    _create() {
+   this._anchor0 = document.createComment('for');
+   return this._anchor0;
+    }
+    _setup() {
+   // Loop: create_block_0
+   {
+     const __s = { blocks: [], keys: [] };
+     __effect(() => {
+       __reconcile(this._anchor0, __s, this.items.value, this, create_block_0, null);
+     });
+     { const __cur = globalThis.__ripComponent?.__getCurrentComponent?.(); if (__cur) (__cur._disposers ??= []).push(() => { for (const __b of __s.blocks) { try { __b.d(true); } catch {} } __s.blocks = []; __s.keys = []; __s.items = []; }); }
+   }
+    }
+  };
+  })();
+  ''', opts
+
 # ==============================================================================
 # Render-scope local declarations — `code = expr` is a binding, not a textnode
 # ==============================================================================
@@ -1163,6 +1224,166 @@ test "duplicate render-local assignments don't double-declare", '''
       for item in items
         sum = item.a
         sum = sum + item.b
+        span "#{sum}"
+  inst = A.new()
+  inst._init({})
+  typeof inst._create
+''', "function"
+
+# Tag-shadowing also covers property-chain and call-form dispatch — `code.x`,
+# `code "hi"`, and `code.primary "arg"` all read the local rather than emit
+# nested `<code>` elements when `code` is a render-local.
+
+code "tag-named local shadows the HTML tag in a property chain", '''
+  export A = component
+    items := [{value: "x"}]
+    render
+      for ex in items
+        code = ex
+        div code.value
+  ''', '''
+  export const A = (() => {
+  function create_block_0(ctx, ex, i) {
+    let code, _el1, _t0;
+    let _factoryChildren = [];
+    return {
+   _s: true,
+   c() {
+     code = ex;
+     _el1 = document.createElement('div');
+     _t0 = document.createTextNode(String(code.value));
+     _el1.appendChild(_t0);
+     this._first = _el1;
+   },
+   m(target, anchor) {
+     if (target) target.insertBefore(_el1, anchor);
+   },
+   p(ctx, ex, i) {
+   },
+   d(detaching) {
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     _factoryChildren = [];
+     if (detaching && _el1) _el1.remove();
+   }
+    };
+  }
+
+  return class extends __Component {
+    _init(props) {
+   this.items = __state([{value: "x"}]);
+    }
+    _create() {
+   this._anchor0 = document.createComment('for');
+   return this._anchor0;
+    }
+    _setup() {
+   // Loop: create_block_0
+   {
+     const __s = { blocks: [], keys: [] };
+     __effect(() => {
+       __reconcile(this._anchor0, __s, this.items.value, this, create_block_0, null);
+     });
+     { const __cur = globalThis.__ripComponent?.__getCurrentComponent?.(); if (__cur) (__cur._disposers ??= []).push(() => { for (const __b of __s.blocks) { try { __b.d(true); } catch {} } __s.blocks = []; __s.keys = []; __s.items = []; }); }
+   }
+    }
+  };
+  })();
+  ''', opts
+
+test "function-typed render-local can be called with tag-call syntax", '''
+  A = component
+    render
+      code = (s) -> s.toUpperCase()
+      div
+        code "hello"
+  inst = A.new()
+  inst._init({})
+  typeof inst._create
+''', "function"
+
+test "function-typed render-local supports chain-call (code.method args)", '''
+  A = component
+    render
+      code = { hi: (s) -> "hi-" + s }
+      div
+        code.hi "world"
+  inst = A.new()
+  inst._init({})
+  typeof inst._create
+''', "function"
+
+# Compound assignments (`+= -= *= …`) at render-block top level are emitted
+# as JS statements just like `=`, not wrapped in createTextNode. The leading
+# `=` declares the local; subsequent compound forms mutate it.
+
+code "compound assignment mutates a render-local without re-declaring", '''
+  export A = component
+    items := [{a: 1, b: 2}]
+    render
+      for item in items
+        sum = item.a
+        sum += item.b
+        sum *= 2
+        span "#{sum}"
+  ''', '''
+  export const A = (() => {
+  function create_block_0(ctx, item, i) {
+    let sum, _el1, _t0;
+    let _factoryChildren = [];
+    return {
+   _s: true,
+   c() {
+     sum = item.a;
+     sum += item.b;
+     sum *= 2;
+     _el1 = document.createElement('span');
+     _t0 = document.createTextNode(String(`${sum}`));
+     _el1.appendChild(_t0);
+     this._first = _el1;
+   },
+   m(target, anchor) {
+     if (target) target.insertBefore(_el1, anchor);
+   },
+   p(ctx, item, i) {
+   },
+   d(detaching) {
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     _factoryChildren = [];
+     if (detaching && _el1) _el1.remove();
+   }
+    };
+  }
+
+  return class extends __Component {
+    _init(props) {
+   this.items = __state([{a: 1, b: 2}]);
+    }
+    _create() {
+   this._anchor0 = document.createComment('for');
+   return this._anchor0;
+    }
+    _setup() {
+   // Loop: create_block_0
+   {
+     const __s = { blocks: [], keys: [] };
+     __effect(() => {
+       __reconcile(this._anchor0, __s, this.items.value, this, create_block_0, null);
+     });
+     { const __cur = globalThis.__ripComponent?.__getCurrentComponent?.(); if (__cur) (__cur._disposers ??= []).push(() => { for (const __b of __s.blocks) { try { __b.d(true); } catch {} } __s.blocks = []; __s.keys = []; __s.items = []; }); }
+   }
+    }
+  };
+  })();
+  ''', opts
+
+test "compound assignment in render block executes (no double-declare)", '''
+  A = component
+    items := [{a: 2, b: 3}]
+    render
+      for item in items
+        sum = item.a
+        sum += item.b
+        sum ??= 0
         span "#{sum}"
   inst = A.new()
   inst._init({})

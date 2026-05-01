@@ -615,6 +615,13 @@ locals. The shadowing only resolves within the same block factory
 (loop body, conditional branch) — render locals do not currently
 thread across factory boundaries the way loop variables do.
 
+Render bindings are creation-time captures, not reactive computeds.
+`code = ex.body` evaluates once when the block is built and never
+re-runs, mirroring the existing semantics of `span ex.body` (also
+one-shot). If you need the value to track changes, lift the
+expression to a class-level `:=` / `~=` member, or read the reactive
+source directly inside the DOM expression.
+
 ### Nested `for` loops can both name `i` (fixed)
 
 The outer `for item in items` no longer auto-allocates `i` and then
