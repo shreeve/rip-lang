@@ -1,17 +1,19 @@
 # Compiler Subsystem — Agent Guide
 
-This covers `compiler.js`, `lexer.js`, `components.js`, `browser.js`, `stdlib.js`, `types.js`, `dts.js`, `app.rip`, `typecheck.js`, the `schema/` subdirectory, and the `grammar/` directory. The schema feature lives in `src/schema/` (entry `src/schema/schema.js`, imported via relative paths like `./schema/schema.js` from sibling modules).
+This covers `compiler.js`, `lexer.js`, `components.js`, `browser.js`, `stdlib.js`, `types.js`, `dts.js`, `typecheck.js`, the `schema/` subdirectory, and the `grammar/` directory. The schema feature lives in `src/schema/` (entry `src/schema/schema.js`, imported via relative paths like `./schema/schema.js` from sibling modules).
+
+The Rip App framework — stash, resource, timing, components store, router, renderer, launch, ARIA helpers — used to live alongside the compiler at `src/app.rip`. It now lives at `packages/app/index.rip` (peer of `packages/server/`, `packages/ui/`, etc.). The browser bundle still includes it via `scripts/build.js`; the source-tree split just reflects that it's user-land Rip code, not a compiler internal.
 
 ---
 
 ## Module Map — browser-side vs CLI-only
 
-The browser bundle (`docs/dist/rip.min.js`) is built from `src/browser.js` plus the compiled `src/app.rip`. Every module statically reachable from either entry ends up in the bundle. `scripts/check-bundle-graph.js` walks both entries on every `bun run build` and fails if any reachable file matches a forbidden list.
+The browser bundle (`docs/dist/rip.min.js`) is built from `src/browser.js` plus the compiled `packages/app/index.rip`. Every module statically reachable from either entry ends up in the bundle. `scripts/check-bundle-graph.js` walks both entries on every `bun run build` and fails if any reachable file matches a forbidden list.
 
 | Module | Browser? | Purpose |
 | --- | --- | --- |
 | `src/browser.js` | yes (entry) | `<script type="text/rip">` discovery, `processRipScripts`, `importRip`, REPL |
-| `src/app.rip` | yes (entry) | Rip App framework runtime: stash, resource, timing, components store, router, renderer, launch, ARIA helpers |
+| `packages/app/index.rip` | yes (entry) | Rip App framework runtime: stash, resource, timing, components store, router, renderer, launch, ARIA helpers |
 | `src/parser.js` | yes | generated LR table |
 | `src/lexer.js` | yes | tokenizer + rewriter pipeline |
 | `src/compiler.js` | yes | codegen + reactive runtime + component runtime + `compileToJS` + `setTypesEmitter` hook + `emitEnum` |

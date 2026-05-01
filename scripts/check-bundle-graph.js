@@ -3,9 +3,9 @@
 // Bundle-graph guardrail.
 //
 // The browser bundle (docs/dist/rip.min.js) is built from src/browser.js +
-// the compiled src/app.rip. Any module statically reachable from either
-// entry ends up in the bundle, so accidental imports of CLI/server/editor-
-// only code silently inflate the browser payload.
+// the compiled packages/app/index.rip. Any module statically reachable
+// from either entry ends up in the bundle, so accidental imports of
+// CLI/server/editor-only code silently inflate the browser payload.
 //
 // This script walks the static import graph from BOTH entries and fails
 // if any reachable file matches the forbidden list. Wired into `bun run
@@ -54,7 +54,7 @@ const FORBIDDEN_PREFIXES = [
 
 // Browser bundle's persistent entries. The build script (scripts/build.js)
 // wires these together with a transient _entry.js. We walk both directly.
-const ENTRIES = ['src/browser.js', 'src/app.rip'];
+const ENTRIES = ['src/browser.js', 'packages/app/index.rip'];
 
 // Match ES import statements. Captures the source specifier on group 1 or 2.
 // Handles: import x from 'p', import {a} from "p", import 'p', import * as x from 'p',

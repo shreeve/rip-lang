@@ -143,7 +143,7 @@ start port: 3000
 
 ### Rip App
 
-Application framework built into Rip — stash, resource, timing, components store, file-based router, renderer, launch, and shared ARIA helpers. Lives in `src/app.rip`, compiled into `rip.min.js` so a single `<script src="rip.min.js">` is enough to build a complete app. `<script type="text/rip">` sources compile into one shared scope, and the framework renders with fine-grained DOM updates.
+Application framework built into Rip — stash, resource, timing, components store, file-based router, renderer, launch, and shared ARIA helpers. Lives in `packages/app/index.rip`, compiled into `rip.min.js` so a single `<script src="rip.min.js">` is enough to build a complete app. `<script type="text/rip">` sources compile into one shared scope, and the framework renders with fine-grained DOM updates.
 
 (Rip UI is the separate widget package at `packages/ui/` — `Dropdown`, `MultiSelect`, `Combobox`, etc. — distributed as `@rip-lang/ui`. The two terms do not overlap.)
 

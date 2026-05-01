@@ -62,11 +62,14 @@ function stamp(js) {
   return js.replace('"0.0.0"', `"${version}"`).replace('"0000-00-00@00:00:00GMT"', `"${buildDate}"`);
 }
 
-// Step 1: Compile app.rip → _app.js (temporary)
-const appJS = compileToJS(readFileSync('./src/app.rip', 'utf-8'));
+// Step 1: Compile @rip-lang/app's index.rip → _app.js (temporary)
+const appJS = compileToJS(readFileSync('./packages/app/index.rip', 'utf-8'));
 writeFileSync('./docs/dist/_app.js', appJS);
 
-// Step 2: Create entry point that wires browser.js + app.rip together
+// Step 2: Create entry point that wires browser.js + the app framework
+// together. The 'app.rip' key is preserved as the importRip.modules
+// registration so existing bundle consumers (`importRip.modules['app.rip']`)
+// keep working — only the source path moved.
 writeFileSync('./docs/dist/_entry.js', `\
 import { importRip } from '../../src/browser.js';
 export * from '../../src/browser.js';
