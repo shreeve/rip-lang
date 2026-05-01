@@ -1577,6 +1577,8 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     this._loopVarStack = [];
     this._factoryMode = false;
     this._factoryVars = null;
+    this._renderLocalScopes = [new Set()];
+    this._renderTopLocals = new Set(); // class-mode (top-level _create) hoisted lets
     this._fragChildren = new Map();
     this._pendingAutoWire = false;
     this._autoWireEl = null;
@@ -1585,23 +1587,50 @@ export function installComponentSupport(CodeEmitter, Lexer) {
 
     const statements = this.is(body, 'block') ? body.slice(1) : [body];
 
+    // Pre-count renderable (non-binding) statements so the single-renderable
+    // optimization survives the presence of leading binding statements like
+    // `code = expr`. Bindings are emitted into _createLines as JS but
+    // produce no DOM child to append.
+    const renderableCount = statements.reduce(
+      (n, s) => n + (this._isRenderBinding(s) ? 0 : 1), 0);
+
     let rootVar;
     if (statements.length === 0 || (statements.length === 1 && statements[0] === 'null')) {
       rootVar = 'null';
-    } else if (statements.length === 1) {
+    } else if (renderableCount === 0) {
+      // All statements are bindings — emit them and return a comment placeholder
+      for (const stmt of statements) this.emitNode(stmt);
+      rootVar = this.newElementVar('empty');
+      this._createLines.push(`${rootVar} = document.createComment('');`);
+    } else if (renderableCount === 1) {
       this._pendingAutoWire = !!this._autoEventHandlers;
-      rootVar = this.emitNode(statements[0]);
+      let onlyRenderable = null;
+      for (const stmt of statements) {
+        const v = this.emitNode(stmt);
+        if (v != null) onlyRenderable = v;
+      }
       this._pendingAutoWire = false;
+      rootVar = onlyRenderable;
     } else {
       rootVar = this.newElementVar('frag');
       this._createLines.push(`${rootVar} = document.createDocumentFragment();`);
       const children = [];
       for (const stmt of statements) {
         const childVar = this.emitNode(stmt);
+        if (childVar == null) continue;
         this._createLines.push(`${rootVar}.appendChild(${childVar});`);
         children.push(childVar);
       }
       this._fragChildren.set(rootVar, children);
+    }
+
+    // Hoist class-mode render-local declarations to the top of _create() so
+    // a) duplicate `name = ...` statements in source don't generate `let name`
+    //    twice (strict-mode redeclaration error), and b) reads inside any
+    //    enclosing IIFE/closure can see the binding.
+    if (this._renderTopLocals.size > 0) {
+      const decl = `let ${[...this._renderTopLocals].join(', ')};`;
+      this._createLines.unshift(decl);
     }
 
     return {
@@ -1654,10 +1683,81 @@ export function installComponentSupport(CodeEmitter, Lexer) {
   };
 
   // --------------------------------------------------------------------------
+  // Render-scope locals — declarations like `code = expr` inside render
+  // --------------------------------------------------------------------------
+  // The render DSL would otherwise treat `code = expr` as a text-emitting
+  // expression (because emitNode's catch-all wraps any expression in a
+  // textnode) and treat a subsequent `span code` reference as a nested
+  // <code> element (because `code` is an HTML tag name). Tracking the
+  // declared name in a per-factory scope lets the codegen emit the
+  // assignment as a real JS local AND recognize subsequent references as
+  // value reads, not tag emissions.
+  //
+  // Scope semantics: each block factory (loop body, conditional branch)
+  // is generated as a separate JS function, so render locals do NOT cross
+  // factory boundaries — only the loop vars in _loopVarStack are
+  // explicitly threaded as parameters. Each factory entry pushes a fresh
+  // scope; factory exit pops it.
+
+  const _isPlainIdentifier = (s) =>
+    typeof s === 'string' && /^[A-Za-z_$][\w$]*$/.test(s);
+
+  proto._isRenderBinding = function(stmt) {
+    return Array.isArray(stmt) && stmt[0] === '=' && _isPlainIdentifier(stmt[1]);
+  };
+
+  proto._addRenderLocal = function(name) {
+    if (!this._renderLocalScopes || this._renderLocalScopes.length === 0) return;
+    this._renderLocalScopes[this._renderLocalScopes.length - 1].add(name);
+  };
+
+  proto._isRenderLocal = function(name) {
+    if (!name || typeof name !== 'string') return false;
+    if (this._renderLocalScopes && this._renderLocalScopes.length > 0) {
+      // Render locals don't cross factory boundaries — check innermost only.
+      const top = this._renderLocalScopes[this._renderLocalScopes.length - 1];
+      if (top.has(name)) return true;
+    }
+    if (this._loopVarStack) {
+      // Loop vars ARE threaded across nested factories as parameters, so
+      // any ancestor loop var is in scope inside any descendant factory.
+      for (const v of this._loopVarStack) {
+        if (v.itemVar === name || v.indexVar === name) return true;
+      }
+    }
+    return false;
+  };
+
+  // --------------------------------------------------------------------------
   // emitNode — main dispatch for all render tree nodes
   // --------------------------------------------------------------------------
 
   proto.emitNode = function(sexpr) {
+    // Render-scope local binding — `code = expr` becomes a hoisted JS local.
+    // Returning null tells the caller (buildRender, emitTemplateBlock,
+    // appendChildren) "no DOM child to append; the assignment was emitted
+    // into _createLines as a plain JS statement". The name is added to the
+    // current render scope so subsequent references know to read the value
+    // instead of treating the identifier as an HTML tag.
+    if (this._isRenderBinding(sexpr)) {
+      const [, name, expr] = sexpr;
+      const exprCode = this.emitInComponent(expr, 'value');
+      if (this._factoryMode) {
+        // In factory mode the per-factory `let _factoryVars[]` declaration
+        // at the top of the factory function holds the slot; we just emit
+        // the assignment itself into c().
+        this._factoryVars.add(name);
+        this._createLines.push(`${name} = ${exprCode};`);
+      } else {
+        // Class mode: declarations are hoisted to the top of _create() in
+        // a single `let a, b, c;` line emitted by buildRender.
+        this._renderTopLocals.add(name);
+        this._createLines.push(`${name} = ${exprCode};`);
+      }
+      this._addRenderLocal(name);
+      return null;
+    }
+
     // String literal → text node (handle both primitive and String objects)
     if (typeof sexpr === 'string' || sexpr instanceof String) {
       const str = sexpr.valueOf();
@@ -1671,6 +1771,13 @@ export function installComponentSupport(CodeEmitter, Lexer) {
         const textVar = this.newTextVar();
         this._createLines.push(`${textVar} = document.createTextNode('');`);
         this._pushEffect(`${textVar}.data = ${this._self}.${str}.value;`);
+        return textVar;
+      }
+      // Render-scope local (binding from `code = expr` or a loop var) — emit
+      // as a value read, NOT a tag. Lexical bindings shadow HTML tag names.
+      if (this._isRenderLocal(str)) {
+        const textVar = this.newTextVar();
+        this._createLines.push(`${textVar} = document.createTextNode(String(${str}));`);
         return textVar;
       }
       // Slot projection — bare <slot> tag → project @children
@@ -1866,12 +1973,15 @@ export function installComponentSupport(CodeEmitter, Lexer) {
               this.emitAttributes(elVar, child);
             } else {
               const childVar = this.emitNode(child);
+              if (childVar == null) continue;
               this._createLines.push(`${elVar}.appendChild(${childVar});`);
             }
           }
         } else if (block) {
           const childVar = this.emitNode(block);
-          this._createLines.push(`${elVar}.appendChild(${childVar});`);
+          if (childVar != null) {
+            this._createLines.push(`${elVar}.appendChild(${childVar});`);
+          }
         }
       }
       else if (this.is(arg, 'object')) {
@@ -1879,9 +1989,14 @@ export function installComponentSupport(CodeEmitter, Lexer) {
       }
       else if (typeof arg === 'string' || arg instanceof String) {
         const val = arg.valueOf();
-        // Template tag appearing as a string arg (e.g., slot after multi-line attrs)
+        // Template tag appearing as a string arg (e.g., slot after multi-line attrs).
+        // Render-scope locals (and loop vars) take precedence over the HTML tag
+        // sugar — `for code in items \n span code` should mean text content,
+        // not a nested <code> element. JSX-equivalent: if `code` is a let
+        // binding in scope, `<span>{code}</span>`, never `<span><code/></span>`.
         const baseName = val.split(/[#.]/)[0];
-        if (this.isHtmlTag(baseName || 'div') || this.isComponent(baseName)) {
+        const isLocal = this._isRenderLocal(val) || this._isRenderLocal(baseName);
+        if (!isLocal && (this.isHtmlTag(baseName || 'div') || this.isComponent(baseName))) {
           const childVar = this.emitNode(arg);
           this._createLines.push(`${elVar}.appendChild(${childVar});`);
         } else {
@@ -1901,7 +2016,9 @@ export function installComponentSupport(CodeEmitter, Lexer) {
       }
       else if (arg) {
         const childVar = this.emitNode(arg);
-        this._createLines.push(`${elVar}.appendChild(${childVar});`);
+        if (childVar != null) {
+          this._createLines.push(`${elVar}.appendChild(${childVar});`);
+        }
       }
     }
   };
@@ -2177,7 +2294,14 @@ export function installComponentSupport(CodeEmitter, Lexer) {
 
   proto.emitTemplateBlock = function(body) {
     if (!Array.isArray(body) || body[0] !== 'block') {
-      return this.emitNode(body);
+      const v = this.emitNode(body);
+      if (v != null) return v;
+      // Lone binding (e.g., `code = expr`) at the position where a child
+      // node was expected — emit a placeholder so the caller has something
+      // to insert. The binding itself was already pushed into _createLines.
+      const commentVar = this.newElementVar('empty');
+      this._createLines.push(`${commentVar} = document.createComment('');`);
+      return commentVar;
     }
 
     const statements = body.slice(1);
@@ -2186,8 +2310,24 @@ export function installComponentSupport(CodeEmitter, Lexer) {
       this._createLines.push(`${commentVar} = document.createComment('');`);
       return commentVar;
     }
-    if (statements.length === 1) {
-      return this.emitNode(statements[0]);
+
+    const renderableCount = statements.reduce(
+      (n, s) => n + (this._isRenderBinding(s) ? 0 : 1), 0);
+
+    if (renderableCount === 0) {
+      for (const stmt of statements) this.emitNode(stmt);
+      const commentVar = this.newElementVar('empty');
+      this._createLines.push(`${commentVar} = document.createComment('');`);
+      return commentVar;
+    }
+
+    if (renderableCount === 1) {
+      let only = null;
+      for (const stmt of statements) {
+        const v = this.emitNode(stmt);
+        if (v != null) only = v;
+      }
+      return only;
     }
 
     const fragVar = this.newElementVar('frag');
@@ -2195,6 +2335,7 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     const children = [];
     for (const stmt of statements) {
       const childVar = this.emitNode(stmt);
+      if (childVar == null) continue;
       this._createLines.push(`${fragVar}.appendChild(${childVar});`);
       children.push(childVar);
     }
@@ -2307,19 +2448,23 @@ export function installComponentSupport(CodeEmitter, Lexer) {
   // --------------------------------------------------------------------------
 
   proto.emitConditionBranch = function(blockName, block) {
-    const saved = [this._createLines, this._setupLines, this._factoryMode, this._factoryVars];
+    const saved = [this._createLines, this._setupLines, this._factoryMode, this._factoryVars, this._renderLocalScopes];
 
     this._createLines = [];
     this._setupLines = [];
     this._factoryMode = true;
     this._factoryVars = new Set();
+    // Each conditional branch is its own JS factory function — render
+    // locals from the surrounding scope are NOT in lexical scope here.
+    // Loop vars still cross via positional parameters (_loopVarStack).
+    this._renderLocalScopes = [new Set()];
 
     const rootVar = this.emitTemplateBlock(block);
     const createLines = this._createLines;
     const setupLines = this._setupLines;
     const factoryVars = this._factoryVars;
 
-    [this._createLines, this._setupLines, this._factoryMode, this._factoryVars] = saved;
+    [this._createLines, this._setupLines, this._factoryMode, this._factoryVars, this._renderLocalScopes] = saved;
 
     const outerParams = this._loopVarStack.map(v => `${v.itemVar}, ${v.indexVar}`).join(', ');
     const extraParams = outerParams ? `, ${outerParams}` : '';
@@ -2475,12 +2620,16 @@ export function installComponentSupport(CodeEmitter, Lexer) {
       }
     }
 
-    const saved = [this._createLines, this._setupLines, this._factoryMode, this._factoryVars];
+    const saved = [this._createLines, this._setupLines, this._factoryMode, this._factoryVars, this._renderLocalScopes];
 
     this._createLines = [];
     this._setupLines = [];
     this._factoryMode = true;
     this._factoryVars = new Set();
+    // Loop body is its own JS factory function — render locals from the
+    // surrounding scope are NOT visible here. Loop vars are explicitly
+    // threaded as positional parameters via _loopVarStack.
+    this._renderLocalScopes = [new Set()];
 
     const outerParams = this._loopVarStack.map(v => `${v.itemVar}, ${v.indexVar}`).join(', ');
     const outerExtra = outerParams ? `, ${outerParams}` : '';
@@ -2492,7 +2641,7 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     const itemSetupLines = this._setupLines;
     const itemFactoryVars = this._factoryVars;
 
-    [this._createLines, this._setupLines, this._factoryMode, this._factoryVars] = saved;
+    [this._createLines, this._setupLines, this._factoryMode, this._factoryVars, this._renderLocalScopes] = saved;
 
     const isStatic = itemSetupLines.length === 0;
     const loopParams = `ctx, ${itemVar}, ${indexVar}${outerExtra}`;

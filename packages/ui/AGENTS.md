@@ -94,64 +94,34 @@ Bad candidates for premature abstraction:
 
 ## Component render gotchas
 
-Two sharp edges that an AI assistant will hit the first time it writes a
-non-trivial render template. Both produce error messages that do not
-mention the actual cause.
+The two historical sharp edges (lowercase locals shadowing HTML tag
+names, and an outer auto-`i` colliding with an inner explicit `i`)
+were fixed in the compiler. Render-scope `name = expr` bindings and
+`for x in ...` loop variables both behave like normal lexical
+locals now — they shadow same-named HTML tags inside the same block
+factory. Nested loops with mixed explicit / auto indices stay
+collision-free at any depth (the compiler pre-scans the loop body
+and skips any name a descendant binds explicitly).
 
-### Don't shadow HTML tag names inside render scopes
-
-Lowercase identifiers in render templates are DOM elements emitted by
-the Pug-like DSL. If you declare a local variable (or `for` loop
-variable) with the same name as a tag, the codegen mis-routes the
-reference and you get confusing runtime errors such as
-`ReferenceError: code is not defined` inside an unrelated component.
+You can now write the formerly-broken patterns directly:
 
 ```coffee
-# WRONG — `code` is an HTML element name (<code>)
 for ex in ep.examples
   code = if ex.curl? then buildCurl(ep, ex.curl) else ex.code
-  CodeBlock label: ex.label, code: code
+  CodeBlock label: ex.label, code: code   # `code` reads the local
 
-# CORRECT — rename the local
-for ex in ep.examples
-  src = if ex.curl? then buildCurl(ep, ex.curl) else ex.code
-  CodeBlock label: ex.label, code: src
-
-# BETTER — push the conditional into a helper, no local at all
-exampleCode = (ep, ex) ->
-  if ex.curl? then buildCurl(ep, ex.curl) else ex.code
-
-CodeBlock label: ex.label, code: exampleCode(ep, ex)
-```
-
-Names to avoid as render-scope locals: `p`, `code`, `a`, `span`, `div`,
-`li`, `time`, `table`, `nav`, `form`, `pre`, `h1`–`h6`, `br`, `button`,
-`input`, `label`, `main`, `section`, `aside`, `img`, `ul`, `ol`, `th`,
-`td`, `tr`, `style`, `script`.
-
-### Nested `for` loops with mixed explicit / auto indices (fixed)
-
-The outer `for item in items` no longer silently allocates `i` and
-then collides with an inner explicit `for v, i in item.enum`. The
-compiler pre-scans the loop body for descendant explicit indices and
-picks a non-colliding name for the auto-allocated outer counter, so
-all of these now compile:
-
-```coffee
-for item in items
-  for v, i in item.enum
-    span v
+for code in items
+  span code                                # → <span>{code}</span>
 
 for item in items
-  for group in item.groups
-    for v, i in group.values
-      span v
+  for v, i in item.enum                    # outer auto-allocates `j`
+    span "#{v}@#{i}"                       #   instead of `i`
 ```
 
-The remaining sharp edge is a real source-level duplicate — e.g.
-`for x, i in xs / for y, i in ys` both binding `i`. That stays a
-strict-mode error because the compiler will not silently rename a
-variable you typed.
+The one remaining strict-mode collision is a real source-level
+duplicate (e.g. `for x, i in xs / for y, i in ys` both binding `i`).
+That one is still a user error — the compiler doesn't silently
+rename a variable you typed.
 
 ### Debugging "Duplicate parameter name" and friends quickly
 

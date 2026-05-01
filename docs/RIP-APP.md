@@ -589,29 +589,31 @@ out of `index.rip`, it can move to a sibling file in `packages/app/`
 **only if `scripts/build.js` is updated to include it in the
 framework bundle**.
 
-### Widget render-template name shadowing
+### Render-template name shadowing (fixed)
 
-Lowercase identifiers in render templates are DOM tags. If you
-declare a local variable with the same name as a tag, the codegen
-mis-routes the reference and you get confusing runtime errors.
+Earlier versions of the compiler treated a lowercase identifier as
+an HTML tag *even when a local of the same name was in lexical
+scope*. Writing `code = ex.body` then `span code` either silently
+mis-routed the reference or emitted a stray `<code>` element. The
+rule now matches every other lexically-scoped language: a render-
+scope local shadows the HTML tag with the same name.
 
 ```rip
-# WRONG — `code` is the <code> HTML element name
+# Both of these now do what they look like — `code` is read as a value,
+# not interpreted as the <code> HTML tag.
 for ex in examples
   code = if ex.curl? then buildCurl(ex) else ex.code
   CodeBlock label: ex.label, code: code
 
-# CORRECT — rename the local
-for ex in examples
-  src = if ex.curl? then buildCurl(ex) else ex.code
-  CodeBlock label: ex.label, code: src
+for code in examples
+  span code   # → <span>{code}</span>
 ```
 
-Names to avoid in render-scope locals: `p`, `code`, `a`, `span`,
-`div`, `li`, `time`, `table`, `nav`, `form`, `pre`, `h1`-`h6`, `br`,
-`button`, `input`, `label`, `main`, `section`, `aside`, `img`, `ul`,
-`ol`, `th`, `td`, `tr`, `style`, `script`. Same constraint as JSX's
-"if it's an HTML tag, don't shadow it."
+Bindings introduced by `name = expr` and loop variables introduced
+by `for x in ...` / `for x, i in ...` are both treated as lexical
+locals. The shadowing only resolves within the same block factory
+(loop body, conditional branch) — render locals do not currently
+thread across factory boundaries the way loop variables do.
 
 ### Nested `for` loops can both name `i` (fixed)
 
@@ -680,11 +682,12 @@ Honest list of where Rip App is the wrong tool:
   protocol, no resumability. If your project's primary requirement
   is SEO-friendly server rendering, use a framework that has SSR as
   a core concern (Next.js, SvelteKit, Nuxt, SolidStart).
-- **Multi-team scale.** The render DSL has gotchas (name shadowing,
-  loop-index collisions) that an experienced team learns to avoid
-  but a large team will keep tripping on. Rip App is happiest with
-  a small focused team that fits the framework's mental model in one
-  head.
+- **Multi-team scale.** The render DSL is unconventional enough that
+  a large team will keep tripping on the conceptual model (block
+  factories, fine-grained reactivity, the `@`/`:=`/`~=` keyword
+  family) even after the historical tag-name and loop-index
+  footguns are gone. Rip App is happiest with a small focused team
+  that fits the framework's mental model in one head.
 - **Plugin-ecosystem-dependent apps.** If your roadmap depends on
   "there's a library for that" — auth, charts, maps, file uploads,
   rich-text editing — the npm ecosystem around React/Vue is
