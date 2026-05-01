@@ -2616,7 +2616,12 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     this._setupLines.push(`if (${instVar} && !${instVar}._isSetup) { ${instVar}._isSetup = true; const __cprev = __pushComponent(${instVar}); try { try { if (${instVar}.beforeMount) ${instVar}.beforeMount(); if (${instVar}._setup) ${instVar}._setup(); if (${instVar}.mounted) ${instVar}.mounted(); } catch (__e) { __handleComponentError(__e, ${instVar}); } } finally { __popComponent(__cprev); } }`);
 
     for (const { key, valueCode } of reactiveProps) {
-      this._pushEffect(`if (${instVar}.${key} && typeof ${instVar}.${key} === 'object' && 'value' in ${instVar}.${key}) ${instVar}.${key}.value = ${valueCode}; else if (${instVar}._setRestProp) ${instVar}._setRestProp('${key}', ${valueCode});`);
+      // Outer instVar guard: if _init / _create failed and the
+      // placeholder branch substituted null for the instance, this
+      // prop-updater effect would otherwise dereference null on every
+      // signal change. The guard mirrors the event-listener emission
+      // a few lines above.
+      this._pushEffect(`if (${instVar}) { if (${instVar}.${key} && typeof ${instVar}.${key} === 'object' && 'value' in ${instVar}.${key}) ${instVar}.${key}.value = ${valueCode}; else if (${instVar}._setRestProp) ${instVar}._setRestProp('${key}', ${valueCode}); }`);
     }
 
     for (const line of childrenSetupLines) {
@@ -2829,7 +2834,16 @@ export function installComponentSupport(CodeEmitter, Lexer) {
 let __currentComponent = null;
 
 function __pushComponent(component) {
-  component._parent = __currentComponent;
+  // Only establish the parent link when the new component differs from
+  // the one already on the stack. Otherwise pushing a component while
+  // it's already current (e.g. re-entering a child's _create from a
+  // factory's p() while the outer chain still has it as current)
+  // would set component._parent = component — a self-cycle that
+  // makes getContext() / __handleComponentError walk up forever on
+  // a missing key or unhandled error.
+  if (__currentComponent !== component) {
+    component._parent = __currentComponent;
+  }
   const prev = __currentComponent;
   __currentComponent = component;
   return prev;
@@ -2854,7 +2868,11 @@ function setContext(key, value) {
 
 function getContext(key) {
   let component = __currentComponent;
-  while (component) {
+  // Cycle guard: see __handleComponentError above. A buggy _parent
+  // chain shouldn't hang lookup of a missing key.
+  const visited = new Set();
+  while (component && !visited.has(component)) {
+    visited.add(component);
     if (component._context && component._context.has(key)) return component._context.get(key);
     component = component._parent;
   }
@@ -2863,7 +2881,9 @@ function getContext(key) {
 
 function hasContext(key) {
   let component = __currentComponent;
-  while (component) {
+  const visited = new Set();
+  while (component && !visited.has(component)) {
+    visited.add(component);
     if (component._context && component._context.has(key)) return true;
     component = component._parent;
   }
@@ -3064,7 +3084,13 @@ function __transition(el, name, dir, done) {
 
 function __handleComponentError(error, component) {
   let current = component;
-  while (current) {
+  // Defensive cycle guard: if the parent chain is corrupted (e.g. by
+  // a buggy _parent assignment), we still terminate. The fix is in
+  // __pushComponent above, but cycle detection here is cheap belt-
+  // and-suspenders so a bad _parent never hangs the runtime.
+  const visited = new Set();
+  while (current && !visited.has(current)) {
+    visited.add(current);
     if (current.onError) {
       try { current.onError(error, component); return; } catch (_) {}
     }

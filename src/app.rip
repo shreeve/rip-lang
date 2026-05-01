@@ -1241,6 +1241,17 @@ export createRenderer = (opts = {}) ->
         container.innerHTML = ''
         mp = container
 
+        # Push the OUTER layout (or null at the top) as current
+        # before constructing each layout below it. The constructor
+        # reads __currentComponent into `_parent`, so this builds a
+        # real ancestry chain across layouts: outer -> inner -> page.
+        # Without this, every layout's _parent would be null and
+        # cross-layout `accept` / `getContext()` (offer-from-outer,
+        # accept-in-inner-or-page) would not see the offered value.
+        __push = globalThis.__ripComponent?.__pushComponent
+        __pop = globalThis.__ripComponent?.__popComponent
+        outerScope = null
+
         for layoutFile in layoutFiles
           layoutSource = components.read(layoutFile)
           continue unless layoutSource
@@ -1250,24 +1261,28 @@ export createRenderer = (opts = {}) ->
           LayoutClass = findComponent(layoutMod)
           continue unless LayoutClass
 
-          inst = new LayoutClass { app, params, router }
-          # Push the layout as current component so any __effect that
-          # `beforeMount` creates auto-registers on the layout itself
-          # (via the __getCurrentComponent bridge). Without this wrap,
-          # those effects register on whatever happened to be current
-          # (typically null), and they never get disposed on unmount.
-          # `mount` does its own __pushComponent for _create/_setup.
+          # Push the previous layout as current so the new layout's
+          # constructor establishes parentage to it (or null for the
+          # outermost layout). Pop after construction; the layout's
+          # own mount() / setup re-pushes itself for its own scope.
+          prevScope = __push?(outerScope)
+          try
+            inst = new LayoutClass { app, params, router }
+          finally
+            __pop?(prevScope)
+
+          # beforeMount under the layout's own scope so its effects
+          # auto-register on the layout itself.
           if inst.beforeMount
-            __push = globalThis.__ripComponent?.__pushComponent
-            __pop = globalThis.__ripComponent?.__popComponent
-            __prev = __push?(inst)
+            __innerPrev = __push?(inst)
             try inst.beforeMount()
-            finally __pop?(__prev)
+            finally __pop?(__innerPrev)
           wrapper = document.createElement('div')
           wrapper.setAttribute 'data-layout', layoutFile
           mp.appendChild wrapper
           inst.mount wrapper
           layoutInstances.push inst
+          outerScope = inst   # next iteration's parent
 
           slot = wrapper.querySelector('#content') or wrapper
           mp = slot
@@ -1283,12 +1298,20 @@ export createRenderer = (opts = {}) ->
       pageWrapper.setAttribute 'data-component', route.file
       mp.appendChild pageWrapper
 
-      instance = new Component { app, params, query, router }
+      # Page component is parented to the innermost layout (if any),
+      # so `accept` / `getContext()` in the page sees `offer` /
+      # `setContext()` from any enclosing layout.
+      __push = globalThis.__ripComponent?.__pushComponent
+      __pop = globalThis.__ripComponent?.__popComponent
+      pageParent = layoutInstances[layoutInstances.length - 1] or null
+      pagePrev = __push?(pageParent)
+      try
+        instance = new Component { app, params, query, router }
+      finally
+        __pop?(pagePrev)
       # Same beforeMount wrap as the layout loop above — effects
       # created in beforeMount auto-register on the page component.
       if instance.beforeMount
-        __push = globalThis.__ripComponent?.__pushComponent
-        __pop = globalThis.__ripComponent?.__popComponent
         __prev = __push?(instance)
         try instance.beforeMount()
         finally __pop?(__prev)

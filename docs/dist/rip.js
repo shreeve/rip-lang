@@ -8045,7 +8045,7 @@ ${blockFactoriesCode}return ${lines.join(`
       }
       this._setupLines.push(`if (${instVar} && !${instVar}._isSetup) { ${instVar}._isSetup = true; const __cprev = __pushComponent(${instVar}); try { try { if (${instVar}.beforeMount) ${instVar}.beforeMount(); if (${instVar}._setup) ${instVar}._setup(); if (${instVar}.mounted) ${instVar}.mounted(); } catch (__e) { __handleComponentError(__e, ${instVar}); } } finally { __popComponent(__cprev); } }`);
       for (const { key, valueCode } of reactiveProps) {
-        this._pushEffect(`if (${instVar}.${key} && typeof ${instVar}.${key} === 'object' && 'value' in ${instVar}.${key}) ${instVar}.${key}.value = ${valueCode}; else if (${instVar}._setRestProp) ${instVar}._setRestProp('${key}', ${valueCode});`);
+        this._pushEffect(`if (${instVar}) { if (${instVar}.${key} && typeof ${instVar}.${key} === 'object' && 'value' in ${instVar}.${key}) ${instVar}.${key}.value = ${valueCode}; else if (${instVar}._setRestProp) ${instVar}._setRestProp('${key}', ${valueCode}); }`);
       }
       for (const line of childrenSetupLines) {
         this._setupLines.push(line);
@@ -8199,7 +8199,16 @@ ${blockFactoriesCode}return ${lines.join(`
 let __currentComponent = null;
 
 function __pushComponent(component) {
-  component._parent = __currentComponent;
+  // Only establish the parent link when the new component differs from
+  // the one already on the stack. Otherwise pushing a component while
+  // it's already current (e.g. re-entering a child's _create from a
+  // factory's p() while the outer chain still has it as current)
+  // would set component._parent = component — a self-cycle that
+  // makes getContext() / __handleComponentError walk up forever on
+  // a missing key or unhandled error.
+  if (__currentComponent !== component) {
+    component._parent = __currentComponent;
+  }
   const prev = __currentComponent;
   __currentComponent = component;
   return prev;
@@ -8224,7 +8233,11 @@ function setContext(key, value) {
 
 function getContext(key) {
   let component = __currentComponent;
-  while (component) {
+  // Cycle guard: see __handleComponentError above. A buggy _parent
+  // chain shouldn't hang lookup of a missing key.
+  const visited = new Set();
+  while (component && !visited.has(component)) {
+    visited.add(component);
     if (component._context && component._context.has(key)) return component._context.get(key);
     component = component._parent;
   }
@@ -8233,7 +8246,9 @@ function getContext(key) {
 
 function hasContext(key) {
   let component = __currentComponent;
-  while (component) {
+  const visited = new Set();
+  while (component && !visited.has(component)) {
+    visited.add(component);
     if (component._context && component._context.has(key)) return true;
     component = component._parent;
   }
@@ -8434,7 +8449,13 @@ function __transition(el, name, dir, done) {
 
 function __handleComponentError(error, component) {
   let current = component;
-  while (current) {
+  // Defensive cycle guard: if the parent chain is corrupted (e.g. by
+  // a buggy _parent assignment), we still terminate. The fix is in
+  // __pushComponent above, but cycle detection here is cheap belt-
+  // and-suspenders so a bad _parent never hangs the runtime.
+  const visited = new Set();
+  while (current && !visited.has(current)) {
+    visited.add(current);
     if (current.onError) {
       try { current.onError(error, component); return; } catch (_) {}
     }
@@ -13226,7 +13247,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.15.4";
-  var BUILD_DATE = "2026-05-01@04:13:52GMT";
+  var BUILD_DATE = "2026-05-01@04:19:50GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -15007,7 +15028,7 @@ ${indented}`);
       return true;
     };
     mountRoute = async function(info, force = false) {
-      let Component, LayoutClass, __pop, __prev, __push, gen2, handled, inst, instance, layoutFile, layoutFiles, layoutMod, layoutSource, layoutsChanged, mod, mp, oldTarget, pageWrapper, params, pre, query, route, sameRoute, slot, source, wrapper;
+      let Component, LayoutClass, __innerPrev, __pop, __prev, __push, gen2, handled, inst, instance, layoutFile, layoutFiles, layoutMod, layoutSource, layoutsChanged, mod, mp, oldTarget, outerScope, pageParent, pagePrev, pageWrapper, params, pre, prevScope, query, route, sameRoute, slot, source, wrapper;
       ({ route, params, layouts: layoutFiles, query } = info);
       if (!route)
         return;
@@ -15063,6 +15084,9 @@ ${indented}`);
           if (layoutsChanged && layoutFiles.length > 0) {
             container.innerHTML = "";
             mp = container;
+            __push = globalThis.__ripComponent?.__pushComponent;
+            __pop = globalThis.__ripComponent?.__popComponent;
+            outerScope = null;
             for (let layoutFile2 of layoutFiles) {
               layoutSource = components.read(layoutFile2);
               if (!layoutSource)
@@ -15075,15 +15099,18 @@ ${indented}`);
               LayoutClass = findComponent(layoutMod);
               if (!LayoutClass)
                 continue;
-              inst = new LayoutClass({ app, params, router });
+              prevScope = __push?.(outerScope);
+              try {
+                inst = new LayoutClass({ app, params, router });
+              } finally {
+                __pop?.(prevScope);
+              }
               if (inst.beforeMount) {
-                __push = globalThis.__ripComponent?.__pushComponent;
-                __pop = globalThis.__ripComponent?.__popComponent;
-                __prev = __push?.(inst);
+                __innerPrev = __push?.(inst);
                 try {
                   inst.beforeMount();
                 } finally {
-                  __pop?.(__prev);
+                  __pop?.(__innerPrev);
                 }
               }
               wrapper = document.createElement("div");
@@ -15091,6 +15118,7 @@ ${indented}`);
               mp.appendChild(wrapper);
               inst.mount(wrapper);
               layoutInstances.push(inst);
+              outerScope = inst;
               slot = wrapper.querySelector("#content") || wrapper;
               mp = slot;
             }
@@ -15104,10 +15132,16 @@ ${indented}`);
           pageWrapper = document.createElement("div");
           pageWrapper.setAttribute("data-component", route.file);
           mp.appendChild(pageWrapper);
-          instance = new Component({ app, params, query, router });
+          __push = globalThis.__ripComponent?.__pushComponent;
+          __pop = globalThis.__ripComponent?.__popComponent;
+          pageParent = layoutInstances[layoutInstances.length - 1] || null;
+          pagePrev = __push?.(pageParent);
+          try {
+            instance = new Component({ app, params, query, router });
+          } finally {
+            __pop?.(pagePrev);
+          }
           if (instance.beforeMount) {
-            __push = globalThis.__ripComponent?.__pushComponent;
-            __pop = globalThis.__ripComponent?.__popComponent;
             __prev = __push?.(instance);
             try {
               instance.beforeMount();

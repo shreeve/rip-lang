@@ -1373,6 +1373,36 @@ test "async effect: stale resolution does not overwrite current cleanup", '''
   cleanups
   ''', ['cleanup-0', 'cleanup-1', 'cleanup-2']
 
+# Wave 12: __pushComponent must NEVER set component._parent = component
+# (self-cycle). The previous code unconditionally assigned _parent on
+# every push; emitChildComponent's outer push of the parent (while the
+# parent was already current via mount()) created a self-cycle that
+# would hang getContext('missing') and __handleComponentError on a
+# missing key/boundary.
+test "__pushComponent does not create _parent self-cycle", '''
+  A = component
+    val =! "x"
+  a = A.new()
+  __pushComponent(a)         # a is now current
+  __pushComponent(a)         # re-push while already current
+  __popComponent(null)
+  __popComponent(null)
+  a._parent isnt a           # critical invariant
+  ''', true
+
+# Wave 12: getContext() on a missing key terminates even if the
+# parent chain has a cycle (defensive cycle-detection guard).
+test "getContext terminates on cycled parent chain", '''
+  A = component
+    val =! "x"
+  a = A.new()
+  a._parent = a              # poison the chain
+  __pushComponent(a)
+  result = getContext("missing")
+  __popComponent(null)
+  result is undefined        # returned, did not hang
+  ''', true
+
 test "component computed with postfix ternary", '''
   A = component
     flag := false
