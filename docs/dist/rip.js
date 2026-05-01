@@ -7289,29 +7289,49 @@ ${blockFactoriesCode}return ${lines.join(`
       this._loopVarStack = [];
       this._factoryMode = false;
       this._factoryVars = null;
+      this._renderLocalScopes = [new Set];
+      this._renderTopLocals = new Set;
       this._fragChildren = new Map;
       this._pendingAutoWire = false;
       this._autoWireEl = null;
       this._autoWireExplicit = null;
       this._inheritsTargetBound = false;
       const statements = this.is(body, "block") ? body.slice(1) : [body];
+      const renderableCount = statements.reduce((n, s) => n + (this._isRenderBinding(s) ? 0 : 1), 0);
       let rootVar;
       if (statements.length === 0 || statements.length === 1 && statements[0] === "null") {
         rootVar = "null";
-      } else if (statements.length === 1) {
+      } else if (renderableCount === 0) {
+        for (const stmt of statements)
+          this.emitNode(stmt);
+        rootVar = this.newElementVar("empty");
+        this._createLines.push(`${rootVar} = document.createComment('');`);
+      } else if (renderableCount === 1) {
         this._pendingAutoWire = !!this._autoEventHandlers;
-        rootVar = this.emitNode(statements[0]);
+        let onlyRenderable = null;
+        for (const stmt of statements) {
+          const v = this.emitNode(stmt);
+          if (v != null)
+            onlyRenderable = v;
+        }
         this._pendingAutoWire = false;
+        rootVar = onlyRenderable;
       } else {
         rootVar = this.newElementVar("frag");
         this._createLines.push(`${rootVar} = document.createDocumentFragment();`);
         const children = [];
         for (const stmt of statements) {
           const childVar = this.emitNode(stmt);
+          if (childVar == null)
+            continue;
           this._createLines.push(`${rootVar}.appendChild(${childVar});`);
           children.push(childVar);
         }
         this._fragChildren.set(rootVar, children);
+      }
+      if (this._renderTopLocals.size > 0) {
+        const decl = `let ${[...this._renderTopLocals].join(", ")};`;
+        this._createLines.unshift(decl);
       }
       return {
         createLines: this._createLines,
@@ -7347,7 +7367,45 @@ ${blockFactoriesCode}return ${lines.join(`
         this._setupLines.push(`__effect(() => { ${body} });`);
       }
     };
+    const _isPlainIdentifier = (s) => typeof s === "string" && /^[A-Za-z_$][\w$]*$/.test(s);
+    proto._isRenderBinding = function(stmt) {
+      return Array.isArray(stmt) && stmt[0] === "=" && _isPlainIdentifier(stmt[1]);
+    };
+    proto._addRenderLocal = function(name) {
+      if (!this._renderLocalScopes || this._renderLocalScopes.length === 0)
+        return;
+      this._renderLocalScopes[this._renderLocalScopes.length - 1].add(name);
+    };
+    proto._isRenderLocal = function(name) {
+      if (!name || typeof name !== "string")
+        return false;
+      if (this._renderLocalScopes && this._renderLocalScopes.length > 0) {
+        const top = this._renderLocalScopes[this._renderLocalScopes.length - 1];
+        if (top.has(name))
+          return true;
+      }
+      if (this._loopVarStack) {
+        for (const v of this._loopVarStack) {
+          if (v.itemVar === name || v.indexVar === name)
+            return true;
+        }
+      }
+      return false;
+    };
     proto.emitNode = function(sexpr) {
+      if (this._isRenderBinding(sexpr)) {
+        const [, name, expr] = sexpr;
+        const exprCode2 = this.emitInComponent(expr, "value");
+        if (this._factoryMode) {
+          this._factoryVars.add(name);
+          this._createLines.push(`${name} = ${exprCode2};`);
+        } else {
+          this._renderTopLocals.add(name);
+          this._createLines.push(`${name} = ${exprCode2};`);
+        }
+        this._addRenderLocal(name);
+        return null;
+      }
       if (typeof sexpr === "string" || sexpr instanceof String) {
         const str = sexpr.valueOf();
         if (str.startsWith('"') || str.startsWith("'") || str.startsWith("`")) {
@@ -7359,6 +7417,11 @@ ${blockFactoriesCode}return ${lines.join(`
           const textVar2 = this.newTextVar();
           this._createLines.push(`${textVar2} = document.createTextNode('');`);
           this._pushEffect(`${textVar2}.data = ${this._self}.${str}.value;`);
+          return textVar2;
+        }
+        if (this._isRenderLocal(str)) {
+          const textVar2 = this.newTextVar();
+          this._createLines.push(`${textVar2} = document.createTextNode(String(${str}));`);
           return textVar2;
         }
         if (str === "slot" && this.componentMembers) {
@@ -7512,19 +7575,24 @@ ${blockFactoriesCode}return ${lines.join(`
                 this.emitAttributes(elVar, child);
               } else {
                 const childVar = this.emitNode(child);
+                if (childVar == null)
+                  continue;
                 this._createLines.push(`${elVar}.appendChild(${childVar});`);
               }
             }
           } else if (block) {
             const childVar = this.emitNode(block);
-            this._createLines.push(`${elVar}.appendChild(${childVar});`);
+            if (childVar != null) {
+              this._createLines.push(`${elVar}.appendChild(${childVar});`);
+            }
           }
         } else if (this.is(arg, "object")) {
           this.emitAttributes(elVar, arg);
         } else if (typeof arg === "string" || arg instanceof String) {
           const val = arg.valueOf();
           const baseName = val.split(/[#.]/)[0];
-          if (this.isHtmlTag(baseName || "div") || this.isComponent(baseName)) {
+          const isLocal = this._isRenderLocal(val) || this._isRenderLocal(baseName);
+          if (!isLocal && (this.isHtmlTag(baseName || "div") || this.isComponent(baseName))) {
             const childVar = this.emitNode(arg);
             this._createLines.push(`${elVar}.appendChild(${childVar});`);
           } else {
@@ -7543,7 +7611,9 @@ ${blockFactoriesCode}return ${lines.join(`
           }
         } else if (arg) {
           const childVar = this.emitNode(arg);
-          this._createLines.push(`${elVar}.appendChild(${childVar});`);
+          if (childVar != null) {
+            this._createLines.push(`${elVar}.appendChild(${childVar});`);
+          }
         }
       }
     };
@@ -7763,7 +7833,12 @@ ${blockFactoriesCode}return ${lines.join(`
     };
     proto.emitTemplateBlock = function(body) {
       if (!Array.isArray(body) || body[0] !== "block") {
-        return this.emitNode(body);
+        const v = this.emitNode(body);
+        if (v != null)
+          return v;
+        const commentVar = this.newElementVar("empty");
+        this._createLines.push(`${commentVar} = document.createComment('');`);
+        return commentVar;
       }
       const statements = body.slice(1);
       if (statements.length === 0) {
@@ -7771,14 +7846,30 @@ ${blockFactoriesCode}return ${lines.join(`
         this._createLines.push(`${commentVar} = document.createComment('');`);
         return commentVar;
       }
-      if (statements.length === 1) {
-        return this.emitNode(statements[0]);
+      const renderableCount = statements.reduce((n, s) => n + (this._isRenderBinding(s) ? 0 : 1), 0);
+      if (renderableCount === 0) {
+        for (const stmt of statements)
+          this.emitNode(stmt);
+        const commentVar = this.newElementVar("empty");
+        this._createLines.push(`${commentVar} = document.createComment('');`);
+        return commentVar;
+      }
+      if (renderableCount === 1) {
+        let only = null;
+        for (const stmt of statements) {
+          const v = this.emitNode(stmt);
+          if (v != null)
+            only = v;
+        }
+        return only;
       }
       const fragVar = this.newElementVar("frag");
       this._createLines.push(`${fragVar} = document.createDocumentFragment();`);
       const children = [];
       for (const stmt of statements) {
         const childVar = this.emitNode(stmt);
+        if (childVar == null)
+          continue;
         this._createLines.push(`${fragVar}.appendChild(${childVar});`);
         children.push(childVar);
       }
@@ -7856,16 +7947,17 @@ ${blockFactoriesCode}return ${lines.join(`
       return anchorVar;
     };
     proto.emitConditionBranch = function(blockName, block) {
-      const saved = [this._createLines, this._setupLines, this._factoryMode, this._factoryVars];
+      const saved = [this._createLines, this._setupLines, this._factoryMode, this._factoryVars, this._renderLocalScopes];
       this._createLines = [];
       this._setupLines = [];
       this._factoryMode = true;
       this._factoryVars = new Set;
+      this._renderLocalScopes = [new Set];
       const rootVar = this.emitTemplateBlock(block);
       const createLines = this._createLines;
       const setupLines = this._setupLines;
       const factoryVars = this._factoryVars;
-      [this._createLines, this._setupLines, this._factoryMode, this._factoryVars] = saved;
+      [this._createLines, this._setupLines, this._factoryMode, this._factoryVars, this._renderLocalScopes] = saved;
       const outerParams = this._loopVarStack.map((v) => `${v.itemVar}, ${v.indexVar}`).join(", ");
       const extraParams = outerParams ? `, ${outerParams}` : "";
       this.emitBlockFactory(blockName, `ctx${extraParams}`, rootVar, createLines, setupLines, factoryVars);
@@ -7942,13 +8034,14 @@ ${blockFactoriesCode}return ${lines.join(`
       if (!indexVar) {
         const usedNames = new Set(this._loopVarStack.flatMap((v) => [v.itemVar, v.indexVar]));
         usedNames.add(itemVar);
+        this._collectExplicitLoopIdentifiers(body, usedNames);
         for (const candidate of ["i", "j", "k", "l", "m", "n"]) {
           if (!usedNames.has(candidate)) {
             indexVar = candidate;
             break;
           }
         }
-        indexVar = indexVar || `_i${this._loopVarStack.length}`;
+        indexVar = indexVar || `__rip_idx${this._loopVarStack.length}`;
       }
       const collectionCode = this.emitInComponent(collection, "value");
       let keyExpr = itemVar;
@@ -7970,11 +8063,12 @@ ${blockFactoriesCode}return ${lines.join(`
           }
         }
       }
-      const saved = [this._createLines, this._setupLines, this._factoryMode, this._factoryVars];
+      const saved = [this._createLines, this._setupLines, this._factoryMode, this._factoryVars, this._renderLocalScopes];
       this._createLines = [];
       this._setupLines = [];
       this._factoryMode = true;
       this._factoryVars = new Set;
+      this._renderLocalScopes = [new Set];
       const outerParams = this._loopVarStack.map((v) => `${v.itemVar}, ${v.indexVar}`).join(", ");
       const outerExtra = outerParams ? `, ${outerParams}` : "";
       this._loopVarStack.push({ itemVar, indexVar });
@@ -7983,7 +8077,7 @@ ${blockFactoriesCode}return ${lines.join(`
       const itemCreateLines = this._createLines;
       const itemSetupLines = this._setupLines;
       const itemFactoryVars = this._factoryVars;
-      [this._createLines, this._setupLines, this._factoryMode, this._factoryVars] = saved;
+      [this._createLines, this._setupLines, this._factoryMode, this._factoryVars, this._renderLocalScopes] = saved;
       const isStatic = itemSetupLines.length === 0;
       const loopParams = `ctx, ${itemVar}, ${indexVar}${outerExtra}`;
       this.emitBlockFactory(blockName, loopParams, itemNode, itemCreateLines, itemSetupLines, itemFactoryVars, isStatic);
@@ -8159,6 +8253,22 @@ ${blockFactoriesCode}return ${lines.join(`
           return true;
       }
       return false;
+    };
+    proto._collectExplicitLoopIdentifiers = function(node, set) {
+      if (!Array.isArray(node))
+        return;
+      const head = node[0];
+      if (head === "for-in" || head === "for-of" || head === "for-as") {
+        const vars = node[1];
+        const names = Array.isArray(vars) ? vars : [vars];
+        for (const n of names) {
+          if (typeof n === "string")
+            set.add(n);
+        }
+      }
+      for (let i = 1;i < node.length; i++) {
+        this._collectExplicitLoopIdentifiers(node[i], set);
+      }
     };
     proto.isSimpleAssignable = function(sexpr) {
       if (typeof sexpr === "string") {
@@ -13251,7 +13361,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.15.4";
-  var BUILD_DATE = "2026-05-01@05:04:28GMT";
+  var BUILD_DATE = "2026-05-01@15:15:49GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
