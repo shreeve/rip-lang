@@ -511,7 +511,7 @@ code "simple loop", '''
      __effect(() => {
        __reconcile(this._anchor0, __s, this.items.value, this, create_block_0, null);
      });
-     { const __cur = globalThis.__ripComponent?.__getCurrentComponent?.(); if (__cur) (__cur._disposers ??= []).push(() => { for (const __b of __s.blocks) { try { __b.d(true); } catch {} } __s.blocks = []; __s.keys = []; }); }
+     { const __cur = globalThis.__ripComponent?.__getCurrentComponent?.(); if (__cur) (__cur._disposers ??= []).push(() => { for (const __b of __s.blocks) { try { __b.d(true); } catch {} } __s.blocks = []; __s.keys = []; __s.items = []; }); }
    }
     }
   };
@@ -566,7 +566,7 @@ code "text output in loop with postfix if else", '''
      __effect(() => {
        __reconcile(this._anchor0, __s, this.items.value, this, create_block_0, null);
      });
-     { const __cur = globalThis.__ripComponent?.__getCurrentComponent?.(); if (__cur) (__cur._disposers ??= []).push(() => { for (const __b of __s.blocks) { try { __b.d(true); } catch {} } __s.blocks = []; __s.keys = []; }); }
+     { const __cur = globalThis.__ripComponent?.__getCurrentComponent?.(); if (__cur) (__cur._disposers ??= []).push(() => { for (const __b of __s.blocks) { try { __b.d(true); } catch {} } __s.blocks = []; __s.keys = []; __s.items = []; }); }
    }
     }
   };
@@ -720,7 +720,7 @@ code "conditional inside loop threads loop vars", '''
      __effect(() => {
        __reconcile(this._anchor0, __s, this.items.value, this, create_block_0, null);
      });
-     { const __cur = globalThis.__ripComponent?.__getCurrentComponent?.(); if (__cur) (__cur._disposers ??= []).push(() => { for (const __b of __s.blocks) { try { __b.d(true); } catch {} } __s.blocks = []; __s.keys = []; }); }
+     { const __cur = globalThis.__ripComponent?.__getCurrentComponent?.(); if (__cur) (__cur._disposers ??= []).push(() => { for (const __b of __s.blocks) { try { __b.d(true); } catch {} } __s.blocks = []; __s.keys = []; __s.items = []; }); }
    }
     }
   };
@@ -781,7 +781,7 @@ code "nested loops thread outer vars", '''
      disposers.push(__effect(() => {
        __reconcile(_anchor1, __s, row, ctx, create_block_1, null, row, ri);
      }, {skipRegister: true}));
-     disposers.push(() => { for (const __b of __s.blocks) { try { __b.d(true); } catch {} } __s.blocks = []; __s.keys = []; });
+     disposers.push(() => { for (const __b of __s.blocks) { try { __b.d(true); } catch {} } __s.blocks = []; __s.keys = []; __s.items = []; });
    }
    },
    d(detaching) {
@@ -808,7 +808,7 @@ code "nested loops thread outer vars", '''
      __effect(() => {
        __reconcile(this._anchor0, __s, this.rows.value, this, create_block_0, null);
      });
-     { const __cur = globalThis.__ripComponent?.__getCurrentComponent?.(); if (__cur) (__cur._disposers ??= []).push(() => { for (const __b of __s.blocks) { try { __b.d(true); } catch {} } __s.blocks = []; __s.keys = []; }); }
+     { const __cur = globalThis.__ripComponent?.__getCurrentComponent?.(); if (__cur) (__cur._disposers ??= []).push(() => { for (const __b of __s.blocks) { try { __b.d(true); } catch {} } __s.blocks = []; __s.keys = []; __s.items = []; }); }
    }
     }
   };
@@ -939,7 +939,7 @@ code "string containing 'this' in loop factory", '''
      __effect(() => {
        __reconcile(this._anchor0, __s, this.items.value, this, create_block_0, null);
      });
-     { const __cur = globalThis.__ripComponent?.__getCurrentComponent?.(); if (__cur) (__cur._disposers ??= []).push(() => { for (const __b of __s.blocks) { try { __b.d(true); } catch {} } __s.blocks = []; __s.keys = []; }); }
+     { const __cur = globalThis.__ripComponent?.__getCurrentComponent?.(); if (__cur) (__cur._disposers ??= []).push(() => { for (const __b of __s.blocks) { try { __b.d(true); } catch {} } __s.blocks = []; __s.keys = []; __s.items = []; }); }
    }
     }
   };
@@ -1580,6 +1580,7 @@ code "child component with static props", '''
    try {
    this._inst1 = new Child({ label: "hello" });
    if (this._inst1 && this._inst1._initFailed) {
+     try { this._inst1.unmount({removeDOM: false}); } catch (__ue) { console.error('[Rip] partial-init unmount error:', __ue); }
      this._inst1 = null;
      this._el2 = document.createComment('rip:child-init-failed: Child');
    } else {
@@ -1599,7 +1600,7 @@ code "child component with static props", '''
    return this._el0;
     }
     _setup() {
-   if (this._inst1 && !this._inst1._isSetup) { this._inst1._isSetup = true; try { if (this._inst1._setup) { const __cprev = __pushComponent(this._inst1); try { this._inst1._setup(); } finally { __popComponent(__cprev); } } if (this._inst1.mounted) this._inst1.mounted(); } catch (__e) { __handleComponentError(__e, this._inst1); } }
+   if (this._inst1 && !this._inst1._isSetup) { this._inst1._isSetup = true; const __cprev = __pushComponent(this._inst1); try { try { if (this._inst1.beforeMount) this._inst1.beforeMount(); if (this._inst1._setup) this._inst1._setup(); if (this._inst1.mounted) this._inst1.mounted(); } catch (__e) { __handleComponentError(__e, this._inst1); } } finally { __popComponent(__cprev); } }
     }
   };
   ''', opts
@@ -1621,6 +1622,7 @@ code "child component with reactive prop (signal pass-through)", '''
    try {
    this._inst1 = new Child({ count: this.count });
    if (this._inst1 && this._inst1._initFailed) {
+     try { this._inst1.unmount({removeDOM: false}); } catch (__ue) { console.error('[Rip] partial-init unmount error:', __ue); }
      this._inst1 = null;
      this._el2 = document.createComment('rip:child-init-failed: Child');
    } else {
@@ -1640,7 +1642,7 @@ code "child component with reactive prop (signal pass-through)", '''
    return this._el0;
     }
     _setup() {
-   if (this._inst1 && !this._inst1._isSetup) { this._inst1._isSetup = true; try { if (this._inst1._setup) { const __cprev = __pushComponent(this._inst1); try { this._inst1._setup(); } finally { __popComponent(__cprev); } } if (this._inst1.mounted) this._inst1.mounted(); } catch (__e) { __handleComponentError(__e, this._inst1); } }
+   if (this._inst1 && !this._inst1._isSetup) { this._inst1._isSetup = true; const __cprev = __pushComponent(this._inst1); try { try { if (this._inst1.beforeMount) this._inst1.beforeMount(); if (this._inst1._setup) this._inst1._setup(); if (this._inst1.mounted) this._inst1.mounted(); } catch (__e) { __handleComponentError(__e, this._inst1); } } finally { __popComponent(__cprev); } }
     }
   };
   ''', opts
@@ -1662,6 +1664,7 @@ code "child component with children (slot)", '''
    try {
    this._inst0 = new Child({ children: this._el2 });
    if (this._inst0 && this._inst0._initFailed) {
+     try { this._inst0.unmount({removeDOM: false}); } catch (__ue) { console.error('[Rip] partial-init unmount error:', __ue); }
      this._inst0 = null;
      this._el1 = document.createComment('rip:child-init-failed: Child');
    } else {
@@ -1680,7 +1683,7 @@ code "child component with children (slot)", '''
    return this._el1;
     }
     _setup() {
-   if (this._inst0 && !this._inst0._isSetup) { this._inst0._isSetup = true; try { if (this._inst0._setup) { const __cprev = __pushComponent(this._inst0); try { this._inst0._setup(); } finally { __popComponent(__cprev); } } if (this._inst0.mounted) this._inst0.mounted(); } catch (__e) { __handleComponentError(__e, this._inst0); } }
+   if (this._inst0 && !this._inst0._isSetup) { this._inst0._isSetup = true; const __cprev = __pushComponent(this._inst0); try { try { if (this._inst0.beforeMount) this._inst0.beforeMount(); if (this._inst0._setup) this._inst0._setup(); if (this._inst0.mounted) this._inst0.mounted(); } catch (__e) { __handleComponentError(__e, this._inst0); } } finally { __popComponent(__cprev); } }
     }
   };
   ''', opts
@@ -1704,6 +1707,7 @@ code "child component with props and children", '''
    try {
    this._inst1 = new Child({ label: "hello", children: this._el3 });
    if (this._inst1 && this._inst1._initFailed) {
+     try { this._inst1.unmount({removeDOM: false}); } catch (__ue) { console.error('[Rip] partial-init unmount error:', __ue); }
      this._inst1 = null;
      this._el2 = document.createComment('rip:child-init-failed: Child');
    } else {
@@ -1723,7 +1727,7 @@ code "child component with props and children", '''
    return this._el0;
     }
     _setup() {
-   if (this._inst1 && !this._inst1._isSetup) { this._inst1._isSetup = true; try { if (this._inst1._setup) { const __cprev = __pushComponent(this._inst1); try { this._inst1._setup(); } finally { __popComponent(__cprev); } } if (this._inst1.mounted) this._inst1.mounted(); } catch (__e) { __handleComponentError(__e, this._inst1); } }
+   if (this._inst1 && !this._inst1._isSetup) { this._inst1._isSetup = true; const __cprev = __pushComponent(this._inst1); try { try { if (this._inst1.beforeMount) this._inst1.beforeMount(); if (this._inst1._setup) this._inst1._setup(); if (this._inst1.mounted) this._inst1.mounted(); } catch (__e) { __handleComponentError(__e, this._inst1); } } finally { __popComponent(__cprev); } }
     }
   };
   ''', opts
@@ -2512,7 +2516,7 @@ code "loop inside parent element", '''
      __effect(() => {
        __reconcile(this._anchor1, __s, this.items.value, this, create_block_0, null);
      });
-     { const __cur = globalThis.__ripComponent?.__getCurrentComponent?.(); if (__cur) (__cur._disposers ??= []).push(() => { for (const __b of __s.blocks) { try { __b.d(true); } catch {} } __s.blocks = []; __s.keys = []; }); }
+     { const __cur = globalThis.__ripComponent?.__getCurrentComponent?.(); if (__cur) (__cur._disposers ??= []).push(() => { for (const __b of __s.blocks) { try { __b.d(true); } catch {} } __s.blocks = []; __s.keys = []; __s.items = []; }); }
    }
     }
   };
@@ -2583,6 +2587,7 @@ code "bare component reference (no args)", '''
    try {
    this._inst1 = new Counter({});
    if (this._inst1 && this._inst1._initFailed) {
+     try { this._inst1.unmount({removeDOM: false}); } catch (__ue) { console.error('[Rip] partial-init unmount error:', __ue); }
      this._inst1 = null;
      this._el2 = document.createComment('rip:child-init-failed: Counter');
    } else {
@@ -2602,7 +2607,7 @@ code "bare component reference (no args)", '''
    return this._el0;
     }
     _setup() {
-   if (this._inst1 && !this._inst1._isSetup) { this._inst1._isSetup = true; try { if (this._inst1._setup) { const __cprev = __pushComponent(this._inst1); try { this._inst1._setup(); } finally { __popComponent(__cprev); } } if (this._inst1.mounted) this._inst1.mounted(); } catch (__e) { __handleComponentError(__e, this._inst1); } }
+   if (this._inst1 && !this._inst1._isSetup) { this._inst1._isSetup = true; const __cprev = __pushComponent(this._inst1); try { try { if (this._inst1.beforeMount) this._inst1.beforeMount(); if (this._inst1._setup) this._inst1._setup(); if (this._inst1.mounted) this._inst1.mounted(); } catch (__e) { __handleComponentError(__e, this._inst1); } } finally { __popComponent(__cprev); } }
     }
   };
   ''', opts

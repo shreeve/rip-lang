@@ -1251,7 +1251,18 @@ export createRenderer = (opts = {}) ->
           continue unless LayoutClass
 
           inst = new LayoutClass { app, params, router }
-          inst.beforeMount() if inst.beforeMount
+          # Push the layout as current component so any __effect that
+          # `beforeMount` creates auto-registers on the layout itself
+          # (via the __getCurrentComponent bridge). Without this wrap,
+          # those effects register on whatever happened to be current
+          # (typically null), and they never get disposed on unmount.
+          # `mount` does its own __pushComponent for _create/_setup.
+          if inst.beforeMount
+            __push = globalThis.__ripComponent?.__pushComponent
+            __pop = globalThis.__ripComponent?.__popComponent
+            __prev = __push?(inst)
+            try inst.beforeMount()
+            finally __pop?(__prev)
           wrapper = document.createElement('div')
           wrapper.setAttribute 'data-layout', layoutFile
           mp.appendChild wrapper
@@ -1273,7 +1284,14 @@ export createRenderer = (opts = {}) ->
       mp.appendChild pageWrapper
 
       instance = new Component { app, params, query, router }
-      instance.beforeMount() if instance.beforeMount
+      # Same beforeMount wrap as the layout loop above — effects
+      # created in beforeMount auto-register on the page component.
+      if instance.beforeMount
+        __push = globalThis.__ripComponent?.__pushComponent
+        __pop = globalThis.__ripComponent?.__popComponent
+        __prev = __push?(instance)
+        try instance.beforeMount()
+        finally __pop?(__prev)
       instance.mount pageWrapper
       currentComponent = instance
       currentRoute = route.file

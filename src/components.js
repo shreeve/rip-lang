@@ -2509,9 +2509,9 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     // components, and effect subscriptions. Same shape as the
     // conditional emitter's block-teardown disposer.
     if (this._factoryMode) {
-      setupLines.push(`  disposers.push(() => { for (const __b of __s.blocks) { try { __b.d(true); } catch {} } __s.blocks = []; __s.keys = []; });`);
+      setupLines.push(`  disposers.push(() => { for (const __b of __s.blocks) { try { __b.d(true); } catch {} } __s.blocks = []; __s.keys = []; __s.items = []; });`);
     } else {
-      setupLines.push(`  { const __cur = globalThis.__ripComponent?.__getCurrentComponent?.(); if (__cur) (__cur._disposers ??= []).push(() => { for (const __b of __s.blocks) { try { __b.d(true); } catch {} } __s.blocks = []; __s.keys = []; }); }`);
+      setupLines.push(`  { const __cur = globalThis.__ripComponent?.__getCurrentComponent?.(); if (__cur) (__cur._disposers ??= []).push(() => { for (const __b of __s.blocks) { try { __b.d(true); } catch {} } __s.blocks = []; __s.keys = []; __s.items = []; }); }`);
     }
     setupLines.push(`}`);
 
@@ -2552,6 +2552,12 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     this._createLines.push(`try {`);
     this._createLines.push(`${instVar} = new ${componentName}(${propsCode});`);
     this._createLines.push(`if (${instVar} && ${instVar}._initFailed) {`);
+    // _init may have registered effects, contexts, or sub-children
+    // before throwing. unmount({removeDOM:false}) releases them; the
+    // instance never reached a usable state but its partial side
+    // effects need cleanup. Idempotent so safe even when nothing was
+    // registered yet.
+    this._createLines.push(`  try { ${instVar}.unmount({removeDOM: false}); } catch (__ue) { console.error('[Rip] partial-init unmount error:', __ue); }`);
     this._createLines.push(`  ${instVar} = null;`);
     this._createLines.push(`  ${elVar} = document.createComment('rip:child-init-failed: ${componentName}');`);
     this._createLines.push(`} else {`);
@@ -2591,16 +2597,23 @@ export function installComponentSupport(CodeEmitter, Lexer) {
       this._createLines.push(`if (${instVar}) ${elVar}.addEventListener('${event}', (e) => __batch(() => (${handlerCode})(e)));`);
     }
 
-    // Per-child push wrap for _setup so reactive bindings created
-    // there register on the child too, not the parent. Three guards:
+    // Per-child push wrap for the full lifecycle invocation. ALL of
+    // beforeMount, _setup, and mounted run with the child as the
+    // current component, so any __effect they create auto-registers
+    // on the child's _disposers (via the __getCurrentComponent
+    // bridge), not the parent's. Guards:
     //   - instVar null-check (failed-init placeholder branch above).
-    //   - _isSetup flag so _setup/mounted run ONCE even when this
+    //   - _isSetup flag so the lifecycle runs ONCE even when this
     //     setupLines block is re-executed by a factory's p() on every
-    //     reactive update (factory mode reruns setupLines; class mode
-    //     runs them once but the flag is harmless there).
-    //   - flag set BEFORE calling _setup so a recursive setup-call
-    //     can't loop.
-    this._setupLines.push(`if (${instVar} && !${instVar}._isSetup) { ${instVar}._isSetup = true; try { if (${instVar}._setup) { const __cprev = __pushComponent(${instVar}); try { ${instVar}._setup(); } finally { __popComponent(__cprev); } } if (${instVar}.mounted) ${instVar}.mounted(); } catch (__e) { __handleComponentError(__e, ${instVar}); } }`);
+    //     reactive update. Class mode runs setupLines once anyway;
+    //     the flag is harmless there.
+    //   - Flag set BEFORE the calls so a recursive setup couldn't
+    //     re-enter and loop.
+    //   - beforeMount fires before _setup so user code has a hook
+    //     after construction but before reactive bindings activate
+    //     (matches the renderer's contract for page/layout
+    //     components).
+    this._setupLines.push(`if (${instVar} && !${instVar}._isSetup) { ${instVar}._isSetup = true; const __cprev = __pushComponent(${instVar}); try { try { if (${instVar}.beforeMount) ${instVar}.beforeMount(); if (${instVar}._setup) ${instVar}._setup(); if (${instVar}.mounted) ${instVar}.mounted(); } catch (__e) { __handleComponentError(__e, ${instVar}); } } finally { __popComponent(__cprev); } }`);
 
     for (const { key, valueCode } of reactiveProps) {
       this._pushEffect(`if (${instVar}.${key} && typeof ${instVar}.${key} === 'object' && 'value' in ${instVar}.${key}) ${instVar}.${key}.value = ${valueCode}; else if (${instVar}._setRestProp) ${instVar}._setRestProp('${key}', ${valueCode});`);
@@ -2897,6 +2910,7 @@ function __reconcile(anchor, state, items, ctx, factory, keyFn, ...outer) {
   if (!parent) return;
 
   const oldKeys = state.keys;
+  const oldItems = state.items || [];
   const oldBlocks = state.blocks;
   const oldLen = oldKeys.length;
   const newLen = items.length;
@@ -2918,14 +2932,24 @@ function __reconcile(anchor, state, items, ctx, factory, keyFn, ...outer) {
       parent.insertBefore(frag, anchor);
     }
     state.keys = hasKeyFn ? newKeys : items.slice();
+    state.items = items.slice();
     state.blocks = newBlocks;
     return;
   }
 
-  // Phase 1: prefix scan — skip p() (item+index identical, effects already live)
+  // Phase 1: prefix scan — skip p() ONLY when key AND item identity
+  // match. With a custom keyFn, a stable key can be reused across
+  // different item references (e.g. when the user replaces an item
+  // object with a new one that has the same id but different fields);
+  // skipping p() in that case would leave the block displaying stale
+  // data. Reference identity guards this.
   let start = 0;
   const minLen = oldLen < newLen ? oldLen : newLen;
   while (start < minLen && oldKeys[start] === newKeys[start]) {
+    if (oldItems[start] !== items[start]) {
+      const block = oldBlocks[start];
+      if (!block._s) block.p(ctx, items[start], start, ...outer);
+    }
     newBlocks[start] = oldBlocks[start];
     start++;
   }
@@ -2995,6 +3019,7 @@ function __reconcile(anchor, state, items, ctx, factory, keyFn, ...outer) {
   }
 
   state.keys = hasKeyFn ? newKeys : items.slice();
+  state.items = items.slice();
   state.blocks = newBlocks;
 }
 

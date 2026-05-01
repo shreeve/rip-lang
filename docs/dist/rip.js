@@ -8000,9 +8000,9 @@ ${blockFactoriesCode}return ${lines.join(`
       setupLines.push(`    __reconcile(${anchorVar}, __s, ${collectionCode}, ${this._self}, ${blockName}, ${keyFnCode}${outerArgs});`);
       setupLines.push(`  ${effClose}`);
       if (this._factoryMode) {
-        setupLines.push(`  disposers.push(() => { for (const __b of __s.blocks) { try { __b.d(true); } catch {} } __s.blocks = []; __s.keys = []; });`);
+        setupLines.push(`  disposers.push(() => { for (const __b of __s.blocks) { try { __b.d(true); } catch {} } __s.blocks = []; __s.keys = []; __s.items = []; });`);
       } else {
-        setupLines.push(`  { const __cur = globalThis.__ripComponent?.__getCurrentComponent?.(); if (__cur) (__cur._disposers ??= []).push(() => { for (const __b of __s.blocks) { try { __b.d(true); } catch {} } __s.blocks = []; __s.keys = []; }); }`);
+        setupLines.push(`  { const __cur = globalThis.__ripComponent?.__getCurrentComponent?.(); if (__cur) (__cur._disposers ??= []).push(() => { for (const __b of __s.blocks) { try { __b.d(true); } catch {} } __s.blocks = []; __s.keys = []; __s.items = []; }); }`);
       }
       setupLines.push(`}`);
       this._setupLines.push(setupLines.join(`
@@ -8019,6 +8019,7 @@ ${blockFactoriesCode}return ${lines.join(`
       this._createLines.push(`try {`);
       this._createLines.push(`${instVar} = new ${componentName}(${propsCode});`);
       this._createLines.push(`if (${instVar} && ${instVar}._initFailed) {`);
+      this._createLines.push(`  try { ${instVar}.unmount({removeDOM: false}); } catch (__ue) { console.error('[Rip] partial-init unmount error:', __ue); }`);
       this._createLines.push(`  ${instVar} = null;`);
       this._createLines.push(`  ${elVar} = document.createComment('rip:child-init-failed: ${componentName}');`);
       this._createLines.push(`} else {`);
@@ -8042,7 +8043,7 @@ ${blockFactoriesCode}return ${lines.join(`
         const handlerCode = this.emitInComponent(value, "value");
         this._createLines.push(`if (${instVar}) ${elVar}.addEventListener('${event}', (e) => __batch(() => (${handlerCode})(e)));`);
       }
-      this._setupLines.push(`if (${instVar} && !${instVar}._isSetup) { ${instVar}._isSetup = true; try { if (${instVar}._setup) { const __cprev = __pushComponent(${instVar}); try { ${instVar}._setup(); } finally { __popComponent(__cprev); } } if (${instVar}.mounted) ${instVar}.mounted(); } catch (__e) { __handleComponentError(__e, ${instVar}); } }`);
+      this._setupLines.push(`if (${instVar} && !${instVar}._isSetup) { ${instVar}._isSetup = true; const __cprev = __pushComponent(${instVar}); try { try { if (${instVar}.beforeMount) ${instVar}.beforeMount(); if (${instVar}._setup) ${instVar}._setup(); if (${instVar}.mounted) ${instVar}.mounted(); } catch (__e) { __handleComponentError(__e, ${instVar}); } } finally { __popComponent(__cprev); } }`);
       for (const { key, valueCode } of reactiveProps) {
         this._pushEffect(`if (${instVar}.${key} && typeof ${instVar}.${key} === 'object' && 'value' in ${instVar}.${key}) ${instVar}.${key}.value = ${valueCode}; else if (${instVar}._setRestProp) ${instVar}._setRestProp('${key}', ${valueCode});`);
       }
@@ -8279,6 +8280,7 @@ function __reconcile(anchor, state, items, ctx, factory, keyFn, ...outer) {
   if (!parent) return;
 
   const oldKeys = state.keys;
+  const oldItems = state.items || [];
   const oldBlocks = state.blocks;
   const oldLen = oldKeys.length;
   const newLen = items.length;
@@ -8300,14 +8302,24 @@ function __reconcile(anchor, state, items, ctx, factory, keyFn, ...outer) {
       parent.insertBefore(frag, anchor);
     }
     state.keys = hasKeyFn ? newKeys : items.slice();
+    state.items = items.slice();
     state.blocks = newBlocks;
     return;
   }
 
-  // Phase 1: prefix scan — skip p() (item+index identical, effects already live)
+  // Phase 1: prefix scan — skip p() ONLY when key AND item identity
+  // match. With a custom keyFn, a stable key can be reused across
+  // different item references (e.g. when the user replaces an item
+  // object with a new one that has the same id but different fields);
+  // skipping p() in that case would leave the block displaying stale
+  // data. Reference identity guards this.
   let start = 0;
   const minLen = oldLen < newLen ? oldLen : newLen;
   while (start < minLen && oldKeys[start] === newKeys[start]) {
+    if (oldItems[start] !== items[start]) {
+      const block = oldBlocks[start];
+      if (!block._s) block.p(ctx, items[start], start, ...outer);
+    }
     newBlocks[start] = oldBlocks[start];
     start++;
   }
@@ -8377,6 +8389,7 @@ function __reconcile(anchor, state, items, ctx, factory, keyFn, ...outer) {
   }
 
   state.keys = hasKeyFn ? newKeys : items.slice();
+  state.items = items.slice();
   state.blocks = newBlocks;
 }
 
@@ -13213,7 +13226,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.15.4";
-  var BUILD_DATE = "2026-05-01@04:04:05GMT";
+  var BUILD_DATE = "2026-05-01@04:13:52GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -14994,7 +15007,7 @@ ${indented}`);
       return true;
     };
     mountRoute = async function(info, force = false) {
-      let Component, LayoutClass, gen2, handled, inst, instance, layoutFile, layoutFiles, layoutMod, layoutSource, layoutsChanged, mod, mp, oldTarget, pageWrapper, params, pre, query, route, sameRoute, slot, source, wrapper;
+      let Component, LayoutClass, __pop, __prev, __push, gen2, handled, inst, instance, layoutFile, layoutFiles, layoutMod, layoutSource, layoutsChanged, mod, mp, oldTarget, pageWrapper, params, pre, query, route, sameRoute, slot, source, wrapper;
       ({ route, params, layouts: layoutFiles, query } = info);
       if (!route)
         return;
@@ -15063,8 +15076,16 @@ ${indented}`);
               if (!LayoutClass)
                 continue;
               inst = new LayoutClass({ app, params, router });
-              if (inst.beforeMount)
-                inst.beforeMount();
+              if (inst.beforeMount) {
+                __push = globalThis.__ripComponent?.__pushComponent;
+                __pop = globalThis.__ripComponent?.__popComponent;
+                __prev = __push?.(inst);
+                try {
+                  inst.beforeMount();
+                } finally {
+                  __pop?.(__prev);
+                }
+              }
               wrapper = document.createElement("div");
               wrapper.setAttribute("data-layout", layoutFile2);
               mp.appendChild(wrapper);
@@ -15084,8 +15105,16 @@ ${indented}`);
           pageWrapper.setAttribute("data-component", route.file);
           mp.appendChild(pageWrapper);
           instance = new Component({ app, params, query, router });
-          if (instance.beforeMount)
-            instance.beforeMount();
+          if (instance.beforeMount) {
+            __push = globalThis.__ripComponent?.__pushComponent;
+            __pop = globalThis.__ripComponent?.__popComponent;
+            __prev = __push?.(instance);
+            try {
+              instance.beforeMount();
+            } finally {
+              __pop?.(__prev);
+            }
+          }
           instance.mount(pageWrapper);
           currentComponent = instance;
           currentRoute = route.file;
