@@ -348,6 +348,7 @@ code "simple conditional", '''
          if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');
        }
      });
+     { const __cur = globalThis.__ripComponent?.__getCurrentComponent?.(); if (__cur) (__cur._disposers ??= []).push(() => { if (currentBlock) { currentBlock.d(true); currentBlock = null; } }); }
    }
     }
   };
@@ -452,6 +453,7 @@ code "if-else conditional", '''
          if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');
        }
      });
+     { const __cur = globalThis.__ripComponent?.__getCurrentComponent?.(); if (__cur) (__cur._disposers ??= []).push(() => { if (currentBlock) { currentBlock.d(true); currentBlock = null; } }); }
    }
     }
   };
@@ -509,6 +511,7 @@ code "simple loop", '''
      __effect(() => {
        __reconcile(this._anchor0, __s, this.items.value, this, create_block_0, null);
      });
+     { const __cur = globalThis.__ripComponent?.__getCurrentComponent?.(); if (__cur) (__cur._disposers ??= []).push(() => { for (const __b of __s.blocks) { try { __b.d(true); } catch {} } __s.blocks = []; __s.keys = []; }); }
    }
     }
   };
@@ -563,6 +566,7 @@ code "text output in loop with postfix if else", '''
      __effect(() => {
        __reconcile(this._anchor0, __s, this.items.value, this, create_block_0, null);
      });
+     { const __cur = globalThis.__ripComponent?.__getCurrentComponent?.(); if (__cur) (__cur._disposers ??= []).push(() => { for (const __b of __s.blocks) { try { __b.d(true); } catch {} } __s.blocks = []; __s.keys = []; }); }
    }
     }
   };
@@ -716,6 +720,7 @@ code "conditional inside loop threads loop vars", '''
      __effect(() => {
        __reconcile(this._anchor0, __s, this.items.value, this, create_block_0, null);
      });
+     { const __cur = globalThis.__ripComponent?.__getCurrentComponent?.(); if (__cur) (__cur._disposers ??= []).push(() => { for (const __b of __s.blocks) { try { __b.d(true); } catch {} } __s.blocks = []; __s.keys = []; }); }
    }
     }
   };
@@ -776,6 +781,7 @@ code "nested loops thread outer vars", '''
      disposers.push(__effect(() => {
        __reconcile(_anchor1, __s, row, ctx, create_block_1, null, row, ri);
      }, {skipRegister: true}));
+     disposers.push(() => { for (const __b of __s.blocks) { try { __b.d(true); } catch {} } __s.blocks = []; __s.keys = []; });
    }
    },
    d(detaching) {
@@ -802,6 +808,7 @@ code "nested loops thread outer vars", '''
      __effect(() => {
        __reconcile(this._anchor0, __s, this.rows.value, this, create_block_0, null);
      });
+     { const __cur = globalThis.__ripComponent?.__getCurrentComponent?.(); if (__cur) (__cur._disposers ??= []).push(() => { for (const __b of __s.blocks) { try { __b.d(true); } catch {} } __s.blocks = []; __s.keys = []; }); }
    }
     }
   };
@@ -878,6 +885,7 @@ code "string containing 'this' in conditional factory", '''
          if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');
        }
      });
+     { const __cur = globalThis.__ripComponent?.__getCurrentComponent?.(); if (__cur) (__cur._disposers ??= []).push(() => { if (currentBlock) { currentBlock.d(true); currentBlock = null; } }); }
    }
     }
   };
@@ -931,6 +939,7 @@ code "string containing 'this' in loop factory", '''
      __effect(() => {
        __reconcile(this._anchor0, __s, this.items.value, this, create_block_0, null);
      });
+     { const __cur = globalThis.__ripComponent?.__getCurrentComponent?.(); if (__cur) (__cur._disposers ??= []).push(() => { for (const __b of __s.blocks) { try { __b.d(true); } catch {} } __s.blocks = []; __s.keys = []; }); }
    }
     }
   };
@@ -1341,6 +1350,29 @@ test "init failure without onError throws from constructor", '''
   caught
   ''', "boom"
 
+# Wave 10: each effect run has a unique runId; async resolutions from
+# a SUPERSEDED run (effect re-ran while the prior body was awaiting)
+# must NOT install their cleanup on the now-current run, AbortError
+# from the superseded run must NOT be logged. This test simulates by
+# triggering re-runs faster than a delayed promise resolves.
+test "async effect: stale resolution does not overwrite current cleanup", '''
+  cleanups = []
+  A = component
+    x := 0
+    ~>
+      v = x + 0
+      -> cleanups.push("cleanup-#{v}")
+  a = A.new()
+  a.x.value = 1
+  a.x.value = 2
+  # Each run should install its cleanup, prior run's cleanup runs on
+  # supersession. Order: setup-0; x=1 fires cleanup-0 then setup-1;
+  # x=2 fires cleanup-1 then setup-2. Cleanups so far: ['cleanup-0',
+  # 'cleanup-1']. unmount fires cleanup-2.
+  a.unmount?(removeDOM: false)
+  cleanups
+  ''', ['cleanup-0', 'cleanup-1', 'cleanup-2']
+
 test "component computed with postfix ternary", '''
   A = component
     flag := false
@@ -1558,6 +1590,7 @@ code "child component with static props", '''
    }
    } catch (__childErr) {
      console.error('[Rip] Child construction failed:', __childErr);
+     if (this._inst1) { try { this._inst1.unmount({removeDOM: false}); } catch (__ue) { console.error('[Rip] partial-child unmount error:', __ue); } }
      this._inst1 = null;
      this._el2 = document.createComment('rip:child-error: Child');
    }
@@ -1566,7 +1599,7 @@ code "child component with static props", '''
    return this._el0;
     }
     _setup() {
-   if (this._inst1) try { if (this._inst1._setup) { const __cprev = __pushComponent(this._inst1); try { this._inst1._setup(); } finally { __popComponent(__cprev); } } if (this._inst1.mounted) this._inst1.mounted(); } catch (__e) { __handleComponentError(__e, this._inst1); }
+   if (this._inst1 && !this._inst1._isSetup) { this._inst1._isSetup = true; try { if (this._inst1._setup) { const __cprev = __pushComponent(this._inst1); try { this._inst1._setup(); } finally { __popComponent(__cprev); } } if (this._inst1.mounted) this._inst1.mounted(); } catch (__e) { __handleComponentError(__e, this._inst1); } }
     }
   };
   ''', opts
@@ -1598,6 +1631,7 @@ code "child component with reactive prop (signal pass-through)", '''
    }
    } catch (__childErr) {
      console.error('[Rip] Child construction failed:', __childErr);
+     if (this._inst1) { try { this._inst1.unmount({removeDOM: false}); } catch (__ue) { console.error('[Rip] partial-child unmount error:', __ue); } }
      this._inst1 = null;
      this._el2 = document.createComment('rip:child-error: Child');
    }
@@ -1606,7 +1640,7 @@ code "child component with reactive prop (signal pass-through)", '''
    return this._el0;
     }
     _setup() {
-   if (this._inst1) try { if (this._inst1._setup) { const __cprev = __pushComponent(this._inst1); try { this._inst1._setup(); } finally { __popComponent(__cprev); } } if (this._inst1.mounted) this._inst1.mounted(); } catch (__e) { __handleComponentError(__e, this._inst1); }
+   if (this._inst1 && !this._inst1._isSetup) { this._inst1._isSetup = true; try { if (this._inst1._setup) { const __cprev = __pushComponent(this._inst1); try { this._inst1._setup(); } finally { __popComponent(__cprev); } } if (this._inst1.mounted) this._inst1.mounted(); } catch (__e) { __handleComponentError(__e, this._inst1); } }
     }
   };
   ''', opts
@@ -1638,6 +1672,7 @@ code "child component with children (slot)", '''
    }
    } catch (__childErr) {
      console.error('[Rip] Child construction failed:', __childErr);
+     if (this._inst0) { try { this._inst0.unmount({removeDOM: false}); } catch (__ue) { console.error('[Rip] partial-child unmount error:', __ue); } }
      this._inst0 = null;
      this._el1 = document.createComment('rip:child-error: Child');
    }
@@ -1645,7 +1680,7 @@ code "child component with children (slot)", '''
    return this._el1;
     }
     _setup() {
-   if (this._inst0) try { if (this._inst0._setup) { const __cprev = __pushComponent(this._inst0); try { this._inst0._setup(); } finally { __popComponent(__cprev); } } if (this._inst0.mounted) this._inst0.mounted(); } catch (__e) { __handleComponentError(__e, this._inst0); }
+   if (this._inst0 && !this._inst0._isSetup) { this._inst0._isSetup = true; try { if (this._inst0._setup) { const __cprev = __pushComponent(this._inst0); try { this._inst0._setup(); } finally { __popComponent(__cprev); } } if (this._inst0.mounted) this._inst0.mounted(); } catch (__e) { __handleComponentError(__e, this._inst0); } }
     }
   };
   ''', opts
@@ -1679,6 +1714,7 @@ code "child component with props and children", '''
    }
    } catch (__childErr) {
      console.error('[Rip] Child construction failed:', __childErr);
+     if (this._inst1) { try { this._inst1.unmount({removeDOM: false}); } catch (__ue) { console.error('[Rip] partial-child unmount error:', __ue); } }
      this._inst1 = null;
      this._el2 = document.createComment('rip:child-error: Child');
    }
@@ -1687,7 +1723,7 @@ code "child component with props and children", '''
    return this._el0;
     }
     _setup() {
-   if (this._inst1) try { if (this._inst1._setup) { const __cprev = __pushComponent(this._inst1); try { this._inst1._setup(); } finally { __popComponent(__cprev); } } if (this._inst1.mounted) this._inst1.mounted(); } catch (__e) { __handleComponentError(__e, this._inst1); }
+   if (this._inst1 && !this._inst1._isSetup) { this._inst1._isSetup = true; try { if (this._inst1._setup) { const __cprev = __pushComponent(this._inst1); try { this._inst1._setup(); } finally { __popComponent(__cprev); } } if (this._inst1.mounted) this._inst1.mounted(); } catch (__e) { __handleComponentError(__e, this._inst1); } }
     }
   };
   ''', opts
@@ -2257,6 +2293,7 @@ code "conditional inside parent element", '''
          if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');
        }
      });
+     { const __cur = globalThis.__ripComponent?.__getCurrentComponent?.(); if (__cur) (__cur._disposers ??= []).push(() => { if (currentBlock) { currentBlock.d(true); currentBlock = null; } }); }
    }
     }
   };
@@ -2338,6 +2375,7 @@ code "conditional with fragment (multiple then-children)", '''
          if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');
        }
      });
+     { const __cur = globalThis.__ripComponent?.__getCurrentComponent?.(); if (__cur) (__cur._disposers ??= []).push(() => { if (currentBlock) { currentBlock.d(true); currentBlock = null; } }); }
    }
     }
   };
@@ -2417,6 +2455,7 @@ code "reactive text inside conditional factory", '''
          if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');
        }
      });
+     { const __cur = globalThis.__ripComponent?.__getCurrentComponent?.(); if (__cur) (__cur._disposers ??= []).push(() => { if (currentBlock) { currentBlock.d(true); currentBlock = null; } }); }
    }
     }
   };
@@ -2473,6 +2512,7 @@ code "loop inside parent element", '''
      __effect(() => {
        __reconcile(this._anchor1, __s, this.items.value, this, create_block_0, null);
      });
+     { const __cur = globalThis.__ripComponent?.__getCurrentComponent?.(); if (__cur) (__cur._disposers ??= []).push(() => { for (const __b of __s.blocks) { try { __b.d(true); } catch {} } __s.blocks = []; __s.keys = []; }); }
    }
     }
   };
@@ -2553,6 +2593,7 @@ code "bare component reference (no args)", '''
    }
    } catch (__childErr) {
      console.error('[Rip] Counter construction failed:', __childErr);
+     if (this._inst1) { try { this._inst1.unmount({removeDOM: false}); } catch (__ue) { console.error('[Rip] partial-child unmount error:', __ue); } }
      this._inst1 = null;
      this._el2 = document.createComment('rip:child-error: Counter');
    }
@@ -2561,7 +2602,7 @@ code "bare component reference (no args)", '''
    return this._el0;
     }
     _setup() {
-   if (this._inst1) try { if (this._inst1._setup) { const __cprev = __pushComponent(this._inst1); try { this._inst1._setup(); } finally { __popComponent(__cprev); } } if (this._inst1.mounted) this._inst1.mounted(); } catch (__e) { __handleComponentError(__e, this._inst1); }
+   if (this._inst1 && !this._inst1._isSetup) { this._inst1._isSetup = true; try { if (this._inst1._setup) { const __cprev = __pushComponent(this._inst1); try { this._inst1._setup(); } finally { __popComponent(__cprev); } } if (this._inst1.mounted) this._inst1.mounted(); } catch (__e) { __handleComponentError(__e, this._inst1); } }
     }
   };
   ''', opts
@@ -3054,6 +3095,7 @@ code "transition sets _t on block factory", '''
          if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');
        }
      });
+     { const __cur = globalThis.__ripComponent?.__getCurrentComponent?.(); if (__cur) (__cur._disposers ??= []).push(() => { if (currentBlock) { currentBlock.d(true); currentBlock = null; } }); }
    }
     }
   };
@@ -3186,6 +3228,7 @@ code "no transition — no _t on block", '''
          if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');
        }
      });
+     { const __cur = globalThis.__ripComponent?.__getCurrentComponent?.(); if (__cur) (__cur._disposers ??= []).push(() => { if (currentBlock) { currentBlock.d(true); currentBlock = null; } }); }
    }
     }
   };

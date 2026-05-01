@@ -93,6 +93,18 @@ export DatePicker = component
       dayList.push { date: new Date(yr, mo + 1, n), outside: true }
     dayList
 
+  # Group the flat dayList into 7-day weeks for proper role=row
+  # rendering. Always a clean multiple of 7 thanks to the trailing
+  # padding above.
+  _weeksInView ~=
+    weeks = []
+    days = _daysInView
+    i = 0
+    while i < days.length
+      weeks.push days.slice(i, i + 7)
+      i += 7
+    weeks
+
   _displayText ~=
     if @range
       pair = _value
@@ -272,20 +284,25 @@ export DatePicker = component
               span $weekday: true
                 dayName
 
-          # Day grid. Cells use roving-tabindex pattern: only the
-          # _focusedDay cell has tabIndex 0 so Tab moves out of the
-          # grid, but arrow keys move within. data-date is used by
-          # _focusGridDay() to find the cell to focus after view changes.
+          # Day grid with proper APG row structure. _daysInView is a
+          # flat list of 7-day weeks (always a multiple of 7); we
+          # group them into row containers so screen readers announce
+          # "row N of M" while navigating with arrow keys. Cells use
+          # roving-tabindex pattern: only the _focusedDay cell has
+          # tabIndex 0, arrow keys move within. data-date is used by
+          # _focusGridDay to find the cell to focus after view changes.
           . $days: true, role: "grid"
-            for entry, dIdx in _daysInView
-              button type: "button", role: "gridcell"
-                data-date: "#{entry.date.getFullYear()}-#{entry.date.getMonth()}-#{entry.date.getDate()}"
-                tabIndex: (if dpSameDay(entry.date, _focusedDay) then 0 else -1)
-                $outside: entry.outside?!
-                $today: dpSameDay(entry.date, _today)?!
-                $selected: (if @range then (Array.isArray(_value) and (dpSameDay(entry.date, _value[0]) or dpSameDay(entry.date, _value[1]))) else dpSameDay(entry.date, _value))?!
-                $in-range: (if @range then (if _rangeStart then dpInRange(entry.date, _rangeStart, _hoveredDay or _rangeStart) else if Array.isArray(_value) and _value[0] and _value[1] then dpInRange(entry.date, _value[0], _value[1]) else false) else false)?!
-                $range-start: (if @range and _rangeStart then dpSameDay(entry.date, _rangeStart) else false)?!
-                @click: (=> @_selectDay(entry.date))
-                @mouseenter: (=> _hoveredDay = entry.date)
-                entry.date.getDate()
+            for week, weekIdx in _weeksInView
+              . $week: true, role: "row"
+                for entry, dIdx in week
+                  button type: "button", role: "gridcell"
+                    data-date: "#{entry.date.getFullYear()}-#{entry.date.getMonth()}-#{entry.date.getDate()}"
+                    tabIndex: (if dpSameDay(entry.date, _focusedDay) then 0 else -1)
+                    $outside: entry.outside?!
+                    $today: dpSameDay(entry.date, _today)?!
+                    $selected: (if @range then (Array.isArray(_value) and (dpSameDay(entry.date, _value[0]) or dpSameDay(entry.date, _value[1]))) else dpSameDay(entry.date, _value))?!
+                    $in-range: (if @range then (if _rangeStart then dpInRange(entry.date, _rangeStart, _hoveredDay or _rangeStart) else if Array.isArray(_value) and _value[0] and _value[1] then dpInRange(entry.date, _value[0], _value[1]) else false) else false)?!
+                    $range-start: (if @range and _rangeStart then dpSameDay(entry.date, _rangeStart) else false)?!
+                    @click: (=> @_selectDay(entry.date))
+                    @mouseenter: (=> _hoveredDay = entry.date)
+                    entry.date.getDate()

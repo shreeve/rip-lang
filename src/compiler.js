@@ -3669,6 +3669,7 @@ function __computed(fn) {
 
 function __effect(fn, opts) {
   let controller = null;
+  let runId = 0;        // increments per run; async resolutions check this to drop stale results
   const effect = {
     dependencies: new Set(),
     _disposed: false,
@@ -3699,6 +3700,12 @@ function __effect(fn, opts) {
       }
       controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
       effect.signal = controller ? controller.signal : null;
+      // Per-run id captured by the closures below. When the effect
+      // re-runs (signal changed) while a prior async body is still
+      // awaiting, the prior body's eventual resolution sees myRun !==
+      // runId and bails — preventing stale cleanup from overwriting
+      // the current run's cleanup.
+      const myRun = ++runId;
 
       if (effect._cleanup) { effect._cleanup(); effect._cleanup = null; }
       for (const dep of effect.dependencies) dep.delete(effect);
@@ -3712,30 +3719,32 @@ function __effect(fn, opts) {
         } else if (result && typeof result.then === 'function') {
           // Async effect body. We can't unwind a pending await, but we
           // CAN intercept the eventual resolution and decide whether
-          // to honor any cleanup it returned. If the effect was
-          // disposed mid-await, the cleanup is run-and-discarded
-          // immediately (so any resources the body acquired before
-          // disposal still get released) but never stored on the
-          // effect — preventing it from firing again on a future
-          // disposal cycle of the now-replaced effect.
+          // to honor any cleanup it returned. Two failure modes are
+          // handled:
+          //   - Effect disposed while body was awaiting: run cleanup
+          //     immediately so resources release, but don't store it.
+          //   - Effect re-ran (newer run superseded this one): same.
+          // In both cases we do NOT touch effect._cleanup, which now
+          // belongs to a different run.
           result.then(
             (cleanup) => {
-              if (effect._disposed) {
+              if (myRun !== runId || effect._disposed) {
                 if (typeof cleanup === 'function') {
                   try { cleanup(); }
-                  catch (e) { console.error('[Rip] post-dispose async cleanup error:', e); }
+                  catch (e) { console.error('[Rip] superseded async cleanup error:', e); }
                 }
                 return;
               }
               if (typeof cleanup === 'function') effect._cleanup = cleanup;
             },
             (err) => {
-              // Swallow AbortError when the effect is disposed — the
-              // body intentionally bailed via the signal. Otherwise
-              // surface the error so it doesn't become a silent
-              // unhandled rejection.
-              if (effect._disposed && err && err.name === 'AbortError') return;
-              if (effect._disposed) return;
+              // AbortError from a dispose or supersede is expected
+              // (the user passed our signal to fetch/etc. and it
+              // aborted). Swallow silently.
+              if (err && err.name === 'AbortError') return;
+              // Stale rejection from a superseded run: caller has
+              // already moved on, no point surfacing.
+              if (myRun !== runId || effect._disposed) return;
               console.error('[Rip] async effect error:', err);
             }
           );

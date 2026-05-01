@@ -1961,6 +1961,15 @@ _ariaPosition = (trigger, floating, opts = {}) ->
   _ariaResetPositionStyles(floating)
   if _ariaHasAnchor()
     name = "--anchor-#{floating.id or Math.random().toString(36).slice(2, 8)}"
+    # If this floating element was previously paired with a different
+    # trigger, clear the OLD trigger's anchor-name so we don't leave a
+    # stale CSS anchor reference on a now-unrelated element. (Slot
+    # re-renders, dynamically-swapped triggers, etc. hit this path.)
+    prevTrigger = floating.__ariaPrevTrigger
+    if prevTrigger and prevTrigger isnt trigger
+      try prevTrigger.style.anchorName = ''
+      catch then null
+    floating.__ariaPrevTrigger = trigger
     trigger.style.anchorName = name
     floating.style.positionAnchor = name
     floating.style.position = 'fixed'

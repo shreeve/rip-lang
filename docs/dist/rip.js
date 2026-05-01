@@ -7847,6 +7847,8 @@ ${blockFactoriesCode}return ${lines.join(`
       setupLines.push(`  ${effClose}`);
       if (this._factoryMode) {
         setupLines.push(`  disposers.push(() => { if (currentBlock) { currentBlock.d(true); currentBlock = null; } });`);
+      } else {
+        setupLines.push(`  { const __cur = globalThis.__ripComponent?.__getCurrentComponent?.(); if (__cur) (__cur._disposers ??= []).push(() => { if (currentBlock) { currentBlock.d(true); currentBlock = null; } }); }`);
       }
       setupLines.push(`}`);
       this._setupLines.push(setupLines.join(`
@@ -7997,6 +7999,11 @@ ${blockFactoriesCode}return ${lines.join(`
       setupLines.push(`  ${effOpen}`);
       setupLines.push(`    __reconcile(${anchorVar}, __s, ${collectionCode}, ${this._self}, ${blockName}, ${keyFnCode}${outerArgs});`);
       setupLines.push(`  ${effClose}`);
+      if (this._factoryMode) {
+        setupLines.push(`  disposers.push(() => { for (const __b of __s.blocks) { try { __b.d(true); } catch {} } __s.blocks = []; __s.keys = []; });`);
+      } else {
+        setupLines.push(`  { const __cur = globalThis.__ripComponent?.__getCurrentComponent?.(); if (__cur) (__cur._disposers ??= []).push(() => { for (const __b of __s.blocks) { try { __b.d(true); } catch {} } __s.blocks = []; __s.keys = []; }); }`);
+      }
       setupLines.push(`}`);
       this._setupLines.push(setupLines.join(`
     `));
@@ -8018,13 +8025,15 @@ ${blockFactoriesCode}return ${lines.join(`
       this._createLines.push(`  { const __cprev = __pushComponent(${instVar}); try {`);
       this._createLines.push(`    ${elVar} = ${instVar}._root = ${instVar}._create();`);
       this._createLines.push(`  } finally { __popComponent(__cprev); } }`);
-      this._createLines.push(`  (${s}._children || (${s}._children = [])).push(${instVar});`);
       if (this._factoryMode) {
         this._createLines.push(`  _factoryChildren.push(${instVar});`);
+      } else {
+        this._createLines.push(`  (${s}._children || (${s}._children = [])).push(${instVar});`);
       }
       this._createLines.push(`}`);
       this._createLines.push(`} catch (__childErr) {`);
       this._createLines.push(`  console.error('[Rip] ${componentName} construction failed:', __childErr);`);
+      this._createLines.push(`  if (${instVar}) { try { ${instVar}.unmount({removeDOM: false}); } catch (__ue) { console.error('[Rip] partial-child unmount error:', __ue); } }`);
       this._createLines.push(`  ${instVar} = null;`);
       this._createLines.push(`  ${elVar} = document.createComment('rip:child-error: ${componentName}');`);
       this._createLines.push(`}`);
@@ -8033,7 +8042,7 @@ ${blockFactoriesCode}return ${lines.join(`
         const handlerCode = this.emitInComponent(value, "value");
         this._createLines.push(`if (${instVar}) ${elVar}.addEventListener('${event}', (e) => __batch(() => (${handlerCode})(e)));`);
       }
-      this._setupLines.push(`if (${instVar}) try { if (${instVar}._setup) { const __cprev = __pushComponent(${instVar}); try { ${instVar}._setup(); } finally { __popComponent(__cprev); } } if (${instVar}.mounted) ${instVar}.mounted(); } catch (__e) { __handleComponentError(__e, ${instVar}); }`);
+      this._setupLines.push(`if (${instVar} && !${instVar}._isSetup) { ${instVar}._isSetup = true; try { if (${instVar}._setup) { const __cprev = __pushComponent(${instVar}); try { ${instVar}._setup(); } finally { __popComponent(__cprev); } } if (${instVar}.mounted) ${instVar}.mounted(); } catch (__e) { __handleComponentError(__e, ${instVar}); } }`);
       for (const { key, valueCode } of reactiveProps) {
         this._pushEffect(`if (${instVar}.${key} && typeof ${instVar}.${key} === 'object' && 'value' in ${instVar}.${key}) ${instVar}.${key}.value = ${valueCode}; else if (${instVar}._setRestProp) ${instVar}._setRestProp('${key}', ${valueCode});`);
       }
@@ -12760,6 +12769,7 @@ function __computed(fn) {
 
 function __effect(fn, opts) {
   let controller = null;
+  let runId = 0;        // increments per run; async resolutions check this to drop stale results
   const effect = {
     dependencies: new Set(),
     _disposed: false,
@@ -12790,6 +12800,12 @@ function __effect(fn, opts) {
       }
       controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
       effect.signal = controller ? controller.signal : null;
+      // Per-run id captured by the closures below. When the effect
+      // re-runs (signal changed) while a prior async body is still
+      // awaiting, the prior body's eventual resolution sees myRun !==
+      // runId and bails — preventing stale cleanup from overwriting
+      // the current run's cleanup.
+      const myRun = ++runId;
 
       if (effect._cleanup) { effect._cleanup(); effect._cleanup = null; }
       for (const dep of effect.dependencies) dep.delete(effect);
@@ -12803,30 +12819,32 @@ function __effect(fn, opts) {
         } else if (result && typeof result.then === 'function') {
           // Async effect body. We can't unwind a pending await, but we
           // CAN intercept the eventual resolution and decide whether
-          // to honor any cleanup it returned. If the effect was
-          // disposed mid-await, the cleanup is run-and-discarded
-          // immediately (so any resources the body acquired before
-          // disposal still get released) but never stored on the
-          // effect — preventing it from firing again on a future
-          // disposal cycle of the now-replaced effect.
+          // to honor any cleanup it returned. Two failure modes are
+          // handled:
+          //   - Effect disposed while body was awaiting: run cleanup
+          //     immediately so resources release, but don't store it.
+          //   - Effect re-ran (newer run superseded this one): same.
+          // In both cases we do NOT touch effect._cleanup, which now
+          // belongs to a different run.
           result.then(
             (cleanup) => {
-              if (effect._disposed) {
+              if (myRun !== runId || effect._disposed) {
                 if (typeof cleanup === 'function') {
                   try { cleanup(); }
-                  catch (e) { console.error('[Rip] post-dispose async cleanup error:', e); }
+                  catch (e) { console.error('[Rip] superseded async cleanup error:', e); }
                 }
                 return;
               }
               if (typeof cleanup === 'function') effect._cleanup = cleanup;
             },
             (err) => {
-              // Swallow AbortError when the effect is disposed — the
-              // body intentionally bailed via the signal. Otherwise
-              // surface the error so it doesn't become a silent
-              // unhandled rejection.
-              if (effect._disposed && err && err.name === 'AbortError') return;
-              if (effect._disposed) return;
+              // AbortError from a dispose or supersede is expected
+              // (the user passed our signal to fetch/etc. and it
+              // aborted). Swallow silently.
+              if (err && err.name === 'AbortError') return;
+              // Stale rejection from a superseded run: caller has
+              // already moved on, no point surfacing.
+              if (myRun !== runId || effect._disposed) return;
               console.error('[Rip] async effect error:', err);
             }
           );
@@ -13195,7 +13213,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.15.4";
-  var BUILD_DATE = "2026-05-01@03:49:46GMT";
+  var BUILD_DATE = "2026-05-01@04:04:05GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -15742,7 +15760,7 @@ ${indented}`);
     return _result;
   };
   _ariaPosition = function(trigger, floating, opts = {}) {
-    let align, matchWidth, name, offset, placement, rect, side;
+    let align, matchWidth, name, offset, placement, prevTrigger, rect, side;
     if (!(trigger && floating))
       return;
     placement = opts.placement ?? "bottom start";
@@ -15751,6 +15769,13 @@ ${indented}`);
     _ariaResetPositionStyles(floating);
     if (_ariaHasAnchor()) {
       name = `--anchor-${floating.id || Math.random().toString(36).slice(2, 8)}`;
+      prevTrigger = floating.__ariaPrevTrigger;
+      if (prevTrigger && prevTrigger !== trigger) {
+        try {
+          prevTrigger.style.anchorName = "";
+        } catch {}
+      }
+      floating.__ariaPrevTrigger = trigger;
       trigger.style.anchorName = name;
       floating.style.positionAnchor = name;
       floating.style.position = "fixed";

@@ -2281,8 +2281,19 @@ export function installComponentSupport(CodeEmitter, Lexer) {
       setupLines.push(`    }`);
     }
     setupLines.push(`  ${effClose}`);
+    // Block teardown: when this conditional's enclosing scope ends
+    // (factory block detach, or parent component unmount), destroy
+    // the currentBlock so its DOM, effects, and child components
+    // are fully cleaned up. Without this, parent unmount would
+    // dispose the reactive effect (preventing future re-runs) but
+    // leave currentBlock alive — its child components, signal
+    // subscriptions, and detached DOM stay pinned in memory.
     if (this._factoryMode) {
       setupLines.push(`  disposers.push(() => { if (currentBlock) { currentBlock.d(true); currentBlock = null; } });`);
+    } else {
+      // Class mode: register on parent component's _disposers via the
+      // __getCurrentComponent bridge (the same pathway __effect uses).
+      setupLines.push(`  { const __cur = globalThis.__ripComponent?.__getCurrentComponent?.(); if (__cur) (__cur._disposers ??= []).push(() => { if (currentBlock) { currentBlock.d(true); currentBlock = null; } }); }`);
     }
     setupLines.push(`}`);
 
@@ -2491,6 +2502,17 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     setupLines.push(`  ${effOpen}`);
     setupLines.push(`    __reconcile(${anchorVar}, __s, ${collectionCode}, ${this._self}, ${blockName}, ${keyFnCode}${outerArgs});`);
     setupLines.push(`  ${effClose}`);
+    // Loop teardown: destroy every block in state.blocks on parent
+    // unmount (or enclosing factory detach). __reconcile only destroys
+    // blocks that are removed mid-render; blocks that exist at the
+    // time the parent dies would otherwise leak their DOM, child
+    // components, and effect subscriptions. Same shape as the
+    // conditional emitter's block-teardown disposer.
+    if (this._factoryMode) {
+      setupLines.push(`  disposers.push(() => { for (const __b of __s.blocks) { try { __b.d(true); } catch {} } __s.blocks = []; __s.keys = []; });`);
+    } else {
+      setupLines.push(`  { const __cur = globalThis.__ripComponent?.__getCurrentComponent?.(); if (__cur) (__cur._disposers ??= []).push(() => { for (const __b of __s.blocks) { try { __b.d(true); } catch {} } __s.blocks = []; __s.keys = []; }); }`);
+    }
     setupLines.push(`}`);
 
     this._setupLines.push(setupLines.join('\n    '));
@@ -2536,17 +2558,29 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     this._createLines.push(`  { const __cprev = __pushComponent(${instVar}); try {`);
     this._createLines.push(`    ${elVar} = ${instVar}._root = ${instVar}._create();`);
     this._createLines.push(`  } finally { __popComponent(__cprev); } }`);
-    this._createLines.push(`  (${s}._children || (${s}._children = [])).push(${instVar});`);
     if (this._factoryMode) {
-      // Factory blocks (for/if in render) maintain their own children
-      // list so d(detaching) can unmount them when the block is removed
-      // — the parent's _children would otherwise hold stale refs until
-      // the parent itself unmounts.
+      // Factory blocks (for/if in render) own their child instances
+      // exclusively. Don't pin them on the PARENT's _children — that
+      // array would grow unboundedly on loop churn (every removed
+      // iteration would leave a stale reference). The factory's
+      // d(detaching) iterates _factoryChildren and unmounts them; on
+      // parent unmount, the parent's own disposer chain destroys the
+      // factory block, which cascades to these children via d().
       this._createLines.push(`  _factoryChildren.push(${instVar});`);
+    } else {
+      // Class-mode children: parent's _children is the canonical owner.
+      // Parent.unmount() cascades to _children for proper teardown.
+      this._createLines.push(`  (${s}._children || (${s}._children = [])).push(${instVar});`);
     }
     this._createLines.push(`}`);
     this._createLines.push(`} catch (__childErr) {`);
     this._createLines.push(`  console.error('[Rip] ${componentName} construction failed:', __childErr);`);
+    // If _init succeeded but _create threw, the partial instance has
+    // _init-time effects, contexts, and possibly children registered.
+    // Unmount it (with removeDOM:false; nothing was inserted into DOM
+    // yet) so those resources release. unmount is idempotent so
+    // redundant calls are safe.
+    this._createLines.push(`  if (${instVar}) { try { ${instVar}.unmount({removeDOM: false}); } catch (__ue) { console.error('[Rip] partial-child unmount error:', __ue); } }`);
     this._createLines.push(`  ${instVar} = null;`);
     this._createLines.push(`  ${elVar} = document.createComment('rip:child-error: ${componentName}');`);
     this._createLines.push(`}`);
@@ -2557,11 +2591,16 @@ export function installComponentSupport(CodeEmitter, Lexer) {
       this._createLines.push(`if (${instVar}) ${elVar}.addEventListener('${event}', (e) => __batch(() => (${handlerCode})(e)));`);
     }
 
-    // Same per-child push wrap for _setup so reactive bindings created
-    // there register on the child too, not the parent. The leading
-    // null-check skips _setup/mounted entirely when the child failed
-    // to construct (instVar = null from the failure paths above).
-    this._setupLines.push(`if (${instVar}) try { if (${instVar}._setup) { const __cprev = __pushComponent(${instVar}); try { ${instVar}._setup(); } finally { __popComponent(__cprev); } } if (${instVar}.mounted) ${instVar}.mounted(); } catch (__e) { __handleComponentError(__e, ${instVar}); }`);
+    // Per-child push wrap for _setup so reactive bindings created
+    // there register on the child too, not the parent. Three guards:
+    //   - instVar null-check (failed-init placeholder branch above).
+    //   - _isSetup flag so _setup/mounted run ONCE even when this
+    //     setupLines block is re-executed by a factory's p() on every
+    //     reactive update (factory mode reruns setupLines; class mode
+    //     runs them once but the flag is harmless there).
+    //   - flag set BEFORE calling _setup so a recursive setup-call
+    //     can't loop.
+    this._setupLines.push(`if (${instVar} && !${instVar}._isSetup) { ${instVar}._isSetup = true; try { if (${instVar}._setup) { const __cprev = __pushComponent(${instVar}); try { ${instVar}._setup(); } finally { __popComponent(__cprev); } } if (${instVar}.mounted) ${instVar}.mounted(); } catch (__e) { __handleComponentError(__e, ${instVar}); } }`);
 
     for (const { key, valueCode } of reactiveProps) {
       this._pushEffect(`if (${instVar}.${key} && typeof ${instVar}.${key} === 'object' && 'value' in ${instVar}.${key}) ${instVar}.${key}.value = ${valueCode}; else if (${instVar}._setRestProp) ${instVar}._setRestProp('${key}', ${valueCode});`);
