@@ -562,6 +562,7 @@ bun run bump major
 | [docs/RIP-TYPES.md](docs/RIP-TYPES.md) | Type system specification |
 | [docs/RIP-SCHEMA.md](docs/RIP-SCHEMA.md) | Schema keyword — validators, models, ORM, DDL, algebra |
 | [docs/RIP-DUCKDB.md](docs/RIP-DUCKDB.md) | DuckDB foreign-key constraints — what works, what doesn't, how the ORM keeps you safe |
+| [docs/RIP-APP.md](docs/RIP-APP.md) | Rip App — browser framework architecture, subsystems, lifecycle invariants, gotchas |
 | [AGENTS.md](AGENTS.md) | AI agents — compiler architecture, subsystems, conventions |
 
 ---
