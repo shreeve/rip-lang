@@ -8009,20 +8009,31 @@ ${blockFactoriesCode}return ${lines.join(`
       const { propsCode, reactiveProps, eventBindings, childrenSetupLines } = this.buildComponentProps(args);
       const s = this._self;
       this._createLines.push(`{ const __prev = __pushComponent(${s}); try {`);
+      this._createLines.push(`try {`);
       this._createLines.push(`${instVar} = new ${componentName}(${propsCode});`);
-      this._createLines.push(`{ const __cprev = __pushComponent(${instVar}); try {`);
-      this._createLines.push(`${elVar} = ${instVar}._root = ${instVar}._create();`);
-      this._createLines.push(`} finally { __popComponent(__cprev); } }`);
-      this._createLines.push(`(${s}._children || (${s}._children = [])).push(${instVar});`);
+      this._createLines.push(`if (${instVar} && ${instVar}._initFailed) {`);
+      this._createLines.push(`  ${instVar} = null;`);
+      this._createLines.push(`  ${elVar} = document.createComment('rip:child-init-failed: ${componentName}');`);
+      this._createLines.push(`} else {`);
+      this._createLines.push(`  { const __cprev = __pushComponent(${instVar}); try {`);
+      this._createLines.push(`    ${elVar} = ${instVar}._root = ${instVar}._create();`);
+      this._createLines.push(`  } finally { __popComponent(__cprev); } }`);
+      this._createLines.push(`  (${s}._children || (${s}._children = [])).push(${instVar});`);
       if (this._factoryMode) {
-        this._createLines.push(`_factoryChildren.push(${instVar});`);
+        this._createLines.push(`  _factoryChildren.push(${instVar});`);
       }
+      this._createLines.push(`}`);
+      this._createLines.push(`} catch (__childErr) {`);
+      this._createLines.push(`  console.error('[Rip] ${componentName} construction failed:', __childErr);`);
+      this._createLines.push(`  ${instVar} = null;`);
+      this._createLines.push(`  ${elVar} = document.createComment('rip:child-error: ${componentName}');`);
+      this._createLines.push(`}`);
       this._createLines.push(`} finally { __popComponent(__prev); } }`);
       for (const { event, value } of eventBindings) {
         const handlerCode = this.emitInComponent(value, "value");
-        this._createLines.push(`${elVar}.addEventListener('${event}', (e) => __batch(() => (${handlerCode})(e)));`);
+        this._createLines.push(`if (${instVar}) ${elVar}.addEventListener('${event}', (e) => __batch(() => (${handlerCode})(e)));`);
       }
-      this._setupLines.push(`try { if (${instVar}._setup) { const __cprev = __pushComponent(${instVar}); try { ${instVar}._setup(); } finally { __popComponent(__cprev); } } if (${instVar}.mounted) ${instVar}.mounted(); } catch (__e) { __handleComponentError(__e, ${instVar}); }`);
+      this._setupLines.push(`if (${instVar}) try { if (${instVar}._setup) { const __cprev = __pushComponent(${instVar}); try { ${instVar}._setup(); } finally { __popComponent(__cprev); } } if (${instVar}.mounted) ${instVar}.mounted(); } catch (__e) { __handleComponentError(__e, ${instVar}); }`);
       for (const { key, valueCode } of reactiveProps) {
         this._pushEffect(`if (${instVar}.${key} && typeof ${instVar}.${key} === 'object' && 'value' in ${instVar}.${key}) ${instVar}.${key}.value = ${valueCode}; else if (${instVar}._setRestProp) ${instVar}._setRestProp('${key}', ${valueCode});`);
       }
@@ -8415,7 +8426,23 @@ class __Component {
     Object.assign(this, props);
     if (!this.app && globalThis.__ripApp) this.app = globalThis.__ripApp;
     const prev = __pushComponent(this);
-    try { this._init(props); } catch (e) { __popComponent(prev); __handleComponentError(e, this); return; }
+    try {
+      this._init(props);
+    } catch (e) {
+      __popComponent(prev);
+      // Mark this instance as having failed initialization so parent
+      // emit-sites (emitChildComponent) can substitute a placeholder
+      // instead of running _create / _setup on a broken instance.
+      this._initFailed = true;
+      // Run the user's error hook (parent-onError walk). If a boundary
+      // handles it, control returns here and we leave the broken
+      // instance to be handled via _initFailed. If no boundary exists,
+      // __handleComponentError re-throws and the caller's outer
+      // try/catch in emitChildComponent will substitute the same
+      // placeholder.
+      __handleComponentError(e, this);
+      return;
+    }
     __popComponent(prev);
   }
   _init() {}
@@ -12732,9 +12759,11 @@ function __computed(fn) {
 }
 
 function __effect(fn, opts) {
+  let controller = null;
   const effect = {
     dependencies: new Set(),
     _disposed: false,
+    signal: null,    // AbortSignal for the current run; aborts on re-run / dispose
 
     run() {
       // Zombie-run guard. An effect can be queued in __pendingEffects
@@ -12750,6 +12779,18 @@ function __effect(fn, opts) {
       // instance than the previous (N visits => N synchronous mounts
       // on visit N).
       if (effect._disposed) return;
+      // Abort the previous run's signal before allocating a new one.
+      // Any async work from the previous run that's still mid-flight
+      // (an await fetch with the signal, for example) sees its signal
+      // go aborted and can bail. This also fires the 'abort' event on
+      // the previous signal so user code subscribed via
+      // signal.addEventListener can run.
+      if (controller) {
+        try { controller.abort(); } catch {}
+      }
+      controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      effect.signal = controller ? controller.signal : null;
+
       if (effect._cleanup) { effect._cleanup(); effect._cleanup = null; }
       for (const dep of effect.dependencies) dep.delete(effect);
       effect.dependencies.clear();
@@ -12757,7 +12798,39 @@ function __effect(fn, opts) {
       __currentEffect = effect;
       try {
         const result = fn();
-        if (typeof result === 'function') effect._cleanup = result;
+        if (typeof result === 'function') {
+          effect._cleanup = result;
+        } else if (result && typeof result.then === 'function') {
+          // Async effect body. We can't unwind a pending await, but we
+          // CAN intercept the eventual resolution and decide whether
+          // to honor any cleanup it returned. If the effect was
+          // disposed mid-await, the cleanup is run-and-discarded
+          // immediately (so any resources the body acquired before
+          // disposal still get released) but never stored on the
+          // effect — preventing it from firing again on a future
+          // disposal cycle of the now-replaced effect.
+          result.then(
+            (cleanup) => {
+              if (effect._disposed) {
+                if (typeof cleanup === 'function') {
+                  try { cleanup(); }
+                  catch (e) { console.error('[Rip] post-dispose async cleanup error:', e); }
+                }
+                return;
+              }
+              if (typeof cleanup === 'function') effect._cleanup = cleanup;
+            },
+            (err) => {
+              // Swallow AbortError when the effect is disposed — the
+              // body intentionally bailed via the signal. Otherwise
+              // surface the error so it doesn't become a silent
+              // unhandled rejection.
+              if (effect._disposed && err && err.name === 'AbortError') return;
+              if (effect._disposed) return;
+              console.error('[Rip] async effect error:', err);
+            }
+          );
+        }
       } finally { __currentEffect = prev; }
     },
 
@@ -12773,6 +12846,13 @@ function __effect(fn, opts) {
       // batched cycles and makes disposal semantics direct rather
       // than dependent on flush ordering.
       __pendingEffects.delete(effect);
+      // Abort the current signal so any in-flight async work (a
+      // user's fetch with the signal, a setTimeout-via-signal, etc.)
+      // unwinds via AbortError and the body can bail without mutating
+      // signals on a destroyed component.
+      if (controller) {
+        try { controller.abort(); } catch {}
+      }
       if (effect._cleanup) { effect._cleanup(); effect._cleanup = null; }
       for (const dep of effect.dependencies) dep.delete(effect);
       effect.dependencies.clear();
@@ -12816,6 +12896,24 @@ function __batch(fn) {
   }
 }
 
+// Returns the AbortSignal of the currently-running effect, or null if
+// called outside an effect or before AbortController is available.
+// Designed for async-aware effect bodies — capture the signal BEFORE
+// any await so it stays valid for the duration of the body:
+//
+//   (in Rip source)
+//     ~>
+//       signal = getEffectSignal()
+//       data = fetch! url, {signal}
+//       this.data = data
+//
+// On effect re-run or component unmount, the signal aborts; the
+// fetch rejects with AbortError; the body unwinds without touching
+// signals on a destroyed component.
+function __getEffectSignal() {
+  return __currentEffect ? __currentEffect.signal : null;
+}
+
 function __readonly(value) {
   return Object.freeze({ value });
 }
@@ -12857,7 +12955,11 @@ function __catchErrors(fn) {
 
 // Register on globalThis for runtime deduplication
 if (typeof globalThis !== 'undefined') {
-  globalThis.__rip = { __state, __computed, __effect, __batch, __readonly, __setErrorHandler, __handleError, __catchErrors };
+  globalThis.__rip = { __state, __computed, __effect, __batch, __readonly, __setErrorHandler, __handleError, __catchErrors, __getEffectSignal };
+  // Stdlib-style global so user code can call getEffectSignal() in a
+  // ~> body without importing or destructuring. Mirrors how p, pp,
+  // assert, etc. are registered for ergonomic use.
+  globalThis.getEffectSignal ??= __getEffectSignal;
 }
 
 // === End Reactive Runtime ===
@@ -13093,7 +13195,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.15.4";
-  var BUILD_DATE = "2026-04-30@23:56:54GMT";
+  var BUILD_DATE = "2026-05-01@03:49:46GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

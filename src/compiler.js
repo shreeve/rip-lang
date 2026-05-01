@@ -3668,9 +3668,11 @@ function __computed(fn) {
 }
 
 function __effect(fn, opts) {
+  let controller = null;
   const effect = {
     dependencies: new Set(),
     _disposed: false,
+    signal: null,    // AbortSignal for the current run; aborts on re-run / dispose
 
     run() {
       // Zombie-run guard. An effect can be queued in __pendingEffects
@@ -3686,6 +3688,18 @@ function __effect(fn, opts) {
       // instance than the previous (N visits => N synchronous mounts
       // on visit N).
       if (effect._disposed) return;
+      // Abort the previous run's signal before allocating a new one.
+      // Any async work from the previous run that's still mid-flight
+      // (an await fetch with the signal, for example) sees its signal
+      // go aborted and can bail. This also fires the 'abort' event on
+      // the previous signal so user code subscribed via
+      // signal.addEventListener can run.
+      if (controller) {
+        try { controller.abort(); } catch {}
+      }
+      controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      effect.signal = controller ? controller.signal : null;
+
       if (effect._cleanup) { effect._cleanup(); effect._cleanup = null; }
       for (const dep of effect.dependencies) dep.delete(effect);
       effect.dependencies.clear();
@@ -3693,7 +3707,39 @@ function __effect(fn, opts) {
       __currentEffect = effect;
       try {
         const result = fn();
-        if (typeof result === 'function') effect._cleanup = result;
+        if (typeof result === 'function') {
+          effect._cleanup = result;
+        } else if (result && typeof result.then === 'function') {
+          // Async effect body. We can't unwind a pending await, but we
+          // CAN intercept the eventual resolution and decide whether
+          // to honor any cleanup it returned. If the effect was
+          // disposed mid-await, the cleanup is run-and-discarded
+          // immediately (so any resources the body acquired before
+          // disposal still get released) but never stored on the
+          // effect — preventing it from firing again on a future
+          // disposal cycle of the now-replaced effect.
+          result.then(
+            (cleanup) => {
+              if (effect._disposed) {
+                if (typeof cleanup === 'function') {
+                  try { cleanup(); }
+                  catch (e) { console.error('[Rip] post-dispose async cleanup error:', e); }
+                }
+                return;
+              }
+              if (typeof cleanup === 'function') effect._cleanup = cleanup;
+            },
+            (err) => {
+              // Swallow AbortError when the effect is disposed — the
+              // body intentionally bailed via the signal. Otherwise
+              // surface the error so it doesn't become a silent
+              // unhandled rejection.
+              if (effect._disposed && err && err.name === 'AbortError') return;
+              if (effect._disposed) return;
+              console.error('[Rip] async effect error:', err);
+            }
+          );
+        }
       } finally { __currentEffect = prev; }
     },
 
@@ -3709,6 +3755,13 @@ function __effect(fn, opts) {
       // batched cycles and makes disposal semantics direct rather
       // than dependent on flush ordering.
       __pendingEffects.delete(effect);
+      // Abort the current signal so any in-flight async work (a
+      // user's fetch with the signal, a setTimeout-via-signal, etc.)
+      // unwinds via AbortError and the body can bail without mutating
+      // signals on a destroyed component.
+      if (controller) {
+        try { controller.abort(); } catch {}
+      }
       if (effect._cleanup) { effect._cleanup(); effect._cleanup = null; }
       for (const dep of effect.dependencies) dep.delete(effect);
       effect.dependencies.clear();
@@ -3752,6 +3805,24 @@ function __batch(fn) {
   }
 }
 
+// Returns the AbortSignal of the currently-running effect, or null if
+// called outside an effect or before AbortController is available.
+// Designed for async-aware effect bodies — capture the signal BEFORE
+// any await so it stays valid for the duration of the body:
+//
+//   (in Rip source)
+//     ~>
+//       signal = getEffectSignal()
+//       data = fetch! url, {signal}
+//       this.data = data
+//
+// On effect re-run or component unmount, the signal aborts; the
+// fetch rejects with AbortError; the body unwinds without touching
+// signals on a destroyed component.
+function __getEffectSignal() {
+  return __currentEffect ? __currentEffect.signal : null;
+}
+
 function __readonly(value) {
   return Object.freeze({ value });
 }
@@ -3793,7 +3864,11 @@ function __catchErrors(fn) {
 
 // Register on globalThis for runtime deduplication
 if (typeof globalThis !== 'undefined') {
-  globalThis.__rip = { __state, __computed, __effect, __batch, __readonly, __setErrorHandler, __handleError, __catchErrors };
+  globalThis.__rip = { __state, __computed, __effect, __batch, __readonly, __setErrorHandler, __handleError, __catchErrors, __getEffectSignal };
+  // Stdlib-style global so user code can call getEffectSignal() in a
+  // ~> body without importing or destructuring. Mirrors how p, pp,
+  // assert, etc. are registered for ergonomic use.
+  globalThis.getEffectSignal ??= __getEffectSignal;
 }
 
 // === End Reactive Runtime ===

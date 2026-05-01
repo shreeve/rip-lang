@@ -2513,33 +2513,55 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     // preserved across child instantiation. Then push the CHILD around
     // its _create() / _setup() calls so any __effect those methods
     // create auto-registers on the child's _disposers, not the parent's.
-    // Without this nested push, child reactive bindings (attribute
-    // setters, text node updaters, etc.) leaked onto the parent's
-    // _disposers — fine for cleanup-on-parent-unmount, fatal for
-    // cleanup-on-child-removal-via-conditional-render.
+    //
+    // Partial-construction failure handling. Two cases produce a broken
+    // child whose _create/_setup would crash:
+    //   1. _init throws and a parent onError boundary handles it. The
+    //      constructor sets ._initFailed and returns the (broken)
+    //      instance. We detect via the flag.
+    //   2. _init throws and no boundary handles it. __handleComponentError
+    //      re-throws from the constructor; OR _create itself throws
+    //      after a successful _init. The outer try/catch handles both.
+    // In all failure modes we substitute a comment-node placeholder so
+    // the parent's appendChild later still finds a valid node, log the
+    // error, and don't push the broken instance onto _children (so the
+    // unmount cascade doesn't walk into it).
     this._createLines.push(`{ const __prev = __pushComponent(${s}); try {`);
+    this._createLines.push(`try {`);
     this._createLines.push(`${instVar} = new ${componentName}(${propsCode});`);
-    this._createLines.push(`{ const __cprev = __pushComponent(${instVar}); try {`);
-    this._createLines.push(`${elVar} = ${instVar}._root = ${instVar}._create();`);
-    this._createLines.push(`} finally { __popComponent(__cprev); } }`);
-    this._createLines.push(`(${s}._children || (${s}._children = [])).push(${instVar});`);
+    this._createLines.push(`if (${instVar} && ${instVar}._initFailed) {`);
+    this._createLines.push(`  ${instVar} = null;`);
+    this._createLines.push(`  ${elVar} = document.createComment('rip:child-init-failed: ${componentName}');`);
+    this._createLines.push(`} else {`);
+    this._createLines.push(`  { const __cprev = __pushComponent(${instVar}); try {`);
+    this._createLines.push(`    ${elVar} = ${instVar}._root = ${instVar}._create();`);
+    this._createLines.push(`  } finally { __popComponent(__cprev); } }`);
+    this._createLines.push(`  (${s}._children || (${s}._children = [])).push(${instVar});`);
     if (this._factoryMode) {
       // Factory blocks (for/if in render) maintain their own children
       // list so d(detaching) can unmount them when the block is removed
       // — the parent's _children would otherwise hold stale refs until
       // the parent itself unmounts.
-      this._createLines.push(`_factoryChildren.push(${instVar});`);
+      this._createLines.push(`  _factoryChildren.push(${instVar});`);
     }
+    this._createLines.push(`}`);
+    this._createLines.push(`} catch (__childErr) {`);
+    this._createLines.push(`  console.error('[Rip] ${componentName} construction failed:', __childErr);`);
+    this._createLines.push(`  ${instVar} = null;`);
+    this._createLines.push(`  ${elVar} = document.createComment('rip:child-error: ${componentName}');`);
+    this._createLines.push(`}`);
     this._createLines.push(`} finally { __popComponent(__prev); } }`);
 
     for (const { event, value } of eventBindings) {
       const handlerCode = this.emitInComponent(value, 'value');
-      this._createLines.push(`${elVar}.addEventListener('${event}', (e) => __batch(() => (${handlerCode})(e)));`);
+      this._createLines.push(`if (${instVar}) ${elVar}.addEventListener('${event}', (e) => __batch(() => (${handlerCode})(e)));`);
     }
 
     // Same per-child push wrap for _setup so reactive bindings created
-    // there register on the child too, not the parent.
-    this._setupLines.push(`try { if (${instVar}._setup) { const __cprev = __pushComponent(${instVar}); try { ${instVar}._setup(); } finally { __popComponent(__cprev); } } if (${instVar}.mounted) ${instVar}.mounted(); } catch (__e) { __handleComponentError(__e, ${instVar}); }`);
+    // there register on the child too, not the parent. The leading
+    // null-check skips _setup/mounted entirely when the child failed
+    // to construct (instVar = null from the failure paths above).
+    this._setupLines.push(`if (${instVar}) try { if (${instVar}._setup) { const __cprev = __pushComponent(${instVar}); try { ${instVar}._setup(); } finally { __popComponent(__cprev); } } if (${instVar}.mounted) ${instVar}.mounted(); } catch (__e) { __handleComponentError(__e, ${instVar}); }`);
 
     for (const { key, valueCode } of reactiveProps) {
       this._pushEffect(`if (${instVar}.${key} && typeof ${instVar}.${key} === 'object' && 'value' in ${instVar}.${key}) ${instVar}.${key}.value = ${valueCode}; else if (${instVar}._setRestProp) ${instVar}._setRestProp('${key}', ${valueCode});`);
@@ -2992,7 +3014,23 @@ class __Component {
     Object.assign(this, props);
     if (!this.app && globalThis.__ripApp) this.app = globalThis.__ripApp;
     const prev = __pushComponent(this);
-    try { this._init(props); } catch (e) { __popComponent(prev); __handleComponentError(e, this); return; }
+    try {
+      this._init(props);
+    } catch (e) {
+      __popComponent(prev);
+      // Mark this instance as having failed initialization so parent
+      // emit-sites (emitChildComponent) can substitute a placeholder
+      // instead of running _create / _setup on a broken instance.
+      this._initFailed = true;
+      // Run the user's error hook (parent-onError walk). If a boundary
+      // handles it, control returns here and we leave the broken
+      // instance to be handled via _initFailed. If no boundary exists,
+      // __handleComponentError re-throws and the caller's outer
+      // try/catch in emitChildComponent will substitute the same
+      // placeholder.
+      __handleComponentError(e, this);
+      return;
+    }
     __popComponent(prev);
   }
   _init() {}

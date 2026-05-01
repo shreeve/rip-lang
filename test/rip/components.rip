@@ -1277,6 +1277,70 @@ test "Component.unmount is idempotent", '''
   count
   ''', 1
 
+# Wave 9a: `getEffectSignal()` returns the AbortSignal for the
+# currently-running effect. On unmount, the signal aborts so async
+# bodies (e.g. `fetch! url, {signal}`) can bail cleanly instead of
+# resolving and mutating state on a destroyed component.
+test "effect signal aborts on unmount", '''
+  events = []
+  A = component
+    ~>
+      signal = getEffectSignal()
+      signal?.addEventListener 'abort', -> events.push 'aborted'
+  a = A.new()
+  a.unmount?(removeDOM: false)
+  events
+  ''', ['aborted']
+
+# Wave 9a: the signal also aborts when the effect re-runs (its
+# dependencies changed). Each re-run gets a fresh signal; the prior
+# one fires 'abort' so any in-flight async work on the previous run
+# unwinds.
+test "effect signal aborts on re-run", '''
+  aborts = 0
+  A = component
+    x := 0
+    ~>
+      v = x + 0
+      signal = getEffectSignal()
+      signal?.addEventListener 'abort', -> aborts += 1
+  a = A.new()
+  a.x.value = 1
+  a.x.value = 2
+  aborts
+  ''', 2
+
+# Wave 9b: when a component's _init throws AND a parent onError
+# handles it, the constructor returns the instance with _initFailed
+# set so the parent's _create can substitute a placeholder instead
+# of running _create / _setup on a broken instance.
+test "init failure with handled onError sets _initFailed flag", '''
+  caught = null
+  Bad = component
+    onError = (err) -> caught = err.message
+    _init = -> raise "boom"
+  bad = Bad.new()
+  # onError caught the error (existing semantics) AND _initFailed marks
+  # the instance for parent emit-sites to substitute a placeholder.
+  caught is "boom" and bad._initFailed is true
+  ''', true
+
+# Wave 9b: when _init throws AND no onError boundary handles it, the
+# constructor re-throws. The parent's emitChildComponent block has its
+# own try/catch that catches the throw and substitutes a placeholder.
+# This test exercises just the throw-from-constructor side; full
+# render-template integration requires DOM.
+test "init failure without onError throws from constructor", '''
+  Bad = component
+    _init = -> raise "boom"
+  caught = null
+  try
+    bad = Bad.new()
+  catch e
+    caught = e.message
+  caught
+  ''', "boom"
+
 test "component computed with postfix ternary", '''
   A = component
     flag := false
@@ -1481,17 +1545,28 @@ code "child component with static props", '''
     _create() {
    this._el0 = document.createElement('div');
    { const __prev = __pushComponent(this); try {
+   try {
    this._inst1 = new Child({ label: "hello" });
-   { const __cprev = __pushComponent(this._inst1); try {
-   this._el2 = this._inst1._root = this._inst1._create();
-   } finally { __popComponent(__cprev); } }
-   (this._children || (this._children = [])).push(this._inst1);
+   if (this._inst1 && this._inst1._initFailed) {
+     this._inst1 = null;
+     this._el2 = document.createComment('rip:child-init-failed: Child');
+   } else {
+     { const __cprev = __pushComponent(this._inst1); try {
+       this._el2 = this._inst1._root = this._inst1._create();
+     } finally { __popComponent(__cprev); } }
+     (this._children || (this._children = [])).push(this._inst1);
+   }
+   } catch (__childErr) {
+     console.error('[Rip] Child construction failed:', __childErr);
+     this._inst1 = null;
+     this._el2 = document.createComment('rip:child-error: Child');
+   }
    } finally { __popComponent(__prev); } }
    this._el0.appendChild(this._el2);
    return this._el0;
     }
     _setup() {
-   try { if (this._inst1._setup) { const __cprev = __pushComponent(this._inst1); try { this._inst1._setup(); } finally { __popComponent(__cprev); } } if (this._inst1.mounted) this._inst1.mounted(); } catch (__e) { __handleComponentError(__e, this._inst1); }
+   if (this._inst1) try { if (this._inst1._setup) { const __cprev = __pushComponent(this._inst1); try { this._inst1._setup(); } finally { __popComponent(__cprev); } } if (this._inst1.mounted) this._inst1.mounted(); } catch (__e) { __handleComponentError(__e, this._inst1); }
     }
   };
   ''', opts
@@ -1510,17 +1585,28 @@ code "child component with reactive prop (signal pass-through)", '''
     _create() {
    this._el0 = document.createElement('div');
    { const __prev = __pushComponent(this); try {
+   try {
    this._inst1 = new Child({ count: this.count });
-   { const __cprev = __pushComponent(this._inst1); try {
-   this._el2 = this._inst1._root = this._inst1._create();
-   } finally { __popComponent(__cprev); } }
-   (this._children || (this._children = [])).push(this._inst1);
+   if (this._inst1 && this._inst1._initFailed) {
+     this._inst1 = null;
+     this._el2 = document.createComment('rip:child-init-failed: Child');
+   } else {
+     { const __cprev = __pushComponent(this._inst1); try {
+       this._el2 = this._inst1._root = this._inst1._create();
+     } finally { __popComponent(__cprev); } }
+     (this._children || (this._children = [])).push(this._inst1);
+   }
+   } catch (__childErr) {
+     console.error('[Rip] Child construction failed:', __childErr);
+     this._inst1 = null;
+     this._el2 = document.createComment('rip:child-error: Child');
+   }
    } finally { __popComponent(__prev); } }
    this._el0.appendChild(this._el2);
    return this._el0;
     }
     _setup() {
-   try { if (this._inst1._setup) { const __cprev = __pushComponent(this._inst1); try { this._inst1._setup(); } finally { __popComponent(__cprev); } } if (this._inst1.mounted) this._inst1.mounted(); } catch (__e) { __handleComponentError(__e, this._inst1); }
+   if (this._inst1) try { if (this._inst1._setup) { const __cprev = __pushComponent(this._inst1); try { this._inst1._setup(); } finally { __popComponent(__cprev); } } if (this._inst1.mounted) this._inst1.mounted(); } catch (__e) { __handleComponentError(__e, this._inst1); }
     }
   };
   ''', opts
@@ -1539,16 +1625,27 @@ code "child component with children (slot)", '''
    this._t0 = document.createTextNode("slot content");
    this._el2.appendChild(this._t0);
    { const __prev = __pushComponent(this); try {
+   try {
    this._inst0 = new Child({ children: this._el2 });
-   { const __cprev = __pushComponent(this._inst0); try {
-   this._el1 = this._inst0._root = this._inst0._create();
-   } finally { __popComponent(__cprev); } }
-   (this._children || (this._children = [])).push(this._inst0);
+   if (this._inst0 && this._inst0._initFailed) {
+     this._inst0 = null;
+     this._el1 = document.createComment('rip:child-init-failed: Child');
+   } else {
+     { const __cprev = __pushComponent(this._inst0); try {
+       this._el1 = this._inst0._root = this._inst0._create();
+     } finally { __popComponent(__cprev); } }
+     (this._children || (this._children = [])).push(this._inst0);
+   }
+   } catch (__childErr) {
+     console.error('[Rip] Child construction failed:', __childErr);
+     this._inst0 = null;
+     this._el1 = document.createComment('rip:child-error: Child');
+   }
    } finally { __popComponent(__prev); } }
    return this._el1;
     }
     _setup() {
-   try { if (this._inst0._setup) { const __cprev = __pushComponent(this._inst0); try { this._inst0._setup(); } finally { __popComponent(__cprev); } } if (this._inst0.mounted) this._inst0.mounted(); } catch (__e) { __handleComponentError(__e, this._inst0); }
+   if (this._inst0) try { if (this._inst0._setup) { const __cprev = __pushComponent(this._inst0); try { this._inst0._setup(); } finally { __popComponent(__cprev); } } if (this._inst0.mounted) this._inst0.mounted(); } catch (__e) { __handleComponentError(__e, this._inst0); }
     }
   };
   ''', opts
@@ -1569,17 +1666,28 @@ code "child component with props and children", '''
    this._t0 = document.createTextNode("child content");
    this._el3.appendChild(this._t0);
    { const __prev = __pushComponent(this); try {
+   try {
    this._inst1 = new Child({ label: "hello", children: this._el3 });
-   { const __cprev = __pushComponent(this._inst1); try {
-   this._el2 = this._inst1._root = this._inst1._create();
-   } finally { __popComponent(__cprev); } }
-   (this._children || (this._children = [])).push(this._inst1);
+   if (this._inst1 && this._inst1._initFailed) {
+     this._inst1 = null;
+     this._el2 = document.createComment('rip:child-init-failed: Child');
+   } else {
+     { const __cprev = __pushComponent(this._inst1); try {
+       this._el2 = this._inst1._root = this._inst1._create();
+     } finally { __popComponent(__cprev); } }
+     (this._children || (this._children = [])).push(this._inst1);
+   }
+   } catch (__childErr) {
+     console.error('[Rip] Child construction failed:', __childErr);
+     this._inst1 = null;
+     this._el2 = document.createComment('rip:child-error: Child');
+   }
    } finally { __popComponent(__prev); } }
    this._el0.appendChild(this._el2);
    return this._el0;
     }
     _setup() {
-   try { if (this._inst1._setup) { const __cprev = __pushComponent(this._inst1); try { this._inst1._setup(); } finally { __popComponent(__cprev); } } if (this._inst1.mounted) this._inst1.mounted(); } catch (__e) { __handleComponentError(__e, this._inst1); }
+   if (this._inst1) try { if (this._inst1._setup) { const __cprev = __pushComponent(this._inst1); try { this._inst1._setup(); } finally { __popComponent(__cprev); } } if (this._inst1.mounted) this._inst1.mounted(); } catch (__e) { __handleComponentError(__e, this._inst1); }
     }
   };
   ''', opts
@@ -2432,17 +2540,28 @@ code "bare component reference (no args)", '''
     _create() {
    this._el0 = document.createElement('div');
    { const __prev = __pushComponent(this); try {
+   try {
    this._inst1 = new Counter({});
-   { const __cprev = __pushComponent(this._inst1); try {
-   this._el2 = this._inst1._root = this._inst1._create();
-   } finally { __popComponent(__cprev); } }
-   (this._children || (this._children = [])).push(this._inst1);
+   if (this._inst1 && this._inst1._initFailed) {
+     this._inst1 = null;
+     this._el2 = document.createComment('rip:child-init-failed: Counter');
+   } else {
+     { const __cprev = __pushComponent(this._inst1); try {
+       this._el2 = this._inst1._root = this._inst1._create();
+     } finally { __popComponent(__cprev); } }
+     (this._children || (this._children = [])).push(this._inst1);
+   }
+   } catch (__childErr) {
+     console.error('[Rip] Counter construction failed:', __childErr);
+     this._inst1 = null;
+     this._el2 = document.createComment('rip:child-error: Counter');
+   }
    } finally { __popComponent(__prev); } }
    this._el0.appendChild(this._el2);
    return this._el0;
     }
     _setup() {
-   try { if (this._inst1._setup) { const __cprev = __pushComponent(this._inst1); try { this._inst1._setup(); } finally { __popComponent(__cprev); } } if (this._inst1.mounted) this._inst1.mounted(); } catch (__e) { __handleComponentError(__e, this._inst1); }
+   if (this._inst1) try { if (this._inst1._setup) { const __cprev = __pushComponent(this._inst1); try { this._inst1._setup(); } finally { __popComponent(__cprev); } } if (this._inst1.mounted) this._inst1.mounted(); } catch (__e) { __handleComponentError(__e, this._inst1); }
     }
   };
   ''', opts
