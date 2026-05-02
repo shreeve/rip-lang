@@ -6875,6 +6875,15 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
                   reshaped.push(node[i]);
                 if (node.loc)
                   reshaped.loc = node.loc;
+                reshaped._astNode = node;
+                const stripLoc = (h) => {
+                  if (Array.isArray(h) && h[0] === ".") {
+                    if (h.loc)
+                      delete h.loc;
+                    stripLoc(h[1]);
+                  }
+                };
+                stripLoc(head2);
                 node = reshaped;
                 head2 = flat;
               }
@@ -6960,16 +6969,38 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
               if (child === "null" || child === "undefined" || child === "true" || child === "false")
                 return;
               let srcLine = parentNode.loc?.r;
+              let srcCol = null;
               if (srcLine != null && sourceLines) {
-                const re = new RegExp(`\\b${child}\\b`);
+                const re = new RegExp(`\\b${child}\\b`, "g");
                 for (let ln = srcLine;ln < sourceLines.length; ln++) {
-                  if (re.test(sourceLines[ln])) {
+                  const lineText = sourceLines[ln];
+                  if (!lineText)
+                    continue;
+                  let searchFrom = ln === parentNode.loc.r ? parentNode.loc.c + 1 : 0;
+                  re.lastIndex = searchFrom;
+                  let m;
+                  let found = -1;
+                  while ((m = re.exec(lineText)) !== null) {
+                    const prev = m.index > 0 ? lineText[m.index - 1] : "";
+                    if (prev === "." || prev === "#")
+                      continue;
+                    found = m.index;
+                    break;
+                  }
+                  if (found >= 0) {
                     srcLine = ln;
+                    srcCol = found;
                     break;
                   }
                 }
               }
               const srcMarker = srcLine != null ? ` // @rip-src:${srcLine}` : "";
+              if (srcLine != null && srcCol != null) {
+                const anchorTarget = parentNode._astNode || parentNode;
+                if (!anchorTarget._anchors)
+                  anchorTarget._anchors = [];
+                anchorTarget._anchors.push({ name: child, origLine: srcLine, origCol: srcCol });
+              }
               if (this.componentMembers && this.componentMembers.has(child)) {
                 constructions.push(`    this.${child};${srcMarker}`);
               } else if (isTextChild) {
@@ -6978,7 +7009,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
                 constructions.push(`    __ripEl('${child}');${srcMarker}`);
               }
             };
-            const isTagHead = typeof head2 === "string" && /^[a-z][\w-]*$/.test(head2) && !CodeEmitter.GENERATORS[head2] && TEMPLATE_TAGS.has(head2.split(/[.#]/)[0]);
+            const isTagHead = typeof head2 === "string" && /^[a-z][\w-]*(?:[.#][\w-]+)*$/.test(head2) && !CodeEmitter.GENERATORS[head2] && TEMPLATE_TAGS.has(head2.split(/[.#]/)[0]);
             if (head2 === "block") {
               for (let i = 1;i < node.length; i++)
                 emitBareIdent(node[i], node, false);
@@ -7406,11 +7437,7 @@ ${blockFactoriesCode}return ${lines.join(`
         const [op, name, expr] = sexpr;
         const exprCode2 = this.emitInComponent(expr, "value");
         if (op === "=") {
-          if (this._factoryMode) {
-            this._factoryVars.add(name);
-          } else {
-            this._renderTopLocals.add(name);
-          }
+          (this._factoryMode ? this._factoryVars : this._renderTopLocals).add(name);
           this._addRenderLocal(name);
         }
         this._createLines.push(`${name} ${op} ${exprCode2};`);
@@ -7512,7 +7539,7 @@ ${blockFactoriesCode}return ${lines.join(`
           return slotVar;
         }
         const { tag, classes, id, base } = this.collectTemplateClasses(sexpr);
-        if (!meta(base, "text") && tag && this.isHtmlTag(tag) && (id !== undefined || !this._isRenderLocal(tag))) {
+        if (!meta(base, "text") && tag && this.isHtmlTag(tag) && !this._isRenderLocal(tag)) {
           return this.emitTag(tag, classes, [], id);
         }
         const textVar2 = this.newTextVar();
@@ -7535,7 +7562,7 @@ ${blockFactoriesCode}return ${lines.join(`
           return this.emitDynamicTag(tag2, classExprs, rest);
         }
         const { tag, classes, id } = this.collectTemplateClasses(head);
-        if (tag && this.isHtmlTag(tag) && (id !== undefined || !this._isRenderLocal(tag))) {
+        if (tag && this.isHtmlTag(tag) && !this._isRenderLocal(tag)) {
           if (classes.length > 0 && classes[classes.length - 1] === "__clsx") {
             const staticClasses = classes.slice(0, -1);
             const staticArgs = staticClasses.map((c) => `"${c}"`);
@@ -9603,6 +9630,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     }
     static _isColInsideString(line, col) {
       let inStr = false, quote = "";
+      let interpDepth = 0;
       for (let i = 0;i < line.length && i < col; i++) {
         let ch = line[i];
         if (inStr) {
@@ -9610,8 +9638,27 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
             i++;
             continue;
           }
+          if (quote === "`" && ch === "$" && line[i + 1] === "{") {
+            interpDepth = 1;
+            inStr = false;
+            i++;
+            continue;
+          }
           if (ch === quote)
             inStr = false;
+        } else if (interpDepth > 0) {
+          if (ch === "{")
+            interpDepth++;
+          else if (ch === "}") {
+            interpDepth--;
+            if (interpDepth === 0) {
+              inStr = true;
+              quote = "`";
+            }
+          } else if (ch === '"' || ch === "'" || ch === "`") {
+            inStr = true;
+            quote = ch;
+          }
         } else if (ch === '"' || ch === "'" || ch === "`") {
           inStr = true;
           quote = ch;
@@ -9641,26 +9688,48 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
         }
         return hi;
       };
+      const usedGenPositions = new Set;
+      const ripSrcCache = new Map;
+      const getRipSrcAnnot = (genLineInStmt) => {
+        if (ripSrcCache.has(genLineInStmt))
+          return ripSrcCache.get(genLineInStmt);
+        const lt = codeLines[genLineInStmt];
+        const m = lt && lt.match(/\/\/ @rip-src:(\d+)\s*$/);
+        const v = m ? parseInt(m[1], 10) : null;
+        ripSrcCache.set(genLineInStmt, v);
+        return v;
+      };
       for (let { name, origLine, origCol } of subs) {
         let escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         let re = new RegExp("\\b" + escaped + "\\b", "g");
-        let m, bestMatch = null, bestDist = Infinity;
+        let m;
+        let bestMatch = null, bestDist = Infinity;
+        let bestUnused = null, bestUnusedDist = Infinity;
         let origLineInStmt = origLine - stmtOrigLine;
         while ((m = re.exec(code)) !== null) {
           const genLineInStmt = offsetToLine(m.index);
           const genCol = m.index - lineStarts[genLineInStmt];
           let lineText = codeLines[genLineInStmt];
-          if (lineText && CodeEmitter._isColInsideString(lineText, genCol))
+          const annotSrc = getRipSrcAnnot(genLineInStmt);
+          const annotMatches = annotSrc != null && annotSrc === origLine;
+          if (lineText && CodeEmitter._isColInsideString(lineText, genCol) && !annotMatches)
             continue;
           let genLine = lineOffset + genLineInStmt;
-          let dist = Math.abs(genLineInStmt - origLineInStmt) * 1e4 + Math.abs(genCol - origCol);
+          let dist = annotMatches ? Math.abs(genCol - origCol) : Math.abs(genLineInStmt - origLineInStmt) * 1e4 + Math.abs(genCol - origCol);
           if (dist < bestDist) {
             bestDist = dist;
             bestMatch = { genLine, genCol };
           }
+          const key = genLine + ":" + genCol;
+          if (!usedGenPositions.has(key) && dist < bestUnusedDist) {
+            bestUnusedDist = dist;
+            bestUnused = { genLine, genCol };
+          }
         }
-        if (bestMatch) {
-          this.sourceMap.addMapping(bestMatch.genLine, bestMatch.genCol, origLine, origCol);
+        const chosen = bestUnused || bestMatch;
+        if (chosen) {
+          this.sourceMap.addMapping(chosen.genLine, chosen.genCol, origLine, origCol);
+          usedGenPositions.add(chosen.genLine + ":" + chosen.genCol);
         }
       }
     }
@@ -9673,14 +9742,23 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
           if (Array.isArray(node[i]))
             this.collectSubExprs(node[i], result);
         }
+        if (Array.isArray(node._anchors)) {
+          for (const a of node._anchors)
+            result.push(a);
+        }
         return;
       }
       if (node.loc) {
         head = str(head);
         let ident = null;
+        let identCol = node.loc.c;
         if (head === ".") {
-          if (typeof node[2] === "string")
+          if (typeof node[2] === "string") {
             ident = node[2];
+            if (typeof node[1] === "string") {
+              identCol = node.loc.c + node[1].length + 1;
+            }
+          }
         } else if (typeof head === "string" && /^[=+\-*/%<>!&|?~^]|^\.\.?$|^def$|^class$|^state$|^computed$|^readonly$|^for-/.test(head)) {
           if (typeof node[1] === "string" && /^[a-zA-Z_$]/.test(node[1]))
             ident = node[1];
@@ -9688,7 +9766,11 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
           ident = head;
         }
         if (ident)
-          result.push({ name: ident, origLine: node.loc.r, origCol: node.loc.c });
+          result.push({ name: ident, origLine: node.loc.r, origCol: identCol });
+      }
+      if (Array.isArray(node._anchors)) {
+        for (const a of node._anchors)
+          result.push(a);
       }
       let start = head === "->" || head === "=>" ? 2 : 1;
       for (let i = start;i < node.length; i++) {
@@ -13372,7 +13454,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.15.4";
-  var BUILD_DATE = "2026-05-02@00:26:45GMT";
+  var BUILD_DATE = "2026-05-02@19:25:05GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
