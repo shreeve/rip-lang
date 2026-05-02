@@ -1740,27 +1740,19 @@ export function installComponentSupport(CodeEmitter, Lexer) {
   // --------------------------------------------------------------------------
   // Render-scope locals — declarations like `code = expr` inside render
   // --------------------------------------------------------------------------
-  // The render DSL would otherwise treat `code = expr` as a text-emitting
-  // expression (because emitNode's catch-all wraps any expression in a
-  // textnode) and treat a subsequent `span code` reference as a nested
-  // <code> element (because `code` is an HTML tag name). Tracking the
-  // declared name in a per-factory scope lets the codegen emit the
-  // assignment as a real JS local AND recognize subsequent references as
-  // value reads, not tag emissions.
-  //
-  // Scope semantics: each block factory (loop body, conditional branch)
-  // is generated as a separate JS function, so render locals do NOT cross
-  // factory boundaries — only the loop vars in _loopVarStack are
-  // explicitly threaded as parameters. Each factory entry installs a
-  // fresh empty scope; factory exit restores the saved one.
+  // Tracked per-factory so emitNode can (a) emit `code = expr` as a real JS
+  // local instead of a text node, and (b) treat subsequent `span code`
+  // references as value reads instead of `<code>` element emissions. Each
+  // block factory (loop body, conditional branch) is its own JS function,
+  // so render locals don't cross factory boundaries; only loop vars do
+  // (threaded via positional parameters from _loopVarStack).
 
   const _isPlainIdentifier = (s) =>
     typeof s === 'string' && /^[A-Za-z_$][\w$]*$/.test(s);
 
-  // Assignment-shape heads that should run as JS statements (not become a
-  // text node) when they appear at render-block top level. `=` declares a
-  // new local; the compound forms mutate an existing one. Both belong in
-  // _createLines as plain JS, not wrapped in createTextNode().
+  // Assignment-shape heads that emit as JS statements at render-block top
+  // level instead of being wrapped in createTextNode. `=` declares a new
+  // local; compound forms mutate an existing one.
   const _ASSIGN_HEADS = new Set([
     '=', '+=', '-=', '*=', '/=', '%=', '**=',
     '&&=', '||=', '?=', '??=',
@@ -1793,32 +1785,17 @@ export function installComponentSupport(CodeEmitter, Lexer) {
   // --------------------------------------------------------------------------
 
   proto.emitNode = function(sexpr) {
-    // Render-scope assignment — `code = expr` (and the compound forms
-    // `+= -= *= /= %= **= &&= ||= ?= ??=`) become JS statements at this
-    // position rather than text nodes. Returning null tells the caller
-    // (buildRender, emitTemplateBlock, appendChildren) "no DOM child to
-    // append; the statement was already pushed into _createLines".
-    //
-    // For `=` we additionally hoist a `let name;` declaration and add the
-    // name to the current render scope so subsequent references know to
-    // read the value instead of treating the identifier as an HTML tag.
-    // Compound assignments require the local to already exist (declared by
-    // an earlier `=` in the same scope, or a parameter, etc.) — a bare
-    // `i += 1` with no prior declaration is a user error and emits exactly
-    // what the user wrote, deferring to JS's runtime semantics.
+    // Render-scope assignment — `code = expr` and compound forms (`+=`,
+    // `-=`, etc.) become JS statements at this position rather than text
+    // nodes. Returning null tells the caller "no DOM child to append".
+    // `=` also declares the local: hoisted via _factoryVars (factory mode)
+    // or _renderTopLocals (class mode) and added to _renderLocalScope so
+    // subsequent references resolve to the local instead of an HTML tag.
     if (this._isRenderBinding(sexpr)) {
       const [op, name, expr] = sexpr;
       const exprCode = this.emitInComponent(expr, 'value');
       if (op === '=') {
-        if (this._factoryMode) {
-          // Factory mode: the per-factory `let ${factoryVars[]};` line at
-          // the top of the factory function holds the slot.
-          this._factoryVars.add(name);
-        } else {
-          // Class mode: declarations are hoisted to the top of _create()
-          // in a single `let a, b, c;` line emitted by buildRender.
-          this._renderTopLocals.add(name);
-        }
+        (this._factoryMode ? this._factoryVars : this._renderTopLocals).add(name);
         this._addRenderLocal(name);
       }
       this._createLines.push(`${name} ${op} ${exprCode};`);
@@ -1919,13 +1896,10 @@ export function installComponentSupport(CodeEmitter, Lexer) {
 
     // HTML tag (possibly with #id, e.g. div#content). A render-local with
     // the same name as an HTML tag wins — `code "hi"` after `code = fn`
-    // means a function call, not a `<code>` element.
-    //
-    // The check is against the FULL headStr (not just the tag part before
-    // `#id`) on purpose: render-locals are plain identifiers and can never
-    // contain `#`, so `_isRenderLocal('div#main')` always returns false.
-    // That preserves `<div id="main">` even when a `div` local exists —
-    // the `#id` syntax is unambiguous "render the tag" intent.
+    // is a function call, not a `<code>` element. Checking the full
+    // headStr (not just the part before `#id`) means `div#main` naturally
+    // dispatches as a tag even when a `div` local exists, since locals
+    // are plain identifiers and can't contain `#`.
     if (headStr && this.isHtmlTag(headStr) && !meta(head, 'text') &&
         !this._isRenderLocal(headStr)) {
       let [tagName, id] = headStr.split('#');
@@ -1953,11 +1927,8 @@ export function installComponentSupport(CodeEmitter, Lexer) {
       // HTML tag with classes (div.class) — skip if base is marked .text by
       // = prefix, and skip if the root is a render-local (so `code.value`
       // after `code = obj` reads obj.value, not <code class="value">).
-      // An explicit `#id` (e.g. `div#main.card`) is unambiguous tag intent
-      // and overrides any same-named local in scope.
       const { tag, classes, id, base } = this.collectTemplateClasses(sexpr);
-      if (!meta(base, 'text') && tag && this.isHtmlTag(tag) &&
-          (id !== undefined || !this._isRenderLocal(tag))) {
+      if (!meta(base, 'text') && tag && this.isHtmlTag(tag) && !this._isRenderLocal(tag)) {
         return this.emitTag(tag, classes, [], id);
       }
 
@@ -1988,8 +1959,7 @@ export function installComponentSupport(CodeEmitter, Lexer) {
       }
 
       const { tag, classes, id } = this.collectTemplateClasses(head);
-      // Same `#id` override as the property-chain branch above.
-      if (tag && this.isHtmlTag(tag) && (id !== undefined || !this._isRenderLocal(tag))) {
+      if (tag && this.isHtmlTag(tag) && !this._isRenderLocal(tag)) {
         // Dynamic class syntax: div.("classes") or div.card.("classes")
         if (classes.length > 0 && classes[classes.length - 1] === '__clsx') {
           const staticClasses = classes.slice(0, -1);
@@ -2537,9 +2507,7 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     this._setupLines = [];
     this._factoryMode = true;
     this._factoryVars = new Set();
-    // Each conditional branch is its own JS factory function — render
-    // locals from the surrounding scope are NOT in lexical scope here.
-    // Loop vars still cross via positional parameters (_loopVarStack).
+    // Fresh render-local scope per factory function (see emitTemplateLoop).
     this._renderLocalScope = new Set();
 
     const rootVar = this.emitTemplateBlock(block);
@@ -2942,13 +2910,10 @@ export function installComponentSupport(CodeEmitter, Lexer) {
           }
 
           if (block) {
-            // Save/restore _createLines/_setupLines only — NOT
-            // _factoryVars or _renderLocalScope. The children block's JS
-            // is appended back into the parent factory's body (same JS
-            // function), so any `let`s and locals it introduces share
-            // the parent's scope on purpose. Anything spliced in here
-            // remains visible to subsequent statements after the child
-            // component instantiation.
+            // Save _createLines/_setupLines only — _factoryVars and
+            // _renderLocalScope are intentionally shared because the
+            // children-block JS is spliced back into the parent factory's
+            // body (same JS function, same lexical scope).
             const savedCreateLines = this._createLines;
             const savedSetupLines = this._setupLines;
             this._createLines = [];
@@ -3033,24 +2998,12 @@ export function installComponentSupport(CodeEmitter, Lexer) {
 
   // _collectBodyBindings — gather every name bound inside a render subtree
   // --------------------------------------------------------------------------
-  // Used by emitTemplateLoop to avoid auto-allocating an outer index name
-  // that would later show up as a `let` declaration or positional parameter
-  // inside one of its descendant factory functions.
-  //
-  // Two kinds of names matter:
-  //   1. Explicit `for-in`/`for-of`/`for-as` vars (item + index). These end
-  //      up as positional parameters of the patch function for that loop's
-  //      factory, alongside the threaded outer-loop vars.
-  //   2. Render-local declarations (`name = expr`). These become hoisted
-  //      `let name;` declarations in the factory function. A duplicate
-  //      between the threaded outer index and a body-level `let` is the
-  //      same strict-mode "Cannot declare a let variable twice" error as
-  //      the duplicate-parameter case Bug 2 originally fixed.
-  //
-  // We walk the entire subtree (through conditionals, blocks, sibling
-  // tags, nested for bodies) because the threaded outer index becomes a
-  // positional parameter of EVERY descendant factory, so a collision at
-  // any depth is a real collision.
+  // Used by emitTemplateLoop to skip auto-allocating an outer index name
+  // that would later show up as either a positional parameter (explicit
+  // `for-in`/`for-of`/`for-as` var at any depth) or a hoisted `let`
+  // (`name = expr` at any depth) inside a descendant factory function. A
+  // collision at any nesting depth is real because the outer index is
+  // threaded as a positional parameter of EVERY descendant factory.
 
   proto._collectBodyBindings = function(node, set) {
     if (!Array.isArray(node)) return;
