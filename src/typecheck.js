@@ -1580,6 +1580,26 @@ export function lineColToOffset(text, line, col) {
   return text.length;
 }
 
+// Detect whether `col` on a single generated line falls inside a string
+// literal or a `//` line comment.  Used to penalize identifier matches
+// that land inside non-code regions during source-map lookup.
+function isInsideStringOrComment(text, col) {
+  let inStr = false, q = '';
+  for (let i = 0; i < col && i < text.length; i++) {
+    const ch = text[i];
+    if (inStr) {
+      if (ch === '\\') { i++; continue; }
+      if (ch === '`' && q === '`') { inStr = false; continue; }
+      if (ch === q) inStr = false;
+    } else if (ch === '/' && text[i + 1] === '/') {
+      return true; // rest of line is a comment
+    } else if (ch === '"' || ch === "'" || ch === '`') {
+      inStr = true; q = ch;
+    }
+  }
+  return inStr;
+}
+
 export function offsetToLineCol(text, offset) {
   let line = 0, ls = 0;
   for (let i = 0; i < offset && i < text.length; i++) {
@@ -1874,12 +1894,22 @@ export function srcToOffset(entry, line, col) {
   if (entry.srcColToGen) {
     const colEntries = entry.srcColToGen.get(line);
     if (colEntries && colEntries.length > 0) {
-      let best = colEntries[0];
-      for (const e of colEntries) {
+      // When srcToGen anchors this source line to a specific genLine, only
+      // consider colEntries on that same genLine.  Stray entries on other
+      // genLines (caused by upstream sub-mapping contamination across
+      // adjacent statements) can otherwise yank the lookup into an unrelated
+      // gen-line context.
+      const anchoredGen = entry.srcToGen.get(line);
+      const filtered = anchoredGen != null
+        ? colEntries.filter(e => e.genLine === anchoredGen)
+        : colEntries;
+      const pool = filtered.length > 0 ? filtered : colEntries;
+      let best = pool[0];
+      for (const e of pool) {
         if (e.srcCol <= col && (best.srcCol > col || e.srcCol > best.srcCol)) best = e;
       }
       if (best.srcCol > col) {
-        for (const e of colEntries) {
+        for (const e of pool) {
           if (Math.abs(e.srcCol - col) < Math.abs(best.srcCol - col)) best = e;
         }
       }
@@ -1936,8 +1966,14 @@ export function srcToOffset(entry, line, col) {
       // closer to the raw source column.
       const expectedGenCol = useHint ? genColHint
         : genColHint >= 0 ? genColHint + (col - bestSrcCol) : col;
+      // Penalize matches that fall inside string literals or line comments
+      // so an identifier appearing both as a value reference and as quoted
+      // text (e.g. `console.log "clicks:", clicks`) doesn't resolve into
+      // the string portion — TS returns no hover for offsets inside strings.
+      const STRING_PENALTY = 1e6;
       while ((m = re.exec(targetText)) !== null) {
-        const dist = Math.abs(m.index - expectedGenCol);
+        const inStr = isInsideStringOrComment(targetText, m.index);
+        const dist = Math.abs(m.index - expectedGenCol) + (inStr ? STRING_PENALTY : 0);
         if (dist < bestDist) { bestDist = dist; bestCol = m.index; }
       }
       if (bestCol >= 0) return lineColToOffset(entry.tsContent, targetLine, bestCol);
@@ -1947,7 +1983,8 @@ export function srcToOffset(entry, line, col) {
         const re1b = new RegExp('\\b' + escaped + '\\b', 'g');
         let m1b, bestCol1b = -1, bestDist1b = Infinity;
         while ((m1b = re1b.exec(genText)) !== null) {
-          const dist = Math.abs(m1b.index - expectedGenCol);
+          const inStr = isInsideStringOrComment(genText, m1b.index);
+          const dist = Math.abs(m1b.index - expectedGenCol) + (inStr ? STRING_PENALTY : 0);
           if (dist < bestDist1b) { bestDist1b = dist; bestCol1b = m1b.index; }
         }
         if (bestCol1b >= 0) return lineColToOffset(entry.tsContent, genLine, bestCol1b);
@@ -1961,7 +1998,8 @@ export function srcToOffset(entry, line, col) {
           const re2 = new RegExp('\\b' + escaped + '\\b', 'g');
           let m2, best2 = -1, bestDist2 = Infinity;
           while ((m2 = re2.exec(tryText)) !== null) {
-            const dist2 = Math.abs(m2.index - col);
+            const inStr = isInsideStringOrComment(tryText, m2.index);
+            const dist2 = Math.abs(m2.index - col) + (inStr ? STRING_PENALTY : 0);
             if (dist2 < bestDist2) { bestDist2 = dist2; best2 = m2.index; }
           }
           if (best2 >= 0) return lineColToOffset(entry.tsContent, tryLine, best2);
