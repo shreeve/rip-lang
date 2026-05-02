@@ -341,11 +341,30 @@ export class CodeEmitter {
   // matches (e.g. identifiers appearing as values inside union type strings).
   static _isColInsideString(line, col) {
     let inStr = false, quote = '';
+    // When inside a template literal (`...`), `${...}` opens an interpolation
+    // expression that is NOT part of the string.  Track interp depth so
+    // identifiers inside `${expr}` aren't incorrectly classified as strings.
+    let interpDepth = 0;
     for (let i = 0; i < line.length && i < col; i++) {
       let ch = line[i];
       if (inStr) {
         if (ch === '\\') { i++; continue; }
+        if (quote === '`' && ch === '$' && line[i + 1] === '{') {
+          interpDepth = 1;
+          inStr = false;
+          i++; // skip `{`
+          continue;
+        }
         if (ch === quote) inStr = false;
+      } else if (interpDepth > 0) {
+        if (ch === '{') interpDepth++;
+        else if (ch === '}') {
+          interpDepth--;
+          if (interpDepth === 0) { inStr = true; quote = '`'; }
+        } else if (ch === '"' || ch === "'" || ch === '`') {
+          // Nested string inside interpolation — recurse via inStr handling
+          inStr = true; quote = ch;
+        }
       } else if (ch === '"' || ch === "'" || ch === '`') {
         inStr = true; quote = ch;
       }
@@ -386,26 +405,60 @@ export class CodeEmitter {
       }
       return hi;
     };
+    // Track generated positions already claimed by an earlier sub-expression
+    // in this statement, so distinct source positions (e.g. `a` in two
+    // adjacent arrow functions) can't all collapse onto the first match.
+    // Without this, identical identifiers in repeated structures get
+    // mis-mapped — e.g. `else if` branches inheriting the `if` branch's
+    // generated coordinates, leaving the real branch unmapped.
+    const usedGenPositions = new Set();
+    // Cache `// @rip-src:N` annotations per generated line so render-block
+    // stub mappings can be honored over unrelated heuristic matches.
+    const ripSrcCache = new Map();
+    const getRipSrcAnnot = (genLineInStmt) => {
+      if (ripSrcCache.has(genLineInStmt)) return ripSrcCache.get(genLineInStmt);
+      const lt = codeLines[genLineInStmt];
+      const m = lt && lt.match(/\/\/ @rip-src:(\d+)\s*$/);
+      const v = m ? parseInt(m[1], 10) : null;
+      ripSrcCache.set(genLineInStmt, v);
+      return v;
+    };
     for (let { name, origLine, origCol } of subs) {
       let escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       let re = new RegExp('\\b' + escaped + '\\b', 'g');
-      let m, bestMatch = null, bestDist = Infinity;
+      let m;
+      let bestMatch = null, bestDist = Infinity;
+      let bestUnused = null, bestUnusedDist = Infinity;
       let origLineInStmt = origLine - stmtOrigLine;
       while ((m = re.exec(code)) !== null) {
         const genLineInStmt = offsetToLine(m.index);
         const genCol = m.index - lineStarts[genLineInStmt];
-        // Skip matches inside string literals — prevents false mappings when
-        // an identifier also appears as a string value (e.g. union type member)
         let lineText = codeLines[genLineInStmt];
-        if (lineText && CodeEmitter._isColInsideString(lineText, genCol)) continue;
+        // A `// @rip-src:N` annotation tags the generated line as derived
+        // from source line N (used by render-block stubs). When N matches
+        // the sub-expression's origLine, accept matches here even if they
+        // fall inside string literals — render stubs emit tag names as
+        // `'p'` and interpolations as `${...}` inside template strings.
+        const annotSrc = getRipSrcAnnot(genLineInStmt);
+        const annotMatches = annotSrc != null && annotSrc === origLine;
+        if (lineText && CodeEmitter._isColInsideString(lineText, genCol) && !annotMatches) continue;
         let genLine = lineOffset + genLineInStmt;
-        // Prefer matches on the same relative line within the statement,
-        // falling back to column distance as tiebreaker.
-        let dist = Math.abs(genLineInStmt - origLineInStmt) * 10000 + Math.abs(genCol - origCol);
+        // Annotation-matched lines are the authoritative gen position for
+        // their source line — score them as a perfect line match so they
+        // beat any heuristic match elsewhere in the statement.
+        let dist = annotMatches
+          ? Math.abs(genCol - origCol)
+          : Math.abs(genLineInStmt - origLineInStmt) * 10000 + Math.abs(genCol - origCol);
         if (dist < bestDist) { bestDist = dist; bestMatch = { genLine, genCol }; }
+        const key = genLine + ':' + genCol;
+        if (!usedGenPositions.has(key) && dist < bestUnusedDist) {
+          bestUnusedDist = dist; bestUnused = { genLine, genCol };
+        }
       }
-      if (bestMatch) {
-        this.sourceMap.addMapping(bestMatch.genLine, bestMatch.genCol, origLine, origCol);
+      const chosen = bestUnused || bestMatch;
+      if (chosen) {
+        this.sourceMap.addMapping(chosen.genLine, chosen.genCol, origLine, origCol);
+        usedGenPositions.add(chosen.genLine + ':' + chosen.genCol);
       }
     }
   }
@@ -420,15 +473,32 @@ export class CodeEmitter {
       for (let i = 0; i < node.length; i++) {
         if (Array.isArray(node[i])) this.collectSubExprs(node[i], result);
       }
+      // Also honor side-channel anchors attached to nodes whose head is an
+      // array (e.g. tag-shorthand `[(. p error), error]` where the tag
+      // node's head is itself an access expression). Without this, anchors
+      // attached by walkRender to such nodes are silently dropped.
+      if (Array.isArray(node._anchors)) {
+        for (const a of node._anchors) result.push(a);
+      }
       return;
     }
     if (node.loc) {
       head = str(head);
       let ident = null;
+      let identCol = node.loc.c;
       // Property access: anchor is the property name (check BEFORE operators
       // because the operator regex also matches '.' via ^\.\.?$)
       if (head === '.') {
-        if (typeof node[2] === 'string') ident = node[2];
+        if (typeof node[2] === 'string') {
+          ident = node[2];
+          // Adjust origCol to point at the property name itself, not the start
+          // of the access expression. node.loc.c marks the object start;
+          // shift past it and the `.` so source-mapping anchors land on the
+          // property identifier (e.g. `image` in `product.image`).
+          if (typeof node[1] === 'string') {
+            identCol = node.loc.c + node[1].length + 1;
+          }
+        }
       }
       // Operators/keywords: anchor is the subject at index 1
       else if (typeof head === 'string' && /^[=+\-*/%<>!&|?~^]|^\.\.?$|^def$|^class$|^state$|^computed$|^readonly$|^for-/.test(head)) {
@@ -438,7 +508,15 @@ export class CodeEmitter {
       else if (typeof head === 'string' && /^[a-zA-Z_$]/.test(head)) {
         ident = head;
       }
-      if (ident) result.push({ name: ident, origLine: node.loc.r, origCol: node.loc.c });
+      if (ident) result.push({ name: ident, origLine: node.loc.r, origCol: identCol });
+    }
+    // Side-channel anchors attached by walkRender for bare-identifier
+    // children of template-tag nodes (e.g. `error` in `p.error error`).
+    // The s-expression child is a plain string atom with no .loc, so the
+    // walk would otherwise miss it; the anchor carries the source position
+    // computed from the parent's loc plus a regex scan over source lines.
+    if (Array.isArray(node._anchors)) {
+      for (const a of node._anchors) result.push(a);
     }
     // Recurse into children (skip head at index 0 — already processed via parent).
     // For arrow functions (-> / =>), skip index 1 (params array) — parameter

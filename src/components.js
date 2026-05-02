@@ -1094,6 +1094,25 @@ export function installComponentSupport(CodeEmitter, Lexer) {
               const reshaped = [flat];
               for (let i = 1; i < node.length; i++) reshaped.push(node[i]);
               if (node.loc) reshaped.loc = node.loc;
+              // Carry an _astNode back-reference so emitBareIdent can attach
+              // anchors (used by recordSubMappings) on the original AST node
+              // rather than this throwaway reshape, since recordSubMappings
+              // walks the original tree.
+              reshaped._astNode = node;
+              // Strip .loc from the original tag-shorthand `(. tag class ...)`
+              // chain so collectSubExprs (used by recordSubMappings) does not
+              // anchor source identifiers (the class names) onto unrelated
+              // gen-side property accesses with the same name. The class
+              // segments (e.g. `image` in `div.image`) are CSS classes, not
+              // identifier references, and should not participate in
+              // identifier-name source-mapping heuristics.
+              const stripLoc = (h) => {
+                if (Array.isArray(h) && h[0] === '.') {
+                  if (h.loc) delete h.loc;
+                  stripLoc(h[1]);
+                }
+              };
+              stripLoc(head);
               node = reshaped;
               head = flat;
             }
@@ -1202,13 +1221,43 @@ export function installComponentSupport(CodeEmitter, Lexer) {
             if (CodeEmitter.GENERATORS[child]) return;
             if (child === 'null' || child === 'undefined' || child === 'true' || child === 'false') return;
             let srcLine = parentNode.loc?.r;
+            let srcCol = null;
             if (srcLine != null && sourceLines) {
-              const re = new RegExp(`\\b${child}\\b`);
+              const re = new RegExp(`\\b${child}\\b`, 'g');
               for (let ln = srcLine; ln < sourceLines.length; ln++) {
-                if (re.test(sourceLines[ln])) { srcLine = ln; break; }
+                const lineText = sourceLines[ln];
+                if (!lineText) continue;
+                let searchFrom = (ln === parentNode.loc.r) ? (parentNode.loc.c + 1) : 0;
+                re.lastIndex = searchFrom;
+                let m;
+                let found = -1;
+                while ((m = re.exec(lineText)) !== null) {
+                  // Skip tag-shorthand class/id matches like `.error`/`#id`
+                  // (e.g. the `error` in `p.error error` — the bare-ident
+                  // child is the *second* `error`, not the CSS class).
+                  const prev = m.index > 0 ? lineText[m.index - 1] : '';
+                  if (prev === '.' || prev === '#') continue;
+                  found = m.index;
+                  break;
+                }
+                if (found >= 0) {
+                  srcLine = ln;
+                  srcCol = found;
+                  break;
+                }
               }
             }
             const srcMarker = srcLine != null ? ` // @rip-src:${srcLine}` : '';
+            // Attach an anchor on the parent so collectSubExprs (used by
+            // recordSubMappings) can record a precise source-map entry for
+            // this bare identifier. Without this, source clicks/hovers on
+            // the bare ident never resolve to the generated `this.X;` /
+            // `X;` stub line, and the LSP can't route a semantic token here.
+            if (srcLine != null && srcCol != null) {
+              const anchorTarget = parentNode._astNode || parentNode;
+              if (!anchorTarget._anchors) anchorTarget._anchors = [];
+              anchorTarget._anchors.push({ name: child, origLine: srcLine, origCol: srcCol });
+            }
             if (this.componentMembers && this.componentMembers.has(child)) {
               constructions.push(`    this.${child};${srcMarker}`);
             } else if (isTextChild) {
@@ -1223,7 +1272,13 @@ export function installComponentSupport(CodeEmitter, Lexer) {
           // Bare lowercase identifiers inside a block or as children of tag nodes
           // — emit __ripEl so TS catches tag typos (e.g., slotz for slot), or
           // emit this.prop for component member text references.
-          const isTagHead = typeof head === 'string' && /^[a-z][\w-]*$/.test(head) &&
+          // Allow tag-shorthand heads like `div.image` or `button#submit` —
+          // split on `.`/`#` and check the bare tag name. Without the
+          // shorthand support here, expression children of `div.image x`
+          // were silently dropped from the type-check stub even though the
+          // lower `__ripEl` branch (which uses the same split) emitted the
+          // tag itself.
+          const isTagHead = typeof head === 'string' && /^[a-z][\w-]*(?:[.#][\w-]+)*$/.test(head) &&
               !CodeEmitter.GENERATORS[head] && TEMPLATE_TAGS.has(head.split(/[.#]/)[0]);
           if (head === 'block') {
             for (let i = 1; i < node.length; i++) emitBareIdent(node[i], node, false);
