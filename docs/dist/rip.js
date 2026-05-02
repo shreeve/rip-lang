@@ -7493,7 +7493,7 @@ ${blockFactoriesCode}return ${lines.join(`
         this._createLines.push(`${cv} = document.createComment('switch');`);
         return cv;
       }
-      if (headStr && this.isHtmlTag(headStr) && !meta(head, "text") && !this._isRenderLocal(headStr.split("#")[0])) {
+      if (headStr && this.isHtmlTag(headStr) && !meta(head, "text") && !this._isRenderLocal(headStr)) {
         let [tagName, id] = headStr.split("#");
         return this.emitTag(tagName || "div", [], rest, id);
       }
@@ -7512,7 +7512,7 @@ ${blockFactoriesCode}return ${lines.join(`
           return slotVar;
         }
         const { tag, classes, id, base } = this.collectTemplateClasses(sexpr);
-        if (!meta(base, "text") && tag && this.isHtmlTag(tag) && !this._isRenderLocal(tag)) {
+        if (!meta(base, "text") && tag && this.isHtmlTag(tag) && (id !== undefined || !this._isRenderLocal(tag))) {
           return this.emitTag(tag, classes, [], id);
         }
         const textVar2 = this.newTextVar();
@@ -7535,7 +7535,7 @@ ${blockFactoriesCode}return ${lines.join(`
           return this.emitDynamicTag(tag2, classExprs, rest);
         }
         const { tag, classes, id } = this.collectTemplateClasses(head);
-        if (tag && this.isHtmlTag(tag) && !this._isRenderLocal(tag)) {
+        if (tag && this.isHtmlTag(tag) && (id !== undefined || !this._isRenderLocal(tag))) {
           if (classes.length > 0 && classes[classes.length - 1] === "__clsx") {
             const staticClasses = classes.slice(0, -1);
             const staticArgs = staticClasses.map((c) => `"${c}"`);
@@ -13372,7 +13372,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.15.4";
-  var BUILD_DATE = "2026-05-01@22:50:41GMT";
+  var BUILD_DATE = "2026-05-02@00:26:45GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

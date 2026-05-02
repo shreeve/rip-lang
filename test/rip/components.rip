@@ -1312,6 +1312,22 @@ test "function-typed render-local supports chain-call (code.method args)", '''
   typeof inst._create
 ''', "function"
 
+# `#id` syntax is unambiguous tag-emission intent and overrides any same-named
+# local in scope at every dispatch site (bare-tag, property-chain, call-form).
+# Without this exception the user would get broken JS like `div#main("hello")`
+# from emitNode's catch-all trying to compile `div#main` as an identifier.
+
+test "#id overrides a same-named render-local at every dispatch site", '''
+  A = component
+    render
+      div = "ignored"
+      div#first "hello"
+      div#second.card "world"
+  inst = A.new()
+  inst._init({})
+  typeof inst._create
+''', "function"
+
 # Compound assignments (`+= -= *= …`) at render-block top level are emitted
 # as JS statements just like `=`, not wrapped in createTextNode. The leading
 # `=` declares the local; subsequent compound forms mutate it.

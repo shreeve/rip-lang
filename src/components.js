@@ -1865,8 +1865,14 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     // HTML tag (possibly with #id, e.g. div#content). A render-local with
     // the same name as an HTML tag wins — `code "hi"` after `code = fn`
     // means a function call, not a `<code>` element.
+    //
+    // The check is against the FULL headStr (not just the tag part before
+    // `#id`) on purpose: render-locals are plain identifiers and can never
+    // contain `#`, so `_isRenderLocal('div#main')` always returns false.
+    // That preserves `<div id="main">` even when a `div` local exists —
+    // the `#id` syntax is unambiguous "render the tag" intent.
     if (headStr && this.isHtmlTag(headStr) && !meta(head, 'text') &&
-        !this._isRenderLocal(headStr.split('#')[0])) {
+        !this._isRenderLocal(headStr)) {
       let [tagName, id] = headStr.split('#');
       return this.emitTag(tagName || 'div', [], rest, id);
     }
@@ -1892,8 +1898,11 @@ export function installComponentSupport(CodeEmitter, Lexer) {
       // HTML tag with classes (div.class) — skip if base is marked .text by
       // = prefix, and skip if the root is a render-local (so `code.value`
       // after `code = obj` reads obj.value, not <code class="value">).
+      // An explicit `#id` (e.g. `div#main.card`) is unambiguous tag intent
+      // and overrides any same-named local in scope.
       const { tag, classes, id, base } = this.collectTemplateClasses(sexpr);
-      if (!meta(base, 'text') && tag && this.isHtmlTag(tag) && !this._isRenderLocal(tag)) {
+      if (!meta(base, 'text') && tag && this.isHtmlTag(tag) &&
+          (id !== undefined || !this._isRenderLocal(tag))) {
         return this.emitTag(tag, classes, [], id);
       }
 
@@ -1924,7 +1933,8 @@ export function installComponentSupport(CodeEmitter, Lexer) {
       }
 
       const { tag, classes, id } = this.collectTemplateClasses(head);
-      if (tag && this.isHtmlTag(tag) && !this._isRenderLocal(tag)) {
+      // Same `#id` override as the property-chain branch above.
+      if (tag && this.isHtmlTag(tag) && (id !== undefined || !this._isRenderLocal(tag))) {
         // Dynamic class syntax: div.("classes") or div.card.("classes")
         if (classes.length > 0 && classes[classes.length - 1] === '__clsx') {
           const staticClasses = classes.slice(0, -1);
