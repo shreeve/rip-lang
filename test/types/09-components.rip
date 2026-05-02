@@ -226,11 +226,11 @@ export Select<TOption extends TOptionShape> = component extends select
       select
         if placeholder
           option value: "", disabled: true, placeholder
-        for option in options
+        for opt in options
           option
-            key: typeof option is "string" ? option : option.value
-            value: typeof option is "string" ? option : option.value
-            typeof option is "string" ? option : option.label
+            key: typeof opt is "string" ? opt : opt.value
+            value: typeof opt is "string" ? opt : opt.value
+            typeof opt is "string" ? opt : opt.label
       if error
         div error
 
