@@ -112,16 +112,17 @@
   },
   "scripts": {
     "build": "bunx esbuild src/extension.js --bundle --outfile=dist/extension.js --format=cjs --platform=node --external:vscode --minify && bunx esbuild src/lsp.js --bundle --outfile=dist/lsp.js --format=cjs --platform=node --external:typescript --minify",
-    "package": "rm -f rip-*.vsix && bun run build && bunx @vscode/vsce package --no-dependencies --skip-license",
+    "package": "rm -f rip-*.vsix && bun run build && bun scripts/package.js",
     "install-vscode": "bun run package && code --install-extension rip-*.vsix --force",
     "install-cursor": "bun run package && cursor --install-extension rip-*.vsix --force"
   },
   "dependencies": {
+    "typescript": "5.9.3"
+  },
+  "devDependencies": {
+    "esbuild": "^0.27.3",
     "vscode-languageclient": "^9.0.1",
     "vscode-languageserver": "^9.0.1",
     "vscode-languageserver-textdocument": "^1.0.12"
-  },
-  "devDependencies": {
-    "esbuild": "^0.27.3"
   }
 }
