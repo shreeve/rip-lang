@@ -13,7 +13,6 @@
 import { Compiler, getStdlibCode } from './compiler.js';
 import { STDLIB_TYPE_DECLS } from './stdlib.js';
 import { INTRINSIC_TYPE_DECLS, INTRINSIC_FN_DECL, ARIA_TYPE_DECLS, SIGNAL_INTERFACE, SIGNAL_FN, COMPUTED_INTERFACE, COMPUTED_FN, EFFECT_FN } from './dts.js';
-import { hasSchemas } from './schema/schema.js';
 import './schema/loader-server.js';   // registers full schema runtime provider
 import { createRequire } from 'module';
 import { readFileSync, existsSync, readdirSync } from 'fs';
@@ -665,7 +664,11 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
   // A `# @nocheck` comment near the top of the file opts out entirely.
   // In strict mode, all non-nocheck files are type-checked.
   const nocheck = /^#\s*@nocheck\b/m.test(source.slice(0, NOCHECK_SCAN_LIMIT));
-  const hasOwnTypes = !nocheck && (hasTypeAnnotations(source) || hasSchemas(source) || !!opts.strict);
+  // Must match the CLI predicate in runCheck. Don't add `hasSchemas(source)`:
+  // that probe is a raw-source regex that fires on `schema :input` inside
+  // heredoc string literals (e.g. test files), flooding the LSP with TS2304
+  // false positives. Schema files still get their DTS via the schema pass.
+  const hasOwnTypes = !nocheck && (hasTypeAnnotations(source) || !!opts.strict);
   let importsTyped = false;
   if (!hasOwnTypes && !nocheck) {
     const ripImports = [...source.matchAll(/from\s+['"]([^'"]*\.rip)['"]/g)];
