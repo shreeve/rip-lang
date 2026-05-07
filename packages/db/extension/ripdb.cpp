@@ -2084,6 +2084,16 @@ static string ValidateRewrittenStatement(const SQLStatement &stmt,
 
 // Reject-list helpers — return non-empty error string if the statement falls
 // outside the v1 supported subset; empty string means OK to forward.
+//
+// Defense-in-depth note: the RETURNING / ON CONFLICT branches in these
+// helpers are currently unreachable because PlanInsert / PlanUpdate /
+// PlanDelete each check the bound Logical* operator (`op.return_chunk`,
+// `op.on_conflict_info.action_type`) BEFORE invoking TryPlanDmlPassthrough,
+// which is what calls these helpers. We keep the parser-AST checks anyway
+// so TryPlanDmlPassthrough remains self-defensive: if a future DuckDB
+// rev changes how RETURNING binds, or someone reorders the planner-side
+// preflight, the AST-side reject still does the right thing. The branches
+// fully describe the v1 AST subset at the parser boundary.
 static string RejectInsertStatement(const InsertStatement &s) {
 	if (!s.returning_list.empty()) {
 		return "RETURNING is not supported by ripdb in v1 (would require "
