@@ -192,3 +192,110 @@ RFC 2 and RFC 3 are independent and can land in either order:
 - **Both:** typed apps import from `@rip-lang/app`; untyped apps call `Rip.*`; the import-rewrite target in step 3 of RFC 2 is `globalThis.Rip` instead of `globalThis`. Cleanest end state.
 
 If both ship, RFC 3's only effect on RFC 2 is changing the rewrite target — a one-line difference in the import-rewriting pass.
+
+
+## RFC 4: should the compiler track property accesses on `for`-loop iteration variables?
+
+While building this cart, the quantity input on each row exhibited two related symptoms that point at the same compiler limitation:
+
+1. **Focus loss on every keystroke.** The original `updateQuantity` did `@items = @items.map (i) -> if i.id is product.id then { ...i, quantity } else i` — a React-style immutable replace. Each keystroke produced a new array of new object identities. The list reconciler tore down the row's `<tr>` (and its `<input>`) and rebuilt it with the new `item`. Symptom: typing one digit blurred the input.
+
+2. **Mutation in place doesn't update the row.** Switching to `item.quantity = quantity` (the idiomatic Rip pattern: mutate the leaf, let signals do the rest) preserved focus but exposed a deeper problem — the displayed quantity and the per-row subtotal stopped updating. The cart total still updated correctly. The `+`/`−` buttons that mutate via the same path also failed to move the displayed quantity.
+
+The compiled output explains both. The per-row block emitted by [src/components.js](../../src/components.js) for `for item in cart.items` looks like this (excerpt from `create_block_4`):
+
+```js
+function create_block_4(ctx, item, i) {
+  ...
+  c() {
+    _t11 = document.createTextNode(String(`${item.image} ${item.name}`));
+    _t12 = document.createTextNode(String(`$${item.price.toFixed(2)}`));
+    _el31.setAttribute('value', String(item.quantity));
+    _t15 = document.createTextNode(String(`$${(item.price * item.quantity).toFixed(2)}`));
+  },
+  p(ctx, item, i) {
+    // empty — no effects emitted
+  },
+}
+```
+
+Every read of `item.foo` is materialized once in the create function `c()` and never wrapped in an `__effect`. The patch function `p()` is empty. The cart total works only because it goes through `cart.totalPrice()`, which is rooted at `ctx.cart` (a tracked component member), so its enclosing effect re-runs when the proxy fires; that effect's body happens to read each `item.quantity` through the proxy and re-renders the total text node.
+
+The reason is documented in [`AGENTS.md`](../../AGENTS.md):
+
+> Inside a component's `render`, only expressions rooted at `this` (`@app.data...`, component members) are tracked as reactive by the compiler.
+
+A `for`-loop iteration variable is not rooted at `this`, so `hasReactiveDeps(item.quantity)` returns false, and no effect wrapper is emitted. The current "workaround" for per-row reactivity is to extract a child component — the prop binding launders `item` into a tracked member and the inner template's reads become reactive again. That works, but it's a workaround masquerading as a pattern: every list-of-reactive-objects template requires a child component for reasons that have nothing to do with composition or reuse.
+
+### Proposal — treat the iteration variable as reactive when the iterated source is reactive
+
+When the compiler emits a `for x in expr` loop body, if `expr` is already reactive (i.e. would itself be wrapped in an `__effect` by the existing `hasReactiveDeps` check), then within that loop body **any read through a binding that references the proxy** is reactive and gets the same effect-wrapping treatment as a `this`-rooted access.
+
+The day-1 scope covers three cases, all of which boil down to the same underlying mechanism — a name that points at a reactive proxy:
+
+1. **Direct member access on the iter var.** `for item in cart.items` then `item.qty`, `item[0]`, `item.foo.bar`. The base case.
+2. **Aliases and rebindings.** `for item in items` then `local = item; local.foo`. `local` references the same proxy as `item`; reads through it are already reactive at runtime — the compiler just needs to know the name is tracked so it emits the effect wrapper.
+3. **Object-shaped destructuring of reactive references.** `for {profile} in users` then `profile.name`. `profile` is still a proxy reference, so reads through it stay reactive. Same name-propagation work as aliases.
+
+Concretely, in `src/components.js`:
+
+- The loop emitter already pushes `{ itemVar, indexVar }` onto `_loopVarStack` before walking the body and pops after.
+- Add a `reactiveSource: bool` field — captured at push time from the same check that decides whether `__reconcile` is wrapped in `__effect`. When true, `itemVar` is added to a scope-local tracked-names set as the body walk begins.
+- During the body walk, when an assignment `ident = X` or a destructuring `{ident, ...} = X` is seen and `X` resolves to a tracked name, add `ident` to the tracked-names set within its lexical scope. Reassigning a tracked name to a non-tracked expression removes it. Pop the scope's additions on scope exit.
+- Extend `hasReactiveDeps(node)` to return true when `node` is a member access whose root identifier is in the current tracked-names set. The reactive-source check has already happened at insertion time, so lookup is just a set membership test.
+
+The existing emit paths (`emitAttributes`, the text-interpolation path, `emitConditional`) already route reactive expressions through `_pushEffect` — they'd start firing for `item.foo`, `local.foo`, and `profile.name` automatically. The patch function `p()` would receive the per-row effects it currently lacks, and the row's DOM nodes would update in place when the underlying signals fire. Identity is preserved — no reconciler rebuild, no input blur.
+
+**Deferred to RFC 4b — primitive destructuring.** `for {qty} in items` where `qty` is a number is genuinely a different problem. Once the value is destructured out it's no longer a proxy reference — `qty` is just a `Number`, and `qty * 2` reads from a snapshot. Making it reactive requires either rewriting reads of `qty` back to `item.qty` (a real source-rewrite pass with scoping concerns around shadowing and reassignment), abandoning JS destructuring entirely in favor of `let qty; ... item.qty` everywhere, or some getter-binding scheme that doesn't have a clean syntax. Each of those is a design decision worth its own RFC. Day-1 covers the three reference-preserving cases; primitive destructuring stays static for now (and the workaround — drop the destructuring, write `item.qty` — is local and obvious).
+
+**Pros:**
+- Closes the gap between "what users expect from fine-grained reactivity" and what the compiler actually delivers. The cart-row case (and every list-of-reactive-objects case) just works.
+- Eliminates the one workaround that exists purely for compiler reasons rather than design reasons. "Extract a child component to make per-row updates reactive" stops being a recommendation; component extraction is once again only about composition and reuse.
+- Strictly more reactivity, never less. The worst case for any existing code is one extra `__effect` per templated reactive-binding read, firing only when the matching signal changes. No existing code's *behavior* changes, just its update granularity.
+- Cheaper than the current "rebuild the row" workaround. N per-row effects — each firing only when its row's signal changes — beats one reconcile that destroys and recreates the whole `<tr>`.
+- Simpler mental model. AGENTS.md's tracking rule changes from "rooted at `this`" to "rooted at any reactive binding" — shorter, more general, easier to teach.
+- Aliases and object-shaped destructuring work day one, so the rule users learn ("reads through a reactive binding are reactive") matches what they actually write. No "don't alias the iter var" caveat in the docs.
+
+**Cons:**
+- Real compiler change in a hot path (every `for` in every render). The detection is local — one tracked-names set lookup per member-access node — but it touches `hasReactiveDeps` and the `_loopVarStack` data structure, and needs test coverage for nested loops, shadowed names, and iteration over non-reactive sources.
+- The rule "iter var is reactive when source is reactive" needs to be precise about what counts as "the source is reactive." `for x in cart.items` — yes (rooted at `ctx`). `for x in [1,2,3]` — no. `for x in someLocalArray` — depends on what `someLocalArray` is, which means the analysis must already exist for arbitrary expressions (it does, via `hasReactiveDeps`, but edge cases will surface).
+- Tracked-name propagation through assignments and object destructuring is a small but real scope-aware analysis. Has to handle nested scopes (loops, blocks, function expressions), reassignment (`local = somethingElse` retracts the tracking), and the difference between object-shaped destructuring (proxy-preserving) and primitive destructuring (not). Not hard, but not zero.
+- Primitive destructuring stays static, silently — `for {qty} in items` then `qty * 2` does not become reactive, and there's no warning. Has to be called out in the docs and ideally surfaced as a lint or compile-time hint when the destructured field is read into a tracked context.
+- Iteration over a `~=` computed that returns a fresh array each time is a real edge case — the array is technically reactive (the computed re-runs), but per-element identity churn means the existing reconciler still fires on identity change and rebuilds the row. The new per-element effects would do nothing useful in that case. Not incorrect, just redundant.
+- Two paths now exist for "update DOM when item changes": the existing reconciler (handles identity / order / length) and the new per-property effects (handle in-place mutation). They're complementary, not conflicting, but the interaction has to be tested — especially the case where both fire in the same flush.
+
+### Alternatives considered
+
+- **Status quo + child-component workaround.** Current state. Rejected as the long-term answer because it makes every list-of-reactive-objects template require a child component for compiler reasons, not design reasons. The workaround is fine when component extraction is wanted anyway; it's a tax when it isn't.
+
+- **Runtime-only solution: have the proxy track reads inside any effect.** It already does — that's why `cart.totalPrice()` works. The issue is that the compiler never *creates* an effect around the per-row reads in the first place, so there's no effect for the runtime tracking to attach to. This isn't a runtime gap; it's a codegen gap. Shipping a "smarter proxy" doesn't fix the missing effect wrapper.
+
+- **Even more aggressive variant: include primitive destructuring.** Tracks `for {name, qty} in items` → `qty * 2` by source-rewriting `qty` reads back to `item.qty`, or by abandoning JS destructuring at the codegen level. Strictly more correct, materially more work, and the right answer eventually. Deferred to RFC 4b because the design space (rewrite vs. binding-scheme vs. getter-shim) deserves its own discussion, and the day-1 workaround (drop the destructuring, write `item.qty`) is local and obvious.
+
+- **Compiler hint: `for item in! items`** (or some new sigil) that explicitly opts into tracking. Rejected because making reactivity explicit per-loop is exactly the kind of ceremony Rip's whole reactivity model is designed to avoid. If `cart.items` is reactive, `for item in cart.items` should "just work" — no extra punctuation, no opt-in.
+
+- **Document around it.** Add a prominent "use a child component for reactive list rows" note to the AGENTS guide and call it done. Rejected because every Rip developer hits this exact bug, and a docs note is a tax paid forever to avoid a one-time codegen change.
+
+### Relationship to other RFCs
+
+Independent of RFCs 1, 2, and 3. Those concern the type and packaging story; this concerns the runtime reactivity story. RFC 4 lands purely in `src/components.js` (codegen) and `AGENTS.md` (the tracking-rule docs).
+
+### Migration
+
+None. This is strictly more reactivity than today, never less. Existing code's update granularity gets finer; behavior doesn't change.
+
+### Test plan
+
+A dedicated test in `test/rip/` covering:
+
+- `for x in stashArray` then `x.prop` in a text node — mutating `x.prop` updates the text node without rebuilding the parent.
+- `for x in [1,2,3]` (non-reactive source) — emits no per-element effect, behavior unchanged.
+- `for x in cart.items` then `<input value: x.qty>` — typing into the input then mutating `x.qty = n` from outside updates the displayed value without blurring the input.
+- Alias propagation: `for item in items` then `local = item; <td>= local.qty` — mutating `item.qty` updates the cell.
+- Object destructuring: `for {profile} in users` then `<td>= profile.name` — mutating `users[i].profile.name` updates the cell.
+- Reassignment retracts tracking: `local = item; local = somethingElse; local.foo` — the read of `local.foo` is not tracked once `local` no longer references the proxy.
+- Primitive destructuring stays static (until 4b): `for {qty} in items` then `<td>= qty` — mutating `items[i].qty` does *not* update the cell; documented behavior.
+- Nested loops over reactive sources — each loop's iter var tracks independently.
+- Shadowed name (`for x in items` containing `for x in subitems`) — inner `x` shadows outer; both tracked correctly.
+- Cart example fixture — the `+`/`−`/typed-quantity case from this README ends up green.
+
