@@ -204,9 +204,13 @@ export swarm = (opts = {}) ->
   scriptPath = resolve(process.argv[1] or '')
 
   # find rip-loader for workers — derive from swarm's own location
-  # (swarm is at node_modules/@rip-lang/swarm/, loader is at node_modules/rip-lang/)
-  loaderPath = join(swarmDir, '..', '..', 'rip-lang', 'rip-loader.js')
-  loaderPath = null unless existsSync(loaderPath)
+  #   linked install: node_modules/@rip-lang/swarm/ → node_modules/rip-lang/rip-loader.js
+  #   source repo:    packages/swarm/             → ../../rip-loader.js
+  loaderCandidates = [
+    join(swarmDir, '..', '..', 'rip-lang', 'rip-loader.js')
+    join(swarmDir, '..', '..', 'rip-loader.js')
+  ]
+  loaderPath = loaderCandidates.find(existsSync) ?? null
 
   # state
   live     = 0
