@@ -170,6 +170,19 @@ Repo-wide regression suite:
 bun run test
 ```
 
+Performance regression harness (`packages/server/bench/`):
+
+```bash
+rip server packages/server/bench/ http:3000 w:4 c:1 --static
+./packages/server/bench/run.sh c1-baseline             # in another shell
+# Vary w:N c:N on the server, re-run to compare.
+```
+
+The harness uses `oha` (`brew install oha`) and reads the server's
+`/diagnostics` endpoint to capture queue shed/timeout deltas. Output is
+written to `packages/server/bench/results/` (gitignored — runs are
+machine-dependent).
+
 When changing:
 
 - config parsing -> update `tests/config.rip`, `tests/servers.rip`
