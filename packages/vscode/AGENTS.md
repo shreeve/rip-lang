@@ -2,6 +2,20 @@
 
 The extension in `packages/vscode/` provides syntax highlighting, autocomplete, hover, go-to-definition, and signature help via TypeScript.
 
+## Local development workflow
+
+After editing **any** file under `packages/vscode/src/` (extension client `extension.js` or LSP server `lsp.js`), you must rebuild and reinstall the extension before changes take effect:
+
+```bash
+cd packages/vscode
+bun run install-vscode   # default — for VS Code
+bun run install-cursor   # only when explicitly using Cursor
+```
+
+Both run `bun run build` (esbuild bundle) → `bun run package` (vsix) → install via `code --install-extension` or `cursor --install-extension`. After installing, reload the host window (`Developer: Reload Window`).
+
+Editing only `package.json`, `syntaxes/*.json`, or other static files still requires the same rebuild — they're packaged into the vsix.
+
 ## Type Intelligence Flow
 
 1. compile `.rip` to virtual `.ts` in memory
