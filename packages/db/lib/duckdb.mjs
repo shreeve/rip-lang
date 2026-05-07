@@ -87,6 +87,20 @@ const lib = dlopen(libPath, {
   duckdb_query:          { args: ['u64', 'ptr', 'ptr'], returns: 'i32' },
   duckdb_destroy_result: { args: ['ptr'], returns: 'void' },
 
+  // Affected-row count for DML (INSERT/UPDATE/DELETE).
+  // Takes a duckdb_result* (declared as 'u64' per Bug 1 — pass BigInt(ptr(buf))
+  // even though it's morally a pointer) and returns idx_t. Must be called
+  // AFTER duckdb_query succeeds and BEFORE duckdb_destroy_result.
+  duckdb_rows_changed:   { args: ['u64'], returns: 'u64' },
+
+  // Statement extraction — used by /ddb/exec to enforce single-statement
+  // input. duckdb_extract_statements(conn, sql, out_handle*) returns the
+  // statement count (0 on failure), and duckdb_destroy_extracted frees the
+  // out handle. Both pointer params declared 'u64' per the Bug 1 convention.
+  duckdb_extract_statements:        { args: ['u64', 'ptr', 'ptr'], returns: 'u64' },
+  duckdb_extract_statements_error:  { args: ['u64'], returns: 'ptr' },
+  duckdb_destroy_extracted:         { args: ['ptr'], returns: 'void' },
+
   // Prepared statements
   duckdb_prepare:          { args: ['u64', 'ptr', 'ptr'], returns: 'i32' },
   duckdb_prepare_error:    { args: ['u64'], returns: 'ptr' },
@@ -400,8 +414,21 @@ class Connection {
       throw new Error(error);
     }
 
+    // Capture affected-row count BEFORE destroy — the result must still be
+    // alive. duckdb_rows_changed is meaningful for DML; for SELECT it returns
+    // the rowcount of the result set, which is not what we want, so we only
+    // surface it as `rowsChanged` and let callers decide based on whether
+    // there were columns. Stored as BigInt to avoid 2^53 precision loss on
+    // huge bulk operations.
+    //
+    // Bug 1 workaround: even though this is morally a pointer arg, we pass
+    // it as a BigInt-valued u64 to match the dlopen declaration.
+    const rowsChanged = lib.duckdb_rows_changed(BigInt(rp));
+
     try {
-      return this.#extractChunks(resultPtr);
+      const rows = this.#extractChunks(resultPtr);
+      rows.rowsChanged = rowsChanged;
+      return rows;
     } finally {
       lib.duckdb_destroy_result(rp);
     }
@@ -429,18 +456,28 @@ class Connection {
       this.#bindParams(stmtHandle, params);
 
       const resultPtr = new Uint8Array(64);  // duckdb_result struct is ~48 bytes
-      lib.duckdb_execute_prepared(stmtHandle, ptr(resultPtr));
+      const execStatus = lib.duckdb_execute_prepared(stmtHandle, ptr(resultPtr));
 
       const rp = ptr(resultPtr);
+      // Honor BOTH the status code AND the error pointer. A non-zero status
+      // is the canonical "failure" signal; checking only result_error misses
+      // failures that didn't populate an error string (rare but real for
+      // execution-time failures vs. parse errors). Without this, callers
+      // would see rowsChanged=0 and think the statement succeeded.
       const errorPtr = lib.duckdb_result_error(rp);
-      if (errorPtr) {
-        const error = fromCString(errorPtr);
+      if (execStatus !== 0 || errorPtr) {
+        const error = errorPtr ? fromCString(errorPtr) : 'Prepared execution failed';
         lib.duckdb_destroy_result(rp);
         throw new Error(error);
       }
 
+      // Capture before destroy (see #querySimple).
+      const rowsChanged = lib.duckdb_rows_changed(BigInt(rp));
+
       try {
-        return this.#extractChunks(resultPtr);
+        const rows = this.#extractChunks(resultPtr);
+        rows.rowsChanged = rowsChanged;
+        return rows;
       } finally {
         lib.duckdb_destroy_result(rp);
       }
@@ -1054,6 +1091,47 @@ class Connection {
         lib.duckdb_destroy_prepare(ptr(stmtPtr));
       }
     });
+  }
+
+  /**
+   * Parse a SQL string and return the number of statements it contains.
+   * Used by /ddb/exec to refuse multi-statement input authoritatively
+   * (a leading-keyword regex isn't enough — DuckDB's parser would happily
+   * execute `INSERT ...; DROP TABLE ...;` if asked).
+   *
+   * Returns 0 on parse failure. Callers MUST treat 0 as "could not be
+   * validated" and refuse to execute the body — proceeding to conn.query
+   * on a 0-count would let an unparseable body bypass the single-statement
+   * check entirely. The /ddb/exec endpoint enforces `count == 1`.
+   *
+   * Throws on FFI lifecycle failures (also fail-closed).
+   */
+  countStatements(sql) {
+    const handlePtr = allocPtr();
+    const sqlBytes = toCString(sql);
+    const count = lib.duckdb_extract_statements(this.#handle, ptr(sqlBytes), ptr(handlePtr));
+    // Always free the handle, even when count == 0. Surface the parser's
+    // error message via duckdb_extract_statements_error if the caller asks
+    // (it's stored on the extracted-statements handle).
+    try {
+      const n = Number(count);
+      if (n === 0) {
+        const handle = readHandle(handlePtr);
+        if (handle) {
+          const errPtr = lib.duckdb_extract_statements_error(handle);
+          if (errPtr) {
+            const msg = fromCString(errPtr);
+            // Throw with the parser's actual error message so /ddb/exec's
+            // fail-closed catch returns something diagnostic instead of
+            // an opaque "0 statements" message.
+            throw new Error(msg || 'duckdb_extract_statements failed');
+          }
+        }
+      }
+      return n;
+    } finally {
+      lib.duckdb_destroy_extracted(ptr(handlePtr));
+    }
   }
 
   close() {

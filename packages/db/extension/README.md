@@ -31,7 +31,19 @@ ATTACH 'rip://localhost:4213' AS r (TYPE ripdb);
 USE r;
 SHOW TABLES;
 SELECT count(*) FROM accounts;
+
+-- DML works too — INSERT, UPDATE, DELETE all forward to rip-db over HTTP.
+INSERT INTO accounts (name, number) VALUES ('Acme Health', '04466500');
+UPDATE accounts SET phone = '(555) 123-4567' WHERE number = '04466500';
+DELETE FROM accounts WHERE number = '04466500';
 ```
+
+> Native DML is supported in the common forms — INSERT VALUES, simple
+> UPDATE/DELETE with a WHERE clause, and INSERT…SELECT (whether the source
+> is local or remote). A few DML shapes throw with a clear message:
+> `RETURNING`, `ON CONFLICT`, multi-statement input, prepared parameters,
+> DML inside an explicit `BEGIN`, and `UPDATE…FROM`/`DELETE…USING`. See the
+> full list and rationale in [`../CLI.md`](../CLI.md#supported-dml).
 
 That's it. Under the hood:
 
@@ -210,6 +222,19 @@ Those are DuckDB UI virtual tables that sneak into `information_schema.tables`
 when you've used the DuckDB UI against this rip-db. Recent rip-db server
 versions filter them out (`/tables` uses `duckdb_tables()` instead of
 `information_schema.tables`). If you see them, update the server.
+
+### `INSERT/UPDATE/DELETE` fails with `attached in read-only mode`
+
+You probably wrote `ATTACH 'http://host:port' AS r (TYPE ripdb)` instead of
+`ATTACH 'rip://host:port' AS r (TYPE ripdb)`. DuckDB resolves
+`IsRemoteFile(info.path)` *before* `(TYPE ripdb)` is considered, and the
+`http://` and `https://` prefixes are on its remote-file list — so an
+`http://` attach with `AccessMode::AUTOMATIC` (the default) is silently
+bumped to `READ_ONLY`. Every DML statement is then refused by DuckDB's own
+read-only check, before the ripdb planner ever sees it.
+
+Re-attach with the `rip://` scheme (or bare `host:port`) and DML works
+again. See `packages/db/CLI.md` §"ATTACH" for the full rationale.
 
 ---
 

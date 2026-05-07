@@ -64,15 +64,23 @@ D CALL rip_refresh('r');
 
 ### ATTACH
 
-Three equivalent URL forms are accepted:
+Three URL forms are accepted by the extension:
 
-- `'rip://host[:port]'` — the recommended form. Does not trigger DuckDB's httpfs autoload (see [Maintenance notes](#maintenance-notes)).
-- `'http://host[:port]'` — works on DuckDB builds that have httpfs loaded.
+- `'rip://host[:port]'` — **recommended**. Does not trigger DuckDB's httpfs autoload, and (more importantly for v1) does not trigger DuckDB's silent read-only bump (see below).
 - `'host[:port]'` — bare form, treated identically to `rip://`.
+- `'http://host[:port]'` — accepted by the extension, **but DML is silently disabled** (see below).
 
 Any of the three accept `?query` or `#fragment` suffixes and trailing path segments; all are stripped at parse time. An unreachable URL at attach time throws `IOException`.
 
 Any other scheme (`https://`, `ftp://`, etc.) throws `InvalidInputException`.
+
+> **Use `rip://` (or bare `host:port`), not `http://`, in `ATTACH` paths.**
+>
+> DuckDB's `DatabaseManager::AttachDatabase` resolves `IsRemoteFile(info.path)` *before* the `(TYPE ripdb)` clause is considered. Since `http://` and `https://` are in DuckDB's `EXTENSION_FILE_PREFIXES`, an `ATTACH 'http://...'` whose access mode is `AUTOMATIC` (the default) gets silently bumped to `READ_ONLY`. Every `INSERT`/`UPDATE`/`DELETE` then fails with `Cannot execute statement of type "INSERT" on database "rip" which is attached in read-only mode!` — the ripdb planner never sees the statement.
+>
+> `rip://` is not in DuckDB's prefix map, so the access mode stays `AUTOMATIC` → `READ_WRITE` and the ripdb planner gets to run.
+>
+> If you genuinely want read-only access, use `rip://` with the explicit option: `ATTACH 'rip://host:port' AS r (TYPE ripdb, READ_ONLY)`.
 
 ### Remote catalog
 
@@ -97,15 +105,69 @@ Three completion forms work:
 
 The fourth standard form — `SELECT <partial> FROM r.t` — completes keywords rather than columns. This is a DuckDB autocomplete-extension limitation that affects local tables identically and is not ripdb-specific.
 
-### Read-only
+### Supported DML
 
-All DDL and DML are rejected at bind time with:
+`INSERT`, `UPDATE`, and `DELETE` are supported via two paths chosen by the
+extension at plan time:
 
-```
-Permission Error: ripdb: remote database attached read-only — <X> is not supported
-```
+1. **Source-AST passthrough (preferred for INSERT VALUES, UPDATE, DELETE).**
+   The original SQL is reparsed, every source-position `BaseTableRef` is
+   verified to carry our local-attach catalog name explicitly (`r.t` or
+   `r.main.t` — bare `t` and pre-existing `main.t` are rejected to defend
+   against a multi-ripdb `USE` attack), the local catalog qualifier is
+   structurally stripped, and the rewritten statement is forwarded to the
+   rip-db server as a single `POST /ddb/exec` request. Used for
+   `INSERT INTO r.t VALUES (...)`, simple `UPDATE r.t ... WHERE`, and
+   `DELETE FROM r.t WHERE`. Subqueries against ripdb tables in
+   `WHERE`/`SET`/`ORDER BY` etc. are supported as long as their refs
+   are also explicitly qualified with `r.`.
+2. **Sink fallback for ALL `INSERT ... SELECT`** (regardless of source).
+   `INSERT INTO r.t SELECT ...` always uses the sink fallback — even
+   when the source only references ripdb tables. The reason: the source
+   binding is rooted in DuckDB's local binder (which knows which ripdb
+   attachment a `LogicalGet` belongs to and resolves `USE` correctly).
+   The sink operator buffers child chunks, formats them as typed SQL
+   literals (`DATE 'x'`, `'12.34'::DECIMAL(p,s)`, `'…'::HUGEINT`,
+   `NULL::<target>`, etc.), and emits one multi-row
+   `INSERT INTO main."t" (cols) VALUES (...), (...), ...` statement on
+   `Finalize`. Only typed-literal `INSERT VALUES` reaches the remote, so
+   there's no source-ref mis-targeting risk regardless of how many ripdb
+   attachments are active. The buffer is bounded by both row count
+   (default 1M) and serialized SQL byte size (default 64 MiB) to keep
+   the operation atomic-by-construction.
 
-Where `<X>` is the specific operation (`INSERT`, `UPDATE`, `DELETE`, `CREATE TABLE`, `ALTER`, `DROP`, etc.). The `StorageExtension`'s `Plan*` virtuals throw explicitly rather than stubbing to bogus operators.
+The CLI prints the standard `N rows affected` line because rip-db's new
+`POST /ddb/exec` endpoint surfaces DuckDB's `duckdb_rows_changed()` as a
+decimal string in the response envelope (string, not JSON number, to
+avoid JS-precision loss above 2^53).
+
+### Rejected with clear messages
+
+These operations throw `NotImplementedException` at plan time:
+
+| Construct | Reason |
+|---|---|
+| All DDL (`CREATE/DROP/ALTER TABLE`, `CREATE INDEX/VIEW/...`, `CREATE TABLE AS SELECT`) | DDL is out of scope for v1; would need a server-side schema-mutation contract. |
+| `RETURNING` on INSERT/UPDATE/DELETE | Would require parsing a row-shaped response into the operator's output. |
+| `INSERT ... ON CONFLICT` (UPSERT) | Out of scope for v1. |
+| `UPDATE ... FROM <other_table>` | Multi-table updates introduce extra source tables and name-resolution complexity. Materialize via temp table first. |
+| `DELETE ... USING <other_table>` | Same rationale as UPDATE...FROM. |
+| Multi-statement input (`INSERT ...; UPDATE ...;` in a single submit) | DuckDB v1.5.2 doesn't expose the per-statement index to `Plan*` callbacks; we can't reliably correlate the `Plan*` invocation to a specific statement in the batch. Run each statement separately. |
+| Prepared-statement parameter placeholders (`$1`, `?`, `$name`) | Detected by the AST safety walker and rejected — placeholders aren't substituted at the planning stage and would forward to the remote literally. Inline values or use a non-prepared statement. |
+| DML inside an explicit `BEGIN ... COMMIT/ROLLBACK` | The no-op `RipTransactionManager` cannot honor a local `ROLLBACK` against the remote (which autocommits each statement), so accepting the DML would silently corrupt user expectations. Run DML outside the explicit transaction, or `COMMIT`/`ROLLBACK` first. |
+| DML referencing the synthetic `rowid` column (in any position) | ripdb synthesizes sequential rowids locally during scans; they aren't stable on the remote and forwarding `WHERE rowid = N` would mutate a different physical row. The AST safety walker rejects any `ColumnRefExpression` whose final-component name is `rowid`. |
+| Qualified-identifier reference to our local-attach catalog name in a WHERE/SET/subquery position | E.g. `DELETE FROM r.t WHERE r.t.id = 1`. The FROM-clause TableRef rewriter doesn't reach expression positions; the AST safety walker rejects to avoid mis-targeting if the remote happens to have a same-named catalog/schema/attachment. Drop the qualifier in expression positions, or `USE r;` first. |
+| `UPDATE`/`DELETE` whose subtree contains a non-ripdb LogicalGet (local-catalog table, local table function, etc.) | The dependency walk rejects passthrough; no fallback for UPDATE/DELETE in v1 (only INSERT has a sink fallback). |
+| INSERT into a column whose catalog type is `VARCHAR` but the remote is actually a native nested/binary type (`LIST/STRUCT/MAP/ARRAY/UNION/ENUM/JSON/BIT/...`) | The catalog exposes those as VARCHAR for read-side ergonomics; the v1 DML write path can't round-trip a string back into the native shape. Both passthrough and sink paths refuse. |
+| Embedded NUL (`\0`) in a VARCHAR value | NULs don't survive HTTP-as-text transport and tooling truncates strings at the first NUL; mutations refuse rather than silently corrupt. |
+| `INSERT ... DEFAULT VALUES` | Out of scope for v1. |
+| TableRef forms other than base table / join / subquery / VALUES list / empty FROM (table functions, recursive CTEs, pivots, SHOW refs, column-data refs, delim refs) | Out of scope for v1; the FROM-clause rewriter doesn't validate these and the safety walker refuses rather than forward unrewritten content. |
+
+## Known v1 limitations (intentional, deferred)
+
+- **Multi-ripdb-attachment dependency disambiguation as a positive feature.** The dependency walk identifies all `ripdb_scan` LogicalGets but can't distinguish which attachment they belong to (the bind data is moved out before our `Plan*` runs). The defense is two-layered: (1) `INSERT...SELECT` always routes to the sink fallback, where the source is materialized via DuckDB's local binder — only typed-literal `INSERT VALUES` reaches the remote, so cross-server mis-targeting is impossible by construction; (2) for `UPDATE`/`DELETE` passthrough (which doesn't materialize), the pre-rewrite source-provenance walker requires every source-position `BaseTableRef` to carry our local-attach catalog name in either the catalog slot (`r.main.t`) or the schema slot (`r.t`). Bare `t`, pre-existing `main.t`, `s.t`, and `s.main.t` all reject. So `UPDATE r.t SET col = (SELECT max FROM main.t)` under `USE s` is refused with a clear cross-attachment-ref message, not silently routed. Genuinely cross-attachment DML (e.g. read from one server, write to another) requires a future feature that carries entry IDs through physical planning.
+- **Recursive CTEs and other QueryNode forms beyond SELECT/SET-OPERATION.** The rewriter and safety walker explicitly refuse these rather than forward un-validated subtrees.
+- **NUL bytes in VARCHAR.** Both passthrough and sink paths refuse SQL containing embedded NUL (`\0`) bytes — they don't survive HTTP-as-text transport and downstream tooling. A future binary-clean transport would lift this.
 
 ### Refresh
 
@@ -133,7 +195,8 @@ Each HTTP request is independent server-side — rip-db does not hold a shared s
 
 ## Limitations
 
-- **Read-only.** `INSERT` / `UPDATE` / `DELETE` / DDL all throw at bind time.
+- **DML supported, DDL not.** `INSERT` / `UPDATE` / `DELETE` are supported (see *Supported DML* above for the constraints); DDL operations (`CREATE/DROP/ALTER TABLE`, `CREATE INDEX/VIEW/SEQUENCE/...`, `CREATE TABLE AS SELECT`) all throw at plan time.
+- **No `RETURNING`, no `ON CONFLICT`, no multi-statement input, no prepared parameters, no DML inside explicit `BEGIN`.** See the *Rejected with clear messages* table above for the full reject list.
 - **Single-threaded scans.** Each scan runs on one thread; DuckDB's parallel planner does not fan out a single ripdb scan across multiple HTTP requests.
 - **Full response buffering.** No per-chunk streaming decode. A query returning millions of rows holds the whole response in memory before DuckDB sees any.
 - **No query cancellation to the server.** Ctrl-C in the CLI returns control to DuckDB and closes the local socket; rip-db continues running the query to completion, and its result is discarded on arrival.
@@ -213,8 +276,21 @@ The extension owns the client half of an HTTP contract with rip-db. Catalog oper
 |---|---|---|---|
 | `GET /tables` | Catalog population | — | `{"tables": [...]}` JSON |
 | `GET /schema/:t` | Per-table column info | — | `{"schema": [{column_name, column_type}, ...]}` JSON |
-| `POST /ddb/run` | Query execution | `text/plain` SQL body | binary response (see below) |
+| `POST /ddb/run` | Read-side query execution | `text/plain` SQL body | binary response (see below) |
+| `POST /ddb/exec` | DML execution (INSERT/UPDATE/DELETE) | `text/plain` SQL body, **single** statement | `{"ok":true,"kind":"exec","statement_type":"INSERT\|UPDATE\|DELETE","affected_rows":"<decimal>","timeMs":N}` JSON. `affected_rows` is a **string** to avoid JS-precision loss on counts > 2^53. |
 | `GET /health` | Liveness / probe | — | `{"ok": true}` |
+
+The DML path is intentionally a separate endpoint from `/ddb/run` because (a)
+the binary read protocol has no slot for an `affected_rows` count, and (b)
+defense in depth: `/ddb/exec` enforces (1) the leading keyword must be
+`INSERT`, `UPDATE`, or `DELETE` (after stripping comments and whitespace) and
+(2) `duckdb_extract_statements` reports exactly one statement — refusing
+multi-statement chain attacks like `INSERT ...; DROP TABLE ...;` even though
+the leading keyword classifier would accept them. `MERGE` is intentionally
+NOT accepted (the extension doesn't implement it; allowing it on this
+endpoint would be a back door around the extension's reject list). Faking the
+affected count as `-1` would break the CLI's "N rows affected" line and isn't
+acceptable.
 
 ### Binary response format (`POST /ddb/run`)
 

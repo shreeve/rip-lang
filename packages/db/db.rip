@@ -494,7 +494,19 @@ post '/ddb/run' ->
     return binaryResponse serializeErrorResult 'Empty query' unless sql
 
     logSQL sql
-    rowLimit = parseInt(@req.header('x-duckdb-ui-result-row-limit') or '10000')
+    # Row limit policy:
+    #   - absent header  -> unlimited (the right default for non-UI clients
+    #                       like the ripdb CLI extension; previously this
+    #                       silently truncated every scan at 10000 rows)
+    #   - present header -> honor it as a hard cap (DuckDB UI uses this
+    #                       to keep its in-browser table renderer responsive)
+    #   - "0" or "-1"    -> unlimited (explicit opt-out)
+    rawLimit = @req.header('x-duckdb-ui-result-row-limit')
+    rowLimit = if rawLimit?
+      n = parseInt rawLimit, 10
+      if Number.isFinite(n) and n > 0 then n else Infinity
+    else
+      Infinity
     params = getUIParams(@req)
 
     rows = await conn.query sql, params
@@ -503,8 +515,10 @@ post '/ddb/run' ->
     # Build column info for serialization
     colInfo = columns.map (col) -> { name: col.name, type: col.typeName }
 
-    # Convert rows to arrays (ensure undefined becomes null for serialization)
-    limitedRows = rows.slice(0, rowLimit)
+    # Convert rows to arrays (ensure undefined becomes null for serialization).
+    # Skip the slice() entirely when no limit is set so we don't pay an O(n)
+    # copy for every full-table scan.
+    limitedRows = if rowLimit is Infinity then rows else rows.slice(0, rowLimit)
     arrayRows = limitedRows.map (row) ->
       columns.map (col) ->
         val = row[col.name]
@@ -553,6 +567,136 @@ post '/shutdown' ->
 # POST /ddb/interrupt — Cancel running query
 post '/ddb/interrupt' ->
   binaryResponse serializeEmptyResult()
+
+# ==============================================================================
+# /ddb/exec — DML execution path used by the ripdb DuckDB extension
+# ==============================================================================
+#
+# Separate endpoint from /ddb/run because:
+#   - /ddb/run is the binary read protocol (DuckDB UI shape) and has no slot
+#     for an "affected rows" count.
+#   - /ddb/exec returns a tiny JSON envelope with the affected_rows for the
+#     last statement, exposed by lib/duckdb.mjs as result.rowsChanged.
+#   - The CLI extension's "N rows affected" line is a hard requirement; we
+#     refuse to fake it as -1 or 0.
+#
+# This endpoint is a privileged DML execution path. Real validation
+# (RETURNING/ON CONFLICT/qualified-ident-leak/rowid/etc.) happens in
+# the ripdb extension before the request is sent — the extension's
+# Plan{Insert,Update,Delete} hooks parse + walk the bound plan and refuse
+# anything outside the M3 supported subset.
+#
+# What we enforce HERE on the server:
+#   1. the body must start with INSERT/UPDATE/DELETE (case-insensitive,
+#      after stripping leading whitespace + SQL comments) — keeps DDL
+#      and SELECT off this endpoint cheaply.
+#   2. exactly one statement (verified via duckdb_extract_statements,
+#      which uses DuckDB's own parser — refuses string-embedded ';'
+#      false-positives and catches `INSERT ...; DROP TABLE ...;` chain
+#      attacks).
+#
+# MERGE is intentionally NOT accepted here — the extension does not
+# implement it, and accepting it on this endpoint would be a back door
+# around the extension's reject list.
+#
+# Request:  text/plain SQL body (single INSERT/UPDATE/DELETE)
+# Response: { ok, kind: 'exec', statement_type, affected_rows: "<decimal>", timeMs }
+#           affected_rows is a STRING — DML on huge tables can exceed 2^53
+#           rows, and JSON numbers silently lose precision past that.
+
+# Detect statement type from the leading keyword.
+classifyDmlStatement = (sql) ->
+  trimmed = sql.replace(/^\s*(?:--[^\n]*\n|\/\*[\s\S]*?\*\/|\s)+/, '')  # strip leading comments/whitespace
+  m = trimmed.match(/^([A-Za-z]+)/)
+  return null unless m
+  switch m[1].toUpperCase()
+    when 'INSERT' then 'INSERT'
+    when 'UPDATE' then 'UPDATE'
+    when 'DELETE' then 'DELETE'
+    else null
+
+post '/ddb/exec' ->
+  startTime = Date.now()
+  sql = read 'body', 'string'
+
+  unless isRunnableSql sql
+    return jsonResponse {
+      ok: false
+      error: 'Empty query'
+      errorCode: 'BAD_REQUEST'
+      timeMs: Date.now() - startTime
+    }, 400
+
+  # NUL byte safety — must happen BEFORE any other path consumes the SQL.
+  # toCString() in lib/duckdb.mjs appends '\0' and passes the buffer to
+  # DuckDB's C API; an embedded NUL in the body would silently truncate
+  # the SQL there. classifyDmlStatement and countStatements are also
+  # NUL-truncation paths in their own right. Mirror the extension-side
+  # check (in ripdb.cpp's TryPlanDmlPassthrough) here so direct HTTP
+  # callers can't bypass it.
+  if sql.includes '\0'
+    return jsonResponse {
+      ok: false
+      error: 'request body contains an embedded NUL byte; refusing to mutate'
+      errorCode: 'BAD_REQUEST'
+      timeMs: Date.now() - startTime
+    }, 400
+
+  stmtType = classifyDmlStatement sql
+  unless stmtType?
+    return jsonResponse {
+      ok: false
+      error: '/ddb/exec accepts only INSERT/UPDATE/DELETE statements'
+      errorCode: 'BAD_REQUEST'
+      timeMs: Date.now() - startTime
+    }, 400
+
+  # Authoritative single-statement enforcement via DuckDB's own parser
+  # (not regex). Refuses `INSERT INTO t VALUES (1); DROP TABLE accounts;`
+  # and similar chain attacks even though both statements look fine to
+  # the leading-keyword classifier above.
+  #
+  # FAIL CLOSED: any FFI/wrapper error from countStatements is treated as
+  # a validation failure, NOT swallowed and proceeded-through. This is
+  # the security gate; it must never accept the body when it can't prove
+  # the body is single-statement.
+  n = null
+  try
+    n = conn.countStatements sql
+  catch err
+    return jsonResponse {
+      ok: false
+      error: "could not validate single-statement input: #{err?.message ?? err}"
+      errorCode: 'BAD_REQUEST'
+      timeMs: Date.now() - startTime
+    }, 400
+  # Strict equality: the only acceptable validator outcome is "exactly one
+  # statement". n == 0 means parse failure (countStatements throws with the
+  # real message before we get here); n > 1 means chained input. Both
+  # rejected.
+  if n isnt 1
+    return jsonResponse {
+      ok: false
+      error: "/ddb/exec accepts exactly one statement (got #{n})"
+      errorCode: 'BAD_REQUEST'
+      timeMs: Date.now() - startTime
+    }, 400
+
+  logSQL sql
+  try
+    result = await conn.query sql
+    affected = result?.rowsChanged
+    affectedStr = if typeof affected is 'bigint' then affected.toString() else String(affected ?? 0)
+    jsonResponse {
+      ok: true
+      kind: 'exec'
+      statement_type: stmtType
+      affected_rows: affectedStr
+      timeMs: Date.now() - startTime
+    }
+  catch err
+    env = errorEnvelope err, startTime
+    jsonResponse env, (if env.errorCode is 'TABLE_NOT_FOUND' then 404 else 422)
 
 # POST /ddb/tokenize — Tokenize SQL for syntax highlighting
 post '/ddb/tokenize' ->

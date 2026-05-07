@@ -10,7 +10,11 @@
 # Usage:
 #   rip packages/db/extension/scripts/smoke-server.rip
 #
-# Run extension_test in another terminal against http://localhost:4214.
+# Run extension_test in another terminal against rip://localhost:4214.
+# (Use the rip:// scheme — DuckDB's `IsRemoteFile` auto-bumps `http://`
+# attaches to READ_ONLY before our extension is consulted, which would
+# block every DML test. See packages/db/extension/build-extension.sh
+# for the full explanation.)
 # =============================================================================
 
 import { spawn } from 'child_process'
