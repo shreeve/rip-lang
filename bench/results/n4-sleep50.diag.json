@@ -1,0 +1,12 @@
+{
+  "name": "n4-sleep50",
+  "endpoint": "http://localhost:3000/sleep?ms=50",
+  "requests": 10500,
+  "responses_2xx": 10500,
+  "responses_5xx": 0,
+  "queued": 10492,
+  "queueShed": 0,
+  "queueTimeouts": 0,
+  "load1_at_start": "4.59",
+  "free_gb_at_start": "4.3"
+}

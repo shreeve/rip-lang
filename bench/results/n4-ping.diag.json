@@ -1,0 +1,12 @@
+{
+  "name": "n4-ping",
+  "endpoint": "http://localhost:3000/ping",
+  "requests": 10500,
+  "responses_2xx": 10500,
+  "responses_5xx": 0,
+  "queued": 10489,
+  "queueShed": 0,
+  "queueTimeouts": 0,
+  "load1_at_start": "7.84",
+  "free_gb_at_start": "2.9"
+}

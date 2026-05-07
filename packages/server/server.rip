@@ -113,6 +113,7 @@ class Server
       appBaseDir: @flags.appBaseDir
       hosts: appHosts
       workers: @flags.workers
+      workerConcurrency: @flags.workerConcurrency
       maxQueue: @flags.maxQueue
       queueTimeoutMs: @flags.queueTimeoutMs
       readTimeoutMs: @flags.readTimeoutMs
@@ -768,8 +769,11 @@ class Server
 
     @retainRuntime(runtime) if matchedRoute?.app
 
-    # Fast path: try available worker
-    if app.inflightTotal < Math.max(1, app.sockets.length)
+    # Fast path: try available worker. Capacity is workers × per-worker
+    # concurrency; default concurrency is 1 (one request per worker, the
+    # historical model). Raising c:N lets each worker fan out N concurrent
+    # requests through the JS event loop.
+    if app.inflightTotal < @appCapacity(app)
       sock = @getNextAvailableSocket(app)
       if sock
         @metrics.forwarded++
@@ -861,9 +865,18 @@ class Server
       return app if app.sockets.some((s) -> s.socket is socketPath)
     getAppState(@appRegistry, @defaultAppId)
 
+  appConcurrency: (app) ->
+    app = app or getAppState(@appRegistry, @defaultAppId)
+    c = app?.config?.workerConcurrency
+    if Number.isFinite(c) and c >= 1 then c else 1
+
+  appCapacity: (app) ->
+    app = app or getAppState(@appRegistry, @defaultAppId)
+    Math.max(1, app.sockets.length) * @appConcurrency(app)
+
   getNextAvailableSocket: (app) ->
     app = app or getAppState(@appRegistry, @defaultAppId)
-    schedulerGetNextAvailableSocket(app.availableWorkers, app.newestVersion)
+    schedulerGetNextAvailableSocket(app.availableWorkers, app.newestVersion, @appConcurrency(app))
 
   isCurrentVersion: (worker, app) ->
     app = app or getAppState(@appRegistry, @defaultAppId)
@@ -871,7 +884,7 @@ class Server
 
   releaseWorker: (worker, app) ->
     app = app or getAppState(@appRegistry, @defaultAppId)
-    schedulerReleaseWorker(app.sockets, app.availableWorkers, app.newestVersion, worker)
+    schedulerReleaseWorker(app.sockets, app.availableWorkers, app.newestVersion, worker, @appConcurrency(app))
 
   logAccess: (req, res, totalSeconds, workerSeconds, mark = null) ->
     if @flags.jsonLogging
@@ -900,16 +913,24 @@ class Server
     start = performance.now()
     res = null
     workerSeconds = 0
-    released = false
-
-    # Pre-clone body-bearing requests so we can retry on 503-busy/draining.
-    # Bodyless methods don't need cloning (headers + URL are safe to reuse).
-    # Returns null if the body is too large or clone fails — in that case
-    # retry is skipped and the worker's 503 surfaces to the client.
-    retryReq = maybeCloneForRetry(req)
+    # `active` tracks the worker currently checked out for this request.
+    # The scheduler bumped its `inflight` on checkout; the finally block
+    # always releases it (which decrements `inflight`). On a retry to a
+    # different worker we release the original, swap `active` to the
+    # retry, and the finally releases that one. On crash, the catch
+    # filters the actually-faulting worker (`active`) out of the pool
+    # and clears `active` so the finally is a no-op.
+    active = socket
 
     try
-      socket.inflight = 1
+      # Pre-clone body-bearing requests so we can retry on 503-busy/draining.
+      # Bodyless methods don't need cloning (headers + URL are safe to reuse).
+      # Returns null if the body is too large or clone fails — in that case
+      # retry is skipped and the worker's 503 surfaces to the client.
+      retryReq = maybeCloneForRetry(req)
+
+      # Note: the scheduler (`getNextAvailableSocket`) already incremented
+      # `socket.inflight`. Don't bump it here. Likewise on the retry path.
       t0 = performance.now()
       res = @forwardOnce!(req, socket.socket, app)
       workerSeconds = (performance.now() - t0) / 1000
@@ -922,23 +943,33 @@ class Server
         canRetry = (not hasBody) or retryReq?
         if canRetry
           retry = @getNextAvailableSocket(app)
-          if retry and retry isnt socket
-            @releaseWorker(socket, app)
-            released = true
-            retry.inflight = 1
+          if retry and retry is socket
+            # At c>1 the scheduler can hand back the same worker because
+            # it still has spare capacity. Retrying on it is futile (it
+            # just told us 503-busy); undo the spurious checkout bump
+            # and let the original 503 surface to the client.
+            @releaseWorker(retry, app)
+          else if retry
+            # Different worker — release the original, swap `active` so
+            # the finally releases the retry instead.
+            @releaseWorker(active, app)
+            active = retry
             t1 = performance.now()
             res = @forwardOnce!((if hasBody then retryReq else req), retry.socket, app)
             workerSeconds = (performance.now() - t1) / 1000
-            @releaseWorker(retry, app)
-            return @buildResponse(res, req, start, workerSeconds, requestId)
     catch err
       warn "[server] forwardToWorker error:", err.message or err if isDebug()
-      app.sockets = app.sockets.filter((x) -> x.socket isnt socket.socket)
-      app.availableWorkers = app.availableWorkers.filter((x) -> x.socket isnt socket.socket)
-      released = true
+      # Evict the worker that actually faulted, not always `socket`.
+      # On a retry that throws, `active` is the retry worker.
+      faulted = active
+      app.sockets = app.sockets.filter((x) -> x.socket isnt faulted.socket)
+      app.availableWorkers = app.availableWorkers.filter((x) -> x.socket isnt faulted.socket)
+      # Worker is being thrown away — its inflight count is moot, and the
+      # filter above means releaseWorker would no-op anyway. Skip release.
+      active = null
       return serviceUnavailableResponse()
     finally
-      @releaseWorker(socket, app) unless released
+      @releaseWorker(active, app) if active
 
     return serviceUnavailableResponse() unless res
     @buildResponse(res, req, start, workerSeconds, requestId)
@@ -959,7 +990,7 @@ class Server
     metrics = @metrics
     app.inflightTotal = drainQueueOnce(
       app.inflightTotal,
-      app.sockets.length,
+      @appCapacity(app),
       (=> app.availableWorkers.length),
       (=> app.queue.shift()),
       ((job) =>

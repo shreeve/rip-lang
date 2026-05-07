@@ -98,6 +98,82 @@ test "getNextAvailableSocket returns null when all busy", ->
   sock = getNextAvailableSocket(workers, null)
   eq sock, null
 
+test "getNextAvailableSocket increments inflight on checkout (K=1)", ->
+  w = { socket: '/a', inflight: 0, version: 1, workerId: 0 }
+  workers = [w]
+  sock = getNextAvailableSocket(workers, null)
+  eq sock, w
+  eq w.inflight, 1
+  # Worker is full at K=1, so pool drops to empty
+  eq workers.length, 0
+
+test "getNextAvailableSocket allows multiple checkouts up to concurrency (K=3)", ->
+  w = { socket: '/a', inflight: 0, version: 1, workerId: 0 }
+  workers = [w]
+  s1 = getNextAvailableSocket(workers, null, 3)
+  eq s1, w
+  eq w.inflight, 1
+  ok workers.length is 1     # still has capacity, re-added
+  s2 = getNextAvailableSocket(workers, null, 3)
+  eq s2, w
+  eq w.inflight, 2
+  ok workers.length is 1
+  s3 = getNextAvailableSocket(workers, null, 3)
+  eq s3, w
+  eq w.inflight, 3
+  eq workers.length, 0       # full, removed from pool
+  s4 = getNextAvailableSocket(workers, null, 3)
+  eq s4, null
+
+test "getNextAvailableSocket prefers a worker with capacity over a full one (K=2)", ->
+  full = { socket: '/full', inflight: 2, version: 1, workerId: 0 }
+  open = { socket: '/open', inflight: 0, version: 1, workerId: 1 }
+  workers = [full, open]
+  sock = getNextAvailableSocket(workers, null, 2)
+  eq sock, open
+  eq open.inflight, 1
+
+test "checkout/release accounting is balanced under retry-same-worker (K=4)", ->
+  # Simulates the dispatcher's retry path: if forward returns 503-busy
+  # while the worker still has capacity, the scheduler can hand back the
+  # same worker. The dispatcher must release the spurious bump so the
+  # accounting balances.
+  w = { socket: '/a', inflight: 0, version: 1, workerId: 0 }
+  available = [w]
+  sockets = [w]
+  s1 = getNextAvailableSocket(available, null, 4)   # initial: 0->1
+  eq w.inflight, 1
+  retry = getNextAvailableSocket(available, null, 4) # retry: 1->2 (same worker)
+  eq retry, w
+  eq w.inflight, 2
+  releaseWorker(sockets, available, null, retry, 4) # undo the spurious bump
+  eq w.inflight, 1
+  releaseWorker(sockets, available, null, s1, 4)    # final release of original
+  eq w.inflight, 0
+
+test "checkout/release accounting is balanced under retry-different-worker (K=2)", ->
+  # Force "different worker" case by saturating the first one before retry.
+  a = { socket: '/a', inflight: 0, version: 1, workerId: 0 }
+  b = { socket: '/b', inflight: 0, version: 1, workerId: 1 }
+  available = [a, b]
+  sockets = [a, b]
+  # Saturate a so the scheduler has to pick b. LIFO: pops b first; for
+  # this test we want the original to be a, so checkout twice on a until
+  # full, then verify retry routes to b.
+  s1 = getNextAvailableSocket(available, null, 2)        # b (LIFO), b.inflight=1
+  s2 = getNextAvailableSocket(available, null, 2)        # b again, b.inflight=2
+  eq s1, s2
+  eq b.inflight, 2
+  # b is now full, removed from pool. Next checkout returns a.
+  retry = getNextAvailableSocket(available, null, 2)
+  eq retry, a
+  ok retry isnt s1
+  releaseWorker(sockets, available, null, s1, 2)         # b.inflight=1
+  releaseWorker(sockets, available, null, s2, 2)         # b.inflight=0
+  releaseWorker(sockets, available, null, retry, 2)      # a.inflight=0
+  eq a.inflight, 0
+  eq b.inflight, 0
+
 test "isCurrentVersion with no version tracking", ->
   ok isCurrentVersion(null, { version: 1 })
   ok isCurrentVersion(null, { version: null })
@@ -109,6 +185,30 @@ test "releaseWorker resets inflight and re-adds to pool", ->
   releaseWorker(sockets, available, null, w)
   eq w.inflight, 0
   eq available.length, 1
+
+test "releaseWorker decrements without re-adding when still has capacity (K=4)", ->
+  w = { socket: '/a', inflight: 2, version: 1, workerId: 0 }
+  sockets = [w]
+  available = [w]   # already in pool — has capacity (2 < 4)
+  releaseWorker(sockets, available, null, w, 4)
+  eq w.inflight, 1
+  eq available.length, 1   # not double-added
+
+test "releaseWorker re-adds when transitioning from full to has-capacity (K=4)", ->
+  w = { socket: '/a', inflight: 4, version: 1, workerId: 0 }
+  sockets = [w]
+  available = []   # was full → not in pool
+  releaseWorker(sockets, available, null, w, 4)
+  eq w.inflight, 3
+  eq available.length, 1   # re-added because we transitioned full → open
+
+test "releaseWorker is idempotent against duplicate adds", ->
+  w = { socket: '/a', inflight: 4, version: 1, workerId: 0 }
+  sockets = [w]
+  available = [w]   # weird edge: somehow already present despite being "full"
+  releaseWorker(sockets, available, null, w, 4)
+  eq w.inflight, 3
+  eq available.length, 1   # still only one entry
 
 test "isRetryableBusy matches 503 + Rip-Worker-Busy", ->
   headers = new Headers({ 'Rip-Worker-Busy': '1' })

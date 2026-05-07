@@ -34,6 +34,22 @@ test "control cli supports explicit path with custom app name", ->
   eq flags.appAliases[0], 'ola'
   eq flags.socketPrefix, 'rip_ola'
 
+test "workerConcurrency defaults to 1 (preserves historical behavior)", ->
+  flags = parseFlags(['bun', 'server', defaultRip])
+  eq flags.workerConcurrency, 1
+
+test "workerConcurrency parses c:N positional", ->
+  flags = parseFlags(['bun', 'server', defaultRip, 'c:8'])
+  eq flags.workerConcurrency, 8
+
+test "workerConcurrency parses --worker-concurrency=N long form", ->
+  flags = parseFlags(['bun', 'server', defaultRip, '--worker-concurrency=4'])
+  eq flags.workerConcurrency, 4
+
+test "workerConcurrency floors below 1 to 1", ->
+  flags = parseFlags(['bun', 'server', defaultRip, 'c:0'])
+  eq flags.workerConcurrency, 1
+
 test "serving runtime helpers load and create summary entries", ->
   runtime = createServingRuntime()
   entry = createReloadHistoryEntry('reload-1', 'test', null, 1, 'applied')

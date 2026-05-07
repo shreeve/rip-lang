@@ -1,0 +1,36 @@
+# bench/index.rip — minimal app for measuring Rip Server throughput.
+#
+# Three handlers, each isolating a different cost:
+#
+#   /sleep?ms=N — I/O-bound. The handler awaits and yields the event loop.
+#                 This is the workload that benefits from per-worker
+#                 concurrency > 1; capacity goes from N_workers to
+#                 N_workers × concurrency.
+#
+#   /ping       — Floor latency. No async work, just a JSON response.
+#                 Measures dispatcher + UDS hop + framework overhead.
+#                 Should be roughly equal at any worker concurrency.
+#
+#   /cpu?ms=N   — CPU-bound. Busy-loops synchronously.
+#                 Should NOT improve at K>1 — the event loop is single
+#                 threaded, so concurrent CPU work just contends.
+#
+# Run via: rip server --workers 4 bench/
+
+import { get, start } from '@rip-lang/server'
+
+get '/sleep', ->
+  ms = parseInt(@req.query('ms') or '50', 10)
+  sleep! ms
+  { ok: true, ms }
+
+get '/ping', -> { ok: true }
+
+get '/cpu', ->
+  ms = parseInt(@req.query('ms') or '10', 10)
+  end = Date.now() + ms
+  i = 0
+  i++ while Date.now() < end
+  { ok: true, ms, iters: i }
+
+start port: 3000
