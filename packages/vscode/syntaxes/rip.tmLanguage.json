@@ -656,6 +656,30 @@
     "type_expression": {
       "patterns": [
         {
+          "comment": "Object/inline type literal — consume balanced braces so inner commas don't leak to the outer parameter-list end pattern.",
+          "begin": "\\{",
+          "beginCaptures": { "0": { "name": "punctuation.definition.typeparameters.rip" } },
+          "end": "\\}",
+          "endCaptures": { "0": { "name": "punctuation.definition.typeparameters.rip" } },
+          "patterns": [{ "include": "#type_expression" }]
+        },
+        {
+          "comment": "Generic brackets — consume balanced angles for the same reason.",
+          "begin": "<",
+          "beginCaptures": { "0": { "name": "punctuation.definition.typeparameters.rip" } },
+          "end": ">",
+          "endCaptures": { "0": { "name": "punctuation.definition.typeparameters.rip" } },
+          "patterns": [{ "include": "#type_expression" }]
+        },
+        {
+          "comment": "Function-type parens — consume balanced parens.",
+          "begin": "\\(",
+          "beginCaptures": { "0": { "name": "punctuation.definition.typeparameters.rip" } },
+          "end": "\\)",
+          "endCaptures": { "0": { "name": "punctuation.definition.typeparameters.rip" } },
+          "patterns": [{ "include": "#type_expression" }]
+        },
+        {
           "comment": "Built-in types",
           "match": "\\b(number|string|boolean|void|any|never|unknown|object|symbol|bigint|null|undefined)\\b",
           "name": "support.type.primitive.rip"
@@ -669,11 +693,6 @@
           "comment": "Type names (PascalCase)",
           "match": "\\b([A-Z]\\w*)\\b",
           "name": "entity.name.type.rip"
-        },
-        {
-          "comment": "Generic brackets",
-          "match": "[<>]",
-          "name": "punctuation.definition.typeparameters.rip"
         },
         {
           "comment": "Array type brackets",
@@ -709,11 +728,6 @@
           "comment": "Type keyword (for structural types)",
           "match": "\\b(type)\\b",
           "name": "storage.type.rip"
-        },
-        {
-          "comment": "Parentheses in function types",
-          "match": "[()]",
-          "name": "punctuation.definition.typeparameters.rip"
         },
         {
           "comment": "Comma separator",

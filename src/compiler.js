@@ -1916,7 +1916,59 @@ export class CodeEmitter {
       return this.emit(['object-comprehension', keyVar, valueExpr, iterators, guards], context);
     }
 
-    let codes = pairs.map(pair => {
+    // Helper: scan source line for an identifier name within [fromCol, toCol).
+    // Used to attach _anchors so identifiers that the parser dropped position
+    // info from (method-shorthand params, property shorthand keys) can still
+    // produce source-map mappings.
+    const scanIdentCol = (srcRow, name, fromCol = 0, toCol = Infinity) => {
+      const source = this.options && this.options.source;
+      if (!source || typeof name !== 'string' || !/^[A-Za-z_$][\w$]*$/.test(name)) return -1;
+      const lines = this._sourceLinesCache || (this._sourceLinesCache = source.split('\n'));
+      const line = lines[srcRow];
+      if (!line) return -1;
+      const re = new RegExp('\\b' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'g');
+      re.lastIndex = Math.max(0, fromCol);
+      let m;
+      while ((m = re.exec(line)) !== null) {
+        if (m.index >= toCol) return -1;
+        return m.index;
+      }
+      return -1;
+    };
+
+    // Same as scanIdentCol but returns the LAST match in [fromCol, toCol).
+    // Property-shorthand pairs only carry .loc for the *end* of the pair,
+    // so to find the key's actual column we walk all occurrences and take
+    // the rightmost one (the param with the same name appears earlier on
+    // the line and would otherwise win).
+    const scanIdentColLast = (srcRow, name, fromCol = 0, toCol = Infinity) => {
+      const source = this.options && this.options.source;
+      if (!source || typeof name !== 'string' || !/^[A-Za-z_$][\w$]*$/.test(name)) return -1;
+      const lines = this._sourceLinesCache || (this._sourceLinesCache = source.split('\n'));
+      const line = lines[srcRow];
+      if (!line) return -1;
+      const re = new RegExp('\\b' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'g');
+      re.lastIndex = Math.max(0, fromCol);
+      let m, last = -1;
+      while ((m = re.exec(line)) !== null) {
+        if (m.index >= toCol) break;
+        last = m.index;
+      }
+      return last;
+    };
+
+    // Track which pairs emit as method-shorthand so we can format the
+    // object multi-line. Joining sibling methods with `, ` collapses
+    // `}, name(args) {` onto the same generated line as the previous
+    // method's closing brace, which makes per-line source-map mappings
+    // ambiguous (the LSP can't tell which source line owns that gen line,
+    // so parameter classifications get attributed to the wrong source
+    // position). Putting each method on its own gen line keeps the
+    // line→source mapping one-to-one.
+    let hasMethod = false;
+    let isMethod = new Array(pairs.length).fill(false);
+
+    let codes = pairs.map((pair, idx) => {
       if (this.is(pair, '...')) return `...${this.emit(pair[1], 'value')}`;
       let [operator, key, value] = pair;
       let keyCode;
@@ -1947,16 +1999,98 @@ export class CodeEmitter {
         let mIsGen = this.containsYield(mBody);
         let prefix = mIsAsync ? 'async ' : '';
         let star = mIsGen ? '*' : '';
+        // Inject source-map anchors for plain-string params (e.g. `quantity`
+        // in `(product, quantity) ->`). The parser drops .loc from non-data
+        // identifier tokens and collectSubExprs intentionally skips the
+        // params slot of arrow nodes, so without these the param positions
+        // produce no source mapping and the LSP's gen→src lookup falls back
+        // to a nearby unrelated identifier — typically classifying the
+        // param as `property`.
+        if (value && value.loc && Array.isArray(mParams) && mParams.length) {
+          const srcRow  = value.loc.r;
+          // value.loc.c marks the start of the params group (the `(` for
+          // parenthesized params, or the first param's column for bare
+          // single-param arrows). Scan forward from there for each param
+          // in declaration order.
+          const paramsStart = value.loc.c;
+          const anchors = [];
+          let cursor = paramsStart;
+          for (const p of mParams) {
+            if (typeof p !== 'string') continue;
+            const col = scanIdentCol(srcRow, p, cursor);
+            if (col >= 0) {
+              anchors.push({ name: p, origLine: srcRow, origCol: col });
+              cursor = col + p.length;
+            }
+          }
+          if (anchors.length) {
+            value._anchors = (value._anchors || []).concat(anchors);
+          }
+        }
+        hasMethod = true;
+        isMethod[idx] = true;
         return `${prefix}${star}${keyCode}(${mParamList}) ${mBodyCode}`;
       }
 
       let valCode = this.emit(value, 'value');
+      // Anchor the key for simple `key: value` pairs so the source-map
+      // heuristic has one anchor per source occurrence (otherwise pairs
+      // like `quantity: 1` are silent and downstream same-named anchors
+      // get stolen by the wrong gen position).
+      if (operator === ':' && isSimpleKey && Array.isArray(pair) && pair.loc &&
+          typeof key === 'string') {
+        const col = scanIdentCol(pair.loc.r, key, 0, pair.loc.c + key.length + 1);
+        if (col >= 0) {
+          pair._anchors = (pair._anchors || []).concat([
+            { name: key, origLine: pair.loc.r, origCol: col }
+          ]);
+        }
+      }
       if (operator === '=') return `${keyCode} = ${valCode}`;
       if (operator === ':') return `${keyCode}: ${valCode}`;
-      if (keyCode === valCode && !Array.isArray(key)) return keyCode;
+      if (keyCode === valCode && !Array.isArray(key)) {
+        // Property shorthand `{ ...i, quantity }` → pair is [null, "quantity",
+        // "quantity"] with the *pair* carrying .loc but the key/value strings
+        // having none. Without an anchor the heuristic gives the gen position
+        // to whichever same-named identifier in the statement happens to be
+        // closest by line distance.
+        if (Array.isArray(pair) && pair.loc && typeof key === 'string') {
+          const col = scanIdentColLast(pair.loc.r, key, 0, pair.loc.c + 1);
+          if (col >= 0) {
+            pair._anchors = (pair._anchors || []).concat([
+              { name: key, origLine: pair.loc.r, origCol: col }
+            ]);
+          }
+        }
+        return keyCode;
+      }
       return `${keyCode}: ${valCode}`;
-    }).join(', ');
-    return `{${codes}}`;
+    });
+
+    if (!hasMethod) return `{${codes.join(', ')}}`;
+
+    // Multi-line output when any pair is a method. Pairs preceding the
+    // first method may stay on the opening-brace line, then each method
+    // (and any pair following a method) starts on its own line.
+    let parts = [];
+    let onOpenLine = [];
+    for (let i = 0; i < codes.length; i++) {
+      if (isMethod[i] || (i > 0 && isMethod[i - 1])) {
+        if (onOpenLine.length && parts.length === 0) {
+          parts.push(onOpenLine.join(', '));
+          onOpenLine = [];
+        }
+        parts.push(codes[i]);
+      } else if (parts.length === 0) {
+        onOpenLine.push(codes[i]);
+      } else {
+        parts.push(codes[i]);
+      }
+    }
+    if (onOpenLine.length && parts.length === 0) parts.push(onOpenLine.join(', '));
+    let head0 = parts[0];
+    let rest = parts.slice(1);
+    return rest.length === 0 ? `{${head0}}` : `{${head0},\n${rest.join(',\n')}}`;
   }
 
   emitMap(head, pairs, context) {
