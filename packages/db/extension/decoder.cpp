@@ -63,10 +63,6 @@ static __int128 make_i128(uint64_t lo, int64_t hi) {
   return v;
 }
 
-static unsigned __int128 make_u128(uint64_t lo, uint64_t hi) {
-  return ((unsigned __int128)hi << 64) | (unsigned __int128)lo;
-}
-
 // ---------------------------------------------------------------------------
 // Low-level reader over a byte range.
 // ---------------------------------------------------------------------------

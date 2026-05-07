@@ -194,8 +194,12 @@ bun run test
    ```
 4. There's also a fast in-process driver at `extension/build-extension.sh`
    that compiles `decoder.cpp + ripdb.cpp + extension_test.cpp` and runs
-   a 79-case smoke suite directly against a live rip-db (no .duckdb_extension
-   loading, no metadata footer). It defaults to building against the
+   the 123-case smoke suite directly against a live rip-db (no
+   `.duckdb_extension` loading, no metadata footer). The driver is
+   invoked with the `rip://localhost:4214` URL — DuckDB's `IsRemoteFile`
+   check runs before `(TYPE ripdb)` is considered, and `http://` would
+   silently bump `AccessMode` to `READ_ONLY` (every DML test would then
+   fail with "attached in read-only mode"). The driver defaults to building against the
    in-tree pinned `packages/db/duckdb` submodule and `packages/db/build/release`
    dylib, NOT against `misc/duckdb`. Reason: the looser `misc/duckdb`
    prebuilt dylib drifts out of sync with the system toolchain — older

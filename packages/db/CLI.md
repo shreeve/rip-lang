@@ -403,11 +403,13 @@ git submodule update --init --recursive
 
 ```bash
 cd packages/db/extension
-./build-extension.sh                     # compile + run 48-case smoke test
+./build-extension.sh                     # compile + run the 123-case smoke suite
 ./build-extension.sh --no-run            # compile only
 ```
 
-Links `decoder.cpp + ripdb.cpp + extension_test.cpp` against `libduckdb`, calls `Load(loader)` directly (no dlopen, no metadata footer, no `LOAD` statement), runs ATTACH / SELECT / refresh / pushdown scenarios against a live rip-db on `:4214`. Fast; no loadable-extension overhead.
+Links `decoder.cpp + ripdb.cpp + extension_test.cpp` against `libduckdb`, calls `Load(loader)` directly (no dlopen, no metadata footer, no `LOAD` statement), runs ATTACH / SELECT / DML (passthrough + sink) / refresh / pushdown scenarios against a live rip-db on `:4214`. Fast; no loadable-extension overhead.
+
+The driver invokes the test binary with the `rip://localhost:4214` URL — using `http://` would silently disable DML (see [ATTACH](#attach) above).
 
 ### Loadable `.duckdb_extension`
 
