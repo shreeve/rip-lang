@@ -1,7 +1,7 @@
 {
   "extension": "ripdb",
   "base_url": "https://shreeve.github.io/rip-lang/extensions/duckdb",
-  "updated_at": "2026-05-07T22:19:21Z",
+  "updated_at": "2026-05-07T22:27:48Z",
   "versions": {
     "v1.5.2": [
       "linux_amd64",
