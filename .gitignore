@@ -49,3 +49,4 @@ notes.txt
 !docs/extensions/**/*.vsix
 !docs/extensions/**/*.duckdb_extension
 !docs/extensions/**/*.duckdb_extension.gz
+/packages/db/.cache
