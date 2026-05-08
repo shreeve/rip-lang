@@ -173,6 +173,18 @@ describeIf('rip-db dump / load round-trip', () => {
     expect(entries.some(e => e.endsWith('orders.csv'))).toBe(true);
   });
 
+  test('load.sql in archive uses paths relative to the dump dir', () => {
+    // Extract just load.sql to stdout and inspect its contents.
+    const out = Bun.spawnSync(['tar', '-xzOf', archive, './load.sql']);
+    const loadSql = new TextDecoder().decode(out.stdout);
+    // Each COPY should reference the bare CSV basename, not an absolute path.
+    expect(loadSql).toContain("FROM 'orders.csv'");
+    // The original /tmp/ripdb-XXXX prefix must be gone — the rewrite is
+    // what makes the archive relocatable for direct load.sql replay.
+    expect(loadSql).not.toContain('/tmp/');
+    expect(loadSql).not.toContain('/ripdb-');
+  });
+
   test('refuses to overwrite an existing archive', () => {
     const r = ripDb({ RIPDB_URL: src.url }, 'dump', archive);
     expect(r.code).not.toBe(0);

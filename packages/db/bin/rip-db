@@ -33,7 +33,7 @@
 import { execFileSync, spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { mkdtempSync, rmSync, statSync, existsSync } from 'fs';
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync, existsSync } from 'fs';
 import { tmpdir } from 'os';
 
 const args = process.argv.slice(2);
@@ -126,6 +126,12 @@ async function runDumpLoad(cmd, rest) {
       // its own /tmp/ripdb-XXX while our local one stays empty — tarring it
       // would produce a worthless archive.
       assertDuckExportDir(tmp);
+      // Rewrite COPY paths in load.sql to be relative to the dump dir so the
+      // archive is self-contained and human-readable. IMPORT DATABASE doesn't
+      // care (it strips the dir off and re-prepends its own), but `cd
+      // dump-dir && duckdb new.db < load.sql` and similar manual replays
+      // become relocatable. See rewriteLoadSqlToRelative() below for details.
+      rewriteLoadSqlToRelative(tmp);
       run('tar', ['-czf', archive, '-C', tmp, '.']);
       const size = statSync(archive).size;
       console.log(`wrote ${archive} (${humanSize(size)})`);
@@ -196,6 +202,36 @@ async function assertEmptyDatabase(url) {
 
 // ---------------------------------------------------------------------------
 // Filesystem / tar helpers
+
+// Strip the absolute tmp-dir prefix from every `COPY ... FROM '<path>'`
+// in load.sql, so the archive's load.sql reads:
+//
+//   COPY accounts FROM 'accounts.csv' (FORMAT 'csv', ...);
+//
+// rather than DuckDB's default:
+//
+//   COPY accounts FROM '/tmp/ripdb-XXXXXX/accounts.csv' (FORMAT 'csv', ...);
+//
+// The replacement is targeted (anchored on the leading single-quote so we
+// only touch FROM-clause paths, not anything else that might contain the
+// tmp dir name). Refuses on weird tmp paths containing a single quote
+// because the SQL escaping would be `''` and our raw text-replace pattern
+// wouldn't match — falls back silently to absolute paths in that case
+// (no-op; archive still works, just less pretty).
+//
+// Why bother: IMPORT DATABASE rewrites these paths at replay time anyway
+// (it uses only the basename and re-prepends the IMPORT directory), so
+// this rewrite is purely cosmetic for the round-trip case. The win is
+// for callers who replay load.sql DIRECTLY — e.g. `cd dump-dir &&
+// duckdb new.db < load.sql` — which would otherwise break when the
+// archive is moved to a different machine.
+function rewriteLoadSqlToRelative(tmp) {
+  if (tmp.includes("'")) return;
+  const loadSqlPath = join(tmp, 'load.sql');
+  const text    = readFileSync(loadSqlPath, 'utf8');
+  const cleaned = text.replaceAll(`'${tmp}/`, "'");
+  writeFileSync(loadSqlPath, cleaned);
+}
 
 function assertDuckExportDir(dir) {
   if (!existsSync(join(dir, 'schema.sql')) || !existsSync(join(dir, 'load.sql'))) {

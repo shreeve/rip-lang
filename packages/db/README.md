@@ -513,6 +513,15 @@ server. DuckDB writes three kinds of files into the staging directory:
 auto-named) archive and cleans up. `load` is the symmetric inverse: untar
 into a staging directory, run `IMPORT DATABASE 'tmpdir'`, clean up.
 
+Before tarring, `dump` also rewrites `load.sql` to strip the absolute
+tmp-dir prefix from each `COPY ... FROM '<path>'` so the archive is
+self-contained — `FROM 'accounts.csv'` rather than `FROM
+'/tmp/ripdb-XXXXXX/accounts.csv'`. `IMPORT DATABASE` doesn't require
+this (it ignores the directory and re-prepends its own at replay
+time), but it makes the archive readable by humans and makes manual
+replays like `cd dump-dir && duckdb new.db < load.sql` Just Work
+regardless of where the dump originated.
+
 ### CSV format choice
 
 CSV (not Parquet) is intentional. Three reasons:
