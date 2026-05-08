@@ -8245,9 +8245,13 @@ ${blockFactoriesCode}return ${lines.join(`
           }
         }
       };
+      const BARE_IDENT_RE = /^[a-zA-Z_$][\w$]*$/;
+      const isBareIdent = (a) => typeof a === "string" && BARE_IDENT_RE.test(a);
       for (const arg of args) {
         if (this.is(arg, "object")) {
           addObjectProps(arg);
+        } else if (isBareIdent(arg)) {
+          addProp(arg, "true");
         } else if (Array.isArray(arg) && (arg[0] === "->" || arg[0] === "=>")) {
           let block = arg[2];
           if (block) {
@@ -13584,7 +13588,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.15.4";
-  var BUILD_DATE = "2026-05-08@19:29:32GMT";
+  var BUILD_DATE = "2026-05-08@21:20:34GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

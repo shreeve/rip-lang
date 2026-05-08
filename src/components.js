@@ -2932,9 +2932,24 @@ export function installComponentSupport(CodeEmitter, Lexer) {
       }
     };
 
+    // Bare identifier args become boolean prop shorthand:
+    //   Button outline, link, "Save"
+    // is equivalent to:
+    //   Button outline: true, link: true, "Save"
+    // Matches JSX semantics — the bare identifier is ALWAYS a literal `true`
+    // prop key, never a variable reference, even if a same-named local
+    // binding exists in scope. To pass a variable, write `outline: outline`.
+    // Scoped to PascalCase component calls (this function's only caller is
+    // emitChildComponent), so DOM element calls and non-render imperative
+    // calls are unaffected.
+    const BARE_IDENT_RE = /^[a-zA-Z_$][\w$]*$/;
+    const isBareIdent = (a) => typeof a === 'string' && BARE_IDENT_RE.test(a);
+
     for (const arg of args) {
       if (this.is(arg, 'object')) {
         addObjectProps(arg);
+      } else if (isBareIdent(arg)) {
+        addProp(arg, 'true');
       } else if (Array.isArray(arg) && (arg[0] === '->' || arg[0] === '=>')) {
         let block = arg[2];
         if (block) {

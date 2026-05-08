@@ -293,6 +293,26 @@ rip -cm example.rip
 > Library helper, rename. One-letter names like `p` are particularly
 > risky.
 
+> **CRITICAL — boolean prop shorthand is a literal `true`, not a variable:**
+>
+> Inside a `render` block, a bare identifier in a PascalCase component
+> arg list is shorthand for `name: true` (JSX semantics):
+>
+> - `Btn outline, link` — `Btn({outline: true, link: true})`
+> - `Btn outline, "Save"` — `Btn({outline: true, children: "Save"})`
+> - `Btn outline: false` — explicit value still wins, stays `false`
+>
+> The bare identifier is **always** the literal `true`, even when a
+> same-named local binding exists in scope. To pass a variable, write
+> the prop explicitly:
+>
+> - `Btn outline` — `{outline: true}` (always, no scope lookup)
+> - `Btn outline: outline` — passes the local `outline` variable
+>
+> Scope: PascalCase component calls inside `render` only. DOM element
+> calls (`div outline` — text child) and imperative calls outside
+> `render` (`Btn(outline)` — positional arg) are unaffected.
+
 ### Removed (from CoffeeScript / Rip 2.x)
 
 | Feature                            | Replacement                                           |
@@ -317,6 +337,7 @@ rip -cm example.rip
 | dotted keys           | `{a.b: 1}`       | flat string key in object literals         |
 | map literal           | `*{a: 1}`        | real `Map` with any key type               |
 | symbol literal        | `:redo`          | interned symbol via `Symbol.for('redo')`   |
+| boolean prop shorthand | `Btn outline, link` | JSX-style `{outline: true, link: true}` for child components in `render` |
 
 ### Kept
 

@@ -54,7 +54,7 @@ export Cart = component
                 td "$#{item.price.toFixed(2)}"
                 td
                   div.stepper
-                    Button outline: true, @click: (->
+                    Button outline, @click: (->
                       if item.quantity <= 1
                         cart.removeItem(item)
                       else
@@ -64,10 +64,10 @@ export Cart = component
                       type: "number"
                       value: String(item.quantity)
                       @input: (e) -> cart.updateQuantity(item, Math.max(1, Number(e.target.value) or 1))
-                    Button outline: true, @click: (-> cart.updateQuantity(item, item.quantity + 1)), "+"
+                    Button outline, @click: (-> cart.updateQuantity(item, item.quantity + 1)), "+"
                 td "$#{(item.price * item.quantity).toFixed(2)}"
                 td
-                  Button variant: "secondary", outline: true, @click: (-> cart.removeItem(item)), "Remove"
+                  Button variant: "secondary", outline, @click: (-> cart.removeItem(item)), "Remove"
           tfoot
             tr
               td colSpan: 3
@@ -77,6 +77,6 @@ export Cart = component
               td
       div.cart-actions
         Button loading: status is 'loading', @click: @placeOrder, "Place Order"
-        Button variant: 'secondary', outline: true, link: true, @click: (-> cart.clear()), "Clear Cart"
+        Button variant: 'secondary', outline, link, @click: (-> cart.clear()), "Clear Cart"
       if status is 'error'
         p.error error

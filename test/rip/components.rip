@@ -2413,6 +2413,186 @@ code "child component with props and children", '''
   ''', opts
 
 # ==============================================================================
+# Boolean Prop Shorthand — JSX-style bare-identifier props
+# ==============================================================================
+
+# Bare identifier in a child-component arg list desugars to `name: true`.
+# Matches JSX semantics: bare ident is ALWAYS a literal `true`, never a
+# variable reference, even if a same-named local binding exists in scope.
+# Scoped to PascalCase component calls inside `render` blocks; DOM elements
+# and imperative calls outside `render` are unaffected.
+
+code "boolean prop shorthand — single bare identifier", '''
+  export A = component
+    render
+      Btn outline
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {
+    }
+    _create() {
+   { const __prev = __pushComponent(this); try {
+   try {
+   this._inst0 = new Btn({ outline: true });
+   if (this._inst0 && this._inst0._initFailed) {
+     try { this._inst0.unmount({removeDOM: false}); } catch (__ue) { console.error('[Rip] partial-init unmount error:', __ue); }
+     this._inst0 = null;
+     this._el1 = document.createComment('rip:child-init-failed: Btn');
+   } else {
+     { const __cprev = __pushComponent(this._inst0); try {
+       this._el1 = this._inst0._root = this._inst0._create();
+     } finally { __popComponent(__cprev); } }
+     (this._children || (this._children = [])).push(this._inst0);
+   }
+   } catch (__childErr) {
+     console.error('[Rip] Btn construction failed:', __childErr);
+     if (this._inst0) { try { this._inst0.unmount({removeDOM: false}); } catch (__ue) { console.error('[Rip] partial-child unmount error:', __ue); } }
+     this._inst0 = null;
+     this._el1 = document.createComment('rip:child-error: Btn');
+   }
+   } finally { __popComponent(__prev); } }
+   return this._el1;
+    }
+    _setup() {
+   if (this._inst0 && !this._inst0._isSetup) { this._inst0._isSetup = true; const __cprev = __pushComponent(this._inst0); try { try { if (this._inst0.beforeMount) this._inst0.beforeMount(); if (this._inst0._setup) this._inst0._setup(); if (this._inst0.mounted) this._inst0.mounted(); } catch (__e) { __handleComponentError(__e, this._inst0); } } finally { __popComponent(__cprev); } }
+    }
+  };
+  ''', opts
+
+code "boolean prop shorthand — multiple bare identifiers with text child", '''
+  export A = component
+    render
+      Btn outline, link, "Save"
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {
+    }
+    _create() {
+   this._t0 = document.createTextNode("Save");
+   { const __prev = __pushComponent(this); try {
+   try {
+   this._inst0 = new Btn({ outline: true, link: true, children: this._t0 });
+   if (this._inst0 && this._inst0._initFailed) {
+     try { this._inst0.unmount({removeDOM: false}); } catch (__ue) { console.error('[Rip] partial-init unmount error:', __ue); }
+     this._inst0 = null;
+     this._el1 = document.createComment('rip:child-init-failed: Btn');
+   } else {
+     { const __cprev = __pushComponent(this._inst0); try {
+       this._el1 = this._inst0._root = this._inst0._create();
+     } finally { __popComponent(__cprev); } }
+     (this._children || (this._children = [])).push(this._inst0);
+   }
+   } catch (__childErr) {
+     console.error('[Rip] Btn construction failed:', __childErr);
+     if (this._inst0) { try { this._inst0.unmount({removeDOM: false}); } catch (__ue) { console.error('[Rip] partial-child unmount error:', __ue); } }
+     this._inst0 = null;
+     this._el1 = document.createComment('rip:child-error: Btn');
+   }
+   } finally { __popComponent(__prev); } }
+   return this._el1;
+    }
+    _setup() {
+   if (this._inst0 && !this._inst0._isSetup) { this._inst0._isSetup = true; const __cprev = __pushComponent(this._inst0); try { try { if (this._inst0.beforeMount) this._inst0.beforeMount(); if (this._inst0._setup) this._inst0._setup(); if (this._inst0.mounted) this._inst0.mounted(); } catch (__e) { __handleComponentError(__e, this._inst0); } } finally { __popComponent(__cprev); } }
+    }
+  };
+  ''', opts
+
+code "boolean prop shorthand — mixed with @event and key:value", '''
+  export A = component
+    render
+      Btn outline, link, @click: handler, variant: "secondary", "Save"
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {
+    }
+    _create() {
+   this._t0 = document.createTextNode("Save");
+   { const __prev = __pushComponent(this); try {
+   try {
+   this._inst0 = new Btn({ outline: true, link: true, variant: "secondary", children: this._t0 });
+   if (this._inst0 && this._inst0._initFailed) {
+     try { this._inst0.unmount({removeDOM: false}); } catch (__ue) { console.error('[Rip] partial-init unmount error:', __ue); }
+     this._inst0 = null;
+     this._el1 = document.createComment('rip:child-init-failed: Btn');
+   } else {
+     { const __cprev = __pushComponent(this._inst0); try {
+       this._el1 = this._inst0._root = this._inst0._create();
+     } finally { __popComponent(__cprev); } }
+     (this._children || (this._children = [])).push(this._inst0);
+   }
+   } catch (__childErr) {
+     console.error('[Rip] Btn construction failed:', __childErr);
+     if (this._inst0) { try { this._inst0.unmount({removeDOM: false}); } catch (__ue) { console.error('[Rip] partial-child unmount error:', __ue); } }
+     this._inst0 = null;
+     this._el1 = document.createComment('rip:child-error: Btn');
+   }
+   } finally { __popComponent(__prev); } }
+   if (this._inst0) this._el1.addEventListener('click', (e) => __batch(() => (handler)(e)));
+   return this._el1;
+    }
+    _setup() {
+   if (this._inst0 && !this._inst0._isSetup) { this._inst0._isSetup = true; const __cprev = __pushComponent(this._inst0); try { try { if (this._inst0.beforeMount) this._inst0.beforeMount(); if (this._inst0._setup) this._inst0._setup(); if (this._inst0.mounted) this._inst0.mounted(); } catch (__e) { __handleComponentError(__e, this._inst0); } } finally { __popComponent(__cprev); } }
+    }
+  };
+  ''', opts
+
+code "boolean prop shorthand — explicit value still wins", '''
+  export A = component
+    render
+      Btn outline: false, "X"
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {
+    }
+    _create() {
+   this._t0 = document.createTextNode("X");
+   { const __prev = __pushComponent(this); try {
+   try {
+   this._inst0 = new Btn({ outline: false, children: this._t0 });
+   if (this._inst0 && this._inst0._initFailed) {
+     try { this._inst0.unmount({removeDOM: false}); } catch (__ue) { console.error('[Rip] partial-init unmount error:', __ue); }
+     this._inst0 = null;
+     this._el1 = document.createComment('rip:child-init-failed: Btn');
+   } else {
+     { const __cprev = __pushComponent(this._inst0); try {
+       this._el1 = this._inst0._root = this._inst0._create();
+     } finally { __popComponent(__cprev); } }
+     (this._children || (this._children = [])).push(this._inst0);
+   }
+   } catch (__childErr) {
+     console.error('[Rip] Btn construction failed:', __childErr);
+     if (this._inst0) { try { this._inst0.unmount({removeDOM: false}); } catch (__ue) { console.error('[Rip] partial-child unmount error:', __ue); } }
+     this._inst0 = null;
+     this._el1 = document.createComment('rip:child-error: Btn');
+   }
+   } finally { __popComponent(__prev); } }
+   return this._el1;
+    }
+    _setup() {
+   if (this._inst0 && !this._inst0._isSetup) { this._inst0._isSetup = true; const __cprev = __pushComponent(this._inst0); try { try { if (this._inst0.beforeMount) this._inst0.beforeMount(); if (this._inst0._setup) this._inst0._setup(); if (this._inst0.mounted) this._inst0.mounted(); } catch (__e) { __handleComponentError(__e, this._inst0); } } finally { __popComponent(__cprev); } }
+    }
+  };
+  ''', opts
+
+# DOM elements unaffected — `div outline` is still a div with text-node `outline`.
+code "boolean prop shorthand — DOM elements unaffected", '''
+  export A = component
+    render
+      div outline
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {
+    }
+    _create() {
+      this._el0 = document.createElement('div');
+      this._t0 = document.createTextNode(outline);
+      this._el0.appendChild(this._t0);
+      return this._el0;
+    }
+  }
+  ''', opts
+
+# ==============================================================================
 # Lifecycle Hooks — mounted / unmounted
 # ==============================================================================
 
