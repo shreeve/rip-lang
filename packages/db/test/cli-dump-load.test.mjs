@@ -231,4 +231,28 @@ describeIf('rip-db dump / load round-trip', () => {
     expect(r.stderr).toContain('could not reach rip-db');
     expect(existsSync(dead)).toBe(false);
   });
+
+  test('dump into an existing directory drops an auto-named archive inside it', () => {
+    const intoDir = mkdtempSync(path.join(tmpdir(), 'ripdb-dropdir-'));
+    try {
+      const r = ripDb({ RIPDB_URL: src.url }, 'dump', intoDir);
+      expect(r.code).toBe(0);
+      expect(r.stdout).toContain('wrote');
+      // The auto-named archive should land inside the target directory.
+      const written = Bun.spawnSync(['ls', intoDir]);
+      const entries = new TextDecoder().decode(written.stdout).split('\n').filter(Boolean);
+      expect(entries.length).toBe(1);
+      expect(entries[0]).toMatch(/^.+-\d{8}-\d{6}\.tar\.gz$/);
+    } finally {
+      rmSync(intoDir, { recursive: true, force: true });
+    }
+  });
+
+  test('dump rejects a path that is neither a directory nor a .tar.gz/.tgz file', () => {
+    const weird = path.join(workDir, 'snapshot.zip');
+    const r = ripDb({ RIPDB_URL: src.url }, 'dump', weird);
+    expect(r.code).not.toBe(0);
+    expect(r.stderr).toContain('must end in .tar.gz or .tgz');
+    expect(existsSync(weird)).toBe(false);
+  });
 });

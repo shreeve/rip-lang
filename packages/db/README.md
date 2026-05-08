@@ -490,6 +490,7 @@ authentication scheme to configure — just two CLI verbs.
 ```bash
 rip-db dump                       # autoname: <dbname>-YYYYMMDD-HHMMSS.tar.gz in cwd
 rip-db dump my-snapshot.tar.gz    # explicit filename
+rip-db dump /var/backups/medlabs  # existing directory → auto-named archive lands inside it
 rip-db load my-snapshot.tar.gz    # restore archive into an empty rip-db
 rip-db dump --help                # subcommand usage
 rip-db load --help
@@ -497,6 +498,16 @@ rip-db load --help
 # Target a non-default server with the RIPDB_URL env var:
 RIPDB_URL=http://prod-host:4213 rip-db dump prod-snapshot.tar.gz
 ```
+
+The `dump` path argument is resolved by these rules (no `--into` /
+`-d` flag needed):
+
+| Argument | Behavior |
+|---|---|
+| _omitted_ | write `<dbname>-YYYYMMDD-HHMMSS.tar.gz` in cwd |
+| existing directory | write `<dbname>-YYYYMMDD-HHMMSS.tar.gz` **inside** the directory |
+| ends in `.tar.gz` or `.tgz` | use the literal filename |
+| anything else | rejected — must be a directory or have a tarball extension |
 
 ### How it works
 

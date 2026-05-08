@@ -62,10 +62,16 @@ if (cmd === 'dump' || cmd === 'load') {
 function helpFor(cmd) {
   switch (cmd) {
     case 'dump': return `\
-Usage: rip-db dump [ARCHIVE.tar.gz]
+Usage: rip-db dump [ARCHIVE.tar.gz | DIRECTORY]
 
 Export the running rip-db database to a single .tar.gz archive.
-If ARCHIVE is omitted, defaults to <dbname>-YYYYMMDD-HHMMSS.tar.gz in cwd.
+
+Path resolution:
+  (omitted)            write <dbname>-YYYYMMDD-HHMMSS.tar.gz in cwd
+  existing directory   write <dbname>-YYYYMMDD-HHMMSS.tar.gz INSIDE the dir
+  *.tar.gz / *.tgz     use the literal filename
+  anything else        rejected (must end in .tar.gz / .tgz, or be a dir)
+
 Refuses to overwrite an existing archive.
 
 Environment:
@@ -110,10 +116,21 @@ async function runDumpLoad(cmd, rest) {
 
   try {
     if (cmd === 'dump') {
+      // Path resolution: omitted → autoname in cwd; existing directory →
+      // autoname inside it; .tar.gz / .tgz filename → use as-is; anything
+      // else → reject (don't second-guess what the user meant).
       let archive = rest[0];
-      if (!archive) {
-        const dbname = safeFileStem(await currentDatabase(url));
-        archive = `${dbname}-${stamp()}.tar.gz`;
+      const isDir = archive && existsSync(archive) && statSync(archive).isDirectory();
+      if (!archive || isDir) {
+        const dbname   = safeFileStem(await currentDatabase(url));
+        const filename = `${dbname}-${stamp()}.tar.gz`;
+        archive = isDir ? join(archive, filename) : filename;
+      } else if (!/\.(tar\.gz|tgz)$/i.test(archive)) {
+        die(
+          `archive path must end in .tar.gz or .tgz (got '${archive}'). ` +
+          `Pass an existing directory to drop an auto-named archive into it, ` +
+          `or omit the path entirely to write into the current directory.`
+        );
       }
       // Backup commands should fail closed on overwrite — never silently
       // destroy an existing archive that might be the only good copy.
