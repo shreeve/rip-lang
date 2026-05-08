@@ -1002,6 +1002,20 @@ function extractUnionValues(typeStr) {
   return values;
 }
 
+// Build a completion item for a union value (string literal, boolean, number).
+// String literals are inserted with their quotes; non-string values (true, 42)
+// are inserted bare so they keep their JS type.
+function unionValueCompletion(v, i, inQuotes) {
+  const isStr = v.startsWith('"') || v.startsWith("'");
+  const bare = isStr ? v.slice(1, -1) : v;
+  return {
+    label: bare,
+    kind: 12,
+    insertText: inQuotes ? bare : (isStr ? v : bare),
+    sortText: String(i).padStart(3, '0'),
+  };
+}
+
 // DOM event names resolved from HTMLElementEventMap via the TS checker.
 // Lazy-initialized on first use; falls back to empty (no @event completions
 // until TS service is ready, then populates on next request).
@@ -2018,15 +2032,7 @@ connection.onCompletion((params) => {
               const ch = srcLine[params.position.character] || '';
               const prevCh = params.position.character > 0 ? srcLine[params.position.character - 1] : '';
               const inQuotes = (prevCh === '"' || prevCh === "'") || (ch === '"' || ch === "'");
-              return values.map((v, i) => {
-                const bare = v.replace(/^["']|["']$/g, '');
-                return {
-                  label: bare,
-                  kind: 12,
-                  insertText: inQuotes ? bare : v.startsWith('"') ? v : `"${v}"`,
-                  sortText: String(i).padStart(3, '0'),
-                };
-              });
+              return values.map((v, i) => unionValueCompletion(v, i, inQuotes));
             }
           }
           // Cursor is in a prop value slot (after `prop: `) but the prop has
@@ -2046,15 +2052,7 @@ connection.onCompletion((params) => {
         // Check if cursor is already inside quotes
         const afterEq = srcLine.slice(srcLine.indexOf(':=') + 2).trimStart();
         const inQuotes = /^["']/.test(afterEq);
-        return values.map((v, i) => {
-          const bare = v.replace(/^["']|["']$/g, '');
-          return {
-            label: bare,
-            kind: 12,
-            insertText: inQuotes ? bare : v.startsWith('"') ? v : `"${v}"`,
-            sortText: String(i).padStart(3, '0'),
-          };
-        });
+        return values.map((v, i) => unionValueCompletion(v, i, inQuotes));
       }
     }
 
@@ -2071,15 +2069,7 @@ connection.onCompletion((params) => {
       if (values.length > 0) {
         const afterEq = srcLine.slice(srcLine.indexOf('=') + 1).trimStart();
         const inQuotes = /^["']/.test(afterEq);
-        return values.map((v, i) => {
-          const bare = v.replace(/^["']|["']$/g, '');
-          return {
-            label: bare,
-            kind: 12,
-            insertText: inQuotes ? bare : v.startsWith('"') ? v : `"${v}"`,
-            sortText: String(i).padStart(3, '0'),
-          };
-        });
+        return values.map((v, i) => unionValueCompletion(v, i, inQuotes));
       }
     }
 
@@ -2124,15 +2114,7 @@ connection.onCompletion((params) => {
             const inQuotes = prevCh === '"' || prevCh === "'";
             return values
               .filter(v => !existing.has(v.replace(/^["']|["']$/g, '')))
-              .map((v, i) => {
-                const bare = v.replace(/^["']|["']$/g, '');
-                return {
-                  label: bare,
-                  kind: 12,
-                  insertText: inQuotes ? bare : v.startsWith('"') ? v : `"${v}"`,
-                  sortText: String(i).padStart(3, '0'),
-                };
-              });
+              .map((v, i) => unionValueCompletion(v, i, inQuotes));
           }
         }
       }
