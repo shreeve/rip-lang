@@ -22,8 +22,23 @@ const compiled = new Map();
 // "Add all missing imports" code action to look beyond the requested range).
 const lastDiagnostics = new Map();
 
-// Component name → { props: [{ name, type, required }], source, line }
-const componentRegistry = new Map();
+// Project root → Map<componentName, { props, source, line, ... }>.
+// Scoped per project so two unrelated apps that both define a `Button`
+// component don't shadow each other across editor windows. Files outside
+// any project root share the '' bucket.
+const componentRegistries = new Map();
+function getComponentRegistry(filePath) {
+  const key = findProjectRoot(filePath) || '';
+  let reg = componentRegistries.get(key);
+  if (!reg) { reg = new Map(); componentRegistries.set(key, reg); }
+  return reg;
+}
+function removeFromComponentRegistry(filePath) {
+  const reg = getComponentRegistry(filePath);
+  for (const [name, info] of reg) {
+    if (info.source === filePath) reg.delete(name);
+  }
+}
 
 // Per-directory project config cache (dir → { strict, exclude, ... })
 const configCache = new Map();
@@ -168,6 +183,7 @@ connection.onDidChangeWatchedFiles((params) => {
         lastDiagnostics.delete(fp);
         discoveredRipFiles.delete(fp);
         removeFromIndex(fp);
+        removeFromComponentRegistry(fp);
         connection.sendDiagnostics({ uri: change.uri, diagnostics: [] });
       } else if (change.type === 1 /* Created */) {
         discoveredRipFiles.add(fp);
@@ -422,14 +438,15 @@ function compileRip(filePath, source) {
     });
 
     if (entry.dts) {
-      updateComponentRegistry(filePath, source, entry.dts);
+      const reg = getComponentRegistry(filePath);
+      updateComponentRegistry(reg, filePath, source, entry.dts);
       // Eagerly populate intrinsic props cache so value completions work
       // even after later compilation failures (e.g. `type:` with no value).
       try {
-        for (const [name, info] of componentRegistry) {
+        for (const [name, info] of reg) {
           if (info.source === filePath && info.inheritsTag) {
             const ownPropNames = new Set(info.props.map(p => p.name));
-            resolveIntrinsicProps(name, ownPropNames);
+            resolveIntrinsicProps(reg, name, ownPropNames);
           }
         }
       } catch (e) {
@@ -705,13 +722,16 @@ function publishDiagnostics(filePath) {
     }
   }
 
-  // Component prop diagnostics (typed files only)
-  if (c.hasTypes && c.source && componentRegistry.size > 0) {
+  // Component prop diagnostics (typed files only). Use the per-project
+  // registry so a Button defined in another project (open in another tab)
+  // can't shadow this file's Button.
+  const projectRegistry = getComponentRegistry(filePath);
+  if (c.hasTypes && c.source && projectRegistry.size > 0) {
     const srcLines = c.source.split('\n');
     for (let i = 0; i < srcLines.length; i++) {
-      const usage = tc.collectUsageProps(srcLines, i, componentRegistry);
+      const usage = tc.collectUsageProps(srcLines, i, projectRegistry);
       if (!usage) continue;
-      const info = componentRegistry.get(usage.component);
+      const info = projectRegistry.get(usage.component);
       if (!info) continue;
 
       if (!info.hasIntrinsicProps) {
@@ -749,7 +769,7 @@ function publishDiagnostics(filePath) {
     }
 
     // Untyped prop errors (at component definitions, not usage sites)
-    for (const [name, compDef] of componentRegistry) {
+    for (const [name, compDef] of projectRegistry) {
       if (compDef.source !== filePath) continue;
       for (const e of tc.checkComponentDefs(compDef.props, srcLines, compDef.line)) {
         diagnostics.push({
@@ -973,9 +993,9 @@ function unwrapReactiveType(display) {
 
 // ── Component IntelliSense infrastructure ──────────────────────────
 
-function updateComponentRegistry(filePath, source, dts) {
-  for (const [name, info] of componentRegistry) {
-    if (info.source === filePath) componentRegistry.delete(name);
+function updateComponentRegistry(registry, filePath, source, dts) {
+  for (const [name, info] of registry) {
+    if (info.source === filePath) registry.delete(name);
   }
 
   const parsed = tc.parseComponentDTS(dts);
@@ -989,7 +1009,7 @@ function updateComponentRegistry(filePath, source, dts) {
         break;
       }
     }
-    componentRegistry.set(name, { ...info, source: filePath, line: defLine });
+    registry.set(name, { ...info, source: filePath, line: defLine });
   }
 }
 
@@ -1191,8 +1211,8 @@ function collectFilteredProps(checker, propsType, contextNode) {
 
 // Resolve intrinsic element attributes for a component that extends an HTML element.
 // Delegates to resolveTagProps and filters out the component's own props.
-function resolveIntrinsicProps(componentName, ownPropNames) {
-  const info = componentRegistry.get(componentName);
+function resolveIntrinsicProps(registry, componentName, ownPropNames) {
+  const info = registry.get(componentName);
   if (!info?.inheritsTag) return [];
   return resolveTagProps(info.inheritsTag, ownPropNames);
 }
@@ -1393,9 +1413,9 @@ function splitProps(str) {
 
 // Detect component context for block-style usage. Walks up from the current
 // line to find a parent component, then builds context from the current line.
-function detectBlockComponentContext(srcLines, lineIndex, col) {
+function detectBlockComponentContext(srcLines, lineIndex, col, registry) {
   // First try the current line directly
-  const direct = detectComponentContext(srcLines[lineIndex], col, srcLines, lineIndex);
+  const direct = detectComponentContext(srcLines[lineIndex], col, srcLines, lineIndex, registry);
   if (direct) {
     // Also collect props from indented block lines below for existingProps
     const baseIndent = srcLines[lineIndex].length - srcLines[lineIndex].trimStart().length;
@@ -1434,7 +1454,7 @@ function detectBlockComponentContext(srcLines, lineIndex, col) {
   let htmlTag = null;
   if (compMatch) {
     if (/=\s*component\b/.test(parentTrimmed)) return null;
-    if (!componentRegistry.has(compMatch[1])) return null;
+    if (!registry.has(compMatch[1])) return null;
     component = compMatch[1];
   } else {
     // Check for HTML element tag (lowercase identifier starting a line in a
@@ -1501,7 +1521,7 @@ function detectBlockComponentContext(srcLines, lineIndex, col) {
   return { component, htmlTag, existingProps, propValues, currentProp: null, wantValues: false, wantProps: true };
 }
 
-function detectComponentContext(srcLine, col, srcLines, lineIndex) {
+function detectComponentContext(srcLine, col, srcLines, lineIndex, registry) {
   if (!srcLine) return null;
 
   const trimmed = srcLine.trimStart();
@@ -1512,7 +1532,7 @@ function detectComponentContext(srcLine, col, srcLines, lineIndex) {
   let htmlTag = null;
   if (compMatch) {
     if (/=\s*component\b/.test(trimmed)) return null;
-    if (!componentRegistry.has(compMatch[1])) return null;
+    if (!registry.has(compMatch[1])) return null;
     component = compMatch[1];
   } else if (srcLines && lineIndex != null) {
     // Check for inline HTML tag (lowercase identifier) inside a render block.
@@ -1922,6 +1942,7 @@ connection.onCompletion((params) => {
   const fp = uriToPath(params.textDocument.uri);
   if (!fp.endsWith('.rip')) return [];
   ensureExportIndex();
+  const registry = getComponentRegistry(fp);
 
   // Component prop completions
   const doc = documents.get(params.textDocument.uri);
@@ -1947,17 +1968,17 @@ connection.onCompletion((params) => {
       const tagMatch = trimmed.match(/^([A-Za-z][\w-]*)/);
       if (tagMatch && cur > tagStart + tagMatch[1].length) {
         const word = tagMatch[1];
-        const isTagOrComp = HTML_TAG_NAMES.has(word) || (/^[A-Z]/.test(word) && componentRegistry.has(word));
+        const isTagOrComp = HTML_TAG_NAMES.has(word) || (/^[A-Z]/.test(word) && registry.has(word));
         if (isTagOrComp) {
           const between = srcLine.slice(tagStart + word.length, cur);
           if (/^[.#][\w.#-]*$/.test(between)) return [];
         }
       }
     }
-    const ctx = strState.inInterpolation ? null : detectBlockComponentContext(srcLines, params.position.line, params.position.character);
+    const ctx = strState.inInterpolation ? null : detectBlockComponentContext(srcLines, params.position.line, params.position.character, registry);
     if (ctx) {
       connection.console.log(`[rip] completion ctx: component=${ctx.component}, htmlTag=${ctx.htmlTag}, wantProps=${ctx.wantProps}, wantValues=${ctx.wantValues}, currentProp=${ctx.currentProp}`);
-      const info = ctx.component ? componentRegistry.get(ctx.component) : null;
+      const info = ctx.component ? registry.get(ctx.component) : null;
 
       // Build the unified props list for either components or raw HTML elements
       let ownProps = [];
@@ -1970,7 +1991,7 @@ connection.onCompletion((params) => {
         ownPropNames = new Set(ownProps.map(p => p.name));
         allProps = [...ownProps];
         if (info.inheritsTag) {
-          for (const ip of resolveIntrinsicProps(ctx.component, ownPropNames)) {
+          for (const ip of resolveIntrinsicProps(registry, ctx.component, ownPropNames)) {
             allProps.push(ip);
           }
         }
@@ -2375,6 +2396,7 @@ connection.onCompletionResolve((item) => {
 connection.onHover((params) => {
   const fp = uriToPath(params.textDocument.uri);
   if (!fp.endsWith('.rip')) return null;
+  const registry = getComponentRegistry(fp);
 
   // Import path / import-name hover — handle both single-line and multi-line
   // imports, since the Rip compiler doesn't emit per-name source map entries
@@ -2460,13 +2482,13 @@ connection.onHover((params) => {
 
   // Component prop hover
   if (srcLines) {
-    const ctx = detectBlockComponentContext(srcLines, params.position.line, params.position.character);
+    const ctx = detectBlockComponentContext(srcLines, params.position.line, params.position.character, registry);
     if (ctx?.component) {
-      const compInfo = componentRegistry.get(ctx.component);
+      const compInfo = registry.get(ctx.component);
       if (compInfo) {
         if (ctx.currentProp) {
           const ownPropNames = new Set(compInfo.props.map(p => p.name));
-          const allProps = compInfo.inheritsTag ? [...compInfo.props, ...resolveIntrinsicProps(ctx.component, ownPropNames)] : compInfo.props;
+          const allProps = compInfo.inheritsTag ? [...compInfo.props, ...resolveIntrinsicProps(registry, ctx.component, ownPropNames)] : compInfo.props;
           const prop = allProps.find(p => p.name === ctx.currentProp);
           if (prop) {
             return { contents: { kind: 'markdown', value: `\`\`\`typescript\n(property) ${prop.name}${prop.required ? '' : '?'}: ${prop.type}\n\`\`\`` } };
@@ -2519,13 +2541,14 @@ connection.onHover((params) => {
 connection.onDefinition((params) => {
   const fp = uriToPath(params.textDocument.uri);
   if (!fp.endsWith('.rip')) return null;
+  const registry = getComponentRegistry(fp);
 
   // Component go-to-definition
   const doc = documents.get(params.textDocument.uri);
   if (doc) {
     const word = getWordAtPosition(doc.getText(), params.position);
-    if (word && componentRegistry.has(word)) {
-      const compInfo = componentRegistry.get(word);
+    if (word && registry.has(word)) {
+      const compInfo = registry.get(word);
       return [{
         uri: pathToUri(compInfo.source),
         range: { start: { line: compInfo.line, character: 0 }, end: { line: compInfo.line, character: 0 } },
@@ -2788,7 +2811,7 @@ connection.onSignatureHelp((params) => {
     // string content shouldn't pop signature help at all).
     const strState = scanStringState(srcLine, params.position.character);
     if (strState.inString && !strState.inInterpolation) return null;
-    const ctx = detectBlockComponentContext(srcLines, params.position.line, params.position.character);
+    const ctx = detectBlockComponentContext(srcLines, params.position.line, params.position.character, getComponentRegistry(fp));
     // Suppress for both Components and intrinsic HTML tags — the synthetic
     // `__ripEl(tag, props?)` stub for HTML tags would otherwise leak
     // compiler internals into the popup.
