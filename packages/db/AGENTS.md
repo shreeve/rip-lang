@@ -5,11 +5,28 @@
 | File | Role |
 |------|------|
 | `db.rip` | HTTP server — routes (`/sql`, `/ddb/run` reads, `/ddb/exec` DML), middleware, UI proxy |
+| `bin/rip-db` | CLI entrypoint — server start (forwards to `db.rip`), plus `dump` / `load` subcommands for tar.gz backup/restore via `EXPORT DATABASE` / `IMPORT DATABASE` over `/sql` |
 | `lib/duckdb.mjs` | FFI driver — chunk-based API, Appender, batch prepared, `duckdb_rows_changed` for DML affected counts |
 | `lib/duckdb-shim.c` | C shim for Linux (struct-by-value workaround) |
 | `lib/duckdb-binary.rip` | Binary serializer — DuckDB UI protocol |
 | `client.rip` | HTTP client — Model factory, query builder |
 | `extension/ripdb.cpp` | DuckDB storage extension — read path (catalog, scan with projection + complex-filter pushdown) and write path (M3 native INSERT/UPDATE/DELETE via source-AST passthrough + INSERT sink fallback) |
+
+## Backup & restore (`rip-db dump` / `rip-db load`)
+
+The CLI ships two subcommands for full-database snapshots that round-trip
+through the existing `/sql` endpoint — no new server-side route. `dump`
+runs `EXPORT DATABASE 'tmp' (FORMAT CSV)` against the live server, then
+`tar -czf` bundles the resulting `schema.sql` + `load.sql` + per-table
+CSVs into a single archive. `load` extracts and runs `IMPORT DATABASE`.
+Same-filesystem assumption: the script verifies DuckDB actually wrote
+`schema.sql` + `load.sql` into the local temp dir before tarring, so a
+remote/containerized server with a separate filesystem fails loudly
+instead of producing an empty archive. Other safety gates: refuse-to-
+overwrite on dump, empty-DB precheck on load (cheap one-query guard
+against partial-restore footguns), tar-path validation against `..` /
+absolute traversals, and SQL string escaping for the tmp path.
+Round-trip integration test: `test/cli-dump-load.test.mjs`.
 
 ## DML write path (M3 — native INSERT/UPDATE/DELETE)
 

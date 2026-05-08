@@ -31,6 +31,25 @@ rip-db: server http://localhost:4213
 
 Open **http://localhost:4213** for the official DuckDB UI.
 
+### Backup & Restore
+
+```bash
+rip-db dump                      # writes <dbname>-YYYYMMDD-HHMMSS.tar.gz
+rip-db dump prod-backup.tar.gz   # explicit name
+rip-db load prod-backup.tar.gz   # restore into an empty rip-db instance
+
+# Different server (defaults to http://localhost:4213)
+RIPDB_URL=http://prod-host:4213 rip-db dump
+```
+
+`dump` exports the running database via DuckDB's `EXPORT DATABASE (FORMAT
+CSV)`, bundles the schema + per-table CSVs into one `.tar.gz`, and refuses
+to overwrite an existing archive. `load` is the symmetric inverse and
+refuses to import into a populated database. Both subcommands accept
+`--help` for full usage. The `RIPDB_URL` env var targets a different
+server; the temp directory used for staging must be on a filesystem the
+rip-db process can read+write (the default localhost case is automatic).
+
 ### Source Selection
 
 When no filename is given, `rip-db` looks for exactly one `*.duckdb` file in

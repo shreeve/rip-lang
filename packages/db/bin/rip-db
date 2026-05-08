@@ -1,13 +1,263 @@
 #!/usr/bin/env bun
+//
+// rip-db — entrypoint for the @rip-lang/db CLI.
+//
+// Subcommands:
+//   rip-db                            Start the server (passes args through to db.rip).
+//   rip-db [server-flags...]          Same.
+//   rip-db dump [ARCHIVE.tar.gz]      Export the running database to a single tar.gz.
+//                                     If ARCHIVE is omitted, defaults to
+//                                     <dbname>-YYYYMMDD-HHMMSS.tar.gz in cwd.
+//                                     Refuses to overwrite an existing archive.
+//   rip-db load ARCHIVE.tar.gz        Import a tar.gz produced by `rip-db dump`
+//                                     into a fresh, empty database. Refuses if
+//                                     the target DB already has tables/views.
+//
+// Env:
+//   RIPDB_URL   Base URL of the running rip-db server (default http://localhost:4213).
+//
+// dump/load talk to the running rip-db over its `/sql` HTTP endpoint, so the script
+// must run on a host that can reach that URL. The temp directory used for staging the
+// EXPORT/IMPORT must be on a filesystem the rip-db process can read+write — for the
+// default `localhost`/loopback case that's automatic. The script verifies this by
+// checking that DuckDB actually wrote `schema.sql` + `load.sql` into the local temp
+// dir before bundling the tarball, so a remote/containerized server with a separate
+// filesystem fails loudly instead of producing an empty archive.
+//
+// Security: tar archives produced elsewhere are not fully sandboxed during extraction
+// (system tar may follow symlinks/hardlinks). `rip-db load` is intended for archives
+// produced by `rip-db dump`. A path-validation pass blocks the obvious traversal
+// patterns (absolute paths, `..` segments) but does NOT defend against malicious
+// archives crafted to overwrite host files. Only load trusted archives.
 
-import { execFileSync } from 'child_process';
+import { execFileSync, spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { mkdtempSync, rmSync, statSync, existsSync } from 'fs';
+import { tmpdir } from 'os';
 
-const dbRip = join(dirname(fileURLToPath(import.meta.url)), '..', 'db.rip');
+const args = process.argv.slice(2);
+const cmd  = args[0];
 
-try {
-  execFileSync('rip', [dbRip, ...process.argv.slice(2)], { stdio: 'inherit' });
-} catch (e) {
-  process.exit(e.status || 1);
+if (cmd === 'dump' || cmd === 'load') {
+  await runDumpLoad(cmd, args.slice(1));
+} else {
+  // Default behavior — start the server. Passes everything through to db.rip.
+  const dbRip = join(dirname(fileURLToPath(import.meta.url)), '..', 'db.rip');
+  try {
+    execFileSync('rip', [dbRip, ...args], { stdio: 'inherit' });
+  } catch (e) {
+    process.exit(e.status || 1);
+  }
+}
+
+// ---------------------------------------------------------------------------
+
+// Subcommand help — printed for `rip-db <cmd> --help` / `-h`. Defined as
+// a function (hoisted) so the top-level await dispatch at the head of
+// this file can reach it without temporal-dead-zone trouble.
+function helpFor(cmd) {
+  switch (cmd) {
+    case 'dump': return (
+      'Usage: rip-db dump [ARCHIVE.tar.gz]\n' +
+      '\n' +
+      'Export the running rip-db database to a single .tar.gz archive.\n' +
+      'If ARCHIVE is omitted, defaults to <dbname>-YYYYMMDD-HHMMSS.tar.gz in cwd.\n' +
+      'Refuses to overwrite an existing archive.\n' +
+      '\n' +
+      'Environment:\n' +
+      '  RIPDB_URL  rip-db server URL (default http://localhost:4213)\n'
+    );
+    case 'load': return (
+      'Usage: rip-db load ARCHIVE.tar.gz\n' +
+      '\n' +
+      'Restore a tar.gz produced by `rip-db dump` into the rip-db database.\n' +
+      'Refuses to load if the target database already has tables/views.\n' +
+      '\n' +
+      'Environment:\n' +
+      '  RIPDB_URL  rip-db server URL (default http://localhost:4213)\n'
+    );
+    default: return '';
+  }
+}
+
+async function runDumpLoad(cmd, rest) {
+  // Subcommand-local --help / -h prints usage and exits 0.
+  if (rest[0] === '--help' || rest[0] === '-h') {
+    process.stdout.write(helpFor(cmd));
+    process.exit(0);
+  }
+
+  // Argument arity validation — both subcommands take at most one positional.
+  if (cmd === 'dump' && rest.length > 1)  die('usage: rip-db dump [ARCHIVE.tar.gz]');
+  if (cmd === 'load' && rest.length !== 1) die('usage: rip-db load ARCHIVE.tar.gz');
+
+  const url = (process.env.RIPDB_URL || 'http://localhost:4213').replace(/\/$/, '');
+
+  // Stage in a per-run temp dir on the local filesystem. The rip-db server reads/writes
+  // here directly via EXPORT/IMPORT DATABASE, so this only works when the script and
+  // the server share a filesystem (the default localhost case). The post-export
+  // assertDuckExportDir() check below catches the cross-filesystem failure mode
+  // explicitly so users get an actionable error rather than a silently-empty archive.
+  const tmp = mkdtempSync(join(tmpdir(), 'ripdb-'));
+  const cleanup = () => { try { rmSync(tmp, { recursive: true, force: true }); } catch {} };
+  process.on('exit', cleanup);
+  process.on('SIGINT',  () => { cleanup(); process.exit(130); });
+  process.on('SIGTERM', () => { cleanup(); process.exit(143); });
+
+  try {
+    if (cmd === 'dump') {
+      let archive = rest[0];
+      if (!archive) {
+        const dbname = safeFileStem(await currentDatabase(url));
+        archive = `${dbname}-${stamp()}.tar.gz`;
+      }
+      // Backup commands should fail closed on overwrite — never silently
+      // destroy an existing archive that might be the only good copy.
+      if (existsSync(archive)) {
+        die(`refusing to overwrite existing file: ${archive} (use a different name or rm it first)`);
+      }
+      await sql(url, `EXPORT DATABASE ${sqlString(tmp)} (FORMAT CSV)`);
+      // Verify the server actually wrote our local temp dir. If rip-db is on a
+      // different host/container/filesystem, EXPORT may have succeeded against
+      // its own /tmp/ripdb-XXX while our local one stays empty — tarring it
+      // would produce a worthless archive.
+      assertDuckExportDir(tmp);
+      run('tar', ['-czf', archive, '-C', tmp, '.']);
+      const size = statSync(archive).size;
+      console.log(`wrote ${archive} (${humanSize(size)})`);
+    } else {
+      const archive = rest[0];
+      if (!existsSync(archive)) die(`no such file: ${archive}`);
+      // Refuse to import into a populated DB — IMPORT DATABASE would fail
+      // partway through with `Table already exists`, leaving partial state
+      // (some COPY statements may have run before the failing CREATE TABLE).
+      // Cheap one-query pre-check avoids that footgun entirely.
+      await assertEmptyDatabase(url);
+      // Block obvious tar traversal patterns before extracting. Does not
+      // defend against symlink/hardlink attacks — `rip-db load` is for
+      // archives you trust (typically produced by your own `rip-db dump`).
+      validateTarPaths(archive);
+      run('tar', ['-xzf', archive, '-C', tmp]);
+      assertDuckExportDir(tmp);
+      await sql(url, `IMPORT DATABASE ${sqlString(tmp)}`);
+      console.log(`loaded ${archive}`);
+    }
+  } catch (e) {
+    die(e?.message || String(e));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// HTTP / SQL helpers
+
+async function sql(url, query) {
+  let res;
+  try {
+    res = await fetch(`${url}/sql`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ sql: query }),
+    });
+  } catch (e) {
+    throw new Error(`could not reach rip-db at ${url}: ${e?.message || e}`);
+  }
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok || body.ok === false) {
+    const msg = body?.error?.message || body?.error || `${res.status} ${res.statusText}`;
+    throw new Error(`/sql failed: ${msg}`);
+  }
+  return body;
+}
+
+async function currentDatabase(url) {
+  const r = await sql(url, 'SELECT current_database()');
+  // /sql envelope: { columns: [...], data: [[value], ...] }
+  return r?.data?.[0]?.[0] ?? 'rip-db';
+}
+
+async function assertEmptyDatabase(url) {
+  const r = await sql(url, `
+    SELECT count(*)
+    FROM information_schema.tables
+    WHERE table_schema = 'main'
+  `);
+  const n = Number(r?.data?.[0]?.[0] ?? 0);
+  if (n !== 0) {
+    throw new Error(
+      `target database is not empty (${n} table/view(s) in 'main' schema). ` +
+      `Drop them first or load into a fresh rip-db instance.`
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Filesystem / tar helpers
+
+function assertDuckExportDir(dir) {
+  if (!existsSync(join(dir, 'schema.sql')) || !existsSync(join(dir, 'load.sql'))) {
+    throw new Error(
+      `expected DuckDB export files (schema.sql + load.sql) not present in ${dir}. ` +
+      `If rip-db is running on a different host or container, the EXPORT/IMPORT ` +
+      `staging directory must be visible to both the script and the server.`
+    );
+  }
+}
+
+function validateTarPaths(archive) {
+  const r = spawnSync('tar', ['-tzf', archive], { encoding: 'utf8' });
+  if (r.error)        throw r.error;
+  if (r.status !== 0) throw new Error(`tar -tzf ${archive} exited ${r.status}: ${r.stderr || ''}`);
+  for (const raw of r.stdout.split(/\r?\n/).filter(Boolean)) {
+    const name = raw.replace(/\\/g, '/');
+    if (
+      name.startsWith('/') ||
+      name === '..' ||
+      name.startsWith('../') ||
+      name.includes('/../')
+    ) {
+      throw new Error(`unsafe path in archive: ${raw}`);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Tiny utilities
+
+// SQL single-quote string literal: doubles embedded `'`. Rejects NUL bytes
+// because they don't survive HTTP-as-text transport reliably.
+function sqlString(s) {
+  if (s.includes('\0')) throw new Error('path contains NUL byte');
+  return `'${s.replaceAll("'", "''")}'`;
+}
+
+// Make a string filesystem-safe for use as the stem of an archive filename.
+function safeFileStem(s) {
+  return String(s)
+    .replace(/[^A-Za-z0-9._-]+/g, '_')
+    .replace(/^_+|_+$/g, '') || 'rip-db';
+}
+
+function stamp() {
+  const d  = new Date();
+  const p  = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+}
+
+function run(bin, args) {
+  const r = spawnSync(bin, args, { stdio: 'inherit' });
+  if (r.error)        throw r.error;
+  if (r.status !== 0) throw new Error(`${bin} ${args.join(' ')} exited ${r.status}`);
+}
+
+function humanSize(bytes) {
+  if (bytes < 1024)              return `${bytes} B`;
+  if (bytes < 1024 * 1024)       return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
+
+function die(msg) {
+  console.error(`rip-db: ${msg}`);
+  process.exit(1);
 }
