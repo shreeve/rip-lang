@@ -55,28 +55,31 @@ if (cmd === 'dump' || cmd === 'load') {
 
 // Subcommand help — printed for `rip-db <cmd> --help` / `-h`. Defined as
 // a function (hoisted) so the top-level await dispatch at the head of
-// this file can reach it without temporal-dead-zone trouble.
+// this file can reach it without temporal-dead-zone trouble. Bodies are
+// JS template literals (backticks) — JS's equivalent of Rip's `'''` /
+// `"""` heredocs. Indentation matters: every line after the opening
+// backtick lives at column 0 so the printed output isn't pre-indented.
 function helpFor(cmd) {
   switch (cmd) {
-    case 'dump': return (
-      'Usage: rip-db dump [ARCHIVE.tar.gz]\n' +
-      '\n' +
-      'Export the running rip-db database to a single .tar.gz archive.\n' +
-      'If ARCHIVE is omitted, defaults to <dbname>-YYYYMMDD-HHMMSS.tar.gz in cwd.\n' +
-      'Refuses to overwrite an existing archive.\n' +
-      '\n' +
-      'Environment:\n' +
-      '  RIPDB_URL  rip-db server URL (default http://localhost:4213)\n'
-    );
-    case 'load': return (
-      'Usage: rip-db load ARCHIVE.tar.gz\n' +
-      '\n' +
-      'Restore a tar.gz produced by `rip-db dump` into the rip-db database.\n' +
-      'Refuses to load if the target database already has tables/views.\n' +
-      '\n' +
-      'Environment:\n' +
-      '  RIPDB_URL  rip-db server URL (default http://localhost:4213)\n'
-    );
+    case 'dump': return `\
+Usage: rip-db dump [ARCHIVE.tar.gz]
+
+Export the running rip-db database to a single .tar.gz archive.
+If ARCHIVE is omitted, defaults to <dbname>-YYYYMMDD-HHMMSS.tar.gz in cwd.
+Refuses to overwrite an existing archive.
+
+Environment:
+  RIPDB_URL  rip-db server URL (default http://localhost:4213)
+`;
+    case 'load': return `\
+Usage: rip-db load ARCHIVE.tar.gz
+
+Restore a tar.gz produced by \`rip-db dump\` into the rip-db database.
+Refuses to load if the target database already has tables/views.
+
+Environment:
+  RIPDB_URL  rip-db server URL (default http://localhost:4213)
+`;
     default: return '';
   }
 }
