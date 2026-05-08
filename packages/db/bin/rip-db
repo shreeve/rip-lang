@@ -143,12 +143,15 @@ async function runDumpLoad(cmd, rest) {
       // its own /tmp/ripdb-XXX while our local one stays empty — tarring it
       // would produce a worthless archive.
       assertDuckExportDir(tmp);
-      // Rewrite COPY paths in load.sql to be relative to the dump dir so the
-      // archive is self-contained and human-readable. IMPORT DATABASE doesn't
-      // care (it strips the dir off and re-prepends its own), but `cd
-      // dump-dir && duckdb new.db < load.sql` and similar manual replays
-      // become relocatable. See rewriteLoadSqlToRelative() below for details.
+      // Make the staged export files presentable before tarring:
+      //   - load.sql:   COPY paths relative to the dump dir
+      //   - schema.sql: collapse `;;` → `;` and trim trailing blank line
+      // Both are upstream DuckDB cosmetic quirks; round-trip via IMPORT
+      // DATABASE works fine without these fixes, but human inspection
+      // and direct `duckdb < schema.sql` replay benefit. See helper
+      // bodies below for the rationale.
       rewriteLoadSqlToRelative(tmp);
+      cleanupSchemaSql(tmp);
       run('tar', ['-czf', archive, '-C', tmp, '.']);
       const size = statSync(archive).size;
       console.log(`wrote ${archive} (${humanSize(size)})`);
@@ -248,6 +251,30 @@ function rewriteLoadSqlToRelative(tmp) {
   const text    = readFileSync(loadSqlPath, 'utf8');
   const cleaned = text.replaceAll(`'${tmp}/`, "'");
   writeFileSync(loadSqlPath, cleaned);
+}
+
+// Two upstream DuckDB cosmetic quirks in `EXPORT DATABASE`'s schema.sql:
+//
+//   1. Doubled trailing `;;` (sometimes `;;;` for CREATE TYPE) — DuckDB's
+//      `WriteCatalogEntries` streams `create_info->ToString()` which
+//      already ends in `;` and then unconditionally appends another
+//      `;\n`. Harmless to SQL parsers (extra `;` is an empty statement)
+//      but ugly when read by humans or piped through tools.
+//
+//   2. Trailing blank line at end of file — the same writer ends with
+//      `ss << '\n';` after the last entry, plus each entry already has a
+//      trailing newline.
+//
+// Replay through `IMPORT DATABASE` works either way; this is purely for
+// the archive-readability story (`cd dump-dir && duckdb new.db < schema.sql`,
+// `git diff` of two snapshots, etc.).
+function cleanupSchemaSql(tmp) {
+  const schemaSqlPath = join(tmp, 'schema.sql');
+  const text    = readFileSync(schemaSqlPath, 'utf8');
+  const cleaned = text
+    .replace(/;+(\s*\n)/g, ';$1')   // `;;\n` / `;;;\n` → `;\n`
+    .replace(/\n+$/, '\n');         // trim trailing blank lines, keep one final newline
+  writeFileSync(schemaSqlPath, cleaned);
 }
 
 function assertDuckExportDir(dir) {

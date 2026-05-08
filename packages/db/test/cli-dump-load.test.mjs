@@ -185,6 +185,19 @@ describeIf('rip-db dump / load round-trip', () => {
     expect(loadSql).not.toContain('/ripdb-');
   });
 
+  test('schema.sql in archive has no doubled `;;` and no trailing blank line', () => {
+    const out = Bun.spawnSync(['tar', '-xzOf', archive, './schema.sql']);
+    const schemaSql = new TextDecoder().decode(out.stdout);
+    // No statement ends in two or three semicolons — that's the upstream
+    // DuckDB cosmetic bug we strip in cleanupSchemaSql().
+    expect(schemaSql).not.toMatch(/;;/);
+    // File ends with exactly one newline (no trailing blank lines).
+    expect(schemaSql).toMatch(/[^\n]\n$/);
+    // Sanity: the actual statements survived.
+    expect(schemaSql).toContain('CREATE TYPE order_status');
+    expect(schemaSql).toContain('CREATE TABLE orders');
+  });
+
   test('refuses to overwrite an existing archive', () => {
     const r = ripDb({ RIPDB_URL: src.url }, 'dump', archive);
     expect(r.code).not.toBe(0);
