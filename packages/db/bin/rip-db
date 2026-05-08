@@ -273,7 +273,7 @@ function cleanupSchemaSql(tmp) {
   const text    = readFileSync(schemaSqlPath, 'utf8');
   const cleaned = text
     .replace(/;+(\s*\n)/g, ';$1')   // `;;\n` / `;;;\n` → `;\n`
-    .replace(/\n+$/, '\n');         // trim trailing blank lines, keep one final newline
+    .replace(/\n{2,}$/, '\n');      // collapse 2+ trailing newlines to 1
   writeFileSync(schemaSqlPath, cleaned);
 }
 
