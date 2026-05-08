@@ -1,3 +1,5 @@
+import { Button } from '../components/button.rip'
+
 export Cart = component
   cart ~= @app.data.cart
   status:: 'idle' | 'loading' | 'success' | 'error' := 'idle'
@@ -28,12 +30,12 @@ export Cart = component
       h1 "Order Placed!"
       p "Your order has been placed successfully."
       a href: "/"
-        button "Continue Shopping"
+        Button "Continue Shopping"
     else if not cart.items.length
       h1 "Cart"
       p "Your cart is empty."
       a href: "/"
-        button "Continue Shopping"
+        Button "Continue Shopping"
     else
       h1 "Cart"
       div.overflow-auto
@@ -52,7 +54,7 @@ export Cart = component
                 td "$#{item.price.toFixed(2)}"
                 td
                   div.stepper
-                    button.outline @click: (->
+                    Button outline: true, @click: (->
                       if item.quantity <= 1
                         cart.removeItem(item)
                       else
@@ -62,10 +64,10 @@ export Cart = component
                       type: "number"
                       value: String(item.quantity)
                       @input: (e) -> cart.updateQuantity(item, Math.max(1, Number(e.target.value) or 1))
-                    button.outline @click: (-> cart.updateQuantity(item, item.quantity + 1)), "+"
+                    Button outline: true, @click: (-> cart.updateQuantity(item, item.quantity + 1)), "+"
                 td "$#{(item.price * item.quantity).toFixed(2)}"
                 td
-                  button.outline.secondary @click: (-> cart.removeItem(item)), "Remove"
+                  Button variant: "secondary", outline: true, @click: (-> cart.removeItem(item)), "Remove"
           tfoot
             tr
               td colSpan: 3
@@ -74,11 +76,7 @@ export Cart = component
                 strong "$#{cart.totalPrice().toFixed(2)}"
               td
       div.cart-actions
-        button
-          aria-busy: status is 'loading'
-          disabled: status is 'loading'
-          @click: @placeOrder
-          "Place Order"
-        button.outline.secondary.link @click: (-> cart.clear()), "Clear Cart"
+        Button loading: status is 'loading', @click: @placeOrder, "Place Order"
+        Button variant: 'secondary', outline: true, link: true, @click: (-> cart.clear()), "Clear Cart"
       if status is 'error'
         p.error error

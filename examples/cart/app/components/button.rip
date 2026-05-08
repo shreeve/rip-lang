@@ -1,0 +1,19 @@
+export Button = component extends button
+  @variant:: 'primary' | 'secondary' := 'primary'
+  @outline:: boolean := false
+  @link:: boolean := false
+  @loading:: boolean := false
+
+  classes ~=
+    parts = []
+    parts.push 'secondary' if @variant is 'secondary'
+    parts.push 'outline'   if @outline
+    parts.push 'link'      if @link
+    parts.join(' ') or null
+
+  render
+    button
+      aria-busy: @loading
+      disabled: @loading
+      class: classes
+      slot

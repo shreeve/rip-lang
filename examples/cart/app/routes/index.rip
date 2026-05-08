@@ -1,4 +1,5 @@
 import { Product } from '../types.rip'
+import { Button } from '../components/button.rip'
 
 export Products = component
   cart ~= @app.data.cart
@@ -55,9 +56,9 @@ export Products = component
               h5 product.name
               p "$#{product.price.toFixed(2)}"
               if cart.items.some (i) -> i.id is product.id
-                button.outline @click: (-> cart.removeItem(product)), "Added to Cart"
+                Button outline: true, @click: (-> cart.removeItem(product)), "Added to Cart"
               else
-                button.outline @click: (-> cart.addItem(product)), "Add to Cart"
+                Button outline: true, @click: (-> cart.addItem(product)), "Add to Cart"
       else
         p "No products found. "
-          button.outline.link @click: @clearFilters, "Clear Filters"
+          Button outline: true, link: true, @click: @clearFilters, "Clear Filters"
