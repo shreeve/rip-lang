@@ -1,13 +1,16 @@
 // ============================================================================
 // ripdb.cpp — DuckDB binding for a remote rip-db HTTP server.
 //
-// Commit 2 (M1) — see packages/db/CLI.md §"Implementation progress" for the
-// running log of what's landed and what's deferred.
+// See packages/db/CLI.md §"Implementation progress" for the running log of
+// what's landed and what's deferred.
 //
-// Phase 2A scope (this file at first commit):
+// Scope:
 //   - Loadable-extension entrypoint via DUCKDB_CPP_EXTENSION_ENTRY.
 //   - StorageExtension('ripdb') → ATTACH dispatch.
-//   - RipCatalog + RipSchemaEntry + RipTableEntry, all read-only.
+//   - RipCatalog + RipSchemaEntry + RipTableEntry. DDL is denied; DML
+//     (INSERT/UPDATE/DELETE) is forwarded to the remote via PlanInsert/
+//     PlanUpdate/PlanDelete (see PhysicalRipPassthrough and
+//     PhysicalRipInsertSink).
 //   - Eager catalog population at attach time (one /tables + one /schema/:t
 //     per table). Stable per-attach object identity so DuckDB's binder/
 //     autocomplete can hold optional_ptrs without lifetime drama.
@@ -15,14 +18,13 @@
 //   - Scan function with projection pushdown and single-threaded scan.
 //     Decode uses the Commit 1 decoder; per-row writes into output vectors,
 //     no memcpy fast paths anywhere yet.
-//   - RipTransaction + RipTransactionManager as thin no-ops.
-//   - All Plan*/CreateXxx/DropXxx/Alter throw PermissionException with a
-//     clear "ripdb: read-only v1" message.
+//   - RipTransaction + RipTransactionManager as thin no-ops; DML inside an
+//     explicit BEGIN is refused (we can't honor a local ROLLBACK against
+//     the remote).
+//   - All Create*/DropEntry/Alter throw PermissionException; only DML is
+//     permitted to mutate.
 //
-// Phase 2B (next commit) wires the metadata footer + smoke-tests with a
-// stock `duckdb -unsigned` CLI and verifies the four completion forms.
-//
-// Sentinel handling per peer-AI round 6:
+// Sentinel handling:
 //   - COLUMN_IDENTIFIER_ROW_ID is rejected explicitly in init_global, not
 //     deep in the scan. Zero-column projections are also rejected with a
 //     clear message rather than producing invalid SQL.
@@ -64,25 +66,59 @@
 // header we need for the vector + logical-operator machinery used below.
 #include "ripdb_compat.hpp"
 #include "duckdb/common/types/uuid.hpp"
+#include "duckdb/common/types/interval.hpp"
+#include "duckdb/common/hugeint.hpp"
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/storage/database_size.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension_install_info.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/operator/logical_insert.hpp"
+#include "duckdb/planner/operator/logical_update.hpp"
+#include "duckdb/planner/operator/logical_delete.hpp"
+#include "duckdb/planner/operator/logical_dummy_scan.hpp"
+#include "duckdb/planner/operator/logical_expression_get.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_subquery_expression.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/enums/physical_operator_type.hpp"
+#include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/parser/statement/update_statement.hpp"
+#include "duckdb/parser/statement/delete_statement.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/parser/tableref/joinref.hpp"
+#include "duckdb/parser/tableref/subqueryref.hpp"
+#include "duckdb/parser/tableref/expressionlistref.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/query_node/set_operation_node.hpp"
+#include "duckdb/parser/query_node/cte_node.hpp"
+#include "duckdb/parser/common_table_expression_info.hpp"
+#include "duckdb/parser/result_modifier.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
+#include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
 #include "yyjson.hpp"
 
 #include <cstring>
 #include <cstdio>
 #include <cerrno>
 #include <cstdlib>
+#include <cmath>
+#include <limits>
+#include <sstream>
 
 // Minimal HTTP/1.1 client (BSD sockets). Local-only by design — no TLS, no
 // redirects, no chunked transfer encoding. See RipHttpClient below.
@@ -227,13 +263,17 @@ public:
 		return DoRequest("GET", path, req);
 	}
 
-	string PostBinary(const string &path, const string &content_type, const string &body) {
+	string PostBinary(const string &path, const string &content_type, const string &body,
+	                  const vector<std::pair<string, string>> &extra_headers = {}) {
 		string req = "POST " + path + " HTTP/1.1\r\n"
 		             "Host: " + options_.host + ":" + std::to_string(options_.port) + "\r\n"
 		             "User-Agent: ripdb/0.1\r\n"
 		             "Content-Type: " + content_type + "\r\n"
-		             "Content-Length: " + std::to_string(body.size()) + "\r\n"
-		             "Connection: close\r\n\r\n";
+		             "Content-Length: " + std::to_string(body.size()) + "\r\n";
+		for (const auto &kv : extra_headers) {
+			req += kv.first + ": " + kv.second + "\r\n";
+		}
+		req += "Connection: close\r\n\r\n";
 		req.append(body);
 		return DoRequest("POST", path, req);
 	}
@@ -364,6 +404,11 @@ struct CatalogTypeResult {
 	bool refuse = false;          // true → emit a populate-time error for this column
 	string refuse_reason;
 	LogicalType type = LogicalType::VARCHAR;
+	// True iff the catalog type is VARCHAR but the REMOTE column is NOT a
+	// real VARCHAR (LIST/STRUCT/MAP/ARRAY/UNION/ENUM/JSON/BIT/...). The
+	// DML write path needs this to refuse INSERTs that would silently
+	// stringify into a column that doesn't actually want a string.
+	bool varchar_is_fallback = false;
 };
 
 // Parse "DECIMAL(w,s)" (whitespace-tolerant) into width + scale. Returns
@@ -414,7 +459,7 @@ static CatalogTypeResult MapToWireType(const string &server_reported_type) {
 
 	if (upper == "BLOB" || upper == "BYTEA" || upper == "BINARY" || upper == "VARBINARY") {
 		r.refuse = true;
-		r.refuse_reason = "BLOB columns are not supported by the ripdb extension in M1 "
+		r.refuse_reason = "BLOB columns are not supported by the ripdb extension "
 		                  "(server-side stringification is lossy; refused per CLI.md).";
 		return r;
 	}
@@ -469,17 +514,35 @@ static CatalogTypeResult MapToWireType(const string &server_reported_type) {
 	// the wire can't deliver. See CLI.md "Types that fall back to VARCHAR".
 	// DECIMAL was on this list in M1; M2.1-follow-up gives it native
 	// encoding (see the DECIMAL branch above), so it's out of this list.
+	//
+	// Two sub-cases:
+	//   - real VARCHAR/CHAR — exposed as VARCHAR; DML can write to them.
+	//   - everything else (LIST/STRUCT/MAP/ARRAY/UNION/ENUM/JSON/BIT/...) —
+	//     ALSO exposed as VARCHAR for the read path (the wire stringifies
+	//     them), but the underlying remote column is NOT a real string.
+	//     DML must refuse to write to these because we can't reliably
+	//     serialize a value back into the native form. Mark them so the
+	//     INSERT/UPDATE path can throw a clear error instead of silently
+	//     coercing.
+	if (starts_with("VARCHAR") || starts_with("CHAR(")) {
+		r.type = LogicalType::VARCHAR;
+		return r;
+	}
 	if (upper == "ENUM" || starts_with("LIST(") || upper == "LIST" ||
 	    starts_with("STRUCT(") || upper == "STRUCT" || starts_with("MAP(") || upper == "MAP" ||
 	    starts_with("UNION(") || upper == "UNION" || starts_with("ARRAY(") || upper == "ARRAY" ||
 	    upper == "BIT" || upper == "BITSTRING" || upper == "JSON" || upper == "VARIANT" ||
-	    upper == "GEOMETRY" || starts_with("VARCHAR") || starts_with("CHAR(")) {
+	    upper == "GEOMETRY") {
 		r.type = LogicalType::VARCHAR;
+		r.varchar_is_fallback = true;
 		return r;
 	}
 
-	// Unknown — also expose as VARCHAR. Better than crashing.
+	// Unknown — also expose as VARCHAR. Better than crashing. Treat as a
+	// fallback (not a real string) so DML refuses to write through the
+	// catalog's VARCHAR mask.
 	r.type = LogicalType::VARCHAR;
+	r.varchar_is_fallback = true;
 	return r;
 }
 
@@ -506,6 +569,7 @@ static string QuoteIdentifier(const string &id) {
 struct RipColumnMeta {
 	string      name;       // remote-canonical (used when emitting SQL)
 	LogicalType type;       // wire-compatible (after MapToWireType)
+	bool        varchar_is_fallback = false; // true → catalog says VARCHAR but remote is native nested/binary
 };
 
 struct RipTableMeta {
@@ -531,6 +595,13 @@ struct RipScanBindData : public TableFunctionData {
 	string                base_url;
 	string                schema_name;     // remote-side schema (currently always "main")
 	string                table_name;      // remote-canonical
+	// Back-pointer to the catalog entry. Required for `LogicalGet::GetTable()`
+	// to surface us as a base-table source — without it, the binder rejects
+	// UPDATE/DELETE with "Can only update base table" before our PlanUpdate
+	// runs. Set in RipTableEntry::GetScanFunction; cleared/refreshed when
+	// rip_refresh swaps the schema (the bind_data outlives a single query
+	// only, so this pointer is safe for the duration of any one statement).
+	optional_ptr<TableCatalogEntry> entry;
 	// Full table column metadata in remote-declared order (NOT projected).
 	vector<string>        all_column_names;
 	vector<LogicalType>   all_column_types;
@@ -549,6 +620,31 @@ struct RipScanBindData : public TableFunctionData {
 	      all_column_types(std::move(types)) {
 	}
 };
+
+// Surface our table as a base-table for the binder. Without this, the binder
+// rejects UPDATE/DELETE with "Can only update base table" because
+// `LogicalGet::GetTable()` returns nullptr for any TableFunction that doesn't
+// set get_bind_info. Signature mirrors v1.5.2's
+// `table_function_get_bind_info_t = BindInfo(*)(const optional_ptr<FunctionData>)`
+// — note this is the v1.5.2 form (no `const FunctionData` inside the
+// optional_ptr); the post-1.5.2 dev tree tightens it. We pin to v1.5.2 here.
+static BindInfo RipScanGetBindInfo(const optional_ptr<FunctionData> bind_data) {
+	if (bind_data) {
+		auto &bd = bind_data->Cast<RipScanBindData>();
+		if (bd.entry) {
+			// BindInfo's TableCatalogEntry& ctor wants non-const; bd.entry
+			// is optional_ptr<TableCatalogEntry> (already non-const inside),
+			// but `bind_data->Cast<>()` returns const-ref (the param above
+			// is `const optional_ptr<FunctionData>` per the v1.5.2 typedef,
+			// so the indirection chain ends up const). Drop the const
+			// safely — the BindInfo just stores the pointer; it doesn't
+			// mutate the table.
+			auto &mut_entry = const_cast<TableCatalogEntry &>(*bd.entry);
+			return BindInfo(mut_entry);
+		}
+	}
+	return BindInfo(ScanType::TABLE);
+}
 
 struct RipScanGlobalState : public GlobalTableFunctionState {
 	// Per-output-column resolution. Entry i matches DataChunk column i.
@@ -671,6 +767,229 @@ static bool FormatLiteralSQL(const Value &v, string &out) {
 		out = std::move(escaped);
 		return true;
 	}
+	default:
+		return false;
+	}
+}
+
+// ---------------------------------------------------------------------------
+// FormatLiteralForDML
+//
+// Target-type-aware SQL literal formatter used by the INSERT VALUES sink
+// fallback. This is intentionally a SEPARATE function from the read-side
+// FormatLiteralSQL above:
+//
+//   - FormatLiteralSQL is conservative: it refuses anything whose remote
+//     literal semantics can't be proven equivalent to DuckDB's local
+//     semantics (DATE, TIMESTAMP*, FLOAT, DOUBLE, DECIMAL, …). A bad
+//     read-pushdown literal returns wrong rows; that's bad but recoverable.
+//
+//   - FormatLiteralForDML must handle every native catalog type we expose,
+//     because failing here means a DML statement either errors out at the
+//     server or, worse, writes wrong data. Mutations are not recoverable.
+//
+// Two non-negotiable invariants enforced by this function:
+//
+//   1. Format against the **target column type**, not the runtime Value
+//      type. A value arriving as INTEGER bound to a DECIMAL(18,2) column
+//      must be cast to DECIMAL(18,2) explicitly so the remote parser
+//      doesn't infer an arbitrary precision and silently truncate.
+//
+//   2. NULLs are always emitted as NULL::<target_type>. Bare NULL inside
+//      a multi-row VALUES clause poisons type inference for the whole
+//      column.
+//
+// Returns false (with `out` cleared) when the type isn't yet supported by
+// the DML write path. Caller must then either fall through to a different
+// strategy or abort the statement with a clear NotImplementedException.
+// ---------------------------------------------------------------------------
+
+static string EscapeSqlSingleQuoted(const string &s) {
+	string out;
+	out.reserve(s.size() + 2);
+	out.push_back('\'');
+	for (char c : s) {
+		if (c == '\'') out.append("''");
+		else           out.push_back(c);
+	}
+	out.push_back('\'');
+	return out;
+}
+
+static bool FormatLiteralForDML(const Value &v, const LogicalType &target, string &out) {
+	out.clear();
+	// NULL: always cast to the target so multi-row VALUES type inference
+	// doesn't pick a different type for the column.
+	if (v.IsNull()) {
+		out = "NULL::" + target.ToString();
+		return true;
+	}
+
+	// Coerce the runtime Value to the target type when they differ. The
+	// DefaultCastAs path is what the planner would do anyway during
+	// execution; doing it here lets us emit the canonical typed literal.
+	const Value *coerced_ptr = &v;
+	Value coerced;
+	if (v.type().id() != target.id()) {
+		try {
+			coerced = v.DefaultCastAs(target, /*strict=*/false);
+			coerced_ptr = &coerced;
+		} catch (...) {
+			// Cast failed; bail and let the caller decide.
+			return false;
+		}
+	}
+	const Value &val = *coerced_ptr;
+
+	switch (target.id()) {
+	case LogicalTypeId::BOOLEAN:
+		out = val.GetValue<bool>() ? "TRUE" : "FALSE";
+		return true;
+
+	case LogicalTypeId::TINYINT:
+		out = std::to_string(val.GetValue<int8_t>());  return true;
+	case LogicalTypeId::SMALLINT:
+		out = std::to_string(val.GetValue<int16_t>()); return true;
+	case LogicalTypeId::INTEGER:
+		out = std::to_string(val.GetValue<int32_t>()); return true;
+	case LogicalTypeId::BIGINT: {
+		// BIGINT min: bare `-9223372036854775808` parses as unary minus on
+		// a positive literal that overflows i64. Quote-and-cast instead.
+		int64_t x = val.GetValue<int64_t>();
+		if (x == std::numeric_limits<int64_t>::min()) {
+			out = "'-9223372036854775808'::BIGINT";
+		} else {
+			out = std::to_string(x);
+		}
+		return true;
+	}
+	case LogicalTypeId::UTINYINT:
+		out = std::to_string(val.GetValue<uint8_t>());  return true;
+	case LogicalTypeId::USMALLINT:
+		out = std::to_string(val.GetValue<uint16_t>()); return true;
+	case LogicalTypeId::UINTEGER:
+		out = std::to_string(val.GetValue<uint32_t>()); return true;
+	case LogicalTypeId::UBIGINT:
+		out = std::to_string(val.GetValue<uint64_t>()); return true;
+
+	case LogicalTypeId::HUGEINT: {
+		// Always quoted-cast: 128-bit literals don't have a bare form.
+		hugeint_t h = val.GetValue<hugeint_t>();
+		out = "'" + h.ToString() + "'::HUGEINT";
+		return true;
+	}
+	case LogicalTypeId::UHUGEINT: {
+		uhugeint_t h = val.GetValue<uhugeint_t>();
+		out = "'" + h.ToString() + "'::UHUGEINT";
+		return true;
+	}
+
+	case LogicalTypeId::FLOAT: {
+		float f = val.GetValue<float>();
+		if (std::isnan(f))      { out = "'nan'::FLOAT";  return true; }
+		if (std::isinf(f))      { out = (f > 0 ? "'inf'::FLOAT" : "'-inf'::FLOAT"); return true; }
+		char buf[32];
+		std::snprintf(buf, sizeof(buf), "%.9g", f);
+		out = string(buf) + "::FLOAT";
+		return true;
+	}
+	case LogicalTypeId::DOUBLE: {
+		double d = val.GetValue<double>();
+		if (std::isnan(d))      { out = "'nan'::DOUBLE";  return true; }
+		if (std::isinf(d))      { out = (d > 0 ? "'inf'::DOUBLE" : "'-inf'::DOUBLE"); return true; }
+		char buf[40];
+		std::snprintf(buf, sizeof(buf), "%.17g", d);
+		out = string(buf) + "::DOUBLE";
+		return true;
+	}
+
+	case LogicalTypeId::DECIMAL: {
+		// DECIMAL(p,s) — always include precision/scale. Lean on
+		// Value::ToString which formats the unscaled int with the right
+		// decimal point, then wrap with explicit cast.
+		uint8_t p = DecimalType::GetWidth(target);
+		uint8_t s = DecimalType::GetScale(target);
+		string lit = val.ToString();
+		out = "'" + lit + "'::DECIMAL(" + std::to_string(p) + "," + std::to_string(s) + ")";
+		return true;
+	}
+
+	case LogicalTypeId::VARCHAR: {
+		const string s = val.GetValue<string>();
+		// VARCHAR can technically carry embedded NULs in DuckDB, but they
+		// don't survive a round trip through HTTP-as-text and tooling
+		// truncates strings at the first NUL. Refuse rather than mutate
+		// silently — the caller gets a clear NotImplementedException.
+		if (s.find('\0') != string::npos) {
+			return false;
+		}
+		out = EscapeSqlSingleQuoted(s);
+		return true;
+	}
+
+	case LogicalTypeId::DATE: {
+		// Value::ToString for DATE is YYYY-MM-DD already.
+		out = "DATE " + EscapeSqlSingleQuoted(val.ToString());
+		return true;
+	}
+	case LogicalTypeId::TIME:
+		out = "TIME " + EscapeSqlSingleQuoted(val.ToString());
+		return true;
+	case LogicalTypeId::TIME_NS:
+		out = "TIME_NS " + EscapeSqlSingleQuoted(val.ToString());
+		return true;
+	case LogicalTypeId::TIME_TZ:
+		out = "TIMETZ " + EscapeSqlSingleQuoted(val.ToString());
+		return true;
+	case LogicalTypeId::TIMESTAMP:
+		out = "TIMESTAMP " + EscapeSqlSingleQuoted(val.ToString());
+		return true;
+	case LogicalTypeId::TIMESTAMP_SEC:
+		out = "TIMESTAMP_S " + EscapeSqlSingleQuoted(val.ToString());
+		return true;
+	case LogicalTypeId::TIMESTAMP_MS:
+		out = "TIMESTAMP_MS " + EscapeSqlSingleQuoted(val.ToString());
+		return true;
+	case LogicalTypeId::TIMESTAMP_NS:
+		out = "TIMESTAMP_NS " + EscapeSqlSingleQuoted(val.ToString());
+		return true;
+	case LogicalTypeId::TIMESTAMP_TZ:
+		out = "TIMESTAMPTZ " + EscapeSqlSingleQuoted(val.ToString());
+		return true;
+
+	case LogicalTypeId::INTERVAL: {
+		// Preserve all three components — months/days/microseconds.
+		// The default Value::ToString stringifies to a parseable form
+		// like "2 years 3 months 5 days 06:07:08.123456" but to keep
+		// it explicit we build our own.
+		interval_t iv = val.GetValue<interval_t>();
+		std::ostringstream os;
+		os << iv.months << " months "
+		   << iv.days   << " days "
+		   << iv.micros << " microseconds";
+		out = "INTERVAL " + EscapeSqlSingleQuoted(os.str());
+		return true;
+	}
+
+	case LogicalTypeId::UUID: {
+		out = "'" + BaseUUID::ToString(val.GetValue<hugeint_t>()) + "'::UUID";
+		return true;
+	}
+
+	case LogicalTypeId::BLOB:
+	case LogicalTypeId::BIT:
+	case LogicalTypeId::ENUM:
+	case LogicalTypeId::LIST:
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::MAP:
+	case LogicalTypeId::ARRAY:
+	case LogicalTypeId::UNION:
+		// Catalog already exposes these as VARCHAR for reads; INSERTs
+		// targeting native nested/binary types haven't been round-trip
+		// tested and we won't claim support until they have. Caller
+		// gets a clear NotImplementedException.
+		return false;
+
 	default:
 		return false;
 	}
@@ -820,7 +1139,1060 @@ static TableFunction MakeRipScanFunction() {
 	fn.filter_pushdown         = false;  // partial pushdown via complex-filter callback
 	fn.filter_prune            = false;
 	fn.pushdown_complex_filter = RipPushdownFilter;
+	fn.get_bind_info           = RipScanGetBindInfo;
 	return fn;
+}
+
+// ===========================================================================
+// DML helpers (M3) — Plan{Insert,Update,Delete} dispatch and physical operators.
+//
+// Architecture (mirrors packages/db/CLI.md §"Native DML"):
+//
+//   Path 1 — source-AST passthrough (preferred). Reparse the user's original
+//   SQL (one statement only), walk the bound LogicalOperator subtree to
+//   confirm every catalog reference is THIS ripdb catalog, structurally
+//   rewrite the parsed AST to drop the local catalog qualifier from any
+//   BaseTableRef whose catalog matches us, then forward the rewritten SQL
+//   to POST /ddb/exec.
+//
+//   Path 2 — INSERT-only sink fallback. When Path 1 rejects an INSERT (the
+//   common case being `INSERT INTO r.t SELECT ... FROM local_t`), we accept
+//   the child plan as a normal DuckDB Sink+Source operator. Sink() buffers
+//   chunks under a row+byte cap; Finalize() emits one big multi-row
+//   INSERT INTO ... VALUES (...) statement built with FormatLiteralForDML
+//   and POSTs it to /ddb/exec atomically.
+//
+// UPDATE/DELETE have no fallback: if Path 1 can't handle them, we throw
+// NotImplementedException with workaround guidance.
+// ===========================================================================
+
+// Forward decl — `IsSafeAsciiIdentifier` is defined further down (near
+// `PopulateSchema`, where it's also used) but called by `EnforceDmlPreflight`
+// which appears earlier.
+static bool IsSafeAsciiIdentifier(const string &name);
+
+// Parse the user's original SQL (from ClientContext::GetCurrentQuery()) and
+// return exactly one statement of the requested type. Returns nullptr if the
+// query parses to a different number of statements or to a different type —
+// callers fall back to throwing or to the sink-fallback path as appropriate.
+//
+// Why we require exactly-one statement: PlanInsert/Update/Delete may be invoked
+// once per statement during planning, but we have no reliable way (in v1.5.2)
+// to know which statement index this Plan* call corresponds to within a
+// multi-statement batch. Forwarding the full original text per statement would
+// run all of it N times; slicing by stmt_location requires correlating the
+// Plan* invocation to a statement, which we can't do safely. Reject and let
+// the user split the batch.
+template <class StmtT>
+static unique_ptr<StmtT> TryParseSingleStatement(const string &sql) {
+	try {
+		Parser p;
+		p.ParseQuery(sql);
+		if (p.statements.size() != 1) return nullptr;
+		auto &stmt = p.statements[0];
+		if (stmt->type != StmtT::TYPE) return nullptr;
+		// Move-cast: the parser owns the unique_ptr<SQLStatement>; we need
+		// a unique_ptr<StmtT>. Verify the cast then transfer ownership.
+		auto *raw = dynamic_cast<StmtT *>(stmt.get());
+		if (!raw) return nullptr;
+		(void)stmt.release();
+		return unique_ptr<StmtT>(raw);
+	} catch (...) {
+		return nullptr;
+	}
+}
+
+// Forward declarations for the rewriter family.
+static void StripCatalogFromTableRefTree(TableRef &ref, const string &our_catalog_name);
+static void StripCatalogFromQueryNode(class QueryNode &node, const string &our_catalog_name);
+static void StripCatalogFromSelectStatement(SelectStatement &sel, const string &our_catalog_name);
+static void StripCatalogFromExpression(ParsedExpression &expr, const string &our_catalog_name);
+
+// Strip the local catalog qualifier from a single TableRef and recurse into
+// its nested table refs (joins, subqueries).
+//
+// The DuckDB parser collapses qualified names into (catalog, schema, table)
+// based on the number of parts in the source SQL:
+//   `tbl`            -> catalog="" schema="" table="tbl"
+//   `sch.tbl`        -> catalog="" schema="sch" table="tbl"     (NB: 'r.t')
+//   `cat.sch.tbl`    -> catalog="cat" schema="sch" table="tbl"
+//
+// So `r.smoke_orders` (the most common form when `USE r;` was NOT done)
+// arrives with our catalog name in the **schema** field, not the catalog
+// field. We have to rewrite both. After the rewrite, `r.smoke_orders`
+// becomes a bare `smoke_orders` — which the remote DuckDB resolves under
+// its current schema (also "main"), and `r.main.smoke_orders` becomes
+// `main.smoke_orders` which the remote resolves directly.
+static void StripCatalogFromBaseTableRef(BaseTableRef &base, const string &our_catalog_name) {
+	bool stripped = false;
+	if (StringUtil::CIEquals(base.catalog_name, our_catalog_name)) {
+		base.catalog_name = "";
+		stripped = true;
+	}
+	// 2-part-name case: `r.smoke_orders` parses as schema='r'.
+	if (StringUtil::CIEquals(base.schema_name, our_catalog_name)) {
+		base.schema_name = "";
+		stripped = true;
+	}
+	// If we stripped our local-attach catalog name from this ref, the
+	// user demonstrably meant our catalog (whichever ripdb attachment is
+	// running this Plan*). Inject `main` so the rewritten ref is fully
+	// qualified — both for clarity in the forwarded SQL AND so the
+	// passthrough-strict validator (which refuses unqualified source-
+	// position refs to defend against multi-ripdb-USE-attack) accepts
+	// it. Refs the user already wrote unqualified (`SELECT * FROM t`
+	// after `USE r`) are NOT canonicalized: those are the ambiguous
+	// case the strict validator rejects on purpose.
+	if (stripped && base.schema_name.empty()) {
+		base.schema_name = "main";
+	}
+}
+
+static void StripCatalogFromTableRefTree(TableRef &ref, const string &our_catalog_name) {
+	switch (ref.type) {
+	case TableReferenceType::BASE_TABLE:
+		StripCatalogFromBaseTableRef(ref.Cast<BaseTableRef>(), our_catalog_name);
+		break;
+	case TableReferenceType::JOIN: {
+		auto &j = ref.Cast<JoinRef>();
+		if (j.left)  StripCatalogFromTableRefTree(*j.left,  our_catalog_name);
+		if (j.right) StripCatalogFromTableRefTree(*j.right, our_catalog_name);
+		break;
+	}
+	case TableReferenceType::SUBQUERY: {
+		auto &sub = ref.Cast<SubqueryRef>();
+		if (sub.subquery) StripCatalogFromSelectStatement(*sub.subquery, our_catalog_name);
+		break;
+	}
+	case TableReferenceType::EXPRESSION_LIST: {
+		// VALUES rows can contain scalar subqueries whose inner SelectStatement
+		// has BaseTableRefs that need the catalog qualifier stripped. Walk
+		// through StripCatalogFromExpression so subquery refs inside VALUES
+		// get canonicalized to `main.<table>` just like everywhere else.
+		auto &els = ref.Cast<ExpressionListRef>();
+		for (auto &row : els.values) {
+			for (auto &expr : row) {
+				if (expr) StripCatalogFromExpression(*expr, our_catalog_name);
+			}
+		}
+		break;
+	}
+	default:
+		// Other TableRef kinds (table-function refs, dummy, pivot, etc.)
+		// don't carry catalog qualifiers we can rewrite. Leave them as-is
+		// — the bound-plan dependency walk and the safety walker reject
+		// them downstream.
+		break;
+	}
+}
+
+// Visit every ParsedExpression on a QueryNode's result modifiers
+// (ORDER BY, LIMIT/OFFSET, DISTINCT ON, LIMIT %). The base QueryNode
+// stores them as a uniform `vector<unique_ptr<ResultModifier>>`; each
+// subclass holds its own expression members.
+static void ForEachModifierExpression(QueryNode &node,
+                                       const std::function<void(ParsedExpression &)> &visit) {
+	for (auto &mod : node.modifiers) {
+		if (!mod) continue;
+		switch (mod->type) {
+		case ResultModifierType::ORDER_MODIFIER: {
+			auto &om = mod->Cast<OrderModifier>();
+			for (auto &order : om.orders) {
+				if (order.expression) visit(*order.expression);
+			}
+			break;
+		}
+		case ResultModifierType::LIMIT_MODIFIER: {
+			auto &lm = mod->Cast<LimitModifier>();
+			if (lm.limit)  visit(*lm.limit);
+			if (lm.offset) visit(*lm.offset);
+			break;
+		}
+		case ResultModifierType::LIMIT_PERCENT_MODIFIER: {
+			auto &lp = mod->Cast<LimitPercentModifier>();
+			if (lp.limit)  visit(*lp.limit);
+			if (lp.offset) visit(*lp.offset);
+			break;
+		}
+		case ResultModifierType::DISTINCT_MODIFIER: {
+			auto &dm = mod->Cast<DistinctModifier>();
+			for (auto &expr : dm.distinct_on_targets) {
+				if (expr) visit(*expr);
+			}
+			break;
+		}
+		}
+	}
+}
+
+// Const variant for the validator path.
+static void ForEachModifierExpression(const QueryNode &node,
+                                       const std::function<void(const ParsedExpression &)> &visit) {
+	for (const auto &mod : node.modifiers) {
+		if (!mod) continue;
+		switch (mod->type) {
+		case ResultModifierType::ORDER_MODIFIER: {
+			const auto &om = mod->Cast<OrderModifier>();
+			for (const auto &order : om.orders) {
+				if (order.expression) visit(*order.expression);
+			}
+			break;
+		}
+		case ResultModifierType::LIMIT_MODIFIER: {
+			const auto &lm = mod->Cast<LimitModifier>();
+			if (lm.limit)  visit(*lm.limit);
+			if (lm.offset) visit(*lm.offset);
+			break;
+		}
+		case ResultModifierType::LIMIT_PERCENT_MODIFIER: {
+			const auto &lp = mod->Cast<LimitPercentModifier>();
+			if (lp.limit)  visit(*lp.limit);
+			if (lp.offset) visit(*lp.offset);
+			break;
+		}
+		case ResultModifierType::DISTINCT_MODIFIER: {
+			const auto &dm = mod->Cast<DistinctModifier>();
+			for (const auto &expr : dm.distinct_on_targets) {
+				if (expr) visit(*expr);
+			}
+			break;
+		}
+		}
+	}
+}
+
+static void StripCatalogFromQueryNode(QueryNode &node, const string &our_catalog_name) {
+	switch (node.type) {
+	case QueryNodeType::SELECT_NODE: {
+		auto &sn = node.Cast<SelectNode>();
+		if (sn.from_table) StripCatalogFromTableRefTree(*sn.from_table, our_catalog_name);
+		// Walk every parsed expression for nested SubqueryExpressions —
+		// any of these can contain a BaseTableRef with the local catalog
+		// qualifier still attached.
+		for (auto &expr : sn.select_list) {
+			if (expr) StripCatalogFromExpression(*expr, our_catalog_name);
+		}
+		if (sn.where_clause) StripCatalogFromExpression(*sn.where_clause, our_catalog_name);
+		for (auto &expr : sn.groups.group_expressions) {
+			if (expr) StripCatalogFromExpression(*expr, our_catalog_name);
+		}
+		if (sn.having)  StripCatalogFromExpression(*sn.having,  our_catalog_name);
+		if (sn.qualify) StripCatalogFromExpression(*sn.qualify, our_catalog_name);
+		// Result modifiers (ORDER BY, LIMIT, OFFSET, DISTINCT ON) — every
+		// expression here can host the same qualified-ident / scalar-
+		// subquery shapes the validator cares about.
+		ForEachModifierExpression(node, [&](ParsedExpression &expr) {
+			StripCatalogFromExpression(expr, our_catalog_name);
+		});
+		// CTEs in cte_map could host nested TableRefs — handle the simple
+		// case where each CTE is itself a SelectStatement.
+		for (auto &cte : sn.cte_map.map) {
+			if (cte.second && cte.second->query) {
+				StripCatalogFromSelectStatement(*cte.second->query, our_catalog_name);
+			}
+		}
+		break;
+	}
+	case QueryNodeType::SET_OPERATION_NODE: {
+		auto &sop = node.Cast<SetOperationNode>();
+		// v1.5.2 stores set-op operands in a children vector (the older
+		// left/right fields were collapsed). Walk all of them.
+		for (auto &child : sop.children) {
+			if (child) StripCatalogFromQueryNode(*child, our_catalog_name);
+		}
+		// SET-OP nodes can also carry their own ORDER BY/LIMIT/etc. modifiers.
+		ForEachModifierExpression(node, [&](ParsedExpression &expr) {
+			StripCatalogFromExpression(expr, our_catalog_name);
+		});
+		break;
+	}
+	case QueryNodeType::CTE_NODE: {
+		auto &cte = node.Cast<CTENode>();
+		// CTENode is the legacy (deprecated) CTE form; both `query` and
+		// `child` here are `unique_ptr<QueryNode>` (not SelectStatement).
+		if (cte.query) StripCatalogFromQueryNode(*cte.query, our_catalog_name);
+		if (cte.child) StripCatalogFromQueryNode(*cte.child, our_catalog_name);
+		break;
+	}
+	case QueryNodeType::RECURSIVE_CTE_NODE: {
+		// RecursiveCTENode also uses children rather than left/right in v1.5.2.
+		// Use the generic ParsedExpressionIterator route to avoid hard-coding
+		// internal field names that may change across versions.
+		// (Walk via the modifier callback no-op and the table-ref callback.)
+		// Conservative: skip — if a recursive CTE is involved, the
+		// dependency walk on the bound plan already accepted only ripdb
+		// LogicalGets, so the remote will resolve them as-is.
+		break;
+	}
+	default:
+		// BoundQueryNode shouldn't appear here (we only walk parsed
+		// statements); if a new QueryNode subclass shows up we leave
+		// it alone — worst case, the remote-side bind throws clearly.
+		break;
+	}
+}
+
+static void StripCatalogFromSelectStatement(SelectStatement &sel, const string &our_catalog_name) {
+	if (sel.node) StripCatalogFromQueryNode(*sel.node, our_catalog_name);
+}
+
+// Walk a parsed expression and rewrite any nested SubqueryExpression's
+// inner SelectStatement (which can contain BaseTableRefs that need their
+// catalog qualifier stripped). The validator runs after rewrite, so this
+// has to happen FIRST or qualified subquery refs would either trip the
+// validator or miscompile to the remote.
+static void StripCatalogFromExpression(ParsedExpression &expr, const string &our_catalog_name) {
+	if (expr.GetExpressionClass() == ExpressionClass::SUBQUERY) {
+		auto &sub = expr.Cast<SubqueryExpression>();
+		if (sub.subquery) {
+			StripCatalogFromSelectStatement(*sub.subquery, our_catalog_name);
+		}
+	}
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](ParsedExpression &child) {
+		    StripCatalogFromExpression(child, our_catalog_name);
+	    });
+}
+
+// Walk a parsed SQLStatement and rewrite catalog-qualified table refs that
+// point to `our_catalog_name`. Different statement subclasses hold their
+// table refs in different places; we handle exactly the three we forward.
+static void RewriteCatalogQualifierInStatement(SQLStatement &stmt, const string &our_catalog_name) {
+	switch (stmt.type) {
+	case StatementType::INSERT_STATEMENT: {
+		auto &ins = stmt.Cast<InsertStatement>();
+		// 3-part `cat.sch.tbl` form.
+		if (StringUtil::CIEquals(ins.catalog, our_catalog_name)) {
+			ins.catalog = "";
+		}
+		// 2-part `r.tbl` form: parser puts our catalog in the schema slot.
+		if (StringUtil::CIEquals(ins.schema, our_catalog_name)) {
+			ins.schema = "";
+		}
+		if (ins.table_ref) StripCatalogFromTableRefTree(*ins.table_ref, our_catalog_name);
+		// INSERT ... SELECT — rewrite TableRefs in the source query too.
+		if (ins.select_statement) StripCatalogFromSelectStatement(*ins.select_statement, our_catalog_name);
+		break;
+	}
+	case StatementType::UPDATE_STATEMENT: {
+		auto &upd = stmt.Cast<UpdateStatement>();
+		if (upd.table) StripCatalogFromTableRefTree(*upd.table, our_catalog_name);
+		// SET expressions and the optional UpdateSetInfo.condition can
+		// contain scalar subqueries against ripdb tables; walk them too.
+		if (upd.set_info) {
+			for (auto &expr : upd.set_info->expressions) {
+				if (expr) StripCatalogFromExpression(*expr, our_catalog_name);
+			}
+			if (upd.set_info->condition) {
+				StripCatalogFromExpression(*upd.set_info->condition, our_catalog_name);
+			}
+		}
+		break;
+	}
+	case StatementType::DELETE_STATEMENT: {
+		auto &del = stmt.Cast<DeleteStatement>();
+		if (del.table) StripCatalogFromTableRefTree(*del.table, our_catalog_name);
+		// DELETE WHERE can contain scalar subqueries / IN(SELECT ...)
+		// against ripdb tables.
+		if (del.condition) StripCatalogFromExpression(*del.condition, our_catalog_name);
+		break;
+	}
+	default:
+		break;
+	}
+}
+
+// ---------------------------------------------------------------------------
+// ValidateRewrittenStatement — safety gate AFTER catalog-qualifier rewrite.
+//
+// The TableRef rewriter (StripCatalogFromTableRefTree + friends) only knows
+// about FROM-clause table references. Real SQL puts qualified identifiers in
+// many other places that the rewriter cannot reach without a full parsed-
+// expression visitor:
+//
+//   DELETE FROM rip.t WHERE rip.t.id = 5         -- ColumnRefExpression in WHERE
+//   UPDATE rip.t SET col = ... WHERE rip.t.x = 1 -- ColumnRefExpression in WHERE
+//   UPDATE rip.t SET col = (SELECT ... FROM rip.u) WHERE ... -- nested SELECT in SET
+//   DELETE FROM rip.t WHERE id IN (SELECT id FROM rip.t)     -- nested SELECT in WHERE
+//
+// Forwarding such SQL with the local catalog name still embedded is unsafe:
+// in the best case the remote bind errors out; in the worst case the remote
+// happens to have a catalog/schema/attachment with the same name and the
+// statement silently mutates or reads the wrong rows.
+//
+// Rather than implement the full parsed-expression visitor (a big chunk of
+// work that overlaps DuckDB's own ParsedExpressionIterator quirks), v1 takes
+// the conservative path: walk the rewritten parsed AST and reject if ANY
+// `ColumnRefExpression`'s leftmost qualifier matches our local catalog
+// name. The walker also catches:
+//
+//   - prepared-statement parameter placeholders (`$1`, `?`, `$name`) anywhere
+//     in the statement (`ParameterExpression`) — values aren't bound at this
+//     stage and would forward as literal placeholders to the remote.
+//   - references to the synthetic `rowid` column (any ColumnRefExpression
+//     whose final-component name is "rowid"). ripdb scans synthesize rowids
+//     locally; the remote DuckDB has its own physical rowid, and forwarding
+//     `WHERE rowid = N` would mutate a different row.
+//
+// On success returns empty string (statement is safe to forward). On any
+// reject returns the human-readable reason. The caller throws
+// NotImplementedException with that message.
+// ---------------------------------------------------------------------------
+
+// Forward decls for the post-rewrite safety walker.
+//
+// `in_source_context` distinguishes BaseTableRefs in the DML's own target
+// slot (the INSERT/UPDATE/DELETE's primary table, known-ours from `op.table`)
+// from refs in source positions (FROM clauses, subquery FROMs, JOIN
+// children) we read from rather than write to. The walker is currently
+// loose either way (accepts empty or `main` schema) — the multi-ripdb-USE-
+// attack defense lives entirely in `ValidateOriginalSourceProvenance`
+// which runs BEFORE rewrite and requires source refs to carry our local-
+// attach catalog name in catalog or schema slot.
+static string ValidateParsedExpression(const ParsedExpression &expr,
+                                        const string &our_catalog_name);
+static string ValidateTableRefSubtree(const TableRef &ref,
+                                       const string &our_catalog_name,
+                                       bool in_source_context);
+static string ValidateQueryNodeSubtree(const QueryNode &node,
+                                        const string &our_catalog_name);
+static string ValidateSelectStatementSubtree(const SelectStatement &sel,
+                                              const string &our_catalog_name);
+
+static string ValidateColumnRef(const ColumnRefExpression &cref,
+                                 const string &our_catalog_name) {
+	// rowid is always rejected for DML — see header comment.
+	if (!cref.column_names.empty()) {
+		const string &leaf = cref.column_names.back();
+		if (StringUtil::CIEquals(leaf, "rowid")) {
+			return "DML referencing the synthetic 'rowid' column is not supported "
+			       "by ripdb (ripdb scans synthesize rowids locally; they are not "
+			       "stable identifiers on the remote DuckDB). Use a real primary key.";
+		}
+	}
+	// Catalog qualifier leaked through the rewrite — the user-emitted SQL
+	// contained a qualified identifier that StripCatalogFromTableRefTree
+	// couldn't reach (it only handles FROM-clause TableRefs).
+	if (cref.column_names.size() >= 2 &&
+	    StringUtil::CIEquals(cref.column_names.front(), our_catalog_name)) {
+		return StringUtil::Format(
+		    "ripdb: this DML uses qualified identifier '%s' inside an "
+		    "expression (WHERE / SET / subquery), which the v1 catalog-qualifier "
+		    "rewriter doesn't reach. Drop the catalog qualifier from "
+		    "expression-position references — `USE %s; ...` first, or refer "
+		    "to columns unqualified.",
+		    cref.ToString(), our_catalog_name);
+	}
+	return string();
+}
+
+static string ValidateParsedExpression(const ParsedExpression &expr,
+                                        const string &our_catalog_name) {
+	if (expr.GetExpressionClass() == ExpressionClass::PARAMETER) {
+		return "ripdb: prepared-statement parameter placeholders ($1, ?, "
+		       "$name) are not supported in DML. The placeholders aren't "
+		       "substituted with bound values at the planning stage, so the "
+		       "remote would receive the placeholder literally. Inline the "
+		       "value or use a non-prepared statement.";
+	}
+	if (expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
+		const auto &cref = expr.Cast<ColumnRefExpression>();
+		string err = ValidateColumnRef(cref, our_catalog_name);
+		if (!err.empty()) return err;
+	}
+	if (expr.GetExpressionClass() == ExpressionClass::SUBQUERY) {
+		const auto &sub = expr.Cast<SubqueryExpression>();
+		if (sub.subquery) {
+			string err = ValidateSelectStatementSubtree(*sub.subquery, our_catalog_name);
+			if (!err.empty()) return err;
+		}
+		// fall through to enumerate the IN/ANY/ALL operand expressions too
+	}
+	string err;
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](const ParsedExpression &child) {
+		    if (!err.empty()) return;
+		    err = ValidateParsedExpression(child, our_catalog_name);
+	    });
+	return err;
+}
+
+// Acceptance rule for BaseTableRefs at POST-rewrite validation time.
+// Catches gross leftovers (non-empty catalog, non-`main` schema). The
+// multi-ripdb-USE-attack defense is enforced separately via
+// `ValidateOriginalSourceProvenance` running BEFORE the rewrite.
+static bool IsAcceptableBaseTableQualifier(const string &catalog, const string &schema) {
+	if (!catalog.empty()) return false;
+	if (schema.empty()) return true;
+	return StringUtil::CIEquals(schema, "main");
+}
+
+static string ValidateTableRefSubtree(const TableRef &ref,
+                                       const string &our_catalog_name,
+                                       bool in_source_context) {
+	switch (ref.type) {
+	case TableReferenceType::BASE_TABLE: {
+		const auto &base = ref.Cast<BaseTableRef>();
+		if (!IsAcceptableBaseTableQualifier(base.catalog_name, base.schema_name)) {
+			return StringUtil::Format(
+			    "ripdb: base-table reference '%s%s%s%s%s' carries a catalog/"
+			    "schema qualifier the rewriter didn't (or shouldn't) strip. "
+			    "If you see this, the rewriter missed a TableRef position.",
+			    base.catalog_name.empty() ? "" : base.catalog_name.c_str(),
+			    base.catalog_name.empty() ? "" : ".",
+			    base.schema_name.empty()  ? "" : base.schema_name.c_str(),
+			    base.schema_name.empty()  ? "" : ".",
+			    base.table_name.c_str());
+		}
+		return string();
+	}
+	case TableReferenceType::JOIN: {
+		const auto &j = ref.Cast<JoinRef>();
+		if (j.left) {
+			string err = ValidateTableRefSubtree(*j.left, our_catalog_name, in_source_context);
+			if (!err.empty()) return err;
+		}
+		if (j.right) {
+			string err = ValidateTableRefSubtree(*j.right, our_catalog_name, in_source_context);
+			if (!err.empty()) return err;
+		}
+		if (j.condition) {
+			string err = ValidateParsedExpression(*j.condition, our_catalog_name);
+			if (!err.empty()) return err;
+		}
+		return string();
+	}
+	case TableReferenceType::SUBQUERY: {
+		const auto &sub = ref.Cast<SubqueryRef>();
+		if (sub.subquery) {
+			return ValidateSelectStatementSubtree(*sub.subquery, our_catalog_name);
+		}
+		return string();
+	}
+	case TableReferenceType::EXPRESSION_LIST: {
+		// `INSERT INTO t VALUES (...)` parses with an ExpressionListRef.
+		// The cells can contain arbitrary parsed expressions — including
+		// scalar subqueries that reference ripdb tables. Walk them so we
+		// catch rowid / parameter / qualified-ColumnRef issues inside.
+		const auto &els = ref.Cast<ExpressionListRef>();
+		for (auto &row : els.values) {
+			for (auto &expr : row) {
+				if (!expr) continue;
+				string err = ValidateParsedExpression(*expr, our_catalog_name);
+				if (!err.empty()) return err;
+			}
+		}
+		return string();
+	}
+	case TableReferenceType::EMPTY_FROM:
+		// `SELECT 1` (no FROM) and similar constant-only sources.
+		return string();
+	default:
+		// TABLE_FUNCTION (range, read_csv, ...), CTE, PIVOT, SHOW_REF,
+		// COLUMN_DATA, DELIM_GET — all local-data references or constructs
+		// the rewriter doesn't touch. The bound-plan dependency walk
+		// (`OnlyRipdbScans`) rejects most of them too, but defense in
+		// depth: refuse to forward any TableRef the v1 rewriter doesn't
+		// validate.
+		return StringUtil::Format(
+		    "ripdb: unsupported TableRef type %d in DML statement (v1 only "
+		    "validates base tables, joins, subqueries, VALUES lists, and "
+		    "empty-FROM; recursive CTEs / table functions / pivots etc. are "
+		    "out of scope).",
+		    static_cast<int>(ref.type));
+	}
+}
+
+static string ValidateQueryNodeSubtree(const QueryNode &node,
+                                        const string &our_catalog_name) {
+	// Modifiers (ORDER BY / LIMIT / OFFSET / DISTINCT ON) live on the base
+	// QueryNode, so visit them here regardless of subclass before
+	// dispatching to the subclass-specific fields.
+	{
+		string err;
+		ForEachModifierExpression(node, [&](const ParsedExpression &expr) {
+			if (err.empty()) err = ValidateParsedExpression(expr, our_catalog_name);
+		});
+		if (!err.empty()) return err;
+	}
+	switch (node.type) {
+	case QueryNodeType::SELECT_NODE: {
+		const auto &sn = node.Cast<SelectNode>();
+		for (auto &expr : sn.select_list) {
+			if (!expr) continue;
+			string err = ValidateParsedExpression(*expr, our_catalog_name);
+			if (!err.empty()) return err;
+		}
+		if (sn.from_table) {
+			string err = ValidateTableRefSubtree(*sn.from_table, our_catalog_name,
+			                                     /*in_source_context=*/true);
+			if (!err.empty()) return err;
+		}
+		if (sn.where_clause) {
+			string err = ValidateParsedExpression(*sn.where_clause, our_catalog_name);
+			if (!err.empty()) return err;
+		}
+		for (auto &expr : sn.groups.group_expressions) {
+			if (!expr) continue;
+			string err = ValidateParsedExpression(*expr, our_catalog_name);
+			if (!err.empty()) return err;
+		}
+		if (sn.having) {
+			string err = ValidateParsedExpression(*sn.having, our_catalog_name);
+			if (!err.empty()) return err;
+		}
+		if (sn.qualify) {
+			string err = ValidateParsedExpression(*sn.qualify, our_catalog_name);
+			if (!err.empty()) return err;
+		}
+		for (auto &cte : sn.cte_map.map) {
+			if (cte.second && cte.second->query) {
+				string err = ValidateSelectStatementSubtree(*cte.second->query, our_catalog_name);
+				if (!err.empty()) return err;
+			}
+		}
+		return string();
+	}
+	case QueryNodeType::SET_OPERATION_NODE: {
+		const auto &sop = node.Cast<SetOperationNode>();
+		for (auto &child : sop.children) {
+			if (!child) continue;
+			string err = ValidateQueryNodeSubtree(*child, our_catalog_name);
+			if (!err.empty()) return err;
+		}
+		return string();
+	}
+	default:
+		// CTENode (deprecated), RecursiveCTENode, etc. — out of scope for v1.
+		// We reject rather than forward un-validated subtrees.
+		return "ripdb: this DML uses a query-node form (recursive CTE, "
+		       "deprecated CTE wrapper, etc.) that the v1 safety walker "
+		       "doesn't validate. Materialize via a temp table first.";
+	}
+}
+
+static string ValidateSelectStatementSubtree(const SelectStatement &sel,
+                                              const string &our_catalog_name) {
+	if (!sel.node) return string();
+	return ValidateQueryNodeSubtree(*sel.node, our_catalog_name);
+}
+
+// "Is this InsertStatement pure VALUES?" — distinguishes the passthrough-
+// eligible case (`INSERT INTO t VALUES (...)` with no SELECT body) from the
+// `INSERT INTO t SELECT ...` case that must use the sink fallback.
+//
+// `GetValuesList()` returns non-null only when the source is a literal
+// VALUES expression list. INSERT...SELECT in any form (including
+// `SELECT * FROM (VALUES ...)`) returns null and is routed to the sink path.
+static bool IsPureInsertValues(const InsertStatement &ins) {
+	return ins.GetValuesList() != nullptr;
+}
+
+// ---------------------------------------------------------------------------
+// ValidateOriginalSourceProvenance — multi-ripdb USE-attack defense.
+//
+// Runs on the ORIGINAL parsed AST, BEFORE the catalog rewriter touches it.
+// For every BaseTableRef in source position (a SELECT's FROM clause, a
+// JOIN's children, a SubqueryRef's inner SELECT, a SubqueryExpression's
+// inner SELECT — but NOT the DML's own target table), require the user
+// to have qualified the ref with our local-attach catalog name in either
+// the catalog slot (3-part `r.main.t` → catalog="r") or the schema slot
+// (2-part `r.t` → schema="r"). Bare `t`, pre-existing `main.t`, `s.t`,
+// `s.main.t`, etc. are all rejected.
+//
+// This is the only rule that's robust against:
+//
+//   ATTACH 'rip://server-a' AS r (TYPE ripdb);
+//   ATTACH 'rip://server-b' AS s (TYPE ripdb);
+//   USE s;
+//   UPDATE r.smoke_orders SET amount = (SELECT max(amount) FROM main.t)
+//                                                              ^^^^
+// where the local binder resolves `main.t` to `s.main.t` (current catalog
+// is `s`) but a verbatim forward to r's server would resolve it as
+// `r.main.t`. Without proof that the user wrote `r.t` (or `r.main.t`),
+// passthrough cannot safely forward the source ref.
+//
+// The rewriter (`StripCatalogFromBaseTableRef`) only canonicalizes refs
+// that match our_catalog_name in catalog or schema; this walker enforces
+// that source refs ALWAYS match before rewrite, so what reaches the
+// remote is always provably ours.
+// ---------------------------------------------------------------------------
+
+static string ValidateProvenanceTableRef(const TableRef &ref,
+                                          const string &our_catalog_name,
+                                          bool in_source_context);
+static string ValidateProvenanceQueryNode(const QueryNode &node,
+                                           const string &our_catalog_name);
+static string ValidateProvenanceExpression(const ParsedExpression &expr,
+                                            const string &our_catalog_name);
+
+static string ValidateProvenanceTableRef(const TableRef &ref,
+                                          const string &our_catalog_name,
+                                          bool in_source_context) {
+	switch (ref.type) {
+	case TableReferenceType::BASE_TABLE: {
+		if (!in_source_context) return string();  // target ref is known-ours
+		const auto &base = ref.Cast<BaseTableRef>();
+		bool ours = StringUtil::CIEquals(base.catalog_name, our_catalog_name) ||
+		            StringUtil::CIEquals(base.schema_name,  our_catalog_name);
+		if (!ours) {
+			return StringUtil::Format(
+			    "ripdb: source-position table reference '%s%s%s%s%s' is not "
+			    "explicitly qualified with this attachment's catalog name "
+			    "('%s'). v1 passthrough requires source refs to be written "
+			    "as `%s.<table>` or `%s.main.<table>` so we can prove they "
+			    "weren't bound to a different ripdb attachment via `USE` "
+			    "(silent cross-server mis-targeting). Qualify the ref or "
+			    "materialize the source via a temp table.",
+			    base.catalog_name.empty() ? "" : base.catalog_name.c_str(),
+			    base.catalog_name.empty() ? "" : ".",
+			    base.schema_name.empty()  ? "" : base.schema_name.c_str(),
+			    base.schema_name.empty()  ? "" : ".",
+			    base.table_name.c_str(),
+			    our_catalog_name.c_str(),
+			    our_catalog_name.c_str(),
+			    our_catalog_name.c_str());
+		}
+		return string();
+	}
+	case TableReferenceType::JOIN: {
+		const auto &j = ref.Cast<JoinRef>();
+		if (j.left) {
+			string err = ValidateProvenanceTableRef(*j.left, our_catalog_name, in_source_context);
+			if (!err.empty()) return err;
+		}
+		if (j.right) {
+			string err = ValidateProvenanceTableRef(*j.right, our_catalog_name, in_source_context);
+			if (!err.empty()) return err;
+		}
+		if (j.condition) {
+			string err = ValidateProvenanceExpression(*j.condition, our_catalog_name);
+			if (!err.empty()) return err;
+		}
+		return string();
+	}
+	case TableReferenceType::SUBQUERY: {
+		const auto &sub = ref.Cast<SubqueryRef>();
+		if (sub.subquery && sub.subquery->node) {
+			return ValidateProvenanceQueryNode(*sub.subquery->node, our_catalog_name);
+		}
+		return string();
+	}
+	case TableReferenceType::EXPRESSION_LIST: {
+		// `INSERT INTO t VALUES (..., (SELECT ... FROM main.x), ...)` — the
+		// VALUES list itself is a TableRef, but the per-cell expressions
+		// can host scalar subqueries against ripdb tables. Walk every
+		// expression in every row through the provenance check.
+		const auto &els = ref.Cast<ExpressionListRef>();
+		for (auto &row : els.values) {
+			for (auto &expr : row) {
+				if (!expr) continue;
+				string err = ValidateProvenanceExpression(*expr, our_catalog_name);
+				if (!err.empty()) return err;
+			}
+		}
+		return string();
+	}
+	case TableReferenceType::EMPTY_FROM:
+		return string();
+	default:
+		// Unsupported TableRef forms — the post-rewrite validator catches
+		// these too with a more detailed message; here just return clean.
+		return string();
+	}
+}
+
+static string ValidateProvenanceExpression(const ParsedExpression &expr,
+                                            const string &our_catalog_name) {
+	if (expr.GetExpressionClass() == ExpressionClass::SUBQUERY) {
+		const auto &sub = expr.Cast<SubqueryExpression>();
+		if (sub.subquery && sub.subquery->node) {
+			string err = ValidateProvenanceQueryNode(*sub.subquery->node, our_catalog_name);
+			if (!err.empty()) return err;
+		}
+	}
+	string err;
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](const ParsedExpression &child) {
+		    if (!err.empty()) return;
+		    err = ValidateProvenanceExpression(child, our_catalog_name);
+	    });
+	return err;
+}
+
+static string ValidateProvenanceQueryNode(const QueryNode &node,
+                                           const string &our_catalog_name) {
+	// Walk modifiers (ORDER BY etc.) — they can host subqueries with their
+	// own source refs.
+	{
+		string err;
+		ForEachModifierExpression(node, [&](const ParsedExpression &expr) {
+			if (err.empty()) err = ValidateProvenanceExpression(expr, our_catalog_name);
+		});
+		if (!err.empty()) return err;
+	}
+	switch (node.type) {
+	case QueryNodeType::SELECT_NODE: {
+		const auto &sn = node.Cast<SelectNode>();
+		if (sn.from_table) {
+			string err = ValidateProvenanceTableRef(*sn.from_table, our_catalog_name,
+			                                         /*in_source_context=*/true);
+			if (!err.empty()) return err;
+		}
+		for (auto &expr : sn.select_list) {
+			if (!expr) continue;
+			string err = ValidateProvenanceExpression(*expr, our_catalog_name);
+			if (!err.empty()) return err;
+		}
+		if (sn.where_clause) {
+			string err = ValidateProvenanceExpression(*sn.where_clause, our_catalog_name);
+			if (!err.empty()) return err;
+		}
+		for (auto &expr : sn.groups.group_expressions) {
+			if (!expr) continue;
+			string err = ValidateProvenanceExpression(*expr, our_catalog_name);
+			if (!err.empty()) return err;
+		}
+		if (sn.having) {
+			string err = ValidateProvenanceExpression(*sn.having, our_catalog_name);
+			if (!err.empty()) return err;
+		}
+		if (sn.qualify) {
+			string err = ValidateProvenanceExpression(*sn.qualify, our_catalog_name);
+			if (!err.empty()) return err;
+		}
+		for (auto &cte : sn.cte_map.map) {
+			if (cte.second && cte.second->query && cte.second->query->node) {
+				string err = ValidateProvenanceQueryNode(*cte.second->query->node, our_catalog_name);
+				if (!err.empty()) return err;
+			}
+		}
+		return string();
+	}
+	case QueryNodeType::SET_OPERATION_NODE: {
+		const auto &sop = node.Cast<SetOperationNode>();
+		for (auto &child : sop.children) {
+			if (!child) continue;
+			string err = ValidateProvenanceQueryNode(*child, our_catalog_name);
+			if (!err.empty()) return err;
+		}
+		return string();
+	}
+	default:
+		return string();
+	}
+}
+
+// Top-level: walk the original parsed DML statement and enforce that all
+// source-position BaseTableRefs are explicitly qualified with our catalog.
+static string ValidateOriginalSourceProvenance(const SQLStatement &stmt,
+                                                const string &our_catalog_name) {
+	switch (stmt.type) {
+	case StatementType::INSERT_STATEMENT: {
+		const auto &ins = stmt.Cast<InsertStatement>();
+		if (ins.select_statement && ins.select_statement->node) {
+			return ValidateProvenanceQueryNode(*ins.select_statement->node, our_catalog_name);
+		}
+		return string();
+	}
+	case StatementType::UPDATE_STATEMENT: {
+		const auto &upd = stmt.Cast<UpdateStatement>();
+		// upd.table is target — skip. upd.set_info.expressions/condition
+		// can host subquery sources.
+		if (upd.set_info) {
+			for (auto &expr : upd.set_info->expressions) {
+				if (!expr) continue;
+				string err = ValidateProvenanceExpression(*expr, our_catalog_name);
+				if (!err.empty()) return err;
+			}
+			if (upd.set_info->condition) {
+				string err = ValidateProvenanceExpression(*upd.set_info->condition, our_catalog_name);
+				if (!err.empty()) return err;
+			}
+		}
+		return string();
+	}
+	case StatementType::DELETE_STATEMENT: {
+		const auto &del = stmt.Cast<DeleteStatement>();
+		if (del.condition) {
+			return ValidateProvenanceExpression(*del.condition, our_catalog_name);
+		}
+		return string();
+	}
+	default:
+		return string();
+	}
+}
+
+// Top-level entry point. Returns empty string if the rewritten DML is safe
+// to forward; otherwise the human-readable reject reason.
+//
+// Catches: rowid in DML, parameter placeholders, qualified-ColumnRef leaks
+// (`r.t.col` in a WHERE/SET/subquery), unsupported TableRef forms, and
+// unsupported QueryNode forms. The multi-ripdb-USE-attack defense lives in
+// `ValidateOriginalSourceProvenance` (pre-rewrite), not here.
+static string ValidateRewrittenStatement(const SQLStatement &stmt,
+                                          const string &our_catalog_name) {
+	switch (stmt.type) {
+	case StatementType::INSERT_STATEMENT: {
+		const auto &ins = stmt.Cast<InsertStatement>();
+		// The post-rewrite InsertStatement.{catalog,schema,table} carry the
+		// target identifier already canonicalized; no need to revisit.
+		if (ins.select_statement) {
+			string err = ValidateSelectStatementSubtree(*ins.select_statement, our_catalog_name);
+			if (!err.empty()) return err;
+		}
+		return string();
+	}
+	case StatementType::UPDATE_STATEMENT: {
+		const auto &upd = stmt.Cast<UpdateStatement>();
+		if (upd.table) {
+			string err = ValidateTableRefSubtree(*upd.table, our_catalog_name,
+			                                     /*in_source_context=*/false);
+			if (!err.empty()) return err;
+		}
+		if (upd.set_info) {
+			for (auto &expr : upd.set_info->expressions) {
+				if (!expr) continue;
+				string err = ValidateParsedExpression(*expr, our_catalog_name);
+				if (!err.empty()) return err;
+			}
+			if (upd.set_info->condition) {
+				string err = ValidateParsedExpression(*upd.set_info->condition, our_catalog_name);
+				if (!err.empty()) return err;
+			}
+		}
+		return string();
+	}
+	case StatementType::DELETE_STATEMENT: {
+		const auto &del = stmt.Cast<DeleteStatement>();
+		if (del.table) {
+			string err = ValidateTableRefSubtree(*del.table, our_catalog_name,
+			                                     /*in_source_context=*/false);
+			if (!err.empty()) return err;
+		}
+		if (del.condition) {
+			string err = ValidateParsedExpression(*del.condition, our_catalog_name);
+			if (!err.empty()) return err;
+		}
+		return string();
+	}
+	default:
+		return string();
+	}
+}
+
+// Reject-list helpers — return non-empty error string if the statement falls
+// outside the v1 supported subset; empty string means OK to forward.
+//
+// Defense-in-depth note: the RETURNING / ON CONFLICT branches in these
+// helpers are currently unreachable because PlanInsert / PlanUpdate /
+// PlanDelete each check the bound Logical* operator (`op.return_chunk`,
+// `op.on_conflict_info.action_type`) BEFORE invoking TryPlanDmlPassthrough,
+// which is what calls these helpers. We keep the parser-AST checks anyway
+// so TryPlanDmlPassthrough remains self-defensive: if a future DuckDB
+// rev changes how RETURNING binds, or someone reorders the planner-side
+// preflight, the AST-side reject still does the right thing. The branches
+// fully describe the v1 AST subset at the parser boundary.
+static string RejectInsertStatement(const InsertStatement &s) {
+	if (!s.returning_list.empty()) {
+		return "RETURNING is not supported by ripdb in v1 (would require "
+		       "row-shaped response handling). Run the statement directly via "
+		       "the rip-db UI or a RETURNING-aware client for now.";
+	}
+	if (s.on_conflict_info && s.on_conflict_info->action_type != OnConflictAction::THROW) {
+		return "INSERT ... ON CONFLICT (UPSERT) is not supported by ripdb in v1.";
+	}
+	if (s.default_values) {
+		return "INSERT ... DEFAULT VALUES is not yet supported by ripdb in v1.";
+	}
+	return string();
+}
+static string RejectUpdateStatement(const UpdateStatement &s) {
+	if (!s.returning_list.empty()) {
+		return "UPDATE ... RETURNING is not supported by ripdb in v1.";
+	}
+	if (s.from_table) {
+		return "UPDATE ... FROM is not supported by ripdb in v1 (introduces extra "
+		       "source tables and name-resolution complexity). Materialize the "
+		       "join in a temp table first.";
+	}
+	return string();
+}
+static string RejectDeleteStatement(const DeleteStatement &s) {
+	if (!s.returning_list.empty()) {
+		return "DELETE ... RETURNING is not supported by ripdb in v1.";
+	}
+	if (!s.using_clauses.empty()) {
+		return "DELETE ... USING is not supported by ripdb in v1.";
+	}
+	return string();
+}
+
+// Walk a bound LogicalOperator (recursively, including bound subquery
+// subplans via ExpressionIterator) and confirm every LogicalGet uses the
+// `ripdb_scan` table function. Returns true iff every catalog-backed scan
+// in the subtree is ripdb-backed.
+//
+// IMPORTANT: this does NOT prove the scans belong to OUR specific RipCatalog
+// attachment. Identification is by `function.name == "ripdb_scan"` (the only
+// stable identifier we have at this stage; see implementation note below).
+// With multiple ripdb attachments, this check accepts `s.u` as easily as
+// `r.t`. The cross-attachment silent-mis-target risk is mitigated by the
+// AST safety walker's BASE_TABLE check — `ValidateTableRefSubtree` refuses
+// any rewritten BaseTableRef whose `(catalog,schema)` qualifier wasn't
+// stripped to our `main` schema. So a dangling `s.u` from a different
+// ripdb attachment would survive this dependency check but get rejected by
+// the safety walker that runs immediately afterwards.
+//
+// Implementation note: we identify by function name because the default
+// DuckDB dispatch for Catalog::Plan{Update,Delete,Insert} physical-plans
+// `op.children[0]` BEFORE invoking our override (see plan_update.cpp /
+// plan_insert.cpp in the DuckDB source). Physical planning moves the
+// LogicalGet's `bind_data` into the PhysicalTableScan, leaving the
+// LogicalGet shell with a null bind_data — so `LogicalGet::GetTable()`
+// returns nullptr by the time we walk. The TableFunction's `name` field
+// is copied (not moved) into PhysicalTableScan, so it remains intact and
+// is the only stable identifier available here.
+//
+// Catches: LogicalGets inside subquery expressions via ExpressionIterator
+// (BoundSubqueryExpression carries a bound LogicalOperator subplan).
+// Does NOT walk: replacement scans, recursive CTE roots, or future
+// LogicalOperator subclasses that host a scan in non-standard locations.
+// Those are covered by the parsed-AST safety walker as a second gate.
+static bool OnlyRipdbScans(const LogicalOperator &op);
+
+static bool ExpressionOnlyRipdbScans(const Expression &expr) {
+	bool ok = true;
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY) {
+		auto &sub = expr.Cast<BoundSubqueryExpression>();
+		if (sub.subquery.plan && !OnlyRipdbScans(*sub.subquery.plan)) {
+			return false;
+		}
+	}
+	ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
+		if (!ok) return;
+		if (!ExpressionOnlyRipdbScans(child)) ok = false;
+	});
+	return ok;
+}
+
+static bool OnlyRipdbScans(const LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_GET) {
+		const auto &get = op.Cast<LogicalGet>();
+		if (get.function.name != "ripdb_scan") {
+			return false;
+		}
+	}
+	// Recurse into expressions (including any bound subquery subplans).
+	for (const auto &expr : op.expressions) {
+		if (expr && !ExpressionOnlyRipdbScans(*expr)) return false;
+	}
+	// Recurse into operator children.
+	for (const auto &child : op.children) {
+		if (child && !OnlyRipdbScans(*child)) return false;
+	}
+	return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -834,6 +2206,16 @@ public:
 	}
 
 	const string &RemoteName() const { return remote_name_; }
+
+	// Mark a column as "exposed-as-VARCHAR-but-remote-is-native". The DML
+	// write path consults this to refuse INSERTs that would otherwise
+	// silently stringify into a JSON/LIST/STRUCT/MAP/etc. remote column.
+	void MarkVarcharFallback(const string &column_name) {
+		varchar_fallback_columns_.insert(column_name);
+	}
+	bool IsVarcharFallbackColumn(const string &column_name) const {
+		return varchar_fallback_columns_.find(column_name) != varchar_fallback_columns_.end();
+	}
 
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &, column_t) override { return nullptr; }
 	TableStorageInfo            GetStorageInfo(ClientContext &) override { return TableStorageInfo {}; }
@@ -907,7 +2289,12 @@ public:
 	vector<ColumnSegmentInfo> GetColumnSegmentInfo(const QueryContext &) override { return {}; }
 	void BindUpdateConstraints(Binder &, LogicalGet &, LogicalProjection &, LogicalUpdate &,
 	                           ClientContext &) override {
-		throw PermissionException("ripdb: remote tables are read-only — UPDATE is not supported");
+		// No-op: rip-db enforces constraints server-side. Without overriding
+		// this to no-op, the binder throws before our PlanUpdate ever runs,
+		// because the default base implementation tries to fetch DuckDB-style
+		// constraint metadata from this table — metadata we don't have for
+		// remote-backed tables. Local-only constraint validation isn't
+		// meaningful here anyway.
 	}
 	virtual_column_map_t GetVirtualColumns() const override {
 		virtual_column_map_t cols;
@@ -920,6 +2307,7 @@ public:
 
 private:
 	string remote_name_;
+	case_insensitive_set_t varchar_fallback_columns_;
 };
 
 // ---------------------------------------------------------------------------
@@ -953,10 +2341,13 @@ public:
 		return it->second.get();
 	}
 
-	// All Create*/DropEntry/Alter throw — read-only in M1.
+	// All Create*/DropEntry/Alter throw — DDL is not exposed via ripdb.
+	// (DML — INSERT/UPDATE/DELETE — is supported via PlanInsert/Update/Delete
+	// and forwards to the remote server. DDL is intentionally not.)
 	[[noreturn]] static void ReadOnly(const char *what) {
 		throw PermissionException(
-		    "ripdb: remote database attached read-only in M1 — %s is not supported", what);
+		    "ripdb: %s is not supported by the ripdb extension — DDL must be "
+		    "issued directly against the rip-db server (DML is supported)", what);
 	}
 
 	optional_ptr<CatalogEntry> CreateTable(CatalogTransaction, BoundCreateTableInfo &) override          { ReadOnly("CREATE TABLE"); }
@@ -1067,18 +2458,17 @@ public:
 		RipSchemaEntry::ReadOnly("CREATE SCHEMA");
 	}
 
+	// CTAS remains read-only (DDL is out of scope for v1).
 	PhysicalOperator &PlanCreateTableAs(ClientContext &, PhysicalPlanGenerator &, LogicalCreateTable &, PhysicalOperator &) override {
 		RipSchemaEntry::ReadOnly("CREATE TABLE AS");
 	}
-	PhysicalOperator &PlanInsert(ClientContext &, PhysicalPlanGenerator &, LogicalInsert &, optional_ptr<PhysicalOperator>) override {
-		RipSchemaEntry::ReadOnly("INSERT");
-	}
-	PhysicalOperator &PlanDelete(ClientContext &, PhysicalPlanGenerator &, LogicalDelete &, PhysicalOperator &) override {
-		RipSchemaEntry::ReadOnly("DELETE");
-	}
-	PhysicalOperator &PlanUpdate(ClientContext &, PhysicalPlanGenerator &, LogicalUpdate &, PhysicalOperator &) override {
-		RipSchemaEntry::ReadOnly("UPDATE");
-	}
+	// DML — defined out-of-line below; see "DML dispatch implementation".
+	PhysicalOperator &PlanInsert(ClientContext &context, PhysicalPlanGenerator &gen,
+	                             LogicalInsert &op, optional_ptr<PhysicalOperator> plan) override;
+	PhysicalOperator &PlanDelete(ClientContext &context, PhysicalPlanGenerator &gen,
+	                             LogicalDelete &op, PhysicalOperator &plan) override;
+	PhysicalOperator &PlanUpdate(ClientContext &context, PhysicalPlanGenerator &gen,
+	                             LogicalUpdate &op, PhysicalOperator &plan) override;
 
 	DatabaseSize GetDatabaseSize(ClientContext &) override { return DatabaseSize{}; }
 	bool         InMemory()                       override { return false; }
@@ -1102,6 +2492,738 @@ private:
 	unique_ptr<RipSchemaEntry>   main_schema_;
 	RipRefreshStats              last_refresh_stats_;
 };
+
+// ===========================================================================
+// DML dispatch implementation
+//
+// Wires the helpers from earlier in this file (FormatLiteralForDML, the AST
+// rewriter, the dependency walker, the reject-list checks) to the three
+// physical operators below, and ultimately to RipCatalog::PlanInsert /
+// PlanUpdate / PlanDelete.
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// HTTP exec helper.
+//
+// POSTs SQL to /ddb/exec on the rip-db server and parses the affected_rows
+// out of the JSON envelope. Returns the count as int64. Throws IOException
+// on network errors, malformed envelopes, or affected_rows > INT64_MAX.
+//
+// affected_rows is a STRING in the wire envelope (decimal) to dodge JS
+// precision loss > 2^53 — see /ddb/exec in db.rip and the matching FFI
+// binding in lib/duckdb.mjs.
+// ---------------------------------------------------------------------------
+static int64_t RipPostExec(RipHttpClient &http, const string &sql) {
+	string body = http.PostBinary("/ddb/exec", "text/plain", sql);
+	auto doc = duckdb_yyjson::yyjson_read(body.data(), body.size(), 0);
+	if (!doc) {
+		throw IOException("ripdb: /ddb/exec returned non-JSON body: %s", body);
+	}
+	auto root = duckdb_yyjson::yyjson_doc_get_root(doc);
+	auto ok_v = duckdb_yyjson::yyjson_obj_get(root, "ok");
+	if (ok_v && duckdb_yyjson::yyjson_is_bool(ok_v) && !duckdb_yyjson::yyjson_get_bool(ok_v)) {
+		// Server-side error envelope { ok:false, error, errorCode, ... }
+		auto err_v = duckdb_yyjson::yyjson_obj_get(root, "error");
+		string err_msg = (err_v && duckdb_yyjson::yyjson_is_str(err_v))
+		                    ? string(duckdb_yyjson::yyjson_get_str(err_v),
+		                             duckdb_yyjson::yyjson_get_len(err_v))
+		                    : "(no message)";
+		duckdb_yyjson::yyjson_doc_free(doc);
+		throw IOException("ripdb: /ddb/exec server error: %s", err_msg);
+	}
+	auto affected_v = duckdb_yyjson::yyjson_obj_get(root, "affected_rows");
+	if (!affected_v || !duckdb_yyjson::yyjson_is_str(affected_v)) {
+		duckdb_yyjson::yyjson_doc_free(doc);
+		throw IOException("ripdb: /ddb/exec response missing affected_rows string");
+	}
+	string s(duckdb_yyjson::yyjson_get_str(affected_v),
+	         duckdb_yyjson::yyjson_get_len(affected_v));
+	duckdb_yyjson::yyjson_doc_free(doc);
+
+	// Parse with overflow check. strtoll sets errno=ERANGE on overflow.
+	errno = 0;
+	char *end = nullptr;
+	long long n = std::strtoll(s.c_str(), &end, 10);
+	if (errno == ERANGE || end == s.c_str() || (end && *end != '\0')) {
+		throw IOException("ripdb: /ddb/exec affected_rows '%s' is not a valid int64", s);
+	}
+	return static_cast<int64_t>(n);
+}
+
+// ---------------------------------------------------------------------------
+// PhysicalRipPassthrough — source-only operator that owns a fully-formed
+// SQL string and POSTs it to /ddb/exec on the first GetData call.
+//
+// Used by Path 1 (source-AST passthrough) for INSERT/UPDATE/DELETE that
+// don't need any local-side child execution.
+// ---------------------------------------------------------------------------
+
+class PhysicalRipPassthrough : public PhysicalOperator {
+public:
+	static constexpr PhysicalOperatorType TYPE = PhysicalOperatorType::EXTENSION;
+
+	PhysicalRipPassthrough(PhysicalPlan &physical_plan, RipCatalog &catalog,
+	                       string sql, idx_t estimated_cardinality)
+	    : PhysicalOperator(physical_plan, TYPE, {LogicalType::BIGINT}, estimated_cardinality),
+	      catalog_(catalog), sql_(std::move(sql)) {}
+
+	bool IsSource() const override { return true; }
+
+	class GlobalState : public GlobalSourceState {
+	public:
+		bool emitted = false;
+		idx_t MaxThreads() override { return 1; }
+	};
+
+	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &) const override {
+		return make_uniq<GlobalState>();
+	}
+
+	SourceResultType GetDataInternal(ExecutionContext &, DataChunk &chunk,
+	                                 OperatorSourceInput &input) const override {
+		auto &state = input.global_state.Cast<GlobalState>();
+		if (state.emitted) {
+			chunk.SetCardinality(0);
+			return SourceResultType::FINISHED;
+		}
+		int64_t affected = RipPostExec(catalog_.Http(), sql_);
+		auto *out = ripdb_compat::FlatVecMutable<int64_t>(chunk.data[0]);
+		out[0] = affected;
+		chunk.SetCardinality(1);
+		state.emitted = true;
+		return SourceResultType::FINISHED;
+	}
+
+	string GetName() const override { return "RIP_DML_PASSTHROUGH"; }
+
+private:
+	RipCatalog &catalog_;
+	string      sql_;
+};
+
+// ---------------------------------------------------------------------------
+// PhysicalRipInsertSink — sink+source operator that buffers child input
+// chunks, then on Finalize emits one INSERT INTO ... VALUES (...) statement
+// with typed literals and POSTs it to /ddb/exec.
+//
+// Bounded by:
+//   - row count   (default 1,000,000 rows)
+//   - byte size   (default 64 MiB of generated SQL text)
+//
+// Exceeding either cap throws — by design. This keeps the operation
+// atomic-by-construction (single /ddb/exec request) at the cost of
+// rejecting genuinely huge bulk loads. A future server-side transactional
+// bulk endpoint would lift this cap.
+// ---------------------------------------------------------------------------
+
+class PhysicalRipInsertSink : public PhysicalOperator {
+public:
+	static constexpr PhysicalOperatorType TYPE = PhysicalOperatorType::EXTENSION;
+	static constexpr idx_t  DEFAULT_ROW_CAP  = 1000000;
+	static constexpr size_t DEFAULT_BYTE_CAP = 64 * 1024 * 1024;
+
+	PhysicalRipInsertSink(PhysicalPlan &physical_plan, RipCatalog &catalog,
+	                      string remote_table,
+	                      vector<string> column_names,
+	                      vector<LogicalType> column_types,
+	                      vector<bool> column_is_fallback,
+	                      idx_t estimated_cardinality)
+	    : PhysicalOperator(physical_plan, TYPE, {LogicalType::BIGINT}, estimated_cardinality),
+	      catalog_(catalog),
+	      remote_table_(std::move(remote_table)),
+	      column_names_(std::move(column_names)),
+	      column_types_(std::move(column_types)),
+	      column_is_fallback_(std::move(column_is_fallback)) {}
+
+	bool IsSink() const override   { return true; }
+	bool IsSource() const override { return true; }
+	bool ParallelSink() const override { return false; }
+
+	// ------------- Sink state ------------
+	class GlobalSinkStateImpl : public GlobalSinkState {
+	public:
+		mutex                       lock;
+		vector<vector<string>>      formatted_rows;  // row -> formatted literal per column
+		size_t                      total_bytes = 0;
+		int64_t                     affected    = 0;
+		bool                        finalized   = false;
+	};
+	class LocalSinkStateImpl : public LocalSinkState {};
+
+	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &) const override {
+		return make_uniq<GlobalSinkStateImpl>();
+	}
+	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &) const override {
+		return make_uniq<LocalSinkStateImpl>();
+	}
+
+	SinkResultType Sink(ExecutionContext &, DataChunk &chunk, OperatorSinkInput &input) const override {
+		auto &g = input.global_state.Cast<GlobalSinkStateImpl>();
+		std::lock_guard<mutex> guard(g.lock);
+
+		const idx_t n_rows = chunk.size();
+		const idx_t n_cols = column_types_.size();
+		if (chunk.ColumnCount() != n_cols) {
+			throw InternalException(
+			    "ripdb: PhysicalRipInsertSink received chunk with %llu cols, expected %llu",
+			    (unsigned long long)chunk.ColumnCount(), (unsigned long long)n_cols);
+		}
+
+		for (idx_t r = 0; r < n_rows; ++r) {
+			vector<string> formatted;
+			formatted.reserve(n_cols);
+			// Per-row SQL bytes:
+			//   "(" + cells + ")" with ", " between cells.
+			// The shared per-statement overhead (`INSERT INTO "..." (cols)
+			// VALUES `, plus ", " between rows) is counted separately at
+			// Finalize-time before we commit the SQL string.
+			size_t row_bytes = 2; // surrounding parens
+			if (n_cols > 0) {
+				row_bytes += (n_cols - 1) * 2; // ", " separators
+			}
+			for (idx_t c = 0; c < n_cols; ++c) {
+				// Refuse to write through the catalog's VARCHAR mask into a
+				// column that's actually a native nested/binary type on
+				// the remote (LIST/STRUCT/MAP/ARRAY/JSON/etc.). The read
+				// path is allowed to surface those as VARCHAR for ergonomic
+				// reasons, but the write path can't reliably round-trip a
+				// stringified value back into the native form.
+				if (c < column_is_fallback_.size() && column_is_fallback_[c]) {
+					throw NotImplementedException(
+					    "ripdb: column '%s' is exposed as VARCHAR but the remote "
+					    "type is a native nested/binary form (LIST/STRUCT/MAP/"
+					    "ARRAY/JSON/ENUM/BIT/...). The v1 DML write path can't "
+					    "round-trip a string into the native shape; INSERT this "
+					    "value directly via the rip-db UI or the /sql endpoint.",
+					    column_names_[c]);
+				}
+				Value v = chunk.GetValue(c, r);
+				string lit;
+				if (!FormatLiteralForDML(v, column_types_[c], lit)) {
+					throw NotImplementedException(
+					    "ripdb: cannot format value for INSERT into column '%s' "
+					    "(type %s) — value or type isn't yet supported by the v1 "
+					    "DML write path (e.g. embedded NUL in VARCHAR, native "
+					    "nested type, etc.). Use the rip-db UI for now.",
+					    column_names_[c], column_types_[c].ToString());
+				}
+				row_bytes += lit.size();
+				formatted.push_back(std::move(lit));
+			}
+			g.total_bytes += row_bytes;
+			g.formatted_rows.push_back(std::move(formatted));
+
+			if (g.formatted_rows.size() > DEFAULT_ROW_CAP) {
+				throw NotImplementedException(
+				    "ripdb: bulk INSERT exceeded row cap (%llu rows). The v1 sink-fallback "
+				    "path is single-request and atomic by construction; batch the INSERT "
+				    "into smaller statements or use a server-side bulk endpoint.",
+				    (unsigned long long)DEFAULT_ROW_CAP);
+			}
+			if (g.total_bytes > DEFAULT_BYTE_CAP) {
+				throw NotImplementedException(
+				    "ripdb: bulk INSERT exceeded SQL byte cap (~%zu MiB). Batch into "
+				    "smaller statements; a typed-binary bulk endpoint is on the roadmap.",
+				    DEFAULT_BYTE_CAP / (1024 * 1024));
+			}
+		}
+		return SinkResultType::NEED_MORE_INPUT;
+	}
+
+	SinkCombineResultType Combine(ExecutionContext &, OperatorSinkCombineInput &) const override {
+		return SinkCombineResultType::FINISHED;
+	}
+
+	SinkFinalizeType Finalize(Pipeline &, Event &, ClientContext &,
+	                          OperatorSinkFinalizeInput &input) const override {
+		auto &g = input.global_state.Cast<GlobalSinkStateImpl>();
+		if (g.formatted_rows.empty()) {
+			g.finalized = true;
+			g.affected  = 0;
+			return SinkFinalizeType::READY;
+		}
+
+		// Build the SQL. Reserve the exact final size up front so we
+		// know it before issuing the request, AND so we don't pay
+		// repeated string reallocations during construction.
+		const string table_quoted = "\"main\"." + QuoteIdentifier(remote_table_);
+		string col_list_sql;
+		for (size_t i = 0; i < column_names_.size(); ++i) {
+			if (i) col_list_sql += ", ";
+			col_list_sql += QuoteIdentifier(column_names_[i]);
+		}
+		// Header: `INSERT INTO "main"."t" (cols) VALUES ` + per-row
+		// content + `, ` between rows.
+		const string header = "INSERT INTO " + table_quoted + " (" + col_list_sql + ") VALUES ";
+		size_t total_size = header.size();
+		for (size_t r = 0; r < g.formatted_rows.size(); ++r) {
+			if (r) total_size += 2; // ", "
+			total_size += 2;        // "(" and ")"
+			const auto &row = g.formatted_rows[r];
+			if (!row.empty()) total_size += (row.size() - 1) * 2; // ", " between cells
+			for (const auto &lit : row) total_size += lit.size();
+		}
+		// Hard cap on the FULL serialized SQL. The Sink-time `g.total_bytes`
+		// counter approximates this, but the header (table name + column
+		// list) wasn't known until Finalize. Re-check here so the cap is
+		// the actual byte size on the wire, not the sink-time estimate.
+		if (total_size > DEFAULT_BYTE_CAP) {
+			throw NotImplementedException(
+			    "ripdb: bulk INSERT serialized to ~%zu MiB of SQL, which exceeds "
+			    "the v1 cap of %zu MiB. Batch the INSERT into smaller statements; "
+			    "a typed-binary bulk endpoint is on the roadmap.",
+			    total_size / (1024 * 1024),
+			    DEFAULT_BYTE_CAP / (1024 * 1024));
+		}
+
+		string sql;
+		sql.reserve(total_size);
+		sql.append(header);
+		for (size_t r = 0; r < g.formatted_rows.size(); ++r) {
+			if (r) sql += ", ";
+			sql += "(";
+			for (size_t c = 0; c < g.formatted_rows[r].size(); ++c) {
+				if (c) sql += ", ";
+				sql += g.formatted_rows[r][c];
+			}
+			sql += ")";
+		}
+
+		g.affected  = RipPostExec(catalog_.Http(), sql);
+		g.finalized = true;
+		// Free buffer memory once we've sent it.
+		g.formatted_rows.clear();
+		g.formatted_rows.shrink_to_fit();
+		return SinkFinalizeType::READY;
+	}
+
+	// ------------- Source state ------------
+	class SourceStateImpl : public GlobalSourceState {
+	public:
+		bool emitted = false;
+		idx_t MaxThreads() override { return 1; }
+	};
+
+	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &) const override {
+		return make_uniq<SourceStateImpl>();
+	}
+
+	SourceResultType GetDataInternal(ExecutionContext &, DataChunk &chunk,
+	                                 OperatorSourceInput &input) const override {
+		auto &src = input.global_state.Cast<SourceStateImpl>();
+		if (src.emitted) {
+			chunk.SetCardinality(0);
+			return SourceResultType::FINISHED;
+		}
+		auto &g = sink_state->Cast<GlobalSinkStateImpl>();
+		if (!g.finalized) {
+			// Should never happen — pipeline executor calls Finalize before
+			// any source pull. Treat as internal invariant violation.
+			throw InternalException("ripdb: PhysicalRipInsertSink source pull before Finalize");
+		}
+		auto *out = ripdb_compat::FlatVecMutable<int64_t>(chunk.data[0]);
+		out[0] = g.affected;
+		chunk.SetCardinality(1);
+		src.emitted = true;
+		return SourceResultType::FINISHED;
+	}
+
+	string GetName() const override { return "RIP_INSERT_SINK"; }
+
+private:
+	RipCatalog          &catalog_;
+	string               remote_table_;
+	vector<string>       column_names_;
+	vector<LogicalType>  column_types_;
+	vector<bool>         column_is_fallback_;  // remote-native (LIST/STRUCT/JSON/...) masquerading as VARCHAR
+};
+
+// ---------------------------------------------------------------------------
+// Common pre-flight guards for any DML.
+//
+// Throw with a clear message rather than silently letting a misbehaving
+// statement reach /ddb/exec. Order matters — auto-commit check first
+// because that's the most surprising failure mode for users (no error
+// message would otherwise hint that local BEGIN/ROLLBACK doesn't honor
+// remote DML).
+// ---------------------------------------------------------------------------
+static void EnforceDmlPreflight(ClientContext &context, const TableCatalogEntry &table) {
+	if (!context.transaction.IsAutoCommit()) {
+		throw NotImplementedException(
+		    "ripdb: DML inside an explicit transaction is not supported "
+		    "(remote autocommits independently of local BEGIN/ROLLBACK). "
+		    "COMMIT or ROLLBACK the local transaction first.");
+	}
+	// Identifier sanity (P3 belt-and-suspenders — PopulateSchema already
+	// rejects non-conforming names at attach, but if a future code path
+	// constructs a RipTableEntry directly this catches it).
+	if (!IsSafeAsciiIdentifier(table.name)) {
+		throw NotImplementedException(
+		    "ripdb: table identifier '%s' uses characters that aren't yet "
+		    "supported by the DML path.", table.name);
+	}
+}
+
+// Try Path 1 (source-AST passthrough) for the supplied LogicalOperator.
+// Returns:
+//   - non-null PhysicalOperator → emit it; passthrough succeeded
+//   - nullptr                   → caller falls back to Path 2 (INSERT only)
+//                                 or throws (UPDATE/DELETE)
+// Throws NotImplementedException with workaround guidance for the explicit
+// reject list (RETURNING, ON CONFLICT, multi-statement, etc.).
+// Schema-drift safety: ensure an InsertStatement's column list is explicit.
+//
+// `INSERT INTO t VALUES (...)` (no column list) binds positionally on the
+// remote against whatever the remote's CURRENT schema looks like. If the
+// remote table changed between attach and DML — column reorder, column add,
+// column drop — the values land in the wrong physical columns. Local
+// validation has already confirmed the values match the cached schema, so
+// we know the right names; lock them in.
+//
+// No-op if the user already wrote an explicit column list.
+static void EnsureInsertColumnList(InsertStatement &ins, const RipTableEntry &table) {
+	if (!ins.columns.empty()) return;
+	const auto &cols = table.GetColumns();
+	ins.columns.reserve(cols.LogicalColumnCount());
+	for (auto &col : cols.Logical()) {
+		ins.columns.push_back(col.GetName());
+	}
+}
+
+// Refuse to UPDATE a fallback-VARCHAR column (catalog says VARCHAR but the
+// remote is a native nested/binary type). Mirrors CheckInsertFallbackVarchar
+// but consults the bound LogicalUpdate's column list (which the binder
+// already resolved to physical-index references on the target table).
+static string CheckUpdateFallbackVarchar(const LogicalUpdate &op,
+                                          const RipTableEntry &table) {
+	const auto &cols = table.GetColumns();
+	for (auto phys_idx : op.columns) {
+		// PhysicalIndex on the table's column list — translate to the
+		// column name and consult the fallback set.
+		if (phys_idx.index < cols.PhysicalColumnCount()) {
+			const auto &col = cols.GetColumn(phys_idx);
+			if (table.IsVarcharFallbackColumn(col.GetName())) {
+				return StringUtil::Format(
+				    "ripdb: UPDATE targets column '%s', which is exposed as VARCHAR "
+				    "but is a native nested/binary type on the remote (LIST/STRUCT/"
+				    "MAP/ARRAY/JSON/...). The v1 DML write path can't round-trip "
+				    "this; use the rip-db UI for now.",
+				    col.GetName());
+			}
+		}
+	}
+	return string();
+}
+
+// Refuse to forward an INSERT whose target columns include a fallback-VARCHAR
+// column (catalog says VARCHAR but the remote column is native nested/binary).
+// Same rationale as the sink path's per-cell check, just enforced earlier
+// (before we serialize and post the SQL).
+static string CheckInsertFallbackVarchar(const InsertStatement &ins,
+                                          const RipTableEntry &table) {
+	if (ins.columns.empty()) {
+		// EnsureInsertColumnList should have populated this; if it didn't,
+		// every table column is potentially being written.
+		for (auto &col : table.GetColumns().Logical()) {
+			if (table.IsVarcharFallbackColumn(col.GetName())) {
+				return StringUtil::Format(
+				    "ripdb: INSERT would write to column '%s', which is exposed "
+				    "as VARCHAR but is a native nested/binary type on the remote "
+				    "(LIST/STRUCT/MAP/ARRAY/JSON/...). The v1 DML write path "
+				    "can't round-trip this. Use the rip-db UI for now.",
+				    col.GetName());
+			}
+		}
+		return string();
+	}
+	for (const auto &name : ins.columns) {
+		if (table.IsVarcharFallbackColumn(name)) {
+			return StringUtil::Format(
+			    "ripdb: INSERT targets column '%s', which is exposed as VARCHAR "
+			    "but is a native nested/binary type on the remote. The v1 DML "
+			    "write path can't round-trip this. Use the rip-db UI for now.",
+			    name);
+		}
+	}
+	return string();
+}
+
+template <class StmtT>
+static optional_ptr<PhysicalOperator>
+TryPlanDmlPassthrough(ClientContext &context, PhysicalPlanGenerator &gen,
+                      const LogicalOperator &logical_root,
+                      const RipCatalog &our_catalog, RipCatalog &mutable_catalog,
+                      string (*reject_check)(const StmtT &),
+                      const char *stmt_label,
+                      optional_ptr<const RipTableEntry> insert_target = nullptr) {
+	const string &original_sql = context.GetCurrentQuery();
+	if (original_sql.empty()) return nullptr;
+
+	// Cross-path NUL safety FIRST — before any C-string FFI surface (the
+	// parser, conn.query, lib/duckdb.mjs's toCString) sees the SQL. NULs
+	// in VARCHAR values don't survive HTTP-as-text transport and tools
+	// truncate at the first NUL byte. Refuse here rather than silently
+	// truncate downstream.
+	if (original_sql.find('\0') != string::npos) {
+		throw NotImplementedException(
+		    "ripdb: SQL contains an embedded NUL (\\0) byte. NULs in VARCHAR "
+		    "values don't survive HTTP-as-text transport and tooling; the v1 "
+		    "DML write path refuses rather than silently truncating.");
+	}
+
+	auto stmt = TryParseSingleStatement<StmtT>(original_sql);
+	if (!stmt) {
+		// Multi-statement input or different statement type → not eligible
+		// for passthrough. The sink fallback (for INSERT) handles the
+		// "different statement type" case (e.g. CREATE TABLE AS routes
+		// through PlanCreateTableAs which we still throw, so that's fine).
+		// The multi-statement case is a user error we should make loud.
+		try {
+			Parser p;
+			p.ParseQuery(original_sql);
+			if (p.statements.size() > 1) {
+				throw NotImplementedException(
+				    "ripdb: %s rejected — multi-statement input is not supported "
+				    "via the ripdb passthrough (statement-index correlation isn't "
+				    "exposed in DuckDB v1.5.2). Run each statement separately.",
+				    stmt_label);
+			}
+		} catch (const NotImplementedException &) {
+			throw;
+		} catch (...) {
+			// Parser threw — fall through to nullptr; caller decides.
+		}
+		return nullptr;
+	}
+
+	// Explicit reject list (RETURNING, ON CONFLICT, FROM, USING, ...).
+	// Always runs — applies to both the passthrough and the sink-fallback
+	// path that may follow.
+	string reject_reason = reject_check(*stmt);
+	if (!reject_reason.empty()) {
+		throw NotImplementedException("ripdb: %s", reject_reason);
+	}
+
+	// Path decision for INSERT: only INSERT VALUES is passthrough-eligible.
+	// INSERT...SELECT (in any form, including SELECT * FROM (VALUES ...))
+	// must go through the sink fallback so the source binding is rooted
+	// in the local DuckDB binder (which knows which ripdb attachment a
+	// LogicalGet belongs to and materializes typed values to send remote).
+	if (insert_target && stmt->type == StatementType::INSERT_STATEMENT) {
+		const auto &ins = stmt->template Cast<InsertStatement>();
+		if (!IsPureInsertValues(ins)) {
+			return nullptr;
+		}
+	}
+
+	// Bound-plan dependency walk: confirm every catalog-backed scan in the
+	// subtree uses our `ripdb_scan` function. Any non-ripdb LogicalGet
+	// (local DuckDB table, local table function, etc.) → caller falls back
+	// to sink path (INSERT only) or throws (UPDATE/DELETE).
+	if (!OnlyRipdbScans(logical_root)) {
+		return nullptr;
+	}
+
+	// Multi-ripdb USE-attack defense — runs on the ORIGINAL parsed AST
+	// BEFORE the rewriter canonicalizes anything. Source-position
+	// BaseTableRefs must carry our local-attach catalog name in the
+	// catalog or schema slot (i.e. `r.t` or `r.main.t`). Bare `t`,
+	// pre-existing `main.t`, `s.t`, and `s.main.t` all reject. Without
+	// this proof, a `USE s; UPDATE r.t SET col = (SELECT max FROM main.t)`
+	// would forward `main.t` to r's server and silently mis-target.
+	{
+		string prov_reason = ValidateOriginalSourceProvenance(*stmt, our_catalog.GetName());
+		if (!prov_reason.empty()) {
+			throw NotImplementedException("ripdb: %s", prov_reason);
+		}
+	}
+
+	// Structurally rewrite the catalog qualifier on FROM-clause TableRefs
+	// and any nested-subquery TableRefs (via StripCatalogFromExpression in
+	// SET/WHERE/SELECT-list etc.). Provably-ours refs get canonicalized to
+	// `main.<table>`; the provenance check above guarantees no other
+	// source refs survive to this point.
+	RewriteCatalogQualifierInStatement(*stmt, our_catalog.GetName());
+
+	// INSERT-only schema-drift safety: lock in explicit column names so the
+	// remote doesn't bind positionally against a possibly-changed schema.
+	// Also reject INSERT into a column whose catalog VARCHAR is a remote
+	// native-type fallback (LIST/STRUCT/MAP/ARRAY/JSON/...).
+	if (insert_target && stmt->type == StatementType::INSERT_STATEMENT) {
+		auto &ins = stmt->template Cast<InsertStatement>();
+		EnsureInsertColumnList(ins, *insert_target);
+		string fb_reason = CheckInsertFallbackVarchar(ins, *insert_target);
+		if (!fb_reason.empty()) {
+			throw NotImplementedException("ripdb: %s", fb_reason);
+		}
+	}
+
+	// AST safety walker (POST-rewrite): rowid / parameters / qualified-
+	// ColumnRef leaks / unsupported TableRef or QueryNode forms / gross
+	// BaseTableRef leftovers (anything the rewriter should have stripped).
+	// Runs on the rewritten AST so the BaseTableRef qualifier check sees
+	// the canonicalized form.
+	{
+		string safety_reason = ValidateRewrittenStatement(*stmt, our_catalog.GetName());
+		if (!safety_reason.empty()) {
+			throw NotImplementedException("ripdb: %s", safety_reason);
+		}
+	}
+
+	string rewritten = stmt->ToString();
+	return gen.Make<PhysicalRipPassthrough>(mutable_catalog, std::move(rewritten),
+	                                         logical_root.estimated_cardinality);
+}
+
+// ---------------------------------------------------------------------------
+// PlanInsert — Path 1 first, Path 2 (sink) fallback.
+// ---------------------------------------------------------------------------
+PhysicalOperator &RipCatalog::PlanInsert(ClientContext &context, PhysicalPlanGenerator &gen,
+                                         LogicalInsert &op, optional_ptr<PhysicalOperator> plan) {
+	auto &table = op.table.Cast<RipTableEntry>();
+	EnforceDmlPreflight(context, table);
+
+	// Reject native INSERT-time features the planner already knows about.
+	if (op.return_chunk) {
+		throw NotImplementedException(
+		    "ripdb: INSERT ... RETURNING is not supported by ripdb in v1.");
+	}
+	if (op.on_conflict_info.action_type != OnConflictAction::THROW) {
+		throw NotImplementedException(
+		    "ripdb: INSERT ... ON CONFLICT (UPSERT) is not supported by ripdb in v1.");
+	}
+
+	// Path 1: passthrough. We pass `&table` as the insert_target so the
+	// passthrough can inject an explicit column list when the user wrote
+	// none — see EnsureInsertColumnList for the schema-drift rationale.
+	auto passthrough = TryPlanDmlPassthrough<InsertStatement>(
+	    context, gen, op, /*our_catalog=*/*this, /*mutable=*/*this,
+	    RejectInsertStatement, "INSERT", &table);
+	if (passthrough) return *passthrough;
+
+	// Path 2: sink fallback. The DuckDB planner has built `plan` as the
+	// physical subtree producing rows that flow into our INSERT. The sink
+	// operator buffers them, formats typed literals, and POSTs one
+	// INSERT INTO ... VALUES (...) statement on Finalize.
+	if (!plan) {
+		throw NotImplementedException(
+		    "ripdb: INSERT requires a source plan (DEFAULT VALUES / inferred "
+		    "DEFAULT not supported in v1).");
+	}
+
+	// Extract the target column names in expected_types order. DuckDB's
+	// LogicalInsert.expected_types is the per-column type vector aligned to
+	// the table's ColumnList; for a column-listed INSERT (`INSERT INTO t (a,b)
+	// VALUES ...`), expected_types is the source-row layout of (a,b), not the
+	// full table. We mirror that ordering.
+	vector<string>      column_names;
+	vector<LogicalType> column_types = op.expected_types;
+	if (op.column_index_map.empty()) {
+		// No explicit column list — input rows are positionally aligned to
+		// the table's full column order.
+		for (auto &col : table.GetColumns().Logical()) {
+			column_names.push_back(col.GetName());
+		}
+	} else {
+		// Build the source-order column-name list by inverting column_index_map:
+		// column_index_map maps physical_index -> source_index, with INVALID_INDEX
+		// for columns omitted from the INSERT. Iterate in source-index order.
+		const auto &table_cols = table.GetColumns();
+		column_names.assign(op.expected_types.size(), string());
+		for (idx_t phys = 0; phys < op.column_index_map.size(); ++phys) {
+			idx_t src_idx = op.column_index_map[PhysicalIndex(phys)];
+			if (src_idx == DConstants::INVALID_INDEX) continue;
+			if (src_idx < column_names.size()) {
+				column_names[src_idx] = table_cols.GetColumn(PhysicalIndex(phys)).GetName();
+			}
+		}
+		// Sanity: every source slot should now be filled.
+		for (size_t i = 0; i < column_names.size(); ++i) {
+			if (column_names[i].empty()) {
+				throw InternalException(
+				    "ripdb: failed to derive column name for INSERT source slot %zu", i);
+			}
+		}
+	}
+
+	// Per-column "is the remote actually a non-VARCHAR native type masquerading
+	// as VARCHAR in the catalog?" bits. The sink path checks this on each
+	// row and refuses to write if any targeted column is fallback-VARCHAR.
+	vector<bool> column_is_fallback;
+	column_is_fallback.reserve(column_names.size());
+	for (const auto &name : column_names) {
+		column_is_fallback.push_back(table.IsVarcharFallbackColumn(name));
+	}
+
+	auto &sink = gen.Make<PhysicalRipInsertSink>(*this, table.RemoteName(),
+	                                              std::move(column_names),
+	                                              std::move(column_types),
+	                                              std::move(column_is_fallback),
+	                                              op.estimated_cardinality);
+	sink.children.push_back(*plan);
+	return sink;
+}
+
+// ---------------------------------------------------------------------------
+// PlanUpdate — Path 1 only; throw if not eligible.
+// ---------------------------------------------------------------------------
+PhysicalOperator &RipCatalog::PlanUpdate(ClientContext &context, PhysicalPlanGenerator &gen,
+                                         LogicalUpdate &op, PhysicalOperator & /*plan*/) {
+	auto &table = op.table.Cast<RipTableEntry>();
+	EnforceDmlPreflight(context, table);
+
+	if (op.return_chunk) {
+		throw NotImplementedException(
+		    "ripdb: UPDATE ... RETURNING is not supported by ripdb in v1.");
+	}
+
+	// Refuse UPDATE on a column whose catalog VARCHAR is a remote native
+	// nested/binary fallback. (Same guarantee as INSERT — the v1 DML write
+	// path can't round-trip a string into the native shape.)
+	{
+		string fb_reason = CheckUpdateFallbackVarchar(op, table);
+		if (!fb_reason.empty()) {
+			throw NotImplementedException("ripdb: %s", fb_reason);
+		}
+	}
+
+	auto passthrough = TryPlanDmlPassthrough<UpdateStatement>(
+	    context, gen, op, /*our_catalog=*/*this, /*mutable=*/*this,
+	    RejectUpdateStatement, "UPDATE");
+	if (passthrough) return *passthrough;
+
+	throw NotImplementedException(
+	    "ripdb: UPDATE could not be passed through to the remote (the statement "
+	    "either uses an unsupported feature, or its WHERE/SET clause references "
+	    "a local table). v1 only supports UPDATE statements that reference one "
+	    "ripdb table and no local-catalog data. Materialize complex updates "
+	    "via a temp table or run them directly against rip-db.");
+}
+
+// ---------------------------------------------------------------------------
+// PlanDelete — Path 1 only; throw if not eligible.
+// ---------------------------------------------------------------------------
+PhysicalOperator &RipCatalog::PlanDelete(ClientContext &context, PhysicalPlanGenerator &gen,
+                                         LogicalDelete &op, PhysicalOperator & /*plan*/) {
+	auto &table = op.table.Cast<RipTableEntry>();
+	EnforceDmlPreflight(context, table);
+
+	if (op.return_chunk) {
+		throw NotImplementedException(
+		    "ripdb: DELETE ... RETURNING is not supported by ripdb in v1.");
+	}
+
+	auto passthrough = TryPlanDmlPassthrough<DeleteStatement>(
+	    context, gen, op, /*our_catalog=*/*this, /*mutable=*/*this,
+	    RejectDeleteStatement, "DELETE");
+	if (passthrough) return *passthrough;
+
+	throw NotImplementedException(
+	    "ripdb: DELETE could not be passed through to the remote (either uses "
+	    "an unsupported feature like USING or RETURNING, or its WHERE clause "
+	    "references a local table). v1 only supports DELETE statements that "
+	    "reference one ripdb table and no local-catalog data.");
+}
 
 // ---------------------------------------------------------------------------
 // Catalog population: GET /tables  +  GET /schema/:t per table.
@@ -1175,7 +3297,8 @@ RipTableMeta ParseSchemaResponse(const string &table_name, const string &body) {
 			    table_name, col_name, type_str, mapped.refuse_reason);
 			break;
 		}
-		meta.columns.push_back({std::move(col_name), std::move(mapped.type)});
+		meta.columns.push_back({std::move(col_name), std::move(mapped.type),
+		                         mapped.varchar_is_fallback});
 	}
 	duckdb_yyjson::yyjson_doc_free(doc);
 	return meta;
@@ -1183,12 +3306,46 @@ RipTableMeta ParseSchemaResponse(const string &table_name, const string &body) {
 
 } // anonymous namespace
 
+// Identifier guard: until URL-encoding lands on the client AND the server-side
+// `/schema/:table` strips its `[^a-zA-Z0-9_]` sanitizer, only ASCII identifiers
+// are safe to round-trip. A non-conforming name today either silently misroutes
+// (server strips characters, client doesn't, names mismatch on lookup) or fails
+// to round-trip through DuckDB's identifier quoting in a way we can't detect
+// at runtime. Refuse to attach such tables/columns rather than mutate the wrong
+// data later. A future identifier-transport hardening pass will lift this.
+static bool IsSafeAsciiIdentifier(const string &name) {
+	if (name.empty()) return false;
+	auto is_ident_first = [](char c) {
+		return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_';
+	};
+	auto is_ident_cont = [](char c) {
+		return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+		       (c >= '0' && c <= '9') || c == '_';
+	};
+	if (!is_ident_first(name[0])) return false;
+	for (size_t i = 1; i < name.size(); ++i) {
+		if (!is_ident_cont(name[i])) return false;
+	}
+	return true;
+}
+
 RipRefreshStats RipCatalog::PopulateSchema(RipSchemaEntry &schema) {
 	RipRefreshStats stats;
 	string tables_body = http_->GetText("/tables");
 	auto names = ParseTablesResponse(tables_body);
 
 	for (const auto &table_name : names) {
+		// Identifier guard at attach time — see IsSafeAsciiIdentifier above.
+		if (!IsSafeAsciiIdentifier(table_name)) {
+			Printer::Print(StringUtil::Format(
+			    "ripdb: skipping table '%s' — identifier contains characters "
+			    "that are not yet supported over the wire (only [A-Za-z_][A-Za-z0-9_]* is safe). "
+			    "See packages/db/CLI.md for the planned identifier-transport hardening.",
+			    table_name));
+			++stats.refused;
+			continue;
+		}
+
 		string schema_body;
 		try {
 			schema_body = http_->GetText("/schema/" + table_name);
@@ -1206,6 +3363,24 @@ RipRefreshStats RipCatalog::PopulateSchema(RipSchemaEntry &schema) {
 			continue;
 		}
 
+		// Validate column identifiers too — same rationale as the table
+		// guard above. A column with weird chars would silently mis-bind
+		// on the wire (the server-side `/schema/:t` already escaped its
+		// own `:t` arg, but the column names come back verbatim and we
+		// emit them in SQL without further escaping).
+		bool col_refused = false;
+		for (auto &col : meta.columns) {
+			if (!IsSafeAsciiIdentifier(col.name)) {
+				Printer::Print(StringUtil::Format(
+				    "ripdb: skipping table '%s' — column '%s' has an identifier "
+				    "that is not yet supported over the wire.",
+				    table_name, col.name));
+				col_refused = true;
+				break;
+			}
+		}
+		if (col_refused) { ++stats.refused; continue; }
+
 		CreateTableInfo info;
 		info.catalog = GetName();
 		info.schema  = "main";
@@ -1214,6 +3389,16 @@ RipRefreshStats RipCatalog::PopulateSchema(RipSchemaEntry &schema) {
 			info.columns.AddColumn(ColumnDefinition(col.name, col.type));
 		}
 		auto table_entry = make_uniq<RipTableEntry>(*this, schema, info, meta.name);
+		// Carry the "VARCHAR but actually native nested/binary on the remote"
+		// markers onto the table entry so the DML write path can refuse
+		// INSERTs that would silently coerce values into the wrong native
+		// shape. Read path is unaffected (it stringifies on the wire and
+		// hands back VARCHAR exactly as advertised).
+		for (auto &col : meta.columns) {
+			if (col.varchar_is_fallback) {
+				table_entry->MarkVarcharFallback(col.name);
+			}
+		}
 		schema.AddTable(std::move(table_entry));
 		++stats.loaded;
 	}
@@ -1232,8 +3417,12 @@ TableFunction RipTableEntry::GetScanFunction(ClientContext &, unique_ptr<Functio
 		all_names.push_back(col.GetName());
 		all_types.push_back(col.GetType());
 	}
-	bind_data = make_uniq<RipScanBindData>(cat.Options().base_url, "main", remote_name_,
-	                                        std::move(all_names), std::move(all_types));
+	auto bd = make_uniq<RipScanBindData>(cat.Options().base_url, "main", remote_name_,
+	                                      std::move(all_names), std::move(all_types));
+	// Surface ourselves as the catalog entry behind this scan so
+	// LogicalGet::GetTable() resolves correctly — see RipScanGetBindInfo.
+	bd->entry = this;
+	bind_data = std::move(bd);
 	return MakeRipScanFunction();
 }
 
@@ -1336,7 +3525,13 @@ RipScanInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
 	opts.base_url = bd.base_url;
 	RipHttpClient http(db, opts);
 
-	string body = http.PostBinary("/ddb/run", "text/plain", sql);
+	// Pass an explicit unlimited row-limit header. Without it, the server
+	// previously fell back to a 10k cap (the DuckDB UI default), silently
+	// truncating any scan over 10k rows. The server now treats absent
+	// header as unlimited, but old servers in the field still cap at 10k,
+	// so being explicit here is a belt-and-suspenders fix for both.
+	string body = http.PostBinary("/ddb/run", "text/plain", sql,
+	                              {{"x-duckdb-ui-result-row-limit", "-1"}});
 	state->decoded = make_uniq<DecodedResult>(
 	    decode(reinterpret_cast<const uint8_t *>(body.data()), body.size()));
 	if (state->decoded->isError) {

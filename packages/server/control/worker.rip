@@ -22,6 +22,8 @@ export runWorkerMode = ->
   workerId = parseInt(process.env.WORKER_ID or '0')
   maxRequests = parseInt(process.env.MAX_REQUESTS or '10000')
   maxSeconds = parseInt(process.env.MAX_SECONDS or '0')
+  parsedConcurrency = parseInt(process.env.WORKER_CONCURRENCY or '1')
+  concurrency = if Number.isFinite(parsedConcurrency) and parsedConcurrency >= 1 then parsedConcurrency else 1
   appEntry = process.env.APP_ENTRY
   appId = process.env.APP_ID or 'default'
   socketPath = process.env.SOCKET_PATH
@@ -32,7 +34,13 @@ export runWorkerMode = ->
   # Use object to avoid Rip closure scoping issues with mutable variables
   workerState =
     appReady: false
-    inflight: false
+    # inflightCount tracks concurrent in-flight requests. When concurrency is
+    # 1 the worker behaves exactly like the historical one-request-at-a-time
+    # model. When concurrency > 1 the worker uses the JS event loop's
+    # cooperative scheduling to interleave I/O-bound requests, refusing new
+    # work only once the cap is reached.
+    inflightCount: 0
+    concurrency: concurrency
     handled: 0
     handler: null
     # draining: set true when the worker is about to retire (maxRequests or
@@ -115,14 +123,14 @@ export runWorkerMode = ->
           status: 503
           headers: { 'Rip-Worker-Draining': '1', 'Retry-After': '0', 'Rip-Worker-Id': String(workerId) }
 
-      if workerState.inflight
+      if workerState.inflightCount >= workerState.concurrency
         return new Response 'busy',
           status: 503
           headers: { 'Rip-Worker-Busy': '1', 'Retry-After': '0', 'Rip-Worker-Id': String(workerId) }
 
       handlerFn = getHandler!
       workerState.appReady = typeof handlerFn is 'function'
-      workerState.inflight = true
+      workerState.inflightCount++
 
       try
         return new Response('not ready', { status: 503 }) unless typeof handlerFn is 'function'
@@ -134,28 +142,24 @@ export runWorkerMode = ->
         new Response('error', { status: 500 })
       finally
         workerState.handled++
+        workerState.inflightCount = Math.max(0, workerState.inflightCount - 1)
         exceededReqs = workerState.handled >= maxRequests
         exceededTime = maxSeconds > 0 and (Date.now() - startedAtMs) / 1000 >= maxSeconds
-        if exceededReqs or exceededTime
-          # Order matters: flip draining FIRST so any request that arrives
-          # between `inflight = false` and SIGTERM sees 503-draining and
-          # goes to another worker. Then clear inflight so the graceful
-          # shutdown handler doesn't wait on our own completed request.
+        if (exceededReqs or exceededTime) and not workerState.draining
+          # Flip draining FIRST so any request that arrives between this
+          # response flushing and the SIGTERM sees 503-draining and routes
+          # to another worker. The shutdown handler waits for inflightCount
+          # to reach 0 before exiting, so peers in flight still complete.
           workerState.draining = true
-          workerState.inflight = false
-          # Route through SIGTERM so the shutdown handler can drain (it
-          # already waits up to SHUTDOWN_TIMEOUT_MS for any in-flight
-          # request). setImmediate lets this response flush first.
+          # setImmediate lets this response flush before SIGTERM fires.
           setImmediate -> process.kill(process.pid, 'SIGTERM')
-        else
-          workerState.inflight = false
 
   selfJoin!
 
   shutdown = ->
-    # Wait for in-flight request to complete (with timeout)
+    # Wait for all in-flight requests to complete (with timeout)
     start = Date.now()
-    while workerState.inflight and Date.now() - start < SHUTDOWN_TIMEOUT_MS
+    while workerState.inflightCount > 0 and Date.now() - start < SHUTDOWN_TIMEOUT_MS
       await new Promise (r) -> setTimeout(r, 10)
     try server.stop()
     selfQuit!

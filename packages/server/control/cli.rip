@@ -63,7 +63,7 @@ export VALUE_FLAGS = new Set(%w[
   -f --file --cert --key --watch --env --https-port
   --socket-prefix --acme --acme-staging --realtime-path --publish-secret
   --max-queue --queue-timeout-ms --connect-timeout-ms --read-timeout-ms
-  --rate-limit --rate-limit-window -o --output
+  --rate-limit --rate-limit-window --worker-concurrency -o --output
 ])
 
 export parseFlags = (argv, defaultEntryPath = null) ->
@@ -191,6 +191,14 @@ export parseFlags = (argv, defaultEntryPath = null) ->
   cores = cpus().length
   workers = parseWorkersToken(getKV('w:'), Math.max(1, Math.floor(cores / 2)))
 
+  # Per-worker concurrency window. Default 1 preserves the historical
+  # one-request-per-worker model. Operators raise this for I/O-bound
+  # apps to fan out concurrent requests inside each worker process.
+  workerConcurrency = Math.max(1, coerceInt(
+    getKV('c:') ?? getKV('--worker-concurrency=') ?? process.env.RIP_WORKER_CONCURRENCY,
+    1
+  ))
+
   policy = parseRestartPolicy(
     getKV('r:'),
     coerceInt(process.env.RIP_MAX_REQUESTS, 10000),
@@ -222,6 +230,7 @@ export parseFlags = (argv, defaultEntryPath = null) ->
     appName
     appAliases
     workers
+    workerConcurrency
     maxRequestsPerWorker: policy.maxRequests
     maxSecondsPerWorker: policy.maxSeconds
     httpPort
@@ -353,13 +362,21 @@ export runHelpOutput = (argv) ->
     Workers:
       w:<n>                   Number of workers (default: cores/2)
       w:auto                  One worker per core
+      c:<n>                   Per-worker request concurrency (default: 1)
+                              Long form: --worker-concurrency=<n>
+                              Env: RIP_WORKER_CONCURRENCY
+                              c:1 is today's behavior (one request at a time
+                              per worker). Raise for I/O-bound apps to fan
+                              out concurrent requests inside one worker.
+                              Effective capacity = workers × c.
       r:<n>,<s>s              Restart policy: max requests, max seconds
 
     Examples:
       rip server               Start with ./index.rip (watches *.rip)
       rip server myapp         Start with app name "myapp"
       rip server http          HTTP only (no TLS)
-      rip server --static w:8  Production: no reload, 8 workers
+      rip server --static w:8           Production: no reload, 8 workers
+      rip server --static w:4 c:8       4 workers × 8 concurrent each = 32
       rip server -c            Validate config and exit
       rip server -c -f hosts.rip
       rip server -i            Show server status

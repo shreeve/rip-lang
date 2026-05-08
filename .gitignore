@@ -41,6 +41,10 @@ notes.txt
 /packages/ui/test-results/
 /packages/ui/tests/results/
 
+# Server bench harness — runs are machine-dependent; the harness itself
+# (index.rip + run.sh) is tracked, but the per-run output isn't.
+/packages/server/bench/results/
+
 # --- Published extension artifacts ---------------------------------------
 # Un-ignore compiled artifacts inside docs/extensions/ so GitHub Pages can
 # serve them. `*.vsix` and `*.duckdb*` above would otherwise exclude the

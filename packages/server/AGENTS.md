@@ -170,6 +170,19 @@ Repo-wide regression suite:
 bun run test
 ```
 
+Performance regression harness (`packages/server/bench/`):
+
+```bash
+rip server packages/server/bench/ http:3000 w:4 c:1 --static
+./packages/server/bench/run.sh c1-baseline             # in another shell
+# Vary w:N c:N on the server, re-run to compare.
+```
+
+The harness uses `oha` (`brew install oha`) and reads the server's
+`/diagnostics` endpoint to capture queue shed/timeout deltas. Output is
+written to `packages/server/bench/results/` (gitignored — runs are
+machine-dependent).
+
 When changing:
 
 - config parsing -> update `tests/config.rip`, `tests/servers.rip`
@@ -201,6 +214,56 @@ When changing:
 - shared-port HTTPS multiplexer mode for `streams.listen == httpsPort`
 
 Consider these rules if they affect your changes.
+
+## Worker concurrency
+
+Each worker process is a separate `Bun.spawn`'d Bun runtime listening on a
+Unix socket. Two knobs determine total request capacity:
+
+- `w:N` — number of worker **processes**
+- `c:N` — per-worker request **concurrency** (default `1`)
+
+Effective capacity = `w × c`. Beyond that, requests queue (up to `maxQueue`)
+or are shed with `503`.
+
+`c:1` is the historical Unicorn-style behavior: each worker handles exactly
+one request at a time and refuses additional work with
+`503 Rip-Worker-Busy`. Raising `c:N` lets a worker fan out N concurrent
+requests through Bun's event loop — beneficial whenever handlers spend wall
+time on `await` (DB calls, HTTP fan-out, slow uploads). Pure-CPU handlers
+don't benefit.
+
+Implementation:
+
+- `worker.rip` tracks `workerState.inflightCount` and rejects new work when
+  `inflightCount >= concurrency`. The shutdown handler waits for
+  `inflightCount` to reach 0 before exiting.
+- `serving/queue.rip` scheduler increments `worker.inflight` on checkout and
+  re-adds the worker to `availableWorkers` if it still has capacity.
+  `releaseWorker` decrements and re-adds when transitioning from full back
+  to has-capacity.
+- `server.rip` capacity gate uses `appCapacity(app) = sockets.length × c`.
+- The `WORKER_CONCURRENCY` env var is set by `control/workers.rip` when
+  spawning each worker.
+- `RIP_WORKER_CONCURRENCY` env var on the server overrides the default.
+
+Safety properties preserved at any `c`:
+
+- Process isolation (heap, FDs, crashes) — unchanged, still per-worker.
+- Hot reload (atomic pool swap) — still works; `Rip-Worker-Draining` semantics
+  fire once any in-flight request crosses the recycle threshold.
+- `maxRequests` / `maxSeconds` recycle — fires once per worker (idempotent
+  guard via `workerState.draining`); SIGTERM shutdown waits for all in-flight
+  requests to drain.
+
+What this requires from app code:
+
+- Per-request state must live on the request context (`@req`, `@`-bound
+  helpers) or in `AsyncLocalStorage`. Module-level mutable variables that
+  hold per-request data leak across concurrent requests at any `c > 1`.
+  `@rip-lang/server` already uses `AsyncLocalStorage` (`requestContext`) for
+  the request context, so handlers using `@req`, `@json()`, `@send()`,
+  `@session` are concurrency-safe by construction.
 
 ## Runtime state model
 

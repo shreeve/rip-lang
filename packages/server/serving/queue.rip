@@ -3,22 +3,45 @@
 # ==============================================================================
 
 # --- Scheduler ---
+#
+# Per-worker concurrency:
+#   `inflight` is a small integer (0..concurrency) — the number of requests
+#   the worker is currently handling. A worker is in `availableWorkers` iff
+#   it still has capacity (`inflight < concurrency`). Concurrency = 1 is the
+#   historical one-request-at-a-time model.
+#
+# Invariant maintained by checkout/release:
+#   - `getNextAvailableSocket` increments `inflight` and returns the worker.
+#     If the worker still has capacity after the bump, it is pushed back so
+#     the next checkout can hand it out again.
+#   - `releaseWorker` decrements `inflight`. When the worker transitions
+#     from full back to has-capacity, it is re-added to the pool.
 
 export isCurrentVersion = (newestVersion, worker) ->
   newestVersion is null or worker.version is null or worker.version >= newestVersion
 
-export getNextAvailableSocket = (availableWorkers, newestVersion) ->
+export getNextAvailableSocket = (availableWorkers, newestVersion, concurrency = 1) ->
   while availableWorkers.length > 0
     worker = availableWorkers.pop()
-    return worker if worker.inflight is 0 and isCurrentVersion(newestVersion, worker)
+    continue unless isCurrentVersion(newestVersion, worker)
+    if (worker.inflight or 0) < concurrency
+      worker.inflight = (worker.inflight or 0) + 1
+      # Worker may still have capacity for additional concurrent requests —
+      # re-add to the pool so the next checkout can hand it out again.
+      availableWorkers.push(worker) if worker.inflight < concurrency
+      return worker
   null
 
-export releaseWorker = (sockets, availableWorkers, newestVersion, worker) ->
+export releaseWorker = (sockets, availableWorkers, newestVersion, worker, concurrency = 1) ->
   return unless worker
   return unless sockets.some((s) -> s.socket is worker.socket)
-  worker.inflight = 0
-  if isCurrentVersion(newestVersion, worker)
-    availableWorkers.push(worker)
+  prev = worker.inflight or 0
+  worker.inflight = Math.max(0, prev - 1)
+  return unless isCurrentVersion(newestVersion, worker)
+  # Re-add when transitioning from full back to has-capacity. For workers
+  # that were already in the pool with spare capacity, no-op.
+  if prev >= concurrency and worker.inflight < concurrency
+    availableWorkers.push(worker) unless availableWorkers.some((w) -> w is worker)
 
 # Upper bound for auto-cloning body-bearing requests so we can retry on
 # 503-busy. Requests larger than this don't get a clone and therefore
@@ -61,8 +84,8 @@ export processQueuedJob = (job, worker, forwardToWorker, onFinally) ->
     .catch((e) -> job.resolve(resolveJobError(e)))
     .finally(-> onFinally())
 
-export drainQueueOnce = (inflightTotal, socketsLength, availableWorkersLength, shiftJob, isJobTimedOut, queueTimeoutResponse, getNextAvailableSocket, processJob) ->
-  while inflightTotal < Math.max(1, socketsLength) and availableWorkersLength() > 0
+export drainQueueOnce = (inflightTotal, capacity, availableWorkersLength, shiftJob, isJobTimedOut, queueTimeoutResponse, getNextAvailableSocket, processJob) ->
+  while inflightTotal < Math.max(1, capacity) and availableWorkersLength() > 0
     job = shiftJob()
     break unless job
     if isJobTimedOut(job)
