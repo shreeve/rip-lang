@@ -37,18 +37,9 @@ Open **http://localhost:4213** for the official DuckDB UI.
 rip-db dump                      # writes <dbname>-YYYYMMDD-HHMMSS.tar.gz
 rip-db dump prod-backup.tar.gz   # explicit name
 rip-db load prod-backup.tar.gz   # restore into an empty rip-db instance
-
-# Different server (defaults to http://localhost:4213)
-RIPDB_URL=http://prod-host:4213 rip-db dump
 ```
 
-`dump` exports the running database via DuckDB's `EXPORT DATABASE (FORMAT
-CSV)`, bundles the schema + per-table CSVs into one `.tar.gz`, and refuses
-to overwrite an existing archive. `load` is the symmetric inverse and
-refuses to import into a populated database. Both subcommands accept
-`--help` for full usage. The `RIPDB_URL` env var targets a different
-server; the temp directory used for staging must be on a filesystem the
-rip-db process can read+write (the default localhost case is automatic).
+Full reference in [§Backup & Restore](#backup--restore-1) below.
 
 ### Source Selection
 
@@ -486,6 +477,321 @@ The client picks the optimal execution path automatically:
 | `Model.upsert!(data, on:)` | Insert or update on conflict (single or bulk) |
 | `Model.destroy!(id)` | Delete by id and return row |
 | `Model.query!(sql, params)` | Raw parameterized query |
+
+## Backup & Restore
+
+`rip-db` ships two subcommands for full-database snapshots, both backed
+by DuckDB's native `EXPORT DATABASE` / `IMPORT DATABASE` over the same
+`/sql` endpoint your app already uses. No new server route, no
+authentication scheme to configure — just two CLI verbs.
+
+### Quick reference
+
+```bash
+rip-db dump                       # autoname: <dbname>-YYYYMMDD-HHMMSS.tar.gz in cwd
+rip-db dump my-snapshot.tar.gz    # explicit filename
+rip-db load my-snapshot.tar.gz    # restore archive into an empty rip-db
+rip-db dump --help                # subcommand usage
+rip-db load --help
+
+# Target a non-default server with the RIPDB_URL env var:
+RIPDB_URL=http://prod-host:4213 rip-db dump prod-snapshot.tar.gz
+```
+
+### How it works
+
+`dump` runs `EXPORT DATABASE 'tmpdir' (FORMAT CSV)` against the running
+server. DuckDB writes three kinds of files into the staging directory:
+
+| File | Contents |
+|---|---|
+| `schema.sql` | All `CREATE SEQUENCE` / `CREATE TYPE` / `CREATE TABLE` / `CREATE VIEW` / `CREATE INDEX` statements (the DDL) |
+| `load.sql` | One `COPY <table> FROM '<csv>' (...)` statement per table (the replay glue) |
+| `<table>.csv` | One CSV per table, type-faithful (DECIMAL precision, TIMESTAMP precision, ENUM values, NULL handling, all preserved) |
+
+`rip-db dump` then `tar -czf`'s the staging directory into the named (or
+auto-named) archive and cleans up. `load` is the symmetric inverse: untar
+into a staging directory, run `IMPORT DATABASE 'tmpdir'`, clean up.
+
+### CSV format choice
+
+CSV (not Parquet) is intentional. Three reasons:
+
+- **Type-faithful**: DuckDB's CSV reader, given the column types from
+  `schema.sql`, parses DECIMALs back without precision loss, parses
+  TIMESTAMPs to microsecond precision, and re-casts ENUM values through
+  the `CREATE TYPE` declaration. For the typical OLTP-shaped schema
+  (INTEGER PKs + VARCHAR + DECIMAL + TIMESTAMP + ENUMs), CSV round-trips
+  losslessly.
+- **Human-readable**: you can `head`, `grep`, or `csvlook` the archive
+  contents without any tooling.
+- **Universally portable**: every database, language, and spreadsheet
+  understands CSV.
+
+The one caveat: VARCHAR columns can't distinguish empty string `''` from
+NULL by default — both serialize as an empty CSV cell, both parse back
+as NULL on import. If your schema needs that distinction, override at
+the server's SQL level: `EXPORT DATABASE 'dir' (FORMAT CSV, NULLSTR
+'\N')`.
+
+For nested types (LIST / STRUCT / MAP / ARRAY) or BLOB columns you'd
+want PARQUET instead — `rip-db dump` doesn't currently expose a format
+flag, but you can run the underlying SQL directly via `/sql` if needed.
+
+### Auto-naming
+
+When you omit the archive name, the script:
+
+1. Asks the server for `current_database()` via `/sql`.
+2. Sanitizes that name to `[A-Za-z0-9._-]+` (so weird DB names produce
+   safe filenames).
+3. Appends a `YYYYMMDD-HHMMSS` local-time stamp.
+4. Writes `<dbname>-<stamp>.tar.gz` to the current directory.
+
+Examples:
+
+| Server's `current_database()` | Auto-named archive |
+|---|---|
+| `medlabs` (file-based, `medlabs.duckdb`) | `medlabs-20260507-191123.tar.gz` |
+| `memory` (`:memory:` server) | `memory-20260507-191123.tar.gz` |
+| `My Customer Data!` (weird) | `My_Customer_Data_-20260507-191123.tar.gz` |
+
+### Targeting a different server
+
+`RIPDB_URL` is the only required configuration. Default is
+`http://localhost:4213`. Examples:
+
+```bash
+# Production backup
+RIPDB_URL=http://prod-host:4213 rip-db dump
+
+# Cross-environment: dump prod, restore to a fresh staging instance
+RIPDB_URL=http://prod-host:4213    rip-db dump /tmp/prod.tar.gz
+RIPDB_URL=http://staging-host:4213 rip-db load /tmp/prod.tar.gz
+
+# Dump from a non-default port (e.g. local rip-db on a different port)
+RIPDB_URL=http://localhost:4299 rip-db dump test-snapshot.tar.gz
+```
+
+### Same-filesystem assumption
+
+`rip-db dump` writes to a temp directory via `mktemp -d`, then asks the
+server to `EXPORT DATABASE` to that path. **The server reads/writes the
+staging directory directly** — so the script and the server must share
+a filesystem. The default localhost case is automatic.
+
+If you're running the server in a container or on a different host,
+you have a few options:
+
+- **Run `rip-db dump` inside the same container as the server**, then
+  `docker cp` (or equivalent) the archive out.
+- **Mount a shared volume** that both the script's container and the
+  server's container can see, then point both `RIPDB_URL` at the
+  server's HTTP and run `rip-db dump` from anywhere with access to the
+  shared volume.
+- **SSH the dump out**: run the script on the server box, archive
+  arrives locally there, then `rsync` to wherever you want it.
+
+The script catches the cross-filesystem failure mode explicitly: after
+asking the server to export, it verifies that `schema.sql` and
+`load.sql` actually appeared in the local temp directory. If they
+didn't, you get an actionable error instead of a silently-empty archive:
+
+```
+rip-db: expected DuckDB export files (schema.sql + load.sql) not present
+in /tmp/ripdb-XXX. If rip-db is running on a different host or container,
+the EXPORT/IMPORT staging directory must be visible to both the script
+and the server.
+```
+
+### Restore semantics
+
+`rip-db load` is **strictly additive into an empty database**. It
+refuses to load if the target server already has any tables or views in
+the `main` schema:
+
+```
+rip-db: target database is not empty (3 table/view(s) in 'main' schema).
+Drop them first or load into a fresh rip-db instance.
+```
+
+The reason is that `IMPORT DATABASE` runs `CREATE TABLE` followed by
+`COPY`, and a naïve restore into a populated DB can fail partway
+through, leaving partial data. The empty-DB precheck makes that
+impossible.
+
+If you want to restore over an existing database, the simplest path is:
+
+1. Stop the rip-db server.
+2. Move the existing `.duckdb` file out of the way (or `DROP` everything
+   first).
+3. Start a fresh rip-db pointing at the same path (or `:memory:` for
+   testing).
+4. `rip-db load <archive>`.
+
+For automated CI / staging refreshes, point a fresh `:memory:` server at
+the load and treat it as a one-shot:
+
+```bash
+# Start a fresh memory rip-db on port 4299
+rip-db :memory: --port=4299 &
+sleep 1
+# Load production snapshot into it
+RIPDB_URL=http://localhost:4299 rip-db load prod-snapshot.tar.gz
+# Now query / test against it
+curl http://localhost:4299/tables
+```
+
+### Safety gates
+
+Both subcommands fail closed on a number of conditions designed to
+prevent the common backup/restore footguns:
+
+| Condition | Behavior |
+|---|---|
+| Output archive already exists | `dump` refuses; never silently destroys an existing archive that might be the only good copy |
+| Server unreachable | Both fail with `could not reach rip-db at <url>: <reason>`; partial archives are not produced |
+| Cross-filesystem export | Both fail with the actionable message shown above; no silently-empty archives |
+| Target DB already populated | `load` fails with the empty-DB precheck message; no partial restores |
+| Missing archive file | `load` fails with `no such file: <path>` |
+| Tar archive contains `..` or absolute paths | `load` rejects with `unsafe path in archive: <name>`; basic tarball-traversal defense |
+| Wrong number of arguments | Both print usage and exit non-zero |
+| Embedded NUL byte in temp path | Refused upfront; NULs don't survive HTTP-as-text transport |
+
+The script does NOT defend against:
+
+- **Symlink/hardlink attacks in tar archives.** `rip-db load` is intended
+  for archives produced by `rip-db dump` (or other trusted sources).
+  Loading an archive crafted by an attacker can overwrite arbitrary
+  files via system tar's symlink-following behavior. Don't load
+  untrusted archives.
+- **Concurrent dumps to the same file.** Two `rip-db dump foo.tar.gz`
+  invocations racing on the same archive name could clobber each other
+  between the existsSync check and the tar write. Not realistic in
+  practice; if it matters, use the auto-naming form.
+- **Network timeouts.** `rip-db dump` has no fetch timeout — a
+  long-running export against a big DB will wait as long as DuckDB
+  takes. Intentional: better to wait than to kill a valid restore.
+
+### Common workflows
+
+#### Nightly backup with rotation
+
+```bash
+# /etc/cron.d/medlabs-backup
+0 3 * * * cd /var/backups/medlabs && rip-db dump && find . -mtime +7 -name '*.tar.gz' -delete
+```
+
+The auto-naming + `find -mtime +N -delete` combo gives you 7 days of
+nightly snapshots for a few lines of cron config. No backup tool needed.
+
+#### Copy production data into staging
+
+```bash
+# On a host with access to both:
+RIPDB_URL=http://prod:4213    rip-db dump /tmp/prod.tar.gz
+RIPDB_URL=http://staging:4213 rip-db load /tmp/prod.tar.gz
+rm /tmp/prod.tar.gz
+```
+
+#### Pull a backup down to your laptop
+
+```bash
+# On your laptop
+ssh prod-host "cd /tmp && rip-db dump && cat *.tar.gz" > local-snap.tar.gz
+ssh prod-host "cd /tmp && rm *.tar.gz"
+```
+
+(Cleaner: have cron drop nightly archives into a fixed location, then
+`rsync` from there.)
+
+#### Snapshot before a risky migration
+
+```bash
+rip-db dump pre-migration-$(date +%F).tar.gz
+# ... run migration ...
+# If it goes wrong:
+#   1. Stop rip-db
+#   2. Move/drop the corrupted DB
+#   3. Start fresh rip-db
+#   4. rip-db load pre-migration-2026-05-07.tar.gz
+```
+
+#### Verify a backup round-trips
+
+```bash
+# Take the snapshot
+rip-db dump snapshot.tar.gz
+
+# Spin up a throwaway memory rip-db on a free port
+rip-db :memory: --port=4299 &
+sleep 1
+
+# Load and compare row counts to production
+RIPDB_URL=http://localhost:4299 rip-db load snapshot.tar.gz
+diff \
+  <(curl -s http://localhost:4213/tables | jq -r '.tables[]' | sort) \
+  <(curl -s http://localhost:4299/tables | jq -r '.tables[]' | sort)
+
+# Cleanup
+curl -X POST http://localhost:4299/shutdown
+```
+
+### Format details
+
+The archive is a vanilla gzipped tarball — anything that handles
+`.tar.gz` can inspect it without `rip-db`:
+
+```bash
+$ tar -tzf medlabs-20260507-191123.tar.gz
+./
+./schema.sql
+./load.sql
+./accounts.csv
+./orders.csv
+./order_items.csv
+./users.csv
+...
+
+$ tar -xzOf medlabs-20260507-191123.tar.gz ./schema.sql | head -5
+CREATE SEQUENCE accounts_seq INCREMENT BY 1 ...;
+CREATE TYPE order_status AS ENUM ('draft','submitted',...);
+CREATE TABLE accounts(id INTEGER DEFAULT(nextval('accounts_seq')) PRIMARY KEY, ...);
+...
+
+$ tar -xzOf medlabs-20260507-191123.tar.gz ./accounts.csv | head -3
+id,name,number,phone,address_street,address_city,address_state,address_zip,created_at,updated_at
+10001,Acme Labs,04466500,(502) 758-8802,5908 Breckenridge Pkwy,Tampa,FL,33610,2026-04-17 12:34:56.123456,2026-04-17 12:34:56.123456
+10002,Beta Health,04466501,...
+```
+
+You can also extract and replay manually if you want full control:
+
+```bash
+mkdir extracted
+tar -xzf medlabs-20260507-191123.tar.gz -C extracted
+duckdb new.duckdb -c "IMPORT DATABASE 'extracted'"
+```
+
+This is useful for picking individual tables out of a snapshot, or for
+running ad-hoc SQL against a backup without restoring it into rip-db.
+
+### Implementation notes
+
+- `dump` and `load` both speak HTTP to the existing `/sql` endpoint —
+  no new server-side route was added for this feature.
+- All staging happens in `mktemp -d` directories with `process.on('exit'/SIGINT/SIGTERM)`
+  cleanup, so interrupted operations don't leave temp files behind.
+- DuckDB's `IMPORT DATABASE` rewrites the COPY paths in `load.sql` at
+  replay time using only the basenames — so the absolute paths baked
+  into `load.sql` by `EXPORT DATABASE` are decorative; the tarball is
+  fully relocatable.
+- SQL string literal escaping is applied to the temp path before
+  templating it into the `EXPORT DATABASE '<path>'` query.
+- The version pairing requirement: this feature works against any
+  rip-db that exposes `/sql` (which is all versions). The DuckDB
+  capability requirement is `EXPORT DATABASE` and `IMPORT DATABASE`,
+  which have been stable since DuckDB 0.7.
 
 ## JSON API
 
