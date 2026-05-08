@@ -990,6 +990,7 @@ export function installComponentSupport(CodeEmitter, Lexer) {
         const sourceLines = this.options.source?.split('\n');
         const extractProps = (args) => {
           const props = [];
+          const sideExprs = [];
           for (const arg of args) {
             let obj = null;
             if (this.is(arg, 'object')) {
@@ -1004,8 +1005,26 @@ export function installComponentSupport(CodeEmitter, Lexer) {
               for (let j = 1; j < obj.length; j++) {
                 const pair = obj[j];
                 const [, key, value] = pair;
-                if (typeof key === 'string' && !key.startsWith('@')) {
-                  const srcLine = pair.loc?.r ?? obj.loc?.r;
+                const srcLine = pair.loc?.r ?? obj.loc?.r;
+                // `@event` props on a component (parsed as `(. this name)`)
+                // — not part of the declared prop type, but emit the value
+                // as a bare expression so TS sees identifiers in the
+                // handler body (hover, completion, identifier resolution).
+                if (Array.isArray(key) && key[0] === '.' && key[1] === 'this') {
+                  try {
+                    const val = this.emitInComponent(value, 'value');
+                    sideExprs.push({ code: val, srcLine });
+                  } catch {}
+                  continue;
+                }
+                if (typeof key === 'string' && key.startsWith('@')) {
+                  try {
+                    const val = this.emitInComponent(value, 'value');
+                    sideExprs.push({ code: val, srcLine });
+                  } catch {}
+                  continue;
+                }
+                if (typeof key === 'string') {
                   if (key.startsWith('__bind_') && key.endsWith('__')) {
                     // Two-way binding: emit the Signal object (this.xxx), not this.xxx.value
                     const member = typeof value === 'string' && this.reactiveMembers?.has(value) ? `this.${value}` : this.emitInComponent(value, 'value');
@@ -1018,6 +1037,7 @@ export function installComponentSupport(CodeEmitter, Lexer) {
               }
             }
           }
+          props.sideExprs = sideExprs;
           return props;
         };
         const extractIntrinsicProps = (args) => {
@@ -1329,6 +1349,14 @@ export function installComponentSupport(CodeEmitter, Lexer) {
                   constructions.push(`      ${p.code},` + (p.srcLine != null ? ` // @rip-src:${p.srcLine}` : ''));
                 }
                 constructions.push(`    };`);
+              }
+            }
+            // Emit @-event handler bodies as bare expression statements so
+            // TS can resolve identifiers inside them (hover, completion).
+            // They aren't part of the component's declared prop type.
+            if (props.sideExprs) {
+              for (const s of props.sideExprs) {
+                constructions.push(`    ${s.code};` + (s.srcLine != null ? ` // @rip-src:${s.srcLine}` : ''));
               }
             }
           } else if (typeof head === 'string' && !CodeEmitter.GENERATORS[head] && (TEMPLATE_TAGS.has(head.split(/[.#]/)[0]) ||

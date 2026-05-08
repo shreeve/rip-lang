@@ -2124,6 +2124,12 @@ connection.onCompletion((params) => {
     if (params.context?.triggerCharacter === ' ' || params.context?.triggerCharacter === ':') {
       if (!isInRenderBlock(srcLines, params.position.line)) return [];
     }
+
+    // Cursor inside a plain string literal (not a `#{...}` interpolation):
+    // identifier completions are noise. Any prop-value path that wanted to
+    // offer in-quote suggestions has already returned above. Inside `#{...}`
+    // we still want TS completions for variables/functions in scope.
+    if (strState.inString && !strState.inInterpolation) return [];
   }
 
   // TypeScript completions
@@ -2763,32 +2769,30 @@ connection.onSignatureHelp((params) => {
   if (!fp.endsWith('.rip')) return null;
 
   // Component signature help
+  //
+  // Intentionally minimal. Rip components take **named** props in any
+  // order, so a positional "you're at param N of M" popup doesn't really
+  // apply — and the existing prop *completions* already surface the same
+  // info (name, type, optional/required) in a filterable, insertable form.
+  // Showing the component signature popup also leaked into nested
+  // expressions like `@click: (-> |)` where it was actively wrong. So
+  // for any cursor inside a render-block component or HTML tag we simply
+  // suppress signature help and let completions do the talking. Real
+  // function/method signature help (TS branch below) is unaffected and
+  // still fires for `cart.addItem(|)`, `arr.map(|)`, etc.
   const doc = documents.get(params.textDocument.uri);
   if (doc) {
     const srcLines = doc.getText().split('\n');
     const srcLine = srcLines[params.position.line];
+    // Suppress when cursor sits inside a plain string literal (typing
+    // string content shouldn't pop signature help at all).
+    const strState = scanStringState(srcLine, params.position.character);
+    if (strState.inString && !strState.inInterpolation) return null;
     const ctx = detectBlockComponentContext(srcLines, params.position.line, params.position.character);
-    if (ctx?.component) {
-      const compInfo = componentRegistry.get(ctx.component);
-      if (compInfo && compInfo.props.length > 0) {
-        const label = `${ctx.component}(${compInfo.props.map(p => `${p.name}${p.required ? '' : '?'}: ${p.type}`).join(', ')})`;
-        return {
-          signatures: [{
-            label,
-            parameters: compInfo.props.map(p => ({
-              label: `${p.name}${p.required ? '' : '?'}: ${p.type}`,
-            })),
-          }],
-          activeSignature: 0,
-          activeParameter: ctx.existingProps.length,
-        };
-      }
-    }
-    // For raw HTML tags inside a render block, suppress TS signature help —
-    // the synthetic stub `__ripEl(tag: 'a', props?: __RipProps<'a'>)` would
-    // otherwise leak compiler internals into the popup. Completions already
-    // surface the relevant attribute list.
-    if (ctx?.htmlTag) return null;
+    // Suppress for both Components and intrinsic HTML tags — the synthetic
+    // `__ripEl(tag, props?)` stub for HTML tags would otherwise leak
+    // compiler internals into the popup.
+    if (ctx?.component || ctx?.htmlTag) return null;
   }
 
   // TypeScript signature help
