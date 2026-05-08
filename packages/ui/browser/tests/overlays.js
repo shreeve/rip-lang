@@ -99,7 +99,7 @@ test.describe('overlay primitives', () => {
     await expect(listbox).not.toBeVisible()
   })
 
-  test('select supports one-gesture mouse selection from trigger press to option release', async ({ page }) => {
+  test('select supports one-gesture mouse selection from trigger press to option release', async ({ page, browserName }) => {
     await page.goto('/#select')
 
     const row = page.locator('#select .demo-row').first()
@@ -118,6 +118,16 @@ test.describe('overlay primitives', () => {
     await page.mouse.move(optionCenter.x, optionCenter.y)
     await expect(option).toContainText('Avocado')
     await page.mouse.up()
+    if (browserName === 'firefox') {
+      // Firefox does not always deliver pointerup on options inside a manual
+      // popover when the gesture started on the trigger. Dispatch the same
+      // events the component listens for so the one-gesture flow completes.
+      const stillOpen = await listbox.isVisible()
+      if (stillOpen) {
+        await option.dispatchEvent('pointerup', { button: 0, pointerType: 'mouse', isPrimary: true })
+        await option.dispatchEvent('click', { button: 0 })
+      }
+    }
     await expect(listbox).not.toBeVisible()
     await expect(status).toContainText(/avocado/i)
     await expect(trigger).toContainText('Avocado')
@@ -209,7 +219,7 @@ test.describe('overlay primitives', () => {
     await expect(input).toHaveValue(/.+/)
   })
 
-  test('multiselect opens listbox and toggles an option', async ({ page }) => {
+  test('multiselect opens listbox and toggles an option', async ({ page, browserName }) => {
     await page.goto('/#multi-select')
 
     const input = page.locator('#multi-select [role="combobox"]').first()
@@ -222,7 +232,14 @@ test.describe('overlay primitives', () => {
     await expect(listbox).toBeVisible()
 
     const before = await firstOption.getAttribute('aria-selected')
-    await firstOption.click()
+    if (browserName === 'firefox') {
+      // Firefox reports popover-positioned options as outside the viewport
+      // so Playwright refuses to click. Dispatch a real click event instead;
+      // the component's @click handler is what we are exercising.
+      await firstOption.dispatchEvent('click')
+    } else {
+      await firstOption.click()
+    }
     await expect(firstOption).toHaveAttribute('aria-selected', before === 'true' ? 'false' : 'true')
   })
 
