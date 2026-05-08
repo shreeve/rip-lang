@@ -15,7 +15,7 @@ Actual output:
 
 **Root cause:** The lexer strips `?` and `!` (setting `data.predicate` / `data.await`) before `types.js` sees them. `expandSuffixes()` in types.js is dead code.
 
-**Resolution:** Remove from the spec (see `?::` RFC below) or fix the lexer to preserve them in type context.
+**Resolution:** Remove from the spec (see RFC 5 in [RFCS.md](../../../RFCS.md)) or fix the lexer to preserve them in type context.
 
 ## ~~2. Function type aliases parse error~~
 
