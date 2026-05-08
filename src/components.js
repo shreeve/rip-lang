@@ -784,6 +784,14 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     for (const { name, isPublic } of stateVars) if (isPublic) publicPropNames.add(name);
     for (const { name, isPublic } of readonlyVars) if (isPublic) publicPropNames.add(name);
 
+    // When extends-ing a tag, expose `@rest` as a reactive view of caller props
+    // not consumed by declared @props. Reads (e.g. `@rest.disabled`) track via
+    // `this.rest.value`; `_setRestProp` mutates and calls `.touch()` to notify.
+    if (inheritsTag) {
+      memberNames.add('rest');
+      reactiveMembers.add('rest');
+    }
+
     // Save and set component context
     const prevComponentMembers = this.componentMembers;
     const prevReactiveMembers = this.reactiveMembers;
@@ -849,6 +857,9 @@ export function installComponentSupport(CodeEmitter, Lexer) {
       for (const { name, type, value } of stateVars) {
         const ts = expandType(type) || inferLiteralType(value);
         sl.push(ts ? `  declare ${name}: Signal<${ts}>;` : `  declare ${name}: Signal<any>;`);
+      }
+      if (inheritsTag) {
+        sl.push(`  declare rest: Signal<__RipProps<'${inheritsTag}'>>;`);
       }
       for (const { name, type, value } of readonlyVars) {
         const ts = expandType(type) || inferLiteralType(value);
@@ -1451,6 +1462,7 @@ export function installComponentSupport(CodeEmitter, Lexer) {
         lines.push("      if (!__k.startsWith('__bind_')) this._rest[__k] = props[__k];");
       }
       lines.push('    }');
+      lines.push('    this.rest = __state(this._rest);');
     }
 
     // Computed (derived)
@@ -1492,6 +1504,7 @@ export function installComponentSupport(CodeEmitter, Lexer) {
       lines.push('    this._rest || (this._rest = {});');
       lines.push('    if (value == null) delete this._rest[key];');
       lines.push('    else this._rest[key] = value;');
+      lines.push('    this.rest.touch();');
       lines.push('    this._applyInheritedProp(this._inheritedEl, key, value);');
       lines.push('  }');
       lines.push('  _applyRestToInheritedEl() {');

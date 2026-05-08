@@ -312,7 +312,7 @@ code "simple conditional", '''
    }
     };
   }
-  
+
   return class extends __Component {
     _init(props) {
    this.show = __state(true);
@@ -331,7 +331,7 @@ code "simple conditional", '''
        const show = !!(this.show.value);
        const want = show ? 'then' : null;
        if (want === showing) return;
-   
+
        if (currentBlock) {
          const leaving = currentBlock;
          if (leaving._t) { __transition(leaving._first, leaving._t, 'leave', () => leaving.d(true)); }
@@ -339,7 +339,7 @@ code "simple conditional", '''
          currentBlock = null;
        }
        showing = want;
-   
+
        if (want === 'then') {
          currentBlock = create_block_0(this);
          currentBlock.c();
@@ -387,7 +387,7 @@ code "if-else conditional", '''
    }
     };
   }
-  
+
   function create_block_1(ctx) {
     let _el2, _t1;
     let _factoryChildren = [];
@@ -410,7 +410,7 @@ code "if-else conditional", '''
    }
     };
   }
-  
+
   return class extends __Component {
     _init(props) {
    this.show = __state(true);
@@ -429,7 +429,7 @@ code "if-else conditional", '''
        const show = !!(this.show.value);
        const want = show ? 'then' : 'else';
        if (want === showing) return;
-   
+
        if (currentBlock) {
          const leaving = currentBlock;
          if (leaving._t) { __transition(leaving._first, leaving._t, 'leave', () => leaving.d(true)); }
@@ -437,7 +437,7 @@ code "if-else conditional", '''
          currentBlock = null;
        }
        showing = want;
-   
+
        if (want === 'then') {
          currentBlock = create_block_0(this);
          currentBlock.c();
@@ -495,7 +495,7 @@ code "simple loop", '''
    }
     };
   }
-  
+
   return class extends __Component {
     _init(props) {
    this.items = __state([1, 2, 3]);
@@ -550,7 +550,7 @@ code "text output in loop with postfix if else", '''
    }
     };
   }
-  
+
   return class extends __Component {
     _init(props) {
    this.items = __state([true]);
@@ -651,7 +651,7 @@ code "conditional inside loop threads loop vars", '''
    }
     };
   }
-  
+
   function create_block_0(ctx, item, i) {
     let _anchor1;
     let disposers = [];
@@ -676,7 +676,7 @@ code "conditional inside loop threads loop vars", '''
        const show = !!(item.active);
        const want = show ? 'then' : null;
        if (want === showing) return;
-   
+
        if (currentBlock) {
          const leaving = currentBlock;
          if (leaving._t) { __transition(leaving._first, leaving._t, 'leave', () => leaving.d(true)); }
@@ -684,7 +684,7 @@ code "conditional inside loop threads loop vars", '''
          currentBlock = null;
        }
        showing = want;
-   
+
        if (want === 'then') {
          currentBlock = create_block_1(ctx, item, i);
          currentBlock.c();
@@ -704,7 +704,7 @@ code "conditional inside loop threads loop vars", '''
    }
     };
   }
-  
+
   return class extends __Component {
     _init(props) {
    this.items = __state([{active: true}]);
@@ -759,7 +759,7 @@ code "nested loops thread outer vars", '''
    }
     };
   }
-  
+
   function create_block_0(ctx, row, ri) {
     let _anchor1;
     let disposers = [];
@@ -792,7 +792,7 @@ code "nested loops thread outer vars", '''
    }
     };
   }
-  
+
   return class extends __Component {
     _init(props) {
    this.rows = __state([[1, 2]]);
@@ -1424,7 +1424,7 @@ code "string containing 'this' in conditional factory", '''
    }
     };
   }
-  
+
   return class extends __Component {
     _init(props) {
    this.show = __state(true);
@@ -1443,7 +1443,7 @@ code "string containing 'this' in conditional factory", '''
        const show = !!(this.show.value);
        const want = show ? 'then' : null;
        if (want === showing) return;
-   
+
        if (currentBlock) {
          const leaving = currentBlock;
          if (leaving._t) { __transition(leaving._first, leaving._t, 'leave', () => leaving.d(true)); }
@@ -1451,7 +1451,7 @@ code "string containing 'this' in conditional factory", '''
          currentBlock = null;
        }
        showing = want;
-   
+
        if (want === 'then') {
          currentBlock = create_block_0(this);
          currentBlock.c();
@@ -1498,7 +1498,7 @@ code "string containing 'this' in loop factory", '''
    }
     };
   }
-  
+
   return class extends __Component {
     _init(props) {
    this.items = __state([1]);
@@ -1788,6 +1788,39 @@ test "extends rest props can be updated", '''
   a._setRestProp("maxlength", 25)
   a._rest.maxlength
   ''', 25
+
+# `@rest` is exposed as a reactive Signal whose value is the live `_rest`
+# bag. Reads in computeds/effects track it; `_setRestProp` calls
+# `this.rest.touch()` so reactive consumers re-fire on parent prop changes.
+test "extends exposes @rest as reactive signal", '''
+  A = component extends button
+    render
+      button
+  a = A.new({ disabled: true, "data-id": "x1" })
+  [typeof a.rest, a.rest.value.disabled, a.rest.value["data-id"]]
+  ''', ["object", true, "x1"]
+
+# The class-merge pattern: a computed reads `@rest.class` and concatenates
+# it with component-controlled parts. The computed re-evaluates when the
+# parent updates the `class` prop via `_setRestProp`. Returning an array
+# (rather than a joined string) lets the `class:` runtime flatten via
+# __clsx, so parents can pass strings, arrays, or {name: bool} objects.
+test "extends class-merge pattern via @rest in computed", '''
+  A = component extends button
+    @variant:: 'primary' | 'secondary' := 'primary'
+    classes ~=
+      parts = []
+      parts.push 'secondary' if @variant is 'secondary'
+      parts.push @rest.class
+      parts
+    render
+      button
+        class: classes
+  a = A.new({ variant: 'secondary', class: 'mt-4' })
+  before = a.classes.value.slice()
+  a._setRestProp('class', ['mb-2', 'mt-4'])
+  [before, a.classes.value]
+  ''', [['secondary', 'mt-4'], ['secondary', ['mb-2', 'mt-4']]]
 
 test "component effect runs on state change", '''
   A = component
@@ -2903,7 +2936,7 @@ code "conditional inside parent element", '''
    }
     };
   }
-  
+
   return class extends __Component {
     _init(props) {
     }
@@ -2927,7 +2960,7 @@ code "conditional inside parent element", '''
        const show = !!(true);
        const want = show ? 'then' : null;
        if (want === showing) return;
-   
+
        if (currentBlock) {
          const leaving = currentBlock;
          if (leaving._t) { __transition(leaving._first, leaving._t, 'leave', () => leaving.d(true)); }
@@ -2935,7 +2968,7 @@ code "conditional inside parent element", '''
          currentBlock = null;
        }
        showing = want;
-   
+
        if (want === 'then') {
          currentBlock = create_block_0(this);
          currentBlock.c();
@@ -2990,7 +3023,7 @@ code "conditional with fragment (multiple then-children)", '''
    }
     };
   }
-  
+
   return class extends __Component {
     _init(props) {
    this.show = __state(false);
@@ -3009,7 +3042,7 @@ code "conditional with fragment (multiple then-children)", '''
        const show = !!(this.show.value);
        const want = show ? 'then' : null;
        if (want === showing) return;
-   
+
        if (currentBlock) {
          const leaving = currentBlock;
          if (leaving._t) { __transition(leaving._first, leaving._t, 'leave', () => leaving.d(true)); }
@@ -3017,7 +3050,7 @@ code "conditional with fragment (multiple then-children)", '''
          currentBlock = null;
        }
        showing = want;
-   
+
        if (want === 'then') {
          currentBlock = create_block_0(this);
          currentBlock.c();
@@ -3069,7 +3102,7 @@ code "reactive text inside conditional factory", '''
    }
     };
   }
-  
+
   return class extends __Component {
     _init(props) {
    this.show = __state(true);
@@ -3089,7 +3122,7 @@ code "reactive text inside conditional factory", '''
        const show = !!(this.show.value);
        const want = show ? 'then' : null;
        if (want === showing) return;
-   
+
        if (currentBlock) {
          const leaving = currentBlock;
          if (leaving._t) { __transition(leaving._first, leaving._t, 'leave', () => leaving.d(true)); }
@@ -3097,7 +3130,7 @@ code "reactive text inside conditional factory", '''
          currentBlock = null;
        }
        showing = want;
-   
+
        if (want === 'then') {
          currentBlock = create_block_0(this);
          currentBlock.c();
@@ -3145,7 +3178,7 @@ code "loop inside parent element", '''
    }
     };
   }
-  
+
   return class extends __Component {
     _init(props) {
    this.items = __state(["a", "b"]);
@@ -3711,7 +3744,7 @@ code "transition sets _t on block factory", '''
    }
     };
   }
-  
+
   return class extends __Component {
     _init(props) {
    this.show = __state(true);
@@ -3730,7 +3763,7 @@ code "transition sets _t on block factory", '''
        const show = !!(this.show.value);
        const want = show ? 'then' : null;
        if (want === showing) return;
-   
+
        if (currentBlock) {
          const leaving = currentBlock;
          if (leaving._t) { __transition(leaving._first, leaving._t, 'leave', () => leaving.d(true)); }
@@ -3738,7 +3771,7 @@ code "transition sets _t on block factory", '''
          currentBlock = null;
        }
        showing = want;
-   
+
        if (want === 'then') {
          currentBlock = create_block_0(this);
          currentBlock.c();
@@ -3844,7 +3877,7 @@ code "no transition — no _t on block", '''
    }
     };
   }
-  
+
   return class extends __Component {
     _init(props) {
    this.show = __state(true);
@@ -3863,7 +3896,7 @@ code "no transition — no _t on block", '''
        const show = !!(this.show.value);
        const want = show ? 'then' : null;
        if (want === showing) return;
-   
+
        if (currentBlock) {
          const leaving = currentBlock;
          if (leaving._t) { __transition(leaving._first, leaving._t, 'leave', () => leaving.d(true)); }
@@ -3871,7 +3904,7 @@ code "no transition — no _t on block", '''
          currentBlock = null;
        }
        showing = want;
-   
+
        if (want === 'then') {
          currentBlock = create_block_0(this);
          currentBlock.c();
@@ -4048,12 +4081,14 @@ code 'component extends: inherits tag, rest props forwarded', '''
       for (const __k in props) {
         if (__k !== 'label' && !__k.startsWith('__bind_')) this._rest[__k] = props[__k];
       }
+      this.rest = __state(this._rest);
     }
     _setRestProp(key, value) {
       if (key.startsWith('__bind_')) return;
       this._rest || (this._rest = {});
       if (value == null) delete this._rest[key];
       else this._rest[key] = value;
+      this.rest.touch();
       this._applyInheritedProp(this._inheritedEl, key, value);
     }
     _applyRestToInheritedEl() {

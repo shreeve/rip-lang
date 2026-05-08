@@ -430,6 +430,13 @@ Methods named `onClick`, `onKeydown`, `onMouseenter`, etc. automatically bind to
 - lifecycle exclusion: `onError` is not auto-wired
 - after bumping `typescript`, refresh the generated DOM metadata with `bun run gen:dom`
 
+### Inherited Props (`extends <tag>`)
+
+User-facing docs: [docs/RIP-LANG.md](../docs/RIP-LANG.md) → "Inherited Props".
+Runtime entry points to grep when working on this: `_bindInheritedTarget`,
+`_setRestProp`, `_applyRestToInheritedEl`, `_inheritsTag`. Tests:
+[test/rip/components.rip](../test/rip/components.rip) under "extends ...".
+
 ### Generated DOM Tag Sets
 
 - `src/generated/dom-tags.js` is generated from TypeScript's `HTMLElementTagNameMap` and `SVGElementTagNameMap`

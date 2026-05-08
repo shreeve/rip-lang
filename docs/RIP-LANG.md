@@ -1525,6 +1525,61 @@ Card = component
 Card title: "Hello", count: 42
 ```
 
+**Inherited Props (`extends <tag>`):**
+
+A component can declare that it wraps a specific HTML element by writing
+`component extends <tag>`. Two things follow:
+
+1. **Type:** the component inherits the element's attribute type, so
+   editor tooling lets parents pass `disabled`, `aria-label`,
+   `data-id`, `@click`, etc., without each one being re-declared on the
+   component.
+2. **Runtime:** any prop the component does *not* declare itself is
+   collected into a reactive `@rest` signal and **auto-spread onto the
+   first matching tag** that appears in the render block.
+
+```coffee
+Button = component extends button
+  @variant := "primary"     # declared — handled by the component
+  render
+    button class: [@variant, @rest.class]
+      slot
+```
+
+The `class:` attribute accepts an array (or object) and flattens it via
+the same `__clsx` runtime that powers `.card.("flex-1 p-4")` — so
+`@rest.class` is forwarded as-is whether the parent passed a string,
+an array, or a `{name: bool}` object.
+
+```coffee
+# Parent
+Button variant: "secondary", class: "mt-4", disabled: true, @click: save
+  "Save"
+```
+
+What happens at the rendered `<button>`:
+
+| Source                              | How it lands                                      |
+| ----------------------------------- | ------------------------------------------------- |
+| `disabled: true`, `@click: save`    | auto-spread from `@rest` (sync, runs first)       |
+| `class: [...]`                      | explicit attr — runs second, last write wins      |
+
+This **spread-first** order is what makes class/style merging work: the
+parent's `class` enters via `@rest`, then the explicit `class: [...]`
+write overwrites it with an array that includes `@rest.class` plus the
+component's own parts. Any attribute the component does not touch
+(`disabled`, `aria-*`, `data-*`, event handlers) flows straight through.
+
+Notes:
+
+- `@rest` is a reactive `Signal` — reads in computeds and effects track
+  it, and parent updates re-fire the consumers.
+- Auto-spread targets only the **first** element whose tag matches
+  `extends <tag>`. If the render block has no matching tag, the rest
+  props are still collected but never written.
+- Declared props (`@variant` above) are removed from `@rest` — the
+  component owns them.
+
 **Methods:**
 
 ```coffee

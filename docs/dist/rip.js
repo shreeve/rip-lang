@@ -6582,6 +6582,10 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       for (const { name, isPublic } of readonlyVars)
         if (isPublic)
           publicPropNames.add(name);
+      if (inheritsTag) {
+        memberNames.add("rest");
+        reactiveMembers.add("rest");
+      }
       const prevComponentMembers = this.componentMembers;
       const prevReactiveMembers = this.reactiveMembers;
       const prevAutoEventHandlers = this._autoEventHandlers;
@@ -6635,6 +6639,9 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         for (const { name, type, value } of stateVars) {
           const ts = expandType(type) || inferLiteralType(value);
           sl.push(ts ? `  declare ${name}: Signal<${ts}>;` : `  declare ${name}: Signal<any>;`);
+        }
+        if (inheritsTag) {
+          sl.push(`  declare rest: Signal<__RipProps<'${inheritsTag}'>>;`);
         }
         for (const { name, type, value } of readonlyVars) {
           const ts = expandType(type) || inferLiteralType(value);
@@ -6767,6 +6774,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
 `);
           const extractProps = (args) => {
             const props = [];
+            const sideExprs = [];
             for (const arg of args) {
               let obj = null;
               if (this.is(arg, "object")) {
@@ -6783,8 +6791,22 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
                 for (let j = 1;j < obj.length; j++) {
                   const pair = obj[j];
                   const [, key, value] = pair;
-                  if (typeof key === "string" && !key.startsWith("@")) {
-                    const srcLine = pair.loc?.r ?? obj.loc?.r;
+                  const srcLine = pair.loc?.r ?? obj.loc?.r;
+                  if (Array.isArray(key) && key[0] === "." && key[1] === "this") {
+                    try {
+                      const val = this.emitInComponent(value, "value");
+                      sideExprs.push({ code: val, srcLine });
+                    } catch {}
+                    continue;
+                  }
+                  if (typeof key === "string" && key.startsWith("@")) {
+                    try {
+                      const val = this.emitInComponent(value, "value");
+                      sideExprs.push({ code: val, srcLine });
+                    } catch {}
+                    continue;
+                  }
+                  if (typeof key === "string") {
                     if (key.startsWith("__bind_") && key.endsWith("__")) {
                       const member = typeof value === "string" && this.reactiveMembers?.has(value) ? `this.${value}` : this.emitInComponent(value, "value");
                       props.push({ code: `${key}: ${member}`, srcLine });
@@ -6796,6 +6818,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
                 }
               }
             }
+            props.sideExprs = sideExprs;
             return props;
           };
           const extractIntrinsicProps = (args) => {
@@ -7067,6 +7090,11 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
                   constructions.push(`    };`);
                 }
               }
+              if (props.sideExprs) {
+                for (const s of props.sideExprs) {
+                  constructions.push(`    ${s.code};` + (s.srcLine != null ? ` // @rip-src:${s.srcLine}` : ""));
+                }
+              }
             } else if (typeof head2 === "string" && !CodeEmitter.GENERATORS[head2] && (TEMPLATE_TAGS.has(head2.split(/[.#]/)[0]) || /^[a-z][\w-]*$/.test(head2) && node.length > 1)) {
               const tagName = head2.split(/[.#]/)[0];
               const iProps = extractIntrinsicProps(node.slice(1));
@@ -7144,6 +7172,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           lines.push("      if (!__k.startsWith('__bind_')) this._rest[__k] = props[__k];");
         }
         lines.push("    }");
+        lines.push("    this.rest = __state(this._rest);");
       }
       for (const { name, expr } of derivedVars) {
         if (this.is(expr, "block")) {
@@ -7177,6 +7206,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         lines.push("    this._rest || (this._rest = {});");
         lines.push("    if (value == null) delete this._rest[key];");
         lines.push("    else this._rest[key] = value;");
+        lines.push("    this.rest.touch();");
         lines.push("    this._applyInheritedProp(this._inheritedEl, key, value);");
         lines.push("  }");
         lines.push("  _applyRestToInheritedEl() {");
@@ -11046,7 +11076,47 @@ ${this.indent()}}`;
         let [, valueExpr, iterators, guards] = compNode;
         return this.emit(["object-comprehension", keyVar, valueExpr, iterators, guards], context);
       }
-      let codes = pairs.map((pair) => {
+      const scanIdentCol = (srcRow, name, fromCol = 0, toCol = Infinity) => {
+        const source = this.options && this.options.source;
+        if (!source || typeof name !== "string" || !/^[A-Za-z_$][\w$]*$/.test(name))
+          return -1;
+        const lines = this._sourceLinesCache || (this._sourceLinesCache = source.split(`
+`));
+        const line = lines[srcRow];
+        if (!line)
+          return -1;
+        const re = new RegExp("\\b" + name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "g");
+        re.lastIndex = Math.max(0, fromCol);
+        let m;
+        while ((m = re.exec(line)) !== null) {
+          if (m.index >= toCol)
+            return -1;
+          return m.index;
+        }
+        return -1;
+      };
+      const scanIdentColLast = (srcRow, name, fromCol = 0, toCol = Infinity) => {
+        const source = this.options && this.options.source;
+        if (!source || typeof name !== "string" || !/^[A-Za-z_$][\w$]*$/.test(name))
+          return -1;
+        const lines = this._sourceLinesCache || (this._sourceLinesCache = source.split(`
+`));
+        const line = lines[srcRow];
+        if (!line)
+          return -1;
+        const re = new RegExp("\\b" + name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "g");
+        re.lastIndex = Math.max(0, fromCol);
+        let m, last = -1;
+        while ((m = re.exec(line)) !== null) {
+          if (m.index >= toCol)
+            break;
+          last = m.index;
+        }
+        return last;
+      };
+      let hasMethod = false;
+      let isMethod = new Array(pairs.length).fill(false);
+      let codes = pairs.map((pair, idx) => {
         if (this.is(pair, "..."))
           return `...${this.emit(pair[1], "value")}`;
         let [operator, key, value] = pair;
@@ -11074,18 +11144,78 @@ ${this.indent()}}`;
           let mIsGen = this.containsYield(mBody);
           let prefix = mIsAsync ? "async " : "";
           let star = mIsGen ? "*" : "";
+          if (value && value.loc && Array.isArray(mParams) && mParams.length) {
+            const srcRow = value.loc.r;
+            const paramsStart = value.loc.c;
+            const anchors = [];
+            let cursor = paramsStart;
+            for (const p of mParams) {
+              if (typeof p !== "string")
+                continue;
+              const col = scanIdentCol(srcRow, p, cursor);
+              if (col >= 0) {
+                anchors.push({ name: p, origLine: srcRow, origCol: col });
+                cursor = col + p.length;
+              }
+            }
+            if (anchors.length) {
+              value._anchors = (value._anchors || []).concat(anchors);
+            }
+          }
+          hasMethod = true;
+          isMethod[idx] = true;
           return `${prefix}${star}${keyCode}(${mParamList}) ${mBodyCode}`;
         }
         let valCode = this.emit(value, "value");
+        if (operator === ":" && isSimpleKey && Array.isArray(pair) && pair.loc && typeof key === "string") {
+          const col = scanIdentCol(pair.loc.r, key, 0, pair.loc.c + key.length + 1);
+          if (col >= 0) {
+            pair._anchors = (pair._anchors || []).concat([
+              { name: key, origLine: pair.loc.r, origCol: col }
+            ]);
+          }
+        }
         if (operator === "=")
           return `${keyCode} = ${valCode}`;
         if (operator === ":")
           return `${keyCode}: ${valCode}`;
-        if (keyCode === valCode && !Array.isArray(key))
+        if (keyCode === valCode && !Array.isArray(key)) {
+          if (Array.isArray(pair) && pair.loc && typeof key === "string") {
+            const col = scanIdentColLast(pair.loc.r, key, 0, pair.loc.c + 1);
+            if (col >= 0) {
+              pair._anchors = (pair._anchors || []).concat([
+                { name: key, origLine: pair.loc.r, origCol: col }
+              ]);
+            }
+          }
           return keyCode;
+        }
         return `${keyCode}: ${valCode}`;
-      }).join(", ");
-      return `{${codes}}`;
+      });
+      if (!hasMethod)
+        return `{${codes.join(", ")}}`;
+      let parts = [];
+      let onOpenLine = [];
+      for (let i = 0;i < codes.length; i++) {
+        if (isMethod[i] || i > 0 && isMethod[i - 1]) {
+          if (onOpenLine.length && parts.length === 0) {
+            parts.push(onOpenLine.join(", "));
+            onOpenLine = [];
+          }
+          parts.push(codes[i]);
+        } else if (parts.length === 0) {
+          onOpenLine.push(codes[i]);
+        } else {
+          parts.push(codes[i]);
+        }
+      }
+      if (onOpenLine.length && parts.length === 0)
+        parts.push(onOpenLine.join(", "));
+      let head0 = parts[0];
+      let rest = parts.slice(1);
+      return rest.length === 0 ? `{${head0}}` : `{${head0},
+${rest.join(`,
+`)}}`;
     }
     emitMap(head, pairs, context) {
       if (pairs.length === 0)
@@ -13454,7 +13584,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.15.4";
-  var BUILD_DATE = "2026-05-02@19:25:05GMT";
+  var BUILD_DATE = "2026-05-08@19:29:32GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -14024,78 +14154,83 @@ ${indented}`);
   makeProxy = function(target) {
     let handler, proxy;
     proxy = null;
-    handler = { get(target2, prop) {
-      let fn, sig, val;
-      if (prop === Symbol.for("stash"))
-        return true;
-      if (prop === Symbol.for("raw"))
-        return target2;
-      if (typeof prop === "symbol")
-        return Reflect.get(target2, prop);
-      if (prop === "length" && Array.isArray(target2)) {
-        keysSignal(target2).value;
-        return target2.length;
-      }
-      if (!_depth && isPathKey(prop)) {
-        return stashGet(proxy, prop);
-      }
-      fn = stashMethodFn(proxy, prop);
-      if (fn)
-        return fn;
-      sig = getSignal(target2, prop);
-      val = sig.value;
-      if (val != null && typeof val === "object")
-        return wrapDeep(val);
-      return val;
-    }, set(target2, prop, value) {
-      let i, newLen, old, oldLen, r, sig;
-      if (!_depth && isPathKey(prop)) {
-        stashSet(proxy, prop, value);
-        return true;
-      }
-      if (Array.isArray(target2) && prop === "length") {
-        oldLen = target2.length;
-        newLen = +value;
-        target2.length = newLen;
-        if (newLen !== oldLen) {
-          if (target2[Symbol.for("signals")]) {
-            for (let i2 of ((s, e) => Array.from({ length: Math.max(0, Math.abs(e - s)) }, (_, i3) => s + i3 * (s <= e ? 1 : -1)))(Math.min(oldLen, newLen), Math.max(oldLen, newLen))) {
-              sig = target2[Symbol.for("signals")].get(String(i2));
-              if (sig != null)
-                sig.value = target2[i2];
-            }
-          }
-          keysSignal(target2).value = ++_keysVersion;
-          _writeVersion.value++;
+    handler = {
+      get(target2, prop) {
+        let fn, sig, val;
+        if (prop === Symbol.for("stash"))
+          return true;
+        if (prop === Symbol.for("raw"))
+          return target2;
+        if (typeof prop === "symbol")
+          return Reflect.get(target2, prop);
+        if (prop === "length" && Array.isArray(target2)) {
+          keysSignal(target2).value;
+          return target2.length;
         }
+        if (!_depth && isPathKey(prop)) {
+          return stashGet(proxy, prop);
+        }
+        fn = stashMethodFn(proxy, prop);
+        if (fn)
+          return fn;
+        sig = getSignal(target2, prop);
+        val = sig.value;
+        if (val != null && typeof val === "object")
+          return wrapDeep(val);
+        return val;
+      },
+      set(target2, prop, value) {
+        let i, newLen, old, oldLen, r, sig;
+        if (!_depth && isPathKey(prop)) {
+          stashSet(proxy, prop, value);
+          return true;
+        }
+        if (Array.isArray(target2) && prop === "length") {
+          oldLen = target2.length;
+          newLen = +value;
+          target2.length = newLen;
+          if (newLen !== oldLen) {
+            if (target2[Symbol.for("signals")]) {
+              for (let i2 of ((s, e) => Array.from({ length: Math.max(0, Math.abs(e - s)) }, (_, i3) => s + i3 * (s <= e ? 1 : -1)))(Math.min(oldLen, newLen), Math.max(oldLen, newLen))) {
+                sig = target2[Symbol.for("signals")].get(String(i2));
+                if (sig != null)
+                  sig.value = target2[i2];
+              }
+            }
+            keysSignal(target2).value = ++_keysVersion;
+            _writeVersion.value++;
+          }
+          return true;
+        }
+        old = target2[prop];
+        r = value?.[Symbol.for("raw")] ? value[Symbol.for("raw")] : value;
+        if (r === old)
+          return true;
+        target2[prop] = r;
+        if (target2[Symbol.for("signals")]?.has(prop)) {
+          target2[Symbol.for("signals")].get(prop).value = r;
+        }
+        if (old === undefined && r !== undefined) {
+          keysSignal(target2).value = ++_keysVersion;
+        }
+        _writeVersion.value++;
         return true;
-      }
-      old = target2[prop];
-      r = value?.[Symbol.for("raw")] ? value[Symbol.for("raw")] : value;
-      if (r === old)
-        return true;
-      target2[prop] = r;
-      if (target2[Symbol.for("signals")]?.has(prop)) {
-        target2[Symbol.for("signals")].get(prop).value = r;
-      }
-      if (old === undefined && r !== undefined) {
+      },
+      deleteProperty(target2, prop) {
+        let sig;
+        delete target2[prop];
+        sig = target2[Symbol.for("signals")]?.get(prop);
+        if (sig != null)
+          sig.value = undefined;
         keysSignal(target2).value = ++_keysVersion;
+        _writeVersion.value++;
+        return true;
+      },
+      ownKeys(target2) {
+        keysSignal(target2).value;
+        return Reflect.ownKeys(target2);
       }
-      _writeVersion.value++;
-      return true;
-    }, deleteProperty(target2, prop) {
-      let sig;
-      delete target2[prop];
-      sig = target2[Symbol.for("signals")]?.get(prop);
-      if (sig != null)
-        sig.value = undefined;
-      keysSignal(target2).value = ++_keysVersion;
-      _writeVersion.value++;
-      return true;
-    }, ownKeys(target2) {
-      keysSignal(target2).value;
-      return Reflect.ownKeys(target2);
-    } };
+    };
     proxy = new Proxy(target, handler);
     PROXIES.set(target, proxy);
     return proxy;
@@ -14441,9 +14576,13 @@ ${indented}`);
     };
   };
   _attachDispose = function(target, disposer) {
-    Object.defineProperty(target, "dispose", { value() {
-      return disposer?.();
-    }, configurable: true, writable: true });
+    Object.defineProperty(target, "dispose", {
+      value() {
+        return disposer?.();
+      },
+      configurable: true,
+      writable: true
+    });
     return target;
   };
   _proxy = function(out, source, disposer) {
@@ -14451,11 +14590,14 @@ ${indented}`);
     obj = { read() {
       return out.read();
     } };
-    Object.defineProperty(obj, "value", { get() {
-      return out.value;
-    }, set(v) {
-      return source.value = v;
-    } });
+    Object.defineProperty(obj, "value", {
+      get() {
+        return out.value;
+      },
+      set(v) {
+        return source.value = v;
+      }
+    });
     return _attachDispose(obj, disposer);
   };
   var delay = function(ms, source) {
@@ -14556,68 +14698,80 @@ ${indented}`);
       }
       return _result;
     };
-    return { read(path) {
-      return files.get(path);
-    }, write(path, content) {
-      let isNew;
-      isNew = !files.has(path);
-      files.set(path, content);
-      compiled.delete(path);
-      return notify(isNew ? "create" : "change", path);
-    }, del(path) {
-      files.delete(path);
-      compiled.delete(path);
-      return notify("delete", path);
-    }, exists(path) {
-      return files.has(path);
-    }, size() {
-      return files.size;
-    }, list(dir = "") {
-      let path, prefix, rest, result;
-      result = [];
-      prefix = dir ? dir + "/" : "";
-      for (let [path2] of files) {
-        if (path2.startsWith(prefix)) {
-          rest = path2.slice(prefix.length);
-          if (rest.includes("/"))
-            continue;
-          result.push(path2);
+    return {
+      read(path) {
+        return files.get(path);
+      },
+      write(path, content) {
+        let isNew;
+        isNew = !files.has(path);
+        files.set(path, content);
+        compiled.delete(path);
+        return notify(isNew ? "create" : "change", path);
+      },
+      del(path) {
+        files.delete(path);
+        compiled.delete(path);
+        return notify("delete", path);
+      },
+      exists(path) {
+        return files.has(path);
+      },
+      size() {
+        return files.size;
+      },
+      list(dir = "") {
+        let path, prefix, rest, result;
+        result = [];
+        prefix = dir ? dir + "/" : "";
+        for (let [path2] of files) {
+          if (path2.startsWith(prefix)) {
+            rest = path2.slice(prefix.length);
+            if (rest.includes("/"))
+              continue;
+            result.push(path2);
+          }
         }
+        return result;
+      },
+      listAll(dir = "") {
+        let path, prefix, result;
+        result = [];
+        prefix = dir ? dir + "/" : "";
+        for (let [path2] of files) {
+          if (path2.startsWith(prefix))
+            result.push(path2);
+        }
+        return result;
+      },
+      load(obj) {
+        let content, key;
+        const _result = [];
+        for (let key2 in obj) {
+          let content2 = obj[key2];
+          files.set(key2, content2);
+          _result.push(compiled.delete(key2));
+        }
+        return _result;
+      },
+      watch(fn) {
+        let disposed;
+        watchers.add(fn);
+        disposed = false;
+        return function() {
+          if (disposed)
+            return;
+          disposed = true;
+          return watchers.delete(fn);
+        };
+      },
+      getCompiled(path) {
+        return compiled.get(path);
+      },
+      setCompiled(path, result) {
+        return compiled.set(path, result);
       }
-      return result;
-    }, listAll(dir = "") {
-      let path, prefix, result;
-      result = [];
-      prefix = dir ? dir + "/" : "";
-      for (let [path2] of files) {
-        if (path2.startsWith(prefix))
-          result.push(path2);
-      }
-      return result;
-    }, load(obj) {
-      let content, key;
-      const _result = [];
-      for (let key2 in obj) {
-        let content2 = obj[key2];
-        files.set(key2, content2);
-        _result.push(compiled.delete(key2));
-      }
-      return _result;
-    }, watch(fn) {
-      let disposed;
-      watchers.add(fn);
-      disposed = false;
-      return function() {
-        if (disposed)
-          return;
-        disposed = true;
-        return watchers.delete(fn);
-      };
-    }, getCompiled(path) {
-      return compiled.get(path);
-    }, setCompiled(path, result) {
-      return compiled.set(path, result);
-    } };
+    };
   };
   fileToPattern = function(rel) {
     let pattern;
@@ -14836,34 +14990,52 @@ ${indented}`);
     };
     if (typeof document !== "undefined")
       document.addEventListener("click", onClick);
-    router = { push(url) {
-      return resolve(url) ? history.pushState(null, "", writeUrl(_normalizedUrl.read())) : undefined;
-    }, replace(url) {
-      return resolve(url) ? history.replaceState(null, "", writeUrl(_normalizedUrl.read())) : undefined;
-    }, back() {
-      return history.back();
-    }, forward() {
-      return history.forward();
-    }, current: undefined, path: undefined, params: undefined, route: undefined, layouts: undefined, query: undefined, hash: undefined, navigating: undefined, onNavigate(cb) {
-      navCallbacks.add(cb);
-      return function() {
-        return navCallbacks.delete(cb);
-      };
-    }, rebuild() {
-      return tree = buildRoutes(components, root);
-    }, routes: undefined, init() {
-      resolve(readUrl());
-      return router;
-    }, destroy() {
-      if (typeof window !== "undefined")
-        window.removeEventListener("popstate", onPopState);
-      if (typeof document !== "undefined")
-        document.removeEventListener("click", onClick);
-      unwatchComponents?.();
-      unwatchComponents = null;
-      _navigating?.dispose?.();
-      return navCallbacks.clear();
-    } };
+    router = {
+      push(url) {
+        return resolve(url) ? history.pushState(null, "", writeUrl(_normalizedUrl.read())) : undefined;
+      },
+      replace(url) {
+        return resolve(url) ? history.replaceState(null, "", writeUrl(_normalizedUrl.read())) : undefined;
+      },
+      back() {
+        return history.back();
+      },
+      forward() {
+        return history.forward();
+      },
+      current: undefined,
+      path: undefined,
+      params: undefined,
+      route: undefined,
+      layouts: undefined,
+      query: undefined,
+      hash: undefined,
+      navigating: undefined,
+      onNavigate(cb) {
+        navCallbacks.add(cb);
+        return function() {
+          return navCallbacks.delete(cb);
+        };
+      },
+      rebuild() {
+        return tree = buildRoutes(components, root);
+      },
+      routes: undefined,
+      init() {
+        resolve(readUrl());
+        return router;
+      },
+      destroy() {
+        if (typeof window !== "undefined")
+          window.removeEventListener("popstate", onPopState);
+        if (typeof document !== "undefined")
+          document.removeEventListener("click", onClick);
+        unwatchComponents?.();
+        unwatchComponents = null;
+        _navigating?.dispose?.();
+        return navCallbacks.clear();
+      }
+    };
     _current = __computed(function() {
       return { path: _path.value, params: _params.value, route: _route.value, layouts: _layouts.value, query: _query.value, hash: _hash.value };
     });
@@ -14888,11 +15060,14 @@ ${indented}`);
     Object.defineProperty(router, "hash", { get() {
       return _hash.value;
     } });
-    Object.defineProperty(router, "navigating", { get() {
-      return _navigating.value;
-    }, set(v) {
-      return _navigating.value = v;
-    } });
+    Object.defineProperty(router, "navigating", {
+      get() {
+        return _navigating.value;
+      },
+      set(v) {
+        return _navigating.value = v;
+      }
+    });
     Object.defineProperty(router, "routes", { get() {
       return tree.routes;
     } });
@@ -15395,50 +15570,54 @@ ${indented}`);
       })();
     };
     started = false;
-    renderer = { start() {
-      if (started)
+    renderer = {
+      start() {
+        if (started)
+          return renderer;
+        started = true;
+        disposeEffect = __effect(function() {
+          let current;
+          current = router.current;
+          return current.route ? mountRoute(current) : undefined;
+        });
+        unwatchSources = components?.watch(function(event, path) {
+          return (Array.isArray(["change", "delete"]) ? ["change", "delete"].includes(event) : (event in ["change", "delete"])) ? invalidateResolver(path) : undefined;
+        });
+        router.init();
         return renderer;
-      started = true;
-      disposeEffect = __effect(function() {
-        let current;
-        current = router.current;
-        return current.route ? mountRoute(current) : undefined;
-      });
-      unwatchSources = components?.watch(function(event, path) {
-        return (Array.isArray(["change", "delete"]) ? ["change", "delete"].includes(event) : (event in ["change", "delete"])) ? invalidateResolver(path) : undefined;
-      });
-      router.init();
-      return renderer;
-    }, stop() {
-      let _, url;
-      if (!started)
-        return;
-      started = false;
-      unmount();
-      if (disposeEffect) {
-        disposeEffect();
-        disposeEffect = null;
-      }
-      unwatchSources?.();
-      unwatchSources = null;
-      if (resolver?.blobUrls) {
-        for (let _2 in resolver.blobUrls) {
-          if (!Object.hasOwn(resolver.blobUrls, _2))
-            continue;
-          let url2 = resolver.blobUrls[_2];
-          try {
-            URL.revokeObjectURL(url2);
-          } catch {}
+      },
+      stop() {
+        let _, url;
+        if (!started)
+          return;
+        started = false;
+        unmount();
+        if (disposeEffect) {
+          disposeEffect();
+          disposeEffect = null;
         }
-        resolver.blobUrls = {};
+        unwatchSources?.();
+        unwatchSources = null;
+        if (resolver?.blobUrls) {
+          for (let _2 in resolver.blobUrls) {
+            if (!Object.hasOwn(resolver.blobUrls, _2))
+              continue;
+            let url2 = resolver.blobUrls[_2];
+            try {
+              URL.revokeObjectURL(url2);
+            } catch {}
+          }
+          resolver.blobUrls = {};
+        }
+        return container.innerHTML = "";
+      },
+      remount(force = false) {
+        let current, forceFlag;
+        forceFlag = typeof force === "object" ? !!force.force : !!force;
+        current = router.current;
+        return current.route ? mountRoute(current, forceFlag) : undefined;
       }
-      return container.innerHTML = "";
-    }, remount(force = false) {
-      let current, forceFlag;
-      forceFlag = typeof force === "object" ? !!force.force : !!force;
-      current = router.current;
-      return current.route ? mountRoute(current, forceFlag) : undefined;
-    } };
+    };
     return renderer;
   };
   connectWatch = function(url) {
@@ -15573,12 +15752,25 @@ ${indented}`);
     }
     if (app.data.title)
       document.title = app.data.title;
-    router = createRouter(appComponents, { root: "components", base: appBase, hash, onError(err) {
-      return console.error(`[Rip] Error ${err.status}: ${err.message || err.path}`);
-    } });
-    renderer = createRenderer({ router, app, components: appComponents, resolver, compile: compile2, target, onError(err) {
-      return console.error(`[Rip] ${err.message}`, err.error);
-    } });
+    router = createRouter(appComponents, {
+      root: "components",
+      base: appBase,
+      hash,
+      onError(err) {
+        return console.error(`[Rip] Error ${err.status}: ${err.message || err.path}`);
+      }
+    });
+    renderer = createRenderer({
+      router,
+      app,
+      components: appComponents,
+      resolver,
+      compile: compile2,
+      target,
+      onError(err) {
+        return console.error(`[Rip] ${err.message}`, err.error);
+      }
+    });
     renderer.start();
     watchDisposer = null;
     if (bundle.data?.watch) {
@@ -15681,11 +15873,14 @@ ${indented}`);
   _ariaPopupGuard = function(delay2 = 250) {
     let blockedUntil;
     blockedUntil = 0;
-    return { block(ms = delay2) {
-      return blockedUntil = Date.now() + ms;
-    }, canOpen() {
-      return Date.now() >= blockedUntil;
-    } };
+    return {
+      block(ms = delay2) {
+        return blockedUntil = Date.now() + ms;
+      },
+      canOpen() {
+        return Date.now() >= blockedUntil;
+      }
+    };
   };
   _ariaBindPopover = function(open, popover, setOpen, source = null) {
     let currentFocus, desired, el, get, onToggle, opts, restoreEl, restoreFocus, shown, src, syncState;
