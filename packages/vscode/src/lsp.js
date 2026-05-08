@@ -132,6 +132,7 @@ connection.onInitialize(async (params) => {
       textDocumentSync: TextDocumentSyncKind.Full,
       completionProvider: {
         triggerCharacters: ['.', '"', "'", '/', ':', ' ', '@'],
+        resolveProvider: true,
       },
       hoverProvider: true,
       definitionProvider: true,
@@ -2174,25 +2175,15 @@ connection.onCompletion((params) => {
     const vf = toVirtual(fp);
     const result = {
       isIncomplete: false,
-      items: r.entries.map((e) => {
-        const item = {
-          label: e.name,
-          kind: tsToLspKind(e.kind),
-          sortText: e.sortText,
-        };
-        try {
-          const d = service.getCompletionEntryDetails(vf, offset, e.name, undefined, undefined, undefined, undefined);
-          if (d) {
-            const display = unwrapReactiveType(ts.displayPartsToString(d.displayParts));
-            item.detail = display.replace(/\((\w+)\)\s*\S+\./, '($1) ');
-            if (display.includes('?:')) item.label = e.name + '?';
-            if (d.documentation?.length) {
-              item.documentation = ts.displayPartsToString(d.documentation);
-            }
-          }
-        } catch {}
-        return item;
-      }),
+      items: r.entries.map((e) => ({
+        label: e.name,
+        kind: tsToLspKind(e.kind),
+        sortText: e.sortText,
+        // Defer the expensive getCompletionEntryDetails() call to
+        // onCompletionResolve — it only runs for the focused item, not
+        // for every entry on every keystroke.
+        data: { vf, offset, name: e.name },
+      })),
     };
 
     // Augment with auto-import suggestions from our export index for any
@@ -2371,6 +2362,27 @@ function buildImportEdit(source, spec, name) {
     newText: `${needsBlankBefore ? '\n' : ''}import { ${name} } from '${spec}'\n${needsBlankAfter ? '\n' : ''}`,
   };
 }
+
+// Lazy detail resolution. The editor only calls this for items the user
+// focuses in the completion list, so we can afford the expensive
+// getCompletionEntryDetails call here without blocking every keystroke.
+connection.onCompletionResolve((item) => {
+  const data = item.data;
+  if (!data || !service) return item;
+  try {
+    patchTypes();
+    const d = service.getCompletionEntryDetails(data.vf, data.offset, data.name, undefined, undefined, undefined, undefined);
+    if (d) {
+      const display = unwrapReactiveType(ts.displayPartsToString(d.displayParts));
+      item.detail = (item.detail ? item.detail + '\n' : '') + display.replace(/\((\w+)\)\s*\S+\./, '($1) ');
+      if (display.includes('?:') && !item.label.endsWith('?')) item.label = data.name + '?';
+      if (d.documentation?.length) {
+        item.documentation = ts.displayPartsToString(d.documentation);
+      }
+    }
+  } catch {}
+  return item;
+});
 
 connection.onHover((params) => {
   const fp = uriToPath(params.textDocument.uri);
