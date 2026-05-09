@@ -1,0 +1,4 @@
+export APP_NAME = 'Rip'
+
+export def title(page:: string):: string
+  "#{page} - #{APP_NAME}"

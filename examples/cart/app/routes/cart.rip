@@ -1,12 +1,12 @@
 import { Button } from '../components/button.rip'
+import { title } from '../config.rip'
 
 export Cart = component
   cart ~= @app.data.cart
   status:: 'idle' | 'loading' | 'success' | 'error' := 'idle'
   error := ''
 
-  mounted: ->
-    document.title = 'Cart - Rip'
+  mounted: -> document.title = title 'Cart'
 
   placeOrder: ->
     status = 'loading'
