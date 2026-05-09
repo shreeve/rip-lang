@@ -8,6 +8,7 @@ historical, not a priority order.
 - [RFC 3 — App framework globals under a single `Rip` namespace](#rfc-3-should-the-rip-app-frameworks-ambient-globals-live-under-a-single-rip-namespace)
 - [RFC 4 — Tracking property accesses on `for`-loop iteration variables](#rfc-4-should-the-compiler-track-property-accesses-on-for-loop-iteration-variables)
 - [RFC 5 — Explicit prop optionality with `?::`](#rfc-5-explicit-prop-optionality-with-)
+- [RFC 6 — Routing ergonomics](#rfc-6-routing-ergonomics)
 
 ---
 
@@ -364,3 +365,123 @@ These should be removed from the spec. They are documented but effectively non-f
 - Remove the suffix branches from `expandSuffixes()` in `src/dts.js` (the `::` → `:` substitution stays — it's load-bearing); also strip the now-unused suffix expansions and update the 18 call sites accordingly
 - Remove the Optionality Modifiers section from `docs/RIP-TYPES.md` and the corresponding sigil table entries (`?`, `??`, `!`)
 - Rename `data.predicate` → `data.optional` across lexer/compiler/types/schema — the current name is a CoffeeScript holdover for "predicate methods" (`empty?` → `isEmpty`); the comments at `src/lexer.js` lines 27, 523, 665 still describe that convention, but no `isEmpty` rewrite exists anywhere in the compiler. The flag is only used for existence checks and optionality.
+
+
+## RFC 6: routing ergonomics
+
+Rip's app framework today gives you file-based routes and document-level `<a>` interception. Two ergonomic features common in modern routers are still missing: **highlighting the active link** (so the current page can be styled distinctly in a nav bar) and **catching typos in route paths** (`<a href: "/crat">` should be a compile error in a typed app, not a 404 at runtime). Neither is essential — plenty of routers ship without one or both — but both are the kind of nice-to-have that nudges a routing library from "functional" to "pleasant." This RFC proposes how Rip should add them.
+
+### Background — what the router already provides
+
+`createRouter` in `packages/app/index.rip` already does three things relevant here. First, it intercepts plain `<a>` clicks at the document level and routes same-origin links through SPA navigation, with a skip list (`target="_blank"`, `[download]`, `[data-router-ignore]`, cross-origin, links outside `base`) for cases that should fall through to the browser. Second, it tracks `router.path` as a reactive signal that updates on every navigation. Third, it exposes `router.push(url)` and `router.replace(url)` for programmatic navigation — see [packages/app/index.rip](packages/app/index.rip#L786-L791). So this RFC isn't proposing a new navigation primitive; it's proposing two ergonomic features that build on what's already there.
+
+### Proposal
+
+**1. Auto `aria-current` on the active anchor.**
+
+Subscribe an effect to `router.path` inside `createRouter`. On every change, walk `[href]` anchors within the router's `base`, normalize their hrefs (strip origin, strip `base`, strip `?query` and `#fragment`, decode, trim trailing slash) and compare to the current path:
+
+- **Exact match** → `aria-current="page"` (the standard "this is the current page" value)
+- **Prefix match** (current path starts with the link's path + `/`) → `aria-current="true"` (HTML's standard "current within this section" value, used by `<a href="/blog">` when on `/blog/123`)
+
+Reuse the click-interception skip-list verbatim so cross-origin / `[download]` / `data-router-ignore` anchors are left alone. Track "we set this" with a `WeakSet` so a manually-set `aria-current` value is never clobbered. Removing the attribute when an anchor is no longer active is symmetric. In hash mode (`opts.hash: true`), normalization reads from the URL hash instead of the pathname — the rest is identical.
+
+Approx. 25 lines hooked to the existing reactive infrastructure. The user gets to write:
+
+```rip
+nav
+  a href: "/", "Home"
+  a href: "/cart", "Cart (#{cart.count})"
+  a href: "/users/#{user.id}", "Profile"
+```
+
+```css
+nav a[aria-current="page"] { color: red; font-weight: bold; }     /* exact: current page */
+nav a[aria-current="true"] { color: red; }                        /* prefix: current section */
+```
+
+Query strings and fragments are stripped before comparison, so `<a href="/cart?utm=foo">` is active when `router.path === "/cart"`. No per-link `'aria-current': 'page' if @router.path is '/cart' else null` boilerplate, no manual subscription to `router.path`, and the feature works on third-party HTML the framework never rendered (markdown content, CMS output, embedded widgets).
+
+**2. Type the `href` attribute on `<a>` against a generated `__RipRoutes` union.**
+
+At type-check time, walk the project's routes directory (mirroring `findStashFile` / `__RipStash` in `src/typecheck.js` lines 22–86 and 1264–1290). The directory defaults to `<appDir>/routes/` to match the `serve()` middleware's default — see [packages/server/middleware.rip](packages/server/middleware.rip#L727-L728), where `routes` is read off the serve options and the on-disk files are mounted under the `components/` key in the bundle (which is why `createRouter` reads from `root: 'components'` while the disk layout uses `routes/`). The path should be readable from `rip.json` (new `"routes"` field, default `"routes"`) so the type-checker stays in sync if a project overrides it.
+
+Mirror the runtime's existing rules when walking: skip `_-prefixed directories` and `_-prefixed files` (the same exclusion `buildRoutes` applies in [packages/app/index.rip](packages/app/index.rip#L639), so `_layout.rip` and helper files don't pollute `__RipRoutes`).
+
+Convert each route file path to a TypeScript template-literal pattern, and emit:
+
+```ts
+type __RipRoutes =
+  | "/"
+  | "/cart"
+  | `/users/${string}`
+  | `/blog/${string}/${string}`
+  | `/admin/${string}`;
+```
+
+Splice it into the project's virtual TS at the entry-file anchor (same mechanism `__RipStash` already uses) and update the `a` entry of `__RipElementMap` in `src/dts.js` so `href` becomes `__RipRoutes | __ExternalHref`, where `__ExternalHref` enumerates the non-route URL shapes by prefix:
+
+```ts
+type __ExternalHref =
+  | `https://${string}`
+  | `http://${string}`
+  | `mailto:${string}`
+  | `tel:${string}`
+  | `#${string}`;   // bare fragment — same-page anchor
+```
+
+This preserves real type safety: `"/cart"` checks against `__RipRoutes`, `"https://github.com"` checks against `__ExternalHref`, but `"/crat"` matches *neither* and produces a type error — exactly what we want. The rare cases that fall outside this set (protocol-relative `//cdn.example.com`, exotic schemes like `chrome://`, etc.) need a one-line cast (`href: "//cdn.example.com" as __RipRoutes`) or `data-router-ignore`. That's a worthwhile trade for catching real route typos.
+
+The same type should apply to the argument of `router.push` / `router.replace` so programmatic navigation gets the same validation as link clicks. (`router.push` likely wants `__RipRoutes` only, since pushing an external URL through SPA navigation doesn't make sense — that's a `window.location.href = ...` operation.)
+
+Typed apps then see squiggles on `<a href: "/crat">` and on `@router.push "/crat"`, autocomplete on route literals at both sites, and a refactor-safety net when route files are renamed. Untyped apps see no change.
+
+**3. Document the existing `data-router-ignore` opt-out.**
+
+It already works; it's just not in the public surface yet. Adding it to the framework's docs is the only "new" thing here.
+
+**4. Scroll restoration.**
+
+Every SPA router has to decide what happens to scroll position on navigation. Today, `createRouter` does nothing — the back button leaves you wherever you were on the new page, which is wrong almost everywhere. Match SvelteKit's defaults:
+
+- **New navigation** (`router.push` or a link click) → scroll to top.
+- **Back / forward** (popstate) → restore the scroll position saved in `history.state`.
+- **Same-document `#fragment` link** → scroll to the element with that ID (browser default; just don't override it).
+- **Opt-out** → `data-router-noscroll` on a link, or `router.push(url, noScroll: true)` programmatically.
+
+Enabled automatically. Doing nothing is a worse default than "scroll to top," and the override surface for the rare "don't scroll" case (a tab switcher that updates the URL without changing what's on screen) is small. Implementation is roughly: capture `window.scrollY` into `history.state` before each `pushState`, restore it on `popstate`, and reset to `(0, 0)` on `pushState` unless the opt-out is set.
+
+### What about programmatic navigation?
+
+Programmatic navigation (a successful async action that should redirect the user, like `await login(); router.push '/dashboard'`) is the obvious companion case to clicking a link. The good news: **Rip already has it.** `router.push(url)` and `router.replace(url)` are stable methods on the router object that's already passed to every component as `@router`. The replacement-vs-push distinction (login redirect that shouldn't appear in back-button history → `replace`; normal nav → `push`) lives there, where it belongs.
+
+### What this RFC does *not* propose, and why
+
+- **A `Link` component.** Most framework UIs ship one (TanStack, Vue, Solid, React Router); SvelteKit doesn't, and Rip should follow SvelteKit. A typed-only `Link` would be the first place in Rip where adding types changes the source idiom rather than just validating it — a divergence not paid anywhere else (`::`, `rip.json strict`, schemas all validate an unchanged API). It also wouldn't help markdown, CMS output, or third-party widgets, which all emit `<a>`. Type safety on the route value can be done on the `href` attribute directly.
+- **A `data-router-active-class` attribute.** `aria-current="page"` plus `[aria-current="page"]` in CSS covers the common case. A custom class is usually wanted for prefix-match active state (`/blog` styled active on `/blog/*`), which is a separate feature with separate rules — defer.
+- **A `data-router-replace` attribute.** Programmatic replace already exists via `router.replace`; click-time replace has no compelling use case.
+
+### Caveats of the template-literal approach
+
+Distinct from the external-URL story above, the `__RipRoutes` union itself is loose on dynamic segments — `${string}` accepts any string, including the empty string and strings containing slashes:
+
+- `<a href: "/users/">` type-checks (matches `` `/users/${string}` ``); the runtime would 404 it.
+- `<a href: "/users/foo/bar">` type-checks against `/users/${string}` even though `[id]` is conceptually one segment.
+- Catch-all routes (`[...rest]`) type as `` `/admin/${string}` ``, which over-accepts but never under-accepts.
+
+Fully tight per-segment typing requires the TanStack-style approach: type each route as `{ to: "/users/$id", params: { id: string } }`, separating the path template from the params. That changes the source idiom — `<a href: "/users/#{id}">` becomes `<a href: route("/users/$id", id: id)>` or similar — which is the typed/untyped divergence this RFC is explicitly trying to avoid. The proposal here trades segment-shape precision for source-form parity. If the looseness causes real bugs in practice, a follow-up RFC can layer per-segment validation on (the underlying route tree is already known at type-check time), but ship the prefix-discriminated version first and see whether the gap matters.
+
+The `aria-current` walker is `O(n_anchors)` per route change. For typical nav bars with tens of links this is invisible; on pages with thousands of anchors a route-indexed cache or `IntersectionObserver`-scoped walk would handle it. Not a v1 concern.
+
+### Effect on untyped apps
+
+**Behavior changes: `aria-current` is set automatically on active anchors, and scroll position is managed automatically on navigation. Surface change: none.**
+
+No new global, no new component, no new import. Existing `<a href>` markup is unchanged.
+
+- Active-link styling: a user who wants to suppress auto-`aria-current` on a specific link can set it manually to any other value (the `WeakSet` keeps the framework from overriding it) or add `data-router-ignore`.
+- Scroll restoration: matches SvelteKit defaults — top on push, restore on back/forward, browser default on `#fragment`. Apps that intentionally update the URL without changing the visible region (tab switchers, filter bars, sub-route swaps inside a scrolled container) opt out per-link with `data-router-noscroll`, or programmatically with `router.push(url, noScroll: true)`. Both are net-new attributes/options; nothing already in the codebase changes meaning.
+
+### Effect on typed apps
+
+The type pipeline gains `findRoutesDir` and `buildRoutesType` in `src/typecheck.js`, and `src/dts.js` gains an `__RipAnchorAttrs` slot in `__RipElementMap` plus typed signatures for `router.push` / `router.replace`. Both follow the existing `__RipStash` precedent. `<a href: "/cart">` and `@router.push "/cart"` in a typed file both validate against the project's actual route tree, with no migration and no new syntax.
