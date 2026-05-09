@@ -373,7 +373,7 @@ Rip's app framework today gives you file-based routes and document-level `<a>` i
 
 ### Background — what the router already provides
 
-`createRouter` in `packages/app/index.rip` already does three things relevant here. First, it intercepts plain `<a>` clicks at the document level and routes same-origin links through SPA navigation, with a skip list (`target="_blank"`, `[download]`, `[data-router-ignore]`, cross-origin, links outside `base`) for cases that should fall through to the browser. Second, it tracks `router.path` as a reactive signal that updates on every navigation. Third, it exposes `router.push(url)` and `router.replace(url)` for programmatic navigation — see [packages/app/index.rip](packages/app/index.rip#L786-L791). So this RFC isn't proposing a new navigation primitive; it's proposing two ergonomic features that build on what's already there.
+`createRouter` in `packages/app/index.rip` already does three things relevant here. First, it intercepts plain `<a>` clicks at the document level and routes same-origin links through SPA navigation, with a skip list (`target="_blank"`, `[download]`, `[data-router-ignore]`, cross-origin, links outside `base`) for cases that should fall through to the browser. Second, it tracks `router.path` as a reactive signal that updates on every navigation. Third, it exposes `router.push(url)` and `router.replace(url)` for programmatic navigation. So this RFC isn't proposing a new navigation primitive; it's proposing two ergonomic features that build on what's already there.
 
 ### Proposal
 
@@ -404,9 +404,9 @@ Query strings and fragments are stripped before comparison, so `<a href="/cart?u
 
 **2. Type the `href` attribute on `<a>` against a generated `__RipRoutes` union.**
 
-At type-check time, walk the project's routes directory (mirroring `findStashFile` / `__RipStash` in `src/typecheck.js` lines 22–86 and 1264–1290). The directory defaults to `<appDir>/routes/` to match the `serve()` middleware's default — see [packages/server/middleware.rip](packages/server/middleware.rip#L727-L728), where `routes` is read off the serve options and the on-disk files are mounted under the `components/` key in the bundle (which is why `createRouter` reads from `root: 'components'` while the disk layout uses `routes/`). The path should be readable from `rip.json` (new `"routes"` field, default `"routes"`) so the type-checker stays in sync if a project overrides it.
+At type-check time, walk the project's routes directory (mirroring `findStashFile` / `__RipStash` in [src/typecheck.js](src/typecheck.js)). The directory defaults to `<appDir>/routes/` to match the `serve()` middleware's default — see [packages/server/middleware.rip](packages/server/middleware.rip), where `routes` is read off the serve options and the on-disk files are mounted under the `components/` key in the bundle (which is why `createRouter` reads from `root: 'components'` while the disk layout uses `routes/`). The path should be readable from `rip.json` (new `"routes"` field, default `"routes"`) so the type-checker stays in sync if a project overrides it.
 
-Mirror the runtime's existing rules when walking: skip `_-prefixed directories` and `_-prefixed files` (the same exclusion `buildRoutes` applies in [packages/app/index.rip](packages/app/index.rip#L639), so `_layout.rip` and helper files don't pollute `__RipRoutes`).
+Mirror the runtime's existing rules when walking: skip `_-prefixed directories` and `_-prefixed files` (the same exclusion `buildRoutes` applies in [packages/app/index.rip](packages/app/index.rip), so `_layout.rip` and helper files don't pollute `__RipRoutes`).
 
 Convert each route file path to a TypeScript template-literal pattern, and emit:
 

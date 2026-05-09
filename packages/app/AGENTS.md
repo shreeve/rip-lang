@@ -24,6 +24,13 @@ All exports are pure user-land Rip code — `index.rip` does not extend
 the compiler. It uses the language's primitives (`:=`, `~=`, `~>`,
 `component`, `render`) the same way any user's app would.
 
+**Router note — `routes/` vs. `components/`.** `createRouter` reads page
+components from the bundle key `components/...`, but on disk these files
+live in `<appDir>/routes/`. The `serve()` middleware in
+[packages/server/middleware.rip](../server/middleware.rip) mounts disk
+`routes/*.rip` under the `components/` prefix at bundle time. Both
+names are correct at their layer (disk vs. bundle).
+
 ## Where it sits in the stack
 
 ```
