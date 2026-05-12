@@ -29,6 +29,17 @@ Design proposals under discussion. Grouped by domain and ordered within each dom
 
 **Problem:** Today, optionality is determined solely by whether a prop has a default value (`:=`). There is no way to declare an optional prop with no default value. The common pattern `@label:: string := null` doesn't actually type-check in a strict project — `rip check` reports `Type 'null' is not assignable to type 'string'`. Workarounds exist (`@label:: string := ""`, `@label:: string | undefined := undefined`, widening the type to `any`), but none of them say what we actually mean: "optional, no default." `@label?:: string` should be the natural spelling. (`| null` is semantically wrong here; TypeScript's `?` adds `undefined` to the union, not `null`. `null` means "explicitly set to nothing," while `undefined` means "not provided" — optional props are the latter.)
 
+**Scope — four parse contexts where `?::` should mean "optional".** Today only two of the four honor the marker; the other two silently drop it. RFC 1 unifies the rule across all four.
+
+| Context                                             | Example                            | Works today?                                                                |
+| --------------------------------------------------- | ---------------------------------- | --------------------------------------------------------------------------- |
+| Function/method params                              | `def f(x?:: T)`                    | ✅ — lexer predicate → DTS `x?: T`                                           |
+| Named type alias fields                             | `type T = { x?:: string }`         | ✅ — same flag, same DTS path                                                |
+| **Component prop declarations**                     | `@label?:: string`                 | ❌ — components emitter ignores `?` on prop names; keys optionality off `:=` |
+| **Structural type literals in annotation position** | `(opts:: { search?:: string }) ->` | ❌ — the `?` is silently stripped, every field types as required             |
+
+The two failing cases share a root: the predicate flag is set on the property name but never consulted by the emitter for that context. The structural-literal failure is particularly silent — no parse error, no warning, just every field treated as required at the call site (caught only when the type checker rejects partial calls).
+
 **Proposed syntax — three prop forms:**
 
 ```coffee
