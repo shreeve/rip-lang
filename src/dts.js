@@ -385,9 +385,16 @@ export function emitTypes(tokens, sexpr = null, source = '') {
     return { params, fields, endIdx: j };
   };
 
+  let paramDepth = 0;
   for (let i = 0; i < tokens.length; i++) {
     let t = tokens[i];
     let tag = t[0];
+
+    // Skip tokens inside parameter lists — annotations there describe
+    // the params of an enclosing function/method, not a top-level binding.
+    if (tag === 'PARAM_START') { paramDepth++; continue; }
+    if (tag === 'PARAM_END')   { paramDepth--; continue; }
+    if (paramDepth > 0) continue;
 
     // Track export flag
     let exported = false;
@@ -961,13 +968,27 @@ function emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars, so
           if (fHead !== '->' && fHead !== '=>') continue;
           let params = funcDef[1];
           if (!Array.isArray(params)) continue;
-          let hasTypedParams = params.some(p => p?.type);
+          // Unwrap `['default', name, value]` AST nodes (params with defaults
+          // like `b = 1`) so we extract the underlying identifier rather than
+          // stringifying the whole array via Array.toString — which produced
+          // `default,b,1: any` in the emitted method signature.
+          let unwrapDefault = (p) => {
+            if (Array.isArray(p) && (p[0]?.valueOf?.() ?? p[0]) === 'default') {
+              return { inner: p[1], hasDefault: true };
+            }
+            return { inner: p, hasDefault: false };
+          };
+          let hasTypedParams = params.some(p => unwrapDefault(p).inner?.type);
           if (!hasTypedParams) continue;
           let paramStrs = [];
           for (let p of params) {
-            let pName = p?.valueOf?.() ?? p;
-            let pType = p?.type ? expandSuffixes(p.type) : 'any';
-            paramStrs.push(`${pName}: ${pType}`);
+            let { inner, hasDefault } = unwrapDefault(p);
+            let pName = inner?.valueOf?.() ?? inner;
+            let pType = inner?.type ? expandSuffixes(inner.type) : 'any';
+            // Defaulted params are optional in the type signature so callers
+            // may omit them.
+            let opt = hasDefault ? '?' : '';
+            paramStrs.push(`${pName}${opt}: ${pType}`);
           }
           bodyMembers.push(`  ${methName}(${paramStrs.join(', ')}): void;`);
         }

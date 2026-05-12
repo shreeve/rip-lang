@@ -322,3 +322,39 @@ export CartTypeTests = component
     store.removeItem(42)
 
   render null
+
+# ── Defaulted method params ──
+#
+# Component methods mixing typed params with `= default` params emit
+# `name?: type` in the shadow stub. Defaulted params become optional;
+# typed params keep their declared type and reject mismatched args.
+
+export DefaultedMethodParams = component
+  setOne:   (key:: string, val = "x")               -> p key, val
+  setTwo:   (key:: string, count:: number = 0)      -> p key, count
+  setThree: (key:: string, val = "x", flag = false) -> p key, val, flag
+  setFour:  (val:: string = "x", count = 1)         -> p val, count
+
+  callSites: ->
+    @setOne("name")
+    @setTwo("name", 5)
+    @setThree("name", "x", true)
+    @setFour()
+    @setFour("y", 2)
+
+  render null
+
+export DefaultedMethodParamsTests = component
+  ref ~= new DefaultedMethodParams({})
+
+  bad: ->
+    # @ts-expect-error — first arg must be string
+    @ref.setOne(42)
+    # @ts-expect-error — second arg must be number
+    @ref.setTwo("name", "nope")
+    # @ts-expect-error — first arg must be string
+    @ref.setThree(false, "x", true)
+    # @ts-expect-error — first arg must be string
+    @ref.setFour(true)
+
+  render null
