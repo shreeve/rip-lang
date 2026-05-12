@@ -754,9 +754,14 @@ export serve = (opts = {}) ->
 
   # Route: /rip/rip.min.js — serve the bundle, prefer pre-compressed Brotli
   unless serve._registered
-    baseFile = Bun.file(bundlePath)
-    baseEtag = "W/\"#{baseFile.lastModified}-#{baseFile.size}\""
     get "/rip/rip.min.js", (c) ->
+      # Re-stat per request: the bundle is rebuilt during dev iteration
+      # (`bun run build`), and a cached etag captured at registration
+      # would keep returning 304 for the old contents until the worker
+      # restarts. Bun.file() is a lazy reference; lastModified/size
+      # trigger a single stat per call.
+      baseFile = Bun.file(bundlePath)
+      baseEtag = "W/\"#{baseFile.lastModified}-#{baseFile.size}\""
       if c.req.header('if-none-match') is baseEtag
         return new Response(null, { status: 304, headers: { 'ETag': baseEtag, 'Cache-Control': 'no-cache' } })
       useBr = hasBrotli and (c.req.header('Accept-Encoding') or '').includes('br')
