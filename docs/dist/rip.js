@@ -13588,7 +13588,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.15.4";
-  var BUILD_DATE = "2026-05-08@21:20:34GMT";
+  var BUILD_DATE = "2026-05-08@21:20:48GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -15434,8 +15434,6 @@ ${indented}`);
         }
         return;
       }
-      currentParams = params;
-      currentQuery = query;
       gen2 = ++generation;
       router.navigating = true;
       return await (async () => {
@@ -15466,6 +15464,8 @@ ${indented}`);
           } else {
             unmountCurrent();
           }
+          currentParams = params;
+          currentQuery = query;
           mp = layoutsChanged ? container : mountPoint;
           if (layoutsChanged && layoutFiles.length > 0) {
             container.innerHTML = "";

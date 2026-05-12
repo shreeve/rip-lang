@@ -66,6 +66,7 @@ rip server
 - Run `bun run build` after codegen, `components.js`, `browser.js`, or `app.rip` changes
 - Run `bun run build:schema-runtime` after editing any `src/schema/runtime-*.js` fragment (CI's `test:schema-fresh` fails on staleness)
 - Run `bun run bump` for the standard release flow
+- **In a typed Rip codebase, always run `rip check` after edits.** A project is typed if it has `rip.json`/`package.json` with `strict: true`, or any `.rip` files using `::` annotations. `rip check` catches both type errors and shadow-TypeScript emitter bugs that the runtime won't surface.
 
 ## Compilation Pipeline
 

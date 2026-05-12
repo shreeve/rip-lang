@@ -3,12 +3,14 @@ import { Button } from '../components/button.rip'
 import { title } from '../config.rip'
 
 export Products = component
+  @router:: any := null
   cart ~= @app.data.cart
   products:: Product[] := []
-  search := ''
-  sort := ''
   error := null
   loaded := false
+
+  search ~= @router.query.search ?? ''
+  sort   ~= @router.query.sort ?? ''
 
   filtered ~=
     result = products.slice()
@@ -31,9 +33,15 @@ export Products = component
     finally
       loaded = true
 
-  clearFilters: ->
-    search = ''
-    sort = ''
+  setQuery: (updates:: Record<string, string>) ->
+    next = { ...@router.query, ...updates }
+    params = new URLSearchParams()
+    for key, val of next when val
+      params.set key, val
+    queryString = params.toString()
+    @router.replace @router.path + (if queryString then "?#{queryString}" else '')
+
+  clearFilters: -> @setQuery {search: '', sort: ''}
 
   render
     if error
@@ -44,8 +52,11 @@ export Products = component
         input
           type: "search"
           placeholder: "Search products..."
-          value <=> search
-        select value <=> sort
+          value: search
+          @input: (e) => @setQuery search: e.target.value
+        select
+          value: sort
+          @change: (e) => @setQuery sort: e.target.value
           option value: "", disabled: true, "Sort"
           option value: "price-asc", "Price: Low to High"
           option value: "price-desc", "Price: High to Low"

@@ -1205,9 +1205,6 @@ export createRenderer = (opts = {}) ->
             onError({ status: 500, message: err.message, error: err }) if onError
       return
 
-    currentParams = params
-    currentQuery = query
-
     gen = ++generation
     router.navigating = true
 
@@ -1234,6 +1231,15 @@ export createRenderer = (opts = {}) ->
         unmount()
       else
         unmountCurrent()
+
+      # Record the new params/query *after* unmount() so they survive
+      # (unmount() resets currentParams/currentQuery to null). Without
+      # this, every subsequent navigation would see currentParams=null,
+      # fail the fast-path sameKeys() check, and force a full remount —
+      # blurring focused inputs and tearing down component state on
+      # every query change (e.g. typing in a search field).
+      currentParams = params
+      currentQuery = query
 
       mp = if layoutsChanged then container else mountPoint
 
