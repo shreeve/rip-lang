@@ -30,8 +30,7 @@ export Products = component
   mounted: ->
     document.title = title('Products')
     try
-      res = await fetch('/api/products')
-      products = await res.json()
+      products = fetch!('/api/products').json!
     catch err
       error = String(err)
     finally
