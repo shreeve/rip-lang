@@ -1,31 +1,34 @@
 # Rip RFCs
 
-Design proposals under discussion. Grouped by domain and ordered within each domain by landing dependency — RFC N+1 generally assumes RFC N has landed, but cross-domain RFCs are independent unless their text says otherwise.
+Design proposals under discussion. Grouped by domain.
 
 ## Domain A — Type system & package types
 
 - [RFC 1 — Explicit prop optionality with `?::`](#rfc-1-explicit-prop-optionality-with-)
 - [RFC 2 — Rip packages exposing types to typed Rip apps](#rfc-2-rip-packages-exposing-types-to-typed-rip-apps)
 - [RFC 3 — App framework types for ambient globals](#rfc-3-app-framework-types-for-ambient-globals)
-- [RFC 4 — Typed component `this` shape](#rfc-4-typed-component-this-shape)
-- [RFC 5 — Typed server handler `this` shape](#rfc-5-typed-server-handler-this-shape)
+- [RFC 4 — Typed `this` shape for components and server handlers](#rfc-4-typed-this-shape-for-components-and-server-handlers)
+- [RFC 5 — Typed routes — `href` typing, typed `router.push`, per-route `@params`](#rfc-5-typed-routes--href-typing-typed-routerpush-per-route-params)
 
 ## Domain B — Runtime delivery & ergonomics
 
 - [RFC 6 — Trim and align the `@rip-lang/app` global surface](#rfc-6-trim-and-align-the-rip-langapp-global-surface)
-- [RFC 7 — Routing ergonomics](#rfc-7-routing-ergonomics)
+- [RFC 7 — Routing ergonomics — active link, scroll, and the `data-router-ignore` opt-out](#rfc-7-routing-ergonomics--active-link-scroll-and-the-data-router-ignore-opt-out)
 
 ## Domain C — Compiler / reactivity
 
 - [RFC 8 — Tracking property accesses on `for`-loop iteration variables](#rfc-8-tracking-property-accesses-on-for-loop-iteration-variables)
 
+## Domain D — Packaging & app config
+
+- [RFC 9 — Consuming Rip packages](#rfc-9-consuming-rip-packages)
+- [RFC 10 — Rename bundle `components` → `modules`, prefix every entry by origin](#rfc-10-rename-bundle-components--modules-prefix-every-entry-by-origin)
+
 ---
 
 ## RFC 1: explicit prop optionality with `?::`
 
-**Status:** Pending discussion — not yet implemented. Documenting the design for review.
-
-**Why this is the first RFC.** RFC 1 is foundational because every later RFC that authors types in `.rip` source — RFC 2 (package annotations), RFC 3 (framework annotations), RFC 4 / RFC 5 (synthesized `this` types) — will write optional fields on options objects (`launch hash?:: boolean`, `createResource opts?:: ResourceOpts`). Landing `?::` second means writing those annotations twice — once with `:: boolean | undefined := undefined` workarounds, once with `?::` after migration. Removing the broken type-suffix operators (`T?`, `T??`, `T!`) at the same time keeps the spec clean for everything that follows.
+**Why this is the first RFC.** RFC 1 is foundational because every later RFC that authors types in `.rip` source — RFC 2 (package annotations), RFC 3 (framework annotations), RFC 4 (synthesized `this` types) — will write optional fields on options objects (`launch hash?:: boolean`, `createResource opts?:: ResourceOpts`). Landing `?::` second means writing those annotations twice — once with `:: boolean | undefined := undefined` workarounds, once with `?::` after migration. Removing the broken type-suffix operators (`T?`, `T??`, `T!`) at the same time keeps the spec clean for everything that follows.
 
 **Problem:** Today, optionality is determined solely by whether a prop has a default value (`:=`). There is no way to declare an optional prop with no default value. The common pattern `@label:: string := null` doesn't actually type-check in a strict project — `rip check` reports `Type 'null' is not assignable to type 'string'`. Workarounds exist (`@label:: string := ""`, `@label:: string | undefined := undefined`, widening the type to `any`), but none of them say what we actually mean: "optional, no default." `@label?:: string` should be the natural spelling. (`| null` is semantically wrong here; TypeScript's `?` adds `undefined` to the union, not `null`. `null` means "explicitly set to nothing," while `undefined` means "not provided" — optional props are the latter.)
 
@@ -57,7 +60,7 @@ The two failing cases share a root: the predicate flag is set on the property na
 
 1. `?` on the prop name is the **sole optionality marker** (like TypeScript's `prop?: type`)
 2. `:=` only assigns a default value — it no longer implies optionality
-3. `@prop:: type := val` without `?` would technically become **required with a default** — the caller must pass it, but it has a fallback value. This is valid TypeScript but rare in practice; it's called out here because it's what the current `@prop:: type := val` syntax means today, and the migration would convert most of these to `@prop?:: type := val`
+3. `@prop:: type := val` without `?` would technically become **required with a default** — the caller must pass it, but it has a fallback value. This is valid TypeScript but rare in practice; it's called out here because it's what the current `@prop:: type := val` syntax means today, and the migration would convert all of these to `@prop?:: type := val` (no real "required with default" usage exists in the codebase today)
 
 **DTS output:**
 
@@ -88,7 +91,7 @@ These should be removed from the spec. They are documented but effectively non-f
 - **279 typed prop lines** (`@prop:: type := val`) across the repo would need `?` added → `@prop?:: type := val`
 - **89 untyped prop lines** (`@prop := val`) — completely unaffected
 - Concentrated in `packages/ui/browser/` (177) and `packages/ui/email/` (71); the rest scattered across `examples/` (15) and `test/` (16). `apps/` has zero typed prop lines today.
-- Mechanical fix: single regex find-and-replace across the repo
+- Mostly mechanical: a single regex find-and-replace over `@prop:: type := val` → `@prop?:: type := val`.
 
 **Implementation notes:**
 
@@ -229,14 +232,16 @@ A subtle bonus: once the browser compiler recognizes `import { createResource } 
 
 ### Relationship to other RFCs
 
-Depends on RFCs 1, 2. Sources the `__RipApp` and `__RipRouter` types that RFCs 4 and 7 reference. Composes with RFC 6 (the renamed exports flow through the import path unchanged).
+Depends on RFCs 1, 2. Sources the `__RipApp` and `__RipRouter` types that RFCs 4 and 5 reference. Composes with RFC 6 (the renamed/trimmed exports flow through the import path unchanged).
 
 
-## RFC 4: typed component `this` shape
+## RFC 4: typed `this` shape for components and server handlers
 
 Inside a component body, the magic `@` context exposes a fixed set of injected members: `@app`, `@router`, `@params`, `@query`, `@rest`, `@children`, plus the six lifecycle hooks the runtime recognizes (`beforeMount`, `mounted`, `updated`, `beforeUnmount`, `unmounted`, `onError` — the canonical list lives in `LIFECYCLE_HOOKS` at [src/components.js](src/components.js#L20)). The renderer constructs each component with `new Component { app, params, query, router }` ([packages/app/index.rip](packages/app/index.rip#L1309)) and the components runtime additionally exposes `this.rest`, `this._rest`, and `this.children`. None of these are visible to the type checker today — every access types as `any`. (Side note: the hook names are not currently documented in `docs/RIP-APP.md` or `AGENTS.md` — the only public hint is the brief `mounted`/`unmounted` comment at [packages/app/index.rip](packages/app/index.rip#L857). Worth fixing alongside this RFC so the typed shape and the prose docs land together.)
 
-This is the gap RFC 3 explicitly leaves open: RFC 3 types module-level imports, but per-component instance members live on `this`, not on any importable name. Typing them needs its own pipeline hook.
+The server side has the same problem with the same shape. API route handlers in `@rip-lang/server` get the same magic `@` context as components — `@req`, `@json()`, `@send()`, `@session`, `@params`, `@query`, plus the auth-helper return values from the framework's routing pattern. Today these all type as `any`. Without typed handler `this`, typing the cart example's API routes (or any typed Rip backend) bottoms out at the first `@req.headers` access.
+
+Both gaps are the gap RFC 3 explicitly leaves open: RFC 3 types module-level imports, but per-instance injected members live on `this`, not on any importable name. Typing them needs its own pipeline hook — the same hook on both sides.
 
 ### Proposal — synthesize `__RipComponentThis` and bind it as `this:` for every component
 
@@ -246,7 +251,7 @@ Members of `__RipComponentThis`:
 
 - `app: __RipApp` — the stash type that already exists today (`__RipStash`-flavored, sourced from the project's `stash.rip` if present, otherwise `Record<string, unknown>`)
 - `router: __RipRouter` — sourced from RFC 3's annotated `createRouter` return type
-- `params: Record<string, string>` — uniform baseline; **RFC 7 tightens this to per-route shapes** for components that live under `routes/` (leaf routes get `{ id: string }` for `routes/users/[id].rip`, etc.); layouts and shared components stay on the baseline
+- `params: Record<string, string>` — uniform baseline; **RFC 5 tightens this to per-route shapes** for components that live under `routes/` (leaf routes get `{ id: string }` for `routes/users/[id].rip`, etc.); layouts and shared components stay on the baseline
 - `query: URLSearchParams` — matches what `createRouter` actually puts on the instance
 - `rest: Record<string, unknown>` — the catch-all for unconsumed props
 - `children: unknown` — slot content; widened because the framework places no constraint on what a parent passes
@@ -276,32 +281,11 @@ In the components emitter (`src/components.js`):
 
 ### Why not extend RFC 3 to cover this
 
-RFC 3 is "ambient module exports become imports." Instance members aren't exports — there's no `this` binding to import. They're injected by the framework's component constructor at runtime, and the natural type-system parallel is a synthesized `this:` parameter, not an import. Different shape, different mechanism. Bundling the two into one RFC would conflate them; splitting keeps each RFC's mechanism crisp.
+RFC 3 is "ambient module exports become imports." Instance members aren't exports — there's no `this` binding to import. They're injected by the framework's component constructor (or the server's handler dispatcher) at runtime, and the natural type-system parallel is a synthesized `this:` parameter, not an import. Different shape, different mechanism. Bundling the two into one RFC would conflate them; splitting keeps each RFC's mechanism crisp.
 
-### Alternatives considered
+### Server handler `this` — same machinery, different members
 
-- **Type the existing `__Component` base class; let inheritance do the work.** The runtime already emits `class Foo extends __Component` (verified by compiling a probe component with `./bin/rip -c`). If `__Component`'s DTS declared the injected members — `app`, `router`, `params`, `query`, `rest`, `children`, plus the optional lifecycle hooks — every user component would inherit them through ordinary TS class inheritance. No splice into the shadow source, no synthetic `this:` parameter, no per-component DTS gymnastics. A user-written `mounted: ->` becomes a method override of the optional base member, which is exactly the relationship TS is designed to model. Rejected as the **primary** mechanism, kept as a future simplification: per-route `params` tightening (RFC 7) is awkward through inheritance, because each component file would need a different generic instantiation of the base, threaded through the components emitter on a per-file basis. The splice approach already has the file path in hand inside `typecheck.js` and can specialize `params` cheaply. Worth revisiting if RFC 7's per-route specialization is later dropped or moved entirely into the renderer.
-
-- **Annotate the `component` factory with `ThisType<__RipComponentThis>`.** TypeScript provides a built-in marker for "infer `this` inside this body": `ThisType<T>`. If the `component` export in `packages/app/index.rip` were typed as a factory taking `ThisType<__RipComponentThis> & ComponentBody`, TS would bind `@app` etc. inside the body without any type-checker pipeline change — pure RFC 2 mechanism, one annotation, done. Rejected because the components emitter today produces a class declaration, not a callback to `component(...)`; the `component` keyword is parsed as a class form, not a function call. To make `ThisType` apply, either the runtime emit would have to change to a callback form (much larger scope, runtime impact, performance regression risk) or the DTS would have to lie about the emit shape. The proposal already accepts a small DTS-only fiction (the `this:` parameter), so this isn't categorically worse, but it solves a smaller slice of the problem at the same cost.
-
-- **Per-component-class generated types** that inspect each component's actual props/state and emit `declare class Foo extends __Component { count: __State<number>; clearFilters(): void; ... }` per file. Strictly more precise — would type user-defined state and methods, not just the injected baseline, and would also help sibling components that import each other. Rejected as too costly: requires a second type-inferer in the components emitter that walks every `name := value` and `name: ->` and infers a TS type from the RHS expression. That's a substantial new piece of compiler infrastructure for a moderate gain over the proposal. Stays as future work; the injected baseline is the "free win" subset.
-
-- **Have the user write `@:: __RipComponentThis`** (or some new sigil) at the top of each component to opt into typed `this`. Rejected — silent universal coverage matches the model of `__RipStash` (no per-file declaration needed) and avoids a 200+ file migration in the UI package alone. The whole point of synthesizing a type is to make it free.
-
-- **Open `interface __RipComponentThis` for declaration merging.** Not a competing alternative — it composes with the proposal. If `__RipComponentThis` is emitted as an `interface` (not a `type` alias), advanced users could augment it from their own code to add app-specific injected members (custom helpers a project's renderer wraps in). Worth doing as part of the proposal; costs nothing.
-
-### Relationship to other RFCs
-
-Depends on RFCs 1 (annotation syntax), 2 (DTS pipeline), 3 (sources `__RipApp`, `__RipRouter`). Unblocks RFC 7 (typed `@router.push`, per-route `@params` tightening). Mirrored structurally by RFC 5 for server handlers.
-
-
-## RFC 5: typed server handler `this` shape
-
-The server-side parallel to RFC 4. API route handlers in `@rip-lang/server` get the same magic `@` context as components — `@req`, `@json()`, `@send()`, `@session`, `@params`, `@query`, plus the auth-helper return values from the framework's routing pattern. Today these all type as `any`. Without RFC 5, typing the cart example's API routes (or any typed Rip backend) bottoms out at the first `@req.headers` access.
-
-### Proposal — synthesize `__RipServerHandlerThis` and bind it as `this:` for every handler
-
-Same machinery as RFC 4, applied to handlers:
+The server side is a pure mirror. Same splice, same `this:` parameter, different member set. Calling it out explicitly so the implementation work isn't double-counted:
 
 Members of `__RipServerHandlerThis`:
 
@@ -313,19 +297,100 @@ Members of `__RipServerHandlerThis`:
 - `send(path: string, type?: string): Promise<Response>` — file-serving helper
 - `redirect(url: string, status?: number): Response` — redirect helper
 
-In `src/typecheck.js`:
+In `src/typecheck.js`, `buildServerHandlerThisType()` sits next to `buildComponentThisType()` and uses standard lib types for `req`/`query`. In `@rip-lang/server` itself ([packages/server/server.rip](packages/server/server.rip)), the route-registration helpers (`get`, `post`, `put`, `delete`, etc.) get RFC 2-style annotations so their handler argument is typed as a function with `this: __RipServerHandlerThis` — the package source is the contract, the DTS pipeline does the rest.
 
-- `buildServerHandlerThisType()` alongside `buildComponentThisType()`. Most of its members are constant shapes; `req`/`params`/`query` are pulled from standard lib types.
+Multi-field input validation — the typical companion to a typed handler — is covered today by `schema :input` with `.safe()`, which already has its own DTS pipeline (`src/schema/dts.js`) and returns `{ok, value, errors}`. The single-field `read()` helper stays as today (returns `unknown` in typed contexts); narrowing its return via string-literal validator overloads was prototyped and dropped — the win was small (one-liner casts at call sites) and the cost was real (~30 hand-maintained overloads kept in sync with `validators` in `packages/server/api.rip`).
 
-In `@rip-lang/server` itself (`packages/server/server.rip`):
+### Alternatives considered
 
-- Annotate the route-registration helpers (`get`, `post`, `put`, `delete`, etc.) so their handler argument is typed as a function with `this: __RipServerHandlerThis`. This is the RFC 2 mechanism — annotate the package source, the DTS pipeline does the rest.
+- **Type the existing `__Component` base class; let inheritance do the work.** The runtime already emits `class Foo extends __Component` (verified by compiling a probe component with `./bin/rip -c`). If `__Component`'s DTS declared the injected members — `app`, `router`, `params`, `query`, `rest`, `children`, plus the optional lifecycle hooks — every user component would inherit them through ordinary TS class inheritance. No splice into the shadow source, no synthetic `this:` parameter, no per-component DTS gymnastics. A user-written `mounted: ->` becomes a method override of the optional base member, which is exactly the relationship TS is designed to model. Rejected as the **primary** mechanism, kept as a future simplification: per-route `params` tightening (RFC 5) is awkward through inheritance, because each component file would need a different generic instantiation of the base, threaded through the components emitter on a per-file basis. The splice approach already has the file path in hand inside `typecheck.js` and can specialize `params` cheaply. Worth revisiting if RFC 5's per-route specialization is later dropped or moved entirely into the renderer.
 
-The compiler emits the `this: __RipServerHandlerThis` slot in the handler's function signature in the DTS slice, the same way RFC 4 does for components.
+- **Annotate the `component` factory with `ThisType<__RipComponentThis>`.** TypeScript provides a built-in marker for "infer `this` inside this body": `ThisType<T>`. If the `component` export in `packages/app/index.rip` were typed as a factory taking `ThisType<__RipComponentThis> & ComponentBody`, TS would bind `@app` etc. inside the body without any type-checker pipeline change — pure RFC 2 mechanism, one annotation, done. Rejected because the components emitter today produces a class declaration, not a callback to `component(...)`; the `component` keyword is parsed as a class form, not a function call. To make `ThisType` apply, either the runtime emit would have to change to a callback form (much larger scope, runtime impact, performance regression risk) or the DTS would have to lie about the emit shape. The proposal already accepts a small DTS-only fiction (the `this:` parameter), so this isn't categorically worse, but it solves a smaller slice of the problem at the same cost.
+
+- **Per-component-class generated types** that inspect each component's actual props/state and emit `declare class Foo extends __Component { count: __State<number>; clearFilters(): void; ... }` per file. Strictly more precise — would type user-defined state and methods, not just the injected baseline, and would also help sibling components that import each other. Rejected as too costly: requires a second type-inferer in the components emitter that walks every `name := value` and `name: ->` and infers a TS type from the RHS expression. That's a substantial new piece of compiler infrastructure for a moderate gain over the proposal. Stays as future work; the injected baseline is the "free win" subset.
+
+- **Have the user write `@:: __RipComponentThis`** (or some new sigil) at the top of each component to opt into typed `this`. Rejected — silent universal coverage matches the model of `__RipStash` (no per-file declaration needed) and avoids a 200+ file migration in the UI package alone. The whole point of synthesizing a type is to make it free.
+
+- **Open `interface __RipComponentThis` for declaration merging.** Not a competing alternative — it composes with the proposal. If `__RipComponentThis` is emitted as an `interface` (not a `type` alias), advanced users could augment it from their own code to add app-specific injected members (custom helpers a project's renderer wraps in). Worth doing as part of the proposal; costs nothing.
 
 ### Relationship to other RFCs
 
-Depends on RFCs 1, 2 (mechanism). Mirrors RFC 4. Multi-field input validation — the typical companion to a typed handler — is covered today by `schema :input` with `.safe()`, which already has its own DTS pipeline (`src/schema/dts.js`) and returns `{ok, value, errors}`. The single-field `read()` helper stays as today (returns `unknown` in typed contexts); narrowing its return via string-literal validator overloads was prototyped and dropped — the win was small (one-liner casts at call sites) and the cost was real (~30 hand-maintained overloads kept in sync with `validators` in `packages/server/api.rip`).
+Depends on RFCs 1 (annotation syntax), 2 (DTS pipeline), 3 (sources `__RipApp`, `__RipRouter`). Unblocks RFC 5 (typed `@router.push`, per-route `@params` tightening).
+
+
+## RFC 5: Typed routes — `href` typing, typed `router.push`, per-route `@params`
+
+The runtime-side ergonomics from RFC 7 (active link, scroll restoration) make the router pleasant. RFC 5 closes the type-system side: `<a href: "/crat">` should be a compile error in a typed app, not a 404 at runtime; `@router.push '/cart'` should validate against the actual route tree; `@params.id` in `routes/users/[id].rip` should type as `string` rather than `string | undefined`.
+
+Untyped apps see no change from this RFC. RFC 5 is purely a `rip check` upgrade.
+
+### Proposal
+
+**1. Type the `href` attribute on `<a>` against a generated `__RipRoutes` union.**
+
+At type-check time, walk the project's routes directory (mirroring `findStashFile` / `__RipStash` in [src/typecheck.js](src/typecheck.js)). The directory defaults to `<appDir>/routes/` to match the `serve()` middleware's default — see [packages/server/middleware.rip](packages/server/middleware.rip), where `routes` is read off the serve options and the on-disk files are mounted under the `components/` key in the bundle (which is why `createRouter` reads from `root: 'components'` while the disk layout uses `routes/`). The path should be readable from `package.json#rip.routes` (per RFC 9's config consolidation, default `"routes"`) so the type-checker stays in sync if a project overrides it.
+
+Mirror the runtime's existing rules when walking: skip `_-prefixed directories` and `_-prefixed files` (the same exclusion `buildRoutes` applies in [packages/app/index.rip](packages/app/index.rip), so `_layout.rip` and helper files don't pollute `__RipRoutes`).
+
+Convert each route file path to a TypeScript template-literal pattern, and emit:
+
+```ts
+type __RipRoutes =
+  | "/"
+  | "/cart"
+  | `/users/${string}`
+  | `/blog/${string}/${string}`
+  | `/admin/${string}`;
+```
+
+Splice it into the project's virtual TS at the entry-file anchor (same mechanism `__RipStash` already uses) and update the `a` entry of `__RipElementMap` in `src/dts.js` so `href` becomes `__RipRoutes | __ExternalHref`, where `__ExternalHref` enumerates the non-route URL shapes by prefix:
+
+```ts
+type __ExternalHref =
+  | `https://${string}`
+  | `http://${string}`
+  | `mailto:${string}`
+  | `tel:${string}`
+  | `#${string}`;   // bare fragment — same-page anchor
+```
+
+This preserves real type safety: `"/cart"` checks against `__RipRoutes`, `"https://github.com"` checks against `__ExternalHref`, but `"/crat"` matches *neither* and produces a type error — exactly what we want. The rare cases that fall outside this set (protocol-relative `//cdn.example.com`, exotic schemes like `chrome://`, etc.) need a one-line cast (`href: "//cdn.example.com" as __RipRoutes`) or `data-router-ignore`. That's a worthwhile trade for catching real route typos.
+
+**2. Type `router.push` and `router.replace` against `__RipRoutes`.**
+
+The same type applies to the argument of `router.push` / `router.replace` so programmatic navigation gets the same validation as link clicks. (`router.push` likely wants `__RipRoutes` only, since pushing an external URL through SPA navigation doesn't make sense — that's a `window.location.href = ...` operation.) This piece **depends on RFC 4** — `@router.push` is only typed if the component's `this.router` is typed, which is what RFC 4 establishes.
+
+**3. Per-route `@params` tightening.**
+
+RFC 4 types `@params` as `Record<string, string>` for every component. RFC 5 tightens this for components that live under `routes/`: the route-tree walker already in step 1 knows each leaf route's dynamic-segment names, so it can synthesize a per-file param shape:
+
+- `routes/users/[id].rip` → `params: { id: string }`
+- `routes/blog/[slug]/[part].rip` → `params: { slug: string; part: string }`
+- `routes/admin/[...rest].rip` → `params: { rest: string }` (catch-all)
+
+Emitted into the same shadow-TS slot RFC 4 uses for `__RipComponentThis`, but specialized per file — one synthesized type variant per route file, applied via the entry-file anchor. Layouts (`_layout.rip`) and components imported from `components/` rather than `routes/` stay on RFC 4's baseline `Record<string, string>` because they don't have a single deterministic param shape.
+
+### Caveats of the template-literal approach
+
+Distinct from the external-URL story above, the `__RipRoutes` union itself is loose on dynamic segments — `${string}` accepts any string, including the empty string and strings containing slashes:
+
+- `<a href: "/users/">` type-checks (matches `` `/users/${string}` ``); the runtime would 404 it.
+- `<a href: "/users/foo/bar">` type-checks against `/users/${string}` even though `[id]` is conceptually one segment.
+- Catch-all routes (`[...rest]`) type as `` `/admin/${string}` ``, which over-accepts but never under-accepts.
+
+This is a real precision gap, not a footnote. The proposal catches typos in the static prefix (`/crat` vs. `/cart`) and unknown route names — the most common authoring bugs — but does not catch malformed dynamic segments. Empty IDs and slash-bearing IDs both type-check today and 404 at runtime; that won't change with this RFC.
+
+Fully tight per-segment typing requires the TanStack-style approach: type each route as `{ to: "/users/$id", params: { id: string } }`, separating the path template from the params. That changes the source idiom — `<a href: "/users/#{id}">` becomes `<a href: route("/users/$id", id: id)>` or similar — which is the typed/untyped divergence this RFC is explicitly trying to avoid. The proposal here trades segment-shape precision for source-form parity. If the looseness causes real bugs in practice, a follow-up RFC can layer per-segment validation on (the underlying route tree is already known at type-check time), but ship the prefix-discriminated version first and see whether the gap matters.
+
+### Effect on existing code
+
+**Untyped apps.** No change. No annotation, no opt-in, no behavior difference. The browser runtime never sees `__RipRoutes`.
+
+**Typed apps.** The type pipeline gains `findRoutesDir` and `buildRoutesType` in `src/typecheck.js`, and `src/dts.js` gains an `__RipAnchorAttrs` slot in `__RipElementMap` plus typed signatures for `router.push` / `router.replace`. Both follow the existing `__RipStash` precedent, and the per-route `@params` tightening lives in the same walker. `<a href: "/cart">` and `@router.push "/cart"` in a typed file both validate against the project's actual route tree. **Migration:** any existing typed app with a real route typo will now get a `rip check` error where it previously had a green build and a 404 at runtime — that's the feature, but it's worth noting that "no migration needed" is conditional on the existing routes being correct.
+
+### Relationship to other RFCs
+
+Depends on RFC 2 (DTS pipeline), RFC 3 (typed router exports), RFC 4 (typed component `this` for `@router.push` and per-route `@params`). Composes with RFC 7 (runtime ergonomics on the same `<a>` element). Reads `routes` directory location from `package.json#rip.routes` (RFC 9).
 
 
 ## RFC 6: Trim and align the `@rip-lang/app` global surface
@@ -385,7 +450,7 @@ External apps using the old names get a one-time find-and-replace plus deprecati
 
 ### Alternatives considered
 
-- **One namespace global (`globalThis.Rip`), every helper accessed as `Rip.*`.** The original RFC 6 sketch. Rejected because it forces a prefix on the eleven well-named globals to fix the four problematic ones — universal cost for partial benefit. Also introduces a typed/untyped divergence (typed apps import, untyped use `Rip.*`) that this proposal avoids.
+- **One namespace global (`globalThis.Rip`), every helper accessed as `Rip.*`.** An earlier sketch in this RFC. Rejected because it forces a prefix on the eleven well-named globals to fix the four problematic ones — universal cost for partial benefit. Also introduces a typed/untyped divergence (typed apps import, untyped use `Rip.*`) that this proposal avoids.
 
 - **Rename the four timing helpers too** (`delay` → `reactiveDelay`, `hold` → `reactiveHold`, etc.). Considered and rejected: they form a coherent vocabulary with `debounce` and `throttle`, the names match what the function does, and the prefix would be uglier than the problem. The AGENTS.md warning is sufficient mitigation for the timing family.
 
@@ -398,13 +463,15 @@ External apps using the old names get a one-time find-and-replace plus deprecati
 Independent of every other RFC. Composes with RFC 3 (the renamed exports flow through the import path unchanged). Does not block, and is not blocked by, anything in Domain A or C.
 
 
-## RFC 7: routing ergonomics
+## RFC 7: Routing ergonomics — active link, scroll, and the `data-router-ignore` opt-out
 
-Rip's app framework today gives you file-based routes and document-level `<a>` interception. Two ergonomic features common in modern routers are still missing: **highlighting the active link** (so the current page can be styled distinctly in a nav bar) and **catching typos in route paths** (`<a href: "/crat">` should be a compile error in a typed app, not a 404 at runtime). Neither is essential — plenty of routers ship without one or both — but both are the kind of nice-to-have that nudges a routing library from "functional" to "pleasant." This RFC proposes how Rip should add them.
+Rip's app framework today gives you file-based routes and document-level `<a>` interception. Two ergonomic gaps that every modern SPA router covers are still open: **highlighting the active link** (so the current page can be styled distinctly in a nav bar) and **scroll position management on navigation** (the back button currently leaves you wherever you were on the new page, which is wrong almost everywhere). A third item — the existing `data-router-ignore` attribute — already works at runtime but isn't in the docs. RFC 7 covers all three, plus the small framing of why programmatic navigation needs no new API.
+
+The matching type-system work — typed `href` against a generated `__RipRoutes` union, per-route `@params` tightening, typed `router.push` — is a separate proposal, RFC 5, because it has a different mechanism (DTS splice, depends on RFCs 2/3/4) and a different audience (typed apps only) from the runtime-ergonomics work below.
 
 ### Background — what the router already provides
 
-`createRouter` in `packages/app/index.rip` already does three things relevant here. First, it intercepts plain `<a>` clicks at the document level and routes same-origin links through SPA navigation, with a skip list (`target="_blank"`, `[download]`, `[data-router-ignore]`, cross-origin, links outside `base`) for cases that should fall through to the browser. Second, it tracks `router.path` as a reactive signal that updates on every navigation. Third, it exposes `router.push(url)` and `router.replace(url)` for programmatic navigation. So this RFC isn't proposing a new navigation primitive; it's proposing two ergonomic features that build on what's already there.
+`createRouter` in `packages/app/index.rip` already does three things relevant here. First, it intercepts plain `<a>` clicks at the document level and routes same-origin links through SPA navigation, with a skip list (`target="_blank"`, `[download]`, `[data-router-ignore]`, cross-origin, links outside `base`) for cases that should fall through to the browser. Second, it tracks `router.path` as a reactive signal that updates on every navigation. Third, it exposes `router.push(url)` and `router.replace(url)` for programmatic navigation. So this RFC isn't proposing a new navigation primitive; it's adding ergonomics on top of what's already there.
 
 ### Proposal
 
@@ -433,55 +500,13 @@ nav a[aria-current="true"] { color: red; }                        /* prefix: cur
 
 Query strings and fragments are stripped before comparison, so `<a href="/cart?utm=foo">` is active when `router.path === "/cart"`. No per-link `'aria-current': 'page' if @router.path is '/cart' else null` boilerplate, no manual subscription to `router.path`, and the feature works on third-party HTML the framework never rendered (markdown content, CMS output, embedded widgets).
 
-**2. Type the `href` attribute on `<a>` against a generated `__RipRoutes` union.**
+**Behavior change:** every `<a>` inside the router's `base` that wasn't already setting `aria-current` will now have it set on every navigation. Apps relying on the previous "no `aria-current` ever" behavior (unlikely but possible) need to opt out per-link with `data-router-ignore` or by setting `aria-current` manually before the walker runs.
 
-At type-check time, walk the project's routes directory (mirroring `findStashFile` / `__RipStash` in [src/typecheck.js](src/typecheck.js)). The directory defaults to `<appDir>/routes/` to match the `serve()` middleware's default — see [packages/server/middleware.rip](packages/server/middleware.rip), where `routes` is read off the serve options and the on-disk files are mounted under the `components/` key in the bundle (which is why `createRouter` reads from `root: 'components'` while the disk layout uses `routes/`). The path should be readable from `rip.json` (new `"routes"` field, default `"routes"`) so the type-checker stays in sync if a project overrides it.
+The `aria-current` walker is `O(n_anchors)` per route change. For typical nav bars with tens of links this is invisible; on pages with thousands of anchors a route-indexed cache or `IntersectionObserver`-scoped walk would handle it. Not a v1 concern.
 
-Mirror the runtime's existing rules when walking: skip `_-prefixed directories` and `_-prefixed files` (the same exclusion `buildRoutes` applies in [packages/app/index.rip](packages/app/index.rip), so `_layout.rip` and helper files don't pollute `__RipRoutes`).
+**2. Scroll restoration.**
 
-Convert each route file path to a TypeScript template-literal pattern, and emit:
-
-```ts
-type __RipRoutes =
-  | "/"
-  | "/cart"
-  | `/users/${string}`
-  | `/blog/${string}/${string}`
-  | `/admin/${string}`;
-```
-
-Splice it into the project's virtual TS at the entry-file anchor (same mechanism `__RipStash` already uses) and update the `a` entry of `__RipElementMap` in `src/dts.js` so `href` becomes `__RipRoutes | __ExternalHref`, where `__ExternalHref` enumerates the non-route URL shapes by prefix:
-
-```ts
-type __ExternalHref =
-  | `https://${string}`
-  | `http://${string}`
-  | `mailto:${string}`
-  | `tel:${string}`
-  | `#${string}`;   // bare fragment — same-page anchor
-```
-
-This preserves real type safety: `"/cart"` checks against `__RipRoutes`, `"https://github.com"` checks against `__ExternalHref`, but `"/crat"` matches *neither* and produces a type error — exactly what we want. The rare cases that fall outside this set (protocol-relative `//cdn.example.com`, exotic schemes like `chrome://`, etc.) need a one-line cast (`href: "//cdn.example.com" as __RipRoutes`) or `data-router-ignore`. That's a worthwhile trade for catching real route typos.
-
-The same type should apply to the argument of `router.push` / `router.replace` so programmatic navigation gets the same validation as link clicks. (`router.push` likely wants `__RipRoutes` only, since pushing an external URL through SPA navigation doesn't make sense — that's a `window.location.href = ...` operation.) This piece **depends on RFC 4** — `@router.push` is only typed if the component's `this.router` is typed, which is what RFC 4 establishes.
-
-**3. Per-route `@params` tightening.**
-
-RFC 4 types `@params` as `Record<string, string>` for every component. RFC 7 tightens this for components that live under `routes/`: the route-tree walker already in step 2 knows each leaf route's dynamic-segment names, so it can synthesize a per-file param shape:
-
-- `routes/users/[id].rip` → `params: { id: string }`
-- `routes/blog/[slug]/[part].rip` → `params: { slug: string; part: string }`
-- `routes/admin/[...rest].rip` → `params: { rest: string }` (catch-all)
-
-Emitted into the same shadow-TS slot RFC 4 uses for `__RipComponentThis`, but specialized per file — one synthesized type variant per route file, applied via the entry-file anchor. Layouts (`_layout.rip`) and components imported from `components/` rather than `routes/` stay on RFC 4's baseline `Record<string, string>` because they don't have a single deterministic param shape.
-
-**4. Document the existing `data-router-ignore` opt-out.**
-
-It already works; it's just not in the public surface yet. Adding it to the framework's docs is the only "new" thing here.
-
-**5. Scroll restoration.**
-
-Every SPA router has to decide what happens to scroll position on navigation. Today, `createRouter` does nothing — the back button leaves you wherever you were on the new page, which is wrong almost everywhere. Match SvelteKit's defaults:
+Every SPA router has to decide what happens to scroll position on navigation. Today, `createRouter` does nothing — the back button leaves you wherever you were on the new page. Match SvelteKit's defaults:
 
 - **New navigation** (`router.push` or a link click) → scroll to top.
 - **Back / forward** (popstate) → restore the scroll position saved in `history.state`.
@@ -490,44 +515,31 @@ Every SPA router has to decide what happens to scroll position on navigation. To
 
 Enabled automatically. Doing nothing is a worse default than "scroll to top," and the override surface for the rare "don't scroll" case (a tab switcher that updates the URL without changing what's on screen) is small. Implementation is roughly: capture `window.scrollY` into `history.state` before each `pushState`, restore it on `popstate`, and reset to `(0, 0)` on `pushState` unless the opt-out is set.
 
+**This is a behavior change for every existing app.** Today every navigation leaves the scroll position wherever it was; after this RFC, every push-style navigation jumps to the top. That is the correct default for almost every app — but it *will* change visible behavior, and apps that intentionally update the URL without changing what's on screen (tab switchers, filter bars, sub-route swaps inside a scrolled container) will need to add `data-router-noscroll` to the relevant links. Worth calling out in the release notes, not buried.
+
+**3. Document the existing `data-router-ignore` opt-out.**
+
+It already works at runtime; it's just not in the public surface yet. Adding it to `docs/RIP-APP.md` and `AGENTS.md` is the only "new" thing here. Pure documentation, no code change.
+
 ### What about programmatic navigation?
 
-Programmatic navigation (a successful async action that should redirect the user, like `await login(); router.push '/dashboard'`) is the obvious companion case to clicking a link. The good news: **Rip already has it.** `router.push(url)` and `router.replace(url)` are stable methods on the router object that's already passed to every component as `@router`. The replacement-vs-push distinction (login redirect that shouldn't appear in back-button history → `replace`; normal nav → `push`) lives there, where it belongs.
+Programmatic navigation (a successful async action that should redirect the user, like `await login(); router.push '/dashboard'`) is the obvious companion case to clicking a link. The good news: **Rip already has it.** `router.push(url)` and `router.replace(url)` are stable methods on the router object that's already passed to every component as `@router`. The replacement-vs-push distinction (login redirect that shouldn't appear in back-button history → `replace`; normal nav → `push`) lives there, where it belongs. No new API needed; only RFC 5's typing of the `url` argument.
 
 ### What this RFC does *not* propose, and why
 
-- **A `Link` component.** Most framework UIs ship one (TanStack, Vue, Solid, React Router); SvelteKit doesn't, and Rip should follow SvelteKit. A typed-only `Link` would be the first place in Rip where adding types changes the source idiom rather than just validating it — a divergence not paid anywhere else (`::`, `rip.json strict`, schemas all validate an unchanged API). It also wouldn't help markdown, CMS output, or third-party widgets, which all emit `<a>`. Type safety on the route value can be done on the `href` attribute directly.
+- **A `Link` component.** Most framework UIs ship one (TanStack, Vue, Solid, React Router); SvelteKit doesn't, and Rip should follow SvelteKit. A typed-only `Link` would be the first place in Rip where adding types changes the source idiom rather than just validating it — a divergence not paid anywhere else (`::`, `rip.json strict`, schemas all validate an unchanged API). It also wouldn't help markdown, CMS output, or third-party widgets, which all emit `<a>`. Type safety on the route value can be done on the `href` attribute directly (RFC 5).
 - **A `data-router-active-class` attribute.** `aria-current="page"` plus `[aria-current="page"]` in CSS covers the common case. A custom class is usually wanted for prefix-match active state (`/blog` styled active on `/blog/*`), which is a separate feature with separate rules — defer.
 - **A `data-router-replace` attribute.** Programmatic replace already exists via `router.replace`; click-time replace has no compelling use case.
 
-### Caveats of the template-literal approach
+### Effect on existing apps
 
-Distinct from the external-URL story above, the `__RipRoutes` union itself is loose on dynamic segments — `${string}` accepts any string, including the empty string and strings containing slashes:
+Two real behavior changes — `aria-current` is set automatically on active anchors, and scroll position resets to top on push-style navigation. Surface stays the same: no new global, no new component, no new import; existing `<a href>` markup is unchanged.
 
-- `<a href: "/users/">` type-checks (matches `` `/users/${string}` ``); the runtime would 404 it.
-- `<a href: "/users/foo/bar">` type-checks against `/users/${string}` even though `[id]` is conceptually one segment.
-- Catch-all routes (`[...rest]`) type as `` `/admin/${string}` ``, which over-accepts but never under-accepts.
-
-Fully tight per-segment typing requires the TanStack-style approach: type each route as `{ to: "/users/$id", params: { id: string } }`, separating the path template from the params. That changes the source idiom — `<a href: "/users/#{id}">` becomes `<a href: route("/users/$id", id: id)>` or similar — which is the typed/untyped divergence this RFC is explicitly trying to avoid. The proposal here trades segment-shape precision for source-form parity. If the looseness causes real bugs in practice, a follow-up RFC can layer per-segment validation on (the underlying route tree is already known at type-check time), but ship the prefix-discriminated version first and see whether the gap matters.
-
-The `aria-current` walker is `O(n_anchors)` per route change. For typical nav bars with tens of links this is invisible; on pages with thousands of anchors a route-indexed cache or `IntersectionObserver`-scoped walk would handle it. Not a v1 concern.
-
-### Effect on untyped apps
-
-**Behavior changes: `aria-current` is set automatically on active anchors, and scroll position is managed automatically on navigation. Surface change: none.**
-
-No new global, no new component, no new import. Existing `<a href>` markup is unchanged.
-
-- Active-link styling: a user who wants to suppress auto-`aria-current` on a specific link can set it manually to any other value (the `WeakSet` keeps the framework from overriding it) or add `data-router-ignore`.
-- Scroll restoration: matches SvelteKit defaults — top on push, restore on back/forward, browser default on `#fragment`. Apps that intentionally update the URL without changing the visible region (tab switchers, filter bars, sub-route swaps inside a scrolled container) opt out per-link with `data-router-noscroll`, or programmatically with `router.push(url, noScroll: true)`. Both are net-new attributes/options; nothing already in the codebase changes meaning.
-
-### Effect on typed apps
-
-The type pipeline gains `findRoutesDir` and `buildRoutesType` in `src/typecheck.js`, and `src/dts.js` gains an `__RipAnchorAttrs` slot in `__RipElementMap` plus typed signatures for `router.push` / `router.replace`. Both follow the existing `__RipStash` precedent, and the per-route `@params` tightening lives in the same walker. `<a href: "/cart">` and `@router.push "/cart"` in a typed file both validate against the project's actual route tree, with no migration and no new syntax.
+Both changes have per-link opt-outs (`data-router-ignore` for `aria-current`, `data-router-noscroll` for scroll) and a programmatic opt-out for scroll (`router.push(url, noScroll: true)`). Apps that hit the edge cases (deliberate manual `aria-current` management, tab-switcher links that shouldn't scroll) update those links once.
 
 ### Relationship to other RFCs
 
-The `aria-current` + scroll-restoration parts are independent of every other RFC — pure runtime ergonomics. The `<a href>` typing piece depends on RFC 2 (DTS pipeline) and RFC 3 (typed router exports). The `@router.push` typing and per-route `@params` tightening depend on RFC 4 (typed component `this`).
+Independent of every other RFC. RFC 5 handles the type-system side of routing (`href` typing, per-route `@params`, typed `router.push`); the two are complementary but neither blocks the other.
 
 
 ## RFC 8: Tracking property accesses on `for`-loop iteration variables
@@ -565,36 +577,38 @@ A `for`-loop iteration variable is not rooted at `this`, so `hasReactiveDeps(ite
 
 ### Proposal — treat the iteration variable as reactive when the iterated source is reactive
 
-When the compiler emits a `for x in expr` loop body, if `expr` is already reactive (i.e. would itself be wrapped in an `__effect` by the existing `hasReactiveDeps` check), then within that loop body **any read through a binding that references the proxy** is reactive and gets the same effect-wrapping treatment as a `this`-rooted access.
+When the compiler emits a `for x in expr` loop body, if `expr` is already reactive (i.e. would itself be wrapped in an `__effect` by the existing `hasReactiveDeps` check), then within that loop body **direct member access on the iter var** is reactive and gets the same effect-wrapping treatment as a `this`-rooted access.
 
-The day-1 scope covers three cases, all of which boil down to the same underlying mechanism — a name that points at a reactive proxy:
-
-1. **Direct member access on the iter var.** `for item in cart.items` then `item.qty`, `item[0]`, `item.foo.bar`. The base case.
-2. **Aliases and rebindings.** `for item in items` then `local = item; local.foo`. `local` references the same proxy as `item`; reads through it are already reactive at runtime — the compiler just needs to know the name is tracked so it emits the effect wrapper.
-3. **Object-shaped destructuring of reactive references.** `for {profile} in users` then `profile.name`. `profile` is still a proxy reference, so reads through it stay reactive. Same name-propagation work as aliases.
+Day-1 scope is intentionally narrow: just the iteration variable itself. `for item in cart.items` then `item.qty`, `item[0]`, `item.foo.bar` becomes reactive. That's the case the cart example actually hits, the case every list-of-reactive-objects template hits, and the smallest change that closes the gap.
 
 Concretely, in `src/components.js`:
 
 - The loop emitter already pushes `{ itemVar, indexVar }` onto `_loopVarStack` before walking the body and pops after.
-- Add a `reactiveSource: bool` field — captured at push time from the same check that decides whether `__reconcile` is wrapped in `__effect`. When true, `itemVar` is added to a scope-local tracked-names set as the body walk begins.
-- During the body walk, when an assignment `ident = X` or a destructuring `{ident, ...} = X` is seen and `X` resolves to a tracked name, add `ident` to the tracked-names set within its lexical scope. Reassigning a tracked name to a non-tracked expression removes it. Pop the scope's additions on scope exit.
+- Add a `reactiveSource: bool` field — captured at push time from the same check that decides whether `__reconcile` is wrapped in `__effect`. When true, `itemVar` is added to a scope-local tracked-names set as the body walk begins, and removed on pop.
 - Extend `hasReactiveDeps(node)` to return true when `node` is a member access whose root identifier is in the current tracked-names set. The reactive-source check has already happened at insertion time, so lookup is just a set membership test.
 
-The existing emit paths (`emitAttributes`, the text-interpolation path, `emitConditional`) already route reactive expressions through `_pushEffect` — they'd start firing for `item.foo`, `local.foo`, and `profile.name` automatically. The patch function `p()` would receive the per-row effects it currently lacks, and the row's DOM nodes would update in place when the underlying signals fire. Identity is preserved — no reconciler rebuild, no input blur.
+The existing emit paths (`emitAttributes`, the text-interpolation path, `emitConditional`) already route reactive expressions through `_pushEffect` — they'd start firing for `item.foo` automatically. The patch function `p()` would receive the per-row effects it currently lacks, and the row's DOM nodes would update in place when the underlying signals fire. Identity is preserved — no reconciler rebuild, no input blur.
 
-**Deferred to RFC 8b — primitive destructuring.** `for {qty} in items` where `qty` is a number is genuinely a different problem. Once the value is destructured out it's no longer a proxy reference — `qty` is just a `Number`, and `qty * 2` reads from a snapshot. Making it reactive requires either rewriting reads of `qty` back to `item.qty` (a real source-rewrite pass with scoping concerns around shadowing and reassignment), abandoning JS destructuring entirely in favor of `let qty; ... item.qty` everywhere, or some getter-binding scheme that doesn't have a clean syntax. Each of those is a design decision worth its own RFC. Day-1 covers the three reference-preserving cases; primitive destructuring stays static for now (and the workaround — drop the destructuring, write `item.qty` — is local and obvious).
+**Deferred to RFC 8b — alias propagation, object-shaped destructuring, and primitive destructuring.** Three cases, all deferred together because they share a tracking-set-propagation mechanism that's worth designing once, with its own RFC, rather than half-shipping in 8a:
+
+- **Aliases and rebindings.** `for item in items` then `local = item; local.foo`. `local` references the same proxy as `item`; the compiler needs scope-aware analysis to know the name is tracked.
+- **Object-shaped destructuring of reactive references.** `for {profile} in users` then `profile.name`. `profile` is still a proxy reference; same propagation work as aliases.
+- **Primitive destructuring.** `for {qty} in items` then `qty * 2`. Genuinely different — once destructured, `qty` is a `Number`, no longer a proxy reference. Fix requires rewriting reads back to `item.qty`, or abandoning JS destructuring at codegen, or some getter-binding scheme.
+
+Day-1 workaround for all three: don't alias, don't destructure — write `item.foo` directly. Local and obvious. The narrower 8a scope is also the safer one — no scope-walker, no reassignment-retraction edge cases, no propagation-through-blocks bugs. RFC 8b takes those on once 8a has shipped and the cart pattern is verified.
 
 **Pros:**
-- Closes the gap between "what users expect from fine-grained reactivity" and what the compiler actually delivers. The cart-row case (and every list-of-reactive-objects case) just works.
+- Closes the gap between "what users expect from fine-grained reactivity" and what the compiler actually delivers. The cart-row case (and every list-of-reactive-objects case using direct iter-var access) just works.
 - Eliminates the one workaround that exists purely for compiler reasons rather than design reasons. "Extract a child component to make per-row updates reactive" stops being a recommendation; component extraction is once again only about composition and reuse.
-- Strictly additive — no regressions. Today, `item.qty` in a template reads once and never updates on in-place mutation; after this RFC, it does. Existing code that *intentionally* relied on the stale-read behavior would change, but that pattern is vanishingly rare and would be better written as a non-reactive snapshot anyway.
+- Behavior change is small but real: today, `item.qty` in a template reads once and never updates on in-place mutation; after this RFC, it does. Existing code that *intentionally* relied on the stale-read behavior would change, but that pattern is vanishingly rare and would be better written as a non-reactive snapshot anyway.
 - Removes the ergonomic tax of extracting a child component just to get per-row reactivity. The child-component pattern still works (and is still right when composition or reuse is the real motivation), but it stops being mandatory for this one compiler-shaped reason.
-- Simpler mental model. AGENTS.md's tracking rule changes from "rooted at `this`" to "rooted at any reactive binding" — shorter, more general, easier to teach.
-- Aliases and object-shaped destructuring work day one, so the rule users learn ("reads through a reactive binding are reactive") matches what they actually write. No "don't alias the iter var" caveat in the docs.
+- Simpler mental model. AGENTS.md's tracking rule changes from "rooted at `this`" to "rooted at `this` or at a reactive iter var" — slightly longer but still teachable.
+- Day-1 implementation is small: one flag on the loop stack, one set lookup in `hasReactiveDeps`. No scope walker, no propagation pass, no destructuring rewrite.
 
 **Cons:**
-- Primitive destructuring stays static, silently — `for {qty} in items` then `qty * 2` does not become reactive, and there's no warning. Has to be called out in the docs and ideally surfaced as a lint or compile-time hint when the destructured field is read into a tracked context. (Full fix deferred to RFC 8b.)
-- Iteration over a `~=` computed that returns fresh objects each recompute is actively wasteful, not just redundant — N per-element effects get torn down and recreated on every recompute, doing work the reconciler already handles via identity change. Not a correctness issue, but worth a docs note: "if your iter source is a `.map`-returning computed, push the reactivity to the source instead of relying on per-element tracking."
+- Aliases (`local = item`) and destructuring (`{profile} = item`, `{qty} = item`) all stay static and silent. `for {qty} in items` then `qty * 2` does not become reactive, and there's no warning. Has to be called out in the docs and ideally surfaced as a lint or compile-time hint. Full fix deferred to RFC 8b.
+- Iteration over a `~=` computed that returns fresh objects each recompute is wasteful — N per-element effects get torn down and recreated on every recompute, doing work the reconciler already handles via identity change. Not a correctness issue, but worth a docs note: "if your iter source is a `.map`-returning computed, push the reactivity to the source instead of relying on per-element tracking."
+- Per-row effect creation is new work on every list render. For lists with thousands of rows times tens of reactive reads, this is observable. Not a v1 blocker for the cart-shaped lists this targets, but flagged here rather than in a Cons-as-asterisk.
 
 ### Implementation notes
 
@@ -618,7 +632,7 @@ The existing emit paths (`emitAttributes`, the text-interpolation path, `emitCon
 
 ### Relationship to other RFCs
 
-Independent of every other RFC. RFCs 1–5 concern the type and packaging story; RFC 6 cleans up the `@rip-lang/app` export surface; RFC 7 concerns routing. RFC 8 lands purely in `src/components.js` (codegen) and `AGENTS.md` (the tracking-rule docs).
+Independent of every other RFC. RFCs 1–5 concern the type and packaging story; RFC 6 cleans up the `@rip-lang/app` export surface; RFC 7 concerns routing ergonomics. RFC 8 lands purely in `src/components.js` (codegen) and `AGENTS.md` (the tracking-rule docs).
 
 ### Migration
 
@@ -631,10 +645,289 @@ A dedicated test in `test/rip/` covering:
 - `for x in stashArray` then `x.prop` in a text node — mutating `x.prop` updates the text node without rebuilding the parent.
 - `for x in [1,2,3]` (non-reactive source) — emits no per-element effect, behavior unchanged.
 - `for x in cart.items` then `<input value: x.qty>` — typing into the input then mutating `x.qty = n` from outside updates the displayed value without blurring the input.
-- Alias propagation: `for item in items` then `local = item; <td>= local.qty` — mutating `item.qty` updates the cell.
-- Object destructuring: `for {profile} in users` then `<td>= profile.name` — mutating `users[i].profile.name` updates the cell.
-- Reassignment retracts tracking: `local = item; local = somethingElse; local.foo` — the read of `local.foo` is not tracked once `local` no longer references the proxy.
-- Primitive destructuring stays static (until 8b): `for {qty} in items` then `<td>= qty` — mutating `items[i].qty` does *not* update the cell; documented behavior.
 - Nested loops over reactive sources — each loop's iter var tracks independently.
 - Shadowed name (`for x in items` containing `for x in subitems`) — inner `x` shadows outer; both tracked correctly.
-- Cart example fixture — the `+`/`−`/typed-quantity case from this README ends up green.
+- Cart example fixture — the `+`/`−`/typed-quantity case ends up green.
+- Negative coverage (documenting 8a's deferred cases): `for item in items` then `local = item; local.foo` does *not* update; `for {profile} in users` then `profile.name` does *not* update; `for {qty} in items` then `qty * 2` does *not* update. These tests pin the day-1 boundary so RFC 8b can flip them green deliberately.
+
+---
+
+## RFC 9: Consuming Rip packages
+
+The protocol below — declared deps, undeclared-import diagnostic, auto-discovery, bare-specifier rewrite, package-shape contract — is consumer-agnostic: it applies equally to in-repo apps (`examples/*`, `apps/*`, `packages/*/dev-server`, the widget gallery) and to standalone apps living outside the workspace. The migration plan focuses on in-repo apps because that's the audit scope this RFC commits to; standalone apps inherit the protocol the moment they bump to a release of `@rip-lang/server` that includes it. The separate question of standalone *deployment* plumbing (version skew between npm-published packages and the served `rip.min.js`, removing `link-global` as a dev-machine crutch) is genuinely out of scope and called out below.
+
+### Problem
+
+An app under `examples/cart/` wants to write `import { http } from '@rip-lang/http'` from `app/routes/index.rip` (a browser-side component). Today this works partially on both sides — and the parts that don't work fail in different ways than you'd guess.
+
+**Server side** — "works" by accident. `rip-loader.js` rewrites `@rip-lang/*` imports through `import.meta.resolve`, which lands inside the global `node_modules` tree only because `bun run link-global` previously symlinked the workspace into `~/node_modules/` and `~/.bun/install/global/node_modules/`. The example app declares no dependency on `@rip-lang/http`. Remove the symlink, the import breaks.
+
+**Browser side** — works only with manual config, with two ergonomic gaps. The `serve` middleware in [packages/server/middleware.rip](packages/server/middleware.rip) already supports external dirs in its `bundle:` option ([middleware.rip:797–805](packages/server/middleware.rip#L797-L805)) and emits them into `components/_lib/{bundle-name}/{path}` keys, which the runtime resolver in [packages/app/index.rip](packages/app/index.rip#L908-L922) already consumes. What's missing is the two pieces between "I wrote the import" and "it ends up in the bundle":
+
+1. **No bare-specifier rewrite.** [`compileAndImport`'s blob-URL rewrite regex](packages/app/index.rip#L991) is `/\.rip['"]/` — it matches `'app/http.rip'` but never `'@rip-lang/http'`. A component using the natural specifier silently fails in the browser.
+2. **No auto-discovery.** Including a Rip package today requires an explicit `bundle: { app: ['.', '../../../packages/http'] }` line, with the relative path written by hand. The `import` statement in the component file isn't enough.
+
+The two server- and browser-side failures share a root cause: **dependency declaration is implicit, and the loader/bundler are guessing.**
+
+This is also the reason `examples/cart/rip.json` has to exclude `index.rip` and `api/**` from `rip check` — the type-checker can't resolve the undeclared `@rip-lang/server` import either, so the only way to keep the build green is to skip those files. Fixing declaration fixes that exclusion as a side effect.
+
+#### Verified-working manual config (May 2026)
+
+For reference: with this `serve` block in `examples/cart/index.rip` and these import lines in the route files, the cart's products + checkout flow runs end-to-end through `@rip-lang/http`:
+
+```coffee
+# examples/cart/index.rip
+use serve
+  dir: "#{dir}/app"
+  bundle: { app: ['.', '../../../packages/http'] }
+  watch: true
+
+# examples/cart/app/routes/index.rip
+import { http } from 'app/http.rip'
+products = http.get!("#{location.origin}/api/products").json!
+```
+
+Three things are awkward here, all addressed by this RFC: (a) the relative path `'../../../packages/http'`, (b) the import spec `'app/http.rip'` instead of `'@rip-lang/http'`, and (c) the `"#{location.origin}/..."` URL prefix — that last one is a `@rip-lang/http` bug (`buildUrl` calls `new URL(input)` without a base, which fails on relative URLs in browsers). The URL bug is adjacent and gets fixed in §5's package-shape work, not in the bundling change itself.
+
+#### Standalone evidence (May 2026)
+
+The same pattern is verified working in a standalone app outside this workspace. Its `package.json` declares the published `@rip-lang/http` as a real npm dep:
+
+```jsonc
+{ "dependencies": { "@rip-lang/http": "^1.1.122" } }
+```
+
+Its `index.rip` adds the same manual `bundle:` entry, just pointed at the locally-installed copy:
+
+```coffee
+use serve
+  dir: "#{dir}/app"
+  bundle: ['.', '../node_modules/@rip-lang/http']
+  watch: true
+```
+
+And its components import via `'app/http.rip'`, identical to the in-repo cart. Server-side, `rip-loader.js`'s `import.meta.resolve` finds `@rip-lang/http` in the app's own `node_modules` — no link-global crutch involved for *this* package, because the dep is properly declared. This is empirical confirmation that §2 (declared deps in `package.json`) is sufficient for the server-side resolution path, and that the §4 ergonomic gaps (manual `bundle:` entry, bundle-key-shaped import spec) are the same on both sides of the in-repo / standalone divide. Notably, the same standalone app does *not* declare `@rip-lang/server` — its server-side resolution still rides on the link-global symlink that puts `rip-server` on `PATH`. That's the asymmetry §2 fixes by requiring all `@rip-lang/*` consumption to go through declared deps.
+
+### Goal
+
+A single declared way for an app to say "I depend on these Rip packages," with three things honoring it consistently:
+
+1. The Bun loader (server-side `import` resolution).
+2. The `serve` middleware's bundle builder (browser-side `import` resolution).
+3. Rip resolution itself (an undeclared-import error at the loader and bundler), with `rip check` surfacing the same error earlier when typing is on.
+
+### Proposal
+
+#### 1. Single source of truth: `package.json`
+
+Remove the `rip.json` concept entirely. Everything that lives there today (`strict`, `exclude`, future `routes`, future `deps`) moves under the `"rip"` key in `package.json`:
+
+```jsonc
+{
+  "name": "cart",
+  "private": true,
+  "dependencies": {
+    "@rip-lang/server": "workspace:*",
+    "@rip-lang/http":   "workspace:*"
+  },
+  "rip": {
+    "strict": true,
+    "exclude": []
+  }
+}
+```
+
+`readProjectConfig` in [src/typecheck.js](src/typecheck.js) already supports the `package.json#rip` form; the rip.json branch gets deleted. The VS Code LSP file watchers ([packages/vscode/src/lsp.js](packages/vscode/src/lsp.js)) drop their `rip.json` glob.
+
+**Why one file.** Two config files for a single project is two places to forget. `package.json` is already mandatory for any app that has dependencies (which, after this RFC, all in-repo apps do). The "rip" key keeps Rip-specific config namespaced and out of the way of npm tooling.
+
+**Migration.** Two files exist today: `examples/cart/rip.json` and `examples/form/rip.json`. Fold each into the sibling `package.json` and delete. Trivial to do in one commit.
+
+#### 2. Dependencies are declared in `dependencies`, not invented
+
+Rip packages are normal npm packages. The example apps that import them get normal `dependencies` entries (`workspace:*` while in-repo, normal semver when consumed externally). This is the part that's missing today and that the link-global symlinks have been silently papering over.
+
+**Prerequisite: expand the root `workspaces` glob.** Today the root [package.json](package.json) declares only `"workspaces": ["packages/*"]`, so `workspace:*` from `examples/cart` would fail to resolve — the cart isn't a workspace member. Step 1 of the migration adds `examples/*`:
+
+```jsonc
+{
+  "workspaces": [
+    "packages/*",
+    "examples/*"
+  ]
+}
+```
+
+Not included: `apps/candor` and `apps/medlabs` are independent git repos that happen to be cloned into `apps/` for dev convenience — they have their own `.git`, manage their own `package.json`, and would be unsafe targets for the root `bun install`. They consume `@rip-lang/*` via link-global (the existing crutch) and stay outside this RFC's scope. `apps/websites/*` is static-asset-shaped (no `.rip` server, no Rip-package imports), so there's nothing to declare.
+
+Every dir matched by the glob has to have a valid `package.json` (the `examples/*` ones already do). After this, `bun install` from the workspace root knows about every in-repo example app, and `workspace:*` means the same thing everywhere — a symlink back to the corresponding `packages/<name>/` dir.
+
+Concretely, this means:
+
+- `examples/cart/package.json` gains `@rip-lang/server` and (when the cart starts using it) `@rip-lang/http`.
+- `examples/form/package.json`, `examples/results/package.json`, `examples/analytics/package.json`, and `packages/ui/browser/` (the widget gallery) all get the same audit.
+- `bun install` from the workspace root resolves these through Bun's workspace protocol — the `node_modules/@rip-lang/server` symlink points back at `packages/server/`. No publish needed for in-repo development.
+
+After this, `rip-loader.js`'s `import.meta.resolve` still works the same way, but it now resolves through the app's *own* `node_modules` (which actually has the package declared) instead of relying on the rescue path under `~/.bun/install/global/`. The link-global mechanism stays installed for now — it covers things outside this repo's purview — but in-repo apps no longer depend on it.
+
+#### 3. Rip resolution flags undeclared imports
+
+A new diagnostic class. Declaration is a Rip-wide invariant, not a type-system feature — every untyped app should get the same early warning a typed one does. So the check lives at the resolution layer, with two enforcement points:
+
+- **`rip-loader.js` (server-side).** Before calling `import.meta.resolve` on a `@rip-lang/<pkg>` specifier, walk up to the nearest `package.json` and verify the package is in `dependencies` / `devDependencies` / `peerDependencies`. If not, throw with a clear message before resolution is even attempted. Cost: one walk + one object lookup per unique import per process — negligible.
+- **`serve` middleware bundler (browser-side).** Same check, run once during the bundle build, against the app's `package.json`. Failure aborts the bundle with the same message text rather than producing a bundle that 404s in the browser.
+
+The error message in both places:
+
+> `` Import of '@rip-lang/<pkg>' is not declared in package.json. Run `bun add @rip-lang/<pkg>` (or use `workspace:*`). ``
+
+**`rip check` surfaces the same error earlier.** When the project is typed (per [AGENTS.md](AGENTS.md), `strict: true` or any `::` usage), `rip check` walks every `.rip` file and runs the same declaration check during its import-resolution pass — catching the bug at check time, before the loader compiles or the bundler builds. Same diagnostic, same message; just an earlier surface.
+
+The **bundler check is the forcing function** for browser-side bundling — it runs unconditionally on every build, typed or not, and it's the latest point at which the error can still fail loudly (the loader check covers server-side imports only, and `rip check` is opt-in via project config). With all three in place, the classic "works on my machine, breaks anywhere else" failure mode either errors at server start, errors at bundle time, or errors at `rip check` — never silently ships to production.
+
+#### 4. Browser-side bundling of Rip packages
+
+The browser-side bundling pipe is already in place. The verified-working manual config in the Problem section uses it end-to-end. What this section proposes is closing the two ergonomic gaps — bare-specifier rewrite and auto-discovery — without inventing new bundle namespaces or runtime fields.
+
+**Discovery is automatic, gated by declaration.** The bundler walks every `.rip` file in `appDir` (recursively), parses the top-of-file imports, and pulls in any `@rip-lang/*` package referenced. Anything imported and declared in `package.json#dependencies` gets bundled; anything imported and *not* declared trips the §3 undeclared-import error at bundle time (and at `rip check` time when typing is on).
+
+This matches what the bundler already does for the app itself — `appDir` is walked recursively today, with no per-file opt-in — and what `rip-loader.js` already does on the server side. An explicit `bundle.lib` list would add a second place to keep in sync with every `import` line, and the failure mode ("I forgot to list it") would be a runtime "module not found" in the browser instead of a build error. With automatic discovery, §3's declaration check is the single forcing function: the import line *is* the bundle list.
+
+**Bundle layout: reuse the existing `_lib` mechanism.** External-dir bundling already produces `components/_lib/{bundle-name}/{path}` keys ([middleware.rip:797–805](packages/server/middleware.rip#L797-L805)) and the runtime resolver already serves them ([packages/app/index.rip:908–922](packages/app/index.rip#L908-L922)). Auto-discovery for a package `@rip-lang/http` whose `package.json#main` resolves to `http.rip` therefore lands at `components/_lib/http/http.rip` — exactly the shape the experiment used, just without the human writing the relative path.
+
+For unscoped third-party packages (whenever those exist), the bundle name comes from the package directory name. For scoped names (`@rip-lang/http`), the bundle name is the trailing segment (`http`) — collisions with an app-local `_lib/http/...` directory are detected at bundle time and named in the error.
+
+**Bare-specifier rewrite.** [`compileAndImport` in packages/app/index.rip:991](packages/app/index.rip#L991) currently rewrites only `\.rip['"]` import specifiers to blob URLs. It gains a second pass: for any specifier matching `^@rip-lang/<pkg>(/.*)?$`, look up the package's bundle entry in the `components` map (using the same name-to-bundle convention the bundler used) and rewrite to that path before the `.rip` rewrite runs. The server-side rewrite in `rip-loader.js` already does the equivalent transformation against the filesystem; the browser version does it against the bundle.
+
+This keeps the runtime resolver, the bundle JSON shape, and the stash field names exactly as they are today. The only new code is: (a) the import-walker in the bundler, and (b) the bare-specifier branch in `compileAndImport`.
+
+**Stash / bundle rename to `modules` is deferred to RFC 10.** The current `bundle.components` field name reads oddly once the contents include third-party packages, and RFC 10 proposes renaming it to `modules` (with a corresponding `_pkg/` prefix split). That cleanup is independent of solving the stated problem — bundling external packages already works under `_lib/`, just less prettily — and conflating it here risks the proposal being judged on the rename's churn rather than on the actual ergonomic deficiency. Punt.
+
+#### 5. Package shape contract
+
+For a `@rip-lang/*` package to be browser-bundleable under §4, it needs:
+
+- A `.rip` entry file (declared via `package.json#main` or a new `package.json#rip.browser` field if the server entry is `.js`).
+- No Node-only imports (`fs`, `path`, `child_process`, `node:*`) on the browser path. The bundler refuses to include any package whose entry transitively imports a node-builtin; the error names the offending file.
+- No browser-incompatible runtime assumptions on the browser path. The current `@rip-lang/http` is the canonical example: its `buildUrl` calls `new URL(input)` without a base, which throws `TypeError: Invalid URL` in browsers when `input` is a relative path like `/api/products`. Fix on the package side (default `prefixUrl` to `location.origin` when running in a browser context, or accept the relative form directly). This RFC doesn't enumerate every such pitfall — it just notes that "passes Node" isn't the same as "passes browser," and Step 5 of the migration plan validates the cart end-to-end after the fix lands.
+- Optional `_lib/` subtree of co-bundled components, mirroring the convention apps already use.
+
+Server-only Rip packages (`@rip-lang/server`, `@rip-lang/db`) don't need any of this — they're never bundled for the browser. The bundler simply doesn't touch them, even if a component file accidentally `import`s them; it errors with "package `@rip-lang/server` is not browser-safe (declares no `rip.browser` entry)."
+
+### Out of scope (deferred to follow-up RFCs or never)
+
+- **Standalone-app *deployment* plumbing** (distinct from the protocol, which standalone apps do get). The rabbit hole here is npm version skew between a published `@rip-lang/server` and the served `rip.min.js`, the `rip.min.js` upward walk in middleware, the `bin/rip-server` ENOENT shim, `bin/rip` dispatch step 4 (cwd vs repoRoot), and removing `link-global` as a dev-machine crutch. Once a standalone app is on a release of `@rip-lang/server` whose middleware implements §4 and whose served runtime implements the bare-specifier rewrite, it consumes Rip packages the same way an in-repo app does — that part isn't deferred. What stays deferred is the cross-version pinning and dev-machine setup work that only matters for downstream maintainers, not for the protocol itself.
+- **Stash / bundle field rename (`components` → `modules`, `_pkg/` namespace).** Cosmetically nicer once third-party packages live in the bundle alongside app components, but the existing `_lib/<bundle-name>/...` shape already works for both (verified). Folding it into RFC 9 risks the proposal being judged on rename churn rather than on the ergonomic deltas. Tracked as RFC 10.
+- **Tree-shaking inside a Rip package.** Today every `.rip` file in a bundled package gets included. Per-export pruning is a real optimization but doesn't change the protocol — defer.
+
+### Migration plan
+
+0. **Expand the root `workspaces` glob.** Add `examples/*` to the `workspaces` array in the root [package.json](package.json). Run `bun install` once and confirm `node_modules/@rip-lang/*` symlinks resolve from each example app dir. (`apps/candor` and `apps/medlabs` are nested independent git repos and stay out of the workspace; `apps/websites/*` has no Rip-package imports.)
+1. **Codify `package.json` as the only config file.** Remove `rip.json` reading from `src/typecheck.js` and the LSP file watchers. Convert and delete the existing `rip.json` files.
+2. **Audit every in-repo app.** For every `examples/*/` and `packages/*/` that has its own `package.json` and imports `@rip-lang/*`, add the missing `dependencies` entries with `workspace:*`. One commit per area is fine.
+3. **Land §3 (undeclared-import diagnostic).** Two enforcement points: the loader (`rip-loader.js`) and the bundler (`serve` middleware), plus the same check inside `rip check` for typed projects. Now that the audit is done, the new error fires on any regression and on any new app created without proper deps — typed or untyped.
+4. **Land §4 + §5 (browser bundling).** Three pieces, all atop the existing `_lib/<bundle-name>/...` machinery: (a) the import-walker in the `serve` middleware that turns declared `@rip-lang/*` deps into auto-added bundle entries; (b) the bare-specifier rewrite branch in [`compileAndImport`](packages/app/index.rip#L991) that turns `'@rip-lang/http'` into the bundle-relative path; (c) the §5 package-shape validator (browser-safety check + `rip.browser` entry). No runtime stash changes, no resolver changes, no bundle JSON shape changes.
+5. **Fix `@rip-lang/http`'s browser URL handling**, then migrate the cart to `import { http } from '@rip-lang/http'` with no relative-path workaround (the original ask that started this whole investigation, plus the `buildUrl` fix surfaced by the experiment that informed this RFC).
+6. **Re-include `index.rip` and `api/**` in `rip check`** for `examples/cart` (and the other example apps with the same exclusion), now that the type-checker can resolve the server-side imports.
+
+Step 0 unblocks everything else — without it `workspace:*` is a dead reference. Steps 1–3 are otherwise independent and can land in any order. Step 4 depends on 1–3. Step 5 depends on 4. Step 6 depends on 1 (config consolidation) and on RFCs 2 / 5 (so the server-side imports actually resolve to types, not just to packages).
+
+### Relationship to other RFCs
+
+- **Depends on nothing.** Steps 1–3 are pure plumbing — no type-system or component changes.
+- **Complements RFC 2, doesn't block it.** RFC 2 ("Rip packages exposing types to typed Rip apps") is about how packages *emit* types from annotated `.rip` source — it can land independently for server packages, since `@rip-lang/server` already resolves via the loader rescue today. What RFC 9 adds is the matching consumer-side honesty: the app *declares* the dependency it's already using. Once both have landed, the cart's `index.rip` and `api/**` come back into `rip check` because (a) the imports resolve through declared deps and (b) the package ships types.
+- **Cross-checks RFC 5.** RFC 5's `__RipRoutes` walker reads `routes` from `rip.json`; after this RFC, it reads from `package.json#rip.routes` instead. Trivial swap.
+- **Independent of RFCs 1, 3, 4, 5, 6, 7, 8.**
+- **Precedes RFC 10.** RFC 10 renames the bundle layout this RFC reuses; landing RFC 9 first means RFC 10 is a pure cosmetic/cleanup pass over a working system rather than a co-mingled change.
+
+---
+
+## RFC 10: Rename bundle `components` → `modules`, prefix every entry by origin
+
+### Problem
+
+After RFC 9 lands, the `serve` middleware bundle JSON has this shape:
+
+```jsonc
+{
+  "components": {
+    "components/_lib/http/http.rip": "...",        // a third-party Rip package (RFC 9 reuse)
+    "components/_lib/widgets/spinner.rip": "...",  // an app-local extra dir (`bundle: ['./widgets']`)
+    "components/_lib/button.rip": "...",            // an actual app component (auto-scanned from appDir)
+    "components/cart.rip": "..."                    // a route file (only unprefixed branch today)
+  },
+  "data": { ... }
+}
+```
+
+Three things read poorly once third-party packages live alongside app components:
+
+1. **`components` is a misnomer.** The map now holds modules of all kinds — UI components, plain `.rip` libraries (`@rip-lang/http`), package entry files. Calling the whole thing `components` reads as "all of these are UI components," which is false. The field name is load-bearing in [packages/app/index.rip:908–922](packages/app/index.rip#L908-L922) (`resolveStorePath`) and in every `bundle.components[...]` reference downstream.
+2. **`_lib/` is overloaded.** Today `_lib/<name>/...` means three different things: app components auto-scanned from `appDir` (no sub-prefix), app-author-declared extra dirs (`bundle: ['./widgets']` → `_lib/widgets/...`), and — after RFC 9 — third-party packages (`_lib/http/...`). They behave identically at runtime, but they have different *origins*. Conflating them makes bundle dumps harder to read and makes any future per-origin behavior (cache-busting on package version change, package-shape validation, etc.) awkward to add. The `_lib/` overload also means a literal collision: an app with a `widgets/http/...` extra dir would clash with a `@rip-lang/http` dependency.
+3. **The namespacing is half-hearted.** Some entries get a `_lib/` prefix; routes sit bare at the root. Two categories self-describe, two don't. The asymmetry is the source of every collision question in this RFC: route-vs-appDir name clashes need a tiebreaker; appDir-vs-extra-dir clashes need another; package-vs-extra-dir is the third. All of them disappear if every entry is prefixed by its origin.
+
+### Goal
+
+Rename the field and put every entry under an origin prefix, with no behavior change other than the new layout being self-describing:
+
+```jsonc
+{
+  "modules": {
+    "_route/cart.rip":            "...",   // URL-addressable route
+    "_app/button.rip":            "...",   // auto-scanned appDir file
+    "_lib/widgets/spinner.rip":   "...",   // author-declared extra dir
+    "_pkg/http/http.rip":         "..."    // auto-discovered package (RFC 9)
+  },
+  "data": { ... }
+}
+```
+
+Four buckets, four prefixes. Each key declares where it came from; no two buckets can collide. The redundant `components/` path prefix that wrapped every old key is gone — once the field is `modules`, repeating the field name in each key is pure noise.
+
+### Proposal
+
+#### 1. Rename `bundle.components` → `bundle.modules`
+
+One field rename. The serializer in [packages/server/middleware.rip](packages/server/middleware.rip) emits `modules:` instead of `components:`. The runtime resolver `resolveStorePath` in [packages/app/index.rip:908–922](packages/app/index.rip#L908-L922) reads `bundle.modules` instead of `bundle.components`. The stash-side mirror (whatever lands the bundle into the running app) follows.
+
+No backwards-compatibility shim. The bundle JSON is regenerated on every `serve` start; no consumer reads it across versions.
+
+#### 2. Four origin prefixes: `_route/`, `_app/`, `_lib/`, `_pkg/`
+
+The bundler categorizes every entry by where it came from and prefixes accordingly:
+
+| Prefix    | Origin                                                                  | Today's keying                              |
+| --------- | ----------------------------------------------------------------------- | ------------------------------------------- |
+| `_route/` | URL-addressable route files (the file-based router's input)             | `components/<path>` (bare)                  |
+| `_app/`   | Auto-scanned `appDir` files (`bundle: { app: ['.'] }` — the `'.'` part) | `components/_lib/<path>` (overloaded)       |
+| `_lib/`   | Author-declared extra dirs (`bundle: { app: ['./widgets'] }`)           | `components/_lib/<dir-name>/<path>`         |
+| `_pkg/`   | RFC 9 auto-discovered packages                                          | (new — RFC 9 reused `_lib/<pkg-name>/...`)  |
+
+The runtime resolver `resolveStorePath` ([packages/app/index.rip:908–922](packages/app/index.rip#L908-L922)) currently tries `components/_lib/{clean}` then `components/{clean}` — a two-step walk with `_lib/` deterministically winning ties. After this RFC the resolver does a single lookup against the `modules` map per category branch: try `_pkg/{clean}`, then `_lib/{clean}`, then `_app/{clean}`, then `_route/{clean}`. The `_pkg/` branch's exact resolution semantics — entry-file lookup, sub-path imports — are TBD and tracked with the package-shape work in [RFC 9 §5](#5-package-shape-contract); this RFC just reserves the prefix.
+
+Collisions become impossible at the categorical level: `_lib/widgets/...` and `_pkg/widgets/...` coexist (different namespaces); a route and an appDir file with the same basename coexist (`_route/cart.rip` and `_app/cart.rip` are distinct keys). The bundler still rejects duplicate keys *within* a single bucket — two route files at the same path is a build error, as today — but cross-bucket clashes go away entirely.
+
+One behavior change worth flagging: today, an `appDir` file and a route file with the same component name resolve deterministically to the appDir file (because `_lib/` is tried before bare `components/`). Under this RFC, both keys exist and the resolver picks based on the prefix order above (`_app/` before `_route/`), so the same call site keeps resolving to the same file — no functional change for the single existing case, but the ambiguity is now visible in the bundle dump.
+
+#### 3. Drop the redundant `components/` path prefix
+
+Every key under the old `components` field was literally prefixed with `components/` — `components/_lib/foo.rip`, `components/cart.rip`. Once the field is `modules`, the prefix is pure noise. Strip it. Keys become `_pkg/http/http.rip`, `_lib/widgets/foo.rip`, `_app/cart.rip`, `_route/checkout.rip`.
+
+The bare-specifier rewrite from [RFC 9 §4](#4-browser-side-bundling-of-rip-packages) targets `_pkg/<name>/<entry>` directly; the `.rip` extension blob-URL rewrite is unaffected.
+
+### Out of scope
+
+- **Renaming on-disk source dirs.** Apps already separate `routes/` and `components/` on the filesystem (verified across `examples/cart`, `examples/form`, `examples/results`, `examples/analytics`, `apps/candor` — all use `routes/` + `components/`, not a single conflated dir). The bundle's misnomer comes from the bundler flattening these into one `components` map, not from the source-tree convention. This RFC fixes the bundle layout; the source tree needs no changes.
+- **Per-package versioning in the bundle.** `_pkg/<name>/...` does not encode a version; one bundle = one version of each package. Multi-version coexistence stays out of scope (also noted in RFC 9).
+
+### Migration plan
+
+1. **Rename in the bundler and resolver in one commit.** Touch the bundle serializer ([packages/server/middleware.rip](packages/server/middleware.rip)), the runtime resolver ([packages/app/index.rip](packages/app/index.rip#L908-L922)), and the bare-specifier rewrite ([packages/app/index.rip](packages/app/index.rip#L991)). Strip the `components/` prefix in the same commit.
+2. **Re-key every entry by origin** in the bundler — routes to `_route/`, auto-scanned appDir files to `_app/`, author-declared extra dirs to `_lib/<dir-name>/`, RFC 9's auto-discovered packages to `_pkg/<pkg-name>/`. Update `resolveStorePath` to walk the four branches in `_pkg/` → `_lib/` → `_app/` → `_route/` order.
+3. **Update tests and any docs that reference the old layout.** Search for `bundle.components`, `components/_lib/`, and the literal field name across the repo. In particular, delete the "Router note — `routes/` vs. `components/`" paragraph in [packages/app/AGENTS.md](packages/app/AGENTS.md#L27-L31) — that note exists only to warn agents about the bundler re-keying `routes/*.rip` under the `components/` prefix, and after this RFC the bundle key (`_route/`) matches the on-disk dir (`routes/`), making the warning obsolete.
+4. **Smoke-test the cart end-to-end.** RFC 9's verified cart config is the regression target; if the cart still renders products and completes checkout after this RFC lands, the rename is non-breaking.
+
+### Relationship to other RFCs
+
+- **Depends on RFC 9.** RFC 9 establishes the bundling pipe and the `_lib/<bundle-name>/...` reuse this RFC then renames. Landing RFC 10 first would mean inventing a `_pkg/` branch with no consumer.
+- **Independent of all other RFCs.** Pure cleanup; no type-system, component-system, or schema interaction.
