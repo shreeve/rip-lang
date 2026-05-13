@@ -1,7 +1,7 @@
 import { title } from '../config.rip'
 
 export NotFound = component
-  mounted: -> document.title = title 'Not Found'
+  mounted: -> document.title = title('Not Found')
 
   render
     p "Page not found"

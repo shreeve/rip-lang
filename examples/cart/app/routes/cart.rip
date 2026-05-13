@@ -6,19 +6,19 @@ export Cart = component
   status:: 'idle' | 'loading' | 'success' | 'error' := 'idle'
   error := ''
 
-  mounted: -> document.title = title 'Cart'
+  mounted: -> document.title = title('Cart')
 
   placeOrder: ->
     status = 'loading'
     error = ''
     try
-      res = await fetch '/api/orders',
+      res = await fetch('/api/orders', {
         method: 'POST'
         headers: { 'Content-Type': 'application/json' }
-        body: JSON.stringify
-          items: cart.items.map (i) -> { productId: i.id, quantity: i.quantity }
+        body: JSON.stringify({ items: cart.items.map((i) -> { productId: i.id, quantity: i.quantity }) })
+      })
       unless res.ok
-        throw new Error 'Order failed'
+        throw new Error('Order failed')
       cart.clear()
       status = 'success'
     catch err

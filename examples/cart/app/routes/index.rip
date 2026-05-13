@@ -20,17 +20,17 @@ export Products = component
     result = products.slice()
     if search
       term = search.toLowerCase()
-      result = result.filter (p) -> p.name.toLowerCase().includes(term)
+      result = result.filter((p) -> p.name.toLowerCase().includes(term))
     if sort is 'price-asc'
-      result.sort (a, b) -> a.price - b.price
+      result.sort((a, b) -> a.price - b.price)
     else if sort is 'price-desc'
-      result.sort (a, b) -> b.price - a.price
+      result.sort((a, b) -> b.price - a.price)
     result
 
   mounted: ->
-    document.title = title 'Products'
+    document.title = title('Products')
     try
-      res = await fetch '/api/products'
+      res = await fetch('/api/products')
       products = await res.json()
     catch err
       error = String(err)
@@ -47,11 +47,11 @@ export Products = component
     next = { ...@router.query, ...opts }
     params = new URLSearchParams()
     for key, val of next when val
-      params.set key, val
+      params.set(key, val)
     queryString = params.toString()
-    @router.replace @router.path + (if queryString then "?#{queryString}" else '')
+    @router.replace(@router.path + (if queryString then "?#{queryString}" else ''))
 
-  clearFilters: -> @setQuery {search: '', sort: ''}
+  clearFilters: -> @setQuery({ search: '', sort: '' })
 
   render
     if error
@@ -63,10 +63,10 @@ export Products = component
           type: "search"
           placeholder: "Search products..."
           value: search
-          @input: (e) => @setQuery search: e.target.value
+          @input: (e) => @setQuery({ search: e.target.value })
         select
           value: sort
-          @change: (e) => @setQuery sort: e.target.value
+          @change: (e) => @setQuery({ sort: e.target.value })
           option value: "", disabled: true, "Sort"
           option value: "price-asc", "Price: Low to High"
           option value: "price-desc", "Price: High to Low"
@@ -77,7 +77,7 @@ export Products = component
               div.image product.image
               h5 product.name
               p "$#{product.price.toFixed(2)}"
-              if cart.items.some (i) -> i.id is product.id
+              if cart.items.some((i) -> i.id is product.id)
                 Button outline, @click: (-> cart.removeItem(product)), "Added to Cart"
               else
                 Button outline, @click: (-> cart.addItem(product)), "Add to Cart"
