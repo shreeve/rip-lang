@@ -26,7 +26,13 @@
 # N/windowMs sustained.
 
 DEFAULT_WINDOW_MS    = 60000    # 1 minute
-DEFAULT_MAX_REQUESTS = 1000     # per window
+# Public-internet-safe default. 5 req/sec sustained, bursts up to 300.
+# Tolerant of institutional NAT (multiple users sharing one egress IP)
+# while still tight enough to make brute-force / scrape behavior
+# impractical from a single source. Operators can lower (60-120) for
+# stricter posture or raise for high-traffic APIs. An explicit 0
+# (typically via --rate-limit=0) disables limiting entirely.
+DEFAULT_MAX_REQUESTS = 300      # per window
 MAX_BUCKETS          = 100000   # hard cap on tracked keys
 
 export createRateLimiter = (maxRequests, windowMs) ->

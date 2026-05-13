@@ -19,6 +19,15 @@ test "generateRequestId is unique", ->
 
 # --- Rate limiter ---
 
+test "createRateLimiter null defaults to public-internet-safe values", ->
+  # Locked in to catch accidental future bumps that loosen the safe default.
+  # Any change here is a behavior change for every operator who hadn't
+  # explicitly set a rate limit, so it should be deliberate.
+  limiter = createRateLimiter(null, null)
+  eq limiter.maxRequests, 300
+  eq limiter.windowMs, 60000
+  limiter.stop()
+
 test "createRateLimiter allows requests under limit", ->
   limiter = createRateLimiter(5, 60000)
   result = limiter.check('1.2.3.4')
