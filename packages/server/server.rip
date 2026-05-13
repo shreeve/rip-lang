@@ -221,9 +221,19 @@ class Server
     fetchFn = @fetch.bind(@)
     wsOpts = @buildWebSocketHandlers()
     port = p
+    # Hardened defaults for the internet-facing listener:
+    #   - idleTimeout closes silent keepalive connections
+    #   - maxRequestBodySize caps giant-POST abuse
+    # See control/cli.rip for the operator-tunable knobs and rationale.
+    base =
+      port: port
+      idleTimeout: @flags.idleTimeoutSec
+      maxRequestBodySize: @flags.maxBodyMb * 1024 * 1024
+      fetch: fetchFn
     while port < p + 100
+      base.port = port
       try
-        return Bun.serve(Object.assign({ port, idleTimeout: 0, fetch: fetchFn }, wsOpts, opts))
+        return Bun.serve(Object.assign({}, base, wsOpts, opts))
       catch e
         if e?.code is 'EACCES' and port < 1024
           fallback = if opts.tls then 3443 else 3000
@@ -253,8 +263,17 @@ class Server
       unless @internalHttpsServer
         fetchFn = @fetch.bind(@)
         wsOpts = @buildWebSocketHandlers()
+        # Internal multiplexer endpoint reached via the L4 stream pipe —
+        # so it terminates TLS for real internet traffic and needs the
+        # same hardened idle/body limits as the public listener.
         @internalHttpsServer = Bun.serve(Object.assign(
-          { hostname: '127.0.0.1', port: 0, idleTimeout: 0, fetch: fetchFn }
+          {
+            hostname: '127.0.0.1'
+            port: 0
+            idleTimeout: @flags.idleTimeoutSec
+            maxRequestBodySize: @flags.maxBodyMb * 1024 * 1024
+            fetch: fetchFn
+          }
           wsOpts
           { tls: @tlsMaterial }
         ))
@@ -573,9 +592,13 @@ class Server
       if @flags.redirectHttp or @flags.acme or @flags.acmeStaging or configHasAcme
         challengeStore = @challengeStore
         try
+          # Redirect listener: very short idle timeout (no real long
+          # responses here), and the same body cap as the main listener
+          # — POSTs to port 80 still need a ceiling.
           @server = Bun.serve
             port: 80
             idleTimeout: 8
+            maxRequestBodySize: @flags.maxBodyMb * 1024 * 1024
             fetch: (req) ->
               url = new URL(req.url)
               # Serve ACME HTTP-01 challenges before redirecting
@@ -684,6 +707,15 @@ class Server
 
     # Rate limiting — applied early, covers all endpoints
     clientIp = bunServer?.requestIP?(req)?.address or '127.0.0.1'
+    # Stash on the request under a `rip`-prefixed name so downstream
+    # code paths (access logging, proxy headers, validation handlers)
+    # can read it without re-deriving it. Bun's requestIP() needs the
+    # server reference, which isn't threaded everywhere. The `rip`
+    # prefix avoids future collision if Bun ever adds a native
+    # `clientIp` property to its Request subclass. Used by
+    # serving/logging.rip to emit `ip` into the JSON access log so
+    # CrowdSec can issue per-IP bans.
+    req.ripClientIp = clientIp
     if @rateLimiter.maxRequests > 0
       { allowed, retryAfter } = @rateLimiter.check(clientIp)
       return rateLimitResponse(retryAfter) unless allowed

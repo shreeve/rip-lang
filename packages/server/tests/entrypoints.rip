@@ -50,6 +50,43 @@ test "workerConcurrency floors below 1 to 1", ->
   flags = parseFlags(['bun', 'server', defaultRip, 'c:0'])
   eq flags.workerConcurrency, 1
 
+test "rateLimit defaults to 300 (public-internet-safe)", ->
+  flags = parseFlags(['bun', 'server', defaultRip])
+  eq flags.rateLimit, 300
+  eq flags.rateLimitWindow, 60000
+
+test "rateLimit explicit 0 still disables limiting", ->
+  flags = parseFlags(['bun', 'server', defaultRip, '--rate-limit=0'])
+  eq flags.rateLimit, 0
+
+test "rateLimit explicit positive value passes through", ->
+  flags = parseFlags(['bun', 'server', defaultRip, '--rate-limit=60'])
+  eq flags.rateLimit, 60
+
+test "idleTimeoutSec defaults to 30s", ->
+  flags = parseFlags(['bun', 'server', defaultRip])
+  eq flags.idleTimeoutSec, 30
+
+test "idleTimeoutSec accepts override", ->
+  flags = parseFlags(['bun', 'server', defaultRip, '--idle-timeout-sec=15'])
+  eq flags.idleTimeoutSec, 15
+
+test "idleTimeoutSec floors negative input to 0", ->
+  flags = parseFlags(['bun', 'server', defaultRip, '--idle-timeout-sec=-5'])
+  eq flags.idleTimeoutSec, 0
+
+test "maxBodyMb defaults to 10MB", ->
+  flags = parseFlags(['bun', 'server', defaultRip])
+  eq flags.maxBodyMb, 10
+
+test "maxBodyMb accepts override", ->
+  flags = parseFlags(['bun', 'server', defaultRip, '--max-body-mb=50'])
+  eq flags.maxBodyMb, 50
+
+test "maxBodyMb floors below 1 to 1 (cap can't be zero)", ->
+  flags = parseFlags(['bun', 'server', defaultRip, '--max-body-mb=0'])
+  eq flags.maxBodyMb, 1
+
 test "serving runtime helpers load and create summary entries", ->
   runtime = createServingRuntime()
   entry = createReloadHistoryEntry('reload-1', 'test', null, 1, 'applied')

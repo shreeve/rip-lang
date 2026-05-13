@@ -17,6 +17,13 @@ export applyFlagSideEffects = (flags) ->
   _envOverride = flags.envOverride if flags.envOverride
   _debugMode = flags.debug is true
   process.env.RIP_DEBUG = '1' if _debugMode
+  # Loud, one-line warning if an operator has explicitly disabled the
+  # listener idle timeout. Doing this on the public internet leaves
+  # every keepalive connection alive forever, which is the textbook
+  # slow-loris precondition. Cheap to print; saves someone from
+  # themselves on a server they forgot they reconfigured.
+  if flags.idleTimeoutSec is 0
+    warn 'idleTimeoutSec=0 disables idle connection timeout — not safe for public exposure (slow-loris vector)'
 
 export formatTimestamp = ->
   now = new Date()
@@ -61,8 +68,14 @@ export logAccessJson = (app, req, res, totalSeconds, workerSeconds, mark = null)
   url = new URL(req.url)
   len = res.headers.get('content-length')
   type = (res.headers.get('content-type') or '').split(';')[0] or undefined
+  # `ip` is the direct TCP connection peer (set by server.rip as
+  # `req.ripClientIp` after Bun's requestIP() call — the `rip` prefix
+  # is intentional, see fetch() in server.rip). It's the field
+  # CrowdSec parsers key on for per-source ban decisions. Always emit,
+  # even if empty, so downstream log analyzers see a stable schema.
   p JSON.stringify
     t: new Date().toISOString()
+    ip: req.ripClientIp or ''
     app: app
     method: req.method or 'GET'
     path: url.pathname

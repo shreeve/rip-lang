@@ -63,7 +63,8 @@ export VALUE_FLAGS = new Set(%w[
   -f --file --cert --key --watch --env --https-port
   --socket-prefix --acme --acme-staging --realtime-path --publish-secret
   --max-queue --queue-timeout-ms --connect-timeout-ms --read-timeout-ms
-  --rate-limit --rate-limit-window --worker-concurrency -o --output
+  --rate-limit --rate-limit-window --worker-concurrency
+  --idle-timeout-sec --max-body-mb -o --output
 ])
 
 export parseFlags = (argv, defaultEntryPath = null) ->
@@ -254,8 +255,22 @@ export parseFlags = (argv, defaultEntryPath = null) ->
     noAcme: has('--no-acme')
     realtimePath: getKV('--realtime-path=') or '/realtime'
     publishSecret: getKV('--publish-secret=') or process.env.RIP_PUBLISH_SECRET or null
-    rateLimit: coerceInt(getKV('--rate-limit='), 0)
+    # 300 req/min/IP default. Public-internet-safe; an explicit 0 disables.
+    # See serving/ratelimit.rip for the rationale behind the value.
+    rateLimit: coerceInt(getKV('--rate-limit='), 300)
     rateLimitWindow: coerceInt(getKV('--rate-limit-window='), 60000)
+    # Listener idle timeout in seconds. Default 30 closes connections that
+    # are silent between requests, which kills indefinite-idle keepalive
+    # abuse. Note: this does NOT fully stop trickle-style slow-loris
+    # (clients dribbling bytes faster than the timeout); only nonzero
+    # idleness is enforced. An explicit 0 disables; unsafe on the public
+    # internet, supported only for special-case deployments.
+    idleTimeoutSec: Math.max(0, coerceInt(getKV('--idle-timeout-sec='), 30))
+    # Max public request body size in MB. Default 10 stops giant-body
+    # bandwidth/memory abuse without breaking typical web traffic. Raise
+    # deliberately for upload-heavy deployments; large uploads should
+    # generally use signed object-store URLs rather than direct POST.
+    maxBodyMb: Math.max(1, coerceInt(getKV('--max-body-mb='), 10))
     watch: watch
     configPath: getKV('--file=') or getKV('-f=')
     checkConfig: has('--check-config') or has('--check') or has('-c')
