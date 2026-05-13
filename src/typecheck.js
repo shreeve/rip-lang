@@ -1603,6 +1603,34 @@ function isInsideStringOrComment(text, col) {
   return inStr;
 }
 
+// Detect whether `col` on a Rip source line falls inside a `#` comment.
+// Walks the line tracking string state (', ", """, ''') so a `#` inside a
+// string literal isn't mistaken for the start of a comment. Used by the
+// diagnostic remapper to reject false-positive identifier matches inside
+// comments.
+function isInsideRipComment(text, col) {
+  let inStr = false, q = '', triple = false;
+  for (let i = 0; i < col && i < text.length; i++) {
+    const ch = text[i];
+    if (inStr) {
+      if (ch === '\\') { i++; continue; }
+      if (triple && ch === q && text[i + 1] === q && text[i + 2] === q) {
+        inStr = false; triple = false; i += 2; continue;
+      }
+      if (!triple && ch === q) inStr = false;
+    } else if (ch === '#') {
+      return true;
+    } else if (ch === '"' || ch === "'") {
+      if (text[i + 1] === ch && text[i + 2] === ch) {
+        inStr = true; q = ch; triple = true; i += 2;
+      } else {
+        inStr = true; q = ch;
+      }
+    }
+  }
+  return false;
+}
+
 export function offsetToLineCol(text, offset) {
   let line = 0, ls = 0;
   for (let i = 0; i < offset && i < text.length; i++) {
@@ -1810,6 +1838,18 @@ export function mapToSourcePos(entry, offset) {
     }
     if (wordAt) {
       let word = wordAt[0];
+      // Compiler-injected `this.foo` / `ctx.foo` (component bodies, server
+      // handlers): the diagnostic offset typically lands on `this`/`ctx`,
+      // which doesn't exist in the Rip source. Peek past it and use the
+      // member name instead so the squiggle anchors on the user-visible
+      // identifier rather than falling through to a fuzzy fallback.
+      if (word === 'this' || word === 'ctx') {
+        const memberMatch = genText.slice(genCol).match(/^(?:this|ctx)\.([A-Za-z_$][\w$]*)\b/);
+        if (memberMatch) {
+          const idx = findNearestWord(srcText, memberMatch[1], approx);
+          if (idx >= 0) return { line: srcLine, col: idx };
+        }
+      }
       let idx = findNearestWord(srcText, word, approx);
       // __bind_xxx__ → xxx: two-way binding props use mangled names in gen
       if (idx < 0 && word.startsWith('__bind_') && word.endsWith('__')) {
@@ -1856,13 +1896,28 @@ export function mapToSourcePos(entry, offset) {
     if (wordFallback) {
       let word = wordFallback[0];
       if (word.startsWith('__bind_') && word.endsWith('__')) word = word.slice(7, -2);
-      const srcLines = entry.source.split('\n');
-      const re = new RegExp('\\b' + word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b');
-      for (let delta = 0; delta <= 10; delta++) {
-        for (const d of delta === 0 ? [srcLine] : [srcLine + delta, srcLine - delta]) {
-          if (d >= 0 && d < srcLines.length) {
-            const m = re.exec(srcLines[d]);
-            if (m) return { line: d, col: m.index };
+      // Skip identifiers that exist only in generated TypeScript, never in
+      // the Rip source: `this` (component bodies), `ctx` (server handlers),
+      // and any `__`-prefixed runtime helper (`__state`, `__effect`,
+      // `__ripEl`, ...). Searching for them across source lines reliably
+      // finds false positives — most commonly the word `this` inside a `#`
+      // comment. `value` is intentionally NOT skipped (it's a valid user
+      // identifier; the `.value` signal-accessor case is handled by the
+      // member-extraction fix in the primary word-match path above).
+      // `__bind_xxx__` was already stripped to its user name above.
+      if (word !== 'this' && word !== 'ctx' && !word.startsWith('__')) {
+        const srcLines = entry.source.split('\n');
+        const re = new RegExp('\\b' + word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b');
+        for (let delta = 0; delta <= 10; delta++) {
+          for (const d of delta === 0 ? [srcLine] : [srcLine + delta, srcLine - delta]) {
+            if (d >= 0 && d < srcLines.length) {
+              const m = re.exec(srcLines[d]);
+              // Reject matches that fall inside a Rip `#` comment — they're
+              // never the source of a type error.
+              if (m && !isInsideRipComment(srcLines[d], m.index)) {
+                return { line: d, col: m.index };
+              }
+            }
           }
         }
       }
