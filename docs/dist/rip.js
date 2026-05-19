@@ -13433,7 +13433,6 @@ if (typeof globalThis !== 'undefined') {
       }
       tokens = tokens.filter((t) => t[0] !== "TYPE_DECL");
       if (lexer.typeRefNames?.size > 0) {
-        let typeRefNames = lexer.typeRefNames;
         let usedNames = new Set;
         let inImport = false;
         for (let t of tokens) {
@@ -13450,6 +13449,7 @@ if (typeof globalThis !== 'undefined') {
           if (t[0] === "IDENTIFIER")
             usedNames.add(t[1]);
         }
+        let isTypeOnly = (local) => !usedNames.has(local);
         for (let i = tokens.length - 1;i >= 0; i--) {
           if (tokens[i][0] !== "IMPORT")
             continue;
@@ -13460,24 +13460,134 @@ if (typeof globalThis !== 'undefined') {
             continue;
           if (tokens[j][0] === "STRING")
             continue;
-          let names = [];
-          while (j < tokens.length && tokens[j][0] !== "FROM" && tokens[j][0] !== "TERMINATOR") {
-            if (tokens[j][0] === "IDENTIFIER")
-              names.push(tokens[j][1]);
-            j++;
+          let fromIdx = -1, endIdx = j;
+          while (endIdx < tokens.length && tokens[endIdx][0] !== "TERMINATOR") {
+            if (fromIdx === -1 && tokens[endIdx][0] === "FROM")
+              fromIdx = endIdx;
+            endIdx++;
           }
-          if (names.length === 0)
+          if (fromIdx === -1)
             continue;
-          if (names.some((n) => usedNames.has(n)))
+          let lbIdx = -1, rbIdx = -1;
+          for (let k = i + 1;k < fromIdx; k++) {
+            if (tokens[k][0] === "{") {
+              lbIdx = k;
+              break;
+            }
+          }
+          if (lbIdx !== -1) {
+            for (let k = lbIdx + 1;k < fromIdx; k++) {
+              if (tokens[k][0] === "}") {
+                rbIdx = k;
+                break;
+              }
+            }
+          }
+          let hasOtherSpec = false;
+          let scanEnd = lbIdx !== -1 ? lbIdx : fromIdx;
+          for (let k = i + 1;k < scanEnd; k++) {
+            let tag = tokens[k][0];
+            if (tag === "IDENTIFIER" || tag === "*") {
+              hasOtherSpec = true;
+              break;
+            }
+          }
+          if (lbIdx === -1 || rbIdx === -1) {
+            if (hasOtherSpec) {
+              let names = [];
+              let k = i + 1;
+              while (k < fromIdx) {
+                if (tokens[k][0] === "AS" && k + 1 < fromIdx && tokens[k + 1][0] === "IDENTIFIER") {
+                  names.push(tokens[k + 1][1]);
+                  k += 2;
+                } else if (tokens[k][0] === "IDENTIFIER") {
+                  names.push(tokens[k][1]);
+                  k++;
+                } else {
+                  k++;
+                }
+              }
+              if (names.length === 0 || !names.every(isTypeOnly))
+                continue;
+              let end = endIdx < tokens.length ? endIdx + 1 : endIdx;
+              tokens.splice(i, end - i);
+            }
             continue;
-          if (!names.some((n) => typeRefNames.has(n)))
+          }
+          let specs = [];
+          let s = lbIdx + 1;
+          while (s < rbIdx) {
+            let e = s;
+            while (e < rbIdx && tokens[e][0] !== ",")
+              e++;
+            if (e > s)
+              specs.push({ start: s, end: e });
+            s = e + 1;
+          }
+          for (let spec of specs) {
+            let local = null, imported = null;
+            for (let k = spec.start;k < spec.end; k++) {
+              if (tokens[k][0] === "IDENTIFIER") {
+                if (imported === null) {
+                  imported = tokens[k][1];
+                  local = imported;
+                } else if (tokens[k - 1] && tokens[k - 1][0] === "AS") {
+                  local = tokens[k][1];
+                }
+              }
+            }
+            spec.local = local;
+            spec.drop = local != null && isTypeOnly(local);
+          }
+          let droppedAny = specs.some((s2) => s2.drop);
+          if (!droppedAny)
             continue;
-          let end = j;
-          while (end < tokens.length && tokens[end][0] !== "TERMINATOR")
-            end++;
-          if (end < tokens.length)
-            end++;
-          tokens.splice(i, end - i);
+          let allDropped = specs.every((s2) => s2.drop);
+          let outerNames = [];
+          if (allDropped && hasOtherSpec) {
+            let k = i + 1;
+            while (k < lbIdx) {
+              if (tokens[k][0] === "AS" && k + 1 < lbIdx && tokens[k + 1][0] === "IDENTIFIER") {
+                outerNames.push(tokens[k + 1][1]);
+                k += 2;
+              } else if (tokens[k][0] === "IDENTIFIER") {
+                outerNames.push(tokens[k][1]);
+                k++;
+              } else {
+                k++;
+              }
+            }
+          }
+          if (allDropped) {
+            if (!hasOtherSpec) {
+              let end = endIdx < tokens.length ? endIdx + 1 : endIdx;
+              tokens.splice(i, end - i);
+            } else if (outerNames.length > 0 && outerNames.every(isTypeOnly)) {
+              let end = endIdx < tokens.length ? endIdx + 1 : endIdx;
+              tokens.splice(i, end - i);
+            } else {
+              let removeStart = lbIdx, removeEnd = rbIdx + 1;
+              let k = lbIdx - 1;
+              while (k > i && tokens[k][0] !== "," && tokens[k][0] !== "IDENTIFIER" && tokens[k][0] !== "*")
+                k--;
+              if (k > i && tokens[k][0] === ",")
+                removeStart = k;
+              tokens.splice(removeStart, removeEnd - removeStart);
+            }
+          } else {
+            for (let idx = specs.length - 1;idx >= 0; idx--) {
+              let spec = specs[idx];
+              if (!spec.drop)
+                continue;
+              let { start: removeStart, end: removeEnd } = spec;
+              if (removeEnd < rbIdx && tokens[removeEnd][0] === ",") {
+                removeEnd++;
+              } else if (removeStart > lbIdx + 1 && tokens[removeStart - 1][0] === ",") {
+                removeStart--;
+              }
+              tokens.splice(removeStart, removeEnd - removeStart);
+            }
+          }
         }
       }
       while (tokens.length > 0 && tokens[0][0] === "TERMINATOR") {
@@ -13624,7 +13734,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.15.4";
-  var BUILD_DATE = "2026-05-19@17:09:23GMT";
+  var BUILD_DATE = "2026-05-19@17:32:59GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

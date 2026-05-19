@@ -4144,9 +4144,20 @@ export class Compiler {
 
     // Elide type-only imports — after type stripping, imported names that were
     // only used in type annotations no longer appear in the token stream.
-    // Only elide when at least one name was consumed by type annotation stripping.
+    // The elision is per-specifier, not per-import: a single declaration like
+    // `import { ApiErrors, parseError } from 'm'` where only `ApiErrors` is
+    // type-only becomes `import { parseError } from 'm'`. If all named
+    // specifiers drop and no default/namespace specifier remains, the whole
+    // import is removed.
+    //
+    // A named specifier is "type-only" from the importing file's point of view
+    // when its local binding is unused at runtime. That catches both
+    // (a) names referenced solely in this file's type annotations (now in
+    // typeRefNames) and (b) names imported only as types but never referenced
+    // in this file at all — the exporting module strips its `export type` to
+    // nothing, so leaving the specifier in place would cause a runtime
+    // "module does not provide an export named X" error.
     if (lexer.typeRefNames?.size > 0) {
-      let typeRefNames = lexer.typeRefNames;
       let usedNames = new Set();
       let inImport = false;
       for (let t of tokens) {
@@ -4155,6 +4166,7 @@ export class Compiler {
         if (inImport) continue;
         if (t[0] === 'IDENTIFIER') usedNames.add(t[1]);
       }
+      let isTypeOnly = (local) => !usedNames.has(local);
       for (let i = tokens.length - 1; i >= 0; i--) {
         if (tokens[i][0] !== 'IMPORT') continue;
         let j = i + 1;
@@ -4163,22 +4175,119 @@ export class Compiler {
         if (tokens[j][0] === 'CALL_START' || tokens[j][0] === '(') continue;
         // Skip side-effect imports: import 'module'
         if (tokens[j][0] === 'STRING') continue;
-        // Collect imported names between IMPORT and FROM
-        let names = [];
-        while (j < tokens.length && tokens[j][0] !== 'FROM' && tokens[j][0] !== 'TERMINATOR') {
-          if (tokens[j][0] === 'IDENTIFIER') names.push(tokens[j][1]);
-          j++;
+        // Find FROM / TERMINATOR bounds
+        let fromIdx = -1, endIdx = j;
+        while (endIdx < tokens.length && tokens[endIdx][0] !== 'TERMINATOR') {
+          if (fromIdx === -1 && tokens[endIdx][0] === 'FROM') fromIdx = endIdx;
+          endIdx++;
         }
-        if (names.length === 0) continue;
-        // Keep if any name is used at runtime
-        if (names.some(n => usedNames.has(n))) continue;
-        // Only elide if at least one name was used in a type annotation
-        if (!names.some(n => typeRefNames.has(n))) continue;
-        // All imported names are type-only — remove IMPORT through TERMINATOR
-        let end = j;
-        while (end < tokens.length && tokens[end][0] !== 'TERMINATOR') end++;
-        if (end < tokens.length) end++; // include TERMINATOR
-        tokens.splice(i, end - i);
+        if (fromIdx === -1) continue;
+        // Locate `{` / `}` for named specifiers
+        let lbIdx = -1, rbIdx = -1;
+        for (let k = i + 1; k < fromIdx; k++) {
+          if (tokens[k][0] === '{') { lbIdx = k; break; }
+        }
+        if (lbIdx !== -1) {
+          for (let k = lbIdx + 1; k < fromIdx; k++) {
+            if (tokens[k][0] === '}') { rbIdx = k; break; }
+          }
+        }
+        // Determine whether a default or namespace specifier exists outside the braces
+        let hasOtherSpec = false;
+        let scanEnd = lbIdx !== -1 ? lbIdx : fromIdx;
+        for (let k = i + 1; k < scanEnd; k++) {
+          let tag = tokens[k][0];
+          if (tag === 'IDENTIFIER' || tag === '*') { hasOtherSpec = true; break; }
+        }
+        // No named specifiers — fall back to whole-import elision
+        if (lbIdx === -1 || rbIdx === -1) {
+          if (hasOtherSpec) {
+            // Default / namespace import: collect outer local names
+            let names = [];
+            let k = i + 1;
+            while (k < fromIdx) {
+              if (tokens[k][0] === 'AS' && k + 1 < fromIdx && tokens[k + 1][0] === 'IDENTIFIER') {
+                names.push(tokens[k + 1][1]); k += 2;
+              } else if (tokens[k][0] === 'IDENTIFIER') {
+                names.push(tokens[k][1]); k++;
+              } else { k++; }
+            }
+            if (names.length === 0 || !names.every(isTypeOnly)) continue;
+            let end = endIdx < tokens.length ? endIdx + 1 : endIdx;
+            tokens.splice(i, end - i);
+          }
+          continue;
+        }
+        // Split brace contents into specifier ranges (start inclusive, end exclusive)
+        // Each specifier is delimited by `,` at depth 0 (the `{}` themselves).
+        let specs = [];
+        let s = lbIdx + 1;
+        while (s < rbIdx) {
+          let e = s;
+          while (e < rbIdx && tokens[e][0] !== ',') e++;
+          if (e > s) specs.push({ start: s, end: e });
+          s = e + 1;
+        }
+        // Determine local name per specifier (after `as` if present)
+        for (let spec of specs) {
+          let local = null;
+          for (let k = spec.start; k < spec.end; k++) {
+            if (tokens[k][0] !== 'IDENTIFIER') continue;
+            if (local === null) local = tokens[k][1];
+            else if (tokens[k - 1]?.[0] === 'AS') local = tokens[k][1];
+          }
+          spec.local = local;
+          spec.drop = local != null && isTypeOnly(local);
+        }
+        let droppedAny = specs.some(s => s.drop);
+        if (!droppedAny) continue;
+        let allDropped = specs.every(s => s.drop);
+        // Outer (default / namespace) local names — needed when all named drop
+        let outerNames = [];
+        if (allDropped && hasOtherSpec) {
+          let k = i + 1;
+          while (k < lbIdx) {
+            if (tokens[k][0] === 'AS' && k + 1 < lbIdx && tokens[k + 1][0] === 'IDENTIFIER') {
+              outerNames.push(tokens[k + 1][1]); k += 2;
+            } else if (tokens[k][0] === 'IDENTIFIER') {
+              outerNames.push(tokens[k][1]); k++;
+            } else { k++; }
+          }
+        }
+        // Splice from right to left to preserve indices
+        if (allDropped) {
+          if (!hasOtherSpec) {
+            // Drop entire import
+            let end = endIdx < tokens.length ? endIdx + 1 : endIdx;
+            tokens.splice(i, end - i);
+          } else if (outerNames.length > 0 && outerNames.every(isTypeOnly)) {
+            // Outer specifiers are also type-only → drop whole import
+            let end = endIdx < tokens.length ? endIdx + 1 : endIdx;
+            tokens.splice(i, end - i);
+          } else {
+            // Remove `{ ... }` and the comma between default and `{`
+            let removeStart = lbIdx, removeEnd = rbIdx + 1;
+            // Strip a leading comma that separated default from `{`
+            let k = lbIdx - 1;
+            while (k > i && tokens[k][0] !== ',' && tokens[k][0] !== 'IDENTIFIER' && tokens[k][0] !== '*') k--;
+            if (k > i && tokens[k][0] === ',') removeStart = k;
+            tokens.splice(removeStart, removeEnd - removeStart);
+          }
+        } else {
+          // Remove dropped specifiers individually, right-to-left, taking one adjacent comma
+          for (let idx = specs.length - 1; idx >= 0; idx--) {
+            let spec = specs[idx];
+            if (!spec.drop) continue;
+            let removeStart = spec.start, removeEnd = spec.end;
+            // Prefer trailing comma; otherwise take leading comma
+            if (removeEnd < rbIdx && tokens[removeEnd][0] === ',') {
+              removeEnd++;
+            } else if (removeStart > lbIdx + 1 && tokens[removeStart - 1][0] === ',') {
+              removeStart--;
+            }
+            tokens.splice(removeStart, removeEnd - removeStart);
+          }
+        }
       }
     }
 
