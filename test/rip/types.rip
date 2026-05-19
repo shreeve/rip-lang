@@ -84,6 +84,30 @@ code "structural type optional prop erased", '''
     ssl?: boolean
   ''', ""
 
+# Regression: a `>` closing a generic on a body line of a multi-line type
+# alias used to be treated as a comparison-continuation, which glued the
+# following statement onto the type body and swallowed it whole.
+code "generic close on type alias body line", '''
+  type ApiErrors =
+    field?: Record<string, string>
+
+  x = 1
+  ''', "var x;\nx = 1;"
+
+code "exported generic close on type alias body line", '''
+  export type ApiErrors =
+    field?: Record<string, string>
+
+  doStuff()
+  ''', "doStuff();"
+
+code "generic close in interface body line", '''
+  interface ApiErrors
+    field: Record<string, string>
+
+  y = 2
+  ''', "var y;\ny = 2;"
+
 # Block unions
 code "block union erased", '''
   type Status =

@@ -900,7 +900,40 @@ export class Lexer {
         else if (tk[0] === 'COMPARE' && tk[1] === '<') depth--;
         if (depth === 0 && tk[0] === 'TYPE_ANNOTATION') return false;
         if (depth === 0 && tk[0] === 'IDENTIFIER' && tk[1] === 'type') return false;
-        if (tk[0] === 'TERMINATOR' || tk[0] === 'INDENT' || tk[0] === 'OUTDENT') break;
+        if (tk[0] === 'INTERFACE') return false;
+        if (tk[0] === 'TERMINATOR' || tk[0] === 'INDENT' || tk[0] === 'OUTDENT') {
+          // The matching `<` is on the current line, but the `type`/`interface`
+          // keyword may be on a previous line (multi-line type alias body).
+          // Walk back to the INDENT that opens our containing block and check
+          // what introduced it.
+          let openerIdx = -1;
+          if (tk[0] === 'INDENT') {
+            openerIdx = k;
+          } else {
+            let blockDepth = (tk[0] === 'OUTDENT') ? 1 : 0;
+            for (let m = k - 1; m >= 0; m--) {
+              let mt = this.tokens[m];
+              if (mt[0] === 'OUTDENT') blockDepth++;
+              else if (mt[0] === 'INDENT') {
+                if (blockDepth === 0) { openerIdx = m; break; }
+                blockDepth--;
+              }
+            }
+          }
+          if (openerIdx > 0) {
+            for (let s = openerIdx - 1; s >= 0; s--) {
+              let st = this.tokens[s];
+              if (st[0] === 'TERMINATOR' || st[0] === 'INDENT' || st[0] === 'OUTDENT') break;
+              if (st[0] === 'INTERFACE') return false;
+              if (st[0] === 'IDENTIFIER' && st[1] === 'type') {
+                let before = this.tokens[s - 1];
+                if (!before || before[0] === 'TERMINATOR' || before[0] === 'EXPORT') return false;
+                break;
+              }
+            }
+          }
+          break;
+        }
       }
     }
     return LINE_CONTINUER_RE.test(this.chunk) || UNFINISHED.has(this.prevTag());
