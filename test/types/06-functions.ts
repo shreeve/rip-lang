@@ -270,3 +270,17 @@ console.log('batch:', batch)
 
 // @ts-expect-error — string arg narrows return to number, not number[]
 let badOverload: number[] = parseInput('42')
+
+// ── Generic functions ──
+// Type parameters on `function name<T>` must be in scope for both the
+// parameter and the return-type annotation (including nested positions).
+
+export async function wrap<T extends string>(value: T): Promise<[T]> {
+  return Promise.resolve([value])
+}
+
+let wrapped = await wrap("hi")
+console.log("wrapped:", wrapped)
+
+// @ts-expect-error — T is preserved, so "hi" return isn't assignable to number[]
+let badWrap: Promise<number[]> = wrap("hi")

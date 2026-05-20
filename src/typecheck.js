@@ -649,6 +649,23 @@ function replaceFnParams(line, newParams) {
   return depth === 0 ? line.slice(0, idx + 1) + newParams + line.slice(i - 1) : line;
 }
 
+// Extract the type parameter list (e.g. "<K extends string>") between the
+// function name and the first `(`. Returns "" when none is present.
+function extractTypeParams(sig) {
+  const m = sig.match(/^(?:export\s+)?(?:async\s+)?function\s+\w+\s*(<[^(]*>)\s*\(/);
+  return m ? m[1] : '';
+}
+
+// Inject `typeParams` between the function name and its `(` on an
+// implementation line. No-op when `typeParams` is empty or the line
+// already has type parameters.
+function injectTypeParams(line, typeParams) {
+  if (!typeParams) return line;
+  const m = line.match(/^(\s*(?:export\s+)?(?:async\s+)?function\s+\w+)(\s*)([(<])/);
+  if (!m || m[3] === '<') return line;
+  return m[1] + typeParams + line.slice(m[0].length - 1);
+}
+
 // ── Shared compilation pipeline ────────────────────────────────────
 
 // Compile a .rip file for type-checking. Prepends DTS declarations to
@@ -759,6 +776,10 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
           const sigParams = extractFnParams(sig);
           if (sigParams !== null) {
             cl[inj.codeLine] = replaceFnParams(cl[inj.codeLine], sigParams);
+          }
+          const typeParams = extractTypeParams(sig);
+          if (typeParams) {
+            cl[inj.codeLine] = injectTypeParams(cl[inj.codeLine], typeParams);
           }
           const retType = extractReturnType(sig);
           if (retType) {

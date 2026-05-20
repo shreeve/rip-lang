@@ -256,3 +256,16 @@ console.log 'batch:', batch
 
 # @ts-expect-error — string arg narrows return to number, not number[]
 badOverload:: number[] = parseInput('42')
+
+# ── Generic functions ──
+# Type parameters on `def name<T>` must be in scope for both the
+# parameter and the return-type annotation (including nested positions).
+
+export def wrap<T extends string>(value:: T):: Promise<[T]>
+  Promise.resolve([value])
+
+wrapped = wrap! "hi"
+console.log "wrapped:", wrapped
+
+# @ts-expect-error — T is preserved, so "hi" return isn't assignable to number[]
+badWrap:: Promise<number[]> = wrap "hi"
