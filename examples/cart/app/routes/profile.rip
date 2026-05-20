@@ -1,0 +1,74 @@
+import { User } from '../types.rip'
+import { ApiErrors, parseApiError } from '../api-client.rip'
+import { Button } from '../components/button.rip'
+import { title } from '../config.rip'
+
+export Profile = component
+  user ~= @app.data.user
+  form:: User := { firstName: '', lastName: '', email: '' }
+  errors:: ApiErrors<keyof User> := {}
+  status:: 'idle' | 'loading' | 'success' := 'idle'
+  hydrated := false
+
+  ~>
+    if user and not hydrated
+      form = { ...user }
+      hydrated = true
+    return
+
+  mounted: ->
+    document.title = title('Profile')
+
+  submit: (e) ->
+    e.preventDefault()
+    status = 'loading'
+    try
+      res = fetch!('/api/user', {
+        method: 'PATCH'
+        headers: { 'Content-Type': 'application/json' }
+        body: JSON.stringify(form)
+      })
+      unless res.ok
+        errors = parseApiError!(res)
+        status = 'idle'
+        return
+      @app.data.user = res.json!()
+      status = 'success'
+      errors = {}
+    catch err
+      status = 'idle'
+      errors = { form: 'Network error' }
+
+  render
+    h1 "Profile"
+    if user
+      form @submit: @submit
+        div.grid
+          label
+            "First name"
+            input
+              value <=> form.firstName
+              aria-invalid: errors.field?.firstName ? true : undefined
+            if errors.field?.firstName
+              small errors.field?.firstName
+          label
+            "Last name"
+            input
+              value <=> form.lastName
+              aria-invalid: errors.field?.lastName ? true : undefined
+            if errors.field?.lastName
+              small errors.field?.lastName
+        div.grid
+          label
+            "Email"
+            input value: form.email, type: "email", readOnly: true
+          label
+            "Phone"
+            input
+              value <=> form.phone
+              type: "tel"
+        Button type: "submit", loading: status is 'loading', "Update Profile"
+        if errors.form
+          p.error errors.form
+        if status is 'success'
+          p.success "Profile updated!"

@@ -1,16 +1,16 @@
+import { ApiErrors, parseApiError } from '../api-client.rip'
 import { Button } from '../components/button.rip'
 import { title } from '../config.rip'
 
 export Cart = component
   cart ~= @app.data.cart
-  status:: 'idle' | 'loading' | 'success' | 'error' := 'idle'
-  error := ''
+  errors:: ApiErrors := {}
+  status:: 'idle' | 'loading' | 'success' := 'idle'
 
   mounted: -> document.title = title('Cart')
 
   placeOrder: ->
     status = 'loading'
-    error = ''
     try
       res = fetch!('/api/orders', {
         method: 'POST'
@@ -18,19 +18,25 @@ export Cart = component
         body: JSON.stringify({ items: cart.items.map((i) -> { productId: i.id, quantity: i.quantity }) })
       })
       unless res.ok
-        throw new Error('Order failed')
+        errors = parseApiError!(res)
+        status = 'idle'
+        return
       cart.clear()
+      errors = {}
       status = 'success'
     catch err
-      error = 'Something went wrong. Please try again.'
-      status = 'error'
+      errors = { form: 'Network error' }
+      status = 'idle'
 
   render
     if status is 'success'
       h1 "Order Placed!"
       p "Your order has been placed successfully."
-      a href: "/"
-        Button "Continue Shopping"
+      div.cart-actions
+        a href: "/"
+          Button "Continue Shopping"
+        a href: "/orders"
+          Button variant: "secondary", "View Orders"
     else if not cart.items.length
       h1 "Cart"
       p "Your cart is empty."
@@ -78,5 +84,5 @@ export Cart = component
       div.cart-actions
         Button loading: status is 'loading', @click: @placeOrder, "Place Order"
         Button variant: 'secondary', outline, link, @click: (-> cart.clear()), "Clear Cart"
-      if status is 'error'
-        p.error error
+      if errors.form
+        p.error errors.form

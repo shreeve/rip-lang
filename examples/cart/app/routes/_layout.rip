@@ -1,5 +1,13 @@
 export Layout = component
   cart ~= @app.data.cart
+  user ~= @app.data.user
+  userName ~= if user then "#{user.firstName} #{user.lastName}" else ''
+
+  mounted: ->
+    try
+      res = fetch!('/api/user')
+      if res.ok
+        @app.data.user = res.json!()
 
   render
     nav.container
@@ -11,5 +19,13 @@ export Layout = component
           a href: "/", "Products"
         li
           a href: "/cart", "Cart (#{cart.totalItems()})"
+        li
+          details.dropdown
+            summary userName
+            ul
+              li
+                a href: "/profile", "Profile"
+              li
+                a href: "/orders", "Orders"
     main.container
       div id: "content"

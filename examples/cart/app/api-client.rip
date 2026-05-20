@@ -1,0 +1,11 @@
+export type ApiErrors<K extends string = string> =
+  form?: string
+  field?: Partial<Record<K, string>>
+
+export def parseApiError(res:: Response):: Promise<ApiErrors>
+  try
+    body = await res.json()
+    if body?.errors?.form or body?.errors?.field
+      return body.errors
+  catch err
+  return { form: 'Something went wrong' }

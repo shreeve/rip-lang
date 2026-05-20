@@ -1,4 +1,4 @@
-import { Product } from './types.rip'
+import { Product, User } from './types.rip'
 
 type CartItem = Product & { quantity: number }
 
@@ -11,7 +11,8 @@ export type Cart =
   totalPrice(): number
   clear(): void
 
-export stash:: { cart: Cart } =
+export stash:: { user: User | null, cart: Cart } =
+  user: null
   cart:
     items: []
     addItem: (product) -> @items = [...@items, { ...product, quantity: 1 }]

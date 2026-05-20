@@ -1,0 +1,47 @@
+import { Order } from '../types.rip'
+import { ApiErrors } from '../api-client.rip'
+import { Button } from '../components/button.rip'
+import { title } from '../config.rip'
+
+export Orders = component
+  orders:: Order[] := []
+  errors:: ApiErrors := {}
+  loaded := false
+
+  mounted: ->
+    document.title = title('Orders')
+    try
+      res = fetch!('/api/orders')
+      unless res.ok
+        throw new Error('Failed')
+      orders = res.json!()
+    catch err
+      errors = { form: 'Failed to load orders' }
+    finally
+      loaded = true
+
+  render
+    if errors.form
+      p.error errors.form
+    else if loaded
+      h1 "Orders"
+      if not orders.length
+        p "You haven't placed any orders yet."
+        a href: "/"
+          Button "Browse Products"
+      else
+        div.overflow-auto
+          table
+            thead
+              tr
+                th "Order"
+                th "Date"
+                th "Items"
+                th "Total"
+            tbody
+              for order in orders
+                tr
+                  td "##{order.id}"
+                  td (new Date(order.createdAt)).toLocaleString()
+                  td "#{order.items.reduce(((sum, i) -> sum + i.quantity), 0)}"
+                  td "$#{order.total.toFixed(2)}"

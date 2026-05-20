@@ -26,6 +26,11 @@ button.link {
   box-shadow: none;
 }
 
+.success {
+  color: var(--pico-ins-color);
+  margin-top: 1rem;
+}
+
 .error {
   color: var(--pico-del-color);
   margin-top: 1rem;
