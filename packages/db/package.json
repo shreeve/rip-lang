@@ -3,19 +3,12 @@
   "version": "1.3.132",
   "description": "DuckDB server with official DuckDB UI - pure Bun FFI",
   "type": "module",
-  "main": "db.rip",
   "exports": {
-    ".": "./db.rip",
     "./client": "./client.rip",
     "./embed": "./embed.rip"
   },
   "bin": {
     "rip-db": "./bin/rip-db"
-  },
-  "scripts": {
-    "start": "rip db.rip",
-    "dev": "rip db.rip :memory:",
-    "test": "bun test --preload ../../rip-loader.js test/"
   },
   "keywords": [
     "db",
@@ -39,14 +32,9 @@
   },
   "author": "Steve Shreeve <steve.shreeve@gmail.com>",
   "license": "MIT",
-  "dependencies": {
-    "@rip-lang/server": ">=1.3.0"
-  },
   "files": [
-    "db.rip",
     "client.rip",
     "embed.rip",
-    "lib/",
     "bin/",
     "README.md"
   ]

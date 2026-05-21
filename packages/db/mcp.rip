@@ -6,7 +6,7 @@
 # Zero dependencies — pure Rip, native fetch.
 #
 # Usage:
-#   rip mcp.rip                              # default: http://localhost:4213
+#   rip mcp.rip                              # default: http://localhost:9494
 #   rip mcp.rip --url http://localhost:8080   # custom endpoint
 #
 # Cursor MCP config (~/.cursor/mcp.json):
@@ -31,7 +31,7 @@ VERSION =! '1.0.0'
 dbUrl = do ->
   args = process.argv.slice(2)
   idx = args.indexOf('--url')
-  if idx >= 0 and args[idx + 1] then args[idx + 1] else 'http://localhost:4213'
+  if idx >= 0 and args[idx + 1] then args[idx + 1] else 'http://localhost:9494'
 
 log = (...args) -> warn '[mcp-duckdb]', ...args
 

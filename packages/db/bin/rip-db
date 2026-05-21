@@ -14,7 +14,7 @@
 //                                     the target DB already has tables/views.
 //
 // Env:
-//   RIPDB_URL   Base URL of the running rip-db server (default http://localhost:4213).
+//   RIPDB_URL   Base URL of the running database server (default http://localhost:9494).
 //
 // dump/load talk to the running rip-db over its `/sql` HTTP endpoint, so the script
 // must run on a host that can reach that URL. The temp directory used for staging the
@@ -30,9 +30,8 @@
 // patterns (absolute paths, `..` segments) but does NOT defend against malicious
 // archives crafted to overwrite host files. Only load trusted archives.
 
-import { execFileSync, spawnSync } from 'child_process';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { spawnSync } from 'child_process';
+import { join } from 'path';
 import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync, existsSync } from 'fs';
 import { tmpdir } from 'os';
 
@@ -42,16 +41,36 @@ const cmd  = args[0];
 if (cmd === 'dump' || cmd === 'load') {
   await runDumpLoad(cmd, args.slice(1));
 } else {
-  // Default behavior — start the server. Passes everything through to db.rip.
-  const dbRip = join(dirname(fileURLToPath(import.meta.url)), '..', 'db.rip');
-  try {
-    execFileSync('rip', [dbRip, ...args], { stdio: 'inherit' });
-  } catch (e) {
-    process.exit(e.status || 1);
-  }
+  // No more in-tree server. Print usage; the database server (harbor or
+  // any other rip-db-compatible /sql endpoint) is started externally.
+  process.stdout.write(usageText());
+  process.exit(cmd ? 1 : 0);
 }
 
 // ---------------------------------------------------------------------------
+
+// Top-level usage — printed when `rip-db` is invoked without a subcommand.
+// Function declaration (hoisted) so the top-level dispatch at the head of
+// this file can reach it without temporal-dead-zone trouble. Indentation
+// matters: every line after the opening backtick is at column 0 so the
+// printed output isn't pre-indented.
+function usageText() {
+  return `\
+rip-db — CLI for @rip-lang/db.
+
+Usage:
+  rip-db dump [ARCHIVE.tar.gz | DIRECTORY]   Snapshot the running database.
+  rip-db load ARCHIVE.tar.gz                 Restore from a snapshot.
+  rip-db <subcommand> --help                 Subcommand-specific help.
+
+This CLI talks to a running database server over HTTP; it does not start
+one. Run your DuckDB-with-harbor (or any rip-db-compatible /sql server)
+separately and point RIPDB_URL at it.
+
+Environment:
+  RIPDB_URL  Base URL of the running server (default http://localhost:9494)
+`;
+}
 
 // Subcommand help — printed for `rip-db <cmd> --help` / `-h`. Defined as
 // a function (hoisted) so the top-level await dispatch at the head of
@@ -75,7 +94,7 @@ Path resolution:
 Refuses to overwrite an existing archive.
 
 Environment:
-  RIPDB_URL  rip-db server URL (default http://localhost:4213)
+  RIPDB_URL  database server URL (default http://localhost:9494)
 `;
     case 'load': return `\
 Usage: rip-db load ARCHIVE.tar.gz
@@ -84,7 +103,7 @@ Restore a tar.gz produced by \`rip-db dump\` into the rip-db database.
 Refuses to load if the target database already has tables/views.
 
 Environment:
-  RIPDB_URL  rip-db server URL (default http://localhost:4213)
+  RIPDB_URL  database server URL (default http://localhost:9494)
 `;
     default: return '';
   }
@@ -101,7 +120,7 @@ async function runDumpLoad(cmd, rest) {
   if (cmd === 'dump' && rest.length > 1)  die('usage: rip-db dump [ARCHIVE.tar.gz]');
   if (cmd === 'load' && rest.length !== 1) die('usage: rip-db load ARCHIVE.tar.gz');
 
-  const url = (process.env.RIPDB_URL || 'http://localhost:4213').replace(/\/$/, '');
+  const url = (process.env.RIPDB_URL || 'http://localhost:9494').replace(/\/$/, '');
 
   // Stage in a per-run temp dir on the local filesystem. The rip-db server reads/writes
   // here directly via EXPORT/IMPORT DATABASE, so this only works when the script and
