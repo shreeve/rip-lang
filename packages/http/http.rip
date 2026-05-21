@@ -10,6 +10,76 @@
 # instances with prefixUrl and default headers — all in pure Rip, zero deps.
 # ==============================================================================
 
+# ==[ Public API types ]==
+#
+# These types describe the consumer-facing contract — what to pass to
+# `http.create({...})`, what hooks receive, what fields HTTPError carries.
+# Internal helpers and locals rely on inference; the type system here
+# documents how to USE this package, not how it's implemented.
+
+export type RetryConfig =
+  limit?: number
+  methods?: string[]
+  statusCodes?: number[]
+  backoffLimit?: number
+  delay?: (attempt: number) => number
+
+export type RetryOption = number | RetryConfig | false
+
+export type BeforeRetryInfo =
+  request: Request
+  options: HttpOptions
+  error: Error | null
+  retryCount: number
+
+export type BeforeRequestHook = (request: Request, options: HttpOptions) => Request | Response | void | Promise<Request | Response | void>
+export type AfterResponseHook = (request: Request, options: HttpOptions, response: Response) => Response | void | Promise<Response | void>
+export type BeforeRetryHook   = (info: BeforeRetryInfo) => void | Promise<void>
+export type BeforeErrorHook   = (error: HTTPError) => HTTPError | Promise<HTTPError>
+
+export type Hooks =
+  beforeRequest?: BeforeRequestHook[]
+  afterResponse?: AfterResponseHook[]
+  beforeRetry?: BeforeRetryHook[]
+  beforeError?: BeforeErrorHook[]
+
+export type HttpOptions =
+  method?: string
+  json?: unknown
+  body?: BodyInit | null
+  headers?: HeadersInit
+  prefixUrl?: string
+  searchParams?: URLSearchParams | string | Record<string, unknown>
+  timeout?: number | false
+  retry?: RetryOption
+  throwHttpErrors?: boolean
+  hooks?: Hooks
+  mode?: RequestMode
+  credentials?: RequestCredentials
+  cache?: RequestCache
+  redirect?: RequestRedirect
+  referrer?: string
+  referrerPolicy?: ReferrerPolicy
+  integrity?: string
+  keepalive?: boolean
+  signal?: AbortSignal | null
+
+type CallFn = (input: string | URL, opts?: HttpOptions) => Promise<Response>
+
+type HttpInstanceMembers =
+  get: CallFn
+  post: CallFn
+  put: CallFn
+  patch: CallFn
+  del: CallFn
+  head: CallFn
+  create: (opts?: HttpOptions) => HttpInstance
+  extend: (opts?: HttpOptions) => HttpInstance
+  HTTPError: typeof HTTPError
+  TimeoutError: typeof TimeoutError
+
+export type HttpInstance = CallFn & HttpInstanceMembers
+
 # ==[ Defaults ]==
 
 RETRY_METHODS =! ['GET', 'PUT', 'HEAD', 'DELETE', 'OPTIONS', 'TRACE']
@@ -20,25 +90,37 @@ TIMEOUT_MS    =! 10000
 
 # ==[ Error Classes ]==
 
-class HTTPError extends Error
-  constructor: (@response, @request, @options) ->
-    super("Request failed with status #{@response.status}")
-    @name = 'HTTPError'
+export class HTTPError extends Error
+  constructor: (response, request, options) ->
+    super("Request failed with status #{response.status}")
+    @response = response
+    @request  = request
+    @options  = options
+    @name     = 'HTTPError'
 
-class TimeoutError extends Error
-  constructor: (@request) ->
+export interface HTTPError
+  response: Response
+  request: Request
+  options: HttpOptions
+
+export class TimeoutError extends Error
+  constructor: (request) ->
     super('Request timed out')
-    @name = 'TimeoutError'
+    @request = request
+    @name    = 'TimeoutError'
+
+export interface TimeoutError
+  request: Request
 
 # ==[ Helpers ]==
 
-def buildUrl(input, opts)
+def buildUrl(input, opts:: HttpOptions = {})
   base = opts.prefixUrl
   if base
     unless base.endsWith('/')
       base += '/'
-    input = input.slice(1) if typeof input is 'string' and input.startsWith('/')
-    url = new URL(input, base)
+    path = if typeof input is 'string' and input.startsWith('/') then input.slice(1) else input
+    url = new URL(path, base)
   else
     url = new URL(input)
 
@@ -54,20 +136,21 @@ def buildUrl(input, opts)
 
   url
 
-def mergeHeaders(a, b)
+def mergeHeaders(a?:: HeadersInit, b?:: HeadersInit)
   result = new Headers(a ?? {})
   if b
     h = new Headers(b)
     h.forEach (v, k) -> result.set(k, v)
   result
 
-def mergeHooks(a = {}, b = {})
-  merged = {}
-  for key in ['beforeRequest', 'beforeRetry', 'afterResponse', 'beforeError']
-    merged[key] = [...(a[key] ?? []), ...(b[key] ?? [])]
-  merged
+def mergeHooks(a:: Hooks = {}, b:: Hooks = {})
+  return
+    beforeRequest: [...(a.beforeRequest ?? []), ...(b.beforeRequest ?? [])]
+    afterResponse: [...(a.afterResponse ?? []), ...(b.afterResponse ?? [])]
+    beforeRetry:   [...(a.beforeRetry   ?? []), ...(b.beforeRetry   ?? [])]
+    beforeError:   [...(a.beforeError   ?? []), ...(b.beforeError   ?? [])]
 
-def mergeOptions(defaults, overrides)
+def mergeOptions(defaults:: HttpOptions = {}, overrides:: HttpOptions = {})
   opts = { ...defaults, ...overrides }
   if defaults.headers or overrides.headers
     opts.headers = mergeHeaders(defaults.headers, overrides.headers)
@@ -76,9 +159,9 @@ def mergeOptions(defaults, overrides)
   opts
 
 def normalizeRetry(retry)
-  return { limit: 0 } if retry is false
+  return { limit: 0, methods: [], statusCodes: [], backoffLimit: Infinity, delay: null } if retry is false
   if typeof retry is 'number'
-    { limit: retry, methods: RETRY_METHODS, statusCodes: RETRY_CODES, backoffLimit: Infinity }
+    { limit: retry, methods: RETRY_METHODS, statusCodes: RETRY_CODES, backoffLimit: Infinity, delay: null }
   else if typeof retry is 'object'
     limit:        retry.limit        ?? RETRY_LIMIT
     methods:      retry.methods      ?? RETRY_METHODS
@@ -86,7 +169,7 @@ def normalizeRetry(retry)
     backoffLimit: retry.backoffLimit ?? Infinity
     delay:        retry.delay        ?? null
   else
-    { limit: RETRY_LIMIT, methods: RETRY_METHODS, statusCodes: RETRY_CODES, backoffLimit: Infinity }
+    { limit: RETRY_LIMIT, methods: RETRY_METHODS, statusCodes: RETRY_CODES, backoffLimit: Infinity, delay: null }
 
 def delay(ms)
   new Promise (resolve) -> setTimeout(resolve, ms)
@@ -103,7 +186,7 @@ def retryDelay(attempt, res, cfg)
   if header
     secs = Number(header)
     if Number.isNaN(secs)
-      Math.max(0, new Date(header) - Date.now())
+      Math.max(0, new Date(header).getTime() - Date.now())
     else
       secs * 1000
   else
@@ -111,35 +194,50 @@ def retryDelay(attempt, res, cfg)
 
 # ==[ Core Request ]==
 
-def request(input, opts = {})
+def request(input, opts:: HttpOptions = {})
   method          = (opts.method ?? 'GET').toUpperCase()
   timeout         = opts.timeout ?? TIMEOUT_MS
   throwHttpErrors = opts.throwHttpErrors ?? true
   retry           = normalizeRetry(opts.retry)
   hooks           = opts.hooks ?? {}
 
-  # Build URL
-  url = buildUrl(input, opts)
-
-  # Build headers
+  url     = buildUrl(input, opts)
   headers = mergeHeaders(opts.headers)
 
-  # JSON body convenience
+  # JSON body convenience. `json: null` is intentionally distinct from
+  # an absent `json` key — the former should send the literal body
+  # `"null"` with a JSON content-type, the latter should send no JSON
+  # body at all. `opts.json?` would conflate them (treats null as
+  # absent), so test for explicit presence instead.
   body = opts.body
-  if opts.json?
+  if 'json' of opts and opts.json isnt undefined
     body = JSON.stringify(opts.json)
     headers.set('content-type', 'application/json') unless headers.has('content-type')
 
-  # Assemble fetch options, passing through native fetch fields
-  fetchOpts = { method, headers, body }
-  for key in ['mode', 'credentials', 'cache', 'redirect', 'referrer', 'referrerPolicy', 'integrity', 'keepalive', 'signal']
-    fetchOpts[key] = opts[key] if opts[key]?
+  # Compose the fetch signal so caller aborts and our timeout are both
+  # honored. Computed in one shot so TS infers a sensible union type
+  # without needing typed-local annotations.
+  fetchSignal = if opts.signal and timeout and timeout isnt Infinity
+    AbortSignal.any [opts.signal, AbortSignal.timeout(timeout)]
+  else if timeout and timeout isnt Infinity
+    AbortSignal.timeout(timeout)
+  else
+    opts.signal ?? null
 
-  # Timeout via AbortSignal (unless caller provided their own signal)
-  if timeout and timeout isnt Infinity and not fetchOpts.signal
-    fetchOpts.signal = AbortSignal.timeout(timeout)
+  fetchOpts =
+    method:         method
+    headers:        headers
+    body:           body
+    mode:           opts.mode
+    credentials:    opts.credentials
+    cache:          opts.cache
+    redirect:       opts.redirect
+    referrer:       opts.referrer
+    referrerPolicy: opts.referrerPolicy
+    integrity:      opts.integrity
+    keepalive:      opts.keepalive
+    signal:         fetchSignal
 
-  # Build Request
   req = new Request(url, fetchOpts)
 
   # Run beforeRequest hooks — may modify the request or short-circuit with a Response
@@ -154,12 +252,18 @@ def request(input, opts = {})
   # Retry loop
   retryCount = 0
   loop
-    res = null
+    res:: Response | null = null
 
     try
       res = fetch!(req.clone())
     catch err
-      if err.name is 'AbortError' or err.name is 'TimeoutError'
+      # Distinguish a caller-driven cancellation from our timeout.
+      # If `opts.signal` aborted, rethrow the original AbortError so
+      # the caller's cancellation semantics are preserved. Otherwise
+      # an AbortError/TimeoutError means our timeout fired — surface
+      # it as a TimeoutError.
+      if err?.name is 'AbortError' or err?.name is 'TimeoutError'
+        throw err if opts.signal?.aborted
         throw new TimeoutError(req)
 
       # Network error — retry if eligible
@@ -185,6 +289,9 @@ def request(input, opts = {})
       if hooks.beforeRetry?.length
         for hook in hooks.beforeRetry
           hook!({ request: req, options: opts, error: null, retryCount })
+      # Free the failed response's body before retrying so the
+      # underlying connection can be reused / released.
+      try res.body?.cancel()
       delay!(retryDelay(retryCount, res, retry))
       continue
 
@@ -199,24 +306,29 @@ def request(input, opts = {})
     return res
 
 # ==[ Instance Factory ]==
+#
+# `Object.assign(call, members)` is the idiomatic TypeScript pattern for
+# building a callable-with-properties (function plus methods/fields). The
+# `:: HttpInstance` return type on `makeInstance` is the one annotation
+# that earns its keep here — it lets TypeScript validate the assembled
+# shape against the public `HttpInstance` contract.
 
-def makeInstance(defaults = {})
-  inst = (input, opts = {}) -> request(input, mergeOptions(defaults, opts))
+def buildMethod(call, method)
+  (input, opts = {}) -> call(input, { ...opts, method })
 
-  inst.get   = (input, opts = {}) -> inst(input, { ...opts, method: 'GET' })
-  inst.post  = (input, opts = {}) -> inst(input, { ...opts, method: 'POST' })
-  inst.put   = (input, opts = {}) -> inst(input, { ...opts, method: 'PUT' })
-  inst.patch = (input, opts = {}) -> inst(input, { ...opts, method: 'PATCH' })
-  inst.del   = (input, opts = {}) -> inst(input, { ...opts, method: 'DELETE' })
-  inst.head  = (input, opts = {}) -> inst(input, { ...opts, method: 'HEAD' })
-
-  inst.create = (opts = {}) -> makeInstance(opts)
-  inst.extend = (opts = {}) -> makeInstance(mergeOptions(defaults, opts))
-
-  inst.HTTPError    = HTTPError
-  inst.TimeoutError = TimeoutError
-
-  inst
+def makeInstance(defaults:: HttpOptions = {}):: HttpInstance
+  call = (input, opts = {}) -> request(input, mergeOptions(defaults, opts))
+  Object.assign call,
+    get:          buildMethod(call, 'GET')
+    post:         buildMethod(call, 'POST')
+    put:          buildMethod(call, 'PUT')
+    patch:        buildMethod(call, 'PATCH')
+    del:          buildMethod(call, 'DELETE')
+    head:         buildMethod(call, 'HEAD')
+    create:       (opts = {}) -> makeInstance(opts)
+    extend:       (opts = {}) -> makeInstance(mergeOptions(defaults, opts))
+    HTTPError:    HTTPError
+    TimeoutError: TimeoutError
 
 # ==[ Public API ]==
 

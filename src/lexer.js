@@ -1483,6 +1483,29 @@ export class Lexer {
       this.inTypeAnnotation = false;
     }
 
+    // Enter type-alias body context: `type IDENTIFIER =` is followed by a
+    // type expression where reserved-word type tokens like `void` should be
+    // accepted. Without this, `type Foo = T | void` and `Promise<void>` in
+    // the body trip the reserved-word check at identifier time. The `=`
+    // reset above runs first; here we re-enable inTypeAnnotation when the
+    // statement-start lookback sees `type IDENTIFIER`. (`interface` bodies
+    // already work because they use `name:: T` per-property, which sets
+    // inTypeAnnotation via `::`.)
+    if (val === '=') {
+      let n = this.tokens.length;
+      let isTypeAlias =
+        n >= 2 &&
+        this.tokens[n - 1][0] === 'IDENTIFIER' &&
+        this.tokens[n - 2][0] === 'IDENTIFIER' &&
+        this.tokens[n - 2][1] === 'type' &&
+        (n === 2 ||
+          this.tokens[n - 3][0] === 'TERMINATOR' ||
+          this.tokens[n - 3][0] === 'INDENT' ||
+          this.tokens[n - 3][0] === 'OUTDENT' ||
+          this.tokens[n - 3][0] === 'EXPORT');
+      if (isTypeAlias) this.inTypeAnnotation = true;
+    }
+
     // Balanced pair tracking
     if (val === '(' || val === '{' || val === '[') {
       this.ends.push({tag: INVERSES[val], origin: [tag, val]});

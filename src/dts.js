@@ -78,6 +78,7 @@ export function emitTypes(tokens, sexpr = null, source = '') {
   let indentStr = '  ';
   let indent = () => indentStr.repeat(indentLevel);
   let inClass = false;
+  let inSubclass = false; // Tracks whether the active class extends another
   let classFields = new Set(); // Track emitted field names to avoid duplicates
   let usesSignal = false;
   let usesComputed = false;
@@ -272,7 +273,13 @@ export function emitTypes(tokens, sexpr = null, source = '') {
   };
 
   // Collect function parameters (handles simple, destructured, rest, defaults)
-  let collectParams = (tokens, startIdx) => {
+  //
+  // `subclassConstructor` mirrors the compiler's @-shorthand renaming:
+  // when a constructor lives inside `class Foo extends Bar`, the compiler
+  // rewrites `@name` params to `_name` so the assignment `this.name =
+  // _name` can run AFTER `super(...)`. The shadow TS must use the same
+  // `_name` binding or the body's `_name` references will be unresolved.
+  let collectParams = (tokens, startIdx, subclassConstructor = false) => {
     let params = [];
     let fields = []; // Track @param:: type for class field emission
     let j = startIdx;
@@ -300,7 +307,8 @@ export function emitTypes(tokens, sexpr = null, source = '') {
         if (tokens[j]?.[0] === 'PROPERTY' || tokens[j]?.[0] === 'IDENTIFIER') {
           let name = tokens[j][1];
           let type = tokens[j].data?.type;
-          params.push(type ? `${name}: ${expandSuffixes(type)}` : name);
+          let paramName = subclassConstructor ? `_${name}` : name;
+          params.push(type ? `${paramName}: ${expandSuffixes(type)}` : paramName);
           if (type) fields.push({ name, type: expandSuffixes(type) });
           j++;
         }
@@ -364,7 +372,11 @@ export function emitTypes(tokens, sexpr = null, source = '') {
         }
         j++;
 
-        // Skip past default value expression
+        // Skip past default value expression. Stops at the next top-level
+        // comma, the matching CALL_END, or the matching PARAM_END — the
+        // last is critical for arrow-function param lists wrapped in
+        // PARAM_START/PARAM_END (e.g. `(input, opts = {}) -> ...`),
+        // because PARAM_END is the only sentinel that closes the list.
         if (hasDefault) {
           j++; // skip =
           let dd = 0;
@@ -372,7 +384,7 @@ export function emitTypes(tokens, sexpr = null, source = '') {
             let dt = tokens[j];
             if (dt[0] === '(' || dt[0] === '[' || dt[0] === '{') dd++;
             if (dt[0] === ')' || dt[0] === ']' || dt[0] === '}') dd--;
-            if (dd === 0 && (dt[1] === ',' || dt[0] === 'CALL_END')) break;
+            if (dd === 0 && (dt[1] === ',' || dt[0] === 'CALL_END' || dt[0] === 'PARAM_END')) break;
             j++;
           }
         }
@@ -386,6 +398,15 @@ export function emitTypes(tokens, sexpr = null, source = '') {
   };
 
   let paramDepth = 0;
+  // bodyDepth counts how deep we are inside `def`/`->` bodies. At
+  // bodyDepth === 0 we're at module scope and dts.js may emit
+  // `declare function NAME(...)` for arrow assignments. Inside a
+  // function body, those assignments would be locals (e.g.
+  // `inst = (input, opts) -> ...` inside `def makeInstance`) and
+  // emitting a module-scope declare for them is wrong — TypeScript
+  // would treat the local and the (synthetic) global as separate
+  // bindings, causing the local to lose its type info.
+  let bodyDepth = 0;
   for (let i = 0; i < tokens.length; i++) {
     let t = tokens[i];
     let tag = t[0];
@@ -405,18 +426,17 @@ export function emitTypes(tokens, sexpr = null, source = '') {
       t = tokens[i];
       tag = t[0];
 
-      // Export default
+      // Export default — runtime statement, not a type declaration.
+      // The compiled JS body already carries `export default x`; emitting
+      // a duplicate here puts two `export default` declarations in front
+      // of the TypeScript language service and triggers TS2528. Skip the
+      // entire `export default ...` clause and let the body provide it.
       if (tag === 'DEFAULT') {
         i++;
-        if (i >= tokens.length) break;
-        t = tokens[i];
-        tag = t[0];
-
-        // export default IDENTIFIER (re-export)
-        if (tag === 'IDENTIFIER') {
-          lines.push(`${indent()}export default ${t[1]};`);
+        if (i < tokens.length) {
+          t = tokens[i];
+          tag = t[0];
         }
-        // export default { ... } or other expressions — skip for now
         continue;
       }
     }
@@ -538,9 +558,11 @@ export function emitTypes(tokens, sexpr = null, source = '') {
 
       // Check for extends
       let ext = '';
+      let isSubclass = false;
       let j = i + 2;
       if (tokens[j]?.[0] === 'EXTENDS') {
         ext = ` extends ${tokens[j + 1]?.[1] || ''}`;
+        isSubclass = true;
         j += 2;
       }
 
@@ -558,6 +580,7 @@ export function emitTypes(tokens, sexpr = null, source = '') {
         if (hasTypedMembers) {
           lines.push(`${indent()}${exp}declare class ${className}${ext} {`);
           inClass = true;
+          inSubclass = isSubclass;
           classFields.clear();
           indentLevel++;
         }
@@ -617,7 +640,12 @@ export function emitTypes(tokens, sexpr = null, source = '') {
           let params = [];
           let fields = [];
           if (tokens[j]?.[0] === 'PARAM_START') {
-            let result = collectParams(tokens, j);
+            // The compiler renames `@name` → `_name` on subclass
+            // constructors so `this.name = _name` runs after super();
+            // mirror that here so the shadow TS body's `_name`
+            // references resolve to a real param binding.
+            let isSubCtor = inSubclass && methodName === 'constructor';
+            let result = collectParams(tokens, j, isSubCtor);
             params = result.params;
             fields = result.fields;
             j = result.endIdx + 1;
@@ -661,19 +689,36 @@ export function emitTypes(tokens, sexpr = null, source = '') {
 
     // Track INDENT/OUTDENT for class body
     if (tag === 'INDENT') {
+      bodyDepth++;
       continue;
     }
     if (tag === 'OUTDENT') {
+      if (bodyDepth > 0) bodyDepth--;
       if (inClass) {
         indentLevel--;
         lines.push(`${indent()}}`);
         inClass = false;
+        inSubclass = false;
       }
       continue;
     }
 
     // Arrow function assignment: name = (params) -> body
-    if (tag === 'IDENTIFIER' && !inClass && tokens[i + 1]?.[0] === '=' &&
+    //
+    // Emission shape depends on scope:
+    //   bodyDepth === 0  → `declare function name(...): R;` at module
+    //                       scope. typecheck.js attaches this as an
+    //                       overload and copies typed params into the
+    //                       impl line.
+    //   bodyDepth >  0   → `let name: (params) => R;` at module scope.
+    //                       typecheck.js's typed-local hoist pulls the
+    //                       `: (...) => R` into the body's `let name`,
+    //                       making the arrow contextually typed.
+    //
+    // The function-form is wrong inside bodies because it would create
+    // a phantom global that shadows / collides with the actual local.
+    if (tag === 'IDENTIFIER' && !inClass &&
+        tokens[i + 1]?.[0] === '=' &&
         (tokens[i + 2]?.[0] === 'PARAM_START' || tokens[i + 2]?.[0] === '(')) {
       let fnName = t[1];
       let j = i + 2;
@@ -693,10 +738,22 @@ export function emitTypes(tokens, sexpr = null, source = '') {
 
       if (returnType || params.some(p => p.includes(':'))) {
         let exp = exported ? 'export ' : '';
-        let declare = exported ? '' : 'declare ';
-        let ret = returnType ? `: ${expandSuffixes(returnType)}` : '';
         let paramStr = params.join(', ');
-        lines.push(`${indent()}${exp}${declare}function ${fnName}(${paramStr})${ret};`);
+        if (bodyDepth === 0) {
+          let declare = exported ? '' : 'declare ';
+          let ret = returnType ? `: ${expandSuffixes(returnType)}` : '';
+          lines.push(`${indent()}${exp}${declare}function ${fnName}(${paramStr})${ret};`);
+        } else {
+          // `any` rather than `unknown` for the inferred-return case.
+          // The annotation's job is to give the body's `let X` a typed
+          // function shape so call-site param checks engage; we
+          // intentionally don't constrain the return type when the
+          // user didn't provide one. `unknown` would force callers to
+          // narrow before using the result, creating new false
+          // positives at every call site.
+          let ret = returnType ? expandSuffixes(returnType) : 'any';
+          lines.push(`${indent()}let ${fnName}: (${paramStr}) => ${ret};`);
+        }
         continue;
       }
     }
