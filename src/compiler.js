@@ -628,7 +628,12 @@ export class CodeEmitter {
       if (Array.isArray(head)) { sexpr.forEach(item => collect(item)); return; }
       if (CodeEmitter.ASSIGNMENT_OPS.has(head)) {
         let [target, value] = rest;
-        if (typeof target === 'string') vars.add(target);
+        // Match collectProgramVariables: identifier targets may arrive as
+        // String wrappers when types.js attaches `.data.type` metadata
+        // to a typed local. Without unwrapping the wrapper, typed locals
+        // skip the function-top `let` declaration and silently leak to
+        // the global scope.
+        if (typeof target === 'string' || target instanceof String) vars.add(str(target));
         else if (this.is(target, 'array')) this.collectVarsFromArray(target, vars);
         else if (this.is(target, 'object')) this.collectVarsFromObject(target, vars);
         collect(value);
@@ -2515,14 +2520,18 @@ export class CodeEmitter {
           let atParamMap = isSubclass ? new Map() : null;
           cleanParams = params.map(p => {
             if (this.is(p, '.') && p[1] === 'this') {
-              let name = p[2];
+              // Unwrap String-wrapper identifiers — typed @field params
+              // arrive with their type metadata attached as `.data.type`
+              // and would otherwise miss the atParamMap key match (the
+              // map is queried with primitive strings via `str(prop)`).
+              let name = str(p[2]);
               let param = isSubclass ? `_${name}` : name;
               autoAssign.push(`this.${name} = ${param}`);
               if (isSubclass) atParamMap.set(name, param);
               return param;
             }
             if (this.is(p, 'default') && this.is(p[1], '.') && p[1][1] === 'this') {
-              let name = p[1][2];
+              let name = str(p[1][2]);
               let param = isSubclass ? `_${name}` : name;
               autoAssign.push(`this.${name} = ${param}`);
               if (isSubclass) atParamMap.set(name, param);

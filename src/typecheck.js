@@ -606,14 +606,22 @@ export function cleanDiagnosticMessage(msg) {
 }
 
 // Base TypeScript compiler settings for type-checking. Callers can
-// pass overrides (e.g. { noImplicitAny: true } for the CLI).
+// pass overrides (e.g. { strict: true } when a project opts in).
+//
+// Default `strict: false` aligns with Rip's stated philosophy
+// ("optional, design scaffolding, not safety rails") and matches the
+// gradual-typing default of comparable systems (Sorbet's `# typed: false`,
+// mypy's permissive default, Hack's `partial`, TypeScript's own pre-strict
+// default). Projects opt UP to strict via rip.json's `strict: true`.
 export function createTypeCheckSettings(ts, overrides = {}) {
   return {
     target: ts.ScriptTarget.ESNext,
     module: ts.ModuleKind.ESNext,
     moduleResolution: ts.ModuleResolutionKind.Bundler,
     allowJs: true,
-    strict: true,
+    strict: false,
+    noImplicitAny: false,
+    strictNullChecks: false,
     noEmit: true,
     skipLibCheck: true,
     ...overrides,
@@ -647,6 +655,150 @@ function replaceFnParams(line, newParams) {
     i++;
   }
   return depth === 0 ? line.slice(0, idx + 1) + newParams + line.slice(i - 1) : line;
+}
+
+// Depth-aware split of a parameter list on top-level commas. Respects
+// nested parens, brackets, braces, and angle brackets so callback types
+// like `(fn: (x: number) => void)` and generic types like `Map<K, V>`
+// don't get split mid-argument.
+//
+// Angle brackets are tracked separately because `>` is ambiguous: it
+// appears in `=>` (function-type arrow), `>=`/`>>`/`>=`, and as a
+// generic-close. We only treat `<` as opening a generic when it
+// follows an identifier-ending character (or another `<` for nested
+// `Map<K, Set<V>>`); arrow `=>` is recognized and skipped before any
+// angle handling. String/template/regex literals are skipped wholesale
+// so commas inside them don't terminate a part.
+function splitTopLevelParams(paramsStr) {
+  const parts = [];
+  let depth = 0;     // counts (), [], {}
+  let angle = 0;     // counts <> when used as generics
+  let start = 0;
+  const isWordEnd = (i) => i > 0 && /[A-Za-z_$0-9>\]]/.test(paramsStr[i - 1]);
+  const skipString = (i, quote) => {
+    let k = i + 1;
+    while (k < paramsStr.length && paramsStr[k] !== quote) {
+      if (paramsStr[k] === '\\') k += 2; else k++;
+    }
+    return k;
+  };
+  for (let i = 0; i < paramsStr.length; i++) {
+    const c = paramsStr[i];
+    // Skip strings to avoid commas / brackets inside string defaults.
+    if (c === '"' || c === "'" || c === '`') {
+      i = skipString(i, c);
+      continue;
+    }
+    if (c === '(' || c === '[' || c === '{') { depth++; continue; }
+    if (c === ')' || c === ']' || c === '}') { depth--; continue; }
+    // Arrow `=>` — ignore the `>` so it doesn't decrement angle/depth.
+    if (c === '=' && paramsStr[i + 1] === '>') { i++; continue; }
+    if (c === '<' && isWordEnd(i)) { angle++; continue; }
+    if (c === '>' && angle > 0) { angle--; continue; }
+    if (c === ',' && depth === 0 && angle === 0) {
+      parts.push(paramsStr.slice(start, i).trim());
+      start = i + 1;
+    }
+  }
+  const last = paramsStr.slice(start).trim();
+  if (last.length > 0) parts.push(last);
+  return parts;
+}
+
+// Find the top-level `= default` separator in a single parameter slot,
+// skipping `=` inside destructured patterns (`{a = 1, b = 2}`) and inside
+// type expressions. Returns the index of the `=` or -1 if none.
+//
+// A param shape is one of:
+//   simple        — `name`, `name: T`, `name?: T`
+//   rest          — `...rest`, `...rest: T[]`
+//   destructured  — `{a, b}`, `{a, b}: {a: T, b: U}`, `[x, y]: [T, U]`
+//
+// The default arrives at the OUTERMOST level only, after the optional
+// type annotation. Inside the destructured pattern's braces/brackets,
+// `=` denotes per-property defaults (a JS pattern feature) and is not
+// the slot's outer default — those belong to the destructured shape and
+// don't survive the merge. Only the top-level `=` matters.
+//
+// Skips strings/templates and uses the same identifier-aware angle
+// tracking as `splitTopLevelParams` so default expressions containing
+// `=>`, `<`, `>`, comparisons, or generic types don't confuse depth.
+function findOuterDefault(paramPart) {
+  let depth = 0;
+  let angle = 0;
+  const isWordEnd = (i) => i > 0 && /[A-Za-z_$0-9>\]]/.test(paramPart[i - 1]);
+  const skipString = (i, quote) => {
+    let k = i + 1;
+    while (k < paramPart.length && paramPart[k] !== quote) {
+      if (paramPart[k] === '\\') k += 2; else k++;
+    }
+    return k;
+  };
+  for (let i = 0; i < paramPart.length; i++) {
+    const c = paramPart[i];
+    if (c === '"' || c === "'" || c === '`') { i = skipString(i, c); continue; }
+    if (c === '(' || c === '[' || c === '{') { depth++; continue; }
+    if (c === ')' || c === ']' || c === '}') { depth--; continue; }
+    if (c === '<' && isWordEnd(i)) { angle++; continue; }
+    if (c === '>' && angle > 0) { angle--; continue; }
+    if (c === '=' && depth === 0 && angle === 0) {
+      // `==`, `===`, `!=`, `!==`, `>=`, `<=`, `=>` are operators, not
+      // the default `=` separator.
+      const prev = paramPart[i - 1];
+      const next = paramPart[i + 1];
+      if (next === '=' || next === '>') { i++; continue; }
+      if (prev === '=' || prev === '!' || prev === '<' || prev === '>') continue;
+      return i;
+    }
+  }
+  return -1;
+}
+
+// Merge a DTS-emitted sig's params into the impl line's params, preserving
+// the impl's default values. The DTS emits `name?: T` for parameters with
+// JS defaults (because callers may omit them — that's the overload view),
+// but inside the body the default ensures `name` is always defined, so the
+// body should see `name: T = default`, not `name?: T`. This merge keeps the
+// caller-facing overload `name?: T` and produces a body-facing impl where
+// each defaulted slot becomes `name: T = default`. Non-defaulted impl
+// params keep whatever the sig provided (`name?: T` for `?:: T` params,
+// `name: T` for required typed params, bare `name` for untyped).
+//
+// Returns the merged param string, or `sigParams` unchanged if the impl
+// has no top-level defaults to preserve.
+function mergeSigWithImplDefaults(sigParams, implParams) {
+  if (!implParams) return sigParams;
+  const sigList = splitTopLevelParams(sigParams);
+  const implList = splitTopLevelParams(implParams);
+  if (sigList.length !== implList.length) return sigParams; // shape mismatch — bail
+  let anyDefault = false;
+  for (const p of implList) { if (findOuterDefault(p) >= 0) { anyDefault = true; break; } }
+  if (!anyDefault) return sigParams;
+  const merged = [];
+  for (let i = 0; i < sigList.length; i++) {
+    const sigPart = sigList[i];
+    const implPart = implList[i];
+    const eqIdx = findOuterDefault(implPart);
+    if (eqIdx < 0) {
+      // No top-level default in impl — use the sig form unchanged.
+      merged.push(sigPart);
+      continue;
+    }
+    const defaultExpr = implPart.slice(eqIdx + 1).trim();
+    // Drop `?` from the sig param's name binding and append `= default`.
+    // Pattern: NAME, NAME?: T, NAME: T, ...REST: T[], {a, b}: {...}, [x, y]: [...]
+    const colonMatch = sigPart.match(/^(\s*(?:\.\.\.|))([A-Za-z_$][\w$]*|\{[\s\S]*?\}|\[[\s\S]*?\])(\?)?(\s*:\s*[\s\S]+)?$/);
+    if (!colonMatch) {
+      // Couldn't parse — keep sig form, append default conservatively.
+      merged.push(`${sigPart} = ${defaultExpr}`);
+      continue;
+    }
+    const prefix = colonMatch[1] || '';
+    const name   = colonMatch[2];
+    const tail   = colonMatch[4] || '';
+    merged.push(`${prefix}${name}${tail} = ${defaultExpr}`);
+  }
+  return merged.join(', ');
 }
 
 // Extract the type parameter list (e.g. "<K extends string>") between the
@@ -713,6 +865,125 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
   if (hasTypes && dts && code) {
     const dl = dts.split('\n');
     const cl = code.split('\n');
+
+    // Hoist locally-scoped typed declarations into the function body's
+    // hoisted `let` line. dts.js emits `let name: T;` at the DTS header
+    // for any typed assignment, including locals declared inside function
+    // bodies (`def f() ... res:: Response | null = null`). Those land at
+    // module scope where TypeScript treats them as separate bindings —
+    // the function-local `let res;` (emitted untyped by the compiler's
+    // function-top hoist) shadows them, and TS infers `res` purely from
+    // the first assignment. Pulling the type back into the local `let`
+    // makes the typed declaration cover the actual binding the body uses.
+    // Typed-local hoist — pull `let X: T;` declarations out of the DTS
+    // header and merge them into the body's matching function-local
+    // `let X` line.
+    //
+    // The hoist is name-based: it doesn't carry source-scope identity
+    // through the DTS → body merge, so we can only act when the name
+    // is unambiguous on BOTH sides:
+    //
+    //   1. DTS-side: exactly one `let X: T;` candidate. Multiple
+    //      typed declarations of the same name (one per function
+    //      scope, e.g. `def a() … x:: number; def b() … x:: string`)
+    //      are ambiguous — we don't know which body site each one
+    //      came from.
+    //   2. Body-side: exactly one indented `let X` site. Multiple
+    //      same-named locals across functions would all receive the
+    //      same type otherwise, which is wrong even when DTS itself
+    //      is unambiguous.
+    //   3. No module-scope binding for the name. A top-level typed
+    //      declaration (`x:: string = "..."` at module scope) would
+    //      otherwise be hoisted into an unrelated function-local
+    //      `let x;` — different bindings, same name.
+    //
+    // When any check fails, we leave the local untyped and let
+    // TypeScript infer per-binding from the first assignment.
+    const dtsCandidatesByName = new Map(); // name -> [{dtsIdx, typeSuffix}]
+    for (let i = 0; i < dl.length; i++) {
+      const m = dl[i].match(/^let\s+(\w+)\s*:\s*(.+)\s*;\s*$/);
+      if (!m) continue;
+      const name = m[1];
+      const typeBody = m[2];
+      // Disqualify lines that are really initialized declarations
+      // (`let x: T = init;`). Walk the string honoring brackets,
+      // generics, and `=>` so we don't mistake an arrow's `=>` or a
+      // comparison's `>=` for an assignment `=`.
+      let isAssignment = false;
+      {
+        let d = 0, ang = 0;
+        for (let p = 0; p < typeBody.length; p++) {
+          const c = typeBody[p];
+          if (c === '(' || c === '[' || c === '{') d++;
+          else if (c === ')' || c === ']' || c === '}') d--;
+          else if (c === '<') ang++;
+          else if (c === '>') ang = Math.max(0, ang - 1);
+          else if (c === '=' && d === 0 && ang === 0 &&
+                   typeBody[p + 1] !== '>' && typeBody[p - 1] !== '=' &&
+                   typeBody[p - 1] !== '!' && typeBody[p - 1] !== '<' &&
+                   typeBody[p - 1] !== '>') {
+            isAssignment = true;
+            break;
+          }
+        }
+      }
+      if (isAssignment) continue;
+      const typeSuffix = ': ' + typeBody.trim();
+      if (!dtsCandidatesByName.has(name)) dtsCandidatesByName.set(name, []);
+      dtsCandidatesByName.get(name).push({ dtsIdx: i, typeSuffix });
+    }
+
+    const localTypedLetIdxs = new Set();
+    for (const [name, candidates] of dtsCandidatesByName) {
+      const { dtsIdx, typeSuffix } = candidates[0];
+      // DTS-side collision: same name typed in two function scopes.
+      // We can't tell which body site each DTS line came from, so
+      // strip both — the locals fall back to per-binding inference.
+      if (candidates.length !== 1) {
+        for (const c of candidates) localTypedLetIdxs.add(c.dtsIdx);
+        continue;
+      }
+      const localPat = new RegExp(`^\\s+let\\s+(?:[^;=]*?\\b)?${name}\\b(?!\\s*:)([^;=]*?)?;`);
+      // Module-scope binding probe: a non-indented `let`/`const`/`var`/
+      // export of the same name, or a bare `name = ...` at the start
+      // of a line. If any exist, this DTS declaration belongs to that
+      // module-scope binding, not to a function-local — leave the DTS
+      // declaration alone (it IS the typed declaration for that
+      // top-level binding).
+      const moduleScopePat = new RegExp(
+        `^(?:export\\s+(?:default\\s+)?)?(?:const|let|var)\\s+(?:[^;=]*?\\b)?${name}\\b|^${name}\\s*=`,
+      );
+      let hasModuleScope = false;
+      let localLine = -1;
+      let multipleLocals = false;
+      for (let j = 0; j < cl.length; j++) {
+        if (moduleScopePat.test(cl[j])) { hasModuleScope = true; break; }
+        if (!localPat.test(cl[j])) continue;
+        if (localLine >= 0) { multipleLocals = true; break; }
+        localLine = j;
+      }
+      if (hasModuleScope) continue;
+      // Body-side collision: multiple function-local `let X` sites
+      // for one DTS declaration. We don't know which one was the
+      // intended source. Strip the DTS line so it doesn't bleed into
+      // the wrong scope; the locals fall back to per-binding inference.
+      if (multipleLocals) { localTypedLetIdxs.add(dtsIdx); continue; }
+      // No local site found: this is genuinely a module-scope typed
+      // declaration (no function-local to hoist into). Leave the DTS
+      // line in place — it's the `let name: T;` declaration the body's
+      // top-level `name = value` needs to type-check.
+      if (localLine < 0) continue;
+      // Single unambiguous match — perform the hoist.
+      cl[localLine] = cl[localLine].replace(
+        new RegExp(`(\\blet\\s[^;]*?\\b${name}\\b)(?!\\s*:)`),
+        `$1${typeSuffix}`,
+      );
+      localTypedLetIdxs.add(dtsIdx);
+    }
+    if (localTypedLetIdxs.size > 0) {
+      for (const i of localTypedLetIdxs) dl[i] = '';
+    }
+
     const fnSigs = [];
     for (let i = 0; i < dl.length; i++) {
       const m = dl[i].match(/^(?:export\s+)?(?:declare\s+)?function\s+(\w+)/);
@@ -722,9 +993,22 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
       const injections = [];
       const moved = new Set();
       for (const fn of fnSigs) {
-        const pat = new RegExp(`^(?:export\\s+)?(?:async\\s+)?function\\s+${fn.name}\\s*[(<]`);
+        // Match the impl in either of two shapes:
+        //   1. top-level: `function NAME(`, `function NAME<`,
+        //      `async function NAME(`, `export function NAME(`
+        //   2. bare-name arrow assignment: `NAME = function(`,
+        //      `NAME = async function(`, `NAME = function*(`
+        // Pattern (2) is how Rip emits arrow assignments at module
+        // scope: `name = (...) -> ...` becomes `name = function(...) {…}`.
+        // We deliberately do NOT match `obj.NAME = function(`: the DTS
+        // emits `declare function NAME(...)` only for module-scope,
+        // bare-name arrow assignments. A property-style match would
+        // pick up an unrelated `obj.NAME = ...` line that happens to
+        // share the function name and apply the wrong signature there.
+        const topLevelPat = new RegExp(`^(?:export\\s+)?(?:async\\s+)?function\\s+${fn.name}\\s*[(<]`);
+        const arrowAssignPat = new RegExp(`^\\s*${fn.name}\\s*=\\s*(?:async\\s+)?function\\s*\\*?\\s*\\(`);
         for (let j = 0; j < cl.length; j++) {
-          if (pat.test(cl[j])) {
+          if (topLevelPat.test(cl[j]) || arrowAssignPat.test(cl[j])) {
             injections.push({ codeLine: j, sig: fn.sig });
             moved.add(fn.idx);
             break;
@@ -775,7 +1059,13 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
           const sig = inj.sig.replace(/^declare /, '');
           const sigParams = extractFnParams(sig);
           if (sigParams !== null) {
-            cl[inj.codeLine] = replaceFnParams(cl[inj.codeLine], sigParams);
+            // Merge in the impl's default values BEFORE replacing — keeps
+            // `name?: T` on the overload (caller view) but writes
+            // `name: T = default` into the impl signature (body view) so
+            // TypeScript sees the body's `opts` as `T`, not `T | undefined`.
+            const implParams = extractFnParams(cl[inj.codeLine]);
+            const merged = mergeSigWithImplDefaults(sigParams, implParams);
+            cl[inj.codeLine] = replaceFnParams(cl[inj.codeLine], merged);
           }
           const typeParams = extractTypeParams(sig);
           if (typeParams) {
@@ -1154,16 +1444,37 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
     const cl = code.split('\n');
     const reEsc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-    // Build DTS header type map for merging
+    // Build DTS header type map for merging. The map is name-based,
+    // and the inline-let pass below uses it to inject types into
+    // function-top hoist `let X;` declarations.
+    //
+    // DTS-side collision: when the same name appears in multiple
+    // `let X: T;` lines with different types (one per independent
+    // function scope), `letTypes.set` would otherwise let the last
+    // one win and silently apply the wrong type. Detect the conflict
+    // and remove the name from the map so the inline-let pass leaves
+    // those locals untyped (TS infers per-binding from the first
+    // assignment, which is the correct fallback). The typed-local
+    // hoist above also handles body-side ambiguity for the cases
+    // where the inline-let pass doesn't fire.
     const letTypes = new Map();
+    const ambiguousLetNames = new Set();
     const movedDts = new Set();
     let dl;
     if (headerDts) {
       dl = headerDts.split('\n');
       for (let i = 0; i < dl.length; i++) {
         const m = dl[i].match(/^(?:export\s+)?(?:declare\s+)?let\s+(\w+):\s+(.+);$/);
-        if (m) letTypes.set(m[1], { type: m[2], idx: i });
+        if (!m) continue;
+        const [, name, type] = m;
+        const prev = letTypes.get(name);
+        if (prev) {
+          if (prev.type !== type) ambiguousLetNames.add(name);
+          continue;
+        }
+        letTypes.set(name, { type, idx: i });
       }
+      for (const name of ambiguousLetNames) letTypes.delete(name);
     }
 
     // Helper: inline a variable at the given line
