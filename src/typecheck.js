@@ -612,7 +612,10 @@ export function cleanDiagnosticMessage(msg) {
 // ("optional, design scaffolding, not safety rails") and matches the
 // gradual-typing default of comparable systems (Sorbet's `# typed: false`,
 // mypy's permissive default, Hack's `partial`, TypeScript's own pre-strict
-// default). Projects opt UP to strict via rip.json's `strict: true`.
+// default). Projects opt UP to strict via rip.json's `strict: true`, which
+// implies noImplicitAny, strictNullChecks, and the rest of TS's strict
+// family. Do NOT pin those flags to `false` here — that would shadow the
+// strict-family inference when an opt-in caller passes `{ strict: true }`.
 export function createTypeCheckSettings(ts, overrides = {}) {
   return {
     target: ts.ScriptTarget.ESNext,
@@ -620,8 +623,6 @@ export function createTypeCheckSettings(ts, overrides = {}) {
     moduleResolution: ts.ModuleResolutionKind.Bundler,
     allowJs: true,
     strict: false,
-    noImplicitAny: false,
-    strictNullChecks: false,
     noEmit: true,
     skipLibCheck: true,
     ...overrides,
@@ -2678,7 +2679,17 @@ export async function runCheck(targetDir, opts = {}) {
   }
 
   // Create TypeScript language service
-  const settings = createTypeCheckSettings(ts);
+  //
+  // Project-scope `strict` (rip.json / package.json `rip.strict: true`, or
+  // CLI --strict) opts the project UP to TypeScript's `strict` family,
+  // which implies noImplicitAny, strictNullChecks, strictFunctionTypes,
+  // and friends. With strict on: `T` excludes null/undefined, untyped
+  // params error, etc. Without strict: lenient gradual-typing defaults —
+  // annotations are accepted as documentation but not enforced as
+  // contracts. The default is lenient to match Rip's "scaffolding, not
+  // safety rails" philosophy; projects opt up when they want the
+  // contract enforced.
+  const settings = createTypeCheckSettings(ts, strict ? { strict: true } : {});
 
   const host = {
     getScriptFileNames: () => [...compiled.keys()].map(toVirtual),

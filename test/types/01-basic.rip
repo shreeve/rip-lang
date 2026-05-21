@@ -73,3 +73,13 @@ console.log "maybeCount:", maybeCount
 badOptional:: string | undefined = 123
 # @ts-expect-error — string not assignable to number | null
 badNullable:: number | null = "oops"
+
+# ── Strict-mode regression sentinels (do not "fix" these) ──
+# These directives only stay "used" while strictNullChecks + noImplicitAny
+# are on. If createTypeCheckSettings is weakened, TypeScript reports TS2578
+# (unused @ts-expect-error) and the audit fails. See AGENTS.md.
+
+# @ts-expect-error — strictNullChecks: null not assignable to string
+notNullable:: string = null
+# @ts-expect-error — noImplicitAny: param x has no annotation
+implicitAny = (x) -> x.length
