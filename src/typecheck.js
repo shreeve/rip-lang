@@ -636,7 +636,10 @@ function extractFnParams(line) {
   return depth === 0 ? line.slice(idx + 1, i - 1) : null;
 }
 
-// Replace the first balanced ( ) content in `line` with `newParams`.
+// Replace the first balanced ( ) content in `line` with `newParams`. When
+// the original body had `= default` clauses, preserve them on the matching
+// new param and drop the `?` optional marker — TS narrows `name: T = d` to
+// `T` inside the body even though the public DTS keeps `name?: T`.
 function replaceFnParams(line, newParams) {
   const idx = line.indexOf('(');
   if (idx < 0) return line;
@@ -646,7 +649,70 @@ function replaceFnParams(line, newParams) {
     else if (line[i] === ')') depth--;
     i++;
   }
-  return depth === 0 ? line.slice(0, idx + 1) + newParams + line.slice(i - 1) : line;
+  if (depth !== 0) return line;
+
+  // Map of original param name → default expression text (everything after `=`).
+  const oldParams = line.slice(idx + 1, i - 1);
+  const defaults = new Map();
+  {
+    let s = 0, d = 0;
+    const parts = [];
+    for (let k = 0; k <= oldParams.length; k++) {
+      const c = oldParams[k];
+      if (k === oldParams.length || (c === ',' && d === 0)) {
+        parts.push(oldParams.slice(s, k));
+        s = k + 1;
+        continue;
+      }
+      if (c === '(' || c === '[' || c === '{') d++;
+      else if (c === ')' || c === ']' || c === '}') d--;
+    }
+    for (const part of parts) {
+      const eq = (() => {
+        let dd = 0;
+        for (let k = 0; k < part.length; k++) {
+          const c = part[k];
+          if (c === '(' || c === '[' || c === '{') dd++;
+          else if (c === ')' || c === ']' || c === '}') dd--;
+          else if (c === '=' && dd === 0) return k;
+        }
+        return -1;
+      })();
+      if (eq < 0) continue;
+      const lhs = part.slice(0, eq).trim();
+      const m = lhs.match(/^(?:\.{3})?\s*([A-Za-z_$][\w$]*)/);
+      if (m) defaults.set(m[1], part.slice(eq + 1).trim());
+    }
+  }
+
+  // Merge defaults into newParams, splitting on commas at depth 0.
+  let merged = newParams;
+  if (defaults.size > 0) {
+    const out = [];
+    let s = 0, d = 0;
+    for (let k = 0; k <= newParams.length; k++) {
+      const c = newParams[k];
+      if (k === newParams.length || (c === ',' && d === 0)) {
+        let part = newParams.slice(s, k);
+        const m = part.match(/^(\s*(?:\.{3})?\s*)([A-Za-z_$][\w$]*)(\??)(.*)$/);
+        if (m) {
+          const name = m[2];
+          if (defaults.has(name)) {
+            // Drop `?` marker, append ` = default`.
+            part = `${m[1]}${name}${m[4]} = ${defaults.get(name)}`;
+          }
+        }
+        out.push(part);
+        s = k + 1;
+        continue;
+      }
+      if (c === '(' || c === '[' || c === '{') d++;
+      else if (c === ')' || c === ']' || c === '}') d--;
+    }
+    merged = out.join(',');
+  }
+
+  return line.slice(0, idx + 1) + merged + line.slice(i - 1);
 }
 
 // Extract the type parameter list (e.g. "<K extends string>") between the
@@ -699,6 +765,12 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
   }
   const hasTypes = hasOwnTypes || importsTyped;
   if (!hasTypes) code = '// @ts-nocheck\n' + code;
+
+  // Promote /*::T*/ hints emitted by the compiler on hoisted `let`s into real
+  // TS annotations so the shadow file contextually types the later assignment.
+  // The hint is a JS comment at runtime, so this rewrite only affects the
+  // virtual .ts file we hand to TypeScript.
+  if (hasTypes) code = code.replace(/\s*\/\*::([^*]+)\*\//g, ': $1');
 
   // Ensure every file is treated as a module (not a global script)
   if (!/\bexport\b/.test(code) && !/\bimport\b/.test(code)) code += '\nexport {};\n';

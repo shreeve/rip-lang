@@ -619,7 +619,7 @@ export class CodeEmitter {
     rest.forEach(item => this.collectProgramVariables(item));
   }
 
-  collectFunctionVariables(body) {
+  collectFunctionVariables(body, typedVars) {
     let vars = new Set();
     let collect = (sexpr) => {
       if (!Array.isArray(sexpr)) return;
@@ -628,7 +628,11 @@ export class CodeEmitter {
       if (Array.isArray(head)) { sexpr.forEach(item => collect(item)); return; }
       if (CodeEmitter.ASSIGNMENT_OPS.has(head)) {
         let [target, value] = rest;
-        if (typeof target === 'string') vars.add(target);
+        if (typeof target === 'string' || target instanceof String) {
+          let name = str(target);
+          vars.add(name);
+          if (typedVars && target instanceof String && target.type) typedVars.set(name, target.type);
+        }
         else if (this.is(target, 'array')) this.collectVarsFromArray(target, vars);
         else if (this.is(target, 'object')) this.collectVarsFromObject(target, vars);
         collect(value);
@@ -2515,14 +2519,14 @@ export class CodeEmitter {
           let atParamMap = isSubclass ? new Map() : null;
           cleanParams = params.map(p => {
             if (this.is(p, '.') && p[1] === 'this') {
-              let name = p[2];
+              let name = str(p[2]);
               let param = isSubclass ? `_${name}` : name;
               autoAssign.push(`this.${name} = ${param}`);
               if (isSubclass) atParamMap.set(name, param);
               return param;
             }
             if (this.is(p, 'default') && this.is(p[1], '.') && p[1][1] === 'this') {
-              let name = p[1][2];
+              let name = str(p[1][2]);
               let param = isSubclass ? `_${name}` : name;
               autoAssign.push(`this.${name} = ${param}`);
               if (isSubclass) atParamMap.set(name, param);
@@ -2823,7 +2827,8 @@ export class CodeEmitter {
     };
     if (Array.isArray(params)) params.forEach(extractPN);
 
-    let bodyVars = this.collectFunctionVariables(body);
+    let typedLocals = new Map();
+    let bodyVars = this.collectFunctionVariables(body, typedLocals);
     let newVars = new Set([...bodyVars].filter(v =>
       !this.programVars.has(v) && !this.reactiveVars?.has(v) && !paramNames.has(v) &&
       !this.scopeStack.some(s => s.has(v))  // don't re-declare variables from enclosing scopes
@@ -2861,7 +2866,11 @@ export class CodeEmitter {
 
       this.indentLevel++;
       let code = '{\n';
-      if (newVars.size > 0) code += this.indent() + `let ${Array.from(newVars).sort().join(', ')};\n`;
+      if (newVars.size > 0) {
+        let names = Array.from(newVars).sort();
+        let decls = names.map(v => typedLocals.has(v) ? `${v} /*::${typedLocals.get(v)}*/` : v);
+        code += this.indent() + `let ${decls.join(', ')};\n`;
+      }
 
       let firstIsSuper = autoAssignments.length > 0 && statements.length > 0 &&
                          Array.isArray(statements[0]) && statements[0][0] === 'super';

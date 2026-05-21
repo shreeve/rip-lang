@@ -78,6 +78,7 @@ export function emitTypes(tokens, sexpr = null, source = '') {
   let indentStr = '  ';
   let indent = () => indentStr.repeat(indentLevel);
   let inClass = false;
+  let inClassIsSubclass = false; // tracks whether the current class extends a base
   let classFields = new Set(); // Track emitted field names to avoid duplicates
   let usesSignal = false;
   let usesComputed = false;
@@ -294,13 +295,19 @@ export function emitTypes(tokens, sexpr = null, source = '') {
       if (tok[0] === '}' || tok[0] === ']' || tok[0] === 'CALL_END' ||
           tok[0] === 'PARAM_END' || tok[0] === 'INDEX_END') { depth--; j++; continue; }
 
-      // @ prefix (constructor shorthand: @name)
+      // @ prefix (constructor shorthand: @name) — in a subclass the compiler
+      // renames the JS param to `_name` and emits `this.name = _name` in the
+      // body so the explicit `super(...)` call can run before `this` is
+      // available. The DTS must mirror that rename so typecheck.js's body
+      // splice keeps names in sync; the class field itself stays `name`.
+      // Non-subclasses keep the original name on both sides.
       if (tok[0] === '@') {
         j++;
         if (tokens[j]?.[0] === 'PROPERTY' || tokens[j]?.[0] === 'IDENTIFIER') {
           let name = tokens[j][1];
           let type = tokens[j].data?.type;
-          params.push(type ? `${name}: ${expandSuffixes(type)}` : name);
+          let paramName = inClassIsSubclass ? `_${name}` : name;
+          params.push(type ? `${paramName}: ${expandSuffixes(type)}` : paramName);
           if (type) fields.push({ name, type: expandSuffixes(type) });
           j++;
         }
@@ -413,8 +420,13 @@ export function emitTypes(tokens, sexpr = null, source = '') {
         tag = t[0];
 
         // export default IDENTIFIER (re-export)
+        // The compiled code body retains the real `export default`. Re-emitting
+        // it from the DTS header would cause TS2528 (multiple default exports)
+        // when both are present in the virtual TS file built by typecheck.js.
+        // Type info still attaches via the typed `let <name>: <Type>` line
+        // emitted earlier in this DTS pass.
         if (tag === 'IDENTIFIER') {
-          lines.push(`${indent()}export default ${t[1]};`);
+          // intentionally skip: do not emit `export default ${t[1]};`
         }
         // export default { ... } or other expressions — skip for now
         continue;
@@ -558,6 +570,7 @@ export function emitTypes(tokens, sexpr = null, source = '') {
         if (hasTypedMembers) {
           lines.push(`${indent()}${exp}declare class ${className}${ext} {`);
           inClass = true;
+          inClassIsSubclass = ext !== '';
           classFields.clear();
           indentLevel++;
         }
@@ -588,7 +601,22 @@ export function emitTypes(tokens, sexpr = null, source = '') {
           lines.push(`${indent()}${exp}${declare}function ${fnName}${typeParams}(${paramStr})${ret};`);
         }
       }
-      i = endIdx; // advance past params to avoid leaking destructured typed identifiers
+      // Advance past params and body so typed locals inside the body are
+      // not emitted as top-level declarations.
+      let j = endIdx + 1;
+      if (tokens[j]?.[0] === '->' || tokens[j]?.[0] === '=>') j++;
+      if (tokens[j]?.[0] === 'INDENT') {
+        let d = 1;
+        j++;
+        while (j < tokens.length && d > 0) {
+          if (tokens[j][0] === 'INDENT') d++;
+          if (tokens[j][0] === 'OUTDENT') d--;
+          j++;
+        }
+        i = j - 1;
+      } else {
+        i = endIdx;
+      }
       continue;
     }
 
@@ -668,6 +696,7 @@ export function emitTypes(tokens, sexpr = null, source = '') {
         indentLevel--;
         lines.push(`${indent()}}`);
         inClass = false;
+        inClassIsSubclass = false;
       }
       continue;
     }

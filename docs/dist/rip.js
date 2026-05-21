@@ -3501,6 +3501,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
   function collectTypeExpression(tokens, j) {
     let typeTokens = [];
     let depth = 0;
+    let braceDepth = 0;
     let startJ = j;
     while (j < tokens.length) {
       let t = tokens[j];
@@ -3515,6 +3516,8 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       }
       if (isOpen) {
         depth++;
+        if (tTag === "{")
+          braceDepth++;
         typeTokens.push(t);
         j++;
         continue;
@@ -3522,11 +3525,24 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       if (isClose) {
         if (depth > 0) {
           depth--;
+          if (tTag === "}" && braceDepth > 0)
+            braceDepth--;
           typeTokens.push(t);
           j++;
           continue;
         }
         break;
+      }
+      if (braceDepth > 0) {
+        if (tTag === "INDENT" || tTag === "OUTDENT") {
+          j++;
+          continue;
+        }
+        if (tTag === "TERMINATOR") {
+          typeTokens.push(["", ";"]);
+          j++;
+          continue;
+        }
       }
       if (depth === 0) {
         if (tTag === "INDENT" && typeTokens.length > 0 && typeTokens[typeTokens.length - 1][0] === "=>") {
@@ -3561,8 +3577,13 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       return "";
     if (typeTokens[0]?.[0] === "=>")
       typeTokens.unshift(["", "()"]);
-    let typeStr = typeTokens.map((t) => t[1]).join(" ").replace(/\s+/g, " ").trim();
-    typeStr = typeStr.replace(/\s*<\s*/g, "<").replace(/\s*>\s*/g, ">").replace(/\s*\[\s*/g, "[").replace(/\s*\]\s*/g, "]").replace(/\s*\(\s*/g, "(").replace(/\s*\)\s*/g, ")").replace(/\s*,\s*/g, ", ").replace(/\s*=>\s*/g, " => ").replace(/ :: /g, ": ").replace(/:: /g, ": ").replace(/ : /g, ": ");
+    let typeStr = typeTokens.map((t) => {
+      if ((t[0] === "IDENTIFIER" || t[0] === "PROPERTY") && t.data?.predicate) {
+        return t[1] + "?";
+      }
+      return t[1];
+    }).join(" ").replace(/\s+/g, " ").trim();
+    typeStr = typeStr.replace(/\s*<\s*/g, "<").replace(/\s*>\s*/g, ">").replace(/\s*\[\s*/g, "[").replace(/\s*\]\s*/g, "]").replace(/\s*\(\s*/g, "(").replace(/\s*\)\s*/g, ")").replace(/\s*,\s*/g, ", ").replace(/\s*;\s*/g, "; ").replace(/\s*=>\s*/g, " => ").replace(/ :: /g, ": ").replace(/:: /g, ": ").replace(/\s*\?\s*:/g, "?:").replace(/ :(?=[A-Za-z_$(])/g, ": ").replace(/ : /g, ": ");
     return typeStr;
   }
   function collectBalancedAngles(tokens, j) {
@@ -9935,7 +9956,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
       }
       rest.forEach((item) => this.collectProgramVariables(item));
     }
-    collectFunctionVariables(body) {
+    collectFunctionVariables(body, typedVars) {
       let vars = new Set;
       let collect = (sexpr) => {
         if (!Array.isArray(sexpr))
@@ -9948,9 +9969,12 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
         }
         if (CodeEmitter.ASSIGNMENT_OPS.has(head)) {
           let [target, value] = rest;
-          if (typeof target === "string")
-            vars.add(target);
-          else if (this.is(target, "array"))
+          if (typeof target === "string" || target instanceof String) {
+            let name = str(target);
+            vars.add(name);
+            if (typedVars && target instanceof String && target.type)
+              typedVars.set(name, target.type);
+          } else if (this.is(target, "array"))
             this.collectVarsFromArray(target, vars);
           else if (this.is(target, "object"))
             this.collectVarsFromObject(target, vars);
@@ -11691,7 +11715,7 @@ ${this.indent()}}`;
             let atParamMap = isSubclass ? new Map : null;
             cleanParams = params.map((p) => {
               if (this.is(p, ".") && p[1] === "this") {
-                let name = p[2];
+                let name = str(p[2]);
                 let param = isSubclass ? `_${name}` : name;
                 autoAssign.push(`this.${name} = ${param}`);
                 if (isSubclass)
@@ -11699,7 +11723,7 @@ ${this.indent()}}`;
                 return param;
               }
               if (this.is(p, "default") && this.is(p[1], ".") && p[1][1] === "this") {
-                let name = p[1][2];
+                let name = str(p[1][2]);
                 let param = isSubclass ? `_${name}` : name;
                 autoAssign.push(`this.${name} = ${param}`);
                 if (isSubclass)
@@ -12014,7 +12038,8 @@ export default ${expr[1]}`;
       };
       if (Array.isArray(params))
         params.forEach(extractPN);
-      let bodyVars = this.collectFunctionVariables(body);
+      let typedLocals = new Map;
+      let bodyVars = this.collectFunctionVariables(body, typedLocals);
       let newVars = new Set([...bodyVars].filter((v) => !this.programVars.has(v) && !this.reactiveVars?.has(v) && !paramNames.has(v) && !this.scopeStack.some((s) => s.has(v))));
       let noRetStmts = ["return", "throw", "break", "continue"];
       let loopStmts = ["for-in", "for-of", "for-as", "while", "loop"];
@@ -12045,9 +12070,12 @@ export default ${expr[1]}`;
         this.indentLevel++;
         let code = `{
 `;
-        if (newVars.size > 0)
-          code += this.indent() + `let ${Array.from(newVars).sort().join(", ")};
+        if (newVars.size > 0) {
+          let names = Array.from(newVars).sort();
+          let decls = names.map((v) => typedLocals.has(v) ? `${v} /*::${typedLocals.get(v)}*/` : v);
+          code += this.indent() + `let ${decls.join(", ")};
 `;
+        }
         let firstIsSuper = autoAssignments.length > 0 && statements.length > 0 && Array.isArray(statements[0]) && statements[0][0] === "super";
         let genStatements = (stmts) => {
           stmts.forEach((stmt, index) => {
@@ -13525,16 +13553,14 @@ if (typeof globalThis !== 'undefined') {
             s = e + 1;
           }
           for (let spec of specs) {
-            let local = null, imported = null;
+            let local = null;
             for (let k = spec.start;k < spec.end; k++) {
-              if (tokens[k][0] === "IDENTIFIER") {
-                if (imported === null) {
-                  imported = tokens[k][1];
-                  local = imported;
-                } else if (tokens[k - 1] && tokens[k - 1][0] === "AS") {
-                  local = tokens[k][1];
-                }
-              }
+              if (tokens[k][0] !== "IDENTIFIER")
+                continue;
+              if (local === null)
+                local = tokens[k][1];
+              else if (tokens[k - 1]?.[0] === "AS")
+                local = tokens[k][1];
             }
             spec.local = local;
             spec.drop = local != null && isTypeOnly(local);
@@ -13734,7 +13760,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.15.4";
-  var BUILD_DATE = "2026-05-19@17:32:59GMT";
+  var BUILD_DATE = "2026-05-21@12:16:04GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

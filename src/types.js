@@ -316,6 +316,7 @@ export function installTypeSupport(Lexer) {
 function collectTypeExpression(tokens, j) {
   let typeTokens = [];
   let depth = 0;
+  let braceDepth = 0; // count of `{` opens currently active
   let startJ = j;
 
   while (j < tokens.length) {
@@ -340,6 +341,7 @@ function collectTypeExpression(tokens, j) {
 
     if (isOpen) {
       depth++;
+      if (tTag === '{') braceDepth++;
       typeTokens.push(t);
       j++;
       continue;
@@ -347,11 +349,20 @@ function collectTypeExpression(tokens, j) {
     if (isClose) {
       if (depth > 0) {
         depth--;
+        if (tTag === '}' && braceDepth > 0) braceDepth--;
         typeTokens.push(t);
         j++;
         continue;
       }
       break;
+    }
+
+    // Inside a `{` block, normalize multi-line layout:
+    // strip INDENT/OUTDENT (their `[1]` is an indent level number) and
+    // convert TERMINATOR into a synthetic `;` so members are separated.
+    if (braceDepth > 0) {
+      if (tTag === 'INDENT' || tTag === 'OUTDENT') { j++; continue; }
+      if (tTag === 'TERMINATOR') { typeTokens.push(['', ';']); j++; continue; }
     }
 
     // Delimiters that end the type at depth 0
@@ -392,15 +403,25 @@ function buildTypeString(typeTokens) {
   if (typeTokens.length === 0) return '';
   // Bare => (no params) means () => — add empty parens
   if (typeTokens[0]?.[0] === '=>') typeTokens.unshift(['', '()']);
-  let typeStr = typeTokens.map(t => t[1]).join(' ').replace(/\s+/g, ' ').trim();
+  let typeStr = typeTokens.map(t => {
+    // Preserve optional marker on identifiers/properties
+    // (lexer attaches `?` as data.predicate on the preceding token).
+    if ((t[0] === 'IDENTIFIER' || t[0] === 'PROPERTY') && t.data?.predicate) {
+      return t[1] + '?';
+    }
+    return t[1];
+  }).join(' ').replace(/\s+/g, ' ').trim();
   typeStr = typeStr
     .replace(/\s*<\s*/g, '<').replace(/\s*>\s*/g, '>')
     .replace(/\s*\[\s*/g, '[').replace(/\s*\]\s*/g, ']')
     .replace(/\s*\(\s*/g, '(').replace(/\s*\)\s*/g, ')')
     .replace(/\s*,\s*/g, ', ')
+    .replace(/\s*;\s*/g, '; ')
     .replace(/\s*=>\s*/g, ' => ')
     .replace(/ :: /g, ': ')
     .replace(/:: /g, ': ')
+    .replace(/\s*\?\s*:/g, '?:')
+    .replace(/ :(?=[A-Za-z_$(])/g, ': ')
     .replace(/ : /g, ': ');
   return typeStr;
 }

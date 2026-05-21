@@ -1,0 +1,6 @@
+# Allow `bun test` to be run from this directory by preloading the
+# workspace's rip-loader (Bun only reads bunfig.toml from cwd).
+preload = ["../../rip-loader.js"]
+
+[test]
+preload = ["../../rip-loader.js"]

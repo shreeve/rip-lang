@@ -1,0 +1,326 @@
+# ==============================================================================
+# @rip-lang/http — Zero-dependency HTTP client for Rip
+#
+# Author: Steve Shreeve (steve.shreeve@gmail.com)
+#   Date: February 18, 2026
+#
+# A ky-inspired convenience layer over native fetch. Method shortcuts, JSON
+# body/response handling, auto error throwing on non-2xx, retries with
+# exponential backoff and jitter, timeouts, lifecycle hooks, and reusable
+# instances with prefixUrl and default headers — all in pure Rip, zero deps.
+# ==============================================================================
+
+# ==[ Defaults ]==
+
+RETRY_METHODS =! ['GET', 'PUT', 'HEAD', 'DELETE', 'OPTIONS', 'TRACE']
+RETRY_CODES   =! [408, 413, 429, 500, 502, 503, 504]
+RETRY_LIMIT   =! 2
+BACKOFF_BASE  =! 0.3
+TIMEOUT_MS    =! 10000
+
+# ==[ Error Classes ]==
+
+class HTTPError extends Error
+  constructor: (@response:: Response, @request:: Request, @options:: HTTPOptions) ->
+    super("Request failed with status #{@response.status}")
+    @name = 'HTTPError'
+
+class TimeoutError extends Error
+  constructor: (@request:: Request) ->
+    super('Request timed out')
+    @name = 'TimeoutError'
+
+# ==[ Public Types ]==
+
+export type HookFn = (req: Request, opts: HTTPOptions) => Request | Response | undefined | Promise<Request | Response | undefined>
+
+export type RetryHookFn = (info: { request: Request, options: HTTPOptions, error: Error | null, retryCount: number }) => undefined | Promise<undefined>
+
+export type AfterResponseFn = (req: Request, opts: HTTPOptions, res: Response) => Response | undefined | Promise<Response | undefined>
+
+export type BeforeErrorFn = (err: HTTPError) => HTTPError | Promise<HTTPError>
+
+export type Hooks =
+  beforeRequest?: HookFn[]
+  beforeRetry?:   RetryHookFn[]
+  afterResponse?: AfterResponseFn[]
+  beforeError?:   BeforeErrorFn[]
+
+export type RetryConfig =
+  limit?:        number
+  methods?:      string[]
+  statusCodes?:  number[]
+  backoffLimit?: number
+  delay?:        (attempt: number) => number
+
+export type HTTPOptions =
+  method?:          string
+  timeout?:         number
+  throwHttpErrors?: boolean
+  retry?:           RetryConfig | number | false
+  hooks?:           Hooks
+  headers?:         HeadersInit
+  body?:            BodyInit | null
+  json?:            any
+  prefixUrl?:       string | URL
+  searchParams?:    string | URLSearchParams | Record<string, any>
+  mode?:            RequestMode
+  credentials?:     RequestCredentials
+  cache?:           RequestCache
+  redirect?:        RequestRedirect
+  referrer?:        string
+  referrerPolicy?:  ReferrerPolicy
+  integrity?:       string
+  keepalive?:       boolean
+  signal?:          AbortSignal
+
+export type Instance = {
+  (input: RequestInfo | URL, opts?: HTTPOptions): Promise<Response>
+  get:    (input: RequestInfo | URL, opts?: HTTPOptions) => Promise<Response>
+  post:   (input: RequestInfo | URL, opts?: HTTPOptions) => Promise<Response>
+  put:    (input: RequestInfo | URL, opts?: HTTPOptions) => Promise<Response>
+  patch:  (input: RequestInfo | URL, opts?: HTTPOptions) => Promise<Response>
+  del:    (input: RequestInfo | URL, opts?: HTTPOptions) => Promise<Response>
+  head:   (input: RequestInfo | URL, opts?: HTTPOptions) => Promise<Response>
+  create: (opts?: HTTPOptions) => Instance
+  extend: (opts?: HTTPOptions) => Instance
+  HTTPError:    typeof HTTPError
+  TimeoutError: typeof TimeoutError
+}
+
+# Internal function shapes — used to contextually type inner arrow functions.
+type RequestFn  = (input: RequestInfo | URL, opts?: HTTPOptions) => Promise<Response>
+type FactoryFn  = (opts?: HTTPOptions) => Instance
+
+type NormalizedRetry = {
+  limit:         number
+  methods:       string[]
+  statusCodes:   number[]
+  backoffLimit:  number
+  delay?:        (attempt: number) => number
+}
+
+# ==[ Helpers ]==
+
+def buildUrl(input:: RequestInfo | URL, opts:: HTTPOptions):: URL
+  base = opts.prefixUrl
+  url = null
+  inputStr = ''
+  if base
+    baseStr = if typeof base is 'string' then base else base.toString()
+    unless baseStr.endsWith('/')
+      baseStr += '/'
+    inputStr = if typeof input is 'string' then input else if input instanceof URL then input.toString() else input.url
+    inputStr = inputStr.slice(1) if inputStr.startsWith('/')
+    url = new URL(inputStr, baseStr)
+  else if input instanceof Request
+    url = new URL(input.url)
+  else
+    inputStr = if typeof input is 'string' then input else input.toString()
+    url = new URL(inputStr)
+
+  sp = opts.searchParams
+  if sp
+    if sp instanceof URLSearchParams
+      sp.forEach (v, k) -> url.searchParams.set(k, v)
+    else if typeof sp is 'string'
+      new URLSearchParams(sp).forEach (v, k) -> url.searchParams.set(k, v)
+    else if typeof sp is 'object'
+      for own k, v of sp
+        url.searchParams.set(k, String(v)) if v?
+
+  url
+
+def mergeHeaders(a:: HeadersInit | undefined, b?:: HeadersInit):: Headers
+  result = new Headers(a ?? {})
+  if b
+    h = new Headers(b)
+    h.forEach (v, k) -> result.set(k, v)
+  result
+
+def mergeHooks(a:: Hooks = {}, b:: Hooks = {}):: Hooks
+  {
+    beforeRequest: [...(a.beforeRequest ?? []), ...(b.beforeRequest ?? [])]
+    beforeRetry:   [...(a.beforeRetry   ?? []), ...(b.beforeRetry   ?? [])]
+    afterResponse: [...(a.afterResponse ?? []), ...(b.afterResponse ?? [])]
+    beforeError:   [...(a.beforeError   ?? []), ...(b.beforeError   ?? [])]
+  }
+
+def mergeOptions(defaults:: HTTPOptions, overrides:: HTTPOptions):: HTTPOptions
+  opts = { ...defaults, ...overrides }
+  if defaults.headers or overrides.headers
+    opts.headers = mergeHeaders(defaults.headers, overrides.headers)
+  if defaults.hooks or overrides.hooks
+    opts.hooks = mergeHooks(defaults.hooks, overrides.hooks)
+  opts
+
+def normalizeRetry(retry:: RetryConfig | number | false | undefined):: NormalizedRetry
+  return { limit: 0, methods: RETRY_METHODS, statusCodes: RETRY_CODES, backoffLimit: Infinity } if retry is false
+  if typeof retry is 'number'
+    { limit: retry, methods: RETRY_METHODS, statusCodes: RETRY_CODES, backoffLimit: Infinity }
+  else if typeof retry is 'object'
+    limit:        retry.limit        ?? RETRY_LIMIT
+    methods:      retry.methods      ?? RETRY_METHODS
+    statusCodes:  retry.statusCodes  ?? RETRY_CODES
+    backoffLimit: retry.backoffLimit ?? Infinity
+    delay:        retry.delay
+  else
+    { limit: RETRY_LIMIT, methods: RETRY_METHODS, statusCodes: RETRY_CODES, backoffLimit: Infinity }
+
+def delay(ms:: number):: Promise<void>
+  new Promise (resolve) -> setTimeout(resolve, ms)
+
+def backoff(attempt:: number, cfg:: NormalizedRetry):: number
+  if cfg.delay
+    cfg.delay(attempt)
+  else
+    jitter = 1 + Math.random() * 0.1
+    Math.min(BACKOFF_BASE * (2 ** (attempt - 1)) * 1000 * jitter, cfg.backoffLimit)
+
+def retryDelay(attempt:: number, res:: Response | null, cfg:: NormalizedRetry):: number
+  header = res?.headers.get('retry-after')
+  if header
+    secs = Number(header)
+    if Number.isNaN(secs)
+      at = new Date(header).getTime()
+      if Number.isNaN(at) then backoff(attempt, cfg) else Math.max(0, at - Date.now())
+    else
+      secs * 1000
+  else
+    backoff(attempt, cfg)
+
+# ==[ Core Request ]==
+
+def request(input:: RequestInfo | URL, opts:: HTTPOptions = {}):: Promise<Response>
+  method          = (opts.method ?? 'GET').toUpperCase()
+  timeout         = opts.timeout ?? TIMEOUT_MS
+  throwHttpErrors = opts.throwHttpErrors ?? true
+  retry           = normalizeRetry(opts.retry)
+  hooks           = opts.hooks ?? {}
+
+  # Build URL
+  url = buildUrl(input, opts)
+
+  # Build headers
+  headers = mergeHeaders(opts.headers)
+
+  # JSON body convenience
+  body = opts.body
+  if opts.json?
+    body = JSON.stringify(opts.json)
+    headers.set('content-type', 'application/json') unless headers.has('content-type')
+
+  # Assemble fetch options, passing through native fetch fields
+  fetchOpts:: RequestInit =
+    method:         method
+    headers:        headers
+    body:           body
+    mode:           opts.mode
+    credentials:    opts.credentials
+    cache:          opts.cache
+    redirect:       opts.redirect
+    referrer:       opts.referrer
+    referrerPolicy: opts.referrerPolicy
+    integrity:      opts.integrity
+    keepalive:      opts.keepalive
+    signal:         opts.signal
+
+  # Timeout via AbortSignal (unless caller provided their own signal)
+  if timeout and timeout isnt Infinity and not fetchOpts.signal
+    fetchOpts.signal = AbortSignal.timeout(timeout)
+
+  # Build Request
+  req = new Request(url, fetchOpts)
+
+  # Run beforeRequest hooks — may modify the request or short-circuit with a Response
+  if hooks.beforeRequest?.length
+    for hook in hooks.beforeRequest
+      result = hook!(req, opts)
+      if result instanceof Request
+        req = result
+      else if result instanceof Response
+        return result
+
+  # Retry loop
+  retryCount = 0
+  loop
+    res:: Response | null = null
+
+    try
+      res = fetch!(req.clone())
+    catch err
+      cause = err instanceof Error ? err : new Error(String(err))
+      if cause.name is 'AbortError' or cause.name is 'TimeoutError'
+        throw new TimeoutError(req)
+
+      # Network error — retry if eligible
+      if retryCount >= retry.limit or not retry.methods.includes(method)
+        throw err
+
+      retryCount++
+      if hooks.beforeRetry?.length
+        for hook in hooks.beforeRetry
+          hook!({ request: req, options: opts, error: cause, retryCount })
+      delay!(backoff(retryCount, retry))
+      continue
+
+    # Run afterResponse hooks — may replace the response
+    if hooks.afterResponse?.length
+      for hook in hooks.afterResponse
+        result = hook!(req, opts, res)
+        res = result if result instanceof Response
+
+    # Retryable HTTP status
+    if not res.ok and retryCount < retry.limit and retry.methods.includes(method) and retry.statusCodes.includes(res.status)
+      retryCount++
+      if hooks.beforeRetry?.length
+        for hook in hooks.beforeRetry
+          hook!({ request: req, options: opts, error: null, retryCount })
+      delay!(retryDelay(retryCount, res, retry))
+      continue
+
+    # Auto-throw on non-2xx
+    if throwHttpErrors and not res.ok
+      error = new HTTPError(res, req, opts)
+      if hooks.beforeError?.length
+        for hook in hooks.beforeError
+          error = hook!(error) ?? error
+      throw error
+
+    return res
+
+# ==[ Instance Factory ]==
+
+def makeInstance(defaults:: HTTPOptions = {}):: Instance
+  base:: RequestFn = (input, opts = {}) -> request(input, mergeOptions(defaults, opts))
+
+  get:: RequestFn    = (input, opts = {}) -> base(input, { ...opts, method: 'GET'    })
+  post:: RequestFn   = (input, opts = {}) -> base(input, { ...opts, method: 'POST'   })
+  put:: RequestFn    = (input, opts = {}) -> base(input, { ...opts, method: 'PUT'    })
+  patch:: RequestFn  = (input, opts = {}) -> base(input, { ...opts, method: 'PATCH'  })
+  del:: RequestFn    = (input, opts = {}) -> base(input, { ...opts, method: 'DELETE' })
+  head:: RequestFn   = (input, opts = {}) -> base(input, { ...opts, method: 'HEAD'   })
+
+  create:: FactoryFn = (opts = {}) -> makeInstance(opts)
+  extend:: FactoryFn = (opts = {}) -> makeInstance(mergeOptions(defaults, opts))
+
+  inst:: Instance = Object.assign base,
+    get:    get
+    post:   post
+    put:    put
+    patch:  patch
+    del:    del
+    head:   head
+    create: create
+    extend: extend
+    HTTPError:    HTTPError
+    TimeoutError: TimeoutError
+
+  inst
+
+# ==[ Public API ]==
+
+http:: Instance = makeInstance()
+
+export default http
+export { http }
