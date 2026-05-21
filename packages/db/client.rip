@@ -1,0 +1,162 @@
+# @rip-lang/db/client — DuckDB-over-HTTP client for duckdb-harbor.
+#
+# v1 surface: just `query(sql, params?)`. Layered helpers (findOne,
+# findAll, Model factory, embed reachability, dump/load CLI) follow
+# in subsequent commits.
+#
+# Configuration via env vars:
+#
+#   RIP_DB_URL    Base URL of the harbor server.
+#                 Default: http://127.0.0.1:9494
+#   RIP_DB_TOKEN  Bearer token for /sql.
+#                 Required by harbor unless harbor_local_dev_mode
+#                 covers your endpoint — and /sql is NOT covered by
+#                 local_dev_mode (only the UI cookie path is). So in
+#                 practice this must be set against any harbor build.
+#
+#   `connect(url)` overrides RIP_DB_URL at runtime. There is no
+#   imperative override for the token; set RIP_DB_TOKEN before
+#   calling query().
+#
+# Wire shape: harbor's POST /sql with `Accept: application/json` returns:
+#
+#   {
+#     ok: true,
+#     kind: 'select' | 'write',
+#     columns: [{ name, duckdbType, lossless }, ...],
+#     data: [[...], ...],
+#     rowCount: N,
+#     timeMs: M,
+#     sessionId: '...'  (when present)
+#   }
+#
+# On failure (HTTP 4xx/5xx):
+#
+#   {
+#     ok: false,
+#     error: 'message',
+#     errorCode: 'SQL_ERROR' | 'BAD_REQUEST' | 'MISSING_CREDENTIAL' | ...,
+#     errorDetails?: {...}
+#   }
+#
+# We pass harbor's success envelope through with one ergonomic addition:
+# each column entry gets a `type` alias for `duckdbType` so legacy code
+# (and the upcoming Model / QueryBuilder layers) can stay column-shape
+# agnostic.
+#
+# Notes on type semantics that the caller is responsible for:
+#
+#   - BIGINT / HUGEINT / UBIGINT / UHUGEINT come back as JSON STRINGS
+#     (e.g. "9223372036854775807") so JS Number precision can't truncate
+#     them. Promote to BigInt at the boundary if needed.
+#   - DECIMAL comes back as a string preserving width/scale.
+#   - DATE / TIME / TIMESTAMP / TIMESTAMPTZ come back as strings.
+#   - INTERVAL comes back as `{months, days, micros}` with micros as a
+#     string.
+#   - BLOB comes back as base64.
+#   - All other scalar types (INTEGER, FLOAT, DOUBLE, BOOLEAN, VARCHAR)
+#     come back as plain JSON values.
+#   - LIST / ARRAY / STRUCT / MAP / UNION / ENUM nest per harbor SPEC §5.4.
+#
+# v1 does NOT auto-decode any of these (no BigInt promotion, no Date
+# parsing, no BLOB base64 decode). One-shot JSON pass-through for now.
+
+# ==============================================================================
+# Connection
+# ==============================================================================
+
+_dbUrl = null
+
+# Bind the client to a harbor URL at runtime. If the schema runtime has
+# been loaded into this process (via any model import), also install an
+# adapter that routes `User.find!` / `User.where!` through the same URL,
+# eliminating per-app adapter boilerplate.
+#
+# The adapter is a reference to `query` itself (not a closure over the
+# URL): `query` re-reads `_dbUrl` on every call via `dbUrl()`, so a
+# later `connect(newUrl)` repoints both client and schema layer without
+# needing to reinstall the adapter.
+export connect = (url) ->
+  _dbUrl = url
+  if globalThis.__ripSchema?.__schemaSetAdapter
+    globalThis.__ripSchema.__schemaSetAdapter { query }
+  url
+
+dbUrl   = -> _dbUrl or process.env.RIP_DB_URL or 'http://127.0.0.1:9494'
+dbToken = -> process.env.RIP_DB_TOKEN
+
+# ==============================================================================
+# Errors
+# ==============================================================================
+
+# Structured error thrown on harbor failures. Carries the HTTP status,
+# harbor's stable errorCode (e.g. 'SQL_ERROR', 'BAD_REQUEST',
+# 'MISSING_CREDENTIAL', 'TABLE_NOT_FOUND'), and any errorDetails harbor
+# included. Catch this to branch on `.code` or `.httpStatus`.
+export class RipDBError extends Error
+  constructor: (message, { code, details, httpStatus } = {}) ->
+    super(message)
+    @name       = 'RipDBError'
+    @code       = code or null
+    @details    = details or null
+    @httpStatus = httpStatus or null
+
+# ==============================================================================
+# Internals
+# ==============================================================================
+
+# Add `type` alias to each column entry alongside harbor's `duckdbType`
+# so legacy code expecting `column.type` keeps working. Doesn't mutate
+# the harbor payload — returns a new envelope with cloned column entries.
+normalizeEnvelope = (env) ->
+  return env unless env?.columns?
+  cols = env.columns.map (c) -> { ...c, type: c.duckdbType ?? c.type }
+  { ...env, columns: cols }
+
+# Throw RipDBError when the response indicates failure; otherwise
+# return the (normalized) success envelope. Accepts both well-formed
+# harbor envelopes and degenerate cases (network-level failures arrive
+# as HTTP errors with non-JSON bodies; we throw with whatever we have).
+throwOrReturn = (res, data) ->
+  if not res?.ok or data?.ok is false
+    msg = data?.error or "harbor returned #{res?.status} #{res?.statusText or ''}".trim()
+    throw new RipDBError msg,
+      code:       data?.errorCode
+      details:    data?.errorDetails
+      httpStatus: res?.status
+  normalizeEnvelope data
+
+# Build outbound headers. Always Content-Type + Accept (harbor's /sql
+# defaults to NDJSON streaming when Accept isn't pinned to JSON, so
+# being explicit matters). Bearer token is sent only when RIP_DB_TOKEN
+# is configured — lets future builds with a no-auth /sql path work
+# without forcing a stub token.
+buildHeaders = ->
+  headers =
+    'Content-Type': 'application/json'
+    'Accept':       'application/json'
+  token = dbToken()
+  headers['Authorization'] = "Bearer #{token}" if token
+  headers
+
+# ==============================================================================
+# Public API
+# ==============================================================================
+
+# Execute a single SQL statement against the configured harbor server.
+# Always one-shot JSON (no NDJSON streaming in v1). Returns the
+# normalized harbor envelope on success; throws RipDBError on failure.
+#
+#   query! 'SELECT 1 AS ok'
+#   query! 'SELECT * FROM users WHERE id = $1', [42]
+#
+# `params` uses harbor's positional `$1`, `$2`, … binding. Mode B
+# typed wrappers (`{type, value}`) work too — see harbor SPEC §5.2.
+export query = (sql, params = []) ->
+  body = if params.length > 0 then { sql, params } else { sql }
+  res = fetch! "#{dbUrl()}/sql",
+    method:  'POST'
+    headers: buildHeaders()
+    body:    JSON.stringify body
+  data = res.json!
+  throwOrReturn res, data
