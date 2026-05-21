@@ -1,21 +1,18 @@
-# @rip-lang/db/embed — process lifecycle helpers for rip-db.
+# @rip-lang/db/embed — boot-time helpers for rip-db / harbor.
 #
-# `ensureRunning(url, opts)` is the typical "am I running, if not
-# start me" pattern apps use during boot. It checks if a rip-db
-# server answers at `url/sql`; if not, it spawns `rip-db ${opts.file}`
-# as a detached child with stdio redirected to a log file, then polls
-# until the server is healthy or a retry budget runs out.
+# `assertReachable(url)` posts `SELECT 1` to `url/sql` and throws if the
+# server doesn't answer healthily. Use it at app boot to fail loudly
+# when the database server isn't up — clearer than letting the first
+# real query 500.
 #
-# Returns one of:
-#   'running'  — an existing rip-db answered; nothing was started
-#   'started'  — we spawned rip-db and it became reachable
-# Throws otherwise.
+# `ensureRunning(url, opts)` is kept as a thin back-compat alias.
+# Older callers expected it to spawn a rip-db process when one wasn't
+# found; with the in-tree server gone, lifecycle is the operator's
+# responsibility (start harbor / your rip-db-compatible server
+# externally and point at it). This now just verifies reachability.
 
-import { openSync, closeSync, mkdirSync } from 'node:fs'
-import { dirname } from 'node:path'
-
-# Verifies the target is *actually* a rip-db (healthy 2xx response to a
-# trivial SELECT), not just any server that answers `/sql`.
+# Verifies the target answers /sql with a healthy result for a trivial
+# SELECT — not just that *something* is listening on the port.
 reachable = (url) ->
   try
     res = fetch! "#{url}/sql",
@@ -28,33 +25,11 @@ reachable = (url) ->
   catch
     false
 
-export ensureRunning = (url, opts = {}) ->
+export assertReachable = (url, opts = {}) ->
   return 'running' if reachable! url
+  throw new Error "rip-db not reachable at #{url} — start the database server (harbor or compatible) and try again"
 
-  { file, logFile, host, port, authToken, attempts = 10, intervalMs = 200 } = opts
-  throw new Error "ensureRunning: `opts.file` is required to spawn rip-db" unless file
-
-  logPath = logFile or "#{file}.log"
-  for path as [file, logPath]
-    dir = dirname path
-    mkdirSync dir, recursive: true unless dir is '.'
-
-  args = ['rip-db', file]
-  args.push "--host=#{host}" if host
-  args.push "--port=#{port}" if port
-  args.push "--auth-token=#{authToken}" if authToken
-
-  fd = openSync logPath, 'a'
-  try
-    proc = Bun.spawn args, stdio: ['ignore', fd, fd], detached: true, env: process.env
-    proc.unref()
-  finally
-    # The spawned child holds its own copy of the fd; close the parent's copy
-    # to avoid a descriptor leak when ensureRunning is called repeatedly.
-    closeSync fd
-
-  for attempt in [1..attempts]
-    sleep! intervalMs
-    return 'started' if reachable! url
-
-  throw new Error "Failed to start rip-db at #{url} — see #{logPath} for details"
+# Back-compat: older app code called `ensureRunning(url, {file, ...})`
+# expecting an auto-spawn. The in-tree server is gone; this is now a
+# reachability check only. `opts` is accepted but ignored.
+export ensureRunning = (url, opts = {}) -> assertReachable url, opts

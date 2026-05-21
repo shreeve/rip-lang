@@ -8,7 +8,7 @@ import { get, post, use, start, read } from '@rip-lang/server'
 import { serve } from '@rip-lang/server/middleware'
 
 dir = new URL('../app', import.meta.url).pathname
-dbUrl = process.env.RIPDB_URL or 'http://localhost:4213'
+dbUrl = process.env.RIPDB_URL or 'http://localhost:9494'
 
 # Serve the Rip app
 use serve

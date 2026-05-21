@@ -48,7 +48,7 @@ export connect = (url) ->
     globalThis.__ripSchema.__schemaSetAdapter { query }
   url
 
-dbUrl = -> _dbUrl or process.env.DB_URL or 'http://localhost:4213'
+dbUrl = -> _dbUrl or process.env.DB_URL or 'http://localhost:9494'
 
 # ==============================================================================
 # Low-Level Helpers

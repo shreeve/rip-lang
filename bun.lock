@@ -29,9 +29,6 @@
       "bin": {
         "rip-db": "./bin/rip-db",
       },
-      "dependencies": {
-        "@rip-lang/server": ">=1.3.0",
-      },
     },
     "packages/http": {
       "name": "@rip-lang/http",

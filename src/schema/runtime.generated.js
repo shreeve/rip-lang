@@ -1031,7 +1031,7 @@ function __schemaTableName(model) { return __schemaPluralize(__schemaSnake(model
 function __schemaFkName(model) { return __schemaSnake(model) + '_id'; }
 `;
 export const SCHEMA_ORM_RUNTIME            = `function __schemaDefaultAdapter() {
-  const url = (typeof process !== 'undefined' && process.env?.DB_URL) || 'http://localhost:4213';
+  const url = (typeof process !== 'undefined' && process.env?.DB_URL) || 'http://localhost:9494';
   return {
     async query(sql, params) {
       const body = params && params.length ? { sql, params } : { sql };

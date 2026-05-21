@@ -14,7 +14,7 @@
 
 /* eslint-disable no-undef, no-unused-vars */
 function __schemaDefaultAdapter() {
-  const url = (typeof process !== 'undefined' && process.env?.DB_URL) || 'http://localhost:4213';
+  const url = (typeof process !== 'undefined' && process.env?.DB_URL) || 'http://localhost:9494';
   return {
     async query(sql, params) {
       const body = params && params.length ? { sql, params } : { sql };
