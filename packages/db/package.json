@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/db",
-  "version": "2.0.NaN",
+  "version": "2.0.0-alpha.1",
   "description": "DuckDB-over-HTTP client and CLI for Rip — talks to a duckdb-harbor instance",
   "type": "module",
   "exports": {
