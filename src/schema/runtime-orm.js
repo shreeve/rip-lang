@@ -394,7 +394,11 @@ __SchemaDef.prototype.find = async function (id) {
   const soft = norm.softDelete ? ' AND "deleted_at" IS NULL' : '';
   const sql = 'SELECT * FROM "' + norm.tableName + '" WHERE "' + norm.primaryKey + '" = ?' + soft + ' LIMIT 1';
   const res = await __schemaAdapter.query(sql, [id]);
-  if (!res.rows) return null;
+  // Harbor returns rowCount (not the legacy `rows` alias). Treat both
+  // as authoritative so the runtime works against any /sql adapter
+  // that has a row-count field, regardless of which name it uses.
+  const n = res.rowCount ?? res.rows;
+  if (!n || !res.data?.[0]) return null;
   return this._hydrate(res.columns, res.data[0]);
 };
 
