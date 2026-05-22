@@ -33,7 +33,7 @@ import { createInterface } from 'readline'
 # Configuration
 MAX_ROWS  =! 1024
 MAX_CHARS =! 50000
-VERSION   =! '2.0.0-alpha.0'
+VERSION   =! '2.0.1'
 
 dbUrl = do ->
   args = process.argv.slice(2)
