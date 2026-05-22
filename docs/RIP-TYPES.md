@@ -59,10 +59,7 @@ Both compile to identical JavaScript.
 |-------|---------|---------|
 | `::` | Type annotation | `count:: number = 0` |
 | `type` | Type alias | `type ID = number` |
-| `?` | Optional value (`T \| undefined`) | `email:: string?` |
-| `??` | Nullable value (`T \| null \| undefined`) | `middle:: string??` |
-| `!` | Non-nullable (`NonNullable<T>`) | `id:: ID!` |
-| `?:` | Optional property | `email?: string` |
+| `?::` | Optional parameter / field / prop | `email?:: string` |
 | `\|` | Union member | `"a" \| "b" \| "c"` |
 | `=>` | Function type arrow | `(a: number) => string` |
 | `<T>` | Generic parameter | `Container<T>` |
@@ -284,106 +281,78 @@ type Dictionary = {
 
 ## Optionality Modifiers
 
-Lightweight suffix operators that map directly to TypeScript unions.
+Rip uses a single optionality marker: `?` placed on the **name**
+(parameter, type-alias field, structural field, or component prop)
+**before** the `::` annotation sigil. There are no `T?` / `T??` / `T!`
+type-suffix operators — write `T | undefined`, `T | null | undefined`,
+or `NonNullable<T>` directly when you need them.
 
-### Optional: `T?`
-
-Indicates a value may be undefined.
-
-```coffee
-email:: string?
-callback:: Function?
-```
-
-**Emits:**
-
-```ts
-email: string | undefined
-callback: Function | undefined
-```
-
-### Nullable Optional: `T??`
-
-Indicates a value may be null or undefined.
+### Optional Parameter / Field: `name?:: T`
 
 ```coffee
-middle:: string??
-cache:: Map<string, any>??
-```
+def greet(name?:: string):: void
+  console.log "hello #{name ?? 'world'}"
 
-**Emits:**
-
-```ts
-middle: string | null | undefined
-cache: Map<string, any> | null | undefined
-```
-
-### Non-Nullable: `T!`
-
-Asserts a value is never null or undefined.
-
-```coffee
-id:: ID!
-user:: User!
-```
-
-**Emits:**
-
-```ts
-id: NonNullable<ID>
-user: NonNullable<User>
-```
-
-### In Function Signatures
-
-```coffee
-def findUser(id:: number):: User?
-  db.find(id) or undefined
-
-def getUser(id:: number):: User!
-  db.find(id) ?? throw new Error "Not found"
-
-def updateUser(id:: number, email:: string??):: boolean
-  ...
-```
-
-**Emits:**
-
-```ts
-function findUser(id: number): User | undefined { ... }
-function getUser(id: number): NonNullable<User> { ... }
-function updateUser(id: number, email: string | null | undefined): boolean { ... }
-```
-
-### Optional Properties
-
-In structural types, `?` after the property name makes it optional (the
-property itself may be absent), distinct from value optionality:
-
-```coffee
 type User =
-  id: number
-  name: string
-  email?: string      # Optional property — may be absent
-  phone?: string?     # Optional property that can also be undefined when present
+  id:: number
+  name:: string
+  email?:: string      # Optional field — may be absent
 ```
 
 **Emits:**
 
 ```ts
+function greet(name?: string): void { ... }
+
 type User = {
   id: number;
   name: string;
   email?: string;
-  phone?: string | undefined;
 };
 ```
 
-### Key Distinction
+### Component Props: `@prop?:: T [:= default]`
 
-- `email?: string` — property may be absent
-- `email:: string?` — value may be undefined
-- `email?: string??` — property may be absent, value may be null or undefined
+A `?` on a component prop name marks it optional in the generated
+constructor type. A `:=` default is purely a runtime initializer — it
+does NOT make the prop optional on its own. The three canonical shapes:
+
+```coffee
+export Counter = component
+  @value::  number              # required, no default
+  @step?::  number              # optional, no default
+  @label?:: string := "Count"   # optional with default
+```
+
+**Emits:**
+
+```ts
+export declare class Counter {
+  constructor(props: {
+    value: number;
+    step?: number;
+    label?: string;
+  });
+}
+```
+
+Writing `@prop:: T := V` (typed, defaulted, no `?`) declares a
+**required prop with a default** — the parent must still pass it. To
+make a prop optional, add `?` to the name.
+
+### Expressing Value Optionality
+
+When the **value** itself needs to permit `undefined` or `null`, write
+the union explicitly:
+
+```coffee
+email::  string | undefined
+middle:: string | null | undefined
+id::     NonNullable<ID>
+```
+
+This is the same form TypeScript uses, so the emitted DTS is a
+character-for-character match.
 
 ---
 
@@ -1153,9 +1122,10 @@ collection — the token itself is the answer:
 
 **Other special cases:**
 
-- **`?` / `??` / `!` suffixes**: These modify the type. When they appear
-  unspaced after an identifier at depth 0, they are part of the type:
-  `string?` → `"string?"`, `ID!` → `"ID!"`.
+- **`?` on names**: When `?` appears unspaced **before** a `::` annotation
+  on a parameter, field, or component prop name, the lexer marks the name
+  token as optional (`data.optional = true`). This is the sole optionality
+  marker — there are no `?` / `??` / `!` suffixes on type expressions.
 - **Generic `<>` vs comparison**: Inside a type context (after `::`), always
   treat `<` as opening a generic bracket. The type context is unambiguous
   because we are already inside a `::` collection.
@@ -1341,12 +1311,12 @@ syntax into standard TypeScript:
 | Rip syntax | TypeScript equivalent |
 |-----------|---------------------|
 | `::` | `:` (annotation sigil to type separator) |
-| `T?` | `T \| undefined` |
-| `T??` | `T \| null \| undefined` |
-| `T!` | `NonNullable<T>` |
+| `name?::` | `name?:` (optional parameter / field / prop) |
 
 Function type expressions use `=>` directly (same as TypeScript), so no
-arrow conversion is needed.
+arrow conversion is needed. Value-level optionality is written with
+explicit unions (`T | undefined`, `T | null`, `NonNullable<T>`) — there
+are no type-suffix operators.
 
 The function returns a `.d.ts` string. Declarations without type
 annotations are skipped — only annotated code appears in the output.
@@ -1774,29 +1744,28 @@ Type annotations never affect `let` vs `const` in `.js` output:
 
 ### Edge Cases
 
-#### Optionality Suffixes in Types
+#### Optionality Marker on Names
 
-The `?`, `??`, and `!` suffixes appear unspaced after the type name:
+A `?` placed unspaced **before** the `::` annotation on a parameter,
+field, or component prop name marks the name as optional:
 
 ```coffee
-email:: string?       # → type = "string?"
-middle:: string??     # → type = "string??"
-id:: ID!              # → type = "ID!"
+def fetch(url:: string, opts?:: RequestInit):: Response
+  ...
+
+type User =
+  id::    number
+  email?:: string   # optional field
 ```
 
-In `rewriteTypes()`, when collecting type tokens, if the next token is `?`,
-`??`, or `!` and is **not spaced** from the previous token, include it as
-part of the type string.
+In the lexer, when `?` appears immediately before `::`, it is stripped
+from the stream and `data.optional = true` is set on the preceding
+name token. `emitTypes()` reads that flag and emits `name?:` instead of
+`name:` in the generated TypeScript.
 
-The `emitTypes()` function expands these suffixes into standard TypeScript:
-
-| Rip suffix | TypeScript equivalent |
-|-----------|---------------------|
-| `T?` | `T \| undefined` |
-| `T??` | `T \| null \| undefined` |
-| `T!` | `NonNullable<T>` |
-
-See §1.6 for the full Rip-to-TypeScript conversion table (including `::` → `:`).
+Value-level optionality is expressed with explicit unions — there are
+no `T?` / `T??` / `T!` type-suffix operators. See §1.6 for the full
+Rip-to-TypeScript conversion table.
 
 #### File-Level Type Directives
 

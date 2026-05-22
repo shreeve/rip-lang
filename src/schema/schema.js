@@ -541,7 +541,7 @@ function parseFieldedLine(kind, line, entries, ctx) {
         dname === 'one' || dname === 'many' || dname === 'mixin') {
       let t0 = argTokens[0];
       if (t0 && (t0[0] === 'IDENTIFIER' || t0[0] === 'PROPERTY')) {
-        let optional = t0.data?.predicate === true;
+        let optional = t0.data?.optional === true;
         if (!optional && argTokens[1]?.[0] === '?') optional = true;
         args = [{ target: t0[1], optional }];
       }
@@ -1468,9 +1468,9 @@ function compileDirectiveArgsLiteral(name, tokens) {
     }
     let target = t0[1];
     // `@belongs_to User?` tokenizes as IDENTIFIER "User" with
-    // data.predicate=true. A trailing `?` in a later token position is
+    // data.optional=true. A trailing `?` in a later token position is
     // also accepted for robustness.
-    let optional = t0.data?.predicate === true;
+    let optional = t0.data?.optional === true;
     let pos = 1;
     if (!optional && tokens[pos]?.[0] === '?') { optional = true; pos++; }
     let parts = [`target: ${JSON.stringify(target)}`];
@@ -1674,7 +1674,7 @@ function collectModifiers(identToken) {
   let mods = [];
   let d = identToken.data;
   if (d?.await === true) mods.push('!');
-  if (d?.predicate === true) mods.push('?');
+  if (d?.optional === true) mods.push('?');
   return mods;
 }
 

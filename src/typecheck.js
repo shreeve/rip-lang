@@ -219,12 +219,12 @@ export function checkComponentDefs(compProps, srcLines, startLine = 0) {
   const errors = [];
   for (const prop of compProps) {
     for (let s = startLine; s < srcLines.length; s++) {
-      const m = new RegExp('(@' + prop.name + ')\\s*(::|([:!]?=))').exec(srcLines[s]);
+      const m = new RegExp('(@' + prop.name + ')\\??\\s*(::|([:!]?=))').exec(srcLines[s]);
       if (!m) continue;
       if (m[1 + 1] !== '::') {
         errors.push({ line: s, col: m.index, len: m[1].length, propName: prop.name, message: `Prop '${prop.name}' has no type annotation` });
       } else {
-        const dm = srcLines[s].match(new RegExp('@' + prop.name + '\\s*::\\s*(.+?)\\s*:=\\s*(.+)'));
+        const dm = srcLines[s].match(new RegExp('@' + prop.name + '\\??\\s*::\\s*(.+?)\\s*:=\\s*(.+)'));
         if (dm) {
           const defVal = dm[2].replace(/#.*$/, '').trim();
           const err = validatePropDefault(dm[1].trim(), defVal);
@@ -1162,7 +1162,7 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
             const existingFields = new Set();
             for (let k = j + 1; k < cl.length; k++) {
               if (cl[k].match(/^(?:export\s+)?(?:class|const)\s+\w+/) && k > j + 1) break;
-              const fm = cl[k].match(/^\s+(?:declare\s+)?(\w+):\s+.+;$/);
+              const fm = cl[k].match(/^\s+(?:declare\s+)?(\w+):\s+.+;(?:\s*\/\/.*)?$/);
               if (fm) existingFields.add(fm[1]);
               // Also match field assignments (e.g. `name = __computed(...)` in component stubs)
               const am = cl[k].match(/^\s+(\w+)\s*=\s+/);

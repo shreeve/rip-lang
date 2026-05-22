@@ -83,9 +83,9 @@ Adding `::` type annotations to props enables IDE IntelliSense — completions,
 hover info, and diagnostics — for every component that uses yours:
 
 ```coffee
-@variant:: 'primary' | 'outline' | 'subtle' := 'primary'
-@disabled:: boolean := false
-@label:: string := ''
+@variant?:: 'primary' | 'outline' | 'subtle' := 'primary'
+@disabled?:: boolean
+@label?:: string
 ```
 
 Without `::`, the prop is untyped (`any`) and the IDE cannot validate values

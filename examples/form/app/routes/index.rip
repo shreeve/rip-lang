@@ -9,7 +9,7 @@ export App = component
           Form title: "Sign in"
 
 export Form = component
-  @title:: string := ""
+  @title?:: string
   email := ""
   password := ""
   loading := false
@@ -21,7 +21,7 @@ export Form = component
     loading = false
 
   render
-    form @submit: @onSubmit
+    form @submit: @onSubmit, noValidate: true
       div class: "text-center text-2xl leading-none font-semibold"
         title
       div class: "mt-6 flex flex-col gap-y-6"

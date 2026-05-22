@@ -392,7 +392,21 @@ function buildTypeString(typeTokens) {
   if (typeTokens.length === 0) return '';
   // Bare => (no params) means () => — add empty parens
   if (typeTokens[0]?.[0] === '=>') typeTokens.unshift(['', '()']);
-  let typeStr = typeTokens.map(t => t[1]).join(' ').replace(/\s+/g, ' ').trim();
+  // Inline structural / function-param property-name optional marker:
+  // an IDENTIFIER carrying `.data.optional` and followed by TYPE_ANNOTATION
+  // gets a trailing `?` appended to its emitted name. The lexer stripped
+  // the trailing `?` from the token text but flagged it on `.data.optional`.
+  let parts = typeTokens.map((t, i) => {
+    let next = typeTokens[i + 1];
+    // Re-attach the trailing `?` for optional property names. The next
+    // separator may be `::` (TYPE_ANNOTATION) in function param lists or
+    // `:` inside an inline structural type literal like `{ x?: T }`.
+    if (t.data?.optional && next && (next[0] === 'TYPE_ANNOTATION' || next[0] === ':')) {
+      return `${t[1]}?`;
+    }
+    return t[1];
+  });
+  let typeStr = parts.join(' ').replace(/\s+/g, ' ').trim();
   typeStr = typeStr
     .replace(/\s*<\s*/g, '<').replace(/\s*>\s*/g, '>')
     .replace(/\s*\[\s*/g, '[').replace(/\s*\]\s*/g, ']')
@@ -485,13 +499,13 @@ function collectStructuralType(tokens, indentIdx) {
           (/^[a-zA-Z_$]/.test(tokens[j][1]) && tokens[j + 1]?.[0] === 'TYPE_ANNOTATION'))) {
         readonly = true;
         propName = tokens[j][1];
-        // Carry predicate flag through
-        if (tokens[j].data?.predicate) optional = true;
+        // Carry optional flag through
+        if (tokens[j].data?.optional) optional = true;
         j++;
       }
 
-      // Check for ? (optional property) — lexer stores as .data.predicate
-      if (t.data?.predicate) optional = true;
+      // Check for ? (optional property) — lexer stores as .data.optional
+      if (t.data?.optional) optional = true;
       // Also check for standalone ? token
       if (tokens[j]?.[1] === '?' && !tokens[j]?.spaced) {
         optional = true;

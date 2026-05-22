@@ -323,6 +323,7 @@ rip -cm example.rip
 | **binary existential (`x ? y`)**   | **`x ?? y` (NEVER use `x ? y`, it is not valid Rip)** |
 | `is not` contraction               | `isnt`                                                |
 | `for x from iterable`              | `for x as iterable`                                   |
+| type-suffix `T?` / `T??` / `T!`    | write `T \| undefined`, `T \| null \| undefined`, `NonNullable<T>` (use `?::` for prop/param/field optionality) |
 
 ### Added
 
@@ -338,6 +339,7 @@ rip -cm example.rip
 | dotted keys           | `{a.b: 1}`       | flat string key in object literals         |
 | map literal           | `*{a: 1}`        | real `Map` with any key type               |
 | symbol literal        | `:redo`          | interned symbol via `Symbol.for('redo')`   |
+| optional prop / param | `name?:: T`      | `?` before `::` marks the name optional (params, type fields, component props, structural literals) |
 | boolean prop shorthand | `Btn outline, link` | JSX-style `{outline: true, link: true}` for child components in `render` |
 
 ### Kept

@@ -2,12 +2,8 @@ import { Product } from '../types.rip'
 import { Button } from '../components/button.rip'
 import { title } from '../config.rip'
 
-type ProductsQuery =
-  search?: string
-  sort?: string
-
 export Products = component
-  @router:: any := null
+  @router?:: any
   cart ~= @app.data.cart
   products:: Product[] := []
   error := null
@@ -36,13 +32,7 @@ export Products = component
     finally
       loaded = true
 
-  # Workaround until RFC 1 lands: `?::` inside an inline structural type literal
-  # is silently stripped today (both fields type as required, breaking the
-  # single-field call sites below). Lifting the shape into a named type alias
-  # (`ProductsQuery`) goes through the type-alias parse path, where `?:` is
-  # honored. RFC 1 will fix the inline-literal context directly; this alias
-  # can then be inlined back if desired. See RFCS.md § RFC 1 scope table.
-  setQuery: (opts:: ProductsQuery) ->
+  setQuery: (opts:: { search?: string, sort?: string }) ->
     next = { ...@router.query, ...opts }
     params = new URLSearchParams()
     for key, val of next when val

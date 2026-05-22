@@ -7,7 +7,7 @@
 //
 // Design principles:
 //   - Every token carries .pre (whitespace count before it)
-//   - Every token carries .data (metadata: await, predicate, quote, etc.)
+//   - Every token carries .data (metadata: await, optional, quote, etc.)
 //   - Every token carries .loc  (location: row, col, len)
 //   - Indentation is derived from .pre, not tracked during lexing
 //   - Token categories use Sets for O(1) membership tests
@@ -24,7 +24,7 @@
 //
 // Identifier suffixes:
 //   !  — dammit operator: fetch!() → await fetch()
-//   ?  — predicate:       empty?  → isEmpty (returns boolean convention)
+//   ?  — optional:        empty?  → (empty != null) (existence check / optional marker)
 //
 // The 9 tokenizer methods (in priority order):
 //   1. identifier  — variables, keywords, properties, ! and ? suffixes
@@ -246,7 +246,7 @@ let UNARY_MATH = new Set(['!', '~']);
 // Regex Patterns
 // ==========================================================================
 
-// Identifier: word chars + optional trailing ! (await) or ? (predicate)
+// Identifier: word chars + optional trailing ! (await) or ? (optional)
 // The ? suffix is only captured when NOT followed by . ? ! [ ( to avoid
 // conflict with ?. (optional chaining), ?? (nullish), ?! (presence), ?.( and ?.[
 let IDENTIFIER_RE = /^(?!\d)((?:(?!\s)[$\w\x7f-\uffff])+(?:!|[?](?![.?![(]))?)([^\n\S]*:(?![=:]))?/;
@@ -520,7 +520,7 @@ export class Lexer {
   //
   // Suffix operators on identifiers:
   //   !  → dammit operator (await): fetch!() → await fetch()
-  //   ?  → predicate (boolean):     empty?   → isEmpty
+  //   ?  → optional (existence):    empty?   → (empty != null)
   //
   // The ? suffix is captured by IDENTIFIER_RE only when NOT followed by
   // . ? [ ( — so x?.y (optional chaining) and x?? (nullish coalescing)
@@ -661,10 +661,14 @@ export class Lexer {
       id = id.slice(0, -1);
     }
 
-    // --- Predicate operator: trailing ? → boolean convention ---
-    // empty? → isEmpty, active? → isActive, valid? → isValid
+    // --- Optional marker: trailing ? ---
+    // Identifier-position: existence check (`empty?` → `(empty != null)`).
+    // Property-name position: optional prop / type field (`@label?:: T`,
+    // `{ x?:: T }`, `def f(x?:: T)`). The flag is consumed by the type/
+    // component/schema emitters; the runtime semantics for `name?` as an
+    // existence check are unchanged.
     if (id.length > 1 && id.endsWith('?')) {
-      data.predicate = true;
+      data.optional = true;
       id = id.slice(0, -1);
     }
 

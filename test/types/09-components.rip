@@ -7,9 +7,9 @@
 # ── Components ──
 
 export Input = component extends input
-  @label:: string := ""
-  @value:: string := ""
-  @error:: string := ""
+  @label?:: string
+  @value?:: string := ""
+  @error?:: string
 
   render
     fieldset
@@ -22,8 +22,8 @@ export Input = component extends input
 
 export Button = component extends button
   @variant:: "primary" | "secondary"
-  @shape:: "rounded" | "pill" := "rounded"
-  @loading:: boolean := false
+  @shape?:: "rounded" | "pill" := "rounded"
+  @loading?:: boolean
 
   bg ~= if variant is "primary" then "#0066ff" else "#e5e5e5"
   fg ~= if variant is "primary" then "#fff" else "#333"
@@ -37,7 +37,7 @@ export Button = component extends button
         slot
 
 export Form = component
-  @title:: string := ""
+  @title?:: string
   email := ""
   password := ""
   loading := false
@@ -108,8 +108,8 @@ export BindingTypeTests = component
 # ── Negative: type safety inside component bodies ──
 
 export TypeTestComp = component
-  @variant:: "primary" | "secondary" := "primary"
-  @count:: number := 0
+  @variant?:: "primary" | "secondary" := "primary"
+  @count?:: number := 0
   loading := false
 
   ok ~= if variant is "primary" then "#0066ff" else "#e5e5e5"
@@ -214,10 +214,10 @@ export EventHandlerTest = component
 type TOptionShape = string | { value: string, label: string }
 
 export Select<TOption extends TOptionShape> = component extends select
-  @label:: string := ""
-  @options:: TOption[] := []
-  @placeholder:: string := ""
-  @error:: string := ""
+  @label?:: string
+  @options?:: TOption[] := []
+  @placeholder?:: string
+  @error?:: string
 
   render
     fieldset

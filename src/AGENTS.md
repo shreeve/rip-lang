@@ -241,7 +241,7 @@ Complete node reference:
 Tokens are `[tag, val]` arrays with extra properties:
 
 - `.pre` — whitespace count before token
-- `.data` — metadata like `{ await, predicate, quote, invert, parsedValue }`
+- `.data` — metadata like `{ await, optional, quote, invert, parsedValue }`
 - `.loc` — `{ r, c, n }`
 - `.spaced` — sugar for `.pre > 0`
 - `.newLine` — whether preceded by newline
@@ -249,7 +249,7 @@ Tokens are `[tag, val]` arrays with extra properties:
 Identifier suffixes:
 
 - `!` sets `.data.await = true`
-- `?` sets `.data.predicate = true`
+- `?` sets `.data.optional = true` (existence check on values; optional marker on prop/type-field names)
 - `as!` in loops emits `FORASAWAIT` for `for await`
 
 Tagged template bridge:
@@ -653,7 +653,7 @@ enum Status
 Type emission is split across two files by execution context:
 
 - `types.js` (browser-side, ~21 KB) — `installTypeSupport(Lexer)` adds `rewriteTypes()` to strip type annotations from the token stream so user-typed Rip parses. This is the only thing the browser needs from type machinery.
-- `dts.js` (CLI/LSP only, ~38 KB) — `emitTypes(tokens, sexpr, source)` generates `.d.ts`, plus `expandSuffixes`, `emitComponentTypes`, and the intrinsic declaration tables (`INTRINSIC_TYPE_DECLS`, `SIGNAL_*`, `COMPUTED_*`, `EFFECT_*`, etc.). Registers itself with the compiler at module load via `setTypesEmitter()`.
+- `dts.js` (CLI/LSP only, ~38 KB) — `emitTypes(tokens, sexpr, source)` generates `.d.ts`, plus `tsType`, `emitComponentTypes`, and the intrinsic declaration tables (`INTRINSIC_TYPE_DECLS`, `SIGNAL_*`, `COMPUTED_*`, `EFFECT_*`, etc.). Registers itself with the compiler at module load via `setTypesEmitter()`.
 
 `emitEnum` (runtime JS for `enum` blocks) lives in `compiler.js` next to the rest of the codegen dispatch — it's not type machinery, it's real runtime emission.
 
