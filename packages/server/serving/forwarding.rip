@@ -145,8 +145,20 @@ export forwardOnceWithTimeout = (req, socketPath, readTimeoutMs, gatewayTimeoutR
   forwardUrl = "http://localhost#{inUrl.pathname}#{inUrl.search}"
   timer = null
 
+  # `redirect: 'manual'` is critical here: Bun.fetch defaults to following
+  # 3xx responses, but the redirect-follow drops the `unix:` socket option
+  # and tries TCP to localhost, which fails ("Unable to connect") because
+  # workers only listen on the UDS. Any Rip app that returns a redirect
+  # (POST→303 patterns, OAuth callbacks, forward_auth flows) would 503
+  # without this. Edge proxy already does the same — see proxyToUpstream.
   try
-    fetchPromise = fetch(forwardUrl, { method: req.method, headers: req.headers, body: req.body, unix: socketPath, decompress: false })
+    fetchPromise = fetch forwardUrl,
+      method: req.method
+      headers: req.headers
+      body: req.body
+      unix: socketPath
+      decompress: false
+      redirect: 'manual'
     readGuard = new Promise (_, rej) ->
       timer = setTimeout (-> rej(new Error('Upstream timeout'))), readTimeoutMs
     res = Promise.race!([fetchPromise, readGuard])
