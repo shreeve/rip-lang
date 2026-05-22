@@ -12,7 +12,7 @@
 #     div $item: "archive", "Archive"
 
 export Menu = component
-  @disabled:: boolean := false
+  @disabled := false
 
   open := false
   highlightedIndex := -1

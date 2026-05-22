@@ -9,9 +9,9 @@
 #   Avatar
 
 export Avatar = component
-  @src:: string := ""
-  @alt:: string := ""
-  @fallback:: string := ""
+  @src := ""
+  @alt := ""
+  @fallback := ""
 
   imgError := false
 

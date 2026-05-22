@@ -12,7 +12,7 @@
 #     div $item: "paste", "Paste"
 
 export ContextMenu = component
-  @disabled:: boolean := false
+  @disabled := false
 
   open := false
   highlightedIndex := -1

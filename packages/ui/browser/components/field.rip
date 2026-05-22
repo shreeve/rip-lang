@@ -9,11 +9,11 @@
 #     Input value <=> email, type: "email"
 
 export Field = component
-  @label:: string := ""
-  @description:: string := ""
-  @error:: string := ""
-  @disabled:: boolean := false
-  @required:: boolean := false
+  @label := ""
+  @description := ""
+  @error := ""
+  @disabled := false
+  @required := false
 
   _id =! "fld-#{Math.random().toString(36).slice(2, 8)}"
 

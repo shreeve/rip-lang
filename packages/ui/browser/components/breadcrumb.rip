@@ -15,8 +15,8 @@
 #     span $item: true, "Settings"
 
 export Breadcrumb = component
-  @separator:: string := "/"
-  @label:: string := "Breadcrumb"
+  @separator := "/"
+  @label := "Breadcrumb"
 
   _ready := false
 

@@ -11,10 +11,10 @@
 #     div $value: "right", "Right"
 
 export ToggleGroup = component
-  @value:: any := null
-  @disabled:: boolean := false
-  @multiple:: boolean := false
-  @orientation:: "horizontal" | "vertical" := "horizontal"
+  @value := null
+  @disabled := false
+  @multiple := false
+  @orientation := "horizontal"
 
   _items ~=
     return [] unless @_slot

@@ -11,8 +11,8 @@
 #       Input value <=> city
 
 export Fieldset = component
-  @legend:: string := ""
-  @disabled:: boolean := false
+  @legend := ""
+  @disabled := false
 
   render
     fieldset disabled: @disabled, $disabled: @disabled?!

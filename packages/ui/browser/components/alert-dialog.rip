@@ -13,8 +13,8 @@
 #     button @click: handleDelete, "Delete"
 
 export AlertDialog = component
-  @open:: boolean := false
-  @initialFocus:: any := null
+  @open := false
+  @initialFocus := null
 
   _id =! "adlg-#{Math.random().toString(36).slice(2, 8)}"
   _focusRaf = null

@@ -15,7 +15,7 @@
 #       div $item: "redo", "Redo"
 
 export Menubar = component
-  @disabled:: boolean := false
+  @disabled := false
 
   activeMenu := null
   highlightedIndex := -1

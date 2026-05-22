@@ -13,9 +13,9 @@
 #     a $link: true, href: "/about", "About"
 
 export NavigationMenu = component
-  @orientation:: "horizontal" | "vertical" := "horizontal"
-  @hoverDelay:: number := 200
-  @hoverCloseDelay:: number := 300
+  @orientation := "horizontal"
+  @hoverDelay := 200
+  @hoverCloseDelay := 300
 
   activePanel := null
   _ready := false

@@ -12,11 +12,11 @@ lastCloseTime = 0
 GROUP_TIMEOUT = 400
 
 export Tooltip = component
-  @text:: string := ""
-  @placement:: "top" | "top-start" | "top-end" | "bottom" | "bottom-start" | "bottom-end" | "left" | "right" := "top"
-  @delay:: number := 300
-  @offset:: number := 6
-  @hoverable:: boolean := false
+  @text := ""
+  @placement := "top"
+  @delay := 300
+  @offset := 6
+  @hoverable := false
 
   open := false
   entering := false

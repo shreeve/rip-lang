@@ -8,10 +8,10 @@
 #   Pagination page <=> currentPage, total: 500, perPage: 20, siblingCount: 2
 
 export Pagination = component
-  @page:: number := 1
-  @total:: number := 0
-  @perPage:: number := 10
-  @siblingCount:: number := 1
+  @page := 1
+  @total := 0
+  @perPage := 10
+  @siblingCount := 1
 
   totalPages ~= Math.max(1, Math.ceil(@total / @perPage))
   _ready := false

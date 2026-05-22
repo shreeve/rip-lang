@@ -11,7 +11,7 @@
 #       input type: "text", value: name, @input: (e) => name = e.target.value
 
 export EditableValue = component
-  @disabled:: boolean := false
+  @disabled := false
 
   editing := false
   saving := false

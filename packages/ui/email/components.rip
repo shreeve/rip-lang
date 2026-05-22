@@ -14,15 +14,15 @@ import { registerEmailTailwindRoot } from '../tailwind/tailwind.rip'
 # ==============================================================================
 
 export Email = component
-  @class:: string := ""
-  @lang:: string := "en"
-  @dir:: "ltr" | "rtl" := "ltr"
+  @class := ""
+  @lang := "en"
+  @dir := "ltr"
   render
     html class: @class, lang: @lang, dir: @dir
       slot
 
 export Head = component
-  @class:: string := ""
+  @class := ""
   render
     head class: @class
       meta content: "text/html; charset=UTF-8", "http-equiv": "Content-Type"
@@ -30,8 +30,8 @@ export Head = component
       slot
 
 export Body = component
-  @class:: string := ""
-  @style:: string := ""
+  @class := ""
+  @style := ""
   render
     body class: @class
       table align: "center", width: "100%", border: "0", cellPadding: "0", cellSpacing: "0", role: "presentation"
@@ -41,8 +41,8 @@ export Body = component
               slot
 
 export Preview = component
-  @class:: string := ""
-  @text:: string := ""
+  @class := ""
+  @text := ""
   _padding ~= previewPadding(@text)
   render
     div class: @class, style: "display:none;overflow:hidden;line-height:1px;opacity:0;max-height:0;max-width:0", "data-skip-in-text": "true"
@@ -51,14 +51,14 @@ export Preview = component
         = _padding
 
 export Font = component
-  @fontFamily:: string := ""
-  @fallbackFontFamily:: string | string[] := "Arial"
-  @fontStyle:: string := "normal"
-  @fontWeight:: number := 400
-  @google:: string := ""
-  @display:: string := "swap"
-  @webFontUrl:: string := ""
-  @webFontFormat:: string := "woff2"
+  @fontFamily := ""
+  @fallbackFontFamily := "Arial"
+  @fontStyle := "normal"
+  @fontWeight := 400
+  @google := ""
+  @display := "swap"
+  @webFontUrl := ""
+  @webFontFormat := "woff2"
 
   _family ~= @google or @fontFamily
   _googleFamily ~= encodeURIComponent(_family).replace(/%20/g, '+')
@@ -68,9 +68,9 @@ export Font = component
     "#{_googleFamily}:wght@#{@fontWeight}"
   _googleUrl ~= if @google then "https://fonts.googleapis.com/css2?family=#{_googleSpec}&display=#{@display}" else ''
   _src ~= if @webFontUrl then "src: url(#{@webFontUrl}) format('#{@webFontFormat}');" else ''
-  _fallback:: string[] ~= if kind(@fallbackFontFamily) is 'array' then Array.from(@fallbackFontFamily) else [@fallbackFontFamily]
+  _fallback ~= if kind(@fallbackFontFamily) is 'array' then Array.from(@fallbackFontFamily) else [@fallbackFontFamily]
   _msoAlt ~= _fallback[0]
-  _fallbackStr:: string ~= _fallback.join(', ')
+  _fallbackStr ~= _fallback.join(', ')
   _fontRule ~= "* { font-family: '#{_family}', #{_fallbackStr}; }"
 
   _css ~= if @webFontUrl
@@ -96,8 +96,8 @@ export Font = component
 # ==============================================================================
 
 export Container = component
-  @class:: string := ""
-  @style:: string := ""
+  @class := ""
+  @style := ""
   _style ~= joinStyles("max-width:37.5em", @style)
   render
     table class: @class, align: "center", width: "100%", border: "0", cellPadding: "0", cellSpacing: "0", role: "presentation", style: _style
@@ -107,8 +107,8 @@ export Container = component
             slot
 
 export Section = component
-  @class:: string := ""
-  @style:: string := ""
+  @class := ""
+  @style := ""
   render
     table class: @class, align: "center", width: "100%", border: "0", cellPadding: "0", cellSpacing: "0", role: "presentation", style: @style
       tbody
@@ -117,8 +117,8 @@ export Section = component
             slot
 
 export Row = component
-  @class:: string := ""
-  @style:: string := ""
+  @class := ""
+  @style := ""
   render
     table class: @class, align: "center", width: "100%", border: "0", cellPadding: "0", cellSpacing: "0", role: "presentation", style: @style
       tbody
@@ -126,8 +126,8 @@ export Row = component
           slot
 
 export Column = component
-  @class:: string := ""
-  @style:: string := ""
+  @class := ""
+  @style := ""
   render
     td class: @class, style: @style
       slot
@@ -137,16 +137,16 @@ export Column = component
 # ==============================================================================
 
 export Heading = component
-  @as:: "h1" | "h2" | "h3" | "h4" | "h5" | "h6" := "h1"
-  @class:: string := ""
-  @style:: string := ""
-  @m:: string | undefined := undefined
-  @mx:: string | undefined := undefined
-  @my:: string | undefined := undefined
-  @mt:: string | undefined := undefined
-  @mr:: string | undefined := undefined
-  @mb:: string | undefined := undefined
-  @ml:: string | undefined := undefined
+  @as := "h1"
+  @class := ""
+  @style := ""
+  @m := undefined
+  @mx := undefined
+  @my := undefined
+  @mt := undefined
+  @mr := undefined
+  @mb := undefined
+  @ml := undefined
   _marginStyle ~= withMargin {
     m:  @m
     mx: @mx
@@ -168,46 +168,46 @@ export Heading = component
       else h1 class: @class, style: _style, slot
 
 export Text = component
-  @class:: string := ""
-  @style:: string := ""
+  @class := ""
+  @style := ""
   _style ~= joinStyles("font-size:14px;line-height:24px;margin:16px 0", @style)
   render
     p class: @class, style: _style
       slot
 
 export Link = component
-  @class:: string := ""
-  @href:: string := ""
-  @target:: string := "_blank"
-  @style:: string := ""
+  @class := ""
+  @href := ""
+  @target := "_blank"
+  @style := ""
   _style ~= joinStyles("color:#067df7;text-decoration:none", @style)
   render
     a class: @class, href: @href, target: @target, style: _style
       slot
 
 export Image = component
-  @class:: string := ""
-  @src:: string := ""
-  @alt:: string := ""
-  @width:: number | undefined := undefined
-  @height:: number | undefined := undefined
-  @style:: string := ""
+  @class := ""
+  @src := ""
+  @alt := ""
+  @width := undefined
+  @height := undefined
+  @style := ""
   _style ~= joinStyles("display:block;outline:none;border:none;text-decoration:none", @style)
   render
     img class: @class, src: @src, alt: @alt, width: @width, height: @height, style: _style
 
 export Divider = component
-  @class:: string := ""
-  @style:: string := ""
+  @class := ""
+  @style := ""
   _style ~= joinStyles("width:100%;border:none;border-top:1px solid #eaeaea", @style)
   render
     hr class: @class, style: _style
 
 export Button = component
-  @class:: string := ""
-  @href:: string := ""
-  @target:: string := "_blank"
-  @style:: string := ""
+  @class := ""
+  @href := ""
+  @target := "_blank"
+  @style := ""
 
   _padding ~= parsePadding(@style)
   _y ~= (_padding.paddingTop ?? 0) + (_padding.paddingBottom ?? 0)
@@ -230,19 +230,19 @@ export Button = component
 # Rich content
 # ==============================================================================
 
-_escapeHtml = (text:: string) ->
+_escapeHtml = (text) ->
   String(text)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
 
-_escapeAttr = (text:: string) ->
+_escapeAttr = (text) ->
   String(text)
     .replace(/&/g, '&amp;')
     .replace(/"/g, '&quot;')
 
-_safeHref = (href:: string) ->
+_safeHref = (href) ->
   value = String(href or '').trim()
   return '' unless value
 
@@ -255,7 +255,7 @@ _safeHref = (href:: string) ->
   return value if lower.startsWith('#')
   '#'
 
-_inlineFormat = (text:: string) ->
+_inlineFormat = (text) ->
   escaped = _escapeHtml(text)
 
   escaped
@@ -268,7 +268,7 @@ _inlineFormat = (text:: string) ->
       safeHref = _escapeAttr(_safeHref(href))
       "<a href=\"#{safeHref}\" target=\"_blank\">#{label}</a>"
 
-_parseMarkdown = (src:: string) ->
+_parseMarkdown = (src) ->
   return '' unless src
   lines = src.split('\n')
   out = []
@@ -320,19 +320,19 @@ _parseMarkdown = (src:: string) ->
   out.join('\n')
 
 export Markdown = component
-  @class:: string := ""
-  @text:: string := ""
-  @style:: string := ""
+  @class := ""
+  @text := ""
+  @style := ""
   _html ~= _parseMarkdown(@text)
   render
     # Raw HTML from markdown input is escaped; only this curated subset renders as tags.
     div class: @class, style: @style, innerHTML: _html
 
 export CodeBlock = component
-  @class:: string := ""
-  @code:: string := ""
-  @lineNumbers:: boolean := false
-  @style:: string := ""
+  @class := ""
+  @code := ""
+  @lineNumbers := false
+  @style := ""
   _baseStyle =! "background:#f4f4f4;padding:16px;border-radius:4px;font-family:monospace;font-size:13px;overflow-x:auto;white-space:pre"
   _style ~= "#{_baseStyle};#{@style}"
 
@@ -356,8 +356,8 @@ export CodeBlock = component
       code innerHTML: _html
 
 export CodeInline = component
-  @class:: string := ""
-  @style:: string := ""
+  @class := ""
+  @style := ""
   _codeStyle ~= "background:#f4f4f4;padding:2px 4px;border-radius:3px;font-family:monospace;font-size:0.9em;#{@style}"
   _orangeCss =! '''
     meta ~ .cino { display: none !important; opacity: 0 !important; }
@@ -375,7 +375,7 @@ export CodeInline = component
 # ==============================================================================
 
 export Tailwind = component
-  @config:: any := undefined
+  @config := undefined
   mounted: ->
     registerEmailTailwindRoot(this, @config)
   render

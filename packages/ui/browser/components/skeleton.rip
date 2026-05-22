@@ -10,10 +10,10 @@
 #   Skeleton circle: true, width: "48px"
 
 export Skeleton = component
-  @width:: any := null
-  @height:: any := null
-  @circle:: boolean := false
-  @label:: string := "Loading"
+  @width := null
+  @height := null
+  @circle := false
+  @label := "Loading"
 
   render
     div role: "status", aria-busy: "true", aria-label: @label

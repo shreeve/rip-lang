@@ -8,11 +8,11 @@
 #   Input value <=> email, type: "email", required: true
 
 export Input = component extends input
-  @value:: string := ""
-  @placeholder:: string := ""
-  @type:: string := "text"
-  @disabled:: boolean := false
-  @required:: boolean := false
+  @value := ""
+  @placeholder := ""
+  @type := "text"
+  @disabled := false
+  @required := false
 
   focused := false
   touched := false

@@ -37,11 +37,11 @@ dpInRange = (day, from, to) ->
   t >= lo and t <= hi
 
 export DatePicker = component
-  @value:: any := null
-  @placeholder:: string := "mm/dd/yyyy"
-  @disabled:: boolean := false
-  @range:: boolean := false
-  @firstDayOfWeek:: number := 0
+  @value := null
+  @placeholder := "mm/dd/yyyy"
+  @disabled := false
+  @range := false
+  @firstDayOfWeek := 0
 
   open := false
   viewMonth := new Date()

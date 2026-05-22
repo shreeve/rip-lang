@@ -10,11 +10,11 @@
 #   Combobox query <=> searchText, items: fruits, @select: handleSelect, @filter: filterFn
 
 export Combobox = component
-  @query:: string := ""
-  @items:: any[] := []
-  @placeholder:: string := "Search..."
-  @disabled:: boolean := false
-  @autoHighlight:: boolean := true
+  @query := ""
+  @items := []
+  @placeholder := "Search..."
+  @disabled := false
+  @autoHighlight := true
 
   open := false
   highlightedIndex := -1

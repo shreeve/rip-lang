@@ -7,10 +7,10 @@
 #   OTPField length: 6, value <=> code, @complete: handleVerify
 
 export OTPField = component
-  @length:: number := 6
-  @value:: string := ""
-  @disabled:: boolean := false
-  @mask:: boolean := false
+  @length := 6
+  @value := ""
+  @disabled := false
+  @mask := false
 
   _id =! "otp-#{Math.random().toString(36).slice(2, 8)}"
 

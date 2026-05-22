@@ -11,10 +11,10 @@
 #     div $value: "lettuce", "Lettuce"
 
 export CheckboxGroup = component
-  @value:: any[] := []
-  @disabled:: boolean := false
-  @orientation:: "horizontal" | "vertical" := "vertical"
-  @label:: string := ""
+  @value := []
+  @disabled := false
+  @orientation := "vertical"
+  @label := ""
 
   _options ~=
     return [] unless @_slot

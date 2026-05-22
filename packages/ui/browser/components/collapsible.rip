@@ -11,8 +11,8 @@
 #       p "Hidden content here"
 
 export Collapsible = component
-  @open:: boolean := false
-  @disabled:: boolean := false
+  @open := false
+  @disabled := false
 
   _ready := false
 

@@ -21,14 +21,14 @@
 
 export Grid = component
 
-  @data:: any[] := []
-  @columns:: any[] := []
-  @rowHeight:: number := 32
-  @headerHeight:: number := 36
-  @overscan:: number := 5
-  @striped:: boolean := false
-  @beforeEdit:: any := null
-  @afterEdit:: any := null
+  @data := []
+  @columns := []
+  @rowHeight := 32
+  @headerHeight := 36
+  @overscan := 5
+  @striped := false
+  @beforeEdit := null
+  @afterEdit := null
 
   formatRegistry = []
 

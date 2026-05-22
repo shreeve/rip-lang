@@ -18,11 +18,11 @@
 #     div $slide: true, "Slide B"
 
 export Carousel = component
-  @orientation:: "horizontal" | "vertical" := "horizontal"
-  @loop:: boolean := false
-  @autoplay:: boolean := false
-  @interval:: number := 4000
-  @label:: string := "Carousel"
+  @orientation := "horizontal"
+  @loop := false
+  @autoplay := false
+  @interval := 4000
+  @label := "Carousel"
 
   activeIndex := 0
   _ready := false

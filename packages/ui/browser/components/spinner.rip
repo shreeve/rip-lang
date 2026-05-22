@@ -9,8 +9,8 @@
 #   Spinner label: "Saving...", size: "24px"
 
 export Spinner = component
-  @label:: string := "Loading"
-  @size:: any := null
+  @label := "Loading"
+  @size := null
 
   render
     div role: "status", aria-label: @label

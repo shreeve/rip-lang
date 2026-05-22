@@ -19,8 +19,8 @@
 #   ToastViewport toasts <=> toasts
 
 export ToastViewport = component
-  @toasts:: any[] := []
-  @placement:: "top-left" | "top-right" | "bottom-left" | "bottom-right" := "bottom-right"
+  @toasts := []
+  @placement := "bottom-right"
 
   _onDismiss: (toast) ->
     @toasts = @toasts.filter (t) -> t isnt toast
@@ -31,7 +31,7 @@ export ToastViewport = component
         Toast toast: toast, @dismiss: (e) => @_onDismiss(e.detail)
 
 export Toast = component
-  @toast:: Record<string, any> := {}
+  @toast := {}
 
   leaving := false
   _timer := null

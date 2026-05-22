@@ -12,7 +12,7 @@
 #       "Submit"
 
 export Form = component
-  @disabled:: boolean := false
+  @disabled := false
 
   submitting := false
   submitted := false

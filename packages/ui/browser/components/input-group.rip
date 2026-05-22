@@ -13,7 +13,7 @@
 #     button $suffix: true, @click: doSearch, "Go"
 
 export InputGroup = component
-  @disabled:: boolean := false
+  @disabled := false
 
   focused := false
 

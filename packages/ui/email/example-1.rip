@@ -7,8 +7,8 @@
 import { toEmail, Email, Head, Body, Preview, Font, Container, Heading, Text, Button, Divider, Link } from './email.rip'
 
 export WelcomeEmail = component
-  @name:: string := "friend"
-  @loginUrl:: string := "https://example.com/login"
+  @name := "friend"
+  @loginUrl := "https://example.com/login"
 
   render
     Email lang: 'en'

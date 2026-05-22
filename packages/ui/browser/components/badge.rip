@@ -8,7 +8,7 @@
 #   Badge variant: "outline", "Beta"
 
 export Badge = component
-  @variant:: "solid" | "outline" | "subtle" := "solid"
+  @variant := "solid"
 
   render
     span $variant: @variant

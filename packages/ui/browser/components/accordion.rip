@@ -16,7 +16,7 @@
 #         p "Content B"
 
 export Accordion = component
-  @multiple:: boolean := false
+  @multiple := false
 
   openItems := new Set()
   _ready    := false

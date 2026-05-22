@@ -11,7 +11,7 @@
 MIN_THUMB = 20
 
 export ScrollArea = component
-  @orientation:: "horizontal" | "vertical" := "vertical"
+  @orientation := "vertical"
 
   hovering := false
   scrolling := false

@@ -13,9 +13,9 @@
 #     button @click: (=> showDialog = false), "Close"
 
 export Dialog = component
-  @open:: boolean := false
-  @dismissable:: boolean := true
-  @initialFocus:: any := null
+  @open := false
+  @dismissable := true
+  @initialFocus := null
 
   _id =! "dlg-#{Math.random().toString(36).slice(2, 8)}"
   _focusRaf = null

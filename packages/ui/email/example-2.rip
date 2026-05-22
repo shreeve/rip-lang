@@ -19,8 +19,8 @@ updates = [
 ]
 
 export WeeklyDigestEmail = component
-  @dashboardUrl:: string := "https://example.com/dashboard"
-  @name:: string := "Alice"
+  @dashboardUrl := "https://example.com/dashboard"
+  @name := "Alice"
 
   render
     Email lang: 'en'

@@ -19,9 +19,9 @@
 #     div $panel: true, "Bottom"
 
 export Resizable = component
-  @orientation:: "horizontal" | "vertical" := "horizontal"
-  @minSize:: number := 10
-  @maxSize:: number := 90
+  @orientation := "horizontal"
+  @minSize := 10
+  @maxSize := 90
 
   _ready := false
   _dragging = null

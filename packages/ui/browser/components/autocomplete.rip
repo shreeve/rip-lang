@@ -10,10 +10,10 @@
 acCollator = new Intl.Collator(undefined, { sensitivity: 'base' })
 
 export Autocomplete = component
-  @value:: string := ""
-  @items:: any[] := []
-  @placeholder:: string := "Type to search..."
-  @disabled:: boolean := false
+  @value := ""
+  @items := []
+  @placeholder := "Type to search..."
+  @disabled := false
 
   open := false
   _ready := false

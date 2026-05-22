@@ -10,7 +10,7 @@
 #     "Unavailable"
 
 export Button = component extends button
-  @disabled:: boolean := false
+  @disabled := false
 
   onClick: ->
     return if @disabled

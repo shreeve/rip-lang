@@ -11,8 +11,8 @@
 #     Toggle pressed <=> isBold, "Bold"
 
 export Toolbar = component
-  @orientation:: "horizontal" | "vertical" := "horizontal"
-  @label:: string := ""
+  @orientation := "horizontal"
+  @label := ""
 
   _getFocusable: ->
     return [] unless @_root

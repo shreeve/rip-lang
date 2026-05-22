@@ -16,8 +16,8 @@
 #         td "Engineer"
 
 export Table = component
-  @caption:: string := ""
-  @striped:: boolean := false
+  @caption := ""
+  @striped := false
 
   render
     div $striped: @striped?!

@@ -19,9 +19,9 @@
 #       p "Content for tab two"
 
 export Tabs = component
-  @active:: any := null
-  @orientation:: "horizontal" | "vertical" := "horizontal"
-  @activation:: "automatic" | "manual" := "automatic"
+  @active := null
+  @orientation := "horizontal"
+  @activation := "automatic"
   _ready       := false
   _id =! "tabs-#{Math.random().toString(36).slice(2, 8)}"
   activationDirection := 'none'

@@ -8,12 +8,12 @@
 #   Textarea value <=> notes, autoResize: true, rows: 3
 
 export Textarea = component extends textarea
-  @value:: string := ""
-  @placeholder:: string := ""
-  @disabled:: boolean := false
-  @required:: boolean := false
-  @rows:: number := 3
-  @autoResize:: boolean := false
+  @value := ""
+  @placeholder := ""
+  @disabled := false
+  @required := false
+  @rows := 3
+  @autoResize := false
 
   focused := false
   touched := false

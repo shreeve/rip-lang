@@ -8,8 +8,8 @@
 #   Separator orientation: "vertical"
 
 export Separator = component
-  @orientation:: "horizontal" | "vertical" := "horizontal"
-  @decorative:: boolean := true
+  @orientation := "horizontal"
+  @decorative := true
 
   render
     div role: (if @decorative then 'none' else 'separator')

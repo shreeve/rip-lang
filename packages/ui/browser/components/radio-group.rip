@@ -10,10 +10,10 @@
 #     div $value: "lg", "Large"
 
 export RadioGroup = component
-  @value:: any := null
-  @disabled:: boolean := false
-  @orientation:: "horizontal" | "vertical" := "vertical"
-  @name:: string := ""
+  @value := null
+  @disabled := false
+  @orientation := "vertical"
+  @name := ""
 
   _options ~=
     return [] unless @_slot

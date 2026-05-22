@@ -8,8 +8,8 @@
 #     "Bold"
 
 export Toggle = component
-  @pressed:: boolean := false
-  @disabled:: boolean := false
+  @pressed := false
+  @disabled := false
 
   onClick: ->
     return if @disabled

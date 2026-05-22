@@ -12,10 +12,10 @@
 #     span "Dark mode"
 
 export Checkbox = component
-  @checked:: boolean := false
-  @disabled:: boolean := false
-  @indeterminate:: boolean := false
-  @switch:: boolean := false
+  @checked := false
+  @disabled := false
+  @indeterminate := false
+  @switch := false
 
   onClick: ->
     return if @disabled

@@ -10,12 +10,12 @@
 #       p "Popover content"
 
 export Popover = component
-  @placement:: "top" | "top-start" | "top-end" | "bottom" | "bottom-start" | "bottom-end" | "left" | "right" := "bottom-start"
-  @offset:: number := 4
-  @disabled:: boolean := false
-  @openOnHover:: boolean := false
-  @hoverDelay:: number := 300
-  @hoverCloseDelay:: number := 200
+  @placement := "bottom-start"
+  @offset := 4
+  @disabled := false
+  @openOnHover := false
+  @hoverDelay := 300
+  @hoverCloseDelay := 200
 
   open := false
   _ready := false

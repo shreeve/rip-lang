@@ -16,9 +16,9 @@
 #     option value: "b", "Option B"
 
 export Select = component
-  @value:: any := null
-  @placeholder:: string := "Select..."
-  @disabled:: boolean := false
+  @value := null
+  @placeholder := "Select..."
+  @disabled := false
 
   options := []
   open := false
@@ -95,7 +95,7 @@ export Select = component
     e.preventDefault()
     if open then @close(false, true) else @openMenu()
 
-  onOptionPointerup: (e:: any) ->
+  onOptionPointerup: (e) ->
     return unless open
     return unless e.button is 0
     return unless e.pointerType in ['mouse', 'pen']
@@ -103,7 +103,7 @@ export Select = component
     suppressOptionClick = true
     @selectIndex(idx)
 
-  onOptionClick: (e:: any) ->
+  onOptionClick: (e) ->
     idx = Number(e.currentTarget.dataset.idx)
     if suppressOptionClick
       suppressOptionClick = false

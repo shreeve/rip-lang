@@ -8,8 +8,8 @@
 #   Label required: true, "Username"
 
 export Label = component
-  @for:: any := null
-  @required:: boolean := false
+  @for := null
+  @required := false
 
   render
     label for: @for?!, $required: @required?!

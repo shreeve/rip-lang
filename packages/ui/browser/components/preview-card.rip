@@ -11,8 +11,8 @@
 #       p "User details here..."
 
 export PreviewCard = component
-  @delay:: number := 400
-  @closeDelay:: number := 200
+  @delay := 400
+  @closeDelay := 200
 
   open := false
   _ready := false

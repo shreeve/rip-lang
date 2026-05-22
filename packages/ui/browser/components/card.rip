@@ -17,7 +17,7 @@
 #     p "Clickable card"
 
 export Card = component
-  @interactive:: boolean := false
+  @interactive := false
 
   render
     div tabindex: (if @interactive then "0" else undefined)

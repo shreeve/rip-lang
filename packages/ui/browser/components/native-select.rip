@@ -10,9 +10,9 @@
 #     option value: "user", "User"
 
 export NativeSelect = component
-  @value:: string := ""
-  @disabled:: boolean := false
-  @required:: boolean := false
+  @value := ""
+  @disabled := false
+  @required := false
 
   focused := false
 

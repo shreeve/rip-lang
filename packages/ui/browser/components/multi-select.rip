@@ -8,10 +8,10 @@
 #   MultiSelect value <=> selectedColors, items: colors, placeholder: "Choose colors..."
 
 export MultiSelect = component
-  @value:: any[] := []
-  @items:: any[] := []
-  @placeholder:: string := "Select..."
-  @disabled:: boolean := false
+  @value := []
+  @items := []
+  @placeholder := "Select..."
+  @disabled := false
 
   open := false
   query := ''

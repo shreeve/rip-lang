@@ -26,7 +26,7 @@ export benchTailwindConfig =
         accent: '#0f766e'
 
 export PlainBenchEmail = component
-  @title:: string := 'Rip UI Weekly Digest'
+  @title := 'Rip UI Weekly Digest'
 
   render
     Email
@@ -63,10 +63,10 @@ export PlainBenchEmail = component
               = 'Visit the team dashboard'
 
 export TailwindBenchEmail = component
-  @title:: string := 'Rip UI Weekly Digest'
-  @config:: any := undefined
-  @buttonClass:: string := 'rounded-md bg-slate-900 px-4 py-3 text-sm font-semibold text-white'
-  @linkClass:: string := 'text-teal-700'
+  @title := 'Rip UI Weekly Digest'
+  @config := undefined
+  @buttonClass := 'rounded-md bg-slate-900 px-4 py-3 text-sm font-semibold text-white'
+  @linkClass := 'text-teal-700'
 
   render
     Email

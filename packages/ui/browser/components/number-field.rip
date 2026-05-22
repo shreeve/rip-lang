@@ -12,15 +12,15 @@ START_DELAY = 400
 TICK_DELAY  = 60
 
 export NumberField = component
-  @value:: number := 0
-  @min:: any := null
-  @max:: any := null
-  @step:: number := 1
-  @smallStep:: number := 0.1
-  @largeStep:: number := 10
-  @disabled:: boolean := false
-  @readOnly:: boolean := false
-  @name:: any := null
+  @value := 0
+  @min := null
+  @max := null
+  @step := 1
+  @smallStep := 0.1
+  @largeStep := 10
+  @disabled := false
+  @readOnly := false
+  @name := null
 
   _timer = null
   _interval = null
