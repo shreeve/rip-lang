@@ -1,0 +1,41 @@
+{
+  "name": "@rip-lang/gate",
+  "version": "0.5.0",
+  "description": "Tiny forward-auth service for vanilla Caddy. Encrypted cookie session, password login, no plugin required.",
+  "type": "module",
+  "main": "index.rip",
+  "exports": {
+    ".": "./index.rip"
+  },
+  "scripts": {
+    "test": "rip test.rip"
+  },
+  "dependencies": {
+    "@rip-lang/server": "workspace:*"
+  },
+  "keywords": [
+    "auth",
+    "forward-auth",
+    "caddy",
+    "cookie",
+    "bun",
+    "rip",
+    "rip-lang"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shreeve/rip-lang.git",
+    "directory": "packages/gate"
+  },
+  "homepage": "https://github.com/shreeve/rip-lang/tree/main/packages/gate#readme",
+  "bugs": {
+    "url": "https://github.com/shreeve/rip-lang/issues"
+  },
+  "author": "Steve Shreeve <steve.shreeve@gmail.com>",
+  "license": "MIT",
+  "files": [
+    "index.rip",
+    "test.rip",
+    "README.md"
+  ]
+}

@@ -1,0 +1,309 @@
+# ==============================================================================
+# @rip-lang/gate — tiny cookie-auth middleware for @rip-lang/server
+# ==============================================================================
+# Encrypted-cookie session (Rack::Session::Cookie-style, but AES-256-GCM).
+# Argon2id passwords. Works two ways:
+#
+#   1. As middleware inside any Rip server app:
+#        import { gate } from '@rip-lang/gate'
+#        use gate { secret, users: { alice: '$argon2id$...' } }
+#        # everything below is now protected
+#
+#   2. As a standalone forward-auth service behind Caddy:
+#        GATE_SECRET=... GATE_USER_ALICE='$argon2id$...' \
+#          rip server packages/gate
+#        # Caddy: forward_auth 127.0.0.1:9090 { uri /_gate/check }
+#
+# Hash a password:
+#        rip packages/gate/index.rip hash <password>
+#
+# `gate(opts)` returns a middleware function (the auth gate) AND as a
+# side effect installs the sessions middleware and registers the
+# /_gate/{check,login,logout} routes. Call it inside `use` once.
+
+import { realpathSync } from 'node:fs'
+import { get, post, use, read, start } from '@rip-lang/server'
+import { sessions } from '@rip-lang/server/middleware'
+
+# ------------------------------------------------------------------------------
+# `hash` subcommand — runs before any module setup so it never touches sessions.
+# ------------------------------------------------------------------------------
+
+if process.argv[2] is 'hash'
+  pw = process.argv[3]
+  unless pw
+    warn 'usage: rip packages/gate/index.rip hash <password>'
+    exit 1
+  p Bun.password.hash!(pw, { algorithm: 'argon2id' })
+  exit 0
+
+# ------------------------------------------------------------------------------
+# Helpers (pure, used by the middleware below).
+# ------------------------------------------------------------------------------
+
+# Same-origin path only. Rejects scheme, `//evil`, `/\evil`, control chars.
+safeReturnTo = (raw) ->
+  return '/' unless typeof raw is 'string' and raw.length > 0 and raw.length < 2048
+  return '/' unless raw.startsWith '/'
+  return '/' if raw.startsWith('//') or raw.startsWith('/\\')
+  return '/' if /[\x00-\x1f\s\\]/.test(raw)
+  raw
+
+hmacHex = (secret, msg) ->
+  enc = new TextEncoder()
+  key = crypto.subtle.importKey! 'raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  sig = crypto.subtle.sign! 'HMAC', key, enc.encode(msg)
+  Array.from(new Uint8Array(sig)).map((b) -> b.toString(16).padStart(2, '0')).join ''
+
+# CSRF token derived from the session itself (no second cookie).
+csrfFor = (secret, session) ->
+  return null unless session?.created
+  hmacHex! secret, "csrf:#{session.created}"
+
+eqct = (a, b) ->
+  return false unless typeof a is 'string' and typeof b is 'string' and a.length is b.length
+  diff = 0
+  diff |= a.charCodeAt(i) ^ b.charCodeAt(i) for i in [0...a.length]
+  diff is 0
+
+esc = (s) ->
+  String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+defaultLogin = ({ csrfToken, error, returnTo, host }) ->
+  errHtml = if error then "<p class=\"err\">#{esc(error)}</p>" else ''
+  """
+  <!doctype html><html lang="en"><head><meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1"><title>Sign in</title>
+  <style>body{font:14px/1.5 system-ui,sans-serif;max-width:22rem;margin:4rem auto;padding:0 1rem}
+  h1{font-size:1.25rem;margin:0 0 .25rem}.host{color:#666;margin:0 0 1.25rem;font-size:.9rem}
+  label{display:block;margin:.75rem 0 .25rem;font-size:.9rem}
+  input{width:100%;padding:.5rem;box-sizing:border-box;font:inherit}
+  button{margin-top:1rem;padding:.5rem 1rem;font:inherit;cursor:pointer}
+  .err{background:#fee;border:1px solid #f99;padding:.5rem;border-radius:4px;color:#900}</style>
+  </head><body><h1>Sign in</h1><p class="host">#{esc(host)}</p>#{errHtml}
+  <form method="post" action="/_gate/login" autocomplete="on">
+  <input type="hidden" name="_csrf" value="#{esc(csrfToken)}">
+  <input type="hidden" name="return_to" value="#{esc(returnTo)}">
+  <label for="u">User</label><input id="u" name="user" autocomplete="username" autofocus required>
+  <label for="p">Password</label><input id="p" name="password" type="password" autocomplete="current-password" required>
+  <button type="submit">Sign in</button></form></body></html>
+  """
+
+# ------------------------------------------------------------------------------
+# The middleware itself.
+# ------------------------------------------------------------------------------
+#
+# Options:
+#   secret        Required. Cookie encryption + CSRF signing key.
+#   users         { username: argon2id-hash } map. Required unless `verify` is set.
+#   verify        async (username, password) -> truthy on success. Overrides `users`.
+#   template      ({ csrfToken, error, returnTo, host }) -> HTML for the login page.
+#   ttl           Session lifetime in seconds (default 28800 = 8h).
+#   secure        Force Secure cookies. Defaults to NODE_ENV=production.
+#   protect       'all' (default): redirect any unauthenticated non-/_gate/* request
+#                 to login. 'none': only expose /_gate/* endpoints (forward_auth mode).
+#   cookieName    Override cookie name. Default `__Host-rip_gate` (prod) or `rip_gate`.
+#
+# After install, handlers can read `@session.user` to identify the caller.
+
+export gate = (opts = {}) ->
+  secret   = opts.secret or throw new Error 'gate: `secret` is required'
+  users    = opts.users or {}
+  verify   = opts.verify or null
+  template = opts.template or defaultLogin
+  ttl      = opts.ttl ?? 28800  # `??` not `or` so the validator below catches ttl:0
+  prod     = if opts.secure? then opts.secure else (process.env.NODE_ENV or '').toLowerCase() is 'production'
+  cookie   = opts.cookieName or (if prod then '__Host-rip_gate' else 'rip_gate')
+  protect  = opts.protect or 'all'
+
+  # Fail closed on misconfiguration: a typo in `protect` (e.g. `'al'`)
+  # would otherwise silently disable auth on every non-/_gate request.
+  unless protect in ['all', 'none']
+    throw new Error "gate: protect must be 'all' or 'none', got #{JSON.stringify(protect)}"
+  unless Number.isInteger(ttl) and ttl > 0
+    throw new Error "gate: ttl must be a positive integer (seconds), got #{JSON.stringify(ttl)}"
+  if typeof secret isnt 'string' or secret.length < 32
+    warn "gate: secret should be at least 32 characters (got #{secret?.length or 0}). Generate one with 'openssl rand -base64 32'."
+
+  # Lazy dummy hash — only built on the first unknown-user login attempt.
+  dummy = null
+  verifyMatches = (plain, hash) ->
+    if hash
+      return Bun.password.verify!(plain, hash)
+    dummy ?= Bun.password.hash!('gate-unknown-user', { algorithm: 'argon2id' })
+    Bun.password.verify!(plain, dummy)
+    false
+
+  doVerify = (rawUser, pass) ->
+    if verify
+      # Custom hooks receive the trimmed-but-not-lowercased username so
+      # case-sensitive backends (LDAP, email-as-username) can decide.
+      result = await verify(rawUser, pass)
+      return null unless result
+      return if typeof result is 'object' then result else { user: rawUser }
+    ok = await verifyMatches(pass, users[rawUser.toLowerCase()])
+    if ok then { user: rawUser.toLowerCase() } else null
+
+  # Server-side expiry check — the cookie's Max-Age is only a browser
+  # hint; a stolen cookie would replay forever otherwise.
+  isAuthed = (s) ->
+    s? and s.user and Number.isFinite(s.expires) and s.expires > Date.now()
+
+  # Preserve query strings in return_to. `c.req.path` is path-only;
+  # we want path + search so deep links survive the login redirect.
+  fullReqPath = (c) ->
+    try
+      u = new URL(c.req.url)
+      "#{u.pathname}#{u.search}"
+    catch
+      c.req.path
+
+  # Install sessions as a sibling middleware. This runs before the gate
+  # middleware that gets returned below, so by the time we look at
+  # `c.session.user` the cookie has already been parsed.
+  use sessions { secret, encrypt: true, secure: prod, sameSite: 'Lax', name: cookie, maxAge: ttl }
+
+  # /check — for Caddy forward_auth (or anyone else who wants a JSON-ish probe).
+  get '/_gate/check', ->
+    if isAuthed(@session)
+      return new Response '',
+        status: 204
+        headers:
+          'Cache-Control': 'no-store'
+          'Remote-User':   String(@session.user)
+    uri = safeReturnTo(@req.header('x-forwarded-uri') or '/')
+    accept = @req.header('accept') or ''
+    method = (@req.header('x-forwarded-method') or 'GET').toUpperCase()
+    if accept.includes('text/html') and method in ['GET', 'HEAD']
+      return new Response '',
+        status: 302
+        headers: { Location: "/_gate/login?return_to=#{encodeURIComponent(uri)}", 'Cache-Control': 'no-store' }
+    new Response 'unauthorized', { status: 401, headers: { 'Cache-Control': 'no-store' } }
+
+  get '/_gate/login', ->
+    rt = safeReturnTo(@req.query('return_to') or '/')
+    host = @req.header('x-forwarded-host') or @req.header('host') or ''
+    @session.created ?= Date.now()
+    token = csrfFor!(secret, @session)
+    @session.csrfNonce = token
+    @header 'Cache-Control', 'no-store'
+    @html template({ csrfToken: token, error: null, returnTo: rt, host })
+
+  post '/_gate/login', ->
+    rt = safeReturnTo(read('return_to') or '/')
+    rawUser = String(read('user') or '').trim()
+    pass = String(read('password') or '')
+    submitted = String(read('_csrf') or '')
+    expected = @session.csrfNonce or ''
+    unless expected and eqct(submitted, expected)
+      return new Response('csrf required', { status: 403, headers: { 'Cache-Control': 'no-store' } })
+
+    identity = await doVerify(rawUser, pass)
+    unless identity
+      host = @req.header('x-forwarded-host') or @req.header('host') or ''
+      @header 'Cache-Control', 'no-store'
+      return @html template({ csrfToken: expected, error: 'Invalid credentials', returnTo: rt, host }), 401
+
+    # Custom `verify` returns are user-supplied — make sure `user` is a
+    # non-empty header-safe string before stamping it onto Remote-User.
+    unless typeof identity.user is 'string' and identity.user.length > 0 and /^[\x20-\x7e]+$/.test(identity.user)
+      warn 'gate: verify() returned an unsafe user value; rejecting login'
+      return new Response('login rejected', { status: 500, headers: { 'Cache-Control': 'no-store' } })
+
+    # Replace the entire session — drops attacker-supplied state and
+    # rotates the CSRF nonce. `expires` carries server-enforced TTL.
+    delete @session[key] for key of @session
+    @session[k] = v for k, v of identity
+    @session.created = Date.now()
+    @session.expires = Date.now() + (ttl * 1000)
+    @session.csrfNonce = csrfFor!(secret, @session)
+    @redirect rt, 303
+
+  # GET /_gate/logout renders a confirmation page with the logout CSRF
+  # token. The actual mutation happens on POST below — SameSite=Lax
+  # protects the POST from cross-origin form submission, and the HMAC
+  # token verifies same-session origin. The GET itself is side-effect
+  # free, so SameSite=Lax's allowance of top-level GET nav is fine.
+  get '/_gate/logout', ->
+    return @redirect '/_gate/login', 302 unless isAuthed(@session)
+    host = @req.header('x-forwarded-host') or @req.header('host') or ''
+    token = csrfFor!(secret, @session)
+    @session.csrfNonce = token
+    user = esc(@session.user)
+    @header 'Cache-Control', 'no-store'
+    @html """
+    <!doctype html><html lang="en"><head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1"><title>Sign out</title>
+    <style>body{font:14px/1.5 system-ui,sans-serif;max-width:22rem;margin:4rem auto;padding:0 1rem}
+    h1{font-size:1.25rem;margin:0 0 .25rem}.host{color:#666;margin:0 0 1.25rem;font-size:.9rem}
+    button{margin-top:1rem;padding:.5rem 1rem;font:inherit;cursor:pointer}</style>
+    </head><body><h1>Sign out</h1><p class="host">#{esc(host)}</p>
+    <p>Signed in as <strong>#{user}</strong>.</p>
+    <form method="post" action="/_gate/logout">
+    <input type="hidden" name="_csrf" value="#{esc(token)}">
+    <button type="submit">Sign out</button></form></body></html>
+    """
+
+  post '/_gate/logout', ->
+    expected = @session?.csrfNonce or ''
+    submitted = String(read('_csrf') or '')
+    unless expected and eqct(submitted, expected)
+      return new Response('csrf required', { status: 403, headers: { 'Cache-Control': 'no-store' } })
+    delete @session[key] for key of @session
+    @redirect '/_gate/login', 303
+
+  # The middleware function returned to `use`. Pass-through unless the
+  # request is unauthenticated AND `protect: 'all'` is configured.
+  (c, next) ->
+    return await next!() if c.req.path.startsWith('/_gate/')
+    return await next!() if isAuthed(c.session)
+    return await next!() unless protect is 'all'
+    accept = c.req.header('accept') or ''
+    if accept.includes('text/html') and c.req.method in ['GET', 'HEAD']
+      c.session ?= {}
+      c.session.created ?= Date.now()
+      loc = "/_gate/login?return_to=#{encodeURIComponent(safeReturnTo(fullReqPath(c)))}"
+      return new Response '', { status: 302, headers: { Location: loc, 'Cache-Control': 'no-store' } }
+    new Response 'unauthorized', { status: 401, headers: { 'Cache-Control': 'no-store' } }
+
+# ------------------------------------------------------------------------------
+# Standalone bootstrap — fires only when this file is the app being run
+# (either `rip packages/gate/index.rip` direct, or as the worker entry under
+# `rip server packages/gate`). When a user app does `import { gate } from
+# '@rip-lang/gate'`, APP_ENTRY points at THEIR entry, not ours, so the
+# bootstrap stays inert and the import only delivers the function.
+# ------------------------------------------------------------------------------
+
+samePath = (a, b) ->
+  return false unless a and b
+  try realpathSync(a) is realpathSync(b)
+  catch then false
+
+if import.meta.main or samePath(process.env.APP_ENTRY, import.meta.path)
+  env   = process.env
+  users = {}
+  for key, value of env when key.startsWith('GATE_USER_') and value
+    users[key.slice('GATE_USER_'.length).toLowerCase()] = value
+
+  # Strict parse: parseInt('123abc') yields 123, which is a footgun for
+  # auth config. Require the whole value to be digits, then bound-check.
+  parsePosInt = (name, raw, fallback, max = Number.MAX_SAFE_INTEGER) ->
+    return fallback unless raw?
+    throw new Error "#{name} must be a positive integer, got #{JSON.stringify(raw)}" unless /^[1-9][0-9]*$/.test(raw)
+    n = Number(raw)
+    throw new Error "#{name} exceeds #{max}, got #{raw}" if n > max
+    n
+
+  ttl  = parsePosInt('GATE_SESSION_TTL', env.GATE_SESSION_TTL, 28800)
+  port = parsePosInt('GATE_PORT',         env.GATE_PORT,         9090, 65535)
+
+  use gate
+    secret:  env.GATE_SECRET or throw new Error 'GATE_SECRET is required'
+    users:   users
+    ttl:     ttl
+    protect: env.GATE_PROTECT or 'all'
+
+  # `start()` binds Bun.serve in direct mode; under `rip server` it short-
+  # circuits on WORKER_ID/SOCKET_PATH and just sets `globalThis.__ripHandler`,
+  # which the worker picks up via its fallback chain.
+  start host: '127.0.0.1', port: port
