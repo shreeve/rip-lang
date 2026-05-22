@@ -5093,6 +5093,12 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       if (this.inTypeAnnotation && (val === "=" || tag === "COMPOUND_ASSIGN")) {
         this.inTypeAnnotation = false;
       }
+      if (val === "=") {
+        let n = this.tokens.length;
+        let isTypeAlias = n >= 2 && this.tokens[n - 1][0] === "IDENTIFIER" && this.tokens[n - 2][0] === "IDENTIFIER" && this.tokens[n - 2][1] === "type" && (n === 2 || this.tokens[n - 3][0] === "TERMINATOR" || this.tokens[n - 3][0] === "INDENT" || this.tokens[n - 3][0] === "OUTDENT" || this.tokens[n - 3][0] === "EXPORT");
+        if (isTypeAlias)
+          this.inTypeAnnotation = true;
+      }
       if (val === "(" || val === "{" || val === "[") {
         this.ends.push({ tag: INVERSES[val], origin: [tag, val] });
       } else if (val === ")" || val === "}" || val === "]") {
@@ -9948,8 +9954,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
         }
         if (CodeEmitter.ASSIGNMENT_OPS.has(head)) {
           let [target, value] = rest;
-          if (typeof target === "string")
-            vars.add(target);
+          if (typeof target === "string" || target instanceof String)
+            vars.add(str(target));
           else if (this.is(target, "array"))
             this.collectVarsFromArray(target, vars);
           else if (this.is(target, "object"))
@@ -11691,7 +11697,7 @@ ${this.indent()}}`;
             let atParamMap = isSubclass ? new Map : null;
             cleanParams = params.map((p) => {
               if (this.is(p, ".") && p[1] === "this") {
-                let name = p[2];
+                let name = str(p[2]);
                 let param = isSubclass ? `_${name}` : name;
                 autoAssign.push(`this.${name} = ${param}`);
                 if (isSubclass)
@@ -11699,7 +11705,7 @@ ${this.indent()}}`;
                 return param;
               }
               if (this.is(p, "default") && this.is(p[1], ".") && p[1][1] === "this") {
-                let name = p[1][2];
+                let name = str(p[1][2]);
                 let param = isSubclass ? `_${name}` : name;
                 autoAssign.push(`this.${name} = ${param}`);
                 if (isSubclass)
@@ -13525,16 +13531,14 @@ if (typeof globalThis !== 'undefined') {
             s = e + 1;
           }
           for (let spec of specs) {
-            let local = null, imported = null;
+            let local = null;
             for (let k = spec.start;k < spec.end; k++) {
-              if (tokens[k][0] === "IDENTIFIER") {
-                if (imported === null) {
-                  imported = tokens[k][1];
-                  local = imported;
-                } else if (tokens[k - 1] && tokens[k - 1][0] === "AS") {
-                  local = tokens[k][1];
-                }
-              }
+              if (tokens[k][0] !== "IDENTIFIER")
+                continue;
+              if (local === null)
+                local = tokens[k][1];
+              else if (tokens[k - 1]?.[0] === "AS")
+                local = tokens[k][1];
             }
             spec.local = local;
             spec.drop = local != null && isTypeOnly(local);
@@ -13733,8 +13737,8 @@ if (typeof globalThis !== 'undefined') {
     return new CodeEmitter({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.15.4";
-  var BUILD_DATE = "2026-05-19@17:32:59GMT";
+  var VERSION = "3.16.0";
+  var BUILD_DATE = "2026-05-22@08:07:44GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

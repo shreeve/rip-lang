@@ -1,35 +1,46 @@
-# @rip-lang/db/embed — boot-time helpers for rip-db / harbor.
+# @rip-lang/db/embed — boot-time helper for harbor.
 #
-# `assertReachable(url)` posts `SELECT 1` to `url/sql` and throws if the
-# server doesn't answer healthily. Use it at app boot to fail loudly
-# when the database server isn't up — clearer than letting the first
-# real query 500.
+# `assertReachable(url)` hits harbor's public `/ready` probe and
+# throws if it doesn't answer healthily. Use during app boot to fail
+# loudly when harbor isn't up, with a clearer message than letting
+# the first real query 500 mysteriously.
 #
-# `ensureRunning(url, opts)` is kept as a thin back-compat alias.
-# Older callers expected it to spawn a rip-db process when one wasn't
-# found; with the in-tree server gone, lifecycle is the operator's
-# responsibility (start harbor / your rip-db-compatible server
-# externally and point at it). This now just verifies reachability.
+# Why `/ready` and not `/sql SELECT 1`:
+#
+#   - `/ready` is a public endpoint (no Bearer token needed) that
+#     harbor exposes specifically as a DB-readiness probe. It runs
+#     `SELECT 1` against a worker connection and returns 200 / 503.
+#   - That's exactly what we want for "is harbor up *and* the DB
+#     attached and answering". Cleaner than rolling our own.
+#
+# Usage:
+#
+#   import { assertReachable } from '@rip-lang/db/embed'
+#
+#   assertReachable! 'http://127.0.0.1:9494'
+#
+# `ensureRunning` is kept as a thin back-compat alias. Older callers
+# expected it to spawn the database server when one wasn't found;
+# harbor's lifecycle is external (operator-managed via `dh` / systemd
+# / etc.) so there's no spawn — this just verifies reachability.
 
-# Verifies the target answers /sql with a healthy result for a trivial
-# SELECT — not just that *something* is listening on the port.
+# Verifies harbor is up and the DB is answering. 200 from /ready
+# means healthy; 503 means harbor's up but the DB is unhealthy;
+# anything else means harbor isn't there at all.
 reachable = (url) ->
   try
-    res = fetch! "#{url}/sql",
-      method: 'POST'
-      headers: { 'Content-Type': 'application/json' }
-      body: JSON.stringify sql: 'SELECT 1'
+    res = fetch! "#{url}/ready"
     return false unless res?.ok
     data = res.json!
-    not data?.error
+    data?.ok is true
   catch
     false
 
-export assertReachable = (url, opts = {}) ->
+export assertReachable = (url) ->
   return 'running' if reachable! url
-  throw new Error "rip-db not reachable at #{url} — start the database server (harbor or compatible) and try again"
+  throw new Error "harbor not reachable at #{url} — start your duckdb-harbor instance and try again"
 
 # Back-compat: older app code called `ensureRunning(url, {file, ...})`
-# expecting an auto-spawn. The in-tree server is gone; this is now a
+# expecting an auto-spawn. Lifecycle is now external; this is a
 # reachability check only. `opts` is accepted but ignored.
-export ensureRunning = (url, opts = {}) -> assertReachable url, opts
+export ensureRunning = (url, opts = {}) -> assertReachable url

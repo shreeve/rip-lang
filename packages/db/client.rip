@@ -1,27 +1,70 @@
-# @rip-lang/db/client — Database client with chainable Model factory
+# @rip-lang/db/client — DuckDB-over-HTTP client for duckdb-harbor.
 #
-# Connects to a rip-db server over HTTP. Provides parameterized queries
-# and an ActiveRecord-style Model for common CRUD operations.
+# v1 surface: just `query(sql, params?)`. Layered helpers (findOne,
+# findAll, Model factory, embed reachability, dump/load CLI) follow
+# in subsequent commits.
 #
-# Usage:
-#   import { query, findOne, findAll, Model } from '@rip-lang/db/client'
+# Configuration via env vars:
 #
-#   # Low-level
-#   result = query! "SELECT * FROM users WHERE id = $1", [42]
-#   user   = findOne! "SELECT * FROM users WHERE id = $1", [42]
-#   users  = findAll! "SELECT * FROM users WHERE active = $1", [true]
+#   RIP_DB_URL    Base URL of the harbor server.
+#                 Default: http://127.0.0.1:9494
+#   RIP_DB_TOKEN  Bearer token for /sql.
+#                 Required by harbor unless harbor_local_dev_mode
+#                 covers your endpoint — and /sql is NOT covered by
+#                 local_dev_mode (only the UI cookie path is). So in
+#                 practice this must be set against any harbor build.
 #
-#   # Model
-#   User = Model 'users'
-#   user  = User.find! 42
-#   users = User.where(active: true).order('name').limit(10).all!
-#   user  = User.insert! { name: 'Alice', email: 'alice@example.com' }
-#   user  = User.upsert! { email: 'alice@example.com', name: 'Alice' }, on: 'email'
-#   user  = User.update! 42, { name: 'Bob' }
-#   User.destroy! 42
-#   users = User.where(active: true).or('role = $1', ['admin']).all!
-#   users = User.where(active: true).not(role: 'banned').all!
-#   stats = User.group('role').select('role, count(*) as n').all!
+#   `connect(url)` overrides RIP_DB_URL at runtime. There is no
+#   imperative override for the token; set RIP_DB_TOKEN before
+#   calling query().
+#
+# Wire shape: harbor's POST /sql with `Accept: application/json` returns:
+#
+#   {
+#     ok: true,
+#     kind: 'select' | 'write',
+#     columns: [{ name, duckdbType, lossless }, ...],
+#     data: [[...], ...],
+#     rowCount: N,
+#     timeMs: M,
+#     sessionId: '...'  (when present)
+#   }
+#
+# On failure (HTTP 4xx/5xx):
+#
+#   {
+#     ok: false,
+#     error: 'message',
+#     errorCode: 'SQL_ERROR' | 'BAD_REQUEST' | 'MISSING_CREDENTIAL' | ...,
+#     errorDetails?: {...}
+#   }
+#
+# We pass harbor's success envelope through with one ergonomic addition:
+# each column entry gets a `type` alias for `duckdbType` so legacy code
+# (and the upcoming Model / QueryBuilder layers) can stay column-shape
+# agnostic.
+#
+# Notes on type semantics that the caller is responsible for:
+#
+#   - BIGINT / HUGEINT / UBIGINT / UHUGEINT come back as JSON NUMBERS
+#     when the value is in JS safe integer range
+#     (`[-9007199254740991, 9007199254740991]`), as JSON STRINGS when
+#     outside. The schema record's `duckdbType` tells consumers the
+#     underlying type either way; promote out-of-range strings to
+#     BigInt at the boundary when exact arithmetic is required. Common
+#     cases (counts, IDs in the millions, sizes) come back as plain
+#     numbers and just work — see harbor SPEC §5.4.
+#   - DECIMAL comes back as a string preserving width/scale.
+#   - DATE / TIME / TIMESTAMP / TIMESTAMPTZ come back as strings.
+#   - INTERVAL comes back as `{months, days, micros}` with micros as a
+#     string.
+#   - BLOB comes back as base64.
+#   - All other scalar types (INTEGER, FLOAT, DOUBLE, BOOLEAN, VARCHAR)
+#     come back as plain JSON values.
+#   - LIST / ARRAY / STRUCT / MAP / UNION / ENUM nest per harbor SPEC §5.4.
+#
+# v1 does NOT auto-decode any of these (no Date parsing, no BLOB
+# base64 decode). One-shot JSON pass-through for now.
 
 # ==============================================================================
 # Connection
@@ -29,14 +72,10 @@
 
 _dbUrl = null
 
-# Bind the client to a rip-db URL. If the schema runtime has been
-# loaded into this process (via any model import), also install an
-# adapter that routes `User.find!` / `User.where!` through the same
-# URL — eliminating per-app adapter boilerplate.
-#
-# The schema runtime is populated eagerly by any `import` of a file
-# that uses `schema`, so calling `connect` after importing models
-# wires everything.
+# Bind the client to a harbor URL at runtime. If the schema runtime has
+# been loaded into this process (via any model import), also install an
+# adapter that routes `User.find!` / `User.where!` through the same URL,
+# eliminating per-app adapter boilerplate.
 #
 # The adapter is a reference to `query` itself (not a closure over the
 # URL): `query` re-reads `_dbUrl` on every call via `dbUrl()`, so a
@@ -48,55 +87,105 @@ export connect = (url) ->
     globalThis.__ripSchema.__schemaSetAdapter { query }
   url
 
-dbUrl = -> _dbUrl or process.env.DB_URL or 'http://localhost:9494'
+dbUrl   = -> _dbUrl or process.env.RIP_DB_URL or 'http://127.0.0.1:9494'
+dbToken = -> process.env.RIP_DB_TOKEN
 
 # ==============================================================================
-# Low-Level Helpers
+# Errors
 # ==============================================================================
 
-export esc = (v) ->
-  return 'NULL' unless v?
-  return String(v) if typeof v is 'number'
-  "'" + String(v).replace(/'/g, "''") + "'"
-
-# Structured error thrown on rip-db server-side failures. Carries the HTTP
-# status, the server-side `errorCode` (e.g. 'TABLE_NOT_FOUND', 'SQL_SYNTAX'),
-# and any `errorDetails` the server included. Backwards-compatible: falls
-# back cleanly when the server still returns the old `{error: "str"}` shape.
+# Structured error thrown on harbor failures. Carries the HTTP status,
+# harbor's stable errorCode (e.g. 'SQL_ERROR', 'BAD_REQUEST',
+# 'MISSING_CREDENTIAL', 'TABLE_NOT_FOUND'), and any errorDetails harbor
+# included. Catch this to branch on `.code` or `.httpStatus`.
 export class RipDBError extends Error
   constructor: (message, { code, details, httpStatus } = {}) ->
     super(message)
-    @name = 'RipDBError'
-    @code = code or null
-    @details = details or null
+    @name       = 'RipDBError'
+    @code       = code or null
+    @details    = details or null
     @httpStatus = httpStatus or null
 
-# Throws RipDBError iff the response indicates failure, otherwise returns data.
-# Accepts both envelope shapes — new ({ok:false, error, errorCode, errorDetails})
-# and legacy ({error: "str"}).
-throwIfError = (res, data) ->
-  hasError = data?.ok is false or (data?.error and typeof data.error is 'string' and data.error.length > 0)
-  return data unless hasError
-  message = if typeof data.error is 'string' then data.error else (data?.error?.message or 'Unknown rip-db error')
-  throw new RipDBError message,
-    code: data?.errorCode or data?.error?.code or null
-    details: data?.errorDetails or data?.error?.details or null
-    httpStatus: res?.status or null
+# ==============================================================================
+# Internals
+# ==============================================================================
 
+# Add `type` alias to each column entry alongside harbor's `duckdbType`
+# so legacy code expecting `column.type` keeps working. Doesn't mutate
+# the harbor payload — returns a new envelope with cloned column entries.
+normalizeEnvelope = (env) ->
+  return env unless env?.columns?
+  cols = env.columns.map (c) -> { ...c, type: c.duckdbType ?? c.type }
+  { ...env, columns: cols }
+
+# Throw RipDBError when the response indicates failure; otherwise
+# return the (normalized) success envelope. Accepts both well-formed
+# harbor envelopes and degenerate cases (network-level failures arrive
+# as HTTP errors with non-JSON bodies; we throw with whatever we have).
+throwOrReturn = (res, data) ->
+  if not res?.ok or data?.ok is false
+    msg = data?.error or "harbor returned #{res?.status} #{res?.statusText or ''}".trim()
+    throw new RipDBError msg,
+      code:       data?.errorCode
+      details:    data?.errorDetails
+      httpStatus: res?.status
+  normalizeEnvelope data
+
+# Build outbound headers. Always Content-Type + Accept (harbor's /sql
+# defaults to NDJSON streaming when Accept isn't pinned to JSON, so
+# being explicit matters). Bearer token is sent only when RIP_DB_TOKEN
+# is configured — lets future builds with a no-auth /sql path work
+# without forcing a stub token.
+buildHeaders = ->
+  headers =
+    'Content-Type': 'application/json'
+    'Accept':       'application/json'
+  token = dbToken()
+  headers['Authorization'] = "Bearer #{token}" if token
+  headers
+
+# ==============================================================================
+# Public API
+# ==============================================================================
+
+# Execute a single SQL statement against the configured harbor server.
+# Always one-shot JSON (no NDJSON streaming in v1). Returns the
+# normalized harbor envelope on success; throws RipDBError on failure.
+#
+#   query! 'SELECT 1 AS ok'
+#   query! 'SELECT * FROM users WHERE id = $1', [42]
+#
+# `params` uses harbor's positional `$1`, `$2`, … binding. Mode B
+# typed wrappers (`{type, value}`) work too — see harbor SPEC §5.2.
 export query = (sql, params = []) ->
   body = if params.length > 0 then { sql, params } else { sql }
   res = fetch! "#{dbUrl()}/sql",
-    method: 'POST'
-    headers: { 'Content-Type': 'application/json' }
-    body: JSON.stringify body
-  throwIfError res, res.json!
+    method:  'POST'
+    headers: buildHeaders()
+    body:    JSON.stringify body
+  data = res.json!
+  throwOrReturn res, data
 
-export bulk = (table, columns, rows) ->
-  res = fetch! "#{dbUrl()}/sql",
-    method: 'POST'
-    headers: { 'Content-Type': 'application/json' }
-    body: JSON.stringify { table, columns, rows }
-  throwIfError res, res.json!
+# ==============================================================================
+# Row materializers
+# ==============================================================================
+
+# `query` returns the harbor envelope:
+#
+#   { columns: [{name, duckdbType, type, ...}], data: [[...], ...], rowCount, ... }
+#
+# The materializers below turn that into plain row objects keyed by
+# column name — the shape most app code wants:
+#
+#   { id: 1, name: 'Alice', email: 'alice@example.com' }
+#
+# Defensive note: harbor v0.2 correctly returns
+# `INSERT/UPDATE/DELETE … RETURNING …` as `kind: "select"` with
+# `columns` and `data` populated, so Model.insert/update/destroy/
+# upsert return the actual rows. The `unless …columns? and …data?`
+# guards below are kept as a robustness measure for malformed
+# responses (defensive against future regressions or stub adapters)
+# but the v0.1 bug they originally worked around is fixed.
 
 materialize = (columns, row) ->
   obj = {}
@@ -105,12 +194,14 @@ materialize = (columns, row) ->
   obj
 
 export materializeAll = (result) ->
-  return [] if result.rows is 0
+  return [] unless result?.columns? and result?.data?
+  return [] if result.rowCount is 0
   result.data.map (row) -> materialize result.columns, row
 
 export findOne = (sql, params = []) ->
   result = query! sql, params
-  return null if result.rows is 0
+  return null unless result?.columns? and result?.data?
+  return null if result.rowCount is 0
   materialize result.columns, result.data[0]
 
 export findAll = (sql, params = []) ->
@@ -120,6 +211,22 @@ export findAll = (sql, params = []) ->
 # ==============================================================================
 # Query Builder
 # ==============================================================================
+#
+# Chainable SQL builder. Every operation returns a new builder
+# (immutable copy) so it's safe to fork a base query and add filters
+# in different branches:
+#
+#   active = User.where(active: true)
+#   admins = active.where(role: 'admin')
+#   users  = active.where(role: 'user')
+#
+# Multiple `where` calls AND. Use `or(...)` and `not(...)` for
+# alternative join semantics. String form (`where 'foo > $1', [42]`)
+# escapes hatch when you need raw SQL.
+#
+# Wire-agnostic — produces SQL strings + positional params, hands off
+# to `query` / `findOne` / `findAll` for transport. The class itself
+# doesn't know harbor exists.
 
 class QueryBuilder
   constructor: (@table, @database = null) ->
@@ -246,7 +353,8 @@ class QueryBuilder
 
   update: (data) ->
     keys = (k for k, v of data when v isnt undefined)
-    sets = keys.map((k, i) -> "\"#{k}\" = $#{@_params.length + i + 1}").join(', ')
+    base = @_params.length
+    sets = keys.map((k, i) -> "\"#{k}\" = $#{base + i + 1}").join(', ')
     vals = keys.map (k) -> data[k]
     allParams = [...@_params, ...vals]
     sql = "UPDATE #{@_tableName} SET #{sets}"
@@ -275,6 +383,21 @@ class QueryBuilder
 # ==============================================================================
 # Model Factory
 # ==============================================================================
+#
+# ActiveRecord-style Model wrapping a QueryBuilder. Keep your code
+# decoupled from raw SQL strings:
+#
+#   User = Model 'users'
+#   alice = User.find! 42
+#   active = User.where(active: true).order('name').all!
+#   alice  = User.insert! { name: 'Alice', email: 'alice@example.com' }
+#   User.update! 42, { last_login: new Date() }
+#   User.destroy! 42
+#
+# Multi-row insert uses one INSERT ... VALUES (...), (...), ... RETURNING *
+# (harbor's /sql is single-statement, no Appender path). Returns the
+# inserted rows. This is a behavior change from the legacy bulk()
+# server-side path which only returned a row count.
 
 export Model = (table, database = null) ->
   tableName = if database then "\"#{database}\".\"#{table}\"" else "\"#{table}\""
@@ -288,9 +411,9 @@ export Model = (table, database = null) ->
     sql += " LIMIT #{limit}" if limit?
     findAll! sql
 
-  where: (conditions, params = []) -> _qb().where(conditions, params)
-  or:    (conditions, params = []) -> _qb().or(conditions, params)
-  not:   (conditions, params = []) -> _qb().not(conditions, params)
+  where:  (conditions, params = []) -> _qb().where(conditions, params)
+  or:     (conditions, params = []) -> _qb().or(conditions, params)
+  not:    (conditions, params = []) -> _qb().not(conditions, params)
   select: (cols) -> _qb().select(cols)
   order:  (expr) -> _qb().order(expr)
   group:  (expr) -> _qb().group(expr)
@@ -305,10 +428,16 @@ export Model = (table, database = null) ->
 
   insert: (data) ->
     if Array.isArray(data)
-      return { rows: 0 } if data.length is 0
-      columns = (k for k, v of data[0] when v isnt undefined)
-      rows = data.map (row) -> columns.map (k) -> row[k]
-      bulk! table, columns, rows
+      return [] if data.length is 0
+      keys = (k for k, v of data[0] when v isnt undefined)
+      cols = keys.map((k) -> "\"#{k}\"").join(', ')
+      allVals = []
+      tuples = data.map (row, rowIdx) ->
+        refs = keys.map (k, colIdx) ->
+          allVals.push(row[k])
+          "$#{rowIdx * keys.length + colIdx + 1}"
+        "(#{refs.join(', ')})"
+      findAll! "INSERT INTO #{tableName} (#{cols}) VALUES #{tuples.join(', ')} RETURNING *", allVals
     else
       keys = (k for k, v of data when v isnt undefined)
       cols = keys.map((k) -> "\"#{k}\"").join(', ')
@@ -323,18 +452,18 @@ export Model = (table, database = null) ->
     findOne! "UPDATE #{tableName} SET #{sets} WHERE id = $1 RETURNING *", [id, ...vals]
 
   upsert: (data, opts = {}) ->
+    conflict = opts.on or opts.conflict
     if Array.isArray(data)
       return [] if data.length is 0
       keys = (k for k, v of data[0] when v isnt undefined)
       cols = keys.map((k) -> "\"#{k}\"").join(', ')
       allVals = []
-      valueTuples = data.map (row, rowIdx) ->
+      tuples = data.map (row, rowIdx) ->
         refs = keys.map (k, colIdx) ->
           allVals.push(row[k])
           "$#{rowIdx * keys.length + colIdx + 1}"
         "(#{refs.join(', ')})"
-      sql = "INSERT INTO #{tableName} (#{cols}) VALUES #{valueTuples.join(', ')}"
-      conflict = opts.on or opts.conflict
+      sql = "INSERT INTO #{tableName} (#{cols}) VALUES #{tuples.join(', ')}"
       if conflict
         updateCols = keys.filter((k) -> k isnt conflict)
         sets = updateCols.map((k) -> "\"#{k}\" = EXCLUDED.\"#{k}\"").join(', ')
@@ -346,7 +475,6 @@ export Model = (table, database = null) ->
       cols = keys.map((k) -> "\"#{k}\"").join(', ')
       refs = keys.map((_, i) -> "$#{i + 1}").join(', ')
       vals = keys.map (k) -> data[k]
-      conflict = opts.on or opts.conflict
       sql = "INSERT INTO #{tableName} (#{cols}) VALUES (#{refs})"
       if conflict
         updateCols = keys.filter((k) -> k isnt conflict)

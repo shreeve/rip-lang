@@ -1,34 +1,48 @@
 #!/usr/bin/env bun
 //
-// rip-db — entrypoint for the @rip-lang/db CLI.
+// rip-db — CLI for @rip-lang/db.
 //
 // Subcommands:
-//   rip-db                            Start the server (passes args through to db.rip).
-//   rip-db [server-flags...]          Same.
-//   rip-db dump [ARCHIVE.tar.gz]      Export the running database to a single tar.gz.
+//   rip-db                            Print this usage.
+//   rip-db --help / -h                Same.
+//   rip-db --version / -v             Print version.
+//   rip-db dump [ARCHIVE.tar.gz]      Snapshot the running database.
 //                                     If ARCHIVE is omitted, defaults to
 //                                     <dbname>-YYYYMMDD-HHMMSS.tar.gz in cwd.
 //                                     Refuses to overwrite an existing archive.
-//   rip-db load ARCHIVE.tar.gz        Import a tar.gz produced by `rip-db dump`
+//   rip-db load ARCHIVE.tar.gz        Restore a tar.gz produced by `rip-db dump`
 //                                     into a fresh, empty database. Refuses if
 //                                     the target DB already has tables/views.
+//   rip-db checkpoint [--force]       Flush the WAL to the main DB file.
+//                                     `--force` uses FORCE CHECKPOINT, which
+//                                     succeeds even when other writers are
+//                                     active. Plain CHECKPOINT will fail with
+//                                     a clear message in that case.
 //
-// Env:
-//   RIPDB_URL   Base URL of the running database server (default http://localhost:9494).
+// Talks HTTP to a running duckdb-harbor (or any /sql-compatible) server.
+// Does NOT start the server — that's external.
 //
-// dump/load talk to the running rip-db over its `/sql` HTTP endpoint, so the script
-// must run on a host that can reach that URL. The temp directory used for staging the
-// EXPORT/IMPORT must be on a filesystem the rip-db process can read+write — for the
-// default `localhost`/loopback case that's automatic. The script verifies this by
-// checking that DuckDB actually wrote `schema.sql` + `load.sql` into the local temp
-// dir before bundling the tarball, so a remote/containerized server with a separate
-// filesystem fails loudly instead of producing an empty archive.
+// Environment:
+//   RIP_DB_URL    Base URL of the harbor server (default http://127.0.0.1:9494)
+//   RIP_DB_TOKEN  Bearer token for /sql. Only required when harbor was
+//                 started with a token; harbor's `token := NULL` mode is
+//                 unauthenticated, in which case leave it unset.
 //
-// Security: tar archives produced elsewhere are not fully sandboxed during extraction
-// (system tar may follow symlinks/hardlinks). `rip-db load` is intended for archives
-// produced by `rip-db dump`. A path-validation pass blocks the obvious traversal
-// patterns (absolute paths, `..` segments) but does NOT defend against malicious
-// archives crafted to overwrite host files. Only load trusted archives.
+// dump/load talk to harbor over its `/sql` HTTP endpoint, so the script
+// must run on a host that can reach that URL. The temp directory used for
+// staging EXPORT/IMPORT must be on a filesystem that the harbor process
+// can read+write — for the default localhost case that's automatic. The
+// script verifies this by checking that DuckDB actually wrote schema.sql
+// + load.sql into the local temp dir before bundling the tarball, so a
+// remote/containerized harbor with a separate filesystem fails loudly
+// instead of producing an empty archive.
+//
+// Security: tar archives produced elsewhere are not fully sandboxed during
+// extraction (system tar may follow symlinks/hardlinks). `rip-db load` is
+// intended for archives produced by `rip-db dump`. A path-validation pass
+// blocks the obvious traversal patterns (absolute paths, `..` segments)
+// but does NOT defend against malicious archives crafted to overwrite
+// host files. Only load trusted archives.
 
 import { spawnSync } from 'child_process';
 import { join } from 'path';
@@ -38,52 +52,67 @@ import { tmpdir } from 'os';
 const args = process.argv.slice(2);
 const cmd  = args[0];
 
-if (cmd === 'dump' || cmd === 'load') {
-  await runDumpLoad(cmd, args.slice(1));
-} else {
-  // No more in-tree server. Print usage; the database server (harbor or
-  // any other rip-db-compatible /sql endpoint) is started externally.
+// Top-level meta-flags exit 0 with the right output. Anything else
+// unrecognized falls through to usage + exit 1.
+if (cmd === '--help' || cmd === '-h' || cmd === undefined) {
   process.stdout.write(usageText());
-  process.exit(cmd ? 1 : 0);
+  process.exit(0);
+} else if (cmd === '--version' || cmd === '-v') {
+  process.stdout.write(`${readVersion()}\n`);
+  process.exit(0);
+} else if (cmd === 'dump' || cmd === 'load') {
+  await runDumpLoad(cmd, args.slice(1));
+} else if (cmd === 'checkpoint') {
+  await runCheckpoint(args.slice(1));
+} else {
+  process.stderr.write(`rip-db: unknown subcommand '${cmd}'\n\n`);
+  process.stdout.write(usageText());
+  process.exit(1);
 }
 
 // ---------------------------------------------------------------------------
 
-// Top-level usage — printed when `rip-db` is invoked without a subcommand.
-// Function declaration (hoisted) so the top-level dispatch at the head of
-// this file can reach it without temporal-dead-zone trouble. Indentation
-// matters: every line after the opening backtick is at column 0 so the
-// printed output isn't pre-indented.
+function readVersion() {
+  try {
+    const pkgPath = new URL('../package.json', import.meta.url);
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
+    return `rip-db v${pkg.version}`;
+  } catch {
+    return 'rip-db (version unavailable)';
+  }
+}
+
+// Top-level usage. Hoisted (function declaration) so the dispatch at the
+// head of this file can reach it without TDZ. Indentation matters:
+// every line after the opening backtick lives at column 0.
 function usageText() {
   return `\
-rip-db — CLI for @rip-lang/db.
+rip-db — CLI for @rip-lang/db (talks to a running duckdb-harbor).
 
 Usage:
   rip-db dump [ARCHIVE.tar.gz | DIRECTORY]   Snapshot the running database.
   rip-db load ARCHIVE.tar.gz                 Restore from a snapshot.
+  rip-db checkpoint [--force]                Flush WAL to the DB file.
   rip-db <subcommand> --help                 Subcommand-specific help.
+  rip-db --help / -h                         This message.
+  rip-db --version / -v                      Print version.
 
-This CLI talks to a running database server over HTTP; it does not start
-one. Run your DuckDB-with-harbor (or any rip-db-compatible /sql server)
-separately and point RIPDB_URL at it.
+This CLI does not start a database server. Run your duckdb-harbor
+instance separately and point RIP_DB_URL at it.
 
 Environment:
-  RIPDB_URL  Base URL of the running server (default http://localhost:9494)
+  RIP_DB_URL    Harbor base URL (default http://127.0.0.1:9494)
+  RIP_DB_TOKEN  Harbor bearer token (only when harbor was started with
+                a token; harbor's \`token := NULL\` mode is unauthenticated)
 `;
 }
 
-// Subcommand help — printed for `rip-db <cmd> --help` / `-h`. Defined as
-// a function (hoisted) so the top-level await dispatch at the head of
-// this file can reach it without temporal-dead-zone trouble. Bodies are
-// JS template literals (backticks) — JS's equivalent of Rip's `'''` /
-// `"""` heredocs. Indentation matters: every line after the opening
-// backtick lives at column 0 so the printed output isn't pre-indented.
 function helpFor(cmd) {
   switch (cmd) {
     case 'dump': return `\
 Usage: rip-db dump [ARCHIVE.tar.gz | DIRECTORY]
 
-Export the running rip-db database to a single .tar.gz archive.
+Export the running harbor database to a single .tar.gz archive.
 
 Path resolution:
   (omitted)            write <dbname>-YYYYMMDD-HHMMSS.tar.gz in cwd
@@ -94,39 +123,56 @@ Path resolution:
 Refuses to overwrite an existing archive.
 
 Environment:
-  RIPDB_URL  database server URL (default http://localhost:9494)
+  RIP_DB_URL    Harbor base URL (default http://127.0.0.1:9494)
+  RIP_DB_TOKEN  Harbor bearer token (omit if harbor is unauthenticated)
 `;
     case 'load': return `\
 Usage: rip-db load ARCHIVE.tar.gz
 
-Restore a tar.gz produced by \`rip-db dump\` into the rip-db database.
+Restore a tar.gz produced by \`rip-db dump\` into the harbor database.
 Refuses to load if the target database already has tables/views.
 
 Environment:
-  RIPDB_URL  database server URL (default http://localhost:9494)
+  RIP_DB_URL    Harbor base URL (default http://127.0.0.1:9494)
+  RIP_DB_TOKEN  Harbor bearer token (omit if harbor is unauthenticated)
+`;
+    case 'checkpoint': return `\
+Usage: rip-db checkpoint [--force]
+
+Issue \`CHECKPOINT\` against the harbor database, flushing the WAL
+into the main DB file. Useful before a snapshot/backup, or to keep
+the WAL from growing unbounded on a long-lived instance.
+
+Plain CHECKPOINT will fail with a clear error if other writers are
+active (DuckDB refuses to checkpoint while writes are in flight).
+\`--force\` runs FORCE CHECKPOINT instead, which succeeds anyway by
+preempting in-flight writers — use this only if you're sure that
+losing concurrent uncommitted writes is acceptable.
+
+Environment:
+  RIP_DB_URL    Harbor base URL (default http://127.0.0.1:9494)
+  RIP_DB_TOKEN  Harbor bearer token (omit if harbor is unauthenticated)
 `;
     default: return '';
   }
 }
 
 async function runDumpLoad(cmd, rest) {
-  // Subcommand-local --help / -h prints usage and exits 0.
   if (rest[0] === '--help' || rest[0] === '-h') {
     process.stdout.write(helpFor(cmd));
     process.exit(0);
   }
 
-  // Argument arity validation — both subcommands take at most one positional.
   if (cmd === 'dump' && rest.length > 1)  die('usage: rip-db dump [ARCHIVE.tar.gz]');
   if (cmd === 'load' && rest.length !== 1) die('usage: rip-db load ARCHIVE.tar.gz');
 
-  const url = (process.env.RIPDB_URL || 'http://localhost:9494').replace(/\/$/, '');
+  const url = (process.env.RIP_DB_URL || 'http://127.0.0.1:9494').replace(/\/$/, '');
+  const token = process.env.RIP_DB_TOKEN || null;
 
-  // Stage in a per-run temp dir on the local filesystem. The rip-db server reads/writes
-  // here directly via EXPORT/IMPORT DATABASE, so this only works when the script and
-  // the server share a filesystem (the default localhost case). The post-export
-  // assertDuckExportDir() check below catches the cross-filesystem failure mode
-  // explicitly so users get an actionable error rather than a silently-empty archive.
+  // Stage in a per-run temp dir on the local filesystem. Harbor reads/writes
+  // here directly via EXPORT/IMPORT DATABASE, so this only works when the
+  // script and harbor share a filesystem (the default localhost case).
+  // assertDuckExportDir() catches cross-filesystem failure mode explicitly.
   const tmp = mkdtempSync(join(tmpdir(), 'ripdb-'));
   const cleanup = () => { try { rmSync(tmp, { recursive: true, force: true }); } catch {} };
   process.on('exit', cleanup);
@@ -141,7 +187,7 @@ async function runDumpLoad(cmd, rest) {
       let archive = rest[0];
       const isDir = archive && existsSync(archive) && statSync(archive).isDirectory();
       if (!archive || isDir) {
-        const dbname   = safeFileStem(await currentDatabase(url));
+        const dbname   = safeFileStem(await currentDatabase(url, token));
         const filename = `${dbname}-${stamp()}.tar.gz`;
         archive = isDir ? join(archive, filename) : filename;
       } else if (!/\.(tar\.gz|tgz)$/i.test(archive)) {
@@ -151,24 +197,18 @@ async function runDumpLoad(cmd, rest) {
           `or omit the path entirely to write into the current directory.`
         );
       }
-      // Backup commands should fail closed on overwrite — never silently
-      // destroy an existing archive that might be the only good copy.
+      // Backup commands fail closed on overwrite — never silently destroy
+      // an existing archive that might be the only good copy.
       if (existsSync(archive)) {
         die(`refusing to overwrite existing file: ${archive} (use a different name or rm it first)`);
       }
-      await sql(url, `EXPORT DATABASE ${sqlString(tmp)} (FORMAT CSV)`);
-      // Verify the server actually wrote our local temp dir. If rip-db is on a
-      // different host/container/filesystem, EXPORT may have succeeded against
-      // its own /tmp/ripdb-XXX while our local one stays empty — tarring it
-      // would produce a worthless archive.
+      await sql(url, token, `EXPORT DATABASE ${sqlString(tmp)} (FORMAT CSV)`);
+      // Verify harbor actually wrote our local temp dir. If harbor is on a
+      // different host/container/filesystem, EXPORT may have succeeded
+      // against its own /tmp/ripdb-XXX while our local one stays empty —
+      // tarring it would produce a worthless archive.
       assertDuckExportDir(tmp);
-      // Make the staged export files presentable before tarring:
-      //   - load.sql:   COPY paths relative to the dump dir
-      //   - schema.sql: collapse `;;` → `;` and trim trailing blank line
-      // Both are upstream DuckDB cosmetic quirks; round-trip via IMPORT
-      // DATABASE works fine without these fixes, but human inspection
-      // and direct `duckdb < schema.sql` replay benefit. See helper
-      // bodies below for the rationale.
+      // Cosmetic touch-ups before tarring (see helper bodies for rationale).
       rewriteLoadSqlToRelative(tmp);
       cleanupSchemaSql(tmp);
       run('tar', ['-czf', archive, '-C', tmp, '.']);
@@ -178,17 +218,16 @@ async function runDumpLoad(cmd, rest) {
       const archive = rest[0];
       if (!existsSync(archive)) die(`no such file: ${archive}`);
       // Refuse to import into a populated DB — IMPORT DATABASE would fail
-      // partway through with `Table already exists`, leaving partial state
-      // (some COPY statements may have run before the failing CREATE TABLE).
+      // partway through with `Table already exists`, leaving partial state.
       // Cheap one-query pre-check avoids that footgun entirely.
-      await assertEmptyDatabase(url);
+      await assertEmptyDatabase(url, token);
       // Block obvious tar traversal patterns before extracting. Does not
       // defend against symlink/hardlink attacks — `rip-db load` is for
       // archives you trust (typically produced by your own `rip-db dump`).
       validateTarPaths(archive);
       run('tar', ['-xzf', archive, '-C', tmp]);
       assertDuckExportDir(tmp);
-      await sql(url, `IMPORT DATABASE ${sqlString(tmp)}`);
+      await sql(url, token, `IMPORT DATABASE ${sqlString(tmp)}`);
       console.log(`loaded ${archive}`);
     }
   } catch (e) {
@@ -196,45 +235,95 @@ async function runDumpLoad(cmd, rest) {
   }
 }
 
+async function runCheckpoint(rest) {
+  if (rest[0] === '--help' || rest[0] === '-h') {
+    process.stdout.write(helpFor('checkpoint'));
+    process.exit(0);
+  }
+
+  let force = false;
+  for (const arg of rest) {
+    if (arg === '--force')      force = true;
+    else if (arg === '--help')  { process.stdout.write(helpFor('checkpoint')); process.exit(0); }
+    else                        die(`unknown argument: ${arg}`);
+  }
+
+  const url = (process.env.RIP_DB_URL || 'http://127.0.0.1:9494').replace(/\/$/, '');
+  const token = process.env.RIP_DB_TOKEN || null;
+
+  // Issue via /sql rather than POST /checkpoint to bypass harbor's
+  // admin-authz default-deny on /checkpoint. The SQL form runs against
+  // an ephemeral session like any other DML/DDL.
+  const stmt = force ? 'FORCE CHECKPOINT' : 'CHECKPOINT';
+  const t0 = Date.now();
+  try {
+    await sql(url, token, stmt);
+  } catch (e) {
+    // DuckDB's diagnostic for "can't checkpoint with concurrent writes"
+    // contains "transaction" — re-throw with a helpful escalation hint.
+    const msg = e?.message || String(e);
+    if (!force && /transaction/i.test(msg)) {
+      die(`${msg}\n\nOther writers are active. Re-run with --force if you're sure that's OK.`);
+    }
+    die(msg);
+  }
+  const dt = Date.now() - t0;
+  console.log(`${stmt.toLowerCase()} complete (${dt} ms)`);
+}
+
 // ---------------------------------------------------------------------------
 // HTTP / SQL helpers
 
-async function sql(url, query) {
+async function sql(url, token, query) {
+  // Bearer header is only sent when a token is configured. Harbor's
+  // unauthenticated mode (`harbor_serve(..., token := NULL)`) accepts
+  // /sql without an Authorization header on loopback binds; harbor's
+  // authenticated mode returns MISSING_CREDENTIAL when no header is
+  // present, which our error-path surfaces cleanly to the caller.
+  const headers = {
+    'Content-Type': 'application/json',
+    'Accept':       'application/json',
+  };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
   let res;
   try {
     res = await fetch(`${url}/sql`, {
       method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ sql: query }),
+      headers,
+      body: JSON.stringify({ sql: query }),
     });
   } catch (e) {
-    throw new Error(`could not reach rip-db at ${url}: ${e?.message || e}`);
+    throw new Error(`could not reach harbor at ${url}: ${e?.message || e}`);
   }
   const body = await res.json().catch(() => ({}));
   if (!res.ok || body.ok === false) {
-    const msg = body?.error?.message || body?.error || `${res.status} ${res.statusText}`;
-    throw new Error(`/sql failed: ${msg}`);
+    const msg = body?.error || `${res.status} ${res.statusText}`;
+    const code = body?.errorCode ? ` (${body.errorCode})` : '';
+    throw new Error(`/sql failed${code}: ${msg}`);
   }
   return body;
 }
 
-async function currentDatabase(url) {
-  const r = await sql(url, 'SELECT current_database()');
-  // /sql envelope: { columns: [...], data: [[value], ...] }
+async function currentDatabase(url, token) {
+  const r = await sql(url, token, 'SELECT current_database()');
+  // Envelope shape: { columns: [...], data: [[value], ...] }
   return r?.data?.[0]?.[0] ?? 'rip-db';
 }
 
-async function assertEmptyDatabase(url) {
-  const r = await sql(url, `
+async function assertEmptyDatabase(url, token) {
+  const r = await sql(url, token, `
     SELECT count(*)
     FROM information_schema.tables
     WHERE table_schema = 'main'
   `);
+  // count(*) returns BIGINT, which harbor encodes as a string per SPEC §5.4
+  // (JS-precision-safe). Coerce via Number() for a small integer comparison.
   const n = Number(r?.data?.[0]?.[0] ?? 0);
   if (n !== 0) {
     throw new Error(
       `target database is not empty (${n} table/view(s) in 'main' schema). ` +
-      `Drop them first or load into a fresh rip-db instance.`
+      `Drop them first or load into a fresh harbor instance.`
     );
   }
 }
@@ -243,7 +332,7 @@ async function assertEmptyDatabase(url) {
 // Filesystem / tar helpers
 
 // Strip the absolute tmp-dir prefix from every `COPY ... FROM '<path>'`
-// in load.sql, so the archive's load.sql reads:
+// in load.sql so the archive's load.sql reads:
 //
 //   COPY accounts FROM 'accounts.csv' (FORMAT 'csv', ...);
 //
@@ -252,18 +341,16 @@ async function assertEmptyDatabase(url) {
 //   COPY accounts FROM '/tmp/ripdb-XXXXXX/accounts.csv' (FORMAT 'csv', ...);
 //
 // The replacement is targeted (anchored on the leading single-quote so we
-// only touch FROM-clause paths, not anything else that might contain the
-// tmp dir name). Refuses on weird tmp paths containing a single quote
-// because the SQL escaping would be `''` and our raw text-replace pattern
-// wouldn't match — falls back silently to absolute paths in that case
+// only touch FROM-clause paths). Refuses on weird tmp paths containing a
+// single quote because the SQL escaping would be `''` and our raw text-
+// replace pattern wouldn't match — falls back silently to absolute paths
 // (no-op; archive still works, just less pretty).
 //
 // Why bother: IMPORT DATABASE rewrites these paths at replay time anyway
 // (it uses only the basename and re-prepends the IMPORT directory), so
-// this rewrite is purely cosmetic for the round-trip case. The win is
-// for callers who replay load.sql DIRECTLY — e.g. `cd dump-dir &&
-// duckdb new.db < load.sql` — which would otherwise break when the
-// archive is moved to a different machine.
+// this rewrite is purely cosmetic for the round-trip case. The win is for
+// callers who replay load.sql DIRECTLY — e.g. `cd dump-dir && duckdb new.db
+// < load.sql` — which would otherwise break when the archive is moved.
 function rewriteLoadSqlToRelative(tmp) {
   if (tmp.includes("'")) return;
   const loadSqlPath = join(tmp, 'load.sql');
@@ -273,20 +360,11 @@ function rewriteLoadSqlToRelative(tmp) {
 }
 
 // Two upstream DuckDB cosmetic quirks in `EXPORT DATABASE`'s schema.sql:
-//
-//   1. Doubled trailing `;;` (sometimes `;;;` for CREATE TYPE) — DuckDB's
-//      `WriteCatalogEntries` streams `create_info->ToString()` which
-//      already ends in `;` and then unconditionally appends another
-//      `;\n`. Harmless to SQL parsers (extra `;` is an empty statement)
-//      but ugly when read by humans or piped through tools.
-//
-//   2. Trailing blank line at end of file — the same writer ends with
-//      `ss << '\n';` after the last entry, plus each entry already has a
-//      trailing newline.
-//
+//   1. Doubled trailing `;;` (sometimes `;;;` for CREATE TYPE).
+//   2. Trailing blank line at end of file.
 // Replay through `IMPORT DATABASE` works either way; this is purely for
-// the archive-readability story (`cd dump-dir && duckdb new.db < schema.sql`,
-// `git diff` of two snapshots, etc.).
+// archive-readability (cd dump-dir && duckdb new.db < schema.sql, git diff,
+// etc.).
 function cleanupSchemaSql(tmp) {
   const schemaSqlPath = join(tmp, 'schema.sql');
   const text    = readFileSync(schemaSqlPath, 'utf8');
@@ -300,7 +378,7 @@ function assertDuckExportDir(dir) {
   if (!existsSync(join(dir, 'schema.sql')) || !existsSync(join(dir, 'load.sql'))) {
     throw new Error(
       `expected DuckDB export files (schema.sql + load.sql) not present in ${dir}. ` +
-      `If rip-db is running on a different host or container, the EXPORT/IMPORT ` +
+      `If harbor is running on a different host or container, the EXPORT/IMPORT ` +
       `staging directory must be visible to both the script and the server.`
     );
   }

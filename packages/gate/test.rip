@@ -1,0 +1,278 @@
+# End-to-end tests for the `gate` middleware via api.rip's fetch handler.
+#
+# Run with:  rip packages/gate/test.rip
+# Or:        bun run --cwd packages/gate test
+
+import { fetch as ripFetch, resetGlobals, get, use } from '@rip-lang/server'
+import { gate } from './index.rip'
+
+# --- inline test harness ---
+# Queue test functions synchronously, then await them serially at the end
+# so async bodies don't race the file-level execution.
+
+_pending = []
+_passed = 0
+_failed = 0
+_failures = []
+
+test = (name, fn) -> _pending.push { name, fn }
+
+eq = (a, b) ->
+  ja = JSON.stringify(a)
+  jb = JSON.stringify(b)
+  throw new Error("expected #{jb}, got #{ja}") unless ja is jb
+
+ok = (v, msg) ->
+  throw new Error(msg or "expected truthy, got #{JSON.stringify(v)}") unless v
+
+ALICE_HASH = await Bun.password.hash('hunter2', { algorithm: 'argon2id' })
+SECRET = 'gate-test-secret-32-chars-or-longer'
+
+setup = (opts = {}) ->
+  resetGlobals()
+  use_opts = Object.assign { secret: SECRET, users: { alice: ALICE_HASH } }, opts
+  use gate(use_opts)
+  # A user route to verify middleware protect behavior.
+  get '/private', -> 'top secret'
+  null
+
+req = (path, opts = {}) ->
+  headers = Object.assign { 'Host': 'app.test' }, opts.headers or {}
+  new Request "http://app.test#{path}", { method: opts.method or 'GET', headers, body: opts.body }
+
+cookieFrom = (res) ->
+  raw = res.headers.get('set-cookie')
+  return null unless raw
+  # Take the first cookie's name=value
+  [pair] = raw.split(';')
+  pair
+
+# --- protect: 'all' (default, middleware mode) ---
+
+test "browser GET /private with no session is redirected to login", ->
+  setup()
+  res = await ripFetch req '/private', headers: { Accept: 'text/html' }
+  eq res.status, 302
+  loc = res.headers.get('location')
+  ok loc.startsWith('/_gate/login?return_to=')
+  ok loc.includes(encodeURIComponent('/private'))
+
+test "API GET /private with no session returns 401", ->
+  setup()
+  res = await ripFetch req('/private', headers: { Accept: 'application/json' })
+  eq res.status, 401
+
+test "GET /_gate/login renders the form", ->
+  setup()
+  res = await ripFetch req '/_gate/login'
+  eq res.status, 200
+  body = await res.text()
+  ok body.includes('<form'), 'form present'
+  ok body.includes('name="_csrf"'), 'csrf hidden field present'
+
+test "POST /_gate/login without CSRF is rejected", ->
+  setup()
+  res = await ripFetch req '/_gate/login',
+    method: 'POST'
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    body: 'user=alice&password=hunter2'
+  eq res.status, 403
+
+test "full happy path: login then private succeeds, logout clears", ->
+  setup()
+  # GET /_gate/login → mint session + CSRF, capture cookie + token.
+  loginPage = await ripFetch req '/_gate/login'
+  cookie = cookieFrom(loginPage)
+  ok cookie?, 'session cookie issued on GET /_gate/login'
+  body = await loginPage.text()
+  csrf = body.match(/name="_csrf"\s+value="([^"]+)"/)[1]
+
+  # POST /_gate/login with cookie + csrf.
+  res = await ripFetch req '/_gate/login',
+    method: 'POST'
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', Cookie: cookie }
+    body: "user=alice&password=hunter2&_csrf=#{csrf}&return_to=%2Fprivate"
+  eq res.status, 303
+  eq res.headers.get('location'), '/private'
+  cookieAfterLogin = cookieFrom(res) or cookie
+
+  # GET /private now succeeds.
+  show = await ripFetch req '/private', headers: { Cookie: cookieAfterLogin, Accept: 'text/html' }
+  eq show.status, 200
+  txt = await show.text()
+  ok txt.includes('top secret')
+
+  # /_gate/check returns 204 + Remote-User for the authenticated session.
+  chk = await ripFetch req '/_gate/check', headers: { Cookie: cookieAfterLogin }
+  eq chk.status, 204
+  eq chk.headers.get('remote-user'), 'alice'
+
+test "wrong password re-renders login with 401, no session", ->
+  setup()
+  loginPage = await ripFetch req '/_gate/login'
+  cookie = cookieFrom(loginPage)
+  body = await loginPage.text()
+  csrf = body.match(/name="_csrf"\s+value="([^"]+)"/)[1]
+
+  res = await ripFetch req '/_gate/login',
+    method: 'POST'
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', Cookie: cookie }
+    body: "user=alice&password=WRONG&_csrf=#{csrf}"
+  eq res.status, 401
+  txt = await res.text()
+  ok txt.includes('Invalid credentials')
+
+test "GET /_gate/logout when not authed redirects to login", ->
+  setup()
+  res = await ripFetch req '/_gate/logout'
+  eq res.status, 302
+  ok res.headers.get('location').startsWith('/_gate/login')
+
+test "GET /_gate/logout when authed renders confirmation form (no side effect)", ->
+  setup({ users: { alice: ALICE_HASH } })
+  # log in
+  page = await ripFetch req '/_gate/login'
+  cookie = cookieFrom(page)
+  csrf = (await page.text()).match(/name="_csrf"\s+value="([^"]+)"/)[1]
+  loginRes = await ripFetch req '/_gate/login',
+    method: 'POST'
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', Cookie: cookie }
+    body: "user=alice&password=hunter2&_csrf=#{csrf}"
+  authedCookie = cookieFrom(loginRes) or cookie
+
+  res = await ripFetch req '/_gate/logout', headers: { Cookie: authedCookie }
+  eq res.status, 200
+  body = await res.text()
+  ok body.includes('Sign out'), 'confirmation page rendered'
+  ok body.includes('name="_csrf"'), 'logout form carries CSRF token'
+
+  # Verify session still valid (GET did not log out).
+  chk = await ripFetch req '/_gate/check', headers: { Cookie: authedCookie }
+  eq chk.status, 204
+
+test "POST /_gate/logout without CSRF is rejected", ->
+  setup()
+  res = await ripFetch req '/_gate/logout',
+    method: 'POST'
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    body: ''
+  eq res.status, 403
+
+# --- custom verify hook ---
+
+test "custom verify hook overrides the users map", ->
+  called = false
+  setup
+    users: {}
+    verify: (user, pass) ->
+      called = true
+      if user is 'bob' and pass is 'rosebud' then { user: 'bob', role: 'admin' } else null
+
+  loginPage = await ripFetch req '/_gate/login'
+  cookie = cookieFrom(loginPage)
+  body = await loginPage.text()
+  csrf = body.match(/name="_csrf"\s+value="([^"]+)"/)[1]
+
+  res = await ripFetch req '/_gate/login',
+    method: 'POST'
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', Cookie: cookie }
+    body: "user=bob&password=rosebud&_csrf=#{csrf}&return_to=%2Fprivate"
+  eq res.status, 303
+  ok called
+
+# --- protect: 'none' (forward_auth mode) ---
+
+test "protect:'none' does not auto-protect non-/_gate routes", ->
+  setup({ protect: 'none' })
+  res = await ripFetch req '/private'
+  eq res.status, 200  # /private answers itself, gate doesn't intercept
+
+# --- safeReturnTo behavior via /_gate/check redirect ---
+
+test "open-redirect tricks fall back to /", ->
+  setup()
+  res = await ripFetch req '/_gate/check',
+    headers: { Accept: 'text/html', 'X-Forwarded-Uri': '//evil.com' }
+  loc = res.headers.get('location')
+  # return_to should sanitize to '/'
+  ok loc.includes("return_to=#{encodeURIComponent('/')}")
+
+# --- v0.2 fixes ---
+
+test "protect: invalid value throws (fail-closed)", ->
+  threw = false
+  try
+    resetGlobals()
+    use gate({ secret: SECRET, users: {}, protect: 'al' })  # typo
+  catch e
+    threw = true
+    ok e.message.includes('protect')
+  ok threw, 'gate() must reject unknown protect value'
+
+test "ttl: non-positive value throws", ->
+  threw = false
+  try
+    resetGlobals()
+    use gate({ secret: SECRET, users: {}, ttl: 0 })
+  catch
+    threw = true
+  ok threw
+
+test "deep-link return_to preserves query string", ->
+  setup()
+  res = await ripFetch req '/private?tab=settings&id=123', headers: { Accept: 'text/html' }
+  eq res.status, 302
+  loc = res.headers.get('location')
+  ok loc.includes(encodeURIComponent('/private?tab=settings&id=123')),
+    "expected encoded deep link in #{loc}"
+
+test "custom verify gets the raw (non-lowercased) username", ->
+  captured = null
+  setup
+    users: {}
+    verify: (user, pass) ->
+      captured = user
+      if user is 'Alice@Example.COM' and pass is 'p' then { user } else null
+
+  page = await ripFetch req '/_gate/login'
+  cookie = cookieFrom(page)
+  csrf = (await page.text()).match(/name="_csrf"\s+value="([^"]+)"/)[1]
+  await ripFetch req '/_gate/login',
+    method: 'POST'
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', Cookie: cookie }
+    body: "user=Alice@Example.COM&password=p&_csrf=#{csrf}"
+  eq captured, 'Alice@Example.COM'
+
+test "expired session is treated as anonymous (server-side TTL)", ->
+  # Build a gate with a tiny TTL so we can race the clock without sleep.
+  setup({ ttl: 1 })
+  page = await ripFetch req '/_gate/login'
+  cookie = cookieFrom(page)
+  csrf = (await page.text()).match(/name="_csrf"\s+value="([^"]+)"/)[1]
+  loginRes = await ripFetch req '/_gate/login',
+    method: 'POST'
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', Cookie: cookie }
+    body: "user=alice&password=hunter2&_csrf=#{csrf}"
+  authedCookie = cookieFrom(loginRes) or cookie
+  # Wait past expiry.
+  await new Promise (r) -> setTimeout(r, 1100)
+  chk = await ripFetch req '/_gate/check', headers: { Cookie: authedCookie }
+  eq chk.status, 401  # NOT 204; cookie present but expired server-side
+
+# --- run ---
+
+p "gate tests: #{_pending.length}"
+for { name, fn } in _pending
+  try
+    r = fn()
+    await r if r?.then
+    _passed++
+    p "  ✓ #{name}"
+  catch e
+    _failed++
+    _failures.push { name, error: e.message or String(e) }
+    p "  ✗ #{name}: #{e.message or e}"
+
+p ''
+p "✓ #{_passed} passing, ✗ #{_failed} failing"
+exit if _failed > 0 then 1 else 0

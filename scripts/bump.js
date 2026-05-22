@@ -35,7 +35,28 @@ function run(cmd, opts = {}) {
 }
 
 function bumpVersion(version, level) {
-  let [major, minor, patch] = version.split('.').map(Number);
+  // SemVer split: base "MAJOR.MINOR.PATCH" + optional "-PRERELEASE".
+  // Naive `version.split('.').map(Number)` blows up on prerelease tags
+  // (e.g. "2.0.0-alpha.0" → Number("0-alpha") === NaN), which silently
+  // produced versions like "2.0.NaN" before this was fixed.
+  const m = version.match(/^(\d+)\.(\d+)\.(\d+)(?:-(.+))?$/);
+  if (!m) throw new Error(`bumpVersion: unparseable version "${version}"`);
+  let [, major, minor, patch, pre] = m;
+  major = +major; minor = +minor; patch = +patch;
+
+  // patch on a prerelease bumps the prerelease counter, not the base
+  // (so "2.0.0-alpha.0" → "2.0.0-alpha.1"). minor/major drop the tag
+  // entirely, graduating to stable (so "2.0.0-alpha.0" --minor → "2.1.0").
+  if (pre && level !== 'major' && level !== 'minor') {
+    const parts = pre.split('.');
+    const tail = +parts[parts.length - 1];
+    if (Number.isFinite(tail)) {
+      parts[parts.length - 1] = String(tail + 1);
+      return `${major}.${minor}.${patch}-${parts.join('.')}`;
+    }
+    return `${major}.${minor}.${patch}-${pre}.1`;
+  }
+
   if (level === 'major') { major++; minor = 0; patch = 0; }
   else if (level === 'minor') { minor++; patch = 0; }
   else { patch++; }
