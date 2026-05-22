@@ -46,9 +46,14 @@
 #
 # Notes on type semantics that the caller is responsible for:
 #
-#   - BIGINT / HUGEINT / UBIGINT / UHUGEINT come back as JSON STRINGS
-#     (e.g. "9223372036854775807") so JS Number precision can't truncate
-#     them. Promote to BigInt at the boundary if needed.
+#   - BIGINT / HUGEINT / UBIGINT / UHUGEINT come back as JSON NUMBERS
+#     when the value is in JS safe integer range
+#     (`[-9007199254740991, 9007199254740991]`), as JSON STRINGS when
+#     outside. The schema record's `duckdbType` tells consumers the
+#     underlying type either way; promote out-of-range strings to
+#     BigInt at the boundary when exact arithmetic is required. Common
+#     cases (counts, IDs in the millions, sizes) come back as plain
+#     numbers and just work — see harbor SPEC §5.4.
 #   - DECIMAL comes back as a string preserving width/scale.
 #   - DATE / TIME / TIMESTAMP / TIMESTAMPTZ come back as strings.
 #   - INTERVAL comes back as `{months, days, micros}` with micros as a
@@ -58,8 +63,8 @@
 #     come back as plain JSON values.
 #   - LIST / ARRAY / STRUCT / MAP / UNION / ENUM nest per harbor SPEC §5.4.
 #
-# v1 does NOT auto-decode any of these (no BigInt promotion, no Date
-# parsing, no BLOB base64 decode). One-shot JSON pass-through for now.
+# v1 does NOT auto-decode any of these (no Date parsing, no BLOB
+# base64 decode). One-shot JSON pass-through for now.
 
 # ==============================================================================
 # Connection
@@ -174,15 +179,13 @@ export query = (sql, params = []) ->
 #
 #   { id: 1, name: 'Alice', email: 'alice@example.com' }
 #
-# Defensive note: harbor v0.1 has a bug where `INSERT/UPDATE/DELETE
-# … RETURNING …` responses come back with `kind: "write"` and no
-# `columns`/`data` — only `rowCount`. The write itself happens; the
-# RETURNING output just isn't surfaced through the JSON envelope.
-# So Model.insert/update/destroy/upsert currently return null (single
-# form) or [] (array form) instead of the inserted/updated/deleted
-# rows. Until harbor fixes this, fetch the row separately if you
-# need it. The materializers below tolerate missing `columns`/`data`
-# for that reason, so the calls don't throw.
+# Defensive note: harbor v0.2 correctly returns
+# `INSERT/UPDATE/DELETE … RETURNING …` as `kind: "select"` with
+# `columns` and `data` populated, so Model.insert/update/destroy/
+# upsert return the actual rows. The `unless …columns? and …data?`
+# guards below are kept as a robustness measure for malformed
+# responses (defensive against future regressions or stub adapters)
+# but the v0.1 bug they originally worked around is fixed.
 
 materialize = (columns, row) ->
   obj = {}
