@@ -17,7 +17,7 @@
     },
     "packages/app": {
       "name": "@rip-lang/app",
-      "version": "0.3.0",
+      "version": "0.3.1",
     },
     "packages/csv": {
       "name": "@rip-lang/csv",
@@ -25,9 +25,15 @@
     },
     "packages/db": {
       "name": "@rip-lang/db",
-      "version": "2.0.0-alpha.0",
       "bin": {
         "rip-db": "./bin/rip-db",
+      },
+    },
+    "packages/gate": {
+      "name": "@rip-lang/gate",
+      "version": "0.5.1",
+      "dependencies": {
+        "@rip-lang/server": "workspace:*",
       },
     },
     "packages/http": {
@@ -46,7 +52,7 @@
     },
     "packages/rsx": {
       "name": "@rip-lang/rsx",
-      "version": "0.1.0",
+      "version": "0.1.1",
     },
     "packages/script": {
       "name": "@rip-lang/script",
@@ -176,6 +182,8 @@
     "@rip-lang/csv": ["@rip-lang/csv@workspace:packages/csv"],
 
     "@rip-lang/db": ["@rip-lang/db@workspace:packages/db"],
+
+    "@rip-lang/gate": ["@rip-lang/gate@workspace:packages/gate"],
 
     "@rip-lang/http": ["@rip-lang/http@workspace:packages/http"],
 
