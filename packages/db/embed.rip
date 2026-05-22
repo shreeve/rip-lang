@@ -38,7 +38,7 @@ reachable = (url) ->
 
 export assertReachable = (url) ->
   return 'running' if reachable! url
-  throw new Error "harbor not reachable at #{url} — start the database server (e.g. 'dh foo.duckdb') and try again"
+  throw new Error "harbor not reachable at #{url} — start your duckdb-harbor instance and try again"
 
 # Back-compat: older app code called `ensureRunning(url, {file, ...})`
 # expecting an auto-spawn. Lifecycle is now external; this is a

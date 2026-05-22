@@ -20,12 +20,13 @@
 //                                     a clear message in that case.
 //
 // Talks HTTP to a running duckdb-harbor (or any /sql-compatible) server.
-// Does NOT start the server — that's external (run `dh` etc.).
+// Does NOT start the server — that's external.
 //
 // Environment:
 //   RIP_DB_URL    Base URL of the harbor server (default http://127.0.0.1:9494)
-//   RIP_DB_TOKEN  Bearer token for /sql. Required by harbor; the script
-//                 fails fast with a helpful error if it's missing.
+//   RIP_DB_TOKEN  Bearer token for /sql. Only required when harbor was
+//                 started with a token; harbor's `token := NULL` mode is
+//                 unauthenticated, in which case leave it unset.
 //
 // dump/load talk to harbor over its `/sql` HTTP endpoint, so the script
 // must run on a host that can reach that URL. The temp directory used for
@@ -97,11 +98,12 @@ Usage:
   rip-db --version / -v                      Print version.
 
 This CLI does not start a database server. Run your duckdb-harbor
-instance separately (e.g. \`dh foo.duckdb\`) and point RIP_DB_URL at it.
+instance separately and point RIP_DB_URL at it.
 
 Environment:
   RIP_DB_URL    Harbor base URL (default http://127.0.0.1:9494)
-  RIP_DB_TOKEN  Harbor bearer token (required)
+  RIP_DB_TOKEN  Harbor bearer token (only when harbor was started with
+                a token; harbor's \`token := NULL\` mode is unauthenticated)
 `;
 }
 
@@ -122,7 +124,7 @@ Refuses to overwrite an existing archive.
 
 Environment:
   RIP_DB_URL    Harbor base URL (default http://127.0.0.1:9494)
-  RIP_DB_TOKEN  Harbor bearer token (required)
+  RIP_DB_TOKEN  Harbor bearer token (omit if harbor is unauthenticated)
 `;
     case 'load': return `\
 Usage: rip-db load ARCHIVE.tar.gz
@@ -132,7 +134,7 @@ Refuses to load if the target database already has tables/views.
 
 Environment:
   RIP_DB_URL    Harbor base URL (default http://127.0.0.1:9494)
-  RIP_DB_TOKEN  Harbor bearer token (required)
+  RIP_DB_TOKEN  Harbor bearer token (omit if harbor is unauthenticated)
 `;
     case 'checkpoint': return `\
 Usage: rip-db checkpoint [--force]
@@ -149,7 +151,7 @@ losing concurrent uncommitted writes is acceptable.
 
 Environment:
   RIP_DB_URL    Harbor base URL (default http://127.0.0.1:9494)
-  RIP_DB_TOKEN  Harbor bearer token (required)
+  RIP_DB_TOKEN  Harbor bearer token (omit if harbor is unauthenticated)
 `;
     default: return '';
   }
@@ -165,14 +167,7 @@ async function runDumpLoad(cmd, rest) {
   if (cmd === 'load' && rest.length !== 1) die('usage: rip-db load ARCHIVE.tar.gz');
 
   const url = (process.env.RIP_DB_URL || 'http://127.0.0.1:9494').replace(/\/$/, '');
-  const token = process.env.RIP_DB_TOKEN;
-  if (!token) {
-    die(
-      'RIP_DB_TOKEN is not set. Harbor requires a bearer token on /sql ' +
-      '(harbor_local_dev_mode does NOT cover /sql). Set it via your shell rc, ' +
-      'matching the token harbor was started with.'
-    );
-  }
+  const token = process.env.RIP_DB_TOKEN || null;
 
   // Stage in a per-run temp dir on the local filesystem. Harbor reads/writes
   // here directly via EXPORT/IMPORT DATABASE, so this only works when the
@@ -254,14 +249,7 @@ async function runCheckpoint(rest) {
   }
 
   const url = (process.env.RIP_DB_URL || 'http://127.0.0.1:9494').replace(/\/$/, '');
-  const token = process.env.RIP_DB_TOKEN;
-  if (!token) {
-    die(
-      'RIP_DB_TOKEN is not set. Harbor requires a bearer token on /sql ' +
-      '(harbor_local_dev_mode does NOT cover /sql). Set it via your shell rc, ' +
-      'matching the token harbor was started with.'
-    );
-  }
+  const token = process.env.RIP_DB_TOKEN || null;
 
   // Issue via /sql rather than POST /checkpoint to bypass harbor's
   // admin-authz default-deny on /checkpoint. The SQL form runs against
@@ -287,15 +275,22 @@ async function runCheckpoint(rest) {
 // HTTP / SQL helpers
 
 async function sql(url, token, query) {
+  // Bearer header is only sent when a token is configured. Harbor's
+  // unauthenticated mode (`harbor_serve(..., token := NULL)`) accepts
+  // /sql without an Authorization header on loopback binds; harbor's
+  // authenticated mode returns MISSING_CREDENTIAL when no header is
+  // present, which our error-path surfaces cleanly to the caller.
+  const headers = {
+    'Content-Type': 'application/json',
+    'Accept':       'application/json',
+  };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
   let res;
   try {
     res = await fetch(`${url}/sql`, {
       method:  'POST',
-      headers: {
-        'Content-Type':  'application/json',
-        'Accept':        'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
+      headers,
       body: JSON.stringify({ sql: query }),
     });
   } catch (e) {

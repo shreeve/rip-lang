@@ -232,8 +232,10 @@ INSTRUCTIONS =! """\
   - Use LIMIT when exploring large tables
 
   Note on numeric types:
-  - BIGINT / HUGEINT / UBIGINT / UHUGEINT come back as JSON STRINGS (e.g. "9223372036854775807")
-    so JS Number precision can't truncate them. INTEGER and smaller are plain JSON numbers.
+  - BIGINT / HUGEINT / UBIGINT / UHUGEINT come back as JSON numbers when the value
+    is in JS safe-integer range, JSON strings otherwise. Common cases (counts, IDs in
+    the millions, sizes) come back as plain numbers. INTEGER and smaller are always
+    plain JSON numbers.
   - DECIMAL comes back as a string preserving width and scale.
   """
 
