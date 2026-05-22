@@ -1,0 +1,380 @@
+#!/usr/bin/env bun
+//
+// rip-db — CLI for @rip-lang/db.
+//
+// Subcommands:
+//   rip-db                            Print this usage.
+//   rip-db --help / -h                Same.
+//   rip-db --version / -v             Print version.
+//   rip-db dump [ARCHIVE.tar.gz]      Snapshot the running database.
+//                                     If ARCHIVE is omitted, defaults to
+//                                     <dbname>-YYYYMMDD-HHMMSS.tar.gz in cwd.
+//                                     Refuses to overwrite an existing archive.
+//   rip-db load ARCHIVE.tar.gz        Restore a tar.gz produced by `rip-db dump`
+//                                     into a fresh, empty database. Refuses if
+//                                     the target DB already has tables/views.
+//
+// Talks HTTP to a running duckdb-harbor (or any /sql-compatible) server.
+// Does NOT start the server — that's external (run `dh` etc.).
+//
+// Environment:
+//   RIP_DB_URL    Base URL of the harbor server (default http://127.0.0.1:9494)
+//   RIP_DB_TOKEN  Bearer token for /sql. Required by harbor; the script
+//                 fails fast with a helpful error if it's missing.
+//
+// dump/load talk to harbor over its `/sql` HTTP endpoint, so the script
+// must run on a host that can reach that URL. The temp directory used for
+// staging EXPORT/IMPORT must be on a filesystem that the harbor process
+// can read+write — for the default localhost case that's automatic. The
+// script verifies this by checking that DuckDB actually wrote schema.sql
+// + load.sql into the local temp dir before bundling the tarball, so a
+// remote/containerized harbor with a separate filesystem fails loudly
+// instead of producing an empty archive.
+//
+// Security: tar archives produced elsewhere are not fully sandboxed during
+// extraction (system tar may follow symlinks/hardlinks). `rip-db load` is
+// intended for archives produced by `rip-db dump`. A path-validation pass
+// blocks the obvious traversal patterns (absolute paths, `..` segments)
+// but does NOT defend against malicious archives crafted to overwrite
+// host files. Only load trusted archives.
+
+import { spawnSync } from 'child_process';
+import { join } from 'path';
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync, existsSync } from 'fs';
+import { tmpdir } from 'os';
+
+const args = process.argv.slice(2);
+const cmd  = args[0];
+
+// Top-level meta-flags exit 0 with the right output. Anything else
+// unrecognized falls through to usage + exit 1.
+if (cmd === '--help' || cmd === '-h' || cmd === undefined) {
+  process.stdout.write(usageText());
+  process.exit(0);
+} else if (cmd === '--version' || cmd === '-v') {
+  process.stdout.write(`${readVersion()}\n`);
+  process.exit(0);
+} else if (cmd === 'dump' || cmd === 'load') {
+  await runDumpLoad(cmd, args.slice(1));
+} else {
+  process.stderr.write(`rip-db: unknown subcommand '${cmd}'\n\n`);
+  process.stdout.write(usageText());
+  process.exit(1);
+}
+
+// ---------------------------------------------------------------------------
+
+function readVersion() {
+  try {
+    const pkgPath = new URL('../package.json', import.meta.url);
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
+    return `rip-db v${pkg.version}`;
+  } catch {
+    return 'rip-db (version unavailable)';
+  }
+}
+
+// Top-level usage. Hoisted (function declaration) so the dispatch at the
+// head of this file can reach it without TDZ. Indentation matters:
+// every line after the opening backtick lives at column 0.
+function usageText() {
+  return `\
+rip-db — CLI for @rip-lang/db (talks to a running duckdb-harbor).
+
+Usage:
+  rip-db dump [ARCHIVE.tar.gz | DIRECTORY]   Snapshot the running database.
+  rip-db load ARCHIVE.tar.gz                 Restore from a snapshot.
+  rip-db <subcommand> --help                 Subcommand-specific help.
+  rip-db --help / -h                         This message.
+  rip-db --version / -v                      Print version.
+
+This CLI does not start a database server. Run your duckdb-harbor
+instance separately (e.g. \`dh foo.duckdb\`) and point RIP_DB_URL at it.
+
+Environment:
+  RIP_DB_URL    Harbor base URL (default http://127.0.0.1:9494)
+  RIP_DB_TOKEN  Harbor bearer token (required)
+`;
+}
+
+function helpFor(cmd) {
+  switch (cmd) {
+    case 'dump': return `\
+Usage: rip-db dump [ARCHIVE.tar.gz | DIRECTORY]
+
+Export the running harbor database to a single .tar.gz archive.
+
+Path resolution:
+  (omitted)            write <dbname>-YYYYMMDD-HHMMSS.tar.gz in cwd
+  existing directory   write <dbname>-YYYYMMDD-HHMMSS.tar.gz INSIDE the dir
+  *.tar.gz / *.tgz     use the literal filename
+  anything else        rejected (must end in .tar.gz / .tgz, or be a dir)
+
+Refuses to overwrite an existing archive.
+
+Environment:
+  RIP_DB_URL    Harbor base URL (default http://127.0.0.1:9494)
+  RIP_DB_TOKEN  Harbor bearer token (required)
+`;
+    case 'load': return `\
+Usage: rip-db load ARCHIVE.tar.gz
+
+Restore a tar.gz produced by \`rip-db dump\` into the harbor database.
+Refuses to load if the target database already has tables/views.
+
+Environment:
+  RIP_DB_URL    Harbor base URL (default http://127.0.0.1:9494)
+  RIP_DB_TOKEN  Harbor bearer token (required)
+`;
+    default: return '';
+  }
+}
+
+async function runDumpLoad(cmd, rest) {
+  if (rest[0] === '--help' || rest[0] === '-h') {
+    process.stdout.write(helpFor(cmd));
+    process.exit(0);
+  }
+
+  if (cmd === 'dump' && rest.length > 1)  die('usage: rip-db dump [ARCHIVE.tar.gz]');
+  if (cmd === 'load' && rest.length !== 1) die('usage: rip-db load ARCHIVE.tar.gz');
+
+  const url = (process.env.RIP_DB_URL || 'http://127.0.0.1:9494').replace(/\/$/, '');
+  const token = process.env.RIP_DB_TOKEN;
+  if (!token) {
+    die(
+      'RIP_DB_TOKEN is not set. Harbor requires a bearer token on /sql ' +
+      '(harbor_local_dev_mode does NOT cover /sql). Set it via your shell rc, ' +
+      'matching the token harbor was started with.'
+    );
+  }
+
+  // Stage in a per-run temp dir on the local filesystem. Harbor reads/writes
+  // here directly via EXPORT/IMPORT DATABASE, so this only works when the
+  // script and harbor share a filesystem (the default localhost case).
+  // assertDuckExportDir() catches cross-filesystem failure mode explicitly.
+  const tmp = mkdtempSync(join(tmpdir(), 'ripdb-'));
+  const cleanup = () => { try { rmSync(tmp, { recursive: true, force: true }); } catch {} };
+  process.on('exit', cleanup);
+  process.on('SIGINT',  () => { cleanup(); process.exit(130); });
+  process.on('SIGTERM', () => { cleanup(); process.exit(143); });
+
+  try {
+    if (cmd === 'dump') {
+      // Path resolution: omitted → autoname in cwd; existing directory →
+      // autoname inside it; .tar.gz / .tgz filename → use as-is; anything
+      // else → reject (don't second-guess what the user meant).
+      let archive = rest[0];
+      const isDir = archive && existsSync(archive) && statSync(archive).isDirectory();
+      if (!archive || isDir) {
+        const dbname   = safeFileStem(await currentDatabase(url, token));
+        const filename = `${dbname}-${stamp()}.tar.gz`;
+        archive = isDir ? join(archive, filename) : filename;
+      } else if (!/\.(tar\.gz|tgz)$/i.test(archive)) {
+        die(
+          `archive path must end in .tar.gz or .tgz (got '${archive}'). ` +
+          `Pass an existing directory to drop an auto-named archive into it, ` +
+          `or omit the path entirely to write into the current directory.`
+        );
+      }
+      // Backup commands fail closed on overwrite — never silently destroy
+      // an existing archive that might be the only good copy.
+      if (existsSync(archive)) {
+        die(`refusing to overwrite existing file: ${archive} (use a different name or rm it first)`);
+      }
+      await sql(url, token, `EXPORT DATABASE ${sqlString(tmp)} (FORMAT CSV)`);
+      // Verify harbor actually wrote our local temp dir. If harbor is on a
+      // different host/container/filesystem, EXPORT may have succeeded
+      // against its own /tmp/ripdb-XXX while our local one stays empty —
+      // tarring it would produce a worthless archive.
+      assertDuckExportDir(tmp);
+      // Cosmetic touch-ups before tarring (see helper bodies for rationale).
+      rewriteLoadSqlToRelative(tmp);
+      cleanupSchemaSql(tmp);
+      run('tar', ['-czf', archive, '-C', tmp, '.']);
+      const size = statSync(archive).size;
+      console.log(`wrote ${archive} (${humanSize(size)})`);
+    } else {
+      const archive = rest[0];
+      if (!existsSync(archive)) die(`no such file: ${archive}`);
+      // Refuse to import into a populated DB — IMPORT DATABASE would fail
+      // partway through with `Table already exists`, leaving partial state.
+      // Cheap one-query pre-check avoids that footgun entirely.
+      await assertEmptyDatabase(url, token);
+      // Block obvious tar traversal patterns before extracting. Does not
+      // defend against symlink/hardlink attacks — `rip-db load` is for
+      // archives you trust (typically produced by your own `rip-db dump`).
+      validateTarPaths(archive);
+      run('tar', ['-xzf', archive, '-C', tmp]);
+      assertDuckExportDir(tmp);
+      await sql(url, token, `IMPORT DATABASE ${sqlString(tmp)}`);
+      console.log(`loaded ${archive}`);
+    }
+  } catch (e) {
+    die(e?.message || String(e));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// HTTP / SQL helpers
+
+async function sql(url, token, query) {
+  let res;
+  try {
+    res = await fetch(`${url}/sql`, {
+      method:  'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Accept':        'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({ sql: query }),
+    });
+  } catch (e) {
+    throw new Error(`could not reach harbor at ${url}: ${e?.message || e}`);
+  }
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok || body.ok === false) {
+    const msg = body?.error || `${res.status} ${res.statusText}`;
+    const code = body?.errorCode ? ` (${body.errorCode})` : '';
+    throw new Error(`/sql failed${code}: ${msg}`);
+  }
+  return body;
+}
+
+async function currentDatabase(url, token) {
+  const r = await sql(url, token, 'SELECT current_database()');
+  // Envelope shape: { columns: [...], data: [[value], ...] }
+  return r?.data?.[0]?.[0] ?? 'rip-db';
+}
+
+async function assertEmptyDatabase(url, token) {
+  const r = await sql(url, token, `
+    SELECT count(*)
+    FROM information_schema.tables
+    WHERE table_schema = 'main'
+  `);
+  // count(*) returns BIGINT, which harbor encodes as a string per SPEC §5.4
+  // (JS-precision-safe). Coerce via Number() for a small integer comparison.
+  const n = Number(r?.data?.[0]?.[0] ?? 0);
+  if (n !== 0) {
+    throw new Error(
+      `target database is not empty (${n} table/view(s) in 'main' schema). ` +
+      `Drop them first or load into a fresh harbor instance.`
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Filesystem / tar helpers
+
+// Strip the absolute tmp-dir prefix from every `COPY ... FROM '<path>'`
+// in load.sql so the archive's load.sql reads:
+//
+//   COPY accounts FROM 'accounts.csv' (FORMAT 'csv', ...);
+//
+// rather than DuckDB's default:
+//
+//   COPY accounts FROM '/tmp/ripdb-XXXXXX/accounts.csv' (FORMAT 'csv', ...);
+//
+// The replacement is targeted (anchored on the leading single-quote so we
+// only touch FROM-clause paths). Refuses on weird tmp paths containing a
+// single quote because the SQL escaping would be `''` and our raw text-
+// replace pattern wouldn't match — falls back silently to absolute paths
+// (no-op; archive still works, just less pretty).
+//
+// Why bother: IMPORT DATABASE rewrites these paths at replay time anyway
+// (it uses only the basename and re-prepends the IMPORT directory), so
+// this rewrite is purely cosmetic for the round-trip case. The win is for
+// callers who replay load.sql DIRECTLY — e.g. `cd dump-dir && duckdb new.db
+// < load.sql` — which would otherwise break when the archive is moved.
+function rewriteLoadSqlToRelative(tmp) {
+  if (tmp.includes("'")) return;
+  const loadSqlPath = join(tmp, 'load.sql');
+  const text    = readFileSync(loadSqlPath, 'utf8');
+  const cleaned = text.replaceAll(`'${tmp}/`, "'");
+  writeFileSync(loadSqlPath, cleaned);
+}
+
+// Two upstream DuckDB cosmetic quirks in `EXPORT DATABASE`'s schema.sql:
+//   1. Doubled trailing `;;` (sometimes `;;;` for CREATE TYPE).
+//   2. Trailing blank line at end of file.
+// Replay through `IMPORT DATABASE` works either way; this is purely for
+// archive-readability (cd dump-dir && duckdb new.db < schema.sql, git diff,
+// etc.).
+function cleanupSchemaSql(tmp) {
+  const schemaSqlPath = join(tmp, 'schema.sql');
+  const text    = readFileSync(schemaSqlPath, 'utf8');
+  const cleaned = text
+    .replace(/;+(\s*\n)/g, ';$1')   // `;;\n` / `;;;\n` → `;\n`
+    .replace(/\n{2,}$/, '\n');      // collapse 2+ trailing newlines to 1
+  writeFileSync(schemaSqlPath, cleaned);
+}
+
+function assertDuckExportDir(dir) {
+  if (!existsSync(join(dir, 'schema.sql')) || !existsSync(join(dir, 'load.sql'))) {
+    throw new Error(
+      `expected DuckDB export files (schema.sql + load.sql) not present in ${dir}. ` +
+      `If harbor is running on a different host or container, the EXPORT/IMPORT ` +
+      `staging directory must be visible to both the script and the server.`
+    );
+  }
+}
+
+function validateTarPaths(archive) {
+  const r = spawnSync('tar', ['-tzf', archive], { encoding: 'utf8' });
+  if (r.error)        throw r.error;
+  if (r.status !== 0) throw new Error(`tar -tzf ${archive} exited ${r.status}: ${r.stderr || ''}`);
+  for (const raw of r.stdout.split(/\r?\n/).filter(Boolean)) {
+    const name = raw.replace(/\\/g, '/');
+    if (
+      name.startsWith('/') ||
+      name === '..' ||
+      name.startsWith('../') ||
+      name.includes('/../')
+    ) {
+      throw new Error(`unsafe path in archive: ${raw}`);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Tiny utilities
+
+// SQL single-quote string literal: doubles embedded `'`. Rejects NUL bytes
+// because they don't survive HTTP-as-text transport reliably.
+function sqlString(s) {
+  if (s.includes('\0')) throw new Error('path contains NUL byte');
+  return `'${s.replaceAll("'", "''")}'`;
+}
+
+// Make a string filesystem-safe for use as the stem of an archive filename.
+function safeFileStem(s) {
+  return String(s)
+    .replace(/[^A-Za-z0-9._-]+/g, '_')
+    .replace(/^_+|_+$/g, '') || 'rip-db';
+}
+
+function stamp() {
+  const d  = new Date();
+  const p  = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+}
+
+function run(bin, args) {
+  const r = spawnSync(bin, args, { stdio: 'inherit' });
+  if (r.error)        throw r.error;
+  if (r.status !== 0) throw new Error(`${bin} ${args.join(' ')} exited ${r.status}`);
+}
+
+function humanSize(bytes) {
+  if (bytes < 1024)              return `${bytes} B`;
+  if (bytes < 1024 * 1024)       return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
+
+function die(msg) {
+  console.error(`rip-db: ${msg}`);
+  process.exit(1);
+}

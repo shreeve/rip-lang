@@ -1,10 +1,14 @@
 {
   "name": "@rip-lang/db",
   "version": "2.0.0-alpha.0",
-  "description": "DuckDB-over-HTTP client for Rip — talks to a local duckdb-harbor instance",
+  "description": "DuckDB-over-HTTP client and CLI for Rip — talks to a duckdb-harbor instance",
   "type": "module",
   "exports": {
-    "./client": "./client.rip"
+    "./client": "./client.rip",
+    "./embed":  "./embed.rip"
+  },
+  "bin": {
+    "rip-db": "./bin/rip-db"
   },
   "keywords": [
     "db",
@@ -14,6 +18,7 @@
     "sql",
     "http",
     "client",
+    "mcp",
     "bun",
     "rip"
   ],
@@ -30,6 +35,9 @@
   "license": "MIT",
   "files": [
     "client.rip",
+    "embed.rip",
+    "mcp.rip",
+    "bin/",
     "README.md"
   ]
 }
