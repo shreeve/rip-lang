@@ -160,3 +160,325 @@ export query = (sql, params = []) ->
     body:    JSON.stringify body
   data = res.json!
   throwOrReturn res, data
+
+# ==============================================================================
+# Row materializers
+# ==============================================================================
+
+# `query` returns the harbor envelope:
+#
+#   { columns: [{name, duckdbType, type, ...}], data: [[...], ...], rowCount, ... }
+#
+# The materializers below turn that into plain row objects keyed by
+# column name — the shape most app code wants:
+#
+#   { id: 1, name: 'Alice', email: 'alice@example.com' }
+#
+# Defensive note: harbor v0.1 has a bug where `INSERT/UPDATE/DELETE
+# … RETURNING …` responses come back with `kind: "write"` and no
+# `columns`/`data` — only `rowCount`. The write itself happens; the
+# RETURNING output just isn't surfaced through the JSON envelope.
+# So Model.insert/update/destroy/upsert currently return null (single
+# form) or [] (array form) instead of the inserted/updated/deleted
+# rows. Until harbor fixes this, fetch the row separately if you
+# need it. The materializers below tolerate missing `columns`/`data`
+# for that reason, so the calls don't throw.
+
+materialize = (columns, row) ->
+  obj = {}
+  for col, i in columns
+    obj[col.name] = row[i]
+  obj
+
+export materializeAll = (result) ->
+  return [] unless result?.columns? and result?.data?
+  return [] if result.rowCount is 0
+  result.data.map (row) -> materialize result.columns, row
+
+export findOne = (sql, params = []) ->
+  result = query! sql, params
+  return null unless result?.columns? and result?.data?
+  return null if result.rowCount is 0
+  materialize result.columns, result.data[0]
+
+export findAll = (sql, params = []) ->
+  result = query! sql, params
+  materializeAll result
+
+# ==============================================================================
+# Query Builder
+# ==============================================================================
+#
+# Chainable SQL builder. Every operation returns a new builder
+# (immutable copy) so it's safe to fork a base query and add filters
+# in different branches:
+#
+#   active = User.where(active: true)
+#   admins = active.where(role: 'admin')
+#   users  = active.where(role: 'user')
+#
+# Multiple `where` calls AND. Use `or(...)` and `not(...)` for
+# alternative join semantics. String form (`where 'foo > $1', [42]`)
+# escapes hatch when you need raw SQL.
+#
+# Wire-agnostic — produces SQL strings + positional params, hands off
+# to `query` / `findOne` / `findAll` for transport. The class itself
+# doesn't know harbor exists.
+
+class QueryBuilder
+  constructor: (@table, @database = null) ->
+    @_tableName = if @database then "\"#{@database}\".\"#{@table}\"" else "\"#{@table}\""
+    @_wheres  = []
+    @_params  = []
+    @_order   = null
+    @_group   = null
+    @_having  = null
+    @_limit   = null
+    @_offset  = null
+    @_select  = '*'
+
+  select: (cols) ->
+    b = @_clone()
+    b._select = if Array.isArray(cols) then cols.join(', ') else cols
+    b
+
+  where: (conditions, params = []) ->
+    b = @_clone()
+    if typeof conditions is 'string'
+      b._wheres.push { clause: conditions, join: 'AND' }
+      b._params = b._params.concat params
+    else if typeof conditions is 'object'
+      for own key, val of conditions
+        if val is null
+          b._wheres.push { clause: "\"#{key}\" IS NULL", join: 'AND' }
+        else
+          b._wheres.push { clause: "\"#{key}\" = $#{b._params.length + 1}", join: 'AND' }
+          b._params.push val
+    b
+
+  or: (conditions, params = []) ->
+    b = @_clone()
+    if typeof conditions is 'string'
+      b._wheres.push { clause: conditions, join: 'OR' }
+      b._params = b._params.concat params
+    else if typeof conditions is 'object'
+      parts = []
+      for own key, val of conditions
+        if val is null
+          parts.push "\"#{key}\" IS NULL"
+        else
+          parts.push "\"#{key}\" = $#{b._params.length + 1}"
+          b._params.push val
+      b._wheres.push { clause: "(#{parts.join(' AND ')})", join: 'OR' }
+    b
+
+  not: (conditions, params = []) ->
+    b = @_clone()
+    if typeof conditions is 'string'
+      b._wheres.push { clause: "NOT (#{conditions})", join: 'AND' }
+      b._params = b._params.concat params
+    else if typeof conditions is 'object'
+      for own key, val of conditions
+        if val is null
+          b._wheres.push { clause: "\"#{key}\" IS NOT NULL", join: 'AND' }
+        else
+          b._wheres.push { clause: "\"#{key}\" != $#{b._params.length + 1}", join: 'AND' }
+          b._params.push val
+    b
+
+  order: (expr) ->
+    b = @_clone()
+    b._order = expr
+    b
+
+  group: (expr) ->
+    b = @_clone()
+    b._group = expr
+    b
+
+  having: (clause, params = []) ->
+    b = @_clone()
+    b._having = clause
+    b._params = b._params.concat params
+    b
+
+  limit: (n) ->
+    b = @_clone()
+    b._limit = n
+    b
+
+  offset: (n) ->
+    b = @_clone()
+    b._offset = n
+    b
+
+  _buildWhere: ->
+    return '' if @_wheres.length is 0
+    parts = []
+    for w, i in @_wheres
+      if i is 0
+        parts.push w.clause
+      else
+        parts.push "#{w.join} #{w.clause}"
+    " WHERE #{parts.join(' ')}"
+
+  _toSQL: ->
+    sql = "SELECT #{@_select} FROM #{@_tableName}"
+    sql += @_buildWhere()
+    sql += " GROUP BY #{@_group}" if @_group
+    sql += " HAVING #{@_having}" if @_having
+    sql += " ORDER BY #{@_order}" if @_order
+    sql += " LIMIT #{@_limit}" if @_limit?
+    sql += " OFFSET #{@_offset}" if @_offset?
+    sql
+
+  all: ->
+    findAll! @_toSQL(), @_params
+
+  first: ->
+    b = @_clone()
+    b._limit = 1
+    findOne! b._toSQL(), b._params
+
+  count: ->
+    sql = "SELECT COUNT(*) as count FROM #{@_tableName}"
+    sql += @_buildWhere()
+    sql += " GROUP BY #{@_group}" if @_group
+    sql += " HAVING #{@_having}" if @_having
+    result = query! sql, @_params
+    result.data[0][0]
+
+  update: (data) ->
+    keys = (k for k, v of data when v isnt undefined)
+    base = @_params.length
+    sets = keys.map((k, i) -> "\"#{k}\" = $#{base + i + 1}").join(', ')
+    vals = keys.map (k) -> data[k]
+    allParams = [...@_params, ...vals]
+    sql = "UPDATE #{@_tableName} SET #{sets}"
+    sql += @_buildWhere()
+    sql += " RETURNING *"
+    findAll! sql, allParams
+
+  destroy: ->
+    sql = "DELETE FROM #{@_tableName}"
+    sql += @_buildWhere()
+    sql += " RETURNING *"
+    findAll! sql, @_params
+
+  _clone: ->
+    b = new QueryBuilder(@table, @database)
+    b._wheres = [...@_wheres]
+    b._params = [...@_params]
+    b._order  = @_order
+    b._group  = @_group
+    b._having = @_having
+    b._limit  = @_limit
+    b._offset = @_offset
+    b._select = @_select
+    b
+
+# ==============================================================================
+# Model Factory
+# ==============================================================================
+#
+# ActiveRecord-style Model wrapping a QueryBuilder. Keep your code
+# decoupled from raw SQL strings:
+#
+#   User = Model 'users'
+#   alice = User.find! 42
+#   active = User.where(active: true).order('name').all!
+#   alice  = User.insert! { name: 'Alice', email: 'alice@example.com' }
+#   User.update! 42, { last_login: new Date() }
+#   User.destroy! 42
+#
+# Multi-row insert uses one INSERT ... VALUES (...), (...), ... RETURNING *
+# (harbor's /sql is single-statement, no Appender path). Returns the
+# inserted rows. This is a behavior change from the legacy bulk()
+# server-side path which only returned a row count.
+
+export Model = (table, database = null) ->
+  tableName = if database then "\"#{database}\".\"#{table}\"" else "\"#{table}\""
+  _qb = -> new QueryBuilder(table, database)
+
+  find: (id) ->
+    findOne! "SELECT * FROM #{tableName} WHERE id = $1", [id]
+
+  all: (limit = null) ->
+    sql = "SELECT * FROM #{tableName}"
+    sql += " LIMIT #{limit}" if limit?
+    findAll! sql
+
+  where:  (conditions, params = []) -> _qb().where(conditions, params)
+  or:     (conditions, params = []) -> _qb().or(conditions, params)
+  not:    (conditions, params = []) -> _qb().not(conditions, params)
+  select: (cols) -> _qb().select(cols)
+  order:  (expr) -> _qb().order(expr)
+  group:  (expr) -> _qb().group(expr)
+  limit:  (n)    -> _qb().limit(n)
+
+  count: ->
+    result = query! "SELECT COUNT(*) as count FROM #{tableName}"
+    result.data[0][0]
+
+  query: (sql, params = []) ->
+    findAll! sql, params
+
+  insert: (data) ->
+    if Array.isArray(data)
+      return [] if data.length is 0
+      keys = (k for k, v of data[0] when v isnt undefined)
+      cols = keys.map((k) -> "\"#{k}\"").join(', ')
+      allVals = []
+      tuples = data.map (row, rowIdx) ->
+        refs = keys.map (k, colIdx) ->
+          allVals.push(row[k])
+          "$#{rowIdx * keys.length + colIdx + 1}"
+        "(#{refs.join(', ')})"
+      findAll! "INSERT INTO #{tableName} (#{cols}) VALUES #{tuples.join(', ')} RETURNING *", allVals
+    else
+      keys = (k for k, v of data when v isnt undefined)
+      cols = keys.map((k) -> "\"#{k}\"").join(', ')
+      refs = keys.map((_, i) -> "$#{i + 1}").join(', ')
+      vals = keys.map (k) -> data[k]
+      findOne! "INSERT INTO #{tableName} (#{cols}) VALUES (#{refs}) RETURNING *", vals
+
+  update: (id, data) ->
+    keys = (k for k, v of data when v isnt undefined)
+    sets = keys.map((k, i) -> "\"#{k}\" = $#{i + 2}").join(', ')
+    vals = keys.map (k) -> data[k]
+    findOne! "UPDATE #{tableName} SET #{sets} WHERE id = $1 RETURNING *", [id, ...vals]
+
+  upsert: (data, opts = {}) ->
+    conflict = opts.on or opts.conflict
+    if Array.isArray(data)
+      return [] if data.length is 0
+      keys = (k for k, v of data[0] when v isnt undefined)
+      cols = keys.map((k) -> "\"#{k}\"").join(', ')
+      allVals = []
+      tuples = data.map (row, rowIdx) ->
+        refs = keys.map (k, colIdx) ->
+          allVals.push(row[k])
+          "$#{rowIdx * keys.length + colIdx + 1}"
+        "(#{refs.join(', ')})"
+      sql = "INSERT INTO #{tableName} (#{cols}) VALUES #{tuples.join(', ')}"
+      if conflict
+        updateCols = keys.filter((k) -> k isnt conflict)
+        sets = updateCols.map((k) -> "\"#{k}\" = EXCLUDED.\"#{k}\"").join(', ')
+        sql += " ON CONFLICT (\"#{conflict}\") DO UPDATE SET #{sets}"
+      sql += " RETURNING *"
+      findAll! sql, allVals
+    else
+      keys = (k for k, v of data when v isnt undefined)
+      cols = keys.map((k) -> "\"#{k}\"").join(', ')
+      refs = keys.map((_, i) -> "$#{i + 1}").join(', ')
+      vals = keys.map (k) -> data[k]
+      sql = "INSERT INTO #{tableName} (#{cols}) VALUES (#{refs})"
+      if conflict
+        updateCols = keys.filter((k) -> k isnt conflict)
+        sets = updateCols.map((k) -> "\"#{k}\" = EXCLUDED.\"#{k}\"").join(', ')
+        sql += " ON CONFLICT (\"#{conflict}\") DO UPDATE SET #{sets}"
+      sql += " RETURNING *"
+      findOne! sql, vals
+
+  destroy: (id) ->
+    findOne! "DELETE FROM #{tableName} WHERE id = $1 RETURNING *", [id]
