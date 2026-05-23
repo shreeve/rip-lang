@@ -1,8 +1,8 @@
 export Button = component extends button
-  @variant:: 'primary' | 'secondary' := 'primary'
-  @outline:: boolean := false
-  @link:: boolean := false
-  @loading:: boolean := false
+  @variant?:: 'primary' | 'secondary' := 'primary'
+  @outline?:: boolean
+  @link?:: boolean
+  @loading?:: boolean
 
   render
     button

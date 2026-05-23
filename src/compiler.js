@@ -673,7 +673,7 @@ export class CodeEmitter {
   // ---------------------------------------------------------------------------
 
   emit(sexpr, context = 'statement') {
-    // String object with metadata (quote, await, predicate, heregex, etc.)
+    // String object with metadata (quote, await, optional, heregex, etc.)
     if (sexpr instanceof String) {
       // Dammit operator (!)
       if (meta(sexpr, 'await') === true) {
@@ -681,7 +681,7 @@ export class CodeEmitter {
       }
 
       // Existence check (?)
-      if (meta(sexpr, 'predicate')) {
+      if (meta(sexpr, 'optional')) {
         return `(${str(sexpr)} != null)`;
       }
 
@@ -1187,7 +1187,7 @@ export class CodeEmitter {
                       ((this.is(obj, 'object') || this.is(obj, 'yield')));
     let base = needsParens ? `(${objCode})` : objCode;
     if (meta(prop, 'await') === true) return `await ${base}.${str(prop)}()`;
-    if (meta(prop, 'predicate')) return `(${base}.${str(prop)} != null)`;
+    if (meta(prop, 'optional')) return `(${base}.${str(prop)} != null)`;
     return `${base}.${str(prop)}`;
   }
 

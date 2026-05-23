@@ -36,7 +36,7 @@ export const INTRINSIC_TYPE_DECLS = [
   "type __RipAttrKeys<T> = { [K in keyof T]-?: K extends 'style' | 'classList' | 'className' | 'nodeValue' | 'textContent' | 'innerHTML' | 'innerText' | 'outerHTML' | 'outerText' | 'scrollLeft' | 'scrollTop' ? never : K extends `on${string}` | `aria${string}Element` | `aria${string}Elements` ? never : T[K] extends (...args: any[]) => any ? never : (<V>() => V extends Pick<T, K> ? 1 : 2) extends (<V>() => V extends { -readonly [P in K]: T[P] } ? 1 : 2) ? K : never }[keyof T] & string;",
   "type __RipEvents<K extends __RipTag> = { [E in keyof HTMLElementEventMap as `@${E}`]?: ((event: RipEvent<HTMLElementEventMap[E], __RipElementMap[K]>) => void) | null };",
   'type RipEvent<E extends Event, T extends EventTarget> = E & { readonly target: T; readonly currentTarget: T };',
-  'type __RipClassValue = string | boolean | null | undefined | Record<string, boolean> | __RipClassValue[];',
+  'type __RipClassValue = string | boolean | null | undefined | Record<string, boolean | null | undefined> | __RipClassValue[];',
   "type __RipProps<K extends __RipTag> = { [P in __RipAttrKeys<__RipElementMap[K]>]?: __RipElementMap[K][P] } & __RipEvents<K> & { ref?: string; class?: __RipClassValue | __RipClassValue[]; style?: string; [k: `data-${string}`]: any; [k: `aria-${string}`]: any };",
 ];
 
@@ -195,7 +195,7 @@ export function emitTypes(tokens, sexpr = null, source = '') {
           let type = tokens[j].data?.type;
           if (type) hasAnyType = true;
           let hasDefault = tokens[j + 1]?.[0] === '=';
-          props.push({ kind: 'rename', propName, localName, type: type ? expandSuffixes(type) : null, hasDefault });
+          props.push({ kind: 'rename', propName, localName, type: type ? tsType(type) : null, hasDefault });
           j++;
           if (hasDefault) j = skipDefault(tokens, j);
         }
@@ -208,7 +208,7 @@ export function emitTypes(tokens, sexpr = null, source = '') {
         let type = tokens[j].data?.type;
         if (type) hasAnyType = true;
         let hasDefault = tokens[j + 1]?.[0] === '=';
-        props.push({ kind: 'simple', propName: name, type: type ? expandSuffixes(type) : null, hasDefault });
+        props.push({ kind: 'simple', propName: name, type: type ? tsType(type) : null, hasDefault });
         j++;
         if (hasDefault) j = skipDefault(tokens, j);
         continue;
@@ -259,7 +259,7 @@ export function emitTypes(tokens, sexpr = null, source = '') {
         let name = tokens[j][1];
         let type = tokens[j].data?.type;
         names.push(name);
-        elemTypes.push(type ? expandSuffixes(type) : null);
+        elemTypes.push(type ? tsType(type) : null);
         if (type) hasAnyType = true;
       }
       j++;
@@ -308,8 +308,8 @@ export function emitTypes(tokens, sexpr = null, source = '') {
           let name = tokens[j][1];
           let type = tokens[j].data?.type;
           let paramName = subclassConstructor ? `_${name}` : name;
-          params.push(type ? `${paramName}: ${expandSuffixes(type)}` : paramName);
-          if (type) fields.push({ name, type: expandSuffixes(type) });
+          params.push(type ? `${paramName}: ${tsType(type)}` : paramName);
+          if (type) fields.push({ name, type: tsType(type) });
           j++;
         }
         continue;
@@ -321,7 +321,7 @@ export function emitTypes(tokens, sexpr = null, source = '') {
         if (tokens[j]?.[0] === 'IDENTIFIER') {
           let name = tokens[j][1];
           let type = tokens[j].data?.type;
-          params.push(type ? `...${name}: ${expandSuffixes(type)}` : `...${name}: any[]`);
+          params.push(type ? `...${name}: ${tsType(type)}` : `...${name}: any[]`);
           j++;
         }
         continue;
@@ -364,9 +364,9 @@ export function emitTypes(tokens, sexpr = null, source = '') {
           hasDefault = true;
         }
 
-        let isOptional = hasDefault || tok.data?.predicate;
+        let isOptional = hasDefault || tok.data?.optional;
         if (paramType) {
-          params.push(`${paramName}${isOptional ? '?' : ''}: ${expandSuffixes(paramType)}`);
+          params.push(`${paramName}${isOptional ? '?' : ''}: ${tsType(paramType)}`);
         } else {
           params.push(paramName);
         }
@@ -486,7 +486,7 @@ export function emitTypes(tokens, sexpr = null, source = '') {
         let nameToken = ot[1]; // DEF is [0], name is [1]
         let { params: paramList } = collectParams(ot, 2);
         let returnType = nameToken.data?.returnType;
-        let ret = returnType ? `: ${expandSuffixes(returnType)}` : '';
+        let ret = returnType ? `: ${tsType(returnType)}` : '';
         let declare = inClass ? '' : (exp ? '' : 'declare ');
         let typeParams = data.typeParams || '';
         if (inClass) {
@@ -498,7 +498,7 @@ export function emitTypes(tokens, sexpr = null, source = '') {
         let ext = data.extends ? ` extends ${data.extends}` : '';
         emitBlock(`${exp}interface ${data.name}${params}${ext} `, data.typeText || '{}', '');
       } else {
-        let typeText = expandSuffixes(data.typeText || '');
+        let typeText = tsType(data.typeText || '');
         emitBlock(`${exp}type ${data.name}${params} = `, typeText, ';');
       }
       continue;
@@ -603,7 +603,7 @@ export function emitTypes(tokens, sexpr = null, source = '') {
       if (returnType || params.some(p => p.includes(':'))) {
         let exp = exported ? 'export ' : '';
         let declare = inClass ? '' : (exported ? '' : 'declare ');
-        let ret = returnType ? `: ${expandSuffixes(returnType)}` : '';
+        let ret = returnType ? `: ${tsType(returnType)}` : '';
         let paramStr = params.join(', ');
         if (inClass) {
           lines.push(`${indent()}${fnName}${typeParams}(${paramStr})${ret};`);
@@ -664,7 +664,7 @@ export function emitTypes(tokens, sexpr = null, source = '') {
           }
 
           if (returnType || params.some(p => p.includes(':'))) {
-            let ret = returnType ? `: ${expandSuffixes(returnType)}` : '';
+            let ret = returnType ? `: ${tsType(returnType)}` : '';
             let paramStr = params.join(', ');
             // Emit field declarations for constructor @param:: type shorthand
             if (methodName === 'constructor' && fields.length) {
@@ -741,7 +741,7 @@ export function emitTypes(tokens, sexpr = null, source = '') {
         let paramStr = params.join(', ');
         if (bodyDepth === 0) {
           let declare = exported ? '' : 'declare ';
-          let ret = returnType ? `: ${expandSuffixes(returnType)}` : '';
+          let ret = returnType ? `: ${tsType(returnType)}` : '';
           lines.push(`${indent()}${exp}${declare}function ${fnName}(${paramStr})${ret};`);
         } else {
           // `any` rather than `unknown` for the inferred-return case.
@@ -751,7 +751,7 @@ export function emitTypes(tokens, sexpr = null, source = '') {
           // user didn't provide one. `unknown` would force callers to
           // narrow before using the result, creating new false
           // positives at every call site.
-          let ret = returnType ? expandSuffixes(returnType) : 'any';
+          let ret = returnType ? tsType(returnType) : 'any';
           lines.push(`${indent()}let ${fnName}: (${paramStr}) => ${ret};`);
         }
         continue;
@@ -761,7 +761,7 @@ export function emitTypes(tokens, sexpr = null, source = '') {
     // Variable assignments with type annotations
     if (tag === 'IDENTIFIER' && t.data?.type) {
       let varName = t[1];
-      let type = expandSuffixes(t.data.type);
+      let type = tsType(t.data.type);
       let next = tokens[i + 1];
 
       if (next) {
@@ -795,7 +795,7 @@ export function emitTypes(tokens, sexpr = null, source = '') {
           if (arrowToken && (arrowToken[0] === '->' || arrowToken[0] === '=>') &&
               arrowToken.data?.returnType) {
             // Typed arrow function assignment
-            let returnType = expandSuffixes(arrowToken.data.returnType);
+            let returnType = tsType(arrowToken.data.returnType);
             let { params } = collectParams(tokens, i + 2);
             let paramStr = params.join(', ');
             lines.push(`${indent()}${exp}${declare}function ${varName}(${paramStr}): ${returnType};`);
@@ -880,25 +880,16 @@ export function emitTypes(tokens, sexpr = null, source = '') {
 }
 
 // ============================================================================
-// Suffix expansion — Rip type suffixes to TypeScript
+// Convert a Rip type expression to its TypeScript form.
 // ============================================================================
+//
+// Today this only strips the `::` annotation sigil to `:`. Kept as a
+// dedicated function so every call site routes through one place if the
+// conversion ever needs to grow.
 
-function expandSuffixes(typeStr) {
+function tsType(typeStr) {
   if (!typeStr) return typeStr;
-
-  // Convert :: to : (annotation sigil to type separator)
-  typeStr = typeStr.replace(/::/g, ':');
-
-  // T?? → T | null | undefined
-  typeStr = typeStr.replace(/(\w+(?:<[^>]+>)?)\?\?/g, '$1 | null | undefined');
-
-  // T? → T | undefined (but not ?. or ?: which are different)
-  typeStr = typeStr.replace(/(\w+(?:<[^>]+>)?)\?(?![.:])/g, '$1 | undefined');
-
-  // T! → NonNullable<T>
-  typeStr = typeStr.replace(/(\w+(?:<[^>]+>)?)\!/g, 'NonNullable<$1>');
-
-  return typeStr;
+  return typeStr.replace(/::/g, ':');
 }
 
 // ============================================================================
@@ -992,18 +983,18 @@ function emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars, so
       if (!Array.isArray(member)) continue;
       let mHead = member[0]?.valueOf?.() ?? member[0];
 
-      let target, propName, isProp, type, hasDefault;
+      let target, propName, isProp, type, optional;
 
       if (mHead === 'state' || mHead === 'readonly' || mHead === 'computed') {
         target = member[1];
         isProp = Array.isArray(target) && (target[0]?.valueOf?.() ?? target[0]) === '.' && (target[1]?.valueOf?.() ?? target[1]) === 'this';
         propName = isProp ? (target[2]?.valueOf?.() ?? target[2]) : (target?.valueOf?.() ?? target);
         type = isProp ? target[2]?.type : target?.type;
-        hasDefault = true;
+        optional = isProp ? !!target[2]?.optional : !!target?.optional;
         if (!isProp) {
           componentVars.add(propName);
           let wrapper = (mHead === 'computed') ? 'Computed' : 'Signal';
-          let typeStr = type ? expandSuffixes(type) : (inferLiteralType(member[2]) || 'any');
+          let typeStr = type ? tsType(type) : (inferLiteralType(member[2]) || 'any');
           bodyMembers.push(`  ${propName}: ${wrapper}<${typeStr}>;`);
           continue;
         }
@@ -1011,7 +1002,7 @@ function emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars, so
         isProp = (member[1]?.valueOf?.() ?? member[1]) === 'this';
         propName = isProp ? (member[2]?.valueOf?.() ?? member[2]) : null;
         type = isProp ? member[2]?.type : null;
-        hasDefault = false;
+        optional = isProp ? !!member[2]?.optional : false;
         if (!isProp && propName) componentVars.add(propName);
       } else if (mHead === 'object') {
         // Method definitions: (object (: methodName (-> (params...) (block ...))))
@@ -1041,7 +1032,7 @@ function emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars, so
           for (let p of params) {
             let { inner, hasDefault } = unwrapDefault(p);
             let pName = inner?.valueOf?.() ?? inner;
-            let pType = inner?.type ? expandSuffixes(inner.type) : 'any';
+            let pType = inner?.type ? tsType(inner.type) : 'any';
             // Defaulted params are optional in the type signature so callers
             // may omit them.
             let opt = hasDefault ? '?' : '';
@@ -1060,9 +1051,11 @@ function emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars, so
 
       if (!isProp || !propName) continue;
 
-      let typeStr = type ? expandSuffixes(type) : 'any';
-      let opt = hasDefault ? '?' : '';
-      if (!hasDefault) hasRequired = true;
+      let typeStr = type ? tsType(type) : 'any';
+      // `?` on the prop name is the sole optionality marker;
+      // `:=` defaults do not imply optionality.
+      let opt = optional ? '?' : '';
+      if (!optional) hasRequired = true;
       publicProps.push(`    ${propName}${opt}: ${typeStr};`);
       if (mHead === 'state') {
         publicProps.push(`    __bind_${propName}__?: Signal<${typeStr}>;`);

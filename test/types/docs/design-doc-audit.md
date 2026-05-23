@@ -2,20 +2,9 @@
 
 Issues discovered by testing every claim in `docs/RIP-TYPES.md` against the actual compiler. Work through these one by one.
 
-## 1. Type suffixes (`T?`, `T??`, `T!`) are broken
+## ~~1. Type suffixes (`T?`, `T??`, `T!`) are broken~~
 
-**Doc ref:** §5 Optionality Modifiers, Current Status table ("Working")
-
-The doc claims `string?` → `string | undefined`, `string??` → `string | null | undefined`, `ID!` → `NonNullable<ID>`. The Current Status table says "Working."
-
-Actual output:
-- `email:: string? = ""` → DTS: `let email: string;` (`?` silently eaten by lexer)
-- `middle:: string?? = ""` → DTS: `let middle: string ??;` (invalid TypeScript)
-- `id:: ID! = 0` → DTS: `let id: ID;` (`!` silently eaten by lexer)
-
-**Root cause:** The lexer strips `?` and `!` (setting `data.predicate` / `data.await`) before `types.js` sees them. `expandSuffixes()` in types.js is dead code.
-
-**Resolution:** Remove from the spec (see RFC 5 in [RFCS.md](../../../RFCS.md)) or fix the lexer to preserve them in type context.
+**Status:** Resolved by RFC 1 (implemented). The suffix operators have been removed from the spec entirely. `?` only ever means "optional" when placed on a name before `::` (`name?:: T`). Value-level optionality is written with explicit unions (`T | undefined`, `T | null | undefined`, `NonNullable<T>`). `data.predicate` was renamed to `data.optional`. See `docs/RIP-TYPES.md` "Optionality Modifiers".
 
 ## ~~2. Function type aliases parse error~~
 

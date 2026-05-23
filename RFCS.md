@@ -4,29 +4,31 @@ Design proposals under discussion. Grouped by domain.
 
 ## Domain A — Type system & package types
 
-- [RFC 1 — Explicit prop optionality with `?::`](#rfc-1-explicit-prop-optionality-with-)
-- [RFC 2 — Rip packages exposing types to typed Rip apps](#rfc-2-rip-packages-exposing-types-to-typed-rip-apps)
-- [RFC 3 — App framework types for ambient globals](#rfc-3-app-framework-types-for-ambient-globals)
-- [RFC 4 — Typed `this` shape for components and server handlers](#rfc-4-typed-this-shape-for-components-and-server-handlers)
-- [RFC 5 — Typed routes — `href` typing, typed `router.push`, per-route `@params`](#rfc-5-typed-routes--href-typing-typed-routerpush-per-route-params)
+- [x] [RFC 1 — Explicit prop optionality with `?::`](#rfc-1-explicit-prop-optionality-with-)
+- [ ] [RFC 2 — Rip packages exposing types to typed Rip apps](#rfc-2-rip-packages-exposing-types-to-typed-rip-apps)
+- [ ] [RFC 3 — App framework types for ambient globals](#rfc-3-app-framework-types-for-ambient-globals)
+- [ ] [RFC 4 — Typed `this` shape for components and server handlers](#rfc-4-typed-this-shape-for-components-and-server-handlers)
+- [ ] [RFC 5 — Typed routes — `href` typing, typed `router.push`, per-route `@params`](#rfc-5-typed-routes--href-typing-typed-routerpush-per-route-params)
 
 ## Domain B — Runtime delivery & ergonomics
 
-- [RFC 6 — Trim and align the `@rip-lang/app` global surface](#rfc-6-trim-and-align-the-rip-langapp-global-surface)
-- [RFC 7 — Routing ergonomics — active link, scroll, and the `data-router-ignore` opt-out](#rfc-7-routing-ergonomics--active-link-scroll-and-the-data-router-ignore-opt-out)
+- [ ] [RFC 6 — Trim and align the `@rip-lang/app` global surface](#rfc-6-trim-and-align-the-rip-langapp-global-surface)
+- [ ] [RFC 7 — Routing ergonomics — active link, scroll, and the `data-router-ignore` opt-out](#rfc-7-routing-ergonomics--active-link-scroll-and-the-data-router-ignore-opt-out)
 
 ## Domain C — Compiler / reactivity
 
-- [RFC 8 — Tracking property accesses on `for`-loop iteration variables](#rfc-8-tracking-property-accesses-on-for-loop-iteration-variables)
+- [ ] [RFC 8 — Tracking property accesses on `for`-loop iteration variables](#rfc-8-tracking-property-accesses-on-for-loop-iteration-variables)
 
 ## Domain D — Packaging & app config
 
-- [RFC 9 — Consuming Rip packages](#rfc-9-consuming-rip-packages)
-- [RFC 10 — Rename bundle `components` → `modules`, prefix every entry by origin](#rfc-10-rename-bundle-components--modules-prefix-every-entry-by-origin)
+- [ ] [RFC 9 — Consuming Rip packages](#rfc-9-consuming-rip-packages)
+- [ ] [RFC 10 — Rename bundle `components` → `modules`, prefix every entry by origin](#rfc-10-rename-bundle-components--modules-prefix-every-entry-by-origin)
 
 ---
 
 ## RFC 1: explicit prop optionality with `?::`
+
+> **Status: Implemented.**
 
 **Why this is the first RFC.** RFC 1 is foundational because every later RFC that authors types in `.rip` source — RFC 2 (package annotations), RFC 3 (framework annotations), RFC 4 (synthesized `this` types) — will write optional fields on options objects (`launch hash?:: boolean`, `createResource opts?:: ResourceOpts`). Landing `?::` second means writing those annotations twice — once with `:: boolean | undefined := undefined` workarounds, once with `?::` after migration. Removing the broken type-suffix operators (`T?`, `T??`, `T!`) at the same time keeps the spec clean for everything that follows.
 

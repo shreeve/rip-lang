@@ -2284,7 +2284,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       if (dname === "belongs_to" || dname === "has_many" || dname === "has_one" || dname === "one" || dname === "many" || dname === "mixin") {
         let t0 = argTokens[0];
         if (t0 && (t0[0] === "IDENTIFIER" || t0[0] === "PROPERTY")) {
-          let optional = t0.data?.predicate === true;
+          let optional = t0.data?.optional === true;
           if (!optional && argTokens[1]?.[0] === "?")
             optional = true;
           args = [{ target: t0[1], optional }];
@@ -2961,7 +2961,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         throw schemaError(t0 || tokens[tokens.length - 1], `@${name} requires a target name.`);
       }
       let target = t0[1];
-      let optional = t0.data?.predicate === true;
+      let optional = t0.data?.optional === true;
       let pos = 1;
       if (!optional && tokens[pos]?.[0] === "?") {
         optional = true;
@@ -3149,7 +3149,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
     let d = identToken.data;
     if (d?.await === true)
       mods.push("!");
-    if (d?.predicate === true)
+    if (d?.optional === true)
       mods.push("?");
     return mods;
   }
@@ -3561,7 +3561,14 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       return "";
     if (typeTokens[0]?.[0] === "=>")
       typeTokens.unshift(["", "()"]);
-    let typeStr = typeTokens.map((t) => t[1]).join(" ").replace(/\s+/g, " ").trim();
+    let parts = typeTokens.map((t, i) => {
+      let next = typeTokens[i + 1];
+      if (t.data?.optional && next && (next[0] === "TYPE_ANNOTATION" || next[0] === ":")) {
+        return `${t[1]}?`;
+      }
+      return t[1];
+    });
+    let typeStr = parts.join(" ").replace(/\s+/g, " ").trim();
     typeStr = typeStr.replace(/\s*<\s*/g, "<").replace(/\s*>\s*/g, ">").replace(/\s*\[\s*/g, "[").replace(/\s*\]\s*/g, "]").replace(/\s*\(\s*/g, "(").replace(/\s*\)\s*/g, ")").replace(/\s*,\s*/g, ", ").replace(/\s*=>\s*/g, " => ").replace(/ :: /g, ": ").replace(/:: /g, ": ").replace(/ : /g, ": ");
     return typeStr;
   }
@@ -3639,11 +3646,11 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         if (propName === "readonly" && tokens[j] && (tokens[j][0] === "PROPERTY" || tokens[j][0] === "IDENTIFIER" || /^[a-zA-Z_$]/.test(tokens[j][1]) && tokens[j + 1]?.[0] === "TYPE_ANNOTATION")) {
           readonly = true;
           propName = tokens[j][1];
-          if (tokens[j].data?.predicate)
+          if (tokens[j].data?.optional)
             optional = true;
           j++;
         }
-        if (t.data?.predicate)
+        if (t.data?.optional)
           optional = true;
         if (tokens[j]?.[1] === "?" && !tokens[j]?.spaced) {
           optional = true;
@@ -4388,7 +4395,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         id = id.slice(0, -1);
       }
       if (id.length > 1 && id.endsWith("?")) {
-        data.predicate = true;
+        data.optional = true;
         id = id.slice(0, -1);
       }
       let t = this.emit(tag, id, { len: idLen, data: Object.keys(data).length ? data : null });
@@ -6077,6 +6084,13 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       return target[2].type;
     return null;
   }
+  function getMemberOptional(target) {
+    if (target instanceof String && target.optional)
+      return true;
+    if (Array.isArray(target) && target[2] instanceof String && target[2].optional)
+      return true;
+    return false;
+  }
   function installComponentSupport(CodeEmitter, Lexer2) {
     let meta = (node, key) => node instanceof String ? node[key] : undefined;
     const origClassify = Lexer2.prototype.classifyKeyword;
@@ -6435,11 +6449,11 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       if (!(from instanceof String))
         return to;
       const s = new String(to);
-      if (from.predicate)
-        s.predicate = true;
+      if (from.optional)
+        s.optional = true;
       if (from.await)
         s.await = true;
-      return s.predicate || s.await ? s : to;
+      return s.optional || s.await ? s : to;
     };
     proto.transformComponentMembers = function(sexpr, localScope = new Set) {
       const self = this._self;
@@ -6548,28 +6562,29 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         } else if (op === "." && stmt[1] === "this" && getMemberName(stmt)) {
           const varName = typeof stmt[2] === "string" || stmt[2] instanceof String ? stmt[2].valueOf() : null;
           if (varName) {
-            stateVars.push({ name: varName, value: undefined, isPublic: true, type: stmt[2]?.type || null, required: true });
+            const optional = getMemberOptional(stmt);
+            stateVars.push({ name: varName, value: undefined, isPublic: true, type: stmt[2]?.type || null, required: !optional, optional, srcLine: stmt.loc?.r });
             memberNames.add(varName);
             reactiveMembers.add(varName);
           }
         } else if (op === "state") {
           const varName = getMemberName(stmt[1]);
           if (varName) {
-            stateVars.push({ name: varName, value: stmt[2], isPublic: isPublicProp(stmt[1]), type: getMemberType(stmt[1]) });
+            stateVars.push({ name: varName, value: stmt[2], isPublic: isPublicProp(stmt[1]), type: getMemberType(stmt[1]), optional: getMemberOptional(stmt[1]), srcLine: stmt.loc?.r });
             memberNames.add(varName);
             reactiveMembers.add(varName);
           }
         } else if (op === "computed") {
           const varName = getMemberName(stmt[1]);
           if (varName) {
-            derivedVars.push({ name: varName, expr: stmt[2], type: getMemberType(stmt[1]) });
+            derivedVars.push({ name: varName, expr: stmt[2], type: getMemberType(stmt[1]), srcLine: stmt.loc?.r });
             memberNames.add(varName);
             reactiveMembers.add(varName);
           }
         } else if (op === "readonly") {
           const varName = getMemberName(stmt[1]);
           if (varName) {
-            readonlyVars.push({ name: varName, value: stmt[2], isPublic: isPublicProp(stmt[1]), type: getMemberType(stmt[1]) });
+            readonlyVars.push({ name: varName, value: stmt[2], isPublic: isPublicProp(stmt[1]), type: getMemberType(stmt[1]), optional: getMemberOptional(stmt[1]), srcLine: stmt.loc?.r });
             memberNames.add(varName);
           }
         } else if (op === "=") {
@@ -6583,7 +6598,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
                 methods.push({ name: varName, func: val });
                 memberNames.add(varName);
               } else {
-                stateVars.push({ name: varName, value: val, isPublic: isPublicProp(stmt[1]) });
+                stateVars.push({ name: varName, value: val, isPublic: isPublicProp(stmt[1]), srcLine: stmt.loc?.r });
                 memberNames.add(varName);
                 reactiveMembers.add(varName);
               }
@@ -6637,18 +6652,18 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       this._autoEventHandlers = autoEventHandlers.size > 0 ? autoEventHandlers : null;
       this._inheritsTag = inheritsTag || null;
       if (this.options.stubComponents) {
-        const expandType = (t) => t ? t.replace(/::/g, ":").replace(/(\w+(?:<[^>]+>)?)\?\?/g, "$1 | null | undefined").replace(/(\w+(?:<[^>]+>)?)\?(?![.:])/g, "$1 | undefined").replace(/(\w+(?:<[^>]+>)?)\!/g, "NonNullable<$1>") : null;
+        const expandType = (t) => t ? t.replace(/::/g, ":") : null;
         const sl = [];
         const componentTypeParams = this._componentTypeParams || "";
         sl.push(`class ${componentTypeParams}{`);
         sl.push("  declare _root: Element | null; declare app: any;");
         sl.push("  emit(_name: string, _detail?: any): void {}");
         const propEntries = [];
-        for (const { name, type, isPublic, required } of stateVars) {
+        for (const { name, type, isPublic, required, optional } of stateVars) {
           if (!isPublic)
             continue;
           const ts = expandType(type);
-          const opt = required ? "" : "?";
+          const opt = optional ?? !required ? "?" : "";
           propEntries.push(`${name}${opt}: ${ts || "any"}`);
           propEntries.push(`__bind_${name}__?: Signal<${ts || "any"}>`);
         }
@@ -6659,7 +6674,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           propEntries.push(`${name}?: ${ts || "any"}`);
         }
         {
-          const hasRequired = propEntries.length > 0 && stateVars.some((v) => v.isPublic && v.required);
+          const hasRequired = propEntries.length > 0 && stateVars.some((v) => v.isPublic && v.required && !v.optional);
           const propsOpt = hasRequired ? "" : "?";
           let propsType = propEntries.length > 0 ? `{${propEntries.join("; ")}}` : "{}";
           if (inheritsTag)
@@ -6678,9 +6693,12 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
             return "string";
           return null;
         };
-        for (const { name, type, value } of stateVars) {
+        for (const { name, type, value, optional, srcLine } of stateVars) {
           const ts = expandType(type) || inferLiteralType(value);
-          sl.push(ts ? `  declare ${name}: Signal<${ts}>;` : `  declare ${name}: Signal<any>;`);
+          const optNoDefault = optional && value === undefined;
+          const wrapped = ts ? optNoDefault ? `${ts} | undefined` : ts : null;
+          const marker = srcLine != null ? ` // @rip-src:${srcLine}` : "";
+          sl.push((wrapped ? `  declare ${name}: Signal<${wrapped}>;` : `  declare ${name}: Signal<any>;`) + marker);
         }
         if (inheritsTag) {
           sl.push(`  declare rest: Signal<__RipProps<'${inheritsTag}'>>;`);
@@ -6702,19 +6720,21 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           }
         }
         sl.push("  _init(props) {");
-        for (const { name, value, isPublic } of readonlyVars) {
+        for (const { name, value, isPublic, srcLine } of readonlyVars) {
           const val = this.emitInComponent(value, "value");
-          sl.push(isPublic ? `    this.${name} = props.${name} ?? ${val};` : `    this.${name} = ${val};`);
+          const marker = srcLine != null ? ` // @rip-src:${srcLine}` : "";
+          sl.push((isPublic ? `    this.${name} = props.${name} ?? ${val};` : `    this.${name} = ${val};`) + marker);
         }
-        for (const { name, value, isPublic, required, type } of stateVars) {
-          if (isPublic && required) {
-            sl.push(`    this.${name} = __state(props.__bind_${name}__ ?? props.${name});`);
+        for (const { name, value, isPublic, required, type, srcLine } of stateVars) {
+          const marker = srcLine != null ? ` // @rip-src:${srcLine}` : "";
+          if (isPublic && (required || value === undefined)) {
+            sl.push(`    this.${name} = __state(props.__bind_${name}__ ?? props.${name});` + marker);
           } else if (isPublic) {
             const val = this.emitInComponent(value, "value");
-            sl.push(`    this.${name} = __state(props.__bind_${name}__ ?? props.${name} ?? ${val});`);
+            sl.push(`    this.${name} = __state(props.__bind_${name}__ ?? props.${name} ?? ${val});` + marker);
           } else {
             const val = this.emitInComponent(value, "value");
-            sl.push(`    this.${name} = __state(${val});`);
+            sl.push(`    this.${name} = __state(${val});` + marker);
           }
         }
         for (const effect of effects) {
@@ -7194,7 +7214,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         lines.push(`    this.${name} = getContext('${name}');`);
       }
       for (const { name, value, isPublic, required } of stateVars) {
-        if (isPublic && required) {
+        if (isPublic && (required || value === undefined)) {
           lines.push(`    this.${name} = __state(props.__bind_${name}__ ?? props.${name});`);
         } else if (isPublic) {
           const val = this.emitInComponent(value, "value");
@@ -10003,7 +10023,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
         if (meta(sexpr, "await") === true) {
           return `await ${str(sexpr)}()`;
         }
-        if (meta(sexpr, "predicate")) {
+        if (meta(sexpr, "optional")) {
           return `(${str(sexpr)} != null)`;
         }
         if (meta(sexpr, "delimiter") === "///" && meta(sexpr, "heregex")) {
@@ -10480,7 +10500,7 @@ function _setDataSection() {
       let base = needsParens ? `(${objCode})` : objCode;
       if (meta(prop, "await") === true)
         return `await ${base}.${str(prop)}()`;
-      if (meta(prop, "predicate"))
+      if (meta(prop, "optional"))
         return `(${base}.${str(prop)} != null)`;
       return `${base}.${str(prop)}`;
     }
@@ -13738,7 +13758,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.16.0";
-  var BUILD_DATE = "2026-05-22@08:07:44GMT";
+  var BUILD_DATE = "2026-05-22@09:54:15GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

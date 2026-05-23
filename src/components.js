@@ -79,6 +79,17 @@ function getMemberType(target) {
   return null;
 }
 
+/**
+ * Extract `?` optionality flag from s-expression target node.
+ * Set by the lexer as `.optional` on the prop-name String wrapper when
+ * the source wrote `@label?:: T` or similar.
+ */
+function getMemberOptional(target) {
+  if (target instanceof String && target.optional) return true;
+  if (Array.isArray(target) && target[2] instanceof String && target[2].optional) return true;
+  return false;
+}
+
 // ============================================================================
 // Prototype Installation
 // ============================================================================
@@ -575,9 +586,9 @@ export function installComponentSupport(CodeEmitter, Lexer) {
   const _transferMeta = (from, to) => {
     if (!(from instanceof String)) return to;
     const s = new String(to);
-    if (from.predicate) s.predicate = true;
+    if (from.optional) s.optional = true;
     if (from.await) s.await = true;
-    return (s.predicate || s.await) ? s : to;
+    return (s.optional || s.await) ? s : to;
   };
 
   proto.transformComponentMembers = function(sexpr, localScope = new Set()) {
@@ -707,31 +718,35 @@ export function installComponentSupport(CodeEmitter, Lexer) {
           reactiveMembers.add(varName);
         }
       } else if (op === '.' && stmt[1] === 'this' && getMemberName(stmt)) {
-        // Required prop: (. this name) — no default value
+        // Bare prop form: `(. this name)` — no default value.
+        // `@name`     → required (caller must pass)
+        // `@name?`    → optional (caller may omit; value will be undefined)
+        // `@name?:: T`→ optional, typed
         const varName = (typeof stmt[2] === 'string' || stmt[2] instanceof String) ? stmt[2].valueOf() : null;
         if (varName) {
-          stateVars.push({ name: varName, value: undefined, isPublic: true, type: stmt[2]?.type || null, required: true });
+          const optional = getMemberOptional(stmt);
+          stateVars.push({ name: varName, value: undefined, isPublic: true, type: stmt[2]?.type || null, required: !optional, optional, srcLine: stmt.loc?.r });
           memberNames.add(varName);
           reactiveMembers.add(varName);
         }
       } else if (op === 'state') {
         const varName = getMemberName(stmt[1]);
         if (varName) {
-          stateVars.push({ name: varName, value: stmt[2], isPublic: isPublicProp(stmt[1]), type: getMemberType(stmt[1]) });
+          stateVars.push({ name: varName, value: stmt[2], isPublic: isPublicProp(stmt[1]), type: getMemberType(stmt[1]), optional: getMemberOptional(stmt[1]), srcLine: stmt.loc?.r });
           memberNames.add(varName);
           reactiveMembers.add(varName);
         }
       } else if (op === 'computed') {
         const varName = getMemberName(stmt[1]);
         if (varName) {
-          derivedVars.push({ name: varName, expr: stmt[2], type: getMemberType(stmt[1]) });
+          derivedVars.push({ name: varName, expr: stmt[2], type: getMemberType(stmt[1]), srcLine: stmt.loc?.r });
           memberNames.add(varName);
           reactiveMembers.add(varName);
         }
       } else if (op === 'readonly') {
         const varName = getMemberName(stmt[1]);
         if (varName) {
-          readonlyVars.push({ name: varName, value: stmt[2], isPublic: isPublicProp(stmt[1]), type: getMemberType(stmt[1]) });
+          readonlyVars.push({ name: varName, value: stmt[2], isPublic: isPublicProp(stmt[1]), type: getMemberType(stmt[1]), optional: getMemberOptional(stmt[1]), srcLine: stmt.loc?.r });
           memberNames.add(varName);
         }
       } else if (op === '=') {
@@ -745,7 +760,7 @@ export function installComponentSupport(CodeEmitter, Lexer) {
               methods.push({ name: varName, func: val });
               memberNames.add(varName);
             } else {
-              stateVars.push({ name: varName, value: val, isPublic: isPublicProp(stmt[1]) });
+              stateVars.push({ name: varName, value: val, isPublic: isPublicProp(stmt[1]), srcLine: stmt.loc?.r });
               memberNames.add(varName);
               reactiveMembers.add(varName);
             }
@@ -804,11 +819,8 @@ export function installComponentSupport(CodeEmitter, Lexer) {
 
     // --- Type-check stub: typed member declarations + body expressions, no DOM ---
     if (this.options.stubComponents) {
-      // Inline type suffix expansion (mirrors types.js expandSuffixes)
-      const expandType = (t) => t ? t.replace(/::/g, ':')
-        .replace(/(\w+(?:<[^>]+>)?)\?\?/g, '$1 | null | undefined')
-        .replace(/(\w+(?:<[^>]+>)?)\?(?![.:])/g, '$1 | undefined')
-        .replace(/(\w+(?:<[^>]+>)?)\!/g, 'NonNullable<$1>') : null;
+      // Strip Rip's `::` annotation sigil to TypeScript's `:` separator.
+      const expandType = (t) => t ? t.replace(/::/g, ':') : null;
 
       const sl = [];
       const componentTypeParams = this._componentTypeParams || '';
@@ -822,10 +834,10 @@ export function installComponentSupport(CodeEmitter, Lexer) {
 
       // Constructor — typed props for public state/readonly (matches DTS)
       const propEntries = [];
-      for (const { name, type, isPublic, required } of stateVars) {
+      for (const { name, type, isPublic, required, optional } of stateVars) {
         if (!isPublic) continue;
         const ts = expandType(type);
-        const opt = required ? '' : '?';
+        const opt = (optional ?? !required) ? '?' : '';
         propEntries.push(`${name}${opt}: ${ts || 'any'}`);
         // Two-way binding: allow parent to pass Signal<T> for this prop
         propEntries.push(`__bind_${name}__?: Signal<${ts || 'any'}>`);
@@ -836,7 +848,7 @@ export function installComponentSupport(CodeEmitter, Lexer) {
         propEntries.push(`${name}?: ${ts || 'any'}`);
       }
       {
-        const hasRequired = propEntries.length > 0 && stateVars.some(v => v.isPublic && v.required);
+        const hasRequired = propEntries.length > 0 && stateVars.some(v => v.isPublic && v.required && !v.optional);
         const propsOpt = hasRequired ? '' : '?';
         let propsType = propEntries.length > 0 ? `{${propEntries.join('; ')}}` : '{}';
         if (inheritsTag) propsType += ` & __RipProps<'${inheritsTag}'>`;
@@ -854,9 +866,15 @@ export function installComponentSupport(CodeEmitter, Lexer) {
       };
 
       // Property declarations (declare avoids definite-assignment errors)
-      for (const { name, type, value } of stateVars) {
+      for (const { name, type, value, optional, srcLine } of stateVars) {
         const ts = expandType(type) || inferLiteralType(value);
-        sl.push(ts ? `  declare ${name}: Signal<${ts}>;` : `  declare ${name}: Signal<any>;`);
+        // Optional prop with no default: field can be undefined at runtime
+        // (we don't synthesize a `?? null` fallback below), so the Signal's
+        // payload type must include undefined.
+        const optNoDefault = optional && value === undefined;
+        const wrapped = ts ? (optNoDefault ? `${ts} | undefined` : ts) : null;
+        const marker = srcLine != null ? ` // @rip-src:${srcLine}` : '';
+        sl.push((wrapped ? `  declare ${name}: Signal<${wrapped}>;` : `  declare ${name}: Signal<any>;`) + marker);
       }
       if (inheritsTag) {
         sl.push(`  declare rest: Signal<__RipProps<'${inheritsTag}'>>;`);
@@ -880,19 +898,21 @@ export function installComponentSupport(CodeEmitter, Lexer) {
 
       // _init body — readonly, state, computed assignments (skip accepted/offered)
       sl.push('  _init(props) {');
-      for (const { name, value, isPublic } of readonlyVars) {
+      for (const { name, value, isPublic, srcLine } of readonlyVars) {
         const val = this.emitInComponent(value, 'value');
-        sl.push(isPublic ? `    this.${name} = props.${name} ?? ${val};` : `    this.${name} = ${val};`);
+        const marker = srcLine != null ? ` // @rip-src:${srcLine}` : '';
+        sl.push((isPublic ? `    this.${name} = props.${name} ?? ${val};` : `    this.${name} = ${val};`) + marker);
       }
-      for (const { name, value, isPublic, required, type } of stateVars) {
-        if (isPublic && required) {
-          sl.push(`    this.${name} = __state(props.__bind_${name}__ ?? props.${name});`);
+      for (const { name, value, isPublic, required, type, srcLine } of stateVars) {
+        const marker = srcLine != null ? ` // @rip-src:${srcLine}` : '';
+        if (isPublic && (required || value === undefined)) {
+          sl.push(`    this.${name} = __state(props.__bind_${name}__ ?? props.${name});` + marker);
         } else if (isPublic) {
           const val = this.emitInComponent(value, 'value');
-          sl.push(`    this.${name} = __state(props.__bind_${name}__ ?? props.${name} ?? ${val});`);
+          sl.push(`    this.${name} = __state(props.__bind_${name}__ ?? props.${name} ?? ${val});` + marker);
         } else {
           const val = this.emitInComponent(value, 'value');
-          sl.push(`    this.${name} = __state(${val});`);
+          sl.push(`    this.${name} = __state(${val});` + marker);
         }
       }
 
@@ -1441,7 +1461,7 @@ export function installComponentSupport(CodeEmitter, Lexer) {
 
     // State variables (__state handles signal passthrough)
     for (const { name, value, isPublic, required } of stateVars) {
-      if (isPublic && required) {
+      if (isPublic && (required || value === undefined)) {
         lines.push(`    this.${name} = __state(props.__bind_${name}__ ?? props.${name});`);
       } else if (isPublic) {
         const val = this.emitInComponent(value, 'value');
