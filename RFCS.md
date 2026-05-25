@@ -36,12 +36,12 @@ Design proposals under discussion. Grouped by domain.
 
 **Scope — four parse contexts where `?::` should mean "optional".** Today only two of the four honor the marker; the other two silently drop it. RFC 1 unifies the rule across all four.
 
-| Context                                             | Example                            | Works today?                                                                |
-| --------------------------------------------------- | ---------------------------------- | --------------------------------------------------------------------------- |
-| Function/method params                              | `def f(x?:: T)`                    | ✅ — lexer predicate → DTS `x?: T`                                           |
-| Named type alias fields                             | `type T = { x?:: string }`         | ✅ — same flag, same DTS path                                                |
-| **Component prop declarations**                     | `@label?:: string`                 | ❌ — components emitter ignores `?` on prop names; keys optionality off `:=` |
-| **Structural type literals in annotation position** | `(opts:: { search?:: string }) ->` | ❌ — the `?` is silently stripped, every field types as required             |
+| Context                                             | Example                           | Works today?                                                                |
+| --------------------------------------------------- | --------------------------------- | --------------------------------------------------------------------------- |
+| Function/method params                              | `def f(x?:: T)`                   | ✅ — lexer predicate → DTS `x?: T`                                           |
+| Named type alias fields                             | `type T = { x?: string }`         | ✅ — same flag, same DTS path                                                |
+| **Component prop declarations**                     | `@label?:: string`                | ❌ — components emitter ignores `?` on prop names; keys optionality off `:=` |
+| **Structural type literals in annotation position** | `(opts:: { search?: string }) ->` | ❌ — the `?` is silently stripped, every field types as required             |
 
 The two failing cases share a root: the predicate flag is set on the property name but never consulted by the emitter for that context. The structural-literal failure is particularly silent — no parse error, no warning, just every field treated as required at the call site (caught only when the type checker rejects partial calls).
 
@@ -898,12 +898,12 @@ No backwards-compatibility shim. The bundle JSON is regenerated on every `serve`
 
 The bundler categorizes every entry by where it came from and prefixes accordingly:
 
-| Prefix    | Origin                                                                  | Today's keying                              |
-| --------- | ----------------------------------------------------------------------- | ------------------------------------------- |
-| `_route/` | URL-addressable route files (the file-based router's input)             | `components/<path>` (bare)                  |
-| `_app/`   | Auto-scanned `appDir` files (`bundle: { app: ['.'] }` — the `'.'` part) | `components/_lib/<path>` (overloaded)       |
-| `_lib/`   | Author-declared extra dirs (`bundle: { app: ['./widgets'] }`)           | `components/_lib/<dir-name>/<path>`         |
-| `_pkg/`   | RFC 9 auto-discovered packages                                          | (new — RFC 9 reused `_lib/<pkg-name>/...`)  |
+| Prefix    | Origin                                                                  | Today's keying                             |
+| --------- | ----------------------------------------------------------------------- | ------------------------------------------ |
+| `_route/` | URL-addressable route files (the file-based router's input)             | `components/<path>` (bare)                 |
+| `_app/`   | Auto-scanned `appDir` files (`bundle: { app: ['.'] }` — the `'.'` part) | `components/_lib/<path>` (overloaded)      |
+| `_lib/`   | Author-declared extra dirs (`bundle: { app: ['./widgets'] }`)           | `components/_lib/<dir-name>/<path>`        |
+| `_pkg/`   | RFC 9 auto-discovered packages                                          | (new — RFC 9 reused `_lib/<pkg-name>/...`) |
 
 The runtime resolver `resolveStorePath` ([packages/app/index.rip:908–922](packages/app/index.rip#L908-L922)) currently tries `components/_lib/{clean}` then `components/{clean}` — a two-step walk with `_lib/` deterministically winning ties. After this RFC the resolver does a single lookup against the `modules` map per category branch: try `_pkg/{clean}`, then `_lib/{clean}`, then `_app/{clean}`, then `_route/{clean}`. The `_pkg/` branch's exact resolution semantics — entry-file lookup, sub-path imports — are TBD and tracked with the package-shape work in [RFC 9 §5](#5-package-shape-contract); this RFC just reserves the prefix.
 

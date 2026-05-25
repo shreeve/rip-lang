@@ -314,6 +314,15 @@ rip -cm example.rip
 > calls (`div outline` — text child) and imperative calls outside
 > `render` (`Btn(outline)` — positional arg) are unaffected.
 
+> **CRITICAL — `::` binds a name to a type; `:` separates fields inside a type literal `{ ... }`:**
+>
+> - `def foo(opts:: { host?: string, port?: number })` — CORRECT
+> - `def foo(opts:: { host?:: string })` — ERROR (`::` rejected inside type literal)
+> - `def foo({name:: string, age:: number})` — CORRECT (destructuring pattern, not a type literal)
+>
+> Rule of thumb: in a param list `({...})` is destructuring (each binding uses `::`);
+> after `::` you're in a type expression (fields use `:`, TS-style).
+
 ### Removed (from CoffeeScript / Rip 2.x)
 
 | Feature                            | Replacement                                           |
@@ -339,7 +348,7 @@ rip -cm example.rip
 | dotted keys           | `{a.b: 1}`       | flat string key in object literals         |
 | map literal           | `*{a: 1}`        | real `Map` with any key type               |
 | symbol literal        | `:redo`          | interned symbol via `Symbol.for('redo')`   |
-| optional prop / param | `name?:: T`      | `?` before `::` marks the name optional (params, type fields, component props, structural literals) |
+| optional prop / param | `name?:: T`      | `?` before `::` marks the name optional (params, type fields). Inside a type literal `{ ... }`, use `name?: T` (TS-style) |
 | boolean prop shorthand | `Btn outline, link` | JSX-style `{outline: true, link: true}` for child components in `render` |
 
 ### Kept
