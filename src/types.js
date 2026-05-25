@@ -392,6 +392,31 @@ function buildTypeString(typeTokens) {
   if (typeTokens.length === 0) return '';
   // Bare => (no params) means () => — add empty parens
   if (typeTokens[0]?.[0] === '=>') typeTokens.unshift(['', '()']);
+  // Validation: `::` inside `{ ... }` in type position is illegal.
+  // `::` binds a name to a type (params, var decls, return types).
+  // Inside a structural type literal `{ ... }`, fields are key→type
+  // pairs and use `:` (TS-style), the same way TS type literals do.
+  // `::` has no role inside a type literal — every `:` there is
+  // already unambiguously a type separator.
+  {
+    let curlyDepth = 0;
+    for (let t of typeTokens) {
+      let tag = t[0];
+      if (tag === '{') curlyDepth++;
+      else if (tag === '}') curlyDepth--;
+      else if (tag === 'TYPE_ANNOTATION' && curlyDepth > 0) {
+        let loc = t.loc;
+        let where = loc ? ` (line ${loc.r}, col ${loc.c})` : '';
+        let err = new Error(
+          `Use \`:\` (not \`::\`) inside a structural type literal${where}. ` +
+          `\`::\` binds a name to a type; inside \`{ ... }\` in type ` +
+          `position, fields use \`:\` (TS-style).`
+        );
+        err.loc = loc;
+        throw err;
+      }
+    }
+  }
   // Inline structural / function-param property-name optional marker:
   // an IDENTIFIER carrying `.data.optional` and followed by TYPE_ANNOTATION
   // gets a trailing `?` appended to its emitted name. The lexer stripped
@@ -399,8 +424,8 @@ function buildTypeString(typeTokens) {
   let parts = typeTokens.map((t, i) => {
     let next = typeTokens[i + 1];
     // Re-attach the trailing `?` for optional property names. The next
-    // separator may be `::` (TYPE_ANNOTATION) in function param lists or
-    // `:` inside an inline structural type literal like `{ x?: T }`.
+    // separator is `::` (TYPE_ANNOTATION) in function param lists, or
+    // `:` inside an inline structural type literal `{ x?: T }`.
     if (t.data?.optional && next && (next[0] === 'TYPE_ANNOTATION' || next[0] === ':')) {
       return `${t[1]}?`;
     }

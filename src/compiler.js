@@ -423,6 +423,47 @@ export class CodeEmitter {
       ripSrcCache.set(genLineInStmt, v);
       return v;
     };
+    // Inline type annotations (emitted when `inlineTypes: true`) inject
+    // identifiers into function-signature lines that have no source
+    // counterpart — e.g. `header(name, value, opts: { append?: boolean })`.
+    // Their identifiers (`append`, `boolean`, etc.) would otherwise compete
+    // with real body identifiers in the regex matcher below, mis-mapping
+    // source positions onto the type literal. Detect those brace ranges
+    // per line and skip matches inside them.
+    const inlineTypeRangesCache = new Map();
+    const getInlineTypeRanges = (genLineInStmt) => {
+      if (inlineTypeRangesCache.has(genLineInStmt)) return inlineTypeRangesCache.get(genLineInStmt);
+      const lt = codeLines[genLineInStmt];
+      const ranges = [];
+      // Only look at function-signature shaped lines: contain `(...) {` or `(...) =>`.
+      if (lt && /\)\s*(\{|=>)\s*$/.test(lt)) {
+        // Find `: {` after an identifier (with optional `?` and whitespace).
+        const annotRe = /\b[a-zA-Z_$][\w$]*\??\s*:\s*\{/g;
+        let am;
+        while ((am = annotRe.exec(lt)) !== null) {
+          const braceStart = am.index + am[0].length - 1; // position of `{`
+          // Skip inside strings (defensive — unlikely here)
+          if (CodeEmitter._isColInsideString(lt, braceStart)) continue;
+          // Walk to matching `}` honoring brace depth and strings
+          let depth = 1, j = braceStart + 1, inStr = false, quote = '';
+          while (j < lt.length && depth > 0) {
+            const ch = lt[j];
+            if (inStr) {
+              if (ch === '\\') { j += 2; continue; }
+              if (ch === quote) inStr = false;
+            } else if (ch === '"' || ch === "'" || ch === '`') {
+              inStr = true; quote = ch;
+            } else if (ch === '{') depth++;
+            else if (ch === '}') depth--;
+            j++;
+          }
+          ranges.push([braceStart, j]); // exclude positions [braceStart, j)
+          annotRe.lastIndex = j;
+        }
+      }
+      inlineTypeRangesCache.set(genLineInStmt, ranges);
+      return ranges;
+    };
     for (let { name, origLine, origCol } of subs) {
       let escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       let re = new RegExp('\\b' + escaped + '\\b', 'g');
@@ -442,6 +483,11 @@ export class CodeEmitter {
         const annotSrc = getRipSrcAnnot(genLineInStmt);
         const annotMatches = annotSrc != null && annotSrc === origLine;
         if (lineText && CodeEmitter._isColInsideString(lineText, genCol) && !annotMatches) continue;
+        // Skip matches inside inline type annotation brace ranges (e.g.
+        // `opts: { append?: boolean }`) — those identifiers are emitted
+        // for TS type-checking only and have no real source counterpart.
+        const itRanges = getInlineTypeRanges(genLineInStmt);
+        if (itRanges.length && itRanges.some(([s, e]) => genCol >= s && genCol < e)) continue;
         let genLine = lineOffset + genLineInStmt;
         // Annotation-matched lines are the authoritative gen position for
         // their source line — score them as a perfect line match so they
@@ -666,6 +712,41 @@ export class CodeEmitter {
     };
     collect(body);
     return vars;
+  }
+
+  // Walk a function body and collect typed local assignments. Returns a
+  // Map<name, typeString> for every `name:: T = value` whose target is a
+  // String-wrapped identifier carrying `data.type` (attached by types.js).
+  //
+  // Used by `emitBodyWithReturns` in `inlineTypes` mode to annotate the
+  // function-top hoist (`let a, y: boolean, b;`) so shadow-TS sees the
+  // intended type instead of inferring a literal from the first RHS. Stops
+  // at nested function boundaries — each function owns its own typed locals.
+  //
+  // Conflict policy: first annotation wins. Same-name re-annotations are
+  // silently ignored; mixing different types on the same local is an
+  // unusual pattern best surfaced by TS itself once the hoist carries the
+  // first annotation.
+  collectTypedLocals(body) {
+    let typed = new Map();
+    let walk = (sexpr) => {
+      if (!Array.isArray(sexpr)) return;
+      let [head, ...rest] = sexpr;
+      head = str(head);
+      if (Array.isArray(head)) { sexpr.forEach(walk); return; }
+      if (CodeEmitter.ASSIGNMENT_OPS.has(head)) {
+        let [target, value] = rest;
+        if (target instanceof String && target.type && !typed.has(str(target))) {
+          typed.set(str(target), target.type);
+        }
+        walk(value);
+        return;
+      }
+      if (head === 'def' || head === '->' || head === '=>' || head === 'effect') return;
+      rest.forEach(walk);
+    };
+    walk(body);
+    return typed;
   }
 
   // ---------------------------------------------------------------------------
@@ -2776,14 +2857,36 @@ export class CodeEmitter {
 
   formatParam(param) {
     if (typeof param === 'string') return param;
-    if (param instanceof String) return param.valueOf();
-    if (this.is(param, 'rest')) return `...${param[1]}`;
+    if (param instanceof String) {
+      // In `inlineTypes` mode (set by typecheck.compileForCheck), emit the
+      // type annotation inline so shadow TS sees `name: T` for typed params
+      // in every function-like position — top-level arrows, class methods,
+      // object-literal method shorthand, nested functions, etc. The user-
+      // facing `-c` output stays untouched because this flag is off by
+      // default. `.type` carries the raw Rip type string (with `::`),
+      // which converts to TS form by swapping `::` → `:`.
+      if (this.options.inlineTypes && param.type) {
+        return `${param.valueOf()}: ${param.type.replace(/::/g, ':')}`;
+      }
+      return param.valueOf();
+    }
+    if (this.is(param, 'rest')) {
+      // Rest param: `...name`. When the name is a String wrapper carrying
+      // a type, emit `...name: T` so shadow TS sees the rest tuple/array.
+      let restName = param[1];
+      if (this.options.inlineTypes && restName instanceof String && restName.type) {
+        return `...${restName.valueOf()}: ${restName.type.replace(/::/g, ':')}`;
+      }
+      return `...${restName}`;
+    }
     if (this.is(param, 'default')) {
       // `param[1]` is either a plain identifier string (e.g. `x = 5`) or a
       // destructuring pattern AST node (e.g. `{a, b} = {}`). Recurse via
       // `formatParam` so patterns emit as `{a, b}` / `[x, y]` instead of
       // being coerced to a string via `Array.prototype.toString`, which
       // produced the famous `(object,,a,a,,b,b = {})` mis-rendering.
+      // The recursion also picks up any inline type annotation on the
+      // name in `inlineTypes` mode, yielding `name: T = default`.
       return `${this.formatParam(param[1])} = ${this.emit(param[2], 'value')}`;
     }
     if (this.is(param, '.') && param[1] === 'this') return param[2];
@@ -2823,10 +2926,14 @@ export class CodeEmitter {
 
     let paramNames = new Set();
     let extractPN = (p) => {
-      if (typeof p === 'string') paramNames.add(p);
+      // Unwrap String wrappers — typed params arrive as `new String('name')`
+      // with `.data.type` metadata. Without unwrapping, `paramNames.has('name')`
+      // misses (Set compares wrappers by identity), causing the param name to
+      // be re-hoisted as a local `let`, producing duplicate-declaration errors.
+      if (typeof p === 'string' || p instanceof String) paramNames.add(str(p));
       else if (Array.isArray(p)) {
-        if (p[0] === 'rest' || p[0] === '...') { if (typeof p[1] === 'string') paramNames.add(p[1]); }
-        else if (p[0] === 'default') { if (typeof p[1] === 'string') paramNames.add(p[1]); }
+        if (p[0] === 'rest' || p[0] === '...') { if (typeof p[1] === 'string' || p[1] instanceof String) paramNames.add(str(p[1])); }
+        else if (p[0] === 'default') { if (typeof p[1] === 'string' || p[1] instanceof String) paramNames.add(str(p[1])); }
         else if (p[0] === 'array' || p[0] === 'object') this.collectVarsFromArray(p, paramNames);
       }
     };
@@ -2870,7 +2977,20 @@ export class CodeEmitter {
 
       this.indentLevel++;
       let code = '{\n';
-      if (newVars.size > 0) code += this.indent() + `let ${Array.from(newVars).sort().join(', ')};\n`;
+      if (newVars.size > 0) {
+        // In `inlineTypes` mode, propagate `name:: T = value` annotations from
+        // body-level typed assignments onto the hoisted `let`. Without this,
+        // the hoist emits `let y;` (no type), shadow-TS infers from the first
+        // RHS literal (`y = true` → `y: true`), and any later `y = false`
+        // fails TS2322. With this, the hoist emits `let y: boolean;` and the
+        // body's `y = true` / `y = false` both check cleanly.
+        let typedLocals = this.options.inlineTypes ? this.collectTypedLocals(body) : null;
+        let names = Array.from(newVars).sort().map(n => {
+          let t = typedLocals?.get(n);
+          return t ? `${n}: ${t}` : n;
+        });
+        code += this.indent() + `let ${names.join(', ')};\n`;
+      }
 
       let firstIsSuper = autoAssignments.length > 0 && statements.length > 0 &&
                          Array.isArray(statements[0]) && statements[0][0] === 'super';
@@ -4377,6 +4497,11 @@ export class Compiler {
       skipDataPart: this.options.skipDataPart,
       stubComponents: this.options.stubComponents,
       reactiveVars: this.options.reactiveVars,
+      // Emit `name: T` inline on typed params so shadow TS in compileForCheck
+      // sees annotations on every function-like position (top-level arrows,
+      // class methods, object-literal method shorthand, nested functions).
+      // Off by default — only set when producing input for the shadow TS pass.
+      inlineTypes: this.options.inlineTypes,
       // Schema runtime mode: 'browser' / 'validate' / 'server' / 'migration'.
       // Default 'migration' covers the common case (CLI, server, tests) where
       // the user might call any schema feature including .toSQL(). The browser

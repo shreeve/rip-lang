@@ -1523,9 +1523,42 @@ export class Lexer {
 
   // Walk back to tag parameters for arrow functions
   tagParameters() {
-    if (this.prevTag() !== ')') return this.tagDoIife();
+    let closeIdx = this.tokens.length - 1;
+    if (this.tokens[closeIdx]?.[0] !== ')') {
+      // Maybe a return-type annotation sits between `)` and the arrow:
+      // `(x:: T):: R ->`. Scan backward over the type expression (balanced
+      // brackets) looking for the trailing `TYPE_ANNOTATION` whose previous
+      // token is `)`. If found, treat that `)` as the param-list close.
+      let n = this.tokens.length;
+      let depth = 0;
+      let j = n - 1;
+      let found = -1;
+      while (j >= 0) {
+        let tk = this.tokens[j];
+        let tg = tk[0];
+        if (tg === ')' || tg === ']' || tg === '}' || tg === 'CALL_END' ||
+            tg === 'PARAM_END' || tg === 'INDEX_END' ||
+            (tg === 'COMPARE' && tk[1] === '>')) {
+          depth++;
+        } else if (tg === '(' || tg === '[' || tg === '{' || tg === 'CALL_START' ||
+                   tg === 'PARAM_START' || tg === 'INDEX_START' ||
+                   (tg === 'COMPARE' && tk[1] === '<')) {
+          depth--;
+        } else if (depth === 0) {
+          if (tg === 'TYPE_ANNOTATION') {
+            if (j > 0 && this.tokens[j - 1][0] === ')') found = j - 1;
+            break;
+          }
+          if (tg === 'TERMINATOR' || tg === 'INDENT' || tg === 'OUTDENT' ||
+              tg === '=' || tg === '->' || tg === '=>') break;
+        }
+        j--;
+      }
+      if (found < 0) return this.tagDoIife();
+      closeIdx = found;
+    }
 
-    let i = this.tokens.length - 1;
+    let i = closeIdx;
     let stack = [];
     this.tokens[i][0] = 'PARAM_END';
 
@@ -1540,7 +1573,7 @@ export class Lexer {
           tok[0] = 'PARAM_START';
           return this.tagDoIife(i - 1);
         } else {
-          this.tokens[this.tokens.length - 1][0] = 'CALL_END';
+          this.tokens[closeIdx][0] = 'CALL_END';
           return;
         }
       }

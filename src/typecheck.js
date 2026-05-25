@@ -629,6 +629,35 @@ export function createTypeCheckSettings(ts, overrides = {}) {
   };
 }
 
+// Collect ambient type packages (e.g. `@types/bun`, `@types/node`) by
+// walking up from rootPath gathering every `node_modules/@types` dir.
+// TS's default typeRoots only checks `<cwd>/node_modules/@types`, so a
+// sub-package check would miss workspace-root ambients. Accepts symlinks
+// because bun's nested-package layout symlinks `@types/bun` to
+// `.bun/@types+bun@.../node_modules/@types/bun`.
+export function collectAmbientTypes(rootPath) {
+  const typeRoots = [];
+  const types = [];
+  let dir = rootPath;
+  while (true) {
+    const cand = resolve(dir, 'node_modules/@types');
+    if (existsSync(cand)) {
+      typeRoots.push(cand);
+      try {
+        for (const entry of readdirSync(cand, { withFileTypes: true })) {
+          if ((entry.isDirectory() || entry.isSymbolicLink()) && !entry.name.startsWith('.') && !types.includes(entry.name)) {
+            types.push(entry.name);
+          }
+        }
+      } catch {}
+    }
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return { typeRoots, types };
+}
+
 // ── Param helpers ──────────────────────────────────────────────────
 
 // Extract the text between the first balanced ( ) — handles nested parens
@@ -826,7 +855,7 @@ function injectTypeParams(line, typeParams) {
 // source maps. Returns everything both the CLI and LSP need.
 // When opts.strict is true, all non-nocheck files are type-checked.
 export function compileForCheck(filePath, source, compiler, opts = {}) {
-  const result = compiler.compile(source, { sourceMap: true, types: 'emit', skipPreamble: true, stubComponents: true });
+  const result = compiler.compile(source, { sourceMap: true, types: 'emit', skipPreamble: true, stubComponents: true, inlineTypes: true });
   let code = result.code || '';
   const dts = result.dts ? result.dts.trimEnd() + '\n' : '';
 
@@ -1336,7 +1365,16 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
 
     for (let i = 0; i < dl.length; i++) {
       const m = dl[i].match(/^(?:export\s+)?declare\s+const\s+(\w+):\s+(.+);$/);
-      if (m) constTypes.set(m[1], { type: m[2], idx: i });
+      if (m) { constTypes.set(m[1], { type: m[2], idx: i }); continue; }
+      // Also merge `(export )?let X: T;` forward-decls from the DTS header
+      // into matching body `(export )?const X = expr` declarations. dts.js
+      // emits the `let` form for typed module-scope value bindings declared
+      // via `name:: T = expr`. Without this merge, TS sees two separate
+      // declarations (header `let` + body `const`) and loses the typed
+      // identity on property access — e.g. `getStore()` returns `unknown`
+      // instead of the declared `AsyncLocalStorage<T>`'s element type.
+      const lm = dl[i].match(/^(?:export\s+)?let\s+(\w+):\s+(.+);$/);
+      if (lm) constTypes.set(lm[1], { type: lm[2], idx: i });
     }
 
     if (constTypes.size > 0) {
@@ -1501,13 +1539,26 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
       const vars = m[2].split(/\s*,\s*/);
       const inlined = new Set();
       const bailed = new Set();
-      const scopeEndRe = new RegExp('^' + reEsc(baseIndent) + '}');
+      // Scope-end detection by indent: the enclosing block ends at the first
+      // non-empty line whose indent is strictly less than baseIndent. This is
+      // correct for compiler-generated JS where indentation reliably reflects
+      // nesting. Regex-matching `}` at baseIndent was wrong because inner
+      // block-closing braces (e.g. `  }` ending a nested `if`) sit at exactly
+      // baseIndent and would terminate the scan prematurely. For top-level
+      // hoists (baseIndent === ''), the scope is the whole file — never end.
+      const baseIndentLen = baseIndent.length;
+      const isScopeEnd = (line) => {
+        if (baseIndentLen === 0) return false;
+        if (line.trim() === '') return false;
+        const li = line.match(/^(\s*)/)[1].length;
+        return li < baseIndentLen;
+      };
 
       // Phase 1: straight-line scan at base indent
       for (let j = i + 1; j < cl.length; j++) {
         const line = cl[j];
         if (line.trim() === '') continue;
-        if (scopeEndRe.test(line)) break;
+        if (isScopeEnd(line)) break;
         // Skip deeper-indented lines
         if (line.startsWith(baseIndent + '  ')) continue;
         // Stop at structural statements (if/for/while/switch/try/do/function/class)
@@ -1539,7 +1590,7 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
         for (let j = i + 1; j < cl.length; j++) {
           const line = cl[j];
           if (line.trim() === '') continue;
-          if (scopeEndRe.test(line)) break;
+          if (isScopeEnd(line)) break;
           if (!vRe.test(line)) continue;
           if (firstRefLine < 0) firstRefLine = j;
           if (!foundAssign) {
@@ -1560,7 +1611,7 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
         for (let j = foundAssign.line + 1; j < cl.length; j++) {
           const line = cl[j];
           if (line.trim() === '') continue;
-          if (scopeEndRe.test(line)) { blockEndLine = j; break; }
+          if (isScopeEnd(line)) { blockEndLine = j; break; }
           const li = line.match(/^(\s*)/)[1];
           if (li.length < foundAssign.indent.length) { blockEndLine = j; break; }
         }
@@ -1571,7 +1622,7 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
           for (let j = blockEndLine + 1; j < cl.length; j++) {
             const line = cl[j];
             if (line.trim() === '') continue;
-            if (scopeEndRe.test(line)) break;
+            if (isScopeEnd(line)) break;
             if (vRe.test(line)) { hasRefAfterBlock = true; break; }
           }
         }
@@ -2658,6 +2709,56 @@ export async function runCheck(targetDir, opts = {}) {
     }
   }
 
+  // ── @rip-lang/* package resolution ─────────────────────────────────
+  //
+  // When a typed file imports from `@rip-lang/foo` (or `@rip-lang/foo/sub`),
+  // resolve the specifier via Node module resolution rooted at the project,
+  // and if it lands on a `.rip` entry, compile that entry with
+  // compileForCheck so its exported annotations become visible to TS as
+  // a virtual `.rip.ts` module. Diagnostics from the package itself are
+  // suppressed (`_typeOnly = true`) — package internals are checked when
+  // the package is checked, not when its consumers are.
+  const pkgRequire = createRequire(resolve(rootPath, 'package.json'));
+  const pkgSpecCache = new Map(); // spec → resolved abs path | null
+  function resolvePkgSpec(spec) {
+    if (pkgSpecCache.has(spec)) return pkgSpecCache.get(spec);
+    let resolved = null;
+    try {
+      const r = pkgRequire.resolve(spec);
+      if (typeof r === 'string' && r.endsWith('.rip') && existsSync(r)) resolved = r;
+    } catch {}
+    pkgSpecCache.set(spec, resolved);
+    return resolved;
+  }
+
+  const pkgSpecRe = /from\s+['"](@rip-lang\/[^'"]+)['"]/g;
+  const pendingPkgFiles = new Set();
+  for (const [, entry] of compiled) {
+    for (const m of entry.source.matchAll(pkgSpecRe)) {
+      const r = resolvePkgSpec(m[1]);
+      if (r && !compiled.has(r)) pendingPkgFiles.add(r);
+    }
+  }
+  // Iterate transitively: package files may themselves import other
+  // @rip-lang/* entries. Bounded by the number of unique resolved paths.
+  while (pendingPkgFiles.size) {
+    const next = pendingPkgFiles.values().next().value;
+    pendingPkgFiles.delete(next);
+    if (compiled.has(next)) continue;
+    try {
+      const pkgSrc = readFileSync(next, 'utf8');
+      const compiledPkg = compileForCheck(next, pkgSrc, new Compiler());
+      compiledPkg._typeOnly = true;
+      compiled.set(next, compiledPkg);
+      for (const m of pkgSrc.matchAll(pkgSpecRe)) {
+        const r = resolvePkgSpec(m[1]);
+        if (r && !compiled.has(r)) pendingPkgFiles.add(r);
+      }
+    } catch (e) {
+      console.warn(`[rip] @rip-lang package compile failed for ${next}: ${e.message}`);
+    }
+  }
+
   // Check for unresolved relative imports in all files (not just typed ones)
   const fileResults = [];
   let totalErrors = 0, totalWarnings = 0;
@@ -2689,7 +2790,17 @@ export async function runCheck(targetDir, opts = {}) {
   // contracts. The default is lenient to match Rip's "scaffolding, not
   // safety rails" philosophy; projects opt up when they want the
   // contract enforced.
-  const settings = createTypeCheckSettings(ts, strict ? { strict: true } : {});
+  // Collect `node_modules/@types` directories walking up from rootPath so
+  // ambient type packages (e.g. `@types/bun`) installed at the workspace
+  // root are picked up even when `rip check` runs in a sub-package. TS's
+  // default `typeRoots` only looks at `<cwd>/node_modules/@types`.
+  const { typeRoots, types: ambientTypes } = collectAmbientTypes(rootPath);
+
+  const settings = createTypeCheckSettings(ts, {
+    ...(strict ? { strict: true } : {}),
+    ...(typeRoots.length ? { typeRoots } : {}),
+    ...(ambientTypes.length ? { types: ambientTypes } : {}),
+  });
 
   const host = {
     getScriptFileNames: () => [...compiled.keys()].map(toVirtual),
@@ -2708,12 +2819,26 @@ export async function runCheck(targetDir, opts = {}) {
     getDirectories: (...a) => ts.sys.getDirectories(...a),
     directoryExists: (...a) => ts.sys.directoryExists(...a),
 
+    resolveTypeReferenceDirectives(typeDirectiveNames, containingFile, redirectedReference, options) {
+      return typeDirectiveNames.map((name) => {
+        const n = typeof name === 'string' ? name : name.name;
+        const r = ts.resolveTypeReferenceDirective(n, containingFile, options || settings, ts.sys, redirectedReference);
+        return r.resolvedTypeReferenceDirective;
+      });
+    },
+
     resolveModuleNames(names, containingFile) {
       return names.map((name) => {
         if (name.endsWith('.rip')) {
           const resolved = resolve(dirname(fromVirtual(containingFile)), name);
           if (compiled.has(resolved)) {
             return { resolvedFileName: toVirtual(resolved), extension: '.ts', isExternalLibraryImport: false };
+          }
+        }
+        if (name.startsWith('@rip-lang/')) {
+          const r = resolvePkgSpec(name);
+          if (r && compiled.has(r)) {
+            return { resolvedFileName: toVirtual(r), extension: '.ts', isExternalLibraryImport: false };
           }
         }
         const r = ts.resolveModuleName(name, containingFile, settings, {
