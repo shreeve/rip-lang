@@ -5,7 +5,7 @@ Design proposals under discussion. Grouped by domain.
 ## Domain A — Type system & package types
 
 - [x] [RFC 1 — Explicit prop optionality with `?::`](#rfc-1-explicit-prop-optionality-with-)
-- [ ] [RFC 2 — Rip packages exposing types to typed Rip apps](#rfc-2-rip-packages-exposing-types-to-typed-rip-apps)
+- [x] [RFC 2 — Rip packages exposing types to typed Rip apps](#rfc-2-rip-packages-exposing-types-to-typed-rip-apps)
 - [ ] [RFC 3 — App framework types for ambient globals](#rfc-3-app-framework-types-for-ambient-globals)
 - [ ] [RFC 4 — Typed `this` shape for components and server handlers](#rfc-4-typed-this-shape-for-components-and-server-handlers)
 - [ ] [RFC 5 — Typed routes — `href` typing, typed `router.push`, per-route `@params`](#rfc-5-typed-routes--href-typing-typed-routerpush-per-route-params)
@@ -110,6 +110,8 @@ Foundation for every later type-authoring RFC. RFCs 2, 3, 4, 5, and 6 all write 
 
 
 ## RFC 2: Rip packages exposing types to typed Rip apps
+
+> **Status: Implemented.**
 
 While working on the cart example, only the client is fully type-safe. The root `index.rip` and `api/` routes are currently excluded from `rip check` (via `rip.json`), because type-checking them would require the two server packages they depend on — `@rip-lang/server` and `@rip-lang/server/middleware` — to be typed as well. Neither is.
 
