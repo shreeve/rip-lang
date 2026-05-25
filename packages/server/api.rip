@@ -24,16 +24,16 @@ import { posix } from 'node:path'
 # Module State
 # ==============================================================================
 
-_                     = null  # Match capture holder for Rip's =~
-_errorHandler         = null  # Custom error handler
-_notFoundHandler      = null  # Custom 404 handler
-_rawFilter            = null  # Raw request filter (before body parsing)
-_beforeFilters        = []    # Before request filters
-_afterFilters         = []    # After request filters
-_routes               = []    # Route definitions
-_middlewares          = []    # Global middleware functions
-_prefix               = ''    # Current route prefix for grouping
-_corsPreflightPolicy  = null  # Policy fn set by cors middleware: see setCorsPreflightPolicy
+_:: RegExpMatchArray | null            = null  # Match capture holder for Rip's =~
+_errorHandler:: Function | null        = null  # Custom error handler
+_notFoundHandler:: Function | null     = null  # Custom 404 handler
+_rawFilter:: Function | null           = null  # Raw request filter (before body parsing)
+_beforeFilters:: Function[]            = []    # Before request filters
+_afterFilters:: Function[]             = []    # After request filters
+_routes:: any[]                        = []    # Route definitions
+_middlewares:: Function[]              = []    # Global middleware functions
+_prefix:: string                       = ''    # Current route prefix for grouping
+_corsPreflightPolicy:: Function | null = null  # Policy fn set by cors middleware: see setCorsPreflightPolicy
 
 export resetGlobals = ->
   _errorHandler        = null
@@ -73,7 +73,7 @@ export setCorsPreflightPolicy = (fn) ->
 export enableCorsPreflight = -> null
 
 # AsyncLocalStorage for request context (enables sync read() in handlers)
-export requestContext = new AsyncLocalStorage()
+export requestContext:: AsyncLocalStorage<{ env?: any, data: any }> = new AsyncLocalStorage()
 
 # ==============================================================================
 # Router: Pattern Compiler
@@ -186,7 +186,7 @@ createContext = (req, params = {}) ->
       out.set 'ETag', etag
       new Response file, { status: 200, headers: out }
 
-    header: (name, value, opts = {}) ->
+    header: (name, value, opts:: { append?: boolean } = {}) ->
       if value?
         if opts.append then out.append(name, value) else out.set(name, value)
         return
@@ -396,7 +396,7 @@ export fetch = (req) ->
   _rawFilter?.(req) if method in ['POST', 'PUT', 'PATCH']
 
   # Pre-parse body and query for sync read() — baked in, zero ceremony
-  data = {}
+  data:: any = {}
   try
     ct = req.headers.get('content-type') or ''
     if method in ['POST', 'PUT', 'PATCH']
@@ -445,7 +445,7 @@ runHandler = (c, handler) ->
 
 export startHandler = -> fetch
 
-export start = (opts = {}) ->
+export start = (opts?:: { host?: string, port?: number, silent?: boolean }) ->
   handler = startHandler()
 
   # If running under rip-server, set global handler and return
@@ -508,7 +508,7 @@ export session = new Proxy {},
     true
 
 # Env proxy — access env.FOO anywhere (shortcut for process.env)
-export env = new Proxy {}, get: (_, key) -> process.env[key]
+export env = new Proxy {}, get: (_, key) -> process.env[String(key)]
 
 # ==============================================================================
 # Error Helpers — Halt request with an HTTP error
@@ -541,7 +541,7 @@ export isBlank = (obj) ->
 
 capitalize = (str) -> str.charAt(0).toUpperCase() + str.slice(1).toLowerCase()
 
-toMoney = (value, half, cents) ->
+toMoney = (value, half = false, cents = false) ->
   m = value.replace(/[$, ]/g, '').match(/^([-+]?)(\d*)\.?(\d*)$/)
   return null unless m
   intp = m[2] or ''
@@ -672,8 +672,8 @@ export validators =
       Array.from(new Set(nums)).sort((a, b) -> a - b)
     catch then null
 
-export registerValidator = (name, fn) -> validators[name] = fn
-export getValidator      = (name)     -> validators[name]
+export registerValidator = (name:: string, fn:: (v: any) => any) -> validators[name] = fn
+export getValidator      = (name:: string)                       -> validators[name]
 
 # ==============================================================================
 # check() — Apply a Validator to an Arbitrary Value
@@ -695,7 +695,7 @@ export check = (value, type) ->
 # read() — Sinatra-style Parameter Reading
 # ==============================================================================
 
-export read = (name = null, type = null, miss = null) ->
+export read = (name?:: string, type?:: string | RegExp | any[] | Record<string, any>, miss?:: any) ->
   store = requestContext.getStore() or throw new Error 'no context for read()'
 
   # missing value helper
@@ -740,7 +740,7 @@ export read = (name = null, type = null, miss = null) ->
   # Array: [min, max] constraint or enumeration
   else if Array.isArray(type)
     s = String(v ?? '')
-    y = true
+    y:: boolean = true
     if typeof type[0] is 'number'
       [min, max] = type
       if typeof v is 'number' or (s =~ /^[-+]?\d+$/)
@@ -762,7 +762,7 @@ export read = (name = null, type = null, miss = null) ->
       n = if s =~ /^[-+]?\d+$/ then +s else NaN
       v = if not isNaN(n) and (not type.start? or n >= type.start) and (not type.end? or n <= type.end) then n else null
     else if type.min? or type.max?
-      y = true
+      y:: boolean = true
       if typeof v is 'number' or (s =~ /^[-+]?\d+$/)
         n = if typeof v is 'number' then v else +s
         y = false if type.min? and n < type.min
