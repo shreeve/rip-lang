@@ -316,6 +316,7 @@ export function installTypeSupport(Lexer) {
 function collectTypeExpression(tokens, j) {
   let typeTokens = [];
   let depth = 0;
+  let bracketStack = []; // tracks innermost open bracket: '{', '[', '(', '<'
   let startJ = j;
 
   while (j < tokens.length) {
@@ -333,6 +334,8 @@ function collectTypeExpression(tokens, j) {
     // Handle >> as two > closes (nested generics: Map<string, Set<number>>)
     if (tTag === 'SHIFT' && t[1] === '>>' && depth >= 2) {
       depth -= 2;
+      if (bracketStack[bracketStack.length - 1] === '<') bracketStack.pop();
+      if (bracketStack[bracketStack.length - 1] === '<') bracketStack.pop();
       typeTokens.push(t);
       j++;
       continue;
@@ -340,6 +343,11 @@ function collectTypeExpression(tokens, j) {
 
     if (isOpen) {
       depth++;
+      let kind = (tTag === '{') ? '{'
+               : (tTag === '[' || tTag === 'INDEX_START') ? '['
+               : (tTag === 'COMPARE' && t[1] === '<') ? '<'
+               : '(';
+      bracketStack.push(kind);
       typeTokens.push(t);
       j++;
       continue;
@@ -347,6 +355,7 @@ function collectTypeExpression(tokens, j) {
     if (isClose) {
       if (depth > 0) {
         depth--;
+        bracketStack.pop();
         typeTokens.push(t);
         j++;
         continue;
@@ -374,6 +383,38 @@ function collectTypeExpression(tokens, j) {
           tTag === '->' || tTag === ',') {
         break;
       }
+    }
+
+    // Inside a bracketed type expression, INDENT/OUTDENT/TERMINATOR are
+    // pure layout tokens (multi-line type literal `{ \n field: T \n }`).
+    // They carry no semantic meaning and would otherwise leak their raw
+    // `[1]` value (e.g. an indent level integer like `2`) into the
+    // type string. INDENT/OUTDENT are dropped silently; TERMINATOR
+    // separates fields and is replaced with a synthetic `;` so the
+    // emitted type literal is valid TS (`{ a: T; b: U }`).
+    if (depth > 0 && (tTag === 'INDENT' || tTag === 'OUTDENT')) {
+      j++;
+      continue;
+    }
+    if (depth > 0 && tTag === 'TERMINATOR') {
+      typeTokens.push(['', ';']);
+      j++;
+      continue;
+    }
+
+    // Inside `{ ... }` the Rip rewriter sometimes drops TERMINATOR
+    // between fields (e.g. after `Record<string, string[]>` because `>`
+    // looks like a binary operator wanting a RHS). Detect a new field
+    // by seeing a PROPERTY token at the top of a `{` and inject `;` if
+    // the previously emitted token isn't already a separator/opener.
+    if (tTag === 'PROPERTY' &&
+        bracketStack[bracketStack.length - 1] === '{') {
+      let prev = typeTokens[typeTokens.length - 1];
+      let prevTag = prev?.[0];
+      let prevVal = prev?.[1];
+      let needsSep = prev && prevTag !== '{' && prevTag !== ',' &&
+                     !(prevTag === '' && prevVal === ';');
+      if (needsSep) typeTokens.push(['', ';']);
     }
 
     // => at depth 0: function type arrow, continue collecting
