@@ -6,7 +6,7 @@ import { csrf } from '../middleware.rip'
 # Run the middleware once. Headers and cookies arrive as plain hash;
 # `mutate` lets a test poke at the context before the inner handler
 # runs (typically to set csrfToken-driven response state).
-runCsrf = (opts, method, headers = {}, mutate) ->
+runCsrf = (opts, method, headers = {}, mutate = null) ->
   mw = csrf(opts)
   c =
     csrfToken: null
