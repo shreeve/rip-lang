@@ -213,6 +213,7 @@ function rebuildProjectInfo() {
   projectRoots.clear();
   projectRootCache.clear();
   bareSpecForEntry.clear();
+  entryForBareSpec.clear();
   (function walk(dir) {
     let entries;
     try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
@@ -252,6 +253,7 @@ const projectRootCache = new Map();      // Map<dir, projectRoot|null>
 // Files that are the entry point of a workspace package, mapped to the bare
 // specifier callers should use (e.g. '@rip-lang/server', '@rip-lang/server/middleware').
 const bareSpecForEntry = new Map();      // Map<fp, bareSpec>
+const entryForBareSpec = new Map();      // Map<bareSpec, fp> — reverse of above, used to resolve bare imports
 
 function findProjectRoot(fp) {
   const dir = path.dirname(fp);
@@ -287,6 +289,7 @@ function loadPackageJson(dir) {
     const full = path.resolve(dir, target);
     const spec = sub === '.' ? pkg.name : pkg.name + sub.slice(1);
     bareSpecForEntry.set(full, spec);
+    entryForBareSpec.set(spec, full);
   };
   if (pkg.exports && typeof pkg.exports === 'object') {
     for (const [sub, target] of Object.entries(pkg.exports)) addEntry(sub, target);
@@ -817,7 +820,11 @@ function publishDiagnostics(filePath) {
 // ── TypeScript Language Service ────────────────────────────────────
 
 function createService() {
-  const settings = tc.createTypeCheckSettings(ts);
+  const { typeRoots, types: ambientTypes } = tc.collectAmbientTypes(rootPath);
+  const settings = tc.createTypeCheckSettings(ts, {
+    ...(typeRoots.length ? { typeRoots } : {}),
+    ...(ambientTypes.length ? { types: ambientTypes } : {}),
+  });
 
   const host = {
     getScriptFileNames: () => [...compiled.keys()].map(toVirtual),
@@ -836,6 +843,14 @@ function createService() {
     getDirectories: (...a) => ts.sys.getDirectories(...a),
     directoryExists: (...a) => ts.sys.directoryExists(...a),
 
+    resolveTypeReferenceDirectives(typeDirectiveNames, containingFile, redirectedReference, options) {
+      return typeDirectiveNames.map((name) => {
+        const n = typeof name === 'string' ? name : name.name;
+        const r = ts.resolveTypeReferenceDirective(n, containingFile, options || settings, ts.sys, redirectedReference);
+        return r.resolvedTypeReferenceDirective;
+      });
+    },
+
     resolveModuleNames(names, containingFile) {
       return names.map((name) => {
         if (name.endsWith('.rip')) {
@@ -845,6 +860,18 @@ function createService() {
           }
           if (compiled.has(resolved)) {
             return { resolvedFileName: toVirtual(resolved), extension: '.ts', isExternalLibraryImport: false };
+          }
+        }
+        // @rip-lang/* (and any workspace package) bare-spec resolution: if the
+        // spec matches a known workspace package entry that resolves to a .rip
+        // file, compile it and return a virtual .rip.ts so TS sees its exports.
+        if (name.startsWith('@') || !name.startsWith('.')) {
+          const resolved = entryForBareSpec.get(name);
+          if (resolved && fs.existsSync(resolved)) {
+            if (!compiled.has(resolved)) compileRip(resolved, fs.readFileSync(resolved, 'utf8'));
+            if (compiled.has(resolved)) {
+              return { resolvedFileName: toVirtual(resolved), extension: '.ts', isExternalLibraryImport: false };
+            }
           }
         }
         const r = ts.resolveModuleName(name, containingFile, settings, {
