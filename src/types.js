@@ -316,6 +316,7 @@ export function installTypeSupport(Lexer) {
 function collectTypeExpression(tokens, j) {
   let typeTokens = [];
   let depth = 0;
+  let bracketStack = []; // tracks innermost open bracket: '{', '[', '(', '<'
   let startJ = j;
 
   while (j < tokens.length) {
@@ -333,6 +334,8 @@ function collectTypeExpression(tokens, j) {
     // Handle >> as two > closes (nested generics: Map<string, Set<number>>)
     if (tTag === 'SHIFT' && t[1] === '>>' && depth >= 2) {
       depth -= 2;
+      if (bracketStack[bracketStack.length - 1] === '<') bracketStack.pop();
+      if (bracketStack[bracketStack.length - 1] === '<') bracketStack.pop();
       typeTokens.push(t);
       j++;
       continue;
@@ -340,6 +343,11 @@ function collectTypeExpression(tokens, j) {
 
     if (isOpen) {
       depth++;
+      let kind = (tTag === '{') ? '{'
+               : (tTag === '[' || tTag === 'INDEX_START') ? '['
+               : (tTag === 'COMPARE' && t[1] === '<') ? '<'
+               : '(';
+      bracketStack.push(kind);
       typeTokens.push(t);
       j++;
       continue;
@@ -347,6 +355,7 @@ function collectTypeExpression(tokens, j) {
     if (isClose) {
       if (depth > 0) {
         depth--;
+        bracketStack.pop();
         typeTokens.push(t);
         j++;
         continue;
@@ -376,6 +385,38 @@ function collectTypeExpression(tokens, j) {
       }
     }
 
+    // Inside a bracketed type expression, INDENT/OUTDENT/TERMINATOR are
+    // pure layout tokens (multi-line type literal `{ \n field: T \n }`).
+    // They carry no semantic meaning and would otherwise leak their raw
+    // `[1]` value (e.g. an indent level integer like `2`) into the
+    // type string. INDENT/OUTDENT are dropped silently; TERMINATOR
+    // separates fields and is replaced with a synthetic `;` so the
+    // emitted type literal is valid TS (`{ a: T; b: U }`).
+    if (depth > 0 && (tTag === 'INDENT' || tTag === 'OUTDENT')) {
+      j++;
+      continue;
+    }
+    if (depth > 0 && tTag === 'TERMINATOR') {
+      typeTokens.push(['', ';']);
+      j++;
+      continue;
+    }
+
+    // Inside `{ ... }` the Rip rewriter sometimes drops TERMINATOR
+    // between fields (e.g. after `Record<string, string[]>` because `>`
+    // looks like a binary operator wanting a RHS). Detect a new field
+    // by seeing a PROPERTY token at the top of a `{` and inject `;` if
+    // the previously emitted token isn't already a separator/opener.
+    if (tTag === 'PROPERTY' &&
+        bracketStack[bracketStack.length - 1] === '{') {
+      let prev = typeTokens[typeTokens.length - 1];
+      let prevTag = prev?.[0];
+      let prevVal = prev?.[1];
+      let needsSep = prev && prevTag !== '{' && prevTag !== ',' &&
+                     !(prevTag === '' && prevVal === ';');
+      if (needsSep) typeTokens.push(['', ';']);
+    }
+
     // => at depth 0: function type arrow, continue collecting
     // -> at depth 0: code arrow, handled as delimiter above
     typeTokens.push(t);
@@ -392,6 +433,31 @@ function buildTypeString(typeTokens) {
   if (typeTokens.length === 0) return '';
   // Bare => (no params) means () => — add empty parens
   if (typeTokens[0]?.[0] === '=>') typeTokens.unshift(['', '()']);
+  // Validation: `::` inside `{ ... }` in type position is illegal.
+  // `::` binds a name to a type (params, var decls, return types).
+  // Inside a structural type literal `{ ... }`, fields are key→type
+  // pairs and use `:` (TS-style), the same way TS type literals do.
+  // `::` has no role inside a type literal — every `:` there is
+  // already unambiguously a type separator.
+  {
+    let curlyDepth = 0;
+    for (let t of typeTokens) {
+      let tag = t[0];
+      if (tag === '{') curlyDepth++;
+      else if (tag === '}') curlyDepth--;
+      else if (tag === 'TYPE_ANNOTATION' && curlyDepth > 0) {
+        let loc = t.loc;
+        let where = loc ? ` (line ${loc.r}, col ${loc.c})` : '';
+        let err = new Error(
+          `Use \`:\` (not \`::\`) inside a structural type literal${where}. ` +
+          `\`::\` binds a name to a type; inside \`{ ... }\` in type ` +
+          `position, fields use \`:\` (TS-style).`
+        );
+        err.loc = loc;
+        throw err;
+      }
+    }
+  }
   // Inline structural / function-param property-name optional marker:
   // an IDENTIFIER carrying `.data.optional` and followed by TYPE_ANNOTATION
   // gets a trailing `?` appended to its emitted name. The lexer stripped
@@ -399,8 +465,8 @@ function buildTypeString(typeTokens) {
   let parts = typeTokens.map((t, i) => {
     let next = typeTokens[i + 1];
     // Re-attach the trailing `?` for optional property names. The next
-    // separator may be `::` (TYPE_ANNOTATION) in function param lists or
-    // `:` inside an inline structural type literal like `{ x?: T }`.
+    // separator is `::` (TYPE_ANNOTATION) in function param lists, or
+    // `:` inside an inline structural type literal `{ x?: T }`.
     if (t.data?.optional && next && (next[0] === 'TYPE_ANNOTATION' || next[0] === ':')) {
       return `${t[1]}?`;
     }
