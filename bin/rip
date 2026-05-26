@@ -145,6 +145,13 @@ async function main() {
 
   if (args[0] === 'check') {
     const checkArgs = args.slice(1);
+    const VALID_FLAGS = new Set(['-q', '--quiet', '--strict', '--audit', '--sourcemap', '--json']);
+    const unknown = checkArgs.filter(a => a.startsWith('-') && !VALID_FLAGS.has(a));
+    if (unknown.length > 0) {
+      console.error(`rip check: unknown flag${unknown.length === 1 ? '' : 's'}: ${unknown.join(', ')}`);
+      console.error(`Valid flags: ${[...VALID_FLAGS].join(', ')}`);
+      process.exit(2);
+    }
     const dir = checkArgs.find(a => !a.startsWith('-')) || '.';
     const wantAudit     = checkArgs.includes('--audit');
     const wantSourcemap = checkArgs.includes('--sourcemap');
