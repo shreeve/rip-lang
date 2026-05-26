@@ -3068,6 +3068,11 @@ export async function runCheck(targetDir, opts = {}) {
   // round-trip: srcToOffset must resolve, and getQuickInfoAtPosition must
   // return hover info for it.  Failures indicate source map gaps that make
   // hover/definition/completion silently break in the editor.
+  //
+  // Opt-in: only runs when --audit is passed.  Source-map gaps are typically
+  // compiler-internal (lexer-rewritten tokens, generated bindings) and aren't
+  // actionable for most users, so they'd be pure noise on every `rip check`.
+  // Package maintainers who care about editor integrity run `rip check --audit`.
 
   const AUDIT_SKIP = new Set([
     'if', 'else', 'then', 'unless', 'switch', 'when', 'for', 'while', 'until',
@@ -3135,7 +3140,7 @@ export async function runCheck(targetDir, opts = {}) {
   let auditGaps = 0;
   const auditResults = [];
 
-  for (const [fp, entry] of compiled) {
+  if (opts.sourceMapAudit) for (const [fp, entry] of compiled) {
     if (!entry.hasTypes) continue;
     if (entry._typeOnly) continue;
     const srcLines = entry.source.split('\n');
@@ -3233,7 +3238,7 @@ export async function runCheck(targetDir, opts = {}) {
   }
 
   // Print audit results
-  if (auditResults.length > 0) {
+  if (opts.sourceMapAudit && auditResults.length > 0) {
     console.log(bold('\n── Source Map Audit ──\n'));
     for (const { file, gaps } of auditResults) {
       const rel = relative(rootPath, file);
