@@ -1687,17 +1687,24 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
   // Dedupe imports: when the DTS header and the body import from the same
   // module specifier, TypeScript reports TS2300 (Duplicate identifier) for
   // every shared binding, which cascades and corrupts type resolution
-  // elsewhere (e.g. `typeof <stateIdent>` collapses to `any`). The DTS-side
-  // import is sufficient for type-checking; blank out matching body imports
-  // (preserve line count so source maps stay aligned).
+  // elsewhere (e.g. `typeof <stateIdent>` collapses to `any`).
+  //
+  // We prefer to drop the *DTS-header* duplicate and keep the body's import:
+  // the body import carries per-specifier source-map mappings (needed for
+  // hover and go-to-definition on each imported name), while the DTS header
+  // import has none. Dropping the body import would leave the source-map
+  // entries pointing at a blanked line, breaking hover for type-only
+  // imports like `import { RetryConfig } from '@rip-lang/http'`.
+  //
+  // Preserve line count on both sides so source maps stay aligned.
   if (hasTypes && headerDts && code) {
-    const dtsSpecs = new Set();
-    for (const m of headerDts.matchAll(/^\s*import\s+[^;]*?from\s+['"]([^'"]+)['"]\s*;?\s*$/gm)) {
-      dtsSpecs.add(m[1]);
+    const bodySpecs = new Set();
+    for (const m of code.matchAll(/^\s*import\s+[^;]*?from\s+['"]([^'"]+)['"]\s*;?\s*$/gm)) {
+      bodySpecs.add(m[1]);
     }
-    if (dtsSpecs.size > 0) {
-      code = code.replace(/^(\s*)import\s+[^;]*?from\s+(['"])([^'"]+)\2\s*;?\s*$/gm, (full, _ws, _q, spec) => {
-        return dtsSpecs.has(spec) ? '' : full;
+    if (bodySpecs.size > 0) {
+      headerDts = headerDts.replace(/^(\s*)import\s+[^;]*?from\s+(['"])([^'"]+)\2\s*;?\s*$/gm, (full, _ws, _q, spec) => {
+        return bodySpecs.has(spec) ? '' : full;
       });
     }
   }
@@ -2418,7 +2425,17 @@ export function srcToOffset(entry, line, col) {
         const dist = Math.abs(m.index - expectedGenCol) + (inStr ? STRING_PENALTY : 0);
         if (dist < bestDist) { bestDist = dist; bestCol = m.index; }
       }
-      if (bestCol >= 0) return lineColToOffset(entry.tsContent, targetLine, bestCol);
+      if (bestCol >= 0) {
+        // If every match for `word` in the target line is inside a string
+        // literal (so hover would return nothing) but we have a precise
+        // mapping hint for this source position, prefer the hint. This is
+        // what makes hover on `:foo` (which compiles to `Symbol.for("foo")`)
+        // resolve to the `Symbol` identifier instead of the dead string.
+        if (useHint && bestDist >= STRING_PENALTY) {
+          return lineColToOffset(entry.tsContent, targetLine, genColHint);
+        }
+        return lineColToOffset(entry.tsContent, targetLine, bestCol);
+      }
 
       // Fall back to original genLine if overload didn't match
       if (targetLine !== genLine) {

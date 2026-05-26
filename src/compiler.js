@@ -322,6 +322,20 @@ export class CodeEmitter {
   // Each entry pairs a statement's generated code with its source loc.
   // Output line positions are computed by exact arithmetic — no heuristics.
   buildMappings() {
+    // Imports are emitted at the top of the file (before the preamble),
+    // starting at line 0. Process them first with their own line offset.
+    if (this._importEntries) {
+      let importLineOffset = 0;
+      for (let entry of this._importEntries) {
+        if (entry.loc) {
+          this.sourceMap.addMapping(importLineOffset, 0, entry.loc.r, entry.loc.c);
+        }
+        if (entry.sexpr && entry.loc) {
+          this.recordSubMappings(entry.code, entry.sexpr, importLineOffset);
+        }
+        importLineOffset += entry.code.split('\n').length;
+      }
+    }
     if (!this._stmtEntries) return;
     let lineOffset = this._preambleLines;
     for (let entry of this._stmtEntries) {
@@ -931,7 +945,12 @@ export class CodeEmitter {
     let needsBlank = false;
 
     if (imports.length > 0) {
-      code += imports.map(s => this.addSemicolon(s, this.emit(s, 'statement'))).join('\n');
+      let importEntries = imports.map(s => {
+        let generated = this.addSemicolon(s, this.emit(s, 'statement'));
+        return { code: generated, loc: Array.isArray(s) ? s.loc : null, sexpr: Array.isArray(s) ? s : null };
+      });
+      this._importEntries = importEntries;
+      code += importEntries.map(e => e.code).join('\n');
       needsBlank = true;
     }
 
@@ -1977,7 +1996,20 @@ export class CodeEmitter {
   // Symbol literals
   // ---------------------------------------------------------------------------
 
-  emitSymbol(head, rest) { return `Symbol.for(${JSON.stringify(rest[0])})`; }
+  emitSymbol(head, rest, context, sexpr) {
+    // Anchor the symbol name's source position to the generated `Symbol`
+    // identifier so hover on `:foo` shows `SymbolConstructor` (the
+    // generated `"foo"` is a string literal that TS has no hover for).
+    // sexpr.loc points at the `:`; the name starts at col + 1.
+    if (sexpr && sexpr.loc && typeof rest[0] === 'string') {
+      sexpr._anchors = (sexpr._anchors || []).concat([{
+        name: 'Symbol',
+        origLine: sexpr.loc.r,
+        origCol: sexpr.loc.c + 1,
+      }]);
+    }
+    return `Symbol.for(${JSON.stringify(rest[0])})`;
+  }
 
   // ---------------------------------------------------------------------------
   // Data structures
@@ -2668,6 +2700,7 @@ export class CodeEmitter {
       let fixedSource = this.addJsExtensionAndAssertions(source);
       if (named[0] === '*' && named.length === 2) return `import ${def}, * as ${named[1]} from ${fixedSource}`;
       let names = named.map(i => Array.isArray(i) && i.length === 2 ? `${i[0]} as ${i[1]}` : i).join(', ');
+      this._attachImportSpecifierAnchors(sexpr, [def, ...named.flatMap(i => Array.isArray(i) ? i : [i])]);
       return `import ${def}, { ${names} } from ${fixedSource}`;
     }
     let [specifier, source] = rest;
@@ -2676,9 +2709,48 @@ export class CodeEmitter {
     if (Array.isArray(specifier)) {
       if (specifier[0] === '*' && specifier.length === 2) return `import * as ${specifier[1]} from ${fixedSource}`;
       let names = specifier.map(i => Array.isArray(i) && i.length === 2 ? `${i[0]} as ${i[1]}` : i).join(', ');
+      this._attachImportSpecifierAnchors(sexpr, specifier.flatMap(i => Array.isArray(i) ? i : [i]));
       return `import { ${names} } from ${fixedSource}`;
     }
     return `import ${this.emit(specifier, 'value')} from ${fixedSource}`;
+  }
+
+  // Attach source-map anchors for each named import specifier so hover /
+  // go-to-def works on individual names in `import { foo, bar } from '...'`.
+  // The parser drops .loc from specifier strings, so we recover positions
+  // by scanning the source forward from the `import` keyword.
+  _attachImportSpecifierAnchors(sexpr, names) {
+    if (!sexpr || !sexpr.loc) return;
+    const source = this.options && this.options.source;
+    if (!source || !names || !names.length) return;
+    const lines = this._sourceLinesCache || (this._sourceLinesCache = source.split('\n'));
+    let row = sexpr.loc.r;
+    let col = sexpr.loc.c;
+    const anchors = [];
+    for (const name of names) {
+      if (typeof name !== 'string' || !/^[A-Za-z_$][\w$]*$/.test(name)) continue;
+      const re = new RegExp('\\b' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b');
+      let found = false;
+      while (row < lines.length) {
+        const line = lines[row] || '';
+        // Strip trailing line comment so '# foo' doesn't match
+        const codePart = line.replace(/#.*$/, '');
+        re.lastIndex = 0;
+        const slice = codePart.slice(col);
+        const m = re.exec(slice);
+        if (m) {
+          const c = col + m.index;
+          anchors.push({ name, origLine: row, origCol: c });
+          col = c + name.length;
+          found = true;
+          break;
+        }
+        row++;
+        col = 0;
+      }
+      if (!found) break;
+    }
+    if (anchors.length) sexpr._anchors = (sexpr._anchors || []).concat(anchors);
   }
 
   emitExport(head, rest) {
@@ -4286,7 +4358,13 @@ export class Compiler {
     // in this file at all — the exporting module strips its `export type` to
     // nothing, so leaving the specifier in place would cause a runtime
     // "module does not provide an export named X" error.
-    if (lexer.typeRefNames?.size > 0) {
+    //
+    // Skip elision in `inlineTypes` mode (set by typecheck.compileForCheck).
+    // The shadow-TS output is fed to the TypeScript language service, not
+    // executed — so keeping the specifiers preserves go-to-definition and
+    // hover for type-only imports like `RetryConfig` that resolve to
+    // `export type` declarations in the target module.
+    if (lexer.typeRefNames?.size > 0 && !this.options.inlineTypes) {
       let usedNames = new Set();
       let inImport = false;
       for (let t of tokens) {
