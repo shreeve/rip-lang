@@ -3238,19 +3238,6 @@ export async function runCheck(targetDir, opts = {}) {
     }
   }
 
-  // Print audit results
-  if (opts.sourceMapAudit && auditResults.length > 0) {
-    console.log(bold('\n── Source Map Audit ──\n'));
-    for (const { file, gaps } of auditResults) {
-      const rel = relative(rootPath, file);
-      for (const g of gaps) {
-        const loc = `${cyan(rel)}${dim(':')}${yellow(String(g.line))}${dim(':')}${yellow(String(g.col))}`;
-        console.log(`${loc} ${dim('-')} ${yellow('warning')} ${dim('audit:')} ${g.issue} for '${g.word}'`);
-      }
-    }
-    console.log(`\n${yellow(String(auditGaps))} source map gap${auditGaps === 1 ? '' : 's'} found\n`);
-  }
-
   // Print results — tsc format with Rip source positions
   for (const { file, errors } of fileResults) {
     const rel = relative(rootPath, file);
@@ -3290,6 +3277,7 @@ export async function runCheck(targetDir, opts = {}) {
   // Summary — tsc format
   const totalFound = totalErrors + totalWarnings;
   if (totalFound === 0) {
+    printSourceMapAudit();
     return compileErrors > 0 ? 1 : 0;
   }
 
@@ -3312,7 +3300,21 @@ export async function runCheck(targetDir, opts = {}) {
     console.log('');
   }
 
+  printSourceMapAudit();
   return totalErrors > 0 ? 1 : 0;
+
+  function printSourceMapAudit() {
+    if (!opts.sourceMapAudit || auditResults.length === 0) return;
+    console.log(bold('── Source Map Audit ──\n'));
+    for (const { file, gaps } of auditResults) {
+      const rel = relative(rootPath, file);
+      for (const g of gaps) {
+        const loc = `${cyan(rel)}${dim(':')}${yellow(String(g.line))}${dim(':')}${yellow(String(g.col))}`;
+        console.log(`${loc} ${dim('-')} ${yellow('warning')} ${dim('audit:')} ${g.issue} for '${g.word}'`);
+      }
+    }
+    console.log(`\n${yellow(String(auditGaps))} source map gap${auditGaps === 1 ? '' : 's'} found\n`);
+  }
 }
 
 // ── Public-surface `any` audit ─────────────────────────────────────
@@ -3639,8 +3641,6 @@ export async function runAudit(targetDir, opts = {}) {
 
   const report = { package: pkgName, entries: [] };
   let totalExports = 0, totalLeaks = 0;
-
-  log(bold(pkgName));
 
   // First pass: collect ALL exported symbols across all entries.
   // The walker treats these as opaque on recursion — each export is
