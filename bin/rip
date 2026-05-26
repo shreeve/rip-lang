@@ -61,9 +61,10 @@ Options:
 Subcommands:
   rip check [dir]               Type-check all .rip files in directory
   rip check --strict [dir]      Require type annotations in all .rip files
-  rip check --audit [pkgDir]    Audit a typed package: source-map gaps (editor hover/go-to-def integrity)
-                                + public API surface for 'any' leaks. Runs after type check.
-                                Add --json for machine-readable audit output.
+  rip check --audit [pkgDir]    Audit a typed package's public API surface for 'any' leaks.
+                                Add --json for machine-readable output.
+  rip check --sourcemap [dir]   Verify source-map round-trip for every identifier
+                                (hover/go-to-def integrity). Useful for compiler work.
   rip <name> [args]             Run rip-<name> (repo bin/, node_modules, or PATH)
 
   Configure via rip.json or package.json:
@@ -145,12 +146,13 @@ async function main() {
   if (args[0] === 'check') {
     const checkArgs = args.slice(1);
     const dir = checkArgs.find(a => !a.startsWith('-')) || '.';
-    const wantAudit = checkArgs.includes('--audit');
+    const wantAudit     = checkArgs.includes('--audit');
+    const wantSourcemap = checkArgs.includes('--sourcemap');
     const { runCheck, runAudit } = await import('../src/typecheck.js');
     const checkCode = await runCheck(dir, {
       quiet:          checkArgs.includes('-q') || checkArgs.includes('--quiet'),
       strict:         checkArgs.includes('--strict'),
-      sourceMapAudit: wantAudit,
+      sourceMapAudit: wantSourcemap,
     });
     if (!wantAudit) process.exit(checkCode);
     const auditCode = await runAudit(dir, {

@@ -3069,10 +3069,11 @@ export async function runCheck(targetDir, opts = {}) {
   // return hover info for it.  Failures indicate source map gaps that make
   // hover/definition/completion silently break in the editor.
   //
-  // Opt-in: only runs when --audit is passed.  Source-map gaps are typically
-  // compiler-internal (lexer-rewritten tokens, generated bindings) and aren't
-  // actionable for most users, so they'd be pure noise on every `rip check`.
-  // Package maintainers who care about editor integrity run `rip check --audit`.
+  // Opt-in via `rip check --sourcemap`.  This is a compiler-development
+  // diagnostic — gaps usually mean the audit's skip list is incomplete or
+  // that codegen lost a binding, both compiler-side concerns rather than
+  // anything a package author can fix.  Not run as part of `--audit` (which
+  // is the package-author-facing public-API check).
 
   const AUDIT_SKIP = new Set([
     'if', 'else', 'then', 'unless', 'switch', 'when', 'for', 'while', 'until',
