@@ -123,6 +123,22 @@ Component testing notes are in `src/AGENTS.md`. Type-system and audit guidance i
 
 The `packages/` directory contains optional packages written in Rip, with zero dependencies, running on Bun.
 
+### Package export style
+
+**Prefer named-only exports** for new `@rip-lang/*` packages. The rest of the typical package surface (types, classes, helpers) is already named-only, so adding a default for the main value just creates a second way to import the same thing.
+
+**Hard rule:** if a package's entry point exports a typed value — e.g. `export http = makeInstance()` where `makeInstance` returns a typed instance — do **not** also re-export it as default. The default-export binding loses the inferred type through Rip's DTS pipeline, so downstream `import http from '@rip-lang/http'` sees `any` while `import { http }` correctly sees `HttpInstance`. Named-only avoids that footgun entirely.
+
+A few existing packages still ship `export default` (`@rip-lang/time`, `packages/script`). That's tolerated for backwards compatibility — don't churn published APIs solely to enforce the style — but don't add new defaults.
+
+**Annotate the public surface at minimum.** Ideally every binding in a package is typed, but realistically that bar is hard to enforce. The practical contract: every `export` must reach consumers with a fully-typed signature (what `rip check --audit` measures). Always annotate:
+
+- exported `def`/`class`/`type`/`interface` declarations and their parameters/return types
+- the return type of any exported function whose body assembles a shape that needs to match a public contract (e.g. `makeInstance():: HttpInstance` in [packages/http/http.rip](packages/http/http.rip))
+- fields of exported types/interfaces
+
+Internal helpers, locals, and private types may rely on inference — but annotate them too when it helps readability or pins down a tricky shape.
+
 ### @rip-lang/server
 
 Sinatra-style web framework with magic `@` context, validation helpers, file serving, middleware composition, multi-worker process management, hot reloading, automatic HTTPS, mDNS, and request queueing.

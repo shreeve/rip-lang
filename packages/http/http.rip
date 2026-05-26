@@ -91,7 +91,7 @@ TIMEOUT_MS    =! 10000
 # ==[ Error Classes ]==
 
 export class HTTPError extends Error
-  constructor: (response, request, options) ->
+  constructor: (response:: Response, request:: Request, options:: HttpOptions) ->
     super("Request failed with status #{response.status}")
     @response = response
     @request  = request
@@ -104,7 +104,7 @@ export interface HTTPError
   options: HttpOptions
 
 export class TimeoutError extends Error
-  constructor: (request) ->
+  constructor: (request:: Request) ->
     super('Request timed out')
     @request = request
     @name    = 'TimeoutError'
@@ -332,7 +332,4 @@ def makeInstance(defaults:: HttpOptions = {}):: HttpInstance
 
 # ==[ Public API ]==
 
-http = makeInstance()
-
-export default http
-export { http }
+export http = makeInstance()
