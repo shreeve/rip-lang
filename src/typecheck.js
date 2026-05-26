@@ -12,7 +12,7 @@
 
 import { Compiler, getStdlibCode } from './compiler.js';
 import { STDLIB_TYPE_DECLS } from './stdlib.js';
-import { INTRINSIC_TYPE_DECLS, INTRINSIC_FN_DECL, ARIA_TYPE_DECLS, SIGNAL_INTERFACE, SIGNAL_FN, COMPUTED_INTERFACE, COMPUTED_FN, EFFECT_FN } from './dts.js';
+import { INTRINSIC_TYPE_DECLS, INTRINSIC_FN_DECL, ARIA_TYPE_DECLS, SIGNAL_INTERFACE, SIGNAL_FN, COMPUTED_INTERFACE, COMPUTED_FN, EFFECT_FN, ripDestructuredNames } from './dts.js';
 import './schema/loader-server.js';   // registers full schema runtime provider
 import { createRequire } from 'module';
 import { readFileSync, existsSync, readdirSync } from 'fs';
@@ -998,11 +998,20 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
       // intended source. Strip the DTS line so it doesn't bleed into
       // the wrong scope; the locals fall back to per-binding inference.
       if (multipleLocals) { localTypedLetIdxs.add(dtsIdx); continue; }
-      // No local site found: this is genuinely a module-scope typed
-      // declaration (no function-local to hoist into). Leave the DTS
-      // line in place — it's the `let name: T;` declaration the body's
-      // top-level `name = value` needs to type-check.
-      if (localLine < 0) continue;
+      // No untyped local site found. Before assuming this is a
+      // module-scope decl, check for an *already-typed* function-local
+      // `let X: T` — the compiler emits the type inline on the body's
+      // hoisted `let` for typed locals, which makes `localPat`'s
+      // `(?!\s*:)` look-ahead skip the line. In that case the DTS
+      // header decl is redundant and would otherwise show up as a
+      // bogus "declared but never read" hint at the top of the file.
+      if (localLine < 0) {
+        const typedLocalPat = new RegExp(`^\\s+let\\s+[^;]*\\b${name}\\b\\s*:`);
+        for (let j = 0; j < cl.length; j++) {
+          if (typedLocalPat.test(cl[j])) { localTypedLetIdxs.add(dtsIdx); break; }
+        }
+        continue;
+      }
       // Single unambiguous match — perform the hoist.
       cl[localLine] = cl[localLine].replace(
         new RegExp(`(\\blet\\s[^;]*?\\b${name}\\b)(?!\\s*:)`),
@@ -1401,9 +1410,10 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
   // but files that import from typed modules may have untyped reactive vars whose
   // compiled code still references __state/__computed/__effect.
   if (hasTypes) {
-    const needSignal = /\b__state\(/.test(code) && !/\bdeclare function __state\b/.test(headerDts);
-    const needComputed = /\b__computed\(/.test(code) && !/\bdeclare function __computed\b/.test(headerDts);
-    const needEffect = /\b__effect\(/.test(code) && !/\bdeclare function __effect\b/.test(headerDts);
+    const bound = ripDestructuredNames(source);
+    const needSignal = /\b__state\(/.test(code) && !/\bdeclare function __state\b/.test(headerDts) && !bound.has('__state');
+    const needComputed = /\b__computed\(/.test(code) && !/\bdeclare function __computed\b/.test(headerDts) && !bound.has('__computed');
+    const needEffect = /\b__effect\(/.test(code) && !/\bdeclare function __effect\b/.test(headerDts) && !bound.has('__effect');
     if (needSignal || needComputed || needEffect) {
       const decls = [];
       if (needSignal) {

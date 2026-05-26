@@ -451,6 +451,7 @@ type "reactive state dts", "count:: number := 0", """
   interface Signal<T> { value: T; read(): T; lock(): Signal<T>; free(): Signal<T>; kill(): T; }
   declare function __state<T>(value: T | Signal<T>): Signal<T>;
   declare function __effect(fn: () => void | (() => void)): () => void;
+  declare function __batch<T>(fn: () => T): T;
 
   declare const count: Signal<number>;
   """
@@ -465,6 +466,7 @@ type "computed dts", """
   interface Computed<T> { readonly value: T; read(): T; lock(): Computed<T>; free(): Computed<T>; kill(): T; }
   declare function __computed<T>(fn: () => T): Computed<T>;
   declare function __effect(fn: () => void | (() => void)): () => void;
+  declare function __batch<T>(fn: () => T): T;
 
   declare const count: Signal<number>;
   declare const doubled: Computed<number>;
@@ -532,6 +534,7 @@ type "export reactive dts", "export count:: number := 0", """
   interface Signal<T> { value: T; read(): T; lock(): Signal<T>; free(): Signal<T>; kill(): T; }
   declare function __state<T>(value: T | Signal<T>): Signal<T>;
   declare function __effect(fn: () => void | (() => void)): () => void;
+  declare function __batch<T>(fn: () => T): T;
 
   export const count: Signal<number>;
   """
