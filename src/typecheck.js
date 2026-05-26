@@ -16,7 +16,7 @@ import { INTRINSIC_TYPE_DECLS, INTRINSIC_FN_DECL, ARIA_TYPE_DECLS, SIGNAL_INTERF
 import './schema/loader-server.js';   // registers full schema runtime provider
 import { createRequire } from 'module';
 import { readFileSync, existsSync, readdirSync } from 'fs';
-import { resolve, relative, dirname, sep as pathSep } from 'path';
+import { resolve, relative, dirname, basename, sep as pathSep } from 'path';
 import { buildLineMap } from './sourcemaps.js';
 
 // ── Typed stash: project entry discovery ───────────────────────────
@@ -2583,6 +2583,7 @@ function findRipFiles(dir, files = [], excludePatterns = [], rootDir = dir) {
 
 const isColor = process.stdout.isTTY !== false;
 const red     = (s) => isColor ? `\x1b[31m${s}\x1b[0m` : s;
+const green   = (s) => isColor ? `\x1b[32m${s}\x1b[0m` : s;
 const yellow  = (s) => isColor ? `\x1b[33m${s}\x1b[0m` : s;
 const cyan    = (s) => isColor ? `\x1b[36m${s}\x1b[0m` : s;
 const dim     = (s) => isColor ? `\x1b[2m${s}\x1b[0m`  : s;
@@ -3306,4 +3307,419 @@ export async function runCheck(targetDir, opts = {}) {
   }
 
   return totalErrors > 0 ? 1 : 0;
+}
+
+// ── Public-surface `any` audit ─────────────────────────────────────
+//
+// `rip check --audit [pkgDir]` walks a package's public exports and
+// flags any export whose type contains `any` (in parameters, return
+// types, or own properties of types declared in the package).
+// External types (e.g. lib.es5, @types/*) are treated as opaque —
+// we don't dive into `Promise<Response>` looking for `any` inside
+// `Response`. The package can only control its own surface; this
+// audit measures exactly that.
+//
+// Exit code: 0 if every export is `any`-free, 1 otherwise. With
+// `--json`, prints a machine-readable report to stdout instead.
+
+// Resolve a package's public entries from its package.json. Handles
+// `main`, `module`, string `exports`, and the subpath/conditional
+// `exports` map. Returns [{ subpath, file }] with absolute paths.
+function collectPackageEntries(pkg, pkgDir) {
+  const entries = new Map(); // subpath → abs file
+  const add = (subpath, p) => {
+    if (typeof p !== 'string') return;
+    if (entries.has(subpath)) return;
+    entries.set(subpath, resolve(pkgDir, p));
+  };
+  const walkConditional = (subpath, v) => {
+    if (typeof v === 'string') { add(subpath, v); return; }
+    if (!v || typeof v !== 'object') return;
+    // Prefer `import` then `default`, fall back to any string value.
+    if (typeof v.import === 'string') { add(subpath, v.import); return; }
+    if (typeof v.default === 'string') { add(subpath, v.default); return; }
+    for (const k of Object.keys(v)) walkConditional(subpath, v[k]);
+  };
+
+  if (typeof pkg.exports === 'string') {
+    add('.', pkg.exports);
+  } else if (pkg.exports && typeof pkg.exports === 'object') {
+    const keys = Object.keys(pkg.exports);
+    const isSubpathMap = keys.some(k => k.startsWith('.'));
+    if (isSubpathMap) {
+      for (const sp of keys) walkConditional(sp, pkg.exports[sp]);
+    } else {
+      walkConditional('.', pkg.exports);
+    }
+  }
+  if (!entries.has('.') && typeof pkg.module === 'string') add('.', pkg.module);
+  if (!entries.has('.') && typeof pkg.main   === 'string') add('.', pkg.main);
+  return [...entries.entries()].map(([subpath, file]) => ({ subpath, file }));
+}
+
+// True if `type`'s declarations all live outside the package's
+// compiled set (i.e. it's a lib/`@types`/external type). Anonymous
+// types (no symbol or no declarations) are treated as local — they
+// are inline shapes from the package's own annotations.
+function isExternalType(type, compiled) {
+  const sym = type.aliasSymbol || type.symbol;
+  if (!sym || !sym.declarations || sym.declarations.length === 0) return false;
+  for (const d of sym.declarations) {
+    const sf = d.getSourceFile?.();
+    if (!sf) continue;
+    if (compiled.has(fromVirtual(sf.fileName))) return false;
+  }
+  return true;
+}
+
+// Walk a TS type looking for `any`. Returns null if no leak, or a
+// breadcrumb string describing where the `any` lives.
+//
+// Scoping rule: EXTERNAL types are fully opaque. We don't walk into
+// their unions, type arguments, signatures, or properties. The
+// package is only accountable for shapes it directly wrote. If a
+// package's export references another local exported type, that
+// referenced type gets audited on its own export — not transitively
+// through every place it's referenced.
+//
+// Why so strict: lib.dom types like `BodyInit` resolve to unions
+// including `ReadableStream<R = any>`. Walking into the expansion
+// blames the package for `any` it never wrote. Same for `Promise<T>`,
+// `Array<T>`, `Record<K, V>`, etc. — diving into them surfaces
+// internals the package doesn't control.
+//
+// Trade-off: `Promise<any>` written literally in package source is
+// also opaque under this rule, so we miss it. Acceptable: such a
+// pattern is rare and easy to spot in review.
+function findAnyLeaks(type, ts, checker, compiled, seen = new WeakSet(), depth = 0, exportedSymbols = null, rootSymbol = null) {
+  if (!type || depth > 12) return null;
+  if (type.flags & ts.TypeFlags.Any) return '';
+  if (isExternalType(type, compiled)) return null;
+  // On recursion (depth > 0), stop at any other exported symbol.
+  // Each export is audited on its own line — don't double-count
+  // leaks through cross-references.
+  if (depth > 0 && exportedSymbols) {
+    const sym = type.aliasSymbol || type.symbol;
+    if (sym && sym !== rootSymbol && exportedSymbols.has(sym)) return null;
+  }
+  if (seen.has(type)) return null;
+  seen.add(type);
+
+  const named = (type.aliasSymbol || type.symbol)?.getName?.();
+  const label = named && named !== '__type' && named !== '__object' ? named : null;
+
+  if (type.isUnion?.() || type.isIntersection?.()) {
+    for (let i = 0; i < type.types.length; i++) {
+      const p = findAnyLeaks(type.types[i], ts, checker, compiled, seen, depth + 1, exportedSymbols, rootSymbol);
+      if (p !== null) return joinPath(label, `|${i}`, p);
+    }
+  }
+
+  const args = checker.getTypeArguments?.(type) || type.typeArguments || [];
+  for (let i = 0; i < args.length; i++) {
+    const p = findAnyLeaks(args[i], ts, checker, compiled, seen, depth + 1, exportedSymbols, rootSymbol);
+    if (p !== null) return joinPath(label, `<${i}>`, p);
+  }
+
+  const walkParams = (sig) => {
+    for (const p of sig.parameters) {
+      const decl = p.valueDeclaration || p.declarations?.[0];
+      if (!decl) continue;
+      const pt = checker.getTypeOfSymbolAtLocation(p, decl);
+      const sub = findAnyLeaks(pt, ts, checker, compiled, seen, depth + 1, exportedSymbols, rootSymbol);
+      if (sub !== null) return joinPath(null, `(${p.getName()})`, sub);
+    }
+    return null;
+  };
+
+  for (const sig of type.getCallSignatures?.() || []) {
+    const ps = walkParams(sig);
+    if (ps !== null) return joinPath(label, '', ps);
+    const rs = findAnyLeaks(sig.getReturnType(), ts, checker, compiled, seen, depth + 1, exportedSymbols, rootSymbol);
+    if (rs !== null) return joinPath(label, '=>', rs);
+  }
+  for (const sig of type.getConstructSignatures?.() || []) {
+    const ps = walkParams(sig);
+    if (ps !== null) return joinPath(label, 'new', ps);
+    const rs = findAnyLeaks(sig.getReturnType(), ts, checker, compiled, seen, depth + 1, exportedSymbols, rootSymbol);
+    if (rs !== null) return joinPath(label, 'new=>', rs);
+  }
+
+  if (type.getProperties) {
+    for (const p of type.getProperties()) {
+      const decl = p.valueDeclaration || p.declarations?.[0];
+      if (!decl) continue;
+      const sf = decl.getSourceFile?.();
+      if (!sf) continue;
+      if (!compiled.has(fromVirtual(sf.fileName))) continue;
+      const pt = checker.getTypeOfSymbolAtLocation(p, decl);
+      const sub = findAnyLeaks(pt, ts, checker, compiled, seen, depth + 1, exportedSymbols, rootSymbol);
+      if (sub !== null) return joinPath(label, `.${p.getName()}`, sub);
+    }
+  }
+
+  return null;
+}
+
+function joinPath(label, step, rest) {
+  const head = label ? `${label}${step}` : step;
+  if (!rest) return head || '<any>';
+  if (rest.startsWith('|') || rest.startsWith('<') || rest.startsWith('(') || rest.startsWith('.') || rest.startsWith('=>') || rest.startsWith('new')) {
+    return head + rest;
+  }
+  return head ? `${head}.${rest}` : rest;
+}
+
+export async function runAudit(targetDir, opts = {}) {
+  const rootPath = resolve(targetDir);
+  const json = !!opts.json;
+  const log = (...a) => { if (!json) console.log(...a); };
+
+  let ts;
+  try {
+    const req = createRequire(resolve(rootPath, 'package.json'));
+    ts = req('typescript');
+  } catch {
+    try { ts = await import('typescript').then(m => m.default || m); } catch {
+      console.error('TypeScript is required for --audit. Install with: bun add -d typescript');
+      return 1;
+    }
+  }
+
+  const pkgJsonPath = resolve(rootPath, 'package.json');
+  if (!existsSync(pkgJsonPath)) {
+    console.error(red(`No package.json found at ${rootPath}`));
+    return 1;
+  }
+  const pkg = JSON.parse(readFileSync(pkgJsonPath, 'utf8'));
+  const pkgName = pkg.name || basename(rootPath);
+
+  const allEntries = collectPackageEntries(pkg, rootPath);
+  const ripEntries = allEntries.filter(e => e.file.endsWith('.rip') && existsSync(e.file));
+  if (ripEntries.length === 0) {
+    console.error(red(`No .rip entry points found in ${pkgName}`));
+    if (allEntries.length > 0) {
+      console.error(dim(`  package.json declares entries, but none point to a .rip file:`));
+      for (const e of allEntries) console.error(dim(`    ${e.subpath} → ${relative(rootPath, e.file)}`));
+    }
+    return 1;
+  }
+
+  // Compile each entry plus its transitive `.rip` imports so the
+  // language service can resolve cross-module types. Only entries
+  // themselves are audited; imported files exist purely so types
+  // referenced from the entry can be expanded.
+  const compiled = new Map();
+  const queue = ripEntries.map(e => e.file);
+  while (queue.length) {
+    const fp = queue.shift();
+    if (compiled.has(fp)) continue;
+    try {
+      const source = readFileSync(fp, 'utf8');
+      // Compile with strict: true so every export's annotations are
+      // emitted into the DTS — without strict, partially-annotated
+      // exports could fall back to inferred types that look cleaner
+      // than they really are.
+      compiled.set(fp, compileForCheck(fp, source, new Compiler(), { strict: true }));
+      for (const m of source.matchAll(/from\s+['"]([^'"]+)['"]/g)) {
+        const spec = m[1];
+        if (spec.endsWith('.rip')) {
+          const r = resolve(dirname(fp), spec);
+          if (existsSync(r) && !compiled.has(r)) queue.push(r);
+        }
+      }
+    } catch (e) {
+      console.error(`${red('error')} ${cyan(relative(rootPath, fp))}: compile error — ${e.message}`);
+      return 1;
+    }
+  }
+
+  // Resolve @rip-lang/* package imports (siblings in the workspace)
+  // so cross-package re-exports type correctly.
+  const pkgRequire = createRequire(resolve(rootPath, 'package.json'));
+  const pkgSpecCache = new Map();
+  function resolvePkgSpec(spec) {
+    if (pkgSpecCache.has(spec)) return pkgSpecCache.get(spec);
+    let resolved = null;
+    try {
+      const r = pkgRequire.resolve(spec);
+      if (typeof r === 'string' && r.endsWith('.rip') && existsSync(r)) resolved = r;
+    } catch {}
+    pkgSpecCache.set(spec, resolved);
+    return resolved;
+  }
+  const pkgSpecRe = /from\s+['"](@rip-lang\/[^'"]+)['"]/g;
+  const pkgQueue = new Set();
+  for (const [, entry] of compiled) {
+    for (const m of entry.source.matchAll(pkgSpecRe)) {
+      const r = resolvePkgSpec(m[1]);
+      if (r && !compiled.has(r)) pkgQueue.add(r);
+    }
+  }
+  while (pkgQueue.size) {
+    const next = pkgQueue.values().next().value;
+    pkgQueue.delete(next);
+    if (compiled.has(next)) continue;
+    try {
+      const src = readFileSync(next, 'utf8');
+      compiled.set(next, compileForCheck(next, src, new Compiler()));
+      for (const m of src.matchAll(pkgSpecRe)) {
+        const r = resolvePkgSpec(m[1]);
+        if (r && !compiled.has(r)) pkgQueue.add(r);
+      }
+    } catch (e) {
+      console.warn(`[rip] @rip-lang package compile failed for ${next}: ${e.message}`);
+    }
+  }
+
+  const { typeRoots, types: ambientTypes } = collectAmbientTypes(rootPath);
+  const settings = createTypeCheckSettings(ts, {
+    strict: true,
+    ...(typeRoots.length    ? { typeRoots }              : {}),
+    ...(ambientTypes.length ? { types: ambientTypes }    : {}),
+  });
+
+  const host = {
+    getScriptFileNames: () => [...compiled.keys()].map(toVirtual),
+    getScriptVersion:   () => '1',
+    getScriptSnapshot(f) {
+      const c = compiled.get(fromVirtual(f));
+      if (c) return ts.ScriptSnapshot.fromString(c.tsContent);
+      try { return ts.ScriptSnapshot.fromString(readFileSync(f, 'utf8')); } catch { return undefined; }
+    },
+    getCompilationSettings: () => settings,
+    getDefaultLibFileName:  (o) => ts.getDefaultLibFilePath(o),
+    getCurrentDirectory:    () => rootPath,
+    fileExists(f) { return compiled.has(fromVirtual(f)) || ts.sys.fileExists(f); },
+    readFile(f)   { return compiled.get(fromVirtual(f))?.tsContent || ts.sys.readFile(f); },
+    readDirectory:   (...a) => ts.sys.readDirectory(...a),
+    getDirectories:  (...a) => ts.sys.getDirectories(...a),
+    directoryExists: (...a) => ts.sys.directoryExists(...a),
+    resolveTypeReferenceDirectives(names, containingFile, redirectedReference, options) {
+      return names.map(n => {
+        const name = typeof n === 'string' ? n : n.name;
+        const r = ts.resolveTypeReferenceDirective(name, containingFile, options || settings, ts.sys, redirectedReference);
+        return r.resolvedTypeReferenceDirective;
+      });
+    },
+    resolveModuleNames(names, containingFile) {
+      return names.map(name => {
+        if (name.endsWith('.rip')) {
+          const r = resolve(dirname(fromVirtual(containingFile)), name);
+          if (compiled.has(r)) return { resolvedFileName: toVirtual(r), extension: '.ts', isExternalLibraryImport: false };
+        }
+        if (name.startsWith('@rip-lang/')) {
+          const r = resolvePkgSpec(name);
+          if (r && compiled.has(r)) return { resolvedFileName: toVirtual(r), extension: '.ts', isExternalLibraryImport: false };
+        }
+        const r = ts.resolveModuleName(name, containingFile, settings, {
+          fileExists:          host.fileExists,
+          readFile:            host.readFile,
+          directoryExists:     host.directoryExists,
+          getCurrentDirectory: host.getCurrentDirectory,
+          getDirectories:      host.getDirectories,
+        });
+        return r.resolvedModule;
+      });
+    },
+  };
+
+  const service = ts.createLanguageService(host, ts.createDocumentRegistry());
+  const program = service.getProgram();
+  const checker = program.getTypeChecker();
+  const fmtFlags = ts.TypeFormatFlags.NoTruncation
+    | ts.TypeFormatFlags.UseAliasDefinedOutsideCurrentScope
+    | ts.TypeFormatFlags.WriteArrayAsGenericType;
+
+  const report = { package: pkgName, entries: [] };
+  let totalExports = 0, totalLeaks = 0;
+
+  log(bold(pkgName));
+
+  // First pass: collect ALL exported symbols across all entries.
+  // The walker treats these as opaque on recursion — each export is
+  // audited only on its own direct shape. If export A references
+  // export B and B leaks, the leak surfaces on B's audit line, not
+  // by polluting every type that mentions B.
+  const exportedSymbols = new Set();
+  const entryData = [];
+  for (const entry of ripEntries) {
+    const vf = toVirtual(entry.file);
+    const sourceFile = program.getSourceFile(vf);
+    if (!sourceFile) { entryData.push(null); continue; }
+    const moduleSymbol = checker.getSymbolAtLocation(sourceFile);
+    if (!moduleSymbol) { entryData.push({ sourceFile, exports: null }); continue; }
+    const exps = checker.getExportsOfModule(moduleSymbol);
+    for (const s of exps) exportedSymbols.add(s);
+    entryData.push({ sourceFile, exports: exps });
+  }
+
+  for (let idx = 0; idx < ripEntries.length; idx++) {
+    const entry = ripEntries[idx];
+    const data = entryData[idx];
+    const rel = relative(rootPath, entry.file);
+    const entryReport = { subpath: entry.subpath, file: rel, exports: [] };
+
+    if (!data) {
+      log(`  ${red('error')} could not load ${cyan(rel)}`);
+      report.entries.push(entryReport);
+      continue;
+    }
+    const { sourceFile, exports } = data;
+    if (!exports) {
+      log(`  ${dim('(no exports)')}`);
+      report.entries.push(entryReport);
+      continue;
+    }
+
+    const header = entry.subpath === '.' ? rel : `${rel}  ${dim('('+entry.subpath+')')}`;
+    log(`\n  ${cyan(header)}`);
+
+    // Compute max name width for column alignment.
+    const names = exports.map(s => s.getName());
+    const colW = Math.min(28, names.reduce((m, n) => Math.max(m, n.length), 0));
+
+    for (const sym of exports) {
+      totalExports++;
+      let t;
+      if (sym.flags & ts.SymbolFlags.Value) {
+        t = checker.getTypeOfSymbolAtLocation(sym, sourceFile);
+      } else {
+        t = checker.getDeclaredTypeOfSymbol(sym);
+      }
+      // Pass `sym` as the rootSymbol so recursion into OTHER exported
+      // symbols stops, but recursion into the export's own self-named
+      // type (e.g. typeof Class → the class itself) doesn't immediately
+      // bail out.
+      const leakPath = findAnyLeaks(t, ts, checker, compiled, new WeakSet(), 0, exportedSymbols, sym);
+      const leaks = leakPath !== null;
+      const typeStr = checker.typeToString(t, sourceFile, fmtFlags);
+      const name = sym.getName();
+      const mark = leaks ? red('✗') : green('✓');
+      log(`    ${mark} ${name.padEnd(colW)}  ${dim(typeStr)}`);
+      if (leaks) {
+        totalLeaks++;
+        log(`      ${dim('└─ any at: ')}${yellow(leakPath || '<root>')}`);
+      }
+      entryReport.exports.push({ name, type: typeStr, leaks, leakPath: leaks ? leakPath : null });
+    }
+    report.entries.push(entryReport);
+  }
+
+  const typed = totalExports - totalLeaks;
+  const pct = totalExports > 0 ? (100 * typed / totalExports).toFixed(1) : '100.0';
+  report.totals = { exports: totalExports, typed, leaks: totalLeaks };
+
+  if (json) {
+    console.log(JSON.stringify(report, null, 2));
+  } else {
+    log('');
+    if (totalLeaks === 0) {
+      log(`${green('✓')} ${bold(pkgName)}: ${typed}/${totalExports} exports fully typed (${pct}%).`);
+    } else {
+      log(`${red('✗')} ${bold(pkgName)}: ${typed}/${totalExports} exports fully typed (${pct}%). ${red(String(totalLeaks))} export${totalLeaks === 1 ? '' : 's'} leak \`any\`.`);
+    }
+  }
+
+  return totalLeaks > 0 ? 1 : 0;
 }

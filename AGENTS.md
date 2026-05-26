@@ -67,6 +67,7 @@ rip server
 - Run `bun run build:schema-runtime` after editing any `src/schema/runtime-*.js` fragment (CI's `test:schema-fresh` fails on staleness)
 - Run `bun run bump` for the standard release flow
 - **In a typed Rip codebase, always run `rip check` after edits.** A project is typed if it has `rip.json`/`package.json` with `strict: true`, or any `.rip` files using `::` annotations. `rip check` catches both type errors and shadow-TypeScript emitter bugs that the runtime won't surface.
+- **If a `@rip-lang/*` package advertises a typed public API, keep it honest with `rip check --audit`.** A package "claims to be typed" if its entry file has `::` annotations on exported symbols, or if downstream typed code imports it. For those, run `rip check --audit` before publishing or merging API changes — it runs the normal type check *and* walks the public surface for `any` leaks. A clean exit (0) means the source type-checks and every export is fully typed for consumers; non-zero means at least one of the two failed. Untyped packages with no typed consumers can stick with plain `rip check`. Add `--json` for machine-readable audit output.
 
 ## Compilation Pipeline
 
