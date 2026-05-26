@@ -736,6 +736,7 @@ Remove the `rip.json` concept entirely. Everything that lives there today (`stri
   },
   "rip": {
     "strict": true,
+    "checkAll": true,
     "exclude": []
   }
 }
@@ -746,6 +747,65 @@ Remove the `rip.json` concept entirely. Everything that lives there today (`stri
 **Why one file.** Two config files for a single project is two places to forget. `package.json` is already mandatory for any app that has dependencies (which, after this RFC, all in-repo apps do). The "rip" key keeps Rip-specific config namespaced and out of the way of npm tooling.
 
 **Migration.** Two files exist today: `examples/cart/rip.json` and `examples/form/rip.json`. Fold each into the sibling `package.json` and delete. Trivial to do in one commit.
+
+#### 1a. Decouple strictness from coverage: split `strict` into two flags
+
+Today's `strict` flag is overloaded — it controls two genuinely orthogonal axes, and the conflation is visible in [src/typecheck.js](src/typecheck.js#L2613-L2631):
+
+1. **TS strictness level** — passed through to the TypeScript compiler options (`noImplicitAny`, `strictNullChecks`, the whole `strict` family). Controls *how* annotated code is checked.
+2. **File inclusion policy** — `hasTypeAnnotations(source) || strict` at line 2631. Controls *which* files get checked at all (only annotated files vs. every non-`@nocheck` file).
+
+These are independent decisions. The four combinations are all reasonable:
+
+|                | Check annotated files only | Check every file     |
+| -------------- | -------------------------- | -------------------- |
+| **Lenient TS** | default today              | unreachable today    |
+| **Strict TS**  | unreachable today          | `strict: true` today |
+
+The two unreachable cells are real use cases:
+
+- **Lenient TS, check all** — gradual-typing project that wants `rip check` to *see* every file (for RFC 9 §3 undeclared-import diagnostics, RFC 5 `__RipRoutes` building, unused-export hints) without committing to strict-null-checks across the codebase.
+- **Strict TS, opt-in per file** — mostly-untyped app that wants the few annotated files held to the strictest standard, without pulling everything else in.
+
+TypeScript itself never coupled these — `strict` is severity, `include`/`files` is scope. The Rip overload was a shortcut that's now in the way of RFC 9 §3 (the undeclared-import check is a scope-of-`rip check` question, not a severity one).
+
+**Proposal.** Split into two flags:
+
+```jsonc
+{
+  "rip": {
+    "strict": true,      // TS strictness family (noImplicitAny, strictNullChecks, …)
+    "checkAll": true,    // check every non-@nocheck file, not just annotated ones
+    "exclude": []
+  }
+}
+```
+
+**Composition with `exclude`.** Cleanly orthogonal. `findRipFiles()` ([typecheck.js:2617](src/typecheck.js#L2617)) applies `exclude` patterns first — those paths never enter the candidate set. `checkAll` then runs over only the survivors. So `checkAll: true` + `exclude: ["legacy/**"]` means "check every file except the legacy tree." Three layered filters, in order:
+
+1. **`exclude`** — filesystem-level removal (path globs)
+2. **`# @nocheck`** — file-level opt-out (per-file pragma; always wins, regardless of `checkAll`)
+3. **`checkAll` vs. annotated-only** — decision policy on what survives the first two
+
+**Defaults for a fresh project.** Omitting the `"rip"` key entirely (or declaring it empty) should give:
+
+```jsonc
+{ "strict": false, "checkAll": false, "exclude": [] }
+```
+
+A brand-new app is zero-config and starts permissive. This matches the existing philosophy comment in [src/typecheck.js](src/typecheck.js#L609-L618) ("opt UP to strict") and the mypy / Hack / pre-strict-TS precedent: gradual typing means new projects start permissive and tighten as they grow. The expected opt-in path:
+
+| Project stage                            | `strict` | `checkAll` |
+| ---------------------------------------- | -------- | ---------- |
+| Brand-new app, no types yet              | `false`  | `false`    |
+| Sprinkling `::` annotations on new files | `false`  | `false`    |
+| Want no file to slip through untyped     | `false`  | `true`     |
+| Mature, fully-typed codebase             | `true`   | `true`     |
+| Library / package author (`packages/*`)  | `true`   | `true`     |
+
+**Migration.** Existing `strict: true` projects keep behavior with `{ strict: true, checkAll: true }` — the migration that folds `rip.json` into `package.json#rip` (§1) also expands the old flag into the new pair. The auto-detection rule in [AGENTS.md](AGENTS.md) ("typed if `strict: true` or any `::` annotation") becomes "typed if `strict`, `checkAll`, or any `::`" — same triggering surface, one extra term.
+
+**Why land it here.** §1 is already rewriting `readProjectConfig` to move config from `rip.json` to `package.json#rip` and adding the new `routes` field. Splitting `strict` is a one-line shape change to the same function in the same PR. Deferring the split means migrating the conflated flag once and then migrating it again.
 
 #### 2. Dependencies are declared in `dependencies`, not invented
 
