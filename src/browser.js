@@ -48,6 +48,40 @@ const dedent = s => {
 const sanitizeSourceURL = (url) =>
   String(url).replace(/[\r\n]/g, '').replace(/\s+$/g, '');
 
+// Rewrite `import { … } from '@rip-lang/<pkg>'` into a `globalThis`
+// destructure. The browser bundle copies every function export from
+// `@rip-lang/app` (and friends) onto `globalThis` at startup (see
+// `_entry.js` in scripts/build.js), so consumers can import them by name
+// in source while the runtime form is a plain destructure. Named imports
+// only — default / namespace forms warn and pass through.
+function rewriteRipPkgImports(js) {
+  const re = /^(\s*)import\s+([^'"]+?)\s+from\s+['"](@rip-lang\/[^'"]+)['"];?\s*$/gm;
+  return js.replace(re, (full, indent, clause, spec) => {
+    const trimmed = clause.trim();
+    if (trimmed.startsWith('type ')) return `${indent}// type-only import erased: ${spec}`;
+    const open = trimmed.indexOf('{');
+    const close = trimmed.lastIndexOf('}');
+    if (open < 0 || close <= open) {
+      console.warn(`[Rip] Skipping non-named import from ${spec}; only \`import { … } from '@rip-lang/*'\` is supported in browser bundles.`);
+      return full;
+    }
+    const inside = trimmed.slice(open + 1, close);
+    const parts = [];
+    for (let raw of inside.split(',')) {
+      let name = raw.trim().replace(/^type\s+/, '');
+      if (!name) continue;
+      if (/\s+as\s+/.test(name)) {
+        const [orig, alias] = name.split(/\s+as\s+/).map(s => s.trim());
+        parts.push(`${orig}: ${alias}`);
+      } else {
+        parts.push(name);
+      }
+    }
+    if (parts.length === 0) return `${indent}// import erased: ${spec}`;
+    return `${indent}const { ${parts.join(', ')} } = globalThis;`;
+  });
+}
+
 // Insert `//# sourceURL=<name>` BEFORE the existing `//# sourceMappingURL=...`
 // comment (or append at end if none). NEVER prepend — that would shift every
 // generated-line mapping by 1 line, breaking line-only source maps.
@@ -209,7 +243,7 @@ async function processRipScripts() {
           ? { ...baseOpts, sourceMap: 'inline', filename: ripName }
           : baseOpts;
         let js;
-        try { js = compileToJS(s.code, opts); }
+        try { js = rewriteRipPkgImports(compileToJS(s.code, opts)); }
         catch (e) { console.error(_formatError(e, { source: s.code, file: ripName, color: false })); continue; }
         try { await (0, eval)(debug ? wrapForEval(js, ripName) : `(async()=>{\n${js}\n})()`); }
         catch (e) { console.error(`Rip runtime error in ${ripName}:`, e); }
@@ -280,7 +314,7 @@ async function processRipScripts() {
           ? { ...baseOpts, sourceMap: 'inline', filename: ripName }
           : baseOpts;
         try {
-          const js = compileToJS(s.code, opts);
+          const js = rewriteRipPkgImports(compileToJS(s.code, opts));
           compiled.push({ js, url: ripName });
         } catch (e) {
           console.error(_formatError(e, { source: s.code, file: ripName, color: false }));
@@ -414,7 +448,7 @@ export async function importRip(url) {
     if (!r.ok) throw new Error(`importRip: ${url} (${r.status})`);
     return r.text();
   });
-  const js = compileToJS(source);
+  const js = rewriteRipPkgImports(compileToJS(source));
   const header = `// ${url}\n`;
   const blob = new Blob([header + js], { type: 'application/javascript' });
   const blobUrl = URL.createObjectURL(blob);

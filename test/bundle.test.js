@@ -137,6 +137,14 @@ check('bundle exposes language version', () => {
   if (!/^\\d+\\.\\d+\\.\\d+/.test(e.VERSION)) throw new Error('bad VERSION: ' + e.VERSION);
 });
 
+check("@rip-lang/app exports copied to globalThis", () => {
+  for (const k of ['launch', 'stash', 'createResource', 'createRouter', 'createRenderer', 'createComponents']) {
+    if (typeof globalThis[k] !== 'function') {
+      throw new Error('globalThis.' + k + ' missing — @rip-lang/app entry preamble did not copy it');
+    }
+  }
+});
+
 process.stdout.write('\\u0001RESULTS\\u0001' + JSON.stringify(results) + '\\u0001RESULTS\\u0001');
 `;
 
