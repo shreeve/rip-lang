@@ -1599,10 +1599,14 @@ export class Lexer {
     this.closeMergeAssignments();
     this.closeOpenCalls();
     this.closeOpenIndexes();
+    // rewriteTypes must run BEFORE normalizeLines: otherwise a type-arrow
+    // `=>` inside `(...) => T` gets treated as a single-liner function and
+    // wrapped in spurious INDENT/OUTDENT, which then derails the type
+    // collector (it slurps the whole assignment body as part of the type).
+    this.rewriteTypes();
     this.normalizeLines();
     this.rewriteRender?.();
     this.rewriteSchema?.();
-    this.rewriteTypes();
     this.tagPostfixConditionals();
     this.rewriteTaggedTemplates();
     this.addImplicitBracesAndParens();

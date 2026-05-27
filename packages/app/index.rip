@@ -25,6 +25,138 @@
 { setContext, getContext, hasContext } = globalThis.__ripComponent or {}
 export { setContext, getContext, hasContext }
 
+# =============================================================================
+# Internal types — used by public function signatures below. Not exported,
+# since consumers only see the function types via `index.d.ts` inference;
+# they have no need to import these names directly. Each cluster mirrors
+# the runtime section of the same name further down the file.
+# =============================================================================
+
+type Disposer = () => void
+
+type Resource<T> =
+  data: T | null
+  loading: boolean
+  error: unknown
+  refetch: () => Promise<T>
+  dispose: Disposer
+
+type ComponentsStore =
+  read: (path: string) => string | undefined
+  write: (path: string, content: string) => void
+  del: (path: string) => void
+  exists: (path: string) => boolean
+  size: () => number
+  list: (dir?: string) => Array<string>
+  listAll: (dir?: string) => Array<string>
+  load: (obj: Record<string, string>) => void
+  watch: (fn: (event: string, path: string) => void) => Disposer
+  getCompiled: (path: string) => Record<string, unknown> | undefined
+  setCompiled: (path: string, mod: Record<string, unknown>) => void
+
+type Route =
+  pattern: string
+  regex: { regex: RegExp, names: Array<string> }
+  file: string
+  rel: string
+
+type RouteInfo =
+  path: string
+  params: Record<string, string>
+  route: Route | null
+  layouts: Array<string>
+  query: Record<string, string>
+  hash: string
+
+type RouterErrorInfo =
+  status: number
+  path?: string
+  message?: string
+
+type RouterOpts =
+  root?: string
+  base?: string
+  hash?: boolean
+  onError?: (err: RouterErrorInfo) => void
+
+type Router =
+  push: (url: string) => void
+  replace: (url: string) => void
+  back: () => void
+  forward: () => void
+  onNavigate: (cb: (info: RouteInfo) => void) => Disposer
+  rebuild: () => void
+  init: () => Router
+  destroy: () => void
+  current: RouteInfo
+  path: string
+  params: Record<string, string>
+  route: Route | null
+  layouts: Array<string>
+  query: Record<string, string>
+  hash: string
+  navigating: boolean
+  routes: Array<Route>
+
+type ComponentInstance =
+  mount: (target: Element) => void
+  unmount?: (opts?: { removeDOM?: boolean }) => void
+  beforeMount?: () => void
+  load?: (params: Record<string, string>, query: Record<string, string>) => unknown
+  onError?: (err: unknown) => void
+  _target?: Element
+
+type ComponentConstructor = new (props?:: Record<string, unknown>) => ComponentInstance
+
+type Resolver =
+  map: Record<string, string>
+  classes: Record<string, ComponentConstructor>
+  key: string
+  blobUrls?: Record<string, string>
+  compiling?: Record<string, boolean>
+
+type CompileFn = (source: string, opts?: { sourceMap?: 'inline' | boolean, filename?: string }) => string
+
+type RendererErrorInfo =
+  status: number
+  message: string
+  error?: unknown
+
+type RendererOpts =
+  router: Router
+  app: Record<string, any>
+  components: ComponentsStore
+  resolver: Resolver
+  compile: CompileFn
+  target?: string | Element
+  onError?: (err: RendererErrorInfo) => void
+
+type Renderer =
+  start: () => Renderer
+  stop: () => void
+  remount: (force?: boolean) => void
+
+type Bundle =
+  components?: Record<string, string>
+  data?: Record<string, unknown>
+  routes?: Array<Route>
+
+type LaunchOpts =
+  base?: string
+  target?: string
+  compile?: CompileFn
+  persist?: boolean | string
+  hash?: boolean
+  bundle?: Bundle
+  bundleUrl?: string
+
+type LaunchResult =
+  app: Record<string, any>
+  components: ComponentsStore
+  router: Router
+  renderer: Renderer
+  destroy: Disposer
+
 # Browser/SSR contract:
 #
 #   The lower tier of Rip App is environment-independent — `stash`,
@@ -302,7 +434,7 @@ export isStash = (obj) -> obj?[:stash] is true
 #
 # Returns a disposer that unsubscribes the autosave effect, removes the
 # beforeunload handler, and writes one final snapshot before unwiring.
-export persistStash = (app, opts = {}) ->
+export def persistStash(app, opts?:: { local?: boolean, key?: string } = {}):: Disposer
   assertBrowser 'persistStash'
   target = raw(app) or app
   return -> null if target[:persisted]    # double-call guard returns a no-op disposer
@@ -324,7 +456,7 @@ export persistStash = (app, opts = {}) ->
     t = setTimeout _save, 2000
     -> clearTimeout t
   window.addEventListener 'beforeunload', _save
-  disposed = false
+  disposed:: boolean = false
   ->
     return if disposed
     disposed = true
@@ -341,7 +473,7 @@ export persistStash = (app, opts = {}) ->
 # Call .refetch() to reload.
 # ==============================================================================
 
-export createResource = (fn, opts = {}) ->
+export def createResource<T>(fn:: (signal?:: AbortSignal) => Promise<T>, opts?:: { initial?: T | null, lazy?: boolean } = {}):: Resource<T>
   # `?? null` instead of `or null` so falsy initials like 0, '', false
   # survive (the previous `or` collapsed them to null).
   _data       = __state(opts.initial ?? null)
@@ -507,7 +639,7 @@ export hold = (ms, source) ->
 
 export createComponents = ->
   files = new Map()
-  watchers = new Set()       # Set, not Array — idempotent disposers, no -1 splice
+  watchers:: Set<(event: string, path: string) => void> = new Set()  # idempotent disposers via Set, no -1 splice
   compiled = new Map()
 
   notify = (event, path) ->
@@ -669,7 +801,7 @@ getLayoutChain = (routeFile, root, layouts) ->
     chain.push layouts.get(dir) if layouts.has(dir)
   chain
 
-export createRouter = (components, opts = {}) ->
+export def createRouter(components:: ComponentsStore, opts?:: RouterOpts = {}):: Router
   assertBrowser 'createRouter'
   root = opts.root or 'components'
   base = opts.base or ''
@@ -715,7 +847,7 @@ export createRouter = (components, opts = {}) ->
   _normalizedUrl = __state(_path.value)
 
   tree = buildRoutes(components, root)
-  navCallbacks = new Set()
+  navCallbacks:: Set<(info: RouteInfo) => void> = new Set()
 
   unwatchComponents = components.watch (event, path) ->
     return unless path.startsWith(root + '/')
@@ -992,7 +1124,7 @@ compileAndImport = (source, compile, components = null, path = null, resolver = 
         # namespace, named, default+named. Group 2 is the binding clause
         # (anything between `import` and `from`); undefined for side-effect.
         ripImportRe = /^(\s*import\s+(?:(.*?)\s+from\s+)?['"])([^'"]*\.rip)(['"];?\s*)$/gm
-        matches = Array.from(js.matchAll(ripImportRe))
+        matches:: Array<RegExpMatchArray> = Array.from(js.matchAll(ripImportRe))
         # Walk matches in reverse so string indices stay valid after each splice
         for m in matches by -1
           [full, pre, bindingClause, specifier, post] = m
@@ -1102,7 +1234,7 @@ compileAndImport = (source, compile, components = null, path = null, resolver = 
       if resolver.blobUrls?[path] is url
         delete resolver.blobUrls[path]
 
-export createRenderer = (opts = {}) ->
+export def createRenderer(opts:: RendererOpts):: Renderer
   assertBrowser 'createRenderer'
   { router, app, components, resolver, compile, target, onError } = opts
 
@@ -1116,16 +1248,16 @@ export createRenderer = (opts = {}) ->
     container.id = 'app'
     document.body.appendChild container
 
-  currentComponent = null
-  currentRoute = null
-  currentParams = null
-  currentQuery = null
-  currentLayouts = []
-  layoutInstances = []
+  currentComponent:: ComponentInstance | null = null
+  currentRoute:: string | null = null
+  currentParams:: Record<string, string> | null = null
+  currentQuery:: Record<string, string> | null = null
+  currentLayouts:: Array<string> = []
+  layoutInstances:: Array<ComponentInstance> = []
   mountPoint = container
   generation = 0
-  disposeEffect = null
-  unwatchSources = null
+  disposeEffect:: Disposer | null = null
+  unwatchSources:: Disposer | null = null
 
   # When a source file changes (hot reload), invalidate the resolver's
   # cached blob URL and class registry so the next compile picks up the
@@ -1360,7 +1492,7 @@ export createRenderer = (opts = {}) ->
         container.innerHTML = ''
         container.appendChild pre
 
-  started = false
+  started:: boolean = false
 
   renderer =
     start: ->
@@ -1406,7 +1538,7 @@ export createRenderer = (opts = {}) ->
     # unmount + remount even when the route hasn't changed. Used by hot
     # reload after a source change so the new component class actually
     # gets instantiated.
-    remount: (force = false) ->
+    remount: (force:: boolean | { force?: boolean } = false) ->
       forceFlag = if typeof force is 'object' then !!force.force else !!force
       current = router.current
       mountRoute(current, forceFlag) if current.route
@@ -1438,7 +1570,8 @@ connectWatch = (url) ->
       location.reload()
 
     es.addEventListener 'css', ->
-      for link as document.querySelectorAll('link[rel="stylesheet"]')
+      sheets:: NodeListOf<HTMLLinkElement> = document.querySelectorAll('link[rel="stylesheet"]')
+      for link as sheets
         cssUrl = new URL(link.href)
         cssUrl.searchParams.set('_t', Date.now())
         link.href = cssUrl.toString()
@@ -1473,7 +1606,7 @@ connectWatch = (url) ->
 # connects SSE hot-reload.
 # ==============================================================================
 
-export launch = (opts = {}) ->
+export def launch(opts?:: LaunchOpts = {}):: Promise<LaunchResult>
   assertBrowser 'launch'
   appBase = (opts.base or '').replace(/\/+$/, '')   # strip trailing slashes
   target = opts.target or '#app'
@@ -1514,7 +1647,7 @@ export launch = (opts = {}) ->
     throw new Error "launch: no bundle or bundleUrl provided"
 
   # Create the unified stash
-  app = stash { components: {}, routes: {}, data: {} }
+  app:: Record<string, any> = stash { components: {}, routes: {}, data: {} }
   globalThis.__ripApp = app
 
   # Create components store and load component sources
@@ -1529,7 +1662,7 @@ export launch = (opts = {}) ->
   # Auto-load app/stash.rip if present — provides defaults + methods that
   # survive the server-side JSON.stringify boundary that bundle.data goes
   # through. Must export a top-level `stash`: write `export stash:: ... = ...`.
-  stashRaw = null
+  stashRaw:: Record<string, unknown> | null = null
   stashPath = 'components/_lib/stash.rip'
   if appComponents.exists(stashPath)
     stashSource = appComponents.read(stashPath)
@@ -1552,7 +1685,7 @@ export launch = (opts = {}) ->
     app.routes = bundle.routes
 
   # Restore persisted state (overrides bundle defaults with saved user state)
-  persistDisposer = null
+  persistDisposer:: Disposer | null = null
   if persist
     persistDisposer = persistStash app, local: persist is 'local', key: "__rip_#{appBase}"
 
@@ -1580,11 +1713,12 @@ export launch = (opts = {}) ->
   renderer.start()
 
   # Connect SSE watch if enabled
-  watchDisposer = null
+  watchDisposer:: Disposer | null = null
   if bundle.data?.watch
     watchDisposer = connectWatch "#{appBase}/watch"
 
-  destroyed = false
+  win:: Window & Record<string, any> = window
+  destroyed:: boolean = false
   destroy = ->
     return if destroyed
     destroyed = true
@@ -1595,14 +1729,14 @@ export launch = (opts = {}) ->
     delete globalThis[classesKey]
     delete globalThis.__ripApp
     delete globalThis.__ripLaunched
-    if window.app is app
-      delete window.app
-    if window.__RIP__?.app is app
-      delete window.__RIP__
+    if win.app is app
+      delete win.app
+    if win.__RIP__?.app is app
+      delete win.__RIP__
 
   # Expose for console and dev tools
-  window.app = app
-  window.__RIP__ =
+  win.app = app
+  win.__RIP__ =
     app: app
     components: appComponents
     router: router
@@ -1916,7 +2050,8 @@ _FOCUSABLE =! 'a[href],button:not([disabled]),input:not([disabled]),select:not([
 _ariaTrapFocus = (panel) ->
   handler = (e) ->
     return unless e.key is 'Tab'
-    list = Array.from(panel.querySelectorAll(_FOCUSABLE)).filter (f) -> f.offsetParent isnt null
+    nodes:: NodeListOf<HTMLElement> = panel.querySelectorAll(_FOCUSABLE)
+    list = Array.from(nodes).filter (f) -> f.offsetParent isnt null
     return unless list.length
     first = list[0]; last = list[list.length - 1]
     if e.shiftKey
@@ -1941,7 +2076,7 @@ _ariaWireAria = (panel, id) ->
 # Shared modal scroll-lock stack — fixes race when Dialog + AlertDialog both open
 # lockScroll(instance): locks body scroll
 # unlockScroll(instance): removes from stack, restores scroll if stack empty
-_ariaModalStack = []
+_ariaModalStack:: Array<{instance: unknown, scrollY: number}> = []
 _ariaLockScroll = (instance) ->
   scrollY = window.scrollY
   _ariaModalStack.push { instance, scrollY }
@@ -1966,8 +2101,8 @@ _ariaUnlockScroll = (instance) ->
 # later call (after body exists) on a browser that DOES support anchor
 # positioning would still return the cached false. So we only flip
 # `_ariaAnchorChecked = true` after we've successfully run a real probe.
-_ariaAnchorChecked = false
-_ariaAnchorSupported = false
+_ariaAnchorChecked:: boolean = false
+_ariaAnchorSupported:: boolean = false
 _ariaHasAnchor = ->
   return _ariaAnchorSupported if _ariaAnchorChecked
   return false unless typeof document isnt 'undefined' and document.body
@@ -2000,7 +2135,7 @@ _ariaResetPositionStyles = (el) ->
   for prop in _ARIA_POSITION_OWNED
     el.style[prop] = ''
 
-_ariaPosition = (trigger, floating, opts = {}) ->
+_ariaPosition = (trigger, floating, opts?:: { placement?: string, offset?: number, matchWidth?: boolean } = {}) ->
   return unless trigger and floating
   placement = opts.placement ?? 'bottom start'
   offset = opts.offset ?? 4

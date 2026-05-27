@@ -15,6 +15,14 @@ const documents = new TextDocuments(TextDocument);
 
 let ts, compiler, tc, service, rootPath, lastPatchedProgram;
 
+// Log paths relative to the workspace root so files like `index.rip` are
+// distinguishable. Falls back to the basename if the path is outside root.
+function relPath(filePath) {
+  if (!rootPath) return path.basename(filePath);
+  const r = path.relative(rootPath, filePath);
+  return r.startsWith('..') ? filePath : r;
+}
+
 // Real .rip path → { version, source, tsContent, srcToGen, genToSrc, ... }
 const compiled = new Map();
 
@@ -453,11 +461,11 @@ function compileRip(filePath, source) {
           }
         }
       } catch (e) {
-        connection.console.log(`[rip] intrinsic props error ${path.basename(filePath)}: ${e.message}`);
+        connection.console.log(`[rip] intrinsic props error ${relPath(filePath)}: ${e.message}`);
       }
     }
 
-    connection.console.log(`[rip] compiled ${path.basename(filePath)}: hasTypes=${entry.hasTypes}, headerLines=${entry.headerLines}`);
+    connection.console.log(`[rip] compiled ${relPath(filePath)}: hasTypes=${entry.hasTypes}, headerLines=${entry.headerLines}`);
     publishDiagnostics(filePath);
 
     // Republish dependents only when this file's public surface (dts) actually
@@ -508,7 +516,7 @@ function compileRip(filePath, source) {
       source: 'rip',
     });
     connection.sendDiagnostics({ uri: pathToUri(filePath), diagnostics });
-    connection.console.log(`[rip] compile error ${path.basename(filePath)}: ${e.message}`);
+    connection.console.log(`[rip] compile error ${relPath(filePath)}: ${e.message}`);
   }
 }
 
@@ -814,7 +822,7 @@ function publishDiagnostics(filePath) {
 
   connection.sendDiagnostics({ uri: pathToUri(filePath), diagnostics: deduped });
   lastDiagnostics.set(filePath, deduped);
-  connection.console.log(`[rip] diagnostics ${path.basename(filePath)}: ${diagnostics.length} issues`);
+  connection.console.log(`[rip] diagnostics ${relPath(filePath)}: ${diagnostics.length} issues`);
 }
 
 // ── TypeScript Language Service ────────────────────────────────────
@@ -1955,7 +1963,7 @@ connection.onRequest('textDocument/semanticTokens/full', (params) => {
       prevChar = t.char;
     }
 
-    connection.console.log(`[rip] semantic tokens ${path.basename(fp)}: ${data.length / 5} tokens`);
+    connection.console.log(`[rip] semantic tokens ${relPath(fp)}: ${data.length / 5} tokens`);
     return { data };
   } catch (e) {
     connection.console.log(`[rip] semantic tokens error: ${e.message}`);

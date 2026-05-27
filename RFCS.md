@@ -6,7 +6,7 @@ Design proposals under discussion. Grouped by domain.
 
 - [x] [RFC 1 — Explicit prop optionality with `?::`](#rfc-1-explicit-prop-optionality-with-)
 - [x] [RFC 2 — Rip packages exposing types to typed Rip apps](#rfc-2-rip-packages-exposing-types-to-typed-rip-apps)
-- [ ] [RFC 3 — App framework types for ambient globals](#rfc-3-app-framework-types-for-ambient-globals)
+- [x] [RFC 3 — App framework types for ambient globals](#rfc-3-app-framework-types-for-ambient-globals)
 - [ ] [RFC 4 — Typed `this` shape for components and server handlers](#rfc-4-typed-this-shape-for-components-and-server-handlers)
 - [ ] [RFC 5 — Typed routes — `href` typing, typed `router.push`, per-route `@params`](#rfc-5-typed-routes--href-typing-typed-routerpush-per-route-params)
 
@@ -161,6 +161,8 @@ Depends on RFC 1 (annotations use `?::` for optional fields). Mechanism re-used 
 
 
 ## RFC 3: App framework types for ambient globals
+
+> **Status: Implemented.**
 
 RFC 2 covers packages that consumers reach via `import` — `@rip-lang/server`, `@rip-lang/db`, etc. The Rip App framework is a different shape. Its public API — `createResource`, `createComponents`, `createRouter`, `createRenderer`, `launch`, `delay`, `debounce`, `throttle`, `hold`, `stash`, `raw`, `isStash`, `persistStash`, `setContext`, `getContext`, `hasContext` (thirteen framework-authored exports plus three context helpers re-exported from the component runtime, sixteen total) — is exposed as **ambient globals** in the browser, registered onto `globalThis` by the build script when `rip.min.js` loads. Untyped consumers just write `createResource ...` with no import line. That's a deliberate part of the framework's "no build step" promise: a `<script src="rip.min.js">` tag plus a few `<script type="text/rip">` blocks is a complete app.
 

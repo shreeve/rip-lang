@@ -637,7 +637,12 @@ export class CodeEmitter {
     }
 
     if (head === 'for-in' || head === 'for-of' || head === 'for-as') {
-      this.collectVarsFromLoopHead(rest[0], this.programVars);
+      // Don't hoist loop vars: emitForIn/emitForOf/emitForAs already
+      // emit `for (let x of ...)`, which is block-scoped AND gives JS's
+      // per-iteration binding semantics (critical for closures captured
+      // inside the loop). Hoisting `let x` to the surrounding scope
+      // would shadow that as dead code (TS6133 "declared but never
+      // read") without changing runtime behavior.
       rest.slice(1).forEach(item => this.collectProgramVariables(item));
       return;
     }
@@ -700,7 +705,10 @@ export class CodeEmitter {
         return;
       }
       if (head === 'for-in' || head === 'for-of' || head === 'for-as') {
-        this.collectVarsFromLoopHead(rest[0], vars);
+        // See collectProgramVariables for-loop branch: loop vars are
+        // block-scoped via the for-header's `let`; hoisting them here
+        // would only produce a redundant outer `let x` flagged as
+        // unused.
         rest.slice(1).forEach(collect);
         return;
       }

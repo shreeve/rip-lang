@@ -67,6 +67,17 @@ export const SIGNAL_FN = 'declare function __state<T>(value: T | Signal<T>): Sig
 export const COMPUTED_INTERFACE = 'interface Computed<T> { readonly value: T; read(): T; lock(): Computed<T>; free(): Computed<T>; kill(): T; }';
 export const COMPUTED_FN = 'declare function __computed<T>(fn: () => T): Computed<T>;';
 export const EFFECT_FN = 'declare function __effect(fn: () => void | (() => void)): () => void;';
+export const BATCH_FN = 'declare function __batch<T>(fn: () => T): T;';
+
+// Names destructured from `globalThis.__rip` in the source. The DTS
+// preamble and the post-compile `declare function` injection both need
+// to skip auto-declaring these names — the explicit binding shadows the
+// global and would otherwise trip TS2630.
+export function ripDestructuredNames(source) {
+  if (typeof source !== 'string') return new Set();
+  const inside = (source.match(/\{\s*([^}]*?)\s*\}\s*=\s*globalThis\.__rip\b/) || [])[1] || '';
+  return new Set(inside.split(',').map(s => s.trim().split(/[:\s]/)[0]).filter(Boolean));
+}
 
 // ============================================================================
 // emitTypes — generate .d.ts from annotated tokens + s-expression tree
@@ -82,7 +93,9 @@ export function emitTypes(tokens, sexpr = null, source = '') {
   let classFields = new Set(); // Track emitted field names to avoid duplicates
   let usesSignal = false;
   let usesComputed = false;
+  let usesBatch = false;
   let usesRipIntrinsicProps = false;
+  const explicitlyBound = ripDestructuredNames(source);
   const sourceLines = typeof source === 'string' ? source.split('\n') : [];
 
   // Pre-scan: detect reactive operators regardless of type annotations.
@@ -92,6 +105,7 @@ export function emitTypes(tokens, sexpr = null, source = '') {
     const tag = tokens[i][0];
     if (tag === 'REACTIVE_ASSIGN') usesSignal = true;
     else if (tag === 'COMPUTED_ASSIGN') usesComputed = true;
+    else if (tag === 'IDENTIFIER' && tokens[i][1] === '__batch') usesBatch = true;
   }
 
   // Format { prop; prop } into multi-line block.  Only applies when the
@@ -860,14 +874,17 @@ export function emitTypes(tokens, sexpr = null, source = '') {
   }
   if (usesSignal) {
     preamble.push(SIGNAL_INTERFACE);
-    preamble.push(SIGNAL_FN);
+    if (!explicitlyBound.has('__state')) preamble.push(SIGNAL_FN);
   }
   if (usesComputed) {
     preamble.push(COMPUTED_INTERFACE);
-    preamble.push(COMPUTED_FN);
+    if (!explicitlyBound.has('__computed')) preamble.push(COMPUTED_FN);
   }
-  if (usesSignal || usesComputed) {
+  if ((usesSignal || usesComputed) && !explicitlyBound.has('__effect')) {
     preamble.push(EFFECT_FN);
+  }
+  if ((usesSignal || usesComputed || usesBatch) && !explicitlyBound.has('__batch')) {
+    preamble.push(BATCH_FN);
   }
   if (hasSchemaDecls) {
     preamble.push(...SCHEMA_INTRINSIC_DECLS);

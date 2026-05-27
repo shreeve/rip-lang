@@ -3501,6 +3501,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
   function collectTypeExpression(tokens, j) {
     let typeTokens = [];
     let depth = 0;
+    let bracketStack = [];
     let startJ = j;
     while (j < tokens.length) {
       let t = tokens[j];
@@ -3509,12 +3510,18 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       let isClose = tTag === ")" || tTag === "]" || tTag === "}" || tTag === "CALL_END" || tTag === "PARAM_END" || tTag === "INDEX_END" || tTag === "COMPARE" && t[1] === ">";
       if (tTag === "SHIFT" && t[1] === ">>" && depth >= 2) {
         depth -= 2;
+        if (bracketStack[bracketStack.length - 1] === "<")
+          bracketStack.pop();
+        if (bracketStack[bracketStack.length - 1] === "<")
+          bracketStack.pop();
         typeTokens.push(t);
         j++;
         continue;
       }
       if (isOpen) {
         depth++;
+        let kind = tTag === "{" ? "{" : tTag === "[" || tTag === "INDEX_START" ? "[" : tTag === "COMPARE" && t[1] === "<" ? "<" : "(";
+        bracketStack.push(kind);
         typeTokens.push(t);
         j++;
         continue;
@@ -3522,6 +3529,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       if (isClose) {
         if (depth > 0) {
           depth--;
+          bracketStack.pop();
           typeTokens.push(t);
           j++;
           continue;
@@ -3550,6 +3558,23 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           break;
         }
       }
+      if (depth > 0 && (tTag === "INDENT" || tTag === "OUTDENT")) {
+        j++;
+        continue;
+      }
+      if (depth > 0 && tTag === "TERMINATOR") {
+        typeTokens.push(["", ";"]);
+        j++;
+        continue;
+      }
+      if (tTag === "PROPERTY" && bracketStack[bracketStack.length - 1] === "{") {
+        let prev = typeTokens[typeTokens.length - 1];
+        let prevTag = prev?.[0];
+        let prevVal = prev?.[1];
+        let needsSep = prev && prevTag !== "{" && prevTag !== "," && !(prevTag === "" && prevVal === ";");
+        if (needsSep)
+          typeTokens.push(["", ";"]);
+      }
       typeTokens.push(t);
       j++;
     }
@@ -3561,6 +3586,23 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       return "";
     if (typeTokens[0]?.[0] === "=>")
       typeTokens.unshift(["", "()"]);
+    {
+      let curlyDepth = 0;
+      for (let t of typeTokens) {
+        let tag = t[0];
+        if (tag === "{")
+          curlyDepth++;
+        else if (tag === "}")
+          curlyDepth--;
+        else if (tag === "TYPE_ANNOTATION" && curlyDepth > 0) {
+          let loc = t.loc;
+          let where = loc ? ` (line ${loc.r}, col ${loc.c})` : "";
+          let err = new Error(`Use \`:\` (not \`::\`) inside a structural type literal${where}. ` + `\`::\` binds a name to a type; inside \`{ ... }\` in type ` + `position, fields use \`:\` (TS-style).`);
+          err.loc = loc;
+          throw err;
+        }
+      }
+    }
     let parts = typeTokens.map((t, i) => {
       let next = typeTokens[i + 1];
       if (t.data?.optional && next && (next[0] === "TYPE_ANNOTATION" || next[0] === ":")) {
@@ -5115,9 +5157,35 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       return val.length;
     }
     tagParameters() {
-      if (this.prevTag() !== ")")
-        return this.tagDoIife();
-      let i = this.tokens.length - 1;
+      let closeIdx = this.tokens.length - 1;
+      if (this.tokens[closeIdx]?.[0] !== ")") {
+        let n = this.tokens.length;
+        let depth = 0;
+        let j = n - 1;
+        let found = -1;
+        while (j >= 0) {
+          let tk = this.tokens[j];
+          let tg = tk[0];
+          if (tg === ")" || tg === "]" || tg === "}" || tg === "CALL_END" || tg === "PARAM_END" || tg === "INDEX_END" || tg === "COMPARE" && tk[1] === ">") {
+            depth++;
+          } else if (tg === "(" || tg === "[" || tg === "{" || tg === "CALL_START" || tg === "PARAM_START" || tg === "INDEX_START" || tg === "COMPARE" && tk[1] === "<") {
+            depth--;
+          } else if (depth === 0) {
+            if (tg === "TYPE_ANNOTATION") {
+              if (j > 0 && this.tokens[j - 1][0] === ")")
+                found = j - 1;
+              break;
+            }
+            if (tg === "TERMINATOR" || tg === "INDENT" || tg === "OUTDENT" || tg === "=" || tg === "->" || tg === "=>")
+              break;
+          }
+          j--;
+        }
+        if (found < 0)
+          return this.tagDoIife();
+        closeIdx = found;
+      }
+      let i = closeIdx;
       let stack = [];
       this.tokens[i][0] = "PARAM_END";
       while (i-- > 0) {
@@ -5131,7 +5199,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
             tok2[0] = "PARAM_START";
             return this.tagDoIife(i - 1);
           } else {
-            this.tokens[this.tokens.length - 1][0] = "CALL_END";
+            this.tokens[closeIdx][0] = "CALL_END";
             return;
           }
         }
@@ -5150,10 +5218,10 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       this.closeMergeAssignments();
       this.closeOpenCalls();
       this.closeOpenIndexes();
+      this.rewriteTypes();
       this.normalizeLines();
       this.rewriteRender?.();
       this.rewriteSchema?.();
-      this.rewriteTypes();
       this.tagPostfixConditionals();
       this.rewriteTaggedTemplates();
       this.addImplicitBracesAndParens();
@@ -9795,6 +9863,45 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
         ripSrcCache.set(genLineInStmt, v);
         return v;
       };
+      const inlineTypeRangesCache = new Map;
+      const getInlineTypeRanges = (genLineInStmt) => {
+        if (inlineTypeRangesCache.has(genLineInStmt))
+          return inlineTypeRangesCache.get(genLineInStmt);
+        const lt = codeLines[genLineInStmt];
+        const ranges = [];
+        if (lt && /\)\s*(\{|=>)\s*$/.test(lt)) {
+          const annotRe = /\b[a-zA-Z_$][\w$]*\??\s*:\s*\{/g;
+          let am;
+          while ((am = annotRe.exec(lt)) !== null) {
+            const braceStart = am.index + am[0].length - 1;
+            if (CodeEmitter._isColInsideString(lt, braceStart))
+              continue;
+            let depth = 1, j = braceStart + 1, inStr = false, quote = "";
+            while (j < lt.length && depth > 0) {
+              const ch = lt[j];
+              if (inStr) {
+                if (ch === "\\") {
+                  j += 2;
+                  continue;
+                }
+                if (ch === quote)
+                  inStr = false;
+              } else if (ch === '"' || ch === "'" || ch === "`") {
+                inStr = true;
+                quote = ch;
+              } else if (ch === "{")
+                depth++;
+              else if (ch === "}")
+                depth--;
+              j++;
+            }
+            ranges.push([braceStart, j]);
+            annotRe.lastIndex = j;
+          }
+        }
+        inlineTypeRangesCache.set(genLineInStmt, ranges);
+        return ranges;
+      };
       for (let { name, origLine, origCol } of subs) {
         let escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         let re = new RegExp("\\b" + escaped + "\\b", "g");
@@ -9809,6 +9916,9 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
           const annotSrc = getRipSrcAnnot(genLineInStmt);
           const annotMatches = annotSrc != null && annotSrc === origLine;
           if (lineText && CodeEmitter._isColInsideString(lineText, genCol) && !annotMatches)
+            continue;
+          const itRanges = getInlineTypeRanges(genLineInStmt);
+          if (itRanges.length && itRanges.some(([s, e]) => genCol >= s && genCol < e))
             continue;
           let genLine = lineOffset + genLineInStmt;
           let dist = annotMatches ? Math.abs(genCol - origCol) : Math.abs(genLineInStmt - origLineInStmt) * 1e4 + Math.abs(genCol - origCol);
@@ -9920,7 +10030,6 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
         return;
       }
       if (head === "for-in" || head === "for-of" || head === "for-as") {
-        this.collectVarsFromLoopHead(rest[0], this.programVars);
         rest.slice(1).forEach((item) => this.collectProgramVariables(item));
         return;
       }
@@ -9984,7 +10093,6 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
           return;
         }
         if (head === "for-in" || head === "for-of" || head === "for-as") {
-          this.collectVarsFromLoopHead(rest[0], vars);
           rest.slice(1).forEach(collect);
           return;
         }
@@ -10017,6 +10125,32 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
       };
       collect(body);
       return vars;
+    }
+    collectTypedLocals(body) {
+      let typed = new Map;
+      let walk = (sexpr) => {
+        if (!Array.isArray(sexpr))
+          return;
+        let [head, ...rest] = sexpr;
+        head = str(head);
+        if (Array.isArray(head)) {
+          sexpr.forEach(walk);
+          return;
+        }
+        if (CodeEmitter.ASSIGNMENT_OPS.has(head)) {
+          let [target, value] = rest;
+          if (target instanceof String && target.type && !typed.has(str(target))) {
+            typed.set(str(target), target.type);
+          }
+          walk(value);
+          return;
+        }
+        if (head === "def" || head === "->" || head === "=>" || head === "effect")
+          return;
+        rest.forEach(walk);
+      };
+      walk(body);
+      return typed;
     }
     emit(sexpr, context = "statement") {
       if (sexpr instanceof String) {
@@ -11977,10 +12111,19 @@ export default ${expr[1]}`;
     formatParam(param) {
       if (typeof param === "string")
         return param;
-      if (param instanceof String)
+      if (param instanceof String) {
+        if (this.options.inlineTypes && param.type) {
+          return `${param.valueOf()}: ${param.type.replace(/::/g, ":")}`;
+        }
         return param.valueOf();
-      if (this.is(param, "rest"))
-        return `...${param[1]}`;
+      }
+      if (this.is(param, "rest")) {
+        let restName = param[1];
+        if (this.options.inlineTypes && restName instanceof String && restName.type) {
+          return `...${restName.valueOf()}: ${restName.type.replace(/::/g, ":")}`;
+        }
+        return `...${restName}`;
+      }
       if (this.is(param, "default")) {
         return `${this.formatParam(param[1])} = ${this.emit(param[2], "value")}`;
       }
@@ -12025,15 +12168,15 @@ export default ${expr[1]}`;
       this.sideEffectOnly = sideEffectOnly;
       let paramNames = new Set;
       let extractPN = (p) => {
-        if (typeof p === "string")
-          paramNames.add(p);
+        if (typeof p === "string" || p instanceof String)
+          paramNames.add(str(p));
         else if (Array.isArray(p)) {
           if (p[0] === "rest" || p[0] === "...") {
-            if (typeof p[1] === "string")
-              paramNames.add(p[1]);
+            if (typeof p[1] === "string" || p[1] instanceof String)
+              paramNames.add(str(p[1]));
           } else if (p[0] === "default") {
-            if (typeof p[1] === "string")
-              paramNames.add(p[1]);
+            if (typeof p[1] === "string" || p[1] instanceof String)
+              paramNames.add(str(p[1]));
           } else if (p[0] === "array" || p[0] === "object")
             this.collectVarsFromArray(p, paramNames);
         }
@@ -12071,9 +12214,15 @@ export default ${expr[1]}`;
         this.indentLevel++;
         let code = `{
 `;
-        if (newVars.size > 0)
-          code += this.indent() + `let ${Array.from(newVars).sort().join(", ")};
+        if (newVars.size > 0) {
+          let typedLocals = this.options.inlineTypes ? this.collectTypedLocals(body) : null;
+          let names = Array.from(newVars).sort().map((n) => {
+            let t = typedLocals?.get(n);
+            return t ? `${n}: ${t}` : n;
+          });
+          code += this.indent() + `let ${names.join(", ")};
 `;
+        }
         let firstIsSuper = autoAssignments.length > 0 && statements.length > 0 && Array.isArray(statements[0]) && statements[0][0] === "super";
         let genStatements = (stmts) => {
           stmts.forEach((stmt, index) => {
@@ -13685,6 +13834,7 @@ if (typeof globalThis !== 'undefined') {
         skipDataPart: this.options.skipDataPart,
         stubComponents: this.options.stubComponents,
         reactiveVars: this.options.reactiveVars,
+        inlineTypes: this.options.inlineTypes,
         schemaMode: this.options.schemaMode,
         sourceMap
       });
@@ -13758,7 +13908,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.16.0";
-  var BUILD_DATE = "2026-05-22@09:54:15GMT";
+  var BUILD_DATE = "2026-05-26@12:06:27GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -13771,6 +13921,36 @@ if (typeof globalThis !== 'undefined') {
     return s.replace(RegExp(`^[ 	]{${i}}`, "gm"), "").trim();
   };
   var sanitizeSourceURL = (url) => String(url).replace(/[\r\n]/g, "").replace(/\s+$/g, "");
+  function rewriteRipPkgImports(js) {
+    const re = /^(\s*)import\s+([^'"]+?)\s+from\s+['"](@rip-lang\/[^'"]+)['"];?\s*$/gm;
+    return js.replace(re, (full, indent, clause, spec) => {
+      const trimmed = clause.trim();
+      if (trimmed.startsWith("type "))
+        return `${indent}// type-only import erased: ${spec}`;
+      const open = trimmed.indexOf("{");
+      const close = trimmed.lastIndexOf("}");
+      if (open < 0 || close <= open) {
+        console.warn(`[Rip] Skipping non-named import from ${spec}; only \`import { … } from '@rip-lang/*'\` is supported in browser bundles.`);
+        return full;
+      }
+      const inside = trimmed.slice(open + 1, close);
+      const parts = [];
+      for (let raw of inside.split(",")) {
+        let name = raw.trim().replace(/^type\s+/, "");
+        if (!name)
+          continue;
+        if (/\s+as\s+/.test(name)) {
+          const [orig, alias] = name.split(/\s+as\s+/).map((s) => s.trim());
+          parts.push(`${orig}: ${alias}`);
+        } else {
+          parts.push(name);
+        }
+      }
+      if (parts.length === 0)
+        return `${indent}// import erased: ${spec}`;
+      return `${indent}const { ${parts.join(", ")} } = globalThis;`;
+    });
+  }
   function addSourceURL(js, generatedName) {
     const safe = sanitizeSourceURL(generatedName);
     const pragma = `//# sourceURL=${safe}`;
@@ -13895,7 +14075,7 @@ ${tagged}
           const opts = debug ? { ...baseOpts, sourceMap: "inline", filename: ripName } : baseOpts;
           let js;
           try {
-            js = compileToJS(s.code, opts);
+            js = rewriteRipPkgImports(compileToJS(s.code, opts));
           } catch (e) {
             console.error(formatError(e, { source: s.code, file: ripName, color: false }));
             continue;
@@ -13959,7 +14139,7 @@ ${js}
           const ripName = s.url || `inline-${++inlineCounter}.rip`;
           const opts = debug ? { ...baseOpts, sourceMap: "inline", filename: ripName } : baseOpts;
           try {
-            const js = compileToJS(s.code, opts);
+            const js = rewriteRipPkgImports(compileToJS(s.code, opts));
             compiled.push({ js, url: ripName });
           } catch (e) {
             console.error(formatError(e, { source: s.code, file: ripName, color: false }));
@@ -14063,7 +14243,7 @@ ${wrapped}
         throw new Error(`importRip: ${url} (${r.status})`);
       return r.text();
     });
-    const js = compileToJS(source);
+    const js = rewriteRipPkgImports(compileToJS(source));
     const header = `// ${url}
 `;
     const blob = new Blob([header + js], { type: "application/javascript" });
@@ -14354,7 +14534,7 @@ ${indented}`);
         return val;
       },
       set(target2, prop, value) {
-        let i, newLen, old, oldLen, r, sig;
+        let newLen, old, oldLen, r, sig;
         if (!_depth && isPathKey(prop)) {
           stashSet(proxy, prop, value);
           return true;
@@ -14365,10 +14545,10 @@ ${indented}`);
           target2.length = newLen;
           if (newLen !== oldLen) {
             if (target2[Symbol.for("signals")]) {
-              for (let i2 of ((s, e) => Array.from({ length: Math.max(0, Math.abs(e - s)) }, (_, i3) => s + i3 * (s <= e ? 1 : -1)))(Math.min(oldLen, newLen), Math.max(oldLen, newLen))) {
-                sig = target2[Symbol.for("signals")].get(String(i2));
+              for (let i of ((s, e) => Array.from({ length: Math.max(0, Math.abs(e - s)) }, (_, i2) => s + i2 * (s <= e ? 1 : -1)))(Math.min(oldLen, newLen), Math.max(oldLen, newLen))) {
+                sig = target2[Symbol.for("signals")].get(String(i));
                 if (sig != null)
-                  sig.value = target2[i2];
+                  sig.value = target2[i];
               }
             }
             keysSignal(target2).value = ++_keysVersion;
@@ -14442,16 +14622,16 @@ ${indented}`);
     return seg;
   };
   stashGet = function(proxy, path) {
-    let obj, seg, segs;
+    let obj, segs;
     segs = walk(path);
     obj = proxy;
     _depth++;
     return (() => {
       try {
-        for (let seg2 of segs) {
+        for (let seg of segs) {
           if (!(obj != null))
             return;
-          obj = obj[resolveIndex(seg2, obj)];
+          obj = obj[resolveIndex(seg, obj)];
         }
         return obj;
       } finally {
@@ -14460,20 +14640,20 @@ ${indented}`);
     })();
   };
   stashSet = function(proxy, path, value) {
-    let i, key, nextSeg, obj, seg, segs;
+    let key, nextSeg, obj, segs;
     segs = walk(path);
     obj = proxy;
     _depth++;
     return (() => {
       try {
-        for (let i2 = 0;i2 < segs.length; i2++) {
-          let seg2 = segs[i2];
-          key = resolveIndex(seg2, obj);
-          if (i2 === segs.length - 1) {
+        for (let i = 0;i < segs.length; i++) {
+          let seg = segs[i];
+          key = resolveIndex(seg, obj);
+          if (i === segs.length - 1) {
             obj[key] = value;
           } else {
             if (!(obj[key] != null)) {
-              nextSeg = segs[i2 + 1];
+              nextSeg = segs[i + 1];
               obj[key] = typeof nextSeg === "number" || isNum(nextSeg) ? [] : {};
             }
             obj = obj[key];
@@ -14520,7 +14700,7 @@ ${indented}`);
         case "join":
           return function(path, obj) {
             return __batch(function() {
-              let k, target, v;
+              let target;
               target = stashGet(proxy, path);
               if (!(target != null && typeof target === "object")) {
                 stashSet(proxy, path, {});
@@ -14531,9 +14711,9 @@ ${indented}`);
                 try {
                   return (() => {
                     const result = [];
-                    for (let k2 in obj) {
-                      let v2 = obj[k2];
-                      result.push(target[k2] = v2);
+                    for (let k in obj) {
+                      let v = obj[k];
+                      result.push(target[k] = v);
                     }
                     return result;
                   })();
@@ -14545,16 +14725,16 @@ ${indented}`);
           };
         case "keys":
           return function(path) {
-            let obj, seg, segs, t;
+            let obj, segs, t;
             _depth++;
             return (() => {
               try {
                 segs = walk(path);
                 obj = proxy;
-                for (let seg2 of segs) {
+                for (let seg of segs) {
                   if (!(obj != null))
                     return [];
-                  obj = obj[resolveIndex(seg2, obj)];
+                  obj = obj[resolveIndex(seg, obj)];
                 }
                 if (!(obj != null && typeof obj === "object"))
                   return [];
@@ -14568,7 +14748,7 @@ ${indented}`);
           };
         case "has":
           return function(path) {
-            let i, key, obj, seg, segs, t;
+            let key, obj, segs, t;
             _depth++;
             return (() => {
               try {
@@ -14576,10 +14756,10 @@ ${indented}`);
                 if (!(segs.length > 0))
                   return false;
                 obj = proxy;
-                for (let i2 = 0;i2 < segs.length; i2++) {
-                  let seg2 = segs[i2];
-                  key = resolveIndex(seg2, obj);
-                  if (i2 === segs.length - 1) {
+                for (let i = 0;i < segs.length; i++) {
+                  let seg = segs[i];
+                  key = resolveIndex(seg, obj);
+                  if (i === segs.length - 1) {
                     t = raw(obj);
                     keysSignal(t).value;
                     return Object.prototype.hasOwnProperty.call(t, key);
@@ -14596,7 +14776,7 @@ ${indented}`);
           };
         case "del":
           return function(path) {
-            let i, key, obj, seg, segs;
+            let key, obj, segs;
             _depth++;
             return (() => {
               try {
@@ -14606,10 +14786,10 @@ ${indented}`);
                 obj = proxy;
                 return (() => {
                   const result = [];
-                  for (let i2 = 0;i2 < segs.length; i2++) {
-                    let seg2 = segs[i2];
-                    key = resolveIndex(seg2, obj);
-                    if (i2 === segs.length - 1) {
+                  for (let i = 0;i < segs.length; i++) {
+                    let seg = segs[i];
+                    key = resolveIndex(seg, obj);
+                    if (i === segs.length - 1) {
                       delete obj[key];
                       return;
                     }
@@ -14638,8 +14818,8 @@ ${indented}`);
   var isStash = function(obj) {
     return obj?.[Symbol.for("stash")] === true;
   };
-  var persistStash = function(app, opts = {}) {
-    let _save, disposed, effectDisposer, k, saved, savedData, storage, storageKey, target, v;
+  function persistStash(app, opts = {}) {
+    let _save, disposed, effectDisposer, saved, savedData, storage, storageKey, target;
     assertBrowser("persistStash");
     target = raw(app) || app;
     return function() {
@@ -14652,9 +14832,9 @@ ${indented}`);
       saved = storage.getItem(storageKey);
       if (saved) {
         savedData = JSON.parse(saved);
-        for (let k2 in savedData) {
-          let v2 = savedData[k2];
-          app.data[k2] = v2;
+        for (let k in savedData) {
+          let v = savedData[k];
+          app.data[k] = v;
         }
       }
     } catch {}
@@ -14686,8 +14866,8 @@ ${indented}`);
       _save();
       return target[Symbol.for("persisted")] = false;
     };
-  };
-  var createResource = function(fn, opts = {}) {
+  }
+  function createResource(fn, opts = {}) {
     let _data, _error, _loading, controller, dispose, generation, load, resource;
     _data = __state(opts.initial ?? null);
     _loading = __state(false);
@@ -14743,7 +14923,7 @@ ${indented}`);
         return null;
       });
     return resource;
-  };
+  }
   _toFn = function(source) {
     return typeof source === "function" ? source : function() {
       return source.value;
@@ -14859,12 +15039,11 @@ ${indented}`);
     watchers = new Set;
     compiled = new Map;
     notify = function(event, path) {
-      let watcher;
       const _result = [];
-      for (let watcher2 of Array.from(watchers)) {
+      for (let watcher of Array.from(watchers)) {
         _result.push((() => {
           try {
-            return watcher2(event, path);
+            return watcher(event, path);
           } catch (e) {
             return console.error("[Rip] watcher error:", e);
           }
@@ -14895,36 +15074,35 @@ ${indented}`);
         return files.size;
       },
       list(dir = "") {
-        let path, prefix, rest, result;
+        let prefix, rest, result;
         result = [];
         prefix = dir ? dir + "/" : "";
-        for (let [path2] of files) {
-          if (path2.startsWith(prefix)) {
-            rest = path2.slice(prefix.length);
+        for (let [path] of files) {
+          if (path.startsWith(prefix)) {
+            rest = path.slice(prefix.length);
             if (rest.includes("/"))
               continue;
-            result.push(path2);
+            result.push(path);
           }
         }
         return result;
       },
       listAll(dir = "") {
-        let path, prefix, result;
+        let prefix, result;
         result = [];
         prefix = dir ? dir + "/" : "";
-        for (let [path2] of files) {
-          if (path2.startsWith(prefix))
-            result.push(path2);
+        for (let [path] of files) {
+          if (path.startsWith(prefix))
+            result.push(path);
         }
         return result;
       },
       load(obj) {
-        let content, key;
         const _result = [];
-        for (let key2 in obj) {
-          let content2 = obj[key2];
-          files.set(key2, content2);
-          _result.push(compiled.delete(key2));
+        for (let key in obj) {
+          let content = obj[key];
+          files.set(key, content);
+          _result.push(compiled.delete(key));
         }
         return _result;
       },
@@ -14971,33 +15149,33 @@ ${indented}`);
     return { regex: new RegExp("^" + str2 + "$"), names };
   };
   matchRoute = function(path, routes) {
-    let i, match, name, params, route;
-    for (let route2 of routes) {
-      match = path.match(route2.regex.regex);
+    let match, params;
+    for (let route of routes) {
+      match = path.match(route.regex.regex);
       if (match) {
         params = {};
-        for (let i2 = 0;i2 < route2.regex.names.length; i2++) {
-          let name2 = route2.regex.names[i2];
-          params[name2] = decodeURIComponent(match[i2 + 1]);
+        for (let i = 0;i < route.regex.names.length; i++) {
+          let name = route.regex.names[i];
+          params[name] = decodeURIComponent(match[i + 1]);
         }
-        return { route: route2, params };
+        return { route, params };
       }
     }
     return null;
   };
   buildRoutes = function(components, root = "components") {
-    let allFiles, dir, filePath, layouts, name, regex, rel, routes, segs, urlPattern;
+    let allFiles, dir, layouts, name, regex, rel, routes, segs, urlPattern;
     routes = [];
     layouts = new Map;
     allFiles = components.listAll(root);
-    for (let filePath2 of allFiles) {
-      rel = filePath2.slice(root.length + 1);
+    for (let filePath of allFiles) {
+      rel = filePath.slice(root.length + 1);
       if (!rel.endsWith(".rip"))
         continue;
       name = rel.split("/").pop();
       if (name === "_layout.rip") {
         dir = rel === "_layout.rip" ? "" : rel.slice(0, -"/_layout.rip".length);
-        layouts.set(dir, filePath2);
+        layouts.set(dir, filePath);
         continue;
       }
       if (name.startsWith("_"))
@@ -15009,7 +15187,7 @@ ${indented}`);
         continue;
       urlPattern = fileToPattern(rel);
       regex = patternToRegex(urlPattern);
-      routes.push({ pattern: urlPattern, regex, file: filePath2, rel });
+      routes.push({ pattern: urlPattern, regex, file: filePath, rel });
     }
     routes.sort(function(a, b) {
       let aCatch, aDyn, bCatch, bDyn;
@@ -15026,24 +15204,24 @@ ${indented}`);
     return { routes, layouts };
   };
   getLayoutChain = function(routeFile, root, layouts) {
-    let chain, dir, i, rel, seg, segments;
+    let chain, dir, rel, segments;
     chain = [];
     rel = routeFile.slice(root.length + 1);
     segments = rel.split("/");
     dir = "";
     if (layouts.has(""))
       chain.push(layouts.get(""));
-    for (let i2 = 0;i2 < segments.length; i2++) {
-      let seg2 = segments[i2];
-      if (i2 === segments.length - 1)
+    for (let i = 0;i < segments.length; i++) {
+      let seg = segments[i];
+      if (i === segments.length - 1)
         break;
-      dir = dir ? dir + "/" + seg2 : seg2;
+      dir = dir ? dir + "/" + seg : seg;
       if (layouts.has(dir))
         chain.push(layouts.get(dir));
     }
     return chain;
   };
-  var createRouter = function(components, opts = {}) {
+  function createRouter(components, opts = {}) {
     let _current, _hash, _layouts, _navigating, _normalizedUrl, _params, _path, _query, _route, addBase, base, hashMode, navCallbacks, onClick, onError, onPopState, readUrl, resolve, root, router, stripBase, tree, unwatchComponents, writeUrl;
     assertBrowser("createRouter");
     root = opts.root || "components";
@@ -15092,7 +15270,7 @@ ${indented}`);
       return tree = buildRoutes(components, root);
     });
     resolve = function(url) {
-      let cb, full, hash, path, queryStr, rawPath, result, snapshot;
+      let full, hash, path, queryStr, rawPath, result, snapshot;
       rawPath = url.split("?")[0].split("#")[0];
       path = stripBase(rawPath);
       path = path[0] === "/" ? path : "/" + path;
@@ -15115,9 +15293,9 @@ ${indented}`);
           return _normalizedUrl.value = full;
         });
         snapshot = Array.from(navCallbacks);
-        for (let cb2 of snapshot) {
+        for (let cb of snapshot) {
           try {
-            cb2(router.current);
+            cb(router.current);
           } catch (err) {
             console.error("[Rip] router onNavigate callback error:", err);
           }
@@ -15246,37 +15424,35 @@ ${indented}`);
       return tree.routes;
     } });
     return router;
-  };
+  }
   arraysEqual = function(a, b) {
-    let i, item;
     if (a.length !== b.length)
       return false;
-    for (let i2 = 0;i2 < a.length; i2++) {
-      let item2 = a[i2];
-      if (item2 !== b[i2])
+    for (let i = 0;i < a.length; i++) {
+      let item = a[i];
+      if (item !== b[i])
         return false;
     }
     return true;
   };
   findComponent = function(mod) {
-    let key, val;
     if (typeof mod.default === "function" && (mod.default.prototype?.mount || mod.default.prototype?._create)) {
       return mod.default;
     }
-    for (let key2 in mod) {
-      let val2 = mod[key2];
-      if (typeof val2 === "function" && (val2.prototype?.mount || val2.prototype?._create))
-        return val2;
+    for (let key in mod) {
+      let val = mod[key];
+      if (typeof val === "function" && (val.prototype?.mount || val.prototype?._create))
+        return val;
     }
     return typeof mod.default === "function" ? mod.default : undefined;
   };
   findAllComponents = function(mod) {
-    let key, result, val;
+    let result;
     result = {};
-    for (let key2 in mod) {
-      let val2 = mod[key2];
-      if (typeof val2 === "function" && (val2.prototype?.mount || val2.prototype?._create)) {
-        result[key2] = val2;
+    for (let key in mod) {
+      let val = mod[key];
+      if (typeof val === "function" && (val.prototype?.mount || val.prototype?._create)) {
+        result[key] = val;
       }
     }
     return result;
@@ -15289,34 +15465,34 @@ ${indented}`);
     });
   };
   buildComponentMap = function(components, root = "components") {
-    let fileName, map, name, path;
+    let fileName, map, name;
     map = {};
-    for (let path2 of components.listAll(root)) {
-      if (!path2.endsWith(".rip"))
+    for (let path of components.listAll(root)) {
+      if (!path.endsWith(".rip"))
         continue;
-      fileName = path2.split("/").pop();
+      fileName = path.split("/").pop();
       if (fileName.startsWith("_"))
         continue;
-      name = fileToComponentName(path2);
+      name = fileToComponentName(path);
       if (map[name]) {
-        console.warn(`[Rip] Component name collision: ${name} (${map[name]} vs ${path2})`);
+        console.warn(`[Rip] Component name collision: ${name} (${map[name]} vs ${path})`);
       }
-      map[name] = path2;
+      map[name] = path;
     }
     return map;
   };
   resolveStorePath = function(specifier, currentPath, components) {
-    let candidate, clean, parts, seg;
+    let candidate, clean, parts;
     clean = specifier.replace(/^(\.\.\/|\.\/)+/, "");
     if (currentPath) {
       parts = currentPath.split("/");
       parts.pop();
-      for (let seg2 of specifier.split("/")) {
-        if (seg2 === "..") {
+      for (let seg of specifier.split("/")) {
+        if (seg === "..") {
           parts.pop();
         } else {
-          if (!(seg2 === ".")) {
-            parts.push(seg2);
+          if (!(seg === ".")) {
+            parts.push(seg);
           }
         }
       }
@@ -15331,7 +15507,7 @@ ${indented}`);
     return null;
   };
   extractImportedNames = function(clause) {
-    let braceIdx, closing, inside, n, names, p, part, rest, t;
+    let braceIdx, closing, inside, names, p, rest, t;
     if (!clause)
       return [];
     rest = clause.trim();
@@ -15344,16 +15520,16 @@ ${indented}`);
       if (closing < 0)
         return names;
       inside = rest.slice(braceIdx + 1, closing);
-      for (let n2 of inside.split(",")) {
-        t = n2.trim();
+      for (let n of inside.split(",")) {
+        t = n.trim();
         if (!t)
           continue;
         names.push(t.split(/\s+as\s+/).pop().trim());
       }
       rest = rest.slice(0, braceIdx).replace(/,\s*$/, "").trim();
     }
-    for (let part2 of rest.split(",")) {
-      p = part2.trim();
+    for (let part of rest.split(",")) {
+      p = part.trim();
       if (!p)
         continue;
       if (/^\*\s+as\s+/.test(p)) {
@@ -15365,7 +15541,7 @@ ${indented}`);
     return names;
   };
   compileAndImport = async function(source, compile2, components = null, path = null, resolver = null) {
-    let anyImportRe, bindingClause, blob, blobUrl, cached, committed, debug, depMod, depPath, depSource, finalJs, found, full, header, importedNames, js, k, keyLiteral, m, matches, mod, msg, n, name, names, needed, offset, post, pre, preamble, prefixLines, previousUrl, replacement, ripImportRe, specifier, storePath, url, v;
+    let anyImportRe, bindingClause, blob, blobUrl, cached, committed, debug, depMod, depSource, finalJs, found, full, header, importedNames, js, keyLiteral, matches, mod, msg, names, needed, offset, post, pre, preamble, prefixLines, previousUrl, replacement, ripImportRe, specifier, storePath, url;
     if (components && path) {
       cached = components.getCompiled(path);
       if (cached)
@@ -15386,8 +15562,8 @@ ${indented}`);
             ripImportRe = /^(\s*import\s+(?:(.*?)\s+from\s+)?['"])([^'"]*\.rip)(['"];?\s*)$/gm;
             matches = Array.from(js.matchAll(ripImportRe));
             for (let _i = matches.length - 1;_i >= 0; _i--) {
-              let m2 = matches[_i];
-              [full, pre, bindingClause, specifier, post] = m2;
+              let m = matches[_i];
+              [full, pre, bindingClause, specifier, post] = m;
               storePath = resolveStorePath(specifier, path, components);
               if (storePath === path)
                 continue;
@@ -15409,38 +15585,38 @@ ${indented}`);
               blobUrl = resolver.blobUrls?.[storePath];
               if (blobUrl) {
                 replacement = `${pre}${blobUrl}${post}`;
-                js = js.slice(0, m2.index) + replacement + js.slice(m2.index + full.length);
-                for (let n2 of extractImportedNames(bindingClause)) {
-                  importedNames.add(n2);
+                js = js.slice(0, m.index) + replacement + js.slice(m.index + full.length);
+                for (let n of extractImportedNames(bindingClause)) {
+                  importedNames.add(n);
                 }
               }
             }
           }
           anyImportRe = /^\s*import\s+(?:(.*?)\s+from\s+)?['"][^'"]*['"];?\s*$/gm;
-          for (let m2 of js.matchAll(anyImportRe)) {
-            for (let n2 of extractImportedNames(m2[1])) {
-              importedNames.add(n2);
+          for (let m of js.matchAll(anyImportRe)) {
+            for (let n of extractImportedNames(m[1])) {
+              importedNames.add(n);
             }
           }
           needed = {};
-          for (let name2 in resolver.map) {
-            let depPath2 = resolver.map[name2];
-            if (importedNames.has(name2))
+          for (let name in resolver.map) {
+            let depPath = resolver.map[name];
+            if (importedNames.has(name))
               continue;
-            if (depPath2 !== path && js.includes(`new ${name2}(`)) {
-              if (!resolver.classes[name2]) {
-                depSource = components.read(depPath2);
+            if (depPath !== path && js.includes(`new ${name}(`)) {
+              if (!resolver.classes[name]) {
+                depSource = components.read(depPath);
                 if (depSource) {
-                  depMod = await compileAndImport(depSource, compile2, components, depPath2, resolver);
+                  depMod = await compileAndImport(depSource, compile2, components, depPath, resolver);
                   found = findAllComponents(depMod);
-                  for (let k2 in found) {
-                    let v2 = found[k2];
-                    resolver.classes[k2] = v2;
+                  for (let k in found) {
+                    let v = found[k];
+                    resolver.classes[k] = v;
                   }
                 }
               }
-              if (resolver.classes[name2])
-                needed[name2] = true;
+              if (resolver.classes[name])
+                needed[name] = true;
             }
           }
           names = Object.keys(needed);
@@ -15479,9 +15655,9 @@ ${indented}`);
         committed = true;
         if (resolver) {
           found = findAllComponents(mod);
-          for (let k2 in found) {
-            let v2 = found[k2];
-            resolver.classes[k2] = v2;
+          for (let k in found) {
+            let v = found[k];
+            resolver.classes[k] = v;
           }
         }
         if (components && path)
@@ -15503,7 +15679,7 @@ ${indented}`);
       }
     })();
   };
-  var createRenderer = function(opts = {}) {
+  function createRenderer(opts) {
     let app, compile2, components, container, currentComponent, currentLayouts, currentParams, currentQuery, currentRoute, disposeEffect, generation, invalidateResolver, layoutInstances, mountPoint, mountRoute, onError, renderer, resolver, router, sameKeys, started, target, unmount, unmountCurrent, unwatchSources;
     assertBrowser("createRenderer");
     ({ router, app, components, resolver, compile: compile2, target, onError } = opts);
@@ -15524,7 +15700,6 @@ ${indented}`);
     disposeEffect = null;
     unwatchSources = null;
     invalidateResolver = function(path) {
-      let depPath, name;
       if (!resolver)
         return;
       if (resolver.blobUrls?.[path]) {
@@ -15535,9 +15710,9 @@ ${indented}`);
       }
       return resolver.classes && resolver.map ? (() => {
         const result = [];
-        for (let name2 in resolver.map) {
-          let depPath2 = resolver.map[name2];
-          result.push(depPath2 === path ? delete resolver.classes[name2] : undefined);
+        for (let name in resolver.map) {
+          let depPath = resolver.map[name];
+          result.push(depPath === path ? delete resolver.classes[name] : undefined);
         }
         return result;
       })() : undefined;
@@ -15554,12 +15729,11 @@ ${indented}`);
       }
     };
     unmount = function() {
-      let inst;
       unmountCurrent();
       for (let _i = layoutInstances.length - 1;_i >= 0; _i--) {
-        let inst2 = layoutInstances[_i];
+        let inst = layoutInstances[_i];
         try {
-          inst2.unmount?.({ removeDOM: true });
+          inst.unmount?.({ removeDOM: true });
         } catch (e) {
           console.error("[Rip] layout unmount error:", e);
         }
@@ -15571,20 +15745,19 @@ ${indented}`);
       return currentLayouts = [];
     };
     sameKeys = function(a, b) {
-      let k, v;
       if (!(a && b))
         return false;
       if (Object.keys(a).length !== Object.keys(b).length)
         return false;
-      for (let k2 in a) {
-        let v2 = a[k2];
-        if (!(b[k2] === v2))
+      for (let k in a) {
+        let v = a[k];
+        if (!(b[k] === v))
           return false;
       }
       return true;
     };
     mountRoute = async function(info, force = false) {
-      let Component, LayoutClass, __innerPrev, __pop, __prev, __push, gen2, handled, inst, instance, layoutFile, layoutFiles, layoutMod, layoutSource, layoutsChanged, mod, mp, oldTarget, outerScope, pageParent, pagePrev, pageWrapper, params, pre, prevScope, query, route, sameRoute, slot, source, wrapper;
+      let Component, LayoutClass, __innerPrev, __pop, __prev, __push, gen2, handled, inst, instance, layoutFiles, layoutMod, layoutSource, layoutsChanged, mod, mp, oldTarget, outerScope, pageParent, pagePrev, pageWrapper, params, pre, prevScope, query, route, sameRoute, slot, source, wrapper;
       ({ route, params, layouts: layoutFiles, query } = info);
       if (!route)
         return;
@@ -15643,11 +15816,11 @@ ${indented}`);
             __push = globalThis.__ripComponent?.__pushComponent;
             __pop = globalThis.__ripComponent?.__popComponent;
             outerScope = null;
-            for (let layoutFile2 of layoutFiles) {
-              layoutSource = components.read(layoutFile2);
+            for (let layoutFile of layoutFiles) {
+              layoutSource = components.read(layoutFile);
               if (!layoutSource)
                 continue;
-              layoutMod = await compileAndImport(layoutSource, compile2, components, layoutFile2, resolver);
+              layoutMod = await compileAndImport(layoutSource, compile2, components, layoutFile, resolver);
               if (gen2 !== generation) {
                 router.navigating = false;
                 return;
@@ -15670,7 +15843,7 @@ ${indented}`);
                 }
               }
               wrapper = document.createElement("div");
-              wrapper.setAttribute("data-layout", layoutFile2);
+              wrapper.setAttribute("data-layout", layoutFile);
               mp.appendChild(wrapper);
               inst.mount(wrapper);
               layoutInstances.push(inst);
@@ -15761,7 +15934,6 @@ ${indented}`);
         return renderer;
       },
       stop() {
-        let _, url;
         if (!started)
           return;
         started = false;
@@ -15773,12 +15945,12 @@ ${indented}`);
         unwatchSources?.();
         unwatchSources = null;
         if (resolver?.blobUrls) {
-          for (let _2 in resolver.blobUrls) {
-            if (!Object.hasOwn(resolver.blobUrls, _2))
+          for (let _ in resolver.blobUrls) {
+            if (!Object.hasOwn(resolver.blobUrls, _))
               continue;
-            let url2 = resolver.blobUrls[_2];
+            let url = resolver.blobUrls[_];
             try {
-              URL.revokeObjectURL(url2);
+              URL.revokeObjectURL(url);
             } catch {}
           }
           resolver.blobUrls = {};
@@ -15793,7 +15965,7 @@ ${indented}`);
       }
     };
     return renderer;
-  };
+  }
   connectWatch = function(url) {
     let closed, connect, es, maxDelay, retryDelay, retryTimer;
     assertBrowser("connectWatch");
@@ -15815,12 +15987,13 @@ ${indented}`);
         return location.reload();
       });
       es.addEventListener("css", function() {
-        let cssUrl, link;
+        let cssUrl, sheets;
+        sheets = document.querySelectorAll('link[rel="stylesheet"]');
         const _result = [];
-        for (let link2 of document.querySelectorAll('link[rel="stylesheet"]')) {
-          cssUrl = new URL(link2.href);
+        for (let link of sheets) {
+          cssUrl = new URL(link.href);
           cssUrl.searchParams.set("_t", Date.now());
-          link2.href = cssUrl.toString();
+          link.href = cssUrl.toString();
         }
         return _result;
       });
@@ -15846,8 +16019,8 @@ ${indented}`);
       return es = null;
     };
   };
-  var launch = async function(opts = {}) {
-    let app, appBase, appComponents, bundle, cached, classesKey, compile2, destroy, destroyed, el, etag, etagKey, hash, headers, k, persist, persistDisposer, renderer, res, resolver, router, seedData, stashMod, stashPath, stashRaw, stashSource, target, v, watchDisposer;
+  async function launch(opts = {}) {
+    let app, appBase, appComponents, bundle, cached, classesKey, compile2, destroy, destroyed, el, etag, etagKey, hash, headers, persist, persistDisposer, renderer, res, resolver, router, seedData, stashMod, stashPath, stashRaw, stashSource, target, watchDisposer, win;
     assertBrowser("launch");
     appBase = (opts.base || "").replace(/\/+$/, "");
     target = opts.target || "#app";
@@ -15909,9 +16082,9 @@ ${indented}`);
       }
     }
     if (stashRaw && bundle.data) {
-      for (let k2 in bundle.data) {
-        let v2 = bundle.data[k2];
-        stashRaw[k2] = v2;
+      for (let k in bundle.data) {
+        let v = bundle.data[k];
+        stashRaw[k] = v;
       }
     }
     seedData = stashRaw ?? bundle.data;
@@ -15950,6 +16123,7 @@ ${indented}`);
     if (bundle.data?.watch) {
       watchDisposer = connectWatch(`${appBase}/watch`);
     }
+    win = window;
     destroyed = false;
     destroy = function() {
       if (destroyed)
@@ -15962,16 +16136,16 @@ ${indented}`);
       delete globalThis[classesKey];
       delete globalThis.__ripApp;
       delete globalThis.__ripLaunched;
-      if (window.app === app) {
-        delete window.app;
+      if (win.app === app) {
+        delete win.app;
       }
-      return window.__RIP__?.app === app ? delete window.__RIP__ : undefined;
+      return win.__RIP__?.app === app ? delete win.__RIP__ : undefined;
     };
-    window.app = app;
-    window.__RIP__ = { app, components: appComponents, router, renderer, resolver, destroy, version: "0.3.0" };
+    win.app = app;
+    win.__RIP__ = { app, components: appComponents, router, renderer, resolver, destroy, version: "0.3.0" };
     globalThis.__ripLaunched = true;
     return { app, components: appComponents, router, renderer, destroy };
-  };
+  }
   _ariaNAV = function(e, fn) {
     if (!fn)
       return;
@@ -16303,10 +16477,11 @@ ${indented}`);
   _ariaTrapFocus = function(panel) {
     let handler;
     handler = function(e) {
-      let first, last, list;
+      let first, last, list, nodes;
       if (!(e.key === "Tab"))
         return;
-      list = Array.from(panel.querySelectorAll(_FOCUSABLE)).filter(function(f) {
+      nodes = panel.querySelectorAll(_FOCUSABLE);
+      list = Array.from(nodes).filter(function(f) {
         return f.offsetParent !== null;
       });
       if (!list.length)
@@ -16391,10 +16566,9 @@ ${indented}`);
   };
   _ARIA_POSITION_OWNED = ["position", "inset", "top", "right", "bottom", "left", "margin", "marginTop", "marginRight", "marginBottom", "marginLeft", "transform", "minWidth", "positionAnchor", "positionArea", "positionTry", "positionVisibility"];
   _ariaResetPositionStyles = function(el) {
-    let prop;
     const _result = [];
-    for (let prop2 of _ARIA_POSITION_OWNED) {
-      _result.push(el.style[prop2] = "");
+    for (let prop of _ARIA_POSITION_OWNED) {
+      _result.push(el.style[prop] = "");
     }
     return _result;
   };
@@ -16492,12 +16666,11 @@ ${indented}`);
   };
   _ariaCombine = function(...disposers) {
     return function() {
-      let d;
       const _result = [];
-      for (let d2 of disposers) {
+      for (let d of disposers) {
         _result.push((() => {
           try {
-            return d2?.();
+            return d?.();
           } catch {
             return null;
           }
