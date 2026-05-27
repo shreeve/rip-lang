@@ -17,7 +17,9 @@ export stash:: { user: User | null, cart: Cart } =
     items: []
     addItem: (product) -> @items = [...@items, { ...product, quantity: 1 }]
     removeItem: (product) -> @items = @items.filter((i) -> i.id isnt product.id)
-    updateQuantity: (product, quantity) -> @items = @items.map((i) -> i.id is product.id ? { ...i, quantity } : i)
+    updateQuantity: (product, quantity) ->
+      item = @items.find((i) -> i.id is product.id)
+      if item then item.quantity = quantity
     totalItems: -> @items.reduce(((sum, i) -> sum + i.quantity), 0)
     totalPrice: -> @items.reduce(((sum, i) -> sum + i.price * i.quantity), 0)
     clear: -> @items = []

@@ -8333,7 +8333,8 @@ ${blockFactoriesCode}return ${lines.join(`
       this._renderLocalScope = new Set;
       const outerParams = this._loopVarStack.map((v) => `${v.itemVar}, ${v.indexVar}`).join(", ");
       const outerExtra = outerParams ? `, ${outerParams}` : "";
-      this._loopVarStack.push({ itemVar, indexVar });
+      const reactiveSource = this.hasReactiveDeps(collection);
+      this._loopVarStack.push({ itemVar, indexVar, reactiveSource });
       const itemNode = this.emitTemplateBlock(body);
       this._loopVarStack.pop();
       const itemCreateLines = this._createLines;
@@ -8509,6 +8510,9 @@ ${blockFactoriesCode}return ${lines.join(`
       if (sexpr[0] === "." && this._rootsAtThis(sexpr[1])) {
         return true;
       }
+      if ((sexpr[0] === "." || sexpr[0] === "[]") && this._rootsAtReactiveLoopVar(sexpr)) {
+        return true;
+      }
       if (Array.isArray(sexpr[0]) && sexpr[0][0] === "." && sexpr[0][1] === "this") {
         const name = _str(sexpr[0][2]);
         if (name && this.componentMembers?.has(name))
@@ -8567,6 +8571,23 @@ ${blockFactoriesCode}return ${lines.join(`
       if (!Array.isArray(sexpr) || sexpr[0] !== ".")
         return false;
       return this._rootsAtThis(sexpr[1]);
+    };
+    proto._rootsAtReactiveLoopVar = function(sexpr) {
+      if (typeof sexpr === "string") {
+        if (!this._loopVarStack || this._loopVarStack.length === 0)
+          return false;
+        for (let i = this._loopVarStack.length - 1;i >= 0; i--) {
+          const v = this._loopVarStack[i];
+          if (v.itemVar === sexpr)
+            return !!v.reactiveSource;
+        }
+        return false;
+      }
+      if (!Array.isArray(sexpr))
+        return false;
+      if (sexpr[0] === "." || sexpr[0] === "[]")
+        return this._rootsAtReactiveLoopVar(sexpr[1]);
+      return false;
     };
     proto.getComponentRuntime = function() {
       return `
@@ -14077,7 +14098,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.16.0";
-  var BUILD_DATE = "2026-05-27@16:45:09GMT";
+  var BUILD_DATE = "2026-05-27@16:47:44GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

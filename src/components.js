@@ -2815,7 +2815,13 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     const outerParams = this._loopVarStack.map(v => `${v.itemVar}, ${v.indexVar}`).join(', ');
     const outerExtra = outerParams ? `, ${outerParams}` : '';
 
-    this._loopVarStack.push({ itemVar, indexVar });
+    // If the iterated collection is reactive, treat direct member access
+    // on the iter var (`item.qty`, `item[0]`, `item.a.b`) as reactive
+    // inside the loop body. hasReactiveDeps consults this flag, so the
+    // existing emit paths wrap those reads in __effect and the per-row
+    // patch function gets populated.
+    const reactiveSource = this.hasReactiveDeps(collection);
+    this._loopVarStack.push({ itemVar, indexVar, reactiveSource });
     const itemNode = this.emitTemplateBlock(body);
     this._loopVarStack.pop();
     const itemCreateLines = this._createLines;
@@ -3125,6 +3131,16 @@ export function installComponentSupport(CodeEmitter, Lexer) {
       return true;
     }
 
+    // Property chain rooted at a `for`-loop iter var whose source is
+    // reactive (e.g. `for item in cart.items` → `item.qty`, `item[0]`,
+    // `item.foo.bar`). Same rationale as the this-rooted case: the source
+    // proxy is reactive at runtime, so any member read may track. Limited
+    // to direct member access on the iter var — aliases and destructuring
+    // are explicitly out of scope.
+    if ((sexpr[0] === '.' || sexpr[0] === '[]') && this._rootsAtReactiveLoopVar(sexpr)) {
+      return true;
+    }
+
     // Method call on component: [['.', 'this', method], ...args]
     // Methods may read reactive state internally — treat as reactive so the
     // call gets wrapped in __effect and re-runs when dependencies change.
@@ -3204,6 +3220,26 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     if (typeof sexpr === 'string') return sexpr === 'this';
     if (!Array.isArray(sexpr) || sexpr[0] !== '.') return false;
     return this._rootsAtThis(sexpr[1]);
+  };
+
+  // _rootsAtReactiveLoopVar — true when a `.` / `[]` access chain bottoms
+  // out at a string identifier that matches the itemVar of some frame on
+  // _loopVarStack whose `reactiveSource` is true. See emitTemplateLoop.
+  proto._rootsAtReactiveLoopVar = function(sexpr) {
+    if (typeof sexpr === 'string') {
+      if (!this._loopVarStack || this._loopVarStack.length === 0) return false;
+      // Iterate innermost-first so a shadowed name resolves to its nearest
+      // binding: `for item in reactive` containing `for item in [1,2,3]`
+      // must treat inner reads of `item` as non-reactive.
+      for (let i = this._loopVarStack.length - 1; i >= 0; i--) {
+        const v = this._loopVarStack[i];
+        if (v.itemVar === sexpr) return !!v.reactiveSource;
+      }
+      return false;
+    }
+    if (!Array.isArray(sexpr)) return false;
+    if (sexpr[0] === '.' || sexpr[0] === '[]') return this._rootsAtReactiveLoopVar(sexpr[1]);
+    return false;
   };
 
   // ==========================================================================

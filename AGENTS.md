@@ -182,9 +182,10 @@ Component naming in render templates:
 
 Stash reactivity in components:
 
-- Inside a component's `render`, only expressions rooted at `this` (`@app.data...`, component members) are tracked as reactive by the compiler
+- Inside a component's `render`, expressions rooted at `this` (`@app.data...`, component members) or at a `for`-loop iter var whose collection is reactive (e.g. `item.qty` inside `for item in @items`) are tracked as reactive by the compiler
 - Shared-scope variables are treated as static — they render once and never update
 - To use stash data reactively, declare a component-local binding: `theme = @app.data.theme`
+- Iter-var tracking covers direct member access only — `item.foo`, `item[0]`, `item.a.b`. Aliases (`local = item; local.foo`) and destructuring (`for {qty} in items`) are not tracked
 
 ```coffee
 import { get, use, start, notFound } from '@rip-lang/server'
