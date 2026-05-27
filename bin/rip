@@ -60,9 +60,7 @@ Options:
 
 Subcommands:
   rip check [dir]               Type-check all .rip files in directory
-  rip check --strict [dir]      Require type annotations in all .rip files
-  rip check --audit [pkgDir]    Audit a typed package's public API surface for 'any' leaks.
-                                Add --json for machine-readable output.
+  rip check --audit [pkgDir]    Audit a typed package's public API surface for 'any' leaks
   rip check --sourcemap [dir]   Verify source-map round-trip for every identifier
                                 (hover/go-to-def integrity). Useful for compiler work.
   rip <name> [args]             Run rip-<name> (repo bin/, node_modules, or PATH)
@@ -145,7 +143,7 @@ async function main() {
 
   if (args[0] === 'check') {
     const checkArgs = args.slice(1);
-    const VALID_FLAGS = new Set(['-q', '--quiet', '--strict', '--audit', '--sourcemap', '--json']);
+    const VALID_FLAGS = new Set(['--audit', '--sourcemap']);
     const unknown = checkArgs.filter(a => a.startsWith('-') && !VALID_FLAGS.has(a));
     if (unknown.length > 0) {
       console.error(`rip check: unknown flag${unknown.length === 1 ? '' : 's'}: ${unknown.join(', ')}`);
@@ -156,15 +154,9 @@ async function main() {
     const wantAudit     = checkArgs.includes('--audit');
     const wantSourcemap = checkArgs.includes('--sourcemap');
     const { runCheck, runAudit } = await import('../src/typecheck.js');
-    const checkCode = await runCheck(dir, {
-      quiet:          checkArgs.includes('-q') || checkArgs.includes('--quiet'),
-      strict:         checkArgs.includes('--strict'),
-      sourceMapAudit: wantSourcemap,
-    });
+    const checkCode = await runCheck(dir, { sourceMapAudit: wantSourcemap });
     if (!wantAudit) process.exit(checkCode);
-    const auditCode = await runAudit(dir, {
-      json: checkArgs.includes('--json'),
-    });
+    const auditCode = await runAudit(dir);
     process.exit(checkCode || auditCode);
   }
 

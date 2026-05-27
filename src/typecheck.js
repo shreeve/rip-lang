@@ -2636,9 +2636,7 @@ export async function runCheck(targetDir, opts = {}) {
   }
 
   const ripConfig = readProjectConfig(rootPath);
-
-  // Merge: CLI flags override config file
-  const strict = opts.strict || ripConfig.strict === true;
+  const strict = ripConfig.strict === true;
   const excludeGlobs = Array.isArray(ripConfig.exclude) ? ripConfig.exclude : [];
   const excludePatterns = excludeGlobs.map(globToRegex);
 
@@ -2809,15 +2807,14 @@ export async function runCheck(targetDir, opts = {}) {
 
   // Create TypeScript language service
   //
-  // Project-scope `strict` (rip.json / package.json `rip.strict: true`, or
-  // CLI --strict) opts the project UP to TypeScript's `strict` family,
-  // which implies noImplicitAny, strictNullChecks, strictFunctionTypes,
-  // and friends. With strict on: `T` excludes null/undefined, untyped
-  // params error, etc. Without strict: lenient gradual-typing defaults —
-  // annotations are accepted as documentation but not enforced as
-  // contracts. The default is lenient to match Rip's "scaffolding, not
-  // safety rails" philosophy; projects opt up when they want the
-  // contract enforced.
+  // Project-scope `strict` (rip.json / package.json `rip.strict: true`)
+  // opts the project UP to TypeScript's `strict` family, which implies
+  // noImplicitAny, strictNullChecks, strictFunctionTypes, and friends.
+  // With strict on: `T` excludes null/undefined, untyped params error,
+  // etc. Without strict: lenient gradual-typing defaults — annotations
+  // are accepted as documentation but not enforced as contracts. The
+  // default is lenient to match Rip's "scaffolding, not safety rails"
+  // philosophy; projects opt up when they want the contract enforced.
   // Collect `node_modules/@types` directories walking up from rootPath so
   // ambient type packages (e.g. `@types/bun`) installed at the workspace
   // root are picked up even when `rip check` runs in a sub-package. TS's
@@ -3354,8 +3351,7 @@ export async function runCheck(targetDir, opts = {}) {
 // `Response`. The package can only control its own surface; this
 // audit measures exactly that.
 //
-// Exit code: 0 if every export is `any`-free, 1 otherwise. With
-// `--json`, prints a machine-readable report to stdout instead.
+// Exit code: 0 if every export is `any`-free, 1 otherwise.
 
 // Resolve a package's public entries from its package.json. Handles
 // `main`, `module`, string `exports`, and the subpath/conditional
@@ -3505,10 +3501,8 @@ function joinPath(label, step, rest) {
   return head ? `${head}.${rest}` : rest;
 }
 
-export async function runAudit(targetDir, opts = {}) {
+export async function runAudit(targetDir) {
   const rootPath = resolve(targetDir);
-  const json = !!opts.json;
-  const log = (...a) => { if (!json) console.log(...a); };
 
   let ts;
   try {
@@ -3666,7 +3660,6 @@ export async function runAudit(targetDir, opts = {}) {
     | ts.TypeFormatFlags.UseAliasDefinedOutsideCurrentScope
     | ts.TypeFormatFlags.WriteArrayAsGenericType;
 
-  const report = { package: pkgName, entries: [] };
   let totalExports = 0, totalLeaks = 0;
 
   // First pass: collect ALL exported symbols across all entries.
@@ -3691,22 +3684,19 @@ export async function runAudit(targetDir, opts = {}) {
     const entry = ripEntries[idx];
     const data = entryData[idx];
     const rel = relative(rootPath, entry.file);
-    const entryReport = { subpath: entry.subpath, file: rel, exports: [] };
 
     if (!data) {
-      log(`  ${red('error')} could not load ${cyan(rel)}`);
-      report.entries.push(entryReport);
+      console.log(`  ${red('error')} could not load ${cyan(rel)}`);
       continue;
     }
     const { sourceFile, exports } = data;
     if (!exports) {
-      log(`  ${dim('(no exports)')}`);
-      report.entries.push(entryReport);
+      console.log(`  ${dim('(no exports)')}`);
       continue;
     }
 
     const header = entry.subpath === '.' ? rel : `${rel}  ${dim('('+entry.subpath+')')}`;
-    log(`\n  ${cyan(header)}`);
+    console.log(`\n  ${cyan(header)}`);
 
     // Compute max name width for column alignment.
     const names = exports.map(s => s.getName());
@@ -3729,29 +3719,22 @@ export async function runAudit(targetDir, opts = {}) {
       const typeStr = checker.typeToString(t, sourceFile, fmtFlags);
       const name = sym.getName();
       const mark = leaks ? red('✗') : green('✓');
-      log(`    ${mark} ${name.padEnd(colW)}  ${dim(typeStr)}`);
+      console.log(`    ${mark} ${name.padEnd(colW)}  ${dim(typeStr)}`);
       if (leaks) {
         totalLeaks++;
-        log(`      ${dim('└─ any at: ')}${yellow(leakPath || '<root>')}`);
+        console.log(`      ${dim('└─ any at: ')}${yellow(leakPath || '<root>')}`);
       }
-      entryReport.exports.push({ name, type: typeStr, leaks, leakPath: leaks ? leakPath : null });
     }
-    report.entries.push(entryReport);
   }
 
   const typed = totalExports - totalLeaks;
   const pct = totalExports > 0 ? (100 * typed / totalExports).toFixed(1) : '100.0';
-  report.totals = { exports: totalExports, typed, leaks: totalLeaks };
 
-  if (json) {
-    console.log(JSON.stringify(report, null, 2));
+  console.log('');
+  if (totalLeaks === 0) {
+    console.log(`${green('✓')} ${bold(pkgName)}: ${typed}/${totalExports} exports fully typed (${pct}%).`);
   } else {
-    log('');
-    if (totalLeaks === 0) {
-      log(`${green('✓')} ${bold(pkgName)}: ${typed}/${totalExports} exports fully typed (${pct}%).`);
-    } else {
-      log(`${red('✗')} ${bold(pkgName)}: ${typed}/${totalExports} exports fully typed (${pct}%). ${red(String(totalLeaks))} export${totalLeaks === 1 ? '' : 's'} leak \`any\`.`);
-    }
+    console.log(`${red('✗')} ${bold(pkgName)}: ${typed}/${totalExports} exports fully typed (${pct}%). ${red(String(totalLeaks))} export${totalLeaks === 1 ? '' : 's'} leak \`any\`.`);
   }
 
   return totalLeaks > 0 ? 1 : 0;
