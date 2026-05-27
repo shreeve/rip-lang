@@ -1,4 +1,4 @@
-import { User } from '../types.rip'
+import { User } from '../../types.rip'
 import { ApiErrors, parseApiError } from '../api-client.rip'
 import { Button } from '../components/button.rip'
 import { title } from '../config.rip'

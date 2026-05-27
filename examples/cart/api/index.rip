@@ -1,9 +1,10 @@
 import { get, post, patch, read } from '@rip-lang/server'
+import { Product, Order, User } from '../types.rip'
 
-errorResponse = (errors, status = 400) ->
-  return Response.json({ errors }, { status })
+def errorResponse(errors:: { form?: string, field?: Partial<Record<string, string>> })
+  return Response.json({ errors }, { status: 400 })
 
-products = [
+products:: Product[] = [
   { id: 1, name: 'Rubber Duck',  image: '🐥', price: 3.99  }
   { id: 2, name: 'Notebook',     image: '📓', price: 9.99  }
   { id: 3, name: 'Desk Plant',   image: '🌵', price: 14.99 }
@@ -12,10 +13,10 @@ products = [
   { id: 6, name: 'Headphones',   image: '🎧', price: 19.99 }
 ]
 
-orders = []
+orders:: Order[] = []
 nextOrderId = 1
 
-user =
+user:: User =
   firstName: 'John'
   lastName: 'Smith'
   email: 'john@example.com'
@@ -31,24 +32,22 @@ post '/api/orders' ->
   if not items?.length
     return errorResponse { form: 'Invalid order data' }
 
-  for item in items
-    if item.productId < 1 or item.quantity < 1
-      return errorResponse { form: 'Invalid order data' }
-    if not products.find((p) -> p.id is item.productId)
-      return errorResponse { form: "Product #{item.productId} not found" }
-
   total = 0
   for item in items
+    if item.productId < 1 or item.quantity < 1
+      return errorResponse({ form: 'Invalid order data' })
     product = products.find((p) -> p.id is item.productId)
-    total  += product.price * item.quantity
+    if not product
+      return errorResponse({ form: "Product #{item.productId} not found" })
+    total += product.price * item.quantity
 
-  order =
+  order:: Order =
     id:        nextOrderId++
     items:     items
     total:     Math.round(total * 100) / 100
     createdAt: new Date().toISOString()
 
-  orders.push order
+  orders.push(order)
 
   return @json(order, 201)
 
@@ -59,7 +58,7 @@ patch '/api/user' ->
   lastName  = read 'lastName',  'name'
   phone     = read 'phone',     'text'
 
-  field = {}
+  field:: Partial<Record<keyof User, string>> = {}
   if not firstName then field.firstName = 'Enter a first name'
   if not lastName then field.lastName = 'Enter a last name'
 

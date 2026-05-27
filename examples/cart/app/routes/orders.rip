@@ -1,4 +1,4 @@
-import { Order } from '../types.rip'
+import { Order } from '../../types.rip'
 import { ApiErrors } from '../api-client.rip'
 import { Button } from '../components/button.rip'
 import { title } from '../config.rip'
