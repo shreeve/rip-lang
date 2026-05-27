@@ -3228,8 +3228,12 @@ export function installComponentSupport(CodeEmitter, Lexer) {
   proto._rootsAtReactiveLoopVar = function(sexpr) {
     if (typeof sexpr === 'string') {
       if (!this._loopVarStack || this._loopVarStack.length === 0) return false;
-      for (const v of this._loopVarStack) {
-        if (v.reactiveSource && v.itemVar === sexpr) return true;
+      // Iterate innermost-first so a shadowed name resolves to its nearest
+      // binding: `for item in reactive` containing `for item in [1,2,3]`
+      // must treat inner reads of `item` as non-reactive.
+      for (let i = this._loopVarStack.length - 1; i >= 0; i--) {
+        const v = this._loopVarStack[i];
+        if (v.itemVar === sexpr) return !!v.reactiveSource;
       }
       return false;
     }

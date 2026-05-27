@@ -6098,7 +6098,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
   // src/components.js
   var BIND_PREFIX = "__bind_";
   var BIND_SUFFIX = "__";
-  var LIFECYCLE_HOOKS = new Set(["beforeMount", "mounted", "updated", "beforeUnmount", "unmounted", "onError"]);
+  var LIFECYCLE_HOOKS = new Set(["beforeMount", "mounted", "beforeUnmount", "unmounted", "onError"]);
   var BOOLEAN_ATTRS = new Set([
     "disabled",
     "hidden",
@@ -6523,6 +6523,56 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         s.await = true;
       return s.optional || s.await ? s : to;
     };
+    proto.addBodyRipSrcMarkers = function(bodyCode, bodySexpr) {
+      if (typeof bodyCode !== "string" || !bodyCode)
+        return bodyCode;
+      const stmts = Array.isArray(bodySexpr) && bodySexpr[0] === "block" ? bodySexpr.slice(1) : Array.isArray(bodySexpr) ? [bodySexpr] : [];
+      if (stmts.length === 0)
+        return bodyCode;
+      const getLoc = (s) => {
+        if (s == null)
+          return null;
+        if (!Array.isArray(s))
+          return s?.loc?.r ?? null;
+        if (s.loc?.r)
+          return s.loc.r;
+        if (s[0]?.loc?.r)
+          return s[0].loc.r;
+        for (const child of s) {
+          if (child?.loc?.r)
+            return child.loc.r;
+          if (Array.isArray(child)) {
+            const l = getLoc(child);
+            if (l != null)
+              return l;
+          }
+        }
+        return null;
+      };
+      const srcLines = stmts.map(getLoc);
+      if (srcLines.every((l) => l == null))
+        return bodyCode;
+      const lines = bodyCode.split(`
+`);
+      let si = 0;
+      for (let i = 0;i < lines.length && si < srcLines.length; i++) {
+        const trimmed = lines[i].trim();
+        if (!trimmed)
+          continue;
+        if (trimmed === "{" || trimmed === "}" || trimmed.startsWith("//"))
+          continue;
+        if (lines[i].includes("@rip-src:")) {
+          si++;
+          continue;
+        }
+        if (srcLines[si] != null) {
+          lines[i] = `${lines[i]} // @rip-src:${srcLines[si]}`;
+        }
+        si++;
+      }
+      return lines.join(`
+`);
+    };
     proto.transformComponentMembers = function(sexpr, localScope = new Set) {
       const self = this._self;
       if (!Array.isArray(sexpr)) {
@@ -6724,7 +6774,21 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         const sl = [];
         const componentTypeParams = this._componentTypeParams || "";
         sl.push(`class ${componentTypeParams}{`);
-        sl.push("  declare _root: Element | null; declare app: any;");
+        sl.push("  declare _root: Element | null; declare app: any; declare router: any; declare params: Record<string, string>; declare query: URLSearchParams; declare children: any;");
+        const userHookNames = new Set(lifecycleHooks.map((h) => h.name));
+        const hookDecls = [];
+        if (!userHookNames.has("beforeMount"))
+          hookDecls.push("beforeMount?(): void;");
+        if (!userHookNames.has("mounted"))
+          hookDecls.push("mounted?(): void;");
+        if (!userHookNames.has("beforeUnmount"))
+          hookDecls.push("beforeUnmount?(): void;");
+        if (!userHookNames.has("unmounted"))
+          hookDecls.push("unmounted?(): void;");
+        if (!userHookNames.has("onError"))
+          hookDecls.push("onError?(err: { status?: number; message?: string; error?: Error; path?: string }): void;");
+        if (hookDecls.length)
+          sl.push("  " + hookDecls.join(" "));
         sl.push("  emit(_name: string, _detail?: any): void {}");
         const propEntries = [];
         for (const { name, type, isPublic, required, optional } of stateVars) {
@@ -6883,7 +6947,8 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
             }
             const transformed = this.reactiveMembers ? this.transformComponentMembers(methodBody) : methodBody;
             const isAsync = this.containsAwait(methodBody);
-            const bodyCode = this.emitFunctionBody(transformed, params || []);
+            let bodyCode = this.emitFunctionBody(transformed, params || []);
+            bodyCode = this.addBodyRipSrcMarkers(bodyCode, methodBody);
             sl.push(`  ${isAsync ? "async " : ""}${name}(${paramStr}) ${bodyCode}`);
           }
         }
@@ -6893,7 +6958,8 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
             const paramStr = Array.isArray(params) ? params.map((p) => this.formatParam(p)).join(", ") : "";
             const transformed = this.reactiveMembers ? this.transformComponentMembers(hookBody) : hookBody;
             const isAsync = this.containsAwait(hookBody);
-            const bodyCode = this.emitFunctionBody(transformed, params || []);
+            let bodyCode = this.emitFunctionBody(transformed, params || []);
+            bodyCode = this.addBodyRipSrcMarkers(bodyCode, hookBody);
             sl.push(`  ${isAsync ? "async " : ""}${name}(${paramStr}) ${bodyCode}`);
           }
         }
@@ -8510,9 +8576,10 @@ ${blockFactoriesCode}return ${lines.join(`
       if (typeof sexpr === "string") {
         if (!this._loopVarStack || this._loopVarStack.length === 0)
           return false;
-        for (const v of this._loopVarStack) {
-          if (v.reactiveSource && v.itemVar === sexpr)
-            return true;
+        for (let i = this._loopVarStack.length - 1;i >= 0; i--) {
+          const v = this._loopVarStack[i];
+          if (v.itemVar === sexpr)
+            return !!v.reactiveSource;
         }
         return false;
       }
@@ -9998,14 +10065,29 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
               identCol = node.loc.c + node[1].length + 1;
             }
           }
-        } else if (typeof head === "string" && /^[=+\-*/%<>!&|?~^]|^\.\.?$|^def$|^class$|^state$|^computed$|^readonly$|^for-/.test(head)) {
-          if (typeof node[1] === "string" && /^[a-zA-Z_$]/.test(node[1]))
+        } else if (typeof head === "string" && /^[=+\-*/%<>!&|?~^]|^\.{1,3}$|^def$|^class$|^state$|^computed$|^readonly$|^for-/.test(head)) {
+          if (typeof node[1] === "string" && /^[a-zA-Z_$]/.test(node[1])) {
             ident = node[1];
+            if (head === "...")
+              identCol = node.loc.c + 3;
+          }
         } else if (typeof head === "string" && /^[a-zA-Z_$]/.test(head)) {
           ident = head;
         }
         if (ident)
           result.push({ name: ident, origLine: node.loc.r, origCol: identCol });
+        if ((head === "->" || head === "=>") && Array.isArray(node[2]) && str(node[2][0]) === "block") {
+          const body = node[2];
+          for (let i = 1;i < body.length; i++) {
+            const leaf = body[i];
+            const leafStr = typeof leaf === "string" || leaf instanceof String ? str(leaf) : null;
+            if (leafStr && /^[a-zA-Z_$][\w$]*$/.test(leafStr) && !leaf.loc) {
+              const anchor = this._scanForIdentAfter(leafStr, node.loc);
+              if (anchor)
+                result.push(anchor);
+            }
+          }
+        }
       }
       if (Array.isArray(node._anchors)) {
         for (const a of node._anchors)
@@ -10016,6 +10098,29 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
         if (Array.isArray(node[i]))
           this.collectSubExprs(node[i], result);
       }
+    }
+    _scanForIdentAfter(ident, startLoc) {
+      const source = this.options && this.options.source;
+      if (!source || !startLoc)
+        return null;
+      const lines = this._sourceLinesCache || (this._sourceLinesCache = source.split(`
+`));
+      const re = new RegExp("\\b" + ident.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "g");
+      const startRow = startLoc.r;
+      const startCol = startLoc.c;
+      for (let r = startRow;r < Math.min(lines.length, startRow + 20); r++) {
+        const line = lines[r];
+        if (!line)
+          continue;
+        re.lastIndex = r === startRow ? startCol : 0;
+        let m;
+        while ((m = re.exec(line)) !== null) {
+          if (CodeEmitter._isColInsideString(line, m.index))
+            continue;
+          return { name: ident, origLine: r, origCol: m.index };
+        }
+      }
+      return null;
     }
     collectProgramVariables(sexpr) {
       if (!Array.isArray(sexpr))
@@ -13993,7 +14098,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.16.0";
-  var BUILD_DATE = "2026-05-27@15:56:48GMT";
+  var BUILD_DATE = "2026-05-27@16:47:44GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -14231,7 +14336,7 @@ ${js}
           }
         }
         if (!globalThis.__ripApp && runtimeTag) {
-          const stashFn = globalThis.stash;
+          const stashFn = globalThis.createStash;
           if (stashFn) {
             let initial = {};
             const stateAttr = runtimeTag.getAttribute("data-state");
@@ -14378,18 +14483,17 @@ ${indented}`);
   // docs/dist/_app.js
   var exports__app = {};
   __export(exports__app, {
+    unwrapStash: () => unwrapStash,
     throttle: () => throttle,
-    stash: () => stash,
     setContext: () => setContext,
-    raw: () => raw,
     persistStash: () => persistStash,
     launch: () => launch,
-    isStash: () => isStash,
     hold: () => hold,
     hasContext: () => hasContext,
     getContext: () => getContext,
     delay: () => delay,
     debounce: () => debounce,
+    createStash: () => createStash,
     createRouter: () => createRouter,
     createResource: () => createResource,
     createRenderer: () => createRenderer,
@@ -14700,7 +14804,7 @@ ${indented}`);
   resolveIndex = function(seg, obj) {
     let t;
     if (typeof seg === "number" && seg < 0) {
-      t = raw(obj);
+      t = unwrapStash(obj);
       if (Array.isArray(t))
         return t.length + seg;
     }
@@ -14823,7 +14927,7 @@ ${indented}`);
                 }
                 if (!(obj != null && typeof obj === "object"))
                   return [];
-                t = raw(obj);
+                t = unwrapStash(obj);
                 keysSignal(t).value;
                 return Object.keys(t);
               } finally {
@@ -14845,7 +14949,7 @@ ${indented}`);
                   let seg = segs[i];
                   key = resolveIndex(seg, obj);
                   if (i === segs.length - 1) {
-                    t = raw(obj);
+                    t = unwrapStash(obj);
                     keysSignal(t).value;
                     return Object.prototype.hasOwnProperty.call(t, key);
                   }
@@ -14894,19 +14998,16 @@ ${indented}`);
     cache[prop] = fn;
     return fn;
   };
-  var stash = function(data = {}) {
+  var createStash = function(data = {}) {
     return makeProxy(data);
   };
-  var raw = function(proxy) {
+  var unwrapStash = function(proxy) {
     return proxy?.[Symbol.for("raw")] ? proxy[Symbol.for("raw")] : proxy;
-  };
-  var isStash = function(obj) {
-    return obj?.[Symbol.for("stash")] === true;
   };
   function persistStash(app, opts = {}) {
     let _save, disposed, effectDisposer, saved, savedData, storage, storageKey, target;
     assertBrowser("persistStash");
-    target = raw(app) || app;
+    target = unwrapStash(app) || app;
     return function() {
       return target[Symbol.for("persisted")] ? null : undefined;
     };
@@ -14926,7 +15027,7 @@ ${indented}`);
     _save = function() {
       return (() => {
         try {
-          return storage.setItem(storageKey, JSON.stringify(raw(app.data)));
+          return storage.setItem(storageKey, JSON.stringify(unwrapStash(app.data)));
         } catch {
           return null;
         }
@@ -16144,7 +16245,7 @@ ${indented}`);
     } else {
       throw new Error("launch: no bundle or bundleUrl provided");
     }
-    app = stash({ components: {}, routes: {}, data: {} });
+    app = createStash({ components: {}, routes: {}, data: {} });
     globalThis.__ripApp = app;
     appComponents = createComponents();
     if (bundle.components)
