@@ -12,7 +12,7 @@ Design proposals under discussion. Grouped by domain.
 
 ## Domain B — Runtime delivery & ergonomics
 
-- [ ] [RFC 6 — Trim and align the `@rip-lang/app` global surface](#rfc-6-trim-and-align-the-rip-langapp-global-surface)
+- [x] [RFC 6 — Trim and align the `@rip-lang/app` global surface](#rfc-6-trim-and-align-the-rip-langapp-global-surface)
 - [ ] [RFC 7 — Routing ergonomics — active link, scroll, and the `data-router-ignore` opt-out](#rfc-7-routing-ergonomics--active-link-scroll-and-the-data-router-ignore-opt-out)
 
 ## Domain C — Compiler / reactivity
@@ -401,6 +401,8 @@ Depends on RFC 2 (DTS pipeline), RFC 3 (typed router exports), RFC 4 (typed comp
 
 
 ## RFC 6: Trim and align the `@rip-lang/app` global surface
+
+> **Status: Implemented.**
 
 `@rip-lang/app` exports sixteen names that the bundle spreads onto `globalThis`. The `AGENTS.md` "don't shadow injected globals" warning treats all sixteen as equally risky, but they aren't. An audit across `apps/`, `examples/`, `docs/`, and `packages/` (excluding the `app` package's own internals and the bundled DuckDB sources) sorts them into three buckets:
 

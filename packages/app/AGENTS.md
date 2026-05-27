@@ -11,7 +11,7 @@ named sections:
 
 | Section          | Public API                                              |
 |------------------|---------------------------------------------------------|
-| Stash            | `stash`, `raw`, `isStash`, `persistStash`               |
+| Stash            | `createStash`, `unwrapStash`, `persistStash`            |
 | Resource         | `createResource`                                        |
 | Timing           | `delay`, `debounce`, `throttle`, `hold`                 |
 | Components store | `createComponents`                                      |

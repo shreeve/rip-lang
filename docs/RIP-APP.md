@@ -201,7 +201,7 @@ A deep reactive proxy with path navigation. Single-app state,
 JSON-persistable, fine-grained signal subscription per key.
 
 ```rip
-app = stash
+app = createStash
   user:
     name: "Alice"
     prefs:
@@ -221,7 +221,7 @@ app.keys 'user'                  # → ['name', 'prefs']
 app.join 'user', email: "..."    # shallow merge
 
 # Use raw object underneath
-plain = raw(app)                 # back to a plain JS object
+plain = unwrapStash(app)         # back to a plain JS object
 ```
 
 **Single-stash policy**: Rip App assumes one stash per page (the one
