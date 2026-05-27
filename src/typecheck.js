@@ -1694,6 +1694,17 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
     if (typedApp) code = code.replace(/declare app: any/g, typedApp);
   }
 
+  // `declare router: any` in the component stub is rewritten to the Router
+  // type exported by @rip-lang/app. Always available — the package ships its
+  // own DTS. Gated on a typed project (same `findEntryFile` check the stash
+  // splice uses) to avoid touching untyped sources.
+  if (code.includes('declare router: any') && findEntryFile(filePath)) {
+    code = code.replace(
+      /declare router: any/g,
+      `declare router: import('@rip-lang/app').Router`,
+    );
+  }
+
   // Dedupe imports: when the DTS header and the body import from the same
   // module specifier, TypeScript reports TS2300 (Duplicate identifier) for
   // every shared binding, which cascades and corrupts type resolution
@@ -2353,6 +2364,17 @@ export function srcToOffset(entry, line, col) {
   if (entry.srcColToGen) {
     const colEntries = entry.srcColToGen.get(line);
     if (colEntries && colEntries.length > 0) {
+      // Exact-column match wins regardless of genLine.  Sub-mapping anchors
+      // for identifiers in arrow bodies, spreads, etc. legitimately land on
+      // a different genLine than the statement's primary anchor; preferring
+      // them when they line up exactly with the queried column avoids the
+      // line-anchor filter (below) from discarding a precise mapping.
+      const exact = colEntries.find(e => e.srcCol === col);
+      if (exact) {
+        genLine = exact.genLine;
+        genColHint = exact.genCol;
+        bestSrcCol = exact.srcCol;
+      } else {
       // When srcToGen anchors this source line to a specific genLine, only
       // consider colEntries on that same genLine.  Stray entries on other
       // genLines (caused by upstream sub-mapping contamination across
@@ -2375,6 +2397,7 @@ export function srcToOffset(entry, line, col) {
       genLine = best.genLine;
       genColHint = best.genCol;
       bestSrcCol = best.srcCol;
+      }
     }
   }
 

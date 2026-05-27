@@ -731,7 +731,12 @@ export function emitTypes(tokens, sexpr = null, source = '') {
     //
     // The function-form is wrong inside bodies because it would create
     // a phantom global that shadows / collides with the actual local.
-    if (tag === 'IDENTIFIER' && !inClass &&
+    //
+    // If the IDENTIFIER carries an explicit `name:: T = arrow` annotation,
+    // skip this path and let the typed-variable-assignment path below
+    // emit the typed form (otherwise we'd lose the user's annotation in
+    // favor of inferred `any` rest-param emission).
+    if (tag === 'IDENTIFIER' && !inClass && !t.data?.type &&
         tokens[i + 1]?.[0] === '=' &&
         (tokens[i + 2]?.[0] === 'PARAM_START' || tokens[i + 2]?.[0] === '(')) {
       let fnName = t[1];
