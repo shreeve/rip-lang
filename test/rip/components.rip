@@ -1822,7 +1822,7 @@ test "extends class-merge pattern via @rest in computed", '''
   [before, a.classes.value]
   ''', [['secondary', 'mt-4'], ['secondary', ['mb-2', 'mt-4']]]
 
-# RFC 1: `?` on a prop name is the sole optionality marker.
+# `?` on a prop name is the sole optionality marker.
 # `:=` only assigns a default; it no longer implies optionality.
 test "optional typed prop without default omitted by caller is undefined at runtime", '''
   A = component
@@ -3707,15 +3707,15 @@ code "static class: attribute", '''
   ''', opts
 
 # ==============================================================================
-# Other Lifecycle Hooks — beforeMount, updated, beforeUnmount
+# Other Lifecycle Hooks — beforeMount, beforeUnmount
 # ==============================================================================
 
-code "beforeMount and updated hooks", '''
+code "beforeMount and beforeUnmount hooks", '''
   export A = component
     beforeMount = ->
       p "before"
-    updated = ->
-      p "updated"
+    beforeUnmount = ->
+      p "leaving"
     render
       div "hi"
   ''', '''
@@ -3725,8 +3725,8 @@ code "beforeMount and updated hooks", '''
     beforeMount() {
     return p("before");
   }
-    updated() {
-    return p("updated");
+    beforeUnmount() {
+    return p("leaving");
   }
     _create() {
       this._el0 = document.createElement('div');

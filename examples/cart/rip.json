@@ -1,4 +1,3 @@
 {
-  "strict": true,
-  "exclude": ["index.rip", "api/**"]
+  "strict": true
 }

@@ -1593,12 +1593,11 @@ App = component
 
 ```coffee
 App = component
-  beforeMount = -> p "about to mount"
-  mounted     = -> p "mounted"
-  updated     = -> p "updated"
+  beforeMount   = -> p "about to mount"
+  mounted       = -> p "mounted"
   beforeUnmount = -> p "about to unmount"
-  unmounted   = -> p "unmounted"
-  onError     = (err, comp) -> p "caught: #{err.message}"
+  unmounted     = -> p "unmounted"
+  onError       = (err) -> p "caught: #{err.message}"
 ```
 
 **Effects:**

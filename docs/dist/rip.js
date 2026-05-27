@@ -6098,7 +6098,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
   // src/components.js
   var BIND_PREFIX = "__bind_";
   var BIND_SUFFIX = "__";
-  var LIFECYCLE_HOOKS = new Set(["beforeMount", "mounted", "updated", "beforeUnmount", "unmounted", "onError"]);
+  var LIFECYCLE_HOOKS = new Set(["beforeMount", "mounted", "beforeUnmount", "unmounted", "onError"]);
   var BOOLEAN_ATTRS = new Set([
     "disabled",
     "hidden",
@@ -6523,6 +6523,56 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         s.await = true;
       return s.optional || s.await ? s : to;
     };
+    proto.addBodyRipSrcMarkers = function(bodyCode, bodySexpr) {
+      if (typeof bodyCode !== "string" || !bodyCode)
+        return bodyCode;
+      const stmts = Array.isArray(bodySexpr) && bodySexpr[0] === "block" ? bodySexpr.slice(1) : Array.isArray(bodySexpr) ? [bodySexpr] : [];
+      if (stmts.length === 0)
+        return bodyCode;
+      const getLoc = (s) => {
+        if (s == null)
+          return null;
+        if (!Array.isArray(s))
+          return s?.loc?.r ?? null;
+        if (s.loc?.r)
+          return s.loc.r;
+        if (s[0]?.loc?.r)
+          return s[0].loc.r;
+        for (const child of s) {
+          if (child?.loc?.r)
+            return child.loc.r;
+          if (Array.isArray(child)) {
+            const l = getLoc(child);
+            if (l != null)
+              return l;
+          }
+        }
+        return null;
+      };
+      const srcLines = stmts.map(getLoc);
+      if (srcLines.every((l) => l == null))
+        return bodyCode;
+      const lines = bodyCode.split(`
+`);
+      let si = 0;
+      for (let i = 0;i < lines.length && si < srcLines.length; i++) {
+        const trimmed = lines[i].trim();
+        if (!trimmed)
+          continue;
+        if (trimmed === "{" || trimmed === "}" || trimmed.startsWith("//"))
+          continue;
+        if (lines[i].includes("@rip-src:")) {
+          si++;
+          continue;
+        }
+        if (srcLines[si] != null) {
+          lines[i] = `${lines[i]} // @rip-src:${srcLines[si]}`;
+        }
+        si++;
+      }
+      return lines.join(`
+`);
+    };
     proto.transformComponentMembers = function(sexpr, localScope = new Set) {
       const self = this._self;
       if (!Array.isArray(sexpr)) {
@@ -6724,7 +6774,21 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         const sl = [];
         const componentTypeParams = this._componentTypeParams || "";
         sl.push(`class ${componentTypeParams}{`);
-        sl.push("  declare _root: Element | null; declare app: any;");
+        sl.push("  declare _root: Element | null; declare app: any; declare router: any; declare params: Record<string, string>; declare query: URLSearchParams; declare children: any;");
+        const userHookNames = new Set(lifecycleHooks.map((h) => h.name));
+        const hookDecls = [];
+        if (!userHookNames.has("beforeMount"))
+          hookDecls.push("beforeMount?(): void;");
+        if (!userHookNames.has("mounted"))
+          hookDecls.push("mounted?(): void;");
+        if (!userHookNames.has("beforeUnmount"))
+          hookDecls.push("beforeUnmount?(): void;");
+        if (!userHookNames.has("unmounted"))
+          hookDecls.push("unmounted?(): void;");
+        if (!userHookNames.has("onError"))
+          hookDecls.push("onError?(err: { status?: number; message?: string; error?: Error; path?: string }): void;");
+        if (hookDecls.length)
+          sl.push("  " + hookDecls.join(" "));
         sl.push("  emit(_name: string, _detail?: any): void {}");
         const propEntries = [];
         for (const { name, type, isPublic, required, optional } of stateVars) {
@@ -6883,7 +6947,8 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
             }
             const transformed = this.reactiveMembers ? this.transformComponentMembers(methodBody) : methodBody;
             const isAsync = this.containsAwait(methodBody);
-            const bodyCode = this.emitFunctionBody(transformed, params || []);
+            let bodyCode = this.emitFunctionBody(transformed, params || []);
+            bodyCode = this.addBodyRipSrcMarkers(bodyCode, methodBody);
             sl.push(`  ${isAsync ? "async " : ""}${name}(${paramStr}) ${bodyCode}`);
           }
         }
@@ -6893,7 +6958,8 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
             const paramStr = Array.isArray(params) ? params.map((p) => this.formatParam(p)).join(", ") : "";
             const transformed = this.reactiveMembers ? this.transformComponentMembers(hookBody) : hookBody;
             const isAsync = this.containsAwait(hookBody);
-            const bodyCode = this.emitFunctionBody(transformed, params || []);
+            let bodyCode = this.emitFunctionBody(transformed, params || []);
+            bodyCode = this.addBodyRipSrcMarkers(bodyCode, hookBody);
             sl.push(`  ${isAsync ? "async " : ""}${name}(${paramStr}) ${bodyCode}`);
           }
         }
@@ -9778,6 +9844,19 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
       return code;
     }
     buildMappings() {
+      if (this._importEntries) {
+        let importLineOffset = 0;
+        for (let entry of this._importEntries) {
+          if (entry.loc) {
+            this.sourceMap.addMapping(importLineOffset, 0, entry.loc.r, entry.loc.c);
+          }
+          if (entry.sexpr && entry.loc) {
+            this.recordSubMappings(entry.code, entry.sexpr, importLineOffset);
+          }
+          importLineOffset += entry.code.split(`
+`).length;
+        }
+      }
       if (!this._stmtEntries)
         return;
       let lineOffset = this._preambleLines;
@@ -10303,7 +10382,12 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
 `);
       let needsBlank = false;
       if (imports.length > 0) {
-        code += imports.map((s) => this.addSemicolon(s, this.emit(s, "statement"))).join(`
+        let importEntries = imports.map((s) => {
+          let generated = this.addSemicolon(s, this.emit(s, "statement"));
+          return { code: generated, loc: Array.isArray(s) ? s.loc : null, sexpr: Array.isArray(s) ? s : null };
+        });
+        this._importEntries = importEntries;
+        code += importEntries.map((e) => e.code).join(`
 `);
         needsBlank = true;
       }
@@ -11254,7 +11338,14 @@ ${this.indent()}}`;
         return this.emit(ops[0], "value");
       return `(${ops.map((o) => this.emit(o, "value")).join(" || ")})`;
     }
-    emitSymbol(head, rest) {
+    emitSymbol(head, rest, context, sexpr) {
+      if (sexpr && sexpr.loc && typeof rest[0] === "string") {
+        sexpr._anchors = (sexpr._anchors || []).concat([{
+          name: "Symbol",
+          origLine: sexpr.loc.r,
+          origCol: sexpr.loc.c + 1
+        }]);
+      }
       return `Symbol.for(${JSON.stringify(rest[0])})`;
     }
     emitArray(head, elements) {
@@ -11919,6 +12010,7 @@ ${this.indent()}}`;
         if (named[0] === "*" && named.length === 2)
           return `import ${def}, * as ${named[1]} from ${fixedSource2}`;
         let names = named.map((i) => Array.isArray(i) && i.length === 2 ? `${i[0]} as ${i[1]}` : i).join(", ");
+        this._attachImportSpecifierAnchors(sexpr, [def, ...named.flatMap((i) => Array.isArray(i) ? i : [i])]);
         return `import ${def}, { ${names} } from ${fixedSource2}`;
       }
       let [specifier, source] = rest;
@@ -11929,9 +12021,48 @@ ${this.indent()}}`;
         if (specifier[0] === "*" && specifier.length === 2)
           return `import * as ${specifier[1]} from ${fixedSource}`;
         let names = specifier.map((i) => Array.isArray(i) && i.length === 2 ? `${i[0]} as ${i[1]}` : i).join(", ");
+        this._attachImportSpecifierAnchors(sexpr, specifier.flatMap((i) => Array.isArray(i) ? i : [i]));
         return `import { ${names} } from ${fixedSource}`;
       }
       return `import ${this.emit(specifier, "value")} from ${fixedSource}`;
+    }
+    _attachImportSpecifierAnchors(sexpr, names) {
+      if (!sexpr || !sexpr.loc)
+        return;
+      const source = this.options && this.options.source;
+      if (!source || !names || !names.length)
+        return;
+      const lines = this._sourceLinesCache || (this._sourceLinesCache = source.split(`
+`));
+      let row = sexpr.loc.r;
+      let col = sexpr.loc.c;
+      const anchors = [];
+      for (const name of names) {
+        if (typeof name !== "string" || !/^[A-Za-z_$][\w$]*$/.test(name))
+          continue;
+        const re = new RegExp("\\b" + name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b");
+        let found = false;
+        while (row < lines.length) {
+          const line = lines[row] || "";
+          const codePart = line.replace(/#.*$/, "");
+          re.lastIndex = 0;
+          const slice = codePart.slice(col);
+          const m = re.exec(slice);
+          if (m) {
+            const c = col + m.index;
+            anchors.push({ name, origLine: row, origCol: c });
+            col = c + name.length;
+            found = true;
+            break;
+          }
+          row++;
+          col = 0;
+        }
+        if (!found)
+          break;
+      }
+      if (anchors.length)
+        sexpr._anchors = (sexpr._anchors || []).concat(anchors);
     }
     emitExport(head, rest) {
       let [decl] = rest;
@@ -13607,7 +13738,7 @@ if (typeof globalThis !== 'undefined') {
         typeTokens = [...tokens];
       }
       tokens = tokens.filter((t) => t[0] !== "TYPE_DECL");
-      if (lexer.typeRefNames?.size > 0) {
+      if (lexer.typeRefNames?.size > 0 && !this.options.inlineTypes) {
         let usedNames = new Set;
         let inImport = false;
         for (let t of tokens) {
@@ -13908,7 +14039,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.16.0";
-  var BUILD_DATE = "2026-05-26@12:06:27GMT";
+  var BUILD_DATE = "2026-05-27@12:14:35GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

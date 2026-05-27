@@ -1,9 +1,8 @@
-import { Product } from '../types.rip'
+import { Product } from '../../types.rip'
 import { Button } from '../components/button.rip'
 import { title } from '../config.rip'
 
 export Products = component
-  @router?:: any
   cart ~= @app.data.cart
   products:: Product[] := []
   error := null

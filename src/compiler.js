@@ -561,14 +561,37 @@ export class CodeEmitter {
         }
       }
       // Operators/keywords: anchor is the subject at index 1
-      else if (typeof head === 'string' && /^[=+\-*/%<>!&|?~^]|^\.\.?$|^def$|^class$|^state$|^computed$|^readonly$|^for-/.test(head)) {
-        if (typeof node[1] === 'string' && /^[a-zA-Z_$]/.test(node[1])) ident = node[1];
+      else if (typeof head === 'string' && /^[=+\-*/%<>!&|?~^]|^\.{1,3}$|^def$|^class$|^state$|^computed$|^readonly$|^for-/.test(head)) {
+        if (typeof node[1] === 'string' && /^[a-zA-Z_$]/.test(node[1])) {
+          ident = node[1];
+          // Spread `...x`: node.loc.c marks the `...` start; shift past the
+          // operator so the anchor lands on the operand identifier.
+          if (head === '...') identCol = node.loc.c + 3;
+        }
       }
       // Function call (head is identifier)
       else if (typeof head === 'string' && /^[a-zA-Z_$]/.test(head)) {
         ident = head;
       }
       if (ident) result.push({ name: ident, origLine: node.loc.r, origCol: identCol });
+
+      // Arrow body bare-identifier anchor: a single-expression arrow body
+      // like `-> products` parses as `['->', [], ['block', 'products']]`.
+      // The body atom has no .loc (parser only attaches loc to arrays), and
+      // the `block` wrapper has bogus `loc=0:0`, so the identifier reference
+      // is invisible to the heuristic mapping. Synthesize an anchor by
+      // scanning source forward from the arrow's location.
+      if ((head === '->' || head === '=>') && Array.isArray(node[2]) && str(node[2][0]) === 'block') {
+        const body = node[2];
+        for (let i = 1; i < body.length; i++) {
+          const leaf = body[i];
+          const leafStr = typeof leaf === 'string' || leaf instanceof String ? str(leaf) : null;
+          if (leafStr && /^[a-zA-Z_$][\w$]*$/.test(leafStr) && !leaf.loc) {
+            const anchor = this._scanForIdentAfter(leafStr, node.loc);
+            if (anchor) result.push(anchor);
+          }
+        }
+      }
     }
     // Side-channel anchors attached by walkRender for bare-identifier
     // children of template-tag nodes (e.g. `error` in `p.error error`).
@@ -586,6 +609,30 @@ export class CodeEmitter {
     for (let i = start; i < node.length; i++) {
       if (Array.isArray(node[i])) this.collectSubExprs(node[i], result);
     }
+  }
+
+  // Scan original source for the first occurrence of `ident` after the
+  // given start location (typically an arrow's `->` loc). Skips matches
+  // inside string/comment regions. Returns a sub-expression anchor or null.
+  _scanForIdentAfter(ident, startLoc) {
+    const source = this.options && this.options.source;
+    if (!source || !startLoc) return null;
+    const lines = this._sourceLinesCache || (this._sourceLinesCache = source.split('\n'));
+    const re = new RegExp('\\b' + ident.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'g');
+    const startRow = startLoc.r;
+    const startCol = startLoc.c;
+    // Search current line from startCol forward, then up to 20 subsequent lines.
+    for (let r = startRow; r < Math.min(lines.length, startRow + 20); r++) {
+      const line = lines[r];
+      if (!line) continue;
+      re.lastIndex = r === startRow ? startCol : 0;
+      let m;
+      while ((m = re.exec(line)) !== null) {
+        if (CodeEmitter._isColInsideString(line, m.index)) continue;
+        return { name: ident, origLine: r, origCol: m.index };
+      }
+    }
+    return null;
   }
 
   // ---------------------------------------------------------------------------

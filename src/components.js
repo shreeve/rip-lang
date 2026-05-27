@@ -17,7 +17,7 @@ import { HTML_TAGS, SVG_TAGS, TEMPLATE_TAGS } from './generated/dom-tags.js';
 const BIND_PREFIX = '__bind_';
 const BIND_SUFFIX = '__';
 
-const LIFECYCLE_HOOKS = new Set(['beforeMount', 'mounted', 'updated', 'beforeUnmount', 'unmounted', 'onError']);
+const LIFECYCLE_HOOKS = new Set(['beforeMount', 'mounted', 'beforeUnmount', 'unmounted', 'onError']);
 const BOOLEAN_ATTRS = new Set([
   'disabled', 'hidden', 'readonly', 'required', 'checked', 'selected',
   'autofocus', 'autoplay', 'controls', 'loop', 'muted', 'multiple',
@@ -591,6 +591,49 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     return (s.optional || s.await) ? s : to;
   };
 
+  // Inject `// @rip-src:N` markers onto each statement line of a method body
+  // emitted into a component stub.  The emitter doesn't carry source-map data
+  // for stub method bodies, so without explicit markers, typecheck.js falls
+  // back to linear gap-fill interpolation which silently misaligns when stub
+  // sizes change.  Walks the body s-expression to recover statement source
+  // lines and pairs them with the rendered body's non-trivial lines.
+  proto.addBodyRipSrcMarkers = function(bodyCode, bodySexpr) {
+    if (typeof bodyCode !== 'string' || !bodyCode) return bodyCode;
+    const stmts = Array.isArray(bodySexpr) && bodySexpr[0] === 'block'
+      ? bodySexpr.slice(1)
+      : (Array.isArray(bodySexpr) ? [bodySexpr] : []);
+    if (stmts.length === 0) return bodyCode;
+    const getLoc = (s) => {
+      if (s == null) return null;
+      if (!Array.isArray(s)) return s?.loc?.r ?? null;
+      if (s.loc?.r) return s.loc.r;
+      if (s[0]?.loc?.r) return s[0].loc.r;
+      for (const child of s) {
+        if (child?.loc?.r) return child.loc.r;
+        if (Array.isArray(child)) {
+          const l = getLoc(child);
+          if (l != null) return l;
+        }
+      }
+      return null;
+    };
+    const srcLines = stmts.map(getLoc);
+    if (srcLines.every(l => l == null)) return bodyCode;
+    const lines = bodyCode.split('\n');
+    let si = 0;
+    for (let i = 0; i < lines.length && si < srcLines.length; i++) {
+      const trimmed = lines[i].trim();
+      if (!trimmed) continue;
+      if (trimmed === '{' || trimmed === '}' || trimmed.startsWith('//')) continue;
+      if (lines[i].includes('@rip-src:')) { si++; continue; }
+      if (srcLines[si] != null) {
+        lines[i] = `${lines[i]} // @rip-src:${srcLines[si]}`;
+      }
+      si++;
+    }
+    return lines.join('\n');
+  };
+
   proto.transformComponentMembers = function(sexpr, localScope = new Set()) {
     const self = this._self;
     if (!Array.isArray(sexpr)) {
@@ -825,11 +868,30 @@ export function installComponentSupport(CodeEmitter, Lexer) {
       const sl = [];
       const componentTypeParams = this._componentTypeParams || '';
       sl.push(`class ${componentTypeParams}{`);
-      // `declare app: any` is rewritten to a typed shape by typecheck.js when
-      // the project has a typed `<root>/app/stash.rip`. The compiler stays
-      // context-free; the rewrite happens in the same pass that splices
-      // function-overload signatures into the stub.
-      sl.push('  declare _root: Element | null; declare app: any;');
+      // Injected `this` shape for every component. The compiler stays
+      // context-free; `declare app: any` and `declare router: any` are
+      // rewritten by typecheck.js to typed shapes when the project anchor /
+      // stash file is discoverable. `params`, `query`, `children`, and the
+      // lifecycle hooks are stable across all projects, so they're typed
+      // here directly. User-defined hooks are emitted later as real methods;
+      // skip the optional-signature declaration for those names to avoid
+      // overload-optionality mismatches.
+      // Combine all injected declarations onto a single line to preserve the
+      // stub's prior line count.  Source-map gap-fill interpolates linearly
+      // between marker lines (e.g. between @rip-src markers from `@count`
+      // and a downstream method), so adding stub header lines pushes the
+      // method bodies past where interpolation expects them — breaking
+      // @ts-expect-error injection.  Keeping a single header line preserves
+      // the relative offsets.
+      sl.push('  declare _root: Element | null; declare app: any; declare router: any; declare params: Record<string, string>; declare query: URLSearchParams; declare children: any;');
+      const userHookNames = new Set(lifecycleHooks.map(h => h.name));
+      const hookDecls = [];
+      if (!userHookNames.has('beforeMount'))   hookDecls.push('beforeMount?(): void;');
+      if (!userHookNames.has('mounted'))       hookDecls.push('mounted?(): void;');
+      if (!userHookNames.has('beforeUnmount')) hookDecls.push('beforeUnmount?(): void;');
+      if (!userHookNames.has('unmounted'))     hookDecls.push('unmounted?(): void;');
+      if (!userHookNames.has('onError'))       hookDecls.push('onError?(err: { status?: number; message?: string; error?: Error; path?: string }): void;');
+      if (hookDecls.length) sl.push('  ' + hookDecls.join(' '));
       sl.push('  emit(_name: string, _detail?: any): void {}');
 
       // Constructor — typed props for public state/readonly (matches DTS)
@@ -996,7 +1058,12 @@ export function installComponentSupport(CodeEmitter, Lexer) {
           }
           const transformed = this.reactiveMembers ? this.transformComponentMembers(methodBody) : methodBody;
           const isAsync = this.containsAwait(methodBody);
-          const bodyCode = this.emitFunctionBody(transformed, params || []);
+          let bodyCode = this.emitFunctionBody(transformed, params || []);
+          // Inject @rip-src markers on each body statement line so that
+          // @ts-expect-error injection and hover/diagnostics resolve to the
+          // user's actual source line, instead of relying on linear gap-fill
+          // interpolation across the stub (which is brittle to stub size).
+          bodyCode = this.addBodyRipSrcMarkers(bodyCode, methodBody);
           sl.push(`  ${isAsync ? 'async ' : ''}${name}(${paramStr}) ${bodyCode}`);
         }
       }
@@ -1008,7 +1075,8 @@ export function installComponentSupport(CodeEmitter, Lexer) {
           const paramStr = Array.isArray(params) ? params.map(p => this.formatParam(p)).join(', ') : '';
           const transformed = this.reactiveMembers ? this.transformComponentMembers(hookBody) : hookBody;
           const isAsync = this.containsAwait(hookBody);
-          const bodyCode = this.emitFunctionBody(transformed, params || []);
+          let bodyCode = this.emitFunctionBody(transformed, params || []);
+          bodyCode = this.addBodyRipSrcMarkers(bodyCode, hookBody);
           sl.push(`  ${isAsync ? 'async ' : ''}${name}(${paramStr}) ${bodyCode}`);
         }
       }

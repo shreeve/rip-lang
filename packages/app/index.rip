@@ -68,18 +68,18 @@ type RouteInfo =
   query: Record<string, string>
   hash: string
 
-type RouterErrorInfo =
+export type RouterErrorInfo =
   status: number
   path?: string
   message?: string
 
-type RouterOpts =
+export type RouterOpts =
   root?: string
   base?: string
   hash?: boolean
   onError?: (err: RouterErrorInfo) => void
 
-type Router =
+export type Router =
   push: (url: string) => void
   replace: (url: string) => void
   back: () => void

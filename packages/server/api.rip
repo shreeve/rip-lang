@@ -149,6 +149,39 @@ export mimeType = (path) ->
 # Context Factory
 # ==============================================================================
 
+# Public type surface for route handlers. The `Ctx` shape mirrors the object
+# returned by `createContext` below; `RouteHandler` types the `this`-bound
+# context that handlers receive (passed as both `this` and first positional
+# arg via `handler.call!(c, c)`), so `@req.json!`, `@params.id`, `@json(...)`
+# all type-check in user code without needing per-app declarations.
+
+export type CtxReq =
+  raw: Request
+  method: string
+  url: string
+  path: string
+  param: (key?: string) => any
+  query: (key?: string) => any
+  header: (key?: string) => any
+  json: () => Promise<any>
+  text: () => Promise<string>
+  formData: () => Promise<FormData>
+  parseBody: (opts?: Record<string, unknown>) => Promise<any>
+
+export type Ctx =
+  json: (data: any, status?: number, headers?: Record<string, string>) => Response
+  text: (str: string, status?: number, headers?: Record<string, string>) => Response
+  html: (str: string, status?: number, headers?: Record<string, string>) => Response
+  body: (data: BodyInit | null, status?: number, headers?: Record<string, string>) => Response
+  redirect: (location: string, status?: number) => Response
+  send: (path: string, type?: string) => Response
+  header: (name: string, value?: string, opts?: { append?: boolean }) => string | null | undefined
+  cache: (duration: number | string) => void
+  session: Record<string, any>
+  req: CtxReq
+
+export type RouteHandler = (this: Ctx, c: Ctx, next?: () => Promise<void>) => any
+
 createContext = (req, params = {}) ->
   url = new URL(req.url)
   out = new Headers()
@@ -317,12 +350,12 @@ addRoute = (method, path, ...handlers) ->
   for handler in handlers
     _routes.push { method: method.toUpperCase(), regex, keys, handler: smart(handler), path: fullPath }
 
-export get   = (path, ...handlers) -> addRoute 'GET',    path, ...handlers
-export post  = (path, ...handlers) -> addRoute 'POST',   path, ...handlers
-export put   = (path, ...handlers) -> addRoute 'PUT',    path, ...handlers
-export patch = (path, ...handlers) -> addRoute 'PATCH',  path, ...handlers
-export del   = (path, ...handlers) -> addRoute 'DELETE', path, ...handlers
-export all   = (path, ...handlers) -> addRoute 'ALL',    path, ...handlers
+export get::   (path: string, ...handlers: RouteHandler[]) => void = (path, ...handlers) -> addRoute 'GET',    path, ...handlers
+export post::  (path: string, ...handlers: RouteHandler[]) => void = (path, ...handlers) -> addRoute 'POST',   path, ...handlers
+export put::   (path: string, ...handlers: RouteHandler[]) => void = (path, ...handlers) -> addRoute 'PUT',    path, ...handlers
+export patch:: (path: string, ...handlers: RouteHandler[]) => void = (path, ...handlers) -> addRoute 'PATCH',  path, ...handlers
+export del::   (path: string, ...handlers: RouteHandler[]) => void = (path, ...handlers) -> addRoute 'DELETE', path, ...handlers
+export all::   (path: string, ...handlers: RouteHandler[]) => void = (path, ...handlers) -> addRoute 'ALL',    path, ...handlers
 
 export use = (pathOrMw, mw = null) ->
   if typeof pathOrMw is 'function'
@@ -339,12 +372,12 @@ export prefix = (base, fn) ->
   finally
     _prefix = old
 
-export onError = (handler) -> _errorHandler = handler
-export notFound = (handler) -> _notFoundHandler = handler
+export onError::  (handler: RouteHandler) => void = (handler) -> _errorHandler = handler
+export notFound:: (handler: RouteHandler) => void = (handler) -> _notFoundHandler = handler
 
-export raw = (fn) -> _rawFilter = fn
-export before = (fn) -> _beforeFilters.push fn
-export after = (fn) -> _afterFilters.push fn
+export raw::    (fn: (req: Request) => any) => void = (fn) -> _rawFilter = fn
+export before:: (fn: RouteHandler) => void = (fn) -> _beforeFilters.push fn
+export after::  (fn: RouteHandler) => void = (fn) -> _afterFilters.push fn
 
 # ==============================================================================
 # Main Fetch Handler
