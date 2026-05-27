@@ -415,7 +415,7 @@ Block factories need locals and `ctx.member` references instead of `this._elN` a
 - `_factoryVars` — variables that need local `let` declarations
 - `_fragChildren` — fragment-to-children tracking for removals
 - `_pushEffect(body)` — emits `__effect(...)` or `disposers.push(__effect(...))`
-- `_loopVarStack` — threads loop variables through nested factories
+- `_loopVarStack` — threads loop variables through nested factories. Each frame is `{ itemVar, indexVar, reactiveSource }`; `reactiveSource` is computed once when the loop is emitted (via `hasReactiveDeps(collection)`) and tells `hasReactiveDeps` to treat direct member access rooted at `itemVar`/`indexVar` (`item.foo`, `item[0]`, `item.a.b`) as reactive. Alias and destructuring forms are not tracked.
 
 Factory mode is entered in `emitConditionBranch` and `emitTemplateLoop` via save/restore of `[_createLines, _setupLines, _factoryMode, _factoryVars]`.
 

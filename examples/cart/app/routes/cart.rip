@@ -69,7 +69,10 @@ export Cart = component
                     input
                       type: "number"
                       value: String(item.quantity)
-                      @input: (e) -> cart.updateQuantity(item, Math.max(1, Number(e.target.value) or 1))
+                      @input: (e) ->
+                        value = Math.max(1, Number(e.target.value) or 1)
+                        cart.updateQuantity(item, value)
+                        if e.target.value isnt String(value) then e.target.value = String(value)
                     Button outline, @click: (-> cart.updateQuantity(item, item.quantity + 1)), "+"
                 td "$#{(item.price * item.quantity).toFixed(2)}"
                 td
