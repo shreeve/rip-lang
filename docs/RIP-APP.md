@@ -24,21 +24,37 @@ shaped the way it is, and how to use it well.
 
 # Contents
 
-1. [The four-layer architecture](#1-the-four-layer-architecture)
-2. [Quick start — the 30-second wow](#2-quick-start)
-3. [The subsystems](#3-the-subsystems)
-   - [Stash](#stash)
-   - [createResource](#createresource)
-   - [Timing helpers](#timing-helpers)
-   - [Components store](#components-store)
-   - [createRouter](#createrouter)
-   - [createRenderer](#createrenderer)
-   - [launch](#launch)
-   - [ARIA helpers](#aria-helpers)
-4. [Lifecycle invariants — what fires when, what owns what](#4-lifecycle-invariants)
-5. [Async effects — `getEffectSignal` and cancellation](#5-async-effects)
-6. [Gotchas — things that have bitten us before](#6-gotchas)
-7. [When NOT to use Rip App](#7-when-not-to-use)
+- [Rip App — Application Framework](#rip-app--application-framework)
+- [Contents](#contents)
+  - [1. The four-layer architecture](#1-the-four-layer-architecture)
+  - [2. Quick start](#2-quick-start)
+    - [Real apps: bundles + file-based routing](#real-apps-bundles--file-based-routing)
+  - [3. The subsystems](#3-the-subsystems)
+    - [Stash](#stash)
+    - [createResource](#createresource)
+    - [Timing helpers](#timing-helpers)
+    - [Components store](#components-store)
+    - [createRouter](#createrouter)
+    - [createRenderer](#createrenderer)
+    - [launch](#launch)
+    - [ARIA helpers](#aria-helpers)
+  - [4. Lifecycle invariants](#4-lifecycle-invariants)
+    - [Component lifecycle order](#component-lifecycle-order)
+    - [User hooks](#user-hooks)
+    - [Effect ownership](#effect-ownership)
+    - [Effect cleanup-on-rerun](#effect-cleanup-on-rerun)
+    - [Parent chain (for context)](#parent-chain-for-context)
+    - [Layout and page parentage](#layout-and-page-parentage)
+    - [Factory blocks (for/if in render)](#factory-blocks-forif-in-render)
+    - [Keyed list reconciliation](#keyed-list-reconciliation)
+  - [5. Async effects](#5-async-effects)
+  - [6. Gotchas](#6-gotchas)
+    - [The bundle boundary matters](#the-bundle-boundary-matters)
+    - [Render-template name shadowing (fixed)](#render-template-name-shadowing-fixed)
+    - [Nested `for` loops can both name `i` (fixed)](#nested-for-loops-can-both-name-i-fixed)
+    - [Snapshot tests are brittle](#snapshot-tests-are-brittle)
+    - [No browser e2e tests](#no-browser-e2e-tests)
+  - [7. When NOT to use Rip App](#7-when-not-to-use-rip-app)
 
 ---
 
@@ -422,6 +438,8 @@ mount(target)                  ← only the renderer calls this directly
                                   Per-child push wrap: each child's _create runs with
                                   child as current, so the child's reactive bindings
                                   register on child._disposers, not parent's.
+       beforeMount()           ← user hook; signals/state ready, DOM not yet in tree
+                                  effects created here auto-register on this component
        _setup()                ← post-creation effects (rare; most go in _init)
        mounted()               ← user hook; DOM is in the tree now
      __popComponent
@@ -435,6 +453,20 @@ unmount({ removeDOM = true })  ← idempotent (_unmounted flag short-circuits se
      unmounted()               ← user hook; final notification
      DOM removal (if requested)
 ```
+
+### User hooks
+
+The framework recognizes these hook names on any component. All are
+optional; the runtime calls each only if defined.
+
+| Hook            | When it fires                                              | Notes                                                                            |
+| --------------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `beforeMount`   | After `_create`, before DOM is attached                    | Effects created here auto-register on the component                              |
+| `mounted`       | After DOM attached                                         | Runs once per visit                                                              |
+| `beforeUnmount` | Before children unmount and disposers fire                 | Signals/effects still live                                                       |
+| `unmounted`     | After disposers fire and DOM is removed                    | Final notification; runs once per visit                                          |
+| `onError`       | A throw escapes any component method (render, hook, event) | Receives `{ status?, message?, error?, path? }`; the renderer walks the layout chain to find the nearest defining component |
+
 
 ### Effect ownership
 

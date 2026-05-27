@@ -169,7 +169,7 @@ For any popup component. Pass lazy getters `(=> @_list)` — NOT the current val
 
 ## Lifecycle and Component Model
 
-- recognized lifecycle hooks: `beforeMount`, `mounted`, `updated`, `beforeUnmount`, `unmounted`, `onError`
+- recognized lifecycle hooks: `beforeMount`, `mounted`, `beforeUnmount`, `unmounted`, `onError`
 - `onMount` is not a lifecycle hook
 - inside components, `->` is rewritten to `=>`
 - `ref:` sets a plain property, not a reactive signal

@@ -36,7 +36,7 @@ Rules learned building these widgets. Follow them.
 
 ### Lifecycle Hooks
 
-The recognized hooks are: `beforeMount`, `mounted`, `updated`, `beforeUnmount`,
+The recognized hooks are: `beforeMount`, `mounted`, `beforeUnmount`,
 `unmounted`, `onError`. That's it. `onMount` is **not** a hook — it compiles as
 a regular method and never gets called. We hit this bug in both Tabs and Toast.
 

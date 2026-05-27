@@ -7,7 +7,7 @@ Design proposals under discussion. Grouped by domain.
 - [x] [RFC 1 — Explicit prop optionality with `?::`](#rfc-1-explicit-prop-optionality-with-)
 - [x] [RFC 2 — Rip packages exposing types to typed Rip apps](#rfc-2-rip-packages-exposing-types-to-typed-rip-apps)
 - [x] [RFC 3 — App framework types for ambient globals](#rfc-3-app-framework-types-for-ambient-globals)
-- [ ] [RFC 4 — Typed `this` shape for components and server handlers](#rfc-4-typed-this-shape-for-components-and-server-handlers)
+- [x] [RFC 4 — Typed `this` shape for components and server handlers](#rfc-4-typed-this-shape-for-components-and-server-handlers)
 - [ ] [RFC 5 — Typed routes — `href` typing, typed `router.push`, per-route `@params`](#rfc-5-typed-routes--href-typing-typed-routerpush-per-route-params)
 
 ## Domain B — Runtime delivery & ergonomics
@@ -243,7 +243,9 @@ Depends on RFCs 1, 2. Sources the `__RipApp` and `__RipRouter` types that RFCs 4
 
 ## RFC 4: typed `this` shape for components and server handlers
 
-Inside a component body, the magic `@` context exposes a fixed set of injected members: `@app`, `@router`, `@params`, `@query`, `@rest`, `@children`, plus the six lifecycle hooks the runtime recognizes (`beforeMount`, `mounted`, `updated`, `beforeUnmount`, `unmounted`, `onError` — the canonical list lives in `LIFECYCLE_HOOKS` at [src/components.js](src/components.js#L20)). The renderer constructs each component with `new Component { app, params, query, router }` ([packages/app/index.rip](packages/app/index.rip#L1309)) and the components runtime additionally exposes `this.rest`, `this._rest`, and `this.children`. None of these are visible to the type checker today — every access types as `any`. (Side note: the hook names are not currently documented in `docs/RIP-APP.md` or `AGENTS.md` — the only public hint is the brief `mounted`/`unmounted` comment at [packages/app/index.rip](packages/app/index.rip#L857). Worth fixing alongside this RFC so the typed shape and the prose docs land together.)
+> **Status: Implemented.**
+
+Inside a component body, the magic `@` context exposes a fixed set of injected members: `@app`, `@router`, `@params`, `@query`, `@rest`, `@children`, plus the five lifecycle hooks the runtime recognizes (`beforeMount`, `mounted`, `beforeUnmount`, `unmounted`, `onError` — the canonical list lives in `LIFECYCLE_HOOKS` at [src/components.js](src/components.js#L20)). The renderer constructs each component with `new Component { app, params, query, router }` ([packages/app/index.rip](packages/app/index.rip#L1309)) and the components runtime additionally exposes `this.rest`, `this._rest`, and `this.children`. None of these are visible to the type checker today — every access types as `any`. (Side note: the hook names are not currently documented in `docs/RIP-APP.md` or `AGENTS.md` — the only public hint is the brief `mounted`/`unmounted` comment at [packages/app/index.rip](packages/app/index.rip#L857). Worth fixing alongside this RFC so the typed shape and the prose docs land together.)
 
 The server side has the same problem with the same shape. API route handlers in `@rip-lang/server` get the same magic `@` context as components — `@req`, `@json()`, `@send()`, `@session`, `@params`, `@query`, plus the auth-helper return values from the framework's routing pattern. Today these all type as `any`. Without typed handler `this`, typing the cart example's API routes (or any typed Rip backend) bottoms out at the first `@req.headers` access.
 
@@ -263,7 +265,6 @@ Members of `__RipComponentThis`:
 - `children: unknown` — slot content; widened because the framework places no constraint on what a parent passes
 - `beforeMount?(): void` — fires before initial DOM mount; effects created here auto-register on the component
 - `mounted?(): void` — fires after initial DOM mount; runs once per visit
-- `updated?(): void` — fires after every reactive re-render
 - `beforeUnmount?(): void` — fires before teardown
 - `unmounted?(): void` — fires after teardown; runs once per visit
 - `onError?(err: { status?: number; message?: string; error?: Error; path?: string }): void` — error boundary; the runtime walks the layout chain looking for the nearest component that defines this
