@@ -10044,14 +10044,29 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
               identCol = node.loc.c + node[1].length + 1;
             }
           }
-        } else if (typeof head === "string" && /^[=+\-*/%<>!&|?~^]|^\.\.?$|^def$|^class$|^state$|^computed$|^readonly$|^for-/.test(head)) {
-          if (typeof node[1] === "string" && /^[a-zA-Z_$]/.test(node[1]))
+        } else if (typeof head === "string" && /^[=+\-*/%<>!&|?~^]|^\.{1,3}$|^def$|^class$|^state$|^computed$|^readonly$|^for-/.test(head)) {
+          if (typeof node[1] === "string" && /^[a-zA-Z_$]/.test(node[1])) {
             ident = node[1];
+            if (head === "...")
+              identCol = node.loc.c + 3;
+          }
         } else if (typeof head === "string" && /^[a-zA-Z_$]/.test(head)) {
           ident = head;
         }
         if (ident)
           result.push({ name: ident, origLine: node.loc.r, origCol: identCol });
+        if ((head === "->" || head === "=>") && Array.isArray(node[2]) && str(node[2][0]) === "block") {
+          const body = node[2];
+          for (let i = 1;i < body.length; i++) {
+            const leaf = body[i];
+            const leafStr = typeof leaf === "string" || leaf instanceof String ? str(leaf) : null;
+            if (leafStr && /^[a-zA-Z_$][\w$]*$/.test(leafStr) && !leaf.loc) {
+              const anchor = this._scanForIdentAfter(leafStr, node.loc);
+              if (anchor)
+                result.push(anchor);
+            }
+          }
+        }
       }
       if (Array.isArray(node._anchors)) {
         for (const a of node._anchors)
@@ -10062,6 +10077,29 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
         if (Array.isArray(node[i]))
           this.collectSubExprs(node[i], result);
       }
+    }
+    _scanForIdentAfter(ident, startLoc) {
+      const source = this.options && this.options.source;
+      if (!source || !startLoc)
+        return null;
+      const lines = this._sourceLinesCache || (this._sourceLinesCache = source.split(`
+`));
+      const re = new RegExp("\\b" + ident.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "g");
+      const startRow = startLoc.r;
+      const startCol = startLoc.c;
+      for (let r = startRow;r < Math.min(lines.length, startRow + 20); r++) {
+        const line = lines[r];
+        if (!line)
+          continue;
+        re.lastIndex = r === startRow ? startCol : 0;
+        let m;
+        while ((m = re.exec(line)) !== null) {
+          if (CodeEmitter._isColInsideString(line, m.index))
+            continue;
+          return { name: ident, origLine: r, origCol: m.index };
+        }
+      }
+      return null;
     }
     collectProgramVariables(sexpr) {
       if (!Array.isArray(sexpr))
@@ -14039,7 +14077,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.16.0";
-  var BUILD_DATE = "2026-05-27@12:14:35GMT";
+  var BUILD_DATE = "2026-05-27@16:45:09GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -14277,7 +14315,7 @@ ${js}
           }
         }
         if (!globalThis.__ripApp && runtimeTag) {
-          const stashFn = globalThis.stash;
+          const stashFn = globalThis.createStash;
           if (stashFn) {
             let initial = {};
             const stateAttr = runtimeTag.getAttribute("data-state");
@@ -14424,18 +14462,17 @@ ${indented}`);
   // docs/dist/_app.js
   var exports__app = {};
   __export(exports__app, {
+    unwrapStash: () => unwrapStash,
     throttle: () => throttle,
-    stash: () => stash,
     setContext: () => setContext,
-    raw: () => raw,
     persistStash: () => persistStash,
     launch: () => launch,
-    isStash: () => isStash,
     hold: () => hold,
     hasContext: () => hasContext,
     getContext: () => getContext,
     delay: () => delay,
     debounce: () => debounce,
+    createStash: () => createStash,
     createRouter: () => createRouter,
     createResource: () => createResource,
     createRenderer: () => createRenderer,
@@ -14746,7 +14783,7 @@ ${indented}`);
   resolveIndex = function(seg, obj) {
     let t;
     if (typeof seg === "number" && seg < 0) {
-      t = raw(obj);
+      t = unwrapStash(obj);
       if (Array.isArray(t))
         return t.length + seg;
     }
@@ -14869,7 +14906,7 @@ ${indented}`);
                 }
                 if (!(obj != null && typeof obj === "object"))
                   return [];
-                t = raw(obj);
+                t = unwrapStash(obj);
                 keysSignal(t).value;
                 return Object.keys(t);
               } finally {
@@ -14891,7 +14928,7 @@ ${indented}`);
                   let seg = segs[i];
                   key = resolveIndex(seg, obj);
                   if (i === segs.length - 1) {
-                    t = raw(obj);
+                    t = unwrapStash(obj);
                     keysSignal(t).value;
                     return Object.prototype.hasOwnProperty.call(t, key);
                   }
@@ -14940,19 +14977,16 @@ ${indented}`);
     cache[prop] = fn;
     return fn;
   };
-  var stash = function(data = {}) {
+  var createStash = function(data = {}) {
     return makeProxy(data);
   };
-  var raw = function(proxy) {
+  var unwrapStash = function(proxy) {
     return proxy?.[Symbol.for("raw")] ? proxy[Symbol.for("raw")] : proxy;
-  };
-  var isStash = function(obj) {
-    return obj?.[Symbol.for("stash")] === true;
   };
   function persistStash(app, opts = {}) {
     let _save, disposed, effectDisposer, saved, savedData, storage, storageKey, target;
     assertBrowser("persistStash");
-    target = raw(app) || app;
+    target = unwrapStash(app) || app;
     return function() {
       return target[Symbol.for("persisted")] ? null : undefined;
     };
@@ -14972,7 +15006,7 @@ ${indented}`);
     _save = function() {
       return (() => {
         try {
-          return storage.setItem(storageKey, JSON.stringify(raw(app.data)));
+          return storage.setItem(storageKey, JSON.stringify(unwrapStash(app.data)));
         } catch {
           return null;
         }
@@ -16190,7 +16224,7 @@ ${indented}`);
     } else {
       throw new Error("launch: no bundle or bundleUrl provided");
     }
-    app = stash({ components: {}, routes: {}, data: {} });
+    app = createStash({ components: {}, routes: {}, data: {} });
     globalThis.__ripApp = app;
     appComponents = createComponents();
     if (bundle.components)

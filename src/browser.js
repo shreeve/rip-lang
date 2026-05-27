@@ -323,7 +323,7 @@ async function processRipScripts() {
 
       // Create app stash
       if (!globalThis.__ripApp && runtimeTag) {
-        const stashFn = globalThis.stash;
+        const stashFn = globalThis.createStash;
         if (stashFn) {
           let initial = {};
           const stateAttr = runtimeTag.getAttribute('data-state');

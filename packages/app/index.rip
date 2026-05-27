@@ -159,7 +159,7 @@ type LaunchResult =
 
 # Browser/SSR contract:
 #
-#   The lower tier of Rip App is environment-independent — `stash`,
+#   The lower tier of Rip App is environment-independent — `createStash`,
 #   `createResource`, and the timing helpers (`delay`, `debounce`,
 #   `throttle`, `hold`) make no `window`/`document`/`location` calls and
 #   work fine in Node or a worker. The upper tier (`createRouter`,
@@ -310,7 +310,7 @@ walk = (path) ->
 
 resolveIndex = (seg, obj) ->
   if typeof seg is 'number' and seg < 0
-    t = raw(obj)
+    t = unwrapStash(obj)
     return t.length + seg if Array.isArray(t)
   seg
 
@@ -378,7 +378,7 @@ stashMethodFn = (proxy, prop) ->
           return [] unless obj?
           obj = obj[resolveIndex(seg, obj)]
         return [] unless obj? and typeof obj is 'object'
-        t = raw(obj)
+        t = unwrapStash(obj)
         keysSignal(t).value
         Object.keys(t)
       finally
@@ -392,7 +392,7 @@ stashMethodFn = (proxy, prop) ->
         for seg, i in segs
           key = resolveIndex(seg, obj)
           if i is segs.length - 1
-            t = raw(obj)
+            t = unwrapStash(obj)
             keysSignal(t).value
             return Object.prototype.hasOwnProperty.call(t, key)
           return false unless obj?
@@ -418,11 +418,9 @@ stashMethodFn = (proxy, prop) ->
   cache[prop] = fn
   fn
 
-export stash = (data = {}) -> makeProxy(data)
+export createStash = (data = {}) -> makeProxy(data)
 
-export raw = (proxy) -> if proxy?[:raw] then proxy[:raw] else proxy
-
-export isStash = (obj) -> obj?[:stash] is true
+export unwrapStash = (proxy) -> if proxy?[:raw] then proxy[:raw] else proxy
 
 # Single-stash policy: Rip App assumes one stash per page (the one
 # `launch()` creates). persistStash is therefore tied to the global
@@ -436,7 +434,7 @@ export isStash = (obj) -> obj?[:stash] is true
 # beforeunload handler, and writes one final snapshot before unwiring.
 export def persistStash(app, opts?:: { local?: boolean, key?: string } = {}):: Disposer
   assertBrowser 'persistStash'
-  target = raw(app) or app
+  target = unwrapStash(app) or app
   return -> null if target[:persisted]    # double-call guard returns a no-op disposer
   target[:persisted] = true
   storage = if opts.local then localStorage else sessionStorage
@@ -449,7 +447,7 @@ export def persistStash(app, opts?:: { local?: boolean, key?: string } = {}):: D
   catch
     null
   _save = ->
-    try storage.setItem storageKey, JSON.stringify(raw(app.data))
+    try storage.setItem storageKey, JSON.stringify(unwrapStash(app.data))
     catch then null
   effectDisposer = __effect ->
     _writeVersion.value
@@ -1647,7 +1645,7 @@ export def launch(opts?:: LaunchOpts = {}):: Promise<LaunchResult>
     throw new Error "launch: no bundle or bundleUrl provided"
 
   # Create the unified stash
-  app:: Record<string, any> = stash { components: {}, routes: {}, data: {} }
+  app:: Record<string, any> = createStash { components: {}, routes: {}, data: {} }
   globalThis.__ripApp = app
 
   # Create components store and load component sources
