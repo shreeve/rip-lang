@@ -942,7 +942,8 @@ export class CodeEmitter {
         let [obj, prop] = head.slice(1);
         let objCode = this.emit(obj, 'value');
         let needsParens = CodeEmitter.NUMBER_LITERAL_RE.test(objCode) ||
-                          ((this.is(obj, 'object') || this.is(obj, 'await') || this.is(obj, 'yield')));
+                          ((this.is(obj, 'object') || this.is(obj, 'await') || this.is(obj, 'yield'))) ||
+                          /^(await|yield)\s/.test(objCode);
         let base = needsParens ? `(${objCode})` : objCode;
         calleeCode = `${base}.${str(prop)}`;
       } else {
