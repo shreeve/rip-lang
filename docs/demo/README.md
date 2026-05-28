@@ -6,7 +6,7 @@ The canonical "everything in one file" demo of the Rip App framework. Six compon
 
 ```
 docs/demo/
-├── components/
+├── routes/
 │   ├── _layout.rip   — root layout with nav + error boundary
 │   ├── index.rip     — Home page (file-based routing: / → index.rip)
 │   ├── counter.rip   — reactive state, := / ~> persistence to stash
@@ -22,7 +22,8 @@ docs/demo/
 ```bash
 bun run bundle:demo
 # wraps:
-# bun scripts/bundle-app.js docs/demo -o docs/example/index.json -t "Rip App Demo"
+# bun scripts/bundle-app.js docs/demo/routes --prefix _route --css docs/demo/css \
+#   -o docs/example/index.json -t "Rip App Demo"
 ```
 
 Output: `docs/example/index.json` — a single ~17 KB file containing every component's raw `.rip` source plus all CSS, ready to ship to any static host. The launcher at `docs/example/index.html` fetches it once and runs the whole app from memory: no bundler, no build step, no per-component network requests.
@@ -38,6 +39,6 @@ Then `<script type="text/rip">launch bundle: bundle</script>` mounts everything.
 
 ## Iterating
 
-Edit any `.rip` file under `components/`, then re-run `bun run bundle:demo` to refresh the bundled JSON. The launcher HTML at `docs/example/` will pick up the new bundle on next load.
+Edit any `.rip` file under `routes/`, then re-run `bun run bundle:demo` to refresh the bundled JSON. The launcher HTML at `docs/example/` will pick up the new bundle on next load.
 
 CSS is concatenated alphabetically by filename. Add `.css` files under `css/` to extend the design.
