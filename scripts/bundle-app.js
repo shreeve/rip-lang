@@ -3,10 +3,11 @@
 // Bundle a Rip app into a single static JSON file.
 //
 // Walks <source-dir>/components/**/*.rip and <source-dir>/css/*.css, packs
-// them into one JSON with shape { css, components, data } where components
-// maps relative paths to raw .rip source strings. The launcher HTML loads
-// the JSON, injects `css` into a <style>, and calls `launch bundle: bundle`
-// to mount the app — no bundler, no per-component fetches at runtime.
+// them into one JSON with shape { css, modules, data } where `modules`
+// maps origin-prefixed store keys (`_route/...`) to raw .rip source strings.
+// The launcher HTML loads the JSON, injects `css` into a <style>, and calls
+// `launch bundle: bundle` to mount the app — no bundler, no per-component
+// fetches at runtime.
 //
 // Usage:
 //   bun scripts/bundle-app.js <source-dir> [-o output] [-t title]
@@ -39,7 +40,7 @@ for (let i = 1; i < args.length; i++) {
 
 // Scan components
 const componentsDir = join(sourceDir, 'components');
-const components = {};
+const modules = {};
 
 function scanRip(dir, prefix) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -47,8 +48,9 @@ function scanRip(dir, prefix) {
     if (entry.isDirectory()) {
       scanRip(path, `${prefix}${entry.name}/`);
     } else if (entry.name.endsWith('.rip')) {
-      const key = `components/${prefix}${entry.name}`;
-      components[key] = readFileSync(path, 'utf-8');
+      // Route-style file-system layout → `_route/` keys.
+      const key = `_route/${prefix}${entry.name}`;
+      modules[key] = readFileSync(path, 'utf-8');
     }
   }
 }
@@ -72,7 +74,7 @@ try {
 // Build bundle
 const bundle = {};
 if (css.trim()) bundle.css = css.trim();
-bundle.components = components;
+bundle.modules = modules;
 bundle.data = {};
 if (title) bundle.data.title = title;
 
@@ -83,7 +85,7 @@ if (output) {
   writeFileSync(output, json);
   const br = brotliCompressSync(Buffer.from(json));
   writeFileSync(`${output}.br`, br);
-  const componentCount = Object.keys(components).length;
+  const componentCount = Object.keys(modules).length;
   const size = (Buffer.byteLength(json) / 1024).toFixed(1);
   const brSize = (br.length / 1024).toFixed(1);
   console.log(`Bundled ${componentCount} components → ${output} (${size} KB, ${brSize} KB Brotli)`);

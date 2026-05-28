@@ -114,6 +114,7 @@ type Resolver =
   key: string
   blobUrls?: Record<string, string>
   compiling?: Record<string, boolean>
+  packages?: Record<string, { short: string, entry: string }>
 
 type CompileFn = (source: string, opts?: { sourceMap?: 'inline' | boolean, filename?: string }) => string
 
@@ -138,6 +139,8 @@ type Renderer =
 
 type Bundle =
   components?: Record<string, string>
+  modules?: Record<string, string>
+  packages?: Record<string, { short: string, entry: string }>
   data?: Record<string, unknown>
   routes?: Array<Route>
 
@@ -708,10 +711,10 @@ export createComponents = ->
 # Router — file-based URL routing with reactive state
 #
 # Maps URL paths to component files using a file-system convention:
-#   components/index.rip       → /
-#   components/about.rip       → /about
-#   components/users/[id].rip  → /users/:id
-#   components/[...rest].rip   → /* (catch-all)
+#   _route/index.rip       → /
+#   _route/about.rip       → /about
+#   _route/users/[id].rip  → /users/:id
+#   _route/[...rest].rip   → /* (catch-all)
 #
 # Supports nested layouts via _layout.rip files, hash-mode routing,
 # base path prefixes, and query/hash tracking.
@@ -749,7 +752,7 @@ matchRoute = (path, routes) ->
       return { route, params }
   null
 
-buildRoutes = (components, root = 'components') ->
+buildRoutes = (components, root = '_route') ->
   routes = []
   layouts = new Map()
   allFiles = components.listAll(root)
@@ -801,7 +804,7 @@ getLayoutChain = (routeFile, root, layouts) ->
 
 export def createRouter(components:: ComponentsStore, opts?:: RouterOpts = {}):: Router
   assertBrowser 'createRouter'
-  root = opts.root or 'components'
+  root = opts.root or '_route'
   base = opts.base or ''
   hashMode = opts.hash or false
   onError = opts.onError or null
@@ -1016,15 +1019,19 @@ findAllComponents = (mod) ->
   result
 
 # Convert file path to PascalCase component name
-# components/card.rip → Card, components/todo-item.rip → TodoItem
+# _app/card.rip → Card, _lib/todo-item.rip → TodoItem
 fileToComponentName = (filePath) ->
   name = filePath.split('/').pop().replace(/\.rip$/, '')
   name.replace /(^|[-_])([a-z])/g, (_, sep, ch) -> ch.toUpperCase()
 
 # Build name-to-path map from component store
-buildComponentMap = (components, root = 'components') ->
+buildComponentMap = (components, roots = ['_app', '_lib', '_pkg', '_route']) ->
   map = {}
-  for path in components.listAll(root)
+  rootList = if Array.isArray(roots) then roots else [roots]
+  paths = []
+  for r in rootList
+    paths.push(p) for p in components.listAll(r)
+  for path in paths
     continue unless path.endsWith('.rip')
     fileName = path.split('/').pop()
     continue if fileName.startsWith('_')
@@ -1034,7 +1041,9 @@ buildComponentMap = (components, root = 'components') ->
     map[name] = path
   map
 
-# Resolve a .rip import specifier to a path in the component store
+# Resolve a .rip import specifier to a path in the module store. The store
+# uses origin prefixes (`_pkg/`, `_lib/`, `_app/`, `_route/`); we try them in
+# that order so package code shadows local code on collisions.
 resolveStorePath = (specifier, currentPath, components) ->
   clean = specifier.replace(/^(\.\.\/|\.\/)+/, '')
   # Direct resolution relative to current file in the store
@@ -1048,9 +1057,14 @@ resolveStorePath = (specifier, currentPath, components) ->
         parts.push seg
     candidate = parts.join('/')
     return candidate if components.exists(candidate)
-  # Try common store prefixes
-  return "components/_lib/#{clean}" if components.exists("components/_lib/#{clean}")
-  return "components/#{clean}" if components.exists("components/#{clean}")
+  # Accept a specifier that's already a full store key (carries an origin
+  # prefix). Lets the bare `@rip-lang/*` rewrite hand us `_pkg/http/http.rip`
+  # without needing to know the priority order again.
+  return clean if components.exists(clean)
+  # Try origin prefixes in priority order
+  for prefix in ['_pkg', '_lib', '_app', '_route']
+    storeKey = "#{prefix}/#{clean}"
+    return storeKey if components.exists(storeKey)
   null
 
 # Extract the local bindings introduced by an ES-module import clause —
@@ -1115,6 +1129,21 @@ compileAndImport = (source, compile, components = null, path = null, resolver = 
 
     if resolver
       importedNames = new Set()
+
+      # Step 0: Rewrite bare `@rip-lang/<pkg>(/sub)?` imports to in-store
+      # `.rip` paths so the .rip → blob-URL pass below picks them up.
+      # The bundler inlines each declared package's source under
+      # `_pkg/<short>/...` and records the entry filename in
+      # `bundle.packages[pkgKey] = { short, entry }`. Bare pkg → _pkg/short/entry;
+      # sub-path → _pkg/short/sub.rip (sub already includes any inner dirs).
+      pkgMap = resolver.packages or {}
+      if Object.keys(pkgMap).length > 0
+        bareImportRe = /^(\s*import\s+(?:.*?\s+from\s+)?['"])(@rip-lang\/[^\/'"]+)((?:\/[^'"]*)?)(['"];?\s*)$/gm
+        js = js.replace bareImportRe, (full, pre, pkgKey, sub, post) ->
+          info = pkgMap[pkgKey]
+          return full unless info
+          target = if sub then "_pkg/#{info.short}#{sub}.rip" else "_pkg/#{info.short}/#{info.entry}"
+          "#{pre}#{target}#{post}"
 
       # Step 1: Rewrite .rip imports to blob URLs
       if components
@@ -1650,18 +1679,18 @@ export def launch(opts?:: LaunchOpts = {}):: Promise<LaunchResult>
 
   # Create components store and load component sources
   appComponents = createComponents()
-  appComponents.load(bundle.components) if bundle.components
+  appComponents.load(bundle.modules) if bundle.modules
 
   # Build component resolver — name-to-path map + app-scoped class registry
   classesKey = "__rip_#{appBase.replace(/\//g, '_') or 'app'}"
-  resolver = { map: buildComponentMap(appComponents), classes: {}, key: classesKey }
+  resolver = { map: buildComponentMap(appComponents), classes: {}, key: classesKey, packages: (bundle.packages or {}) }
   globalThis[classesKey] = resolver.classes
 
   # Auto-load app/stash.rip if present — provides defaults + methods that
   # survive the server-side JSON.stringify boundary that bundle.data goes
   # through. Must export a top-level `stash`: write `export stash:: ... = ...`.
   stashRaw:: Record<string, unknown> | null = null
-  stashPath = 'components/_lib/stash.rip'
+  stashPath = '_app/stash.rip'
   if appComponents.exists(stashPath)
     stashSource = appComponents.read(stashPath)
     if stashSource
@@ -1692,7 +1721,7 @@ export def launch(opts?:: LaunchOpts = {}):: Promise<LaunchResult>
 
   # Create router
   router = createRouter appComponents,
-    root: 'components'
+    root: '_route'
     base: appBase
     hash: hash
     onError: (err) -> console.error "[Rip] Error #{err.status}: #{err.message or err.path}"

@@ -10387,7 +10387,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
           needsAwait = true;
           let [obj, prop] = head.slice(1);
           let objCode = this.emit(obj, "value");
-          let needsParens = CodeEmitter.NUMBER_LITERAL_RE.test(objCode) || (this.is(obj, "object") || this.is(obj, "await") || this.is(obj, "yield"));
+          let needsParens = CodeEmitter.NUMBER_LITERAL_RE.test(objCode) || (this.is(obj, "object") || this.is(obj, "await") || this.is(obj, "yield")) || /^(await|yield)\s/.test(objCode);
           let base = needsParens ? `(${objCode})` : objCode;
           calleeCode = `${base}.${str(prop)}`;
         } else {
@@ -14098,7 +14098,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.16.0";
-  var BUILD_DATE = "2026-05-27@16:47:44GMT";
+  var BUILD_DATE = "2026-05-27@21:54:36GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -14289,7 +14289,8 @@ ${js}
       } else {
         const expanded = [];
         for (const b of bundles) {
-          for (const [name, code] of Object.entries(b.components || {})) {
+          const mods = b.modules || b.components || {};
+          for (const [name, code] of Object.entries(mods)) {
             expanded.push({ code, url: name });
           }
           if (b.data) {
@@ -14308,8 +14309,9 @@ ${js}
         if (bundles.length > 0 && typeof globalThis.createComponents === "function") {
           const sourceStore = globalThis.createComponents();
           for (const b of bundles) {
-            if (b.components)
-              sourceStore.load(b.components);
+            const mods = b.modules || b.components;
+            if (mods)
+              sourceStore.load(mods);
           }
           if (typeof window !== "undefined") {
             if (!window.__RIP__)
@@ -15349,7 +15351,7 @@ ${indented}`);
     }
     return null;
   };
-  buildRoutes = function(components, root = "components") {
+  buildRoutes = function(components, root = "_route") {
     let allFiles, dir, layouts, name, regex, rel, routes, segs, urlPattern;
     routes = [];
     layouts = new Map;
@@ -15410,7 +15412,7 @@ ${indented}`);
   function createRouter(components, opts = {}) {
     let _current, _hash, _layouts, _navigating, _normalizedUrl, _params, _path, _query, _route, addBase, base, hashMode, navCallbacks, onClick, onError, onPopState, readUrl, resolve, root, router, stripBase, tree, unwatchComponents, writeUrl;
     assertBrowser("createRouter");
-    root = opts.root || "components";
+    root = opts.root || "_route";
     base = opts.base || "";
     hashMode = opts.hash || false;
     onError = opts.onError || null;
@@ -15650,10 +15652,17 @@ ${indented}`);
       return ch.toUpperCase();
     });
   };
-  buildComponentMap = function(components, root = "components") {
-    let fileName, map, name;
+  buildComponentMap = function(components, roots = ["_app", "_lib", "_pkg", "_route"]) {
+    let fileName, map, name, paths, rootList;
     map = {};
-    for (let path of components.listAll(root)) {
+    rootList = Array.isArray(roots) ? roots : [roots];
+    paths = [];
+    for (let r of rootList) {
+      for (let p of components.listAll(r)) {
+        paths.push(p);
+      }
+    }
+    for (let path of paths) {
       if (!path.endsWith(".rip"))
         continue;
       fileName = path.split("/").pop();
@@ -15668,7 +15677,7 @@ ${indented}`);
     return map;
   };
   resolveStorePath = function(specifier, currentPath, components) {
-    let candidate, clean, parts;
+    let candidate, clean, parts, storeKey;
     clean = specifier.replace(/^(\.\.\/|\.\/)+/, "");
     if (currentPath) {
       parts = currentPath.split("/");
@@ -15686,10 +15695,13 @@ ${indented}`);
       if (components.exists(candidate))
         return candidate;
     }
-    if (components.exists(`components/_lib/${clean}`))
-      return `components/_lib/${clean}`;
-    if (components.exists(`components/${clean}`))
-      return `components/${clean}`;
+    if (components.exists(clean))
+      return clean;
+    for (let prefix of ["_pkg", "_lib", "_app", "_route"]) {
+      storeKey = `${prefix}/${clean}`;
+      if (components.exists(storeKey))
+        return storeKey;
+    }
     return null;
   };
   extractImportedNames = function(clause) {
@@ -15727,7 +15739,7 @@ ${indented}`);
     return names;
   };
   compileAndImport = async function(source, compile2, components = null, path = null, resolver = null) {
-    let anyImportRe, bindingClause, blob, blobUrl, cached, committed, debug, depMod, depSource, finalJs, found, full, header, importedNames, js, keyLiteral, matches, mod, msg, names, needed, offset, post, pre, preamble, prefixLines, previousUrl, replacement, ripImportRe, specifier, storePath, url;
+    let anyImportRe, bareImportRe, bindingClause, blob, blobUrl, cached, committed, debug, depMod, depSource, finalJs, found, full, header, importedNames, js, keyLiteral, matches, mod, msg, names, needed, offset, pkgMap, post, pre, preamble, prefixLines, previousUrl, replacement, ripImportRe, specifier, storePath, url;
     if (components && path) {
       cached = components.getCompiled(path);
       if (cached)
@@ -15744,6 +15756,18 @@ ${indented}`);
         js = debug ? compile2(source, { sourceMap: "inline", filename: path }) : compile2(source);
         if (resolver) {
           importedNames = new Set;
+          pkgMap = resolver.packages || {};
+          if (Object.keys(pkgMap).length > 0) {
+            bareImportRe = /^(\s*import\s+(?:.*?\s+from\s+)?['"])(@rip-lang\/[^\/'"]+)((?:\/[^'"]*)?)(['"];?\s*)$/gm;
+            js = js.replace(bareImportRe, function(full2, pre2, pkgKey, sub, post2) {
+              let info, target;
+              info = pkgMap[pkgKey];
+              if (!info)
+                return full2;
+              target = sub ? `_pkg/${info.short}${sub}.rip` : `_pkg/${info.short}/${info.entry}`;
+              return `${pre2}${target}${post2}`;
+            });
+          }
           if (components) {
             ripImportRe = /^(\s*import\s+(?:(.*?)\s+from\s+)?['"])([^'"]*\.rip)(['"];?\s*)$/gm;
             matches = Array.from(js.matchAll(ripImportRe));
@@ -16248,13 +16272,13 @@ ${indented}`);
     app = createStash({ components: {}, routes: {}, data: {} });
     globalThis.__ripApp = app;
     appComponents = createComponents();
-    if (bundle.components)
-      appComponents.load(bundle.components);
+    if (bundle.modules)
+      appComponents.load(bundle.modules);
     classesKey = `__rip_${appBase.replace(/\//g, "_") || "app"}`;
-    resolver = { map: buildComponentMap(appComponents), classes: {}, key: classesKey };
+    resolver = { map: buildComponentMap(appComponents), classes: {}, key: classesKey, packages: bundle.packages || {} };
     globalThis[classesKey] = resolver.classes;
     stashRaw = null;
-    stashPath = "components/_lib/stash.rip";
+    stashPath = "_app/stash.rip";
     if (appComponents.exists(stashPath)) {
       stashSource = appComponents.read(stashPath);
       if (stashSource) {
@@ -16286,7 +16310,7 @@ ${indented}`);
     if (app.data.title)
       document.title = app.data.title;
     router = createRouter(appComponents, {
-      root: "components",
+      root: "_route",
       base: appBase,
       hash,
       onError(err) {

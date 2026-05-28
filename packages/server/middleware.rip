@@ -36,7 +36,88 @@
 import { get, setCorsPreflightPolicy } from '@rip-lang/server'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve, relative } from 'node:path'
-import { existsSync, realpathSync } from 'node:fs'
+import { existsSync, realpathSync, readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
+
+# ── Undeclared-import diagnostic (bundler surface) ─────────────────────
+# Walk every .rip file in `dirs`, collect `@rip-lang/<pkg>` imports, and
+# verify each is in the app's package.json#dependencies/devDependencies/
+# peerDependencies/optionalDependencies. Throws on the first miss.
+readDeclaredDeps = (appDir) ->
+  cur = realpathSync(resolve(appDir))
+  loop
+    pkgPath = "#{cur}/package.json"
+    if existsSync(pkgPath)
+      try
+        pkg = JSON.parse readFileSync(pkgPath, 'utf8')
+        declared = new Set([
+          ...Object.keys(pkg.dependencies         or {})
+          ...Object.keys(pkg.devDependencies      or {})
+          ...Object.keys(pkg.peerDependencies     or {})
+          ...Object.keys(pkg.optionalDependencies or {})
+        ])
+        return { pkgName: pkg.name or null, declared }
+      catch
+        return { pkgName: null, declared: new Set() }
+    parent = dirname(cur)
+    break if parent is cur
+    cur = parent
+  null
+
+IMPORT_RE = /(?:from|import)\s+['"](@rip-lang\/[^'"\/]+)(?:\/[^'"]*)?['"]/g
+
+# Same regex but capturing the optional sub-path too — used by the browser
+# package bundler to know which sub-modules a consumer actually imports.
+IMPORT_RE_FULL = /(?:from|import)\s+['"](@rip-lang\/[^'"\/]+)(\/[^'"]*)?['"]/g
+
+# Forbidden specifiers on browser-shipped packages. If a .rip file destined
+# for the browser bundle imports any of these, we refuse to ship the package.
+NODE_BUILTIN_RE = /(?:from|import)\s+['"](?:node:[^'"]+|fs|fs\/promises|path|os|child_process|crypto|net|tls|http|https|zlib|stream|util|url|module|process|worker_threads|cluster|dgram|dns|readline|repl|tty|v8|vm)['"]/
+
+# Resolve a declared `@rip-lang/<pkg>` to its on-disk directory using
+# require.resolve rooted at the app's package.json. Returns null if the
+# package isn't installed.
+resolvePackageDir = (appDir, pkgKey) ->
+  try
+    req = createRequire("#{appDir}/package.json")
+    entryPath = req.resolve "#{pkgKey}/package.json"
+    return dirname(entryPath)
+  catch
+    null
+
+# Classify a package as browser-shippable or server-only based on its
+# `rip.browser` opt-in field. Returns:
+#   { kind: 'browser', dir, entry }  — bundle .rip files under _lib/<short>/
+#   { kind: 'server',  dir }         — refuse to include in browser bundles
+#   null                              — unresolvable
+classifyPackage = (appDir, pkgKey) ->
+  dir = resolvePackageDir(appDir, pkgKey)
+  return null unless dir
+  pkgJson = try JSON.parse readFileSync("#{dir}/package.json", 'utf8') catch then {}
+  ripCfg = pkgJson.rip or {}
+  browserField = ripCfg.browser
+  if browserField
+    entry = if typeof browserField is 'string' then browserField else (pkgJson.main or 'index.rip')
+    return { kind: 'browser', dir, entry }
+  { kind: 'server', dir }
+
+assertBundleDepsDeclared = (appDir, dirs) ->
+  info = readDeclaredDeps(appDir)
+  return unless info?  # no package.json → ad-hoc, skip
+  seen = new Set()
+  glob = new Bun.Glob("**/*.rip")
+  for dir in dirs
+    continue unless existsSync(dir)
+    for path in glob.scanSync(dir)
+      src = readFileSync("#{dir}/#{path}", 'utf8')
+      while m = IMPORT_RE.exec(src)
+        pkgKey = m[1]
+        continue if seen.has(pkgKey)
+        seen.add(pkgKey)
+        continue if info.pkgName is pkgKey
+        continue if info.declared.has(pkgKey)
+        raise "Import of '#{pkgKey}' (used in #{dir}/#{path}) is not declared in #{appDir}/package.json. Run 'bun add #{pkgKey}' (or use 'workspace:*' inside this monorepo)."
+  return
 
 export cors = (opts:: {
   origin?: string | string[] | ((origin: string) => boolean)
@@ -785,6 +866,15 @@ export serve = (opts:: {
   appState      = opts.state or null
   appTitle      = opts.title or null
 
+  # Fail loud at bundle setup time on any undeclared @rip-lang/* import.
+  # Runs unconditionally, typed or not — the forcing function for
+  # browser-side bundling.
+  allBundleDirs = []
+  for [_, bdirs] as bundles
+    allBundleDirs.push(...bdirs)
+  allBundleDirs.push(routesDir) if existsSync(routesDir)
+  assertBundleDepsDeclared(appDir, allBundleDirs)
+
   # Resolve rip.min.js — walk up from cwd to find it (dev), then module resolution (prod)
   bundlePath = do ->
     dir = process.cwd()
@@ -832,26 +922,72 @@ export serve = (opts:: {
   buildNamedBundle = (name, dirs, includeRoutes = false) ->
     { brotliCompressSync } = require 'zlib'
     glob = new Bun.Glob("**/*.rip")
-    components = {}
+    modules = {}
     hasRoutes = false
     if includeRoutes and existsSync(routesDir)
       routePaths:: string[] = Array.from(glob.scanSync(routesDir), String).sort()
       for path in routePaths
-        components["components/#{path}"] = Bun.file("#{routesDir}/#{path}").text!
+        modules["_route/#{path}"] = Bun.file("#{routesDir}/#{path}").text!
         hasRoutes = true
     for dir in dirs
       rel = relative(appDir, dir)
       isExternal = rel.startsWith('..')
       isAppDir   = rel is '' or rel is '.'
-      keyPrefix  = if isExternal then name else if isAppDir then '' else rel
+      # appDir → _app/<path>; external or named subdir → _lib/<name>/<path>
+      keyPrefix  = if isExternal then "_lib/#{name}" else if isAppDir then '_app' else "_lib/#{rel}"
       dirPaths:: string[] = Array.from(glob.scanSync(dir), String).sort()
       for path in dirPaths
         continue if path is 'index.rip' or path.endsWith('/index.rip')
-        # In auto-scan mode, skip the routes/ subtree (already keyed by routes branch above)
+        # In auto-scan mode, skip the routes/ subtree (already keyed under _route/ above)
         continue if isAppDir and (path is routesName or path.startsWith("#{routesName}/"))
-        key = if keyPrefix then "components/_lib/#{keyPrefix}/#{path}" else "components/_lib/#{path}"
-        components[key] = Bun.file("#{dir}/#{path}").text! unless components[key]
-    bundle = { components }
+        key = "#{keyPrefix}/#{path}"
+        modules[key] = Bun.file("#{dir}/#{path}").text! unless modules[key]
+
+    # Auto-discover declared `@rip-lang/*` packages used by
+    # bundled .rip files and inline them into the browser bundle. Only do
+    # this for the primary app bundle (the one that also includes routes);
+    # secondary bundles don't ship packages, by convention.
+    packages = {}
+    if includeRoutes
+      info = readDeclaredDeps(appDir)
+      if info?
+        # Scan everything we just collected for @rip-lang/* imports.
+        usedPkgs = new Set()
+        for _, src of modules
+          IMPORT_RE_FULL.lastIndex = 0
+          while m = IMPORT_RE_FULL.exec(src)
+            pkgKey = m[1]
+            continue if pkgKey is info.pkgName
+            usedPkgs.add(pkgKey)
+        seenShortNames = {}
+        for pkgKey as usedPkgs
+          continue unless info.declared.has(pkgKey)  # Phase 3 already errored on undeclared
+          classified = classifyPackage(appDir, pkgKey)
+          unless classified?
+            raise "Package '#{pkgKey}' is declared in package.json but not installed. Run 'bun install'."
+          if classified.kind is 'server'
+            raise "Package '#{pkgKey}' is a server-only package and cannot be used in browser-bundled code. Add '\"rip\": { \"browser\": true }' to its package.json if it is safe to ship."
+          short = pkgKey.replace(/^@rip-lang\//, '')
+          if seenShortNames[short]
+            raise "Package short-name collision: '#{pkgKey}' and '#{seenShortNames[short]}' both resolve to '_pkg/#{short}/'."
+          seenShortNames[short] = pkgKey
+          existingKey = "_pkg/#{short}/"
+          for ck of modules
+            if ck.startsWith(existingKey)
+              raise "Package '#{pkgKey}' collides with an existing module at '_pkg/#{short}/'."
+          pkgGlob = new Bun.Glob("**/*.rip")
+          pkgPaths:: string[] = Array.from(pkgGlob.scanSync(classified.dir), String).sort()
+          unless pkgPaths.length > 0
+            raise "Package '#{pkgKey}' has no .rip source files at #{classified.dir}."
+          for path in pkgPaths
+            src = readFileSync("#{classified.dir}/#{path}", 'utf8')
+            if NODE_BUILTIN_RE.test(src)
+              raise "Package '#{pkgKey}' file '#{path}' imports a Node built-in module and cannot be shipped to the browser."
+            modules["_pkg/#{short}/#{path}"] = src
+          packages[pkgKey] = { short, entry: classified.entry }
+
+    bundle = { modules }
+    bundle.packages = packages if Object.keys(packages).length > 0
     if includeRoutes
       data:: Record<string, any> = {}
       data.title = appTitle if appTitle

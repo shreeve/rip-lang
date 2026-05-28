@@ -261,7 +261,8 @@ async function processRipScripts() {
       // No routing — expand bundles into individual sources, compile everything
       const expanded = [];
       for (const b of bundles) {
-        for (const [name, code] of Object.entries(b.components || {})) {
+        const mods = b.modules || b.components || {};
+        for (const [name, code] of Object.entries(mods)) {
           expanded.push({ code, url: name });
         }
         if (b.data) {
@@ -281,7 +282,8 @@ async function processRipScripts() {
       if (bundles.length > 0 && typeof globalThis.createComponents === 'function') {
         const sourceStore = globalThis.createComponents();
         for (const b of bundles) {
-          if (b.components) sourceStore.load(b.components);
+          const mods = b.modules || b.components;
+          if (mods) sourceStore.load(mods);
         }
         if (typeof window !== 'undefined') {
           if (!window.__RIP__) window.__RIP__ = {};

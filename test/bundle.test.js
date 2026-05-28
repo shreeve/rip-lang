@@ -202,7 +202,7 @@ globalThis.fetch = async (url) => {
     return {
       ok: true,
       status: 200,
-      json: async () => ({ components: { 'components/foo.rip': FAKE_SOURCE } }),
+      json: async () => ({ modules: { '_route/foo.rip': FAKE_SOURCE } }),
       text: async () => '',
       headers: { get: () => null },
     };
@@ -238,7 +238,7 @@ const bundleSrc = readFileSync(${JSON.stringify(bundlePath)}, 'utf8');
     const store = globalThis.window.__RIP__ && globalThis.window.__RIP__.components;
     if (!store) throw new Error('__RIP__.components missing');
     if (typeof store.read !== 'function') throw new Error('__RIP__.components.read is not a function');
-    const src = store.read('components/foo.rip');
+    const src = store.read('_route/foo.rip');
     if (!src) throw new Error('components.read returned empty');
     if (!src.includes('Foo = component')) throw new Error('wrong source: ' + src);
   });

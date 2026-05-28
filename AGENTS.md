@@ -140,6 +140,23 @@ A few existing packages still ship `export default` (`@rip-lang/time`, `packages
 
 Internal helpers, locals, and private types may rely on inference — but annotate them too when it helps readability or pins down a tricky shape.
 
+### Browser-safe packages
+
+Packages that should be auto-discovered and bundled into the browser bundle by `@rip-lang/server`'s `serve()` middleware must opt in via `package.json`:
+
+```json
+{
+  "name": "@rip-lang/http",
+  "rip": { "browser": true }
+}
+```
+
+With this flag set, the `serve()` middleware walks the app's declared `@rip-lang/*` dependencies, compiles each package's entry, and stores its modules under the `_pkg/<pkg>/` bundle prefix (see [packages/app/AGENTS.md](packages/app/AGENTS.md)). Bare specifiers like `import { http } from '@rip-lang/http'` are rewritten at compile time to the bundle-relative path.
+
+Server-only packages (`@rip-lang/server`, `@rip-lang/db`, anything that touches `node:*`, `Bun.*`, or the filesystem) must **not** set this flag. If a browser-bound component file imports a package that lacks `rip.browser: true`, the bundler errors with *"package X is not browser-safe (declares no `rip.browser` entry)"* rather than producing a broken bundle.
+
+Rule of thumb: if every public API in the package works in a browser (uses only `fetch`, DOM, or pure JS), set `rip.browser: true`. Otherwise leave it off.
+
 ### @rip-lang/server
 
 Sinatra-style web framework with magic `@` context, validation helpers, file serving, middleware composition, multi-worker process management, hot reloading, automatic HTTPS, mDNS, and request queueing.
