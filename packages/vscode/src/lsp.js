@@ -519,6 +519,13 @@ function compileRip(filePath, source) {
 //
 // Pull-based: only files that are *open* in the editor are republished.
 // Closed files don't show squiggles anyway and will recompute on next open.
+//
+// We recompile (not just republish) dependents so their version bumps and
+// TypeScript invalidates its cached cross-file symbol resolution. Without
+// the version bump, TS reuses stale parse/binder state built against the
+// previous version of the changed file, which has been observed to produce
+// spurious diagnostics ("Cannot find name 'retur'" etc.) until the user
+// manually edits the dependent.
 const DEPENDENT_REPUBLISH_DELAY_MS = 250;
 const pendingRepublish = new Set(); // Set<changedFilePath>
 let republishTimer = null;
@@ -533,7 +540,11 @@ function scheduleDependentRepublish(changedPath) {
       const fp = uriToPath(doc.uri);
       if (changed.has(fp)) continue; // already published immediately
       if (!compiled.has(fp)) continue;
-      publishDiagnostics(fp);
+      if (fp.endsWith('.rip') && compiler && tc) {
+        compileRip(fp, doc.getText()); // bumps version, invalidates TS caches
+      } else {
+        publishDiagnostics(fp);
+      }
     }
   }, DEPENDENT_REPUBLISH_DELAY_MS);
 }
