@@ -863,7 +863,7 @@ function injectTypeParams(line, typeParams) {
 // Compile a .rip file for type-checking. Prepends DTS declarations to
 // compiled JS, detects type annotations, and builds bidirectional
 // source maps. Returns everything both the CLI and LSP need.
-// When opts.strict is true, all non-nocheck files are type-checked.
+// When opts.checkAll is true, all non-nocheck files are type-checked.
 export function compileForCheck(filePath, source, compiler, opts = {}) {
   const result = compiler.compile(source, { sourceMap: true, types: 'emit', skipPreamble: true, stubComponents: true, inlineTypes: true });
   let code = result.code || '';

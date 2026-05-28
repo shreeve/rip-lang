@@ -13,7 +13,17 @@ const fs = require('fs');
 const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
 
-let ts, compiler, tc, service, rootPath, lastPatchedProgram;
+let ts, compiler, tc, rootPath, documentRegistry;
+
+// Per-project TypeScript language services keyed by project root path.
+// Files outside any detected project root share the '' bucket.  All
+// services share one DocumentRegistry so parsed SourceFiles are dedup'd
+// across projects (the canonical tsserver pattern).
+const services = new Map();
+// Programs we've already patched (uninitialized-type fix-up).  Each
+// service has its own program, so a WeakSet keyed on the Program object
+// avoids redoing work without us tracking per-service state.
+const patchedPrograms = new WeakSet();
 
 // Log paths relative to the workspace root so files like `index.rip` are
 // distinguishable. Falls back to the basename if the path is outside root.
@@ -146,8 +156,8 @@ connection.onInitialize(async (params) => {
   if (ts) connection.console.log(`[rip] TypeScript ${ts.version}`);
 
   if (ts && compiler && tc) {
-    service = createService();
-    connection.console.log('[rip] language service ready');
+    documentRegistry = ts.createDocumentRegistry();
+    connection.console.log('[rip] language services ready (lazy per-project)');
   }
 
   return {
@@ -209,6 +219,13 @@ connection.onDidChangeWatchedFiles((params) => {
   }
   if (cfgChanged) {
     configCache.clear();
+    // Settings (strict, checkAll, ambient types) are project-scoped, so a
+    // package.json change can invalidate any service. Dispose each one so
+    // its DocumentRegistry refcounts drop before we drop our references.
+    for (const svc of services.values()) {
+      try { svc.dispose?.(); } catch {}
+    }
+    services.clear();
     rebuildProjectInfo();
     for (const fp of compiled.keys()) publishDiagnostics(fp);
   }
@@ -419,20 +436,26 @@ documents.onDidClose(({ document }) => {
   connection.sendDiagnostics({ uri: document.uri, diagnostics: [] });
 });
 
-function isStrictFile(filePath) {
+// Effective per-file strict/checkAll, honoring the project's exclude globs.
+// Both flags collapse to false for excluded files.
+function getFileProfile(filePath) {
   const config = getProjectConfig(filePath);
-  if (!config.strict && !config.checkAll) return false;
+  const strict   = config.strict === true;
+  const checkAll = config.checkAll === true;
+  if (!strict && !checkAll) return { strict: false, checkAll: false };
   if (config._configDir && Array.isArray(config.exclude)) {
     const rel = path.relative(config._configDir, filePath);
-    if (config.exclude.some(glob => tc.globToRegex(glob).test(rel))) return false;
+    if (config.exclude.some(glob => tc.globToRegex(glob).test(rel))) {
+      return { strict: false, checkAll: false };
+    }
   }
-  return true;
+  return { strict, checkAll };
 }
 
 function compileRip(filePath, source) {
   try {
-    const strict = isStrictFile(filePath);
-    const entry = tc.compileForCheck(filePath, source, compiler, { strict });
+    const profile = getFileProfile(filePath);
+    const entry = tc.compileForCheck(filePath, source, compiler, profile);
     const prev = compiled.get(filePath);
     const dtsChanged = (prev?.dts || '') !== (entry.dts || '');
 
@@ -556,13 +579,14 @@ function publishDiagnostics(filePath) {
   const diagnostics = [];
 
   // TypeScript diagnostics (typed files with TS service)
-  if (service && c.hasTypes) {
+  const svc = c.hasTypes ? getServiceFor(filePath) : null;
+  if (svc && c.hasTypes) {
     try {
-      patchTypes();
+      patchTypes(svc);
       const vf = toVirtual(filePath);
-      const semanticDiags = service.getSemanticDiagnostics(vf);
-      const syntacticDiags = service.getSyntacticDiagnostics(vf);
-      const suggestionDiags = service.getSuggestionDiagnostics(vf);
+      const semanticDiags = svc.getSemanticDiagnostics(vf);
+      const syntacticDiags = svc.getSyntacticDiagnostics(vf);
+      const suggestionDiags = svc.getSuggestionDiagnostics(vf);
       const allDiags = [...syntacticDiags, ...semanticDiags, ...suggestionDiags];
 
       for (const d of allDiags) {
@@ -830,10 +854,45 @@ function publishDiagnostics(filePath) {
 }
 
 // ── TypeScript Language Service ────────────────────────────────────
+//
+// One LanguageService per project root (nearest ancestor package.json).
+// Settings — most importantly `strict` — are read from the project's
+// `package.json#rip` block, so a strict project surfaces noImplicitAny /
+// strictNullChecks the same way `rip check` does, while a sibling lenient
+// project keeps its quieter editor experience. All services share one
+// DocumentRegistry so duplicate SourceFiles aren't parsed twice.
+//
+// Files outside any detected project root land in the '' bucket and use
+// a lenient (non-strict) default service.
 
-function createService() {
-  const { typeRoots, types: ambientTypes } = tc.collectAmbientTypes(rootPath);
+// Look up (or lazy-create) the service responsible for `filePath`.
+function getServiceFor(filePath) {
+  if (!ts || !compiler || !tc) return null;
+  const key = (filePath && findProjectRoot(filePath)) || '';
+  let svc = services.get(key);
+  if (!svc) {
+    svc = createService(key || null);
+    services.set(key, svc);
+  }
+  return svc;
+}
+
+// Return any existing service, lazy-creating a default if none exist.
+// Used by project-agnostic lookups (DOM event names, intrinsic tag props)
+// where any program with lib.dom loaded will do.
+function getAnyService() {
+  for (const svc of services.values()) return svc;
+  return getServiceFor(rootPath);
+}
+
+function createService(projectRoot) {
+  if (!documentRegistry) documentRegistry = ts.createDocumentRegistry();
+  const cfgDir = projectRoot || rootPath;
+  const config = (projectRoot && tc.readProjectConfig?.(projectRoot)) || {};
+  const strict = config.strict === true;
+  const { typeRoots, types: ambientTypes } = tc.collectAmbientTypes(cfgDir);
   const settings = tc.createTypeCheckSettings(ts, {
+    ...(strict ? { strict: true } : {}),
     ...(typeRoots.length ? { typeRoots } : {}),
     ...(ambientTypes.length ? { types: ambientTypes } : {}),
   });
@@ -848,7 +907,7 @@ function createService() {
     },
     getCompilationSettings: () => settings,
     getDefaultLibFileName: (opts) => ts.getDefaultLibFilePath(opts),
-    getCurrentDirectory: () => rootPath,
+    getCurrentDirectory: () => cfgDir,
     fileExists(f) { return compiled.has(fromVirtual(f)) || ts.sys.fileExists(f); },
     readFile(f) { return compiled.get(fromVirtual(f))?.tsContent || ts.sys.readFile(f); },
     readDirectory: (...a) => ts.sys.readDirectory(...a),
@@ -898,7 +957,7 @@ function createService() {
     },
   };
 
-  return ts.createLanguageService(host, ts.createDocumentRegistry());
+  return ts.createLanguageService(host, documentRegistry);
 }
 
 // ── Type inference patching ────────────────────────────────────────
@@ -908,16 +967,17 @@ function createService() {
 // array. Setting symbol.links = { type } before any type resolution makes
 // TypeScript see the correct type through all 67+ internal checker functions.
 
-function patchTypes() {
-  if (!service) return;
-  const program = service.getProgram();
-  if (!program || program === lastPatchedProgram) return;
-  lastPatchedProgram = program;
+function patchTypes(svc) {
+  svc = svc || getAnyService();
+  if (!svc) return;
+  const program = svc.getProgram();
+  if (!program || patchedPrograms.has(program)) return;
+  patchedPrograms.add(program);
   // Don't clear intrinsicPropsCache — DOM element types are stable across
   // program changes and must survive compilation failures so that value
   // completions still work when the user is mid-edit (e.g. `type:` with
   // no value yet causes a parse error, deleting compiled data).
-  tc.patchUninitializedTypes(ts, service, compiled);
+  tc.patchUninitializedTypes(ts, svc, compiled);
 }
 
 // ── Position mapping ───────────────────────────────────────────────
@@ -1082,9 +1142,11 @@ let domEventNamesCache = null;
 
 function getDomEventNames() {
   if (domEventNamesCache) return domEventNamesCache;
-  if (!service || !ts) return [];
-  patchTypes();
-  const program = service.getProgram();
+  if (!ts) return [];
+  const svc = getAnyService();
+  if (!svc) return [];
+  patchTypes(svc);
+  const program = svc.getProgram();
   if (!program) return [];
   const checker = program.getTypeChecker();
   // HTMLElementEventMap is declared in lib.dom.d.ts
@@ -1109,9 +1171,11 @@ function resolveTagProps(tag, skipNames) {
     if (!skipNames || skipNames.size === 0) return cached;
     return cached.filter(p => !skipNames.has(p.name));
   }
-  if (!service || !ts) return [];
-  patchTypes();
-  const program = service.getProgram();
+  if (!ts) return [];
+  const svc = getAnyService();
+  if (!svc) return [];
+  patchTypes(svc);
+  const program = svc.getProgram();
   if (!program) { return []; }
   const checker = program.getTypeChecker();
 
@@ -1682,16 +1746,17 @@ function isInRenderBlock(srcLines, lineIndex) {
 
 connection.onRequest('textDocument/semanticTokens/full', (params) => {
   const fp = uriToPath(params.textDocument.uri);
-  if (!fp.endsWith('.rip') || !service) return { data: [] };
+  const svc = fp.endsWith('.rip') ? getServiceFor(fp) : null;
+  if (!svc) return { data: [] };
 
   const c = compiled.get(fp);
   if (!c || !c.hasTypes) return { data: [] };
 
   try {
-    patchTypes();
+    patchTypes(svc);
     const vf = toVirtual(fp);
     const format = ts.SemanticClassificationFormat?.TwentyTwenty || '2020';
-    const result = service.getEncodedSemanticClassifications(vf, { start: 0, length: c.tsContent.length }, format);
+    const result = svc.getEncodedSemanticClassifications(vf, { start: 0, length: c.tsContent.length }, format);
     if (!result?.spans) return { data: [] };
 
     const srcLines = c.source.split('\n');
@@ -2193,7 +2258,8 @@ connection.onCompletion((params) => {
   }
 
   // TypeScript completions
-  if (!service) return [];
+  const svc = getServiceFor(fp);
+  if (!svc) return [];
 
   // Dot-recovery: when cursor follows a trailing dot (e.g. `obj.`), the lexer
   // treats `.` at EOL as line-continuation and compilation fails.  Patch only
@@ -2205,8 +2271,7 @@ connection.onCompletion((params) => {
       const docLines = doc.getText().split('\n');
       docLines[params.position.line] = before.replace(/(\w)\.\s*$/, '$1.__rip__') + curLine.slice(params.position.character);
       try {
-        const strict = isStrictFile(fp);
-        const entry = tc.compileForCheck(fp, docLines.join('\n'), compiler, { strict });
+        const entry = tc.compileForCheck(fp, docLines.join('\n'), compiler, getFileProfile(fp));
         const prev = compiled.get(fp);
         compiled.set(fp, { version: (prev?.version || 0) + 1, ...entry });
       } catch {} // recovery failed — continue with stale data
@@ -2217,8 +2282,8 @@ connection.onCompletion((params) => {
   if (offset === undefined) return [];
 
   try {
-    patchTypes();
-    const r = service.getCompletionsAtPosition(toVirtual(fp), offset, { includeExternalModuleExports: true, includeInsertTextCompletions: true });
+    patchTypes(svc);
+    const r = svc.getCompletionsAtPosition(toVirtual(fp), offset, { includeExternalModuleExports: true, includeInsertTextCompletions: true });
     if (!r) return [];
     const vf = toVirtual(fp);
     const result = {
@@ -2416,10 +2481,12 @@ function buildImportEdit(source, spec, name) {
 // getCompletionEntryDetails call here without blocking every keystroke.
 connection.onCompletionResolve((item) => {
   const data = item.data;
-  if (!data || !service) return item;
+  if (!data) return item;
+  const svc = getServiceFor(fromVirtual(data.vf));
+  if (!svc) return item;
   try {
-    patchTypes();
-    const d = service.getCompletionEntryDetails(data.vf, data.offset, data.name, undefined, undefined, undefined, undefined);
+    patchTypes(svc);
+    const d = svc.getCompletionEntryDetails(data.vf, data.offset, data.name, undefined, undefined, undefined, undefined);
     if (d) {
       const display = unwrapReactiveType(ts.displayPartsToString(d.displayParts));
       item.detail = (item.detail ? item.detail + '\n' : '') + display.replace(/\((\w+)\)\s*\S+\./, '($1) ');
@@ -2475,7 +2542,7 @@ connection.onHover((params) => {
       // Otherwise see if the cursor is on an imported identifier and ask the
       // TS service for the equivalent quick info from the collapsed import line.
       const word = getWordAtPosition(fullText, params.position);
-      if (word && word !== 'import' && word !== 'from' && word !== 'as' && service) {
+      if (word && word !== 'import' && word !== 'from' && word !== 'as') {
         const c = compiled.get(fp);
         if (c?.tsContent) {
           const tsLines = c.tsContent.split('\n');
@@ -2493,8 +2560,10 @@ connection.onHover((params) => {
             const lineOffset = tsLines.slice(0, li).join('\n').length + (li > 0 ? 1 : 0);
             const offset = lineOffset + m.index;
             try {
-              patchTypes();
-              const info = service.getQuickInfoAtPosition(toVirtual(fp), offset);
+              const svc = getServiceFor(fp);
+              if (!svc) break;
+              patchTypes(svc);
+              const info = svc.getQuickInfoAtPosition(toVirtual(fp), offset);
               if (info) {
                 let display = ts.displayPartsToString(info.displayParts);
                 display = unwrapReactiveType(display);
@@ -2549,15 +2618,16 @@ connection.onHover((params) => {
   }
 
   // TypeScript hover
-  if (!service) return null;
+  const svc = getServiceFor(fp);
+  if (!svc) return null;
   const offset = srcToOffset(fp, params.position.line, params.position.character);
   if (offset === undefined) {
     return null;
   }
 
   try {
-    patchTypes();
-    const info = service.getQuickInfoAtPosition(toVirtual(fp), offset);
+    patchTypes(svc);
+    const info = svc.getQuickInfoAtPosition(toVirtual(fp), offset);
     if (!info) {
       return null;
     }
@@ -2668,15 +2738,16 @@ connection.onDefinition((params) => {
   }
 
   // TypeScript go-to-definition
-  if (!service) return null;
+  const svc = getServiceFor(fp);
+  if (!svc) return null;
   const offset = srcToOffset(fp, params.position.line, params.position.character);
   if (offset === undefined) {
     return null;
   }
 
   try {
-    patchTypes();
-    const defs = service.getDefinitionAtPosition(toVirtual(fp), offset);
+    patchTypes(svc);
+    const defs = svc.getDefinitionAtPosition(toVirtual(fp), offset);
     if (!defs) return null;
     return defs.map((d) => {
       const realPath = isVirtual(d.fileName) ? fromVirtual(d.fileName) : d.fileName;
@@ -2858,13 +2929,14 @@ connection.onSignatureHelp((params) => {
   }
 
   // TypeScript signature help
-  if (!service) return null;
+  const svc = getServiceFor(fp);
+  if (!svc) return null;
   const offset = srcToOffset(fp, params.position.line, params.position.character);
   if (offset === undefined) return null;
 
   try {
-    patchTypes();
-    const sig = service.getSignatureHelpItems(toVirtual(fp), offset, {});
+    patchTypes(svc);
+    const sig = svc.getSignatureHelpItems(toVirtual(fp), offset, {});
     if (!sig) return null;
     return {
       signatures: sig.items.map((item) => ({
