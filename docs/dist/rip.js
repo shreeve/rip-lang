@@ -14098,7 +14098,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.16.0";
-  var BUILD_DATE = "2026-05-27@21:54:36GMT";
+  var BUILD_DATE = "2026-05-28@12:05:59GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -15764,7 +15764,7 @@ ${indented}`);
               info = pkgMap[pkgKey];
               if (!info)
                 return full2;
-              target = sub ? `_pkg/${info.short}${sub}.rip` : `_pkg/${info.short}/${info.entry}`;
+              target = !sub ? `_pkg/${info.short}/${info.entry}` : sub.endsWith(".rip") ? `_pkg/${info.short}${sub}` : `_pkg/${info.short}${sub}.rip`;
               return `${pre2}${target}${post2}`;
             });
           }

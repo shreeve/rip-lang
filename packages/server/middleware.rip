@@ -64,11 +64,12 @@ readDeclaredDeps = (appDir) ->
     cur = parent
   null
 
-IMPORT_RE = /(?:from|import)\s+['"](@rip-lang\/[^'"\/]+)(?:\/[^'"]*)?['"]/g
-
-# Same regex but capturing the optional sub-path too — used by the browser
-# package bundler to know which sub-modules a consumer actually imports.
-IMPORT_RE_FULL = /(?:from|import)\s+['"](@rip-lang\/[^'"\/]+)(\/[^'"]*)?['"]/g
+# Match `from '@rip-lang/<pkg>'` or `import '@rip-lang/<pkg>'`, capturing the
+# package name (group 1) and any optional sub-path (group 2 — full form only).
+# Compiled fresh on each call via `String#matchAll` so module-scoped state
+# never leaks between invocations.
+IMPORT_RE      = -> /(?:from|import)\s+['"](@rip-lang\/[^'"\/]+)(?:\/[^'"]*)?['"]/g
+IMPORT_RE_FULL = -> /(?:from|import)\s+['"](@rip-lang\/[^'"\/]+)(\/[^'"]*)?['"]/g
 
 # Forbidden specifiers on browser-shipped packages. If a .rip file destined
 # for the browser bundle imports any of these, we refuse to ship the package.
@@ -110,7 +111,7 @@ assertBundleDepsDeclared = (appDir, dirs) ->
     continue unless existsSync(dir)
     for path in glob.scanSync(dir)
       src = readFileSync("#{dir}/#{path}", 'utf8')
-      while m = IMPORT_RE.exec(src)
+      for m as src.matchAll(IMPORT_RE())
         pkgKey = m[1]
         continue if seen.has(pkgKey)
         seen.add(pkgKey)
@@ -954,8 +955,7 @@ export serve = (opts:: {
         # Scan everything we just collected for @rip-lang/* imports.
         usedPkgs = new Set()
         for _, src of modules
-          IMPORT_RE_FULL.lastIndex = 0
-          while m = IMPORT_RE_FULL.exec(src)
+          for m as src.matchAll(IMPORT_RE_FULL())
             pkgKey = m[1]
             continue if pkgKey is info.pkgName
             usedPkgs.add(pkgKey)

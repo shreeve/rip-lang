@@ -1135,14 +1135,19 @@ compileAndImport = (source, compile, components = null, path = null, resolver = 
       # The bundler inlines each declared package's source under
       # `_pkg/<short>/...` and records the entry filename in
       # `bundle.packages[pkgKey] = { short, entry }`. Bare pkg → _pkg/short/entry;
-      # sub-path → _pkg/short/sub.rip (sub already includes any inner dirs).
+      # sub-path → _pkg/short/sub.rip (sub-path can include or omit `.rip`).
       pkgMap = resolver.packages or {}
       if Object.keys(pkgMap).length > 0
         bareImportRe = /^(\s*import\s+(?:.*?\s+from\s+)?['"])(@rip-lang\/[^\/'"]+)((?:\/[^'"]*)?)(['"];?\s*)$/gm
         js = js.replace bareImportRe, (full, pre, pkgKey, sub, post) ->
           info = pkgMap[pkgKey]
           return full unless info
-          target = if sub then "_pkg/#{info.short}#{sub}.rip" else "_pkg/#{info.short}/#{info.entry}"
+          target = if not sub
+            "_pkg/#{info.short}/#{info.entry}"
+          else if sub.endsWith('.rip')
+            "_pkg/#{info.short}#{sub}"
+          else
+            "_pkg/#{info.short}#{sub}.rip"
           "#{pre}#{target}#{post}"
 
       # Step 1: Rewrite .rip imports to blob URLs
