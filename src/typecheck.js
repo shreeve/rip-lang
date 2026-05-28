@@ -34,6 +34,37 @@ import { buildLineMap } from './sourcemaps.js';
 const entryFileCache = new Map(); // dir → entryFile|null
 const stashFileCache = new Map(); // root dir → stashFile|null
 
+// ── Robust import extraction ───────────────────────────────────────
+//
+// Walk a file's `import ...` / dynamic `import(...)` specifiers via Bun's
+// real parser instead of regex-scanning. This is immune to false matches
+// from comments, string literals, regex bodies, and any other place a
+// `from "@rip-lang/..."`-shaped sequence might appear in source.
+//
+// `scanText` is the compiled TS-virtual content (entry.tsContent) when
+// available; we fall back to the raw .rip source for entries that
+// haven't been compiled yet (the only such call site reads a freshly-
+// read package file).
+const _ripImportTranspiler = new Bun.Transpiler({ loader: 'ts' });
+function scanRipPkgImports(scanText) {
+  if (!scanText) return [];
+  let imports;
+  try { imports = _ripImportTranspiler.scanImports(scanText); }
+  catch { return []; }
+  const out = [];
+  for (const imp of imports) {
+    const p = imp.path;
+    if (typeof p === 'string' && p.startsWith('@rip-lang/')) out.push(p);
+  }
+  return out;
+}
+// Extract the bare package name (`@rip-lang/foo`) from a specifier
+// that may include a subpath (`@rip-lang/foo/sub/path`).
+function ripPkgRoot(spec) {
+  const i = spec.indexOf('/', '@rip-lang/'.length);
+  return i === -1 ? spec : spec.slice(0, i);
+}
+
 export function findEntryFile(filePath) {
   let dir = dirname(filePath);
   const visited = [];
@@ -2854,8 +2885,6 @@ export async function runCheck(targetDir, opts = {}) {
     return resolved;
   }
 
-  const pkgSpecRe = /from\s+['"](@rip-lang\/[^'"]+)['"]/g;
-
   // ── Undeclared-import diagnostic (`rip check` surface) ──
   // Same check as the loader and bundler — surfaced earlier when typing is on.
   // The project's own `package.json#name` is treated as a self-import (covers
@@ -2872,12 +2901,11 @@ export async function runCheck(targetDir, opts = {}) {
         ...Object.keys(projPkg.optionalDependencies || {}),
       ]);
       const selfName = projPkg.name || null;
-      const importRe = /(?:from|import)\s+['"](@rip-lang\/[^'"\/]+)(?:\/[^'"]*)?['"]/g;
       const reported = new Set();
       for (const [fp, entry] of compiled) {
         if (entry._typeOnly) continue;
-        for (const m of entry.source.matchAll(importRe)) {
-          const pkgKey = m[1];
+        for (const spec of scanRipPkgImports(entry.tsContent || entry.source)) {
+          const pkgKey = ripPkgRoot(spec);
           if (pkgKey === selfName) continue;
           if (declared.has(pkgKey)) continue;
           const key = `${fp}::${pkgKey}`;
@@ -2894,8 +2922,8 @@ export async function runCheck(targetDir, opts = {}) {
   }
   const pendingPkgFiles = new Set();
   for (const [, entry] of compiled) {
-    for (const m of entry.source.matchAll(pkgSpecRe)) {
-      const r = resolvePkgSpec(m[1]);
+    for (const spec of scanRipPkgImports(entry.tsContent || entry.source)) {
+      const r = resolvePkgSpec(spec);
       if (r && !compiled.has(r)) pendingPkgFiles.add(r);
     }
   }
@@ -2910,8 +2938,8 @@ export async function runCheck(targetDir, opts = {}) {
       const compiledPkg = compileForCheck(next, pkgSrc, new Compiler());
       compiledPkg._typeOnly = true;
       compiled.set(next, compiledPkg);
-      for (const m of pkgSrc.matchAll(pkgSpecRe)) {
-        const r = resolvePkgSpec(m[1]);
+      for (const spec of scanRipPkgImports(compiledPkg.tsContent || pkgSrc)) {
+        const r = resolvePkgSpec(spec);
         if (r && !compiled.has(r)) pendingPkgFiles.add(r);
       }
     } catch (e) {
@@ -3711,11 +3739,10 @@ export async function runAudit(targetDir) {
     pkgSpecCache.set(spec, resolved);
     return resolved;
   }
-  const pkgSpecRe = /from\s+['"](@rip-lang\/[^'"]+)['"]/g;
   const pkgQueue = new Set();
   for (const [, entry] of compiled) {
-    for (const m of entry.source.matchAll(pkgSpecRe)) {
-      const r = resolvePkgSpec(m[1]);
+    for (const spec of scanRipPkgImports(entry.tsContent || entry.source)) {
+      const r = resolvePkgSpec(spec);
       if (r && !compiled.has(r)) pkgQueue.add(r);
     }
   }
@@ -3725,9 +3752,10 @@ export async function runAudit(targetDir) {
     if (compiled.has(next)) continue;
     try {
       const src = readFileSync(next, 'utf8');
-      compiled.set(next, compileForCheck(next, src, new Compiler()));
-      for (const m of src.matchAll(pkgSpecRe)) {
-        const r = resolvePkgSpec(m[1]);
+      const compiledPkg = compileForCheck(next, src, new Compiler());
+      compiled.set(next, compiledPkg);
+      for (const spec of scanRipPkgImports(compiledPkg.tsContent || src)) {
+        const r = resolvePkgSpec(spec);
         if (r && !compiled.has(r)) pkgQueue.add(r);
       }
     } catch (e) {
