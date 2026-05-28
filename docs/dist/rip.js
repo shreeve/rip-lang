@@ -14098,7 +14098,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.16.0";
-  var BUILD_DATE = "2026-05-28@12:05:59GMT";
+  var BUILD_DATE = "2026-05-28@12:19:31GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -14206,8 +14206,8 @@ ${tagged}
         if (url)
           sources.push({ url });
       }
-    } else if (runtimeTag) {
-      sources.push({ url: "/app" });
+    } else if (runtimeTag && /^https?:$/.test(location.protocol)) {
+      sources.push({ url: "/app", optional: true });
     }
     for (const script of document.querySelectorAll('script[type="text/rip"]')) {
       if (script.src) {
@@ -14232,9 +14232,11 @@ ${tagged}
           s.bundle = bundle;
         }
       }));
-      for (const r of results) {
-        if (r.status === "rejected")
+      for (let i = 0;i < results.length; i++) {
+        const r = results[i];
+        if (r.status === "rejected" && !sources[i].optional) {
           console.warn("Rip: fetch failed:", r.reason.message);
+        }
       }
       const bundles = [];
       const individual = [];
