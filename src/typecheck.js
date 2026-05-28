@@ -419,19 +419,30 @@ export const SKIP_CODES = new Set([
   1064, // Return type of async function must be Promise
 ]);
 
-// Dedup diagnostics by (start line/col, end line/col, code, message).
+// Dedup diagnostics by (start line/col, code).
 // The same TS error can fire twice when the dts header and compiled body
 // both contain the offending construct (e.g. an `import { X }` line that
-// maps to the same source position from both copies).
+// maps to the same source position from both copies), or when a diagnostic
+// hits both an injected function overload signature and its implementation.
+//
+// The key intentionally excludes end position and message: the duplicates we
+// want to collapse routinely differ in span length (overload sig vs impl
+// token widths) and occasionally in message text (TS referencing different
+// candidate signatures). Same start position + same code is the right
+// invariant — distinct logical errors at the exact same (line, col, code)
+// would be vanishingly rare and folding them is preferable to leaking
+// structural duplicates.
 //
 // `getRange(d)` must return `{ startLine, startCol, endLine, endCol }`.
-// Returns a new array; does not mutate the input.
+// Returns a new array; does not mutate the input. Preserves input object
+// identity so callers can use Set membership to find which entries were
+// dropped.
 export function dedupDiagnostics(diags, getRange) {
   const seen = new Set();
   const out = [];
   for (const d of diags) {
     const r = getRange(d);
-    const key = `${r.startLine}:${r.startCol}:${r.endLine}:${r.endCol}:${d.code}:${d.message}`;
+    const key = `${r.startLine}:${r.startCol}:${d.code}`;
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(d);
@@ -1070,6 +1081,47 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
           return depth === 0 && sig.slice(i).includes(':');
         }
 
+        // Check if any parameter in a DTS signature lacks a type annotation.
+        // Used to suppress overload-sig injection: if a param is untyped, TS
+        // will fire TS7006 on both the injected sig and the impl (same source
+        // position, same code) — let it fire on the impl only.
+        //
+        // Each top-level param part is "typed" iff it contains a top-level `:`
+        // outside of any nested (), [], {}, or <> groups. Destructured-rename
+        // colons inside `{a: aliased}` don't count because they're nested.
+        // Empty param lists are trivially "all typed".
+        function hasUntypedParam(sig) {
+          const params = extractFnParams(sig);
+          if (params === null || params.trim() === '') return false;
+          const parts = splitTopLevelParams(params);
+          for (const part of parts) {
+            if (!part) continue;
+            // Skip TS `this: T` pseudo-param if it appears.
+            if (/^this\s*:/.test(part)) continue;
+            let depth = 0, angle = 0, hasColon = false;
+            for (let i = 0; i < part.length; i++) {
+              const c = part[i];
+              if (c === '"' || c === "'" || c === '`') {
+                // skip string literal
+                const q = c; i++;
+                while (i < part.length && part[i] !== q) {
+                  if (part[i] === '\\') i++;
+                  i++;
+                }
+                continue;
+              }
+              if (c === '(' || c === '[' || c === '{') { depth++; continue; }
+              if (c === ')' || c === ']' || c === '}') { depth--; continue; }
+              if (c === '=' && part[i + 1] === '>') { i++; continue; }
+              if (c === '<' && i > 0 && /[A-Za-z_$0-9>\]]/.test(part[i - 1])) { angle++; continue; }
+              if (c === '>' && angle > 0) { angle--; continue; }
+              if (c === ':' && depth === 0 && angle === 0) { hasColon = true; break; }
+            }
+            if (!hasColon) return true;
+          }
+          return false;
+        }
+
         // Extract the return type from a DTS signature (e.g. ": number" from
         // "function add(a: number, b: number): number;").
         function extractReturnType(sig) {
@@ -1119,10 +1171,13 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
           }
         }
 
-        // Only inject overload signatures for functions with explicit return types.
-        // Functions without a return type annotation let TS infer the return from
-        // the implementation body — injecting an overload would force it to `any`.
-        const overloads = injections.filter(inj => hasExplicitReturn(inj.sig));
+        // Only inject overload signatures for functions with explicit return types
+        // AND fully-typed params. Functions without a return type annotation let
+        // TS infer the return from the implementation body — injecting an overload
+        // would force it to `any`. Functions with any untyped param would fire
+        // TS7006 twice (once on the injected sig, once on the impl) at the same
+        // source position — skip the injection so the user sees a single error.
+        const overloads = injections.filter(inj => hasExplicitReturn(inj.sig) && !hasUntypedParam(inj.sig));
 
         // Adjust reverseMap: each overload injection shifts subsequent code lines down by 1.
         // Compare against the original genLine (not genLine + offset) because bottom-up
@@ -1969,13 +2024,27 @@ export function findNearestWord(text, word, approx) {
 
 // Check whether an offset falls on an injected function overload signature line
 // (generated by compileForCheck, not from user code).  These are body lines that
-// match `function NAME(...): TYPE;` and have no genToSrc entry.
+// match `[export ][async ]function NAME(...): TYPE;` and are immediately followed
+// by the matching implementation `[export ][async ]function NAME(...) ... {`.
+//
+// Note: we can't rely on `!genToSrc.has(line)` as a discriminator — the gap-fill
+// interpolation in buildLineMap will fabricate a mapping for the injected line.
 export function isInjectedOverload(entry, offset) {
   const tsLine = offsetToLine(entry.tsContent, offset);
   if (tsLine < entry.headerLines) return false;
-  if (entry.genToSrc.get(tsLine) !== undefined) return false;
   const lineText = getLineText(entry.tsContent, tsLine);
-  return /^(?:async\s+)?function\s+\w+\s*\(/.test(lineText) && lineText.trimEnd().endsWith(';');
+  const m = lineText.match(/^(?:export\s+)?(?:async\s+)?function\s+(\w+)\s*\(/);
+  if (!m) return false;
+  if (!lineText.trimEnd().endsWith(';')) return false;
+  // Confirm the next non-empty line is the implementation of the same function.
+  const allLines = entry.tsContent.split('\n');
+  for (let i = tsLine + 1; i < allLines.length; i++) {
+    const next = allLines[i];
+    if (next.trim() === '') continue;
+    const nm = next.match(/^(?:export\s+)?(?:async\s+)?function\s+(\w+)\s*\(/);
+    return !!nm && nm[1] === m[1] && !next.trimEnd().endsWith(';');
+  }
+  return false;
 }
 
 export function offsetToLine(text, offset) {
