@@ -1866,10 +1866,16 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
     const genGap = genB - genA;
     if (srcGap > 1 && genGap > 1 && srcGap <= genGap + 2) {
       for (let d = 1; d < srcGap; d++) {
-        if (!srcToGen.has(srcA + d) && genA + d < genB) {
-          srcToGen.set(srcA + d, genA + d);
-          if (!genToSrc.has(genA + d)) {
-            genToSrc.set(genA + d, srcA + d);
+        const gen = genA + d;
+        if (!srcToGen.has(srcA + d) && gen < genB) {
+          // Don't interpolate INTO the DTS header. Header lines must only
+          // carry explicit DTS-back-mappings (or none); fabricating a mapping
+          // here causes go-to-def to land on whatever source line happens to
+          // fall in the gap (typically a doc comment).
+          if (gen < headerLines) continue;
+          srcToGen.set(srcA + d, gen);
+          if (!genToSrc.has(gen)) {
+            genToSrc.set(gen, srcA + d);
           }
         }
       }

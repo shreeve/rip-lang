@@ -22,8 +22,11 @@
 { __state, __computed, __effect, __batch } = globalThis.__rip
 
 # Re-export context functions from the component runtime
-{ setContext, getContext, hasContext } = globalThis.__ripComponent or {}
-export { setContext, getContext, hasContext }
+__ripCtx = globalThis.__ripComponent or {}
+
+export setContext = (key:: unknown, value:: unknown):: void -> __ripCtx.setContext(key, value)
+export getContext = (key:: unknown):: unknown -> __ripCtx.getContext(key)
+export hasContext = (key:: unknown):: boolean -> __ripCtx.hasContext(key)
 
 # =============================================================================
 # Internal types — used by public function signatures below. Not exported,
@@ -33,6 +36,19 @@ export { setContext, getContext, hasContext }
 # =============================================================================
 
 type Disposer = () => void
+
+type Stash = Record<PropertyKey, any>
+
+type Signal<T> =
+  value: T
+  read?: () => T
+
+type TimingSource<T> = Signal<T> | (() => T)
+
+type TimedSignal<T> =
+  value: T
+  read?: () => T
+  dispose: Disposer
 
 type Resource<T> =
   data: T | null
@@ -418,9 +434,11 @@ stashMethodFn = (proxy, prop) ->
   cache[prop] = fn
   fn
 
-export createStash = (data = {}) -> makeProxy(data)
+export def createStash(data:: Record<string, any> = {}):: Stash
+  makeProxy(data)
 
-export unwrapStash = (proxy) -> if proxy?[:raw] then proxy[:raw] else proxy
+export def unwrapStash(proxy:: Stash):: Stash
+  if proxy?[:raw] then proxy[:raw] else proxy
 
 # Single-stash policy: Rip App assumes one stash per page (the one
 # `launch()` creates). persistStash is therefore tied to the global
@@ -432,7 +450,7 @@ export unwrapStash = (proxy) -> if proxy?[:raw] then proxy[:raw] else proxy
 #
 # Returns a disposer that unsubscribes the autosave effect, removes the
 # beforeunload handler, and writes one final snapshot before unwiring.
-export def persistStash(app, opts?:: { local?: boolean, key?: string } = {}):: Disposer
+export def persistStash(app:: Stash, opts?:: { local?: boolean, key?: string } = {}):: Disposer
   assertBrowser 'persistStash'
   target = unwrapStash(app) or app
   return -> null if target[:persisted]    # double-call guard returns a no-op disposer
@@ -571,7 +589,7 @@ _proxy = (out, source, disposer) ->
 # delay(ms, source) — truthy waits ms, falsy immediate
 # Usage: showLoading := delay 200 -> loading
 #        navigating = delay 100, __state(false)
-export delay = (ms, source) ->
+export delay = (ms:: number, source:: TimingSource<unknown>):: TimedSignal<boolean> ->
   fn = _toFn(source)
   out = __state(!!fn())
   eff = __effect ->
@@ -584,7 +602,7 @@ export delay = (ms, source) ->
 
 # debounce(ms, source) — waits ms after last change, then propagates
 # Usage: debouncedQuery := debounce 300 -> query
-export debounce = (ms, source) ->
+export debounce = (ms:: number, source:: TimingSource<unknown>):: TimedSignal<unknown> ->
   fn = _toFn(source)
   out = __state(fn())
   eff = __effect ->
@@ -595,7 +613,7 @@ export debounce = (ms, source) ->
 
 # throttle(ms, source) — propagates at most once per ms
 # Usage: smoothScroll := throttle 100 -> scrollY
-export throttle = (ms, source) ->
+export throttle = (ms:: number, source:: TimingSource<unknown>):: TimedSignal<unknown> ->
   fn = _toFn(source)
   out = __state(fn())
   last = 0
@@ -616,7 +634,7 @@ export throttle = (ms, source) ->
 
 # hold(ms, source) — once truthy, stays true for at least ms
 # Usage: showSaved := hold 2000 -> saved
-export hold = (ms, source) ->
+export hold = (ms:: number, source:: TimingSource<unknown>):: TimedSignal<boolean> ->
   fn = _toFn(source)
   out = __state(!!fn())
   eff = __effect ->
@@ -635,7 +653,7 @@ export hold = (ms, source) ->
 # create/change/delete. Compiled modules are cached alongside sources.
 # ==============================================================================
 
-export createComponents = ->
+export def createComponents():: ComponentsStore
   files = new Map()
   watchers:: Set<(event: string, path: string) => void> = new Set()  # idempotent disposers via Set, no -1 splice
   compiled = new Map()
