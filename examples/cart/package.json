@@ -1,0 +1,12 @@
+{
+  "name": "@rip-lang/example-cart",
+  "private": true,
+  "dependencies": {
+    "@rip-lang/http": "workspace:*",
+    "@rip-lang/server": "workspace:*"
+  },
+  "rip": {
+    "strict": true,
+    "checkAll": true
+  }
+}

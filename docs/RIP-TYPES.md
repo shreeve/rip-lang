@@ -616,18 +616,20 @@ Types are optional and gradual:
 
 ### Project Level
 
-Configure via `rip.json` or the `"rip"` key in `package.json`:
+Configure via the `"rip"` key in `package.json`:
 
 ```json
 {
   "strict": true,
+  "checkAll": true,
   "exclude": ["vendor/**", "legacy/**"]
 }
 ```
 
 | Key | Purpose |
 |-----|--------|
-| `strict` | Enable strict mode for `rip check` (default: `false`) |
+| `strict` | Enable TS strict family for `rip check` (default: `false`) |
+| `checkAll` | Type-check every non-`@nocheck` `.rip` file, not just annotated ones (default: `false`) |
 | `exclude` | Glob patterns for files to skip during `rip check` |
 
 ### File Level

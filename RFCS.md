@@ -736,8 +736,8 @@ Remove the `rip.json` concept entirely. Everything that lives there today (`stri
   "name": "cart",
   "private": true,
   "dependencies": {
-    "@rip-lang/server": "workspace:*",
-    "@rip-lang/http":   "workspace:*"
+    "@rip-lang/http":   "workspace:*",
+    "@rip-lang/server": "workspace:*"
   },
   "rip": {
     "strict": true,
@@ -821,8 +821,8 @@ Rip packages are normal npm packages. The example apps that import them get norm
 ```jsonc
 {
   "workspaces": [
-    "packages/*",
-    "examples/*"
+    "examples/*",
+    "packages/*"
   ]
 }
 ```

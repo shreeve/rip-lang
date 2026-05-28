@@ -9,6 +9,31 @@
         "typescript": "5.9.3",
       },
     },
+    "examples/analytics": {
+      "name": "@rip-lang/example-analytics",
+      "dependencies": {
+        "@rip-lang/server": "workspace:*",
+      },
+    },
+    "examples/cart": {
+      "name": "@rip-lang/example-cart",
+      "dependencies": {
+        "@rip-lang/http": "workspace:*",
+        "@rip-lang/server": "workspace:*",
+      },
+    },
+    "examples/form": {
+      "name": "@rip-lang/example-form",
+      "dependencies": {
+        "@rip-lang/server": "workspace:*",
+      },
+    },
+    "examples/results": {
+      "name": "@rip-lang/example-results",
+      "dependencies": {
+        "@rip-lang/server": "workspace:*",
+      },
+    },
     "packages/ai": {
       "name": "@rip-lang/ai",
       "version": "1.0.1",
@@ -184,6 +209,14 @@
     "@rip-lang/csv": ["@rip-lang/csv@workspace:packages/csv"],
 
     "@rip-lang/db": ["@rip-lang/db@workspace:packages/db"],
+
+    "@rip-lang/example-analytics": ["@rip-lang/example-analytics@workspace:examples/analytics"],
+
+    "@rip-lang/example-cart": ["@rip-lang/example-cart@workspace:examples/cart"],
+
+    "@rip-lang/example-form": ["@rip-lang/example-form@workspace:examples/form"],
+
+    "@rip-lang/example-results": ["@rip-lang/example-results@workspace:examples/results"],
 
     "@rip-lang/gate": ["@rip-lang/gate@workspace:packages/gate"],
 

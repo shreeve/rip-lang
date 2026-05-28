@@ -48,7 +48,7 @@ function removeFromComponentRegistry(filePath) {
   }
 }
 
-// Per-directory project config cache (dir → { strict, exclude, ... })
+// Per-directory project config cache (dir → { strict, checkAll, exclude, ... })
 const configCache = new Map();
 function getProjectConfig(filePath) {
   const dir = path.dirname(filePath);
@@ -172,7 +172,6 @@ connection.onInitialize(async (params) => {
 connection.onInitialized(async () => {
   connection.client.register(require('vscode-languageserver').DidChangeWatchedFilesNotification.type, {
     watchers: [
-      { globPattern: '**/rip.json' },
       { globPattern: '**/package.json' },
       { globPattern: '**/*.rip' },
     ],
@@ -226,10 +225,7 @@ function rebuildProjectInfo() {
     let entries;
     try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
     for (const ent of entries) {
-      if (ent.isFile() && (ent.name === 'package.json' || ent.name === 'rip.json')) {
-        if (ent.name === 'package.json') loadPackageJson(dir);
-        else projectRoots.add(dir);
-      }
+      if (ent.isFile() && ent.name === 'package.json') loadPackageJson(dir);
     }
     for (const ent of entries) {
       if (INDEX_SKIP_DIRS.has(ent.name)) continue;
@@ -254,7 +250,7 @@ const exportIndexByFile = new Map(); // Map<fp, Set<name>> for incremental updat
 let exportIndexBuilt = false;
 
 // Project-scoping data — populated alongside discovery. A project root is any
-// directory containing a `package.json` or `rip.json`. Files in different
+// directory containing a `package.json`. Files in different
 // projects may not auto-import each other via relative paths.
 const projectRoots = new Set();          // Set<dir>
 const projectRootCache = new Map();      // Map<dir, projectRoot|null>
@@ -388,10 +384,7 @@ function indexWorkspaceRipFiles() {
     let entries;
     try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
     for (const ent of entries) {
-      if (ent.isFile() && (ent.name === 'package.json' || ent.name === 'rip.json')) {
-        if (ent.name === 'package.json') loadPackageJson(dir);
-        else projectRoots.add(dir);
-      }
+      if (ent.isFile() && ent.name === 'package.json') loadPackageJson(dir);
     }
     for (const ent of entries) {
       if (INDEX_SKIP_DIRS.has(ent.name)) continue;
@@ -428,7 +421,7 @@ documents.onDidClose(({ document }) => {
 
 function isStrictFile(filePath) {
   const config = getProjectConfig(filePath);
-  if (!config.strict) return false;
+  if (!config.strict && !config.checkAll) return false;
   if (config._configDir && Array.isArray(config.exclude)) {
     const rel = path.relative(config._configDir, filePath);
     if (config.exclude.some(glob => tc.globToRegex(glob).test(rel))) return false;

@@ -1,6 +1,7 @@
 {
   "rip": {
-    "strict": true
+    "strict": true,
+    "checkAll": true
   },
   "dependencies": {
     "dayjs": "^1.11.20",

@@ -5,6 +5,7 @@
   "type": "module",
   "main": "src/compiler.js",
   "workspaces": [
+    "examples/*",
     "packages/*"
   ],
   "browser": "docs/dist/rip.min.js",
