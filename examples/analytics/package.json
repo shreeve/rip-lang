@@ -1,0 +1,7 @@
+{
+  "name": "@rip-lang/example-analytics",
+  "private": true,
+  "dependencies": {
+    "@rip-lang/server": "workspace:*"
+  }
+}

@@ -124,7 +124,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Type inference (split decl.)   | 11-inference   | `patchUninitializedTypes` infers from first assignment; top-level + block + destruct |
 | Type inference (inline-let)    | 11-inference   | Inline-let emits `let x = value;` everywhere; no patcher needed                      |
 | Strict mode                    | *(all files)*  | `strict: true` — `noImplicitAny`, full null checks, strict function types            |
-| Project-level type enforcement | *(all files)*  | CLI `--strict`, `rip.json`, `package.json`; `# @nocheck` / `"exclude"` opt-out       |
+| Project-level type enforcement | *(all files)*  | CLI `--strict`, `package.json#rip`; `# @nocheck` / `"exclude"` opt-out               |
 | Hover types                    | *(IDE only)*   | Column-aware source maps, overload preference, typed implementation params           |
 | Union value autocomplete       | *(IDE only)*   | String literal completions for prop values, defaults, typed assignments              |
 | Semantic token provider        | *(IDE only)*   | Bridges TS classifications to Rip; reactive vars not marked readonly                 |

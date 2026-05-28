@@ -116,7 +116,15 @@ export interface TimeoutError
 
 def buildUrl(input, opts:: HttpOptions = {})
   base = opts.prefixUrl
+  origin = globalThis.location?.origin or null
+  # In the browser, default `base` to the current page origin so callers
+  # can pass relative paths like '/api/foo' without setting `prefixUrl`.
+  base = origin if not base and origin
   if base
+    # If `base` is a site-relative path (e.g. '/api'), resolve it against
+    # the page origin so it becomes a valid base URL for `new URL(...)`.
+    if origin and typeof base is 'string' and base.startsWith('/')
+      base = new URL(base, origin).href
     unless base.endsWith('/')
       base += '/'
     path = if typeof input is 'string' and input.startsWith('/') then input.slice(1) else input

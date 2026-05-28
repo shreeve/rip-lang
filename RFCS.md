@@ -21,8 +21,8 @@ Design proposals under discussion. Grouped by domain.
 
 ## Domain D — Packaging & app config
 
-- [ ] [RFC 9 — Consuming Rip packages](#rfc-9-consuming-rip-packages)
-- [ ] [RFC 10 — Rename bundle `components` → `modules`, prefix every entry by origin](#rfc-10-rename-bundle-components--modules-prefix-every-entry-by-origin)
+- [x] [RFC 9 — Consuming Rip packages](#rfc-9-consuming-rip-packages)
+- [x] [RFC 10 — Rename bundle `components` → `modules`, prefix every entry by origin](#rfc-10-rename-bundle-components--modules-prefix-every-entry-by-origin)
 
 ---
 
@@ -663,6 +663,8 @@ End-to-end validation is the cart example itself: typing into the quantity input
 
 ## RFC 9: Consuming Rip packages
 
+> **Status: Implemented.**
+
 The protocol below — declared deps, undeclared-import diagnostic, auto-discovery, bare-specifier rewrite, package-shape contract — is consumer-agnostic: it applies equally to in-repo apps (`examples/*`, `apps/*`, `packages/*/dev-server`, the widget gallery) and to standalone apps living outside the workspace. The migration plan focuses on in-repo apps because that's the audit scope this RFC commits to; standalone apps inherit the protocol the moment they bump to a release of `@rip-lang/server` that includes it. The separate question of standalone *deployment* plumbing (version skew between npm-published packages and the served `rip.min.js`, removing `link-global` as a dev-machine crutch) is genuinely out of scope and called out below.
 
 ### Problem
@@ -736,8 +738,8 @@ Remove the `rip.json` concept entirely. Everything that lives there today (`stri
   "name": "cart",
   "private": true,
   "dependencies": {
-    "@rip-lang/server": "workspace:*",
-    "@rip-lang/http":   "workspace:*"
+    "@rip-lang/http":   "workspace:*",
+    "@rip-lang/server": "workspace:*"
   },
   "rip": {
     "strict": true,
@@ -821,8 +823,8 @@ Rip packages are normal npm packages. The example apps that import them get norm
 ```jsonc
 {
   "workspaces": [
-    "packages/*",
-    "examples/*"
+    "examples/*",
+    "packages/*"
   ]
 }
 ```
@@ -912,6 +914,8 @@ Step 0 unblocks everything else — without it `workspace:*` is a dead reference
 ---
 
 ## RFC 10: Rename bundle `components` → `modules`, prefix every entry by origin
+
+> **Status: Implemented.**
 
 ### Problem
 

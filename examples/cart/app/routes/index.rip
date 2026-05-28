@@ -1,6 +1,7 @@
 import { Product } from '../../types.rip'
 import { Button } from '../components/button.rip'
 import { title } from '../config.rip'
+import { api } from '../api-client.rip'
 
 export Products = component
   cart ~= @app.data.cart
@@ -25,8 +26,9 @@ export Products = component
   mounted: ->
     document.title = title('Products')
     try
-      products = fetch!('/api/products').json!
+      products = api.get!('products').json!()
     catch err
+      console.error(err)
       error = String(err)
     finally
       loaded = true

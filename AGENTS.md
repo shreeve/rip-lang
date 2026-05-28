@@ -66,7 +66,7 @@ rip server
 - Run `bun run build` after codegen, `components.js`, `browser.js`, or `app.rip` changes
 - Run `bun run build:schema-runtime` after editing any `src/schema/runtime-*.js` fragment (CI's `test:schema-fresh` fails on staleness)
 - Run `bun run bump` for the standard release flow
-- **In a typed Rip codebase, always run `rip check` after edits.** A project is typed if it has `rip.json`/`package.json` with `strict: true`, or any `.rip` files using `::` annotations. `rip check` catches both type errors and shadow-TypeScript emitter bugs that the runtime won't surface.
+- **In a typed Rip codebase, always run `rip check` after edits.** A project is typed if its `package.json` has `rip.strict: true` or `rip.checkAll: true`, or any `.rip` files use `::` annotations. `rip check` catches both type errors and shadow-TypeScript emitter bugs that the runtime won't surface.
 - **If a `@rip-lang/*` package advertises a typed public API, keep it honest with `rip check --audit`.** A package "claims to be typed" if its entry file has `::` annotations on exported symbols, or if downstream typed code imports it. For those, run `rip check --audit` before publishing or merging API changes — it runs the normal type check and walks the public surface for `any` leaks. A clean exit (0) means the source type-checks and every export is fully typed for consumers. Untyped packages with no typed consumers can stick with plain `rip check`.
 - **When working on the compiler, lexer, or source-map machinery, use `rip check --sourcemap`** to verify that every identifier round-trips through the generated source map (i.e. hover and go-to-def work in editors). This is a compiler-development diagnostic, not a package-quality check — gaps usually mean the audit's skip list is incomplete or that codegen lost a binding, both of which are compiler-side concerns.
 
@@ -139,6 +139,23 @@ A few existing packages still ship `export default` (`@rip-lang/time`, `packages
 - fields of exported types/interfaces
 
 Internal helpers, locals, and private types may rely on inference — but annotate them too when it helps readability or pins down a tricky shape.
+
+### Browser-safe packages
+
+Packages that should be auto-discovered and bundled into the browser bundle by `@rip-lang/server`'s `serve()` middleware must opt in via `package.json`:
+
+```json
+{
+  "name": "@rip-lang/http",
+  "rip": { "browser": true }
+}
+```
+
+With this flag set, the `serve()` middleware walks the app's declared `@rip-lang/*` dependencies, compiles each package's entry, and stores its modules under the `_pkg/<pkg>/` bundle prefix (see [packages/app/AGENTS.md](packages/app/AGENTS.md)). Bare specifiers like `import { http } from '@rip-lang/http'` are rewritten at compile time to the bundle-relative path.
+
+Server-only packages (`@rip-lang/server`, `@rip-lang/db`, anything that touches `node:*`, `Bun.*`, or the filesystem) must **not** set this flag. If a browser-bound component file imports a package that lacks `rip.browser: true`, the bundler errors with *"package X is not browser-safe (declares no `rip.browser` entry)"* rather than producing a broken bundle.
+
+Rule of thumb: if every public API in the package works in a browser (uses only `fetch`, DOM, or pure JS), set `rip.browser: true`. Otherwise leave it off.
 
 ### @rip-lang/server
 

@@ -7,6 +7,9 @@
   "exports": {
     ".": "./http.rip"
   },
+  "rip": {
+    "browser": true
+  },
   "keywords": [
     "http",
     "client",

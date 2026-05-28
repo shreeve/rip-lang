@@ -107,7 +107,8 @@ try { unlinkSync('./docs/dist/_entry.js'); } catch {}
 // the canonical sources at packages/ui/browser/components/.
 const uiBundle = spawnSync('bun', [
   'scripts/bundle-app.js',
-  'packages/ui/browser',
+  'packages/ui/browser/components',
+  '--prefix', '_pkg/ui',
   '-o', 'docs/ui/bundle.json',
   '-t', 'Rip UI',
 ], { stdio: 'inherit' });

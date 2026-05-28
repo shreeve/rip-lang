@@ -161,15 +161,17 @@ async function processRipScripts() {
   let lastBundle;
 
   // Step 1: Collect data-src URLs from the runtime script tag
-  // When data-src is omitted, default to '/app' (auto-scanned bundle from serve middleware).
+  // When data-src is omitted, default to '/app' (auto-scanned bundle from
+  // serve middleware). The default is silent on failure — only explicit
+  // data-src URLs warn — so static / file:// pages aren't noisy.
   const runtimeTag = document.querySelector('script[src$="rip.min.js"], script[src$="rip.js"]');
   const dataSrc = runtimeTag?.getAttribute('data-src');
   if (dataSrc !== null && dataSrc !== undefined) {
     for (const url of dataSrc.trim().split(/\s+/)) {
       if (url) sources.push({ url });
     }
-  } else if (runtimeTag) {
-    sources.push({ url: '/app' });
+  } else if (runtimeTag && /^https?:$/.test(location.protocol)) {
+    sources.push({ url: '/app', optional: true });
   }
 
   // Step 2: Collect all <script type="text/rip"> tags (inline and external)
@@ -195,8 +197,11 @@ async function processRipScripts() {
         s.bundle = bundle;
       }
     }));
-    for (const r of results) {
-      if (r.status === 'rejected') console.warn('Rip: fetch failed:', r.reason.message);
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i];
+      if (r.status === 'rejected' && !sources[i].optional) {
+        console.warn('Rip: fetch failed:', r.reason.message);
+      }
     }
 
     // Separate bundles from individual sources
@@ -261,7 +266,8 @@ async function processRipScripts() {
       // No routing — expand bundles into individual sources, compile everything
       const expanded = [];
       for (const b of bundles) {
-        for (const [name, code] of Object.entries(b.components || {})) {
+        const mods = b.modules || b.components || {};
+        for (const [name, code] of Object.entries(mods)) {
           expanded.push({ code, url: name });
         }
         if (b.data) {
@@ -281,7 +287,8 @@ async function processRipScripts() {
       if (bundles.length > 0 && typeof globalThis.createComponents === 'function') {
         const sourceStore = globalThis.createComponents();
         for (const b of bundles) {
-          if (b.components) sourceStore.load(b.components);
+          const mods = b.modules || b.components;
+          if (mods) sourceStore.load(mods);
         }
         if (typeof window !== 'undefined') {
           if (!window.__RIP__) window.__RIP__ = {};

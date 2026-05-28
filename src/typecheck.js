@@ -29,9 +29,8 @@ import { buildLineMap } from './sourcemaps.js';
 // `import('<rel-to-stash>').__RipStash` into their `app.data` declaration.
 //
 // Discovery: walk up from each file to the nearest dir that contains an
-// `index.rip` AND a `rip.json` or `package.json` (the project anchor),
-// then look for `<root>/app/stash.rip`. Cached per-directory for the
-// process lifetime.
+// `index.rip` AND a `package.json` (the project anchor), then look for
+// `<root>/app/stash.rip`. Cached per-directory for the process lifetime.
 const entryFileCache = new Map(); // dir → entryFile|null
 const stashFileCache = new Map(); // root dir → stashFile|null
 
@@ -45,7 +44,7 @@ export function findEntryFile(filePath) {
       return cached;
     }
     visited.push(dir);
-    const hasAnchor = existsSync(resolve(dir, 'rip.json')) || existsSync(resolve(dir, 'package.json'));
+    const hasAnchor = existsSync(resolve(dir, 'package.json'));
     if (hasAnchor) {
       const entry = resolve(dir, 'index.rip');
       const result = existsSync(entry) ? entry : null;
@@ -623,8 +622,8 @@ export function cleanDiagnosticMessage(msg) {
 // ("optional, design scaffolding, not safety rails") and matches the
 // gradual-typing default of comparable systems (Sorbet's `# typed: false`,
 // mypy's permissive default, Hack's `partial`, TypeScript's own pre-strict
-// default). Projects opt UP to strict via rip.json's `strict: true`, which
-// implies noImplicitAny, strictNullChecks, and the rest of TS's strict
+// default). Projects opt UP to strict via package.json's `rip.strict: true`,
+// which implies noImplicitAny, strictNullChecks, and the rest of TS's strict
 // family. Do NOT pin those flags to `false` here — that would shadow the
 // strict-family inference when an opt-in caller passes `{ strict: true }`.
 export function createTypeCheckSettings(ts, overrides = {}) {
@@ -878,7 +877,7 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
   // that probe is a raw-source regex that fires on `schema :input` inside
   // heredoc string literals (e.g. test files), flooding the LSP with TS2304
   // false positives. Schema files still get their DTS via the schema pass.
-  const hasOwnTypes = !nocheck && (hasTypeAnnotations(source) || !!opts.strict);
+  const hasOwnTypes = !nocheck && (hasTypeAnnotations(source) || !!opts.checkAll);
   let importsTyped = false;
   if (!hasOwnTypes && !nocheck) {
     const ripImports = [...source.matchAll(/from\s+['"]([^'"]*\.rip)['"]/g)];
@@ -2634,19 +2633,18 @@ export function mapToSource(entry, offset) {
 
 // ── Project config ─────────────────────────────────────────────────
 
-// Read project config: rip.json in the given directory, or "rip" key in
-// the nearest ancestor package.json.  Returns { strict, exclude }.
+// Read project config from the "rip" key in the nearest ancestor
+// package.json. Returns { strict, checkAll, exclude, ... } merged from
+// `package.json#rip`, plus `_configDir` marking where it was found.
+//
+// `strict`   — TS strictness family (noImplicitAny, strictNullChecks, …)
+// `checkAll` — coverage policy: check every non-@nocheck file, not just
+//              annotated ones. Independent of `strict`.
 export function readProjectConfig(dir) {
   const config = {};
   try {
     let d = resolve(dir);
     while (true) {
-      const ripJsonPath = resolve(d, 'rip.json');
-      if (existsSync(ripJsonPath)) {
-        Object.assign(config, JSON.parse(readFileSync(ripJsonPath, 'utf8')));
-        config._configDir = d;
-        break;
-      }
       const pkgPath = resolve(d, 'package.json');
       if (existsSync(pkgPath)) {
         const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
@@ -2734,7 +2732,8 @@ export async function runCheck(targetDir, opts = {}) {
   }
 
   const ripConfig = readProjectConfig(rootPath);
-  const strict = ripConfig.strict === true;
+  const strict   = ripConfig.strict   === true;
+  const checkAll = ripConfig.checkAll === true;
   const excludeGlobs = Array.isArray(ripConfig.exclude) ? ripConfig.exclude : [];
   const excludePatterns = excludeGlobs.map(globToRegex);
 
@@ -2752,7 +2751,7 @@ export async function runCheck(targetDir, opts = {}) {
     const source = readFileSync(fp, 'utf8');
     sourcesByPath.set(fp, source);
     const nocheck = /^#\s*@nocheck\b/m.test(source.slice(0, NOCHECK_SCAN_LIMIT));
-    if (!nocheck && (hasTypeAnnotations(source) || strict)) typedFiles.add(fp);
+    if (!nocheck && (hasTypeAnnotations(source) || checkAll)) typedFiles.add(fp);
   }
 
   // Include imports of typed files (files imported BY typed files)
@@ -2788,7 +2787,7 @@ export async function runCheck(targetDir, opts = {}) {
   for (const fp of typedFiles) {
     try {
       const source = sourcesByPath.get(fp);
-      compiled.set(fp, compileForCheck(fp, source, new Compiler(), { strict }));
+      compiled.set(fp, compileForCheck(fp, source, new Compiler(), { checkAll }));
     } catch (e) {
       compileErrors++;
       const rel = relative(rootPath, fp);
@@ -2808,7 +2807,7 @@ export async function runCheck(targetDir, opts = {}) {
     if (compiled.has(stashFile) || !existsSync(stashFile)) continue;
     try {
       const src = sourcesByPath.get(stashFile) ?? readFileSync(stashFile, 'utf8');
-      const compiledStash = compileForCheck(stashFile, src, new Compiler(), { strict });
+      const compiledStash = compileForCheck(stashFile, src, new Compiler(), { checkAll });
       compiledStash._typeOnly = true; // skip diagnostics — only here for cross-module types
       compiled.set(stashFile, compiledStash);
     } catch (e) {
@@ -2856,6 +2855,43 @@ export async function runCheck(targetDir, opts = {}) {
   }
 
   const pkgSpecRe = /from\s+['"](@rip-lang\/[^'"]+)['"]/g;
+
+  // ── Undeclared-import diagnostic (`rip check` surface) ──
+  // Same check as the loader and bundler — surfaced earlier when typing is on.
+  // The project's own `package.json#name` is treated as a self-import (covers
+  // in-package fixtures/tests like `packages/server/bench/index.rip`).
+  let undeclaredCount = 0;
+  try {
+    const projPkgPath = resolve(rootPath, 'package.json');
+    if (existsSync(projPkgPath)) {
+      const projPkg = JSON.parse(readFileSync(projPkgPath, 'utf8'));
+      const declared = new Set([
+        ...Object.keys(projPkg.dependencies         || {}),
+        ...Object.keys(projPkg.devDependencies      || {}),
+        ...Object.keys(projPkg.peerDependencies     || {}),
+        ...Object.keys(projPkg.optionalDependencies || {}),
+      ]);
+      const selfName = projPkg.name || null;
+      const importRe = /(?:from|import)\s+['"](@rip-lang\/[^'"\/]+)(?:\/[^'"]*)?['"]/g;
+      const reported = new Set();
+      for (const [fp, entry] of compiled) {
+        if (entry._typeOnly) continue;
+        for (const m of entry.source.matchAll(importRe)) {
+          const pkgKey = m[1];
+          if (pkgKey === selfName) continue;
+          if (declared.has(pkgKey)) continue;
+          const key = `${fp}::${pkgKey}`;
+          if (reported.has(key)) continue;
+          reported.add(key);
+          const rel = relative(rootPath, fp);
+          console.error(`${red('error')} ${cyan(rel)}: import of '${pkgKey}' is not declared in package.json. Run \`bun add ${pkgKey}\` (or use \`workspace:*\` inside this monorepo).`);
+          undeclaredCount++;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn(`[rip] undeclared-import check failed: ${e.message}`);
+  }
   const pendingPkgFiles = new Set();
   for (const [, entry] of compiled) {
     for (const m of entry.source.matchAll(pkgSpecRe)) {
@@ -2905,7 +2941,7 @@ export async function runCheck(targetDir, opts = {}) {
 
   // Create TypeScript language service
   //
-  // Project-scope `strict` (rip.json / package.json `rip.strict: true`)
+  // Project-scope `strict` (package.json `rip.strict: true`)
   // opts the project UP to TypeScript's `strict` family, which implies
   // noImplicitAny, strictNullChecks, strictFunctionTypes, and friends.
   // With strict on: `T` excludes null/undefined, untyped params error,
@@ -3400,7 +3436,7 @@ export async function runCheck(targetDir, opts = {}) {
   const totalFound = totalErrors + totalWarnings;
   if (totalFound === 0) {
     printSourceMapAudit();
-    return compileErrors > 0 ? 1 : 0;
+    return compileErrors > 0 || undeclaredCount > 0 ? 1 : 0;
   }
 
   const s = totalFound === 1 ? '' : 's';
@@ -3423,7 +3459,7 @@ export async function runCheck(targetDir, opts = {}) {
   }
 
   printSourceMapAudit();
-  return totalErrors > 0 ? 1 : 0;
+  return totalErrors > 0 || undeclaredCount > 0 ? 1 : 0;
 
   function printSourceMapAudit() {
     if (!opts.sourceMapAudit || auditResults.length === 0) return;
@@ -3647,7 +3683,7 @@ export async function runAudit(targetDir) {
       // emitted into the DTS — without strict, partially-annotated
       // exports could fall back to inferred types that look cleaner
       // than they really are.
-      compiled.set(fp, compileForCheck(fp, source, new Compiler(), { strict: true }));
+      compiled.set(fp, compileForCheck(fp, source, new Compiler(), { checkAll: true }));
       for (const m of source.matchAll(/from\s+['"]([^'"]+)['"]/g)) {
         const spec = m[1];
         if (spec.endsWith('.rip')) {

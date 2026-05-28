@@ -1,0 +1,11 @@
+{
+  "name": "@rip-lang/example-form",
+  "private": true,
+  "dependencies": {
+    "@rip-lang/server": "workspace:*"
+  },
+  "rip": {
+    "strict": true,
+    "checkAll": true
+  }
+}

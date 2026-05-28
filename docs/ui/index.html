@@ -103,7 +103,7 @@ export WidgetGallery = component
     return unless entry
     sourceName = entry.name
     sourceLines = entry.lines
-    src = window.__RIP__?.components?.read("components/#{id}.rip")
+    src = window.__RIP__?.components?.read("_pkg/ui/#{id}.rip")
     return unless src
     sourceCode = src
   _closeSource: -> sourceCode = null

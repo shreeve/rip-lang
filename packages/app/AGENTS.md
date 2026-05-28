@@ -24,12 +24,21 @@ All exports are pure user-land Rip code — `index.rip` does not extend
 the compiler. It uses the language's primitives (`:=`, `~=`, `~>`,
 `component`, `render`) the same way any user's app would.
 
-**Router note — `routes/` vs. `components/`.** `createRouter` reads page
-components from the bundle key `components/...`, but on disk these files
-live in `<appDir>/routes/`. The `serve()` middleware in
-[packages/server/middleware.rip](../server/middleware.rip) mounts disk
-`routes/*.rip` under the `components/` prefix at bundle time. Both
-names are correct at their layer (disk vs. bundle).
+**Bundle layout.** The browser bundle stores every `.rip`
+module under one of four origin-prefixed keys:
+
+| Prefix       | Origin                                                             |
+| ------------ | ------------------------------------------------------------------ |
+| `_route/`    | Route pages from `<appDir>/routes/` (consumed by `createRouter`)   |
+| `_app/`      | Auto-scanned `.rip` files from `<appDir>` itself                   |
+| `_lib/<dir>/`| Author-declared extra bundle directories                           |
+| `_pkg/<pkg>/`| Auto-discovered `@rip-lang/*` packages with `rip.browser: true`    |
+
+The `serve()` middleware in
+[packages/server/middleware.rip](../server/middleware.rip) decides where
+each on-disk file lands. `resolveStorePath` in `index.rip` searches the
+prefixes in `_pkg → _lib → _app → _route` order so package code shadows
+local code on collisions.
 
 ## Where it sits in the stack
 
