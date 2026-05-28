@@ -1,4 +1,4 @@
-import { ApiErrors, parseApiError } from '../api-client.rip'
+import { api, ApiErrors, parseApiError } from '../api-client.rip'
 import { Button } from '../components/button.rip'
 import { title } from '../config.rip'
 
@@ -12,20 +12,16 @@ export Cart = component
   placeOrder: ->
     status = 'loading'
     try
-      res = fetch!('/api/orders', {
-        method: 'POST'
-        headers: { 'Content-Type': 'application/json' }
-        body: JSON.stringify({ items: cart.items.map((i) -> { productId: i.id, quantity: i.quantity }) })
+      api.post!('orders', {
+        json: {
+          items: cart.items.map((i) -> { productId: i.id, quantity: i.quantity })
+        }
       })
-      unless res.ok
-        errors = parseApiError!(res)
-        status = 'idle'
-        return
       cart.clear()
       errors = {}
       status = 'success'
     catch err
-      errors = { form: 'Network error' }
+      errors = parseApiError!(err)
       status = 'idle'
 
   render

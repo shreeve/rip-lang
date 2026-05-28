@@ -1,5 +1,5 @@
 import { Order } from '../../types.rip'
-import { ApiErrors } from '../api-client.rip'
+import { api, ApiErrors, parseApiError } from '../api-client.rip'
 import { Button } from '../components/button.rip'
 import { title } from '../config.rip'
 
@@ -11,12 +11,9 @@ export Orders = component
   mounted: ->
     document.title = title('Orders')
     try
-      res = fetch!('/api/orders')
-      unless res.ok
-        throw new Error('Failed')
-      orders = res.json!()
+      orders = api.get!('orders').json!()
     catch err
-      errors = { form: 'Failed to load orders' }
+      errors = parseApiError!(err)
     finally
       loaded = true
 

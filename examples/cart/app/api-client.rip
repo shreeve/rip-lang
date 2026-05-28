@@ -1,11 +1,13 @@
+import { http, HTTPError } from '@rip-lang/http'
+
+export api = http.create({ prefixUrl: '/api', retry: 0 })
+
 export type ApiErrors<K extends string = string> =
   form?: string
   field?: Partial<Record<K, string>>
 
-export def parseApiError(res:: Response):: Promise<ApiErrors>
-  try
-    body = res.json!()
-    if body?.errors?.form or body?.errors?.field
-      return body.errors
-  catch err
+export def parseApiError(err:: unknown):: Promise<ApiErrors>
+  return { form: 'Network error' } unless err instanceof HTTPError
+  body:: { errors?: ApiErrors } | null = try err.response.json!() catch then null
+  return body.errors if body?.errors?.form or body?.errors?.field
   return { form: 'Something went wrong' }

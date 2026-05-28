@@ -1,5 +1,5 @@
 import { User } from '../../types.rip'
-import { ApiErrors, parseApiError } from '../api-client.rip'
+import { api, ApiErrors, parseApiError } from '../api-client.rip'
 import { Button } from '../components/button.rip'
 import { title } from '../config.rip'
 
@@ -23,21 +23,12 @@ export Profile = component
     e.preventDefault()
     status = 'loading'
     try
-      res = fetch!('/api/user', {
-        method: 'PATCH'
-        headers: { 'Content-Type': 'application/json' }
-        body: JSON.stringify(form)
-      })
-      unless res.ok
-        errors = parseApiError!(res)
-        status = 'idle'
-        return
-      @app.data.user = res.json!()
+      @app.data.user = api.patch!('user', { json: form }).json!()
       status = 'success'
       errors = {}
     catch err
+      errors = parseApiError!(err)
       status = 'idle'
-      errors = { form: 'Network error' }
 
   render
     h1 "Profile"
