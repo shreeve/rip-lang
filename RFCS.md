@@ -8,12 +8,12 @@ Design proposals under discussion. Grouped by domain.
 - [x] [RFC 2 — Rip packages exposing types to typed Rip apps](#rfc-2-rip-packages-exposing-types-to-typed-rip-apps)
 - [x] [RFC 3 — App framework types for ambient globals](#rfc-3-app-framework-types-for-ambient-globals)
 - [x] [RFC 4 — Typed `this` shape for components and server handlers](#rfc-4-typed-this-shape-for-components-and-server-handlers)
-- [ ] [RFC 5 — Typed routes — `href` typing, typed `router.push`, per-route `@params`](#rfc-5-typed-routes--href-typing-typed-routerpush-per-route-params)
+- [x] [RFC 5 — Typed routes — `href` typing, typed `router.push`, per-route `@params`](#rfc-5-typed-routes--href-typing-typed-routerpush-per-route-params)
 
 ## Domain B — Runtime delivery & ergonomics
 
 - [x] [RFC 6 — Trim and align the `@rip-lang/app` global surface](#rfc-6-trim-and-align-the-rip-langapp-global-surface)
-- [ ] [RFC 7 — Routing ergonomics — active link, scroll, and the `data-router-ignore` opt-out](#rfc-7-routing-ergonomics--active-link-scroll-and-the-data-router-ignore-opt-out)
+- [x] [RFC 7 — Routing ergonomics — active link, scroll, and the `data-router-ignore` opt-out](#rfc-7-routing-ergonomics--active-link-scroll-and-the-data-router-ignore-opt-out)
 
 ## Domain C — Compiler / reactivity
 
@@ -327,6 +327,8 @@ Depends on RFCs 1 (annotation syntax), 2 (DTS pipeline), 3 (sources `__RipApp`, 
 
 ## RFC 5: Typed routes — `href` typing, typed `router.push`, per-route `@params`
 
+> **Status: Implemented.**
+
 The runtime-side ergonomics from RFC 7 (active link, scroll restoration) make the router pleasant. RFC 5 closes the type-system side: `<a href: "/crat">` should be a compile error in a typed app, not a 404 at runtime; `@router.push '/cart'` should validate against the actual route tree; `@params.id` in `routes/users/[id].rip` should type as `string` rather than `string | undefined`.
 
 Untyped apps see no change from this RFC. RFC 5 is purely a `rip check` upgrade.
@@ -483,6 +485,8 @@ Independent of every other RFC. Composes with RFC 3 (the renamed exports flow th
 
 
 ## RFC 7: Routing ergonomics — active link, scroll, and the `data-router-ignore` opt-out
+
+> **Status: Implemented.**
 
 Rip's app framework today gives you file-based routes and document-level `<a>` interception. Two ergonomic gaps that every modern SPA router covers are still open: **highlighting the active link** (so the current page can be styled distinctly in a nav bar) and **scroll position management on navigation** (the back button currently leaves you wherever you were on the new page, which is wrong almost everywhere). A third item — the existing `data-router-ignore` attribute — already works at runtime but isn't in the docs. RFC 7 covers all three, plus the small framing of why programmatic navigation needs no new API.
 
