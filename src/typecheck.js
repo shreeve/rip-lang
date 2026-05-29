@@ -2847,6 +2847,90 @@ export function mapToSourcePos(entry, offset) {
   return { line: srcLine, col: srcCol };
 }
 
+// Count top-level commas in `s` (depth 0 w.r.t. ()/[]/{}). Used to map a
+// cursor onto the Nth argument / Nth property when retargeting completion
+// offsets into object-literal call arguments.
+function countTopLevelCommas(s) {
+  let depth = 0, n = 0;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (ch === '(' || ch === '[' || ch === '{') depth++;
+    else if (ch === ')' || ch === ']' || ch === '}') depth--;
+    else if (ch === ',' && depth === 0) n++;
+  }
+  return n;
+}
+
+// Completion-offset fixup for inline object-literal call arguments, e.g.
+// `@router.push('/', { ▮ })`. At a non-identifier cursor (empty slot, after
+// a comma) the word-anchored `srcToOffset` has nothing to grab and lands on
+// the call name, so TS returns the receiver's *members* (push, replace, …)
+// instead of the object's contextually-typed *properties* (noScroll, …).
+//
+// Given the gen offset `srcToOffset` produced (which sits at/near the call
+// name on the gen line), this walks the gen call to the same argument index
+// and property slot the source cursor occupies and returns the corrected
+// absolute offset. Returns the original offset unchanged when the cursor
+// isn't in this situation, so callers can apply it unconditionally.
+export function retargetObjectArgOffset(entry, srcLine, srcCol, genOffset) {
+  if (!entry || genOffset == null || !srcLine) return genOffset;
+  const before = srcLine.slice(0, srcCol);
+  // On an identifier? Word-anchoring already mapped it precisely — leave it.
+  if (/\w$/.test(before) || /^\w/.test(srcLine.slice(srcCol))) return genOffset;
+
+  // Walk back to the enclosing object-literal `{`, tracking bracket depth.
+  let depth = 0, objOpen = -1;
+  for (let i = srcCol - 1; i >= 0; i--) {
+    const ch = before[i];
+    if (ch === '}' || ch === ')' || ch === ']') depth++;
+    else if (ch === '{') { if (depth === 0) { objOpen = i; break; } depth--; }
+    else if (ch === '(' || ch === '[') { if (depth === 0) return genOffset; depth--; }
+  }
+  if (objOpen < 0) return genOffset;
+  // The object must be a call argument: a `name(` must precede it with only
+  // argument text (no nested braces) between the `(` and this `{`.
+  const head = before.slice(0, objOpen);
+  const callM = head.match(/\.\s*\w+\s*\(([^(){}]*)$/);
+  if (!callM) return genOffset;
+  const argIndex = countTopLevelCommas(callM[1]);                 // object is this call-arg
+  const propSlot = countTopLevelCommas(before.slice(objOpen + 1)); // commas before cursor in object
+
+  // Gen side: locate the call paren near the mapped offset, then walk to the
+  // same argument and the same property slot inside its object literal.
+  const tsText = entry.tsContent;
+  const lc = offsetToLineCol(tsText, genOffset);
+  const genLine = tsText.split('\n')[lc.line];
+  if (genLine == null) return genOffset;
+  const callRe = /\.\s*\w+\s*\(/g;
+  callRe.lastIndex = Math.max(0, lc.col - 4);
+  const gm = callRe.exec(genLine);
+  if (!gm) return genOffset;
+  let i = gm.index + gm[0].length;  // just inside the call's `(`
+  let d = 1, args = 0;
+  // Advance to the start of argument `argIndex`.
+  while (i < genLine.length && args < argIndex) {
+    const ch = genLine[i];
+    if (ch === '(' || ch === '[' || ch === '{') d++;
+    else if (ch === ')' || ch === ']' || ch === '}') { d--; if (d === 0) return genOffset; }
+    else if (ch === ',' && d === 1) args++;
+    i++;
+  }
+  while (i < genLine.length && /\s/.test(genLine[i])) i++;
+  if (genLine[i] !== '{') return genOffset;                       // arg isn't an object literal
+  i++;                                                            // step inside the object
+  // Skip `propSlot` top-level properties within the object.
+  let pd = 1, props = 0;
+  while (i < genLine.length && props < propSlot) {
+    const ch = genLine[i];
+    if (ch === '(' || ch === '[' || ch === '{') pd++;
+    else if (ch === ')' || ch === ']' || ch === '}') { pd--; if (pd === 0) break; }
+    else if (ch === ',' && pd === 1) props++;
+    i++;
+  }
+  while (i < genLine.length && /\s/.test(genLine[i])) i++;
+  return genOffset - lc.col + i;
+}
+
 // Map a Rip source (line, col) to a TypeScript virtual file byte offset.
 // This is the forward direction: source → generated (used for hover, definition, etc.)
 //

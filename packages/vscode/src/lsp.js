@@ -2464,8 +2464,19 @@ connection.onCompletion((params) => {
     }
   }
 
-  const offset = srcToOffset(fp, params.position.line, params.position.character);
+  let offset = srcToOffset(fp, params.position.line, params.position.character);
   if (offset === undefined) return [];
+
+  // Retarget completions requested inside an inline object-literal call
+  // argument (e.g. `@router.push('/', { ▮ })`). The word-anchored mapper
+  // lands on the call name there, so TS would offer the receiver's members
+  // (push, replace, …) instead of the object's contextually-typed
+  // properties (noScroll, …). No-op outside that context.
+  if (tc.retargetObjectArgOffset && doc) {
+    const c2 = compiled.get(fp);
+    const lineText = (doc.getText().split('\n')[params.position.line]) || '';
+    if (c2) offset = tc.retargetObjectArgOffset(c2, lineText, params.position.character, offset);
+  }
 
   try {
     patchTypes(svc);
