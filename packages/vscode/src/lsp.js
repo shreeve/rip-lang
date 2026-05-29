@@ -195,6 +195,9 @@ connection.onDidChangeWatchedFiles((params) => {
   for (const change of (params.changes || [])) {
     const fp = uriToPath(change.uri);
     if (fp.endsWith('.rip')) {
+      // Route file create/delete is handled by the native fs.watch
+      // installed in indexWorkspaceRipFiles — VS Code's watcher delivery
+      // is too slow (2–10s on macOS) to be useful for that case.
       if (change.type === 3 /* Deleted */) {
         compiled.delete(fp);
         lastDiagnostics.delete(fp);
@@ -230,6 +233,49 @@ connection.onDidChangeWatchedFiles((params) => {
     for (const fp of compiled.keys()) publishDiagnostics(fp);
   }
 });
+
+// Coalesce route refreshes — a single file rename fires Delete + Create,
+// and watcher debouncing in VS Code can deliver them in separate batches.
+let _routeRefreshTimer = null;
+const _routeRefreshDirs = new Set();
+function scheduleRouteRefresh(dirs) {
+  for (const d of dirs) _routeRefreshDirs.add(d);
+  if (_routeRefreshTimer) return;
+  _routeRefreshTimer = setTimeout(() => {
+    _routeRefreshTimer = null;
+    const dirs = new Set(_routeRefreshDirs);
+    _routeRefreshDirs.clear();
+    // Only refresh files with an open editor that actually reference
+    // routes (`href:` on an anchor, or `router.push/replace`). Files
+    // without route references can't change their diagnostics from a
+    // route rename, and recompile+TS-diagnostics each cost ~400ms.
+    const ROUTE_REF_RE = /\bhref\s*:|\brouter\s*\.\s*(?:push|replace)\b/;
+    const affected = [];
+    for (const fp of compiled.keys()) {
+      const doc = documents.get(pathToUri(fp));
+      if (!doc) continue;
+      const dir = tc.findRoutesDir?.(fp);
+      if (!dir || !dirs.has(dir)) continue;
+      if (!ROUTE_REF_RE.test(doc.getText())) continue;
+      affected.push(fp);
+    }
+    // Put the most-recently-edited file first so the user sees its
+    // diagnostic update before background files.
+    affected.sort((a, b) => (lastEditAt.get(b) || 0) - (lastEditAt.get(a) || 0));
+    connection.console.log(`[rip] route refresh fired: ${affected.length} route-using file(s) in ${dirs.size} project(s)`);
+    for (const fp of affected) {
+      try {
+        const doc = documents.get(pathToUri(fp));
+        compileRip(fp, doc.getText());
+        publishDiagnostics(fp);
+      } catch {}
+    }
+  }, 100);
+}
+
+// Tracks the last edit timestamp per file so route refreshes can publish
+// the most-recently-edited file first. Updated by onDidChangeContent.
+const lastEditAt = new Map();
 
 // Rebuild project-root + workspace-package info by re-walking the workspace.
 // Only inspects directory entries (no .rip indexing), so it's cheap.
@@ -414,7 +460,50 @@ function indexWorkspaceRipFiles() {
     }
   })(rootPath);
   connection.console.log(`[rip] discovered ${count} .rip file(s), ${projectRoots.size} project(s), ${bareSpecForEntry.size} package entrypoint(s) in ${Date.now() - start}ms`);
+  // Install native fs.watch on every discovered routes dir. VS Code's
+  // workspace/didChangeWatchedFiles can take 2–10s on macOS to deliver
+  // a rename — FSEvents via fs.watch delivers in <100ms.
+  for (const fp of discoveredRipFiles) {
+    if (/[/\\]app[/\\]routes[/\\]/.test(fp)) {
+      const dir = tc.findRoutesDir?.(fp);
+      if (dir) watchRoutesDir(dir);
+    }
+  }
 }
+
+// Native fs.watch on each known routes dir. Keyed by dir so we install
+// at most one watcher per project even if many files map to it.
+const routesWatchers = new Map();
+function watchRoutesDir(dir) {
+  if (routesWatchers.has(dir)) return;
+  try {
+    const watcher = fs.watch(dir, { recursive: true }, (eventType, filename) => {
+      if (!filename || !filename.endsWith('.rip')) return;
+      const full = path.join(dir, filename);
+      // Mirror the bookkeeping that onDidChangeWatchedFiles does for
+      // route file create/delete, then schedule the refresh. We don't
+      // know create vs delete from fs.watch — checking existence is
+      // cheap and reliable.
+      const exists = fs.existsSync(full);
+      if (exists) {
+        discoveredRipFiles.add(full);
+      } else {
+        compiled.delete(full);
+        lastDiagnostics.delete(full);
+        discoveredRipFiles.delete(full);
+        removeFromIndex(full);
+        removeFromComponentRegistry(full);
+        connection.sendDiagnostics({ uri: pathToUri(full), diagnostics: [] });
+      }
+      tc.invalidateRoutesCache?.();
+      connection.console.log(`[rip] fs.watch route change: ${path.relative(rootPath, full)} (${exists ? 'create/modify' : 'delete'})`);
+      scheduleRouteRefresh(new Set([dir]));
+    });
+    watcher.on('error', () => { routesWatchers.delete(dir); });
+    routesWatchers.set(dir, watcher);
+  } catch {}
+}
+
 
 // Lazily compile a .rip file for the TS Program without publishing diagnostics
 // (used when TS asks for a snapshot of a file the user isn't editing).
@@ -426,13 +515,17 @@ connection.onDidChangeConfiguration(async () => {
 
 documents.onDidChangeContent(({ document }) => {
   const fp = uriToPath(document.uri);
-  if (fp.endsWith('.rip') && compiler && tc) compileRip(fp, document.getText());
+  if (fp.endsWith('.rip') && compiler && tc) {
+    lastEditAt.set(fp, Date.now());
+    compileRip(fp, document.getText());
+  }
 });
 
 documents.onDidClose(({ document }) => {
   const fp = uriToPath(document.uri);
   compiled.delete(fp);
   lastDiagnostics.delete(fp);
+  lastEditAt.delete(fp);
   connection.sendDiagnostics({ uri: document.uri, diagnostics: [] });
 });
 
