@@ -195,6 +195,9 @@ connection.onDidChangeWatchedFiles((params) => {
   for (const change of (params.changes || [])) {
     const fp = uriToPath(change.uri);
     if (fp.endsWith('.rip')) {
+      // Route file create/delete is handled by the native fs.watch
+      // installed in indexWorkspaceRipFiles — VS Code's watcher delivery
+      // is too slow (2–10s on macOS) to be useful for that case.
       if (change.type === 3 /* Deleted */) {
         compiled.delete(fp);
         lastDiagnostics.delete(fp);
@@ -230,6 +233,49 @@ connection.onDidChangeWatchedFiles((params) => {
     for (const fp of compiled.keys()) publishDiagnostics(fp);
   }
 });
+
+// Coalesce route refreshes — a single file rename fires Delete + Create,
+// and watcher debouncing in VS Code can deliver them in separate batches.
+let _routeRefreshTimer = null;
+const _routeRefreshDirs = new Set();
+function scheduleRouteRefresh(dirs) {
+  for (const d of dirs) _routeRefreshDirs.add(d);
+  if (_routeRefreshTimer) return;
+  _routeRefreshTimer = setTimeout(() => {
+    _routeRefreshTimer = null;
+    const dirs = new Set(_routeRefreshDirs);
+    _routeRefreshDirs.clear();
+    // Only refresh files with an open editor that actually reference
+    // routes (`href:` on an anchor, or `router.push/replace`). Files
+    // without route references can't change their diagnostics from a
+    // route rename, and recompile+TS-diagnostics each cost ~400ms.
+    const ROUTE_REF_RE = /\bhref\s*:|\brouter\s*\.\s*(?:push|replace)\b/;
+    const affected = [];
+    for (const fp of compiled.keys()) {
+      const doc = documents.get(pathToUri(fp));
+      if (!doc) continue;
+      const dir = tc.findRoutesDir?.(fp);
+      if (!dir || !dirs.has(dir)) continue;
+      if (!ROUTE_REF_RE.test(doc.getText())) continue;
+      affected.push(fp);
+    }
+    // Put the most-recently-edited file first so the user sees its
+    // diagnostic update before background files.
+    affected.sort((a, b) => (lastEditAt.get(b) || 0) - (lastEditAt.get(a) || 0));
+    connection.console.log(`[rip] route refresh fired: ${affected.length} route-using file(s) in ${dirs.size} project(s)`);
+    for (const fp of affected) {
+      try {
+        const doc = documents.get(pathToUri(fp));
+        compileRip(fp, doc.getText());
+        publishDiagnostics(fp);
+      } catch {}
+    }
+  }, 100);
+}
+
+// Tracks the last edit timestamp per file so route refreshes can publish
+// the most-recently-edited file first. Updated by onDidChangeContent.
+const lastEditAt = new Map();
 
 // Rebuild project-root + workspace-package info by re-walking the workspace.
 // Only inspects directory entries (no .rip indexing), so it's cheap.
@@ -414,7 +460,50 @@ function indexWorkspaceRipFiles() {
     }
   })(rootPath);
   connection.console.log(`[rip] discovered ${count} .rip file(s), ${projectRoots.size} project(s), ${bareSpecForEntry.size} package entrypoint(s) in ${Date.now() - start}ms`);
+  // Install native fs.watch on every discovered routes dir. VS Code's
+  // workspace/didChangeWatchedFiles can take 2–10s on macOS to deliver
+  // a rename — FSEvents via fs.watch delivers in <100ms.
+  for (const fp of discoveredRipFiles) {
+    if (/[/\\]app[/\\]routes[/\\]/.test(fp)) {
+      const dir = tc.findRoutesDir?.(fp);
+      if (dir) watchRoutesDir(dir);
+    }
+  }
 }
+
+// Native fs.watch on each known routes dir. Keyed by dir so we install
+// at most one watcher per project even if many files map to it.
+const routesWatchers = new Map();
+function watchRoutesDir(dir) {
+  if (routesWatchers.has(dir)) return;
+  try {
+    const watcher = fs.watch(dir, { recursive: true }, (eventType, filename) => {
+      if (!filename || !filename.endsWith('.rip')) return;
+      const full = path.join(dir, filename);
+      // Mirror the bookkeeping that onDidChangeWatchedFiles does for
+      // route file create/delete, then schedule the refresh. We don't
+      // know create vs delete from fs.watch — checking existence is
+      // cheap and reliable.
+      const exists = fs.existsSync(full);
+      if (exists) {
+        discoveredRipFiles.add(full);
+      } else {
+        compiled.delete(full);
+        lastDiagnostics.delete(full);
+        discoveredRipFiles.delete(full);
+        removeFromIndex(full);
+        removeFromComponentRegistry(full);
+        connection.sendDiagnostics({ uri: pathToUri(full), diagnostics: [] });
+      }
+      tc.invalidateRoutesCache?.();
+      connection.console.log(`[rip] fs.watch route change: ${path.relative(rootPath, full)} (${exists ? 'create/modify' : 'delete'})`);
+      scheduleRouteRefresh(new Set([dir]));
+    });
+    watcher.on('error', () => { routesWatchers.delete(dir); });
+    routesWatchers.set(dir, watcher);
+  } catch {}
+}
+
 
 // Lazily compile a .rip file for the TS Program without publishing diagnostics
 // (used when TS asks for a snapshot of a file the user isn't editing).
@@ -426,13 +515,17 @@ connection.onDidChangeConfiguration(async () => {
 
 documents.onDidChangeContent(({ document }) => {
   const fp = uriToPath(document.uri);
-  if (fp.endsWith('.rip') && compiler && tc) compileRip(fp, document.getText());
+  if (fp.endsWith('.rip') && compiler && tc) {
+    lastEditAt.set(fp, Date.now());
+    compileRip(fp, document.getText());
+  }
 });
 
 documents.onDidClose(({ document }) => {
   const fp = uriToPath(document.uri);
   compiled.delete(fp);
   lastDiagnostics.delete(fp);
+  lastEditAt.delete(fp);
   connection.sendDiagnostics({ uri: document.uri, diagnostics: [] });
 });
 
@@ -743,14 +836,26 @@ function publishDiagnostics(filePath) {
           endPos.line = adj.line; endPos.character = adj.col + adj.len;
         }
 
-        const message = tc.cleanDiagnosticMessage(ts.flattenDiagnosticMessageText(d.messageText, '\n'));
+        const rawMessage = tc.cleanDiagnosticMessage(ts.flattenDiagnosticMessageText(d.messageText, '\n'));
+        const { code, message } = tc.unifyRouteDiagnostic(d.code, rawMessage, c, d.start, filePath);
+
+        // Snap route diagnostics to the meaningful token (`href` / `push`).
+        if (c.source && tc.locateRouteDiagnosticSpan) {
+          const srcLineText = tc.getLineText(c.source, startPos.line);
+          const routeSpan = tc.locateRouteDiagnosticSpan(c, d.start, srcLineText);
+          if (routeSpan) {
+            startPos.character = routeSpan.col;
+            endPos.line = startPos.line;
+            endPos.character = routeSpan.col + routeSpan.len;
+          }
+        }
         const tags = [];
         if (d.reportsUnnecessary) tags.push(1);
         if (d.reportsDeprecated) tags.push(2);
         diagnostics.push({
           range: { start: startPos, end: endPos },
           severity: d.category === 1 ? 1 : d.category === 0 ? 2 : d.category === 2 ? 4 : 3,
-          code: d.code,
+          code,
           source: 'rip',
           message,
           tags: tags.length > 0 ? tags : undefined,
@@ -995,7 +1100,6 @@ function genToSrcPos(filePath, offset) {
   return { line: pos.line, character: pos.col };
 }
 
-function lineColToOffset(t, line, col) { return tc.lineColToOffset(t, line, col); }
 function offsetToLineCol(t, o) { const p = tc.offsetToLineCol(t, o); return { line: p.line, character: p.col }; }
 function uriToPath(u) { try { return decodeURIComponent(new URL(u).pathname); } catch { return u; } }
 function pathToUri(p) { return 'file://' + p.replace(/#/g, '%23').replace(/%(?![0-9A-Fa-f]{2})/g, '%25').replace(/ /g, '%20'); }
@@ -1123,15 +1227,48 @@ function extractUnionValues(typeStr) {
 
 // Build a completion item for a union value (string literal, boolean, number).
 // String literals are inserted with their quotes; non-string values (true, 42)
-// are inserted bare so they keep their JS type.
-function unionValueCompletion(v, i, inQuotes) {
+// are inserted bare so they keep their JS type. When `range` is provided, the
+// item uses a textEdit so picking the suggestion REPLACES the current string
+// contents — otherwise typing `"/` and picking `/cart` would append, giving
+// `"//cart"` (VS Code's default word-boundary doesn't include `/`).
+function unionValueCompletion(v, i, inQuotes, range) {
   const isStr = v.startsWith('"') || v.startsWith("'");
   const bare = isStr ? v.slice(1, -1) : v;
-  return {
+  const newText = inQuotes ? bare : (isStr ? v : bare);
+  const item = {
     label: bare,
-    kind: 12,
-    insertText: inQuotes ? bare : (isStr ? v : bare),
+    kind: 21,
     sortText: String(i).padStart(3, '0'),
+  };
+  if (range) {
+    item.textEdit = { range, newText };
+    item.filterText = bare;
+  } else {
+    item.insertText = newText;
+  }
+  return item;
+}
+
+// Locate the string-literal content range around a cursor position on a line.
+// Returns an LSP Range covering everything between the opening quote and the
+// closing quote (or end-of-line if unterminated). Used so union-value
+// completions inside quotes REPLACE the current text instead of inserting at
+// the cursor.
+function stringContentRange(line, lineNumber, col) {
+  let start = -1, quote = null;
+  for (let i = col - 1; i >= 0; i--) {
+    const c = line[i];
+    if (c === '"' || c === "'") { start = i; quote = c; break; }
+  }
+  if (start < 0) return null;
+  let end = -1;
+  for (let i = col; i < line.length; i++) {
+    if (line[i] === quote) { end = i; break; }
+  }
+  if (end < 0) end = line.length;
+  return {
+    start: { line: lineNumber, character: start + 1 },
+    end:   { line: lineNumber, character: end },
   };
 }
 
@@ -2150,6 +2287,51 @@ connection.onCompletion((params) => {
           return attrItems;
         }
         if (ctx.wantValues && ctx.currentProp) {
+          // Route completions for `<a href: "|">` — surface every route in
+          // the project, with dynamic segments inserted as tab-stop snippets
+          // (e.g. `/orders/${1:orderId}`). TanStack-router-style.
+          if (ctx.currentProp === 'href' && ctx.htmlTag === 'a' && tc.findRoutesDir && tc.walkRoutesDir) {
+            const routesDir = tc.findRoutesDir(fp);
+            if (routesDir) {
+              const { entries } = tc.walkRoutesDir(routesDir);
+              if (entries.length > 0) {
+                const ch = srcLine[params.position.character] || '';
+                const prevCh = params.position.character > 0 ? srcLine[params.position.character - 1] : '';
+                const inQuotes = (prevCh === '"' || prevCh === "'") || (ch === '"' || ch === "'");
+                const range = inQuotes ? stringContentRange(srcLine, params.position.line, params.position.character) : null;
+                return entries
+                  .filter(e => !e.dynamic.some(d => d.catchAll))
+                  .map((e, i) => {
+                    let tab = 1;
+                    const segs = e.rel.replace(/\.rip$/, '').split('/').filter(s => s && s !== 'index');
+                    const labelSegs = segs.map(s => {
+                      const m = s.match(/^\[(\w+)\]$/);
+                      return m ? '$' + m[1] : s;
+                    });
+                    const label = '/' + labelSegs.join('/');
+                    const snippetSegs = segs.map(s => {
+                      const m = s.match(/^\[(\w+)\]$/);
+                      return m ? '${' + (tab++) + ':' + m[1] + '}' : s;
+                    });
+                    const snippet = '/' + snippetSegs.join('/');
+                    const item = {
+                      label: label || '/',
+                      kind: 14, // Keyword (gets a distinct icon)
+                      sortText: String(i).padStart(3, '0'),
+                      insertTextFormat: 2, // Snippet
+                    };
+                    const text = snippet || '/';
+                    if (range) {
+                      item.textEdit = { range, newText: text };
+                      item.filterText = label || '/';
+                    } else {
+                      item.insertText = text;
+                    }
+                    return item;
+                  });
+              }
+            }
+          }
           const prop = allProps.find(p => p.name === ctx.currentProp);
           if (prop) {
             const values = extractUnionValues(prop.type);
@@ -2157,7 +2339,8 @@ connection.onCompletion((params) => {
               const ch = srcLine[params.position.character] || '';
               const prevCh = params.position.character > 0 ? srcLine[params.position.character - 1] : '';
               const inQuotes = (prevCh === '"' || prevCh === "'") || (ch === '"' || ch === "'");
-              return values.map((v, i) => unionValueCompletion(v, i, inQuotes));
+              const range = inQuotes ? stringContentRange(srcLine, params.position.line, params.position.character) : null;
+              return values.map((v, i) => unionValueCompletion(v, i, inQuotes, range));
             }
           }
           // Cursor is in a prop value slot (after `prop: `) but the prop has
@@ -2177,7 +2360,8 @@ connection.onCompletion((params) => {
         // Check if cursor is already inside quotes
         const afterEq = srcLine.slice(srcLine.indexOf(':=') + 2).trimStart();
         const inQuotes = /^["']/.test(afterEq);
-        return values.map((v, i) => unionValueCompletion(v, i, inQuotes));
+        const range = inQuotes ? stringContentRange(srcLine, params.position.line, params.position.character) : null;
+        return values.map((v, i) => unionValueCompletion(v, i, inQuotes, range));
       }
     }
 
@@ -2194,7 +2378,8 @@ connection.onCompletion((params) => {
       if (values.length > 0) {
         const afterEq = srcLine.slice(srcLine.indexOf('=') + 1).trimStart();
         const inQuotes = /^["']/.test(afterEq);
-        return values.map((v, i) => unionValueCompletion(v, i, inQuotes));
+        const range = inQuotes ? stringContentRange(srcLine, params.position.line, params.position.character) : null;
+        return values.map((v, i) => unionValueCompletion(v, i, inQuotes, range));
       }
     }
 
@@ -2237,9 +2422,10 @@ connection.onCompletion((params) => {
             }
             const prevCh = col > 0 ? srcLine[col - 1] : '';
             const inQuotes = prevCh === '"' || prevCh === "'";
+            const range = inQuotes ? stringContentRange(srcLine, params.position.line, col) : null;
             return values
               .filter(v => !existing.has(v.replace(/^["']|["']$/g, '')))
-              .map((v, i) => unionValueCompletion(v, i, inQuotes));
+              .map((v, i) => unionValueCompletion(v, i, inQuotes, range));
           }
         }
       }
@@ -2278,8 +2464,19 @@ connection.onCompletion((params) => {
     }
   }
 
-  const offset = srcToOffset(fp, params.position.line, params.position.character);
+  let offset = srcToOffset(fp, params.position.line, params.position.character);
   if (offset === undefined) return [];
+
+  // Retarget completions requested inside an inline object-literal call
+  // argument (e.g. `@router.push('/', { ▮ })`). The word-anchored mapper
+  // lands on the call name there, so TS would offer the receiver's members
+  // (push, replace, …) instead of the object's contextually-typed
+  // properties (noScroll, …). No-op outside that context.
+  if (tc.retargetObjectArgOffset && doc) {
+    const c2 = compiled.get(fp);
+    const lineText = (doc.getText().split('\n')[params.position.line]) || '';
+    if (c2) offset = tc.retargetObjectArgOffset(c2, lineText, params.position.character, offset);
+  }
 
   try {
     patchTypes(svc);
@@ -2612,7 +2809,14 @@ connection.onHover((params) => {
       const allProps = resolveTagProps(ctx.htmlTag);
       const prop = allProps.find(p => p.name === ctx.currentProp);
       if (prop) {
-        return { contents: { kind: 'markdown', value: `\`\`\`typescript\n(property) ${prop.name}?: ${prop.type}\n\`\`\`` } };
+        let propType = prop.type;
+        const routesDir = tc.findRoutesDir?.(fp);
+        if (routesDir && (propType.includes('${string}') || propType.includes(' | '))) {
+          const tree = tc.walkRoutesDir(routesDir);
+          propType = tc.prettifyRoutePatterns(propType, tree);
+          propType = tc.canonicalizeRouteUnion(propType, tree);
+        }
+        return { contents: { kind: 'markdown', value: `\`\`\`typescript\n(property) ${prop.name}?: ${propType}\n\`\`\`` } };
       }
     }
   }
@@ -2635,6 +2839,15 @@ connection.onHover((params) => {
     const docs = ts.displayPartsToString(info.documentation || []);
     display = unwrapReactiveType(display);
     display = display.replace(/\b__bind_(\w+)__\b/g, '$1');
+    // Prettify `${string}` placeholders in route patterns (matches diagnostics).
+    if (display.includes('${string}') || display.includes(' | ')) {
+      const routesDir = tc.findRoutesDir?.(fp);
+      if (routesDir) {
+        const tree = tc.walkRoutesDir(routesDir);
+        display = tc.prettifyRoutePatterns(display, tree);
+        display = tc.canonicalizeRouteUnion(display, tree);
+      }
+    }
     let value = '```typescript\n' + display + '\n```';
     if (docs) value += '\n\n' + docs;
     if (info.tags?.length) {

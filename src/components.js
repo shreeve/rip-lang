@@ -1139,8 +1139,22 @@ export function installComponentSupport(CodeEmitter, Lexer) {
           props.sideExprs = sideExprs;
           return props;
         };
-        const extractIntrinsicProps = (args) => {
+        const extractIntrinsicProps = (args, tagName) => {
           const props = [];
+          // For <a href: ...>, wrap interpolated route literals (templates
+          // starting with `/...`) in __ripRoute so TS checks the dynamic
+          // template against __RipRoutes. Static literals fall through to
+          // the existing __ripEl Option-C conditional, which still gives
+          // the "Did you mean ..." hint. Variables and external URLs are
+          // left untouched.
+          const wrapHrefVal = (val) => {
+            if (tagName !== 'a') return val;
+            if (typeof val !== 'string') return val;
+            if (val.length < 2) return val;
+            if (val[0] !== '`') return val;
+            if (val[1] !== '/') return val;
+            return `__ripRoute(${val})`;
+          };
           for (const arg of args) {
             let obj = null;
             if (this.is(arg, 'object')) {
@@ -1177,7 +1191,8 @@ export function installComponentSupport(CodeEmitter, Lexer) {
                     props.push({ code: `${propName}: ${val}`, srcLine });
                   } else {
                     const val = this.emitInComponent(value, 'value');
-                    props.push({ code: `${key}: ${val}`, srcLine });
+                    const finalVal = key === 'href' ? wrapHrefVal(val) : val;
+                    props.push({ code: `${key}: ${finalVal}`, srcLine });
                   }
                 }
               }
@@ -1461,7 +1476,7 @@ export function installComponentSupport(CodeEmitter, Lexer) {
           } else if (typeof head === 'string' && !CodeEmitter.GENERATORS[head] && (TEMPLATE_TAGS.has(head.split(/[.#]/)[0]) ||
                      (/^[a-z][\w-]*$/.test(head) && node.length > 1))) {
             const tagName = head.split(/[.#]/)[0];
-            const iProps = extractIntrinsicProps(node.slice(1));
+            const iProps = extractIntrinsicProps(node.slice(1), tagName);
             const tagLine = node.loc?.r;
             const srcMarker = tagLine != null ? ` // @rip-src:${tagLine}` : '';
             if (iProps.length === 0) {

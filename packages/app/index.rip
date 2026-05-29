@@ -95,9 +95,12 @@ export type RouterOpts =
   hash?: boolean
   onError?: (err: RouterErrorInfo) => void
 
+export type NavOpts =
+  noScroll?: boolean
+
 export type Router =
-  push: (url: string) => void
-  replace: (url: string) => void
+  push: (url: string, opts?: NavOpts) => void
+  replace: (url: string, opts?: NavOpts) => void
   back: () => void
   forward: () => void
   onNavigate: (cb: (info: RouteInfo) => void) => Disposer
@@ -905,41 +908,181 @@ export def createRouter(components:: ComponentsStore, opts?:: RouterOpts = {})::
     onError({ status: 404, path }) if onError
     false
 
-  onPopState = -> resolve(readUrl())
+  # ── Scroll management ────────────────────────────────────────────
+  # Take manual control so the browser's native restoration (default
+  # 'auto') doesn't race our saved-position logic on back/forward.
+  prevScrollRestoration:: ScrollRestoration | null = null
+  if typeof history isnt 'undefined' and 'scrollRestoration' of history
+    prevScrollRestoration = history.scrollRestoration
+    history.scrollRestoration = 'manual'
+
+  # Schedule on the next frame. requestAnimationFrame must be invoked with
+  # `window` as receiver or browsers throw "Illegal invocation".
+  raf = (cb) ->
+    if typeof window isnt 'undefined' and window.requestAnimationFrame
+      window.requestAnimationFrame cb
+    else
+      setTimeout cb, 16
+
+  # Apply a scroll position after the destination route has painted. Route
+  # components mount asynchronously (see createRenderer), so on the first
+  # frame the new page may be too short to reach `y`; retry across a few
+  # frames until the document can accommodate it (or we give up).
+  applyScroll = (y) ->
+    return if typeof window is 'undefined'
+    attempts = 0
+    step = ->
+      maxY = Math.max(0, (document?.documentElement?.scrollHeight or 0) - window.innerHeight)
+      window.scrollTo(0, Math.min(y, maxY))
+      attempts += 1
+      raf step if y > maxY and attempts < 20
+    raf step
+
+  # Keep the current history entry's saved scroll fresh so returning to it
+  # (including departures via back/forward, which we can't intercept) lands
+  # where the user was. Throttled — only the latest position matters.
+  scrollSaveTimer:: ReturnType<typeof setTimeout> | null = null
+  onScroll = ->
+    return if scrollSaveTimer or typeof window is 'undefined'
+    scrollSaveTimer = setTimeout (->
+      scrollSaveTimer = null
+      try history.replaceState({ ...(history.state or {}), _ripScroll: window.scrollY }, '', location.href)
+    ), 100
+  window.addEventListener 'scroll', onScroll, { passive: true } if typeof window isnt 'undefined'
+
+  onPopState = (e) ->
+    # Restore the scroll position saved on this entry. Deferred via
+    # applyScroll because the destination route mounts asynchronously —
+    # scrolling synchronously here would clamp to the old/empty layout.
+    saved = e?.state?._ripScroll
+    resolve(readUrl())
+    applyScroll(saved) if typeof saved is 'number'
   window.addEventListener 'popstate', onPopState if typeof window isnt 'undefined'
+
+  # Shared between onClick and the aria-current walker so the two views
+  # of "which anchors does the SPA router own" can't drift. Returns true
+  # if the anchor should be left alone (cross-origin, _blank, download,
+  # opt-out, or outside base).
+  shouldIgnoreAnchor = (target) ->
+    return true unless target?.href
+    url = try new URL(target.href, location.origin) catch then null
+    return true unless url
+    return true if url.origin isnt location.origin
+    return true if target.target is '_blank'
+    return true if target.hasAttribute('download')
+    return true if target.hasAttribute('data-router-ignore')
+    if base and not hashMode
+      return true unless url.pathname is base or url.pathname.startsWith(base + '/')
+    false
 
   onClick = (e) ->
     return if e.defaultPrevented
     return if e.button isnt 0 or e.metaKey or e.ctrlKey or e.shiftKey or e.altKey
     target = e.target
     target = target.parentElement while target and target.tagName isnt 'A'
-    return unless target?.href
+    return unless target
+    return if shouldIgnoreAnchor(target)
     url = new URL(target.href, location.origin)
-    return if url.origin isnt location.origin
-    return if target.target is '_blank' or target.hasAttribute('data-external')
-    return if target.hasAttribute('download')
-    return if target.hasAttribute('data-router-ignore')
-    # When base is set, only intercept links that fall under it. A link
-    # to `/login` from an app mounted at `/admin` should perform a real
-    # navigation, not a router.push that resolves to a route under
-    # `/admin` (or 404s but still steals the URL bar). Hash mode bypasses
-    # this check because the hash itself is the route space.
-    if base and not hashMode
-      return unless url.pathname is base or url.pathname.startsWith(base + '/')
     e.preventDefault()
     dest = if hashMode and url.hash then (url.hash.slice(1) or '/') else (url.pathname + url.search + url.hash)
-    router.push dest
+    noScroll = target.hasAttribute('data-router-noscroll')
+    router.push dest, { noScroll }
 
   document.addEventListener 'click', onClick if typeof document isnt 'undefined'
 
-  router =
-    push: (url) ->
-      if resolve(url)
-        history.pushState null, '', writeUrl(_normalizedUrl.read())
+  # aria-current walker. Re-runs on every path change. Walks anchors
+  # scoped to `base` (whole document when base is empty), normalizes
+  # each href, and sets aria-current="page" (exact) or "true" (prefix).
+  # We only touch anchors we previously set ourselves (tracked via a
+  # WeakSet) so app code can manage aria-current manually on any anchor
+  # it controls — that value survives our walks.
+  ownedAnchors = new WeakSet()
+  normalizeHref = (rawPath) ->
+    p = rawPath.split('?')[0].split('#')[0]
+    p = decodeURIComponent(p)
+    p = stripBase(p)
+    p = '/' + p unless p[0] is '/'
+    p = p.slice(0, -1) if p.length > 1 and p.endsWith('/')
+    p
 
-    replace: (url) ->
+  currentNorm = ->
+    p = if hashMode then stripBase(readUrl()).split('?')[0].split('#')[0] else _path.value.split('?')[0].split('#')[0]
+    p = '/' + p unless p[0] is '/'
+    p = p.slice(0, -1) if p.length > 1 and p.endsWith('/')
+    p
+
+  # aria-current walker — re-runs on every path change (via __effect
+  # tracking _path) and on every DOM mutation (via MutationObserver),
+  # since component mounts are async and anchors may appear after the
+  # initial render frame.
+  applyAria = ->
+    return if typeof document is 'undefined'
+    cur = currentNorm()
+    anchors = document.querySelectorAll('a[href]')
+    for a in anchors
+      continue if shouldIgnoreAnchor(a)
+      url = try new URL(a.href, location.origin) catch then null
+      continue unless url
+      linkPath = normalizeHref(url.pathname + url.search + url.hash)
+      desired = null
+      desired = 'page' if linkPath is cur
+      desired = 'true' if not desired and cur isnt '/' and cur.startsWith(linkPath + '/') and linkPath isnt ''
+      existing = a.getAttribute('aria-current')
+      if desired
+        if existing and not ownedAnchors.has(a)
+          continue   # user-managed value, leave alone
+        a.setAttribute('aria-current', desired)
+        ownedAnchors.add(a)
+      else if ownedAnchors.has(a)
+        a.removeAttribute('aria-current')
+        ownedAnchors.delete(a)
+    return
+
+  ariaObserver:: MutationObserver | null = null
+  ariaScheduled:: boolean = false
+  scheduleAria = ->
+    return if ariaScheduled
+    ariaScheduled = true
+    cb = ->
+      ariaScheduled = false
+      applyAria()
+    # requestAnimationFrame must be called with `window` as receiver —
+    # a detached reference throws "Illegal invocation" in browsers.
+    if typeof window isnt 'undefined' and window.requestAnimationFrame
+      window.requestAnimationFrame cb
+    else
+      setTimeout cb, 0
+
+  ariaEffect = __effect ->
+    return if typeof document is 'undefined'
+    currentNorm()  # subscribe to path changes
+    scheduleAria()
+    unless ariaObserver
+      ariaObserver = new MutationObserver -> scheduleAria()
+      target = document.body or document.documentElement
+      ariaObserver.observe target, { childList: true, subtree: true }
+    return
+
+  router =
+    push: (url, opts) ->
+      # Capture the outgoing scroll BEFORE resolve() swaps the DOM —
+      # afterwards window.scrollY reflects the new (shorter) page, not
+      # where the user actually was.
+      prevY = if typeof window isnt 'undefined' then window.scrollY else 0
       if resolve(url)
-        history.replaceState null, '', writeUrl(_normalizedUrl.read())
+        # Save it into the current entry so a future popstate back to it
+        # can restore, write the new entry, then reset scroll to the top
+        # unless the caller opted out.
+        try history.replaceState({ ...(history.state or {}), _ripScroll: prevY }, '', location.href)
+        history.pushState { _ripScroll: 0 }, '', writeUrl(_normalizedUrl.read())
+        if not opts?.noScroll and typeof window isnt 'undefined'
+          window.scrollTo(0, 0)
+
+    replace: (url, opts) ->
+      if resolve(url)
+        history.replaceState { _ripScroll: 0 }, '', writeUrl(_normalizedUrl.read())
+        if not opts?.noScroll and typeof window isnt 'undefined'
+          window.scrollTo(0, 0)
 
     back: -> history.back()
     forward: -> history.forward()
@@ -967,7 +1110,13 @@ export def createRouter(components:: ComponentsStore, opts?:: RouterOpts = {})::
 
     destroy: ->
       window.removeEventListener 'popstate', onPopState if typeof window isnt 'undefined'
+      window.removeEventListener 'scroll', onScroll if typeof window isnt 'undefined'
       document.removeEventListener 'click', onClick if typeof document isnt 'undefined'
+      if prevScrollRestoration isnt null and typeof history isnt 'undefined'
+        history.scrollRestoration = prevScrollRestoration
+      ariaObserver?.disconnect()
+      ariaObserver = null
+      ariaEffect?()
       unwatchComponents?()
       unwatchComponents = null
       # `_navigating` is a delay()-wrapped signal whose internal effect

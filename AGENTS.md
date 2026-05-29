@@ -190,6 +190,8 @@ Key ideas:
 - stash seeded from `data-state`
 - file-based routing
 - hot reload through `/watch`
+- router auto-sets `aria-current` (`page` exact, `true` prefix) on in-document anchors; per-anchor `data-router-ignore` opts out of SPA interception, `data-router-noscroll` opts out of scroll reset
+- typed projects get compile-time route checking: `<a href: "...">`, `router.push`, and per-route `@params` are narrowed against a `__RipRoutes` union built from `app/routes/`. Anchor `href` uses a `const`-generic conditional — `/`-prefixed string literals must satisfy `__RipRoutes`, while external schemes (`https:`, `mailto:`), fragments (`#x`), and dynamic `string` values fall through. Typos like `<a href: "/crat">` or `@router.push "/bogus"` fire `TS2322`/`TS2345`. `router.replace` stays at `string` (query-string mutation pattern).
 
 Component naming in render templates:
 
