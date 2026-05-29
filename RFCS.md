@@ -399,6 +399,16 @@ Fully tight per-segment typing requires the TanStack-style approach: type each r
 
 Depends on RFC 2 (DTS pipeline), RFC 3 (typed router exports), RFC 4 (typed component `this` for `@router.push` and per-route `@params`). Composes with RFC 7 (runtime ergonomics on the same `<a>` element). Reads `routes` directory location from `package.json#rip.routes` (RFC 9).
 
+### As-built notes (deviations from the proposal above)
+
+Two decisions changed during implementation; recorded here so the proposal text isn't read as the final design:
+
+1. **`href` typing uses a `const`-generic conditional, not `__RipRoutes | __ExternalHref`.** The `__ripEl` declaration is specialized to `<K, const H extends string>` so a `/`-prefixed string *literal* must satisfy `__RipRoutes`, while external schemes (`https:`, `mailto:`, `tel:`), fragments (`#x`), and any dynamic `string` value fall through to `H` unchecked. This drops the need to enumerate external URL shapes (`__ExternalHref` no longer exists) and removes the protocol-relative/exotic-scheme false positives the proposal called out — those now pass as plain strings. Interpolated `/`-prefixed templates are wrapped by the compiler in a `__ripRoute(...)` helper so they're still checked against the union.
+
+2. **Routes directory is the fixed convention `app/routes/`, not `package.json#rip.routes`.** The config knob was dropped. Rationale: the type-checker must walk the *same* directory `@rip-lang/server`'s `serve dir: "<root>/app"` actually serves, or route-typo checking silently desyncs from runtime; a configurable path is a second place for the two to drift and, when mismatched, fails silently (`__RipRoutes` resolves to `any`). If a multi-root layout ever needs it, the knob can return as a narrowing override defaulting to `app/routes`. (The RFC 9 cross-reference above is therefore moot for RFC 5.)
+
+Also: catch-all routes (`[...rest].rip`) are *excluded* from the `__RipRoutes` union (they're 404 fallbacks, not navigation targets; including them as `/${string}` would defeat typo-catching), though they still contribute their `{ rest: string }` shape to per-route `@params`.
+
 
 ## RFC 6: Trim and align the `@rip-lang/app` global surface
 

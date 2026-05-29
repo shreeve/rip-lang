@@ -114,6 +114,129 @@ export function findStashFile(filePath) {
   return result;
 }
 
+// ── Route tree discovery ───────────────────────────────────────────
+//
+// The project's routes live under `<projectRoot>/app/routes/` — a fixed
+// convention (not configurable) that matches `@rip-lang/server`'s
+// `serve dir: "<root>/app"`, which mounts route files under `app/routes/`.
+// Each `.rip` file there contributes one entry to a
+// generated `__RipRoutes` template-literal union, used for typed
+// `<a href: "...">`, typed `router.push`, and per-route `@params`
+// tightening. Mirrors the runtime rules in `buildRoutes`
+// (packages/app/index.rip): skip `_-prefixed` files, skip files
+// inside `_-prefixed` directories, treat `index.rip` as `/`,
+// `[id]` as a dynamic segment, `[...rest]` as catch-all.
+const routesDirCache  = new Map(); // entryDir → absoluteRoutesDir|null
+const routesTreeCache = new Map(); // routesDir → { entries, union }
+
+// Invalidate the route-tree cache for the project containing `filePath`,
+// or all projects when no path is given. Called by the LSP whenever a
+// `.rip` file is added/removed/renamed so completions, hover, and
+// diagnostics see the new route shape without a process restart.
+export function invalidateRoutesCache(filePath) {
+  if (!filePath) {
+    routesDirCache.clear();
+    routesTreeCache.clear();
+    return;
+  }
+  // Cheap and correct: drop both caches. Reads are O(routes-dir scan),
+  // and the caches refill on the next access. Pin-pointing the exact
+  // entryDir would require re-running findEntryFile, which itself
+  // caches; clearing wholesale avoids the dependency.
+  routesDirCache.clear();
+  routesTreeCache.clear();
+}
+
+export function findRoutesDir(filePath) {
+  const entryFile = findEntryFile(filePath);
+  if (!entryFile) return null;
+  const root = dirname(entryFile);
+  if (routesDirCache.has(root)) return routesDirCache.get(root);
+  // Convention: `app/routes/`. Matches `@rip-lang/server`'s `serve dir:
+  // "<root>/app"` pattern, which resolves routes under `app/routes/`.
+  const dir = resolve(root, 'app/routes');
+  const result = existsSync(dir) ? dir : null;
+  routesDirCache.set(root, result);
+  return result;
+}
+
+// Build per-route metadata and the `__RipRoutes` template-literal union.
+// Each entry: { rel, file, pattern (TS expression), dynamic: [{name, catchAll}] }
+export function walkRoutesDir(routesDir) {
+  if (!routesDir) return { entries: [], union: 'never' };
+  if (routesTreeCache.has(routesDir)) return routesTreeCache.get(routesDir);
+  const entries = [];
+  function walk(dir, segs) {
+    let dirents;
+    try { dirents = readdirSync(dir, { withFileTypes: true }); }
+    catch { return; }
+    for (const e of dirents) {
+      // Skip _-prefixed files (_layout.rip etc.) and dirs (shared
+      // helpers, not pages). Same rule as runtime buildRoutes.
+      if (e.name.startsWith('_')) continue;
+      if (e.isDirectory()) walk(resolve(dir, e.name), [...segs, e.name]);
+      else if (e.isFile() && e.name.endsWith('.rip')) {
+        const base = e.name.slice(0, -'.rip'.length);
+        const fileSegs = base === 'index' ? segs : [...segs, base];
+        const dynamic = [];
+        const displaySegs = [];
+        const tsSegs = fileSegs.map(s => {
+          let m = s.match(/^\[\.\.\.(\w+)\]$/);
+          if (m) { dynamic.push({ name: m[1], catchAll: true }); displaySegs.push('$' + m[1]); return '${string}'; }
+          m = s.match(/^\[(\w+)\]$/);
+          if (m) { dynamic.push({ name: m[1], catchAll: false }); displaySegs.push('$' + m[1]); return '${string}'; }
+          displaySegs.push(s);
+          return s;
+        });
+        const path = '/' + tsSegs.join('/');
+        const displayPath = '/' + displaySegs.join('/');
+        const pattern = dynamic.length === 0
+          ? JSON.stringify(path === '//' ? '/' : path)
+          : '`' + (path === '//' ? '/' : path) + '`';
+        const display = dynamic.length === 0
+          ? null
+          : '`' + (displayPath === '//' ? '/' : displayPath) + '`';
+        entries.push({
+          rel: relative(routesDir, resolve(dir, e.name)),
+          file: resolve(dir, e.name),
+          pattern,
+          display,
+          displayPath,
+          dynamic,
+        });
+      }
+    }
+  }
+  walk(routesDir, []);
+  // Canonical order: index route ("/") first, then the rest by display
+  // path, lexicographically. Filesystem walk order is undefined across
+  // platforms — sorting here gives stable union order and a consistent
+  // member sequence in completions, hovers, and error messages.
+  entries.sort((a, b) => {
+    if (a.displayPath === '/') return -1;
+    if (b.displayPath === '/') return 1;
+    return a.displayPath < b.displayPath ? -1 : a.displayPath > b.displayPath ? 1 : 0;
+  });
+  // Build union, deduping static patterns (template-literal patterns
+  // are inherently distinct by structure). Catch-all routes
+  // (`[...rest].rip`) are excluded — they're runtime 404 fallbacks,
+  // not navigation targets, and including them as `/${string}` would
+  // make the union accept any slash-prefixed string and defeat
+  // typo-catching for every other route.
+  const seen = new Set();
+  const parts = [];
+  for (const e of entries) {
+    if (e.dynamic.some(d => d.catchAll)) continue;
+    if (seen.has(e.pattern)) continue;
+    seen.add(e.pattern);
+    parts.push(e.pattern);
+  }
+  const union = parts.length ? parts.join(' | ') : 'never';
+  const result = { entries, union };
+  routesTreeCache.set(routesDir, result);
+  return result;
+}
+
 // ── Shared helpers ─────────────────────────────────────────────────
 
 // Detect type annotations (:: followed by space or =) ignoring comments,
@@ -644,6 +767,116 @@ export function cleanDiagnosticMessage(msg) {
     }
   }
   return msg;
+}
+
+// Classify a route-related diagnostic so the message rewrite and the
+// squiggle-snap use one consistent detection. Returns:
+//   'el'    — anchor href mismatch (static __ripEl or dynamic __ripRoute)
+//   'route' — programmatic router.push/replace mismatch
+//   null    — unrelated diagnostic
+//
+// Detection is position-aware: a single source line can host both an anchor
+// and an inline event handler (e.g. `a @click: () -> @router.push(...)`),
+// so substring-checking the whole TS line is ambiguous. Instead we look at
+// the call site immediately preceding the diagnostic's TS offset.
+function classifyRouteDiagnostic(entry, start) {
+  if (!entry?.tsContent || start == null) return null;
+  const before = entry.tsContent.slice(Math.max(0, start - 64), start);
+  if (/(?:__ripEl|__ripRoute)\([^()]*$/.test(before)) return 'el';
+  if (/\.(?:push|replace)\([^()]*$/.test(before)) return 'route';
+  return null;
+}
+
+// Unify route diagnostics with the static __ripEl form so users see one
+// consistent message shape regardless of which call site (anchor href,
+// router.push, etc.) produced the error. Rewrites TS2345 "Argument of
+// type 'X' is not assignable to parameter of type 'Y'." into TS2322
+// "Type 'X' is not assignable to type 'Y | undefined'." Then prettifies
+// `${string}` placeholders in route patterns to their source-form
+// `$paramName` (from `[id].rip` → `$id`). Used by both the CLI
+// (runCheck) and the LSP diagnostic publisher.
+export function unifyRouteDiagnostic(code, message, entry, start, filePath) {
+  const kind = classifyRouteDiagnostic(entry, start);
+  const routesDir = filePath ? findRoutesDir(filePath) : null;
+  const tree = routesDir ? walkRoutesDir(routesDir) : null;
+
+  if ((kind === 'route' || kind === 'el') && code === 2345) {
+    const m = message.match(/^Argument of type '([^']*(?:''[^']*)*)' is not assignable to parameter of type '([^']*(?:''[^']*)*)'\.$/);
+    if (m) {
+      code = 2322;
+      message = `Type '${m[1]}' is not assignable to type '${m[2]} | undefined'.`;
+    }
+  }
+
+  // Prettify ${string} placeholders in known route patterns.
+  if (tree && message.includes('${string}')) {
+    message = prettifyRoutePatterns(message, tree);
+  }
+  // Canonicalize route-union member order (TS normalizes unions, so the
+  // order shifts between error contexts — pin to walkRoutesDir order).
+  if (tree) message = canonicalizeRouteUnion(message, tree);
+  return { code, message };
+}
+
+// Rewrite `${string}` placeholders in route patterns to their source-form
+// `$paramName` (from `[id].rip` → `$id`). Used by diagnostics and hover.
+export function prettifyRoutePatterns(text, tree) {
+  if (!tree || !text || !text.includes('${string}')) return text;
+  for (const e of tree.entries) {
+    if (!e.display) continue;
+    if (e.pattern !== e.display) text = text.split(e.pattern).join(e.display);
+  }
+  return text;
+}
+
+// Reorder route-union members to match walkRoutesDir order. TS normalizes
+// unions internally, so the same set can render in different orders across
+// hover and error contexts. Scans for runs of unioned string/template/
+// undefined members, and if the run exactly covers the known route set
+// (plus optional `undefined`), rewrites it in canonical order. Leaves
+// unrelated unions untouched.
+export function canonicalizeRouteUnion(text, tree) {
+  if (!tree || !text || !text.includes(' | ')) return text;
+  const canonical = [];
+  const seen = new Set();
+  for (const e of tree.entries) {
+    if (e.dynamic.some(d => d.catchAll)) continue;
+    const member = e.display || e.pattern;
+    if (seen.has(member)) continue;
+    seen.add(member);
+    canonical.push(member);
+  }
+  if (canonical.length === 0) return text;
+  const canonicalSet = new Set(canonical);
+  const memberRe = /(?:"[^"]*"|`[^`]*`|undefined)/.source;
+  const unionRe = new RegExp(`${memberRe}(?:\\s*\\|\\s*${memberRe})+`, 'g');
+  return text.replace(unionRe, run => {
+    const parts = run.split(/\s*\|\s*/);
+    const hasUndefined = parts.includes('undefined');
+    const nonUndef = parts.filter(p => p !== 'undefined');
+    if (nonUndef.length !== canonical.length) return run;
+    if (!nonUndef.every(p => canonicalSet.has(p))) return run;
+    const ordered = hasUndefined ? [...canonical, 'undefined'] : canonical;
+    return ordered.join(' | ');
+  });
+}
+
+// Locate the best span for a route diagnostic in the source line. TS
+// reports the span on the generated `__ripEl`/`__ripRoute` call, which
+// source-maps back to imprecise positions. We snap to the meaningful
+// token in the source:
+//   - 'el'    → the `href` attribute name
+//   - 'route' → the method name `push`/`replace`
+export function locateRouteDiagnosticSpan(entry, start, srcLine) {
+  const kind = classifyRouteDiagnostic(entry, start);
+  if (kind === 'el') {
+    const m = srcLine.match(/\bhref\b/);
+    if (m) return { col: m.index, len: 4 };
+  } else if (kind === 'route') {
+    const m = srcLine.match(/\.(push|replace)\b/);
+    if (m) return { col: m.index + 1, len: m[1].length };
+  }
+  return null;
 }
 
 // Base TypeScript compiler settings for type-checking. Callers can
@@ -1790,6 +2023,115 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
     );
   }
 
+  // ── Typed routes ─────────────────────────────────────────────────
+  //
+  // Three splices, all keyed off the project's `<routesDir>/` tree:
+  //   1. Entry file — append `export type __RipRoutes = ...;` so every
+  //      file in the project can reach it via
+  //      `import('<entry>').__RipRoutes`.
+  //   2. Per-route file (anything under <routesDir>/) — tighten the
+  //      `params: any` slot in the typed `declare app:` line so
+  //      `routes/users/[id].rip` sees `params: { id: string }`.
+  //   3. Any typed file that uses `<a>` elements — override the
+  //      INTRINSIC `__ripEl` declaration so anchor `href` is typed via
+  //      a `const H extends string` conditional: if H is a literal
+  //      starting with `/`, it must satisfy `__RipRoutes`; otherwise
+  //      (external URLs `https:`/`mailto:`, fragments `#x`, dynamic
+  //      `string`) it falls through to plain H. Also narrow
+  //      `router.push` to `__RipRoutes` for typo-catching.
+  const entryFile = findEntryFile(filePath);
+  const routesDir = findRoutesDir(filePath);
+  const isEntry   = entryFile && entryFile === filePath;
+  const isRoute   = routesDir && filePath.startsWith(routesDir + pathSep);
+
+  if (isEntry && routesDir) {
+    const { union } = walkRoutesDir(routesDir);
+    code += `\nexport type __RipRoutes = ${union};\n`;
+  }
+
+  // Per-route @params tightening: the component stub declares
+  // `declare params: Record<string, string>`. For route files whose
+  // filename carries dynamic segments (`[id].rip`, `[...rest].rip`),
+  // replace that with a precise shape so typos like `@params.bogu`
+  // are caught and `@params.id` narrows to `string` (the literal).
+  if (isRoute && entryFile) {
+    const { entries } = walkRoutesDir(routesDir);
+    const me = entries.find(e => e.file === filePath);
+    if (me && me.dynamic.length > 0) {
+      const paramFields = me.dynamic
+        .map(d => `${d.name}: string`)
+        .join('; ');
+      code = code.replace(
+        /declare params: Record<string, string>/g,
+        `declare params: { ${paramFields} }`,
+      );
+    }
+  }
+
+  // Anchor href + typed router.push/replace overrides. Spliced into the
+  // DTS header (where `__RipProps` is defined) and the `declare router`
+  // line (already rewritten above). Gated on the project having a
+  // routes dir at all — without routes there's no `__RipRoutes` to
+  // intersect with, so the default `string` href is what users get.
+  if (routesDir && entryFile && findStashFile(filePath)) {
+    // Reach __RipRoutes via the entry file's virtual module.
+    const entrySpec = entryImportSpec(filePath, entryFile);
+    const anchorRouteType = `import('${entrySpec}').__RipRoutes`;
+    // Inline the routes union for diagnostics on __ripRoute (dynamic
+    // interpolated hrefs). The static __ripEl path resolves the alias
+    // already; for the helper-call path we inline so error messages
+    // read "Argument of type '`/x/${number}`' is not assignable to
+    // parameter of type '<actual route union>'" instead of '__RipRoutes'.
+    const { union: inlineRoutesUnion } = walkRoutesDir(routesDir);
+
+    // Declare a clean local alias for NavOpts so hover shows `NavOpts`
+    // instead of `import("@rip-lang/app").NavOpts`. We *don't* alias
+    // __RipRoutes — inlining the union directly into the push signature
+    // makes hover and errors both show the actual list of routes,
+    // avoiding the leak of an implementation-detail name.
+    if (headerDts) {
+      headerDts = `type NavOpts = import('@rip-lang/app').NavOpts;\n` + headerDts;
+    }
+
+    // (a) Constrain <a href>: replace the INTRINSIC __ripEl declaration
+    // with a const-H-generic version whose href slot conditionally
+    // narrows to __RipRoutes for slash-prefixed literals. External
+    // URLs (https:, mailto:, #frag) and dynamic `string` values fall
+    // through to H. Error reads:
+    //   Type '"/foo"' is not assignable to type '__RipRoutes | undefined'.
+    if (headerDts) {
+      const newFnDecl = `declare function __ripEl<K extends __RipTag, const H extends string = string>(tag: K, props?: __RipProps<K> & (K extends 'a' ? { href?: H extends \`/\${string}\` ? ${inlineRoutesUnion} : H } : {})): void;`;
+      headerDts = headerDts.replace(
+        /declare function __ripEl<K extends __RipTag>\(tag: K, props\?: __RipProps<K>\): void;/,
+        newFnDecl,
+      );
+      // Strengthen __ripRoute: compiler wraps interpolated /-prefixed
+      // anchor href values in __ripRoute(...) so TS checks the dynamic
+      // template against __RipRoutes. Without this strengthening the
+      // baseline passthrough lets every string through.
+      headerDts = headerDts.replace(
+        /declare function __ripRoute<const T extends string>\(s: T\): T;/,
+        `declare function __ripRoute<const T extends ${inlineRoutesUnion}>(s: T): T;`,
+      );
+    }
+
+    // (b) Narrow router.push argument to __RipRoutes for typo-catching
+    // on programmatic navigation. Leave `router.replace` accepting plain
+    // `string` (the base Router signature) — it's commonly used to
+    // mutate the current URL with query strings, where the result is
+    // built dynamically and can't satisfy a literal-route union. Use
+    // Omit + re-add instead of intersection because intersecting
+    // overloaded methods makes the parameter type a union
+    // (contravariance), which loses the narrowing.
+    if (code.includes(`declare router: import('@rip-lang/app').Router`)) {
+      const typedRouter = `declare router: Omit<import('@rip-lang/app').Router, 'push'> & { push(url: ${inlineRoutesUnion}, opts?: NavOpts): void; }`;
+      code = code.replace(
+        /declare router: import\('@rip-lang\/app'\)\.Router(?![ &])/g,
+        typedRouter,
+      );
+    }
+  }
+
   // Dedupe imports: when the DTS header and the body import from the same
   // module specifier, TypeScript reports TS2300 (Duplicate identifier) for
   // every shared binding, which cascades and corrupts type resolution
@@ -2346,6 +2688,39 @@ export function mapToSourcePos(entry, offset) {
     }
   }
   const srcText = entry.source ? getLineText(entry.source, srcLine) : '';
+  // Synthetic anchor: `__ripRoute(...)` wraps an anchor href value for
+  // dynamic route type-checking. The TS diagnostic span starts at the
+  // call argument (a template literal), which has no clean source token
+  // to land on — landing instead on the source `href:` keyword keeps
+  // dynamic anchor diagnostics visually consistent with the static
+  // `__ripEl` `href` case (TS2820 lands on the property identifier).
+  // Map both the start and end offsets that fall anywhere inside a
+  // `__ripRoute(...)` call to the bounds of the `href` keyword so the
+  // squiggle length matches the static case (4 chars) instead of
+  // spanning the whole compiled call expression.
+  if (srcText) {
+    const callStart = genText.lastIndexOf('__ripRoute(', genCol);
+    if (callStart >= 0) {
+      // Find matching `)` after the call
+      let depth = 0, callEnd = -1;
+      for (let i = callStart + '__ripRoute('.length - 1; i < genText.length; i++) {
+        const ch = genText[i];
+        if (ch === '(') depth++;
+        else if (ch === ')') { depth--; if (depth === 0) { callEnd = i; break; } }
+      }
+      if (callEnd >= 0 && genCol <= callEnd + 1) {
+        const m = srcText.match(/\bhref\b/);
+        if (m) {
+          // Heuristic for end offset: anchor at end of `href` (start + 4)
+          // when the gen offset is inside the call body (past the opening
+          // paren). For the start offset (at the opening paren or first
+          // arg char), anchor at the start of `href`.
+          const atOrBeforeArg = genCol <= callStart + '__ripRoute('.length;
+          return { line: srcLine, col: atOrBeforeArg ? m.index : m.index + 4 };
+        }
+      }
+    }
+  }
   // Text-match: find the word at genCol in the gen line, then locate it in the source line
   if (srcText) {
     let wordAt = genText.slice(genCol).match(/^\w+/);
@@ -2846,6 +3221,30 @@ export async function runCheck(targetDir, opts = {}) {
     }
   }
 
+  // Always compile the project's entry file when routes exist, so its
+  // `__RipRoutes` export is resolvable from typed route/layout files. The
+  // entry file (server bin) is typically untyped — it just calls `start()` —
+  // so it wouldn't otherwise be pulled into the typed set, and
+  // `import('<entry>').__RipRoutes` would silently resolve to `any`,
+  // disabling the route-typo check. Diagnostics from the entry are
+  // suppressed via `_typeOnly` — only here as a cross-module type carrier.
+  const seenEntry = new Set();
+  for (const fp of typedFiles) {
+    const entryFile = findEntryFile(fp);
+    if (!entryFile || seenEntry.has(entryFile)) continue;
+    seenEntry.add(entryFile);
+    if (!findRoutesDir(fp)) continue;
+    if (compiled.has(entryFile) || !existsSync(entryFile)) continue;
+    try {
+      const src = sourcesByPath.get(entryFile) ?? readFileSync(entryFile, 'utf8');
+      const compiledEntry = compileForCheck(entryFile, src, new Compiler(), { checkAll });
+      compiledEntry._typeOnly = true;
+      compiled.set(entryFile, compiledEntry);
+    } catch (e) {
+      console.warn(`[rip] entry compile failed for ${entryFile}: ${e.message}`);
+    }
+  }
+
   // Also compile any .rip files imported from typed files that aren't yet compiled
   for (const [fp, entry] of [...compiled.entries()]) {
     if (!entry.hasTypes) continue;
@@ -3095,11 +3494,17 @@ export async function runCheck(targetDir, opts = {}) {
       if (adj) { pos.line = adj.line; pos.col = adj.col; }
 
       const endPos = adj ? { line: adj.line, col: adj.col + adj.len } : (d.length ? mapToSourcePos(entry, d.start + d.length) : null);
-      const len = endPos && endPos.line === pos.line ? endPos.col - pos.col : 1;
+      let len = endPos && endPos.line === pos.line ? endPos.col - pos.col : 1;
 
       const message = cleanDiagnosticMessage(ts.flattenDiagnosticMessageText(d.messageText, '\n'));
       const severity = d.category === 1 ? 'error' : d.category === 0 ? 'warning' : 'info';
       const srcLine = srcLines[pos.line] || '';
+
+      const { code: finalCode, message: finalMessage } = unifyRouteDiagnostic(d.code, message, entry, d.start, fp);
+
+      // Snap route diagnostics to the meaningful token (`href` / `push`).
+      const routeSpan = locateRouteDiagnosticSpan(entry, d.start, srcLine);
+      if (routeSpan) { pos.col = routeSpan.col; len = routeSpan.len; }
 
       // Collect related information
       const related = [];
@@ -3147,7 +3552,7 @@ export async function runCheck(targetDir, opts = {}) {
         }
       }
 
-      errors.push({ line: pos.line + 1, col: pos.col + 1, len: Math.max(1, len), message, severity, code: d.code, srcLine, related });
+      errors.push({ line: pos.line + 1, col: pos.col + 1, len: Math.max(1, len), message: finalMessage, severity, code: finalCode, srcLine, related });
       if (severity === 'error') totalErrors++;
       else if (severity === 'warning') totalWarnings++;
     }

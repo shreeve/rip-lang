@@ -332,6 +332,65 @@ The renderer uses `router.current` to drive its mount effect. Each
 field is also a separate signal so subscribers can track only what
 they care about.
 
+#### Anchor opt-outs and active-link styling
+
+The router intercepts plain `<a>` clicks at the document level. Two
+per-anchor attributes adjust that behavior:
+
+| Attribute               | Effect                                                                                |
+| ----------------------- | ------------------------------------------------------------------------------------- |
+| `data-router-ignore`    | Skip SPA interception entirely. The browser performs a full navigation.               |
+| `data-router-noscroll`  | Take the SPA navigation, but don't reset scroll to `(0, 0)`.                          |
+
+Anchors with `target="_blank"`, `[download]`, cross-origin hrefs, or
+hrefs outside `base` are also skipped automatically.
+
+**Active-link highlighting.** On every navigation the router walks
+in-document anchors and sets `aria-current` on those that match the
+current path:
+
+- exact match → `aria-current="page"`
+- prefix match (`/blog` on `/blog/123`) → `aria-current="true"`
+- otherwise → attribute removed (only if the router set it)
+
+Style it with attribute selectors — no per-link boilerplate needed:
+
+```css
+nav a[aria-current="page"] { color: red; font-weight: bold; }
+nav a[aria-current="true"] { color: red; }
+```
+
+Setting `aria-current` manually on an anchor wins — the router only
+touches values it set itself.
+
+**Scroll restoration.** New navigations (`push` or a link click)
+reset scroll to `(0, 0)`. Back/forward (`popstate`) restores the
+scroll position the page had when you left it. Same-document fragment
+links (`#section`) defer to the browser.
+
+**Typed routes (compile-time).** In a typed project (one with
+`rip.strict: true` or `::` annotations), `rip check` synthesizes a
+`__RipRoutes` union from the file tree under `app/routes/` and
+threads it through three places:
+
+| Place                              | Type                                                                  | Catches                            |
+| ---------------------------------- | --------------------------------------------------------------------- | ---------------------------------- |
+| `<a href: "...">` in render blocks | `__RipRoutes` for `/`-prefixed literals; any string otherwise         | Typos in known routes              |
+| `router.push url, opts?`           | `__RipRoutes` (replaces base `string`)                                | Typos in programmatic navigation   |
+| `@params` in `routes/[id].rip`     | `{ id: string }` (replaces `Record<string, string>`)                  | Typos like `@params.bogus`         |
+
+Anchor `href` uses a `const`-generic conditional: a literal starting
+with `/` must satisfy `__RipRoutes`, while external schemes
+(`https://`, `mailto:`, `tel:`), fragments (`#anchor`), and dynamic
+`string` values fall through unchecked. Typos like `<a href: "/crat">`
+produce a single-line error naming the valid routes.
+`router.replace` is deliberately left at `string` — it's commonly
+used to mutate the current URL with query strings, where the built
+value can't satisfy a literal-route union. Catch-all routes
+(`[...rest].rip`) are excluded from `__RipRoutes` — they're runtime
+404 fallbacks, not navigation targets, so including them as
+`/${string}` would defeat typo-catching for every other route.
+
 ### createRenderer
 
 The render loop. Subscribes to `router.current`, mounts/unmounts
