@@ -7017,8 +7017,21 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
             props.sideExprs = sideExprs;
             return props;
           };
-          const extractIntrinsicProps = (args) => {
+          const extractIntrinsicProps = (args, tagName) => {
             const props = [];
+            const wrapHrefVal = (val) => {
+              if (tagName !== "a")
+                return val;
+              if (typeof val !== "string")
+                return val;
+              if (val.length < 2)
+                return val;
+              if (val[0] !== "`")
+                return val;
+              if (val[1] !== "/")
+                return val;
+              return `__ripRoute(${val})`;
+            };
             for (const arg of args) {
               let obj = null;
               if (this.is(arg, "object")) {
@@ -7058,7 +7071,8 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
                       props.push({ code: `${propName}: ${val}`, srcLine });
                     } else {
                       const val = this.emitInComponent(value, "value");
-                      props.push({ code: `${key}: ${val}`, srcLine });
+                      const finalVal = key === "href" ? wrapHrefVal(val) : val;
+                      props.push({ code: `${key}: ${finalVal}`, srcLine });
                     }
                   }
                 }
@@ -7293,7 +7307,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
               }
             } else if (typeof head2 === "string" && !CodeEmitter.GENERATORS[head2] && (TEMPLATE_TAGS.has(head2.split(/[.#]/)[0]) || /^[a-z][\w-]*$/.test(head2) && node.length > 1)) {
               const tagName = head2.split(/[.#]/)[0];
-              const iProps = extractIntrinsicProps(node.slice(1));
+              const iProps = extractIntrinsicProps(node.slice(1), tagName);
               const tagLine = node.loc?.r;
               const srcMarker = tagLine != null ? ` // @rip-src:${tagLine}` : "";
               if (iProps.length === 0) {
@@ -14098,7 +14112,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.16.0";
-  var BUILD_DATE = "2026-05-28@12:19:31GMT";
+  var BUILD_DATE = "2026-05-29@09:12:20GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -14511,6 +14525,7 @@ ${indented}`);
   var __batch;
   var __computed;
   var __effect;
+  var __ripCtx;
   var __state;
   var _ariaAnchorChecked;
   var _ariaAnchorSupported;
@@ -14548,10 +14563,8 @@ ${indented}`);
   var fileToPattern;
   var findAllComponents;
   var findComponent;
-  var getContext;
   var getLayoutChain;
   var getSignal;
-  var hasContext;
   var isNum;
   var isPathKey;
   var keysSignal;
@@ -14560,7 +14573,6 @@ ${indented}`);
   var patternToRegex;
   var resolveIndex;
   var resolveStorePath;
-  var setContext;
   var stashGet;
   var stashMethodFn;
   var stashSet;
@@ -14653,7 +14665,16 @@ ${indented}`);
   globalThis.warn ??= console.warn;
   globalThis.zip ??= (...a) => a[0].map((_, i) => a.map((b) => b[i]));
   ({ __state, __computed, __effect, __batch } = globalThis.__rip);
-  ({ setContext, getContext, hasContext } = globalThis.__ripComponent || {});
+  __ripCtx = globalThis.__ripComponent || {};
+  var setContext = function(key, value) {
+    return __ripCtx.setContext(key, value);
+  };
+  var getContext = function(key) {
+    return __ripCtx.getContext(key);
+  };
+  var hasContext = function(key) {
+    return __ripCtx.hasContext(key);
+  };
   assertBrowser = function(where) {
     if (typeof window === "undefined" || typeof document === "undefined") {
       throw new Error(`Rip App: '${where}' requires a browser environment`);
@@ -15002,12 +15023,12 @@ ${indented}`);
     cache[prop] = fn;
     return fn;
   };
-  var createStash = function(data = {}) {
+  function createStash(data = {}) {
     return makeProxy(data);
-  };
-  var unwrapStash = function(proxy) {
+  }
+  function unwrapStash(proxy) {
     return proxy?.[Symbol.for("raw")] ? proxy[Symbol.for("raw")] : proxy;
-  };
+  }
   function persistStash(app, opts = {}) {
     let _save, disposed, effectDisposer, saved, savedData, storage, storageKey, target;
     assertBrowser("persistStash");
@@ -15223,7 +15244,7 @@ ${indented}`);
     });
     return typeof source !== "function" ? _proxy(out, source, eff) : _attachDispose(out, eff);
   };
-  var createComponents = function() {
+  function createComponents() {
     let compiled, files, notify, watchers;
     files = new Map;
     watchers = new Set;
@@ -15314,7 +15335,7 @@ ${indented}`);
         return compiled.set(path, result);
       }
     };
-  };
+  }
   fileToPattern = function(rel) {
     let pattern;
     pattern = rel.replace(/\.rip$/, "");
@@ -15412,7 +15433,7 @@ ${indented}`);
     return chain;
   };
   function createRouter(components, opts = {}) {
-    let _current, _hash, _layouts, _navigating, _normalizedUrl, _params, _path, _query, _route, addBase, base, hashMode, navCallbacks, onClick, onError, onPopState, readUrl, resolve, root, router, stripBase, tree, unwatchComponents, writeUrl;
+    let _current, _hash, _layouts, _navigating, _normalizedUrl, _params, _path, _query, _route, addBase, applyAria, applyScroll, ariaEffect, ariaObserver, ariaScheduled, base, currentNorm, hashMode, navCallbacks, normalizeHref, onClick, onError, onPopState, onScroll, ownedAnchors, prevScrollRestoration, raf, readUrl, resolve, root, router, scheduleAria, scrollSaveTimer, shouldIgnoreAnchor, stripBase, tree, unwatchComponents, writeUrl;
     assertBrowser("createRouter");
     root = opts.root || "_route";
     base = opts.base || "";
@@ -15496,13 +15517,80 @@ ${indented}`);
         onError({ status: 404, path });
       return false;
     };
-    onPopState = function() {
-      return resolve(readUrl());
+    prevScrollRestoration = null;
+    if (typeof history !== "undefined" && "scrollRestoration" in history) {
+      prevScrollRestoration = history.scrollRestoration;
+      history.scrollRestoration = "manual";
+    }
+    raf = function(cb) {
+      return typeof window !== "undefined" && window.requestAnimationFrame ? window.requestAnimationFrame(cb) : setTimeout(cb, 16);
+    };
+    applyScroll = function(y) {
+      let attempts, step;
+      if (typeof window === "undefined")
+        return;
+      attempts = 0;
+      step = function() {
+        let maxY;
+        maxY = Math.max(0, (document?.documentElement?.scrollHeight || 0) - window.innerHeight);
+        window.scrollTo(0, Math.min(y, maxY));
+        attempts += 1;
+        return y > maxY && attempts < 20 ? raf(step) : undefined;
+      };
+      return raf(step);
+    };
+    scrollSaveTimer = null;
+    onScroll = function() {
+      if (scrollSaveTimer || typeof window === "undefined")
+        return;
+      return scrollSaveTimer = setTimeout(function() {
+        scrollSaveTimer = null;
+        return (() => {
+          try {
+            return history.replaceState({ ...history.state || {}, _ripScroll: window.scrollY }, "", location.href);
+          } catch {}
+        })();
+      }, 100);
+    };
+    if (typeof window !== "undefined")
+      window.addEventListener("scroll", onScroll, { passive: true });
+    onPopState = function(e) {
+      let saved;
+      saved = e?.state?._ripScroll;
+      resolve(readUrl());
+      return typeof saved === "number" ? applyScroll(saved) : undefined;
     };
     if (typeof window !== "undefined")
       window.addEventListener("popstate", onPopState);
+    shouldIgnoreAnchor = function(target) {
+      let url;
+      if (!target?.href)
+        return true;
+      url = (() => {
+        try {
+          return new URL(target.href, location.origin);
+        } catch {
+          return null;
+        }
+      })();
+      if (!url)
+        return true;
+      if (url.origin !== location.origin)
+        return true;
+      if (target.target === "_blank")
+        return true;
+      if (target.hasAttribute("download"))
+        return true;
+      if (target.hasAttribute("data-router-ignore"))
+        return true;
+      if (base && !hashMode) {
+        if (!(url.pathname === base || url.pathname.startsWith(base + "/")))
+          return true;
+      }
+      return false;
+    };
     onClick = function(e) {
-      let dest, target, url;
+      let dest, noScroll, target, url;
       if (e.defaultPrevented)
         return;
       if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey)
@@ -15511,33 +15599,122 @@ ${indented}`);
       while (target && target.tagName !== "A") {
         target = target.parentElement;
       }
-      if (!target?.href)
+      if (!target)
+        return;
+      if (shouldIgnoreAnchor(target))
         return;
       url = new URL(target.href, location.origin);
-      if (url.origin !== location.origin)
-        return;
-      if (target.target === "_blank" || target.hasAttribute("data-external"))
-        return;
-      if (target.hasAttribute("download"))
-        return;
-      if (target.hasAttribute("data-router-ignore"))
-        return;
-      if (base && !hashMode) {
-        if (!(url.pathname === base || url.pathname.startsWith(base + "/")))
-          return;
-      }
       e.preventDefault();
       dest = hashMode && url.hash ? url.hash.slice(1) || "/" : url.pathname + url.search + url.hash;
-      return router.push(dest);
+      noScroll = target.hasAttribute("data-router-noscroll");
+      return router.push(dest, { noScroll });
     };
     if (typeof document !== "undefined")
       document.addEventListener("click", onClick);
+    ownedAnchors = new WeakSet;
+    normalizeHref = function(rawPath) {
+      let p;
+      p = rawPath.split("?")[0].split("#")[0];
+      p = decodeURIComponent(p);
+      p = stripBase(p);
+      if (!(p[0] === "/"))
+        p = "/" + p;
+      if (p.length > 1 && p.endsWith("/"))
+        p = p.slice(0, -1);
+      return p;
+    };
+    currentNorm = function() {
+      let p;
+      p = hashMode ? stripBase(readUrl()).split("?")[0].split("#")[0] : _path.value.split("?")[0].split("#")[0];
+      if (!(p[0] === "/"))
+        p = "/" + p;
+      if (p.length > 1 && p.endsWith("/"))
+        p = p.slice(0, -1);
+      return p;
+    };
+    applyAria = function() {
+      let anchors, cur, desired, existing, linkPath, url;
+      if (typeof document === "undefined")
+        return;
+      cur = currentNorm();
+      anchors = document.querySelectorAll("a[href]");
+      for (let a of anchors) {
+        if (shouldIgnoreAnchor(a))
+          continue;
+        url = (() => {
+          try {
+            return new URL(a.href, location.origin);
+          } catch {
+            return null;
+          }
+        })();
+        if (!url)
+          continue;
+        linkPath = normalizeHref(url.pathname + url.search + url.hash);
+        desired = null;
+        if (linkPath === cur)
+          desired = "page";
+        if (!desired && cur !== "/" && cur.startsWith(linkPath + "/") && linkPath !== "")
+          desired = "true";
+        existing = a.getAttribute("aria-current");
+        if (desired) {
+          if (existing && !ownedAnchors.has(a)) {
+            continue;
+          }
+          a.setAttribute("aria-current", desired);
+          ownedAnchors.add(a);
+        } else if (ownedAnchors.has(a)) {
+          a.removeAttribute("aria-current");
+          ownedAnchors.delete(a);
+        }
+      }
+      return;
+    };
+    ariaObserver = null;
+    ariaScheduled = false;
+    scheduleAria = function() {
+      let cb;
+      if (ariaScheduled)
+        return;
+      ariaScheduled = true;
+      cb = function() {
+        ariaScheduled = false;
+        return applyAria();
+      };
+      return typeof window !== "undefined" && window.requestAnimationFrame ? window.requestAnimationFrame(cb) : setTimeout(cb, 0);
+    };
+    ariaEffect = __effect(function() {
+      let target;
+      if (typeof document === "undefined")
+        return;
+      currentNorm();
+      scheduleAria();
+      if (!ariaObserver) {
+        ariaObserver = new MutationObserver(function() {
+          return scheduleAria();
+        });
+        target = document.body || document.documentElement;
+        ariaObserver.observe(target, { childList: true, subtree: true });
+      }
+      return;
+    });
     router = {
-      push(url) {
-        return resolve(url) ? history.pushState(null, "", writeUrl(_normalizedUrl.read())) : undefined;
+      push(url, opts2) {
+        let prevY;
+        prevY = typeof window !== "undefined" ? window.scrollY : 0;
+        if (resolve(url)) {
+          try {
+            history.replaceState({ ...history.state || {}, _ripScroll: prevY }, "", location.href);
+          } catch {}
+          history.pushState({ _ripScroll: 0 }, "", writeUrl(_normalizedUrl.read()));
+          return !opts2?.noScroll && typeof window !== "undefined" ? window.scrollTo(0, 0) : undefined;
+        }
       },
-      replace(url) {
-        return resolve(url) ? history.replaceState(null, "", writeUrl(_normalizedUrl.read())) : undefined;
+      replace(url, opts2) {
+        if (resolve(url)) {
+          history.replaceState({ _ripScroll: 0 }, "", writeUrl(_normalizedUrl.read()));
+          return !opts2?.noScroll && typeof window !== "undefined" ? window.scrollTo(0, 0) : undefined;
+        }
       },
       back() {
         return history.back();
@@ -15570,8 +15747,16 @@ ${indented}`);
       destroy() {
         if (typeof window !== "undefined")
           window.removeEventListener("popstate", onPopState);
+        if (typeof window !== "undefined")
+          window.removeEventListener("scroll", onScroll);
         if (typeof document !== "undefined")
           document.removeEventListener("click", onClick);
+        if (prevScrollRestoration !== null && typeof history !== "undefined") {
+          history.scrollRestoration = prevScrollRestoration;
+        }
+        ariaObserver?.disconnect();
+        ariaObserver = null;
+        ariaEffect?.();
         unwatchComponents?.();
         unwatchComponents = null;
         _navigating?.dispose?.();
