@@ -307,6 +307,7 @@ router = createRouter components,
 
 router.push '/users/42?tab=settings'
 router.replace '/login'
+router.push '/cart', noScroll: true   # don't reset scroll on this nav
 router.back()
 router.forward()
 
