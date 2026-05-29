@@ -58,6 +58,24 @@ function scanRipPkgImports(scanText) {
   }
   return out;
 }
+// Type-position `import('@rip-lang/...')` import-types are erased by
+// `scanImports` (they live in type space), so the parser-based scan above
+// never sees them. The DTS pipeline injects exactly these — e.g.
+// `declare router: import('@rip-lang/app').Router` and the `NavOpts` alias
+// (RFC 4/5) — so the referenced package must still be pulled into the TS
+// program or its types silently resolve to `any` (e.g. `push`'s `opts`
+// going unchecked). Used ONLY for package seeding, never the
+// undeclared-import check: these are synthesized references, not source
+// dependencies the user must declare in package.json.
+const _ripImportTypeRe = /\bimport\(\s*(["'])(@rip-lang\/[^"']+)\1\s*\)/g;
+function scanRipPkgImportTypes(scanText) {
+  if (!scanText) return [];
+  const out = [];
+  _ripImportTypeRe.lastIndex = 0;
+  let m;
+  while ((m = _ripImportTypeRe.exec(scanText))) out.push(m[2]);
+  return out;
+}
 // Extract the bare package name (`@rip-lang/foo`) from a specifier
 // that may include a subpath (`@rip-lang/foo/sub/path`).
 function ripPkgRoot(spec) {
@@ -3321,7 +3339,8 @@ export async function runCheck(targetDir, opts = {}) {
   }
   const pendingPkgFiles = new Set();
   for (const [, entry] of compiled) {
-    for (const spec of scanRipPkgImports(entry.tsContent || entry.source)) {
+    const text = entry.tsContent || entry.source;
+    for (const spec of [...scanRipPkgImports(text), ...scanRipPkgImportTypes(text)]) {
       const r = resolvePkgSpec(spec);
       if (r && !compiled.has(r)) pendingPkgFiles.add(r);
     }
@@ -3337,7 +3356,8 @@ export async function runCheck(targetDir, opts = {}) {
       const compiledPkg = compileForCheck(next, pkgSrc, new Compiler());
       compiledPkg._typeOnly = true;
       compiled.set(next, compiledPkg);
-      for (const spec of scanRipPkgImports(compiledPkg.tsContent || pkgSrc)) {
+      const pkgText = compiledPkg.tsContent || pkgSrc;
+      for (const spec of [...scanRipPkgImports(pkgText), ...scanRipPkgImportTypes(pkgText)]) {
         const r = resolvePkgSpec(spec);
         if (r && !compiled.has(r)) pendingPkgFiles.add(r);
       }
