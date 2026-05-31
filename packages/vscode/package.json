@@ -117,7 +117,7 @@
     "install-cursor": "bun run package && cursor --install-extension rip-*.vsix --force"
   },
   "dependencies": {
-    "typescript": "5.9.3"
+    "typescript": "catalog:"
   },
   "devDependencies": {
     "esbuild": "^0.27.3",

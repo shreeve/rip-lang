@@ -62,7 +62,7 @@ function scanRipPkgImports(scanText) {
 // `scanImports` (they live in type space), so the parser-based scan above
 // never sees them. The DTS pipeline injects exactly these — e.g.
 // `declare router: import('@rip-lang/app').Router` and the `NavOpts` alias
-// (RFC 4/5) — so the referenced package must still be pulled into the TS
+// — so the referenced package must still be pulled into the TS
 // program or its types silently resolve to `any` (e.g. `push`'s `opts`
 // going unchecked). Used ONLY for package seeding, never the
 // undeclared-import check: these are synthesized references, not source

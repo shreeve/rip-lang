@@ -35,8 +35,21 @@ const os = require('os');
 const pkgDir   = path.resolve(__dirname, '..');
 const repoRoot = path.resolve(pkgDir, '..', '..');
 const pkgJson  = JSON.parse(fs.readFileSync(path.join(pkgDir, 'package.json'), 'utf8'));
-const tsVer    = pkgJson.dependencies?.typescript;
+let tsVer      = pkgJson.dependencies?.typescript;
 if (!tsVer) { console.error('typescript dep missing from package.json'); process.exit(1); }
+
+// The dep is declared as a bun catalog reference (`catalog:` / `catalog:<name>`)
+// so the version lives in one place — the root workspace catalog. Resolve it to
+// the concrete version here: vsce knows nothing about catalogs, and tsVer is used
+// below to locate TypeScript in bun's store and to write the staged manifest, so
+// a literal `catalog:` would both fail to resolve and leak into the published vsix.
+if (tsVer.startsWith('catalog:')) {
+  const rootPkg = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
+  const name = tsVer.slice('catalog:'.length); // '' = the default catalog
+  const resolved = (name ? rootPkg.catalogs?.[name] : rootPkg.catalog)?.typescript;
+  if (!resolved) { console.error(`could not resolve "${tsVer}" for typescript from root catalog`); process.exit(1); }
+  tsVer = resolved;
+}
 
 const tsSrc = path.join(repoRoot, 'node_modules', '.bun', `typescript@${tsVer}`, 'node_modules', 'typescript');
 if (!fs.existsSync(tsSrc)) {

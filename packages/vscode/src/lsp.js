@@ -152,8 +152,8 @@ connection.onInitialize(async (params) => {
   tc = await loadTypecheck(rootPath);
   connection.console.log(`[rip] typecheck: ${tc ? 'loaded' : 'NOT FOUND'}`);
 
-  ts = loadTypeScript(params);
-  if (ts) connection.console.log(`[rip] TypeScript ${ts.version}`);
+  ts = loadTypeScript();
+  connection.console.log(`[rip] TypeScript ${ts ? ts.version : 'NOT FOUND'}`);
 
   if (ts && compiler && tc) {
     documentRegistry = ts.createDocumentRegistry();
@@ -364,6 +364,46 @@ function loadPackageJson(dir) {
     addEntry('.', pkg.exports);
   } else if (typeof pkg.main === 'string') {
     addEntry('.', pkg.main);
+  }
+}
+
+// Resolve a bare specifier (`@rip-lang/server`, `@rip-lang/server/middleware`,
+// or an unscoped `foo/bar`) to a `.rip` entry installed under node_modules.
+// Discovery skips node_modules (INDEX_SKIP_DIRS), so packages installed there as
+// declared dependencies (rather than workspace members) never land in
+// entryForBareSpec. Resolve them on demand by walking up from the importing file,
+// mirroring loadPackageJson's exports/main → `.rip` mapping for a single subpath.
+// Returns an absolute `.rip` path, or null if nothing resolves (so the caller
+// falls through to ordinary TypeScript module resolution).
+function resolveNodeModulesRipEntry(name, containingFile) {
+  const parts = name.split('/');
+  const pkgName = name.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0];
+  const sub = name.length > pkgName.length ? '.' + name.slice(pkgName.length) : '.';
+
+  let dir = path.dirname(containingFile);
+  while (true) {
+    const pkgDir = path.join(dir, 'node_modules', pkgName);
+    const pkgJsonPath = path.join(pkgDir, 'package.json');
+    if (fs.existsSync(pkgJsonPath)) {
+      let pkg;
+      try { pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8')); } catch { return null; }
+      let target;
+      if (pkg.exports && typeof pkg.exports === 'object') {
+        let t = pkg.exports[sub];
+        if (t && typeof t !== 'string') t = t.default || t.import || t.require;
+        target = t;
+      } else if (sub === '.' && typeof pkg.exports === 'string') {
+        target = pkg.exports;
+      } else if (sub === '.' && typeof pkg.main === 'string') {
+        target = pkg.main;
+      }
+      if (typeof target !== 'string' || !target.endsWith('.rip')) return null;
+      const full = path.resolve(pkgDir, target);
+      return fs.existsSync(full) ? full : null;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) return null; // reached filesystem root
+    dir = parent;
   }
 }
 
@@ -624,7 +664,7 @@ function compileRip(filePath, source) {
       message,
       source: 'rip',
     });
-    connection.sendDiagnostics({ uri: pathToUri(filePath), diagnostics });
+    if (!isInNodeModules(filePath)) connection.sendDiagnostics({ uri: pathToUri(filePath), diagnostics });
     connection.console.log(`[rip] compile error ${relPath(filePath)}: ${e.message}`);
   }
 }
@@ -665,7 +705,15 @@ function scheduleDependentRepublish(changedPath) {
   }, DEPENDENT_REPUBLISH_DELAY_MS);
 }
 
+// Dependency sources (anything under a node_modules segment) are compiled so
+// imports resolve to their types, but they are external code — never report
+// diagnostics for them, nor check them under the consuming project's config.
+function isInNodeModules(filePath) {
+  return /[\\/]node_modules[\\/]/.test(filePath);
+}
+
 function publishDiagnostics(filePath) {
+  if (isInNodeModules(filePath)) return;
   const c = compiled.get(filePath);
   if (!c) return;
 
@@ -1039,10 +1087,13 @@ function createService(projectRoot) {
           }
         }
         // @rip-lang/* (and any workspace package) bare-spec resolution: if the
-        // spec matches a known workspace package entry that resolves to a .rip
-        // file, compile it and return a virtual .rip.ts so TS sees its exports.
+        // spec resolves to a `.rip` entry, compile it and return a virtual
+        // .rip.ts so TS sees its exports. Prefer a discovered workspace-member
+        // entry; otherwise fall back to a node_modules-installed package (which
+        // discovery skips) so the editor types it the same way `rip check` does.
         if (name.startsWith('@') || !name.startsWith('.')) {
-          const resolved = entryForBareSpec.get(name);
+          const resolved = entryForBareSpec.get(name)
+            || resolveNodeModulesRipEntry(name, fromVirtual(containingFile));
           if (resolved && fs.existsSync(resolved)) {
             if (!compiled.has(resolved)) compileRip(resolved, fs.readFileSync(resolved, 'utf8'));
             if (compiled.has(resolved)) {
@@ -3205,12 +3256,11 @@ async function loadTypecheck(root) {
   return null;
 }
 
-function loadTypeScript(params) {
-  const dirs = [rootPath];
-  if (params.initializationOptions?.typescript?.tsdk) dirs.unshift(params.initializationOptions.typescript.tsdk);
-  dirs.push(__dirname);
-  for (const d of dirs) { try { return require(require.resolve('typescript', { paths: [d] })); } catch {} }
-  try { return require('typescript'); } catch {}
+function loadTypeScript() {
+  // Only the TypeScript the extension ships (catalog-pinned, in lockstep with
+  // rip-lang) so the editor matches `rip check` — never the workspace's own TS.
+  // Missing bundled copy → return null (logged "NOT FOUND"), don't guess.
+  try { return require(require.resolve('typescript', { paths: [__dirname] })); } catch {}
   return null;
 }
 
