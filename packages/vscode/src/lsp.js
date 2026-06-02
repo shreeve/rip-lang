@@ -284,6 +284,7 @@ function rebuildProjectInfo() {
   projectRootCache.clear();
   bareSpecForEntry.clear();
   entryForBareSpec.clear();
+  declaredDepsCache.clear();
   (function walk(dir) {
     let entries;
     try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
@@ -295,6 +296,10 @@ function rebuildProjectInfo() {
       if (ent.isDirectory()) walk(path.join(dir, ent.name));
     }
   })(rootPath);
+  // Re-register declared node_modules .rip dependencies (a package.json edit may
+  // have added or removed one). Skipping this would drop their bare-specifier
+  // entries until the next restart.
+  indexNodeModulesRipDeps();
 }
 
 // Workspace .rip files discovered by a fast directory walk. Stored as paths
@@ -499,6 +504,7 @@ function indexWorkspaceRipFiles() {
       }
     }
   })(rootPath);
+  indexNodeModulesRipDeps();
   connection.console.log(`[rip] discovered ${count} .rip file(s), ${projectRoots.size} project(s), ${bareSpecForEntry.size} package entrypoint(s) in ${Date.now() - start}ms`);
   // Install native fs.watch on every discovered routes dir. VS Code's
   // workspace/didChangeWatchedFiles can take 2–10s on macOS to deliver
@@ -507,6 +513,65 @@ function indexWorkspaceRipFiles() {
     if (/[/\\]app[/\\]routes[/\\]/.test(fp)) {
       const dir = tc.findRoutesDir?.(fp);
       if (dir) watchRoutesDir(dir);
+    }
+  }
+}
+
+// Index the entry-point `.rip` files of declared dependencies installed under
+// node_modules. The workspace walk skips node_modules (INDEX_SKIP_DIRS) for
+// speed, so `.rip` packages installed as ordinary dependencies — rather than
+// workspace members living in the tree — never reach the export index, and
+// their public symbols can't be auto-imported (e.g. `RouteHandler` from
+// `@rip-lang/server`). For each project's declared deps that ship a `.rip`
+// entry point, register its bare specifier and index that entry's exports.
+function indexNodeModulesRipDeps() {
+  const seen = new Set();
+  for (const projRoot of [...projectRoots]) {
+    const deps = declaredDepsFor(projRoot);
+    if (!deps) continue;
+    for (const depName of deps) {
+      // Resolve node_modules/<depName> by walking up from the project root.
+      let dir = projRoot, pkgDir = null;
+      while (true) {
+        const cand = path.join(dir, 'node_modules', depName);
+        if (fs.existsSync(path.join(cand, 'package.json'))) { pkgDir = cand; break; }
+        const parent = path.dirname(dir);
+        if (parent === dir) break;
+        dir = parent;
+      }
+      // Keep the symlink path (under rootPath) rather than its realpath so
+      // findProjectRoot — which walks up checking projectRoots — still resolves.
+      if (!pkgDir || !pkgDir.startsWith(rootPath) || seen.has(pkgDir)) continue;
+      seen.add(pkgDir);
+      // Skip workspace members already indexed via their real path (a monorepo
+      // node_modules entry symlinked back into the tree); only external deps
+      // whose source lives outside the workspace need this pass.
+      let real;
+      try { real = fs.realpathSync(pkgDir); } catch { real = pkgDir; }
+      if (real.startsWith(rootPath) && !real.includes(`${path.sep}node_modules${path.sep}`)) continue;
+      let depPkg;
+      try { depPkg = JSON.parse(fs.readFileSync(path.join(pkgDir, 'package.json'), 'utf8')); } catch { continue; }
+      // Collect `.rip` entry-point files from exports/main.
+      const entryFiles = new Set();
+      const collect = (target) => {
+        if (target && typeof target !== 'string') target = target.default || target.import || target.require;
+        if (typeof target === 'string' && target.endsWith('.rip')) {
+          const full = path.resolve(pkgDir, target);
+          if (fs.existsSync(full)) entryFiles.add(full);
+        }
+      };
+      if (depPkg.exports && typeof depPkg.exports === 'object') for (const t of Object.values(depPkg.exports)) collect(t);
+      else if (typeof depPkg.exports === 'string') collect(depPkg.exports);
+      else if (typeof depPkg.main === 'string') collect(depPkg.main);
+      if (!entryFiles.size) continue;
+      loadPackageJson(pkgDir);                 // register bare specifiers for entries
+      for (const f of entryFiles) {
+        discoveredRipFiles.add(f);
+        // At startup the index isn't built yet (ensureExportIndex scans
+        // discoveredRipFiles lazily); on a package.json-driven rebuild it is,
+        // so index the newly-registered entry immediately.
+        if (exportIndexBuilt) updateExportIndexFor(f);
+      }
     }
   }
 }
@@ -2718,16 +2783,52 @@ function relativeRipSpecifier(fromFp, toFp) {
   return spec.split(path.sep).join('/');
 }
 
+// The package name carried by a bare specifier: `@scope/name` or `@scope/name
+// /sub` -> `@scope/name`; `name` or `name/sub` -> `name`.
+function pkgNameFromSpec(spec) {
+  const parts = spec.split('/');
+  return spec.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0];
+}
+
+// Declared dependency names for a project, cached. Cleared by
+// rebuildProjectInfo on any package.json change.
+const declaredDepsCache = new Map(); // projectRoot -> Set<pkgName>
+function declaredDepsFor(projectRoot) {
+  if (!projectRoot) return null;
+  let set = declaredDepsCache.get(projectRoot);
+  if (set) return set;
+  set = new Set();
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf8'));
+    for (const field of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) {
+      for (const name of Object.keys(pkg[field] || {})) set.add(name);
+    }
+  } catch {}
+  declaredDepsCache.set(projectRoot, set);
+  return set;
+}
+
 // Decide what specifier to use when importing `targetFp` from `fromFp`, or
 // null if the target shouldn't be suggested.
 //   - same project root  -> relative `.rip` path
-//   - cross-project, but `targetFp` is a workspace package entry -> bare spec
-//   - otherwise -> null (skip; would be a cross-project relative path)
+//   - cross-project, target is a package entry the consumer DECLARES -> bare spec
+//   - otherwise -> null (different project and not a declared dependency)
+//
+// The export index spans the whole workspace (one shared cache for every file
+// you might open), so a name can resolve to an entry in some sibling package
+// the current project doesn't depend on. Suggesting that import would produce
+// code that fails RFC 9's undeclared-import check (at `rip check`, the loader,
+// and the bundler), so cross-project suggestions are gated on the consuming
+// project's declared dependencies — the suggestion surface for any file is its
+// own project's files plus what its package.json actually pulls in.
 function resolveSpecForTarget(fromFp, targetFp) {
   const fromRoot = findProjectRoot(fromFp);
   const toRoot = findProjectRoot(targetFp);
   if (fromRoot && toRoot && fromRoot === toRoot) return relativeRipSpecifier(fromFp, targetFp);
-  return bareSpecForEntry.get(targetFp) || null;
+  const spec = bareSpecForEntry.get(targetFp);
+  if (!spec) return null;
+  const deps = declaredDepsFor(fromRoot);
+  return deps && deps.has(pkgNameFromSpec(spec)) ? spec : null;
 }
 
 // Build an LSP TextEdit that adds `name` to an import from `spec` in `source`.
