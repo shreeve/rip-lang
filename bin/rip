@@ -207,13 +207,32 @@ async function main() {
         }
       }
 
-      // 5. Global PATH: rip-<name>
+      // 5. Nearest node_modules/.bin walking up from the cwd. `getRepoRoot`
+      // uses `git rev-parse --show-toplevel`, which returns the OUTERMOST git
+      // repo — wrong when a project lives in a subdirectory of a larger git
+      // repo: step 4 then probes the outer repo's node_modules and misses the
+      // project's own declared bins. Resolve the bin the way Node resolves a
+      // dependency — nearest node_modules up the tree from the cwd — which is
+      // correct for nested projects and standalone consumers alike.
+      let nmDir = process.cwd();
+      while (true) {
+        const nmBin = join(nmDir, 'node_modules', '.bin', `rip-${name}`);
+        if (existsSync(nmBin)) {
+          const r = spawnSync(nmBin, subArgs, { stdio: 'inherit', env: process.env });
+          process.exit(r.status ?? 1);
+        }
+        const parent = dirname(nmDir);
+        if (parent === nmDir) break;
+        nmDir = parent;
+      }
+
+      // 6. Global PATH: rip-<name>
       const pathResult = spawnSync(`rip-${name}`, subArgs, { stdio: 'inherit', env: process.env });
       if (pathResult.error?.code !== 'ENOENT') {
         process.exit(pathResult.status ?? 1);
       }
 
-      // 6. Not found
+      // 7. Not found
       console.error(`rip: unknown command '${name}'\n\nRun 'rip --help' for usage.`);
       process.exit(1);
     }
