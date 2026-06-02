@@ -1876,10 +1876,12 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
     for (let i = 0; i < cl.length; i++) {
       const m = cl[i].match(/^(\s*)let\s+([A-Za-z_$][\w$]*(?:\s*,\s*[A-Za-z_$][\w$]*)*)\s*;\s*$/);
       if (!m) continue;
-      // Only process hoist-position lets (first non-blank line after `{` or start of file)
+      // Only process hoist-position lets (first non-blank line after `{`, start
+      // of file, or the module's import block — the compiler emits the
+      // module-scope hoist right after the imports).
       let prev = null;
       for (let k = i - 1; k >= 0; k--) { if (cl[k].trim() !== '') { prev = cl[k]; break; } }
-      if (prev !== null && !/\{\s*$/.test(prev)) continue;
+      if (prev !== null && !/\{\s*$/.test(prev) && !/^\s*import\b/.test(prev)) continue;
 
       const baseIndent = m[1];
       const vars = m[2].split(/\s*,\s*/);
@@ -1980,8 +1982,23 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
       }
 
       const remaining = vars.filter(v => !inlined.has(v));
-      if (remaining.length) cl[i] = `${baseIndent}let ${remaining.join(', ')};`;
-      else cl[i] = '';
+      // Module-scope only: drop any var that still has a DTS-header decl
+      // (`let name: T;`) from this untyped hoist. These are chiefly module-level
+      // function bindings, whose assignment spans multiple lines
+      // (`proxy = function(c) {` … `};`) and so never folds into a single
+      // `let name: T = value;` line. The header decl is the single,
+      // correctly-typed declaration and the body's later `name = …` assigns it;
+      // leaving name in this hoist too would duplicate the module-scope binding,
+      // and TS resolves to the untyped copy — dropping contextual typing for the
+      // function's params and `this` (the redeclare is auto-suppressed, so the
+      // symptom surfaces elsewhere). We deliberately keep the type on the header
+      // decl rather than re-emitting it onto this synthetic hoist line: the
+      // compiler source-maps the header's type name back to the real `name:: T`
+      // annotation, so diagnostics/quick-fixes land on it — re-emitting here
+      // would map them to the hoist's position instead. Function-body hoists are
+      // left alone: their locals get types from the compiler's inline hoist.
+      const kept = baseIndent === '' ? remaining.filter(v => !letTypes.has(v)) : remaining;
+      cl[i] = kept.length ? `${baseIndent}let ${kept.join(', ')};` : '';
     }
     code = cl.join('\n');
 
@@ -3155,8 +3172,18 @@ export function readProjectConfig(dir) {
     while (true) {
       const pkgPath = resolve(d, 'package.json');
       if (existsSync(pkgPath)) {
+        // The first package.json walking up is the project boundary — matching
+        // the LSP's findProjectRoot and TypeScript's nearest-config resolution.
+        // Apply its `rip` config if present, otherwise fall back to defaults;
+        // either way stop here. We deliberately do NOT walk past it into
+        // ancestors: a parent repo's config must not silently leak across a
+        // project boundary (e.g. a standalone app nested inside a larger git
+        // repo inheriting that repo's `strict`). Inheritance, if ever wanted,
+        // should be opt-in and explicit rather than positional.
         const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
-        if (pkg.rip && typeof pkg.rip === 'object') { Object.assign(config, pkg.rip); config._configDir = d; break; }
+        if (pkg.rip && typeof pkg.rip === 'object') Object.assign(config, pkg.rip);
+        config._configDir = d;
+        break;
       }
       const parent = dirname(d);
       if (parent === d) break;
