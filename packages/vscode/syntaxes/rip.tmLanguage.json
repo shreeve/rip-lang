@@ -714,6 +714,36 @@
           "name": "keyword.operator.expression.typeof.rip"
         },
         {
+          "comment": "keyof type operator",
+          "match": "\\b(keyof)\\b",
+          "name": "keyword.operator.expression.keyof.rip"
+        },
+        {
+          "comment": "infer type operator (conditional types)",
+          "match": "\\b(infer)\\b",
+          "name": "keyword.operator.expression.infer.rip"
+        },
+        {
+          "comment": "extends — generic constraints and conditional types",
+          "match": "\\b(extends)\\b",
+          "name": "keyword.operator.expression.extends.rip"
+        },
+        {
+          "comment": "in — mapped type key iteration ([P in K])",
+          "match": "\\b(in)\\b",
+          "name": "keyword.operator.expression.in.rip"
+        },
+        {
+          "comment": "is — type predicates (x is Foo)",
+          "match": "\\b(is)\\b",
+          "name": "keyword.operator.expression.is.rip"
+        },
+        {
+          "comment": "readonly — array/tuple/mapped type modifier",
+          "match": "\\b(readonly)\\b",
+          "name": "storage.modifier.rip"
+        },
+        {
           "comment": "Type names (PascalCase)",
           "match": "\\b([A-Z]\\w*)\\b",
           "name": "entity.name.type.rip"

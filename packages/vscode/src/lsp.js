@@ -1192,8 +1192,10 @@ function isInsideStringOrComment(line, col) {
 
 // Find an unused word-boundary occurrence of `word` near `centerLine`.
 // Searches outward ±5 lines, skipping positions already in `used`.
+// `isExcluded(line, col)` (optional) rejects otherwise-valid positions —
+// used to keep spilled tokens off import specifiers (see caller).
 // Calls `assign(line, col)` and returns true on success.
-function findUnusedOccurrence(srcLines, word, len, centerLine, used, assign) {
+function findUnusedOccurrence(srcLines, word, len, centerLine, used, assign, isExcluded) {
   for (let delta = 0; delta <= 5; delta++) {
     const tryLines = delta === 0 ? [centerLine] : [centerLine - delta, centerLine + delta];
     for (const ln of tryLines) {
@@ -1204,7 +1206,8 @@ function findUnusedOccurrence(srcLines, word, len, centerLine, used, assign) {
         if ((idx === 0 || !/\w/.test(s[idx - 1])) &&
             (idx + len >= s.length || !/\w/.test(s[idx + len])) &&
             !used.has(ln + ':' + idx) &&
-            !isInsideStringOrComment(s, idx)) {
+            !isInsideStringOrComment(s, idx) &&
+            !(isExcluded && isExcluded(ln, idx))) {
           assign(ln, idx);
           return true;
         }
@@ -1951,6 +1954,42 @@ connection.onRequest('textDocument/semanticTokens/full', (params) => {
     const tokens = [];
     const usedPositions = new Set();
 
+    // Pre-compute source ranges inside import/export `{ … }` specifier lists.
+    // TypeScript never emits a semantic classification for an import specifier
+    // name, so any token that maps onto one is a mis-mapped (spilled) usage
+    // token — e.g. when a type is used N times but every usage collapses onto
+    // a single source position, the surplus tokens spill via findUnusedOccurrence
+    // and one can land on the same name in an `import { … }` line. Excluding
+    // these positions lets the spill continue to the next real usage instead.
+    const importSpecRanges = new Map(); // srcLine → [[startCol, endCol], …]
+    {
+      const srcText = c.source;
+      const lineStarts = [0];
+      for (let i = 0; i < srcText.length; i++) if (srcText[i] === '\n') lineStarts.push(i + 1);
+      const offToLC = (off) => {
+        let lo = 0, hi = lineStarts.length - 1;
+        while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (lineStarts[mid] <= off) lo = mid; else hi = mid - 1; }
+        return { line: lo, col: off - lineStarts[lo] };
+      };
+      const importRe = /(?:^|\n)[ \t]*(?:import|export)\b[^\n{]*\{([\s\S]*?)\}[^\n]*?\bfrom\b/g;
+      let im;
+      while ((im = importRe.exec(srcText)) !== null) {
+        const contentStart = im.index + im[0].indexOf('{') + 1;
+        const contentEnd = contentStart + im[1].length;
+        const a = offToLC(contentStart), b = offToLC(contentEnd);
+        for (let ln = a.line; ln <= b.line; ln++) {
+          const startCol = ln === a.line ? a.col : 0;
+          const endCol = ln === b.line ? b.col : (srcLines[ln]?.length ?? 0);
+          if (!importSpecRanges.has(ln)) importSpecRanges.set(ln, []);
+          importSpecRanges.get(ln).push([startCol, endCol]);
+        }
+      }
+    }
+    const inImportSpecifier = (ln, col) => {
+      const ranges = importSpecRanges.get(ln);
+      return ranges ? ranges.some(([s, e]) => col >= s && col < e) : false;
+    };
+
     // Collect reactive variable names (:= and ~= declarations) so we
     // can strip the readonly modifier from all their references — TS
     // sees `const` but these are semantically mutable.
@@ -2045,6 +2084,24 @@ connection.onRequest('textDocument/semanticTokens/full', (params) => {
       return info;
     }
 
+    // Recognize compiler-injected component-stub lines (emitted by the
+    // `stubComponents` pass: the synthetic `this` shape, the optional
+    // lifecycle-hook signatures, `emit`, and the props constructor). These
+    // declarations have no source counterpart, so the text-search mapper
+    // interpolates their identifiers onto real nearby source names — e.g. the
+    // `err` param of a synthesized `onError?(err: …)` stub lands on a user
+    // `catch err` binding or an `errors` state var, painting it with the
+    // `parameter` scope. Their signatures are stable compiler output, so match
+    // them exactly and skip every token they produce. Keep in sync with the
+    // stubComponents emission in src/components.js.
+    function isComponentStubLine(lineText) {
+      const s = lineText.trim();
+      return /^declare _root: Element \| null; declare app:/.test(s)
+        || /^(?:(?:beforeMount|mounted|beforeUnmount|unmounted)\?\(\): void;\s*|onError\?\(err: \{[^}]*\}\): void;\s*)+$/.test(s)
+        || /^emit\(_name: string, _detail\?: any\): void \{\}$/.test(s)
+        || /^constructor\(_props\?:/.test(s);
+    }
+
     for (const [tsOffset, tsLength, classification] of orderedSpans) {
       const tsTokenType = ((classification >> 8) & 0xFF) - 1;
       const tsModifiers = classification & 0xFF;
@@ -2087,6 +2144,9 @@ connection.onRequest('textDocument/semanticTokens/full', (params) => {
       // which steal source positions from actual body tokens via text search.
       if (tsOffset >= headerEndOffset) {
         const tsLine = tc.offsetToLine(c.tsContent, tsOffset);
+        // Skip ALL tokens from compiler-injected component-stub lines —
+        // they have no source counterpart and mis-map onto real identifiers.
+        if (isComponentStubLine(tc.getLineText(c.tsContent, tsLine))) continue;
         const info = getFnSigInfo(tsLine);
         // Skip ALL tokens from overload signature lines (duplicates)
         if (info.isOverload) continue;
@@ -2113,9 +2173,18 @@ connection.onRequest('textDocument/semanticTokens/full', (params) => {
       const srcLine = srcLines[matchLine];
       if (!srcLine) continue;
 
-      if (srcLine.substring(matchCol, matchCol + tsLength) !== tsText) {
+      // Accept the mapped position only if it covers the WHOLE identifier, not
+      // just a prefix/substring of a longer one. A semantic token classifies an
+      // identifier, so it must align to a word boundary on both sides. Without
+      // this, a mis-mapped token whose text is a prefix of the real source
+      // identifier (e.g. the `err` param of a synthesized `onError?(err:…)`
+      // lifecycle stub landing on `errors`) passes a plain substring check and
+      // paints the wrong scope over part of an unrelated name.
+      const beforeOk = matchCol === 0 || !/\w/.test(srcLine[matchCol - 1]);
+      const afterOk = matchCol + tsLength >= srcLine.length || !/\w/.test(srcLine[matchCol + tsLength]);
+      if (srcLine.substring(matchCol, matchCol + tsLength) !== tsText || !beforeOk || !afterOk) {
         // Multiline expressions compile to one gen line — search nearby source lines
-        if (!findUnusedOccurrence(srcLines, tsText, tsLength, srcPos.line, usedPositions, (l, c) => { matchLine = l; matchCol = c; })) continue;
+        if (!findUnusedOccurrence(srcLines, tsText, tsLength, srcPos.line, usedPositions, (l, c) => { matchLine = l; matchCol = c; }, inImportSpecifier)) continue;
       }
 
       // Collision: multiple TS tokens mapped to the same source position
@@ -2123,7 +2192,7 @@ connection.onRequest('textDocument/semanticTokens/full', (params) => {
       // Find the next unused occurrence of this word nearby.
       const posKey = matchLine + ':' + matchCol;
       if (usedPositions.has(posKey)) {
-        if (!findUnusedOccurrence(srcLines, tsText, tsLength, matchLine, usedPositions, (l, c) => { matchLine = l; matchCol = c; })) continue;
+        if (!findUnusedOccurrence(srcLines, tsText, tsLength, matchLine, usedPositions, (l, c) => { matchLine = l; matchCol = c; }, inImportSpecifier)) continue;
       }
 
       // When the initial mapping lands inside a string literal or comment,
@@ -2132,7 +2201,7 @@ connection.onRequest('textDocument/semanticTokens/full', (params) => {
       // value on the same source line (e.g. `console.log "total:", total`).
       if (isInsideStringOrComment(srcLines[matchLine], matchCol)) {
         usedPositions.add(matchLine + ':' + matchCol);
-        if (!findUnusedOccurrence(srcLines, tsText, tsLength, matchLine, usedPositions, (l, c) => { matchLine = l; matchCol = c; })) continue;
+        if (!findUnusedOccurrence(srcLines, tsText, tsLength, matchLine, usedPositions, (l, c) => { matchLine = l; matchCol = c; }, inImportSpecifier)) continue;
       }
 
       // Skip tokens inside render blocks where TextMate provides

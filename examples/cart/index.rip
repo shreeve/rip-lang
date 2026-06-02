@@ -1,4 +1,4 @@
-import { get, post, use, start, notFound } from '@rip-lang/server'
+import { get, use, start, notFound } from '@rip-lang/server'
 import { serve } from '@rip-lang/server/middleware'
 import './api/index.rip'
 
