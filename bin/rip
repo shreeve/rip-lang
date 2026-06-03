@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { readFileSync, readdirSync, writeFileSync, existsSync, statSync, unlinkSync } from 'fs';
+import { readFileSync, readdirSync, writeFileSync, existsSync, statSync, unlinkSync, lstatSync, readlinkSync, rmSync, mkdirSync, symlinkSync, realpathSync } from 'fs';
 import { execSync, spawnSync, spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, basename, join } from 'path';
@@ -63,6 +63,9 @@ Subcommands:
   rip check --audit [pkgDir]    Audit a typed package's public API surface for 'any' leaks
   rip check --sourcemap [dir]   Verify source-map round-trip for every identifier
                                 (hover/go-to-def integrity). Useful for compiler work.
+  rip link [--quiet]            After 'bun install', symlink @rip-lang/* deps to
+                                local source (opt-in, for framework devs;
+                                undo with 'bun install --force')
   rip <name> [args]             Run rip-<name> (repo bin/, node_modules, or PATH)
 
   Configure via rip.json or package.json:
@@ -95,6 +98,109 @@ Shebang support:
   #!/usr/bin/env rip            # Execute with rip
   #!/usr/bin/env bun            # Execute with bun (also works)
 `);
+}
+
+// `rip link` — opt-in override for framework maintainers, layered on top of a
+// normal install. The canonical setup for any rip project is `bun install`
+// (published packages, lockfile, transitive deps); `rip link` then redirects
+// the @rip-lang/* deps to this CLI's own source checkout, by symlinking them
+// into ./node_modules/@rip-lang/* (plus matching .bin shims), so you can edit
+// framework source live without publishing.
+//
+// Requires `bun install` first — it overrides an existing install, it is not a
+// substitute for one. Reversible: the symlinks live in node_modules (gitignored)
+// and package.json stays clean semver, so `bun install --force` restores the
+// published packages (a plain `bun install` sees the lockfile as satisfied and
+// leaves the symlinks in place). No-op when no source tree is found (e.g. `rip`
+// installed from npm without a dev checkout) — projects then just use installed
+// packages.
+//
+// Source is this CLI's repo root (so it Just Works after `link-global`),
+// overridable via RIP_SRC.
+function ripLink(args) {
+  const quiet = args.includes('--quiet');
+  const log = (msg) => { if (!quiet) console.log(`[rip] link: ${msg}`); };
+
+  const rawSrc = process.env.RIP_SRC || join(__dirname, '..');
+  if (!existsSync(join(rawSrc, 'packages'))) {
+    log(`no rip-lang source at ${rawSrc} — using installed packages (set RIP_SRC to override)`);
+    return;
+  }
+  const src = realpathSync(rawSrc);
+
+  const cwd = process.cwd();
+  const pkgPath = join(cwd, 'package.json');
+  if (!existsSync(pkgPath)) {
+    console.error('[rip] link: no package.json in current directory');
+    process.exit(1);
+  }
+  const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+  const deps = Object.keys(pkg.dependencies || {}).filter((d) => d.startsWith('@rip-lang/'));
+  if (deps.length === 0) {
+    log('no @rip-lang/* dependencies declared — nothing to link');
+    return;
+  }
+
+  const nodeModules = join(cwd, 'node_modules');
+  if (!existsSync(nodeModules)) {
+    console.error('[rip] link: no node_modules found — run `bun install` first, then `rip link`.');
+    process.exit(1);
+  }
+  const binDir = join(nodeModules, '.bin');
+
+  const linkTo = (path, target, type = 'dir') => {
+    try {
+      if (lstatSync(path).isSymbolicLink() && readlinkSync(path) === target) return false;
+      rmSync(path, { recursive: true, force: true });
+    } catch {}
+    mkdirSync(dirname(path), { recursive: true });
+    symlinkSync(target, path, type);
+    return true;
+  };
+
+  const linked = [];   // { dep, bins: [names] } for each resolved package
+  let changed = false;
+
+  for (const dep of deps) {
+    const short = dep.slice('@rip-lang/'.length);
+    const target = join(src, 'packages', short);
+    if (!existsSync(target)) { log(`skip ${dep} — not found at ${target}`); continue; }
+    if (linkTo(join(nodeModules, '@rip-lang', short), target)) changed = true;
+
+    // Re-create .bin shims from the package's own `bin` field so `rip server`
+    // and friends resolve source binaries from this project's node_modules.
+    let meta = {};
+    try { meta = JSON.parse(readFileSync(join(target, 'package.json'), 'utf-8')); } catch {}
+    const binMap = typeof meta.bin === 'string' ? { [short]: meta.bin } : (meta.bin || {});
+    const bins = [];
+    for (const [name, rel] of Object.entries(binMap)) {
+      const binTarget = join(target, rel);
+      if (!existsSync(binTarget)) continue;
+      if (linkTo(join(binDir, name), binTarget, 'file')) changed = true;
+      bins.push(name);
+    }
+    linked.push({ dep, bins });
+  }
+
+  if (quiet || linked.length === 0) {
+    if (linked.length === 0) log('no @rip-lang/* packages resolved to source');
+    return;
+  }
+
+  const home = process.env.HOME || process.env.USERPROFILE || '';
+  const tilde = (p) => home && p.startsWith(home) ? '~' + p.slice(home.length) : p;
+  const tty = process.stdout.isTTY;
+  const dim = (s) => tty ? `\x1b[2m${s}\x1b[0m` : s;
+  const bold = (s) => tty ? `\x1b[1m${s}\x1b[0m` : s;
+
+  const n = linked.length;
+  const verb = changed ? 'linked' : 'already linked';
+  console.log(`${bold('rip link')} ${dim('·')} ${verb} ${n} package${n === 1 ? '' : 's'} ${dim('→ ' + tilde(src))}`);
+  const width = Math.max(...linked.map((l) => l.dep.length));
+  for (const { dep, bins } of linked) {
+    const line = bins.length ? `${dep.padEnd(width)}${dim(`  bin: ${bins.join(', ')}`)}` : dep;
+    console.log(`  ${dim('•')} ${line}`);
+  }
 }
 
 async function main() {
@@ -158,6 +264,11 @@ async function main() {
     if (!wantAudit) process.exit(checkCode);
     const auditCode = await runAudit(dir);
     process.exit(checkCode || auditCode);
+  }
+
+  if (args[0] === 'link') {
+    ripLink(args.slice(1));
+    process.exit(0);
   }
 
   // --- Subcommand dispatch: rip <name> → rip-<name> ---
