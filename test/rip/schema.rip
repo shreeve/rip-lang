@@ -1882,8 +1882,8 @@ INTRINSICS = '''
   interface SchemaIssue { field: string; error: string; message: string; }
   type SchemaSafeResult<T> = { ok: true; value: T; errors: null } | { ok: false; value: null; errors: SchemaIssue[] };
   interface Schema<Out, In = unknown> {
-    parse(data: In): Out;
-    safe(data: In): SchemaSafeResult<Out>;
+    parse(data: unknown): Out;
+    safe(data: unknown): SchemaSafeResult<Out>;
     ok(data: unknown): boolean;
     pick<K extends keyof In>(...keys: K[]): Schema<Pick<In, K>, Pick<In, K>>;
     omit<K extends keyof In>(...keys: K[]): Schema<Omit<In, K>, Omit<In, K>>;
@@ -1912,13 +1912,13 @@ INTRINSICS = '''
 
   '''
 
-type ":input emits Schema<Value, Value>", '''
+type ":input emits a bare value type", '''
   SignupInput = schema
     email! email
     password! string
   ''', INTRINSICS + "\n" + '''
-  type SignupInputValue = { email: string; password: string };
-  declare const SignupInput: Schema<SignupInputValue, SignupInputValue>;
+  type SignupInput = { email: string; password: string };
+  declare const SignupInput: Schema<SignupInput, SignupInput>;
   '''
 
 type ":shape emits Data + Instance types", '''
@@ -1929,8 +1929,8 @@ type ":shape emits Data + Instance types", '''
     normalize: -> @
   ''', INTRINSICS + "\n" + '''
   type AddressData = { street: string; city: string };
-  type AddressInstance = AddressData & { readonly full: unknown; normalize: (...args: any[]) => unknown };
-  declare const Address: Schema<AddressInstance, AddressData>;
+  type Address = AddressData & { readonly full: unknown; normalize: (...args: any[]) => unknown };
+  declare const Address: Schema<Address, AddressData>;
   '''
 
 type ":enum emits union + const with predicate ok()", '''
@@ -1958,8 +1958,8 @@ type "optional fields marked with ?", '''
     bio?   text
     age    integer
   ''', INTRINSICS + "\n" + '''
-  type UserValue = { name: string; bio?: string; age?: number };
-  declare const User: Schema<UserValue, UserValue>;
+  type User = { name: string; bio?: string; age?: number };
+  declare const User: Schema<User, User>;
   '''
 
 type ":model emits ModelSchema<Instance, Data> with relation accessors", '''
@@ -1969,12 +1969,12 @@ type ":model emits ModelSchema<Instance, Data> with relation accessors", '''
     name! string
     @belongs_to Org
   ''', INTRINSICS + "\n" + '''
-  type OrgData = { name: string };
-  type OrgInstance = OrgData & { save(): Promise<OrgInstance>; destroy(): Promise<OrgInstance>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): OrgData };
-  declare const Org: ModelSchema<OrgInstance, OrgData>;
-  type UserData = { name: string };
-  type UserInstance = UserData & { org(): Promise<OrgInstance | null>; save(): Promise<UserInstance>; destroy(): Promise<UserInstance>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): UserData };
-  declare const User: ModelSchema<UserInstance, UserData>;
+  type OrgData = { name: string } & { id: number };
+  type Org = OrgData & { save(): Promise<Org>; destroy(): Promise<Org>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): OrgData };
+  declare const Org: ModelSchema<Org, OrgData>;
+  type UserData = { name: string } & { id: number; orgId: number };
+  type User = UserData & { org(): Promise<Org | null>; save(): Promise<User>; destroy(): Promise<User>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): UserData };
+  declare const User: ModelSchema<User, UserData>;
   '''
 
 type ":mixin emits field-type alias; host Data intersects mixins", '''
@@ -1986,9 +1986,9 @@ type ":mixin emits field-type alias; host Data intersects mixins", '''
     updatedAt! datetime
   ''', INTRINSICS + "\n" + '''
   type Timestamps = { createdAt: Date; updatedAt: Date };
-  type UserData = { name: string } & Timestamps;
-  type UserInstance = UserData & { save(): Promise<UserInstance>; destroy(): Promise<UserInstance>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): UserData };
-  declare const User: ModelSchema<UserInstance, UserData>;
+  type UserData = { name: string } & Timestamps & { id: number };
+  type User = UserData & { save(): Promise<User>; destroy(): Promise<User>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): UserData };
+  declare const User: ModelSchema<User, UserData>;
   '''
 
 type "cross-file relation target degrades to unknown", '''
@@ -1997,9 +1997,9 @@ type "cross-file relation target degrades to unknown", '''
     @belongs_to Organization
     @has_many Order
   ''', INTRINSICS + "\n" + '''
-  type UserData = { name: string };
-  type UserInstance = UserData & { organization(): Promise<unknown>; orders(): Promise<unknown[]>; save(): Promise<UserInstance>; destroy(): Promise<UserInstance>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): UserData };
-  declare const User: ModelSchema<UserInstance, UserData>;
+  type UserData = { name: string } & { id: number; organizationId: number };
+  type User = UserData & { organization(): Promise<unknown>; orders(): Promise<unknown[]>; save(): Promise<User>; destroy(): Promise<User>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): UserData };
+  declare const User: ModelSchema<User, UserData>;
   '''
 
 # ==============================================================================
@@ -3117,7 +3117,7 @@ test ".omit returns a :shape without named fields", '''
     password! string
   Safe = User.omit("password")
   [Safe.kind, [...Safe._normalize().fields.keys()]]
-''', ["shape", ["name", "email"]]
+''', ["shape", ["name", "email", "id"]]
 
 test ".partial flips all fields to optional", '''
   X = schema
@@ -3197,10 +3197,10 @@ test "algebra drops behavior (D13)", '''
   [typeof a.full, typeof a.normalize, typeof b.full, typeof b.normalize]
 ''', ["string", "function", "undefined", "undefined"]
 
-type "exported schema emits export const", '''
+type "exported schema emits export declare const", '''
   export Foo = schema :input
     a! string
   ''', INTRINSICS + "\n" + '''
-  export type FooValue = { a: string };
-  export const Foo: Schema<FooValue, FooValue>;
+  export type Foo = { a: string };
+  export declare const Foo: Schema<Foo, Foo>;
   '''

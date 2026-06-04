@@ -1149,17 +1149,50 @@ function injectTypeParams(line, typeParams) {
 export function compileForCheck(filePath, source, compiler, opts = {}) {
   const result = compiler.compile(source, { sourceMap: true, types: 'emit', skipPreamble: true, stubComponents: true, inlineTypes: true });
   let code = result.code || '';
-  const dts = result.dts ? result.dts.trimEnd() + '\n' : '';
+  let dts = result.dts ? result.dts.trimEnd() + '\n' : '';
+
+  // ── Schema shadow reconciliation ──────────────────────────────────────
+  // The compiled body keeps its runtime `const Name = __schema({...})`
+  // bindings verbatim, so source maps stay exact. But in a `.ts` shadow that
+  // body references an undeclared `__schema` (skipPreamble drops the runtime
+  // import) and would also collide with the dts `declare const Name`. Rewrite
+  // each schema `const` declaration into a `__schema` overload keyed on the
+  // schema's `name` literal, so the body's `__schema({name:"Name",...})` call
+  // resolves to the precise Schema/ModelSchema type with no duplicate binding.
+  // The `type` aliases (NameValue/NameData/NameInstance) are kept untouched —
+  // importers and the body both reference them.
+  let usesSchemas = false;
+  if (dts) {
+    const overloads = [];
+    const kept = [];
+    for (const line of dts.split('\n')) {
+      const m = line.match(/^(?:export )?declare const (\w+): (.+);\s*$/);
+      if (m && /^(?:Schema<|ModelSchema<|\{ parse\()/.test(m[2])) {
+        usesSchemas = true;
+        overloads.push(`declare function __schema(d: { name: "${m[1]}"; [k: string]: any }): ${m[2]};`);
+      } else {
+        kept.push(line);
+      }
+    }
+    if (usesSchemas) {
+      overloads.push('declare function __schema(d: any): any;');
+      overloads.push('declare const SchemaError: any;');
+      overloads.push('declare const __SchemaRegistry: any;');
+      overloads.push('declare const __schemaSetAdapter: any;');
+      dts = kept.join('\n').trimEnd() + '\n' + overloads.join('\n') + '\n';
+    }
+  }
 
   // Determine if this file should be type-checked.
   // A `# @nocheck` comment near the top of the file opts out entirely.
   // In strict mode, all non-nocheck files are type-checked.
   const nocheck = /^#\s*@nocheck\b/m.test(source.slice(0, NOCHECK_SCAN_LIMIT));
-  // Must match the CLI predicate in runCheck. Don't add `hasSchemas(source)`:
-  // that probe is a raw-source regex that fires on `schema :input` inside
-  // heredoc string literals (e.g. test files), flooding the LSP with TS2304
-  // false positives. Schema files still get their DTS via the schema pass.
-  const hasOwnTypes = !nocheck && (hasTypeAnnotations(source) || !!opts.checkAll);
+  // A file that declares schemas has an exportable type surface (its
+  // `NameValue`/`NameInstance` aliases), so it must be checked even without
+  // explicit `::`/`type` annotations — otherwise importers can't resolve those
+  // names. `usesSchemas` is derived from the compiled dts, not a raw-source
+  // regex, so it never false-fires on `schema` inside heredoc literals.
+  const hasOwnTypes = !nocheck && (hasTypeAnnotations(source) || !!opts.checkAll || usesSchemas);
   let importsTyped = false;
   if (!hasOwnTypes && !nocheck) {
     const ripImports = [...source.matchAll(/from\s+['"]([^'"]*\.rip)['"]/g)];

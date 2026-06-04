@@ -54,8 +54,8 @@ export const SCHEMA_INTRINSIC_DECLS = [
   // algebra methods don't autocomplete — which is the right behavior
   // for :input schemas where the input shape isn't statically known.
   'interface Schema<Out, In = unknown> {',
-  '  parse(data: In): Out;',
-  '  safe(data: In): SchemaSafeResult<Out>;',
+  '  parse(data: unknown): Out;',
+  '  safe(data: unknown): SchemaSafeResult<Out>;',
   '  ok(data: unknown): boolean;',
   '  pick<K extends keyof In>(...keys: K[]): Schema<Pick<In, K>, Pick<In, K>>;',
   '  omit<K extends keyof In>(...keys: K[]): Schema<Omit<In, K>, Omit<In, K>>;',
@@ -180,7 +180,12 @@ function collectSchemas(sexpr, out) {
 function emitOneSchemaType(collected, byName, known, lines) {
   const { name, descriptor, exported } = collected;
   const exp = exported ? 'export ' : '';
-  const decl = exported ? '' : 'declare ';
+  // Always `declare`: the value binding is provided by the compiled body
+  // (`const Name = __schema(...)`), so the type surface is ambient. Without
+  // `declare`, an exported `export const Name: T;` in a `.ts` shadow is an
+  // uninitialized const (TS1155). `export declare const` is valid in both
+  // the `.ts` shadow and a published `.d.ts`.
+  const decl = 'declare ';
 
   if (descriptor.kind === 'enum') {
     const members = [];
@@ -223,8 +228,18 @@ function emitOneSchemaType(collected, byName, known, lines) {
 
   if (descriptor.kind === 'model') {
     const dataName = `${name}Data`;
-    const instName = `${name}Instance`;
+    // Class-style: the bare schema name IS the instance type (parse result),
+    // mirroring how a class names both its value and its instance type — and
+    // how :enum/:mixin already emit a bare type. `${name}Data` survives as the
+    // fields-only shape that algebra/`toJSON` derive from.
+    const instName = name;
     const relationAccessors = modelRelationAccessors(descriptor, known);
+    // `${name}Data` includes the columns a :model manages implicitly — the
+    // `id` primary key, `@timestamps`, `@softDelete`, and `@belongs_to` FKs —
+    // so they appear in `toJSON()` and are projectable via `.pick`/`.omit`,
+    // matching the runtime's projectable field set.
+    const implicitProps = modelImplicitProps(descriptor);
+    const modelDataType = implicitProps.length ? `${dataType} & { ${implicitProps.join('; ')} }` : dataType;
     const instanceExtras = [
       ...computed,
       ...methods,
@@ -235,7 +250,7 @@ function emitOneSchemaType(collected, byName, known, lines) {
       `errors(): SchemaIssue[]`,
       `toJSON(): ${dataName}`,
     ];
-    lines.push(`${exp}type ${dataName} = ${dataType};`);
+    lines.push(`${exp}type ${dataName} = ${modelDataType};`);
     lines.push(`${exp}type ${instName} = ${dataName} & { ${instanceExtras.join('; ')} };`);
     lines.push(`${exp}${decl}const ${name}: ModelSchema<${instName}, ${dataName}>;`);
     return;
@@ -243,22 +258,24 @@ function emitOneSchemaType(collected, byName, known, lines) {
 
   if (descriptor.kind === 'shape') {
     const dataName = `${name}Data`;
-    const instName = `${name}Instance`;
     const hasBehavior = methods.length + computed.length > 0;
-    lines.push(`${exp}type ${dataName} = ${dataType};`);
     if (hasBehavior) {
-      lines.push(`${exp}type ${instName} = ${dataName} & { ${[...computed, ...methods].join('; ')} };`);
-      lines.push(`${exp}${decl}const ${name}: Schema<${instName}, ${dataName}>;`);
+      // Behavior present: `${name}Data` = fields, bare `${name}` = instance.
+      lines.push(`${exp}type ${dataName} = ${dataType};`);
+      lines.push(`${exp}type ${name} = ${dataName} & { ${[...computed, ...methods].join('; ')} };`);
+      lines.push(`${exp}${decl}const ${name}: Schema<${name}, ${dataName}>;`);
     } else {
-      lines.push(`${exp}${decl}const ${name}: Schema<${dataName}, ${dataName}>;`);
+      // No behavior: instance === data, so collapse to a single bare `${name}`
+      // (matching :input). No `${name}Data` alias to learn.
+      lines.push(`${exp}type ${name} = ${dataType};`);
+      lines.push(`${exp}${decl}const ${name}: Schema<${name}, ${name}>;`);
     }
     return;
   }
 
-  // :input — parse returns the Data shape directly (no behavior).
-  const valueName = `${name}Value`;
-  lines.push(`${exp}type ${valueName} = ${dataType};`);
-  lines.push(`${exp}${decl}const ${name}: Schema<${valueName}, ${valueName}>;`);
+  // :input — no behavior, so the bare name IS the parsed value type.
+  lines.push(`${exp}type ${name} = ${dataType};`);
+  lines.push(`${exp}${decl}const ${name}: Schema<${name}, ${name}>;`);
 }
 
 // Return an array of mixin type-reference strings for `& Foo & Bar` joins.
@@ -277,6 +294,31 @@ function mixinIntersections(descriptor, byName) {
   return refs;
 }
 
+// The TS property strings for a :model's implicitly-managed columns: the
+// `id` PK, `@timestamps`, `@softDelete`, and `@belongs_to` FK columns. These
+// aren't declared fields but are real columns on every row — so they belong
+// in `<Name>Data` (what `toJSON()` returns and `.pick`/`.omit` project over).
+function modelImplicitProps(descriptor) {
+  const props = ['id: number'];
+  let timestamps = false, softDelete = false;
+  for (const e of descriptor.entries) {
+    if (e.tag !== 'directive') continue;
+    if (e.name === 'timestamps') timestamps = true;
+    else if (e.name === 'softDelete') softDelete = true;
+    else if (e.name === 'belongs_to') {
+      const target = e.args && e.args[0] && e.args[0].target;
+      if (target) {
+        const optional = e.args[0].optional === true;
+        const fk = target[0].toLowerCase() + target.slice(1) + 'Id';
+        props.push(`${fk}: number${optional ? ' | null' : ''}`);
+      }
+    }
+  }
+  if (timestamps) { props.push('createdAt: Date'); props.push('updatedAt: Date'); }
+  if (softDelete) props.push('deletedAt: Date | null');
+  return props;
+}
+
 // Emit relation accessor type declarations for :model instances. For
 // targets declared in the same file we emit a typed Promise; for
 // unknown (cross-file) targets we degrade to `Promise<unknown>` rather
@@ -291,7 +333,8 @@ function modelRelationAccessors(descriptor, known) {
     if (!target) continue;
     const optional = args[0].optional === true;
     const targetLc = target[0].toLowerCase() + target.slice(1);
-    const instName = `${target}Instance`;
+    // Class-style: the target's bare name IS its instance type.
+    const instName = target;
     const isKnown = known && known.has(target);
     if (e.name === 'belongs_to') {
       const retT = isKnown ? (optional ? `${instName} | null` : `${instName} | null`) : 'unknown';
