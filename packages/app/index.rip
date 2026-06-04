@@ -1317,12 +1317,16 @@ compileAndImport = (source, compile, components = null, path = null, resolver = 
             "_pkg/#{info.short}#{sub}.rip"
           "#{pre}#{target}#{post}"
 
-      # Step 1: Rewrite .rip imports to blob URLs
+      # Step 1: Rewrite .rip imports and re-exports to blob URLs
       if components
-        # Single regex covering all import shapes: side-effect, default,
-        # namespace, named, default+named. Group 2 is the binding clause
-        # (anything between `import` and `from`); undefined for side-effect.
-        ripImportRe = /^(\s*import\s+(?:(.*?)\s+from\s+)?['"])([^'"]*\.rip)(['"];?\s*)$/gm
+        # Single regex covering all import shapes AND `export … from` re-exports:
+        # side-effect, default, namespace, named, default+named, and
+        # `export { a as b } from '…'` / `export * from '…'`. Group 2 is the
+        # binding clause (between the keyword and `from`); undefined for a
+        # side-effect `import '…'`. Re-exports need the same blob rewrite — a
+        # bare/relative `.rip` specifier left in place would reach the browser's
+        # native resolver and throw "Failed to resolve module specifier".
+        ripImportRe = /^(\s*(?:import|export)\s+(?:(.*?)\s+from\s+)?['"])([^'"]*\.rip)(['"];?\s*)$/gm
         matches:: Array<RegExpMatchArray> = Array.from(js.matchAll(ripImportRe))
         # Walk matches in reverse so string indices stay valid after each splice
         for m in matches by -1
@@ -1346,12 +1350,12 @@ compileAndImport = (source, compile, components = null, path = null, resolver = 
             js = js.slice(0, m.index) + replacement + js.slice(m.index + full.length)
             importedNames.add(n) for n in extractImportedNames(bindingClause)
 
-      # Sweep all remaining import statements (non-rip) and add their
+      # Sweep all remaining import/re-export statements (non-rip) and add their
       # bindings to importedNames as well. The implicit-component preamble
       # below would otherwise redeclare names that are already in scope
       # from a non-rip import (e.g. `import { Card } from 'somewhere'`),
       # producing a SyntaxError at module-import time.
-      anyImportRe = /^\s*import\s+(?:(.*?)\s+from\s+)?['"][^'"]*['"];?\s*$/gm
+      anyImportRe = /^\s*(?:import|export)\s+(?:(.*?)\s+from\s+)?['"][^'"]*['"];?\s*$/gm
       for m in js.matchAll(anyImportRe)
         importedNames.add(n) for n in extractImportedNames(m[1])
 

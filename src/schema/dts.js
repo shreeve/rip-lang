@@ -143,12 +143,43 @@ export function emitSchemaTypes(sexpr, lines) {
 
   // Mixin types first so type aliases down-file can reference them.
   for (const c of collected) {
-    if (c.descriptor.kind === 'mixin') emitOneSchemaType(c, byName, known, lines);
+    if (c.descriptor?.kind === 'mixin') emitOneSchemaType(c, byName, known, lines);
   }
   for (const c of collected) {
-    if (c.descriptor.kind !== 'mixin') emitOneSchemaType(c, byName, known, lines);
+    if (c.descriptor?.kind !== 'mixin') emitOneSchemaType(c, byName, known, lines);
   }
   return true;
+}
+
+// Schema algebra methods that derive a fresh schema from an existing one.
+// A `Name = Base.<method>(...)` assignment (possibly chained) is a derived
+// schema and gets a bare `type Name` even though it has no `schema` body.
+const SCHEMA_ALGEBRA = new Set(['pick', 'omit', 'partial', 'required', 'extend']);
+
+// Given an assignment's RHS s-expr, decide whether it's a schema-algebra
+// call chain (`Base.pick(...)`, `Base.pick(...).omit(...)`, …) and return the
+// root base identifier — or null when it isn't one. The base lets the caller
+// confirm it resolves to a known schema before emitting a type for it, so an
+// unrelated `foo = bar.partial()` never gets a (spurious) schema type.
+function derivedSchemaBase(rhs) {
+  if (!Array.isArray(rhs)) return null;
+  const callee = rhs[0];
+  if (!Array.isArray(callee)) return null;
+  const dot = callee[0]?.valueOf?.() ?? callee[0];
+  if (dot !== '.') return null;
+  const method = callee[2]?.valueOf?.() ?? callee[2];
+  if (!SCHEMA_ALGEBRA.has(method)) return null;
+  // Descend through member accesses and call nodes to the root identifier:
+  // `User.pick(...).omit(...)` → callee[1] is the inner `.pick(...)` call.
+  let obj = callee[1];
+  while (Array.isArray(obj)) {
+    const head = obj[0]?.valueOf?.() ?? obj[0];
+    if (head === '.') obj = obj[1];          // member access — descend the object
+    else if (Array.isArray(obj[0])) obj = obj[0]; // call node — descend the callee
+    else break;
+  }
+  const root = obj?.valueOf?.() ?? obj;
+  return typeof root === 'string' ? root : null;
 }
 
 function collectSchemas(sexpr, out) {
@@ -170,9 +201,16 @@ function collectSchemas(sexpr, out) {
   }
   if (assignNode && Array.isArray(assignNode[2])) {
     const name = assignNode[1]?.valueOf?.() ?? assignNode[1];
+    if (typeof name !== 'string') return;
     const descriptor = descriptorFromSchemaNode(assignNode[2]);
-    if (typeof name === 'string' && descriptor) {
+    if (descriptor) {
       out.push({ name, descriptor, exported });
+    } else {
+      // A derived schema (`Name = Base.pick(...)`) has no `schema` body, so it
+      // carries no descriptor — record its base instead. emitSchemaTypes emits
+      // a bare `type Name` for it once the base is confirmed to be a schema.
+      const derivedBase = derivedSchemaBase(assignNode[2]);
+      if (derivedBase) out.push({ name, derivedBase, exported });
     }
   }
 }
@@ -180,6 +218,21 @@ function collectSchemas(sexpr, out) {
 function emitOneSchemaType(collected, byName, known, lines) {
   const { name, descriptor, exported } = collected;
   const exp = exported ? 'export ' : '';
+
+  // Derived schema (`Name = Base.pick(...)`): no body, so no descriptor. Give it
+  // a bare type so it can be annotated (`u:: UserView`) and re-exported under a
+  // clean name. The type is the source-free result
+  // of the algebra, which the `Schema<Out, In>` interface methods already model
+  // exactly; reading it back off the value's own `parse` return reuses that
+  // inference rather than re-deriving Pick/Omit/Partial here, and so handles
+  // every operator and chained projection for free. Gated on the base being a
+  // locally-known schema, so an unrelated `foo = bar.partial()` never gets a
+  // bogus schema type (its `parse` lookup would otherwise error).
+  if (collected.derivedBase) {
+    if (!known.has(collected.derivedBase)) return;
+    lines.push(`${exp}type ${name} = ReturnType<(typeof ${name})['parse']>;`);
+    return;
+  }
   // Always `declare`: the value binding is provided by the compiled body
   // (`const Name = __schema(...)`), so the type surface is ambient. Without
   // `declare`, an exported `export const Name: T;` in a `.ts` shadow is an

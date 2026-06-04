@@ -2002,6 +2002,51 @@ type "cross-file relation target degrades to unknown", '''
   declare const User: ModelSchema<User, UserData>;
   '''
 
+# A derived schema (`Name = Base.pick(...)`) has no `schema` body, so nothing
+# declares a bare `Name` type — yet projections are exactly where one is needed
+# (annotate `u:: UserView`, re-export under a clean name). Emit a bare type that
+# reads the algebra's result back off the value's own `parse`, reusing the
+# Schema<Out, In> interface inference instead of re-deriving Pick/Omit here.
+type "derived schema emits a bare projection type", '''
+  User = schema :model
+    firstName! string
+    lastName!  string
+    @timestamps
+  UserView = User.pick("id", "firstName")
+  ''', INTRINSICS + "\n" + '''
+  type UserData = { firstName: string; lastName: string } & { id: number; createdAt: Date; updatedAt: Date };
+  type User = UserData & { save(): Promise<User>; destroy(): Promise<User>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): UserData };
+  declare const User: ModelSchema<User, UserData>;
+  type UserView = ReturnType<(typeof UserView)['parse']>;
+  '''
+
+# Chained algebra still yields one bare type, and an exported projection carries
+# the `export` through — the client imports it under its clean name.
+type "chained + exported derived schema emits one bare type each", '''
+  User = schema :model
+    firstName! string
+    lastName!  string
+    @timestamps
+  export UserView = User.pick("id", "firstName", "lastName").omit("lastName")
+  ''', INTRINSICS + "\n" + '''
+  type UserData = { firstName: string; lastName: string } & { id: number; createdAt: Date; updatedAt: Date };
+  type User = UserData & { save(): Promise<User>; destroy(): Promise<User>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): UserData };
+  declare const User: ModelSchema<User, UserData>;
+  export type UserView = ReturnType<(typeof UserView)['parse']>;
+  '''
+
+# A `.partial()`/`.pick()`-shaped call on a NON-schema must not be mistaken for
+# a projection — emitting a schema type for it would make its `parse` lookup
+# error. Only a base that resolves to a local schema gets a derived type.
+type "non-schema algebra-shaped call is not given a schema type", '''
+  User = schema :input
+    name! string
+  config = loader.partial()
+  ''', INTRINSICS + "\n" + '''
+  type User = { name: string };
+  declare const User: Schema<User, User>;
+  '''
+
 # ==============================================================================
 # :model runtime — ORM, hooks, DDL, relations
 # ==============================================================================
@@ -3196,6 +3241,55 @@ test "algebra drops behavior (D13)", '''
   b = ShortAddress.parse({street: "X", city: "Y"})
   [typeof a.full, typeof a.normalize, typeof b.full, typeof b.normalize]
 ''', ["string", "function", "undefined", "undefined"]
+
+# ==============================================================================
+# Compile-time projection folding (opt-in: foldProjections)
+# ==============================================================================
+#
+# Folding statically evaluates a derived schema's algebra against the source's
+# descriptor and rewrites the assignment to a self-contained `__schema({...})`
+# literal — no reference to the source. That's what lets a projection cross the
+# client bundle boundary without dragging the model along. It's OFF by default
+# (the runtime algebra path is unchanged), so these tests pass foldProjections.
+
+# A derived schema is a plain runtime call by default — the source stays coupled.
+code "fold off by default: derived schema stays a runtime call", '''
+  User = schema :model
+    name! string
+    @timestamps
+  V = User.pick("id", "name")
+  ''', '''
+  let User, V;
+  User = __schema({kind: "model", name: "User", entries: [{tag: "field", name: "name", modifiers: ["!"], typeName: "string", array: false}, {tag: "directive", name: "timestamps"}]});
+  V = User.pick("id", "name");
+  ''', opts
+
+# With folding on, the same projection becomes a source-free shape literal. The
+# implicit `id` (a :model column) is projectable even though it isn't declared.
+code "fold: pick emits a self-contained shape literal", '''
+  User = schema :model
+    name! string
+    @timestamps
+  V = User.pick("id", "name")
+  ''', '''
+  let User, V;
+  User = __schema({kind: "model", name: "User", entries: [{tag: "field", name: "name", modifiers: ["!"], typeName: "string", array: false}, {tag: "directive", name: "timestamps"}]});
+  V = __schema({kind: "shape", name: "V", entries: [{tag: "field", name: "id", modifiers: ["!"], typeName: "integer", array: false}, {tag: "field", name: "name", modifiers: ["!"], typeName: "string", array: false}]});
+  ''', { ...opts, foldProjections: true }
+
+# Folding is conservative: a dynamic (non-literal) key can't be statically
+# evaluated, so it bails to the runtime call rather than guess.
+code "fold: bails to the runtime call on dynamic keys", '''
+  User = schema :model
+    name! string
+  k = "name"
+  V = User.pick(k)
+  ''', '''
+  let User, V, k;
+  User = __schema({kind: "model", name: "User", entries: [{tag: "field", name: "name", modifiers: ["!"], typeName: "string", array: false}]});
+  k = "name";
+  V = User.pick(k);
+  ''', { ...opts, foldProjections: true }
 
 type "exported schema emits export declare const", '''
   export Foo = schema :input
