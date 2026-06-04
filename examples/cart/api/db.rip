@@ -1,0 +1,64 @@
+# @nocheck
+# Local database — a single SQLite file (api/cart.sqlite) via `bun:sqlite`,
+# built into Bun, so there are zero dependencies and nothing to run.
+#
+# This module is imported by every worker and RE-IMPORTED on each hot-reload,
+# so its top level does only the cheap wiring: open the file and route the
+# schema ORM through it. The one-time schema creation + seed live in `migrate`,
+# which ../setup.rip runs once at startup under `rip server` — never on reload.
+
+import { Database } from 'bun:sqlite'
+import { User, Order } from './models.rip'
+
+export db = new Database "#{import.meta.dir}/cart.sqlite"
+
+# Wait for the write lock instead of failing with SQLITE_BUSY when several
+# workers open the file at once on boot.
+db.exec "PRAGMA busy_timeout = 5000"
+
+# One-time setup: create the schema and seed the demo user. Idempotent, so the
+# startup call is a no-op against an already-provisioned file.
+export migrate = ->
+  # SQLite's flexible typing accepts DuckDB's VARCHAR/DOUBLE/JSON/TIMESTAMP
+  # as-is; only DuckDB's sequence-based auto-id needs stripping (INTEGER PRIMARY
+  # KEY auto-increments), plus IF NOT EXISTS so re-running is harmless.
+  # (rip's toSQL emits DuckDB DDL by design — these two tweaks adapt it to SQLite.)
+  ddl = (User.toSQL() + "\n" + Order.toSQL())
+    .replace(/CREATE SEQUENCE[^;]*;/g, '')
+    .replace(/ DEFAULT nextval\('[^']*'\)/g, '')
+    .replace(/CREATE (TABLE|UNIQUE INDEX|INDEX) /g, 'CREATE $1 IF NOT EXISTS ')
+  for stmt in ddl.split(';') when stmt.trim()
+    db.run stmt
+
+  # `INSERT OR IGNORE` keys off the UNIQUE email, so seeding is idempotent.
+  db.run 'INSERT OR IGNORE INTO users ("first_name", "last_name", "email", "phone") VALUES (?, ?, ?, ?)',
+    'John', 'Smith', 'john@example.com', '(123) 456-7890'
+
+# Columns the schema declares as JSON (an order's `items`). Only these are
+# decoded on read, so a VARCHAR value that merely looks like JSON (a name like
+# "[redacted]") is left untouched rather than parsed.
+jsonCols = new Set([...(User.toSQL() + Order.toSQL()).matchAll(/(\w+)\s+JSON\b/g)].map((m) -> m[1]))
+
+# Route the schema ORM through SQLite. `.values()` returns row arrays and
+# `.columnNames` the headers — exactly the adapter's result shape. Object
+# params (an order's `items`) serialize into a JSON text column on write, and
+# the JSON columns above decode back on read. Dates come back as strings and
+# are coerced by the schema's own date handling.
+globalThis.__ripSchema.__schemaSetAdapter
+  query: (sql, params) ->
+    bound = (params or []).map (p) ->
+      if p? and typeof p is 'object' and not (p instanceof Date) then JSON.stringify(p) else p
+    stmt = db.query(sql)
+    names = stmt.columnNames
+    # `.values()` runs the statement and returns row arrays — or null for a
+    # write with no RETURNING (the write still executes); coerce that to [].
+    data = stmt.values(...bound) or []
+    decode = (v, i) ->
+      if jsonCols.has(names[i]) and typeof v is 'string'
+        try return JSON.parse(v) catch then return v
+      v
+    {
+      columns: names.map((n) -> { name: n })
+      data:    data.map((row) -> row.map(decode))
+      rows:    data.length
+    }

@@ -1,4 +1,4 @@
-import { User } from '../../types.rip'
+import { User } from '../types.rip'
 import { api, ApiErrors, parseApiError } from '../api-client.rip'
 import { Button } from '../components/button.rip'
 import { title } from '../config.rip'
@@ -16,14 +16,14 @@ export Profile = component
       hydrated = true
     return
 
-  mounted: ->
-    document.title = title('Profile')
+  mounted: -> document.title = title('Profile')
 
   submit: (e) ->
     e.preventDefault()
     status = 'loading'
     try
-      @app.data.user = api.patch!('user', { json: form }).json!()
+      res = api.patch!('user', { json: form }).json!()
+      @app.data.user = User.parse(res)
       status = 'success'
       errors = {}
     catch err

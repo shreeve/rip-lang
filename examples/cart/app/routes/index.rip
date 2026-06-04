@@ -1,4 +1,4 @@
-import { Product } from '../../types.rip'
+import { Product } from '../types.rip'
 import { Button } from '../components/button.rip'
 import { title } from '../config.rip'
 import { api } from '../api-client.rip'
@@ -6,8 +6,8 @@ import { api } from '../api-client.rip'
 export Products = component
   cart ~= @app.data.cart
   products:: Product[] := []
-  error := null
   loaded := false
+  loadError := ''
 
   search ~= @router.query.search ?? ''
   sort   ~= @router.query.sort ?? ''
@@ -26,12 +26,12 @@ export Products = component
   mounted: ->
     document.title = title('Products')
     try
-      products = api.get!('products').json!()
+      res = api.get!('products').json!()
+      products = res.map((p:: unknown) -> Product.parse(p))
+      loaded = true
     catch err
       console.error(err)
-      error = String(err)
-    finally
-      loaded = true
+      loadError = 'Products failed to load.'
 
   setQuery: (opts:: { search?: string, sort?: string }) ->
     next = { ...@router.query, ...opts }
@@ -44,8 +44,8 @@ export Products = component
   clearFilters: -> @setQuery({ search: '', sort: '' })
 
   render
-    if error
-      p.error "Failed to load products"
+    if loadError
+      p.error loadError
     else if loaded
       h1 "Products"
       div.product-filters

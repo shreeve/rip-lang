@@ -1,0 +1,9 @@
+# Startup setup hook. rip-server auto-detects a `setup.rip` next to the app
+# entry and runs its `setup` export ONCE, before workers start — and never on
+# hot-reload (workers only re-import the app). That's the whole point of this
+# file: the schema creation + seed run at startup only, instead of at module
+# load where every file change would re-run them.
+
+import { migrate } from './api/db.rip'
+
+export setup = migrate

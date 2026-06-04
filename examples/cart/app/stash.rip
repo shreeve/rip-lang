@@ -1,4 +1,4 @@
-import { Product, User } from '../types.rip'
+import { Product, User } from './types.rip'
 
 type CartItem = Product & { quantity: number }
 

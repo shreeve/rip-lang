@@ -1,30 +1,41 @@
+import { User } from '../types.rip'
 import { api } from '../api-client.rip'
 
 export Layout = component
   cart ~= @app.data.cart
   user ~= @app.data.user
   userName ~= if user then "#{user.firstName} #{user.lastName}" else ''
+  loadError := ''
 
   mounted: ->
-    @app.data.user = api.get!('user').json!()
+    try
+      res = api.get!('user').json!()
+      @app.data.user = User.parse(res)
+    catch err
+      console.error(err)
+      loadError = 'Failed to load your account.'
 
   render
-    nav.container
-      ul
-        li
-          strong "Shop"
-      ul
-        li
-          a href: "/", "Products"
-        li
-          a href: "/cart", "Cart (#{cart.totalItems()})"
-        li
-          details.dropdown
-            summary userName
-            ul
-              li
-                a href: "/profile", "Profile"
-              li
-                a href: "/orders", "Orders"
-    main.container
-      div id: "content"
+    if loadError
+      main.container
+        p.error loadError
+    else
+      nav.container
+        ul
+          li
+            strong "Shop"
+        ul
+          li
+            a href: "/", "Products"
+          li
+            a href: "/cart", "Cart (#{cart.totalItems()})"
+          li
+            details.dropdown
+              summary userName
+              ul
+                li
+                  a href: "/profile", "Profile"
+                li
+                  a href: "/orders", "Orders"
+      main.container
+        div id: "content"
