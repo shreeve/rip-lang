@@ -6,16 +6,22 @@ export User = schema :model
   @timestamps
   @has_many Order
 
-export products = [
-  { id: 1, name: 'Rubber Duck',  image: '🐥', price: 3.99  }
-  { id: 2, name: 'Notebook',     image: '📓', price: 9.99  }
-  { id: 3, name: 'Desk Plant',   image: '🌵', price: 14.99 }
-  { id: 4, name: 'Coffee Mug',   image: '☕', price: 11.99 }
-  { id: 5, name: 'Stress Ball',  image: '🏀', price: 6.99  }
-  { id: 6, name: 'Headphones',   image: '🎧', price: 19.99 }
+export Product = schema :shape
+  id!    integer
+  name!  string, 1..
+  image! string
+  price! number, 0..
+
+export products:: Product[] = [
+  { id: 1, name: 'Rubber Duck', image: '🐥', price: 3.99  }
+  { id: 2, name: 'Notebook',    image: '📓', price: 9.99  }
+  { id: 3, name: 'Desk Plant',  image: '🌵', price: 14.99 }
+  { id: 4, name: 'Coffee Mug',  image: '☕',  price: 11.99 }
+  { id: 5, name: 'Stress Ball', image: '🏀', price: 6.99  }
+  { id: 6, name: 'Headphones',  image: '🎧', price: 19.99 }
 ]
 
-OrderItem = schema :shape
+export OrderItem = schema :shape
   productId! integer
   quantity!  integer, 1..
 

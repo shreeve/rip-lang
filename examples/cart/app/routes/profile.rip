@@ -5,7 +5,7 @@ import { title } from '../config.rip'
 
 export Profile = component
   user ~= @app.data.user
-  form:: User := { firstName: '', lastName: '', email: '' }
+  form:: Omit<User, "id"> := { firstName: '', lastName: '', email: '' }
   errors:: ApiErrors<keyof User> := {}
   status:: 'idle' | 'loading' | 'success' := 'idle'
   hydrated := false

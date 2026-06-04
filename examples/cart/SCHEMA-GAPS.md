@@ -1,8 +1,8 @@
 # Rip schema gaps (from the cart example)
 
-The cart is the first real full-stack use of rip schema — define models on the server, project them to the client, validate the wire, persist to a db — so it surfaced a batch of schema gaps. Fixed ones are listed first (1–4); the open ones follow (5–9), highest priority first. Each open gap has a matching `#gap-N` comment at its source site, pointing back here.
+The cart is the first real full-stack use of rip schema — define models on the server, project them to the client, validate the wire, persist to a db — so it surfaced a batch of schema gaps. Fixed ones are listed first (1–6); the open ones follow (7–9), highest priority first. Several gaps have a matching `#gap-N` comment at their source site in the cart, pointing back here.
 
-## The projection ideal (and the interim workaround)
+## The projection ideal (now how the cart works)
 
 ```coffee
 # api/models.rip — define each entity ONCE, on the server
@@ -13,18 +13,17 @@ User = schema :model
   @timestamps
 
 # the client's view is a PROJECTION of that one model…
-UserView = User.pick "id", "firstName", "lastName", "email"
+UserView = User.pick "id", "firstName", "lastName", "email", "phone"
 ```
 
 ```coffee
-# app/routes/profile.rip — …imported under a bare name, used as value + type
-import { User } from <the projection>
-user := User.parse(res.json!())   # client validates the wire shape
+# app/types.rip — …re-exported under a bare name, used as value + type
+export { UserView as User } from '../api/models.rip'
 ```
 
 One declaration on the server; the client gets a clean, bare-named, validated projection. No duplicated field lists, no drift.
 
-**What the cart does instead (interim):** `app/types.rip` re-declares `Product`/`User`/`Order` as standalone client schemas — agreeing with the server models by convention, not derivation ("define twice"). It's the workaround gaps 5–6 force, not the end state.
+**This is what the cart does now** (gaps 5 and 6, both fixed): every shape is defined once on the server and `app/types.rip` re-exports them in a single line — `UserView`/`OrderView` as `User`/`Order` (projections of the models), plus the plain `Product`/`OrderItem` shapes. The build folds the projections to self-contained descriptors and materializes every imported shape into the browser bundle, so nothing server-only ships and the client declares no schema of its own.
 
 ## Fixed
 
@@ -44,26 +43,19 @@ An exported schema emitted `export const X: T` with no initializer (TS1155), and
 
 `UserView.parse(wirePayload)` threw `createdAt must be datetime`: over JSON a date is a `string`, but the projection inherits the model's `datetime` (`Date`). Fixed by coercing ISO date strings to `Date` on `parse`/`safe` (`_coerceDates`). The more principled fix is retyping a projected `datetime` to its serialized `string` form, but coercion makes the round-trip work today.
 
+### 5. Derived schemas had no bare type — FIXED ✅
+
+`UserView = User.pick(...)` emitted `let UserView = User.pick(...)` with no `type UserView`, so the projection couldn't be annotated or re-exported under a clean name — the client couldn't write `u:: UserView`. Fixed in `src/schema/dts.js`: a derived assignment (`Name = Base.pick(...)`, including chains like `.pick(...).omit(...)`) now emits a bare `type Name = ReturnType<(typeof Name)['parse']>`. Reading the result back off the value's own `parse` reuses the `Schema<Out, In>` interface's algebra inference rather than re-deriving `Pick`/`Omit`/`Partial` in the emitter, so every operator and chain is covered for free; it expands to the exact projection (e.g. `Pick<UserData, "id" | "firstName" | "email">`). Gated on the base resolving to a locally-known schema, so an unrelated `foo = bar.partial()` is never mistaken for a projection.
+
+### 6. Projections were runtime-coupled to their source and couldn't reach the client — FIXED ✅
+
+`UserView = User.pick(...)` compiled to a runtime method call, so it was evaluated at load time and needed `User` present — importing the projection dragged the whole model with it (`create`/`toSQL`, the `CREATE SEQUENCE … CREATE TABLE …` DDL, every server-managed column). And the browser only bundles `app/`, so a projection living in server-only `api/` couldn't be reached at all: re-exporting `{ UserView as User }` from `api/models.rip` made the browser fetch the server module and fail with `TypeError: Failed to resolve module specifier "../api/models.rip"`.
+
+Fixed in two layers. **(A) Compile-time folding** (`src/schema/schema.js`, opt-in `foldProjections`): a foldable derived schema (same-file source, static-literal keys) is statically evaluated against the source descriptor and rewritten to a fresh `__schema({kind:"shape", …})` literal with no reference to the source — severing the load-time coupling. It mirrors the runtime's projectable-field set (declared fields + `id`/timestamps/FKs) so a folded shape validates identically to `Model.pick(...)`; it BAILS to the runtime call on anything it can't prove (unknown base, dynamic keys), which is always a correct fallback. **(B) Bundle-time materialization** (`packages/server/middleware.rip` + `extractClientProjections` in `src/compiler.js`): when a bundled client module imports from a server-only file, the builder folds the named bindings and inlines ONLY those into a synthetic `_shared/<path>` module the browser compiles, rewriting the import to that key. It refuses anything that would ship server code — a `:model`, a value carrying behavior (methods/computed/transforms), or a non-schema — so the model's ORM/DDL can never leak by construction. The browser loader needs no change: its existing exact-key store lookup resolves the `_shared/…` specifier.
+
+Verified end-to-end in the cart: `app/types.rip` is a single `export { UserView as User, OrderView as Order, Product, OrderItem } from '../api/models.rip'` (define once on the server, import on the client). The shipped `/app` bundle carries a `_shared/api/models.rip` holding just those four shapes — no `kind:"model"`, no `CREATE SEQUENCE`, no `@has_many` — and the projection's type flows cross-file (`User` is `Pick<UserData, …>`), so the profile edit form types as `Omit<User, "id">`.
+
 ## Open (by priority)
-
-### 5. Derived schemas have no bare type — `src/schema/dts.js` — OPEN ❌
-
-`UserView = User.pick(...)` emits `let UserView = User.pick(...)` with no `type UserView`, so the projection can't be annotated or re-exported under a clean name — the client can't write `u:: UserView`.
-
-### 6. Projections are runtime-coupled to their source and can't reach the client — `src/schema/runtime-validate.js` — OPEN ❌
-
-`UserView = User.pick(...)` is evaluated at load time and needs `User` present, so importing the projection drags the full model with it — the loaded `User` still has `create`/`toSQL` (and `toSQL()` emits the whole `CREATE SEQUENCE … CREATE TABLE …`) plus every server-managed column (`id`, timestamps, FKs).
-
-Verified in the cart: re-exporting `{ UserView as User }` from `api/models.rip` compiles to `export { … } from '../api/models.rip'`, so the browser fetches the server-only module and fails at runtime:
-
-```
-TypeError: Failed to resolve module specifier "../api/models.rip".
-Invalid relative url or base scheme isn't hierarchical.
-```
-
-The fix is **compile-time folding**: statically evaluate the algebra and emit a fresh, source-free descriptor (which also gives the result a bare type — gap 5 — and a known serialized `datetime` form).
-
-But folding alone isn't enough, and this is the part the boundary forces. Only `app/` is bundled to the browser, so a folded descriptor still living in `api/` can't be reached (that's the error above), and no client-side config changes that: `api/` is server-only by design (db-backed models, ORM, DDL). So folding must also **materialize the descriptor at the client import site** — inline it into the app bundle and drop the `from '../api/...'` import entirely — so nothing server-only ships and the client author still just writes `import { User } from <…>`. The `include`-the-whole-`api/`-dir escape hatch in the serve middleware is the non-answer: it resolves the import but ships the entire model (ORM, DDL, all fields) to the browser.
 
 ### 7. `create` doesn't type-check required fields — `src/schema/dts.js` — OPEN ❌
 
