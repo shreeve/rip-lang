@@ -1,0 +1,170 @@
+# ==============================================================================
+# compat/caddy.rip — generate a Caddyfile from normalized serve.rip config
+# ==============================================================================
+#
+# Sibling of compat/nginx.rip: consumes the SAME normalized serve.rip config
+# object and emits a Caddyfile instead of an nginx.conf. The HTTP serving modes
+# map cleanly to first-class Caddy directives:
+#
+#   reverse proxy   -> reverse_proxy   (WebSocket upgrades handled automatically)
+#   static / browse -> root + file_server [browse]
+#   SPA             -> try_files {path} /index.html + file_server
+#   managed app     -> reverse_proxy with a TODO (worker port is unknown here)
+#
+# TCP/TLS passthrough (the `streams` config) has no native Caddyfile form; it
+# maps to the caddy-l4 `layer4` app, which requires a custom build:
+#
+#   xcaddy build --with github.com/mholt/caddy-l4
+#
+# When passthrough streams exist, the HTTP sites move to an internal terminator
+# port and layer4 forwards by SNI — the same topology the nginx exporter builds
+# with its `stream {}` block + internal 4443 listener.
+
+INTERNAL_PORT = 4443
+
+mountPathFor = (route) ->
+  return route.mountPath if route.mountPath?
+  p = route.path or '/'
+  return '/' if p is '/' or p is '/*'
+  return p.slice(0, -2) if p.endsWith('/*')
+  p
+
+certPathsForHost = (hostname, sslPath) ->
+  domain = hostname.replace(/^\*\./, '')
+  base   = domain.split('.').slice(-2).join('.')
+  { certPath: "#{sslPath}/#{base}.crt", keyPath: "#{sslPath}/#{base}.key" }
+
+sortRoutesBySpecificity = (routes) ->
+  routes.slice().sort (a, b) ->
+    aExact = if (a.path or '/').endsWith('*') then 1 else 0
+    bExact = if (b.path or '/').endsWith('*') then 1 else 0
+    return aExact - bExact if aExact isnt bExact
+    (mountPathFor(b) or '/').length - (mountPathFor(a) or '/').length
+
+# Path matcher tokens for a mount: bare path + subtree, so `/mqtt` and
+# `/mqtt/...` both match (mirrors the nginx exporter's bare-location behavior).
+matchTokensFor = (mountPath) ->
+  "#{mountPath} #{mountPath}/*"
+
+originFor = (normalized, proxyName) ->
+  normalized.proxies?[proxyName]?.targets?[0] or 'http://127.0.0.1:3000'
+
+# Each route becomes one `handle`/`handle_path` block so routes on a site are
+# mutually exclusive (Caddy orders them by specificity automatically). Static
+# subpath mounts use `handle_path` to strip the prefix (nginx `alias` semantics)
+# plus a bare→trailing-slash redirect.
+emitRouteBlock = (route, normalized) ->
+  mountPath = mountPathFor(route)
+  isRoot    = mountPath is '/'
+  lines     = []
+
+  if route.static? and not isRoot
+    lines.push "\tredir #{mountPath} #{mountPath}/ permanent"
+
+  head = if isRoot then "\thandle {"
+  else if route.static? then "\thandle_path #{mountPath}/* {"
+  else "\thandle #{matchTokensFor(mountPath)} {"
+  lines.push head
+
+  if route.proxy
+    lines.push "\t\treverse_proxy #{originFor(normalized, route.proxy)}"
+  else if route.static?
+    lines.push "\t\troot * #{route.root}"
+    if route.spa
+      lines.push "\t\ttry_files {path} /index.html"
+      lines.push "\t\tfile_server"
+    else if route.browse
+      lines.push "\t\tfile_server browse"
+    else
+      lines.push "\t\tfile_server"
+  else if route.app
+    lines.push "\t\t# TODO: set reverse_proxy to the port where '#{route.app}' listens"
+    lines.push "\t\treverse_proxy 127.0.0.1:3000  # adjust port"
+
+  lines.push "\t}"
+  lines
+
+export generateCaddyConfig = (normalized) ->
+  out        = []
+  streams    = normalized.streams or []
+  hasStreams = streams.length > 0
+  hsts       = normalized.server?.hsts is true
+
+  # --- Global options block ---
+  globalLines = []
+  if hasStreams
+    # Sites move to the internal terminator; we own the :80 -> :443 redirect
+    # explicitly, so turn off Caddy's automatic (it would target :4443).
+    globalLines.push "\tauto_https disable_redirects"
+    globalLines.push "\t# TCP/TLS passthrough requires the caddy-l4 plugin:"
+    globalLines.push "\t#   xcaddy build --with github.com/mholt/caddy-l4"
+    globalLines.push "\tlayer4 {"
+    globalLines.push "\t\t:443 {"
+    for stream in streams
+      target = normalized.streamUpstreams?[stream.proxy]?.targets?[0]
+      continue unless target
+      for sni in (stream.sni or [])
+        matcher = "@#{sni.replace(/[^a-zA-Z0-9]/g, '_')}"
+        globalLines.push "\t\t\t#{matcher} tls sni #{sni}"
+        globalLines.push "\t\t\troute #{matcher} {"
+        globalLines.push "\t\t\t\tproxy #{target.host}:#{target.port}"
+        globalLines.push "\t\t\t}"
+    globalLines.push "\t\t\t# Everything else -> local HTTPS terminator"
+    globalLines.push "\t\t\troute {"
+    globalLines.push "\t\t\t\tproxy 127.0.0.1:#{INTERNAL_PORT}"
+    globalLines.push "\t\t\t}"
+    globalLines.push "\t\t}"
+    globalLines.push "\t}"
+
+  if globalLines.length > 0
+    out.push "{"
+    for line in globalLines
+      out.push line
+    out.push "}"
+    out.push ""
+
+  # --- Per-site blocks ---
+  siteSuffix     = if hasStreams then ":#{INTERNAL_PORT}" else ""
+  httpsHostnames = []
+  for hostname, siteConfig of (normalized.sites or {})
+    routes = (siteConfig.routes or []).filter(Boolean)
+    continue if routes.length is 0
+    httpsHostnames.push(hostname)
+
+    cert     = normalized.resolvedCerts?[hostname]
+    certPath = cert?.certPath
+    keyPath  = cert?.keyPath
+    if not certPath and normalized.sslPath
+      { certPath, keyPath } = certPathsForHost(hostname, normalized.sslPath)
+
+    out.push "https://#{hostname}#{siteSuffix} {"
+    out.push "\ttls #{certPath} #{keyPath}" if certPath and keyPath
+    out.push ""
+
+    # Security headers — always on, matching the nginx exporter.
+    out.push "\theader {"
+    out.push "\t\tStrict-Transport-Security \"max-age=31536000; includeSubDomains\"" if hsts
+    out.push "\t\tX-Content-Type-Options nosniff"
+    out.push "\t\tReferrer-Policy strict-origin-when-cross-origin"
+    out.push "\t\tX-Frame-Options SAMEORIGIN"
+    out.push "\t\t-Server"
+    out.push "\t}"
+    out.push ""
+
+    for route in sortRoutesBySpecificity(routes)
+      for line in emitRouteBlock(route, normalized)
+        out.push line
+    out.push "}"
+    out.push ""
+
+  # --- Explicit :80 -> :443 redirects (only needed in passthrough topology;
+  # otherwise Caddy's automatic HTTP redirect handles it). ---
+  if hasStreams and httpsHostnames.length > 0
+    for hostname in httpsHostnames
+      out.push "http://#{hostname} {"
+      out.push "\tredir https://{host}{uri} permanent"
+      out.push "}"
+      out.push ""
+
+  out.pop() while out.length > 0 and out[out.length - 1] is ""
+  out.join('\n') + '\n'

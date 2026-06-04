@@ -1,0 +1,243 @@
+# ==============================================================================
+# desync.rip — HTTP request-smuggling / proxy-desync differential tests
+# ==============================================================================
+#
+# Inbound HTTP/1 framing is parsed by Bun, so rip's smuggling surface is two
+# rip-controlled boundaries:
+#
+#   1. validateRequest  — the front door. Rejects the classic ambiguous
+#                         frames (CL+TE, multi-Host, encoded traversal, …)
+#                         before anything downstream sees them.
+#   2. proxyToUpstream  — the reverse-proxy hop. Must strip hop-by-hop
+#                         headers and OVERWRITE X-Forwarded-For so a client
+#                         can't smuggle framing directives or spoof its IP
+#                         to the backend, and must re-frame cleanly so one
+#                         inbound request becomes exactly one upstream request.
+#
+# Part A asserts the front-door rejections. Part B drives the real
+# proxyToUpstream against a live echo upstream and inspects exactly what the
+# backend received (the differential). Part C is a raw-socket end-to-end
+# probe: it fires textbook smuggling payloads at a front door wired from the
+# real rip functions and proves the hidden request never reaches the backend.
+# ==============================================================================
+
+import { test, eq, ok } from './runner.rip'
+import { validateRequest } from '../serving/security.rip'
+import { proxyToUpstream } from '../serving/forwarding.rip'
+import { connect } from 'node:net'
+
+# ==============================================================================
+# Part A — front-door rejection battery (validateRequest)
+# ==============================================================================
+
+mkReq = (url, headers = {}) -> new Request(url, { headers })
+
+test "validateRequest rejects Content-Length + Transfer-Encoding (CL.TE)", ->
+  r = validateRequest mkReq('http://h.test/', { 'content-length': '5', 'transfer-encoding': 'chunked' })
+  eq r.valid, false
+  eq r.status, 400
+
+test "validateRequest rejects comma-joined multiple Host headers", ->
+  r = validateRequest mkReq('http://h.test/', { host: 'good.com, evil.com' })
+  eq r.valid, false
+  eq r.status, 400
+
+test "validateRequest rejects triple-encoded path traversal", ->
+  # %25252e -> %252e -> %2e -> '.'  (three decodes); two of them => '..'
+  r = validateRequest new Request('http://h.test/%25252e%25252e/%25252e%25252e/etc/passwd')
+  eq r.valid, false
+  eq r.status, 400
+
+test "validateRequest rejects an over-length URL", ->
+  r = validateRequest new Request("http://h.test/#{'a'.repeat(9000)}")
+  eq r.valid, false
+  eq r.status, 400
+
+test "validateRequest accepts a benign request (no over-eager rejection)", ->
+  r = validateRequest new Request('http://h.test/api/v1.2/users?id=42')
+  eq r.valid, true
+
+# ==============================================================================
+# Echo upstream — records exactly what the backend received
+# ==============================================================================
+
+bootEcho = ->
+  received = []
+  server = Bun.serve
+    port: 0
+    fetch: (req) ->
+      body = req.text!
+      hdrs = {}
+      for [k, v] as req.headers.entries()
+        hdrs[k] = v
+      received.push { method: req.method, path: new URL(req.url).pathname, headers: hdrs, body }
+      new Response 'upstream-ok',
+        headers:
+          'x-upstream': '1'
+          # hop-by-hop response header — proxyToUpstream must strip it before
+          # the client sees it. (Standard response header, not client-filtered.)
+          'proxy-authenticate': 'Basic realm=leak'
+  { server, received, base: "http://127.0.0.1:#{server.port}" }
+
+# ==============================================================================
+# Part B — proxy forwarding hygiene (the differential)
+# ==============================================================================
+
+test "proxyToUpstream overwrites X-Forwarded-For (no client spoofing)", ->
+  { server, received, base } = bootEcho()
+  try
+    req = new Request "#{base}/x", { headers: { 'x-forwarded-for': '9.9.9.9', cookie: 'sid=abc' } }
+    res = proxyToUpstream! req, base, { clientIp: '10.0.0.7' }
+    eq res.status, 200
+    eq received.length, 1
+    up = received[0]
+    eq up.headers['x-forwarded-for'], '10.0.0.7'              # overwritten, not trusted
+    ok not up.headers['x-forwarded-for'].includes('9.9.9.9'), 'client XFF must not survive'
+    eq up.headers['cookie'], 'sid=abc'                        # ordinary header preserved
+    ok up.headers['via']?, 'Via header should be stamped'
+    eq up.headers['x-forwarded-proto'], 'http'
+  finally
+    server.stop()
+
+test "proxyToUpstream strips hop-by-hop request headers", ->
+  { server, received, base } = bootEcho()
+  try
+    raw =
+      'proxy-authorization': 'Basic c2VjcmV0'
+      'te':                  'trailers'
+      'upgrade':             'h2c'
+      'transfer-encoding':   'chunked'
+      'x-keep':              'yes'
+    req = new Request "#{base}/h", { headers: raw }
+    # proxy-authorization is a non-forbidden header, so it reliably survives
+    # into req.headers — guarantees this test actually exercises stripping.
+    ok req.headers.has('proxy-authorization'), 'precondition: hop header is injectable'
+    res = proxyToUpstream! req, base, { clientIp: '127.0.0.1' }
+    eq res.status, 200
+    up = received[0]
+    # Framing- and auth-critical hop headers must never reach the backend.
+    # (`connection`/`keep-alive` are intentionally excluded: those govern the
+    # proxy→upstream hop itself and are regenerated by Bun's fetch transport,
+    # so their presence is correct, not a leak of the client's value.)
+    for h in ['proxy-authorization', 'te', 'upgrade', 'transfer-encoding']
+      if req.headers.has(h)
+        ok not up.headers[h]?, "hop-by-hop header '#{h}' leaked to upstream"
+    eq up.headers['x-keep'], 'yes'                            # ordinary header preserved
+  finally
+    server.stop()
+
+test "proxyToUpstream strips hop-by-hop response headers", ->
+  { server, base } = bootEcho()
+  try
+    res = proxyToUpstream! new Request("#{base}/r"), base, { clientIp: '127.0.0.1' }
+    eq res.status, 200
+    eq res.headers.get('x-upstream'), '1'                     # ordinary header passes through
+    ok not res.headers.get('proxy-authenticate')?, 'hop-by-hop response header leaked to client'
+    ok res.headers.get('via')?, 'Via header should be stamped on the response'
+  finally
+    server.stop()
+
+test "proxyToUpstream forwards the request body intact", ->
+  { server, received, base } = bootEcho()
+  try
+    payload = "begin-#{'x'.repeat(4096)}-end"
+    req = new Request "#{base}/b", { method: 'POST', body: payload, headers: { 'content-type': 'text/plain' } }
+    res = proxyToUpstream! req, base, { clientIp: '127.0.0.1' }
+    eq res.status, 200
+    eq received[0].method, 'POST'
+    eq received[0].body, payload
+  finally
+    server.stop()
+
+# ==============================================================================
+# Part C — raw-socket end-to-end: smuggled requests must never reach the backend
+# ==============================================================================
+
+# Front door wired from the REAL rip functions in the production order:
+# validateRequest gate, then proxyToUpstream. Mirrors server.rip#fetch.
+bootFrontDoor = (base) ->
+  Bun.serve
+    port: 0
+    fetch: (req, server) ->
+      v = validateRequest(req)
+      return new Response(v.message, { status: v.status }) unless v.valid
+      ip = server.requestIP(req)?.address or '127.0.0.1'
+      proxyToUpstream! req, base, { clientIp: ip }
+
+# Minimal raw TCP client: write bytes, accumulate whatever comes back, resolve
+# on close/error/timeout. Used to send deliberately malformed HTTP.
+rawSend = (port, payload, waitMs = 700) ->
+  new Promise (resolve) ->
+    chunks = []
+    done = false
+    sock = null
+    finish = ->
+      return if done
+      done = true
+      try sock?.destroy()
+      resolve Buffer.concat(chunks).toString('utf8')
+    sock = connect { port, host: '127.0.0.1' }, -> sock.write(payload)
+    sock.on 'data', (d) -> chunks.push(d)
+    sock.on 'error', -> finish()
+    sock.on 'close', -> finish()
+    setTimeout finish, waitMs
+
+test "end-to-end: a normal request IS proxied to the upstream (positive control)", ->
+  { server: up, received, base } = bootEcho()
+  front = bootFrontDoor(base)
+  try
+    res = fetch! "http://127.0.0.1:#{front.port}/normal"
+    eq res.status, 200
+    eq (res.text!), 'upstream-ok'
+    ok received.some((r) -> r.path is '/normal'), 'upstream should have seen /normal'
+  finally
+    front.stop()
+    up.stop()
+
+test "end-to-end: CL.TE smuggling never delivers the hidden request upstream", ->
+  { server: up, received, base } = bootEcho()
+  front = bootFrontDoor(base)
+  try
+    payload = [
+      'POST / HTTP/1.1'
+      "Host: 127.0.0.1:#{front.port}"
+      'Content-Length: 4'
+      'Transfer-Encoding: chunked'
+      ''
+      '0'
+      ''
+      'GET /smuggled HTTP/1.1'
+      "Host: 127.0.0.1:#{front.port}"
+      ''
+      ''
+    ].join('\r\n')
+    rawSend! front.port, payload
+    sleep! 150   # allow a desynced backend request time to arrive
+    smuggled = received.filter (r) -> r.path is '/smuggled'
+    eq smuggled.length, 0
+  finally
+    front.stop()
+    up.stop()
+
+test "end-to-end: duplicate Content-Length never delivers a hidden request upstream", ->
+  { server: up, received, base } = bootEcho()
+  front = bootFrontDoor(base)
+  try
+    payload = [
+      'POST / HTTP/1.1'
+      "Host: 127.0.0.1:#{front.port}"
+      'Content-Length: 6'
+      'Content-Length: 39'
+      ''
+      'GET /smuggled HTTP/1.1'
+      "Host: x"
+      ''
+      ''
+    ].join('\r\n')
+    rawSend! front.port, payload
+    sleep! 150
+    smuggled = received.filter (r) -> r.path is '/smuggled'
+    eq smuggled.length, 0
+  finally
+    front.stop()
+    up.stop()

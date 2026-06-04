@@ -206,10 +206,20 @@ rip server --check-config --file=./serve.rip
 ### Generate nginx.conf
 
 ```bash
-rip server -n > /etc/nginx/nginx.conf && nginx -s reload
+rip server --nginx > /etc/nginx/nginx.conf && nginx -s reload
 ```
 
 Generates a complete, production-hardened nginx config from your `serve.rip`.
+
+### Generate a Caddyfile
+
+```bash
+rip server --caddy > Caddyfile && caddy reload
+```
+
+Generates a Caddyfile from the same `serve.rip`. TCP/TLS passthrough routes
+emit a [caddy-l4](https://github.com/mholt/caddy-l4) `layer4` block, which
+requires a custom build (`xcaddy build --with github.com/mholt/caddy-l4`).
 
 ### Reload config safely
 

@@ -1,5 +1,5 @@
 import { test, ok } from './runner.rip'
-import { generateNginxConfig } from '../serving/nginx.rip'
+import { generateNginxConfig } from '../compat/nginx.rip'
 import { writeFileSync, mkdtempSync, rmSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
