@@ -2787,6 +2787,232 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
     }
     return null;
   }
+  var FOLD_ALGEBRA = new Set(["pick", "omit", "partial", "required", "extend"]);
+  function foldStr(n) {
+    return n && n.valueOf ? n.valueOf() : n;
+  }
+  function foldProjectableMap(descriptor) {
+    const map = new Map;
+    for (const e of descriptor.entries) {
+      if (e.tag === "field")
+        map.set(e.name, e);
+    }
+    if (descriptor.kind !== "model")
+      return map;
+    const synth = (name, typeName, required) => {
+      if (!map.has(name))
+        map.set(name, { tag: "field", name, modifiers: required ? ["!"] : ["?"], typeName, array: false });
+    };
+    let timestamps = false, softDelete = false;
+    const fks = [];
+    for (const e of descriptor.entries) {
+      if (e.tag !== "directive")
+        continue;
+      if (e.name === "timestamps")
+        timestamps = true;
+      else if (e.name === "softDelete")
+        softDelete = true;
+      else if (e.name === "belongs_to") {
+        const t = e.args && e.args[0] && e.args[0].target;
+        if (t)
+          fks.push({ fk: t[0].toLowerCase() + t.slice(1) + "Id", required: e.args[0].optional !== true });
+      }
+    }
+    synth("id", "integer", true);
+    if (timestamps) {
+      synth("createdAt", "datetime", true);
+      synth("updatedAt", "datetime", true);
+    }
+    if (softDelete)
+      synth("deletedAt", "datetime", false);
+    for (const { fk, required } of fks)
+      synth(fk, "integer", required);
+    return map;
+  }
+  function foldRemark(entry, mode) {
+    let mods = entry.modifiers.filter((m) => m !== (mode === "partial" ? "!" : "?"));
+    const want = mode === "partial" ? "?" : "!";
+    if (!mods.includes(want))
+      mods = [...mods, want];
+    return { ...entry, modifiers: mods };
+  }
+  function foldApplyOp(map, op, byName) {
+    switch (op.method) {
+      case "pick": {
+        const out = new Map;
+        for (const k of op.keys) {
+          if (!map.has(k))
+            return null;
+          out.set(k, map.get(k));
+        }
+        return out;
+      }
+      case "omit": {
+        const drop = new Set(op.keys);
+        const out = new Map;
+        for (const [k, v] of map)
+          if (!drop.has(k))
+            out.set(k, v);
+        return out;
+      }
+      case "partial": {
+        const out = new Map;
+        for (const [k, v] of map)
+          out.set(k, foldRemark(v, "partial"));
+        return out;
+      }
+      case "required": {
+        const req = new Set(op.keys);
+        const out = new Map;
+        for (const [k, v] of map)
+          out.set(k, req.has(k) ? foldRemark(v, "required") : v);
+        return out;
+      }
+      case "extend": {
+        const other = byName.get(op.otherName);
+        if (!other)
+          return null;
+        const out = new Map(map);
+        for (const [k, v] of foldProjectableMap(other)) {
+          if (out.has(k))
+            return null;
+          out.set(k, v);
+        }
+        return out;
+      }
+      default:
+        return null;
+    }
+  }
+  function foldProjectionDescriptor(baseDescriptor, ops, byName) {
+    let map = foldProjectableMap(baseDescriptor);
+    for (const op of ops) {
+      map = foldApplyOp(map, op, byName);
+      if (!map)
+        return null;
+    }
+    return { kind: "shape", entries: [...map.values()] };
+  }
+  function foldParseChain(rhs) {
+    const ops = [];
+    let node = rhs;
+    while (true) {
+      if (!Array.isArray(node))
+        return null;
+      const callee = node[0];
+      if (!Array.isArray(callee))
+        return null;
+      if (foldStr(callee[0]) !== ".")
+        return null;
+      const method = foldStr(callee[2]);
+      if (!FOLD_ALGEBRA.has(method))
+        return null;
+      const argNodes = node.slice(1);
+      let op;
+      if (method === "partial") {
+        if (argNodes.length)
+          return null;
+        op = { method };
+      } else if (method === "extend") {
+        if (argNodes.length !== 1)
+          return null;
+        const a = argNodes[0];
+        if (Array.isArray(a))
+          return null;
+        const name = foldStr(a);
+        if (typeof name !== "string" || !/^[A-Za-z_$][\w$]*$/.test(name))
+          return null;
+        op = { method, otherName: name };
+      } else {
+        const keys = foldLiteralKeys(argNodes);
+        if (!keys || !keys.length)
+          return null;
+        op = { method, keys };
+      }
+      ops.unshift(op);
+      const obj = callee[1];
+      if (Array.isArray(obj)) {
+        node = obj;
+        continue;
+      }
+      const base = foldStr(obj);
+      if (typeof base !== "string")
+        return null;
+      return { base, ops };
+    }
+  }
+  function foldLiteralKeys(argNodes) {
+    const keys = [];
+    for (const a of argNodes) {
+      if (Array.isArray(a)) {
+        if (foldStr(a[0]) !== "array")
+          return null;
+        for (let i = 1;i < a.length; i++) {
+          const k = foldParseStrLit(a[i]);
+          if (k == null)
+            return null;
+          keys.push(k);
+        }
+      } else {
+        const k = foldParseStrLit(a);
+        if (k == null)
+          return null;
+        keys.push(k);
+      }
+    }
+    return keys;
+  }
+  function foldParseStrLit(node) {
+    const v = foldStr(node);
+    if (typeof v !== "string" || v.length < 2)
+      return null;
+    const q = v[0];
+    if (q !== '"' && q !== "'" || v[v.length - 1] !== q)
+      return null;
+    const inner = v.slice(1, -1);
+    if (/[\\#]/.test(inner))
+      return null;
+    return inner;
+  }
+  function foldDerivedSchemas(sexpr) {
+    if (!Array.isArray(sexpr))
+      return;
+    const head = foldStr(sexpr[0]);
+    const stmts = head === "program" || head === "block" ? sexpr.slice(1) : [sexpr];
+    const byName = new Map;
+    for (const stmt of stmts) {
+      if (!Array.isArray(stmt))
+        continue;
+      let assign = stmt;
+      if (foldStr(stmt[0]) === "export" && Array.isArray(stmt[1]))
+        assign = stmt[1];
+      if (foldStr(assign[0]) !== "=" || !Array.isArray(assign[2]))
+        continue;
+      const name = foldStr(assign[1]);
+      if (typeof name !== "string")
+        continue;
+      if (foldStr(assign[2][0]) === "schema") {
+        const existing = readDescriptor(assign[2][1]);
+        if (existing)
+          byName.set(name, existing);
+        continue;
+      }
+      const chain = foldParseChain(assign[2]);
+      if (!chain)
+        continue;
+      const baseDesc = byName.get(chain.base);
+      if (!baseDesc)
+        continue;
+      const folded = foldProjectionDescriptor(baseDesc, chain.ops, byName);
+      if (!folded)
+        continue;
+      const bridge = new String("shape");
+      bridge.descriptor = folded;
+      bridge.data = { descriptor: folded };
+      assign[2] = ["schema", bridge];
+      byName.set(name, folded);
+    }
+  }
   function entryLiteral(emitter, e) {
     switch (e.tag) {
       case "field": {
@@ -9914,6 +10140,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
       this.functionVars = new Map;
       this.helpers = new Set;
       this.scopeStack = [];
+      if (this.options.foldProjections)
+        foldDerivedSchemas(sexpr);
       this.collectProgramVariables(sexpr);
       let code = this.emit(sexpr);
       if (this.sourceMap)
@@ -14082,6 +14310,7 @@ if (typeof globalThis !== 'undefined') {
         reactiveVars: this.options.reactiveVars,
         inlineTypes: this.options.inlineTypes,
         schemaMode: this.options.schemaMode,
+        foldProjections: this.options.foldProjections,
         sourceMap
       });
       let code = generator.compile(sexpr);
@@ -14154,7 +14383,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.16.0";
-  var BUILD_DATE = "2026-06-04@18:39:53GMT";
+  var BUILD_DATE = "2026-06-04@21:16:38GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -15998,7 +16227,7 @@ ${indented}`);
             });
           }
           if (components) {
-            ripImportRe = /^(\s*import\s+(?:(.*?)\s+from\s+)?['"])([^'"]*\.rip)(['"];?\s*)$/gm;
+            ripImportRe = /^(\s*(?:import|export)\s+(?:(.*?)\s+from\s+)?['"])([^'"]*\.rip)(['"];?\s*)$/gm;
             matches = Array.from(js.matchAll(ripImportRe));
             for (let _i = matches.length - 1;_i >= 0; _i--) {
               let m = matches[_i];
@@ -16031,7 +16260,7 @@ ${indented}`);
               }
             }
           }
-          anyImportRe = /^\s*import\s+(?:(.*?)\s+from\s+)?['"][^'"]*['"];?\s*$/gm;
+          anyImportRe = /^\s*(?:import|export)\s+(?:(.*?)\s+from\s+)?['"][^'"]*['"];?\s*$/gm;
           for (let m of js.matchAll(anyImportRe)) {
             for (let n of extractImportedNames(m[1])) {
               importedNames.add(n);
