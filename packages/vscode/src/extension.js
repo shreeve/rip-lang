@@ -12,8 +12,8 @@ let client;
 
 // VS Code only auto-linkifies URLs (with a scheme) in comments — not relative
 // paths. This provider makes relative-path references in .rip *comments*
-// clickable (e.g. `# see ../SCHEMA-GAPS.md#gap-6`). A `#anchor` jumps to the
-// matching section — `#gap-6` finds the "6." heading; an `id="..."`/`name="..."`
+// clickable (e.g. `# see ../NOTES.md#section-3`). A `#anchor` jumps to the
+// matching section — `#section-3` finds the "3." heading; an `id="..."`/`name="..."`
 // HTML anchor also works. Only real files become links.
 function relativePathLinkProvider() {
   // ./ or ../ prefix, a path with an extension, optional #anchor.
@@ -68,8 +68,8 @@ function findCommentStart(line) {
   return -1;
 }
 
-// Resolve a fragment to a 0-based line in the target file: a `#gap-6` anchor
-// maps to the heading that starts with "6."; an `id="..."`/`name="..."` HTML
+// Resolve a fragment to a 0-based line in the target file: a `#section-3` anchor
+// maps to the heading that starts with "3."; an `id="..."`/`name="..."` HTML
 // anchor also resolves. Returns -1 if not found.
 function anchorLine(file, anchor) {
   let lines;
