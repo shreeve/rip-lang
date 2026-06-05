@@ -139,7 +139,7 @@ bun run install-vscode
 
 1. **`esbuild src/extension.js`** → `dist/extension.js` (~345KB) — the LSP client, bundled with `vscode-languageclient`
 2. **`esbuild src/lsp.js`** → `dist/lsp.js` (~179KB) — the language server, bundled with `vscode-languageserver`
-3. **`vsce package`** → `rip-*.vsix` — the installable extension package
+3. **`vsce package`** → `vscode-rip-*.vsix` — the installable extension package
 
 Both `vscode` and `typescript` are external (not bundled) — `vscode` is provided by the editor, `typescript` is loaded at runtime from the workspace or editor.
 
@@ -166,7 +166,7 @@ Release notes:
 
 - `packages/vscode` is not included in the root `bun run bump` flow.
 - After publishing, create and push a git tag such as `vscode-vX.Y.Z`.
-- Create a matching GitHub release and attach the generated `rip-*.vsix`.
+- Create a matching GitHub release and attach the generated `vscode-rip-*.vsix`.
 
 ### Repeatable Release Checklist
 
@@ -207,4 +207,4 @@ gh release create "vscode-vX.Y.Z" "packages/vscode/rip-X.Y.Z.vsix" \
 ## Links
 
 - [Rip Language](https://github.com/shreeve/rip-lang)
-- [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=rip-lang.rip)
+- [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=rip-lang.vscode-rip)
