@@ -684,12 +684,21 @@ class __SchemaDef {
   // as a Date. Runs on parse/safe only — hydrate gets canonical DB values.
   _coerceDates(working) {
     const norm = this._normalize();
+    // Only ISO-shaped strings (\`YYYY-MM-DD\` optionally followed by a time) are
+    // coerced. \`new Date(v)\` is otherwise lax — \`new Date("5")\` is a valid
+    // Date — which would let clearly-bad input slip past a date field as a
+    // bogus Date instead of failing validation. Array-of-date fields coerce
+    // element-wise.
+    const isoShaped = (s) => typeof s === 'string' && /^\\d{4}-\\d{2}-\\d{2}([T ].*)?$/.test(s);
+    const toDate = (s) => { const d = new Date(s); return Number.isNaN(d.getTime()) ? s : d; };
     for (const [n, f] of norm.fields) {
       if (f.typeName !== 'date' && f.typeName !== 'datetime') continue;
       const v = working[n];
-      if (typeof v !== 'string') continue;
-      const d = new Date(v);
-      if (!Number.isNaN(d.getTime())) working[n] = d;
+      if (f.array && Array.isArray(v)) {
+        working[n] = v.map(el => isoShaped(el) ? toDate(el) : el);
+      } else if (isoShaped(v)) {
+        working[n] = toDate(v);
+      }
     }
   }
 
@@ -2791,7 +2800,16 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
   function foldStr(n) {
     return n && n.valueOf ? n.valueOf() : n;
   }
+  function foldHasMixin(descriptor) {
+    return descriptor.entries.some((e) => e.tag === "directive" && e.name === "mixin");
+  }
+  function foldFkName(target) {
+    const snake = target.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase();
+    return (snake + "_id").replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+  }
   function foldProjectableMap(descriptor) {
+    if (foldHasMixin(descriptor))
+      return null;
     const map = new Map;
     for (const e of descriptor.entries) {
       if (e.tag === "field")
@@ -2815,7 +2833,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       else if (e.name === "belongs_to") {
         const t = e.args && e.args[0] && e.args[0].target;
         if (t)
-          fks.push({ fk: t[0].toLowerCase() + t.slice(1) + "Id", required: e.args[0].optional !== true });
+          fks.push({ fk: foldFkName(t), required: e.args[0].optional !== true });
       }
     }
     synth("id", "integer", true);
@@ -2827,6 +2845,16 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       synth("deletedAt", "datetime", false);
     for (const { fk, required } of fks)
       synth(fk, "integer", required);
+    return map;
+  }
+  function foldDeclaredMap(descriptor) {
+    if (foldHasMixin(descriptor))
+      return null;
+    const map = new Map;
+    for (const e of descriptor.entries) {
+      if (e.tag === "field")
+        map.set(e.name, e);
+    }
     return map;
   }
   function foldRemark(entry, mode) {
@@ -2872,8 +2900,11 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         const other = byName.get(op.otherName);
         if (!other)
           return null;
+        const otherMap = foldDeclaredMap(other);
+        if (!otherMap)
+          return null;
         const out = new Map(map);
-        for (const [k, v] of foldProjectableMap(other)) {
+        for (const [k, v] of otherMap) {
           if (out.has(k))
             return null;
           out.set(k, v);
@@ -2886,6 +2917,8 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
   }
   function foldProjectionDescriptor(baseDescriptor, ops, byName) {
     let map = foldProjectableMap(baseDescriptor);
+    if (!map)
+      return null;
     for (const op of ops) {
       map = foldApplyOp(map, op, byName);
       if (!map)
@@ -14402,7 +14435,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.16.0";
-  var BUILD_DATE = "2026-06-05@12:12:57GMT";
+  var BUILD_DATE = "2026-06-05@13:40:39GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
