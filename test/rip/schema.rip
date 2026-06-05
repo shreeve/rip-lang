@@ -1899,14 +1899,14 @@ INTRINSICS = '''
     offset(n: number): SchemaQuery<T>;
     order(spec: string): SchemaQuery<T>;
   }
-  interface ModelSchema<Instance, Data = unknown> extends Schema<Instance, Data> {
-    find(id: unknown): Promise<Instance | null>;
-    findMany(ids: unknown[]): Promise<Instance[]>;
+  interface ModelSchema<Instance, Data = unknown, Id = number, Create = Partial<Data>> extends Schema<Instance, Data> {
+    find(id: Id): Promise<Instance | null>;
+    findMany(ids: Id[]): Promise<Instance[]>;
     where(cond: Record<string, unknown> | string, ...params: unknown[]): SchemaQuery<Instance>;
     all(limit?: number): Promise<Instance[]>;
     first(): Promise<Instance | null>;
     count(cond?: Record<string, unknown>): Promise<number>;
-    create(data: Partial<Data>): Promise<Instance>;
+    create(data: Create): Promise<Instance>;
     toSQL(options?: { dropFirst?: boolean; header?: string; idStart?: number }): string;
   }
 
@@ -1931,6 +1931,32 @@ type ":shape emits Data + Instance types", '''
   type AddressData = { street: string; city: string };
   type Address = AddressData & { readonly full: unknown; normalize: (...args: any[]) => unknown };
   declare const Address: Schema<Address, AddressData>;
+  '''
+
+# `!>` eager-derived is an own enumerable property — part of the instance
+# (Out) and writable (not `readonly` like a `~>` getter) — but not an
+# input/projectable field, so it sits on the bare name, never in `…Data`.
+type ":shape eager-derived (!>) attaches to instance, not Data", '''
+  Order = schema :shape
+    total! number
+    label: !> "x"
+    view:  ~> "y"
+  ''', INTRINSICS + "\n" + '''
+  type OrderData = { total: number };
+  type Order = OrderData & { label: unknown; readonly view: unknown };
+  declare const Order: Schema<Order, OrderData>;
+  '''
+
+# `:input` permits `!>` (its one bit of behavior), so a derived field there
+# also splits the input shape (In) from the instance (Out).
+type ":input eager-derived (!>) splits Data from the bare instance", '''
+  Tag = schema
+    name! string
+    slug: !> "s"
+  ''', INTRINSICS + "\n" + '''
+  type TagData = { name: string };
+  type Tag = TagData & { slug: unknown };
+  declare const Tag: Schema<Tag, TagData>;
   '''
 
 type ":enum emits union + const with predicate ok()", '''
@@ -1970,11 +1996,13 @@ type ":model emits ModelSchema<Instance, Data> with relation accessors", '''
     @belongs_to Org
   ''', INTRINSICS + "\n" + '''
   type OrgData = { name: string } & { id: number };
+  type OrgCreate = { name: string };
   type Org = OrgData & { save(): Promise<Org>; destroy(): Promise<Org>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): OrgData };
-  declare const Org: ModelSchema<Org, OrgData>;
+  declare const Org: ModelSchema<Org, OrgData, number, OrgCreate>;
   type UserData = { name: string } & { id: number; orgId: number };
+  type UserCreate = { name: string; orgId: number };
   type User = UserData & { org(): Promise<Org | null>; save(): Promise<User>; destroy(): Promise<User>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): UserData };
-  declare const User: ModelSchema<User, UserData>;
+  declare const User: ModelSchema<User, UserData, number, UserCreate>;
   '''
 
 type ":mixin emits field-type alias; host Data intersects mixins", '''
@@ -1987,8 +2015,9 @@ type ":mixin emits field-type alias; host Data intersects mixins", '''
   ''', INTRINSICS + "\n" + '''
   type Timestamps = { createdAt: Date; updatedAt: Date };
   type UserData = { name: string } & Timestamps & { id: number };
+  type UserCreate = { name: string } & Timestamps;
   type User = UserData & { save(): Promise<User>; destroy(): Promise<User>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): UserData };
-  declare const User: ModelSchema<User, UserData>;
+  declare const User: ModelSchema<User, UserData, number, UserCreate>;
   '''
 
 type "cross-file relation target degrades to unknown", '''
@@ -1998,8 +2027,9 @@ type "cross-file relation target degrades to unknown", '''
     @has_many Order
   ''', INTRINSICS + "\n" + '''
   type UserData = { name: string } & { id: number; organizationId: number };
+  type UserCreate = { name: string; organizationId: number };
   type User = UserData & { organization(): Promise<unknown>; orders(): Promise<unknown[]>; save(): Promise<User>; destroy(): Promise<User>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): UserData };
-  declare const User: ModelSchema<User, UserData>;
+  declare const User: ModelSchema<User, UserData, number, UserCreate>;
   '''
 
 # A derived schema (`Name = Base.pick(...)`) has no `schema` body, so nothing
@@ -2015,8 +2045,9 @@ type "derived schema emits a bare projection type", '''
   UserView = User.pick("id", "firstName")
   ''', INTRINSICS + "\n" + '''
   type UserData = { firstName: string; lastName: string } & { id: number; createdAt: Date; updatedAt: Date };
+  type UserCreate = { firstName: string; lastName: string };
   type User = UserData & { save(): Promise<User>; destroy(): Promise<User>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): UserData };
-  declare const User: ModelSchema<User, UserData>;
+  declare const User: ModelSchema<User, UserData, number, UserCreate>;
   type UserView = ReturnType<(typeof UserView)['parse']>;
   '''
 
@@ -2030,8 +2061,9 @@ type "chained + exported derived schema emits one bare type each", '''
   export UserView = User.pick("id", "firstName", "lastName").omit("lastName")
   ''', INTRINSICS + "\n" + '''
   type UserData = { firstName: string; lastName: string } & { id: number; createdAt: Date; updatedAt: Date };
+  type UserCreate = { firstName: string; lastName: string };
   type User = UserData & { save(): Promise<User>; destroy(): Promise<User>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): UserData };
-  declare const User: ModelSchema<User, UserData>;
+  declare const User: ModelSchema<User, UserData, number, UserCreate>;
   export type UserView = ReturnType<(typeof UserView)['parse']>;
   '''
 

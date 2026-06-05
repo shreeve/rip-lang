@@ -1451,6 +1451,7 @@ For `:model`:
 
 ```ts
 type UserData = { name: string; email: string };
+type UserCreate = { name: string; email: string };   // create()'s input — required-no-default fields
 type User = UserData & {
   readonly identifier: unknown;
   greet: (...args: any[]) => unknown;
@@ -1462,8 +1463,17 @@ type User = UserData & {
   organization(): Promise<Organization | null>;
   orders(): Promise<Order[]>;
 };
-declare const User: ModelSchema<User, UserData>;
+declare const User: ModelSchema<User, UserData, number, UserCreate>;
 ```
+
+> **Computed/derived inference.** The `unknown` on a `~>`/`!>` member above is
+> the *published* `.d.ts` form. In the editor and `rip check`, the type emitter
+> infers each computed/derived member from its body — `full` above resolves to
+> `string`, and a `status: ~> if @done then 'Completed' else 'Pending'` resolves
+> to `"Completed" | "Pending"` — so they're usable as their real types (e.g.
+> `order.name.toUpperCase()`). A plain `.d.ts` has no runtime body to infer
+> from, so it keeps `unknown`. Methods stay `(...args: any[]) => unknown` either
+> way (their params aren't typed).
 
 For `:enum`:
 
@@ -1496,6 +1506,17 @@ Schema<Omit<UserData, "email">, Omit<UserData, "email">>
 Schema<Partial<UserData>, Partial<UserData>>
 ```
 
+A **named** derived schema additionally gets a bare type of its own, so a
+projection can be annotated or re-exported under a clean name:
+
+```coffee
+UserView = User.pick("id", "name")   # also emits a bare `type UserView`
+```
+
+It's emitted as `type UserView = ReturnType<(typeof UserView)['parse']>`,
+which resolves to the exact projection (`Pick<UserData, "id" | "name">`) —
+covering every operator and chain for free.
+
 ### Same-file targets type relation accessors
 
 Relation accessors get precise return types when the target is declared
@@ -1514,7 +1535,7 @@ requiring virtual-module imports.
 
 ### Intrinsic declarations
 
-Three base interfaces get injected into every schema-using file's type
+Five base interfaces get injected into every schema-using file's type
 view:
 
 ```ts
@@ -1537,15 +1558,24 @@ interface Schema<Out, In = unknown> {
   extend<U>(other: Schema<U>): Schema<In & U, In & U>;
 }
 
-interface ModelSchema<Instance, Data = unknown> extends Schema<Instance, Data> {
-  find(id: unknown): Promise<Instance | null>;
-  findMany(ids: unknown[]): Promise<Instance[]>;
+interface SchemaQuery<T> {
+  all(): Promise<T[]>;
+  first(): Promise<T | null>;
+  count(): Promise<number>;
+  limit(n: number): SchemaQuery<T>;
+  offset(n: number): SchemaQuery<T>;
+  order(spec: string): SchemaQuery<T>;
+}
+
+interface ModelSchema<Instance, Data = unknown, Id = number, Create = Partial<Data>> extends Schema<Instance, Data> {
+  find(id: Id): Promise<Instance | null>;
+  findMany(ids: Id[]): Promise<Instance[]>;
   where(cond: Record<string, unknown> | string, ...params: unknown[]): SchemaQuery<Instance>;
   all(limit?: number): Promise<Instance[]>;
   first(): Promise<Instance | null>;
   count(cond?: Record<string, unknown>): Promise<number>;
-  create(data: Partial<Data>): Promise<Instance>;
-  toSQL(options?: { dropFirst?: boolean; header?: string }): string;
+  create(data: Create): Promise<Instance>;
+  toSQL(options?: { dropFirst?: boolean; header?: string; idStart?: number }): string;
 }
 ```
 

@@ -4674,9 +4674,11 @@ export class Compiler {
       code += `\n//# sourceMappingURL=${this.options.filename}.js.map`;
     }
 
-    // Step 5: Emit .d.ts from annotated tokens + parsed s-expression
+    // Step 5: Emit .d.ts from annotated tokens + parsed s-expression. The
+    // generator's `_schemaBehavior` buffer (populated during codegen, shadow-TS
+    // mode only) lets the type emitter infer computed/derived return types.
     if (typeTokens && _typesEmitter) {
-      dts = _typesEmitter(typeTokens, sexpr, source);
+      dts = _typesEmitter(typeTokens, sexpr, source, generator._schemaBehavior);
     }
 
     return { tokens, sexpr, code, dts, map, reverseMap, data: dataSection, reactiveVars: generator.reactiveVars };

@@ -1480,27 +1480,67 @@ function entryLiteral(emitter, e) {
 // emitted using the Rip thin-arrow codegen, which naturally produces a
 // `function() { ... }` (Rip `->` is NOT a JS arrow). This gives us the
 // right `this` semantics for instance-attached methods and proto getters.
+//
+// In shadow-TS (`inlineTypes`) mode the body's `@field` reads (`this.field`)
+// would otherwise trip `noImplicitAny` (TS2683), since the bare `function()`
+// has an untyped `this`. So in that mode only we prepend a TypeScript `this`
+// parameter typed to the schema's instance type (its bare name — what
+// methods/computed/derived bodies actually see, including other behavior).
+// The `this` parameter is erased at runtime and is illegal as a real JS
+// param, so it is emitted ONLY under inlineTypes; normal codegen is
+// unchanged (`function() { ... }`).
 function compileCallableFn(emitter, entry) {
   let bodySexpr = parseBodyTokens(entry.bodyTokens);
   if (!bodySexpr) {
     // Empty body — emit a no-op.
     return `(function() {})`;
   }
-  // Wrap as a thin-arrow with no params. `emit` in value context produces
-  // a parenthesized function expression.
-  let arrowSexpr = ['->', [], bodySexpr];
-  return emitter.emit(arrowSexpr, 'value');
+  let params = [];
+  if (emitter.options.inlineTypes && emitter._schemaName) {
+    let thisParam = new String('this');
+    thisParam.type = emitter._schemaName;
+    params.push(thisParam);
+  }
+  // Wrap as a thin-arrow. `emit` in value context produces a parenthesized
+  // function expression.
+  let arrowSexpr = ['->', params, bodySexpr];
+  let fnCode = emitter.emit(arrowSexpr, 'value');
+  // Shadow-TS only: stash computed (`~>`) and eager-derived (`!>`) bodies so
+  // the type emitter can infer their return type via
+  // `ReturnType<typeof __<Name>__behavior.field>` instead of falling back to
+  // `unknown` (the body is already a `function(this: <Name>) { … }`). Methods
+  // are excluded — they keep `(...args) => unknown`, since their params aren't
+  // typed. The buffer rides on the emitter instance (per-compile, no globals)
+  // and is read by emitSchemaTypes after codegen finishes.
+  if (emitter.options.inlineTypes && emitter._schemaName &&
+      (entry.tag === 'computed' || entry.tag === 'derived')) {
+    if (!emitter._schemaBehavior) emitter._schemaBehavior = new Map();
+    let list = emitter._schemaBehavior.get(emitter._schemaName);
+    if (!list) { list = []; emitter._schemaBehavior.set(emitter._schemaName, list); }
+    list.push({ field: entry.name, tag: entry.tag, fnExpr: fnCode });
+  }
+  return fnCode;
 }
 
 // Compile an inline field transform body (`-> body`). The body receives
-// the raw input object via Rip's implicit `it` parameter; no explicit
-// params are emitted. Transform runs on .parse() only, not on hydrate.
+// the raw input object via Rip's `it` parameter. Transform runs on
+// .parse() only, not on hydrate.
+//
+// `it` is emitted as an explicit `any`-typed param (rather than relying on
+// the implicit-`it` injection) so the shadow-TS pass doesn't trip
+// `noImplicitAny` (TS7006) — runtime output is identical (`function(it)`).
+// `any` is the correct type, not a cop-out: a transform sees the RAW,
+// pre-validation input, which legitimately carries keys that aren't
+// declared fields (e.g. `it.Id` remapped to `id`), so typing `it` to the
+// schema's own shape would wrongly reject those reads.
 function compileTransformFn(emitter, bodyTokens) {
   let bodySexpr = parseBodyTokens(bodyTokens);
   if (!bodySexpr) {
     return `(function() { return undefined; })`;
   }
-  let arrowSexpr = ['->', [], bodySexpr];
+  let itParam = new String('it');
+  itParam.type = 'any';
+  let arrowSexpr = ['->', [itParam], bodySexpr];
   return emitter.emit(arrowSexpr, 'value');
 }
 
