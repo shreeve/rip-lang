@@ -6,7 +6,6 @@ def errorResponse(errors:: { form?: string, field?: Partial<Record<string, strin
   return Response.json({ errors }, { status })
 
 # No auth in this demo — the "current user" is always the seeded user (id 1).
-# (find's id is typed `unknown`, not `number` — see ../SCHEMA-GAPS.md#gap-8)
 currentUser = () -> User.find!(1)
 
 get '/api/products' -> products
@@ -34,8 +33,6 @@ post '/api/orders' ->
   user = currentUser!()
   if not user then return errorResponse({ form: 'No user found' }, 404)
 
-  # create's input is Partial<Data>, so a missing required field isn't caught at
-  # compile time (the runtime still enforces it) — see ../SCHEMA-GAPS.md#gap-7
   order = Order.create!({ userId: user.id, items, total: Math.round(total * 100) / 100 })
   return @json(OrderView.parse(order), 201)
 
@@ -49,9 +46,7 @@ patch '/api/user' ->
   lastName  = read 'lastName',  'name'
   phone     = read 'phone',     'text'
 
-  # Ideally `Partial<Record<keyof typeof UserView, string>>`, but `keyof` a
-  # schema yields its methods, not its fields — see ../SCHEMA-GAPS.md#gap-9
-  field:: Partial<Record<string, string>> = {}
+  field:: Partial<Record<keyof UserView, string>> = {}
   if not firstName then field.firstName = 'Enter a first name'
   if not lastName then field.lastName = 'Enter a last name'
 
