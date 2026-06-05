@@ -1510,10 +1510,10 @@ A **named** derived schema additionally gets a bare type of its own, so a
 projection can be annotated or re-exported under a clean name:
 
 ```coffee
-UserView = User.pick("id", "name")   # also emits a bare `type UserView`
+UserPublic = User.pick("id", "name")   # also emits a bare `type UserPublic`
 ```
 
-It's emitted as `type UserView = ReturnType<(typeof UserView)['parse']>`,
+It's emitted as `type UserPublic = ReturnType<(typeof UserPublic)['parse']>`,
 which resolves to the exact projection (`Pick<UserData, "id" | "name">`) —
 covering every operator and chain for free.
 
@@ -1722,14 +1722,14 @@ A = schema :model
 ### Calling ORM methods on a derived shape
 
 ```coffee
-UserView = User.pick "id", "name", "email"
+UserPublic = User.pick "id", "name", "email"
 
 # wrong — algebra returns :shape; :shape has no .find()
-user = UserView.find! 1
+user = UserPublic.find! 1
 
 # right — query the source model and project
 user = User.find! 1
-view = UserView.parse user.toJSON()
+view = UserPublic.parse user.toJSON()
 ```
 
 ### Treating `.ok()` as a type predicate for shapes/models
@@ -1853,13 +1853,13 @@ User = schema :model
 # Use `pick` (an allowlist): a field added to the model later can't leak to
 # clients by default — `password` is simply never selected. Prefer this over
 # `omit` for anything crossing a trust boundary; `omit` fails open.
-UserView = User.pick "id", "name", "email", "role"
+UserPublic = User.pick "id", "name", "email", "role"
 
 get '/users/:id' ->
   id = read 'id', 'id!'
   user = User.find! id
   return error! 404 unless user
-  { user: UserView.parse user.toJSON() }
+  { user: UserPublic.parse user.toJSON() }
 ```
 
 ### Writing a migration script
