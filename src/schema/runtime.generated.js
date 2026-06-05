@@ -639,12 +639,21 @@ class __SchemaDef {
   // as a Date. Runs on parse/safe only — hydrate gets canonical DB values.
   _coerceDates(working) {
     const norm = this._normalize();
+    // Only ISO-shaped strings (\`YYYY-MM-DD\` optionally followed by a time) are
+    // coerced. \`new Date(v)\` is otherwise lax — \`new Date("5")\` is a valid
+    // Date — which would let clearly-bad input slip past a date field as a
+    // bogus Date instead of failing validation. Array-of-date fields coerce
+    // element-wise.
+    const isoShaped = (s) => typeof s === 'string' && /^\\d{4}-\\d{2}-\\d{2}([T ].*)?$/.test(s);
+    const toDate = (s) => { const d = new Date(s); return Number.isNaN(d.getTime()) ? s : d; };
     for (const [n, f] of norm.fields) {
       if (f.typeName !== 'date' && f.typeName !== 'datetime') continue;
       const v = working[n];
-      if (typeof v !== 'string') continue;
-      const d = new Date(v);
-      if (!Number.isNaN(d.getTime())) working[n] = d;
+      if (f.array && Array.isArray(v)) {
+        working[n] = v.map(el => isoShaped(el) ? toDate(el) : el);
+      } else if (isoShaped(v)) {
+        working[n] = toDate(v);
+      }
     }
   }
 

@@ -1203,11 +1203,30 @@ const FOLD_ALGEBRA = new Set(['pick', 'omit', 'partial', 'required', 'extend']);
 
 function foldStr(n) { return n && n.valueOf ? n.valueOf() : n; }
 
+// True when a descriptor pulls fields in via `@mixin`. The fold can't expand
+// mixins (resolution is a runtime `_normalize` concern), so any projection over
+// such a base must bail to the runtime call rather than silently emit a shape
+// missing the mixin's fields.
+function foldHasMixin(descriptor) {
+  return descriptor.entries.some(e => e.tag === 'directive' && e.name === 'mixin');
+}
+
+// The `@belongs_to <Target>` FK column name, computed exactly as the runtime
+// does (`__schemaCamel(__schemaSnake(target) + '_id')` in runtime-validate.js).
+// The naive `target[0].toLowerCase() + …` diverges for acronym targets
+// (`ABCWidget` → runtime `abcwidgetId`, naive `aBCWidgetId`).
+function foldFkName(target) {
+  const snake = target.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
+  return (snake + '_id').replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+}
+
 // The projectable columns of a descriptor as an ordered Map(name → field
 // entry): declared fields, then a :model's implicit id / @timestamps /
 // @softDelete / @belongs_to FK columns — matching __schemaProjectableFields
 // in runtime-validate.js so a fold yields the same field set the runtime would.
+// Returns null (bail) when the base uses `@mixin`.
 function foldProjectableMap(descriptor) {
+  if (foldHasMixin(descriptor)) return null;
   const map = new Map();
   for (const e of descriptor.entries) {
     if (e.tag === 'field') map.set(e.name, e);
@@ -1224,7 +1243,7 @@ function foldProjectableMap(descriptor) {
     else if (e.name === 'softDelete') softDelete = true;
     else if (e.name === 'belongs_to') {
       const t = e.args && e.args[0] && e.args[0].target;
-      if (t) fks.push({ fk: t[0].toLowerCase() + t.slice(1) + 'Id', required: e.args[0].optional !== true });
+      if (t) fks.push({ fk: foldFkName(t), required: e.args[0].optional !== true });
     }
   }
   // Insertion order mirrors the runtime: id, timestamps, softDelete, then FKs.
@@ -1232,6 +1251,18 @@ function foldProjectableMap(descriptor) {
   if (timestamps) { synth('createdAt', 'datetime', true); synth('updatedAt', 'datetime', true); }
   if (softDelete) synth('deletedAt', 'datetime', false);
   for (const { fk, required } of fks) synth(fk, 'integer', required);
+  return map;
+}
+
+// Declared fields only (no implicit :model columns) — what runtime `.extend()`
+// merges from its argument (`other._normalize().fields`). Returns null (bail)
+// when the argument uses `@mixin`.
+function foldDeclaredMap(descriptor) {
+  if (foldHasMixin(descriptor)) return null;
+  const map = new Map();
+  for (const e of descriptor.entries) {
+    if (e.tag === 'field') map.set(e.name, e);
+  }
   return map;
 }
 
@@ -1278,8 +1309,12 @@ function foldApplyOp(map, op, byName) {
     case 'extend': {
       const other = byName.get(op.otherName);
       if (!other) return null;
+      // Runtime `.extend()` merges the argument's DECLARED fields only — not a
+      // :model's implicit id/timestamp/FK columns — so use the declared map.
+      const otherMap = foldDeclaredMap(other);
+      if (!otherMap) return null; // @mixin in the argument — bail
       const out = new Map(map);
-      for (const [k, v] of foldProjectableMap(other)) {
+      for (const [k, v] of otherMap) {
         if (out.has(k)) return null; // collision — let the runtime throw
         out.set(k, v);
       }
@@ -1294,6 +1329,7 @@ function foldApplyOp(map, op, byName) {
 // `{kind:"shape", entries}` descriptor, or null to bail to the runtime call.
 function foldProjectionDescriptor(baseDescriptor, ops, byName) {
   let map = foldProjectableMap(baseDescriptor);
+  if (!map) return null; // base uses @mixin — bail to the runtime call
   for (const op of ops) {
     map = foldApplyOp(map, op, byName);
     if (!map) return null;

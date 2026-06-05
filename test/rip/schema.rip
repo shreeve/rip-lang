@@ -983,6 +983,22 @@ test "transform: coerces wire string to Date via constructor", '''
   out.shippedAt instanceof Date
   ''', true
 
+# Date coercion only accepts ISO-shaped strings — `new Date(v)` is otherwise
+# lax (`new Date("5")` is a valid Date), which would let junk pass a date field.
+test "date coercion: ISO string coerces to Date; non-ISO junk is rejected", '''
+  E = schema :shape
+    at! datetime
+  [E.safe({at: "2024-03-15T10:30:00Z"}).ok, E.parse({at: "2024-03-15T10:30:00Z"}).at instanceof Date, E.safe({at: "5"}).ok, E.safe({at: "nope"}).ok]
+  ''', [true, true, false, false]
+
+# Array-of-date fields coerce element-wise.
+test "date coercion: array-of-date coerces each ISO element", '''
+  E = schema :shape
+    days! date[]
+  out = E.parse({days: ["2024-01-01", "2024-02-02"]})
+  [out.days[0] instanceof Date, out.days[1] instanceof Date]
+  ''', [true, true]
+
 test "transform: combined with default for missing input", '''
   X = schema
     role? ["guest"], -> it.Role

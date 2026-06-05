@@ -4825,19 +4825,43 @@ export function extractClientProjections(source, names, { filename } = {}) {
     return { ok: false, error: `failed to compile ${filename || 'module'}: ${e.message}` };
   }
   const code = compiled.code || '';
+  // Every schema bound in this source — lets us tell a nested *schema-typed*
+  // field (`items! OrderItem[]` → `typeName: "OrderItem"`) apart from a
+  // primitive (`typeName: "string"`).
+  const defined = new Set();
+  for (const m of code.matchAll(/(?:^|\n)\s*(?:export\s+const\s+)?(\w+)\s*=\s*__schema\(/g)) defined.add(m[1]);
+
   const lines = [];
   const errors = [];
   const where = filename ? ` from '${filename}'` : '';
-  for (const name of names) {
+  const requested = new Set(names);
+  const seen = new Set();
+  // Process requested names, then transitively any schema they reference by a
+  // field type — otherwise the shared module ships a shape whose nested type
+  // isn't registered in the browser, and that field's validation is *silently*
+  // skipped. A pulled-in dependency that isn't itself shippable is a hard error.
+  const queue = [...names];
+  while (queue.length) {
+    const name = queue.shift();
+    if (seen.has(name)) continue;
+    seen.add(name);
     const lit = findSchemaLiteral(code, name);
+    const isDep = !requested.has(name);
+    const tag = isDep ? `'${name}'${where} (a nested type of a shipped projection)` : `'${name}'${where}`;
     if (!lit) {
-      errors.push(`'${name}'${where} isn't a shippable schema — only a schema or a folded projection (e.g. ${name} = Model.pick(...)) can cross to the browser`);
+      errors.push(isDep
+        ? `${tag} isn't a shippable schema, so the projection referencing it can't cross to the browser`
+        : `${tag} isn't a shippable schema — only a schema or a folded projection (e.g. ${name} = Model.pick(...)) can cross to the browser`);
     } else if (lit.isModel) {
-      errors.push(`'${name}'${where} is a :model — ship a projection like ${name}.pick(...)/.omit(...) instead of the model (which carries ORM/DDL)`);
+      errors.push(`${tag} is a :model — ship a projection like ${name}.pick(...)/.omit(...) instead of the model (which carries ORM/DDL)`);
     } else if (lit.hasBehavior) {
-      errors.push(`'${name}'${where} carries behavior (methods/computed/transforms) that may close over server-only code — project it to plain fields before importing it client-side`);
+      errors.push(`${tag} carries behavior (methods/computed/transforms) that may close over server-only code — project it to plain fields before importing it client-side`);
     } else {
       lines.push(`export ${name} = ${lit.text}`);
+      for (const tm of lit.text.matchAll(/typeName:\s*"(\w+)"/g)) {
+        const dep = tm[1];
+        if (defined.has(dep) && !seen.has(dep)) queue.push(dep);
+      }
     }
   }
   if (errors.length) return { ok: false, error: errors.join('; ') };

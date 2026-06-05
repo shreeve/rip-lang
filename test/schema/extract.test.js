@@ -123,6 +123,47 @@ check('synthetic source carries no model/ORM/DDL artifacts', () => {
   assert(!/CREATE SEQUENCE|toSQL|nextval|has_many|belongs_to/.test(r.source), 'server artifact leaked');
 });
 
+// ── transitive materialization: a shipped shape's nested schema must ship too,
+//    else the browser registry misses it and that field's validation is
+//    silently skipped. A nested type that isn't itself shippable is refused.
+check('a projection transitively ships its nested schema dependency', () => {
+  const src = 'Item = schema :shape\n  id! number\nOrder = schema :shape\n  items! Item[]\nOrderPub = Order.pick("items")\n';
+  const r = extractClientProjections(src, ['OrderPub'], { filename: 'm.rip' });
+  assert(r.ok, r.error);
+  assert(/export OrderPub = __schema/.test(r.source), 'projection missing');
+  assert(/export Item = __schema/.test(r.source), 'nested Item not shipped transitively: ' + r.source);
+});
+
+check('a non-shippable nested type (a :model) is refused', () => {
+  const src = 'Owner = schema :model\n  name! string\nThing = schema :shape\n  owner! Owner\nThingPub = Thing.pick("owner")\n';
+  const r = extractClientProjections(src, ['ThingPub'], { filename: 'm.rip' });
+  assert(!r.ok, 'expected refusal');
+  assert(/nested type/.test(r.error) && /:model/.test(r.error), 'error should explain the nested model: ' + r.error);
+});
+
+// ── fold must reproduce the runtime algebra's field set, or bail. ──
+function foldedFields(src, name) {
+  const code = new Compiler({ foldProjections: true, skipPreamble: true, skipRuntimes: true }).compile(src).code;
+  const lit = (code.match(new RegExp(name + ' = __schema\\([\\s\\S]*?\\}\\);')) || [null])[0];
+  if (!lit) return null; // bailed to a runtime call
+  return [...lit.matchAll(/name: "(\w+)"/g)].map(m => m[1]).slice(1); // drop the schema's own name
+}
+
+check('folded extend() merges the argument\'s declared fields, not a model\'s implicit columns', () => {
+  const f = foldedFields('Base = schema :shape\n  a! string\nM = schema :model\n  b! string\n  @timestamps\nC = Base.extend(M)\n', 'C');
+  assert(JSON.stringify(f) === JSON.stringify(['a', 'b']), 'extend leaked implicit columns: ' + JSON.stringify(f));
+});
+
+check('folding bails (stays a runtime call) when the base uses @mixin', () => {
+  const f = foldedFields('S = schema :mixin\n  n! string\nB = schema :shape\n  a! string\n  @mixin S\nV = B.omit("a")\n', 'V');
+  assert(f === null, 'fold should have bailed on a @mixin base, got: ' + JSON.stringify(f));
+});
+
+check('folded belongs_to FK uses the runtime camelCase derivation', () => {
+  const f = foldedFields('W = schema :model\n  n! string\nB = schema :model\n  a! string\n  @belongs_to ABCWidget\nV = B.pick("a", "abcwidgetId")\n', 'V');
+  assert(JSON.stringify(f) === JSON.stringify(['a', 'abcwidgetId']), 'FK name diverged from runtime: ' + JSON.stringify(f));
+});
+
 console.log('');
 const total = passed + failed;
 if (failed === 0) {

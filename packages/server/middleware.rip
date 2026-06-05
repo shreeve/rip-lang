@@ -114,6 +114,10 @@ materializeSharedSchemas = (modules, moduleFiles, bundleRoots, appDir) ->
     bundleRoots.some (root) -> real is root or real.startsWith("#{root}/")
   # target abs path → { key, names:Set, importers:[{key, spec}] }
   needs = new Map()
+  # sharedKey → abs, to catch two distinct server files whose path-tail (after
+  # stripping `../`) collapses to the same `_shared/...` key (else one silently
+  # overwrites the other). Mirrors the `_pkg/` short-name collision guard below.
+  sharedKeys = new Map()
   for key, src of modules
     file = moduleFiles[key]
     continue unless file
@@ -129,7 +133,12 @@ materializeSharedSchemas = (modules, moduleFiles, bundleRoots, appDir) ->
       entry = needs.get(abs)
       unless entry
         sharedRel = relative(dirname(appDir), abs).replace(/\.\.\//g, '').replace(/^\/+/, '')
-        entry = { key: "_shared/#{sharedRel}", names: new Set(), importers: [] }
+        sharedKey = "_shared/#{sharedRel}"
+        prior = sharedKeys.get(sharedKey)
+        if prior and prior isnt abs
+          raise "Shared-schema key collision: '#{abs}' and '#{prior}' both map to '#{sharedKey}'. Two server-only modules can't materialize to the same browser-bundle key."
+        sharedKeys.set(sharedKey, abs)
+        entry = { key: sharedKey, names: new Set(), importers: [] }
         needs.set(abs, entry)
       entry.names.add(n) for n in names
       entry.importers.push({ key, spec })
