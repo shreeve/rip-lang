@@ -3080,15 +3080,34 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
     if (!bodySexpr) {
       return `(function() {})`;
     }
-    let arrowSexpr = ["->", [], bodySexpr];
-    return emitter.emit(arrowSexpr, "value");
+    let params = [];
+    if (emitter.options.inlineTypes && emitter._schemaName) {
+      let thisParam = new String("this");
+      thisParam.type = emitter._schemaName;
+      params.push(thisParam);
+    }
+    let arrowSexpr = ["->", params, bodySexpr];
+    let fnCode = emitter.emit(arrowSexpr, "value");
+    if (emitter.options.inlineTypes && emitter._schemaName && (entry.tag === "computed" || entry.tag === "derived")) {
+      if (!emitter._schemaBehavior)
+        emitter._schemaBehavior = new Map;
+      let list = emitter._schemaBehavior.get(emitter._schemaName);
+      if (!list) {
+        list = [];
+        emitter._schemaBehavior.set(emitter._schemaName, list);
+      }
+      list.push({ field: entry.name, tag: entry.tag, fnExpr: fnCode });
+    }
+    return fnCode;
   }
   function compileTransformFn(emitter, bodyTokens) {
     let bodySexpr = parseBodyTokens(bodyTokens);
     if (!bodySexpr) {
       return `(function() { return undefined; })`;
     }
-    let arrowSexpr = ["->", [], bodySexpr];
+    let itParam = new String("it");
+    itParam.type = "any";
+    let arrowSexpr = ["->", [itParam], bodySexpr];
     return emitter.emit(arrowSexpr, "value");
   }
   function compileEnsureFn(emitter, entry) {
@@ -14334,7 +14353,7 @@ if (typeof globalThis !== 'undefined') {
 //# sourceMappingURL=${this.options.filename}.js.map`;
       }
       if (typeTokens && _typesEmitter) {
-        dts = _typesEmitter(typeTokens, sexpr, source);
+        dts = _typesEmitter(typeTokens, sexpr, source, generator._schemaBehavior);
       }
       return { tokens, sexpr, code, dts, map, reverseMap, data: dataSection, reactiveVars: generator.reactiveVars };
     }
@@ -14383,7 +14402,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.16.0";
-  var BUILD_DATE = "2026-06-04@21:16:38GMT";
+  var BUILD_DATE = "2026-06-05@12:12:57GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
