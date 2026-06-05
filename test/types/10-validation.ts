@@ -1,10 +1,10 @@
 // 10-validation.ts — Runtime validation use cases
 //
 // TS + Zod implements each case with runtime validation and inferred
-// types. Compare with the .rip companion to see the gap: Rip types
-// describe the same shapes at compile time, but can't validate at
-// runtime. Zod schemas are the single source of truth — they define
-// the shape, validate incoming data, and derive the TypeScript type.
+// types. The .rip companion does the same with rip `schema`: both are
+// the single source of truth — they define the shape, validate incoming
+// data on `.parse()`, and derive the static type from one declaration.
+// Same four cases, identical output.
 //
 // Use cases:
 //   1. API response shape — validate what the server returns
