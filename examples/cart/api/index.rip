@@ -1,7 +1,10 @@
 import './db.rip'
 import { get, post, patch, read } from '@rip-lang/server'
-import { User, Order, UserView, OrderView, products } from './models.rip'
+import { User, Order, UserPublic, OrderPublic, products } from './models.rip'
 
+# Response conventions: a bare `return value` becomes 200 JSON; `@json(value,
+# status)` sets a custom status (e.g. 201 Created); errors go through
+# `errorResponse` — an `{ errors }` envelope with a 4xx status.
 def errorResponse(errors:: { form?: string, field?: Partial<Record<string, string>> }, status = 400)
   return Response.json({ errors }, { status })
 
@@ -13,13 +16,13 @@ get '/api/products' -> products
 get '/api/orders' ->
   user = currentUser!()
   if not user then return []
-  return user.orders!().reverse().map((o) -> OrderView.parse(o))
+  return user.orders!().reverse().map((o) -> OrderPublic.parse(o))
 
 post '/api/orders' ->
   items = read 'items', 'array'
 
   if not items?.length
-    return errorResponse { form: 'Invalid order data' }
+    return errorResponse({ form: 'Invalid order data' })
 
   total = 0
   for item in items
@@ -34,19 +37,19 @@ post '/api/orders' ->
   if not user then return errorResponse({ form: 'No user found' }, 404)
 
   order = Order.create!({ userId: user.id, items, total: Math.round(total * 100) / 100 })
-  return @json(OrderView.parse(order), 201)
+  return @json(OrderPublic.parse(order), 201)
 
 get '/api/user' ->
   user = currentUser!()
   if not user then return errorResponse({ form: 'No user found' }, 404)
-  return UserView.parse(user)
+  return UserPublic.parse(user)
 
 patch '/api/user' ->
   firstName = read 'firstName', 'name'
   lastName  = read 'lastName',  'name'
   phone     = read 'phone',     'text'
 
-  field:: Partial<Record<keyof UserView, string>> = {}
+  field:: Partial<Record<keyof UserPublic, string>> = {}
   if not firstName then field.firstName = 'Enter a first name'
   if not lastName then field.lastName = 'Enter a last name'
 
@@ -58,4 +61,4 @@ patch '/api/user' ->
   Object.assign(user, { firstName, lastName, phone })
   user.save!()
 
-  return UserView.parse(user)
+  return UserPublic.parse(user)

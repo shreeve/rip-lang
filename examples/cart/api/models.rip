@@ -1,7 +1,7 @@
 export User = schema :model
   firstName! string, 1..
   lastName!  string, 1..
-  email!#
+  email!#    email
   phone?     string
   @timestamps
   @has_many Order
@@ -31,5 +31,5 @@ export Order = schema :model
   @timestamps
   @belongs_to User
 
-export UserView  = User.pick("id", "firstName", "lastName", "email", "phone")
-export OrderView = Order.pick("id", "items", "total", "createdAt")
+export UserPublic  = User.pick("id", "firstName", "lastName", "email", "phone")
+export OrderPublic = Order.pick("id", "items", "total", "createdAt")
