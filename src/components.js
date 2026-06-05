@@ -587,8 +587,8 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     if (!(from instanceof String)) return to;
     const s = new String(to);
     if (from.optional) s.optional = true;
-    if (from.await) s.await = true;
-    return (s.optional || s.await) ? s : to;
+    if (from.bang) s.bang = true;
+    return (s.optional || s.bang) ? s : to;
   };
 
   // Inject `// @rip-src:N` markers onto each statement line of a method body

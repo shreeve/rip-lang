@@ -248,7 +248,7 @@ Tokens are `[tag, val]` arrays with extra properties:
 
 Identifier suffixes:
 
-- `!` sets `.data.await = true`
+- `!` sets `.data.bang = true` — a neutral "trailing `!`" flag resolved by context downstream: dammit/`await` at a call site (`fetch!` → `await fetch()`), or the void marker at a function definition (`foo! = ->`, `def foo!` → no implicit return). Void-ness is stamped onto the function node as `isVoid` by `applyVoidMarker` and read locally by the arrow emitters; `def` reads `meta(name, 'bang')` directly.
 - `?` sets `.data.optional = true` (existence check on values; optional marker on prop/type-field names)
 - `as!` in loops emits `FORASAWAIT` for `for await`
 

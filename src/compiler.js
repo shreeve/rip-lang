@@ -823,10 +823,10 @@ export class CodeEmitter {
   // ---------------------------------------------------------------------------
 
   emit(sexpr, context = 'statement') {
-    // String object with metadata (quote, await, optional, heregex, etc.)
+    // String object with metadata (quote, bang, optional, heregex, etc.)
     if (sexpr instanceof String) {
       // Dammit operator (!)
-      if (meta(sexpr, 'await') === true) {
+      if (meta(sexpr, 'bang') === true) {
         return `await ${str(sexpr)}()`;
       }
 
@@ -887,8 +887,8 @@ export class CodeEmitter {
 
     let [head, ...rest] = sexpr;
 
-    // Preserve await metadata before converting head to primitive
-    let headAwaitMeta = meta(head, 'await');
+    // Preserve bang metadata before converting head to primitive
+    let headBangMeta = meta(head, 'bang');
     head = str(head);
 
     // Dispatch table
@@ -908,7 +908,7 @@ export class CodeEmitter {
       let postfix = this._tryPostfixCall(head, rest, context);
       if (postfix) return postfix;
 
-      let needsAwait = headAwaitMeta === true;
+      let needsAwait = headBangMeta === true;
       let callStr = `${this.emit(head, 'value')}(${this._emitArgs(rest)})`;
       return needsAwait ? `await ${callStr}` : callStr;
     }
@@ -934,10 +934,10 @@ export class CodeEmitter {
       let postfix = this._tryPostfixCall(head, rest, context);
       if (postfix) return postfix;
 
-      // Property access with await sigil on property
+      // Property access with bang sigil on property
       let needsAwait = false;
       let calleeCode;
-      if (head[0] === '.' && meta(head[2], 'await') === true) {
+      if (head[0] === '.' && meta(head[2], 'bang') === true) {
         needsAwait = true;
         let [obj, prop] = head.slice(1);
         let objCode = this.emit(obj, 'value');
@@ -1198,15 +1198,7 @@ export class CodeEmitter {
     }
 
     // Validate: no sigils in assignment targets (except void function syntax)
-    let isFnValue = (this.is(value, '->') || this.is(value, '=>') || this.is(value, 'def'));
-    if (target instanceof String && meta(target, 'await') !== undefined && !isFnValue) {
-      let sigil = meta(target, 'await') === true ? '!' : '&';
-      this.error(`Cannot use ${sigil} sigil in variable declaration '${str(target)}'`, sexpr);
-    }
-
-    if (target instanceof String && meta(target, 'await') === true && isFnValue) {
-      this.nextFunctionIsVoid = true;
-    }
+    this.applyVoidMarker(target, value, sexpr);
 
     // Empty destructuring — just evaluate RHS
     let isEmptyArr = this.is(target, 'array', 0);
@@ -1295,7 +1287,7 @@ export class CodeEmitter {
 
     // Generate target (handle reactive, sigils)
     let targetCode;
-    if (target instanceof String && meta(target, 'await') !== undefined) {
+    if (target instanceof String && meta(target, 'bang') !== undefined) {
       targetCode = str(target);
     } else if (typeof target === 'string' && this.reactiveVars?.has(target)) {
       targetCode = `${target}.value`;
@@ -1342,7 +1334,7 @@ export class CodeEmitter {
                       objCode.startsWith('await ') ||
                       ((this.is(obj, 'object') || this.is(obj, 'yield')));
     let base = needsParens ? `(${objCode})` : objCode;
-    if (meta(prop, 'await') === true) return `await ${base}.${str(prop)}()`;
+    if (meta(prop, 'bang') === true) return `await ${base}.${str(prop)}()`;
     if (meta(prop, 'optional')) return `(${base}.${str(prop)} != null)`;
     return `${base}.${str(prop)}`;
   }
@@ -1509,7 +1501,7 @@ export class CodeEmitter {
 
   emitDef(head, rest, context, sexpr) {
     let [name, params, body] = rest;
-    let sideEffectOnly = meta(name, 'await') === true;
+    let sideEffectOnly = meta(name, 'bang') === true;
     let cleanName = str(name);
     let paramList = this.emitParamList(params);
     let bodyCode = this.emitFunctionBody(body, params, sideEffectOnly);
@@ -1521,8 +1513,7 @@ export class CodeEmitter {
   emitThinArrow(head, rest, context, sexpr) {
     let [params, body] = rest;
     if ((!params || (Array.isArray(params) && params.length === 0)) && this.containsIt(body)) params = ['it'];
-    let sideEffectOnly = this.nextFunctionIsVoid || false;
-    this.nextFunctionIsVoid = false;
+    let sideEffectOnly = sexpr.isVoid || false;
     let paramList = this.emitParamList(params);
     let bodyCode = this.emitFunctionBody(body, params, sideEffectOnly);
     let isAsync = this.containsAwait(body);
@@ -1534,8 +1525,7 @@ export class CodeEmitter {
   emitFatArrow(head, rest, context, sexpr) {
     let [params, body] = rest;
     if ((!params || (Array.isArray(params) && params.length === 0)) && this.containsIt(body)) params = ['it'];
-    let sideEffectOnly = this.nextFunctionIsVoid || false;
-    this.nextFunctionIsVoid = false;
+    let sideEffectOnly = sexpr.isVoid || false;
     let paramList = this.emitParamList(params);
     let isSingle = params.length === 1 && typeof params[0] === 'string' &&
                    !paramList.includes('=') && !paramList.includes('...') &&
@@ -2165,8 +2155,7 @@ export class CodeEmitter {
       if (operator === ':' && isSimpleKey && this.is(value, '->')) {
         let [, mParams, mBody] = value;
         if ((!mParams || (Array.isArray(mParams) && mParams.length === 0)) && this.containsIt(mBody)) mParams = ['it'];
-        let mSideEffect = this.nextFunctionIsVoid || false;
-        this.nextFunctionIsVoid = false;
+        let mSideEffect = value.isVoid || false;
         let mParamList = this.emitParamList(mParams);
         let mBodyCode = this.emitFunctionBody(mBody, mParams, mSideEffect);
         let mIsAsync = this.containsAwait(mBody);
@@ -2747,7 +2736,7 @@ export class CodeEmitter {
   emitImport(head, rest, context, sexpr) {
     if (rest.length === 1) {
       let importExpr = `import(${this.emit(rest[0], 'value')})`;
-      if (meta(sexpr[0], 'await') === true) return `(await ${importExpr})`;
+      if (meta(sexpr[0], 'bang') === true) return `(await ${importExpr})`;
       return importExpr;
     }
     if (this.options.skipImports) return '';
@@ -2809,6 +2798,26 @@ export class CodeEmitter {
     if (anchors.length) sexpr._anchors = (sexpr._anchors || []).concat(anchors);
   }
 
+  // Propagate the void marker from a `name! = fn` LHS onto the function node.
+  // The `!` suffix is recorded as `.bang === true` metadata on the target
+  // identifier; when the value is a function (`->`/`=>`/`def`) the bang means
+  // the function is void (no implicit return). We stamp `isVoid` directly on
+  // the function node so the arrow emitters read it locally — the same way
+  // `emitDef` reads `meta(name, 'bang')` off its own node. Used by assignment
+  // and export declaration paths so `export name! = ->` matches the bare
+  // `name! = ->` semantics. Rejects `!`/`&` sigils on non-function values,
+  // exactly like a plain assignment.
+  applyVoidMarker(target, value, sexpr) {
+    let isFnValue = (this.is(value, '->') || this.is(value, '=>') || this.is(value, 'def'));
+    if (target instanceof String && meta(target, 'bang') !== undefined && !isFnValue) {
+      let sigil = meta(target, 'bang') === true ? '!' : '&';
+      this.error(`Cannot use ${sigil} sigil in variable declaration '${str(target)}'`, sexpr);
+    }
+    if (target instanceof String && meta(target, 'bang') === true && isFnValue) {
+      value.isVoid = true;
+    }
+  }
+
   emitExport(head, rest) {
     let [decl] = rest;
     if (this.options.skipExports) {
@@ -2821,6 +2830,7 @@ export class CodeEmitter {
           this._componentTypeParams = decl[1]?.typeParams || '';
         }
         if (this.is(decl[2], 'schema')) this._schemaName = str(decl[1]);
+        this.applyVoidMarker(decl[1], decl[2], decl);
         const result = `const ${decl[1]} = ${this.emit(decl[2], 'value')}`;
         this._componentName = prev;
         this._componentTypeParams = prevTP;
@@ -2839,6 +2849,7 @@ export class CodeEmitter {
         this._componentTypeParams = decl[1]?.typeParams || '';
       }
       if (this.is(decl[2], 'schema')) this._schemaName = str(decl[1]);
+      this.applyVoidMarker(decl[1], decl[2], decl);
       const result = `export const ${decl[1]} = ${this.emit(decl[2], 'value')}`;
       this._componentName = prev;
       this._componentTypeParams = prevTP;
@@ -2852,10 +2863,14 @@ export class CodeEmitter {
   emitExportDefault(head, rest) {
     let [expr] = rest;
     if (this.options.skipExports) {
-      if (this.is(expr, '=')) return `const ${expr[1]} = ${this.emit(expr[2], 'value')}`;
+      if (this.is(expr, '=')) {
+        this.applyVoidMarker(expr[1], expr[2], expr);
+        return `const ${expr[1]} = ${this.emit(expr[2], 'value')}`;
+      }
       return this.emit(expr, 'statement');
     }
     if (this.is(expr, '=')) {
+      this.applyVoidMarker(expr[1], expr[2], expr);
       return `const ${expr[1]} = ${this.emit(expr[2], 'value')};\nexport default ${expr[1]}`;
     }
     return `export default ${this.emit(expr, 'statement')}`;
@@ -3955,7 +3970,7 @@ export class CodeEmitter {
 
   containsAwait(sexpr) {
     if (!sexpr) return false;
-    if (sexpr instanceof String && meta(sexpr, 'await') === true) return true;
+    if (sexpr instanceof String && meta(sexpr, 'bang') === true) return true;
     if (typeof sexpr !== 'object') return false;
     if (this.is(sexpr, 'await')) return true;
     if (this.is(sexpr, 'for-as') && sexpr[3] === true) return true;
