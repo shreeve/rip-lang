@@ -1,8 +1,27 @@
 # ==============================================================================
 # @rip-lang/gate — tiny cookie-auth middleware for @rip-lang/server
 # ==============================================================================
-# Encrypted-cookie session (Rack::Session::Cookie-style, but AES-256-GCM).
-# Argon2id passwords. Works two ways:
+# A bouncer. Its only job is to ensure nobody reaches the gated app without
+# first authenticating. There is ZERO interaction between the gated app and
+# the gate — the app never sees gate's session, only an authenticated request
+# (and, in forward-auth mode, a `Remote-User` header).
+#
+# Session model (deliberately boring):
+#
+#   * On login, gate mints a 128-bit random base64url token and writes a file
+#     named after it (contents = the username) under a private session dir.
+#   * "Is this session valid?" is one `stat`: the file exists and its mtime is
+#     within `ttl`. No encryption, no signing — an unguessable token IS the
+#     proof, and the filesystem is the source of truth.
+#   * Logout / revoke a session: `rm <dir>/<token>`. Kick everyone: `rm <dir>/*`.
+#   * Sliding window: each authed request bumps the file's mtime, so active
+#     users stay logged in; idle ones past `ttl` read as expired (and get
+#     swept lazily on the next look).
+#
+# The one `secret` is used ONLY to HMAC-sign the login/logout CSRF token
+# (signed double-submit cookie). It no longer encrypts anything.
+#
+# Works two ways:
 #
 #   1. As middleware inside any Rip server app:
 #        import { gate } from '@rip-lang/gate'
@@ -17,16 +36,18 @@
 # Hash a password:
 #        rip packages/gate/index.rip hash <password>
 #
-# `gate(opts)` returns a middleware function (the auth gate) AND as a
-# side effect installs the sessions middleware and registers the
-# /_gate/{check,login,logout} routes. Call it inside `use` once.
+# `gate(opts)` returns a middleware function (the auth gate) AND, as a side
+# effect, registers the /_gate/{check,login,logout} routes. Call it inside
+# `use` once.
 
-import { realpathSync } from 'node:fs'
+import { realpathSync, mkdirSync, lstatSync, statSync, writeFileSync, readFileSync, unlinkSync, utimesSync } from 'node:fs'
+import { join } from 'node:path'
+import { homedir, tmpdir } from 'node:os'
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { get, post, use, read, start } from '@rip-lang/server'
-import { sessions } from '@rip-lang/server/middleware'
 
 # ------------------------------------------------------------------------------
-# `hash` subcommand — runs before any module setup so it never touches sessions.
+# `hash` subcommand — runs before any module setup.
 # ------------------------------------------------------------------------------
 
 if process.argv[2] is 'hash'
@@ -38,8 +59,15 @@ if process.argv[2] is 'hash'
   exit 0
 
 # ------------------------------------------------------------------------------
-# Helpers (pure, used by the middleware below).
+# Pure helpers (no per-instance state).
 # ------------------------------------------------------------------------------
+
+# Opaque session token: 16 random bytes as base64url → 22 chars, 128 bits.
+# base64url ('-'/'_', no padding) is safe as a filename, cookie value, and URL
+# param all at once. The charset has no path separators, so the regex below is
+# a complete traversal guard for any token we read back off a cookie.
+TOKEN_RE = /^[A-Za-z0-9_-]{22}$/
+newToken = -> randomBytes(16).toString('base64url')
 
 # Same-origin path only. Rejects scheme, `//evil`, `/\evil`, control chars.
 safeReturnTo = (raw) ->
@@ -49,22 +77,15 @@ safeReturnTo = (raw) ->
   return '/' if /[\x00-\x1f\s\\]/.test(raw)
   raw
 
-hmacHex = (secret, msg) ->
-  enc = new TextEncoder()
-  key = crypto.subtle.importKey! 'raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
-  sig = crypto.subtle.sign! 'HMAC', key, enc.encode(msg)
-  Array.from(new Uint8Array(sig)).map((b) -> b.toString(16).padStart(2, '0')).join ''
-
-# CSRF token derived from the session itself (no second cookie).
-csrfFor = (secret, session) ->
-  return null unless session?.created
-  hmacHex! secret, "csrf:#{session.created}"
-
-eqct = (a, b) ->
-  return false unless typeof a is 'string' and typeof b is 'string' and a.length is b.length
-  diff = 0
-  diff |= a.charCodeAt(i) ^ b.charCodeAt(i) for i in [0...a.length]
-  diff is 0
+parseCookies = (header) ->
+  out = {}
+  for pair in String(header or '').split(';')
+    s = pair.trim()
+    continue unless s
+    i = s.indexOf('=')
+    continue if i < 1
+    out[s.slice(0, i)] = s.slice(i + 1)
+  out
 
 esc = (s) ->
   String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -89,22 +110,41 @@ defaultLogin = ({ csrfToken, error, returnTo, host }) ->
   <button type="submit">Sign in</button></form></body></html>
   """
 
+# Default session dir. /tmp is the right home for disposable auth sessions:
+# no root needed, and a reboot simply forces re-login (a feature, not a loss).
+defaultSessionDir = ->
+  base = process.env.XDG_RUNTIME_DIR or tmpdir() or join(homedir(), '.local', 'state')
+  join(base, 'rip-gate')
+
+# Create the session dir privately and refuse to use one we don't own. /tmp is
+# world-writable (sticky bit), so on a multi-user box a local attacker could
+# pre-create or symlink `<dir>`; lstat (not stat) catches the symlink case, and
+# the uid check catches a dir planted by another user.
+ensureSessionDir = (dir) ->
+  mkdirSync dir, { recursive: true, mode: 0o700 }
+  st = lstatSync(dir)
+  uid = process.getuid?()
+  unless st.isDirectory() and not st.isSymbolicLink() and (uid is undefined or st.uid is uid)
+    throw new Error "gate: session dir #{JSON.stringify(dir)} is not a private directory we own"
+  dir
+
 # ------------------------------------------------------------------------------
 # The middleware itself.
 # ------------------------------------------------------------------------------
 #
 # Options:
-#   secret        Required. Cookie encryption + CSRF signing key.
+#   secret        Required. HMAC key for the CSRF token.
 #   users         { username: argon2id-hash } map. Required unless `verify` is set.
 #   verify        async (username, password) -> truthy on success. Overrides `users`.
 #   template      ({ csrfToken, error, returnTo, host }) -> HTML for the login page.
-#   ttl           Session lifetime in seconds (default 28800 = 8h).
+#   ttl           Session idle lifetime in seconds (default 28800 = 8h).
 #   secure        Force Secure cookies. Defaults to NODE_ENV=production.
 #   protect       'all' (default): redirect any unauthenticated non-/_gate/* request
 #                 to login. 'none': only expose /_gate/* endpoints (forward_auth mode).
-#   cookieName    Override cookie name. Default `__Host-rip_gate` (prod) or `rip_gate`.
-#
-# After install, handlers can read `@session.user` to identify the caller.
+#   cookieName    Override session cookie name. Default `__Host-rip_gate` (prod)
+#                 or `rip_gate`.
+#   sessionDir    Where token files live. Default $XDG_RUNTIME_DIR/rip-gate or
+#                 /tmp/rip-gate. Overridable via GATE_SESSION_DIR.
 
 export gate = (opts = {}) ->
   secret   = opts.secret or throw new Error 'gate: `secret` is required'
@@ -114,10 +154,12 @@ export gate = (opts = {}) ->
   ttl      = opts.ttl ?? 28800  # `??` not `or` so the validator below catches ttl:0
   prod     = if opts.secure? then opts.secure else (process.env.NODE_ENV or '').toLowerCase() is 'production'
   cookie   = opts.cookieName or (if prod then '__Host-rip_gate' else 'rip_gate')
+  csrfCookie = if prod then '__Host-rip_gate_csrf' else 'rip_gate_csrf'
   protect  = opts.protect or 'all'
+  dir      = ensureSessionDir(opts.sessionDir or process.env.GATE_SESSION_DIR or defaultSessionDir())
 
-  # Fail closed on misconfiguration: a typo in `protect` (e.g. `'al'`)
-  # would otherwise silently disable auth on every non-/_gate request.
+  # Fail closed on misconfiguration: a typo in `protect` (e.g. `'al'`) would
+  # otherwise silently disable auth on every non-/_gate request.
   unless protect in ['all', 'none']
     throw new Error "gate: protect must be 'all' or 'none', got #{JSON.stringify(protect)}"
   unless Number.isInteger(ttl) and ttl > 0
@@ -125,11 +167,74 @@ export gate = (opts = {}) ->
   if typeof secret isnt 'string' or secret.length < 32
     warn "gate: secret should be at least 32 characters (got #{secret?.length or 0}). Generate one with 'openssl rand -base64 32'."
 
-  # Lazy dummy hash — only built on the first unknown-user login attempt.
+  # --- session store (random token + file) ---
+
+  # Persist a session: write `<dir>/<token>` containing the username.
+  issue = (user) ->
+    tok = newToken()
+    writeFileSync join(dir, tok), String(user), { mode: 0o600 }
+    tok
+
+  # Validate a token. Returns { user } when live, else null. mtime is the
+  # server-enforced TTL clock; a stolen-but-idle cookie expires here even
+  # though the browser still holds it. Sliding: bump mtime on each hit.
+  lookup = (tok) ->
+    return null unless tok and TOKEN_RE.test(tok)
+    path = join(dir, tok)
+    try
+      st = statSync(path)
+    catch
+      return null
+    now = Date.now()
+    if now - st.mtimeMs > ttl * 1000
+      try unlinkSync(path)
+      return null
+    secs = now / 1000
+    try utimesSync(path, secs, secs)
+    try { user: readFileSync(path, 'utf8') }
+    catch then null
+
+  revoke = (tok) ->
+    return unless tok and TOKEN_RE.test(tok)
+    try unlinkSync(join(dir, tok))
+
+  # --- CSRF (signed double-submit cookie) ---
+  #
+  # The token is `nonce.HMAC(secret, nonce)`. On GET it's planted in BOTH a
+  # cookie and the form's hidden field; on POST we require cookie == form AND a
+  # valid HMAC. The HMAC stops cookie forgery; the cookie/form match (with
+  # SameSite=Lax keeping the cookie off cross-site POSTs) stops cross-site
+  # submission. No session needed — it's stateless, which suits pre-auth login.
+
+  sign = (v) -> createHmac('sha256', secret).update(v).digest('base64url')
+
+  mintCsrf = ->
+    nonce = randomBytes(16).toString('base64url')
+    "#{nonce}.#{sign(nonce)}"
+
+  validCsrf = (tok) ->
+    return false unless typeof tok is 'string'
+    [nonce, sig] = tok.split('.')
+    return false unless nonce and sig
+    want = sign(nonce)
+    return false unless sig.length is want.length
+    try timingSafeEqual(Buffer.from(sig), Buffer.from(want))
+    catch then false
+
+  csrfOk = (c) ->
+    cookies = parseCookies(c.req.header('cookie'))
+    fromCookie = cookies[csrfCookie] or ''
+    fromForm   = String(read('_csrf') or '')
+    fromCookie and fromForm and fromCookie is fromForm and validCsrf(fromForm)
+
+  # --- credential verification ---
+
   dummy = null
   verifyMatches = (plain, hash) ->
     if hash
       return Bun.password.verify!(plain, hash)
+    # Lazy dummy hash so an unknown user costs the same as a wrong password
+    # (no username enumeration via timing). Built on first miss only.
     dummy ?= Bun.password.hash!('gate-unknown-user', { algorithm: 'argon2id' })
     Bun.password.verify!(plain, dummy)
     false
@@ -141,16 +246,23 @@ export gate = (opts = {}) ->
       result = await verify(rawUser, pass)
       return null unless result
       return if typeof result is 'object' then result else { user: rawUser }
-    ok = await verifyMatches(pass, users[rawUser.toLowerCase()])
-    if ok then { user: rawUser.toLowerCase() } else null
+    name = rawUser.toLowerCase()
+    # Object.hasOwn so a username like `constructor`/`toString` can't resolve
+    # to an inherited member and blow up Bun.password.verify with a 500.
+    hash = if Object.hasOwn(users, name) then users[name] else undefined
+    ok = await verifyMatches(pass, hash)
+    if ok then { user: name } else null
 
-  # Server-side expiry check — the cookie's Max-Age is only a browser
-  # hint; a stolen cookie would replay forever otherwise.
-  isAuthed = (s) ->
-    s? and s.user and Number.isFinite(s.expires) and s.expires > Date.now()
+  # --- shared response bits ---
 
-  # Preserve query strings in return_to. `c.req.path` is path-only;
-  # we want path + search so deep links survive the login redirect.
+  setCookie = (name, value, maxAge) ->
+    parts = ["#{name}=#{value}", "Path=/", "HttpOnly", "SameSite=Lax"]
+    parts.push "Secure" if prod
+    parts.push "Max-Age=#{maxAge}" if maxAge?
+    parts.join '; '
+
+  hostOf = (c) -> c.req.header('x-forwarded-host') or c.req.header('host') or ''
+
   fullReqPath = (c) ->
     try
       u = new URL(c.req.url)
@@ -158,19 +270,17 @@ export gate = (opts = {}) ->
     catch
       c.req.path
 
-  # Install sessions as a sibling middleware. This runs before the gate
-  # middleware that gets returned below, so by the time we look at
-  # `c.session.user` the cookie has already been parsed.
-  use sessions { secret, encrypt: true, secure: prod, sameSite: 'Lax', name: cookie, maxAge: ttl }
+  # --- routes ---
 
-  # /check — for Caddy forward_auth (or anyone else who wants a JSON-ish probe).
+  # /check — for Caddy/Traefik/Envoy forward_auth (or any JSON-ish probe).
   get '/_gate/check', ->
-    if isAuthed(@session)
+    session = lookup(parseCookies(@req.header('cookie'))[cookie])
+    if session
       return new Response '',
         status: 204
         headers:
           'Cache-Control': 'no-store'
-          'Remote-User':   String(@session.user)
+          'Remote-User':   session.user
     uri = safeReturnTo(@req.header('x-forwarded-uri') or '/')
     accept = @req.header('accept') or ''
     method = (@req.header('x-forwarded-method') or 'GET').toUpperCase()
@@ -182,86 +292,91 @@ export gate = (opts = {}) ->
 
   get '/_gate/login', ->
     rt = safeReturnTo(@req.query('return_to') or '/')
-    host = @req.header('x-forwarded-host') or @req.header('host') or ''
-    @session.created ?= Date.now()
-    token = csrfFor!(secret, @session)
-    @session.csrfNonce = token
-    @header 'Cache-Control', 'no-store'
-    @html template({ csrfToken: token, error: null, returnTo: rt, host })
+    token = mintCsrf()
+    new Response template({ csrfToken: token, error: null, returnTo: rt, host: hostOf(@) }),
+      status: 200
+      headers:
+        'Content-Type':  'text/html; charset=UTF-8'
+        'Cache-Control': 'no-store'
+        'Set-Cookie':    setCookie(csrfCookie, token, 600)
 
   post '/_gate/login', ->
     rt = safeReturnTo(read('return_to') or '/')
+    unless csrfOk(@)
+      return new Response 'csrf required', { status: 403, headers: { 'Cache-Control': 'no-store' } }
+
     rawUser = String(read('user') or '').trim()
-    pass = String(read('password') or '')
-    submitted = String(read('_csrf') or '')
-    expected = @session.csrfNonce or ''
-    unless expected and eqct(submitted, expected)
-      return new Response('csrf required', { status: 403, headers: { 'Cache-Control': 'no-store' } })
+    pass    = String(read('password') or '')
+    # Cheap caps before Argon2id — gate does no rate limiting of its own.
+    if rawUser.length > 256 or pass.length > 1024
+      return new Response 'invalid credentials', { status: 400, headers: { 'Cache-Control': 'no-store' } }
 
     identity = await doVerify(rawUser, pass)
     unless identity
-      host = @req.header('x-forwarded-host') or @req.header('host') or ''
-      @header 'Cache-Control', 'no-store'
-      return @html template({ csrfToken: expected, error: 'Invalid credentials', returnTo: rt, host }), 401
+      submitted = String(read('_csrf') or '')
+      return new Response template({ csrfToken: submitted, error: 'Invalid credentials', returnTo: rt, host: hostOf(@) }),
+        status: 401
+        headers: { 'Content-Type': 'text/html; charset=UTF-8', 'Cache-Control': 'no-store' }
 
-    # Custom `verify` returns are user-supplied — make sure `user` is a
-    # non-empty header-safe string before stamping it onto Remote-User.
+    # Custom `verify` returns are user-supplied — `user` must be a non-empty
+    # header-safe string before it lands in a file and later on Remote-User.
     unless typeof identity.user is 'string' and identity.user.length > 0 and /^[\x20-\x7e]+$/.test(identity.user)
       warn 'gate: verify() returned an unsafe user value; rejecting login'
-      return new Response('login rejected', { status: 500, headers: { 'Cache-Control': 'no-store' } })
+      return new Response 'login rejected', { status: 500, headers: { 'Cache-Control': 'no-store' } }
 
-    # Replace the entire session — drops attacker-supplied state and
-    # rotates the CSRF nonce. `expires` carries server-enforced TTL.
-    delete @session[key] for key of @session
-    @session[k] = v for k, v of identity
-    @session.created = Date.now()
-    @session.expires = Date.now() + (ttl * 1000)
-    @session.csrfNonce = csrfFor!(secret, @session)
-    @redirect rt, 303
+    token = issue(identity.user)
+    headers = new Headers()
+    headers.set 'Location', rt
+    headers.set 'Cache-Control', 'no-store'
+    # Session cookie is session-scoped (no Max-Age): the server's mtime+ttl is
+    # the sole expiry authority, which lets the sliding window actually slide.
+    headers.append 'Set-Cookie', setCookie(cookie, token)
+    headers.append 'Set-Cookie', setCookie(csrfCookie, '', 0)
+    new Response '', { status: 303, headers }
 
-  # GET /_gate/logout renders a confirmation page with the logout CSRF
-  # token. The actual mutation happens on POST below — SameSite=Lax
-  # protects the POST from cross-origin form submission, and the HMAC
-  # token verifies same-session origin. The GET itself is side-effect
-  # free, so SameSite=Lax's allowance of top-level GET nav is fine.
+  # GET renders a confirmation page (side-effect free); POST does the mutation.
   get '/_gate/logout', ->
-    return @redirect '/_gate/login', 302 unless isAuthed(@session)
-    host = @req.header('x-forwarded-host') or @req.header('host') or ''
-    token = csrfFor!(secret, @session)
-    @session.csrfNonce = token
-    user = esc(@session.user)
-    @header 'Cache-Control', 'no-store'
-    @html """
+    session = lookup(parseCookies(@req.header('cookie'))[cookie])
+    return @redirect '/_gate/login', 302 unless session
+    token = mintCsrf()
+    body = """
     <!doctype html><html lang="en"><head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1"><title>Sign out</title>
     <style>body{font:14px/1.5 system-ui,sans-serif;max-width:22rem;margin:4rem auto;padding:0 1rem}
     h1{font-size:1.25rem;margin:0 0 .25rem}.host{color:#666;margin:0 0 1.25rem;font-size:.9rem}
     button{margin-top:1rem;padding:.5rem 1rem;font:inherit;cursor:pointer}</style>
-    </head><body><h1>Sign out</h1><p class="host">#{esc(host)}</p>
-    <p>Signed in as <strong>#{user}</strong>.</p>
+    </head><body><h1>Sign out</h1><p class="host">#{esc(hostOf(@))}</p>
+    <p>Signed in as <strong>#{esc(session.user)}</strong>.</p>
     <form method="post" action="/_gate/logout">
     <input type="hidden" name="_csrf" value="#{esc(token)}">
     <button type="submit">Sign out</button></form></body></html>
     """
+    new Response body,
+      status: 200
+      headers:
+        'Content-Type':  'text/html; charset=UTF-8'
+        'Cache-Control': 'no-store'
+        'Set-Cookie':    setCookie(csrfCookie, token, 600)
 
   post '/_gate/logout', ->
-    expected = @session?.csrfNonce or ''
-    submitted = String(read('_csrf') or '')
-    unless expected and eqct(submitted, expected)
-      return new Response('csrf required', { status: 403, headers: { 'Cache-Control': 'no-store' } })
-    delete @session[key] for key of @session
-    @redirect '/_gate/login', 303
+    unless csrfOk(@)
+      return new Response 'csrf required', { status: 403, headers: { 'Cache-Control': 'no-store' } }
+    revoke parseCookies(@req.header('cookie'))[cookie]
+    headers = new Headers()
+    headers.set 'Location', '/_gate/login'
+    headers.set 'Cache-Control', 'no-store'
+    headers.append 'Set-Cookie', setCookie(cookie, '', 0)
+    headers.append 'Set-Cookie', setCookie(csrfCookie, '', 0)
+    new Response '', { status: 303, headers }
 
-  # The middleware function returned to `use`. Pass-through unless the
-  # request is unauthenticated AND `protect: 'all'` is configured.
+  # The middleware returned to `use`. Pass-through unless the request is
+  # unauthenticated AND `protect: 'all'` is configured.
   (c, next) ->
     return await next!() if c.req.path.startsWith('/_gate/')
-    return await next!() if isAuthed(c.session)
+    return await next!() if lookup(parseCookies(c.req.header('cookie'))[cookie])
     return await next!() unless protect is 'all'
     accept = c.req.header('accept') or ''
     if accept.includes('text/html') and c.req.method in ['GET', 'HEAD']
-      c.session ?= {}
-      c.session.created ?= Date.now()
       loc = "/_gate/login?return_to=#{encodeURIComponent(safeReturnTo(fullReqPath(c)))}"
       return new Response '', { status: 302, headers: { Location: loc, 'Cache-Control': 'no-store' } }
     new Response 'unauthorized', { status: 401, headers: { 'Cache-Control': 'no-store' } }
@@ -285,8 +400,8 @@ if import.meta.main or samePath(process.env.APP_ENTRY, import.meta.path)
   for key, value of env when key.startsWith('GATE_USER_') and value
     users[key.slice('GATE_USER_'.length).toLowerCase()] = value
 
-  # Strict parse: parseInt('123abc') yields 123, which is a footgun for
-  # auth config. Require the whole value to be digits, then bound-check.
+  # Strict parse: parseInt('123abc') yields 123, a footgun for auth config.
+  # Require the whole value to be digits, then bound-check.
   parsePosInt = (name, raw, fallback, max = Number.MAX_SAFE_INTEGER) ->
     return fallback unless raw?
     throw new Error "#{name} must be a positive integer, got #{JSON.stringify(raw)}" unless /^[1-9][0-9]*$/.test(raw)
@@ -298,10 +413,11 @@ if import.meta.main or samePath(process.env.APP_ENTRY, import.meta.path)
   port = parsePosInt('GATE_PORT',         env.GATE_PORT,         9090, 65535)
 
   use gate
-    secret:  env.GATE_SECRET or throw new Error 'GATE_SECRET is required'
-    users:   users
-    ttl:     ttl
-    protect: env.GATE_PROTECT or 'all'
+    secret:     env.GATE_SECRET or throw new Error 'GATE_SECRET is required'
+    users:      users
+    ttl:        ttl
+    protect:    env.GATE_PROTECT or 'all'
+    sessionDir: env.GATE_SESSION_DIR or null
 
   # `start()` binds Bun.serve in direct mode; under `rip server` it short-
   # circuits on WORKER_ID/SOCKET_PATH and just sets `globalThis.__ripHandler`,

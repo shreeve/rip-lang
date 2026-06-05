@@ -1,6 +1,21 @@
 # @rip-lang/gate
 
-Tiny cookie-auth middleware for `@rip-lang/server`. Encrypted-cookie session (Rack::Session::Cookie-style, but AES-256-GCM). Argon2id passwords. Two ways to use it.
+A bouncer for `@rip-lang/server`. Its only job: make sure nobody reaches your app without authenticating first. There is **zero interaction** between the gated app and the gate — the app just sees an authenticated request (and, behind a proxy, a `Remote-User` header).
+
+Sessions are deliberately boring: a 128-bit random token in a cookie, backed by a file on disk. Argon2id passwords. Two ways to use it.
+
+## How sessions work
+
+On login, gate mints an unguessable 22-char base64url token and writes a file named after it (contents = the username) under a private session dir. "Is this session valid?" is one `stat`: the file exists and its mtime is within `ttl`.
+
+- **No encryption, no signing.** An unguessable token *is* the proof; the filesystem is the source of truth. The cookie carries no PII.
+- **Real server-side revocation** — the thing a stateless encrypted cookie can't give you:
+  - log out / kill one session → `rm <dir>/<token>` (the `POST /_gate/logout` route does this)
+  - kick everyone → `rm <dir>/*`
+- **Sliding idle timeout** — each authed request bumps the file's mtime, so active users stay in; idle ones past `ttl` read as expired and are swept lazily.
+- **Ephemeral by default** — sessions live in `/tmp/rip-gate`, so a reboot simply forces re-login (a feature for an auth gate, and no root needed).
+
+The single `secret` is used **only** to HMAC-sign the login/logout CSRF token. It no longer encrypts anything.
 
 ## Install
 
@@ -21,12 +36,12 @@ use gate
   users:
     alice: '$argon2id$v=19$m=65536,t=2,p=1$...'
 
-get '/' -> "Hello, #{@session.user}!"
+get '/' -> "Hello! You're past the gate."
 
 start port: 3000
 ```
 
-Unauthenticated browser requests redirect to `/_gate/login`; API requests (no `Accept: text/html`) get `401`. After login, `@session.user` is set and handlers run normally.
+Unauthenticated browser requests redirect to `/_gate/login`; API requests (no `Accept: text/html`) get `401`. Once past the gate, your handlers run normally. Gate keeps **no shared session** with your app — it's purely a bouncer. If a handler needs to know *who* the user is, run gate in forward-auth mode (Mode 2) and read the `Remote-User` header.
 
 Generate an Argon2id hash for the `users` map:
 
@@ -133,8 +148,11 @@ Traefik's `forwardAuth` and Envoy's `ext_authz` behave like Caddy (Gate's `302` 
 | `template`   | built-in HTML form                     | `({csrfToken, error, returnTo, host}) -> HTML` — bring your own login page             |
 | `ttl`        | `28800` (8h)                           | Session lifetime in seconds                                                            |
 | `secure`     | `NODE_ENV=production`                  | Force `Secure` cookie attribute                                                        |
-| `cookieName` | `__Host-rip_gate` / `rip_gate`         | Override cookie name                                                                   |
+| `cookieName` | `__Host-rip_gate` / `rip_gate`         | Override session cookie name                                                           |
 | `protect`    | `'all'`                                | `'all'`: auto-redirect unauthenticated requests. `'none'`: only expose `/_gate/*`      |
+| `sessionDir` | `$XDG_RUNTIME_DIR/rip-gate` or `/tmp/rip-gate` | Where token files live. Created `0700`, refuses a dir it doesn't own.          |
+
+`ttl` is an **idle** timeout (sliding): activity refreshes it. `verify` returning an object only uses its `.user` field (that's all gate stores and emits as `Remote-User`).
 
 ## Env vars (standalone mode)
 
@@ -144,6 +162,7 @@ Traefik's `forwardAuth` and Envoy's `ext_authz` behave like Caddy (Gate's `302` 
 | `GATE_PORT`          | `9090`                | Standalone listen port                 |
 | `GATE_SESSION_TTL`   | `28800`               | Session lifetime in seconds            |
 | `GATE_PROTECT`       | `all`                 | `all` or `none`                        |
+| `GATE_SESSION_DIR`   | `/tmp/rip-gate`       | Where token files live                 |
 | `GATE_USER_<NAME>`   | -                     | One per user; value is the Argon2id hash |
 | `NODE_ENV=production`| -                     | Forces `Secure` cookies + `__Host-` prefix |
 
@@ -153,19 +172,24 @@ Traefik's `forwardAuth` and Envoy's `ext_authz` behave like Caddy (Gate's `302` 
 - `GET /_gate/login` — renders the login form.
 - `POST /_gate/login` — verifies credentials, sets session cookie, redirects to `return_to`.
 - `GET /_gate/logout` — renders a tiny "Sign out as X" confirmation form (side-effect free).
-- `POST /_gate/logout` — clears session (CSRF-required).
+- `POST /_gate/logout` — deletes the session's token file server-side (CSRF-required).
 
-## How the crypto compares
+## Security model
 
-Rack::Session::Cookie defaults to `Base64(JSON)--HMAC-SHA1` — tamper-proof but client-readable. Gate uses Rip's existing `sessions({encrypt: true})` middleware, which is AES-256-GCM AEAD — tamper-proof AND confidential. Same operational shape, stronger storage.
+What actually guards the app, and what doesn't:
 
-CSRF tokens are derived from the session via `HMAC(secret, "csrf:" + session.created)` — no second cookie needed. Forms post the token as `_csrf`.
+- **Access control** rests on two things a hostile client can't beat by forging headers: the **password** (Argon2id) needed to get a session, and the **128-bit random token** needed to use one. `curl` with any headers it likes still hits those walls.
+- **CSRF protection** is a separate concern — it protects honest *browser* users from a malicious third-party page abusing their cookie. It is never the access wall, so "but curl can fake `Origin`" doesn't matter: a direct attacker has no victim cookie to abuse. Gate uses a **signed double-submit cookie**: the CSRF token is `nonce.HMAC(secret, nonce)`, planted in both a cookie and the form's hidden `_csrf`; `POST` requires cookie == form **and** a valid HMAC. `SameSite=Lax` keeps the cookie off cross-site POSTs.
+
+Other defenses: server-enforced mtime TTL (a stolen-but-idle cookie expires server-side regardless of the browser), `Remote-User` is ASCII-validated before it's emitted, `return_to` is sanitized to a same-origin path, and unknown users cost the same Argon2id time as a wrong password (no timing enumeration).
 
 ## Notes
 
-- A single `use gate({...})` does two things: installs the `sessions` middleware and registers the `/_gate/*` routes. Don't call it more than once.
-- **Logout is stateless.** `POST /_gate/logout` deletes the browser's cookie, but a copy captured before logout remains usable until `ttl` expires. Short TTLs are the revocation mechanism; if you need server-side revocation, that's a v0.2 extension.
-- Gate doesn't throttle login attempts on its own — put it behind CrowdSec or Caddy `rate_limit` if you need that.
+- A single `use gate({...})` registers the `/_gate/*` routes and returns the gate middleware. Call it once.
+- **`Remote-User` trust:** the reverse proxy MUST strip any client-supplied `Remote-User` before the auth subrequest (the Caddy/nginx configs above do). Otherwise a client could spoof an identity.
+- **Logout revokes server-side** — `POST /_gate/logout` deletes the token file, so a copy of the cookie captured beforehand stops working immediately. (A stolen cookie still works until *its* file is removed or expires — short `ttl` plus `rm` are your controls.)
+- **Multi-user hosts:** `/tmp` is world-writable, so gate creates the session dir `0700` and refuses one it doesn't own (defeats symlink/pre-create tricks). On a dedicated server this is moot.
+- Gate doesn't throttle login attempts — put it behind CrowdSec or Caddy `rate_limit` if you're exposed to the public internet.
 
 ## Files
 
