@@ -19,10 +19,25 @@
 
 # ── 1. API response shape ──
 #
-# The server returns JSON; the client validates it into a typed value.
-# `.parse()` checks the shape at runtime and the bare `User` name is the
-# compile-time type. `name` is optional, so a present `null` (or an absent
-# field) is accepted — the same round-trip as Zod's `.nullable()`.
+# The server returns JSON; the client validates it into a typed value via
+# `.parse()`, and the bare `User` name is the compile-time type.
+#
+# Nullability note — rip vs Zod (known limitation): rip folds Zod's three
+# absent/null states into one marker. `name?` is *nullish* — it accepts a
+# present `null` OR an absent key (the loosest); the .ts companion matches it
+# with `z.string().nullish()`. rip can't express the stricter two: `.optional()`
+# (absent-or-value, reject null) or `.nullable()` (present, value-or-null, reject
+# absent). Two consequences worth knowing:
+#   • The emitted type under-states the runtime: `name?: string` (no `| null`)
+#     even though `parse` accepts `null` — so `bob.name` is typed
+#     `string | undefined` but can actually be `null`.
+#   • "present, but may be null" is unrepresentable, so a contract that must
+#     tell absent from null can't be modeled — e.g. PUT (full replace: every
+#     field present, `null` = explicitly cleared) vs PATCH (absent = no-op).
+# The runtime divergence can't be demonstrated here: the parity check requires
+# both companions to produce identical output on every input, and any input that
+# exposed it would break parity — so it's documented, not tested. Deliberate
+# design (`src/schema/schema.js`: "nullability is carried by the `?` modifier").
 
 User = schema
   id!    number

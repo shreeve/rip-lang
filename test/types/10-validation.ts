@@ -20,7 +20,7 @@ import dayjs from 'dayjs'
 const UserSchema = z.object({
   id: z.number(),
   email: z.string(),
-  name: z.string().nullable(),
+  name: z.string().nullish(),
 })
 
 type User = z.infer<typeof UserSchema>
@@ -76,8 +76,8 @@ const OrderSchema = z.object({
   meta: z.object({
     items: OrderItemSchema.array(),
   }),
-  shippedAt: z.string().nullable().transform((val) => val ? dayjs(val) : null),
-  completedAt: z.string().nullable().transform((val) => val ? dayjs(val) : null),
+  shippedAt: z.string().nullish().transform((val) => val ? dayjs(val) : null),
+  completedAt: z.string().nullish().transform((val) => val ? dayjs(val) : null),
   createdAt: z.string().transform((val) => dayjs(val)),
 }).transform((order) => {
   let name = order.meta.items[0]?.name ?? ''
@@ -136,7 +136,7 @@ const TaskStepSchema = z.object({
 const FinalStepSchema = z.object({
   type: z.literal('final'),
   heading: z.string(),
-  button: z.string().nullable(),
+  button: z.string().nullish(),
 })
 
 const WorkflowStepSchema = z.discriminatedUnion('type', [
