@@ -245,12 +245,21 @@ async function main() {
       const home = process.env.HOME || process.env.USERPROFILE;
       const scopeDir = join(home, '.bun', 'install', 'global', 'node_modules', '@rip-lang');
       if (existsSync(scopeDir) && statSync(scopeDir).isDirectory()) {
-        console.log();
-        for (const name of readdirSync(scopeDir).sort()) {
-          try {
-            const pkg = JSON.parse(readFileSync(join(scopeDir, name, 'package.json'), 'utf-8'));
+        // Sort by the displayed package name (e.g. `@rip-lang/ui`,
+        // `vscode-rip`) rather than the on-disk directory entry — most
+        // entries match either way, but a package whose `name` field
+        // diverges from its directory (the VS Code extension lives in
+        // packages/vscode/ but publishes as `vscode-rip`) would
+        // otherwise sort by its directory and look misplaced.
+        const pkgs = readdirSync(scopeDir)
+          .map((name) => { try { return JSON.parse(readFileSync(join(scopeDir, name, 'package.json'), 'utf-8')); } catch { return null; } })
+          .filter(Boolean)
+          .sort((a, b) => a.name.localeCompare(b.name));
+        if (pkgs.length) {
+          console.log();
+          for (const pkg of pkgs) {
             console.log(`  ${pkg.name.padEnd(24)} ${pkg.version}`);
-          } catch {}
+          }
         }
       }
     } catch {}
