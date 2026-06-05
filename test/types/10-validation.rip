@@ -1,97 +1,80 @@
 # 10-validation.rip — Runtime validation use cases
 #
-# Rip type blocks describe shapes at compile time but have no
-# runtime effect. These real-world patterns show what typed code
-# needs beyond compile-time checking. The .ts companion implements
-# each case with Zod for comparison.
+# rip `schema` fills the role Zod plays in the .ts companion: a schema is
+# the single source of truth — it defines the shape, validates incoming
+# data on `.parse()`, AND its bare name is the compile-time type. Compare
+# with 10-validation.ts (Zod): same four cases, identical output.
+#
+# Every schema here is the default `:input` kind (bare `schema`, no
+# `:symbol`): the whole file validates data entering from outside — API
+# responses, JSON config, a 3rd-party payload — and none carry behavior
+# (methods or computed getters), which is what would call for `:shape`.
+# That makes `:input` the direct parallel to Zod's plain `z.object`.
 #
 # Use cases:
 #   1. API response shape — validate what the server returns
 #   2. Composition — client schema ≠ server model
-#   3. Non-DB config — discriminated unions with no backing table
+#   3. Non-DB config — variant steps keyed by a discriminant
 #   4. 3rd-party API transform — normalize external data on parse
 
 # ── 1. API response shape ──
 #
-# The server returns JSON, the client needs to know the shape.
-# In Rip, the type annotation is compile-time only —
-# response.json() is unvalidated `any` at runtime.
-# In TS+Zod, schema.parse() validates AND the type is inferred.
+# The server returns JSON; the client validates it into a typed value.
+# `.parse()` checks the shape at runtime and the bare `User` name is the
+# compile-time type. `name` is optional, so a present `null` (or an absent
+# field) is accepted — the same round-trip as Zod's `.nullable()`.
 
-type User =
-  id: number
-  email: string
-  name: string | null
+User = schema
+  id!    number
+  email! string
+  name?  string
 
-# compile-time return type, but response.json() is unvalidated any
+# .parse() validates at runtime AND returns the typed value
 def fetchUser(id:: number):: Promise<User>
-  response = fetch! "/api/users/#{id}"
-  response.json()
+  response = fetch!("/api/users/#{id}")
+  return User.parse(response.json())
 
-alice:: User = { id: 1, email: 'alice@example.com', name: 'Alice' }
-bob:: User = { id: 2, email: 'bob@example.com', name: null }
+alice = User.parse({ id: 1, email: 'alice@example.com', name: 'Alice' })
+bob = User.parse({ id: 2, email: 'bob@example.com', name: null })
 
 console.log "user: #{alice.id} #{alice.email} #{alice.name}"
 console.log "user: #{bob.id} #{bob.email} #{bob.name ?? '(anon)'}"
 
 # ── 2. Composition — client schema ≠ server model ──
 #
-# The DB stores order items inside a `meta Json` column and dates
-# as DateTime. The client schema types meta, transforms date strings
-# into Dayjs instances, and computes derived fields. The output has
-# fields that don't exist in the DB and fields whose types changed.
-#
-#   Server (DB model):              Client (parsed + transformed):
-#   ─────────────────               ──────────────────────────────
-#   id           Int @id            id          number
-#   userId       Int                number      string
-#   number       String             payment     string
-#   payment      String             subtotal    number
-#   subtotal     Int                total       number
-#   total        Int                meta        { items: OrderItem[] }
-#   meta         Json ─────────────► name       string    ← computed
-#   shippedAt    DateTime?          status      string    ← computed
-#   completedAt  DateTime?          shippedAt   Dayjs | null ← was string
-#   createdAt    DateTime           completedAt Dayjs | null ← was string
-#   updatedAt    DateTime           createdAt   Dayjs        ← was string
-#
-# In Zod, .transform() computes derived fields during .parse() —
-# the output type is inferred automatically. In Rip, you need
-# separate types and a manual conversion function.
+# The DB stores order items inside a Json `meta` column and dates as
+# strings over the wire. The client schema types `meta` into OrderItem[],
+# coerces the ISO `createdAt` string to a Date, and keeps the nullable
+# `shippedAt`/`completedAt`. `name` and `status` are both computed getters
+# (`~>`): lazy, read-only views derived from the parsed fields, never
+# serialized or sent back, so neither needs to be a stored own property.
+# (Reach for an eager-derived field (`!>`) only when the derived value must
+# serialize — sent over the wire, persisted, or snapshotted.) Both are
+# behavior, so `Order` is a `:shape` (`:input` is fields-only).
 
-type OrderItem =
-  id: number
-  name: string
-  price: number
-  quantity: number
+OrderItem = schema
+  id!       number
+  name!     string
+  price!    number
+  quantity! number
 
-type OrderMeta =
-  items: OrderItem[]
+OrderMeta = schema
+  items! OrderItem[]
 
-type Order =
-  id: number
-  number: string
-  payment: string
-  subtotal: number
-  total: number
-  meta: OrderMeta
-  name: string
-  status: string
-  shippedAt: string | null
-  completedAt: string | null
-  createdAt: string
+Order = schema :shape
+  id!          number
+  number!      string
+  payment!     string
+  subtotal!    number
+  total!       number
+  meta!        OrderMeta
+  shippedAt?   datetime
+  completedAt? datetime
+  createdAt!   datetime
+  name:   ~> (@meta.items[0]?.name ?? '') + (if @meta.items.length > 1 then " + #{@meta.items.length - 1} more item#{if @meta.items.length - 1 is 1 then '' else 's'}" else '')
+  status: ~> if @completedAt then 'Completed' else if @shippedAt then 'Shipped' else 'Pending'
 
-def parseOrder(raw:: any):: Order
-  items = raw.meta.items
-  name = items[0]?.name ?? ''
-  if items.length > 1
-    more = items.length - 1
-    suffix = '' if more is 1 else 's'
-    name += " + #{more} more item#{suffix}"
-  status = raw.completedAt ? 'Completed' : raw.shippedAt ? 'Shipped' : 'Pending'
-  { ...raw, name, status }
-
-order = parseOrder({
+order = Order.parse({
   id: 1
   number: 'ORD-1001'
   payment: 'card'
@@ -113,50 +96,40 @@ console.log "status: #{order.status}"
 console.log "item: #{order.meta.items[0].name} $#{(order.meta.items[0].price / 100).toFixed(2)}"
 console.log "item: #{order.meta.items[1].name} $#{(order.meta.items[1].price / 100).toFixed(2)} x#{order.meta.items[1].quantity}"
 
-# ── 3. Non-DB config — discriminated unions ──
+# ── 3. Non-DB config — variant steps ──
 #
-# Workflow configs are built server-side and returned as JSON —
-# no database table. Each step type has different required fields.
-# The `type` field determines which shape applies.
-#
-# In Zod: z.discriminatedUnion('type', [...]) validates the
-# discriminant and applies the correct schema per variant.
-# In Rip: type blocks + union describe the shape at compile time,
-# but nothing validates at runtime.
+# Workflow configs are built server-side and returned as JSON — no DB
+# table. Each step type carries different fields. rip schema has no
+# discriminated union, so one `Step` schema keys the variant on a
+# literal-union `type` discriminant and makes each variant's field
+# optional; the consumer narrows on `step.type`. (Zod's
+# z.discriminatedUnion also enforces the per-variant shape; the
+# discriminant here types the read side.)
 
-type IntroStep =
-  type: "intro"
-  heading: string
-  consent: string
+Step = schema
+  type!      "intro" | "task" | "final"
+  heading!   string
+  consent?   string
+  duration?  number
+  button?    string
 
-type TaskStep =
-  type: "task"
-  heading: string
-  duration: number
+Workflow = schema
+  name!  string
+  steps! Step[]
 
-type FinalStep =
-  type: "final"
-  heading: string
-  button: string | null
-
-type WorkflowStep = IntroStep | TaskStep | FinalStep
-
-type Workflow =
-  name: string
-  steps: WorkflowStep[]
-
-workflow:: Workflow =
+workflow = Workflow.parse({
   name: 'Lab Kit Collection'
   steps: [
     { type: 'intro', heading: 'Welcome', consent: 'I agree to the terms' }
     { type: 'task', heading: 'Collect Sample', duration: 300 }
     { type: 'final', heading: 'Ship Kit', button: 'findLocations' }
   ]
+})
 
 console.log "workflow: #{workflow.name} (#{workflow.steps.length} steps)"
 for step in workflow.steps
   console.log "step: #{step.type} - #{step.heading}"
-  # after narrowing on step.type, variant-specific fields are accessible
+  # after narrowing on step.type, the variant's field is the one to read
   if step.type is 'intro'
     console.log "  consent: #{step.consent}"
   else if step.type is 'task'
@@ -166,25 +139,14 @@ for step in workflow.steps
 
 # ── 4. 3rd-party API transform ──
 #
-# External APIs return data in their own format — PascalCase,
-# different field names, nested differently. The client needs to
-# normalize this into the app's conventions. This data doesn't
-# come from your DB at all, so a server .schema can't define it.
-#
-# In Zod, .transform() reshapes during .parse() — one declaration,
-# input validated + output typed. In Rip, you need two types and
-# a manual conversion function.
+# QuickBooks returns PascalCase fields; the app wants camelCase. A field
+# transform (`-> it.X`) remaps each key during `.parse()` — one schema
+# validates the input and reshapes it. This data doesn't come from your
+# DB, so a server :model can't define it.
 
-type RawQBCustomer =
-  Id: string
-  DisplayName: string
+QBCustomer = schema
+  id!          -> it.Id
+  displayName! -> it.DisplayName
 
-type QBCustomer =
-  id: string
-  displayName: string
-
-def parseQBCustomer(raw:: RawQBCustomer):: QBCustomer
-  { id: raw.Id, displayName: raw.DisplayName }
-
-customer = parseQBCustomer({ Id: '123', DisplayName: 'Acme Corp' })
+customer = QBCustomer.parse({ Id: '123', DisplayName: 'Acme Corp' })
 console.log "customer: #{customer.id} #{customer.displayName}"
