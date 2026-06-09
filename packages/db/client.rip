@@ -9,10 +9,11 @@
 #   RIP_DB_URL    Base URL of the harbor server.
 #                 Default: http://127.0.0.1:9494
 #   RIP_DB_TOKEN  Bearer token for /sql.
-#                 Required by harbor unless harbor_local_dev_mode
-#                 covers your endpoint — and /sql is NOT covered by
-#                 local_dev_mode (only the UI cookie path is). So in
-#                 practice this must be set against any harbor build.
+#                 Required whenever harbor runs authenticated — which
+#                 is the default (`harbor_serve` with no token argument
+#                 auto-generates one). Leave unset only when harbor was
+#                 started with the explicit unauthenticated opt-in,
+#                 `harbor_serve(..., token := NULL)`.
 #
 #   `connect(url)` overrides RIP_DB_URL at runtime. There is no
 #   imperative override for the token; set RIP_DB_TOKEN before
@@ -87,8 +88,21 @@ export connect = (url) ->
     globalThis.__ripSchema.__schemaSetAdapter { query }
   url
 
-dbUrl   = -> _dbUrl or process.env.RIP_DB_URL or 'http://127.0.0.1:9494'
+# Trim trailing slash(es) so concatenation can't produce `//sql`.
+# Harbor + most reverse proxies tolerate it, not all do; cheap to fix.
+dbUrl   = -> ((_dbUrl or process.env.RIP_DB_URL or 'http://127.0.0.1:9494').replace /\/+$/, '')
 dbToken = -> process.env.RIP_DB_TOKEN
+
+# Default request timeout in milliseconds. Every HTTP call (query, embed
+# probe, MCP, CLI) flows through this; override per-call via `opts.timeout`
+# (`0` disables, useful for dump/load).
+DEFAULT_TIMEOUT_MS =! 30_000
+
+# SQL identifier quoter — doubles embedded `"` so a column or table name
+# containing one can't break out of the quoted context. Required because
+# the Model/QueryBuilder API exposes object keys as if they were safe.
+export ident = (name) ->
+  '"' + String(name).replace(/"/g, '""') + '"'
 
 # ==============================================================================
 # Errors
@@ -131,6 +145,20 @@ throwOrReturn = (res, data) ->
       httpStatus: res?.status
   normalizeEnvelope data
 
+# Robustly turn a fetch Response into a parsed body. Harbor's happy path
+# is JSON; the unhappy path can be HTML (reverse proxy 500), plain text
+# (server crash trace), or empty (connection reset). All of those used
+# to crash `res.json!` with SyntaxError, bypassing RipDBError entirely.
+# Fall back to `{ error: <text> }` so the caller still gets a structured
+# error with the HTTP status attached.
+parseBody = (res) ->
+  text = try await res.text() catch then ''
+  return {} unless text
+  try
+    JSON.parse text
+  catch
+    { error: text }
+
 # Build outbound headers. Always Content-Type + Accept (harbor's /sql
 # defaults to NDJSON streaming when Accept isn't pinned to JSON, so
 # being explicit matters). Bearer token is sent only when RIP_DB_TOKEN
@@ -150,21 +178,64 @@ buildHeaders = ->
 
 # Execute a single SQL statement against the configured harbor server.
 # Always one-shot JSON (no NDJSON streaming in v1). Returns the
-# normalized harbor envelope on success; throws RipDBError on failure.
+# normalized harbor envelope on success; throws RipDBError on failure
+# — including network errors, timeouts, and non-JSON responses.
 #
 #   query! 'SELECT 1 AS ok'
-#   query! 'SELECT * FROM users WHERE id = $1', [42]
+#   query! 'SELECT * FROM users WHERE id = ?', [42]
+#   query! sql, params, timeout: 5000     # 5s deadline
+#   query! sql, params, signal: ctrl.signal  # caller-managed abort
 #
-# `params` uses harbor's positional `$1`, `$2`, … binding. Mode B
-# typed wrappers (`{type, value}`) work too — see harbor SPEC §5.2.
-export query = (sql, params = []) ->
+# DuckDB accepts both `?` and `$N` positional placeholders; the
+# QueryBuilder / Model layer emits `?` so chained fragments compose
+# correctly (each fragment carries its own placeholders, params append
+# in order). Mode B typed wrappers (`{type, value}`) work too — see
+# harbor SPEC §5.2.
+#
+# `opts.timeout` is in milliseconds (default 30_000; `0` disables).
+# `opts.signal` is an AbortSignal — when both are passed, whichever
+# trips first wins.
+export query = (sql, params = [], opts = {}) ->
+  throw new TypeError "params must be an array (got #{kind params})" unless Array.isArray params
+
+  timeoutMs = if opts.timeout? then opts.timeout else DEFAULT_TIMEOUT_MS
+  timer = null
+  timedOut = false
+  ctrl  = if timeoutMs > 0 or opts.signal then new AbortController() else null
+  if opts.signal
+    opts.signal.addEventListener 'abort', (-> ctrl.abort opts.signal.reason), { once: true }
+  if ctrl and timeoutMs > 0
+    timer = setTimeout (->
+      timedOut = true
+      ctrl.abort new Error "query timed out after #{timeoutMs}ms"
+    ), timeoutMs
+
   body = if params.length > 0 then { sql, params } else { sql }
-  res = fetch! "#{dbUrl()}/sql",
-    method:  'POST'
-    headers: buildHeaders()
-    body:    JSON.stringify body
-  data = res.json!
-  throwOrReturn res, data
+
+  try
+    res = try
+      fetch! "#{dbUrl()}/sql",
+        method:  'POST'
+        headers: buildHeaders()
+        body:    JSON.stringify body
+        signal:  ctrl?.signal
+    catch err
+      # Classify the failure: our own setTimeout-driven abort is TIMEOUT;
+      # any other AbortError came from the caller's opts.signal; otherwise
+      # it's a real network-layer failure (DNS, conn refused, reset, …).
+      msg  = err?.message or String(err)
+      code = switch
+        when timedOut                                          then 'TIMEOUT'
+        when err?.name is 'AbortError' or opts.signal?.aborted then 'ABORTED'
+        else                                                        'NETWORK_ERROR'
+      throw new RipDBError "harbor request failed: #{msg}",
+        code:       code
+        details:    { reason: code.toLowerCase() }
+        httpStatus: null
+    data = parseBody! res
+    throwOrReturn res, data
+  finally
+    clearTimeout timer if timer
 
 # ==============================================================================
 # Row materializers
@@ -179,13 +250,13 @@ export query = (sql, params = []) ->
 #
 #   { id: 1, name: 'Alice', email: 'alice@example.com' }
 #
-# Defensive note: harbor v0.2 correctly returns
-# `INSERT/UPDATE/DELETE … RETURNING …` as `kind: "select"` with
-# `columns` and `data` populated, so Model.insert/update/destroy/
-# upsert return the actual rows. The `unless …columns? and …data?`
-# guards below are kept as a robustness measure for malformed
-# responses (defensive against future regressions or stub adapters)
-# but the v0.1 bug they originally worked around is fixed.
+# Known sharp edge: when two columns have the same name (e.g.
+# `SELECT users.id, posts.id FROM users JOIN posts ...`), the second
+# overwrites the first in the row object. Materializers are lossy on
+# duplicate column names by design (object keys are unique). For join
+# queries that surface ambiguous columns, alias them in SQL
+# (`SELECT users.id AS user_id, posts.id AS post_id`) or use `query`
+# directly and read positionally from `result.data`.
 
 materialize = (columns, row) ->
   obj = {}
@@ -195,17 +266,18 @@ materialize = (columns, row) ->
 
 export materializeAll = (result) ->
   return [] unless result?.columns? and result?.data?
-  return [] if result.rowCount is 0
-  result.data.map (row) -> materialize result.columns, row
+  rows = result.data
+  return [] if rows.length is 0
+  rows.map (row) -> materialize result.columns, row
 
-export findOne = (sql, params = []) ->
-  result = query! sql, params
+export findOne = (sql, params = [], opts = {}) ->
+  result = query! sql, params, opts
   return null unless result?.columns? and result?.data?
-  return null if result.rowCount is 0
+  return null if result.data.length is 0
   materialize result.columns, result.data[0]
 
-export findAll = (sql, params = []) ->
-  result = query! sql, params
+export findAll = (sql, params = [], opts = {}) ->
+  result = query! sql, params, opts
   materializeAll result
 
 # ==============================================================================
@@ -230,7 +302,7 @@ export findAll = (sql, params = []) ->
 
 class QueryBuilder
   constructor: (@table, @database = null) ->
-    @_tableName = if @database then "\"#{@database}\".\"#{@table}\"" else "\"#{@table}\""
+    @_tableName = if @database then "#{ident @database}.#{ident @table}" else ident(@table)
     @_wheres  = []
     @_params  = []
     @_order   = null
@@ -253,9 +325,9 @@ class QueryBuilder
     else if typeof conditions is 'object'
       for own key, val of conditions
         if val is null
-          b._wheres.push { clause: "\"#{key}\" IS NULL", join: 'AND' }
+          b._wheres.push { clause: "#{ident key} IS NULL", join: 'AND' }
         else
-          b._wheres.push { clause: "\"#{key}\" = $#{b._params.length + 1}", join: 'AND' }
+          b._wheres.push { clause: "#{ident key} = ?", join: 'AND' }
           b._params.push val
     b
 
@@ -268,9 +340,9 @@ class QueryBuilder
       parts = []
       for own key, val of conditions
         if val is null
-          parts.push "\"#{key}\" IS NULL"
+          parts.push "#{ident key} IS NULL"
         else
-          parts.push "\"#{key}\" = $#{b._params.length + 1}"
+          parts.push "#{ident key} = ?"
           b._params.push val
       b._wheres.push { clause: "(#{parts.join(' AND ')})", join: 'OR' }
     b
@@ -283,9 +355,9 @@ class QueryBuilder
     else if typeof conditions is 'object'
       for own key, val of conditions
         if val is null
-          b._wheres.push { clause: "\"#{key}\" IS NOT NULL", join: 'AND' }
+          b._wheres.push { clause: "#{ident key} IS NOT NULL", join: 'AND' }
         else
-          b._wheres.push { clause: "\"#{key}\" != $#{b._params.length + 1}", join: 'AND' }
+          b._wheres.push { clause: "#{ident key} != ?", join: 'AND' }
           b._params.push val
     b
 
@@ -343,29 +415,31 @@ class QueryBuilder
     b._limit = 1
     findOne! b._toSQL(), b._params
 
+  # When the builder has a GROUP BY, COUNT(*) inside the same statement
+  # counts rows per group — almost never what the caller wants. Wrap the
+  # current builder as a subquery and count its rows instead.
   count: ->
-    sql = "SELECT COUNT(*) as count FROM #{@_tableName}"
-    sql += @_buildWhere()
-    sql += " GROUP BY #{@_group}" if @_group
-    sql += " HAVING #{@_having}" if @_having
+    if @_group
+      inner = "SELECT 1 FROM #{@_tableName}#{@_buildWhere()} GROUP BY #{@_group}"
+      inner += " HAVING #{@_having}" if @_having
+      sql = "SELECT COUNT(*) FROM (#{inner}) AS _t"
+    else
+      sql = "SELECT COUNT(*) FROM #{@_tableName}"
+      sql += @_buildWhere()
     result = query! sql, @_params
     result.data[0][0]
 
   update: (data) ->
     keys = (k for k, v of data when v isnt undefined)
-    base = @_params.length
-    sets = keys.map((k, i) -> "\"#{k}\" = $#{base + i + 1}").join(', ')
+    throw new RipDBError 'update requires at least one column to set', code: 'BAD_REQUEST' if keys.length is 0
+    sets = keys.map((k) -> "#{ident k} = ?").join(', ')
     vals = keys.map (k) -> data[k]
-    allParams = [...@_params, ...vals]
-    sql = "UPDATE #{@_tableName} SET #{sets}"
-    sql += @_buildWhere()
-    sql += " RETURNING *"
-    findAll! sql, allParams
+    # SET placeholders bind in source order, then WHERE placeholders after.
+    sql = "UPDATE #{@_tableName} SET #{sets}#{@_buildWhere()} RETURNING *"
+    findAll! sql, [...vals, ...@_params]
 
   destroy: ->
-    sql = "DELETE FROM #{@_tableName}"
-    sql += @_buildWhere()
-    sql += " RETURNING *"
+    sql = "DELETE FROM #{@_tableName}#{@_buildWhere()} RETURNING *"
     findAll! sql, @_params
 
   _clone: ->
@@ -399,12 +473,22 @@ class QueryBuilder
 # inserted rows. This is a behavior change from the legacy bulk()
 # server-side path which only returned a row count.
 
+# Build the ON CONFLICT tail for upsert(). If the only key in the row
+# IS the conflict target, there's nothing to set on update — fall back
+# to DO NOTHING so the upsert is a safe insert-or-skip.
+_conflictClause = (conflict, keys) ->
+  return '' unless conflict
+  updateCols = keys.filter (k) -> k isnt conflict
+  return " ON CONFLICT (#{ident conflict}) DO NOTHING" if updateCols.length is 0
+  sets = updateCols.map((k) -> "#{ident k} = EXCLUDED.#{ident k}").join(', ')
+  " ON CONFLICT (#{ident conflict}) DO UPDATE SET #{sets}"
+
 export Model = (table, database = null) ->
-  tableName = if database then "\"#{database}\".\"#{table}\"" else "\"#{table}\""
+  tableName = if database then "#{ident database}.#{ident table}" else ident(table)
   _qb = -> new QueryBuilder(table, database)
 
   find: (id) ->
-    findOne! "SELECT * FROM #{tableName} WHERE id = $1", [id]
+    findOne! "SELECT * FROM #{tableName} WHERE id = ?", [id]
 
   all: (limit = null) ->
     sql = "SELECT * FROM #{tableName}"
@@ -420,7 +504,7 @@ export Model = (table, database = null) ->
   limit:  (n)    -> _qb().limit(n)
 
   count: ->
-    result = query! "SELECT COUNT(*) as count FROM #{tableName}"
+    result = query! "SELECT COUNT(*) FROM #{tableName}"
     result.data[0][0]
 
   query: (sql, params = []) ->
@@ -430,58 +514,51 @@ export Model = (table, database = null) ->
     if Array.isArray(data)
       return [] if data.length is 0
       keys = (k for k, v of data[0] when v isnt undefined)
-      cols = keys.map((k) -> "\"#{k}\"").join(', ')
-      allVals = []
-      tuples = data.map (row, rowIdx) ->
-        refs = keys.map (k, colIdx) ->
-          allVals.push(row[k])
-          "$#{rowIdx * keys.length + colIdx + 1}"
-        "(#{refs.join(', ')})"
-      findAll! "INSERT INTO #{tableName} (#{cols}) VALUES #{tuples.join(', ')} RETURNING *", allVals
+      throw new RipDBError 'insert requires at least one column', code: 'BAD_REQUEST' if keys.length is 0
+      cols = keys.map(ident).join(', ')
+      tuple = "(#{keys.map(-> '?').join(', ')})"
+      vals = []
+      data.forEach (row) -> vals.push(row[k]) for k in keys
+      findAll! "INSERT INTO #{tableName} (#{cols}) VALUES #{Array(data.length).fill(tuple).join(', ')} RETURNING *", vals
     else
       keys = (k for k, v of data when v isnt undefined)
-      cols = keys.map((k) -> "\"#{k}\"").join(', ')
-      refs = keys.map((_, i) -> "$#{i + 1}").join(', ')
+      throw new RipDBError 'insert requires at least one column', code: 'BAD_REQUEST' if keys.length is 0
+      cols = keys.map(ident).join(', ')
+      refs = keys.map(-> '?').join(', ')
       vals = keys.map (k) -> data[k]
       findOne! "INSERT INTO #{tableName} (#{cols}) VALUES (#{refs}) RETURNING *", vals
 
   update: (id, data) ->
     keys = (k for k, v of data when v isnt undefined)
-    sets = keys.map((k, i) -> "\"#{k}\" = $#{i + 2}").join(', ')
+    throw new RipDBError 'update requires at least one column to set', code: 'BAD_REQUEST' if keys.length is 0
+    sets = keys.map((k) -> "#{ident k} = ?").join(', ')
     vals = keys.map (k) -> data[k]
-    findOne! "UPDATE #{tableName} SET #{sets} WHERE id = $1 RETURNING *", [id, ...vals]
+    findOne! "UPDATE #{tableName} SET #{sets} WHERE id = ? RETURNING *", [...vals, id]
 
   upsert: (data, opts = {}) ->
     conflict = opts.on or opts.conflict
     if Array.isArray(data)
       return [] if data.length is 0
       keys = (k for k, v of data[0] when v isnt undefined)
-      cols = keys.map((k) -> "\"#{k}\"").join(', ')
-      allVals = []
-      tuples = data.map (row, rowIdx) ->
-        refs = keys.map (k, colIdx) ->
-          allVals.push(row[k])
-          "$#{rowIdx * keys.length + colIdx + 1}"
-        "(#{refs.join(', ')})"
-      sql = "INSERT INTO #{tableName} (#{cols}) VALUES #{tuples.join(', ')}"
-      if conflict
-        updateCols = keys.filter((k) -> k isnt conflict)
-        sets = updateCols.map((k) -> "\"#{k}\" = EXCLUDED.\"#{k}\"").join(', ')
-        sql += " ON CONFLICT (\"#{conflict}\") DO UPDATE SET #{sets}"
+      throw new RipDBError 'upsert requires at least one column', code: 'BAD_REQUEST' if keys.length is 0
+      cols = keys.map(ident).join(', ')
+      tuple = "(#{keys.map(-> '?').join(', ')})"
+      vals = []
+      data.forEach (row) -> vals.push(row[k]) for k in keys
+      sql = "INSERT INTO #{tableName} (#{cols}) VALUES #{Array(data.length).fill(tuple).join(', ')}"
+      sql += _conflictClause(conflict, keys)
       sql += " RETURNING *"
-      findAll! sql, allVals
+      findAll! sql, vals
     else
       keys = (k for k, v of data when v isnt undefined)
-      cols = keys.map((k) -> "\"#{k}\"").join(', ')
-      refs = keys.map((_, i) -> "$#{i + 1}").join(', ')
+      throw new RipDBError 'upsert requires at least one column', code: 'BAD_REQUEST' if keys.length is 0
+      cols = keys.map(ident).join(', ')
+      refs = keys.map(-> '?').join(', ')
       vals = keys.map (k) -> data[k]
       sql = "INSERT INTO #{tableName} (#{cols}) VALUES (#{refs})"
-      if conflict
-        updateCols = keys.filter((k) -> k isnt conflict)
-        sets = updateCols.map((k) -> "\"#{k}\" = EXCLUDED.\"#{k}\"").join(', ')
-        sql += " ON CONFLICT (\"#{conflict}\") DO UPDATE SET #{sets}"
+      sql += _conflictClause(conflict, keys)
       sql += " RETURNING *"
       findOne! sql, vals
 
   destroy: (id) ->
-    findOne! "DELETE FROM #{tableName} WHERE id = $1 RETURNING *", [id]
+    findOne! "DELETE FROM #{tableName} WHERE id = ? RETURNING *", [id]

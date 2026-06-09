@@ -24,21 +24,35 @@
 # harbor's lifecycle is external (operator-managed via `dh` / systemd
 # / etc.) so there's no spawn — this just verifies reachability.
 
+# Resolve the harbor URL — explicit argument wins, then RIP_DB_URL,
+# then the package-wide default. Mirrors `dbUrl()` in client.rip so
+# every entry point defaults the same way.
+DEFAULT_URL =! 'http://127.0.0.1:9494'
+PROBE_TIMEOUT_MS =! 5_000
+
+resolveUrl = (url) -> (url or process.env.RIP_DB_URL or DEFAULT_URL).replace(/\/+$/, '')
+
 # Verifies harbor is up and the DB is answering. 200 from /ready
 # means healthy; 503 means harbor's up but the DB is unhealthy;
-# anything else means harbor isn't there at all.
+# anything else means harbor isn't there at all. 5s timeout so a
+# half-open TCP doesn't hang boot indefinitely.
 reachable = (url) ->
+  ctrl = new AbortController()
+  timer = setTimeout (-> ctrl.abort()), PROBE_TIMEOUT_MS
   try
-    res = fetch! "#{url}/ready"
+    res = fetch! "#{url}/ready", signal: ctrl.signal
     return false unless res?.ok
     data = res.json!
     data?.ok is true
   catch
     false
+  finally
+    clearTimeout timer
 
 export assertReachable = (url) ->
-  return 'running' if reachable! url
-  throw new Error "harbor not reachable at #{url} — start your duckdb-harbor instance and try again"
+  resolved = resolveUrl url
+  return 'running' if reachable! resolved
+  throw new Error "harbor not reachable at #{resolved} — start your duckdb-harbor instance and try again"
 
 # Back-compat: older app code called `ensureRunning(url, {file, ...})`
 # expecting an auto-spawn. Lifecycle is now external; this is a
