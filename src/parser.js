@@ -254,7 +254,7 @@ const parserInstance = {
     }
   },
   parse(input) {
-    let EOF, TERROR, action, errStr, expected, k, len, lex, lexer, loc, locs, newState, p, parseTable, preErrorSymbol, r, recovering, rv, sharedState, state, stk, symbol, tokenLen, tokenLine, tokenLoc, tokenText, v, vals;
+    let EOF, TERROR, action, errStr, expected, len, lex, lexer, loc, locs, newState, p, parseTable, preErrorSymbol, r, recovering, rv, sharedState, state, stk, symbol, tokenLen, tokenLine, tokenLoc, tokenText, vals;
     [stk, vals, locs] = [[0], [null], []];
     [parseTable, tokenText, tokenLine, tokenLen, recovering] = [this.parseTable, "", 0, 0, 0];
     [TERROR, EOF] = [2, 1];
