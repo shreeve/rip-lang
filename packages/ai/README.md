@@ -199,7 +199,7 @@ Default models:
 | `panel` synthesis | `openai:gpt-5.5-mini` | `synthesis_model` parameter |
 | `fresh_review` | first credentialed default not in `exclude_models` | `model` parameter |
 
-Aliases recognized in any `model:` parameter: `gpt`, `gpt-5.5`, `gpt-5.4`, `mini`, `claude`, `opus`, `claude-opus-4-7`, `claude-opus-4-6`, `sonnet`, `claude-sonnet-4-5`, `haiku`, `claude-haiku-4-1`, `openai`, `anthropic`. Or use the canonical `provider:model` form.
+Aliases recognized in any `model:` parameter: `gpt`, `gpt-5.5`, `gpt-5.4`, `mini`, `claude`, `fable`, `claude-fable-5`, `opus`, `claude-opus-4-7`, `claude-opus-4-6`, `sonnet`, `claude-sonnet-4-5`, `haiku`, `claude-haiku-4-1`, `openai`, `anthropic`. Or use the canonical `provider:model` form.
 
 Pricing constants in `lib/providers.rip` are seeded from public rates and are easy to update.
 

@@ -38,6 +38,7 @@ LOCAL_META =! {
   'openai:gpt-5.5-mini':      { tier: 'cheap',    context: 400000, tool_use: true,  strengths: ['fast', 'extraction', 'synthesis'], pricing: { input_per_million: 0.4, output_per_million: 1.2 } }
   'openai:gpt-5.4':           { tier: 'frontier', context: 256000, tool_use: true,  strengths: ['reasoning', 'coding'],              pricing: { input_per_million: 5,  output_per_million: 15 } }
   'openai:gpt-5.4-mini':      { tier: 'cheap',    context: 128000, tool_use: false, strengths: ['fast'],                              pricing: { input_per_million: 0.3, output_per_million: 1.0 } }
+  'anthropic:claude-fable-5':     { tier: 'frontier', context: 1000000, tool_use: true, strengths: ['reasoning', 'coding', 'review'], pricing: { input_per_million: 10, output_per_million: 50 } }
   'anthropic:claude-opus-4-7':    { tier: 'frontier', context: 200000, tool_use: true,  strengths: ['coding', 'long-doc review'],     pricing: { input_per_million: 15, output_per_million: 75 } }
   'anthropic:claude-opus-4-6':    { tier: 'frontier', context: 200000, tool_use: true,  strengths: ['coding', 'long-doc review'],     pricing: { input_per_million: 15, output_per_million: 75 } }
   'anthropic:claude-sonnet-4-5':  { tier: 'mid',      context: 200000, tool_use: true,  strengths: ['fast coding', 'review'],          pricing: { input_per_million: 3,  output_per_million: 15 } }
@@ -54,6 +55,10 @@ ALIASES =! {
   'gpt-5.4-mini':       'openai:gpt-5.4-mini'
   'openai':             'openai:gpt-5.5'
   'claude':             'anthropic:claude-opus-4-7'
+  'fable':              'anthropic:claude-fable-5'
+  'fable-5':            'anthropic:claude-fable-5'
+  'claude-fable':       'anthropic:claude-fable-5'
+  'claude-fable-5':     'anthropic:claude-fable-5'
   'opus':               'anthropic:claude-opus-4-7'
   'claude-opus':        'anthropic:claude-opus-4-7'
   'claude-opus-4-7':    'anthropic:claude-opus-4-7'
