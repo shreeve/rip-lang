@@ -236,6 +236,30 @@ Complete node reference:
 ['render', body]
 ```
 
+## Rewriter Pipeline (canonical order)
+
+The single source of truth is `rewrite()` in `src/lexer.js`. Current order, with
+the passes contributed by sidecar files marked:
+
+1. `removeLeadingNewlines`
+2. `rewriteDottedPicks` — must run before `rewriteMapLiterals` so pick bodies see raw `{` `}` for depth counting
+3. `rewriteMapLiterals`
+4. `closeMergeAssignments`
+5. `closeOpenCalls`
+6. `closeOpenIndexes`
+7. `rewriteTypes` — installed by `types.js`; must run before `normalizeLines`, otherwise a type-arrow `=>` inside `(...) => T` is treated as a single-liner function and wrapped in spurious INDENT/OUTDENT, derailing the type collector
+8. `normalizeLines`
+9. `rewriteRender?.()` — installed by `components.js` (optional sidecar)
+10. `rewriteSchema?.()` — installed by `schema/schema.js` (optional sidecar)
+11. `tagPostfixConditionals`
+12. `rewriteTaggedTemplates`
+13. `addImplicitBracesAndParens`
+14. `addImplicitCallCommas`
+
+When pass order changes in `rewrite()`, update this list — other sections of
+this file describe pass positions relative to their neighbors and assume this
+listing is accurate.
+
 ## Lexer Token Format
 
 Tokens are `[tag, val]` arrays with extra properties:
@@ -356,7 +380,7 @@ The component system is a compiler sidecar. `installComponentSupport(CodeEmitter
 
 ### Render Rewriter
 
-`rewriteRender()` runs after `normalizeLines` and before `tagPostfixConditionals`.
+`rewriteRender()` runs after `normalizeLines` and before `rewriteSchema()` (see "Rewriter Pipeline" above for the full order).
 
 Inside `render` blocks it rewrites template syntax into function-call syntax:
 
@@ -700,8 +724,10 @@ several files by execution context:
 ### Lexer path
 
 - `installSchemaSupport(Lexer, CodeEmitter)` adds `rewriteSchema()` to the
-  Lexer prototype. It runs between `rewriteRender()` and `rewriteTypes()` in
-  the rewriter pipeline.
+  Lexer prototype. It runs immediately after `rewriteRender()` and before
+  `tagPostfixConditionals()` in the rewriter pipeline (see "Rewriter
+  Pipeline" earlier in this file for the full order; note `rewriteTypes()`
+  is not adjacent — it runs much earlier, before `normalizeLines()`).
 - `rewriteSchema()` detects a contextual `schema` identifier at expression-
   start positions followed by either a `:kind` SYMBOL or a direct INDENT.
   The matching INDENT...OUTDENT range is parsed by a schema-specific
