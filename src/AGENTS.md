@@ -40,6 +40,8 @@ The browser bundle (`docs/dist/rip.min.js`) is built from `src/browser.js` plus 
 
 The forbidden list in `scripts/check-bundle-graph.js` enforces this. If a code change would put a forbidden module on the browser graph, `bun run build` aborts before the bundler runs.
 
+**Decision record — "core Rip" vs "type-enabled Rip" (June 2026):** this module graph *is* the split. Tier 0 is the erasure core (everything reachable from `src/browser.js` — types stripped, never checked); tier 1 adds `.d.ts` emission (`dts.js`, registered via `setTypesEmitter`); tier 2 adds type checking (`typecheck.js` + the TypeScript service, loaded only by `rip check`). A package-level split (`@rip-lang/core` + a typed variant) was considered and rejected: it would add publishing and versioning friction to express a boundary the import graph and the bundle-graph guard already enforce mechanically. Don't re-propose the package split; if the boundary needs strengthening, extend the forbidden list or route new type-aware behavior through a registration hook instead.
+
 ### Registration-hook pattern (`setTypesEmitter`, `setSchemaRuntimeProvider`)
 
 The same pattern is used twice — once for `.d.ts` emission, once for the schema runtime body. Both make the bundler's tree-shaker keep CLI/server-only code out of the browser bundle.
