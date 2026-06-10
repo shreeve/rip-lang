@@ -85,7 +85,7 @@ _dbUrl = null
 export connect = (url) ->
   _dbUrl = url
   if globalThis.__ripSchema?.__schemaSetAdapter
-    globalThis.__ripSchema.__schemaSetAdapter { query }
+    globalThis.__ripSchema.__schemaSetAdapter { query, begin, capabilities: { tx: true } }
   url
 
 # Trim trailing slash(es) so concatenation can't produce `//sql`.
@@ -185,6 +185,7 @@ buildHeaders = ->
 #   query! 'SELECT * FROM users WHERE id = ?', [42]
 #   query! sql, params, timeout: 5000     # 5s deadline
 #   query! sql, params, signal: ctrl.signal  # caller-managed abort
+#   query! sql, params, sessionId: sid    # pin to a harbor DB session
 #
 # DuckDB accepts both `?` and `$N` positional placeholders; the
 # QueryBuilder / Model layer emits `?` so chained fragments compose
@@ -211,6 +212,7 @@ export query = (sql, params = [], opts = {}) ->
     ), timeoutMs
 
   body = if params.length > 0 then { sql, params } else { sql }
+  body.sessionId = opts.sessionId if opts.sessionId
 
   try
     res = try
@@ -236,6 +238,76 @@ export query = (sql, params = [], opts = {}) ->
     throwOrReturn res, data
   finally
     clearTimeout timer if timer
+
+# ==============================================================================
+# Transactions (Adapter Contract v2)
+# ==============================================================================
+#
+# Harbor's /sql is stateless per request, so a transaction needs a pinned
+# DB session: POST /sql/sessions/new creates one (a dedicated connection
+# whose BEGIN/COMMIT survive across requests), statements carry its
+# sessionId, and the session is destroyed after COMMIT/ROLLBACK. Harbor
+# enforces an idle TTL, so an abandoned transaction auto-rolls-back
+# server-side — a crashed client never wedges the database.
+#
+# `begin()` returns a TxHandle per the schema runtime's Adapter Contract
+# v2: { query(sql, params), commit(), rollback() }. The schema runtime's
+# `schema.transaction!` consumes this; direct use also works:
+#
+#   tx = begin!
+#   try
+#     tx.query! 'INSERT ...', [a]
+#     tx.query! 'INSERT ...', [b]
+#     tx.commit!
+#   catch e
+#     tx.rollback!
+#     throw e
+#
+# NOTE: harbor gates session creation behind the authz policy string
+# `__HARBOR_ADMIN__:sessions:create`, which is default-deny when no
+# authz hook is configured. Transactions therefore require either a
+# harbor_authorization_function that allows it, or
+# `harbor_allow_admin_without_authz = true` on trusted deployments.
+export begin = (opts = {}) ->
+  res = try
+    fetch! "#{dbUrl()}/sql/sessions/new",
+      method:  'POST'
+      headers: buildHeaders()
+      body:    '{}'
+  catch err
+    throw new RipDBError "harbor request failed: #{err?.message or err}",
+      code: 'NETWORK_ERROR'
+  data = parseBody! res
+  if not res.ok or data?.ok is false or not data?.sessionId
+    msg = data?.error or "harbor returned #{res.status} #{res.statusText or ''}".trim()
+    if res.status is 403
+      msg = "transactions need a harbor DB session, and harbor denied session creation " +
+        "(authz policy __HARBOR_ADMIN__:sessions:create). Allow it in your " +
+        "harbor_authorization_function or set harbor_allow_admin_without_authz = true " +
+        "on a trusted deployment. Original error: #{msg}"
+    throw new RipDBError msg,
+      code:       data?.errorCode
+      details:    data?.errorDetails
+      httpStatus: res.status
+  sessionId = data.sessionId
+
+  # Best-effort session teardown — harbor's idle TTL reaps stragglers,
+  # so a failed DELETE only delays cleanup, never leaks a transaction.
+  drop = ->
+    try fetch! "#{dbUrl()}/sql/sessions/#{sessionId}", method: 'DELETE', headers: buildHeaders()
+
+  query! 'BEGIN', [], { sessionId }
+  {
+    query: (sql, params = []) -> query sql, params, { sessionId }
+    commit: ->
+      query! 'COMMIT', [], { sessionId }
+      drop!
+    rollback: ->
+      try
+        query! 'ROLLBACK', [], { sessionId }
+      finally
+        drop!
+  }
 
 # ==============================================================================
 # Row materializers

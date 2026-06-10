@@ -65,6 +65,10 @@ const HOOK_NAMES = new Set([
   'beforeCreate', 'afterCreate',
   'beforeUpdate', 'afterUpdate',
   'beforeDestroy', 'afterDestroy',
+  // Transaction-aware hooks: fire after the outermost transaction
+  // commits / rolls back, or immediately after save/destroy when no
+  // transaction is open. See __schemaTransaction in runtime-orm.js.
+  'afterCommit', 'afterRollback',
 ]);
 
 // Positions where `schema` can legitimately start an expression.
@@ -92,7 +96,11 @@ const EXPR_START_PREV = new Set([
 export function hasSchemas(source) {
   if (typeof source !== 'string') return false;
   if (!/\bschema\b/.test(source)) return false;
-  return /(?:^|[\s=,(\[{:])schema(?:\s*:[A-Za-z_$][\w$]*|\s*\n[ \t]+\S)/m.test(source);
+  // Matches a schema declaration (`schema :kind` / `schema` + indented
+  // body) or a runtime-namespace call (`schema.transaction`). The probe
+  // is conservative: a false positive just means typecheck pays a bit
+  // more work, never wrong behavior.
+  return /(?:^|[\s=,(\[{:])schema(?:\s*:[A-Za-z_$][\w$]*|\s*\n[ \t]+\S|\.transaction\b)/m.test(source);
 }
 
 // ============================================================================

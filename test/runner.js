@@ -23,6 +23,15 @@ import { compile } from '../src/compiler.js';
 import '../src/dts.js';
 import '../src/schema/loader-server.js';
 
+// Test snippets redeclare the same schema names (User, Order, …) across
+// hundreds of cases in one process. Opt the shared registry into HMR
+// "replace" semantics so re-registration rebinds instead of throwing
+// the name-collision error (which is itself tested explicitly, with the
+// flag flipped off inside the test).
+if (globalThis.__ripSchema?.__SchemaRegistry) {
+  globalThis.__ripSchema.__SchemaRegistry.replace = true;
+}
+
 // ANSI colors
 const colors = {
   reset: '\x1b[0m',

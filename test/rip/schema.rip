@@ -1911,20 +1911,36 @@ INTRINSICS = '''
     all(): Promise<T[]>;
     first(): Promise<T | null>;
     count(): Promise<number>;
+    where(cond: Record<string, unknown> | string, ...params: unknown[]): SchemaQuery<T>;
     limit(n: number): SchemaQuery<T>;
     offset(n: number): SchemaQuery<T>;
     order(spec: string): SchemaQuery<T>;
+    orderBy(spec: string): SchemaQuery<T>;
+    includes(...specs: unknown[]): SchemaQuery<T>;
+    withDeleted(): SchemaQuery<T>;
+    onlyDeleted(): SchemaQuery<T>;
+    updateAll(values: Record<string, unknown>): Promise<number | null>;
+    deleteAll(): Promise<number | null>;
   }
   interface ModelSchema<Instance, Data = unknown, Id = number, Create = Partial<Data>> extends Schema<Instance, Data> {
     find(id: Id): Promise<Instance | null>;
     findMany(ids: Id[]): Promise<Instance[]>;
     where(cond: Record<string, unknown> | string, ...params: unknown[]): SchemaQuery<Instance>;
+    includes(...specs: unknown[]): SchemaQuery<Instance>;
+    withDeleted(): SchemaQuery<Instance>;
+    onlyDeleted(): SchemaQuery<Instance>;
     all(limit?: number): Promise<Instance[]>;
     first(): Promise<Instance | null>;
     count(cond?: Record<string, unknown>): Promise<number>;
     create(data: Create): Promise<Instance>;
+    upsert(data: Create, opts: { on: unknown }): Promise<Instance>;
+    insertMany(rows: Create[]): Promise<Instance[]>;
     toSQL(options?: { dropFirst?: boolean; header?: string; idStart?: number }): string;
   }
+  declare const schema: {
+    transaction<T>(fn: () => T | Promise<T>): Promise<T>;
+    transaction<T>(opts: Record<string, unknown>, fn: () => T | Promise<T>): Promise<T>;
+  };
 
   '''
 
@@ -2013,11 +2029,11 @@ type ":model emits ModelSchema<Instance, Data> with relation accessors", '''
   ''', INTRINSICS + "\n" + '''
   type OrgData = { name: string } & { id: number };
   type OrgCreate = { name: string };
-  type Org = OrgData & { save(): Promise<Org>; destroy(): Promise<Org>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): OrgData };
+  type Org = OrgData & { save(): Promise<Org>; destroy(opts?: { hard?: boolean }): Promise<Org>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): OrgData };
   declare const Org: ModelSchema<Org, OrgData, number, OrgCreate>;
   type UserData = { name: string } & { id: number; orgId: number };
   type UserCreate = { name: string; orgId: number };
-  type User = UserData & { org(): Promise<Org | null>; save(): Promise<User>; destroy(): Promise<User>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): UserData };
+  type User = UserData & { org(opts?: { reload?: boolean }): Promise<Org | null>; save(): Promise<User>; destroy(opts?: { hard?: boolean }): Promise<User>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): UserData };
   declare const User: ModelSchema<User, UserData, number, UserCreate>;
   '''
 
@@ -2032,7 +2048,7 @@ type ":mixin emits field-type alias; host Data intersects mixins", '''
   type Timestamps = { createdAt: Date; updatedAt: Date };
   type UserData = { name: string } & Timestamps & { id: number };
   type UserCreate = { name: string } & Timestamps;
-  type User = UserData & { save(): Promise<User>; destroy(): Promise<User>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): UserData };
+  type User = UserData & { save(): Promise<User>; destroy(opts?: { hard?: boolean }): Promise<User>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): UserData };
   declare const User: ModelSchema<User, UserData, number, UserCreate>;
   '''
 
@@ -2044,7 +2060,7 @@ type "cross-file relation target degrades to unknown", '''
   ''', INTRINSICS + "\n" + '''
   type UserData = { name: string } & { id: number; organizationId: number };
   type UserCreate = { name: string; organizationId: number };
-  type User = UserData & { organization(): Promise<unknown>; orders(): Promise<unknown[]>; save(): Promise<User>; destroy(): Promise<User>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): UserData };
+  type User = UserData & { organization(opts?: { reload?: boolean }): Promise<unknown>; orders(opts?: { reload?: boolean }): Promise<unknown[]>; save(): Promise<User>; destroy(opts?: { hard?: boolean }): Promise<User>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): UserData };
   declare const User: ModelSchema<User, UserData, number, UserCreate>;
   '''
 
@@ -2062,7 +2078,7 @@ type "derived schema emits a bare projection type", '''
   ''', INTRINSICS + "\n" + '''
   type UserData = { firstName: string; lastName: string } & { id: number; createdAt: Date; updatedAt: Date };
   type UserCreate = { firstName: string; lastName: string };
-  type User = UserData & { save(): Promise<User>; destroy(): Promise<User>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): UserData };
+  type User = UserData & { save(): Promise<User>; destroy(opts?: { hard?: boolean }): Promise<User>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): UserData };
   declare const User: ModelSchema<User, UserData, number, UserCreate>;
   type UserView = ReturnType<(typeof UserView)['parse']>;
   '''
@@ -2078,7 +2094,7 @@ type "chained + exported derived schema emits one bare type each", '''
   ''', INTRINSICS + "\n" + '''
   type UserData = { firstName: string; lastName: string } & { id: number; createdAt: Date; updatedAt: Date };
   type UserCreate = { firstName: string; lastName: string };
-  type User = UserData & { save(): Promise<User>; destroy(): Promise<User>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): UserData };
+  type User = UserData & { save(): Promise<User>; destroy(opts?: { hard?: boolean }): Promise<User>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): UserData };
   declare const User: ModelSchema<User, UserData, number, UserCreate>;
   export type UserView = ReturnType<(typeof UserView)['parse']>;
   '''
@@ -3346,3 +3362,534 @@ type "exported schema emits export declare const", '''
   export type Foo = { a: string };
   export declare const Foo: Schema<Foo, Foo>;
   '''
+
+# ==============================================================================
+# Recursive / same-file schema references in shadow TS
+# ==============================================================================
+
+# Recursion falls out of the bare-name scheme: every named schema
+# declares a `type Name`, so self-references and mutual recursion
+# resolve natively as recursive TS type aliases.
+type "recursive :shape emits a self-referencing type alias", '''
+  Tree = schema :shape
+    value!    integer
+    children? Tree[]
+  ''', INTRINSICS + "\n" + '''
+  type Tree = { value: number; children?: Tree[] };
+  declare const Tree: Schema<Tree, Tree>;
+  '''
+
+type "mutually recursive shapes resolve through bare-name aliases", '''
+  Person = schema :shape
+    name! string
+    pets? Pet[]
+  Pet = schema :shape
+    name!  string
+    owner? Person
+  ''', INTRINSICS + "\n" + '''
+  type Person = { name: string; pets?: Pet[] };
+  declare const Person: Schema<Person, Person>;
+  type Pet = { name: string; owner?: Person };
+  declare const Pet: Schema<Pet, Pet>;
+  '''
+
+type "nested same-file schema reference resolves to its bare type", '''
+  Address = schema :shape
+    street! string
+  User = schema :shape
+    name!    string
+    address! Address
+  ''', INTRINSICS + "\n" + '''
+  type Address = { street: string };
+  declare const Address: Schema<Address, Address>;
+  type User = { name: string; address: Address };
+  declare const User: Schema<User, User>;
+  '''
+
+# ==============================================================================
+# Registry hardening — collisions throw, replace opt-in, scope()
+# ==============================================================================
+
+test "registry: different definition under same name throws collision", '''
+  __SchemaRegistry.reset()
+  __SchemaRegistry.replace = false
+  err = null
+  try
+    R1 = schema :input; name!
+    R1 = schema :input; other! integer
+  catch e
+    err = e
+  __SchemaRegistry.replace = true
+  [err?.name, err?.issues[0].error, err.message.includes("already registered")]
+''', ["SchemaError", "collision", true]
+
+test "registry: identical redeclaration rebinds silently", '''
+  __SchemaRegistry.reset()
+  __SchemaRegistry.replace = false
+  out = null
+  try
+    R2 = schema :input; name!
+    first = __SchemaRegistry.get("R2")
+    R2 = schema :input; name!
+    second = __SchemaRegistry.get("R2")
+    out = [first isnt second, second.name]
+  finally
+    __SchemaRegistry.replace = true
+  out
+''', [true, "R2"]
+
+test "registry: replace = true restores last-loaded-wins (dev/HMR)", '''
+  __SchemaRegistry.reset()
+  R3 = schema :input; name!
+  R3 = schema :input; other! integer
+  [...__SchemaRegistry.get("R3")._normalize().fields.keys()]
+''', ["other"]
+
+test "registry: scope() runs against a fresh registry and restores", '''
+  __SchemaRegistry.reset()
+  S1 = schema :input; name!
+  inner = null
+  __SchemaRegistry.scope ->
+    S2 = schema :input; other!
+    inner = [__SchemaRegistry.has("S1"), __SchemaRegistry.has("S2")]
+    null
+  [inner[0], inner[1], __SchemaRegistry.has("S1"), __SchemaRegistry.has("S2")]
+''', [false, true, true, false]
+
+# ==============================================================================
+# findMany, relation memo, eager loading (.includes)
+# ==============================================================================
+
+test "findMany issues one IN query; [] short-circuits with no SQL", modelHeader + '''
+  User = schema :model
+    name! string
+  adapter.canned['SELECT * FROM "users" WHERE "id" IN (?, ?, ?)'] =
+    {columns: [{name: "id"}, {name: "name"}], data: [[1, "A"], [2, "B"], [3, "C"]], rows: 3}
+  list = User.findMany! [1, 2, 3]
+  none = User.findMany! []
+  [list.length, none.length, adapter.calls.length, list[0].name]
+''', [3, 0, 1, "A"]
+
+test "relation accessor memoizes; {reload: true} busts the memo", modelHeader + '''
+  User = schema :model
+    name! string
+    @has_many Order
+  Order = schema :model
+    total! integer
+    @belongs_to User
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "name"}], data: [[1, "A"]], rows: 1}
+  u = User.find! 1
+  before = adapter.calls.length
+  o1 = u.orders!
+  mid = adapter.calls.length
+  o2 = u.orders!
+  cached = adapter.calls.length
+  u.orders! {reload: true}
+  [mid - before, cached - mid, adapter.calls.length - cached, o1 is o2]
+''', [1, 0, 1, true]
+
+test ".includes(:orders) batches one IN query and fills the memo", modelHeader + '''
+  User = schema :model
+    name! string
+    @has_many Order
+  Order = schema :model
+    total! integer
+    @belongs_to User
+  adapter.canned['SELECT * FROM "users"'] =
+    {columns: [{name: "id"}, {name: "name"}], data: [[1, "A"], [2, "B"]], rows: 2}
+  adapter.canned['SELECT * FROM "orders" WHERE "user_id" IN (?, ?)'] =
+    {columns: [{name: "id"}, {name: "total"}, {name: "user_id"}], data: [[7, 100, 1], [8, 50, 1], [9, 25, 2]], rows: 3}
+  users = User.includes(:orders).all!
+  queries = adapter.calls.length
+  a = users[0].orders!
+  b = users[1].orders!
+  [queries, adapter.calls.length, a.length, b.length, a[0].total]
+''', [2, 2, 2, 1, 100]
+
+test ".includes(:user) on belongs_to batches via findMany; instances shared", modelHeader + '''
+  User = schema :model
+    name! string
+    @has_many Order
+  Order = schema :model
+    total! integer
+    @belongs_to User
+  adapter.canned['SELECT * FROM "orders"'] =
+    {columns: [{name: "id"}, {name: "total"}, {name: "user_id"}], data: [[7, 100, 1], [8, 50, 1]], rows: 2}
+  adapter.canned['SELECT * FROM "users" WHERE "id" IN (?)'] =
+    {columns: [{name: "id"}, {name: "name"}], data: [[1, "A"]], rows: 1}
+  orders = Order.includes(:user).all!
+  u1 = orders[0].user!
+  u2 = orders[1].user!
+  [adapter.calls.length, u1.name, u1 is u2]
+''', [2, "A", true]
+
+test "nested includes: {orders: :user} preloads two levels", modelHeader + '''
+  User = schema :model
+    name! string
+    @has_many Order
+  Order = schema :model
+    total! integer
+    @belongs_to User
+  adapter.canned['SELECT * FROM "users"'] =
+    {columns: [{name: "id"}, {name: "name"}], data: [[1, "A"], [2, "B"]], rows: 2}
+  adapter.canned['SELECT * FROM "orders" WHERE "user_id" IN (?, ?)'] =
+    {columns: [{name: "id"}, {name: "total"}, {name: "user_id"}], data: [[7, 100, 1], [8, 50, 2]], rows: 2}
+  adapter.canned['SELECT * FROM "users" WHERE "id" IN (?, ?)'] =
+    {columns: [{name: "id"}, {name: "name"}], data: [[1, "A"], [2, "B"]], rows: 2}
+  users = User.includes(orders: :user).all!
+  total = adapter.calls.length
+  orders = users[0].orders!
+  owner = orders[0].user!
+  [total, adapter.calls.length, owner.name]
+''', [3, 3, "A"]
+
+test ".includes with unknown relation throws a helpful error", modelHeader + '''
+  User = schema :model
+    name! string
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "name"}], data: [[1, "A"]], rows: 1}
+  err = null
+  try
+    User.includes(:bogus).all!
+  catch e
+    err = e.message
+  [err.includes("bogus"), err.includes("no such relation")]
+''', [true, true]
+
+# ==============================================================================
+# Constraint-violation translation — DB errors become SchemaErrors
+# ==============================================================================
+
+test "UNIQUE violation surfaces as SchemaError {field, error: 'unique'}", '''
+  adapter =
+    query: (sql, params) ->
+      throw new Error('Constraint Error: Duplicate key "email: a@b.c" violates unique constraint.')
+  __schemaSetAdapter adapter
+  __SchemaRegistry.reset()
+  User = schema :model
+    name! string
+    email!# email
+  err = null
+  try
+    User.create! {name: "A", email: "a@b.c"}
+  catch e
+    err = e
+  [err.name, err.issues[0].field, err.issues[0].error, err.schemaName, err.cause?.message.includes("Duplicate key")]
+''', ["SchemaError", "email", "unique", "User", true]
+
+test "NOT NULL violation surfaces as {field, error: 'required'}", '''
+  adapter =
+    query: (sql, params) ->
+      throw new Error("Constraint Error: NOT NULL constraint failed: users.name")
+  __schemaSetAdapter adapter
+  __SchemaRegistry.reset()
+  User = schema :model
+    name? string
+  err = null
+  try
+    User.create! {}
+  catch e
+    err = e
+  [err.name, err.issues[0].field, err.issues[0].error]
+''', ["SchemaError", "name", "required"]
+
+test "FK violation surfaces as {field, error: 'reference'}", '''
+  adapter =
+    query: (sql, params) ->
+      throw new Error('Constraint Error: Violates foreign key constraint because key "user_id: 99" does not exist in the referenced table')
+  __schemaSetAdapter adapter
+  __SchemaRegistry.reset()
+  User = schema :model
+    name! string
+  Order = schema :model
+    total! integer
+    @belongs_to User
+  err = null
+  try
+    Order.create! {total: 1, user_id: 99}
+  catch e
+    err = e
+  [err.name, err.issues[0].field, err.issues[0].error]
+''', ["SchemaError", "userId", "reference"]
+
+test "non-constraint DB errors propagate untouched", '''
+  adapter =
+    query: (sql, params) -> throw new Error("Catalog Error: table users does not exist")
+  __schemaSetAdapter adapter
+  __SchemaRegistry.reset()
+  User = schema :model
+    name! string
+  err = null
+  try
+    User.create! {name: "A"}
+  catch e
+    err = e
+  [err.name, err.message.includes("Catalog Error")]
+''', ["Error", true]
+
+# ==============================================================================
+# @softDelete — withDeleted / onlyDeleted / restore / hard destroy
+# ==============================================================================
+
+test "@softDelete: withDeleted / onlyDeleted control the filter", modelHeader + '''
+  User = schema :model
+    name! string
+    @softDelete
+  User.all!
+  User.withDeleted().all!
+  User.onlyDeleted().all!
+  [
+    adapter.calls[0].sql.includes('"deleted_at" IS NULL')
+    adapter.calls[1].sql.includes('deleted_at')
+    adapter.calls[2].sql.includes('"deleted_at" IS NOT NULL')
+  ]
+''', [true, false, true]
+
+test "@softDelete: restore() clears deleted_at; destroy(hard: true) DELETEs", modelHeader + '''
+  User = schema :model
+    name! string
+    @softDelete
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "name"}, {name: "deleted_at"}], data: [[1, "A", "2026-01-01"]], rows: 1}
+  u = User.withDeleted().first!
+  u.restore!
+  restoreSQL = adapter.calls[adapter.calls.length - 1].sql
+  u.destroy! {hard: true}
+  destroySQL = adapter.calls[adapter.calls.length - 1].sql
+  [restoreSQL.includes('SET "deleted_at" = NULL'), destroySQL.startsWith("DELETE"), u.deletedAt, u._persisted]
+''', [true, true, null, false]
+
+test "restore() on a model without @softDelete throws", modelHeader + '''
+  User = schema :model
+    name! string
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "name"}], data: [[1, "A"]], rows: 1}
+  u = User.find! 1
+  err = null
+  try
+    u.restore!
+  catch e
+    err = e.message
+  err.includes("@softDelete")
+''', true
+
+# ==============================================================================
+# Batch writes — updateAll / deleteAll / insertMany / upsert
+# ==============================================================================
+
+test ".where().updateAll! emits one UPDATE and bypasses hooks", modelHeader + '''
+  trace = []
+  User = schema :model
+    name! string
+    active? boolean
+    beforeSave: -> trace.push "bs"
+  User.where(active: false).updateAll! {name: "X"}
+  sql = adapter.calls[0].sql
+  [sql.startsWith("UPDATE"), sql.includes('SET "name" = ?'), sql.includes('WHERE "active" = ?'), adapter.calls[0].params, trace.length]
+''', [true, true, true, ["X", false], 0]
+
+test ".deleteAll! is soft-delete aware", modelHeader + '''
+  Soft = schema :model
+    name! string
+    @softDelete
+  Hard = schema :model
+    name! string
+  Soft.where(name: "x").deleteAll!
+  Hard.where(name: "x").deleteAll!
+  [
+    adapter.calls[0].sql.startsWith("UPDATE")
+    adapter.calls[0].sql.includes('"deleted_at" = ?')
+    adapter.calls[1].sql.startsWith("DELETE")
+  ]
+''', [true, true, true]
+
+test ".insertMany! validates every row before any SQL, then one INSERT", modelHeader + '''
+  User = schema :model
+    name! string
+    email! email
+  err = null
+  try
+    User.insertMany! [{name: "A", email: "a@b.c"}, {name: "B", email: "nope"}]
+  catch e
+    err = e
+  noSQL = adapter.calls.length
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "name"}, {name: "email"}], data: [[1, "A", "a@b.c"], [2, "B", "b@b.c"]], rows: 2}
+  out = User.insertMany! [{name: "A", email: "a@b.c"}, {name: "B", email: "b@b.c"}]
+  sql = adapter.calls[0].sql
+  [err.issues[0].field, noSQL, out.length, sql.includes("VALUES (?, ?), (?, ?)"), out[0]._persisted]
+''', ["[1].email", 0, 2, true, true]
+
+test ".upsert! emits ON CONFLICT DO UPDATE; branch hooks skipped", modelHeader + '''
+  trace = []
+  User = schema :model
+    name! string
+    email!# email
+    beforeSave:   -> trace.push "beforeSave"
+    beforeCreate: -> trace.push "beforeCreate"
+    beforeUpdate: -> trace.push "beforeUpdate"
+    afterSave:    -> trace.push "afterSave"
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "name"}, {name: "email"}], data: [[1, "Alice", "a@b.c"]], rows: 1}
+  u = User.upsert! {email: "a@b.c", name: "Alice"}, on: :email
+  sql = adapter.calls[0].sql
+  [sql.includes('ON CONFLICT ("email") DO UPDATE SET'), sql.includes('"name" = EXCLUDED."name"'), trace, u.id, u._persisted]
+''', [true, true, ["beforeSave", "afterSave"], 1, true]
+
+test ".upsert! without a conflict target throws", modelHeader + '''
+  User = schema :model
+    name! string
+  err = null
+  try
+    User.upsert! {name: "A"}
+  catch e
+    err = e.message
+  err.includes("conflict target")
+''', true
+
+# ==============================================================================
+# Transactions — schema.transaction!
+# ==============================================================================
+#
+# The tx mock adapter records BEGIN / per-statement / COMMIT / ROLLBACK
+# events and separates statements routed through the transaction handle
+# (txCalls) from statements on the base adapter (mainCalls).
+
+txHeader = '''
+  events = []
+  txCalls = []
+  mainCalls = []
+  resState = {res: {columns: [{name: "id"}, {name: "name"}], data: [[1, "A"]], rows: 1}}
+  adapter =
+    query: (sql, params) ->
+      mainCalls.push sql
+      events.push "main"
+      resState.res
+    begin: (opts) ->
+      events.push "BEGIN"
+      handle = {}
+      handle.query = (sql, params) ->
+        txCalls.push sql
+        events.push "stmt"
+        resState.res
+      handle.commit = -> events.push "COMMIT"
+      handle.rollback = -> events.push "ROLLBACK"
+      handle
+    capabilities: {tx: true}
+  __schemaSetAdapter adapter
+  __SchemaRegistry.reset()
+
+'''
+
+test "transaction!: SQL routes through the tx handle; commit; block value returned", txHeader + '''
+  User = schema :model
+    name! string
+  result = schema.transaction! ->
+    u = User.create! {name: "A"}
+    u.name
+  [result, events, txCalls.length, mainCalls.length]
+''', ["A", ["BEGIN", "stmt", "COMMIT"], 1, 0]
+
+test "transaction!: throw rolls back and the exception propagates", txHeader + '''
+  User = schema :model
+    name! string
+  err = null
+  try
+    schema.transaction! ->
+      User.create! {name: "A"}
+      throw new Error "boom"
+  catch e
+    err = e.message
+  [err, events]
+''', ["boom", ["BEGIN", "stmt", "ROLLBACK"]]
+
+test "transaction!: nested call joins the outer transaction", txHeader + '''
+  User = schema :model
+    name! string
+  schema.transaction! ->
+    User.create! {name: "A"}
+    schema.transaction! ->
+      User.create! {name: "B"}
+    null
+  events
+''', ["BEGIN", "stmt", "stmt", "COMMIT"]
+
+test "transaction!: ORM calls outside the block use the base adapter", txHeader + '''
+  User = schema :model
+    name! string
+  User.create! {name: "X"}
+  schema.transaction! ->
+    User.create! {name: "Y"}
+    null
+  User.create! {name: "Z"}
+  [mainCalls.length, txCalls.length]
+''', [2, 1]
+
+test "afterCommit fires after COMMIT, exactly once per instance", txHeader + '''
+  User = schema :model
+    name! string
+    afterCommit: -> events.push "afterCommit"
+  schema.transaction! ->
+    u = User.create! {name: "A"}
+    u.name = "B"
+    u.save!
+    null
+  events
+''', ["BEGIN", "stmt", "stmt", "COMMIT", "afterCommit"]
+
+test "afterRollback fires on rollback; afterCommit does not", txHeader + '''
+  User = schema :model
+    name! string
+    afterCommit:   -> events.push "afterCommit"
+    afterRollback: -> events.push "afterRollback"
+  try
+    schema.transaction! ->
+      User.create! {name: "A"}
+      throw new Error "x"
+  events
+''', ["BEGIN", "stmt", "ROLLBACK", "afterRollback"]
+
+test "afterCommit fires immediately when no transaction is open", txHeader + '''
+  User = schema :model
+    name! string
+    afterCommit: -> events.push "afterCommit"
+  User.create! {name: "A"}
+  events
+''', ["main", "afterCommit"]
+
+test "transaction! on an adapter without begin() throws a clear error", '''
+  adapter =
+    query: (sql, params) -> {columns: [], data: [], rows: 0}
+  __schemaSetAdapter adapter
+  __SchemaRegistry.reset()
+  User = schema :model
+    name! string
+  err = null
+  try
+    schema.transaction! ->
+      User.create! {name: "A"}
+  catch e
+    err = e.message
+  [err.includes("does not support transactions"), err.includes("begin")]
+''', [true, true]
+
+test "two parallel transactions use independent handles (no cross-talk)", txHeader + '''
+  User = schema :model
+    name! string
+  handles = []
+  adapter.begin = ->
+    box = {sqls: []}
+    handles.push box
+    handle = {}
+    handle.query = (sql, params) ->
+      box.sqls.push sql
+      resState.res
+    handle.commit = -> null
+    handle.rollback = -> null
+    handle
+  run = (a, b) ->
+    schema.transaction! ->
+      User.create! {name: a}
+      sleep! 5
+      User.create! {name: b}
+      null
+  p1 = run "A", "B"
+  p2 = run "C", "D"
+  Promise.all! [p1, p2]
+  [handles.length, handles[0].sqls.length, handles[1].sqls.length, mainCalls.length]
+''', [2, 2, 2, 0]

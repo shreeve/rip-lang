@@ -622,7 +622,7 @@ TypeScript types fall out automatically.
 | `:shape`  | validator + instance methods + computed getters            |
 | `:enum`   | closed set of `:symbol` members                            |
 | `:mixin`  | reusable field group, composed via `@mixin Name`           |
-| `:model`  | DB-backed: ORM (`find`/`where`/`create`/`save`/`destroy`), DDL (`.toSQL()`), hooks, relations |
+| `:model`  | DB-backed: ORM (`find`/`where`/`create`/`save`/`destroy`), transactions (`schema.transaction! ->`), eager loading (`.includes(:orders)`), DDL (`.toSQL()`), hooks (12, incl. `afterCommit`/`afterRollback`), relations |
 
 Body forms (six declarative line shapes):
 

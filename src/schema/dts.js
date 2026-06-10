@@ -68,9 +68,16 @@ export const SCHEMA_INTRINSIC_DECLS = [
   '  all(): Promise<T[]>;',
   '  first(): Promise<T | null>;',
   '  count(): Promise<number>;',
+  '  where(cond: Record<string, unknown> | string, ...params: unknown[]): SchemaQuery<T>;',
   '  limit(n: number): SchemaQuery<T>;',
   '  offset(n: number): SchemaQuery<T>;',
   '  order(spec: string): SchemaQuery<T>;',
+  '  orderBy(spec: string): SchemaQuery<T>;',
+  '  includes(...specs: unknown[]): SchemaQuery<T>;',
+  '  withDeleted(): SchemaQuery<T>;',
+  '  onlyDeleted(): SchemaQuery<T>;',
+  '  updateAll(values: Record<string, unknown>): Promise<number | null>;',
+  '  deleteAll(): Promise<number | null>;',
   '}',
   // ModelSchema extends the base schema surface with ORM methods. Algebra
   // over `Data` (not `Instance`) so derived shapes reflect runtime
@@ -82,12 +89,22 @@ export const SCHEMA_INTRINSIC_DECLS = [
   '  find(id: Id): Promise<Instance | null>;',
   '  findMany(ids: Id[]): Promise<Instance[]>;',
   '  where(cond: Record<string, unknown> | string, ...params: unknown[]): SchemaQuery<Instance>;',
+  '  includes(...specs: unknown[]): SchemaQuery<Instance>;',
+  '  withDeleted(): SchemaQuery<Instance>;',
+  '  onlyDeleted(): SchemaQuery<Instance>;',
   '  all(limit?: number): Promise<Instance[]>;',
   '  first(): Promise<Instance | null>;',
   '  count(cond?: Record<string, unknown>): Promise<number>;',
   '  create(data: Create): Promise<Instance>;',
+  '  upsert(data: Create, opts: { on: unknown }): Promise<Instance>;',
+  '  insertMany(rows: Create[]): Promise<Instance[]>;',
   '  toSQL(options?: { dropFirst?: boolean; header?: string; idStart?: number }): string;',
   '}',
+  // Runtime namespace for transaction control (schema.transaction! ->).
+  'declare const schema: {',
+  '  transaction<T>(fn: () => T | Promise<T>): Promise<T>;',
+  '  transaction<T>(opts: Record<string, unknown>, fn: () => T | Promise<T>): Promise<T>;',
+  '};',
 ];
 
 const RIP_TYPE_TO_TS = {
@@ -107,6 +124,12 @@ const RIP_TYPE_TO_TS = {
   any:      'any',
 };
 
+// Non-built-in type names emit as-is: every named schema now declares a
+// bare `type Name`, so same-file nested references — including
+// self-references (`Tree = schema :shape` with `children? Tree[]`) and
+// mutual recursion — resolve natively as recursive TS type aliases.
+// Unknown (cross-file) identifiers also emit as-is, matching the
+// runtime's permissive resolution.
 function mapFieldType(entry) {
   if (entry.typeName === 'literal-union' && entry.literals?.length) {
     return entry.literals.map(l => JSON.stringify(l)).join(' | ');
@@ -333,13 +356,15 @@ function emitOneSchemaType(collected, byName, known, lines, schemaBehavior) {
     const createName = `${name}Create`;
     const createBase = modelCreateInputType(descriptor);
     const createType = mixinRefs.length ? `${createBase} & ${mixinRefs.join(' & ')}` : createBase;
+    const softDelete = descriptor.entries.some(e => e.tag === 'directive' && e.name === 'softDelete');
     const instanceExtras = [
       ...derived,
       ...computed,
       ...methods,
       ...relationAccessors,
       `save(): Promise<${instName}>`,
-      `destroy(): Promise<${instName}>`,
+      `destroy(opts?: { hard?: boolean }): Promise<${instName}>`,
+      ...(softDelete ? [`restore(): Promise<${instName}>`] : []),
       `ok(): boolean`,
       `errors(): SchemaIssue[]`,
       `toJSON(): ${dataName}`,
@@ -478,16 +503,17 @@ function modelRelationAccessors(descriptor, known) {
     // Class-style: the target's bare name IS its instance type.
     const instName = target;
     const isKnown = known && known.has(target);
+    const optsT = 'opts?: { reload?: boolean }';
     if (e.name === 'belongs_to') {
       const retT = isKnown ? (optional ? `${instName} | null` : `${instName} | null`) : 'unknown';
-      out.push(`${targetLc}(): Promise<${retT}>`);
+      out.push(`${targetLc}(${optsT}): Promise<${retT}>`);
     } else if (e.name === 'has_one' || e.name === 'one') {
       const retT = isKnown ? `${instName} | null` : 'unknown';
-      out.push(`${targetLc}(): Promise<${retT}>`);
+      out.push(`${targetLc}(${optsT}): Promise<${retT}>`);
     } else if (e.name === 'has_many' || e.name === 'many') {
       const retT = isKnown ? `${instName}[]` : 'unknown[]';
       const pluralLc = __schemaClientPluralize(targetLc);
-      out.push(`${pluralLc}(): Promise<${retT}>`);
+      out.push(`${pluralLc}(${optsT}): Promise<${retT}>`);
     }
   }
   return out;

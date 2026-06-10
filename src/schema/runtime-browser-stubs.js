@@ -32,20 +32,29 @@ const __schemaBrowserStub = (api) => function() {
 };
 
 // Static / class-level methods on __SchemaDef
-__SchemaDef.prototype.find    = __schemaBrowserStub('find');
-__SchemaDef.prototype.where   = __schemaBrowserStub('where');
-__SchemaDef.prototype.all     = __schemaBrowserStub('all');
-__SchemaDef.prototype.first   = __schemaBrowserStub('first');
-__SchemaDef.prototype.count   = __schemaBrowserStub('count');
-__SchemaDef.prototype.create  = __schemaBrowserStub('create');
-__SchemaDef.prototype.toSQL   = __schemaBrowserStub('toSQL');
+__SchemaDef.prototype.find        = __schemaBrowserStub('find');
+__SchemaDef.prototype.findMany    = __schemaBrowserStub('findMany');
+__SchemaDef.prototype.where       = __schemaBrowserStub('where');
+__SchemaDef.prototype.includes    = __schemaBrowserStub('includes');
+__SchemaDef.prototype.withDeleted = __schemaBrowserStub('withDeleted');
+__SchemaDef.prototype.onlyDeleted = __schemaBrowserStub('onlyDeleted');
+__SchemaDef.prototype.all         = __schemaBrowserStub('all');
+__SchemaDef.prototype.first       = __schemaBrowserStub('first');
+__SchemaDef.prototype.count       = __schemaBrowserStub('count');
+__SchemaDef.prototype.create      = __schemaBrowserStub('create');
+__SchemaDef.prototype.upsert      = __schemaBrowserStub('upsert');
+__SchemaDef.prototype.insertMany  = __schemaBrowserStub('insertMany');
+__SchemaDef.prototype.toSQL       = __schemaBrowserStub('toSQL');
 
 // Helpers referenced by the validate fragment that are otherwise
 // defined in db-naming / orm fragments. Kept inert (return safe
 // defaults or throw on use) so validate's _makeClass / _normalize
 // can run end-to-end in browser context.
-function __schemaSave()       { throw new Error("schema instance.save() is not available in the browser. Import @rip-lang/db on the server."); }
-function __schemaDestroy()    { throw new Error("schema instance.destroy() is not available in the browser. Import @rip-lang/db on the server."); }
+function __schemaSave()            { throw new Error("schema instance.save() is not available in the browser. Import @rip-lang/db on the server."); }
+function __schemaDestroy()         { throw new Error("schema instance.destroy() is not available in the browser. Import @rip-lang/db on the server."); }
+function __schemaRestore()         { throw new Error("schema instance.restore() is not available in the browser. Import @rip-lang/db on the server."); }
+function __schemaResolveRelation() { throw new Error("schema relation accessors are not available in the browser. Import @rip-lang/db on the server."); }
+function __schemaTransaction()     { throw new Error("schema.transaction() is not available in the browser. Import @rip-lang/db on the server."); }
 function __schemaTableName(m) { return null; } // returned only for :model normalize; never used downstream in browser
 function __schemaPluralize(w) { return w; }    // identity — relations work for type-resolution but never query
 function __schemaFkName(m)    { return ''; }   // ditto

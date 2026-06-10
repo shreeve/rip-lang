@@ -47,17 +47,34 @@ var { __schema, SchemaError, __SchemaRegistry, __schemaSetAdapter } = (function(
 
 `;
 export const SCHEMA_RUNTIME_WRAPPER_TAIL = `
-  // __schemaSetAdapter is server/migration-only. In validate or browser
-  // modes it doesn't exist; export an undefined slot so destructure works.
+  // __schemaSetAdapter / __schemaTransaction are server/migration-only.
+  // In validate mode they don't exist (browser mode stubs transaction);
+  // export undefined / throwing slots so destructure works everywhere.
   const __schemaSetAdapterExport = typeof __schemaSetAdapter !== 'undefined'
     ? __schemaSetAdapter
     : undefined;
+  const __schemaTransactionExport = typeof __schemaTransaction !== 'undefined'
+    ? __schemaTransaction
+    : function() {
+        throw new Error('schema.transaction() requires the server schema runtime (validate-only runtime loaded).');
+      };
+  // User-facing namespace: schema.transaction! -> ... in Rip source
+  // resolves through this object (installed as a global alongside the
+  // other Rip stdlib globals; ??= keeps user overrides intact).
+  const schemaNamespace = {
+    transaction: __schemaTransactionExport,
+  };
   const exports = {
     __schema, SchemaError, __SchemaRegistry,
     __schemaSetAdapter: __schemaSetAdapterExport,
+    __schemaTransaction: __schemaTransactionExport,
+    schema: schemaNamespace,
     __version: 1,
   };
-  if (typeof globalThis !== 'undefined') globalThis.__ripSchema = exports;
+  if (typeof globalThis !== 'undefined') {
+    globalThis.__ripSchema = exports;
+    globalThis.schema ??= schemaNamespace;
+  }
   return exports;
 })();
 
@@ -82,10 +99,11 @@ function __schemaFormatIssues(issues, name) {
 
 const __SCHEMA_RESERVED_STATIC = new Set([
   'parse','safe','ok','find','findMany','where','all','first','count','create','toSQL',
+  'includes','upsert','insertMany','updateAll','deleteAll','withDeleted','onlyDeleted',
 ]);
 const __SCHEMA_RESERVED_INSTANCE = new Set([
-  'save','destroy','reload','ok','errors','toJSON','savedChanges','markDirty',
-  '_saving',
+  'save','destroy','restore','reload','ok','errors','toJSON','savedChanges','markDirty',
+  '_saving','_relMemo',
 ]);
 // Implicit columns owned by directive-driven runtime behavior. Declaring
 // them as user fields would either shadow the runtime API (savedChanges /
@@ -209,6 +227,21 @@ function __schemaSnapshot(norm, inst) {
   return snap;
 }
 
+// Relation memo — caches resolved relation values per instance under
+// the accessor name. Lazily created and non-enumerable so it never
+// shows up in Object.keys / JSON.stringify. Written by the relation
+// accessors (on first resolve) and by the eager-loading preloader
+// (.includes), read by the accessors.
+function __schemaRelMemoSet(inst, acc, v) {
+  if (!inst._relMemo) {
+    Object.defineProperty(inst, '_relMemo', {
+      value: new Map(), enumerable: false, writable: false, configurable: true,
+    });
+  }
+  inst._relMemo.set(acc, v);
+  return v;
+}
+
 // SameValue-Zero: like ===, except NaN equals NaN. Used by the dirty
 // check so a persisted NaN doesn't trigger a wasted UPDATE on every
 // save. Distinguishes from Object.is by treating +0/-0 as equal, which
@@ -217,17 +250,74 @@ function __schemaSameValue(a, b) {
   return a === b || (a !== a && b !== b);
 }
 
+// Structural signature of a declaration — name-shape only, function
+// bodies excluded. Two registrations with the same signature are the
+// same declaration arriving twice (double import via symlinked paths,
+// re-eval of an unchanged module) and rebind silently. Different
+// signatures under the same name are a real collision and throw,
+// unless \`__SchemaRegistry.replace\` is set (dev/HMR semantics).
+function __schemaSignature(def) {
+  // Constraints may hold RegExp values; JSON.stringify would erase them
+  // to {} and miss a real difference, so stringify them explicitly.
+  const safe = (v) => JSON.stringify(v ?? null, (k, x) =>
+    x instanceof RegExp ? String(x) : (typeof x === 'function' ? '<fn>' : x));
+  const parts = [def.kind];
+  for (const e of def._desc.entries || []) {
+    switch (e.tag) {
+      case 'field':
+        parts.push('f:' + e.name + ':' + (e.typeName || '') +
+          (e.array ? '[]' : '') + ':' + (e.modifiers || []).join('') +
+          (e.literals ? ':' + e.literals.join(',') : '') +
+          ':' + safe(e.constraints) +
+          (e.transform ? ':t' : ''));
+        break;
+      case 'enum-member':
+        parts.push('e:' + e.name + '=' + String(e.value));
+        break;
+      case 'directive':
+        parts.push('d:' + e.name + ':' + safe(e.args));
+        break;
+      case 'ensure':
+        parts.push('n:' + (e.message || ''));
+        break;
+      default:
+        // method / computed / derived / hook — name identity only.
+        parts.push(e.tag + ':' + (e.name || ''));
+    }
+  }
+  return parts.join('|');
+}
+
 const __SchemaRegistry = {
   _entries: new Map(),
+  // Dev/HMR escape hatch: when true, re-registering a name rebinds
+  // unconditionally (pre-hardening "last loaded wins" semantics). Dev
+  // servers and test harnesses set it; production code should not.
+  replace: false,
   register(def) {
     // Named schemas of any kind land here. Relations look up :model,
     // @mixin Name looks up :mixin. Algebra (.extend etc.) accepts :shape
     // and derived shapes. Kind is checked at lookup time.
     if (!def.name) return;
-    // Most recent registration wins. Recompilation produces a fresh
-    // __SchemaDef with the same name; the registry rebinds. Cross-
-    // module name collisions should be avoided — schema names are
-    // app-global identifiers for relation resolution.
+    const existing = this._entries.get(def.name);
+    if (existing && existing.def !== def && !this.replace) {
+      // Identical declarations (same structural signature) rebind
+      // silently — the same module arriving twice is not a conflict.
+      // Anything else is the "two different models, one name" footgun:
+      // relation / @mixin resolution is name-keyed and app-global, so
+      // silently letting the last one win corrupts resolution. Throw.
+      if (__schemaSignature(existing.def) !== __schemaSignature(def)) {
+        throw new SchemaError(
+          [{
+            field: def.name, error: 'collision',
+            message: "schema name '" + def.name + "' is already registered with a different definition. " +
+              "Schema names are app-global (they resolve relations and @mixin references), so two different " +
+              "schemas cannot share one name. Rename one of them — or, for dev/HMR reload semantics, set " +
+              "__SchemaRegistry.replace = true before re-evaluating modules.",
+          }],
+          def.name, def.kind);
+      }
+    }
     this._entries.set(def.name, { def, kind: def.kind });
   },
   get(name) {
@@ -240,6 +330,24 @@ const __SchemaRegistry = {
   },
   has(name) { return this._entries.has(name); },
   reset() { this._entries.clear(); },
+  // Run \`fn\` against a fresh, empty registry; restore the parent
+  // registry afterward (success, throw, or async rejection). Replaces
+  // ad-hoc reset() in tests and makes schema-declaring test blocks
+  // safe to run without leaking registrations into each other.
+  scope(fn) {
+    const saved = this._entries;
+    this._entries = new Map();
+    const restore = () => { this._entries = saved; };
+    try {
+      const r = fn();
+      if (r && typeof r.then === 'function') return r.finally(restore);
+      restore();
+      return r;
+    } catch (e) {
+      restore();
+      throw e;
+    }
+  },
 };
 
 class __SchemaDef {
@@ -498,12 +606,23 @@ class __SchemaDef {
       });
     }
 
-    // Relation methods: user.organization(). Accepts no args; returns
-    // a promise to a target-model instance (or array for has_many).
+    // Relation methods: user.organization(). Accepts an optional opts
+    // object; returns a promise to a target-model instance (or array
+    // for has_many). Results memoize per instance — the second call
+    // resolves from cache with no query, and eager loading (.includes)
+    // fills the same memo so preloaded relations are free. Pass
+    // {reload: true} to bust the memo and re-query.
     for (const [acc, rel] of norm.relations) {
       Object.defineProperty(klass.prototype, acc, {
         enumerable: false, configurable: true,
-        value: async function() { return __schemaResolveRelation(def, this, rel); },
+        value: async function(opts) {
+          if (!(opts && opts.reload === true) && this._relMemo && this._relMemo.has(acc)) {
+            return this._relMemo.get(acc);
+          }
+          const v = await __schemaResolveRelation(def, this, rel);
+          __schemaRelMemoSet(this, acc, v);
+          return v;
+        },
       });
     }
 
@@ -513,9 +632,17 @@ class __SchemaDef {
         enumerable: false, configurable: true, writable: true,
         value: async function() { return __schemaSave(def, this); },
       });
+      // destroy() honors @softDelete (UPDATE deleted_at) by default;
+      // destroy(hard: true) forces a real DELETE. Hooks fire either way.
       Object.defineProperty(klass.prototype, 'destroy', {
         enumerable: false, configurable: true, writable: true,
-        value: async function() { return __schemaDestroy(def, this); },
+        value: async function(opts) { return __schemaDestroy(def, this, opts); },
+      });
+      // restore() un-deletes a soft-deleted row (deleted_at = NULL).
+      // Throws on models without @softDelete.
+      Object.defineProperty(klass.prototype, 'restore', {
+        enumerable: false, configurable: true, writable: true,
+        value: async function() { return __schemaRestore(def, this); },
       });
       Object.defineProperty(klass.prototype, 'ok', {
         enumerable: false, configurable: true, writable: true,
@@ -1081,26 +1208,252 @@ function __schemaTableName(model) { return __schemaPluralize(__schemaSnake(model
 
 function __schemaFkName(model) { return __schemaSnake(model) + '_id'; }
 `;
-export const SCHEMA_ORM_RUNTIME            = `function __schemaDefaultAdapter() {
-  const url = (typeof process !== 'undefined' && process.env?.DB_URL) || 'http://localhost:9494';
+export const SCHEMA_ORM_RUNTIME            = `// ---- Adapter (Contract v2) -------------------------------------------------
+//
+// \`query(sql, params) → {columns, data, rowCount}\` is the only REQUIRED
+// method. v2 adds optional capabilities that the runtime feature-detects:
+//
+//   begin(options?) → TxHandle        transactions (schema.transaction!)
+//     TxHandle: { query(sql, params), commit(), rollback() }
+//   capabilities: { tx: true, ... }   truthful self-report (informational)
+//
+// Calling a feature whose method is absent throws a clear error — never
+// a silent fallback.
+//
+// The default adapter talks to a duckdb-harbor server (or any
+// /sql-compatible server). Configuration via env:
+//
+//   RIP_DB_URL    base URL (default http://127.0.0.1:9494; legacy DB_URL
+//                 honored as a fallback)
+//   RIP_DB_TOKEN  bearer token, required when harbor runs authenticated
+//
+// Transactions use harbor's session protocol: POST /sql/sessions/new
+// pins a DB session (connection) so BEGIN/COMMIT survive across
+// requests; statements carry the sessionId; the session is destroyed
+// after COMMIT/ROLLBACK. Harbor enforces an idle TTL, so an abandoned
+// transaction auto-rolls-back server-side.
+function __schemaDefaultAdapter() {
+  const env = (typeof process !== 'undefined' && process.env) || {};
+  const base = () => String(env.RIP_DB_URL || env.DB_URL || 'http://127.0.0.1:9494').replace(/\\/+$/, '');
+  const headers = () => {
+    const h = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
+    if (env.RIP_DB_TOKEN) h['Authorization'] = 'Bearer ' + env.RIP_DB_TOKEN;
+    return h;
+  };
+  async function post(path, body) {
+    const res = await fetch(base() + path, {
+      method: 'POST', headers: headers(), body: JSON.stringify(body),
+    });
+    let data;
+    try { data = await res.json(); } catch { data = {}; }
+    if (!res.ok || data.ok === false || data.error) {
+      const err = new Error(data.error || ('db request failed: ' + res.status + ' ' + (res.statusText || '')));
+      if (data.errorCode) err.code = data.errorCode;
+      if (data.errorDetails) err.details = data.errorDetails;
+      err.httpStatus = res.status;
+      throw err;
+    }
+    return data;
+  }
   return {
     async query(sql, params) {
-      const body = params && params.length ? { sql, params } : { sql };
-      const res = await fetch(url + '/sql', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
-      return data;
-    }
+      return post('/sql', params && params.length ? { sql, params } : { sql });
+    },
+    async begin(options) {
+      let session;
+      try {
+        session = await post('/sql/sessions/new', {});
+      } catch (e) {
+        if (e && e.httpStatus === 403) {
+          e.message = 'transactions need a harbor DB session, and harbor denied session creation ' +
+            '(authz policy __HARBOR_ADMIN__:sessions:create). Allow it in your harbor_authorization_function ' +
+            'or set harbor_allow_admin_without_authz = true on a trusted deployment. Original error: ' + e.message;
+        }
+        throw e;
+      }
+      const sessionId = session.sessionId;
+      const run = (sql, params) =>
+        post('/sql', params && params.length ? { sql, params, sessionId } : { sql, sessionId });
+      const drop = async () => {
+        // Best-effort: harbor's idle TTL reaps abandoned sessions, so a
+        // failed DELETE only delays cleanup, never leaks a transaction.
+        try {
+          await fetch(base() + '/sql/sessions/' + sessionId, { method: 'DELETE', headers: headers() });
+        } catch {}
+      };
+      await run('BEGIN');
+      return {
+        query: run,
+        async commit() { await run('COMMIT'); await drop(); },
+        async rollback() {
+          try { await run('ROLLBACK'); } finally { await drop(); }
+        },
+      };
+    },
+    capabilities: { tx: true },
   };
 }
 
 let __schemaAdapter = __schemaDefaultAdapter();
 
 function __schemaSetAdapter(a) { __schemaAdapter = a; }
+
+// ---- Transactions ----------------------------------------------------------
+//
+// schema.transaction! ->                  propagates ambiently: every ORM
+//   user = User.create! ...               call inside the block routes
+//   Order.create! userId: user.id, ...    through the transaction's handle
+//   user                                  via AsyncLocalStorage. Model code
+//                                         is unchanged inside the block.
+//
+// Block throws   → ROLLBACK, exception propagates, afterRollback hooks fire.
+// Block returns  → COMMIT, value returned, afterCommit hooks fire.
+// Nested call    → joins the ambient transaction (Active Record's default;
+//                  DuckDB has no SAVEPOINT, so nested-as-independent-unit
+//                  cannot be honored on the primary backend).
+//
+// The ALS instance is created lazily on first use — \`node:async_hooks\`
+// exists in Bun and Node, and the import never runs in browser bundles
+// (this fragment is server/migration-only).
+let __schemaTxALS = null;
+
+// Ambient transaction store for the CURRENT adapter, or null. A store
+// created against a different adapter (multi-DB future) is ignored —
+// cross-adapter atomicity is impossible and the runtime never pretends
+// otherwise.
+function __schemaTxStore() {
+  if (!__schemaTxALS) return null;
+  const store = __schemaTxALS.getStore();
+  return store && store.adapter === __schemaAdapter ? store : null;
+}
+
+// The single SQL funnel. Every ORM-issued statement flows through here:
+// it routes to the ambient transaction handle when one exists, and
+// translates DB constraint violations into structured SchemaErrors.
+async function __schemaRunSQL(def, sql, params) {
+  const tx = __schemaTxStore();
+  try {
+    return await (tx ? tx.handle.query(sql, params) : __schemaAdapter.query(sql, params));
+  } catch (e) {
+    throw __schemaTranslateDBError(e, def);
+  }
+}
+
+async function __schemaTransaction(optsOrFn, maybeFn) {
+  const fn = typeof optsOrFn === 'function' ? optsOrFn : maybeFn;
+  const opts = typeof optsOrFn === 'function' ? {} : (optsOrFn || {});
+  if (typeof fn !== 'function') {
+    throw new Error('schema.transaction(fn): expected a function (got ' + typeof fn + ')');
+  }
+  const adapter = __schemaAdapter;
+
+  // Nested transaction joins the ambient one — the inner block's writes
+  // commit or roll back with the outer transaction.
+  const ambient = __schemaTxALS ? __schemaTxALS.getStore() : null;
+  if (ambient && ambient.adapter === adapter) return fn();
+
+  if (typeof adapter.begin !== 'function') {
+    throw new Error(
+      'schema.transaction(): the configured adapter does not support transactions ' +
+      '(no begin() method; see Adapter Contract v2). Install an adapter with begin() ' +
+      'or use the default @rip-lang/db adapter against duckdb-harbor.');
+  }
+  if (!__schemaTxALS) {
+    const { AsyncLocalStorage } = await import('node:async_hooks');
+    __schemaTxALS = new AsyncLocalStorage();
+  }
+
+  const handle = await adapter.begin(opts);
+  // \`after\` collects {def, inst} for every save/destroy that completed
+  // inside the transaction on a model declaring afterCommit/afterRollback.
+  const store = { adapter, handle, after: [] };
+  let result;
+  try {
+    result = await __schemaTxALS.run(store, fn);
+  } catch (err) {
+    try { await handle.rollback(); } catch {}
+    await __schemaFlushTxHooks(store, 'afterRollback');
+    throw err;
+  }
+  await handle.commit();
+  // afterCommit runs OUTSIDE the transaction — this is where emails,
+  // webhooks, and cache invalidation belong (they must never observe
+  // uncommitted state). Exceptions here propagate to the caller but
+  // cannot roll anything back: the COMMIT already happened.
+  await __schemaFlushTxHooks(store, 'afterCommit');
+  return result;
+}
+
+async function __schemaFlushTxHooks(store, hookName) {
+  // Dedupe by instance: a row saved twice in one transaction gets one
+  // callback, matching Active Record's after_commit semantics.
+  const seen = new Set();
+  for (const entry of store.after) {
+    if (seen.has(entry.inst)) continue;
+    seen.add(entry.inst);
+    await __schemaRunHook(entry.def, entry.inst, hookName);
+  }
+}
+
+// Queue an instance's commit-time hooks on the ambient transaction.
+// Returns true when queued; false means "no ambient tx — fire now".
+function __schemaEnqueueTxHook(def, inst) {
+  const tx = __schemaTxStore();
+  if (!tx) return false;
+  tx.after.push({ def, inst });
+  return true;
+}
+
+// ---- Constraint-violation translation --------------------------------------
+//
+// The ORM wraps every adapter call (via __schemaRunSQL). Errors that are
+// recognizably DB constraint violations are translated into SchemaError
+// so a \`save!\` that trips a UNIQUE index fails the same way a \`save!\`
+// that trips a validator does: structured {field, error, message} issues.
+// Unrecognized errors propagate untouched. The original error is kept
+// as \`.cause\` for debugging.
+//
+// Recognition is message-pattern based (DuckDB first). Deliberately NOT
+// added: \`validates_uniqueness_of\`-style pre-checks — they race. The DB
+// constraint is the check; translation makes it ergonomic.
+function __schemaTranslateDBError(e, def) {
+  const msg = (e && e.message) || '';
+  const issue = __schemaConstraintIssue(msg);
+  if (!issue) return e;
+  const err = new SchemaError([issue], def ? def.name : null, def ? def.kind : null);
+  err.cause = e;
+  return err;
+}
+
+function __schemaConstraintIssue(msg) {
+  let m;
+  // DuckDB: Constraint Error: Duplicate key "email: a@b.c" violates unique constraint ...
+  //         (also "violates primary key constraint")
+  m = msg.match(/[Dd]uplicate key "([A-Za-z0-9_]+):[^"]*" violates (?:unique|primary key) constraint/);
+  if (m || /violates unique constraint/i.test(msg)) {
+    const field = m ? __schemaCamel(m[1]) : '';
+    return { field, error: 'unique', message: (field || 'value') + ' already taken' };
+  }
+  // DuckDB: Constraint Error: NOT NULL constraint failed: users.name
+  m = msg.match(/NOT NULL constraint failed:\\s*(?:[A-Za-z0-9_]+\\.)?([A-Za-z0-9_]+)/i);
+  if (m) {
+    const field = __schemaCamel(m[1]);
+    return { field, error: 'required', message: field + ' is required' };
+  }
+  // DuckDB: Constraint Error: Violates foreign key constraint because ... "user_id: 99" ...
+  if (/[Vv]iolates foreign key constraint/.test(msg)) {
+    m = msg.match(/"([A-Za-z0-9_]+):[^"]*"/);
+    const field = m ? __schemaCamel(m[1]) : '';
+    return { field, error: 'reference', message: (field || 'reference') + ' refers to a missing or still-referenced record' };
+  }
+  // DuckDB: Constraint Error: CHECK constraint failed: <table>
+  if (/CHECK constraint failed/i.test(msg)) {
+    return { field: '', error: 'check', message: msg };
+  }
+  return null;
+}
+
+// ---- Query builder ----------------------------------------------------------
 
 class __SchemaQuery {
   constructor(def, opts = {}) {
@@ -1110,7 +1463,10 @@ class __SchemaQuery {
     this._limit = null;
     this._offset = null;
     this._order = null;
-    this._includeDeleted = opts.includeDeleted === true;
+    this._includes = [];
+    // Soft-delete filter mode: 'live' (default), 'all' (.withDeleted),
+    // 'deleted' (.onlyDeleted). Pre-v2 \`includeDeleted\` option maps to 'all'.
+    this._deleted = opts.includeDeleted === true ? 'all' : 'live';
   }
   where(cond, ...params) {
     if (typeof cond === 'string') {
@@ -1121,6 +1477,9 @@ class __SchemaQuery {
         const col = __schemaSnake(k);
         if (v === null || v === undefined) {
           this._clauses.push('"' + col + '" IS NULL');
+        } else if (Array.isArray(v)) {
+          this._clauses.push('"' + col + '" IN (' + v.map(() => '?').join(', ') + ')');
+          this._params.push(...v);
         } else {
           this._clauses.push('"' + col + '" = ?');
           this._params.push(v);
@@ -1133,12 +1492,24 @@ class __SchemaQuery {
   offset(n) { this._offset = n; return this; }
   order(spec) { this._order = spec; return this; }
   orderBy(spec) { return this.order(spec); }
+  includes(...specs) {
+    this._includes.push(...__schemaNormalizeIncludes(specs));
+    return this;
+  }
+  withDeleted() { this._deleted = 'all'; return this; }
+  onlyDeleted() { this._deleted = 'deleted'; return this; }
+  _whereParts(norm) {
+    const where = [...this._clauses];
+    if (norm.softDelete) {
+      if (this._deleted === 'live') where.push('"deleted_at" IS NULL');
+      else if (this._deleted === 'deleted') where.push('"deleted_at" IS NOT NULL');
+    }
+    return where;
+  }
   _buildSQL() {
     const n = this._def._normalize();
-    const table = n.tableName;
-    const parts = ['SELECT * FROM "' + table + '"'];
-    const where = [...this._clauses];
-    if (!this._includeDeleted && n.softDelete) where.push('"deleted_at" IS NULL');
+    const parts = ['SELECT * FROM "' + n.tableName + '"'];
+    const where = this._whereParts(n);
     if (where.length) parts.push('WHERE ' + where.join(' AND '));
     if (this._order) parts.push('ORDER BY ' + this._order);
     if (this._limit != null) parts.push('LIMIT ' + this._limit);
@@ -1147,8 +1518,14 @@ class __SchemaQuery {
   }
   async all() {
     const sql = this._buildSQL();
-    const res = await __schemaAdapter.query(sql, this._params);
-    return (res.data || []).map(row => this._def._hydrate(res.columns, row));
+    const res = await __schemaRunSQL(this._def, sql, this._params);
+    const instances = (res.data || []).map(row => this._def._hydrate(res.columns, row));
+    // Eager loading: batched second queries (WHERE fk IN (...)) that
+    // fill the relation memos. Never changes the root result set.
+    if (this._includes.length && instances.length) {
+      await __schemaPreload(this._def, instances, this._includes);
+    }
+    return instances;
   }
   async first() {
     this._limit = 1;
@@ -1158,11 +1535,130 @@ class __SchemaQuery {
   async count() {
     const n = this._def._normalize();
     const parts = ['SELECT COUNT(*) FROM "' + n.tableName + '"'];
-    const where = [...this._clauses];
-    if (!this._includeDeleted && n.softDelete) where.push('"deleted_at" IS NULL');
+    const where = this._whereParts(n);
     if (where.length) parts.push('WHERE ' + where.join(' AND '));
-    const res = await __schemaAdapter.query(parts.join(' '), this._params);
+    const res = await __schemaRunSQL(this._def, parts.join(' '), this._params);
     return res.data?.[0]?.[0] || 0;
+  }
+  // One UPDATE statement for every matching row. Bypasses validation
+  // and per-instance hooks — the name says "all", the docs say "raw".
+  // Returns the adapter's reported row count when available.
+  async updateAll(values) {
+    const n = this._def._normalize();
+    const keys = values && typeof values === 'object' ? Object.keys(values) : [];
+    if (!keys.length) throw new Error('updateAll: requires at least one column to set');
+    const sets = [];
+    const params = [];
+    for (const k of keys) {
+      const name = __schemaCamel(k);
+      const field = n.fields.get(name);
+      sets.push('"' + __schemaSnake(k) + '" = ?');
+      params.push(__schemaSerialize(values[k], field));
+    }
+    if (n.timestamps) {
+      sets.push('"updated_at" = ?');
+      params.push(new Date().toISOString());
+    }
+    const where = this._whereParts(n);
+    let sql = 'UPDATE "' + n.tableName + '" SET ' + sets.join(', ');
+    if (where.length) sql += ' WHERE ' + where.join(' AND ');
+    const res = await __schemaRunSQL(this._def, sql, [...params, ...this._params]);
+    return res.rowCount ?? res.rows ?? null;
+  }
+  // One statement for every matching row. Soft-delete aware: on a
+  // @softDelete model this is an UPDATE setting deleted_at; on a hard
+  // model it's a real DELETE. Bypasses per-instance hooks (bulk path).
+  async deleteAll() {
+    const n = this._def._normalize();
+    const where = this._whereParts(n);
+    let sql, params;
+    if (n.softDelete && this._deleted === 'live') {
+      sql = 'UPDATE "' + n.tableName + '" SET "deleted_at" = ?';
+      params = [new Date().toISOString(), ...this._params];
+    } else {
+      sql = 'DELETE FROM "' + n.tableName + '"';
+      params = this._params;
+    }
+    if (where.length) sql += ' WHERE ' + where.join(' AND ');
+    const res = await __schemaRunSQL(this._def, sql, params);
+    return res.rowCount ?? res.rows ?? null;
+  }
+}
+
+// ---- Eager loading ----------------------------------------------------------
+
+// Normalize .includes arguments into [{name, children}] trees. Accepts
+// :symbols, strings, arrays, and nested maps to any depth:
+//   .includes(:orders)
+//   .includes(:author, comments: :author)
+function __schemaNormalizeIncludes(specs) {
+  const out = [];
+  for (const s of specs) {
+    if (s == null) continue;
+    if (typeof s === 'symbol') out.push({ name: Symbol.keyFor(s) || s.description, children: [] });
+    else if (typeof s === 'string') out.push({ name: s, children: [] });
+    else if (Array.isArray(s)) out.push(...__schemaNormalizeIncludes(s));
+    else if (typeof s === 'object') {
+      for (const [k, v] of Object.entries(s)) {
+        out.push({ name: k, children: __schemaNormalizeIncludes([v]) });
+      }
+    }
+  }
+  return out;
+}
+
+// Batched preload: one query per relation per nesting level
+// (\`WHERE fk IN (?, …)\`), never JOINs — no row duplication, uniform
+// across belongs_to / has_one / has_many. Results land in the relation
+// memo, so \`user.orders!\` resolves from cache with no query. Invisible
+// to call sites: preloading is purely a performance fact.
+async function __schemaPreload(def, instances, specs) {
+  if (!instances.length || !specs.length) return;
+  const norm = def._normalize();
+  for (const spec of specs) {
+    const rel = norm.relations.get(spec.name);
+    if (!rel) {
+      throw new Error(
+        "schema: includes('" + spec.name + "') — no such relation on " + (def.name || 'model') +
+        '. Declared relations: ' + ([...norm.relations.keys()].join(', ') || '(none)'));
+    }
+    const target = __SchemaRegistry.get(rel.target);
+    if (!target) throw new Error('schema: unknown relation target "' + rel.target + '" from ' + (def.name || 'anon'));
+    const children = [];
+    if (rel.kind === 'belongsTo') {
+      const fkCamel = __schemaCamel(rel.foreignKey);
+      const ids = [...new Set(instances.map(i => i[fkCamel]).filter(v => v != null))];
+      const rows = ids.length ? await target.findMany(ids) : [];
+      const pk = target._normalize().primaryKey;
+      const byId = new Map(rows.map(r => [r[pk], r]));
+      for (const inst of instances) {
+        const v = inst[fkCamel] != null ? (byId.get(inst[fkCamel]) ?? null) : null;
+        __schemaRelMemoSet(inst, spec.name, v);
+        if (v && !children.includes(v)) children.push(v);
+      }
+    } else {
+      const pk = norm.primaryKey;
+      const fkCamel = __schemaCamel(rel.foreignKey);
+      const ids = [...new Set(instances.map(i => i[pk]).filter(v => v != null))];
+      let rows = [];
+      if (ids.length) {
+        rows = await new __SchemaQuery(target)
+          .where('"' + rel.foreignKey + '" IN (' + ids.map(() => '?').join(', ') + ')', ...ids)
+          .all();
+      }
+      const groups = new Map();
+      for (const r of rows) {
+        const k = r[fkCamel];
+        if (!groups.has(k)) groups.set(k, []);
+        groups.get(k).push(r);
+        children.push(r);
+      }
+      for (const inst of instances) {
+        const g = groups.get(inst[pk]) || [];
+        __schemaRelMemoSet(inst, spec.name, rel.kind === 'hasOne' ? (g[0] ?? null) : g);
+      }
+    }
+    if (spec.children.length) await __schemaPreload(target, children, spec.children);
   }
 }
 
@@ -1183,9 +1679,24 @@ async function __schemaResolveRelation(def, inst, rel) {
   return null;
 }
 
+// ---- Save / destroy ----------------------------------------------------------
+
 async function __schemaRunHook(def, inst, name) {
   const fn = def._normalize().hooks.get(name);
   if (fn) await fn.call(inst);
+}
+
+// After a successful save/destroy: queue afterCommit/afterRollback on
+// the ambient transaction, or fire afterCommit immediately when no
+// transaction is open (AR semantics: outside a tx, "commit" is the
+// statement itself). Only models that declare one of the two hooks pay
+// any cost here.
+async function __schemaSettleTxHooks(def, inst) {
+  const hooks = def._normalize().hooks;
+  if (!hooks.has('afterCommit') && !hooks.has('afterRollback')) return;
+  if (!__schemaEnqueueTxHook(def, inst)) {
+    await __schemaRunHook(def, inst, 'afterCommit');
+  }
 }
 
 async function __schemaSave(def, inst) {
@@ -1250,24 +1761,9 @@ async function __schemaSave(def, inst) {
       }
     }
     const sql = 'INSERT INTO "' + norm.tableName + '" (' + cols.join(', ') + ') VALUES (' + placeholders.join(', ') + ') RETURNING *';
-    const res = await __schemaAdapter.query(sql, values);
+    const res = await __schemaRunSQL(def, sql, values);
     if (res.data?.[0] && res.columns) {
-      for (let i = 0; i < res.columns.length; i++) {
-        const snake = res.columns[i].name;
-        const key = __schemaCamel(snake);
-        if (!(key in inst)) {
-          Object.defineProperty(inst, key, { value: res.data[0][i], enumerable: true, writable: true, configurable: true });
-        } else {
-          inst[key] = res.data[0][i];
-        }
-        if (snake !== key && !(snake in inst)) {
-          Object.defineProperty(inst, snake, {
-            enumerable: false, configurable: true,
-            get() { return this[key]; },
-            set(v) { this[key] = v; },
-          });
-        }
-      }
+      __schemaAbsorbRow(inst, res.columns, res.data[0]);
     }
     // Now that the RETURNING columns (id, @timestamps, FKs) are on the
     // instance, !> eager-derived fields can see them. Mirrors the hydrate
@@ -1415,7 +1911,7 @@ async function __schemaSave(def, inst) {
       }
       values.push(wherePk);
       const sql = 'UPDATE "' + norm.tableName + '" SET ' + sets.join(', ') + ' WHERE "' + pk + '" = ?';
-      await __schemaAdapter.query(sql, values);
+      await __schemaRunSQL(def, sql, values);
       inst._snapshot = nextSnap;
     }
   }
@@ -1424,6 +1920,7 @@ async function __schemaSave(def, inst) {
   if (isNew) await __schemaRunHook(def, inst, 'afterCreate');
   else       await __schemaRunHook(def, inst, 'afterUpdate');
   await __schemaRunHook(def, inst, 'afterSave');
+  await __schemaSettleTxHooks(def, inst);
   return inst;
 
   } finally {
@@ -1431,19 +1928,59 @@ async function __schemaSave(def, inst) {
   }
 }
 
-async function __schemaDestroy(def, inst) {
+// Absorb a RETURNING row onto an instance: camelCase canonical own
+// properties plus non-enumerable snake_case aliases. Shared by the
+// INSERT path, upsert, and restore.
+function __schemaAbsorbRow(inst, columns, row) {
+  for (let i = 0; i < columns.length; i++) {
+    const snake = columns[i].name;
+    const key = __schemaCamel(snake);
+    if (!(key in inst)) {
+      Object.defineProperty(inst, key, { value: row[i], enumerable: true, writable: true, configurable: true });
+    } else {
+      inst[key] = row[i];
+    }
+    if (snake !== key && !(snake in inst)) {
+      Object.defineProperty(inst, snake, {
+        enumerable: false, configurable: true,
+        get() { return this[key]; },
+        set(v) { this[key] = v; },
+      });
+    }
+  }
+}
+
+async function __schemaDestroy(def, inst, opts) {
   if (!inst._persisted) return inst;
   const norm = def._normalize();
+  const hard = opts && opts.hard === true;
   await __schemaRunHook(def, inst, 'beforeDestroy');
-  if (norm.softDelete) {
+  if (norm.softDelete && !hard) {
     const now = new Date().toISOString();
-    await __schemaAdapter.query('UPDATE "' + norm.tableName + '" SET "deleted_at" = ? WHERE "' + norm.primaryKey + '" = ?', [now, inst[norm.primaryKey]]);
+    await __schemaRunSQL(def, 'UPDATE "' + norm.tableName + '" SET "deleted_at" = ? WHERE "' + norm.primaryKey + '" = ?', [now, inst[norm.primaryKey]]);
     inst.deletedAt = now;
   } else {
-    await __schemaAdapter.query('DELETE FROM "' + norm.tableName + '" WHERE "' + norm.primaryKey + '" = ?', [inst[norm.primaryKey]]);
+    await __schemaRunSQL(def, 'DELETE FROM "' + norm.tableName + '" WHERE "' + norm.primaryKey + '" = ?', [inst[norm.primaryKey]]);
     inst._persisted = false;
   }
   await __schemaRunHook(def, inst, 'afterDestroy');
+  await __schemaSettleTxHooks(def, inst);
+  return inst;
+}
+
+// Soft-delete recovery: UPDATE ... SET deleted_at = NULL. Fires the
+// update lifecycle (beforeUpdate/afterUpdate) like Active Record's
+// touch-style writes. Only meaningful on @softDelete models.
+async function __schemaRestore(def, inst) {
+  const norm = def._normalize();
+  if (!norm.softDelete) {
+    throw new Error('schema: restore() requires @softDelete on ' + (def.name || 'model'));
+  }
+  if (!inst._persisted) return inst;
+  await __schemaRunHook(def, inst, 'beforeUpdate');
+  await __schemaRunSQL(def, 'UPDATE "' + norm.tableName + '" SET "deleted_at" = NULL WHERE "' + norm.primaryKey + '" = ?', [inst[norm.primaryKey]]);
+  inst.deletedAt = null;
+  await __schemaRunHook(def, inst, 'afterUpdate');
   return inst;
 }
 
@@ -1454,14 +1991,14 @@ function __schemaSerialize(v, field) {
   return v;
 }
 
-// ORM prototype augmentations — added to __SchemaDef
+// ---- ORM prototype augmentations — added to __SchemaDef ----------------------
 
 __SchemaDef.prototype.find = async function (id) {
   this._assertModel('find');
   const norm = this._normalize();
   const soft = norm.softDelete ? ' AND "deleted_at" IS NULL' : '';
   const sql = 'SELECT * FROM "' + norm.tableName + '" WHERE "' + norm.primaryKey + '" = ?' + soft + ' LIMIT 1';
-  const res = await __schemaAdapter.query(sql, [id]);
+  const res = await __schemaRunSQL(this, sql, [id]);
   // Harbor returns rowCount (not the legacy \`rows\` alias). Treat both
   // as authoritative so the runtime works against any /sql adapter
   // that has a row-count field, regardless of which name it uses.
@@ -1470,9 +2007,34 @@ __SchemaDef.prototype.find = async function (id) {
   return this._hydrate(res.columns, res.data[0]);
 };
 
+__SchemaDef.prototype.findMany = async function (ids) {
+  this._assertModel('findMany');
+  if (!Array.isArray(ids)) throw new Error('schema: findMany(ids) expects an array');
+  if (!ids.length) return [];
+  const norm = this._normalize();
+  return new __SchemaQuery(this)
+    .where('"' + norm.primaryKey + '" IN (' + ids.map(() => '?').join(', ') + ')', ...ids)
+    .all();
+};
+
 __SchemaDef.prototype.where = function (cond, ...params) {
   this._assertModel('where');
   return new __SchemaQuery(this).where(cond, ...params);
+};
+
+__SchemaDef.prototype.includes = function (...specs) {
+  this._assertModel('includes');
+  return new __SchemaQuery(this).includes(...specs);
+};
+
+__SchemaDef.prototype.withDeleted = function () {
+  this._assertModel('withDeleted');
+  return new __SchemaQuery(this).withDeleted();
+};
+
+__SchemaDef.prototype.onlyDeleted = function () {
+  this._assertModel('onlyDeleted');
+  return new __SchemaQuery(this).onlyDeleted();
 };
 
 __SchemaDef.prototype.all = function () {
@@ -1511,6 +2073,139 @@ __SchemaDef.prototype.create = async function (data) {
   }
   await __schemaSave(this, inst);
   return inst;
+};
+
+// INSERT ... ON CONFLICT (target) DO UPDATE SET ... RETURNING *.
+//
+//   User.upsert! {email: "a@b.c", name: "Alice"}, on: :email
+//
+// Validates the row and fires beforeValidation / beforeSave / afterSave.
+// beforeCreate/beforeUpdate do NOT fire — the runtime cannot know which
+// branch the database took. The conflict target accepts a :symbol,
+// string, or array of either (composite targets).
+__SchemaDef.prototype.upsert = async function (data, opts) {
+  this._assertModel('upsert');
+  const norm = this._normalize();
+  const on = opts && (opts.on ?? opts.conflict);
+  if (on == null) throw new Error("schema: upsert(data, on: :column) requires a conflict target");
+  const targets = (Array.isArray(on) ? on : [on]).map(t =>
+    __schemaSnake(typeof t === 'symbol' ? (Symbol.keyFor(t) || t.description) : String(t)));
+
+  const klass = this._getClass();
+  const canonical = {};
+  if (data && typeof data === 'object') {
+    for (const k of Object.keys(data)) canonical[__schemaCamel(k)] = data[k];
+  }
+  const inst = new klass(this._applyDefaults(canonical), false);
+  for (const [k, v] of Object.entries(canonical)) {
+    if (!(k in inst)) {
+      Object.defineProperty(inst, k, { value: v, enumerable: true, writable: true, configurable: true });
+    }
+  }
+
+  await __schemaRunHook(this, inst, 'beforeValidation');
+  const errs = this._validateFields(inst, true);
+  if (errs.length) throw new SchemaError(errs, this.name, this.kind);
+  await __schemaRunHook(this, inst, 'afterValidation');
+  await __schemaRunHook(this, inst, 'beforeSave');
+
+  const cols = [], placeholders = [], values = [];
+  for (const [n, f] of norm.fields) {
+    const v = inst[n];
+    if (v == null) continue;
+    cols.push(__schemaSnake(n));
+    placeholders.push('?');
+    values.push(__schemaSerialize(v, f));
+  }
+  for (const [, rel] of norm.relations) {
+    if (rel.kind !== 'belongsTo') continue;
+    const v = inst[__schemaCamel(rel.foreignKey)];
+    if (v != null) {
+      cols.push(rel.foreignKey);
+      placeholders.push('?');
+      values.push(v);
+    }
+  }
+  if (!cols.length) throw new Error('schema: upsert() requires at least one column');
+  const updateCols = cols.filter(c => !targets.includes(c));
+  let conflict = ' ON CONFLICT (' + targets.map(t => '"' + t + '"').join(', ') + ')';
+  if (updateCols.length) {
+    const sets = updateCols.map(c => '"' + c + '" = EXCLUDED."' + c + '"');
+    if (norm.timestamps) sets.push('"updated_at" = CURRENT_TIMESTAMP');
+    conflict += ' DO UPDATE SET ' + sets.join(', ');
+  } else {
+    conflict += ' DO NOTHING';
+  }
+  const sql = 'INSERT INTO "' + norm.tableName + '" (' + cols.map(c => '"' + c + '"').join(', ') + ')' +
+    ' VALUES (' + placeholders.join(', ') + ')' + conflict + ' RETURNING *';
+  const res = await __schemaRunSQL(this, sql, values);
+  if (res.data?.[0] && res.columns) __schemaAbsorbRow(inst, res.columns, res.data[0]);
+  this._applyEagerDerived(inst);
+  inst._snapshot = __schemaSnapshot(norm, inst);
+  inst._persisted = true;
+  await __schemaRunHook(this, inst, 'afterSave');
+  await __schemaSettleTxHooks(this, inst);
+  return inst;
+};
+
+// Bulk insert: validates EVERY row first (collecting all failures into
+// one SchemaError, issues prefixed \`[i].field\`, before any SQL), then
+// issues one multi-VALUES INSERT ... RETURNING *. Per-instance hooks
+// are deliberately skipped — this is the bulk path; use create! in a
+// loop when hooks matter. Returns hydrated instances.
+__SchemaDef.prototype.insertMany = async function (rows) {
+  this._assertModel('insertMany');
+  if (!Array.isArray(rows)) throw new Error('schema: insertMany(rows) expects an array');
+  if (!rows.length) return [];
+  const norm = this._normalize();
+
+  const canonicalRows = [];
+  const allErrs = [];
+  for (let i = 0; i < rows.length; i++) {
+    const canonical = {};
+    const data = rows[i];
+    if (data && typeof data === 'object') {
+      for (const k of Object.keys(data)) canonical[__schemaCamel(k)] = data[k];
+    }
+    this._applyDefaults(canonical);
+    for (const e of this._validateFields(canonical, true)) {
+      allErrs.push({
+        field: '[' + i + ']' + (e.field ? '.' + e.field : ''),
+        error: e.error,
+        message: '[' + i + '] ' + e.message,
+      });
+    }
+    canonicalRows.push(canonical);
+  }
+  if (allErrs.length) throw new SchemaError(allErrs, this.name, this.kind);
+
+  // Column set = union of written columns across rows (missing values
+  // insert as NULL / column default).
+  const colSet = new Set();
+  for (const row of canonicalRows) {
+    for (const [n] of norm.fields) if (row[n] != null) colSet.add(n);
+    for (const [, rel] of norm.relations) {
+      if (rel.kind !== 'belongsTo') continue;
+      if (row[__schemaCamel(rel.foreignKey)] != null) colSet.add(__schemaCamel(rel.foreignKey));
+    }
+  }
+  const colNames = [...colSet];
+  if (!colNames.length) throw new Error('schema: insertMany() requires at least one column');
+  const values = [];
+  const tuples = [];
+  for (const row of canonicalRows) {
+    const slots = [];
+    for (const n of colNames) {
+      slots.push('?');
+      values.push(__schemaSerialize(row[n] ?? null, norm.fields.get(n)));
+    }
+    tuples.push('(' + slots.join(', ') + ')');
+  }
+  const sql = 'INSERT INTO "' + norm.tableName + '" (' +
+    colNames.map(n => '"' + __schemaSnake(n) + '"').join(', ') + ') VALUES ' +
+    tuples.join(', ') + ' RETURNING *';
+  const res = await __schemaRunSQL(this, sql, values);
+  return (res.data || []).map(row => this._hydrate(res.columns, row));
 };
 
 __SchemaDef.prototype._assertModel = function (api) {
@@ -1654,20 +2349,29 @@ const __schemaBrowserStub = (api) => function() {
 };
 
 // Static / class-level methods on __SchemaDef
-__SchemaDef.prototype.find    = __schemaBrowserStub('find');
-__SchemaDef.prototype.where   = __schemaBrowserStub('where');
-__SchemaDef.prototype.all     = __schemaBrowserStub('all');
-__SchemaDef.prototype.first   = __schemaBrowserStub('first');
-__SchemaDef.prototype.count   = __schemaBrowserStub('count');
-__SchemaDef.prototype.create  = __schemaBrowserStub('create');
-__SchemaDef.prototype.toSQL   = __schemaBrowserStub('toSQL');
+__SchemaDef.prototype.find        = __schemaBrowserStub('find');
+__SchemaDef.prototype.findMany    = __schemaBrowserStub('findMany');
+__SchemaDef.prototype.where       = __schemaBrowserStub('where');
+__SchemaDef.prototype.includes    = __schemaBrowserStub('includes');
+__SchemaDef.prototype.withDeleted = __schemaBrowserStub('withDeleted');
+__SchemaDef.prototype.onlyDeleted = __schemaBrowserStub('onlyDeleted');
+__SchemaDef.prototype.all         = __schemaBrowserStub('all');
+__SchemaDef.prototype.first       = __schemaBrowserStub('first');
+__SchemaDef.prototype.count       = __schemaBrowserStub('count');
+__SchemaDef.prototype.create      = __schemaBrowserStub('create');
+__SchemaDef.prototype.upsert      = __schemaBrowserStub('upsert');
+__SchemaDef.prototype.insertMany  = __schemaBrowserStub('insertMany');
+__SchemaDef.prototype.toSQL       = __schemaBrowserStub('toSQL');
 
 // Helpers referenced by the validate fragment that are otherwise
 // defined in db-naming / orm fragments. Kept inert (return safe
 // defaults or throw on use) so validate's _makeClass / _normalize
 // can run end-to-end in browser context.
-function __schemaSave()       { throw new Error("schema instance.save() is not available in the browser. Import @rip-lang/db on the server."); }
-function __schemaDestroy()    { throw new Error("schema instance.destroy() is not available in the browser. Import @rip-lang/db on the server."); }
+function __schemaSave()            { throw new Error("schema instance.save() is not available in the browser. Import @rip-lang/db on the server."); }
+function __schemaDestroy()         { throw new Error("schema instance.destroy() is not available in the browser. Import @rip-lang/db on the server."); }
+function __schemaRestore()         { throw new Error("schema instance.restore() is not available in the browser. Import @rip-lang/db on the server."); }
+function __schemaResolveRelation() { throw new Error("schema relation accessors are not available in the browser. Import @rip-lang/db on the server."); }
+function __schemaTransaction()     { throw new Error("schema.transaction() is not available in the browser. Import @rip-lang/db on the server."); }
 function __schemaTableName(m) { return null; } // returned only for :model normalize; never used downstream in browser
 function __schemaPluralize(w) { return w; }    // identity — relations work for type-resolution but never query
 function __schemaFkName(m)    { return ''; }   // ditto
