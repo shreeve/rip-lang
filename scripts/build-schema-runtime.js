@@ -92,17 +92,34 @@ var { __schema, SchemaError, __SchemaRegistry, __schemaSetAdapter } = (function(
 `;
 
 const WRAPPER_TAIL = `
-  // __schemaSetAdapter is server/migration-only. In validate or browser
-  // modes it doesn't exist; export an undefined slot so destructure works.
+  // __schemaSetAdapter / __schemaTransaction are server/migration-only.
+  // In validate mode they don't exist (browser mode stubs transaction);
+  // export undefined / throwing slots so destructure works everywhere.
   const __schemaSetAdapterExport = typeof __schemaSetAdapter !== 'undefined'
     ? __schemaSetAdapter
     : undefined;
+  const __schemaTransactionExport = typeof __schemaTransaction !== 'undefined'
+    ? __schemaTransaction
+    : function() {
+        throw new Error('schema.transaction() requires the server schema runtime (validate-only runtime loaded).');
+      };
+  // User-facing namespace: schema.transaction! -> ... in Rip source
+  // resolves through this object (installed as a global alongside the
+  // other Rip stdlib globals; ??= keeps user overrides intact).
+  const schemaNamespace = {
+    transaction: __schemaTransactionExport,
+  };
   const exports = {
     __schema, SchemaError, __SchemaRegistry,
     __schemaSetAdapter: __schemaSetAdapterExport,
+    __schemaTransaction: __schemaTransactionExport,
+    schema: schemaNamespace,
     __version: ${SCHEMA_RUNTIME_ABI_VERSION},
   };
-  if (typeof globalThis !== 'undefined') globalThis.__ripSchema = exports;
+  if (typeof globalThis !== 'undefined') {
+    globalThis.__ripSchema = exports;
+    globalThis.schema ??= schemaNamespace;
+  }
   return exports;
 })();
 
