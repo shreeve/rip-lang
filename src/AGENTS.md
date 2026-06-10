@@ -679,7 +679,7 @@ enum Status
 Type emission is split across two files by execution context:
 
 - `types.js` (browser-side, ~21 KB) — `installTypeSupport(Lexer)` adds `rewriteTypes()` to strip type annotations from the token stream so user-typed Rip parses. This is the only thing the browser needs from type machinery.
-- `dts.js` (CLI/LSP only, ~38 KB) — `emitTypes(tokens, sexpr, source)` generates `.d.ts`, plus `tsType`, `emitComponentTypes`, and the intrinsic declaration tables (`INTRINSIC_TYPE_DECLS`, `SIGNAL_*`, `COMPUTED_*`, `EFFECT_*`, etc.). Registers itself with the compiler at module load via `setTypesEmitter()`.
+- `dts.js` (CLI/LSP only, ~38 KB) — `emitTypes(tokens, sexpr, source, schemaBehavior)` generates `.d.ts`, plus `tsType`, `emitComponentTypes`, and the intrinsic declaration tables (`INTRINSIC_TYPE_DECLS`, `SIGNAL_*`, `COMPUTED_*`, `EFFECT_*`, etc.). Registers itself with the compiler at module load via `setTypesEmitter()`. `schemaBehavior` (the generator's per-compile buffer of compiled `~>`/`!>` bodies, populated only in `inlineTypes`/shadow mode) drives computed/derived return-type inference.
 
 `emitEnum` (runtime JS for `enum` blocks) lives in `compiler.js` next to the rest of the codegen dispatch — it's not type machinery, it's real runtime emission.
 
@@ -826,9 +826,11 @@ signatures both enforce this.
 
 ### Shadow TS
 
-`emitSchemaTypes(sexpr, lines)` walks the parsed s-expression for named
-schema declarations, emits mixins first so intersections resolve, then
-emits type aliases and `declare const` per kind:
+`emitSchemaTypes(sexpr, lines, schemaBehavior)` walks the parsed s-expression
+for named schema declarations, emits mixins first so intersections resolve, then
+emits type aliases and `declare const` per kind (`schemaBehavior`, when set in
+shadow mode, anchors computed/derived members to
+`ReturnType<typeof __<Name>__behavior.field>`):
 
 - `:input` → `Schema<ValueType, ValueType>`
 - `:shape` → `Schema<ShapeInstance, ShapeData>` (or `Schema<Data, Data>` when

@@ -28,7 +28,7 @@ From that single line of source, the language gives you:
 
 - a **runtime validator** — `User.parse(data)` / `.safe()` / `.ok()`
 - a **generated class** with your methods and `~>` computed getters bound as prototype getters
-- a **TypeScript type** — `ModelSchema<UserInstance, UserData>`, automatic, no codegen step
+- a **TypeScript type** — `ModelSchema<User, UserData>`, automatic, no codegen step
 - an **async ORM** — `User.find! 1`, `User.where(active: true).all!`, `user.save!`
 - **migration-grade DDL** — `User.toSQL()` emits `CREATE TABLE`, indexes, foreign keys
 - **schema algebra** — `User.omit("password")` produces a correctly-typed derived shape
@@ -858,13 +858,13 @@ you:
 ### Static ORM methods
 
 ```coffee
-User.find! id                            # → UserInstance | null
-User.findMany! [1, 2, 3]                 # → UserInstance[]
-User.where(active: true).all!            # → UserInstance[]
-User.where(active: true).first!          # → UserInstance | null
+User.find! id                            # → User | null
+User.findMany! [1, 2, 3]                 # → User[]
+User.where(active: true).all!            # → User[]
+User.where(active: true).first!          # → User | null
 User.where(active: true).count!          # → number
-User.all!                                # → UserInstance[]
-User.first!                              # → UserInstance | null
+User.all!                                # → User[]
+User.first!                              # → User | null
 User.count!                              # → number
 User.create! name: "Alice", email: "a@b.c"
 User.toSQL()                             # → DDL string (no DB call)
@@ -1079,11 +1079,11 @@ Relation accessors are **async methods** on the instance prototype:
 
 ```coffee
 user = User.find! 1
-orders  = user.orders!            # → OrderInstance[]
-profile = user.profile!           # → ProfileInstance | null
+orders  = user.orders!            # → Order[]
+profile = user.profile!           # → Profile | null
 
 order  = Order.find! 42
-owner  = order.user!              # → UserInstance | null
+owner  = order.user!              # → User | null
 ```
 
 Accessor names:
@@ -1423,41 +1423,57 @@ the box.
 
 ### What gets emitted
 
-For `:input`:
+The schema's **bare name** is the type you reference everywhere — the parsed
+value (for `:input`/`:shape`) or the hydrated instance (for `:model`) — exactly
+the way a class names both its value and its instance type. A separate
+`<Name>Data` (fields-only) type is emitted only when it differs from the bare
+name: behavior-bearing `:shape`s and every `:model`.
+
+For `:input` (no behavior — the bare name is the whole shape):
 
 ```ts
-type SignupInputValue = { email: string; password: string };
-declare const SignupInput: Schema<SignupInputValue, SignupInputValue>;
+type SignupInput = { email: string; password: string };
+declare const SignupInput: Schema<SignupInput, SignupInput>;
 ```
 
-For `:shape` (with behavior):
+For `:shape` (with behavior — `<Name>Data` = fields, bare `<Name>` = instance):
 
 ```ts
 type AddressData = { street: string; city: string };
-type AddressInstance = AddressData & {
+type Address = AddressData & {
   readonly full: unknown;
   normalize: (...args: any[]) => unknown;
 };
-declare const Address: Schema<AddressInstance, AddressData>;
+declare const Address: Schema<Address, AddressData>;
 ```
 
 For `:model`:
 
 ```ts
 type UserData = { name: string; email: string };
-type UserInstance = UserData & {
+type UserCreate = { name: string; email: string };   // create()'s input — required-no-default fields
+type User = UserData & {
   readonly identifier: unknown;
   greet: (...args: any[]) => unknown;
-  save(): Promise<UserInstance>;
-  destroy(): Promise<UserInstance>;
+  save(): Promise<User>;
+  destroy(): Promise<User>;
   ok(): boolean;
   errors(): SchemaIssue[];
   toJSON(): UserData;
-  organization(): Promise<OrganizationInstance | null>;
-  orders(): Promise<OrderInstance[]>;
+  organization(): Promise<Organization | null>;
+  orders(): Promise<Order[]>;
 };
-declare const User: ModelSchema<UserInstance, UserData>;
+declare const User: ModelSchema<User, UserData, number, UserCreate>;
 ```
+
+> **Computed/derived inference.** The `unknown` on a `~>`/`!>` member above is
+> the *published* `.d.ts` form. In the editor and `rip check`, the type emitter
+> infers each computed/derived member from its body — `full` above resolves to
+> `string`, and a `status: ~> if @done then 'Completed' else 'Pending'` resolves
+> to `"Completed" | "Pending"` — so they're usable as their real types (e.g.
+> `order.name.toUpperCase()`). A plain `.d.ts` has no runtime body to infer
+> from, so it keeps `unknown`. Methods stay `(...args: any[]) => unknown` either
+> way (their params aren't typed).
 
 For `:enum`:
 
@@ -1490,6 +1506,17 @@ Schema<Omit<UserData, "email">, Omit<UserData, "email">>
 Schema<Partial<UserData>, Partial<UserData>>
 ```
 
+A **named** derived schema additionally gets a bare type of its own, so a
+projection can be annotated or re-exported under a clean name:
+
+```coffee
+UserPublic = User.pick("id", "name")   # also emits a bare `type UserPublic`
+```
+
+It's emitted as `type UserPublic = ReturnType<(typeof UserPublic)['parse']>`,
+which resolves to the exact projection (`Pick<UserData, "id" | "name">`) —
+covering every operator and chain for free.
+
 ### Same-file targets type relation accessors
 
 Relation accessors get precise return types when the target is declared
@@ -1499,7 +1526,7 @@ in the same file:
 User = schema :model
   name! string
 Order = schema :model
-  @belongs_to User                   # → order.user(): Promise<UserInstance | null>
+  @belongs_to User                   # → order.user(): Promise<User | null>
 ```
 
 Cross-file relation targets degrade to `unknown` rather than emit
@@ -1508,7 +1535,7 @@ requiring virtual-module imports.
 
 ### Intrinsic declarations
 
-Three base interfaces get injected into every schema-using file's type
+Five base interfaces get injected into every schema-using file's type
 view:
 
 ```ts
@@ -1518,8 +1545,8 @@ type SchemaSafeResult<T> =
   | { ok: false; value: null; errors: SchemaIssue[] };
 
 interface Schema<Out, In = unknown> {
-  parse(data: In): Out;
-  safe(data: In): SchemaSafeResult<Out>;
+  parse(data: unknown): Out;
+  safe(data: unknown): SchemaSafeResult<Out>;
   ok(data: unknown): boolean;
   pick<K extends keyof In>(...keys: K[]): Schema<Pick<In, K>, Pick<In, K>>;
   omit<K extends keyof In>(...keys: K[]): Schema<Omit<In, K>, Omit<In, K>>;
@@ -1531,15 +1558,24 @@ interface Schema<Out, In = unknown> {
   extend<U>(other: Schema<U>): Schema<In & U, In & U>;
 }
 
-interface ModelSchema<Instance, Data = unknown> extends Schema<Instance, Data> {
-  find(id: unknown): Promise<Instance | null>;
-  findMany(ids: unknown[]): Promise<Instance[]>;
+interface SchemaQuery<T> {
+  all(): Promise<T[]>;
+  first(): Promise<T | null>;
+  count(): Promise<number>;
+  limit(n: number): SchemaQuery<T>;
+  offset(n: number): SchemaQuery<T>;
+  order(spec: string): SchemaQuery<T>;
+}
+
+interface ModelSchema<Instance, Data = unknown, Id = number, Create = Partial<Data>> extends Schema<Instance, Data> {
+  find(id: Id): Promise<Instance | null>;
+  findMany(ids: Id[]): Promise<Instance[]>;
   where(cond: Record<string, unknown> | string, ...params: unknown[]): SchemaQuery<Instance>;
   all(limit?: number): Promise<Instance[]>;
   first(): Promise<Instance | null>;
   count(cond?: Record<string, unknown>): Promise<number>;
-  create(data: Partial<Data>): Promise<Instance>;
-  toSQL(options?: { dropFirst?: boolean; header?: string }): string;
+  create(data: Create): Promise<Instance>;
+  toSQL(options?: { dropFirst?: boolean; header?: string; idStart?: number }): string;
 }
 ```
 
@@ -1686,14 +1722,14 @@ A = schema :model
 ### Calling ORM methods on a derived shape
 
 ```coffee
-UserPublic = User.omit "password"
+UserPublic = User.pick "id", "name", "email"
 
 # wrong — algebra returns :shape; :shape has no .find()
 user = UserPublic.find! 1
 
 # right — query the source model and project
 user = User.find! 1
-publicView = UserPublic.parse user.toJSON()
+view = UserPublic.parse user.toJSON()
 ```
 
 ### Treating `.ok()` as a type predicate for shapes/models
@@ -1803,7 +1839,7 @@ Post = schema :model
   @belongs_to User
 ```
 
-### Building a public DTO from a model
+### Projecting a model to a wire view
 
 ```coffee
 User = schema :model
@@ -1813,16 +1849,17 @@ User = schema :model
   role?     string, [:user]
   @timestamps
 
-# Public projection — no password, no ORM methods.
-UserPublic = User.omit "password"
-
-publicJson = (user) -> UserPublic.parse user.toJSON()
+# Wire projection — the shape clients receive, derived from the one model.
+# Use `pick` (an allowlist): a field added to the model later can't leak to
+# clients by default — `password` is simply never selected. Prefer this over
+# `omit` for anything crossing a trust boundary; `omit` fails open.
+UserPublic = User.pick "id", "name", "email", "role"
 
 get '/users/:id' ->
   id = read 'id', 'id!'
   user = User.find! id
   return error! 404 unless user
-  { user: publicJson user }
+  { user: UserPublic.parse user.toJSON() }
 ```
 
 ### Writing a migration script
@@ -2281,10 +2318,10 @@ without changing the scanner shape.
 
 | Directive                   | Accessor name         | Returns                                  |
 | --------------------------- | --------------------- | ---------------------------------------- |
-| `@belongs_to User`          | `user()`              | `Promise<UserInstance \| null>`          |
-| `@belongs_to User?`         | `user()`              | `Promise<UserInstance \| null>` + nullable FK |
-| `@has_one Profile`          | `profile()`           | `Promise<ProfileInstance \| null>`       |
-| `@has_many Order`           | `orders()`            | `Promise<OrderInstance[]>`               |
+| `@belongs_to User`          | `user()`              | `Promise<User \| null>`          |
+| `@belongs_to User?`         | `user()`              | `Promise<User \| null>` + nullable FK |
+| `@has_one Profile`          | `profile()`           | `Promise<Profile \| null>`       |
+| `@has_many Order`           | `orders()`            | `Promise<Order[]>`               |
 
 Accessor names:
 

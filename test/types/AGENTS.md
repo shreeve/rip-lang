@@ -47,19 +47,19 @@ Each file exercises a specific type feature. Status key:
 - **fail** — `rip check` or runtime reports errors
 - **partial** — some features in the file work, others don't
 
-| File               | Feature                                                     | Status | Notes                                                      |
-| ------------------ | ----------------------------------------------------------- | ------ | ---------------------------------------------------------- |
-| 01-basic.rip       | `::` on variables, nullable (`T \| null`, `T \| undefined`) | pass   |                                                            |
-| 02-aliases.rip     | `type` aliases (simple, union, typeof, function)            | pass   | Function aliases `(a: T) => R` with generics + negatives   |
-| 03-structural.rip  | `type` blocks, optional, readonly, recursive, generic       | pass   | Nested blocks, index signatures, deep nesting, negatives   |
-| 04-unions.rip      | Inline, block, discriminated unions + switch narrowing      | pass   | Narrowing + exhaustiveness via strict mode                 |
-| 05-interfaces.rip  | `interface`, `extends`, optional members                    | pass   |                                                            |
-| 06-functions.rip   | Typed functions, arrows, overloads, array transforms        | pass   | 22 negative tests; overloads narrow return types           |
-| 07-integration.rip | Cross-module imports of typed functions                     | pass   | Cross-file type flow via `.d.ts`                           |
-| 08-reactive.rip    | `:: T :=`, `:: T ~=`, `:: T =!`, `:: T ~>`                  | pass   | Reactive state annotations                                 |
-| 09-components.rip  | `@prop:: T :=`, `@prop:: T`, default validation             | pass   | Required props, default-vs-type, 4 negative body tests     |
-| 10-validation.rip  | Runtime validation use cases (4 real-world patterns)        | pass   | API shape, composition, discriminated config, 3rd-party    |
-| 11-inference.rip   | Type inference on unannotated variables                     | pass   | Top-level, block-scoped, destructured, inline-let in funcs |
+| File               | Feature                                                     | Status | Notes                                                           |
+| ------------------ | ----------------------------------------------------------- | ------ | --------------------------------------------------------------- |
+| 01-basic.rip       | `::` on variables, nullable (`T \| null`, `T \| undefined`) | pass   |                                                                 |
+| 02-aliases.rip     | `type` aliases (simple, union, typeof, function)            | pass   | Function aliases `(a: T) => R` with generics + negatives        |
+| 03-structural.rip  | `type` blocks, optional, readonly, recursive, generic       | pass   | Nested blocks, index signatures, deep nesting, negatives        |
+| 04-unions.rip      | Inline, block, discriminated unions + switch narrowing      | pass   | Narrowing + exhaustiveness via strict mode                      |
+| 05-interfaces.rip  | `interface`, `extends`, optional members                    | pass   |                                                                 |
+| 06-functions.rip   | Typed functions, arrows, overloads, array transforms        | pass   | 22 negative tests; overloads narrow return types                |
+| 07-integration.rip | Cross-module imports of typed functions                     | pass   | Cross-file type flow via `.d.ts`                                |
+| 08-reactive.rip    | `:: T :=`, `:: T ~=`, `:: T =!`, `:: T ~>`                  | pass   | Reactive state annotations                                      |
+| 09-components.rip  | `@prop:: T :=`, `@prop:: T`, default validation             | pass   | Required props, default-vs-type, 4 negative body tests          |
+| 10-validation.rip  | Runtime validation via rip `schema`                         | pass   | Validates the wire via `schema` (4 patterns; was `type` blocks) |
+| 11-inference.rip   | Type inference on unannotated variables                     | pass   | Top-level, block-scoped, destructured, inline-let in funcs      |
 
 ## Type Safety Gap Analysis
 
@@ -67,11 +67,11 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 **Maintenance rule:** When you fix a gap, run the full verification suite. If everything passes, move the row to 🔍. To promote from 🔍 to ✅, manually verify IDE behavior (squiggle on correct token, hover shows expected type, no parse errors masking diagnostics, no false-positive errors). Remove stale "Fixed:" annotations — the row's position is the status. Never leave a fixed item in ❌.
 
-### ❌ Not working (language-level changes or runtime validation needed)
+### ❌ Not working (language-level changes needed)
 
-| Category                       | Tested In     | Notes                                                                                      |
-| ------------------------------ | ------------- | ------------------------------------------------------------------------------------------ |
-| Runtime return-type validation | 10-validation | Return types erased; `response.json()` is `any`. See "Future Notes" for the schema bridge. |
+| Category                    | Tested In     | Notes                                                                                           |
+| --------------------------- | ------------- | ----------------------------------------------------------------------------------------------- |
+| Schema discriminated unions | 10-validation | No object-variant DUs in `schema` (§15, deferred to Steve); `Step` uses a literal discriminant. |
 
 ### 🔶 Partial
 
@@ -121,6 +121,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Dot-completion accuracy        | 09-components  | Source map fix + LSP single-line `__rip__` patching for trailing-dot                 |
 | Generic components             | 09-components  | `Name<T extends C> = component` — type params flow through DTS, stub, inference      |
 | Typed shared state             | 09-components  | `Cart`-shaped value with method-shorthand; negative tests for typos and arg shapes   |
+| Schema behavior typing         | 10-validation  | Transforms (`it`), `~>` body-type inference, nested/array fields, datetime coercion  |
 | Type inference (split decl.)   | 11-inference   | `patchUninitializedTypes` infers from first assignment; top-level + block + destruct |
 | Type inference (inline-let)    | 11-inference   | Inline-let emits `let x = value;` everywhere; no patcher needed                      |
 | Strict mode                    | *(all files)*  | `strict: true` — `noImplicitAny`, full null checks, strict function types            |
@@ -146,34 +147,6 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | 2300, 2451 | Duplicate identifiers     | Other endpoint sits in the DTS header, or import line names the identifier only once | Body↔body collision, including ≥2 imports of the name |
 | 2307       | Cannot find module        | Path starts with `@rip-lang/` or ends with `.rip` (Rip resolves these)               | Any other import (npm packages, JS/TS files)          |
 | 2582, 2593 | Cannot find test/describe | File basename contains `test`/`spec`, or path includes `/test/` etc.                 | Non-test files (e.g. `app.rip`, `index.rip`)          |
-
-## Future Notes — Runtime Return Validation
-
-This captures design notes for the `Runtime return-type validation` gap in `10-validation`.
-
-### Problem
-
-`rip check` verifies declared return types at compile time, but runtime values are not validated. Example: `response.json()` in a function typed as `Promise<User>` can return invalid data and still run.
-
-### Why the `schema` keyword is a likely fit
-
-- First-class runtime validator API (`Schema.parse / .safe / .ok`)
-- Good support for boundary checks (named object types, nested types, arrays, required/optional)
-- Already built into the language, no extra dependency needed
-
-### Practical MVP (no grammar changes)
-
-1. **Compiler hook**: in `src/compiler.js`, detect functions with explicit return types (`User`, `Promise<User>`).
-2. **Return wrapper**: inject runtime helper around return values for eligible functions.
-3. **Validation contract**: use a global hook (for decoupling), e.g. `globalThis.__ripReturnValidator(typeName, value)`.
-4. **Schema adapter**: app code wires a named schema for each type it wants enforced, e.g. `__setReturnValidator('User', User.parse)`.
-5. **Tests**: extend `test/types/10-validation.rip` with pass/fail runtime cases for typed API payloads.
-
-### Important caveats
-
-- Start with **named type returns**; full arbitrary type expression validation is larger scope.
-- The schema runtime is good for boundary validation, but not a complete replacement for full TypeScript-level runtime type semantics.
-- Consider option-gating first rollout (e.g. compiler/runtime flag) to avoid breaking existing apps.
 
 ## TypeScript Companions
 

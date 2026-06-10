@@ -678,6 +678,30 @@ class __SchemaDef {
     return inst;
   }
 
+  // Coerce ISO date strings to Date for date/datetime fields. Over JSON a
+  // date is a string, so a value crossing the wire (or any \`.parse\` of
+  // external input) arrives as a string; this lets it validate and be stored
+  // as a Date. Runs on parse/safe only — hydrate gets canonical DB values.
+  _coerceDates(working) {
+    const norm = this._normalize();
+    // Only ISO-shaped strings (\`YYYY-MM-DD\` optionally followed by a time) are
+    // coerced. \`new Date(v)\` is otherwise lax — \`new Date("5")\` is a valid
+    // Date — which would let clearly-bad input slip past a date field as a
+    // bogus Date instead of failing validation. Array-of-date fields coerce
+    // element-wise.
+    const isoShaped = (s) => typeof s === 'string' && /^\\d{4}-\\d{2}-\\d{2}([T ].*)?$/.test(s);
+    const toDate = (s) => { const d = new Date(s); return Number.isNaN(d.getTime()) ? s : d; };
+    for (const [n, f] of norm.fields) {
+      if (f.typeName !== 'date' && f.typeName !== 'datetime') continue;
+      const v = working[n];
+      if (f.array && Array.isArray(v)) {
+        working[n] = v.map(el => isoShaped(el) ? toDate(el) : el);
+      } else if (isoShaped(v)) {
+        working[n] = toDate(v);
+      }
+    }
+  }
+
   _validateFields(data, collect) {
     const norm = this._normalize();
     const errors = collect ? [] : null;
@@ -832,6 +856,7 @@ class __SchemaDef {
     const working = { ...raw };
     const transformErrors = this._applyTransforms(raw, working);
     this._applyDefaults(working);
+    this._coerceDates(working);
     const errs = transformErrors.concat(this._validateFields(working, true));
     if (errs.length) throw new SchemaError(errs, this.name, this.kind);
     // @ensure runs AFTER per-field validation so predicates can
@@ -858,6 +883,7 @@ class __SchemaDef {
     const working = { ...raw };
     const transformErrors = this._applyTransforms(raw, working);
     this._applyDefaults(working);
+    this._coerceDates(working);
     const errs = transformErrors.concat(this._validateFields(working, true));
     if (errs.length) return {ok: false, value: null, errors: errs};
     const ensureErrs = this._applyEnsures(working);
@@ -952,8 +978,33 @@ function __schemaFlatten(keys) {
   return out;
 }
 
+// The full projectable column set of a schema: declared fields plus the
+// columns a :model manages implicitly — the \`id\` primary key, \`@timestamps\`
+// (createdAt/updatedAt), \`@softDelete\` (deletedAt), and \`@belongs_to\` FK
+// columns. Algebra (.pick/.omit/.partial/.required) operates over THIS set so
+// a client projection can include \`id\`/\`createdAt\` even though they aren't
+// declared fields. Non-model kinds have no implicit columns — declared only.
+function __schemaProjectableFields(def) {
+  const norm = def._normalize();
+  const out = new Map(norm.fields);
+  if (def.kind !== 'model') return out;
+  const col = (name, typeName, required) => {
+    if (!out.has(name)) out.set(name, {
+      name, required: !!required, unique: false, optional: !required,
+      typeName, literals: null, array: false, constraints: null, transform: null,
+    });
+  };
+  col(norm.primaryKey, 'integer', true);
+  if (norm.timestamps) { col('createdAt', 'datetime', true); col('updatedAt', 'datetime', true); }
+  if (norm.softDelete) col('deletedAt', 'datetime', false);
+  for (const [, rel] of norm.relations) {
+    if (rel.kind === 'belongsTo') col(__schemaCamel(rel.foreignKey), 'integer', !rel.optional);
+  }
+  return out;
+}
+
 function __schemaDerive(source, transform) {
-  const src = source._normalize().fields;
+  const src = __schemaProjectableFields(source);
   const derivedFields = transform(src);
   const entries = [];
   for (const [, f] of derivedFields) {
@@ -1822,17 +1873,17 @@ function __schemaFkName(m)    { return ''; }   // ditto
       }
     },
     parse(input) {
-      let EOF, TERROR, action, errStr, expected, k, len, lex, lexer, loc, locs, newState, p, parseTable, preErrorSymbol, r, recovering, rv, sharedState, state, stk, symbol, tokenLen, tokenLine, tokenLoc, tokenText, v, vals;
+      let EOF, TERROR, action, errStr, expected, len, lex, lexer, loc, locs, newState, p, parseTable, preErrorSymbol, r, recovering, rv, sharedState, state, stk, symbol, tokenLen, tokenLine, tokenLoc, tokenText, vals;
       [stk, vals, locs] = [[0], [null], []];
       [parseTable, tokenText, tokenLine, tokenLen, recovering] = [this.parseTable, "", 0, 0, 0];
       [TERROR, EOF] = [2, 1];
       lexer = Object.create(this.lexer);
       sharedState = { ctx: {} };
-      for (let k2 in this.ctx) {
-        if (!Object.hasOwn(this.ctx, k2))
+      for (let k in this.ctx) {
+        if (!Object.hasOwn(this.ctx, k))
           continue;
-        let v2 = this.ctx[k2];
-        sharedState.ctx[k2] = v2;
+        let v = this.ctx[k];
+        sharedState.ctx[k] = v;
       }
       lexer.setInput(input, sharedState.ctx);
       [sharedState.ctx.lexer, sharedState.ctx.parser] = [lexer, this];
@@ -2745,6 +2796,256 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
     }
     return null;
   }
+  var FOLD_ALGEBRA = new Set(["pick", "omit", "partial", "required", "extend"]);
+  function foldStr(n) {
+    return n && n.valueOf ? n.valueOf() : n;
+  }
+  function foldHasMixin(descriptor) {
+    return descriptor.entries.some((e) => e.tag === "directive" && e.name === "mixin");
+  }
+  function foldFkName(target) {
+    const snake = target.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase();
+    return (snake + "_id").replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+  }
+  function foldProjectableMap(descriptor) {
+    if (foldHasMixin(descriptor))
+      return null;
+    const map = new Map;
+    for (const e of descriptor.entries) {
+      if (e.tag === "field")
+        map.set(e.name, e);
+    }
+    if (descriptor.kind !== "model")
+      return map;
+    const synth = (name, typeName, required) => {
+      if (!map.has(name))
+        map.set(name, { tag: "field", name, modifiers: required ? ["!"] : ["?"], typeName, array: false });
+    };
+    let timestamps = false, softDelete = false;
+    const fks = [];
+    for (const e of descriptor.entries) {
+      if (e.tag !== "directive")
+        continue;
+      if (e.name === "timestamps")
+        timestamps = true;
+      else if (e.name === "softDelete")
+        softDelete = true;
+      else if (e.name === "belongs_to") {
+        const t = e.args && e.args[0] && e.args[0].target;
+        if (t)
+          fks.push({ fk: foldFkName(t), required: e.args[0].optional !== true });
+      }
+    }
+    synth("id", "integer", true);
+    if (timestamps) {
+      synth("createdAt", "datetime", true);
+      synth("updatedAt", "datetime", true);
+    }
+    if (softDelete)
+      synth("deletedAt", "datetime", false);
+    for (const { fk, required } of fks)
+      synth(fk, "integer", required);
+    return map;
+  }
+  function foldDeclaredMap(descriptor) {
+    if (foldHasMixin(descriptor))
+      return null;
+    const map = new Map;
+    for (const e of descriptor.entries) {
+      if (e.tag === "field")
+        map.set(e.name, e);
+    }
+    return map;
+  }
+  function foldRemark(entry, mode) {
+    let mods = entry.modifiers.filter((m) => m !== (mode === "partial" ? "!" : "?"));
+    const want = mode === "partial" ? "?" : "!";
+    if (!mods.includes(want))
+      mods = [...mods, want];
+    return { ...entry, modifiers: mods };
+  }
+  function foldApplyOp(map, op, byName) {
+    switch (op.method) {
+      case "pick": {
+        const out = new Map;
+        for (const k of op.keys) {
+          if (!map.has(k))
+            return null;
+          out.set(k, map.get(k));
+        }
+        return out;
+      }
+      case "omit": {
+        const drop = new Set(op.keys);
+        const out = new Map;
+        for (const [k, v] of map)
+          if (!drop.has(k))
+            out.set(k, v);
+        return out;
+      }
+      case "partial": {
+        const out = new Map;
+        for (const [k, v] of map)
+          out.set(k, foldRemark(v, "partial"));
+        return out;
+      }
+      case "required": {
+        const req = new Set(op.keys);
+        const out = new Map;
+        for (const [k, v] of map)
+          out.set(k, req.has(k) ? foldRemark(v, "required") : v);
+        return out;
+      }
+      case "extend": {
+        const other = byName.get(op.otherName);
+        if (!other)
+          return null;
+        const otherMap = foldDeclaredMap(other);
+        if (!otherMap)
+          return null;
+        const out = new Map(map);
+        for (const [k, v] of otherMap) {
+          if (out.has(k))
+            return null;
+          out.set(k, v);
+        }
+        return out;
+      }
+      default:
+        return null;
+    }
+  }
+  function foldProjectionDescriptor(baseDescriptor, ops, byName) {
+    let map = foldProjectableMap(baseDescriptor);
+    if (!map)
+      return null;
+    for (const op of ops) {
+      map = foldApplyOp(map, op, byName);
+      if (!map)
+        return null;
+    }
+    return { kind: "shape", entries: [...map.values()] };
+  }
+  function foldParseChain(rhs) {
+    const ops = [];
+    let node = rhs;
+    while (true) {
+      if (!Array.isArray(node))
+        return null;
+      const callee = node[0];
+      if (!Array.isArray(callee))
+        return null;
+      if (foldStr(callee[0]) !== ".")
+        return null;
+      const method = foldStr(callee[2]);
+      if (!FOLD_ALGEBRA.has(method))
+        return null;
+      const argNodes = node.slice(1);
+      let op;
+      if (method === "partial") {
+        if (argNodes.length)
+          return null;
+        op = { method };
+      } else if (method === "extend") {
+        if (argNodes.length !== 1)
+          return null;
+        const a = argNodes[0];
+        if (Array.isArray(a))
+          return null;
+        const name = foldStr(a);
+        if (typeof name !== "string" || !/^[A-Za-z_$][\w$]*$/.test(name))
+          return null;
+        op = { method, otherName: name };
+      } else {
+        const keys = foldLiteralKeys(argNodes);
+        if (!keys || !keys.length)
+          return null;
+        op = { method, keys };
+      }
+      ops.unshift(op);
+      const obj = callee[1];
+      if (Array.isArray(obj)) {
+        node = obj;
+        continue;
+      }
+      const base = foldStr(obj);
+      if (typeof base !== "string")
+        return null;
+      return { base, ops };
+    }
+  }
+  function foldLiteralKeys(argNodes) {
+    const keys = [];
+    for (const a of argNodes) {
+      if (Array.isArray(a)) {
+        if (foldStr(a[0]) !== "array")
+          return null;
+        for (let i = 1;i < a.length; i++) {
+          const k = foldParseStrLit(a[i]);
+          if (k == null)
+            return null;
+          keys.push(k);
+        }
+      } else {
+        const k = foldParseStrLit(a);
+        if (k == null)
+          return null;
+        keys.push(k);
+      }
+    }
+    return keys;
+  }
+  function foldParseStrLit(node) {
+    const v = foldStr(node);
+    if (typeof v !== "string" || v.length < 2)
+      return null;
+    const q = v[0];
+    if (q !== '"' && q !== "'" || v[v.length - 1] !== q)
+      return null;
+    const inner = v.slice(1, -1);
+    if (/[\\#]/.test(inner))
+      return null;
+    return inner;
+  }
+  function foldDerivedSchemas(sexpr) {
+    if (!Array.isArray(sexpr))
+      return;
+    const head = foldStr(sexpr[0]);
+    const stmts = head === "program" || head === "block" ? sexpr.slice(1) : [sexpr];
+    const byName = new Map;
+    for (const stmt of stmts) {
+      if (!Array.isArray(stmt))
+        continue;
+      let assign = stmt;
+      if (foldStr(stmt[0]) === "export" && Array.isArray(stmt[1]))
+        assign = stmt[1];
+      if (foldStr(assign[0]) !== "=" || !Array.isArray(assign[2]))
+        continue;
+      const name = foldStr(assign[1]);
+      if (typeof name !== "string")
+        continue;
+      if (foldStr(assign[2][0]) === "schema") {
+        const existing = readDescriptor(assign[2][1]);
+        if (existing)
+          byName.set(name, existing);
+        continue;
+      }
+      const chain = foldParseChain(assign[2]);
+      if (!chain)
+        continue;
+      const baseDesc = byName.get(chain.base);
+      if (!baseDesc)
+        continue;
+      const folded = foldProjectionDescriptor(baseDesc, chain.ops, byName);
+      if (!folded)
+        continue;
+      const bridge = new String("shape");
+      bridge.descriptor = folded;
+      bridge.data = { descriptor: folded };
+      assign[2] = ["schema", bridge];
+      byName.set(name, folded);
+    }
+  }
   function entryLiteral(emitter, e) {
     switch (e.tag) {
       case "field": {
@@ -2812,15 +3113,34 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
     if (!bodySexpr) {
       return `(function() {})`;
     }
-    let arrowSexpr = ["->", [], bodySexpr];
-    return emitter.emit(arrowSexpr, "value");
+    let params = [];
+    if (emitter.options.inlineTypes && emitter._schemaName) {
+      let thisParam = new String("this");
+      thisParam.type = emitter._schemaName;
+      params.push(thisParam);
+    }
+    let arrowSexpr = ["->", params, bodySexpr];
+    let fnCode = emitter.emit(arrowSexpr, "value");
+    if (emitter.options.inlineTypes && emitter._schemaName && (entry.tag === "computed" || entry.tag === "derived")) {
+      if (!emitter._schemaBehavior)
+        emitter._schemaBehavior = new Map;
+      let list = emitter._schemaBehavior.get(emitter._schemaName);
+      if (!list) {
+        list = [];
+        emitter._schemaBehavior.set(emitter._schemaName, list);
+      }
+      list.push({ field: entry.name, tag: entry.tag, fnExpr: fnCode });
+    }
+    return fnCode;
   }
   function compileTransformFn(emitter, bodyTokens) {
     let bodySexpr = parseBodyTokens(bodyTokens);
     if (!bodySexpr) {
       return `(function() { return undefined; })`;
     }
-    let arrowSexpr = ["->", [], bodySexpr];
+    let itParam = new String("it");
+    itParam.type = "any";
+    let arrowSexpr = ["->", [itParam], bodySexpr];
     return emitter.emit(arrowSexpr, "value");
   }
   function compileEnsureFn(emitter, entry) {
@@ -9872,6 +10192,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
       this.functionVars = new Map;
       this.helpers = new Set;
       this.scopeStack = [];
+      if (this.options.foldProjections)
+        foldDerivedSchemas(sexpr);
       this.collectProgramVariables(sexpr);
       let code = this.emit(sexpr);
       if (this.sourceMap)
@@ -14045,6 +14367,7 @@ if (typeof globalThis !== 'undefined') {
         reactiveVars: this.options.reactiveVars,
         inlineTypes: this.options.inlineTypes,
         schemaMode: this.options.schemaMode,
+        foldProjections: this.options.foldProjections,
         sourceMap
       });
       let code = generator.compile(sexpr);
@@ -14068,7 +14391,7 @@ if (typeof globalThis !== 'undefined') {
 //# sourceMappingURL=${this.options.filename}.js.map`;
       }
       if (typeTokens && _typesEmitter) {
-        dts = _typesEmitter(typeTokens, sexpr, source);
+        dts = _typesEmitter(typeTokens, sexpr, source, generator._schemaBehavior);
       }
       return { tokens, sexpr, code, dts, map, reverseMap, data: dataSection, reactiveVars: generator.reactiveVars };
     }
@@ -14117,7 +14440,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.16.1";
-  var BUILD_DATE = "2026-06-05@18:16:05GMT";
+  var BUILD_DATE = "2026-06-10@17:58:17GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -15961,7 +16284,7 @@ ${indented}`);
             });
           }
           if (components) {
-            ripImportRe = /^(\s*import\s+(?:(.*?)\s+from\s+)?['"])([^'"]*\.rip)(['"];?\s*)$/gm;
+            ripImportRe = /^(\s*(?:import|export)\s+(?:(.*?)\s+from\s+)?['"])([^'"]*\.rip)(['"];?\s*)$/gm;
             matches = Array.from(js.matchAll(ripImportRe));
             for (let _i = matches.length - 1;_i >= 0; _i--) {
               let m = matches[_i];
@@ -15994,7 +16317,7 @@ ${indented}`);
               }
             }
           }
-          anyImportRe = /^\s*import\s+(?:(.*?)\s+from\s+)?['"][^'"]*['"];?\s*$/gm;
+          anyImportRe = /^\s*(?:import|export)\s+(?:(.*?)\s+from\s+)?['"][^'"]*['"];?\s*$/gm;
           for (let m of js.matchAll(anyImportRe)) {
             for (let n of extractImportedNames(m[1])) {
               importedNames.add(n);

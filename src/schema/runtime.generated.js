@@ -633,6 +633,30 @@ class __SchemaDef {
     return inst;
   }
 
+  // Coerce ISO date strings to Date for date/datetime fields. Over JSON a
+  // date is a string, so a value crossing the wire (or any \`.parse\` of
+  // external input) arrives as a string; this lets it validate and be stored
+  // as a Date. Runs on parse/safe only — hydrate gets canonical DB values.
+  _coerceDates(working) {
+    const norm = this._normalize();
+    // Only ISO-shaped strings (\`YYYY-MM-DD\` optionally followed by a time) are
+    // coerced. \`new Date(v)\` is otherwise lax — \`new Date("5")\` is a valid
+    // Date — which would let clearly-bad input slip past a date field as a
+    // bogus Date instead of failing validation. Array-of-date fields coerce
+    // element-wise.
+    const isoShaped = (s) => typeof s === 'string' && /^\\d{4}-\\d{2}-\\d{2}([T ].*)?$/.test(s);
+    const toDate = (s) => { const d = new Date(s); return Number.isNaN(d.getTime()) ? s : d; };
+    for (const [n, f] of norm.fields) {
+      if (f.typeName !== 'date' && f.typeName !== 'datetime') continue;
+      const v = working[n];
+      if (f.array && Array.isArray(v)) {
+        working[n] = v.map(el => isoShaped(el) ? toDate(el) : el);
+      } else if (isoShaped(v)) {
+        working[n] = toDate(v);
+      }
+    }
+  }
+
   _validateFields(data, collect) {
     const norm = this._normalize();
     const errors = collect ? [] : null;
@@ -787,6 +811,7 @@ class __SchemaDef {
     const working = { ...raw };
     const transformErrors = this._applyTransforms(raw, working);
     this._applyDefaults(working);
+    this._coerceDates(working);
     const errs = transformErrors.concat(this._validateFields(working, true));
     if (errs.length) throw new SchemaError(errs, this.name, this.kind);
     // @ensure runs AFTER per-field validation so predicates can
@@ -813,6 +838,7 @@ class __SchemaDef {
     const working = { ...raw };
     const transformErrors = this._applyTransforms(raw, working);
     this._applyDefaults(working);
+    this._coerceDates(working);
     const errs = transformErrors.concat(this._validateFields(working, true));
     if (errs.length) return {ok: false, value: null, errors: errs};
     const ensureErrs = this._applyEnsures(working);
@@ -907,8 +933,33 @@ function __schemaFlatten(keys) {
   return out;
 }
 
+// The full projectable column set of a schema: declared fields plus the
+// columns a :model manages implicitly — the \`id\` primary key, \`@timestamps\`
+// (createdAt/updatedAt), \`@softDelete\` (deletedAt), and \`@belongs_to\` FK
+// columns. Algebra (.pick/.omit/.partial/.required) operates over THIS set so
+// a client projection can include \`id\`/\`createdAt\` even though they aren't
+// declared fields. Non-model kinds have no implicit columns — declared only.
+function __schemaProjectableFields(def) {
+  const norm = def._normalize();
+  const out = new Map(norm.fields);
+  if (def.kind !== 'model') return out;
+  const col = (name, typeName, required) => {
+    if (!out.has(name)) out.set(name, {
+      name, required: !!required, unique: false, optional: !required,
+      typeName, literals: null, array: false, constraints: null, transform: null,
+    });
+  };
+  col(norm.primaryKey, 'integer', true);
+  if (norm.timestamps) { col('createdAt', 'datetime', true); col('updatedAt', 'datetime', true); }
+  if (norm.softDelete) col('deletedAt', 'datetime', false);
+  for (const [, rel] of norm.relations) {
+    if (rel.kind === 'belongsTo') col(__schemaCamel(rel.foreignKey), 'integer', !rel.optional);
+  }
+  return out;
+}
+
 function __schemaDerive(source, transform) {
-  const src = source._normalize().fields;
+  const src = __schemaProjectableFields(source);
   const derivedFields = transform(src);
   const entries = [];
   for (const [, f] of derivedFields) {

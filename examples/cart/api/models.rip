@@ -1,0 +1,35 @@
+export User = schema :model
+  firstName! string, 1..
+  lastName!  string, 1..
+  email!#    email
+  phone?     string
+  @timestamps
+  @has_many Order
+
+export Product = schema :shape
+  id!    integer
+  name!  string, 1..
+  image! string
+  price! number, 0..
+
+export products:: Product[] = [
+  { id: 1, name: 'Rubber Duck', image: '🐥', price: 3.99  }
+  { id: 2, name: 'Notebook',    image: '📓', price: 9.99  }
+  { id: 3, name: 'Desk Plant',  image: '🌵', price: 14.99 }
+  { id: 4, name: 'Coffee Mug',  image: '☕',  price: 11.99 }
+  { id: 5, name: 'Stress Ball', image: '🏀', price: 6.99  }
+  { id: 6, name: 'Headphones',  image: '🎧', price: 19.99 }
+]
+
+export OrderItem = schema :shape
+  productId! integer
+  quantity!  integer, 1..
+
+export Order = schema :model
+  items! OrderItem[]
+  total! number, 0..
+  @timestamps
+  @belongs_to User
+
+export UserPublic  = User.pick("id", "firstName", "lastName", "email", "phone")
+export OrderPublic = Order.pick("id", "items", "total", "createdAt")

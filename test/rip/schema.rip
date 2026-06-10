@@ -983,6 +983,22 @@ test "transform: coerces wire string to Date via constructor", '''
   out.shippedAt instanceof Date
   ''', true
 
+# Date coercion only accepts ISO-shaped strings — `new Date(v)` is otherwise
+# lax (`new Date("5")` is a valid Date), which would let junk pass a date field.
+test "date coercion: ISO string coerces to Date; non-ISO junk is rejected", '''
+  E = schema :shape
+    at! datetime
+  [E.safe({at: "2024-03-15T10:30:00Z"}).ok, E.parse({at: "2024-03-15T10:30:00Z"}).at instanceof Date, E.safe({at: "5"}).ok, E.safe({at: "nope"}).ok]
+  ''', [true, true, false, false]
+
+# Array-of-date fields coerce element-wise.
+test "date coercion: array-of-date coerces each ISO element", '''
+  E = schema :shape
+    days! date[]
+  out = E.parse({days: ["2024-01-01", "2024-02-02"]})
+  [out.days[0] instanceof Date, out.days[1] instanceof Date]
+  ''', [true, true]
+
 test "transform: combined with default for missing input", '''
   X = schema
     role? ["guest"], -> it.Role
@@ -1882,8 +1898,8 @@ INTRINSICS = '''
   interface SchemaIssue { field: string; error: string; message: string; }
   type SchemaSafeResult<T> = { ok: true; value: T; errors: null } | { ok: false; value: null; errors: SchemaIssue[] };
   interface Schema<Out, In = unknown> {
-    parse(data: In): Out;
-    safe(data: In): SchemaSafeResult<Out>;
+    parse(data: unknown): Out;
+    safe(data: unknown): SchemaSafeResult<Out>;
     ok(data: unknown): boolean;
     pick<K extends keyof In>(...keys: K[]): Schema<Pick<In, K>, Pick<In, K>>;
     omit<K extends keyof In>(...keys: K[]): Schema<Omit<In, K>, Omit<In, K>>;
@@ -1899,26 +1915,26 @@ INTRINSICS = '''
     offset(n: number): SchemaQuery<T>;
     order(spec: string): SchemaQuery<T>;
   }
-  interface ModelSchema<Instance, Data = unknown> extends Schema<Instance, Data> {
-    find(id: unknown): Promise<Instance | null>;
-    findMany(ids: unknown[]): Promise<Instance[]>;
+  interface ModelSchema<Instance, Data = unknown, Id = number, Create = Partial<Data>> extends Schema<Instance, Data> {
+    find(id: Id): Promise<Instance | null>;
+    findMany(ids: Id[]): Promise<Instance[]>;
     where(cond: Record<string, unknown> | string, ...params: unknown[]): SchemaQuery<Instance>;
     all(limit?: number): Promise<Instance[]>;
     first(): Promise<Instance | null>;
     count(cond?: Record<string, unknown>): Promise<number>;
-    create(data: Partial<Data>): Promise<Instance>;
+    create(data: Create): Promise<Instance>;
     toSQL(options?: { dropFirst?: boolean; header?: string; idStart?: number }): string;
   }
 
   '''
 
-type ":input emits Schema<Value, Value>", '''
+type ":input emits a bare value type", '''
   SignupInput = schema
     email! email
     password! string
   ''', INTRINSICS + "\n" + '''
-  type SignupInputValue = { email: string; password: string };
-  declare const SignupInput: Schema<SignupInputValue, SignupInputValue>;
+  type SignupInput = { email: string; password: string };
+  declare const SignupInput: Schema<SignupInput, SignupInput>;
   '''
 
 type ":shape emits Data + Instance types", '''
@@ -1929,8 +1945,34 @@ type ":shape emits Data + Instance types", '''
     normalize: -> @
   ''', INTRINSICS + "\n" + '''
   type AddressData = { street: string; city: string };
-  type AddressInstance = AddressData & { readonly full: unknown; normalize: (...args: any[]) => unknown };
-  declare const Address: Schema<AddressInstance, AddressData>;
+  type Address = AddressData & { readonly full: unknown; normalize: (...args: any[]) => unknown };
+  declare const Address: Schema<Address, AddressData>;
+  '''
+
+# `!>` eager-derived is an own enumerable property — part of the instance
+# (Out) and writable (not `readonly` like a `~>` getter) — but not an
+# input/projectable field, so it sits on the bare name, never in `…Data`.
+type ":shape eager-derived (!>) attaches to instance, not Data", '''
+  Order = schema :shape
+    total! number
+    label: !> "x"
+    view:  ~> "y"
+  ''', INTRINSICS + "\n" + '''
+  type OrderData = { total: number };
+  type Order = OrderData & { label: unknown; readonly view: unknown };
+  declare const Order: Schema<Order, OrderData>;
+  '''
+
+# `:input` permits `!>` (its one bit of behavior), so a derived field there
+# also splits the input shape (In) from the instance (Out).
+type ":input eager-derived (!>) splits Data from the bare instance", '''
+  Tag = schema
+    name! string
+    slug: !> "s"
+  ''', INTRINSICS + "\n" + '''
+  type TagData = { name: string };
+  type Tag = TagData & { slug: unknown };
+  declare const Tag: Schema<Tag, TagData>;
   '''
 
 type ":enum emits union + const with predicate ok()", '''
@@ -1958,8 +2000,8 @@ type "optional fields marked with ?", '''
     bio?   text
     age    integer
   ''', INTRINSICS + "\n" + '''
-  type UserValue = { name: string; bio?: string; age?: number };
-  declare const User: Schema<UserValue, UserValue>;
+  type User = { name: string; bio?: string; age?: number };
+  declare const User: Schema<User, User>;
   '''
 
 type ":model emits ModelSchema<Instance, Data> with relation accessors", '''
@@ -1969,12 +2011,14 @@ type ":model emits ModelSchema<Instance, Data> with relation accessors", '''
     name! string
     @belongs_to Org
   ''', INTRINSICS + "\n" + '''
-  type OrgData = { name: string };
-  type OrgInstance = OrgData & { save(): Promise<OrgInstance>; destroy(): Promise<OrgInstance>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): OrgData };
-  declare const Org: ModelSchema<OrgInstance, OrgData>;
-  type UserData = { name: string };
-  type UserInstance = UserData & { org(): Promise<OrgInstance | null>; save(): Promise<UserInstance>; destroy(): Promise<UserInstance>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): UserData };
-  declare const User: ModelSchema<UserInstance, UserData>;
+  type OrgData = { name: string } & { id: number };
+  type OrgCreate = { name: string };
+  type Org = OrgData & { save(): Promise<Org>; destroy(): Promise<Org>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): OrgData };
+  declare const Org: ModelSchema<Org, OrgData, number, OrgCreate>;
+  type UserData = { name: string } & { id: number; orgId: number };
+  type UserCreate = { name: string; orgId: number };
+  type User = UserData & { org(): Promise<Org | null>; save(): Promise<User>; destroy(): Promise<User>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): UserData };
+  declare const User: ModelSchema<User, UserData, number, UserCreate>;
   '''
 
 type ":mixin emits field-type alias; host Data intersects mixins", '''
@@ -1986,9 +2030,10 @@ type ":mixin emits field-type alias; host Data intersects mixins", '''
     updatedAt! datetime
   ''', INTRINSICS + "\n" + '''
   type Timestamps = { createdAt: Date; updatedAt: Date };
-  type UserData = { name: string } & Timestamps;
-  type UserInstance = UserData & { save(): Promise<UserInstance>; destroy(): Promise<UserInstance>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): UserData };
-  declare const User: ModelSchema<UserInstance, UserData>;
+  type UserData = { name: string } & Timestamps & { id: number };
+  type UserCreate = { name: string } & Timestamps;
+  type User = UserData & { save(): Promise<User>; destroy(): Promise<User>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): UserData };
+  declare const User: ModelSchema<User, UserData, number, UserCreate>;
   '''
 
 type "cross-file relation target degrades to unknown", '''
@@ -1997,9 +2042,57 @@ type "cross-file relation target degrades to unknown", '''
     @belongs_to Organization
     @has_many Order
   ''', INTRINSICS + "\n" + '''
-  type UserData = { name: string };
-  type UserInstance = UserData & { organization(): Promise<unknown>; orders(): Promise<unknown[]>; save(): Promise<UserInstance>; destroy(): Promise<UserInstance>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): UserData };
-  declare const User: ModelSchema<UserInstance, UserData>;
+  type UserData = { name: string } & { id: number; organizationId: number };
+  type UserCreate = { name: string; organizationId: number };
+  type User = UserData & { organization(): Promise<unknown>; orders(): Promise<unknown[]>; save(): Promise<User>; destroy(): Promise<User>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): UserData };
+  declare const User: ModelSchema<User, UserData, number, UserCreate>;
+  '''
+
+# A derived schema (`Name = Base.pick(...)`) has no `schema` body, so nothing
+# declares a bare `Name` type — yet projections are exactly where one is needed
+# (annotate `u:: UserView`, re-export under a clean name). Emit a bare type that
+# reads the algebra's result back off the value's own `parse`, reusing the
+# Schema<Out, In> interface inference instead of re-deriving Pick/Omit here.
+type "derived schema emits a bare projection type", '''
+  User = schema :model
+    firstName! string
+    lastName!  string
+    @timestamps
+  UserView = User.pick("id", "firstName")
+  ''', INTRINSICS + "\n" + '''
+  type UserData = { firstName: string; lastName: string } & { id: number; createdAt: Date; updatedAt: Date };
+  type UserCreate = { firstName: string; lastName: string };
+  type User = UserData & { save(): Promise<User>; destroy(): Promise<User>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): UserData };
+  declare const User: ModelSchema<User, UserData, number, UserCreate>;
+  type UserView = ReturnType<(typeof UserView)['parse']>;
+  '''
+
+# Chained algebra still yields one bare type, and an exported projection carries
+# the `export` through — the client imports it under its clean name.
+type "chained + exported derived schema emits one bare type each", '''
+  User = schema :model
+    firstName! string
+    lastName!  string
+    @timestamps
+  export UserView = User.pick("id", "firstName", "lastName").omit("lastName")
+  ''', INTRINSICS + "\n" + '''
+  type UserData = { firstName: string; lastName: string } & { id: number; createdAt: Date; updatedAt: Date };
+  type UserCreate = { firstName: string; lastName: string };
+  type User = UserData & { save(): Promise<User>; destroy(): Promise<User>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): UserData };
+  declare const User: ModelSchema<User, UserData, number, UserCreate>;
+  export type UserView = ReturnType<(typeof UserView)['parse']>;
+  '''
+
+# A `.partial()`/`.pick()`-shaped call on a NON-schema must not be mistaken for
+# a projection — emitting a schema type for it would make its `parse` lookup
+# error. Only a base that resolves to a local schema gets a derived type.
+type "non-schema algebra-shaped call is not given a schema type", '''
+  User = schema :input
+    name! string
+  config = loader.partial()
+  ''', INTRINSICS + "\n" + '''
+  type User = { name: string };
+  declare const User: Schema<User, User>;
   '''
 
 # ==============================================================================
@@ -3117,7 +3210,7 @@ test ".omit returns a :shape without named fields", '''
     password! string
   Safe = User.omit("password")
   [Safe.kind, [...Safe._normalize().fields.keys()]]
-''', ["shape", ["name", "email"]]
+''', ["shape", ["name", "email", "id"]]
 
 test ".partial flips all fields to optional", '''
   X = schema
@@ -3197,10 +3290,59 @@ test "algebra drops behavior (D13)", '''
   [typeof a.full, typeof a.normalize, typeof b.full, typeof b.normalize]
 ''', ["string", "function", "undefined", "undefined"]
 
-type "exported schema emits export const", '''
+# ==============================================================================
+# Compile-time projection folding (opt-in: foldProjections)
+# ==============================================================================
+#
+# Folding statically evaluates a derived schema's algebra against the source's
+# descriptor and rewrites the assignment to a self-contained `__schema({...})`
+# literal — no reference to the source. That's what lets a projection cross the
+# client bundle boundary without dragging the model along. It's OFF by default
+# (the runtime algebra path is unchanged), so these tests pass foldProjections.
+
+# A derived schema is a plain runtime call by default — the source stays coupled.
+code "fold off by default: derived schema stays a runtime call", '''
+  User = schema :model
+    name! string
+    @timestamps
+  V = User.pick("id", "name")
+  ''', '''
+  let User, V;
+  User = __schema({kind: "model", name: "User", entries: [{tag: "field", name: "name", modifiers: ["!"], typeName: "string", array: false}, {tag: "directive", name: "timestamps"}]});
+  V = User.pick("id", "name");
+  ''', opts
+
+# With folding on, the same projection becomes a source-free shape literal. The
+# implicit `id` (a :model column) is projectable even though it isn't declared.
+code "fold: pick emits a self-contained shape literal", '''
+  User = schema :model
+    name! string
+    @timestamps
+  V = User.pick("id", "name")
+  ''', '''
+  let User, V;
+  User = __schema({kind: "model", name: "User", entries: [{tag: "field", name: "name", modifiers: ["!"], typeName: "string", array: false}, {tag: "directive", name: "timestamps"}]});
+  V = __schema({kind: "shape", name: "V", entries: [{tag: "field", name: "id", modifiers: ["!"], typeName: "integer", array: false}, {tag: "field", name: "name", modifiers: ["!"], typeName: "string", array: false}]});
+  ''', { ...opts, foldProjections: true }
+
+# Folding is conservative: a dynamic (non-literal) key can't be statically
+# evaluated, so it bails to the runtime call rather than guess.
+code "fold: bails to the runtime call on dynamic keys", '''
+  User = schema :model
+    name! string
+  k = "name"
+  V = User.pick(k)
+  ''', '''
+  let User, V, k;
+  User = __schema({kind: "model", name: "User", entries: [{tag: "field", name: "name", modifiers: ["!"], typeName: "string", array: false}]});
+  k = "name";
+  V = User.pick(k);
+  ''', { ...opts, foldProjections: true }
+
+type "exported schema emits export declare const", '''
   export Foo = schema :input
     a! string
   ''', INTRINSICS + "\n" + '''
-  export type FooValue = { a: string };
-  export const Foo: Schema<FooValue, FooValue>;
+  export type Foo = { a: string };
+  export declare const Foo: Schema<Foo, Foo>;
   '''

@@ -1,69 +1,67 @@
+import './db.rip'
 import { get, post, patch, read } from '@rip-lang/server'
-import { Product, Order, User } from '../types.rip'
+import { User, Order, OrderItem, UserPublic, OrderPublic, products } from './models.rip'
 
-def errorResponse(errors:: { form?: string, field?: Partial<Record<string, string>> })
-  return Response.json({ errors }, { status: 400 })
+# Response conventions: a bare `return value` becomes 200 JSON; `@json(value,
+# status)` sets a custom status (e.g. 201 Created); errors go through
+# `errorResponse` — an `{ errors }` envelope with a 4xx status.
+def errorResponse(errors:: { form?: string, field?: Partial<Record<string, string>> }, status = 400)
+  return Response.json({ errors }, { status })
 
-products:: Product[] = [
-  { id: 1, name: 'Rubber Duck',  image: '🐥', price: 3.99  }
-  { id: 2, name: 'Notebook',     image: '📓', price: 9.99  }
-  { id: 3, name: 'Desk Plant',   image: '🌵', price: 14.99 }
-  { id: 4, name: 'Coffee Mug',   image: '☕', price: 11.99 }
-  { id: 5, name: 'Stress Ball',  image: '🏀', price: 6.99  }
-  { id: 6, name: 'Headphones',   image: '🎧', price: 19.99 }
-]
-
-orders:: Order[] = []
-nextOrderId = 1
-
-user:: User =
-  firstName: 'John'
-  lastName: 'Smith'
-  email: 'john@example.com'
-  phone: '(123) 456-7890'
+# No auth in this demo — the "current user" is always the seeded user (id 1).
+currentUser = () -> User.find!(1)
 
 get '/api/products' -> products
 
-get '/api/orders' -> [...orders].reverse()
+get '/api/orders' ->
+  user = currentUser!()
+  if not user then return []
+  return user.orders!().reverse().map((o) -> OrderPublic.parse(o))
 
 post '/api/orders' ->
-  items = read 'items', 'array'
+  raw = read 'items', 'array'
 
-  if not items?.length
-    return errorResponse { form: 'Invalid order data' }
+  if not raw?.length then return errorResponse({ form: 'Invalid order data' })
 
   total = 0
-  for item in items
-    if item.productId < 1 or item.quantity < 1
+  items:: OrderItem[] = []
+  for line in raw
+    result = OrderItem.safe(line)
+    if not result.ok
       return errorResponse({ form: 'Invalid order data' })
+    item = result.value
     product = products.find((p) -> p.id is item.productId)
     if not product
       return errorResponse({ form: "Product #{item.productId} not found" })
     total += product.price * item.quantity
+    items.push(item)
 
-  order:: Order =
-    id:        nextOrderId++
-    items:     items
-    total:     Math.round(total * 100) / 100
-    createdAt: new Date().toISOString()
+  user = currentUser!()
+  if not user then return errorResponse({ form: 'No user found' }, 404)
 
-  orders.push(order)
+  order = Order.create!({ userId: user.id, items, total: Math.round(total * 100) / 100 })
+  return @json(OrderPublic.parse(order), 201)
 
-  return @json(order, 201)
-
-get '/api/user' -> user
+get '/api/user' ->
+  user = currentUser!()
+  if not user then return errorResponse({ form: 'No user found' }, 404)
+  return UserPublic.parse(user)
 
 patch '/api/user' ->
   firstName = read 'firstName', 'name'
   lastName  = read 'lastName',  'name'
   phone     = read 'phone',     'text'
 
-  field:: Partial<Record<keyof User, string>> = {}
+  field:: Partial<Record<keyof UserPublic, string>> = {}
   if not firstName then field.firstName = 'Enter a first name'
   if not lastName then field.lastName = 'Enter a last name'
 
   if Object.keys(field).length then return errorResponse({ field })
 
-  Object.assign(user, { firstName, lastName, phone })
+  user = currentUser!()
+  if not user then return errorResponse({ form: 'No user found' }, 404)
 
-  return @json(user)
+  Object.assign(user, { firstName, lastName, phone })
+  user.save!()
+
+  return UserPublic.parse(user)

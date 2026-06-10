@@ -54,8 +54,8 @@ export const SCHEMA_INTRINSIC_DECLS = [
   // algebra methods don't autocomplete — which is the right behavior
   // for :input schemas where the input shape isn't statically known.
   'interface Schema<Out, In = unknown> {',
-  '  parse(data: In): Out;',
-  '  safe(data: In): SchemaSafeResult<Out>;',
+  '  parse(data: unknown): Out;',
+  '  safe(data: unknown): SchemaSafeResult<Out>;',
   '  ok(data: unknown): boolean;',
   '  pick<K extends keyof In>(...keys: K[]): Schema<Pick<In, K>, Pick<In, K>>;',
   '  omit<K extends keyof In>(...keys: K[]): Schema<Omit<In, K>, Omit<In, K>>;',
@@ -74,15 +74,18 @@ export const SCHEMA_INTRINSIC_DECLS = [
   '}',
   // ModelSchema extends the base schema surface with ORM methods. Algebra
   // over `Data` (not `Instance`) so derived shapes reflect runtime
-  // behavior-dropping semantics.
-  'interface ModelSchema<Instance, Data = unknown> extends Schema<Instance, Data> {',
-  '  find(id: unknown): Promise<Instance | null>;',
-  '  findMany(ids: unknown[]): Promise<Instance[]>;',
+  // behavior-dropping semantics. `Id` is the primary-key type (always `number`
+  // today — `INTEGER PRIMARY KEY`); `Create` is the per-model create-input
+  // shape (required fields required, auto-managed columns omitted) that codegen
+  // threads in. Both default sanely so a bare `ModelSchema<I, D>` still works.
+  'interface ModelSchema<Instance, Data = unknown, Id = number, Create = Partial<Data>> extends Schema<Instance, Data> {',
+  '  find(id: Id): Promise<Instance | null>;',
+  '  findMany(ids: Id[]): Promise<Instance[]>;',
   '  where(cond: Record<string, unknown> | string, ...params: unknown[]): SchemaQuery<Instance>;',
   '  all(limit?: number): Promise<Instance[]>;',
   '  first(): Promise<Instance | null>;',
   '  count(cond?: Record<string, unknown>): Promise<number>;',
-  '  create(data: Partial<Data>): Promise<Instance>;',
+  '  create(data: Create): Promise<Instance>;',
   '  toSQL(options?: { dropFirst?: boolean; header?: string; idStart?: number }): string;',
   '}',
 ];
@@ -131,7 +134,7 @@ function descriptorFromSchemaNode(schemaNode) {
 // reference them in `& Timestamps`-style intersections. Within a group,
 // source order is preserved. Returns true when at least one schema was
 // found (drives intrinsic preamble injection).
-export function emitSchemaTypes(sexpr, lines) {
+export function emitSchemaTypes(sexpr, lines, schemaBehavior = null) {
   const collected = [];
   collectSchemas(sexpr, collected);
   if (!collected.length) return false;
@@ -143,12 +146,43 @@ export function emitSchemaTypes(sexpr, lines) {
 
   // Mixin types first so type aliases down-file can reference them.
   for (const c of collected) {
-    if (c.descriptor.kind === 'mixin') emitOneSchemaType(c, byName, known, lines);
+    if (c.descriptor?.kind === 'mixin') emitOneSchemaType(c, byName, known, lines, schemaBehavior);
   }
   for (const c of collected) {
-    if (c.descriptor.kind !== 'mixin') emitOneSchemaType(c, byName, known, lines);
+    if (c.descriptor?.kind !== 'mixin') emitOneSchemaType(c, byName, known, lines, schemaBehavior);
   }
   return true;
+}
+
+// Schema algebra methods that derive a fresh schema from an existing one.
+// A `Name = Base.<method>(...)` assignment (possibly chained) is a derived
+// schema and gets a bare `type Name` even though it has no `schema` body.
+const SCHEMA_ALGEBRA = new Set(['pick', 'omit', 'partial', 'required', 'extend']);
+
+// Given an assignment's RHS s-expr, decide whether it's a schema-algebra
+// call chain (`Base.pick(...)`, `Base.pick(...).omit(...)`, …) and return the
+// root base identifier — or null when it isn't one. The base lets the caller
+// confirm it resolves to a known schema before emitting a type for it, so an
+// unrelated `foo = bar.partial()` never gets a (spurious) schema type.
+function derivedSchemaBase(rhs) {
+  if (!Array.isArray(rhs)) return null;
+  const callee = rhs[0];
+  if (!Array.isArray(callee)) return null;
+  const dot = callee[0]?.valueOf?.() ?? callee[0];
+  if (dot !== '.') return null;
+  const method = callee[2]?.valueOf?.() ?? callee[2];
+  if (!SCHEMA_ALGEBRA.has(method)) return null;
+  // Descend through member accesses and call nodes to the root identifier:
+  // `User.pick(...).omit(...)` → callee[1] is the inner `.pick(...)` call.
+  let obj = callee[1];
+  while (Array.isArray(obj)) {
+    const head = obj[0]?.valueOf?.() ?? obj[0];
+    if (head === '.') obj = obj[1];          // member access — descend the object
+    else if (Array.isArray(obj[0])) obj = obj[0]; // call node — descend the callee
+    else break;
+  }
+  const root = obj?.valueOf?.() ?? obj;
+  return typeof root === 'string' ? root : null;
 }
 
 function collectSchemas(sexpr, out) {
@@ -170,17 +204,44 @@ function collectSchemas(sexpr, out) {
   }
   if (assignNode && Array.isArray(assignNode[2])) {
     const name = assignNode[1]?.valueOf?.() ?? assignNode[1];
+    if (typeof name !== 'string') return;
     const descriptor = descriptorFromSchemaNode(assignNode[2]);
-    if (typeof name === 'string' && descriptor) {
+    if (descriptor) {
       out.push({ name, descriptor, exported });
+    } else {
+      // A derived schema (`Name = Base.pick(...)`) has no `schema` body, so it
+      // carries no descriptor — record its base instead. emitSchemaTypes emits
+      // a bare `type Name` for it once the base is confirmed to be a schema.
+      const derivedBase = derivedSchemaBase(assignNode[2]);
+      if (derivedBase) out.push({ name, derivedBase, exported });
     }
   }
 }
 
-function emitOneSchemaType(collected, byName, known, lines) {
+function emitOneSchemaType(collected, byName, known, lines, schemaBehavior) {
   const { name, descriptor, exported } = collected;
   const exp = exported ? 'export ' : '';
-  const decl = exported ? '' : 'declare ';
+
+  // Derived schema (`Name = Base.pick(...)`): no body, so no descriptor. Give it
+  // a bare type so it can be annotated (`u:: UserView`) and re-exported under a
+  // clean name. The type is the source-free result
+  // of the algebra, which the `Schema<Out, In>` interface methods already model
+  // exactly; reading it back off the value's own `parse` return reuses that
+  // inference rather than re-deriving Pick/Omit/Partial here, and so handles
+  // every operator and chained projection for free. Gated on the base being a
+  // locally-known schema, so an unrelated `foo = bar.partial()` never gets a
+  // bogus schema type (its `parse` lookup would otherwise error).
+  if (collected.derivedBase) {
+    if (!known.has(collected.derivedBase)) return;
+    lines.push(`${exp}type ${name} = ReturnType<(typeof ${name})['parse']>;`);
+    return;
+  }
+  // Always `declare`: the value binding is provided by the compiled body
+  // (`const Name = __schema(...)`), so the type surface is ambient. Without
+  // `declare`, an exported `export const Name: T;` in a `.ts` shadow is an
+  // uninitialized const (TS1155). `export declare const` is valid in both
+  // the `.ts` shadow and a published `.d.ts`.
+  const decl = 'declare ';
 
   if (descriptor.kind === 'enum') {
     const members = [];
@@ -206,16 +267,46 @@ function emitOneSchemaType(collected, byName, known, lines) {
 
   const fieldProps = fieldPropList(descriptor);
   const mixinRefs = mixinIntersections(descriptor, byName);
+
+  // Shadow-TS only: codegen stashed the compiled `~>`/`!>` bodies, so a
+  // computed/derived member's type can be inferred from its body via
+  // `ReturnType<typeof __<Name>__behavior.field>` (gap 13) — `status` becomes
+  // `"Completed" | "Pending"` instead of `unknown`. Without the buffer (a plain
+  // `.d.ts` emit, where no behavior const exists), the value type stays
+  // `unknown`. The behavior const itself is emitted just below.
+  const behaviorList = (schemaBehavior && schemaBehavior.get(name)) || null;
+  const behaviorVar = `__${name}__behavior`;
+  const inferredFields = new Set((behaviorList || []).map(b => b.field));
+  const memberType = (field) =>
+    inferredFields.has(field) ? `ReturnType<typeof ${behaviorVar}.${field}>` : 'unknown';
+
   const methods = [];
   const computed = [];
+  const derived = [];
   for (const e of descriptor.entries) {
     if (e.tag === 'method') {
       methods.push(`${e.name}: (...args: any[]) => unknown`);
     } else if (e.tag === 'computed') {
-      computed.push(`readonly ${e.name}: unknown`);
+      computed.push(`readonly ${e.name}: ${memberType(e.name)}`);
+    } else if (e.tag === 'derived') {
+      // `!>` eager-derived: an own *enumerable* property materialized at
+      // parse/hydrate, so it's part of the instance (and serializes) but
+      // isn't an input/projectable field — it lives on the Out type, never
+      // in `<Name>Data`. Writable (unlike the `~>` getter), so not readonly.
+      derived.push(`${e.name}: ${memberType(e.name)}`);
     }
     // hooks are intentionally omitted — they fire automatically and
     // shouldn't appear in autocomplete.
+  }
+
+  // Emit the behavior const that anchors the `ReturnType<…>` inferences above.
+  // It re-uses the already-compiled `function(this: <Name>) { … }` bodies as
+  // object properties; `typeof __<Name>__behavior.field` then yields each
+  // body's signature. Forward-references to the instance type resolve fine in
+  // TS type space. Only present in shadow-TS mode (when the buffer is set).
+  if (behaviorList && behaviorList.length) {
+    const props = behaviorList.map(b => `${b.field}: ${b.fnExpr}`).join(', ');
+    lines.push(`const ${behaviorVar} = { ${props} };`);
   }
 
   const dataBase = `{ ${fieldProps.join('; ')} }`;
@@ -223,9 +314,27 @@ function emitOneSchemaType(collected, byName, known, lines) {
 
   if (descriptor.kind === 'model') {
     const dataName = `${name}Data`;
-    const instName = `${name}Instance`;
+    // Class-style: the bare schema name IS the instance type (parse result),
+    // mirroring how a class names both its value and its instance type — and
+    // how :enum/:mixin already emit a bare type. `${name}Data` survives as the
+    // fields-only shape that algebra/`toJSON` derive from.
+    const instName = name;
     const relationAccessors = modelRelationAccessors(descriptor, known);
+    // `${name}Data` includes the columns a :model manages implicitly — the
+    // `id` primary key, `@timestamps`, `@softDelete`, and `@belongs_to` FKs —
+    // so they appear in `toJSON()` and are projectable via `.pick`/`.omit`,
+    // matching the runtime's projectable field set.
+    const implicitProps = modelImplicitProps(descriptor);
+    const modelDataType = implicitProps.length ? `${dataType} & { ${implicitProps.join('; ')} }` : dataType;
+    // Create-input type: required-declared fields without a default and
+    // non-null FKs are required; everything else is optional; `id` and
+    // timestamps are omitted (the DB manages them). Threaded into ModelSchema
+    // so `create({})` flags a missing required field at compile time.
+    const createName = `${name}Create`;
+    const createBase = modelCreateInputType(descriptor);
+    const createType = mixinRefs.length ? `${createBase} & ${mixinRefs.join(' & ')}` : createBase;
     const instanceExtras = [
+      ...derived,
       ...computed,
       ...methods,
       ...relationAccessors,
@@ -235,30 +344,46 @@ function emitOneSchemaType(collected, byName, known, lines) {
       `errors(): SchemaIssue[]`,
       `toJSON(): ${dataName}`,
     ];
-    lines.push(`${exp}type ${dataName} = ${dataType};`);
+    lines.push(`${exp}type ${dataName} = ${modelDataType};`);
+    lines.push(`${exp}type ${createName} = ${createType};`);
     lines.push(`${exp}type ${instName} = ${dataName} & { ${instanceExtras.join('; ')} };`);
-    lines.push(`${exp}${decl}const ${name}: ModelSchema<${instName}, ${dataName}>;`);
+    lines.push(`${exp}${decl}const ${name}: ModelSchema<${instName}, ${dataName}, number, ${createName}>;`);
     return;
   }
 
   if (descriptor.kind === 'shape') {
     const dataName = `${name}Data`;
-    const instName = `${name}Instance`;
-    const hasBehavior = methods.length + computed.length > 0;
-    lines.push(`${exp}type ${dataName} = ${dataType};`);
-    if (hasBehavior) {
-      lines.push(`${exp}type ${instName} = ${dataName} & { ${[...computed, ...methods].join('; ')} };`);
-      lines.push(`${exp}${decl}const ${name}: Schema<${instName}, ${dataName}>;`);
+    // `!>` derived own props, `~>` computed getters, and methods all attach to
+    // the instance (Out) but not the projectable `${name}Data` (In).
+    const extras = [...derived, ...computed, ...methods];
+    if (extras.length) {
+      // Behavior present: `${name}Data` = fields, bare `${name}` = instance.
+      lines.push(`${exp}type ${dataName} = ${dataType};`);
+      lines.push(`${exp}type ${name} = ${dataName} & { ${extras.join('; ')} };`);
+      lines.push(`${exp}${decl}const ${name}: Schema<${name}, ${dataName}>;`);
     } else {
-      lines.push(`${exp}${decl}const ${name}: Schema<${dataName}, ${dataName}>;`);
+      // No behavior: instance === data, so collapse to a single bare `${name}`
+      // (matching :input). No `${name}Data` alias to learn.
+      lines.push(`${exp}type ${name} = ${dataType};`);
+      lines.push(`${exp}${decl}const ${name}: Schema<${name}, ${name}>;`);
     }
     return;
   }
 
-  // :input — parse returns the Data shape directly (no behavior).
-  const valueName = `${name}Value`;
-  lines.push(`${exp}type ${valueName} = ${dataType};`);
-  lines.push(`${exp}${decl}const ${name}: Schema<${valueName}, ${valueName}>;`);
+  // :input — fields-only, except `!>` eager-derived own properties (the one
+  // behavior :input permits; methods/computed are rejected). When present,
+  // they live on the instance (Out) but not the input shape (In), so split
+  // `${name}Data` from the bare name like a behavior-bearing :shape.
+  if (derived.length) {
+    const dataName = `${name}Data`;
+    lines.push(`${exp}type ${dataName} = ${dataType};`);
+    lines.push(`${exp}type ${name} = ${dataName} & { ${derived.join('; ')} };`);
+    lines.push(`${exp}${decl}const ${name}: Schema<${name}, ${dataName}>;`);
+    return;
+  }
+  // No behavior: the bare name IS the parsed value type.
+  lines.push(`${exp}type ${name} = ${dataType};`);
+  lines.push(`${exp}${decl}const ${name}: Schema<${name}, ${name}>;`);
 }
 
 // Return an array of mixin type-reference strings for `& Foo & Bar` joins.
@@ -277,6 +402,65 @@ function mixinIntersections(descriptor, byName) {
   return refs;
 }
 
+// The TS property strings for a :model's implicitly-managed columns: the
+// `id` PK, `@timestamps`, `@softDelete`, and `@belongs_to` FK columns. These
+// aren't declared fields but are real columns on every row — so they belong
+// in `<Name>Data` (what `toJSON()` returns and `.pick`/`.omit` project over).
+function modelImplicitProps(descriptor) {
+  const props = ['id: number'];
+  let timestamps = false, softDelete = false;
+  for (const e of descriptor.entries) {
+    if (e.tag !== 'directive') continue;
+    if (e.name === 'timestamps') timestamps = true;
+    else if (e.name === 'softDelete') softDelete = true;
+    else if (e.name === 'belongs_to') {
+      const target = e.args && e.args[0] && e.args[0].target;
+      if (target) {
+        const optional = e.args[0].optional === true;
+        const fk = target[0].toLowerCase() + target.slice(1) + 'Id';
+        props.push(`${fk}: number${optional ? ' | null' : ''}`);
+      }
+    }
+  }
+  if (timestamps) { props.push('createdAt: Date'); props.push('updatedAt: Date'); }
+  if (softDelete) props.push('deletedAt: Date | null');
+  return props;
+}
+
+// The create-input shape for a :model: what `create(data)` must be given.
+// A declared field is REQUIRED iff it's marked `!` AND has no default
+// (`[value]` bracket) — a required field with a default is effectively
+// optional at insert time. Everything else (optional fields, defaulted
+// fields) is optional. `@belongs_to` adds its FK column: required when the
+// relation is non-null, optional (`| null`) otherwise. `id` and the
+// auto-managed timestamp/softDelete columns are omitted — the DB fills them.
+//
+// `@mixin` fields are folded in by the caller via `& <Mixin>` and keep their
+// declared optionality, so a mixin's `!`-required fields are required at
+// create too (the runtime requires them as well). That's correct for ordinary
+// shared fields; if a mixin models auto-managed columns, prefer the
+// `@timestamps`/`@softDelete` directives (which are omitted here) over a mixin.
+function modelCreateInputType(descriptor) {
+  const props = [];
+  for (const e of descriptor.entries) {
+    if (e.tag !== 'field') continue;
+    // `constraintTokens` is the `[default]` bracket; its presence means the
+    // field has a default, so it's optional at create even when marked `!`.
+    const requiredAtCreate = e.modifiers.includes('!') && !e.constraintTokens;
+    const mark = requiredAtCreate ? '' : '?';
+    props.push(`${e.name}${mark}: ${mapFieldType(e)}`);
+  }
+  for (const e of descriptor.entries) {
+    if (e.tag !== 'directive' || e.name !== 'belongs_to') continue;
+    const target = e.args && e.args[0] && e.args[0].target;
+    if (!target) continue;
+    const optional = e.args[0].optional === true;
+    const fk = target[0].toLowerCase() + target.slice(1) + 'Id';
+    props.push(`${fk}${optional ? '?' : ''}: number${optional ? ' | null' : ''}`);
+  }
+  return `{ ${props.join('; ')} }`;
+}
+
 // Emit relation accessor type declarations for :model instances. For
 // targets declared in the same file we emit a typed Promise; for
 // unknown (cross-file) targets we degrade to `Promise<unknown>` rather
@@ -291,7 +475,8 @@ function modelRelationAccessors(descriptor, known) {
     if (!target) continue;
     const optional = args[0].optional === true;
     const targetLc = target[0].toLowerCase() + target.slice(1);
-    const instName = `${target}Instance`;
+    // Class-style: the target's bare name IS its instance type.
+    const instName = target;
     const isKnown = known && known.has(target);
     if (e.name === 'belongs_to') {
       const retT = isKnown ? (optional ? `${instName} | null` : `${instName} | null`) : 'unknown';

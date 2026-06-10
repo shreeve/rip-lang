@@ -1,25 +1,26 @@
-import { Order } from '../../types.rip'
-import { api, ApiErrors, parseApiError } from '../api-client.rip'
+import { Order } from '../types.rip'
+import { api } from '../api-client.rip'
 import { Button } from '../components/button.rip'
 import { title } from '../config.rip'
 
 export Orders = component
   orders:: Order[] := []
-  errors:: ApiErrors := {}
   loaded := false
+  loadError := ''
 
   mounted: ->
     document.title = title('Orders')
     try
-      orders = api.get!('orders').json!()
-    catch err
-      errors = parseApiError!(err)
-    finally
+      res = api.get!('orders').json!()
+      orders = res.map((o:: unknown) -> Order.parse(o))
       loaded = true
+    catch err
+      console.error(err)
+      loadError = 'Orders failed to load.'
 
   render
-    if errors.form
-      p.error errors.form
+    if loadError
+      p.error loadError
     else if loaded
       h1 "Orders"
       if not orders.length

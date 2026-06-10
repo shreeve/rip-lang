@@ -16,7 +16,7 @@ import { installComponentSupport } from './components.js';
 // so _typesEmitter stays null and .d.ts output is silently skipped.
 let _typesEmitter = null;
 export function setTypesEmitter(fn) { _typesEmitter = fn; }
-import { installSchemaSupport } from './schema/schema.js';
+import { installSchemaSupport, foldDerivedSchemas } from './schema/schema.js';
 import { SourceMapGenerator } from './sourcemaps.js';
 import { stringify, getStdlibCode } from './stdlib.js';
 import { RipError, toRipError } from './error.js';
@@ -309,6 +309,11 @@ export class CodeEmitter {
     this.functionVars = new Map();
     this.helpers = new Set();
     this.scopeStack = [];  // Track enclosing function scopes for proper variable hoisting
+    // Opt-in projection folding: rewrite foldable `X = Base.pick(...)` derived
+    // schemas into self-contained schema literals before emit (and before DTS,
+    // which reads the same s-expr). Off by default — the browser-bundle
+    // extractor enables it so projections can cross the client boundary.
+    if (this.options.foldProjections) foldDerivedSchemas(sexpr);
     this.collectProgramVariables(sexpr);
     let code = this.emit(sexpr);
 
@@ -4656,6 +4661,8 @@ export class Compiler {
       // the user might call any schema feature including .toSQL(). The browser
       // bundle build script overrides to 'browser' for size reduction.
       schemaMode: this.options.schemaMode,
+      // Opt-in: fold derived projection schemas to self-contained literals.
+      foldProjections: this.options.foldProjections,
       sourceMap,
     });
     let code = generator.compile(sexpr);
@@ -4682,9 +4689,11 @@ export class Compiler {
       code += `\n//# sourceMappingURL=${this.options.filename}.js.map`;
     }
 
-    // Step 5: Emit .d.ts from annotated tokens + parsed s-expression
+    // Step 5: Emit .d.ts from annotated tokens + parsed s-expression. The
+    // generator's `_schemaBehavior` buffer (populated during codegen, shadow-TS
+    // mode only) lets the type emitter infer computed/derived return types.
     if (typeTokens && _typesEmitter) {
-      dts = _typesEmitter(typeTokens, sexpr, source);
+      dts = _typesEmitter(typeTokens, sexpr, source, generator._schemaBehavior);
     }
 
     return { tokens, sexpr, code, dts, map, reverseMap, data: dataSection, reactiveVars: generator.reactiveVars };
@@ -4752,6 +4761,126 @@ export function compileToJS(source, options = {}) {
 
 export function emit(sexpr, options = {}) {
   return new CodeEmitter(options).compile(sexpr);
+}
+
+// =============================================================================
+// Client projection extraction (browser bundle boundary)
+// =============================================================================
+//
+// When a browser-bundled module imports a binding from a server-only file
+// (e.g. `import { UserView } from '../api/models.rip'`), that file can't ship
+// to the browser — it carries the model's ORM/DDL. This lifts ONLY the named
+// bindings, and only when each is a self-contained schema, into a synthetic
+// shared module the browser can compile.
+//
+// The source is compiled with projection folding ON, so a derived schema
+// (`UserView = User.pick(...)`) becomes a source-free `__schema({...})` literal.
+// A binding is shippable iff it's such a literal AND not a :model AND carries
+// no behavior (methods/computed/transforms — which compile to functions that
+// could close over server-only imports). Anything else is refused with a
+// reason, keeping server code out of the browser by construction.
+//
+// Returns { ok: true, source } where `source` is synthetic .rip the browser can
+// compile, or { ok: false, error } listing every binding that can't be shipped.
+
+function skipJsString(code, i, quote) {
+  i++;
+  while (i < code.length && code[i] !== quote) {
+    if (code[i] === '\\') i += 2; else i++;
+  }
+  return i + 1;
+}
+
+// Locate a top-level `NAME = __schema(...)` binding in compiled JS and return
+// { text, isModel, hasBehavior } — or null when NAME isn't bound to a __schema
+// literal (an unfolded `Model.pick(x)` call, a function, a plain value, or
+// absent). Balanced extraction skips nested parens/brackets/braces and strings.
+function findSchemaLiteral(code, name) {
+  // `name` is a schema identifier, but `$` is both a valid identifier char and
+  // a regex metacharacter, so escape before interpolating into the pattern.
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`(?:^|\\n)\\s*(?:export\\s+const\\s+)?${escaped}\\s*=\\s*__schema\\(`, 'g');
+  const m = re.exec(code);
+  if (!m) return null;
+  let i = m.index + m[0].length; // just past the opening '('
+  const start = i;
+  let depth = 1;
+  while (i < code.length && depth > 0) {
+    const c = code[i];
+    if (c === '"' || c === "'" || c === '`') { i = skipJsString(code, i, c); continue; }
+    if (c === '(' || c === '[' || c === '{') depth++;
+    else if (c === ')' || c === ']' || c === '}') depth--;
+    i++;
+  }
+  if (depth !== 0) return null;
+  const argText = code.slice(start, i - 1);
+  // Behavior is detected structurally, not by scanning for the word "function":
+  // a callable entry surfaces as `tag: "computed"|...`, and a field transform as
+  // `transform: (function…)`. A bare `\bfunction\b` would also match a literal
+  // VALUE like `kind! "function" | "class"` and wrongly refuse a plain shape.
+  return {
+    text: `__schema(${argText})`,
+    isModel: /^\s*\{\s*kind:\s*"model"/.test(argText),
+    hasBehavior: /\btransform:/.test(argText) || /tag:\s*"(?:computed|method|hook|ensure|derived)"/.test(argText),
+  };
+}
+
+export function extractClientProjections(source, names, { filename } = {}) {
+  let compiled;
+  try {
+    compiled = new Compiler({
+      filename,
+      foldProjections: true,
+      skipPreamble: true,
+      skipRuntimes: true,
+      skipDataPart: true,
+      skipImports: true,
+    }).compile(source);
+  } catch (e) {
+    return { ok: false, error: `failed to compile ${filename || 'module'}: ${e.message}` };
+  }
+  const code = compiled.code || '';
+  // Every schema bound in this source — lets us tell a nested *schema-typed*
+  // field (`items! OrderItem[]` → `typeName: "OrderItem"`) apart from a
+  // primitive (`typeName: "string"`).
+  const defined = new Set();
+  for (const m of code.matchAll(/(?:^|\n)\s*(?:export\s+const\s+)?(\w+)\s*=\s*__schema\(/g)) defined.add(m[1]);
+
+  const lines = [];
+  const errors = [];
+  const where = filename ? ` from '${filename}'` : '';
+  const requested = new Set(names);
+  const seen = new Set();
+  // Process requested names, then transitively any schema they reference by a
+  // field type — otherwise the shared module ships a shape whose nested type
+  // isn't registered in the browser, and that field's validation is *silently*
+  // skipped. A pulled-in dependency that isn't itself shippable is a hard error.
+  const queue = [...names];
+  while (queue.length) {
+    const name = queue.shift();
+    if (seen.has(name)) continue;
+    seen.add(name);
+    const lit = findSchemaLiteral(code, name);
+    const isDep = !requested.has(name);
+    const tag = isDep ? `'${name}'${where} (a nested type of a shipped projection)` : `'${name}'${where}`;
+    if (!lit) {
+      errors.push(isDep
+        ? `${tag} isn't a shippable schema, so the projection referencing it can't cross to the browser`
+        : `${tag} isn't a shippable schema — only a schema or a folded projection (e.g. ${name} = Model.pick(...)) can cross to the browser`);
+    } else if (lit.isModel) {
+      errors.push(`${tag} is a :model — ship a projection like ${name}.pick(...)/.omit(...) instead of the model (which carries ORM/DDL)`);
+    } else if (lit.hasBehavior) {
+      errors.push(`${tag} carries behavior (methods/computed/transforms) that may close over server-only code — project it to plain fields before importing it client-side`);
+    } else {
+      lines.push(`export ${name} = ${lit.text}`);
+      for (const tm of lit.text.matchAll(/typeName:\s*"(\w+)"/g)) {
+        const dep = tm[1];
+        if (defined.has(dep) && !seen.has(dep)) queue.push(dep);
+      }
+    }
+  }
+  if (errors.length) return { ok: false, error: errors.join('; ') };
+  return { ok: true, source: lines.join('\n') + '\n' };
 }
 
 export function getReactiveRuntime() {

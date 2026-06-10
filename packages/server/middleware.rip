@@ -34,6 +34,7 @@
 #
 
 import { get, setCorsPreflightPolicy } from '@rip-lang/server'
+import { extractClientProjections } from 'rip-lang'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve, relative } from 'node:path'
 import { existsSync, realpathSync, readFileSync } from 'node:fs'
@@ -74,6 +75,94 @@ IMPORT_RE_FULL = -> /(?:from|import)\s+['"](@rip-lang\/[^'"\/]+)(\/[^'"]*)?['"]/
 # Forbidden specifiers on browser-shipped packages. If a .rip file destined
 # for the browser bundle imports any of these, we refuse to ship the package.
 NODE_BUILTIN_RE = /(?:from|import)\s+['"](?:node:[^'"]+|fs|fs\/promises|path|os|child_process|crypto|net|tls|http|https|zlib|stream|util|url|module|process|worker_threads|cluster|dgram|dns|readline|repl|tty|v8|vm)['"]/
+
+# ── Cross-boundary projection materializing ────────────────────────────────
+# A bundled client module may import a binding from a server-only file that
+# lives OUTSIDE the bundle (e.g. `import { UserView } from '../api/models.rip'`).
+# That file can't ship to the browser — it carries the model's ORM/DDL. For
+# each such import we fold the named bindings to self-contained descriptors and
+# inline ONLY those into a synthetic `_shared/<path>` module the browser can
+# compile, then rewrite the importer's specifier to that key. The extractor
+# refuses anything that would drag server code along (a :model, a function,
+# behavior), so this can never leak the model to the browser.
+
+# Match relative `.rip` import/re-export statements (the only ones that can
+# leave the bundle tree), capturing the binding clause (group 1, undefined for
+# a side-effect `import '…'`) and the specifier (group 2). Re-exports
+# (`export { UserView as User } from '…'`) are the idiomatic projection form, so
+# they're matched too. Fresh per call so matchAll's lastIndex never leaks.
+RIP_REL_IMPORT = -> /(?:^|\n)[ \t]*(?:import|export)\s+(?:([\s\S]*?)\s+from\s+)?['"](\.[^'"]*\.rip)['"]/g
+
+# The EXPORTED names referenced by a `{ a, b as c }` import clause — i.e. the
+# left side of any `as` (`a`, `b`). These are what the synthetic shared module
+# must re-export and what the extractor looks up in the source; the importer's
+# local aliases (`c`) are its own concern and the rewritten import keeps them.
+importedBindingNames = (clause) ->
+  return [] unless clause
+  m = clause.match(/\{([^}]*)\}/)
+  return [] unless m
+  names = []
+  for n in m[1].split(',')
+    t = n.trim()
+    continue unless t
+    names.push(t.split(/\s+as\s+/)[0].trim())
+  names
+
+materializeSharedSchemas = (modules, moduleFiles, bundleRoots, appDir) ->
+  insideBundle = (abs) ->
+    real = realpathSync(abs)
+    bundleRoots.some (root) -> real is root or real.startsWith("#{root}/")
+  # target abs path → { key, names:Set, importers:[{key, spec}] }
+  needs = new Map()
+  # sharedKey → abs, to catch two distinct server files whose path-tail (after
+  # stripping `../`) collapses to the same `_shared/...` key (else one silently
+  # overwrites the other). Mirrors the `_pkg/` short-name collision guard below.
+  sharedKeys = new Map()
+  for key, src of modules
+    file = moduleFiles[key]
+    continue unless file
+    fileDir = dirname(file)
+    for m as src.matchAll(RIP_REL_IMPORT())
+      [_full, clause, spec] = m
+      abs = resolve(fileDir, spec)
+      continue unless existsSync(abs)
+      continue if insideBundle(abs)            # same-bundle import — already shipped
+      names = importedBindingNames(clause)
+      if names.length is 0
+        raise "Cannot import server-only module '#{spec}' into browser code (#{key}). Only named schema projections can cross the client boundary."
+      entry = needs.get(abs)
+      unless entry
+        sharedRel = relative(dirname(appDir), abs).replace(/\.\.\//g, '').replace(/^\/+/, '')
+        sharedKey = "_shared/#{sharedRel}"
+        prior = sharedKeys.get(sharedKey)
+        if prior and prior isnt abs
+          raise "Shared-schema key collision: '#{abs}' and '#{prior}' both map to '#{sharedKey}'. Two server-only modules can't materialize to the same browser-bundle key."
+        sharedKeys.set(sharedKey, abs)
+        entry = { key: sharedKey, names: new Set(), importers: [] }
+        needs.set(abs, entry)
+      entry.names.add(n) for n in names
+      entry.importers.push({ key, spec })
+  # Synthesize each shared module, and collect the per-importer specifier
+  # rewrites (importer key → { originalSpec: sharedKey }).
+  rewrites = new Map()
+  for [abs, entry] as needs
+    targetSrc = readFileSync(abs, 'utf8')
+    result = extractClientProjections(targetSrc, [...entry.names], { filename: relative(dirname(appDir), abs) })
+    unless result.ok
+      raise "Cannot ship schema import to the browser bundle: #{result.error}"
+    modules[entry.key] = result.source
+    for imp in entry.importers
+      map = rewrites.get(imp.key) or {}
+      map[imp.spec] = entry.key
+      rewrites.set(imp.key, map)
+  # Rewrite specifiers only inside real import/export statements (via the same
+  # matcher), so a matching `from '…'` substring in a comment or string literal
+  # is left untouched. Each match is a single statement, so swapping the quoted
+  # specifier within it is safe.
+  for [key, specMap] as rewrites
+    modules[key] = modules[key].replace RIP_REL_IMPORT(), (full, _clause, spec) ->
+      target = specMap[spec]
+      if target then full.replace("'#{spec}'", "'#{target}'").replace("\"#{spec}\"", "\"#{target}\"") else full
 
 # Resolve a declared `@rip-lang/<pkg>` to its on-disk directory using
 # require.resolve rooted at the app's package.json. Returns null if the
@@ -924,11 +1013,15 @@ export serve = (opts:: {
     { brotliCompressSync } = require 'zlib'
     glob = new Bun.Glob("**/*.rip")
     modules = {}
+    # Source file backing each module key, so cross-boundary imports can be
+    # resolved against the real filesystem (for cross-boundary projection materializing).
+    moduleFiles = {}
     hasRoutes = false
     if includeRoutes and existsSync(routesDir)
       routePaths:: string[] = Array.from(glob.scanSync(routesDir), String).sort()
       for path in routePaths
         modules["_route/#{path}"] = Bun.file("#{routesDir}/#{path}").text!
+        moduleFiles["_route/#{path}"] = "#{routesDir}/#{path}"
         hasRoutes = true
     for dir in dirs
       rel = relative(appDir, dir)
@@ -942,7 +1035,16 @@ export serve = (opts:: {
         # In auto-scan mode, skip the routes/ subtree (already keyed under _route/ above)
         continue if isAppDir and (path is routesName or path.startsWith("#{routesName}/"))
         key = "#{keyPrefix}/#{path}"
-        modules[key] = Bun.file("#{dir}/#{path}").text! unless modules[key]
+        unless modules[key]
+          modules[key] = Bun.file("#{dir}/#{path}").text!
+          moduleFiles[key] = "#{dir}/#{path}"
+
+    # Real paths of every directory that's IN this bundle — used to tell a
+    # same-bundle import (already collected) from a cross-boundary one.
+    bundleRoots = [...dirs, routesDir]
+      .filter(existsSync)
+      .map((d) -> realpathSync(resolve(d)))
+    materializeSharedSchemas(modules, moduleFiles, bundleRoots, appDir)
 
     # Auto-discover declared `@rip-lang/*` packages used by
     # bundled .rip files and inline them into the browser bundle. Only do

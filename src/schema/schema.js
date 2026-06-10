@@ -1178,6 +1178,279 @@ function readDescriptor(node) {
   return null;
 }
 
+// ============================================================================
+// Compile-time projection folding (opt-in: options.foldProjections)
+// ============================================================================
+//
+// A derived schema like `UserView = User.pick("id", "firstName")` normally
+// compiles to a runtime method call, which (a) needs the source `User` loaded
+// and (b) only yields a descriptor at load time. Folding statically evaluates
+// the algebra against the source's descriptor and rewrites the assignment to a
+// fresh, self-contained `__schema({kind:"shape", entries:[…]})` node — no
+// reference to `User`. That's what lets a projection cross the client bundle
+// boundary (the bundler extracts the folded literal) without dragging the
+// model's ORM/DDL along.
+//
+// Folding is intentionally conservative: it only fires for a same-file source
+// schema and static string-literal keys, and it BAILS (leaving the runtime
+// call untouched) on anything it can't prove — an unknown base, dynamic args,
+// a field the source doesn't expose, an extend collision. The runtime path is
+// always a correct fallback, so a bail is never a regression. Folding is OFF
+// by default (server/CLI/check keep the runtime algebra, including its
+// `_sourceModel` back-pointer); the browser-bundle extractor turns it on.
+
+const FOLD_ALGEBRA = new Set(['pick', 'omit', 'partial', 'required', 'extend']);
+
+function foldStr(n) { return n && n.valueOf ? n.valueOf() : n; }
+
+// True when a descriptor pulls fields in via `@mixin`. The fold can't expand
+// mixins (resolution is a runtime `_normalize` concern), so any projection over
+// such a base must bail to the runtime call rather than silently emit a shape
+// missing the mixin's fields.
+function foldHasMixin(descriptor) {
+  return descriptor.entries.some(e => e.tag === 'directive' && e.name === 'mixin');
+}
+
+// The `@belongs_to <Target>` FK column name, computed exactly as the runtime
+// does (`__schemaCamel(__schemaSnake(target) + '_id')` in runtime-validate.js).
+// The naive `target[0].toLowerCase() + …` diverges for acronym targets
+// (`ABCWidget` → runtime `abcwidgetId`, naive `aBCWidgetId`).
+function foldFkName(target) {
+  const snake = target.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
+  return (snake + '_id').replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+}
+
+// The projectable columns of a descriptor as an ordered Map(name → field
+// entry): declared fields, then a :model's implicit id / @timestamps /
+// @softDelete / @belongs_to FK columns — matching __schemaProjectableFields
+// in runtime-validate.js so a fold yields the same field set the runtime would.
+// Returns null (bail) when the base uses `@mixin`.
+function foldProjectableMap(descriptor) {
+  if (foldHasMixin(descriptor)) return null;
+  const map = new Map();
+  for (const e of descriptor.entries) {
+    if (e.tag === 'field') map.set(e.name, e);
+  }
+  if (descriptor.kind !== 'model') return map;
+  const synth = (name, typeName, required) => {
+    if (!map.has(name)) map.set(name, { tag: 'field', name, modifiers: required ? ['!'] : ['?'], typeName, array: false });
+  };
+  let timestamps = false, softDelete = false;
+  const fks = [];
+  for (const e of descriptor.entries) {
+    if (e.tag !== 'directive') continue;
+    if (e.name === 'timestamps') timestamps = true;
+    else if (e.name === 'softDelete') softDelete = true;
+    else if (e.name === 'belongs_to') {
+      const t = e.args && e.args[0] && e.args[0].target;
+      if (t) fks.push({ fk: foldFkName(t), required: e.args[0].optional !== true });
+    }
+  }
+  // Insertion order mirrors the runtime: id, timestamps, softDelete, then FKs.
+  synth('id', 'integer', true);
+  if (timestamps) { synth('createdAt', 'datetime', true); synth('updatedAt', 'datetime', true); }
+  if (softDelete) synth('deletedAt', 'datetime', false);
+  for (const { fk, required } of fks) synth(fk, 'integer', required);
+  return map;
+}
+
+// Declared fields only (no implicit :model columns) — what runtime `.extend()`
+// merges from its argument (`other._normalize().fields`). Returns null (bail)
+// when the argument uses `@mixin`.
+function foldDeclaredMap(descriptor) {
+  if (foldHasMixin(descriptor)) return null;
+  const map = new Map();
+  for (const e of descriptor.entries) {
+    if (e.tag === 'field') map.set(e.name, e);
+  }
+  return map;
+}
+
+// Rewrite a field entry's modifiers, preserving any constraint/transform token
+// fields so emission stays faithful. `mode` is 'partial' (drop !, ensure ?) or
+// 'required' (drop ?, ensure !). Unique (#) and other modifiers are kept.
+function foldRemark(entry, mode) {
+  let mods = entry.modifiers.filter(m => m !== (mode === 'partial' ? '!' : '?'));
+  const want = mode === 'partial' ? '?' : '!';
+  if (!mods.includes(want)) mods = [...mods, want];
+  return { ...entry, modifiers: mods };
+}
+
+// Apply one algebra op to an ordered field Map, returning a new Map or null
+// (bail). `op` is { method, keys?, otherName? }. `byName` resolves a same-file
+// schema descriptor for extend's argument.
+function foldApplyOp(map, op, byName) {
+  switch (op.method) {
+    case 'pick': {
+      const out = new Map();
+      for (const k of op.keys) {
+        if (!map.has(k)) return null;
+        out.set(k, map.get(k));
+      }
+      return out;
+    }
+    case 'omit': {
+      const drop = new Set(op.keys);
+      const out = new Map();
+      for (const [k, v] of map) if (!drop.has(k)) out.set(k, v);
+      return out;
+    }
+    case 'partial': {
+      const out = new Map();
+      for (const [k, v] of map) out.set(k, foldRemark(v, 'partial'));
+      return out;
+    }
+    case 'required': {
+      const req = new Set(op.keys);
+      const out = new Map();
+      for (const [k, v] of map) out.set(k, req.has(k) ? foldRemark(v, 'required') : v);
+      return out;
+    }
+    case 'extend': {
+      const other = byName.get(op.otherName);
+      if (!other) return null;
+      // Runtime `.extend()` merges the argument's DECLARED fields only — not a
+      // :model's implicit id/timestamp/FK columns — so use the declared map.
+      const otherMap = foldDeclaredMap(other);
+      if (!otherMap) return null; // @mixin in the argument — bail
+      const out = new Map(map);
+      for (const [k, v] of otherMap) {
+        if (out.has(k)) return null; // collision — let the runtime throw
+        out.set(k, v);
+      }
+      return out;
+    }
+    default:
+      return null;
+  }
+}
+
+// Evaluate an algebra chain against a base descriptor. Returns a folded
+// `{kind:"shape", entries}` descriptor, or null to bail to the runtime call.
+function foldProjectionDescriptor(baseDescriptor, ops, byName) {
+  let map = foldProjectableMap(baseDescriptor);
+  if (!map) return null; // base uses @mixin — bail to the runtime call
+  for (const op of ops) {
+    map = foldApplyOp(map, op, byName);
+    if (!map) return null;
+  }
+  return { kind: 'shape', entries: [...map.values()] };
+}
+
+// Parse an assignment RHS s-expr into an algebra chain { base, ops } when it's
+// `Base.pick(...)`/`.omit(...)`/… (including chains like `.pick(...).omit(...)`),
+// else null. Keys must be static string literals (or arrays of them); extend's
+// argument must be a bare identifier. Anything dynamic returns null → no fold.
+function foldParseChain(rhs) {
+  const ops = [];
+  let node = rhs;
+  while (true) {
+    if (!Array.isArray(node)) return null;
+    const callee = node[0];
+    if (!Array.isArray(callee)) return null;
+    if (foldStr(callee[0]) !== '.') return null;
+    const method = foldStr(callee[2]);
+    if (!FOLD_ALGEBRA.has(method)) return null;
+    const argNodes = node.slice(1);
+    let op;
+    if (method === 'partial') {
+      if (argNodes.length) return null;
+      op = { method };
+    } else if (method === 'extend') {
+      if (argNodes.length !== 1) return null;
+      const a = argNodes[0];
+      if (Array.isArray(a)) return null;
+      const name = foldStr(a);
+      if (typeof name !== 'string' || !/^[A-Za-z_$][\w$]*$/.test(name)) return null;
+      op = { method, otherName: name };
+    } else {
+      const keys = foldLiteralKeys(argNodes);
+      if (!keys || !keys.length) return null;
+      op = { method, keys };
+    }
+    ops.unshift(op);
+    const obj = callee[1];
+    if (Array.isArray(obj)) { node = obj; continue; } // inner call in the chain
+    const base = foldStr(obj);
+    if (typeof base !== 'string') return null;
+    return { base, ops };
+  }
+}
+
+// Collect static string-literal keys from call args (each a string literal, or
+// an array literal of string literals). Returns null on any non-literal arg.
+function foldLiteralKeys(argNodes) {
+  const keys = [];
+  for (const a of argNodes) {
+    if (Array.isArray(a)) {
+      if (foldStr(a[0]) !== 'array') return null;
+      for (let i = 1; i < a.length; i++) {
+        const k = foldParseStrLit(a[i]);
+        if (k == null) return null;
+        keys.push(k);
+      }
+    } else {
+      const k = foldParseStrLit(a);
+      if (k == null) return null;
+      keys.push(k);
+    }
+  }
+  return keys;
+}
+
+// A string-literal node's value carries its surrounding quotes (e.g. `"id"`).
+// Strip them; return null for anything that isn't a plain string literal.
+function foldParseStrLit(node) {
+  const v = foldStr(node);
+  if (typeof v !== 'string' || v.length < 2) return null;
+  const q = v[0];
+  if ((q !== '"' && q !== "'") || v[v.length - 1] !== q) return null;
+  const inner = v.slice(1, -1);
+  // Keys are identifiers in practice; reject anything with escapes/interpolation.
+  if (/[\\#]/.test(inner)) return null;
+  return inner;
+}
+
+// Walk the program's top-level statements, fold every foldable derived-schema
+// assignment in place, and thread folded results into the same-file schema map
+// so a later `.extend`/chain can reference an already-folded projection. Mutates
+// `sexpr`. Called by the emitter only when options.foldProjections is set.
+export function foldDerivedSchemas(sexpr) {
+  if (!Array.isArray(sexpr)) return;
+  const head = foldStr(sexpr[0]);
+  const stmts = (head === 'program' || head === 'block') ? sexpr.slice(1) : [sexpr];
+  const byName = new Map();
+  for (const stmt of stmts) {
+    if (!Array.isArray(stmt)) continue;
+    // Unwrap `export <assign>` to reach the assignment node.
+    let assign = stmt;
+    if (foldStr(stmt[0]) === 'export' && Array.isArray(stmt[1])) assign = stmt[1];
+    if (foldStr(assign[0]) !== '=' || !Array.isArray(assign[2])) continue;
+    const name = foldStr(assign[1]);
+    if (typeof name !== 'string') continue;
+
+    // Already a schema literal — register its descriptor and move on.
+    if (foldStr(assign[2][0]) === 'schema') {
+      const existing = readDescriptor(assign[2][1]);
+      if (existing) byName.set(name, existing);
+      continue;
+    }
+
+    const chain = foldParseChain(assign[2]);
+    if (!chain) continue;
+    const baseDesc = byName.get(chain.base);
+    if (!baseDesc) continue; // base not a same-file schema — leave the runtime call
+    const folded = foldProjectionDescriptor(baseDesc, chain.ops, byName);
+    if (!folded) continue;   // not statically foldable — leave the runtime call
+
+    const bridge = new String('shape');
+    bridge.descriptor = folded;
+    bridge.data = { descriptor: folded };
+    assign[2] = ['schema', bridge];
+    byName.set(name, folded);
+  }
+}
+
 function entryLiteral(emitter, e) {
   switch (e.tag) {
     case 'field': {
@@ -1243,27 +1516,67 @@ function entryLiteral(emitter, e) {
 // emitted using the Rip thin-arrow codegen, which naturally produces a
 // `function() { ... }` (Rip `->` is NOT a JS arrow). This gives us the
 // right `this` semantics for instance-attached methods and proto getters.
+//
+// In shadow-TS (`inlineTypes`) mode the body's `@field` reads (`this.field`)
+// would otherwise trip `noImplicitAny` (TS2683), since the bare `function()`
+// has an untyped `this`. So in that mode only we prepend a TypeScript `this`
+// parameter typed to the schema's instance type (its bare name — what
+// methods/computed/derived bodies actually see, including other behavior).
+// The `this` parameter is erased at runtime and is illegal as a real JS
+// param, so it is emitted ONLY under inlineTypes; normal codegen is
+// unchanged (`function() { ... }`).
 function compileCallableFn(emitter, entry) {
   let bodySexpr = parseBodyTokens(entry.bodyTokens);
   if (!bodySexpr) {
     // Empty body — emit a no-op.
     return `(function() {})`;
   }
-  // Wrap as a thin-arrow with no params. `emit` in value context produces
-  // a parenthesized function expression.
-  let arrowSexpr = ['->', [], bodySexpr];
-  return emitter.emit(arrowSexpr, 'value');
+  let params = [];
+  if (emitter.options.inlineTypes && emitter._schemaName) {
+    let thisParam = new String('this');
+    thisParam.type = emitter._schemaName;
+    params.push(thisParam);
+  }
+  // Wrap as a thin-arrow. `emit` in value context produces a parenthesized
+  // function expression.
+  let arrowSexpr = ['->', params, bodySexpr];
+  let fnCode = emitter.emit(arrowSexpr, 'value');
+  // Shadow-TS only: stash computed (`~>`) and eager-derived (`!>`) bodies so
+  // the type emitter can infer their return type via
+  // `ReturnType<typeof __<Name>__behavior.field>` instead of falling back to
+  // `unknown` (the body is already a `function(this: <Name>) { … }`). Methods
+  // are excluded — they keep `(...args) => unknown`, since their params aren't
+  // typed. The buffer rides on the emitter instance (per-compile, no globals)
+  // and is read by emitSchemaTypes after codegen finishes.
+  if (emitter.options.inlineTypes && emitter._schemaName &&
+      (entry.tag === 'computed' || entry.tag === 'derived')) {
+    if (!emitter._schemaBehavior) emitter._schemaBehavior = new Map();
+    let list = emitter._schemaBehavior.get(emitter._schemaName);
+    if (!list) { list = []; emitter._schemaBehavior.set(emitter._schemaName, list); }
+    list.push({ field: entry.name, tag: entry.tag, fnExpr: fnCode });
+  }
+  return fnCode;
 }
 
 // Compile an inline field transform body (`-> body`). The body receives
-// the raw input object via Rip's implicit `it` parameter; no explicit
-// params are emitted. Transform runs on .parse() only, not on hydrate.
+// the raw input object via Rip's `it` parameter. Transform runs on
+// .parse() only, not on hydrate.
+//
+// `it` is emitted as an explicit `any`-typed param (rather than relying on
+// the implicit-`it` injection) so the shadow-TS pass doesn't trip
+// `noImplicitAny` (TS7006) — runtime output is identical (`function(it)`).
+// `any` is the correct type, not a cop-out: a transform sees the RAW,
+// pre-validation input, which legitimately carries keys that aren't
+// declared fields (e.g. `it.Id` remapped to `id`), so typing `it` to the
+// schema's own shape would wrongly reject those reads.
 function compileTransformFn(emitter, bodyTokens) {
   let bodySexpr = parseBodyTokens(bodyTokens);
   if (!bodySexpr) {
     return `(function() { return undefined; })`;
   }
-  let arrowSexpr = ['->', [], bodySexpr];
+  let itParam = new String('it');
+  itParam.type = 'any';
+  let arrowSexpr = ['->', [itParam], bodySexpr];
   return emitter.emit(arrowSexpr, 'value');
 }
 
