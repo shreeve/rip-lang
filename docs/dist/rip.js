@@ -104,11 +104,22 @@ var { __schema, SchemaError, __SchemaRegistry, __schemaSetAdapter } = (function(
     : function() {
         throw new Error('schema.transaction() requires the server schema runtime (validate-only runtime loaded).');
       };
+  // Migration surface is migration-mode-only; export throwing slots in
+  // other modes so the namespace shape is stable everywhere.
+  const __schemaMigrationStub = (api) => function() {
+    throw new Error('schema.' + api + '() requires the migration schema runtime (CLI / rip schema); it is not part of the ' +
+      'validate/browser/server runtime modes.');
+  };
   // User-facing namespace: schema.transaction! -> ... in Rip source
   // resolves through this object (installed as a global alongside the
   // other Rip stdlib globals; ??= keeps user overrides intact).
   const schemaNamespace = {
     transaction: __schemaTransactionExport,
+    plan:       typeof __schemaPlan       !== 'undefined' ? __schemaPlan       : __schemaMigrationStub('plan'),
+    status:     typeof __schemaStatus     !== 'undefined' ? __schemaStatus     : __schemaMigrationStub('status'),
+    make:       typeof __schemaMake       !== 'undefined' ? __schemaMake       : __schemaMigrationStub('make'),
+    migrate:    typeof __schemaMigrate    !== 'undefined' ? __schemaMigrate    : __schemaMigrationStub('migrate'),
+    introspect: typeof __schemaIntrospect !== 'undefined' ? __schemaIntrospect : __schemaMigrationStub('introspect'),
   };
   const exports = {
     __schema, SchemaError, __SchemaRegistry,
@@ -320,7 +331,7 @@ function __schemaSignature(def) {
         parts.push('f:' + e.name + ':' + (e.typeName || '') +
           (e.array ? '[]' : '') + ':' + (e.modifiers || []).join('') +
           (e.literals ? ':' + e.literals.join(',') : '') +
-          ':' + safe(e.constraints) +
+          ':' + safe(e.constraints) + ':' + safe(e.attrs) +
           (e.transform ? ':t' : ''));
         break;
       case 'enum-member':
@@ -486,6 +497,7 @@ class __SchemaDef {
             literals: e.literals || null,
             array: e.array === true,
             constraints: e.constraints || null,
+            attrs: e.attrs || null,
             transform: e.transform || null,
           });
           break;
@@ -565,10 +577,16 @@ class __SchemaDef {
     const primaryKey = 'id';
     const tableName = this.kind === 'model' ? __schemaTableName(this.name) : null;
 
+    // \`@tableWas old_name\` — table-rename annotation for the differ.
+    let tableWas = null;
+    for (const d of directives) {
+      if (d.name === 'tableWas' && d.args?.[0]?.name) tableWas = d.args[0].name;
+    }
+
     this._norm = {
       fields, methods, computed, derived, hooks, directives, enumMembers, relations,
       ensures, scopes, defaultScope,
-      timestamps, softDelete, primaryKey, tableName,
+      timestamps, softDelete, primaryKey, tableName, tableWas,
     };
     return this._norm;
   }
@@ -1185,6 +1203,7 @@ function __schemaDerive(source, transform) {
       typeName: f.typeName, array: f.array,
       literals: f.literals || null,
       constraints: f.constraints,
+      attrs: f.attrs || null,
       transform: f.transform || null,
     });
   }
@@ -1256,6 +1275,7 @@ function __schemaExpandMixins(host, fields, directives, ctx) {
         literals: e.literals || null,
         array: e.array === true,
         constraints: e.constraints || null,
+        attrs: e.attrs || null,
         transform: e.transform || null,
       });
     }
@@ -3348,6 +3368,11 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         let merged = mergeFieldConstraints(range, bracket, regex, e);
         if (merged)
           obj.push(`constraints: ${merged}`);
+        if (e.attrsTokens) {
+          let attrs = compileAttrsLiteral(e.attrsTokens, e);
+          if (attrs)
+            obj.push(`attrs: ${attrs}`);
+        }
         if (e.transformTokens) {
           obj.push(`transform: ${compileTransformFn(emitter, e.transformTokens)}`);
         }
@@ -3546,6 +3571,33 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
     }
     return constraintLiteral(c);
   }
+  var SCHEMA_FIELD_ATTRS = new Set(["was"]);
+  function compileAttrsLiteral(tokens, fieldEntry) {
+    let inner = tokens.slice(1, -1).filter((t) => t[0] !== "TERMINATOR" && t[0] !== "INDENT" && t[0] !== "OUTDENT");
+    let items = splitTopLevelByComma(inner);
+    let parts = [];
+    for (let item of items) {
+      if (!item.length)
+        continue;
+      let keyTok = item[0];
+      if (keyTok[0] !== "PROPERTY" && keyTok[0] !== "IDENTIFIER") {
+        throw schemaError(keyTok, `Field attrs must be '{key: value}' pairs. Got ${keyTok[0]}.`);
+      }
+      let key = keyTok[1];
+      if (!SCHEMA_FIELD_ATTRS.has(key)) {
+        throw schemaError(keyTok, `Unknown field attr '${key}'. Known attrs: ${[...SCHEMA_FIELD_ATTRS].join(", ")}.`);
+      }
+      let valueStart = 1;
+      if (item[valueStart]?.[0] === ":")
+        valueStart++;
+      let value = evalLiteralTokens(item.slice(valueStart), fieldEntry);
+      if (key === "was" && typeof value !== "string") {
+        throw schemaError(keyTok, `Field attr 'was' requires a string column name, e.g. {was: "first_name"}.`);
+      }
+      parts.push(`${key}: ${serializeLiteral(value)}`);
+    }
+    return parts.length ? `{${parts.join(", ")}}` : null;
+  }
   function constraintLiteral(c) {
     let parts = [];
     if (c.min !== undefined)
@@ -3631,6 +3683,19 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       if (unique)
         parts.push("unique: true");
       return `[{${parts.join(", ")}}]`;
+    }
+    if (name === "tableWas") {
+      if (tokens[0]?.[0] === "CALL_START" && tokens[tokens.length - 1]?.[0] === "CALL_END") {
+        tokens = tokens.slice(1, -1);
+      }
+      let t0 = tokens[0];
+      if (t0 && t0[0] === "STRING") {
+        return `[{name: ${t0[1]}}]`;
+      }
+      if (t0 && (t0[0] === "IDENTIFIER" || t0[0] === "PROPERTY")) {
+        return `[{name: ${JSON.stringify(t0[1])}}]`;
+      }
+      throw schemaError(t0 || tokens[tokens.length - 1], `@tableWas requires the previous table name, e.g. @tableWas legacy_users.`);
     }
     if (name === "idStart") {
       let tok = tokens[0];
@@ -14742,7 +14807,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.16.1";
-  var BUILD_DATE = "2026-06-10@22:13:32GMT";
+  var BUILD_DATE = "2026-06-10@22:48:39GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

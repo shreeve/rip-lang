@@ -124,7 +124,7 @@ schema dialect, its own types, its own runtime, its own failure modes:
 | Input validation            | Zod, Yup, Joi, io-ts, Valibot       | `schema :input` + `.parse/.safe`     |
 | Domain objects with logic   | hand-written classes + `zod.infer`  | `schema :shape`                      |
 | Database models             | Prisma, Drizzle, TypeORM, Sequelize | `schema :model`                      |
-| Migrations / DDL            | Prisma migrate, Drizzle Kit, knex   | `Model.toSQL()`                      |
+| Migrations / DDL            | Prisma migrate, Drizzle Kit, knex   | `Model.toSQL()` + `rip schema make/migrate` |
 | API projections / DTOs      | `.pick` / `.omit` on Zod + class    | `Model.pick/.omit/.partial/.extend`  |
 | Static types for the editor | Inferred from every library above   | Automatic shadow TS — no codegen     |
 | Fixed value sets            | TS `enum` or string unions          | `schema :enum` (runtime + static)    |
@@ -1320,6 +1320,73 @@ ddl = [
 ].join('\n\n')
 ```
 
+### Schema evolution (`rip schema status / make / migrate`)
+
+`.toSQL()` covers greenfield CREATE. Evolution — diffing the declared
+models against the deployed database and emitting ALTER migrations —
+is built in:
+
+```text
+rip schema status  [models.rip]        # applied / pending / drift + the current plan
+rip schema plan    [models.rip]        # just the classified diff
+rip schema make <name> [models.rip]    # write migrations/NNNN_<name>.sql from the diff
+rip schema migrate [models.rip]        # apply pending migration files in order
+```
+
+The same verbs are callable from code: `schema.plan!`, `schema.status!`,
+`schema.make! "name", opts`, `schema.migrate! opts`, and
+`schema.introspect!` (the deployed schema as canonical table specs).
+
+**How it works.** The DDL emitter's internal model is exposed as a
+canonical table spec (`Model._tableSpec()`); introspection builds the
+same structure from the live database (`information_schema` +
+`duckdb_*()` catalogs, or the adapter's own `introspect()` capability).
+The differ operates on two values of the same type and emits classified
+steps:
+
+| Class | Examples | Gate |
+| --- | --- | --- |
+| `safe` | ADD COLUMN (nullable / defaulted), CREATE TABLE, CREATE INDEX, RENAME | none |
+| `lossy` | type change, SET NOT NULL, new UNIQUE on existing data | `--allow-lossy` |
+| `destructive` | DROP COLUMN, DROP TABLE | `--allow-destructive` |
+| `blocked` | any ALTER DuckDB refuses on an FK-referenced table | no flag — manual rebuild |
+
+**Migration files are plain SQL** — numbered, hand-editable, checked
+into git (default `./migrations`). `make` writes them; humans may amend
+them; `migrate` applies pending files in order (each inside a
+transaction when the adapter supports one) and records
+`(version, name, checksum, applied_at)` in `_rip_migrations`. A
+checksum mismatch on an applied file aborts — someone edited history —
+unless `--repair` re-records.
+
+**Renames are resolved in the declaration**, since a diff cannot
+distinguish rename from drop + add:
+
+```coffee
+User = schema :model
+  givenName! ..50, {was: "first_name"}    # column rename
+  @tableWas legacy_users                   # table rename
+```
+
+The differ consumes the annotation and emits `RENAME` instead of
+`DROP + ADD`; once the migration lands, the annotation is dead weight
+and can be removed.
+
+**DuckDB caveats the differ understands:**
+
+- `ADD COLUMN` cannot carry `NOT NULL` / `UNIQUE` / `REFERENCES` —
+  required adds become add → (backfill TODO when no default) →
+  `SET NOT NULL`; unique adds get a separate `CREATE UNIQUE INDEX`;
+  FK constraints cannot be added to an existing table at all (a note is
+  emitted).
+- A table referenced by another table's FOREIGN KEY is frozen for
+  everything except `ADD COLUMN` and index DDL ("Dependency Error") —
+  such steps classify `blocked`. The plan orders ALTERs before
+  CREATEs so a new child table never freezes its parent mid-migration.
+- `VARCHAR(n)` length hints are not persisted by DuckDB, so they never
+  produce drift; sequence start values cannot be altered after
+  creation, so `@idStart` drift is reported as a note, not a step.
+
 ### The adapter seam (Contract v2)
 
 All ORM methods route through a single adapter funnel.
@@ -2145,9 +2212,10 @@ language.
 
 ### ORM features not yet in
 
-- **Migration diffing** — `toSQL()` is greenfield CREATE; diffing the
-  declared models against a deployed database into ALTER migrations
-  (`rip schema status / make / migrate`) is the next big item.
+- **FK-cluster rebuilds** — DuckDB freezes FK-referenced tables for most
+  ALTERs; the differ classifies those steps `blocked` and leaves the
+  rebuild (recreate referencing tables around the change) to the human.
+  Generating the rebuild automatically is the next migration item.
 - **Polymorphic associations** — `@belongs_to :commentable, polymorphic: true`.
 - **Non-SQL adapters** — Mongo, Redis, Elasticsearch. The adapter contract
   is `query(sql, params)`, which assumes SQL.
@@ -2288,6 +2356,7 @@ user-defined enums or shapes compose incrementally.
 | `@idStart N`                  | Seed value for the auto-id sequence in `.toSQL()` output (default `1`). Overridden per-call by `toSQL(idStart: N)`. |
 | `@scope :name, -> body`       | Named composable query scope — `this` is the builder; also `@scope :name, (args) -> body`. Installed on the model and the builder |
 | `@defaultScope -> body`       | Applied to every query unless `.unscoped()` is called. At most one per model |
+| `@tableWas old_name`          | Table-rename annotation for the schema differ — `rip schema make` emits `RENAME TO` instead of `DROP + CREATE`. Removable once the migration lands |
 | `@belongs_to Target`          | FK column `target_id` referencing `targets.id`, NOT NULL            |
 | `@belongs_to Target?`         | Same, nullable                                                      |
 | `@has_one Target`             | Accessor `target()` returning one                                   |
@@ -2340,7 +2409,7 @@ a string-literal union; the **constraint** forms live after the type:
 | `min..max`           | constraint | Size (string/array length) or value range (numeric)    |
 | `[value]`            | constraint | Default value (single literal in brackets)             |
 | `/regex/`            | constraint | Pattern constraint (bare regex literal)                |
-| `{key: value}`       | constraint | Attrs (unique, index, etc.)                            |
+| `{key: value}`       | constraint | Attrs. Known keys: `{was: "old_name"}` — column-rename annotation for the schema differ |
 
 ```coffee
 password!  string, 8..100                     # length range

@@ -207,7 +207,7 @@ function __schemaSignature(def) {
         parts.push('f:' + e.name + ':' + (e.typeName || '') +
           (e.array ? '[]' : '') + ':' + (e.modifiers || []).join('') +
           (e.literals ? ':' + e.literals.join(',') : '') +
-          ':' + safe(e.constraints) +
+          ':' + safe(e.constraints) + ':' + safe(e.attrs) +
           (e.transform ? ':t' : ''));
         break;
       case 'enum-member':
@@ -373,6 +373,7 @@ class __SchemaDef {
             literals: e.literals || null,
             array: e.array === true,
             constraints: e.constraints || null,
+            attrs: e.attrs || null,
             transform: e.transform || null,
           });
           break;
@@ -452,10 +453,16 @@ class __SchemaDef {
     const primaryKey = 'id';
     const tableName = this.kind === 'model' ? __schemaTableName(this.name) : null;
 
+    // `@tableWas old_name` — table-rename annotation for the differ.
+    let tableWas = null;
+    for (const d of directives) {
+      if (d.name === 'tableWas' && d.args?.[0]?.name) tableWas = d.args[0].name;
+    }
+
     this._norm = {
       fields, methods, computed, derived, hooks, directives, enumMembers, relations,
       ensures, scopes, defaultScope,
-      timestamps, softDelete, primaryKey, tableName,
+      timestamps, softDelete, primaryKey, tableName, tableWas,
     };
     return this._norm;
   }
@@ -1072,6 +1079,7 @@ function __schemaDerive(source, transform) {
       typeName: f.typeName, array: f.array,
       literals: f.literals || null,
       constraints: f.constraints,
+      attrs: f.attrs || null,
       transform: f.transform || null,
     });
   }
@@ -1143,6 +1151,7 @@ function __schemaExpandMixins(host, fields, directives, ctx) {
         literals: e.literals || null,
         array: e.array === true,
         constraints: e.constraints || null,
+        attrs: e.attrs || null,
         transform: e.transform || null,
       });
     }

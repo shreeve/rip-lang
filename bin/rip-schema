@@ -1,0 +1,175 @@
+#!/usr/bin/env bun
+//
+// rip-schema — schema evolution CLI (`rip schema …`).
+//
+//   rip schema status  [entry.rip] [--dir DIR]
+//   rip schema plan    [entry.rip]
+//   rip schema make <name> [entry.rip] [--dir DIR] [--allow-lossy] [--allow-destructive]
+//   rip schema migrate [entry.rip] [--dir DIR] [--repair]
+//
+// `entry.rip` is a file whose import registers every :model schema
+// (your models file — it may also call connect() to point the adapter
+// at the database). When omitted, conventional locations are tried.
+//
+// Database connection comes from the entry file's own connect() call,
+// or from RIP_DB_URL / RIP_DB_TOKEN for the default duckdb-harbor
+// adapter.
+//
+// Migration files are plain SQL — numbered, hand-editable, checked into
+// git (default directory: ./migrations). `make` writes them from the
+// model-vs-database diff; `migrate` applies pending ones in order and
+// records (version, name, checksum) in the `_rip_migrations` table.
+
+// Registers the .rip module loader AND the full (migration-mode) schema
+// runtime — globalThis.schema gains plan/status/make/migrate/introspect.
+import '../rip-loader.js';
+
+import { existsSync } from 'fs';
+import { resolve } from 'path';
+
+const ENTRY_CANDIDATES = [
+  'models.rip', 'api/models.rip', 'app/models.rip', 'db/models.rip', 'src/models.rip',
+];
+
+const args = process.argv.slice(2);
+const cmd = args[0];
+
+if (!cmd || cmd === '--help' || cmd === '-h') {
+  usage(0);
+} else if (!['status', 'plan', 'make', 'migrate'].includes(cmd)) {
+  console.error(`rip schema: unknown subcommand '${cmd}'\n`);
+  usage(1);
+}
+
+const rest = args.slice(1);
+const flags = {
+  dir: 'migrations',
+  allowLossy: false,
+  allowDestructive: false,
+  repair: false,
+};
+const positional = [];
+for (let i = 0; i < rest.length; i++) {
+  const a = rest[i];
+  if (a === '--dir') flags.dir = rest[++i];
+  else if (a === '--allow-lossy') flags.allowLossy = true;
+  else if (a === '--allow-destructive') flags.allowDestructive = true;
+  else if (a === '--repair') flags.repair = true;
+  else if (a.startsWith('-')) die(`unknown flag: ${a}`);
+  else positional.push(a);
+}
+
+// `make` takes a migration name first; every command takes an optional
+// models entry. Disambiguate by file existence: a positional that names
+// an existing file is the entry, anything else (for make) is the name.
+let name = null;
+let entry = null;
+for (const p of positional) {
+  if (existsSync(p) && /\.(rip|js|ts)$/.test(p)) entry = p;
+  else if (cmd === 'make' && !name) name = p;
+  else die(`unexpected argument: ${p} (no such file)`);
+}
+if (cmd === 'make' && !name) die("usage: rip schema make <name> [entry.rip] — a migration name is required");
+if (!entry) entry = ENTRY_CANDIDATES.find(c => existsSync(c)) || null;
+if (!entry) {
+  die(
+    'no models entry found. Pass one explicitly (rip schema ' + cmd + ' [name] path/to/models.rip)\n' +
+    'or create one of: ' + ENTRY_CANDIDATES.join(', '));
+}
+
+// Importing the entry registers every :model it declares (directly or
+// transitively) and runs any connect() it performs.
+await import(resolve(entry));
+
+const schema = globalThis.schema;
+if (!schema || typeof schema.plan !== 'function') {
+  die('schema runtime did not load — does the entry file declare or import any schemas?');
+}
+
+const color = (c, s) => process.stdout.isTTY ? `\x1b[${c}m${s}\x1b[0m` : s;
+const dim = (s) => color('2', s);
+const CLASS_COLOR = { safe: '32', lossy: '33', destructive: '31', blocked: '31;1' };
+const tag = (cls) => color(CLASS_COLOR[cls] || '0', `[${cls}]`);
+
+function printSteps(steps) {
+  if (!steps.length) {
+    console.log(color('32', '✓ database matches the declared models — no changes'));
+    return;
+  }
+  for (const s of steps) {
+    console.log(`${tag(s.class)} ${s.kind} ${s.table}`);
+    for (const n of s.notes) console.log(dim(`    ${n}`));
+    for (const line of s.sql) console.log(`    ${line}`);
+  }
+  const counts = {};
+  for (const s of steps) counts[s.class] = (counts[s.class] || 0) + 1;
+  console.log('\n' + Object.entries(counts).map(([k, v]) => `${v} ${k}`).join(', '));
+}
+
+try {
+  if (cmd === 'plan') {
+    printSteps(await schema.plan());
+
+  } else if (cmd === 'status') {
+    const st = await schema.status({ dir: flags.dir });
+    console.log(`applied:  ${st.applied.length ? st.applied.map(a => a.version + '_' + a.name).join(', ') : '(none)'}`);
+    console.log(`pending:  ${st.pending.length ? st.pending.map(f => f.version + '_' + f.name).join(', ') : '(none)'}`);
+    if (st.mismatched.length) {
+      console.log(color('31', `edited after apply: ${st.mismatched.join(', ')} — restore the files or migrate --repair`));
+    }
+    console.log('');
+    if (st.steps.length && !st.pending.length && (st.applied.length || st.files.length)) {
+      console.log(color('33', 'drift: the database differs from the models in ways no pending migration explains'));
+    }
+    printSteps(st.steps);
+
+  } else if (cmd === 'make') {
+    const out = await schema.make(name, {
+      dir: flags.dir,
+      allowLossy: flags.allowLossy,
+      allowDestructive: flags.allowDestructive,
+    });
+    if (!out) {
+      console.log(color('32', '✓ no changes — nothing to write'));
+    } else {
+      printSteps(out.steps);
+      console.log(`\nwrote ${out.file}`);
+      console.log(dim('review the file, then apply with: rip schema migrate'));
+    }
+
+  } else if (cmd === 'migrate') {
+    const out = await schema.migrate({ dir: flags.dir, repair: flags.repair });
+    if (!out.ran.length) console.log(color('32', '✓ no pending migrations'));
+    else for (const r of out.ran) console.log(`applied ${r}`);
+  }
+  process.exit(0);
+} catch (e) {
+  die(e?.message || String(e));
+}
+
+function usage(code) {
+  console.log(`\
+rip schema — diff declared :model schemas against the database and manage migrations.
+
+Usage:
+  rip schema status  [entry.rip] [--dir DIR]        applied / pending / drift + the current plan
+  rip schema plan    [entry.rip]                    print the classified diff (no files touched)
+  rip schema make <name> [entry.rip] [--dir DIR]    write migrations/NNNN_<name>.sql from the diff
+                     [--allow-lossy] [--allow-destructive]
+  rip schema migrate [entry.rip] [--dir DIR]        apply pending migration files in order
+                     [--repair]
+
+entry.rip       file that declares/imports every :model (default: ${ENTRY_CANDIDATES.join(' | ')})
+--dir DIR       migrations directory (default: migrations)
+--allow-lossy   include steps that may lose data on existing rows (type changes, SET NOT NULL)
+--allow-destructive   include DROP TABLE / DROP COLUMN steps
+--repair        re-record checksums for applied migrations whose files changed
+
+Connection: the entry's connect() call, or RIP_DB_URL / RIP_DB_TOKEN.`);
+  process.exit(code);
+}
+
+function die(msg) {
+  console.error(`rip schema: ${msg}`);
+  process.exit(1);
+}

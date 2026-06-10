@@ -30,6 +30,7 @@ import {
   SCHEMA_DB_NAMING_RUNTIME,
   SCHEMA_ORM_RUNTIME,
   SCHEMA_DDL_RUNTIME,
+  SCHEMA_MIGRATE_RUNTIME,
   SCHEMA_BROWSER_STUBS_RUNTIME,
 } from './runtime.generated.js';
 import { setSchemaRuntimeProvider } from './schema.js';
@@ -47,7 +48,7 @@ function provider({ mode = 'migration' } = {}) {
       body = SCHEMA_VALIDATE_RUNTIME + '\n' + SCHEMA_DB_NAMING_RUNTIME + '\n' + SCHEMA_ORM_RUNTIME;
       break;
     case 'migration':
-      body = SCHEMA_VALIDATE_RUNTIME + '\n' + SCHEMA_DB_NAMING_RUNTIME + '\n' + SCHEMA_ORM_RUNTIME + '\n' + SCHEMA_DDL_RUNTIME;
+      body = SCHEMA_VALIDATE_RUNTIME + '\n' + SCHEMA_DB_NAMING_RUNTIME + '\n' + SCHEMA_ORM_RUNTIME + '\n' + SCHEMA_DDL_RUNTIME + '\n' + SCHEMA_MIGRATE_RUNTIME;
       break;
     default:
       throw new Error(`unknown schema runtime mode: ${mode}`);

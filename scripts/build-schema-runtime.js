@@ -28,6 +28,7 @@ const fragments = [
   'runtime-db-naming.js',
   'runtime-orm.js',
   'runtime-ddl.js',
+  'runtime-migrate.js',
   'runtime-browser-stubs.js',
 ];
 
@@ -103,11 +104,22 @@ const WRAPPER_TAIL = `
     : function() {
         throw new Error('schema.transaction() requires the server schema runtime (validate-only runtime loaded).');
       };
+  // Migration surface is migration-mode-only; export throwing slots in
+  // other modes so the namespace shape is stable everywhere.
+  const __schemaMigrationStub = (api) => function() {
+    throw new Error('schema.' + api + '() requires the migration schema runtime (CLI / rip schema); it is not part of the ' +
+      'validate/browser/server runtime modes.');
+  };
   // User-facing namespace: schema.transaction! -> ... in Rip source
   // resolves through this object (installed as a global alongside the
   // other Rip stdlib globals; ??= keeps user overrides intact).
   const schemaNamespace = {
     transaction: __schemaTransactionExport,
+    plan:       typeof __schemaPlan       !== 'undefined' ? __schemaPlan       : __schemaMigrationStub('plan'),
+    status:     typeof __schemaStatus     !== 'undefined' ? __schemaStatus     : __schemaMigrationStub('status'),
+    make:       typeof __schemaMake       !== 'undefined' ? __schemaMake       : __schemaMigrationStub('make'),
+    migrate:    typeof __schemaMigrate    !== 'undefined' ? __schemaMigrate    : __schemaMigrationStub('migrate'),
+    introspect: typeof __schemaIntrospect !== 'undefined' ? __schemaIntrospect : __schemaMigrationStub('introspect'),
   };
   const exports = {
     __schema, SchemaError, __SchemaRegistry,
@@ -140,6 +152,7 @@ const generatedSrc = `// AUTOGEN-NOTICE: do not edit by hand. Regenerate with:
 //   src/schema/runtime-db-naming.js      (server + migration)
 //   src/schema/runtime-orm.js            (server + migration)
 //   src/schema/runtime-ddl.js            (migration only)
+//   src/schema/runtime-migrate.js        (migration only)
 //   src/schema/runtime-browser-stubs.js  (browser only)
 //
 // CI: bun scripts/build-schema-runtime.js --check fails if this file
@@ -155,6 +168,7 @@ export const SCHEMA_VALIDATE_RUNTIME       = \`${esc(bodies.validate)}\`;
 export const SCHEMA_DB_NAMING_RUNTIME      = \`${esc(bodies['db-naming'])}\`;
 export const SCHEMA_ORM_RUNTIME            = \`${esc(bodies.orm)}\`;
 export const SCHEMA_DDL_RUNTIME            = \`${esc(bodies.ddl)}\`;
+export const SCHEMA_MIGRATE_RUNTIME        = \`${esc(bodies.migrate)}\`;
 export const SCHEMA_BROWSER_STUBS_RUNTIME  = \`${esc(bodies['browser-stubs'])}\`;
 `;
 
@@ -183,6 +197,7 @@ const sizes = {
   'db-naming':  Buffer.byteLength(bodies['db-naming']),
   orm:          Buffer.byteLength(bodies.orm),
   ddl:          Buffer.byteLength(bodies.ddl),
+  migrate:      Buffer.byteLength(bodies.migrate),
   'browser-stubs': Buffer.byteLength(bodies['browser-stubs']),
 };
 for (const [k, v] of Object.entries(sizes)) {

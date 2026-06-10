@@ -3905,8 +3905,292 @@ type "@scope emits typed statics and a per-model query alias", '''
   '''
 
 # ==============================================================================
-# Transactions — schema.transaction!
+# Schema evolution — _tableSpec, introspect, diff, status/make/migrate
 # ==============================================================================
+#
+# The differ is tested against fixtures (roadmap §2.6): the mock adapter
+# implements the Contract-v2 `introspect()` capability and returns a
+# canned DeployedSchema; declared models come from real declarations.
+
+migrateHeader = '''
+  deployed = {tables: []}
+  history  = []
+  calls    = []
+  adapter =
+    introspect: -> deployed
+    query: (sql, params) ->
+      calls.push {sql, params}
+      if sql.startsWith("SELECT version")
+        {columns: [{name: "version"}, {name: "name"}, {name: "checksum"}, {name: "applied_at"}], data: history.map((h) -> [h.version, h.name, h.checksum, null]), rows: history.length}
+      else if sql.startsWith("INSERT INTO _rip_migrations")
+        history.push {version: params[0], name: params[1], checksum: params[2]}
+        {columns: [], data: [], rows: 1}
+      else
+        {columns: [], data: [], rows: 0}
+  __schemaSetAdapter adapter
+  __SchemaRegistry.reset()
+
+'''
+
+test "_tableSpec exposes the canonical table structure", modelHeader + '''
+  Org = schema :model
+    name! string
+  User = schema :model
+    name!   string, 1..100
+    email!# email
+    @timestamps
+    @softDelete
+    @belongs_to Org
+    @index [name, email]
+  spec = User._tableSpec()
+  cols = spec.columns.map (c) -> c.name
+  [
+    spec.name
+    spec.sequence.name + ":" + spec.sequence.start
+    cols
+    spec.columns[1].type
+    spec.columns[2].unique
+    spec.foreignKeys[0].refTable
+    spec.indexes.map (i) -> i.name + (i.unique ? "!" : "")
+  ]
+''', ["users", "users_seq:1", ["id", "name", "email", "org_id", "created_at", "updated_at", "deleted_at"], "VARCHAR(100)", true, "orgs", ["idx_users_email!", "idx_users_name_email"]]
+
+test "diff: empty database plans CREATE for every model", migrateHeader + '''
+  User = schema :model
+    name! string
+  Order = schema :model
+    total! integer
+    @belongs_to User
+  steps = schema.plan!
+  kinds = steps.map (s) -> s.kind + ":" + s.class
+  out = [
+    steps.length
+    kinds
+    steps[0].sql.join("\\n").includes("CREATE TABLE users")
+    steps[1].sql.join("\\n").includes("user_id INTEGER NOT NULL REFERENCES users(id)")
+  ]
+  out
+''', [2, ["create-table:safe", "create-table:safe"], true, true]
+
+test "diff: matching database plans nothing (round-trip clean)", migrateHeader + '''
+  User = schema :model
+    name!   string, 1..100
+    email!# email
+    @timestamps
+  deployed.tables = [{
+    name: "users"
+    sequence: {name: "users_seq", start: 1}
+    primaryKey: "id"
+    columns: [
+      {name: "id", type: "INTEGER", notNull: true, unique: false, primary: true, default: "nextval('users_seq')"}
+      {name: "name", type: "VARCHAR", notNull: true, unique: false, default: null}
+      {name: "email", type: "VARCHAR", notNull: true, unique: true, default: null}
+      {name: "created_at", type: "TIMESTAMP", notNull: false, unique: false, default: "CURRENT_TIMESTAMP"}
+      {name: "updated_at", type: "TIMESTAMP", notNull: false, unique: false, default: "now()"}
+    ]
+    indexes: [{name: "idx_users_email", columns: ["email"], unique: true}]
+    foreignKeys: []
+    tableWas: null
+  }]
+  steps = schema.plan!
+  steps.length
+''', 0
+
+test "diff: added columns classify by shape (optional / default / required / unique)", migrateHeader + '''
+  User = schema :model
+    name!  string
+    bio?   text
+    plan?  string, ["free"]
+    code!  string
+    tag!#  string
+  deployed.tables = [{
+    name: "users", sequence: {name: "users_seq", start: 1}, primaryKey: "id"
+    columns: [
+      {name: "id", type: "INTEGER", notNull: true, unique: false, primary: true, default: "nextval('users_seq')"}
+      {name: "name", type: "VARCHAR", notNull: true, unique: false, default: null}
+    ]
+    indexes: [], foreignKeys: [], tableWas: null
+  }]
+  steps = schema.plan!
+  byKind = {}
+  for s in steps
+    byKind[s.sql[0].match(/ADD COLUMN (\\w+)/)?[1] ?? s.kind] = s
+  hasTodo = byKind.code.sql.some (l) -> l.includes("TODO: backfill")
+  hasUniq = byKind.tag.sql.some (l) -> l.includes("CREATE UNIQUE INDEX idx_users_tag")
+  out = [
+    byKind.bio.sql.length
+    byKind.plan.sql[0].includes("DEFAULT 'free'")
+    hasTodo
+    byKind.code.sql[byKind.code.sql.length - 1].includes("SET NOT NULL")
+    hasUniq
+  ]
+  out
+''', [1, true, true, true, true]
+
+test "diff: drops are destructive; type/null changes classify lossy/safe", migrateHeader + '''
+  User = schema :model
+    name!  string
+    age?   integer
+  deployed.tables = [{
+    name: "users", sequence: {name: "users_seq", start: 1}, primaryKey: "id"
+    columns: [
+      {name: "id", type: "INTEGER", notNull: true, unique: false, primary: true, default: "nextval('users_seq')"}
+      {name: "name", type: "VARCHAR", notNull: false, unique: false, default: null}
+      {name: "age", type: "VARCHAR", notNull: true, unique: false, default: null}
+      {name: "legacy", type: "VARCHAR", notNull: false, unique: false, default: null}
+    ]
+    indexes: [], foreignKeys: [], tableWas: null
+  }, {
+    name: "ghosts", sequence: null, primaryKey: "id"
+    columns: [{name: "id", type: "INTEGER", notNull: true, unique: false, primary: true, default: null}]
+    indexes: [], foreignKeys: [], tableWas: null
+  }]
+  steps = schema.plan!
+  kinds = steps.map((s) -> s.kind + ":" + s.class).sort()
+  kinds
+''', ["alter-type:lossy", "drop-column:destructive", "drop-not-null:safe", "drop-table:destructive", "set-not-null:lossy"]
+
+test "diff: VARCHAR length hints never produce drift (DuckDB erases them)", migrateHeader + '''
+  User = schema :model
+    name! string, 1..100
+  deployed.tables = [{
+    name: "users", sequence: {name: "users_seq", start: 1}, primaryKey: "id"
+    columns: [
+      {name: "id", type: "INTEGER", notNull: true, unique: false, primary: true, default: "nextval('users_seq')"}
+      {name: "name", type: "VARCHAR", notNull: true, unique: false, default: null}
+    ]
+    indexes: [], foreignKeys: [], tableWas: null
+  }]
+  steps = schema.plan!
+  steps.length
+''', 0
+
+test "rename: {was: ...} emits RENAME COLUMN instead of drop + add", migrateHeader + '''
+  User = schema :model
+    givenName! string, {was: "first_name"}
+  deployed.tables = [{
+    name: "users", sequence: {name: "users_seq", start: 1}, primaryKey: "id"
+    columns: [
+      {name: "id", type: "INTEGER", notNull: true, unique: false, primary: true, default: "nextval('users_seq')"}
+      {name: "first_name", type: "VARCHAR", notNull: true, unique: false, default: null}
+    ]
+    indexes: [], foreignKeys: [], tableWas: null
+  }]
+  steps = schema.plan!
+  [steps.length, steps[0].kind, steps[0].sql[0]]
+''', [1, "rename-column", "ALTER TABLE users RENAME COLUMN first_name TO given_name;"]
+
+test "rename: @tableWas emits RENAME TO and then diffs columns", migrateHeader + '''
+  Member = schema :model
+    name! string
+    @tableWas users
+  deployed.tables = [{
+    name: "users", sequence: {name: "users_seq", start: 1}, primaryKey: "id"
+    columns: [
+      {name: "id", type: "INTEGER", notNull: true, unique: false, primary: true, default: "nextval('users_seq')"}
+      {name: "name", type: "VARCHAR", notNull: true, unique: false, default: null}
+    ]
+    indexes: [], foreignKeys: [], tableWas: null
+  }]
+  steps = schema.plan!
+  [steps.length, steps[0].kind, steps[0].sql[0]]
+''', [1, "rename-table", "ALTER TABLE users RENAME TO members;"]
+
+test "diff: ALTERs on FK-referenced tables classify as blocked (DuckDB wall)", migrateHeader + '''
+  User = schema :model
+    fullName! string, {was: "name"}
+    phone?    string
+  Order = schema :model
+    total! integer
+    @belongs_to User
+  deployed.tables = [{
+    name: "users", sequence: {name: "users_seq", start: 1}, primaryKey: "id"
+    columns: [
+      {name: "id", type: "INTEGER", notNull: true, unique: false, primary: true, default: "nextval('users_seq')"}
+      {name: "name", type: "VARCHAR", notNull: true, unique: false, default: null}
+    ]
+    indexes: [], foreignKeys: [], tableWas: null
+  }, {
+    name: "orders", sequence: {name: "orders_seq", start: 1}, primaryKey: "id"
+    columns: [
+      {name: "id", type: "INTEGER", notNull: true, unique: false, primary: true, default: "nextval('orders_seq')"}
+      {name: "total", type: "INTEGER", notNull: true, unique: false, default: null}
+      {name: "user_id", type: "INTEGER", notNull: true, unique: false, default: null}
+    ]
+    indexes: [], foreignKeys: [{column: "user_id", refTable: "users", refColumn: "id"}], tableWas: null
+  }]
+  steps = schema.plan!
+  rename = steps.find (s) -> s.kind is "rename-column"
+  added  = steps.find (s) -> s.kind is "add-column"
+  err = null
+  try
+    schema.make! "x", {dir: "/tmp/__rip_mig_blocked"}
+  catch e
+    err = e.message
+  out = [rename.class, added.class, rename.notes.some((n) -> n.includes("Dependency Error")), err.includes("cannot execute")]
+  out
+''', ["blocked", "safe", true, true]
+
+test "make: refuses gated steps without allow flags; allows with them", migrateHeader + '''
+  User = schema :model
+    name! string
+  deployed.tables = [{
+    name: "users", sequence: {name: "users_seq", start: 1}, primaryKey: "id"
+    columns: [
+      {name: "id", type: "INTEGER", notNull: true, unique: false, primary: true, default: "nextval('users_seq')"}
+      {name: "name", type: "VARCHAR", notNull: true, unique: false, default: null}
+      {name: "legacy", type: "VARCHAR", notNull: false, unique: false, default: null}
+    ]
+    indexes: [], foreignKeys: [], tableWas: null
+  }]
+  err = null
+  try
+    schema.make! "drop_legacy", {dir: "/tmp/__rip_mig_test_none"}
+  catch e
+    err = e.message
+  [err.includes("gated steps"), err.includes("destructive")]
+''', [true, true]
+
+test "make + migrate: write file, apply pending, record history, idempotent", migrateHeader + '''
+  fs = await import("node:fs")
+  dir = "/tmp/__rip_mig_test_" + Date.now()
+  User = schema :model
+    name! string
+  out = schema.make! "init", {dir}
+  applied1 = schema.migrate! {dir}
+  ranSQL = calls.filter((c) -> c.sql.includes("CREATE TABLE users") or c.sql.includes("CREATE SEQUENCE users_seq")).length
+  applied2 = schema.migrate! {dir}
+  content = fs.readFileSync(out.file, "utf8")
+  fs.rmSync(dir, {recursive: true, force: true})
+  result = [
+    out.file.endsWith("0001_init.sql")
+    content.includes("CREATE TABLE users")
+    applied1.ran
+    ranSQL >= 2
+    history.length
+    applied2.ran.length
+  ]
+  result
+''', [true, true, ["0001_init"], true, 1, 0]
+
+test "migrate: checksum mismatch on applied file aborts; --repair re-records", migrateHeader + '''
+  fs = await import("node:fs")
+  dir = "/tmp/__rip_mig_chk_" + Date.now()
+  User = schema :model
+    name! string
+  out = schema.make! "init", {dir}
+  schema.migrate! {dir}
+  fs.appendFileSync(out.file, "\\n-- edited after apply\\n")
+  err = null
+  try
+    schema.migrate! {dir}
+  catch e
+    err = e.message
+  schema.migrate! {dir, repair: true}
+  fs.rmSync(dir, {recursive: true, force: true})
+  repaired = calls.some (c) -> c.sql.startsWith("UPDATE _rip_migrations")
+  [err.includes("checksum mismatch"), repaired]
+''', [true, true]
 #
 # The tx mock adapter records BEGIN / per-statement / COMMIT / ROLLBACK
 # events and separates statements routed through the transaction handle
