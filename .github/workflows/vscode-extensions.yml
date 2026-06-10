@@ -110,10 +110,12 @@ jobs:
           echo "Validating $vsix"
           # 1) Valid zip
           unzip -tq "$vsix"
-          # 2) Contains extension/package.json with the expected name
+          # 2) Contains extension/package.json whose name matches the source
+          #    package.json (the matrix name is just a publish label — the
+          #    packaged name can differ, e.g. rip → vscode-rip).
           unzip -p "$vsix" extension/package.json > /tmp/ext-pkg.json
           got=$(node -p 'require("/tmp/ext-pkg.json").name')
-          want="${{ matrix.name }}"
+          want=$(node -p 'require("./package.json").name')
           if [[ "$got" != "$want" ]]; then
             echo "::error::Packaged extension name '$got' does not match '$want'"; exit 1
           fi
@@ -209,8 +211,10 @@ jobs:
 
               # Enumerate what's currently published for this extension so
               # the landing page lists all versions (not just this run's).
+              # Match any .vsix — packaged names can differ from the publish
+              # label (e.g. vscode-rip-0.6.0.vsix under vscode/rip/).
               all_versions = sorted(
-                  (os.path.basename(f) for f in glob.glob(f"{dest}/{name}-*.vsix")
+                  (os.path.basename(f) for f in glob.glob(f"{dest}/*.vsix")
                    if not f.endswith(f"{name}-latest.vsix")),
                   reverse=True,
               )
@@ -286,8 +290,9 @@ jobs:
           for n in print rip; do
             d="docs/extensions/vscode/$n"
             [[ -d "$d" ]] || continue
-            for f in "$d"/${n}-[0-9]*.vsix; do
+            for f in "$d"/*.vsix; do
               [[ -f "$f" ]] || continue
+              [[ "$f" == *"${n}-latest.vsix" ]] && continue
               summary+="$(basename "$f" .vsix), "
             done
           done
