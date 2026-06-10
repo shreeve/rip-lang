@@ -32,6 +32,13 @@ function __schemaFormatIssues(issues, name) {
 const __SCHEMA_RESERVED_STATIC = new Set([
   'parse','safe','ok','find','findMany','where','all','first','count','create','toSQL',
   'includes','upsert','insertMany','updateAll','deleteAll','withDeleted','onlyDeleted',
+  'unscoped',
+]);
+// Names a @scope may not take: the model statics above plus the
+// builder-only chain methods — scopes install on both surfaces.
+const __SCHEMA_SCOPE_RESERVED = new Set([
+  ...__SCHEMA_RESERVED_STATIC,
+  'limit','offset','order','orderBy',
 ]);
 const __SCHEMA_RESERVED_INSTANCE = new Set([
   'save','destroy','restore','reload','ok','errors','toJSON','savedChanges','markDirty',
@@ -290,6 +297,21 @@ class __SchemaDef {
     this._norm = null;
     this._klass = null;
     this._sourceModel = null;
+    // Install @scope statics eagerly so `User.active()` works as the
+    // very first call on the model (normalization hasn't run yet at
+    // that point; the scope invocation itself triggers it, which also
+    // fires the duplicate / reserved-name collision checks). Prototype
+    // methods win on name conflicts (`in` sees the prototype chain),
+    // and normalize rejects those names anyway.
+    for (const e of desc.entries || []) {
+      if (e.tag !== 'scope' || (e.name in this)) continue;
+      const self = this;
+      const sfn = e.fn;
+      Object.defineProperty(this, e.name, {
+        enumerable: false, configurable: true,
+        value: function(...args) { return __schemaInvokeScope(self, null, sfn, args); },
+      });
+    }
   }
 
   _normalize() {
@@ -304,6 +326,8 @@ class __SchemaDef {
     const enumMembers = new Map();
     const relations = new Map();
     const ensures = [];
+    const scopes = new Map();
+    let defaultScope = null;
     let timestamps = false;
     let softDelete = false;
 
@@ -393,6 +417,23 @@ class __SchemaDef {
           // come out in the order authored.
           ensures.push({ message: e.message, fn: e.fn });
           break;
+        case 'scope':
+          // Scopes live in the STATIC namespace (model + builder), not
+          // the instance namespace — a field `active` and a scope
+          // `:active` coexist by design. Collisions are checked against
+          // other scopes and the reserved static/builder names.
+          if (scopes.has(e.name)) collision(e.name, 'scope');
+          if (__SCHEMA_SCOPE_RESERVED.has(e.name)) collision(e.name, 'reserved query API name');
+          scopes.set(e.name, e.fn);
+          break;
+        case 'defaultScope':
+          if (defaultScope) {
+            throw new SchemaError(
+              [{field: '', error: 'collision', message: 'only one @defaultScope per model'}],
+              this.name, this.kind);
+          }
+          defaultScope = e.fn;
+          break;
       }
     }
 
@@ -413,7 +454,7 @@ class __SchemaDef {
 
     this._norm = {
       fields, methods, computed, derived, hooks, directives, enumMembers, relations,
-      ensures,
+      ensures, scopes, defaultScope,
       timestamps, softDelete, primaryKey, tableName,
     };
     return this._norm;

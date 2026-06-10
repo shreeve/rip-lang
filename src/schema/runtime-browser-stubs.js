@@ -38,6 +38,7 @@ __SchemaDef.prototype.where       = __schemaBrowserStub('where');
 __SchemaDef.prototype.includes    = __schemaBrowserStub('includes');
 __SchemaDef.prototype.withDeleted = __schemaBrowserStub('withDeleted');
 __SchemaDef.prototype.onlyDeleted = __schemaBrowserStub('onlyDeleted');
+__SchemaDef.prototype.unscoped    = __schemaBrowserStub('unscoped');
 __SchemaDef.prototype.all         = __schemaBrowserStub('all');
 __SchemaDef.prototype.first       = __schemaBrowserStub('first');
 __SchemaDef.prototype.count       = __schemaBrowserStub('count');
@@ -55,6 +56,7 @@ function __schemaDestroy()         { throw new Error("schema instance.destroy() 
 function __schemaRestore()         { throw new Error("schema instance.restore() is not available in the browser. Import @rip-lang/db on the server."); }
 function __schemaResolveRelation() { throw new Error("schema relation accessors are not available in the browser. Import @rip-lang/db on the server."); }
 function __schemaTransaction()     { throw new Error("schema.transaction() is not available in the browser. Import @rip-lang/db on the server."); }
+function __schemaInvokeScope()     { throw new Error("schema query scopes are not available in the browser. Import @rip-lang/db on the server."); }
 function __schemaTableName(m) { return null; } // returned only for :model normalize; never used downstream in browser
 function __schemaPluralize(w) { return w; }    // identity — relations work for type-resolution but never query
 function __schemaFkName(m)    { return ''; }   // ditto

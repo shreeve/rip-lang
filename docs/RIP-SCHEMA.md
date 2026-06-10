@@ -921,6 +921,41 @@ Relation accessors memoize independently of `.includes`: the second
 `user.orders!` call on the same instance is free. Pass
 `user.orders! reload: true` to bust the memo and re-query.
 
+### Query scopes (`@scope`, `@defaultScope`)
+
+Named, composable query fragments declared on the model:
+
+```coffee
+User = schema :model
+  name!    string
+  active?  boolean
+  role?    string
+  @scope :active, -> @where(active: true)
+  @scope :since,  (d) -> @where("created_at > ?", d)
+  @defaultScope -> @where(banned: false)
+
+User.active().since(monday).order("name").all!
+User.where(role: "admin").active().all!       # chains in any order
+User.unscoped().all!                          # skip the @defaultScope
+```
+
+- `this` inside a scope body is the query builder; scopes return the
+  builder, so they compose with each other and with `.where` /
+  `.order` / `.limit` in any order. Parameterized scopes declare their
+  args: `(d) -> @where("created_at > ?", d)`.
+- Scopes live in the **static** namespace (model + builder), so a field
+  `active` and a scope `:active` coexist. Scope names may not collide
+  with the query API (`where`, `find`, `order`, …) or with each other —
+  checked at first use with a `collision` SchemaError.
+- `@defaultScope` (at most one per model) applies to every read and
+  bulk write — `where`/`all`/`first`/`count`/`find`/`findMany`/
+  `updateAll`/`deleteAll` — unless `.unscoped()` appears anywhere in
+  the chain. It composes with `@softDelete`'s implicit filter; both
+  apply. (Use sparingly — Active Record's caveats about default
+  scopes apply verbatim.)
+- Scopes appear in shadow TS: typed statics on the model const plus a
+  per-model `UserQuery` alias so scope-first chains typecheck.
+
 ### Transactions (`schema.transaction!`)
 
 Atomic multi-statement writes. The block's value becomes the
@@ -1718,6 +1753,7 @@ interface ModelSchema<Instance, Data = unknown, Id = number, Create = Partial<Da
   includes(...specs: unknown[]): SchemaQuery<Instance>;
   withDeleted(): SchemaQuery<Instance>;
   onlyDeleted(): SchemaQuery<Instance>;
+  unscoped(): SchemaQuery<Instance>;
   all(limit?: number): Promise<Instance[]>;
   first(): Promise<Instance | null>;
   count(cond?: Record<string, unknown>): Promise<number>;
@@ -2109,8 +2145,6 @@ language.
 
 ### ORM features not yet in
 
-- **Query scopes** — named, composable `@scope :active, -> @where(...)`
-  reusable across `.where` chains, plus `@defaultScope`.
 - **Migration diffing** — `toSQL()` is greenfield CREATE; diffing the
   declared models against a deployed database into ALTER migrations
   (`rip schema status / make / migrate`) is the next big item.
@@ -2252,6 +2286,8 @@ user-defined enums or shapes compose incrementally.
 | `@index column`               | Single-column index (same as `@index [column]`)                     |
 | `@index [...] #`              | Unique index                                                        |
 | `@idStart N`                  | Seed value for the auto-id sequence in `.toSQL()` output (default `1`). Overridden per-call by `toSQL(idStart: N)`. |
+| `@scope :name, -> body`       | Named composable query scope — `this` is the builder; also `@scope :name, (args) -> body`. Installed on the model and the builder |
+| `@defaultScope -> body`       | Applied to every query unless `.unscoped()` is called. At most one per model |
 | `@belongs_to Target`          | FK column `target_id` referencing `targets.id`, NOT NULL            |
 | `@belongs_to Target?`         | Same, nullable                                                      |
 | `@has_one Target`             | Accessor `target()` returning one                                   |
@@ -2787,9 +2823,9 @@ from `z.infer<>`.
 For the common production shape — yes. `find`, `where`, `create`,
 `save`, `destroy`, relations, DDL, hooks, lifecycle callbacks,
 validations, transactions (`schema.transaction!`), eager loading
-(`.includes`), soft deletes, upsert/batch writes, and structured
-constraint-violation errors are all present. For query scopes and
-migration diffing — not yet; see §15.
+(`.includes`), query scopes (`@scope` / `@defaultScope`), soft deletes,
+upsert/batch writes, and structured constraint-violation errors are all
+present. For migration diffing — not yet; see §15.
 
 **Does the runtime belong to `schema.js` or is it loaded separately?**
 It's inlined. When a file uses `schema`, the compiler injects a small

@@ -100,6 +100,13 @@ function __schemaFormatIssues(issues, name) {
 const __SCHEMA_RESERVED_STATIC = new Set([
   'parse','safe','ok','find','findMany','where','all','first','count','create','toSQL',
   'includes','upsert','insertMany','updateAll','deleteAll','withDeleted','onlyDeleted',
+  'unscoped',
+]);
+// Names a @scope may not take: the model statics above plus the
+// builder-only chain methods — scopes install on both surfaces.
+const __SCHEMA_SCOPE_RESERVED = new Set([
+  ...__SCHEMA_RESERVED_STATIC,
+  'limit','offset','order','orderBy',
 ]);
 const __SCHEMA_RESERVED_INSTANCE = new Set([
   'save','destroy','restore','reload','ok','errors','toJSON','savedChanges','markDirty',
@@ -358,6 +365,21 @@ class __SchemaDef {
     this._norm = null;
     this._klass = null;
     this._sourceModel = null;
+    // Install @scope statics eagerly so \`User.active()\` works as the
+    // very first call on the model (normalization hasn't run yet at
+    // that point; the scope invocation itself triggers it, which also
+    // fires the duplicate / reserved-name collision checks). Prototype
+    // methods win on name conflicts (\`in\` sees the prototype chain),
+    // and normalize rejects those names anyway.
+    for (const e of desc.entries || []) {
+      if (e.tag !== 'scope' || (e.name in this)) continue;
+      const self = this;
+      const sfn = e.fn;
+      Object.defineProperty(this, e.name, {
+        enumerable: false, configurable: true,
+        value: function(...args) { return __schemaInvokeScope(self, null, sfn, args); },
+      });
+    }
   }
 
   _normalize() {
@@ -372,6 +394,8 @@ class __SchemaDef {
     const enumMembers = new Map();
     const relations = new Map();
     const ensures = [];
+    const scopes = new Map();
+    let defaultScope = null;
     let timestamps = false;
     let softDelete = false;
 
@@ -461,6 +485,23 @@ class __SchemaDef {
           // come out in the order authored.
           ensures.push({ message: e.message, fn: e.fn });
           break;
+        case 'scope':
+          // Scopes live in the STATIC namespace (model + builder), not
+          // the instance namespace — a field \`active\` and a scope
+          // \`:active\` coexist by design. Collisions are checked against
+          // other scopes and the reserved static/builder names.
+          if (scopes.has(e.name)) collision(e.name, 'scope');
+          if (__SCHEMA_SCOPE_RESERVED.has(e.name)) collision(e.name, 'reserved query API name');
+          scopes.set(e.name, e.fn);
+          break;
+        case 'defaultScope':
+          if (defaultScope) {
+            throw new SchemaError(
+              [{field: '', error: 'collision', message: 'only one @defaultScope per model'}],
+              this.name, this.kind);
+          }
+          defaultScope = e.fn;
+          break;
       }
     }
 
@@ -481,7 +522,7 @@ class __SchemaDef {
 
     this._norm = {
       fields, methods, computed, derived, hooks, directives, enumMembers, relations,
-      ensures,
+      ensures, scopes, defaultScope,
       timestamps, softDelete, primaryKey, tableName,
     };
     return this._norm;
@@ -1455,6 +1496,18 @@ function __schemaConstraintIssue(msg) {
 
 // ---- Query builder ----------------------------------------------------------
 
+// Run a scope body with \`this\` bound to a query builder. \`builder\` is
+// null when invoked from a model static (User.active()) — a fresh
+// builder is created; chained scope calls pass the existing builder.
+// Scopes conventionally return the builder (\`@where\` does), but a body
+// that returns something else falls back to the builder so chains never
+// break on a stray trailing expression.
+function __schemaInvokeScope(def, builder, fn, args) {
+  const q = builder || new __SchemaQuery(def);
+  const out = fn.apply(q, args);
+  return out instanceof __SchemaQuery ? out : q;
+}
+
 class __SchemaQuery {
   constructor(def, opts = {}) {
     this._def = def;
@@ -1464,9 +1517,25 @@ class __SchemaQuery {
     this._offset = null;
     this._order = null;
     this._includes = [];
+    this._unscoped = false;
+    this._defaultScopeApplied = false;
     // Soft-delete filter mode: 'live' (default), 'all' (.withDeleted),
     // 'deleted' (.onlyDeleted). Pre-v2 \`includeDeleted\` option maps to 'all'.
     this._deleted = opts.includeDeleted === true ? 'all' : 'live';
+    // Per-model scopes install as own methods so chains compose in any
+    // order: User.where(role: 'admin').active().since(d). Builder
+    // method names win on collision (normalize rejects those anyway).
+    const scopes = def._normalize().scopes;
+    if (scopes && scopes.size) {
+      for (const [sname, sfn] of scopes) {
+        if (!(sname in this)) {
+          Object.defineProperty(this, sname, {
+            enumerable: false, configurable: true,
+            value: (...args) => __schemaInvokeScope(def, this, sfn, args),
+          });
+        }
+      }
+    }
   }
   where(cond, ...params) {
     if (typeof cond === 'string') {
@@ -1498,6 +1567,16 @@ class __SchemaQuery {
   }
   withDeleted() { this._deleted = 'all'; return this; }
   onlyDeleted() { this._deleted = 'deleted'; return this; }
+  unscoped() { this._unscoped = true; return this; }
+  // @defaultScope applies lazily at terminal time (all/count/updateAll/
+  // deleteAll) so .unscoped() works no matter where it appears in the
+  // chain, and so the default's clauses never double-apply.
+  _applyDefaultScope() {
+    if (this._unscoped || this._defaultScopeApplied) return;
+    this._defaultScopeApplied = true;
+    const fn = this._def._normalize().defaultScope;
+    if (fn) fn.call(this);
+  }
   _whereParts(norm) {
     const where = [...this._clauses];
     if (norm.softDelete) {
@@ -1517,6 +1596,7 @@ class __SchemaQuery {
     return parts.join(' ');
   }
   async all() {
+    this._applyDefaultScope();
     const sql = this._buildSQL();
     const res = await __schemaRunSQL(this._def, sql, this._params);
     const instances = (res.data || []).map(row => this._def._hydrate(res.columns, row));
@@ -1533,6 +1613,7 @@ class __SchemaQuery {
     return arr[0] || null;
   }
   async count() {
+    this._applyDefaultScope();
     const n = this._def._normalize();
     const parts = ['SELECT COUNT(*) FROM "' + n.tableName + '"'];
     const where = this._whereParts(n);
@@ -1544,6 +1625,7 @@ class __SchemaQuery {
   // and per-instance hooks — the name says "all", the docs say "raw".
   // Returns the adapter's reported row count when available.
   async updateAll(values) {
+    this._applyDefaultScope();
     const n = this._def._normalize();
     const keys = values && typeof values === 'object' ? Object.keys(values) : [];
     if (!keys.length) throw new Error('updateAll: requires at least one column to set');
@@ -1569,6 +1651,7 @@ class __SchemaQuery {
   // @softDelete model this is an UPDATE setting deleted_at; on a hard
   // model it's a real DELETE. Bypasses per-instance hooks (bulk path).
   async deleteAll() {
+    this._applyDefaultScope();
     const n = this._def._normalize();
     const where = this._whereParts(n);
     let sql, params;
@@ -1995,16 +2078,13 @@ function __schemaSerialize(v, field) {
 
 __SchemaDef.prototype.find = async function (id) {
   this._assertModel('find');
+  // Routed through the builder so find honors the same filters as every
+  // other read: the @softDelete \`deleted_at IS NULL\` filter and the
+  // model's @defaultScope (Active Record semantics — default_scope
+  // applies to find). \`User.unscoped().where(id: …).first!\` is the
+  // escape hatch.
   const norm = this._normalize();
-  const soft = norm.softDelete ? ' AND "deleted_at" IS NULL' : '';
-  const sql = 'SELECT * FROM "' + norm.tableName + '" WHERE "' + norm.primaryKey + '" = ?' + soft + ' LIMIT 1';
-  const res = await __schemaRunSQL(this, sql, [id]);
-  // Harbor returns rowCount (not the legacy \`rows\` alias). Treat both
-  // as authoritative so the runtime works against any /sql adapter
-  // that has a row-count field, regardless of which name it uses.
-  const n = res.rowCount ?? res.rows;
-  if (!n || !res.data?.[0]) return null;
-  return this._hydrate(res.columns, res.data[0]);
+  return new __SchemaQuery(this).where({ [norm.primaryKey]: id }).first();
 };
 
 __SchemaDef.prototype.findMany = async function (ids) {
@@ -2035,6 +2115,11 @@ __SchemaDef.prototype.withDeleted = function () {
 __SchemaDef.prototype.onlyDeleted = function () {
   this._assertModel('onlyDeleted');
   return new __SchemaQuery(this).onlyDeleted();
+};
+
+__SchemaDef.prototype.unscoped = function () {
+  this._assertModel('unscoped');
+  return new __SchemaQuery(this).unscoped();
 };
 
 __SchemaDef.prototype.all = function () {
@@ -2355,6 +2440,7 @@ __SchemaDef.prototype.where       = __schemaBrowserStub('where');
 __SchemaDef.prototype.includes    = __schemaBrowserStub('includes');
 __SchemaDef.prototype.withDeleted = __schemaBrowserStub('withDeleted');
 __SchemaDef.prototype.onlyDeleted = __schemaBrowserStub('onlyDeleted');
+__SchemaDef.prototype.unscoped    = __schemaBrowserStub('unscoped');
 __SchemaDef.prototype.all         = __schemaBrowserStub('all');
 __SchemaDef.prototype.first       = __schemaBrowserStub('first');
 __SchemaDef.prototype.count       = __schemaBrowserStub('count');
@@ -2372,6 +2458,7 @@ function __schemaDestroy()         { throw new Error("schema instance.destroy() 
 function __schemaRestore()         { throw new Error("schema instance.restore() is not available in the browser. Import @rip-lang/db on the server."); }
 function __schemaResolveRelation() { throw new Error("schema relation accessors are not available in the browser. Import @rip-lang/db on the server."); }
 function __schemaTransaction()     { throw new Error("schema.transaction() is not available in the browser. Import @rip-lang/db on the server."); }
+function __schemaInvokeScope()     { throw new Error("schema query scopes are not available in the browser. Import @rip-lang/db on the server."); }
 function __schemaTableName(m) { return null; } // returned only for :model normalize; never used downstream in browser
 function __schemaPluralize(w) { return w; }    // identity — relations work for type-resolution but never query
 function __schemaFkName(m)    { return ''; }   // ditto

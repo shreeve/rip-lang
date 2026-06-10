@@ -1921,6 +1921,7 @@ INTRINSICS = '''
     onlyDeleted(): SchemaQuery<T>;
     updateAll(values: Record<string, unknown>): Promise<number | null>;
     deleteAll(): Promise<number | null>;
+    unscoped(): SchemaQuery<T>;
   }
   interface ModelSchema<Instance, Data = unknown, Id = number, Create = Partial<Data>> extends Schema<Instance, Data> {
     find(id: Id): Promise<Instance | null>;
@@ -1929,6 +1930,7 @@ INTRINSICS = '''
     includes(...specs: unknown[]): SchemaQuery<Instance>;
     withDeleted(): SchemaQuery<Instance>;
     onlyDeleted(): SchemaQuery<Instance>;
+    unscoped(): SchemaQuery<Instance>;
     all(limit?: number): Promise<Instance[]>;
     first(): Promise<Instance | null>;
     count(cond?: Record<string, unknown>): Promise<number>;
@@ -3741,6 +3743,166 @@ test ".upsert! without a conflict target throws", modelHeader + '''
     err = e.message
   err.includes("conflict target")
 ''', true
+
+# ==============================================================================
+# Query scopes — @scope, @defaultScope, .unscoped()
+# ==============================================================================
+
+test "@scope: composes on the model and the builder, in any order", modelHeader + '''
+  User = schema :model
+    name!    string
+    active?  boolean
+    role?    string
+    @scope :active, -> @where(active: true)
+    @scope :admins, -> @where(role: "admin")
+    @scope :since,  (d) -> @where("created_at > ?", d)
+  User.active().admins().since(123).all!
+  User.where(role: "user").active().all!
+  [
+    adapter.calls[0].sql.includes('"active" = ? AND "role" = ? AND created_at > ?')
+    adapter.calls[0].params
+    adapter.calls[1].sql.includes('"role" = ? AND "active" = ?')
+  ]
+''', [true, [true, "admin", 123], true]
+
+test "@scope: chains with order/limit and terminates normally", modelHeader + '''
+  User = schema :model
+    name!   string
+    active? boolean
+    @scope :active, -> @where(active: true)
+  User.active().order("name").limit(5).all!
+  sql = adapter.calls[0].sql
+  [sql.includes('WHERE "active" = ?'), sql.includes("ORDER BY name"), sql.includes("LIMIT 5")]
+''', [true, true, true]
+
+test "@defaultScope: applies to where/all/count/find; .unscoped() skips it", modelHeader + '''
+  User = schema :model
+    name!    string
+    hidden?  boolean
+    @defaultScope -> @where(hidden: false)
+  User.all!
+  User.where(name: "A").all!
+  User.count!
+  User.find! 7
+  User.unscoped().all!
+  User.where(name: "B").unscoped().all!
+  [
+    adapter.calls[0].sql.includes('"hidden" = ?')
+    adapter.calls[1].sql.includes('"name" = ? AND "hidden" = ?')
+    adapter.calls[2].sql.includes('"hidden" = ?')
+    adapter.calls[3].sql.includes('"id" = ? AND "hidden" = ?')
+    adapter.calls[4].sql.includes("hidden")
+    adapter.calls[5].sql.includes("hidden")
+  ]
+''', [true, true, true, true, false, false]
+
+test "@defaultScope composes with @softDelete filtering", modelHeader + '''
+  User = schema :model
+    name!   string
+    hidden? boolean
+    @softDelete
+    @defaultScope -> @where(hidden: false)
+  User.all!
+  sql = adapter.calls[0].sql
+  [sql.includes('"hidden" = ?'), sql.includes('"deleted_at" IS NULL')]
+''', [true, true]
+
+test "@scope: name colliding with the query API throws at normalize", modelHeader + '''
+  User = schema :model
+    name! string
+    @scope :where, -> @limit(1)
+  err = null
+  try
+    User.all!
+  catch e
+    err = e
+  [err.name, err.issues[0].error, err.issues[0].field]
+''', ["SchemaError", "collision", "where"]
+
+test "@scope: duplicate scope names throw at normalize", modelHeader + '''
+  User = schema :model
+    name! string
+    @scope :active, -> @limit(1)
+    @scope :active, -> @limit(2)
+  err = null
+  try
+    User.all!
+  catch e
+    err = e
+  [err.name, err.issues[0].error]
+''', ["SchemaError", "collision"]
+
+test "@defaultScope: more than one throws at normalize", modelHeader + '''
+  User = schema :model
+    name! string
+    @defaultScope -> @where(a: 1)
+    @defaultScope -> @where(b: 2)
+  err = null
+  try
+    User.all!
+  catch e
+    err = e
+  [err.name, err.message.includes("one @defaultScope")]
+''', ["SchemaError", true]
+
+test "@scope: a field and a scope may share a name (static vs instance)", modelHeader + '''
+  User = schema :model
+    name!   string
+    active? boolean
+    @scope :active, -> @where(active: true)
+  adapter.canned.__default = {columns: [{name: "id"}, {name: "name"}, {name: "active"}], data: [[1, "A", true]], rows: 1}
+  u = User.active().first!
+  [u.active, adapter.calls[0].sql.includes('"active" = ?')]
+''', [true, true]
+
+fail "@scope on :shape is rejected at compile time", '''
+  X = schema :shape
+    name! string
+    @scope :active, -> @where(active: true)
+'''
+
+fail "@defaultScope on :input is rejected at compile time", '''
+  X = schema :input
+    name! string
+    @defaultScope -> @where(a: 1)
+'''
+
+fail "@scope requires a :symbol name", '''
+  X = schema :model
+    name! string
+    @scope active, -> @where(active: true)
+'''
+
+fail "@defaultScope rejects parameters", '''
+  X = schema :model
+    name! string
+    @defaultScope (d) -> @where("created_at > ?", d)
+'''
+
+test "@scope: multi-line body parses and runs", modelHeader + '''
+  User = schema :model
+    name!   string
+    active? boolean
+    @scope :recent, ->
+      @where(active: true)
+      @order("created_at DESC")
+  User.recent().all!
+  sql = adapter.calls[0].sql
+  [sql.includes('"active" = ?'), sql.includes("ORDER BY created_at DESC")]
+''', [true, true]
+
+type "@scope emits typed statics and a per-model query alias", '''
+  User = schema :model
+    name!   string
+    active? boolean
+    @scope :active, -> @where(active: true)
+  ''', INTRINSICS + "\n" + '''
+  type UserData = { name: string; active?: boolean } & { id: number };
+  type UserCreate = { name: string; active?: boolean };
+  type User = UserData & { save(): Promise<User>; destroy(opts?: { hard?: boolean }): Promise<User>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): UserData };
+  type UserQuery = SchemaQuery<User> & { active(...args: any[]): UserQuery };
+  declare const User: ModelSchema<User, UserData, number, UserCreate> & { active(...args: any[]): UserQuery };
+  '''
 
 # ==============================================================================
 # Transactions — schema.transaction!

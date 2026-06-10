@@ -78,6 +78,7 @@ export const SCHEMA_INTRINSIC_DECLS = [
   '  onlyDeleted(): SchemaQuery<T>;',
   '  updateAll(values: Record<string, unknown>): Promise<number | null>;',
   '  deleteAll(): Promise<number | null>;',
+  '  unscoped(): SchemaQuery<T>;',
   '}',
   // ModelSchema extends the base schema surface with ORM methods. Algebra
   // over `Data` (not `Instance`) so derived shapes reflect runtime
@@ -92,6 +93,7 @@ export const SCHEMA_INTRINSIC_DECLS = [
   '  includes(...specs: unknown[]): SchemaQuery<Instance>;',
   '  withDeleted(): SchemaQuery<Instance>;',
   '  onlyDeleted(): SchemaQuery<Instance>;',
+  '  unscoped(): SchemaQuery<Instance>;',
   '  all(limit?: number): Promise<Instance[]>;',
   '  first(): Promise<Instance | null>;',
   '  count(cond?: Record<string, unknown>): Promise<number>;',
@@ -372,7 +374,19 @@ function emitOneSchemaType(collected, byName, known, lines, schemaBehavior) {
     lines.push(`${exp}type ${dataName} = ${modelDataType};`);
     lines.push(`${exp}type ${createName} = ${createType};`);
     lines.push(`${exp}type ${instName} = ${dataName} & { ${instanceExtras.join('; ')} };`);
-    lines.push(`${exp}${decl}const ${name}: ModelSchema<${instName}, ${dataName}, number, ${createName}>;`);
+    // @scope declarations surface as statics on the model const AND as
+    // chainable methods on a per-model query alias, so scope-first
+    // chains (`User.active().since(d).all()`) typecheck.
+    const scopeNames = descriptor.entries.filter(e => e.tag === 'scope').map(e => e.name);
+    const modelT = `ModelSchema<${instName}, ${dataName}, number, ${createName}>`;
+    if (scopeNames.length) {
+      const queryName = `${name}Query`;
+      const scopeSigs = scopeNames.map(s => `${s}(...args: any[]): ${queryName}`);
+      lines.push(`${exp}type ${queryName} = SchemaQuery<${instName}> & { ${scopeSigs.join('; ')} };`);
+      lines.push(`${exp}${decl}const ${name}: ${modelT} & { ${scopeSigs.join('; ')} };`);
+    } else {
+      lines.push(`${exp}${decl}const ${name}: ${modelT};`);
+    }
     return;
   }
 

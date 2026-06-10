@@ -411,6 +411,10 @@ function parseSchemaBody(kind, bodyTokens, ctx) {
           throw schemaError({ loc: e.headerLoc || e.loc },
             `:mixin schemas don't accept @ensure refinements. Move the invariant to a :shape or :model that composes this mixin.`);
         }
+        if (e.tag === 'scope' || e.tag === 'defaultScope') {
+          throw schemaError({ loc: e.headerLoc || e.loc },
+            `:mixin schemas don't accept query scopes. '@${e.tag === 'scope' ? 'scope' : 'defaultScope'}' is :model-only.`);
+        }
         if (e.tag === 'directive' && e.name !== 'mixin') {
           throw schemaError({ loc: e.loc },
             `:mixin schemas only accept '@mixin Name' directives. '@${e.name}' is not allowed.`);
@@ -426,6 +430,10 @@ function parseSchemaBody(kind, bodyTokens, ctx) {
           throw schemaError({ loc: e.headerLoc || e.loc },
             `:input schemas are fields-only. '${e.name}' is a ${e.tag}; use :shape or :model if you need behavior.`);
         }
+        if (e.tag === 'scope' || e.tag === 'defaultScope') {
+          throw schemaError({ loc: e.headerLoc || e.loc },
+            `:input schemas don't accept query scopes. '@${e.tag === 'scope' ? 'scope' : 'defaultScope'}' is :model-only.`);
+        }
         if (e.tag === 'directive' && e.name !== 'mixin') {
           throw schemaError({ loc: e.loc },
             `:input schemas only accept '@mixin Name' and '@ensure'. '@${e.name}' is not allowed.`);
@@ -439,6 +447,10 @@ function parseSchemaBody(kind, bodyTokens, ctx) {
         if (e.tag === 'hook') {
           throw schemaError({ loc: e.headerLoc || e.loc },
             `:shape schemas don't have lifecycle hooks. '${e.name}' runs only on :model; move it or remove it.`);
+        }
+        if (e.tag === 'scope' || e.tag === 'defaultScope') {
+          throw schemaError({ loc: e.headerLoc || e.loc },
+            `:shape schemas don't accept query scopes. '@${e.tag === 'scope' ? 'scope' : 'defaultScope'}' is :model-only.`);
         }
         if (e.tag === 'directive' && e.name !== 'mixin') {
           throw schemaError({ loc: e.loc },
@@ -538,6 +550,49 @@ function parseFieldedLine(kind, line, entries, ctx) {
           headerLoc: first.loc,
         });
       }
+      return;
+    }
+
+    // `@scope` declares a named, composable query scope — :model-only.
+    // Two forms:
+    //
+    //   @scope :active, -> @where(active: true)          (zero-arg)
+    //   @scope :since, (d) -> @where("created_at > ?", d) (parameterized)
+    //
+    // `this` inside the body is the query builder. Emits a
+    // `tag: "scope"` entry carrying the compiled fn, parallel to
+    // `@ensure`'s shape.
+    if (dname === 'scope') {
+      let parsed = parseScopeDirective(argTokens, first);
+      entries.push({
+        tag: 'scope',
+        name: parsed.name,
+        paramTokens: parsed.paramTokens,
+        bodyTokens: parsed.bodyTokens,
+        loc: first.loc,
+        headerLoc: first.loc,
+      });
+      return;
+    }
+
+    // `@defaultScope -> body` applies to every query builder unless
+    // `.unscoped()` is called. Exactly one per model (enforced at
+    // normalize time, where duplicates across mixin expansion would
+    // also surface).
+    if (dname === 'defaultScope') {
+      let parsed = parseScopeFn(stripCallWrapper(argTokens), first, '@defaultScope');
+      if (parsed.paramTokens.length) {
+        throw schemaError(first,
+          "@defaultScope takes no parameters — write '@defaultScope -> @where(...)'.");
+      }
+      entries.push({
+        tag: 'defaultScope',
+        name: 'defaultScope',
+        paramTokens: [],
+        bodyTokens: parsed.bodyTokens,
+        loc: first.loc,
+        headerLoc: first.loc,
+      });
       return;
     }
 
@@ -895,6 +950,83 @@ function parseCallableLine(kind, headerTok, line, entries) {
     headerLoc: headerTok.loc,
     arrowLoc,
   });
+}
+
+// Strip the implicit CALL_START/CALL_END wrapper that Rip puts around
+// directive arguments (`@scope args...` is a call to the lexer).
+function stripCallWrapper(tokens) {
+  if (tokens[0]?.[0] === 'CALL_START' &&
+      tokens[tokens.length - 1]?.[0] === 'CALL_END') {
+    return tokens.slice(1, -1);
+  }
+  return tokens;
+}
+
+// Parse `@scope :name, fn` arguments. The name must be a :symbol; the fn
+// is either `-> body` (zero-arg, builder-thisbound) or `(args) -> body`.
+function parseScopeDirective(argTokens, directiveTok) {
+  let tokens = stripCallWrapper(argTokens);
+  if (!tokens.length) {
+    throw schemaError(directiveTok,
+      "@scope requires ':name, -> body' (or ':name, (args) -> body').");
+  }
+  let nameTok = tokens[0];
+  if (nameTok[0] !== 'SYMBOL') {
+    throw schemaError(nameTok,
+      "@scope name must be a :symbol — '@scope :active, -> @where(active: true)'.");
+  }
+  let name = nameTok[1];
+  if (!/^[a-z][a-zA-Z0-9]*$/.test(name)) {
+    throw schemaError(nameTok,
+      `@scope name ':${name}' must be a lowercase-first alphanumeric identifier.`);
+  }
+  let rest = tokens.slice(1);
+  if (rest[0]?.[0] === ',') rest = rest.slice(1);
+  if (!rest.length) {
+    throw schemaError(nameTok,
+      `@scope :${name} is missing its body — '@scope :${name}, -> @where(...)'.`);
+  }
+  let fn = parseScopeFn(rest, nameTok, `@scope :${name}`);
+  return { name, paramTokens: fn.paramTokens, bodyTokens: fn.bodyTokens };
+}
+
+// Parse a scope function token slice: `-> body` or `(params) -> body`.
+// Unlike @ensure predicates, the parameter list is optional — scopes
+// read the builder through `this`, so most take no arguments.
+function parseScopeFn(tokens, anchorTok, label) {
+  if (!tokens.length) {
+    throw schemaError(anchorTok, `${label}: expected '-> body' or '(args) -> body'.`);
+  }
+  let paramTokens = [];
+  let pos = 0;
+  let t0 = tokens[0];
+  if (t0[0] === '(' || t0[0] === 'PARAM_START') {
+    let depth = 1;
+    pos = 1;
+    while (pos < tokens.length && depth > 0) {
+      let tag = tokens[pos][0];
+      if (tag === '(' || tag === 'PARAM_START') depth++;
+      if (tag === ')' || tag === 'PARAM_END') {
+        depth--;
+        if (depth === 0) { pos++; break; }
+      }
+      paramTokens.push(tokens[pos]);
+      pos++;
+    }
+    if (depth !== 0) {
+      throw schemaError(t0, `${label}: unclosed '(' in parameters.`);
+    }
+  }
+  let arrowTok = tokens[pos];
+  if (!arrowTok || arrowTok[0] !== '->') {
+    throw schemaError(arrowTok || anchorTok,
+      `${label}: expected '->' ${paramTokens.length ? 'after parameters' : 'to start the body'}.`);
+  }
+  let bodyTokens = tokens.slice(pos + 1);
+  if (!bodyTokens.length) {
+    throw schemaError(arrowTok, `${label}: function body is empty.`);
+  }
+  return { paramTokens, bodyTokens };
 }
 
 // Parse `@ensure` arguments into one or more refinement pairs. Accepts two
@@ -1497,6 +1629,19 @@ function entryLiteral(emitter, e) {
       ];
       return `{${obj.join(', ')}}`;
     }
+    case 'scope':
+    case 'defaultScope': {
+      // Scope bodies compile like @ensure predicates (explicit params,
+      // thin-arrow `function` so `this` binds to the query builder),
+      // except the parameter list is optional.
+      let fnCode = compileScopeFn(emitter, e);
+      let obj = [
+        `tag: ${JSON.stringify(e.tag)}`,
+        `name: ${JSON.stringify(e.name)}`,
+        `fn: ${fnCode}`,
+      ];
+      return `{${obj.join(', ')}}`;
+    }
     case 'computed':
     case 'method':
     case 'hook':
@@ -1585,6 +1730,19 @@ function compileTransformFn(emitter, bodyTokens) {
   let itParam = new String('it');
   itParam.type = 'any';
   let arrowSexpr = ['->', [itParam], bodySexpr];
+  return emitter.emit(arrowSexpr, 'value');
+}
+
+// Compile a `@scope` / `@defaultScope` body into a thin-arrow function
+// expression. Params are optional ident-only (reuses the @ensure param
+// extractor); `this` is the query builder at call time.
+function compileScopeFn(emitter, entry) {
+  let bodySexpr = parseBodyTokens(entry.bodyTokens);
+  if (!bodySexpr) {
+    return `(function() { return this; })`;
+  }
+  let params = entry.paramTokens.length ? ensureParamNames(entry.paramTokens, entry) : [];
+  let arrowSexpr = ['->', params, bodySexpr];
   return emitter.emit(arrowSexpr, 'value');
 }
 
