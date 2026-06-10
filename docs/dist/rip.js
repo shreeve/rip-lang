@@ -93,17 +93,34 @@ var { __schema, SchemaError, __SchemaRegistry, __schemaSetAdapter } = (function(
 
 `;
   var SCHEMA_RUNTIME_WRAPPER_TAIL = `
-  // __schemaSetAdapter is server/migration-only. In validate or browser
-  // modes it doesn't exist; export an undefined slot so destructure works.
+  // __schemaSetAdapter / __schemaTransaction are server/migration-only.
+  // In validate mode they don't exist (browser mode stubs transaction);
+  // export undefined / throwing slots so destructure works everywhere.
   const __schemaSetAdapterExport = typeof __schemaSetAdapter !== 'undefined'
     ? __schemaSetAdapter
     : undefined;
+  const __schemaTransactionExport = typeof __schemaTransaction !== 'undefined'
+    ? __schemaTransaction
+    : function() {
+        throw new Error('schema.transaction() requires the server schema runtime (validate-only runtime loaded).');
+      };
+  // User-facing namespace: schema.transaction! -> ... in Rip source
+  // resolves through this object (installed as a global alongside the
+  // other Rip stdlib globals; ??= keeps user overrides intact).
+  const schemaNamespace = {
+    transaction: __schemaTransactionExport,
+  };
   const exports = {
     __schema, SchemaError, __SchemaRegistry,
     __schemaSetAdapter: __schemaSetAdapterExport,
+    __schemaTransaction: __schemaTransactionExport,
+    schema: schemaNamespace,
     __version: 1,
   };
-  if (typeof globalThis !== 'undefined') globalThis.__ripSchema = exports;
+  if (typeof globalThis !== 'undefined') {
+    globalThis.__ripSchema = exports;
+    globalThis.schema ??= schemaNamespace;
+  }
   return exports;
 })();
 
@@ -127,10 +144,18 @@ function __schemaFormatIssues(issues, name) {
 
 const __SCHEMA_RESERVED_STATIC = new Set([
   'parse','safe','ok','find','findMany','where','all','first','count','create','toSQL',
+  'includes','upsert','insertMany','updateAll','deleteAll','withDeleted','onlyDeleted',
+  'unscoped',
+]);
+// Names a @scope may not take: the model statics above plus the
+// builder-only chain methods — scopes install on both surfaces.
+const __SCHEMA_SCOPE_RESERVED = new Set([
+  ...__SCHEMA_RESERVED_STATIC,
+  'limit','offset','order','orderBy',
 ]);
 const __SCHEMA_RESERVED_INSTANCE = new Set([
-  'save','destroy','reload','ok','errors','toJSON','savedChanges','markDirty',
-  '_saving',
+  'save','destroy','restore','reload','ok','errors','toJSON','savedChanges','markDirty',
+  '_saving','_relMemo',
 ]);
 // Implicit columns owned by directive-driven runtime behavior. Declaring
 // them as user fields would either shadow the runtime API (savedChanges /
@@ -254,6 +279,21 @@ function __schemaSnapshot(norm, inst) {
   return snap;
 }
 
+// Relation memo — caches resolved relation values per instance under
+// the accessor name. Lazily created and non-enumerable so it never
+// shows up in Object.keys / JSON.stringify. Written by the relation
+// accessors (on first resolve) and by the eager-loading preloader
+// (.includes), read by the accessors.
+function __schemaRelMemoSet(inst, acc, v) {
+  if (!inst._relMemo) {
+    Object.defineProperty(inst, '_relMemo', {
+      value: new Map(), enumerable: false, writable: false, configurable: true,
+    });
+  }
+  inst._relMemo.set(acc, v);
+  return v;
+}
+
 // SameValue-Zero: like ===, except NaN equals NaN. Used by the dirty
 // check so a persisted NaN doesn't trigger a wasted UPDATE on every
 // save. Distinguishes from Object.is by treating +0/-0 as equal, which
@@ -262,17 +302,74 @@ function __schemaSameValue(a, b) {
   return a === b || (a !== a && b !== b);
 }
 
+// Structural signature of a declaration — name-shape only, function
+// bodies excluded. Two registrations with the same signature are the
+// same declaration arriving twice (double import via symlinked paths,
+// re-eval of an unchanged module) and rebind silently. Different
+// signatures under the same name are a real collision and throw,
+// unless \`__SchemaRegistry.replace\` is set (dev/HMR semantics).
+function __schemaSignature(def) {
+  // Constraints may hold RegExp values; JSON.stringify would erase them
+  // to {} and miss a real difference, so stringify them explicitly.
+  const safe = (v) => JSON.stringify(v ?? null, (k, x) =>
+    x instanceof RegExp ? String(x) : (typeof x === 'function' ? '<fn>' : x));
+  const parts = [def.kind];
+  for (const e of def._desc.entries || []) {
+    switch (e.tag) {
+      case 'field':
+        parts.push('f:' + e.name + ':' + (e.typeName || '') +
+          (e.array ? '[]' : '') + ':' + (e.modifiers || []).join('') +
+          (e.literals ? ':' + e.literals.join(',') : '') +
+          ':' + safe(e.constraints) +
+          (e.transform ? ':t' : ''));
+        break;
+      case 'enum-member':
+        parts.push('e:' + e.name + '=' + String(e.value));
+        break;
+      case 'directive':
+        parts.push('d:' + e.name + ':' + safe(e.args));
+        break;
+      case 'ensure':
+        parts.push('n:' + (e.message || ''));
+        break;
+      default:
+        // method / computed / derived / hook — name identity only.
+        parts.push(e.tag + ':' + (e.name || ''));
+    }
+  }
+  return parts.join('|');
+}
+
 const __SchemaRegistry = {
   _entries: new Map(),
+  // Dev/HMR escape hatch: when true, re-registering a name rebinds
+  // unconditionally (pre-hardening "last loaded wins" semantics). Dev
+  // servers and test harnesses set it; production code should not.
+  replace: false,
   register(def) {
     // Named schemas of any kind land here. Relations look up :model,
     // @mixin Name looks up :mixin. Algebra (.extend etc.) accepts :shape
     // and derived shapes. Kind is checked at lookup time.
     if (!def.name) return;
-    // Most recent registration wins. Recompilation produces a fresh
-    // __SchemaDef with the same name; the registry rebinds. Cross-
-    // module name collisions should be avoided — schema names are
-    // app-global identifiers for relation resolution.
+    const existing = this._entries.get(def.name);
+    if (existing && existing.def !== def && !this.replace) {
+      // Identical declarations (same structural signature) rebind
+      // silently — the same module arriving twice is not a conflict.
+      // Anything else is the "two different models, one name" footgun:
+      // relation / @mixin resolution is name-keyed and app-global, so
+      // silently letting the last one win corrupts resolution. Throw.
+      if (__schemaSignature(existing.def) !== __schemaSignature(def)) {
+        throw new SchemaError(
+          [{
+            field: def.name, error: 'collision',
+            message: "schema name '" + def.name + "' is already registered with a different definition. " +
+              "Schema names are app-global (they resolve relations and @mixin references), so two different " +
+              "schemas cannot share one name. Rename one of them — or, for dev/HMR reload semantics, set " +
+              "__SchemaRegistry.replace = true before re-evaluating modules.",
+          }],
+          def.name, def.kind);
+      }
+    }
     this._entries.set(def.name, { def, kind: def.kind });
   },
   get(name) {
@@ -285,6 +382,24 @@ const __SchemaRegistry = {
   },
   has(name) { return this._entries.has(name); },
   reset() { this._entries.clear(); },
+  // Run \`fn\` against a fresh, empty registry; restore the parent
+  // registry afterward (success, throw, or async rejection). Replaces
+  // ad-hoc reset() in tests and makes schema-declaring test blocks
+  // safe to run without leaking registrations into each other.
+  scope(fn) {
+    const saved = this._entries;
+    this._entries = new Map();
+    const restore = () => { this._entries = saved; };
+    try {
+      const r = fn();
+      if (r && typeof r.then === 'function') return r.finally(restore);
+      restore();
+      return r;
+    } catch (e) {
+      restore();
+      throw e;
+    }
+  },
 };
 
 class __SchemaDef {
@@ -295,6 +410,21 @@ class __SchemaDef {
     this._norm = null;
     this._klass = null;
     this._sourceModel = null;
+    // Install @scope statics eagerly so \`User.active()\` works as the
+    // very first call on the model (normalization hasn't run yet at
+    // that point; the scope invocation itself triggers it, which also
+    // fires the duplicate / reserved-name collision checks). Prototype
+    // methods win on name conflicts (\`in\` sees the prototype chain),
+    // and normalize rejects those names anyway.
+    for (const e of desc.entries || []) {
+      if (e.tag !== 'scope' || (e.name in this)) continue;
+      const self = this;
+      const sfn = e.fn;
+      Object.defineProperty(this, e.name, {
+        enumerable: false, configurable: true,
+        value: function(...args) { return __schemaInvokeScope(self, null, sfn, args); },
+      });
+    }
   }
 
   _normalize() {
@@ -309,6 +439,8 @@ class __SchemaDef {
     const enumMembers = new Map();
     const relations = new Map();
     const ensures = [];
+    const scopes = new Map();
+    let defaultScope = null;
     let timestamps = false;
     let softDelete = false;
 
@@ -398,6 +530,23 @@ class __SchemaDef {
           // come out in the order authored.
           ensures.push({ message: e.message, fn: e.fn });
           break;
+        case 'scope':
+          // Scopes live in the STATIC namespace (model + builder), not
+          // the instance namespace — a field \`active\` and a scope
+          // \`:active\` coexist by design. Collisions are checked against
+          // other scopes and the reserved static/builder names.
+          if (scopes.has(e.name)) collision(e.name, 'scope');
+          if (__SCHEMA_SCOPE_RESERVED.has(e.name)) collision(e.name, 'reserved query API name');
+          scopes.set(e.name, e.fn);
+          break;
+        case 'defaultScope':
+          if (defaultScope) {
+            throw new SchemaError(
+              [{field: '', error: 'collision', message: 'only one @defaultScope per model'}],
+              this.name, this.kind);
+          }
+          defaultScope = e.fn;
+          break;
       }
     }
 
@@ -418,7 +567,7 @@ class __SchemaDef {
 
     this._norm = {
       fields, methods, computed, derived, hooks, directives, enumMembers, relations,
-      ensures,
+      ensures, scopes, defaultScope,
       timestamps, softDelete, primaryKey, tableName,
     };
     return this._norm;
@@ -543,12 +692,23 @@ class __SchemaDef {
       });
     }
 
-    // Relation methods: user.organization(). Accepts no args; returns
-    // a promise to a target-model instance (or array for has_many).
+    // Relation methods: user.organization(). Accepts an optional opts
+    // object; returns a promise to a target-model instance (or array
+    // for has_many). Results memoize per instance — the second call
+    // resolves from cache with no query, and eager loading (.includes)
+    // fills the same memo so preloaded relations are free. Pass
+    // {reload: true} to bust the memo and re-query.
     for (const [acc, rel] of norm.relations) {
       Object.defineProperty(klass.prototype, acc, {
         enumerable: false, configurable: true,
-        value: async function() { return __schemaResolveRelation(def, this, rel); },
+        value: async function(opts) {
+          if (!(opts && opts.reload === true) && this._relMemo && this._relMemo.has(acc)) {
+            return this._relMemo.get(acc);
+          }
+          const v = await __schemaResolveRelation(def, this, rel);
+          __schemaRelMemoSet(this, acc, v);
+          return v;
+        },
       });
     }
 
@@ -558,9 +718,17 @@ class __SchemaDef {
         enumerable: false, configurable: true, writable: true,
         value: async function() { return __schemaSave(def, this); },
       });
+      // destroy() honors @softDelete (UPDATE deleted_at) by default;
+      // destroy(hard: true) forces a real DELETE. Hooks fire either way.
       Object.defineProperty(klass.prototype, 'destroy', {
         enumerable: false, configurable: true, writable: true,
-        value: async function() { return __schemaDestroy(def, this); },
+        value: async function(opts) { return __schemaDestroy(def, this, opts); },
+      });
+      // restore() un-deletes a soft-deleted row (deleted_at = NULL).
+      // Throws on models without @softDelete.
+      Object.defineProperty(klass.prototype, 'restore', {
+        enumerable: false, configurable: true, writable: true,
+        value: async function() { return __schemaRestore(def, this); },
       });
       Object.defineProperty(klass.prototype, 'ok', {
         enumerable: false, configurable: true, writable: true,
@@ -1125,20 +1293,31 @@ const __schemaBrowserStub = (api) => function() {
 };
 
 // Static / class-level methods on __SchemaDef
-__SchemaDef.prototype.find    = __schemaBrowserStub('find');
-__SchemaDef.prototype.where   = __schemaBrowserStub('where');
-__SchemaDef.prototype.all     = __schemaBrowserStub('all');
-__SchemaDef.prototype.first   = __schemaBrowserStub('first');
-__SchemaDef.prototype.count   = __schemaBrowserStub('count');
-__SchemaDef.prototype.create  = __schemaBrowserStub('create');
-__SchemaDef.prototype.toSQL   = __schemaBrowserStub('toSQL');
+__SchemaDef.prototype.find        = __schemaBrowserStub('find');
+__SchemaDef.prototype.findMany    = __schemaBrowserStub('findMany');
+__SchemaDef.prototype.where       = __schemaBrowserStub('where');
+__SchemaDef.prototype.includes    = __schemaBrowserStub('includes');
+__SchemaDef.prototype.withDeleted = __schemaBrowserStub('withDeleted');
+__SchemaDef.prototype.onlyDeleted = __schemaBrowserStub('onlyDeleted');
+__SchemaDef.prototype.unscoped    = __schemaBrowserStub('unscoped');
+__SchemaDef.prototype.all         = __schemaBrowserStub('all');
+__SchemaDef.prototype.first       = __schemaBrowserStub('first');
+__SchemaDef.prototype.count       = __schemaBrowserStub('count');
+__SchemaDef.prototype.create      = __schemaBrowserStub('create');
+__SchemaDef.prototype.upsert      = __schemaBrowserStub('upsert');
+__SchemaDef.prototype.insertMany  = __schemaBrowserStub('insertMany');
+__SchemaDef.prototype.toSQL       = __schemaBrowserStub('toSQL');
 
 // Helpers referenced by the validate fragment that are otherwise
 // defined in db-naming / orm fragments. Kept inert (return safe
 // defaults or throw on use) so validate's _makeClass / _normalize
 // can run end-to-end in browser context.
-function __schemaSave()       { throw new Error("schema instance.save() is not available in the browser. Import @rip-lang/db on the server."); }
-function __schemaDestroy()    { throw new Error("schema instance.destroy() is not available in the browser. Import @rip-lang/db on the server."); }
+function __schemaSave()            { throw new Error("schema instance.save() is not available in the browser. Import @rip-lang/db on the server."); }
+function __schemaDestroy()         { throw new Error("schema instance.destroy() is not available in the browser. Import @rip-lang/db on the server."); }
+function __schemaRestore()         { throw new Error("schema instance.restore() is not available in the browser. Import @rip-lang/db on the server."); }
+function __schemaResolveRelation() { throw new Error("schema relation accessors are not available in the browser. Import @rip-lang/db on the server."); }
+function __schemaTransaction()     { throw new Error("schema.transaction() is not available in the browser. Import @rip-lang/db on the server."); }
+function __schemaInvokeScope()     { throw new Error("schema query scopes are not available in the browser. Import @rip-lang/db on the server."); }
 function __schemaTableName(m) { return null; } // returned only for :model normalize; never used downstream in browser
 function __schemaPluralize(w) { return w; }    // identity — relations work for type-resolution but never query
 function __schemaFkName(m)    { return ''; }   // ditto
@@ -1999,7 +2178,9 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
     "beforeUpdate",
     "afterUpdate",
     "beforeDestroy",
-    "afterDestroy"
+    "afterDestroy",
+    "afterCommit",
+    "afterRollback"
   ]);
   var EXPR_START_PREV = new Set([
     "TERMINATOR",
@@ -2250,6 +2431,9 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           if (e.tag === "ensure") {
             throw schemaError({ loc: e.headerLoc || e.loc }, `:mixin schemas don't accept @ensure refinements. Move the invariant to a :shape or :model that composes this mixin.`);
           }
+          if (e.tag === "scope" || e.tag === "defaultScope") {
+            throw schemaError({ loc: e.headerLoc || e.loc }, `:mixin schemas don't accept query scopes. '@${e.tag === "scope" ? "scope" : "defaultScope"}' is :model-only.`);
+          }
           if (e.tag === "directive" && e.name !== "mixin") {
             throw schemaError({ loc: e.loc }, `:mixin schemas only accept '@mixin Name' directives. '@${e.name}' is not allowed.`);
           }
@@ -2259,6 +2443,9 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           if (e.tag === "method" || e.tag === "computed" || e.tag === "hook") {
             throw schemaError({ loc: e.headerLoc || e.loc }, `:input schemas are fields-only. '${e.name}' is a ${e.tag}; use :shape or :model if you need behavior.`);
           }
+          if (e.tag === "scope" || e.tag === "defaultScope") {
+            throw schemaError({ loc: e.headerLoc || e.loc }, `:input schemas don't accept query scopes. '@${e.tag === "scope" ? "scope" : "defaultScope"}' is :model-only.`);
+          }
           if (e.tag === "directive" && e.name !== "mixin") {
             throw schemaError({ loc: e.loc }, `:input schemas only accept '@mixin Name' and '@ensure'. '@${e.name}' is not allowed.`);
           }
@@ -2267,6 +2454,9 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         for (let e of entries) {
           if (e.tag === "hook") {
             throw schemaError({ loc: e.headerLoc || e.loc }, `:shape schemas don't have lifecycle hooks. '${e.name}' runs only on :model; move it or remove it.`);
+          }
+          if (e.tag === "scope" || e.tag === "defaultScope") {
+            throw schemaError({ loc: e.headerLoc || e.loc }, `:shape schemas don't accept query scopes. '@${e.tag === "scope" ? "scope" : "defaultScope"}' is :model-only.`);
           }
           if (e.tag === "directive" && e.name !== "mixin") {
             throw schemaError({ loc: e.loc }, `:shape schemas only accept '@mixin Name'. '@${e.name}' is :model-only.`);
@@ -2329,6 +2519,33 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
             headerLoc: first.loc
           });
         }
+        return;
+      }
+      if (dname === "scope") {
+        let parsed = parseScopeDirective(argTokens, first);
+        entries.push({
+          tag: "scope",
+          name: parsed.name,
+          paramTokens: parsed.paramTokens,
+          bodyTokens: parsed.bodyTokens,
+          loc: first.loc,
+          headerLoc: first.loc
+        });
+        return;
+      }
+      if (dname === "defaultScope") {
+        let parsed = parseScopeFn(stripCallWrapper(argTokens), first, "@defaultScope");
+        if (parsed.paramTokens.length) {
+          throw schemaError(first, "@defaultScope takes no parameters — write '@defaultScope -> @where(...)'.");
+        }
+        entries.push({
+          tag: "defaultScope",
+          name: "defaultScope",
+          paramTokens: [],
+          bodyTokens: parsed.bodyTokens,
+          loc: first.loc,
+          headerLoc: first.loc
+        });
         return;
       }
       let args = null;
@@ -2580,6 +2797,72 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       headerLoc: headerTok.loc,
       arrowLoc
     });
+  }
+  function stripCallWrapper(tokens) {
+    if (tokens[0]?.[0] === "CALL_START" && tokens[tokens.length - 1]?.[0] === "CALL_END") {
+      return tokens.slice(1, -1);
+    }
+    return tokens;
+  }
+  function parseScopeDirective(argTokens, directiveTok) {
+    let tokens = stripCallWrapper(argTokens);
+    if (!tokens.length) {
+      throw schemaError(directiveTok, "@scope requires ':name, -> body' (or ':name, (args) -> body').");
+    }
+    let nameTok = tokens[0];
+    if (nameTok[0] !== "SYMBOL") {
+      throw schemaError(nameTok, "@scope name must be a :symbol — '@scope :active, -> @where(active: true)'.");
+    }
+    let name = nameTok[1];
+    if (!/^[a-z][a-zA-Z0-9]*$/.test(name)) {
+      throw schemaError(nameTok, `@scope name ':${name}' must be a lowercase-first alphanumeric identifier.`);
+    }
+    let rest = tokens.slice(1);
+    if (rest[0]?.[0] === ",")
+      rest = rest.slice(1);
+    if (!rest.length) {
+      throw schemaError(nameTok, `@scope :${name} is missing its body — '@scope :${name}, -> @where(...)'.`);
+    }
+    let fn = parseScopeFn(rest, nameTok, `@scope :${name}`);
+    return { name, paramTokens: fn.paramTokens, bodyTokens: fn.bodyTokens };
+  }
+  function parseScopeFn(tokens, anchorTok, label) {
+    if (!tokens.length) {
+      throw schemaError(anchorTok, `${label}: expected '-> body' or '(args) -> body'.`);
+    }
+    let paramTokens = [];
+    let pos = 0;
+    let t0 = tokens[0];
+    if (t0[0] === "(" || t0[0] === "PARAM_START") {
+      let depth = 1;
+      pos = 1;
+      while (pos < tokens.length && depth > 0) {
+        let tag = tokens[pos][0];
+        if (tag === "(" || tag === "PARAM_START")
+          depth++;
+        if (tag === ")" || tag === "PARAM_END") {
+          depth--;
+          if (depth === 0) {
+            pos++;
+            break;
+          }
+        }
+        paramTokens.push(tokens[pos]);
+        pos++;
+      }
+      if (depth !== 0) {
+        throw schemaError(t0, `${label}: unclosed '(' in parameters.`);
+      }
+    }
+    let arrowTok = tokens[pos];
+    if (!arrowTok || arrowTok[0] !== "->") {
+      throw schemaError(arrowTok || anchorTok, `${label}: expected '->' ${paramTokens.length ? "after parameters" : "to start the body"}.`);
+    }
+    let bodyTokens = tokens.slice(pos + 1);
+    if (!bodyTokens.length) {
+      throw schemaError(arrowTok, `${label}: function body is empty.`);
+    }
+    return { paramTokens, bodyTokens };
   }
   function parseEnsurePairs(argTokens, directiveTok) {
     let tokens = argTokens;
@@ -3086,6 +3369,16 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         ];
         return `{${obj.join(", ")}}`;
       }
+      case "scope":
+      case "defaultScope": {
+        let fnCode = compileScopeFn(emitter, e);
+        let obj = [
+          `tag: ${JSON.stringify(e.tag)}`,
+          `name: ${JSON.stringify(e.name)}`,
+          `fn: ${fnCode}`
+        ];
+        return `{${obj.join(", ")}}`;
+      }
       case "computed":
       case "method":
       case "hook":
@@ -3141,6 +3434,15 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
     let itParam = new String("it");
     itParam.type = "any";
     let arrowSexpr = ["->", [itParam], bodySexpr];
+    return emitter.emit(arrowSexpr, "value");
+  }
+  function compileScopeFn(emitter, entry) {
+    let bodySexpr = parseBodyTokens(entry.bodyTokens);
+    if (!bodySexpr) {
+      return `(function() { return this; })`;
+    }
+    let params = entry.paramTokens.length ? ensureParamNames(entry.paramTokens, entry) : [];
+    let arrowSexpr = ["->", params, bodySexpr];
     return emitter.emit(arrowSexpr, "value");
   }
   function compileEnsureFn(emitter, entry) {
@@ -14440,7 +14742,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.16.1";
-  var BUILD_DATE = "2026-06-10@17:58:17GMT";
+  var BUILD_DATE = "2026-06-10@22:13:32GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
