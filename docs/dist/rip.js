@@ -154,7 +154,8 @@ function __schemaFormatIssues(issues, name) {
 }
 
 const __SCHEMA_RESERVED_STATIC = new Set([
-  'parse','safe','ok','find','findMany','where','all','first','count','create','toSQL',
+  'parse','safe','ok','parseAsync','safeAsync','okAsync',
+  'find','findMany','where','all','first','count','create','toSQL',
   'includes','upsert','insertMany','updateAll','deleteAll','withDeleted','onlyDeleted',
   'unscoped',
 ]);
@@ -203,6 +204,44 @@ function __schemaCheckValue(v, typeName) {
   return check ? check(v) : true;
 }
 
+// Strict coercion tables for the \`~type\` marker — "coerce, then
+// validate". Deliberately narrow: \`~integer\` rejects "12.5" and NaN,
+// \`~boolean\` accepts exactly six tokens, \`~date\` accepts ISO-8601
+// strings and finite epoch numbers. A failed coercion is
+// {error: 'coerce'}, distinct from {error: 'type'} — the value LOOKED
+// like wire data but didn't convert, which is a different user mistake
+// than sending the wrong shape entirely.
+const __SCHEMA_COERCERS = {
+  integer(v) {
+    if (typeof v === 'number') return Number.isInteger(v) ? { ok: true, value: v } : { ok: false };
+    if (typeof v === 'string' && /^[+-]?\\d+$/.test(v.trim())) return { ok: true, value: parseInt(v.trim(), 10) };
+    return { ok: false };
+  },
+  number(v) {
+    if (typeof v === 'number') return Number.isNaN(v) ? { ok: false } : { ok: true, value: v };
+    if (typeof v === 'string' && /^[+-]?(\\d+\\.?\\d*|\\.\\d+)([eE][+-]?\\d+)?$/.test(v.trim())) {
+      return { ok: true, value: Number(v.trim()) };
+    }
+    return { ok: false };
+  },
+  boolean(v) {
+    if (typeof v === 'boolean') return { ok: true, value: v };
+    if (v === 'true' || v === '1' || v === 1) return { ok: true, value: true };
+    if (v === 'false' || v === '0' || v === 0) return { ok: true, value: false };
+    return { ok: false };
+  },
+  date(v) {
+    if (v instanceof Date) return Number.isNaN(v.getTime()) ? { ok: false } : { ok: true, value: v };
+    if (typeof v === 'number' && Number.isFinite(v)) return { ok: true, value: new Date(v) };
+    if (typeof v === 'string' && /^\\d{4}-\\d{2}-\\d{2}/.test(v)) {
+      const d = new Date(v);
+      if (!Number.isNaN(d.getTime())) return { ok: true, value: d };
+    }
+    return { ok: false };
+  },
+};
+__SCHEMA_COERCERS.datetime = __SCHEMA_COERCERS.date;
+
 function __schemaValidateValue(v, typeName) {
   const prim = __schemaTypes[typeName];
   if (prim) {
@@ -216,6 +255,12 @@ function __schemaValidateValue(v, typeName) {
   }
   if (subDef.kind === 'mixin') {
     return [{field: '', error: 'type', message: ':mixin ' + typeName + ' is not usable as a field type'}];
+  }
+  if (subDef.kind === 'union') {
+    const r = subDef._unionResolve(v);
+    if (r.issue) return [r.issue];
+    const memberErrs = r.def._validateFields(v, true);
+    return memberErrs.length ? memberErrs : null;
   }
   if (v === null || typeof v !== 'object' || Array.isArray(v)) {
     return [{field: '', error: 'type', message: 'must be a ' + typeName + ' object'}];
@@ -331,7 +376,7 @@ function __schemaSignature(def) {
         parts.push('f:' + e.name + ':' + (e.typeName || '') +
           (e.array ? '[]' : '') + ':' + (e.modifiers || []).join('') +
           (e.literals ? ':' + e.literals.join(',') : '') +
-          ':' + safe(e.constraints) + ':' + safe(e.attrs) +
+          ':' + safe(e.constraints) + ':' + safe(e.attrs) + (e.coerce ? ':~' : '') +
           (e.transform ? ':t' : ''));
         break;
       case 'enum-member':
@@ -421,6 +466,7 @@ class __SchemaDef {
     this._norm = null;
     this._klass = null;
     this._sourceModel = null;
+    this._unionPlanCache = null;
     // Install @scope statics eagerly so \`User.active()\` works as the
     // very first call on the model (normalization hasn't run yet at
     // that point; the scope invocation itself triggers it, which also
@@ -496,6 +542,7 @@ class __SchemaDef {
             typeName: e.typeName,
             literals: e.literals || null,
             array: e.array === true,
+            coerce: e.coerce === true,
             constraints: e.constraints || null,
             attrs: e.attrs || null,
             transform: e.transform || null,
@@ -539,8 +586,15 @@ class __SchemaDef {
         case 'ensure':
           // @ensure entries are schema-level invariants (cross-field
           // predicates). Declaration order is preserved so diagnostics
-          // come out in the order authored.
-          ensures.push({ message: e.message, fn: e.fn });
+          // come out in the order authored. \`field\` attributes the
+          // failure to a specific input; \`async\` marks an @ensure!
+          // refinement (the schema becomes async-validating).
+          ensures.push({
+            message: e.message,
+            field: e.field || '',
+            async: e.async === true,
+            fn: e.fn,
+          });
           break;
         case 'scope':
           // Scopes live in the STATIC namespace (model + builder), not
@@ -583,12 +637,90 @@ class __SchemaDef {
       if (d.name === 'tableWas' && d.args?.[0]?.name) tableWas = d.args[0].name;
     }
 
+    // :union metadata — discriminator field + constituent names.
+    let unionOn = null;
+    const unionMembers = [];
+    if (this.kind === 'union') {
+      for (const d of directives) {
+        if (d.name === 'on' && d.args?.[0]?.field) unionOn = d.args[0].field;
+      }
+      for (const e of this._desc.entries) {
+        if (e.tag === 'union-member') unionMembers.push(e.name);
+      }
+    }
+
     this._norm = {
       fields, methods, computed, derived, hooks, directives, enumMembers, relations,
       ensures, scopes, defaultScope,
+      hasAsyncEnsures: ensures.some(r => r.async),
       timestamps, softDelete, primaryKey, tableName, tableWas,
+      unionOn, unionMembers,
     };
     return this._norm;
+  }
+
+  // ---- :union dispatch -------------------------------------------------------
+  //
+  // Built lazily on first parse (consistent with registry resolution):
+  // resolves every constituent from the registry, reads its declared
+  // discriminator literals, and compiles a value → constituent map for
+  // O(1) dispatch. Collisions and shapeless discriminators fail here
+  // with the constituent names in the message.
+
+  _unionPlan() {
+    if (this._unionPlanCache) return this._unionPlanCache;
+    const norm = this._normalize();
+    const disc = norm.unionOn;
+    if (this.kind !== 'union' || !disc) {
+      throw new Error("schema: '" + (this.name || 'anon') + "' is not a :union");
+    }
+    const map = new Map();
+    const members = [];
+    for (const name of norm.unionMembers) {
+      const def = __SchemaRegistry.get(name);
+      if (!def) {
+        throw new SchemaError(
+          [{field: '', error: 'union', message: 'unknown union constituent: ' + name + ' (import the file that declares it)'}],
+          this.name, this.kind);
+      }
+      members.push(def);
+      const f = def._normalize().fields.get(disc);
+      if (!f || f.typeName !== 'literal-union' || !f.literals?.length) {
+        throw new SchemaError(
+          [{field: disc, error: 'union', message: name + " must declare '" + disc +
+            "' as a string-literal type (e.g. " + disc + '! "click") to join union ' + (this.name || '')}],
+          this.name, this.kind);
+      }
+      for (const lit of f.literals) {
+        if (map.has(lit)) {
+          throw new SchemaError(
+            [{field: disc, error: 'union', message: 'duplicate discriminator value ' + JSON.stringify(lit) +
+              ' in ' + (map.get(lit).name || 'anon') + ' and ' + name}],
+            this.name, this.kind);
+        }
+        map.set(lit, def);
+      }
+    }
+    const plan = {
+      disc, map,
+      expected: [...map.keys()].join(' | '),
+      hasAsyncEnsures: members.some(d => d._normalize().hasAsyncEnsures),
+    };
+    this._unionPlanCache = plan;
+    return plan;
+  }
+
+  // Resolve a raw value to its constituent def, or produce the issue.
+  _unionResolve(data) {
+    const plan = this._unionPlan();
+    if (data === null || typeof data !== 'object' || Array.isArray(data)) {
+      return { issue: {field: plan.disc, error: 'union', message: 'expected an object with ' + plan.disc} };
+    }
+    const def = plan.map.get(data[plan.disc]);
+    if (!def) {
+      return { issue: {field: plan.disc, error: 'union', message: 'expected one of ' + plan.expected} };
+    }
+    return { def };
   }
 
   // Run eager-derived entries (!>) — one pass, in declaration order.
@@ -648,19 +780,66 @@ class __SchemaDef {
         ok = !!r.fn(data);
       } catch (e) {
         errs.push({
-          field: '', error: 'ensure',
+          field: r.field || '', error: 'ensure',
           message: r.message || e?.message || 'ensure failed',
         });
         continue;
       }
       if (!ok) {
         errs.push({
-          field: '', error: 'ensure',
+          field: r.field || '', error: 'ensure',
           message: r.message || 'ensure failed',
         });
       }
     }
     return errs;
+  }
+
+  // Async-aware refinement pass for parseAsync/safeAsync/okAsync. Sync
+  // refinements run first (cheap before expensive); async refinements
+  // then run CONCURRENTLY (Promise.all) — preserving the no-short-
+  // circuit rule. Issues come out in declaration order regardless of
+  // completion order. A rejected async predicate counts as failure
+  // with the declared message, same as a thrown sync one.
+  async _applyEnsuresAsync(data) {
+    const norm = this._normalize();
+    if (!norm.ensures.length) return [];
+    const results = [];
+    const pending = [];
+    norm.ensures.forEach((r, idx) => {
+      const issue = () => ({
+        field: r.field || '', error: 'ensure',
+        message: r.message || 'ensure failed',
+      });
+      if (r.async) {
+        pending.push((async () => {
+          let ok = false;
+          try { ok = !!(await r.fn(data)); } catch { ok = false; }
+          if (!ok) results.push({ idx, issue: issue() });
+        })());
+      } else {
+        let ok = false;
+        try { ok = !!r.fn(data); } catch { ok = false; }
+        if (!ok) results.push({ idx, issue: issue() });
+      }
+    });
+    await Promise.all(pending);
+    results.sort((a, b) => a.idx - b.idx);
+    return results.map(r => r.issue);
+  }
+
+  // A schema with ≥1 @ensure! is async-validating: the sync entry
+  // points refuse loudly rather than sometimes-returning a promise.
+  _assertSyncValidatable(api) {
+    const async = this.kind === 'union'
+      ? this._unionPlan().hasAsyncEnsures
+      : this._normalize().hasAsyncEnsures;
+    if (async) {
+      throw new Error(
+        "schema '" + (this.name || 'anon') + "' has async refinements (@ensure!" +
+        (this.kind === 'union' ? ' in a constituent' : '') + "); " +
+        '.' + api + '() is sync. Use parseAsync!/safeAsync!/okAsync! instead.');
+    }
   }
 
   _getClass() {
@@ -888,10 +1067,13 @@ class __SchemaDef {
     }
   }
 
-  _validateFields(data, collect) {
+  _validateFields(data, collect, skip) {
     const norm = this._normalize();
     const errors = collect ? [] : null;
     for (const [n, f] of norm.fields) {
+      // Fields whose coercion already failed carry a {error: 'coerce'}
+      // issue; re-checking the uncoerced value would double-report.
+      if (skip && skip.has(n)) continue;
       const v = data == null ? undefined : data[n];
       if (v === undefined || v === null) {
         if (f.required) {
@@ -993,6 +1175,32 @@ class __SchemaDef {
     return errors;
   }
 
+  // \`~type\` coercions — part of pipeline step 1 (obtain raw candidate):
+  // the wire value converts through the strict coercion table before
+  // defaults and validation, so range checks see the coerced value.
+  // Failed coercions collect {error: 'coerce'} issues and the field
+  // lands in \`failed\` so per-field validation doesn't double-report
+  // the same problem as a type error. Skipped on hydrate (rows arrive
+  // canonical), like transforms. Mutually exclusive with transforms at
+  // compile time.
+  _applyCoercions(working, failed) {
+    const norm = this._normalize();
+    const errors = [];
+    for (const [n, f] of norm.fields) {
+      if (!f.coerce) continue;
+      const v = working[n];
+      if (v === undefined || v === null) continue;
+      const r = __SCHEMA_COERCERS[f.typeName] ? __SCHEMA_COERCERS[f.typeName](v) : { ok: false };
+      if (r.ok) {
+        working[n] = r.value;
+      } else {
+        errors.push({field: n, error: 'coerce', message: n + ' cannot be coerced to ' + f.typeName});
+        failed.add(n);
+      }
+    }
+    return errors;
+  }
+
   _validateEnum(data, collect) {
     const norm = this._normalize();
     for (const [n, v] of norm.enumMembers) {
@@ -1033,17 +1241,27 @@ class __SchemaDef {
     if (this.kind === 'mixin') {
       throw new Error(":mixin schema '" + (this.name || 'anon') + "' is not instantiable");
     }
+    if (this.kind === 'union') {
+      const plan = this._unionPlan();
+      if (plan.hasAsyncEnsures) this._assertSyncValidatable('parse');
+      const r = this._unionResolve(data);
+      if (r.issue) throw new SchemaError([r.issue], this.name, this.kind);
+      return r.def.parse(data);
+    }
     if (this.kind === 'enum') {
       const errs = this._validateEnum(data, true);
       if (errs.length) throw new SchemaError(errs, this.name, this.kind);
       return this._materializeEnum(data);
     }
+    this._assertSyncValidatable('parse');
     const raw = data || {};
     const working = { ...raw };
+    const failed = new Set();
     const transformErrors = this._applyTransforms(raw, working);
+    const coerceErrors = this._applyCoercions(working, failed);
     this._applyDefaults(working);
     this._coerceDates(working);
-    const errs = transformErrors.concat(this._validateFields(working, true));
+    const errs = transformErrors.concat(coerceErrors, this._validateFields(working, true, failed));
     if (errs.length) throw new SchemaError(errs, this.name, this.kind);
     // @ensure runs AFTER per-field validation so predicates can
     // assume declared fields are typed and defaulted. A field-level
@@ -1060,17 +1278,27 @@ class __SchemaDef {
     if (this.kind === 'mixin') {
       return {ok: false, value: null, errors: [{field: '', error: 'mixin', message: 'not instantiable'}]};
     }
+    if (this.kind === 'union') {
+      const plan = this._unionPlan();
+      if (plan.hasAsyncEnsures) this._assertSyncValidatable('safe');
+      const r = this._unionResolve(data);
+      if (r.issue) return {ok: false, value: null, errors: [r.issue]};
+      return r.def.safe(data);
+    }
     if (this.kind === 'enum') {
       const errs = this._validateEnum(data, true);
       if (errs.length) return {ok: false, value: null, errors: errs};
       return {ok: true, value: this._materializeEnum(data), errors: null};
     }
+    this._assertSyncValidatable('safe');
     const raw = data || {};
     const working = { ...raw };
+    const failed = new Set();
     const transformErrors = this._applyTransforms(raw, working);
+    const coerceErrors = this._applyCoercions(working, failed);
     this._applyDefaults(working);
     this._coerceDates(working);
-    const errs = transformErrors.concat(this._validateFields(working, true));
+    const errs = transformErrors.concat(coerceErrors, this._validateFields(working, true, failed));
     if (errs.length) return {ok: false, value: null, errors: errs};
     const ensureErrs = this._applyEnsures(working);
     if (ensureErrs.length) return {ok: false, value: null, errors: ensureErrs};
@@ -1085,15 +1313,87 @@ class __SchemaDef {
 
   ok(data) {
     if (this.kind === 'mixin') return false;
+    if (this.kind === 'union') {
+      const plan = this._unionPlan();
+      if (plan.hasAsyncEnsures) this._assertSyncValidatable('ok');
+      const r = this._unionResolve(data);
+      return r.issue ? false : r.def.ok(data);
+    }
     if (this.kind === 'enum') return this._validateEnum(data, false);
+    this._assertSyncValidatable('ok');
     const raw = data || {};
     const working = { ...raw };
+    const failed = new Set();
     const transformErrors = this._applyTransforms(raw, working);
     if (transformErrors.length) return false;
+    if (this._applyCoercions(working, failed).length) return false;
     this._applyDefaults(working);
+    this._coerceDates(working);
     if (!this._validateFields(working, false)) return false;
     // Per-field validation passed — @ensure predicates are the final gate.
     return this._applyEnsures(working).length === 0;
+  }
+
+  // Async validation entry points. Work on EVERY schema (sync-only
+  // schemas just resolve immediately); REQUIRED when the schema has
+  // @ensure! refinements. The dammit operator gives the idiomatic
+  // form: \`SignupInput.parseAsync! raw\`.
+  async _runPipelineAsync(data) {
+    const raw = data || {};
+    const working = { ...raw };
+    const failed = new Set();
+    const transformErrors = this._applyTransforms(raw, working);
+    const coerceErrors = this._applyCoercions(working, failed);
+    this._applyDefaults(working);
+    this._coerceDates(working);
+    const errs = transformErrors.concat(coerceErrors, this._validateFields(working, true, failed));
+    if (errs.length) return { errors: errs };
+    const ensureErrs = await this._applyEnsuresAsync(working);
+    if (ensureErrs.length) return { errors: ensureErrs };
+    return { working };
+  }
+
+  async parseAsync(data) {
+    if (this.kind === 'mixin') {
+      throw new Error(":mixin schema '" + (this.name || 'anon') + "' is not instantiable");
+    }
+    if (this.kind === 'union') {
+      const r = this._unionResolve(data);
+      if (r.issue) throw new SchemaError([r.issue], this.name, this.kind);
+      return r.def.parseAsync(data);
+    }
+    if (this.kind === 'enum') return this.parse(data);
+    const r = await this._runPipelineAsync(data);
+    if (r.errors) throw new SchemaError(r.errors, this.name, this.kind);
+    const klass = this._getClass();
+    const inst = new klass(r.working, false);
+    this._applyEagerDerived(inst);
+    return inst;
+  }
+
+  async safeAsync(data) {
+    if (this.kind === 'mixin') {
+      return {ok: false, value: null, errors: [{field: '', error: 'mixin', message: 'not instantiable'}]};
+    }
+    if (this.kind === 'union') {
+      const r = this._unionResolve(data);
+      if (r.issue) return {ok: false, value: null, errors: [r.issue]};
+      return r.def.safeAsync(data);
+    }
+    if (this.kind === 'enum') return this.safe(data);
+    const r = await this._runPipelineAsync(data);
+    if (r.errors) return {ok: false, value: null, errors: r.errors};
+    const klass = this._getClass();
+    const inst = new klass(r.working, false);
+    try { this._applyEagerDerived(inst); }
+    catch (e) {
+      return {ok: false, value: null, errors: [{field: '', error: 'derived', message: e?.message || String(e)}]};
+    }
+    return {ok: true, value: inst, errors: null};
+  }
+
+  async okAsync(data) {
+    return (await this.safeAsync(data)).ok;
   }
 
   // ---- :model static ORM methods --------------------------------------------
@@ -1139,6 +1439,9 @@ class __SchemaDef {
   extend(other) {
     if (!(other instanceof __SchemaDef)) {
       throw new Error('extend(): argument must be a schema value');
+    }
+    if (other.kind === 'union') {
+      throw new Error('extend(): :union schemas have no fields to merge');
     }
     return __schemaDerive(this, (src) => {
       const merged = new Map(src);
@@ -1190,6 +1493,11 @@ function __schemaProjectableFields(def) {
 }
 
 function __schemaDerive(source, transform) {
+  // Algebra on a union has no obviously-right semantics (distribute?
+  // intersect?) — deferring is honest. Derive from a constituent.
+  if (source.kind === 'union') {
+    throw new Error('schema algebra (.pick/.omit/.partial/.required/.extend) is not supported on :union — derive from a constituent schema instead');
+  }
   const src = __schemaProjectableFields(source);
   const derivedFields = transform(src);
   const entries = [];
@@ -1202,6 +1510,7 @@ function __schemaDerive(source, transform) {
       tag: 'field', name: f.name, modifiers: mods,
       typeName: f.typeName, array: f.array,
       literals: f.literals || null,
+      coerce: f.coerce === true,
       constraints: f.constraints,
       attrs: f.attrs || null,
       transform: f.transform || null,
@@ -1274,6 +1583,7 @@ function __schemaExpandMixins(host, fields, directives, ctx) {
         typeName: e.typeName,
         literals: e.literals || null,
         array: e.array === true,
+        coerce: e.coerce === true,
         constraints: e.constraints || null,
         attrs: e.attrs || null,
         transform: e.transform || null,
@@ -2186,8 +2496,9 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
   function setSchemaRuntimeProvider(fn) {
     _schemaRuntimeProvider = fn;
   }
-  var VALID_KINDS = new Set(["input", "shape", "model", "mixin", "enum"]);
+  var VALID_KINDS = new Set(["input", "shape", "model", "mixin", "enum", "union"]);
   var KIND_DEFAULT = "input";
+  var SCHEMA_COERCIBLE_TYPES = new Set(["integer", "number", "boolean", "date", "datetime"]);
   var HOOK_NAMES = new Set([
     "beforeValidation",
     "afterValidation",
@@ -2439,6 +2750,18 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       for (let line of lines) {
         parseEnumLine(line, entries);
       }
+    } else if (kind === "union") {
+      for (let line of lines) {
+        parseUnionLine(line, entries);
+      }
+      let onCount = entries.filter((e) => e.tag === "directive" && e.name === "on").length;
+      let members = entries.filter((e) => e.tag === "union-member");
+      if (onCount !== 1) {
+        throw schemaError({ loc: ctx.schemaLoc }, onCount === 0 ? `:union requires an '@on :field' discriminator — untagged unions are not supported.` : `:union takes exactly one '@on :field' discriminator (got ${onCount}).`);
+      }
+      if (members.length < 2) {
+        throw schemaError({ loc: ctx.schemaLoc }, `:union needs at least two constituent schemas (got ${members.length}).`);
+      }
     } else {
       for (let line of lines) {
         parseFieldedLine(kind, line, entries, ctx);
@@ -2527,12 +2850,15 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       let argTokens = line.slice(2);
       let dname = nameTok[1];
       if (dname === "ensure") {
+        let isAsync = nameTok.data?.bang === true;
         let pairs = parseEnsurePairs(argTokens, first);
         for (let p of pairs) {
           entries.push({
             tag: "ensure",
             name: "ensure",
             message: p.message,
+            field: p.field || null,
+            async: isAsync,
             paramTokens: p.paramTokens,
             bodyTokens: p.bodyTokens,
             loc: p.loc,
@@ -2618,7 +2944,20 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
     }
     let typeName = "string";
     let literals = null;
-    if (typeFirst?.[0] === "IDENTIFIER") {
+    let coerce = false;
+    if (typeFirst?.[0] === "UNARY_MATH" && typeFirst[1] === "~") {
+      let typeTok = line[pos + 1];
+      if (!typeTok || typeTok[0] !== "IDENTIFIER") {
+        throw schemaError(typeFirst, `'~' in the type slot marks coercion and needs a type name — '~integer', '~number', '~boolean', '~date'.`);
+      }
+      if (!SCHEMA_COERCIBLE_TYPES.has(typeTok[1])) {
+        throw schemaError(typeTok, `'~${typeTok[1]}' is not coercible. Coercion is defined for: ${[...SCHEMA_COERCIBLE_TYPES].join(", ")}. ` + `For anything else, write an explicit transform: '${name}, -> …'.`);
+      }
+      coerce = true;
+      typeName = typeTok[1];
+      pos += 2;
+      typeFirst = typeTok;
+    } else if (typeFirst?.[0] === "IDENTIFIER") {
       typeName = typeFirst[1];
       pos++;
     } else if (typeFirst?.[0] === "STRING") {
@@ -2634,9 +2973,6 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         let tag = next?.[0] ?? "<end>";
         throw schemaError(next || line[pos], `Literal unions contain string literals only. '${tag}' is not allowed as a union member. Use the '?' modifier for nullability.`);
       }
-      if (literals.length < 2) {
-        throw schemaError(typeFirst, `Literal union needs at least two string literals. Use '${JSON.stringify(literals[0])}' as a default with '[${JSON.stringify(literals[0])}]' instead.`);
-      }
       typeName = "literal-union";
     }
     let array = false;
@@ -2645,6 +2981,9 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
     if ((openTag === "[" || openTag === "INDEX_START") && (closeTag === "]" || closeTag === "INDEX_END")) {
       array = true;
       pos += 2;
+    }
+    if (coerce && array) {
+      throw schemaError(typeFirst, `Coercion ('~${typeName}') does not apply to array types. Coerce per-element with a transform instead.`);
     }
     let rest = line.slice(pos);
     let typeConsumed = typeFirst?.[0] === "IDENTIFIER" || typeFirst?.[0] === "STRING";
@@ -2720,6 +3059,9 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
     if (ctx?.defaultMaxString != null && !regexToken && !literals && VARCHAR_TYPES.has(typeName)) {
       defaultMax = ctx.defaultMaxString;
     }
+    if (coerce && transformTokens) {
+      throw schemaError(first, `Field '${name}' has both '~${typeName}' coercion and a '->' transform. ` + `A transform replaces coercion — coerce inside it instead.`);
+    }
     entries.push({
       tag: "field",
       name,
@@ -2727,6 +3069,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       typeName,
       array,
       literals,
+      coerce,
       constraintTokens,
       attrsTokens,
       rangeTokens,
@@ -2902,23 +3245,35 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       if (parts2.length === 0) {
         throw schemaError(first, "@ensure [...] must contain at least one 'message, fn' pair.");
       }
-      if (parts2.length % 2 !== 0) {
-        throw schemaError(first, `@ensure [...] must have pairs of 'message, fn' (got ${parts2.length} elements; odd count).`);
-      }
-      let pairs = [];
-      for (let i = 0;i < parts2.length; i += 2) {
-        pairs.push(extractEnsurePair(parts2[i], parts2[i + 1], first));
-      }
-      return pairs;
+      return consumeEnsureTuples(parts2, first);
     }
     let parts = splitTopLevelByComma(tokens);
     if (parts.length < 2) {
       throw schemaError(first, "@ensure inline form must be 'message, (x) -> body'. Did you forget the comma?");
     }
-    if (parts.length > 2) {
-      throw schemaError(first, `@ensure inline form takes exactly 'message, fn' (got ${parts.length} comma-separated parts). Use '@ensure [...]' for multiple refinements.`);
+    if (parts.length > 3 || parts.length === 3 && !isEnsureFieldPart(parts[1])) {
+      throw schemaError(first, `@ensure inline form takes 'message[, :field], fn' (got ${parts.length} comma-separated parts). Use '@ensure [...]' for multiple refinements.`);
     }
-    return [extractEnsurePair(parts[0], parts[1], first)];
+    return consumeEnsureTuples(parts, first);
+  }
+  function isEnsureFieldPart(part) {
+    return part && part.length === 1 && part[0][0] === "SYMBOL";
+  }
+  function consumeEnsureTuples(parts, anchorTok) {
+    let pairs = [];
+    let i = 0;
+    while (i < parts.length) {
+      let msgPart = parts[i++];
+      let fieldPart = null;
+      if (i < parts.length && isEnsureFieldPart(parts[i])) {
+        fieldPart = parts[i++];
+      }
+      if (i >= parts.length) {
+        throw schemaError(msgPart?.[0] || anchorTok, "@ensure: missing function after message" + (fieldPart ? " and :field" : "") + ".");
+      }
+      pairs.push(extractEnsurePair(msgPart, fieldPart, parts[i++], anchorTok));
+    }
+    return pairs;
   }
   function extractEnsureBracketInner(tokens, openTok) {
     let depth = 0;
@@ -2986,7 +3341,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       parts.push(cur);
     return parts;
   }
-  function extractEnsurePair(messagePart, fnPart, refTok) {
+  function extractEnsurePair(messagePart, fieldPart, fnPart, refTok) {
     if (!messagePart || !messagePart.length) {
       throw schemaError(refTok, "@ensure: missing message (expected a string literal).");
     }
@@ -2995,6 +3350,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
     }
     let msgTok = messagePart[0];
     let message = JSON.parse(msgTok[1]);
+    let field = fieldPart ? fieldPart[0][1] : null;
     if (!fnPart || !fnPart.length) {
       throw schemaError(msgTok, "@ensure: missing function after message.");
     }
@@ -3031,7 +3387,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
     if (!bodyTokens.length) {
       throw schemaError(arrowTok, "@ensure: predicate function body is empty.");
     }
-    return { message, paramTokens, bodyTokens, loc: msgTok.loc };
+    return { message, field, paramTokens, bodyTokens, loc: msgTok.loc };
   }
   function ensureParamNames(paramTokens, refTok) {
     if (!paramTokens.length)
@@ -3044,6 +3400,38 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       }
       return pTokens[0][1];
     });
+  }
+  function parseUnionLine(line, entries) {
+    let first = line[0];
+    if (!first)
+      return;
+    if (first[0] === "@") {
+      let nameTok = line[1];
+      if (!nameTok || nameTok[1] !== "on") {
+        throw schemaError(nameTok || first, `:union bodies accept only '@on :field' and constituent schema names. '@${nameTok?.[1] ?? ""}' is not allowed.`);
+      }
+      let args = stripCallWrapper(line.slice(2));
+      let symTok = args[0];
+      if (!symTok || symTok[0] !== "SYMBOL") {
+        throw schemaError(symTok || nameTok, `@on requires the discriminator field as a :symbol — '@on :kind'.`);
+      }
+      if (args.length > 1) {
+        throw schemaError(args[1], `@on takes exactly one :field symbol.`);
+      }
+      entries.push({
+        tag: "directive",
+        name: "on",
+        args: [{ field: symTok[1] }],
+        argTokens: line.slice(2),
+        loc: first.loc
+      });
+      return;
+    }
+    if (first[0] === "IDENTIFIER" && line.length === 1) {
+      entries.push({ tag: "union-member", name: first[1], loc: first.loc });
+      return;
+    }
+    throw schemaError(first, `:union bodies accept only '@on :field' and bare constituent schema names (one per line). ` + `Got ${first[0]}${line.length > 1 ? " followed by " + line[1][0] : ""}.`);
   }
   function parseEnumLine(line, entries) {
     let first = line[0];
@@ -3362,6 +3750,9 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         if (e.literals) {
           obj.push(`literals: ${JSON.stringify(e.literals)}`);
         }
+        if (e.coerce) {
+          obj.push("coerce: true");
+        }
         let range = e.rangeTokens ? compileRangeTokens(e.rangeTokens, e) : null;
         let bracket = e.constraintTokens ? compileConstraintsLiteral(e.constraintTokens, e) : null;
         let regex = e.regexToken ? regexLiteralOf(e.regexToken) : null;
@@ -3392,6 +3783,10 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           `message: ${JSON.stringify(e.message)}`,
           `fn: ${fnCode}`
         ];
+        if (e.field)
+          obj.push(`field: ${JSON.stringify(e.field)}`);
+        if (e.async)
+          obj.push("async: true");
         return `{${obj.join(", ")}}`;
       }
       case "scope":
@@ -3421,6 +3816,9 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         if (e.value !== undefined)
           obj.push(`value: ${JSON.stringify(e.value)}`);
         return `{${obj.join(", ")}}`;
+      }
+      case "union-member": {
+        return `{tag: "union-member", name: ${JSON.stringify(e.name)}}`;
       }
       default:
         return `{tag: "unknown"}`;
@@ -3683,6 +4081,13 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       if (unique)
         parts.push("unique: true");
       return `[{${parts.join(", ")}}]`;
+    }
+    if (name === "on") {
+      let t = stripCallWrapper(tokens)[0];
+      if (t && t[0] === "SYMBOL") {
+        return `[{field: ${JSON.stringify(t[1])}}]`;
+      }
+      throw schemaError(t || tokens[tokens.length - 1], `@on requires the discriminator field as a :symbol — '@on :kind'.`);
     }
     if (name === "tableWas") {
       if (tokens[0]?.[0] === "CALL_START" && tokens[tokens.length - 1]?.[0] === "CALL_END") {
@@ -14807,7 +15212,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.16.1";
-  var BUILD_DATE = "2026-06-10@22:48:39GMT";
+  var BUILD_DATE = "2026-06-10@23:50:43GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

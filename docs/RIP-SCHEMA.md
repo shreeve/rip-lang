@@ -51,7 +51,7 @@ architecture for contributors.
 1. [What Rip Schema is](#1-what-rip-schema-is)
 2. [A quick tour](#2-a-quick-tour)
 3. [Schemas vs types](#3-schemas-vs-types)
-4. [The five kinds](#4-the-five-kinds)
+4. [The six kinds](#4-the-six-kinds)
 5. [Body syntax](#5-body-syntax)
 6. [The runtime API](#6-the-runtime-api)
 7. [What `.parse()` returns by kind](#7-what-parse-returns-by-kind)
@@ -344,9 +344,9 @@ plus the runtime dimension.
 
 ---
 
-## 4. The five kinds
+## 4. The six kinds
 
-Every schema has one of five kinds, selected by a `:symbol` after the
+Every schema has one of six kinds, selected by a `:symbol` after the
 `schema` keyword:
 
 ```coffee
@@ -355,6 +355,7 @@ shape  = schema :shape
 enum   = schema :enum
 mixin  = schema :mixin
 model  = schema :model
+union  = schema :union
 ```
 
 The kind determines which body forms are legal, what `.parse()` returns,
@@ -432,6 +433,48 @@ User = schema :model
 Mixins are fields-only. Methods, computed, hooks, and non-`@mixin`
 directives inside a mixin body are compile errors.
 
+### `:union`
+
+A discriminated union over registered schemas. The body names the
+discriminator field (`@on :field`, required — untagged unions are a
+non-goal: they make dispatch O(n) and error messages incoherent) and
+two or more constituent schemas, one per line:
+
+```coffee
+ClickEvent = schema :shape
+  kind! "click"               # single-literal constant — the tag
+  x!    integer
+  y!    integer
+
+ScrollEvent = schema :shape
+  kind!  "scroll"
+  delta! integer
+
+Event = schema :union
+  @on :kind
+  ClickEvent
+  ScrollEvent
+
+Event.parse(kind: "click", x: 1, y: 2)    # → ClickEvent instance
+Event.safe(kind: "hover")                 # → {field: "kind", error: "union",
+                                          #    message: "expected one of click | scroll"}
+```
+
+- Each constituent must declare the discriminator as a string-literal
+  type, all values distinct across the union — checked at first parse
+  (lazy, consistent with registry resolution), with the colliding
+  constituents named in the error.
+- `.parse(data)` reads the discriminator and dispatches O(1) to the
+  matching constituent's validator; the result is that constituent's
+  instance (shapes keep their behavior).
+- Usable as a field type like any registered schema: `events! Event[]`.
+- If any constituent is async-validating (`@ensure!`), the union is too
+  — use `parseAsync!` / `safeAsync!` / `okAsync!`.
+- Schema algebra on a union throws — distribute-vs-intersect has no
+  obviously-right answer, so v1 defers; derive from a constituent.
+- Shadow TS: `type Event = ClickEvent | ScrollEvent;` — narrowing via
+  the discriminator works natively.
+
 ### `:model`
 
 A DB-backed entity. Everything `:shape` offers (all field forms,
@@ -485,7 +528,11 @@ expressions accept:
 - a type identifier (`string`, `email`, `integer`, …)
 - an array suffix (`string[]`)
 - a string-literal union (`"M" | "F" | "U"`) — value must be one of the
-  listed members; 2+ members required, no mixing with base types
+  listed members; no mixing with base types. A single literal
+  (`kind! "click"`) is a constant field — the building block of
+  [discriminated unions](#union)
+- a `~`-prefixed coercible type (`~integer`, `~number`, `~boolean`,
+  `~date`) — "coerce, then validate" (see below)
 
 ```coffee
 name!                                   # required string (default type)
@@ -498,6 +545,36 @@ zip!       string, /^\d{5}$/            # regex-validated
 sex?       "M" | "F" | "U"              # literal union
 priority   "low" | "med" | "high", [:med]  # literal union + default
 ```
+
+### Coercion types (`~type`)
+
+Wire data arrives as strings; a `~` prefix on a coercible built-in
+means the value converts through a strict table before validation:
+
+```coffee
+SearchParams = schema
+  page?     ~integer        # "42" → 42; "abc" → {error: 'coerce'}
+  minPrice? ~number         # "19.95" → 19.95
+  active?   ~boolean        # "true"/"1"/1 → true; "false"/"0"/0 → false
+  since?    ~date           # ISO-8601 string or epoch ms → Date
+```
+
+- Coercion tables are strict and documented: `~integer` accepts
+  integral strings and integral numbers, rejects `NaN` and `"12.5"`;
+  `~boolean` accepts exactly the six tokens above; `~date` accepts
+  ISO-8601 strings and finite epoch numbers. Failed coercion is
+  `{error: 'coerce'}` — distinct from `{error: 'type'}`, because "looked
+  like wire data but didn't convert" is a different mistake than "wrong
+  shape entirely".
+- Constraints apply **after** coercion — `age? ~integer, 18..120` range-
+  checks the coerced number.
+- Coercion is field semantics, so it **survives algebra** (`.pick`,
+  `.omit`, …) like transforms do, and is **skipped on DB hydrate**
+  (rows arrive canonical).
+- `~` doesn't combine with a `->` transform (the transform IS manual
+  control of the same step), doesn't apply to arrays, and only covers
+  the four wire-friendly built-ins — everything else wants an explicit
+  transform.
 
 ### Inline field transform
 
@@ -654,6 +731,36 @@ Two forms, same semantics:
 ]
 ```
 
+An optional `:field` symbol between the message and the predicate
+**attributes the failure to a specific field**, so form libraries can
+attach the error to the right input (without it, the issue stays
+schema-wide with `field: ''`):
+
+```coffee
+@ensure "passwords must match", :password2, (u) -> u.password is u.password2
+# fails as {field: "password2", error: "ensure", message: "passwords must match"}
+```
+
+**Async refinements** use the dammit operator — `@ensure!` — for
+predicates that await a database or network check:
+
+```coffee
+Signup = schema
+  email! email
+  @ensure! "email already registered", :email, (u) ->
+    not await User.where(email: u.email).first()
+```
+
+A schema with ≥1 `@ensure!` is **async-validating**: sync `.parse` /
+`.safe` / `.ok` throw immediately ("use parseAsync!/safeAsync!/okAsync!")
+— no silent promise-leak, no sometimes-sync API. Sync refinements run
+first (cheap before expensive); async refinements then run
+**concurrently** (`Promise.all`) with all results collected in
+declaration order, preserving the no-short-circuit rule. A rejected
+async predicate counts as failed with the declared message. Async
+refinements are skipped on hydrate and dropped by algebra, same as
+sync ones.
+
 Both forms compile to the same internal representation; use whichever
 reads cleanest for the case at hand. The inline form is nicer for
 one-offs; the array form keeps related invariants visually grouped.
@@ -806,10 +913,22 @@ if User.ok raw
   # ...
 ```
 
-### Async variants (`parse!`, `safe!`, `ok!`)
+### `.parseAsync(data)` / `.safeAsync(data)` / `.okAsync(data)`
 
-Every method has a dammit-operator variant that awaits the result. For
-`:input`/`:shape`/`:enum` these are sync, so `!` is a no-op (harmless).
+Async validation entry points. They exist on **every** schema (sync-only
+schemas just resolve immediately) and are **required** when the schema
+has `@ensure!` async refinements — the sync trio throws on those schemas
+rather than sometimes-returning a promise. The dammit operator gives the
+idiomatic call:
+
+```coffee
+user = Signup.parseAsync! raw
+r    = Signup.safeAsync! raw
+ok   = Signup.okAsync! raw
+```
+
+### The dammit operator and the ORM
+
 For `:model`, the ORM methods are all genuinely async and `!` is the
 canonical form:
 
@@ -829,6 +948,7 @@ users = User.where(active: true).all!
 | `:shape`   | Instance of a generated class — fields as enumerable own properties, methods and getters on the prototype | same |
 | `:enum`    | The member value (or the name string, for bare enums) | same |
 | `:model`   | **Unpersisted** instance — same structure as `:shape`, but the class also has `save()`, `destroy()`, relation methods, and `_persisted` state | same |
+| `:union`   | The matching constituent's `.parse()` result — dispatched O(1) on the discriminator | same |
 | `:mixin`   | **Not instantiable** — `.parse()` throws | N/A |
 
 For `:shape` and `:model`:
@@ -2192,23 +2312,11 @@ language.
 
 ### Validator features not yet in
 
-- **Full discriminated-union schemas** — `schema.union(A, B)` with a
-  `:discriminator` key that dispatches to the matching constituent.
-  String-literal unions in the type slot (`"a" | "b"`) are in;
-  schema-constituent unions over arbitrary shapes are not. Today you
-  express cross-shape alternation by running multiple `.safe()` calls.
-- **Issue paths** — `@ensure` issues today use `field: ''` (the whole
-  object). Per-field attribution (`field: 'email'`) on a refinement
-  isn't supported; write the field-specific rule as a constraint or
-  inline transform instead.
-- **Coercion built-in types** — `coerce.number`, `coerce.date`, etc.
-  as dedicated type names. Today a field transform handles the same
-  case (`shippedAt? date, -> new Date(it.shippedAt)`); coerce types
-  would just be a stdlib convenience over the transform mechanism.
-- **Async refinements** — `@ensure` predicates are sync. Async
-  refinements (that await a database or network check) would need
-  either a separate `@ensureAsync` directive or a full async variant
-  of the whole validate pipeline.
+- **Union algebra** — `.pick`/`.omit`/etc. on a `:union` throws; the
+  semantics (distribute? intersect?) have no obviously-right answer.
+  Derive from a constituent instead.
+- **Untagged unions** — deliberate non-goal: O(n) dispatch and
+  incoherent error messages. Use `@on :field`.
 
 ### ORM features not yet in
 
@@ -2272,6 +2380,11 @@ What each kind's body can contain:
 
 "methods" in the `:shape` / Hooks row means: hook-named functions are
 accepted, but they're just methods with no lifecycle binding.
+
+`:union` is body-incompatible with everything above — its body is
+exactly one `@on :field` plus 2+ bare constituent names. It exposes
+`.parse` / `.safe` / `.ok` (and the async trio) by delegating to the
+matched constituent; algebra and ORM surface throw.
 
 ---
 
@@ -2342,7 +2455,14 @@ user-defined enums or shapes compose incrementally.
 | Directive       | Effect                                                            |
 | --------------- | ----------------------------------------------------------------- |
 | `@mixin Name`   | Pull in the fields of mixin `Name` at Layer 2 normalization       |
-| `@ensure "msg", (x) -> pred` | Cross-field refinement — see [§5](#refinement-ensure). Allowed on `:input` / `:shape` / `:model`; rejected on `:enum` / `:mixin`. |
+| `@ensure "msg"[, :field], (x) -> pred` | Cross-field refinement, optionally attributed to a field — see [§5](#refinement-ensure). Allowed on `:input` / `:shape` / `:model`; rejected on `:enum` / `:mixin`. |
+| `@ensure! "msg"[, :field], (x) -> pred` | ASYNC refinement — the schema becomes async-validating (`parseAsync!` / `safeAsync!` / `okAsync!`) |
+
+### `:union`-only
+
+| Directive   | Effect                                                          |
+| ----------- | --------------------------------------------------------------- |
+| `@on :field` | Names the discriminator field (required, exactly once). Constituents follow as bare schema names, one per line |
 
 ### `:model`-only
 
