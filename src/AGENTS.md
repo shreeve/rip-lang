@@ -27,6 +27,7 @@ The browser bundle (`docs/dist/rip.min.js`) is built from `src/browser.js` plus 
 | `src/schema/runtime-db-naming.js` | source for `db-naming` fragment (server + migration) |
 | `src/schema/runtime-orm.js` | source for `orm` fragment (server + migration) |
 | `src/schema/runtime-ddl.js` | source for `ddl` fragment (migration only) |
+| `src/schema/runtime-migrate.js` | source for `migrate` fragment (migration only) — introspection, differ, status/make/migrate |
 | `src/schema/runtime-browser-stubs.js` | source for `browser-stubs` fragment (browser only) |
 | `src/types.js` | yes | only `installTypeSupport(Lexer)` — token-stream type stripper |
 | `src/error.js` | yes | runtime error formatting |
@@ -74,7 +75,7 @@ The mode matrix exposed by `getSchemaRuntime({ mode })`:
 | `validate` | VALIDATE | isomorphic validate-only contexts |
 | `browser` | VALIDATE + BROWSER_STUBS | the `<script type="text/rip">` runtime |
 | `server` | VALIDATE + DB_NAMING + ORM | `@rip-lang/server` and friends |
-| `migration` | VALIDATE + DB_NAMING + ORM + DDL | CLI / migration tool / tests (default) |
+| `migration` | VALIDATE + DB_NAMING + ORM + DDL + MIGRATE | CLI / migration tool / tests (default) |
 
 Edits to `src/schema/runtime-*.js` require running `bun run build:schema-runtime` to regenerate `runtime.generated.js`. CI fails (`bun run test:schema-fresh`) if the generated file is stale.
 

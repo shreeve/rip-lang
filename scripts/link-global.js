@@ -112,6 +112,7 @@ const bins = [
   ['rip-ai',      'packages/ai/bin/rip-ai'],
   ['rip-db',      'packages/db/bin/rip-db'],
   ['rip-print',   'packages/print/bin/rip-print'],
+  ['rip-schema',  'bin/rip-schema'],
   ['rip-server',  'packages/server/bin/rip-server'],
 ]
 

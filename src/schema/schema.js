@@ -1609,6 +1609,10 @@ function entryLiteral(emitter, e) {
       let regex = e.regexToken ? regexLiteralOf(e.regexToken) : null;
       let merged = mergeFieldConstraints(range, bracket, regex, e);
       if (merged) obj.push(`constraints: ${merged}`);
+      if (e.attrsTokens) {
+        let attrs = compileAttrsLiteral(e.attrsTokens, e);
+        if (attrs) obj.push(`attrs: ${attrs}`);
+      }
       if (e.transformTokens) {
         obj.push(`transform: ${compileTransformFn(emitter, e.transformTokens)}`);
       }
@@ -1907,6 +1911,45 @@ function mergeFieldConstraints(range, bracketLiteral, regex, fieldEntry) {
   return constraintLiteral(c);
 }
 
+// Compile a field's `{key: value}` attrs bracket into a JS object
+// literal. Known keys only — a typo'd attr silently baked into every
+// downstream schema would be worse than a hard error. Current keys:
+//
+//   was: "old_column_name"   migration-rename annotation, consumed by
+//                            the schema differ (`rip schema make`) to
+//                            emit RENAME COLUMN instead of DROP + ADD.
+//                            Removable once the migration has landed.
+const SCHEMA_FIELD_ATTRS = new Set(['was']);
+
+function compileAttrsLiteral(tokens, fieldEntry) {
+  // tokens: `{` … `}` — strip the braces, split entries on top-level commas.
+  let inner = tokens.slice(1, -1).filter(t => t[0] !== 'TERMINATOR' && t[0] !== 'INDENT' && t[0] !== 'OUTDENT');
+  let items = splitTopLevelByComma(inner);
+  let parts = [];
+  for (let item of items) {
+    if (!item.length) continue;
+    let keyTok = item[0];
+    if (keyTok[0] !== 'PROPERTY' && keyTok[0] !== 'IDENTIFIER') {
+      throw schemaError(keyTok,
+        `Field attrs must be '{key: value}' pairs. Got ${keyTok[0]}.`);
+    }
+    let key = keyTok[1];
+    if (!SCHEMA_FIELD_ATTRS.has(key)) {
+      throw schemaError(keyTok,
+        `Unknown field attr '${key}'. Known attrs: ${[...SCHEMA_FIELD_ATTRS].join(', ')}.`);
+    }
+    let valueStart = 1;
+    if (item[valueStart]?.[0] === ':') valueStart++;
+    let value = evalLiteralTokens(item.slice(valueStart), fieldEntry);
+    if (key === 'was' && typeof value !== 'string') {
+      throw schemaError(keyTok,
+        `Field attr 'was' requires a string column name, e.g. {was: "first_name"}.`);
+    }
+    parts.push(`${key}: ${serializeLiteral(value)}`);
+  }
+  return parts.length ? `{${parts.join(', ')}}` : null;
+}
+
 function constraintLiteral(c) {
   let parts = [];
   if (c.min !== undefined) parts.push(`min: ${serializeLiteral(c.min)}`);
@@ -1989,6 +2032,26 @@ function compileDirectiveArgsLiteral(name, tokens) {
     let parts = [`fields: ${JSON.stringify(fields)}`];
     if (unique) parts.push('unique: true');
     return `[{${parts.join(', ')}}]`;
+  }
+
+  // `@tableWas old_name` — migration-rename annotation for the whole
+  // table. Consumed by the schema differ to emit `ALTER TABLE … RENAME
+  // TO …` instead of DROP + CREATE. Accepts an identifier or string.
+  if (name === 'tableWas') {
+    // A string arg gets the implicit-call wrapper (like @ensure); a bare
+    // identifier doesn't. Strip defensively.
+    if (tokens[0]?.[0] === 'CALL_START' && tokens[tokens.length - 1]?.[0] === 'CALL_END') {
+      tokens = tokens.slice(1, -1);
+    }
+    let t0 = tokens[0];
+    if (t0 && t0[0] === 'STRING') {
+      return `[{name: ${t0[1]}}]`;
+    }
+    if (t0 && (t0[0] === 'IDENTIFIER' || t0[0] === 'PROPERTY')) {
+      return `[{name: ${JSON.stringify(t0[1])}}]`;
+    }
+    throw schemaError(t0 || tokens[tokens.length - 1],
+      `@tableWas requires the previous table name, e.g. @tableWas legacy_users.`);
   }
 
   // @idStart N sets the seed value for the table's auto-id sequence.

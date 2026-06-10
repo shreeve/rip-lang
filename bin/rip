@@ -300,6 +300,15 @@ async function main() {
       const name = candidate;
       const subArgs = args.slice(scriptFileIndex + 1);
 
+      // 0. Sibling subcommand in this CLI's own bin/ — works from any
+      // cwd (getRepoRoot below resolves the CWD's git checkout, which
+      // is unrelated when running `rip schema …` inside an app dir).
+      const selfSibling = join(__dirname, `rip-${name}`);
+      if (existsSync(selfSibling)) {
+        const r = spawnSync(selfSibling, subArgs, { stdio: 'inherit', env: process.env });
+        process.exit(r.status ?? 1);
+      }
+
       const repoRoot = getRepoRoot();
       if (repoRoot) {
         // 1. Repo package: bin/rip-<name>

@@ -31,6 +31,11 @@ bun run build
 # Serve an app (watches *.rip, HTTPS, mDNS)
 rip server
 
+# Schema migrations (diff declared :models vs the database)
+rip schema status [models.rip]
+rip schema make <name> [models.rip] [--allow-lossy] [--allow-destructive]
+rip schema migrate [models.rip]
+
 # Interactive REPL (toggle .tokens, .sexp, .js modes)
 ./bin/rip
 ```
@@ -622,7 +627,7 @@ TypeScript types fall out automatically.
 | `:shape`  | validator + instance methods + computed getters            |
 | `:enum`   | closed set of `:symbol` members                            |
 | `:mixin`  | reusable field group, composed via `@mixin Name`           |
-| `:model`  | DB-backed: ORM (`find`/`where`/`create`/`save`/`destroy`), transactions (`schema.transaction! ->`), eager loading (`.includes(:orders)`), scopes (`@scope :active, -> @where(active: true)`, `@defaultScope`), DDL (`.toSQL()`), hooks (12, incl. `afterCommit`/`afterRollback`), relations |
+| `:model`  | DB-backed: ORM (`find`/`where`/`create`/`save`/`destroy`), transactions (`schema.transaction! ->`), eager loading (`.includes(:orders)`), scopes (`@scope :active, -> @where(active: true)`, `@defaultScope`), DDL (`.toSQL()`), migrations (`rip schema status/make/migrate`, renames via `{was: "old"}` / `@tableWas`), hooks (12, incl. `afterCommit`/`afterRollback`), relations |
 
 Body forms (six declarative line shapes):
 
