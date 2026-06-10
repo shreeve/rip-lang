@@ -1873,17 +1873,17 @@ function __schemaFkName(m)    { return ''; }   // ditto
       }
     },
     parse(input) {
-      let EOF, TERROR, action, errStr, expected, k, len, lex, lexer, loc, locs, newState, p, parseTable, preErrorSymbol, r, recovering, rv, sharedState, state, stk, symbol, tokenLen, tokenLine, tokenLoc, tokenText, v, vals;
+      let EOF, TERROR, action, errStr, expected, len, lex, lexer, loc, locs, newState, p, parseTable, preErrorSymbol, r, recovering, rv, sharedState, state, stk, symbol, tokenLen, tokenLine, tokenLoc, tokenText, vals;
       [stk, vals, locs] = [[0], [null], []];
       [parseTable, tokenText, tokenLine, tokenLen, recovering] = [this.parseTable, "", 0, 0, 0];
       [TERROR, EOF] = [2, 1];
       lexer = Object.create(this.lexer);
       sharedState = { ctx: {} };
-      for (let k2 in this.ctx) {
-        if (!Object.hasOwn(this.ctx, k2))
+      for (let k in this.ctx) {
+        if (!Object.hasOwn(this.ctx, k))
           continue;
-        let v2 = this.ctx[k2];
-        sharedState.ctx[k2] = v2;
+        let v = this.ctx[k];
+        sharedState.ctx[k] = v;
       }
       lexer.setInput(input, sharedState.ctx);
       [sharedState.ctx.lexer, sharedState.ctx.parser] = [lexer, this];
@@ -3467,7 +3467,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
   function collectModifiers(identToken) {
     let mods = [];
     let d = identToken.data;
-    if (d?.await === true)
+    if (d?.bang === true)
       mods.push("!");
     if (d?.optional === true)
       mods.push("?");
@@ -4753,7 +4753,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         }
       }
       if (id.length > 1 && id.endsWith("!")) {
-        data.await = true;
+        data.bang = true;
         id = id.slice(0, -1);
       }
       if (id.length > 1 && id.endsWith("?")) {
@@ -6839,9 +6839,9 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       const s = new String(to);
       if (from.optional)
         s.optional = true;
-      if (from.await)
-        s.await = true;
-      return s.optional || s.await ? s : to;
+      if (from.bang)
+        s.bang = true;
+      return s.optional || s.bang ? s : to;
     };
     proto.addBodyRipSrcMarkers = function(bodyCode, bodySexpr) {
       if (typeof bodyCode !== "string" || !bodyCode)
@@ -10628,7 +10628,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     }
     emit(sexpr, context = "statement") {
       if (sexpr instanceof String) {
-        if (meta(sexpr, "await") === true) {
+        if (meta(sexpr, "bang") === true) {
           return `await ${str(sexpr)}()`;
         }
         if (meta(sexpr, "optional")) {
@@ -10683,7 +10683,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
       if (!Array.isArray(sexpr))
         this.error(`Invalid s-expression: ${JSON.stringify(sexpr)}`, sexpr);
       let [head, ...rest] = sexpr;
-      let headAwaitMeta = meta(head, "await");
+      let headBangMeta = meta(head, "bang");
       head = str(head);
       let method = CodeEmitter.GENERATORS[head];
       if (method)
@@ -10697,7 +10697,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
         let postfix = this._tryPostfixCall(head, rest, context);
         if (postfix)
           return postfix;
-        let needsAwait = headAwaitMeta === true;
+        let needsAwait = headBangMeta === true;
         let callStr = `${this.emit(head, "value")}(${this._emitArgs(rest)})`;
         return needsAwait ? `await ${callStr}` : callStr;
       }
@@ -10719,7 +10719,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
           return postfix;
         let needsAwait = false;
         let calleeCode;
-        if (head[0] === "." && meta(head[2], "await") === true) {
+        if (head[0] === "." && meta(head[2], "bang") === true) {
           needsAwait = true;
           let [obj, prop] = head.slice(1);
           let objCode = this.emit(obj, "value");
@@ -10982,14 +10982,7 @@ function _setDataSection() {
         }
         return `if (${guardCode} != null) ${targetCode2} ${op} ${valueCode2}`;
       }
-      let isFnValue = this.is(value, "->") || this.is(value, "=>") || this.is(value, "def");
-      if (target instanceof String && meta(target, "await") !== undefined && !isFnValue) {
-        let sigil = meta(target, "await") === true ? "!" : "&";
-        this.error(`Cannot use ${sigil} sigil in variable declaration '${str(target)}'`, sexpr);
-      }
-      if (target instanceof String && meta(target, "await") === true && isFnValue) {
-        this.nextFunctionIsVoid = true;
-      }
+      this.applyVoidMarker(target, value, sexpr);
       let isEmptyArr = this.is(target, "array", 0);
       let isEmptyObj = this.is(target, "object", 0);
       if (isEmptyArr || isEmptyObj) {
@@ -11071,7 +11064,7 @@ function _setDataSection() {
         }
       }
       let targetCode;
-      if (target instanceof String && meta(target, "await") !== undefined) {
+      if (target instanceof String && meta(target, "bang") !== undefined) {
         targetCode = str(target);
       } else if (typeof target === "string" && this.reactiveVars?.has(target)) {
         targetCode = `${target}.value`;
@@ -11111,7 +11104,7 @@ function _setDataSection() {
       let objCode = this.emit(obj, "value");
       let needsParens = CodeEmitter.NUMBER_LITERAL_RE.test(objCode) || objCode.startsWith("await ") || (this.is(obj, "object") || this.is(obj, "yield"));
       let base = needsParens ? `(${objCode})` : objCode;
-      if (meta(prop, "await") === true)
+      if (meta(prop, "bang") === true)
         return `await ${base}.${str(prop)}()`;
       if (meta(prop, "optional"))
         return `(${base}.${str(prop)} != null)`;
@@ -11236,7 +11229,7 @@ function _setDataSection() {
     }
     emitDef(head, rest, context, sexpr) {
       let [name, params, body] = rest;
-      let sideEffectOnly = meta(name, "await") === true;
+      let sideEffectOnly = meta(name, "bang") === true;
       let cleanName = str(name);
       let paramList = this.emitParamList(params);
       let bodyCode = this.emitFunctionBody(body, params, sideEffectOnly);
@@ -11248,8 +11241,7 @@ function _setDataSection() {
       let [params, body] = rest;
       if ((!params || Array.isArray(params) && params.length === 0) && this.containsIt(body))
         params = ["it"];
-      let sideEffectOnly = this.nextFunctionIsVoid || false;
-      this.nextFunctionIsVoid = false;
+      let sideEffectOnly = sexpr.isVoid || false;
       let paramList = this.emitParamList(params);
       let bodyCode = this.emitFunctionBody(body, params, sideEffectOnly);
       let isAsync = this.containsAwait(body);
@@ -11261,8 +11253,7 @@ function _setDataSection() {
       let [params, body] = rest;
       if ((!params || Array.isArray(params) && params.length === 0) && this.containsIt(body))
         params = ["it"];
-      let sideEffectOnly = this.nextFunctionIsVoid || false;
-      this.nextFunctionIsVoid = false;
+      let sideEffectOnly = sexpr.isVoid || false;
       let paramList = this.emitParamList(params);
       let isSingle = params.length === 1 && typeof params[0] === "string" && !paramList.includes("=") && !paramList.includes("...") && !paramList.includes("[") && !paramList.includes("{");
       let paramSyntax = isSingle ? paramList : `(${paramList})`;
@@ -11822,8 +11813,7 @@ ${this.indent()}}`;
           let [, mParams, mBody] = value;
           if ((!mParams || Array.isArray(mParams) && mParams.length === 0) && this.containsIt(mBody))
             mParams = ["it"];
-          let mSideEffect = this.nextFunctionIsVoid || false;
-          this.nextFunctionIsVoid = false;
+          let mSideEffect = value.isVoid || false;
           let mParamList = this.emitParamList(mParams);
           let mBodyCode = this.emitFunctionBody(mBody, mParams, mSideEffect);
           let mIsAsync = this.containsAwait(mBody);
@@ -12393,7 +12383,7 @@ ${this.indent()}}`;
     emitImport(head, rest, context, sexpr) {
       if (rest.length === 1) {
         let importExpr = `import(${this.emit(rest[0], "value")})`;
-        if (meta(sexpr[0], "await") === true)
+        if (meta(sexpr[0], "bang") === true)
           return `(await ${importExpr})`;
         return importExpr;
       }
@@ -12459,6 +12449,16 @@ ${this.indent()}}`;
       if (anchors.length)
         sexpr._anchors = (sexpr._anchors || []).concat(anchors);
     }
+    applyVoidMarker(target, value, sexpr) {
+      let isFnValue = this.is(value, "->") || this.is(value, "=>") || this.is(value, "def");
+      if (target instanceof String && meta(target, "bang") !== undefined && !isFnValue) {
+        let sigil = meta(target, "bang") === true ? "!" : "&";
+        this.error(`Cannot use ${sigil} sigil in variable declaration '${str(target)}'`, sexpr);
+      }
+      if (target instanceof String && meta(target, "bang") === true && isFnValue) {
+        value.isVoid = true;
+      }
+    }
     emitExport(head, rest) {
       let [decl] = rest;
       if (this.options.skipExports) {
@@ -12472,6 +12472,7 @@ ${this.indent()}}`;
           }
           if (this.is(decl[2], "schema"))
             this._schemaName = str(decl[1]);
+          this.applyVoidMarker(decl[1], decl[2], decl);
           const result = `const ${decl[1]} = ${this.emit(decl[2], "value")}`;
           this._componentName = prev;
           this._componentTypeParams = prevTP;
@@ -12492,6 +12493,7 @@ ${this.indent()}}`;
         }
         if (this.is(decl[2], "schema"))
           this._schemaName = str(decl[1]);
+        this.applyVoidMarker(decl[1], decl[2], decl);
         const result = `export const ${decl[1]} = ${this.emit(decl[2], "value")}`;
         this._componentName = prev;
         this._componentTypeParams = prevTP;
@@ -12505,11 +12507,14 @@ ${this.indent()}}`;
     emitExportDefault(head, rest) {
       let [expr] = rest;
       if (this.options.skipExports) {
-        if (this.is(expr, "="))
+        if (this.is(expr, "=")) {
+          this.applyVoidMarker(expr[1], expr[2], expr);
           return `const ${expr[1]} = ${this.emit(expr[2], "value")}`;
+        }
         return this.emit(expr, "statement");
       }
       if (this.is(expr, "=")) {
+        this.applyVoidMarker(expr[1], expr[2], expr);
         return `const ${expr[1]} = ${this.emit(expr[2], "value")};
 export default ${expr[1]}`;
       }
@@ -13693,7 +13698,7 @@ ${this.indent()}}`;
     containsAwait(sexpr) {
       if (!sexpr)
         return false;
-      if (sexpr instanceof String && meta(sexpr, "await") === true)
+      if (sexpr instanceof String && meta(sexpr, "bang") === true)
         return true;
       if (typeof sexpr !== "object")
         return false;
@@ -14434,8 +14439,8 @@ if (typeof globalThis !== 'undefined') {
     return new CodeEmitter({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.16.0";
-  var BUILD_DATE = "2026-06-05@13:40:39GMT";
+  var VERSION = "3.16.1";
+  var BUILD_DATE = "2026-06-10@17:58:17GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

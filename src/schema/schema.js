@@ -1986,7 +1986,7 @@ function parseBodyTokens(bodyTokens) {
 function collectModifiers(identToken) {
   let mods = [];
   let d = identToken.data;
-  if (d?.await === true) mods.push('!');
+  if (d?.bang === true) mods.push('!');
   if (d?.optional === true) mods.push('?');
   return mods;
 }

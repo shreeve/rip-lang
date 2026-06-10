@@ -608,7 +608,7 @@ export function emitTypes(tokens, sexpr = null, source = '', schemaBehavior = nu
       if (!nameToken) continue;
       let fnName = nameToken[1];
       let returnType = nameToken.data?.returnType;
-      if (!returnType && nameToken.data?.await === true) returnType = 'void';
+      if (!returnType && nameToken.data?.bang === true) returnType = 'void';
       let typeParams = nameToken.data?.typeParams || '';
 
       let { params, endIdx } = collectParams(tokens, i + 2);

@@ -1,0 +1,253 @@
+import { test, eq, ok } from './runner.rip'
+import { generateCaddyConfig } from '../compat/caddy.rip'
+
+makeConfig = (overrides = {}) ->
+  Object.assign({
+    kind: 'serve'
+    version: 2
+    server: { hsts: false, verify: {} }
+    proxies: {}
+    upstreams: {}
+    apps: {}
+    routes: []
+    sites: {}
+    resolvedCerts: {}
+    streamUpstreams: {}
+    streams: []
+  }, overrides)
+
+test "proxy app generates reverse_proxy in an https site block", ->
+  config = makeConfig
+    proxies:
+      'proxy-web':
+        id: 'proxy-web'
+        kind: 'http'
+        targets: ['http://127.0.0.1:7201']
+    sites:
+      'example.com':
+        host: 'example.com'
+        routes: [{ id: 'web-proxy', host: 'example.com', path: '/*', proxy: 'proxy-web' }]
+  out = generateCaddyConfig(config)
+  ok out.includes('https://example.com {')
+  ok out.includes('reverse_proxy http://127.0.0.1:7201')
+  ok not out.includes('layer4')
+
+test "static app generates root and file_server browse", ->
+  config = makeConfig
+    sites:
+      'example.com':
+        host: 'example.com'
+        routes: [{ id: 'static', host: 'example.com', path: '/*', static: '.', root: '/var/www', browse: true, spa: false }]
+  out = generateCaddyConfig(config)
+  ok out.includes('root * /var/www')
+  ok out.includes('file_server browse')
+
+test "SPA app generates try_files fallback to index.html", ->
+  config = makeConfig
+    sites:
+      'example.com':
+        host: 'example.com'
+        routes: [{ id: 'spa', host: 'example.com', path: '/*', static: '.', root: '/var/www', browse: false, spa: true }]
+  out = generateCaddyConfig(config)
+  ok out.includes('try_files {path} /index.html')
+  ok not out.includes('file_server browse')
+
+test "TCP app generates layer4 block with tls sni matcher", ->
+  config = makeConfig
+    streamUpstreams:
+      'tcp-incus':
+        id: 'tcp-incus'
+        targets: [{ host: '127.0.0.1', port: 8443 }]
+    streams: [
+      { id: 'tcp-incus', sni: ['incus.example.com'], proxy: 'tcp-incus' }
+    ]
+  out = generateCaddyConfig(config)
+  ok out.includes('layer4 {')
+  ok out.includes('tls sni incus.example.com')
+  ok out.includes('proxy 127.0.0.1:8443')
+  ok out.includes('caddy-l4')   # plugin requirement is documented inline
+
+test "mixed HTTP+TCP uses internal terminator on 4443", ->
+  config = makeConfig
+    proxies:
+      'proxy-web':
+        id: 'proxy-web'
+        kind: 'http'
+        targets: ['http://127.0.0.1:3000']
+    sites:
+      'example.com':
+        host: 'example.com'
+        routes: [{ id: 'web', host: 'example.com', path: '/*', proxy: 'proxy-web' }]
+    streamUpstreams:
+      'tcp-db':
+        id: 'tcp-db'
+        targets: [{ host: '127.0.0.1', port: 5432 }]
+    streams: [
+      { id: 'tcp-db', sni: ['db.example.com'], proxy: 'tcp-db' }
+    ]
+  out = generateCaddyConfig(config)
+  ok out.includes('layer4 {')
+  ok out.includes('https://example.com:4443 {')
+  ok out.includes('proxy 127.0.0.1:4443')          # default route -> terminator
+  ok out.includes('auto_https disable_redirects')
+  ok out.includes('http://example.com {')          # explicit :80 redirect
+
+test "HTTP-only config serves directly on 443 (no layer4, no 4443)", ->
+  config = makeConfig
+    proxies:
+      'proxy-web':
+        id: 'proxy-web'
+        kind: 'http'
+        targets: ['http://127.0.0.1:3000']
+    sites:
+      'example.com':
+        host: 'example.com'
+        routes: [{ id: 'web', host: 'example.com', path: '/*', proxy: 'proxy-web' }]
+  out = generateCaddyConfig(config)
+  ok not out.includes('layer4')
+  ok out.includes('https://example.com {')
+  ok not out.includes('4443')
+  ok not out.includes('auto_https disable_redirects')
+
+test "HSTS emitted when server.hsts is true", ->
+  config = makeConfig
+    server: { hsts: true, verify: {} }
+    sites:
+      'example.com':
+        host: 'example.com'
+        routes: [{ id: 'static', host: 'example.com', path: '/*', static: '.', root: '/var/www' }]
+  out = generateCaddyConfig(config)
+  ok out.includes('Strict-Transport-Security')
+  ok out.includes('max-age=31536000')
+
+test "HSTS not emitted when server.hsts is false", ->
+  config = makeConfig
+    sites:
+      'example.com':
+        host: 'example.com'
+        routes: [{ id: 'static', host: 'example.com', path: '/*', static: '.', root: '/var/www' }]
+  out = generateCaddyConfig(config)
+  ok not out.includes('Strict-Transport-Security')
+
+test "cert paths from resolvedCerts emit a tls directive", ->
+  config = makeConfig
+    sites:
+      'example.com':
+        host: 'example.com'
+        routes: [{ id: 'web', host: 'example.com', path: '/*', static: '.', root: '/var/www' }]
+    resolvedCerts:
+      'example.com':
+        certPath: '/ssl/example.com.crt'
+        keyPath: '/ssl/example.com.key'
+  out = generateCaddyConfig(config)
+  ok out.includes('tls /ssl/example.com.crt /ssl/example.com.key')
+
+test "security headers always included", ->
+  config = makeConfig
+    sites:
+      'example.com':
+        host: 'example.com'
+        routes: [{ id: 'static', host: 'example.com', path: '/*', static: '.', root: '/var/www' }]
+  out = generateCaddyConfig(config)
+  ok out.includes('X-Content-Type-Options nosniff')
+  ok out.includes('X-Frame-Options SAMEORIGIN')
+  ok out.includes('Referrer-Policy strict-origin-when-cross-origin')
+  ok out.includes('-Server')
+
+test "subpath proxy mount uses a handle block matching bare + subtree", ->
+  config = makeConfig
+    proxies:
+      'proxy-mqtt':
+        id: 'proxy-mqtt'
+        kind: 'http'
+        targets: ['http://127.0.0.1:9001']
+    sites:
+      'relay.example.com':
+        host: 'relay.example.com'
+        routes: [
+          { id: 'mqtt', host: 'relay.example.com', path: '/mqtt/*', mountPath: '/mqtt', proxy: 'proxy-mqtt' }
+        ]
+  out = generateCaddyConfig(config)
+  ok out.includes('handle /mqtt /mqtt/* {')
+  ok out.includes('reverse_proxy http://127.0.0.1:9001')
+
+test "subpath static mount strips prefix via handle_path and redirects bare URL", ->
+  config = makeConfig
+    sites:
+      'relay.example.com':
+        host: 'relay.example.com'
+        routes: [
+          { id: 'repl', host: 'relay.example.com', path: '/repl/*', mountPath: '/repl', static: '.', root: '/var/www/relay-repl', browse: true, spa: false }
+        ]
+  out = generateCaddyConfig(config)
+  ok out.includes('redir /repl /repl/ permanent')
+  ok out.includes('handle_path /repl/* {')
+  ok out.includes('root * /var/www/relay-repl')
+  ok out.includes('file_server browse')
+
+test "root static mount uses a catch-all handle with root + file_server", ->
+  config = makeConfig
+    sites:
+      'example.com':
+        host: 'example.com'
+        routes: [
+          { id: 'root', host: 'example.com', path: '/*', mountPath: '/', static: '.', root: '/var/www' }
+        ]
+  out = generateCaddyConfig(config)
+  ok out.includes('handle {')
+  ok out.includes('root * /var/www')
+  ok out.includes('file_server')
+
+test "local app mounted at subpath emits handle with TODO port placeholder", ->
+  config = makeConfig
+    sites:
+      'example.com':
+        host: 'example.com'
+        routes: [
+          { id: 'api-app', host: 'example.com', path: '/api/*', mountPath: '/api', app: 'api' }
+        ]
+  out = generateCaddyConfig(config)
+  ok out.includes('handle /api /api/* {')
+  ok out.includes("# TODO: set reverse_proxy to the port where 'api' listens")
+  ok out.includes('reverse_proxy 127.0.0.1:3000')
+
+test "more specific path mount is emitted before less specific on same host", ->
+  config = makeConfig
+    proxies:
+      'proxy-admin':
+        id: 'proxy-admin'
+        kind: 'http'
+        targets: ['http://127.0.0.1:9100']
+    sites:
+      'example.com':
+        host: 'example.com'
+        routes: [
+          { id: 'root', host: 'example.com', path: '/*', mountPath: '/', static: '.', root: '/var/www' }
+          { id: 'admin-proxy', host: 'example.com', path: '/admin/*', mountPath: '/admin', proxy: 'proxy-admin' }
+        ]
+  out = generateCaddyConfig(config)
+  adminIdx = out.indexOf('handle /admin /admin/* {')
+  rootIdx  = out.indexOf('handle {')
+  ok adminIdx >= 0
+  ok rootIdx >= 0
+  ok adminIdx < rootIdx
+
+test "distinct hostnames get their own https site blocks", ->
+  config = makeConfig
+    proxies:
+      'proxy-web':
+        id: 'proxy-web'
+        kind: 'http'
+        targets: ['http://127.0.0.1:7201']
+    sites:
+      'medlabs.health':
+        host: 'medlabs.health'
+        routes: [{ id: 'r1', host: 'medlabs.health', path: '/*', proxy: 'proxy-web' }]
+      '*.medlabs.health':
+        host: '*.medlabs.health'
+        routes: [{ id: 'r2', host: '*.medlabs.health', path: '/*', proxy: 'proxy-web' }]
+  out = generateCaddyConfig(config)
+  ok out.includes('https://medlabs.health {')
+  ok out.includes('https://*.medlabs.health {')
+  siteCount = out.split('https://').length - 1
+  ok siteCount >= 2, "expected at least 2 site blocks, got #{siteCount}"

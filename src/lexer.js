@@ -7,7 +7,7 @@
 //
 // Design principles:
 //   - Every token carries .pre (whitespace count before it)
-//   - Every token carries .data (metadata: await, optional, quote, etc.)
+//   - Every token carries .data (metadata: bang, optional, quote, etc.)
 //   - Every token carries .loc  (location: row, col, len)
 //   - Indentation is derived from .pre, not tracked during lexing
 //   - Token categories use Sets for O(1) membership tests
@@ -23,7 +23,7 @@
 //   token.newLine       — true if preceded by a newline
 //
 // Identifier suffixes:
-//   !  — dammit operator: fetch!() → await fetch()
+//   !  — bang: fetch!() → await fetch() (call site) | foo! = -> → void (definition)
 //   ?  — optional:        empty?  → (empty != null) (existence check / optional marker)
 //
 // The 9 tokenizer methods (in priority order):
@@ -246,7 +246,7 @@ let UNARY_MATH = new Set(['!', '~']);
 // Regex Patterns
 // ==========================================================================
 
-// Identifier: word chars + optional trailing ! (await) or ? (optional)
+// Identifier: word chars + optional trailing ! (bang) or ? (optional)
 // The ? suffix is only captured when NOT followed by . ? ! [ ( to avoid
 // conflict with ?. (optional chaining), ?? (nullish), ?! (presence), ?.( and ?.[
 let IDENTIFIER_RE = /^(?!\d)((?:(?!\s)[$\w\x7f-\uffff])+(?:!|[?](?![.?![(]))?)([^\n\S]*:(?![=:]))?/;
@@ -519,7 +519,9 @@ export class Lexer {
   // Handles: variables, keywords, properties, aliases
   //
   // Suffix operators on identifiers:
-  //   !  → dammit operator (await): fetch!() → await fetch()
+  //   !  → bang: a neutral "trailing !" flag. Resolved by context downstream —
+  //        dammit/await at a call site (fetch!() → await fetch()), or the void
+  //        marker at a function definition (foo! = -> / def foo! → no return).
   //   ?  → optional (existence):    empty?   → (empty != null)
   //
   // The ? suffix is captured by IDENTIFIER_RE only when NOT followed by
@@ -655,9 +657,9 @@ export class Lexer {
       }
     }
 
-    // --- Dammit operator: trailing ! → await ---
+    // --- Bang: trailing ! → context-resolved (await at call site / void at def) ---
     if (id.length > 1 && id.endsWith('!')) {
-      data.await = true;
+      data.bang = true;
       id = id.slice(0, -1);
     }
 

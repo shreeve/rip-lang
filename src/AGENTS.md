@@ -40,6 +40,8 @@ The browser bundle (`docs/dist/rip.min.js`) is built from `src/browser.js` plus 
 
 The forbidden list in `scripts/check-bundle-graph.js` enforces this. If a code change would put a forbidden module on the browser graph, `bun run build` aborts before the bundler runs.
 
+**Decision record — "core Rip" vs "type-enabled Rip" (June 2026):** this module graph *is* the split. Tier 0 is the erasure core (everything reachable from `src/browser.js` — types stripped, never checked); tier 1 adds `.d.ts` emission (`dts.js`, registered via `setTypesEmitter`); tier 2 adds type checking (`typecheck.js` + the TypeScript service, loaded only by `rip check`). A package-level split (`@rip-lang/core` + a typed variant) was considered and rejected: it would add publishing and versioning friction to express a boundary the import graph and the bundle-graph guard already enforce mechanically. Don't re-propose the package split; if the boundary needs strengthening, extend the forbidden list or route new type-aware behavior through a registration hook instead.
+
 ### Registration-hook pattern (`setTypesEmitter`, `setSchemaRuntimeProvider`)
 
 The same pattern is used twice — once for `.d.ts` emission, once for the schema runtime body. Both make the bundler's tree-shaker keep CLI/server-only code out of the browser bundle.
@@ -236,6 +238,30 @@ Complete node reference:
 ['render', body]
 ```
 
+## Rewriter Pipeline (canonical order)
+
+The single source of truth is `rewrite()` in `src/lexer.js`. Current order, with
+the passes contributed by sidecar files marked:
+
+1. `removeLeadingNewlines`
+2. `rewriteDottedPicks` — must run before `rewriteMapLiterals` so pick bodies see raw `{` `}` for depth counting
+3. `rewriteMapLiterals`
+4. `closeMergeAssignments`
+5. `closeOpenCalls`
+6. `closeOpenIndexes`
+7. `rewriteTypes` — installed by `types.js`; must run before `normalizeLines`, otherwise a type-arrow `=>` inside `(...) => T` is treated as a single-liner function and wrapped in spurious INDENT/OUTDENT, derailing the type collector
+8. `normalizeLines`
+9. `rewriteRender?.()` — installed by `components.js` (optional sidecar)
+10. `rewriteSchema?.()` — installed by `schema/schema.js` (optional sidecar)
+11. `tagPostfixConditionals`
+12. `rewriteTaggedTemplates`
+13. `addImplicitBracesAndParens`
+14. `addImplicitCallCommas`
+
+When pass order changes in `rewrite()`, update this list — other sections of
+this file describe pass positions relative to their neighbors and assume this
+listing is accurate.
+
 ## Lexer Token Format
 
 Tokens are `[tag, val]` arrays with extra properties:
@@ -248,7 +274,7 @@ Tokens are `[tag, val]` arrays with extra properties:
 
 Identifier suffixes:
 
-- `!` sets `.data.await = true`
+- `!` sets `.data.bang = true` — a neutral "trailing `!`" flag resolved by context downstream: dammit/`await` at a call site (`fetch!` → `await fetch()`), or the void marker at a function definition (`foo! = ->`, `def foo!` → no implicit return). Void-ness is stamped onto the function node as `isVoid` by `applyVoidMarker` and read locally by the arrow emitters; `def` reads `meta(name, 'bang')` directly.
 - `?` sets `.data.optional = true` (existence check on values; optional marker on prop/type-field names)
 - `as!` in loops emits `FORASAWAIT` for `for await`
 
@@ -356,7 +382,7 @@ The component system is a compiler sidecar. `installComponentSupport(CodeEmitter
 
 ### Render Rewriter
 
-`rewriteRender()` runs after `normalizeLines` and before `tagPostfixConditionals`.
+`rewriteRender()` runs after `normalizeLines` and before `rewriteSchema()` (see "Rewriter Pipeline" above for the full order).
 
 Inside `render` blocks it rewrites template syntax into function-call syntax:
 
@@ -700,8 +726,10 @@ several files by execution context:
 ### Lexer path
 
 - `installSchemaSupport(Lexer, CodeEmitter)` adds `rewriteSchema()` to the
-  Lexer prototype. It runs between `rewriteRender()` and `rewriteTypes()` in
-  the rewriter pipeline.
+  Lexer prototype. It runs immediately after `rewriteRender()` and before
+  `tagPostfixConditionals()` in the rewriter pipeline (see "Rewriter
+  Pipeline" earlier in this file for the full order; note `rewriteTypes()`
+  is not adjacent — it runs much earlier, before `normalizeLines()`).
 - `rewriteSchema()` detects a contextual `schema` identifier at expression-
   start positions followed by either a `:kind` SYMBOL or a direct INDENT.
   The matching INDENT...OUTDENT range is parsed by a schema-specific

@@ -33,7 +33,7 @@ import { createInterface } from 'readline'
 # Configuration
 MAX_ROWS  =! 1024
 MAX_CHARS =! 50000
-VERSION   =! '2.0.1'
+VERSION   =! '2.1.0'
 
 dbUrl = do ->
   args = process.argv.slice(2)
@@ -51,16 +51,25 @@ log 'WARNING: RIP_DB_TOKEN is not set. Harbor /sql will reject every call with M
 # HTTP — talk to harbor
 # ==============================================================================
 
-sql = (query) ->
+SQL_TIMEOUT_MS =! 30_000
+
+sql = (query, params = null) ->
   headers =
     'Content-Type': 'application/json'
     'Accept':       'application/json'
   headers['Authorization'] = "Bearer #{dbToken}" if dbToken
-  resp = await fetch "#{dbUrl}/sql",
-    method:  'POST'
-    headers: headers
-    body:    JSON.stringify({ sql: query })
-  await resp.json()
+  body = if params? then { sql: query, params } else { sql: query }
+  ctrl = new AbortController()
+  timer = setTimeout (-> ctrl.abort()), SQL_TIMEOUT_MS
+  try
+    resp = await fetch "#{dbUrl}/sql",
+      method:  'POST'
+      headers: headers
+      body:    JSON.stringify body
+      signal:  ctrl.signal
+    await resp.json()
+  finally
+    clearTimeout timer
 
 # ==============================================================================
 # Tools
@@ -173,17 +182,44 @@ listTables = ->
 listColumns = (params) ->
   table = params.table
   return { success: false, error: 'Missing table parameter' } unless table
-  safe = table.replace(/[^a-zA-Z0-9_]/g, '')
 
-  try
-    result = await sql """
+  # Accept `schema.table` as well as bare `table`. Both halves are bound
+  # as positional parameters, so any character survives — no regex
+  # mangling that would strip a `.` or turn `user-events` into
+  # `userevents`.
+  hasSchema = table.includes('.')
+  if hasSchema
+    parts = table.split('.')
+    schemaName = parts[0]
+    tableName  = parts.slice(1).join('.')
+  else
+    schemaName = null
+    tableName  = table
+
+  stmt = if hasSchema
+    """
       SELECT column_name as name, data_type as type,
              is_nullable = 'YES' as nullable, comment
       FROM duckdb_columns()
       WHERE database_name = current_database()
-        AND table_name = '#{safe}'
+        AND schema_name   = ?
+        AND table_name    = ?
       ORDER BY column_index
-      """
+    """
+  else
+    """
+      SELECT column_name as name, data_type as type,
+             is_nullable = 'YES' as nullable, comment
+      FROM duckdb_columns()
+      WHERE database_name = current_database()
+        AND table_name    = ?
+      ORDER BY column_index
+    """
+
+  bindings = if hasSchema then [schemaName, tableName] else [tableName]
+
+  try
+    result = await sql(stmt, bindings)
     if result?.ok is false
       return { success: false, error: result.error, errorCode: result.errorCode }
     cols = result.columns or []
@@ -191,7 +227,7 @@ listColumns = (params) ->
       obj = {}
       obj[cols[i].name] = row[i] for i in [0...cols.length]
       obj
-    { success: true, table: safe, columns, columnCount: columns.length }
+    { success: true, table, columns, columnCount: columns.length }
   catch err
     { success: false, error: err.message, errorType: err.constructor?.name or 'Error' }
 
@@ -246,6 +282,12 @@ INSTRUCTIONS =! """\
 respond = (id, result) ->
   JSON.stringify({ jsonrpc: '2.0', id, result })
 
+# JSON-RPC 2.0 error responses put `error` at the top level, NOT
+# inside `result`. Keep separate from `respond` so the shape is
+# always correct.
+respondError = (id, code, message) ->
+  JSON.stringify({ jsonrpc: '2.0', id, error: { code, message } })
+
 dispatch = (msg) ->
   { id, method, params } = msg
 
@@ -282,7 +324,7 @@ dispatch = (msg) ->
 
     else
       if id?
-        respond id, { error: { code: -32601, message: "Unknown method: #{method}" } }
+        respondError id, -32601, "Unknown method: #{method}"
       else
         null
 

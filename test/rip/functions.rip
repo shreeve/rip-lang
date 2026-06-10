@@ -369,6 +369,44 @@ process = x => {
 };
 '''
 
+# ==============================================================================
+# Exported Void Arrow Functions (export name! = -> / =>)
+# ==============================================================================
+
+fail "export void thin arrow with return value", '''
+  export foo! = (x) ->
+    return "nope"
+'''
+
+fail "export void fat arrow with return value", '''
+  export bar! = (x) =>
+    return "nope"
+'''
+
+fail "export void marker on non-function", '''
+  export baz! = 42
+'''
+
+code "export void thin arrow compiler", '''
+  export foo! = (x) ->
+    x + 1
+  ''', '''
+export const foo = (function(x) {
+  (x + 1);
+  return;
+});
+'''
+
+code "export void fat arrow compiler", '''
+  export process! = (x) =>
+    x * 2
+  ''', '''
+export const process = x => {
+  (x * 2);
+  return;
+};
+'''
+
 # NOTE: Object method void syntax (fn!:) not yet supported by parser
 # test "void arrow in object method", '''
 #   obj = {

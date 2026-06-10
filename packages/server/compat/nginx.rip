@@ -1,5 +1,5 @@
 # ==============================================================================
-# serving/nginx.rip — generate nginx.conf from normalized serve.rip config
+# compat/nginx.rip — generate nginx.conf from normalized serve.rip config
 # ==============================================================================
 
 INTERNAL_PORT = 4443

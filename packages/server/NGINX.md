@@ -79,14 +79,14 @@ export default
 Generate and deploy:
 
 ```bash
-rip server -n > /opt/nginx/conf/nginx.conf
+rip server --nginx > /opt/nginx/conf/nginx.conf
 sudo /opt/nginx/sbin/nginx -t && sudo /opt/nginx/sbin/nginx -s reload
 ```
 
 Or for a fresh start:
 
 ```bash
-rip server -n > /opt/nginx/conf/nginx.conf
+rip server --nginx > /opt/nginx/conf/nginx.conf
 sudo /opt/nginx/sbin/nginx
 ```
 
@@ -320,7 +320,7 @@ apps:
   repl: '/var/www/relay-repl relay@/repl browse'
 ```
 
-`rip server -n` emits (abbreviated):
+`rip server --nginx` emits (abbreviated):
 
 ```nginx
 server {

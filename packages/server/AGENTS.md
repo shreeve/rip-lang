@@ -39,7 +39,6 @@ HTTP serving layer. Everything that handles an inbound HTTP request after it
 arrives at the server.
 
 - `config.rip` — `serve.rip` loading, validation, and normalization
-- `nginx.rip` — generate nginx.conf from normalized serve.rip config
 - `forwarding.rip` — response builders, request IDs, error responses, worker forwarding
 - `logging.rip` — access logging, debug flags, formatting utilities
 - `metrics.rip` — diagnostics counters/gauges and response builders
@@ -67,6 +66,14 @@ TCP/TLS passthrough layer. Handles Layer 4 connections before TLS termination.
 - `router.rip` — listen port + SNI matching
 - `runtime.rip` — stream runtime metadata
 - `upstream.rip` — TCP backend target selection and accounting
+
+### `compat/`
+
+Export/compatibility tooling — generates config for other servers, not part
+of the request-handling runtime.
+
+- `nginx.rip` — generate nginx.conf from normalized serve.rip config
+- `caddy.rip` — generate a Caddyfile from normalized serve.rip config (TCP passthrough emits a caddy-l4 `layer4` block)
 
 ### `acme/`
 
@@ -152,7 +159,7 @@ mounts use `alias` semantics (mount prefix stripped before resolving against
 - `serve.rip` app-spec parsing + `site@/path` mount canonicalization -> `serving/config.rip`
 - mount-path route matching + longest-prefix scoring -> `serving/router.rip`
 - mount-prefix stripping for static file resolution -> `serving/static.rip` (`stripRoutePrefix`)
-- nginx `location` emission per mount -> `serving/nginx.rip` (`emitRouteLocation`)
+- nginx `location` emission per mount -> `compat/nginx.rip` (`emitRouteLocation`)
 
 Avoid adding generic utility files.
 

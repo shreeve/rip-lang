@@ -312,17 +312,25 @@ async function currentDatabase(url, token) {
 }
 
 async function assertEmptyDatabase(url, token) {
+  // Cover every user schema, not just `main`. A `rip-db dump` that ran
+  // ATTACHed databases or non-main schemas could otherwise restore into
+  // a DB that looks empty in `main` but has user data elsewhere — and
+  // IMPORT DATABASE would crash midway. duckdb_tables/views with
+  // `internal = false` filters out system catalogs.
   const r = await sql(url, token, `
-    SELECT count(*)
-    FROM information_schema.tables
-    WHERE table_schema = 'main'
+    SELECT count(*) FROM (
+      SELECT 1 FROM duckdb_tables() WHERE internal = false
+      UNION ALL
+      SELECT 1 FROM duckdb_views()  WHERE internal = false
+    )
   `);
-  // count(*) returns BIGINT, which harbor encodes as a string per SPEC §5.4
-  // (JS-precision-safe). Coerce via Number() for a small integer comparison.
+  // count(*) returns BIGINT, which harbor encodes as a JSON number inside
+  // the JS safe-integer range and a string outside it (SPEC §5.4). Number()
+  // handles both shapes for this small-count comparison.
   const n = Number(r?.data?.[0]?.[0] ?? 0);
   if (n !== 0) {
     throw new Error(
-      `target database is not empty (${n} table/view(s) in 'main' schema). ` +
+      `target database is not empty (${n} user table/view(s) across all schemas). ` +
       `Drop them first or load into a fresh harbor instance.`
     );
   }

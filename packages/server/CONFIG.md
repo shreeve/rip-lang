@@ -258,9 +258,23 @@ rip server --check-config --file=./serve.rip
 Generate a production-ready nginx.conf from your `serve.rip`:
 
 ```bash
-rip server -n > /etc/nginx/nginx.conf && nginx -s reload
-rip server -n --file=./serve.rip > nginx.conf
+rip server --nginx > /etc/nginx/nginx.conf && nginx -s reload
+rip server --nginx --file=./serve.rip > nginx.conf
 ```
+
+### Generate a Caddyfile
+
+Generate a Caddyfile from the same `serve.rip`:
+
+```bash
+rip server --caddy > Caddyfile && caddy reload
+rip server --caddy --file=./serve.rip > Caddyfile
+```
+
+HTTP modes (reverse proxy, static, SPA, app) map to native Caddy directives.
+TCP/TLS passthrough routes emit a `layer4` block requiring the
+[caddy-l4](https://github.com/mholt/caddy-l4) plugin
+(`xcaddy build --with github.com/mholt/caddy-l4`).
 
 This outputs a complete nginx config with TLS hardening, rate limiting, security
 headers, and WebSocket support. When TCP passthrough and HTTP sites share port
