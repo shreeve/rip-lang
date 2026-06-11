@@ -57,6 +57,9 @@ type Resource<T> =
   refetch: () => Promise<T>
   dispose: Disposer
 
+export type Mutation<R> =
+  ((...args: any[]) => Promise<R | undefined>) & { readonly pending: boolean, readonly succeeded: boolean, readonly error: unknown }
+
 type ComponentsStore =
   read: (path: string) => string | undefined
   write: (path: string, content: string) => void
@@ -213,6 +216,8 @@ METHODS   = new WeakMap()
 # The cell machinery itself lives in the Source section below.
 SOURCE        = Symbol.for 'rip.source'
 SOURCE_FAMILY = Symbol.for 'rip.source.family'
+DEFAULTS      = Symbol.for 'rip.defaults'        # declared plain-key defaults (for reset())
+PERSIST_PURGE = Symbol.for 'rip.persist'         # purge hook persistStash registers for reset()
 
 isSourceCell   = (v) -> v? and (typeof v is 'object' or typeof v is 'function') and (v[SOURCE] is true or v[SOURCE_FAMILY] is true)
 isSourceFamily = (v) -> v? and typeof v is 'function' and v[SOURCE_FAMILY] is true
@@ -403,7 +408,29 @@ stashSet = (proxy, path, value) ->
     _depth--
 
 # Stash methods — reserved names for atomic/structural operations
-STASH_METHOD_NAMES = { inc: true, dec: true, flip: true, join: true, keys: true, has: true, del: true, peek: true }
+STASH_METHOD_NAMES = { inc: true, dec: true, flip: true, join: true, keys: true, has: true, del: true, peek: true, reset: true, source: true }
+
+# Deep clone of the plain-key default state (the stash literal IS the
+# default-state declaration): keeps function references (stash methods),
+# recurses plain objects/arrays, skips source cells (a cell's "default"
+# is unloaded), and keeps exotic objects (Date, Map, …) by reference.
+snapshotDefaults = (obj) ->
+  return obj unless obj? and typeof obj is 'object'
+  return obj if obj instanceof Date or obj instanceof RegExp or obj instanceof Map or obj instanceof Set or obj instanceof Promise
+  if Array.isArray(obj)
+    return (snapshotDefaults(v) for v in obj)
+  out = {}
+  for own k, v of obj
+    continue if isSourceCell(v)
+    out[k] = snapshotDefaults(v)
+  out
+
+# Stamp a raw stash target with its declared defaults so reset() can
+# restore them. Non-enumerable symbol — invisible to iteration and JSON.
+stampDefaults = (raw) ->
+  return unless raw? and typeof raw is 'object'
+  Object.defineProperty raw, DEFAULTS, { value: snapshotDefaults(raw), configurable: true }
+  return
 
 stashMethodFn = (proxy, prop) ->
   return undefined unless STASH_METHOD_NAMES[prop]
@@ -473,6 +500,54 @@ stashMethodFn = (proxy, prop) ->
           obj = obj[key]
       finally
         _depth--
+    when 'reset' then ->
+      # One reset, not N writes (RFC 11): restore plain keys to their
+      # declared defaults (fresh clones, so defaults can't be mutated),
+      # unload every source (aborting in-flight loads, clearing keyed
+      # caches), delete keys that weren't declared, and purge the
+      # persisted snapshot. The next gates refetch as the new principal.
+      __batch ->
+        t = unwrapStash(proxy)
+        defaults = t[DEFAULTS]
+        for own k, v of t
+          if isSourceCell(v)
+            v.reset()
+          else if defaults
+            if Object.prototype.hasOwnProperty.call(defaults, k)
+              proxy[k] = snapshotDefaults(defaults[k])
+            else
+              delete proxy[k]
+          # without a defaults snapshot (manual createStash subtree),
+          # plain keys are left as-is — only sources unload
+        t[PERSIST_PURGE]?()
+      return
+    when 'source' then (path, key) ->
+      # Per-key handle: { value, loading, error, refetch(), reset() } —
+      # all reactive. Resolves the nearest source cell along the path;
+      # a non-source path is a dev-time error (deterministic — every
+      # call site hits it). Keyed cells take the key as a second arg.
+      cell = null
+      obj = unwrapStash(proxy)
+      for seg in walk(path)
+        break unless obj? and typeof obj is 'object'
+        obj = obj[seg]
+        if isSourceCell(obj)
+          cell = obj
+          break
+      unless cell
+        throw new Error "Rip App: source('#{path}') does not resolve to a source key — declare it with source() in app/stash.rip"
+      if isSourceFamily(cell)
+        throw new Error "Rip App: keyed source('#{path}') requires a key — source('#{path}', key)" unless key?
+        cell = cell.cellFor(key)
+      else if key?
+        throw new Error "Rip App: source('#{path}') is not keyed — drop the key argument"
+      handle = { refetch: cell.refetch, reset: cell.reset }
+      Object.defineProperty handle, 'value',
+        get: -> cell.read()
+        set: (v) -> cell.write(v)
+      Object.defineProperty handle, 'loading', get: -> cell.loading
+      Object.defineProperty handle, 'error',   get: -> cell.error
+      handle
     when 'peek' then (path) ->
       # Non-triggering read for code ABOUT the stash (serializer, devtools,
       # generic iteration): walks raw values, never touches signals, and a
@@ -573,6 +648,14 @@ export def persistStash(app:: Stash, opts?:: { local?: boolean, key?: string } =
     t = setTimeout _save, 2000
     -> clearTimeout t
   window.addEventListener 'beforeunload', _save
+  # Register the purge hook reset() invokes: signing out must not leave a
+  # persisted snapshot of the previous principal behind.
+  dataRaw = unwrapStash(app.data)
+  if dataRaw? and typeof dataRaw is 'object'
+    Object.defineProperty dataRaw, PERSIST_PURGE,
+      value: -> (try storage.removeItem(storageKey) catch then null)
+      configurable: true
+      writable: true
   disposed:: boolean = false
   ->
     return if disposed
@@ -580,6 +663,7 @@ export def persistStash(app:: Stash, opts?:: { local?: boolean, key?: string } =
     effectDisposer?()
     window.removeEventListener 'beforeunload', _save
     _save()                               # final flush so a programmatic teardown matches a real unload
+    dataRaw[PERSIST_PURGE] = null if dataRaw? and typeof dataRaw is 'object'
     target[:persisted] = false
 
 # ==============================================================================
@@ -854,6 +938,52 @@ export def source<T>(opts:: { fetch: (...args: any[]) => Promise<T> | T, staleTi
   else
     makeSourceCell(opts.fetch, staleTime)
   cell
+
+# ==============================================================================
+# Mutation — the write-side primitive (RFC 11)
+#
+# Reads are per-key (source); writes are per-action. createMutation wraps
+# an async action and exposes reactive pending / succeeded / error while
+# running onSuccess / onError. Read and write meet at exactly one point:
+# a mutation's onSuccess assigns the stash key(s) it affects, so a
+# successful write updates every reader in place — no refetch.
+#
+# The mutation IS the action — invoke it directly with the payload
+# (`updateUser(form)`); there is no .mutate method. Note: callbacks are
+# plain options on a runtime call — nothing binds their `this`; use `=>`
+# to capture the component lexically.
+# ==============================================================================
+
+export def createMutation<R>(
+  fn:: (...args: any[]) => Promise<R> | R,
+  opts?:: { onSuccess?: (r: R) => void, onError?: (e: unknown) => void } = {}
+):: Mutation<R>
+  _pending   = __state(false)
+  _succeeded = __state(false)
+  _error     = __state(null)
+  generation = 0    # a newer invocation wins the flags — same race rule as loads
+
+  mutation = (...args) ->
+    me = ++generation
+    _pending.value = true
+    _succeeded.value = false
+    _error.value = null
+    try
+      r = await fn(...args)
+      _succeeded.value = true if me is generation
+      opts.onSuccess?(r)
+      r
+    catch e
+      _error.value = e if me is generation
+      if opts.onError then opts.onError(e) else throw e
+      return
+    finally
+      _pending.value = false if me is generation
+
+  Object.defineProperty mutation, 'pending',   get: -> _pending.value
+  Object.defineProperty mutation, 'succeeded', get: -> _succeeded.value
+  Object.defineProperty mutation, 'error',     get: -> _error.value
+  mutation
 
 # ==============================================================================
 # Timing — reactive timing primitives
@@ -2179,11 +2309,19 @@ export def launch(opts?:: LaunchOpts = {}):: Promise<LaunchResult>
   # Hydrate from bundle — server seed (JSON only, no functions) overlays
   # stash defaults *in place*, so the module's `stash` reference and
   # `app.data` share underlying storage. Stash defaults preserve methods;
-  # bundle.data wins on key collisions (shallow).
+  # bundle.data wins on key collisions (shallow) — except source keys,
+  # which a JSON seed must never replace (the cell would silently stop
+  # being a source and every gate on it would fail; the deferred
+  # `initial:` source option is the seeding path for server data).
   if stashRaw and bundle.data
-    stashRaw[k] = v for k, v of bundle.data
+    for k, v of bundle.data
+      stashRaw[k] = v unless isSourceCell(stashRaw[k])
   seedData = stashRaw ?? bundle.data
   app.data = seedData if seedData
+  # RFC 11: snapshot the declared plain-key defaults for app.data.reset().
+  # Taken post-bundle-overlay, pre-persist-restore — signout returns to
+  # the server-seeded baseline, not to user-persisted state.
+  stampDefaults unwrapStash(app.data)
   if bundle.routes
     app.routes = bundle.routes
 

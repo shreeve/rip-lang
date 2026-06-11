@@ -16212,11 +16212,14 @@ ${indented}`);
     createRouter: () => createRouter,
     createResource: () => createResource,
     createRenderer: () => createRenderer,
+    createMutation: () => createMutation,
     createComponents: () => createComponents
   });
+  var DEFAULTS;
   var DURATION_RE;
   var METHODS;
   var PATH_RE;
+  var PERSIST_PURGE;
   var PROXIES;
   var SOURCE;
   var SOURCE_FAMILY;
@@ -16282,6 +16285,8 @@ ${indented}`);
   var patternToRegex;
   var resolveIndex;
   var resolveStorePath;
+  var snapshotDefaults;
+  var stampDefaults;
   var stashGet;
   var stashMethodFn;
   var stashSet;
@@ -16393,6 +16398,8 @@ ${indented}`);
   METHODS = new WeakMap;
   SOURCE = Symbol.for("rip.source");
   SOURCE_FAMILY = Symbol.for("rip.source.family");
+  DEFAULTS = Symbol.for("rip.defaults");
+  PERSIST_PURGE = Symbol.for("rip.persist");
   isSourceCell = function(v) {
     return v != null && (typeof v === "object" || typeof v === "function") && (v[SOURCE] === true || v[SOURCE_FAMILY] === true);
   };
@@ -16613,7 +16620,39 @@ ${indented}`);
       }
     })();
   };
-  STASH_METHOD_NAMES = { inc: true, dec: true, flip: true, join: true, keys: true, has: true, del: true, peek: true };
+  STASH_METHOD_NAMES = { inc: true, dec: true, flip: true, join: true, keys: true, has: true, del: true, peek: true, reset: true, source: true };
+  snapshotDefaults = function(obj) {
+    let out;
+    if (!(obj != null && typeof obj === "object"))
+      return obj;
+    if (obj instanceof Date || obj instanceof RegExp || obj instanceof Map || obj instanceof Set || obj instanceof Promise)
+      return obj;
+    if (Array.isArray(obj)) {
+      return (() => {
+        const result = [];
+        for (let v of obj) {
+          result.push(snapshotDefaults(v));
+        }
+        return result;
+      })();
+    }
+    out = {};
+    for (let k in obj) {
+      if (!Object.hasOwn(obj, k))
+        continue;
+      let v = obj[k];
+      if (isSourceCell(v))
+        continue;
+      out[k] = snapshotDefaults(v);
+    }
+    return out;
+  };
+  stampDefaults = function(raw) {
+    if (!(raw != null && typeof raw === "object"))
+      return;
+    Object.defineProperty(raw, DEFAULTS, { value: snapshotDefaults(raw), configurable: true });
+    return;
+  };
   stashMethodFn = function(proxy, prop) {
     let cache, fn;
     if (!STASH_METHOD_NAMES[prop])
@@ -16752,6 +16791,71 @@ ${indented}`);
               }
             })();
           };
+        case "reset":
+          return function() {
+            __batch(function() {
+              let defaults, t;
+              t = unwrapStash(proxy);
+              defaults = t[DEFAULTS];
+              for (let k in t) {
+                if (!Object.hasOwn(t, k))
+                  continue;
+                let v = t[k];
+                if (isSourceCell(v)) {
+                  v.reset();
+                } else if (defaults) {
+                  if (Object.prototype.hasOwnProperty.call(defaults, k)) {
+                    proxy[k] = snapshotDefaults(defaults[k]);
+                  } else {
+                    delete proxy[k];
+                  }
+                }
+              }
+              return t[PERSIST_PURGE]?.();
+            });
+            return;
+          };
+        case "source":
+          return function(path, key) {
+            let cell, handle, obj;
+            cell = null;
+            obj = unwrapStash(proxy);
+            for (let seg of walk(path)) {
+              if (!(obj != null && typeof obj === "object"))
+                break;
+              obj = obj[seg];
+              if (isSourceCell(obj)) {
+                cell = obj;
+                break;
+              }
+            }
+            if (!cell) {
+              throw new Error(`Rip App: source('${path}') does not resolve to a source key — declare it with source() in app/stash.rip`);
+            }
+            if (isSourceFamily(cell)) {
+              if (!(key != null))
+                throw new Error(`Rip App: keyed source('${path}') requires a key — source('${path}', key)`);
+              cell = cell.cellFor(key);
+            } else if (key != null) {
+              throw new Error(`Rip App: source('${path}') is not keyed — drop the key argument`);
+            }
+            handle = { refetch: cell.refetch, reset: cell.reset };
+            Object.defineProperty(handle, "value", {
+              get() {
+                return cell.read();
+              },
+              set(v) {
+                return cell.write(v);
+              }
+            });
+            Object.defineProperty(handle, "loading", { get() {
+              return cell.loading;
+            } });
+            Object.defineProperty(handle, "error", { get() {
+              return cell.error;
+            } });
+            return handle;
+          };
         case "peek":
           return function(path) {
             let key, obj;
@@ -16820,7 +16924,7 @@ ${indented}`);
     return;
   };
   function persistStash(app, opts = {}) {
-    let _save, disposed, effectDisposer, saved, savedData, storage, storageKey, target;
+    let _save, dataRaw, disposed, effectDisposer, saved, savedData, storage, storageKey, target;
     assertBrowser("persistStash");
     target = unwrapStash(app) || app;
     if (target[Symbol.for("persisted")])
@@ -16855,6 +16959,22 @@ ${indented}`);
       };
     });
     window.addEventListener("beforeunload", _save);
+    dataRaw = unwrapStash(app.data);
+    if (dataRaw != null && typeof dataRaw === "object") {
+      Object.defineProperty(dataRaw, PERSIST_PURGE, {
+        value() {
+          return (() => {
+            try {
+              return storage.removeItem(storageKey);
+            } catch {
+              return null;
+            }
+          })();
+        },
+        configurable: true,
+        writable: true
+      });
+    }
     disposed = false;
     return function() {
       if (disposed)
@@ -16863,6 +16983,8 @@ ${indented}`);
       effectDisposer?.();
       window.removeEventListener("beforeunload", _save);
       _save();
+      if (dataRaw != null && typeof dataRaw === "object")
+        dataRaw[PERSIST_PURGE] = null;
       return target[Symbol.for("persisted")] = false;
     };
   }
@@ -17120,6 +17242,51 @@ ${indented}`);
     staleTime = parseStaleTime(opts.staleTime);
     cell = opts.fetch.length >= 1 ? makeSourceFamily(opts.fetch, staleTime) : makeSourceCell(opts.fetch, staleTime);
     return cell;
+  }
+  function createMutation(fn, opts = {}) {
+    let _error, _pending, _succeeded, generation, mutation;
+    _pending = __state(false);
+    _succeeded = __state(false);
+    _error = __state(null);
+    generation = 0;
+    mutation = async function(...args) {
+      let me, r;
+      me = ++generation;
+      _pending.value = true;
+      _succeeded.value = false;
+      _error.value = null;
+      return await (async () => {
+        try {
+          r = await fn(...args);
+          if (me === generation)
+            _succeeded.value = true;
+          opts.onSuccess?.(r);
+          return r;
+        } catch (e) {
+          if (me === generation)
+            _error.value = e;
+          if (opts.onError) {
+            opts.onError(e);
+          } else {
+            throw e;
+          }
+          return;
+        } finally {
+          if (me === generation)
+            _pending.value = false;
+        }
+      })();
+    };
+    Object.defineProperty(mutation, "pending", { get() {
+      return _pending.value;
+    } });
+    Object.defineProperty(mutation, "succeeded", { get() {
+      return _succeeded.value;
+    } });
+    Object.defineProperty(mutation, "error", { get() {
+      return _error.value;
+    } });
+    return mutation;
   }
   _toFn = function(source2) {
     return typeof source2 === "function" ? source2 : function() {
@@ -18467,12 +18634,14 @@ ${indented}`);
     if (stashRaw && bundle.data) {
       for (let k in bundle.data) {
         let v = bundle.data[k];
-        stashRaw[k] = v;
+        if (!isSourceCell(stashRaw[k]))
+          stashRaw[k] = v;
       }
     }
     seedData = stashRaw ?? bundle.data;
     if (seedData)
       app.data = seedData;
+    stampDefaults(unwrapStash(app.data));
     if (bundle.routes) {
       app.routes = bundle.routes;
     }

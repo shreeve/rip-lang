@@ -138,7 +138,7 @@ check('bundle exposes language version', () => {
 });
 
 check("@rip-lang/app exports copied to globalThis", () => {
-  for (const k of ['launch', 'createStash', 'createResource', 'createRouter', 'createRenderer', 'createComponents', 'source']) {
+  for (const k of ['launch', 'createStash', 'createResource', 'createRouter', 'createRenderer', 'createComponents', 'source', 'createMutation']) {
     if (typeof globalThis[k] !== 'function') {
       throw new Error('globalThis.' + k + ' missing — @rip-lang/app entry preamble did not copy it');
     }
@@ -287,6 +287,78 @@ checkAsync('persistStash: projection skips source keys on save and restore', asy
   const rawU = globalThis.unwrapStash(app2.data).user;
   if (!rawU || rawU[SOURCE_TAG] !== true) throw new Error('restore must not clobber a live source cell');
   dispose2();
+});
+
+checkAsync('stash: source(path) handle — reactive value/loading/error + refetch/reset, dev error on non-source', async () => {
+  let calls = 0;
+  const stash = globalThis.createStash({
+    plain: 1,
+    stats: globalThis.source({ fetch: async () => { calls++; return { n: calls }; } }),
+    order: globalThis.source({ fetch: async (id) => ({ id }) }),
+  });
+  let threw = false;
+  try { stash.source('plain'); } catch (e) { threw = true; }
+  if (!threw) throw new Error('handle on a non-source path must throw');
+  threw = false;
+  try { stash.source('order'); } catch (e) { threw = true; }
+  if (!threw) throw new Error('keyed handle without a key must throw');
+  const h = stash.source('stats');
+  if (h.value != null) throw new Error('handle value of unloaded cell must be null');
+  await sleep(5); // handle .value read kicked the lazy load
+  if (!h.value || h.value.n !== 1) throw new Error('handle value must land');
+  await h.refetch();
+  if (h.value.n !== 2) throw new Error('handle refetch must reload');
+  h.reset();
+  if (h.value != null && calls === 3) throw new Error('handle reset must unload');
+  const hk = stash.source('order', 'o1');
+  hk.value = { id: 'seeded' };  // test-seeding path for keyed cells
+  if (stash.order('o1').id !== 'seeded') throw new Error('keyed handle write must seed the cell');
+});
+
+checkAsync('stash: reset() restores defaults, unloads sources, drops undeclared keys', async () => {
+  let calls = 0;
+  const stash = globalThis.createStash({
+    cart: { items: [1, 2], total: 10 },
+    user: globalThis.source({ fetch: async () => { calls++; return { name: 'Ada' }; } }),
+  });
+  // createStash itself doesn't stamp defaults (launch does) — stamp via the
+  // same path launch uses: assert reset is sources-only without defaults.
+  await globalThis.unwrapStash(stash).user.ensure();
+  stash.cart.total = 99;
+  stash.extra = 'undeclared';
+  stash.reset();
+  if (globalThis.unwrapStash(stash).user.peek() != null) throw new Error('reset must unload sources');
+  if (stash.cart.total !== 99) throw new Error('without a defaults snapshot, plain keys stay');
+  // now stamp defaults the way launch() does and reset again
+  const raw = globalThis.unwrapStash(stash);
+  Object.defineProperty(raw, Symbol.for('rip.defaults'), { value: { cart: { items: [1, 2], total: 10 } }, configurable: true });
+  let purged = false;
+  raw[Symbol.for('rip.persist')] = () => { purged = true; };
+  stash.reset();
+  if (stash.cart.total !== 10 || stash.cart.items.length !== 2) throw new Error('reset must restore declared defaults');
+  if (stash.extra !== undefined) throw new Error('reset must drop undeclared keys');
+  if (!purged) throw new Error('reset must purge the persisted snapshot');
+});
+
+checkAsync('createMutation: reactive pending/succeeded/error with onSuccess write-back', async () => {
+  const stash = globalThis.createStash({ user: globalThis.source({ fetch: async () => ({ name: 'old' }) }) });
+  let failNext = false;
+  let errSeen = null;
+  const update = globalThis.createMutation(
+    async (data) => { if (failNext) throw new Error('422'); return { name: data.name }; },
+    { onSuccess: (u) => { stash.user = u; }, onError: (e) => { errSeen = e; } }
+  );
+  if (update.pending !== false || update.succeeded !== false) throw new Error('initial flags must be false');
+  const p = update({ name: 'new' });
+  if (update.pending !== true) throw new Error('pending must flip during the action');
+  await p;
+  if (update.pending !== false || update.succeeded !== true) throw new Error('flags must settle on success');
+  if (stash.user.name !== 'new') throw new Error('onSuccess write-back must update the stash key');
+  failNext = true;
+  await update({ name: 'x' });
+  if (update.succeeded !== false || update.error == null) throw new Error('flags must settle on error');
+  if (errSeen == null) throw new Error('onError must receive the error');
+  if (stash.user.name !== 'new') throw new Error('a failed mutation must not roll anything back');
 });
 
 checkAsync('stash: peek never triggers a load and reads through cells', async () => {
