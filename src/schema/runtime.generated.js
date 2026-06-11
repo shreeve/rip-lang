@@ -68,8 +68,15 @@ export const SCHEMA_RUNTIME_WRAPPER_TAIL = `
   // User-facing namespace: schema.transaction! -> ... in Rip source
   // resolves through this object (installed as a global alongside the
   // other Rip stdlib globals; ??= keeps user overrides intact).
+  const __schemaConnectExport = typeof __schemaConnect !== 'undefined'
+    ? __schemaConnect
+    : function() {
+        throw new Error('schema.connect() requires the server schema runtime (validate/browser-only runtime loaded).');
+      };
   const schemaNamespace = {
     transaction: __schemaTransactionExport,
+    connect:    __schemaConnectExport,
+    registerCoercer: __schemaRegisterCoercer,
     plan:       typeof __schemaPlan       !== 'undefined' ? __schemaPlan       : __schemaMigrationStub('plan'),
     status:     typeof __schemaStatus     !== 'undefined' ? __schemaStatus     : __schemaMigrationStub('status'),
     make:       typeof __schemaMake       !== 'undefined' ? __schemaMake       : __schemaMigrationStub('make'),
@@ -80,6 +87,7 @@ export const SCHEMA_RUNTIME_WRAPPER_TAIL = `
     __schema, SchemaError, __SchemaRegistry,
     __schemaSetAdapter: __schemaSetAdapterExport,
     __schemaTransaction: __schemaTransactionExport,
+    __schemaRegisterCoercer,
     schema: schemaNamespace,
     __version: 1,
   };
@@ -110,7 +118,7 @@ function __schemaFormatIssues(issues, name) {
 }
 
 const __SCHEMA_RESERVED_STATIC = new Set([
-  'parse','safe','ok','parseAsync','safeAsync','okAsync',
+  'parse','safe','ok','parseAsync','safeAsync','okAsync','toJSONSchema',
   'find','findMany','where','all','first','count','create','toSQL',
   'includes','upsert','insertMany','updateAll','deleteAll','withDeleted','onlyDeleted',
   'unscoped',
@@ -197,6 +205,26 @@ const __SCHEMA_COERCERS = {
   },
 };
 __SCHEMA_COERCERS.datetime = __SCHEMA_COERCERS.date;
+
+// Named-coercer registry for the \`~:name\` field syntax. A coercer is a
+// function (wireValue) → coercedValue, where null/undefined/false means
+// "didn't convert" → {error: 'coerce'}. @rip-lang/server registers its
+// entire read() validator vocabulary (id, money, ssn, phone, name,
+// date, …) here at module load, so every wire normalizer that works in
+// \`read 'x', 'ssn'\` also works as \`x? ~:ssn\` in a schema. Apps register
+// their own via schema.registerCoercer.
+//
+//   opts.raw — pass the value through un-stringified (validators that
+//   operate on arrays/objects, e.g. the server's array/hash/json).
+const __schemaNamedCoercers = new Map();
+
+function __schemaRegisterCoercer(name, fn, opts) {
+  if (typeof name !== 'string' || typeof fn !== 'function') {
+    throw new Error('schema.registerCoercer(name, fn, opts?): name string and fn required');
+  }
+  __schemaNamedCoercers.set(name, { fn, raw: opts?.raw === true });
+  return fn;
+}
 
 function __schemaValidateValue(v, typeName) {
   const prim = __schemaTypes[typeName];
@@ -332,7 +360,7 @@ function __schemaSignature(def) {
         parts.push('f:' + e.name + ':' + (e.typeName || '') +
           (e.array ? '[]' : '') + ':' + (e.modifiers || []).join('') +
           (e.literals ? ':' + e.literals.join(',') : '') +
-          ':' + safe(e.constraints) + ':' + safe(e.attrs) + (e.coerce ? ':~' : '') +
+          ':' + safe(e.constraints) + ':' + safe(e.attrs) + (e.coerce ? ':~' + (e.coercer || '') : '') +
           (e.transform ? ':t' : ''));
         break;
       case 'enum-member':
@@ -423,6 +451,9 @@ class __SchemaDef {
     this._klass = null;
     this._sourceModel = null;
     this._unionPlanCache = null;
+    // Per-schema adapter (\`schema :model, on: analytics\`). null → the
+    // process-global adapter. Resolved per ORM call by the orm fragment.
+    this._adapter = desc.adapter || null;
     // Install @scope statics eagerly so \`User.active()\` works as the
     // very first call on the model (normalization hasn't run yet at
     // that point; the scope invocation itself triggers it, which also
@@ -499,6 +530,7 @@ class __SchemaDef {
             literals: e.literals || null,
             array: e.array === true,
             coerce: e.coerce === true,
+            coercer: e.coercer || null,
             constraints: e.constraints || null,
             attrs: e.attrs || null,
             transform: e.transform || null,
@@ -1146,6 +1178,28 @@ class __SchemaDef {
       if (!f.coerce) continue;
       const v = working[n];
       if (v === undefined || v === null) continue;
+      if (f.coercer) {
+        // \`~:name\` — registry lookup. A missing coercer is a CONFIG
+        // error (the package that provides it wasn't loaded), not a
+        // validation failure — fail loud.
+        const entry = __schemaNamedCoercers.get(f.coercer);
+        if (!entry) {
+          throw new Error(
+            "schema: no coercer registered for '~:" + f.coercer + "' (field '" + n + "' on " +
+            (this.name || 'anon') + "). Import @rip-lang/server (which registers the read() " +
+            "validator vocabulary) or register it with schema.registerCoercer('" + f.coercer + "', fn).");
+        }
+        const input = entry.raw ? v : String(v).trim();
+        let out;
+        try { out = entry.fn(input); } catch { out = null; }
+        if (out === null || out === undefined || out === false) {
+          errors.push({field: n, error: 'coerce', message: n + ' is not a valid ' + f.coercer});
+          failed.add(n);
+        } else {
+          working[n] = out;
+        }
+        continue;
+      }
       const r = __SCHEMA_COERCERS[f.typeName] ? __SCHEMA_COERCERS[f.typeName](v) : { ok: false };
       if (r.ok) {
         working[n] = r.value;
@@ -1413,6 +1467,159 @@ class __SchemaDef {
   }
 }
 
+// ---- JSON Schema export (draft 2020-12) -------------------------------------
+//
+// One declaration → wire contract. Field types map per the table in the
+// language reference; nested registry schemas become \`$ref\`s collected
+// under \`$defs\` (cycle-safe); enums map to \`enum\`, unions to \`oneOf\` +
+// an OpenAPI-style \`discriminator\`. Transforms and refinements have no
+// executable JSON Schema equivalent — they export as \`description\`
+// annotations rather than being silently dropped or approximated.
+
+const __SCHEMA_JSON_TYPES = {
+  string:   () => ({ type: 'string' }),
+  text:     () => ({ type: 'string' }),
+  email:    () => ({ type: 'string', format: 'email' }),
+  url:      () => ({ type: 'string', format: 'uri' }),
+  uuid:     () => ({ type: 'string', format: 'uuid' }),
+  phone:    () => ({ type: 'string', pattern: '^[\\\\d\\\\s\\\\-+()]+$' }),
+  zip:      () => ({ type: 'string', pattern: '^\\\\d{5}(-\\\\d{4})?$' }),
+  number:   () => ({ type: 'number' }),
+  integer:  () => ({ type: 'integer' }),
+  boolean:  () => ({ type: 'boolean' }),
+  date:     () => ({ type: 'string', format: 'date' }),
+  datetime: () => ({ type: 'string', format: 'date-time' }),
+  json:     () => ({}),
+  any:      () => ({}),
+};
+
+function __schemaFieldJSONSchema(f, ctx) {
+  let s;
+  if (f.typeName === 'literal-union' && f.literals?.length) {
+    s = f.literals.length === 1 ? { const: f.literals[0] } : { enum: [...f.literals] };
+  } else if (__SCHEMA_JSON_TYPES[f.typeName]) {
+    s = __SCHEMA_JSON_TYPES[f.typeName]();
+  } else {
+    const sub = __SchemaRegistry.get(f.typeName);
+    if (sub) {
+      s = __schemaJSONSchemaRef(sub, ctx);
+    } else {
+      s = {}; // unknown identifier — permissive, matching the validator
+    }
+  }
+  const c = f.constraints;
+  if (c && !f.array) {
+    const stringish = s.type === 'string';
+    const numeric = s.type === 'number' || s.type === 'integer';
+    if (stringish) {
+      if (c.min != null) s.minLength = c.min;
+      if (c.max != null) s.maxLength = c.max;
+      if (c.regex) s.pattern = c.regex.source;
+    } else if (numeric) {
+      if (c.min != null) s.minimum = c.min;
+      if (c.max != null) s.maximum = c.max;
+    }
+  }
+  if (f.array) {
+    const items = s;
+    s = { type: 'array', items };
+    if (c) {
+      if (c.min != null) s.minItems = c.min;
+      if (c.max != null) s.maxItems = c.max;
+    }
+  }
+  if (c && c.default !== undefined) s.default = c.default;
+  if (f.coerce) {
+    s.description = ((s.description ? s.description + ' ' : '') +
+      'Coerced from wire data (' + (f.coercer ? '~:' + f.coercer : '~' + f.typeName) + ').').trim();
+  }
+  if (f.transform) {
+    s.description = ((s.description ? s.description + ' ' : '') +
+      'Derived via transform; the raw input may use different keys.').trim();
+  }
+  return s;
+}
+
+// A registry schema used as a field type / union constituent becomes a
+// \`$ref\` into \`$defs\`, expanding each named schema exactly once.
+function __schemaJSONSchemaRef(def, ctx) {
+  const name = def.name || 'Anon';
+  if (!ctx.defs.has(name) && !ctx.expanding.has(name)) {
+    ctx.expanding.add(name);
+    ctx.defs.set(name, null); // reserve slot to keep insertion order
+    ctx.defs.set(name, __schemaJSONSchemaBody(def, ctx));
+    ctx.expanding.delete(name);
+  }
+  return { $ref: '#/$defs/' + name };
+}
+
+function __schemaJSONSchemaBody(def, ctx) {
+  const norm = def._normalize();
+
+  if (def.kind === 'enum') {
+    return { enum: [...new Set(norm.enumMembers.values())] };
+  }
+
+  if (def.kind === 'union') {
+    const plan = def._unionPlan();
+    const oneOf = norm.unionMembers.map(name => {
+      const member = __SchemaRegistry.get(name);
+      return member ? __schemaJSONSchemaRef(member, ctx) : {};
+    });
+    return {
+      oneOf,
+      discriminator: { propertyName: plan.disc },
+    };
+  }
+
+  // Fielded kinds: object schema. A field is required on the wire only
+  // when it's \`!\`-marked AND has no default (defaults apply before the
+  // required check, so a defaulted field can never fail required).
+  const properties = {};
+  const required = [];
+  for (const [n, f] of norm.fields) {
+    properties[n] = __schemaFieldJSONSchema(f, ctx);
+    if (f.required && f.constraints?.default === undefined) required.push(n);
+  }
+  // :model wire shapes include the DB-managed columns toJSON() carries.
+  if (def.kind === 'model') {
+    properties[norm.primaryKey] = { type: 'integer' };
+    for (const [, rel] of norm.relations) {
+      if (rel.kind !== 'belongsTo') continue;
+      properties[__schemaCamel(rel.foreignKey)] = rel.optional
+        ? { type: ['integer', 'null'] }
+        : { type: 'integer' };
+    }
+    if (norm.timestamps) {
+      properties.createdAt = { type: 'string', format: 'date-time' };
+      properties.updatedAt = { type: 'string', format: 'date-time' };
+    }
+    if (norm.softDelete) {
+      properties.deletedAt = { type: ['string', 'null'], format: 'date-time' };
+    }
+  }
+  const out = { type: 'object', properties };
+  if (required.length) out.required = required;
+  if (norm.ensures.length) {
+    out.description = 'Refinements (not expressible in JSON Schema): ' +
+      norm.ensures.map(r => r.message).join('; ') + '.';
+  }
+  return out;
+}
+
+__SchemaDef.prototype.toJSONSchema = function () {
+  const ctx = { defs: new Map(), expanding: new Set() };
+  // The root schema expands inline; only REFERENCED schemas go to $defs.
+  const root = __schemaJSONSchemaBody(this, ctx);
+  root.$schema = 'https://json-schema.org/draft/2020-12/schema';
+  if (this.name) root.title = this.name;
+  if (ctx.defs.size) {
+    root.$defs = {};
+    for (const [k, v] of ctx.defs) root.$defs[k] = v;
+  }
+  return root;
+};
+
 function __schemaFlatten(keys) {
   const out = [];
   for (const k of keys) {
@@ -1467,6 +1674,7 @@ function __schemaDerive(source, transform) {
       typeName: f.typeName, array: f.array,
       literals: f.literals || null,
       coerce: f.coerce === true,
+      coercer: f.coercer || null,
       constraints: f.constraints,
       attrs: f.attrs || null,
       transform: f.transform || null,
@@ -1540,6 +1748,7 @@ function __schemaExpandMixins(host, fields, directives, ctx) {
         literals: e.literals || null,
         array: e.array === true,
         coerce: e.coerce === true,
+        coercer: e.coercer || null,
         constraints: e.constraints || null,
         attrs: e.attrs || null,
         transform: e.transform || null,
@@ -1604,12 +1813,14 @@ export const SCHEMA_ORM_RUNTIME            = `// ---- Adapter (Contract v2) ----
 // requests; statements carry the sessionId; the session is destroyed
 // after COMMIT/ROLLBACK. Harbor enforces an idle TTL, so an abandoned
 // transaction auto-rolls-back server-side.
-function __schemaDefaultAdapter() {
+function __schemaDefaultAdapter(overrides) {
   const env = (typeof process !== 'undefined' && process.env) || {};
-  const base = () => String(env.RIP_DB_URL || env.DB_URL || 'http://127.0.0.1:9494').replace(/\\/+$/, '');
+  const base = () => String(
+    overrides?.url || env.RIP_DB_URL || env.DB_URL || 'http://127.0.0.1:9494').replace(/\\/+$/, '');
   const headers = () => {
     const h = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
-    if (env.RIP_DB_TOKEN) h['Authorization'] = 'Bearer ' + env.RIP_DB_TOKEN;
+    const token = overrides?.token || env.RIP_DB_TOKEN;
+    if (token) h['Authorization'] = 'Bearer ' + token;
     return h;
   };
   async function post(path, body) {
@@ -1670,6 +1881,26 @@ let __schemaAdapter = __schemaDefaultAdapter();
 
 function __schemaSetAdapter(a) { __schemaAdapter = a; }
 
+// Resolve the adapter for a def: its own \`on:\` adapter, else the
+// process-global one. Migration internals pass def = null → global.
+function __schemaAdapterFor(def) {
+  return (def && def._adapter) || __schemaAdapter;
+}
+
+// Build a NEW adapter value (without installing it globally) — the
+// counterpart of \`schema :model, on: analytics\`:
+//
+//   analytics = schema.connect url: env.ANALYTICS_URL, token: env.ANALYTICS_TOKEN
+//   Event = schema :model, on: analytics
+//
+// Same duckdb-harbor contract as the default adapter (query + begin +
+// capabilities), pinned to an explicit URL/token instead of env vars.
+function __schemaConnect(opts) {
+  const o = typeof opts === 'string' ? { url: opts } : (opts || {});
+  if (!o.url) throw new Error("schema.connect({url, token?}): a url is required");
+  return __schemaDefaultAdapter({ url: o.url, token: o.token });
+}
+
 // ---- Transactions ----------------------------------------------------------
 //
 // schema.transaction! ->                  propagates ambiently: every ORM
@@ -1689,23 +1920,26 @@ function __schemaSetAdapter(a) { __schemaAdapter = a; }
 // (this fragment is server/migration-only).
 let __schemaTxALS = null;
 
-// Ambient transaction store for the CURRENT adapter, or null. A store
-// created against a different adapter (multi-DB future) is ignored —
-// cross-adapter atomicity is impossible and the runtime never pretends
-// otherwise.
-function __schemaTxStore() {
+// The ALS store is a Map<adapter, txContext> — each adapter gets its
+// own slot, so a transaction pinned to one adapter never captures ORM
+// calls bound to another (cross-adapter atomicity is impossible and
+// the runtime never pretends otherwise), and an inner transaction on a
+// second adapter doesn't shadow the outer one.
+function __schemaTxStore(adapter) {
   if (!__schemaTxALS) return null;
-  const store = __schemaTxALS.getStore();
-  return store && store.adapter === __schemaAdapter ? store : null;
+  const map = __schemaTxALS.getStore();
+  return (map && map.get(adapter)) || null;
 }
 
 // The single SQL funnel. Every ORM-issued statement flows through here:
-// it routes to the ambient transaction handle when one exists, and
-// translates DB constraint violations into structured SchemaErrors.
+// it resolves the def's adapter, routes to that adapter's ambient
+// transaction handle when one exists, and translates DB constraint
+// violations into structured SchemaErrors.
 async function __schemaRunSQL(def, sql, params) {
-  const tx = __schemaTxStore();
+  const adapter = __schemaAdapterFor(def);
+  const tx = __schemaTxStore(adapter);
   try {
-    return await (tx ? tx.handle.query(sql, params) : __schemaAdapter.query(sql, params));
+    return await (tx ? tx.handle.query(sql, params) : adapter.query(sql, params));
   } catch (e) {
     throw __schemaTranslateDBError(e, def);
   }
@@ -1717,12 +1951,14 @@ async function __schemaTransaction(optsOrFn, maybeFn) {
   if (typeof fn !== 'function') {
     throw new Error('schema.transaction(fn): expected a function (got ' + typeof fn + ')');
   }
-  const adapter = __schemaAdapter;
+  // \`on:\` pins the transaction to a specific adapter (per-schema
+  // adapters); default is the process-global one.
+  const adapter = opts.on || __schemaAdapter;
 
-  // Nested transaction joins the ambient one — the inner block's writes
-  // commit or roll back with the outer transaction.
-  const ambient = __schemaTxALS ? __schemaTxALS.getStore() : null;
-  if (ambient && ambient.adapter === adapter) return fn();
+  // Nested transaction on the SAME adapter joins the ambient one — the
+  // inner block's writes commit or roll back with the outer transaction.
+  // A nested transaction on a DIFFERENT adapter is independent.
+  if (__schemaTxStore(adapter)) return fn();
 
   if (typeof adapter.begin !== 'function') {
     throw new Error(
@@ -1739,9 +1975,13 @@ async function __schemaTransaction(optsOrFn, maybeFn) {
   // \`after\` collects {def, inst} for every save/destroy that completed
   // inside the transaction on a model declaring afterCommit/afterRollback.
   const store = { adapter, handle, after: [] };
+  // Copy-on-run: other adapters' ambient contexts stay visible inside
+  // the block; only this adapter's slot is (re)bound.
+  const nextMap = new Map(__schemaTxALS.getStore() || []);
+  nextMap.set(adapter, store);
   let result;
   try {
-    result = await __schemaTxALS.run(store, fn);
+    result = await __schemaTxALS.run(nextMap, fn);
   } catch (err) {
     try { await handle.rollback(); } catch {}
     await __schemaFlushTxHooks(store, 'afterRollback');
@@ -1767,10 +2007,11 @@ async function __schemaFlushTxHooks(store, hookName) {
   }
 }
 
-// Queue an instance's commit-time hooks on the ambient transaction.
-// Returns true when queued; false means "no ambient tx — fire now".
+// Queue an instance's commit-time hooks on the ambient transaction for
+// ITS adapter. Returns true when queued; false means "no ambient tx —
+// fire now".
 function __schemaEnqueueTxHook(def, inst) {
-  const tx = __schemaTxStore();
+  const tx = __schemaTxStore(__schemaAdapterFor(def));
   if (!tx) return false;
   tx.after.push({ def, inst });
   return true;
@@ -2715,12 +2956,25 @@ __SchemaDef.prototype._tableSpec = function (options) {
   }
 
   const foreignKeys = [];
+  const notes = [];
   for (const [, rel] of norm.relations) {
     if (rel.kind !== 'belongsTo') continue;
     columns.push({
       name: rel.foreignKey, type: 'INTEGER',
       notNull: !rel.optional, unique: false, default: null, was: null,
     });
+    // A relation whose target lives on a DIFFERENT adapter cannot carry
+    // a database FK constraint — the referenced table is in another
+    // database. The accessor still works (it's just a second query);
+    // the DDL suppresses the constraint with a note.
+    const targetDef = __SchemaRegistry.get(rel.target);
+    const crossAdapter = targetDef &&
+      (targetDef._adapter || null) !== (this._adapter || null);
+    if (crossAdapter) {
+      notes.push('-- NOTE: ' + rel.foreignKey + ' references ' + __schemaTableName(rel.target) +
+        '(id) on a different adapter; FK constraint suppressed (cross-database constraints are impossible)');
+      continue;
+    }
     foreignKeys.push({
       column: rel.foreignKey,
       refTable: __schemaTableName(rel.target),
@@ -2754,7 +3008,7 @@ __SchemaDef.prototype._tableSpec = function (options) {
     name: table,
     sequence: { name: seq, start: idStart },
     primaryKey: norm.primaryKey,
-    columns, indexes, foreignKeys,
+    columns, indexes, foreignKeys, notes,
     tableWas: norm.tableWas || null,
   };
 };
@@ -2795,6 +3049,7 @@ function __schemaRenderCreate(spec) {
   blocks.push('CREATE TABLE ' + spec.name + ' (\\n' + lines.join(',\\n') + '\\n);');
   const ix = spec.indexes.map(i => __schemaRenderIndex(spec, i));
   if (ix.length) blocks.push(ix.join('\\n'));
+  if (spec.notes && spec.notes.length) blocks.push(spec.notes.join('\\n'));
   return blocks;
 }
 

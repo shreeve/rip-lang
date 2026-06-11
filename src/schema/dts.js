@@ -60,6 +60,7 @@ export const SCHEMA_INTRINSIC_DECLS = [
   '  parseAsync(data: unknown): Promise<Out>;',
   '  safeAsync(data: unknown): Promise<SchemaSafeResult<Out>>;',
   '  okAsync(data: unknown): Promise<boolean>;',
+  '  toJSONSchema(): Record<string, unknown>;',
   '  pick<K extends keyof In>(...keys: K[]): Schema<Pick<In, K>, Pick<In, K>>;',
   '  omit<K extends keyof In>(...keys: K[]): Schema<Omit<In, K>, Omit<In, K>>;',
   '  partial(): Schema<Partial<In>, Partial<In>>;',
@@ -331,7 +332,13 @@ function emitOneSchemaType(collected, byName, known, lines, schemaBehavior) {
   const derived = [];
   for (const e of descriptor.entries) {
     if (e.tag === 'method') {
-      methods.push(`${e.name}: (...args: any[]) => unknown`);
+      // A method whose params are all annotated rides the behavior
+      // buffer: `typeof` yields its full signature — typed params,
+      // `this`, and the inferred return. Unannotated methods keep the
+      // honest fallback.
+      methods.push(inferredFields.has(e.name)
+        ? `${e.name}: typeof ${behaviorVar}.${e.name}`
+        : `${e.name}: (...args: any[]) => unknown`);
     } else if (e.tag === 'computed') {
       computed.push(`readonly ${e.name}: ${memberType(e.name)}`);
     } else if (e.tag === 'derived') {

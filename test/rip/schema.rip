@@ -1908,6 +1908,7 @@ INTRINSICS = '''
     parseAsync(data: unknown): Promise<Out>;
     safeAsync(data: unknown): Promise<SchemaSafeResult<Out>>;
     okAsync(data: unknown): Promise<boolean>;
+    toJSONSchema(): Record<string, unknown>;
     pick<K extends keyof In>(...keys: K[]): Schema<Pick<In, K>, Pick<In, K>>;
     omit<K extends keyof In>(...keys: K[]): Schema<Omit<In, K>, Omit<In, K>>;
     partial(): Schema<Partial<In>, Partial<In>>;
@@ -3977,6 +3978,59 @@ fail "~ coercion does not apply to arrays", '''
 '''
 
 # ==============================================================================
+# Named coercers — ~:name (registry-backed wire vocabulary)
+# ==============================================================================
+
+test "~:name resolves through the registry; output validates and constrains", '''
+  __ripSchema.__schemaRegisterCoercer "id", (v) ->
+    m = v.match(/^([1-9]\\d{0,14})$/)
+    if m then parseInt(m[1]) else null
+  __ripSchema.__schemaRegisterCoercer "ssn", (v) ->
+    m = v.match(/^(\\d{3})-?(\\d{2})-?(\\d{4})$/)
+    if m then m[1] + m[2] + m[3] else null
+  X = schema
+    chart! ~:id, 1..99999
+    ssn?   ~:ssn
+  a = X.parse {chart: "42", ssn: "123-45-6789"}
+  r1 = X.safe {chart: "0"}
+  r2 = X.safe {chart: "999999999"}
+  [a.chart, a.ssn, r1.errors[0].error, r2.errors[0].error]
+''', [42, "123456789", "coerce", "max"]
+
+test "~:name failures use the coercer's name in the issue", '''
+  __ripSchema.__schemaRegisterCoercer "state2", (v) ->
+    m = v.match(/^([a-z][a-z])$/i)
+    if m then m[1].toUpperCase() else null
+  X = schema
+    state? ~:state2
+  r = X.safe {state: "utah"}
+  [r.errors[0].field, r.errors[0].error, r.errors[0].message]
+''', ["state", "coerce", "state is not a valid state2"]
+
+test "~:name with an unregistered coercer fails loud at parse (config error)", '''
+  X = schema
+    npi? ~:npi9999
+  err = null
+  try
+    X.parse {npi: "123"}
+  catch e
+    err = e.message
+  [err.includes("no coercer registered"), err.includes("registerCoercer")]
+''', [true, true]
+
+test "custom ~:name coercers type as any — value-typed constraints still apply", '''
+  __ripSchema.__schemaRegisterCoercer "evenInt", (v) ->
+    n = parseInt(v, 10)
+    if Number.isInteger(n) and n % 2 is 0 then n else null
+  X = schema
+    n? ~:evenInt, 0..10
+  a = X.parse {n: "4"}
+  r = X.safe {n: "3"}
+  r2 = X.safe {n: "12"}
+  [a.n, r.errors[0].error, r2.errors[0].error]
+''', [4, "coerce", "max"]
+
+# ==============================================================================
 # @ensure upgrades — field attribution and async (@ensure!)
 # ==============================================================================
 
@@ -4166,6 +4220,195 @@ type ":union emits a TS union + validation-only const", '''
   type Event = Click | Scroll;
   declare const Event: { parse(data: unknown): Event; safe(data: unknown): SchemaSafeResult<Event>; ok(data: unknown): boolean; parseAsync(data: unknown): Promise<Event>; safeAsync(data: unknown): Promise<SchemaSafeResult<Event>>; okAsync(data: unknown): Promise<boolean>; };
   '''
+
+# ==============================================================================
+# Typed method parameters
+# ==============================================================================
+
+test "methods accept parameters (typed and untyped) at runtime", '''
+  Money = schema :shape
+    amount!   integer
+    currency! string, 3..3
+    add: (other:: Money) ->
+      Money.parse {amount: @amount + other.amount, currency: @currency}
+    scaled: (factor, label) ->
+      label + (@amount * factor)
+  a = Money.parse {amount: 100, currency: "USD"}
+  b = a.add(Money.parse {amount: 25, currency: "USD"})
+  [b.amount, a.scaled(2, "x")]
+''', [125, "x200"]
+
+fail "computed getters reject parameters", '''
+  X = schema :shape
+    amount! integer
+    bad: (n) ~> @amount * n
+'''
+
+fail "hooks reject parameters", '''
+  X = schema :model
+    name! string
+    beforeSave: (n) -> @name = "x"
+'''
+
+# ==============================================================================
+# Per-schema adapters — schema :model, on: adapter
+# ==============================================================================
+
+test "on: routes a model's SQL to its own adapter; others use the global", '''
+  calls = {a: [], b: []}
+  mk = (tag) -> {
+    query: (sql, params) ->
+      calls[tag].push sql
+      {columns: [{name: "id"}], data: [[1]], rows: 1}
+  }
+  __schemaSetAdapter mk("a")
+  __SchemaRegistry.reset()
+  analytics = mk("b")
+  User = schema :model
+    name! string
+  Event = schema :model, on: analytics
+    name! string
+  User.find! 1
+  Event.find! 1
+  Event.where(name: "x").count!
+  [calls.a.length, calls.b.length]
+''', [1, 2]
+
+test "transaction! on: pins one adapter; other-adapter calls run outside", '''
+  calls = {a: [], b: []}
+  mk = (tag) ->
+    adapter = {}
+    adapter.query = (sql, params) ->
+      calls[tag].push sql
+      {columns: [{name: "id"}, {name: "name"}], data: [[1, "x"]], rows: 1}
+    adapter.begin = ->
+      calls[tag].push "BEGIN"
+      handle = {}
+      handle.query = (sql) ->
+        calls[tag].push "tx:" + sql.split(" ")[0]
+        {columns: [], data: [], rows: 0}
+      handle.commit = -> calls[tag].push "COMMIT"
+      handle.rollback = -> calls[tag].push "ROLLBACK"
+      handle
+    adapter
+  __schemaSetAdapter mk("a")
+  __SchemaRegistry.reset()
+  analytics = mk("b")
+  User = schema :model
+    name! string
+  Event = schema :model, on: analytics
+    name! string
+  schema.transaction! on: analytics, ->
+    Event.create! name: "e"
+    User.create! name: "u"
+    null
+  txB = calls.b.filter (s) -> s.startsWith("tx:")
+  txA = calls.a.filter (s) -> s.startsWith("tx:")
+  [txB.length, txA.length, calls.b.includes("COMMIT"), calls.a.includes("BEGIN")]
+''', [1, 0, true, false]
+
+test "cross-adapter @belongs_to: accessor works, FK DDL suppressed with a note", '''
+  rows = {columns: [{name: "id"}, {name: "name"}], data: [[7, "main"]], rows: 1}
+  __schemaSetAdapter { query: (sql, params) -> rows }
+  __SchemaRegistry.reset()
+  analytics = { query: (sql, params) -> {columns: [{name: "id"}, {name: "user_id"}], data: [[1, 7]], rows: 1} }
+  User = schema :model
+    name! string
+  Event = schema :model, on: analytics
+    name? string
+    @belongs_to User
+  sql = Event.toSQL()
+  ev = Event.find! 1
+  owner = ev.user!
+  [sql.includes("REFERENCES users"), sql.includes("FK constraint suppressed"), owner.name]
+''', [false, true, "main"]
+
+fail "on: is :model-only", '''
+  X = schema :shape, on: whatever
+    name! string
+'''
+
+# ==============================================================================
+# JSON Schema export — toJSONSchema()
+# ==============================================================================
+
+test "toJSONSchema maps fields, constraints, formats, defaults, required", '''
+  SignupInput = schema
+    email!    email
+    password! string, 8..100
+    role?     string, ["user"]
+    age?      ~integer, 18..120
+    tags?     string[], 1..5
+  js = SignupInput.toJSONSchema()
+  out = [
+    js.title
+    js.required
+    js.properties.email.format
+    [js.properties.password.minLength, js.properties.password.maxLength]
+    js.properties.role.default
+    [js.properties.age.type, js.properties.age.minimum]
+    [js.properties.tags.type, js.properties.tags.items.type, js.properties.tags.maxItems]
+  ]
+  out
+''', ["SignupInput", ["email", "password"], "email", [8, 100], "user", ["integer", 18], ["array", "string", 5]]
+
+test "toJSONSchema: nested schemas become $refs; enums and unions map", '''
+  __SchemaRegistry.reset()
+  Role = schema :enum
+    :admin
+    :user
+  Click = schema :shape
+    kind! "click"
+    x!    integer
+  Scroll = schema :shape
+    kind!  "scroll"
+    delta! integer
+  Action = schema :union
+    @on :kind
+    Click
+    Scroll
+  Profile = schema :shape
+    role!    Role
+    actions? Action[]
+  js = Profile.toJSONSchema()
+  out = [
+    js.properties.role.$ref
+    js.properties.actions.items.$ref
+    js.$defs.Role.enum
+    js.$defs.Action.oneOf.map (o) -> o.$ref
+    js.$defs.Action.discriminator.propertyName
+    js.$defs.Click.properties.kind.const
+  ]
+  out
+''', ["#/$defs/Role", "#/$defs/Action", ["admin", "user"], ["#/$defs/Click", "#/$defs/Scroll"], "kind", "click"]
+
+test "toJSONSchema: models include DB-managed columns; refinements annotate", '''
+  __SchemaRegistry.reset()
+  Org = schema :model
+    name! string
+  User = schema :model
+    name! string
+    @timestamps
+    @belongs_to Org
+    @ensure "name must not be empty-ish", (u) -> u.name.trim().length > 0
+  js = User.toJSONSchema()
+  out = [
+    js.properties.id.type
+    js.properties.orgId.type
+    js.properties.createdAt.format
+    js.description.includes("name must not be empty-ish")
+  ]
+  out
+''', ["integer", "integer", "date-time", true]
+
+test "toJSONSchema: recursive shapes are cycle-safe via $defs", '''
+  __SchemaRegistry.reset()
+  Tree = schema :shape
+    value!    integer
+    children? Tree[]
+  js = Tree.toJSONSchema()
+  [js.properties.children.items.$ref, js.$defs.Tree.properties.children.items.$ref]
+''', ["#/$defs/Tree", "#/$defs/Tree"]
 
 # ==============================================================================
 # Schema evolution — _tableSpec, introspect, diff, status/make/migrate

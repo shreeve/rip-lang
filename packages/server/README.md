@@ -56,6 +56,34 @@ get '/users/:id' ->
 start()
 ```
 
+### Schema-validated routes + OpenAPI
+
+A route registered with an `input:` schema validates the JSON body
+before the handler runs — a 400 with structured `{field, error,
+message}` issues goes out on failure, and the parsed (defaulted,
+coerced) value is `@input`. Every such route contributes to an
+auto-generated `GET /openapi.json`:
+
+```coffee
+import { post, openapi } from '@rip-lang/server'
+
+SignupInput = schema
+  email!    email
+  password! string, 8..100
+  page?     ~integer
+
+post '/signup', input: SignupInput, ->
+  { welcome: @input.email }
+
+openapi title: 'My API', version: '1.0.0'   # optional info block
+```
+
+The `read()` validator vocabulary doubles as schema coercers: importing
+`@rip-lang/server` registers every validator as a `~:name` field type,
+so `chart! ~:id`, `ssn? ~:ssn`, `amount? ~:money`, `dob? ~:date` all
+normalize exactly like `read 'x', 'id'` does. `registerValidator`
+registers both surfaces.
+
 Run it:
 
 ```bash

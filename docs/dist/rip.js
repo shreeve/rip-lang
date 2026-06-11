@@ -113,8 +113,15 @@ var { __schema, SchemaError, __SchemaRegistry, __schemaSetAdapter } = (function(
   // User-facing namespace: schema.transaction! -> ... in Rip source
   // resolves through this object (installed as a global alongside the
   // other Rip stdlib globals; ??= keeps user overrides intact).
+  const __schemaConnectExport = typeof __schemaConnect !== 'undefined'
+    ? __schemaConnect
+    : function() {
+        throw new Error('schema.connect() requires the server schema runtime (validate/browser-only runtime loaded).');
+      };
   const schemaNamespace = {
     transaction: __schemaTransactionExport,
+    connect:    __schemaConnectExport,
+    registerCoercer: __schemaRegisterCoercer,
     plan:       typeof __schemaPlan       !== 'undefined' ? __schemaPlan       : __schemaMigrationStub('plan'),
     status:     typeof __schemaStatus     !== 'undefined' ? __schemaStatus     : __schemaMigrationStub('status'),
     make:       typeof __schemaMake       !== 'undefined' ? __schemaMake       : __schemaMigrationStub('make'),
@@ -125,6 +132,7 @@ var { __schema, SchemaError, __SchemaRegistry, __schemaSetAdapter } = (function(
     __schema, SchemaError, __SchemaRegistry,
     __schemaSetAdapter: __schemaSetAdapterExport,
     __schemaTransaction: __schemaTransactionExport,
+    __schemaRegisterCoercer,
     schema: schemaNamespace,
     __version: 1,
   };
@@ -154,7 +162,7 @@ function __schemaFormatIssues(issues, name) {
 }
 
 const __SCHEMA_RESERVED_STATIC = new Set([
-  'parse','safe','ok','parseAsync','safeAsync','okAsync',
+  'parse','safe','ok','parseAsync','safeAsync','okAsync','toJSONSchema',
   'find','findMany','where','all','first','count','create','toSQL',
   'includes','upsert','insertMany','updateAll','deleteAll','withDeleted','onlyDeleted',
   'unscoped',
@@ -241,6 +249,26 @@ const __SCHEMA_COERCERS = {
   },
 };
 __SCHEMA_COERCERS.datetime = __SCHEMA_COERCERS.date;
+
+// Named-coercer registry for the \`~:name\` field syntax. A coercer is a
+// function (wireValue) → coercedValue, where null/undefined/false means
+// "didn't convert" → {error: 'coerce'}. @rip-lang/server registers its
+// entire read() validator vocabulary (id, money, ssn, phone, name,
+// date, …) here at module load, so every wire normalizer that works in
+// \`read 'x', 'ssn'\` also works as \`x? ~:ssn\` in a schema. Apps register
+// their own via schema.registerCoercer.
+//
+//   opts.raw — pass the value through un-stringified (validators that
+//   operate on arrays/objects, e.g. the server's array/hash/json).
+const __schemaNamedCoercers = new Map();
+
+function __schemaRegisterCoercer(name, fn, opts) {
+  if (typeof name !== 'string' || typeof fn !== 'function') {
+    throw new Error('schema.registerCoercer(name, fn, opts?): name string and fn required');
+  }
+  __schemaNamedCoercers.set(name, { fn, raw: opts?.raw === true });
+  return fn;
+}
 
 function __schemaValidateValue(v, typeName) {
   const prim = __schemaTypes[typeName];
@@ -376,7 +404,7 @@ function __schemaSignature(def) {
         parts.push('f:' + e.name + ':' + (e.typeName || '') +
           (e.array ? '[]' : '') + ':' + (e.modifiers || []).join('') +
           (e.literals ? ':' + e.literals.join(',') : '') +
-          ':' + safe(e.constraints) + ':' + safe(e.attrs) + (e.coerce ? ':~' : '') +
+          ':' + safe(e.constraints) + ':' + safe(e.attrs) + (e.coerce ? ':~' + (e.coercer || '') : '') +
           (e.transform ? ':t' : ''));
         break;
       case 'enum-member':
@@ -467,6 +495,9 @@ class __SchemaDef {
     this._klass = null;
     this._sourceModel = null;
     this._unionPlanCache = null;
+    // Per-schema adapter (\`schema :model, on: analytics\`). null → the
+    // process-global adapter. Resolved per ORM call by the orm fragment.
+    this._adapter = desc.adapter || null;
     // Install @scope statics eagerly so \`User.active()\` works as the
     // very first call on the model (normalization hasn't run yet at
     // that point; the scope invocation itself triggers it, which also
@@ -543,6 +574,7 @@ class __SchemaDef {
             literals: e.literals || null,
             array: e.array === true,
             coerce: e.coerce === true,
+            coercer: e.coercer || null,
             constraints: e.constraints || null,
             attrs: e.attrs || null,
             transform: e.transform || null,
@@ -1190,6 +1222,28 @@ class __SchemaDef {
       if (!f.coerce) continue;
       const v = working[n];
       if (v === undefined || v === null) continue;
+      if (f.coercer) {
+        // \`~:name\` — registry lookup. A missing coercer is a CONFIG
+        // error (the package that provides it wasn't loaded), not a
+        // validation failure — fail loud.
+        const entry = __schemaNamedCoercers.get(f.coercer);
+        if (!entry) {
+          throw new Error(
+            "schema: no coercer registered for '~:" + f.coercer + "' (field '" + n + "' on " +
+            (this.name || 'anon') + "). Import @rip-lang/server (which registers the read() " +
+            "validator vocabulary) or register it with schema.registerCoercer('" + f.coercer + "', fn).");
+        }
+        const input = entry.raw ? v : String(v).trim();
+        let out;
+        try { out = entry.fn(input); } catch { out = null; }
+        if (out === null || out === undefined || out === false) {
+          errors.push({field: n, error: 'coerce', message: n + ' is not a valid ' + f.coercer});
+          failed.add(n);
+        } else {
+          working[n] = out;
+        }
+        continue;
+      }
       const r = __SCHEMA_COERCERS[f.typeName] ? __SCHEMA_COERCERS[f.typeName](v) : { ok: false };
       if (r.ok) {
         working[n] = r.value;
@@ -1457,6 +1511,159 @@ class __SchemaDef {
   }
 }
 
+// ---- JSON Schema export (draft 2020-12) -------------------------------------
+//
+// One declaration → wire contract. Field types map per the table in the
+// language reference; nested registry schemas become \`$ref\`s collected
+// under \`$defs\` (cycle-safe); enums map to \`enum\`, unions to \`oneOf\` +
+// an OpenAPI-style \`discriminator\`. Transforms and refinements have no
+// executable JSON Schema equivalent — they export as \`description\`
+// annotations rather than being silently dropped or approximated.
+
+const __SCHEMA_JSON_TYPES = {
+  string:   () => ({ type: 'string' }),
+  text:     () => ({ type: 'string' }),
+  email:    () => ({ type: 'string', format: 'email' }),
+  url:      () => ({ type: 'string', format: 'uri' }),
+  uuid:     () => ({ type: 'string', format: 'uuid' }),
+  phone:    () => ({ type: 'string', pattern: '^[\\\\d\\\\s\\\\-+()]+$' }),
+  zip:      () => ({ type: 'string', pattern: '^\\\\d{5}(-\\\\d{4})?$' }),
+  number:   () => ({ type: 'number' }),
+  integer:  () => ({ type: 'integer' }),
+  boolean:  () => ({ type: 'boolean' }),
+  date:     () => ({ type: 'string', format: 'date' }),
+  datetime: () => ({ type: 'string', format: 'date-time' }),
+  json:     () => ({}),
+  any:      () => ({}),
+};
+
+function __schemaFieldJSONSchema(f, ctx) {
+  let s;
+  if (f.typeName === 'literal-union' && f.literals?.length) {
+    s = f.literals.length === 1 ? { const: f.literals[0] } : { enum: [...f.literals] };
+  } else if (__SCHEMA_JSON_TYPES[f.typeName]) {
+    s = __SCHEMA_JSON_TYPES[f.typeName]();
+  } else {
+    const sub = __SchemaRegistry.get(f.typeName);
+    if (sub) {
+      s = __schemaJSONSchemaRef(sub, ctx);
+    } else {
+      s = {}; // unknown identifier — permissive, matching the validator
+    }
+  }
+  const c = f.constraints;
+  if (c && !f.array) {
+    const stringish = s.type === 'string';
+    const numeric = s.type === 'number' || s.type === 'integer';
+    if (stringish) {
+      if (c.min != null) s.minLength = c.min;
+      if (c.max != null) s.maxLength = c.max;
+      if (c.regex) s.pattern = c.regex.source;
+    } else if (numeric) {
+      if (c.min != null) s.minimum = c.min;
+      if (c.max != null) s.maximum = c.max;
+    }
+  }
+  if (f.array) {
+    const items = s;
+    s = { type: 'array', items };
+    if (c) {
+      if (c.min != null) s.minItems = c.min;
+      if (c.max != null) s.maxItems = c.max;
+    }
+  }
+  if (c && c.default !== undefined) s.default = c.default;
+  if (f.coerce) {
+    s.description = ((s.description ? s.description + ' ' : '') +
+      'Coerced from wire data (' + (f.coercer ? '~:' + f.coercer : '~' + f.typeName) + ').').trim();
+  }
+  if (f.transform) {
+    s.description = ((s.description ? s.description + ' ' : '') +
+      'Derived via transform; the raw input may use different keys.').trim();
+  }
+  return s;
+}
+
+// A registry schema used as a field type / union constituent becomes a
+// \`$ref\` into \`$defs\`, expanding each named schema exactly once.
+function __schemaJSONSchemaRef(def, ctx) {
+  const name = def.name || 'Anon';
+  if (!ctx.defs.has(name) && !ctx.expanding.has(name)) {
+    ctx.expanding.add(name);
+    ctx.defs.set(name, null); // reserve slot to keep insertion order
+    ctx.defs.set(name, __schemaJSONSchemaBody(def, ctx));
+    ctx.expanding.delete(name);
+  }
+  return { $ref: '#/$defs/' + name };
+}
+
+function __schemaJSONSchemaBody(def, ctx) {
+  const norm = def._normalize();
+
+  if (def.kind === 'enum') {
+    return { enum: [...new Set(norm.enumMembers.values())] };
+  }
+
+  if (def.kind === 'union') {
+    const plan = def._unionPlan();
+    const oneOf = norm.unionMembers.map(name => {
+      const member = __SchemaRegistry.get(name);
+      return member ? __schemaJSONSchemaRef(member, ctx) : {};
+    });
+    return {
+      oneOf,
+      discriminator: { propertyName: plan.disc },
+    };
+  }
+
+  // Fielded kinds: object schema. A field is required on the wire only
+  // when it's \`!\`-marked AND has no default (defaults apply before the
+  // required check, so a defaulted field can never fail required).
+  const properties = {};
+  const required = [];
+  for (const [n, f] of norm.fields) {
+    properties[n] = __schemaFieldJSONSchema(f, ctx);
+    if (f.required && f.constraints?.default === undefined) required.push(n);
+  }
+  // :model wire shapes include the DB-managed columns toJSON() carries.
+  if (def.kind === 'model') {
+    properties[norm.primaryKey] = { type: 'integer' };
+    for (const [, rel] of norm.relations) {
+      if (rel.kind !== 'belongsTo') continue;
+      properties[__schemaCamel(rel.foreignKey)] = rel.optional
+        ? { type: ['integer', 'null'] }
+        : { type: 'integer' };
+    }
+    if (norm.timestamps) {
+      properties.createdAt = { type: 'string', format: 'date-time' };
+      properties.updatedAt = { type: 'string', format: 'date-time' };
+    }
+    if (norm.softDelete) {
+      properties.deletedAt = { type: ['string', 'null'], format: 'date-time' };
+    }
+  }
+  const out = { type: 'object', properties };
+  if (required.length) out.required = required;
+  if (norm.ensures.length) {
+    out.description = 'Refinements (not expressible in JSON Schema): ' +
+      norm.ensures.map(r => r.message).join('; ') + '.';
+  }
+  return out;
+}
+
+__SchemaDef.prototype.toJSONSchema = function () {
+  const ctx = { defs: new Map(), expanding: new Set() };
+  // The root schema expands inline; only REFERENCED schemas go to $defs.
+  const root = __schemaJSONSchemaBody(this, ctx);
+  root.$schema = 'https://json-schema.org/draft/2020-12/schema';
+  if (this.name) root.title = this.name;
+  if (ctx.defs.size) {
+    root.$defs = {};
+    for (const [k, v] of ctx.defs) root.$defs[k] = v;
+  }
+  return root;
+};
+
 function __schemaFlatten(keys) {
   const out = [];
   for (const k of keys) {
@@ -1511,6 +1718,7 @@ function __schemaDerive(source, transform) {
       typeName: f.typeName, array: f.array,
       literals: f.literals || null,
       coerce: f.coerce === true,
+      coercer: f.coercer || null,
       constraints: f.constraints,
       attrs: f.attrs || null,
       transform: f.transform || null,
@@ -1584,6 +1792,7 @@ function __schemaExpandMixins(host, fields, directives, ctx) {
         literals: e.literals || null,
         array: e.array === true,
         coerce: e.coerce === true,
+        coercer: e.coercer || null,
         constraints: e.constraints || null,
         attrs: e.attrs || null,
         transform: e.transform || null,
@@ -2499,6 +2708,45 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
   var VALID_KINDS = new Set(["input", "shape", "model", "mixin", "enum", "union"]);
   var KIND_DEFAULT = "input";
   var SCHEMA_COERCIBLE_TYPES = new Set(["integer", "number", "boolean", "date", "datetime"]);
+  var SCHEMA_NAMED_COERCER_TYPES = {
+    id: "integer",
+    int: "integer",
+    whole: "integer",
+    float: "number",
+    money: "number",
+    money_even: "number",
+    cents: "integer",
+    cents_even: "integer",
+    bool: "boolean",
+    truthy: "boolean",
+    falsy: "boolean",
+    json: "json",
+    hash: "json",
+    array: "json",
+    ids: { type: "integer", array: true },
+    string: "string",
+    text: "string",
+    name: "string",
+    address: "string",
+    date: "string",
+    time: "string",
+    time12: "string",
+    email: "email",
+    state: "string",
+    zip: "zip",
+    zipplus4: "string",
+    ssn: "string",
+    sex: "string",
+    phone: "string",
+    username: "string",
+    ip: "string",
+    mac: "string",
+    url: "url",
+    color: "string",
+    uuid: "uuid",
+    semver: "string",
+    slug: "string"
+  };
   var HOOK_NAMES = new Set([
     "beforeValidation",
     "afterValidation",
@@ -2655,8 +2903,14 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       }
     }
     let j = i + 1;
-    if (tokens[j]?.[0] === "SYMBOL")
+    if (tokens[j]?.[0] === "SYMBOL") {
       j++;
+      if (tokens[j]?.[0] === "," && (tokens[j + 1]?.[0] === "PROPERTY" || tokens[j + 1]?.[0] === "IDENTIFIER") && tokens[j + 1]?.[1] === "on") {
+        j += 2;
+        while (j < tokens.length && tokens[j][0] !== "TERMINATOR" && tokens[j][0] !== "INDENT")
+          j++;
+      }
+    }
     if (tokens[j]?.[0] === "TERMINATOR") {
       if (tokens[j][1] === ";")
         return true;
@@ -2673,10 +2927,27 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       kindToken = tokens[j];
       let k = kindToken[1];
       if (!VALID_KINDS.has(k)) {
-        throw schemaError(kindToken, `Unknown schema kind :${k}. Expected one of :input, :shape, :model, :mixin, :enum.`);
+        throw schemaError(kindToken, `Unknown schema kind :${k}. Expected one of :input, :shape, :model, :mixin, :enum, :union.`);
       }
       kind = k;
       j++;
+    }
+    let adapterTokens = null;
+    if (tokens[j]?.[0] === "," && (tokens[j + 1]?.[0] === "PROPERTY" || tokens[j + 1]?.[0] === "IDENTIFIER") && tokens[j + 1]?.[1] === "on") {
+      if (kind !== "model") {
+        throw schemaError(tokens[j + 1], `'on:' (per-schema adapter) applies to :model only — :${kind} never queries a database.`);
+      }
+      let k2 = j + 2;
+      if (tokens[k2]?.[0] === ":")
+        k2++;
+      let exprStart = k2;
+      while (k2 < tokens.length && tokens[k2][0] !== "TERMINATOR" && tokens[k2][0] !== "INDENT")
+        k2++;
+      adapterTokens = tokens.slice(exprStart, k2);
+      if (!adapterTokens.length) {
+        throw schemaError(tokens[j + 1], `'on:' requires an adapter expression — 'schema :model, on: analytics'.`);
+      }
+      j = k2;
     }
     let bodyTokens;
     let endIdx;
@@ -2734,6 +3005,8 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       kind,
       defaultMaxString: config?.defaultMaxString ?? null
     });
+    if (adapterTokens)
+      descriptor.adapterTokens = adapterTokens;
     let schemaNewTok = mkToken("SCHEMA", "schema", schemaTok);
     let bodyNewTok = mkToken("SCHEMA_BODY", kind, schemaTok);
     bodyNewTok.data = { descriptor };
@@ -2945,18 +3218,33 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
     let typeName = "string";
     let literals = null;
     let coerce = false;
+    let coercer = null;
+    let coercerArray = false;
     if (typeFirst?.[0] === "UNARY_MATH" && typeFirst[1] === "~") {
       let typeTok = line[pos + 1];
-      if (!typeTok || typeTok[0] !== "IDENTIFIER") {
-        throw schemaError(typeFirst, `'~' in the type slot marks coercion and needs a type name — '~integer', '~number', '~boolean', '~date'.`);
+      if (typeTok?.[0] === "SYMBOL") {
+        coerce = true;
+        coercer = typeTok[1];
+        let out = SCHEMA_NAMED_COERCER_TYPES[coercer];
+        if (out && typeof out === "object") {
+          typeName = out.type;
+          coercerArray = true;
+        } else {
+          typeName = out || "any";
+        }
+        pos += 2;
+        typeFirst = typeTok;
+      } else if (typeTok?.[0] === "IDENTIFIER") {
+        if (!SCHEMA_COERCIBLE_TYPES.has(typeTok[1])) {
+          throw schemaError(typeTok, `'~${typeTok[1]}' is not coercible. Built-in coercion is defined for: ${[...SCHEMA_COERCIBLE_TYPES].join(", ")}. ` + `Named coercers use a symbol — '~:${typeTok[1]}' — and resolve through the registry ` + `(@rip-lang/server's read() validators, or schema.registerCoercer). ` + `For anything else, write an explicit transform: '${name}, -> …'.`);
+        }
+        coerce = true;
+        typeName = typeTok[1];
+        pos += 2;
+        typeFirst = typeTok;
+      } else {
+        throw schemaError(typeFirst, `'~' in the type slot marks coercion and needs a type name ('~integer', '~date', …) ` + `or a registered coercer symbol ('~:ssn', '~:money', …).`);
       }
-      if (!SCHEMA_COERCIBLE_TYPES.has(typeTok[1])) {
-        throw schemaError(typeTok, `'~${typeTok[1]}' is not coercible. Coercion is defined for: ${[...SCHEMA_COERCIBLE_TYPES].join(", ")}. ` + `For anything else, write an explicit transform: '${name}, -> …'.`);
-      }
-      coerce = true;
-      typeName = typeTok[1];
-      pos += 2;
-      typeFirst = typeTok;
     } else if (typeFirst?.[0] === "IDENTIFIER") {
       typeName = typeFirst[1];
       pos++;
@@ -2985,6 +3273,8 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
     if (coerce && array) {
       throw schemaError(typeFirst, `Coercion ('~${typeName}') does not apply to array types. Coerce per-element with a transform instead.`);
     }
+    if (coercerArray)
+      array = true;
     let rest = line.slice(pos);
     let typeConsumed = typeFirst?.[0] === "IDENTIFIER" || typeFirst?.[0] === "STRING";
     if (typeConsumed && rest[0]?.[0] === "->") {
@@ -3070,6 +3360,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       array,
       literals,
       coerce,
+      coercer,
       constraintTokens,
       attrsTokens,
       rangeTokens,
@@ -3121,21 +3412,46 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
     if (!colonTok || colonTok[0] !== ":") {
       throw schemaError(headerTok, `Expected ':' after '${name}' before arrow.`);
     }
-    let arrowTok = line[2];
-    let nextTok = line[3];
+    let pos = 2;
+    let paramTokens = [];
+    let hadParams = false;
+    if (line[pos] && (line[pos][0] === "PARAM_START" || line[pos][0] === "(")) {
+      hadParams = true;
+      let depth = 1;
+      pos++;
+      while (pos < line.length && depth > 0) {
+        let tag = line[pos][0];
+        if (tag === "(" || tag === "PARAM_START")
+          depth++;
+        if (tag === ")" || tag === "PARAM_END") {
+          depth--;
+          if (depth === 0) {
+            pos++;
+            break;
+          }
+        }
+        paramTokens.push(line[pos]);
+        pos++;
+      }
+      if (depth !== 0) {
+        throw schemaError(line[2], `'${name}': unclosed '(' in parameters.`);
+      }
+    }
+    let arrowTok = line[pos];
+    let nextTok = line[pos + 1];
     let arrow, arrowLoc, bodyStart;
     if (arrowTok && arrowTok[0] === "->") {
       arrow = "->";
       arrowLoc = arrowTok.loc;
-      bodyStart = 3;
+      bodyStart = pos + 1;
     } else if (arrowTok && arrowTok[0] === "EFFECT") {
       arrow = "~>";
       arrowLoc = arrowTok.loc;
-      bodyStart = 3;
+      bodyStart = pos + 1;
     } else if (arrowTok && arrowTok[0] === "UNARY_MATH" && arrowTok[1] === "!" && nextTok && nextTok[0] === "COMPARE" && nextTok[1] === ">" && !arrowTok.spaced) {
       arrow = "!>";
       arrowLoc = arrowTok.loc;
-      bodyStart = 4;
+      bodyStart = pos + 2;
     } else {
       throw schemaError(colonTok, `Schema top-level '${name}:' must be followed by '->' (method/hook), '~>' (computed getter), or '!>' (eager derived).`);
     }
@@ -3151,11 +3467,15 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
     } else {
       entryTag = "method";
     }
+    if (hadParams && entryTag !== "method") {
+      let what = entryTag === "hook" ? "lifecycle hooks" : entryTag === "computed" ? "computed getters (~>)" : "eager-derived fields (!>)";
+      throw schemaError(colonTok, `'${name}': ${what} take no parameters — only methods do.`);
+    }
     entries.push({
       tag: entryTag,
       name,
       arrow,
-      paramTokens: [],
+      paramTokens,
       bodyTokens,
       headerLoc: headerTok.loc,
       arrowLoc
@@ -3476,6 +3796,12 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
     if (schemaName)
       parts.push(`name: ${JSON.stringify(schemaName)}`);
     parts.push(`entries: [${descriptor.entries.map((e) => entryLiteral(emitter, e)).join(", ")}]`);
+    if (descriptor.adapterTokens) {
+      let adapterSexpr = parseBodyTokens(descriptor.adapterTokens);
+      if (adapterSexpr) {
+        parts.push(`adapter: ${emitter.emit(unwrapSingleStatement(adapterSexpr), "value")}`);
+      }
+    }
     return `__schema({${parts.join(", ")}})`;
   }
   function readDescriptor(node) {
@@ -3752,6 +4078,8 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         }
         if (e.coerce) {
           obj.push("coerce: true");
+          if (e.coercer)
+            obj.push(`coercer: ${JSON.stringify(e.coercer)}`);
         }
         let range = e.rangeTokens ? compileRangeTokens(e.rangeTokens, e) : null;
         let bracket = e.constraintTokens ? compileConstraintsLiteral(e.constraintTokens, e) : null;
@@ -3824,8 +4152,25 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         return `{tag: "unknown"}`;
     }
   }
+  function callableParams(emitter, entry) {
+    if (!entry.paramTokens || !entry.paramTokens.length)
+      return [];
+    let parts = splitTopLevelByComma(entry.paramTokens);
+    return parts.map((part) => {
+      let toks = part.filter((t) => t[0] !== "TERMINATOR" && t[0] !== "INDENT" && t[0] !== "OUTDENT");
+      if (toks.length !== 1 || toks[0][0] !== "IDENTIFIER") {
+        throw schemaError(toks[0] || { loc: entry.headerLoc }, `'${entry.name}': method parameters must be plain identifiers (with optional ':: Type' annotations).`);
+      }
+      let p = new String(toks[0][1]);
+      if (emitter.options.inlineTypes) {
+        p.type = toks[0].data?.type || "any";
+      }
+      return p;
+    });
+  }
   function compileCallableFn(emitter, entry) {
     let bodySexpr = parseBodyTokens(entry.bodyTokens);
+    let methodParams = callableParams(emitter, entry);
     if (!bodySexpr) {
       return `(function() {})`;
     }
@@ -3835,9 +4180,11 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       thisParam.type = emitter._schemaName;
       params.push(thisParam);
     }
+    params.push(...methodParams);
     let arrowSexpr = ["->", params, bodySexpr];
     let fnCode = emitter.emit(arrowSexpr, "value");
-    if (emitter.options.inlineTypes && emitter._schemaName && (entry.tag === "computed" || entry.tag === "derived")) {
+    let bufferable = entry.tag === "computed" || entry.tag === "derived" || entry.tag === "method";
+    if (emitter.options.inlineTypes && emitter._schemaName && bufferable) {
       if (!emitter._schemaBehavior)
         emitter._schemaBehavior = new Map;
       let list = emitter._schemaBehavior.get(emitter._schemaName);
@@ -4152,6 +4499,14 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
     let s = typeof val === "string" ? val : String(val);
     let m = s.match(/^\/(.*)\/([gimsuy]*)$/s);
     return m ? new RegExp(m[1], m[2]) : new RegExp(s);
+  }
+  function unwrapSingleStatement(sexpr) {
+    if (Array.isArray(sexpr)) {
+      const head = sexpr[0]?.valueOf?.() ?? sexpr[0];
+      if (head === "block" && sexpr.length === 2)
+        return sexpr[1];
+    }
+    return sexpr;
   }
   function parseBodyTokens(bodyTokens) {
     if (!bodyTokens || !bodyTokens.length)
@@ -15212,7 +15567,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.16.1";
-  var BUILD_DATE = "2026-06-10@23:50:43GMT";
+  var BUILD_DATE = "2026-06-11@00:22:23GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

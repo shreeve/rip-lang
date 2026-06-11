@@ -37,12 +37,14 @@
 // requests; statements carry the sessionId; the session is destroyed
 // after COMMIT/ROLLBACK. Harbor enforces an idle TTL, so an abandoned
 // transaction auto-rolls-back server-side.
-function __schemaDefaultAdapter() {
+function __schemaDefaultAdapter(overrides) {
   const env = (typeof process !== 'undefined' && process.env) || {};
-  const base = () => String(env.RIP_DB_URL || env.DB_URL || 'http://127.0.0.1:9494').replace(/\/+$/, '');
+  const base = () => String(
+    overrides?.url || env.RIP_DB_URL || env.DB_URL || 'http://127.0.0.1:9494').replace(/\/+$/, '');
   const headers = () => {
     const h = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
-    if (env.RIP_DB_TOKEN) h['Authorization'] = 'Bearer ' + env.RIP_DB_TOKEN;
+    const token = overrides?.token || env.RIP_DB_TOKEN;
+    if (token) h['Authorization'] = 'Bearer ' + token;
     return h;
   };
   async function post(path, body) {
@@ -103,6 +105,26 @@ let __schemaAdapter = __schemaDefaultAdapter();
 
 function __schemaSetAdapter(a) { __schemaAdapter = a; }
 
+// Resolve the adapter for a def: its own `on:` adapter, else the
+// process-global one. Migration internals pass def = null → global.
+function __schemaAdapterFor(def) {
+  return (def && def._adapter) || __schemaAdapter;
+}
+
+// Build a NEW adapter value (without installing it globally) — the
+// counterpart of `schema :model, on: analytics`:
+//
+//   analytics = schema.connect url: env.ANALYTICS_URL, token: env.ANALYTICS_TOKEN
+//   Event = schema :model, on: analytics
+//
+// Same duckdb-harbor contract as the default adapter (query + begin +
+// capabilities), pinned to an explicit URL/token instead of env vars.
+function __schemaConnect(opts) {
+  const o = typeof opts === 'string' ? { url: opts } : (opts || {});
+  if (!o.url) throw new Error("schema.connect({url, token?}): a url is required");
+  return __schemaDefaultAdapter({ url: o.url, token: o.token });
+}
+
 // ---- Transactions ----------------------------------------------------------
 //
 // schema.transaction! ->                  propagates ambiently: every ORM
@@ -122,23 +144,26 @@ function __schemaSetAdapter(a) { __schemaAdapter = a; }
 // (this fragment is server/migration-only).
 let __schemaTxALS = null;
 
-// Ambient transaction store for the CURRENT adapter, or null. A store
-// created against a different adapter (multi-DB future) is ignored —
-// cross-adapter atomicity is impossible and the runtime never pretends
-// otherwise.
-function __schemaTxStore() {
+// The ALS store is a Map<adapter, txContext> — each adapter gets its
+// own slot, so a transaction pinned to one adapter never captures ORM
+// calls bound to another (cross-adapter atomicity is impossible and
+// the runtime never pretends otherwise), and an inner transaction on a
+// second adapter doesn't shadow the outer one.
+function __schemaTxStore(adapter) {
   if (!__schemaTxALS) return null;
-  const store = __schemaTxALS.getStore();
-  return store && store.adapter === __schemaAdapter ? store : null;
+  const map = __schemaTxALS.getStore();
+  return (map && map.get(adapter)) || null;
 }
 
 // The single SQL funnel. Every ORM-issued statement flows through here:
-// it routes to the ambient transaction handle when one exists, and
-// translates DB constraint violations into structured SchemaErrors.
+// it resolves the def's adapter, routes to that adapter's ambient
+// transaction handle when one exists, and translates DB constraint
+// violations into structured SchemaErrors.
 async function __schemaRunSQL(def, sql, params) {
-  const tx = __schemaTxStore();
+  const adapter = __schemaAdapterFor(def);
+  const tx = __schemaTxStore(adapter);
   try {
-    return await (tx ? tx.handle.query(sql, params) : __schemaAdapter.query(sql, params));
+    return await (tx ? tx.handle.query(sql, params) : adapter.query(sql, params));
   } catch (e) {
     throw __schemaTranslateDBError(e, def);
   }
@@ -150,12 +175,14 @@ async function __schemaTransaction(optsOrFn, maybeFn) {
   if (typeof fn !== 'function') {
     throw new Error('schema.transaction(fn): expected a function (got ' + typeof fn + ')');
   }
-  const adapter = __schemaAdapter;
+  // `on:` pins the transaction to a specific adapter (per-schema
+  // adapters); default is the process-global one.
+  const adapter = opts.on || __schemaAdapter;
 
-  // Nested transaction joins the ambient one — the inner block's writes
-  // commit or roll back with the outer transaction.
-  const ambient = __schemaTxALS ? __schemaTxALS.getStore() : null;
-  if (ambient && ambient.adapter === adapter) return fn();
+  // Nested transaction on the SAME adapter joins the ambient one — the
+  // inner block's writes commit or roll back with the outer transaction.
+  // A nested transaction on a DIFFERENT adapter is independent.
+  if (__schemaTxStore(adapter)) return fn();
 
   if (typeof adapter.begin !== 'function') {
     throw new Error(
@@ -172,9 +199,13 @@ async function __schemaTransaction(optsOrFn, maybeFn) {
   // `after` collects {def, inst} for every save/destroy that completed
   // inside the transaction on a model declaring afterCommit/afterRollback.
   const store = { adapter, handle, after: [] };
+  // Copy-on-run: other adapters' ambient contexts stay visible inside
+  // the block; only this adapter's slot is (re)bound.
+  const nextMap = new Map(__schemaTxALS.getStore() || []);
+  nextMap.set(adapter, store);
   let result;
   try {
-    result = await __schemaTxALS.run(store, fn);
+    result = await __schemaTxALS.run(nextMap, fn);
   } catch (err) {
     try { await handle.rollback(); } catch {}
     await __schemaFlushTxHooks(store, 'afterRollback');
@@ -200,10 +231,11 @@ async function __schemaFlushTxHooks(store, hookName) {
   }
 }
 
-// Queue an instance's commit-time hooks on the ambient transaction.
-// Returns true when queued; false means "no ambient tx — fire now".
+// Queue an instance's commit-time hooks on the ambient transaction for
+// ITS adapter. Returns true when queued; false means "no ambient tx —
+// fire now".
 function __schemaEnqueueTxHook(def, inst) {
-  const tx = __schemaTxStore();
+  const tx = __schemaTxStore(__schemaAdapterFor(def));
   if (!tx) return false;
   tx.after.push({ def, inst });
   return true;

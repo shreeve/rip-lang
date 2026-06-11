@@ -170,6 +170,7 @@ Key ideas:
 
 - handlers use `@req`, `@json()`, `@send()`, `@session`
 - `read()` validates params and body
+- `post '/x', input: SomeSchema, ->` validates the JSON body through a Rip schema before the handler runs (400 with structured issues; parsed value at `@input`) and contributes to the auto-generated `GET /openapi.json`
 - `@send(path, type?)` serves files
 - `use()` composes middleware
 
@@ -636,6 +637,7 @@ Body forms (six declarative line shapes):
 | ------------------------ | ----------------------------------------------- |
 | Field                    | `name! 1..50` (type slot optional, defaults to `string`) |
 | Coerced field            | `age? ~integer` ("coerce, then validate" — also `~number`, `~boolean`, `~date`) |
+| Named-coercer field      | `ssn? ~:ssn` — registry-backed; @rip-lang/server registers its full `read()` validator vocabulary (`~:id`, `~:money`, `~:phone`, `~:date`, …); apps add more via `schema.registerCoercer` |
 | Inline field transform   | `email!, -> it.email.toLowerCase()`            |
 | Directive                | `@timestamps`, `@mixin Name`, `@belongs_to User?` |
 | Refinement               | `@ensure "msg"[, :field], (u) -> pred`; async via `@ensure!` (schema becomes `parseAsync!`-only) |

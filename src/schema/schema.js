@@ -64,6 +64,29 @@ const KIND_DEFAULT = 'input';
 // else needs an explicit transform.
 const SCHEMA_COERCIBLE_TYPES = new Set(['integer', 'number', 'boolean', 'date', 'datetime']);
 
+// `~:name` — NAMED coercers from the runtime registry
+// (__schemaRegisterCoercer). @rip-lang/server registers its read()
+// validator vocabulary (id, money, ssn, phone, name, date, …) at load;
+// apps add their own. The coercer's OUTPUT type matters at compile time
+// (shadow TS + DDL), so the shipped names carry a static output-type
+// table here; unknown (custom) names type as `any` — annotate with an
+// explicit transform when you need strictness.
+const SCHEMA_NAMED_COERCER_TYPES = {
+  id: 'integer', int: 'integer', whole: 'integer',
+  float: 'number', money: 'number', money_even: 'number',
+  cents: 'integer', cents_even: 'integer',
+  bool: 'boolean', truthy: 'boolean', falsy: 'boolean',
+  json: 'json', hash: 'json', array: 'json',
+  ids: { type: 'integer', array: true },
+  // everything else in the shipped set normalizes to a string:
+  string: 'string', text: 'string', name: 'string', address: 'string',
+  date: 'string', time: 'string', time12: 'string',
+  email: 'email', state: 'string', zip: 'zip', zipplus4: 'string',
+  ssn: 'string', sex: 'string', phone: 'string', username: 'string',
+  ip: 'string', mac: 'string', url: 'url', color: 'string',
+  uuid: 'uuid', semver: 'string', slug: 'string',
+};
+
 const HOOK_NAMES = new Set([
   'beforeValidation', 'afterValidation',
   'beforeSave', 'afterSave',
@@ -245,8 +268,20 @@ function isSchemaStart(tokens, i) {
   //   SYMBOL? then `TERMINATOR ;`   — inline body (one-liner), with field
   //                                   entries separated by more `;`
   //                                   terminators up to the newline.
+  //   SYMBOL `, on: expr` then INDENT — declaration options (per-schema
+  //                                   adapter) before the block body.
   let j = i + 1;
-  if (tokens[j]?.[0] === 'SYMBOL') j++;
+  if (tokens[j]?.[0] === 'SYMBOL') {
+    j++;
+    // `, on: expr` option tail — scan past it to the line end.
+    if (tokens[j]?.[0] === ',' &&
+        (tokens[j + 1]?.[0] === 'PROPERTY' || tokens[j + 1]?.[0] === 'IDENTIFIER') &&
+        tokens[j + 1]?.[1] === 'on') {
+      j += 2;
+      while (j < tokens.length && tokens[j][0] !== 'TERMINATOR' &&
+             tokens[j][0] !== 'INDENT') j++;
+    }
+  }
   if (tokens[j]?.[0] === 'TERMINATOR') {
     if (tokens[j][1] === ';') return true;
     j++;
@@ -270,10 +305,34 @@ function collapseSchemaAt(lexer, tokens, i, config) {
     let k = kindToken[1];
     if (!VALID_KINDS.has(k)) {
       throw schemaError(kindToken,
-        `Unknown schema kind :${k}. Expected one of :input, :shape, :model, :mixin, :enum.`);
+        `Unknown schema kind :${k}. Expected one of :input, :shape, :model, :mixin, :enum, :union.`);
     }
     kind = k;
     j++;
+  }
+
+  // Declaration options: `schema :model, on: analytics` pins the model
+  // to a specific adapter (an expression evaluated at declaration time).
+  // The expression tokens are captured raw and re-emitted at codegen.
+  let adapterTokens = null;
+  if (tokens[j]?.[0] === ',' &&
+      (tokens[j + 1]?.[0] === 'PROPERTY' || tokens[j + 1]?.[0] === 'IDENTIFIER') &&
+      tokens[j + 1]?.[1] === 'on') {
+    if (kind !== 'model') {
+      throw schemaError(tokens[j + 1],
+        `'on:' (per-schema adapter) applies to :model only — :${kind} never queries a database.`);
+    }
+    let k2 = j + 2;
+    if (tokens[k2]?.[0] === ':') k2++;
+    let exprStart = k2;
+    while (k2 < tokens.length && tokens[k2][0] !== 'TERMINATOR' &&
+           tokens[k2][0] !== 'INDENT') k2++;
+    adapterTokens = tokens.slice(exprStart, k2);
+    if (!adapterTokens.length) {
+      throw schemaError(tokens[j + 1],
+        `'on:' requires an adapter expression — 'schema :model, on: analytics'.`);
+    }
+    j = k2;
   }
 
   let bodyTokens;
@@ -368,6 +427,7 @@ function collapseSchemaAt(lexer, tokens, i, config) {
     // don't retroactively change already-parsed schemas.
     defaultMaxString: config?.defaultMaxString ?? null,
   });
+  if (adapterTokens) descriptor.adapterTokens = adapterTokens;
 
   // Replace range `[i, endIdx-1]` with `SCHEMA SCHEMA_BODY`.
   let schemaNewTok = mkToken('SCHEMA', 'schema', schemaTok);
@@ -708,24 +768,45 @@ function parseFieldedLine(kind, line, entries, ctx) {
   let typeName = 'string';
   let literals = null;
   let coerce = false;
-  // `~type` — coercion marker. Lexically unambiguous in the type slot:
-  // `~>` (computed) lexes as EFFECT and lives after a `:`, a different
-  // slot entirely. Only wire-friendly built-ins are coercible.
+  let coercer = null;
+  let coercerArray = false;
+  // `~type` / `~:name` — coercion markers. Lexically unambiguous in the
+  // type slot: `~>` (computed) lexes as EFFECT and lives after a `:`, a
+  // different slot entirely. `~type` coerces via the strict built-in
+  // tables; `~:name` coerces via the named-coercer registry (the
+  // rip-server read() vocabulary, plus app registrations).
   if (typeFirst?.[0] === 'UNARY_MATH' && typeFirst[1] === '~') {
     let typeTok = line[pos + 1];
-    if (!typeTok || typeTok[0] !== 'IDENTIFIER') {
+    if (typeTok?.[0] === 'SYMBOL') {
+      coerce = true;
+      coercer = typeTok[1];
+      let out = SCHEMA_NAMED_COERCER_TYPES[coercer];
+      if (out && typeof out === 'object') {
+        // e.g. ~:ids → integer[] — the coercer's output is a list.
+        typeName = out.type;
+        coercerArray = true;
+      } else {
+        typeName = out || 'any';
+      }
+      pos += 2;
+      typeFirst = typeTok;
+    } else if (typeTok?.[0] === 'IDENTIFIER') {
+      if (!SCHEMA_COERCIBLE_TYPES.has(typeTok[1])) {
+        throw schemaError(typeTok,
+          `'~${typeTok[1]}' is not coercible. Built-in coercion is defined for: ${[...SCHEMA_COERCIBLE_TYPES].join(', ')}. ` +
+          `Named coercers use a symbol — '~:${typeTok[1]}' — and resolve through the registry ` +
+          `(@rip-lang/server's read() validators, or schema.registerCoercer). ` +
+          `For anything else, write an explicit transform: '${name}, -> …'.`);
+      }
+      coerce = true;
+      typeName = typeTok[1];
+      pos += 2;
+      typeFirst = typeTok; // for the typeConsumed / comma-rule checks below
+    } else {
       throw schemaError(typeFirst,
-        `'~' in the type slot marks coercion and needs a type name — '~integer', '~number', '~boolean', '~date'.`);
+        `'~' in the type slot marks coercion and needs a type name ('~integer', '~date', …) ` +
+        `or a registered coercer symbol ('~:ssn', '~:money', …).`);
     }
-    if (!SCHEMA_COERCIBLE_TYPES.has(typeTok[1])) {
-      throw schemaError(typeTok,
-        `'~${typeTok[1]}' is not coercible. Coercion is defined for: ${[...SCHEMA_COERCIBLE_TYPES].join(', ')}. ` +
-        `For anything else, write an explicit transform: '${name}, -> …'.`);
-    }
-    coerce = true;
-    typeName = typeTok[1];
-    pos += 2;
-    typeFirst = typeTok; // for the typeConsumed / comma-rule checks below
   } else if (typeFirst?.[0] === 'IDENTIFIER') {
     typeName = typeFirst[1];
     pos++;
@@ -765,6 +846,7 @@ function parseFieldedLine(kind, line, entries, ctx) {
     throw schemaError(typeFirst,
       `Coercion ('~${typeName}') does not apply to array types. Coerce per-element with a transform instead.`);
   }
+  if (coercerArray) array = true;
 
   // Remaining tokens on the line are a mix of `[…]` constraints (default,
   // regex), `{…}` attrs, and `n..n` range constraints. Each form is
@@ -906,6 +988,7 @@ function parseFieldedLine(kind, line, entries, ctx) {
     array,
     literals,
     coerce,
+    coercer,
     constraintTokens,
     attrsTokens,
     rangeTokens,
@@ -964,27 +1047,56 @@ function parseCallableLine(kind, headerTok, line, entries) {
     throw schemaError(headerTok,
       `Expected ':' after '${name}' before arrow.`);
   }
-  // Three arrow forms:
-  //   name: -> body   — method / hook
-  //   name: ~> body   — lazy computed getter (EFFECT token)
-  //   name: !> body   — eager derived field (UNARY_MATH '!' + COMPARE '>')
-  let arrowTok = line[2];
-  let nextTok = line[3];
+  // Arrow forms:
+  //   name: -> body            — method / hook
+  //   name: (params) -> body   — parameterized method (methods only —
+  //                              hooks/computed/derived are accessor-
+  //                              shaped and take no arguments)
+  //   name: ~> body            — lazy computed getter (EFFECT token)
+  //   name: !> body            — eager derived field (UNARY_MATH '!' + COMPARE '>')
+  //
+  // Method params may carry Rip type annotations — `(other:: Money)` —
+  // which the type rewriter (an earlier lexer pass) has already stripped
+  // and stamped onto the identifier tokens as `.data.type`; we keep the
+  // raw tokens so codegen can rebuild typed params.
+  let pos = 2;
+  let paramTokens = [];
+  let hadParams = false;
+  if (line[pos] && (line[pos][0] === 'PARAM_START' || line[pos][0] === '(')) {
+    hadParams = true;
+    let depth = 1;
+    pos++;
+    while (pos < line.length && depth > 0) {
+      let tag = line[pos][0];
+      if (tag === '(' || tag === 'PARAM_START') depth++;
+      if (tag === ')' || tag === 'PARAM_END') {
+        depth--;
+        if (depth === 0) { pos++; break; }
+      }
+      paramTokens.push(line[pos]);
+      pos++;
+    }
+    if (depth !== 0) {
+      throw schemaError(line[2], `'${name}': unclosed '(' in parameters.`);
+    }
+  }
+  let arrowTok = line[pos];
+  let nextTok = line[pos + 1];
   let arrow, arrowLoc, bodyStart;
   if (arrowTok && arrowTok[0] === '->') {
     arrow = '->';
     arrowLoc = arrowTok.loc;
-    bodyStart = 3;
+    bodyStart = pos + 1;
   } else if (arrowTok && arrowTok[0] === 'EFFECT') {
     arrow = '~>';
     arrowLoc = arrowTok.loc;
-    bodyStart = 3;
+    bodyStart = pos + 1;
   } else if (arrowTok && arrowTok[0] === 'UNARY_MATH' && arrowTok[1] === '!' &&
              nextTok && nextTok[0] === 'COMPARE' && nextTok[1] === '>' &&
              !arrowTok.spaced) {
     arrow = '!>';
     arrowLoc = arrowTok.loc;
-    bodyStart = 4;
+    bodyStart = pos + 2;
   } else {
     throw schemaError(colonTok,
       `Schema top-level '${name}:' must be followed by '->' (method/hook), '~>' (computed getter), or '!>' (eager derived).`);
@@ -1001,11 +1113,17 @@ function parseCallableLine(kind, headerTok, line, entries) {
   } else {
     entryTag = 'method';
   }
+  if (hadParams && entryTag !== 'method') {
+    let what = entryTag === 'hook' ? 'lifecycle hooks' :
+      entryTag === 'computed' ? 'computed getters (~>)' : 'eager-derived fields (!>)';
+    throw schemaError(colonTok,
+      `'${name}': ${what} take no parameters — only methods do.`);
+  }
   entries.push({
     tag: entryTag,
     name,
     arrow,
-    paramTokens: [],
+    paramTokens,
     bodyTokens,
     headerLoc: headerTok.loc,
     arrowLoc,
@@ -1428,6 +1546,14 @@ function emitSchemaNode(emitter, head, rest, context) {
   let parts = [`kind: ${JSON.stringify(descriptor.kind)}`];
   if (schemaName) parts.push(`name: ${JSON.stringify(schemaName)}`);
   parts.push(`entries: [${descriptor.entries.map(e => entryLiteral(emitter, e)).join(', ')}]`);
+  // `schema :model, on: <expr>` — the adapter expression evaluates at
+  // declaration time in the user's scope.
+  if (descriptor.adapterTokens) {
+    let adapterSexpr = parseBodyTokens(descriptor.adapterTokens);
+    if (adapterSexpr) {
+      parts.push(`adapter: ${emitter.emit(unwrapSingleStatement(adapterSexpr), 'value')}`);
+    }
+  }
   return `__schema({${parts.join(', ')}})`;
 }
 
@@ -1727,6 +1853,7 @@ function entryLiteral(emitter, e) {
       }
       if (e.coerce) {
         obj.push('coerce: true');
+        if (e.coercer) obj.push(`coercer: ${JSON.stringify(e.coercer)}`);
       }
       let range = e.rangeTokens ? compileRangeTokens(e.rangeTokens, e) : null;
       let bracket = e.constraintTokens ? compileConstraintsLiteral(e.constraintTokens, e) : null;
@@ -1811,8 +1938,34 @@ function entryLiteral(emitter, e) {
 // The `this` parameter is erased at runtime and is illegal as a real JS
 // param, so it is emitted ONLY under inlineTypes; normal codegen is
 // unchanged (`function() { ... }`).
+// Build the real parameter list for a method from its captured tokens.
+// Plain identifiers only (defaults/destructuring can come later); type
+// annotations were stripped by the type rewriter and live on the
+// identifier tokens as `.data.type` — re-attach them ONLY in shadow-TS
+// mode so normal codegen emits plain `function(other) { … }`.
+function callableParams(emitter, entry) {
+  if (!entry.paramTokens || !entry.paramTokens.length) return [];
+  let parts = splitTopLevelByComma(entry.paramTokens);
+  return parts.map(part => {
+    let toks = part.filter(t =>
+      t[0] !== 'TERMINATOR' && t[0] !== 'INDENT' && t[0] !== 'OUTDENT');
+    if (toks.length !== 1 || toks[0][0] !== 'IDENTIFIER') {
+      throw schemaError(toks[0] || { loc: entry.headerLoc },
+        `'${entry.name}': method parameters must be plain identifiers (with optional ':: Type' annotations).`);
+    }
+    let p = new String(toks[0][1]);
+    if (emitter.options.inlineTypes) {
+      // Unannotated params get explicit `any` so the shadow file never
+      // trips noImplicitAny (TS7006) — same policy as transform `it`.
+      p.type = toks[0].data?.type || 'any';
+    }
+    return p;
+  });
+}
+
 function compileCallableFn(emitter, entry) {
   let bodySexpr = parseBodyTokens(entry.bodyTokens);
+  let methodParams = callableParams(emitter, entry);
   if (!bodySexpr) {
     // Empty body — emit a no-op.
     return `(function() {})`;
@@ -1823,19 +1976,23 @@ function compileCallableFn(emitter, entry) {
     thisParam.type = emitter._schemaName;
     params.push(thisParam);
   }
+  params.push(...methodParams);
   // Wrap as a thin-arrow. `emit` in value context produces a parenthesized
   // function expression.
   let arrowSexpr = ['->', params, bodySexpr];
   let fnCode = emitter.emit(arrowSexpr, 'value');
-  // Shadow-TS only: stash computed (`~>`) and eager-derived (`!>`) bodies so
-  // the type emitter can infer their return type via
-  // `ReturnType<typeof __<Name>__behavior.field>` instead of falling back to
-  // `unknown` (the body is already a `function(this: <Name>) { … }`). Methods
-  // are excluded — they keep `(...args) => unknown`, since their params aren't
-  // typed. The buffer rides on the emitter instance (per-compile, no globals)
-  // and is read by emitSchemaTypes after codegen finishes.
-  if (emitter.options.inlineTypes && emitter._schemaName &&
-      (entry.tag === 'computed' || entry.tag === 'derived')) {
+  // Shadow-TS only: stash bodies so the type emitter can infer member
+  // types via `typeof __<Name>__behavior.field` instead of falling back
+  // to `unknown` (the body is already a `function(this: <Name>) { … }`).
+  // Computed (`~>`), eager-derived (`!>`), and methods all qualify —
+  // method params carry their declared annotations (or explicit `any`),
+  // so `typeof` yields the full signature: typed params, `this`, and
+  // the inferred return. The buffer rides on the emitter instance
+  // (per-compile, no globals) and is read by emitSchemaTypes after
+  // codegen finishes.
+  let bufferable =
+    entry.tag === 'computed' || entry.tag === 'derived' || entry.tag === 'method';
+  if (emitter.options.inlineTypes && emitter._schemaName && bufferable) {
     if (!emitter._schemaBehavior) emitter._schemaBehavior = new Map();
     let list = emitter._schemaBehavior.get(emitter._schemaName);
     if (!list) { list = []; emitter._schemaBehavior.set(emitter._schemaName, list); }
@@ -2259,6 +2416,17 @@ function parseRegexLiteral(val) {
 // the result through parser.parse() via a temporary lex adapter. The
 // returned s-expression is the parsed body — either a single statement or
 // a block of statements — ready to wrap in `['->', [], body]`.
+// Unwrap a single-statement `['block', stmt]` to the statement itself —
+// used when a captured token slice is a value expression (the `on:`
+// adapter), not a function body.
+function unwrapSingleStatement(sexpr) {
+  if (Array.isArray(sexpr)) {
+    const head = sexpr[0]?.valueOf?.() ?? sexpr[0];
+    if (head === 'block' && sexpr.length === 2) return sexpr[1];
+  }
+  return sexpr;
+}
+
 function parseBodyTokens(bodyTokens) {
   if (!bodyTokens || !bodyTokens.length) return null;
 
