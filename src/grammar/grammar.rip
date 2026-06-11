@@ -592,14 +592,15 @@ grammar =
     o 'INDENT Body OUTDENT', '["block", ...2]'
   ]
 
-  # Parenthetical mark-up: when the inner expression is a single `=` assignment,
-  # tag it with `.parenthesized = true` so the codegen ternary-hoist doesn't
-  # silently turn `(x = "a") if cond else "b"` (conditional assign) into
-  # `x = (cond ? "a" : "b")` (unconditional). The marker is harmless for any
-  # other consumer; it's just a flag the hoist consults.
+  # Parenthetical mark-up: tag a single parenthesized expression with
+  # `.parenthesized = true`. Consumers that respect explicit grouping
+  # consult it: the codegen ternary-hoist (so `(x = "a") if cond else "b"`
+  # stays a conditional assign) and comparison chaining (so
+  # `(a == b) == c` compares the boolean instead of chaining). The marker
+  # is harmless for any other consumer.
   Parenthetical: [
-    o '( Body )'               , '$2.length === 1 ? (Array.isArray($2[0]) && $2[0][0] === "=" && ($2[0].parenthesized = true), $2[0]) : ["block", ...$2]'
-    o '( INDENT Body OUTDENT )', '$3.length === 1 ? (Array.isArray($3[0]) && $3[0][0] === "=" && ($3[0].parenthesized = true), $3[0]) : ["block", ...$3]'
+    o '( Body )'               , '$2.length === 1 ? (Array.isArray($2[0]) && ($2[0].parenthesized = true), $2[0]) : ["block", ...$2]'
+    o '( INDENT Body OUTDENT )', '$3.length === 1 ? (Array.isArray($3[0]) && ($3[0].parenthesized = true), $3[0]) : ["block", ...$3]'
   ]
 
   OptComma: [

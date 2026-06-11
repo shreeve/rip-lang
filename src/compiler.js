@@ -1132,15 +1132,19 @@ export class CodeEmitter {
         return `${this.emit(left, 'value')}.repeat(${this.emit(right, 'value')})`;
       }
     }
-    // Chained comparisons: (< (< a b) c) → ((a < b) && (b < c))
-    let COMPARE_OPS = new Set(['<', '>', '<=', '>=']);
-    if (COMPARE_OPS.has(op) && Array.isArray(left)) {
+    // Chained comparisons: (< (< a b) c) → ((a < b) && (b < c)).
+    // All COMPARE-level ops chain, including equality — otherwise
+    // a == b < c silently compares a boolean to c. Recursing through
+    // the left side handles chains of any length.
+    let COMPARE_OPS = new Set(['<', '>', '<=', '>=', '==', '===', '!=', '!==']);
+    if (COMPARE_OPS.has(op) && Array.isArray(left) && !left.parenthesized) {
       let leftOp = left[0]?.valueOf?.() ?? left[0];
       if (COMPARE_OPS.has(leftOp)) {
-        let a = this.emit(left[1], 'value');
+        let jsOp = (o) => o === '==' ? '===' : o === '!=' ? '!==' : o;
+        let leftCode = this.emit(left, 'value');
         let b = this.emit(left[2], 'value');
         let c = this.emit(right, 'value');
-        return `((${a} ${leftOp} ${b}) && (${b} ${op} ${c}))`;
+        return `(${leftCode} && (${b} ${jsOp(op)} ${c}))`;
       }
     }
     if (op === '==') op = '===';

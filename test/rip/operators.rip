@@ -274,6 +274,15 @@ test "chained greater than", "x = 5; 10 > x > 1", true
 test "chained mixed", "x = 5; 0 <= x < 10", true
 code "chained compiles to conjunction", "1 < x < 10", "((1 < x) && (x < 10))"
 
+# Equality ops chain like relationals; explicit parens opt out
+test "chained equality true", "a = 5; b = 5; c = 5; a == b == c", true
+test "chained equality false", "a = 5; b = 5; c = 6; a == b == c", false
+test "chained inequality", "1 != 2 != 3", true
+test "chained mixed equality and relational", "x = 5; 5 == x < 10", true
+test "four element chain", "x = 5; 1 < x < 10 < 20", true
+test "parenthesized comparison does not chain", "(3 == 3) == true", true
+test "parenthesized relational does not chain", "(1 < 2) < 10", true
+
 # ==============================================================================
 # Negative Indexing
 # ==============================================================================

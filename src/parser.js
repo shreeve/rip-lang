@@ -105,8 +105,8 @@ const parserInstance = {
       case 254: return [".", "import", $[$0]];
       case 255: return ["block"];
       case 256: return ["block", ...$[$0-1]];
-      case 257: return $[$0-1].length === 1 ? (Array.isArray($[$0-1][0]) && $[$0-1][0][0] === "=" && ($[$0-1][0].parenthesized = true), $[$0-1][0]) : ["block", ...$[$0-1]];
-      case 258: return $[$0-2].length === 1 ? (Array.isArray($[$0-2][0]) && $[$0-2][0][0] === "=" && ($[$0-2][0].parenthesized = true), $[$0-2][0]) : ["block", ...$[$0-2]];
+      case 257: return $[$0-1].length === 1 ? (Array.isArray($[$0-1][0]) && ($[$0-1][0].parenthesized = true), $[$0-1][0]) : ["block", ...$[$0-1]];
+      case 258: return $[$0-2].length === 1 ? (Array.isArray($[$0-2][0]) && ($[$0-2][0].parenthesized = true), $[$0-2][0]) : ["block", ...$[$0-2]];
       case 261: return ["return", $[$0]];
       case 262: return ["return", $[$0-1]];
       case 263: return ["return"];
