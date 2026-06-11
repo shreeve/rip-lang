@@ -57,8 +57,47 @@ type Resource<T> =
   refetch: () => Promise<T>
   dispose: Disposer
 
-export type Mutation<R> =
-  ((...args: any[]) => Promise<R | undefined>) & { readonly pending: boolean, readonly succeeded: boolean, readonly error: unknown }
+# (One line on purpose: an indented alias body parses as a structural type.)
+export type Mutation<R> = ((...args: any[]) => Promise<R | undefined>) & { pending: boolean, succeeded: boolean, error: unknown }
+
+# Source typing (RFC 11). The runtime returns a tagged cell, but the TYPE
+# is the value: `T | null` for singletons, `(key: K) => T | null` for keyed
+# families — so `typeof stash` infers honest nullable reads with no
+# annotations, and the `<~` gate is the narrow. Keyed-ness mirrors the
+# runtime's `fetch.length >= 1` rule exactly: a fetch whose first param is
+# REQUIRED is keyed; an optional/defaulted param stays a singleton.
+export type SourceOpts<T, A extends unknown[]> =
+  fetch: (...args: A) => Promise<T> | T
+  staleTime?: number | string | symbol
+
+# (One line on purpose: an indented alias body parses as a structural type.)
+export type SourceValue<T, A extends unknown[]> = A extends [infer K, ...unknown[]] ? ((key: K) => T | null) : (T | null)
+
+# Per-key handle returned by app.data.source(path, key?) — every field
+# reactive; `value` reads kick the lazy load, writes route into the cell.
+export type SourceHandle<T> =
+  value: T | null
+  readonly loading: boolean
+  readonly error: unknown
+  refetch: () => Promise<unknown>
+  reset: () => void
+
+type SourceHandleFor<V> = V extends ((key: any) => infer U) ? SourceHandle<NonNullable<U>> : SourceHandle<NonNullable<V>>
+
+# The reserved stash methods, typed. The checker intersects `app.data`
+# with StashMethods<__RipStash> so the methods carry signatures and the
+# source() handle is typed per key.
+export type StashMethods<D> =
+  inc: (path: string, step?: number) => number
+  dec: (path: string, step?: number) => number
+  flip: (path: string) => boolean
+  join: (path: string, obj: object) => void
+  keys: (path: string) => string[]
+  has: (path: string) => boolean
+  del: (path: string) => void
+  peek: (path?: string) => unknown
+  reset: () => void
+  source: <K extends keyof D & string>(path: K, key?: unknown) => SourceHandleFor<D[K]>
 
 type ComponentsStore =
   read: (path: string) => string | undefined
@@ -758,7 +797,7 @@ export def createResource<T>(fn:: (signal?:: AbortSignal) => Promise<T>, opts?::
 # revalidates in the background (stale-while-revalidate).
 DURATION_RE = /^(\d+)\s*(s|sec|second|seconds|m|min|minute|minutes|h|hr|hour|hours|d|day|days|w|week|weeks|y|year|years)$/i
 
-parseStaleTime = (v:: number | string | symbol | null | undefined):: number ->
+def parseStaleTime(v:: number | string | symbol | null | undefined):: number
   return 0 unless v?
   return Infinity if v is Symbol.for('forever') or v is 'forever'
   return v if typeof v is 'number'
@@ -826,7 +865,7 @@ makeSourceCell = (fetchFn, staleTime) ->
     inflight = p
     p
 
-  cell = {}
+  cell:: Record<PropertyKey, any> = {}
   cell[SOURCE] = true
 
   # Reactive read; first touch kicks the lazy load without blocking.
@@ -933,7 +972,7 @@ makeSourceFamily = (fetchFn, staleTime) ->
 # `fetch: (id) -> …` types and runs as one cell per key. A singleton fetch
 # receives an optional AbortSignal; declare it with a default
 # (`fetch: (signal = null) -> …`) so it doesn't read as a key parameter.
-export def source<T>(opts:: { fetch: (...args: any[]) => Promise<T> | T, staleTime?: number | string | symbol }):: T | null
+export def source<T, A extends unknown[]>(opts:: SourceOpts<T, A>):: SourceValue<T, A>
   staleTime = parseStaleTime(opts.staleTime)
   cell = if opts.fetch.length >= 1
     makeSourceFamily(opts.fetch, staleTime)
@@ -956,16 +995,15 @@ export def source<T>(opts:: { fetch: (...args: any[]) => Promise<T> | T, staleTi
 # to capture the component lexically.
 # ==============================================================================
 
-export def createMutation<R>(
-  fn:: (...args: any[]) => Promise<R> | R,
-  opts?:: { onSuccess?: (r: R) => void, onError?: (e: unknown) => void } = {}
-):: Mutation<R>
+export def createMutation<R>(fn:: (...args: any[]) => Promise<R> | R, opts?:: { onSuccess?: (r: R) => void, onError?: (e: unknown) => void } = {}):: Mutation<R>
   _pending   = __state(false)
   _succeeded = __state(false)
   _error     = __state(null)
   generation = 0    # a newer invocation wins the flags — same race rule as loads
 
-  mutation = (...args) ->
+  # `any` because the callable + reactive-flags intersection is assembled
+  # at runtime (defineProperty below) — TS can't see the flags on the fn.
+  mutation:: any = (...args) ->
     me = ++generation
     _pending.value = true
     _succeeded.value = false
@@ -2080,7 +2118,8 @@ export def createRenderer(opts:: RendererOpts):: Renderer
     # key fns' outputs under old vs new query; differing keys force the
     # full mount path below.
     queryKeyedChanged = ->
-      gates = currentComponent?.constructor?.__gates
+      ctor:: any = currentComponent?.constructor
+      gates = ctor?.__gates
       return false unless gates
       for g in gates
         if typeof g isnt 'string' and g.key

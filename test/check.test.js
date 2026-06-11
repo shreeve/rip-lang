@@ -33,11 +33,17 @@ function check(name, fn) {
 function assert(c, m) { if (!c) throw new Error(m || 'assertion failed'); }
 
 // Wipe the temp project, write the given files, run `rip check .` over it.
+// File names may contain subdirectories ('app/stash.rip').
 function checkProject(files) {
   rmSync(tmpDir, { recursive: true, force: true });
   mkdirSync(tmpDir, { recursive: true });
-  writeFileSync(resolve(tmpDir, 'package.json'), '{"rip": {"strict": true, "checkAll": true}}\n');
-  for (const [name, src] of Object.entries(files)) writeFileSync(resolve(tmpDir, name), src);
+  writeFileSync(resolve(tmpDir, 'package.json'),
+    '{"rip": {"strict": true, "checkAll": true}, "dependencies": {"@rip-lang/app": "workspace:*"}}\n');
+  for (const [name, src] of Object.entries(files)) {
+    const dest = resolve(tmpDir, name);
+    mkdirSync(dirname(dest), { recursive: true });
+    writeFileSync(dest, src);
+  }
   try {
     execSync(`'${rip}' check .`, { cwd: tmpDir, stdio: 'pipe' });
     return { ok: true, out: '' };
@@ -165,6 +171,91 @@ export Dash = component
   });
   assert(!r.ok, 'expected TS2531 in the else branch');
   assert(/possibly 'null'/.test(r.out), 'unexpected output:\n' + r.out);
+});
+
+// ── 4. RFC 11 render-ready state: gates narrow, ungated reads stay honest ──
+//
+// `x <~ @app.data.x` stubs as `__computed(() => __ripGate(...))` — the
+// generic non-null narrow, sound because the renderer loads the source
+// before construction. Ungated reads keep the source's declared
+// `T | null`, and the StashMethods intersection types reset()/source().
+
+const RFC11_STASH = `import { source } from '@rip-lang/app'
+
+export stash =
+  cart: { items: [] }
+  user: source { fetch: -> { firstName: 'Ada', lastName: 'Lovelace' } }
+  order: source { fetch: (id:: string) -> { id: id, total: 42 } }
+`;
+
+check('gated binding is non-null at every read site', () => {
+  const r = checkProject({
+    'index.rip': `export ok = true\n`,
+    'app/stash.rip': RFC11_STASH,
+    'profile.rip': `export Profile = component
+  user <~ @app.data.user
+  form := { ...user }
+  render
+    h1 "#{user.firstName} #{user.lastName}"
+`,
+  });
+  assert(r.ok, 'expected clean check, got:\n' + r.out);
+});
+
+check('ungated source read stays T | null — unguarded access errors', () => {
+  const r = checkProject({
+    'index.rip': `export ok = true\n`,
+    'app/stash.rip': RFC11_STASH,
+    'nav.rip': `export Nav = component
+  user ~= @app.data.user
+  render
+    h1 user.firstName
+`,
+  });
+  assert(!r.ok, 'expected a nullability error on the ungated read');
+  assert(/possibly 'null'/.test(r.out), 'unexpected output:\n' + r.out);
+});
+
+check('keyed gate narrows; ungated keyed read stays nullable', () => {
+  const r = checkProject({
+    'index.rip': `export ok = true\n`,
+    'app/stash.rip': RFC11_STASH,
+    'detail.rip': `export Detail = component
+  order <~ @app.data.order(params.id)
+  render
+    p "total: #{order.total}"
+`,
+  });
+  assert(r.ok, 'expected clean check on the keyed gate, got:\n' + r.out);
+
+  const r2 = checkProject({
+    'index.rip': `export ok = true\n`,
+    'app/stash.rip': RFC11_STASH,
+    'detail.rip': `export Detail = component
+  o ~= @app.data.order('x')
+  render
+    p "#{o.total}"
+`,
+  });
+  assert(!r2.ok, 'expected a nullability error on the ungated keyed read');
+  assert(/possibly 'null'/.test(r2.out), 'unexpected output:\n' + r2.out);
+});
+
+check('stash methods are typed: reset() and the source() handle', () => {
+  const r = checkProject({
+    'index.rip': `export ok = true\n`,
+    'app/stash.rip': RFC11_STASH,
+    'tools.rip': `export Tools = component
+  stats = @app.data.source('user')
+  signout: -> @app.data.reset()
+  render
+    if stats.loading
+      p "loading"
+    else if stats.value
+      p stats.value.firstName
+`,
+  });
+  assert(r.ok, 'expected clean check, got:\n' + r.out);
 });
 
 rmSync(tmpDir, { recursive: true, force: true });

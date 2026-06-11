@@ -2067,19 +2067,28 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
   const isStash = stashFile && stashFile === filePath;
 
   if (isStash) {
-    // The DTS header hoists `export let stash: <Type>;` so the type is
-    // visible everywhere. The body emits either `let stash; ... stash = {...}`
-    // (no export) or `export const stash = {...}` (with export). Both
-    // conflict with the typed hoist — TS sees a redeclaration and the
-    // un-annotated body wins, collapsing the inferred type to `{ items:
-    // never[], ... }`. Rewrite both forms into a bare assignment to the
-    // already-declared `stash`, preserving the contextual type.
-    const letRe = /^(\s*let\s+)([^;=]+);/m;
-    code = code.replace(letRe, (full, prefix, names) => {
-      const remaining = names.split(',').map(s => s.trim()).filter(n => n !== 'stash');
-      return remaining.length ? `${prefix}${remaining.join(', ')};` : '';
-    });
-    code = code.replace(/^(\s*)export\s+const\s+stash\s*=/m, '$1stash =');
+    // For an ANNOTATED stash (`stash:: T = ...`) the DTS header hoists
+    // `export let stash: <Type>;` so the type is visible everywhere. The
+    // body emits either `let stash; ... stash = {...}` (no export) or
+    // `export const stash = {...}` (with export). Both conflict with the
+    // typed hoist — TS sees a redeclaration and the un-annotated body
+    // wins, collapsing the inferred type to `{ items: never[], ... }`.
+    // Rewrite both forms into a bare assignment to the already-declared
+    // `stash`, preserving the contextual type.
+    //
+    // An UNANNOTATED stash (`export stash = ...`, the RFC 11 inference
+    // path — source() keys carry their own types) hoists nothing, so the
+    // body declaration must stay: removing it left `typeof stash` with no
+    // `stash` at all.
+    const stashHoisted = /(^|\n)\s*export\s+(let|const|var)\s+stash\s*:/.test(headerDts || '');
+    if (stashHoisted) {
+      const letRe = /^(\s*let\s+)([^;=]+);/m;
+      code = code.replace(letRe, (full, prefix, names) => {
+        const remaining = names.split(',').map(s => s.trim()).filter(n => n !== 'stash');
+        return remaining.length ? `${prefix}${remaining.join(', ')};` : '';
+      });
+      code = code.replace(/^(\s*)export\s+const\s+stash\s*=/m, '$1stash =');
+    }
     code += `\nexport type __RipStash = typeof stash;\n`;
   }
 
@@ -2087,7 +2096,10 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
     let typedApp = null;
     if (stashFile && !isStash) {
       const spec = entryImportSpec(filePath, stashFile);
-      typedApp = `declare app: { data: import('${spec}').__RipStash; components: any; routes: any; params: any; query: any; router: any }`;
+      // data intersects the stash shape with the reserved stash methods
+      // (inc/dec/…, and RFC 11's peek/reset/source handle) so they carry
+      // signatures and completion in typed projects.
+      typedApp = `declare app: { data: import('${spec}').__RipStash & import('@rip-lang/app').StashMethods<import('${spec}').__RipStash>; components: any; routes: any; params: any; query: any; router: any }`;
     }
     if (typedApp) code = code.replace(/declare app: any/g, typedApp);
   }
