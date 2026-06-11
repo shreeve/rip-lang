@@ -57,6 +57,9 @@ export const SCHEMA_INTRINSIC_DECLS = [
   '  parse(data: unknown): Out;',
   '  safe(data: unknown): SchemaSafeResult<Out>;',
   '  ok(data: unknown): boolean;',
+  '  parseAsync(data: unknown): Promise<Out>;',
+  '  safeAsync(data: unknown): Promise<SchemaSafeResult<Out>>;',
+  '  okAsync(data: unknown): Promise<boolean>;',
   '  pick<K extends keyof In>(...keys: K[]): Schema<Pick<In, K>, Pick<In, K>>;',
   '  omit<K extends keyof In>(...keys: K[]): Schema<Omit<In, K>, Omit<In, K>>;',
   '  partial(): Schema<Partial<In>, Partial<In>>;',
@@ -287,6 +290,24 @@ function emitOneSchemaType(collected, byName, known, lines, schemaBehavior) {
     // No value declaration — mixins aren't user-facing runtime values.
     const fieldProps = fieldPropList(descriptor);
     lines.push(`${exp}type ${name} = { ${fieldProps.join('; ')} };`);
+    return;
+  }
+
+  if (descriptor.kind === 'union') {
+    // Discriminated union: the bare type is the TS union of the
+    // constituents' bare instance types, so narrowing via the
+    // discriminator works natively. The const exposes the validation
+    // surface only — unions have no fields, so no algebra methods.
+    const members = descriptor.entries.filter(e => e.tag === 'union-member').map(e => e.name);
+    const u = members.length ? members.join(' | ') : 'never';
+    lines.push(`${exp}type ${name} = ${u};`);
+    lines.push(`${exp}${decl}const ${name}: { ` +
+      `parse(data: unknown): ${name}; ` +
+      `safe(data: unknown): SchemaSafeResult<${name}>; ` +
+      `ok(data: unknown): boolean; ` +
+      `parseAsync(data: unknown): Promise<${name}>; ` +
+      `safeAsync(data: unknown): Promise<SchemaSafeResult<${name}>>; ` +
+      `okAsync(data: unknown): Promise<boolean>; };`);
     return;
   }
 

@@ -56,8 +56,13 @@ export function setSchemaRuntimeProvider(fn) { _schemaRuntimeProvider = fn; }
 // Anything else at schema top level is a schema-mode-aware compile error
 // with a helpful message.
 
-const VALID_KINDS = new Set(['input', 'shape', 'model', 'mixin', 'enum']);
+const VALID_KINDS = new Set(['input', 'shape', 'model', 'mixin', 'enum', 'union']);
 const KIND_DEFAULT = 'input';
+
+// Wire-friendly built-ins the `~type` coercion marker accepts. Each has
+// a strict coercion table in the runtime (__SCHEMA_COERCERS); anything
+// else needs an explicit transform.
+const SCHEMA_COERCIBLE_TYPES = new Set(['integer', 'number', 'boolean', 'date', 'datetime']);
 
 const HOOK_NAMES = new Set([
   'beforeValidation', 'afterValidation',
@@ -393,6 +398,22 @@ function parseSchemaBody(kind, bodyTokens, ctx) {
     for (let line of lines) {
       parseEnumLine(line, entries);
     }
+  } else if (kind === 'union') {
+    for (let line of lines) {
+      parseUnionLine(line, entries);
+    }
+    let onCount = entries.filter(e => e.tag === 'directive' && e.name === 'on').length;
+    let members = entries.filter(e => e.tag === 'union-member');
+    if (onCount !== 1) {
+      throw schemaError({ loc: ctx.schemaLoc },
+        onCount === 0
+          ? `:union requires an '@on :field' discriminator — untagged unions are not supported.`
+          : `:union takes exactly one '@on :field' discriminator (got ${onCount}).`);
+    }
+    if (members.length < 2) {
+      throw schemaError({ loc: ctx.schemaLoc },
+        `:union needs at least two constituent schemas (got ${members.length}).`);
+    }
   } else {
     for (let line of lines) {
       parseFieldedLine(kind, line, entries, ctx);
@@ -533,17 +554,24 @@ function parseFieldedLine(kind, line, entries, ctx) {
     let dname = nameTok[1];
 
     // `@ensure` is a refinement directive with its own grammar — it takes
-    // either an inline `"msg", (args) -> body` or a bracketed array of
-    // those pairs. Emits one `tag: "ensure"` entry per refinement; the
-    // per-entry shape mirrors methods so compileCallableFn-style codegen
-    // can fire.
+    // either an inline `"msg"[, :field], (args) -> body` or a bracketed
+    // array of those tuples. The optional `:field` symbol attributes the
+    // failure to a specific field so form libraries can attach the error
+    // to the right input; without it the issue stays schema-wide
+    // (`field: ''`). `@ensure!` (dammit) marks ASYNC refinements — the
+    // schema becomes async-validating (parseAsync!/safeAsync!/okAsync!).
+    // Emits one `tag: "ensure"` entry per refinement; the per-entry
+    // shape mirrors methods so compileCallableFn-style codegen can fire.
     if (dname === 'ensure') {
+      let isAsync = nameTok.data?.bang === true;
       let pairs = parseEnsurePairs(argTokens, first);
       for (let p of pairs) {
         entries.push({
           tag: 'ensure',
           name: 'ensure',
           message: p.message,
+          field: p.field || null,
+          async: isAsync,
           paramTokens: p.paramTokens,
           bodyTokens: p.bodyTokens,
           loc: p.loc,
@@ -672,13 +700,33 @@ function parseFieldedLine(kind, line, entries, ctx) {
   }
 
   // Type: IDENTIFIER (optionally followed by `[]` for array) OR a
-  // string-literal union like `"M" | "F" | "U"`. The type slot is
+  // string-literal union like `"M" | "F" | "U"`, optionally prefixed
+  // with `~` for coercion ("coerce, then validate"). The type slot is
   // OPTIONAL — if the next token isn't a type-starting token, the
   // field defaults to `string` and we fall through to constraint
   // parsing.
   let typeName = 'string';
   let literals = null;
-  if (typeFirst?.[0] === 'IDENTIFIER') {
+  let coerce = false;
+  // `~type` — coercion marker. Lexically unambiguous in the type slot:
+  // `~>` (computed) lexes as EFFECT and lives after a `:`, a different
+  // slot entirely. Only wire-friendly built-ins are coercible.
+  if (typeFirst?.[0] === 'UNARY_MATH' && typeFirst[1] === '~') {
+    let typeTok = line[pos + 1];
+    if (!typeTok || typeTok[0] !== 'IDENTIFIER') {
+      throw schemaError(typeFirst,
+        `'~' in the type slot marks coercion and needs a type name — '~integer', '~number', '~boolean', '~date'.`);
+    }
+    if (!SCHEMA_COERCIBLE_TYPES.has(typeTok[1])) {
+      throw schemaError(typeTok,
+        `'~${typeTok[1]}' is not coercible. Coercion is defined for: ${[...SCHEMA_COERCIBLE_TYPES].join(', ')}. ` +
+        `For anything else, write an explicit transform: '${name}, -> …'.`);
+    }
+    coerce = true;
+    typeName = typeTok[1];
+    pos += 2;
+    typeFirst = typeTok; // for the typeConsumed / comma-rule checks below
+  } else if (typeFirst?.[0] === 'IDENTIFIER') {
     typeName = typeFirst[1];
     pos++;
   } else if (typeFirst?.[0] === 'STRING') {
@@ -697,10 +745,9 @@ function parseFieldedLine(kind, line, entries, ctx) {
       throw schemaError(next || line[pos],
         `Literal unions contain string literals only. '${tag}' is not allowed as a union member. Use the '?' modifier for nullability.`);
     }
-    if (literals.length < 2) {
-      throw schemaError(typeFirst,
-        `Literal union needs at least two string literals. Use '${JSON.stringify(literals[0])}' as a default with '[${JSON.stringify(literals[0])}]' instead.`);
-    }
+    // A single literal is a constant field — `kind! "click"` — the
+    // building block of discriminated unions (each :union constituent
+    // declares its tag this way). Multi-member unions need 2+ as before.
     typeName = 'literal-union';
   }
   let array = false;
@@ -713,6 +760,10 @@ function parseFieldedLine(kind, line, entries, ctx) {
       (closeTag === ']' || closeTag === 'INDEX_END')) {
     array = true;
     pos += 2;
+  }
+  if (coerce && array) {
+    throw schemaError(typeFirst,
+      `Coercion ('~${typeName}') does not apply to array types. Coerce per-element with a transform instead.`);
   }
 
   // Remaining tokens on the line are a mix of `[…]` constraints (default,
@@ -839,6 +890,14 @@ function parseFieldedLine(kind, line, entries, ctx) {
     defaultMax = ctx.defaultMaxString;
   }
 
+  // Coercion IS the wire-value derivation; a transform is full manual
+  // control of the same step. Both on one field is a contradiction.
+  if (coerce && transformTokens) {
+    throw schemaError(first,
+      `Field '${name}' has both '~${typeName}' coercion and a '->' transform. ` +
+      `A transform replaces coercion — coerce inside it instead.`);
+  }
+
   entries.push({
     tag: 'field',
     name,
@@ -846,6 +905,7 @@ function parseFieldedLine(kind, line, entries, ctx) {
     typeName,
     array,
     literals,
+    coerce,
     constraintTokens,
     attrsTokens,
     rangeTokens,
@@ -1068,28 +1128,47 @@ function parseEnsurePairs(argTokens, directiveTok) {
     if (parts.length === 0) {
       throw schemaError(first, "@ensure [...] must contain at least one 'message, fn' pair.");
     }
-    if (parts.length % 2 !== 0) {
-      throw schemaError(first,
-        `@ensure [...] must have pairs of 'message, fn' (got ${parts.length} elements; odd count).`);
-    }
-    let pairs = [];
-    for (let i = 0; i < parts.length; i += 2) {
-      pairs.push(extractEnsurePair(parts[i], parts[i + 1], first));
-    }
-    return pairs;
+    return consumeEnsureTuples(parts, first);
   }
 
-  // Inline form: STRING, (args) -> body
+  // Inline form: STRING [, :field], (args) -> body
   let parts = splitTopLevelByComma(tokens);
   if (parts.length < 2) {
     throw schemaError(first,
       "@ensure inline form must be 'message, (x) -> body'. Did you forget the comma?");
   }
-  if (parts.length > 2) {
+  if (parts.length > 3 || (parts.length === 3 && !isEnsureFieldPart(parts[1]))) {
     throw schemaError(first,
-      `@ensure inline form takes exactly 'message, fn' (got ${parts.length} comma-separated parts). Use '@ensure [...]' for multiple refinements.`);
+      `@ensure inline form takes 'message[, :field], fn' (got ${parts.length} comma-separated parts). Use '@ensure [...]' for multiple refinements.`);
   }
-  return [extractEnsurePair(parts[0], parts[1], first)];
+  return consumeEnsureTuples(parts, first);
+}
+
+// One element that is exactly a `:field` symbol — the optional
+// attribution slot between message and predicate.
+function isEnsureFieldPart(part) {
+  return part && part.length === 1 && part[0][0] === 'SYMBOL';
+}
+
+// Walk a flat element stream consuming `message[, :field], fn` tuples.
+// Both the inline form and the array form normalize through here, so
+// the two source shapes stay indistinguishable downstream.
+function consumeEnsureTuples(parts, anchorTok) {
+  let pairs = [];
+  let i = 0;
+  while (i < parts.length) {
+    let msgPart = parts[i++];
+    let fieldPart = null;
+    if (i < parts.length && isEnsureFieldPart(parts[i])) {
+      fieldPart = parts[i++];
+    }
+    if (i >= parts.length) {
+      throw schemaError(msgPart?.[0] || anchorTok,
+        "@ensure: missing function after message" + (fieldPart ? " and :field" : "") + ".");
+    }
+    pairs.push(extractEnsurePair(msgPart, fieldPart, parts[i++], anchorTok));
+  }
+  return pairs;
 }
 
 // Walk `[ ... ]` tokens and return the inner slice. Rejects trailing
@@ -1167,11 +1246,12 @@ function splitEnsureElements(tokens) {
   return parts;
 }
 
-// Extract one refinement pair from `messagePart` and `fnPart` (two token
-// slices already split by splitTopLevelByComma). Validates shape at parse
-// time so typos surface with targeted diagnostics instead of runtime
-// "expected function" noise.
-function extractEnsurePair(messagePart, fnPart, refTok) {
+// Extract one refinement tuple from `messagePart`, optional `fieldPart`
+// (a single `:field` symbol), and `fnPart` (token slices already split
+// by splitTopLevelByComma). Validates shape at parse time so typos
+// surface with targeted diagnostics instead of runtime "expected
+// function" noise.
+function extractEnsurePair(messagePart, fieldPart, fnPart, refTok) {
   if (!messagePart || !messagePart.length) {
     throw schemaError(refTok, "@ensure: missing message (expected a string literal).");
   }
@@ -1181,6 +1261,7 @@ function extractEnsurePair(messagePart, fnPart, refTok) {
   }
   let msgTok = messagePart[0];
   let message = JSON.parse(msgTok[1]);
+  let field = fieldPart ? fieldPart[0][1] : null;
 
   if (!fnPart || !fnPart.length) {
     throw schemaError(msgTok, "@ensure: missing function after message.");
@@ -1220,7 +1301,7 @@ function extractEnsurePair(messagePart, fnPart, refTok) {
   if (!bodyTokens.length) {
     throw schemaError(arrowTok, "@ensure: predicate function body is empty.");
   }
-  return { message, paramTokens, bodyTokens, loc: msgTok.loc };
+  return { message, field, paramTokens, bodyTokens, loc: msgTok.loc };
 }
 
 // Extract param names from `(u)` or `(u, opts)` token slice. Accepts
@@ -1237,6 +1318,46 @@ function ensureParamNames(paramTokens, refTok) {
     }
     return pTokens[0][1];
   });
+}
+
+// :union body lines: `@on :field` (the discriminator, exactly once) and
+// bare constituent schema names. Anything else is a targeted error.
+function parseUnionLine(line, entries) {
+  let first = line[0];
+  if (!first) return;
+
+  if (first[0] === '@') {
+    let nameTok = line[1];
+    if (!nameTok || nameTok[1] !== 'on') {
+      throw schemaError(nameTok || first,
+        `:union bodies accept only '@on :field' and constituent schema names. '@${nameTok?.[1] ?? ''}' is not allowed.`);
+    }
+    let args = stripCallWrapper(line.slice(2));
+    let symTok = args[0];
+    if (!symTok || symTok[0] !== 'SYMBOL') {
+      throw schemaError(symTok || nameTok,
+        `@on requires the discriminator field as a :symbol — '@on :kind'.`);
+    }
+    if (args.length > 1) {
+      throw schemaError(args[1], `@on takes exactly one :field symbol.`);
+    }
+    entries.push({
+      tag: 'directive', name: 'on',
+      args: [{ field: symTok[1] }],
+      argTokens: line.slice(2),
+      loc: first.loc,
+    });
+    return;
+  }
+
+  if (first[0] === 'IDENTIFIER' && line.length === 1) {
+    entries.push({ tag: 'union-member', name: first[1], loc: first.loc });
+    return;
+  }
+
+  throw schemaError(first,
+    `:union bodies accept only '@on :field' and bare constituent schema names (one per line). ` +
+    `Got ${first[0]}${line.length > 1 ? ' followed by ' + line[1][0] : ''}.`);
 }
 
 function parseEnumLine(line, entries) {
@@ -1604,6 +1725,9 @@ function entryLiteral(emitter, e) {
       if (e.literals) {
         obj.push(`literals: ${JSON.stringify(e.literals)}`);
       }
+      if (e.coerce) {
+        obj.push('coerce: true');
+      }
       let range = e.rangeTokens ? compileRangeTokens(e.rangeTokens, e) : null;
       let bracket = e.constraintTokens ? compileConstraintsLiteral(e.constraintTokens, e) : null;
       let regex = e.regexToken ? regexLiteralOf(e.regexToken) : null;
@@ -1631,6 +1755,8 @@ function entryLiteral(emitter, e) {
         `message: ${JSON.stringify(e.message)}`,
         `fn: ${fnCode}`,
       ];
+      if (e.field) obj.push(`field: ${JSON.stringify(e.field)}`);
+      if (e.async) obj.push('async: true');
       return `{${obj.join(', ')}}`;
     }
     case 'scope':
@@ -1662,6 +1788,9 @@ function entryLiteral(emitter, e) {
       let obj = [`tag: "enum-member"`, `name: ${JSON.stringify(e.name)}`];
       if (e.value !== undefined) obj.push(`value: ${JSON.stringify(e.value)}`);
       return `{${obj.join(', ')}}`;
+    }
+    case 'union-member': {
+      return `{tag: "union-member", name: ${JSON.stringify(e.name)}}`;
     }
     default:
       return `{tag: "unknown"}`;
@@ -2032,6 +2161,18 @@ function compileDirectiveArgsLiteral(name, tokens) {
     let parts = [`fields: ${JSON.stringify(fields)}`];
     if (unique) parts.push('unique: true');
     return `[{${parts.join(', ')}}]`;
+  }
+
+  // `@on :field` — the :union discriminator. Pre-validated by
+  // parseUnionLine; recompiled here from the raw tokens for the
+  // descriptor literal.
+  if (name === 'on') {
+    let t = stripCallWrapper(tokens)[0];
+    if (t && t[0] === 'SYMBOL') {
+      return `[{field: ${JSON.stringify(t[1])}}]`;
+    }
+    throw schemaError(t || tokens[tokens.length - 1],
+      `@on requires the discriminator field as a :symbol — '@on :kind'.`);
   }
 
   // `@tableWas old_name` — migration-rename annotation for the whole

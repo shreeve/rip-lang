@@ -950,10 +950,14 @@ fail "literal union: rejects mixing with identifier type", '''
     x! "a" | "b" | string
   '''
 
-fail "literal union: rejects single-literal (use default)", '''
+# A single literal is a CONSTANT field — `kind! "click"` — the building
+# block of discriminated unions (each :union constituent tags itself
+# this way). Was rejected pre-union; now first-class.
+test "literal union: single literal is a constant field", '''
   X = schema
     x! "only"
-  '''
+  [X.ok({x: "only"}), X.ok({x: "other"})]
+''', [true, false]
 
 fail "literal union: rejects array suffix", '''
   X = schema
@@ -1901,6 +1905,9 @@ INTRINSICS = '''
     parse(data: unknown): Out;
     safe(data: unknown): SchemaSafeResult<Out>;
     ok(data: unknown): boolean;
+    parseAsync(data: unknown): Promise<Out>;
+    safeAsync(data: unknown): Promise<SchemaSafeResult<Out>>;
+    okAsync(data: unknown): Promise<boolean>;
     pick<K extends keyof In>(...keys: K[]): Schema<Pick<In, K>, Pick<In, K>>;
     omit<K extends keyof In>(...keys: K[]): Schema<Omit<In, K>, Omit<In, K>>;
     partial(): Schema<Partial<In>, Partial<In>>;
@@ -3902,6 +3909,262 @@ type "@scope emits typed statics and a per-model query alias", '''
   type User = UserData & { save(): Promise<User>; destroy(opts?: { hard?: boolean }): Promise<User>; ok(): boolean; errors(): SchemaIssue[]; toJSON(): UserData };
   type UserQuery = SchemaQuery<User> & { active(...args: any[]): UserQuery };
   declare const User: ModelSchema<User, UserData, number, UserCreate> & { active(...args: any[]): UserQuery };
+  '''
+
+# ==============================================================================
+# Coercion types — ~integer / ~number / ~boolean / ~date
+# ==============================================================================
+
+test "~integer: integral strings coerce; floats and junk fail with {error: 'coerce'}", '''
+  X = schema
+    age? ~integer
+  a = X.parse({age: "42"})
+  b = X.parse({age: 42})
+  r1 = X.safe({age: "12.5"})
+  r2 = X.safe({age: "abc"})
+  [a.age, b.age, r1.errors[0].error, r2.errors[0].error, r2.errors.length]
+''', [42, 42, "coerce", "coerce", 1]
+
+test "~number / ~boolean coerce their strict token sets", '''
+  X = schema
+    price?  ~number
+    active? ~boolean
+  a = X.parse({price: "19.95", active: "true"})
+  b = X.parse({price: 5, active: 0})
+  r = X.safe({active: "yes"})
+  [a.price, a.active, b.active, r.errors[0].error, r.errors[0].field]
+''', [19.95, true, false, "coerce", "active"]
+
+test "~date: ISO strings and epoch numbers become Dates; junk fails", '''
+  X = schema
+    shipped? ~date
+  a = X.parse({shipped: "2026-06-10"})
+  b = X.parse({shipped: 1749600000000})
+  r = X.safe({shipped: "tomorrow"})
+  [a.shipped instanceof Date, b.shipped instanceof Date, r.errors[0].error]
+''', [true, true, "coerce"]
+
+test "coercion runs before constraints; missing values untouched", '''
+  X = schema
+    age? ~integer, 18..120
+  r = X.safe({age: "12"})
+  ok = X.parse({})
+  [r.errors[0].error, r.errors[0].field, ok.age]
+''', ["min", "age", undefined]
+
+test "coercion survives algebra (field semantics carry through .pick)", '''
+  X = schema :shape
+    age?  ~integer
+    name? string
+  P = X.pick("age")
+  p1 = P.parse({age: "33"})
+  [P.kind, p1.age]
+''', ["shape", 33]
+
+fail "~ rejects non-coercible types", '''
+  X = schema
+    name? ~string
+'''
+
+fail "~ coercion cannot combine with a transform", '''
+  X = schema
+    age? ~integer, -> Number(it.age)
+'''
+
+fail "~ coercion does not apply to arrays", '''
+  X = schema
+    ages? ~integer[]
+'''
+
+# ==============================================================================
+# @ensure upgrades — field attribution and async (@ensure!)
+# ==============================================================================
+
+test "@ensure with :field attributes the failure to that field", '''
+  Signup = schema
+    password!  8..100
+    password2! 8..100
+    @ensure "passwords must match", :password2, (u) -> u.password is u.password2
+  r = Signup.safe({password: "longenough", password2: "different1"})
+  [r.errors[0].field, r.errors[0].error, r.errors[0].message]
+''', ["password2", "ensure", "passwords must match"]
+
+test "@ensure array form accepts mixed attributed and bare tuples", '''
+  X = schema
+    a! integer
+    b! integer
+    @ensure [
+      "a must be small", :a, (u) -> u.a < 10
+      "sum must be even", (u) -> (u.a + u.b) % 2 is 0
+    ]
+  r = X.safe({a: 50, b: 1})
+  fields = r.errors.map (e) -> e.field
+  fields
+''', ["a", ""]
+
+test "@ensure!: schema becomes async-validating; sync entry points throw", '''
+  X = schema
+    email! email
+    @ensure! "email taken", :email, (u) -> u.email isnt "taken@x.co"
+  err = null
+  try
+    X.parse({email: "a@b.co"})
+  catch e
+    err = e.message
+  ok = X.parseAsync! {email: "a@b.co"}
+  bad = X.safeAsync! {email: "taken@x.co"}
+  [err.includes("async refinements"), err.includes("parseAsync"), ok.email, bad.errors[0].field, bad.errors[0].error]
+''', [true, true, "a@b.co", "email", "ensure"]
+
+test "@ensure!: async predicates run concurrently; all failures collect in order", '''
+  X = schema
+    n! integer
+    @ensure! "first",  (u) -> sleep(5).then -> false
+    @ensure "syncone", (u) -> false
+    @ensure! "second", (u) -> sleep(1).then -> false
+  r = X.safeAsync! {n: 1}
+  msgs = r.errors.map (e) -> e.message
+  msgs
+''', ["first", "syncone", "second"]
+
+test "@ensure!: rejected async predicate counts as failure with declared message", '''
+  X = schema
+    n! integer
+    @ensure! "boom guard", (u) -> Promise.reject(new Error("io"))
+  r = X.safeAsync! {n: 1}
+  [r.ok, r.errors[0].message]
+''', [false, "boom guard"]
+
+test "parseAsync works on plain sync schemas too (uniform surface)", '''
+  X = schema
+    name! string
+  v = X.parseAsync! {name: "A"}
+  v.name
+''', "A"
+
+# ==============================================================================
+# Discriminated unions — schema :union
+# ==============================================================================
+
+unionHeader = '''
+  __SchemaRegistry.reset()
+  ClickEvent = schema :shape
+    kind! "click"
+    x!    integer
+    y!    integer
+    at: ~> @x + "," + @y
+  ScrollEvent = schema :shape
+    kind!  "scroll"
+    delta! integer
+  Event = schema :union
+    @on :kind
+    ClickEvent
+    ScrollEvent
+
+'''
+
+test ":union dispatches on the discriminator and returns constituent instances", unionHeader + '''
+  c = Event.parse({kind: "click", x: 1, y: 2})
+  s = Event.parse({kind: "scroll", delta: -3})
+  [c.at, s.delta, c instanceof ClickEvent._getClass()]
+''', ["1,2", -3, true]
+
+test ":union: unknown discriminator value fails with the expected list", unionHeader + '''
+  r = Event.safe({kind: "hover", x: 1})
+  [r.errors[0].field, r.errors[0].error, r.errors[0].message]
+''', ["kind", "union", "expected one of click | scroll"]
+
+test ":union: non-object input and constituent validation errors surface", unionHeader + '''
+  r1 = Event.safe(42)
+  r2 = Event.safe({kind: "click", x: "bad"})
+  [r1.errors[0].error, r2.ok, r2.errors.map((e) -> e.field).includes("x")]
+''', ["union", false, true]
+
+test ":union works as a field type, including arrays", unionHeader + '''
+  Log = schema :shape
+    events! Event[]
+  r1 = Log.safe({events: [{kind: "click", x: 1, y: 2}, {kind: "scroll", delta: 1}]})
+  r2 = Log.safe({events: [{kind: "nope"}]})
+  [r1.ok, r2.ok, r2.errors[0].field]
+''', [true, false, "events[0].kind"]
+
+test ":union: algebra throws; ok() delegates", unionHeader + '''
+  err = null
+  try
+    Event.pick("kind")
+  catch e
+    err = e.message
+  [err.includes(":union"), Event.ok({kind: "scroll", delta: 1}), Event.ok({kind: "scroll"})]
+''', [true, true, false]
+
+test ":union: duplicate discriminator values across constituents throw at first parse", '''
+  __SchemaRegistry.reset()
+  A1 = schema :shape; kind! "x"; a! integer
+  B1 = schema :shape; kind! "x"; b! integer
+  U1 = schema :union
+    @on :kind
+    A1
+    B1
+  err = null
+  try
+    U1.parse({kind: "x", a: 1})
+  catch e
+    err = e
+  [err.issues[0].error, err.message.includes("duplicate discriminator")]
+''', ["union", true]
+
+test ":union: constituent missing the discriminator literal throws at first parse", '''
+  __SchemaRegistry.reset()
+  A2 = schema :shape; kind! "x"; a! integer
+  B2 = schema :shape; name! string
+  U2 = schema :union
+    @on :kind
+    A2
+    B2
+  err = null
+  try
+    U2.parse({kind: "x", a: 1})
+  catch e
+    err = e.message
+  err.includes("string-literal")
+''', true
+
+fail ":union requires @on", '''
+  U = schema :union
+    A
+    B
+'''
+
+fail ":union needs at least two constituents", '''
+  U = schema :union
+    @on :kind
+    OnlyOne
+'''
+
+fail ":union rejects field declarations in the body", '''
+  U = schema :union
+    @on :kind
+    name! string
+'''
+
+type ":union emits a TS union + validation-only const", '''
+  Click = schema :shape
+    kind! "click"
+    x!    integer
+  Scroll = schema :shape
+    kind!  "scroll"
+    delta! integer
+  Event = schema :union
+    @on :kind
+    Click
+    Scroll
+  ''', INTRINSICS + "\n" + '''
+  type Click = { kind: "click"; x: number };
+  declare const Click: Schema<Click, Click>;
+  type Scroll = { kind: "scroll"; delta: number };
+  declare const Scroll: Schema<Scroll, Scroll>;
+  type Event = Click | Scroll;
+  declare const Event: { parse(data: unknown): Event; safe(data: unknown): SchemaSafeResult<Event>; ok(data: unknown): boolean; parseAsync(data: unknown): Promise<Event>; safeAsync(data: unknown): Promise<SchemaSafeResult<Event>>; okAsync(data: unknown): Promise<boolean>; };
   '''
 
 # ==============================================================================

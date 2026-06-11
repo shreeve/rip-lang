@@ -110,7 +110,8 @@ function __schemaFormatIssues(issues, name) {
 }
 
 const __SCHEMA_RESERVED_STATIC = new Set([
-  'parse','safe','ok','find','findMany','where','all','first','count','create','toSQL',
+  'parse','safe','ok','parseAsync','safeAsync','okAsync',
+  'find','findMany','where','all','first','count','create','toSQL',
   'includes','upsert','insertMany','updateAll','deleteAll','withDeleted','onlyDeleted',
   'unscoped',
 ]);
@@ -159,6 +160,44 @@ function __schemaCheckValue(v, typeName) {
   return check ? check(v) : true;
 }
 
+// Strict coercion tables for the \`~type\` marker — "coerce, then
+// validate". Deliberately narrow: \`~integer\` rejects "12.5" and NaN,
+// \`~boolean\` accepts exactly six tokens, \`~date\` accepts ISO-8601
+// strings and finite epoch numbers. A failed coercion is
+// {error: 'coerce'}, distinct from {error: 'type'} — the value LOOKED
+// like wire data but didn't convert, which is a different user mistake
+// than sending the wrong shape entirely.
+const __SCHEMA_COERCERS = {
+  integer(v) {
+    if (typeof v === 'number') return Number.isInteger(v) ? { ok: true, value: v } : { ok: false };
+    if (typeof v === 'string' && /^[+-]?\\d+$/.test(v.trim())) return { ok: true, value: parseInt(v.trim(), 10) };
+    return { ok: false };
+  },
+  number(v) {
+    if (typeof v === 'number') return Number.isNaN(v) ? { ok: false } : { ok: true, value: v };
+    if (typeof v === 'string' && /^[+-]?(\\d+\\.?\\d*|\\.\\d+)([eE][+-]?\\d+)?$/.test(v.trim())) {
+      return { ok: true, value: Number(v.trim()) };
+    }
+    return { ok: false };
+  },
+  boolean(v) {
+    if (typeof v === 'boolean') return { ok: true, value: v };
+    if (v === 'true' || v === '1' || v === 1) return { ok: true, value: true };
+    if (v === 'false' || v === '0' || v === 0) return { ok: true, value: false };
+    return { ok: false };
+  },
+  date(v) {
+    if (v instanceof Date) return Number.isNaN(v.getTime()) ? { ok: false } : { ok: true, value: v };
+    if (typeof v === 'number' && Number.isFinite(v)) return { ok: true, value: new Date(v) };
+    if (typeof v === 'string' && /^\\d{4}-\\d{2}-\\d{2}/.test(v)) {
+      const d = new Date(v);
+      if (!Number.isNaN(d.getTime())) return { ok: true, value: d };
+    }
+    return { ok: false };
+  },
+};
+__SCHEMA_COERCERS.datetime = __SCHEMA_COERCERS.date;
+
 function __schemaValidateValue(v, typeName) {
   const prim = __schemaTypes[typeName];
   if (prim) {
@@ -172,6 +211,12 @@ function __schemaValidateValue(v, typeName) {
   }
   if (subDef.kind === 'mixin') {
     return [{field: '', error: 'type', message: ':mixin ' + typeName + ' is not usable as a field type'}];
+  }
+  if (subDef.kind === 'union') {
+    const r = subDef._unionResolve(v);
+    if (r.issue) return [r.issue];
+    const memberErrs = r.def._validateFields(v, true);
+    return memberErrs.length ? memberErrs : null;
   }
   if (v === null || typeof v !== 'object' || Array.isArray(v)) {
     return [{field: '', error: 'type', message: 'must be a ' + typeName + ' object'}];
@@ -287,7 +332,7 @@ function __schemaSignature(def) {
         parts.push('f:' + e.name + ':' + (e.typeName || '') +
           (e.array ? '[]' : '') + ':' + (e.modifiers || []).join('') +
           (e.literals ? ':' + e.literals.join(',') : '') +
-          ':' + safe(e.constraints) + ':' + safe(e.attrs) +
+          ':' + safe(e.constraints) + ':' + safe(e.attrs) + (e.coerce ? ':~' : '') +
           (e.transform ? ':t' : ''));
         break;
       case 'enum-member':
@@ -377,6 +422,7 @@ class __SchemaDef {
     this._norm = null;
     this._klass = null;
     this._sourceModel = null;
+    this._unionPlanCache = null;
     // Install @scope statics eagerly so \`User.active()\` works as the
     // very first call on the model (normalization hasn't run yet at
     // that point; the scope invocation itself triggers it, which also
@@ -452,6 +498,7 @@ class __SchemaDef {
             typeName: e.typeName,
             literals: e.literals || null,
             array: e.array === true,
+            coerce: e.coerce === true,
             constraints: e.constraints || null,
             attrs: e.attrs || null,
             transform: e.transform || null,
@@ -495,8 +542,15 @@ class __SchemaDef {
         case 'ensure':
           // @ensure entries are schema-level invariants (cross-field
           // predicates). Declaration order is preserved so diagnostics
-          // come out in the order authored.
-          ensures.push({ message: e.message, fn: e.fn });
+          // come out in the order authored. \`field\` attributes the
+          // failure to a specific input; \`async\` marks an @ensure!
+          // refinement (the schema becomes async-validating).
+          ensures.push({
+            message: e.message,
+            field: e.field || '',
+            async: e.async === true,
+            fn: e.fn,
+          });
           break;
         case 'scope':
           // Scopes live in the STATIC namespace (model + builder), not
@@ -539,12 +593,90 @@ class __SchemaDef {
       if (d.name === 'tableWas' && d.args?.[0]?.name) tableWas = d.args[0].name;
     }
 
+    // :union metadata — discriminator field + constituent names.
+    let unionOn = null;
+    const unionMembers = [];
+    if (this.kind === 'union') {
+      for (const d of directives) {
+        if (d.name === 'on' && d.args?.[0]?.field) unionOn = d.args[0].field;
+      }
+      for (const e of this._desc.entries) {
+        if (e.tag === 'union-member') unionMembers.push(e.name);
+      }
+    }
+
     this._norm = {
       fields, methods, computed, derived, hooks, directives, enumMembers, relations,
       ensures, scopes, defaultScope,
+      hasAsyncEnsures: ensures.some(r => r.async),
       timestamps, softDelete, primaryKey, tableName, tableWas,
+      unionOn, unionMembers,
     };
     return this._norm;
+  }
+
+  // ---- :union dispatch -------------------------------------------------------
+  //
+  // Built lazily on first parse (consistent with registry resolution):
+  // resolves every constituent from the registry, reads its declared
+  // discriminator literals, and compiles a value → constituent map for
+  // O(1) dispatch. Collisions and shapeless discriminators fail here
+  // with the constituent names in the message.
+
+  _unionPlan() {
+    if (this._unionPlanCache) return this._unionPlanCache;
+    const norm = this._normalize();
+    const disc = norm.unionOn;
+    if (this.kind !== 'union' || !disc) {
+      throw new Error("schema: '" + (this.name || 'anon') + "' is not a :union");
+    }
+    const map = new Map();
+    const members = [];
+    for (const name of norm.unionMembers) {
+      const def = __SchemaRegistry.get(name);
+      if (!def) {
+        throw new SchemaError(
+          [{field: '', error: 'union', message: 'unknown union constituent: ' + name + ' (import the file that declares it)'}],
+          this.name, this.kind);
+      }
+      members.push(def);
+      const f = def._normalize().fields.get(disc);
+      if (!f || f.typeName !== 'literal-union' || !f.literals?.length) {
+        throw new SchemaError(
+          [{field: disc, error: 'union', message: name + " must declare '" + disc +
+            "' as a string-literal type (e.g. " + disc + '! "click") to join union ' + (this.name || '')}],
+          this.name, this.kind);
+      }
+      for (const lit of f.literals) {
+        if (map.has(lit)) {
+          throw new SchemaError(
+            [{field: disc, error: 'union', message: 'duplicate discriminator value ' + JSON.stringify(lit) +
+              ' in ' + (map.get(lit).name || 'anon') + ' and ' + name}],
+            this.name, this.kind);
+        }
+        map.set(lit, def);
+      }
+    }
+    const plan = {
+      disc, map,
+      expected: [...map.keys()].join(' | '),
+      hasAsyncEnsures: members.some(d => d._normalize().hasAsyncEnsures),
+    };
+    this._unionPlanCache = plan;
+    return plan;
+  }
+
+  // Resolve a raw value to its constituent def, or produce the issue.
+  _unionResolve(data) {
+    const plan = this._unionPlan();
+    if (data === null || typeof data !== 'object' || Array.isArray(data)) {
+      return { issue: {field: plan.disc, error: 'union', message: 'expected an object with ' + plan.disc} };
+    }
+    const def = plan.map.get(data[plan.disc]);
+    if (!def) {
+      return { issue: {field: plan.disc, error: 'union', message: 'expected one of ' + plan.expected} };
+    }
+    return { def };
   }
 
   // Run eager-derived entries (!>) — one pass, in declaration order.
@@ -604,19 +736,66 @@ class __SchemaDef {
         ok = !!r.fn(data);
       } catch (e) {
         errs.push({
-          field: '', error: 'ensure',
+          field: r.field || '', error: 'ensure',
           message: r.message || e?.message || 'ensure failed',
         });
         continue;
       }
       if (!ok) {
         errs.push({
-          field: '', error: 'ensure',
+          field: r.field || '', error: 'ensure',
           message: r.message || 'ensure failed',
         });
       }
     }
     return errs;
+  }
+
+  // Async-aware refinement pass for parseAsync/safeAsync/okAsync. Sync
+  // refinements run first (cheap before expensive); async refinements
+  // then run CONCURRENTLY (Promise.all) — preserving the no-short-
+  // circuit rule. Issues come out in declaration order regardless of
+  // completion order. A rejected async predicate counts as failure
+  // with the declared message, same as a thrown sync one.
+  async _applyEnsuresAsync(data) {
+    const norm = this._normalize();
+    if (!norm.ensures.length) return [];
+    const results = [];
+    const pending = [];
+    norm.ensures.forEach((r, idx) => {
+      const issue = () => ({
+        field: r.field || '', error: 'ensure',
+        message: r.message || 'ensure failed',
+      });
+      if (r.async) {
+        pending.push((async () => {
+          let ok = false;
+          try { ok = !!(await r.fn(data)); } catch { ok = false; }
+          if (!ok) results.push({ idx, issue: issue() });
+        })());
+      } else {
+        let ok = false;
+        try { ok = !!r.fn(data); } catch { ok = false; }
+        if (!ok) results.push({ idx, issue: issue() });
+      }
+    });
+    await Promise.all(pending);
+    results.sort((a, b) => a.idx - b.idx);
+    return results.map(r => r.issue);
+  }
+
+  // A schema with ≥1 @ensure! is async-validating: the sync entry
+  // points refuse loudly rather than sometimes-returning a promise.
+  _assertSyncValidatable(api) {
+    const async = this.kind === 'union'
+      ? this._unionPlan().hasAsyncEnsures
+      : this._normalize().hasAsyncEnsures;
+    if (async) {
+      throw new Error(
+        "schema '" + (this.name || 'anon') + "' has async refinements (@ensure!" +
+        (this.kind === 'union' ? ' in a constituent' : '') + "); " +
+        '.' + api + '() is sync. Use parseAsync!/safeAsync!/okAsync! instead.');
+    }
   }
 
   _getClass() {
@@ -844,10 +1023,13 @@ class __SchemaDef {
     }
   }
 
-  _validateFields(data, collect) {
+  _validateFields(data, collect, skip) {
     const norm = this._normalize();
     const errors = collect ? [] : null;
     for (const [n, f] of norm.fields) {
+      // Fields whose coercion already failed carry a {error: 'coerce'}
+      // issue; re-checking the uncoerced value would double-report.
+      if (skip && skip.has(n)) continue;
       const v = data == null ? undefined : data[n];
       if (v === undefined || v === null) {
         if (f.required) {
@@ -949,6 +1131,32 @@ class __SchemaDef {
     return errors;
   }
 
+  // \`~type\` coercions — part of pipeline step 1 (obtain raw candidate):
+  // the wire value converts through the strict coercion table before
+  // defaults and validation, so range checks see the coerced value.
+  // Failed coercions collect {error: 'coerce'} issues and the field
+  // lands in \`failed\` so per-field validation doesn't double-report
+  // the same problem as a type error. Skipped on hydrate (rows arrive
+  // canonical), like transforms. Mutually exclusive with transforms at
+  // compile time.
+  _applyCoercions(working, failed) {
+    const norm = this._normalize();
+    const errors = [];
+    for (const [n, f] of norm.fields) {
+      if (!f.coerce) continue;
+      const v = working[n];
+      if (v === undefined || v === null) continue;
+      const r = __SCHEMA_COERCERS[f.typeName] ? __SCHEMA_COERCERS[f.typeName](v) : { ok: false };
+      if (r.ok) {
+        working[n] = r.value;
+      } else {
+        errors.push({field: n, error: 'coerce', message: n + ' cannot be coerced to ' + f.typeName});
+        failed.add(n);
+      }
+    }
+    return errors;
+  }
+
   _validateEnum(data, collect) {
     const norm = this._normalize();
     for (const [n, v] of norm.enumMembers) {
@@ -989,17 +1197,27 @@ class __SchemaDef {
     if (this.kind === 'mixin') {
       throw new Error(":mixin schema '" + (this.name || 'anon') + "' is not instantiable");
     }
+    if (this.kind === 'union') {
+      const plan = this._unionPlan();
+      if (plan.hasAsyncEnsures) this._assertSyncValidatable('parse');
+      const r = this._unionResolve(data);
+      if (r.issue) throw new SchemaError([r.issue], this.name, this.kind);
+      return r.def.parse(data);
+    }
     if (this.kind === 'enum') {
       const errs = this._validateEnum(data, true);
       if (errs.length) throw new SchemaError(errs, this.name, this.kind);
       return this._materializeEnum(data);
     }
+    this._assertSyncValidatable('parse');
     const raw = data || {};
     const working = { ...raw };
+    const failed = new Set();
     const transformErrors = this._applyTransforms(raw, working);
+    const coerceErrors = this._applyCoercions(working, failed);
     this._applyDefaults(working);
     this._coerceDates(working);
-    const errs = transformErrors.concat(this._validateFields(working, true));
+    const errs = transformErrors.concat(coerceErrors, this._validateFields(working, true, failed));
     if (errs.length) throw new SchemaError(errs, this.name, this.kind);
     // @ensure runs AFTER per-field validation so predicates can
     // assume declared fields are typed and defaulted. A field-level
@@ -1016,17 +1234,27 @@ class __SchemaDef {
     if (this.kind === 'mixin') {
       return {ok: false, value: null, errors: [{field: '', error: 'mixin', message: 'not instantiable'}]};
     }
+    if (this.kind === 'union') {
+      const plan = this._unionPlan();
+      if (plan.hasAsyncEnsures) this._assertSyncValidatable('safe');
+      const r = this._unionResolve(data);
+      if (r.issue) return {ok: false, value: null, errors: [r.issue]};
+      return r.def.safe(data);
+    }
     if (this.kind === 'enum') {
       const errs = this._validateEnum(data, true);
       if (errs.length) return {ok: false, value: null, errors: errs};
       return {ok: true, value: this._materializeEnum(data), errors: null};
     }
+    this._assertSyncValidatable('safe');
     const raw = data || {};
     const working = { ...raw };
+    const failed = new Set();
     const transformErrors = this._applyTransforms(raw, working);
+    const coerceErrors = this._applyCoercions(working, failed);
     this._applyDefaults(working);
     this._coerceDates(working);
-    const errs = transformErrors.concat(this._validateFields(working, true));
+    const errs = transformErrors.concat(coerceErrors, this._validateFields(working, true, failed));
     if (errs.length) return {ok: false, value: null, errors: errs};
     const ensureErrs = this._applyEnsures(working);
     if (ensureErrs.length) return {ok: false, value: null, errors: ensureErrs};
@@ -1041,15 +1269,87 @@ class __SchemaDef {
 
   ok(data) {
     if (this.kind === 'mixin') return false;
+    if (this.kind === 'union') {
+      const plan = this._unionPlan();
+      if (plan.hasAsyncEnsures) this._assertSyncValidatable('ok');
+      const r = this._unionResolve(data);
+      return r.issue ? false : r.def.ok(data);
+    }
     if (this.kind === 'enum') return this._validateEnum(data, false);
+    this._assertSyncValidatable('ok');
     const raw = data || {};
     const working = { ...raw };
+    const failed = new Set();
     const transformErrors = this._applyTransforms(raw, working);
     if (transformErrors.length) return false;
+    if (this._applyCoercions(working, failed).length) return false;
     this._applyDefaults(working);
+    this._coerceDates(working);
     if (!this._validateFields(working, false)) return false;
     // Per-field validation passed — @ensure predicates are the final gate.
     return this._applyEnsures(working).length === 0;
+  }
+
+  // Async validation entry points. Work on EVERY schema (sync-only
+  // schemas just resolve immediately); REQUIRED when the schema has
+  // @ensure! refinements. The dammit operator gives the idiomatic
+  // form: \`SignupInput.parseAsync! raw\`.
+  async _runPipelineAsync(data) {
+    const raw = data || {};
+    const working = { ...raw };
+    const failed = new Set();
+    const transformErrors = this._applyTransforms(raw, working);
+    const coerceErrors = this._applyCoercions(working, failed);
+    this._applyDefaults(working);
+    this._coerceDates(working);
+    const errs = transformErrors.concat(coerceErrors, this._validateFields(working, true, failed));
+    if (errs.length) return { errors: errs };
+    const ensureErrs = await this._applyEnsuresAsync(working);
+    if (ensureErrs.length) return { errors: ensureErrs };
+    return { working };
+  }
+
+  async parseAsync(data) {
+    if (this.kind === 'mixin') {
+      throw new Error(":mixin schema '" + (this.name || 'anon') + "' is not instantiable");
+    }
+    if (this.kind === 'union') {
+      const r = this._unionResolve(data);
+      if (r.issue) throw new SchemaError([r.issue], this.name, this.kind);
+      return r.def.parseAsync(data);
+    }
+    if (this.kind === 'enum') return this.parse(data);
+    const r = await this._runPipelineAsync(data);
+    if (r.errors) throw new SchemaError(r.errors, this.name, this.kind);
+    const klass = this._getClass();
+    const inst = new klass(r.working, false);
+    this._applyEagerDerived(inst);
+    return inst;
+  }
+
+  async safeAsync(data) {
+    if (this.kind === 'mixin') {
+      return {ok: false, value: null, errors: [{field: '', error: 'mixin', message: 'not instantiable'}]};
+    }
+    if (this.kind === 'union') {
+      const r = this._unionResolve(data);
+      if (r.issue) return {ok: false, value: null, errors: [r.issue]};
+      return r.def.safeAsync(data);
+    }
+    if (this.kind === 'enum') return this.safe(data);
+    const r = await this._runPipelineAsync(data);
+    if (r.errors) return {ok: false, value: null, errors: r.errors};
+    const klass = this._getClass();
+    const inst = new klass(r.working, false);
+    try { this._applyEagerDerived(inst); }
+    catch (e) {
+      return {ok: false, value: null, errors: [{field: '', error: 'derived', message: e?.message || String(e)}]};
+    }
+    return {ok: true, value: inst, errors: null};
+  }
+
+  async okAsync(data) {
+    return (await this.safeAsync(data)).ok;
   }
 
   // ---- :model static ORM methods --------------------------------------------
@@ -1095,6 +1395,9 @@ class __SchemaDef {
   extend(other) {
     if (!(other instanceof __SchemaDef)) {
       throw new Error('extend(): argument must be a schema value');
+    }
+    if (other.kind === 'union') {
+      throw new Error('extend(): :union schemas have no fields to merge');
     }
     return __schemaDerive(this, (src) => {
       const merged = new Map(src);
@@ -1146,6 +1449,11 @@ function __schemaProjectableFields(def) {
 }
 
 function __schemaDerive(source, transform) {
+  // Algebra on a union has no obviously-right semantics (distribute?
+  // intersect?) — deferring is honest. Derive from a constituent.
+  if (source.kind === 'union') {
+    throw new Error('schema algebra (.pick/.omit/.partial/.required/.extend) is not supported on :union — derive from a constituent schema instead');
+  }
   const src = __schemaProjectableFields(source);
   const derivedFields = transform(src);
   const entries = [];
@@ -1158,6 +1466,7 @@ function __schemaDerive(source, transform) {
       tag: 'field', name: f.name, modifiers: mods,
       typeName: f.typeName, array: f.array,
       literals: f.literals || null,
+      coerce: f.coerce === true,
       constraints: f.constraints,
       attrs: f.attrs || null,
       transform: f.transform || null,
@@ -1230,6 +1539,7 @@ function __schemaExpandMixins(host, fields, directives, ctx) {
         typeName: e.typeName,
         literals: e.literals || null,
         array: e.array === true,
+        coerce: e.coerce === true,
         constraints: e.constraints || null,
         attrs: e.attrs || null,
         transform: e.transform || null,

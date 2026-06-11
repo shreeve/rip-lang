@@ -627,6 +627,7 @@ TypeScript types fall out automatically.
 | `:shape`  | validator + instance methods + computed getters            |
 | `:enum`   | closed set of `:symbol` members                            |
 | `:mixin`  | reusable field group, composed via `@mixin Name`           |
+| `:union`  | discriminated union: `@on :kind` + 2+ constituent schema names; `.parse` dispatches O(1) on the tag |
 | `:model`  | DB-backed: ORM (`find`/`where`/`create`/`save`/`destroy`), transactions (`schema.transaction! ->`), eager loading (`.includes(:orders)`), scopes (`@scope :active, -> @where(active: true)`, `@defaultScope`), DDL (`.toSQL()`), migrations (`rip schema status/make/migrate`, renames via `{was: "old"}` / `@tableWas`), hooks (12, incl. `afterCommit`/`afterRollback`), relations |
 
 Body forms (six declarative line shapes):
@@ -634,8 +635,10 @@ Body forms (six declarative line shapes):
 | Form                     | Example                                         |
 | ------------------------ | ----------------------------------------------- |
 | Field                    | `name! 1..50` (type slot optional, defaults to `string`) |
+| Coerced field            | `age? ~integer` ("coerce, then validate" — also `~number`, `~boolean`, `~date`) |
 | Inline field transform   | `email!, -> it.email.toLowerCase()`            |
 | Directive                | `@timestamps`, `@mixin Name`, `@belongs_to User?` |
+| Refinement               | `@ensure "msg"[, :field], (u) -> pred`; async via `@ensure!` (schema becomes `parseAsync!`-only) |
 | Method                   | `name: -> body`                                 |
 | Computed getter (lazy)   | `name: ~> body`                                 |
 | Eager-derived field      | `name: !> body` (materialized once, stored as own property) |
