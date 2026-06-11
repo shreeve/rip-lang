@@ -1027,7 +1027,7 @@ The bare-specifier rewrite from [RFC 9 §4](#4-browser-side-bundling-of-rip-pack
 
 ## RFC 11: render-ready state
 
-> **Status: Proposed — revised after two independent reviews.**
+> **Status: Implemented** (branch `rfc-11-render-ready`) — v1 as specified: `source` cells + keyed families, the `<~` gate, `staleTime` freshness, the live-binding invariant, `source()`/`reset()`/`peek()` stash methods, `createMutation`, serialization projection, gate error routing, link-intent preloading, the type narrow, and the cart conversion. Two spelling deviations from the examples below, found at implementation time: (1) `createMutation`'s options can't follow an inline arrow body directly — parenthesize the fn and add a trailing comma (`createMutation ((data) -> …),` then the indented options); (2) a *singleton* fetch that wants the AbortSignal must declare it with a default (`fetch: (signal = null) -> …`) — a required first param is what marks a fetch as keyed, at runtime (`fetch.length >= 1`) and in the types alike.
 
 **Problem:** rip makes state reactive — `:=` (state), `~=` (computed), `~>` (effect) — but has no reactive form for **server data that's guaranteed present before its screen renders**. Every fetched value is typed `T | null`, and that null radiates to every consumer. The cart example pays for it on every screen:
 

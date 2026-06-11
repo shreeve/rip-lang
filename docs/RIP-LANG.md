@@ -351,6 +351,7 @@ Multiple lines
 | `not in` | Not in | `x not in arr` | Negated membership test |
 | `not of` | Not of | `k not of obj` | Negated key existence |
 | `<=>` | Two-way bind | `value <=> name` | Bidirectional reactive binding (render blocks) |
+| `<~` | Render-ready | `user <~ @app.data.user` | Load-before-render binding (component bodies) |
 | `*{ }` | Map literal | `*{/pat/: val}` | `new Map([[/pat/, val]])` |
 | `:name` | Symbol literal | `:redo` | `Symbol.for("redo")` — Ruby-style interned symbol |
 
@@ -880,6 +881,7 @@ Rip's reactive features are **language-level operators**, not library imports.
 | `:=` | State | "gets state" | Reactive state variable |
 | `~=` | Computed | "always equals" | Computed value (auto-updates) |
 | `~>` | Effect | "always calls" | Side effect on dependency change |
+| `<~` | Render-ready | "loads from" | Server-backed state, loaded before render (component bodies) |
 | `=!` | Readonly | "equals, dammit!" | Constant (`const`) |
 
 ## Reactive Behavior
@@ -940,6 +942,35 @@ ticker ~>
   interval = setInterval (-> tick()), 1000
   -> clearInterval interval  # Cleanup function
 ```
+
+## Render-Ready State (`<~`)
+
+The fourth creation form completes the reactivity grid: `<~` binds a
+component member to a server-backed stash key (a `source` — see the
+App framework docs) and declares that the key must be **loaded before
+the component renders**. The binding is therefore non-null — no `if user`
+guards, no loading flags:
+
+```coffee
+export Profile = component
+  user <~ @app.data.user               # loaded before render → non-null
+  form := { ...user }                  # synchronous — the value is present
+  order <~ @app.data.order(params.id)  # keyed source: one cell per id
+  theme <~ @app.data.settings.theme    # subpath: loads the nearest source
+```
+
+Rules, all enforced at compile time or deterministically at mount:
+
+- `<~` is only valid at the top of a **component body**, and only in
+  routes and layouts (a reusable child takes gated values as props).
+- The right-hand side must be a literal `@app.data.…` path — the compiler
+  hoists it into a static gate-set the renderer reads before construction.
+- A keyed gate's key expression may only reference `params` / `query`.
+- The path must resolve to a `source` key — gating a plain key is an error.
+
+An **ungated** read of the same key (`user ~= @app.data.user`) is the
+progressive-rendering form: it types as `T | null`, kicks the load without
+blocking, and the null branch is the skeleton branch.
 
 ## Auto-Unwrapping
 
