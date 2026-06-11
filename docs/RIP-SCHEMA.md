@@ -88,9 +88,9 @@ A *schema* in Rip is a runtime value that describes data. You create one with
 the `schema` keyword and an optional `:kind` symbol:
 
 ```coffee
-SignupInput = schema             # default :input
-Role        = schema :enum
-User        = schema :model
+SignupInput = schema; email!     # default :input
+Role        = schema :enum; :admin; :user
+User        = schema :model; name!
 ```
 
 Every schema is a real JavaScript object at runtime. It has methods
@@ -261,8 +261,8 @@ owner  = orders[0]?.user!                   # belongs_to relation → User
 UserPublic = User.omit "email"              # →  Schema<Omit<UserData, 'email'>>
 UserCreate = User.pick "name", "email"      # →  Schema<Pick<UserData, 'name' | 'email'>>
 UserUpdate = User.partial()                 # →  Schema<Partial<UserData>>
-AdminUser  = User.extend schema :shape
-  permissions! string[]
+AdminUser  = User.extend (schema :shape
+  permissions! string[])
 ```
 
 Derived schemas are always `:shape`. **Field semantics survive** —
@@ -349,6 +349,7 @@ plus the runtime dimension.
 Every schema has one of six kinds, selected by a `:symbol` after the
 `schema` keyword:
 
+<!-- doctest: skip -->
 ```coffee
 input  = schema                # default — :input
 shape  = schema :shape
@@ -506,6 +507,7 @@ a schema-specific diagnostic.
 
 ### Field
 
+<!-- doctest: skip -->
 ```coffee
 name[!|?|#]*  [type]  [range]  [default]  [regex]  [attrs]  [, -> transform]
 ```
@@ -535,15 +537,16 @@ expressions accept:
   `~date`) — "coerce, then validate" (see below)
 
 ```coffee
-name!                                   # required string (default type)
-tags!      string[]                     # required array of strings
-email!#    email                        # required, unique, email-format-validated
-bio?       text, 0..1000                # optional text, 0-1000 chars
-role?      string, ["user"]             # optional, default "user"
-status     string, [:draft]             # default :draft — same as ["draft"]
-zip!       string, /^\d{5}$/            # regex-validated
-sex?       "M" | "F" | "U"              # literal union
-priority   "low" | "med" | "high", [:med]  # literal union + default
+Example = schema
+  name!                                   # required string (default type)
+  tags!      string[]                     # required array of strings
+  email!#    email                        # required, unique, email-format-validated
+  bio?       text, 0..1000                # optional text, 0-1000 chars
+  role?      string, ["user"]             # optional, default "user"
+  status     string, [:draft]             # default :draft — same as ["draft"]
+  zip!       string, /^\d{5}$/            # regex-validated
+  sex?       "M" | "F" | "U"              # literal union
+  priority   "low" | "med" | "high", [:med]  # literal union + default
 ```
 
 ### Coercion types (`~type`)
@@ -620,11 +623,12 @@ raw input. `it` inside the body refers to the **whole raw input object**
 differently-named key, compose across multiple inputs, or coerce types:
 
 ```coffee
-id!          -> it.Id                                    # remap PascalCase input
-displayName! -> it.DisplayName
-shippedAt?   date, -> new Date(it.shippedAt)             # wire string → Date
-slug!        -> "#{it.FirstName}-#{it.LastName}".toLowerCase()
-email!#      email, -> it.email.toLowerCase().trim()     # normalize + validate
+Imported = schema
+  id!          -> it.Id                                    # remap PascalCase input
+  displayName! -> it.DisplayName
+  shippedAt?   date, -> new Date(it.shippedAt)             # wire string → Date
+  slug!        -> "#{it.FirstName}-#{it.LastName}".toLowerCase()
+  email!#      email, -> it.email.toLowerCase().trim()     # normalize + validate
 ```
 
 Rules:
@@ -718,6 +722,7 @@ isAdmin:    ~> @role is 'admin'
 
 ### Eager-derived field
 
+<!-- doctest: skip -->
 ```coffee
 name: !> body
 ```
@@ -729,9 +734,11 @@ Excluded from DDL and persistence — re-computed on hydrate from the
 declared fields.
 
 ```coffee
-fullName:    !> "#{@firstName} #{@lastName}".trim()
-orderNumber: !> "ORD-#{String(@id).padStart(6, '0')}"
-slug:        !> @fullName.toLowerCase().replace(/\s+/g, '-')
+Person = schema :shape
+  firstName! string
+  lastName!  string
+  fullName:    !> "#{@firstName} #{@lastName}".trim()
+  slug:        !> @fullName.toLowerCase().replace(/\s+/g, '-')
 ```
 
 Declaration order matters — an `!>` can read earlier declared fields
@@ -894,6 +901,7 @@ hook / transform), `~>` (computed getter), `!>` (eager-derived) — is
 rejected on the inline form with a message pointing to the indented
 form:
 
+<!-- doctest: fail -->
 ```coffee
 # compile error — point at the indented form:
 X = schema :shape; name!; greet: -> @name   # ✗ '->' not allowed inline
@@ -957,8 +965,7 @@ Validates `data`. Returns a boolean. Allocates no error arrays — this is
 the fast path for filter-style checks.
 
 ```coffee
-if User.ok raw
-  # ...
+process raw if User.ok raw
 ```
 
 ### `.parseAsync(data)` / `.safeAsync(data)` / `.okAsync(data)`
@@ -1607,13 +1614,20 @@ capabilities the runtime feature-detects:
 
 ```coffee
 globalThis.__ripSchema.__schemaSetAdapter
+  # required — returns {columns: [{name, type}, …], data: [[…]], rowCount: N}
   query: (sql, params) ->
-    # return {columns: [{name, type}, ...], data: [[row values], ...], rowCount: N}
-    ...
-  # optional — transactions (schema.transaction!)
+    db.run sql, params
+
+  # optional — transactions (schema.transaction!). Returns a TxHandle.
   begin: (options) ->
-    # return a TxHandle: { query(sql, params), commit(), rollback() }
-    ...
+    conn = db.pin()
+    conn.run 'BEGIN'
+    {
+      query:    (sql, params) -> conn.run sql, params
+      commit:   -> conn.run 'COMMIT'   and conn.release()
+      rollback: -> conn.run 'ROLLBACK' and conn.release()
+    }
+
   capabilities: { tx: true }    # truthful self-report
 ```
 
@@ -1875,8 +1889,8 @@ typeof u.tagline                    # 'undefined' — !> dropped
 fields from another schema. Collisions still throw.
 
 ```coffee
-AdminUser = User.extend schema :shape
-  permissions! string[]
+AdminUser = User.extend (schema :shape
+  permissions! string[])
 ```
 
 `.sourceModel` is preserved through chained algebra, so tooling can trace
@@ -2149,6 +2163,7 @@ with specific diagnostics.
 
 ### `name: type` instead of `name type`
 
+<!-- doctest: fail -->
 ```coffee
 # wrong — fields use a space, not a colon, between name and type
 X = schema
@@ -2161,6 +2176,7 @@ X = schema
 
 ### Bare identifier enum members
 
+<!-- doctest: fail -->
 ```coffee
 # wrong — enum members are :symbol
 R = schema :enum
@@ -2175,6 +2191,7 @@ R = schema
 
 ### `name: value` as an enum member
 
+<!-- doctest: fail -->
 ```coffee
 # wrong — use :name value
 R = schema :enum
@@ -2187,6 +2204,7 @@ R = schema
 
 ### Methods in `:input` or `:mixin`
 
+<!-- doctest: fail -->
 ```coffee
 # wrong — :input is fields-only
 X = schema :input
@@ -2201,6 +2219,7 @@ X = schema :shape
 
 ### ORM directives on `:shape`
 
+<!-- doctest: fail -->
 ```coffee
 # wrong — @timestamps is :model-only
 A = schema :shape
@@ -2622,6 +2641,7 @@ to the caller.
 Each constraint on a field line is self-identifying by its token
 shape. Multiple constraints combine on one field, separated by commas:
 
+<!-- doctest: skip -->
 ```coffee
 name[!|?|#]  [type]  [constraint]  [constraint]  …
 ```
@@ -2640,13 +2660,14 @@ a string-literal union; the **constraint** forms live after the type:
 | `{key: value}`       | constraint | Attrs. Known keys: `{was: "old_name"}` — column-rename annotation for the schema differ |
 
 ```coffee
-password!  string, 8..100                     # length range
-age?       integer, 0..120                    # value range
-role?      string, ["guest"]                  # default
-zip!       string, /^\d{5}$/                  # regex pattern
-status?    string, 3..20, ["pending"]         # range AND default
-sex?       "M" | "F" | "U"                    # literal union
-status?    "draft" | "active" | "done", [:draft]  # union + default
+Example = schema
+  password!  string, 8..100                     # length range
+  age?       integer, 0..120                    # value range
+  role?      string, ["guest"]                  # default
+  zip!       string, /^\d{5}$/                  # regex pattern
+  status?    string, 3..20, ["pending"]         # range AND default
+  sex?       "M" | "F" | "U"                    # literal union
+  phase?     "draft" | "active" | "done", [:draft]  # union + default
 ```
 
 ### Range semantics by field type
@@ -2664,9 +2685,10 @@ status?    "draft" | "active" | "done", [:draft]  # union + default
 Use `n..n` for "exactly N":
 
 ```coffee
-sex?    1..1                     # single-character sex code
-npi!    10..10                   # NPI is exactly 10 digits
-code!   6..6                     # fixed-length code
+Fixed = schema
+  sex?    1..1                     # single-character sex code
+  npi!    10..10                   # NPI is exactly 10 digits
+  code!   6..6                     # fixed-length code
 ```
 
 Reads as "between N and N" which collapses to "exactly N."
@@ -2690,14 +2712,20 @@ redundant `1` that the `!` modifier already implies:
 
 ```coffee
 # These pairs mean the same thing:
-firstName!  1..50           firstName!  ..50
-name!       1..100          name!       ..100
-email!      1..320          email!      ..320
+Explicit = schema
+  firstName!  1..50
+  name!       1..100
+  email!      1..320
+Sugar = schema
+  firstName!  ..50
+  name!       ..100
+  email!      ..320
 
-# But explicit always wins:
-admin!      0..50           # explicit min=0 stays (rare: required but empty allowed)
-age!        0..120          # explicit min=0 stays (newborns are zero)
-score!      0..100          # explicit min=0 stays (test score can be zero)
+# But an explicit min always wins:
+Zeroes = schema
+  admin!      0..50            # explicit min=0 stays (rare: required but empty allowed)
+  age!        0..120           # explicit min=0 stays (newborns are zero)
+  score!      0..100           # explicit min=0 stays (test score can be zero)
 ```
 
 If the sugar would produce an impossible constraint (`! ..0` →
@@ -2730,9 +2758,10 @@ rejected at parse time with a clear error.
 Trailing comma + indent continues the line:
 
 ```coffee
-password! string,
-  8..100,
-  /[A-Z]/
+Account = schema
+  password! string,
+    8..100,
+    /[A-Z]/
 ```
 
 This is the same rule Rip applies to any trailing-comma continuation.

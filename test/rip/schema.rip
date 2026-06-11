@@ -3254,6 +3254,43 @@ test ".required(keys) forces required on listed fields", '''
   [R._normalize().fields.get("name").required, R._normalize().fields.get("age").required]
 ''', [true, false]
 
+test "multi-line trailers split on commas (range + regex across lines)", '''
+  Account = schema
+    password! string,
+      8..100,
+      /[A-Z]/
+  r1 = Account.safe {password: "short"}
+  r2 = Account.safe {password: "longenough"}
+  ok = Account.ok {password: "Longenough"}
+  [r1.errors[0].error, r2.errors[0].error, ok]
+''', ["min", "pattern", true]
+
+test "multi-line trailer ending in a transform still parses", '''
+  X = schema
+    email!# email,
+      ..320,
+      -> it.email.toLowerCase()
+  v = X.parse {email: "A@B.CO"}
+  v.email
+''', "a@b.co"
+
+test ".extend accepts an inline schema argument inside call parens", '''
+  User = schema :shape
+    name! string
+  AdminUser = User.extend(schema :shape; permissions! string[])
+  a = AdminUser.parse {name: "A", permissions: ["all"]}
+  [a.name, a.permissions]
+''', ["A", ["all"]]
+
+test ".extend accepts a parenthesized indented schema argument", '''
+  User = schema :shape
+    name! string
+  Wide = User.extend (schema :shape
+    level? integer)
+  w = Wide.parse {name: "B", level: 3}
+  [w.name, w.level]
+''', ["B", 3]
+
 test ".extend merges two schemas' fields", '''
   A = schema :shape
     a! string

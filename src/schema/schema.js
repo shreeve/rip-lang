@@ -361,7 +361,14 @@ function collapseSchemaAt(lexer, tokens, i, config) {
       if (tag === '(' || tag === '[' || tag === '{' ||
           tag === 'CALL_START' || tag === 'INDEX_START' || tag === 'PARAM_START') depth++;
       else if (tag === ')' || tag === ']' || tag === '}' ||
-               tag === 'CALL_END' || tag === 'INDEX_END' || tag === 'PARAM_END') depth--;
+               tag === 'CALL_END' || tag === 'INDEX_END' || tag === 'PARAM_END') {
+        depth--;
+        // A closer the body never opened belongs to the ENCLOSING
+        // expression — `Admin = User.extend(schema :shape; perms!)`
+        // ends the inline body at the call's own `)`. Leave it in the
+        // stream for the outer parser.
+        if (depth < 0) break;
+      }
       // Inline body ends at the first depth-0 newline OR at any
       // INDENT/OUTDENT — INDENT would mean the user opened a block
       // (incompatible with inline), and OUTDENT means we're exiting
@@ -876,6 +883,23 @@ function parseFieldedLine(kind, line, entries, ctx) {
     // directly (`name? [1, 20]`). Both shapes produce the same parts.
     if (rest[0]?.[0] === ',') {
       rest = rest.slice(1);
+    }
+    // Multi-line trailers (`password! string,\n  8..100,\n  /[A-Z]/`)
+    // arrive wrapped in one INDENT … OUTDENT pair. Strip it when it
+    // spans the whole remainder, so the inner commas are top-level for
+    // the split below — otherwise the whole continuation reads as ONE
+    // nested part and per-constraint classification never happens.
+    if (rest.length >= 2 && rest[0][0] === 'INDENT') {
+      let d = 0;
+      let lastIdx = -1;
+      for (let k = 0; k < rest.length; k++) {
+        if (rest[k][0] === 'INDENT') d++;
+        else if (rest[k][0] === 'OUTDENT') {
+          d--;
+          if (d === 0) { lastIdx = k; break; }
+        }
+      }
+      if (lastIdx === rest.length - 1) rest = rest.slice(1, -1);
     }
     // Split top-level by commas. Multi-line trailers (`name! type,\n
     // [8, 100]`) introduce surrounding INDENT/OUTDENT tokens that
