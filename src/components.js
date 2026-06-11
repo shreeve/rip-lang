@@ -1269,7 +1269,24 @@ export function installComponentSupport(CodeEmitter, Lexer) {
               const condCode = this.emitInComponent(condition, 'value');
               const srcLine = node.loc?.r;
               const srcMarker = srcLine != null ? ` // @rip-src:${srcLine}` : '';
-              constructions.push(`    ${condCode};${srcMarker}`);
+              // Emit a real `if (...) { } else { }` (mirroring the for-loop
+              // case below) instead of a bare condition statement with the
+              // branches flattened as unguarded siblings. The structure is
+              // what lets TS narrow the condition inside the then-branch —
+              // `if order then order.total` type-checks against `T | null`
+              // without `?.` laundering. Reads are plain property chains
+              // (`this.order.value`), which TS keeps narrowed across the
+              // intervening `__ripEl(...)` stub calls.
+              const guard = head === 'unless' ? `!(${condCode})` : condCode;
+              constructions.push(`    if (${guard}) {${srcMarker}`);
+              if (node[2] != null) walkRender(node[2]);
+              const elses = node.slice(3).filter(n => n != null);
+              if (elses.length) {
+                constructions.push(`    } else {`);
+                for (const e of elses) walkRender(e);
+              }
+              constructions.push(`    }`);
+              return; // branches fully handled — don't re-walk children below
             }
           } else if (head === '?:') {
             // Emit the full ternary so all branches are type-checked
