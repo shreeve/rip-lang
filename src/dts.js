@@ -821,7 +821,16 @@ export function emitTypes(tokens, sexpr = null, source = '', schemaBehavior = nu
           } else if (inClass) {
             lines.push(`${indent()}${varName}: ${type};`);
             classFields.add(varName);
-          } else {
+          } else if (bodyDepth === 0) {
+            // Module-scope typed binding: typecheck.js's inline-let pass
+            // merges this header line into the body's hoist by NAME. That
+            // name-based merge is only sound at module scope — for a
+            // function-local (`bodyDepth > 0`) the same name can exist
+            // untyped in sibling functions, and the merge would stamp this
+            // annotation onto every one of them. Function-locals don't
+            // need the header line anyway: the compiler's typed-local
+            // hoist (collectTypedLocals) annotates the owning function's
+            // own `let` in the body, scope-correctly.
             lines.push(`${indent()}${exp}let ${varName}: ${type};`);
           }
         } else if (inClass) {
