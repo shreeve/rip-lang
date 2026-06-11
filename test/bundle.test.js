@@ -122,7 +122,7 @@ check("app framework registered as importRip.modules['app.rip']", () => {
   const app = globalThis.importRip.modules['app.rip'];
   if (!app) throw new Error("importRip.modules['app.rip'] missing");
   if (typeof app.launch !== 'function') throw new Error('launch missing');
-  if (typeof app.stash !== 'function') throw new Error('stash missing');
+  if (typeof app.createStash !== 'function') throw new Error('createStash missing');
 });
 
 check("legacy 'ui.rip' key is NOT registered (atomic rename, no alias)", () => {
@@ -138,7 +138,7 @@ check('bundle exposes language version', () => {
 });
 
 check("@rip-lang/app exports copied to globalThis", () => {
-  for (const k of ['launch', 'stash', 'createResource', 'createRouter', 'createRenderer', 'createComponents']) {
+  for (const k of ['launch', 'createStash', 'createResource', 'createRouter', 'createRenderer', 'createComponents']) {
     if (typeof globalThis[k] !== 'function') {
       throw new Error('globalThis.' + k + ' missing — @rip-lang/app entry preamble did not copy it');
     }
