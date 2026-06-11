@@ -431,7 +431,6 @@ rip -cm example.rip
 | `[-n]`      | Negative index   | `arr[-1]`                    |
 | `*`         | String repeat    | `"-" * 40`                   |
 | `<` `<=`    | Chained          | `1 < x < 10`                 |
-| `\|>`       | Pipe             | `x \|> fn`                   |
 | `.=`        | Method assign    | `x .= trim()`                |
 | `?.=`       | Optional assign  | `el?.style.display = "none"` |
 | `=`         | Render text      | `= item.textContent`         |

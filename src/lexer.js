@@ -129,7 +129,7 @@ let IMPLICIT_UNSPACED_CALL = new Set(['+', '-']);
 // Tokens that end an implicit call
 let IMPLICIT_END = new Set([
   'POST_IF', 'POST_UNLESS', 'FOR', 'WHILE', 'UNTIL',
-  'WHEN', 'BY', 'LOOP', 'TERMINATOR', '||', '&&', 'PIPE',
+  'WHEN', 'BY', 'LOOP', 'TERMINATOR', '||', '&&',
 ]);
 
 // Tokens that trigger implicit comma insertion before arrows
@@ -251,7 +251,7 @@ let UNARY_MATH = new Set(['!', '~']);
 // conflict with ?. (optional chaining), ?? (nullish), ?! (presence), ?.( and ?.[
 let IDENTIFIER_RE = /^(?!\d)((?:(?!\s)[$\w\x7f-\uffff])+(?:!|[?](?![.?![(]))?)([^\n\S]*:(?![=:]))?/;
 let NUMBER_RE     = /^0b[01](?:_?[01])*n?|^0o[0-7](?:_?[0-7])*n?|^0x[\da-f](?:_?[\da-f])*n?|^\d+(?:_\d+)*n|^(?:\d+(?:_\d+)*)?\.?\d+(?:_\d+)*(?:e[+-]?\d+(?:_\d+)*)?/i;
-let OPERATOR_RE   = /^(?:<=>|::|\*>|[-=]>|~>|~=|:=|=!|===|!==|\?\!|\?\?|=~|\|>|[-+*\/%<>&|^!?=]=|>>>=?|([-+:])\1|([&|<>*\/%])\2=?|\?\.?|\.{2,3})/;
+let OPERATOR_RE   = /^(?:<=>|::|\*>|[-=]>|~>|~=|:=|=!|===|!==|\?\!|\?\?|=~|[-+*\/%<>&|^!?=]=|>>>=?|([-+:])\1|([&|<>*\/%])\2=?|\?\.?|\.{2,3})/;
 let WHITESPACE_RE = /^[^\n\S]+/;
 let NEWLINE_RE    = /^(?:\n[^\n\S]*)+/;
 let COMMENT_RE    = /^(\s*)###([^#][\s\S]*?)(?:###([^\n\S]*)|###$)|^((?:\s*#(?!##[^#]).*)+)/;
@@ -1388,8 +1388,6 @@ export class Lexer {
       this.inTypeAnnotation = false;
       tag = 'TERMINATOR';
     }
-    // Pipe operator
-    else if (val === '|>') tag = 'PIPE';
     // Type operators
     else if (val === '::' && /^[a-zA-Z_$]/.test(this.chunk[2] || '')) {
       // Prototype access: String::trim → String.prototype.trim

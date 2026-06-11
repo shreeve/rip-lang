@@ -346,7 +346,6 @@ Multiple lines
 | `[-n]` | Negative index | `arr[-1]` | `arr.at(-1)` |
 | `*` | String repeat | `"-" * 40` | `"-".repeat(40)` |
 | `<` `<=` | Chained comparison | `1 < x < 10` | `(1 < x) && (x < 10)` |
-| `\|>` | Pipe | `x \|> fn` or `x \|> fn(y)` | `fn(x)` or `fn(x, y)` |
 | `.=` | Method assign | `x .= trim()` | `x = x.trim()` |
 | `*>` | Merge assign | `*>obj = {a: 1}` | `Object.assign(obj, {a: 1})` |
 | `not in` | Not in | `x not in arr` | Negated membership test |
@@ -699,32 +698,6 @@ arr[i]           # → arr[i]      — variable index
 ```
 
 Only literal negative numbers trigger the `.at()` transform. Variable indexes pass through as-is.
-
-## Pipe Operator (`|>`)
-
-Pipes a value into a function as its first argument. Chains left-to-right:
-
-```coffee
-# Simple reference — value becomes the sole argument
-5 |> double                      # → double(5)
-10 |> Math.sqrt                  # → Math.sqrt(10)
-"hello" |> console.log           # → console.log("hello")
-
-# Multi-arg — value is inserted as the FIRST argument
-5 |> add(3)                      # → add(5, 3)
-data |> filter(isActive)         # → filter(data, isActive)
-"World" |> greet("!")            # → greet("World", "!")
-
-# Chaining — reads left-to-right like a pipeline
-5 |> double |> add(1) |> console.log
-# → console.log(add(double(5), 1))
-
-# Works with dotted methods
-users |> Array.from              # → Array.from(users)
-data |> JSON.stringify(null, 2)  # → JSON.stringify(data, null, 2)
-```
-
-This is the **Elixir-style** pipe — strictly better than F#'s (which only supports bare function references) and cleaner than Hack's (which requires a `%` placeholder). No special syntax to learn; if the right side is a call, the left value goes first.
 
 ---
 
@@ -2367,11 +2340,6 @@ Each would need design discussion before building.
 - **Reactive resource operator (`~>?`)** — Language-level `createResource`.
   `user ~>? fetch!("/api/users/#{id}").json!` gives `user.loading`,
   `user.error`, `user.data`. Park until real-world usage shows demand.
-
-- **Pipe operator (`|>`) — Hack-style placeholder** — Currently Rip uses
-  Elixir-style first-arg insertion. A `%` placeholder for arbitrary position
-  (`data |> fn(1, %, 3)`) could be added later if needed. Current design
-  covers 95%+ of cases.
 
 ---
 

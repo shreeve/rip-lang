@@ -208,10 +208,6 @@ def ripOperators(obj:: any, val:: string | null, arr:: number[], fn:: Function)
   # Presence
   isPresent = val?!
 
-  # Pipe
-  data = [1, 2, 3]
-  result = data |> JSON.stringify
-
   # Range
   nums = [1..10]
 

@@ -38,7 +38,7 @@ get '/users/:id' ->                 # RESTful API endpoint, comma-less
 
 **What makes Rip different:**
 - **Modern output** — ES2022 with native classes, `?.`, `??`, modules
-- **New operators** — `!`, `//`, `%%`, `=~`, `|>`, `.new()`, and more
+- **New operators** — `!`, `//`, `%%`, `=~`, `.new()`, and more
 - **Reactive operators** — `:=`, `~=`, `~>` as language syntax
 - **Optional types** — `::` annotations, `type` aliases, `.d.ts` emission
 - **Zero dependencies** — everything included, even the parser generator
@@ -262,7 +262,6 @@ All use `globalThis` with `??=` — override any by redeclaring locally.
 | `[-n]` (negative index) | `arr[-1]` | Last element via `.at()` |
 | `*` (string repeat) | `"-" * 40` | String repeat via `.repeat()` |
 | `<` `<=` (chained) | `1 < x < 10` | Chained comparisons |
-| `\|>` (pipe) | `x \|> fn` or `x \|> fn(y)` | Pipe operator (first-arg insertion) |
 | `not in` | `x not in arr` | Negated membership test |
 | `not of` | `k not of obj` | Negated key existence |
 | `.=` (method assign) | `x .= trim()` | `x = x.trim()` — compound method assignment |

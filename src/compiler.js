@@ -227,7 +227,6 @@ export class CodeEmitter {
     '?': 'emitExistential',
     'presence': 'emitPresence',
     '?:': 'emitTernary',
-    '|>': 'emitPipe',
     'loop': 'emitLoop',
     'loop-n': 'emitLoopN',
     'await': 'emitAwait',
@@ -1663,23 +1662,6 @@ export class CodeEmitter {
     }
 
     return `(${this.unwrap(this.emit(cond, 'value'))} ? ${this.emit(then_, 'value')} : ${this.emit(else_, 'value')})`;
-  }
-
-  emitPipe(head, rest) {
-    let [left, right] = rest;
-    let leftCode = this.emit(left, 'value');
-    // Detect function calls: [fn, ...args] where fn is an identifier or accessor
-    if (Array.isArray(right) && right.length > 1) {
-      let fn = right[0];
-      let isCall = Array.isArray(fn) || (typeof fn === 'string' && /^[a-zA-Z_$]/.test(fn));
-      if (isCall) {
-        let fnCode = this.emit(fn, 'value');
-        let args = right.slice(1).map(a => this.emit(a, 'value'));
-        return `${fnCode}(${leftCode}, ${args.join(', ')})`;
-      }
-    }
-    // Simple reference or property access — call with left as sole arg
-    return `${this.emit(right, 'value')}(${leftCode})`;
   }
 
   emitLoop(head, rest) {
