@@ -78,6 +78,12 @@ post '/signup', input: SignupInput, ->
 openapi title: 'My API', version: '1.0.0'   # optional info block
 ```
 
+The `read()` validator vocabulary doubles as schema coercers: importing
+`@rip-lang/server` registers every validator as a `~:name` field type,
+so `chart! ~:id`, `ssn? ~:ssn`, `amount? ~:money`, `dob? ~:date` all
+normalize exactly like `read 'x', 'id'` does. `registerValidator`
+registers both surfaces.
+
 Run it:
 
 ```bash

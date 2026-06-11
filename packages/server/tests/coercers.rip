@@ -1,0 +1,54 @@
+# coercers.rip — read() validators double as `~:name` schema coercers
+#
+# Importing api.rip registers the entire validator vocabulary into the
+# schema runtime's named-coercer registry: the normalizer behind
+# `read 'dob', 'date'` is the same function behind `dob? ~:date`.
+
+import { test, eq, ok } from './runner.rip'
+import { registerValidator } from '../api.rip'
+
+Patient = schema
+  chart!  ~:id, 1..99999
+  ssn?    ~:ssn
+  phone?  ~:phone
+  state?  ~:state
+  dob?    ~:date
+  amount? ~:money
+  kids?   ~:ids
+
+test '~:name coerces through the read() vocabulary (normalize + convert)', ->
+  p1 = Patient.parse {
+    chart: '42', ssn: '123-45-6789', phone: '8016542000'
+    state: 'ut', dob: '1985-01-15', amount: '$1,234.50', kids: '3, 1, 2, 2'
+  }
+  eq p1.chart, 42
+  eq p1.ssn, '123456789'
+  eq p1.phone, '(801) 654-2000'
+  eq p1.state, 'UT'
+  eq p1.dob, '1985-01-15'
+  eq p1.amount, 1234.5
+  eq p1.kids, [1, 2, 3]
+
+test '~:name rejects what read() rejects — {error: coerce} issues', ->
+  r = Patient.safe { chart: '0', ssn: '12-345' }
+  eq r.ok, false
+  fields = r.errors.map((e) -> e.field + ':' + e.error).sort()
+  eq fields, ['chart:coerce', 'ssn:coerce']
+
+test 'registerValidator() also registers the schema coercer', ->
+  registerValidator 'npi', (v) ->
+    m = v.match(/^(\d{10})$/)
+    if m then m[1] else null
+  Provider = schema
+    npi! ~:npi
+  good = Provider.parse { npi: '1234567890' }
+  bad  = Provider.safe { npi: '123' }
+  eq good.npi, '1234567890'
+  eq bad.errors[0].error, 'coerce'
+
+test '~:name appears in toJSONSchema with the coercer named', ->
+  js = Patient.toJSONSchema()
+  eq js.properties.chart.type, 'integer'
+  ok js.properties.ssn.description.includes('~:ssn'), 'ssn description names the coercer'
+  eq js.properties.kids.type, 'array'
+  eq js.properties.kids.items.type, 'integer'

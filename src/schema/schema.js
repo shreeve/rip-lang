@@ -64,6 +64,29 @@ const KIND_DEFAULT = 'input';
 // else needs an explicit transform.
 const SCHEMA_COERCIBLE_TYPES = new Set(['integer', 'number', 'boolean', 'date', 'datetime']);
 
+// `~:name` — NAMED coercers from the runtime registry
+// (__schemaRegisterCoercer). @rip-lang/server registers its read()
+// validator vocabulary (id, money, ssn, phone, name, date, …) at load;
+// apps add their own. The coercer's OUTPUT type matters at compile time
+// (shadow TS + DDL), so the shipped names carry a static output-type
+// table here; unknown (custom) names type as `any` — annotate with an
+// explicit transform when you need strictness.
+const SCHEMA_NAMED_COERCER_TYPES = {
+  id: 'integer', int: 'integer', whole: 'integer',
+  float: 'number', money: 'number', money_even: 'number',
+  cents: 'integer', cents_even: 'integer',
+  bool: 'boolean', truthy: 'boolean', falsy: 'boolean',
+  json: 'json', hash: 'json', array: 'json',
+  ids: { type: 'integer', array: true },
+  // everything else in the shipped set normalizes to a string:
+  string: 'string', text: 'string', name: 'string', address: 'string',
+  date: 'string', time: 'string', time12: 'string',
+  email: 'email', state: 'string', zip: 'zip', zipplus4: 'string',
+  ssn: 'string', sex: 'string', phone: 'string', username: 'string',
+  ip: 'string', mac: 'string', url: 'url', color: 'string',
+  uuid: 'uuid', semver: 'string', slug: 'string',
+};
+
 const HOOK_NAMES = new Set([
   'beforeValidation', 'afterValidation',
   'beforeSave', 'afterSave',
@@ -745,24 +768,45 @@ function parseFieldedLine(kind, line, entries, ctx) {
   let typeName = 'string';
   let literals = null;
   let coerce = false;
-  // `~type` — coercion marker. Lexically unambiguous in the type slot:
-  // `~>` (computed) lexes as EFFECT and lives after a `:`, a different
-  // slot entirely. Only wire-friendly built-ins are coercible.
+  let coercer = null;
+  let coercerArray = false;
+  // `~type` / `~:name` — coercion markers. Lexically unambiguous in the
+  // type slot: `~>` (computed) lexes as EFFECT and lives after a `:`, a
+  // different slot entirely. `~type` coerces via the strict built-in
+  // tables; `~:name` coerces via the named-coercer registry (the
+  // rip-server read() vocabulary, plus app registrations).
   if (typeFirst?.[0] === 'UNARY_MATH' && typeFirst[1] === '~') {
     let typeTok = line[pos + 1];
-    if (!typeTok || typeTok[0] !== 'IDENTIFIER') {
+    if (typeTok?.[0] === 'SYMBOL') {
+      coerce = true;
+      coercer = typeTok[1];
+      let out = SCHEMA_NAMED_COERCER_TYPES[coercer];
+      if (out && typeof out === 'object') {
+        // e.g. ~:ids → integer[] — the coercer's output is a list.
+        typeName = out.type;
+        coercerArray = true;
+      } else {
+        typeName = out || 'any';
+      }
+      pos += 2;
+      typeFirst = typeTok;
+    } else if (typeTok?.[0] === 'IDENTIFIER') {
+      if (!SCHEMA_COERCIBLE_TYPES.has(typeTok[1])) {
+        throw schemaError(typeTok,
+          `'~${typeTok[1]}' is not coercible. Built-in coercion is defined for: ${[...SCHEMA_COERCIBLE_TYPES].join(', ')}. ` +
+          `Named coercers use a symbol — '~:${typeTok[1]}' — and resolve through the registry ` +
+          `(@rip-lang/server's read() validators, or schema.registerCoercer). ` +
+          `For anything else, write an explicit transform: '${name}, -> …'.`);
+      }
+      coerce = true;
+      typeName = typeTok[1];
+      pos += 2;
+      typeFirst = typeTok; // for the typeConsumed / comma-rule checks below
+    } else {
       throw schemaError(typeFirst,
-        `'~' in the type slot marks coercion and needs a type name — '~integer', '~number', '~boolean', '~date'.`);
+        `'~' in the type slot marks coercion and needs a type name ('~integer', '~date', …) ` +
+        `or a registered coercer symbol ('~:ssn', '~:money', …).`);
     }
-    if (!SCHEMA_COERCIBLE_TYPES.has(typeTok[1])) {
-      throw schemaError(typeTok,
-        `'~${typeTok[1]}' is not coercible. Coercion is defined for: ${[...SCHEMA_COERCIBLE_TYPES].join(', ')}. ` +
-        `For anything else, write an explicit transform: '${name}, -> …'.`);
-    }
-    coerce = true;
-    typeName = typeTok[1];
-    pos += 2;
-    typeFirst = typeTok; // for the typeConsumed / comma-rule checks below
   } else if (typeFirst?.[0] === 'IDENTIFIER') {
     typeName = typeFirst[1];
     pos++;
@@ -802,6 +846,7 @@ function parseFieldedLine(kind, line, entries, ctx) {
     throw schemaError(typeFirst,
       `Coercion ('~${typeName}') does not apply to array types. Coerce per-element with a transform instead.`);
   }
+  if (coercerArray) array = true;
 
   // Remaining tokens on the line are a mix of `[…]` constraints (default,
   // regex), `{…}` attrs, and `n..n` range constraints. Each form is
@@ -943,6 +988,7 @@ function parseFieldedLine(kind, line, entries, ctx) {
     array,
     literals,
     coerce,
+    coercer,
     constraintTokens,
     attrsTokens,
     rangeTokens,
@@ -1807,6 +1853,7 @@ function entryLiteral(emitter, e) {
       }
       if (e.coerce) {
         obj.push('coerce: true');
+        if (e.coercer) obj.push(`coercer: ${JSON.stringify(e.coercer)}`);
       }
       let range = e.rangeTokens ? compileRangeTokens(e.rangeTokens, e) : null;
       let bracket = e.constraintTokens ? compileConstraintsLiteral(e.constraintTokens, e) : null;

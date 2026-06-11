@@ -637,6 +637,7 @@ Body forms (six declarative line shapes):
 | ------------------------ | ----------------------------------------------- |
 | Field                    | `name! 1..50` (type slot optional, defaults to `string`) |
 | Coerced field            | `age? ~integer` ("coerce, then validate" — also `~number`, `~boolean`, `~date`) |
+| Named-coercer field      | `ssn? ~:ssn` — registry-backed; @rip-lang/server registers its full `read()` validator vocabulary (`~:id`, `~:money`, `~:phone`, `~:date`, …); apps add more via `schema.registerCoercer` |
 | Inline field transform   | `email!, -> it.email.toLowerCase()`            |
 | Directive                | `@timestamps`, `@mixin Name`, `@belongs_to User?` |
 | Refinement               | `@ensure "msg"[, :field], (u) -> pred`; async via `@ensure!` (schema becomes `parseAsync!`-only) |

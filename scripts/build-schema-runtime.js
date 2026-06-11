@@ -121,6 +121,7 @@ const WRAPPER_TAIL = `
   const schemaNamespace = {
     transaction: __schemaTransactionExport,
     connect:    __schemaConnectExport,
+    registerCoercer: __schemaRegisterCoercer,
     plan:       typeof __schemaPlan       !== 'undefined' ? __schemaPlan       : __schemaMigrationStub('plan'),
     status:     typeof __schemaStatus     !== 'undefined' ? __schemaStatus     : __schemaMigrationStub('status'),
     make:       typeof __schemaMake       !== 'undefined' ? __schemaMake       : __schemaMigrationStub('make'),
@@ -131,6 +132,7 @@ const WRAPPER_TAIL = `
     __schema, SchemaError, __SchemaRegistry,
     __schemaSetAdapter: __schemaSetAdapterExport,
     __schemaTransaction: __schemaTransactionExport,
+    __schemaRegisterCoercer,
     schema: schemaNamespace,
     __version: ${SCHEMA_RUNTIME_ABI_VERSION},
   };

@@ -3978,6 +3978,59 @@ fail "~ coercion does not apply to arrays", '''
 '''
 
 # ==============================================================================
+# Named coercers — ~:name (registry-backed wire vocabulary)
+# ==============================================================================
+
+test "~:name resolves through the registry; output validates and constrains", '''
+  __ripSchema.__schemaRegisterCoercer "id", (v) ->
+    m = v.match(/^([1-9]\\d{0,14})$/)
+    if m then parseInt(m[1]) else null
+  __ripSchema.__schemaRegisterCoercer "ssn", (v) ->
+    m = v.match(/^(\\d{3})-?(\\d{2})-?(\\d{4})$/)
+    if m then m[1] + m[2] + m[3] else null
+  X = schema
+    chart! ~:id, 1..99999
+    ssn?   ~:ssn
+  a = X.parse {chart: "42", ssn: "123-45-6789"}
+  r1 = X.safe {chart: "0"}
+  r2 = X.safe {chart: "999999999"}
+  [a.chart, a.ssn, r1.errors[0].error, r2.errors[0].error]
+''', [42, "123456789", "coerce", "max"]
+
+test "~:name failures use the coercer's name in the issue", '''
+  __ripSchema.__schemaRegisterCoercer "state2", (v) ->
+    m = v.match(/^([a-z][a-z])$/i)
+    if m then m[1].toUpperCase() else null
+  X = schema
+    state? ~:state2
+  r = X.safe {state: "utah"}
+  [r.errors[0].field, r.errors[0].error, r.errors[0].message]
+''', ["state", "coerce", "state is not a valid state2"]
+
+test "~:name with an unregistered coercer fails loud at parse (config error)", '''
+  X = schema
+    npi? ~:npi9999
+  err = null
+  try
+    X.parse {npi: "123"}
+  catch e
+    err = e.message
+  [err.includes("no coercer registered"), err.includes("registerCoercer")]
+''', [true, true]
+
+test "custom ~:name coercers type as any — value-typed constraints still apply", '''
+  __ripSchema.__schemaRegisterCoercer "evenInt", (v) ->
+    n = parseInt(v, 10)
+    if Number.isInteger(n) and n % 2 is 0 then n else null
+  X = schema
+    n? ~:evenInt, 0..10
+  a = X.parse {n: "4"}
+  r = X.safe {n: "3"}
+  r2 = X.safe {n: "12"}
+  [a.n, r.errors[0].error, r2.errors[0].error]
+''', [4, "coerce", "max"]
+
+# ==============================================================================
 # @ensure upgrades — field attribution and async (@ensure!)
 # ==============================================================================
 

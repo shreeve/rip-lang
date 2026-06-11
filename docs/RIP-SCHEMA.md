@@ -573,8 +573,44 @@ SearchParams = schema
   (rows arrive canonical).
 - `~` doesn't combine with a `->` transform (the transform IS manual
   control of the same step), doesn't apply to arrays, and only covers
-  the four wire-friendly built-ins — everything else wants an explicit
-  transform.
+  the four wire-friendly built-ins — everything else wants a named
+  coercer or an explicit transform.
+
+### Named coercers (`~:name`)
+
+A `~:symbol` in the type slot coerces through the **named-coercer
+registry** — and `@rip-lang/server` registers its entire `read()`
+validator vocabulary there at load, so every battle-tested wire
+normalizer (`id`, `money`, `ssn`, `phone`, `name`, `date`, `state`,
+`zipplus4`, `slug`, `ids`, …) works in a schema field:
+
+```coffee
+Patient = schema :model
+  chart!  ~:id, 1..99999     # "42" → 42 (integer; constraint after coercion)
+  ssn?    ~:ssn              # "123-45-6789" → "123456789"
+  phone?  ~:phone            # "8016542000" → "(801) 654-2000"
+  state?  ~:state            # "ut" → "UT"
+  dob?    ~:date             # normalized "YYYY-MM-DD" string
+  amount? ~:money            # "$1,234.50" → 1234.5
+  kids?   ~:ids              # "3, 1, 2, 2" → [1, 2, 3]
+```
+
+- The normalizer behind `read 'dob', 'date'` is the *same function*
+  behind `dob? ~:date` — one vocabulary, two call sites.
+  `registerValidator` on the server side registers both; schema-only
+  code uses `schema.registerCoercer name, fn` directly.
+- A coercer returning `null`/`undefined`/`false` fails the field with
+  `{error: 'coerce', message: "<field> is not a valid <name>"}`. A
+  coercer that isn't registered at parse time is a **config error**
+  (fail loud), not a validation failure.
+- Output types: the shipped names carry static output types for shadow
+  TS and DDL (`~:id` → `number`/INTEGER, `~:money` → `number`,
+  `~:ids` → `number[]`, `~:ssn` → `string`, …). Custom-registered
+  names type as `any` — use an explicit transform when you need a
+  precise static type.
+- Note the namespaces differ: `~date` (built-in) coerces to a `Date`
+  instance; `~:date` (named) normalizes to a `"YYYY-MM-DD"` string —
+  exactly what `read 'x', 'date'` returns.
 
 ### Inline field transform
 

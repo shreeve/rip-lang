@@ -121,6 +121,7 @@ var { __schema, SchemaError, __SchemaRegistry, __schemaSetAdapter } = (function(
   const schemaNamespace = {
     transaction: __schemaTransactionExport,
     connect:    __schemaConnectExport,
+    registerCoercer: __schemaRegisterCoercer,
     plan:       typeof __schemaPlan       !== 'undefined' ? __schemaPlan       : __schemaMigrationStub('plan'),
     status:     typeof __schemaStatus     !== 'undefined' ? __schemaStatus     : __schemaMigrationStub('status'),
     make:       typeof __schemaMake       !== 'undefined' ? __schemaMake       : __schemaMigrationStub('make'),
@@ -131,6 +132,7 @@ var { __schema, SchemaError, __SchemaRegistry, __schemaSetAdapter } = (function(
     __schema, SchemaError, __SchemaRegistry,
     __schemaSetAdapter: __schemaSetAdapterExport,
     __schemaTransaction: __schemaTransactionExport,
+    __schemaRegisterCoercer,
     schema: schemaNamespace,
     __version: 1,
   };
@@ -247,6 +249,26 @@ const __SCHEMA_COERCERS = {
   },
 };
 __SCHEMA_COERCERS.datetime = __SCHEMA_COERCERS.date;
+
+// Named-coercer registry for the \`~:name\` field syntax. A coercer is a
+// function (wireValue) → coercedValue, where null/undefined/false means
+// "didn't convert" → {error: 'coerce'}. @rip-lang/server registers its
+// entire read() validator vocabulary (id, money, ssn, phone, name,
+// date, …) here at module load, so every wire normalizer that works in
+// \`read 'x', 'ssn'\` also works as \`x? ~:ssn\` in a schema. Apps register
+// their own via schema.registerCoercer.
+//
+//   opts.raw — pass the value through un-stringified (validators that
+//   operate on arrays/objects, e.g. the server's array/hash/json).
+const __schemaNamedCoercers = new Map();
+
+function __schemaRegisterCoercer(name, fn, opts) {
+  if (typeof name !== 'string' || typeof fn !== 'function') {
+    throw new Error('schema.registerCoercer(name, fn, opts?): name string and fn required');
+  }
+  __schemaNamedCoercers.set(name, { fn, raw: opts?.raw === true });
+  return fn;
+}
 
 function __schemaValidateValue(v, typeName) {
   const prim = __schemaTypes[typeName];
@@ -382,7 +404,7 @@ function __schemaSignature(def) {
         parts.push('f:' + e.name + ':' + (e.typeName || '') +
           (e.array ? '[]' : '') + ':' + (e.modifiers || []).join('') +
           (e.literals ? ':' + e.literals.join(',') : '') +
-          ':' + safe(e.constraints) + ':' + safe(e.attrs) + (e.coerce ? ':~' : '') +
+          ':' + safe(e.constraints) + ':' + safe(e.attrs) + (e.coerce ? ':~' + (e.coercer || '') : '') +
           (e.transform ? ':t' : ''));
         break;
       case 'enum-member':
@@ -552,6 +574,7 @@ class __SchemaDef {
             literals: e.literals || null,
             array: e.array === true,
             coerce: e.coerce === true,
+            coercer: e.coercer || null,
             constraints: e.constraints || null,
             attrs: e.attrs || null,
             transform: e.transform || null,
@@ -1199,6 +1222,28 @@ class __SchemaDef {
       if (!f.coerce) continue;
       const v = working[n];
       if (v === undefined || v === null) continue;
+      if (f.coercer) {
+        // \`~:name\` — registry lookup. A missing coercer is a CONFIG
+        // error (the package that provides it wasn't loaded), not a
+        // validation failure — fail loud.
+        const entry = __schemaNamedCoercers.get(f.coercer);
+        if (!entry) {
+          throw new Error(
+            "schema: no coercer registered for '~:" + f.coercer + "' (field '" + n + "' on " +
+            (this.name || 'anon') + "). Import @rip-lang/server (which registers the read() " +
+            "validator vocabulary) or register it with schema.registerCoercer('" + f.coercer + "', fn).");
+        }
+        const input = entry.raw ? v : String(v).trim();
+        let out;
+        try { out = entry.fn(input); } catch { out = null; }
+        if (out === null || out === undefined || out === false) {
+          errors.push({field: n, error: 'coerce', message: n + ' is not a valid ' + f.coercer});
+          failed.add(n);
+        } else {
+          working[n] = out;
+        }
+        continue;
+      }
       const r = __SCHEMA_COERCERS[f.typeName] ? __SCHEMA_COERCERS[f.typeName](v) : { ok: false };
       if (r.ok) {
         working[n] = r.value;
@@ -1530,7 +1575,7 @@ function __schemaFieldJSONSchema(f, ctx) {
   if (c && c.default !== undefined) s.default = c.default;
   if (f.coerce) {
     s.description = ((s.description ? s.description + ' ' : '') +
-      'Coerced from wire data (~' + f.typeName + ').').trim();
+      'Coerced from wire data (' + (f.coercer ? '~:' + f.coercer : '~' + f.typeName) + ').').trim();
   }
   if (f.transform) {
     s.description = ((s.description ? s.description + ' ' : '') +
@@ -1673,6 +1718,7 @@ function __schemaDerive(source, transform) {
       typeName: f.typeName, array: f.array,
       literals: f.literals || null,
       coerce: f.coerce === true,
+      coercer: f.coercer || null,
       constraints: f.constraints,
       attrs: f.attrs || null,
       transform: f.transform || null,
@@ -1746,6 +1792,7 @@ function __schemaExpandMixins(host, fields, directives, ctx) {
         literals: e.literals || null,
         array: e.array === true,
         coerce: e.coerce === true,
+        coercer: e.coercer || null,
         constraints: e.constraints || null,
         attrs: e.attrs || null,
         transform: e.transform || null,
@@ -2661,6 +2708,45 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
   var VALID_KINDS = new Set(["input", "shape", "model", "mixin", "enum", "union"]);
   var KIND_DEFAULT = "input";
   var SCHEMA_COERCIBLE_TYPES = new Set(["integer", "number", "boolean", "date", "datetime"]);
+  var SCHEMA_NAMED_COERCER_TYPES = {
+    id: "integer",
+    int: "integer",
+    whole: "integer",
+    float: "number",
+    money: "number",
+    money_even: "number",
+    cents: "integer",
+    cents_even: "integer",
+    bool: "boolean",
+    truthy: "boolean",
+    falsy: "boolean",
+    json: "json",
+    hash: "json",
+    array: "json",
+    ids: { type: "integer", array: true },
+    string: "string",
+    text: "string",
+    name: "string",
+    address: "string",
+    date: "string",
+    time: "string",
+    time12: "string",
+    email: "email",
+    state: "string",
+    zip: "zip",
+    zipplus4: "string",
+    ssn: "string",
+    sex: "string",
+    phone: "string",
+    username: "string",
+    ip: "string",
+    mac: "string",
+    url: "url",
+    color: "string",
+    uuid: "uuid",
+    semver: "string",
+    slug: "string"
+  };
   var HOOK_NAMES = new Set([
     "beforeValidation",
     "afterValidation",
@@ -3132,18 +3218,33 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
     let typeName = "string";
     let literals = null;
     let coerce = false;
+    let coercer = null;
+    let coercerArray = false;
     if (typeFirst?.[0] === "UNARY_MATH" && typeFirst[1] === "~") {
       let typeTok = line[pos + 1];
-      if (!typeTok || typeTok[0] !== "IDENTIFIER") {
-        throw schemaError(typeFirst, `'~' in the type slot marks coercion and needs a type name — '~integer', '~number', '~boolean', '~date'.`);
+      if (typeTok?.[0] === "SYMBOL") {
+        coerce = true;
+        coercer = typeTok[1];
+        let out = SCHEMA_NAMED_COERCER_TYPES[coercer];
+        if (out && typeof out === "object") {
+          typeName = out.type;
+          coercerArray = true;
+        } else {
+          typeName = out || "any";
+        }
+        pos += 2;
+        typeFirst = typeTok;
+      } else if (typeTok?.[0] === "IDENTIFIER") {
+        if (!SCHEMA_COERCIBLE_TYPES.has(typeTok[1])) {
+          throw schemaError(typeTok, `'~${typeTok[1]}' is not coercible. Built-in coercion is defined for: ${[...SCHEMA_COERCIBLE_TYPES].join(", ")}. ` + `Named coercers use a symbol — '~:${typeTok[1]}' — and resolve through the registry ` + `(@rip-lang/server's read() validators, or schema.registerCoercer). ` + `For anything else, write an explicit transform: '${name}, -> …'.`);
+        }
+        coerce = true;
+        typeName = typeTok[1];
+        pos += 2;
+        typeFirst = typeTok;
+      } else {
+        throw schemaError(typeFirst, `'~' in the type slot marks coercion and needs a type name ('~integer', '~date', …) ` + `or a registered coercer symbol ('~:ssn', '~:money', …).`);
       }
-      if (!SCHEMA_COERCIBLE_TYPES.has(typeTok[1])) {
-        throw schemaError(typeTok, `'~${typeTok[1]}' is not coercible. Coercion is defined for: ${[...SCHEMA_COERCIBLE_TYPES].join(", ")}. ` + `For anything else, write an explicit transform: '${name}, -> …'.`);
-      }
-      coerce = true;
-      typeName = typeTok[1];
-      pos += 2;
-      typeFirst = typeTok;
     } else if (typeFirst?.[0] === "IDENTIFIER") {
       typeName = typeFirst[1];
       pos++;
@@ -3172,6 +3273,8 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
     if (coerce && array) {
       throw schemaError(typeFirst, `Coercion ('~${typeName}') does not apply to array types. Coerce per-element with a transform instead.`);
     }
+    if (coercerArray)
+      array = true;
     let rest = line.slice(pos);
     let typeConsumed = typeFirst?.[0] === "IDENTIFIER" || typeFirst?.[0] === "STRING";
     if (typeConsumed && rest[0]?.[0] === "->") {
@@ -3257,6 +3360,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       array,
       literals,
       coerce,
+      coercer,
       constraintTokens,
       attrsTokens,
       rangeTokens,
@@ -3974,6 +4078,8 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         }
         if (e.coerce) {
           obj.push("coerce: true");
+          if (e.coercer)
+            obj.push(`coercer: ${JSON.stringify(e.coercer)}`);
         }
         let range = e.rangeTokens ? compileRangeTokens(e.rangeTokens, e) : null;
         let bracket = e.constraintTokens ? compileConstraintsLiteral(e.constraintTokens, e) : null;
@@ -15461,7 +15567,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.16.1";
-  var BUILD_DATE = "2026-06-11@00:10:28GMT";
+  var BUILD_DATE = "2026-06-11@00:22:23GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

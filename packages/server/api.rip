@@ -823,8 +823,30 @@ export validators =
       Array.from(new Set(nums)).sort((a, b) -> a - b)
     catch then null
 
-export registerValidator = (name:: string, fn:: (v: any) => any) -> validators[name] = fn
-export getValidator      = (name:: string)                       -> validators[name]
+export registerValidator = (name:: string, fn:: (v: any) => any) ->
+  validators[name] = fn
+  registerCoercer name, fn
+  fn
+
+export getValidator = (name:: string) -> validators[name]
+
+# ==============================================================================
+# Schema-coercer bridge
+# ==============================================================================
+#
+# Every read() validator doubles as a `~:name` schema coercer — the
+# normalizer that powers `read 'dob', 'date'` also powers `dob? ~:date`
+# in a schema field. One vocabulary, two call sites. The raw set
+# (array / hash / json) operates on non-strings, so it skips the
+# stringify step the rest get.
+
+RAW_VALIDATORS =! new Set(['array', 'hash', 'json'])
+
+registerCoercer = (name, fn) ->
+  reg = globalThis.__ripSchema?.__schemaRegisterCoercer
+  reg name, fn, { raw: RAW_VALIDATORS.has(name) } if reg
+
+registerCoercer name, fn for own name, fn of validators
 
 # ==============================================================================
 # check() — Apply a Validator to an Arbitrary Value
