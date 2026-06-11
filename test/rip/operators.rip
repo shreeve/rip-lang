@@ -378,3 +378,12 @@ test "merge assign auto-init", '''
   ''', 3
 
 code "merge assign compiles to Object.assign", "*>config = {a: 1}", "let config;\n\nconfig = Object.assign(config ??= {}, {a: 1});"
+
+# ==============================================================================
+# Unary bases of ** must be parenthesized (bare form is a JS SyntaxError)
+# ==============================================================================
+
+code "typeof base of power parenthesized", "typeof x ** 2", "((typeof x) ** 2);"
+test "not base of power", "not false ** 2", 1
+test "power right assoc unchanged", "2 ** 3 ** 2", 512
+test "unary minus binds outside power", "-2 ** 2", -4

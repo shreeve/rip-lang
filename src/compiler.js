@@ -1145,6 +1145,18 @@ export class CodeEmitter {
     }
     if (op === '==') op = '===';
     if (op === '!=') op = '!==';
+    // JS requires the base of ** to be an UpdateExpression: a bare unary
+    // (typeof x ** 2, !a ** b, await f() ** 2) is a SyntaxError unless
+    // parenthesized. Wrap unary-headed left operands that emit bare.
+    if (op === '**' && Array.isArray(left)) {
+      let UNARY_HEADS = new Set(['!', '~', 'typeof', 'void', 'delete', 'await', 'not', '+', '-']);
+      let leftHead = left[0]?.valueOf?.() ?? left[0];
+      if (UNARY_HEADS.has(leftHead)) {
+        let lc = this.emit(left, 'value');
+        if (!lc.startsWith('(')) lc = `(${lc})`;
+        return `(${lc} ** ${this.emit(right, 'value')})`;
+      }
+    }
     return `(${this.emit(left, 'value')} ${op} ${this.emit(right, 'value')})`;
   }
 
