@@ -1664,14 +1664,63 @@ export class CodeEmitter {
     return `(${this.unwrap(this.emit(cond, 'value'))} ? ${this.emit(then_, 'value')} : ${this.emit(else_, 'value')})`;
   }
 
-  emitLoop(head, rest) {
+  emitLoop(head, rest, context) {
+    if (context === 'value') return this.emitLoopAsValue('while (true)', rest[0]);
     return `while (true) ${this.emitLoopBody(rest[0])}`;
   }
 
-  emitLoopN(head, rest) {
+  emitLoopN(head, rest, context) {
     let [count, body] = rest;
     let n = this.emit(count, 'value');
-    return `for (let it = 0; it < ${n}; it++) ${this.emitLoopBody(body)}`;
+    let header = `for (let it = 0; it < ${n}; it++)`;
+    if (context === 'value') return this.emitLoopAsValue(header, body);
+    return `${header} ${this.emitLoopBody(body)}`;
+  }
+
+  // Loops used as expressions collect each iteration's last body value into
+  // an array (CoffeeScript semantics): x = (f() while c) → x = [f(), ...].
+  // Mirrors emitForIn's value-context routing through comprehensions.
+  emitLoopAsValue(header, body, guard) {
+    let hasAwait = this.containsAwait(body) || (guard != null && this.containsAwait(guard));
+    let code = this.asyncIIFEOpen(hasAwait) + '\n';
+    this.indentLevel++;
+    code += this.indent() + 'const result = [];\n';
+    code += this.indent() + header + ' {\n';
+    this.indentLevel++;
+    if (guard != null) {
+      code += this.indent() + `if (!(${this.unwrap(this.emit(guard, 'value'))})) continue;\n`;
+    }
+
+    let stmts;
+    if (!Array.isArray(body)) stmts = [body];
+    else if (body[0] === 'block') stmts = body.slice(1);
+    else if (Array.isArray(body[0])) stmts = body;
+    else stmts = [body];
+
+    let loopStmts = ['for-in', 'for-of', 'for-as', 'while', 'loop'];
+    let hasCtrl = (node) => {
+      if (typeof node === 'string' && (node === 'break' || node === 'continue')) return true;
+      if (!Array.isArray(node)) return false;
+      if (['break', 'continue', 'return', 'throw'].includes(node[0])) return true;
+      if (node[0] === 'if') return node.slice(1).some(hasCtrl);
+      return node.some(hasCtrl);
+    };
+
+    for (let i = 0; i < stmts.length; i++) {
+      let s = stmts[i], isLast = i === stmts.length - 1;
+      if (!isLast || hasCtrl(s) || (Array.isArray(s) && loopStmts.includes(s[0]))) {
+        code += this.indent() + this.addSemicolon(s, this.emit(s, 'statement')) + '\n';
+      } else {
+        code += this.indent() + `result.push(${this.emit(s, 'value')});\n`;
+      }
+    }
+
+    this.indentLevel--;
+    code += this.indent() + '}\n';
+    code += this.indent() + 'return result;\n';
+    this.indentLevel--;
+    code += this.indent() + '})()';
+    return code;
   }
 
   emitAwait(head, rest) { return `await ${this.emit(rest[0], 'value')}`; }
@@ -1910,10 +1959,11 @@ export class CodeEmitter {
     return code;
   }
 
-  emitWhile(head, rest) {
+  emitWhile(head, rest, context) {
     let cond = rest[0], guard = rest.length === 3 ? rest[1] : null, body = rest[rest.length - 1];
-    let code = `while (${this.unwrap(this.emit(cond, 'value'))}) `;
-    return code + (guard ? this.emitLoopBodyWithGuard(body, guard) : this.emitLoopBody(body));
+    let header = `while (${this.unwrap(this.emit(cond, 'value'))})`;
+    if (context === 'value') return this.emitLoopAsValue(header, body, guard);
+    return header + ' ' + (guard ? this.emitLoopBodyWithGuard(body, guard) : this.emitLoopBody(body));
   }
 
   emitRange(head, rest) {

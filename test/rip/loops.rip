@@ -411,3 +411,48 @@ for (let it = 0; it < 3; it++) {
   console.log('hi');
 };
 """, {skipPreamble: true}
+
+# ==============================================================================
+# Loops as expressions — collect each iteration's value (CoffeeScript-style)
+# ==============================================================================
+
+test "postfix while as value collects results", '''
+  i = 0
+  x = (i += 1 while i < 4)
+  x
+  ''', [1, 2, 3, 4]
+
+test "block while as value collects results", '''
+  i = 0
+  x = while i < 3
+    i += 1
+    i * 10
+  x
+  ''', [10, 20, 30]
+
+test "postfix until as value collects results", '''
+  i = 0
+  x = (i += 1 until i >= 3)
+  x
+  ''', [1, 2, 3]
+
+test "loop n as value collects results", '''
+  x = loop 3
+    "hi"
+  x
+  ''', ["hi", "hi", "hi"]
+
+test "while as value with await", '''
+  f = -> Promise.resolve 7
+  i = 0
+  x = while i < 2
+    i += 1
+    await f()
+  x
+  ''', [7, 7]
+
+test "statement-level postfix while is a plain loop", '''
+  i = 0
+  i += 1 while i < 5
+  i
+  ''', 5
