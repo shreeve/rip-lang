@@ -114,6 +114,12 @@ test "nullish with zero", "0 ?? 30", 0
 test "nullish with false", "false ?? 40", false
 code "nullish coalescing parens", "a ?? b", "(a ?? b)"
 
+# ?? shares the || precedence level (left-assoc); && binds tighter
+code "nullish then or groups left", "x = a ?? b || c", "let x;\n\nx = (a ?? b) || c;"
+code "or then nullish groups left", "x = a || b ?? c", "let x;\n\nx = (a || b) ?? c;"
+code "and binds tighter than nullish", "x = a ?? b && c", "let x;\n\nx = a ?? (b && c);"
+test "nullish or chain runtime", "(null ?? false) || 'y'", "y"
+
 # Postfix presence check: "?!" (Houdini — truthy or undefined)
 test "presence with true", "true?!", true
 test "presence with value", "5?!", true

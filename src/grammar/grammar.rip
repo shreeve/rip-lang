@@ -1043,7 +1043,7 @@ operators = """
   left        ^
   left        |
   left        &&
-  left        ||
+  left        || ??
   right       TERNARY
   nonassoc    INDENT OUTDENT
   right       YIELD
