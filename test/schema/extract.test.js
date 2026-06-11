@@ -154,6 +154,11 @@ check('folded extend() merges the argument\'s declared fields, not a model\'s im
   assert(JSON.stringify(f) === JSON.stringify(['a', 'b']), 'extend leaked implicit columns: ' + JSON.stringify(f));
 });
 
+check('folded extend() accepts an inline anonymous schema argument', () => {
+  const f = foldedFields('Base = schema :shape\n  a! string\n  b! string\nV = Base.omit("b").extend(schema :shape\n  c! integer)\n', 'V');
+  assert(JSON.stringify(f) === JSON.stringify(['a', 'c']), 'inline extend did not fold: ' + JSON.stringify(f));
+});
+
 check('folding bails (stays a runtime call) when the base uses @mixin', () => {
   const f = foldedFields('S = schema :mixin\n  n! string\nB = schema :shape\n  a! string\n  @mixin S\nV = B.omit("a")\n', 'V');
   assert(f === null, 'fold should have bailed on a @mixin base, got: ' + JSON.stringify(f));

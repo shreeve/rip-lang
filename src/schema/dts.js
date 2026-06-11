@@ -144,29 +144,21 @@ function mapFieldType(entry) {
   return entry.array ? `${base}[]` : base;
 }
 
-// Extract descriptor from a SCHEMA_BODY s-expr node. Grammar reduces
-// `['schema', SCHEMA_BODY_VAL]` where the value is the String wrapper
-// carrying `.descriptor` via the metadata bridge.
-function descriptorFromSchemaNode(schemaNode) {
-  if (!Array.isArray(schemaNode)) return null;
-  let head = schemaNode[0]?.valueOf?.() ?? schemaNode[0];
-  if (head !== 'schema') return null;
-  let body = schemaNode[1];
-  if (!body || typeof body !== 'object') return null;
-  if (body.descriptor) return body.descriptor;
-  if (body.data?.descriptor) return body.data.descriptor;
-  return null;
-}
+// Extract descriptor from a SCHEMA_BODY s-expr node — the shared decoder
+// lives in schema.js (the projection fold uses the same one, so the two
+// passes can't drift on what counts as a schema node).
+import { schemaNodeDescriptor as descriptorFromSchemaNode } from './schema.js';
 
 // Walk the parsed s-expression collecting every named schema declaration.
 // Mixins are emitted first so subsequent :shape/:model type aliases can
 // reference them in `& Timestamps`-style intersections. Within a group,
 // source order is preserved. Returns true when at least one schema was
 // found (drives intrinsic preamble injection).
-export function emitSchemaTypes(sexpr, lines, schemaBehavior = null) {
+export function emitSchemaTypes(sexpr, lines, schemaBehavior = null, schemaAnon = null) {
   const collected = [];
   collectSchemas(sexpr, collected);
-  if (!collected.length) return false;
+  const anon = schemaAnon || [];
+  if (!collected.length && !anon.length) return false;
 
   // Set of locally-known schema names (for relation-accessor type
   // resolution — same-file targets get typed, unknown targets degrade).
@@ -179,6 +171,22 @@ export function emitSchemaTypes(sexpr, lines, schemaBehavior = null) {
   }
   for (const c of collected) {
     if (c.descriptor?.kind !== 'mixin') emitOneSchemaType(c, byName, known, lines, schemaBehavior);
+  }
+
+  // Anonymous (expression-position) schemas — codegen stashed each one's
+  // descriptor under a synthesized `__anon` name (shadow-TS mode only;
+  // field-bearing kinds only — emitSchemaNode gates the stamp). Emit a
+  // field-type alias plus a `__schema` overload keyed on that descriptor
+  // key, so e.g. `Base.extend(schema :shape …)` resolves to a precise
+  // `Schema<T, T>` instead of the `(d: any) => any` fallback — which made
+  // `extend` contribute nothing to the derived type.
+  for (const a of anon) {
+    const fieldProps = fieldPropList(a.descriptor);
+    const mixinRefs = mixinIntersections(a.descriptor, byName);
+    const dataBase = `{ ${fieldProps.join('; ')} }`;
+    const dataType = mixinRefs.length ? `${dataBase} & ${mixinRefs.join(' & ')}` : dataBase;
+    lines.push(`type ${a.name} = ${dataType};`);
+    lines.push(`declare function __schema(d: { __anon: ${JSON.stringify(a.name)}; [k: string]: any }): Schema<${a.name}, ${a.name}>;`);
   }
   return true;
 }

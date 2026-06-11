@@ -83,7 +83,7 @@ export function ripDestructuredNames(source) {
 // emitTypes — generate .d.ts from annotated tokens + s-expression tree
 // ============================================================================
 
-export function emitTypes(tokens, sexpr = null, source = '', schemaBehavior = null) {
+export function emitTypes(tokens, sexpr = null, source = '', schemaBehavior = null, schemaAnon = null) {
   let lines = [];
   let indentLevel = 0;
   let indentStr = '  ';
@@ -852,7 +852,7 @@ export function emitTypes(tokens, sexpr = null, source = '', schemaBehavior = nu
     // Schema declarations — strip any prior auto-emitted `declare let Foo`
     // for the same bindings (they are re-emitted as typed Schema<T>).
     let schemaLines = [];
-    hasSchemaDecls = emitSchemaTypes(sexpr, schemaLines, schemaBehavior);
+    hasSchemaDecls = emitSchemaTypes(sexpr, schemaLines, schemaBehavior, schemaAnon);
     if (hasSchemaDecls) {
       let bindings = new Set();
       for (let line of schemaLines) {

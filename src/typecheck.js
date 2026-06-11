@@ -1171,6 +1171,11 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
         usesSchemas = true;
         overloads.push(`declare function __schema(d: { name: "${m[1]}"; [k: string]: any }): ${m[2]};`);
       } else {
+        // Anonymous-schema overloads are emitted directly by the dts pass
+        // (keyed on the descriptor's `__anon` marker); keep them, but they
+        // still mark the file as schema-using so the `(d: any) => any`
+        // fallback and registry declares are appended.
+        if (/^declare function __schema\(/.test(line)) usesSchemas = true;
         kept.push(line);
       }
     }

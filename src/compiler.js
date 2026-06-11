@@ -4741,7 +4741,7 @@ export class Compiler {
     // generator's `_schemaBehavior` buffer (populated during codegen, shadow-TS
     // mode only) lets the type emitter infer computed/derived return types.
     if (typeTokens && _typesEmitter) {
-      dts = _typesEmitter(typeTokens, sexpr, source, generator._schemaBehavior);
+      dts = _typesEmitter(typeTokens, sexpr, source, generator._schemaBehavior, generator._schemaAnon);
     }
 
     return { tokens, sexpr, code, dts, map, reverseMap, data: dataSection, reactiveVars: generator.reactiveVars };

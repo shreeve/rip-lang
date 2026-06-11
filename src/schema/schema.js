@@ -1569,6 +1569,22 @@ function emitSchemaNode(emitter, head, rest, context) {
 
   let parts = [`kind: ${JSON.stringify(descriptor.kind)}`];
   if (schemaName) parts.push(`name: ${JSON.stringify(schemaName)}`);
+  else if (emitter.options.inlineTypes && (descriptor.kind === 'shape' || descriptor.kind === 'input')) {
+    // Anonymous (expression-position) schema — e.g. `Base.extend(schema :shape …)`.
+    // Synthesize a shadow-only identity so the dts pass can key a typed
+    // `__schema` overload on it; without one the call falls to the
+    // `(d: any) => any` overload and the schema's type evaporates (an
+    // `.extend()` argument then contributes nothing to the derived type).
+    // Keyed as `__anon`, not `name`: only the shadow compile (`inlineTypes`)
+    // emits it, and the runtime never registers anonymous schemas, so
+    // cross-file name collisions in `__SchemaRegistry` are impossible.
+    // Field-bearing kinds only — :enum/:union have no field list to emit a
+    // type from, so they keep the untyped fallback.
+    let anonList = (emitter._schemaAnon ??= []);
+    let anonName = `__AnonSchema${anonList.length + 1}`;
+    parts.push(`__anon: ${JSON.stringify(anonName)}`);
+    anonList.push({ name: anonName, descriptor });
+  }
   parts.push(`entries: [${descriptor.entries.map(e => entryLiteral(emitter, e)).join(', ')}]`);
   // `schema :model, on: <expr>` — the adapter expression evaluates at
   // declaration time in the user's scope.
@@ -1587,6 +1603,18 @@ function readDescriptor(node) {
     if (node.data?.descriptor) return node.data.descriptor;
   }
   return null;
+}
+
+// Descriptor for a `schema …` s-expr node (`['schema', SCHEMA_BODY]`) — the
+// grammar's metadata bridge carries the descriptor on the body value. The
+// single decoder for that shape: used by the projection fold below and by
+// the dts pass (src/schema/dts.js, which may import from this module; the
+// reverse import is barred by the browser-bundle graph).
+export function schemaNodeDescriptor(node) {
+  if (!Array.isArray(node)) return null;
+  const head = node[0]?.valueOf?.() ?? node[0];
+  if (head !== 'schema') return null;
+  return readDescriptor(node[1]);
 }
 
 // ============================================================================
@@ -1718,7 +1746,7 @@ function foldApplyOp(map, op, byName) {
       return out;
     }
     case 'extend': {
-      const other = byName.get(op.otherName);
+      const other = op.otherDescriptor || byName.get(op.otherName);
       if (!other) return null;
       // Runtime `.extend()` merges the argument's DECLARED fields only — not a
       // :model's implicit id/timestamp/FK columns — so use the declared map.
@@ -1751,7 +1779,8 @@ function foldProjectionDescriptor(baseDescriptor, ops, byName) {
 // Parse an assignment RHS s-expr into an algebra chain { base, ops } when it's
 // `Base.pick(...)`/`.omit(...)`/… (including chains like `.pick(...).omit(...)`),
 // else null. Keys must be static string literals (or arrays of them); extend's
-// argument must be a bare identifier. Anything dynamic returns null → no fold.
+// argument must be a bare identifier or an inline schema literal. Anything
+// dynamic returns null → no fold.
 function foldParseChain(rhs) {
   const ops = [];
   let node = rhs;
@@ -1770,10 +1799,19 @@ function foldParseChain(rhs) {
     } else if (method === 'extend') {
       if (argNodes.length !== 1) return null;
       const a = argNodes[0];
-      if (Array.isArray(a)) return null;
-      const name = foldStr(a);
-      if (typeof name !== 'string' || !/^[A-Za-z_$][\w$]*$/.test(name)) return null;
-      op = { method, otherName: name };
+      if (Array.isArray(a)) {
+        // Inline anonymous schema as the argument (`Base.extend(schema
+        // :shape …)`) — its descriptor rides on the node itself, so it
+        // folds with no name resolution at all. Field-less kinds
+        // (:enum/:union) bail like any other unfoldable argument.
+        const inline = schemaNodeDescriptor(a);
+        if (!inline || (inline.kind !== 'shape' && inline.kind !== 'input')) return null;
+        op = { method, otherDescriptor: inline };
+      } else {
+        const name = foldStr(a);
+        if (typeof name !== 'string' || !/^[A-Za-z_$][\w$]*$/.test(name)) return null;
+        op = { method, otherName: name };
+      }
     } else {
       const keys = foldLiteralKeys(argNodes);
       if (!keys || !keys.length) return null;
