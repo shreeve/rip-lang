@@ -5,16 +5,17 @@
 # data on `.parse()`, AND its bare name is the compile-time type. Compare
 # with 10-validation.ts (Zod): same four cases, identical output.
 #
-# Every schema here is the default `:input` kind (bare `schema`, no
+# Schemas here default to the `:input` kind (bare `schema`, no
 # `:symbol`): the whole file validates data entering from outside — API
-# responses, JSON config, a 3rd-party payload — and none carry behavior
-# (methods or computed getters), which is what would call for `:shape`.
-# That makes `:input` the direct parallel to Zod's plain `z.object`.
+# responses, JSON config, a 3rd-party payload. `:input` is the direct
+# parallel to Zod's plain `z.object`. Two exceptions: `Order` is a
+# `:shape` (it carries computed getters — behavior), and `Step` is a
+# `:union` (the parallel to z.discriminatedUnion).
 #
 # Use cases:
 #   1. API response shape — validate what the server returns
 #   2. Composition — client schema ≠ server model
-#   3. Non-DB config — variant steps keyed by a discriminant
+#   3. Non-DB config — discriminated unions with no backing table
 #   4. 3rd-party API transform — normalize external data on parse
 
 # ── 1. API response shape ──
@@ -111,22 +112,36 @@ console.log "status: #{order.status}"
 console.log "item: #{order.meta.items[0].name} $#{(order.meta.items[0].price / 100).toFixed(2)}"
 console.log "item: #{order.meta.items[1].name} $#{(order.meta.items[1].price / 100).toFixed(2)} x#{order.meta.items[1].quantity}"
 
-# ── 3. Non-DB config — variant steps ──
+# ── 3. Non-DB config — discriminated unions ──
 #
 # Workflow configs are built server-side and returned as JSON — no DB
-# table. Each step type carries different fields. rip schema has no
-# discriminated union, so one `Step` schema keys the variant on a
-# literal-union `type` discriminant and makes each variant's field
-# optional; the consumer narrows on `step.type`. (Zod's
-# z.discriminatedUnion also enforces the per-variant shape; the
-# discriminant here types the read side.)
+# table. Each step type carries different fields. `schema :union` is
+# the direct parallel to z.discriminatedUnion(): `@on :type` names the
+# discriminant, each constituent tags itself with a single-literal
+# constant field (`type! "intro"`), and `.parse()` dispatches O(1) to
+# the matching constituent — enforcing the per-variant shape at runtime
+# while the shadow TS union narrows on `step.type` at compile time.
 
-Step = schema
-  type!      "intro" | "task" | "final"
-  heading!   string
-  consent?   string
-  duration?  number
-  button?    string
+IntroStep = schema
+  type!    "intro"
+  heading! string
+  consent! string
+
+TaskStep = schema
+  type!     "task"
+  heading!  string
+  duration! number
+
+FinalStep = schema
+  type!    "final"
+  heading! string
+  button?  string
+
+Step = schema :union
+  @on :type
+  IntroStep
+  TaskStep
+  FinalStep
 
 Workflow = schema
   name!  string
@@ -144,7 +159,7 @@ workflow = Workflow.parse({
 console.log "workflow: #{workflow.name} (#{workflow.steps.length} steps)"
 for step in workflow.steps
   console.log "step: #{step.type} - #{step.heading}"
-  # after narrowing on step.type, the variant's field is the one to read
+  # after narrowing on step.type, variant-specific fields are accessible
   if step.type is 'intro'
     console.log "  consent: #{step.consent}"
   else if step.type is 'task'
