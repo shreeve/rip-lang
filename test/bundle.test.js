@@ -138,14 +138,171 @@ check('bundle exposes language version', () => {
 });
 
 check("@rip-lang/app exports copied to globalThis", () => {
-  for (const k of ['launch', 'createStash', 'createResource', 'createRouter', 'createRenderer', 'createComponents']) {
+  for (const k of ['launch', 'createStash', 'createResource', 'createRouter', 'createRenderer', 'createComponents', 'source']) {
     if (typeof globalThis[k] !== 'function') {
       throw new Error('globalThis.' + k + ' missing — @rip-lang/app entry preamble did not copy it');
     }
   }
 });
 
-process.stdout.write('\\u0001RESULTS\\u0001' + JSON.stringify(results) + '\\u0001RESULTS\\u0001');
+// ── RFC 11 source cells — async behavior checks ─────────────────────────
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const SOURCE_TAG = Symbol.for('rip.source');
+const asyncChecks = [];
+function checkAsync(name, fn) {
+  asyncChecks.push(
+    Promise.resolve()
+      .then(fn)
+      .then(() => results.push({ name, ok: true }),
+            (e) => results.push({ name, ok: false, error: e.message }))
+  );
+}
+
+checkAsync('source: lazy — ungated proxy read is null, kicks the load, lands in place', async () => {
+  let calls = 0;
+  const stash = globalThis.createStash({ user: globalThis.source({ fetch: async () => { calls++; return { n: 1 }; } }) });
+  const v = stash.user;
+  if (v != null) throw new Error('unloaded read must be null');
+  if (calls !== 1) throw new Error('first touch must kick the load');
+  await sleep(5);
+  if (!stash.user || stash.user.n !== 1) throw new Error('value must land in place');
+});
+
+checkAsync('source: ensure dedupes — one in-flight load per source', async () => {
+  let calls = 0;
+  const stash = globalThis.createStash({ user: globalThis.source({ fetch: async () => { calls++; await sleep(10); return { name: 'Ada' }; } }) });
+  const cell = globalThis.unwrapStash(stash).user;
+  if (calls !== 0) throw new Error('source must be lazy');
+  await Promise.all([cell.ensure(), cell.ensure()]);
+  if (calls !== 1) throw new Error('ensure must dedupe in-flight loads: ' + calls);
+  if (stash.user.name !== 'Ada') throw new Error('proxy read must unwrap the cell value');
+});
+
+checkAsync('source: a write wins over an in-flight load', async () => {
+  let resolveFetch;
+  const stash = globalThis.createStash({ user: globalThis.source({ fetch: () => new Promise((r) => { resolveFetch = r; }) }) });
+  const cell = globalThis.unwrapStash(stash).user;
+  cell.ensure().catch(() => {});
+  stash.user = { name: 'written' };
+  resolveFetch({ name: 'stale' });
+  await sleep(5);
+  if (stash.user.name !== 'written') throw new Error('late load clobbered a newer write: ' + stash.user.name);
+});
+
+checkAsync('source: staleTime 0 (default) serves cached value and revalidates in background', async () => {
+  let calls = 0;
+  const stash = globalThis.createStash({ k: globalThis.source({ fetch: async () => { calls++; return { v: calls }; } }) });
+  const cell = globalThis.unwrapStash(stash).k;
+  await cell.ensure();
+  const v = await cell.ensure();
+  if (!v || v.v !== 1) throw new Error('stale ensure must serve the cached value instantly');
+  await sleep(10);
+  if (calls !== 2) throw new Error('expected a background revalidate: ' + calls);
+  if (stash.k.v !== 2) throw new Error('revalidate must update in place');
+});
+
+checkAsync("source: staleTime '5 min' serves within the window without refetching", async () => {
+  let calls = 0;
+  const stash = globalThis.createStash({ k: globalThis.source({ fetch: async () => { calls++; return { v: calls }; }, staleTime: '5 min' }) });
+  const cell = globalThis.unwrapStash(stash).k;
+  await cell.ensure();
+  await cell.ensure();
+  await sleep(5);
+  if (calls !== 1) throw new Error('fresh value must not refetch: ' + calls);
+});
+
+checkAsync('source: staleTime :forever loads once; refetch() still reloads', async () => {
+  let calls = 0;
+  const stash = globalThis.createStash({ k: globalThis.source({ fetch: async () => { calls++; return { v: calls }; }, staleTime: Symbol.for('forever') }) });
+  const cell = globalThis.unwrapStash(stash).k;
+  await cell.ensure();
+  await cell.ensure();
+  await sleep(5);
+  if (calls !== 1) throw new Error(':forever must not revalidate: ' + calls);
+  await cell.refetch();
+  if (calls !== 2) throw new Error('explicit refetch must reload: ' + calls);
+});
+
+checkAsync('source: failed initial load stays unloaded + retries; failed refetch keeps last-good', async () => {
+  let mode = 'fail';
+  let calls = 0;
+  const stash = globalThis.createStash({ k: globalThis.source({ fetch: async () => { calls++; if (mode === 'fail') throw new Error('boom'); return { ok: calls }; } }) });
+  const cell = globalThis.unwrapStash(stash).k;
+  let rejected = false;
+  await cell.ensure().catch(() => { rejected = true; });
+  if (!rejected) throw new Error('a failed initial load must reject ensure');
+  if (cell.peek() != null) throw new Error('cell must return to unloaded');
+  if (cell.error == null) throw new Error('error must be recorded on the cell');
+  mode = 'ok';
+  const v = await cell.ensure();
+  if (!v || v.ok !== 2) throw new Error('next gate must retry the load');
+  mode = 'fail';
+  await cell.refetch().catch(() => {});
+  if (cell.peek() == null || cell.peek().ok !== 2) throw new Error('a failed refetch must keep last-good');
+  if (cell.error == null) throw new Error('refetch error must be recorded');
+});
+
+checkAsync('source: write-null invalidates — ungated readers see null, next ensure refetches', async () => {
+  let calls = 0;
+  const stash = globalThis.createStash({ k: globalThis.source({ fetch: async () => { calls++; return { v: calls }; }, staleTime: '5 min' }) });
+  const cell = globalThis.unwrapStash(stash).k;
+  await cell.ensure();
+  stash.k = null;
+  if (cell.peek() != null) throw new Error('write-null must clear the cell value');
+  await cell.ensure();
+  if (calls !== 2) throw new Error('ensure after invalidate must refetch: ' + calls);
+});
+
+checkAsync('source: keyed family — one cell per key, callable proxy read, write-assign throws', async () => {
+  const calls = [];
+  const stash = globalThis.createStash({ order: globalThis.source({ fetch: async (id) => { calls.push(id); return { id }; } }) });
+  const fam = globalThis.unwrapStash(stash).order;
+  if (typeof stash.order !== 'function') throw new Error('keyed read must be callable through the proxy');
+  if (stash.order('a') != null) throw new Error('unloaded keyed read must be null');
+  await fam.cellFor('a').ensure();
+  if (stash.order('a').id !== 'a') throw new Error('keyed value must land');
+  await fam.cellFor('b').ensure();
+  if (calls.length !== 2 || calls[1] !== 'b') throw new Error('one load per key expected: ' + JSON.stringify(calls));
+  let threw = false;
+  try { stash.order = { id: 'x' }; } catch (e) { threw = true; }
+  if (!threw) throw new Error('value-assign to a keyed source must throw');
+  fam.reset();
+  if (stash.order('a') != null) throw new Error('family reset must clear keyed cells');
+});
+
+checkAsync('persistStash: projection skips source keys on save and restore', async () => {
+  const store = {};
+  globalThis.window = { addEventListener: () => {}, removeEventListener: () => {} };
+  globalThis.sessionStorage = { getItem: (k) => store[k] ?? null, setItem: (k, v) => { store[k] = v; }, removeItem: (k) => { delete store[k]; } };
+  const app1 = { data: globalThis.createStash({ cart: { items: [1] }, user: globalThis.source({ fetch: async () => ({ secret: true }) }) }) };
+  const dispose1 = globalThis.persistStash(app1);
+  dispose1();
+  const saved = JSON.parse(store['__rip_app']);
+  if (!saved.cart || saved.cart.items[0] !== 1) throw new Error('plain key must persist');
+  if (saved.user != null) throw new Error('source key must not persist');
+  store['__rip_app'] = JSON.stringify({ cart: { items: [2] }, user: { stale: true } });
+  const app2 = { data: globalThis.createStash({ cart: { items: [] }, user: globalThis.source({ fetch: async () => ({ ok: 1 }) }) }) };
+  const dispose2 = globalThis.persistStash(app2);
+  if (app2.data.cart.items[0] !== 2) throw new Error('plain key must restore');
+  const rawU = globalThis.unwrapStash(app2.data).user;
+  if (!rawU || rawU[SOURCE_TAG] !== true) throw new Error('restore must not clobber a live source cell');
+  dispose2();
+});
+
+checkAsync('stash: peek never triggers a load and reads through cells', async () => {
+  let calls = 0;
+  const stash = globalThis.createStash({ user: globalThis.source({ fetch: async () => { calls++; return { name: 'Ada' }; } }), plain: { a: 1 } });
+  if (stash.peek('user') !== null && stash.peek('user') !== undefined) throw new Error('peek of unloaded cell must be empty');
+  if (calls !== 0) throw new Error('peek must never trigger a load');
+  if (stash.peek('plain.a') !== 1) throw new Error('peek must walk plain paths');
+  await globalThis.unwrapStash(stash).user.ensure();
+  if (stash.peek('user.name') !== 'Ada') throw new Error('peek must read through a loaded cell');
+  if (calls !== 1) throw new Error('peek must not refetch');
+});
+
+Promise.all(asyncChecks).then(() => {
+  process.stdout.write('\\u0001RESULTS\\u0001' + JSON.stringify(results) + '\\u0001RESULTS\\u0001');
+});
 `;
 
 const child = spawnSync('bun', ['-e', driver], {

@@ -15808,7 +15808,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.16.1";
-  var BUILD_DATE = "2026-06-11@20:15:05GMT";
+  var BUILD_DATE = "2026-06-11@20:15:19GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -16199,6 +16199,7 @@ ${indented}`);
   __export(exports__app, {
     unwrapStash: () => unwrapStash,
     throttle: () => throttle,
+    source: () => source,
     setContext: () => setContext,
     persistStash: () => persistStash,
     launch: () => launch,
@@ -16213,9 +16214,13 @@ ${indented}`);
     createRenderer: () => createRenderer,
     createComponents: () => createComponents
   });
+  var DURATION_RE;
   var METHODS;
   var PATH_RE;
   var PROXIES;
+  var SOURCE;
+  var SOURCE_FAMILY;
+  var SOURCE_FAMILY_CAP;
   var STASH_METHOD_NAMES;
   var _ARIA_POSITION_OWNED;
   var __batch;
@@ -16244,8 +16249,11 @@ ${indented}`);
   var _ariaWireAria;
   var _attachDispose;
   var _depth;
+  var _hasSourceDeep;
   var _keysVersion;
   var _proxy;
+  var _restoreSaved;
+  var _sourceReplacer;
   var _toFn;
   var _writeVersion;
   var arraysEqual;
@@ -16263,9 +16271,14 @@ ${indented}`);
   var getSignal;
   var isNum;
   var isPathKey;
+  var isSourceCell;
+  var isSourceFamily;
   var keysSignal;
   var makeProxy;
+  var makeSourceCell;
+  var makeSourceFamily;
   var matchRoute;
+  var parseStaleTime;
   var patternToRegex;
   var resolveIndex;
   var resolveStorePath;
@@ -16378,6 +16391,14 @@ ${indented}`);
   };
   PROXIES = new WeakMap;
   METHODS = new WeakMap;
+  SOURCE = Symbol.for("rip.source");
+  SOURCE_FAMILY = Symbol.for("rip.source.family");
+  isSourceCell = function(v) {
+    return v != null && (typeof v === "object" || typeof v === "function") && (v[SOURCE] === true || v[SOURCE_FAMILY] === true);
+  };
+  isSourceFamily = function(v) {
+    return v != null && typeof v === "function" && v[SOURCE_FAMILY] === true;
+  };
   _keysVersion = 0;
   _writeVersion = __state(0);
   _depth = 0;
@@ -16408,6 +16429,8 @@ ${indented}`);
       return value;
     if (value[Symbol.for("stash")])
       return value;
+    if (value[SOURCE])
+      return value;
     if (value instanceof Date || value instanceof RegExp || value instanceof Map || value instanceof Set || value instanceof Promise)
       return value;
     existing = PROXIES.get(value);
@@ -16420,7 +16443,7 @@ ${indented}`);
     proxy = null;
     handler = {
       get(target2, prop) {
-        let fn, sig, val;
+        let fn, raw, sig, v, val;
         if (prop === Symbol.for("stash"))
           return true;
         if (prop === Symbol.for("raw"))
@@ -16437,6 +16460,13 @@ ${indented}`);
         fn = stashMethodFn(proxy, prop);
         if (fn)
           return fn;
+        raw = target2[prop];
+        if (raw != null && (typeof raw === "object" || typeof raw === "function") && (raw[SOURCE] || raw[SOURCE_FAMILY])) {
+          if (typeof raw === "function")
+            return raw;
+          v = raw.read();
+          return v != null && typeof v === "object" ? wrapDeep(v) : v;
+        }
         sig = getSignal(target2, prop);
         val = sig.value;
         if (val != null && typeof val === "object")
@@ -16467,6 +16497,14 @@ ${indented}`);
           return true;
         }
         old = target2[prop];
+        if (isSourceCell(old) && !isSourceCell(value)) {
+          if (isSourceFamily(old)) {
+            throw new Error(`Rip App: cannot assign a value to keyed source '${String(prop)}' — use source('${String(prop)}', key) and set .value`);
+          }
+          old.write(value?.[Symbol.for("raw")] ? value[Symbol.for("raw")] : value);
+          _writeVersion.value++;
+          return true;
+        }
         r = value?.[Symbol.for("raw")] ? value[Symbol.for("raw")] : value;
         if (r === old)
           return true;
@@ -16575,7 +16613,7 @@ ${indented}`);
       }
     })();
   };
-  STASH_METHOD_NAMES = { inc: true, dec: true, flip: true, join: true, keys: true, has: true, del: true };
+  STASH_METHOD_NAMES = { inc: true, dec: true, flip: true, join: true, keys: true, has: true, del: true, peek: true };
   stashMethodFn = function(proxy, prop) {
     let cache, fn;
     if (!STASH_METHOD_NAMES[prop])
@@ -16714,6 +16752,27 @@ ${indented}`);
               }
             })();
           };
+        case "peek":
+          return function(path) {
+            let key, obj;
+            obj = unwrapStash(proxy);
+            if (!(path != null))
+              return obj;
+            for (let seg of walk(path)) {
+              if (!(obj != null))
+                return;
+              if (isSourceCell(obj)) {
+                if (isSourceFamily(obj))
+                  return;
+                obj = obj.peek();
+                if (!(obj != null))
+                  return;
+              }
+              key = typeof seg === "number" && seg < 0 && Array.isArray(obj) ? obj.length + seg : seg;
+              obj = obj[key];
+            }
+            return isSourceCell(obj) ? isSourceFamily(obj) ? undefined : obj.peek() : obj;
+          };
       }
     })();
     cache[prop] = fn;
@@ -16725,13 +16784,49 @@ ${indented}`);
   function unwrapStash(proxy) {
     return proxy?.[Symbol.for("raw")] ? proxy[Symbol.for("raw")] : proxy;
   }
+  _sourceReplacer = function(k, v) {
+    return isSourceCell(v) ? undefined : v;
+  };
+  _hasSourceDeep = function(obj) {
+    if (!(obj != null && typeof obj === "object"))
+      return false;
+    for (let k in obj) {
+      if (!Object.hasOwn(obj, k))
+        continue;
+      let v = obj[k];
+      if (!(v != null))
+        continue;
+      if (isSourceCell(v))
+        return true;
+      if (typeof v === "object" && _hasSourceDeep(v))
+        return true;
+    }
+    return false;
+  };
+  _restoreSaved = function(target, saved) {
+    let cur, raw;
+    raw = unwrapStash(target);
+    for (let k in saved) {
+      let v = saved[k];
+      cur = raw[k];
+      if (isSourceCell(cur))
+        continue;
+      if (v != null && cur != null && typeof v === "object" && !Array.isArray(v) && typeof cur === "object" && !Array.isArray(cur) && _hasSourceDeep(cur)) {
+        _restoreSaved(target[k], v);
+      } else {
+        target[k] = v;
+      }
+    }
+    return;
+  };
   function persistStash(app, opts = {}) {
     let _save, disposed, effectDisposer, saved, savedData, storage, storageKey, target;
     assertBrowser("persistStash");
     target = unwrapStash(app) || app;
-    return function() {
-      return target[Symbol.for("persisted")] ? null : undefined;
-    };
+    if (target[Symbol.for("persisted")])
+      return function() {
+        return null;
+      };
     target[Symbol.for("persisted")] = true;
     storage = opts.local ? localStorage : sessionStorage;
     storageKey = opts.key || "__rip_app";
@@ -16739,16 +16834,13 @@ ${indented}`);
       saved = storage.getItem(storageKey);
       if (saved) {
         savedData = JSON.parse(saved);
-        for (let k in savedData) {
-          let v = savedData[k];
-          app.data[k] = v;
-        }
+        _restoreSaved(app.data, savedData);
       }
     } catch {}
     _save = function() {
       return (() => {
         try {
-          return storage.setItem(storageKey, JSON.stringify(unwrapStash(app.data)));
+          return storage.setItem(storageKey, JSON.stringify(unwrapStash(app.data), _sourceReplacer));
         } catch {
           return null;
         }
@@ -16831,9 +16923,207 @@ ${indented}`);
       });
     return resource;
   }
-  _toFn = function(source) {
-    return typeof source === "function" ? source : function() {
-      return source.value;
+  DURATION_RE = /^(\d+)\s*(s|sec|second|seconds|m|min|minute|minutes|h|hr|hour|hours|d|day|days|w|week|weeks|y|year|years)$/i;
+  parseStaleTime = function(v) {
+    let n, parts;
+    if (!(v != null))
+      return 0;
+    if (v === Symbol.for("forever") || v === "forever")
+      return Infinity;
+    if (typeof v === "number")
+      return v;
+    if (typeof v === "string") {
+      parts = v.match(DURATION_RE);
+      if (parts) {
+        n = parseInt(parts[1]);
+        return (() => {
+          switch (parts[2][0].toLowerCase()) {
+            case "s":
+              return n * 1000;
+            case "m":
+              return n * 60000;
+            case "h":
+              return n * 3600000;
+            case "d":
+              return n * 86400000;
+            case "w":
+              return n * 604800000;
+            case "y":
+              return n * 31536000000;
+            default:
+              return n * 1000;
+          }
+        })();
+      }
+      return parseInt(v) || 0;
+    }
+    return 0;
+  };
+  makeSourceCell = function(fetchFn, staleTime) {
+    let _data, _error, _loading, cell, controller, generation, inflight, load, loadedAt, start;
+    _data = __state(null);
+    _loading = __state(false);
+    _error = __state(null);
+    generation = 0;
+    controller = null;
+    inflight = null;
+    loadedAt = 0;
+    load = async function(background) {
+      let me, result;
+      controller?.abort();
+      controller = typeof AbortController !== "undefined" ? new AbortController : null;
+      me = ++generation;
+      if (!background)
+        _loading.value = true;
+      return await (async () => {
+        try {
+          result = await fetchFn(controller?.signal);
+          if (me !== generation)
+            return result;
+          _error.value = null;
+          _data.value = result;
+          loadedAt = Date.now();
+          return result;
+        } catch (err) {
+          if (me !== generation)
+            return;
+          if (err?.name === "AbortError")
+            return;
+          _error.value = err;
+          if (!(_data.read() != null)) {
+            loadedAt = 0;
+            throw err;
+          }
+          return;
+        } finally {
+          if (me === generation) {
+            _loading.value = false;
+            inflight = null;
+          }
+        }
+      })();
+    };
+    start = function(background) {
+      let p;
+      p = load(background);
+      inflight = p;
+      return p;
+    };
+    cell = {};
+    cell[SOURCE] = true;
+    cell.read = function() {
+      let v;
+      v = _data.value;
+      if (!(v != null) && !inflight && loadedAt === 0) {
+        start(false).catch(function() {
+          return null;
+        });
+      }
+      return v;
+    };
+    cell.peek = function() {
+      return _data.read();
+    };
+    cell.ensure = function() {
+      let v;
+      v = _data.read();
+      if (v != null) {
+        if (staleTime !== Infinity && Date.now() - loadedAt >= staleTime && !inflight) {
+          start(true).catch(function() {
+            return null;
+          });
+        }
+        return Promise.resolve(v);
+      }
+      if (inflight)
+        return inflight;
+      return start(false);
+    };
+    cell.write = function(v) {
+      generation++;
+      controller?.abort();
+      controller = null;
+      inflight = null;
+      _loading.value = false;
+      _error.value = null;
+      _data.value = v;
+      loadedAt = v != null ? Date.now() : 0;
+      return v;
+    };
+    cell.reset = function() {
+      generation++;
+      controller?.abort();
+      controller = null;
+      inflight = null;
+      _loading.value = false;
+      _error.value = null;
+      _data.value = null;
+      loadedAt = 0;
+      return;
+    };
+    cell.refetch = function() {
+      return start(false);
+    };
+    Object.defineProperty(cell, "loading", { get() {
+      return _loading.value;
+    } });
+    Object.defineProperty(cell, "error", { get() {
+      return _error.value;
+    } });
+    return cell;
+  };
+  SOURCE_FAMILY_CAP = 64;
+  makeSourceFamily = function(fetchFn, staleTime) {
+    let cellFor, cells, family;
+    cells = new Map;
+    cellFor = function(key) {
+      let cell, ec, k;
+      k = key != null && typeof key === "object" ? JSON.stringify(key) : key;
+      cell = cells.get(k);
+      if (cell) {
+        cells.delete(k);
+        cells.set(k, cell);
+      } else {
+        cell = makeSourceCell(function(signal) {
+          return fetchFn(key, signal);
+        }, staleTime);
+        cells.set(k, cell);
+        if (cells.size > SOURCE_FAMILY_CAP) {
+          for (let ek of cells.keys()) {
+            ec = cells.get(ek);
+            if (ec.loading)
+              continue;
+            ec.reset();
+            cells.delete(ek);
+            break;
+          }
+        }
+      }
+      return cell;
+    };
+    family = function(key) {
+      return cellFor(key).read();
+    };
+    family[SOURCE_FAMILY] = true;
+    family.cellFor = cellFor;
+    family.reset = function() {
+      for (let c of cells.values()) {
+        c.reset();
+      }
+      cells.clear();
+      return;
+    };
+    return family;
+  };
+  function source(opts) {
+    let cell, staleTime;
+    staleTime = parseStaleTime(opts.staleTime);
+    cell = opts.fetch.length >= 1 ? makeSourceFamily(opts.fetch, staleTime) : makeSourceCell(opts.fetch, staleTime);
+    return cell;
+  }
+  _toFn = function(source2) {
+    return typeof source2 === "function" ? source2 : function() {
+      return source2.value;
     };
   };
   _attachDispose = function(target, disposer) {
@@ -16846,7 +17136,7 @@ ${indented}`);
     });
     return target;
   };
-  _proxy = function(out, source, disposer) {
+  _proxy = function(out, source2, disposer) {
     let obj;
     obj = { read() {
       return out.read();
@@ -16856,14 +17146,14 @@ ${indented}`);
         return out.value;
       },
       set(v) {
-        return source.value = v;
+        return source2.value = v;
       }
     });
     return _attachDispose(obj, disposer);
   };
-  var delay = function(ms, source) {
+  var delay = function(ms, source2) {
     let eff, fn, out;
-    fn = _toFn(source);
+    fn = _toFn(source2);
     out = __state(!!fn());
     eff = __effect(function() {
       let t;
@@ -16878,11 +17168,11 @@ ${indented}`);
         return out.value = false;
       }
     });
-    return typeof source !== "function" ? _proxy(out, source, eff) : _attachDispose(out, eff);
+    return typeof source2 !== "function" ? _proxy(out, source2, eff) : _attachDispose(out, eff);
   };
-  var debounce = function(ms, source) {
+  var debounce = function(ms, source2) {
     let eff, fn, out;
-    fn = _toFn(source);
+    fn = _toFn(source2);
     out = __state(fn());
     eff = __effect(function() {
       let t, val;
@@ -16894,11 +17184,11 @@ ${indented}`);
         return clearTimeout(t);
       };
     });
-    return typeof source !== "function" ? _proxy(out, source, eff) : _attachDispose(out, eff);
+    return typeof source2 !== "function" ? _proxy(out, source2, eff) : _attachDispose(out, eff);
   };
-  var throttle = function(ms, source) {
+  var throttle = function(ms, source2) {
     let eff, fn, last, out;
-    fn = _toFn(source);
+    fn = _toFn(source2);
     out = __state(fn());
     last = 0;
     eff = __effect(function() {
@@ -16919,11 +17209,11 @@ ${indented}`);
         };
       }
     });
-    return typeof source !== "function" ? _proxy(out, source, eff) : _attachDispose(out, eff);
+    return typeof source2 !== "function" ? _proxy(out, source2, eff) : _attachDispose(out, eff);
   };
-  var hold = function(ms, source) {
+  var hold = function(ms, source2) {
     let eff, fn, out;
-    fn = _toFn(source);
+    fn = _toFn(source2);
     out = __state(!!fn());
     eff = __effect(function() {
       let t;
@@ -16938,7 +17228,7 @@ ${indented}`);
         };
       }
     });
-    return typeof source !== "function" ? _proxy(out, source, eff) : _attachDispose(out, eff);
+    return typeof source2 !== "function" ? _proxy(out, source2, eff) : _attachDispose(out, eff);
   };
   function createComponents() {
     let compiled, files, notify, watchers;
@@ -17621,7 +17911,7 @@ ${indented}`);
     }
     return names;
   };
-  compileAndImport = async function(source, compile2, components = null, path = null, resolver = null) {
+  compileAndImport = async function(source2, compile2, components = null, path = null, resolver = null) {
     let anyImportRe, bareImportRe, bindingClause, blob, blobUrl, cached, committed, debug, depMod, depSource, finalJs, found, full, header, importedNames, js, keyLiteral, matches, mod, msg, names, needed, offset, pkgMap, post, pre, preamble, prefixLines, previousUrl, replacement, ripImportRe, specifier, storePath, url;
     if (components && path) {
       cached = components.getCompiled(path);
@@ -17636,7 +17926,7 @@ ${indented}`);
       try {
         debug = globalThis?.__ripDebug?.enabled && path;
         prefixLines = 0;
-        js = debug ? compile2(source, { sourceMap: "inline", filename: path }) : compile2(source);
+        js = debug ? compile2(source2, { sourceMap: "inline", filename: path }) : compile2(source2);
         if (resolver) {
           importedNames = new Set;
           pkgMap = resolver.packages || {};
@@ -17850,7 +18140,7 @@ ${indented}`);
       return true;
     };
     mountRoute = async function(info, force = false) {
-      let Component, LayoutClass, __innerPrev, __pop, __prev, __push, gen2, handled, inst, instance, layoutFiles, layoutMod, layoutSource, layoutsChanged, mod, mp, oldTarget, outerScope, pageParent, pagePrev, pageWrapper, params, pre, prevScope, query, route, sameRoute, slot, source, wrapper;
+      let Component, LayoutClass, __innerPrev, __pop, __prev, __push, gen2, handled, inst, instance, layoutFiles, layoutMod, layoutSource, layoutsChanged, mod, mp, oldTarget, outerScope, pageParent, pagePrev, pageWrapper, params, pre, prevScope, query, route, sameRoute, slot, source2, wrapper;
       ({ route, params, layouts: layoutFiles, query } = info);
       if (!route)
         return;
@@ -17874,14 +18164,14 @@ ${indented}`);
       router.navigating = true;
       return await (async () => {
         try {
-          source = components.read(route.file);
-          if (!source) {
+          source2 = components.read(route.file);
+          if (!source2) {
             if (onError)
               onError({ status: 404, message: `File not found: ${route.file}` });
             router.navigating = false;
             return;
           }
-          mod = await compileAndImport(source, compile2, components, route.file, resolver);
+          mod = await compileAndImport(source2, compile2, components, route.file, resolver);
           if (gen2 !== generation) {
             router.navigating = false;
             return;
@@ -18323,7 +18613,7 @@ ${indented}`);
       }
     };
   };
-  _ariaBindPopover = function(open, popover, setOpen, source = null) {
+  _ariaBindPopover = function(open, popover, setOpen, source2 = null) {
     let currentFocus, desired, el, get, onToggle, opts, restoreEl, restoreFocus, shown, src, syncState;
     get = function(x) {
       return typeof x === "function" ? x() : x;
@@ -18391,7 +18681,7 @@ ${indented}`);
       let isOpen;
       isOpen = e.newState === "open";
       if (isOpen) {
-        restoreEl = get(source) || currentFocus();
+        restoreEl = get(source2) || currentFocus();
         syncState(true);
       } else {
         syncState(false);
@@ -18404,7 +18694,7 @@ ${indented}`);
     shown = el.matches(":popover-open");
     desired = !!open;
     if (shown !== desired) {
-      src = get(source);
+      src = get(source2);
       if (desired) {
         restoreEl = src || currentFocus();
         syncState(true);

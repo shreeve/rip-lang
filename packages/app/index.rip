@@ -207,6 +207,16 @@ assertBrowser = (where) ->
 PROXIES   = new WeakMap()
 METHODS   = new WeakMap()
 
+# Source-cell tags (RFC 11) — defined ahead of the stash so the proxy
+# handlers can detect cells cheaply. Registry symbols so meta-consumers
+# (renderer, serializer, devtools) can detect cells without imports.
+# The cell machinery itself lives in the Source section below.
+SOURCE        = Symbol.for 'rip.source'
+SOURCE_FAMILY = Symbol.for 'rip.source.family'
+
+isSourceCell   = (v) -> v? and (typeof v is 'object' or typeof v is 'function') and (v[SOURCE] is true or v[SOURCE_FAMILY] is true)
+isSourceFamily = (v) -> v? and typeof v is 'function' and v[SOURCE_FAMILY] is true
+
 _keysVersion = 0
 _writeVersion = __state(0)
 _depth = 0
@@ -229,6 +239,7 @@ keysSignal = (target) -> getSignal(target, :keys)
 wrapDeep = (value) ->
   return value unless value? and typeof value is 'object'
   return value if value[:stash]
+  return value if value[SOURCE]    # source cells are never proxied
   return value if value instanceof Date or value instanceof RegExp or value instanceof Map or value instanceof Set or value instanceof Promise
   existing = PROXIES.get(value)
   return existing if existing
@@ -251,6 +262,18 @@ makeProxy = (target) ->
 
       fn = stashMethodFn(proxy, prop)
       return fn if fn
+
+      # Source cells bypass the per-key signal layer entirely (the cell's
+      # internal _data signal provides reactivity, and __state() would
+      # mistake the cell — it has .read() — for a signal). A singleton
+      # cell unwraps to its current value, kicking the lazy load on first
+      # touch; a keyed family is returned raw, so calling it is the keyed
+      # read: app.data.order(id).
+      raw = target[prop]
+      if raw? and (typeof raw is 'object' or typeof raw is 'function') and (raw[SOURCE] or raw[SOURCE_FAMILY])
+        return raw if typeof raw is 'function'
+        v = raw.read()
+        return if v? and typeof v is 'object' then wrapDeep(v) else v
 
       sig = getSignal(target, prop)
       val = sig.value
@@ -281,6 +304,19 @@ makeProxy = (target) ->
         return true
 
       old = target[prop]
+
+      # Writing to a source key routes into the cell (write-through: bumps
+      # the cell's generation, aborts any in-flight load, updates every
+      # reader in place). Assigning a NEW cell over a key replaces it (the
+      # stash-module seeding path falls through below). A keyed family has
+      # no single value to assign — address cells via the source() handle.
+      if isSourceCell(old) and not isSourceCell(value)
+        if isSourceFamily(old)
+          throw new Error "Rip App: cannot assign a value to keyed source '#{String(prop)}' — use source('#{String(prop)}', key) and set .value"
+        old.write(if value?[:raw] then value[:raw] else value)
+        _writeVersion.value++
+        return true
+
       r = if value?[:raw] then value[:raw] else value
       return true if r is old
       target[prop] = r
@@ -367,7 +403,7 @@ stashSet = (proxy, path, value) ->
     _depth--
 
 # Stash methods — reserved names for atomic/structural operations
-STASH_METHOD_NAMES = { inc: true, dec: true, flip: true, join: true, keys: true, has: true, del: true }
+STASH_METHOD_NAMES = { inc: true, dec: true, flip: true, join: true, keys: true, has: true, del: true, peek: true }
 
 stashMethodFn = (proxy, prop) ->
   return undefined unless STASH_METHOD_NAMES[prop]
@@ -437,6 +473,25 @@ stashMethodFn = (proxy, prop) ->
           obj = obj[key]
       finally
         _depth--
+    when 'peek' then (path) ->
+      # Non-triggering read for code ABOUT the stash (serializer, devtools,
+      # generic iteration): walks raw values, never touches signals, and a
+      # source cell encountered on the path contributes its current value
+      # WITHOUT kicking its lazy load. A keyed family has no single value.
+      obj = unwrapStash(proxy)
+      return obj unless path?
+      for seg in walk(path)
+        return undefined unless obj?
+        if isSourceCell(obj)
+          return undefined if isSourceFamily(obj)
+          obj = obj.peek()
+          return undefined unless obj?
+        key = if typeof seg is 'number' and seg < 0 and Array.isArray(obj) then obj.length + seg else seg
+        obj = obj[key]
+      if isSourceCell(obj)
+        if isSourceFamily(obj) then undefined else obj.peek()
+      else
+        obj
   cache[prop] = fn
   fn
 
@@ -445,6 +500,39 @@ export def createStash(data:: Record<string, any> = {}):: Stash
 
 export def unwrapStash(proxy:: Stash):: Stash
   if proxy?[:raw] then proxy[:raw] else proxy
+
+# Serialization projection helpers (RFC 11). Saving and restoring must
+# never touch a source cell: a cell is fetch + signal machinery, not a
+# value — persisting one would serialize the wrapper, and merging a saved
+# snapshot over one would replace the live cell with a dead copy (the key
+# would silently stop being a source, and every gate on it would fail).
+_sourceReplacer = (k, v) ->
+  if isSourceCell(v) then undefined else v
+
+_hasSourceDeep = (obj) ->
+  return false unless obj? and typeof obj is 'object'
+  for own k, v of obj
+    continue unless v?
+    return true if isSourceCell(v)
+    return true if typeof v is 'object' and _hasSourceDeep(v)
+  false
+
+_restoreSaved = (target, saved) ->
+  # target is a stash (sub)proxy; saved is parsed JSON. Per-key shallow
+  # replace (today's semantics), except: keys whose live value is a source
+  # cell are skipped (stale snapshots from a pre-source version of the app
+  # must not clobber cells), and subtrees that CONTAIN a cell are merged
+  # recursively so the nested cell survives the restore.
+  raw = unwrapStash(target)
+  for k, v of saved
+    cur = raw[k]
+    continue if isSourceCell(cur)
+    if v? and cur? and typeof v is 'object' and not Array.isArray(v) and
+       typeof cur is 'object' and not Array.isArray(cur) and _hasSourceDeep(cur)
+      _restoreSaved target[k], v
+    else
+      target[k] = v
+  return
 
 # Single-stash policy: Rip App assumes one stash per page (the one
 # `launch()` creates). persistStash is therefore tied to the global
@@ -459,7 +547,11 @@ export def unwrapStash(proxy:: Stash):: Stash
 export def persistStash(app:: Stash, opts?:: { local?: boolean, key?: string } = {}):: Disposer
   assertBrowser 'persistStash'
   target = unwrapStash(app) or app
-  return -> null if target[:persisted]    # double-call guard returns a no-op disposer
+  # Double-call guard returns a no-op disposer. Parenthesized on purpose:
+  # a bare `return -> null if cond` parses as `return (-> null if cond)` —
+  # an unconditional return of a conditional-body arrow, which made every
+  # persistStash call a silent no-op.
+  return (-> null) if target[:persisted]
   target[:persisted] = true
   storage = if opts.local then localStorage else sessionStorage
   storageKey = opts.key or '__rip_app'
@@ -467,11 +559,14 @@ export def persistStash(app:: Stash, opts?:: { local?: boolean, key?: string } =
     saved = storage.getItem(storageKey)
     if saved
       savedData = JSON.parse(saved)
-      app.data[k] = v for k, v of savedData
+      _restoreSaved app.data, savedData
   catch
     null
   _save = ->
-    try storage.setItem storageKey, JSON.stringify(unwrapStash(app.data))
+    # Serialization is a projection over the one store: persist plain keys,
+    # skip source keys (server data is refetchable — the gate reloads it on
+    # restore). The replacer drops cells at any depth.
+    try storage.setItem storageKey, JSON.stringify(unwrapStash(app.data), _sourceReplacer)
     catch then null
   effectDisposer = __effect ->
     _writeVersion.value
@@ -554,6 +649,211 @@ export def createResource<T>(fn:: (signal?:: AbortSignal) => Promise<T>, opts?::
   # unhandled rejection (the refetch() caller would still get the throw).
   load().catch(-> null) unless opts.lazy
   resource
+
+# ==============================================================================
+# Source — async reactive stash cells (RFC 11 render-ready state)
+#
+# A `source` is a stash key that knows how to (re)load itself. It is NOT a
+# promise: it owns the in-flight load internally, but its value is part of
+# the stash's reactive fabric like any other key. Lazy by default — it
+# loads on first touch (a gated `<~` binding or a plain read), not at
+# startup. The stash proxy unwraps reads of a cell to its current value and
+# routes writes into it; the renderer awaits `ensure()` for gated keys
+# before constructing the screen.
+#
+# Tags are registry symbols so meta-consumers (renderer, serializer) can
+# detect cells without importing anything.
+# ==============================================================================
+
+# staleTime — how long a loaded value is trustworthy. Accepts ms (number),
+# a duration string (same vocabulary as the server's cache() helper, here
+# converted to ms), or :forever (load once per session). Default 0: stale
+# the moment it lands, so every gate serves the cached value and
+# revalidates in the background (stale-while-revalidate).
+DURATION_RE = /^(\d+)\s*(s|sec|second|seconds|m|min|minute|minutes|h|hr|hour|hours|d|day|days|w|week|weeks|y|year|years)$/i
+
+parseStaleTime = (v:: number | string | symbol | null | undefined):: number ->
+  return 0 unless v?
+  return Infinity if v is Symbol.for('forever') or v is 'forever'
+  return v if typeof v is 'number'
+  if typeof v is 'string'
+    parts = v.match(DURATION_RE)
+    if parts
+      n = parseInt(parts[1])
+      return switch parts[2][0].toLowerCase()
+        when 's' then n * 1000
+        when 'm' then n * 60000
+        when 'h' then n * 3600000
+        when 'd' then n * 86400000
+        when 'w' then n * 604800000
+        when 'y' then n * 31536000000
+        else n * 1000
+    return parseInt(v) or 0
+  0
+
+# One cell: value + race/abort core (same pattern as createResource) plus
+# the surface the gate wants — ensure / write / reset / refetch / peek.
+#
+# Error semantics (never cached):
+#   - a failed INITIAL load records the error, returns the cell to
+#     unloaded, and rethrows — a gate awaiting ensure() rejects into the
+#     router's error path, and the next gate retries.
+#   - a failed REFETCH of a loaded cell keeps the last-good value and
+#     records the error on the handle — mounted gates never get yanked
+#     (the live-binding invariant).
+makeSourceCell = (fetchFn, staleTime) ->
+  _data    = __state(null)
+  _loading = __state(false)
+  _error   = __state(null)
+  generation = 0       # bumped by every load/write/reset — old loads can't clobber
+  controller = null
+  inflight   = null    # the in-flight load promise — one per source, shared by every waiter
+  loadedAt   = 0       # 0 means unloaded; gates only block on unloaded cells
+
+  load = (background) ->
+    controller?.abort()
+    controller = if typeof AbortController isnt 'undefined' then new AbortController() else null
+    me = ++generation
+    _loading.value = true unless background
+    try
+      result = await fetchFn(controller?.signal)
+      return result if me isnt generation     # superseded — don't write
+      _error.value = null
+      _data.value = result
+      loadedAt = Date.now()
+      result
+    catch err
+      return if me isnt generation
+      return if err?.name is 'AbortError'     # silent on abort
+      _error.value = err
+      if not _data.read()?
+        loadedAt = 0                          # failed initial load — stay unloaded, next gate retries
+        throw err
+      return                                  # failed refetch — keep last-good
+    finally
+      if me is generation
+        _loading.value = false
+        inflight = null
+
+  start = (background) ->
+    p = load(background)
+    inflight = p
+    p
+
+  cell = {}
+  cell[SOURCE] = true
+
+  # Reactive read; first touch kicks the lazy load without blocking.
+  cell.read = ->
+    v = _data.value
+    if not v? and not inflight and loadedAt is 0
+      start(false).catch(-> null)
+    v
+
+  # Untracked read that never triggers a load — for code ABOUT the stash
+  # (serializer, devtools), not code using it.
+  cell.peek = -> _data.read()
+
+  # The gate primitive: serve if loaded (revalidating in the background
+  # when past staleTime), await if in-flight, else fetch. A gate blocks
+  # only on unloaded cells.
+  cell.ensure = ->
+    v = _data.read()
+    if v?
+      # >= so the default staleTime of 0 means stale-on-arrival even when
+      # the gate lands in the same millisecond as the load.
+      if staleTime isnt Infinity and Date.now() - loadedAt >= staleTime and not inflight
+        start(true).catch(-> null)
+      return Promise.resolve(v)
+    return inflight if inflight
+    start(false)
+
+  # Write-through assignment: a write wins over an in-flight load — bump
+  # the generation and abort, so an older fetch resolving late can never
+  # clobber a newer write. Writing null means INVALIDATE: ungated readers
+  # see it immediately; the next gate refetches rather than serving it.
+  cell.write = (v) ->
+    generation++
+    controller?.abort()
+    controller = null
+    inflight = null
+    _loading.value = false
+    _error.value = null
+    _data.value = v
+    loadedAt = if v? then Date.now() else 0
+    v
+
+  # Back to UNLOADED — distinct from writing null, which invalidates for
+  # gates but still serves ungated readers the null branch immediately.
+  cell.reset = ->
+    generation++
+    controller?.abort()
+    controller = null
+    inflight = null
+    _loading.value = false
+    _error.value = null
+    _data.value = null
+    loadedAt = 0
+    return
+
+  cell.refetch = -> start(false)
+
+  Object.defineProperty cell, 'loading', get: -> _loading.value
+  Object.defineProperty cell, 'error',   get: -> _error.value
+  cell
+
+# A keyed family of cells: one declaration, one cell per key, each with the
+# full cell machinery. The family is callable — `app.data.order(id)` is an
+# ungated keyed read. Entries are kept under a simple LRU cap and
+# revalidate under the same staleTime rule as singletons.
+SOURCE_FAMILY_CAP = 64
+
+makeSourceFamily = (fetchFn, staleTime) ->
+  cells = new Map()    # insertion-ordered — LRU via delete+set on touch
+
+  cellFor = (key) ->
+    k = if key? and typeof key is 'object' then JSON.stringify(key) else key
+    cell = cells.get(k)
+    if cell
+      cells.delete(k)
+      cells.set(k, cell)
+    else
+      cell = makeSourceCell ((signal) -> fetchFn(key, signal)), staleTime
+      cells.set(k, cell)
+      if cells.size > SOURCE_FAMILY_CAP
+        for ek as cells.keys()
+          ec = cells.get(ek)
+          continue if ec.loading
+          ec.reset()
+          cells.delete(ek)
+          break
+    cell
+
+  family = (key) -> cellFor(key).read()
+  family[SOURCE_FAMILY] = true
+  family.cellFor = cellFor
+  family.reset = ->
+    c.reset() for c as cells.values()
+    cells.clear()
+    return
+  family
+
+# Declare a server-backed stash key. The runtime returns a tagged cell (the
+# stash proxy unwraps reads to its current value; writes route into it),
+# but the type says `T | null` — an ungated read is honestly nullable, and
+# the `<~` gate is the narrow.
+#
+# A fetch that declares a required first parameter is a KEYED family —
+# `fetch: (id) -> …` types and runs as one cell per key. A singleton fetch
+# receives an optional AbortSignal; declare it with a default
+# (`fetch: (signal = null) -> …`) so it doesn't read as a key parameter.
+export def source<T>(opts:: { fetch: (...args: any[]) => Promise<T> | T, staleTime?: number | string | symbol }):: T | null
+  staleTime = parseStaleTime(opts.staleTime)
+  cell = if opts.fetch.length >= 1
+    makeSourceFamily(opts.fetch, staleTime)
+  else
+    makeSourceCell(opts.fetch, staleTime)
+  cell
 
 # ==============================================================================
 # Timing — reactive timing primitives
