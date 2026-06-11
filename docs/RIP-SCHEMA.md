@@ -4,35 +4,44 @@
 
 # Rip Schema
 
-> **One keyword. A validator, a class, an ORM, a migration tool, and a TypeScript type — from a single declaration.**
+> **One keyword. A validator, a class, an ORM, migrations, and a live API contract — from a single declaration.**
 
-In a typical TypeScript application the shape of a `User` is described four
+In a typical TypeScript application the shape of a `User` is described five
 times. Once as a Zod schema for input validation. Once as a Prisma model for
 the database. Once as a generated TypeScript type for the editor. Once as a
-DTO class for API projections. Every change has to be propagated across all
-four. Every divergence becomes a bug.
+DTO class for API projections. Once more as an OpenAPI document for clients.
+Every change has to be propagated across all five. Every divergence becomes
+a bug.
 
-Rip Schema collapses all four into one declaration:
+Rip Schema collapses all of them into one declaration:
 
 ```coffee
 User = schema :model
   name!   string, 1..100
   email!# email
+  phone?  ~:phone
   @timestamps
   @has_many Order
   identifier:       ~> "#{@name} <#{@email}>"
   beforeValidation: -> @email = @email.toLowerCase()
 ```
 
-From that single line of source, the language gives you:
+From that single declaration, the language gives you:
 
-- a **runtime validator** — `User.parse(data)` / `.safe()` / `.ok()`
+- a **runtime validator** — `User.parse(data)` / `.safe()` / `.ok()` (plus
+  async variants), with strict wire coercion (`~integer`, `~:phone`),
+  cross-field refinements, and discriminated unions
 - a **generated class** with your methods and `~>` computed getters bound as prototype getters
 - a **TypeScript type** — `ModelSchema<User, UserData>`, automatic, no codegen step
 - an **async ORM** — `User.find! 1`, `User.where(active: true).all!`, `user.save!`
-- **transactions** — `schema.transaction! ->` with ambient propagation and rollback
-- **eager loading** — `User.includes(:orders).all!` batches relations, no N+1
-- **migration-grade DDL** — `User.toSQL()` emits `CREATE TABLE`, indexes, foreign keys
+- **transactions** — `schema.transaction! ->` with ambient propagation,
+  rollback, and `afterCommit` hooks
+- **query economics** — `User.includes(:orders)` eager loading, composable
+  `@scope`s, batch writes; no N+1 by default
+- **migrations** — `rip schema make/migrate` diffs the declared models
+  against the live database and writes plain-SQL migration files
+- **a wire contract** — `User.toJSONSchema()`, and rip-server routes that
+  validate with a schema contribute to a generated `GET /openapi.json`
 - **schema algebra** — `User.omit("password")` produces a correctly-typed derived shape
 
 Schemas are runtime values. You pass them around, export them, derive from
@@ -82,39 +91,6 @@ architecture for contributors.
 28. [Runtime architecture](#28-runtime-architecture)
 29. [Compiler integration](#29-compiler-integration)
 30. [FAQ](#30-faq)
-
----
-
-# Part I — Using Rip Schema
-1. [What Rip Schema is](#1-what-rip-schema-is)
-2. [A quick tour](#2-a-quick-tour)
-3. [Schemas vs types](#3-schemas-vs-types)
-4. [The six kinds](#4-the-six-kinds)
-5. [Body syntax](#5-body-syntax)
-6. [The runtime API](#6-the-runtime-api)
-7. [What `.parse()` returns by kind](#7-what-parse-returns-by-kind)
-8. [`:model` — ORM, DDL, hooks, relations](#8-model--the-orm)
-9. [Mixins](#14-mixins)
-10. [Schema algebra](#15-schema-algebra)
-11. [Shadow TypeScript](#16-shadow-typescript)
-12. [SchemaError and diagnostics](#17-schemaerror-and-diagnostics)
-13. [Common mistakes](#18-common-mistakes)
-14. [Recipes](#19-recipes)
-15. [What's not here yet](#20-whats-not-here-yet)
-
-## Part II — Reference
-16. [Capability matrix](#21-capability-matrix)
-17. [Field types](#22-field-types)
-18. [Directives](#23-directives)
-19. [Hook reference](#24-hook-reference)
-20. [Constraints](#25-constraints)
-21. [Relations](#26-relations)
-22. [Design invariants](#27-design-invariants)
-
-## Part III — Architecture
-23. [Runtime architecture](#28-runtime-architecture)
-24. [Compiler integration](#29-compiler-integration)
-25. [FAQ](#30-faq)
 
 ---
 
@@ -286,12 +262,42 @@ Order = schema :model
 # DDL for migration (works with or without the ORM adapter configured)
 sql = User.toSQL()
 
-# ORM operations (async, use `!` or `await`)
+# ORM operations (async — `!` is the dammit operator, Rip's await)
 user   = User.create! name: "Alice", email: "ALICE@EXAMPLE.COM"
 found  = User.find! user.id
 orders = user.orders!                       # has_many relation → Order[]
 owner  = orders[0]?.user!                   # belongs_to relation → User
 ```
+
+### The production layer
+
+The same declaration carries the whole data layer — atomic writes,
+constant-query-count reads, schema evolution, and a live API contract:
+
+```coffee
+# Transactions — ambient propagation; model code inside is unchanged
+order = schema.transaction! ->
+  o = Order.create! userId: user.id, total: 100
+  user.name = "Alice Q."
+  user.save!
+  o                                          # block value = transaction value
+
+# Eager loading + scopes — a list view in three queries, any row count
+users = User.includes(orders: :user).where(active: true).all!
+
+# Migrations — diff the declared models against the live database
+#   rip schema status      applied / pending / drift + the classified plan
+#   rip schema make NAME   write migrations/NNNN_NAME.sql from the diff
+#   rip schema migrate     apply pending files, checksummed history
+
+# Wire contract — schema-validated routes feed a generated OpenAPI doc
+post '/signup', input: SignupInput, ->
+  { welcome: @input.email }                  # 400 + issues automatic
+```
+
+Each of these has its own section: [§9](#9-transactions--data-integrity),
+[§10](#10-query-economics), [§12](#12-ddl--schema-evolution),
+[§13](#13-wire-contracts--json-schema--openapi).
 
 ### Schema algebra — derive new shapes
 
@@ -1063,12 +1069,19 @@ you:
 
 - field validation (from `:shape`)
 - class instances with methods and computed getters (from `:shape`)
-- lifecycle hooks bound by name
+- lifecycle hooks bound by name (12 of them, including transaction-aware
+  `afterCommit` / `afterRollback`)
 - an async ORM — `find`, `where`, `create`, `save`, `destroy`
-- `.toSQL()` for DDL (works without ever touching the ORM)
 - relation accessors driven by `@belongs_to` / `@has_many` / `@has_one`
 - automatic registration in a process-global registry for cross-module
   relation resolution
+
+This section covers the core read/write surface. The rest of the data
+layer has its own sections: transactions and constraint translation
+([§9](#9-transactions--data-integrity)), eager loading / scopes / batch
+writes / soft deletes ([§10](#10-query-economics)), adapters
+([§11](#11-adapters)), DDL and migrations
+([§12](#12-ddl--schema-evolution)).
 
 ### Static ORM methods
 
@@ -2347,22 +2360,80 @@ predicate.
 
 ### Validating HTTP input
 
+The `input:` route option validates the JSON body before the handler
+runs — a 400 with structured issues goes out automatically, the parsed
+(defaulted, coerced) value is `@input`, and the route contributes to
+the generated `GET /openapi.json`:
+
 ```coffee
-import { post, read } from '@rip-lang/server'
+import { post } from '@rip-lang/server'
 
 SignupInput = schema
   email!    email
   password! string, 8..100
-  age?      integer, 18..120
+  age?      ~integer, 18..120         # "21" on the wire → 21
 
-post '/signup' ->
-  raw = @json()                       # whatever shape the client sent
-  result = SignupInput.safe raw
-  unless result.ok
-    return error! 400, errors: result.errors
-  # result.value is the cleaned, typed payload
-  db.users.insert result.value
+post '/signup', input: SignupInput, ->
+  db.users.insert @input
   { ok: true }
+```
+
+Validating by hand works too — `SignupInput.safe raw` returns
+`{ok, value, errors}` for cases where you need custom failure handling.
+
+### An atomic checkout
+
+`schema.transaction!` makes the multi-write atomic; the UNIQUE
+constraint is the duplicate check (no racy pre-query — the DB error
+arrives as a structured SchemaError); `afterCommit` is where effects
+that must never observe uncommitted state belong:
+
+```coffee
+Order = schema :model
+  total!     integer
+  reference! # string
+  @belongs_to User
+  @timestamps
+  afterCommit: -> queueEmail 'receipt', @id     # fires after COMMIT only
+
+placeOrder = (user, items, reference) ->
+  try
+    schema.transaction! ->
+      order = Order.create! userId: user.id, total: totalOf(items), reference: reference
+      Invoice.create! orderId: order.id, amount: order.total
+      order
+  catch err
+    if err.issues?[0]?.error is 'unique'
+      error! 'That order reference already exists', 409
+    throw err
+```
+
+A throw anywhere in the block rolls everything back — the order and
+invoice land together or not at all.
+
+### A list view without N+1
+
+`.includes` batches relations (`WHERE fk IN (…)` — one query per
+relation per level), scopes name the filters, and `@defaultScope`
+keeps cancelled rows out of every query unless `.unscoped()` opts in:
+
+```coffee
+Patient = schema :model
+  name!    string
+  active?  boolean
+  @has_many Visit
+  @scope :active, -> @where(active: true)
+  @defaultScope -> @where(archived: false)
+
+Visit = schema :model
+  reason? string
+  @belongs_to Patient
+  @belongs_to Provider
+
+# 3 queries total, regardless of row count:
+patients = Patient.active().includes(visits: :provider).all!
+for patient in patients
+  visits = patient.visits!            # memo hit — no query
 ```
 
 ### A DB-backed model with relations
@@ -2452,31 +2523,57 @@ get '/users/:id' ->
   { user: UserPublic.parse user.toJSON() }
 ```
 
-### Writing a migration script
+### Evolving the schema (week 2 and beyond)
+
+Change the models, then let the differ write the migration. A rename is
+declared, not guessed:
 
 ```coffee
-# scripts/migrate.rip
-import { User, Order, OrderItem } from '../api/models.rip'
-import { sql, setup } from '../api/db.rip'
+# models.rip — week 2: rename a column, add a field, add a table
+User = schema :model
+  fullName! string, 1..100, {was: "name"}   # rename annotation
+  email!#   email
+  phone?    ~:phone                          # new column
+  @timestamps
 
-setup!                                   # start DB if needed
-
-# Emit DDL in dependency order
-ddl = [
-  User.toSQL()
-  Order.toSQL()       # references User
-  OrderItem.toSQL()   # references Order
-].join('\n\n')
-
-for stmt in ddl.split ';'
-  stmt = stmt.trim()
-  sql! stmt + ';' if stmt
-
-p "[migrate] schema created"
+AuditLog = schema :model                     # new table
+  action! string
+  @belongs_to User
+  @timestamps
 ```
 
-Because `.toSQL()` doesn't call the adapter, migration scripts work
-before the database exists or before the ORM is wired.
+```text
+rip schema status models.rip          # review the classified plan
+rip schema make week2 models.rip      # writes migrations/0002_week2.sql
+rip schema migrate models.rip         # applies it, records the checksum
+```
+
+Lossy steps (type changes, SET NOT NULL) need `--allow-lossy`;
+DROPs need `--allow-destructive`; steps DuckDB refuses on
+FK-referenced tables are marked `blocked` and never auto-applied.
+Once the migration lands, delete the `{was: …}` annotation.
+
+For greenfield scripts, `.toSQL()` still works standalone — it never
+calls the adapter, so DDL can be emitted before the database exists.
+
+### The wire vocabulary (`~:name`)
+
+Every `read()` validator from `@rip-lang/server` doubles as a schema
+coercer — one normalization vocabulary for route params and schema
+fields:
+
+```coffee
+Patient = schema :model
+  chart!  ~:id, 1..99999     # "42" → 42, range-checked
+  ssn?    ~:ssn              # "123-45-6789" → "123456789"
+  phone?  ~:phone            # "8016542000" → "(801) 654-2000"
+  state?  ~:state            # "ut" → "UT"
+  dob?    ~:date             # normalized "YYYY-MM-DD"
+  amount? ~:money            # "$1,234.50" → 1234.5
+```
+
+Custom validators registered with `registerValidator` (server) or
+`schema.registerCoercer` (anywhere) join the vocabulary automatically.
 
 ### Composing nested shapes
 
@@ -2566,29 +2663,32 @@ What each kind's body can contain:
 | Feature                                 | `:input` | `:shape` | `:enum`  | `:mixin` | `:model` |
 | --------------------------------------- | -------- | -------- | -------- | -------- | -------- |
 | Fields (`name` with optional type)      | ✓        | ✓        | —        | ✓        | ✓        |
-| Literal-union type (`"a" \| "b"`)       | ✓        | ✓        | —        | ✓        | ✓        |
+| Literal-union type (`"a" \| "b"`, single = constant) | ✓ | ✓   | —        | ✓        | ✓        |
+| Coercion (`~integer`, `~:ssn`)          | ✓        | ✓        | —        | ✓        | ✓        |
 | Range / regex / default / attrs         | ✓        | ✓        | —        | ✓        | ✓        |
 | Inline transforms (`name, -> fn(it)`)   | ✓        | ✓        | —        | —        | ✓        |
 | `@mixin` directive                      | ✓        | ✓        | —        | ✓        | ✓        |
-| `@ensure` refinement                    | ✓        | ✓        | —        | —        | ✓        |
-| Other directives                        | —        | —        | —        | —        | ✓        |
-| Methods (`name: -> body`)               | —        | ✓        | —        | —        | ✓        |
+| `@ensure` / `@ensure!` refinement       | ✓        | ✓        | —        | —        | ✓        |
+| Other directives (`@timestamps`, `@scope`, …) | — | —        | —        | —        | ✓        |
+| Methods (`name: (params) -> body`)      | —        | ✓        | —        | —        | ✓        |
 | Computed getter (`name: ~> body`)       | —        | ✓        | —        | —        | ✓        |
-| Eager-derived field (`name: !> body`)   | —        | ✓        | —        | —        | ✓        |
-| Hooks (by known name)                   | —        | methods  | —        | —        | ✓        |
+| Eager-derived field (`name: !> body`)   | ✓        | ✓        | —        | —        | ✓        |
+| Hooks (by known name, 12 total)         | —        | methods  | —        | —        | ✓        |
 | Enum members (`:symbol`)                | —        | —        | ✓        | —        | —        |
 | Algebra (`.pick` etc.)                  | ✓ → shape | ✓ → shape | —       | —        | ✓ → shape |
-| ORM (`.find`, `.create`)                | —        | —        | —        | —        | ✓        |
-| `.parse` / `.safe` / `.ok`              | ✓        | ✓        | ✓        | —        | ✓        |
-| `.toSQL()`                              | —        | —        | —        | —        | ✓        |
+| ORM (`.find`, `.create`, transactions, scopes) | — | —       | —        | —        | ✓        |
+| `.parse` / `.safe` / `.ok` (+ async trio) | ✓      | ✓        | ✓        | —        | ✓        |
+| `.toJSONSchema()`                       | ✓        | ✓        | ✓        | ✓        | ✓        |
+| `.toSQL()` / `rip schema make`          | —        | —        | —        | —        | ✓        |
 
 "methods" in the `:shape` / Hooks row means: hook-named functions are
 accepted, but they're just methods with no lifecycle binding.
 
 `:union` is body-incompatible with everything above — its body is
 exactly one `@on :field` plus 2+ bare constituent names. It exposes
-`.parse` / `.safe` / `.ok` (and the async trio) by delegating to the
-matched constituent; algebra and ORM surface throw.
+`.parse` / `.safe` / `.ok` (and the async trio) plus `.toJSONSchema()`
+(`oneOf` + discriminator) by delegating to the matched constituent;
+algebra and ORM surface throw.
 
 ---
 
@@ -2948,7 +3048,7 @@ the same memo, which is why preloaded relations are free. Pass
 
 ## 27. Design invariants
 
-Twelve rules that define how Rip Schema behaves. Worth keeping in mind
+Sixteen rules that define how Rip Schema behaves. Worth keeping in mind
 when debugging or extending:
 
 1. **Default kind is `:input`.** `schema` with no marker and a
@@ -2999,14 +3099,40 @@ when debugging or extending:
     result as an own enumerable property. Mutating a dependency
     afterward does **not** update the derived value — it stays stale
     by design. Use `~>` for always-current derivations.
-12. **Refinements are schema-level, not field-level.** `@ensure`
-    predicates run after per-field validation succeeds, once per
-    parse, against the whole defaulted and typed object. They fail
-    with a declared message that ships verbatim to the caller;
-    thrown exceptions inside a predicate count as failure, not
-    error. Refinements are skipped on DB hydrate (trusted data)
-    and dropped by every algebra op (structural derivation never
-    carries non-structural invariants).
+12. **Refinements are schema-level, not field-level by default.**
+    `@ensure` predicates run after per-field validation succeeds, once
+    per parse, against the whole defaulted and typed object. An
+    optional `:field` symbol attributes the failure to one input;
+    without it the issue is schema-wide (`field: ''`). They fail with
+    a declared message that ships verbatim to the caller; thrown
+    exceptions inside a predicate count as failure, not error.
+    Refinements are skipped on DB hydrate (trusted data) and dropped
+    by every algebra op (structural derivation never carries
+    non-structural invariants).
+13. **Coercion is field semantics.** `~type` / `~:name` converts the
+    wire value in pipeline step 1, before defaults and validation —
+    constraints always see the coerced value. Like transforms,
+    coercion survives algebra and is skipped on hydrate. A failed
+    coercion is `{error: 'coerce'}`, distinct from `{error: 'type'}`;
+    an unregistered `~:name` is a loud config error, never a
+    validation failure.
+14. **Async-validating schemas refuse the sync API.** One `@ensure!`
+    makes the whole schema async-validating: `.parse`/`.safe`/`.ok`
+    throw immediately ("use parseAsync!/safeAsync!/okAsync!") rather
+    than sometimes-returning a promise. Sync refinements run first;
+    async ones run concurrently; issues collect in declaration order.
+15. **Unions dispatch, never merge.** `:union` resolves the
+    discriminator to exactly one constituent and delegates — the
+    result is that constituent's instance. Discriminator values must
+    be disjoint string literals (checked at first parse, lazily).
+    Algebra on a union throws; distribute-vs-intersect has no
+    obviously-right answer, so v1 declines to guess.
+16. **The default scope applies at terminal time.** `@defaultScope`
+    composes into the query when a terminal (`all`/`first`/`count`/
+    `updateAll`/`deleteAll`) runs — so `.unscoped()` works anywhere in
+    the chain and the default's clauses never double-apply. `find`
+    routes through the builder, so the default scope and the
+    `@softDelete` filter apply to it uniformly.
 
 ---
 
@@ -3108,19 +3234,29 @@ this layer.
 Built on first `.find/.create/.save/.destroy/.where` call on a `:model`.
 Wires:
 
-- the query builder
-- save / destroy flows (including hook lifecycle)
-- relation accessors on the generated class
-- instance methods (`save`, `destroy`, `ok`, `errors`, `toJSON`)
+- the query builder (with scope methods, default-scope composition,
+  soft-delete filtering, and `.includes` eager-load resolution)
+- save / destroy / restore flows (including the 12-hook lifecycle and
+  constraint-violation translation)
+- relation accessors on the generated class (with per-instance
+  memoization)
+- instance methods (`save`, `destroy`, `restore`, `ok`, `errors`,
+  `toJSON`)
+- transaction routing — every statement checks the AsyncLocalStorage
+  slot for the schema's adapter and joins an ambient
+  `schema.transaction!` automatically
 
 Requires a configured adapter before first use.
 
 ### Layer 4b — DDL plan
 
-Built on first `.toSQL()` call. Emits the `CREATE SEQUENCE` /
-`CREATE TABLE` / indexes + foreign keys for one model. Independent of
-Layer 4a — a migration script that never touches the ORM builds this
-layer only.
+Built on first `.toSQL()` call. A canonical `_tableSpec` (columns,
+indexes, FKs, sequence) renders to `CREATE SEQUENCE` / `CREATE TABLE` /
+indexes + foreign keys for one model. The same spec is what the
+migration differ (`rip schema status/make/migrate`) compares against
+the introspected live database — DDL emission and diffing can't drift
+apart because they share one source. Independent of Layer 4a — a
+migration script that never touches the ORM builds this layer only.
 
 ### Lazy is the point
 
@@ -3134,16 +3270,22 @@ don't have to.
 
 `__SchemaRegistry` holds every named `:model` and `:mixin` by bare name.
 Registration happens in the `__SchemaDef` constructor — *importing a
-file that declares named schemas activates them*. Tests can call
-`__SchemaRegistry.reset()` between runs to avoid cross-test leakage.
+file that declares named schemas activates them*. Re-declaring a name
+with an identical structure is an idempotent no-op (double-import
+safe); a *different* structure throws unless `replace` mode is on (HMR
+and test runners opt in). Tests can also use `__SchemaRegistry.scope()`
+for isolated registries or `.reset()` between runs.
 
 ### The adapter
 
-One function: `adapter.query(sql, params) → {columns, data, rows}`. The
-default adapter talks to rip-db via `fetch`. Custom adapters (for
-tests, in-memory mocks, alternate SQL backends) install with
-`globalThis.__ripSchema.__schemaSetAdapter`. Every ORM method funnels
-through this interface.
+Contract v2: `query(sql, params) → {columns, data, rowCount}` is the
+one required method; `begin(options) → TxHandle` and a truthful
+`capabilities` object are optional and feature-detected (§11). The
+default adapter talks to a duckdb-harbor instance via `fetch`; named
+adapters from `schema.connect(...)` bind individual models elsewhere
+(`on:`). Custom adapters (for tests, in-memory mocks, alternate SQL
+backends) install with `globalThis.__ripSchema.__schemaSetAdapter`.
+Every ORM method funnels through this interface.
 
 ---
 
@@ -3216,19 +3358,38 @@ its footprint in the main compiler is small.
 ## 30. FAQ
 
 **Why not just use Zod?**
-Zod gives you the validator. It doesn't give you the ORM, the DDL, the
-class, the computed getters, or the derived DTOs. Rip Schema is all of
-that from one declaration. If you only need the validator, `schema :input`
-is the equivalent surface — and the derived shadow TS is indistinguishable
-from `z.infer<>`.
+Zod gives you the validator. It doesn't give you the ORM, the
+transactions, the migrations, the class, the computed getters, the
+derived DTOs, or the OpenAPI document. Rip Schema is all of that from
+one declaration. The validator alone now covers Zod's daily surface
+too: strict coercion (`~integer`, `~:phone`), discriminated unions
+(`schema :union`), sync and async refinements (`@ensure` /
+`@ensure!`), and `safeParse`-style structured results — with shadow TS
+indistinguishable from `z.infer<>` and no codegen step.
 
 **Is this a full ORM replacement for Prisma / Drizzle?**
-For the common production shape — yes. `find`, `where`, `create`,
-`save`, `destroy`, relations, DDL, hooks, lifecycle callbacks,
-validations, transactions (`schema.transaction!`), eager loading
-(`.includes`), query scopes (`@scope` / `@defaultScope`), soft deletes,
-upsert/batch writes, and structured constraint-violation errors are all
-present. For migration diffing — not yet; see §20.
+For the production shape — yes. `find`, `where`, `create`, `save`,
+`destroy`, relations, hooks, validations, transactions
+(`schema.transaction!`), eager loading (`.includes`), query scopes
+(`@scope` / `@defaultScope`), soft deletes, upsert/batch writes,
+structured constraint-violation errors, DDL, **and migration diffing**
+(`rip schema status / make / migrate` — declared models vs the live
+database, with checksummed history and rename annotations). The
+remaining gaps are listed honestly in §20.
+
+**How do transactions propagate without passing a handle around?**
+AsyncLocalStorage. `schema.transaction! ->` pins a connection and binds
+it to the async context; every ORM call inside the block routes through
+it automatically — model code is unchanged. Nested calls join the outer
+transaction; parallel transactions get independent contexts; per-schema
+adapters get independent slots. See §9.
+
+**What's the difference between `"a" | "b"` and `schema :union`?**
+The literal union is a FIELD type — one value constrained to a set of
+strings. `:union` is a SCHEMA kind — whole objects dispatched to
+different constituent schemas by a discriminator field (`@on :kind`).
+A single literal (`kind! "click"`) is the constant field that tags a
+constituent.
 
 **Does the runtime belong to `schema.js` or is it loaded separately?**
 It's inlined. When a file uses `schema`, the compiler injects a small
