@@ -31,5 +31,12 @@ export Order = schema :model
   @timestamps
   @belongs_to User
 
-export UserPublic  = User.pick("id", "firstName", "lastName", "email", "phone")
-export OrderPublic = Order.pick("id", "items", "total", "createdAt")
+export UserPublic   = User.pick("id", "firstName", "lastName", "email", "phone")
+export OrderSummary = Order.pick("id", "items", "total", "createdAt")
+
+export OrderDetailItem = schema :shape
+  product!  Product
+  quantity! integer, 1..
+
+export OrderDetail = OrderSummary.omit("items").extend(schema :shape
+  items! OrderDetailItem[])

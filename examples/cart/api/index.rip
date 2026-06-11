@@ -1,6 +1,6 @@
 import './db.rip'
 import { get, post, patch, read } from '@rip-lang/server'
-import { User, Order, OrderItem, UserPublic, OrderPublic, products } from './models.rip'
+import { User, Order, OrderItem, UserPublic, OrderSummary, OrderDetail, products } from './models.rip'
 
 # Response conventions: a bare `return value` becomes 200 JSON; `@json(value,
 # status)` sets a custom status (e.g. 201 Created); errors go through
@@ -16,7 +16,21 @@ get '/api/products' -> products
 get '/api/orders' ->
   user = currentUser!()
   if not user then return []
-  return user.orders!().reverse().map((o) -> OrderPublic.parse(o))
+  return user.orders!().reverse().map((o) -> OrderSummary.parse(o))
+
+get '/api/orders/:id' ->
+  id = read 'id', 'id'
+
+  user = currentUser!()
+  if not user then return errorResponse({ form: 'No user found' }, 404)
+
+  order = Order.where({ id, userId: user.id }).first!()
+  if not order then return errorResponse({ form: 'Order not found' }, 404)
+
+  items = order.items.map (item) ->
+    { product: products.find((p) -> p.id is item.productId), quantity: item.quantity }
+
+  return OrderDetail.parse({ ...order, items })
 
 post '/api/orders' ->
   raw = read 'items', 'array'
@@ -40,7 +54,7 @@ post '/api/orders' ->
   if not user then return errorResponse({ form: 'No user found' }, 404)
 
   order = Order.create!({ userId: user.id, items, total: Math.round(total * 100) / 100 })
-  return @json(OrderPublic.parse(order), 201)
+  return @json(OrderSummary.parse(order), 201)
 
 get '/api/user' ->
   user = currentUser!()
