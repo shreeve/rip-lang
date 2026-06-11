@@ -439,7 +439,7 @@ buildOpenAPI = ->
     continue if r.method is 'ALL'
     p = r.path.replace(/:([A-Za-z0-9_]+)\??/g, '{$1}')
     entry = (paths[p] ?= {})
-    op =
+    op:: Record<string, any> =
       responses:
         '200': { description: 'OK' }
         '400':
