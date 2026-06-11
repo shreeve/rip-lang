@@ -1,41 +1,34 @@
-import { User } from '../types.rip'
-import { api } from '../api-client.rip'
-
 export Layout = component
   cart ~= @app.data.cart
-  user ~= @app.data.user
-  userName ~= if user then "#{user.firstName} #{user.lastName}" else ''
-  loadError := ''
+  user <~ @app.data.user               # load before render → `user` is non-null
+  userName ~= "#{user.firstName} #{user.lastName}"
+  gateError:: { status?: number, message?: string } | null := null
 
-  mounted: ->
-    try
-      res = api.get!('user').json!()
-      @app.data.user = User.parse(res)
-    catch err
-      console.error(err)
-      loadError = 'Failed to load your account.'
+  # Descendant gate failures (a route's orders, an order detail) land here;
+  # the chrome stays up and the error renders in place of the route. The
+  # next navigation clears it.
+  onError: (err:: { status?: number, message?: string }) -> gateError = err
+  mounted: -> @router.onNavigate(=> gateError = null)
 
   render
-    if loadError
-      main.container
-        p.error loadError
-    else
-      nav.container
-        ul
-          li
-            strong "Shop"
-        ul
-          li
-            a href: "/", "Products"
-          li
-            a href: "/cart", "Cart (#{cart.totalItems()})"
-          li
-            details.dropdown
-              summary userName
-              ul
-                li
-                  a href: "/profile", "Profile"
-                li
-                  a href: "/orders", "Orders"
-      main.container
-        div id: "content"
+    nav.container
+      ul
+        li
+          strong "Shop"
+      ul
+        li
+          a href: "/", "Products"
+        li
+          a href: "/cart", "Cart (#{cart.totalItems()})"
+        li
+          details.dropdown
+            summary userName
+            ul
+              li
+                a href: "/profile", "Profile"
+              li
+                a href: "/orders", "Orders"
+    main.container
+      if gateError
+        p.error "Couldn't load this page (#{gateError.status ?? 500})."
+      div id: "content"

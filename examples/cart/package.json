@@ -2,6 +2,7 @@
   "name": "@rip-lang/example-cart",
   "private": true,
   "dependencies": {
+    "@rip-lang/app": "workspace:*",
     "@rip-lang/http": "workspace:*",
     "@rip-lang/server": "workspace:*"
   },

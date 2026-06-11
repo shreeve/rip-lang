@@ -1,4 +1,6 @@
-import { Product, User } from './types.rip'
+import { source } from '@rip-lang/app'
+import { api } from './api-client.rip'
+import { Product, User, OrderSummary, OrderDetail } from './types.rip'
 
 type CartItem = Product & { quantity: number }
 
@@ -11,15 +13,33 @@ export type Cart =
   totalPrice(): number
   clear(): void
 
-export stash:: { user: User | null, cart: Cart } =
-  user: null
-  cart:
-    items: []
-    addItem: (product) -> @items = [...@items, { ...product, quantity: 1 }]
-    removeItem: (product) -> @items = @items.filter((i) -> i.id isnt product.id)
-    updateQuantity: (product, quantity) ->
-      item = @items.find((i) -> i.id is product.id)
-      if item then item.quantity = quantity
-    totalItems: -> @items.reduce(((sum, i) -> sum + i.quantity), 0)
-    totalPrice: -> @items.reduce(((sum, i) -> sum + i.price * i.quantity), 0)
-    clear: -> @items = []
+# Plain client state — always present, never gates. Typed separately so the
+# method params carry types; the stash itself stays unannotated so
+# `typeof stash` infers every key (source keys type as their VALUE:
+# `User | null`, and the keyed `order` as `(id: string) => OrderDetail | null`).
+cart:: Cart =
+  items: []
+  addItem: (product) -> @items = [...@items, { ...product, quantity: 1 }]
+  removeItem: (product) -> @items = @items.filter((i) -> i.id isnt product.id)
+  updateQuantity: (product, quantity) ->
+    item = @items.find((i) -> i.id is product.id)
+    if item then item.quantity = quantity
+  totalItems: -> @items.reduce(((sum, i) -> sum + i.quantity), 0)
+  totalPrice: -> @items.reduce(((sum, i) -> sum + i.price * i.quantity), 0)
+  clear: -> @items = []
+
+# One store: server keys know how to load themselves (RFC 11). Reads are
+# per-key; writes are per-action (see the createMutation call sites).
+export stash =
+  cart: cart
+  user: source { fetch: -> User.parse(api.get!('user').json!()) }
+  products: source                # catalog: five minutes of freshness is plenty
+    fetch: ->
+      list:: Product[] = api.get!('products').json!().map((p:: unknown) -> Product.parse(p))
+      list
+    staleTime: '5 min'
+  orders: source
+    fetch: ->
+      list:: OrderSummary[] = api.get!('orders').json!().map((o:: unknown) -> OrderSummary.parse(o))
+      list
+  order: source { fetch: (id:: string) -> OrderDetail.parse(api.get!("orders/#{id}").json!()) }

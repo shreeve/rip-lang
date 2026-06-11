@@ -1,31 +1,30 @@
 import { api, ApiErrors, parseApiError } from '../api-client.rip'
 import { Button } from '../components/button.rip'
 import { title } from '../config.rip'
+import { createMutation } from '@rip-lang/app'
 
 export Cart = component
   cart ~= @app.data.cart
   errors:: ApiErrors := {}
-  status:: 'idle' | 'loading' | 'success' := 'idle'
+
+  # Writes are per-action: placing an order is a POST that touches TWO
+  # keys — it empties `cart` and stales `orders`. The fetch is a `=>`
+  # because it reads component state (nothing binds a mutation's `this`).
+  placeOrder = createMutation ((=> api.post!('orders', {
+    json: {
+      items: cart.items.map((i) -> { productId: i.id, quantity: i.quantity })
+    }
+  }))),
+    onSuccess: =>
+      cart.clear()
+      errors = {}
+      @app.data.orders = null            # invalidate — the next orders gate refetches
+    onError: (e) => errors = parseApiError!(e)
 
   mounted: -> document.title = title('Cart')
 
-  placeOrder: ->
-    status = 'loading'
-    try
-      api.post!('orders', {
-        json: {
-          items: cart.items.map((i) -> { productId: i.id, quantity: i.quantity })
-        }
-      })
-      cart.clear()
-      errors = {}
-      status = 'success'
-    catch err
-      errors = parseApiError!(err)
-      status = 'idle'
-
   render
-    if status is 'success'
+    if placeOrder.succeeded
       h1 "Order Placed!"
       p "Your order has been placed successfully."
       div.cart-actions
@@ -81,7 +80,7 @@ export Cart = component
                 strong "$#{cart.totalPrice().toFixed(2)}"
               td
       div.cart-actions
-        Button loading: status is 'loading', @click: @placeOrder, "Place Order"
+        Button loading: placeOrder.pending, @click: (-> placeOrder()), "Place Order"
         Button variant: 'secondary', outline, link, @click: (-> cart.clear()), "Clear Cart"
       if errors.form
         p.error errors.form

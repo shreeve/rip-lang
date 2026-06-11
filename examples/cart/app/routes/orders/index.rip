@@ -1,46 +1,31 @@
-import { OrderSummary } from '../../types.rip'
-import { api } from '../../api-client.rip'
 import { Button } from '../../components/button.rip'
 import { title } from '../../config.rip'
 
 export Orders = component
-  orders:: OrderSummary[] := []
-  loaded := false
-  loadError := ''
+  orders <~ @app.data.orders           # gated: the list is loaded before this renders
 
-  mounted: ->
-    document.title = title('Orders')
-    try
-      res = api.get!('orders').json!()
-      orders = res.map((o:: unknown) -> OrderSummary.parse(o))
-      loaded = true
-    catch err
-      console.error(err)
-      loadError = 'Orders failed to load.'
+  mounted: -> document.title = title('Orders')
 
   render
-    if loadError
-      p.error loadError
-    else if loaded
-      h1 "Orders"
-      if not orders.length
-        p "You haven't placed any orders yet."
-        a href: "/"
-          Button "Browse Products"
-      else
-        div.overflow-auto
-          table
-            thead
+    h1 "Orders"
+    if not orders.length
+      p "You haven't placed any orders yet."
+      a href: "/"
+        Button "Browse Products"
+    else
+      div.overflow-auto
+        table
+          thead
+            tr
+              th "Order"
+              th "Date"
+              th "Items"
+              th "Total"
+          tbody
+            for order in orders
               tr
-                th "Order"
-                th "Date"
-                th "Items"
-                th "Total"
-            tbody
-              for order in orders
-                tr
-                  td
-                    a href: "/orders/#{order.id}", "##{order.id}"
-                  td (new Date(order.createdAt)).toLocaleString()
-                  td "#{order.items.reduce(((sum, i) -> sum + i.quantity), 0)}"
-                  td "$#{order.total.toFixed(2)}"
+                td
+                  a href: "/orders/#{order.id}", "##{order.id}"
+                td (new Date(order.createdAt)).toLocaleString()
+                td "#{order.items.reduce(((sum, i) -> sum + i.quantity), 0)}"
+                td "$#{order.total.toFixed(2)}"
