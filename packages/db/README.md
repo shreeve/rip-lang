@@ -78,15 +78,27 @@ User.destroy! 42
 | `RIP_DB_URL`   | Base URL of the harbor server                                  | `http://127.0.0.1:9494` |
 | `RIP_DB_TOKEN` | Bearer token for `/sql`. Omit only when harbor was started with the explicit unauthenticated opt-in, `harbor_serve(..., token := NULL)` | unset |
 
-`connect(url)` overrides `RIP_DB_URL` at runtime (and, when the schema
-runtime is loaded, routes `Model.find!` / `Model.where!` through the same
-URL automatically).
+`connect(url)` overrides `RIP_DB_URL` at runtime. When the schema runtime
+is loaded, it also installs the full **adapter Contract v2** — `query`,
+`begin`, and `capabilities: { tx: true }` — so `Model.find!`,
+`Model.where(...).all!`, and `schema.transaction!` all route through the
+same harbor instance automatically.
 
 ## Client API (`client.rip`)
 
 - **`query(sql, params?, opts?)`** — execute one statement, returns harbor's
   envelope `{ ok, kind, columns, data, rowCount, timeMs }`. Options:
-  `timeout` ms (default 30 000, `0` disables) and `signal` (AbortSignal).
+  `timeout` ms (default 30 000, `0` disables), `signal` (AbortSignal), and
+  `sessionId` — pins the statement to a harbor session so it runs on that
+  session's dedicated connection (this is how transactions ride).
+- **`begin(options?)`** — open a harbor session and `BEGIN TRANSACTION` on
+  it; returns a `TxHandle` `{ query(sql, params), commit(), rollback() }`.
+  This is the transaction seam `schema.transaction!` uses — application
+  code normally goes through the schema runtime rather than calling
+  `begin()` directly. Requires an authenticated harbor (set
+  `RIP_DB_TOKEN`): harbor only creates *owned* sessions, so an
+  unauthenticated deployment can run plain queries but not transactions.
+  `commit()`/`rollback()` always close the session, even on error.
 - **`findOne(sql, params?)` / `findAll(sql, params?)`** — same, but rows come
   back as plain objects keyed by column name.
 - **`materializeAll(result)`** — turn a raw envelope into row objects.

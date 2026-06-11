@@ -70,6 +70,7 @@ rip schema migrate [models.rip]
 - Run `bun run parser` after grammar changes
 - Run `bun run build` after codegen, `components.js`, `browser.js`, or `app.rip` changes
 - Run `bun run build:schema-runtime` after editing any `src/schema/runtime-*.js` fragment (CI's `test:schema-fresh` fails on staleness)
+- **Every fenced `coffee` block in `docs/RIP-SCHEMA.md` must compile** — `bun run test:docs` enforces it (part of `test:all`). Annotate intentional exceptions with `<!-- doctest: skip -->` (fragments/templates) or `<!-- doctest: fail -->` (documented compile errors) on the line above the fence. When editing that doc, run `bun run test:docs` before committing.
 - Run `bun run bump` for the standard release flow
 - **In a typed Rip codebase, always run `rip check` after edits.** A project is typed if its `package.json` has `rip.strict: true` or `rip.checkAll: true`, or any `.rip` files use `::` annotations. `rip check` catches both type errors and shadow-TypeScript emitter bugs that the runtime won't surface.
 - **If a `@rip-lang/*` package advertises a typed public API, keep it honest with `rip check --audit`.** A package "claims to be typed" if its entry file has `::` annotations on exported symbols, or if downstream typed code imports it. For those, run `rip check --audit` before publishing or merging API changes — it runs the normal type check and walks the public surface for `any` leaks. A clean exit (0) means the source type-checks and every export is fully typed for consumers. Untyped packages with no typed consumers can stick with plain `rip check`.
