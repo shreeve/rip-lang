@@ -3670,8 +3670,12 @@ function __transition(el, name, dir, done) {
 // live-binding invariant. Last-good lives in this closure, so it dies
 // with the instance.
 function __gateBind(self, path, keyFn) {
+  // The component runtime ships both inlined after the reactive runtime
+  // (where __computed is a local) and as a standalone bundle chunk (where
+  // it is not) — resolve through globalThis.__rip in the latter case.
+  const __c = typeof __computed !== 'undefined' ? __computed : globalThis.__rip.__computed;
   let last;
-  return __computed(() => {
+  return __c(() => {
     const data = self.app && self.app.data;
     if (!data) return last;
     const v = keyFn

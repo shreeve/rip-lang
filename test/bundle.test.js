@@ -50,6 +50,7 @@ globalThis.document = {
   querySelector: () => null,
   querySelectorAll: () => [],
   addEventListener: () => {},
+  removeEventListener: () => {},
   body: { classList: { add: () => {} } },
 };
 
@@ -370,6 +371,99 @@ checkAsync('stash: peek never triggers a load and reads through cells', async ()
   await globalThis.unwrapStash(stash).user.ensure();
   if (stash.peek('user.name') !== 'Ada') throw new Error('peek must read through a loaded cell');
   if (calls !== 1) throw new Error('peek must not refetch');
+});
+
+// ── RFC 11 renderer gate flow — DOM-stubbed integration check ──────────
+// Pre-seeded compiled modules (components.setCompiled) let mountRoute run
+// without blob-URL imports, and 'render null' components never touch real
+// DOM beyond createElement/appendChild stubs.
+checkAsync('renderer: gates load before construction; failures route to onError; non-source path errors', async () => {
+  const makeEl = () => ({
+    children: [], attrs: {}, style: {}, innerHTML: '', textContent: '',
+    appendChild(c) { this.children.push(c); },
+    setAttribute(k, v) { this.attrs[k] = v; },
+    querySelector: () => null,
+    remove() {},
+  });
+  globalThis.window = globalThis.window || { addEventListener: () => {}, removeEventListener: () => {} };
+  globalThis.document.createElement = () => makeEl();
+  globalThis.document.getElementById = () => null;
+  globalThis.document.body.appendChild = () => {};
+
+  const C = globalThis.__ripComponent.__Component;
+  const gb = globalThis.__ripComponent.__gateBind;
+
+  let constructedWith;
+  let failConstructed = false;
+  let calls = 0;
+  class Page extends C {
+    static __gates = ['user'];
+    _init() { this.user = gb(this, 'user'); constructedWith = this.user.value; }
+    _create() { return null; }
+  }
+  class FailPage extends C {
+    static __gates = ['bad'];
+    _init() { this.bad = gb(this, 'bad'); failConstructed = true; }
+    _create() { return null; }
+  }
+  class PlainGate extends C {
+    static __gates = ['plain'];
+    _init() { this.plain = gb(this, 'plain'); }
+    _create() { return null; }
+  }
+
+  const components = globalThis.createComponents();
+  components.write('_route/index.rip', 'stub');
+  components.setCompiled('_route/index.rip', { Page });
+  components.write('_route/fail.rip', 'stub');
+  components.setCompiled('_route/fail.rip', { FailPage });
+  components.write('_route/plain.rip', 'stub');
+  components.setCompiled('_route/plain.rip', { PlainGate });
+
+  const app = { data: globalThis.createStash({
+    plain: { x: 1 },
+    user: globalThis.source({ fetch: async () => { calls++; await sleep(10); return { name: 'Ada' }; } }),
+    bad:  globalThis.source({ fetch: async () => { const e = new Error('boom'); e.status = 503; throw e; } }),
+  }) };
+
+  const errors = [];
+  const routeSig = globalThis.__rip.__state(null);
+  const router = {
+    get current() { return routeSig.value ?? { route: null }; },
+    navigating: false,
+    init() {},
+    match: () => null,
+    ownsAnchor: () => false,
+  };
+  const renderer = globalThis.createRenderer({
+    router, app, components, resolver: {}, compile: (s) => s, target: makeEl(),
+    onError: (e) => errors.push(e),
+  });
+  renderer.start();
+
+  // 1. healthy gate: construction waits for the load; binding is non-null
+  routeSig.value = { path: '/', params: {}, route: { file: '_route/index.rip', pattern: '/' }, layouts: [], query: {}, hash: '' };
+  await sleep(5);
+  if (constructedWith !== undefined) throw new Error('component must not construct before its gate resolves');
+  await sleep(30);
+  if (!constructedWith || constructedWith.name !== 'Ada') throw new Error('gated binding must be non-null at construction: ' + JSON.stringify(constructedWith));
+  if (calls !== 1) throw new Error('gate must load exactly once: ' + calls);
+
+  // 2. failing gate: page never constructs; structured error reaches onError
+  routeSig.value = { path: '/fail', params: {}, route: { file: '_route/fail.rip', pattern: '/fail' }, layouts: [], query: {}, hash: '' };
+  await sleep(30);
+  if (failConstructed) throw new Error('a component whose gate failed must never construct');
+  const ge = errors.find((e) => e.path === 'bad');
+  if (!ge) throw new Error('gate failure must reach onError with its path: ' + JSON.stringify(errors));
+  if (ge.status !== 503 || ge.message !== 'boom') throw new Error('gate failure must carry status/message: ' + JSON.stringify(ge));
+
+  // 3. gate on a non-source key: deterministic dev-time error at mount
+  routeSig.value = { path: '/plain', params: {}, route: { file: '_route/plain.rip', pattern: '/plain' }, layouts: [], query: {}, hash: '' };
+  await sleep(20);
+  const pe = errors.find((e) => /does not resolve to a source/.test(e.message || ''));
+  if (!pe) throw new Error('non-source gate path must be a mount-time error: ' + JSON.stringify(errors));
+
+  renderer.stop();
 });
 
 Promise.all(asyncChecks).then(() => {

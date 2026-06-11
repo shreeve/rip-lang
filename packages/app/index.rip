@@ -108,6 +108,8 @@ export type Router =
   forward: () => void
   onNavigate: (cb: (info: RouteInfo) => void) => Disposer
   rebuild: () => void
+  match: (url: string) => RouteInfo | null
+  ownsAnchor: (a: HTMLAnchorElement) => boolean
   init: () => Router
   destroy: () => void
   current: RouteInfo
@@ -1532,6 +1534,35 @@ export def createRouter(components:: ComponentsStore, opts?:: RouterOpts = {})::
 
     rebuild: -> tree = buildRoutes(components, root)
 
+    # Pure match of a URL (or full anchor href) against the current route
+    # tree — same parsing as resolve(), but no signal writes, no history,
+    # no navigation callbacks. Returns null when nothing matches. Used by
+    # the renderer's link-intent preloading (RFC 11).
+    match: (url) ->
+      if /^[a-z][a-z0-9+.-]*:\/\//i.test(url)
+        u = try new URL(url, location.origin) catch then null
+        return null unless u
+        url = if hashMode and u.hash then (u.hash.slice(1) or '/') else (u.pathname + u.search + u.hash)
+      rawPath = url.split('?')[0].split('#')[0]
+      path = stripBase(rawPath)
+      path = if path[0] is '/' then path else '/' + path
+      queryStr = url.split('?')[1]?.split('#')[0] or ''
+      result = matchRoute(path, tree.routes)
+      return null unless result
+      {
+        path: path
+        params: result.params
+        route: result.route
+        layouts: getLayoutChain(result.route.file, root, tree.layouts)
+        query: Object.fromEntries(new URLSearchParams(queryStr))
+        hash: if url.includes('#') then url.split('#')[1] else ''
+      }
+
+    # True when the SPA router owns this anchor — same checks as the click
+    # interceptor and the aria-current walker, exposed so a third consumer
+    # (the renderer's preloader) can't drift from them.
+    ownsAnchor: (a) -> not shouldIgnoreAnchor(a)
+
     routes: undefined
 
     init: ->
@@ -1945,6 +1976,89 @@ export def createRenderer(opts:: RendererOpts):: Renderer
       return false unless b[k] is v
     true
 
+  # ── RFC 11: render gates ──────────────────────────────────────────────
+  # A gate path resolves to the NEAREST source cell along it: a subpath
+  # gate ('settings.theme') loads the `settings` source and binds the
+  # subpath. The walk is over raw values — it must never trigger loads.
+  resolveGateCell = (path) ->
+    obj = unwrapStash(app.data)
+    for seg in path.split('.')
+      return null unless obj? and typeof obj is 'object'
+      obj = obj[seg]
+      return obj if isSourceCell(obj)
+    null
+
+  # Union the chain's static gate-sets and ensure every cell before
+  # construction. Overlapping gates dedupe (one in-flight load per
+  # source), and the union SETTLES rather than failing fast — one
+  # rejection doesn't abort its siblings' loads (their cells finish and
+  # cache normally; they're not wasted on the retry). Returns
+  # { failedIndex, failure }: failedIndex is Infinity when every gate
+  # loaded, else the chain index of the outermost member whose gate
+  # failed — the chain constructs top-down only above that point.
+  ensureGates = (chain, params, query) ->
+    jobs = new Map()
+    for entry, idx in chain
+      gates = entry.cls?.__gates
+      continue unless gates and gates.length
+      for g in gates
+        path = if typeof g is 'string' then g else g.path
+        keyFn = if typeof g is 'string' then null else g.key
+        cell = resolveGateCell(path)
+        unless cell
+          throw new Error "[Rip] #{entry.file}: '#{path} <~' does not resolve to a source — declare it with source() in app/stash.rip"
+        key = undefined
+        if isSourceFamily(cell)
+          unless keyFn
+            throw new Error "[Rip] #{entry.file}: '#{path}' is a keyed source — gate with a key: #{path}(params.…)"
+          key = keyFn(params or {}, query or {})
+          cell = cell.cellFor(key)
+        else if keyFn
+          throw new Error "[Rip] #{entry.file}: '#{path}' is not a keyed source — drop the key argument"
+        jk = path + '|' + String(key ?? '')
+        job = jobs.get(jk)
+        unless job
+          job = { cell: cell, owners: [], path: path }
+          jobs.set jk, job
+        job.owners.push idx
+    list = [...jobs.values()]
+    return { failedIndex: Infinity, failure: null } unless list.length
+    results = await Promise.allSettled(list.map((j) -> j.cell.ensure()))
+    failedIndex = Infinity
+    failure = null
+    for r, i in results
+      continue unless r.status is 'rejected'
+      ownerIdx = Math.min(...list[i].owners)
+      if ownerIdx < failedIndex
+        err = r.reason
+        failedIndex = ownerIdx
+        failure = { status: err?.status ?? err?.response?.status ?? 500, message: err?.message ?? String(err), error: err, path: list[i].path }
+    { failedIndex: failedIndex, failure: failure }
+
+  # Route a gate failure to the nearest constructible onError boundary —
+  # innermost mounted layout first, app-level last. Mirrors the catch
+  # block below, but carries the structured { status, message, error,
+  # path } the RFC specifies for gate failures.
+  routeGateFailure = (failure) ->
+    console.error "Renderer: gate '#{failure.path}' failed:", failure.error
+    onError(failure) if onError
+    handled = false
+    for inst in layoutInstances by -1
+      if inst.onError
+        try
+          inst.onError(failure)
+          handled = true
+          break
+        catch boundaryErr
+          console.error "Renderer: error boundary failed:", boundaryErr
+    unless handled
+      unmount()
+      pre = document.createElement('pre')
+      pre.style.cssText = 'color:red;padding:1em'
+      pre.textContent = "#{failure.status}: #{failure.message}"
+      container.innerHTML = ''
+      container.appendChild pre
+
   mountRoute = (info, force = false) ->
     { route, params, layouts: layoutFiles, query } = info
     return unless route
@@ -1960,7 +2074,23 @@ export def createRenderer(opts:: RendererOpts):: Renderer
     # The load!() call is wrapped in try/catch so an async failure here
     # surfaces through the same onError path as the full-mount path
     # below (instead of becoming a silent unhandled rejection).
-    if sameRoute and not force
+    # A query-keyed gate (order <~ @app.data.order(query.id)) addresses a
+    # DIFFERENT cell when the query changes — the fast path would skip the
+    # ensure and hand the component a binding nobody loaded. Compare the
+    # key fns' outputs under old vs new query; differing keys force the
+    # full mount path below.
+    queryKeyedChanged = ->
+      gates = currentComponent?.constructor?.__gates
+      return false unless gates
+      for g in gates
+        if typeof g isnt 'string' and g.key
+          try
+            return true if g.key(params or {}, currentQuery or {}) isnt g.key(params or {}, query or {})
+          catch
+            return true
+      false
+
+    if sameRoute and not force and not queryKeyedChanged()
       if not sameKeys(query, currentQuery)
         currentQuery = query
         if currentComponent?.load
@@ -1989,6 +2119,26 @@ export def createRenderer(opts:: RendererOpts):: Renderer
         router.navigating = false
         return
 
+      # Pre-compile the layout chain (cached per path, so this is ~free on
+      # repeat navigations) — the gate union below must read every chain
+      # member's static __gates BEFORE anything constructs.
+      layoutEntries = []
+      for layoutFile in layoutFiles
+        layoutSource = components.read(layoutFile)
+        continue unless layoutSource
+        layoutMod = compileAndImport! layoutSource, compile, components, layoutFile, resolver
+        if gen isnt generation then router.navigating = false; return
+        LayoutClass = findComponent(layoutMod)
+        continue unless LayoutClass
+        layoutEntries.push { file: layoutFile, cls: LayoutClass }
+
+      # RFC 11 gate phase — runs before any teardown, so the previous
+      # screen stays up while gated sources load (loading UI is the
+      # router's `navigating` indicator, nothing per-component).
+      chain = [...layoutEntries, { file: route.file, cls: Component }]
+      { failedIndex, failure } = ensureGates! chain, params, query
+      if gen isnt generation then router.navigating = false; return
+
       layoutsChanged = not arraysEqual(layoutFiles, currentLayouts)
       oldTarget = currentComponent?._target
 
@@ -2008,6 +2158,13 @@ export def createRenderer(opts:: RendererOpts):: Renderer
 
       mp = if layoutsChanged then container else mountPoint
 
+      # A failed gate stops construction at its owner: layouts above the
+      # failure construct normally (the chain renders as far as its gates
+      # succeeded); the failing member and everything below it never
+      # exist. failedIndex === layoutEntries.length means the page's own
+      # gate failed under a healthy layout chain.
+      constructUpTo = Math.min(failedIndex, layoutEntries.length)
+
       if layoutsChanged and layoutFiles.length > 0
         container.innerHTML = ''
         mp = container
@@ -2023,23 +2180,22 @@ export def createRenderer(opts:: RendererOpts):: Renderer
         __pop = globalThis.__ripComponent?.__popComponent
         outerScope = null
 
-        for layoutFile in layoutFiles
-          layoutSource = components.read(layoutFile)
-          continue unless layoutSource
-          layoutMod = compileAndImport! layoutSource, compile, components, layoutFile, resolver
-          if gen isnt generation then router.navigating = false; return
-
-          LayoutClass = findComponent(layoutMod)
-          continue unless LayoutClass
+        for entry, li in layoutEntries
+          break if li >= constructUpTo
+          LayoutClass = entry.cls
 
           # Push the previous layout as current so the new layout's
           # constructor establishes parentage to it (or null for the
           # outermost layout). Pop after construction; the layout's
           # own mount() / setup re-pushes itself for its own scope.
+          # __ripGateMount marks this construction as renderer-driven so
+          # the embedded-child gate guard in __Component lets it through.
           prevScope = __push?(outerScope)
+          globalThis.__ripGateMount = LayoutClass
           try
             inst = new LayoutClass { app, params, router }
           finally
+            globalThis.__ripGateMount = null
             __pop?(prevScope)
 
           # beforeMount under the layout's own scope so its effects
@@ -2049,7 +2205,7 @@ export def createRenderer(opts:: RendererOpts):: Renderer
             try inst.beforeMount()
             finally __pop?(__innerPrev)
           wrapper = document.createElement('div')
-          wrapper.setAttribute 'data-layout', layoutFile
+          wrapper.setAttribute 'data-layout', entry.file
           mp.appendChild wrapper
           inst.mount wrapper
           layoutInstances.push inst
@@ -2058,12 +2214,25 @@ export def createRenderer(opts:: RendererOpts):: Renderer
           slot = wrapper.querySelector('#content') or wrapper
           mp = slot
 
-        currentLayouts = [...layoutFiles]
+        # Record only the prefix that actually mounted — a partial chain
+        # (gate failure) must not pass the next navigation's arraysEqual
+        # check as if the whole chain were up.
+        currentLayouts = if constructUpTo < layoutEntries.length then layoutFiles.slice(0, constructUpTo) else [...layoutFiles]
         mountPoint = mp
       else if layoutsChanged
         container.innerHTML = ''
         currentLayouts = []
         mountPoint = container
+
+      if failure
+        # Gate failure: route to the nearest constructible onError —
+        # global-state failure (a layout's own gate) is an app-level
+        # event; screen-state failure (the route's gate) renders at the
+        # innermost layout boundary. The old page DOM is gone either way.
+        oldTarget?.remove()
+        routeGateFailure(failure)
+        router.navigating = false
+        return
 
       pageWrapper = document.createElement('div')
       pageWrapper.setAttribute 'data-component', route.file
@@ -2076,9 +2245,11 @@ export def createRenderer(opts:: RendererOpts):: Renderer
       __pop = globalThis.__ripComponent?.__popComponent
       pageParent = layoutInstances[layoutInstances.length - 1] or null
       pagePrev = __push?(pageParent)
+      globalThis.__ripGateMount = Component
       try
         instance = new Component { app, params, query, router }
       finally
+        globalThis.__ripGateMount = null
         __pop?(pagePrev)
       # Same beforeMount wrap as the layout loop above — effects
       # created in beforeMount auto-register on the page component.
@@ -2127,6 +2298,48 @@ export def createRenderer(opts:: RendererOpts):: Renderer
 
   started:: boolean = false
 
+  # ── RFC 11: link-intent preloading ────────────────────────────────────
+  # On hover/focus of a router-owned anchor, match the target URL, compile
+  # its chain (cached per path), and fire the gate union's loads early.
+  # Navigation then awaits cells already loaded or in-flight — ensure()
+  # guarantees one in-flight load per source, so there's no double fetch.
+  # A preload failure never surfaces: the cell records it, and the
+  # navigation's own gate retries.
+  preload = (url) ->
+    info = router.match?(url)
+    return unless info?.route
+    chain = []
+    for layoutFile in info.layouts
+      layoutSource = components.read(layoutFile)
+      continue unless layoutSource
+      layoutMod = compileAndImport! layoutSource, compile, components, layoutFile, resolver
+      cls = findComponent(layoutMod)
+      chain.push { file: layoutFile, cls: cls } if cls
+    pageSource = components.read(info.route.file)
+    if pageSource
+      pageMod = compileAndImport! pageSource, compile, components, info.route.file, resolver
+      cls = findComponent(pageMod)
+      chain.push { file: info.route.file, cls: cls } if cls
+    ensureGates! chain, info.params, info.query
+    return
+
+  # Re-preloading the same href on every pointerover bubble would re-run
+  # match + compile (cached, but not free) dozens of times per hover —
+  # debounce per href. Freshness is still the cells' job: a preload only
+  # ever goes through ensure(), which respects staleTime.
+  lastPreload = { href: null, at: 0 }
+  onIntent = (e) ->
+    a = e.target
+    a = a.parentElement while a and a.tagName isnt 'A'
+    return unless a
+    return unless router.ownsAnchor?(a)
+    href = a.href
+    now = Date.now()
+    return if href is lastPreload.href and now - lastPreload.at < 3000
+    lastPreload.href = href
+    lastPreload.at = now
+    preload(href).catch(-> null)
+
   renderer =
     start: ->
       # Idempotent: a double-call without an intervening stop() would
@@ -2145,6 +2358,8 @@ export def createRenderer(opts:: RendererOpts):: Renderer
       # remount of the current route immediately.
       unwatchSources = components?.watch (event, path) ->
         invalidateResolver(path) if event in ['change', 'delete']
+      document.addEventListener 'pointerover', onIntent, { passive: true }
+      document.addEventListener 'focusin', onIntent, { passive: true }
       router.init()
       renderer
 
@@ -2157,6 +2372,8 @@ export def createRenderer(opts:: RendererOpts):: Renderer
         disposeEffect = null
       unwatchSources?()
       unwatchSources = null
+      document.removeEventListener 'pointerover', onIntent
+      document.removeEventListener 'focusin', onIntent
       # Revoke every blob URL we created so the underlying module text
       # can be reclaimed. Without this, every hot reload leaks one
       # module's worth of memory per .rip file.

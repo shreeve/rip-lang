@@ -10469,8 +10469,12 @@ function __transition(el, name, dir, done) {
 // live-binding invariant. Last-good lives in this closure, so it dies
 // with the instance.
 function __gateBind(self, path, keyFn) {
+  // The component runtime ships both inlined after the reactive runtime
+  // (where __computed is a local) and as a standalone bundle chunk (where
+  // it is not) — resolve through globalThis.__rip in the latter case.
+  const __c = typeof __computed !== 'undefined' ? __computed : globalThis.__rip.__computed;
   let last;
-  return __computed(() => {
+  return __c(() => {
     const data = self.app && self.app.data;
     if (!data) return last;
     const v = keyFn
@@ -15808,7 +15812,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.16.1";
-  var BUILD_DATE = "2026-06-11@20:15:19GMT";
+  var BUILD_DATE = "2026-06-11@20:42:34GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -17892,6 +17896,32 @@ ${indented}`);
       rebuild() {
         return tree = buildRoutes(components, root);
       },
+      match(url) {
+        let path, queryStr, rawPath, result, u;
+        if (/^[a-z][a-z0-9+.-]*:\/\//i.test(url)) {
+          u = (() => {
+            try {
+              return new URL(url, location.origin);
+            } catch {
+              return null;
+            }
+          })();
+          if (!u)
+            return null;
+          url = hashMode && u.hash ? u.hash.slice(1) || "/" : u.pathname + u.search + u.hash;
+        }
+        rawPath = url.split("?")[0].split("#")[0];
+        path = stripBase(rawPath);
+        path = path[0] === "/" ? path : "/" + path;
+        queryStr = url.split("?")[1]?.split("#")[0] || "";
+        result = matchRoute(path, tree.routes);
+        if (!result)
+          return null;
+        return { path, params: result.params, route: result.route, layouts: getLayoutChain(result.route.file, root, tree.layouts), query: Object.fromEntries(new URLSearchParams(queryStr)), hash: url.includes("#") ? url.split("#")[1] : "" };
+      },
+      ownsAnchor(a) {
+        return !shouldIgnoreAnchor(a);
+      },
       routes: undefined,
       init() {
         resolve(readUrl());
@@ -18230,7 +18260,7 @@ ${indented}`);
     })();
   };
   function createRenderer(opts) {
-    let app, compile2, components, container, currentComponent, currentLayouts, currentParams, currentQuery, currentRoute, disposeEffect, generation, invalidateResolver, layoutInstances, mountPoint, mountRoute, onError, renderer, resolver, router, sameKeys, started, target, unmount, unmountCurrent, unwatchSources;
+    let app, compile2, components, container, currentComponent, currentLayouts, currentParams, currentQuery, currentRoute, disposeEffect, ensureGates, generation, invalidateResolver, lastPreload, layoutInstances, mountPoint, mountRoute, onError, onIntent, preload, renderer, resolveGateCell, resolver, routeGateFailure, router, sameKeys, started, target, unmount, unmountCurrent, unwatchSources;
     assertBrowser("createRenderer");
     ({ router, app, components, resolver, compile: compile2, target, onError } = opts);
     container = typeof target === "string" ? document.querySelector(target) : target || document.getElementById("app");
@@ -18306,13 +18336,124 @@ ${indented}`);
       }
       return true;
     };
+    resolveGateCell = function(path) {
+      let obj;
+      obj = unwrapStash(app.data);
+      for (let seg of path.split(".")) {
+        if (!(obj != null && typeof obj === "object"))
+          return null;
+        obj = obj[seg];
+        if (isSourceCell(obj))
+          return obj;
+      }
+      return null;
+    };
+    ensureGates = async function(chain, params, query) {
+      let cell, err, failedIndex, failure, gates, jk, job, jobs, key, keyFn, list, ownerIdx, path, results;
+      jobs = new Map;
+      for (let idx = 0;idx < chain.length; idx++) {
+        let entry = chain[idx];
+        gates = entry.cls?.__gates;
+        if (!(gates && gates.length))
+          continue;
+        for (let g of gates) {
+          path = typeof g === "string" ? g : g.path;
+          keyFn = typeof g === "string" ? null : g.key;
+          cell = resolveGateCell(path);
+          if (!cell) {
+            throw new Error(`[Rip] ${entry.file}: '${path} <~' does not resolve to a source — declare it with source() in app/stash.rip`);
+          }
+          key = undefined;
+          if (isSourceFamily(cell)) {
+            if (!keyFn) {
+              throw new Error(`[Rip] ${entry.file}: '${path}' is a keyed source — gate with a key: ${path}(params.…)`);
+            }
+            key = keyFn(params || {}, query || {});
+            cell = cell.cellFor(key);
+          } else if (keyFn) {
+            throw new Error(`[Rip] ${entry.file}: '${path}' is not a keyed source — drop the key argument`);
+          }
+          jk = path + "|" + String(key ?? "");
+          job = jobs.get(jk);
+          if (!job) {
+            job = { cell, owners: [], path };
+            jobs.set(jk, job);
+          }
+          job.owners.push(idx);
+        }
+      }
+      list = [...jobs.values()];
+      if (!list.length)
+        return { failedIndex: Infinity, failure: null };
+      results = await Promise.allSettled(list.map(function(j) {
+        return j.cell.ensure();
+      }));
+      failedIndex = Infinity;
+      failure = null;
+      for (let i = 0;i < results.length; i++) {
+        let r = results[i];
+        if (!(r.status === "rejected"))
+          continue;
+        ownerIdx = Math.min(...list[i].owners);
+        if (ownerIdx < failedIndex) {
+          err = r.reason;
+          failedIndex = ownerIdx;
+          failure = { status: err?.status ?? err?.response?.status ?? 500, message: err?.message ?? String(err), error: err, path: list[i].path };
+        }
+      }
+      return { failedIndex, failure };
+    };
+    routeGateFailure = function(failure) {
+      let handled, pre;
+      console.error(`Renderer: gate '${failure.path}' failed:`, failure.error);
+      if (onError)
+        onError(failure);
+      handled = false;
+      for (let _i = layoutInstances.length - 1;_i >= 0; _i--) {
+        let inst = layoutInstances[_i];
+        if (inst.onError) {
+          try {
+            inst.onError(failure);
+            handled = true;
+            break;
+          } catch (boundaryErr) {
+            console.error("Renderer: error boundary failed:", boundaryErr);
+          }
+        }
+      }
+      if (!handled) {
+        unmount();
+        pre = document.createElement("pre");
+        pre.style.cssText = "color:red;padding:1em";
+        pre.textContent = `${failure.status}: ${failure.message}`;
+        container.innerHTML = "";
+        return container.appendChild(pre);
+      }
+    };
     mountRoute = async function(info, force = false) {
-      let Component, LayoutClass, __innerPrev, __pop, __prev, __push, gen2, handled, inst, instance, layoutFiles, layoutMod, layoutSource, layoutsChanged, mod, mp, oldTarget, outerScope, pageParent, pagePrev, pageWrapper, params, pre, prevScope, query, route, sameRoute, slot, source2, wrapper;
+      let Component, LayoutClass, __innerPrev, __pop, __prev, __push, chain, constructUpTo, failedIndex, failure, gen2, handled, inst, instance, layoutEntries, layoutFiles, layoutMod, layoutSource, layoutsChanged, mod, mp, oldTarget, outerScope, pageParent, pagePrev, pageWrapper, params, pre, prevScope, query, queryKeyedChanged, route, sameRoute, slot, source2, wrapper;
       ({ route, params, layouts: layoutFiles, query } = info);
       if (!route)
         return;
       sameRoute = route.file === currentRoute && sameKeys(params, currentParams);
-      if (sameRoute && !force) {
+      queryKeyedChanged = function() {
+        let gates;
+        gates = currentComponent?.constructor?.__gates;
+        if (!gates)
+          return false;
+        for (let g of gates) {
+          if (typeof g !== "string" && g.key) {
+            try {
+              if (g.key(params || {}, currentQuery || {}) !== g.key(params || {}, query || {}))
+                return true;
+            } catch {
+              return true;
+            }
+          }
+        }
+        return false;
+      };
+      if (sameRoute && !force && !queryKeyedChanged()) {
         if (!sameKeys(query, currentQuery)) {
           currentQuery = query;
           if (currentComponent?.load) {
@@ -18350,6 +18491,27 @@ ${indented}`);
             router.navigating = false;
             return;
           }
+          layoutEntries = [];
+          for (let layoutFile of layoutFiles) {
+            layoutSource = components.read(layoutFile);
+            if (!layoutSource)
+              continue;
+            layoutMod = await compileAndImport(layoutSource, compile2, components, layoutFile, resolver);
+            if (gen2 !== generation) {
+              router.navigating = false;
+              return;
+            }
+            LayoutClass = findComponent(layoutMod);
+            if (!LayoutClass)
+              continue;
+            layoutEntries.push({ file: layoutFile, cls: LayoutClass });
+          }
+          chain = [...layoutEntries, { file: route.file, cls: Component }];
+          ({ failedIndex, failure } = await ensureGates(chain, params, query));
+          if (gen2 !== generation) {
+            router.navigating = false;
+            return;
+          }
           layoutsChanged = !arraysEqual(layoutFiles, currentLayouts);
           oldTarget = currentComponent?._target;
           if (layoutsChanged) {
@@ -18360,28 +18522,24 @@ ${indented}`);
           currentParams = params;
           currentQuery = query;
           mp = layoutsChanged ? container : mountPoint;
+          constructUpTo = Math.min(failedIndex, layoutEntries.length);
           if (layoutsChanged && layoutFiles.length > 0) {
             container.innerHTML = "";
             mp = container;
             __push = globalThis.__ripComponent?.__pushComponent;
             __pop = globalThis.__ripComponent?.__popComponent;
             outerScope = null;
-            for (let layoutFile of layoutFiles) {
-              layoutSource = components.read(layoutFile);
-              if (!layoutSource)
-                continue;
-              layoutMod = await compileAndImport(layoutSource, compile2, components, layoutFile, resolver);
-              if (gen2 !== generation) {
-                router.navigating = false;
-                return;
-              }
-              LayoutClass = findComponent(layoutMod);
-              if (!LayoutClass)
-                continue;
+            for (let li = 0;li < layoutEntries.length; li++) {
+              let entry = layoutEntries[li];
+              if (li >= constructUpTo)
+                break;
+              LayoutClass = entry.cls;
               prevScope = __push?.(outerScope);
+              globalThis.__ripGateMount = LayoutClass;
               try {
                 inst = new LayoutClass({ app, params, router });
               } finally {
+                globalThis.__ripGateMount = null;
                 __pop?.(prevScope);
               }
               if (inst.beforeMount) {
@@ -18393,7 +18551,7 @@ ${indented}`);
                 }
               }
               wrapper = document.createElement("div");
-              wrapper.setAttribute("data-layout", layoutFile);
+              wrapper.setAttribute("data-layout", entry.file);
               mp.appendChild(wrapper);
               inst.mount(wrapper);
               layoutInstances.push(inst);
@@ -18401,12 +18559,18 @@ ${indented}`);
               slot = wrapper.querySelector("#content") || wrapper;
               mp = slot;
             }
-            currentLayouts = [...layoutFiles];
+            currentLayouts = constructUpTo < layoutEntries.length ? layoutFiles.slice(0, constructUpTo) : [...layoutFiles];
             mountPoint = mp;
           } else if (layoutsChanged) {
             container.innerHTML = "";
             currentLayouts = [];
             mountPoint = container;
+          }
+          if (failure) {
+            oldTarget?.remove();
+            routeGateFailure(failure);
+            router.navigating = false;
+            return;
           }
           pageWrapper = document.createElement("div");
           pageWrapper.setAttribute("data-component", route.file);
@@ -18415,9 +18579,11 @@ ${indented}`);
           __pop = globalThis.__ripComponent?.__popComponent;
           pageParent = layoutInstances[layoutInstances.length - 1] || null;
           pagePrev = __push?.(pageParent);
+          globalThis.__ripGateMount = Component;
           try {
             instance = new Component({ app, params, query, router });
           } finally {
+            globalThis.__ripGateMount = null;
             __pop?.(pagePrev);
           }
           if (instance.beforeMount) {
@@ -18467,6 +18633,52 @@ ${indented}`);
       })();
     };
     started = false;
+    preload = async function(url) {
+      let chain, cls, info, layoutMod, layoutSource, pageMod, pageSource;
+      info = router.match?.(url);
+      if (!info?.route)
+        return;
+      chain = [];
+      for (let layoutFile of info.layouts) {
+        layoutSource = components.read(layoutFile);
+        if (!layoutSource)
+          continue;
+        layoutMod = await compileAndImport(layoutSource, compile2, components, layoutFile, resolver);
+        cls = findComponent(layoutMod);
+        if (cls)
+          chain.push({ file: layoutFile, cls });
+      }
+      pageSource = components.read(info.route.file);
+      if (pageSource) {
+        pageMod = await compileAndImport(pageSource, compile2, components, info.route.file, resolver);
+        cls = findComponent(pageMod);
+        if (cls)
+          chain.push({ file: info.route.file, cls });
+      }
+      await ensureGates(chain, info.params, info.query);
+      return;
+    };
+    lastPreload = { href: null, at: 0 };
+    onIntent = function(e) {
+      let a, href, now;
+      a = e.target;
+      while (a && a.tagName !== "A") {
+        a = a.parentElement;
+      }
+      if (!a)
+        return;
+      if (!router.ownsAnchor?.(a))
+        return;
+      href = a.href;
+      now = Date.now();
+      if (href === lastPreload.href && now - lastPreload.at < 3000)
+        return;
+      lastPreload.href = href;
+      lastPreload.at = now;
+      return preload(href).catch(function() {
+        return null;
+      });
+    };
     renderer = {
       start() {
         if (started)
@@ -18480,6 +18692,8 @@ ${indented}`);
         unwatchSources = components?.watch(function(event, path) {
           return (Array.isArray(["change", "delete"]) ? ["change", "delete"].includes(event) : (event in ["change", "delete"])) ? invalidateResolver(path) : undefined;
         });
+        document.addEventListener("pointerover", onIntent, { passive: true });
+        document.addEventListener("focusin", onIntent, { passive: true });
         router.init();
         return renderer;
       },
@@ -18494,6 +18708,8 @@ ${indented}`);
         }
         unwatchSources?.();
         unwatchSources = null;
+        document.removeEventListener("pointerover", onIntent);
+        document.removeEventListener("focusin", onIntent);
         if (resolver?.blobUrls) {
           for (let _ in resolver.blobUrls) {
             if (!Object.hasOwn(resolver.blobUrls, _))
