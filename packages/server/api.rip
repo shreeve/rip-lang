@@ -34,6 +34,8 @@ _routes:: any[]                        = []    # Route definitions
 _middlewares:: Function[]              = []    # Global middleware functions
 _prefix:: string                       = ''    # Current route prefix for grouping
 _corsPreflightPolicy:: Function | null = null  # Policy fn set by cors middleware: see setCorsPreflightPolicy
+_openapiRegistered:: boolean           = false # GET /openapi.json auto-registered?
+_openapiInfo:: Record<string, any>     = { title: 'Rip API', version: '0.0.0' }
 
 export resetGlobals = ->
   _errorHandler        = null
@@ -45,6 +47,8 @@ export resetGlobals = ->
   _middlewares         = []
   _prefix              = ''
   _corsPreflightPolicy = null
+  _openapiRegistered   = false
+  _openapiInfo         = { title: 'Rip API', version: '0.0.0' }
 
 # Register a CORS preflight policy. Called by the `cors()` middleware when
 # opts.preflight is set. The policy function receives the request Origin
@@ -169,6 +173,7 @@ export type CtxReq =
   parseBody: (opts?: Record<string, unknown>) => Promise<any>
 
 export type Ctx =
+  input: any
   json: (data: any, status?: number, headers?: Record<string, string>) => Response
   text: (str: string, status?: number, headers?: Record<string, string>) => Response
   html: (str: string, status?: number, headers?: Record<string, string>) => Response
@@ -329,7 +334,12 @@ smart = (fn) ->
     catch err
       status = err?.status or 500
       warn 'Handler error:', err if status >= 500
-      if err?.notice
+      if err?.issues
+        # Schema validation failure (route `input:` option) — structured
+        # {field, error, message} issues, same shape SchemaError carries.
+        body = JSON.stringify { error: { message: err.message or 'Validation failed', issues: err.issues } }
+        new Response body, { status, headers: { 'Content-Type': 'application/json' } }
+      else if err?.notice
         body = JSON.stringify { error: { notice: err.notice } }
         new Response body, { status, headers: { 'Content-Type': 'application/json' } }
       else
@@ -340,15 +350,63 @@ smart = (fn) ->
 # DSL: Route Registration
 # ==============================================================================
 
+# Validate the JSON body through a schema before the handler runs. On
+# failure the request never reaches the handler — a 400 with structured
+# {field, error, message} issues goes out instead (see smart's catch).
+# On success the parsed, defaulted, coerced value is `@input`. Uses
+# safeAsync so schemas with @ensure! async refinements work too.
+withInput = (schema, fn) ->
+  (c) ->
+    if c._bodyInvalid
+      err = new Error 'Invalid JSON body'
+      err.status = 400
+      err.issues = [{ field: '', error: 'json', message: 'request body is not valid JSON' }]
+      throw err
+    r = schema.safeAsync! (c._body ?? {})
+    unless r.ok
+      err = new Error 'Validation failed'
+      err.status = 400
+      err.issues = r.errors
+      throw err
+    c.input = r.value
+    if fn.length > 0 then fn.call!(c, c) else fn.call!(c)
+
 addRoute = (method, path, ...handlers) ->
+  # Route options: a leading plain-object slot carries route metadata.
+  # `input: SomeSchema` wires schema validation + the OpenAPI contract:
+  #
+  #   post '/signup', input: SignupInput, ->
+  #     # @input is the parsed value; 400 with issues is automatic
+  opts = null
+  if handlers.length > 1 and handlers[0]? and typeof handlers[0] is 'object'
+    opts = handlers[0]
+    handlers = handlers.slice(1)
   fullPath = "#{_prefix}#{path}"
   if fullPath.includes(':') and fullPath.endsWith('?')
     basePath = fullPath.slice(0, -1).replace(/\/:[^\/]+$/, '')
-    addRoute method, basePath, ...handlers if basePath and basePath isnt fullPath.slice(0, -1)
+    if basePath and basePath isnt fullPath.slice(0, -1)
+      addRoute method, basePath, ...(if opts then [opts, ...handlers] else handlers)
     fullPath = fullPath.slice(0, -1)
   { regex, keys } = compilePattern(fullPath)
   for handler in handlers
-    _routes.push { method: method.toUpperCase(), regex, keys, handler: smart(handler), path: fullPath }
+    h = if opts?.input then withInput(opts.input, handler) else handler
+    _routes.push {
+      method: method.toUpperCase(), regex, keys,
+      handler: smart(h), path: fullPath,
+      inputSchema: opts?.input ?? null,
+    }
+  # The first input-validated route turns on the generated OpenAPI
+  # document — GET /openapi.json reflects every such route, always
+  # current, with zero additional authoring. Registered directly (no
+  # _prefix) so it lives at the server root even inside prefix blocks.
+  if opts?.input and not _openapiRegistered
+    _openapiRegistered = true
+    oa = compilePattern('/openapi.json')
+    _routes.push {
+      method: 'GET', regex: oa.regex, keys: oa.keys,
+      handler: smart(-> buildOpenAPI()), path: '/openapi.json',
+      inputSchema: null,
+    }
 
 export get::   (path: string, ...handlers: RouteHandler[]) => void = (path, ...handlers) -> addRoute 'GET',    path, ...handlers
 export post::  (path: string, ...handlers: RouteHandler[]) => void = (path, ...handlers) -> addRoute 'POST',   path, ...handlers
@@ -356,6 +414,62 @@ export put::   (path: string, ...handlers: RouteHandler[]) => void = (path, ...h
 export patch:: (path: string, ...handlers: RouteHandler[]) => void = (path, ...handlers) -> addRoute 'PATCH',  path, ...handlers
 export del::   (path: string, ...handlers: RouteHandler[]) => void = (path, ...handlers) -> addRoute 'DELETE', path, ...handlers
 export all::   (path: string, ...handlers: RouteHandler[]) => void = (path, ...handlers) -> addRoute 'ALL',    path, ...handlers
+
+# ==============================================================================
+# OpenAPI generation
+# ==============================================================================
+#
+# Every route registered with an `input:` schema contributes an
+# operation: path params from the route pattern, requestBody from
+# `schema.toJSONSchema()` (draft 2020-12), and the standard 400
+# validation-failure shape. The document is rebuilt per request — route
+# tables are small and this keeps it always-current.
+
+ISSUE_SCHEMA =!
+  type: 'object'
+  properties:
+    field:   { type: 'string' }
+    error:   { type: 'string' }
+    message: { type: 'string' }
+
+buildOpenAPI = ->
+  paths = {}
+  for r in _routes
+    continue if r.middleware or not r.inputSchema
+    continue if r.method is 'ALL'
+    p = r.path.replace(/:([A-Za-z0-9_]+)\??/g, '{$1}')
+    entry = (paths[p] ?= {})
+    op =
+      responses:
+        '200': { description: 'OK' }
+        '400':
+          description: 'Validation failed'
+          content:
+            'application/json':
+              schema:
+                type: 'object'
+                properties:
+                  error:
+                    type: 'object'
+                    properties:
+                      message: { type: 'string' }
+                      issues:  { type: 'array', items: ISSUE_SCHEMA }
+      requestBody:
+        required: true
+        content:
+          'application/json':
+            schema: r.inputSchema.toJSONSchema()
+    if r.keys?.length
+      op.parameters = r.keys.map (k) -> { name: k, in: 'path', required: true, schema: { type: 'string' } }
+    entry[r.method.toLowerCase()] = op
+  { openapi: '3.1.0', info: _openapiInfo, paths }
+
+# Customize the document's info block and/or build it imperatively:
+#
+#   openapi title: 'Trust Health API', version: '1.4.0'
+export openapi = (info = null) ->
+  Object.assign(_openapiInfo, info) if info
+  buildOpenAPI()
 
 export use = (pathOrMw, mw = null) ->
   if typeof pathOrMw is 'function'
@@ -443,6 +557,10 @@ export fetch = (req) ->
         data = { body: c.req.text! }
   catch
     data = {}
+    c._bodyInvalid = true
+  # The body stream is consumed now — route `input:` validation reads
+  # the parsed value from here, never from c.req.json() again.
+  c._body = data
   merged = { ...data, ...c.req.query(), ...match.params }
 
   # Run handler inside AsyncLocalStorage context

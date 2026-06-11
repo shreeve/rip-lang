@@ -170,6 +170,7 @@ Key ideas:
 
 - handlers use `@req`, `@json()`, `@send()`, `@session`
 - `read()` validates params and body
+- `post '/x', input: SomeSchema, ->` validates the JSON body through a Rip schema before the handler runs (400 with structured issues; parsed value at `@input`) and contributes to the auto-generated `GET /openapi.json`
 - `@send(path, type?)` serves files
 - `use()` composes middleware
 

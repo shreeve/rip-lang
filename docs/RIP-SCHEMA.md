@@ -636,20 +636,32 @@ kind (see [§18](#18-directives)). Examples:
 
 ```coffee
 name: -> body
+name: (params) -> body
 ```
 
 Thin-arrow method bound on the generated class prototype. `this` is the
-instance. For `:model`, method names matching known [hook
-names](#19-hook-reference) bind to the lifecycle; on other kinds those
-names are just methods.
+instance. Parameters are optional and may carry Rip type annotations,
+which flow into shadow TS — a fully-annotated method gets its complete
+signature (typed params, `this`, and the inferred return) instead of
+`(...args: any[]) => unknown`:
 
 ```coffee
 greet: -> "Hello, #{@name}!"
+
+add: (other:: Money) ->
+  Money.parse amount: @amount + other.amount, currency: @currency
+  # shadow TS: add(this: Money, other: Money): Money
 
 beforeSave: ->
   @email = @email.toLowerCase()
   @slug  = @name.toLowerCase().replace(/\s+/g, '-')
 ```
+
+Parameters are method-only — lifecycle hooks, computed getters (`~>`),
+and eager-derived fields (`!>`) are accessor-shaped and reject them.
+For `:model`, method names matching known [hook
+names](#19-hook-reference) bind to the lifecycle; on other kinds those
+names are just methods.
 
 ### Computed getter (lazy)
 
@@ -1507,6 +1519,50 @@ and can be removed.
   produce drift; sequence start values cannot be altered after
   creation, so `@idStart` drift is reported as a note, not a step.
 
+### JSON Schema & OpenAPI (`toJSONSchema`)
+
+Every schema exports a JSON Schema (draft 2020-12):
+
+```coffee
+SignupInput.toJSONSchema()
+# { $schema: "…/2020-12/schema", title: "SignupInput", type: "object",
+#   properties: { email: {type: "string", format: "email"}, … },
+#   required: ["email", "password"] }
+```
+
+- Field types map per [§17](#17-field-types); ranges become
+  `minLength`/`maxLength`/`minimum`/`maximum`/`minItems`/`maxItems`,
+  regexes become `pattern`, defaults become `default`, literal unions
+  become `enum` (single literal → `const`).
+- Nested registry schemas become `$ref`s collected under `$defs`
+  (cycle-safe — recursive shapes work); `:enum` maps to `enum`,
+  `:union` to `oneOf` + a `discriminator`.
+- `:model` shapes include the DB-managed columns `toJSON()` carries
+  (`id`, FKs, `@timestamps`, `@softDelete`).
+- Transforms and refinements have no executable JSON Schema equivalent
+  — they export as `description` annotations rather than being
+  silently dropped or approximated.
+
+**The payoff is rip-server integration.** A route that validates with
+a schema contributes to a generated `GET /openapi.json` automatically:
+
+```coffee
+import { post, openapi } from '@rip-lang/server'
+
+post '/signup', input: SignupInput, ->
+  # @input is the parsed (defaulted, coerced) value;
+  # 400 with structured {field, error, message} issues is automatic
+  createUser @input
+
+openapi title: 'Trust Health API', version: '1.4.0'   # optional info block
+```
+
+The `input:` option validates through `safeAsync` (so `@ensure!`
+schemas work), never re-reads the body stream, and registers
+`/openapi.json` on first use — declaration → DB → server contract →
+client codegen (any OpenAPI generator), with zero additional
+authoring.
+
 ### The adapter seam (Contract v2)
 
 All ORM methods route through a single adapter funnel.
@@ -1536,6 +1592,31 @@ protocol — `POST /sql/sessions/new` pins a connection, statements carry
 the `sessionId`, and the session is destroyed after COMMIT/ROLLBACK.
 `@rip-lang/db`'s `connect(url)` installs the same contract (query +
 begin) with its richer error handling and timeouts.
+
+### Per-schema adapters (`on:`)
+
+Multi-database setups pin individual models to their own adapter:
+
+```coffee
+analytics = schema.connect url: env.ANALYTICS_URL, token: env.ANALYTICS_TOKEN
+
+Event = schema :model, on: analytics
+  name! string
+  @timestamps
+```
+
+- `schema.connect {url, token?}` builds a NEW harbor adapter value
+  without installing it globally; any Contract-v2 adapter object works
+  in the `on:` slot. The default remains the global adapter.
+- Every ORM call resolves the model's adapter; `schema.transaction!`
+  takes `on: analytics` to pin the ambient transaction to one adapter.
+  ORM calls against a *different* adapter inside that block run
+  **outside** the transaction — each adapter has its own ambient slot,
+  and cross-adapter atomicity is impossible, so the runtime never
+  pretends otherwise.
+- `@belongs_to` / `@has_many` across adapters: the accessor works (it's
+  just a second query), but FK DDL emission is suppressed with a note —
+  the constraint can't exist cross-database.
 
 ### Snake / camel dual access on instances
 
@@ -2337,15 +2418,6 @@ language.
   by another schema. Today you define a concrete `PaginatedUser` per type.
 - **Branded / nominal types** — `UserId = schema :input` whose parsed
   value is nominally distinct from `number`.
-- **Typed method parameters / inferred returns** — methods are typed
-  `(...args: any[]) => unknown` in shadow TS.
-
-### Deferred by design
-
-- **Per-schema adapters** — every schema currently uses the one global
-  adapter. Multi-database setups require swapping before the call.
-- **JSON Schema / OpenAPI export** — `User.toJSONSchema()`. The
-  four-layer runtime makes this feasible; no canonical emitter exists yet.
 
 None of these are architectural impossibilities. Each is a conscious pause
 while the core shape of the feature settles. If one of these is blocking

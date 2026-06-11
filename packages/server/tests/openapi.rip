@@ -1,0 +1,65 @@
+# openapi.rip — route `input:` validation + generated OpenAPI document
+#
+# `post '/signup', input: SignupInput, -> …` validates the JSON body
+# through the schema before the handler runs (400 with structured
+# issues on failure, @input on success) and contributes the schema to
+# the auto-registered GET /openapi.json.
+
+import { test, eq, ok } from './runner.rip'
+import { post, fetch as dispatch, openapi, resetGlobals } from '../api.rip'
+
+SignupInput = schema
+  email!    email
+  password! string, 8..100
+  page?     ~integer
+
+resetGlobals()
+
+post '/signup', input: SignupInput, ->
+  { welcome: @input.email, page: @input.page }
+
+req = (path, body) ->
+  dispatch new Request "http://test#{path}",
+    method:  'POST'
+    headers: { 'Content-Type': 'application/json' }
+    body:    JSON.stringify(body)
+
+test 'input: valid body reaches the handler as @input (coercion applied)', ->
+  res = req! '/signup', { email: 'a@b.co', password: 'longenough', page: '3' }
+  eq res.status, 200
+  data = res.json!
+  eq data, { welcome: 'a@b.co', page: 3 }
+
+test 'input: invalid body never reaches the handler — 400 with issues', ->
+  res = req! '/signup', { email: 'nope', password: 'short' }
+  eq res.status, 400
+  data = res.json!
+  fields = data.error.issues.map((i) -> i.field).sort()
+  eq fields, ['email', 'password']
+
+test 'input: malformed JSON body → 400 with a json issue', ->
+  res = dispatch! new Request('http://test/signup', {
+    method: 'POST'
+    headers: { 'Content-Type': 'application/json' }
+    body: 'not json'
+  })
+  eq res.status, 400
+  data = res.json!
+  eq data.error.issues[0].error, 'json'
+
+test 'GET /openapi.json is auto-registered and reflects the route', ->
+  res = dispatch! new Request('http://test/openapi.json')
+  eq res.status, 200
+  doc = res.json!
+  eq doc.openapi, '3.1.0'
+  body = doc.paths['/signup'].post.requestBody.content['application/json'].schema
+  eq body.title, 'SignupInput'
+  eq body.required, ['email', 'password']
+  eq body.properties.email.format, 'email'
+  eq body.properties.page.type, 'integer'
+  ok doc.paths['/signup'].post.responses['400'], '400 response documented'
+
+test 'openapi(info) customizes the document info block', ->
+  doc = openapi title: 'Test API', version: '9.9.9'
+  eq doc.info, { title: 'Test API', version: '9.9.9' }
+  resetGlobals()

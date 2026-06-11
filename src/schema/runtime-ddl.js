@@ -92,12 +92,25 @@ __SchemaDef.prototype._tableSpec = function (options) {
   }
 
   const foreignKeys = [];
+  const notes = [];
   for (const [, rel] of norm.relations) {
     if (rel.kind !== 'belongsTo') continue;
     columns.push({
       name: rel.foreignKey, type: 'INTEGER',
       notNull: !rel.optional, unique: false, default: null, was: null,
     });
+    // A relation whose target lives on a DIFFERENT adapter cannot carry
+    // a database FK constraint — the referenced table is in another
+    // database. The accessor still works (it's just a second query);
+    // the DDL suppresses the constraint with a note.
+    const targetDef = __SchemaRegistry.get(rel.target);
+    const crossAdapter = targetDef &&
+      (targetDef._adapter || null) !== (this._adapter || null);
+    if (crossAdapter) {
+      notes.push('-- NOTE: ' + rel.foreignKey + ' references ' + __schemaTableName(rel.target) +
+        '(id) on a different adapter; FK constraint suppressed (cross-database constraints are impossible)');
+      continue;
+    }
     foreignKeys.push({
       column: rel.foreignKey,
       refTable: __schemaTableName(rel.target),
@@ -131,7 +144,7 @@ __SchemaDef.prototype._tableSpec = function (options) {
     name: table,
     sequence: { name: seq, start: idStart },
     primaryKey: norm.primaryKey,
-    columns, indexes, foreignKeys,
+    columns, indexes, foreignKeys, notes,
     tableWas: norm.tableWas || null,
   };
 };
@@ -172,6 +185,7 @@ function __schemaRenderCreate(spec) {
   blocks.push('CREATE TABLE ' + spec.name + ' (\n' + lines.join(',\n') + '\n);');
   const ix = spec.indexes.map(i => __schemaRenderIndex(spec, i));
   if (ix.length) blocks.push(ix.join('\n'));
+  if (spec.notes && spec.notes.length) blocks.push(spec.notes.join('\n'));
   return blocks;
 }
 

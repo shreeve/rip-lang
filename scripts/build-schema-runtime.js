@@ -113,8 +113,14 @@ const WRAPPER_TAIL = `
   // User-facing namespace: schema.transaction! -> ... in Rip source
   // resolves through this object (installed as a global alongside the
   // other Rip stdlib globals; ??= keeps user overrides intact).
+  const __schemaConnectExport = typeof __schemaConnect !== 'undefined'
+    ? __schemaConnect
+    : function() {
+        throw new Error('schema.connect() requires the server schema runtime (validate/browser-only runtime loaded).');
+      };
   const schemaNamespace = {
     transaction: __schemaTransactionExport,
+    connect:    __schemaConnectExport,
     plan:       typeof __schemaPlan       !== 'undefined' ? __schemaPlan       : __schemaMigrationStub('plan'),
     status:     typeof __schemaStatus     !== 'undefined' ? __schemaStatus     : __schemaMigrationStub('status'),
     make:       typeof __schemaMake       !== 'undefined' ? __schemaMake       : __schemaMigrationStub('make'),
