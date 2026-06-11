@@ -1801,6 +1801,13 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
       if (needEffect) decls.push(EFFECT_FN);
       headerDts = decls.join('\n') + '\n' + headerDts;
     }
+    // RFC 11: gated bindings (`x <~ @app.data.x`) stub as
+    // `__computed(() => __ripGate(this.app.data.x))`. __ripGate is the
+    // generic narrow — soundness is supplied by the runtime gate, which
+    // loads the source before the component is constructed.
+    if (/\b__ripGate\(/.test(code) && !/\bdeclare function __ripGate\b/.test(headerDts)) {
+      headerDts = 'declare function __ripGate<T>(v: T | null | undefined): T;\n' + headerDts;
+    }
   }
 
   // Inject declarations for Rip's stdlib globals (abort, assert, p, sleep, etc.)

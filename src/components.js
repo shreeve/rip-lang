@@ -90,6 +90,77 @@ function getMemberOptional(target) {
   return false;
 }
 
+/**
+ * Flatten a pure `.` chain s-expression into its segment names.
+ * `(. (. this app) data)` → ['this', 'app', 'data']. Returns null when the
+ * node isn't a plain identifier chain (computed access, calls, etc.).
+ */
+function chainSegments(node) {
+  const segs = [];
+  while (Array.isArray(node) && node[0] === '.') {
+    const prop = node[2];
+    if (!(typeof prop === 'string' || prop instanceof String)) return null;
+    segs.unshift(prop.valueOf());
+    node = node[1];
+  }
+  if (typeof node === 'string' || node instanceof String) segs.unshift(node.valueOf());
+  else return null;
+  return segs;
+}
+
+/**
+ * RFC 11: parse a gate RHS (`user <~ @app.data.user`) into its hoistable
+ * parts. The RHS must be a literal `@app.data.…` chain, optionally applied
+ * to exactly one key argument (keyed source). Returns
+ * { path, keyExpr? } or { error }.
+ */
+function parseGatePath(rhs) {
+  let keyExpr;
+  let chain = rhs;
+  // Application form: [calleeChain, keyArg]
+  if (Array.isArray(rhs) && Array.isArray(rhs[0]) && rhs[0][0] === '.') {
+    if (rhs.length !== 2) return { error: 'a keyed gate takes exactly one key argument' };
+    chain = rhs[0];
+    keyExpr = rhs[1];
+  }
+  const segs = chainSegments(chain);
+  if (!segs) return { error: "'<~' requires a literal @app.data.… path on the right-hand side" };
+  if (segs[0] === 'this') segs.shift();
+  if (segs[0] !== 'app' || segs[1] !== 'data' || segs.length < 3) {
+    return { error: "'<~' requires a literal @app.data.… path on the right-hand side" };
+  }
+  return { path: segs.slice(2).join('.'), keyExpr };
+}
+
+/**
+ * RFC 11: parse a keyed gate's key expression. The key must be available
+ * to the renderer before construction, so it is restricted to a literal or
+ * a params/query access (`params.id`, `@query.tab`). Returns
+ * { code, stubCode } (runtime and type-stub spellings) or { error }.
+ */
+function parseGateKey(expr) {
+  const KEY_ERROR = { error: 'a keyed gate key may only reference params or query (e.g. params.id)' };
+  const lit = (typeof expr === 'string' || expr instanceof String) ? expr.valueOf() : null;
+  if (lit != null) {
+    if (/^-?[\d.]/.test(lit) || lit.startsWith('"') || lit.startsWith("'")) {
+      return { code: lit, stubCode: lit };
+    }
+    if (lit === 'params' || lit === 'query') return KEY_ERROR; // a whole bag isn't a key
+    return KEY_ERROR;
+  }
+  const segs = chainSegments(expr);
+  if (!segs) return KEY_ERROR;
+  if (segs[0] === 'this') segs.shift();
+  if ((segs[0] !== 'params' && segs[0] !== 'query') || segs.length < 2) return KEY_ERROR;
+  const code = segs.join('.');
+  // The stub types `query` as URLSearchParams while the router hands
+  // components a plain object — cast in the shadow only.
+  const stubCode = segs[0] === 'query'
+    ? `(this.query as any).${segs.slice(1).join('.')}`
+    : `this.${code}`;
+  return { code, stubCode };
+}
+
 // ============================================================================
 // Prototype Installation
 // ============================================================================
@@ -730,6 +801,7 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     // Categorize statements
     const stateVars = [];
     const derivedVars = [];
+    const gateVars = [];
     const readonlyVars = [];
     const methods = [];
     const lifecycleHooks = [];
@@ -783,6 +855,22 @@ export function installComponentSupport(CodeEmitter, Lexer) {
         const varName = getMemberName(stmt[1]);
         if (varName) {
           derivedVars.push({ name: varName, expr: stmt[2], type: getMemberType(stmt[1]), srcLine: stmt.loc?.r });
+          memberNames.add(varName);
+          reactiveMembers.add(varName);
+        }
+      } else if (op === 'gate') {
+        // RFC 11 render-ready binding: hoist the literal stash path into the
+        // component's static gate-set; bind the member as a reactive read.
+        const varName = getMemberName(stmt[1]);
+        if (varName) {
+          const parsed = parseGatePath(stmt[2]);
+          if (parsed.error) this.error(parsed.error, stmt);
+          let key = null;
+          if (parsed.keyExpr !== undefined) {
+            key = parseGateKey(parsed.keyExpr);
+            if (key.error) this.error(key.error, stmt);
+          }
+          gateVars.push({ name: varName, path: parsed.path, key, type: getMemberType(stmt[1]), srcLine: stmt.loc?.r });
           memberNames.add(varName);
           reactiveMembers.add(varName);
         }
@@ -944,6 +1032,19 @@ export function installComponentSupport(CodeEmitter, Lexer) {
       for (const { name, type, value } of readonlyVars) {
         const ts = expandType(type) || inferLiteralType(value);
         sl.push(ts ? `  declare ${name}: ${ts};` : `  declare ${name}: any;`);
+      }
+      // Gated bindings (<~): non-null by construction — the renderer loads
+      // the source before the component exists. __ripGate is the generic
+      // narrow `(v: T | null | undefined) => T`; soundness comes from the
+      // runtime gate, not from the type system proving the load ran.
+      for (const { name, path, key, type, srcLine } of gateVars) {
+        const ts = expandType(type);
+        const typeAnnot = ts ? `: Computed<${ts}>` : '';
+        const access = key
+          ? `this.app.data.${path}(${key.stubCode})`
+          : `this.app.data.${path}`;
+        const marker = srcLine != null ? ` // @rip-src:${srcLine}` : '';
+        sl.push(`  ${name}${typeAnnot} = __computed(() => __ripGate(${access}));` + marker);
       }
       for (const { name, expr, type } of derivedVars) {
         const ts = expandType(type);
@@ -1543,8 +1644,27 @@ export function installComponentSupport(CodeEmitter, Lexer) {
 
     lines.push('class extends __Component {');
 
+    // RFC 11: static gate-set — readable by the renderer without
+    // constructing the component. Strings are plain stash paths; keyed
+    // gates carry a key fn the renderer evaluates with the matched
+    // params/query before construction.
+    if (gateVars.length > 0) {
+      const items = gateVars.map(({ path, key }) => key
+        ? `{ path: '${path}', key: (params, query) => ${key.code} }`
+        : `'${path}'`);
+      lines.push(`  static __gates = [${items.join(', ')}];`);
+    }
+
     // --- Init (called by __Component constructor) ---
     lines.push('  _init(props) {');
+
+    // Gated bindings (<~) — first, so any readonly/state initializer can
+    // consume the loaded value synchronously (`form := { ...user }`).
+    for (const { name, path, key } of gateVars) {
+      lines.push(key
+        ? `    this.${name} = __gateBind(this, '${path}', (params, query) => ${key.code});`
+        : `    this.${name} = __gateBind(this, '${path}');`);
+    }
 
     // Constants (readonly)
     for (const { name, value, isPublic } of readonlyVars) {
@@ -3543,6 +3663,24 @@ function __transition(el, name, dir, done) {
   });
 }
 
+// RFC 11 render-ready binding (\`x <~ @app.data.x\`): a reactive read of a
+// stash source key that retains the last non-null value for the life of
+// this instance. A null write or reset() invalidates the CELL (ungated
+// readers see it immediately) without yanking mounted gates — the
+// live-binding invariant. Last-good lives in this closure, so it dies
+// with the instance.
+function __gateBind(self, path, keyFn) {
+  let last;
+  return __computed(() => {
+    const data = self.app && self.app.data;
+    if (!data) return last;
+    const v = keyFn
+      ? data[path](keyFn(self.params || {}, self.query || {}))
+      : data[path];   // dotted paths route through the stash's path-key get
+    return v != null ? (last = v) : last;
+  });
+}
+
 function __handleComponentError(error, component) {
   let current = component;
   // Defensive cycle guard: if the parent chain is corrupted (e.g. by
@@ -3564,6 +3702,17 @@ class __Component {
   constructor(props = {}) {
     Object.assign(this, props);
     if (!this.app && globalThis.__ripApp) this.app = globalThis.__ripApp;
+    // RFC 11: a component with render gates (<~) is honored only via route
+    // matching — the renderer sets __ripGateMount around each route/layout
+    // construction. Constructed as an embedded child (a parent scope is
+    // active but the renderer flag doesn't match), its gates were never
+    // loaded, so the T-typed bindings would be silent nulls. Fail loud and
+    // deterministically instead. Direct construction outside any component
+    // scope (tests: seed the stash, then construct) stays allowed.
+    const __g = this.constructor.__gates;
+    if (__g && __g.length && globalThis.__ripGateMount !== this.constructor && __currentComponent) {
+      throw new Error('[Rip] component declares render gates (<~) but was constructed as an embedded child; gates are honored only via route matching — lift the gate to the route/layout and pass the value as a prop');
+    }
     const prev = __pushComponent(this);
     try {
       this._init(props);
@@ -3663,7 +3812,7 @@ class __Component {
 
 // Register on globalThis for runtime deduplication
 if (typeof globalThis !== 'undefined') {
-  globalThis.__ripComponent = { __pushComponent, __popComponent, __getCurrentComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __transition, __handleComponentError, __Component };
+  globalThis.__ripComponent = { __pushComponent, __popComponent, __getCurrentComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __transition, __handleComponentError, __gateBind, __Component };
 }
 
 `;
