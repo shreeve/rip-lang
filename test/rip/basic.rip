@@ -279,3 +279,79 @@ test 'string negative to negative', '"abcdef"[-4..-2]', "cde"
 test 'slice with variable end', 'x = [0,1,2,3,4]; n = 3; x[1..n]', [1,2,3]
 test 'slice with variable start', 'x = [0,1,2,3,4]; n = 2; x[n..4]', [2,3,4]
 test 'slice with both variable', 'x = [0,1,2,3,4]; a = 1; b = 3; x[a..b]', [1,2,3]
+
+# ==============================================================================
+# Postfix conditionals in implicit-object properties bind to the VALUE,
+# even on the first property line (used to split the object into args)
+# ==============================================================================
+
+test "postfix if/else on first property line", '''
+  f = (o) -> o
+  body = true
+  x = f
+    method: "POST" if body else "GET"
+    other: 1
+  [x.method, x.other]
+  ''', ["POST", 1]
+
+test "postfix if/else on first property line, falsy", '''
+  f = (o) -> o
+  body = false
+  x = f
+    method: "POST" if body else "GET"
+    other: 1
+  [x.method, x.other]
+  ''', ["GET", 1]
+
+test "bare postfix if on first property line", '''
+  f = (o) -> o
+  x = f
+    a: 1 if false
+    b: 2
+  [x.a, x.b]
+  ''', [undefined, 2]
+
+test "postfix unless on first property line", '''
+  f = (o) -> o
+  x = f
+    a: 1 unless false
+    b: 2
+  [x.a, x.b]
+  ''', [1, 2]
+
+test "postfix if/else in implicit object assignment", '''
+  c = true
+  x =
+    method: "POST" if c else "GET"
+    other: 1
+  [x.method, x.other]
+  ''', ["POST", 1]
+
+test "postfix if/else mid-list of three", '''
+  f = (o) -> o
+  x = f
+    a: 1
+    b: 2 if false else 3
+    d: 4
+  [x.a, x.b, x.d]
+  ''', [1, 3, 4]
+
+test "nested implicit object with postfix conditional", '''
+  f = (o) -> o
+  x = f
+    outer:
+      inner: 1 if false else 2
+      other: 3
+    last: 4
+  [x.outer.inner, x.outer.other, x.last]
+  ''', [2, 3, 4]
+
+# Single-line statement guard is unchanged: the call itself is conditional
+test "single-line object guard still guards the call", '''
+  calls = 0
+  f = (o) -> calls += 1
+  f a: 1 if false
+  calls
+  ''', 0
+
+code "first-line conditional keeps one object", "foo\n  a: 1 if c else 2\n  b: 3", "foo({a: (c ? 1 : 2), b: 3});"

@@ -2061,12 +2061,32 @@ export class Lexer {
         } else if (t && t !== 'TERMINATOR' && t !== 'OUTDENT' && t !== ',') j++;
         logicalKeep = tokens[j]?.[0] === ',';
       }
+      // A postfix conditional on the FIRST property line of a multiline
+      // implicit object must bind to the property's value, not close the
+      // object — otherwise `a: 1 if c` followed by more properties splits
+      // the object into separate arguments. Later property lines already
+      // bind to the value (the sameLine flag is false by then), so only
+      // first-line conditionals need the lookahead: keep the object open
+      // when the property list continues after this line.
+      let objectContinues = (j) => {
+        for (let d = 0; j < tokens.length; j++) {
+          let t = tokens[j][0];
+          if (t === '(' || t === '[' || t === '{' || t === 'CALL_START' || t === 'INDEX_START' || t === 'INDENT') d++;
+          else if (t === ')' || t === ']' || t === '}' || t === 'CALL_END' || t === 'INDEX_END' || t === 'OUTDENT') {
+            if (d === 0) return false;
+            d--;
+          }
+          else if (t === 'TERMINATOR' && d === 0) return this.looksObjectish(j + 1);
+        }
+        return false;
+      };
       if ((IMPLICIT_END.has(tag) && !logicalKeep) || (CALL_CLOSERS.has(tag) && newLine)) {
         while (isImplicit(stackTop())) {
           let [stackTag, , {sameLine, startsLine}] = stackTop();
           if (inImplicitCall() && prevTag !== ',') {
             endImplicitCall();
-          } else if (inImplicitObject() && !isLogicalOp && sameLine && tag !== 'TERMINATOR' && prevTag !== ':') {
+          } else if (inImplicitObject() && !isLogicalOp && sameLine && tag !== 'TERMINATOR' && prevTag !== ':' &&
+                     !((tag === 'POST_IF' || tag === 'POST_UNLESS') && objectContinues(i + 1))) {
             endImplicitObject();
           } else if (inImplicitObject() && tag === 'TERMINATOR' && prevTag !== ',' && !(startsLine && this.looksObjectish(i + 1))) {
             endImplicitObject();
