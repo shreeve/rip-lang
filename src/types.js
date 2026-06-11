@@ -378,7 +378,7 @@ function collectTypeExpression(tokens, j) {
       }
       if (tTag === '=' || tTag === 'REACTIVE_ASSIGN' ||
           tTag === 'COMPUTED_ASSIGN' || tTag === 'READONLY_ASSIGN' ||
-          tTag === 'EFFECT' || tTag === 'TERMINATOR' ||
+          tTag === 'EFFECT' || tTag === 'GATE' || tTag === 'TERMINATOR' ||
           tTag === 'INDENT' || tTag === 'OUTDENT' ||
           tTag === '->' || tTag === ',') {
         break;

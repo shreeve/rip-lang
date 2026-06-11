@@ -220,6 +220,7 @@ export class CodeEmitter {
     'computed': 'emitComputed',
     'readonly': 'emitReadonly',
     'effect': 'emitEffect',
+    'gate': 'emitGate',
 
     // Control flow — simple
     'break': 'emitBreak',
@@ -1625,6 +1626,12 @@ export class CodeEmitter {
   emitReadonly(head, rest) {
     let [name, expr] = rest;
     return `const ${str(name) ?? name} = ${this.emit(expr, 'value')}`;
+  }
+
+  // The component macro consumes 'gate' statements before generator dispatch,
+  // so reaching this generator means the binding sits outside a component body.
+  emitGate(head, rest, context, sexpr) {
+    this.error(`'<~' (render-ready gate) is only valid at the top of a component body`, sexpr);
   }
 
   emitEffect(head, rest) {
