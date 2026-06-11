@@ -31,6 +31,7 @@ you're in the right place.
 6. [When you genuinely need to mutate a referenced indexed column](#6-when-you-genuinely-need-to-mutate)
 7. [Escape hatches](#7-escape-hatches)
 8. [Should I use DuckDB for OLTP at all?](#8-should-i-use-duckdb-for-oltp-at-all)
+9. [Transactions, sequences, and migration edges](#9-transactions-sequences-and-migration-edges)
 
 ---
 
@@ -464,6 +465,43 @@ DuckDB is a fine fit when:
 For a project where you're not sure: prototype with DuckDB, watch
 the FK behavior, and switch to PostgreSQL or SQLite if you find
 yourself reaching for the escape hatches more than once or twice.
+
+---
+
+## 9. Transactions, sequences, and migration edges
+
+Findings from running the Rip Schema transaction and migration
+machinery against live DuckDB (via duckdb-harbor) — each one shapes
+runtime or differ behavior:
+
+**FK-referenced tables are frozen for DDL too.** The §1 rule isn't
+just about UPDATE/DELETE — most `ALTER TABLE` operations (add column,
+drop column, type changes) on a table referenced by another table's FK
+fail with `Dependency Error: Cannot alter entry "users" because there
+are entries that depend on it`. Changing such a table means recreating
+the referencing tables around it. The migration differ classifies
+these steps as **`blocked`** in `rip schema status` and refuses to
+write them into a migration file — the rebuild is a human decision.
+Unreferenced tables alter normally.
+
+**No `SAVEPOINT`.** DuckDB supports flat transactions only. A nested
+`schema.transaction!` therefore *joins* the outer transaction rather
+than creating an independently-rollbackable unit — one rollback undoes
+the whole nest. Don't design flows that need partial rollback.
+
+**Sequences are non-transactional.** `nextval()` consumed inside a
+rolled-back transaction is not returned — a failed `create!` leaves a
+gap in the `id` sequence. Gaps are normal and harmless; never write
+code that assumes ids are contiguous, and never predict "the next id"
+from the last one you saw.
+
+**Harbor sessions require an authenticated principal.** Transactions
+ride duckdb-harbor's session protocol (`POST /sessions`, then
+per-statement `session_id`), and harbor only creates *owned* sessions.
+An unauthenticated harbor (no token configured) can run plain queries
+but cannot open sessions — `schema.transaction!` will fail with a
+clear error. Set `RIP_DB_TOKEN` (or pass `token:` to
+`schema.connect`) for any deployment that uses transactions.
 
 ---
 

@@ -4,35 +4,44 @@
 
 # Rip Schema
 
-> **One keyword. A validator, a class, an ORM, a migration tool, and a TypeScript type — from a single declaration.**
+> **One keyword. A validator, a class, an ORM, migrations, and a live API contract — from a single declaration.**
 
-In a typical TypeScript application the shape of a `User` is described four
+In a typical TypeScript application the shape of a `User` is described five
 times. Once as a Zod schema for input validation. Once as a Prisma model for
 the database. Once as a generated TypeScript type for the editor. Once as a
-DTO class for API projections. Every change has to be propagated across all
-four. Every divergence becomes a bug.
+DTO class for API projections. Once more as an OpenAPI document for clients.
+Every change has to be propagated across all five. Every divergence becomes
+a bug.
 
-Rip Schema collapses all four into one declaration:
+Rip Schema collapses all of them into one declaration:
 
 ```coffee
 User = schema :model
   name!   string, 1..100
   email!# email
+  phone?  ~:phone
   @timestamps
   @has_many Order
   identifier:       ~> "#{@name} <#{@email}>"
   beforeValidation: -> @email = @email.toLowerCase()
 ```
 
-From that single line of source, the language gives you:
+From that single declaration, the language gives you:
 
-- a **runtime validator** — `User.parse(data)` / `.safe()` / `.ok()`
+- a **runtime validator** — `User.parse(data)` / `.safe()` / `.ok()` (plus
+  async variants), with strict wire coercion (`~integer`, `~:phone`),
+  cross-field refinements, and discriminated unions
 - a **generated class** with your methods and `~>` computed getters bound as prototype getters
 - a **TypeScript type** — `ModelSchema<User, UserData>`, automatic, no codegen step
 - an **async ORM** — `User.find! 1`, `User.where(active: true).all!`, `user.save!`
-- **transactions** — `schema.transaction! ->` with ambient propagation and rollback
-- **eager loading** — `User.includes(:orders).all!` batches relations, no N+1
-- **migration-grade DDL** — `User.toSQL()` emits `CREATE TABLE`, indexes, foreign keys
+- **transactions** — `schema.transaction! ->` with ambient propagation,
+  rollback, and `afterCommit` hooks
+- **query economics** — `User.includes(:orders)` eager loading, composable
+  `@scope`s, batch writes; no N+1 by default
+- **migrations** — `rip schema make/migrate` diffs the declared models
+  against the live database and writes plain-SQL migration files
+- **a wire contract** — `User.toJSONSchema()`, and rip-server routes that
+  validate with a schema contribute to a generated `GET /openapi.json`
 - **schema algebra** — `User.omit("password")` produces a correctly-typed derived shape
 
 Schemas are runtime values. You pass them around, export them, derive from
@@ -55,28 +64,33 @@ architecture for contributors.
 5. [Body syntax](#5-body-syntax)
 6. [The runtime API](#6-the-runtime-api)
 7. [What `.parse()` returns by kind](#7-what-parse-returns-by-kind)
-8. [`:model` — ORM, DDL, hooks, relations](#8-model--orm-ddl-hooks-relations)
-9. [Mixins](#9-mixins)
-10. [Schema algebra](#10-schema-algebra)
-11. [Shadow TypeScript](#11-shadow-typescript)
-12. [SchemaError and diagnostics](#12-schemaerror-and-diagnostics)
-13. [Common mistakes](#13-common-mistakes)
-14. [Recipes](#14-recipes)
-15. [What's not here yet](#15-whats-not-here-yet)
+8. [`:model` — the ORM](#8-model--the-orm)
+9. [Transactions & data integrity](#9-transactions--data-integrity)
+10. [Query economics](#10-query-economics)
+11. [Adapters](#11-adapters)
+12. [DDL & schema evolution](#12-ddl--schema-evolution)
+13. [Wire contracts — JSON Schema & OpenAPI](#13-wire-contracts--json-schema--openapi)
+14. [Mixins](#14-mixins)
+15. [Schema algebra](#15-schema-algebra)
+16. [Shadow TypeScript](#16-shadow-typescript)
+17. [SchemaError and diagnostics](#17-schemaerror-and-diagnostics)
+18. [Common mistakes](#18-common-mistakes)
+19. [Recipes](#19-recipes)
+20. [What's not here yet](#20-whats-not-here-yet)
 
 ## Part II — Reference
-16. [Capability matrix](#16-capability-matrix)
-17. [Field types](#17-field-types)
-18. [Directives](#18-directives)
-19. [Hook reference](#19-hook-reference)
-20. [Constraints](#20-constraints)
-21. [Relations](#21-relations)
-22. [Design invariants](#22-design-invariants)
+21. [Capability matrix](#21-capability-matrix)
+22. [Field types](#22-field-types)
+23. [Directives](#23-directives)
+24. [Hook reference](#24-hook-reference)
+25. [Constraints](#25-constraints)
+26. [Relations](#26-relations)
+27. [Design invariants](#27-design-invariants)
 
 ## Part III — Architecture
-23. [Runtime architecture](#23-runtime-architecture)
-24. [Compiler integration](#24-compiler-integration)
-25. [FAQ](#25-faq)
+28. [Runtime architecture](#28-runtime-architecture)
+29. [Compiler integration](#29-compiler-integration)
+30. [FAQ](#30-faq)
 
 ---
 
@@ -88,9 +102,9 @@ A *schema* in Rip is a runtime value that describes data. You create one with
 the `schema` keyword and an optional `:kind` symbol:
 
 ```coffee
-SignupInput = schema             # default :input
-Role        = schema :enum
-User        = schema :model
+SignupInput = schema; email!     # default :input
+Role        = schema :enum; :admin; :user
+User        = schema :model; name!
 ```
 
 Every schema is a real JavaScript object at runtime. It has methods
@@ -248,12 +262,42 @@ Order = schema :model
 # DDL for migration (works with or without the ORM adapter configured)
 sql = User.toSQL()
 
-# ORM operations (async, use `!` or `await`)
+# ORM operations (async — `!` is the dammit operator, Rip's await)
 user   = User.create! name: "Alice", email: "ALICE@EXAMPLE.COM"
 found  = User.find! user.id
 orders = user.orders!                       # has_many relation → Order[]
 owner  = orders[0]?.user!                   # belongs_to relation → User
 ```
+
+### The production layer
+
+The same declaration carries the whole data layer — atomic writes,
+constant-query-count reads, schema evolution, and a live API contract:
+
+```coffee
+# Transactions — ambient propagation; model code inside is unchanged
+order = schema.transaction! ->
+  o = Order.create! userId: user.id, total: 100
+  user.name = "Alice Q."
+  user.save!
+  o                                          # block value = transaction value
+
+# Eager loading + scopes — a list view in three queries, any row count
+users = User.includes(orders: :user).where(active: true).all!
+
+# Migrations — diff the declared models against the live database
+#   rip schema status      applied / pending / drift + the classified plan
+#   rip schema make NAME   write migrations/NNNN_NAME.sql from the diff
+#   rip schema migrate     apply pending files, checksummed history
+
+# Wire contract — schema-validated routes feed a generated OpenAPI doc
+post '/signup', input: SignupInput, ->
+  { welcome: @input.email }                  # 400 + issues automatic
+```
+
+Each of these has its own section: [§9](#9-transactions--data-integrity),
+[§10](#10-query-economics), [§12](#12-ddl--schema-evolution),
+[§13](#13-wire-contracts--json-schema--openapi).
 
 ### Schema algebra — derive new shapes
 
@@ -261,8 +305,8 @@ owner  = orders[0]?.user!                   # belongs_to relation → User
 UserPublic = User.omit "email"              # →  Schema<Omit<UserData, 'email'>>
 UserCreate = User.pick "name", "email"      # →  Schema<Pick<UserData, 'name' | 'email'>>
 UserUpdate = User.partial()                 # →  Schema<Partial<UserData>>
-AdminUser  = User.extend schema :shape
-  permissions! string[]
+AdminUser  = User.extend (schema :shape
+  permissions! string[])
 ```
 
 Derived schemas are always `:shape`. **Field semantics survive** —
@@ -298,8 +342,8 @@ Order = schema :shape
   address!    Address           # validation recurses; errors like "address.street"
 ```
 
-See §5 for body-syntax details, §17 for nested type references, and
-§20 for constraint and pragma rules.
+See §5 for body-syntax details, §22 for nested type references, and
+§25 for constraint and pragma rules.
 
 ---
 
@@ -349,6 +393,7 @@ plus the runtime dimension.
 Every schema has one of six kinds, selected by a `:symbol` after the
 `schema` keyword:
 
+<!-- doctest: skip -->
 ```coffee
 input  = schema                # default — :input
 shape  = schema :shape
@@ -506,6 +551,7 @@ a schema-specific diagnostic.
 
 ### Field
 
+<!-- doctest: skip -->
 ```coffee
 name[!|?|#]*  [type]  [range]  [default]  [regex]  [attrs]  [, -> transform]
 ```
@@ -535,15 +581,16 @@ expressions accept:
   `~date`) — "coerce, then validate" (see below)
 
 ```coffee
-name!                                   # required string (default type)
-tags!      string[]                     # required array of strings
-email!#    email                        # required, unique, email-format-validated
-bio?       text, 0..1000                # optional text, 0-1000 chars
-role?      string, ["user"]             # optional, default "user"
-status     string, [:draft]             # default :draft — same as ["draft"]
-zip!       string, /^\d{5}$/            # regex-validated
-sex?       "M" | "F" | "U"              # literal union
-priority   "low" | "med" | "high", [:med]  # literal union + default
+Example = schema
+  name!                                   # required string (default type)
+  tags!      string[]                     # required array of strings
+  email!#    email                        # required, unique, email-format-validated
+  bio?       text, 0..1000                # optional text, 0-1000 chars
+  role?      string, ["user"]             # optional, default "user"
+  status     string, [:draft]             # default :draft — same as ["draft"]
+  zip!       string, /^\d{5}$/            # regex-validated
+  sex?       "M" | "F" | "U"              # literal union
+  priority   "low" | "med" | "high", [:med]  # literal union + default
 ```
 
 ### Coercion types (`~type`)
@@ -620,11 +667,12 @@ raw input. `it` inside the body refers to the **whole raw input object**
 differently-named key, compose across multiple inputs, or coerce types:
 
 ```coffee
-id!          -> it.Id                                    # remap PascalCase input
-displayName! -> it.DisplayName
-shippedAt?   date, -> new Date(it.shippedAt)             # wire string → Date
-slug!        -> "#{it.FirstName}-#{it.LastName}".toLowerCase()
-email!#      email, -> it.email.toLowerCase().trim()     # normalize + validate
+Imported = schema
+  id!          -> it.Id                                    # remap PascalCase input
+  displayName! -> it.DisplayName
+  shippedAt?   date, -> new Date(it.shippedAt)             # wire string → Date
+  slug!        -> "#{it.FirstName}-#{it.LastName}".toLowerCase()
+  email!#      email, -> it.email.toLowerCase().trim()     # normalize + validate
 ```
 
 Rules:
@@ -656,7 +704,7 @@ Rules:
 ```
 
 Directives attach behavior that isn't a field. The set depends on the
-kind (see [§18](#18-directives)). Examples:
+kind (see [§23](#23-directives)). Examples:
 
 ```coffee
 @timestamps                       # adds createdAt/updatedAt columns (:model only)
@@ -696,7 +744,7 @@ beforeSave: ->
 Parameters are method-only — lifecycle hooks, computed getters (`~>`),
 and eager-derived fields (`!>`) are accessor-shaped and reject them.
 For `:model`, method names matching known [hook
-names](#19-hook-reference) bind to the lifecycle; on other kinds those
+names](#24-hook-reference) bind to the lifecycle; on other kinds those
 names are just methods.
 
 ### Computed getter (lazy)
@@ -718,6 +766,7 @@ isAdmin:    ~> @role is 'admin'
 
 ### Eager-derived field
 
+<!-- doctest: skip -->
 ```coffee
 name: !> body
 ```
@@ -729,9 +778,11 @@ Excluded from DDL and persistence — re-computed on hydrate from the
 declared fields.
 
 ```coffee
-fullName:    !> "#{@firstName} #{@lastName}".trim()
-orderNumber: !> "ORD-#{String(@id).padStart(6, '0')}"
-slug:        !> @fullName.toLowerCase().replace(/\s+/g, '-')
+Person = schema :shape
+  firstName! string
+  lastName!  string
+  fullName:    !> "#{@firstName} #{@lastName}".trim()
+  slug:        !> @fullName.toLowerCase().replace(/\s+/g, '-')
 ```
 
 Declaration order matters — an `!>` can read earlier declared fields
@@ -842,7 +893,7 @@ Rules:
   would be wasted work.
 - **Refinements drop on algebra.** Any derivation (`.pick`, `.omit`,
   `.partial`, `.required`, `.extend`) returns a `:shape` without any
-  refinements from the source. See [§10](#10-schema-algebra).
+  refinements from the source. See [§15](#15-schema-algebra).
 
 **Scope**: `:input`, `:shape`, and `:model` accept `@ensure`. `:enum`
 and `:mixin` reject it at compile time with a diagnostic pointing at
@@ -894,6 +945,7 @@ hook / transform), `~>` (computed getter), `!>` (eager-derived) — is
 rejected on the inline form with a message pointing to the indented
 form:
 
+<!-- doctest: fail -->
 ```coffee
 # compile error — point at the indented form:
 X = schema :shape; name!; greet: -> @name   # ✗ '->' not allowed inline
@@ -957,8 +1009,7 @@ Validates `data`. Returns a boolean. Allocates no error arrays — this is
 the fast path for filter-style checks.
 
 ```coffee
-if User.ok raw
-  # ...
+process raw if User.ok raw
 ```
 
 ### `.parseAsync(data)` / `.safeAsync(data)` / `.okAsync(data)`
@@ -1011,19 +1062,26 @@ For `:shape` and `:model`:
 
 ---
 
-## 8. `:model` — ORM, DDL, hooks, relations
+## 8. `:model` — the ORM
 
 `:model` is where everything comes together. A model declaration gives
 you:
 
 - field validation (from `:shape`)
 - class instances with methods and computed getters (from `:shape`)
-- lifecycle hooks bound by name
+- lifecycle hooks bound by name (12 of them, including transaction-aware
+  `afterCommit` / `afterRollback`)
 - an async ORM — `find`, `where`, `create`, `save`, `destroy`
-- `.toSQL()` for DDL (works without ever touching the ORM)
 - relation accessors driven by `@belongs_to` / `@has_many` / `@has_one`
 - automatic registration in a process-global registry for cross-module
   relation resolution
+
+This section covers the core read/write surface. The rest of the data
+layer has its own sections: transactions and constraint translation
+([§9](#9-transactions--data-integrity)), eager loading / scopes / batch
+writes / soft deletes ([§10](#10-query-economics)), adapters
+([§11](#11-adapters)), DDL and migrations
+([§12](#12-ddl--schema-evolution)).
 
 ### Static ORM methods
 
@@ -1061,156 +1119,6 @@ User
   `.withDeleted`, `.onlyDeleted` return the query builder (sync).
 - `.all`, `.first`, `.count`, `.updateAll`, `.deleteAll` terminate with
   a promise.
-
-### Eager loading (`.includes`)
-
-Relations are lazy by default — `user.orders!` issues a query on demand,
-which makes N+1 the default behavior of every list view. `.includes`
-fixes the economics with **batched second queries** (`WHERE fk IN (…)`),
-never JOINs — no row duplication, uniform across `belongs_to` /
-`has_one` / `has_many`:
-
-```coffee
-users = User.includes(:orders).where(active: true).all!
-posts = Post.includes(:author, comments: :author).limit(20).all!
-```
-
-- Accepts `:symbols`, strings, and nested `{relation: nested}` maps to
-  any depth. One query per relation per nesting level, regardless of
-  row count.
-- Preloaded relations fill the accessor's **memo**: `user.orders!`
-  resolves from cache with no query. The accessor API is unchanged
-  (uniform async) — preloading is purely a performance fact, invisible
-  to call sites.
-- `.includes` never changes the root result set — same rows with or
-  without it.
-
-Relation accessors memoize independently of `.includes`: the second
-`user.orders!` call on the same instance is free. Pass
-`user.orders! reload: true` to bust the memo and re-query.
-
-### Query scopes (`@scope`, `@defaultScope`)
-
-Named, composable query fragments declared on the model:
-
-```coffee
-User = schema :model
-  name!    string
-  active?  boolean
-  role?    string
-  @scope :active, -> @where(active: true)
-  @scope :since,  (d) -> @where("created_at > ?", d)
-  @defaultScope -> @where(banned: false)
-
-User.active().since(monday).order("name").all!
-User.where(role: "admin").active().all!       # chains in any order
-User.unscoped().all!                          # skip the @defaultScope
-```
-
-- `this` inside a scope body is the query builder; scopes return the
-  builder, so they compose with each other and with `.where` /
-  `.order` / `.limit` in any order. Parameterized scopes declare their
-  args: `(d) -> @where("created_at > ?", d)`.
-- Scopes live in the **static** namespace (model + builder), so a field
-  `active` and a scope `:active` coexist. Scope names may not collide
-  with the query API (`where`, `find`, `order`, …) or with each other —
-  checked at first use with a `collision` SchemaError.
-- `@defaultScope` (at most one per model) applies to every read and
-  bulk write — `where`/`all`/`first`/`count`/`find`/`findMany`/
-  `updateAll`/`deleteAll` — unless `.unscoped()` appears anywhere in
-  the chain. It composes with `@softDelete`'s implicit filter; both
-  apply. (Use sparingly — Active Record's caveats about default
-  scopes apply verbatim.)
-- Scopes appear in shadow TS: typed statics on the model const plus a
-  per-model `UserQuery` alias so scope-first chains typecheck.
-
-### Transactions (`schema.transaction!`)
-
-Atomic multi-statement writes. The block's value becomes the
-transaction's value; a throw rolls everything back and propagates:
-
-```coffee
-result = schema.transaction! ->
-  user = User.create! name: "Alice", email: "a@b.c"
-  Order.create! userId: user.id, total: 100
-  user                                   # block value = transaction!'s value
-```
-
-- **Propagation is ambient** (AsyncLocalStorage): every ORM call inside
-  the block — `create!`, `save!`, `destroy!`, relation accessors,
-  queries — automatically routes through the transaction's pinned
-  connection. Model code is unchanged inside the block.
-- Block throws → `ROLLBACK`, the exception propagates. Block returns →
-  `COMMIT`, the value is returned.
-- **Nested `transaction!` joins the outer transaction** (Active
-  Record's default). DuckDB has no `SAVEPOINT`, so independent nested
-  units aren't expressible on the primary backend; joining is the
-  honest semantics.
-- Don't parallelize ORM calls *inside* one transaction — they share one
-  pinned DB connection, exactly like one connection in any ORM.
-  Parallel `transaction!` blocks are fine; each gets its own connection
-  and its own ambient context.
-- Two transaction-aware hooks: `afterCommit` fires after the outermost
-  transaction commits (or immediately after save/destroy when no
-  transaction is open) — this is where emails, webhooks, and cache
-  invalidation belong. `afterRollback` fires after a rollback for each
-  instance saved/destroyed inside the rolled-back transaction. A row
-  saved twice in one transaction gets one callback. Exceptions in
-  `afterCommit` propagate but cannot roll back — the COMMIT already
-  happened.
-- Against rip-db / duckdb-harbor, the transaction rides harbor's
-  session protocol (`POST /sql/sessions/new` pins a connection; the
-  session is destroyed after COMMIT/ROLLBACK; harbor's idle TTL
-  auto-rolls-back abandoned transactions server-side). Note: harbor
-  gates session creation behind the `__HARBOR_ADMIN__:sessions:create`
-  authz policy — transactions need an authz rule allowing it (or
-  `harbor_allow_admin_without_authz = true` on trusted deployments),
-  and an authenticated principal (harbor's unauthenticated `token :=
-  NULL` mode cannot create owned sessions).
-- Adapters without `begin()` throw a clear "does not support
-  transactions" error — never a silent non-transactional fallback.
-
-### Constraint violations are SchemaErrors
-
-The ORM wraps every adapter call. DB errors recognized as constraint
-violations are translated into `SchemaError` so a `save!` that trips a
-UNIQUE index fails the same way a `save!` that trips a validator does:
-
-| DB condition | Issue emitted |
-| --- | --- |
-| UNIQUE violation | `{field: "email", error: "unique", message: "email already taken"}` |
-| NOT NULL violation | `{field, error: "required", …}` |
-| FK violation | `{field, error: "reference", …}` |
-| CHECK violation | `{field: "", error: "check", …}` |
-
-The original adapter error is preserved as `err.cause`. Unrecognized
-errors propagate untouched. Uniqueness pre-checks
-(`validates_uniqueness_of`-style) are deliberately **not** offered —
-they race; the DB constraint is the check, translation makes it
-ergonomic.
-
-### Batch writes
-
-```coffee
-User.upsert! {email: "a@b.c", name: "Alice"}, on: :email
-  # INSERT … ON CONFLICT (email) DO UPDATE SET …; validates;
-  # beforeSave/afterSave fire; beforeCreate/beforeUpdate do NOT
-  # (the runtime can't know which branch the DB took).
-  # DuckDB caveat: ON CONFLICT updates on rows referenced by another
-  # table's FK trip DuckDB's indexed-column restriction — see
-  # docs/RIP-DUCKDB.md.
-
-User.insertMany! rows
-  # validates every row first (ALL failures collected into one
-  # SchemaError with `[i].field` issue paths, before any SQL), then one
-  # multi-VALUES INSERT … RETURNING *. Per-instance hooks deliberately
-  # skipped — this is the bulk path; use create! in a loop for hooks.
-
-User.where(active: false).deleteAll!     # one statement (soft-delete aware)
-User.where(plan: "trial").updateAll! expired: true
-  # one UPDATE; bypasses validation and hooks — the name says "all",
-  # the docs say "raw". Bumps updated_at on @timestamps models.
-```
 
 ### Instance methods
 
@@ -1351,7 +1259,7 @@ the same instance work fine.
 ### Lifecycle hooks
 
 Hooks are methods whose name matches one of the [twelve recognized hook
-names](#19-hook-reference). On `:model` they bind into the lifecycle; on
+names](#24-hook-reference). On `:model` they bind into the lifecycle; on
 other kinds they're just regular methods.
 
 **Save flow:**
@@ -1430,8 +1338,354 @@ Targets resolve lazily through a process-global registry keyed by name.
 Circular and cross-module references work — import the file that defines
 the target, and relation calls succeed.
 
-See [§21 Relations](#21-relations) for the full table of directive →
+See [§26 Relations](#26-relations) for the full table of directive →
 accessor → return type.
+
+### Snake / camel dual access on instances
+
+Database columns are typically snake_case (`user_id`, `created_at`) while
+field names are camelCase (`userId`, `createdAt`). A hydrated `:model`
+instance exposes both — `order.user_id` and `order.userId` read the same
+slot. The camelCase form is the canonical own property; the snake_case
+form is a non-enumerable accessor that forwards.
+
+```coffee
+order = Order.find! 42
+order.userId       # 7     (camelCase: canonical)
+order.user_id      # 7     (snake_case: alias)
+order.createdAt    # Date  (camelCase: canonical)
+order.created_at   # Date  (snake_case: alias)
+```
+
+`.create(data)` also accepts either style:
+
+```coffee
+Order.create! user_id: 7, total: 100
+Order.create! userId:  7, total: 100    # same result
+```
+
+Use whichever reads better alongside nearby raw SQL or JSON payloads.
+
+### Field-name conventions
+
+The snake_case ↔ camelCase bijection only works for identifiers
+that round-trip cleanly. The schema runtime enforces canonical
+camelCase at definition time:
+
+```coffee
+User = schema :model
+  mdmId? string                        # OK — canonical
+  mdmID? string                        # error — acronym style;
+                                       #   round-trips to mdm_i_d / mdmID
+                                       #   ambiguously
+```
+
+Rules:
+
+- Lowercase-first
+- Alphanumeric body
+- No two consecutive uppercase letters anywhere
+
+Same convention as Java Beans, Swift's "Acronyms in API names"
+guidance, and what most JS/TS codebases follow in practice.
+
+The runtime also reserves the names of its instance API
+(`save`, `destroy`, `ok`, `errors`, `toJSON`, `savedChanges`,
+`markDirty`, `_dirty` / `_persisted` / `_snapshot` / `_saving`)
+and the implicit timestamp / soft-delete columns
+(`createdAt`, `updatedAt`, `deletedAt`). Declaring any of those
+as a user field on a `:model` raises a `'reserved ORM name'`
+collision error at definition time. (Mixins are exempt — they
+can declare `createdAt` / `updatedAt` for explicit control,
+which is the alternative to the `@timestamps` directive.)
+
+### Relation target names
+
+`@belongs_to TargetName` derives the FK column from the target's
+PascalCase name via `__schemaSnake(target) + '_id'`. The same
+camelCase / snake_case bijection rule applies in reverse: target
+names should be canonical PascalCase (`User`, `UserOrg`, not
+`MDMUser`) so the derived FK column round-trips cleanly. Acronym-
+style target names aren't currently rejected at definition time,
+but writing `@belongs_to MDMUser` produces FK column `m_d_m_user_id`
+— almost certainly not what you want. Stick to PascalCase.
+
+### SQL reserved words
+
+The runtime always quotes column names in generated SQL — every
+INSERT, UPDATE, and SELECT it emits surrounds column identifiers
+with `"..."`. So a field named `order` works fine through the
+ORM:
+
+```coffee
+Trade = schema :model
+  order! integer                       # works through the ORM
+```
+
+The compiled SQL is `UPDATE "trades" SET "order" = ? WHERE "id" = ?`.
+
+The catch is **raw SQL** that you write yourself via the adapter's
+`query()` method or via `query!`. There the reserved-word collision
+becomes your problem:
+
+```coffee
+result = query! "SELECT order FROM trades"          # syntax error
+result = query! "SELECT \"order\" FROM trades"      # works
+```
+
+This matches Active Record's behavior — the ORM-generated SQL is
+always quoted, and raw SQL is always the user's responsibility.
+
+---
+
+## 9. Transactions & data integrity
+
+Atomic multi-statement writes, transaction-aware lifecycle hooks, and
+DB constraint violations that fail the same structured way validation
+does.
+
+### Transactions (`schema.transaction!`)
+
+Atomic multi-statement writes. The block's value becomes the
+transaction's value; a throw rolls everything back and propagates:
+
+```coffee
+result = schema.transaction! ->
+  user = User.create! name: "Alice", email: "a@b.c"
+  Order.create! userId: user.id, total: 100
+  user                                   # block value = transaction!'s value
+```
+
+- **Propagation is ambient** (AsyncLocalStorage): every ORM call inside
+  the block — `create!`, `save!`, `destroy!`, relation accessors,
+  queries — automatically routes through the transaction's pinned
+  connection. Model code is unchanged inside the block.
+- Block throws → `ROLLBACK`, the exception propagates. Block returns →
+  `COMMIT`, the value is returned.
+- **Nested `transaction!` joins the outer transaction** (Active
+  Record's default). DuckDB has no `SAVEPOINT`, so independent nested
+  units aren't expressible on the primary backend; joining is the
+  honest semantics.
+- Don't parallelize ORM calls *inside* one transaction — they share one
+  pinned DB connection, exactly like one connection in any ORM.
+  Parallel `transaction!` blocks are fine; each gets its own connection
+  and its own ambient context.
+- Two transaction-aware hooks: `afterCommit` fires after the outermost
+  transaction commits (or immediately after save/destroy when no
+  transaction is open) — this is where emails, webhooks, and cache
+  invalidation belong. `afterRollback` fires after a rollback for each
+  instance saved/destroyed inside the rolled-back transaction. A row
+  saved twice in one transaction gets one callback. Exceptions in
+  `afterCommit` propagate but cannot roll back — the COMMIT already
+  happened.
+- Against rip-db / duckdb-harbor, the transaction rides harbor's
+  session protocol (`POST /sql/sessions/new` pins a connection; the
+  session is destroyed after COMMIT/ROLLBACK; harbor's idle TTL
+  auto-rolls-back abandoned transactions server-side). Note: harbor
+  gates session creation behind the `__HARBOR_ADMIN__:sessions:create`
+  authz policy — transactions need an authz rule allowing it (or
+  `harbor_allow_admin_without_authz = true` on trusted deployments),
+  and an authenticated principal (harbor's unauthenticated `token :=
+  NULL` mode cannot create owned sessions).
+- Adapters without `begin()` throw a clear "does not support
+  transactions" error — never a silent non-transactional fallback.
+
+### Constraint violations are SchemaErrors
+
+The ORM wraps every adapter call. DB errors recognized as constraint
+violations are translated into `SchemaError` so a `save!` that trips a
+UNIQUE index fails the same way a `save!` that trips a validator does:
+
+| DB condition | Issue emitted |
+| --- | --- |
+| UNIQUE violation | `{field: "email", error: "unique", message: "email already taken"}` |
+| NOT NULL violation | `{field, error: "required", …}` |
+| FK violation | `{field, error: "reference", …}` |
+| CHECK violation | `{field: "", error: "check", …}` |
+
+The original adapter error is preserved as `err.cause`. Unrecognized
+errors propagate untouched. Uniqueness pre-checks
+(`validates_uniqueness_of`-style) are deliberately **not** offered —
+they race; the DB constraint is the check, translation makes it
+ergonomic.
+
+## 10. Query economics
+
+The features that keep list views at a constant query count and bulk
+operations at one statement: eager loading, composable scopes, batch
+writes, and soft deletes.
+
+### Eager loading (`.includes`)
+
+Relations are lazy by default — `user.orders!` issues a query on demand,
+which makes N+1 the default behavior of every list view. `.includes`
+fixes the economics with **batched second queries** (`WHERE fk IN (…)`),
+never JOINs — no row duplication, uniform across `belongs_to` /
+`has_one` / `has_many`:
+
+```coffee
+users = User.includes(:orders).where(active: true).all!
+posts = Post.includes(:author, comments: :author).limit(20).all!
+```
+
+- Accepts `:symbols`, strings, and nested `{relation: nested}` maps to
+  any depth. One query per relation per nesting level, regardless of
+  row count.
+- Preloaded relations fill the accessor's **memo**: `user.orders!`
+  resolves from cache with no query. The accessor API is unchanged
+  (uniform async) — preloading is purely a performance fact, invisible
+  to call sites.
+- `.includes` never changes the root result set — same rows with or
+  without it.
+
+Relation accessors memoize independently of `.includes`: the second
+`user.orders!` call on the same instance is free. Pass
+`user.orders! reload: true` to bust the memo and re-query.
+
+### Query scopes (`@scope`, `@defaultScope`)
+
+Named, composable query fragments declared on the model:
+
+```coffee
+User = schema :model
+  name!    string
+  active?  boolean
+  role?    string
+  @scope :active, -> @where(active: true)
+  @scope :since,  (d) -> @where("created_at > ?", d)
+  @defaultScope -> @where(banned: false)
+
+User.active().since(monday).order("name").all!
+User.where(role: "admin").active().all!       # chains in any order
+User.unscoped().all!                          # skip the @defaultScope
+```
+
+- `this` inside a scope body is the query builder; scopes return the
+  builder, so they compose with each other and with `.where` /
+  `.order` / `.limit` in any order. Parameterized scopes declare their
+  args: `(d) -> @where("created_at > ?", d)`.
+- Scopes live in the **static** namespace (model + builder), so a field
+  `active` and a scope `:active` coexist. Scope names may not collide
+  with the query API (`where`, `find`, `order`, …) or with each other —
+  checked at first use with a `collision` SchemaError.
+- `@defaultScope` (at most one per model) applies to every read and
+  bulk write — `where`/`all`/`first`/`count`/`find`/`findMany`/
+  `updateAll`/`deleteAll` — unless `.unscoped()` appears anywhere in
+  the chain. It composes with `@softDelete`'s implicit filter; both
+  apply. (Use sparingly — Active Record's caveats about default
+  scopes apply verbatim.)
+- Scopes appear in shadow TS: typed statics on the model const plus a
+  per-model `UserQuery` alias so scope-first chains typecheck.
+
+### Batch writes
+
+```coffee
+User.upsert! {email: "a@b.c", name: "Alice"}, on: :email
+  # INSERT … ON CONFLICT (email) DO UPDATE SET …; validates;
+  # beforeSave/afterSave fire; beforeCreate/beforeUpdate do NOT
+  # (the runtime can't know which branch the DB took).
+  # DuckDB caveat: ON CONFLICT updates on rows referenced by another
+  # table's FK trip DuckDB's indexed-column restriction — see
+  # docs/RIP-DUCKDB.md.
+
+User.insertMany! rows
+  # validates every row first (ALL failures collected into one
+  # SchemaError with `[i].field` issue paths, before any SQL), then one
+  # multi-VALUES INSERT … RETURNING *. Per-instance hooks deliberately
+  # skipped — this is the bulk path; use create! in a loop for hooks.
+
+User.where(active: false).deleteAll!     # one statement (soft-delete aware)
+User.where(plan: "trial").updateAll! expired: true
+  # one UPDATE; bypasses validation and hooks — the name says "all",
+  # the docs say "raw". Bumps updated_at on @timestamps models.
+```
+
+### Soft deletes
+
+`@softDelete` adds a `deleted_at` column and turns `.destroy()` into an
+UPDATE. Every read (`find`, `where`, `all`, `first`, `count`) and bulk
+write implicitly filters `deleted_at IS NULL`. The escape hatches:
+
+```coffee
+User.withDeleted().all!          # no filter — live and deleted rows
+User.onlyDeleted().all!          # inverted filter — deleted rows only
+user.restore!                    # UPDATE … SET deleted_at = NULL
+user.destroy! hard: true         # real DELETE; hooks still fire
+```
+
+Relation accessors on other models respect the target's soft-delete
+filter — an `order.user!` of a soft-deleted user resolves `null`,
+consistent with `find`.
+
+## 11. Adapters
+
+### The adapter seam (Contract v2)
+
+All ORM methods route through a single adapter funnel.
+`query(sql, params)` is the only **required** method; v2 adds optional
+capabilities the runtime feature-detects:
+
+```coffee
+globalThis.__ripSchema.__schemaSetAdapter
+  # required — returns {columns: [{name, type}, …], data: [[…]], rowCount: N}
+  query: (sql, params) ->
+    db.run sql, params
+
+  # optional — transactions (schema.transaction!). Returns a TxHandle.
+  begin: (options) ->
+    conn = db.pin()
+    conn.run 'BEGIN'
+    {
+      query:    (sql, params) -> conn.run sql, params
+      commit:   -> conn.run 'COMMIT'   and conn.release()
+      rollback: -> conn.run 'ROLLBACK' and conn.release()
+    }
+
+  capabilities: { tx: true }    # truthful self-report
+```
+
+Calling a feature whose method is absent throws a clear error
+(`schema.transaction()` on an adapter without `begin()` says so by
+name) — never a silent fallback.
+
+The default adapter talks to a duckdb-harbor instance: `RIP_DB_URL`
+(default `http://127.0.0.1:9494`; legacy `DB_URL` honored) and
+`RIP_DB_TOKEN` for bearer auth. Its `begin()` rides harbor's session
+protocol — `POST /sql/sessions/new` pins a connection, statements carry
+the `sessionId`, and the session is destroyed after COMMIT/ROLLBACK.
+`@rip-lang/db`'s `connect(url)` installs the same contract (query +
+begin) with its richer error handling and timeouts.
+
+### Per-schema adapters (`on:`)
+
+Multi-database setups pin individual models to their own adapter:
+
+```coffee
+analytics = schema.connect url: env.ANALYTICS_URL, token: env.ANALYTICS_TOKEN
+
+Event = schema :model, on: analytics
+  name! string
+  @timestamps
+```
+
+- `schema.connect {url, token?}` builds a NEW harbor adapter value
+  without installing it globally; any Contract-v2 adapter object works
+  in the `on:` slot. The default remains the global adapter.
+- Every ORM call resolves the model's adapter; `schema.transaction!`
+  takes `on: analytics` to pin the ambient transaction to one adapter.
+  ORM calls against a *different* adapter inside that block run
+  **outside** the transaction — each adapter has its own ambient slot,
+  and cross-adapter atomicity is impossible, so the runtime never
+  pretends otherwise.
+- `@belongs_to` / `@has_many` across adapters: the accessor works (it's
+  just a second query), but FK DDL emission is suppressed with a note —
+  the constraint can't exist cross-database.
+
+## 12. DDL & schema evolution
+
+Greenfield CREATE comes from `toSQL()`; everything after the first
+deploy comes from the migration system — diffing the declared models
+against the live database.
 
 ### DDL (`.toSQL()`)
 
@@ -1555,6 +1809,8 @@ and can be removed.
   produce drift; sequence start values cannot be altered after
   creation, so `@idStart` drift is reported as a note, not a step.
 
+## 13. Wire contracts — JSON Schema & OpenAPI
+
 ### JSON Schema & OpenAPI (`toJSONSchema`)
 
 Every schema exports a JSON Schema (draft 2020-12):
@@ -1566,7 +1822,7 @@ SignupInput.toJSONSchema()
 #   required: ["email", "password"] }
 ```
 
-- Field types map per [§17](#17-field-types); ranges become
+- Field types map per [§22](#22-field-types); ranges become
   `minLength`/`maxLength`/`minimum`/`maximum`/`minItems`/`maxItems`,
   regexes become `pattern`, defaults become `default`, literal unions
   become `enum` (single literal → `const`).
@@ -1599,159 +1855,7 @@ schemas work), never re-reads the body stream, and registers
 client codegen (any OpenAPI generator), with zero additional
 authoring.
 
-### The adapter seam (Contract v2)
-
-All ORM methods route through a single adapter funnel.
-`query(sql, params)` is the only **required** method; v2 adds optional
-capabilities the runtime feature-detects:
-
-```coffee
-globalThis.__ripSchema.__schemaSetAdapter
-  query: (sql, params) ->
-    # return {columns: [{name, type}, ...], data: [[row values], ...], rowCount: N}
-    ...
-  # optional — transactions (schema.transaction!)
-  begin: (options) ->
-    # return a TxHandle: { query(sql, params), commit(), rollback() }
-    ...
-  capabilities: { tx: true }    # truthful self-report
-```
-
-Calling a feature whose method is absent throws a clear error
-(`schema.transaction()` on an adapter without `begin()` says so by
-name) — never a silent fallback.
-
-The default adapter talks to a duckdb-harbor instance: `RIP_DB_URL`
-(default `http://127.0.0.1:9494`; legacy `DB_URL` honored) and
-`RIP_DB_TOKEN` for bearer auth. Its `begin()` rides harbor's session
-protocol — `POST /sql/sessions/new` pins a connection, statements carry
-the `sessionId`, and the session is destroyed after COMMIT/ROLLBACK.
-`@rip-lang/db`'s `connect(url)` installs the same contract (query +
-begin) with its richer error handling and timeouts.
-
-### Per-schema adapters (`on:`)
-
-Multi-database setups pin individual models to their own adapter:
-
-```coffee
-analytics = schema.connect url: env.ANALYTICS_URL, token: env.ANALYTICS_TOKEN
-
-Event = schema :model, on: analytics
-  name! string
-  @timestamps
-```
-
-- `schema.connect {url, token?}` builds a NEW harbor adapter value
-  without installing it globally; any Contract-v2 adapter object works
-  in the `on:` slot. The default remains the global adapter.
-- Every ORM call resolves the model's adapter; `schema.transaction!`
-  takes `on: analytics` to pin the ambient transaction to one adapter.
-  ORM calls against a *different* adapter inside that block run
-  **outside** the transaction — each adapter has its own ambient slot,
-  and cross-adapter atomicity is impossible, so the runtime never
-  pretends otherwise.
-- `@belongs_to` / `@has_many` across adapters: the accessor works (it's
-  just a second query), but FK DDL emission is suppressed with a note —
-  the constraint can't exist cross-database.
-
-### Snake / camel dual access on instances
-
-Database columns are typically snake_case (`user_id`, `created_at`) while
-field names are camelCase (`userId`, `createdAt`). A hydrated `:model`
-instance exposes both — `order.user_id` and `order.userId` read the same
-slot. The camelCase form is the canonical own property; the snake_case
-form is a non-enumerable accessor that forwards.
-
-```coffee
-order = Order.find! 42
-order.userId       # 7     (camelCase: canonical)
-order.user_id      # 7     (snake_case: alias)
-order.createdAt    # Date  (camelCase: canonical)
-order.created_at   # Date  (snake_case: alias)
-```
-
-`.create(data)` also accepts either style:
-
-```coffee
-Order.create! user_id: 7, total: 100
-Order.create! userId:  7, total: 100    # same result
-```
-
-Use whichever reads better alongside nearby raw SQL or JSON payloads.
-
-### Field-name conventions
-
-The snake_case ↔ camelCase bijection only works for identifiers
-that round-trip cleanly. The schema runtime enforces canonical
-camelCase at definition time:
-
-```coffee
-User = schema :model
-  mdmId? string                        # OK — canonical
-  mdmID? string                        # error — acronym style;
-                                       #   round-trips to mdm_i_d / mdmID
-                                       #   ambiguously
-```
-
-Rules:
-
-- Lowercase-first
-- Alphanumeric body
-- No two consecutive uppercase letters anywhere
-
-Same convention as Java Beans, Swift's "Acronyms in API names"
-guidance, and what most JS/TS codebases follow in practice.
-
-The runtime also reserves the names of its instance API
-(`save`, `destroy`, `ok`, `errors`, `toJSON`, `savedChanges`,
-`markDirty`, `_dirty` / `_persisted` / `_snapshot` / `_saving`)
-and the implicit timestamp / soft-delete columns
-(`createdAt`, `updatedAt`, `deletedAt`). Declaring any of those
-as a user field on a `:model` raises a `'reserved ORM name'`
-collision error at definition time. (Mixins are exempt — they
-can declare `createdAt` / `updatedAt` for explicit control,
-which is the alternative to the `@timestamps` directive.)
-
-### Relation target names
-
-`@belongs_to TargetName` derives the FK column from the target's
-PascalCase name via `__schemaSnake(target) + '_id'`. The same
-camelCase / snake_case bijection rule applies in reverse: target
-names should be canonical PascalCase (`User`, `UserOrg`, not
-`MDMUser`) so the derived FK column round-trips cleanly. Acronym-
-style target names aren't currently rejected at definition time,
-but writing `@belongs_to MDMUser` produces FK column `m_d_m_user_id`
-— almost certainly not what you want. Stick to PascalCase.
-
-### SQL reserved words
-
-The runtime always quotes column names in generated SQL — every
-INSERT, UPDATE, and SELECT it emits surrounds column identifiers
-with `"..."`. So a field named `order` works fine through the
-ORM:
-
-```coffee
-Trade = schema :model
-  order! integer                       # works through the ORM
-```
-
-The compiled SQL is `UPDATE "trades" SET "order" = ? WHERE "id" = ?`.
-
-The catch is **raw SQL** that you write yourself via the adapter's
-`query()` method or via `query!`. There the reserved-word collision
-becomes your problem:
-
-```coffee
-result = query! "SELECT order FROM trades"          # syntax error
-result = query! "SELECT \"order\" FROM trades"      # works
-```
-
-This matches Active Record's behavior — the ORM-generated SQL is
-always quoted, and raw SQL is always the user's responsibility.
-
----
-
-## 9. Mixins
+## 14. Mixins
 
 `:mixin` schemas exist to share field groups across multiple models or
 shapes. They're non-instantiable — you declare them, then other schemas
@@ -1814,7 +1918,7 @@ orthogonal to the capability axis that distinguishes the kinds.
 
 ---
 
-## 10. Schema algebra
+## 15. Schema algebra
 
 Algebra operators derive new schemas from existing ones:
 
@@ -1875,8 +1979,8 @@ typeof u.tagline                    # 'undefined' — !> dropped
 fields from another schema. Collisions still throw.
 
 ```coffee
-AdminUser = User.extend schema :shape
-  permissions! string[]
+AdminUser = User.extend (schema :shape
+  permissions! string[])
 ```
 
 `.sourceModel` is preserved through chained algebra, so tooling can trace
@@ -1897,7 +2001,7 @@ generators, query projectors) can walk this back to the originating
 
 ---
 
-## 11. Shadow TypeScript
+## 16. Shadow TypeScript
 
 Every named schema emits virtual TypeScript declarations that the
 language service picks up. The VS Code extension and `rip check` both
@@ -2078,7 +2182,7 @@ contains any schema declaration.
 
 ---
 
-## 12. SchemaError and diagnostics
+## 17. SchemaError and diagnostics
 
 ### `SchemaError`
 
@@ -2142,13 +2246,14 @@ range or drop the conflicting pragma.
 
 ---
 
-## 13. Common mistakes
+## 18. Common mistakes
 
 These forms look right but don't work — the parser catches all of them
 with specific diagnostics.
 
 ### `name: type` instead of `name type`
 
+<!-- doctest: fail -->
 ```coffee
 # wrong — fields use a space, not a colon, between name and type
 X = schema
@@ -2161,6 +2266,7 @@ X = schema
 
 ### Bare identifier enum members
 
+<!-- doctest: fail -->
 ```coffee
 # wrong — enum members are :symbol
 R = schema :enum
@@ -2175,6 +2281,7 @@ R = schema
 
 ### `name: value` as an enum member
 
+<!-- doctest: fail -->
 ```coffee
 # wrong — use :name value
 R = schema :enum
@@ -2187,6 +2294,7 @@ R = schema
 
 ### Methods in `:input` or `:mixin`
 
+<!-- doctest: fail -->
 ```coffee
 # wrong — :input is fields-only
 X = schema :input
@@ -2201,6 +2309,7 @@ X = schema :shape
 
 ### ORM directives on `:shape`
 
+<!-- doctest: fail -->
 ```coffee
 # wrong — @timestamps is :model-only
 A = schema :shape
@@ -2247,26 +2356,84 @@ predicate.
 
 ---
 
-## 14. Recipes
+## 19. Recipes
 
 ### Validating HTTP input
 
+The `input:` route option validates the JSON body before the handler
+runs — a 400 with structured issues goes out automatically, the parsed
+(defaulted, coerced) value is `@input`, and the route contributes to
+the generated `GET /openapi.json`:
+
 ```coffee
-import { post, read } from '@rip-lang/server'
+import { post } from '@rip-lang/server'
 
 SignupInput = schema
   email!    email
   password! string, 8..100
-  age?      integer, 18..120
+  age?      ~integer, 18..120         # "21" on the wire → 21
 
-post '/signup' ->
-  raw = @json()                       # whatever shape the client sent
-  result = SignupInput.safe raw
-  unless result.ok
-    return error! 400, errors: result.errors
-  # result.value is the cleaned, typed payload
-  db.users.insert result.value
+post '/signup', input: SignupInput, ->
+  db.users.insert @input
   { ok: true }
+```
+
+Validating by hand works too — `SignupInput.safe raw` returns
+`{ok, value, errors}` for cases where you need custom failure handling.
+
+### An atomic checkout
+
+`schema.transaction!` makes the multi-write atomic; the UNIQUE
+constraint is the duplicate check (no racy pre-query — the DB error
+arrives as a structured SchemaError); `afterCommit` is where effects
+that must never observe uncommitted state belong:
+
+```coffee
+Order = schema :model
+  total!     integer
+  reference! # string
+  @belongs_to User
+  @timestamps
+  afterCommit: -> queueEmail 'receipt', @id     # fires after COMMIT only
+
+placeOrder = (user, items, reference) ->
+  try
+    schema.transaction! ->
+      order = Order.create! userId: user.id, total: totalOf(items), reference: reference
+      Invoice.create! orderId: order.id, amount: order.total
+      order
+  catch err
+    if err.issues?[0]?.error is 'unique'
+      error! 'That order reference already exists', 409
+    throw err
+```
+
+A throw anywhere in the block rolls everything back — the order and
+invoice land together or not at all.
+
+### A list view without N+1
+
+`.includes` batches relations (`WHERE fk IN (…)` — one query per
+relation per level), scopes name the filters, and `@defaultScope`
+keeps cancelled rows out of every query unless `.unscoped()` opts in:
+
+```coffee
+Patient = schema :model
+  name!    string
+  active?  boolean
+  @has_many Visit
+  @scope :active, -> @where(active: true)
+  @defaultScope -> @where(archived: false)
+
+Visit = schema :model
+  reason? string
+  @belongs_to Patient
+  @belongs_to Provider
+
+# 3 queries total, regardless of row count:
+patients = Patient.active().includes(visits: :provider).all!
+for patient in patients
+  visits = patient.visits!            # memo hit — no query
 ```
 
 ### A DB-backed model with relations
@@ -2356,31 +2523,57 @@ get '/users/:id' ->
   { user: UserPublic.parse user.toJSON() }
 ```
 
-### Writing a migration script
+### Evolving the schema (week 2 and beyond)
+
+Change the models, then let the differ write the migration. A rename is
+declared, not guessed:
 
 ```coffee
-# scripts/migrate.rip
-import { User, Order, OrderItem } from '../api/models.rip'
-import { sql, setup } from '../api/db.rip'
+# models.rip — week 2: rename a column, add a field, add a table
+User = schema :model
+  fullName! string, 1..100, {was: "name"}   # rename annotation
+  email!#   email
+  phone?    ~:phone                          # new column
+  @timestamps
 
-setup!                                   # start DB if needed
-
-# Emit DDL in dependency order
-ddl = [
-  User.toSQL()
-  Order.toSQL()       # references User
-  OrderItem.toSQL()   # references Order
-].join('\n\n')
-
-for stmt in ddl.split ';'
-  stmt = stmt.trim()
-  sql! stmt + ';' if stmt
-
-p "[migrate] schema created"
+AuditLog = schema :model                     # new table
+  action! string
+  @belongs_to User
+  @timestamps
 ```
 
-Because `.toSQL()` doesn't call the adapter, migration scripts work
-before the database exists or before the ORM is wired.
+```text
+rip schema status models.rip          # review the classified plan
+rip schema make week2 models.rip      # writes migrations/0002_week2.sql
+rip schema migrate models.rip         # applies it, records the checksum
+```
+
+Lossy steps (type changes, SET NOT NULL) need `--allow-lossy`;
+DROPs need `--allow-destructive`; steps DuckDB refuses on
+FK-referenced tables are marked `blocked` and never auto-applied.
+Once the migration lands, delete the `{was: …}` annotation.
+
+For greenfield scripts, `.toSQL()` still works standalone — it never
+calls the adapter, so DDL can be emitted before the database exists.
+
+### The wire vocabulary (`~:name`)
+
+Every `read()` validator from `@rip-lang/server` doubles as a schema
+coercer — one normalization vocabulary for route params and schema
+fields:
+
+```coffee
+Patient = schema :model
+  chart!  ~:id, 1..99999     # "42" → 42, range-checked
+  ssn?    ~:ssn              # "123-45-6789" → "123456789"
+  phone?  ~:phone            # "8016542000" → "(801) 654-2000"
+  state?  ~:state            # "ut" → "UT"
+  dob?    ~:date             # normalized "YYYY-MM-DD"
+  amount? ~:money            # "$1,234.50" → 1234.5
+```
+
+Custom validators registered with `registerValidator` (server) or
+`schema.registerCoercer` (anywhere) join the vocabulary automatically.
 
 ### Composing nested shapes
 
@@ -2415,11 +2608,11 @@ else
 ```
 
 Registered `:shape` / `:input` / `:model` names can all be referenced
-as field types — see §17 for resolution rules.
+as field types — see §22 for resolution rules.
 
 ---
 
-## 15. What's not here yet
+## 20. What's not here yet
 
 Rip Schema covers a large surface area with one keyword, but it deliberately
 does not yet cover every feature you might find across the union of Zod,
@@ -2463,40 +2656,43 @@ you, file a proposal — the sidecar design makes most of them additive.
 
 # Part II — Reference
 
-## 16. Capability matrix
+## 21. Capability matrix
 
 What each kind's body can contain:
 
 | Feature                                 | `:input` | `:shape` | `:enum`  | `:mixin` | `:model` |
 | --------------------------------------- | -------- | -------- | -------- | -------- | -------- |
 | Fields (`name` with optional type)      | ✓        | ✓        | —        | ✓        | ✓        |
-| Literal-union type (`"a" \| "b"`)       | ✓        | ✓        | —        | ✓        | ✓        |
+| Literal-union type (`"a" \| "b"`, single = constant) | ✓ | ✓   | —        | ✓        | ✓        |
+| Coercion (`~integer`, `~:ssn`)          | ✓        | ✓        | —        | ✓        | ✓        |
 | Range / regex / default / attrs         | ✓        | ✓        | —        | ✓        | ✓        |
 | Inline transforms (`name, -> fn(it)`)   | ✓        | ✓        | —        | —        | ✓        |
 | `@mixin` directive                      | ✓        | ✓        | —        | ✓        | ✓        |
-| `@ensure` refinement                    | ✓        | ✓        | —        | —        | ✓        |
-| Other directives                        | —        | —        | —        | —        | ✓        |
-| Methods (`name: -> body`)               | —        | ✓        | —        | —        | ✓        |
+| `@ensure` / `@ensure!` refinement       | ✓        | ✓        | —        | —        | ✓        |
+| Other directives (`@timestamps`, `@scope`, …) | — | —        | —        | —        | ✓        |
+| Methods (`name: (params) -> body`)      | —        | ✓        | —        | —        | ✓        |
 | Computed getter (`name: ~> body`)       | —        | ✓        | —        | —        | ✓        |
-| Eager-derived field (`name: !> body`)   | —        | ✓        | —        | —        | ✓        |
-| Hooks (by known name)                   | —        | methods  | —        | —        | ✓        |
+| Eager-derived field (`name: !> body`)   | ✓        | ✓        | —        | —        | ✓        |
+| Hooks (by known name, 12 total)         | —        | methods  | —        | —        | ✓        |
 | Enum members (`:symbol`)                | —        | —        | ✓        | —        | —        |
 | Algebra (`.pick` etc.)                  | ✓ → shape | ✓ → shape | —       | —        | ✓ → shape |
-| ORM (`.find`, `.create`)                | —        | —        | —        | —        | ✓        |
-| `.parse` / `.safe` / `.ok`              | ✓        | ✓        | ✓        | —        | ✓        |
-| `.toSQL()`                              | —        | —        | —        | —        | ✓        |
+| ORM (`.find`, `.create`, transactions, scopes) | — | —       | —        | —        | ✓        |
+| `.parse` / `.safe` / `.ok` (+ async trio) | ✓      | ✓        | ✓        | —        | ✓        |
+| `.toJSONSchema()`                       | ✓        | ✓        | ✓        | ✓        | ✓        |
+| `.toSQL()` / `rip schema make`          | —        | —        | —        | —        | ✓        |
 
 "methods" in the `:shape` / Hooks row means: hook-named functions are
 accepted, but they're just methods with no lifecycle binding.
 
 `:union` is body-incompatible with everything above — its body is
 exactly one `@on :field` plus 2+ bare constituent names. It exposes
-`.parse` / `.safe` / `.ok` (and the async trio) by delegating to the
-matched constituent; algebra and ORM surface throw.
+`.parse` / `.safe` / `.ok` (and the async trio) plus `.toJSONSchema()`
+(`oneOf` + discriminator) by delegating to the matched constituent;
+algebra and ORM surface throw.
 
 ---
 
-## 17. Field types
+## 22. Field types
 
 Built-in type names and their runtime / SQL / TypeScript mappings:
 
@@ -2556,7 +2752,7 @@ user-defined enums or shapes compose incrementally.
 
 ---
 
-## 18. Directives
+## 23. Directives
 
 ### For any fielded kind
 
@@ -2592,7 +2788,7 @@ user-defined enums or shapes compose incrementally.
 
 ---
 
-## 19. Hook reference
+## 24. Hook reference
 
 Twelve recognized hook names. On `:model` they bind into the lifecycle;
 on other kinds they're plain methods.
@@ -2617,11 +2813,12 @@ to the caller.
 
 ---
 
-## 20. Constraints
+## 25. Constraints
 
 Each constraint on a field line is self-identifying by its token
 shape. Multiple constraints combine on one field, separated by commas:
 
+<!-- doctest: skip -->
 ```coffee
 name[!|?|#]  [type]  [constraint]  [constraint]  …
 ```
@@ -2640,13 +2837,14 @@ a string-literal union; the **constraint** forms live after the type:
 | `{key: value}`       | constraint | Attrs. Known keys: `{was: "old_name"}` — column-rename annotation for the schema differ |
 
 ```coffee
-password!  string, 8..100                     # length range
-age?       integer, 0..120                    # value range
-role?      string, ["guest"]                  # default
-zip!       string, /^\d{5}$/                  # regex pattern
-status?    string, 3..20, ["pending"]         # range AND default
-sex?       "M" | "F" | "U"                    # literal union
-status?    "draft" | "active" | "done", [:draft]  # union + default
+Example = schema
+  password!  string, 8..100                     # length range
+  age?       integer, 0..120                    # value range
+  role?      string, ["guest"]                  # default
+  zip!       string, /^\d{5}$/                  # regex pattern
+  status?    string, 3..20, ["pending"]         # range AND default
+  sex?       "M" | "F" | "U"                    # literal union
+  phase?     "draft" | "active" | "done", [:draft]  # union + default
 ```
 
 ### Range semantics by field type
@@ -2664,9 +2862,10 @@ status?    "draft" | "active" | "done", [:draft]  # union + default
 Use `n..n` for "exactly N":
 
 ```coffee
-sex?    1..1                     # single-character sex code
-npi!    10..10                   # NPI is exactly 10 digits
-code!   6..6                     # fixed-length code
+Fixed = schema
+  sex?    1..1                     # single-character sex code
+  npi!    10..10                   # NPI is exactly 10 digits
+  code!   6..6                     # fixed-length code
 ```
 
 Reads as "between N and N" which collapses to "exactly N."
@@ -2690,14 +2889,20 @@ redundant `1` that the `!` modifier already implies:
 
 ```coffee
 # These pairs mean the same thing:
-firstName!  1..50           firstName!  ..50
-name!       1..100          name!       ..100
-email!      1..320          email!      ..320
+Explicit = schema
+  firstName!  1..50
+  name!       1..100
+  email!      1..320
+Sugar = schema
+  firstName!  ..50
+  name!       ..100
+  email!      ..320
 
-# But explicit always wins:
-admin!      0..50           # explicit min=0 stays (rare: required but empty allowed)
-age!        0..120          # explicit min=0 stays (newborns are zero)
-score!      0..100          # explicit min=0 stays (test score can be zero)
+# But an explicit min always wins:
+Zeroes = schema
+  admin!      0..50            # explicit min=0 stays (rare: required but empty allowed)
+  age!        0..120           # explicit min=0 stays (newborns are zero)
+  score!      0..100           # explicit min=0 stays (test score can be zero)
 ```
 
 If the sugar would produce an impossible constraint (`! ..0` →
@@ -2730,9 +2935,10 @@ rejected at parse time with a clear error.
 Trailing comma + indent continues the line:
 
 ```coffee
-password! string,
-  8..100,
-  /[A-Z]/
+Account = schema
+  password! string,
+    8..100,
+    /[A-Z]/
 ```
 
 This is the same rule Rip applies to any trailing-comma continuation.
@@ -2800,7 +3006,7 @@ without changing the scanner shape.
 
 ---
 
-## 21. Relations
+## 26. Relations
 
 ### Directive → accessor → return type
 
@@ -2840,9 +3046,9 @@ the same memo, which is why preloaded relations are free. Pass
 
 ---
 
-## 22. Design invariants
+## 27. Design invariants
 
-Twelve rules that define how Rip Schema behaves. Worth keeping in mind
+Sixteen rules that define how Rip Schema behaves. Worth keeping in mind
 when debugging or extending:
 
 1. **Default kind is `:input`.** `schema` with no marker and a
@@ -2893,20 +3099,46 @@ when debugging or extending:
     result as an own enumerable property. Mutating a dependency
     afterward does **not** update the derived value — it stays stale
     by design. Use `~>` for always-current derivations.
-12. **Refinements are schema-level, not field-level.** `@ensure`
-    predicates run after per-field validation succeeds, once per
-    parse, against the whole defaulted and typed object. They fail
-    with a declared message that ships verbatim to the caller;
-    thrown exceptions inside a predicate count as failure, not
-    error. Refinements are skipped on DB hydrate (trusted data)
-    and dropped by every algebra op (structural derivation never
-    carries non-structural invariants).
+12. **Refinements are schema-level, not field-level by default.**
+    `@ensure` predicates run after per-field validation succeeds, once
+    per parse, against the whole defaulted and typed object. An
+    optional `:field` symbol attributes the failure to one input;
+    without it the issue is schema-wide (`field: ''`). They fail with
+    a declared message that ships verbatim to the caller; thrown
+    exceptions inside a predicate count as failure, not error.
+    Refinements are skipped on DB hydrate (trusted data) and dropped
+    by every algebra op (structural derivation never carries
+    non-structural invariants).
+13. **Coercion is field semantics.** `~type` / `~:name` converts the
+    wire value in pipeline step 1, before defaults and validation —
+    constraints always see the coerced value. Like transforms,
+    coercion survives algebra and is skipped on hydrate. A failed
+    coercion is `{error: 'coerce'}`, distinct from `{error: 'type'}`;
+    an unregistered `~:name` is a loud config error, never a
+    validation failure.
+14. **Async-validating schemas refuse the sync API.** One `@ensure!`
+    makes the whole schema async-validating: `.parse`/`.safe`/`.ok`
+    throw immediately ("use parseAsync!/safeAsync!/okAsync!") rather
+    than sometimes-returning a promise. Sync refinements run first;
+    async ones run concurrently; issues collect in declaration order.
+15. **Unions dispatch, never merge.** `:union` resolves the
+    discriminator to exactly one constituent and delegates — the
+    result is that constituent's instance. Discriminator values must
+    be disjoint string literals (checked at first parse, lazily).
+    Algebra on a union throws; distribute-vs-intersect has no
+    obviously-right answer, so v1 declines to guess.
+16. **The default scope applies at terminal time.** `@defaultScope`
+    composes into the query when a terminal (`all`/`first`/`count`/
+    `updateAll`/`deleteAll`) runs — so `.unscoped()` works anywhere in
+    the chain and the default's clauses never double-apply. `find`
+    routes through the builder, so the default scope and the
+    `@softDelete` filter apply to it uniformly.
 
 ---
 
 # Part III — Architecture
 
-## 23. Runtime architecture
+## 28. Runtime architecture
 
 Each schema goes through four layers. Each layer is built lazily on first
 need, and the caches are independent.
@@ -3002,19 +3234,29 @@ this layer.
 Built on first `.find/.create/.save/.destroy/.where` call on a `:model`.
 Wires:
 
-- the query builder
-- save / destroy flows (including hook lifecycle)
-- relation accessors on the generated class
-- instance methods (`save`, `destroy`, `ok`, `errors`, `toJSON`)
+- the query builder (with scope methods, default-scope composition,
+  soft-delete filtering, and `.includes` eager-load resolution)
+- save / destroy / restore flows (including the 12-hook lifecycle and
+  constraint-violation translation)
+- relation accessors on the generated class (with per-instance
+  memoization)
+- instance methods (`save`, `destroy`, `restore`, `ok`, `errors`,
+  `toJSON`)
+- transaction routing — every statement checks the AsyncLocalStorage
+  slot for the schema's adapter and joins an ambient
+  `schema.transaction!` automatically
 
 Requires a configured adapter before first use.
 
 ### Layer 4b — DDL plan
 
-Built on first `.toSQL()` call. Emits the `CREATE SEQUENCE` /
-`CREATE TABLE` / indexes + foreign keys for one model. Independent of
-Layer 4a — a migration script that never touches the ORM builds this
-layer only.
+Built on first `.toSQL()` call. A canonical `_tableSpec` (columns,
+indexes, FKs, sequence) renders to `CREATE SEQUENCE` / `CREATE TABLE` /
+indexes + foreign keys for one model. The same spec is what the
+migration differ (`rip schema status/make/migrate`) compares against
+the introspected live database — DDL emission and diffing can't drift
+apart because they share one source. Independent of Layer 4a — a
+migration script that never touches the ORM builds this layer only.
 
 ### Lazy is the point
 
@@ -3028,20 +3270,26 @@ don't have to.
 
 `__SchemaRegistry` holds every named `:model` and `:mixin` by bare name.
 Registration happens in the `__SchemaDef` constructor — *importing a
-file that declares named schemas activates them*. Tests can call
-`__SchemaRegistry.reset()` between runs to avoid cross-test leakage.
+file that declares named schemas activates them*. Re-declaring a name
+with an identical structure is an idempotent no-op (double-import
+safe); a *different* structure throws unless `replace` mode is on (HMR
+and test runners opt in). Tests can also use `__SchemaRegistry.scope()`
+for isolated registries or `.reset()` between runs.
 
 ### The adapter
 
-One function: `adapter.query(sql, params) → {columns, data, rows}`. The
-default adapter talks to rip-db via `fetch`. Custom adapters (for
-tests, in-memory mocks, alternate SQL backends) install with
-`globalThis.__ripSchema.__schemaSetAdapter`. Every ORM method funnels
-through this interface.
+Contract v2: `query(sql, params) → {columns, data, rowCount}` is the
+one required method; `begin(options) → TxHandle` and a truthful
+`capabilities` object are optional and feature-detected (§11). The
+default adapter talks to a duckdb-harbor instance via `fetch`; named
+adapters from `schema.connect(...)` bind individual models elsewhere
+(`on:`). Custom adapters (for tests, in-memory mocks, alternate SQL
+backends) install with `globalThis.__ripSchema.__schemaSetAdapter`.
+Every ORM method funnels through this interface.
 
 ---
 
-## 24. Compiler integration
+## 29. Compiler integration
 
 The schema keyword is implemented as a compiler sidecar in
 `src/schema/schema.js`, alongside the existing type and component sidecars.
@@ -3107,22 +3355,41 @@ its footprint in the main compiler is small.
 
 ---
 
-## 25. FAQ
+## 30. FAQ
 
 **Why not just use Zod?**
-Zod gives you the validator. It doesn't give you the ORM, the DDL, the
-class, the computed getters, or the derived DTOs. Rip Schema is all of
-that from one declaration. If you only need the validator, `schema :input`
-is the equivalent surface — and the derived shadow TS is indistinguishable
-from `z.infer<>`.
+Zod gives you the validator. It doesn't give you the ORM, the
+transactions, the migrations, the class, the computed getters, the
+derived DTOs, or the OpenAPI document. Rip Schema is all of that from
+one declaration. The validator alone now covers Zod's daily surface
+too: strict coercion (`~integer`, `~:phone`), discriminated unions
+(`schema :union`), sync and async refinements (`@ensure` /
+`@ensure!`), and `safeParse`-style structured results — with shadow TS
+indistinguishable from `z.infer<>` and no codegen step.
 
 **Is this a full ORM replacement for Prisma / Drizzle?**
-For the common production shape — yes. `find`, `where`, `create`,
-`save`, `destroy`, relations, DDL, hooks, lifecycle callbacks,
-validations, transactions (`schema.transaction!`), eager loading
-(`.includes`), query scopes (`@scope` / `@defaultScope`), soft deletes,
-upsert/batch writes, and structured constraint-violation errors are all
-present. For migration diffing — not yet; see §15.
+For the production shape — yes. `find`, `where`, `create`, `save`,
+`destroy`, relations, hooks, validations, transactions
+(`schema.transaction!`), eager loading (`.includes`), query scopes
+(`@scope` / `@defaultScope`), soft deletes, upsert/batch writes,
+structured constraint-violation errors, DDL, **and migration diffing**
+(`rip schema status / make / migrate` — declared models vs the live
+database, with checksummed history and rename annotations). The
+remaining gaps are listed honestly in §20.
+
+**How do transactions propagate without passing a handle around?**
+AsyncLocalStorage. `schema.transaction! ->` pins a connection and binds
+it to the async context; every ORM call inside the block routes through
+it automatically — model code is unchanged. Nested calls join the outer
+transaction; parallel transactions get independent contexts; per-schema
+adapters get independent slots. See §9.
+
+**What's the difference between `"a" | "b"` and `schema :union`?**
+The literal union is a FIELD type — one value constrained to a set of
+strings. `:union` is a SCHEMA kind — whole objects dispatched to
+different constituent schemas by a discriminator field (`@on :kind`).
+A single literal (`kind! "click"`) is the constant field that tags a
+constituent.
 
 **Does the runtime belong to `schema.js` or is it loaded separately?**
 It's inlined. When a file uses `schema`, the compiler injects a small
@@ -3172,7 +3439,7 @@ Yes. They compose: `User.omit("password").pick("name", "email").partial()`
 produces a `:shape` with the intersection of the three operations.
 
 **How do I express cross-field rules — "passwords must match", "end after start"?**
-Use `@ensure`. See [§5](#refinement-ensure) and the summary in [§22](#22-design-invariants)
+Use `@ensure`. See [§5](#refinement-ensure) and the summary in [§27](#27-design-invariants)
 invariant 12. Messages are required, predicates are plain Rip fns,
 thrown exceptions count as failure, and all refinements run every time
 (no short-circuit between refinements).
