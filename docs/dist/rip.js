@@ -5094,6 +5094,8 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       if (t.data?.optional && next && (next[0] === "TYPE_ANNOTATION" || next[0] === ":")) {
         return `${t[1]}?`;
       }
+      if (t[0] === "JS")
+        return "`" + t[1] + "`";
       return t[1];
     });
     let typeStr = parts.join(" ").replace(/\s+/g, " ").trim();
@@ -7599,6 +7601,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
   var BIND_PREFIX = "__bind_";
   var BIND_SUFFIX = "__";
   var LIFECYCLE_HOOKS = new Set(["beforeMount", "mounted", "beforeUnmount", "unmounted", "onError"]);
+  var ON_ERROR_PARAM_TYPE = "{ status?: number; message?: string; error?: Error; path?: string }";
   var BOOLEAN_ATTRS = new Set([
     "disabled",
     "hidden",
@@ -7712,8 +7715,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
     if (segs[0] !== "params" && segs[0] !== "query" || segs.length < 2)
       return KEY_ERROR;
     const code = segs.join(".");
-    const stubCode = segs[0] === "query" ? `(this.query as any).${segs.slice(1).join(".")}` : `this.${code}`;
-    return { code, stubCode };
+    return { code, stubCode: `this.${code}` };
   }
   function installComponentSupport(CodeEmitter, Lexer2) {
     let meta = (node, key) => node instanceof String ? node[key] : undefined;
@@ -8289,7 +8291,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
                 methods.push({ name: varName, func: val });
                 memberNames.add(varName);
               } else {
-                stateVars.push({ name: varName, value: val, isPublic: isPublicProp(stmt[1]), srcLine: stmt.loc?.r });
+                stateVars.push({ name: varName, value: val, isPublic: isPublicProp(stmt[1]), type: getMemberType(stmt[1]), optional: getMemberOptional(stmt[1]), srcLine: stmt.loc?.r });
                 memberNames.add(varName);
                 reactiveMembers.add(varName);
               }
@@ -8312,6 +8314,13 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
               memberNames.add(methodName);
             }
           }
+        }
+      }
+      if (gateVars.length > 0) {
+        if (!this._gateDecls)
+          this._gateDecls = [];
+        for (const { path, key, srcLine } of gateVars) {
+          this._gateDecls.push({ path, keyed: !!key, line: (srcLine ?? 0) + 1 });
         }
       }
       const autoEventHandlers = new Map;
@@ -8347,7 +8356,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         const sl = [];
         const componentTypeParams = this._componentTypeParams || "";
         sl.push(`class ${componentTypeParams}{`);
-        sl.push("  declare _root: Element | null; declare app: any; declare router: any; declare params: Record<string, string>; declare query: URLSearchParams; declare children: any;");
+        sl.push("  declare _root: Element | null; declare app: any; declare router: any; declare params: Record<string, string>; declare query: Record<string, string>; declare children: any;");
         const userHookNames = new Set(lifecycleHooks.map((h) => h.name));
         const hookDecls = [];
         if (!userHookNames.has("beforeMount"))
@@ -8359,7 +8368,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         if (!userHookNames.has("unmounted"))
           hookDecls.push("unmounted?(): void;");
         if (!userHookNames.has("onError"))
-          hookDecls.push("onError?(err: { status?: number; message?: string; error?: Error; path?: string }): void;");
+          hookDecls.push(`onError?(err: ${ON_ERROR_PARAM_TYPE}): void;`);
         if (hookDecls.length)
           sl.push("  " + hookDecls.join(" "));
         sl.push("  emit(_name: string, _detail?: any): void {}");
@@ -8398,12 +8407,31 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
             return "string";
           return null;
         };
-        for (const { name, type, value, optional, srcLine } of stateVars) {
+        const refsThisSync = (node) => {
+          if (!Array.isArray(node)) {
+            if (typeof node === "string" || node instanceof String) {
+              const s = node.valueOf();
+              return s === "this" || reactiveMembers.has(s);
+            }
+            return false;
+          }
+          const head2 = node[0]?.valueOf?.() ?? node[0];
+          if (head2 === "->" || head2 === "=>")
+            return false;
+          return node.some(refsThisSync);
+        };
+        const deferredStateInits = [];
+        for (const { name, type, value, isPublic, optional, srcLine } of stateVars) {
           const ts = expandType(type) || inferLiteralType(value);
-          const optNoDefault = optional && value === undefined;
+          const noValue = value === undefined || (value?.valueOf?.() ?? value) === "undefined";
+          const optNoDefault = optional && noValue;
           const wrapped = ts ? optNoDefault ? `${ts} | undefined` : ts : null;
           const marker = srcLine != null ? ` // @rip-src:${srcLine}` : "";
-          sl.push((wrapped ? `  declare ${name}: Signal<${wrapped}>;` : `  declare ${name}: Signal<any>;`) + marker);
+          if (!wrapped && !isPublic && !noValue && !refsThisSync(value)) {
+            deferredStateInits.push({ name, value, marker });
+          } else {
+            sl.push((wrapped ? `  declare ${name}: Signal<${wrapped}>;` : `  declare ${name}: Signal<any>;`) + marker);
+          }
         }
         if (inheritsTag) {
           sl.push(`  declare rest: Signal<__RipProps<'${inheritsTag}'>>;`);
@@ -8431,6 +8459,10 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
             sl.push(`  ${name}${typeAnnot} = __computed(() => ${val});`);
           }
         }
+        for (const { name, value, marker } of deferredStateInits) {
+          const val = this.emitInComponent(value, "value");
+          sl.push(`  ${name} = __state(${val});` + marker);
+        }
         sl.push("  _init(props) {");
         for (const { name, value, isPublic, srcLine } of readonlyVars) {
           const val = this.emitInComponent(value, "value");
@@ -8438,6 +8470,8 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           sl.push((isPublic ? `    this.${name} = props.${name} ?? ${val};` : `    this.${name} = ${val};`) + marker);
         }
         for (const { name, value, isPublic, required, type, srcLine } of stateVars) {
+          if (deferredStateInits.some((d) => d.name === name))
+            continue;
           const marker = srcLine != null ? ` // @rip-src:${srcLine}` : "";
           if (isPublic && (required || value === undefined)) {
             sl.push(`    this.${name} = __state(props.__bind_${name}__ ?? props.${name});` + marker);
@@ -8535,7 +8569,13 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         for (const { name, value } of lifecycleHooks) {
           if (Array.isArray(value) && (value[0] === "->" || value[0] === "=>")) {
             const [, params, hookBody] = value;
-            const paramStr = Array.isArray(params) ? params.map((p) => this.formatParam(p)).join(", ") : "";
+            let paramStr = Array.isArray(params) ? params.map((p) => this.formatParam(p)).join(", ") : "";
+            if (name === "onError" && Array.isArray(params) && params.length === 1) {
+              const p = params[0];
+              if ((typeof p === "string" || p instanceof String) && !meta(p, "type")) {
+                paramStr = `${p.valueOf()}: ${ON_ERROR_PARAM_TYPE}`;
+              }
+            }
             const transformed = this.reactiveMembers ? this.transformComponentMembers(hookBody) : hookBody;
             const isAsync = this.containsAwait(hookBody);
             let bodyCode = this.emitFunctionBody(transformed, params || []);
@@ -10462,7 +10502,7 @@ function __transition(el, name, dir, done) {
   });
 }
 
-// RFC 11 render-ready binding (\`x <~ @app.data.x\`): a reactive read of a
+// Render-ready binding (\`x <~ @app.data.x\`): a reactive read of a
 // stash source key that retains the last non-null value for the life of
 // this instance. A null write or reset() invalidates the CELL (ungated
 // readers see it immediately) without yanking mounted gates — the
@@ -10505,7 +10545,7 @@ class __Component {
   constructor(props = {}) {
     Object.assign(this, props);
     if (!this.app && globalThis.__ripApp) this.app = globalThis.__ripApp;
-    // RFC 11: a component with render gates (<~) is honored only via route
+    // A component with render gates (<~) is honored only via route
     // matching — the renderer sets __ripGateMount around each route/layout
     // construction. Constructed as an embedded child (a parent scope is
     // active but the renderer flag doesn't match), its gates were never
@@ -15672,7 +15712,7 @@ if (typeof globalThis !== 'undefined') {
       if (tokens.every((t) => t[0] === "TERMINATOR")) {
         if (typeTokens && _typesEmitter)
           dts = _typesEmitter(typeTokens, ["program"], source);
-        return { tokens, sexpr: ["program"], code: "", dts, data: dataSection, reactiveVars: {} };
+        return { tokens, sexpr: ["program"], code: "", dts, data: dataSection, reactiveVars: {}, gates: [] };
       }
       let lastLexedLoc = null;
       parser.lexer = {
@@ -15765,7 +15805,7 @@ if (typeof globalThis !== 'undefined') {
       if (typeTokens && _typesEmitter) {
         dts = _typesEmitter(typeTokens, sexpr, source, generator._schemaBehavior, generator._schemaAnon);
       }
-      return { tokens, sexpr, code, dts, map, reverseMap, data: dataSection, reactiveVars: generator.reactiveVars };
+      return { tokens, sexpr, code, dts, map, reverseMap, data: dataSection, reactiveVars: generator.reactiveVars, gates: generator._gateDecls || [] };
     }
     compileToJS(source) {
       return this.compile(source).code;
@@ -15812,7 +15852,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.16.1";
-  var BUILD_DATE = "2026-06-11@20:42:34GMT";
+  var BUILD_DATE = "2026-06-12@11:50:32GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -16285,7 +16325,6 @@ ${indented}`);
   var makeSourceCell;
   var makeSourceFamily;
   var matchRoute;
-  var parseStaleTime;
   var patternToRegex;
   var resolveIndex;
   var resolveStorePath;
@@ -17049,19 +17088,19 @@ ${indented}`);
       });
     return resource;
   }
-  DURATION_RE = /^(\d+)\s*(s|sec|second|seconds|m|min|minute|minutes|h|hr|hour|hours|d|day|days|w|week|weeks|y|year|years)$/i;
-  parseStaleTime = function(v) {
-    let n, parts;
+  DURATION_RE = /^(\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\s*(s|sec|second|seconds|m|min|minute|minutes|h|hr|hour|hours|d|day|days|w|week|weeks|y|year|years)$/i;
+  function parseStaleTime(v) {
+    let label, n, parts;
     if (!(v != null))
       return 0;
-    if (v === Symbol.for("forever") || v === "forever")
-      return Infinity;
     if (typeof v === "number")
       return v;
     if (typeof v === "string") {
+      if (v === "forever")
+        return Infinity;
       parts = v.match(DURATION_RE);
       if (parts) {
-        n = parseInt(parts[1]);
+        n = parseFloat(parts[1]);
         return (() => {
           switch (parts[2][0].toLowerCase()) {
             case "s":
@@ -17081,10 +17120,13 @@ ${indented}`);
           }
         })();
       }
-      return parseInt(v) || 0;
+      if (/^\d+$/.test(v))
+        return parseInt(v, 10);
     }
+    label = typeof v === "symbol" ? String(v) : JSON.stringify(v);
+    console.warn(`[Rip] source: unrecognized staleTime ${label} — treating as 0 (use e.g. '5 min', '2 hours', a number of ms, or 'forever')`);
     return 0;
-  };
+  }
   makeSourceCell = function(fetchFn, staleTime) {
     let _data, _error, _loading, cell, controller, generation, inflight, load, loadedAt, start;
     _data = __state(null);
@@ -18038,6 +18080,8 @@ ${indented}`);
       fileName = path.split("/").pop();
       if (fileName.startsWith("_"))
         continue;
+      if (fileName === "index.rip")
+        continue;
       name = fileToComponentName(path);
       if (map[name]) {
         console.warn(`[Rip] Component name collision: ${name} (${map[name]} vs ${path})`);
@@ -18109,7 +18153,7 @@ ${indented}`);
     return names;
   };
   compileAndImport = async function(source2, compile2, components = null, path = null, resolver = null) {
-    let anyImportRe, bareImportRe, bindingClause, blob, blobUrl, cached, committed, debug, depMod, depSource, finalJs, found, full, header, importedNames, js, keyLiteral, matches, mod, msg, names, needed, offset, pkgMap, post, pre, preamble, prefixLines, previousUrl, replacement, ripImportRe, specifier, storePath, url;
+    let anyImportRe, bareImportRe, bindingClause, blob, blobUrl, cached, committed, debug, depMod, depSource, finalJs, found, full, header, importedNames, js, keyLiteral, matches, mod, msg, names, needed, offset, pkgGlobalRe, pkgMap, post, pre, preamble, prefixLines, previousUrl, replacement, ripImportRe, specifier, storePath, url;
     if (components && path) {
       cached = components.getCompiled(path);
       if (cached)
@@ -18138,6 +18182,39 @@ ${indented}`);
               return `${pre2}${target}${post2}`;
             });
           }
+          pkgGlobalRe = /^(\s*)import\s+([^'"]+?)\s+from\s+['"](@rip-lang\/[^'"]+)['"];?\s*$/gm;
+          js = js.replace(pkgGlobalRe, function(full2, indent, clause, spec) {
+            let alias, close, name, open, orig, parts, pkgKey, trimmed;
+            pkgKey = spec.replace(/^(@rip-lang\/[^\/]+).*$/, "$1");
+            if (pkgMap[pkgKey])
+              return full2;
+            trimmed = clause.trim();
+            if (trimmed.startsWith("type "))
+              return `${indent}// type-only import erased: ${spec}`;
+            open = trimmed.indexOf("{");
+            close = trimmed.lastIndexOf("}");
+            if (open < 0 || close <= open) {
+              console.warn(`[Rip] Skipping non-named import from ${spec}; only named imports from '@rip-lang/*' are supported.`);
+              return full2;
+            }
+            parts = [];
+            for (let raw of trimmed.slice(open + 1, close).split(",")) {
+              name = raw.trim().replace(/^type\s+/, "");
+              if (!name)
+                continue;
+              if (/\s+as\s+/.test(name)) {
+                [orig, alias] = name.split(/\s+as\s+/).map(function(s) {
+                  return s.trim();
+                });
+                parts.push(`${orig}: ${alias}`);
+              } else {
+                parts.push(name);
+              }
+            }
+            if (parts.length === 0)
+              return `${indent}// import erased: ${spec}`;
+            return `${indent}const { ${parts.join(", ")} } = globalThis;`;
+          });
           if (components) {
             ripImportRe = /^(\s*(?:import|export)\s+(?:(.*?)\s+from\s+)?['"])([^'"]*\.rip)(['"];?\s*)$/gm;
             matches = Array.from(js.matchAll(ripImportRe));
@@ -18437,8 +18514,9 @@ ${indented}`);
         return;
       sameRoute = route.file === currentRoute && sameKeys(params, currentParams);
       queryKeyedChanged = function() {
-        let gates;
-        gates = currentComponent?.constructor?.__gates;
+        let ctor, gates;
+        ctor = currentComponent?.constructor;
+        gates = ctor?.__gates;
         if (!gates)
           return false;
         for (let g of gates) {
