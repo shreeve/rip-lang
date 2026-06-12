@@ -4637,7 +4637,7 @@ export class Compiler {
     // If only terminators remain (type-only source), emit types and return early
     if (tokens.every(t => t[0] === 'TERMINATOR')) {
       if (typeTokens && _typesEmitter) dts = _typesEmitter(typeTokens, ['program'], source);
-      return { tokens, sexpr: ['program'], code: '', dts, data: dataSection, reactiveVars: {} };
+      return { tokens, sexpr: ['program'], code: '', dts, data: dataSection, reactiveVars: {}, gates: [] };
     }
 
     // Step 3: Parse — shim adapter wraps token values with metadata
@@ -4751,7 +4751,7 @@ export class Compiler {
       dts = _typesEmitter(typeTokens, sexpr, source, generator._schemaBehavior, generator._schemaAnon);
     }
 
-    return { tokens, sexpr, code, dts, map, reverseMap, data: dataSection, reactiveVars: generator.reactiveVars };
+    return { tokens, sexpr, code, dts, map, reverseMap, data: dataSection, reactiveVars: generator.reactiveVars, gates: generator._gateDecls || [] };
   }
 
   compileToJS(source) { return this.compile(source).code; }

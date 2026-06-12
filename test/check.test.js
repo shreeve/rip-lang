@@ -173,14 +173,14 @@ export Dash = component
   assert(/possibly 'null'/.test(r.out), 'unexpected output:\n' + r.out);
 });
 
-// ── 4. RFC 11 render-ready state: gates narrow, ungated reads stay honest ──
+// ── 4. Render-ready state: gates narrow, ungated reads stay honest ──
 //
 // `x <~ @app.data.x` stubs as `__computed(() => __ripGate(...))` — the
 // generic non-null narrow, sound because the renderer loads the source
 // before construction. Ungated reads keep the source's declared
 // `T | null`, and the StashMethods intersection types reset()/source().
 
-const RFC11_STASH = `import { source } from '@rip-lang/app'
+const SOURCE_STASH = `import { source } from '@rip-lang/app'
 
 export stash =
   cart: { items: [] }
@@ -191,7 +191,7 @@ export stash =
 check('gated binding is non-null at every read site', () => {
   const r = checkProject({
     'index.rip': `export ok = true\n`,
-    'app/stash.rip': RFC11_STASH,
+    'app/stash.rip': SOURCE_STASH,
     'profile.rip': `export Profile = component
   user <~ @app.data.user
   form := { ...user }
@@ -205,7 +205,7 @@ check('gated binding is non-null at every read site', () => {
 check('ungated source read stays T | null — unguarded access errors', () => {
   const r = checkProject({
     'index.rip': `export ok = true\n`,
-    'app/stash.rip': RFC11_STASH,
+    'app/stash.rip': SOURCE_STASH,
     'nav.rip': `export Nav = component
   user ~= @app.data.user
   render
@@ -219,7 +219,7 @@ check('ungated source read stays T | null — unguarded access errors', () => {
 check('keyed gate narrows; ungated keyed read stays nullable', () => {
   const r = checkProject({
     'index.rip': `export ok = true\n`,
-    'app/stash.rip': RFC11_STASH,
+    'app/stash.rip': SOURCE_STASH,
     'detail.rip': `export Detail = component
   order <~ @app.data.order(params.id)
   render
@@ -230,7 +230,7 @@ check('keyed gate narrows; ungated keyed read stays nullable', () => {
 
   const r2 = checkProject({
     'index.rip': `export ok = true\n`,
-    'app/stash.rip': RFC11_STASH,
+    'app/stash.rip': SOURCE_STASH,
     'detail.rip': `export Detail = component
   o ~= @app.data.order('x')
   render
@@ -244,7 +244,7 @@ check('keyed gate narrows; ungated keyed read stays nullable', () => {
 check('stash methods are typed: reset() and the source() handle', () => {
   const r = checkProject({
     'index.rip': `export ok = true\n`,
-    'app/stash.rip': RFC11_STASH,
+    'app/stash.rip': SOURCE_STASH,
     'tools.rip': `export Tools = component
   stats = @app.data.source('user')
   signout: -> @app.data.reset()
@@ -256,6 +256,259 @@ check('stash methods are typed: reset() and the source() handle', () => {
 `,
   });
   assert(r.ok, 'expected clean check, got:\n' + r.out);
+});
+
+// ── 5. Gating a plain key is a compile error, not just a mount error ──
+//
+// The renderer rejects a `<~` on a non-source path deterministically at
+// mount; `rip check` mirrors it statically by classifying the stash
+// literal's keys (chasing module-level bindings). Conservative: values
+// whose source-ness isn't visible (imports, factory calls, spreads) stay
+// silent — the mount check backstops those.
+
+check('gating a plain key errors at check time (module-binding indirection)', () => {
+  const r = checkProject({
+    'index.rip': `export ok = true\n`,
+    'app/stash.rip': `import { source } from '@rip-lang/app'
+
+orders:: number[] = []
+
+export stash =
+  orders: orders
+  user: source { fetch: -> { name: 'Ada' } }
+`,
+    'orders.rip': `export Orders = component
+  orders <~ @app.data.orders
+  render
+    p "#{orders.length}"
+`,
+  });
+  assert(!r.ok, 'expected a gate-on-plain-key error');
+  assert(/'orders <~' does not resolve to a source/.test(r.out), 'unexpected output:\n' + r.out);
+});
+
+check('gating a nullable plain key errors too (the silent-null case)', () => {
+  const r = checkProject({
+    'index.rip': `export ok = true\n`,
+    'app/stash.rip': `import { source } from '@rip-lang/app'
+
+export stash =
+  selected: null
+  user: source { fetch: -> { name: 'Ada' } }
+`,
+    'sel.rip': `export Sel = component
+  selected <~ @app.data.selected
+  render null
+`,
+  });
+  assert(!r.ok, 'expected a gate-on-nullable-plain-key error');
+  assert(/'selected <~' does not resolve to a source/.test(r.out), 'unexpected output:\n' + r.out);
+});
+
+check('a gate on a missing key errors; sources via binding or subpath stay clean', () => {
+  const missing = checkProject({
+    'index.rip': `export ok = true\n`,
+    'app/stash.rip': `import { source } from '@rip-lang/app'
+
+export stash =
+  user: source { fetch: -> { name: 'Ada' } }
+`,
+    'c.rip': `export C = component
+  stats <~ @app.data.stats
+  render null
+`,
+  });
+  assert(!missing.ok, 'expected a missing-key error');
+  assert(/'stats <~' does not resolve to a source.*not a key/.test(missing.out), 'unexpected output:\n' + missing.out);
+
+  const clean = checkProject({
+    'index.rip': `export ok = true\n`,
+    'app/stash.rip': `import { source } from '@rip-lang/app'
+
+userSource = source { fetch: -> { name: 'Ada' } }
+
+export stash =
+  user: userSource
+  settings: { theme: source { fetch: -> { dark: true } } }
+`,
+    'c.rip': `export C = component
+  user <~ @app.data.user
+  theme <~ @app.data.settings.theme
+  render null
+`,
+  });
+  assert(clean.ok, 'binding indirection and subpath gates should pass: ' + clean.out);
+});
+
+check('opaque stash values stay silent (the mount check backstops them)', () => {
+  const r = checkProject({
+    'index.rip': `export ok = true\n`,
+    'app/stash.rip': `import { source } from '@rip-lang/app'
+import { makeThing } from './factory.rip'
+
+export stash =
+  thing: makeThing()
+  user: source { fetch: -> { name: 'Ada' } }
+`,
+    'app/factory.rip': `export makeThing = -> null\n`,
+    'c.rip': `export C = component
+  thing <~ @app.data.thing
+  render
+    p "#{thing}"
+`,
+  });
+  assert(r.ok, 'opaque values must not produce gate errors: ' + r.out);
+});
+
+// ── 6. staleTime duration strings are template-literal typed ──
+//
+// `staleTime?: Duration | symbol` where Duration is number |
+// `${number}${Unit}` | `${number} ${Unit}` — so '5 min' checks clean and
+// typos like '5 mins' (which would otherwise parseInt to 5ms) error at
+// the declaration site. Also pins backtick template-literal types
+// surviving the type emitter (buildTypeString re-wraps JS tokens).
+
+check("staleTime '5 min' checks clean; '5 mins' is a type error", () => {
+  const good = checkProject({
+    'index.rip': `export ok = true\n`,
+    'app/stash.rip': `import { source } from '@rip-lang/app'
+
+export stash =
+  products: source { fetch: (-> [1, 2]), staleTime: '5 min' }
+`,
+  });
+  assert(good.ok, "'5 min' should be a valid Duration: " + good.out);
+
+  const bad = checkProject({
+    'index.rip': `export ok = true\n`,
+    'app/stash.rip': `import { source } from '@rip-lang/app'
+
+export stash =
+  products: source { fetch: (-> [1, 2]), staleTime: '5 mins' }
+`,
+  });
+  assert(!bad.ok, "'5 mins' should be rejected by the Duration type");
+  assert(/5 mins/.test(bad.out), 'unexpected output:\n' + bad.out);
+});
+
+check("staleTime 'forever' checks clean; symbols and near-misses are type errors", () => {
+  const good = checkProject({
+    'index.rip': `export ok = true\n`,
+    'app/stash.rip': `import { source } from '@rip-lang/app'
+
+export stash =
+  products: source { fetch: (-> [1, 2]), staleTime: 'forever' }
+`,
+  });
+  assert(good.ok, "'forever' should type-check: " + good.out);
+
+  const sym = checkProject({
+    'index.rip': `export ok = true\n`,
+    'app/stash.rip': `import { source } from '@rip-lang/app'
+
+export stash =
+  products: source { fetch: (-> [1, 2]), staleTime: :forever }
+`,
+  });
+  assert(!sym.ok, 'the :forever symbol should be rejected — the keyword is a string');
+
+  const typo = checkProject({
+    'index.rip': `export ok = true\n`,
+    'app/stash.rip': `import { source } from '@rip-lang/app'
+
+export stash =
+  products: source { fetch: (-> [1, 2]), staleTime: 'foreverz' }
+`,
+  });
+  assert(!typo.ok, "'foreverz' should be rejected");
+  assert(/foreverz/.test(typo.out), 'unexpected output:\n' + typo.out);
+});
+
+// ── 7. User-defined onError gets the canonical param type ──
+//
+// The typed optional onError declaration is only emitted when the user
+// does NOT define the hook, so a user-defined `onError: (err) ->` had no
+// signature to inherit and errored as an implicit any in strict mode.
+// The stub now injects the canonical payload type for an unannotated
+// single param.
+
+check('untyped onError param checks clean and is typed, not any', () => {
+  const r = checkProject({
+    'comp.rip': `export Layout = component
+  msg:: string | null := null
+  onError: (err) -> msg = err.message ?? 'unknown'
+  render null
+`,
+  });
+  assert(r.ok, 'expected clean check, got:\n' + r.out);
+
+  const misuse = checkProject({
+    'comp.rip': `export Layout = component
+  msg:: string | null := null
+  onError: (err) -> msg = err.bogus
+  render null
+`,
+  });
+  assert(!misuse.ok, 'err should carry the structured type, not any');
+  assert(/bogus/.test(misuse.out), 'unexpected output:\n' + misuse.out);
+});
+
+// ── 8. `?` widens a member with an explicit `:= undefined` initializer ──
+//
+// `x?:: string := undefined` used to declare Signal<string> but initialize
+// it with undefined — an immediate TS2322. The `?` marker now widens the
+// payload to `| undefined` when the initializer is the undefined literal,
+// matching the no-initializer prop case (`@label?:: T`). A `?` with a real
+// default stays unwidened (the default fills the gap).
+
+check("x?:: T := undefined declares Signal<T | undefined>; use still narrows", () => {
+  const r = checkProject({
+    'comp.rip': `export C = component
+  gateError?:: string := undefined
+  msg ~= gateError ?? 'ok'
+  render null
+`,
+  });
+  assert(r.ok, 'expected clean check, got:\n' + r.out);
+
+  const unguarded = checkProject({
+    'comp.rip': `export C = component
+  gateError?:: string := undefined
+  bad ~= gateError.length
+  render null
+`,
+  });
+  assert(!unguarded.ok, 'unguarded use must require narrowing');
+  assert(/possibly 'undefined'/.test(unguarded.out), 'unexpected output:\n' + unguarded.out);
+});
+
+// ── 9. `query` is typed as the Record the router actually hands components ──
+//
+// Component stubs used to declare query: URLSearchParams, but the router
+// passes a plain Record<string, string> (Object.fromEntries over the params).
+// The honest type catches URLSearchParams-only calls like query.get(...) that
+// would crash at runtime, and lets keyed gates read query fields directly.
+
+check("query is Record<string, string>; URLSearchParams calls error", () => {
+  const ok = checkProject({
+    'comp.rip': `export C = component
+  sort ~= @query.sort ?? 'asc'
+  render null
+`,
+  });
+  assert(ok.ok, 'plain query field access should check clean, got:\n' + ok.out);
+
+  const bad = checkProject({
+    'comp.rip': `export C = component
+  sort ~= @query.get('sort')
+  render null
+`,
+  });
+  // query is a Record<string, string>: its index signature makes `.get` a
+  // string, so calling it fails as "not callable" — proving query is not the
+  // URLSearchParams the stub used to claim (where `.get('sort')` was valid).
+  assert(!bad.ok, 'query.get(...) must error — query is not URLSearchParams');
+  assert(/not callable|no call signatures/.test(bad.out), 'unexpected output:\n' + bad.out);
 });
 
 rmSync(tmpDir, { recursive: true, force: true });

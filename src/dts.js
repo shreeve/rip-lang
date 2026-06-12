@@ -798,7 +798,7 @@ export function emitTypes(tokens, sexpr = null, source = '', schemaBehavior = nu
         } else if (next[0] === 'EFFECT') {
           lines.push(`${indent()}${exp}${declare}const ${varName}: () => void;`);
         } else if (next[0] === 'GATE') {
-          // Render-ready gate (RFC 11) — only valid inside component
+          // Render-ready gate (<~) — only valid inside component
           // bodies, where the component stub (not this hoist) types the
           // binding. Explicit no-op so an annotated gate never falls
           // through to the `=` arrow-scan below.

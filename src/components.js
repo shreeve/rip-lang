@@ -18,6 +18,12 @@ const BIND_PREFIX = '__bind_';
 const BIND_SUFFIX = '__';
 
 const LIFECYCLE_HOOKS = new Set(['beforeMount', 'mounted', 'beforeUnmount', 'unmounted', 'onError']);
+
+// Canonical payload type for the onError lifecycle hook — the single source
+// of truth for both the optional declaration emitted when a component does
+// NOT define the hook and the shadow param type of a user-defined hook
+// whose param is unannotated.
+const ON_ERROR_PARAM_TYPE = '{ status?: number; message?: string; error?: Error; path?: string }';
 const BOOLEAN_ATTRS = new Set([
   'disabled', 'hidden', 'readonly', 'required', 'checked', 'selected',
   'autofocus', 'autoplay', 'controls', 'loop', 'muted', 'multiple',
@@ -109,7 +115,7 @@ function chainSegments(node) {
 }
 
 /**
- * RFC 11: parse a gate RHS (`user <~ @app.data.user`) into its hoistable
+ * Parse a render gate's RHS (`user <~ @app.data.user`) into its hoistable
  * parts. The RHS must be a literal `@app.data.…` chain, optionally applied
  * to exactly one key argument (keyed source). Returns
  * { path, keyExpr? } or { error }.
@@ -133,7 +139,7 @@ function parseGatePath(rhs) {
 }
 
 /**
- * RFC 11: parse a keyed gate's key expression. The key must be available
+ * Parse a keyed gate's key expression. The key must be available
  * to the renderer before construction, so it is restricted to a literal or
  * a params/query access (`params.id`, `@query.tab`). Returns
  * { code, stubCode } (runtime and type-stub spellings) or { error }.
@@ -153,12 +159,9 @@ function parseGateKey(expr) {
   if (segs[0] === 'this') segs.shift();
   if ((segs[0] !== 'params' && segs[0] !== 'query') || segs.length < 2) return KEY_ERROR;
   const code = segs.join('.');
-  // The stub types `query` as URLSearchParams while the router hands
-  // components a plain object — cast in the shadow only.
-  const stubCode = segs[0] === 'query'
-    ? `(this.query as any).${segs.slice(1).join('.')}`
-    : `this.${code}`;
-  return { code, stubCode };
+  // `params` and `query` are both Record<string, string> on the component, so
+  // the shadow reads the key the same way the runtime does — no cast needed.
+  return { code, stubCode: `this.${code}` };
 }
 
 // ============================================================================
@@ -859,7 +862,7 @@ export function installComponentSupport(CodeEmitter, Lexer) {
           reactiveMembers.add(varName);
         }
       } else if (op === 'gate') {
-        // RFC 11 render-ready binding: hoist the literal stash path into the
+        // Render-ready binding: hoist the literal stash path into the
         // component's static gate-set; bind the member as a reactive read.
         const varName = getMemberName(stmt[1]);
         if (varName) {
@@ -891,7 +894,7 @@ export function installComponentSupport(CodeEmitter, Lexer) {
               methods.push({ name: varName, func: val });
               memberNames.add(varName);
             } else {
-              stateVars.push({ name: varName, value: val, isPublic: isPublicProp(stmt[1]), srcLine: stmt.loc?.r });
+              stateVars.push({ name: varName, value: val, isPublic: isPublicProp(stmt[1]), type: getMemberType(stmt[1]), optional: getMemberOptional(stmt[1]), srcLine: stmt.loc?.r });
               memberNames.add(varName);
               reactiveMembers.add(varName);
             }
@@ -913,6 +916,17 @@ export function installComponentSupport(CodeEmitter, Lexer) {
             memberNames.add(methodName);
           }
         }
+      }
+    }
+
+    // Record gate declarations on the generator so the compile result can
+    // expose them (compiler.js threads `_gateDecls` through as `gates`).
+    // `rip check` validates each path against app/stash.rip's source-key
+    // set — the compile-time mirror of the renderer's mount check.
+    if (gateVars.length > 0) {
+      if (!this._gateDecls) this._gateDecls = [];
+      for (const { path, key, srcLine } of gateVars) {
+        this._gateDecls.push({ path, keyed: !!key, line: (srcLine ?? 0) + 1 });
       }
     }
 
@@ -971,14 +985,14 @@ export function installComponentSupport(CodeEmitter, Lexer) {
       // method bodies past where interpolation expects them — breaking
       // @ts-expect-error injection.  Keeping a single header line preserves
       // the relative offsets.
-      sl.push('  declare _root: Element | null; declare app: any; declare router: any; declare params: Record<string, string>; declare query: URLSearchParams; declare children: any;');
+      sl.push('  declare _root: Element | null; declare app: any; declare router: any; declare params: Record<string, string>; declare query: Record<string, string>; declare children: any;');
       const userHookNames = new Set(lifecycleHooks.map(h => h.name));
       const hookDecls = [];
       if (!userHookNames.has('beforeMount'))   hookDecls.push('beforeMount?(): void;');
       if (!userHookNames.has('mounted'))       hookDecls.push('mounted?(): void;');
       if (!userHookNames.has('beforeUnmount')) hookDecls.push('beforeUnmount?(): void;');
       if (!userHookNames.has('unmounted'))     hookDecls.push('unmounted?(): void;');
-      if (!userHookNames.has('onError'))       hookDecls.push('onError?(err: { status?: number; message?: string; error?: Error; path?: string }): void;');
+      if (!userHookNames.has('onError'))       hookDecls.push(`onError?(err: ${ON_ERROR_PARAM_TYPE}): void;`);
       if (hookDecls.length) sl.push('  ' + hookDecls.join(' '));
       sl.push('  emit(_name: string, _detail?: any): void {}');
 
@@ -1015,16 +1029,55 @@ export function installComponentSupport(CodeEmitter, Lexer) {
         return null;
       };
 
+      // A value references `this` synchronously if it reads `this`/`@…` or a
+      // reactive member (which emits as `this.x.value`) OUTSIDE any nested
+      // function. Refs inside a `->`/`=>` are deferred to call time, so they
+      // don't run during field initialization. Used below to decide whether a
+      // value is safe to emit as a field initializer (the injected `app`,
+      // `router`, … are `declare`-only, so a synchronous `this.app` read in a
+      // field initializer would trip TS2729 "used before initialization").
+      const refsThisSync = (node) => {
+        if (!Array.isArray(node)) {
+          if (typeof node === 'string' || node instanceof String) {
+            const s = node.valueOf();
+            return s === 'this' || reactiveMembers.has(s);
+          }
+          return false;
+        }
+        const head = node[0]?.valueOf?.() ?? node[0];
+        if (head === '->' || head === '=>') return false; // nested fn — deferred
+        return node.some(refsThisSync);
+      };
+
       // Property declarations (declare avoids definite-assignment errors)
-      for (const { name, type, value, optional, srcLine } of stateVars) {
+      const deferredStateInits = [];
+      for (const { name, type, value, isPublic, optional, srcLine } of stateVars) {
         const ts = expandType(type) || inferLiteralType(value);
         // Optional prop with no default: field can be undefined at runtime
         // (we don't synthesize a `?? null` fallback below), so the Signal's
         // payload type must include undefined.
-        const optNoDefault = optional && value === undefined;
+        // `?` widens the Signal payload to `| undefined` when the member has
+        // no initializer (`@label?:: T` — caller may omit) OR an explicit
+        // `:= undefined` (`x?:: T := undefined` — starts empty). A `?` with a
+        // real default stays `T`: the default fills the gap, so the field is
+        // never undefined.
+        const noValue = value === undefined || (value?.valueOf?.() ?? value) === 'undefined';
+        const optNoDefault = optional && noValue;
         const wrapped = ts ? (optNoDefault ? `${ts} | undefined` : ts) : null;
         const marker = srcLine != null ? ` // @rip-src:${srcLine}` : '';
-        sl.push((wrapped ? `  declare ${name}: Signal<${wrapped}>;` : `  declare ${name}: Signal<any>;`) + marker);
+        // No declared or literal-inferred type, but a private initializer is
+        // present and reads nothing from `this` synchronously: emit a real
+        // field initializer (deferred below) so TS infers the Signal payload
+        // from the value — e.g. `x = createMutation(...)` → Signal<Mutation<R>>
+        // — instead of falling back to Signal<any>. Mirrors how computed/gate
+        // members already infer from their `__computed(...)` initializers.
+        // Values that touch `this` synchronously keep the declare form (they
+        // can't be field initializers — see refsThisSync above).
+        if (!wrapped && !isPublic && !noValue && !refsThisSync(value)) {
+          deferredStateInits.push({ name, value, marker });
+        } else {
+          sl.push((wrapped ? `  declare ${name}: Signal<${wrapped}>;` : `  declare ${name}: Signal<any>;`) + marker);
+        }
       }
       if (inheritsTag) {
         sl.push(`  declare rest: Signal<__RipProps<'${inheritsTag}'>>;`);
@@ -1059,6 +1112,13 @@ export function installComponentSupport(CodeEmitter, Lexer) {
         }
       }
 
+      // Inferred-type private state vars: field initializers emitted after the
+      // computed members above, so any member they read is already declared.
+      for (const { name, value, marker } of deferredStateInits) {
+        const val = this.emitInComponent(value, 'value');
+        sl.push(`  ${name} = __state(${val});` + marker);
+      }
+
       // _init body — readonly, state, computed assignments (skip accepted/offered)
       sl.push('  _init(props) {');
       for (const { name, value, isPublic, srcLine } of readonlyVars) {
@@ -1067,6 +1127,7 @@ export function installComponentSupport(CodeEmitter, Lexer) {
         sl.push((isPublic ? `    this.${name} = props.${name} ?? ${val};` : `    this.${name} = ${val};`) + marker);
       }
       for (const { name, value, isPublic, required, type, srcLine } of stateVars) {
+        if (deferredStateInits.some(d => d.name === name)) continue;
         const marker = srcLine != null ? ` // @rip-src:${srcLine}` : '';
         if (isPublic && (required || value === undefined)) {
           sl.push(`    this.${name} = __state(props.__bind_${name}__ ?? props.${name});` + marker);
@@ -1173,7 +1234,22 @@ export function installComponentSupport(CodeEmitter, Lexer) {
       for (const { name, value } of lifecycleHooks) {
         if (Array.isArray(value) && (value[0] === '->' || value[0] === '=>')) {
           const [, params, hookBody] = value;
-          const paramStr = Array.isArray(params) ? params.map(p => this.formatParam(p)).join(', ') : '';
+          let paramStr = Array.isArray(params) ? params.map(p => this.formatParam(p)).join(', ') : '';
+          // onError's payload shape is known to the framework, but its typed
+          // optional declaration above is only emitted when the user does
+          // NOT define the hook (a real method would collide with it) — so a
+          // user-defined `onError: (err) ->` has no signature to inherit
+          // from, and an unannotated param would be an implicit any in
+          // strict projects. Type it from the same canonical constant the
+          // declaration uses. Detection is structural (the parse tree's
+          // type metadata, like getMemberType), and an explicit user
+          // annotation always wins.
+          if (name === 'onError' && Array.isArray(params) && params.length === 1) {
+            const p = params[0];
+            if ((typeof p === 'string' || p instanceof String) && !meta(p, 'type')) {
+              paramStr = `${p.valueOf()}: ${ON_ERROR_PARAM_TYPE}`;
+            }
+          }
           const transformed = this.reactiveMembers ? this.transformComponentMembers(hookBody) : hookBody;
           const isAsync = this.containsAwait(hookBody);
           let bodyCode = this.emitFunctionBody(transformed, params || []);
@@ -1644,7 +1720,7 @@ export function installComponentSupport(CodeEmitter, Lexer) {
 
     lines.push('class extends __Component {');
 
-    // RFC 11: static gate-set — readable by the renderer without
+    // Static gate-set — readable by the renderer without
     // constructing the component. Strings are plain stash paths; keyed
     // gates carry a key fn the renderer evaluates with the matched
     // params/query before construction.
@@ -3663,7 +3739,7 @@ function __transition(el, name, dir, done) {
   });
 }
 
-// RFC 11 render-ready binding (\`x <~ @app.data.x\`): a reactive read of a
+// Render-ready binding (\`x <~ @app.data.x\`): a reactive read of a
 // stash source key that retains the last non-null value for the life of
 // this instance. A null write or reset() invalidates the CELL (ungated
 // readers see it immediately) without yanking mounted gates — the
@@ -3706,7 +3782,7 @@ class __Component {
   constructor(props = {}) {
     Object.assign(this, props);
     if (!this.app && globalThis.__ripApp) this.app = globalThis.__ripApp;
-    // RFC 11: a component with render gates (<~) is honored only via route
+    // A component with render gates (<~) is honored only via route
     // matching — the renderer sets __ripGateMount around each route/layout
     // construction. Constructed as an embedded child (a parent scope is
     // active but the renderer flag doesn't match), its gates were never

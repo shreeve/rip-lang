@@ -4559,7 +4559,7 @@ code 'component extends: inherits tag, rest props forwarded', '''
   ''', opts
 
 # ==============================================================================
-# Render-ready gates (<~) — RFC 11
+# Render-ready gates (<~)
 # ==============================================================================
 
 code "gate: hoists static __gates and binds via __gateBind", '''
@@ -4649,7 +4649,7 @@ code "gate: binds before state so initializers consume the value", '''
   ''', opts
 
 # Gated bindings resolve synchronously at construction when the value is
-# present — the RFC's test story: seed the stash, then construct.
+# present — the testing story for gates: seed the stash, then construct.
 test "gate: binding reads seeded stash value at construction", '''
   globalThis.__ripApp = { data: { user: { name: 'Ada' } } }
   A = component

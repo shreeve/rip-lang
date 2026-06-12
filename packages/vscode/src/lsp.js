@@ -1059,6 +1059,36 @@ function publishDiagnostics(filePath) {
     }
   }
 
+  // Render gates (<~) must resolve to source() keys in app/stash.rip —
+  // the same validation `rip check` runs (collectGateDiagnostics), live
+  // in the editor. The stash compiles lazily here if TS hasn't already
+  // pulled it in via module resolution.
+  if (c.gates?.length && c.source && tc.collectGateDiagnostics && tc.collectStashAnalysis) {
+    try {
+      const stashFile = tc.findStashFile(filePath);
+      if (stashFile && stashFile !== filePath) {
+        if (!compiled.has(stashFile) && fs.existsSync(stashFile)) {
+          compileRip(stashFile, fs.readFileSync(stashFile, 'utf8'));
+        }
+        const stashEntry = compiled.get(stashFile);
+        const analysis = stashEntry?.sexpr ? tc.collectStashAnalysis(stashEntry.sexpr) : null;
+        for (const d of tc.collectGateDiagnostics(c.gates, c.source, analysis)) {
+          diagnostics.push({
+            range: {
+              start: { line: d.line - 1, character: d.col - 1 },
+              end: { line: d.line - 1, character: d.col - 1 + d.len },
+            },
+            severity: 1,
+            source: 'rip',
+            message: d.message,
+          });
+        }
+      }
+    } catch (e) {
+      connection.console.log(`[rip] gate validation error ${relPath(filePath)}: ${e.message}`);
+    }
+  }
+
   // Dedup: same diagnostic can map twice when the dts header and compiled
   // body both contain the offending construct (e.g. an `import { X }` line).
   const deduped = tc.dedupDiagnostics(diagnostics, d => ({
@@ -2817,7 +2847,7 @@ function declaredDepsFor(projectRoot) {
 // The export index spans the whole workspace (one shared cache for every file
 // you might open), so a name can resolve to an entry in some sibling package
 // the current project doesn't depend on. Suggesting that import would produce
-// code that fails RFC 9's undeclared-import check (at `rip check`, the loader,
+// code that fails the undeclared-import check (at `rip check`, the loader,
 // and the bundler), so cross-project suggestions are gated on the consuming
 // project's declared dependencies — the suggestion surface for any file is its
 // own project's files plus what its package.json actually pulls in.

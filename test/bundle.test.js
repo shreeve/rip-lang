@@ -146,7 +146,7 @@ check("@rip-lang/app exports copied to globalThis", () => {
   }
 });
 
-// ── RFC 11 source cells — async behavior checks ─────────────────────────
+// ── Source cells — async behavior checks ────────────────────────────────
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const SOURCE_TAG = Symbol.for('rip.source');
 const asyncChecks = [];
@@ -212,14 +212,57 @@ checkAsync("source: staleTime '5 min' serves within the window without refetchin
   if (calls !== 1) throw new Error('fresh value must not refetch: ' + calls);
 });
 
-checkAsync('source: staleTime :forever loads once; refetch() still reloads', async () => {
+checkAsync('source: unrecognized staleTime warns and falls back to 0 (typo string, quoted/wrong symbol)', async () => {
+  const warns = [];
+  const origWarn = console.warn;
+  console.warn = (...a) => { warns.push(a.join(' ')); };
+  try {
+    let calls = 0;
+    const stash = globalThis.createStash({ k: globalThis.source({ fetch: async () => { calls++; return { v: calls }; }, staleTime: '5 mins' }) });
+    if (!warns.some((w) => w.includes('unrecognized staleTime'))) throw new Error('expected a warning for the typo: ' + JSON.stringify(warns));
+    const cell = globalThis.unwrapStash(stash).k;
+    await cell.ensure();
+    await cell.ensure();   // fallback 0 -> stale-on-arrival -> background revalidate
+    await sleep(10);
+    if (calls !== 2) throw new Error('typo staleTime must behave as 0 (revalidate), got calls=' + calls);
+
+    // Only the string 'forever' means forever — symbols (including
+    // :forever, which untyped projects might try) warn instead of
+    // silently meaning 0.
+    warns.length = 0;
+    globalThis.source({ fetch: async () => 1, staleTime: Symbol.for('forever') });
+    if (!warns.some((w) => w.includes('Symbol(forever)'))) throw new Error('symbols must warn with their name: ' + JSON.stringify(warns));
+  } finally {
+    console.warn = origWarn;
+  }
+});
+
+checkAsync('source: bare numeric staleTime string is ms, no warning', async () => {
+  const warns = [];
+  const origWarn = console.warn;
+  console.warn = (...a) => { warns.push(a.join(' ')); };
+  try {
+    let calls = 0;
+    const stash = globalThis.createStash({ k: globalThis.source({ fetch: async () => { calls++; return { v: calls }; }, staleTime: '300000' }) });
+    const cell = globalThis.unwrapStash(stash).k;
+    await cell.ensure();
+    await cell.ensure();
+    await sleep(5);
+    if (calls !== 1) throw new Error("'300000' must behave as 5 minutes of freshness: " + calls);
+    if (warns.length) throw new Error('numeric string must not warn: ' + JSON.stringify(warns));
+  } finally {
+    console.warn = origWarn;
+  }
+});
+
+checkAsync("source: staleTime 'forever' loads once; refetch() still reloads", async () => {
   let calls = 0;
-  const stash = globalThis.createStash({ k: globalThis.source({ fetch: async () => { calls++; return { v: calls }; }, staleTime: Symbol.for('forever') }) });
+  const stash = globalThis.createStash({ k: globalThis.source({ fetch: async () => { calls++; return { v: calls }; }, staleTime: 'forever' }) });
   const cell = globalThis.unwrapStash(stash).k;
   await cell.ensure();
   await cell.ensure();
   await sleep(5);
-  if (calls !== 1) throw new Error(':forever must not revalidate: ' + calls);
+  if (calls !== 1) throw new Error("'forever' must not revalidate: " + calls);
   await cell.refetch();
   if (calls !== 2) throw new Error('explicit refetch must reload: ' + calls);
 });
@@ -373,7 +416,7 @@ checkAsync('stash: peek never triggers a load and reads through cells', async ()
   if (calls !== 1) throw new Error('peek must not refetch');
 });
 
-// ── RFC 11 renderer gate flow — DOM-stubbed integration check ──────────
+// ── Renderer gate flow — DOM-stubbed integration check ─────────────────
 // Pre-seeded compiled modules (components.setCompiled) let mountRoute run
 // without blob-URL imports, and 'render null' components never touch real
 // DOM beyond createElement/appendChild stubs.
