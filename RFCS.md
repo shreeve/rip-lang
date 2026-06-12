@@ -1027,7 +1027,7 @@ The bare-specifier rewrite from [RFC 9 §4](#4-browser-side-bundling-of-rip-pack
 
 ## RFC 11: render-ready state
 
-> **Status: Implemented** (branch `rfc-11-render-ready`) — v1 as specified: `source` cells + keyed families, the `<~` gate, `staleTime` freshness, the live-binding invariant, `source()`/`reset()`/`peek()` stash methods, `createMutation`, serialization projection, gate error routing, link-intent preloading, the type narrow, and the cart conversion. Two spelling deviations from the examples below, found at implementation time: (1) `createMutation`'s options can't follow an inline arrow body directly — parenthesize the fn and add a trailing comma (`createMutation ((data) -> …),` then the indented options); (2) a *singleton* fetch that wants the AbortSignal must declare it with a default (`fetch: (signal = null) -> …`) — a required first param is what marks a fetch as keyed, at runtime (`fetch.length >= 1`) and in the types alike.
+> **Status: Implemented.**
 
 **Problem:** rip makes state reactive — `:=` (state), `~=` (computed), `~>` (effect) — but has no reactive form for **server data that's guaranteed present before its screen renders**. Every fetched value is typed `T | null`, and that null radiates to every consumer. The cart example pays for it on every screen:
 
@@ -1092,7 +1092,7 @@ What this means in practice:
 - **Writing is assigning.** `@app.data.user = u` writes through to the source's value; every consumer re-renders. This is exactly what the cart does today, on a value that's also gated. A write also bumps the cell's generation and aborts any in-flight load — an older fetch resolving late can never clobber a newer write (the mutation write-back depends on this; see *The live-binding invariant*).
 - **Refetching is re-running the key** — it writes the same reactive value, so consumers update in place, no remount.
 - **Signing out is one reset, not N writes.** `@app.data.reset()` — a reserved stash method — restores plain keys to their declared defaults (the stash literal *is* the default-state declaration), unloads every source (aborting in-flight loads, clearing keyed caches), and purges persisted snapshots — the next gates refetch as the new principal. Assignment can't do this job: `@app.data.user = null` invalidates one cell (see *The live-binding invariant*) but leaves in-flight fetches, persisted copies, and every other key untouched. One call is possible only because all state lives in one store; *when* to call it is the app's signout flow — auth stays app-level. Screens still mounted when reset runs keep their last-good gated values until they unmount (the invariant again) — signout navigates, and nothing flashes on the way out.
-- **Sources stay fresh by default.** A loaded cell serves every later gate instantly — and revalidates in the background when it's past its `staleTime`, which defaults to `0`: every navigation onto a gated key serves the cached value and refetches, updating in place. Session-stable keys opt out per declaration (`staleTime: '5 min'`, or `:forever` for load-once) — see *Freshness*.
+- **Sources stay fresh by default.** A loaded cell serves every later gate instantly — and revalidates in the background when it's past its `staleTime`, which defaults to `0`: every navigation onto a gated key serves the cached value and refetches, updating in place. Session-stable keys opt out per declaration (`staleTime: '5 min'`, or `'forever'` for load-once) — see *Freshness*.
 - **Serialization is one projection over one store** — fully or partially, the app's call (its own section below).
 
 ### Why an explicit gate?
@@ -1159,7 +1159,7 @@ A cell that loads once and serves a whole session will eventually serve somethin
 
 - **Default `0`**: the value is stale the moment it lands, so every gate revalidates — serve the cached value instantly, refetch in the background, update in place (stale-while-revalidate). This is the domain's bias, *fresh or visibly loading*, with one amendment: a screen with a cached value is never blocked by staleness, only refreshed through it.
 - **A duration** (`staleTime: '5 min'` — duration strings per the server `cache()` helper's vocabulary, or ms): gates within the window serve without refetching. For catalogs, config, anything where seconds of staleness are fine and re-fetching per navigation is pure waste.
-- **`:forever`**: load once per session — the old default, now the opt-in. Still refreshable explicitly via the handle's `refetch()`.
+- **`'forever'`**: load once per session — the old default, now the opt-in. Still refreshable explicitly via the handle's `refetch()`. (Originally specified as the `:forever` symbol; implementation settled on the string — it's exactly typed as a literal, where `symbol` admits every symbol, and its type errors read cleanly.)
 
 The axis composes with *triggers* rather than encoding them: a trigger is an event that consults the window (v1's only trigger is the gate itself — being navigated onto), and later triggers — revalidate-on-focus, `subscribe:` for genuinely-live keys — land orthogonally in *Deferred* without touching `staleTime`. Gate semantics stated precisely: **a gate blocks only on unloaded cells**; loaded-but-stale serves instantly and revalidates behind the screen.
 
@@ -1199,6 +1199,8 @@ Omitting the gate isn't a runtime surprise. An ungated read is `User | null`, wh
 The mirror question: what if a component writes `cart <~ @app.data.cart` on a plain client key? Two cases, and the second decides the rule. On a non-nullable key (`cart: Cart`) the gate would be a harmless no-op — but it dilutes the mark: every `<~` should mean "this render waits on a load," or the dashboard stops being readable as a time-to-first-paint budget. On a *nullable* plain key (`selectedItem: Item | null`) it would be unsound: the narrow claims `Item`, but there is no load for the gate to await — nothing ever makes the key non-null — so the binding would manufacture exactly the silent null this design exists to eliminate. So the binding requires a `source`: the renderer rejects a non-source path at mount with a dev-time error (deterministic — every mount of that component hits it, so it can't slip past development), and the type layer can front-run the diagnostic by branding `source`'s return type so `<~` only accepts source-typed keys (best-effort: nothing load-bearing depends on it; the brand must be an *optional unique-symbol* property so it never leaks into ungated read types — `User | null`, not `User & __Brand | null` — and never breaks assigning a plain `User` into the key).
 
 The rule also makes key migrations self-guiding: plain → `source` flips every ungated reader to a `T | null` type error (each component then chooses gate or skeleton); `source` → plain surfaces every stale `<~` as the mount error. Neither direction can silently change behavior.
+
+*Implementation note:* the compile-time diagnostic shipped as static analysis rather than the brand — `rip check` and the LSP validate each hoisted gate path against the stash literal's source keys (chasing module-level bindings, walking subpaths), so gating a plain, nullable, or missing key errors at the call site. The analysis is deliberately conservative: values whose source-ness isn't statically visible (imported cells, factory calls, spreads) stay silent and fall back to the mount check.
 
 ### Loading and error states, scenario by scenario
 
@@ -1348,6 +1350,14 @@ The test story falls out of *writing is assigning*: a write marks a cell loaded,
 - **Per-instance derived async** — search-as-you-type, autocomplete: per-keystroke results are component state, not app data. This is `createResource` finished to Solid parity (a reactive `source` argument driving refetch), not a stash key.
 - **Optimistic updates + rollback** — additive on top of write-back.
 - **Per-key `source` options** — where later features land on the declaration: `initial:` (pre-load value), `eager:` (launch-time load — mostly unnecessary once the build-time gate manifest ships), keyed-cache knobs (`maxEntries:`, per-entry `staleTime` overrides), `persist:` (the snapshot opt-in from *Serialization* — rare in this domain), revalidate-on-focus (a new *trigger*, orthogonal to `staleTime`), eventually `subscribe:` (live updates for genuinely-live keys).
+
+### Follow-ups from implementation
+
+Loose ends found while building and exercising v1 — none load-bearing, each its own small change:
+
+- **First-load experience.** The cold load is strictly serial (shell → bundle → compile → import → gate fetch → render) and paints nothing for its duration. The served shell should carry a CSS loading indicator, and the build-time route→gate-set manifest (plus shell prefetch hints) from *Why it's cheap to build* would parallelize the gate fetches with module evaluation.
+- **Keyed-fetch arity lint.** Keyed-ness is `fetch.length >= 1`, so a singleton fetch wanting the AbortSignal must declare it with a default (`(signal = null) ->`). A macro-level lint on `source` declarations could catch the required-`signal`-param mistake before the type/runtime split confuses anyone.
+- **Contextually-typed lifecycle hooks.** A user-defined `onError: (err) ->` gets its param type via shadow injection (the framework's optional hook declaration can't coexist with a real method, and TS doesn't contextually type method params from base declarations). The principled fix is emitting hooks in the stub as typed property declarations plus `this.onError = (err) => …` assignments — property assignments DO get contextual typing, which would infer unannotated params and validate annotated ones, uniformly for every hook. Touches stub line layout (source-map gap-fill is sensitive to it), so it wants its own change.
 
 ### Relationship to other RFCs
 

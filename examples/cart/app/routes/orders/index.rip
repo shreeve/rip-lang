@@ -2,7 +2,7 @@ import { Button } from '../../components/button.rip'
 import { title } from '../../config.rip'
 
 export Orders = component
-  orders <~ @app.data.orders           # gated: the list is loaded before this renders
+  orders <~ @app.data.orders
 
   mounted: -> document.title = title('Orders')
 

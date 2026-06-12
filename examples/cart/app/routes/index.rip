@@ -2,8 +2,8 @@ import { Button } from '../components/button.rip'
 import { title } from '../config.rip'
 
 export Products = component
-  cart ~= @app.data.cart
-  products <~ @app.data.products       # gated: catalog loads before render (staleTime '5 min')
+  products <~ @app.data.products
+  cart     ~= @app.data.cart
 
   search ~= @router.query.search ?? ''
   sort   ~= @router.query.sort ?? ''
@@ -38,10 +38,10 @@ export Products = component
         type: "search"
         placeholder: "Search products..."
         value: search
-        @input: (e) => @setQuery({ search: e.target.value })
+        @input: (e) -> @setQuery({ search: e.target.value })
       select
         value: sort
-        @change: (e) => @setQuery({ sort: e.target.value })
+        @change: (e) -> @setQuery({ sort: e.target.value })
         option value: "", disabled: true, "Sort"
         option value: "price-asc", "Price: Low to High"
         option value: "price-desc", "Price: High to Low"

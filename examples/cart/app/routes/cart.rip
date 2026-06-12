@@ -7,21 +7,17 @@ export Cart = component
   cart ~= @app.data.cart
   errors:: ApiErrors := {}
 
-  # Writes are per-action: placing an order is a POST that touches TWO
-  # keys — it empties `cart` and stales `orders`. The fetch is a `=>`
-  # because it reads component state (nothing binds a mutation's `this`).
-  placeOrder = createMutation ((=> api.post!('orders', {
-    json: {
-      items: cart.items.map((i) -> { productId: i.id, quantity: i.quantity })
-    }
-  }))),
-    onSuccess: =>
+  mounted: -> document.title = title('Cart')
+
+  placeOrder = createMutation (->
+    items = cart.items.map((i) -> { productId: i.id, quantity: i.quantity })
+    api.post!('orders', { json: { items } })
+  ),
+    onSuccess: ->
       cart.clear()
       errors = {}
-      @app.data.orders = null            # invalidate — the next orders gate refetches
-    onError: (e) => errors = parseApiError!(e)
-
-  mounted: -> document.title = title('Cart')
+      @app.data.orders = null
+    onError: (err) -> errors = parseApiError!(err)
 
   render
     if placeOrder.succeeded

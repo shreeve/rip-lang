@@ -31,7 +31,7 @@ shaped the way it is, and how to use it well.
     - [Real apps: bundles + file-based routing](#real-apps-bundles--file-based-routing)
   - [3. The subsystems](#3-the-subsystems)
     - [Stash](#stash)
-    - [Sources and render gates (RFC 11)](#sources-and-render-gates-rfc-11)
+    - [Sources and render gates](#sources-and-render-gates)
     - [createMutation](#createmutation)
     - [createResource](#createresource)
     - [Timing helpers](#timing-helpers)
@@ -232,7 +232,7 @@ beforeunload-flush mechanism both rely on this. Apps needing
 isolated state silos should use plain `__state(...)` signals or
 namespace under different keys on `app.data`.
 
-### Sources and render gates (RFC 11)
+### Sources and render gates
 
 Server data lives in the stash as **source** keys — cells that know how
 to load themselves. `app/stash.rip` becomes the app's data manifest:
@@ -269,7 +269,7 @@ the stash's reactive fabric like any other key:
   with `order <~ @app.data.order(params.id)`. Entries live under an LRU
   cap and revalidate like singletons.
 - **Freshness.** `staleTime` (ms, a duration string like `'5 min'`, or
-  `:forever`) controls revalidation. The default `0` is
+  `'forever'`) controls revalidation. The default `0` is
   stale-while-revalidate: every gate serves the cached value instantly
   and refetches in the background. A gate only ever *blocks* on unloaded
   cells.

@@ -5,24 +5,21 @@ import { title } from '../config.rip'
 import { createMutation } from '@rip-lang/app'
 
 export Profile = component
-  user <~ @app.data.user                 # already loaded by the layout → instant; still non-null
-  form:: Omit<User, "id"> := { ...user } # editable draft — no hydrated flag, no effect
+  user <~ @app.data.user
+  form:: User := { ...user }
   errors:: ApiErrors<keyof User> := {}
-
-  updateUser = createMutation ((data:: Omit<User, "id">) -> User.parse(api.patch!('user', { json: data }).json!())),
-    onSuccess: (u) => @app.data.user = u           # write-back into the stash key — nav updates, no refetch
-    onError:   (e) => errors = parseApiError!(e)
 
   mounted: -> document.title = title('Profile')
 
-  submit: (e) ->
-    e.preventDefault()
-    errors = {}
-    updateUser(form)
+  updateUser = createMutation (data:: User) -> User.parse(api.patch!('user', { json: data }).json!()),
+    onSuccess: (user) ->
+      errors = {}
+      @app.data.user = user
+    onError: (err) -> errors = parseApiError!(err)
 
   render
     h1 "Profile"
-    form @submit: @submit
+    form @submit: ((e) -> e.preventDefault(); updateUser(form))
       div.grid
         label
           "First name"

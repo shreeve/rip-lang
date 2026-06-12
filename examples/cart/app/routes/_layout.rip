@@ -1,14 +1,11 @@
 export Layout = component
+  user <~ @app.data.user
   cart ~= @app.data.cart
-  user <~ @app.data.user               # load before render → `user` is non-null
-  userName ~= "#{user.firstName} #{user.lastName}"
-  gateError:: { status?: number, message?: string } | null := null
+  gateError?:: string := undefined
 
-  # Descendant gate failures (a route's orders, an order detail) land here;
-  # the chrome stays up and the error renders in place of the route. The
-  # next navigation clears it.
-  onError: (err:: { status?: number, message?: string }) -> gateError = err
-  mounted: -> @router.onNavigate(=> gateError = null)
+  mounted: -> @router.onNavigate(-> gateError = undefined)
+
+  onError: (err) -> console.error(err); gateError = "Couldn't load this page"
 
   render
     nav.container
@@ -22,7 +19,7 @@ export Layout = component
           a href: "/cart", "Cart (#{cart.totalItems()})"
         li
           details.dropdown
-            summary userName
+            summary "#{user.firstName} #{user.lastName}"
             ul
               li
                 a href: "/profile", "Profile"
@@ -30,5 +27,5 @@ export Layout = component
                 a href: "/orders", "Orders"
     main.container
       if gateError
-        p.error "Couldn't load this page (#{gateError.status ?? 500})."
+        p.error gateError
       div id: "content"
