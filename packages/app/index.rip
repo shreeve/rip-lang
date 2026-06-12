@@ -202,6 +202,7 @@ type RendererOpts =
   compile: CompileFn
   target?: string | Element
   onError?: (err: RendererErrorInfo) => void
+  preload?: 'intent' | false
 
 type Renderer =
   start: () => Renderer
@@ -835,8 +836,18 @@ def parseStaleTime(v:: number | string | symbol | null | undefined):: number
   console.warn "[Rip] source: unrecognized staleTime #{label} — treating as 0 (use e.g. '5 min', '2 hours', a number of ms, or 'forever')"
   0
 
+# A preload-initiated load grants the cell a one-shot freshness floor: the
+# single navigation that follows the hover treats the value as fresh regardless
+# of the source's own staleTime, then consumes the floor. Without it a short
+# staleTime (notably 0) double-fetches — the hover preload loads, then the
+# navigation a beat later sees the value already stale and revalidates. The
+# floor only bridges that hover→navigate handoff; a later revisit honors
+# staleTime again. The window here is just the backstop for a hover that never
+# leads to a navigation. Internal, like the settle delay — not a knob.
+PRELOAD_FRESH_MS = 30_000
+
 # One cell: value + race/abort core (same pattern as createResource) plus
-# the surface the gate wants — ensure / write / reset / refetch / peek.
+# the surface the gate wants — ensure / preload / write / reset / refetch / peek.
 #
 # Error semantics (never cached):
 #   - a failed INITIAL load records the error, returns the cell to
@@ -853,8 +864,9 @@ makeSourceCell = (fetchFn, staleTime) ->
   controller = null
   inflight   = null    # the in-flight load promise — one per source, shared by every waiter
   loadedAt   = 0       # 0 means unloaded; gates only block on unloaded cells
+  freshUntil = 0       # preload freshness floor — value is fresh until this time regardless of staleTime
 
-  load = (background) ->
+  load = (background, preload) ->
     controller?.abort()
     controller = if typeof AbortController isnt 'undefined' then new AbortController() else null
     me = ++generation
@@ -865,6 +877,9 @@ makeSourceCell = (fetchFn, staleTime) ->
       _error.value = null
       _data.value = result
       loadedAt = Date.now()
+      # A preload load earns the freshness floor; any normal load clears it
+      # so explicit refetches and gate-driven reloads resume staleTime rules.
+      freshUntil = if preload then loadedAt + PRELOAD_FRESH_MS else 0
       result
     catch err
       return if me isnt generation
@@ -879,10 +894,13 @@ makeSourceCell = (fetchFn, staleTime) ->
         _loading.value = false
         inflight = null
 
-  start = (background) ->
-    p = load(background)
+  start = (background, preload) ->
+    p = load(background, preload)
     inflight = p
     p
+
+  # Stale unless within staleTime OR within an unexpired preload freshness floor.
+  isFresh = -> staleTime is Infinity or Date.now() - loadedAt < staleTime or Date.now() < freshUntil
 
   cell:: Record<PropertyKey, any> = {}
   cell[SOURCE] = true
@@ -904,13 +922,29 @@ makeSourceCell = (fetchFn, staleTime) ->
   cell.ensure = ->
     v = _data.read()
     if v?
-      # >= so the default staleTime of 0 means stale-on-arrival even when
-      # the gate lands in the same millisecond as the load.
-      if staleTime isnt Infinity and Date.now() - loadedAt >= staleTime and not inflight
-        start(true).catch(-> null)
+      stale = not isFresh()
+      # The preload floor is a one-shot bridge to *this* navigation — consume
+      # it here so a later revisit honors staleTime again (a staleTime-0 source
+      # must refetch on every landing, not stay pinned by an old preload).
+      freshUntil = 0
+      start(true).catch(-> null) if stale and not inflight
+      return Promise.resolve(v)
+    # Joining an in-flight preload IS this navigation consuming the bridge —
+    # clear the floor when that load settles (the common hover-then-click path,
+    # where the click lands before the preload's fetch resolves). Otherwise the
+    # floor would outlive its one navigation and pin a later revisit.
+    return inflight.finally(-> freshUntil = 0) if inflight
+    start(false)
+
+  # Like ensure(), but a load it triggers earns the preload freshness floor,
+  # so the navigation that follows the hover joins it instead of refetching.
+  cell.preload = ->
+    v = _data.read()
+    if v?
+      start(true, true).catch(-> null) if not isFresh() and not inflight
       return Promise.resolve(v)
     return inflight if inflight
-    start(false)
+    start(false, true)
 
   # Write-through assignment: a write wins over an in-flight load — bump
   # the generation and abort, so an older fetch resolving late can never
@@ -925,6 +959,7 @@ makeSourceCell = (fetchFn, staleTime) ->
     _error.value = null
     _data.value = v
     loadedAt = if v? then Date.now() else 0
+    freshUntil = 0
     v
 
   # Back to UNLOADED — distinct from writing null, which invalidates for
@@ -938,6 +973,7 @@ makeSourceCell = (fetchFn, staleTime) ->
     _error.value = null
     _data.value = null
     loadedAt = 0
+    freshUntil = 0
     return
 
   cell.refetch = -> start(false)
@@ -1994,6 +2030,7 @@ compileAndImport = (source, compile, components = null, path = null, resolver = 
 export def createRenderer(opts:: RendererOpts):: Renderer
   assertBrowser 'createRenderer'
   { router, app, components, resolver, compile, target, onError } = opts
+  preloadOnIntent = opts.preload is 'intent'
 
   container = if typeof target is 'string'
     document.querySelector(target)
@@ -2089,9 +2126,13 @@ export def createRenderer(opts:: RendererOpts):: Renderer
   # { failedIndex, failure }: failedIndex is Infinity when every gate
   # loaded, else the chain index of the outermost member whose gate
   # failed — the chain constructs top-down only above that point.
-  ensureGates = (chain, params, query) ->
+  ensureGates = (chain, params, query, preloadMode = false, skipMounted = 0) ->
     jobs = new Map()
     for entry, idx in chain
+      # A staying-mounted member (the unchanged layout prefix) keeps its live
+      # gate binding — skip re-ensuring it. Its idx is preserved, so failedIndex
+      # still indexes the full chain for the construction logic below.
+      continue if idx < skipMounted
       gates = entry.cls?.__gates
       continue unless gates and gates.length
       for g in gates
@@ -2116,7 +2157,7 @@ export def createRenderer(opts:: RendererOpts):: Renderer
         job.owners.push idx
     list = [...jobs.values()]
     return { failedIndex: Infinity, failure: null } unless list.length
-    results = await Promise.allSettled(list.map((j) -> j.cell.ensure()))
+    results = await Promise.allSettled(list.map((j) -> if preloadMode then j.cell.preload() else j.cell.ensure()))
     failedIndex = Infinity
     failure = null
     for r, i in results
@@ -2230,10 +2271,18 @@ export def createRenderer(opts:: RendererOpts):: Renderer
       # screen stays up while gated sources load (loading UI is the
       # router's `navigating` indicator, nothing per-component).
       chain = [...layoutEntries, { file: route.file, cls: Component }]
-      { failedIndex, failure } = ensureGates! chain, params, query
+      layoutsChanged = not arraysEqual(layoutFiles, currentLayouts)
+
+      # A layout that's staying mounted keeps its live gate binding — don't
+      # re-ensure it. Re-gating it would refetch shell data on every child
+      # navigation (a staleTime-0 layout source like `user` would reload on
+      # each hop); the layout isn't reconstructing, so there's nothing to gate.
+      # A page that ALSO gates a layout source still revalidates it on arrival
+      # — only the staying-mounted layout prefix is skipped, never the page.
+      mountedPrefix = if layoutsChanged then 0 else layoutEntries.length
+      { failedIndex, failure } = ensureGates! chain, params, query, false, mountedPrefix
       if gen isnt generation then router.navigating = false; return
 
-      layoutsChanged = not arraysEqual(layoutFiles, currentLayouts)
       oldTarget = currentComponent?._target
 
       if layoutsChanged
@@ -2402,37 +2451,79 @@ export def createRenderer(opts:: RendererOpts):: Renderer
   preload = (url) ->
     info = router.match?(url)
     return unless info?.route
+    # Warm only what navigating there would actually (re)construct. A layout
+    # already mounted under the current route stays mounted across navigation
+    # (its gate binding is live), so re-ensuring it would re-fetch data we
+    # already hold — visible as a hover firing a refetch of a staleTime-0
+    # layout source like `user`. When the layout chain is unchanged we preload
+    # the page alone; when it differs (the layouts will remount) we warm the
+    # whole chain. And if the destination is already fully mounted (hovering
+    # the current link), there's nothing to warm.
+    layoutsStay = arraysEqual(info.layouts, currentLayouts)
+    return if layoutsStay and info.route.file is currentRoute and sameKeys(info.params, currentParams)
     chain = []
-    for layoutFile in info.layouts
-      layoutSource = components.read(layoutFile)
-      continue unless layoutSource
-      layoutMod = compileAndImport! layoutSource, compile, components, layoutFile, resolver
-      cls = findComponent(layoutMod)
-      chain.push { file: layoutFile, cls: cls } if cls
+    unless layoutsStay
+      for layoutFile in info.layouts
+        layoutSource = components.read(layoutFile)
+        continue unless layoutSource
+        layoutMod = compileAndImport! layoutSource, compile, components, layoutFile, resolver
+        cls = findComponent(layoutMod)
+        chain.push { file: layoutFile, cls: cls } if cls
     pageSource = components.read(info.route.file)
     if pageSource
       pageMod = compileAndImport! pageSource, compile, components, info.route.file, resolver
       cls = findComponent(pageMod)
       chain.push { file: info.route.file, cls: cls } if cls
-    ensureGates! chain, info.params, info.query
+    ensureGates! chain, info.params, info.query, true
     return
+
+  # Settle delay: only preload a link the pointer actually rests on, not
+  # every anchor swept under a moving cursor. The pointer must hover (or the
+  # link must hold focus) for PRELOAD_SETTLE_MS before the load fires; a
+  # pointerout/focusout before then cancels it. 50ms is the established
+  # threshold for "deliberately on this link" vs "brushing past" — it's an
+  # implementation detail, not a knob.
+  PRELOAD_SETTLE_MS = 50
 
   # Re-preloading the same href on every pointerover bubble would re-run
   # match + compile (cached, but not free) dozens of times per hover —
   # debounce per href. Freshness is still the cells' job: a preload only
   # ever goes through ensure(), which respects staleTime.
   lastPreload = { href: null, at: 0 }
+  settleTimer:: ReturnType<typeof setTimeout> | null = null
+  settleAnchor:: HTMLAnchorElement | null = null
+
+  cancelSettle = ->
+    if settleTimer
+      clearTimeout settleTimer
+      settleTimer = null
+    settleAnchor = null
+
   onIntent = (e) ->
     a = e.target
     a = a.parentElement while a and a.tagName isnt 'A'
     return unless a
     return unless router.ownsAnchor?(a)
+    # Already counting down on this same anchor — let it settle.
+    return if a is settleAnchor
+    cancelSettle()
+    settleAnchor = a
     href = a.href
-    now = Date.now()
-    return if href is lastPreload.href and now - lastPreload.at < 3000
-    lastPreload.href = href
-    lastPreload.at = now
-    preload(href).catch(-> null)
+    settleTimer = setTimeout (->
+      settleTimer = null
+      settleAnchor = null
+      now = Date.now()
+      return if href is lastPreload.href and now - lastPreload.at < 3000
+      lastPreload.href = href
+      lastPreload.at = now
+      preload(href).catch(-> null)
+    ), PRELOAD_SETTLE_MS
+
+  # Pointer left (or focus moved off) the settling anchor before it fired.
+  onIntentCancel = (e) ->
+    return unless settleAnchor
+    related = e.relatedTarget
+    cancelSettle() unless related and settleAnchor.contains(related)
 
   renderer =
     start: ->
@@ -2452,8 +2543,11 @@ export def createRenderer(opts:: RendererOpts):: Renderer
       # remount of the current route immediately.
       unwatchSources = components?.watch (event, path) ->
         invalidateResolver(path) if event in ['change', 'delete']
-      document.addEventListener 'pointerover', onIntent, { passive: true }
-      document.addEventListener 'focusin', onIntent, { passive: true }
+      if preloadOnIntent
+        document.addEventListener 'pointerover', onIntent, { passive: true }
+        document.addEventListener 'focusin', onIntent, { passive: true }
+        document.addEventListener 'pointerout', onIntentCancel, { passive: true }
+        document.addEventListener 'focusout', onIntentCancel, { passive: true }
       router.init()
       renderer
 
@@ -2466,8 +2560,12 @@ export def createRenderer(opts:: RendererOpts):: Renderer
         disposeEffect = null
       unwatchSources?()
       unwatchSources = null
-      document.removeEventListener 'pointerover', onIntent
-      document.removeEventListener 'focusin', onIntent
+      cancelSettle()
+      if preloadOnIntent
+        document.removeEventListener 'pointerover', onIntent
+        document.removeEventListener 'focusin', onIntent
+        document.removeEventListener 'pointerout', onIntentCancel
+        document.removeEventListener 'focusout', onIntentCancel
       # Revoke every blob URL we created so the underlying module text
       # can be reclaimed. Without this, every hot reload leaks one
       # module's worth of memory per .rip file.
@@ -2659,6 +2757,7 @@ export def launch(opts?:: LaunchOpts = {}):: Promise<LaunchResult>
     resolver: resolver
     compile: compile
     target: target
+    preload: if bundle.data?.preload is 'intent' then 'intent' else false
     onError: (err) -> console.error "[Rip] #{err.message}", err.error
 
   # Start

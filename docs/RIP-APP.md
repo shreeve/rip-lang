@@ -244,9 +244,7 @@ export stash =
   cart: { items: [] }                                       # plain client state
   user: source { fetch: -> User.parse(api.get!('user').json!()) }
   products: source                                          # five minutes of freshness is plenty
-    fetch: ->
-      list:: Product[] = api.get!('products').json!().map((p:: unknown) -> Product.parse(p))
-      list
+    fetch: -> Product.array.parse(api.get!('products').json!())   # validated Product[]
     staleTime: '5 min'
   order: source { fetch: (id:: string) -> Order.parse(api.get!("orders/#{id}").json!()) }
 ```
@@ -288,9 +286,14 @@ the stash's reactive fabric like any other key:
   and skips source keys (server data is refetchable; the gate reloads on
   restore). `app.data.peek(path)` is the non-triggering read for code
   *about* the stash (serializers, devtools).
-- **Preloading.** Hovering or focusing a router-owned link fires the
-  target route's gate union early; navigation joins loads already in
-  flight (one in-flight load per source). Preload failures never surface.
+- **Preloading.** Off by default; opt in with `serve({ preload: 'intent' })`
+  in the root entry. Once on, resting the pointer on (or focusing) a
+  router-owned link for ~50ms warms the gates the destination would *newly*
+  mount — a layout already mounted under the current route is skipped, so
+  hovering siblings never re-fetches shared shell data. Navigation joins
+  loads already in flight (one in-flight load per source). Sweeping past a
+  link cancels before it fires, and preload failures never surface — the
+  cell records them and navigation's own gate retries.
 
 Testing gated components needs no mocks: a write marks a cell loaded, so
 seed and construct — `app.data.user = fixtureUser`, then `new Profile(...)`.

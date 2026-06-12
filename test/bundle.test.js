@@ -212,6 +212,47 @@ checkAsync("source: staleTime '5 min' serves within the window without refetchin
   if (calls !== 1) throw new Error('fresh value must not refetch: ' + calls);
 });
 
+checkAsync('source: preload floor is a one-shot bridge — the nav that follows reuses it, a later revisit refetches at staleTime 0', async () => {
+  let calls = 0;
+  const stash = globalThis.createStash({ k: globalThis.source({ fetch: async () => { calls++; return { v: calls }; } }) });
+  const cell = globalThis.unwrapStash(stash).k;
+  await cell.preload();   // hover: one load
+  if (calls !== 1) throw new Error('preload must load once: ' + calls);
+  await cell.ensure();    // navigation a beat later — joins the preloaded value
+  await sleep(10);
+  if (calls !== 1) throw new Error('the nav after a preload must not revalidate: ' + calls);
+  await cell.ensure();    // a later revisit — floor consumed, staleTime 0 resumes
+  await sleep(10);
+  if (calls !== 2) throw new Error('a revisit must refetch — the floor is one-shot, not a 30s blanket: ' + calls);
+});
+
+checkAsync('source: a nav that joins an in-flight preload consumes the floor — no leak to a later revisit', async () => {
+  let calls = 0, release;
+  const stash = globalThis.createStash({ k: globalThis.source({ fetch: async () => { calls++; await new Promise((r) => { release = r; }); return { v: calls }; } }) });
+  const cell = globalThis.unwrapStash(stash).k;
+  cell.preload();             // hover: starts the load (still in flight)
+  await sleep(5);
+  if (calls !== 1) throw new Error('preload must have started the load: ' + calls);
+  const navP = cell.ensure(); // click lands before the fetch resolves — joins the in-flight load
+  release();
+  await navP;
+  await sleep(5);
+  await cell.ensure();        // a later revisit — the floor must already be consumed
+  await sleep(5);
+  if (calls !== 2) throw new Error('revisit after a joined preload must refetch — the floor must not leak: ' + calls);
+});
+
+checkAsync('source: a write clears the preload freshness floor so staleTime rules resume', async () => {
+  let calls = 0;
+  const stash = globalThis.createStash({ k: globalThis.source({ fetch: async () => { calls++; return { v: calls }; } }) });
+  const cell = globalThis.unwrapStash(stash).k;
+  await cell.preload();        // floor granted
+  stash.k = { v: 99 };         // write replaces the value AND clears the floor
+  await cell.ensure();         // staleTime 0 resumes → background revalidate
+  await sleep(10);
+  if (calls !== 2) throw new Error('write must clear the floor so a stale ensure revalidates: ' + calls);
+});
+
 checkAsync('source: unrecognized staleTime warns and falls back to 0 (typo string, quoted/wrong symbol)', async () => {
   const warns = [];
   const origWarn = console.warn;
@@ -505,6 +546,87 @@ checkAsync('renderer: gates load before construction; failures route to onError;
   await sleep(20);
   const pe = errors.find((e) => /does not resolve to a source/.test(e.message || ''));
   if (!pe) throw new Error('non-source gate path must be a mount-time error: ' + JSON.stringify(errors));
+
+  renderer.stop();
+});
+
+checkAsync('renderer: a staying-mounted layout is not re-gated on sibling nav; a page gating the same source revalidates it', async () => {
+  const makeEl = () => ({
+    children: [], attrs: {}, style: {}, innerHTML: '', textContent: '',
+    appendChild(c) { this.children.push(c); },
+    setAttribute(k, v) { this.attrs[k] = v; },
+    querySelector: () => null,
+    remove() {},
+  });
+  globalThis.window = globalThis.window || { addEventListener: () => {}, removeEventListener: () => {} };
+  globalThis.document.createElement = () => makeEl();
+  globalThis.document.getElementById = () => null;
+  globalThis.document.body.appendChild = () => {};
+
+  const C = globalThis.__ripComponent.__Component;
+  const gb = globalThis.__ripComponent.__gateBind;
+
+  let userCalls = 0, ordersCalls = 0;
+  class Layout extends C {
+    static __gates = ['user'];
+    _init() { this.user = gb(this, 'user'); }
+    _create() { return null; }
+  }
+  class Home extends C { _create() { return null; } }       // no gates
+  class Orders extends C {
+    static __gates = ['orders'];
+    _init() { this.orders = gb(this, 'orders'); }
+    _create() { return null; }
+  }
+  class Profile extends C {                                  // ALSO gates user
+    static __gates = ['user'];
+    _init() { this.user = gb(this, 'user'); }
+    _create() { return null; }
+  }
+
+  const components = globalThis.createComponents();
+  components.write('_route/_layout.rip', 'stub'); components.setCompiled('_route/_layout.rip', { Layout });
+  components.write('_route/index.rip', 'stub');   components.setCompiled('_route/index.rip', { Home });
+  components.write('_route/orders.rip', 'stub');  components.setCompiled('_route/orders.rip', { Orders });
+  components.write('_route/profile.rip', 'stub'); components.setCompiled('_route/profile.rip', { Profile });
+
+  // user has the default staleTime 0, so a page that re-gates it revalidates.
+  const app = { data: globalThis.createStash({
+    user:   globalThis.source({ fetch: async () => { userCalls++; return { name: 'Ada' }; } }),
+    orders: globalThis.source({ fetch: async () => { ordersCalls++; return [{ id: 1 }]; } }),
+  }) };
+
+  const errors = [];
+  const routeSig = globalThis.__rip.__state(null);
+  const router = {
+    get current() { return routeSig.value ?? { route: null }; },
+    navigating: false, init() {}, match: () => null, ownsAnchor: () => false,
+  };
+  const renderer = globalThis.createRenderer({
+    router, app, components, resolver: {}, compile: (s) => s, target: makeEl(),
+    onError: (e) => errors.push(e),
+  });
+  renderer.start();
+
+  const L = ['_route/_layout.rip'];
+
+  // Land on home under the layout: the layout gates user once.
+  routeSig.value = { path: '/', params: {}, route: { file: '_route/index.rip', pattern: '/' }, layouts: L, query: {}, hash: '' };
+  await sleep(20);
+  if (userCalls !== 1) throw new Error('layout must gate user once on first mount: ' + userCalls);
+
+  // Sibling nav under the SAME layout: the layout stays mounted, so its user
+  // gate is NOT re-ensured; only the newly-mounting page gates its own source.
+  routeSig.value = { path: '/orders', params: {}, route: { file: '_route/orders.rip', pattern: '/orders' }, layouts: L, query: {}, hash: '' };
+  await sleep(20);
+  if (ordersCalls !== 1) throw new Error('the newly-mounting page must gate its own source: ' + ordersCalls);
+  if (userCalls !== 1) throw new Error('a staying-mounted layout must NOT refetch its gate on sibling nav: ' + userCalls);
+
+  // Navigate to a page that ALSO gates user: its own gate revalidates it.
+  routeSig.value = { path: '/profile', params: {}, route: { file: '_route/profile.rip', pattern: '/profile' }, layouts: L, query: {}, hash: '' };
+  await sleep(20);
+  if (userCalls !== 2) throw new Error('a page gating the same source must revalidate it on arrival: ' + userCalls);
+  if (errors.length) throw new Error('no gate should have failed: ' + JSON.stringify(errors));
 
   renderer.stop();
 });

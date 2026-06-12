@@ -28,14 +28,11 @@ export stash =
   cart: cart
   user: source
     fetch: -> User.parse(api.get!('user').json!())
-    staleTime: '1 min'
+    staleTime: '5 min'
   products: source
-    fetch: ->
-      list:: Product[] = api.get!('products').json!().map((p:: unknown) -> Product.parse(p))
-      list
+    fetch: -> Product.array.parse(api.get!('products').json!())
     staleTime: 'forever'
   orders: source
-    fetch: ->
-      list:: OrderSummary[] = api.get!('orders').json!().map((o:: unknown) -> OrderSummary.parse(o))
-      list
-  order: source { fetch: (id:: string) -> OrderDetail.parse(api.get!("orders/#{id}").json!()) }
+    fetch: -> OrderSummary.array.parse(api.get!('orders').json!())
+  order: source
+    fetch: (id:: string) -> OrderDetail.parse(api.get!("orders/#{id}").json!())

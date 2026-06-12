@@ -924,6 +924,7 @@ pre{margin:0;white-space:pre-wrap;word-break:break-word}
 #   title:      string          — document title
 #   state:      object          — initial app state passed via bundle
 #   watch:      boolean         — enable hot-reload (registers watch dirs with rip-server)
+#   preload:    'intent'        — preload a route's source data on link hover/focus (default: off)
 #
 
 serveRegistered:: boolean = false
@@ -937,6 +938,7 @@ export serve = (opts:: {
   title?: string
   state?: Record<string, any>
   watch?: boolean
+  preload?: 'intent' | false
 } = {}) ->
   prefix        = opts.app or ''
   appDir        = opts.dir or '.'
@@ -955,6 +957,7 @@ export serve = (opts:: {
   enableWatch   = if opts.watch? then opts.watch else process.env.SOCKET_PREFIX?
   appState      = opts.state or null
   appTitle      = opts.title or null
+  preloadIntent = opts.preload is 'intent'
 
   # Fail loud at bundle setup time on any undeclared @rip-lang/* import.
   # Runs unconditionally, typed or not — the forcing function for
@@ -1102,6 +1105,7 @@ export serve = (opts:: {
       data.title = appTitle if appTitle
       data.watch = enableWatch
       data.router = true if hasRoutes
+      data.preload = 'intent' if preloadIntent
       if appState
         data[k] = v for k, v of appState
       bundle.data = data
