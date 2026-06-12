@@ -7765,8 +7765,6 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       if (/^-?[\d.]/.test(lit) || lit.startsWith('"') || lit.startsWith("'")) {
         return { code: lit, stubCode: lit };
       }
-      if (lit === "params" || lit === "query")
-        return KEY_ERROR;
       return KEY_ERROR;
     }
     const segs = chainSegments(expr);
@@ -15914,7 +15912,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.16.1";
-  var BUILD_DATE = "2026-06-12@15:57:44GMT";
+  var BUILD_DATE = "2026-06-12@19:25:03GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -16574,7 +16572,7 @@ ${indented}`);
         if (fn)
           return fn;
         raw = target2[prop];
-        if (raw != null && (typeof raw === "object" || typeof raw === "function") && (raw[SOURCE] || raw[SOURCE_FAMILY])) {
+        if (isSourceCell(raw)) {
           if (typeof raw === "function")
             return raw;
           v = raw.read();
@@ -17264,7 +17262,7 @@ ${indented}`);
     cell.ensure = function() {
       let stale, v;
       v = _data.read();
-      if (v != null) {
+      if (loadedAt !== 0) {
         stale = !isFresh();
         freshUntil = 0;
         if (stale && !inflight)
@@ -17282,7 +17280,7 @@ ${indented}`);
     cell.preload = function() {
       let v;
       v = _data.read();
-      if (v != null) {
+      if (loadedAt !== 0) {
         if (!isFresh() && !inflight)
           start(true, true).catch(function() {
             return null;
@@ -17392,15 +17390,17 @@ ${indented}`);
       return await (async () => {
         try {
           r = await fn(...args);
-          if (me === generation)
+          if (me === generation) {
             _succeeded.value = true;
-          opts.onSuccess?.(r);
+            await opts.onSuccess?.(r);
+          }
           return r;
         } catch (e) {
-          if (me === generation)
-            _error.value = e;
+          if (!(me === generation))
+            return;
+          _error.value = e;
           if (opts.onError) {
-            opts.onError(e);
+            await opts.onError(e);
           } else {
             throw e;
           }
