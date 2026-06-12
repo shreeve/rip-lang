@@ -212,6 +212,36 @@ checkAsync("source: staleTime '5 min' serves within the window without refetchin
   if (calls !== 1) throw new Error('fresh value must not refetch: ' + calls);
 });
 
+checkAsync('source: a null-resolving fetch counts as loaded — gates do not refetch it every time', async () => {
+  let calls = 0;
+  const stash = globalThis.createStash({ sel: globalThis.source({ fetch: async () => { calls++; return null; }, staleTime: '5 min' }) });
+  const cell = globalThis.unwrapStash(stash).sel;
+  const v = await cell.ensure();
+  if (v !== null) throw new Error('a null fetch must resolve to null: ' + JSON.stringify(v));
+  if (calls !== 1) throw new Error('first ensure must load once: ' + calls);
+  await cell.ensure();   // loaded + fresh: must serve the null, not treat it as unloaded and refetch
+  await sleep(5);
+  if (calls !== 1) throw new Error('a loaded null value must not be refetched as if unloaded: ' + calls);
+});
+
+checkAsync('createMutation: a superseded invocation does not run its onSuccess (newer wins)', async () => {
+  const writes = [];
+  const resolvers = [];
+  const m = globalThis.createMutation(
+    (v) => new Promise((res) => { resolvers.push(() => res(v)); }),
+    { onSuccess: (v) => { writes.push(v); } }
+  );
+  const p1 = m('A');   // generation 1
+  const p2 = m('B');   // generation 2 — newer, wins
+  resolvers[1]();      // B resolves first
+  await p2;
+  resolvers[0]();      // A (superseded) resolves after
+  await p1;
+  await sleep(5);
+  if (writes.includes('A')) throw new Error('superseded onSuccess(A) must not run after newer B: ' + JSON.stringify(writes));
+  if (!writes.includes('B')) throw new Error('newer onSuccess(B) must run: ' + JSON.stringify(writes));
+});
+
 checkAsync('source: preload floor is a one-shot bridge — the nav that follows reuses it, a later revisit refetches at staleTime 0', async () => {
   let calls = 0;
   const stash = globalThis.createStash({ k: globalThis.source({ fetch: async () => { calls++; return { v: calls }; } }) });

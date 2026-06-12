@@ -325,7 +325,7 @@ makeProxy = (target) ->
       # touch; a keyed family is returned raw, so calling it is the keyed
       # read: app.data.order(id).
       raw = target[prop]
-      if raw? and (typeof raw is 'object' or typeof raw is 'function') and (raw[SOURCE] or raw[SOURCE_FAMILY])
+      if isSourceCell(raw)
         return raw if typeof raw is 'function'
         v = raw.read()
         return if v? and typeof v is 'object' then wrapDeep(v) else v
@@ -921,7 +921,11 @@ makeSourceCell = (fetchFn, staleTime) ->
   # only on unloaded cells.
   cell.ensure = ->
     v = _data.read()
-    if v?
+    # `loadedAt`, not `v?`: a source that legitimately resolved to null is
+    # loaded, not unloaded — keying on value-truthiness would refetch it on
+    # every gate. write(null)/reset() set loadedAt = 0, so invalidation still
+    # forces a reload.
+    if loadedAt isnt 0
       stale = not isFresh()
       # The preload floor is a one-shot bridge to *this* navigation — consume
       # it here so a later revisit honors staleTime again (a staleTime-0 source
@@ -940,7 +944,7 @@ makeSourceCell = (fetchFn, staleTime) ->
   # so the navigation that follows the hover joins it instead of refetching.
   cell.preload = ->
     v = _data.read()
-    if v?
+    if loadedAt isnt 0
       start(true, true).catch(-> null) if not isFresh() and not inflight
       return Promise.resolve(v)
     return inflight if inflight
@@ -1065,12 +1069,20 @@ export def createMutation<R>(fn:: (...args: any[]) => Promise<R> | R, opts?:: { 
     _error.value = null
     try
       r = await fn(...args)
-      _succeeded.value = true if me is generation
-      opts.onSuccess?(r)
+      # Newer-invocation-wins: a superseded call (a later invocation bumped the
+      # generation) must not flip the flags OR run its callback — otherwise an
+      # older result's onSuccess can clobber the newer one's stash write. Await
+      # the callback so its work is part of the mutation's lifecycle (pending
+      # stays true through it) and an async rejection surfaces here instead of
+      # floating as an unhandled rejection.
+      if me is generation
+        _succeeded.value = true
+        await opts.onSuccess?(r)
       r
     catch e
-      _error.value = e if me is generation
-      if opts.onError then opts.onError(e) else throw e
+      return unless me is generation     # superseded failure — newer call owns the outcome
+      _error.value = e
+      if opts.onError then await opts.onError(e) else throw e
       return
     finally
       _pending.value = false if me is generation

@@ -151,8 +151,7 @@ function parseGateKey(expr) {
     if (/^-?[\d.]/.test(lit) || lit.startsWith('"') || lit.startsWith("'")) {
       return { code: lit, stubCode: lit };
     }
-    if (lit === 'params' || lit === 'query') return KEY_ERROR; // a whole bag isn't a key
-    return KEY_ERROR;
+    return KEY_ERROR; // a bare identifier (incl. `params`/`query` alone) isn't a key
   }
   const segs = chainSegments(expr);
   if (!segs) return KEY_ERROR;
