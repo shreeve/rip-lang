@@ -60,7 +60,15 @@ type Resource<T> =
 # (One line on purpose: an indented alias body parses as a structural type.)
 export type Mutation<R> = ((...args: any[]) => Promise<R | undefined>) & { pending: boolean, succeeded: boolean, error: unknown }
 
-# Source typing (RFC 11). The runtime returns a tagged cell, but the TYPE
+# Durations — ms as a number, or an integer + unit string. The unit
+# vocabulary matches the server cache() helper's; the template-literal type
+# rejects typos ('5 mins', '1.5 h') at the declaration site in typed
+# projects, and parseStaleTime warns about them at runtime everywhere.
+# (One line each on purpose: an indented alias body parses as a structural type.)
+export type DurationUnit = 's' | 'sec' | 'second' | 'seconds' | 'm' | 'min' | 'minute' | 'minutes' | 'h' | 'hr' | 'hour' | 'hours' | 'd' | 'day' | 'days' | 'w' | 'week' | 'weeks' | 'y' | 'year' | 'years'
+export type Duration = number | `${number}${DurationUnit}` | `${number} ${DurationUnit}`
+
+# Source typing. The runtime returns a tagged cell, but the TYPE
 # is the value: `T | null` for singletons, `(key: K) => T | null` for keyed
 # families — so `typeof stash` infers honest nullable reads with no
 # annotations, and the `<~` gate is the narrow. Keyed-ness mirrors the
@@ -68,7 +76,7 @@ export type Mutation<R> = ((...args: any[]) => Promise<R | undefined>) & { pendi
 # REQUIRED is keyed; an optional/defaulted param stays a singleton.
 export type SourceOpts<T, A extends unknown[]> =
   fetch: (...args: A) => Promise<T> | T
-  staleTime?: number | string | symbol
+  staleTime?: Duration | 'forever'
 
 # (One line on purpose: an indented alias body parses as a structural type.)
 export type SourceValue<T, A extends unknown[]> = A extends [infer K, ...unknown[]] ? ((key: K) => T | null) : (T | null)
@@ -251,7 +259,7 @@ assertBrowser = (where) ->
 PROXIES   = new WeakMap()
 METHODS   = new WeakMap()
 
-# Source-cell tags (RFC 11) — defined ahead of the stash so the proxy
+# Source-cell tags — defined ahead of the stash so the proxy
 # handlers can detect cells cheaply. Registry symbols so meta-consumers
 # (renderer, serializer, devtools) can detect cells without imports.
 # The cell machinery itself lives in the Source section below.
@@ -542,7 +550,7 @@ stashMethodFn = (proxy, prop) ->
       finally
         _depth--
     when 'reset' then ->
-      # One reset, not N writes (RFC 11): restore plain keys to their
+      # One reset, not N writes: restore plain keys to their
       # declared defaults (fresh clones, so defaults can't be mutated),
       # unload every source (aborting in-flight loads, clearing keyed
       # caches), delete keys that weren't declared, and purge the
@@ -617,7 +625,7 @@ export def createStash(data:: Record<string, any> = {}):: Stash
 export def unwrapStash(proxy:: Stash):: Stash
   if proxy?[:raw] then proxy[:raw] else proxy
 
-# Serialization projection helpers (RFC 11). Saving and restoring must
+# Serialization projection helpers. Saving and restoring must
 # never touch a source cell: a cell is fetch + signal machinery, not a
 # value — persisting one would serialize the wrapper, and merging a saved
 # snapshot over one would replace the live cell with a dead copy (the key
@@ -776,7 +784,7 @@ export def createResource<T>(fn:: (signal?:: AbortSignal) => Promise<T>, opts?::
   resource
 
 # ==============================================================================
-# Source — async reactive stash cells (RFC 11 render-ready state)
+# Source — async reactive stash cells (render-ready state)
 #
 # A `source` is a stash key that knows how to (re)load itself. It is NOT a
 # promise: it owns the in-flight load internally, but its value is part of
@@ -792,19 +800,22 @@ export def createResource<T>(fn:: (signal?:: AbortSignal) => Promise<T>, opts?::
 
 # staleTime — how long a loaded value is trustworthy. Accepts ms (number),
 # a duration string (same vocabulary as the server's cache() helper, here
-# converted to ms), or :forever (load once per session). Default 0: stale
+# converted to ms), or 'forever' (load once per session). Default 0: stale
 # the moment it lands, so every gate serves the cached value and
 # revalidates in the background (stale-while-revalidate).
-DURATION_RE = /^(\d+)\s*(s|sec|second|seconds|m|min|minute|minutes|h|hr|hour|hours|d|day|days|w|week|weeks|y|year|years)$/i
+# The numeric part mirrors what the Duration template-literal type's
+# `${number}` segment admits — integers, decimals, and exponent forms —
+# so the type and the runtime accept the same strings.
+DURATION_RE = /^(\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\s*(s|sec|second|seconds|m|min|minute|minutes|h|hr|hour|hours|d|day|days|w|week|weeks|y|year|years)$/i
 
 def parseStaleTime(v:: number | string | symbol | null | undefined):: number
   return 0 unless v?
-  return Infinity if v is Symbol.for('forever') or v is 'forever'
   return v if typeof v is 'number'
   if typeof v is 'string'
+    return Infinity if v is 'forever'
     parts = v.match(DURATION_RE)
     if parts
-      n = parseInt(parts[1])
+      n = parseFloat(parts[1])
       return switch parts[2][0].toLowerCase()
         when 's' then n * 1000
         when 'm' then n * 60000
@@ -813,7 +824,15 @@ def parseStaleTime(v:: number | string | symbol | null | undefined):: number
         when 'w' then n * 604800000
         when 'y' then n * 31536000000
         else n * 1000
-    return parseInt(v) or 0
+    # A bare numeric string is unambiguous — treat as ms, like the number
+    # form.
+    return parseInt(v, 10) if /^\d+$/.test(v)
+  # Anything else is a mistake — a unit typo ('5 mins', which a silent
+  # parseInt would turn into near-zero ms), or a symbol/other non-string
+  # (e.g. :forever — the keyword is a plain string here, not a symbol).
+  # Warn and use the safe default (0 = stale-on-arrival, data stays fresh).
+  label = if typeof v is 'symbol' then String(v) else JSON.stringify(v)
+  console.warn "[Rip] source: unrecognized staleTime #{label} — treating as 0 (use e.g. '5 min', '2 hours', a number of ms, or 'forever')"
   0
 
 # One cell: value + race/abort core (same pattern as createResource) plus
@@ -981,7 +1000,7 @@ export def source<T, A extends unknown[]>(opts:: SourceOpts<T, A>):: SourceValue
   cell
 
 # ==============================================================================
-# Mutation — the write-side primitive (RFC 11)
+# Mutation — the write-side primitive
 #
 # Reads are per-key (source); writes are per-action. createMutation wraps
 # an async action and exposes reactive pending / succeeded / error while
@@ -1575,7 +1594,7 @@ export def createRouter(components:: ComponentsStore, opts?:: RouterOpts = {})::
     # Pure match of a URL (or full anchor href) against the current route
     # tree — same parsing as resolve(), but no signal writes, no history,
     # no navigation callbacks. Returns null when nothing matches. Used by
-    # the renderer's link-intent preloading (RFC 11).
+    # the renderer's link-intent preloading.
     match: (url) ->
       if /^[a-z][a-z0-9+.-]*:\/\//i.test(url)
         u = try new URL(url, location.origin) catch then null
@@ -1701,6 +1720,13 @@ buildComponentMap = (components, roots = ['_app', '_lib', '_pkg', '_route']) ->
     continue unless path.endsWith('.rip')
     fileName = path.split('/').pop()
     continue if fileName.startsWith('_')
+    # index.rip is a path convention (route indexes, package entries), not
+    # a component name: file-based routing gives every directory one, so
+    # the derived name `Index` collides by construction — and the implicit
+    # resolver below could only ever consume the mapping from a file that
+    # literally exports `Index` (the injection is keyed by export name).
+    # Keep index files out of the tag map instead of warning about them.
+    continue if fileName is 'index.rip'
     name = fileToComponentName(path)
     if map[name]
       console.warn "[Rip] Component name collision: #{name} (#{map[name]} vs #{path})"
@@ -1815,6 +1841,35 @@ compileAndImport = (source, compile, components = null, path = null, resolver = 
           else
             "_pkg/#{info.short}#{sub}.rip"
           "#{pre}#{target}#{post}"
+
+      # Step 0b: A runtime-provided framework package (@rip-lang/app) is NOT
+      # inlined under _pkg — rip.min.js compiles its source and registers every
+      # function export on globalThis. Rewrite its imports to a globalThis
+      # destructure so the app uses that single already-loaded copy instead of
+      # bundling a second one. Packages present in pkgMap were inlined above and
+      # are left untouched here for the .rip → blob pass below.
+      pkgGlobalRe = /^(\s*)import\s+([^'"]+?)\s+from\s+['"](@rip-lang\/[^'"]+)['"];?\s*$/gm
+      js = js.replace pkgGlobalRe, (full, indent, clause, spec) ->
+        pkgKey = spec.replace(/^(@rip-lang\/[^\/]+).*$/, '$1')
+        return full if pkgMap[pkgKey]
+        trimmed = clause.trim()
+        return "#{indent}// type-only import erased: #{spec}" if trimmed.startsWith('type ')
+        open = trimmed.indexOf('{')
+        close = trimmed.lastIndexOf('}')
+        if open < 0 or close <= open
+          console.warn "[Rip] Skipping non-named import from #{spec}; only named imports from '@rip-lang/*' are supported."
+          return full
+        parts = []
+        for raw in trimmed.slice(open + 1, close).split(',')
+          name = raw.trim().replace(/^type\s+/, '')
+          continue unless name
+          if /\s+as\s+/.test(name)
+            [orig, alias] = name.split(/\s+as\s+/).map((s) -> s.trim())
+            parts.push "#{orig}: #{alias}"
+          else
+            parts.push name
+        return "#{indent}// import erased: #{spec}" if parts.length is 0
+        "#{indent}const { #{parts.join(', ')} } = globalThis;"
 
       # Step 1: Rewrite .rip imports and re-exports to blob URLs
       if components
@@ -2014,7 +2069,7 @@ export def createRenderer(opts:: RendererOpts):: Renderer
       return false unless b[k] is v
     true
 
-  # ── RFC 11: render gates ──────────────────────────────────────────────
+  # ── Render gates ──────────────────────────────────────────────────────
   # A gate path resolves to the NEAREST source cell along it: a subpath
   # gate ('settings.theme') loads the `settings` source and binds the
   # subpath. The walk is over raw values — it must never trigger loads.
@@ -2076,7 +2131,7 @@ export def createRenderer(opts:: RendererOpts):: Renderer
   # Route a gate failure to the nearest constructible onError boundary —
   # innermost mounted layout first, app-level last. Mirrors the catch
   # block below, but carries the structured { status, message, error,
-  # path } the RFC specifies for gate failures.
+  # path } shape gate failures carry.
   routeGateFailure = (failure) ->
     console.error "Renderer: gate '#{failure.path}' failed:", failure.error
     onError(failure) if onError
@@ -2171,7 +2226,7 @@ export def createRenderer(opts:: RendererOpts):: Renderer
         continue unless LayoutClass
         layoutEntries.push { file: layoutFile, cls: LayoutClass }
 
-      # RFC 11 gate phase — runs before any teardown, so the previous
+      # Gate phase — runs before any teardown, so the previous
       # screen stays up while gated sources load (loading UI is the
       # router's `navigating` indicator, nothing per-component).
       chain = [...layoutEntries, { file: route.file, cls: Component }]
@@ -2337,7 +2392,7 @@ export def createRenderer(opts:: RendererOpts):: Renderer
 
   started:: boolean = false
 
-  # ── RFC 11: link-intent preloading ────────────────────────────────────
+  # ── Link-intent preloading ────────────────────────────────────────────
   # On hover/focus of a router-owned anchor, match the target URL, compile
   # its chain (cached per path), and fire the gate union's loads early.
   # Navigation then awaits cells already loaded or in-flight — ensure()
@@ -2574,7 +2629,7 @@ export def launch(opts?:: LaunchOpts = {}):: Promise<LaunchResult>
       stashRaw[k] = v unless isSourceCell(stashRaw[k])
   seedData = stashRaw ?? bundle.data
   app.data = seedData if seedData
-  # RFC 11: snapshot the declared plain-key defaults for app.data.reset().
+  # Snapshot the declared plain-key defaults for app.data.reset().
   # Taken post-bundle-overlay, pre-persist-restore — signout returns to
   # the server-seeded baseline, not to user-persisted state.
   stampDefaults unwrapStash(app.data)

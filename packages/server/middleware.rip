@@ -1064,6 +1064,13 @@ export serve = (opts:: {
         seenShortNames = {}
         for pkgKey as usedPkgs
           continue unless info.declared.has(pkgKey)  # Phase 3 already errored on undeclared
+          # @rip-lang/app is the framework runtime itself. rip.min.js already
+          # compiles its source and registers every function export on
+          # globalThis, and the browser loader rewrites `@rip-lang/app` imports
+          # to a globalThis destructure (see compileAndImport). Inlining its
+          # source under _pkg/app/ would ship a second full copy of the
+          # framework in every app bundle, so skip it entirely.
+          continue if pkgKey is '@rip-lang/app'
           classified = classifyPackage(appDir, pkgKey)
           unless classified?
             raise "Package '#{pkgKey}' is declared in package.json but not installed. Run 'bun install'."
