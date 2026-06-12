@@ -1352,13 +1352,6 @@ The test story falls out of *writing is assigning*: a write marks a cell loaded,
 - **Per-key `source` options** — where later features land on the declaration: `initial:` (pre-load value), `eager:` (launch-time load — mostly unnecessary once the build-time gate manifest ships), keyed-cache knobs (`maxEntries:`, per-entry `staleTime` overrides), `persist:` (the snapshot opt-in from *Serialization* — rare in this domain), revalidate-on-focus (a new *trigger*, orthogonal to `staleTime`), eventually `subscribe:` (live updates for genuinely-live keys).
 - **Route-level error views** — a gate failure today routes the structured `{ status, message, error, path }` to the nearest `onError` boundary (layout or app-level), which can already differentiate copy by `err.path` / `err.status`. A route that *owns* its failure UI — a route-specific error rendered in the failing slot with a retry/back affordance (TanStack's `errorComponent`, Remix error boundaries) — would localize it. The rip shape is a sibling `error` render block to `render`: because gates load *before* construct, the failing component is never built, so unlike a component-swap it's a separate render path the renderer mounts at the already-computed failing chain index, falling back to the nearest `onError` when a route declares none. The foundation is in place (the renderer localizes the failure); it's a focused macro + renderer addition, not a re-architecture.
 
-### Follow-ups from implementation
-
-Loose ends found while building and exercising v1 — none load-bearing, each its own small change:
-
-- **Keyed-fetch arity lint.** Keyed-ness is `fetch.length >= 1`, so a singleton fetch wanting the AbortSignal must declare it with a default (`(signal = null) ->`). A macro-level lint on `source` declarations could catch the required-`signal`-param mistake before the type/runtime split confuses anyone.
-- **Contextually-typed lifecycle hooks.** A user-defined `onError: (err) ->` gets its param type via shadow injection (the framework's optional hook declaration can't coexist with a real method, and TS doesn't contextually type method params from base declarations). The principled fix is emitting hooks in the stub as typed property declarations plus `this.onError = (err) => …` assignments — property assignments DO get contextual typing, which would infer unannotated params and validate annotated ones, uniformly for every hook. Touches stub line layout (source-map gap-fill is sensitive to it), so it wants its own change.
-
 ### Relationship to other RFCs
 
 - **Builds on RFC 3/4** (typed ambient globals / `this` shape) for the diagnostics tier — but does not require a typed project; gate, hoist, and mount check are runtime mechanisms.
