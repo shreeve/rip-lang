@@ -222,6 +222,60 @@ await check('version mismatch error mentions both versions', () => {
   if (!msg.includes('999')) throw new Error('did not mention loaded version: ' + msg);
 });
 
+console.log('\n' + color('36', '── array combinator ──'));
+
+const arrayItem = (rt) => rt.__schema({
+  kind: 'shape', name: 'Item',
+  entries: [
+    { tag: 'field', name: 'id', modifiers: ['!'], typeName: 'integer', array: false },
+    { tag: 'field', name: 'name', modifiers: ['!'], typeName: 'string', array: false },
+  ],
+});
+
+await check('array.parse validates every item into a typed array', () => {
+  const out = arrayItem(freshRuntime()).array.parse([{ id: 1, name: 'a' }, { id: 2, name: 'b' }]);
+  if (!Array.isArray(out) || out.length !== 2) {
+    throw new Error('expected 2 parsed items, got ' + JSON.stringify(out));
+  }
+  if (out[0].id !== 1 || out[1].name !== 'b') throw new Error('items not parsed correctly');
+});
+
+await check('array.parse on a non-array fails fast, naming the received shape', () => {
+  let err;
+  try { arrayItem(freshRuntime()).array.parse({ items: [] }); }
+  catch (e) { err = e; }
+  if (!err) throw new Error('array.parse did not throw on a non-array');
+  if (err.name !== 'SchemaError') throw new Error('expected SchemaError, got ' + err.name);
+  if (!/expected an array, received an object with keys \[items\]/.test(err.message)) {
+    throw new Error('error did not name the received shape: ' + err.message);
+  }
+});
+
+await check('array.parse tags a per-item failure with its [index]', () => {
+  let err;
+  try { arrayItem(freshRuntime()).array.parse([{ id: 1, name: 'a' }, { id: 'nope', name: 'b' }]); }
+  catch (e) { err = e; }
+  if (!err) throw new Error('expected a validation error for the malformed item');
+  if (!err.issues.some(i => String(i.field).startsWith('[1]'))) {
+    throw new Error('item error not tagged with [1]: ' + JSON.stringify(err.issues));
+  }
+});
+
+await check('array.safe returns the family result without throwing', () => {
+  const sch = arrayItem(freshRuntime());
+  const good = sch.array.safe([{ id: 1, name: 'a' }]);
+  if (!good.ok || good.value.length !== 1) throw new Error('expected ok result with 1 item');
+  const bad = sch.array.safe([{ id: 'x', name: 'a' }]);
+  if (bad.ok || bad.value !== null || !bad.errors.length) throw new Error('expected a non-ok result with errors');
+});
+
+await check('array.ok reports list validity as a boolean', () => {
+  const sch = arrayItem(freshRuntime());
+  if (sch.array.ok([{ id: 1, name: 'a' }]) !== true) throw new Error('valid list should be ok');
+  if (sch.array.ok([{ id: 1, name: 'a' }, { id: 'x', name: 'b' }]) !== false) throw new Error('list with a bad item should not be ok');
+  if (sch.array.ok({ items: [] }) !== false) throw new Error('a non-array should not be ok');
+});
+
 console.log('');
 const total = passed + failed;
 if (failed === 0) {

@@ -30,7 +30,7 @@ function __schemaFormatIssues(issues, name) {
 }
 
 const __SCHEMA_RESERVED_STATIC = new Set([
-  'parse','safe','ok','parseAsync','safeAsync','okAsync','toJSONSchema',
+  'parse','array','safe','ok','parseAsync','safeAsync','okAsync','toJSONSchema',
   'find','findMany','where','all','first','count','create','toSQL',
   'includes','upsert','insertMany','updateAll','deleteAll','withDeleted','onlyDeleted',
   'unscoped',
@@ -1194,6 +1194,68 @@ class __SchemaDef {
     const inst = new klass(working, false);
     this._applyEagerDerived(inst);
     return inst;
+  }
+
+  // Array combinator: `Schema.array` is a list-of-this schema exposing the
+  // same validation family (parse/safe/ok + async). The common list-endpoint
+  // case is `Schema.array.parse(api.get!('x').json!())` → Out[]. A non-array
+  // input fails fast with a descriptive error naming what it got — so passing
+  // an enveloped `{ items: [...] }` whole, a typo'd key, or a changed server
+  // contract surfaces clearly at the boundary. Item failures aggregate, each
+  // issue tagged with its `[index]` so a bad element is locatable.
+  get array() {
+    const elem = this;
+    const notArray = (data) => {
+      const got = data === null ? 'null'
+        : data === undefined ? 'undefined'
+        : typeof data === 'object' ? ('an object with keys [' + Object.keys(data).join(', ') + ']')
+        : typeof data;
+      return { field: '', error: 'not_array', message: 'expected an array, received ' + got };
+    };
+    const collect = (results) => {
+      const value = [];
+      const errors = [];
+      results.forEach((r, i) => {
+        if (r.ok) value.push(r.value);
+        else for (const e of r.errors) {
+          errors.push({ ...e, field: '[' + i + ']' + (e.field ? '.' + e.field : '') });
+        }
+      });
+      return { value, errors };
+    };
+    return {
+      parse(data) {
+        if (!Array.isArray(data)) throw new SchemaError([notArray(data)], elem.name, elem.kind);
+        const { value, errors } = collect(data.map((x) => elem.safe(x)));
+        if (errors.length) throw new SchemaError(errors, elem.name, elem.kind);
+        return value;
+      },
+      safe(data) {
+        if (!Array.isArray(data)) return { ok: false, value: null, errors: [notArray(data)] };
+        const { value, errors } = collect(data.map((x) => elem.safe(x)));
+        return errors.length ? { ok: false, value: null, errors } : { ok: true, value, errors: null };
+      },
+      ok(data) {
+        return Array.isArray(data) && data.every((x) => elem.ok(x));
+      },
+      async parseAsync(data) {
+        if (!Array.isArray(data)) throw new SchemaError([notArray(data)], elem.name, elem.kind);
+        const { value, errors } = collect(await Promise.all(data.map((x) => elem.safeAsync(x))));
+        if (errors.length) throw new SchemaError(errors, elem.name, elem.kind);
+        return value;
+      },
+      async safeAsync(data) {
+        if (!Array.isArray(data)) return { ok: false, value: null, errors: [notArray(data)] };
+        const { value, errors } = collect(await Promise.all(data.map((x) => elem.safeAsync(x))));
+        return errors.length ? { ok: false, value: null, errors } : { ok: true, value, errors: null };
+      },
+      async okAsync(data) {
+        return Array.isArray(data) && (await Promise.all(data.map((x) => elem.okAsync(x)))).every(Boolean);
+      },
+      toJSONSchema() {
+        return { type: 'array', items: elem.toJSONSchema() };
+      },
+    };
   }
 
   safe(data) {

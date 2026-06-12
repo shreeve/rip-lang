@@ -206,6 +206,27 @@ result = SignupInput.safe rawJson
 valid = SignupInput.ok rawJson
 ```
 
+### Validating a list
+
+`.array` turns any schema into a *list-of-that* schema, exposing the same
+validation family — the common shape for an API response (one request, many
+records):
+
+```coffee
+Product = schema :shape
+  id!   integer
+  name! string
+
+items   = Product.array.parse rawJson      # → Product[]; throws on any bad item
+result  = Product.array.safe rawJson       # → {ok, value: Product[], errors}
+allGood = Product.array.ok rawJson         # → boolean
+```
+
+A non-array input fails fast with an error naming what it got — so an enveloped
+`{ items: [...] }` passed whole, or a renamed key, is obvious — and each item
+failure carries its `[index]` so a bad record is locatable. `parseAsync` /
+`safeAsync` / `okAsync` mirror the async variants.
+
 ### A shape with behavior
 
 ```coffee
