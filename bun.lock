@@ -91,6 +91,9 @@
       "bin": {
         "rip-server": "./bin/rip-server",
       },
+      "dependencies": {
+        "@rip-lang/validate": "workspace:*",
+      },
     },
     "packages/stamp": {
       "name": "@rip-lang/stamp",
@@ -125,6 +128,10 @@
         "@rip-lang/server": "workspace:*",
         "playwright": "1.58.2",
       },
+    },
+    "packages/validate": {
+      "name": "@rip-lang/validate",
+      "version": "1.0.0",
     },
     "packages/vscode": {
       "name": "vscode-rip",
@@ -240,6 +247,8 @@
     "@rip-lang/time": ["@rip-lang/time@workspace:packages/time"],
 
     "@rip-lang/ui": ["@rip-lang/ui@workspace:packages/ui"],
+
+    "@rip-lang/validate": ["@rip-lang/validate@workspace:packages/validate"],
 
     "@rip-lang/x12": ["@rip-lang/x12@workspace:packages/x12"],
 

@@ -1,0 +1,39 @@
+{
+  "name": "@rip-lang/validate",
+  "version": "1.0.0",
+  "description": "Zero-dependency validation and normalization vocabulary for Rip - read() validators and ~:name schema coercers, isomorphic (server + browser)",
+  "type": "module",
+  "main": "validate.rip",
+  "exports": {
+    ".": "./validate.rip"
+  },
+  "rip": {
+    "browser": true
+  },
+  "scripts": {
+    "test": "rip test.rip"
+  },
+  "keywords": [
+    "validate",
+    "validators",
+    "coerce",
+    "normalize",
+    "schema",
+    "rip"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shreeve/rip-lang.git",
+    "directory": "packages/validate"
+  },
+  "homepage": "https://github.com/shreeve/rip-lang/tree/main/packages/validate#readme",
+  "bugs": {
+    "url": "https://github.com/shreeve/rip-lang/issues"
+  },
+  "author": "Steve Shreeve <steve.shreeve@gmail.com>",
+  "license": "MIT",
+  "files": [
+    "validate.rip",
+    "README.md"
+  ]
+}

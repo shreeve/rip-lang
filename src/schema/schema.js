@@ -802,7 +802,7 @@ function parseFieldedLine(kind, line, entries, ctx) {
         throw schemaError(typeTok,
           `'~${typeTok[1]}' is not coercible. Built-in coercion is defined for: ${[...SCHEMA_COERCIBLE_TYPES].join(', ')}. ` +
           `Named coercers use a symbol — '~:${typeTok[1]}' — and resolve through the registry ` +
-          `(@rip-lang/server's read() validators, or schema.registerCoercer). ` +
+          `(@rip-lang/validate's vocabulary, or schema.registerCoercer). ` +
           `For anything else, write an explicit transform: '${name}, -> …'.`);
       }
       coerce = true;

@@ -231,6 +231,7 @@ start port: 3000
 - `@rip-lang/csv` — CSV parser and writer
 - `@rip-lang/http` — zero-dependency HTTP client
 - `@rip-lang/print` — syntax-highlighted code printer
+- `@rip-lang/validate` — the validation/normalization vocabulary (browser-safe): `read()` validators and `~:name` schema coercers from one table; `@rip-lang/server` depends on it and re-exports its surface
 - `@rip-lang/time` — tiny immutable date/time library with IANA timezones + Duration (US-English, zero runtime deps; dayjs is devDependency for parity tests)
 - `packages/ui/` — headless UI widgets written in Rip
 - `packages/vscode/` — VS Code / Cursor extension

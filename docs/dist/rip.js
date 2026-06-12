@@ -1230,8 +1230,8 @@ class __SchemaDef {
         if (!entry) {
           throw new Error(
             "schema: no coercer registered for '~:" + f.coercer + "' (field '" + n + "' on " +
-            (this.name || 'anon') + "). Import @rip-lang/server (which registers the read() " +
-            "validator vocabulary) or register it with schema.registerCoercer('" + f.coercer + "', fn).");
+            (this.name || 'anon') + "). Import '@rip-lang/validate' (browser-safe; registers the " +
+            "whole vocabulary) or register it with schema.registerCoercer('" + f.coercer + "', fn).");
         }
         const input = entry.raw ? v : String(v).trim();
         let out;
@@ -3236,7 +3236,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         typeFirst = typeTok;
       } else if (typeTok?.[0] === "IDENTIFIER") {
         if (!SCHEMA_COERCIBLE_TYPES.has(typeTok[1])) {
-          throw schemaError(typeTok, `'~${typeTok[1]}' is not coercible. Built-in coercion is defined for: ${[...SCHEMA_COERCIBLE_TYPES].join(", ")}. ` + `Named coercers use a symbol — '~:${typeTok[1]}' — and resolve through the registry ` + `(@rip-lang/server's read() validators, or schema.registerCoercer). ` + `For anything else, write an explicit transform: '${name}, -> …'.`);
+          throw schemaError(typeTok, `'~${typeTok[1]}' is not coercible. Built-in coercion is defined for: ${[...SCHEMA_COERCIBLE_TYPES].join(", ")}. ` + `Named coercers use a symbol — '~:${typeTok[1]}' — and resolve through the registry ` + `(@rip-lang/validate's vocabulary, or schema.registerCoercer). ` + `For anything else, write an explicit transform: '${name}, -> …'.`);
         }
         coerce = true;
         typeName = typeTok[1];
@@ -3812,7 +3812,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
     let parts = [`kind: ${JSON.stringify(descriptor.kind)}`];
     if (schemaName)
       parts.push(`name: ${JSON.stringify(schemaName)}`);
-    else if (emitter.options.inlineTypes) {
+    else if (emitter.options.inlineTypes && (descriptor.kind === "shape" || descriptor.kind === "input")) {
       let anonList = emitter._schemaAnon ??= [];
       let anonName = `__AnonSchema${anonList.length + 1}`;
       parts.push(`__anon: ${JSON.stringify(anonName)}`);
@@ -3835,6 +3835,14 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         return node.data.descriptor;
     }
     return null;
+  }
+  function schemaNodeDescriptor(node) {
+    if (!Array.isArray(node))
+      return null;
+    const head = node[0]?.valueOf?.() ?? node[0];
+    if (head !== "schema")
+      return null;
+    return readDescriptor(node[1]);
   }
   var FOLD_ALGEBRA = new Set(["pick", "omit", "partial", "required", "extend"]);
   function foldStr(n) {
@@ -3966,13 +3974,6 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
     }
     return { kind: "shape", entries: [...map.values()] };
   }
-  function foldInlineSchemaDescriptor(node) {
-    if (!Array.isArray(node))
-      return null;
-    if (foldStr(node[0]) !== "schema")
-      return null;
-    return readDescriptor(node[1]);
-  }
   function foldParseChain(rhs) {
     const ops = [];
     let node = rhs;
@@ -3998,7 +3999,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           return null;
         const a = argNodes[0];
         if (Array.isArray(a)) {
-          const inline = foldInlineSchemaDescriptor(a);
+          const inline = schemaNodeDescriptor(a);
           if (!inline || inline.kind !== "shape" && inline.kind !== "input")
             return null;
           op = { method, otherDescriptor: inline };
@@ -15681,7 +15682,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.16.1";
-  var BUILD_DATE = "2026-06-11@18:17:03GMT";
+  var BUILD_DATE = "2026-06-12@16:03:02GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
