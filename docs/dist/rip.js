@@ -162,7 +162,7 @@ function __schemaFormatIssues(issues, name) {
 }
 
 const __SCHEMA_RESERVED_STATIC = new Set([
-  'parse','safe','ok','parseAsync','safeAsync','okAsync','toJSONSchema',
+  'parse','array','safe','ok','parseAsync','safeAsync','okAsync','toJSONSchema',
   'find','findMany','where','all','first','count','create','toSQL',
   'includes','upsert','insertMany','updateAll','deleteAll','withDeleted','onlyDeleted',
   'unscoped',
@@ -1326,6 +1326,68 @@ class __SchemaDef {
     const inst = new klass(working, false);
     this._applyEagerDerived(inst);
     return inst;
+  }
+
+  // Array combinator: \`Schema.array\` is a list-of-this schema exposing the
+  // same validation family (parse/safe/ok + async). The common list-endpoint
+  // case is \`Schema.array.parse(api.get!('x').json!())\` → Out[]. A non-array
+  // input fails fast with a descriptive error naming what it got — so passing
+  // an enveloped \`{ items: [...] }\` whole, a typo'd key, or a changed server
+  // contract surfaces clearly at the boundary. Item failures aggregate, each
+  // issue tagged with its \`[index]\` so a bad element is locatable.
+  get array() {
+    const elem = this;
+    const notArray = (data) => {
+      const got = data === null ? 'null'
+        : data === undefined ? 'undefined'
+        : typeof data === 'object' ? ('an object with keys [' + Object.keys(data).join(', ') + ']')
+        : typeof data;
+      return { field: '', error: 'not_array', message: 'expected an array, received ' + got };
+    };
+    const collect = (results) => {
+      const value = [];
+      const errors = [];
+      results.forEach((r, i) => {
+        if (r.ok) value.push(r.value);
+        else for (const e of r.errors) {
+          errors.push({ ...e, field: '[' + i + ']' + (e.field ? '.' + e.field : '') });
+        }
+      });
+      return { value, errors };
+    };
+    return {
+      parse(data) {
+        if (!Array.isArray(data)) throw new SchemaError([notArray(data)], elem.name, elem.kind);
+        const { value, errors } = collect(data.map((x) => elem.safe(x)));
+        if (errors.length) throw new SchemaError(errors, elem.name, elem.kind);
+        return value;
+      },
+      safe(data) {
+        if (!Array.isArray(data)) return { ok: false, value: null, errors: [notArray(data)] };
+        const { value, errors } = collect(data.map((x) => elem.safe(x)));
+        return errors.length ? { ok: false, value: null, errors } : { ok: true, value, errors: null };
+      },
+      ok(data) {
+        return Array.isArray(data) && data.every((x) => elem.ok(x));
+      },
+      async parseAsync(data) {
+        if (!Array.isArray(data)) throw new SchemaError([notArray(data)], elem.name, elem.kind);
+        const { value, errors } = collect(await Promise.all(data.map((x) => elem.safeAsync(x))));
+        if (errors.length) throw new SchemaError(errors, elem.name, elem.kind);
+        return value;
+      },
+      async safeAsync(data) {
+        if (!Array.isArray(data)) return { ok: false, value: null, errors: [notArray(data)] };
+        const { value, errors } = collect(await Promise.all(data.map((x) => elem.safeAsync(x))));
+        return errors.length ? { ok: false, value: null, errors } : { ok: true, value, errors: null };
+      },
+      async okAsync(data) {
+        return Array.isArray(data) && (await Promise.all(data.map((x) => elem.okAsync(x)))).every(Boolean);
+      },
+      toJSONSchema() {
+        return { type: 'array', items: elem.toJSONSchema() };
+      },
+    };
   }
 
   safe(data) {
@@ -15852,7 +15914,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.16.1";
-  var BUILD_DATE = "2026-06-12@11:50:32GMT";
+  var BUILD_DATE = "2026-06-12@15:57:44GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -16264,6 +16326,7 @@ ${indented}`);
   var METHODS;
   var PATH_RE;
   var PERSIST_PURGE;
+  var PRELOAD_FRESH_MS;
   var PROXIES;
   var SOURCE;
   var SOURCE_FAMILY;
@@ -17127,8 +17190,9 @@ ${indented}`);
     console.warn(`[Rip] source: unrecognized staleTime ${label} — treating as 0 (use e.g. '5 min', '2 hours', a number of ms, or 'forever')`);
     return 0;
   }
+  PRELOAD_FRESH_MS = 30000;
   makeSourceCell = function(fetchFn, staleTime) {
-    let _data, _error, _loading, cell, controller, generation, inflight, load, loadedAt, start;
+    let _data, _error, _loading, cell, controller, freshUntil, generation, inflight, isFresh, load, loadedAt, start;
     _data = __state(null);
     _loading = __state(false);
     _error = __state(null);
@@ -17136,7 +17200,8 @@ ${indented}`);
     controller = null;
     inflight = null;
     loadedAt = 0;
-    load = async function(background) {
+    freshUntil = 0;
+    load = async function(background, preload) {
       let me, result;
       controller?.abort();
       controller = typeof AbortController !== "undefined" ? new AbortController : null;
@@ -17151,6 +17216,7 @@ ${indented}`);
           _error.value = null;
           _data.value = result;
           loadedAt = Date.now();
+          freshUntil = preload ? loadedAt + PRELOAD_FRESH_MS : 0;
           return result;
         } catch (err) {
           if (me !== generation)
@@ -17171,11 +17237,14 @@ ${indented}`);
         }
       })();
     };
-    start = function(background) {
+    start = function(background, preload) {
       let p;
-      p = load(background);
+      p = load(background, preload);
       inflight = p;
       return p;
+    };
+    isFresh = function() {
+      return staleTime === Infinity || Date.now() - loadedAt < staleTime || Date.now() < freshUntil;
     };
     cell = {};
     cell[SOURCE] = true;
@@ -17193,19 +17262,36 @@ ${indented}`);
       return _data.read();
     };
     cell.ensure = function() {
-      let v;
+      let stale, v;
       v = _data.read();
       if (v != null) {
-        if (staleTime !== Infinity && Date.now() - loadedAt >= staleTime && !inflight) {
+        stale = !isFresh();
+        freshUntil = 0;
+        if (stale && !inflight)
           start(true).catch(function() {
             return null;
           });
-        }
+        return Promise.resolve(v);
+      }
+      if (inflight)
+        return inflight.finally(function() {
+          return freshUntil = 0;
+        });
+      return start(false);
+    };
+    cell.preload = function() {
+      let v;
+      v = _data.read();
+      if (v != null) {
+        if (!isFresh() && !inflight)
+          start(true, true).catch(function() {
+            return null;
+          });
         return Promise.resolve(v);
       }
       if (inflight)
         return inflight;
-      return start(false);
+      return start(false, true);
     };
     cell.write = function(v) {
       generation++;
@@ -17216,6 +17302,7 @@ ${indented}`);
       _error.value = null;
       _data.value = v;
       loadedAt = v != null ? Date.now() : 0;
+      freshUntil = 0;
       return v;
     };
     cell.reset = function() {
@@ -17227,6 +17314,7 @@ ${indented}`);
       _error.value = null;
       _data.value = null;
       loadedAt = 0;
+      freshUntil = 0;
       return;
     };
     cell.refetch = function() {
@@ -18337,9 +18425,10 @@ ${indented}`);
     })();
   };
   function createRenderer(opts) {
-    let app, compile2, components, container, currentComponent, currentLayouts, currentParams, currentQuery, currentRoute, disposeEffect, ensureGates, generation, invalidateResolver, lastPreload, layoutInstances, mountPoint, mountRoute, onError, onIntent, preload, renderer, resolveGateCell, resolver, routeGateFailure, router, sameKeys, started, target, unmount, unmountCurrent, unwatchSources;
+    let PRELOAD_SETTLE_MS, app, cancelSettle, compile2, components, container, currentComponent, currentLayouts, currentParams, currentQuery, currentRoute, disposeEffect, ensureGates, generation, invalidateResolver, lastPreload, layoutInstances, mountPoint, mountRoute, onError, onIntent, onIntentCancel, preload, preloadOnIntent, renderer, resolveGateCell, resolver, routeGateFailure, router, sameKeys, settleAnchor, settleTimer, started, target, unmount, unmountCurrent, unwatchSources;
     assertBrowser("createRenderer");
     ({ router, app, components, resolver, compile: compile2, target, onError } = opts);
+    preloadOnIntent = opts.preload === "intent";
     container = typeof target === "string" ? document.querySelector(target) : target || document.getElementById("app");
     if (!container) {
       container = document.createElement("div");
@@ -18425,11 +18514,13 @@ ${indented}`);
       }
       return null;
     };
-    ensureGates = async function(chain, params, query) {
+    ensureGates = async function(chain, params, query, preloadMode = false, skipMounted = 0) {
       let cell, err, failedIndex, failure, gates, jk, job, jobs, key, keyFn, list, ownerIdx, path, results;
       jobs = new Map;
       for (let idx = 0;idx < chain.length; idx++) {
         let entry = chain[idx];
+        if (idx < skipMounted)
+          continue;
         gates = entry.cls?.__gates;
         if (!(gates && gates.length))
           continue;
@@ -18463,7 +18554,7 @@ ${indented}`);
       if (!list.length)
         return { failedIndex: Infinity, failure: null };
       results = await Promise.allSettled(list.map(function(j) {
-        return j.cell.ensure();
+        return preloadMode ? j.cell.preload() : j.cell.ensure();
       }));
       failedIndex = Infinity;
       failure = null;
@@ -18508,7 +18599,7 @@ ${indented}`);
       }
     };
     mountRoute = async function(info, force = false) {
-      let Component, LayoutClass, __innerPrev, __pop, __prev, __push, chain, constructUpTo, failedIndex, failure, gen2, handled, inst, instance, layoutEntries, layoutFiles, layoutMod, layoutSource, layoutsChanged, mod, mp, oldTarget, outerScope, pageParent, pagePrev, pageWrapper, params, pre, prevScope, query, queryKeyedChanged, route, sameRoute, slot, source2, wrapper;
+      let Component, LayoutClass, __innerPrev, __pop, __prev, __push, chain, constructUpTo, failedIndex, failure, gen2, handled, inst, instance, layoutEntries, layoutFiles, layoutMod, layoutSource, layoutsChanged, mod, mountedPrefix, mp, oldTarget, outerScope, pageParent, pagePrev, pageWrapper, params, pre, prevScope, query, queryKeyedChanged, route, sameRoute, slot, source2, wrapper;
       ({ route, params, layouts: layoutFiles, query } = info);
       if (!route)
         return;
@@ -18585,12 +18676,13 @@ ${indented}`);
             layoutEntries.push({ file: layoutFile, cls: LayoutClass });
           }
           chain = [...layoutEntries, { file: route.file, cls: Component }];
-          ({ failedIndex, failure } = await ensureGates(chain, params, query));
+          layoutsChanged = !arraysEqual(layoutFiles, currentLayouts);
+          mountedPrefix = layoutsChanged ? 0 : layoutEntries.length;
+          ({ failedIndex, failure } = await ensureGates(chain, params, query, false, mountedPrefix));
           if (gen2 !== generation) {
             router.navigating = false;
             return;
           }
-          layoutsChanged = !arraysEqual(layoutFiles, currentLayouts);
           oldTarget = currentComponent?._target;
           if (layoutsChanged) {
             unmount();
@@ -18712,19 +18804,24 @@ ${indented}`);
     };
     started = false;
     preload = async function(url) {
-      let chain, cls, info, layoutMod, layoutSource, pageMod, pageSource;
+      let chain, cls, info, layoutMod, layoutSource, layoutsStay, pageMod, pageSource;
       info = router.match?.(url);
       if (!info?.route)
         return;
+      layoutsStay = arraysEqual(info.layouts, currentLayouts);
+      if (layoutsStay && info.route.file === currentRoute && sameKeys(info.params, currentParams))
+        return;
       chain = [];
-      for (let layoutFile of info.layouts) {
-        layoutSource = components.read(layoutFile);
-        if (!layoutSource)
-          continue;
-        layoutMod = await compileAndImport(layoutSource, compile2, components, layoutFile, resolver);
-        cls = findComponent(layoutMod);
-        if (cls)
-          chain.push({ file: layoutFile, cls });
+      if (!layoutsStay) {
+        for (let layoutFile of info.layouts) {
+          layoutSource = components.read(layoutFile);
+          if (!layoutSource)
+            continue;
+          layoutMod = await compileAndImport(layoutSource, compile2, components, layoutFile, resolver);
+          cls = findComponent(layoutMod);
+          if (cls)
+            chain.push({ file: layoutFile, cls });
+        }
       }
       pageSource = components.read(info.route.file);
       if (pageSource) {
@@ -18733,12 +18830,22 @@ ${indented}`);
         if (cls)
           chain.push({ file: info.route.file, cls });
       }
-      await ensureGates(chain, info.params, info.query);
+      await ensureGates(chain, info.params, info.query, true);
       return;
     };
+    PRELOAD_SETTLE_MS = 50;
     lastPreload = { href: null, at: 0 };
+    settleTimer = null;
+    settleAnchor = null;
+    cancelSettle = function() {
+      if (settleTimer) {
+        clearTimeout(settleTimer);
+        settleTimer = null;
+      }
+      return settleAnchor = null;
+    };
     onIntent = function(e) {
-      let a, href, now;
+      let a, href;
       a = e.target;
       while (a && a.tagName !== "A") {
         a = a.parentElement;
@@ -18747,15 +18854,31 @@ ${indented}`);
         return;
       if (!router.ownsAnchor?.(a))
         return;
-      href = a.href;
-      now = Date.now();
-      if (href === lastPreload.href && now - lastPreload.at < 3000)
+      if (a === settleAnchor)
         return;
-      lastPreload.href = href;
-      lastPreload.at = now;
-      return preload(href).catch(function() {
-        return null;
-      });
+      cancelSettle();
+      settleAnchor = a;
+      href = a.href;
+      return settleTimer = setTimeout(function() {
+        let now;
+        settleTimer = null;
+        settleAnchor = null;
+        now = Date.now();
+        if (href === lastPreload.href && now - lastPreload.at < 3000)
+          return;
+        lastPreload.href = href;
+        lastPreload.at = now;
+        return preload(href).catch(function() {
+          return null;
+        });
+      }, PRELOAD_SETTLE_MS);
+    };
+    onIntentCancel = function(e) {
+      let related;
+      if (!settleAnchor)
+        return;
+      related = e.relatedTarget;
+      return !(related && settleAnchor.contains(related)) ? cancelSettle() : undefined;
     };
     renderer = {
       start() {
@@ -18770,8 +18893,12 @@ ${indented}`);
         unwatchSources = components?.watch(function(event, path) {
           return (Array.isArray(["change", "delete"]) ? ["change", "delete"].includes(event) : (event in ["change", "delete"])) ? invalidateResolver(path) : undefined;
         });
-        document.addEventListener("pointerover", onIntent, { passive: true });
-        document.addEventListener("focusin", onIntent, { passive: true });
+        if (preloadOnIntent) {
+          document.addEventListener("pointerover", onIntent, { passive: true });
+          document.addEventListener("focusin", onIntent, { passive: true });
+          document.addEventListener("pointerout", onIntentCancel, { passive: true });
+          document.addEventListener("focusout", onIntentCancel, { passive: true });
+        }
         router.init();
         return renderer;
       },
@@ -18786,8 +18913,13 @@ ${indented}`);
         }
         unwatchSources?.();
         unwatchSources = null;
-        document.removeEventListener("pointerover", onIntent);
-        document.removeEventListener("focusin", onIntent);
+        cancelSettle();
+        if (preloadOnIntent) {
+          document.removeEventListener("pointerover", onIntent);
+          document.removeEventListener("focusin", onIntent);
+          document.removeEventListener("pointerout", onIntentCancel);
+          document.removeEventListener("focusout", onIntentCancel);
+        }
         if (resolver?.blobUrls) {
           for (let _ in resolver.blobUrls) {
             if (!Object.hasOwn(resolver.blobUrls, _))
@@ -18960,6 +19092,7 @@ ${indented}`);
       resolver,
       compile: compile2,
       target,
+      preload: bundle.data?.preload === "intent" ? "intent" : false,
       onError(err) {
         return console.error(`[Rip] ${err.message}`, err.error);
       }
