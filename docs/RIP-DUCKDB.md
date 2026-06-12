@@ -495,13 +495,18 @@ gap in the `id` sequence. Gaps are normal and harmless; never write
 code that assumes ids are contiguous, and never predict "the next id"
 from the last one you saw.
 
-**Harbor sessions require an authenticated principal.** Transactions
-ride duckdb-harbor's session protocol (`POST /sessions`, then
-per-statement `session_id`), and harbor only creates *owned* sessions.
-An unauthenticated harbor (no token configured) can run plain queries
-but cannot open sessions — `schema.transaction!` will fail with a
-clear error. Set `RIP_DB_TOKEN` (or pass `token:` to
-`schema.connect`) for any deployment that uses transactions.
+**Harbor sessions work in every auth mode.** Transactions ride
+duckdb-harbor's session protocol (`POST /sql/sessions/new`, then
+per-statement `session_id`). Own-session lifecycle is scoped as
+`__HARBOR_SELF__:sessions:create` / `:delete` — allowed by default for
+any caller, including unauthenticated local-dev mode
+(`harbor_serve(..., token := NULL)`), where sessions are owned by the
+synthetic `harbor.local-dev` principal. A 403 from
+`schema.transaction!` means a custom `harbor_authorization_function`
+explicitly denies the `__HARBOR_SELF__:sessions:` scope — add a branch
+matching it. (Earlier harbor versions misfiled session creation as an
+admin action; that required `RIP_DB_TOKEN` plus an admin grant and is
+the reason older notes here said transactions need a token.)
 
 ---
 
