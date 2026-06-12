@@ -655,7 +655,18 @@ function compileRip(filePath, source) {
     const profile = getFileProfile(filePath);
     const entry = tc.compileForCheck(filePath, source, compiler, profile);
     const prev = compiled.get(filePath);
-    const dtsChanged = (prev?.dts || '') !== (entry.dts || '');
+    // A file's "type surface" is normally its emitted .d.ts — changing a
+    // function body leaves it identical, so dependents needn't refresh. The
+    // unannotated stash is the exception: consumers get its type via
+    // `export type __RipStash = typeof stash`, which resolves against the
+    // stash's tsContent (its runtime shape), NOT its .d.ts. Editing a source's
+    // param/return type changes that shape but leaves the .d.ts text constant,
+    // so gate the stash's dependent-refresh on its tsContent too — otherwise
+    // open dependents keep TypeScript's cached `typeof stash` resolution until
+    // a full window reload.
+    const isStashFile = tc.findStashFile?.(filePath) === filePath;
+    const surfaceChanged = (prev?.dts || '') !== (entry.dts || '')
+      || (isStashFile && (prev?.tsContent || '') !== (entry.tsContent || ''));
 
     compiled.set(filePath, {
       version: (prev?.version || 0) + 1,
@@ -687,7 +698,7 @@ function compileRip(filePath, source) {
     // common case skips the loop entirely.  When it does change, schedule a
     // debounced pass over *open* documents only (closed files don't need
     // squiggles refreshed; the next open will recompute).
-    if (dtsChanged) scheduleDependentRepublish(filePath);
+    if (surfaceChanged) scheduleDependentRepublish(filePath);
   } catch (e) {
     // Keep the previous compiled version for completions/hover during
     // transient parse errors.  Dot-recovery (trailing `.` triggers) is
