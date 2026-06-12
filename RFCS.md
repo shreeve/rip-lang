@@ -1356,7 +1356,6 @@ The test story falls out of *writing is assigning*: a write marks a cell loaded,
 
 Loose ends found while building and exercising v1 — none load-bearing, each its own small change:
 
-- **First-load experience.** The cold load is strictly serial (shell → bundle → compile → import → gate fetch → render) and paints nothing for its duration. The served shell should carry a CSS loading indicator, and the build-time route→gate-set manifest (plus shell prefetch hints) from *Why it's cheap to build* would parallelize the gate fetches with module evaluation.
 - **Keyed-fetch arity lint.** Keyed-ness is `fetch.length >= 1`, so a singleton fetch wanting the AbortSignal must declare it with a default (`(signal = null) ->`). A macro-level lint on `source` declarations could catch the required-`signal`-param mistake before the type/runtime split confuses anyone.
 - **Contextually-typed lifecycle hooks.** A user-defined `onError: (err) ->` gets its param type via shadow injection (the framework's optional hook declaration can't coexist with a real method, and TS doesn't contextually type method params from base declarations). The principled fix is emitting hooks in the stub as typed property declarations plus `this.onError = (err) => …` assignments — property assignments DO get contextual typing, which would infer unannotated params and validate annotated ones, uniformly for every hook. Touches stub line layout (source-map gap-fill is sensitive to it), so it wants its own change.
 
