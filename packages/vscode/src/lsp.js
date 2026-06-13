@@ -2657,6 +2657,32 @@ connection.onCompletion((params) => {
       }
     }
 
+    // Object-literal property value — `key: "▮"` whose type comes from a
+    // contextually-typed call argument (e.g. `preload: '▮'` under `use serve`,
+    // typed against serve's opts param). The implicit-object block collapses to
+    // a single generated line, so srcToOffset can't reach the value string and
+    // the generic in-string bail-out below would suppress the list. Retarget
+    // into the gen string and let TS supply the literal-union values, rebuilt
+    // as in-quote replacements (so picking one replaces the string contents).
+    if (strState.inString && !strState.inInterpolation && tc.retargetObjectValueOffset
+        && /^\s*[\w$]+\s*:\s*["']/.test(srcLine)) {
+      const c2 = compiled.get(fp);
+      const svc = getServiceFor(fp);
+      const genOff = srcToOffset(fp, params.position.line, params.position.character);
+      if (c2 && svc && genOff !== undefined) {
+        const rt = tc.retargetObjectValueOffset(c2, srcLine, params.position.character, genOff);
+        if (rt !== genOff) {
+          patchTypes(svc);
+          const r = svc.getCompletionsAtPosition(toVirtual(fp), rt, { includeInsertTextCompletions: true });
+          const lits = (r?.entries || []).filter(e => e.kind === 'string');
+          if (lits.length > 0) {
+            const range = stringContentRange(srcLine, params.position.line, params.position.character);
+            return lits.map((e, i) => unionValueCompletion(e.name, i, true, range));
+          }
+        }
+      }
+    }
+
     // Space/colon triggered outside component/render context — don't fall through to TS
     if (params.context?.triggerCharacter === ' ' || params.context?.triggerCharacter === ':') {
       if (!isInRenderBlock(srcLines, params.position.line)) return [];
@@ -2687,6 +2713,52 @@ connection.onCompletion((params) => {
         const prev = compiled.get(fp);
         compiled.set(fp, { version: (prev?.version || 0) + 1, ...entry });
       } catch {} // recovery failed — continue with stale data
+    }
+  }
+
+  // Object-key recovery: when the cursor sits on a property name being typed —
+  // or a blank slot — on its own line inside an implicit-object block (e.g.
+  // under `use serve` where sibling lines are `dir: …`, `watch: …`), the
+  // compiler reads a bareword as a *positional* call argument — `serve({…},
+  // prel)` — and an empty line offers nothing object-related, so TS surfaces
+  // global identifiers instead of the object's contextually-typed property
+  // names. Patch the line to `<word>: 0` (using a placeholder when no word has
+  // been typed yet) so it folds into the object literal, then recompile; TS
+  // then surfaces the remaining property names (filtered by any prefix →
+  // `preload`). Gated on a contiguous sibling `key:` line at the same indent,
+  // the signature of an implicit-object block.
+  let objectKeyRecovery = false;
+  if (doc) {
+    const docLines = doc.getText().split('\n');
+    const curLine = docLines[params.position.line] || '';
+    const before = curLine.slice(0, params.position.character);
+    const after = curLine.slice(params.position.character);
+    // Indent + optional partial identifier up to the cursor, nothing but
+    // whitespace after it. The optional partial covers the blank-slot case.
+    const m = before.match(/^(\s+)([A-Za-z_$][\w$]*)?$/);
+    if (m && /^\s*$/.test(after)) {
+      const indent = m[1].length;
+      let inObjectBlock = false;
+      for (let ln = params.position.line - 1; ln >= 0; ln--) {
+        const t = docLines[ln];
+        const trimmed = t.trimStart();
+        if (trimmed === '' || trimmed.startsWith('#')) continue;  // skip blanks/comments
+        const lead = t.length - trimmed.length;
+        if (lead < indent) break;                 // reached the block header
+        if (lead === indent) {                    // contiguous sibling line
+          inObjectBlock = /^\s*[\w$]+\s*:/.test(t);
+          break;
+        }
+      }
+      if (inObjectBlock) {
+        docLines[params.position.line] = m[1] + (m[2] || '__rip__') + ': 0' + after;
+        try {
+          const entry = tc.compileForCheck(fp, docLines.join('\n'), compiler, getFileProfile(fp));
+          const prev = compiled.get(fp);
+          compiled.set(fp, { version: (prev?.version || 0) + 1, ...entry });
+          objectKeyRecovery = true;
+        } catch {} // recovery failed — continue with stale data
+      }
     }
   }
 
@@ -2746,6 +2818,10 @@ connection.onCompletion((params) => {
       const beforePartial = lineTextPrefix.slice(0, lineTextPrefix.length - partial.length);
       const isMemberAccess = /[.?!]\s*$/.test(beforePartial);
       if (isMemberAccess) return result;
+
+      // Object-key recovery produced a contextually-typed property-name list;
+      // workspace export suggestions would only be noise in that slot.
+      if (objectKeyRecovery) return result;
 
       const existingImports = collectImportedNames(c.source);
       const itemsByLabel = new Map();

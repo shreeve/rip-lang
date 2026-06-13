@@ -3109,6 +3109,38 @@ export function retargetObjectArgOffset(entry, srcLine, srcCol, genOffset) {
   return genOffset - lc.col + i;
 }
 
+// Completion-offset fixup for object-literal property *values* whose owning
+// object spans several source lines that collapse to a single generated line.
+// An implicit-object call block —
+//   use serve
+//     preload: '▮'
+// — compiles to `use(serve({ …, preload: '' }))`, so srcToOffset maps the
+// property's source line onto that one statement gen line but lands near the
+// statement start, not inside the value string. Given the source line, the
+// cursor column, and the gen offset srcToOffset produced, this finds the same
+// `key: <quote>` on the gen line and returns the absolute gen offset at the
+// matching spot inside the gen string — so TS can supply the contextually-typed
+// string-literal completions. Returns genOffset unchanged outside this context.
+export function retargetObjectValueOffset(entry, srcLine, srcCol, genOffset) {
+  if (!entry || genOffset == null || !srcLine) return genOffset;
+  const m = srcLine.match(/^(\s*)([\w$]+)(\s*:\s*)(["'])/);
+  if (!m) return genOffset;
+  const key = m[2];
+  const strStart = m[0].length;             // src index just inside the opening quote
+  if (srcCol < strStart) return genOffset;   // cursor isn't inside the value string
+  const inStr = srcCol - strStart;           // characters into the string content
+
+  const tsText = entry.tsContent;
+  const lc = offsetToLineCol(tsText, genOffset);
+  const genLine = tsText.split('\n')[lc.line];
+  if (genLine == null) return genOffset;
+  const re = new RegExp('\\b' + key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*:\\s*["\']');
+  const gm = re.exec(genLine);
+  if (!gm) return genOffset;
+  const genStrInside = gm.index + gm[0].length;   // just inside the gen opening quote
+  return (genOffset - lc.col) + genStrInside + inStr;
+}
+
 // Map a Rip source (line, col) to a TypeScript virtual file byte offset.
 // This is the forward direction: source → generated (used for hover, definition, etc.)
 //
