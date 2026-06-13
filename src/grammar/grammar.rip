@@ -96,6 +96,7 @@ grammar =
     o 'ComputedAssign'
     o 'ReadonlyAssign'
     o 'Effect'
+    o 'Gate'
     o 'If'
     o 'Try'
     o 'While'
@@ -231,6 +232,13 @@ grammar =
     o 'Assignable READONLY_ASSIGN Expression'               , '["readonly", 1, 3]'
     o 'Assignable READONLY_ASSIGN TERMINATOR Expression'    , '["readonly", 1, 4]'
     o 'Assignable READONLY_ASSIGN INDENT Expression OUTDENT', '["readonly", 1, 4]'
+  ]
+
+  # Render-ready gate (<~) — load-before-render binding; component bodies only.
+  # One form on purpose: the RHS must be a one-line literal stash path, so the
+  # compiler can hoist it into the component's static gate-set.
+  Gate: [
+    o 'Assignable GATE Expression', '["gate", 1, 3]'
   ]
 
   # Reactive effect (~>) — side effects that run when dependencies change

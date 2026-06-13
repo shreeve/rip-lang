@@ -1901,8 +1901,18 @@ test "deeply nested (3 levels) propagates path", '''
 INTRINSICS = '''
   interface SchemaIssue { field: string; error: string; message: string; }
   type SchemaSafeResult<T> = { ok: true; value: T; errors: null } | { ok: false; value: null; errors: SchemaIssue[] };
+  interface ArraySchema<Out> {
+    parse(data: unknown): Out[];
+    safe(data: unknown): SchemaSafeResult<Out[]>;
+    ok(data: unknown): boolean;
+    parseAsync(data: unknown): Promise<Out[]>;
+    safeAsync(data: unknown): Promise<SchemaSafeResult<Out[]>>;
+    okAsync(data: unknown): Promise<boolean>;
+    toJSONSchema(): Record<string, unknown>;
+  }
   interface Schema<Out, In = unknown> {
     parse(data: unknown): Out;
+    array: ArraySchema<Out>;
     safe(data: unknown): SchemaSafeResult<Out>;
     ok(data: unknown): boolean;
     parseAsync(data: unknown): Promise<Out>;

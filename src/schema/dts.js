@@ -53,8 +53,18 @@ export const SCHEMA_INTRINSIC_DECLS = [
   // correctly; when `In` defaults to unknown, `keyof In` is `never` and
   // algebra methods don't autocomplete — which is the right behavior
   // for :input schemas where the input shape isn't statically known.
+  'interface ArraySchema<Out> {',
+  '  parse(data: unknown): Out[];',
+  '  safe(data: unknown): SchemaSafeResult<Out[]>;',
+  '  ok(data: unknown): boolean;',
+  '  parseAsync(data: unknown): Promise<Out[]>;',
+  '  safeAsync(data: unknown): Promise<SchemaSafeResult<Out[]>>;',
+  '  okAsync(data: unknown): Promise<boolean>;',
+  '  toJSONSchema(): Record<string, unknown>;',
+  '}',
   'interface Schema<Out, In = unknown> {',
   '  parse(data: unknown): Out;',
+  '  array: ArraySchema<Out>;',
   '  safe(data: unknown): SchemaSafeResult<Out>;',
   '  ok(data: unknown): boolean;',
   '  parseAsync(data: unknown): Promise<Out>;',

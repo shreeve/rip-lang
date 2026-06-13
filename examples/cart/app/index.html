@@ -6,8 +6,20 @@
     <title>Rip</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
     <link rel="stylesheet" href="/styles.css">
+    <style>
+      #app-loader {
+        display: grid;
+        place-items: center;
+        min-height: 100vh;
+        animation: app-loader 200ms ease 100ms both;
+      }
+      @keyframes app-loader { from { opacity: 0 } to { opacity: 1 } }
+    </style>
   </head>
   <body>
+    <div id="app">
+      <div id="app-loader" aria-busy="true"></div>
+    </div>
     <script defer src="/rip/rip.min.js"></script>
   </body>
 </html>

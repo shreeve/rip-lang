@@ -132,6 +132,110 @@ export function findStashFile(filePath) {
   return result;
 }
 
+// ── Static gate-path validation ────────────────────────────────────
+//
+// `x <~ @app.data.path` requires the path to resolve to a source key —
+// the renderer enforces this with a deterministic mount-time error, and
+// `rip check` mirrors it at compile time by reading the stash module's
+// s-expressions: collect module-level bindings, find the `stash` object
+// literal, and classify each gate path's keys. The analysis is
+// CONSERVATIVE: only paths that provably land on a plain key (or on no
+// key) error; anything whose source-ness isn't statically visible —
+// imported cells, factory calls, spreads — stays silent and the mount
+// check backstops it. False positives are the failure mode to avoid;
+// false negatives just fall back to today's runtime error.
+
+function sexprName(v) {
+  return (typeof v === 'string' || v instanceof String) ? v.valueOf() : null;
+}
+
+// Walk a stash module's program s-expression into { stashObj, bindings }:
+// the `stash` object literal plus every module-level `name = value`
+// binding (so `orders: ordersSource` can chase `ordersSource = source …`).
+export function collectStashAnalysis(sexpr) {
+  if (!Array.isArray(sexpr) || sexpr[0] !== 'program') return null;
+  const bindings = new Map();
+  for (let stmt of sexpr.slice(1)) {
+    if (!Array.isArray(stmt)) continue;
+    if (stmt[0] === 'export' && Array.isArray(stmt[1])) stmt = stmt[1];
+    if (stmt[0] === '=' || stmt[0] === 'readonly') {
+      const name = sexprName(stmt[1]);
+      if (name) bindings.set(name, stmt[2]);
+    }
+  }
+  const stashObj = bindings.get('stash');
+  if (!Array.isArray(stashObj) || sexprName(stashObj[0]) !== 'object') return null;
+  return { stashObj, bindings };
+}
+
+// 'source' | 'plain' | 'unknown' | { kind: 'object', node } — what a stash
+// value provably is. Identifier references chase module-level bindings.
+function classifyStashValue(node, bindings, depth = 0) {
+  if (depth > 8) return 'unknown';
+  const name = sexprName(node);
+  if (name != null) {
+    if (/^["'\d]/.test(name) || name === 'true' || name === 'false' ||
+        name === 'null' || name === 'undefined') return 'plain';
+    if (bindings.has(name)) return classifyStashValue(bindings.get(name), bindings, depth + 1);
+    return 'unknown';   // imported or otherwise invisible
+  }
+  if (!Array.isArray(node)) return 'unknown';
+  const head = sexprName(node[0]);
+  if (head === 'source') return 'source';       // application of the source() declarator
+  if (head === 'object') return { kind: 'object', node };
+  if (head === 'array') return 'plain';
+  return 'unknown';
+}
+
+// Shared by `rip check` and the LSP: turn a file's hoisted gates into
+// diagnostic records against the stash analysis. Lines/cols are 1-based
+// (the LSP converts). Only provably-wrong paths produce records — see
+// validateGatePath below for the conservative verdict rules.
+export function collectGateDiagnostics(gates, source, analysis) {
+  const out = [];
+  if (!gates || !gates.length || !analysis) return out;
+  const srcLines = source.split('\n');
+  for (const g of gates) {
+    const verdict = validateGatePath(g.path, analysis);
+    if (verdict !== 'plain' && verdict !== 'missing') continue;
+    const lineText = srcLines[g.line - 1] ?? '';
+    const idx = lineText.indexOf('@app.data');
+    const detail = verdict === 'missing'
+      ? `'${g.path}' is not a key of the stash`
+      : `'${g.path}' is a plain key`;
+    out.push({
+      line: g.line,
+      col: (idx >= 0 ? idx : 0) + 1,
+      len: idx >= 0 ? '@app.data.'.length + String(g.path).length : Math.max(lineText.trim().length, 1),
+      message: `'${g.path} <~' does not resolve to a source (${detail}) — declare it with source() in app/stash.rip`,
+      srcLine: lineText,
+    });
+  }
+  return out;
+}
+
+// Verdict for one gate path against the stash literal:
+// 'source' (ok), 'unknown' (silent), 'plain' / 'missing' (error).
+// Walks segments through plain object literals; stops at the nearest
+// source on the path (subpath gates bind under the loaded value).
+export function validateGatePath(path, analysis) {
+  let node = analysis.stashObj;
+  for (const seg of String(path).split('.')) {
+    const entries = new Map();
+    let hasOpaqueEntries = false;
+    for (const e of node.slice(1)) {
+      const key = Array.isArray(e) && sexprName(e[0]) === ':' ? sexprName(e[1]) : null;
+      if (key != null) entries.set(key, e[2]);
+      else hasOpaqueEntries = true;   // spread / computed key — can't enumerate
+    }
+    if (!entries.has(seg)) return hasOpaqueEntries ? 'unknown' : 'missing';
+    const c = classifyStashValue(entries.get(seg), analysis.bindings);
+    if (c === 'source' || c === 'unknown' || c === 'plain') return c;
+    node = c.node;   // plain object literal — walk deeper
+  }
+  return 'plain';    // path exhausted inside plain literals, no source found
+}
+
 // ── Route tree discovery ───────────────────────────────────────────
 //
 // The project's routes live under `<projectRoot>/app/routes/` — a fixed
@@ -1801,6 +1905,13 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
       if (needEffect) decls.push(EFFECT_FN);
       headerDts = decls.join('\n') + '\n' + headerDts;
     }
+    // Gated bindings (`x <~ @app.data.x`) stub as
+    // `__computed(() => __ripGate(this.app.data.x))`. __ripGate is the
+    // generic narrow — soundness is supplied by the runtime gate, which
+    // loads the source before the component is constructed.
+    if (/\b__ripGate\(/.test(code) && !/\bdeclare function __ripGate\b/.test(headerDts)) {
+      headerDts = 'declare function __ripGate<T>(v: T | null | undefined): T;\n' + headerDts;
+    }
   }
 
   // Inject declarations for Rip's stdlib globals (abort, assert, p, sleep, etc.)
@@ -2060,19 +2171,28 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
   const isStash = stashFile && stashFile === filePath;
 
   if (isStash) {
-    // The DTS header hoists `export let stash: <Type>;` so the type is
-    // visible everywhere. The body emits either `let stash; ... stash = {...}`
-    // (no export) or `export const stash = {...}` (with export). Both
-    // conflict with the typed hoist — TS sees a redeclaration and the
-    // un-annotated body wins, collapsing the inferred type to `{ items:
-    // never[], ... }`. Rewrite both forms into a bare assignment to the
-    // already-declared `stash`, preserving the contextual type.
-    const letRe = /^(\s*let\s+)([^;=]+);/m;
-    code = code.replace(letRe, (full, prefix, names) => {
-      const remaining = names.split(',').map(s => s.trim()).filter(n => n !== 'stash');
-      return remaining.length ? `${prefix}${remaining.join(', ')};` : '';
-    });
-    code = code.replace(/^(\s*)export\s+const\s+stash\s*=/m, '$1stash =');
+    // For an ANNOTATED stash (`stash:: T = ...`) the DTS header hoists
+    // `export let stash: <Type>;` so the type is visible everywhere. The
+    // body emits either `let stash; ... stash = {...}` (no export) or
+    // `export const stash = {...}` (with export). Both conflict with the
+    // typed hoist — TS sees a redeclaration and the un-annotated body
+    // wins, collapsing the inferred type to `{ items: never[], ... }`.
+    // Rewrite both forms into a bare assignment to the already-declared
+    // `stash`, preserving the contextual type.
+    //
+    // An UNANNOTATED stash (`export stash = ...`, the inference path —
+    // source() keys carry their own types) hoists nothing, so the
+    // body declaration must stay: removing it left `typeof stash` with no
+    // `stash` at all.
+    const stashHoisted = /(^|\n)\s*export\s+(let|const|var)\s+stash\s*:/.test(headerDts || '');
+    if (stashHoisted) {
+      const letRe = /^(\s*let\s+)([^;=]+);/m;
+      code = code.replace(letRe, (full, prefix, names) => {
+        const remaining = names.split(',').map(s => s.trim()).filter(n => n !== 'stash');
+        return remaining.length ? `${prefix}${remaining.join(', ')};` : '';
+      });
+      code = code.replace(/^(\s*)export\s+const\s+stash\s*=/m, '$1stash =');
+    }
     code += `\nexport type __RipStash = typeof stash;\n`;
   }
 
@@ -2080,7 +2200,10 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
     let typedApp = null;
     if (stashFile && !isStash) {
       const spec = entryImportSpec(filePath, stashFile);
-      typedApp = `declare app: { data: import('${spec}').__RipStash; components: any; routes: any; params: any; query: any; router: any }`;
+      // data intersects the stash shape with the reserved stash methods
+      // (inc/dec/…, peek/reset, and the source handle) so they carry
+      // signatures and completion in typed projects.
+      typedApp = `declare app: { data: import('${spec}').__RipStash & import('@rip-lang/app').StashMethods<import('${spec}').__RipStash>; components: any; routes: any; params: any; query: any; router: any }`;
     }
     if (typedApp) code = code.replace(/declare app: any/g, typedApp);
   }
@@ -2398,7 +2521,7 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
     }
   }
 
-  return { tsContent, headerLines, hasTypes, srcToGen, genToSrc, srcColToGen, source, dts };
+  return { tsContent, headerLines, hasTypes, srcToGen, genToSrc, srcColToGen, source, dts, sexpr: result.sexpr, gates: result.gates || [] };
 }
 
 // ── Source-position mapping helpers ────────────────────────────────
@@ -3515,7 +3638,19 @@ export async function runCheck(targetDir, opts = {}) {
     }
   }
 
-  // Check for unresolved relative imports in all files (not just typed ones)
+  // Check for unresolved relative imports in all files (not just typed ones),
+  // and validate render gates (<~) against the stash's source-key set.
+  const stashAnalyses = new Map();
+  const stashAnalysisFor = (fp) => {
+    const stashFile = findStashFile(fp);
+    if (!stashFile) return null;
+    if (!stashAnalyses.has(stashFile)) {
+      const entry = compiled.get(stashFile);
+      stashAnalyses.set(stashFile, entry?.sexpr ? collectStashAnalysis(entry.sexpr) : null);
+    }
+    return stashAnalyses.get(stashFile);
+  };
+
   const fileResults = [];
   let totalErrors = 0, totalWarnings = 0;
   for (const [fp, source] of sourcesByPath) {
@@ -3532,6 +3667,18 @@ export async function runCheck(targetDir, opts = {}) {
         totalErrors++;
       }
     }
+
+    // A gate whose path provably lands on a plain key (or no key)
+    // in app/stash.rip is the compile-time form of the renderer's
+    // deterministic mount error. Conservative — see validateGatePath.
+    const gates = compiled.get(fp)?.gates;
+    if (gates && gates.length) {
+      for (const d of collectGateDiagnostics(gates, source, stashAnalysisFor(fp))) {
+        errors.push({ line: d.line, col: d.col, len: d.len, message: d.message, severity: 'error', code: 'rip', srcLine: d.srcLine, related: [] });
+        totalErrors++;
+      }
+    }
+
     if (errors.length > 0) fileResults.push({ file: fp, errors });
   }
 

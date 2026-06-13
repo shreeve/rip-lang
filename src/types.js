@@ -378,7 +378,7 @@ function collectTypeExpression(tokens, j) {
       }
       if (tTag === '=' || tTag === 'REACTIVE_ASSIGN' ||
           tTag === 'COMPUTED_ASSIGN' || tTag === 'READONLY_ASSIGN' ||
-          tTag === 'EFFECT' || tTag === 'TERMINATOR' ||
+          tTag === 'EFFECT' || tTag === 'GATE' || tTag === 'TERMINATOR' ||
           tTag === 'INDENT' || tTag === 'OUTDENT' ||
           tTag === '->' || tTag === ',') {
         break;
@@ -470,6 +470,10 @@ function buildTypeString(typeTokens) {
     if (t.data?.optional && next && (next[0] === 'TYPE_ANNOTATION' || next[0] === ':')) {
       return `${t[1]}?`;
     }
+    // Embedded-JS tokens are backtick literals with the delimiters stripped
+    // by the lexer. In type position they are TS template-literal types
+    // (e.g. `${number} min`) — re-wrap them so the emitted type is valid.
+    if (t[0] === 'JS') return '`' + t[1] + '`';
     return t[1];
   });
   let typeStr = parts.join(' ').replace(/\s+/g, ' ').trim();

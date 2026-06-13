@@ -50,6 +50,7 @@ globalThis.document = {
   querySelector: () => null,
   querySelectorAll: () => [],
   addEventListener: () => {},
+  removeEventListener: () => {},
   body: { classList: { add: () => {} } },
 };
 
@@ -138,14 +139,531 @@ check('bundle exposes language version', () => {
 });
 
 check("@rip-lang/app exports copied to globalThis", () => {
-  for (const k of ['launch', 'createStash', 'createResource', 'createRouter', 'createRenderer', 'createComponents']) {
+  for (const k of ['launch', 'createStash', 'createResource', 'createRouter', 'createRenderer', 'createComponents', 'source', 'createMutation']) {
     if (typeof globalThis[k] !== 'function') {
       throw new Error('globalThis.' + k + ' missing — @rip-lang/app entry preamble did not copy it');
     }
   }
 });
 
-process.stdout.write('\\u0001RESULTS\\u0001' + JSON.stringify(results) + '\\u0001RESULTS\\u0001');
+// ── Source cells — async behavior checks ────────────────────────────────
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const SOURCE_TAG = Symbol.for('rip.source');
+const asyncChecks = [];
+function checkAsync(name, fn) {
+  asyncChecks.push(
+    Promise.resolve()
+      .then(fn)
+      .then(() => results.push({ name, ok: true }),
+            (e) => results.push({ name, ok: false, error: e.message }))
+  );
+}
+
+checkAsync('source: lazy — ungated proxy read is null, kicks the load, lands in place', async () => {
+  let calls = 0;
+  const stash = globalThis.createStash({ user: globalThis.source({ fetch: async () => { calls++; return { n: 1 }; } }) });
+  const v = stash.user;
+  if (v != null) throw new Error('unloaded read must be null');
+  if (calls !== 1) throw new Error('first touch must kick the load');
+  await sleep(5);
+  if (!stash.user || stash.user.n !== 1) throw new Error('value must land in place');
+});
+
+checkAsync('source: ensure dedupes — one in-flight load per source', async () => {
+  let calls = 0;
+  const stash = globalThis.createStash({ user: globalThis.source({ fetch: async () => { calls++; await sleep(10); return { name: 'Ada' }; } }) });
+  const cell = globalThis.unwrapStash(stash).user;
+  if (calls !== 0) throw new Error('source must be lazy');
+  await Promise.all([cell.ensure(), cell.ensure()]);
+  if (calls !== 1) throw new Error('ensure must dedupe in-flight loads: ' + calls);
+  if (stash.user.name !== 'Ada') throw new Error('proxy read must unwrap the cell value');
+});
+
+checkAsync('source: a write wins over an in-flight load', async () => {
+  let resolveFetch;
+  const stash = globalThis.createStash({ user: globalThis.source({ fetch: () => new Promise((r) => { resolveFetch = r; }) }) });
+  const cell = globalThis.unwrapStash(stash).user;
+  cell.ensure().catch(() => {});
+  stash.user = { name: 'written' };
+  resolveFetch({ name: 'stale' });
+  await sleep(5);
+  if (stash.user.name !== 'written') throw new Error('late load clobbered a newer write: ' + stash.user.name);
+});
+
+checkAsync('source: staleTime 0 (default) serves cached value and revalidates in background', async () => {
+  let calls = 0;
+  const stash = globalThis.createStash({ k: globalThis.source({ fetch: async () => { calls++; return { v: calls }; } }) });
+  const cell = globalThis.unwrapStash(stash).k;
+  await cell.ensure();
+  const v = await cell.ensure();
+  if (!v || v.v !== 1) throw new Error('stale ensure must serve the cached value instantly');
+  await sleep(10);
+  if (calls !== 2) throw new Error('expected a background revalidate: ' + calls);
+  if (stash.k.v !== 2) throw new Error('revalidate must update in place');
+});
+
+checkAsync("source: staleTime '5 min' serves within the window without refetching", async () => {
+  let calls = 0;
+  const stash = globalThis.createStash({ k: globalThis.source({ fetch: async () => { calls++; return { v: calls }; }, staleTime: '5 min' }) });
+  const cell = globalThis.unwrapStash(stash).k;
+  await cell.ensure();
+  await cell.ensure();
+  await sleep(5);
+  if (calls !== 1) throw new Error('fresh value must not refetch: ' + calls);
+});
+
+checkAsync('source: a null-resolving fetch counts as loaded — gates do not refetch it every time', async () => {
+  let calls = 0;
+  const stash = globalThis.createStash({ sel: globalThis.source({ fetch: async () => { calls++; return null; }, staleTime: '5 min' }) });
+  const cell = globalThis.unwrapStash(stash).sel;
+  const v = await cell.ensure();
+  if (v !== null) throw new Error('a null fetch must resolve to null: ' + JSON.stringify(v));
+  if (calls !== 1) throw new Error('first ensure must load once: ' + calls);
+  await cell.ensure();   // loaded + fresh: must serve the null, not treat it as unloaded and refetch
+  await sleep(5);
+  if (calls !== 1) throw new Error('a loaded null value must not be refetched as if unloaded: ' + calls);
+});
+
+checkAsync('createMutation: a superseded invocation does not run its onSuccess (newer wins)', async () => {
+  const writes = [];
+  const resolvers = [];
+  const m = globalThis.createMutation(
+    (v) => new Promise((res) => { resolvers.push(() => res(v)); }),
+    { onSuccess: (v) => { writes.push(v); } }
+  );
+  const p1 = m('A');   // generation 1
+  const p2 = m('B');   // generation 2 — newer, wins
+  resolvers[1]();      // B resolves first
+  await p2;
+  resolvers[0]();      // A (superseded) resolves after
+  await p1;
+  await sleep(5);
+  if (writes.includes('A')) throw new Error('superseded onSuccess(A) must not run after newer B: ' + JSON.stringify(writes));
+  if (!writes.includes('B')) throw new Error('newer onSuccess(B) must run: ' + JSON.stringify(writes));
+});
+
+checkAsync('source: preload floor is a one-shot bridge — the nav that follows reuses it, a later revisit refetches at staleTime 0', async () => {
+  let calls = 0;
+  const stash = globalThis.createStash({ k: globalThis.source({ fetch: async () => { calls++; return { v: calls }; } }) });
+  const cell = globalThis.unwrapStash(stash).k;
+  await cell.preload();   // hover: one load
+  if (calls !== 1) throw new Error('preload must load once: ' + calls);
+  await cell.ensure();    // navigation a beat later — joins the preloaded value
+  await sleep(10);
+  if (calls !== 1) throw new Error('the nav after a preload must not revalidate: ' + calls);
+  await cell.ensure();    // a later revisit — floor consumed, staleTime 0 resumes
+  await sleep(10);
+  if (calls !== 2) throw new Error('a revisit must refetch — the floor is one-shot, not a 30s blanket: ' + calls);
+});
+
+checkAsync('source: a nav that joins an in-flight preload consumes the floor — no leak to a later revisit', async () => {
+  let calls = 0, release;
+  const stash = globalThis.createStash({ k: globalThis.source({ fetch: async () => { calls++; await new Promise((r) => { release = r; }); return { v: calls }; } }) });
+  const cell = globalThis.unwrapStash(stash).k;
+  cell.preload();             // hover: starts the load (still in flight)
+  await sleep(5);
+  if (calls !== 1) throw new Error('preload must have started the load: ' + calls);
+  const navP = cell.ensure(); // click lands before the fetch resolves — joins the in-flight load
+  release();
+  await navP;
+  await sleep(5);
+  await cell.ensure();        // a later revisit — the floor must already be consumed
+  await sleep(5);
+  if (calls !== 2) throw new Error('revisit after a joined preload must refetch — the floor must not leak: ' + calls);
+});
+
+checkAsync('source: a write clears the preload freshness floor so staleTime rules resume', async () => {
+  let calls = 0;
+  const stash = globalThis.createStash({ k: globalThis.source({ fetch: async () => { calls++; return { v: calls }; } }) });
+  const cell = globalThis.unwrapStash(stash).k;
+  await cell.preload();        // floor granted
+  stash.k = { v: 99 };         // write replaces the value AND clears the floor
+  await cell.ensure();         // staleTime 0 resumes → background revalidate
+  await sleep(10);
+  if (calls !== 2) throw new Error('write must clear the floor so a stale ensure revalidates: ' + calls);
+});
+
+checkAsync('source: unrecognized staleTime warns and falls back to 0 (typo string, quoted/wrong symbol)', async () => {
+  const warns = [];
+  const origWarn = console.warn;
+  console.warn = (...a) => { warns.push(a.join(' ')); };
+  try {
+    let calls = 0;
+    const stash = globalThis.createStash({ k: globalThis.source({ fetch: async () => { calls++; return { v: calls }; }, staleTime: '5 mins' }) });
+    if (!warns.some((w) => w.includes('unrecognized staleTime'))) throw new Error('expected a warning for the typo: ' + JSON.stringify(warns));
+    const cell = globalThis.unwrapStash(stash).k;
+    await cell.ensure();
+    await cell.ensure();   // fallback 0 -> stale-on-arrival -> background revalidate
+    await sleep(10);
+    if (calls !== 2) throw new Error('typo staleTime must behave as 0 (revalidate), got calls=' + calls);
+
+    // Only the string 'forever' means forever — symbols (including
+    // :forever, which untyped projects might try) warn instead of
+    // silently meaning 0.
+    warns.length = 0;
+    globalThis.source({ fetch: async () => 1, staleTime: Symbol.for('forever') });
+    if (!warns.some((w) => w.includes('Symbol(forever)'))) throw new Error('symbols must warn with their name: ' + JSON.stringify(warns));
+  } finally {
+    console.warn = origWarn;
+  }
+});
+
+checkAsync('source: bare numeric staleTime string is ms, no warning', async () => {
+  const warns = [];
+  const origWarn = console.warn;
+  console.warn = (...a) => { warns.push(a.join(' ')); };
+  try {
+    let calls = 0;
+    const stash = globalThis.createStash({ k: globalThis.source({ fetch: async () => { calls++; return { v: calls }; }, staleTime: '300000' }) });
+    const cell = globalThis.unwrapStash(stash).k;
+    await cell.ensure();
+    await cell.ensure();
+    await sleep(5);
+    if (calls !== 1) throw new Error("'300000' must behave as 5 minutes of freshness: " + calls);
+    if (warns.length) throw new Error('numeric string must not warn: ' + JSON.stringify(warns));
+  } finally {
+    console.warn = origWarn;
+  }
+});
+
+checkAsync("source: staleTime 'forever' loads once; refetch() still reloads", async () => {
+  let calls = 0;
+  const stash = globalThis.createStash({ k: globalThis.source({ fetch: async () => { calls++; return { v: calls }; }, staleTime: 'forever' }) });
+  const cell = globalThis.unwrapStash(stash).k;
+  await cell.ensure();
+  await cell.ensure();
+  await sleep(5);
+  if (calls !== 1) throw new Error("'forever' must not revalidate: " + calls);
+  await cell.refetch();
+  if (calls !== 2) throw new Error('explicit refetch must reload: ' + calls);
+});
+
+checkAsync('source: failed initial load stays unloaded + retries; failed refetch keeps last-good', async () => {
+  let mode = 'fail';
+  let calls = 0;
+  const stash = globalThis.createStash({ k: globalThis.source({ fetch: async () => { calls++; if (mode === 'fail') throw new Error('boom'); return { ok: calls }; } }) });
+  const cell = globalThis.unwrapStash(stash).k;
+  let rejected = false;
+  await cell.ensure().catch(() => { rejected = true; });
+  if (!rejected) throw new Error('a failed initial load must reject ensure');
+  if (cell.peek() != null) throw new Error('cell must return to unloaded');
+  if (cell.error == null) throw new Error('error must be recorded on the cell');
+  mode = 'ok';
+  const v = await cell.ensure();
+  if (!v || v.ok !== 2) throw new Error('next gate must retry the load');
+  mode = 'fail';
+  await cell.refetch().catch(() => {});
+  if (cell.peek() == null || cell.peek().ok !== 2) throw new Error('a failed refetch must keep last-good');
+  if (cell.error == null) throw new Error('refetch error must be recorded');
+});
+
+checkAsync('source: write-null invalidates — ungated readers see null, next ensure refetches', async () => {
+  let calls = 0;
+  const stash = globalThis.createStash({ k: globalThis.source({ fetch: async () => { calls++; return { v: calls }; }, staleTime: '5 min' }) });
+  const cell = globalThis.unwrapStash(stash).k;
+  await cell.ensure();
+  stash.k = null;
+  if (cell.peek() != null) throw new Error('write-null must clear the cell value');
+  await cell.ensure();
+  if (calls !== 2) throw new Error('ensure after invalidate must refetch: ' + calls);
+});
+
+checkAsync('source: keyed family — one cell per key, callable proxy read, write-assign throws', async () => {
+  const calls = [];
+  const stash = globalThis.createStash({ order: globalThis.source({ fetch: async (id) => { calls.push(id); return { id }; } }) });
+  const fam = globalThis.unwrapStash(stash).order;
+  if (typeof stash.order !== 'function') throw new Error('keyed read must be callable through the proxy');
+  if (stash.order('a') != null) throw new Error('unloaded keyed read must be null');
+  await fam.cellFor('a').ensure();
+  if (stash.order('a').id !== 'a') throw new Error('keyed value must land');
+  await fam.cellFor('b').ensure();
+  if (calls.length !== 2 || calls[1] !== 'b') throw new Error('one load per key expected: ' + JSON.stringify(calls));
+  let threw = false;
+  try { stash.order = { id: 'x' }; } catch (e) { threw = true; }
+  if (!threw) throw new Error('value-assign to a keyed source must throw');
+  fam.reset();
+  if (stash.order('a') != null) throw new Error('family reset must clear keyed cells');
+});
+
+checkAsync('persistStash: projection skips source keys on save and restore', async () => {
+  const store = {};
+  globalThis.window = { addEventListener: () => {}, removeEventListener: () => {} };
+  globalThis.sessionStorage = { getItem: (k) => store[k] ?? null, setItem: (k, v) => { store[k] = v; }, removeItem: (k) => { delete store[k]; } };
+  const app1 = { data: globalThis.createStash({ cart: { items: [1] }, user: globalThis.source({ fetch: async () => ({ secret: true }) }) }) };
+  const dispose1 = globalThis.persistStash(app1);
+  dispose1();
+  const saved = JSON.parse(store['__rip_app']);
+  if (!saved.cart || saved.cart.items[0] !== 1) throw new Error('plain key must persist');
+  if (saved.user != null) throw new Error('source key must not persist');
+  store['__rip_app'] = JSON.stringify({ cart: { items: [2] }, user: { stale: true } });
+  const app2 = { data: globalThis.createStash({ cart: { items: [] }, user: globalThis.source({ fetch: async () => ({ ok: 1 }) }) }) };
+  const dispose2 = globalThis.persistStash(app2);
+  if (app2.data.cart.items[0] !== 2) throw new Error('plain key must restore');
+  const rawU = globalThis.unwrapStash(app2.data).user;
+  if (!rawU || rawU[SOURCE_TAG] !== true) throw new Error('restore must not clobber a live source cell');
+  dispose2();
+});
+
+checkAsync('stash: source(path) handle — reactive value/loading/error + refetch/reset, dev error on non-source', async () => {
+  let calls = 0;
+  const stash = globalThis.createStash({
+    plain: 1,
+    stats: globalThis.source({ fetch: async () => { calls++; return { n: calls }; } }),
+    order: globalThis.source({ fetch: async (id) => ({ id }) }),
+  });
+  let threw = false;
+  try { stash.source('plain'); } catch (e) { threw = true; }
+  if (!threw) throw new Error('handle on a non-source path must throw');
+  threw = false;
+  try { stash.source('order'); } catch (e) { threw = true; }
+  if (!threw) throw new Error('keyed handle without a key must throw');
+  const h = stash.source('stats');
+  if (h.value != null) throw new Error('handle value of unloaded cell must be null');
+  await sleep(5); // handle .value read kicked the lazy load
+  if (!h.value || h.value.n !== 1) throw new Error('handle value must land');
+  await h.refetch();
+  if (h.value.n !== 2) throw new Error('handle refetch must reload');
+  h.reset();
+  if (h.value != null && calls === 3) throw new Error('handle reset must unload');
+  const hk = stash.source('order', 'o1');
+  hk.value = { id: 'seeded' };  // test-seeding path for keyed cells
+  if (stash.order('o1').id !== 'seeded') throw new Error('keyed handle write must seed the cell');
+});
+
+checkAsync('stash: reset() restores defaults, unloads sources, drops undeclared keys', async () => {
+  let calls = 0;
+  const stash = globalThis.createStash({
+    cart: { items: [1, 2], total: 10 },
+    user: globalThis.source({ fetch: async () => { calls++; return { name: 'Ada' }; } }),
+  });
+  // createStash itself doesn't stamp defaults (launch does) — stamp via the
+  // same path launch uses: assert reset is sources-only without defaults.
+  await globalThis.unwrapStash(stash).user.ensure();
+  stash.cart.total = 99;
+  stash.extra = 'undeclared';
+  stash.reset();
+  if (globalThis.unwrapStash(stash).user.peek() != null) throw new Error('reset must unload sources');
+  if (stash.cart.total !== 99) throw new Error('without a defaults snapshot, plain keys stay');
+  // now stamp defaults the way launch() does and reset again
+  const raw = globalThis.unwrapStash(stash);
+  Object.defineProperty(raw, Symbol.for('rip.defaults'), { value: { cart: { items: [1, 2], total: 10 } }, configurable: true });
+  let purged = false;
+  raw[Symbol.for('rip.persist')] = () => { purged = true; };
+  stash.reset();
+  if (stash.cart.total !== 10 || stash.cart.items.length !== 2) throw new Error('reset must restore declared defaults');
+  if (stash.extra !== undefined) throw new Error('reset must drop undeclared keys');
+  if (!purged) throw new Error('reset must purge the persisted snapshot');
+});
+
+checkAsync('createMutation: reactive pending/succeeded/error with onSuccess write-back', async () => {
+  const stash = globalThis.createStash({ user: globalThis.source({ fetch: async () => ({ name: 'old' }) }) });
+  let failNext = false;
+  let errSeen = null;
+  const update = globalThis.createMutation(
+    async (data) => { if (failNext) throw new Error('422'); return { name: data.name }; },
+    { onSuccess: (u) => { stash.user = u; }, onError: (e) => { errSeen = e; } }
+  );
+  if (update.pending !== false || update.succeeded !== false) throw new Error('initial flags must be false');
+  const p = update({ name: 'new' });
+  if (update.pending !== true) throw new Error('pending must flip during the action');
+  await p;
+  if (update.pending !== false || update.succeeded !== true) throw new Error('flags must settle on success');
+  if (stash.user.name !== 'new') throw new Error('onSuccess write-back must update the stash key');
+  failNext = true;
+  await update({ name: 'x' });
+  if (update.succeeded !== false || update.error == null) throw new Error('flags must settle on error');
+  if (errSeen == null) throw new Error('onError must receive the error');
+  if (stash.user.name !== 'new') throw new Error('a failed mutation must not roll anything back');
+});
+
+checkAsync('stash: peek never triggers a load and reads through cells', async () => {
+  let calls = 0;
+  const stash = globalThis.createStash({ user: globalThis.source({ fetch: async () => { calls++; return { name: 'Ada' }; } }), plain: { a: 1 } });
+  if (stash.peek('user') !== null && stash.peek('user') !== undefined) throw new Error('peek of unloaded cell must be empty');
+  if (calls !== 0) throw new Error('peek must never trigger a load');
+  if (stash.peek('plain.a') !== 1) throw new Error('peek must walk plain paths');
+  await globalThis.unwrapStash(stash).user.ensure();
+  if (stash.peek('user.name') !== 'Ada') throw new Error('peek must read through a loaded cell');
+  if (calls !== 1) throw new Error('peek must not refetch');
+});
+
+// ── Renderer gate flow — DOM-stubbed integration check ─────────────────
+// Pre-seeded compiled modules (components.setCompiled) let mountRoute run
+// without blob-URL imports, and 'render null' components never touch real
+// DOM beyond createElement/appendChild stubs.
+checkAsync('renderer: gates load before construction; failures route to onError; non-source path errors', async () => {
+  const makeEl = () => ({
+    children: [], attrs: {}, style: {}, innerHTML: '', textContent: '',
+    appendChild(c) { this.children.push(c); },
+    setAttribute(k, v) { this.attrs[k] = v; },
+    querySelector: () => null,
+    remove() {},
+  });
+  globalThis.window = globalThis.window || { addEventListener: () => {}, removeEventListener: () => {} };
+  globalThis.document.createElement = () => makeEl();
+  globalThis.document.getElementById = () => null;
+  globalThis.document.body.appendChild = () => {};
+
+  const C = globalThis.__ripComponent.__Component;
+  const gb = globalThis.__ripComponent.__gateBind;
+
+  let constructedWith;
+  let failConstructed = false;
+  let calls = 0;
+  class Page extends C {
+    static __gates = ['user'];
+    _init() { this.user = gb(this, 'user'); constructedWith = this.user.value; }
+    _create() { return null; }
+  }
+  class FailPage extends C {
+    static __gates = ['bad'];
+    _init() { this.bad = gb(this, 'bad'); failConstructed = true; }
+    _create() { return null; }
+  }
+  class PlainGate extends C {
+    static __gates = ['plain'];
+    _init() { this.plain = gb(this, 'plain'); }
+    _create() { return null; }
+  }
+
+  const components = globalThis.createComponents();
+  components.write('_route/index.rip', 'stub');
+  components.setCompiled('_route/index.rip', { Page });
+  components.write('_route/fail.rip', 'stub');
+  components.setCompiled('_route/fail.rip', { FailPage });
+  components.write('_route/plain.rip', 'stub');
+  components.setCompiled('_route/plain.rip', { PlainGate });
+
+  const app = { data: globalThis.createStash({
+    plain: { x: 1 },
+    user: globalThis.source({ fetch: async () => { calls++; await sleep(10); return { name: 'Ada' }; } }),
+    bad:  globalThis.source({ fetch: async () => { const e = new Error('boom'); e.status = 503; throw e; } }),
+  }) };
+
+  const errors = [];
+  const routeSig = globalThis.__rip.__state(null);
+  const router = {
+    get current() { return routeSig.value ?? { route: null }; },
+    navigating: false,
+    init() {},
+    match: () => null,
+    ownsAnchor: () => false,
+  };
+  const renderer = globalThis.createRenderer({
+    router, app, components, resolver: {}, compile: (s) => s, target: makeEl(),
+    onError: (e) => errors.push(e),
+  });
+  renderer.start();
+
+  // 1. healthy gate: construction waits for the load; binding is non-null
+  routeSig.value = { path: '/', params: {}, route: { file: '_route/index.rip', pattern: '/' }, layouts: [], query: {}, hash: '' };
+  await sleep(5);
+  if (constructedWith !== undefined) throw new Error('component must not construct before its gate resolves');
+  await sleep(30);
+  if (!constructedWith || constructedWith.name !== 'Ada') throw new Error('gated binding must be non-null at construction: ' + JSON.stringify(constructedWith));
+  if (calls !== 1) throw new Error('gate must load exactly once: ' + calls);
+
+  // 2. failing gate: page never constructs; structured error reaches onError
+  routeSig.value = { path: '/fail', params: {}, route: { file: '_route/fail.rip', pattern: '/fail' }, layouts: [], query: {}, hash: '' };
+  await sleep(30);
+  if (failConstructed) throw new Error('a component whose gate failed must never construct');
+  const ge = errors.find((e) => e.path === 'bad');
+  if (!ge) throw new Error('gate failure must reach onError with its path: ' + JSON.stringify(errors));
+  if (ge.status !== 503 || ge.message !== 'boom') throw new Error('gate failure must carry status/message: ' + JSON.stringify(ge));
+
+  // 3. gate on a non-source key: deterministic dev-time error at mount
+  routeSig.value = { path: '/plain', params: {}, route: { file: '_route/plain.rip', pattern: '/plain' }, layouts: [], query: {}, hash: '' };
+  await sleep(20);
+  const pe = errors.find((e) => /does not resolve to a source/.test(e.message || ''));
+  if (!pe) throw new Error('non-source gate path must be a mount-time error: ' + JSON.stringify(errors));
+
+  renderer.stop();
+});
+
+checkAsync('renderer: a staying-mounted layout is not re-gated on sibling nav; a page gating the same source revalidates it', async () => {
+  const makeEl = () => ({
+    children: [], attrs: {}, style: {}, innerHTML: '', textContent: '',
+    appendChild(c) { this.children.push(c); },
+    setAttribute(k, v) { this.attrs[k] = v; },
+    querySelector: () => null,
+    remove() {},
+  });
+  globalThis.window = globalThis.window || { addEventListener: () => {}, removeEventListener: () => {} };
+  globalThis.document.createElement = () => makeEl();
+  globalThis.document.getElementById = () => null;
+  globalThis.document.body.appendChild = () => {};
+
+  const C = globalThis.__ripComponent.__Component;
+  const gb = globalThis.__ripComponent.__gateBind;
+
+  let userCalls = 0, ordersCalls = 0;
+  class Layout extends C {
+    static __gates = ['user'];
+    _init() { this.user = gb(this, 'user'); }
+    _create() { return null; }
+  }
+  class Home extends C { _create() { return null; } }       // no gates
+  class Orders extends C {
+    static __gates = ['orders'];
+    _init() { this.orders = gb(this, 'orders'); }
+    _create() { return null; }
+  }
+  class Profile extends C {                                  // ALSO gates user
+    static __gates = ['user'];
+    _init() { this.user = gb(this, 'user'); }
+    _create() { return null; }
+  }
+
+  const components = globalThis.createComponents();
+  components.write('_route/_layout.rip', 'stub'); components.setCompiled('_route/_layout.rip', { Layout });
+  components.write('_route/index.rip', 'stub');   components.setCompiled('_route/index.rip', { Home });
+  components.write('_route/orders.rip', 'stub');  components.setCompiled('_route/orders.rip', { Orders });
+  components.write('_route/profile.rip', 'stub'); components.setCompiled('_route/profile.rip', { Profile });
+
+  // user has the default staleTime 0, so a page that re-gates it revalidates.
+  const app = { data: globalThis.createStash({
+    user:   globalThis.source({ fetch: async () => { userCalls++; return { name: 'Ada' }; } }),
+    orders: globalThis.source({ fetch: async () => { ordersCalls++; return [{ id: 1 }]; } }),
+  }) };
+
+  const errors = [];
+  const routeSig = globalThis.__rip.__state(null);
+  const router = {
+    get current() { return routeSig.value ?? { route: null }; },
+    navigating: false, init() {}, match: () => null, ownsAnchor: () => false,
+  };
+  const renderer = globalThis.createRenderer({
+    router, app, components, resolver: {}, compile: (s) => s, target: makeEl(),
+    onError: (e) => errors.push(e),
+  });
+  renderer.start();
+
+  const L = ['_route/_layout.rip'];
+
+  // Land on home under the layout: the layout gates user once.
+  routeSig.value = { path: '/', params: {}, route: { file: '_route/index.rip', pattern: '/' }, layouts: L, query: {}, hash: '' };
+  await sleep(20);
+  if (userCalls !== 1) throw new Error('layout must gate user once on first mount: ' + userCalls);
+
+  // Sibling nav under the SAME layout: the layout stays mounted, so its user
+  // gate is NOT re-ensured; only the newly-mounting page gates its own source.
+  routeSig.value = { path: '/orders', params: {}, route: { file: '_route/orders.rip', pattern: '/orders' }, layouts: L, query: {}, hash: '' };
+  await sleep(20);
+  if (ordersCalls !== 1) throw new Error('the newly-mounting page must gate its own source: ' + ordersCalls);
+  if (userCalls !== 1) throw new Error('a staying-mounted layout must NOT refetch its gate on sibling nav: ' + userCalls);
+
+  // Navigate to a page that ALSO gates user: its own gate revalidates it.
+  routeSig.value = { path: '/profile', params: {}, route: { file: '_route/profile.rip', pattern: '/profile' }, layouts: L, query: {}, hash: '' };
+  await sleep(20);
+  if (userCalls !== 2) throw new Error('a page gating the same source must revalidate it on arrival: ' + userCalls);
+  if (errors.length) throw new Error('no gate should have failed: ' + JSON.stringify(errors));
+
+  renderer.stop();
+});
+
+Promise.all(asyncChecks).then(() => {
+  process.stdout.write('\\u0001RESULTS\\u0001' + JSON.stringify(results) + '\\u0001RESULTS\\u0001');
+});
 `;
 
 const child = spawnSync('bun', ['-e', driver], {

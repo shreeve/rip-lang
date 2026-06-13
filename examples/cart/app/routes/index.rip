@@ -1,13 +1,9 @@
-import { Product } from '../types.rip'
 import { Button } from '../components/button.rip'
 import { title } from '../config.rip'
-import { api } from '../api-client.rip'
 
 export Products = component
-  cart ~= @app.data.cart
-  products:: Product[] := []
-  loaded := false
-  loadError := ''
+  products <~ @app.data.products
+  cart     ~= @app.data.cart
 
   search ~= @router.query.search ?? ''
   sort   ~= @router.query.sort ?? ''
@@ -23,15 +19,7 @@ export Products = component
       result.sort((a, b) -> b.price - a.price)
     result
 
-  mounted: ->
-    document.title = title('Products')
-    try
-      res = api.get!('products').json!()
-      products = res.map((p:: unknown) -> Product.parse(p))
-      loaded = true
-    catch err
-      console.error(err)
-      loadError = 'Products failed to load.'
+  mounted: -> document.title = title('Products')
 
   setQuery: (opts:: { search?: string, sort?: string }) ->
     next = { ...@router.query, ...opts }
@@ -44,33 +32,30 @@ export Products = component
   clearFilters: -> @setQuery({ search: '', sort: '' })
 
   render
-    if loadError
-      p.error loadError
-    else if loaded
-      h1 "Products"
-      div.product-filters
-        input
-          type: "search"
-          placeholder: "Search products..."
-          value: search
-          @input: (e) => @setQuery({ search: e.target.value })
-        select
-          value: sort
-          @change: (e) => @setQuery({ sort: e.target.value })
-          option value: "", disabled: true, "Sort"
-          option value: "price-asc", "Price: Low to High"
-          option value: "price-desc", "Price: High to Low"
-      if filtered.length
-        div.product-list
-          for product in filtered
-            article
-              div.image product.image
-              h5 product.name
-              p "$#{product.price.toFixed(2)}"
-              if cart.items.some((i) -> i.id is product.id)
-                Button outline, @click: (-> cart.removeItem(product)), "Added to Cart"
-              else
-                Button outline, @click: (-> cart.addItem(product)), "Add to Cart"
-      else
-        p "No products found. "
-          Button outline, link, @click: @clearFilters, "Clear Filters"
+    h1 "Products"
+    div.product-filters
+      input
+        type: "search"
+        placeholder: "Search products..."
+        value: search
+        @input: (e) -> @setQuery({ search: e.target.value })
+      select
+        value: sort
+        @change: (e) -> @setQuery({ sort: e.target.value })
+        option value: "", disabled: true, "Sort"
+        option value: "price-asc", "Price: Low to High"
+        option value: "price-desc", "Price: High to Low"
+    if filtered.length
+      div.product-list
+        for product in filtered
+          article
+            div.image product.image
+            h5 product.name
+            p "$#{product.price.toFixed(2)}"
+            if cart.items.some((i) -> i.id is product.id)
+              Button outline, @click: (-> cart.removeItem(product)), "Added to Cart"
+            else
+              Button outline, @click: (-> cart.addItem(product)), "Add to Cart"
+    else
+      p "No products found. "
+        Button outline, link, @click: @clearFilters, "Clear Filters"

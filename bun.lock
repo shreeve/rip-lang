@@ -18,6 +18,7 @@
     "examples/cart": {
       "name": "@rip-lang/example-cart",
       "dependencies": {
+        "@rip-lang/app": "workspace:*",
         "@rip-lang/http": "workspace:*",
         "@rip-lang/server": "workspace:*",
       },

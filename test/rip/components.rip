@@ -4557,3 +4557,155 @@ code 'component extends: inherits tag, rest props forwarded', '''
     }
   };
   ''', opts
+
+# ==============================================================================
+# Render-ready gates (<~)
+# ==============================================================================
+
+code "gate: hoists static __gates and binds via __gateBind", '''
+  export A = component
+    user <~ @app.data.user
+    render
+      div user.name
+  ''', '''
+  export const A = class extends __Component {
+    static __gates = ['user'];
+    _init(props) {
+      this.user = __gateBind(this, 'user');
+    }
+    _create() {
+      this._el0 = document.createElement('div');
+      this._t0 = document.createTextNode(String(this.user.value.name));
+      this._el0.appendChild(this._t0);
+      return this._el0;
+    }
+  };
+  ''', opts
+
+code "gate: keyed source hoists (path, key fn) pair", '''
+  export A = component
+    order <~ @app.data.order(params.id)
+    render null
+  ''', '''
+  export const A = class extends __Component {
+    static __gates = [{ path: 'order', key: (params, query) => params.id }];
+    _init(props) {
+      this.order = __gateBind(this, 'order', (params, query) => params.id);
+    }
+    _create() {
+      return null;
+    }
+  };
+  ''', opts
+
+code "gate: @params key form normalizes to bare params", '''
+  export A = component
+    order <~ @app.data.order(@params.id)
+    render null
+  ''', '''
+  export const A = class extends __Component {
+    static __gates = [{ path: 'order', key: (params, query) => params.id }];
+    _init(props) {
+      this.order = __gateBind(this, 'order', (params, query) => params.id);
+    }
+    _create() {
+      return null;
+    }
+  };
+  ''', opts
+
+code "gate: subpath binds the nested path string", '''
+  export A = component
+    theme <~ @app.data.settings.theme
+    render null
+  ''', '''
+  export const A = class extends __Component {
+    static __gates = ['settings.theme'];
+    _init(props) {
+      this.theme = __gateBind(this, 'settings.theme');
+    }
+    _create() {
+      return null;
+    }
+  };
+  ''', opts
+
+code "gate: binds before state so initializers consume the value", '''
+  export A = component
+    user <~ @app.data.user
+    form := { ...user }
+    render null
+  ''', '''
+  export const A = class extends __Component {
+    static __gates = ['user'];
+    _init(props) {
+      this.user = __gateBind(this, 'user');
+      this.form = __state({...this.user.value});
+    }
+    _create() {
+      return null;
+    }
+  };
+  ''', opts
+
+# Gated bindings resolve synchronously at construction when the value is
+# present — the testing story for gates: seed the stash, then construct.
+test "gate: binding reads seeded stash value at construction", '''
+  globalThis.__ripApp = { data: { user: { name: 'Ada' } } }
+  A = component
+    user <~ @app.data.user
+    render null
+  a = A.new()
+  name = a.user.value.name
+  globalThis.__ripApp = undefined
+  name
+  ''', "Ada"
+
+test "gate: keyed binding calls the family with the params key", '''
+  globalThis.__ripApp = { data: { order: (id) -> { id: id, total: 42 } } }
+  A = component
+    order <~ @app.data.order(params.id)
+    render null
+  a = A.new({ params: { id: 'o1' } })
+  id = a.order.value.id
+  globalThis.__ripApp = undefined
+  id
+  ''', "o1"
+
+# A child with gates constructed under a parent scope (outside route
+# matching) is a deterministic dev-time error — its gates were never
+# loaded, so the T-typed bindings would be silent nulls.
+test "gate: embedded child with gates throws at construction", '''
+  globalThis.__ripApp = { data: { user: { name: 'Ada' } } }
+  Child = component
+    user <~ @app.data.user
+    render null
+  Parent = component
+    render null
+  p = Parent.new()
+  err = null
+  prev = globalThis.__ripComponent.__pushComponent(p)
+  try
+    Child.new()
+  catch e
+    err = e.message
+  globalThis.__ripComponent.__popComponent(prev)
+  globalThis.__ripApp = undefined
+  err?.includes('render gates') ?? false
+  ''', true
+
+fail "gate: <~ outside a component body is a compile error", '''
+  user <~ @app.data.user
+  '''
+
+fail "gate: non-literal path is a compile error", '''
+  C = component
+    user <~ someVar.user
+    render null
+  '''
+
+fail "gate: key referencing a local is a compile error", '''
+  C = component
+    order <~ @app.data.order(someLocal)
+    render null
+  '''

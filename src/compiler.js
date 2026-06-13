@@ -220,6 +220,7 @@ export class CodeEmitter {
     'computed': 'emitComputed',
     'readonly': 'emitReadonly',
     'effect': 'emitEffect',
+    'gate': 'emitGate',
 
     // Control flow — simple
     'break': 'emitBreak',
@@ -1079,9 +1080,9 @@ export class CodeEmitter {
 
     if (this.usesTemplates && !skip) {
       if (skipRT) {
-        code += 'var { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __transition, __handleComponentError, __Component } = globalThis.__ripComponent;\n';
+        code += 'var { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __transition, __handleComponentError, __gateBind, __Component } = globalThis.__ripComponent;\n';
       } else if (typeof globalThis !== 'undefined' && globalThis.__ripComponent) {
-        code += 'const { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __transition, __handleComponentError, __Component } = globalThis.__ripComponent;\n';
+        code += 'const { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __transition, __handleComponentError, __gateBind, __Component } = globalThis.__ripComponent;\n';
       } else {
         code += this.getComponentRuntime();
       }
@@ -1625,6 +1626,12 @@ export class CodeEmitter {
   emitReadonly(head, rest) {
     let [name, expr] = rest;
     return `const ${str(name) ?? name} = ${this.emit(expr, 'value')}`;
+  }
+
+  // The component macro consumes 'gate' statements before generator dispatch,
+  // so reaching this generator means the binding sits outside a component body.
+  emitGate(head, rest, context, sexpr) {
+    this.error(`'<~' (render-ready gate) is only valid at the top of a component body`, sexpr);
   }
 
   emitEffect(head, rest) {
@@ -4630,7 +4637,7 @@ export class Compiler {
     // If only terminators remain (type-only source), emit types and return early
     if (tokens.every(t => t[0] === 'TERMINATOR')) {
       if (typeTokens && _typesEmitter) dts = _typesEmitter(typeTokens, ['program'], source);
-      return { tokens, sexpr: ['program'], code: '', dts, data: dataSection, reactiveVars: {} };
+      return { tokens, sexpr: ['program'], code: '', dts, data: dataSection, reactiveVars: {}, gates: [] };
     }
 
     // Step 3: Parse — shim adapter wraps token values with metadata
@@ -4744,7 +4751,7 @@ export class Compiler {
       dts = _typesEmitter(typeTokens, sexpr, source, generator._schemaBehavior, generator._schemaAnon);
     }
 
-    return { tokens, sexpr, code, dts, map, reverseMap, data: dataSection, reactiveVars: generator.reactiveVars };
+    return { tokens, sexpr, code, dts, map, reverseMap, data: dataSection, reactiveVars: generator.reactiveVars, gates: generator._gateDecls || [] };
   }
 
   compileToJS(source) { return this.compile(source).code; }

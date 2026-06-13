@@ -31,6 +31,8 @@ shaped the way it is, and how to use it well.
     - [Real apps: bundles + file-based routing](#real-apps-bundles--file-based-routing)
   - [3. The subsystems](#3-the-subsystems)
     - [Stash](#stash)
+    - [Sources and render gates](#sources-and-render-gates)
+    - [createMutation](#createmutation)
     - [createResource](#createresource)
     - [Timing helpers](#timing-helpers)
     - [Components store](#components-store)
@@ -230,10 +232,97 @@ beforeunload-flush mechanism both rely on this. Apps needing
 isolated state silos should use plain `__state(...)` signals or
 namespace under different keys on `app.data`.
 
+### Sources and render gates
+
+Server data lives in the stash as **source** keys — cells that know how
+to load themselves. `app/stash.rip` becomes the app's data manifest:
+
+```rip
+import { source } from '@rip-lang/app'
+
+export stash =
+  cart: { items: [] }                                       # plain client state
+  user: source { fetch: -> User.parse(api.get!('user').json!()) }
+  products: source                                          # five minutes of freshness is plenty
+    fetch: -> Product.array.parse(api.get!('products').json!())   # validated Product[]
+    staleTime: '5 min'
+  order: source { fetch: (id:: string) -> Order.parse(api.get!("orders/#{id}").json!()) }
+```
+
+A source is **lazy** (loads on first touch, not at startup) and **not a
+promise** — it owns its in-flight load internally; its value is part of
+the stash's reactive fabric like any other key:
+
+- **Reading is reading.** An ungated read (`@app.data.user`) is honest —
+  `User | null` — and kicks the load without blocking; the null branch is
+  the skeleton branch. A gated binding (`user <~ @app.data.user` in a
+  route or layout) is loaded before the component constructs and types
+  non-null.
+- **Writing is assigning.** `@app.data.user = u` writes through to the
+  cell; every consumer updates in place. A write bumps the cell's
+  generation and aborts any in-flight load — an old fetch can never
+  clobber a newer write. `@app.data.user = null` means *invalidate*.
+- **Keyed families.** A `fetch` with a required first param is one cell
+  per key: `@app.data.order(id)` is an ungated keyed read; a route gates
+  with `order <~ @app.data.order(params.id)`. Entries live under an LRU
+  cap and revalidate like singletons.
+- **Freshness.** `staleTime` (ms, a duration string like `'5 min'`, or
+  `'forever'`) controls revalidation. The default `0` is
+  stale-while-revalidate: every gate serves the cached value instantly
+  and refetches in the background. A gate only ever *blocks* on unloaded
+  cells.
+- **Errors are never cached.** A failed initial load returns the cell to
+  unloaded (the next gate retries) and rejects the navigation into the
+  nearest `onError` boundary as `{ status, message, error, path }`. A
+  failed refetch keeps the last-good value and records the error on the
+  handle — mounted gates are never yanked (the live-binding invariant).
+- **The handle.** `app.data.source(path, key?)` returns reactive
+  `{ value, loading, error, refetch(), reset() }` for screens that render
+  *through* loading/error instead of gating.
+- **One reset.** `app.data.reset()` restores plain keys to their declared
+  defaults, unloads every source (aborting in-flight loads, clearing
+  keyed caches), and purges the persisted snapshot — signout in one call.
+- **Serialization is a projection.** `persistStash` persists plain keys
+  and skips source keys (server data is refetchable; the gate reloads on
+  restore). `app.data.peek(path)` is the non-triggering read for code
+  *about* the stash (serializers, devtools).
+- **Preloading.** Off by default; opt in with `serve({ preload: 'intent' })`
+  in the root entry. Once on, resting the pointer on (or focusing) a
+  router-owned link for ~50ms warms the gates the destination would *newly*
+  mount — a layout already mounted under the current route is skipped, so
+  hovering siblings never re-fetches shared shell data. Navigation joins
+  loads already in flight (one in-flight load per source). Sweeping past a
+  link cancels before it fires, and preload failures never surface — the
+  cell records them and navigation's own gate retries.
+
+Testing gated components needs no mocks: a write marks a cell loaded, so
+seed and construct — `app.data.user = fixtureUser`, then `new Profile(...)`.
+
+### createMutation
+
+The write-side primitive. Reads are per-key (`source`); writes are
+per-action — a mutation wraps the action and exposes reactive
+`pending` / `succeeded` / `error`. Invoke it directly with the payload
+(it *is* the action; there is no `.mutate`):
+
+```rip
+updateUser = createMutation ((data) -> User.parse(api.patch!('user', { json: data }).json!())),
+  onSuccess: (u) => @app.data.user = u           # write-back — every reader updates, no refetch
+  onError:   (e) => errors = parseApiError!(e)
+
+submit: (e) -> e.preventDefault(); updateUser(form)
+# render: the submit button reads updateUser.pending; banners read succeeded/error
+```
+
+Callbacks (and a source's `fetch:`) are plain options on a runtime call —
+nothing binds their `this`. Use `=>` for anything touching component
+members.
+
 ### createResource
 
-Async data with race protection, abort support, and reactive loading
-state.
+The standalone packaging of the same async cell, for **instance-local**
+async (a search box's per-instance results are component state, not app
+data). Same race protection, abort support, and reactive loading state.
 
 ```rip
 user = createResource ->
