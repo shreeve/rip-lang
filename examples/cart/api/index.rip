@@ -11,6 +11,30 @@ def errorResponse(errors:: { form?: string, field?: Partial<Record<string, strin
 # No auth in this demo — the "current user" is always the seeded user (id 1).
 currentUser = () -> User.find!(1)
 
+get '/api/user' ->
+  user = currentUser!()
+  if not user then return errorResponse({ form: 'No user found' }, 404)
+  return UserPublic.parse(user)
+
+patch '/api/user' ->
+  firstName = read 'firstName', 'name'
+  lastName  = read 'lastName',  'name'
+  phone     = read 'phone',     'text'
+
+  field:: Partial<Record<keyof UserPublic, string>> = {}
+  if not firstName then field.firstName = 'Enter a first name'
+  if not lastName then field.lastName = 'Enter a last name'
+
+  if Object.keys(field).length then return errorResponse({ field })
+
+  user = currentUser!()
+  if not user then return errorResponse({ form: 'No user found' }, 404)
+
+  Object.assign(user, { firstName, lastName, phone })
+  user.save!()
+
+  return UserPublic.parse(user)
+
 get '/api/products' -> products
 
 get '/api/orders' ->
@@ -55,27 +79,3 @@ post '/api/orders' ->
 
   order = Order.create!({ userId: user.id, items, total: Math.round(total * 100) / 100 })
   return @json(OrderSummary.parse(order), 201)
-
-get '/api/user' ->
-  user = currentUser!()
-  if not user then return errorResponse({ form: 'No user found' }, 404)
-  return UserPublic.parse(user)
-
-patch '/api/user' ->
-  firstName = read 'firstName', 'name'
-  lastName  = read 'lastName',  'name'
-  phone     = read 'phone',     'text'
-
-  field:: Partial<Record<keyof UserPublic, string>> = {}
-  if not firstName then field.firstName = 'Enter a first name'
-  if not lastName then field.lastName = 'Enter a last name'
-
-  if Object.keys(field).length then return errorResponse({ field })
-
-  user = currentUser!()
-  if not user then return errorResponse({ form: 'No user found' }, 404)
-
-  Object.assign(user, { firstName, lastName, phone })
-  user.save!()
-
-  return UserPublic.parse(user)

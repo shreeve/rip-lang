@@ -57,6 +57,56 @@ type Resource<T> =
   refetch: () => Promise<T>
   dispose: Disposer
 
+# (One line on purpose: an indented alias body parses as a structural type.)
+export type Mutation<R> = ((...args: any[]) => Promise<R | undefined>) & { pending: boolean, succeeded: boolean, error: unknown }
+
+# Durations — ms as a number, or an integer + unit string. The unit
+# vocabulary matches the server cache() helper's; the template-literal type
+# rejects typos ('5 mins', '1.5 h') at the declaration site in typed
+# projects, and parseStaleTime warns about them at runtime everywhere.
+# (One line each on purpose: an indented alias body parses as a structural type.)
+export type DurationUnit = 's' | 'sec' | 'second' | 'seconds' | 'm' | 'min' | 'minute' | 'minutes' | 'h' | 'hr' | 'hour' | 'hours' | 'd' | 'day' | 'days' | 'w' | 'week' | 'weeks' | 'y' | 'year' | 'years'
+export type Duration = number | `${number}${DurationUnit}` | `${number} ${DurationUnit}`
+
+# Source typing. The runtime returns a tagged cell, but the TYPE
+# is the value: `T | null` for singletons, `(key: K) => T | null` for keyed
+# families — so `typeof stash` infers honest nullable reads with no
+# annotations, and the `<~` gate is the narrow. Keyed-ness mirrors the
+# runtime's `fetch.length >= 1` rule exactly: a fetch whose first param is
+# REQUIRED is keyed; an optional/defaulted param stays a singleton.
+export type SourceOpts<T, A extends unknown[]> =
+  fetch: (...args: A) => Promise<T> | T
+  staleTime?: Duration | 'forever'
+
+# (One line on purpose: an indented alias body parses as a structural type.)
+export type SourceValue<T, A extends unknown[]> = A extends [infer K, ...unknown[]] ? ((key: K) => T | null) : (T | null)
+
+# Per-key handle returned by app.data.source(path, key?) — every field
+# reactive; `value` reads kick the lazy load, writes route into the cell.
+export type SourceHandle<T> =
+  value: T | null
+  readonly loading: boolean
+  readonly error: unknown
+  refetch: () => Promise<unknown>
+  reset: () => void
+
+type SourceHandleFor<V> = V extends ((key: any) => infer U) ? SourceHandle<NonNullable<U>> : SourceHandle<NonNullable<V>>
+
+# The reserved stash methods, typed. The checker intersects `app.data`
+# with StashMethods<__RipStash> so the methods carry signatures and the
+# source() handle is typed per key.
+export type StashMethods<D> =
+  inc: (path: string, step?: number) => number
+  dec: (path: string, step?: number) => number
+  flip: (path: string) => boolean
+  join: (path: string, obj: object) => void
+  keys: (path: string) => string[]
+  has: (path: string) => boolean
+  del: (path: string) => void
+  peek: (path?: string) => unknown
+  reset: () => void
+  source: <K extends keyof D & string>(path: K, key?: unknown) => SourceHandleFor<D[K]>
+
 type ComponentsStore =
   read: (path: string) => string | undefined
   write: (path: string, content: string) => void
@@ -105,6 +155,8 @@ export type Router =
   forward: () => void
   onNavigate: (cb: (info: RouteInfo) => void) => Disposer
   rebuild: () => void
+  match: (url: string) => RouteInfo | null
+  ownsAnchor: (a: HTMLAnchorElement) => boolean
   init: () => Router
   destroy: () => void
   current: RouteInfo
@@ -150,6 +202,7 @@ type RendererOpts =
   compile: CompileFn
   target?: string | Element
   onError?: (err: RendererErrorInfo) => void
+  preload?: 'intent' | false
 
 type Renderer =
   start: () => Renderer
@@ -207,6 +260,18 @@ assertBrowser = (where) ->
 PROXIES   = new WeakMap()
 METHODS   = new WeakMap()
 
+# Source-cell tags — defined ahead of the stash so the proxy
+# handlers can detect cells cheaply. Registry symbols so meta-consumers
+# (renderer, serializer, devtools) can detect cells without imports.
+# The cell machinery itself lives in the Source section below.
+SOURCE        = Symbol.for 'rip.source'
+SOURCE_FAMILY = Symbol.for 'rip.source.family'
+DEFAULTS      = Symbol.for 'rip.defaults'        # declared plain-key defaults (for reset())
+PERSIST_PURGE = Symbol.for 'rip.persist'         # purge hook persistStash registers for reset()
+
+isSourceCell   = (v) -> v? and (typeof v is 'object' or typeof v is 'function') and (v[SOURCE] is true or v[SOURCE_FAMILY] is true)
+isSourceFamily = (v) -> v? and typeof v is 'function' and v[SOURCE_FAMILY] is true
+
 _keysVersion = 0
 _writeVersion = __state(0)
 _depth = 0
@@ -229,6 +294,7 @@ keysSignal = (target) -> getSignal(target, :keys)
 wrapDeep = (value) ->
   return value unless value? and typeof value is 'object'
   return value if value[:stash]
+  return value if value[SOURCE]    # source cells are never proxied
   return value if value instanceof Date or value instanceof RegExp or value instanceof Map or value instanceof Set or value instanceof Promise
   existing = PROXIES.get(value)
   return existing if existing
@@ -251,6 +317,18 @@ makeProxy = (target) ->
 
       fn = stashMethodFn(proxy, prop)
       return fn if fn
+
+      # Source cells bypass the per-key signal layer entirely (the cell's
+      # internal _data signal provides reactivity, and __state() would
+      # mistake the cell — it has .read() — for a signal). A singleton
+      # cell unwraps to its current value, kicking the lazy load on first
+      # touch; a keyed family is returned raw, so calling it is the keyed
+      # read: app.data.order(id).
+      raw = target[prop]
+      if isSourceCell(raw)
+        return raw if typeof raw is 'function'
+        v = raw.read()
+        return if v? and typeof v is 'object' then wrapDeep(v) else v
 
       sig = getSignal(target, prop)
       val = sig.value
@@ -281,6 +359,19 @@ makeProxy = (target) ->
         return true
 
       old = target[prop]
+
+      # Writing to a source key routes into the cell (write-through: bumps
+      # the cell's generation, aborts any in-flight load, updates every
+      # reader in place). Assigning a NEW cell over a key replaces it (the
+      # stash-module seeding path falls through below). A keyed family has
+      # no single value to assign — address cells via the source() handle.
+      if isSourceCell(old) and not isSourceCell(value)
+        if isSourceFamily(old)
+          throw new Error "Rip App: cannot assign a value to keyed source '#{String(prop)}' — use source('#{String(prop)}', key) and set .value"
+        old.write(if value?[:raw] then value[:raw] else value)
+        _writeVersion.value++
+        return true
+
       r = if value?[:raw] then value[:raw] else value
       return true if r is old
       target[prop] = r
@@ -367,7 +458,29 @@ stashSet = (proxy, path, value) ->
     _depth--
 
 # Stash methods — reserved names for atomic/structural operations
-STASH_METHOD_NAMES = { inc: true, dec: true, flip: true, join: true, keys: true, has: true, del: true }
+STASH_METHOD_NAMES = { inc: true, dec: true, flip: true, join: true, keys: true, has: true, del: true, peek: true, reset: true, source: true }
+
+# Deep clone of the plain-key default state (the stash literal IS the
+# default-state declaration): keeps function references (stash methods),
+# recurses plain objects/arrays, skips source cells (a cell's "default"
+# is unloaded), and keeps exotic objects (Date, Map, …) by reference.
+snapshotDefaults = (obj) ->
+  return obj unless obj? and typeof obj is 'object'
+  return obj if obj instanceof Date or obj instanceof RegExp or obj instanceof Map or obj instanceof Set or obj instanceof Promise
+  if Array.isArray(obj)
+    return (snapshotDefaults(v) for v in obj)
+  out = {}
+  for own k, v of obj
+    continue if isSourceCell(v)
+    out[k] = snapshotDefaults(v)
+  out
+
+# Stamp a raw stash target with its declared defaults so reset() can
+# restore them. Non-enumerable symbol — invisible to iteration and JSON.
+stampDefaults = (raw) ->
+  return unless raw? and typeof raw is 'object'
+  Object.defineProperty raw, DEFAULTS, { value: snapshotDefaults(raw), configurable: true }
+  return
 
 stashMethodFn = (proxy, prop) ->
   return undefined unless STASH_METHOD_NAMES[prop]
@@ -437,6 +550,73 @@ stashMethodFn = (proxy, prop) ->
           obj = obj[key]
       finally
         _depth--
+    when 'reset' then ->
+      # One reset, not N writes: restore plain keys to their
+      # declared defaults (fresh clones, so defaults can't be mutated),
+      # unload every source (aborting in-flight loads, clearing keyed
+      # caches), delete keys that weren't declared, and purge the
+      # persisted snapshot. The next gates refetch as the new principal.
+      __batch ->
+        t = unwrapStash(proxy)
+        defaults = t[DEFAULTS]
+        for own k, v of t
+          if isSourceCell(v)
+            v.reset()
+          else if defaults
+            if Object.prototype.hasOwnProperty.call(defaults, k)
+              proxy[k] = snapshotDefaults(defaults[k])
+            else
+              delete proxy[k]
+          # without a defaults snapshot (manual createStash subtree),
+          # plain keys are left as-is — only sources unload
+        t[PERSIST_PURGE]?()
+      return
+    when 'source' then (path, key) ->
+      # Per-key handle: { value, loading, error, refetch(), reset() } —
+      # all reactive. Resolves the nearest source cell along the path;
+      # a non-source path is a dev-time error (deterministic — every
+      # call site hits it). Keyed cells take the key as a second arg.
+      cell = null
+      obj = unwrapStash(proxy)
+      for seg in walk(path)
+        break unless obj? and typeof obj is 'object'
+        obj = obj[seg]
+        if isSourceCell(obj)
+          cell = obj
+          break
+      unless cell
+        throw new Error "Rip App: source('#{path}') does not resolve to a source key — declare it with source() in app/stash.rip"
+      if isSourceFamily(cell)
+        throw new Error "Rip App: keyed source('#{path}') requires a key — source('#{path}', key)" unless key?
+        cell = cell.cellFor(key)
+      else if key?
+        throw new Error "Rip App: source('#{path}') is not keyed — drop the key argument"
+      handle = { refetch: cell.refetch, reset: cell.reset }
+      Object.defineProperty handle, 'value',
+        get: -> cell.read()
+        set: (v) -> cell.write(v)
+      Object.defineProperty handle, 'loading', get: -> cell.loading
+      Object.defineProperty handle, 'error',   get: -> cell.error
+      handle
+    when 'peek' then (path) ->
+      # Non-triggering read for code ABOUT the stash (serializer, devtools,
+      # generic iteration): walks raw values, never touches signals, and a
+      # source cell encountered on the path contributes its current value
+      # WITHOUT kicking its lazy load. A keyed family has no single value.
+      obj = unwrapStash(proxy)
+      return obj unless path?
+      for seg in walk(path)
+        return undefined unless obj?
+        if isSourceCell(obj)
+          return undefined if isSourceFamily(obj)
+          obj = obj.peek()
+          return undefined unless obj?
+        key = if typeof seg is 'number' and seg < 0 and Array.isArray(obj) then obj.length + seg else seg
+        obj = obj[key]
+      if isSourceCell(obj)
+        if isSourceFamily(obj) then undefined else obj.peek()
+      else
+        obj
   cache[prop] = fn
   fn
 
@@ -445,6 +625,39 @@ export def createStash(data:: Record<string, any> = {}):: Stash
 
 export def unwrapStash(proxy:: Stash):: Stash
   if proxy?[:raw] then proxy[:raw] else proxy
+
+# Serialization projection helpers. Saving and restoring must
+# never touch a source cell: a cell is fetch + signal machinery, not a
+# value — persisting one would serialize the wrapper, and merging a saved
+# snapshot over one would replace the live cell with a dead copy (the key
+# would silently stop being a source, and every gate on it would fail).
+_sourceReplacer = (k, v) ->
+  if isSourceCell(v) then undefined else v
+
+_hasSourceDeep = (obj) ->
+  return false unless obj? and typeof obj is 'object'
+  for own k, v of obj
+    continue unless v?
+    return true if isSourceCell(v)
+    return true if typeof v is 'object' and _hasSourceDeep(v)
+  false
+
+_restoreSaved = (target, saved) ->
+  # target is a stash (sub)proxy; saved is parsed JSON. Per-key shallow
+  # replace (today's semantics), except: keys whose live value is a source
+  # cell are skipped (stale snapshots from a pre-source version of the app
+  # must not clobber cells), and subtrees that CONTAIN a cell are merged
+  # recursively so the nested cell survives the restore.
+  raw = unwrapStash(target)
+  for k, v of saved
+    cur = raw[k]
+    continue if isSourceCell(cur)
+    if v? and cur? and typeof v is 'object' and not Array.isArray(v) and
+       typeof cur is 'object' and not Array.isArray(cur) and _hasSourceDeep(cur)
+      _restoreSaved target[k], v
+    else
+      target[k] = v
+  return
 
 # Single-stash policy: Rip App assumes one stash per page (the one
 # `launch()` creates). persistStash is therefore tied to the global
@@ -459,7 +672,11 @@ export def unwrapStash(proxy:: Stash):: Stash
 export def persistStash(app:: Stash, opts?:: { local?: boolean, key?: string } = {}):: Disposer
   assertBrowser 'persistStash'
   target = unwrapStash(app) or app
-  return -> null if target[:persisted]    # double-call guard returns a no-op disposer
+  # Double-call guard returns a no-op disposer. Parenthesized on purpose:
+  # a bare `return -> null if cond` parses as `return (-> null if cond)` —
+  # an unconditional return of a conditional-body arrow, which made every
+  # persistStash call a silent no-op.
+  return (-> null) if target[:persisted]
   target[:persisted] = true
   storage = if opts.local then localStorage else sessionStorage
   storageKey = opts.key or '__rip_app'
@@ -467,17 +684,28 @@ export def persistStash(app:: Stash, opts?:: { local?: boolean, key?: string } =
     saved = storage.getItem(storageKey)
     if saved
       savedData = JSON.parse(saved)
-      app.data[k] = v for k, v of savedData
+      _restoreSaved app.data, savedData
   catch
     null
   _save = ->
-    try storage.setItem storageKey, JSON.stringify(unwrapStash(app.data))
+    # Serialization is a projection over the one store: persist plain keys,
+    # skip source keys (server data is refetchable — the gate reloads it on
+    # restore). The replacer drops cells at any depth.
+    try storage.setItem storageKey, JSON.stringify(unwrapStash(app.data), _sourceReplacer)
     catch then null
   effectDisposer = __effect ->
     _writeVersion.value
     t = setTimeout _save, 2000
     -> clearTimeout t
   window.addEventListener 'beforeunload', _save
+  # Register the purge hook reset() invokes: signing out must not leave a
+  # persisted snapshot of the previous principal behind.
+  dataRaw = unwrapStash(app.data)
+  if dataRaw? and typeof dataRaw is 'object'
+    Object.defineProperty dataRaw, PERSIST_PURGE,
+      value: -> (try storage.removeItem(storageKey) catch then null)
+      configurable: true
+      writable: true
   disposed:: boolean = false
   ->
     return if disposed
@@ -485,6 +713,7 @@ export def persistStash(app:: Stash, opts?:: { local?: boolean, key?: string } =
     effectDisposer?()
     window.removeEventListener 'beforeunload', _save
     _save()                               # final flush so a programmatic teardown matches a real unload
+    dataRaw[PERSIST_PURGE] = null if dataRaw? and typeof dataRaw is 'object'
     target[:persisted] = false
 
 # ==============================================================================
@@ -554,6 +783,314 @@ export def createResource<T>(fn:: (signal?:: AbortSignal) => Promise<T>, opts?::
   # unhandled rejection (the refetch() caller would still get the throw).
   load().catch(-> null) unless opts.lazy
   resource
+
+# ==============================================================================
+# Source — async reactive stash cells (render-ready state)
+#
+# A `source` is a stash key that knows how to (re)load itself. It is NOT a
+# promise: it owns the in-flight load internally, but its value is part of
+# the stash's reactive fabric like any other key. Lazy by default — it
+# loads on first touch (a gated `<~` binding or a plain read), not at
+# startup. The stash proxy unwraps reads of a cell to its current value and
+# routes writes into it; the renderer awaits `ensure()` for gated keys
+# before constructing the screen.
+#
+# Tags are registry symbols so meta-consumers (renderer, serializer) can
+# detect cells without importing anything.
+# ==============================================================================
+
+# staleTime — how long a loaded value is trustworthy. Accepts ms (number),
+# a duration string (same vocabulary as the server's cache() helper, here
+# converted to ms), or 'forever' (load once per session). Default 0: stale
+# the moment it lands, so every gate serves the cached value and
+# revalidates in the background (stale-while-revalidate).
+# The numeric part mirrors what the Duration template-literal type's
+# `${number}` segment admits — integers, decimals, and exponent forms —
+# so the type and the runtime accept the same strings.
+DURATION_RE = /^(\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\s*(s|sec|second|seconds|m|min|minute|minutes|h|hr|hour|hours|d|day|days|w|week|weeks|y|year|years)$/i
+
+def parseStaleTime(v:: number | string | symbol | null | undefined):: number
+  return 0 unless v?
+  return v if typeof v is 'number'
+  if typeof v is 'string'
+    return Infinity if v is 'forever'
+    parts = v.match(DURATION_RE)
+    if parts
+      n = parseFloat(parts[1])
+      return switch parts[2][0].toLowerCase()
+        when 's' then n * 1000
+        when 'm' then n * 60000
+        when 'h' then n * 3600000
+        when 'd' then n * 86400000
+        when 'w' then n * 604800000
+        when 'y' then n * 31536000000
+        else n * 1000
+    # A bare numeric string is unambiguous — treat as ms, like the number
+    # form.
+    return parseInt(v, 10) if /^\d+$/.test(v)
+  # Anything else is a mistake — a unit typo ('5 mins', which a silent
+  # parseInt would turn into near-zero ms), or a symbol/other non-string
+  # (e.g. :forever — the keyword is a plain string here, not a symbol).
+  # Warn and use the safe default (0 = stale-on-arrival, data stays fresh).
+  label = if typeof v is 'symbol' then String(v) else JSON.stringify(v)
+  console.warn "[Rip] source: unrecognized staleTime #{label} — treating as 0 (use e.g. '5 min', '2 hours', a number of ms, or 'forever')"
+  0
+
+# A preload-initiated load grants the cell a one-shot freshness floor: the
+# single navigation that follows the hover treats the value as fresh regardless
+# of the source's own staleTime, then consumes the floor. Without it a short
+# staleTime (notably 0) double-fetches — the hover preload loads, then the
+# navigation a beat later sees the value already stale and revalidates. The
+# floor only bridges that hover→navigate handoff; a later revisit honors
+# staleTime again. The window here is just the backstop for a hover that never
+# leads to a navigation. Internal, like the settle delay — not a knob.
+PRELOAD_FRESH_MS = 30_000
+
+# One cell: value + race/abort core (same pattern as createResource) plus
+# the surface the gate wants — ensure / preload / write / reset / refetch / peek.
+#
+# Error semantics (never cached):
+#   - a failed INITIAL load records the error, returns the cell to
+#     unloaded, and rethrows — a gate awaiting ensure() rejects into the
+#     router's error path, and the next gate retries.
+#   - a failed REFETCH of a loaded cell keeps the last-good value and
+#     records the error on the handle — mounted gates never get yanked
+#     (the live-binding invariant).
+makeSourceCell = (fetchFn, staleTime) ->
+  _data    = __state(null)
+  _loading = __state(false)
+  _error   = __state(null)
+  generation = 0       # bumped by every load/write/reset — old loads can't clobber
+  controller = null
+  inflight   = null    # the in-flight load promise — one per source, shared by every waiter
+  loadedAt   = 0       # 0 means unloaded; gates only block on unloaded cells
+  freshUntil = 0       # preload freshness floor — value is fresh until this time regardless of staleTime
+
+  load = (background, preload) ->
+    controller?.abort()
+    controller = if typeof AbortController isnt 'undefined' then new AbortController() else null
+    me = ++generation
+    _loading.value = true unless background
+    try
+      result = await fetchFn(controller?.signal)
+      return result if me isnt generation     # superseded — don't write
+      _error.value = null
+      _data.value = result
+      loadedAt = Date.now()
+      # A preload load earns the freshness floor; any normal load clears it
+      # so explicit refetches and gate-driven reloads resume staleTime rules.
+      freshUntil = if preload then loadedAt + PRELOAD_FRESH_MS else 0
+      result
+    catch err
+      return if me isnt generation
+      return if err?.name is 'AbortError'     # silent on abort
+      _error.value = err
+      if not _data.read()?
+        loadedAt = 0                          # failed initial load — stay unloaded, next gate retries
+        throw err
+      return                                  # failed refetch — keep last-good
+    finally
+      if me is generation
+        _loading.value = false
+        inflight = null
+
+  start = (background, preload) ->
+    p = load(background, preload)
+    inflight = p
+    p
+
+  # Stale unless within staleTime OR within an unexpired preload freshness floor.
+  isFresh = -> staleTime is Infinity or Date.now() - loadedAt < staleTime or Date.now() < freshUntil
+
+  cell:: Record<PropertyKey, any> = {}
+  cell[SOURCE] = true
+
+  # Reactive read; first touch kicks the lazy load without blocking.
+  cell.read = ->
+    v = _data.value
+    if not v? and not inflight and loadedAt is 0
+      start(false).catch(-> null)
+    v
+
+  # Untracked read that never triggers a load — for code ABOUT the stash
+  # (serializer, devtools), not code using it.
+  cell.peek = -> _data.read()
+
+  # The gate primitive: serve if loaded (revalidating in the background
+  # when past staleTime), await if in-flight, else fetch. A gate blocks
+  # only on unloaded cells.
+  cell.ensure = ->
+    v = _data.read()
+    # `loadedAt`, not `v?`: a source that legitimately resolved to null is
+    # loaded, not unloaded — keying on value-truthiness would refetch it on
+    # every gate. write(null)/reset() set loadedAt = 0, so invalidation still
+    # forces a reload.
+    if loadedAt isnt 0
+      stale = not isFresh()
+      # The preload floor is a one-shot bridge to *this* navigation — consume
+      # it here so a later revisit honors staleTime again (a staleTime-0 source
+      # must refetch on every landing, not stay pinned by an old preload).
+      freshUntil = 0
+      start(true).catch(-> null) if stale and not inflight
+      return Promise.resolve(v)
+    # Joining an in-flight preload IS this navigation consuming the bridge —
+    # clear the floor when that load settles (the common hover-then-click path,
+    # where the click lands before the preload's fetch resolves). Otherwise the
+    # floor would outlive its one navigation and pin a later revisit.
+    return inflight.finally(-> freshUntil = 0) if inflight
+    start(false)
+
+  # Like ensure(), but a load it triggers earns the preload freshness floor,
+  # so the navigation that follows the hover joins it instead of refetching.
+  cell.preload = ->
+    v = _data.read()
+    if loadedAt isnt 0
+      start(true, true).catch(-> null) if not isFresh() and not inflight
+      return Promise.resolve(v)
+    return inflight if inflight
+    start(false, true)
+
+  # Write-through assignment: a write wins over an in-flight load — bump
+  # the generation and abort, so an older fetch resolving late can never
+  # clobber a newer write. Writing null means INVALIDATE: ungated readers
+  # see it immediately; the next gate refetches rather than serving it.
+  cell.write = (v) ->
+    generation++
+    controller?.abort()
+    controller = null
+    inflight = null
+    _loading.value = false
+    _error.value = null
+    _data.value = v
+    loadedAt = if v? then Date.now() else 0
+    freshUntil = 0
+    v
+
+  # Back to UNLOADED — distinct from writing null, which invalidates for
+  # gates but still serves ungated readers the null branch immediately.
+  cell.reset = ->
+    generation++
+    controller?.abort()
+    controller = null
+    inflight = null
+    _loading.value = false
+    _error.value = null
+    _data.value = null
+    loadedAt = 0
+    freshUntil = 0
+    return
+
+  cell.refetch = -> start(false)
+
+  Object.defineProperty cell, 'loading', get: -> _loading.value
+  Object.defineProperty cell, 'error',   get: -> _error.value
+  cell
+
+# A keyed family of cells: one declaration, one cell per key, each with the
+# full cell machinery. The family is callable — `app.data.order(id)` is an
+# ungated keyed read. Entries are kept under a simple LRU cap and
+# revalidate under the same staleTime rule as singletons.
+SOURCE_FAMILY_CAP = 64
+
+makeSourceFamily = (fetchFn, staleTime) ->
+  cells = new Map()    # insertion-ordered — LRU via delete+set on touch
+
+  cellFor = (key) ->
+    k = if key? and typeof key is 'object' then JSON.stringify(key) else key
+    cell = cells.get(k)
+    if cell
+      cells.delete(k)
+      cells.set(k, cell)
+    else
+      cell = makeSourceCell ((signal) -> fetchFn(key, signal)), staleTime
+      cells.set(k, cell)
+      if cells.size > SOURCE_FAMILY_CAP
+        for ek as cells.keys()
+          ec = cells.get(ek)
+          continue if ec.loading
+          ec.reset()
+          cells.delete(ek)
+          break
+    cell
+
+  family = (key) -> cellFor(key).read()
+  family[SOURCE_FAMILY] = true
+  family.cellFor = cellFor
+  family.reset = ->
+    c.reset() for c as cells.values()
+    cells.clear()
+    return
+  family
+
+# Declare a server-backed stash key. The runtime returns a tagged cell (the
+# stash proxy unwraps reads to its current value; writes route into it),
+# but the type says `T | null` — an ungated read is honestly nullable, and
+# the `<~` gate is the narrow.
+#
+# A fetch that declares a required first parameter is a KEYED family —
+# `fetch: (id) -> …` types and runs as one cell per key. A singleton fetch
+# receives an optional AbortSignal; declare it with a default
+# (`fetch: (signal = null) -> …`) so it doesn't read as a key parameter.
+export def source<T, A extends unknown[]>(opts:: SourceOpts<T, A>):: SourceValue<T, A>
+  staleTime = parseStaleTime(opts.staleTime)
+  cell = if opts.fetch.length >= 1
+    makeSourceFamily(opts.fetch, staleTime)
+  else
+    makeSourceCell(opts.fetch, staleTime)
+  cell
+
+# ==============================================================================
+# Mutation — the write-side primitive
+#
+# Reads are per-key (source); writes are per-action. createMutation wraps
+# an async action and exposes reactive pending / succeeded / error while
+# running onSuccess / onError. Read and write meet at exactly one point:
+# a mutation's onSuccess assigns the stash key(s) it affects, so a
+# successful write updates every reader in place — no refetch.
+#
+# The mutation IS the action — invoke it directly with the payload
+# (`updateUser(form)`); there is no .mutate method. Note: callbacks are
+# plain options on a runtime call — nothing binds their `this`; use `=>`
+# to capture the component lexically.
+# ==============================================================================
+
+export def createMutation<R>(fn:: (...args: any[]) => Promise<R> | R, opts?:: { onSuccess?: (r: R) => void, onError?: (e: unknown) => void } = {}):: Mutation<R>
+  _pending   = __state(false)
+  _succeeded = __state(false)
+  _error     = __state(null)
+  generation = 0    # a newer invocation wins the flags — same race rule as loads
+
+  # `any` because the callable + reactive-flags intersection is assembled
+  # at runtime (defineProperty below) — TS can't see the flags on the fn.
+  mutation:: any = (...args) ->
+    me = ++generation
+    _pending.value = true
+    _succeeded.value = false
+    _error.value = null
+    try
+      r = await fn(...args)
+      # Newer-invocation-wins: a superseded call (a later invocation bumped the
+      # generation) must not flip the flags OR run its callback — otherwise an
+      # older result's onSuccess can clobber the newer one's stash write. Await
+      # the callback so its work is part of the mutation's lifecycle (pending
+      # stays true through it) and an async rejection surfaces here instead of
+      # floating as an unhandled rejection.
+      if me is generation
+        _succeeded.value = true
+        await opts.onSuccess?(r)
+      r
+    catch e
+      return unless me is generation     # superseded failure — newer call owns the outcome
+      _error.value = e
+      if opts.onError then await opts.onError(e) else throw e
+      return
+    finally
+      _pending.value = false if me is generation
+
+  Object.defineProperty mutation, 'pending',   get: -> _pending.value
+  Object.defineProperty mutation, 'succeeded', get: -> _succeeded.value
+  Object.defineProperty mutation, 'error',     get: -> _error.value
+  mutation
 
 # ==============================================================================
 # Timing — reactive timing primitives
@@ -1102,6 +1639,35 @@ export def createRouter(components:: ComponentsStore, opts?:: RouterOpts = {})::
 
     rebuild: -> tree = buildRoutes(components, root)
 
+    # Pure match of a URL (or full anchor href) against the current route
+    # tree — same parsing as resolve(), but no signal writes, no history,
+    # no navigation callbacks. Returns null when nothing matches. Used by
+    # the renderer's link-intent preloading.
+    match: (url) ->
+      if /^[a-z][a-z0-9+.-]*:\/\//i.test(url)
+        u = try new URL(url, location.origin) catch then null
+        return null unless u
+        url = if hashMode and u.hash then (u.hash.slice(1) or '/') else (u.pathname + u.search + u.hash)
+      rawPath = url.split('?')[0].split('#')[0]
+      path = stripBase(rawPath)
+      path = if path[0] is '/' then path else '/' + path
+      queryStr = url.split('?')[1]?.split('#')[0] or ''
+      result = matchRoute(path, tree.routes)
+      return null unless result
+      {
+        path: path
+        params: result.params
+        route: result.route
+        layouts: getLayoutChain(result.route.file, root, tree.layouts)
+        query: Object.fromEntries(new URLSearchParams(queryStr))
+        hash: if url.includes('#') then url.split('#')[1] else ''
+      }
+
+    # True when the SPA router owns this anchor — same checks as the click
+    # interceptor and the aria-current walker, exposed so a third consumer
+    # (the renderer's preloader) can't drift from them.
+    ownsAnchor: (a) -> not shouldIgnoreAnchor(a)
+
     routes: undefined
 
     init: ->
@@ -1202,6 +1768,13 @@ buildComponentMap = (components, roots = ['_app', '_lib', '_pkg', '_route']) ->
     continue unless path.endsWith('.rip')
     fileName = path.split('/').pop()
     continue if fileName.startsWith('_')
+    # index.rip is a path convention (route indexes, package entries), not
+    # a component name: file-based routing gives every directory one, so
+    # the derived name `Index` collides by construction — and the implicit
+    # resolver below could only ever consume the mapping from a file that
+    # literally exports `Index` (the injection is keyed by export name).
+    # Keep index files out of the tag map instead of warning about them.
+    continue if fileName is 'index.rip'
     name = fileToComponentName(path)
     if map[name]
       console.warn "[Rip] Component name collision: #{name} (#{map[name]} vs #{path})"
@@ -1316,6 +1889,35 @@ compileAndImport = (source, compile, components = null, path = null, resolver = 
           else
             "_pkg/#{info.short}#{sub}.rip"
           "#{pre}#{target}#{post}"
+
+      # Step 0b: A runtime-provided framework package (@rip-lang/app) is NOT
+      # inlined under _pkg — rip.min.js compiles its source and registers every
+      # function export on globalThis. Rewrite its imports to a globalThis
+      # destructure so the app uses that single already-loaded copy instead of
+      # bundling a second one. Packages present in pkgMap were inlined above and
+      # are left untouched here for the .rip → blob pass below.
+      pkgGlobalRe = /^(\s*)import\s+([^'"]+?)\s+from\s+['"](@rip-lang\/[^'"]+)['"];?\s*$/gm
+      js = js.replace pkgGlobalRe, (full, indent, clause, spec) ->
+        pkgKey = spec.replace(/^(@rip-lang\/[^\/]+).*$/, '$1')
+        return full if pkgMap[pkgKey]
+        trimmed = clause.trim()
+        return "#{indent}// type-only import erased: #{spec}" if trimmed.startsWith('type ')
+        open = trimmed.indexOf('{')
+        close = trimmed.lastIndexOf('}')
+        if open < 0 or close <= open
+          console.warn "[Rip] Skipping non-named import from #{spec}; only named imports from '@rip-lang/*' are supported."
+          return full
+        parts = []
+        for raw in trimmed.slice(open + 1, close).split(',')
+          name = raw.trim().replace(/^type\s+/, '')
+          continue unless name
+          if /\s+as\s+/.test(name)
+            [orig, alias] = name.split(/\s+as\s+/).map((s) -> s.trim())
+            parts.push "#{orig}: #{alias}"
+          else
+            parts.push name
+        return "#{indent}// import erased: #{spec}" if parts.length is 0
+        "#{indent}const { #{parts.join(', ')} } = globalThis;"
 
       # Step 1: Rewrite .rip imports and re-exports to blob URLs
       if components
@@ -1440,6 +2042,7 @@ compileAndImport = (source, compile, components = null, path = null, resolver = 
 export def createRenderer(opts:: RendererOpts):: Renderer
   assertBrowser 'createRenderer'
   { router, app, components, resolver, compile, target, onError } = opts
+  preloadOnIntent = opts.preload is 'intent'
 
   container = if typeof target is 'string'
     document.querySelector(target)
@@ -1515,6 +2118,93 @@ export def createRenderer(opts:: RendererOpts):: Renderer
       return false unless b[k] is v
     true
 
+  # ── Render gates ──────────────────────────────────────────────────────
+  # A gate path resolves to the NEAREST source cell along it: a subpath
+  # gate ('settings.theme') loads the `settings` source and binds the
+  # subpath. The walk is over raw values — it must never trigger loads.
+  resolveGateCell = (path) ->
+    obj = unwrapStash(app.data)
+    for seg in path.split('.')
+      return null unless obj? and typeof obj is 'object'
+      obj = obj[seg]
+      return obj if isSourceCell(obj)
+    null
+
+  # Union the chain's static gate-sets and ensure every cell before
+  # construction. Overlapping gates dedupe (one in-flight load per
+  # source), and the union SETTLES rather than failing fast — one
+  # rejection doesn't abort its siblings' loads (their cells finish and
+  # cache normally; they're not wasted on the retry). Returns
+  # { failedIndex, failure }: failedIndex is Infinity when every gate
+  # loaded, else the chain index of the outermost member whose gate
+  # failed — the chain constructs top-down only above that point.
+  ensureGates = (chain, params, query, preloadMode = false, skipMounted = 0) ->
+    jobs = new Map()
+    for entry, idx in chain
+      # A staying-mounted member (the unchanged layout prefix) keeps its live
+      # gate binding — skip re-ensuring it. Its idx is preserved, so failedIndex
+      # still indexes the full chain for the construction logic below.
+      continue if idx < skipMounted
+      gates = entry.cls?.__gates
+      continue unless gates and gates.length
+      for g in gates
+        path = if typeof g is 'string' then g else g.path
+        keyFn = if typeof g is 'string' then null else g.key
+        cell = resolveGateCell(path)
+        unless cell
+          throw new Error "[Rip] #{entry.file}: '#{path} <~' does not resolve to a source — declare it with source() in app/stash.rip"
+        key = undefined
+        if isSourceFamily(cell)
+          unless keyFn
+            throw new Error "[Rip] #{entry.file}: '#{path}' is a keyed source — gate with a key: #{path}(params.…)"
+          key = keyFn(params or {}, query or {})
+          cell = cell.cellFor(key)
+        else if keyFn
+          throw new Error "[Rip] #{entry.file}: '#{path}' is not a keyed source — drop the key argument"
+        jk = path + '|' + String(key ?? '')
+        job = jobs.get(jk)
+        unless job
+          job = { cell: cell, owners: [], path: path }
+          jobs.set jk, job
+        job.owners.push idx
+    list = [...jobs.values()]
+    return { failedIndex: Infinity, failure: null } unless list.length
+    results = await Promise.allSettled(list.map((j) -> if preloadMode then j.cell.preload() else j.cell.ensure()))
+    failedIndex = Infinity
+    failure = null
+    for r, i in results
+      continue unless r.status is 'rejected'
+      ownerIdx = Math.min(...list[i].owners)
+      if ownerIdx < failedIndex
+        err = r.reason
+        failedIndex = ownerIdx
+        failure = { status: err?.status ?? err?.response?.status ?? 500, message: err?.message ?? String(err), error: err, path: list[i].path }
+    { failedIndex: failedIndex, failure: failure }
+
+  # Route a gate failure to the nearest constructible onError boundary —
+  # innermost mounted layout first, app-level last. Mirrors the catch
+  # block below, but carries the structured { status, message, error,
+  # path } shape gate failures carry.
+  routeGateFailure = (failure) ->
+    console.error "Renderer: gate '#{failure.path}' failed:", failure.error
+    onError(failure) if onError
+    handled = false
+    for inst in layoutInstances by -1
+      if inst.onError
+        try
+          inst.onError(failure)
+          handled = true
+          break
+        catch boundaryErr
+          console.error "Renderer: error boundary failed:", boundaryErr
+    unless handled
+      unmount()
+      pre = document.createElement('pre')
+      pre.style.cssText = 'color:red;padding:1em'
+      pre.textContent = "#{failure.status}: #{failure.message}"
+      container.innerHTML = ''
+      container.appendChild pre
+
   mountRoute = (info, force = false) ->
     { route, params, layouts: layoutFiles, query } = info
     return unless route
@@ -1530,7 +2220,24 @@ export def createRenderer(opts:: RendererOpts):: Renderer
     # The load!() call is wrapped in try/catch so an async failure here
     # surfaces through the same onError path as the full-mount path
     # below (instead of becoming a silent unhandled rejection).
-    if sameRoute and not force
+    # A query-keyed gate (order <~ @app.data.order(query.id)) addresses a
+    # DIFFERENT cell when the query changes — the fast path would skip the
+    # ensure and hand the component a binding nobody loaded. Compare the
+    # key fns' outputs under old vs new query; differing keys force the
+    # full mount path below.
+    queryKeyedChanged = ->
+      ctor:: any = currentComponent?.constructor
+      gates = ctor?.__gates
+      return false unless gates
+      for g in gates
+        if typeof g isnt 'string' and g.key
+          try
+            return true if g.key(params or {}, currentQuery or {}) isnt g.key(params or {}, query or {})
+          catch
+            return true
+      false
+
+    if sameRoute and not force and not queryKeyedChanged()
       if not sameKeys(query, currentQuery)
         currentQuery = query
         if currentComponent?.load
@@ -1559,7 +2266,35 @@ export def createRenderer(opts:: RendererOpts):: Renderer
         router.navigating = false
         return
 
+      # Pre-compile the layout chain (cached per path, so this is ~free on
+      # repeat navigations) — the gate union below must read every chain
+      # member's static __gates BEFORE anything constructs.
+      layoutEntries = []
+      for layoutFile in layoutFiles
+        layoutSource = components.read(layoutFile)
+        continue unless layoutSource
+        layoutMod = compileAndImport! layoutSource, compile, components, layoutFile, resolver
+        if gen isnt generation then router.navigating = false; return
+        LayoutClass = findComponent(layoutMod)
+        continue unless LayoutClass
+        layoutEntries.push { file: layoutFile, cls: LayoutClass }
+
+      # Gate phase — runs before any teardown, so the previous
+      # screen stays up while gated sources load (loading UI is the
+      # router's `navigating` indicator, nothing per-component).
+      chain = [...layoutEntries, { file: route.file, cls: Component }]
       layoutsChanged = not arraysEqual(layoutFiles, currentLayouts)
+
+      # A layout that's staying mounted keeps its live gate binding — don't
+      # re-ensure it. Re-gating it would refetch shell data on every child
+      # navigation (a staleTime-0 layout source like `user` would reload on
+      # each hop); the layout isn't reconstructing, so there's nothing to gate.
+      # A page that ALSO gates a layout source still revalidates it on arrival
+      # — only the staying-mounted layout prefix is skipped, never the page.
+      mountedPrefix = if layoutsChanged then 0 else layoutEntries.length
+      { failedIndex, failure } = ensureGates! chain, params, query, false, mountedPrefix
+      if gen isnt generation then router.navigating = false; return
+
       oldTarget = currentComponent?._target
 
       if layoutsChanged
@@ -1578,6 +2313,13 @@ export def createRenderer(opts:: RendererOpts):: Renderer
 
       mp = if layoutsChanged then container else mountPoint
 
+      # A failed gate stops construction at its owner: layouts above the
+      # failure construct normally (the chain renders as far as its gates
+      # succeeded); the failing member and everything below it never
+      # exist. failedIndex === layoutEntries.length means the page's own
+      # gate failed under a healthy layout chain.
+      constructUpTo = Math.min(failedIndex, layoutEntries.length)
+
       if layoutsChanged and layoutFiles.length > 0
         container.innerHTML = ''
         mp = container
@@ -1593,23 +2335,22 @@ export def createRenderer(opts:: RendererOpts):: Renderer
         __pop = globalThis.__ripComponent?.__popComponent
         outerScope = null
 
-        for layoutFile in layoutFiles
-          layoutSource = components.read(layoutFile)
-          continue unless layoutSource
-          layoutMod = compileAndImport! layoutSource, compile, components, layoutFile, resolver
-          if gen isnt generation then router.navigating = false; return
-
-          LayoutClass = findComponent(layoutMod)
-          continue unless LayoutClass
+        for entry, li in layoutEntries
+          break if li >= constructUpTo
+          LayoutClass = entry.cls
 
           # Push the previous layout as current so the new layout's
           # constructor establishes parentage to it (or null for the
           # outermost layout). Pop after construction; the layout's
           # own mount() / setup re-pushes itself for its own scope.
+          # __ripGateMount marks this construction as renderer-driven so
+          # the embedded-child gate guard in __Component lets it through.
           prevScope = __push?(outerScope)
+          globalThis.__ripGateMount = LayoutClass
           try
             inst = new LayoutClass { app, params, router }
           finally
+            globalThis.__ripGateMount = null
             __pop?(prevScope)
 
           # beforeMount under the layout's own scope so its effects
@@ -1619,7 +2360,7 @@ export def createRenderer(opts:: RendererOpts):: Renderer
             try inst.beforeMount()
             finally __pop?(__innerPrev)
           wrapper = document.createElement('div')
-          wrapper.setAttribute 'data-layout', layoutFile
+          wrapper.setAttribute 'data-layout', entry.file
           mp.appendChild wrapper
           inst.mount wrapper
           layoutInstances.push inst
@@ -1628,12 +2369,25 @@ export def createRenderer(opts:: RendererOpts):: Renderer
           slot = wrapper.querySelector('#content') or wrapper
           mp = slot
 
-        currentLayouts = [...layoutFiles]
+        # Record only the prefix that actually mounted — a partial chain
+        # (gate failure) must not pass the next navigation's arraysEqual
+        # check as if the whole chain were up.
+        currentLayouts = if constructUpTo < layoutEntries.length then layoutFiles.slice(0, constructUpTo) else [...layoutFiles]
         mountPoint = mp
       else if layoutsChanged
         container.innerHTML = ''
         currentLayouts = []
         mountPoint = container
+
+      if failure
+        # Gate failure: route to the nearest constructible onError —
+        # global-state failure (a layout's own gate) is an app-level
+        # event; screen-state failure (the route's gate) renders at the
+        # innermost layout boundary. The old page DOM is gone either way.
+        oldTarget?.remove()
+        routeGateFailure(failure)
+        router.navigating = false
+        return
 
       pageWrapper = document.createElement('div')
       pageWrapper.setAttribute 'data-component', route.file
@@ -1646,9 +2400,11 @@ export def createRenderer(opts:: RendererOpts):: Renderer
       __pop = globalThis.__ripComponent?.__popComponent
       pageParent = layoutInstances[layoutInstances.length - 1] or null
       pagePrev = __push?(pageParent)
+      globalThis.__ripGateMount = Component
       try
         instance = new Component { app, params, query, router }
       finally
+        globalThis.__ripGateMount = null
         __pop?(pagePrev)
       # Same beforeMount wrap as the layout loop above — effects
       # created in beforeMount auto-register on the page component.
@@ -1697,6 +2453,90 @@ export def createRenderer(opts:: RendererOpts):: Renderer
 
   started:: boolean = false
 
+  # ── Link-intent preloading ────────────────────────────────────────────
+  # On hover/focus of a router-owned anchor, match the target URL, compile
+  # its chain (cached per path), and fire the gate union's loads early.
+  # Navigation then awaits cells already loaded or in-flight — ensure()
+  # guarantees one in-flight load per source, so there's no double fetch.
+  # A preload failure never surfaces: the cell records it, and the
+  # navigation's own gate retries.
+  preload = (url) ->
+    info = router.match?(url)
+    return unless info?.route
+    # Warm only what navigating there would actually (re)construct. A layout
+    # already mounted under the current route stays mounted across navigation
+    # (its gate binding is live), so re-ensuring it would re-fetch data we
+    # already hold — visible as a hover firing a refetch of a staleTime-0
+    # layout source like `user`. When the layout chain is unchanged we preload
+    # the page alone; when it differs (the layouts will remount) we warm the
+    # whole chain. And if the destination is already fully mounted (hovering
+    # the current link), there's nothing to warm.
+    layoutsStay = arraysEqual(info.layouts, currentLayouts)
+    return if layoutsStay and info.route.file is currentRoute and sameKeys(info.params, currentParams)
+    chain = []
+    unless layoutsStay
+      for layoutFile in info.layouts
+        layoutSource = components.read(layoutFile)
+        continue unless layoutSource
+        layoutMod = compileAndImport! layoutSource, compile, components, layoutFile, resolver
+        cls = findComponent(layoutMod)
+        chain.push { file: layoutFile, cls: cls } if cls
+    pageSource = components.read(info.route.file)
+    if pageSource
+      pageMod = compileAndImport! pageSource, compile, components, info.route.file, resolver
+      cls = findComponent(pageMod)
+      chain.push { file: info.route.file, cls: cls } if cls
+    ensureGates! chain, info.params, info.query, true
+    return
+
+  # Settle delay: only preload a link the pointer actually rests on, not
+  # every anchor swept under a moving cursor. The pointer must hover (or the
+  # link must hold focus) for PRELOAD_SETTLE_MS before the load fires; a
+  # pointerout/focusout before then cancels it. 50ms is the established
+  # threshold for "deliberately on this link" vs "brushing past" — it's an
+  # implementation detail, not a knob.
+  PRELOAD_SETTLE_MS = 50
+
+  # Re-preloading the same href on every pointerover bubble would re-run
+  # match + compile (cached, but not free) dozens of times per hover —
+  # debounce per href. Freshness is still the cells' job: a preload only
+  # ever goes through ensure(), which respects staleTime.
+  lastPreload = { href: null, at: 0 }
+  settleTimer:: ReturnType<typeof setTimeout> | null = null
+  settleAnchor:: HTMLAnchorElement | null = null
+
+  cancelSettle = ->
+    if settleTimer
+      clearTimeout settleTimer
+      settleTimer = null
+    settleAnchor = null
+
+  onIntent = (e) ->
+    a = e.target
+    a = a.parentElement while a and a.tagName isnt 'A'
+    return unless a
+    return unless router.ownsAnchor?(a)
+    # Already counting down on this same anchor — let it settle.
+    return if a is settleAnchor
+    cancelSettle()
+    settleAnchor = a
+    href = a.href
+    settleTimer = setTimeout (->
+      settleTimer = null
+      settleAnchor = null
+      now = Date.now()
+      return if href is lastPreload.href and now - lastPreload.at < 3000
+      lastPreload.href = href
+      lastPreload.at = now
+      preload(href).catch(-> null)
+    ), PRELOAD_SETTLE_MS
+
+  # Pointer left (or focus moved off) the settling anchor before it fired.
+  onIntentCancel = (e) ->
+    return unless settleAnchor
+    related = e.relatedTarget
+    cancelSettle() unless related and settleAnchor.contains(related)
+
   renderer =
     start: ->
       # Idempotent: a double-call without an intervening stop() would
@@ -1715,6 +2555,11 @@ export def createRenderer(opts:: RendererOpts):: Renderer
       # remount of the current route immediately.
       unwatchSources = components?.watch (event, path) ->
         invalidateResolver(path) if event in ['change', 'delete']
+      if preloadOnIntent
+        document.addEventListener 'pointerover', onIntent, { passive: true }
+        document.addEventListener 'focusin', onIntent, { passive: true }
+        document.addEventListener 'pointerout', onIntentCancel, { passive: true }
+        document.addEventListener 'focusout', onIntentCancel, { passive: true }
       router.init()
       renderer
 
@@ -1727,6 +2572,12 @@ export def createRenderer(opts:: RendererOpts):: Renderer
         disposeEffect = null
       unwatchSources?()
       unwatchSources = null
+      cancelSettle()
+      if preloadOnIntent
+        document.removeEventListener 'pointerover', onIntent
+        document.removeEventListener 'focusin', onIntent
+        document.removeEventListener 'pointerout', onIntentCancel
+        document.removeEventListener 'focusout', onIntentCancel
       # Revoke every blob URL we created so the underlying module text
       # can be reclaimed. Without this, every hot reload leaks one
       # module's worth of memory per .rip file.
@@ -1879,11 +2730,19 @@ export def launch(opts?:: LaunchOpts = {}):: Promise<LaunchResult>
   # Hydrate from bundle — server seed (JSON only, no functions) overlays
   # stash defaults *in place*, so the module's `stash` reference and
   # `app.data` share underlying storage. Stash defaults preserve methods;
-  # bundle.data wins on key collisions (shallow).
+  # bundle.data wins on key collisions (shallow) — except source keys,
+  # which a JSON seed must never replace (the cell would silently stop
+  # being a source and every gate on it would fail; the deferred
+  # `initial:` source option is the seeding path for server data).
   if stashRaw and bundle.data
-    stashRaw[k] = v for k, v of bundle.data
+    for k, v of bundle.data
+      stashRaw[k] = v unless isSourceCell(stashRaw[k])
   seedData = stashRaw ?? bundle.data
   app.data = seedData if seedData
+  # Snapshot the declared plain-key defaults for app.data.reset().
+  # Taken post-bundle-overlay, pre-persist-restore — signout returns to
+  # the server-seeded baseline, not to user-persisted state.
+  stampDefaults unwrapStash(app.data)
   if bundle.routes
     app.routes = bundle.routes
 
@@ -1910,6 +2769,7 @@ export def launch(opts?:: LaunchOpts = {}):: Promise<LaunchResult>
     resolver: resolver
     compile: compile
     target: target
+    preload: if bundle.data?.preload is 'intent' then 'intent' else false
     onError: (err) -> console.error "[Rip] #{err.message}", err.error
 
   # Start

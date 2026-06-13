@@ -1,45 +1,30 @@
-import { OrderDetail } from '../../types.rip'
-import { api } from '../../api-client.rip'
 import { Button } from '../../components/button.rip'
 import { title } from '../../config.rip'
 
 export OrderDetails = component
-  order:: OrderDetail | null := null
-  loadError := ''
+  order <~ @app.data.order(params.id)
 
-  mounted: ->
-    document.title = title("Order ##{@params.id}")
-    try
-      res = api.get!("orders/#{@params.id}").json!()
-      order = OrderDetail.parse(res)
-    catch err
-      console.error(err)
-      loadError = 'Order failed to load.'
+  mounted: -> document.title = title("Order ##{@params.id}")
 
   render
-    if loadError
-      p.error loadError
-      a href: "/orders"
-        Button outline, "Back to Orders"
-    else if order
-      h1 "Order ##{order.id}"
-      p "Placed #{(new Date(order.createdAt)).toLocaleString()}"
-      div.overflow-auto
-        table
-          thead
+    h1 "Order ##{order.id}"
+    p "Placed #{(new Date(order.createdAt)).toLocaleString()}"
+    div.overflow-auto
+      table
+        thead
+          tr
+            th "Item"
+            th "Quantity"
+            th "Subtotal"
+        tbody
+          for item in order.items
             tr
-              th "Item"
-              th "Quantity"
-              th "Subtotal"
-          tbody
-            for item in order.items
-              tr
-                td "#{item.product.image} #{item.product.name}"
-                td "#{item.quantity}"
-                td "$#{(item.product.price * item.quantity).toFixed(2)}"
-            tr
-              td ""
-              td "Total"
-              td "$#{order.total.toFixed(2)}"
-      a href: "/orders"
-        Button outline, "Back to Orders"
+              td "#{item.product.image} #{item.product.name}"
+              td "#{item.quantity}"
+              td "$#{(item.product.price * item.quantity).toFixed(2)}"
+          tr
+            td ""
+            td "Total"
+            td "$#{order.total.toFixed(2)}"
+    a href: "/orders"
+      Button outline, "Back to Orders"

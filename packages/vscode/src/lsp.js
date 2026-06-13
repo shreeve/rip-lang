@@ -655,7 +655,18 @@ function compileRip(filePath, source) {
     const profile = getFileProfile(filePath);
     const entry = tc.compileForCheck(filePath, source, compiler, profile);
     const prev = compiled.get(filePath);
-    const dtsChanged = (prev?.dts || '') !== (entry.dts || '');
+    // A file's "type surface" is normally its emitted .d.ts — changing a
+    // function body leaves it identical, so dependents needn't refresh. The
+    // unannotated stash is the exception: consumers get its type via
+    // `export type __RipStash = typeof stash`, which resolves against the
+    // stash's tsContent (its runtime shape), NOT its .d.ts. Editing a source's
+    // param/return type changes that shape but leaves the .d.ts text constant,
+    // so gate the stash's dependent-refresh on its tsContent too — otherwise
+    // open dependents keep TypeScript's cached `typeof stash` resolution until
+    // a full window reload.
+    const isStashFile = tc.findStashFile?.(filePath) === filePath;
+    const surfaceChanged = (prev?.dts || '') !== (entry.dts || '')
+      || (isStashFile && (prev?.tsContent || '') !== (entry.tsContent || ''));
 
     compiled.set(filePath, {
       version: (prev?.version || 0) + 1,
@@ -687,7 +698,7 @@ function compileRip(filePath, source) {
     // common case skips the loop entirely.  When it does change, schedule a
     // debounced pass over *open* documents only (closed files don't need
     // squiggles refreshed; the next open will recompute).
-    if (dtsChanged) scheduleDependentRepublish(filePath);
+    if (surfaceChanged) scheduleDependentRepublish(filePath);
   } catch (e) {
     // Keep the previous compiled version for completions/hover during
     // transient parse errors.  Dot-recovery (trailing `.` triggers) is
@@ -1056,6 +1067,36 @@ function publishDiagnostics(filePath) {
           message: `Cannot find module '${m[1]}'`,
         });
       }
+    }
+  }
+
+  // Render gates (<~) must resolve to source() keys in app/stash.rip —
+  // the same validation `rip check` runs (collectGateDiagnostics), live
+  // in the editor. The stash compiles lazily here if TS hasn't already
+  // pulled it in via module resolution.
+  if (c.gates?.length && c.source && tc.collectGateDiagnostics && tc.collectStashAnalysis) {
+    try {
+      const stashFile = tc.findStashFile(filePath);
+      if (stashFile && stashFile !== filePath) {
+        if (!compiled.has(stashFile) && fs.existsSync(stashFile)) {
+          compileRip(stashFile, fs.readFileSync(stashFile, 'utf8'));
+        }
+        const stashEntry = compiled.get(stashFile);
+        const analysis = stashEntry?.sexpr ? tc.collectStashAnalysis(stashEntry.sexpr) : null;
+        for (const d of tc.collectGateDiagnostics(c.gates, c.source, analysis)) {
+          diagnostics.push({
+            range: {
+              start: { line: d.line - 1, character: d.col - 1 },
+              end: { line: d.line - 1, character: d.col - 1 + d.len },
+            },
+            severity: 1,
+            source: 'rip',
+            message: d.message,
+          });
+        }
+      }
+    } catch (e) {
+      connection.console.log(`[rip] gate validation error ${relPath(filePath)}: ${e.message}`);
     }
   }
 
@@ -2817,7 +2858,7 @@ function declaredDepsFor(projectRoot) {
 // The export index spans the whole workspace (one shared cache for every file
 // you might open), so a name can resolve to an entry in some sibling package
 // the current project doesn't depend on. Suggesting that import would produce
-// code that fails RFC 9's undeclared-import check (at `rip check`, the loader,
+// code that fails the undeclared-import check (at `rip check`, the loader,
 // and the bundler), so cross-project suggestions are gated on the consuming
 // project's declared dependencies — the suggestion surface for any file is its
 // own project's files plus what its package.json actually pulls in.

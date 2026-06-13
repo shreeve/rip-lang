@@ -2,64 +2,50 @@ import { User } from '../types.rip'
 import { api, ApiErrors, parseApiError } from '../api-client.rip'
 import { Button } from '../components/button.rip'
 import { title } from '../config.rip'
+import { createMutation } from '@rip-lang/app'
 
 export Profile = component
-  user ~= @app.data.user
-  form:: Omit<User, "id"> := { firstName: '', lastName: '', email: '' }
+  user <~ @app.data.user
+  form:: User := { ...user }
   errors:: ApiErrors<keyof User> := {}
-  status:: 'idle' | 'loading' | 'success' := 'idle'
-  hydrated := false
-
-  ~>
-    if user and not hydrated
-      form = { ...user }
-      hydrated = true
-    return
 
   mounted: -> document.title = title('Profile')
 
-  submit: (e) ->
-    e.preventDefault()
-    status = 'loading'
-    try
-      res = api.patch!('user', { json: form }).json!()
-      @app.data.user = User.parse(res)
-      status = 'success'
+  updateUser = createMutation (data:: User) -> User.parse(api.patch!('user', { json: data }).json!()),
+    onSuccess: (user) ->
       errors = {}
-    catch err
-      errors = parseApiError!(err)
-      status = 'idle'
+      @app.data.user = user
+    onError: (err) -> errors = parseApiError!(err)
 
   render
     h1 "Profile"
-    if user
-      form @submit: @submit
-        div.grid
-          label
-            "First name"
-            input
-              value <=> form.firstName
-              aria-invalid: errors.field?.firstName ? true : undefined
-            if errors.field?.firstName
-              small errors.field?.firstName
-          label
-            "Last name"
-            input
-              value <=> form.lastName
-              aria-invalid: errors.field?.lastName ? true : undefined
-            if errors.field?.lastName
-              small errors.field?.lastName
-        div.grid
-          label
-            "Email"
-            input value: form.email, type: "email", readOnly: true
-          label
-            "Phone"
-            input
-              value <=> form.phone
-              type: "tel"
-        Button type: "submit", loading: status is 'loading', "Update Profile"
-        if errors.form
-          p.error errors.form
-        if status is 'success'
-          p.success "Profile updated!"
+    form @submit: ((e) -> e.preventDefault(); updateUser(form))
+      div.grid
+        label
+          "First name"
+          input
+            value <=> form.firstName
+            aria-invalid: errors.field?.firstName ? true : undefined
+          if errors.field?.firstName
+            small errors.field?.firstName
+        label
+          "Last name"
+          input
+            value <=> form.lastName
+            aria-invalid: errors.field?.lastName ? true : undefined
+          if errors.field?.lastName
+            small errors.field?.lastName
+      div.grid
+        label
+          "Email"
+          input value: form.email, type: "email", readOnly: true
+        label
+          "Phone"
+          input
+            value <=> form.phone
+            type: "tel"
+      Button type: "submit", loading: updateUser.pending, "Update Profile"
+      if errors.form
+        p.error errors.form
+      if updateUser.succeeded
+        p.success "Profile updated!"

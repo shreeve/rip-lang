@@ -7,6 +7,7 @@ dir = import.meta.dir
 use serve
   dir: "#{dir}/app"
   watch: true
+  preload: 'intent'
 
 get '/styles.css' -> @send "#{dir}/app/styles.css", 'text/css; charset=UTF-8'
 
