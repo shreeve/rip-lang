@@ -1230,8 +1230,8 @@ class __SchemaDef {
         if (!entry) {
           throw new Error(
             "schema: no coercer registered for '~:" + f.coercer + "' (field '" + n + "' on " +
-            (this.name || 'anon') + "). Import @rip-lang/server (which registers the read() " +
-            "validator vocabulary) or register it with schema.registerCoercer('" + f.coercer + "', fn).");
+            (this.name || 'anon') + "). Import '@rip-lang/validate' (browser-safe; registers the " +
+            "whole vocabulary) or register it with schema.registerCoercer('" + f.coercer + "', fn).");
         }
         const input = entry.raw ? v : String(v).trim();
         let out;
@@ -3301,7 +3301,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         typeFirst = typeTok;
       } else if (typeTok?.[0] === "IDENTIFIER") {
         if (!SCHEMA_COERCIBLE_TYPES.has(typeTok[1])) {
-          throw schemaError(typeTok, `'~${typeTok[1]}' is not coercible. Built-in coercion is defined for: ${[...SCHEMA_COERCIBLE_TYPES].join(", ")}. ` + `Named coercers use a symbol — '~:${typeTok[1]}' — and resolve through the registry ` + `(@rip-lang/server's read() validators, or schema.registerCoercer). ` + `For anything else, write an explicit transform: '${name}, -> …'.`);
+          throw schemaError(typeTok, `'~${typeTok[1]}' is not coercible. Built-in coercion is defined for: ${[...SCHEMA_COERCIBLE_TYPES].join(", ")}. ` + `Named coercers use a symbol — '~:${typeTok[1]}' — and resolve through the registry ` + `(@rip-lang/validate's vocabulary, or schema.registerCoercer). ` + `For anything else, write an explicit transform: '${name}, -> …'.`);
         }
         coerce = true;
         typeName = typeTok[1];
@@ -15912,7 +15912,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.16.1";
-  var BUILD_DATE = "2026-06-12@19:25:03GMT";
+  var BUILD_DATE = "2026-06-13@06:10:55GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
