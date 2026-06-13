@@ -17,6 +17,7 @@ bun add @rip-lang/server         # Production server
 bun add @rip-lang/stamp          # Declarative host provisioning
 bun add @rip-lang/swarm          # Parallel job runner
 bun add @rip-lang/ui             # Reactive UI system, including grid widgets
+bun add @rip-lang/validate       # Validation/normalization vocabulary (browser-safe)
 bun add @rip-lang/x12            # X12 EDI parser + query engine
 
 # VS Code / Cursor extension
@@ -65,6 +66,18 @@ Multi-worker process manager with hot reloading, automatic HTTPS, mDNS service d
 ```bash
 rip server                        # Start server (watches *.rip by default)
 rip server myapp                  # Named (accessible at myapp.local)
+```
+
+### [@rip-lang/validate](validate/) — Validation Vocabulary
+
+The validation and normalization vocabulary: ~37 pure normalizers (`money`, `ssn`, `phone`, `date`, `name`, …) that power both `read()` in `@rip-lang/server` route handlers and `~:name` coercion in Rip Schema fields. Zero dependencies and browser-safe — one side-effect import makes client-side `.parse()` coerce identically to the server. ~210 lines.
+
+```coffee
+import { check, registerValidator } from '@rip-lang/validate'
+
+check '$1,234.50', 'money'       # 1234.5
+check '8016542000', 'phone'      # "(801) 654-2000"
+registerValidator 'npi', (v) -> v =~ /^(\d{10})$/ and _[1]
 ```
 
 ### [@rip-lang/stamp](stamp/) — Declarative Host Provisioning

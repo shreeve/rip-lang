@@ -1186,8 +1186,8 @@ class __SchemaDef {
         if (!entry) {
           throw new Error(
             "schema: no coercer registered for '~:" + f.coercer + "' (field '" + n + "' on " +
-            (this.name || 'anon') + "). Import @rip-lang/server (which registers the read() " +
-            "validator vocabulary) or register it with schema.registerCoercer('" + f.coercer + "', fn).");
+            (this.name || 'anon') + "). Import '@rip-lang/validate' (browser-safe; registers the " +
+            "whole vocabulary) or register it with schema.registerCoercer('" + f.coercer + "', fn).");
         }
         const input = entry.raw ? v : String(v).trim();
         let out;

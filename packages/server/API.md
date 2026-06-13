@@ -66,7 +66,10 @@ code = read 'code', /^[A-Z]{3,6}$/
 
 ## Built-in Validators
 
-`@rip-lang/server` includes 37 validators for every common API need:
+`@rip-lang/server` includes 37 validators for every common API need.
+(They live in [`@rip-lang/validate`](../validate/) — a zero-dependency,
+browser-safe package re-exported here — so the same vocabulary powers
+`~:name` schema coercion in client-side `.parse()` calls too.)
 
 ### Numbers & Money
 ```coffee
