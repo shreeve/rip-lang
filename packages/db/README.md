@@ -95,10 +95,11 @@ same harbor instance automatically.
   it; returns a `TxHandle` `{ query(sql, params), commit(), rollback() }`.
   This is the transaction seam `schema.transaction!` uses — application
   code normally goes through the schema runtime rather than calling
-  `begin()` directly. Requires an authenticated harbor (set
-  `RIP_DB_TOKEN`): harbor only creates *owned* sessions, so an
-  unauthenticated deployment can run plain queries but not transactions.
-  `commit()`/`rollback()` always close the session, even on error.
+  `begin()` directly. Works in every harbor auth mode — sessions are
+  own-session scoped (`__HARBOR_SELF__:sessions:*`, allowed by default),
+  and unauthenticated local-dev harbor owns them via its synthetic
+  principal. `commit()`/`rollback()` always close the session, even on
+  error.
 - **`findOne(sql, params?)` / `findAll(sql, params?)`** — same, but rows come
   back as plain objects keyed by column name.
 - **`materializeAll(result)`** — turn a raw envelope into row objects.

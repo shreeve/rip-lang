@@ -263,11 +263,12 @@ export query = (sql, params = [], opts = {}) ->
 #     tx.rollback!
 #     throw e
 #
-# NOTE: harbor gates session creation behind the authz policy string
-# `__HARBOR_ADMIN__:sessions:create`, which is default-deny when no
-# authz hook is configured. Transactions therefore require either a
-# harbor_authorization_function that allows it, or
-# `harbor_allow_admin_without_authz = true` on trusted deployments.
+# NOTE: harbor scopes own-session lifecycle as `__HARBOR_SELF__:
+# sessions:create` / `:delete` — allowed by default for any caller
+# (token-authenticated or unauthenticated local-dev mode), so
+# transactions work with zero authz configuration. A 403 here means a
+# custom harbor_authorization_function explicitly denies the
+# __HARBOR_SELF__:sessions: scope.
 export begin = (opts = {}) ->
   res = try
     fetch! "#{dbUrl()}/sql/sessions/new",
@@ -281,10 +282,10 @@ export begin = (opts = {}) ->
   if not res.ok or data?.ok is false or not data?.sessionId
     msg = data?.error or "harbor returned #{res.status} #{res.statusText or ''}".trim()
     if res.status is 403
-      msg = "transactions need a harbor DB session, and harbor denied session creation " +
-        "(authz policy __HARBOR_ADMIN__:sessions:create). Allow it in your " +
-        "harbor_authorization_function or set harbor_allow_admin_without_authz = true " +
-        "on a trusted deployment. Original error: #{msg}"
+      msg = "transactions need a harbor DB session, and harbor denied session creation. " +
+        "Sessions are allowed by default (authz scope __HARBOR_SELF__:sessions:create), " +
+        "so a 403 means your custom harbor_authorization_function denies that scope — " +
+        "add a branch matching '__HARBOR_SELF__:sessions:%'. Original error: #{msg}"
     throw new RipDBError msg,
       code:       data?.errorCode
       details:    data?.errorDetails

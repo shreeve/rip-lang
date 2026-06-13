@@ -1,0 +1,113 @@
+# Tests for @rip-lang/validate — the validation/normalization vocabulary.
+#
+# Run with:  rip packages/validate/test.rip
+# Or:        bun run test:validate
+#
+# Deliberately does NOT import @rip-lang/server: the whole point of this
+# package is that the vocabulary (and its `~:name` schema-coercer bridge)
+# works standalone — the import graph here is exactly what a browser
+# bundle sees.
+
+import { validators, registerValidator, getValidator, check, isBlank, toName, toPhone } from './validate.rip'
+
+_passed = 0
+_failed = 0
+_failures = []
+
+eq = (name, got, want) ->
+  jg = JSON.stringify(got)
+  jw = JSON.stringify(want)
+  if jg is jw
+    _passed += 1
+  else
+    _failed += 1
+    _failures.push "#{name}: expected #{jw}, got #{jg}"
+
+# ------------------------------------------------------------------------------
+# Validator spot-checks — one per family
+# ------------------------------------------------------------------------------
+
+eq 'id accepts',        validators.id('42'),               42
+eq 'id rejects zero',   validators.id('0'),                null
+eq 'int signed',        validators.int('-7'),              -7
+eq 'money normalizes',  validators.money('$1,234.50'),     1234.5
+eq 'cents integerizes', validators.cents('$1.23'),         123
+eq 'string squeezes',   validators.string("a\t\tb  c"),    'a b c'
+eq 'date compact',      validators.date('20240115'),       '20240115'
+eq 'date dashed',       validators.date('2024-01-15'),     '2024-01-15'
+eq 'bool yes',          validators.bool('YES'),            true
+eq 'bool off',          validators.bool('off'),            false
+eq 'email lowercases',  validators.email('A@B.CO'),        'a@b.co'
+eq 'state uppercases',  validators.state('ut'),            'UT'
+eq 'ssn strips dashes', validators.ssn('123-45-6789'),     '123456789'
+eq 'phone formats',     validators.phone('8016542000'),    '(801) 654-2000'
+eq 'uuid hyphenates',   validators.uuid('00112233445566778899AABBCCDDEEFF'), '00112233-4455-6677-8899-aabbccddeeff'
+eq 'json parses',       validators.json('{"a":1}'),        {a: 1}
+eq 'array passthrough', validators.array([1, 2]),          [1, 2]
+eq 'ids dedupes+sorts', validators.ids('3, 1 1,2'),        [1, 2, 3]
+eq 'slug lowercases',   validators.slug('My-Page'),        'my-page'
+
+# ------------------------------------------------------------------------------
+# Utilities
+# ------------------------------------------------------------------------------
+
+eq 'isBlank empty str', isBlank('   '),                    true
+eq 'isBlank object',    isBlank({}),                       true
+eq 'isBlank value',     isBlank('x'),                      false
+eq 'toName cases',      toName('STEVE SHREEVE', 'name'),   'Steve Shreeve'
+eq 'toPhone ext',       toPhone('801-654-2000 x99'),       '(801) 654-2000, ext. 99'
+
+# ------------------------------------------------------------------------------
+# check() — same contract as read(), for values you already have
+# ------------------------------------------------------------------------------
+
+eq 'check stringifies', check(42, 'id'),                   42
+eq 'check miss',        check('nope', 'id'),               null
+eq 'check raw array',   check([1], 'array'),               [1]
+eq 'check unknown',     check('x', 'no_such_type'),        undefined
+
+# ------------------------------------------------------------------------------
+# The schema-coercer bridge — the isomorphic claim.
+# Importing this package alone (no @rip-lang/server) must make `~:name`
+# coercion work in schema parsing.
+# ------------------------------------------------------------------------------
+
+Patient = schema
+  chart!  ~:id
+  ssn?    ~:ssn
+  phone?  ~:phone
+  state?  ~:state
+
+pt = Patient.parse {chart: '42', ssn: '123-45-6789', phone: '8016542000', state: 'ut'}
+eq 'coerce ~:id',    pt.chart, 42
+eq 'coerce ~:ssn',   pt.ssn,   '123456789'
+eq 'coerce ~:phone', pt.phone, '(801) 654-2000'
+eq 'coerce ~:state', pt.state, 'UT'
+
+bad = Patient.safe {chart: 'zero0'}
+eq 'failed coercion is a coerce issue', bad.errors[0].{field, error}, {field: 'chart', error: 'coerce'}
+
+# registerValidator extends BOTH vocabularies (read()'s table + ~:name)
+registerValidator 'npi', (v) -> v =~ /^(\d{10})$/ and _[1]
+eq 'registerValidator joins table',   getValidator('npi')('1234567890'), '1234567890'
+
+Provider = schema
+  npi! ~:npi
+eq 'registered coercer reaches schemas', Provider.parse({npi: '1234567890'}).npi, '1234567890'
+
+# Unknown coercer is a loud config error naming this package
+caught = null
+Mystery = schema
+  x! ~:no_such_coercer
+try
+  Mystery.parse {x: '1'}
+catch e
+  caught = e.message
+eq 'unknown coercer fails loud', /no coercer registered.*@rip-lang\/validate/.test(caught or ''), true
+
+# ------------------------------------------------------------------------------
+
+p "#{_passed} passing, #{_failed} failing"
+if _failed > 0
+  p "  ✗ #{f}" for f in _failures
+  exit 1

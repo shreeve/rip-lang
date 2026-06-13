@@ -647,10 +647,11 @@ SearchParams = schema
 ### Named coercers (`~:name`)
 
 A `~:symbol` in the type slot coerces through the **named-coercer
-registry** — and `@rip-lang/server` registers its entire `read()`
-validator vocabulary there at load, so every battle-tested wire
-normalizer (`id`, `money`, `ssn`, `phone`, `name`, `date`, `state`,
-`zipplus4`, `slug`, `ids`, …) works in a schema field:
+registry** — and `@rip-lang/validate` (the zero-dependency,
+browser-safe package behind `@rip-lang/server`'s `read()` vocabulary)
+registers every battle-tested wire normalizer (`id`, `money`, `ssn`,
+`phone`, `name`, `date`, `state`, `zipplus4`, `slug`, `ids`, …) there
+at load, so they all work in a schema field:
 
 ```coffee
 Patient = schema :model
@@ -665,8 +666,12 @@ Patient = schema :model
 
 - The normalizer behind `read 'dob', 'date'` is the *same function*
   behind `dob? ~:date` — one vocabulary, two call sites.
-  `registerValidator` on the server side registers both; schema-only
-  code uses `schema.registerCoercer name, fn` directly.
+  `registerValidator` registers both; schema-only code can use
+  `schema.registerCoercer name, fn` directly.
+- The vocabulary is **isomorphic**: importing `@rip-lang/server` loads
+  it on the server, and a side-effect `import '@rip-lang/validate'` in
+  any component file loads it in the browser bundle — so a schema with
+  `~:ssn` parses identically on both sides of the wire.
 - A coercer returning `null`/`undefined`/`false` fails the field with
   `{error: 'coerce', message: "<field> is not a valid <name>"}`. A
   coercer that isn't registered at parse time is a **config error**
@@ -2579,9 +2584,11 @@ calls the adapter, so DDL can be emitted before the database exists.
 
 ### The wire vocabulary (`~:name`)
 
-Every `read()` validator from `@rip-lang/server` doubles as a schema
-coercer — one normalization vocabulary for route params and schema
-fields:
+Every `read()` validator doubles as a schema coercer — one
+normalization vocabulary for route params and schema fields. It lives
+in `@rip-lang/validate` (browser-safe), loads with `@rip-lang/server`
+on the server, and a side-effect `import '@rip-lang/validate'` brings
+it to client-side parsing:
 
 ```coffee
 Patient = schema :model
@@ -2593,8 +2600,9 @@ Patient = schema :model
   amount? ~:money            # "$1,234.50" → 1234.5
 ```
 
-Custom validators registered with `registerValidator` (server) or
-`schema.registerCoercer` (anywhere) join the vocabulary automatically.
+Custom validators registered with `registerValidator` (from
+`@rip-lang/validate`) or `schema.registerCoercer` (anywhere) join the
+vocabulary automatically.
 
 ### Composing nested shapes
 
