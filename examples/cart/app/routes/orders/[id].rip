@@ -1,5 +1,5 @@
 import { Button } from '../../components/button.rip'
-import { title } from '../../config.rip'
+import { title, formatPrice } from '../../config.rip'
 
 export OrderDetails = component
   order <~ @app.data.order(params.id)
@@ -8,23 +8,27 @@ export OrderDetails = component
 
   render
     h1 "Order ##{order.id}"
-    p "Placed #{(new Date(order.createdAt)).toLocaleString()}"
+    p "Placed on #{(new Date(order.createdAt)).toLocaleString()}"
     div.overflow-auto
       table
         thead
           tr
-            th "Item"
+            th "Product"
+            th "Price"
             th "Quantity"
             th "Subtotal"
         tbody
           for item in order.items
             tr
-              td "#{item.product.image} #{item.product.name}"
+              td "#{item.image} #{item.name}"
+              td "#{formatPrice(item.price)}"
               td "#{item.quantity}"
-              td "$#{(item.product.price * item.quantity).toFixed(2)}"
+              td "#{formatPrice(item.price * item.quantity)}"
+        tfoot
           tr
-            td ""
-            td "Total"
-            td "$#{order.total.toFixed(2)}"
+            td colSpan: 3
+              strong "Total"
+            td
+              strong "#{formatPrice(order.total)}"
     a href: "/orders"
       Button outline, "Back to Orders"

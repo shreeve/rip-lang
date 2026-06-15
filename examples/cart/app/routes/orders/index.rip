@@ -1,5 +1,5 @@
 import { Button } from '../../components/button.rip'
-import { title } from '../../config.rip'
+import { title, formatPrice } from '../../config.rip'
 
 export Orders = component
   orders <~ @app.data.orders
@@ -28,4 +28,4 @@ export Orders = component
                   a href: "/orders/#{order.id}", "##{order.id}"
                 td (new Date(order.createdAt)).toLocaleString()
                 td "#{order.items.reduce(((sum, i) -> sum + i.quantity), 0)}"
-                td "$#{order.total.toFixed(2)}"
+                td "#{formatPrice(order.total)}"

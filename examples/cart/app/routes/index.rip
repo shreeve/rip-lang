@@ -1,5 +1,5 @@
 import { Button } from '../components/button.rip'
-import { title } from '../config.rip'
+import { title, formatPrice } from '../config.rip'
 
 export Products = component
   products <~ @app.data.products
@@ -51,7 +51,7 @@ export Products = component
           article
             div.image product.image
             h5 product.name
-            p "$#{product.price.toFixed(2)}"
+            p "#{formatPrice(product.price)}"
             if cart.items.some((i) -> i.id is product.id)
               Button outline, @click: (-> cart.removeItem(product)), "Added to Cart"
             else

@@ -1,10 +1,7 @@
 import './db.rip'
 import { get, post, patch, read } from '@rip-lang/server'
-import { User, Order, OrderItem, UserPublic, OrderSummary, OrderDetail, products } from './models.rip'
+import { User, Order, OrderItem, OrderLine, UserPublic, OrderPublic, products } from './models.rip'
 
-# Response conventions: a bare `return value` becomes 200 JSON; `@json(value,
-# status)` sets a custom status (e.g. 201 Created); errors go through
-# `errorResponse` — an `{ errors }` envelope with a 4xx status.
 def errorResponse(errors:: { form?: string, field?: Partial<Record<string, string>> }, status = 400)
   return Response.json({ errors }, { status })
 
@@ -40,7 +37,7 @@ get '/api/products' -> products
 get '/api/orders' ->
   user = currentUser!()
   if not user then return []
-  return user.orders!().reverse().map((o) -> OrderSummary.parse(o))
+  return user.orders!().reverse().map((o) -> OrderPublic.parse(o))
 
 get '/api/orders/:id' ->
   id = read 'id', 'id'
@@ -51,10 +48,7 @@ get '/api/orders/:id' ->
   order = Order.where({ id, userId: user.id }).first!()
   if not order then return errorResponse({ form: 'Order not found' }, 404)
 
-  items = order.items.map (item) ->
-    { product: products.find((p) -> p.id is item.productId), quantity: item.quantity }
-
-  return OrderDetail.parse({ ...order, items })
+  return OrderPublic.parse(order)
 
 post '/api/orders' ->
   raw = read 'items', 'array'
@@ -64,18 +58,18 @@ post '/api/orders' ->
   total = 0
   items:: OrderItem[] = []
   for line in raw
-    result = OrderItem.safe(line)
+    result = OrderLine.safe(line)
     if not result.ok
       return errorResponse({ form: 'Invalid order data' })
-    item = result.value
-    product = products.find((p) -> p.id is item.productId)
+    { productId, quantity } = result.value
+    product = products.find((p) -> p.id is productId)
     if not product
-      return errorResponse({ form: "Product #{item.productId} not found" })
-    total += product.price * item.quantity
-    items.push(item)
+      return errorResponse({ form: "Product #{productId} not found" })
+    total += product.price * quantity
+    items.push({ productId, name: product.name, price: product.price, image: product.image, quantity })
 
   user = currentUser!()
   if not user then return errorResponse({ form: 'No user found' }, 404)
 
-  order = Order.create!({ userId: user.id, items, total: Math.round(total * 100) / 100 })
-  return @json(OrderSummary.parse(order), 201)
+  order = Order.create!({ userId: user.id, total, items })
+  return @json(OrderPublic.parse(order), 201)

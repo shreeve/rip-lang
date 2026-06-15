@@ -1,6 +1,6 @@
 import { api, ApiErrors, parseApiError } from '../api-client.rip'
 import { Button } from '../components/button.rip'
-import { title } from '../config.rip'
+import { title, formatPrice } from '../config.rip'
 import { createMutation } from '@rip-lang/app'
 
 export Cart = component
@@ -48,7 +48,7 @@ export Cart = component
             for item in cart.items
               tr
                 td.name "#{item.image} #{item.name}"
-                td "$#{item.price.toFixed(2)}"
+                td "#{formatPrice(item.price)}"
                 td
                   div.stepper
                     Button outline, @click: (->
@@ -65,7 +65,7 @@ export Cart = component
                         cart.updateQuantity(item, value)
                         if e.target.value isnt String(value) then e.target.value = String(value)
                     Button outline, @click: (-> cart.updateQuantity(item, item.quantity + 1)), "+"
-                td "$#{(item.price * item.quantity).toFixed(2)}"
+                td "#{formatPrice(item.price * item.quantity)}"
                 td
                   Button variant: "secondary", outline, @click: (-> cart.removeItem(item)), "Remove"
           tfoot
@@ -73,7 +73,7 @@ export Cart = component
               td colSpan: 3
                 strong "Total"
               td
-                strong "$#{cart.totalPrice().toFixed(2)}"
+                strong "#{formatPrice(cart.totalPrice())}"
               td
       div.cart-actions
         Button loading: placeOrder.pending, @click: (-> placeOrder()), "Place Order"

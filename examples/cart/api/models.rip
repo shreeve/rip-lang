@@ -9,34 +9,34 @@ export User = schema :model
 export Product = schema :shape
   id!    integer
   name!  string, 1..
+  price! integer, 0..
   image! string
-  price! number, 0..
 
 export products:: Product[] = [
-  { id: 1, name: 'Rubber Duck', image: '🐥', price: 3.99  }
-  { id: 2, name: 'Notebook',    image: '📓', price: 9.99  }
-  { id: 3, name: 'Desk Plant',  image: '🌵', price: 14.99 }
-  { id: 4, name: 'Coffee Mug',  image: '☕',  price: 11.99 }
-  { id: 5, name: 'Stress Ball', image: '🏀', price: 6.99  }
-  { id: 6, name: 'Headphones',  image: '🎧', price: 19.99 }
+  { id: 1, name: 'Rubber Duck', price: 399,  image: '🐥' }
+  { id: 2, name: 'Notebook',    price: 999,  image: '📓' }
+  { id: 3, name: 'Desk Plant',  price: 1499, image: '🌵' }
+  { id: 4, name: 'Coffee Mug',  price: 1199, image: '☕'  }
+  { id: 5, name: 'Stress Ball', price: 699,  image: '🏀' }
+  { id: 6, name: 'Headphones',  price: 1999, image: '🎧' }
 ]
 
-export OrderItem = schema :shape
+export OrderLine = schema :shape
   productId! integer
   quantity!  integer, 1..
 
+export OrderItem = schema :shape
+  productId! integer
+  name!      string, 1..
+  price!     integer, 0..
+  image!     string
+  quantity!  integer, 1..
+
 export Order = schema :model
+  total! integer, 0..
   items! OrderItem[]
-  total! number, 0..
   @timestamps
   @belongs_to User
 
-export UserPublic   = User.pick("id", "firstName", "lastName", "email", "phone")
-export OrderSummary = Order.pick("id", "items", "total", "createdAt")
-
-export OrderDetailItem = schema :shape
-  product!  Product
-  quantity! integer, 1..
-
-export OrderDetail = OrderSummary.omit("items").extend(schema :shape
-  items! OrderDetailItem[])
+export UserPublic  = User.pick("id", "firstName", "lastName", "email", "phone")
+export OrderPublic = Order.pick("id", "total", "items", "createdAt")

@@ -1,6 +1,6 @@
 import { source } from '@rip-lang/app'
 import { api } from './api-client.rip'
-import { Product, User, OrderSummary, OrderDetail } from './types.rip'
+import { Product, User, Order } from './types.rip'
 
 type CartItem = Product & { quantity: number }
 
@@ -33,6 +33,6 @@ export stash =
     fetch: -> Product.array.parse(api.get!('products').json!())
     staleTime: 'forever'
   orders: source
-    fetch: -> OrderSummary.array.parse(api.get!('orders').json!())
+    fetch: -> Order.array.parse(api.get!('orders').json!())
   order: source
-    fetch: (id:: string) -> OrderDetail.parse(api.get!("orders/#{id}").json!())
+    fetch: (id:: string) -> Order.parse(api.get!("orders/#{id}").json!())
