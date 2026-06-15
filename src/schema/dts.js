@@ -78,21 +78,24 @@ export const SCHEMA_INTRINSIC_DECLS = [
   '  extend<U>(other: Schema<U>): Schema<In & U, In & U>;',
   '}',
   // Chainable query builder for :model.
-  'interface SchemaQuery<T> {',
+  // `Data` carries the model's column shape so `.where({...})` keys are checked
+  // against the real fields; it defaults to a permissive map so a bare
+  // `SchemaQuery<T>` (no column type) keeps accepting any condition object.
+  'interface SchemaQuery<T, Data = Record<string, unknown>> {',
   '  all(): Promise<T[]>;',
   '  first(): Promise<T | null>;',
   '  count(): Promise<number>;',
-  '  where(cond: Record<string, unknown> | string, ...params: unknown[]): SchemaQuery<T>;',
-  '  limit(n: number): SchemaQuery<T>;',
-  '  offset(n: number): SchemaQuery<T>;',
-  '  order(spec: string): SchemaQuery<T>;',
-  '  orderBy(spec: string): SchemaQuery<T>;',
-  '  includes(...specs: unknown[]): SchemaQuery<T>;',
-  '  withDeleted(): SchemaQuery<T>;',
-  '  onlyDeleted(): SchemaQuery<T>;',
-  '  updateAll(values: Record<string, unknown>): Promise<number | null>;',
+  '  where(cond: Partial<Record<keyof Data, unknown>> | string, ...params: unknown[]): SchemaQuery<T, Data>;',
+  '  limit(n: number): SchemaQuery<T, Data>;',
+  '  offset(n: number): SchemaQuery<T, Data>;',
+  '  order(spec: string): SchemaQuery<T, Data>;',
+  '  orderBy(spec: string): SchemaQuery<T, Data>;',
+  '  includes(...specs: unknown[]): SchemaQuery<T, Data>;',
+  '  withDeleted(): SchemaQuery<T, Data>;',
+  '  onlyDeleted(): SchemaQuery<T, Data>;',
+  '  updateAll(values: Partial<Record<keyof Data, unknown>>): Promise<number | null>;',
   '  deleteAll(): Promise<number | null>;',
-  '  unscoped(): SchemaQuery<T>;',
+  '  unscoped(): SchemaQuery<T, Data>;',
   '}',
   // ModelSchema extends the base schema surface with ORM methods. Algebra
   // over `Data` (not `Instance`) so derived shapes reflect runtime
@@ -103,14 +106,14 @@ export const SCHEMA_INTRINSIC_DECLS = [
   'interface ModelSchema<Instance, Data = unknown, Id = number, Create = Partial<Data>> extends Schema<Instance, Data> {',
   '  find(id: Id): Promise<Instance | null>;',
   '  findMany(ids: Id[]): Promise<Instance[]>;',
-  '  where(cond: Record<string, unknown> | string, ...params: unknown[]): SchemaQuery<Instance>;',
-  '  includes(...specs: unknown[]): SchemaQuery<Instance>;',
-  '  withDeleted(): SchemaQuery<Instance>;',
-  '  onlyDeleted(): SchemaQuery<Instance>;',
-  '  unscoped(): SchemaQuery<Instance>;',
+  '  where(cond: Partial<Record<keyof Data, unknown>> | string, ...params: unknown[]): SchemaQuery<Instance, Data>;',
+  '  includes(...specs: unknown[]): SchemaQuery<Instance, Data>;',
+  '  withDeleted(): SchemaQuery<Instance, Data>;',
+  '  onlyDeleted(): SchemaQuery<Instance, Data>;',
+  '  unscoped(): SchemaQuery<Instance, Data>;',
   '  all(limit?: number): Promise<Instance[]>;',
   '  first(): Promise<Instance | null>;',
-  '  count(cond?: Record<string, unknown>): Promise<number>;',
+  '  count(cond?: Partial<Record<keyof Data, unknown>>): Promise<number>;',
   '  create(data: Create): Promise<Instance>;',
   '  upsert(data: Create, opts: { on: unknown }): Promise<Instance>;',
   '  insertMany(rows: Create[]): Promise<Instance[]>;',
@@ -428,7 +431,7 @@ function emitOneSchemaType(collected, byName, known, lines, schemaBehavior) {
     if (scopeNames.length) {
       const queryName = `${name}Query`;
       const scopeSigs = scopeNames.map(s => `${s}(...args: any[]): ${queryName}`);
-      lines.push(`${exp}type ${queryName} = SchemaQuery<${instName}> & { ${scopeSigs.join('; ')} };`);
+      lines.push(`${exp}type ${queryName} = SchemaQuery<${instName}, ${dataName}> & { ${scopeSigs.join('; ')} };`);
       lines.push(`${exp}${decl}const ${name}: ${modelT} & { ${scopeSigs.join('; ')} };`);
     } else {
       lines.push(`${exp}${decl}const ${name}: ${modelT};`);
