@@ -6,20 +6,10 @@ export User = schema :model
   @timestamps
   @has_many Order
 
-export Product = schema :shape
-  id!    integer
+export Product = schema :model
   name!  string, 1..
   price! integer, 0..
   image! string
-
-export products:: Product[] = [
-  { id: 1, name: 'Rubber Duck', price: 399,  image: '🐥' }
-  { id: 2, name: 'Notebook',    price: 999,  image: '📓' }
-  { id: 3, name: 'Desk Plant',  price: 1499, image: '🌵' }
-  { id: 4, name: 'Coffee Mug',  price: 1199, image: '☕'  }
-  { id: 5, name: 'Stress Ball', price: 699,  image: '🏀' }
-  { id: 6, name: 'Headphones',  price: 1999, image: '🎧' }
-]
 
 export OrderLine = schema :shape
   productId! integer
@@ -38,5 +28,6 @@ export Order = schema :model
   @timestamps
   @belongs_to User
 
-export UserPublic  = User.pick("id", "firstName", "lastName", "email", "phone")
-export OrderPublic = Order.pick("id", "total", "items", "createdAt")
+export UserPublic    = User.pick("id", "firstName", "lastName", "email", "phone")
+export ProductPublic = Product.pick("id", "name", "price", "image")
+export OrderPublic   = Order.pick("id", "total", "items", "createdAt")

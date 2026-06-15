@@ -4,11 +4,12 @@
 #
 # This module is imported by every worker and RE-IMPORTED on each hot-reload,
 # so its top level does only the cheap wiring: open the file and route the
-# schema ORM through it. The one-time schema creation + seed live in `migrate`,
-# which ../setup.rip runs once at startup under `rip server` — never on reload.
+# schema ORM through it. The one-time schema creation lives in `migrate` and the
+# data seeding in `./seed.rip` — both run by ../setup.rip once at startup under
+# `rip server`, never on reload.
 
 import { Database } from 'bun:sqlite'
-import { User, Order } from './models.rip'
+import { User, Product, Order } from './models.rip'
 
 export db = new Database "#{import.meta.dir}/cart.sqlite"
 
@@ -16,28 +17,24 @@ export db = new Database "#{import.meta.dir}/cart.sqlite"
 # workers open the file at once on boot.
 db.exec "PRAGMA busy_timeout = 5000"
 
-# One-time setup: create the schema and seed the demo user. Idempotent, so the
-# startup call is a no-op against an already-provisioned file.
+# One-time schema creation. Idempotent (IF NOT EXISTS), so the startup call is a
+# no-op against an already-provisioned file. Seeding lives in `./seed.rip`.
 export migrate = ->
   # SQLite's flexible typing accepts DuckDB's VARCHAR/DOUBLE/JSON/TIMESTAMP
   # as-is; only DuckDB's sequence-based auto-id needs stripping (INTEGER PRIMARY
   # KEY auto-increments), plus IF NOT EXISTS so re-running is harmless.
   # (rip's toSQL emits DuckDB DDL by design — these two tweaks adapt it to SQLite.)
-  ddl = (User.toSQL() + "\n" + Order.toSQL())
+  ddl = (User.toSQL() + "\n" + Product.toSQL() + "\n" + Order.toSQL())
     .replace(/CREATE SEQUENCE[^;]*;/g, '')
     .replace(/ DEFAULT nextval\('[^']*'\)/g, '')
     .replace(/CREATE (TABLE|UNIQUE INDEX|INDEX) /g, 'CREATE $1 IF NOT EXISTS ')
   for stmt in ddl.split(';') when stmt.trim()
     db.run stmt
 
-  # `INSERT OR IGNORE` keys off the UNIQUE email, so seeding is idempotent.
-  db.run 'INSERT OR IGNORE INTO users ("first_name", "last_name", "email", "phone") VALUES (?, ?, ?, ?)',
-    'John', 'Smith', 'john@example.com', '(123) 456-7890'
-
 # Columns the schema declares as JSON (an order's `items`). Only these are
 # decoded on read, so a VARCHAR value that merely looks like JSON (a name like
 # "[redacted]") is left untouched rather than parsed.
-jsonCols = new Set([...(User.toSQL() + Order.toSQL()).matchAll(/(\w+)\s+JSON\b/g)].map((m) -> m[1]))
+jsonCols = new Set([...(User.toSQL() + Product.toSQL() + Order.toSQL()).matchAll(/(\w+)\s+JSON\b/g)].map((m) -> m[1]))
 
 # Route the schema ORM through SQLite. `.values()` returns row arrays and
 # `.columnNames` the headers — exactly the adapter's result shape. Object

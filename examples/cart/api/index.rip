@@ -1,6 +1,6 @@
 import './db.rip'
 import { get, post, patch, read } from '@rip-lang/server'
-import { User, Order, OrderItem, OrderLine, UserPublic, OrderPublic, products } from './models.rip'
+import { User, Product, Order, OrderItem, OrderLine, UserPublic, ProductPublic, OrderPublic } from './models.rip'
 
 def errorResponse(errors:: { form?: string, field?: Partial<Record<string, string>> }, status = 400)
   return Response.json({ errors }, { status })
@@ -32,7 +32,7 @@ patch '/api/user' ->
 
   return UserPublic.parse(user)
 
-get '/api/products' -> products
+get '/api/products' -> Product.all!().map((p) -> ProductPublic.parse(p))
 
 get '/api/orders' ->
   user = currentUser!()
@@ -62,7 +62,7 @@ post '/api/orders' ->
     if not result.ok
       return errorResponse({ form: 'Invalid order data' })
     { productId, quantity } = result.value
-    product = products.find((p) -> p.id is productId)
+    product = Product.find!(productId)
     if not product
       return errorResponse({ form: "Product #{productId} not found" })
     total += product.price * quantity

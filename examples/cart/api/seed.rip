@@ -1,0 +1,30 @@
+import "./db.rip"
+import { User, Product } from "./models.rip"
+
+user =
+  firstName: "John"
+  lastName:  "Smith"
+  email:     "john@example.com"
+  phone:     "(123) 456-7890"
+
+products = [
+  { name: "Rubber Duck", price: 399,  image: "🐥" }
+  { name: "Notebook",    price: 999,  image: "📓" }
+  { name: "Desk Plant",  price: 1499, image: "🌵" }
+  { name: "Coffee Mug",  price: 1199, image: "☕"  }
+  { name: "Stress Ball", price: 699,  image: "🏀" }
+  { name: "Headphones",  price: 1999, image: "🎧" }
+]
+
+export def seed()
+  unless User.where(email: user.email).first!()
+    User.create!(user)
+    console.log("Seeded user.")
+
+  if Product.all!().length is 0
+    Product.create!(item) for item in products
+    console.log("Seeded #{products.length} products.")
+
+if import.meta.main
+  seed!()
+  console.log "Seed complete."

@@ -31,7 +31,7 @@ export stash =
     staleTime: '5 min'
   products: source
     fetch: -> Product.array.parse(api.get!('products').json!())
-    staleTime: 'forever'
+    staleTime: '5 min'
   orders: source
     fetch: -> Order.array.parse(api.get!('orders').json!())
   order: source

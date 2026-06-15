@@ -1,1 +1,1 @@
-export { UserPublic as User, OrderPublic as Order, Product } from '../api/models.rip'
+export { UserPublic as User, ProductPublic as Product, OrderPublic as Order } from '../api/models.rip'
