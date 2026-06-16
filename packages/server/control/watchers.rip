@@ -15,6 +15,15 @@ export handleWatchGroup = (watchGroups, prefix) ->
   return new Response('not-found', { status: 404 }) unless group
   encoder = new TextEncoder()
   client = null
+  heartbeat = null
+  # Heartbeat keeps the stream non-idle so it isn't closed mid-flight. A
+  # server-side write resets Bun's per-connection idleTimeout (default 30s);
+  # without it the idle SSE stream is dropped at ~30s, the browser logs
+  # ERR_INCOMPLETE_CHUNKED_ENCODING, and the client's reconnect triggers a
+  # spurious full page reload. 20s stays comfortably under the 30s timeout and
+  # also keeps intermediary proxies (e.g. nginx proxy_read_timeout) happy. The
+  # comment line (`:`) is ignored by EventSource.
+  HEARTBEAT_MS = 20000
   new Response new ReadableStream(
     start: (controller) ->
       send = (type) ->
@@ -22,7 +31,16 @@ export handleWatchGroup = (watchGroups, prefix) ->
       client = { send }
       group.sseClients.add(client)
       send('connected')
+      heartbeat = setInterval (->
+        try
+          controller.enqueue encoder.encode(": keepalive\n\n")
+        catch
+          clearInterval(heartbeat) if heartbeat
+          heartbeat = null
+      ), HEARTBEAT_MS
     cancel: ->
+      clearInterval(heartbeat) if heartbeat
+      heartbeat = null
       group.sseClients.delete(client) if client
   ),
     headers:
