@@ -1,5 +1,5 @@
 import { api, ApiErrors, parseApiError } from '../api-client.rip'
-import { Button } from '../components/button.rip'
+import { Button, ButtonLink } from '../components/button.rip'
 import { title, formatPrice } from '../config.rip'
 import { createMutation } from '@rip-lang/app'
 
@@ -24,15 +24,12 @@ export Cart = component
       h1 "Order Placed!"
       p "Your order has been placed successfully."
       div.cart-actions
-        a href: "/"
-          Button "Continue Shopping"
-        a href: "/orders"
-          Button variant: "secondary", "View Orders"
+        ButtonLink href: "/", "Continue Shopping"
+        ButtonLink href: "/orders", variant: "secondary", "View Orders"
     else if not cart.items.length
       h1 "Cart"
       p "Your cart is empty."
-      a href: "/"
-        Button "Continue Shopping"
+      ButtonLink href: "/", "Continue Shopping"
     else
       h1 "Cart"
       div.overflow-auto

@@ -1263,6 +1263,18 @@ export function installComponentSupport(CodeEmitter, Lexer) {
         const constructions = [];
         let constructionIdx = 0;
         const sourceLines = this.options.source?.split('\n');
+        // Route-check any `href:` prop passed to a component the same way
+        // intrinsic `<a href>` is checked. A component that forwards href to
+        // an anchor (e.g. `component extends a`) exposes it via `@rest` typed
+        // as plain `string`, so without this `ButtonLink href: "/typo"` would
+        // escape route validation entirely. We can't see the component's tag
+        // cross-module, so we key on the prop name — `href` is a URL wherever
+        // it appears. Wrap slash-prefixed string and template literals in
+        // `__ripRoute(...)` (strengthened to the route union when the project
+        // has routes); external URLs and variables (no leading-slash literal)
+        // pass through untouched.
+        const wrapCompHref = (val) =>
+          typeof val === 'string' && /^["'`]\//.test(val) ? `__ripRoute(${val})` : val;
         const extractProps = (args) => {
           const props = [];
           const sideExprs = [];
@@ -1306,7 +1318,8 @@ export function installComponentSupport(CodeEmitter, Lexer) {
                     props.push({ code: `${key}: ${member}`, srcLine });
                   } else {
                     const val = this.emitInComponent(value, 'value');
-                    props.push({ code: `${key}: ${val}`, srcLine });
+                    const finalVal = key === 'href' ? wrapCompHref(val) : val;
+                    props.push({ code: `${key}: ${finalVal}`, srcLine });
                   }
                 }
               }

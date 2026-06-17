@@ -1,4 +1,4 @@
-import { Button } from '../../components/button.rip'
+import { ButtonLink } from '../../components/button.rip'
 import { title, formatPrice } from '../../config.rip'
 
 export Orders = component
@@ -10,8 +10,7 @@ export Orders = component
     h1 "Orders"
     if not orders.length
       p "You haven't placed any orders yet."
-      a href: "/"
-        Button "Browse Products"
+      ButtonLink href: "/", "Browse Products"
     else
       div.overflow-auto
         table

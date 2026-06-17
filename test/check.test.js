@@ -511,6 +511,53 @@ check("query is Record<string, string>; URLSearchParams calls error", () => {
   assert(/not callable|no call signatures/.test(bad.out), 'unexpected output:\n' + bad.out);
 });
 
+// ── 10. `href:` on a component is route-checked like intrinsic `<a href>` ──
+//
+// A component that forwards href to an anchor (`component extends a`) exposes
+// it via `@rest` typed as plain `string`, so `Btn href: "/typo"` used to escape
+// route validation entirely — the typo only surfaced at runtime. Codegen now
+// wraps slash-prefixed href literals on component calls in `__ripRoute(...)`,
+// the same helper intrinsic anchors use, so invalid routes error at the call
+// site while external URLs and variables pass through.
+
+// Shared project: a NavLink that extends `a`, plus an `/orders` route so the
+// generated `__RipRoutes` union is `"/" | "/orders"`.
+const routeProject = (homeBody) => ({
+  'index.rip': `x = 1\n`,
+  'app/stash.rip': `stash =\n  count: 0\n`,
+  'app/components/link.rip': `export NavLink = component extends a
+  @outline?:: boolean
+
+  render
+    a
+      role: "button"
+      class: @outline and 'outline'
+      slot
+`,
+  'app/routes/orders.rip': `export Orders = component\n  render null\n`,
+  'app/routes/index.rip': `import { NavLink } from '../components/link.rip'
+
+export Home = component
+  render
+${homeBody}
+`,
+});
+
+check('a bogus route in a component href errors at the call site', () => {
+  const r = checkProject(routeProject('    NavLink href: "/nope", "Broken"'));
+  assert(!r.ok, 'expected a route error on NavLink href: "/nope"');
+  assert(/not assignable/.test(r.out), 'unexpected output:\n' + r.out);
+  assert(/"\/nope"/.test(r.out), 'error should name the bad href:\n' + r.out);
+});
+
+check('valid routes, external URLs, and variables in component href pass', () => {
+  const r = checkProject(routeProject(
+    `    NavLink href: "/", "Home"
+    NavLink href: "/orders", "Orders"
+    NavLink href: "https://example.com", "External"`));
+  assert(r.ok, 'expected clean check, got:\n' + r.out);
+});
+
 rmSync(tmpDir, { recursive: true, force: true });
 console.log('');
 const total = passed + failed;

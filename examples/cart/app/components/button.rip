@@ -15,3 +15,17 @@ export Button = component extends button
         @rest.class
       ]
       slot
+
+export ButtonLink = component extends a
+  @variant?:: 'primary' | 'secondary' := 'primary'
+  @outline?:: boolean
+
+  render
+    a
+      role: "button"
+      class: [
+        @variant
+        @outline and 'outline'
+        @rest.class
+      ]
+      slot
