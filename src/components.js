@@ -1538,6 +1538,26 @@ export function installComponentSupport(CodeEmitter, Lexer) {
               constructions.push(`    ${exprCode};${srcMarker}`);
             } catch {}
             return;
+          } else if (head === '.' || head === '?.') {
+            // Bare member-access expression as element content
+            // (e.g. `div config.site.theme.logoMark`). Walk to the chain's
+            // base identifier: emit it for type-checking only when the base
+            // is a value reference, NOT an HTML tag-shorthand like `div.image`
+            // (whose base IS a tag). Without this, static text-content
+            // expressions never reach the stub and escape type-checking —
+            // only interpolated "#{...}" content was being checked.
+            let base = node;
+            while (Array.isArray(base) && (base[0] === '.' || base[0] === '?.')) base = base[1];
+            const baseName = typeof base === 'string' ? base : base?.valueOf?.();
+            if (typeof baseName === 'string' && !this.isHtmlTag(baseName) && !CodeEmitter.GENERATORS[baseName]) {
+              try {
+                const exprCode = this.emitInComponent(node, 'value');
+                const srcLine = node.loc?.r;
+                const srcMarker = srcLine != null ? ` // @rip-src:${srcLine}` : '';
+                constructions.push(`    ${exprCode};${srcMarker}`);
+              } catch {}
+            }
+            return;
           }
 
           // Emit a bare lowercase identifier as either a property access
