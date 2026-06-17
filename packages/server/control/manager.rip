@@ -87,8 +87,17 @@ export class Manager
   start: ->
     @stop!
 
+    # Run each distinct setup.rip once. Multiple apps can share a baseDir
+    # (e.g. the dir-named default app and a serve.rip app over the same code),
+    # and they resolve to the same setup.rip — running it per-app would migrate
+    # and log twice.
+    ranSetupFiles = new Set()
     for app in @allAppStates()
-      @runSetupForApp!(app) if app.config.entry
+      continue unless app.config.entry
+      setupFile = join(app.config.appBaseDir or dirname(app.config.entry or @flags.appEntry), 'setup.rip')
+      continue if ranSetupFiles.has(setupFile)
+      ranSetupFiles.add(setupFile)
+      @runSetupForApp!(app)
 
     for app in @allAppStates()
       workers = @getWorkers(app.appId)
@@ -108,9 +117,15 @@ export class Manager
         continue unless app.config.entry and app.config.appBaseDir
         appId = app.appId
         try
-          watcher = watch app.config.appBaseDir, { recursive: true }, (event, filename) =>
+          baseDir = app.config.appBaseDir
+          watcher = watch baseDir, { recursive: true }, (event, filename) =>
             return unless shouldTriggerCodeReload(filename, watchPattern, null)
-            @onFileChange(appId)
+            # Bun coalesces multiple recursive watches on one directory, so a
+            # single callback may fire. Bump every app rooted at this baseDir
+            # (e.g. the dir-named default app and a serve.rip app over the same
+            # code) — otherwise an app reached on a different host never swaps.
+            for other in @allAppStates() when other.config.appBaseDir is baseDir
+              @onFileChange(other.appId)
           @codeWatchers.set(appId, watcher)
         catch e
           warn "rip-server: directory watch failed for #{appId}: #{e.message}"
