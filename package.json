@@ -93,7 +93,7 @@
   "homepage": "https://github.com/shreeve/rip-lang#readme",
   "author": "Steve Shreeve <steve.shreeve@gmail.com>",
   "license": "MIT",
-  "devDependencies": {
+  "dependencies": {
     "@types/bun": "1.3.14",
     "typescript": "catalog:"
   }

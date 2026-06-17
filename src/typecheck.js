@@ -1031,26 +1031,36 @@ export function createTypeCheckSettings(ts, overrides = {}) {
 // sub-package check would miss workspace-root ambients. Accepts symlinks
 // because bun's nested-package layout symlinks `@types/bun` to
 // `.bun/@types+bun@.../node_modules/@types/bun`.
+//
+// rip targets the Bun runtime, so `Bun`, `process`, `Buffer`, etc. are
+// always present — rip ships `@types/bun` as a dependency and includes
+// its own `node_modules/@types` last, so every project type-checks those
+// globals without installing anything. A workspace that installs its own
+// `@types/bun`/`@types/node` still wins: its dir is walked first and the
+// name dedup below keeps that copy.
 export function collectAmbientTypes(rootPath) {
   const typeRoots = [];
   const types = [];
+  const scan = (cand) => {
+    if (typeRoots.includes(cand) || !existsSync(cand)) return;
+    typeRoots.push(cand);
+    try {
+      for (const entry of readdirSync(cand, { withFileTypes: true })) {
+        if ((entry.isDirectory() || entry.isSymbolicLink()) && !entry.name.startsWith('.') && !types.includes(entry.name)) {
+          types.push(entry.name);
+        }
+      }
+    } catch {}
+  };
   let dir = rootPath;
   while (true) {
-    const cand = resolve(dir, 'node_modules/@types');
-    if (existsSync(cand)) {
-      typeRoots.push(cand);
-      try {
-        for (const entry of readdirSync(cand, { withFileTypes: true })) {
-          if ((entry.isDirectory() || entry.isSymbolicLink()) && !entry.name.startsWith('.') && !types.includes(entry.name)) {
-            types.push(entry.name);
-          }
-        }
-      } catch {}
-    }
+    scan(resolve(dir, 'node_modules/@types'));
     const parent = dirname(dir);
     if (parent === dir) break;
     dir = parent;
   }
+  // rip's own bundled ambients (this file lives at <rip-lang>/src/typecheck.js).
+  scan(resolve(import.meta.dirname, '../node_modules/@types'));
   return { typeRoots, types };
 }
 
@@ -3443,15 +3453,16 @@ const bold    = (s) => isColor ? `\x1b[1m${s}\x1b[0m`  : s;
 export async function runCheck(targetDir, opts = {}) {
   const rootPath = resolve(targetDir);
 
+  // Use rip's own catalog-pinned TypeScript (a dependency), never the
+  // consumer's — so `rip check` and the editor type-check with the exact
+  // same version. import('typescript') resolves from this file's location
+  // (rip-lang's node_modules) regardless of the consumer's setup.
   let ts;
   try {
-    const req = createRequire(resolve(rootPath, 'package.json'));
-    ts = req('typescript');
+    ts = await import('typescript').then(m => m.default || m);
   } catch {
-    try { ts = await import('typescript').then(m => m.default || m); } catch {
-      console.error('TypeScript is required for type checking. Install with: bun add -d typescript');
-      return 1;
-    }
+    console.error('TypeScript could not be loaded. Reinstall rip-lang (it ships TypeScript as a dependency).');
+    return 1;
   }
 
   if (!existsSync(rootPath)) {
@@ -4419,15 +4430,14 @@ function joinPath(label, step, rest) {
 export async function runAudit(targetDir) {
   const rootPath = resolve(targetDir);
 
+  // Use rip's own catalog-pinned TypeScript (a dependency), never the
+  // consumer's — see runCheck above.
   let ts;
   try {
-    const req = createRequire(resolve(rootPath, 'package.json'));
-    ts = req('typescript');
+    ts = await import('typescript').then(m => m.default || m);
   } catch {
-    try { ts = await import('typescript').then(m => m.default || m); } catch {
-      console.error('TypeScript is required for --audit. Install with: bun add -d typescript');
-      return 1;
-    }
+    console.error('TypeScript could not be loaded. Reinstall rip-lang (it ships TypeScript as a dependency).');
+    return 1;
   }
 
   const pkgJsonPath = resolve(rootPath, 'package.json');

@@ -3,7 +3,7 @@
 import { readFileSync, readdirSync, writeFileSync, existsSync, statSync, unlinkSync, lstatSync, readlinkSync, rmSync, mkdirSync, symlinkSync, realpathSync } from 'fs';
 import { execSync, spawnSync, spawn } from 'child_process';
 import { fileURLToPath } from 'url';
-import { dirname, basename, join } from 'path';
+import { dirname, basename, join, resolve, relative } from 'path';
 import { Compiler, formatError } from '../src/compiler.js';
 // Side-effect imports — register CLI-side runtime providers. The browser
 // bundle imports a different schema loader so server-only fragments
@@ -505,8 +505,21 @@ async function main() {
     }
 
     if (showShadow) {
-      const { compileForCheck } = await import('../src/typecheck.js');
-      const entry = compileForCheck(inputFile || '<stdin>', source, new Compiler());
+      const { compileForCheck, readProjectConfig, globToRegex } = await import('../src/typecheck.js');
+      // Honor the project's `rip` config so the shadow matches what `rip
+      // check` actually does. Without `checkAll`, an unannotated file gets a
+      // `// @ts-nocheck` it wouldn't get under the project's real settings.
+      const config = readProjectConfig(inputFile ? dirname(resolve(inputFile)) : process.cwd());
+      const checkAll = config.checkAll === true;
+      // An excluded file is skipped entirely — surface that, since the shadow
+      // below reflects nocheck logic that never runs for excluded files.
+      if (inputFile && config._configDir && Array.isArray(config.exclude)) {
+        const rel = relative(config._configDir, resolve(inputFile));
+        if (config.exclude.map(globToRegex).some(p => p.test(rel)) && !quiet) {
+          console.log(`// NOTE: ${rel} matches rip.exclude — \`rip check\` skips this file entirely.\n`);
+        }
+      }
+      const entry = compileForCheck(inputFile || '<stdin>', source, new Compiler(), { checkAll });
       if (!quiet) console.log(`// == Shadow TypeScript (what \`rip check\` sees) == //\n`);
       console.log(entry.tsContent);
     }
