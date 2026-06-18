@@ -2324,16 +2324,14 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
       );
     }
 
-    // (b) Narrow router.push argument to __RipRoutes for typo-catching
-    // on programmatic navigation. Leave `router.replace` accepting plain
-    // `string` (the base Router signature) — it's commonly used to
-    // mutate the current URL with query strings, where the result is
-    // built dynamically and can't satisfy a literal-route union. Use
-    // Omit + re-add instead of intersection because intersecting
-    // overloaded methods makes the parameter type a union
-    // (contravariance), which loses the narrowing.
+    // (b) Route-check router.push / router.replace the same way as <a href>:
+    // slash-prefixed string LITERALS must be a known route (typos caught, clean
+    // route-list errors); dynamic strings and external URLs fall through. Build
+    // query/hash URLs as `string` values rather than slash-prefixed literals.
+    // Omit + re-add instead of intersection: intersecting overloaded methods
+    // unions the parameter type (contravariance), which loses the narrowing.
     if (code.includes(`declare router: import('@rip-lang/app').Router`)) {
-      const typedRouter = `declare router: Omit<import('@rip-lang/app').Router, 'push'> & { push(url: ${inlineRoutesUnion}, opts?: NavOpts): void; }`;
+      const typedRouter = `declare router: Omit<import('@rip-lang/app').Router, 'push' | 'replace'> & { push<const P extends string>(url: P extends \`/\${string}\` ? ${inlineRoutesUnion} : P, opts?: NavOpts): void; replace<const U extends string>(url: U extends \`/\${string}\` ? ${inlineRoutesUnion} : U, opts?: NavOpts): void; }`;
       code = code.replace(
         /declare router: import\('@rip-lang\/app'\)\.Router(?![ &])/g,
         typedRouter,

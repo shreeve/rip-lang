@@ -558,6 +558,40 @@ check('valid routes, external URLs, and variables in component href pass', () =>
   assert(r.ok, 'expected clean check, got:\n' + r.out);
 });
 
+// ── 11. router.push / router.replace are route-checked like href ──
+//
+// All three nav surfaces share one rule: a slash-prefixed string LITERAL must be
+// a known route (typos error, with a clean route-list message); dynamic strings
+// fall through and pass. Build query/hash URLs as `string` values, not literals.
+const routerBodyProject = (body) => ({
+  'index.rip': `x = 1\n`,
+  'app/stash.rip': `stash =\n  count: 0\n`,
+  'app/routes/orders.rip': `export Orders = component\n  render null\n`,
+  'app/routes/index.rip': `export Home = component\n${body}\n  render\n    div\n`,
+});
+
+check('router.replace: a valid route passes; a path typo errors', () => {
+  let r = checkProject(routerBodyProject(`  mounted: -> @router.replace('/orders')`));
+  assert(r.ok, 'valid route replace should pass:\n' + r.out);
+  r = checkProject(routerBodyProject(`  mounted: -> @router.replace('/nope')`));
+  assert(!r.ok, 'a path typo in replace should error');
+  assert(/not assignable/.test(r.out), 'unexpected output:\n' + r.out);
+});
+
+check('router.replace / push: a dynamic (non-literal) string passes', () => {
+  let r = checkProject(routerBodyProject(`  url:: string := '/whatever'\n  mounted: -> @router.replace(url)`));
+  assert(r.ok, 'dynamic string replace should pass:\n' + r.out);
+  r = checkProject(routerBodyProject(`  url:: string := '/whatever'\n  mounted: -> @router.push(url)`));
+  assert(r.ok, 'dynamic string push should pass:\n' + r.out);
+});
+
+check('router.push: a valid route passes; a path typo errors', () => {
+  let r = checkProject(routerBodyProject(`  mounted: -> @router.push('/orders')`));
+  assert(r.ok, 'valid route push should pass:\n' + r.out);
+  r = checkProject(routerBodyProject(`  mounted: -> @router.push('/nope')`));
+  assert(!r.ok, 'a push typo should error');
+});
+
 rmSync(tmpDir, { recursive: true, force: true });
 console.log('');
 const total = passed + failed;
