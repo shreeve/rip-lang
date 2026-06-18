@@ -1883,7 +1883,7 @@ Status = schema
 # DB-backed model with ORM and migrations
 User = schema :model
   name!   string
-  email!# email
+  email! email @unique
   @timestamps
   @has_many Order
   beforeValidation: -> @email = @email.toLowerCase()

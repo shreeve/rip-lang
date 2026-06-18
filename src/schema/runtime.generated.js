@@ -524,7 +524,7 @@ class __SchemaDef {
           fields.set(e.name, {
             name: e.name,
             required: e.modifiers.includes('!'),
-            unique: e.modifiers.includes('#'),
+            unique: e.unique === true,
             optional: e.modifiers.includes('?'),
             typeName: e.typeName,
             literals: e.literals || null,
@@ -1729,10 +1729,10 @@ function __schemaDerive(source, transform) {
   for (const [, f] of derivedFields) {
     const mods = [];
     if (f.required) mods.push('!');
-    if (f.unique) mods.push('#');
     if (f.optional && !f.required) mods.push('?');
     entries.push({
       tag: 'field', name: f.name, modifiers: mods,
+      unique: f.unique === true,
       typeName: f.typeName, array: f.array,
       literals: f.literals || null,
       coerce: f.coerce === true,
@@ -1804,7 +1804,7 @@ function __schemaExpandMixins(host, fields, directives, ctx) {
       fields.set(e.name, {
         name: e.name,
         required: e.modifiers.includes('!'),
-        unique: e.modifiers.includes('#'),
+        unique: e.unique === true,
         optional: e.modifiers.includes('?'),
         typeName: e.typeName,
         literals: e.literals || null,
@@ -3059,11 +3059,11 @@ __SchemaDef.prototype._tableSpec = function (options) {
     indexes.push({ name: 'idx_' + table + '_' + col, columns: [col], unique: true });
   }
   for (const d of norm.directives) {
-    if (d.name !== 'index') continue;
+    if (d.name !== 'index' && d.name !== 'unique') continue;
     const ixArgs = d.args?.[0] || {};
     const cols = (ixArgs.fields || []).map(__schemaSnake);
     if (!cols.length) continue;
-    indexes.push({ name: 'idx_' + table + '_' + cols.join('_'), columns: cols, unique: ixArgs.unique === true });
+    indexes.push({ name: 'idx_' + table + '_' + cols.join('_'), columns: cols, unique: d.name === 'unique' });
   }
 
   return {
@@ -3085,7 +3085,13 @@ function __schemaRenderColumn(spec, col, fkByColumn) {
     parts[0] = '  ' + col.name + ' ' + col.type + ' PRIMARY KEY';
   } else {
     if (col.notNull) parts.push('NOT NULL');
-    if (col.unique) parts.push('UNIQUE');
+    // Uniqueness is emitted as a single named index (\`idx_<table>_<col>\`),
+    // never as an inline column \`UNIQUE\`. Inline UNIQUE created a second,
+    // auto-named index the migrate differ's fold (__schemaFoldSpec) can't
+    // normalize; the named index is what ADD COLUMN and introspection
+    // already round-trip through. \`col.unique\` stays the canonical spec
+    // flag — it drives the index below and the differ — it just no longer
+    // renders here.
   }
   const fk = fkByColumn ? fkByColumn.get(col.name) : null;
   if (fk) parts.push('REFERENCES ' + fk.refTable + '(' + fk.refColumn + ')');

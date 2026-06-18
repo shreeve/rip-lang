@@ -133,11 +133,11 @@ __SchemaDef.prototype._tableSpec = function (options) {
     indexes.push({ name: 'idx_' + table + '_' + col, columns: [col], unique: true });
   }
   for (const d of norm.directives) {
-    if (d.name !== 'index') continue;
+    if (d.name !== 'index' && d.name !== 'unique') continue;
     const ixArgs = d.args?.[0] || {};
     const cols = (ixArgs.fields || []).map(__schemaSnake);
     if (!cols.length) continue;
-    indexes.push({ name: 'idx_' + table + '_' + cols.join('_'), columns: cols, unique: ixArgs.unique === true });
+    indexes.push({ name: 'idx_' + table + '_' + cols.join('_'), columns: cols, unique: d.name === 'unique' });
   }
 
   return {
@@ -159,7 +159,13 @@ function __schemaRenderColumn(spec, col, fkByColumn) {
     parts[0] = '  ' + col.name + ' ' + col.type + ' PRIMARY KEY';
   } else {
     if (col.notNull) parts.push('NOT NULL');
-    if (col.unique) parts.push('UNIQUE');
+    // Uniqueness is emitted as a single named index (`idx_<table>_<col>`),
+    // never as an inline column `UNIQUE`. Inline UNIQUE created a second,
+    // auto-named index the migrate differ's fold (__schemaFoldSpec) can't
+    // normalize; the named index is what ADD COLUMN and introspection
+    // already round-trip through. `col.unique` stays the canonical spec
+    // flag — it drives the index below and the differ — it just no longer
+    // renders here.
   }
   const fk = fkByColumn ? fkByColumn.get(col.name) : null;
   if (fk) parts.push('REFERENCES ' + fk.refTable + '(' + fk.refColumn + ')');

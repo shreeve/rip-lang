@@ -94,13 +94,13 @@ code "mixin with fields only", '''
 code "model with modifiers and directives", '''
   User = schema :model
     name!    string
-    email!#  email
+    email!   email @unique
     bio?     text
     @timestamps
     @belongs_to Organization
   ''', '''
   let User;
-  User = __schema({kind: "model", name: "User", entries: [{tag: "field", name: "name", modifiers: ["!"], typeName: "string", array: false}, {tag: "field", name: "email", modifiers: ["!","#"], typeName: "email", array: false}, {tag: "field", name: "bio", modifiers: ["?"], typeName: "text", array: false}, {tag: "directive", name: "timestamps"}, {tag: "directive", name: "belongs_to", args: [{target: "Organization"}]}]});
+  User = __schema({kind: "model", name: "User", entries: [{tag: "field", name: "name", modifiers: ["!"], typeName: "string", array: false}, {tag: "field", name: "email", modifiers: ["!"], typeName: "email", array: false, unique: true}, {tag: "field", name: "bio", modifiers: ["?"], typeName: "text", array: false}, {tag: "directive", name: "timestamps"}, {tag: "directive", name: "belongs_to", args: [{target: "Organization"}]}]});
   ''', opts
 
 code "model recognizes known hook names", '''
@@ -606,7 +606,7 @@ test "default-string: constraint immediately after modifier", '''
 
 test "default-string: required+unique without explicit type", '''
   U = schema :shape
-    code!#
+    code! @unique
   U.ok({code: "abc"})
   ''', true
 
@@ -848,12 +848,12 @@ code "bare modifier (no ! no ?) has no implicit min", '''
   X = __schema({kind: "shape", name: "X", entries: [{tag: "field", name: "name", modifiers: [], typeName: "string", array: false, constraints: {max: 20}}]});
   ''', opts
 
-code "!# (required+unique) + ..N implies min=1", '''
+code "required @unique + ..N implies min=1", '''
   X = schema
-    token!# ..60
+    token! ..60, @unique
   ''', '''
   let X;
-  X = __schema({kind: "input", name: "X", entries: [{tag: "field", name: "token", modifiers: ["!","#"], typeName: "string", array: false, constraints: {min: 1, max: 60}}]});
+  X = __schema({kind: "input", name: "X", entries: [{tag: "field", name: "token", modifiers: ["!"], typeName: "string", array: false, unique: true, constraints: {min: 1, max: 60}}]});
   ''', opts
 
 code "! + N..N (explicit min) does not override", '''
@@ -1025,8 +1025,8 @@ test "transform: thrown error surfaces as issue", '''
 
 test "transform: survives algebra (.pick preserves transform)", '''
   User = schema :shape
-    email!# email, -> it.email.toLowerCase()
-    name!# -> it.Name
+    email! email, -> it.email.toLowerCase()
+    name! -> it.Name
   Slim = User.pick("email", "name")
   out = Slim.parse({email: "ALICE@X.com", Name: "Alice"})
   [out.email, out.name]
@@ -1051,7 +1051,7 @@ test "transform: comma-less bare form (no type, no constraints)", '''
 
 test "transform: comma required after type", '''
   X = schema
-    email!# email, -> it.email.toLowerCase()
+    email! email, -> it.email.toLowerCase()
   X.parse({email: "HELLO@X.COM"}).email
   ''', "hello@x.com"
 
@@ -1063,7 +1063,7 @@ test "transform: comma required after range", '''
 
 fail "transform: missing comma after type is rejected", '''
   X = schema
-    email!# email -> it.email.toLowerCase()
+    email! email -> it.email.toLowerCase()
   '''
 
 fail "transform: missing comma after range is rejected", '''
@@ -2156,7 +2156,7 @@ modelHeader = '''
 test ":model toSQL emits CREATE TABLE", modelHeader + '''
   User = schema :model
     name! string, 1..100
-    email!# email
+    email! email @unique
     @timestamps
   sql = User.toSQL()
   [sql.includes("CREATE TABLE users"), sql.includes("VARCHAR(100)"), sql.includes("UNIQUE"), sql.includes("created_at"), sql.includes("updated_at")]
@@ -3277,7 +3277,7 @@ test "multi-line trailers split on commas (range + regex across lines)", '''
 
 test "multi-line trailer ending in a transform still parses", '''
   X = schema
-    email!# email,
+    email! email,
       ..320,
       -> it.email.toLowerCase()
   v = X.parse {email: "A@B.CO"}
@@ -3624,7 +3624,7 @@ test "UNIQUE violation surfaces as SchemaError {field, error: 'unique'}", '''
   __SchemaRegistry.reset()
   User = schema :model
     name! string
-    email!# email
+    email! email @unique
   err = null
   try
     User.create! {name: "A", email: "a@b.c"}
@@ -3777,7 +3777,7 @@ test ".upsert! emits ON CONFLICT DO UPDATE; branch hooks skipped", modelHeader +
   trace = []
   User = schema :model
     name! string
-    email!# email
+    email! email @unique
     beforeSave:   -> trace.push "beforeSave"
     beforeCreate: -> trace.push "beforeCreate"
     beforeUpdate: -> trace.push "beforeUpdate"
@@ -4490,7 +4490,7 @@ test "_tableSpec exposes the canonical table structure", modelHeader + '''
     name! string
   User = schema :model
     name!   string, 1..100
-    email!# email
+    email!  email @unique
     @timestamps
     @softDelete
     @belongs_to Org
@@ -4507,6 +4507,36 @@ test "_tableSpec exposes the canonical table structure", modelHeader + '''
     spec.indexes.map (i) -> i.name + (i.unique ? "!" : "")
   ]
 ''', ["users", "users_seq:1", ["id", "name", "email", "org_id", "created_at", "updated_at", "deleted_at"], "VARCHAR(100)", true, "orgs", ["idx_users_email!", "idx_users_name_email"]]
+
+# Regression: the `@unique` DIRECTIVE forms (the silent-no-op bug that
+# motivated retiring `#`). `@unique :col` and `@unique [a, b]` must each
+# emit a UNIQUE index — single and composite.
+test "@unique directive: single + composite emit unique indexes", modelHeader + '''
+  User = schema :model
+    a!     string
+    b!     string
+    email! email
+    @unique :email
+    @unique [:a, :b]
+  User._tableSpec().indexes.map (i) -> i.name + (i.unique ? "!" : "")
+''', ["idx_users_email!", "idx_users_a_b!"]
+
+# `@unique` rides through mixin expansion like any other field attribute.
+test "@unique survives mixin expansion", modelHeader + '''
+  Keyed = schema :mixin
+    code! string @unique
+  Thing = schema :model
+    @mixin Keyed
+    name! string
+  Thing._tableSpec().indexes.map (i) -> i.name + (i.unique ? "!" : "")
+''', ["idx_things_code!"]
+
+# Clean break: the removed `#` unique modifier is a hard compile error,
+# not a silent no-op.
+fail "removed: '#' unique modifier is rejected", '''
+  User = schema :model
+    email!# email
+  '''
 
 test "diff: empty database plans CREATE for every model", migrateHeader + '''
   User = schema :model
@@ -4528,7 +4558,7 @@ test "diff: empty database plans CREATE for every model", migrateHeader + '''
 test "diff: matching database plans nothing (round-trip clean)", migrateHeader + '''
   User = schema :model
     name!   string, 1..100
-    email!# email
+    email!  email @unique
     @timestamps
   deployed.tables = [{
     name: "users"
@@ -4555,7 +4585,7 @@ test "diff: added columns classify by shape (optional / default / required / uni
     bio?   text
     plan?  string, ["free"]
     code!  string
-    tag!#  string
+    tag!   string @unique
   deployed.tables = [{
     name: "users", sequence: {name: "users_seq", start: 1}, primaryKey: "id"
     columns: [

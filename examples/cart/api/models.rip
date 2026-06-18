@@ -1,7 +1,7 @@
 export User = schema :model
   firstName! string, 1..
   lastName!  string, 1..
-  email!#    email
+  email!     email @unique
   phone?     string
   @timestamps
   @has_many Order

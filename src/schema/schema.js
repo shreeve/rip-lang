@@ -740,17 +740,27 @@ function parseFieldedLine(kind, line, entries, ctx) {
   let modifiers = collectModifiers(first);
   let pos = 1;
 
-  // Adjacent `!`, `#`, `?` modifier tokens. `!` and `?` are absorbed into
-  // the IDENTIFIER's data by the main lexer. `#` arrives as a standalone
-  // token because the schema commentToken exception kicks in when `#` is
-  // adjacent to an identifier. A modifier must be unspaced from the
-  // token it follows, so we check the preceding token's `.spaced` flag
+  // Adjacent `!`, `?` modifier tokens. They are absorbed into the
+  // IDENTIFIER's data by the main lexer. A modifier must be unspaced from
+  // the token it follows, so we check the preceding token's `.spaced` flag
   // (which the whitespace pass sets to true when whitespace follows).
+  //
+  // `#` used to be a third (unique) modifier; it arrives as a standalone
+  // token because the schema commentToken exception kicks in when `#` is
+  // adjacent to an identifier. Uniqueness is now a storage concern spelled
+  // `@unique` — so a leftover `#` here is a removed-syntax migration error,
+  // not a silent no-op.
   while (pos < line.length) {
     let tk = line[pos];
     let adjacent = line[pos - 1] && !line[pos - 1].spaced;
     if (!adjacent) break;
-    if (tk[0] === '#' || tk[0] === '?' || tk[0] === '!') {
+    if (tk[0] === '#') {
+      throw schemaError(tk,
+        `The '#' unique modifier was removed. Mark uniqueness with '@unique': ` +
+        `inline as '${name}! <type> @unique', or as a directive '@unique :${name}' ` +
+        `(composite: '@unique [:a, :b]').`);
+    }
+    if (tk[0] === '?' || tk[0] === '!') {
       modifiers.push(tk[0]);
       pos++;
       continue;
@@ -864,7 +874,7 @@ function parseFieldedLine(kind, line, entries, ctx) {
   // Comma-required rule: if a type was consumed and the next token is
   // `->` (no comma separator), reject with a clear diagnostic. The
   // comma is a structural boundary between the field declaration and
-  // the transform; skipping it makes `email!# email -> fn` read as
+  // the transform; skipping it makes `email! email -> fn` read as
   // if 'email' were an argument to the arrow, which it isn't.
   let typeConsumed = typeFirst?.[0] === 'IDENTIFIER' || typeFirst?.[0] === 'STRING';
   if (typeConsumed && rest[0]?.[0] === '->') {
@@ -876,6 +886,7 @@ function parseFieldedLine(kind, line, entries, ctx) {
   let rangeTokens = null;
   let regexToken = null;
   let transformTokens = null;
+  let uniqueAttr = false;
 
   if (rest.length > 0) {
     // The leading comma is only required when a type was consumed. If
@@ -970,9 +981,26 @@ function parseFieldedLine(kind, line, entries, ctx) {
             `Transform '-> …' must be the last element on the field line for '${name}'.`);
         }
         transformTokens = part.slice(1);
+      } else if (head[0] === '@') {
+        // Trailing `@unique` — single-column uniqueness co-located on the
+        // field (mirrors Prisma's field-level `@unique`). Uniqueness is a
+        // storage property, so it rides as a field attribute, not a `!`/`?`
+        // shape modifier. Composite uniqueness uses the `@unique [...]`
+        // directive on its own line.
+        let attrTok = part[1];
+        let attrName = attrTok && (attrTok[0] === 'IDENTIFIER' || attrTok[0] === 'PROPERTY') ? attrTok[1] : null;
+        if (part.length === 2 && attrName === 'unique') {
+          if (uniqueAttr) {
+            throw schemaError(head, `Field '${name}' has more than one '@unique'.`);
+          }
+          uniqueAttr = true;
+        } else {
+          throw schemaError(head,
+            `Unknown inline attribute '@${attrName ?? ''}' on field '${name}'. The only inline attribute is '@unique'.`);
+        }
       } else {
         throw schemaError(head,
-          `Unexpected trailer for field '${name}'. Expected '[…]' default, '{…}' attrs, '/regex/', 'min..max' range, or '-> transform'.`);
+          `Unexpected trailer for field '${name}'. Expected '[…]' default, '{…}' attrs, '/regex/', 'min..max' range, '-> transform', or '@unique'.`);
       }
     }
   }
@@ -1008,6 +1036,7 @@ function parseFieldedLine(kind, line, entries, ctx) {
     tag: 'field',
     name,
     modifiers,
+    unique: uniqueAttr,
     typeName,
     array,
     literals,
@@ -1910,6 +1939,7 @@ function entryLiteral(emitter, e) {
         `typeName: ${JSON.stringify(e.typeName)}`,
         `array: ${e.array ? 'true' : 'false'}`,
       ];
+      if (e.unique) obj.push('unique: true');
       if (e.literals) {
         obj.push(`literals: ${JSON.stringify(e.literals)}`);
       }
@@ -2316,6 +2346,37 @@ function serializeLiteral(v) {
   return JSON.stringify(v);
 }
 
+// Extract a column-name list from a directive's args — a single name
+// (`field` / `:field`) or a bracketed list (`[:a, :b]`). Accepts bare
+// identifiers and `:symbol` form interchangeably; both denote field names.
+// Shared by `@unique` and `@index`.
+function collectDirectiveFieldNames(tokens) {
+  let isName = (t) => t && (t[0] === 'IDENTIFIER' || t[0] === 'PROPERTY' || t[0] === 'SYMBOL');
+  let fields = [];
+  let pos = 0;
+  if (isName(tokens[pos])) {
+    fields.push(tokens[pos][1]);
+  } else if (tokens[pos]?.[0] === '[' || tokens[pos]?.[0] === 'INDEX_START') {
+    let inner = [];
+    let depth = 1;
+    pos++;
+    while (pos < tokens.length && depth > 0) {
+      let t = tokens[pos];
+      if (t[0] === '[' || t[0] === 'INDEX_START') depth++;
+      if (t[0] === ']' || t[0] === 'INDEX_END') {
+        depth--;
+        if (depth === 0) { pos++; break; }
+      }
+      inner.push(t);
+      pos++;
+    }
+    for (let part of splitTopLevelByComma(inner)) {
+      if (isName(part[0])) fields.push(part[0][1]);
+    }
+  }
+  return fields;
+}
+
 // Compile directive args to a JS literal list or null. Each directive has
 // its own arg shape — we centralize the parsing here so Layer 2 can rely
 // on normalized structures.
@@ -2348,38 +2409,24 @@ function compileDirectiveArgsLiteral(name, tokens) {
     return `[{${parts.join(', ')}}]`;
   }
 
-  // `@index field` or `@index [a, b]` or `@index [a, b] #` for unique.
-  if (name === 'index') {
-    let fields = [];
-    let unique = false;
-    let pos = 0;
-    if (tokens[pos]?.[0] === 'IDENTIFIER' || tokens[pos]?.[0] === 'PROPERTY') {
-      fields.push(tokens[pos][1]);
-      pos++;
-    } else if (tokens[pos]?.[0] === '[' || tokens[pos]?.[0] === 'INDEX_START') {
-      let inner = [];
-      let depth = 1;
-      pos++;
-      while (pos < tokens.length && depth > 0) {
-        let t = tokens[pos];
-        if (t[0] === '[' || t[0] === 'INDEX_START') depth++;
-        if (t[0] === ']' || t[0] === 'INDEX_END') {
-          depth--;
-          if (depth === 0) { pos++; break; }
-        }
-        inner.push(t);
-        pos++;
-      }
-      for (let part of splitTopLevelByComma(inner)) {
-        if (part[0] && (part[0][0] === 'IDENTIFIER' || part[0][0] === 'PROPERTY')) {
-          fields.push(part[0][1]);
-        }
-      }
+  // `@unique :field`, `@unique field`, or `@unique [:a, :b]` — a unique
+  // constraint (model-only). Single-field uniqueness is more commonly
+  // written inline as `field! type @unique`; this directive form covers
+  // composite keys and the single-field case when you prefer it separate.
+  if (name === 'unique') {
+    let fields = collectDirectiveFieldNames(tokens);
+    if (!fields.length) {
+      throw schemaError(tokens[0] || tokens[tokens.length - 1],
+        `@unique requires a field name or list — '@unique :email' or '@unique [:a, :b]'.`);
     }
-    if (tokens[pos]?.[0] === '#') unique = true;
-    let parts = [`fields: ${JSON.stringify(fields)}`];
-    if (unique) parts.push('unique: true');
-    return `[{${parts.join(', ')}}]`;
+    return `[{fields: ${JSON.stringify(fields)}}]`;
+  }
+
+  // `@index field` or `@index [a, b]` — a non-unique index. Uniqueness is
+  // spelled `@unique`, never `@index … #` (the `#` unique flag was removed).
+  if (name === 'index') {
+    let fields = collectDirectiveFieldNames(tokens);
+    return `[{fields: ${JSON.stringify(fields)}}]`;
   }
 
   // `@on :field` — the :union discriminator. Pre-validated by

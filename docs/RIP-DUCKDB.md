@@ -185,7 +185,7 @@ was originally documented from:
 ```coffee
 Partner = schema :model
   name!  string
-  slug!# string
+  slug! string @unique
 
 Patient = schema :model
   mrn?       string

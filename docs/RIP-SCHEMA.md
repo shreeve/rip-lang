@@ -18,7 +18,7 @@ Rip Schema collapses all of them into one declaration:
 ```coffee
 User = schema :model
   name!   string, 1..100
-  email!# email
+  email! email @unique
   phone?  ~:phone
   @timestamps
   @has_many Order
@@ -268,7 +268,7 @@ Status.ok "unknown"      # false
 ```coffee
 User = schema :model
   name!    string, 1..100
-  email!#  email
+  email!   email @unique
   @timestamps
   @has_many Order
 
@@ -352,9 +352,9 @@ User = schema
 schema.defaultMaxString = 500
 
 Profile = schema :model
-  name!                         # → {min: 1, max: 500}
-  email!#     email             # → {max: 500}
-  bio?        text              # → uncapped (text opts out)
+  name!                  # → {min: 1, max: 500}
+  email! email @unique   # → {max: 500}
+  bio?   text            # → uncapped (text opts out)
 
 # One-line small shapes, plus a registered schema used as a field type.
 Address = schema :shape; street? ..200; city? ..100; zip? ..10
@@ -554,7 +554,7 @@ instances.
 ```coffee
 User = schema :model
   name!    string
-  email!#  email
+  email!   email @unique
   @timestamps
   @has_many Order
 
@@ -582,12 +582,15 @@ Modifiers:
 | Modifier | Meaning  |
 | -------- | -------- |
 | `!`      | required |
-| `#`      | unique (emits `UNIQUE` in DDL; also creates a unique index) |
 | `?`      | optional |
 
-Any combination works (`email!#` means required + unique). Order among
-modifiers doesn't matter. No modifier means "present but not required" —
+`!` and `?` are *shape* modifiers — they apply to every schema kind, and
+order doesn't matter. No modifier means "present but not required" —
 equivalent to `?` for validation purposes.
+
+Uniqueness is **not** a modifier — it's a *storage* constraint (only
+meaningful on `:model`), spelled `@unique`: inline as `email! email @unique`,
+or as a directive `@unique :email` (composite: `@unique [:partnerId, :mrn]`).
 
 **Type is optional** — when omitted, the field defaults to `string`. Type
 expressions accept:
@@ -605,7 +608,7 @@ expressions accept:
 Example = schema
   name!                                   # required string (default type)
   tags!      string[]                     # required array of strings
-  email!#    email                        # required, unique, email-format-validated
+  email!    email @unique                        # required, unique, email-format-validated
   bio?       text, 0..1000                # optional text, 0-1000 chars
   role?      string, ["user"]             # optional, default "user"
   status     string, [:draft]             # default :draft — same as ["draft"]
@@ -698,7 +701,7 @@ Imported = schema
   displayName! -> it.DisplayName
   shippedAt?   date, -> new Date(it.shippedAt)             # wire string → Date
   slug!        -> "#{it.FirstName}-#{it.LastName}".toLowerCase()
-  email!#      email, -> it.email.toLowerCase().trim()     # normalize + validate
+  email!       email @unique, -> it.email.toLowerCase().trim()     # normalize + validate
 ```
 
 Rules:
@@ -710,7 +713,7 @@ Rules:
   the line (type, range, regex, default, attrs). The comma is a
   structural boundary between the field declaration and the
   transform, not an argument separator — without it, lines like
-  `email!# email -> fn` misleadingly suggest `email` is an input to
+  `email! email -> fn` misleadingly suggest `email` is an input to
   the arrow. The bare form `name! -> fn` (nothing before the arrow
   except the name and modifiers) parses comma-less because there's
   nothing to elide. This is unlike Rip's general `get '/path' ->`
@@ -1726,10 +1729,12 @@ User.toSQL()
 # CREATE TABLE users (
 #   id INTEGER PRIMARY KEY DEFAULT nextval('users_seq'),
 #   name VARCHAR(100) NOT NULL,
-#   email VARCHAR NOT NULL UNIQUE,
+#   email VARCHAR NOT NULL,
 #   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 #   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 # );
+#
+# CREATE UNIQUE INDEX idx_users_email ON users ("email");
 #
 # CREATE UNIQUE INDEX idx_users_email ON users ("email");
 ```
@@ -1983,8 +1988,8 @@ Algebra operators derive new schemas from existing ones:
 
 ```coffee
 User = schema :model
-  name!    string
-  email!#  email, -> it.email.toLowerCase()
+  name!     string
+  email!    email @unique, -> it.email.toLowerCase()
   password! string
   full: ~> "#{@name} <#{@email}>"
   tagline: !> "#{@name} (active)"
@@ -2467,7 +2472,7 @@ for patient in patients
 ```coffee
 User = schema :model
   name!    string, 1..100
-  email!#  email
+  email!   email @unique
   @timestamps
   @has_many Order
 
@@ -2531,7 +2536,7 @@ Post = schema :model
 ```coffee
 User = schema :model
   name!     string
-  email!#   email
+  email!    email @unique
   password! string
   role?     string, [:user]
   @timestamps
@@ -2558,7 +2563,7 @@ declared, not guessed:
 # models.rip — week 2: rename a column, add a field, add a table
 User = schema :model
   fullName! string, 1..100, {was: "name"}   # rename annotation
-  email!#   email
+  email!    email @unique
   phone?    ~:phone                          # new column
   @timestamps
 
@@ -2805,7 +2810,8 @@ user-defined enums or shapes compose incrementally.
 | `@softDelete`                 | Adds `deleted_at` column; `.destroy()` sets `deleted_at = now()` instead of DELETE. Queries (`find`, `where`, `all`, `first`, `count`) implicitly filter `deleted_at IS NULL`; escape hatches: `.withDeleted()`, `.onlyDeleted()`, `inst.restore!`, `inst.destroy! hard: true` |
 | `@index [a, b, c]`            | Composite index on the listed columns                               |
 | `@index column`               | Single-column index (same as `@index [column]`)                     |
-| `@index [...] #`              | Unique index                                                        |
+| `@unique [a, b]`              | Composite unique constraint on the listed columns                   |
+| `@unique :column`             | Single-column unique (or inline on the field: `column! type @unique`) |
 | `@idStart N`                  | Seed value for the auto-id sequence in `.toSQL()` output (default `1`). Overridden per-call by `toSQL(idStart: N)`. |
 | `@scope :name, -> body`       | Named composable query scope — `this` is the builder; also `@scope :name, (args) -> body`. Installed on the model and the builder |
 | `@defaultScope -> body`       | Applied to every query unless `.unscoped()` is called. At most one per model |
@@ -2996,7 +3002,7 @@ schema.defaultMaxString = 500
 
 User = schema :model
   name!                         # → {min: 1, max: 500}  (sugar + pragma)
-  email!#    email              # → {max: 500}
+  email!     email @unique      # → {max: 500}
   code?                         # → {max: 500}
   password!  8..200             # → {min: 8, max: 200}  (explicit wins)
   bio?       text               # → no constraint       (text opts out)

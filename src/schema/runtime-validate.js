@@ -436,7 +436,7 @@ class __SchemaDef {
           fields.set(e.name, {
             name: e.name,
             required: e.modifiers.includes('!'),
-            unique: e.modifiers.includes('#'),
+            unique: e.unique === true,
             optional: e.modifiers.includes('?'),
             typeName: e.typeName,
             literals: e.literals || null,
@@ -1641,10 +1641,10 @@ function __schemaDerive(source, transform) {
   for (const [, f] of derivedFields) {
     const mods = [];
     if (f.required) mods.push('!');
-    if (f.unique) mods.push('#');
     if (f.optional && !f.required) mods.push('?');
     entries.push({
       tag: 'field', name: f.name, modifiers: mods,
+      unique: f.unique === true,
       typeName: f.typeName, array: f.array,
       literals: f.literals || null,
       coerce: f.coerce === true,
@@ -1716,7 +1716,7 @@ function __schemaExpandMixins(host, fields, directives, ctx) {
       fields.set(e.name, {
         name: e.name,
         required: e.modifiers.includes('!'),
-        unique: e.modifiers.includes('#'),
+        unique: e.unique === true,
         optional: e.modifiers.includes('?'),
         typeName: e.typeName,
         literals: e.literals || null,
