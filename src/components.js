@@ -1478,11 +1478,18 @@ export function installComponentSupport(CodeEmitter, Lexer) {
               return; // branches fully handled — don't re-walk children below
             }
           } else if (head === '?:') {
-            // Emit the full ternary so all branches are type-checked
+            // Emit the full ternary so all branches are type-checked, then
+            // return — like the `__text__`/`str` cases. The emitted expression
+            // already covers every branch, so re-walking children is redundant
+            // and actively harmful: a nested member access (e.g. `opt.label`
+            // in `typeof opt is "string" ? opt : opt.label`) would hit the
+            // bare member-access case below and be re-emitted *unguarded*,
+            // stripping the `typeof` narrowing and producing a false error.
             const ternCode = this.emitInComponent(node, 'value');
             const srcLine = node.loc?.r;
             const srcMarker = srcLine != null ? ` // @rip-src:${srcLine}` : '';
             constructions.push(`    ${ternCode};${srcMarker}`);
+            return;
           } else if (head === 'switch') {
             const discriminant = node[1];
             if (discriminant != null) {
