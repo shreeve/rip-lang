@@ -8648,6 +8648,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           let constructionIdx = 0;
           const sourceLines = this.options.source?.split(`
 `);
+          const wrapCompHref = (val) => typeof val === "string" && /^["'`]\//.test(val) ? `__ripRoute(${val})` : val;
           const extractProps = (args) => {
             const props = [];
             const sideExprs = [];
@@ -8688,7 +8689,8 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
                       props.push({ code: `${key}: ${member}`, srcLine });
                     } else {
                       const val = this.emitInComponent(value, "value");
-                      props.push({ code: `${key}: ${val}`, srcLine });
+                      const finalVal = key === "href" ? wrapCompHref(val) : val;
+                      props.push({ code: `${key}: ${finalVal}`, srcLine });
                     }
                   }
                 }
@@ -8827,6 +8829,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
               const srcLine = node.loc?.r;
               const srcMarker = srcLine != null ? ` // @rip-src:${srcLine}` : "";
               constructions.push(`    ${ternCode};${srcMarker}`);
+              return;
             } else if (head2 === "switch") {
               const discriminant = node[1];
               if (discriminant != null) {
@@ -8883,6 +8886,20 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
                 const srcMarker = srcLine != null ? ` // @rip-src:${srcLine}` : "";
                 constructions.push(`    ${exprCode};${srcMarker}`);
               } catch {}
+              return;
+            } else if (head2 === "." || head2 === "?.") {
+              let base = node;
+              while (Array.isArray(base) && (base[0] === "." || base[0] === "?."))
+                base = base[1];
+              const baseName = typeof base === "string" ? base : base?.valueOf?.();
+              if (typeof baseName === "string" && !this.isHtmlTag(baseName) && !CodeEmitter.GENERATORS[baseName]) {
+                try {
+                  const exprCode = this.emitInComponent(node, "value");
+                  const srcLine = node.loc?.r;
+                  const srcMarker = srcLine != null ? ` // @rip-src:${srcLine}` : "";
+                  constructions.push(`    ${exprCode};${srcMarker}`);
+                } catch {}
+              }
               return;
             }
             const emitBareIdent = (child, parentNode, isTextChild) => {
@@ -15912,7 +15929,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.16.1";
-  var BUILD_DATE = "2026-06-13@06:10:55GMT";
+  var BUILD_DATE = "2026-06-18@10:30:19GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
