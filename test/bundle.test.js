@@ -681,6 +681,104 @@ checkAsync('renderer: a staying-mounted layout is not re-gated on sibling nav; a
   renderer.stop();
 });
 
+check('route groups: pathless (group) dirs strip from URL and share their _layout', () => {
+  globalThis.window = globalThis.window || { addEventListener: () => {}, removeEventListener: () => {} };
+  globalThis.location = globalThis.location || { pathname: '/', search: '', hash: '', origin: 'http://test', href: 'http://test/' };
+  globalThis.MutationObserver = globalThis.MutationObserver || class { observe() {} disconnect() {} takeRecords() { return []; } };
+  const C = globalThis.createComponents();
+  const stub = (p) => { C.write(p, 'stub'); C.setCompiled(p, {}); };
+  stub('_route/welcome.rip');
+  stub('_route/(app)/_layout.rip');
+  stub('_route/(app)/new-order.rip');
+  stub('_route/(app)/orders/[id].rip');
+  const router = globalThis.createRouter(C);
+
+  const m = router.match('/new-order');
+  if (!m) throw new Error('grouped route did not match at stripped URL /new-order');
+  if (m.route.file !== '_route/(app)/new-order.rip') throw new Error('wrong file: ' + (m.route && m.route.file));
+  if (!m.layouts.includes('_route/(app)/_layout.rip')) throw new Error('group _layout not in chain: ' + JSON.stringify(m.layouts));
+
+  const d = router.match('/orders/42');
+  if (!d || d.route.file !== '_route/(app)/orders/[id].rip') throw new Error('nested grouped dynamic route failed');
+  if (d.params.id !== '42') throw new Error('param not parsed: ' + JSON.stringify(d.params));
+
+  if (router.match('/app/new-order')) throw new Error('group segment leaked into the URL');
+});
+
+check('route groups: two routes resolving to the same URL throw at build time', () => {
+  globalThis.window = globalThis.window || { addEventListener: () => {}, removeEventListener: () => {} };
+  globalThis.location = globalThis.location || { pathname: '/', search: '', hash: '', origin: 'http://test', href: 'http://test/' };
+  globalThis.MutationObserver = globalThis.MutationObserver || class { observe() {} disconnect() {} takeRecords() { return []; } };
+  const C = globalThis.createComponents();
+  const stub = (p) => { C.write(p, 'stub'); C.setCompiled(p, {}); };
+  stub('_route/(app)/orders.rip');
+  stub('_route/(public)/orders.rip');
+  let threw = false;
+  try { globalThis.createRouter(C); } catch (e) { threw = /resolve to/.test(e.message); }
+  if (!threw) throw new Error('expected a collision error for two routes resolving to /orders');
+});
+
+checkAsync("a page's gate failure routes to the parent layout's onError, carrying the HTTP status", async () => {
+  const makeEl = () => ({
+    children: [], attrs: {}, style: {}, innerHTML: '', textContent: '',
+    appendChild(c) { this.children.push(c); }, setAttribute(k, v) { this.attrs[k] = v; },
+    querySelector: () => null, remove() {},
+  });
+  globalThis.window = globalThis.window || { addEventListener: () => {}, removeEventListener: () => {} };
+  globalThis.document.createElement = () => makeEl();
+  globalThis.document.getElementById = () => null;
+  globalThis.document.body.appendChild = () => {};
+
+  const C = globalThis.__ripComponent.__Component;
+  const gb = globalThis.__ripComponent.__gateBind;
+
+  let caught = null;
+  class Layout extends C {                          // the boundary
+    onError(f) { caught = f; }
+    _create() { return null; }
+  }
+  class Secret extends C {                          // page gating a throwing source
+    static __gates = ['secret'];
+    _init() { this.secret = gb(this, 'secret'); }
+    _create() { return null; }
+  }
+
+  const components = globalThis.createComponents();
+  components.write('_route/(app)/_layout.rip', 'stub'); components.setCompiled('_route/(app)/_layout.rip', { Layout });
+  components.write('_route/(app)/secret.rip', 'stub'); components.setCompiled('_route/(app)/secret.rip', { Secret });
+
+  const app = { data: globalThis.createStash({
+    secret: globalThis.source({ fetch: async () => { throw Object.assign(new Error('nope'), { status: 401 }); } }),
+  }) };
+
+  const globalErrors = [];
+  const routeSig = globalThis.__rip.__state(null);
+  const router = {
+    get current() { return routeSig.value ?? { route: null }; },
+    navigating: false, init() {}, match: () => null, ownsAnchor: () => false,
+  };
+  const renderer = globalThis.createRenderer({
+    router, app, components, resolver: {}, compile: (s) => s, target: makeEl(),
+    onError: (e) => globalErrors.push(e),
+  });
+  renderer.start();
+
+  // A handled gate failure is control flow, not an error: capture console.error
+  // to prove the framework stays quiet when a boundary handles it.
+  const logs = [];
+  const origErr = console.error;
+  console.error = (...a) => logs.push(a.map(String).join(' '));
+  routeSig.value = { path: '/secret', params: {}, route: { file: '_route/(app)/secret.rip', pattern: '/secret' }, layouts: ['_route/(app)/_layout.rip'], query: {}, hash: '' };
+  await sleep(20);
+  console.error = origErr;
+
+  if (!caught) throw new Error("the parent layout's onError was not called for the child page's gate failure");
+  if (caught.status !== 401) throw new Error('failure should carry status 401, got ' + JSON.stringify(caught.status));
+  if (globalErrors.length) throw new Error('a handled gate failure must not reach the global onError: ' + JSON.stringify(globalErrors));
+  if (logs.some((l) => /gate .* failed/.test(l))) throw new Error('a handled gate failure must not console.error: ' + JSON.stringify(logs));
+  renderer.stop();
+});
+
 Promise.all(asyncChecks).then(() => {
   process.stdout.write('\\u0001RESULTS\\u0001' + JSON.stringify(results) + '\\u0001RESULTS\\u0001');
 });

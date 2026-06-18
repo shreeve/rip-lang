@@ -296,7 +296,10 @@ export function walkRoutesDir(routesDir) {
       // Skip _-prefixed files (_layout.rip etc.) and dirs (shared
       // helpers, not pages). Same rule as runtime buildRoutes.
       if (e.name.startsWith('_')) continue;
-      if (e.isDirectory()) walk(resolve(dir, e.name), [...segs, e.name]);
+      // Pathless route groups: a `(name)` directory organizes routes and
+      // shares a _layout.rip without contributing a URL segment. Recurse
+      // but don't add it to the path. Mirrors runtime fileToPattern.
+      if (e.isDirectory()) walk(resolve(dir, e.name), /^\(.+\)$/.test(e.name) ? segs : [...segs, e.name]);
       else if (e.isFile() && e.name.endsWith('.rip')) {
         const base = e.name.slice(0, -'.rip'.length);
         const fileSegs = base === 'index' ? segs : [...segs, base];

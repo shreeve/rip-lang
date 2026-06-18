@@ -15929,7 +15929,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.16.1";
-  var BUILD_DATE = "2026-06-18@10:30:19GMT";
+  var BUILD_DATE = "2026-06-18@20:51:21GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -17645,7 +17645,10 @@ ${indented}`);
     pattern = rel.replace(/\.rip$/, "");
     pattern = pattern.replace(/\[\.\.\.(\w+)\]/g, "*$1");
     pattern = pattern.replace(/\[(\w+)\]/g, ":$1");
-    if (pattern === "index")
+    pattern = pattern.split("/").filter(function(seg) {
+      return !/^\(.+\)$/.test(seg);
+    }).join("/");
+    if (pattern === "index" || pattern === "")
       return "/";
     pattern = pattern.replace(/\/index$/, "");
     return "/" + pattern;
@@ -17679,7 +17682,7 @@ ${indented}`);
     return null;
   };
   buildRoutes = function(components, root = "_route") {
-    let allFiles, dir, layouts, name, regex, rel, routes, segs, urlPattern;
+    let allFiles, dir, layouts, name, regex, rel, routes, seen, segs, urlPattern;
     routes = [];
     layouts = new Map;
     allFiles = components.listAll(root);
@@ -17703,6 +17706,13 @@ ${indented}`);
       urlPattern = fileToPattern(rel);
       regex = patternToRegex(urlPattern);
       routes.push({ pattern: urlPattern, regex, file: filePath, rel });
+    }
+    seen = new Map;
+    for (let r of routes) {
+      if (seen.has(r.pattern)) {
+        throw new Error(`Rip App: '${seen.get(r.pattern)}' and '${r.rel}' both resolve to '${r.pattern}'`);
+      }
+      seen.set(r.pattern, r.rel);
     }
     routes.sort(function(a, b) {
       let aCatch, aDyn, bCatch, bDyn;
@@ -18590,9 +18600,6 @@ ${indented}`);
     };
     routeGateFailure = function(failure) {
       let handled, pre;
-      console.error(`Renderer: gate '${failure.path}' failed:`, failure.error);
-      if (onError)
-        onError(failure);
       handled = false;
       for (let _i = layoutInstances.length - 1;_i >= 0; _i--) {
         let inst = layoutInstances[_i];
@@ -18607,6 +18614,9 @@ ${indented}`);
         }
       }
       if (!handled) {
+        console.error(`Renderer: gate '${failure.path}' failed:`, failure.error);
+        if (onError)
+          onError(failure);
         unmount();
         pre = document.createElement("pre");
         pre.style.cssText = "color:red;padding:1em";

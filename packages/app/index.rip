@@ -1282,7 +1282,12 @@ fileToPattern = (rel) ->
   pattern = rel.replace(/\.rip$/, '')
   pattern = pattern.replace(/\[\.\.\.(\w+)\]/g, '*$1')
   pattern = pattern.replace(/\[(\w+)\]/g, ':$1')
-  return '/' if pattern is 'index'
+  # Pathless route groups: a path segment wrapped wholly in parens —
+  # `(app)/orders` → `orders` — groups routes under a shared `_layout.rip`
+  # without contributing a URL segment. Literal parens inside a filename
+  # (`foo(bar)`) are untouched, since only whole `(…)` segments are dropped.
+  pattern = pattern.split('/').filter((seg) -> not /^\(.+\)$/.test(seg)).join('/')
+  return '/' if pattern is 'index' or pattern is ''
   pattern = pattern.replace(/\/index$/, '')
   '/' + pattern
 
@@ -1334,6 +1339,15 @@ buildRoutes = (components, root = '_route') ->
     urlPattern = fileToPattern(rel)
     regex = patternToRegex(urlPattern)
     routes.push { pattern: urlPattern, regex, file: filePath, rel }
+
+  # Two files resolving to the same URL (e.g. via different pathless groups —
+  # `(app)/orders.rip` and `(public)/orders.rip`) is an authoring error, not a
+  # silent last-wins. Surface it deterministically at build time.
+  seen = new Map()
+  for r in routes
+    if seen.has(r.pattern)
+      throw new Error "Rip App: '#{seen.get(r.pattern)}' and '#{r.rel}' both resolve to '#{r.pattern}'"
+    seen.set r.pattern, r.rel
 
   # Sort: static first, then fewest dynamic segments, catch-all last
   routes.sort (a, b) ->
@@ -2186,8 +2200,10 @@ export def createRenderer(opts:: RendererOpts):: Renderer
   # block below, but carries the structured { status, message, error,
   # path } shape gate failures carry.
   routeGateFailure = (failure) ->
-    console.error "Renderer: gate '#{failure.path}' failed:", failure.error
-    onError(failure) if onError
+    # Error boundaries get first crack: a handled gate failure (e.g. an auth
+    # boundary redirecting on 401) is control flow, not an error — it must not
+    # log or reach the global onError reporter. Only an UNHANDLED failure is a
+    # real error worth surfacing.
     handled = false
     for inst in layoutInstances by -1
       if inst.onError
@@ -2198,6 +2214,8 @@ export def createRenderer(opts:: RendererOpts):: Renderer
         catch boundaryErr
           console.error "Renderer: error boundary failed:", boundaryErr
     unless handled
+      console.error "Renderer: gate '#{failure.path}' failed:", failure.error
+      onError(failure) if onError
       unmount()
       pre = document.createElement('pre')
       pre.style.cssText = 'color:red;padding:1em'
