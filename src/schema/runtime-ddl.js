@@ -126,18 +126,34 @@ __SchemaDef.prototype._tableSpec = function (options) {
     columns.push({ name: 'deleted_at', type: 'TIMESTAMP', notNull: false, unique: false, default: null, was: null });
   }
 
+  // Index names are derived from their column set (`idx_<table>_<cols>`),
+  // so two declarations on the same columns collide. That's always a
+  // redundant/contradictory schema (a `@unique` index already serves as an
+  // index for those columns) — reject it loudly rather than emit duplicate
+  // CREATE INDEX statements.
   const indexes = [];
+  const indexByName = new Map();
+  const addIndex = (ix) => {
+    if (indexByName.has(ix.name)) {
+      throw new Error(
+        `Table '${table}': duplicate index '${ix.name}' on (${ix.columns.join(', ')}). ` +
+        `Those columns are declared unique/indexed more than once — a '@unique' already ` +
+        `creates an index, so remove the redundant '@unique'/'@index' declaration.`);
+    }
+    indexByName.set(ix.name, ix);
+    indexes.push(ix);
+  };
   for (const [n, f] of norm.fields) {
     if (!f.unique) continue;
     const col = __schemaSnake(n);
-    indexes.push({ name: 'idx_' + table + '_' + col, columns: [col], unique: true });
+    addIndex({ name: 'idx_' + table + '_' + col, columns: [col], unique: true });
   }
   for (const d of norm.directives) {
     if (d.name !== 'index' && d.name !== 'unique') continue;
     const ixArgs = d.args?.[0] || {};
     const cols = (ixArgs.fields || []).map(__schemaSnake);
     if (!cols.length) continue;
-    indexes.push({ name: 'idx_' + table + '_' + cols.join('_'), columns: cols, unique: d.name === 'unique' });
+    addIndex({ name: 'idx_' + table + '_' + cols.join('_'), columns: cols, unique: d.name === 'unique' });
   }
 
   return {

@@ -4538,6 +4538,21 @@ fail "removed: '#' unique modifier is rejected", '''
     email!# email
   '''
 
+# Two index declarations on the same columns collide on index name — a
+# redundant/contradictory schema, rejected loudly rather than emitting
+# duplicate CREATE INDEX.
+test "duplicate index on the same columns is rejected", modelHeader + '''
+  User = schema :model
+    email! email @unique
+    @index :email
+  err = null
+  try
+    User._tableSpec()
+  catch e
+    err = e
+  [err?.message.includes("duplicate index"), err?.message.includes("idx_users_email")]
+''', [true, true]
+
 test "diff: empty database plans CREATE for every model", migrateHeader + '''
   User = schema :model
     name! string
