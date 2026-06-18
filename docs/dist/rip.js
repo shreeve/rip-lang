@@ -15929,7 +15929,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.16.1";
-  var BUILD_DATE = "2026-06-18@20:51:21GMT";
+  var BUILD_DATE = "2026-06-18@20:51:59GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -16406,6 +16406,7 @@ ${indented}`);
   var patternToRegex;
   var resolveIndex;
   var resolveStorePath;
+  var showFatalError;
   var snapshotDefaults;
   var stampDefaults;
   var stashGet;
@@ -18451,6 +18452,14 @@ ${indented}`);
       }
     })();
   };
+  showFatalError = function(container, text) {
+    let pre;
+    container.innerHTML = "";
+    pre = document.createElement("pre");
+    pre.style.cssText = "margin:2rem;padding:1rem 1.25rem;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;overflow-wrap:anywhere";
+    pre.textContent = text;
+    return container.appendChild(pre);
+  };
   function createRenderer(opts) {
     let PRELOAD_SETTLE_MS, app, cancelSettle, compile2, components, container, currentComponent, currentLayouts, currentParams, currentQuery, currentRoute, disposeEffect, ensureGates, generation, invalidateResolver, lastPreload, layoutInstances, mountPoint, mountRoute, onError, onIntent, onIntentCancel, preload, preloadOnIntent, renderer, resolveGateCell, resolver, routeGateFailure, router, sameKeys, settleAnchor, settleTimer, started, target, unmount, unmountCurrent, unwatchSources;
     assertBrowser("createRenderer");
@@ -18587,11 +18596,16 @@ ${indented}`);
       failure = null;
       for (let i = 0;i < results.length; i++) {
         let r = results[i];
-        if (!(r.status === "rejected"))
+        err = null;
+        if (r.status === "rejected") {
+          err = r.reason;
+        } else if (!preloadMode && !(r.value != null)) {
+          err = new Error(`[Rip] gate '${list[i].path} <~' resolved to ${r.value}: a gated source must resolve to a non-null value or throw. For a value that can be absent, read it ungated with ~= instead of gating it.`);
+        }
+        if (!err)
           continue;
         ownerIdx = Math.min(...list[i].owners);
         if (ownerIdx < failedIndex) {
-          err = r.reason;
           failedIndex = ownerIdx;
           failure = { status: err?.status ?? err?.response?.status ?? 500, message: err?.message ?? String(err), error: err, path: list[i].path };
         }
@@ -18599,7 +18613,7 @@ ${indented}`);
       return { failedIndex, failure };
     };
     routeGateFailure = function(failure) {
-      let handled, pre;
+      let handled;
       handled = false;
       for (let _i = layoutInstances.length - 1;_i >= 0; _i--) {
         let inst = layoutInstances[_i];
@@ -18618,15 +18632,11 @@ ${indented}`);
         if (onError)
           onError(failure);
         unmount();
-        pre = document.createElement("pre");
-        pre.style.cssText = "color:red;padding:1em";
-        pre.textContent = `${failure.status}: ${failure.message}`;
-        container.innerHTML = "";
-        return container.appendChild(pre);
+        return showFatalError(container, `${failure.status}: ${failure.message}`);
       }
     };
     mountRoute = async function(info, force = false) {
-      let Component, LayoutClass, __innerPrev, __pop, __prev, __push, chain, constructUpTo, failedIndex, failure, gen2, handled, inst, instance, layoutEntries, layoutFiles, layoutMod, layoutSource, layoutsChanged, mod, mountedPrefix, mp, oldTarget, outerScope, pageParent, pagePrev, pageWrapper, params, pre, prevScope, query, queryKeyedChanged, route, sameRoute, slot, source2, wrapper;
+      let Component, LayoutClass, __innerPrev, __pop, __prev, __push, chain, constructUpTo, failedIndex, failure, gen2, handled, inst, instance, layoutEntries, layoutFiles, layoutMod, layoutSource, layoutsChanged, mod, mountedPrefix, mp, oldTarget, outerScope, pageParent, pagePrev, pageWrapper, params, prevScope, query, queryKeyedChanged, route, sameRoute, slot, source2, wrapper;
       ({ route, params, layouts: layoutFiles, query } = info);
       if (!route)
         return;
@@ -18819,11 +18829,7 @@ ${indented}`);
           return (() => {
             if (!handled) {
               unmount();
-              pre = document.createElement("pre");
-              pre.style.cssText = "color:red;padding:1em";
-              pre.textContent = err.stack || err.message;
-              container.innerHTML = "";
-              return container.appendChild(pre);
+              return showFatalError(container, err.stack || err.message);
             }
           })();
         }

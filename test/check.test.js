@@ -184,8 +184,8 @@ const SOURCE_STASH = `import { source } from '@rip-lang/app'
 
 export stash =
   cart: { items: [] }
-  user: source { fetch: -> { firstName: 'Ada', lastName: 'Lovelace' } }
-  order: source { fetch: (id:: string) -> { id: id, total: 42 } }
+  user: source { fetch: -> Promise.resolve({ firstName: 'Ada', lastName: 'Lovelace' }) }
+  order: source { fetch: (id:: string) -> Promise.resolve({ id: id, total: 42 }) }
 `;
 
 check('gated binding is non-null at every read site', () => {
@@ -275,7 +275,7 @@ orders:: number[] = []
 
 export stash =
   orders: orders
-  user: source { fetch: -> { name: 'Ada' } }
+  user: source { fetch: -> Promise.resolve({ name: 'Ada' }) }
 `,
     'orders.rip': `export Orders = component
   orders <~ @app.data.orders
@@ -294,7 +294,7 @@ check('gating a nullable plain key errors too (the silent-null case)', () => {
 
 export stash =
   selected: null
-  user: source { fetch: -> { name: 'Ada' } }
+  user: source { fetch: -> Promise.resolve({ name: 'Ada' }) }
 `,
     'sel.rip': `export Sel = component
   selected <~ @app.data.selected
@@ -311,7 +311,7 @@ check('a gate on a missing key errors; sources via binding or subpath stay clean
     'app/stash.rip': `import { source } from '@rip-lang/app'
 
 export stash =
-  user: source { fetch: -> { name: 'Ada' } }
+  user: source { fetch: -> Promise.resolve({ name: 'Ada' }) }
 `,
     'c.rip': `export C = component
   stats <~ @app.data.stats
@@ -325,11 +325,11 @@ export stash =
     'index.rip': `export ok = true\n`,
     'app/stash.rip': `import { source } from '@rip-lang/app'
 
-userSource = source { fetch: -> { name: 'Ada' } }
+userSource = source { fetch: -> Promise.resolve({ name: 'Ada' }) }
 
 export stash =
   user: userSource
-  settings: { theme: source { fetch: -> { dark: true } } }
+  settings: { theme: source { fetch: -> Promise.resolve({ dark: true }) } }
 `,
     'c.rip': `export C = component
   user <~ @app.data.user
@@ -340,6 +340,96 @@ export stash =
   assert(clean.ok, 'binding indirection and subpath gates should pass: ' + clean.out);
 });
 
+// ── source() is non-null and async by contract (`T extends NonNullSourceValue`) ──
+//
+// A render-ready gate narrows `T | null` to `T`; that narrowing is only
+// honest if a source can never RESOLVE to null. The constraint enforces it
+// at the declaration: a fetch that can return null/undefined — or forgets
+// to return — is a compile error, caught at the source, not deep in a
+// component dereferencing a "non-null" null.
+
+check('a source whose fetch can resolve to null errors at the declaration', () => {
+  const r = checkProject({
+    'index.rip': `export ok = true\n`,
+    'app/stash.rip': `import { source } from '@rip-lang/app'
+
+export stash =
+  user: source { fetch: -> if true then Promise.resolve({ name: 'Ada' }) else Promise.resolve(null) }
+`,
+  });
+  assert(!r.ok, 'expected a non-null-source constraint error');
+  assert(/Type 'null' is not assignable/.test(r.out), 'unexpected output:\n' + r.out);
+});
+
+check('a source whose fetch resolves to undefined (no value) errors at the declaration', () => {
+  const r = checkProject({
+    'index.rip': `export ok = true\n`,
+    'app/stash.rip': `import { source } from '@rip-lang/app'
+
+export stash =
+  user: source { fetch: -> Promise.resolve(undefined) }
+`,
+  });
+  assert(!r.ok, 'expected a void-fetch constraint error');
+  assert(/Type 'undefined' is not assignable/.test(r.out), 'unexpected output:\n' + r.out);
+});
+
+check('a source with a non-null fetch passes (constraint does not over-fire)', () => {
+  const r = checkProject({
+    'index.rip': `export ok = true\n`,
+    'app/stash.rip': `import { source } from '@rip-lang/app'
+
+export stash =
+  user: source { fetch: -> Promise.resolve({ name: 'Ada' }) }
+  orders: source { fetch: -> Promise.resolve([1, 2, 3]) }
+`,
+    'c.rip': `export C = component
+  user <~ @app.data.user
+  render
+    p "#{user.name}"
+`,
+  });
+  assert(r.ok, 'expected a clean check, got:\n' + r.out);
+});
+
+// A forgotten return is the trap case: an async fetch with no return is
+// `Promise<void>`. Because a source `fetch` must return `Promise<T>` with `T`
+// non-null, `void` fails the constraint — so the error lands at the
+// DECLARATION, at the fetch, not later at the consumer (where TS's `void`
+// leniency would otherwise only surface it as `{}`).
+check('a fetch that forgets to return errors at the declaration (async no-return)', () => {
+  const r = checkProject({
+    'index.rip': `export ok = true\n`,
+    'app/stash.rip': `import { source } from '@rip-lang/app'
+
+export stash =
+  user: source
+    fetch: ->
+      x = await Promise.resolve({ name: 'Ada' })
+      if not x then throw new Error('no')
+`,
+  });
+  assert(!r.ok, 'a forgotten return must be caught');
+  assert(/stash\.rip/.test(r.out), 'error should surface at the declaration:\n' + r.out);
+  assert(/not assignable/.test(r.out) && /NonNullSourceValue/.test(r.out), 'should cite the named non-null fetch contract:\n' + r.out);
+});
+
+// A source is async by contract — `fetch` must return a `Promise`. A
+// synchronous fetch (returning a value directly) is a type error, so static
+// non-null data isn't smuggled in as a source; it belongs in a plain stash key.
+check('a synchronous (non-Promise) fetch is rejected — a source must be async', () => {
+  const r = checkProject({
+    'index.rip': `export ok = true\n`,
+    'app/stash.rip': `import { source } from '@rip-lang/app'
+
+export stash =
+  user: source { fetch: -> { name: 'Ada' } }
+`,
+  });
+  assert(!r.ok, 'a sync fetch must be a type error (fetch must return a Promise)');
+  assert(/stash\.rip/.test(r.out), 'error should surface at the declaration:\n' + r.out);
+});
+
 check('opaque stash values stay silent (the mount check backstops them)', () => {
   const r = checkProject({
     'index.rip': `export ok = true\n`,
@@ -348,7 +438,7 @@ import { makeThing } from './factory.rip'
 
 export stash =
   thing: makeThing()
-  user: source { fetch: -> { name: 'Ada' } }
+  user: source { fetch: -> Promise.resolve({ name: 'Ada' }) }
 `,
     'app/factory.rip': `export makeThing = -> null\n`,
     'c.rip': `export C = component
@@ -374,7 +464,7 @@ check("staleTime '5 min' checks clean; '5 mins' is a type error", () => {
     'app/stash.rip': `import { source } from '@rip-lang/app'
 
 export stash =
-  products: source { fetch: (-> [1, 2]), staleTime: '5 min' }
+  products: source { fetch: (-> Promise.resolve([1, 2])), staleTime: '5 min' }
 `,
   });
   assert(good.ok, "'5 min' should be a valid Duration: " + good.out);
@@ -384,7 +474,7 @@ export stash =
     'app/stash.rip': `import { source } from '@rip-lang/app'
 
 export stash =
-  products: source { fetch: (-> [1, 2]), staleTime: '5 mins' }
+  products: source { fetch: (-> Promise.resolve([1, 2])), staleTime: '5 mins' }
 `,
   });
   assert(!bad.ok, "'5 mins' should be rejected by the Duration type");
@@ -397,7 +487,7 @@ check("staleTime 'forever' checks clean; symbols and near-misses are type errors
     'app/stash.rip': `import { source } from '@rip-lang/app'
 
 export stash =
-  products: source { fetch: (-> [1, 2]), staleTime: 'forever' }
+  products: source { fetch: (-> Promise.resolve([1, 2])), staleTime: 'forever' }
 `,
   });
   assert(good.ok, "'forever' should type-check: " + good.out);
@@ -407,7 +497,7 @@ export stash =
     'app/stash.rip': `import { source } from '@rip-lang/app'
 
 export stash =
-  products: source { fetch: (-> [1, 2]), staleTime: :forever }
+  products: source { fetch: (-> Promise.resolve([1, 2])), staleTime: :forever }
 `,
   });
   assert(!sym.ok, 'the :forever symbol should be rejected — the keyword is a string');
@@ -417,7 +507,7 @@ export stash =
     'app/stash.rip': `import { source } from '@rip-lang/app'
 
 export stash =
-  products: source { fetch: (-> [1, 2]), staleTime: 'foreverz' }
+  products: source { fetch: (-> Promise.resolve([1, 2])), staleTime: 'foreverz' }
 `,
   });
   assert(!typo.ok, "'foreverz' should be rejected");

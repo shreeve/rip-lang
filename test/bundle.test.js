@@ -600,6 +600,69 @@ checkAsync('renderer: gates load before construction; failures route to onError;
   renderer.stop();
 });
 
+checkAsync('renderer: a gated source that RESOLVES to null fails the gate (does not construct on a null)', async () => {
+  const makeEl = () => ({
+    children: [], attrs: {}, style: {}, innerHTML: '', textContent: '',
+    appendChild(c) { this.children.push(c); },
+    setAttribute(k, v) { this.attrs[k] = v; },
+    querySelector: () => null,
+    remove() {},
+  });
+  globalThis.window = globalThis.window || { addEventListener: () => {}, removeEventListener: () => {} };
+  globalThis.document.createElement = () => makeEl();
+  globalThis.document.getElementById = () => null;
+  globalThis.document.body.appendChild = () => {};
+
+  const C = globalThis.__ripComponent.__Component;
+  const gb = globalThis.__ripComponent.__gateBind;
+
+  // The type constraint (source<T extends NonNullSourceValue>) forbids declaring a nullish
+  // fetch, but an any-typed or unvalidated fetch can still resolve to null
+  // at runtime. The gate must treat that as a failure that routes to the
+  // boundary, not construct on a null the binding swears is non-null.
+  let caught = null;
+  let constructed = false;
+  class Layout extends C {
+    onError(f) { caught = f; }
+    _create() { return null; }
+  }
+  class NullPage extends C {
+    static __gates = ['nullish'];
+    _init() { this.nullish = gb(this, 'nullish'); constructed = true; }
+    _create() { return null; }
+  }
+
+  const components = globalThis.createComponents();
+  components.write('_route/_layout.rip', 'stub'); components.setCompiled('_route/_layout.rip', { Layout });
+  components.write('_route/index.rip', 'stub'); components.setCompiled('_route/index.rip', { NullPage });
+
+  const app = { data: globalThis.createStash({
+    nullish: globalThis.source({ fetch: async () => null }),
+  }) };
+
+  const routeSig = globalThis.__rip.__state(null);
+  const router = {
+    get current() { return routeSig.value ?? { route: null }; },
+    navigating: false,
+    init() {}, match: () => null, ownsAnchor: () => false,
+  };
+  const renderer = globalThis.createRenderer({
+    router, app, components, resolver: {}, compile: (s) => s, target: makeEl(),
+    onError: () => {},
+  });
+  renderer.start();
+
+  routeSig.value = { path: '/', params: {}, route: { file: '_route/index.rip', pattern: '/' }, layouts: ['_route/_layout.rip'], query: {}, hash: '' };
+  await sleep(20);
+
+  if (constructed) throw new Error('a page whose gated source resolved to null must not construct');
+  if (!caught) throw new Error('a null-resolving gate must route to the boundary onError');
+  if (caught.path !== 'nullish') throw new Error('gate failure must carry the source path: ' + JSON.stringify(caught));
+  if (!/resolved to null/.test(caught.message || '')) throw new Error('gate failure must explain the null resolution: ' + JSON.stringify(caught));
+
+  renderer.stop();
+});
+
 checkAsync('renderer: a staying-mounted layout is not re-gated on sibling nav; a page gating the same source revalidates it', async () => {
   const makeEl = () => ({
     children: [], attrs: {}, style: {}, innerHTML: '', textContent: '',

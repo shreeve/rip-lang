@@ -74,8 +74,29 @@ export type Duration = number | `${number}${DurationUnit}` | `${number} ${Durati
 # annotations, and the `<~` gate is the narrow. Keyed-ness mirrors the
 # runtime's `fetch.length >= 1` rule exactly: a fetch whose first param is
 # REQUIRED is keyed; an optional/defaulted param stays a singleton.
-export type SourceOpts<T, A extends unknown[]> =
-  fetch: (...args: A) => Promise<T> | T
+# A source's resolved value is non-null by contract: `fetch` returns a
+# `Promise<T>` where `T` is non-null. A fetch that resolves to null/undefined,
+# or one that forgets to return (so its type is `Promise<void>`), is a compile
+# error AT THE DECLARATION — `void`/`null`/`undefined` don't satisfy `T`. Model
+# absence as a throw (gate failure → boundary) or a non-null empty value (`[]`,
+# `{...}`). This keeps a render-ready gate's non-null narrowing honest, and
+# makes a null source read mean exactly one thing: not loaded.
+#
+# A source is async by definition (server-loaded data with loading/stale/error
+# state), so `fetch` must return a `Promise` — a plain `Promise<T>` return,
+# with no sync `| T` branch. That sync branch is what let a forgotten return
+# (`Promise<void>`, an object) slip past the constraint and surface later at
+# the gate; requiring a Promise rejects it right here with a clean message.
+# Synchronous non-null data belongs in a plain stash key, not a source.
+#
+# `NonNullSourceValue` is `{}` (any non-null value) spelled as a named union
+# instead of the literal `{}`. TS preserves a union alias's NAME in errors but
+# expands `type … = {}` to the bare `{}`, so the failure reads "Type 'void' is
+# not assignable to type 'NonNullSourceValue'" — self-documenting.
+export type NonNullSourceValue = object | string | number | boolean | symbol | bigint
+
+export type SourceOpts<T extends NonNullSourceValue, A extends unknown[]> =
+  fetch: (...args: A) => Promise<T>
   staleTime?: Duration | 'forever'
 
 # (One line on purpose: an indented alias body parses as a structural type.)
@@ -1031,7 +1052,7 @@ makeSourceFamily = (fetchFn, staleTime) ->
 # `fetch: (id) -> …` types and runs as one cell per key. A singleton fetch
 # receives an optional AbortSignal; declare it with a default
 # (`fetch: (signal = null) -> …`) so it doesn't read as a key parameter.
-export def source<T, A extends unknown[]>(opts:: SourceOpts<T, A>):: SourceValue<T, A>
+export def source<T extends NonNullSourceValue, A extends unknown[]>(opts:: SourceOpts<T, A>):: SourceValue<T, A>
   staleTime = parseStaleTime(opts.staleTime)
   cell = if opts.fetch.length >= 1
     makeSourceFamily(opts.fetch, staleTime)
@@ -2053,6 +2074,18 @@ compileAndImport = (source, compile, components = null, path = null, resolver = 
       if resolver.blobUrls?[path] is url
         delete resolver.blobUrls[path]
 
+# Last-resort fatal-error display: shown when a gate fails with no boundary
+# to handle it, or a component throws during mount. Self-contained inline
+# styles (no app CSS dependency — this is the fallback when the app itself is
+# broken). `pre-wrap`/`overflow-wrap` keep long messages and stack traces from
+# running off-screen; the rest reads as a plain error card.
+showFatalError = (container, text) ->
+  container.innerHTML = ''
+  pre = document.createElement('pre')
+  pre.style.cssText = 'margin:2rem;padding:1rem 1.25rem;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;overflow-wrap:anywhere'
+  pre.textContent = text
+  container.appendChild pre
+
 export def createRenderer(opts:: RendererOpts):: Renderer
   assertBrowser 'createRenderer'
   { router, app, components, resolver, compile, target, onError } = opts
@@ -2187,10 +2220,22 @@ export def createRenderer(opts:: RendererOpts):: Renderer
     failedIndex = Infinity
     failure = null
     for r, i in results
-      continue unless r.status is 'rejected'
+      # A gate fails two ways: the fetch threw (rejected), OR it resolved to
+      # null/undefined under a non-null binding. The type constraint on
+      # source() catches the latter statically, but a fetch whose type lies
+      # at runtime (an `any` leak, an unvalidated response, a server breaking
+      # contract) can still hand a gate a nullish value — fail fast here with
+      # a located message instead of constructing on a null the type swears
+      # is non-null. Preload is best-effort (a value may simply not be loaded
+      # yet), so only the real gate pass enforces non-null.
+      err = null
+      if r.status is 'rejected'
+        err = r.reason
+      else if not preloadMode and not r.value?
+        err = new Error "[Rip] gate '#{list[i].path} <~' resolved to #{r.value}: a gated source must resolve to a non-null value or throw. For a value that can be absent, read it ungated with ~= instead of gating it."
+      continue unless err
       ownerIdx = Math.min(...list[i].owners)
       if ownerIdx < failedIndex
-        err = r.reason
         failedIndex = ownerIdx
         failure = { status: err?.status ?? err?.response?.status ?? 500, message: err?.message ?? String(err), error: err, path: list[i].path }
     { failedIndex: failedIndex, failure: failure }
@@ -2217,11 +2262,7 @@ export def createRenderer(opts:: RendererOpts):: Renderer
       console.error "Renderer: gate '#{failure.path}' failed:", failure.error
       onError(failure) if onError
       unmount()
-      pre = document.createElement('pre')
-      pre.style.cssText = 'color:red;padding:1em'
-      pre.textContent = "#{failure.status}: #{failure.message}"
-      container.innerHTML = ''
-      container.appendChild pre
+      showFatalError container, "#{failure.status}: #{failure.message}"
 
   mountRoute = (info, force = false) ->
     { route, params, layouts: layoutFiles, query } = info
@@ -2463,11 +2504,7 @@ export def createRenderer(opts:: RendererOpts):: Renderer
         # would set layoutsChanged=false and try to mount into the
         # destroyed container DOM.
         unmount()
-        pre = document.createElement('pre')
-        pre.style.cssText = 'color:red;padding:1em'
-        pre.textContent = err.stack or err.message
-        container.innerHTML = ''
-        container.appendChild pre
+        showFatalError container, (err.stack or err.message)
 
   started:: boolean = false
 
