@@ -12,12 +12,32 @@
 // mistakes that the source-level test suite (which runs against
 // src/compiler.js directly) would otherwise miss.
 
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'fs';
 import { resolve } from 'path';
 import { spawnSync } from 'child_process';
 
 const repoRoot = resolve(import.meta.dir, '..');
 const bundlePath = resolve(repoRoot, 'docs/dist/rip.min.js');
+
+// `bun run build` (below) rewrites the committed browser-bundle artifacts in
+// docs/dist. This test only needs *a* freshly-built bundle to smoke-test — it
+// must not leave the working tree dirty (the build stamps a wall-clock
+// BUILD_DATE when source is dirty, so every run would otherwise show a diff).
+// Snapshot the artifacts now and restore them on exit so the test is
+// side-effect-free; updating the committed bundle stays an explicit
+// `bun run build`. Restore runs on the 'exit' event to cover all the
+// process.exit() paths below; writes are synchronous so they complete there.
+const artifacts = ['docs/dist/rip.js', 'docs/dist/rip.min.js', 'docs/dist/rip.min.js.br']
+  .map(p => resolve(repoRoot, p));
+const snapshot = artifacts.map(p => (existsSync(p) ? readFileSync(p) : null));
+process.on('exit', () => {
+  for (let i = 0; i < artifacts.length; i++) {
+    try {
+      if (snapshot[i] === null) { if (existsSync(artifacts[i])) unlinkSync(artifacts[i]); }
+      else writeFileSync(artifacts[i], snapshot[i]);
+    } catch {}
+  }
+});
 
 function color(code, s) { return process.stdout.isTTY ? `\x1b[${code}m${s}\x1b[0m` : s; }
 const green = s => color('32;1', s);
