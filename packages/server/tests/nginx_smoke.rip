@@ -81,6 +81,12 @@ if nginxBin
         """
       # Ensure static root exists (nginx -t checks alias paths)
       try Bun.write(join(dir, 'repl', '.keep'), '')
+      # The generated config has `include mime.types;` (a relative path, correct
+      # for production where nginx resolves it against its install prefix). With
+      # `-c <abspath>` and no `-p`, nginx uses the config file's directory as the
+      # prefix, so it looks for mime.types in this temp dir — drop a minimal one
+      # there so the include resolves without depending on the host's nginx layout.
+      writeFileSync(join(dir, 'mime.types'), "types {\n    text/html html;\n    text/plain txt;\n}\n")
       confPath = join(dir, 'nginx.conf')
       writeFileSync(confPath, nginxConf)
 
