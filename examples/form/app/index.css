@@ -1,59 +1,67 @@
 @import "tailwindcss";
 
 :root {
-  --color-brand: var(--color-sky-600);
+  --color-brand:   var(--color-sky-600);
   --color-success: var(--color-green-600);
-  --color-info: var(--color-brand);
-  --color-error: var(--color-red-600);
-  --color-text-primary: var(--color-neutral-950);
-  --color-text-secondary: var(--color-neutral-800);
-  --color-text-tertiary: var(--color-neutral-600);
+  --color-info:    var(--color-brand);
+  --color-error:   var(--color-red-600);
+
+  --color-text-primary:    var(--color-neutral-950);
+  --color-text-secondary:  var(--color-neutral-800);
+  --color-text-tertiary:   var(--color-neutral-600);
   --color-text-quaternary: var(--color-neutral-400);
-  --color-bg-background: var(--color-neutral-50);
-  --color-bg-surface: var(--color-white);
-  --color-bg-input: var(--color-white);
-  --color-bg-input-hover: var(--color-neutral-50);
+
+  --color-bg-background:   var(--color-neutral-50);
+  --color-bg-surface:      var(--color-white);
+  --color-bg-input:        var(--color-white);
+  --color-bg-input-hover:  var(--color-neutral-50);
   --color-bg-input-active: var(--color-neutral-100);
-  --color-border-surface: oklch(from var(--color-neutral-200) calc(l + 0.02) c h);
-  --color-border-input: var(--color-neutral-200);
+
+  --color-border-surface:     oklch(from var(--color-neutral-200) calc(l + 0.02) c h);
+  --color-border-input:       var(--color-neutral-200);
   --color-border-input-hover: var(--color-neutral-300);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-text-primary: var(--color-neutral-50);
-    --color-text-secondary: var(--color-neutral-200);
-    --color-text-tertiary: var(--color-neutral-300);
+    --color-text-primary:    var(--color-neutral-50);
+    --color-text-secondary:  var(--color-neutral-200);
+    --color-text-tertiary:   var(--color-neutral-300);
     --color-text-quaternary: var(--color-neutral-400);
-    --color-bg-background: var(--color-neutral-950);
-    --color-bg-surface: var(--color-neutral-900);
-    --color-bg-input: oklch(from var(--color-neutral-900) calc(l + 0.04) c h);
+
+    --color-bg-background:  var(--color-neutral-950);
+    --color-bg-surface:     var(--color-neutral-900);
+    --color-bg-input:       oklch(from var(--color-neutral-900) calc(l + 0.04) c h);
     --color-bg-input-hover: oklch(from var(--color-neutral-900) calc(l + 0.05) c h);
     --color-bg-input-active: var(--color-neutral-800);
-    --color-border-surface: var(--color-neutral-800);
-    --color-border-input: var(--color-neutral-700);
+
+    --color-border-surface:     var(--color-neutral-800);
+    --color-border-input:       var(--color-neutral-700);
     --color-border-input-hover: var(--color-neutral-600);
   }
 }
 
 @theme {
-  --color-brand: var(--color-brand);
-  --color-brand-hover: oklch(from var(--color-brand) calc(l - 0.02) c h);
+  --color-brand:        var(--color-brand);
+  --color-brand-hover:  oklch(from var(--color-brand) calc(l - 0.02) c h);
   --color-brand-active: oklch(from var(--color-brand) calc(l - 0.05) c h);
-  --color-success: var(--color-success);
-  --color-info: var(--color-info);
-  --color-error: var(--color-error);
-  --text-color-primary: var(--color-text-primary);
-  --text-color-secondary: var(--color-text-secondary);
-  --text-color-tertiary: var(--color-text-tertiary);
+  --color-success:      var(--color-success);
+  --color-info:         var(--color-info);
+  --color-error:        var(--color-error);
+
+  --text-color-primary:    var(--color-text-primary);
+  --text-color-secondary:  var(--color-text-secondary);
+  --text-color-tertiary:   var(--color-text-tertiary);
   --text-color-quaternary: var(--color-text-quaternary);
-  --background-color-background: var(--color-bg-background);
-  --background-color-surface: var(--color-bg-surface);
-  --background-color-input: var(--color-bg-input);
-  --background-color-input-hover: var(--color-bg-input-hover);
+
+  --background-color-background:   var(--color-bg-background);
+  --background-color-surface:      var(--color-bg-surface);
+  --background-color-input:        var(--color-bg-input);
+  --background-color-input-hover:  var(--color-bg-input-hover);
   --background-color-input-active: var(--color-bg-input-active);
-  --border-color-surface: var(--color-border-surface);
-  --border-color-input: var(--color-border-input);
+
+  --border-color-surface:     var(--color-border-surface);
+  --border-color-input:       var(--color-border-input);
   --border-color-input-hover: var(--color-border-input-hover);
 
   --breakpoint-xs: 30rem;
