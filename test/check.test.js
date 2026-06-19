@@ -463,6 +463,66 @@ check('an inline @event handler param is genuinely typed (a bogus member errors)
   assert(/preventDefaultz/.test(r.out), 'unexpected output:\n' + r.out);
 });
 
+// ── A required prop is satisfiable by a `<=>` two-way binding ──
+//
+// `mode <=> mode` compiles to the mangled `__bind_mode__: <signal>`, so a
+// REQUIRED public prop bound this way used to report TS2741 ("Property 'mode'
+// is missing") — the binding only supplied `__bind_mode__`, never the bare
+// required `mode`. Fixed: the constructor types each required prop as a union
+// of { value } | { __bind_value__ }, so either form satisfies it. Optional
+// props never hit this (nothing to leave missing).
+
+check('a required prop bound with <=> checks clean (binding satisfies it)', () => {
+  const r = checkProject({
+    'index.rip': `export ok = true\n`,
+    'c.rip': `export Parent = component
+  mode:: 'a' | 'b' := 'a'
+  render
+    Child mode <=> mode
+
+Child = component
+  @mode:: 'a' | 'b'
+  render
+    p "#{mode}"
+`,
+  });
+  assert(r.ok, 'a required prop bound via <=> should check clean: ' + r.out);
+});
+
+check('a required prop passed by direct value still checks clean', () => {
+  const r = checkProject({
+    'index.rip': `export ok = true\n`,
+    'c.rip': `export Parent = component
+  render
+    Child mode: 'a'
+
+Child = component
+  @mode:: 'a' | 'b'
+  render
+    p "#{mode}"
+`,
+  });
+  assert(r.ok, 'a required prop passed directly should check clean: ' + r.out);
+});
+
+check('omitting a required prop entirely still errors', () => {
+  const r = checkProject({
+    'index.rip': `export ok = true\n`,
+    'c.rip': `export Parent = component
+  render
+    Child config: 'x'
+
+Child = component
+  @config:: string
+  @mode:: 'a' | 'b'
+  render
+    p "#{mode}"
+`,
+  });
+  assert(!r.ok, 'omitting a required prop must still error');
+  assert(/mode/.test(r.out), 'error should name the missing prop:\n' + r.out);
+});
+
 check('opaque stash values stay silent (the mount check backstops them)', () => {
   const r = checkProject({
     'index.rip': `export ok = true\n`,

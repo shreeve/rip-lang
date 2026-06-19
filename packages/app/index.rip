@@ -1088,23 +1088,32 @@ export def createMutation<R>(fn:: (...args: any[]) => Promise<R> | R, opts?:: { 
     _pending.value = true
     _succeeded.value = false
     _error.value = null
+    r:: R
     try
       r = await fn(...args)
-      # Newer-invocation-wins: a superseded call (a later invocation bumped the
-      # generation) must not flip the flags OR run its callback — otherwise an
-      # older result's onSuccess can clobber the newer one's stash write. Await
-      # the callback so its work is part of the mutation's lifecycle (pending
-      # stays true through it) and an async rejection surfaces here instead of
-      # floating as an unhandled rejection.
-      if me is generation
-        _succeeded.value = true
-        await opts.onSuccess?(r)
-      r
     catch e
-      return unless me is generation     # superseded failure — newer call owns the outcome
+      # Only a request (fn) rejection is a mutation failure. A superseded call
+      # (a later invocation bumped the generation) must not flip flags or run a
+      # callback — the newer call owns the outcome. Clear pending in a finally so
+      # it stays true through onError, symmetric with the onSuccess path below.
+      return unless me is generation
       _error.value = e
-      if opts.onError then await opts.onError(e) else throw e
-      return
+      try
+        if opts.onError then return await opts.onError(e) else throw e
+      finally
+        _pending.value = false
+    # fn resolved. A superseded success is dropped silently — its onSuccess
+    # must not clobber the newer call's stash write.
+    return unless me is generation
+    # onSuccess runs OUTSIDE the failure-catch: the request already succeeded,
+    # so a throw in the success handler is a programming error, not a mutation
+    # failure — it must surface (or reject), never masquerade as onError. Await
+    # it so pending stays true through its work and async rejections surface
+    # here rather than floating unhandled. The finally clears pending either way.
+    try
+      _succeeded.value = true
+      await opts.onSuccess?(r)
+      r
     finally
       _pending.value = false if me is generation
 
@@ -2816,6 +2825,10 @@ export def launch(opts?:: LaunchOpts = {}):: Promise<LaunchResult>
     hash: hash
     onError: (err) -> console.error "[Rip] Error #{err.status}: #{err.message or err.path}"
 
+  # Self-heal `@router` for embedded (non-route) components, mirroring how the
+  # __Component constructor heals `@app` from __ripApp — both are singletons.
+  globalThis.__ripRouter = router
+
   # Create renderer
   renderer = createRenderer
     router: router
@@ -2846,6 +2859,7 @@ export def launch(opts?:: LaunchOpts = {}):: Promise<LaunchResult>
     persistDisposer?()
     delete globalThis[classesKey]
     delete globalThis.__ripApp
+    delete globalThis.__ripRouter
     delete globalThis.__ripLaunched
     if win.app is app
       delete win.app

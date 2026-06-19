@@ -8432,25 +8432,32 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         if (hookDecls.length)
           sl.push("  " + hookDecls.join(" "));
         sl.push("  emit(_name: string, _detail?: any): void {}");
-        const propEntries = [];
+        const baseEntries = [];
+        const requiredBindUnions = [];
         for (const { name, type, isPublic, required, optional } of stateVars) {
           if (!isPublic)
             continue;
-          const ts = expandType(type);
-          const opt = optional ?? !required ? "?" : "";
-          propEntries.push(`${name}${opt}: ${ts || "any"}`);
-          propEntries.push(`__bind_${name}__?: Signal<${ts || "any"}>`);
+          const ts = expandType(type) || "any";
+          if (optional ?? !required) {
+            baseEntries.push(`${name}?: ${ts}`);
+            baseEntries.push(`__bind_${name}__?: Signal<${ts}>`);
+          } else {
+            requiredBindUnions.push(`({ ${name}: ${ts}; __bind_${name}__?: Signal<${ts}> } | { ${name}?: ${ts}; __bind_${name}__: Signal<${ts}> })`);
+          }
         }
         for (const { name, type, isPublic } of readonlyVars) {
           if (!isPublic)
             continue;
-          const ts = expandType(type);
-          propEntries.push(`${name}?: ${ts || "any"}`);
+          const ts = expandType(type) || "any";
+          baseEntries.push(`${name}?: ${ts}`);
         }
         {
-          const hasRequired = propEntries.length > 0 && stateVars.some((v) => v.isPublic && v.required && !v.optional);
-          const propsOpt = hasRequired ? "" : "?";
-          let propsType = propEntries.length > 0 ? `{${propEntries.join("; ")}}` : "{}";
+          const propsOpt = requiredBindUnions.length > 0 ? "" : "?";
+          const parts = [];
+          if (baseEntries.length)
+            parts.push(`{${baseEntries.join("; ")}}`);
+          parts.push(...requiredBindUnions);
+          let propsType = parts.length ? parts.join(" & ") : "{}";
           if (inheritsTag)
             propsType += ` & __RipProps<'${inheritsTag}'>`;
           sl.push(`  constructor(_props${propsOpt}: ${propsType}) {}`);
@@ -9226,6 +9233,9 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         lines.push("  _create() {");
         for (const line of result.createLines) {
           lines.push(`    ${line}`);
+        }
+        if (this._fragChildren.has(result.rootVar)) {
+          lines.push(`    this._nodes = [...${result.rootVar}.childNodes];`);
         }
         lines.push(`    return ${result.rootVar};`);
         lines.push("  }");
@@ -10003,17 +10013,17 @@ ${blockFactoriesCode}return ${lines.join(`
       }
       factoryLines.push(`    },`);
       factoryLines.push(`    d(detaching) {`);
-      factoryLines.push(`      for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }`);
+      factoryLines.push(`      for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: detaching}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }`);
       factoryLines.push(`      _factoryChildren = [];`);
       if (hasEffects) {
         factoryLines.push(`      disposers.forEach(d => d());`);
       }
       if (fragChildren) {
         for (const child of fragChildren) {
-          factoryLines.push(`      if (detaching && ${child}) ${child}.remove();`);
+          factoryLines.push(`      if (detaching) __detach(${child});`);
         }
       } else {
-        factoryLines.push(`      if (detaching && ${rootVar}) ${rootVar}.remove();`);
+        factoryLines.push(`      if (detaching) __detach(${rootVar});`);
       }
       factoryLines.push(`    }`);
       factoryLines.push(`  };`);
@@ -10334,6 +10344,17 @@ ${blockFactoriesCode}return ${lines.join(`
 
 let __currentComponent = null;
 
+// Remove a node from the DOM, tolerant of what it actually is. A
+// DocumentFragment (a multi-root component's _root) is skipped: it is emptied
+// the moment it is inserted, so it owns nothing to remove — its real top-level
+// nodes are tracked on the component instance (_nodes) and removed there. A
+// detached node (parentNode null) is a harmless no-op.
+function __detach(node) {
+  if (!node || node.nodeType === 11) return;
+  if (typeof node.remove === 'function') node.remove();
+  else if (node.parentNode) node.parentNode.removeChild(node);
+}
+
 function __pushComponent(component) {
   // The component stack tracks the currently-active scope (so __effect
   // and friends can find it). Parent assignment happens ONCE — on the
@@ -10630,6 +10651,7 @@ class __Component {
   constructor(props = {}) {
     Object.assign(this, props);
     if (!this.app && globalThis.__ripApp) this.app = globalThis.__ripApp;
+    if (!this.router && globalThis.__ripRouter) this.router = globalThis.__ripRouter;
     // A component with render gates (<~) is honored only via route
     // matching — the renderer sets __ripGateMount around each route/layout
     // construction. Constructed as an embedded child (a parent scope is
@@ -10724,9 +10746,16 @@ class __Component {
     try {
       if (this.unmounted) this.unmounted();
     } catch (e) { console.error('[Rip] unmounted error:', e); }
-    if (removeDOM && this._root && this._root.parentNode) {
-      this._root.parentNode.removeChild(this._root);
+    if (removeDOM) {
+      if (this._nodes) {
+        // Multi-root: detach each captured top-level node (the _root fragment
+        // is empty and owns nothing).
+        for (const n of this._nodes) __detach(n);
+      } else if (this._root && this._root.parentNode) {
+        this._root.parentNode.removeChild(this._root);
+      }
     }
+    this._nodes = null;
   }
   emit(name, detail) {
     if (this._root) {
@@ -10740,7 +10769,7 @@ class __Component {
 
 // Register on globalThis for runtime deduplication
 if (typeof globalThis !== 'undefined') {
-  globalThis.__ripComponent = { __pushComponent, __popComponent, __getCurrentComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __transition, __handleComponentError, __gateBind, __Component };
+  globalThis.__ripComponent = { __pushComponent, __popComponent, __getCurrentComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __transition, __handleComponentError, __gateBind, __detach, __Component };
 }
 
 `;
@@ -12311,10 +12340,10 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
       }
       if (this.usesTemplates && !skip) {
         if (skipRT) {
-          code += `var { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __transition, __handleComponentError, __gateBind, __Component } = globalThis.__ripComponent;
+          code += `var { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __transition, __handleComponentError, __gateBind, __detach, __Component } = globalThis.__ripComponent;
 `;
         } else if (typeof globalThis !== "undefined" && globalThis.__ripComponent) {
-          code += `const { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __transition, __handleComponentError, __gateBind, __Component } = globalThis.__ripComponent;
+          code += `const { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __transition, __handleComponentError, __gateBind, __detach, __Component } = globalThis.__ripComponent;
 `;
         } else {
           code += this.getComponentRuntime();
@@ -15937,7 +15966,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.16.1";
-  var BUILD_DATE = "2026-06-19@09:52:35GMT";
+  var BUILD_DATE = "2026-06-19@12:19:28GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -17413,24 +17442,29 @@ ${indented}`);
       _pending.value = true;
       _succeeded.value = false;
       _error.value = null;
-      return await (async () => {
+      try {
+        r = await fn(...args);
+      } catch (e) {
+        if (!(me === generation))
+          return;
+        _error.value = e;
         try {
-          r = await fn(...args);
-          if (me === generation) {
-            _succeeded.value = true;
-            await opts.onSuccess?.(r);
-          }
-          return r;
-        } catch (e) {
-          if (!(me === generation))
-            return;
-          _error.value = e;
           if (opts.onError) {
-            await opts.onError(e);
+            return await opts.onError(e);
           } else {
             throw e;
           }
-          return;
+        } finally {
+          _pending.value = false;
+        }
+      }
+      if (!(me === generation))
+        return;
+      return await (async () => {
+        try {
+          _succeeded.value = true;
+          await opts.onSuccess?.(r);
+          return r;
         } finally {
           if (me === generation)
             _pending.value = false;
@@ -19126,6 +19160,7 @@ ${indented}`);
         return console.error(`[Rip] Error ${err.status}: ${err.message || err.path}`);
       }
     });
+    globalThis.__ripRouter = router;
     renderer = createRenderer({
       router,
       app,
@@ -19155,6 +19190,7 @@ ${indented}`);
       persistDisposer?.();
       delete globalThis[classesKey];
       delete globalThis.__ripApp;
+      delete globalThis.__ripRouter;
       delete globalThis.__ripLaunched;
       if (win.app === app) {
         delete win.app;

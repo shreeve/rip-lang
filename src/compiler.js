@@ -1080,9 +1080,9 @@ export class CodeEmitter {
 
     if (this.usesTemplates && !skip) {
       if (skipRT) {
-        code += 'var { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __transition, __handleComponentError, __gateBind, __Component } = globalThis.__ripComponent;\n';
+        code += 'var { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __transition, __handleComponentError, __gateBind, __detach, __Component } = globalThis.__ripComponent;\n';
       } else if (typeof globalThis !== 'undefined' && globalThis.__ripComponent) {
-        code += 'const { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __transition, __handleComponentError, __gateBind, __Component } = globalThis.__ripComponent;\n';
+        code += 'const { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __transition, __handleComponentError, __gateBind, __detach, __Component } = globalThis.__ripComponent;\n';
       } else {
         code += this.getComponentRuntime();
       }

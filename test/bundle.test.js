@@ -496,6 +496,103 @@ checkAsync('createMutation: reactive pending/succeeded/error with onSuccess writ
   if (stash.user.name !== 'new') throw new Error('a failed mutation must not roll anything back');
 });
 
+check('__Component: an embedded child self-heals @router from __ripRouter (like @app)', () => {
+  const C = globalThis.__ripComponent.__Component;
+  const fakeApp = { data: {} };
+  const fakeRouter = { push() {}, replace() {} };
+  const prevApp = globalThis.__ripApp, prevRouter = globalThis.__ripRouter;
+  globalThis.__ripApp = fakeApp;
+  globalThis.__ripRouter = fakeRouter;
+  try {
+    class Child extends C { _init() {} _create() { return null; } }
+    const inst = new Child({});          // constructed as a child — no app/router props
+    if (inst.app !== fakeApp) throw new Error('@app should self-heal from __ripApp');
+    if (inst.router !== fakeRouter) throw new Error('@router should self-heal from __ripRouter');
+    // An explicitly-passed router prop must still win over the global.
+    const ownRouter = { push() {} };
+    const inst2 = new Child({ router: ownRouter });
+    if (inst2.router !== ownRouter) throw new Error('an injected router prop must not be overwritten by the global');
+  } finally {
+    globalThis.__ripApp = prevApp;
+    globalThis.__ripRouter = prevRouter;
+  }
+});
+
+check('multi-root component: unmount detaches its real nodes (fragment root has no .remove)', () => {
+  const C = globalThis.__ripComponent.__Component;
+  const __detach = globalThis.__ripComponent.__detach;
+
+  // Minimal DOM faithful to the two facts behind the crash:
+  //  - a DocumentFragment is nodeType 11 and has NO .remove()
+  //  - appending a fragment moves its children out, emptying it
+  const mkNode = (nodeType) => {
+    const n = { nodeType, childNodes: [], parentNode: null };
+    n.appendChild = (c) => {
+      if (c.nodeType === 11) { for (const k of [...c.childNodes]) n.appendChild(k); c.childNodes = []; return; }
+      if (c.parentNode) c.parentNode.removeChild(c);
+      c.parentNode = n; n.childNodes.push(c);
+    };
+    n.removeChild = (c) => { const i = n.childNodes.indexOf(c); if (i >= 0) n.childNodes.splice(i, 1); c.parentNode = null; };
+    if (nodeType !== 11) n.remove = () => { if (n.parentNode) n.parentNode.removeChild(n); };
+    return n;
+  };
+  globalThis.document.createElement = () => mkNode(1);
+
+  // __detach on a fragment must be a safe no-op — the original crash was
+  // "_el.remove is not a function" when _el was a DocumentFragment.
+  __detach(mkNode(11));
+
+  // A multi-root render compiles to: build a fragment, capture its top-level
+  // nodes on _nodes, return the fragment (see codegen 'fragment root' test).
+  class Multi extends C {
+    _create() {
+      const f = mkNode(11);
+      f.appendChild(mkNode(1));
+      f.appendChild(mkNode(1));
+      this._nodes = [...f.childNodes];
+      return f;
+    }
+  }
+
+  const container = mkNode(1);
+  const inst = new Multi({});
+  inst.mount(container);    // fragment empties; its two nodes now live in container
+  if (container.childNodes.length !== 2) throw new Error('multi-root mount should place both top-level nodes');
+
+  inst.unmount();           // must detach the two real nodes, not the empty fragment
+  if (container.childNodes.length !== 0) throw new Error('multi-root unmount must detach every top-level node, leaked: ' + container.childNodes.length);
+});
+
+checkAsync('createMutation: a throw in onSuccess does not masquerade as onError (request succeeded)', async () => {
+  // The request resolved, so succeeded is true and onError must NOT fire — a
+  // bug in the success handler is a programming error, not a mutation failure.
+  let errSeen = null;
+  const m = globalThis.createMutation(
+    async () => ({ ok: true }),
+    { onSuccess: () => { throw new Error('boom in handler'); }, onError: (e) => { errSeen = e; } }
+  );
+  let threw = null;
+  try { await m(); } catch (e) { threw = e; }
+  if (errSeen != null) throw new Error('onError must not fire when the request succeeded: ' + errSeen);
+  if (m.succeeded !== true) throw new Error('succeeded must stay true — the request did succeed');
+  if (m.error != null) throw new Error('error must stay null — fn never rejected');
+  if (m.pending !== false) throw new Error('pending must clear even when onSuccess throws');
+  if (threw == null || threw.message !== 'boom in handler') throw new Error('the onSuccess throw must surface to the caller, not vanish');
+});
+
+checkAsync('createMutation: only a request (fn) rejection routes to onError', async () => {
+  let errSeen = null;
+  const m = globalThis.createMutation(
+    async () => { throw new Error('500'); },
+    { onSuccess: () => { throw new Error('should never run'); }, onError: (e) => { errSeen = e; } }
+  );
+  await m();
+  if (errSeen == null || errSeen.message !== '500') throw new Error('fn rejection must route to onError');
+  if (m.succeeded !== false) throw new Error('succeeded must be false on a request failure');
+  if (m.error == null) throw new Error('error flag must be set on a request failure');
+  if (m.pending !== false) throw new Error('pending must clear on failure');
+});
+
 checkAsync('stash: peek never triggers a load and reads through cells', async () => {
   let calls = 0;
   const stash = globalThis.createStash({ user: globalThis.source({ fetch: async () => { calls++; return { name: 'Ada' }; } }), plain: { a: 1 } });

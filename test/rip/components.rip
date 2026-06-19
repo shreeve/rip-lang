@@ -168,6 +168,7 @@ code "fragment root", '''
       this._t1 = document.createTextNode("b");
       this._el2.appendChild(this._t1);
       this._frag0.appendChild(this._el2);
+      this._nodes = [...this._frag0.childNodes];
       return this._frag0;
     }
   }
@@ -306,9 +307,9 @@ code "simple conditional", '''
    p(ctx) {
    },
    d(detaching) {
-     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: detaching}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
      _factoryChildren = [];
-     if (detaching && _el1) _el1.remove();
+     if (detaching) __detach(_el1);
    }
     };
   }
@@ -381,9 +382,9 @@ code "if-else conditional", '''
    p(ctx) {
    },
    d(detaching) {
-     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: detaching}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
      _factoryChildren = [];
-     if (detaching && _el1) _el1.remove();
+     if (detaching) __detach(_el1);
    }
     };
   }
@@ -404,9 +405,9 @@ code "if-else conditional", '''
    p(ctx) {
    },
    d(detaching) {
-     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: detaching}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
      _factoryChildren = [];
-     if (detaching && _el2) _el2.remove();
+     if (detaching) __detach(_el2);
    }
     };
   }
@@ -489,9 +490,9 @@ code "simple loop", '''
    p(ctx, item, i) {
    },
    d(detaching) {
-     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: detaching}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
      _factoryChildren = [];
-     if (detaching && _el1) _el1.remove();
+     if (detaching) __detach(_el1);
    }
     };
   }
@@ -544,9 +545,9 @@ code "text output in loop with postfix if else", '''
    p(ctx, item, i) {
    },
    d(detaching) {
-     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: detaching}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
      _factoryChildren = [];
-     if (detaching && _el1) _el1.remove();
+     if (detaching) __detach(_el1);
    }
     };
   }
@@ -645,9 +646,9 @@ code "conditional inside loop threads loop vars", '''
    p(ctx, item, i) {
    },
    d(detaching) {
-     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: detaching}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
      _factoryChildren = [];
-     if (detaching && _el2) _el2.remove();
+     if (detaching) __detach(_el2);
    }
     };
   }
@@ -697,10 +698,10 @@ code "conditional inside loop threads loop vars", '''
    }
    },
    d(detaching) {
-     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: detaching}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
      _factoryChildren = [];
      disposers.forEach(d => d());
-     if (detaching && _anchor1) _anchor1.remove();
+     if (detaching) __detach(_anchor1);
    }
     };
   }
@@ -753,9 +754,9 @@ code "nested loops thread outer vars", '''
    p(ctx, cell, ci, row, ri) {
    },
    d(detaching) {
-     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: detaching}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
      _factoryChildren = [];
-     if (detaching && _el2) _el2.remove();
+     if (detaching) __detach(_el2);
    }
     };
   }
@@ -785,10 +786,10 @@ code "nested loops thread outer vars", '''
    }
    },
    d(detaching) {
-     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: detaching}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
      _factoryChildren = [];
      disposers.forEach(d => d());
-     if (detaching && _anchor1) _anchor1.remove();
+     if (detaching) __detach(_anchor1);
    }
     };
   }
@@ -851,9 +852,9 @@ code "outer auto-index avoids inner explicit `i`", '''
    p(ctx, v, i, item, j) {
    },
    d(detaching) {
-     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: detaching}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
      _factoryChildren = [];
-     if (detaching && _el2) _el2.remove();
+     if (detaching) __detach(_el2);
    }
     };
   }
@@ -883,10 +884,10 @@ code "outer auto-index avoids inner explicit `i`", '''
    }
    },
    d(detaching) {
-     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: detaching}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
      _factoryChildren = [];
      disposers.forEach(d => d());
-     if (detaching && _anchor1) _anchor1.remove();
+     if (detaching) __detach(_anchor1);
    }
     };
   }
@@ -981,9 +982,9 @@ code "outer auto-index avoids body-level render-local declaration", '''
    p(ctx, x, j) {
    },
    d(detaching) {
-     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: detaching}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
      _factoryChildren = [];
-     if (detaching && _el1) _el1.remove();
+     if (detaching) __detach(_el1);
    }
     };
   }
@@ -1051,10 +1052,10 @@ code "reactive iter var: member access wrapped in __effect", '''
      disposers.push(__effect(() => { _t0.data = `${item.qty}`; }, {skipRegister: true}));
    },
    d(detaching) {
-     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: detaching}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
      _factoryChildren = [];
      disposers.forEach(d => d());
-     if (detaching && _el1) _el1.remove();
+     if (detaching) __detach(_el1);
    }
     };
   }
@@ -1108,9 +1109,9 @@ code "reactive iter var: literal-array source stays static", '''
    p(ctx, item, i) {
    },
    d(detaching) {
-     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: detaching}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
      _factoryChildren = [];
-     if (detaching && _el1) _el1.remove();
+     if (detaching) __detach(_el1);
    }
     };
   }
@@ -1167,9 +1168,9 @@ code "reactive iter var: alias is NOT tracked (deferred)", '''
    p(ctx, item, i) {
    },
    d(detaching) {
-     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: detaching}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
      _factoryChildren = [];
-     if (detaching && _el1) _el1.remove();
+     if (detaching) __detach(_el1);
    }
     };
   }
@@ -1235,9 +1236,9 @@ code "render-local binding compiles to a hoisted `let`, not a textnode", '''
    p(ctx, item, i) {
    },
    d(detaching) {
-     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: detaching}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
      _factoryChildren = [];
-     if (detaching && _el1) _el1.remove();
+     if (detaching) __detach(_el1);
    }
     };
   }
@@ -1291,9 +1292,9 @@ code "tag-named local (`code`) shadows the HTML tag name", '''
    p(ctx, ex, i) {
    },
    d(detaching) {
-     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: detaching}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
      _factoryChildren = [];
-     if (detaching && _el1) _el1.remove();
+     if (detaching) __detach(_el1);
    }
     };
   }
@@ -1345,9 +1346,9 @@ code "tag-named loop variable (`code`) shadows the HTML tag name", '''
    p(ctx, code, i) {
    },
    d(detaching) {
-     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: detaching}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
      _factoryChildren = [];
-     if (detaching && _el1) _el1.remove();
+     if (detaching) __detach(_el1);
    }
     };
   }
@@ -1447,9 +1448,9 @@ code "tag-named local shadows the HTML tag in a property chain", '''
    p(ctx, ex, i) {
    },
    d(detaching) {
-     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: detaching}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
      _factoryChildren = [];
-     if (detaching && _el1) _el1.remove();
+     if (detaching) __detach(_el1);
    }
     };
   }
@@ -1533,9 +1534,9 @@ code "compound assignment mutates a render-local without re-declaring", '''
    p(ctx, item, i) {
    },
    d(detaching) {
-     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: detaching}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
      _factoryChildren = [];
-     if (detaching && _el1) _el1.remove();
+     if (detaching) __detach(_el1);
    }
     };
   }
@@ -1604,9 +1605,9 @@ code "string containing 'this' in conditional factory", '''
    p(ctx) {
    },
    d(detaching) {
-     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: detaching}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
      _factoryChildren = [];
-     if (detaching && _el1) _el1.remove();
+     if (detaching) __detach(_el1);
    }
     };
   }
@@ -1678,9 +1679,9 @@ code "string containing 'this' in loop factory", '''
    p(ctx, item, i) {
    },
    d(detaching) {
-     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: detaching}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
      _factoryChildren = [];
-     if (detaching && _el1) _el1.remove();
+     if (detaching) __detach(_el1);
    }
     };
   }
@@ -3338,9 +3339,9 @@ code "conditional inside parent element", '''
    p(ctx) {
    },
    d(detaching) {
-     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: detaching}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
      _factoryChildren = [];
-     if (detaching && _el2) _el2.remove();
+     if (detaching) __detach(_el2);
    }
     };
   }
@@ -3424,10 +3425,10 @@ code "conditional with fragment (multiple then-children)", '''
    p(ctx) {
    },
    d(detaching) {
-     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: detaching}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
      _factoryChildren = [];
-     if (detaching && _el2) _el2.remove();
-     if (detaching && _el3) _el3.remove();
+     if (detaching) __detach(_el2);
+     if (detaching) __detach(_el3);
    }
     };
   }
@@ -3503,10 +3504,10 @@ code "reactive text inside conditional factory", '''
      disposers.push(__effect(() => { _t0.data = ctx.name.value; }, {skipRegister: true}));
    },
    d(detaching) {
-     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: detaching}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
      _factoryChildren = [];
      disposers.forEach(d => d());
-     if (detaching && _el1) _el1.remove();
+     if (detaching) __detach(_el1);
    }
     };
   }
@@ -3580,9 +3581,9 @@ code "loop inside parent element", '''
    p(ctx, item, i) {
    },
    d(detaching) {
-     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: detaching}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
      _factoryChildren = [];
-     if (detaching && _el2) _el2.remove();
+     if (detaching) __detach(_el2);
    }
     };
   }
@@ -4146,9 +4147,9 @@ code "transition sets _t on block factory", '''
    p(ctx) {
    },
    d(detaching) {
-     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: detaching}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
      _factoryChildren = [];
-     if (detaching && _el1) _el1.remove();
+     if (detaching) __detach(_el1);
    }
     };
   }
@@ -4279,9 +4280,9 @@ code "no transition — no _t on block", '''
    p(ctx) {
    },
    d(detaching) {
-     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
+     for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: detaching}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }
      _factoryChildren = [];
-     if (detaching && _el1) _el1.remove();
+     if (detaching) __detach(_el1);
    }
     };
   }
