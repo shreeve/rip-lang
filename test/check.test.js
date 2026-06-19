@@ -430,6 +430,39 @@ export stash =
   assert(/stash\.rip/.test(r.out), 'error should surface at the declaration:\n' + r.out);
 });
 
+// An inline @event handler's first param is explicitly annotated with the
+// event type (matching __RipEvents), rather than left to TS contextual typing
+// through __ripEl's generic props — which silently drops the param to `any`
+// for certain sibling-prop combinations. The handler must type-check cleanly
+// regardless of surrounding props, and the param must be genuinely typed.
+check('an inline @event handler types its param, robust to sibling props', () => {
+  const r = checkProject({
+    'index.rip': `export ok = true\n`,
+    'c.rip': `import { createMutation } from '@rip-lang/app'
+
+export C = component
+  send = createMutation (-> Promise.resolve({ n: 1 }))
+  render
+    form @submit: ((e) -> e.preventDefault(); send()), noValidate: true, class: "x"
+      div "a"
+`,
+  });
+  assert(r.ok, 'inline handler with sibling props should check clean: ' + r.out);
+});
+
+check('an inline @event handler param is genuinely typed (a bogus member errors)', () => {
+  const r = checkProject({
+    'index.rip': `export ok = true\n`,
+    'c.rip': `export C = component
+  render
+    form @submit: ((e) -> e.preventDefaultz())
+      div "a"
+`,
+  });
+  assert(!r.ok, 'a bogus member on the typed event must error (param is not any)');
+  assert(/preventDefaultz/.test(r.out), 'unexpected output:\n' + r.out);
+});
+
 check('opaque stash values stay silent (the mount check backstops them)', () => {
   const r = checkProject({
     'index.rip': `export ok = true\n`,

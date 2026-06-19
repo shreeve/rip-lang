@@ -1362,9 +1362,25 @@ export function installComponentSupport(CodeEmitter, Lexer) {
                 if (Array.isArray(key) && key[0] === '.' && key[1] === 'this') {
                   let memberName = typeof key[2] === 'string' ? key[2] : key[2]?.valueOf?.();
                   if (!memberName) continue;
-                  const eventKey = '@' + memberName.split('.')[0];
-                  const val = this.emitInComponent(value, 'value');
-                  props.push({ code: `'${eventKey}': ${val}`, srcLine });
+                  const eventName = memberName.split('.')[0];
+                  let val = this.emitInComponent(value, 'value');
+                  // Inline arrow handler: explicitly annotate its untyped first
+                  // param with the event type. Letting TS contextually type it
+                  // through __ripEl's generic props is fragile — certain prop
+                  // combinations silently drop the param to `any`. This gives
+                  // inline handlers the same reliable typing the `@event: @method`
+                  // path already gets, matching __RipEvents' shape exactly.
+                  if (Array.isArray(value) && (value[0] === '->' || value[0] === '=>')) {
+                    const p0 = value[1]?.[0];
+                    const pName = typeof p0 === 'string' ? p0 : p0?.valueOf?.();
+                    if (pName && !(p0 && p0.type) && /^[A-Za-z_$][\w$]*$/.test(pName)) {
+                      const T = `RipEvent<HTMLElementEventMap['${eventName}'], __RipElementMap['${tagName}']>`;
+                      val = val[0] === '('
+                        ? val.replace(new RegExp('^\\(\\s*' + pName + '\\b'), `(${pName}: ${T}`)
+                        : val.replace(new RegExp('^' + pName + '\\b'), `(${pName}: ${T})`);
+                    }
+                  }
+                  props.push({ code: `'@${eventName}': ${val}`, srcLine });
                 } else if (typeof key === 'string') {
                   if (key === 'key') {
                     // key: is not an HTML attribute, but emit its value

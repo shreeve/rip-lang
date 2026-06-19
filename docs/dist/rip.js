@@ -8737,9 +8737,17 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
                     let memberName = typeof key[2] === "string" ? key[2] : key[2]?.valueOf?.();
                     if (!memberName)
                       continue;
-                    const eventKey = "@" + memberName.split(".")[0];
-                    const val = this.emitInComponent(value, "value");
-                    props.push({ code: `'${eventKey}': ${val}`, srcLine });
+                    const eventName = memberName.split(".")[0];
+                    let val = this.emitInComponent(value, "value");
+                    if (Array.isArray(value) && (value[0] === "->" || value[0] === "=>")) {
+                      const p0 = value[1]?.[0];
+                      const pName = typeof p0 === "string" ? p0 : p0?.valueOf?.();
+                      if (pName && !(p0 && p0.type) && /^[A-Za-z_$][\w$]*$/.test(pName)) {
+                        const T = `RipEvent<HTMLElementEventMap['${eventName}'], __RipElementMap['${tagName}']>`;
+                        val = val[0] === "(" ? val.replace(new RegExp("^\\(\\s*" + pName + "\\b"), `(${pName}: ${T}`) : val.replace(new RegExp("^" + pName + "\\b"), `(${pName}: ${T})`);
+                      }
+                    }
+                    props.push({ code: `'@${eventName}': ${val}`, srcLine });
                   } else if (typeof key === "string") {
                     if (key === "key") {
                       const val = this.emitInComponent(value, "value");
@@ -15929,7 +15937,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.16.1";
-  var BUILD_DATE = "2026-06-18@20:51:59GMT";
+  var BUILD_DATE = "2026-06-19@09:52:35GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
