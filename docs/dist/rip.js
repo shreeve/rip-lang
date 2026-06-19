@@ -568,7 +568,7 @@ class __SchemaDef {
           fields.set(e.name, {
             name: e.name,
             required: e.modifiers.includes('!'),
-            unique: e.modifiers.includes('#'),
+            unique: e.unique === true,
             optional: e.modifiers.includes('?'),
             typeName: e.typeName,
             literals: e.literals || null,
@@ -1773,10 +1773,10 @@ function __schemaDerive(source, transform) {
   for (const [, f] of derivedFields) {
     const mods = [];
     if (f.required) mods.push('!');
-    if (f.unique) mods.push('#');
     if (f.optional && !f.required) mods.push('?');
     entries.push({
       tag: 'field', name: f.name, modifiers: mods,
+      unique: f.unique === true,
       typeName: f.typeName, array: f.array,
       literals: f.literals || null,
       coerce: f.coerce === true,
@@ -1848,7 +1848,7 @@ function __schemaExpandMixins(host, fields, directives, ctx) {
       fields.set(e.name, {
         name: e.name,
         required: e.modifiers.includes('!'),
-        unique: e.modifiers.includes('#'),
+        unique: e.unique === true,
         optional: e.modifiers.includes('?'),
         typeName: e.typeName,
         literals: e.literals || null,
@@ -3269,7 +3269,10 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       let adjacent = line[pos - 1] && !line[pos - 1].spaced;
       if (!adjacent)
         break;
-      if (tk[0] === "#" || tk[0] === "?" || tk[0] === "!") {
+      if (tk[0] === "#") {
+        throw schemaError(tk, `The '#' unique modifier was removed. Mark uniqueness with '@unique': ` + `inline as '${name}! <type> @unique', or as a directive '@unique :${name}' ` + `(composite: '@unique [:a, :b]').`);
+      }
+      if (tk[0] === "?" || tk[0] === "!") {
         modifiers.push(tk[0]);
         pos++;
         continue;
@@ -3350,6 +3353,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
     let rangeTokens = null;
     let regexToken = null;
     let transformTokens = null;
+    let uniqueAttr = false;
     if (rest.length > 0) {
       if (rest[0]?.[0] === ",") {
         rest = rest.slice(1);
@@ -3419,8 +3423,19 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
             throw schemaError(head, `Transform '-> …' must be the last element on the field line for '${name}'.`);
           }
           transformTokens = part.slice(1);
+        } else if (head[0] === "@") {
+          let attrTok = part[1];
+          let attrName = attrTok && (attrTok[0] === "IDENTIFIER" || attrTok[0] === "PROPERTY") ? attrTok[1] : null;
+          if (part.length === 2 && attrName === "unique") {
+            if (uniqueAttr) {
+              throw schemaError(head, `Field '${name}' has more than one '@unique'.`);
+            }
+            uniqueAttr = true;
+          } else {
+            throw schemaError(head, `Unknown inline attribute '@${attrName ?? ""}' on field '${name}'. The only inline attribute is '@unique'.`);
+          }
         } else {
-          throw schemaError(head, `Unexpected trailer for field '${name}'. Expected '[…]' default, '{…}' attrs, '/regex/', 'min..max' range, or '-> transform'.`);
+          throw schemaError(head, `Unexpected trailer for field '${name}'. Expected '[…]' default, '{…}' attrs, '/regex/', 'min..max' range, '-> transform', or '@unique'.`);
         }
       }
     }
@@ -3438,6 +3453,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       tag: "field",
       name,
       modifiers,
+      unique: uniqueAttr,
       typeName,
       array,
       literals,
@@ -4174,6 +4190,8 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           `typeName: ${JSON.stringify(e.typeName)}`,
           `array: ${e.array ? "true" : "false"}`
         ];
+        if (e.unique)
+          obj.push("unique: true");
         if (e.literals) {
           obj.push(`literals: ${JSON.stringify(e.literals)}`);
         }
@@ -4469,6 +4487,37 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       return v.toString();
     return JSON.stringify(v);
   }
+  function collectDirectiveFieldNames(tokens) {
+    let isName = (t) => t && (t[0] === "IDENTIFIER" || t[0] === "PROPERTY" || t[0] === "SYMBOL");
+    let fields = [];
+    let pos = 0;
+    if (isName(tokens[pos])) {
+      fields.push(tokens[pos][1]);
+    } else if (tokens[pos]?.[0] === "[" || tokens[pos]?.[0] === "INDEX_START") {
+      let inner = [];
+      let depth = 1;
+      pos++;
+      while (pos < tokens.length && depth > 0) {
+        let t = tokens[pos];
+        if (t[0] === "[" || t[0] === "INDEX_START")
+          depth++;
+        if (t[0] === "]" || t[0] === "INDEX_END") {
+          depth--;
+          if (depth === 0) {
+            pos++;
+            break;
+          }
+        }
+        inner.push(t);
+        pos++;
+      }
+      for (let part of splitTopLevelByComma(inner)) {
+        if (isName(part[0]))
+          fields.push(part[0][1]);
+      }
+    }
+    return fields;
+  }
   function compileDirectiveArgsLiteral(name, tokens) {
     if (name === "idStart" && !tokens.length) {
       throw schemaError(null, "@idStart requires an integer literal, e.g. @idStart 10001.");
@@ -4492,43 +4541,16 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         parts.push("optional: true");
       return `[{${parts.join(", ")}}]`;
     }
-    if (name === "index") {
-      let fields = [];
-      let unique = false;
-      let pos = 0;
-      if (tokens[pos]?.[0] === "IDENTIFIER" || tokens[pos]?.[0] === "PROPERTY") {
-        fields.push(tokens[pos][1]);
-        pos++;
-      } else if (tokens[pos]?.[0] === "[" || tokens[pos]?.[0] === "INDEX_START") {
-        let inner = [];
-        let depth = 1;
-        pos++;
-        while (pos < tokens.length && depth > 0) {
-          let t = tokens[pos];
-          if (t[0] === "[" || t[0] === "INDEX_START")
-            depth++;
-          if (t[0] === "]" || t[0] === "INDEX_END") {
-            depth--;
-            if (depth === 0) {
-              pos++;
-              break;
-            }
-          }
-          inner.push(t);
-          pos++;
-        }
-        for (let part of splitTopLevelByComma(inner)) {
-          if (part[0] && (part[0][0] === "IDENTIFIER" || part[0][0] === "PROPERTY")) {
-            fields.push(part[0][1]);
-          }
-        }
+    if (name === "unique") {
+      let fields = collectDirectiveFieldNames(tokens);
+      if (!fields.length) {
+        throw schemaError(tokens[0] || tokens[tokens.length - 1], `@unique requires a field name or list — '@unique :email' or '@unique [:a, :b]'.`);
       }
-      if (tokens[pos]?.[0] === "#")
-        unique = true;
-      let parts = [`fields: ${JSON.stringify(fields)}`];
-      if (unique)
-        parts.push("unique: true");
-      return `[{${parts.join(", ")}}]`;
+      return `[{fields: ${JSON.stringify(fields)}}]`;
+    }
+    if (name === "index") {
+      let fields = collectDirectiveFieldNames(tokens);
+      return `[{fields: ${JSON.stringify(fields)}}]`;
     }
     if (name === "on") {
       let t = stripCallWrapper(tokens)[0];
@@ -6064,12 +6086,6 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         }
         if (/^\s+#[a-zA-Z_]/.test(this.chunk))
           return 0;
-      }
-      if (this.chunk[0] === "#") {
-        let prev = this.prev();
-        if (prev && !prev.spaced && !prev.newLine && (prev[0] === "IDENTIFIER" || prev[0] === "PROPERTY")) {
-          return 0;
-        }
       }
       let match = COMMENT_RE.exec(this.chunk);
       if (!match)
@@ -15937,7 +15953,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.16.1";
-  var BUILD_DATE = "2026-06-19@09:52:35GMT";
+  var BUILD_DATE = "2026-06-19@18:03:41GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

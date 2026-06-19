@@ -748,18 +748,6 @@ export class Lexer {
       }
       if (/^\s+#[a-zA-Z_]/.test(this.chunk)) return 0;  // let lineToken handle indentation first
     }
-    // Schema field modifier: `#` adjacent (unspaced) to an identifier acts
-    // as the unique-marker inside schema bodies (e.g. `email!# email`).
-    // Return 0 so literalToken emits a standalone `#` token; rewriteSchema
-    // absorbs it. Outside schema bodies the `#` token is harmless because
-    // nothing else in the grammar accepts `IDENTIFIER #` without a space.
-    if (this.chunk[0] === '#') {
-      let prev = this.prev();
-      if (prev && !prev.spaced && !prev.newLine &&
-          (prev[0] === 'IDENTIFIER' || prev[0] === 'PROPERTY')) {
-        return 0;
-      }
-    }
     let match = COMMENT_RE.exec(this.chunk);
     if (!match) return 0;
     return match[0].length;

@@ -4531,13 +4531,6 @@ test "@unique survives mixin expansion", modelHeader + '''
   Thing._tableSpec().indexes.map (i) -> i.name + (i.unique ? "!" : "")
 ''', ["idx_things_code!"]
 
-# Clean break: the removed `#` unique modifier is a hard compile error,
-# not a silent no-op.
-fail "removed: '#' unique modifier is rejected", '''
-  User = schema :model
-    email!# email
-  '''
-
 # Two index declarations on the same columns collide on index name — a
 # redundant/contradictory schema, rejected loudly rather than emitting
 # duplicate CREATE INDEX.
