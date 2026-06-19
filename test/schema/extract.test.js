@@ -36,7 +36,7 @@ function assert(cond, msg) { if (!cond) throw new Error(msg || 'assertion failed
 const MODELS = `export User = schema :model
   firstName! string, 1..
   lastName!  string
-  email!#    email
+  email!     email @unique
   phone?     string
   @timestamps
 
