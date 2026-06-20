@@ -8448,25 +8448,32 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         if (hookDecls.length)
           sl.push("  " + hookDecls.join(" "));
         sl.push("  emit(_name: string, _detail?: any): void {}");
-        const propEntries = [];
+        const baseEntries = [];
+        const requiredBindUnions = [];
         for (const { name, type, isPublic, required, optional } of stateVars) {
           if (!isPublic)
             continue;
-          const ts = expandType(type);
-          const opt = optional ?? !required ? "?" : "";
-          propEntries.push(`${name}${opt}: ${ts || "any"}`);
-          propEntries.push(`__bind_${name}__?: Signal<${ts || "any"}>`);
+          const ts = expandType(type) || "any";
+          if (optional ?? !required) {
+            baseEntries.push(`${name}?: ${ts}`);
+            baseEntries.push(`__bind_${name}__?: Signal<${ts}>`);
+          } else {
+            requiredBindUnions.push(`({ ${name}: ${ts}; __bind_${name}__?: Signal<${ts}> } | { ${name}?: ${ts}; __bind_${name}__: Signal<${ts}> })`);
+          }
         }
         for (const { name, type, isPublic } of readonlyVars) {
           if (!isPublic)
             continue;
-          const ts = expandType(type);
-          propEntries.push(`${name}?: ${ts || "any"}`);
+          const ts = expandType(type) || "any";
+          baseEntries.push(`${name}?: ${ts}`);
         }
         {
-          const hasRequired = propEntries.length > 0 && stateVars.some((v) => v.isPublic && v.required && !v.optional);
-          const propsOpt = hasRequired ? "" : "?";
-          let propsType = propEntries.length > 0 ? `{${propEntries.join("; ")}}` : "{}";
+          const propsOpt = requiredBindUnions.length > 0 ? "" : "?";
+          const parts = [];
+          if (baseEntries.length)
+            parts.push(`{${baseEntries.join("; ")}}`);
+          parts.push(...requiredBindUnions);
+          let propsType = parts.length ? parts.join(" & ") : "{}";
           if (inheritsTag)
             propsType += ` & __RipProps<'${inheritsTag}'>`;
           sl.push(`  constructor(_props${propsOpt}: ${propsType}) {}`);
@@ -8665,7 +8672,25 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           const sourceLines = this.options.source?.split(`
 `);
           const wrapCompHref = (val) => typeof val === "string" && /^["'`]\//.test(val) ? `__ripRoute(${val})` : val;
-          const extractProps = (args) => {
+          const FLAG_RE = /^[a-zA-Z_$][\w$]*$/;
+          const isFlagArg = (a) => typeof a === "string" && FLAG_RE.test(a) && !/^(?:true|false|null|undefined)$/.test(a) && !CodeEmitter.GENERATORS[a] && !this._isInScopeValue(a);
+          const findFlagLine = (name, fromLine) => {
+            if (fromLine == null || !sourceLines)
+              return fromLine;
+            const re = new RegExp(`(?<![\\w$.#@])${name}(?![\\w$])`);
+            for (let ln = fromLine;ln < sourceLines.length; ln++) {
+              if (sourceLines[ln] && re.test(sourceLines[ln]))
+                return ln;
+            }
+            return fromLine;
+          };
+          const emitFlag = (name, fromLine, headLine) => {
+            const srcLine = findFlagLine(name, fromLine);
+            if (srcLine != null && srcLine === headLine)
+              return;
+            constructions.push(`    ({ ${name}: true });` + (srcLine != null ? ` // @rip-src:${srcLine}` : ""));
+          };
+          const extractProps = (args, nodeLine) => {
             const props = [];
             const sideExprs = [];
             for (const arg of args) {
@@ -8673,12 +8698,18 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
               if (this.is(arg, "object")) {
                 obj = arg;
               } else if (Array.isArray(arg) && (arg[0] === "->" || arg[0] === "=>") && this.is(arg[2], "block")) {
+                const blockLine = arg[2].loc?.r ?? nodeLine;
                 for (let k = 1;k < arg[2].length; k++) {
-                  if (this.is(arg[2][k], "object")) {
-                    obj = arg[2][k];
-                    break;
-                  }
+                  const bc = arg[2][k];
+                  if (this.is(bc, "object")) {
+                    if (!obj)
+                      obj = bc;
+                  } else if (isFlagArg(bc))
+                    emitFlag(bc, blockLine, nodeLine);
                 }
+              } else if (isFlagArg(arg)) {
+                emitFlag(arg, nodeLine, nodeLine);
+                continue;
               }
               if (obj) {
                 for (let j = 1;j < obj.length; j++) {
@@ -8715,7 +8746,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
             props.sideExprs = sideExprs;
             return props;
           };
-          const extractIntrinsicProps = (args, tagName) => {
+          const extractIntrinsicProps = (args, tagName, nodeLine) => {
             const props = [];
             const wrapHrefVal = (val) => {
               if (tagName !== "a")
@@ -8735,12 +8766,18 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
               if (this.is(arg, "object")) {
                 obj = arg;
               } else if (Array.isArray(arg) && (arg[0] === "->" || arg[0] === "=>") && this.is(arg[2], "block")) {
+                const blockLine = arg[2].loc?.r ?? nodeLine;
                 for (let k = 1;k < arg[2].length; k++) {
-                  if (this.is(arg[2][k], "object")) {
-                    obj = arg[2][k];
-                    break;
-                  }
+                  const bc = arg[2][k];
+                  if (this.is(bc, "object")) {
+                    if (!obj)
+                      obj = bc;
+                  } else if (isFlagArg(bc))
+                    emitFlag(bc, blockLine, nodeLine);
                 }
+              } else if (isFlagArg(arg)) {
+                emitFlag(arg, nodeLine, nodeLine);
+                continue;
               }
               if (obj) {
                 for (let j = 1;j < obj.length; j++) {
@@ -8887,10 +8924,14 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
                 } else {
                   constructions.push(`    for (const ${varPattern} of ${iterCode}) {${srcMarker}`);
                 }
+                const asName = (v) => typeof v === "string" || v instanceof String ? String(v) : null;
+                const loopFrame = Array.isArray(vars) ? { itemVar: asName(vars[0]), indexVar: asName(vars[1]) } : { itemVar: asName(vars), indexVar: null };
+                (this._loopVarStack || (this._loopVarStack = [])).push(loopFrame);
                 for (let bi = 3;bi < node.length; bi++) {
                   if (node[bi] != null)
                     walkRender(node[bi]);
                 }
+                this._loopVarStack.pop();
                 constructions.push(`    }`);
                 return;
               }
@@ -8968,9 +9009,9 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
               }
               if (this.componentMembers && this.componentMembers.has(child)) {
                 constructions.push(`    this.${child};${srcMarker}`);
-              } else if (isTextChild) {
+              } else if (this._isInScopeValue(child)) {
                 constructions.push(`    ${child};${srcMarker}`);
-              } else {
+              } else if (!isTextChild && this.isHtmlTag(child)) {
                 constructions.push(`    __ripEl('${child}');${srcMarker}`);
               }
             };
@@ -8978,6 +9019,9 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
             if (head2 === "block") {
               for (let i = 1;i < node.length; i++)
                 emitBareIdent(node[i], node, false);
+            } else if (typeof head2 === "string" && /^[A-Z]/.test(head2)) {
+              for (let i = 1;i < node.length; i++)
+                emitBareIdent(node[i], node, true);
             } else if (isTagHead) {
               for (let i = 1;i < node.length; i++)
                 emitBareIdent(node[i], node, true);
@@ -9009,7 +9053,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
             for (let i = 1;i < node.length; i++)
               walkRender(node[i]);
             if (typeof head2 === "string" && /^[A-Z]/.test(head2)) {
-              const props = extractProps(node.slice(1));
+              const props = extractProps(node.slice(1), node.loc?.r);
               const varName = `_${constructionIdx++}`;
               const propsType = `ConstructorParameters<typeof ${head2}>[0] & {}`;
               if (props.length === 0) {
@@ -9039,7 +9083,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
               }
             } else if (typeof head2 === "string" && !CodeEmitter.GENERATORS[head2] && (TEMPLATE_TAGS.has(head2.split(/[.#]/)[0]) || /^[a-z][\w-]*$/.test(head2) && node.length > 1)) {
               const tagName = head2.split(/[.#]/)[0];
-              const iProps = extractIntrinsicProps(node.slice(1), tagName);
+              const iProps = extractIntrinsicProps(node.slice(1), tagName, node.loc?.r);
               const tagLine = node.loc?.r;
               const srcMarker = tagLine != null ? ` // @rip-src:${tagLine}` : "";
               if (iProps.length === 0) {
@@ -9243,6 +9287,9 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         for (const line of result.createLines) {
           lines.push(`    ${line}`);
         }
+        if (this._fragChildren.has(result.rootVar)) {
+          lines.push(`    this._nodes = [...${result.rootVar}.childNodes];`);
+        }
         lines.push(`    return ${result.rootVar};`);
         lines.push("  }");
         if (result.setupLines.length > 0) {
@@ -9409,6 +9456,19 @@ ${blockFactoriesCode}return ${lines.join(`
             return true;
         }
       }
+      return false;
+    };
+    proto._isInScopeValue = function(name) {
+      if (!name || typeof name !== "string")
+        return false;
+      if (this.reactiveMembers && this.reactiveMembers.has(name))
+        return true;
+      if (this.componentMembers && this.componentMembers.has(name))
+        return true;
+      if (this._isRenderLocal(name))
+        return true;
+      if (this.moduleBindings && this.moduleBindings.has(name))
+        return true;
       return false;
     };
     proto.emitNode = function(sexpr) {
@@ -9610,6 +9670,8 @@ ${blockFactoriesCode}return ${lines.join(`
           if (!this._isRenderLocal(baseName) && (this.isHtmlTag(baseName || "div") || this.isComponent(baseName))) {
             const childVar = this.emitNode(arg);
             this._createLines.push(`${elVar}.appendChild(${childVar});`);
+          } else if (/^[A-Za-z_$][\w$]*$/.test(val) && !this._isInScopeValue(val)) {
+            this.emitAttributes(elVar, ["object", [":", val, "true"]]);
           } else {
             const textVar = this.newTextVar();
             if (val.startsWith('"') || val.startsWith("'") || val.startsWith("`")) {
@@ -10019,17 +10081,17 @@ ${blockFactoriesCode}return ${lines.join(`
       }
       factoryLines.push(`    },`);
       factoryLines.push(`    d(detaching) {`);
-      factoryLines.push(`      for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: false}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }`);
+      factoryLines.push(`      for (const __c of _factoryChildren) { try { __c.unmount?.({removeDOM: detaching}); } catch (__e) { console.error('[Rip] factory child unmount error:', __e); } }`);
       factoryLines.push(`      _factoryChildren = [];`);
       if (hasEffects) {
         factoryLines.push(`      disposers.forEach(d => d());`);
       }
       if (fragChildren) {
         for (const child of fragChildren) {
-          factoryLines.push(`      if (detaching && ${child}) ${child}.remove();`);
+          factoryLines.push(`      if (detaching) __detach(${child});`);
         }
       } else {
-        factoryLines.push(`      if (detaching && ${rootVar}) ${rootVar}.remove();`);
+        factoryLines.push(`      if (detaching) __detach(${rootVar});`);
       }
       factoryLines.push(`    }`);
       factoryLines.push(`  };`);
@@ -10200,7 +10262,7 @@ ${blockFactoriesCode}return ${lines.join(`
       for (const arg of args) {
         if (this.is(arg, "object")) {
           addObjectProps(arg);
-        } else if (isBareIdent(arg)) {
+        } else if (isBareIdent(arg) && !this._isInScopeValue(arg)) {
           addProp(arg, "true");
         } else if (Array.isArray(arg) && (arg[0] === "->" || arg[0] === "=>")) {
           let block = arg[2];
@@ -10210,6 +10272,8 @@ ${blockFactoriesCode}return ${lines.join(`
               for (const child of block.slice(1)) {
                 if (this.is(child, "object")) {
                   addObjectProps(child);
+                } else if (isBareIdent(child) && !this._isInScopeValue(child)) {
+                  addProp(child, "true");
                 } else {
                   domChildren.push(child);
                 }
@@ -10349,6 +10413,17 @@ ${blockFactoriesCode}return ${lines.join(`
 // ============================================================================
 
 let __currentComponent = null;
+
+// Remove a node from the DOM, tolerant of what it actually is. A
+// DocumentFragment (a multi-root component's _root) is skipped: it is emptied
+// the moment it is inserted, so it owns nothing to remove — its real top-level
+// nodes are tracked on the component instance (_nodes) and removed there. A
+// detached node (parentNode null) is a harmless no-op.
+function __detach(node) {
+  if (!node || node.nodeType === 11) return;
+  if (typeof node.remove === 'function') node.remove();
+  else if (node.parentNode) node.parentNode.removeChild(node);
+}
 
 function __pushComponent(component) {
   // The component stack tracks the currently-active scope (so __effect
@@ -10646,6 +10721,7 @@ class __Component {
   constructor(props = {}) {
     Object.assign(this, props);
     if (!this.app && globalThis.__ripApp) this.app = globalThis.__ripApp;
+    if (!this.router && globalThis.__ripRouter) this.router = globalThis.__ripRouter;
     // A component with render gates (<~) is honored only via route
     // matching — the renderer sets __ripGateMount around each route/layout
     // construction. Constructed as an embedded child (a parent scope is
@@ -10740,9 +10816,16 @@ class __Component {
     try {
       if (this.unmounted) this.unmounted();
     } catch (e) { console.error('[Rip] unmounted error:', e); }
-    if (removeDOM && this._root && this._root.parentNode) {
-      this._root.parentNode.removeChild(this._root);
+    if (removeDOM) {
+      if (this._nodes) {
+        // Multi-root: detach each captured top-level node (the _root fragment
+        // is empty and owns nothing).
+        for (const n of this._nodes) __detach(n);
+      } else if (this._root && this._root.parentNode) {
+        this._root.parentNode.removeChild(this._root);
+      }
     }
+    this._nodes = null;
   }
   emit(name, detail) {
     if (this._root) {
@@ -10756,7 +10839,7 @@ class __Component {
 
 // Register on globalThis for runtime deduplication
 if (typeof globalThis !== 'undefined') {
-  globalThis.__ripComponent = { __pushComponent, __popComponent, __getCurrentComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __transition, __handleComponentError, __gateBind, __Component };
+  globalThis.__ripComponent = { __pushComponent, __popComponent, __getCurrentComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __transition, __handleComponentError, __gateBind, __detach, __Component };
 }
 
 `;
@@ -11647,6 +11730,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
       if (this.options.foldProjections)
         foldDerivedSchemas(sexpr);
       this.collectProgramVariables(sexpr);
+      this.moduleBindings = new Set;
+      this.collectModuleBindings(sexpr);
       let code = this.emit(sexpr);
       if (this.sourceMap)
         this.buildMappings();
@@ -11909,6 +11994,70 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
         }
       }
       return null;
+    }
+    collectModuleBindings(program) {
+      if (!Array.isArray(program))
+        return;
+      let statements;
+      if (str(program[0]) === "program")
+        statements = program.slice(1);
+      else if (Array.isArray(program[0]))
+        statements = program;
+      else
+        statements = [program];
+      for (const stmt of statements)
+        this._collectTopLevelBinding(stmt);
+    }
+    _addModuleBinding(name) {
+      const s = name && name.valueOf ? name.valueOf() : name;
+      if (typeof s === "string" && /^[A-Za-z_$][\w$]*$/.test(s))
+        this.moduleBindings.add(s);
+    }
+    _collectTopLevelBinding(stmt) {
+      if (!Array.isArray(stmt))
+        return;
+      const head = str(stmt[0]) ?? stmt[0];
+      if (head === "export" || head === "export-default")
+        return this._collectTopLevelBinding(stmt[1]);
+      if (CodeEmitter.ASSIGNMENT_OPS.has(head)) {
+        const target = stmt[1];
+        if (typeof target === "string" || target instanceof String)
+          this._addModuleBinding(target);
+        else if (this.is(target, "array"))
+          this.collectVarsFromArray(target, this.moduleBindings);
+        else if (this.is(target, "object"))
+          this.collectVarsFromObject(target, this.moduleBindings);
+        return;
+      }
+      if (head === "def")
+        return this._addModuleBinding(stmt[1]);
+      if (head === "import")
+        return this._collectImportNames(stmt.slice(1));
+    }
+    _collectImportNames(rest) {
+      const addSpec = (spec) => {
+        if (typeof spec === "string" || spec instanceof String)
+          this._addModuleBinding(spec);
+        else if (Array.isArray(spec)) {
+          if (spec[0] === "*" && spec.length === 2)
+            this._addModuleBinding(spec[1]);
+          else
+            for (const i of spec) {
+              if (Array.isArray(i) && i.length === 2)
+                this._addModuleBinding(i[1]);
+              else
+                this._addModuleBinding(i);
+            }
+        }
+      };
+      if (rest.length === 1)
+        return;
+      if (rest.length === 3) {
+        this._addModuleBinding(rest[0]);
+        addSpec(rest[1]);
+        return;
+      }
+      addSpec(rest[0]);
     }
     collectProgramVariables(sexpr) {
       if (!Array.isArray(sexpr))
@@ -12327,10 +12476,10 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
       }
       if (this.usesTemplates && !skip) {
         if (skipRT) {
-          code += `var { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __transition, __handleComponentError, __gateBind, __Component } = globalThis.__ripComponent;
+          code += `var { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __transition, __handleComponentError, __gateBind, __detach, __Component } = globalThis.__ripComponent;
 `;
         } else if (typeof globalThis !== "undefined" && globalThis.__ripComponent) {
-          code += `const { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __transition, __handleComponentError, __gateBind, __Component } = globalThis.__ripComponent;
+          code += `const { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __transition, __handleComponentError, __gateBind, __detach, __Component } = globalThis.__ripComponent;
 `;
         } else {
           code += this.getComponentRuntime();
@@ -15952,8 +16101,8 @@ if (typeof globalThis !== 'undefined') {
     return new CodeEmitter({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.16.1";
-  var BUILD_DATE = "2026-06-19@18:03:41GMT";
+  var VERSION = "3.16.2";
+  var BUILD_DATE = "2026-06-20@11:05:39GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -17429,24 +17578,29 @@ ${indented}`);
       _pending.value = true;
       _succeeded.value = false;
       _error.value = null;
-      return await (async () => {
+      try {
+        r = await fn(...args);
+      } catch (e) {
+        if (!(me === generation))
+          return;
+        _error.value = e;
         try {
-          r = await fn(...args);
-          if (me === generation) {
-            _succeeded.value = true;
-            await opts.onSuccess?.(r);
-          }
-          return r;
-        } catch (e) {
-          if (!(me === generation))
-            return;
-          _error.value = e;
           if (opts.onError) {
-            await opts.onError(e);
+            return await opts.onError(e);
           } else {
             throw e;
           }
-          return;
+        } finally {
+          _pending.value = false;
+        }
+      }
+      if (!(me === generation))
+        return;
+      return await (async () => {
+        try {
+          _succeeded.value = true;
+          await opts.onSuccess?.(r);
+          return r;
         } finally {
           if (me === generation)
             _pending.value = false;
@@ -19142,6 +19296,7 @@ ${indented}`);
         return console.error(`[Rip] Error ${err.status}: ${err.message || err.path}`);
       }
     });
+    globalThis.__ripRouter = router;
     renderer = createRenderer({
       router,
       app,
@@ -19171,6 +19326,7 @@ ${indented}`);
       persistDisposer?.();
       delete globalThis[classesKey];
       delete globalThis.__ripApp;
+      delete globalThis.__ripRouter;
       delete globalThis.__ripLaunched;
       if (win.app === app) {
         delete win.app;
