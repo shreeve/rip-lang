@@ -30,7 +30,13 @@ import * as vsctm from 'vscode-textmate';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, '..');
-const grammarPath = resolve(root, 'packages/vscode/syntaxes/rip.tmLanguage.json');
+const sx = (f) => resolve(root, 'packages/vscode/syntaxes', f);
+const GRAMMARS = {
+  'source.rip': 'rip.tmLanguage.json',
+  'source.rip-schema': 'schema.tmLanguage.json',
+  'rip.injection.markdown': 'rip-markdown-injection.tmLanguage.json',
+  'rip.injection.html': 'rip-html-injection.tmLanguage.json',
+};
 
 function color(code, s) { return process.stdout.isTTY ? `\x1b[${code}m${s}\x1b[0m` : s; }
 const green = s => color('32;1', s), red = s => color('31;1', s), dim = s => color('2', s);
@@ -48,12 +54,19 @@ const registry = new vsctm.Registry({
     createOnigScanner: (patterns) => new oniguruma.OnigScanner(patterns),
     createOnigString: (s) => new oniguruma.OnigString(s),
   }),
-  loadGrammar: async (scope) =>
-    scope === 'source.rip'
-      ? vsctm.parseRawGrammar(readFileSync(grammarPath, 'utf8'), grammarPath)
-      : null,
+  loadGrammar: async (scope) => {
+    const file = GRAMMARS[scope];
+    return file ? vsctm.parseRawGrammar(readFileSync(sx(file), 'utf8'), sx(file)) : null;
+  },
 });
-const grammar = await registry.loadGrammar('source.rip');
+const ripGrammar = await registry.loadGrammar('source.rip');
+const schemaGrammar = await registry.loadGrammar('source.rip-schema');
+// Injection grammars carry top-level patterns, so they tokenize a fenced/script
+// block directly here; their `include: source.rip` resolves through the same
+// registry. (In VS Code they activate via injectionSelector inside the base
+// HTML/Markdown grammars, which aren't needed to exercise the embedding.)
+const mdInjection = await registry.loadGrammar('rip.injection.markdown');
+const htmlInjection = await registry.loadGrammar('rip.injection.html');
 
 // ── Fixture runner ───────────────────────────────────────────────────────
 // Token carrying the scope of the column it owns. Tokenizes code lines in
@@ -66,7 +79,7 @@ function scopesAt(tokens, col) {
 
 const ASSERT_RE = /^\s*#\s*"((?:[^"\\]|\\.)*)"(?:@(\d+))?\s+(!?)(\S.*?)\s*$/;
 
-function runFixture(fixture) {
+function runFixture(fixture, grammar = ripGrammar) {
   const lines = fixture.replace(/^\n/, '').replace(/\n\s*$/, '').split('\n');
   let stack = vsctm.INITIAL;
   let lastCode = null; // { text, tokens }
@@ -311,6 +324,85 @@ export Foo = component
     div.card#main
   # "main" comment.line.number-sign.rip
 `));
+
+// ── Schema grammar (source.rip-schema, .schema files) ────────────────────
+// A separate grammar ships for standalone schema files; drive it through the
+// same runner by passing schemaGrammar as the second argument.
+
+check('schema — declaration directive + type name', () => runFixture(`
+@model User
+# "@model" storage.type.declaration.rip-schema
+# "User" entity.name.type.rip-schema
+`, schemaGrammar));
+
+check('schema — field with modifier and type', () => runFixture(`
+@model User
+  firstName! string
+# "firstName" variable.other.field.rip-schema
+# "!" keyword.operator.modifier.rip-schema
+# "string" support.type.rip-schema
+`, schemaGrammar));
+
+check('schema — constraint brackets and numbers', () => runFixture(`
+@model User
+  total! number [1, 100]
+# "[" punctuation.definition.constraint.begin.rip-schema
+# "1" constant.numeric.rip-schema
+# "]" punctuation.definition.constraint.end.rip-schema
+`, schemaGrammar));
+
+check('schema — options object', () => runFixture(`
+@model User
+  role string { optional: true }
+# "optional" variable.other.property.rip-schema
+# "true" constant.language.rip-schema
+`, schemaGrammar));
+
+check('schema — inline enum members', () => runFixture(`
+@enum Role: admin, editor
+# "@enum" storage.type.declaration.rip-schema
+# "Role" entity.name.type.rip-schema
+# "admin" variable.other.enummember.rip-schema
+`, schemaGrammar));
+
+check('schema — relationship, unique, and standalone directives', () => runFixture(`
+@belongs_to Account
+# "@belongs_to" keyword.other.directive.rip-schema
+# "Account" entity.name.type.rip-schema
+@unique email
+# "@unique" keyword.other.directive.rip-schema
+@timestamps
+# "@timestamps" keyword.other.directive.rip-schema
+`, schemaGrammar));
+
+check('schema — line comment', () => runFixture(`
+# a note
+# "a note" comment.line.number-sign.rip-schema
+`, schemaGrammar));
+
+// ── Injection grammars (Rip embedded in Markdown / HTML) ─────────────────
+// These inject source.rip into a Markdown ```rip fence or an HTML
+// <script type="text/rip"> block. The key contract: the fence/tag keeps its
+// host scope, and the Rip code inside is wrapped in meta.embedded.block.rip and
+// carries real Rip scopes. (`~~~` fences avoid backticks in the JS template.)
+
+check('markdown injection — fence marks language and embeds Rip', () => runFixture(`
+~~~rip
+# "rip" fenced_code.block.language.markdown
+x = "hi"
+# "x" meta.embedded.block.rip
+# "hi" string.quoted.double.rip
+~~~
+`, mdInjection));
+
+check('html injection — script tag embeds Rip in its body', () => runFixture(`
+<script type="text/rip">
+# "script" entity.name.tag.script.html
+y = 42
+# "y" meta.embedded.block.rip
+# "42" constant.numeric.decimal.rip
+</script>
+`, htmlInjection));
 
 // ── Summary ──────────────────────────────────────────────────────────────
 console.log(`\n${passed} passed, ${failed} failed\n`);
