@@ -15,7 +15,7 @@
   "repository": {
 
     "comments": {
-      "comment": "Only match # when preceded by whitespace or at start of line, not after word chars (email!#)",
+      "comment": "Match # only at start of line or after whitespace (standard Rip comment); never mid-token",
       "name": "comment.line.number-sign.rip-schema",
       "match": "(?:^|(?<=\\s))#.*$"
     },
@@ -39,8 +39,8 @@
           }
         },
         {
-          "comment": "Index directive with fields",
-          "match": "(@index)\\b",
+          "comment": "Index / unique constraint directives with fields",
+          "match": "(@(?:index|unique))\\b",
           "name": "keyword.other.directive.rip-schema"
         },
         {
@@ -54,8 +54,8 @@
     "fields": {
       "patterns": [
         {
-          "comment": "Field with modifiers and type: name!# string, [1, 100]",
-          "match": "^(\\s+)([a-z]\\w*)((?:[!#?])+)?\\s+([a-z]\\w*|[A-Z]\\w*)",
+          "comment": "Field with modifiers and type: name! string, [1, 100]",
+          "match": "^(\\s+)([a-z]\\w*)((?:[!?])+)?\\s+([a-z]\\w*|[A-Z]\\w*)",
           "captures": {
             "2": { "name": "variable.other.field.rip-schema" },
             "3": { "name": "keyword.operator.modifier.rip-schema" },

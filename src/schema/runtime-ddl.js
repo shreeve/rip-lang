@@ -126,18 +126,34 @@ __SchemaDef.prototype._tableSpec = function (options) {
     columns.push({ name: 'deleted_at', type: 'TIMESTAMP', notNull: false, unique: false, default: null, was: null });
   }
 
+  // Index names are derived from their column set (`idx_<table>_<cols>`),
+  // so two declarations on the same columns collide. That's always a
+  // redundant/contradictory schema (a `@unique` index already serves as an
+  // index for those columns) — reject it loudly rather than emit duplicate
+  // CREATE INDEX statements.
   const indexes = [];
+  const indexByName = new Map();
+  const addIndex = (ix) => {
+    if (indexByName.has(ix.name)) {
+      throw new Error(
+        `Table '${table}': duplicate index '${ix.name}' on (${ix.columns.join(', ')}). ` +
+        `Those columns are declared unique/indexed more than once — a '@unique' already ` +
+        `creates an index, so remove the redundant '@unique'/'@index' declaration.`);
+    }
+    indexByName.set(ix.name, ix);
+    indexes.push(ix);
+  };
   for (const [n, f] of norm.fields) {
     if (!f.unique) continue;
     const col = __schemaSnake(n);
-    indexes.push({ name: 'idx_' + table + '_' + col, columns: [col], unique: true });
+    addIndex({ name: 'idx_' + table + '_' + col, columns: [col], unique: true });
   }
   for (const d of norm.directives) {
-    if (d.name !== 'index') continue;
+    if (d.name !== 'index' && d.name !== 'unique') continue;
     const ixArgs = d.args?.[0] || {};
     const cols = (ixArgs.fields || []).map(__schemaSnake);
     if (!cols.length) continue;
-    indexes.push({ name: 'idx_' + table + '_' + cols.join('_'), columns: cols, unique: ixArgs.unique === true });
+    addIndex({ name: 'idx_' + table + '_' + cols.join('_'), columns: cols, unique: d.name === 'unique' });
   }
 
   return {
@@ -159,7 +175,13 @@ function __schemaRenderColumn(spec, col, fkByColumn) {
     parts[0] = '  ' + col.name + ' ' + col.type + ' PRIMARY KEY';
   } else {
     if (col.notNull) parts.push('NOT NULL');
-    if (col.unique) parts.push('UNIQUE');
+    // Uniqueness is emitted as a single named index (`idx_<table>_<col>`),
+    // never as an inline column `UNIQUE`. Inline UNIQUE created a second,
+    // auto-named index the migrate differ's fold (__schemaFoldSpec) can't
+    // normalize; the named index is what ADD COLUMN and introspection
+    // already round-trip through. `col.unique` stays the canonical spec
+    // flag — it drives the index below and the differ — it just no longer
+    // renders here.
   }
   const fk = fkByColumn ? fkByColumn.get(col.name) : null;
   if (fk) parts.push('REFERENCES ' + fk.refTable + '(' + fk.refColumn + ')');

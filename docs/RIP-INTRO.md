@@ -78,7 +78,7 @@ Read as families, not atoms:
 |---|---|---|
 | Existence / safety | `x?` · `x ?? y` · `a?.b` · `a?.[0]` · `a?.()` · `a?[0]` · `a?(x)` · `el?.prop = v` · `?!` (presence / Houdini) · `?? throw` | Nothing-safe access and guards |
 | Dammit / await | `fetch! url` · `user.save!` · `User.find! 1` | One glyph: "call it and await" |
-| Void / required | `def process!` (suppresses implicit return) · `name! string` (required field) · `email!#` (required + unique) | Same `!` glyph, context-disambiguated |
+| Void / required | `def process!` (suppresses implicit return) · `name! string` (required field) · `email! email @unique` (required + unique) | Same `!` glyph, context-disambiguated |
 | Math | `//` floor div · `%%` true mod · `1 < x < 10` chained compare · `arr[-1]` negative index · `"-" * 40` string repeat | Math you can read |
 | Regex | `str =~ /re/` with `_[1]` captures · `str[/re/, 1]` · `///...///` heregex | Pattern matching as an expression |
 | Assignment sugar | `.=` method-assign (`x .= trim()`) · `?.=` optional-chain assign · `*>obj = {a:1}` merge-assign | "Mutate this thing" |
@@ -188,7 +188,7 @@ Status = schema
 # DB-backed model
 User = schema :model
   name!   string
-  email!# email
+  email! email @unique
   role?   "admin" | "user"
   @timestamps
   @has_many Order
@@ -363,7 +363,7 @@ A close second is **non-reactive reads due to aliasing / stash access patterns**
 | `fetch!` | dammit — call + await |
 | `def fn!` | void — suppress implicit return |
 | `name! string` | required field (in `schema` body) |
-| `email!#` | required + unique (in `schema :model` body) |
+| `email! email @unique` | required + unique (in `schema :model` body) |
 | `MAX =! 100` | readonly const |
 
 ### The `?` family
@@ -383,7 +383,7 @@ A close second is **non-reactive reads due to aliasing / stash access patterns**
 | Line form | Example |
 |---|---|
 | Field (type implicit string) | `name! 1..50` |
-| Field + modifiers | `email!# email` (required + unique) |
+| Field + modifiers | `email! email @unique` (required + unique) |
 | Field + range | `password! 8..100` |
 | Field + literal union | `sex? "M" \| "F" \| "U"` |
 | Inline field transform | `email!, -> it.email.toLowerCase()` |

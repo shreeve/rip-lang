@@ -340,7 +340,7 @@ Status = schema
 # DB-backed model
 User = schema :model
   name!   string
-  email!# email
+  email! email @unique
   @timestamps
   @has_many Order
   beforeValidation: -> @email = @email.toLowerCase()
