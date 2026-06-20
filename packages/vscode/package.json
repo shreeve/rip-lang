@@ -90,6 +90,19 @@
         }
       }
     ],
+    "semanticTokenTypes": [
+      {
+        "id": "attribute",
+        "description": "A render-block boolean flag (e.g. a bare `disabled` on its own line)"
+      }
+    ],
+    "semanticTokenScopes": [
+      {
+        "scopes": {
+          "attribute": ["entity.other.attribute-name.rip"]
+        }
+      }
+    ],
     "configurationDefaults": {
       "[rip]": {
         "editor.tabSize": 2,

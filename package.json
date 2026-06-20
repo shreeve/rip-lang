@@ -54,12 +54,14 @@
     "test:docs": "bun scripts/doctest.js",
     "build:schema-runtime": "bun scripts/build-schema-runtime.js",
     "test:bundle": "bun test/bundle.test.js",
+    "test:grammar": "bun test/grammar.test.js",
+    "test:semantic": "bun test/semantic.test.js",
     "test:loader": "bun test/loader-reexport.test.js",
     "test:graph": "bun scripts/check-bundle-graph.js",
     "test:server": "./bin/rip packages/server/tests/runner.rip",
     "test:time": "bun run --cwd packages/time test",
     "test:validate": "./bin/rip packages/validate/test.rip",
-    "test:all": "bun run test && bun run test:types && bun run test:schema && bun run test:schema-fresh && bun run test:docs && bun run test:loader && bun run test:graph && bun run test:bundle && bun run test:server && bun run test:time && bun run test:validate",
+    "test:all": "bun run test && bun run test:types && bun run test:schema && bun run test:schema-fresh && bun run test:docs && bun run test:loader && bun run test:graph && bun run test:bundle && bun run test:grammar && bun run test:semantic && bun run test:server && bun run test:time && bun run test:validate",
     "test:ui": "bun run --cwd packages/ui test:e2e",
     "test:ui:chromium": "bun run --cwd packages/ui test:e2e:chromium",
     "test:ui:axe": "bun run --cwd packages/ui test:e2e:axe",
@@ -96,5 +98,9 @@
   "dependencies": {
     "@types/bun": "1.3.14",
     "typescript": "catalog:"
+  },
+  "devDependencies": {
+    "vscode-oniguruma": "2.0.1",
+    "vscode-textmate": "9.3.2"
   }
 }

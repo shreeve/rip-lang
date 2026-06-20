@@ -91,7 +91,13 @@ const SEMANTIC_TOKEN_TYPES = [
   'function',       // 10
   'method',         // 11
   'decorator',      // 12
+  // Synthetic — never produced by TS. The remap assigns it to a render-block
+  // boolean flag (`Button disabled` on its own line) so package.json's
+  // semanticTokenScopes can paint it like entity.other.attribute-name, i.e.
+  // the same colour as an inline flag/`key:` that TextMate already handles.
+  'attribute',      // 13
 ];
+const LEGEND_ATTRIBUTE = 13;
 
 const SEMANTIC_TOKEN_MODIFIERS = [
   'declaration',     // bit 0
@@ -2215,6 +2221,11 @@ connection.onRequest('textDocument/semanticTokens/full', (params) => {
 
       // DTS header token handling: reclassify and skip synthetic lines.
       let finalType = tsTokenType;
+      // Render-block boolean flag: the stub emits `({ flag: true });` for a
+      // bare flag on its own line (where TextMate gives it no scope). Repaint
+      // its property key as the synthetic `attribute` type so it matches an
+      // inline flag's colour. Detected by the distinctive generated line.
+      let forcedLegendType = null;
       if (tsOffset < headerEndOffset) {
         const tsLine = tc.offsetToLine(c.tsContent, tsOffset);
         const lineText = tc.getLineText(c.tsContent, tsLine);
@@ -2250,9 +2261,13 @@ connection.onRequest('textDocument/semanticTokens/full', (params) => {
       // which steal source positions from actual body tokens via text search.
       if (tsOffset >= headerEndOffset) {
         const tsLine = tc.offsetToLine(c.tsContent, tsOffset);
+        const tsLineText = tc.getLineText(c.tsContent, tsLine);
         // Skip ALL tokens from compiler-injected component-stub lines —
         // they have no source counterpart and mis-map onto real identifiers.
-        if (isComponentStubLine(tc.getLineText(c.tsContent, tsLine))) continue;
+        if (isComponentStubLine(tsLineText)) continue;
+        if (tsTokenType === 9 && /^\s*\(\{\s*[\w$]+:\s*true\s*\}\);/.test(tsLineText)) {
+          forcedLegendType = LEGEND_ATTRIBUTE;
+        }
         const info = getFnSigInfo(tsLine);
         // Skip ALL tokens from overload signature lines (duplicates)
         if (info.isOverload) continue;
@@ -2357,6 +2372,16 @@ connection.onRequest('textDocument/semanticTokens/full', (params) => {
         const colonMatch = afterToken.match(/^\s*:/);
         if (colonMatch && afterToken.charAt(colonMatch[0].length) !== ':' && afterToken.charAt(colonMatch[0].length) !== '=') {
           if (matchCol === slIndent || isTagLine || isComponentLine) continue;
+          // Inline render head (`if cond then Bar tone: …`): the line starts
+          // with a control keyword, so the checks above miss the prop key, and
+          // the grammar only scopes it meta.object-literal.key (not
+          // attribute-name) — so the property token would paint it as a member.
+          // If a tag/component head precedes the key on the line, repaint the
+          // key as the synthetic attribute type to match every other prop.
+          const heads = sl.slice(slIndent, matchCol).match(/[A-Za-z][\w-]*(?=\s)/g);
+          if (heads && heads.some(w => /^[A-Z]/.test(w) || HTML_TAG_NAMES.has(w))) {
+            forcedLegendType = LEGEND_ATTRIBUTE;
+          }
         }
         if (/^\s*<=>/.test(afterToken)) {
           if (matchCol === slIndent || isTagLine || isComponentLine) continue;
@@ -2373,7 +2398,7 @@ connection.onRequest('textDocument/semanticTokens/full', (params) => {
         line: matchLine,
         char: matchCol,
         length: tsLength,
-        type: TS_TYPE_TO_LEGEND[finalType],
+        type: forcedLegendType != null ? forcedLegendType : TS_TYPE_TO_LEGEND[finalType],
         modifiers: mods,
       });
     }

@@ -1283,7 +1283,43 @@ export function installComponentSupport(CodeEmitter, Lexer) {
         // pass through untouched.
         const wrapCompHref = (val) =>
           typeof val === 'string' && /^["'`]\//.test(val) ? `__ripRoute(${val})` : val;
-        const extractProps = (args) => {
+        // Boolean-flag shorthand in render args (`Button disabled`, `form
+        // noValidate`): a bare identifier that resolves to nothing in scope is
+        // `flag: true` at runtime (see buildComponentProps). Mirror that rule
+        // here and emit each flag as a standalone, *untyped* object-literal
+        // statement — `({ flag: true });`. TS classifies `flag` as a property
+        // (the semantic token that lets the editor highlight a flag sitting
+        // alone on its own line, where TextMate can't tell it from a child),
+        // but, being untyped, it is NOT checked against the declared props:
+        // flags stay permissive (a deliberate design — see the `Btn disabled
+        // checks clean` pin), so an undeclared flag never raises a type error.
+        const FLAG_RE = /^[a-zA-Z_$][\w$]*$/;
+        const isFlagArg = (a) =>
+          typeof a === 'string' && FLAG_RE.test(a) &&
+          !/^(?:true|false|null|undefined)$/.test(a) &&
+          !CodeEmitter.GENERATORS[a] && !this._isInScopeValue(a);
+        // Resolve a flag's source line by searching forward from the owning
+        // node's line for the bare word — own-line flags sit below their tag.
+        const findFlagLine = (name, fromLine) => {
+          if (fromLine == null || !sourceLines) return fromLine;
+          const re = new RegExp(`(?<![\\w$.#@])${name}(?![\\w$])`);
+          for (let ln = fromLine; ln < sourceLines.length; ln++) {
+            if (sourceLines[ln] && re.test(sourceLines[ln])) return ln;
+          }
+          return fromLine;
+        };
+        // Emit the classifying statement only for a flag on its OWN line. An
+        // inline flag (same line as its tag/component head) is already painted
+        // `entity.other.attribute-name` by TextMate — exactly like a `key:` —
+        // so a semantic token there would only recolor it inconsistently with
+        // its sibling props. Own-line flags get no TextMate scope at all, so
+        // the semantic token is their only highlight.
+        const emitFlag = (name, fromLine, headLine) => {
+          const srcLine = findFlagLine(name, fromLine);
+          if (srcLine != null && srcLine === headLine) return;
+          constructions.push(`    ({ ${name}: true });` + (srcLine != null ? ` // @rip-src:${srcLine}` : ''));
+        };
+        const extractProps = (args, nodeLine) => {
           const props = [];
           const sideExprs = [];
           for (const arg of args) {
@@ -1292,9 +1328,15 @@ export function installComponentSupport(CodeEmitter, Lexer) {
               obj = arg;
             } else if (Array.isArray(arg) && (arg[0] === '->' || arg[0] === '=>') && this.is(arg[2], 'block')) {
               // Multi-line props: (-> (undefined) (block (object ...)))
+              const blockLine = arg[2].loc?.r ?? nodeLine;
               for (let k = 1; k < arg[2].length; k++) {
-                if (this.is(arg[2][k], 'object')) { obj = arg[2][k]; break; }
+                const bc = arg[2][k];
+                if (this.is(bc, 'object')) { if (!obj) obj = bc; }
+                else if (isFlagArg(bc)) emitFlag(bc, blockLine, nodeLine);
               }
+            } else if (isFlagArg(arg)) {
+              emitFlag(arg, nodeLine, nodeLine);
+              continue;
             }
             if (obj) {
               for (let j = 1; j < obj.length; j++) {
@@ -1336,7 +1378,7 @@ export function installComponentSupport(CodeEmitter, Lexer) {
           props.sideExprs = sideExprs;
           return props;
         };
-        const extractIntrinsicProps = (args, tagName) => {
+        const extractIntrinsicProps = (args, tagName, nodeLine) => {
           const props = [];
           // For <a href: ...>, wrap interpolated route literals (templates
           // starting with `/...`) in __ripRoute so TS checks the dynamic
@@ -1357,9 +1399,15 @@ export function installComponentSupport(CodeEmitter, Lexer) {
             if (this.is(arg, 'object')) {
               obj = arg;
             } else if (Array.isArray(arg) && (arg[0] === '->' || arg[0] === '=>') && this.is(arg[2], 'block')) {
+              const blockLine = arg[2].loc?.r ?? nodeLine;
               for (let k = 1; k < arg[2].length; k++) {
-                if (this.is(arg[2][k], 'object')) { obj = arg[2][k]; break; }
+                const bc = arg[2][k];
+                if (this.is(bc, 'object')) { if (!obj) obj = bc; }
+                else if (isFlagArg(bc)) emitFlag(bc, blockLine, nodeLine);
               }
+            } else if (isFlagArg(arg)) {
+              emitFlag(arg, nodeLine, nodeLine);
+              continue;
             }
             if (obj) {
               for (let j = 1; j < obj.length; j++) {
@@ -1689,6 +1737,13 @@ export function installComponentSupport(CodeEmitter, Lexer) {
               !CodeEmitter.GENERATORS[head] && TEMPLATE_TAGS.has(head.split(/[.#]/)[0]);
           if (head === 'block') {
             for (let i = 1; i < node.length; i++) emitBareIdent(node[i], node, false);
+          } else if (typeof head === 'string' && /^[A-Z]/.test(head)) {
+            // Component bare-ident children (`Badge value`): emit an in-scope
+            // member/local as a reference so TS classifies it (a value used as
+            // slot content), mirroring intrinsic tags. isTextChild skips the
+            // tag-typo branch; out-of-scope idents resolve to nothing here and
+            // are handled as boolean flags by extractProps.
+            for (let i = 1; i < node.length; i++) emitBareIdent(node[i], node, true);
           } else if (isTagHead) {
             for (let i = 1; i < node.length; i++) emitBareIdent(node[i], node, true);
             // Emit expression children of intrinsic tags for type-checking.
@@ -1715,7 +1770,7 @@ export function installComponentSupport(CodeEmitter, Lexer) {
           }
           for (let i = 1; i < node.length; i++) walkRender(node[i]);
           if (typeof head === 'string' && /^[A-Z]/.test(head)) {
-            const props = extractProps(node.slice(1));
+            const props = extractProps(node.slice(1), node.loc?.r);
             const varName = `_${constructionIdx++}`;
             const propsType = `ConstructorParameters<typeof ${head}>[0] & {}`;
             if (props.length === 0) {
@@ -1749,7 +1804,7 @@ export function installComponentSupport(CodeEmitter, Lexer) {
           } else if (typeof head === 'string' && !CodeEmitter.GENERATORS[head] && (TEMPLATE_TAGS.has(head.split(/[.#]/)[0]) ||
                      (/^[a-z][\w-]*$/.test(head) && node.length > 1))) {
             const tagName = head.split(/[.#]/)[0];
-            const iProps = extractIntrinsicProps(node.slice(1), tagName);
+            const iProps = extractIntrinsicProps(node.slice(1), tagName, node.loc?.r);
             const tagLine = node.loc?.r;
             const srcMarker = tagLine != null ? ` // @rip-src:${tagLine}` : '';
             if (iProps.length === 0) {
@@ -3371,8 +3426,8 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     // tag-vs-variable). A bare identifier that resolves to NOTHING in scope is
     // boolean-prop shorthand — `Button outline, "Save"` ⇒ `outline: true`. A
     // bare identifier that resolves to an in-scope value falls through to the
-    // child handling below, so it's passed as slot content (`Alert error` ⇒
-    // the value of `error` as a child). To pass an in-scope value as a PROP,
+    // child handling below, so it's passed as slot content (`Badge value` ⇒
+    // the value of `value` as a child). To pass an in-scope value as a PROP,
     // be explicit: `outline: outline` / `outline <=> outline` / `outline: true`.
     const BARE_IDENT_RE = /^[a-zA-Z_$][\w$]*$/;
     const isBareIdent = (a) => typeof a === 'string' && BARE_IDENT_RE.test(a);
