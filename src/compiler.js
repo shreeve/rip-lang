@@ -315,6 +315,8 @@ export class CodeEmitter {
     // extractor enables it so projections can cross the client boundary.
     if (this.options.foldProjections) foldDerivedSchemas(sexpr);
     this.collectProgramVariables(sexpr);
+    this.moduleBindings = new Set();
+    this.collectModuleBindings(sexpr);
     let code = this.emit(sexpr);
 
     // Build source map mappings from generation-time recorded entries
@@ -643,6 +645,60 @@ export class CodeEmitter {
   // ---------------------------------------------------------------------------
   // Variable collection
   // ---------------------------------------------------------------------------
+
+  // Collect every module-level binding name (imports, top-level decls,
+  // exported decls, def/component names) into this.moduleBindings, BEFORE
+  // emission. Used by the bare-identifier disambiguator (components.js): a
+  // bare identifier that names something in scope is a value (rendered as a
+  // child), otherwise it is boolean-flag shorthand. programVars can't serve
+  // this — it deliberately skips exports and imports. Module-level only: we
+  // never descend into function/component bodies.
+  collectModuleBindings(program) {
+    if (!Array.isArray(program)) return;
+    let statements;
+    if (str(program[0]) === 'program') statements = program.slice(1);
+    else if (Array.isArray(program[0])) statements = program;
+    else statements = [program];
+    for (const stmt of statements) this._collectTopLevelBinding(stmt);
+  }
+
+  _addModuleBinding(name) {
+    const s = (name && name.valueOf) ? name.valueOf() : name;
+    if (typeof s === 'string' && /^[A-Za-z_$][\w$]*$/.test(s)) this.moduleBindings.add(s);
+  }
+
+  _collectTopLevelBinding(stmt) {
+    if (!Array.isArray(stmt)) return;
+    const head = str(stmt[0]) ?? stmt[0];
+    if (head === 'export' || head === 'export-default') return this._collectTopLevelBinding(stmt[1]);
+    if (CodeEmitter.ASSIGNMENT_OPS.has(head)) {
+      const target = stmt[1];
+      if (typeof target === 'string' || target instanceof String) this._addModuleBinding(target);
+      else if (this.is(target, 'array')) this.collectVarsFromArray(target, this.moduleBindings);
+      else if (this.is(target, 'object')) this.collectVarsFromObject(target, this.moduleBindings);
+      return;
+    }
+    if (head === 'def') return this._addModuleBinding(stmt[1]);
+    if (head === 'import') return this._collectImportNames(stmt.slice(1));
+  }
+
+  // Mirror the import shapes emitImport understands; bind the local name
+  // (the alias for `orig as alias`, the namespace for `* as NS`).
+  _collectImportNames(rest) {
+    const addSpec = (spec) => {
+      if (typeof spec === 'string' || spec instanceof String) this._addModuleBinding(spec);
+      else if (Array.isArray(spec)) {
+        if (spec[0] === '*' && spec.length === 2) this._addModuleBinding(spec[1]);
+        else for (const i of spec) {
+          if (Array.isArray(i) && i.length === 2) this._addModuleBinding(i[1]);
+          else this._addModuleBinding(i);
+        }
+      }
+    };
+    if (rest.length === 1) return;                 // dynamic import(...)
+    if (rest.length === 3) { this._addModuleBinding(rest[0]); addSpec(rest[1]); return; }
+    addSpec(rest[0]);                              // [specifier, source]
+  }
 
   collectProgramVariables(sexpr) {
     if (!Array.isArray(sexpr)) return;

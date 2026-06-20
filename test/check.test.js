@@ -450,6 +450,54 @@ export C = component
   assert(r.ok, 'inline handler with sibling props should check clean: ' + r.out);
 });
 
+// Scope-based bare-identifier disambiguation reaches the type-check (stub)
+// path too. A bare identifier that resolves to nothing is boolean-attribute
+// shorthand (`form noValidate`), NOT a reference — so it must not surface as
+// "Cannot find name". A bare identifier that resolves to an in-scope value is
+// still emitted as a reference, so a genuine value typo is still caught.
+check('an unresolved bare-ident attribute (form noValidate) checks clean', () => {
+  const r = checkProject({
+    'index.rip': `export ok = true\n`,
+    'c.rip': `export C = component
+  render
+    form noValidate, class: "x"
+      div "a"
+`,
+  });
+  assert(r.ok, 'a bare-ident boolean attribute must not error as an undefined name: ' + r.out);
+});
+
+check('a bare-ident text child that IS in scope still type-checks (loop var)', () => {
+  const r = checkProject({
+    'index.rip': `export ok = true\n`,
+    'c.rip': `export C = component
+  items := ['a', 'b']
+  render
+    for item in items
+      li item
+`,
+  });
+  assert(r.ok, 'an in-scope loop var rendered as a text child should check clean: ' + r.out);
+});
+
+check('an unresolved bare-ident flag on a component checks clean (Btn disabled)', () => {
+  const r = checkProject({
+    'index.rip': `export ok = true\n`,
+    'c.rip': `export Btn = component
+  render
+    button
+      slot
+
+export C = component
+  render
+    Btn
+      disabled
+      "Save"
+`,
+  });
+  assert(r.ok, 'a bare-ident boolean flag on a component must not error as a missing element: ' + r.out);
+});
+
 check('an inline @event handler param is genuinely typed (a bogus member errors)', () => {
   const r = checkProject({
     'index.rip': `export ok = true\n`,

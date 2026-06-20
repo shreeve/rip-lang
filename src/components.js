@@ -1552,10 +1552,19 @@ export function installComponentSupport(CodeEmitter, Lexer) {
               } else {
                 constructions.push(`    for (const ${varPattern} of ${iterCode}) {${srcMarker}`);
               }
+              // Track the loop vars while walking the body so _isInScopeValue
+              // recognizes them (mirrors the runtime emitter). Without this a
+              // bare-ident loop var (`li item`) would be misread as a flag.
+              const asName = (v) => (typeof v === 'string' || v instanceof String) ? String(v) : null;
+              const loopFrame = Array.isArray(vars)
+                ? { itemVar: asName(vars[0]), indexVar: asName(vars[1]) }
+                : { itemVar: asName(vars), indexVar: null };
+              (this._loopVarStack || (this._loopVarStack = [])).push(loopFrame);
               // Walk body children (indices 3+ may contain guard, body, etc.)
               for (let bi = 3; bi < node.length; bi++) {
                 if (node[bi] != null) walkRender(node[bi]);
               }
+              this._loopVarStack.pop();
               constructions.push(`    }`);
               return; // Don't walk children again below
             }
@@ -1649,13 +1658,20 @@ export function installComponentSupport(CodeEmitter, Lexer) {
               if (!anchorTarget._anchors) anchorTarget._anchors = [];
               anchorTarget._anchors.push({ name: child, origLine: srcLine, origCol: srcCol });
             }
+            // Mirror the runtime's scope-based bare-identifier rule:
+            //   • a component member        → `this.x` (member text reference)
+            //   • any other in-scope value  → `x`      (render-local/loop/module)
+            //   • a bare HTML tag at block  → `__ripEl('x')` (element typo check)
+            //   • anything else             → nothing: it resolves to nothing
+            //     and isn't an element, so it's boolean flag/attribute shorthand
+            //     (`form noValidate`, `Button disabled`). Emitting a reference or
+            //     __ripEl here would be a false "Cannot find name" / "not a known
+            //     element" on what is really a flag.
             if (this.componentMembers && this.componentMembers.has(child)) {
               constructions.push(`    this.${child};${srcMarker}`);
-            } else if (isTextChild) {
-              // Text child of a tag — emit as variable reference so TS
-              // reports "Cannot find name 'x'" instead of "not a known element"
+            } else if (this._isInScopeValue(child)) {
               constructions.push(`    ${child};${srcMarker}`);
-            } else {
+            } else if (!isTextChild && this.isHtmlTag(child)) {
               constructions.push(`    __ripEl('${child}');${srcMarker}`);
             }
           };
@@ -2209,6 +2225,22 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     return false;
   };
 
+  // True when a bare identifier resolves to a value in scope — a component
+  // member (reactive/method/readonly), a render-local, a loop var, or a
+  // module-level binding (collected by collectModuleBindings before emit).
+  // Drives bare-identifier disambiguation: a name that resolves to a value is
+  // that value (rendered as a child); a name that resolves to NOTHING is
+  // boolean-flag/attribute shorthand. This is the same scope-based rule rip
+  // already uses to tell a `<code>` tag from a `code` variable.
+  proto._isInScopeValue = function(name) {
+    if (!name || typeof name !== 'string') return false;
+    if (this.reactiveMembers && this.reactiveMembers.has(name)) return true;
+    if (this.componentMembers && this.componentMembers.has(name)) return true;
+    if (this._isRenderLocal(name)) return true;
+    if (this.moduleBindings && this.moduleBindings.has(name)) return true;
+    return false;
+  };
+
   // --------------------------------------------------------------------------
   // emitNode — main dispatch for all render tree nodes
   // --------------------------------------------------------------------------
@@ -2481,6 +2513,11 @@ export function installComponentSupport(CodeEmitter, Lexer) {
         if (!this._isRenderLocal(baseName) && (this.isHtmlTag(baseName || 'div') || this.isComponent(baseName))) {
           const childVar = this.emitNode(arg);
           this._createLines.push(`${elVar}.appendChild(${childVar});`);
+        } else if (/^[A-Za-z_$][\w$]*$/.test(val) && !this._isInScopeValue(val)) {
+          // A bare identifier that resolves to nothing in scope is boolean
+          // attribute shorthand — `form noValidate` ⇒ `noValidate: true`. (An
+          // in-scope value falls through below and renders as a text child.)
+          this.emitAttributes(elVar, ['object', [':', val, 'true']]);
         } else {
           const textVar = this.newTextVar();
           if (val.startsWith('"') || val.startsWith("'") || val.startsWith('`')) {
@@ -3330,23 +3367,20 @@ export function installComponentSupport(CodeEmitter, Lexer) {
       }
     };
 
-    // Bare identifier args become boolean prop shorthand:
-    //   Button outline, link, "Save"
-    // is equivalent to:
-    //   Button outline: true, link: true, "Save"
-    // Matches JSX semantics — the bare identifier is ALWAYS a literal `true`
-    // prop key, never a variable reference, even if a same-named local
-    // binding exists in scope. To pass a variable, write `outline: outline`.
-    // Scoped to PascalCase component calls (this function's only caller is
-    // emitChildComponent), so DOM element calls and non-render imperative
-    // calls are unaffected.
+    // Bare identifier disambiguation (the same scope-based rule rip uses for
+    // tag-vs-variable). A bare identifier that resolves to NOTHING in scope is
+    // boolean-prop shorthand — `Button outline, "Save"` ⇒ `outline: true`. A
+    // bare identifier that resolves to an in-scope value falls through to the
+    // child handling below, so it's passed as slot content (`Alert error` ⇒
+    // the value of `error` as a child). To pass an in-scope value as a PROP,
+    // be explicit: `outline: outline` / `outline <=> outline` / `outline: true`.
     const BARE_IDENT_RE = /^[a-zA-Z_$][\w$]*$/;
     const isBareIdent = (a) => typeof a === 'string' && BARE_IDENT_RE.test(a);
 
     for (const arg of args) {
       if (this.is(arg, 'object')) {
         addObjectProps(arg);
-      } else if (isBareIdent(arg)) {
+      } else if (isBareIdent(arg) && !this._isInScopeValue(arg)) {
         addProp(arg, 'true');
       } else if (Array.isArray(arg) && (arg[0] === '->' || arg[0] === '=>')) {
         let block = arg[2];
@@ -3356,6 +3390,10 @@ export function installComponentSupport(CodeEmitter, Lexer) {
             for (const child of block.slice(1)) {
               if (this.is(child, 'object')) {
                 addObjectProps(child);
+              } else if (isBareIdent(child) && !this._isInScopeValue(child)) {
+                // Same rule as inline args: an indented bare identifier that
+                // resolves to nothing is boolean-prop shorthand, not a child.
+                addProp(child, 'true');
               } else {
                 domChildren.push(child);
               }

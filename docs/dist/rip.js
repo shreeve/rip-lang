@@ -8878,10 +8878,14 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
                 } else {
                   constructions.push(`    for (const ${varPattern} of ${iterCode}) {${srcMarker}`);
                 }
+                const asName = (v) => typeof v === "string" || v instanceof String ? String(v) : null;
+                const loopFrame = Array.isArray(vars) ? { itemVar: asName(vars[0]), indexVar: asName(vars[1]) } : { itemVar: asName(vars), indexVar: null };
+                (this._loopVarStack || (this._loopVarStack = [])).push(loopFrame);
                 for (let bi = 3;bi < node.length; bi++) {
                   if (node[bi] != null)
                     walkRender(node[bi]);
                 }
+                this._loopVarStack.pop();
                 constructions.push(`    }`);
                 return;
               }
@@ -8959,9 +8963,9 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
               }
               if (this.componentMembers && this.componentMembers.has(child)) {
                 constructions.push(`    this.${child};${srcMarker}`);
-              } else if (isTextChild) {
+              } else if (this._isInScopeValue(child)) {
                 constructions.push(`    ${child};${srcMarker}`);
-              } else {
+              } else if (!isTextChild && this.isHtmlTag(child)) {
                 constructions.push(`    __ripEl('${child}');${srcMarker}`);
               }
             };
@@ -9405,6 +9409,19 @@ ${blockFactoriesCode}return ${lines.join(`
       }
       return false;
     };
+    proto._isInScopeValue = function(name) {
+      if (!name || typeof name !== "string")
+        return false;
+      if (this.reactiveMembers && this.reactiveMembers.has(name))
+        return true;
+      if (this.componentMembers && this.componentMembers.has(name))
+        return true;
+      if (this._isRenderLocal(name))
+        return true;
+      if (this.moduleBindings && this.moduleBindings.has(name))
+        return true;
+      return false;
+    };
     proto.emitNode = function(sexpr) {
       if (this._isRenderBinding(sexpr)) {
         const [op, name, expr] = sexpr;
@@ -9604,6 +9621,8 @@ ${blockFactoriesCode}return ${lines.join(`
           if (!this._isRenderLocal(baseName) && (this.isHtmlTag(baseName || "div") || this.isComponent(baseName))) {
             const childVar = this.emitNode(arg);
             this._createLines.push(`${elVar}.appendChild(${childVar});`);
+          } else if (/^[A-Za-z_$][\w$]*$/.test(val) && !this._isInScopeValue(val)) {
+            this.emitAttributes(elVar, ["object", [":", val, "true"]]);
           } else {
             const textVar = this.newTextVar();
             if (val.startsWith('"') || val.startsWith("'") || val.startsWith("`")) {
@@ -10194,7 +10213,7 @@ ${blockFactoriesCode}return ${lines.join(`
       for (const arg of args) {
         if (this.is(arg, "object")) {
           addObjectProps(arg);
-        } else if (isBareIdent(arg)) {
+        } else if (isBareIdent(arg) && !this._isInScopeValue(arg)) {
           addProp(arg, "true");
         } else if (Array.isArray(arg) && (arg[0] === "->" || arg[0] === "=>")) {
           let block = arg[2];
@@ -10204,6 +10223,8 @@ ${blockFactoriesCode}return ${lines.join(`
               for (const child of block.slice(1)) {
                 if (this.is(child, "object")) {
                   addObjectProps(child);
+                } else if (isBareIdent(child) && !this._isInScopeValue(child)) {
+                  addProp(child, "true");
                 } else {
                   domChildren.push(child);
                 }
@@ -11660,6 +11681,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
       if (this.options.foldProjections)
         foldDerivedSchemas(sexpr);
       this.collectProgramVariables(sexpr);
+      this.moduleBindings = new Set;
+      this.collectModuleBindings(sexpr);
       let code = this.emit(sexpr);
       if (this.sourceMap)
         this.buildMappings();
@@ -11922,6 +11945,70 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
         }
       }
       return null;
+    }
+    collectModuleBindings(program) {
+      if (!Array.isArray(program))
+        return;
+      let statements;
+      if (str(program[0]) === "program")
+        statements = program.slice(1);
+      else if (Array.isArray(program[0]))
+        statements = program;
+      else
+        statements = [program];
+      for (const stmt of statements)
+        this._collectTopLevelBinding(stmt);
+    }
+    _addModuleBinding(name) {
+      const s = name && name.valueOf ? name.valueOf() : name;
+      if (typeof s === "string" && /^[A-Za-z_$][\w$]*$/.test(s))
+        this.moduleBindings.add(s);
+    }
+    _collectTopLevelBinding(stmt) {
+      if (!Array.isArray(stmt))
+        return;
+      const head = str(stmt[0]) ?? stmt[0];
+      if (head === "export" || head === "export-default")
+        return this._collectTopLevelBinding(stmt[1]);
+      if (CodeEmitter.ASSIGNMENT_OPS.has(head)) {
+        const target = stmt[1];
+        if (typeof target === "string" || target instanceof String)
+          this._addModuleBinding(target);
+        else if (this.is(target, "array"))
+          this.collectVarsFromArray(target, this.moduleBindings);
+        else if (this.is(target, "object"))
+          this.collectVarsFromObject(target, this.moduleBindings);
+        return;
+      }
+      if (head === "def")
+        return this._addModuleBinding(stmt[1]);
+      if (head === "import")
+        return this._collectImportNames(stmt.slice(1));
+    }
+    _collectImportNames(rest) {
+      const addSpec = (spec) => {
+        if (typeof spec === "string" || spec instanceof String)
+          this._addModuleBinding(spec);
+        else if (Array.isArray(spec)) {
+          if (spec[0] === "*" && spec.length === 2)
+            this._addModuleBinding(spec[1]);
+          else
+            for (const i of spec) {
+              if (Array.isArray(i) && i.length === 2)
+                this._addModuleBinding(i[1]);
+              else
+                this._addModuleBinding(i);
+            }
+        }
+      };
+      if (rest.length === 1)
+        return;
+      if (rest.length === 3) {
+        this._addModuleBinding(rest[0]);
+        addSpec(rest[1]);
+        return;
+      }
+      addSpec(rest[0]);
     }
     collectProgramVariables(sexpr) {
       if (!Array.isArray(sexpr))
@@ -15966,7 +16053,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.16.1";
-  var BUILD_DATE = "2026-06-19@12:19:28GMT";
+  var BUILD_DATE = "2026-06-20@07:50:30GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

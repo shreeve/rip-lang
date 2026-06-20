@@ -2803,8 +2803,9 @@ code "boolean prop shorthand — explicit value still wins", '''
   };
   ''', opts
 
-# DOM elements unaffected — `div outline` is still a div with text-node `outline`.
-code "boolean prop shorthand — DOM elements unaffected", '''
+# Scope-based disambiguation: a bare identifier that resolves to NOTHING in
+# scope is boolean-attribute shorthand on a DOM element too (`form noValidate`).
+code "bare-ident shorthand — unresolved name is a boolean attribute", '''
   export A = component
     render
       div outline
@@ -2814,9 +2815,32 @@ code "boolean prop shorthand — DOM elements unaffected", '''
     }
     _create() {
       this._el0 = document.createElement('div');
-      this._t0 = document.createTextNode(outline);
+      this._el0.setAttribute('outline', true);
+      return this._el0;
+    }
+  }
+  ''', opts
+
+# But a bare identifier that DOES resolve to an in-scope value (here a member)
+# renders as a text child — the common `span title` pattern, unchanged.
+code "bare-ident — in-scope value is a text child, not an attribute", '''
+  export A = component
+    @title := ""
+    render
+      div title
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {
+      this.title = __state(props.__bind_title__ ?? props.title ?? "");
+    }
+    _create() {
+      this._el0 = document.createElement('div');
+      this._t0 = document.createTextNode('');
       this._el0.appendChild(this._t0);
       return this._el0;
+    }
+    _setup() {
+      __effect(() => { this._t0.data = this.title.value; });
     }
   }
   ''', opts

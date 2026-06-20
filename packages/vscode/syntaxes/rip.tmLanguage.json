@@ -313,8 +313,9 @@
           "end": "$",
           "patterns": [
             { "include": "#render-prop-class" },
-            { "include": "#render-prop-event" },
-            { "include": "#render-prop-key" },
+            { "include": "#render-prop-event-region" },
+            { "include": "#render-prop-key-region" },
+            { "include": "#render-prop-bool-shorthand" },
             { "include": "$self" }
           ]
         },
@@ -339,8 +340,9 @@
           "end": "$",
           "patterns": [
             { "include": "#render-prop-class" },
-            { "include": "#render-prop-event" },
-            { "include": "#render-prop-key" },
+            { "include": "#render-prop-event-region" },
+            { "include": "#render-prop-key-region" },
+            { "include": "#render-prop-bool-shorthand" },
             { "include": "$self" }
           ]
         },
@@ -637,21 +639,8 @@
         "2": { "name": "entity.other.attribute-name.class.rip" }
       }
     },
-    "render-prop-event": {
-      "comment": "Event prop @name: handler — simple match (used in HTML tag and implicit-div contexts where boolean shorthand isn't supported).",
-      "match": "(@)([a-zA-Z_$][\\w$-]*)(?=\\s*:(?![:=]))",
-      "captures": {
-        "1": { "name": "punctuation.definition.event.rip" },
-        "2": { "name": "entity.other.attribute-name.event.rip" }
-      }
-    },
-    "render-prop-key": {
-      "comment": "Attribute key:value or key<=>binding — simple match (used in HTML tag and implicit-div contexts).",
-      "match": "\\b([a-zA-Z_$][\\w$-]*)(?=\\s*(?::(?![:=])|<=>))",
-      "name": "entity.other.attribute-name.rip"
-    },
     "render-prop-event-region": {
-      "comment": "Event prop @name: handler — begin/end variant for PascalCase component context, so the handler value isn't matched by the boolean shorthand pattern.",
+      "comment": "Event prop @name: handler — begin/end variant used in every render-arg context, so the handler value isn't matched by the boolean shorthand pattern.",
       "begin": "(@)([a-zA-Z_$][\\w$-]*)(?=\\s*:(?![:=]))",
       "beginCaptures": {
         "1": { "name": "punctuation.definition.event.rip" },
@@ -661,7 +650,7 @@
       "patterns": [{ "include": "$self" }]
     },
     "render-prop-key-region": {
-      "comment": "Attribute key:value or key<=>binding — begin/end variant for PascalCase component context, consumes value through next comma or EOL so its identifiers don't match the boolean shorthand pattern.",
+      "comment": "Attribute key:value or key<=>binding — begin/end variant used in every render-arg context, consumes value through next comma or EOL so its identifiers don't match the boolean shorthand pattern.",
       "begin": "(?<![\\w$])([a-zA-Z_$][\\w$-]*)(?=\\s*(?::(?![:=])|<=>))",
       "beginCaptures": {
         "1": { "name": "entity.other.attribute-name.rip" }
@@ -670,7 +659,7 @@
       "patterns": [{ "include": "$self" }]
     },
     "render-prop-bool-shorthand": {
-      "comment": "Boolean prop shorthand — bare identifier as a `name: true` prop in PascalCase component args. Must come after render-prop-event-region and render-prop-key-region so colon-values are consumed first.",
+      "comment": "Boolean flag shorthand — a bare identifier that resolves to nothing is a `name: true` prop/attribute. Used for HTML tags, implicit divs, and components alike. Must come after render-prop-event-region and render-prop-key-region so colon-values are consumed first.",
       "match": "(?<![\\w$.])([a-zA-Z_$][\\w$]*)\\b(?=\\s*(?:,|$))",
       "name": "entity.other.attribute-name.rip"
     },

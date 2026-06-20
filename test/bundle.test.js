@@ -92,6 +92,30 @@ check('exports importRip on globalThis', () => {
   if (!globalThis.importRip.modules) throw new Error('importRip.modules not initialized');
 });
 
+// Scope-based bare-identifier disambiguation. A bare identifier that resolves
+// to an in-scope value is that value (a child); one that resolves to nothing is
+// boolean-flag/attribute shorthand. Same rule for components and elements.
+check('bare-ident resolving to an in-scope value passes it as a child', () => {
+  // error is a reactive member, so it passes as a child (the value), not error:true.
+  const src = "export Parent = component\\n  error := ''\\n  render\\n    Alert classes: \\"x\\", error\\n";
+  const out = globalThis.compileToJS(src, { skipPreamble: true, skipRuntimes: true });
+  if (out.includes("error: true")) throw new Error('in-scope bare ident must NOT become a boolean prop');
+  if (!out.includes("children:")) throw new Error('in-scope bare ident should be passed as a child: ' + out);
+});
+
+check('bare-ident resolving to nothing is boolean shorthand (component prop + element attr)', () => {
+  const comp = globalThis.compileToJS("export Parent = component\\n  render\\n    Btn outline\\n", { skipPreamble: true, skipRuntimes: true });
+  if (!comp.includes("outline: true")) throw new Error('unresolved bare ident on a component should be a boolean prop: ' + comp);
+  const el = globalThis.compileToJS("export Parent = component\\n  render\\n    form noValidate\\n", { skipPreamble: true, skipRuntimes: true });
+  if (!el.includes("setAttribute('noValidate'")) throw new Error('unresolved bare ident on an element should be a boolean attribute: ' + el);
+});
+
+check('a bare-ident flag works in the indented (block) child form too', () => {
+  // disabled on its own indented line is a boolean prop, NOT a child node.
+  const out = globalThis.compileToJS("export Parent = component\\n  render\\n    Btn\\n      disabled\\n      \\"Save\\"\\n", { skipPreamble: true, skipRuntimes: true });
+  if (!out.includes("disabled: true")) throw new Error('an indented bare-ident flag must become a boolean prop: ' + out);
+});
+
 check('exports rip browser REPL', () => {
   if (typeof globalThis.rip !== 'function') throw new Error('rip() not exposed');
 });
