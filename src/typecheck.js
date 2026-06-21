@@ -390,10 +390,13 @@ export function countLines(str) {
 // Validate a prop's default value against its declared type.
 // Returns an error message string if invalid, null if OK or can't validate.
 export function validatePropDefault(type, defVal) {
+  // A string literal in either quote style: "a" or 'a'.
+  const isStrLit = s => /^"[^"]*"$/.test(s) || /^'[^']*'$/.test(s);
+  const strInner = s => s.slice(1, -1);
   const parts = type.split('|').map(s => s.trim());
-  // String literal union: "a" | "b" | "c"
-  if (parts.every(p => /^"[^"]*"$/.test(p))) {
-    if (/^"[^"]*"$/.test(defVal) && !parts.includes(defVal)) {
+  // String literal union: "a" | "b" | "c" (either quote style)
+  if (parts.every(p => isStrLit(p))) {
+    if (isStrLit(defVal) && !parts.some(p => strInner(p) === strInner(defVal))) {
       return `Type '${defVal}' is not assignable to type '${type}'`;
     }
     return null;
@@ -407,7 +410,7 @@ export function validatePropDefault(type, defVal) {
     if (t === 'number' && !/^-?\d+(\.\d+)?$/.test(defVal)) {
       return `Type '${defVal}' is not assignable to type 'number'`;
     }
-    if (t === 'string' && !/^"[^"]*"$/.test(defVal)) {
+    if (t === 'string' && !isStrLit(defVal)) {
       return `Type '${defVal}' is not assignable to type 'string'`;
     }
   }
@@ -3418,8 +3421,10 @@ export function globToRegex(pattern) {
     } else if (c === '?') {
       re += '[^/]';
       i++;
-    } else if (c === '.') {
-      re += '\\.';
+    } else if (/[.\\^$+()[\]{}|]/.test(c)) {
+      // Escape regex metacharacters so literal path chars match literally.
+      // Matters for Rip's own route-dir syntax: `[id]`, `[...rest]`, `(app)`.
+      re += '\\' + c;
       i++;
     } else {
       re += c;

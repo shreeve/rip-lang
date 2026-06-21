@@ -34,11 +34,13 @@ function assert(c, m) { if (!c) throw new Error(m || 'assertion failed'); }
 
 // Wipe the temp project, write the given files, run `rip check .` over it.
 // File names may contain subdirectories ('app/stash.rip').
-function checkProject(files) {
+// `ripConfig` overrides/extends the default `rip` config (e.g. { exclude: [...] }).
+function checkProject(files, ripConfig = {}) {
   rmSync(tmpDir, { recursive: true, force: true });
   mkdirSync(tmpDir, { recursive: true });
+  const ripCfg = { strict: true, checkAll: true, ...ripConfig };
   writeFileSync(resolve(tmpDir, 'package.json'),
-    '{"rip": {"strict": true, "checkAll": true}, "dependencies": {"@rip-lang/app": "workspace:*"}}\n');
+    JSON.stringify({ rip: ripCfg, dependencies: { '@rip-lang/app': 'workspace:*' } }) + '\n');
   for (const [name, src] of Object.entries(files)) {
     const dest = resolve(tmpDir, name);
     mkdirSync(dirname(dest), { recursive: true });
@@ -821,6 +823,82 @@ check('router.push: a valid route passes; a path typo errors', () => {
   assert(r.ok, 'valid route push should pass:\n' + r.out);
   r = checkProject(routerBodyProject(`  mounted: -> @router.push('/nope')`));
   assert(!r.ok, 'a push typo should error');
+});
+
+// ── Single-quoted string literals are valid prop defaults ──
+//
+// validatePropDefault only recognized double-quoted literals (/^"[^"]*"$/),
+// so a single-quoted default like `@value?:: string := ''` was reported as
+// `Type '''' is not assignable to type 'string'` — a false positive, since
+// '' and "" are the same empty string in Rip. String-literal unions escaped
+// it only by accident (their single-quoted members also failed the regex, so
+// the whole branch was skipped). Fixed: accept either quote style, and
+// compare union membership by inner content.
+
+check('single-quoted string prop defaults pass', () => {
+  const r = checkProject({
+    'c.rip': `export Input = component extends input
+  @value?:: string := ''
+  @label?:: string := 'hi'
+  render
+    input
+`,
+  });
+  assert(r.ok, 'single-quoted string defaults should pass:\n' + r.out);
+});
+
+check('single-quoted defaults in a string-literal union pass; a non-member errors', () => {
+  let r = checkProject({
+    'c.rip': `export Button = component extends button
+  @variant?:: 'primary' | 'secondary' := 'primary'
+  render
+    button
+`,
+  });
+  assert(r.ok, 'single-quoted union default should pass:\n' + r.out);
+  r = checkProject({
+    'c.rip': `export Button = component extends button
+  @variant?:: 'primary' | 'secondary' := 'tertiary'
+  render
+    button
+`,
+  });
+  assert(!r.ok, 'a default outside the union should error');
+  assert(/not assignable/.test(r.out), 'unexpected output:\n' + r.out);
+});
+
+check('a genuinely mismatched default still errors (string default on number)', () => {
+  const r = checkProject({
+    'c.rip': `export Box = component extends div
+  @count?:: number := 'oops'
+  render
+    div
+`,
+  });
+  assert(!r.ok, 'a string default on a number prop should error');
+  assert(/not assignable/.test(r.out), 'unexpected output:\n' + r.out);
+});
+
+// ── globToRegex escapes regex metacharacters in exclude patterns ──
+//
+// globToRegex only escaped `.`, leaving `[ ] ( ) { } + ^ $ |` raw. That
+// silently broke excludes for Rip's own route-dir syntax: `[id]/**` compiled
+// to a char class, so `app/routes/[id]/x.rip` never matched and the file was
+// type-checked despite being excluded. Fixed: escape the full metacharacter
+// set. The error file below would fail `rip check` if the exclude were a no-op.
+
+check('exclude patterns with route-dir brackets/parens are honored', () => {
+  const files = {
+    'app/routes/index.rip': `export Home = component\n  render\n    div\n`,
+    'app/routes/[id]/x.rip': `bad:: number := 'oops'\n`,
+    'app/routes/(app)/y.rip': `bad:: number := 'oops'\n`,
+  };
+  // Sanity: without the exclude, the bracketed files' errors surface.
+  let r = checkProject(files);
+  assert(!r.ok, 'the deliberate errors should surface when not excluded');
+  // With the exclude, both bracketed dirs are skipped → clean.
+  r = checkProject(files, { exclude: ['app/routes/[id]/**', 'app/routes/(app)/**'] });
+  assert(r.ok, 'excluded route-dir files should be skipped:\n' + r.out);
 });
 
 rmSync(tmpDir, { recursive: true, force: true });
