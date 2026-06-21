@@ -26,11 +26,11 @@ type ButtonProps = ComponentProps<'button'> & {
 
 function Input({ label, error, ...props }: InputProps) {
   return (
-    <fieldset>
+    <div>
       {label && <label>{label}</label>}
       <input {...props} />
       {error && <div>{error}</div>}
-    </fieldset>
+    </div>
   )
 }
 
@@ -219,7 +219,7 @@ type SelectProps<TOption extends TOptionShape> = ComponentProps<'select'> & {
 
 function Select<TOption extends TOptionShape>({ label, options, placeholder, error, ...props }: SelectProps<TOption>) {
   return (
-    <fieldset>
+    <div>
       {label && <label>{label}</label>}
       <select {...props}>
         {placeholder && <option value='' disabled>{placeholder}</option>}
@@ -230,7 +230,7 @@ function Select<TOption extends TOptionShape>({ label, options, placeholder, err
         })}
       </select>
       {error && <div>{error}</div>}
-    </fieldset>
+    </div>
   )
 }
 

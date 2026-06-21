@@ -12,7 +12,7 @@ export Input = component extends input
   @error?:: string
 
   render
-    fieldset
+    div
       if label
         label label
       input
@@ -220,7 +220,7 @@ export Select<TOption extends TOptionShape> = component extends select
   @error?:: string
 
   render
-    fieldset
+    div
       if label
         label label
       select

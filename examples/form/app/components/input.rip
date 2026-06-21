@@ -7,7 +7,7 @@ export Input = component extends input
   @inputClasses?:: string
 
   render
-    fieldset class: classes
+    div class: classes
       label
         if label
           div
