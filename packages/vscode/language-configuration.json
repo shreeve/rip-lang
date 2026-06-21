@@ -31,9 +31,27 @@
       "end": "^\\s*#\\s*endregion\\b"
     }
   },
-  "indentationRules": {
-    "increaseIndentPattern": "(?:^\\s*(?:def|class|component|render|if|unless|else|for|while|until|loop|switch|when|try|catch|finally|enum|interface)\\b.*$)|(?:[-=]>\\s*$)|(?:\\btype\\s+[A-Z]\\w*(?:<[^>]+>)?\\s*=\\s*$)",
-    "decreaseIndentPattern": "^\\s*(else|catch|finally)\\b"
-  },
+  "onEnterRules": [
+    {
+      "beforeText": "^\\s*(?!.*\\bthen\\b)(?:def|class|render|if|unless|else|for|while|until|loop|switch|when|try|catch|finally|enum|interface)\\b.*$",
+      "action": { "indent": "indent" }
+    },
+    {
+      "beforeText": "=\\s*component\\s*$",
+      "action": { "indent": "indent" }
+    },
+    {
+      "beforeText": "[-=]>\\s*$",
+      "action": { "indent": "indent" }
+    },
+    {
+      "beforeText": "\\btype\\s+[A-Z]\\w*(?:<[^>]+>)?\\s*=\\s*$",
+      "action": { "indent": "indent" }
+    },
+    {
+      "beforeText": "^\\s*(?!.*\\bthen\\b)(?!(?:import|export|from|return|throw|yield|await|delete|new|typeof|void|do|type|const|let|var|function)\\b)[A-Za-z][\\w-]*(?:[ \\t]+(?![-=<>~:!&|^%+*/?]).*)?$",
+      "action": { "indent": "indent" }
+    }
+  ],
   "wordPattern": "(-?\\d*\\.\\d\\w*)|([^\\`\\~\\!\\@\\#\\%\\^\\&\\*\\(\\)\\-\\=\\+\\[\\{\\]\\}\\\\\\|\\;\\:\\'\\\"\\,\\.\\<\\>\\/\\?\\s]+)"
 }
