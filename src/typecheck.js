@@ -864,8 +864,9 @@ export function cleanDiagnosticMessage(msg) {
   msg = msg.replace(/__bind_(\w+)__/g, '$1');
   // Clean intrinsic element type helper names from display
   msg = msg.replace(/\b__RipProps<['"](\w+)['"]>/g, '<$1> props');
+  msg = msg.replace(/\s*&\s*__RipSvgAttrs\b/g, '');
   msg = msg.replace(/\b__RipElementMap\b/g, 'ElementMap');
-  msg = msg.replace(/\b__ripEl\b/g, 'element');
+  msg = msg.replace(/\b__rip(?:Svg)?El\b/g, 'element');
   // Rewrite verbose __ripEl tag union mismatch into a clean JSX-like message
   msg = msg.replace(
     /Argument of type '"([\w-]+)"' is not assignable to parameter of type '(?:__RipTag|[^']*\bkeyof HTMLElementTagNameMap\b[^']*)'\./,
@@ -910,7 +911,7 @@ export function cleanDiagnosticMessage(msg) {
 function classifyRouteDiagnostic(entry, start) {
   if (!entry?.tsContent || start == null) return null;
   const before = entry.tsContent.slice(Math.max(0, start - 64), start);
-  if (/(?:__ripEl|__ripRoute)\([^()]*$/.test(before)) return 'el';
+  if (/(?:__rip(?:Svg)?El|__ripRoute)\([^()]*$/.test(before)) return 'el';
   if (/\.(?:push|replace)\([^()]*$/.test(before)) return 'route';
   return null;
 }

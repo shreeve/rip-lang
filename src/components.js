@@ -1804,23 +1804,27 @@ export function installComponentSupport(CodeEmitter, Lexer) {
           } else if (typeof head === 'string' && !CodeEmitter.GENERATORS[head] && (TEMPLATE_TAGS.has(head.split(/[.#]/)[0]) ||
                      (/^[a-z][\w-]*$/.test(head) && node.length > 1))) {
             const tagName = head.split(/[.#]/)[0];
+            // SVG elements use __ripSvgEl, whose props add the SVG attribute
+            // surface (cx/viewBox/stroke-width/…) that the DOM reflects as
+            // readonly IDL props and __RipProps would otherwise drop.
+            const elFn = SVG_TAGS.has(tagName) ? '__ripSvgEl' : '__ripEl';
             const iProps = extractIntrinsicProps(node.slice(1), tagName, node.loc?.r);
             const tagLine = node.loc?.r;
             const srcMarker = tagLine != null ? ` // @rip-src:${tagLine}` : '';
             if (iProps.length === 0) {
-              constructions.push(`    __ripEl('${tagName}');${srcMarker}`);
+              constructions.push(`    ${elFn}('${tagName}');${srcMarker}`);
             } else if (iProps.length === 1) {
               const srcLine = iProps[0].srcLine ?? tagLine;
               const marker = srcLine != null ? ` // @rip-src:${srcLine}` : '';
-              constructions.push(`    __ripEl('${tagName}', {${iProps[0].code}});${marker}`);
+              constructions.push(`    ${elFn}('${tagName}', {${iProps[0].code}});${marker}`);
             } else {
               const distinctLines = new Set(iProps.map(p => p.srcLine).filter(l => l != null));
               if (distinctLines.size <= 1) {
                 const srcLine = iProps[0].srcLine ?? tagLine;
                 const marker = srcLine != null ? ` // @rip-src:${srcLine}` : '';
-                constructions.push(`    __ripEl('${tagName}', {${iProps.map(p => p.code).join(', ')}});${marker}`);
+                constructions.push(`    ${elFn}('${tagName}', {${iProps.map(p => p.code).join(', ')}});${marker}`);
               } else {
-                constructions.push(`    __ripEl('${tagName}', {${srcMarker}`);
+                constructions.push(`    ${elFn}('${tagName}', {${srcMarker}`);
                 for (const p of iProps) {
                   constructions.push(`      ${p.code},` + (p.srcLine != null ? ` // @rip-src:${p.srcLine}` : ''));
                 }
