@@ -123,17 +123,17 @@ console.log "item: #{order.meta.items[1].name} $#{(order.meta.items[1].price / 1
 # while the shadow TS union narrows on `step.type` at compile time.
 
 IntroStep = schema
-  type!    "intro"
+  type!    'intro'
   heading! string
   consent! string
 
 TaskStep = schema
-  type!     "task"
+  type!     'task'
   heading!  string
   duration! number
 
 FinalStep = schema
-  type!    "final"
+  type!    'final'
   heading! string
   button?  string
 

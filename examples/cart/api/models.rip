@@ -28,6 +28,6 @@ export Order = schema :model
   @timestamps
   @belongs_to User
 
-export UserPublic    = User.pick("id", "firstName", "lastName", "email", "phone")
-export ProductPublic = Product.pick("id", "name", "price", "image")
-export OrderPublic   = Order.pick("id", "total", "items", "createdAt")
+export UserPublic    = User.pick('id', 'firstName', 'lastName', 'email', 'phone')
+export ProductPublic = Product.pick('id', 'name', 'price', 'image')
+export OrderPublic   = Order.pick('id', 'total', 'items', 'createdAt')

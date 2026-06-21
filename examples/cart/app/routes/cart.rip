@@ -21,25 +21,25 @@ export Cart = component
 
   render
     if placeOrder.succeeded
-      h1 "Order Placed!"
-      p "Your order has been placed successfully."
+      h1 'Order Placed!'
+      p 'Your order has been placed successfully.'
       div.cart-actions
-        ButtonLink href: "/", "Continue Shopping"
-        ButtonLink href: "/orders", variant: "secondary", "View Orders"
+        ButtonLink href: '/', 'Continue Shopping'
+        ButtonLink href: '/orders', variant: 'secondary', 'View Orders'
     else if not cart.items.length
-      h1 "Cart"
-      p "Your cart is empty."
-      ButtonLink href: "/", "Continue Shopping"
+      h1 'Cart'
+      p 'Your cart is empty.'
+      ButtonLink href: '/', 'Continue Shopping'
     else
-      h1 "Cart"
+      h1 'Cart'
       div.overflow-auto
         table.cart-table
           thead
             tr
-              th "Product"
-              th "Price"
-              th "Quantity"
-              th "Subtotal"
+              th 'Product'
+              th 'Price'
+              th 'Quantity'
+              th 'Subtotal'
               th
           tbody
             for item in cart.items
@@ -53,27 +53,27 @@ export Cart = component
                         cart.removeItem(item)
                       else
                         cart.updateQuantity(item, item.quantity - 1)
-                    ), "−"
+                    ), '−'
                     input
-                      type: "number"
+                      type: 'number'
                       value: String(item.quantity)
                       @input: (e) ->
                         value = Math.max(1, Number(e.target.value) or 1)
                         cart.updateQuantity(item, value)
                         if e.target.value isnt String(value) then e.target.value = String(value)
-                    Button outline, @click: (-> cart.updateQuantity(item, item.quantity + 1)), "+"
+                    Button outline, @click: (-> cart.updateQuantity(item, item.quantity + 1)), '+'
                 td "#{formatPrice(item.price * item.quantity)}"
                 td
-                  Button variant: "secondary", outline, @click: (-> cart.removeItem(item)), "Remove"
+                  Button variant: 'secondary', outline, @click: (-> cart.removeItem(item)), 'Remove'
           tfoot
             tr
               td colSpan: 3
-                strong "Total"
+                strong 'Total'
               td
                 strong "#{formatPrice(cart.totalPrice())}"
               td
       div.cart-actions
-        Button loading: placeOrder.pending, @click: (-> placeOrder()), "Place Order"
-        Button variant: 'secondary', outline, link, @click: (-> cart.clear()), "Clear Cart"
+        Button loading: placeOrder.pending, @click: (-> placeOrder()), 'Place Order'
+        Button variant: 'secondary', outline, link, @click: (-> cart.clear()), 'Clear Cart'
       if errors.form
         p.error errors.form

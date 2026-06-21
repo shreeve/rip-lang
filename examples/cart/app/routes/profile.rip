@@ -18,18 +18,18 @@ export Profile = component
     onError: (err) -> errors = parseApiError!(err)
 
   render
-    h1 "Profile"
+    h1 'Profile'
     form @submit: ((e) -> e.preventDefault(); updateUser(form))
       div.grid
         label
-          "First name"
+          'First name'
           input
             value <=> form.firstName
             aria-invalid: errors.field?.firstName ? true : undefined
           if errors.field?.firstName
             small errors.field?.firstName
         label
-          "Last name"
+          'Last name'
           input
             value <=> form.lastName
             aria-invalid: errors.field?.lastName ? true : undefined
@@ -37,15 +37,15 @@ export Profile = component
             small errors.field?.lastName
       div.grid
         label
-          "Email"
-          input value: form.email, type: "email", readOnly: true
+          'Email'
+          input value: form.email, type: 'email', readOnly: true
         label
-          "Phone"
+          'Phone'
           input
             value <=> form.phone
-            type: "tel"
-      Button type: "submit", loading: updateUser.pending, "Update Profile"
+            type: 'tel'
+      Button type: 'submit', loading: updateUser.pending, 'Update Profile'
       if errors.form
         p.error errors.form
       if updateUser.succeeded
-        p.success "Profile updated!"
+        p.success 'Profile updated!'

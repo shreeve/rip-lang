@@ -1,6 +1,6 @@
 export Input = component extends input
   @label?:: string
-  @value?:: string := ""
+  @value?:: string := ''
   @compact?:: boolean
   @error?:: string
   @classes?:: string
@@ -11,18 +11,18 @@ export Input = component extends input
       label
         if label
           div
-            class: ["mb-2 leading-none font-medium text-secondary", if compact then "text-sm" else "text-sm-plus"]
+            class: ['mb-2 leading-none font-medium text-secondary', if compact then 'text-sm' else 'text-sm-plus']
             label
         input
           value <=> value
           class: [
-            "w-full rounded-lg border bg-input shadow-xs transition outline-none placeholder:text-quaternary",
-            "focus:ring focus:ring-brand enabled:focus:border-brand disabled:opacity-50",
-            if compact then "h-10.5 px-3.25 text-sm-plus" else "h-11 px-3.5 text-base",
-            if error then "border-error ring ring-error" else "border-input enabled:hover:border-input-hover",
+            'w-full rounded-lg border bg-input shadow-xs transition outline-none placeholder:text-quaternary',
+            'focus:ring focus:ring-brand enabled:focus:border-brand disabled:opacity-50',
+            if compact then 'h-10.5 px-3.25 text-sm-plus' else 'h-11 px-3.5 text-base',
+            if error then 'border-error ring ring-error' else 'border-input enabled:hover:border-input-hover',
             inputClasses,
           ]
       if error
         div
-          class: ["mt-2 leading-none text-error", if compact then "text-sm" else "text-sm-plus"]
+          class: ['mt-2 leading-none text-error', if compact then 'text-sm' else 'text-sm-plus']
           error

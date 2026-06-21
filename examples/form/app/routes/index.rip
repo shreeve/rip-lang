@@ -1,17 +1,17 @@
-import { Input } from "../components/input.rip"
-import { Button } from "../components/button.rip"
+import { Input } from '../components/input.rip'
+import { Button } from '../components/button.rip'
 
 export App = component
   render
-    div class: "flex min-h-dvh items-center justify-center bg-background pb-8 md:py-10 lg:py-12"
-      div class: "rounded-2xl border border-surface bg-surface p-6 pt-8 shadow-lg/6 xs:px-8 md:p-11"
-        div class: "xs:w-80"
-          Form title: "Sign in"
+    div class: 'flex min-h-dvh items-center justify-center bg-background pb-8 md:py-10 lg:py-12'
+      div class: 'rounded-2xl border border-surface bg-surface p-6 pt-8 shadow-lg/6 xs:px-8 md:p-11'
+        div class: 'xs:w-80'
+          Form title: 'Sign in'
 
 export Form = component
   @title?:: string
-  email := ""
-  password := ""
+  email := ''
+  password := ''
   loading := false
 
   onSubmit: (e) ->
@@ -22,24 +22,24 @@ export Form = component
 
   render
     form @submit: @onSubmit, noValidate: true
-      div class: "text-center text-2xl leading-none font-semibold"
+      div class: 'text-center text-2xl leading-none font-semibold'
         title
-      div class: "mt-6 flex flex-col gap-y-6"
+      div class: 'mt-6 flex flex-col gap-y-6'
         Input
-          label: "Email"
+          label: 'Email'
           value <=> email
-          placeholder: "me@example.com"
-          type: "email"
-          autocomplete: "email"
+          placeholder: 'me@example.com'
+          type: 'email'
+          autocomplete: 'email'
         Input
-          label: "Password"
+          label: 'Password'
           value <=> password
-          placeholder: "••••••••"
-          type: "password"
-          autocomplete: "current-password"
+          placeholder: '••••••••'
+          type: 'password'
+          autocomplete: 'current-password'
       Button
-        variant: "primary"
-        type: "submit"
+        variant: 'primary'
+        type: 'submit'
         loading: loading
-        classes: "mt-8 w-full"
-        "Sign In"
+        classes: 'mt-8 w-full'
+        'Sign In'

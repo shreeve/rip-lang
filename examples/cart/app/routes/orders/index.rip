@@ -7,19 +7,19 @@ export Orders = component
   mounted: -> document.title = title('Orders')
 
   render
-    h1 "Orders"
+    h1 'Orders'
     if not orders.length
       p "You haven't placed any orders yet."
-      ButtonLink href: "/", "Browse Products"
+      ButtonLink href: '/', 'Browse Products'
     else
       div.overflow-auto
         table
           thead
             tr
-              th "Order"
-              th "Date"
-              th "Items"
-              th "Total"
+              th 'Order'
+              th 'Date'
+              th 'Items'
+              th 'Total'
           tbody
             for order in orders
               tr

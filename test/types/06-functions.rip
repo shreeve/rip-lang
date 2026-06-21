@@ -29,7 +29,7 @@ export def isPositive(n:: number):: boolean
   n > 0
 
 # Default param (emits title?: string in .d.ts)
-export def formal(name:: string, title:: string = "Mr"):: string
+export def formal(name:: string, title:: string = 'Mr'):: string
   "#{title} #{name}"
 
 # Void return (! suppresses return value)
@@ -47,17 +47,17 @@ export def double(n:: number)
 # ── Use: inferred results (no :: annotations) ──
 
 result1  = add(3, 4)
-result2  = greet("World")
+result2  = greet('World')
 result3  = clamp(15, 0, 10)
 result4  = makePoint(1, 2)
-result5  = parse("42")
+result5  = parse('42')
 result6  = sum(1, 2, 3, 4)
 result7  = isPositive(5)
-result8  = formal("Smith")
-result9  = formal("Smith", "Dr")
-logMsg("hello")
-result10 = greetOpt("Smith")
-result11 = greetOpt("Smith", "Dr")
+result8  = formal('Smith')
+result9  = formal('Smith', 'Dr')
+logMsg('hello')
+result10 = greetOpt('Smith')
+result11 = greetOpt('Smith', 'Dr')
 result12 = double(21)
 
 console.log result1, result2, result3, result4, result5, result6, result7, result8, result9, result10, result11, result12
@@ -65,7 +65,7 @@ console.log result1, result2, result3, result4, result5, result6, result7, resul
 # ── Negative: wrong param types ──
 
 # @ts-expect-error — string args where numbers expected
-badAdd:: number = add("a", "b")
+badAdd:: number = add('a', 'b')
 # @ts-expect-error — number arg where string expected
 badGreet:: string = greet(42)
 # @ts-expect-error — too few arguments
@@ -75,16 +75,16 @@ badPoint:: Point = makePoint(true, false)
 # @ts-expect-error — number arg where string expected
 badParse:: number | null = parse(123)
 # @ts-expect-error — string args where numbers expected
-badSum:: number = sum("a", "b")
+badSum:: number = sum('a', 'b')
 # @ts-expect-error — string arg where number expected
-badPos:: boolean = isPositive("five")
+badPos:: boolean = isPositive('five')
 
 # ── Negative: wrong return types ──
 
 # @ts-expect-error — add returns number, not string
 badRet1:: string = add(1, 2)
 # @ts-expect-error — greet returns string, not number
-badRet2:: number = greet("hi")
+badRet2:: number = greet('hi')
 # @ts-expect-error — makePoint returns Point, not string
 badRet3:: string = makePoint(1, 2)
 # @ts-expect-error — sum returns number, not boolean
@@ -101,17 +101,17 @@ doubled = nums.map (x) => x * 2
 evens = nums.filter (x) => x % 2 == 0
 arrTotal = nums.reduce ((acc, x) => acc + x), 0
 
-words:: string[] = ["hello", "world", "rip"]
+words:: string[] = ['hello', 'world', 'rip']
 upper = words.map (w) => w.toUpperCase()
 long = words.filter (w) => w.length > 3
-joined = words.join(", ")
+joined = words.join(', ')
 
-console.log "doubled:", doubled
-console.log "evens:", evens
-console.log "arrTotal:", arrTotal
-console.log "upper:", upper
-console.log "long:", long
-console.log "joined:", joined
+console.log 'doubled:', doubled
+console.log 'evens:', evens
+console.log 'arrTotal:', arrTotal
+console.log 'upper:', upper
+console.log 'long:', long
+console.log 'joined:', joined
 
 # @ts-expect-error — map returns number[], not string[]
 badMap:: string[] = nums.map (x) => x * 2
@@ -125,7 +125,7 @@ badReduce:: string = nums.reduce ((acc, x) => acc + x), 0
 export def createUser({name:: string, age:: number}):: string
   "#{name} is #{age}"
 
-result13 = createUser({ name: "Jane", age: 30 })
+result13 = createUser({ name: 'Jane', age: 30 })
 
 console.log result13
 
@@ -134,11 +134,11 @@ badCreate:: string = createUser({ name: 42, age: 30 })
 
 # ── Destructured params: defaults ──
 
-export def withDefaults({name:: string = "anon", age:: number = 0}):: string
+export def withDefaults({name:: string = 'anon', age:: number = 0}):: string
   "#{name} is #{age}"
 
 result14 = withDefaults({})
-result15 = withDefaults({ name: "Eve", age: 25 })
+result15 = withDefaults({ name: 'Eve', age: 25 })
 
 console.log result14, result15
 
@@ -150,7 +150,7 @@ badDefaults:: string = withDefaults({ name: 42 })
 export def withRest({name:: string, ...rest}):: string
   "#{name}"
 
-result16 = withRest({ name: "Alice", extra: true })
+result16 = withRest({ name: 'Alice', extra: true })
 
 console.log result16
 
@@ -159,7 +159,7 @@ console.log result16
 export def withRename({name: userName:: string, age:: number}):: string
   "#{userName} is #{age}"
 
-result17 = withRename({ name: "Bob", age: 42 })
+result17 = withRename({ name: 'Bob', age: 42 })
 
 console.log result17
 
@@ -171,19 +171,19 @@ badRename:: string = withRename({ name: 123, age: 42 })
 export def withArray([first:: string, second:: string]):: string
   "#{first} and #{second}"
 
-result18 = withArray(["hello", "world"])
+result18 = withArray(['hello', 'world'])
 
 console.log result18
 
 # @ts-expect-error — number where string expected in array destructured param
-badArray:: string = withArray([42, "world"])
+badArray:: string = withArray([42, 'world'])
 
 # ── Destructured params: nested ──
 
 export def withNested({user: {name:: string, age:: number}}):: string
   "#{name} is #{age}"
 
-result19 = withNested({ user: { name: "Carol", age: 35 } })
+result19 = withNested({ user: { name: 'Carol', age: 35 } })
 
 console.log result19
 
@@ -199,17 +199,17 @@ badNested:: string = withNested({ user: { name: 123, age: 35 } })
 #   - `it` (implicit param) is colored as a parameter
 
 export def parseNums(input:: string, radix:: number, fallback:: number):: number[]
-  input.split(",").map (part) ->
+  input.split(',').map (part) ->
     parsed = parseInt(part.trim(), radix)
     value = if isNaN(parsed) then fallback else parsed
     Math.max(0, Math.min(value, 1000))
 
-result20 = parseNums("10, 20, ff, zz", 16, -1)
+result20 = parseNums('10, 20, ff, zz', 16, -1)
 result21 = [1, 2, 3].map(double)
-result22 = ["3", "7", "nope"].map -> parseInt(it) or 0
-console.log "parseNums:", result20
-console.log "map double:", result21
-console.log "map it:", result22
+result22 = ['3', '7', 'nope'].map -> parseInt(it) or 0
+console.log 'parseNums:', result20
+console.log 'map double:', result21
+console.log 'map it:', result22
 
 # ── Async/await with ! (dammit) operator ──
 # The ! operator calls a function and awaits the result in one step.
@@ -264,8 +264,8 @@ badOverload:: number[] = parseInput('42')
 export def wrap<T extends string>(value:: T):: Promise<[T]>
   Promise.resolve([value])
 
-wrapped = wrap! "hi"
-console.log "wrapped:", wrapped
+wrapped = wrap! 'hi'
+console.log 'wrapped:', wrapped
 
 # @ts-expect-error — T is preserved, so "hi" return isn't assignable to number[]
-badWrap:: Promise<number[]> = wrap "hi"
+badWrap:: Promise<number[]> = wrap 'hi'

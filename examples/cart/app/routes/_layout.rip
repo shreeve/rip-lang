@@ -11,21 +11,21 @@ export Layout = component
     nav.container
       ul
         li
-          strong "Shop"
+          strong 'Shop'
       ul
         li
-          a href: "/", "Products"
+          a href: '/', 'Products'
         li
-          a href: "/cart", "Cart (#{cart.totalItems()})"
+          a href: '/cart', "Cart (#{cart.totalItems()})"
         li
           details.dropdown
             summary "#{user.firstName} #{user.lastName}"
             ul
               li
-                a href: "/profile", "Profile"
+                a href: '/profile', 'Profile'
               li
-                a href: "/orders", "Orders"
+                a href: '/orders', 'Orders'
     main.container
       if gateError
         p.error gateError
-      div id: "content"
+      div id: 'content'

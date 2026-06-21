@@ -27,30 +27,30 @@ interface HttpOptions
 # ── Use the types ──
 
 item:: Identifiable = { id: 1 }
-record:: Timestamped = { createdAt: "2024-01-01", updatedAt: "2024-06-15" }
-person:: Named = { name: "Jane" }
+record:: Timestamped = { createdAt: '2024-01-01', updatedAt: '2024-06-15' }
+person:: Named = { name: 'Jane' }
 
-cat:: Animal = { name: "Whiskers", sound: "meow", legs: 4 }
-dog:: Dog = { name: "Rex", sound: "woof", legs: 4, breed: "Labrador" }
+cat:: Animal = { name: 'Whiskers', sound: 'meow', legs: 4 }
+dog:: Dog = { name: 'Rex', sound: 'woof', legs: 4, breed: 'Labrador' }
 
-opts:: HttpOptions = { method: "POST", timeout: 5000 }
+opts:: HttpOptions = { method: 'POST', timeout: 5000 }
 minOpts:: HttpOptions = {}
 
-console.log "item:", item
-console.log "record:", record
-console.log "person:", person
-console.log "cat:", cat
-console.log "dog:", dog
-console.log "opts:", opts
-console.log "minOpts:", minOpts
+console.log 'item:', item
+console.log 'record:', record
+console.log 'person:', person
+console.log 'cat:', cat
+console.log 'dog:', dog
+console.log 'opts:', opts
+console.log 'minOpts:', minOpts
 
 # ── Negative: wrong types must be caught ──
 
 # @ts-expect-error — missing required field (id)
 badId:: Identifiable = {}
 # @ts-expect-error — wrong type for legs
-badAnimal:: Animal = { name: "Cat", sound: "meow", legs: "four" }
+badAnimal:: Animal = { name: 'Cat', sound: 'meow', legs: 'four' }
 # @ts-expect-error — Dog extends Animal, breed missing
-badDog:: Dog = { name: "Rex", sound: "woof", legs: 4 }
+badDog:: Dog = { name: 'Rex', sound: 'woof', legs: 4 }
 # @ts-expect-error — wrong type for optional field
-badOpts:: HttpOptions = { timeout: "slow" }
+badOpts:: HttpOptions = { timeout: 'slow' }

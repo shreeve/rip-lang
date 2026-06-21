@@ -15,7 +15,7 @@ export db = new Database "#{import.meta.dir}/cart.sqlite"
 
 # Wait for the write lock instead of failing with SQLITE_BUSY when several
 # workers open the file at once on boot.
-db.exec "PRAGMA busy_timeout = 5000"
+db.exec 'PRAGMA busy_timeout = 5000'
 
 # One-time schema creation. Idempotent (IF NOT EXISTS), so the startup call is a
 # no-op against an already-provisioned file. Seeding lives in `./seed.rip`.
@@ -24,7 +24,7 @@ export migrate = ->
   # as-is; only DuckDB's sequence-based auto-id needs stripping (INTEGER PRIMARY
   # KEY auto-increments), plus IF NOT EXISTS so re-running is harmless.
   # (rip's toSQL emits DuckDB DDL by design — these two tweaks adapt it to SQLite.)
-  ddl = (User.toSQL() + "\n" + Product.toSQL() + "\n" + Order.toSQL())
+  ddl = (User.toSQL() + '\n' + Product.toSQL() + '\n' + Order.toSQL())
     .replace(/CREATE SEQUENCE[^;]*;/g, '')
     .replace(/ DEFAULT nextval\('[^']*'\)/g, '')
     .replace(/CREATE (TABLE|UNIQUE INDEX|INDEX) /g, 'CREATE $1 IF NOT EXISTS ')

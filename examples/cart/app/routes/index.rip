@@ -32,19 +32,19 @@ export Products = component
   clearFilters: -> @setQuery({ search: '', sort: '' })
 
   render
-    h1 "Products"
+    h1 'Products'
     div.product-filters
       input
-        type: "search"
-        placeholder: "Search products..."
+        type: 'search'
+        placeholder: 'Search products...'
         value: search
         @input: (e) -> @setQuery({ search: e.target.value })
       select
         value: sort
         @change: (e) -> @setQuery({ sort: e.target.value })
-        option value: "", disabled: true, "Sort"
-        option value: "price-asc", "Price: Low to High"
-        option value: "price-desc", "Price: High to Low"
+        option value: '', disabled, 'Sort'
+        option value: 'price-asc', 'Price: Low to High'
+        option value: 'price-desc', 'Price: High to Low'
     if filtered.length
       div.product-list
         for product in filtered
@@ -53,9 +53,9 @@ export Products = component
             h5 product.name
             p "#{formatPrice(product.price)}"
             if cart.items.some((i) -> i.id is product.id)
-              Button outline, @click: (-> cart.removeItem(product)), "Added to Cart"
+              Button outline, @click: (-> cart.removeItem(product)), 'Added to Cart'
             else
-              Button outline, @click: (-> cart.addItem(product)), "Add to Cart"
+              Button outline, @click: (-> cart.addItem(product)), 'Add to Cart'
     else
-      p "No products found. "
-        Button outline, link, @click: @clearFilters, "Clear Filters"
+      p 'No products found. '
+        Button outline, link, @click: @clearFilters, 'Clear Filters'

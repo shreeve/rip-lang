@@ -4,4 +4,4 @@ export NotFound = component
   mounted: -> document.title = title('Not Found')
 
   render
-    p "Page not found"
+    p 'Page not found'

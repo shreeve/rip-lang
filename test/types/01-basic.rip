@@ -1,12 +1,12 @@
 # 01-basic.rip — Basic type annotations on variables (incl. nullable)
 
 count:: number = 0
-label:: string = "Rip"
+label:: string = 'Rip'
 active:: boolean = true
 ratio:: number = 3.14
-items:: string[] = ["alpha", "bravo", "charlie"]
+items:: string[] = ['alpha', 'bravo', 'charlie']
 ids:: number[] = [1, 2, 3]
-pair:: [string, number] = ["hello", 42]
+pair:: [string, number] = ['hello', 42]
 
 # ── Derive (let inference work — no annotations) ──
 
@@ -17,31 +17,31 @@ allIds = ids.reduce ((a, b) -> a + b), 0
 pairLabel = pair[0]
 pairValue = pair[1]
 
-console.log "total:", total
-console.log "greeting:", greeting
-console.log "first:", first
-console.log "allIds:", allIds
-console.log "pairLabel:", pairLabel
-console.log "pairValue:", pairValue
+console.log 'total:', total
+console.log 'greeting:', greeting
+console.log 'first:', first
+console.log 'allIds:', allIds
+console.log 'pairLabel:', pairLabel
+console.log 'pairValue:', pairValue
 
 # ── Readonly (=!) — compiles to const ──
 
 MAX:: number =! 3
-console.log "MAX:", MAX
+console.log 'MAX:', MAX
 
 # ── Negative: wrong types must be caught ──
 
 # Wrong literals assigned to annotated variables
 # @ts-expect-error — string assigned to number
-badCount:: number = "oops"
+badCount:: number = 'oops'
 # @ts-expect-error — number assigned to string
 badLabel:: string = 42
 # @ts-expect-error — string assigned to boolean
-badActive:: boolean = "yes"
+badActive:: boolean = 'yes'
 # @ts-expect-error — string[] assigned to number[]
-badIds:: number[] = ["a", "b"]
+badIds:: number[] = ['a', 'b']
 # @ts-expect-error — swapped tuple members
-badPair:: [string, number] = [123, "hello"]
+badPair:: [string, number] = [123, 'hello']
 
 # Wrong types on derived expressions
 # @ts-expect-error — number + number can't be string
@@ -61,18 +61,18 @@ badPairValue:: string = pair[1]
 
 optionalName:: string | undefined = undefined
 nullableCount:: number | null = null
-maybeName:: string | undefined = "hello"
+maybeName:: string | undefined = 'hello'
 maybeCount:: number | null = 42
 
-console.log "optionalName:", optionalName
-console.log "nullableCount:", nullableCount
-console.log "maybeName:", maybeName
-console.log "maybeCount:", maybeCount
+console.log 'optionalName:', optionalName
+console.log 'nullableCount:', nullableCount
+console.log 'maybeName:', maybeName
+console.log 'maybeCount:', maybeCount
 
 # @ts-expect-error — number not assignable to string | undefined
 badOptional:: string | undefined = 123
 # @ts-expect-error — string not assignable to number | null
-badNullable:: number | null = "oops"
+badNullable:: number | null = 'oops'
 
 # ── Strict-mode regression sentinels (do not "fix" these) ──
 # These directives only stay "used" while strictNullChecks + noImplicitAny

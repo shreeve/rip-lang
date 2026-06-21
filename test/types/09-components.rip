@@ -8,7 +8,7 @@
 
 export Input = component extends input
   @label?:: string
-  @value?:: string := ""
+  @value?:: string := ''
   @error?:: string
 
   render
@@ -21,25 +21,25 @@ export Input = component extends input
         div error
 
 export Button = component extends button
-  @variant:: "primary" | "secondary"
-  @shape?:: "rounded" | "pill" := "rounded"
+  @variant:: 'primary' | 'secondary'
+  @shape?:: 'rounded' | 'pill' := 'rounded'
   @loading?:: boolean
 
-  bg ~= if variant is "primary" then "#0066ff" else "#e5e5e5"
-  fg ~= if variant is "primary" then "#fff" else "#333"
+  bg ~= if variant is 'primary' then '#0066ff' else '#e5e5e5'
+  fg ~= if variant is 'primary' then '#fff' else '#333'
 
   render
     button
       style: "background: #{bg}; color: #{fg}"
       if loading
-        "Loading..."
+        'Loading...'
       else
         slot
 
 export Form = component
   @title?:: string
-  email := ""
-  password := ""
+  email := ''
+  password := ''
   loading := false
 
   onSubmit: (e:: SubmitEvent) ->
@@ -52,20 +52,20 @@ export Form = component
     form @submit: @onSubmit
       h1 title
       Input
-        label: "Email"
+        label: 'Email'
         value <=> email
-        placeholder: "jane@example.com"
-        type: "email"
+        placeholder: 'jane@example.com'
+        type: 'email'
       Input
-        label: "Password"
+        label: 'Password'
         value <=> password
-        placeholder: "••••••••"
-        type: "password"
+        placeholder: '••••••••'
+        type: 'password'
       Button
-        variant: "primary"
-        type: "submit"
+        variant: 'primary'
+        type: 'submit'
         loading: loading
-        "Sign In"
+        'Sign In'
 
 # ── Negative: wrong prop types must be caught ──
 #
@@ -77,13 +77,13 @@ export PropTypeTests = component
   render
     div
       # @ts-expect-error — wrong variant literal
-      Button variant: "danger"
+      Button variant: 'danger'
       # @ts-expect-error — disabled expects boolean
-      Button variant: "primary", disabled: "yes"
+      Button variant: 'primary', disabled: 'yes'
       # @ts-expect-error — wrong type for label
       Input label: 123
       # @ts-expect-error — inherited intrinsic: maxLength expects number
-      Input maxLength: "ten"
+      Input maxLength: 'ten'
 
 # ── Two-way binding type safety ──
 #
@@ -93,7 +93,7 @@ export PropTypeTests = component
 # the child's expected type.
 
 export BindingTypeTests = component
-  email := ""
+  email := ''
   count := 0
 
   render
@@ -108,11 +108,11 @@ export BindingTypeTests = component
 # ── Negative: type safety inside component bodies ──
 
 export TypeTestComp = component
-  @variant?:: "primary" | "secondary" := "primary"
+  @variant?:: 'primary' | 'secondary' := 'primary'
   @count?:: number := 0
   loading := false
 
-  ok ~= if variant is "primary" then "#0066ff" else "#e5e5e5"
+  ok ~= if variant is 'primary' then '#0066ff' else '#e5e5e5'
 
   # @ts-expect-error — toFixed doesn't exist on string union
   badFixed ~= variant.toFixed(2)
@@ -122,11 +122,11 @@ export TypeTestComp = component
 
   badMethod = ->
     # @ts-expect-error — string assigned to number state
-    count = "hello"
+    count = 'hello'
 
   badBodyAssign = ->
     # @ts-expect-error — string assigned to inferred boolean state
-    loading = "wrong"
+    loading = 'wrong'
 
   render
     null
@@ -137,10 +137,10 @@ export TypeTestComp = component
 # in render blocks are type-checked. Typos emit into the stub so TS catches them.
 
 export RenderCondTest = component
-  label := ""
-  error := ""
-  items := ["a", "b"]
-  status := "active"
+  label := ''
+  error := ''
+  items := ['a', 'b']
+  status := 'active'
   loading := false
   count := 42
 
@@ -148,17 +148,17 @@ export RenderCondTest = component
     div
       # @ts-expect-error — typo: 'labelz' does not exist on component
       if labelz
-        span "label"
+        span 'label'
       # @ts-expect-error — typo: 'loadingz' does not exist
       unless loadingz
-        span "ready"
+        span 'ready'
       # @ts-expect-error — typo: 'statusz' does not exist
       switch statusz
-        when "active" then span "on"
-        when "inactive" then span "off"
+        when 'active' then span 'on'
+        when 'inactive' then span 'off'
       # @ts-expect-error — typo: 'itemsz' does not exist
       for item in itemsz
-        span "list"
+        span 'list'
       # @ts-expect-error — typo: 'countz' does not exist
       = countz
 
@@ -170,7 +170,7 @@ export RenderCondTest = component
 # explicit `:: string` annotation is needed on `term`.
 
 export FilterGapTest = component
-  items:: string[] := ["a", "b", "c"]
+  items:: string[] := ['a', 'b', 'c']
   search := ''
 
   filtered ~=
@@ -201,9 +201,9 @@ export EventHandlerTest = component
 
   render
     form @submit: @handleSubmit
-      button @click: @handleClick, "Click"
+      button @click: @handleClick, 'Click'
       # Inline handlers — contextual typing from __RipEvents
-      button @click: (e) -> p e.clientX, "Inline"
+      button @click: (e) -> p e.clientX, 'Inline'
       input @keydown: (e) -> p e.key
 
 # ── Generic components ──
@@ -225,12 +225,12 @@ export Select<TOption extends TOptionShape> = component extends select
         label label
       select
         if placeholder
-          option value: "", disabled: true, placeholder
+          option value: '', disabled, placeholder
         for opt in options
           option
-            key: typeof opt is "string" ? opt : opt.value
-            value: typeof opt is "string" ? opt : opt.value
-            typeof opt is "string" ? opt : opt.label
+            key: typeof opt is 'string' ? opt : opt.value
+            value: typeof opt is 'string' ? opt : opt.value
+            typeof opt is 'string' ? opt : opt.label
       if error
         div error
 
@@ -239,16 +239,16 @@ export GenericUsageTests = component
   render
     div
       # Simple: string options
-      Select options: ["Red", "Green", "Blue"]
+      Select options: ['Red', 'Green', 'Blue']
 
       # Structured: { value, label } options
-      Select options: [{ value: "admin", label: "Admin" }, { value: "user", label: "User" }]
+      Select options: [{ value: 'admin', label: 'Admin' }, { value: 'user', label: 'User' }]
 
       # @ts-expect-error — number doesn't extend TOptionShape
       Select options: [1, 2, 3]
 
       # @ts-expect-error — object missing 'label' field (has 'name' instead)
-      Select options: [{ value: "a", name: "A" }]
+      Select options: [{ value: 'a', name: 'A' }]
 
 # ── Typed shared state ──
 #
@@ -288,7 +288,7 @@ export CartDemo = component
   render
     div
       span "#{store.items.length} items — $#{store.total()}"
-      button @click: (-> store.addItem(id: 1, name: 'Widget', price: 9.99, quantity: 1)), "Add to Cart"
+      button @click: (-> store.addItem(id: 1, name: 'Widget', price: 9.99, quantity: 1)), 'Add to Cart'
       ul
         for item in store.items
           li "#{item.name} x#{item.quantity} — $#{item.price}"
@@ -330,17 +330,17 @@ export CartTypeTests = component
 # typed params keep their declared type and reject mismatched args.
 
 export DefaultedMethodParams = component
-  setOne:   (key:: string, val = "x")               -> p key, val
+  setOne:   (key:: string, val = 'x')               -> p key, val
   setTwo:   (key:: string, count:: number = 0)      -> p key, count
-  setThree: (key:: string, val = "x", flag = false) -> p key, val, flag
-  setFour:  (val:: string = "x", count = 1)         -> p val, count
+  setThree: (key:: string, val = 'x', flag = false) -> p key, val, flag
+  setFour:  (val:: string = 'x', count = 1)         -> p val, count
 
   callSites: ->
-    @setOne("name")
-    @setTwo("name", 5)
-    @setThree("name", "x", true)
+    @setOne('name')
+    @setTwo('name', 5)
+    @setThree('name', 'x', true)
     @setFour()
-    @setFour("y", 2)
+    @setFour('y', 2)
 
   render null
 
@@ -351,9 +351,9 @@ export DefaultedMethodParamsTests = component
     # @ts-expect-error — first arg must be string
     @ref.setOne(42)
     # @ts-expect-error — second arg must be number
-    @ref.setTwo("name", "nope")
+    @ref.setTwo('name', 'nope')
     # @ts-expect-error — first arg must be string
-    @ref.setThree(false, "x", true)
+    @ref.setThree(false, 'x', true)
     # @ts-expect-error — first arg must be string
     @ref.setFour(true)
 

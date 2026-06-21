@@ -13,7 +13,7 @@ block comment ###
 
 # --- Variables & Constants --------------------------------------------------
 
-myName = "Alice"
+myName = 'Alice'
 count = 0
 items = [1, 2, 3]
 MAX =! 100
@@ -21,7 +21,7 @@ MAX =! 100
 # --- Type Annotations -------------------------------------------------------
 
 age:: number = 25
-label:: string = "hello"
+label:: string = 'hello'
 active:: boolean = true
 scores:: number[] = [90, 95, 88]
 cache:: Map<string, number> = new Map()
@@ -38,9 +38,9 @@ type User =
   email?: string
 
 type Status =
-  | "active"
-  | "inactive"
-  | "pending"
+  | 'active'
+  | 'inactive'
+  | 'pending'
 
 interface Shape
   area:: () => number
@@ -74,7 +74,7 @@ underscore = 1_000_000
 # --- Strings ----------------------------------------------------------------
 
 single = 'hello'
-double = "world"
+double = 'world'
 interp = "name is #{myName}"
 template = "count is ${count}"
 
@@ -91,7 +91,7 @@ heredocDouble = """
 # --- Regex ------------------------------------------------------------------
 
 pattern = /[a-z]+/gi
-match = "test" =~ /es/
+match = 'test' =~ /es/
 
 heregex = ///
   ^               # Start
@@ -141,12 +141,12 @@ class Animal
 
 class Dog extends Animal
   constructor: (name:: string) ->
-    super(name, "Woof")
+    super(name, 'Woof')
 
   fetch: (item:: string) ->
     "#{@name} fetches #{item}"
 
-dog = Dog.new("Buddy")
+dog = Dog.new('Buddy')
 
 # --- Operators --------------------------------------------------------------
 
@@ -203,7 +203,7 @@ def ripOperators(obj:: any, val:: string | null, arr:: number[], fn:: Function)
   safeIdx = arr?[0]
 
   # Nullish coalescing
-  fallback = val ?? "default"
+  fallback = val ?? 'default'
 
   # Presence
   isPresent = val?!
@@ -239,19 +239,19 @@ def destructuring(person:: { name: string, age: number }, list:: number[])
 
 def controlFlow(active:: boolean, items:: number[], obj:: Record<string, number>, x:: number)
   if active
-    p "yes"
+    p 'yes'
   else if count is 0
-    p "zero"
+    p 'zero'
   else
-    p "no"
+    p 'no'
 
-  result = "a" if active else "b"
+  result = 'a' if active else 'b'
 
-  p "done" if active
-  return "error" unless active
+  p 'done' if active
+  return 'error' unless active
 
   unless active
-    p "skip"
+    p 'skip'
 
   for item in items
     p item
@@ -274,26 +274,26 @@ def controlFlow(active:: boolean, items:: number[], obj:: Record<string, number>
   #   done = true
 
   loop 5
-    p "repeat"
+    p 'repeat'
 
   # squares = (n * n for n in items)           # TODO: comprehension compiles to [] then push, TS infers never[]
   # evens = (n for n in items when n % 2 is 0)
 
   switch x
-    when 1 then "one"
-    when 2 then "two"
-    else "other"
+    when 1 then 'one'
+    when 2 then 'two'
+    else 'other'
 
 # --- Guard Clauses ---------------------------------------------------------
 
 def guardClauses(getValue:: Function, lookup:: Function)
   x = getValue() or return
-  y = lookup() ?? throw new Error("missing")
+  y = lookup() ?? throw new Error('missing')
 
 # --- Async / Await ----------------------------------------------------------
 
 def fetchData!
-  response = fetch!("/api")
+  response = fetch!('/api')
   data = response.json!()
   data
 
@@ -311,28 +311,28 @@ $visible = true
 
 # --- Embedded JavaScript ----------------------------------------------------
 
-`const raw = "inline JS"`
+`const raw = 'inline JS'`
 
 # --- Module Imports ---------------------------------------------------------
 
-import fs from "fs"
-import { readFile, writeFile } from "fs/promises"
-import * as path from "path"
+import fs from 'fs'
+import { readFile, writeFile } from 'fs/promises'
+import * as path from 'path'
 
 export { greet, add, square }
 
 # --- Standard Library -------------------------------------------------------
 
-p "hello"
+p 'hello'
 pp { a: 1 }
-assert true, "must be true"
+assert true, 'must be true'
 kind 42
 sleep 100
 rand 1, 10
 
 # --- Deprecated API (strikethrough test) -------------------------------------
 
-escaped:: string = escape("hello & world")
+escaped:: string = escape('hello & world')
 
 # --- Word Literal -----------------------------------------------------------
 
@@ -342,18 +342,18 @@ colors = %w[red green blue]
 
 counter := 0
 doubled ~= counter * 2
-~> p "counter changed:", counter
-logger ~> p "logged:", counter
+~> p 'counter changed:', counter
+logger ~> p 'logged:', counter
 
 # Typed reactive variables
 clicks:: number := 0
-username:: string := "Rip"
+username:: string := 'Rip'
 enabled:: boolean := true
 tags:: string[] := []
 clicksDoubled:: number ~= clicks * 2
 greeting ~= "Hello, #{username}!"
 MAX_RETRIES:: number =! 3
-clickLogger:: Function ~> p "clicks:", clicks
+clickLogger:: Function ~> p 'clicks:', clicks
 
 # --- Components (no direct TS equivalent) -----------------------------------
 

@@ -22,7 +22,7 @@ export ButtonLink = component extends a
 
   render
     a
-      role: "button"
+      role: 'button'
       class: [
         @variant
         @outline and 'outline'

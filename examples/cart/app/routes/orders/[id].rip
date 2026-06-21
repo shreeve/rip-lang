@@ -13,10 +13,10 @@ export OrderDetails = component
       table
         thead
           tr
-            th "Product"
-            th "Price"
-            th "Quantity"
-            th "Subtotal"
+            th 'Product'
+            th 'Price'
+            th 'Quantity'
+            th 'Subtotal'
         tbody
           for item in order.items
             tr
@@ -27,7 +27,7 @@ export OrderDetails = component
         tfoot
           tr
             td colSpan: 3
-              strong "Total"
+              strong 'Total'
             td
               strong "#{formatPrice(order.total)}"
-    ButtonLink href: "/orders", outline, "Back to Orders"
+    ButtonLink href: '/orders', outline, 'Back to Orders'

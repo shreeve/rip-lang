@@ -48,39 +48,39 @@ type PagedResult<T> =
 # ── Use the types ──
 
 dim:: Dimensions = { width: 800, height: 600 }
-cfg:: Config = { host: "localhost", port: 3000 }
-fullCfg:: Config = { host: "prod.example.com", port: 443, ssl: true, timeout: 5000 }
+cfg:: Config = { host: 'localhost', port: 3000 }
+fullCfg:: Config = { host: 'prod.example.com', port: 443, ssl: true, timeout: 5000 }
 
 resp:: ApiResponse = {
-  data: { items: ["a", "b"], total: 2 }
+  data: { items: ['a', 'b'], total: 2 }
   meta: { page: 1, limit: 10, hasMore: false }
 }
 
-frozen:: ImmutableConfig = { host: "localhost", port: 3000, ssl: true }
+frozen:: ImmutableConfig = { host: 'localhost', port: 3000, ssl: true }
 
 tree:: TreeNode = {
-  value: "root"
+  value: 'root'
   children: [
-    { value: "left", children: [] }
-    { value: "right", children: [{ value: "deep", children: [] }] }
+    { value: 'left', children: [] }
+    { value: 'right', children: [{ value: 'deep', children: [] }] }
   ]
 }
 
 # value is required (must pass key), placeholder is optional (can omit key)
-field:: FormField = { label: "Name", value: undefined }
-fullField:: FormField = { label: "Email", value: "test@example.com", placeholder: "you@domain.com" }
+field:: FormField = { label: 'Name', value: undefined }
+fullField:: FormField = { label: 'Email', value: 'test@example.com', placeholder: 'you@domain.com' }
 
-console.log "dimensions:", dim
-console.log "config:", cfg
-console.log "fullCfg:", fullCfg
-console.log "response items:", resp.data.items
-console.log "frozen:", frozen
-console.log "field:", field
-console.log "fullField:", fullField
-console.log "tree root:", tree.value
+console.log 'dimensions:', dim
+console.log 'config:', cfg
+console.log 'fullCfg:', fullCfg
+console.log 'response items:', resp.data.items
+console.log 'frozen:', frozen
+console.log 'field:', field
+console.log 'fullField:', fullField
+console.log 'tree root:', tree.value
 
-paged:: PagedResult<string> = { data: ["a", "b"], page: 1, total: 2 }
-console.log "paged:", paged
+paged:: PagedResult<string> = { data: ['a', 'b'], page: 1, total: 2 }
+console.log 'paged:', paged
 
 # ── Negative: wrong types must be caught ──
 
@@ -93,7 +93,7 @@ badExtra:: Dimensions = { width: 800, height: 600, depth: 100 }
 # @ts-expect-error — nested wrong type
 badResp:: ApiResponse = { data: { items: [1, 2], total: 2 }, meta: { page: 1, limit: 10, hasMore: false } }
 # @ts-expect-error — missing required field (value must be passed even if undefined)
-badField:: FormField = { label: "Name" }
+badField:: FormField = { label: 'Name' }
 # @ts-expect-error — wrong element type in generic structural type
 badPaged:: PagedResult<string> = { data: [1, 2], page: 1, total: 2 }
 
@@ -104,8 +104,8 @@ type MixedMap =
   name: string
   [key: string]: unknown
 
-mixed:: MixedMap = { name: "test", extra: 42 }
-console.log "mixed:", mixed
+mixed:: MixedMap = { name: 'test', extra: 42 }
+console.log 'mixed:', mixed
 
 # @ts-expect-error — missing required named prop in index signature type
 badMixed:: MixedMap = { extra: 42 }

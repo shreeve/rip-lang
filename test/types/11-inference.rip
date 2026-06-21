@@ -16,7 +16,7 @@
 
 count = 0
 ratio = 3.14
-items = ["a", "b", "c"]
+items = ['a', 'b', 'c']
 
 def double(n:: number)
   n * 2
@@ -31,26 +31,26 @@ def expectString(x:: string)
 # ── Primitives ──
 
 total = count + ratio
-label = "hello"
+label = 'hello'
 active = true
 
 # @ts-expect-error — inferred number
-total = "oops"
+total = 'oops'
 # @ts-expect-error — inferred string
 label = 42
 # @ts-expect-error — inferred boolean
-active = "yes"
+active = 'yes'
 
 # ── Typed function return ──
 
 result = double 5
 # @ts-expect-error — inferred number
-result = "oops"
+result = 'oops'
 
 # ── Method calls on typed values ──
 
-upper = "hello".toUpperCase()
-joined = items.join ", "
+upper = 'hello'.toUpperCase()
+joined = items.join ', '
 
 # @ts-expect-error — inferred string
 upper = 42
@@ -90,7 +90,7 @@ expectString insideIf
 # The patcher walks destructuring patterns and infers each property's
 # type from the RHS object type.
 
-{a, b} = {a: 1, b: "hello"}
+{a, b} = {a: 1, b: 'hello'}
 # @ts-expect-error — number not assignable to string (destructured inference patched)
 expectString a
 
@@ -108,7 +108,7 @@ def expectNum(x:: number)
   x
 
 def process(data:: string[])
-  csv = data.join ", "
+  csv = data.join ', '
   loud = csv.toUpperCase()
   loud
 
@@ -120,7 +120,7 @@ def filterBy(query:: string)
   q = query.toLowerCase()
   items.filter (s) -> s.includes(q)
 
-matches = filterBy "a"
+matches = filterBy 'a'
 # @ts-expect-error — matches inferred as string[]
 expectNum matches
 
@@ -140,11 +140,11 @@ def search(data:: string[], query:: string)
     hits = data.filter (n) -> n.toLowerCase().includes(needle)
     # @ts-expect-error — hits inferred as string[]
     expectNum hits
-    hits.join ", "
+    hits.join ', '
   else
-    "no results"
+    'no results'
 
-found = search items, "a"
+found = search items, 'a'
 # @ts-expect-error — found inferred as string
 expectNum found
 
