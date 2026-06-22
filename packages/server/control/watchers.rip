@@ -2,7 +2,8 @@
 # control/watchers.rip — SSE watch groups and app directory watchers
 # ==============================================================================
 
-import { watch } from 'node:fs'
+import { watch, readdirSync, statSync, existsSync } from 'node:fs'
+import { join, dirname, basename } from 'node:path'
 
 # --- SSE watch groups ---
 
@@ -57,8 +58,24 @@ export broadcastWatchChange = (watchGroups, prefix, type = 'page') ->
     catch then dead.push(client)
   group.sseClients.delete(c) for c in dead
 
-# --- Code reload matching ---
+# --- Change detection ---
 
+# Bun's recursive fs.watch reports the *source* name of a rename, so an atomic
+# save (temp file + rename — how vim, many formatters, and agent edit tools
+# write) surfaces as `route.rip.tmp` / `.route.rip.<rand>` instead of the real
+# `route.rip`. Trusting that basename drops the event. The event's *directory*
+# is real, though, and the saved file lands there with a fresh mtime — so we
+# look at the directory, not the name.
+
+IGNORED_DIRS = new Set(['node_modules', '.git', 'dist', '.rip-cache'])
+
+export isIgnoredPath = (rel) ->
+  return false unless rel
+  for seg in rel.split('/')
+    return true if IGNORED_DIRS.has(seg)
+  false
+
+# Matches a basename against a watch spec ('*.ext' or an exact filename).
 export shouldTriggerCodeReload = (filename, watchSpec, entryBase = null) ->
   return false unless filename
   return false if entryBase and filename is entryBase
@@ -66,6 +83,50 @@ export shouldTriggerCodeReload = (filename, watchSpec, entryBase = null) ->
     filename.endsWith(watchSpec.slice(1))
   else
     filename is watchSpec or filename.endsWith("/#{watchSpec}")
+
+# Classifies a source file by extension into a live-reload category.
+export classifyPageStyle = (name) ->
+  if name.endsWith('.rip') or name.endsWith('.html') then 'page'
+  else if name.endsWith('.css') then 'styles'
+  else null
+
+# Decides which reload categories a watch event implies, comparing real files
+# on disk against per-category watermarks (`marks`: category -> last-acted
+# mtimeMs). The untrusted basename only locates the directory; the decision
+# comes from real extensions + mtimes. `seed` is the floor for categories not
+# yet seen (registration time), so pre-existing files don't fire on the first
+# stray event. Watermarks are per-category so a newer style change can't
+# suppress an older-but-unreported page change.
+#
+# Returns a Set of changed categories (possibly empty), or `null` when the
+# event has no filename and can't be localized — the caller should then reload
+# conservatively rather than miss a nested change.
+export changedCategories = (rootDir, filename, classify, marks, seed) ->
+  return null unless filename
+  changed = new Set()
+  dir = join(rootDir, dirname(filename))
+  try
+    for entry in readdirSync(dir, { withFileTypes: true })
+      continue unless entry.isFile()
+      cat = classify(entry.name)
+      continue unless cat
+      mtime = null
+      try mtime = statSync(join(dir, entry.name)).mtimeMs
+      continue if mtime is null
+      floor = if marks.has(cat) then marks.get(cat) else seed
+      if mtime > floor
+        changed.add(cat)
+        marks.set(cat, mtime)
+  # Deletion / rename-away leaves no source file newer than the watermark, but
+  # the event's real basename still classifies and the file is now gone. Run
+  # this unconditionally (not only when nothing else changed): a deleted page
+  # alongside a changed sibling style in the same dir must still trigger a page
+  # reload, not just the style. Atomic save temp names (`route.rip.tmp`) don't
+  # classify, so this never fires on the common save path; the existsSync guard
+  # avoids spurious reloads from duplicate events for files that still exist.
+  cat = classify(basename(filename))
+  changed.add(cat) if cat and not existsSync(join(rootDir, filename))
+  changed
 
 # --- App directory watchers ---
 
@@ -82,13 +143,21 @@ export registerAppWatchDirs = (appWatchers, prefix, dirs, server, cwdFn) ->
       server?.broadcastChange(prefix, pending)
       pending = null
     , 300
+  # Per-category watermarks shared across the app's dirs, seeded to now so
+  # pre-existing files don't fire on the first stray event. A reload re-reads
+  # every file, so the newest file in a burst always trips its category here and
+  # nothing is left stale.
+  marks = new Map()
+  seed = Date.now()
   for dir in dirs
     try
       w = watch dir, { recursive: true }, (event, filename) ->
-        if filename?.endsWith('.rip') or filename?.endsWith('.html')
-          broadcast('page')
-        else if filename?.endsWith('.css')
-          broadcast('styles')
+        return if isIgnoredPath(filename)
+        cats = changedCategories(dir, filename, classifyPageStyle, marks, seed)
+        if cats is null
+          broadcast('page')           # unlocalizable event — reload conservatively
+        else if cats.size > 0
+          broadcast(if cats.has('page') then 'page' else 'styles')
       watchers.push(w)
     catch e
       rel = dir.replace(cwdFn() + '/', '')

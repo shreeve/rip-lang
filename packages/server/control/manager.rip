@@ -5,7 +5,7 @@
 import { existsSync, unlinkSync, watch } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { spawnTrackedWorker, postWorkerQuit, waitForWorkerReady } from './workers.rip'
-import { shouldTriggerCodeReload, registerAppWatchDirs } from './watchers.rip'
+import { shouldTriggerCodeReload, changedCategories, isIgnoredPath, registerAppWatchDirs } from './watchers.rip'
 import { logEvent } from './lifecycle.rip'
 
 MAX_BACKOFF_MS = 30000
@@ -118,8 +118,18 @@ export class Manager
         appId = app.appId
         try
           baseDir = app.config.appBaseDir
+          # The event basename is untrusted (atomic saves report a temp name),
+          # so classify real files in the event's directory by the watch spec
+          # instead. Seeded to now so pre-existing files don't fire on startup.
+          marks = new Map()
+          seed = Date.now()
+          classify = (name) -> if shouldTriggerCodeReload(name, watchPattern, null) then 'code' else null
           watcher = watch baseDir, { recursive: true }, (event, filename) =>
-            return unless shouldTriggerCodeReload(filename, watchPattern, null)
+            return if isIgnoredPath(filename)
+            cats = changedCategories(baseDir, filename, classify, marks, seed)
+            # null = unlocalizable event (reload conservatively); empty = nothing
+            # relevant changed; otherwise a watched code file changed.
+            return if cats? and cats.size is 0
             # Bun coalesces multiple recursive watches on one directory, so a
             # single callback may fire. Bump every app rooted at this baseDir
             # (e.g. the dir-named default app and a serve.rip app over the same

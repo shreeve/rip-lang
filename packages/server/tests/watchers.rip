@@ -1,5 +1,23 @@
-import { test, eq } from './runner.rip'
-import { shouldTriggerCodeReload } from '../control/watchers.rip'
+import { test, eq, ok } from './runner.rip'
+import { shouldTriggerCodeReload, changedCategories, isIgnoredPath, classifyPageStyle } from '../control/watchers.rip'
+import { mkdtempSync, mkdirSync, writeFileSync, utimesSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+# Fixed mtime so tests are deterministic (no sleeps / clock races).
+T = 2000000000
+stamp = (path) -> utimesSync(path, new Date(T), new Date(T))
+withDir = (fn) ->
+  dir = mkdtempSync(join(tmpdir(), 'ripwatch-'))
+  try fn(dir)
+  finally rmSync(dir, { recursive: true, force: true })
+src = (dir, rel) ->
+  full = join(dir, rel)
+  writeFileSync(full, 'x')
+  stamp(full)
+  full
+
+codeClassify = (name) -> if shouldTriggerCodeReload(name, '*.rip', null) then 'code' else null
 
 test "shouldTriggerCodeReload matches extension watch specs", ->
   eq shouldTriggerCodeReload('foo.rip', '*.rip'), true
@@ -13,3 +31,105 @@ test "shouldTriggerCodeReload matches exact filenames", ->
 test "shouldTriggerCodeReload ignores the entry file itself", ->
   eq shouldTriggerCodeReload('index.rip', '*.rip', 'index.rip'), false
   eq shouldTriggerCodeReload('nested.rip', '*.rip', 'index.rip'), true
+
+test "classifyPageStyle maps extensions to reload categories", ->
+  eq classifyPageStyle('a.rip'), 'page'
+  eq classifyPageStyle('a.html'), 'page'
+  eq classifyPageStyle('a.css'), 'styles'
+  eq classifyPageStyle('a.txt'), null
+
+test "isIgnoredPath skips vendored directories", ->
+  ok isIgnoredPath('node_modules/foo/bar.rip')
+  ok isIgnoredPath('sub/.git/x')
+  eq isIgnoredPath('routes/home.rip'), false
+  eq isIgnoredPath(null), false
+
+# The core regression: an atomic save reports the temp basename, but the real
+# file lands in the same directory with a fresh mtime. changedCategories must
+# find it from the directory, not the (untrusted) event name.
+test "changedCategories detects atomic-save edits via real file mtime", ->
+  withDir (dir) ->
+    src(dir, 'route.rip')
+    cats = changedCategories(dir, 'route.rip.tmp', codeClassify, new Map(), T - 1)
+    ok cats.has('code')
+
+test "changedCategories ignores edits older than the watermark", ->
+  withDir (dir) ->
+    src(dir, 'route.rip')
+    cats = changedCategories(dir, 'route.rip.tmp', codeClassify, new Map(), T + 1)
+    eq cats.size, 0
+
+test "changedCategories picks up newly created files", ->
+  withDir (dir) ->
+    src(dir, 'new-route.rip')
+    cats = changedCategories(dir, 'new-route.rip', classifyPageStyle, new Map(), T - 1)
+    ok cats.has('page')
+
+test "changedCategories ignores non-source files", ->
+  withDir (dir) ->
+    src(dir, 'notes.txt')
+    cats = changedCategories(dir, 'notes.txt', classifyPageStyle, new Map(), T - 1)
+    eq cats.size, 0
+
+test "changedCategories separates page (.rip/.html) from styles (.css)", ->
+  withDir (dir) ->
+    src(dir, 'app.css')
+    s = changedCategories(dir, 'app.css.tmp', classifyPageStyle, new Map(), T - 1)
+    ok s.has('styles')
+    ok not s.has('page')
+    src(dir, 'view.rip')
+    p = changedCategories(dir, 'view.rip.tmp', classifyPageStyle, new Map(), T - 1)
+    ok p.has('page')
+
+# Per-category watermarks: a newer style change must not suppress an older (but
+# still unreported) page change processed afterward in a different directory.
+test "changedCategories per-category watermarks don't cross-suppress", ->
+  withDir (dir) ->
+    mkdirSync(join(dir, 'styles'))
+    mkdirSync(join(dir, 'routes'))
+    utimesSync(src(dir, 'styles/app.css'), new Date(T), new Date(T))
+    utimesSync(src(dir, 'routes/page.rip'), new Date(T - 5), new Date(T - 5))
+    marks = new Map()
+    seed = T - 10
+    s = changedCategories(dir, 'styles/app.css', classifyPageStyle, marks, seed)
+    ok s.has('styles')
+    # page.rip is older than app.css but newer than the seed; a single shared
+    # watermark (advanced to T by the css) would wrongly suppress it.
+    pcat = changedCategories(dir, 'routes/page.rip', classifyPageStyle, marks, seed)
+    ok pcat.has('page')
+
+# Deletion / rename-away: the file is gone, so the mtime scan finds nothing, but
+# the event's real basename classifies — fall back to a reload.
+test "changedCategories reloads on deletion (file gone, name classifies)", ->
+  withDir (dir) ->
+    cats = changedCategories(dir, 'gone.rip', classifyPageStyle, new Map(), T)
+    ok cats.has('page')
+
+# A page deletion must still trigger a page reload even when a sibling style in
+# the same directory also changed (the scan adds styles; the unconditional
+# deletion fallback must still add page).
+test "changedCategories reloads page on delete even with a sibling style change", ->
+  withDir (dir) ->
+    src(dir, 'app.css')
+    cats = changedCategories(dir, 'view.rip', classifyPageStyle, new Map(), T - 1)
+    ok cats.has('styles')
+    ok cats.has('page')
+
+# ...but a duplicate event for a file that still exists and didn't change must
+# NOT spuriously reload.
+test "changedCategories no spurious reload for unchanged existing file", ->
+  withDir (dir) ->
+    src(dir, 'route.rip')
+    cats = changedCategories(dir, 'route.rip', classifyPageStyle, new Map(), T)
+    eq cats.size, 0
+
+# A lingering temp file whose name doesn't classify must not trigger the
+# deletion fallback.
+test "changedCategories ignores temp-named events with no real source", ->
+  withDir (dir) ->
+    cats = changedCategories(dir, 'route.rip.tmp', classifyPageStyle, new Map(), T)
+    eq cats.size, 0
+
+test "changedCategories returns null for unlocalizable events", ->
+  withDir (dir) ->
+    eq changedCategories(dir, null, classifyPageStyle, new Map(), T), null
