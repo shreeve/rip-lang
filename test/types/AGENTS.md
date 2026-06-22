@@ -137,7 +137,7 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 `rip check` runs TypeScript under the hood but suppresses error codes in two tiers (defined in [src/typecheck.js](../../../src/typecheck.js)):
 
-**Blanket suppression (7 codes in `SKIP_CODES`):** Structural artifacts that always fire due to Rip's compilation model — overload patterns, async return types, enum declarations. These are safe to suppress unconditionally: 2389, 2391, 2393, 2394, 2567, 2842, 1064.
+**Blanket suppression (7 codes in `SKIP_CODES`):** 2389, 2391, 2393, 2394, 2567, 2842, 1064. These fire on structural artifacts of the shadow-TS retrofit (a declare-header and a compiled body are two views of one symbol — overload patterns, async returns, enum declarations). But the mute is *global*, and these are **not** safe to suppress unconditionally: the same codes also fire on genuine user mistakes, which then vanish. Demonstrated — `bun run test:suppressed` shows a mis-annotated async return (1064), a duplicate definition (2393), and an incompatible overload (2394) that raw `tsc` flags but `rip check` reports clean. This is fault A's user-facing leak; recovering it is part of rip-lang RFC 12 (Unified emitter).
 
 **Conditional suppression (5 codes in `CONDITIONAL_CODES`):** These are only suppressed when the diagnostic is structural:
 

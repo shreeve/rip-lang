@@ -1,32 +1,21 @@
 # Rip RFCs
 
-Design proposals under discussion. Grouped by domain.
+Design proposals under discussion. The **Tags** column groups by area (`type-system` · `runtime` · `compiler` · `packaging` · `data`) — labels, not partitions, so a cross-cutting RFC carries several.
 
-## Domain A — Type system & package types
-
-- [x] [RFC 1 — Explicit prop optionality with `?::`](#rfc-1-explicit-prop-optionality-with-)
-- [x] [RFC 2 — Rip packages exposing types to typed Rip apps](#rfc-2-rip-packages-exposing-types-to-typed-rip-apps)
-- [x] [RFC 3 — App framework types for ambient globals](#rfc-3-app-framework-types-for-ambient-globals)
-- [x] [RFC 4 — Typed `this` shape for components and server handlers](#rfc-4-typed-this-shape-for-components-and-server-handlers)
-- [x] [RFC 5 — Typed routes — `href` typing, typed `router.push`, per-route `@params`](#rfc-5-typed-routes--href-typing-typed-routerpush-per-route-params)
-
-## Domain B — Runtime delivery & ergonomics
-
-- [x] [RFC 6 — Trim and align the `@rip-lang/app` global surface](#rfc-6-trim-and-align-the-rip-langapp-global-surface)
-- [x] [RFC 7 — Routing ergonomics — active link, scroll, and the `data-router-ignore` opt-out](#rfc-7-routing-ergonomics--active-link-scroll-and-the-data-router-ignore-opt-out)
-
-## Domain C — Compiler / reactivity
-
-- [x] [RFC 8 — Tracking property accesses on `for`-loop iteration variables](#rfc-8-tracking-property-accesses-on-for-loop-iteration-variables)
-
-## Domain D — Packaging & app config
-
-- [x] [RFC 9 — Consuming Rip packages](#rfc-9-consuming-rip-packages)
-- [x] [RFC 10 — Rename bundle `components` → `modules`, prefix every entry by origin](#rfc-10-rename-bundle-components--modules-prefix-every-entry-by-origin)
-
-## Domain E — Data layer
-
-- [ ] [RFC 11 — Render-ready state](#rfc-11-render-ready-state)
+|    # | RFC                                                                                                                                                                | Tags                      | Status               |
+| ---: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------- | -------------------- |
+|    1 | [Explicit prop optionality with `?::`](#rfc-1-explicit-prop-optionality-with-)                                                                                     | `type-system`             | ✅ Implemented        |
+|    2 | [Rip packages exposing types to typed Rip apps](#rfc-2-rip-packages-exposing-types-to-typed-rip-apps)                                                              | `type-system`             | ✅ Implemented        |
+|    3 | [App framework types for ambient globals](#rfc-3-app-framework-types-for-ambient-globals)                                                                          | `type-system`             | ✅ Implemented        |
+|    4 | [Typed `this` shape for components and server handlers](#rfc-4-typed-this-shape-for-components-and-server-handlers)                                                | `type-system`             | ✅ Implemented        |
+|    5 | [Typed routes — `href` typing, typed `router.push`, per-route `@params`](#rfc-5-typed-routes--href-typing-typed-routerpush-per-route-params)                       | `type-system`             | ✅ Implemented        |
+|    6 | [Trim and align the `@rip-lang/app` global surface](#rfc-6-trim-and-align-the-rip-langapp-global-surface)                                                          | `runtime`                 | ✅ Implemented        |
+|    7 | [Routing ergonomics — active link, scroll, and the `data-router-ignore` opt-out](#rfc-7-routing-ergonomics--active-link-scroll-and-the-data-router-ignore-opt-out) | `runtime`                 | ✅ Implemented        |
+|    8 | [Tracking property accesses on `for`-loop iteration variables](#rfc-8-tracking-property-accesses-on-for-loop-iteration-variables)                                  | `compiler`                | ✅ Implemented        |
+|    9 | [Consuming Rip packages](#rfc-9-consuming-rip-packages)                                                                                                            | `packaging`               | ✅ Implemented        |
+|   10 | [Rename bundle `components` → `modules`, prefix every entry by origin](#rfc-10-rename-bundle-components--modules-prefix-every-entry-by-origin)                     | `packaging`               | ✅ Implemented        |
+|   11 | [Render-ready state](#rfc-11-render-ready-state)                                                                                                                   | `data`                    | ✅ Implemented        |
+|   12 | [Unified emitter](#rfc-12-unified-emitter)                                                                                                                         | `compiler`, `type-system` | 🔬 Gathering evidence |
 
 ---
 
@@ -42,8 +31,8 @@ Design proposals under discussion. Grouped by domain.
 
 | Context                                             | Example                           | Works today?                                                                |
 | --------------------------------------------------- | --------------------------------- | --------------------------------------------------------------------------- |
-| Function/method params                              | `def f(x?:: T)`                   | ✅ — lexer predicate → DTS `x?: T`                                           |
-| Named type alias fields                             | `type T = { x?: string }`         | ✅ — same flag, same DTS path                                                |
+| Function/method params                              | `def f(x?:: T)`                   | ✅ Implemented — lexer predicate → DTS `x?: T`                               |
+| Named type alias fields                             | `type T = { x?: string }`         | ✅ Implemented — same flag, same DTS path                                    |
 | **Component prop declarations**                     | `@label?:: string`                | ❌ — components emitter ignores `?` on prop names; keys optionality off `:=` |
 | **Structural type literals in annotation position** | `(opts:: { search?: string }) ->` | ❌ — the `?` is silently stripped, every field types as required             |
 
@@ -1358,4 +1347,114 @@ The test story falls out of *writing is assigning*: a write marks a cell loaded,
 - **Reshapes rather than removes `createResource`** — it stays as the instance-local packaging of the cell; with zero consumers, the surface alignment is free (no RFC 6-style migration).
 - **Independent of RFC 5** (typed routes), though keyed gates want its per-route `@params` typing for the key expression.
 - **Converges with TanStack Router + Query** — loader-gated routes, one keyed store with `staleTime` freshness, mutations writing back. Arrived at here from rip's own reactivity grid rather than imported, which is a good sign for the shape.
+
+---
+
+## RFC 12: Unified emitter
+
+> **Status: Gathering evidence.** Pre-proposal — accumulating reproductions and feasibility validation before this is put forward formally. Foundational compiler change; when proposed, a phased, output-preserving migration (phase 1 — the map fix — first), gated on byte-identical runtime output.
+
+Rip's type system was bolted onto a runtime-first compiler. It works, but a family of recurring failures is not a long tail — it's the predictable output of *how* types were retrofitted. The everyday cost is editor intelligence landing in the wrong place: completion, hover, go-to-def, and diagnostic squiggles mis-position on ordinary typed code — the bug class that's recurred roughly biweekly (seven fixes across six weeks) without ever closing. Rarer but sharper, the same retrofit can also *drop* real type errors: to hide its own structural noise it mutes whole `tsc` error codes *globally*, so a mis-annotated async return or a duplicate definition can pass `rip check` clean while plain `tsc` flags them. The first is the broad daily tax; the second is a narrower correctness gap — and a second, independent sign the mechanism is wrong. This RFC replaces the retrofit's mechanism while keeping its strategy.
+
+### Problem — the shadow-TypeScript retrofit
+
+Type checking is a *shadow `.ts`* model: the compiler emits two artifacts from one source — `result.code` (runtime JS) and `result.dts` (a `.d.ts` of the typed surface) — and `compileForCheck` (src/typecheck.js) splices them into one virtual `.ts` that `tsc` will accept, then maps tsc's verdicts back to Rip positions. The strategy (delegate type work to `tsc`) is correct and should stay. Two *mechanism* choices are the problem:
+
+1. **Types live in a separate artifact, stitched back by ~1,300 lines of regex/line reconciliation passes** (overload interleaving, typed-local hoist, class-field injection, schema-overload bridging, …), each obligated to preserve line counts so the source map survives.
+2. **The source map is reconstructed *after* codegen by a regex+distance identifier search** (`recordSubMappings`). It anchors only identifiers; non-identifier and *contentless* positions — a blank object slot, an empty string mid-typing — are unrepresentable and fall back to the statement start.
+
+These yield three fault lines, unequal in weight — **B is the class** (it mis-resolves *everyday* typed code and is where the recurring fixes land); **A** and **C** are the same separate-artifact choice biting in two narrower ways:
+
+- **A — reconciliation fragility.** The merge passes are combinatorial and brittle to codegen format changes.
+- **B — source-map imprecision.** Hover / definition / diagnostics / completion mis-resolve at non-identifier, contentless, and repeated-identifier positions.
+- **C — no-symbol DSL targets.** Schema fields compile to string-literal *data* (`{name:"id", modifiers:["!"], …}`), so there is no symbol for `tsc` to hover or jump to.
+
+### Evidence
+
+Gathered from the typed Rip code that exists today — the cart example, the type audit, and `medlabs` (the first production app being built on Rip) — plus the commit history.
+
+- **Concentration.** The load-bearing number: **7 source-map / reconciliation / diagnostic-position fixes recurring ~biweekly across six weeks**, every one a point-patch to the same machinery, none closing the class. (The shadow layer is also 33% of `src/` commits over 90 days, but that figure is atmospheric — the youngest subsystem dominates commit share regardless of design quality, as the construction-vs-fixes split itself shows. The recurrence is the signal, not the share.)
+- **Dual-emitter tax.** ~12 substantive commits/90d touched the runtime emitter *and* the type emitter together — every type-bearing feature pays it.
+- **Surface-area collapse (not a line count).** The *total* line drop is modest — type *derivation* (`dts.js` / `schema/dts.js`, ~1,750) **relocates** into the emitter and the map *data structure* (`sourcemaps.js`) **stays**. The win is that the **brittle, line-arithmetic surface that's been the actual bug source goes away**: the `compileForCheck` reconciliation passes (~1,300), the heuristic source map (`recordSubMappings` / `collectSubExprs` / `buildMappings`, ~290), and ~half the `patchTypes` hacks (~100) — ~1,700 lines, exactly the machinery the *concentration* figure flags as the recurring fix site. Conservatively so: a *second* occurrence-guess layer retires too — the editor providers carry their own word-boundary search and spill (`findUnusedOccurrence`, several hundred LSP lines) that exists only to survive the imprecise map, so the bug class doesn't fully close until consumers stop occurrence-guessing either (an exact map with a stale spill-search still drops tokens). Net, not gross: against the ~1,700 deleted, the additions are modest and one-time — a position-tracking builder (a few hundred lines, largely *replacing* the ~290 deleted map-builders), one `builder.mark()` per position-bearing handler (≈1 line each), and the bounded parser loc-attach; the two new corpora are test assets, not production surface. So this is not a raw line win — production code lands roughly flat. What changes is the *kind*: brittle line-arithmetic glue (the recurring fix site) becomes local, gate-checked marks.
+- **Suppressed-diagnostic recovery.** The type audit drove `SKIP_CODES` to its irreducible minimum — that floor is the header/body split made measurable. Six of the seven (2389/2391/2393/2394, 2567, 2842) exist only because the header and body are two views of one symbol; unified emission removes their cause, so the diagnostic-equivalence gate can retire them code-by-code (the seventh, 1064, is a latent emission gap to fix instead). The correctness payoff is narrower than the line count suggests: the mute is *global*, so on the codes a user can actually trip it swallows real mistakes — `bun run test:suppressed` demonstrates three (1064, 2393, 2394) that raw `tsc` flags but `rip check` reports clean. The rest (2567/2842/2391) fire only on structural artifacts in testing, so suppressing *those* is correct — the recovered coverage is the user-reachable subset, not a blanket win.
+- **Reproductions.** Concretely:
+  - a blank line under `use serve` offers global identifiers instead of the config object's properties (**B**, a contentless position);
+  - `stash.rip`'s `totalPrice` type-member maps to the `export type Cart` header instead of the member (**B**, repeated identifier);
+  - in `medlabs`, `auth.rip` declares two sibling `createMutation`s, `signUp` and `devLogin`. At `loading: signUp.pending`, `signUp` loses its `property` semantic token; at the identical `loading: devLogin.pending`, `devLogin` keeps it. The sole difference: `signUp` is *also* referenced inside an inline `@submit` handler (`(e) -> …; signUp()`), and that extra occurrence shifts the spill-search so the `loading:` token finds no free slot. `tsc` classifies both identically — a pure position-map drop, with a clean same-file A/B control (**B**, repeated identifier);
+  - a schema's `firstName` maps correctly onto the string literal `"firstName"`, which has no symbol (**C**).
+  - an async `def` whose return is mis-annotated `:: string` instead of `Promise<string>` compiles to `async function f(): string`; raw `tsc` on the shadow flags **TS1064** ("Did you mean `Promise<string>`?"), but `SKIP_CODES` mutes 1064 *globally*, so `rip check` passes — and the bogus `: string` then types every call site wrong, with no error anywhere. Defining a function twice likewise swallows **TS2393** ("Duplicate function implementation"). Both verified by diffing raw `tsc` on the shadow against `rip check` (**A**, global-suppression leak).
+  This is fault A's user-visible edge — narrower than B (rarer, and often caught at runtime) but silent when it bites. Enough to retire any claim that A is purely internal: the global mute that hides A's structural noise also hides these, and phase 2 removes the header/body duplication that forces it.
+- **Feasibility.** The mechanism already exists in miniature: under `inlineTypes` the emitter emits parameter types *in position* today (`function(a: number)`, src/compiler.js) — extending that to return types, hoisted locals, and declarations is more of the same, not a new technique. Position-preserving output builders that keep mappings stable across reindent/reflow are a solved pattern (e.g. `magic-string`). Byte-identical runtime output is enforced as a migration gate (see *Constraints*), not assumed.
+- **Timing.** Typed Rip is just leaving the demo stage: the cart example and the type audit, plus `medlabs` — the first production app being built on Rip — now exercising the typed, schema-heavy path for real. `medlabs` is already surfacing fresh fault-B instances (the `signUp`/`devLogin` case above came straight from it), which both validates the timing and means the cost curve has *started* to rise. Migration cost is ~zero now and only climbs as typed code accumulates — the cheapest this change will ever be.
+
+### Why it was built this way (and why change now)
+
+The retrofit was the right call when made. Rip began runtime-first with a proven JS emitter; types arrived later as an additive convenience, and bolting them on as a *separate* `.d.ts` reconciled after the fact had the smallest blast radius — runtime codegen untouched, a type-layer bug couldn't corrupt runtime output (literally different strings), and the common case (hovering a named identifier) was served fine by the regex map. The growing reconciliation stack isn't evidence the approach was wrong — it's evidence it worked up to a structural ceiling that typed, schema-heavy apps now push against. The one cost of unifying: both modes share one traversal, so emission changes must keep the JS token stream identical with annotations on or off — bounded by the byte-equivalence gate below, and the price for never reconciling two mismatched artifacts again.
+
+### Proposal
+
+Replace the dual-artifact + reconcile + heuristic-map mechanism with **a single position-aware emitter** that:
+
+1. **Emits type annotations inline, in position, on the check path** — extend the existing `inlineTypes` path from params to return types, hoisted locals (`let x: T = …`), and declarations, so the separate `.d.ts` header and the reconciliation passes that stitch it back become unnecessary.
+2. **Records exact source↔generated positions at write time** — thread a position-tracking output builder through the emit handlers (`builder.mark(node.loc); builder.write(text)`), retiring the regex+distance search. Applies to *all* emission, typed or not — and includes the **parser loc-attach for leaf atoms** (see *Constraints*), which is in-scope, not optional: several fault-B cases bottom out in bare-atom values carrying no `.loc`.
+3. **Keeps runtime emission JavaScript-first** — the same single tree-walk emits plain JS in runtime mode and the same JS *plus* inline annotations in check mode. Annotations are additive: runtime mode omits them, so runtime output is unchanged and is never routed through a TypeScript representation.
+4. **Points the editor providers at the exact map** — retire the consumer-side occurrence-guess/spill search (`findUnusedOccurrence` et al.) so semantic tokens / hover / definition read true positions instead of re-deriving them. Without this step an exact map still drops tokens at the consumer.
+
+The TS-delegation strategy is unchanged; only the mechanism that feeds and maps `tsc` changes.
+
+### Why it dissolves the fault lines
+
+- **A** — no header/body to reconcile; types are emitted in place. The ~1,300 reconciliation lines are deleted, not hardened.
+- **B** — positions are recorded where they're written, so *every* position is exact (identifier, value, blank slot, string interior). Both the core heuristic *and* the consumer-side spill search it spawned are retired.
+- **C** — inline emission gives schema fields a real type property to anchor, so hover/definition resolve at all. (The *rich* schema hover — `required · unique · min 18`, read from the descriptor — is a complementary synthetic provider, out of scope here. This RFC closes the no-symbol gap; that enhances it.)
+- **`patchTypes`** (the undocumented-TS-internals hack for `let x; x = expr` → `any`) shrinks — annotated hoisted locals emit `let x: T` directly — but does not vanish, since inferred locals still need it.
+
+### Plan
+
+**Phase 1 and phase 2 are two separately-gated commit series, phase 1 first.** The order is fixed (phase 2 needs phase 1's builder), not the atomicity. Phase 1 is runtime-output-preserving and closes the user-facing fault (B) — with two honest contingencies: its map-correctness corpus must be complete enough to catch mis-marks (byte-equivalence cannot), and because the consumer-side spill search lives in a *separate package* (`packages/vscode/src/lsp.js`), B closes for users only once that retirement ships in a rebuilt extension. It also sharpens go-to-def/hover for *untyped* Rip (see *What this does not change*). Phase 2 is the type-shape change, gated separately on diagnostic-equivalence, closing fault A (and the global-suppression leak it forces) and giving schema fields real symbols (C). They can land together, or phase 1 can bake in `main` first — worth staging **only if** phase-2 diagnostic-equivalence on complex generics/overloads proves a long tail, since bisection and review clarity already come from the per-phase commits, not the merge boundary. Each phase is validated against the gates in *Constraints & risks*.
+
+- **Phase 1 — position-tracking emitter.** Thread the output builder through the ~61 position-bearing emit handlers (of ~95 `emit*` methods in `compiler.js`; the remainder are structural helpers that emit no source-mapped text); land the parser loc-attach for leaf atoms; retire the heuristic core map *and* the consumer-side spill search. Records exact positions for *every* construct, including the contentless ones the heuristic cannot represent (closes fault B). Runtime-output-preserving — the map, not the JS, is the deliverable *and* the risk surface (see *Constraints*).
+- **Phase 2 — inline type unification.** Emit return types / locals / declarations inline on the check path; retire the reconciliation passes. Runtime mode emits the same walk with annotations omitted (no separate transform). Closes fault A and the no-symbol half of fault C.
+- **Optional pre-fix — only if the full change is deferred.** A standalone patch to the *existing* heuristic (anchor object `:` pairs in `collectSubExprs`; resolve repeated identifiers by traversal order in `recordSubMappings`) would relieve object-key completion and the repeated-identifier mis-maps sooner — but it polishes code phase 1 deletes, so it's a stopgap only, never a step toward the unified emitter.
+
+### Constraints & risks
+
+The migration is protected by three gates; the first exists today, the other two are net-new and are first-class deliverables of this work.
+
+- **Runtime byte-equivalence (existing).** Runtime mode is the current emit path with annotations switched off, so equivalence is the default rather than a transformation to verify; every stage diffs generated runtime output against the current emitter across all tests + the example apps, and a change that alters runtime text fails the gate. This same gate keeps the two modes from drifting — the JS token stream must be identical with annotations on or off — and it preserves the "a type bug can't reach runtime" safety of the two-artifact design: runtime output is held byte-identical and the runtime path migrates last, so there is never a window where a type-layer change alters running code.
+- **Map-correctness gate (new).** Byte-equivalence protects runtime output but *not* the map — the map isn't in the JS, so a handler that marks the wrong node fails silently. The migration introduces the project's first map-correctness corpus: assert `srcToOffset(line, col)` lands on the expected token and that hover/definition/semantic-token-classification there resolve to the expected symbol, across the test + example sources. Today *no* test asserts map correctness at all, so this is net-new safety the heuristic never had.
+- **Diagnostic-equivalence gate (new).** Inline emission changes the *shape* types reach `tsc` in (inline `let x: T` / adjacent signatures vs a `declare` header), not the type facts — no checker verdict may silently shift. The gate runs **two populations**, because the after-set is deliberately *not* uniformly identical: phase 2 enlarges it exactly where suppressed codes recover. (a) **Passing corpus** (test + example apps, type-clean today) — assert an identical diagnostic set across *all* codes, the seven `SKIP_CODES` included; post-unification they no longer fire on clean code, so any that does is a real regression, not an artifact to mute, and a changed or vanished diagnostic fails the gate (emission shape tuned to match). (b) **Negative corpus** (`test/types/suppressed.js` + the audit's negative tests) — assert each recovered code now fires where a genuine mistake exists, the inverse of today's swallow. The split *is* the safety: a global code-level carve-out ("identical *modulo* the recovered codes") would make a resolution-changed regression indistinguishable from a recovery — so equivalence stays strict where a code should be silent, and recovery is asserted positively where it should fire.
+- **Reindent/reflow must route through the builder.** The emitter post-processes some fragments — reindenting and line-by-line reassembly of comprehensions/loops — and raw-string surgery would invalidate marks placed inside the moved text. These operations move to builder ops that shift their marks with the text (the `magic-string` pattern): a known technique, but real porting work in phase 1.
+- **Leaf-atom positions.** Object / array / call / pair nodes carry `.loc`; bare atoms (identifier / string / number primitives) do not, because the parser attaches loc only to array reductions. Object keys are covered by the pair node's loc; bare-atom *values* and call args need loc carried at the parser loc-attach site (a bounded grammar/parser change). As noted in the *Proposal*, this is load-bearing rather than optional polish — several confirmed fault-B reproductions resolve to nothing else.
+- **Breadth, not depth.** Phase 1 touches many handlers; the work is mechanical and diff-gated, not conceptually hard. But two failure modes get *asymmetric* protection. A handler that drifts the **JS output** is caught by the byte-diff gate, and the heuristic stays a fallback for any *unmarked* handler — so no interim regression there. A handler that emits correct JS with a **wrong mark** is invisible to byte-equivalence (the map isn't in the JS) and the fallback doesn't help (the handler *is* marked, just wrong); it's caught only by the new map-correctness corpus. That mis-mark case — not the missed handler — is phase 1's real risk surface, and it is only as covered as that corpus is complete. This also fixes the migration *shape*: handlers convert incrementally behind the fallback, in reviewable slices, not one cut. (Person-time isn't bounded at this stage; that's for the proposal, once the builder API is fixed.)
+
+### Objections, and what survives them
+
+The honest case isn't "this is free" — it's that each apparent cost, examined, turns out to be largely a status-quo problem in disguise, leaving a real but narrow residual. Those residuals, named so the trade stays explicit:
+
+- **Mark upkeep on codegen changes.** The heuristic re-derives positions by searching output, so it survives emitter changes untouched; a baked-in `builder.mark(node.loc)` must instead stay correct when a handler's codegen changes. History says this is frequent but cheap: of the ~12 substantive dual-emitter commits/90d, ≈40% changed **token-stream shape** (would touch marks), ≈60% only **added a type fact** (would not) — and a mark sits on the same line as the `write()` it annotates, so fixing it is part of a shape change you're authoring anyway. It's **gated**, too: the map-correctness gate turns a botched mark into a localized build failure at the change site — the change→gate→fix loop a human or agent handles mechanically — where the heuristic's "zero upkeep" instead ships *silent* mis-maps (fault B is exactly that). Residual: marks inside text that reflow/reindent moves (non-local, mitigated by routing reflow through the builder), the gate being only as good as its corpus, and synthesized output with no source counterpart (a mapping judgment).
+- **Verdict-equivalence for complex types.** Phase 2 emits types inline, gated on diagnostic-equivalence with today's verdicts — the one objection that doesn't fully dissolve, though its baseline is wrong. Today isn't inline types checking "identically" to a `declare` header: `compileForCheck` runs *both at once*, then reconciles by hand — interleaving overload signatures, deduping doubled diagnostics, and **globally muting seven TS codes** (`SKIP_CODES`; 2389/2391/2393/2394 are overload artifacts) that fire only because header and body are two views of one symbol. So even common cases don't check identically — disagreements are suppressed. The un-dissolving work is *reproducing* those verdicts through one inline emission on complex generics/overloads, where declaration shape drives TS resolution and the gate — unlike the allowlist — can't be satisfied by muting. Upside riding along: removing the header/body split also removes the *cause* of six of the seven `SKIP_CODES`, recovering globally-suppressed diagnostics — see *Suppressed-diagnostic recovery* in Evidence.
+- **Reduced source-level separability.** Type derivation lives in its own files today (`dts.js` / `schema/dts.js`); afterward it co-locates in the emitter behind the mode flag, so reading the runtime emitter means passing flag-guarded type branches instead of skipping a file. Two things bound this. The removability that matters — *output*-level — is preserved: runtime mode emits no types. And the file separation is partly illusory: `dts.js` can't be lifted out wholesale, because the reconciliation passes (`compileForCheck` / `recordSubMappings` / `patchTypes`) are load-bearing glue that exists *only* to stitch the separate type pass back onto runtime output — fault A, the drift seam this RFC closes. So the trade is file-level separability (some of it fictional) for concern-level coherence, mitigated by keeping type emission in clearly flag-guarded branches.
+
+### Alternatives considered
+
+- **Keep patching.** The maintenance data shows the same fault class recurring ~biweekly on near-empty typed code; the cost curve rises with adoption. Rejected.
+- **Marker/sentinel-probe completion only.** Already partly shipped and effective for *completion* — but it is a completion-only technique (you cannot inject a sentinel to hover an existing token), so it leaves hover / definition / diagnostics on the broken map. A point fix, not the foundation.
+- **The post-pass map fix alone.** Anchoring object pairs and resolving repeated identifiers in the existing heuristic helps those positions, but the post-pass fundamentally cannot represent contentless positions, and it polishes code phase 1 deletes. Kept only as the optional deferral stopgap above, not a destination.
+
+### Effect on existing code
+
+No language-surface change; runtime output byte-identical (migration gate). Regression metric: `test` / `test:types` stay green, the two new gates (map-correctness, diagnostic-equivalence) pass, and the `rip check --sourcemap` gap count drops — especially fault B.
+
+### What this does *not* change — Rip stays JavaScript-first
+
+This is not a move toward "a language that emits TypeScript." Precisely:
+
+- **Nothing Rip ships or runs becomes TypeScript.** Every executed artifact — browser bundle, `bin/rip` output — stays byte-identical JS. The only TypeScript is the type-check shadow, which is *already* TS today: `compileForCheck` builds a virtual `.ts` solely for `tsc`'s language service — never written, bundled, or run; thrown away after the check. This RFC changes *how that throwaway shadow is assembled* (one in-position walk vs. two artifacts + glue), not whether it exists.
+- **Types remain additive and ignorable.** A developer who never opts in (no `::`, no `schema`) gets a `// @ts-nocheck` shadow and pays nothing; their JS is emitted directly, exactly as now.
+- **A win lands even for untyped Rip.** Position tracking (phase 1) fixes the source map for *plain, untyped* programs too — go-to-definition and hover on ordinary identifiers get more accurate whether or not anyone writes a single type. The map fix is a codegen-accuracy feature that the checker also happens to consume, not a types feature.
+
+### Relationship to other RFCs
+
+The type-system RFCs (1–5, 11) all *ride on* the source map and reconciliation this RFC replaces; none change in surface, all become more reliable. Independent of the reactivity and packaging RFCs. The complementary schema-aware hover provider — rich field semantics from the descriptor — is a natural follow-on once phase 2 gives schema fields real symbols.
 
