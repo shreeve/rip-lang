@@ -26,6 +26,9 @@
       "captures": { "1": { "name": "punctuation.definition.comment.rip" } }
     },
 
+    {"comment": "=== SCHEMA BLOCKS (`Name = schema [:kind]` + indented body) ==="},
+    { "include": "#schema-block" },
+
     {"comment": "=== HEREDOCS (before regular strings — triple quotes first) ==="},
     {
       "begin": "'''",
@@ -537,6 +540,9 @@
     {"comment": "=== TWO-WAY BINDING (before comparison to prevent <=> matching <= then >) ==="},
     { "match": "<=>", "name": "keyword.control.bind.rip" },
 
+    {"comment": "=== COMPUTED / REACTIVE ARROW (before comparison and bitwise so ~> / !> don't split into ~ + > or ! + >) ==="},
+    { "match": "[~!]>", "name": "keyword.operator.assignment.reactive.rip" },
+
     {"comment": "=== COMPARISON (before assignment to prevent == matching =) ==="},
     { "match": "===|!==|==|!=|<=|>=", "name": "keyword.operator.comparison.rip" },
 
@@ -864,6 +870,115 @@
             },
             { "include": "$self" }
           ]
+        }
+      ]
+    },
+
+    "schema-block": {
+      "comment": "Inline schema declaration: a `... = schema [:kind]` head ending the line opens an indented block. The body runs until a line dedents back to column 0 (the next top-level statement); non-schema tokens (constraints, expression bodies, strings) fall through to $self.",
+      "begin": "\\b(schema)\\b[ \\t]*(:[a-z][A-Za-z0-9_]*)?[ \\t]*$",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.schema.rip" },
+        "2": { "name": "storage.type.schema.rip" }
+      },
+      "end": "^(?=\\S)",
+      "patterns": [
+        { "include": "#schema-directives" },
+        { "include": "#schema-enum-member" },
+        { "include": "#schema-entry-key" },
+        { "include": "#schema-field" },
+        { "include": "$self" }
+      ]
+    },
+
+    "schema-directives": {
+      "patterns": [
+        {
+          "comment": "Relationship directives carry a model name: @belongs_to User, @has_many Order",
+          "match": "(@(?:belongs_to|belongsTo|has_many|hasMany|has_one|hasOne))\\s+([A-Z]\\w*)",
+          "captures": {
+            "1": { "name": "entity.name.function.decorator.rip" },
+            "2": { "name": "entity.name.type.rip" }
+          }
+        },
+        {
+          "comment": "Composite index / unique with a column list: @index [role, active], @unique [:partnerId, :mrn]. The listed names reference fields, so they take the field scope.",
+          "begin": "(@(?:index|unique))\\s*(\\[)",
+          "beginCaptures": {
+            "1": { "name": "entity.name.function.decorator.rip" },
+            "2": { "name": "punctuation.definition.array.rip" }
+          },
+          "end": "\\]",
+          "endCaptures": {
+            "0": { "name": "punctuation.definition.array.rip" }
+          },
+          "patterns": [
+            { "match": ",", "name": "punctuation.separator.comma.rip" },
+            {
+              "match": "(:)?([a-z]\\w*)",
+              "captures": {
+                "1": { "name": "punctuation.definition.symbol.rip" },
+                "2": { "name": "variable.other.property.rip" }
+              }
+            }
+          ]
+        },
+        {
+          "comment": "Single-column index / unique: @index role, @unique :email. The column references a field.",
+          "match": "(@(?:index|unique))\\s+(:)?([a-z]\\w*)",
+          "captures": {
+            "1": { "name": "entity.name.function.decorator.rip" },
+            "2": { "name": "punctuation.definition.symbol.rip" },
+            "3": { "name": "variable.other.property.rip" }
+          }
+        },
+        {
+          "comment": "Standalone / field-level directives — an explicit allowlist, NOT a \\w+ catch-all, so instance member access (@email, @role, @first) inside hook/computed bodies falls through to the @-variable rule instead of being mis-scoped as a directive. @id and @index are intentionally omitted: @id collides with the common @id member access, and @index always carries a column arg (handled by the composite/single-column rules above).",
+          "match": "@(?:timestamps|softDelete|soft_delete|unique|mixin|ensure|check|scope|defaultScope|idStart|on|where|belongs_to|belongsTo|has_many|hasMany|has_one|hasOne)\\b",
+          "name": "entity.name.function.decorator.rip"
+        }
+      ]
+    },
+
+    "schema-enum-member": {
+      "comment": "Enum members are bare symbols, optionally valued: :admin, :pending 0, :free \"free\". The value falls through to $self.",
+      "match": "^(\\s*)(:)([a-z]\\w*)",
+      "captures": {
+        "2": { "name": "punctuation.definition.symbol.rip" },
+        "3": { "name": "variable.other.enummember.rip" }
+      }
+    },
+
+    "schema-entry-key": {
+      "comment": "Hook / method / computed entries: `name: -> @` (method), `name: ~> @x` (lazy), `name: !> @x` (eager). The body falls through to $self.",
+      "match": "^(\\s*)([a-z]\\w*)(\\s*)(:)(?=\\s*[-~!]>)",
+      "captures": {
+        "2": { "name": "entity.name.function.rip" },
+        "4": { "name": "punctuation.separator.key-value.rip" }
+      }
+    },
+
+    "schema-field": {
+      "patterns": [
+        {
+          "comment": "Field with a model-reference type: items! OrderItem[], author? User",
+          "match": "^(\\s*)([a-z]\\w*)((?:[!?])+)?\\s+([A-Z]\\w*)(\\[\\])?",
+          "captures": {
+            "2": { "name": "variable.other.property.rip" },
+            "3": { "name": "keyword.operator.modifier.rip" },
+            "4": { "name": "entity.name.type.rip" },
+            "5": { "name": "punctuation.definition.array.rip" }
+          }
+        },
+        {
+          "comment": "Field with a primitive type: email! string, tags! string[]",
+          "match": "^(\\s*)([a-z]\\w*)((?:[!?])+)?\\s+([a-z]\\w*)(\\[\\])?",
+          "captures": {
+            "2": { "name": "variable.other.property.rip" },
+            "3": { "name": "keyword.operator.modifier.rip" },
+            "4": { "name": "support.type.rip" },
+            "5": { "name": "punctuation.definition.array.rip" }
+          }
         }
       ]
     }

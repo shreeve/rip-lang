@@ -62,7 +62,7 @@ const stage = fs.mkdtempSync(path.join(os.tmpdir(), 'rip-vscode-'));
 // Copy the files vsce needs.
 const include = [
   'README.md', 'icon.png',
-  'language-configuration.json', 'schema-language-configuration.json',
+  'language-configuration.json',
   'dist', 'src', 'syntaxes', 'test',
 ];
 for (const name of include) {

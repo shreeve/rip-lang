@@ -33,7 +33,6 @@ const root = resolve(__dirname, '..');
 const sx = (f) => resolve(root, 'packages/vscode/syntaxes', f);
 const GRAMMARS = {
   'source.rip': 'rip.tmLanguage.json',
-  'source.rip-schema': 'schema.tmLanguage.json',
   'rip.injection.markdown': 'rip-markdown-injection.tmLanguage.json',
   'rip.injection.html': 'rip-html-injection.tmLanguage.json',
 };
@@ -60,7 +59,6 @@ const registry = new vsctm.Registry({
   },
 });
 const ripGrammar = await registry.loadGrammar('source.rip');
-const schemaGrammar = await registry.loadGrammar('source.rip-schema');
 // Injection grammars carry top-level patterns, so they tokenize a fenced/script
 // block directly here; their `include: source.rip` resolves through the same
 // registry. (In VS Code they activate via injectionSelector inside the base
@@ -325,61 +323,6 @@ export Foo = component
   # "main" comment.line.number-sign.rip
 `));
 
-// ── Schema grammar (source.rip-schema, .schema files) ────────────────────
-// A separate grammar ships for standalone schema files; drive it through the
-// same runner by passing schemaGrammar as the second argument.
-
-check('schema — declaration directive + type name', () => runFixture(`
-@model User
-# "@model" storage.type.declaration.rip-schema
-# "User" entity.name.type.rip-schema
-`, schemaGrammar));
-
-check('schema — field with modifier and type', () => runFixture(`
-@model User
-  firstName! string
-# "firstName" variable.other.field.rip-schema
-# "!" keyword.operator.modifier.rip-schema
-# "string" support.type.rip-schema
-`, schemaGrammar));
-
-check('schema — constraint brackets and numbers', () => runFixture(`
-@model User
-  total! number [1, 100]
-# "[" punctuation.definition.constraint.begin.rip-schema
-# "1" constant.numeric.rip-schema
-# "]" punctuation.definition.constraint.end.rip-schema
-`, schemaGrammar));
-
-check('schema — options object', () => runFixture(`
-@model User
-  role string { optional: true }
-# "optional" variable.other.property.rip-schema
-# "true" constant.language.rip-schema
-`, schemaGrammar));
-
-check('schema — inline enum members', () => runFixture(`
-@enum Role: admin, editor
-# "@enum" storage.type.declaration.rip-schema
-# "Role" entity.name.type.rip-schema
-# "admin" variable.other.enummember.rip-schema
-`, schemaGrammar));
-
-check('schema — relationship, unique, and standalone directives', () => runFixture(`
-@belongs_to Account
-# "@belongs_to" keyword.other.directive.rip-schema
-# "Account" entity.name.type.rip-schema
-@unique email
-# "@unique" keyword.other.directive.rip-schema
-@timestamps
-# "@timestamps" keyword.other.directive.rip-schema
-`, schemaGrammar));
-
-check('schema — line comment', () => runFixture(`
-# a note
-# "a note" comment.line.number-sign.rip-schema
-`, schemaGrammar));
-
 // ── Injection grammars (Rip embedded in Markdown / HTML) ─────────────────
 // These inject source.rip into a Markdown ```rip fence or an HTML
 // <script type="text/rip"> block. The key contract: the fence/tag keeps its
@@ -403,6 +346,113 @@ y = 42
 # "42" constant.numeric.decimal.rip
 </script>
 `, htmlInjection));
+
+// ── Schema blocks (inline `schema` declarations in source.rip) ───────────
+// A `... = schema [:kind]` head ending a line opens an indented block whose
+// fields/directives/enum members/hooks get schema scopes; values and
+// expression bodies fall through to the rest of the Rip grammar ($self). The
+// head prefix (`export Name =`) keeps its normal Rip scopes — the block only
+// takes over at the `schema` keyword — and the block releases at the dedent.
+
+check('schema — head keeps Rip scopes, then keyword and kind', () => runFixture(`
+export User = schema :model
+# "export" keyword.control.rip
+# "schema" keyword.control.schema.rip
+# ":model" storage.type.schema.rip
+  name! string
+# "name" variable.other.property.rip
+# "!" keyword.operator.modifier.rip
+# "string" support.type.rip
+`));
+
+check('schema — bare schema head (no kind)', () => runFixture(`
+SignupInput = schema
+# "schema" keyword.control.schema.rip
+  email! email
+# "email" variable.other.property.rip
+# "email"@2 support.type.rip
+`));
+
+check('schema — model-ref type and array suffix', () => runFixture(`
+Order = schema :model
+  items! OrderItem[]
+# "items" variable.other.property.rip
+# "OrderItem" entity.name.type.rip
+# "[]" punctuation.definition.array.rip
+`));
+
+check('schema — field directive and relationships', () => runFixture(`
+User = schema :model
+  email! email @unique
+# "email" variable.other.property.rip
+# "@unique" entity.name.function.decorator.rip
+  @belongs_to Account
+# "@belongs_to" entity.name.function.decorator.rip
+# "Account" entity.name.type.rip
+  @timestamps
+# "@timestamps" entity.name.function.decorator.rip
+  @index [role, active]
+# "@index" entity.name.function.decorator.rip
+# "[" punctuation.definition.array.rip
+# "role" variable.other.property.rip
+# "active" variable.other.property.rip
+# "]" punctuation.definition.array.rip
+  @index role
+# "@index" entity.name.function.decorator.rip
+# "role" variable.other.property.rip
+  @unique :email
+# "@unique" entity.name.function.decorator.rip
+# ":" punctuation.definition.symbol.rip
+# "email" variable.other.property.rip
+`));
+
+// Inside hook/computed bodies, `@foo` is instance member access, not a
+// directive — the directive allowlist must let these fall through.
+check('schema — hook-body @member is instance access, not a directive', () => runFixture(`
+User = schema :model
+  email! email
+  beforeSave: -> @email = @email.toLowerCase()
+# "@email" variable.other.readwrite.instance.rip
+# "@email" !entity.name.function.decorator.rip
+# "->" storage.type.function.rip
+  isAdmin: ~> @role is 'admin'
+# "@role" variable.other.readwrite.instance.rip
+# "~>" keyword.operator.assignment.reactive.rip
+  display: !> @label
+# "display" entity.name.function.rip
+# "!>" keyword.operator.assignment.reactive.rip
+`));
+
+check('schema — enum members fall through to Rip values', () => runFixture(`
+Status = schema :enum
+  :pending 0
+# ":" punctuation.definition.symbol.rip
+# "pending" variable.other.enummember.rip
+# "0" constant.numeric.decimal.rip
+`));
+
+check('schema — hook/computed entry keys', () => runFixture(`
+Address = schema :shape
+  full: ~> @street
+# "full" entity.name.function.rip
+# ":" punctuation.separator.key-value.rip
+`));
+
+check('schema — comment inside the block', () => runFixture(`
+User = schema :model
+  # a note
+# "a note" comment.line.number-sign.rip
+  name! string
+# "name" variable.other.property.rip
+`));
+
+check('schema — block ends at dedent', () => runFixture(`
+User = schema :model
+  name! string
+done = 1
+# "done" !variable.other.property.rip
+# "done" variable.other.readwrite.rip
+`));
 
 // ── Summary ──────────────────────────────────────────────────────────────
 console.log(`\n${passed} passed, ${failed} failed\n`);

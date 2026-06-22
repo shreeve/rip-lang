@@ -40,21 +40,6 @@
           "light": "./icon.png",
           "dark": "./icon.png"
         }
-      },
-      {
-        "id": "rip-schema",
-        "extensions": [
-          ".schema"
-        ],
-        "aliases": [
-          "Rip Schema",
-          "schema"
-        ],
-        "configuration": "./schema-language-configuration.json",
-        "icon": {
-          "light": "./icon.png",
-          "dark": "./icon.png"
-        }
       }
     ],
     "grammars": [
@@ -62,11 +47,6 @@
         "language": "rip",
         "scopeName": "source.rip",
         "path": "./syntaxes/rip.tmLanguage.json"
-      },
-      {
-        "language": "rip-schema",
-        "scopeName": "source.rip-schema",
-        "path": "./syntaxes/schema.tmLanguage.json"
       },
       {
         "scopeName": "rip.injection.html",
@@ -108,10 +88,6 @@
         "editor.tabSize": 2,
         "editor.insertSpaces": true,
         "diffEditor.ignoreTrimWhitespace": false
-      },
-      "[rip-schema]": {
-        "editor.tabSize": 2,
-        "editor.insertSpaces": true
       },
       "tailwindCSS.includeLanguages": {
         "rip": "html"

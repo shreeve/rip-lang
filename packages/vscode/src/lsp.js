@@ -812,9 +812,28 @@ function publishDiagnostics(filePath) {
       const suggestionDiags = svc.getSuggestionDiagnostics(vf);
       const allDiags = [...syntacticDiags, ...semanticDiags, ...suggestionDiags];
 
+      // Byte offset where the injected DTS header ends. The header declares
+      // ambient globals (abort, schema, SchemaError, …) that a given file
+      // usually doesn't reference, so TS's suggestion pass flags each as
+      // "declared but never read". They're compiler-injected, not user code,
+      // and stay silent only because the source has no matching token to map
+      // them onto — until an injected name collides with a real one (e.g. the
+      // `schema` keyword), where the text-search mapper lands the hint on it.
+      let headerEndOffset = 0;
+      if (c.headerLines > 0) {
+        let nl = 0;
+        for (let j = 0; j < c.tsContent.length; j++) {
+          if (c.tsContent[j] === '\n' && ++nl === c.headerLines) { headerEndOffset = j + 1; break; }
+        }
+      }
+
       for (const d of allDiags) {
         if (d.start === undefined) continue;
         if (tc.SKIP_CODES.has(d.code)) continue;
+
+        // Drop unused-declaration suggestions originating in the injected DTS
+        // header — those declarations are synthetic ambients, never user code.
+        if ((d.code === 6133 || d.code === 6196) && d.start < headerEndOffset) continue;
 
         // Conditional suppression — narrowed instead of blanket
         if (tc.CONDITIONAL_CODES?.has(d.code)) {
@@ -2129,6 +2148,39 @@ connection.onRequest('textDocument/semanticTokens/full', (params) => {
       }
     }
 
+    // Pre-compute positions of the `schema` keyword on schema-head lines
+    // (`Name = schema [:kind]`, mirroring the grammar's schema-block begin).
+    // The keyword compiles to a call of the runtime `schema` helper, so TS
+    // classifies it as a readonly const variable; without this the variable
+    // token overrides the grammar's keyword.control.schema.rip scope and
+    // paints the keyword like a constant — and inconsistently, since the
+    // occurrence-search resolves the duplicate `schema` tokens unevenly.
+    // Suppress the token here and let the grammar own the keyword.
+    const schemaHeadPositions = new Set();
+    for (let si = 0; si < srcLines.length; si++) {
+      const m = srcLines[si].match(/\bschema\b[ \t]*(?::[a-z][A-Za-z0-9_]*)?[ \t]*$/);
+      if (m) schemaHeadPositions.add(si + ':' + m.index);
+    }
+
+    // Pre-compute the indented body lines of each schema block (following a
+    // `= schema [:kind]` head until a line dedents to column 0 — mirroring the
+    // grammar's schema-block end `^(?=\S)`). Schema fields compile to
+    // string-literal data with no real symbols, and their names / types /
+    // directives are fully scoped by the grammar. But the header type-defs
+    // (`email: string`) and compiled object keys (`unique: true`) still get
+    // `property` classifications, which the heuristic text-search lands on
+    // schema source tokens — painting a field's type or an `@directive` as a
+    // property. The grammar owns the whole body, so suppress tokens there.
+    const schemaBodyLines = new Set();
+    for (let si = 0; si < srcLines.length; si++) {
+      if (!/\bschema\b[ \t]*(?::[a-z][A-Za-z0-9_]*)?[ \t]*$/.test(srcLines[si])) continue;
+      for (let sj = si + 1; sj < srcLines.length; sj++) {
+        const ch = srcLines[sj][0];
+        if (srcLines[sj].trim() === '' || ch === ' ' || ch === '\t') { schemaBodyLines.add(sj); continue; }
+        break;
+      }
+    }
+
     // Compute byte offset where DTS header ends in the virtual file.
     // Body spans have accurate source maps; header spans use heuristic
     // text search. Processing body first lets accurate mappings claim
@@ -2387,6 +2439,16 @@ connection.onRequest('textDocument/semanticTokens/full', (params) => {
           if (matchCol === slIndent || isTagLine || isComponentLine) continue;
         }
       }
+
+      // The `schema` keyword is owned by the TextMate grammar
+      // (keyword.control.schema.rip); skip TS's variable classification of the
+      // compiled `schema(...)` helper so it doesn't repaint the keyword.
+      if (tsText === 'schema' && schemaHeadPositions.has(matchLine + ':' + matchCol)) continue;
+
+      // Schema block bodies are entirely grammar-scoped (fields are
+      // string-literal data, no real symbols); drop heuristic property/type
+      // tokens that would repaint a field type or `@directive`.
+      if (schemaBodyLines.has(matchLine)) continue;
 
       usedPositions.add(matchLine + ':' + matchCol);
       let mods = tsModifiers & 0x1F; // keep bits 0-4, mask off 'local' (bit 5)
