@@ -825,6 +825,36 @@ check('router.push: a valid route passes; a path typo errors', () => {
   assert(!r.ok, 'a push typo should error');
 });
 
+// ── 12. `RoutePath` ambient type exposes the route union to app code ──
+//
+// Data-driven hrefs (a nav array threaded through a component) lose the
+// automatic literal `<a href>` check, so app code needs to name the route
+// union. `RoutePath` is injected ambiently into any app file that references
+// it — same union the href/push checks use — so a typo or a non-existent
+// route errors at the annotation, with no import or `__RipRoutes` leak.
+const routePathProject = (body) => ({
+  'index.rip': `x = 1\n`,
+  'app/stash.rip': `stash =\n  count: 0\n`,
+  'app/routes/orders.rip': `export Orders = component\n  render null\n`,
+  'app/routes/index.rip': `${body}\n\nexport Home = component\n  render\n    div\n`,
+});
+
+check('RoutePath: a valid route literal passes', () => {
+  const r = checkProject(routePathProject(`home:: RoutePath = '/orders'`));
+  assert(r.ok, 'expected clean check, got:\n' + r.out);
+});
+
+check('RoutePath: a bogus route literal errors', () => {
+  const r = checkProject(routePathProject(`home:: RoutePath = '/nope'`));
+  assert(!r.ok, 'expected a route error on RoutePath = "/nope"');
+  assert(/not assignable/.test(r.out), 'unexpected output:\n' + r.out);
+});
+
+check('RoutePath: a file-local declaration wins (no duplicate-identifier clash)', () => {
+  const r = checkProject(routePathProject(`type RoutePath = 'custom'\n\nval:: RoutePath = 'custom'`));
+  assert(r.ok, 'a user-defined RoutePath should win cleanly:\n' + r.out);
+});
+
 // ── Single-quoted string literals are valid prop defaults ──
 //
 // validatePropDefault only recognized double-quoted literals (/^"[^"]*"$/),

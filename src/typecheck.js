@@ -2306,6 +2306,20 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
       headerDts = `type NavOpts = import('@rip-lang/app').NavOpts;\n` + headerDts;
     }
 
+    // Expose the route-path union under a clean, ambient `RoutePath` type so
+    // app code can annotate data-driven hrefs (a nav array, props forwarded
+    // to an anchor) without reaching into the internal `__RipRoutes` via the
+    // entry path. Inject only when the file references `RoutePath` and does
+    // not declare or import its own — a user-defined `RoutePath` always wins,
+    // so there's no duplicate-identifier clash. Mirrors the conditional
+    // header injection used for __state / __ripGate.
+    if (headerDts
+        && /\bRoutePath\b/.test(headerDts + code)
+        && !/\b(?:type|interface)\s+RoutePath\b/.test(headerDts + code)
+        && !/\bimport\b[^;\n]*\bRoutePath\b/.test(headerDts + code)) {
+      headerDts = `type RoutePath = ${inlineRoutesUnion};\n` + headerDts;
+    }
+
     // (a) Constrain <a href>: replace the INTRINSIC __ripEl declaration
     // with a const-H-generic version whose href slot conditionally
     // narrows to __RipRoutes for slash-prefixed literals. External
