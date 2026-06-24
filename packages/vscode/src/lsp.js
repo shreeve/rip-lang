@@ -1150,15 +1150,52 @@ function publishDiagnostics(filePath) {
 // a lenient (non-strict) default service.
 
 // Look up (or lazy-create) the service responsible for `filePath`.
+//
+// Each service carries its own TypeScript type-checker. SourceFiles are shared
+// via the DocumentRegistry, so the JS heap per extra service is small, but each
+// still costs ~0.6 GB RSS (mapped lib/DOM/@types). Left unbounded, a service
+// accumulates per project the user visits, so browsing a large monorepo holds
+// several GB of RSS. We cap that footprint: services whose project has an open
+// editor tab are never evicted (evicting them would re-typecheck on every
+// cross-tab operation); among truly-idle services we keep MAX_IDLE_SERVICES
+// warm and dispose the rest, LRU-first. The warm buffer trades that RSS for
+// instant switching back to a recently-used project (a cold re-create costs a
+// ~1s re-typecheck).
+const MAX_IDLE_SERVICES = 2;
 function getServiceFor(filePath) {
   if (!ts || !compiler || !tc) return null;
   const key = (filePath && findProjectRoot(filePath)) || '';
   let svc = services.get(key);
-  if (!svc) {
-    svc = createService(key || null);
+  if (svc) {
+    // Bump to most-recently-used (Map preserves insertion order).
+    services.delete(key);
     services.set(key, svc);
+    return svc;
   }
+  svc = createService(key || null);
+  services.set(key, svc);
+  evictIdleServices(key);
   return svc;
+}
+
+// Dispose idle services (no open file in their project) beyond the warm buffer,
+// LRU-first. `keepKey` is the just-accessed service, never evicted.
+function evictIdleServices(keepKey) {
+  if (services.size <= MAX_IDLE_SERVICES + 1) return;
+  const openRoots = new Set();
+  for (const doc of documents.all()) {
+    openRoots.add(findProjectRoot(uriToPath(doc.uri)) || '');
+  }
+  let idleKept = 0;
+  // Iterate LRU→MRU (insertion order); evict idle services past the buffer.
+  for (const k of [...services.keys()]) {
+    if (k === keepKey || openRoots.has(k)) continue; // active — never evict
+    if (idleKept < MAX_IDLE_SERVICES) { idleKept++; continue; }
+    const s = services.get(k);
+    try { s.dispose?.(); } catch {}
+    services.delete(k);
+    connection.console.log(`[rip] evicted idle service: ${k || '(default)'}`);
+  }
 }
 
 // Return any existing service, lazy-creating a default if none exist.
