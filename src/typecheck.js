@@ -524,10 +524,36 @@ export function checkComponentDefs(compProps, srcLines, startLine = 0) {
 // first assignment. This makes `let total; total = count + ratio;` behave
 // like `let total: number;` — so a later `total = "string"` is caught.
 // Called by both the LSP and the CLI type-checker to keep them aligned.
+// Symbols mutated by the most recent patch pass. These are binder symbols that
+// live on DocumentRegistry-shared SourceFiles, so they outlive program
+// rebuilds; the `{ type }` we hang off them pins that program's entire type
+// graph. We must release the previous pass's mutations before re-patching, or
+// every rebuilt program leaks (~50MB/compile → GBs over an editing session).
+let _patchedSyms = [];
+
 export function patchUninitializedTypes(ts, service, compiledEntries) {
   const program = service.getProgram();
   if (!program) return;
   const checker = program.getTypeChecker();
+
+  // Release the prior program's pinned types: restore each previously-patched
+  // symbol to its original (non-transient, unresolved) state so the old program
+  // becomes collectable. We re-patch against the current program below before
+  // any diagnostics run, so inference is unaffected.
+  for (const s of _patchedSyms) {
+    try { s.flags &= ~ts.SymbolFlags.Transient; s.links = undefined; } catch {}
+  }
+  _patchedSyms = [];
+
+  // Inject an inferred type onto an uninitialized local. Marking the symbol
+  // Transient makes TypeScript read `symbol.links` directly (bypassing the
+  // per-checker links array), so the type is visible to all checker functions.
+  // Every mutated symbol is recorded so the next pass can release it.
+  const setSymType = (sym, type) => {
+    sym.flags |= ts.SymbolFlags.Transient;
+    sym.links = { type };
+    _patchedSyms.push(sym);
+  };
 
   function patchStatements(stmts) {
     const uninitialized = new Map();
@@ -611,8 +637,7 @@ export function patchUninitializedTypes(ts, service, compiledEntries) {
           const sym = uninitialized.get(name);
           if (sym) {
             const rhsType = checker.getTypeAtLocation(expr.right);
-            sym.flags |= ts.SymbolFlags.Transient;
-            sym.links = { type: rhsType };
+            setSymType(sym, rhsType);
             uninitialized.delete(name);
           }
         } else if (ts.isObjectLiteralExpression(expr.left) || ts.isArrayLiteralExpression(expr.left)) {
@@ -629,8 +654,7 @@ export function patchUninitializedTypes(ts, service, compiledEntries) {
                     const propSym = contextType.getProperty(name);
                     if (propSym) {
                       const propType = checker.getTypeOfSymbol(propSym);
-                      sym.flags |= ts.SymbolFlags.Transient;
-                      sym.links = { type: propType };
+                      setSymType(sym, propType);
                       uninitialized.delete(name);
                     }
                   }
@@ -642,8 +666,7 @@ export function patchUninitializedTypes(ts, service, compiledEntries) {
                     const propSym = key && contextType.getProperty(key);
                     if (propSym) {
                       const propType = checker.getTypeOfSymbol(propSym);
-                      sym.flags |= ts.SymbolFlags.Transient;
-                      sym.links = { type: propType };
+                      setSymType(sym, propType);
                       uninitialized.delete(name);
                     }
                   }
@@ -657,8 +680,7 @@ export function patchUninitializedTypes(ts, service, compiledEntries) {
                   const name = el.text;
                   const sym = uninitialized.get(name);
                   if (sym && tupleTypes && tupleTypes[i]) {
-                    sym.flags |= ts.SymbolFlags.Transient;
-                    sym.links = { type: tupleTypes[i] };
+                    setSymType(sym, tupleTypes[i]);
                     uninitialized.delete(name);
                   }
                 }
