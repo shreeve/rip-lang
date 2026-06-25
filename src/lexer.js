@@ -1717,7 +1717,7 @@ export class Lexer {
         !(token[0] === 'TERMINATOR' && EXPRESSION_CLOSE.has(this.tokens[i + 1]?.[0])) &&
         !(token[0] === 'ELSE' && starter !== 'THEN') ||
         token[0] === 'INDENT' && !token.generated && (starter === '->' || starter === '=>') ||
-        token[0] === ',' && (starter === '->' || starter === '=>') && !this.commaInImplicitCall(i) && !this.commaInImplicitObject(i) ||
+        token[0] === ',' && (starter === '->' || starter === '=>' || starter === 'THEN' || starter === 'ELSE') && !this.commaInImplicitCall(i) && !this.commaInImplicitObject(i) ||
         CALL_CLOSERS.has(token[0]) && (this.tokens[i - 1]?.newLine || this.tokens[i - 1]?.[0] === 'OUTDENT');
     };
 

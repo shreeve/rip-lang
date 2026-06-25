@@ -3917,6 +3917,68 @@ code "static class: attribute", '''
   }
   ''', opts
 
+# A static array/object class value still flattens via __clsx (a raw array
+# would stringify with commas instead of spaces).
+code "static class: array uses __clsx", '''
+  export A = component
+    render
+      div class: ["a", "b"]
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {}
+    _create() {
+      this._el0 = document.createElement('div');
+      this._el0.className = __clsx(["a", "b"]);
+      return this._el0;
+    }
+  }
+  ''', opts
+
+# Inline `class:` with an array value on the same line as an element that has
+# a child block parses (the leading `[` no longer reads as opening a block).
+code "inline class: array with child block", '''
+  export A = component
+    render
+      div class: ["a", "b"]
+        span "hi"
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {}
+    _create() {
+      this._el0 = document.createElement('div');
+      this._el0.className = __clsx(["a", "b"]);
+      this._el1 = document.createElement('span');
+      this._t0 = document.createTextNode("hi");
+      this._el1.appendChild(this._t0);
+      this._el0.appendChild(this._el1);
+      return this._el0;
+    }
+  }
+  ''', opts
+
+# An inline conditional inside a class array (not the last element) + a child
+# block: the conditional closes at the next array comma, and the array flattens
+# via __clsx.
+code "inline class: array with conditional and child block", '''
+  export A = component
+    render
+      div class: ["base", if 1 > 0 then "a" else "b"]
+        span "hi"
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {}
+    _create() {
+      this._el0 = document.createElement('div');
+      this._el0.className = __clsx(["base", ((1 > 0) ? "a" : "b")]);
+      this._el1 = document.createElement('span');
+      this._t0 = document.createTextNode("hi");
+      this._el1.appendChild(this._t0);
+      this._el0.appendChild(this._el1);
+      return this._el0;
+    }
+  }
+  ''', opts
+
 # ==============================================================================
 # Other Lifecycle Hooks — beforeMount, beforeUnmount
 # ==============================================================================

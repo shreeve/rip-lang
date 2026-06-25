@@ -16,6 +16,9 @@ test "if else false branch", "x = if false then 'yes' else 'no'\nx", "no"
 # If as expression
 test "if expression", "x = if 5 > 3 then 'greater' else 'less'\nx", "greater"
 
+# Inline if/else as a non-last array element (the comma closes the else clause)
+test "inline if/else mid-array", "a = ['x', if true then 'y' else 'z', 'w']\na.join(',')", "x,y,w"
+
 # Nested if
 test "nested if", "x = if true\n  if true\n    42\n  else\n    10\nx", 42
 
