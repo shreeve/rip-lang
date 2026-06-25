@@ -129,7 +129,7 @@ let IMPLICIT_UNSPACED_CALL = new Set(['+', '-']);
 // Tokens that end an implicit call
 let IMPLICIT_END = new Set([
   'POST_IF', 'POST_UNLESS', 'FOR', 'WHILE', 'UNTIL',
-  'WHEN', 'BY', 'LOOP', 'TERMINATOR', '||', '&&',
+  'WHEN', 'BY', 'LOOP', 'TERMINATOR', '||', '&&', '??',
 ]);
 
 // Tokens that trigger implicit comma insertion before arrows
@@ -2036,7 +2036,7 @@ export class Lexer {
 
       // End implicit calls/objects
       let newLine = prevTag === 'OUTDENT' || prevToken.newLine;
-      let isLogicalOp = tag === '||' || tag === '&&';
+      let isLogicalOp = tag === '||' || tag === '&&' || tag === '??';
       let logicalKeep = false;
       if (isLogicalOp) {
         // Don't close implicit call when more comma-separated args follow

@@ -263,14 +263,42 @@ async function _runTest(name, code, expected) {
       // eval() does. Inject a `return` on the last expression-statement
       // so the test helper receives the value.
       const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
+      // AsyncFunction doesn't auto-return the last expression the way eval()
+      // does. Inject a `return` on the final top-level expression so the test
+      // helper receives the value.
       const lines = result.code.split('\n');
       let lastIdx = lines.length - 1;
       while (lastIdx >= 0 && lines[lastIdx].trim() === '') lastIdx--;
       if (lastIdx >= 0) {
+        const SKIP = /^(if|for|while|do|class|function|async function|const|let|var|return|throw|try|switch|import|export|await\s*$)\b/;
         const stripped = lines[lastIdx].trim().replace(/;$/, '');
-        if (!/^(if|for|while|do|class|function|async function|const|let|var|return|throw|try|switch|import|export|await\s*$)\b/.test(stripped) &&
-            !stripped.startsWith('{') && !stripped.endsWith('{') && !stripped.endsWith('}')) {
+        // A line that *opens* with a closer (`}`, `)`, `]`) is the tail of a
+        // multi-line construct, not a standalone expression — route it to the
+        // backward-scan branch instead of injecting on the closer line.
+        const isCloserTail = /^[)\]}]/.test(stripped);
+        if (!isCloserTail && !SKIP.test(stripped) && !stripped.startsWith('{') && !stripped.endsWith('{') && !stripped.endsWith('}')) {
+          // Final expression is on one line — original fast path, unchanged.
           lines[lastIdx] = lines[lastIdx].replace(stripped, 'return ' + stripped);
+        } else if (/[)\]}]$/.test(stripped) && !stripped.endsWith('{')) {
+          // Final expression spans multiple lines (its last line is a closer
+          // like `});`, which the single-line path skips). Walk back balancing
+          // brackets to the line that opened the construct and inject there —
+          // unless that line begins a statement/declaration (an if/for/while/
+          // try/function block legitimately yields undefined, so leave it).
+          let depth = 0, startIdx = lastIdx;
+          for (let li = lastIdx; li >= 0; li--) {
+            const ln = lines[li];
+            for (let ci = ln.length - 1; ci >= 0; ci--) {
+              const ch = ln[ci];
+              if (ch === ')' || ch === ']' || ch === '}') depth++;
+              else if (ch === '(' || ch === '[' || ch === '{') depth--;
+            }
+            if (depth <= 0) { startIdx = li; break; }
+          }
+          const startStripped = lines[startIdx].trim();
+          if (!SKIP.test(startStripped) && !startStripped.startsWith('{') && !startStripped.startsWith('}')) {
+            lines[startIdx] = lines[startIdx].replace(/^\s*/, (m) => m + 'return ');
+          }
         }
       }
       const fn = new AsyncFunction(lines.join('\n'));
@@ -395,37 +423,36 @@ function type(name, have, want) {
   }
 }
 
-// Test helper: Expect failure (compilation or execution)
-function fail(name, have) {
+// Test helper: Expect failure (compilation or execution).
+// Optional `expected` substring asserts it appears in the thrown error's
+// message or suggestion (hint) — so a test can pin not just "it errors" but
+// "it errors with the right guidance".
+function fail(name, have, expected) {
+  const pass = () => { fileTests.pass++; totalTests.pass++; console.log(`  ${colors.green}✓${colors.reset} ${name}`); };
+  const fail_ = (reason, extra = {}) => {
+    fileTests.fail++; totalTests.fail++;
+    console.log(`  ${colors.red}✗${colors.reset} ${name}`);
+    failures.push({ file: currentFile, test: name, type: 'fail', reason, ...extra });
+  };
+  const matches = (err) => {
+    if (expected == null) return true;
+    const hay = `${err?.message || ''} ${err?.suggestion || ''}`;
+    return hay.includes(expected);
+  };
+  const onThrow = (err) => {
+    if (matches(err)) pass();
+    else fail_(`Expected error to include "${expected}", got "${(err?.message || '')}${err?.suggestion ? ' / ' + err.suggestion : ''}"`);
+  };
   try {
     const result = compile(have);
-
-    // Try to execute - should fail
     try {
       eval(result.code);
-
-      // If we get here, test failed (should have thrown)
-      fileTests.fail++;
-      totalTests.fail++;
-      console.log(`  ${colors.red}✗${colors.reset} ${name}`);
-      failures.push({
-        file: currentFile,
-        test: name,
-        type: 'fail',
-        reason: 'Expected failure but succeeded',
-        code: result.code
-      });
+      fail_('Expected failure but succeeded', { code: result.code });
     } catch (execError) {
-      // Execution failed as expected
-      fileTests.pass++;
-      totalTests.pass++;
-      console.log(`  ${colors.green}✓${colors.reset} ${name}`);
+      onThrow(execError);
     }
   } catch (compileError) {
-    // Compilation failed as expected
-    fileTests.pass++;
-    totalTests.pass++;
-    console.log(`  ${colors.green}✓${colors.reset} ${name}`);
+    onThrow(compileError);
   }
 }
 

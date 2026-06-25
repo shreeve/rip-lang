@@ -142,7 +142,7 @@ export registerAppWatchDirs = (appWatchers, prefix, dirs, server, cwdFn) ->
       timer = null
       server?.broadcastChange(prefix, pending)
       pending = null
-    , 300
+    , 150
   # Per-category watermarks shared across the app's dirs, seeded to now so
   # pre-existing files don't fire on the first stray event. A reload re-reads
   # every file, so the newest file in a burst always trips its category here and

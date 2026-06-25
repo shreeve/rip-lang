@@ -13,6 +13,52 @@ test "comprehension with string", "(c.toUpperCase() for c in ['a', 'b', 'c'])", 
 test "comprehension when", "(x for x in [1, 2, 3, 4, 5] when x > 2)", [3, 4, 5]
 test "comprehension multiple guards", "(x for x in [1, 2, 3, 4] when x > 1 && x < 4)", [2, 3]
 
+# ==============================================================================
+# Comprehension filters use `when`, not `if` — the Python-habit trap
+# A trailing/leading `if` parses as a postfix conditional wrapping the whole
+# comprehension; its loop variable is then out of scope. Reject with a clear
+# error rather than emitting code that throws ReferenceError at runtime.
+# ==============================================================================
+
+fail "comprehension if filter is rejected", "(x for x in [1, 2, 3] if x > 1)"
+fail "comprehension unless filter is rejected", "(x for x in [1, 2, 3] unless x > 1)"
+fail "leading if comprehension filter is rejected", "(x if x > 1 for x in [1, 2, 3])"
+fail "object comprehension if filter is rejected", "(k for k, v of {a: 1} if v > 1)"
+fail "object-comprehension brace if filter is rejected", "r = ({k: v for k, v of obj if v > 1})"
+
+# The leak is caught even when the comprehension is buried under a wrapper
+# (here a postfix-if on an assignment), and for destructured loop vars.
+fail "if filter rejected through assignment wrapper", "r = (1 for [a, b] in pairs) if a > 0"
+fail "if filter rejected for object-destructured target", "r = (1 for {x: y} in pairs) if y > 0"
+
+# Scope-aware: a nested comprehension that rebinds the name is its own scope,
+# so this is NOT a leak and must still compile.
+test "nested comprehension rebinding name is not a leak", '''
+  a = [1, 2]
+  b = [3]
+  r = (x for x in a) if (x for x in b).length > 0
+  r
+  ''', [1, 2]
+
+# An object-destructure KEY is not a binding, so referencing the key name in
+# the guard is a legit outer reference, not a loop-var leak.
+test "object-destructure key in guard is not a leak", '''
+  x = 9
+  pairs = [{k: 1}]
+  r = (v for {k: v} in pairs) if x > 0
+  r
+  ''', [1]
+
+# `when` is the real filter and still works
+test "comprehension when filter works", "(x for x in [1, 2, 3] when x > 1)", [2, 3]
+
+# A guard that does NOT reference the loop var is a legit list-or-undefined
+test "comprehension guarded by unrelated cond", "cond = true\nr = (x for x in [1, 2, 3]) if cond\nr", [1, 2, 3]
+test "comprehension guarded by false cond", "cond = false\nr = (x for x in [1, 2, 3]) if cond\nr", undefined
+
+# A comprehension in a ternary else branch is fine (loop var doesn't leak)
+test "comprehension in ternary else", "cond = false\n'a' if cond else (y for y in [1, 2])", [1, 2]
+
 # Comprehension with index
 test "comprehension with index", "(i for item, i in ['a', 'b', 'c'])", [0, 1, 2]
 

@@ -106,6 +106,30 @@ test '=~ email parsing', '''
   ''', 'example.com'
 
 # ==============================================================================
+# =~ does not chain — `a =~ b =~ c` would match the first match result (an
+# array/null) against the second pattern, which is never intended. Reject it
+# and require explicit parentheses to opt in.
+# ==============================================================================
+
+fail '=~ does not chain', '''
+  s = 'ab'
+  s =~ /a/ =~ /b/
+  '''
+
+# Explicit parentheses are the opt-out (author clearly means to match the result)
+test '=~ parenthesized chain is allowed', '''
+  s = 'true'
+  r = (s =~ /true/) =~ /true/
+  r[0]
+  ''', 'true'
+
+# `=~` mixed with `==` groups sensibly via left-assoc: (s =~ r) == v
+test '=~ then == checks no-match', '''
+  s = 'ab'
+  (s =~ /xyz/) == null
+  ''', true
+
+# ==============================================================================
 # Regex Indexing (value[/pattern/] and value[/pattern/, n])
 # ==============================================================================
 

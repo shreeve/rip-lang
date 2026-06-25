@@ -32,6 +32,42 @@ test "and returns first when first falsy", "fn = (x) -> x\nfn '' and 'yes'", ""
 test "and with multiple args", "fn = (a, b) -> a + b\nfn 'a', 'b' and 'result'", "result"
 
 # ==============================================================================
+# nullish (??) ends implicit calls — must mirror || / && at the call boundary
+# ==============================================================================
+
+# ?? after implicit call returns call result when non-nullish
+test "?? returns call result when present", "fn = (x) -> x\nfn 'hello' ?? 'default'", "hello"
+
+# ?? returns default when call result is null/undefined
+test "?? returns default when nullish", "fn = (x) -> x\nfn null ?? 'default'", "default"
+
+# ?? does NOT fall through on falsy-but-present values (unlike ||)
+test "?? keeps empty string from call", "fn = (x) -> x\nfn '' ?? 'default'", ""
+test "?? keeps zero from call", "fn = (x) -> x\nfn 0 ?? 99", 0
+
+# ?? parses the same as || at the implicit-call boundary
+code "?? ends implicit call like or", "fn = (x) -> x\nx = fn null ?? 'd'", """
+let fn, x;
+
+fn = function(x) {
+  return x;
+};
+x = fn(null) ?? 'd';
+"""
+
+# ?? with more comma-separated args stays inside the call (matches ||)
+test "?? in first arg with more", "fn = (a, b) -> (a ?? 'y') + ':' + b\nfn null ?? 'y', 'z'", "y:z"
+
+# ?? inside an implicit object value should not close the object
+test "?? in implicit object value", "foo = null\nx =\n  a: foo ?? 'default'\n  b: 'other'\nx.a + x.b", "defaultother"
+
+# ?? return inside an implicit call ends the call (like or return)
+test "?? return ends implicit call", "read = (k) -> null\nfn = ->\n  sql = read 'body' ?? return 'empty'\n  'got: ' + sql\nfn()", "empty"
+
+# Explicit parens preserve ?? inside the argument
+test "parens preserve ?? in args", "fn = (x) -> x\nfn (null ?? 'd')", "d"
+
+# ==============================================================================
 # Explicit parens preserve grouping (when you WANT || inside args)
 # ==============================================================================
 
