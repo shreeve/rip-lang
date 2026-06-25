@@ -24,7 +24,9 @@ isaWidthsStr = (str) ->
   parts = str.split sep
   for part, i in parts
     len = ISA_WIDTHS[i]
-    if part and len and part.length isnt len
+    # ISA elements are fixed-width: pad even when empty (skip only the
+    # trailing component-sep + terminator, which has no width entry).
+    if len? and part.length isnt len
       parts[i] = part.padEnd(len).slice 0, len
   parts.join sep
 
@@ -99,8 +101,9 @@ class X12
   isaWidths: (row) ->
     for was, i in row
       len = ISA_WIDTHS[i]
-      if was and len and was.length isnt len
-        row[i] = was.padEnd(len).slice 0, len
+      continue unless len?
+      cur = was ?? ''
+      row[i] = cur.padEnd(len).slice 0, len if cur.length isnt len
     row
 
   # ==[ Display ]===============================================================
@@ -248,7 +251,9 @@ class X12
       our = @ary.filter (now) -> want.test now[0]
 
       unless allNum
-        num ?= 0
+        # No occurrence given: target the first existing segment, or fall
+        # through to num=0 (create) when none exist / this is an append (+).
+        num ?= if not newNum and our.length > 0 then 1 else 0
         row = our[num - 1]
         pad = if row then 0 else num - our.length
         pad = 1 if (num is 0 and our.length is 0) or newNum
