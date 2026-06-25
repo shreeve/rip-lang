@@ -250,12 +250,22 @@ export function installComponentSupport(CodeEmitter, Lexer) {
 
     let startsWithTag = (tokens, i) => {
       let j = i;
+      // A trailing inline sub-block (e.g. an `if/then/else` attribute value)
+      // ends in a closing OUTDENT; step over the whole OUTDENT…INDENT body so
+      // the backward walk resumes at the tokens that precede the sub-block.
+      while (j > 0 && tokens[j][0] === 'OUTDENT') {
+        j = skipBalancedPair(tokens, j - 1, 'OUTDENT', 'INDENT');
+      }
       while (j > 0) {
         let pt = tokens[j - 1][0];
         if (pt === 'TERMINATOR' || pt === 'RENDER') {
           break;
         }
-        if (pt === 'INDENT' || pt === 'OUTDENT') {
+        if (pt === 'OUTDENT') {
+          j = skipBalancedPair(tokens, j - 2, 'OUTDENT', 'INDENT');
+          continue;
+        }
+        if (pt === 'INDENT') {
           let jt = tokens[j][0];
           if (jt === 'CALL_END' || jt === ')') {
             j = skipBalancedPair(tokens, j - 1, jt, jt === 'CALL_END' ? 'CALL_START' : '(');
@@ -548,7 +558,7 @@ export function installComponentSupport(CodeEmitter, Lexer) {
           isTemplateElement = true;
         } else if (tag === 'IDENTIFIER' && !isAfterControlFlow) {
           isTemplateElement = atLineStart || startsWithTag(tokens, i);
-        } else if (tag === 'PROPERTY' || tag === 'STRING' || tag === 'STRING_END' || tag === 'NUMBER' || tag === 'BOOL' || tag === 'CALL_END' || tag === ')' || tag === 'PRESENCE') {
+        } else if (tag === 'PROPERTY' || tag === 'STRING' || tag === 'STRING_END' || tag === 'NUMBER' || tag === 'BOOL' || tag === 'CALL_END' || tag === ')' || tag === ']' || tag === 'INDEX_END' || tag === '}' || tag === 'MAP_END' || tag === 'PRESENCE') {
           isTemplateElement = startsWithTag(tokens, i);
         }
 
@@ -2781,10 +2791,17 @@ export function installComponentSupport(CodeEmitter, Lexer) {
               this._pushEffect(`${elVar}.className = __clsx(${valueCode});`);
             }
           } else {
+            // A bare string literal is already a space-separated className, but
+            // any compound expression (array/object/map literal, ternary, call,
+            // concatenation, …) can evaluate to an array — which `.className =`
+            // would stringify with commas instead of spaces. Route every compound
+            // value through __clsx (flatten + space-join; strings pass through
+            // unchanged), mirroring the reactive branch above which always wraps.
+            const out = Array.isArray(value) ? `__clsx(${valueCode})` : valueCode;
             if (this._svgDepth > 0) {
-              this._createLines.push(`${elVar}.setAttribute('class', ${valueCode});`);
+              this._createLines.push(`${elVar}.setAttribute('class', ${out});`);
             } else {
-              this._createLines.push(`${elVar}.className = ${valueCode};`);
+              this._createLines.push(`${elVar}.className = ${out};`);
             }
           }
           continue;
