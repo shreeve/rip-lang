@@ -317,7 +317,7 @@ export class CodeEmitter {
     this.collectProgramVariables(sexpr);
     this.moduleBindings = new Set();
     this.collectModuleBindings(sexpr);
-    this.validateAst(sexpr);
+    this.validateComprehensionFilters(sexpr);
     let code = this.emit(sexpr);
 
     // Build source map mappings from generation-time recorded entries
@@ -1827,7 +1827,7 @@ export class CodeEmitter {
   // because a postfix `if` on an assignment RHS is hoisted into a ternary by
   // emitAssignment and never reaches emitIf — but the `["if", ...]` node is
   // present in the AST regardless of how it is later emitted.
-  validateAst(node) {
+  validateComprehensionFilters(node) {
     if (!Array.isArray(node)) return;
     if (str(node[0]) === 'if') {
       let [, condition, thenBranch, ...elseBranches] = node;
@@ -1836,7 +1836,7 @@ export class CodeEmitter {
     // Recurse from index 0: most heads are operator/tag strings (a no-op
     // here), but a callee in head position can itself be an expression that
     // nests an `if` node, so it must be walked too.
-    for (let i = 0; i < node.length; i++) this.validateAst(node[i]);
+    for (let i = 0; i < node.length; i++) this.validateComprehensionFilters(node[i]);
   }
 
   // Catch the Python-habit comprehension filter: `(x for x in xs if x > 1)`.

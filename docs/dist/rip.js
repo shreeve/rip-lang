@@ -11734,7 +11734,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
       this.collectProgramVariables(sexpr);
       this.moduleBindings = new Set;
       this.collectModuleBindings(sexpr);
-      this.validateAst(sexpr);
+      this.validateComprehensionFilters(sexpr);
       let code = this.emit(sexpr);
       if (this.sourceMap)
         this.buildMappings();
@@ -13066,7 +13066,7 @@ function _setDataSection() {
       let [condition, thenBranch, ...elseBranches] = rest;
       return context === "value" ? this.emitIfAsExpression(condition, thenBranch, elseBranches) : this.emitIfAsStatement(condition, thenBranch, elseBranches);
     }
-    validateAst(node) {
+    validateComprehensionFilters(node) {
       if (!Array.isArray(node))
         return;
       if (str(node[0]) === "if") {
@@ -13074,7 +13074,7 @@ function _setDataSection() {
         this._checkComprehensionFilterTrap(condition, thenBranch, elseBranches, node);
       }
       for (let i = 0;i < node.length; i++)
-        this.validateAst(node[i]);
+        this.validateComprehensionFilters(node[i]);
     }
     _checkComprehensionFilterTrap(condition, thenBranch, elseBranches, sexpr) {
       if (elseBranches.length)
@@ -16229,7 +16229,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.16.2";
-  var BUILD_DATE = "2026-06-25@00:52:35GMT";
+  var BUILD_DATE = "2026-06-25@01:01:46GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
