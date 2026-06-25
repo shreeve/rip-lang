@@ -431,10 +431,15 @@ export function collectUsageProps(srcLines, lineIndex, componentDefs) {
   if (/=\s*component\b/.test(trimmed)) return null;
   if (!componentDefs.has(component)) return null;
 
+  // A prop is supplied either directly (`name: value`) or via a two-way
+  // binding (`name <=> signal`, which compiles to `__bind_name__`). Both forms
+  // satisfy a required prop, so both count as "used".
+  const propRe = /(?:^|,)\s*(@?\w+)\s*(?::|<=>)/g;
+
   // Parse props on the usage line
   const rest = trimmed.substring(component.length);
   const usedProps = [];
-  for (const m of rest.matchAll(/(?:^|,)\s*(@?\w+)\s*:/g)) {
+  for (const m of rest.matchAll(propRe)) {
     usedProps.push(m[1]);
   }
 
@@ -445,7 +450,7 @@ export function collectUsageProps(srcLines, lineIndex, componentDefs) {
     if (bLine.trim() === '') continue;
     const bIndent = bLine.length - bLine.trimStart().length;
     if (bIndent <= baseIndent) break;
-    for (const m of bLine.trimStart().matchAll(/(?:^|,)\s*(@?\w+)\s*:/g)) {
+    for (const m of bLine.trimStart().matchAll(propRe)) {
       usedProps.push(m[1]);
     }
   }
@@ -461,19 +466,38 @@ export function parseComponentDTS(dtsString) {
   const lines = dtsString.split('\n');
   let i = 0;
   while (i < lines.length) {
-    const cm = lines[i].match(/^export declare class (\w+)/);
+    // Match both `export declare class` and bare `declare class` — a non-exported
+    // component is still a component, and its usage sites (same file) must be
+    // prop-checked. The `^` anchor skips indented nested user classes; the
+    // `constructor(props…)` check below is what actually marks a class a component.
+    const cm = lines[i].match(/^(?:export )?declare class (\w+)/);
     if (!cm) { i++; continue; }
     const name = cm[1];
     const props = [];
     let hasIntrinsicProps = false;
     let inheritsTag = null;
+    let isComponent = false;
     let j = i + 1;
     while (j < lines.length) {
       if (/^\}/.test(lines[j])) break;
       if (/constructor\(props\??/.test(lines[j])) {
+        isComponent = true;
         if (lines[j].includes('__RipProps<')) hasIntrinsicProps = true;
         const tagMatch = lines[j].match(/__RipProps<'(\w+)'>/);
         if (tagMatch) inheritsTag = tagMatch[1];
+        // Inline object type — the whole prop list lives between `{` and `}` on
+        // this single line (`constructor(props?: { … });`, or `{}` when empty).
+        // Parse it here; do NOT fall through to the multi-line reader, which
+        // would otherwise treat the class's own reactive members as props.
+        const inlineObj = lines[j].match(/constructor\(props\??:\s*\{([^}]*)\}/);
+        if (inlineObj) {
+          for (const seg of inlineObj[1].split(';')) {
+            const pm = seg.match(/^\s*(\w+)(\?)?\s*:\s*(.+?)\s*$/);
+            if (pm && !pm[1].startsWith('__bind_')) props.push({ name: pm[1], type: pm[3].trim(), required: !pm[2] });
+          }
+          j++;
+          continue;
+        }
         if (!lines[j].includes('{')) { j++; continue; }
         j++;
         while (j < lines.length) {
@@ -488,7 +512,11 @@ export function parseComponentDTS(dtsString) {
       }
       j++;
     }
-    if (props.length || hasIntrinsicProps) result.set(name, { props, hasIntrinsicProps, inheritsTag });
+    // A `constructor(props…)` is what makes this class a component. Register it
+    // even with zero props, so a prop-less component (`constructor(props?: {});`)
+    // still has its usage sites checked — passing it any prop is an error, not
+    // silently accepted. Non-component classes (no props constructor) stay out.
+    if (isComponent) result.set(name, { props, hasIntrinsicProps, inheritsTag });
     i = Math.max(i + 1, j);
   }
   return result;

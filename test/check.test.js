@@ -573,6 +573,83 @@ Child = component
   assert(/mode/.test(r.out), 'error should name the missing prop:\n' + r.out);
 });
 
+// ── A prop-less component used as a child has no required props ──
+//
+// A component declaring no props emits `constructor(props?: {});` — an inline,
+// empty object type. The DTS parser used to see the `{`, enter multi-line
+// mode, and read the class's own reactive members (`term: Signal<any>;` …) as
+// required props, so every call site errored `Missing required prop 'term'`.
+// Worse, the runaway reader never found a `});` close and swallowed the next
+// class too. Fixed: an inline `{ … }`/`{}` on the constructor line is the
+// complete prop list — parse it inline, don't fall through to class members.
+
+check('a prop-less child component has no phantom required props', () => {
+  const r = checkProject({
+    'index.rip': `export ok = true\n`,
+    'c.rip': `export Parent = component
+  render
+    Picker
+    Sibling label: 'x'
+
+Picker = component
+  term := ''
+  results := []
+  render
+    p "#{term}"
+
+Sibling = component
+  @label:: string
+  render
+    p "#{label}"
+`,
+  });
+  assert(r.ok, 'a prop-less child must not require its reactive members as props: ' + r.out);
+});
+
+check('a prop-less component does not corrupt a following component def', () => {
+  const r = checkProject({
+    'index.rip': `export ok = true\n`,
+    'c.rip': `export Parent = component
+  render
+    Picker
+    Sibling label: 5
+
+Picker = component
+  term := ''
+  render
+    p "#{term}"
+
+Sibling = component
+  @label:: string
+  render
+    p "#{label}"
+`,
+  });
+  assert(!r.ok, 'Sibling defined after a prop-less component must still type-check its props');
+  assert(/label/.test(r.out), 'error should name the mistyped prop:\n' + r.out);
+});
+
+check('a non-exported prop-less component still rejects unknown props', () => {
+  // `Picker` is non-exported (`declare class`, not `export declare class`) and
+  // declares no props. It must still land in the component registry so its
+  // usage sites are prop-checked — passing it `bogus` is an error, not silently
+  // accepted.
+  const r = checkProject({
+    'index.rip': `export ok = true\n`,
+    'c.rip': `export Parent = component
+  render
+    Picker bogus: 99
+
+Picker = component
+  term := ''
+  render
+    p "#{term}"
+`,
+  });
+  assert(!r.ok, 'passing an unknown prop to a prop-less component must error: ' + r.out);
+  assert(/bogus/.test(r.out), 'error should name the unknown prop:\n' + r.out);
+});
+
 check('opaque stash values stay silent (the mount check backstops them)', () => {
   const r = checkProject({
     'index.rip': `export ok = true\n`,
