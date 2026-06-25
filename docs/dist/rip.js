@@ -6890,7 +6890,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       let indent = null;
       let outdent = null;
       let condition = (token, i) => {
-        return token[1] !== ";" && SINGLE_CLOSERS.has(token[0]) && !(token[0] === "TERMINATOR" && EXPRESSION_CLOSE.has(this.tokens[i + 1]?.[0])) && !(token[0] === "ELSE" && starter !== "THEN") || token[0] === "INDENT" && !token.generated && (starter === "->" || starter === "=>") || token[0] === "," && (starter === "->" || starter === "=>") && !this.commaInImplicitCall(i) && !this.commaInImplicitObject(i) || CALL_CLOSERS.has(token[0]) && (this.tokens[i - 1]?.newLine || this.tokens[i - 1]?.[0] === "OUTDENT");
+        return token[1] !== ";" && SINGLE_CLOSERS.has(token[0]) && !(token[0] === "TERMINATOR" && EXPRESSION_CLOSE.has(this.tokens[i + 1]?.[0])) && !(token[0] === "ELSE" && starter !== "THEN") || token[0] === "INDENT" && !token.generated && (starter === "->" || starter === "=>") || token[0] === "," && (starter === "->" || starter === "=>" || starter === "THEN" || starter === "ELSE") && !this.commaInImplicitCall(i) && !this.commaInImplicitObject(i) || CALL_CLOSERS.has(token[0]) && (this.tokens[i - 1]?.newLine || this.tokens[i - 1]?.[0] === "OUTDENT");
       };
       let action = (token, i) => {
         let idx = this.tokens[i - 1]?.[0] === "," ? i - 1 : i;
@@ -7858,12 +7858,19 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       };
       let startsWithTag = (tokens, i) => {
         let j = i;
+        while (j > 0 && tokens[j][0] === "OUTDENT") {
+          j = skipBalancedPair(tokens, j - 1, "OUTDENT", "INDENT");
+        }
         while (j > 0) {
           let pt = tokens[j - 1][0];
           if (pt === "TERMINATOR" || pt === "RENDER") {
             break;
           }
-          if (pt === "INDENT" || pt === "OUTDENT") {
+          if (pt === "OUTDENT") {
+            j = skipBalancedPair(tokens, j - 2, "OUTDENT", "INDENT");
+            continue;
+          }
+          if (pt === "INDENT") {
             let jt = tokens[j][0];
             if (jt === "CALL_END" || jt === ")") {
               j = skipBalancedPair(tokens, j - 1, jt, jt === "CALL_END" ? "CALL_START" : "(");
@@ -8079,7 +8086,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
             isTemplateElement = true;
           } else if (tag === "IDENTIFIER" && !isAfterControlFlow) {
             isTemplateElement = atLineStart || startsWithTag(tokens, i);
-          } else if (tag === "PROPERTY" || tag === "STRING" || tag === "STRING_END" || tag === "NUMBER" || tag === "BOOL" || tag === "CALL_END" || tag === ")" || tag === "PRESENCE") {
+          } else if (tag === "PROPERTY" || tag === "STRING" || tag === "STRING_END" || tag === "NUMBER" || tag === "BOOL" || tag === "CALL_END" || tag === ")" || tag === "]" || tag === "INDEX_END" || tag === "}" || tag === "MAP_END" || tag === "PRESENCE") {
             isTemplateElement = startsWithTag(tokens, i);
           }
           if (isTemplateElement) {
@@ -9839,10 +9846,11 @@ ${blockFactoriesCode}return ${lines.join(`
                 this._pushEffect(`${elVar}.className = __clsx(${valueCode2});`);
               }
             } else {
+              const out = Array.isArray(value) ? `__clsx(${valueCode2})` : valueCode2;
               if (this._svgDepth > 0) {
-                this._createLines.push(`${elVar}.setAttribute('class', ${valueCode2});`);
+                this._createLines.push(`${elVar}.setAttribute('class', ${out});`);
               } else {
-                this._createLines.push(`${elVar}.className = ${valueCode2};`);
+                this._createLines.push(`${elVar}.className = ${out};`);
               }
             }
             continue;
@@ -16244,7 +16252,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.16.2";
-  var BUILD_DATE = "2026-06-25@07:31:25GMT";
+  var BUILD_DATE = "2026-06-25@11:13:41GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
