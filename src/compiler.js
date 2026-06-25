@@ -317,6 +317,7 @@ export class CodeEmitter {
     this.collectProgramVariables(sexpr);
     this.moduleBindings = new Set();
     this.collectModuleBindings(sexpr);
+    this.validateAst(sexpr);
     let code = this.emit(sexpr);
 
     // Build source map mappings from generation-time recorded entries
@@ -1821,6 +1822,154 @@ export class CodeEmitter {
       : this.emitIfAsStatement(condition, thenBranch, elseBranches);
   }
 
+  // Walk the parsed program once, before codegen, to reject the Python-habit
+  // comprehension filter. This runs as a pre-emit pass (not inside emitIf)
+  // because a postfix `if` on an assignment RHS is hoisted into a ternary by
+  // emitAssignment and never reaches emitIf — but the `["if", ...]` node is
+  // present in the AST regardless of how it is later emitted.
+  validateAst(node) {
+    if (!Array.isArray(node)) return;
+    if (str(node[0]) === 'if') {
+      let [, condition, thenBranch, ...elseBranches] = node;
+      this._checkComprehensionFilterTrap(condition, thenBranch, elseBranches, node);
+    }
+    // Recurse from index 0: most heads are operator/tag strings (a no-op
+    // here), but a callee in head position can itself be an expression that
+    // nests an `if` node, so it must be walked too.
+    for (let i = 0; i < node.length; i++) this.validateAst(node[i]);
+  }
+
+  // Catch the Python-habit comprehension filter: `(x for x in xs if x > 1)`.
+  // Rip comprehensions filter with `when`, so a trailing `if` parses as a
+  // postfix conditional that wraps the whole comprehension — and its
+  // condition then references a loop variable that is scoped to the
+  // comprehension's IIFE, guaranteeing a ReferenceError (or a silent bind to
+  // an unrelated outer variable). Only a guard-form `if`/`unless` (no else)
+  // whose comprehension loop var actually leaks into the sibling branch is
+  // flagged, so legitimate `(list) if cond else fallback` is untouched.
+  _checkComprehensionFilterTrap(condition, thenBranch, elseBranches, sexpr) {
+    if (elseBranches.length) return;
+
+    // A guard-form `if`/`unless` evaluates its CONDITION in the enclosing
+    // scope, never inside the guarded branch. So any comprehension loop
+    // variable bound on one side and referenced on the other is guaranteed
+    // out of scope — the Python `if`-filter trap, in either order:
+    //   `(expr for x in xs if cond)` → ["if", cond, [comprehension]]
+    //   `(expr if cond for x in xs)` → ["if", comprehension, [body]]
+    // Comprehensions may be nested under transparent wrappers (an assignment
+    // RHS, a call arg), so each side is scanned in full.
+    let thenVars = this._collectLeakVars(thenBranch);
+    if (thenVars.size && this._referencesAnyName(condition, thenVars)) {
+      this._throwComprehensionFilterTrap(sexpr);
+    }
+    let condVars = this._collectLeakVars(condition);
+    if (condVars.size && this._referencesAnyName(thenBranch, condVars)) {
+      this._throwComprehensionFilterTrap(sexpr);
+    }
+  }
+
+  // Union of loop-bound names from every comprehension within a branch.
+  _collectLeakVars(node) {
+    let names = new Set();
+    let walk = (n) => {
+      if (!Array.isArray(n)) return;
+      let h = str(n[0]);
+      if (h === 'comprehension' || h === 'object-comprehension') {
+        for (let v of this._collectComprehensionVars(n)) names.add(v);
+      }
+      for (let i = 0; i < n.length; i++) walk(n[i]);
+    };
+    walk(node);
+    return names;
+  }
+
+  _throwComprehensionFilterTrap(sexpr) {
+    this.error(
+      'Comprehensions filter with `when`, not `if` — the trailing `if` wraps the whole comprehension and its loop variable is out of scope here',
+      sexpr,
+      { suggestion: 'Use `(expr for x in xs when cond)` instead of `(expr for x in xs if cond)`' }
+    );
+  }
+
+  // Collect only the names a comprehension's loop pattern actually *binds*.
+  // Mirrors the binding-pattern shapes in _validateBindingPattern so object
+  // keys (which are not bindings) are not collected — e.g. `for {x: y} in xs`
+  // binds `y`, not `x`.
+  _collectComprehensionVars(comp) {
+    let names = new Set();
+    let addLeaves = (v) => {
+      if (typeof v === 'string') { names.add(v); return; }
+      if (v instanceof String) { names.add(v.valueOf()); return; }
+      if (!Array.isArray(v)) return;
+      let head = str(v[0]);
+      // ["default", target, expr] — only the target binds
+      if (head === 'default') { addLeaves(v[1]); return; }
+      // ["...", target] / ["rest", target] — the target binds
+      if (head === '...' || head === 'rest') { addLeaves(v[1]); return; }
+      // Array pattern — every element (skipping elision holes) is a target
+      if (head === 'array') {
+        for (let i = 1; i < v.length; i++) if (v[i] !== ',' && v[i] != null) addLeaves(v[i]);
+        return;
+      }
+      // Object pattern — bind the target slot of each entry, never the key:
+      //   [null, k, k]      shorthand {x}      → entry[2]
+      //   [":", k, target]  rename   {x: y}    → entry[2]
+      //   ["=", k, default] default  {x = 5}   → entry[1]
+      //   ["...", target]   rest     {...rest} → entry[1]
+      if (head === 'object') {
+        for (let i = 1; i < v.length; i++) {
+          let entry = v[i];
+          if (!Array.isArray(entry)) continue;
+          let h = str(entry[0]);
+          if (h === null || h === ':') addLeaves(entry[2]);
+          else if (h === '=' || h === '...') addLeaves(entry[1]);
+        }
+        return;
+      }
+    };
+    // Iterators sit at index 2 for `comprehension`, index 3 for
+    // `object-comprehension` (which carries keyExpr + valueExpr first).
+    let iterators = (str(comp[0]) === 'object-comprehension' ? comp[3] : comp[2]) || [];
+    for (let iter of iterators) {
+      let vars = iter[1];
+      if (Array.isArray(vars)) for (let v of vars) addLeaves(v);
+      else addLeaves(vars);
+    }
+    return names;
+  }
+
+  _referencesAnyName(node, names) {
+    if (typeof node === 'string') return names.has(node);
+    if (node instanceof String) return names.has(node.valueOf());
+    if (!Array.isArray(node)) return false;
+    let head = str(node[0]);
+    // For property access, the property slot is a name, not a variable
+    // reference — only the object side can reference a loop variable.
+    if ((head === '.' || head === '?.') && node.length === 3) {
+      return this._referencesAnyName(node[1], names);
+    }
+    // A nested comprehension introduces its own scope: any name it rebinds is
+    // shadowed, so references to that name inside belong to the inner scope,
+    // not the loop var we're tracking. Drop shadowed names for this subtree
+    // (erring toward NOT flagging — the safe direction).
+    if (head === 'comprehension' || head === 'object-comprehension') {
+      let inner = this._collectComprehensionVars(node);
+      if ([...inner].some(n => names.has(n))) {
+        names = new Set([...names].filter(n => !inner.has(n)));
+        if (names.size === 0) return false;
+      }
+    }
+    // The head may itself be a reference: a call callee (`x(...)`) or a
+    // body-list wrapping a bare identifier (`[x]`). Operator and structural
+    // heads ('+', 'if', 'block', ...) are never valid identifiers, so testing
+    // the head against the loop-var set is safe.
+    if (names.has(head)) return true;
+    for (let i = 1; i < node.length; i++) {
+      if (this._referencesAnyName(node[i], names)) return true;
+    }
+    return false;
+  }
+
   // ---------------------------------------------------------------------------
   // Loops
   // ---------------------------------------------------------------------------
@@ -2111,8 +2260,21 @@ export class CodeEmitter {
     return isNeg ? `(!${result})` : result;
   }
 
-  emitRegexMatch(head, rest) {
+  emitRegexMatch(head, rest, context, sexpr) {
     let [left, right] = rest;
+    // `=~` is a match operator, not a chainable comparison. Although the
+    // lexer gives it COMPARE precedence (so `x =~ /a/ == v` groups as the
+    // useful `(x =~ /a/) == v`), `=~` deliberately does NOT chain the way
+    // `<`/`==` do. A bare `a =~ b =~ c` would silently match the *result* of
+    // the first match (an array or null) against the second regex — never
+    // what the author meant. Reject it and ask for explicit parentheses.
+    if (this.is(left, '=~') && !left.parenthesized) {
+      this.error(
+        '`=~` does not chain — `a =~ b =~ c` would match the first match result against the second pattern',
+        sexpr,
+        { suggestion: 'Parenthesize the intended match, e.g. `(a =~ b) =~ c`, or split into separate expressions' }
+      );
+    }
     this.helpers.add('toMatchable');
     this.programVars.add('_');
     let r = this.emit(right, 'value');

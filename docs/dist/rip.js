@@ -5575,7 +5575,8 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
     "LOOP",
     "TERMINATOR",
     "||",
-    "&&"
+    "&&",
+    "??"
   ]);
   var IMPLICIT_COMMA_BEFORE_ARROW = new Set([
     "STRING",
@@ -7153,7 +7154,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           }
         }
         let newLine = prevTag === "OUTDENT" || prevToken.newLine;
-        let isLogicalOp = tag === "||" || tag === "&&";
+        let isLogicalOp = tag === "||" || tag === "&&" || tag === "??";
         let logicalKeep = false;
         if (isLogicalOp) {
           let j = i + 1, t = tokens[j]?.[0];
@@ -9083,23 +9084,24 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
               }
             } else if (typeof head2 === "string" && !CodeEmitter.GENERATORS[head2] && (TEMPLATE_TAGS.has(head2.split(/[.#]/)[0]) || /^[a-z][\w-]*$/.test(head2) && node.length > 1)) {
               const tagName = head2.split(/[.#]/)[0];
+              const elFn = SVG_TAGS.has(tagName) ? "__ripSvgEl" : "__ripEl";
               const iProps = extractIntrinsicProps(node.slice(1), tagName, node.loc?.r);
               const tagLine = node.loc?.r;
               const srcMarker = tagLine != null ? ` // @rip-src:${tagLine}` : "";
               if (iProps.length === 0) {
-                constructions.push(`    __ripEl('${tagName}');${srcMarker}`);
+                constructions.push(`    ${elFn}('${tagName}');${srcMarker}`);
               } else if (iProps.length === 1) {
                 const srcLine = iProps[0].srcLine ?? tagLine;
                 const marker = srcLine != null ? ` // @rip-src:${srcLine}` : "";
-                constructions.push(`    __ripEl('${tagName}', {${iProps[0].code}});${marker}`);
+                constructions.push(`    ${elFn}('${tagName}', {${iProps[0].code}});${marker}`);
               } else {
                 const distinctLines = new Set(iProps.map((p) => p.srcLine).filter((l) => l != null));
                 if (distinctLines.size <= 1) {
                   const srcLine = iProps[0].srcLine ?? tagLine;
                   const marker = srcLine != null ? ` // @rip-src:${srcLine}` : "";
-                  constructions.push(`    __ripEl('${tagName}', {${iProps.map((p) => p.code).join(", ")}});${marker}`);
+                  constructions.push(`    ${elFn}('${tagName}', {${iProps.map((p) => p.code).join(", ")}});${marker}`);
                 } else {
-                  constructions.push(`    __ripEl('${tagName}', {${srcMarker}`);
+                  constructions.push(`    ${elFn}('${tagName}', {${srcMarker}`);
                   for (const p of iProps) {
                     constructions.push(`      ${p.code},` + (p.srcLine != null ? ` // @rip-src:${p.srcLine}` : ""));
                   }
@@ -11732,6 +11734,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
       this.collectProgramVariables(sexpr);
       this.moduleBindings = new Set;
       this.collectModuleBindings(sexpr);
+      this.validateAst(sexpr);
       let code = this.emit(sexpr);
       if (this.sourceMap)
         this.buildMappings();
@@ -13063,6 +13066,127 @@ function _setDataSection() {
       let [condition, thenBranch, ...elseBranches] = rest;
       return context === "value" ? this.emitIfAsExpression(condition, thenBranch, elseBranches) : this.emitIfAsStatement(condition, thenBranch, elseBranches);
     }
+    validateAst(node) {
+      if (!Array.isArray(node))
+        return;
+      if (str(node[0]) === "if") {
+        let [, condition, thenBranch, ...elseBranches] = node;
+        this._checkComprehensionFilterTrap(condition, thenBranch, elseBranches, node);
+      }
+      for (let i = 0;i < node.length; i++)
+        this.validateAst(node[i]);
+    }
+    _checkComprehensionFilterTrap(condition, thenBranch, elseBranches, sexpr) {
+      if (elseBranches.length)
+        return;
+      let thenVars = this._collectLeakVars(thenBranch);
+      if (thenVars.size && this._referencesAnyName(condition, thenVars)) {
+        this._throwComprehensionFilterTrap(sexpr);
+      }
+      let condVars = this._collectLeakVars(condition);
+      if (condVars.size && this._referencesAnyName(thenBranch, condVars)) {
+        this._throwComprehensionFilterTrap(sexpr);
+      }
+    }
+    _collectLeakVars(node) {
+      let names = new Set;
+      let walk = (n) => {
+        if (!Array.isArray(n))
+          return;
+        let h = str(n[0]);
+        if (h === "comprehension" || h === "object-comprehension") {
+          for (let v of this._collectComprehensionVars(n))
+            names.add(v);
+        }
+        for (let i = 0;i < n.length; i++)
+          walk(n[i]);
+      };
+      walk(node);
+      return names;
+    }
+    _throwComprehensionFilterTrap(sexpr) {
+      this.error("Comprehensions filter with `when`, not `if` — the trailing `if` wraps the whole comprehension and its loop variable is out of scope here", sexpr, { suggestion: "Use `(expr for x in xs when cond)` instead of `(expr for x in xs if cond)`" });
+    }
+    _collectComprehensionVars(comp) {
+      let names = new Set;
+      let addLeaves = (v) => {
+        if (typeof v === "string") {
+          names.add(v);
+          return;
+        }
+        if (v instanceof String) {
+          names.add(v.valueOf());
+          return;
+        }
+        if (!Array.isArray(v))
+          return;
+        let head = str(v[0]);
+        if (head === "default") {
+          addLeaves(v[1]);
+          return;
+        }
+        if (head === "..." || head === "rest") {
+          addLeaves(v[1]);
+          return;
+        }
+        if (head === "array") {
+          for (let i = 1;i < v.length; i++)
+            if (v[i] !== "," && v[i] != null)
+              addLeaves(v[i]);
+          return;
+        }
+        if (head === "object") {
+          for (let i = 1;i < v.length; i++) {
+            let entry = v[i];
+            if (!Array.isArray(entry))
+              continue;
+            let h = str(entry[0]);
+            if (h === null || h === ":")
+              addLeaves(entry[2]);
+            else if (h === "=" || h === "...")
+              addLeaves(entry[1]);
+          }
+          return;
+        }
+      };
+      let iterators = (str(comp[0]) === "object-comprehension" ? comp[3] : comp[2]) || [];
+      for (let iter of iterators) {
+        let vars = iter[1];
+        if (Array.isArray(vars))
+          for (let v of vars)
+            addLeaves(v);
+        else
+          addLeaves(vars);
+      }
+      return names;
+    }
+    _referencesAnyName(node, names) {
+      if (typeof node === "string")
+        return names.has(node);
+      if (node instanceof String)
+        return names.has(node.valueOf());
+      if (!Array.isArray(node))
+        return false;
+      let head = str(node[0]);
+      if ((head === "." || head === "?.") && node.length === 3) {
+        return this._referencesAnyName(node[1], names);
+      }
+      if (head === "comprehension" || head === "object-comprehension") {
+        let inner = this._collectComprehensionVars(node);
+        if ([...inner].some((n) => names.has(n))) {
+          names = new Set([...names].filter((n) => !inner.has(n)));
+          if (names.size === 0)
+            return false;
+        }
+      }
+      if (names.has(head))
+        return true;
+      for (let i = 1;i < node.length; i++) {
+        if (this._referencesAnyName(node[i], names))
+          return true;
+      }
+      return false;
+    }
     emitForIn(head, rest, context, sexpr) {
       let [vars, iterable, step, guard, body] = rest;
       if (context === "value" && this.comprehensionDepth === 0) {
@@ -13347,8 +13471,11 @@ ${this.indent()}}`;
       let result = `(${v} in ${c})`;
       return isNeg ? `(!${result})` : result;
     }
-    emitRegexMatch(head, rest) {
+    emitRegexMatch(head, rest, context, sexpr) {
       let [left, right] = rest;
+      if (this.is(left, "=~") && !left.parenthesized) {
+        this.error("`=~` does not chain — `a =~ b =~ c` would match the first match result against the second pattern", sexpr, { suggestion: "Parenthesize the intended match, e.g. `(a =~ b) =~ c`, or split into separate expressions" });
+      }
       this.helpers.add("toMatchable");
       this.programVars.add("_");
       let r = this.emit(right, "value");
@@ -16102,7 +16229,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.16.2";
-  var BUILD_DATE = "2026-06-20@11:05:39GMT";
+  var BUILD_DATE = "2026-06-25@00:52:35GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
