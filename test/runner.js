@@ -263,14 +263,42 @@ async function _runTest(name, code, expected) {
       // eval() does. Inject a `return` on the last expression-statement
       // so the test helper receives the value.
       const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
+      // AsyncFunction doesn't auto-return the last expression the way eval()
+      // does. Inject a `return` on the final top-level expression so the test
+      // helper receives the value.
       const lines = result.code.split('\n');
       let lastIdx = lines.length - 1;
       while (lastIdx >= 0 && lines[lastIdx].trim() === '') lastIdx--;
       if (lastIdx >= 0) {
+        const SKIP = /^(if|for|while|do|class|function|async function|const|let|var|return|throw|try|switch|import|export|await\s*$)\b/;
         const stripped = lines[lastIdx].trim().replace(/;$/, '');
-        if (!/^(if|for|while|do|class|function|async function|const|let|var|return|throw|try|switch|import|export|await\s*$)\b/.test(stripped) &&
-            !stripped.startsWith('{') && !stripped.endsWith('{') && !stripped.endsWith('}')) {
+        // A line that *opens* with a closer (`}`, `)`, `]`) is the tail of a
+        // multi-line construct, not a standalone expression — route it to the
+        // backward-scan branch instead of injecting on the closer line.
+        const isCloserTail = /^[)\]}]/.test(stripped);
+        if (!isCloserTail && !SKIP.test(stripped) && !stripped.startsWith('{') && !stripped.endsWith('{') && !stripped.endsWith('}')) {
+          // Final expression is on one line — original fast path, unchanged.
           lines[lastIdx] = lines[lastIdx].replace(stripped, 'return ' + stripped);
+        } else if (/[)\]}]$/.test(stripped) && !stripped.endsWith('{')) {
+          // Final expression spans multiple lines (its last line is a closer
+          // like `});`, which the single-line path skips). Walk back balancing
+          // brackets to the line that opened the construct and inject there —
+          // unless that line begins a statement/declaration (an if/for/while/
+          // try/function block legitimately yields undefined, so leave it).
+          let depth = 0, startIdx = lastIdx;
+          for (let li = lastIdx; li >= 0; li--) {
+            const ln = lines[li];
+            for (let ci = ln.length - 1; ci >= 0; ci--) {
+              const ch = ln[ci];
+              if (ch === ')' || ch === ']' || ch === '}') depth++;
+              else if (ch === '(' || ch === '[' || ch === '{') depth--;
+            }
+            if (depth <= 0) { startIdx = li; break; }
+          }
+          const startStripped = lines[startIdx].trim();
+          if (!SKIP.test(startStripped) && !startStripped.startsWith('{') && !startStripped.startsWith('}')) {
+            lines[startIdx] = lines[startIdx].replace(/^\s*/, (m) => m + 'return ');
+          }
         }
       }
       const fn = new AsyncFunction(lines.join('\n'));

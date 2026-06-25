@@ -16,6 +16,16 @@ test "async canary - multi-hop await is tracked by runner", '''
   fn()
   ''', 42
 
+# Runner canary: an async test whose final top-level expression spans multiple
+# lines (a multi-line arrow, so the last emitted line is `});`). The async
+# wrapper must inject `return` at the statement's true start, not give up on
+# the closing-brace line and silently yield undefined.
+test "async value from multi-line final arrow", '''
+  items = await Promise.resolve [1, 2, 3]
+  items.map (x) ->
+    x * 10
+  ''', [10, 20, 30]
+
 # ==============================================================================
 # Await: "await"
 # ==============================================================================
