@@ -11251,6 +11251,21 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
           suggestion += `, ... (${h.expected.length} total)`;
       }
       let token = h.token || "token";
+      let expectedSet = new Set((h.expected || []).map((e) => e.replace(/'/g, "")));
+      let TERNARY_ENDERS = new Set([
+        "TERMINATOR",
+        ",",
+        ")",
+        "]",
+        "OUTDENT",
+        "CALL_END",
+        "INDEX_END",
+        "PARAM_END",
+        "EOF"
+      ]);
+      if (expectedSet.has(":") && (expectedSet.has("POST_IF") || expectedSet.has("POST_UNLESS") || expectedSet.has("FOR") || expectedSet.has("WHILE")) && TERNARY_ENDERS.has(token)) {
+        suggestion = "Binary `x ? y` was removed — use `x ?? y` for nullish coalescing, or a full ternary `x ? y : z`";
+      }
       let near = h.text ? ` near '${h.text}'` : "";
       let message = `Unexpected ${token}${near}`;
       return new RipError(message, {
@@ -16229,7 +16244,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.16.2";
-  var BUILD_DATE = "2026-06-25@01:01:46GMT";
+  var BUILD_DATE = "2026-06-25@07:31:25GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

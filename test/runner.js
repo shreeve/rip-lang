@@ -395,37 +395,36 @@ function type(name, have, want) {
   }
 }
 
-// Test helper: Expect failure (compilation or execution)
-function fail(name, have) {
+// Test helper: Expect failure (compilation or execution).
+// Optional `expected` substring asserts it appears in the thrown error's
+// message or suggestion (hint) — so a test can pin not just "it errors" but
+// "it errors with the right guidance".
+function fail(name, have, expected) {
+  const pass = () => { fileTests.pass++; totalTests.pass++; console.log(`  ${colors.green}✓${colors.reset} ${name}`); };
+  const fail_ = (reason, extra = {}) => {
+    fileTests.fail++; totalTests.fail++;
+    console.log(`  ${colors.red}✗${colors.reset} ${name}`);
+    failures.push({ file: currentFile, test: name, type: 'fail', reason, ...extra });
+  };
+  const matches = (err) => {
+    if (expected == null) return true;
+    const hay = `${err?.message || ''} ${err?.suggestion || ''}`;
+    return hay.includes(expected);
+  };
+  const onThrow = (err) => {
+    if (matches(err)) pass();
+    else fail_(`Expected error to include "${expected}", got "${(err?.message || '')}${err?.suggestion ? ' / ' + err.suggestion : ''}"`);
+  };
   try {
     const result = compile(have);
-
-    // Try to execute - should fail
     try {
       eval(result.code);
-
-      // If we get here, test failed (should have thrown)
-      fileTests.fail++;
-      totalTests.fail++;
-      console.log(`  ${colors.red}✗${colors.reset} ${name}`);
-      failures.push({
-        file: currentFile,
-        test: name,
-        type: 'fail',
-        reason: 'Expected failure but succeeded',
-        code: result.code
-      });
+      fail_('Expected failure but succeeded', { code: result.code });
     } catch (execError) {
-      // Execution failed as expected
-      fileTests.pass++;
-      totalTests.pass++;
-      console.log(`  ${colors.green}✓${colors.reset} ${name}`);
+      onThrow(execError);
     }
   } catch (compileError) {
-    // Compilation failed as expected
-    fileTests.pass++;
-    totalTests.pass++;
-    console.log(`  ${colors.green}✓${colors.reset} ${name}`);
+    onThrow(compileError);
   }
 }
 

@@ -84,6 +84,20 @@ fail 'unexpected end after colon', 'a:'
 fail 'unexpected end after plus', 'a +'
 
 # ==============================================================================
+# Removed binary existential `x ? y` — targeted parse-error hint
+# (The third arg to `fail` asserts the hint text appears in the error.)
+# ==============================================================================
+
+fail 'binary existential hints ??', 'x = opts?.input ? null', 'x ?? y'
+fail 'bare binary existential hints ??', 'x = a ? b', 'x ?? y'
+fail 'incomplete ternary hints ??', 'y = cond ? 1', 'x ?? y'
+fail 'binary existential in call arg hints ??', 'foo a ? b', 'x ?? y'
+
+# A real ternary and nullish coalescing must still compile (no hint, no error)
+test 'full ternary still compiles', 'x = true ? 1 : 2\nx', 1
+test 'nullish coalescing still compiles', 'x = null ?? 7\nx', 7
+
+# ==============================================================================
 # Invalid Assignments
 # ==============================================================================
 

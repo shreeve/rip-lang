@@ -56,6 +56,24 @@ export class RipError extends Error {
     }
     // Build a clean message from the hash instead of using the parser's pre-formatted string
     let token = h.token || 'token';
+
+    // Targeted hint for the removed binary existential `x ? y`. The parser
+    // proves the case for us: mid-ternary it expects the `:` branch, so when
+    // a complete `a ? b` is ended instead, `expected` carries `:` *together
+    // with* the expression-complete continuations (POST_IF/FOR/...) and the
+    // unexpected token is an expression terminator. That co-presence rules
+    // out object-key contexts (where `:` is expected but POST_IF/FOR are not),
+    // so no source scan is needed. Also nudges the genuine "forgot `: z`" case.
+    let expectedSet = new Set((h.expected || []).map(e => e.replace(/'/g, '')));
+    let TERNARY_ENDERS = new Set([
+      'TERMINATOR', ',', ')', ']', 'OUTDENT', 'CALL_END', 'INDEX_END', 'PARAM_END', 'EOF',
+    ]);
+    if (expectedSet.has(':') &&
+        (expectedSet.has('POST_IF') || expectedSet.has('POST_UNLESS') ||
+         expectedSet.has('FOR') || expectedSet.has('WHILE')) &&
+        TERNARY_ENDERS.has(token)) {
+      suggestion = 'Binary `x ? y` was removed — use `x ?? y` for nullish coalescing, or a full ternary `x ? y : z`';
+    }
     let near = h.text ? ` near '${h.text}'` : '';
     let message = `Unexpected ${token}${near}`;
     return new RipError(message, {
