@@ -13,7 +13,7 @@ block comment */
 
 // --- Variables & Constants --------------------------------------------------
 
-let myName = "Alice"
+let myName = 'Alice'
 let count = 0
 let items = [1, 2, 3]
 const MAX = 100
@@ -21,7 +21,7 @@ const MAX = 100
 // --- Type Annotations -------------------------------------------------------
 
 let age: number = 25
-let label: string = "hello"
+let label: string = 'hello'
 let active: boolean = true
 let scores: number[] = [90, 95, 88]
 let cache: Map<string, number> = new Map()
@@ -39,9 +39,9 @@ type User = {
 }
 
 type Status =
-  | "active"
-  | "inactive"
-  | "pending"
+  | 'active'
+  | 'inactive'
+  | 'pending'
 
 interface Shape {
   area: () => number
@@ -79,7 +79,7 @@ let underscore = 1_000_000
 // --- Strings ----------------------------------------------------------------
 
 let single = 'hello'
-let double = "world"
+let double = 'world'
 let interp = `name is ${myName}`
 let template = `count is ${count}`
 
@@ -88,7 +88,7 @@ let template = `count is ${count}`
 // --- Regex ------------------------------------------------------------------
 
 let pattern = /[a-z]+/gi
-let match = "test".match(/es/)
+let match = 'test'.match(/es/)
 
 // (no heregex equivalent in TypeScript)
 
@@ -137,7 +137,7 @@ class Animal {
 
 class Dog extends Animal {
   constructor(name: string) {
-    super(name, "Woof")
+    super(name, 'Woof')
   }
 
   fetch(item: string) {
@@ -145,7 +145,7 @@ class Dog extends Animal {
   }
 }
 
-let dog = new Dog("Buddy")
+let dog = new Dog('Buddy')
 
 // --- Operators --------------------------------------------------------------
 
@@ -196,7 +196,7 @@ function tsOperators(obj: any, val: string | null, arr: number[]) {
   let safeIdx = arr?.[0]
 
   // Nullish coalescing
-  let fallback = val ?? "default"
+  let fallback = val ?? 'default'
 
   // Spread
   let [first, ...rest] = arr
@@ -230,22 +230,22 @@ function destructuring(person: { name: string; age: number }, list: number[]) {
 function controlFlow(active: boolean, items: number[], obj: Record<string, number>, x: number) {
   let count = 10
   if (active) {
-    console.log("yes")
+    console.log('yes')
   } else if (count === 0) {
-    console.log("zero")
+    console.log('zero')
   } else {
-    console.log("no")
+    console.log('no')
   }
 
-  let result = active ? "a" : "b"
+  let result = active ? 'a' : 'b'
 
   // postfix if / unless → inline conditionals
-  if (active) console.log("done")
-  if (!active) return "error"
+  if (active) console.log('done')
+  if (!active) return 'error'
 
   // unless → negated if
   if (!active) {
-    console.log("skip")
+    console.log('skip')
   }
 
   for (let item of items) {
@@ -276,16 +276,16 @@ function controlFlow(active: boolean, items: number[], obj: Record<string, numbe
   // } while (!done)
 
   for (let i = 0; i < 5; i++) {
-    console.log("repeat")
+    console.log('repeat')
   }
 
   // let squares = items.map(n => n * n)                // TODO: comprehension compiles to [] then push, TS infers never[]
   // let evens = items.filter(n => n % 2 === 0)
 
   switch (x) {
-    case 1: console.log("one"); break
-    case 2: console.log("two"); break
-    default: console.log("other")
+    case 1: console.log('one'); break
+    case 2: console.log('two'); break
+    default: console.log('other')
   }
 }
 
@@ -293,13 +293,13 @@ function controlFlow(active: boolean, items: number[], obj: Record<string, numbe
 
 function guardClauses(getValue: Function, lookup: Function) {
   let x = getValue() || (() => { return })()  // or return
-  let y = lookup() ?? (() => { throw new Error("missing") })()
+  let y = lookup() ?? (() => { throw new Error('missing') })()
 }
 
 // --- Async / Await ----------------------------------------------------------
 
 async function fetchData() {
-  let response = await fetch("/api")
+  let response = await fetch('/api')
   let data = await response.json()
   return data
 }
@@ -322,13 +322,13 @@ class UserAccount {
 // --- Embedded JavaScript (no direct TS equivalent) --------------------------
 
 // Rip supports inline JS with backticks:
-// `const raw = "inline JS"`
+// `const raw = 'inline JS'`
 
 // --- Module Imports ---------------------------------------------------------
 
-// import fs from "fs"
-// import { readFile, writeFile } from "fs/promises"
-// import * as path from "path"
+// import fs from 'fs'
+// import { readFile, writeFile } from 'fs/promises'
+// import * as path from 'path'
 //
 // export { greet, add, square }
 
