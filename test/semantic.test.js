@@ -247,6 +247,17 @@ check('every reference of a many-referenced member is classified', () => {
   for (let occ = 1; occ <= 5; occ++) expectType(spillT, SPILL_SRC, 'err', 'property', occ);
 });
 
+// `slot` is a render keyword (children projection) AND in HTML_TAG_NAMES, so
+// the grammar paints the render-block use entity.name.tag.rip. When the
+// component also declares a reactive member named `slot`, the spill remap would
+// otherwise paint the keyword use with that member's `property` classification,
+// overriding the tag scope. The remap must suppress the keyword use (matchCol
+// === slIndent) while still classifying the real member declaration.
+const SLOT_SRC = ['export Foo = component', '  slot := 0', '  render', '    slot'].join('\n');
+const slotT = await server.tokens('slot.rip', SLOT_SRC);
+check('reactive member named slot still classifies at its declaration', () => expectType(slotT, SLOT_SRC, 'slot', 'property', 1));
+check('render-keyword slot keeps its grammar tag scope (no semantic token)', () => expectNoToken(slotT, SLOT_SRC, 'slot', 2));
+
 // ── Teardown ─────────────────────────────────────────────────────────────
 server.stop();
 rmSync(tmp, { recursive: true, force: true });

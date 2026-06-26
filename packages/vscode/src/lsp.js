@@ -2423,6 +2423,15 @@ connection.onRequest('textDocument/semanticTokens/full', (params) => {
         const isTagLine = firstWord && HTML_TAG_NAMES.has(firstWord[1]);
         const isComponentLine = firstWord && /^[A-Z]/.test(firstWord[1]);
 
+        // `slot` is a reserved render keyword (children projection), not a
+        // variable or prop, and the grammar already paints it entity.name.tag.rip.
+        // It compiles to `this.children`/`__ripEl('slot')`, so it has no token of
+        // its own — but a component that also declares a reactive member named
+        // `slot` would let the spill remap paint the keyword use with that
+        // member's `property` classification, overriding the tag scope. Suppress
+        // the keyword use so the grammar scope stands (slot renders like any tag).
+        if (firstWord && firstWord[1] === 'slot' && matchCol === slIndent) continue;
+
         // Skip tokens that fall inside a tag-shorthand chain
         // (`div.cart-actions`, `button.outline.secondary`).  TextMate
         // already paints the class portion; without this guard a class
