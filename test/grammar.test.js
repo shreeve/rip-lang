@@ -267,6 +267,15 @@ export type Mode = "a"
 # "Mode" entity.name.type.alias.rip
 `));
 
+check('type-keyword name as an object key is a key, not a primitive', () => runFixture(`
+number: 'L2602852147'
+# "number" meta.object-literal.key.rip
+# "number" !support.type.primitive.rip
+object?: 42
+# "object" meta.object-literal.key.rip
+# "object" !support.type.primitive.rip
+`));
+
 check('operators — arithmetic, nullish, reactive, logical', () => runFixture(`
 a = b + c
 # "+" keyword.operator.arithmetic.rip

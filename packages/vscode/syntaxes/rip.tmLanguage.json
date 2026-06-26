@@ -431,9 +431,9 @@
       "name": "storage.modifier.extends.rip"
     },
 
-    {"comment": "=== BUILT-IN TYPE KEYWORDS (always highlighted) ==="},
+    {"comment": "=== BUILT-IN TYPE KEYWORDS (always highlighted, except as an object key) ==="},
     {
-      "match": "\\b(number|string|boolean|void|any|never|unknown|object|symbol|bigint)\\b",
+      "match": "\\b(number|string|boolean|void|any|never|unknown|object|symbol|bigint)\\b(?!\\s*\\??:(?![:=]))",
       "name": "support.type.primitive.rip"
     },
 
