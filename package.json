@@ -49,7 +49,6 @@
     "serve": "bun scripts/serve.js",
     "test": "bun test/runner.js",
     "test:types": "bun test/types/runner.js",
-    "test:suppressed": "bun test/types/suppressed.js",
     "test:sourcemap-corpus": "bun test/types/sourcemap-corpus.js",
     "test:diagnostic-corpus": "bun test/types/diagnostic-corpus.js",
     "test:markers": "bun test/markers.test.js",
