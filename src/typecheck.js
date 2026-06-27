@@ -1809,45 +1809,17 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
     if (changed) code = cl.join('\n');
   }
 
-  // Transfer typed params from `declare function name(...)` into function
-  // expressions assigned to variables: `name = function(x) {}` → `name = function(x: T) {}`.
-  // Also replace `declare function` with `declare var` so TS doesn't clash
-  // with the `let name; name = function(...)` pattern (TS2630).
-  if (hasTypes && headerDts && code) {
-    const dl = headerDts.split('\n');
-    const cl = code.split('\n');
-    const funcDecls = new Map();
-
-    for (let i = 0; i < dl.length; i++) {
-      const m = dl[i].match(/^(?:export\s+)?declare\s+function\s+(\w+)\((.+)\)(?::\s*(.+))?;$/);
-      if (m) funcDecls.set(m[1], { params: m[2], ret: m[3] || null, idx: i });
-    }
-
-    if (funcDecls.size > 0) {
-      const movedDts = new Set();
-
-      for (let j = 0; j < cl.length; j++) {
-        // Match: name = function(args) { or name = (args) => (
-        const fm = cl[j].match(/^(\w+)\s*=\s*function\s*\([^)]*\)/);
-        const am = !fm && cl[j].match(/^(\w+)\s*=\s*\([^)]*\)\s*=>/);
-        const match = fm || am;
-        if (match && funcDecls.has(match[1])) {
-          const entry = funcDecls.get(match[1]);
-          if (fm) {
-            cl[j] = cl[j].replace(/function\s*\([^)]*\)/, `function(${entry.params})`);
-          } else {
-            cl[j] = cl[j].replace(/\([^)]*\)\s*=>/, `(${entry.params}) =>`);
-          }
-          movedDts.add(entry.idx);
-        }
-      }
-
-      if (movedDts.size > 0) {
-        code = cl.join('\n');
-        headerDts = dl.filter((_, i) => !movedDts.has(i)).join('\n').trimEnd() + '\n';
-      }
-    }
-  }
+  // RFC 12 phase 2 — the typed-param transfer for arrow-assigned functions is
+  // gone. It copied params from a header `declare function name(...)` onto the
+  // body's `name = function(...)` / `name = (...) =>` and dropped the header
+  // line. Inline emission + the overload interleave subsume it: thin-arrow
+  // assignments (`name = function(...)`) already carry inline params and have
+  // their header `declare function` removed by the interleave's `moved` set,
+  // while fat-arrow bindings reach the body typed via inline params and the
+  // `let name: (...) => T` forward-decl (its duplicate-identifier diagnostic is
+  // conditionally suppressed). Removing the pass changes no verdict across the
+  // type corpus or the example apps (see the arrow-assigned negative test in
+  // 06-functions.rip).
 
   // Annotate reactive/readonly/computed const assignments with their declared
   // types from the DTS header, and remove the corresponding `declare const`
