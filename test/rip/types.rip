@@ -542,6 +542,23 @@ type "export reactive dts", "export count:: number := 0", """
 # Arrow function
 type "arrow function dts", 'greet = (name:: string) -> "Hello"', "declare function greet(name: string);"
 
+# Fat-arrow return type — `(params):: R => body`. The `=>` is the arrow
+# operator, not a TS function-type arrow; the type collector stops at it
+# (symmetric with `->`). Type erased from JS, surfaces in the .d.ts.
+code "fat arrow return type erased", 'g = (x:: number):: string => "v"', 'let g;\ng = (x) => "v";'
+type "fat arrow return type dts", 'g = (x:: number):: string => "v"', "declare function g(x: number): string;"
+
+# A function-TYPE return must be parenthesized as a whole. Unparenthesized,
+# the collector would stop at the inner `=>` and silently re-associate the
+# body — so it's a hard error pointing at the fix.
+fail "fat arrow bare function-type return", 'g = (x:: number):: (n: number) => number => x'
+fail "fat arrow empty-params function-type return", 'g = (x:: number):: () => void => x'
+# Parenthesized as a whole — accepted.
+type "fat arrow parenthesized function-type return dts", 'g = (x:: number):: ((n: number) => number) => h', "declare function g(x: number): ((n: number) => number);"
+# A parenthesized conditional type is NOT a bare parameter list (its depth-1 `:`
+# is the conditional else-branch, paired with the `?`), so it's accepted.
+type "fat arrow conditional return dts", 'f = (x:: number):: (T extends U ? A : B) => h', "declare function f(x: number): (T extends U ? A: B);"
+
 # Class with methods
 type "class with methods dts", """
   class UserService
