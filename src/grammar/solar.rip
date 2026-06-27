@@ -206,7 +206,9 @@ class Generator
         # (subLocs) so primitive leaves carry an exact position via their
         # parent. Pure additive metadata — the value array is unchanged.
         sub = @_subLocsExpr action, symbols
-        result = "__sub(#{result}, #{sub})" if sub
+        # `__subLocsOn ? ... : null` so the loc array (and its __spl calls) is
+        # only built on the check path; runtime parses pass null → no attach.
+        result = "__sub(#{result}, __subLocsOn ? #{sub} : null)" if sub
       when 'number', 'undefined'
         result = getToken('', action || 1) # No action or just a number
       else
@@ -630,8 +632,16 @@ class Generator
     // is the head/tag, usually null). Primitive leaves (identifiers, strings,
     // numbers) cannot carry their own loc, so their position lives here on the
     // parent. Non-enumerable so it never perturbs array length, iteration, or JSON.
+    // subLocs are editor/check-only metadata; attaching them taxes every parse
+    // for a benefit only the type-check/source-map path consumes. The compiler
+    // flips this on (setSubLocs) just for that path, so runtime/bundle/CLI
+    // compiles pay nothing — the action passes null when off (see _subLocsExpr),
+    // and __sub then skips the attach entirely.
+    let __subLocsOn = false;
+    const setSubLocs = (on) => { __subLocsOn = on; };
+
     const __sub = (node, subLocs) => {
-      if (Array.isArray(node)) Object.defineProperty(node, "subLocs", { value: subLocs, enumerable: false, configurable: true, writable: true });
+      if (subLocs && Array.isArray(node)) Object.defineProperty(node, "subLocs", { value: subLocs, enumerable: false, configurable: true, writable: true });
       return node;
     };
 
@@ -655,7 +665,7 @@ class Generator
 
     const parser = /*#__PURE__*/createParser()
 
-    export { parser }
+    export { parser, setSubLocs }
     export const Parser = createParser
     export const parse = parser.parse.bind(parser)
     export default parser

@@ -9,7 +9,7 @@
 // two functions change.
 
 import { Lexer } from './lexer.js';
-import { parser } from './parser.js';
+import { parser, setSubLocs } from './parser.js';
 import { installComponentSupport } from './components.js';
 // Type emission is CLI/editor-only. dts.js registers itself via
 // setTypesEmitter() at module load. The browser never imports dts.js,
@@ -4976,6 +4976,12 @@ export class Compiler {
         return token[0];
       }
     };
+
+    // Attach per-element source locs (subLocs) only on the check/exact path —
+    // the only consumer (the source-map overlay) — so runtime/bundle/CLI parses
+    // pay nothing. Set per-parse so the singleton parser's state is always
+    // correct for this compile.
+    setSubLocs(!!this.options.exactMarks);
 
     let sexpr;
     try {
