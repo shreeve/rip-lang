@@ -1,8 +1,8 @@
 export Button = component extends button
-  @variant?:: 'primary' | 'secondary' := 'primary'
-  @outline?:: boolean
-  @link?:: boolean
-  @loading?:: boolean
+  @variant?: 'primary' | 'secondary' := 'primary'
+  @outline?: boolean
+  @link?: boolean
+  @loading?: boolean
 
   render
     button
@@ -17,8 +17,8 @@ export Button = component extends button
       slot
 
 export ButtonLink = component extends a
-  @variant?:: 'primary' | 'secondary' := 'primary'
-  @outline?:: boolean
+  @variant?: 'primary' | 'secondary' := 'primary'
+  @outline?: boolean
 
   render
     a

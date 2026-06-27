@@ -484,14 +484,24 @@ function reclassifyColonTypes(tokens) {
     return false;
   };
 
-  // Track class bodies via INDENT/OUTDENT so a bare `name: T` member is read as
-  // a typed field. `pendingClass` is armed by the `class` keyword and consumed
-  // by the next INDENT (the class body); methods inside it open their own
-  // (non-class) INDENT, so a member is in a class body only when the innermost
-  // indent frame is the class body.
-  let pendingClass = false;
+  // Track class/component bodies via INDENT/OUTDENT so a bare `name: T` member
+  // (or `@name: T` component prop) is read as a typed field. `pendingBody` is
+  // armed by `class`/`component` and consumed by the next INDENT (the body);
+  // methods inside it open their own (non-body) INDENT, so a member is in a
+  // typed body only when the innermost indent frame is that body.
+  let pendingBody = false;
   const indentStack = [];
-  const inClassBody = () => indentStack.length > 0 && indentStack[indentStack.length - 1];
+  const inTypedBody = () => indentStack.length > 0 && indentStack[indentStack.length - 1];
+
+  // The binding name for a statement/field annotation is `tokens[i-1]` (a
+  // PROPERTY/IDENTIFIER), optionally preceded by `@` (component prop / promoted
+  // field). Returns true when that name sits at a statement boundary.
+  const nameAtStatementStart = (i) => {
+    const p = tokens[i - 1]?.[0];
+    if (p !== 'PROPERTY' && p !== 'IDENTIFIER') return false;
+    if (tokens[i - 2]?.[0] === '@') return atStatementStart(tokens[i - 3]);
+    return atStatementStart(tokens[i - 2]);
+  };
 
   // A type expression (opened by any `::` / TYPE_ANNOTATION, or by a `:` we
   // reclassify) must never have its interior touched: a function type like
@@ -508,8 +518,8 @@ function reclassifyColonTypes(tokens) {
     // Class-body tracking (INDENT/OUTDENT). `class` arms the next INDENT as a
     // class body; nested method/blocks push non-class indents. INDENT/OUTDENT
     // at the type's start depth also end a type expression.
-    if (tag === 'CLASS') { pendingClass = true; continue; }
-    if (tag === 'INDENT') { indentStack.push(pendingClass); pendingClass = false; if (inType && stack.length <= typeStartDepth) inType = false; continue; }
+    if (tag === 'CLASS' || tag === 'COMPONENT') { pendingBody = true; continue; }
+    if (tag === 'INDENT') { indentStack.push(pendingBody); pendingBody = false; if (inType && stack.length <= typeStartDepth) inType = false; continue; }
     if (tag === 'OUTDENT') { indentStack.pop(); if (inType && stack.length <= typeStartDepth) inType = false; continue; }
 
     // Brackets are always tracked (depth drives the type-context boundary).
@@ -565,21 +575,20 @@ function reclassifyColonTypes(tokens) {
         tokens[i][0] = 'TYPE_ANNOTATION'; enterType(); continue;
       }
       // Statement-level typed declaration (top level, name at statement start,
-      // binding operator before any arrow).
-      if (stack.length === 0 &&
-          (prevTag === 'PROPERTY' || prevTag === 'IDENTIFIER') &&
-          atStatementStart(tokens[i - 2]) &&
+      // binding operator before any arrow). Covers `@name: T := v` props too.
+      // An `@`-prefixed name stays PROPERTY (the `@`-prop / promoted-field
+      // machinery needs it); a plain name is retagged IDENTIFIER like `::`.
+      if (stack.length === 0 && nameAtStatementStart(i) &&
           declBindsBeforeArrow(i + 1)) {
-        if (prevTag === 'PROPERTY') prev[0] = 'IDENTIFIER';
+        if (prevTag === 'PROPERTY' && tokens[i - 2]?.[0] !== '@') prev[0] = 'IDENTIFIER';
         tokens[i][0] = 'TYPE_ANNOTATION'; enterType(); continue;
       }
-      // Class-body typed field: a bare `name: T` member (no initializer) is a
-      // typed field unless its value is a method (`name: (…) -> …`).
-      if (inClassBody() && stack.length === 0 &&
-          (prevTag === 'PROPERTY' || prevTag === 'IDENTIFIER') &&
-          atStatementStart(tokens[i - 2]) &&
+      // Class/component-body typed field: a bare `name: T` (or `@name: T`)
+      // member with no initializer is a typed field unless its value is a
+      // method (`name: (…) -> …`).
+      if (inTypedBody() && stack.length === 0 && nameAtStatementStart(i) &&
           !valueIsMethod(i + 1)) {
-        if (prevTag === 'PROPERTY') prev[0] = 'IDENTIFIER';
+        if (prevTag === 'PROPERTY' && tokens[i - 2]?.[0] !== '@') prev[0] = 'IDENTIFIER';
         tokens[i][0] = 'TYPE_ANNOTATION'; enterType(); continue;
       }
     }
@@ -592,7 +601,7 @@ function reclassifyColonTypes(tokens) {
         const prev = tokens[i - 1];
         const prevTag = prev?.[0];
         if (prevTag === 'PROPERTY' || prevTag === 'IDENTIFIER') {
-          if (prevTag === 'PROPERTY') prev[0] = 'IDENTIFIER';
+          if (prevTag === 'PROPERTY' && tokens[i - 2]?.[0] !== '@') prev[0] = 'IDENTIFIER';
           tokens[i][0] = 'TYPE_ANNOTATION';
           f.sawType = true;
           enterType();

@@ -9,7 +9,7 @@ export App = component
           Form title: 'Sign in'
 
 export Form = component
-  @title?:: string
+  @title?: string
   email := ''
   password := ''
   loading := false

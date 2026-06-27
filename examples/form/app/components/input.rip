@@ -1,10 +1,10 @@
 export Input = component extends input
-  @label?:: string
-  @value?:: string := ''
-  @compact?:: boolean
-  @error?:: string
-  @classes?:: string
-  @inputClasses?:: string
+  @label?: string
+  @value?: string := ''
+  @compact?: boolean
+  @error?: string
+  @classes?: string
+  @inputClasses?: string
 
   render
     div class: classes
