@@ -1402,132 +1402,18 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
     const dl = dts.split('\n');
     const cl = code.split('\n');
 
-    // Hoist locally-scoped typed declarations into the function body's
-    // hoisted `let` line. dts.js emits `let name: T;` at the DTS header
-    // for any typed assignment, including locals declared inside function
-    // bodies (`def f() ... res:: Response | null = null`). Those land at
-    // module scope where TypeScript treats them as separate bindings —
-    // the function-local `let res;` (emitted untyped by the compiler's
-    // function-top hoist) shadows them, and TS infers `res` purely from
-    // the first assignment. Pulling the type back into the local `let`
-    // makes the typed declaration cover the actual binding the body uses.
-    // Typed-local hoist — pull `let X: T;` declarations out of the DTS
-    // header and merge them into the body's matching function-local
-    // `let X` line.
-    //
-    // The hoist is name-based: it doesn't carry source-scope identity
-    // through the DTS → body merge, so we can only act when the name
-    // is unambiguous on BOTH sides:
-    //
-    //   1. DTS-side: exactly one `let X: T;` candidate. Multiple
-    //      typed declarations of the same name (one per function
-    //      scope, e.g. `def a() … x:: number; def b() … x:: string`)
-    //      are ambiguous — we don't know which body site each one
-    //      came from.
-    //   2. Body-side: exactly one indented `let X` site. Multiple
-    //      same-named locals across functions would all receive the
-    //      same type otherwise, which is wrong even when DTS itself
-    //      is unambiguous.
-    //   3. No module-scope binding for the name. A top-level typed
-    //      declaration (`x:: string = "..."` at module scope) would
-    //      otherwise be hoisted into an unrelated function-local
-    //      `let x;` — different bindings, same name.
-    //
-    // When any check fails, we leave the local untyped and let
-    // TypeScript infer per-binding from the first assignment.
-    const dtsCandidatesByName = new Map(); // name -> [{dtsIdx, typeSuffix}]
-    for (let i = 0; i < dl.length; i++) {
-      const m = dl[i].match(/^let\s+(\w+)\s*:\s*(.+)\s*;\s*$/);
-      if (!m) continue;
-      const name = m[1];
-      const typeBody = m[2];
-      // Disqualify lines that are really initialized declarations
-      // (`let x: T = init;`). Walk the string honoring brackets,
-      // generics, and `=>` so we don't mistake an arrow's `=>` or a
-      // comparison's `>=` for an assignment `=`.
-      let isAssignment = false;
-      {
-        let d = 0, ang = 0;
-        for (let p = 0; p < typeBody.length; p++) {
-          const c = typeBody[p];
-          if (c === '(' || c === '[' || c === '{') d++;
-          else if (c === ')' || c === ']' || c === '}') d--;
-          else if (c === '<') ang++;
-          else if (c === '>') ang = Math.max(0, ang - 1);
-          else if (c === '=' && d === 0 && ang === 0 &&
-                   typeBody[p + 1] !== '>' && typeBody[p - 1] !== '=' &&
-                   typeBody[p - 1] !== '!' && typeBody[p - 1] !== '<' &&
-                   typeBody[p - 1] !== '>') {
-            isAssignment = true;
-            break;
-          }
-        }
-      }
-      if (isAssignment) continue;
-      const typeSuffix = ': ' + typeBody.trim();
-      if (!dtsCandidatesByName.has(name)) dtsCandidatesByName.set(name, []);
-      dtsCandidatesByName.get(name).push({ dtsIdx: i, typeSuffix });
-    }
-
-    const localTypedLetIdxs = new Set();
-    for (const [name, candidates] of dtsCandidatesByName) {
-      const { dtsIdx, typeSuffix } = candidates[0];
-      // DTS-side collision: same name typed in two function scopes.
-      // We can't tell which body site each DTS line came from, so
-      // strip both — the locals fall back to per-binding inference.
-      if (candidates.length !== 1) {
-        for (const c of candidates) localTypedLetIdxs.add(c.dtsIdx);
-        continue;
-      }
-      const localPat = new RegExp(`^\\s+let\\s+(?:[^;=]*?\\b)?${name}\\b(?!\\s*:)([^;=]*?)?;`);
-      // Module-scope binding probe: a non-indented `let`/`const`/`var`/
-      // export of the same name, or a bare `name = ...` at the start
-      // of a line. If any exist, this DTS declaration belongs to that
-      // module-scope binding, not to a function-local — leave the DTS
-      // declaration alone (it IS the typed declaration for that
-      // top-level binding).
-      const moduleScopePat = new RegExp(
-        `^(?:export\\s+(?:default\\s+)?)?(?:const|let|var)\\s+(?:[^;=]*?\\b)?${name}\\b|^${name}\\s*=`,
-      );
-      let hasModuleScope = false;
-      let localLine = -1;
-      let multipleLocals = false;
-      for (let j = 0; j < cl.length; j++) {
-        if (moduleScopePat.test(cl[j])) { hasModuleScope = true; break; }
-        if (!localPat.test(cl[j])) continue;
-        if (localLine >= 0) { multipleLocals = true; break; }
-        localLine = j;
-      }
-      if (hasModuleScope) continue;
-      // Body-side collision: multiple function-local `let X` sites
-      // for one DTS declaration. We don't know which one was the
-      // intended source. Strip the DTS line so it doesn't bleed into
-      // the wrong scope; the locals fall back to per-binding inference.
-      if (multipleLocals) { localTypedLetIdxs.add(dtsIdx); continue; }
-      // No untyped local site found. Before assuming this is a
-      // module-scope decl, check for an *already-typed* function-local
-      // `let X: T` — the compiler emits the type inline on the body's
-      // hoisted `let` for typed locals, which makes `localPat`'s
-      // `(?!\s*:)` look-ahead skip the line. In that case the DTS
-      // header decl is redundant and would otherwise show up as a
-      // bogus "declared but never read" hint at the top of the file.
-      if (localLine < 0) {
-        const typedLocalPat = new RegExp(`^\\s+let\\s+[^;]*\\b${name}\\b\\s*:`);
-        for (let j = 0; j < cl.length; j++) {
-          if (typedLocalPat.test(cl[j])) { localTypedLetIdxs.add(dtsIdx); break; }
-        }
-        continue;
-      }
-      // Single unambiguous match — perform the hoist.
-      cl[localLine] = cl[localLine].replace(
-        new RegExp(`(\\blet\\s[^;]*?\\b${name}\\b)(?!\\s*:)`),
-        `$1${typeSuffix}`,
-      );
-      localTypedLetIdxs.add(dtsIdx);
-    }
-    if (localTypedLetIdxs.size > 0) {
-      for (const i of localTypedLetIdxs) dl[i] = '';
-    }
+    // RFC 12 phase 2 — the typed-local hoist is gone. It used to pull
+    // `let X: T;` declarations out of the DTS header and merge the type onto
+    // the body's function-local `let X` (a name-based, scope-ambiguous string
+    // reconciliation). Inline emission made it redundant: the compiler now
+    // annotates the function-top hoist for typed locals directly
+    // (`collectTypedLocals`, src/compiler.js), `patchUninitializedTypes` types
+    // any remaining uninitialized locals from their first assignment, and the
+    // leftover header `let X: T;` lines have no source counterpart so their
+    // diagnostics are already dropped. Removing the pass changes no verdict on
+    // the corpus or the example apps (gated by test:types + the inference
+    // cases in 11-inference.rip). True scope-shadowing of a module binding by a
+    // same-named typed local stays a known name-based limitation, unchanged.
 
     const fnSigs = [];
     for (let i = 0; i < dl.length; i++) {

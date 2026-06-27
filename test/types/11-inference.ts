@@ -153,3 +153,23 @@ let found = search(items, 'a')
 expectNum(found)
 
 console.log(found)
+
+// ──────────────────────────────────────────────────
+// Annotated locals keep their declared type (not first-assignment)
+// ──────────────────────────────────────────────────
+
+function firstOr(fallback: number) {
+  let res: number | null = null
+  res = 42
+  return res ?? fallback
+}
+
+function pickLabel(flag: boolean) {
+  let tag: string | null = null
+  if (flag) {
+    tag = 'yes'
+  }
+  return tag ?? 'no'
+}
+
+console.log(firstOr(7), pickLabel(true), pickLabel(false))
