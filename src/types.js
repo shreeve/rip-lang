@@ -395,6 +395,83 @@ function looksLikeBareFunctionType(typeTokens) {
   return false;
 }
 
+// Rip 3.17 — does the token slice [a, b) form a complete, well-formed *type*
+// expression (vs a value expression)? Used to decide whether a single `:` in a
+// bare decl (`r: R`) or a function-type-valued decl (`get: (p) => void = …`) is
+// a type annotation. A whitelist of type tokens + bracket/generic balance + an
+// adjacency rule (two atoms with no separator is not a type — kills the value
+// comparison `x < y > z`). Anything outside the whitelist (a CALL_START, `->`,
+// `new`/UNARY, arithmetic, `&&`, `==`, …) marks it as a value, so the `:` is
+// left alone and any side effects survive.
+function isCompleteTypeExpr(tokens, a, b) {
+  if (b <= a) return false;
+  const SEP = new Set(['|', '&', ',', ':', '?', '.', '...', '=>']);
+  let par = 0, brk = 0, brc = 0, gen = 0, atomEnd = false;
+  for (let j = a; j < b; j++) {
+    const t = tokens[j][0], v = tokens[j][1];
+    if (t === '(' || t === 'PARAM_START')      { par++; atomEnd = false; continue; }
+    if (t === ')' || t === 'PARAM_END')        { if (--par < 0) return false; atomEnd = true; continue; }
+    if (t === '[' || t === 'INDEX_START')      { brk++; atomEnd = false; continue; }
+    if (t === ']' || t === 'INDEX_END')        { if (--brk < 0) return false; atomEnd = true; continue; }
+    if (t === '{')                             { brc++; atomEnd = false; continue; }
+    if (t === '}')                             { if (--brc < 0) return false; atomEnd = true; continue; }
+    if (t === 'COMPARE') {
+      if (v === '<') { gen++; atomEnd = false; continue; }
+      if (v === '>') { if (gen <= 0) return false; gen--; atomEnd = true; continue; }
+      return false;                            // ==, !=, <=, >= → not a type
+    }
+    if (t === 'SHIFT') {
+      if (v === '>>') { if (gen < 2) return false; gen -= 2; atomEnd = true; continue; }
+      return false;
+    }
+    if (t === '=') { if (gen > 0) { atomEnd = false; continue; } return false; } // generic default only
+    if (SEP.has(t)) { atomEnd = false; continue; }
+    if (t === 'IDENTIFIER' || t === 'PROPERTY' || t === 'NUMBER' ||
+        t === 'STRING' || t === 'NULL' || t === 'UNDEFINED' || t === 'BOOL') {
+      if (atomEnd) return false;               // two atoms, no separator → not a type
+      atomEnd = true; continue;
+    }
+    return false;                              // any non-type token → value
+  }
+  return par === 0 && brk === 0 && brc === 0 && gen === 0 && atomEnd;
+}
+
+// Rip 3.17 — positive evidence that a bare `name: T` is a typed forward
+// declaration: the same identifier is assigned (`name = …`, `:=`, etc.)
+// somewhere later in the same block (any nesting depth before the block's
+// OUTDENT). Distinguishes `r: R` (then `r = …`) from a discarded object
+// property. Starts scanning at `start` (just past the decl line's TERMINATOR).
+function assignedLaterInBlock(tokens, start, name) {
+  const ASSIGN = new Set(['=', 'REACTIVE_ASSIGN', 'COMPUTED_ASSIGN', 'READONLY_ASSIGN']);
+  // Descend into control-flow sub-blocks (try/if/for — the medlabs `r = …`
+  // sits inside a `try`), but SKIP nested function bodies: an assignment inside
+  // a closure (`init -> … name = …`) is a different scope and must not count
+  // as evidence. A closure body is an INDENT immediately preceded by `->`/`=>`.
+  let indent = 0, bracket = 0, closureDepth = 0;
+  const closureAt = [];
+  for (let j = start; j < tokens.length; j++) {
+    const g = tokens[j][0];
+    if (g === 'INDENT') {
+      indent++;
+      const p = tokens[j - 1]?.[0];
+      if (p === '->' || p === '=>') { closureAt.push(indent); closureDepth++; }
+      continue;
+    }
+    if (g === 'OUTDENT') {
+      if (indent === 0) return false;            // left the starting block
+      if (closureAt[closureAt.length - 1] === indent) { closureAt.pop(); closureDepth--; }
+      indent--; continue;
+    }
+    if (g === '(' || g === 'CALL_START' || g === 'PARAM_START' ||
+        g === '[' || g === 'INDEX_START' || g === '{') { bracket++; continue; }
+    if (g === ')' || g === 'CALL_END' || g === 'PARAM_END' ||
+        g === ']' || g === 'INDEX_END' || g === '}') { bracket--; continue; }
+    if (closureDepth === 0 && bracket === 0 && (g === 'IDENTIFIER' || g === 'PROPERTY') &&
+        tokens[j][1] === name && ASSIGN.has(tokens[j + 1]?.[0])) return true;
+  }
+  return false;
+}
+
 // Rip 3.17 — reclassify single-colon `:` into TYPE_ANNOTATION in the contexts
 // where it means a type, so `:` and `::` share one code path. Scoped tightly:
 //
@@ -515,6 +592,13 @@ function reclassifyColonTypes(tokens) {
   let inType = false, typeStartDepth = 0;
   const enterType = () => { inType = true; typeStartDepth = stack.length; };
 
+  // Object-context detection for context D: a statement-start `name:` line that
+  // sits next to another `key:` line is an object member (`{a: A, b: B}`), not a
+  // bare typed declaration. `curLineKV` marks the current line as starting
+  // `name:`; committed to `prevSiblingKV` at the line's TERMINATOR; both reset
+  // at block boundaries.
+  let prevSiblingKV = false, curLineKV = false;
+
   const stack = [];
   for (let i = 0; i < tokens.length; i++) {
     const tag = tokens[i][0];
@@ -523,8 +607,8 @@ function reclassifyColonTypes(tokens) {
     // class body; nested method/blocks push non-class indents. INDENT/OUTDENT
     // at the type's start depth also end a type expression.
     if (tag === 'CLASS' || tag === 'COMPONENT') { pendingBody = true; continue; }
-    if (tag === 'INDENT') { indentStack.push(pendingBody); pendingBody = false; if (inType && stack.length <= typeStartDepth) inType = false; continue; }
-    if (tag === 'OUTDENT') { indentStack.pop(); if (inType && stack.length <= typeStartDepth) inType = false; continue; }
+    if (tag === 'INDENT') { indentStack.push(pendingBody); pendingBody = false; prevSiblingKV = curLineKV = false; if (inType && stack.length <= typeStartDepth) inType = false; continue; }
+    if (tag === 'OUTDENT') { indentStack.pop(); prevSiblingKV = curLineKV = false; if (inType && stack.length <= typeStartDepth) inType = false; continue; }
 
     // Brackets are always tracked (depth drives the type-context boundary).
     // Inside a type, an opener is never a real parameter list (it's a
@@ -562,9 +646,16 @@ function reclassifyColonTypes(tokens) {
       }
     }
 
+    // Commit per-line key:value state at statement boundaries (depth 0).
+    if (tag === 'TERMINATOR' && stack.length === 0) { prevSiblingKV = curLineKV; curLineKV = false; }
+
     if (tag === ':') {
       const prev = tokens[i - 1];
       const prevTag = prev?.[0];
+      // Mark this line as `name:`-shaped (object-member candidate) for D's
+      // adjacent-key detection.
+      if (stack.length === 0 && (prevTag === 'IDENTIFIER' || prevTag === 'PROPERTY') &&
+          atStatementStart(tokens[i - 2])) curLineKV = true;
       // Return type: a `:` immediately after a closed param list. Arrow param
       // lists close as PARAM_END; def param lists close as `)` or CALL_END
       // (flagged `isDefParamEnd`).
@@ -587,6 +678,28 @@ function reclassifyColonTypes(tokens) {
         if (prevTag === 'PROPERTY' && tokens[i - 2]?.[0] !== '@') prev[0] = 'IDENTIFIER';
         tokens[i][0] = 'TYPE_ANNOTATION'; enterType(); continue;
       }
+      // Context B — function-type-valued declaration: `name: (…) => Ret = value`
+      // (statement start). The type carries a `=>` arrow, so the binding-before-
+      // arrow check above misses it. Scan for the first bracket-depth-0 `=`
+      // (only ()[]{} count) whose preceding slice is a complete type expression
+      // — the `=>` is then a function-TYPE arrow. Try-and-continue handles
+      // generic defaults `Foo<T = U>` (the inner `=` leaves `Foo<T` incomplete).
+      if (stack.length === 0 && nameAtStatementStart(i)) {
+        let depth = 0;
+        for (let j = i + 1; j < tokens.length; j++) {
+          const g = tokens[j][0];
+          if (isOpen(g)) depth++;
+          else if (isClose(g)) { if (depth === 0) break; depth--; }
+          else if (depth === 0) {
+            if (g === 'TERMINATOR' || g === 'INDENT' || g === 'OUTDENT') break;
+            if (g === '=' && isCompleteTypeExpr(tokens, i + 1, j)) {
+              if (prevTag === 'PROPERTY' && tokens[i - 2]?.[0] !== '@') prev[0] = 'IDENTIFIER';
+              tokens[i][0] = 'TYPE_ANNOTATION'; enterType(); break;
+            }
+          }
+        }
+        if (tokens[i][0] === 'TYPE_ANNOTATION') continue;
+      }
       // Class/component-body typed field: a bare `name: T` (or `@name: T`)
       // member with no initializer is a typed field unless its value is a
       // method (`name: (…) -> …`).
@@ -594,6 +707,34 @@ function reclassifyColonTypes(tokens) {
           !valueIsMethod(i + 1)) {
         if (prevTag === 'PROPERTY' && tokens[i - 2]?.[0] !== '@') prev[0] = 'IDENTIFIER';
         tokens[i][0] = 'TYPE_ANNOTATION'; enterType(); continue;
+      }
+      // Context D — bare typed declaration, no initializer: `name: T` at
+      // statement start, the line is NON-TAIL (not the last expression of its
+      // block — that would be an implicit-return object), the type slice is a
+      // complete type expression (rejects `name: build()` so side effects
+      // survive), and the same `name` is assigned later in the block (positive
+      // evidence it's a forward declaration, not a discarded object property).
+      if (stack.length === 0 && nameAtStatementStart(i) && tokens[i - 2]?.[0] !== '@') {
+        let depth = 0, end = -1;
+        for (let j = i + 1; j < tokens.length; j++) {
+          const g = tokens[j][0];
+          if (isOpen(g)) depth++;
+          else if (isClose(g)) { if (depth === 0) break; depth--; }
+          else if (depth === 0) {
+            if (g === 'TERMINATOR') { end = j; break; }
+            if (g === 'INDENT' || g === 'OUTDENT' || g === '=' || BINDING_OPS.has(g)) break;
+          }
+        }
+        const nk = tokens[end + 1];
+        const nextKV = nk && (nk[0] === 'IDENTIFIER' || nk[0] === 'PROPERTY') &&
+                       tokens[end + 2]?.[0] === ':';
+        if (end > i + 1 && nk && nk[0] !== 'OUTDENT' &&
+            !prevSiblingKV && !nextKV &&
+            isCompleteTypeExpr(tokens, i + 1, end) &&
+            assignedLaterInBlock(tokens, end + 1, prev[1])) {
+          if (prevTag === 'PROPERTY') prev[0] = 'IDENTIFIER';
+          tokens[i][0] = 'TYPE_ANNOTATION'; enterType(); continue;
+        }
       }
     }
 
