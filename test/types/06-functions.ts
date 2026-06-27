@@ -56,6 +56,9 @@ export function greetUntyped(name: string, title?: any): string {
   return title ? `${title} ${name}` : name
 }
 
+// Arrow-assignment form of the untyped-optional regression (TS twin)
+const ageOf = (dob: string, asOf?: any) => dob
+
 // Inferred return type (no annotation — TS infers from body)
 export function double(n: number) {
   return n * 2
@@ -78,8 +81,10 @@ let result11 = greetOpt('Smith', 'Dr')
 let result10b = greetUntyped('Smith')
 let result11b = greetUntyped('Smith', 'Dr')
 let result12 = double(21)
+let result10c = ageOf('2000-01-01')
+let result11c = ageOf('2000-01-01', 'now')
 
-console.log(result1, result2, result3, result4, result5, result6, result7, result8, result9, result10, result11, result10b, result11b, result12)
+console.log(result1, result2, result3, result4, result5, result6, result7, result8, result9, result10, result11, result10b, result11b, result12, result10c, result11c)
 
 // ── Negative: wrong param types ──
 

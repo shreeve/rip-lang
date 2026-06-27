@@ -19,6 +19,7 @@ export function setTypesEmitter(fn) { _typesEmitter = fn; }
 import { installSchemaSupport, foldDerivedSchemas } from './schema/schema.js';
 import { SourceMapGenerator } from './sourcemaps.js';
 import { stringify, getStdlibCode } from './stdlib.js';
+import { emitTsParam } from './params.js';
 import { RipError, toRipError } from './error.js';
 
 // =============================================================================
@@ -3292,11 +3293,18 @@ export class CodeEmitter {
       // Preserve the optional `?` marker (the lexer flags it via metadata) so
       // shadow TS sees `name?: T` — including the untyped case `name?` →
       // `name?: any`. Without this the `?` was dropped for params, making them
-      // required and breaking single-arg calls on `(a, b?) ->`.
+      // required and breaking single-arg calls on `(a, b?) ->`. The
+      // optionality/`::`-conversion rules live in the shared `emitTsParam`
+      // policy (src/params.js) so this and dts.js's `.d.ts` emitter can't
+      // diverge again. Defaulted params reach this method through the
+      // `default` node branch below, not here, so `hasDefault` is false.
       if (this.options.inlineTypes) {
-        let opt = meta(param, 'optional') ? '?' : '';
-        if (param.type) return `${param.valueOf()}${opt}: ${param.type.replace(/::/g, ':')}`;
-        if (opt) return `${param.valueOf()}?: any`;
+        return emitTsParam({
+          name: param.valueOf(),
+          ripType: param.type,
+          optional: !!meta(param, 'optional'),
+          hasDefault: false,
+        }, 'implementation');
       }
       return param.valueOf();
     }
