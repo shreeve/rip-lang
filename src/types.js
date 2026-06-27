@@ -440,18 +440,55 @@ function reclassifyColonTypes(tokens) {
     return tokens[j - 1]?.[0] === 'DEF';
   };
 
+  // Statement-level typed declaration `name: T = v` (and `:=`, `~=`, `=!`,
+  // `~>`, `<~`). True only when an assignment/binding operator appears at the
+  // top level BEFORE any function arrow — so a method/value like
+  // `name: (x) -> …` or `name: (x) => y = x` (arrow first) stays a binding,
+  // and a bare `name: T` (no binding op) stays an object property.
+  const STMT_START  = new Set(['TERMINATOR', 'INDENT', 'OUTDENT', 'EXPORT']);
+  // Assignment/binding operators that mark `name: T <op> …` as a typed
+  // declaration. EFFECT (`~>`) and GATE (`<~`) are deliberately excluded: a
+  // bare `name: ~> …` is a schema computed getter (no type), so treating `~>`
+  // as a binding op would misread schema bodies as typed declarations.
+  const BINDING_OPS = new Set(['=', 'REACTIVE_ASSIGN', 'COMPUTED_ASSIGN', 'READONLY_ASSIGN']);
+  const atStatementStart = (t) => !t || STMT_START.has(t[0]);
+  const declBindsBeforeArrow = (start) => {
+    let depth = 0;
+    for (let j = start; j < tokens.length; j++) {
+      const g = tokens[j][0];
+      if (isOpen(g)) depth++;
+      else if (isClose(g)) depth--;
+      else if (depth === 0) {
+        if (g === '->' || g === '=>') return false;
+        if (BINDING_OPS.has(g)) return true;
+        if (g === 'TERMINATOR' || g === 'INDENT' || g === 'OUTDENT') return false;
+      }
+    }
+    return false;
+  };
+
   const stack = [];
   for (let i = 0; i < tokens.length; i++) {
     const tag = tokens[i][0];
 
-    // Return type: a `:` immediately after a closed param list. Arrow param
-    // lists close as PARAM_END; def param lists close as `)` or CALL_END
-    // (and are flagged `isDefParamEnd` below).
     if (tag === ':') {
       const prev = tokens[i - 1];
       const prevTag = prev?.[0];
+      // Return type: a `:` immediately after a closed param list. Arrow param
+      // lists close as PARAM_END; def param lists close as `)` or CALL_END
+      // (and are flagged `isDefParamEnd` below).
       if (prevTag === 'PARAM_END' ||
           ((prevTag === ')' || prevTag === 'CALL_END') && prev.data?.isDefParamEnd)) {
+        tokens[i][0] = 'TYPE_ANNOTATION';
+        continue;
+      }
+      // Statement-level typed declaration (top level, name at statement start,
+      // binding operator before any arrow).
+      if (stack.length === 0 &&
+          (prevTag === 'PROPERTY' || prevTag === 'IDENTIFIER') &&
+          atStatementStart(tokens[i - 2]) &&
+          declBindsBeforeArrow(i + 1)) {
+        if (prevTag === 'PROPERTY') prev[0] = 'IDENTIFIER';
         tokens[i][0] = 'TYPE_ANNOTATION';
         continue;
       }
