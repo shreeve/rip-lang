@@ -1,0 +1,56 @@
+# ==============================================================================
+# @rip-lang/time — a runnable tour
+# ==============================================================================
+#
+#   rip packages/time/demo.rip        (from the repo root)
+#   bun run demo                      (from packages/time)
+#
+# Each line shows a real call and its output. The base instant is fixed so the
+# tour is deterministic; only the `relative` example reads "now".
+
+import time, { age } from './time.rip'
+
+show = (label, value) -> console.log "  #{String(label).padEnd(28)} #{value}"
+head = (title)        -> console.log "\n#{title}"
+
+base = time.utc('2026-06-15T18:30:45Z')   # Mon, 18:30:45 UTC
+
+head 'Parse'
+show 'ISO',                   time('2026-06-15').format('YYYY-MM-DD')
+show 'US MM/DD/YYYY',         time('06/15/2026').format('YYYY-MM-DD')
+
+head 'Format'
+show 'toISOString',          base.toISOString()
+show 'YYYY-MM-DD',           base.format('YYYY-MM-DD')
+show 'h:mm A',               base.format('h:mm A')
+show 'long',                 base.format('ddd, MMM D, YYYY h:mm A')
+
+head 'Convert (toZone) — same instant, different clock'
+show 'Eastern',              base.toZone('ET').format('h:mm A z')
+show 'Pacific',              base.toZone('PT').format('h:mm A z')
+show 'Hawaii',               base.toZone('HT').format('h:mm A z')
+
+head 'Reinterpret (asZone/asUTC) — keep the clock, change the zone'
+show 'naive string is UTC',  time.utc('2026-06-15 18:30:45').toISOString()
+show 'asUTC (08:00 ET→UTC)', base.toZone('ET').asUTC().toISOString()
+show 'asZone ET (18:30 ET)', base.asZone('ET').toISOString()
+
+head 'Arithmetic'
+show 'add 3 days',           base.add(3, :day).format('YYYY-MM-DD')
+show 'subtract 90 min',      base.subtract(90, :minute).format('HH:mm')
+show 'startOf month',        base.startOf(:month).format('YYYY-MM-DD')
+show 'endOf day',            base.endOf(:day).format('HH:mm:ss')
+show 'diff in days',         time('2026-06-20').diff(time('2026-06-15'), :day)
+
+head 'Duration'
+show 'humanize',             time.duration(90, :minute).humanize()
+
+head 'Age (birthday-aware)'
+show 'after birthday',       age('1990-06-15', '2026-06-15')
+show 'before birthday',      age('1990-06-16', '2026-06-15')
+
+head 'Relative'
+show 'from (+3 days)',       base.from(base.add(3, :day))
+show 'unix seconds',         base.unix()
+
+console.log ''

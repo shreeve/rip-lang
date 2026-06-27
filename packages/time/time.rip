@@ -1071,7 +1071,7 @@ time.Time   = Time
 # (subtract a year if asOf falls before this year's birthday). Accepts anything
 # time() accepts (ISO string, Date, Time); returns null for a blank/invalid dob
 # or asOf. Compares wall-clock calendar dates in the instances' zone.
-export age = (dob, asOf) ->
+export age = (dob, asOf?) ->
   return null unless dob?
   born = time(dob)
   ref  = if asOf? then time(asOf) else time()

@@ -7,8 +7,12 @@
   "exports": {
     ".": "./time.rip"
   },
+  "rip": {
+    "browser": true
+  },
   "scripts": {
-    "test": "rip test/test.rip"
+    "test": "rip test/test.rip",
+    "demo": "rip demo.rip"
   },
   "keywords": [
     "date",
