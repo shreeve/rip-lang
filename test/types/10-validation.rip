@@ -46,7 +46,7 @@ User = schema
   name?  string
 
 # .parse() validates at runtime AND returns the typed value
-def fetchUser(id:: number):: Promise<User>
+def fetchUser(id: number): Promise<User>
   response = fetch!("/api/users/#{id}")
   return User.parse(response.json())
 

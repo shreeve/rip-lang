@@ -893,6 +893,13 @@ export class Lexer {
         else if (tk[0] === 'SHIFT' && tk[1] === '>>>') depth += 3;
         else if (tk[0] === 'COMPARE' && tk[1] === '<') depth--;
         if (depth === 0 && tk[0] === 'TYPE_ANNOTATION') return false;
+        // A single `:` return type (Rip 3.17) — `…): Generic<…>` — closes a
+        // generic just like `::` does. Recognize it when the `:` directly
+        // follows a param-list close (mirrors the `tagParameters` acceptance).
+        if (depth === 0 && tk[0] === ':') {
+          let pv = this.tokens[k - 1];
+          if (pv && (pv[0] === ')' || pv[0] === 'PARAM_END' || pv[0] === 'CALL_END')) return false;
+        }
         if (depth === 0 && tk[0] === 'IDENTIFIER' && tk[1] === 'type') return false;
         if (tk[0] === 'INTERFACE') return false;
         if (tk[0] === 'TERMINATOR' || tk[0] === 'INDENT' || tk[0] === 'OUTDENT') {
