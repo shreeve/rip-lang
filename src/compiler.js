@@ -9,7 +9,7 @@
 // two functions change.
 
 import { Lexer } from './lexer.js';
-import { parser } from './parser.js';
+import { parser, setSubLocs } from './parser.js';
 import { installComponentSupport } from './components.js';
 // Type emission is CLI/editor-only. dts.js registers itself via
 // setTypesEmitter() at module load. The browser never imports dts.js,
@@ -21,6 +21,8 @@ import { SourceMapGenerator } from './sourcemaps.js';
 import { stringify, getStdlibCode } from './stdlib.js';
 import { emitTsParam } from './params.js';
 import { EmitBuilder } from './builder.js';
+import { MarkerRecorder, stripMarkers } from './markers.js';
+import { childLoc } from './ast-loc.js';
 import { RipError, toRipError } from './error.js';
 
 // =============================================================================
@@ -322,7 +324,21 @@ export class CodeEmitter {
     this.validateComprehensionFilters(sexpr);
 
     let code;
-    if (this.options.useBuilder) {
+    if (this.options.exactMarks) {
+      // Exact-position marks via the marker bridge (src/markers.js). Converted
+      // handlers wrap emitted identifier text in zero-width sentinels through
+      // `this.markRecorder`; the normal string emit carries them through; we
+      // strip them here to recover exact GENERATED spans, paired with the
+      // SOURCE loc each came from. Output is byte-identical to a normal compile
+      // (the strip removes every sentinel) — guarded by the byte-equivalence
+      // test. `this.exactMarks` feeds the source-map overlay in buildMappings.
+      this.markRecorder = new MarkerRecorder();
+      const marked = this.emit(sexpr);
+      const stripped = stripMarkers(marked, this.markRecorder);
+      this.markRecorder = null;
+      code = stripped.code;
+      this.exactMarks = stripped.marks;
+    } else if (this.options.useBuilder) {
       // RFC 12 phase 1 seam. Route emission through a position-tracking builder.
       // Today this is the fallback path — `emitTo` writes `emit(node)` verbatim,
       // so output is byte-identical to the string emitter (guarded by the
@@ -352,6 +368,20 @@ export class CodeEmitter {
   // `emit(node)` verbatim: byte-identical output, cursor advanced, no interior
   // marks. The byte-equivalence gate (test/builder.test.js) ensures every
   // conversion keeps the generated JS identical to the string emitter.
+  // Wrap an emitted identifier's generated text in a source-position marker
+  // when exact-marks mode is active and the identifier's source `loc` is known
+  // (e.g. a primitive leaf located via its parent's `subLocs`). A no-op
+  // otherwise, so callers can wrap unconditionally. The marker is stripped
+  // after emission, yielding the exact generated span for the source `loc`.
+  markIdent(code, node, loc) {
+    if (!this.markRecorder || !loc) return code;
+    if (typeof node === 'string' || node instanceof String) {
+      const name = str(node);
+      if (/^[A-Za-z_$][\w$]*$/.test(name)) return this.markRecorder.wrap('ident', loc, code);
+    }
+    return code;
+  }
+
   emitTo(sexpr, context, builder) {
     builder.write(this.emit(sexpr, context));
   }
@@ -360,6 +390,18 @@ export class CodeEmitter {
   // Each entry pairs a statement's generated code with its source loc.
   // Output line positions are computed by exact arithmetic — no heuristics.
   buildMappings() {
+    // Exact-position marks (marker bridge) take precedence over the heuristic:
+    // add them first, and record their SOURCE positions so recordSubMappings
+    // skips re-mapping those positions (its regex+distance guess would land on
+    // the wrong generated occurrence — the repeated-identifier fault B).
+    this._exactSrc = new Set();
+    if (this.exactMarks) {
+      for (const m of this.exactMarks) {
+        if (!m.loc) continue;
+        this.sourceMap.addMapping(m.genLine, m.genCol, m.loc.r, m.loc.c);
+        this._exactSrc.add(m.loc.r + ':' + m.loc.c);
+      }
+    }
     // Imports are emitted at the top of the file (before the preamble),
     // starting at line 0. Process them first with their own line offset.
     if (this._importEntries) {
@@ -517,6 +559,9 @@ export class CodeEmitter {
       return ranges;
     };
     for (let { name, origLine, origCol } of subs) {
+      // Skip positions an exact marker already mapped — the heuristic's
+      // regex+distance guess would otherwise overwrite the exact mark.
+      if (this._exactSrc?.has(origLine + ':' + origCol)) continue;
       let escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       let re = new RegExp('\\b' + escaped + '\\b', 'g');
       let m;
@@ -3462,10 +3507,13 @@ export class CodeEmitter {
       let firstIsSuper = autoAssignments.length > 0 && statements.length > 0 &&
                          Array.isArray(statements[0]) && statements[0][0] === 'super';
 
-      let genStatements = (stmts) => {
+      let genStatements = (stmts, locBase = null) => {
         stmts.forEach((stmt, index) => {
           let isLast = index === stmts.length - 1;
           let h = Array.isArray(stmt) ? stmt[0] : null;
+          // Exact source loc for this statement's leaf, when the block wasn't
+          // transformed (locBase set): stmts[index] ↔ body.subLocs[locBase+index].
+          let stmtLoc = (locBase != null && body.subLocs) ? body.subLocs[locBase + index] : null;
 
           if (!isLast && h === 'comprehension') {
             let [, expr, iters, guards] = stmt;
@@ -3533,7 +3581,7 @@ export class CodeEmitter {
                            !this.hasExplicitControlFlow(stmt);
           let ctx = needsReturn ? 'value' : 'statement';
           let sc = this.emit(stmt, ctx);
-          if (needsReturn) code += this.indent() + 'return ' + sc + ';\n';
+          if (needsReturn) code += this.indent() + 'return ' + this.markIdent(sc, stmt, stmtLoc) + ';\n';
           else code += this.indent() + this.addSemicolon(stmt, sc) + '\n';
         });
       };
@@ -3546,7 +3594,10 @@ export class CodeEmitter {
         genStatements(statements.slice(1));
       } else {
         for (let a of autoAssignments) code += this.indent() + a + ';\n';
-        genStatements(statements);
+        // locBase=1 only when `statements` is exactly body.slice(1) (no synthetic
+        // prepends/transforms above), so subLocs indices stay aligned.
+        let locBase = (this.is(body, 'block') && body.subLocs && statements.length === body.length - 1) ? 1 : null;
+        genStatements(statements, locBase);
       }
 
       if (sideEffectOnly && statements.length > 0) {
@@ -4926,6 +4977,12 @@ export class Compiler {
       }
     };
 
+    // Attach per-element source locs (subLocs) only on the check/exact path —
+    // the only consumer (the source-map overlay) — so runtime/bundle/CLI parses
+    // pay nothing. Set per-parse so the singleton parser's state is always
+    // correct for this compile.
+    setSubLocs(!!this.options.exactMarks);
+
     let sexpr;
     try {
       sexpr = parser.parse(source);
@@ -4984,6 +5041,8 @@ export class Compiler {
       foldProjections: this.options.foldProjections,
       // RFC 12 phase 1: route emission through the position-tracking builder.
       useBuilder: this.options.useBuilder,
+      // RFC 12 phase 1: capture exact generated positions via marker bridge.
+      exactMarks: this.options.exactMarks,
       sourceMap,
     });
     let code = generator.compile(sexpr);

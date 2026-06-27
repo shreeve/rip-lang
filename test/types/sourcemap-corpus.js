@@ -104,20 +104,24 @@ for (const c of PASS) {
 // Each gap names the mechanism that makes "resolved" unambiguous, so the gate
 // can detect when the position-builder closes it.
 
-// Repeated-identifier collision: in `age = (dob, asOf) -> asOf`, the BODY `asOf`
-// resolves to the SAME generated offset as the SIGNATURE `asOf` — the heuristic
-// cannot tell the two occurrences apart, so a query on the body lands on the
-// parameter declaration. Mechanism: offBody === offSig. The unified emitter,
-// recording exact positions at write time, will give them distinct offsets.
+// Repeated-identifier resolution — the canonical recordSubMappings failure,
+// now CLOSED by the marker bridge (exact generated positions). In
+// `age = (dob, asOf) -> asOf` the body `asOf` and the signature `asOf` must
+// resolve to DISTINCT generated offsets, each landing on its own occurrence
+// (the body on `return asOf`, not the signature `asOf: string`). The heuristic
+// alone collapses them onto the nearer generated line; the exact mark wins.
 {
   const name = 'repeated ident — body distinct from signature';
   try {
     const src = 'age = (dob:: string, asOf:: string) -> asOf\nasOf = "x"\n';
     const sig  = resolve(src, 0, 'asOf', 0);          // signature occurrence
     const body = resolve(src, 0, 'asOf', 1);          // body occurrence (`-> asOf`)
-    const collided = body.off != null && body.off === sig.off;
-    if (collided) gap(name, `body 'asOf' collapses onto the signature offset (${body.off}); distinct positions need the unified emitter`);
-    else flip(name);
+    const distinct = sig.off != null && body.off != null && sig.off !== body.off;
+    const sigOk = landsOn(sig.entry, sig.off, 'asOf');
+    const bodyOk = landsOn(body.entry, body.off, 'asOf');
+    const bodyOnReturn = bodyOk && /return\s+$/.test(body.entry.tsContent.slice(Math.max(0, body.off - 9), body.off));
+    if (distinct && sigOk && bodyOnReturn) ok(name);
+    else bad(name, `sig=${sig.off} body=${body.off} distinct=${distinct} bodyOnReturn=${bodyOnReturn}`);
   } catch (e) {
     bad(name, e.message);
   }
