@@ -3269,17 +3269,28 @@ export class CodeEmitter {
     return `${tagCode}\`${content}\``;
   }
 
+  // Escape literal text for safe inclusion in a JS template literal: a raw
+  // backtick would close the literal early, and a literal `${` would be read as
+  // an interpolation. (Rip interpolation is `#{}`, so `${` in source is literal.)
+  escapeTemplateText(s) {
+    return s.replace(/`/g, '\\`').replace(/\$\{/g, '\\${');
+  }
+
   emitString(head, rest) {
     let result = '`';
     for (let part of rest) {
       if (part instanceof String) {
-        result += this.extractStringContent(part);
+        // Literal segment of an interpolated string — must be escaped, exactly
+        // as the non-interpolated heredoc path does. Without this, a literal
+        // backtick or `${` in an interpolated string emitted broken JS (the
+        // backtick terminated the template literal early).
+        result += this.escapeTemplateText(this.extractStringContent(part));
       } else if (typeof part === 'string') {
         if (part.startsWith('"') || part.startsWith("'")) {
           if (this.options.debug) console.warn('[Rip] Unexpected quoted primitive in str:', part);
-          result += part.slice(1, -1);
+          result += this.escapeTemplateText(part.slice(1, -1));
         } else {
-          result += part;
+          result += this.escapeTemplateText(part);
         }
       } else if (Array.isArray(part)) {
         if (part.length === 1 && typeof part[0] === 'string' && !Array.isArray(part[0])) {

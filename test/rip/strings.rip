@@ -534,6 +534,13 @@ test 'if/then/else in interpolation plural', 'n = 3; "#{n} item#{if n is 1 then 
 test 'ternary in interpolation', 'n = 1; "#{n} item#{n is 1 ? "" : "s"}"', '1 item'
 test 'postfix if in interpolation', 'n = 3; "#{n} item#{"" if n is 1 else "s"}"', '3 items'
 
+# Literal backtick in an interpolated string must be escaped in the emitted
+# template literal — regression: a raw backtick closed the template early,
+# breaking compilation of the surrounding code.
+test 'literal backtick in interpolated string', 'x = 1; "a `b` #{x}"', 'a `b` 1'
+test 'literal backtick in interpolated heredoc', '''x = 2
+"""tick `t` #{x}"""''', 'tick `t` 2'
+
 # Quote preservation - single quotes
 code 'single quote preserved', "'hello'", "'hello'"
 
